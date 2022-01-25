@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.164 2001/04/04 23:24:30 vakatov Exp $
+#	$Id: makeall.unx,v 6.171 2001/06/29 19:05:31 kans Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -160,7 +160,7 @@ LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(VIBFLAG) $(NCBI_OTHERLINKOPTIONS) -L$(N
 
 # sources needed for versions of asntool and entrez
 THR_SRC = ncbithr.c
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+# NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
 
 SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbiprop.c ncbimain.c ncbimath.c ncbimem.c ncbimisc.c \
@@ -175,16 +175,16 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	$(NCBI_LBSM_SRC) ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_service_dispd.c \
 	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
-	ncbi_sendmail_.c ncbi_sendmail.c
+	ncbi_sendmail_.c ncbi_sendmail.c asn_connection.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
-	objsub.c objprt.c objfdef.c objmime.c objalignloc.c \
+	objsub.c objprt.c objfdef.c objmime.c objcn3d.c objalignloc.c \
 	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c \
 	strucapi.c qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
-	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
+	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
 	subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
 	asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
@@ -224,7 +224,7 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	vsm.c vsmfile.c vsmutil.c udvgraph.c udvopen.c udvpanel.c dotvibrant.c \
 	dlgutil1.c dlgutil2.c \
 	medview.c bspview.c gbfview.c gphview.c \
-	gphdraw.c gxydraw.c gtrdraw.c \
+	gphdraw.c gxydraw.c gtrdraw.c ingengraph.c \
 	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c salogif.c
 
 SRC45 = ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
@@ -248,7 +248,7 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c \
 	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c fdlobj.c \
-	dotseq.c 
+	dotseq.c spidey.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -274,7 +274,7 @@ SRC39 = ideochrow.c humchrom_dat.c mschrom_dat.c ideochrom.c ideoorgs.c \
 # objects needed for versions of asntool and entrez
 
 THR_OBJ = ncbithr.o
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+# NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
 
 OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o \
@@ -289,16 +289,16 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	$(NCBI_LBSM_OBJ) ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_service_dispd.o \
 	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
-	ncbi_sendmail_.o
+	ncbi_sendmail_.o asn_connection.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
 	objres.o objseq.o objblock.o objcode.o objsset.o \
-	objsub.o objprt.o objfdef.o objmime.o objalignloc.o \
+	objsub.o objprt.o objfdef.o objmime.o objcn3d.o objalignloc.o \
 	objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o \
 	strucapi.o qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
-	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
+	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
 	subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
 	asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
@@ -348,7 +348,7 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o dotvibrant.o \
 	dlgutil1.o dlgutil2.o \
 	medview.o bspview.o gbfview.o gphview.o \
-	gphdraw.o gxydraw.o gtrdraw.o \
+	gphdraw.o gxydraw.o gtrdraw.o ingengraph.o \
 	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o salogif.o
 
 OBJ45 = ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
@@ -373,7 +373,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o \
 	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o \
-	dotseq.o 
+	dotseq.o spidey.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -628,6 +628,10 @@ copy :
 	-chmod ug+rw,o+r ../include/connect
 	-rm ../include/ncbi_*.h
 	cp -p ../connect/ncbi_*.h ../include/connect
+	-mkdir ../include/ctools
+	-chmod ug+rw,o+r ../include/ctools
+	-rm ../include/asn_connection.h
+	cp ../connect/asn_connection.h  ../include/ctools
 	$(SRCCOPY) ../connect/lbapi/*.c .
 	$(SRCCOPY) ../connect/lbapi/*.h ../include
 	$(SRCCOPY) ../object/*.c .
@@ -647,6 +651,8 @@ copy :
 	$(SRCCOPY) ../biostruc/*.c .
 	$(SRCCOPY) ../biostruc/cdd/*.h ../include
 	$(SRCCOPY) ../biostruc/cdd/*.c .
+	$(SRCCOPY) ../biostruc/cn3d/*.h ../include
+	$(SRCCOPY) ../biostruc/cn3d/*.c .
 	$(SRCCOPY) ../tools/*.h ../include
 	$(SRCCOPY) ../tools/*.c .
 	$(SRCCOPY) ../cn3d/*.h ../include

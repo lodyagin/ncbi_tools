@@ -27,6 +27,7 @@ asntool -m ..\asn\objprt.asn -l asnprt.h
 asntool -m ..\biostruc\mmdb1.asn -l mmdb1.h -w100
 asntool -m ..\biostruc\mmdb2.asn -l mmdb2.h -w100
 asntool -m ..\biostruc\mmdb3.asn -l mmdb3.h -w100
+asntool -m ..\biostruc\cn3d\cn3d.asn -l cn3d.h -w100
 rem asntool -m ..\network\blast2\client\blast18.asn -l asnbl18.h
 asntool -m ..\network\blast3\client\blstspc.asn -l blstspc.h
 asntool -m ..\network\suggest\client\suggest.asn -l sugmap.h

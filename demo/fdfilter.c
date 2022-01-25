@@ -1,4 +1,4 @@
-/* $Id: fdfilter.c,v 6.12 2000/06/07 19:18:42 shavirin Exp $ */
+/* $Id: fdfilter.c,v 6.20 2001/06/22 20:12:52 shavirin Exp $ */
 /*****************************************************************************
 
   
@@ -31,11 +31,40 @@
    
    Version Creation Date: 05/21/99
 
-   $Revision: 6.12 $
+   $Revision: 6.20 $
 
    File Description:  Filter FASTA databases for identical sequences
 
    $Log: fdfilter.c,v $
+   Revision 6.20  2001/06/22 20:12:52  shavirin
+   Fixed problem with incorrect sorting of definition lines.
+
+   Revision 6.19  2001/06/15 21:00:32  shavirin
+   Added possibility to create sub-database of Taxonomy names for taxonomy
+   ids used in Blast database for custom formating of results.
+
+   Revision 6.18  2001/06/13 20:43:29  shavirin
+   Fixed function GetPDBRankByGi() for absence of pdbrank file.
+
+   Revision 6.17  2001/05/31 14:42:26  shavirin
+   Added possibility to create LocusLink and UniGene affiliations
+   for ASN.1 structured definition lines.
+
+   Revision 6.16  2001/05/23 21:16:22  shavirin
+   Added population of tax_id and membership fields for sequence to
+   database affiliation.
+
+   Revision 6.15  2001/05/22 17:32:12  shavirin
+   Fixed few UMR purify errors.
+
+   Revision 6.14  2001/05/14 17:37:28  shavirin
+   Added possibility to manipulate with BLAST databases with ASN.1 structured
+   deflines.
+
+   Revision 6.13  2001/05/08 22:04:22  shavirin
+   Changed usage of function FDBAddSequence() in accordance with it's
+   changed definition.
+
    Revision 6.12  2000/06/07 19:18:42  shavirin
    Added rank sorting of PDB sequences using rank file (optional)
 
@@ -76,6 +105,10 @@
 #include <readdb.h>
 #include <ncbiwww.h>
 
+#ifdef TAX_CS_LOOKUP
+#include <taxblast.h>
+#endif
+
 /* We will use regular WWW encoding of request to make specific
    filtering using database information file 
 
@@ -113,6 +146,8 @@ typedef struct _DefLine
     Int4 gi;
     Int4 pdb_rank;
     CharPtr line;
+    BlastDefLinePtr bdp;
+
 } DefLine, PNTR DefLinePtr;
 
 typedef struct deflist
@@ -159,27 +194,49 @@ typedef struct PDBTable
     PDBElmPtr pelms;
 } PDBTable, *PDBTablePtr;
 
+/* Structures used for LocuisLink or UniGene identification */
+#define IS_UG_ELEMENT 0x1
+#define IS_LL_ELEMENT 0x2
+
+typedef struct llugelm
+{
+    Int4  gi;
+    Int4  id;                   /* LL id or UG cluster id */
+    Int4  link;                 /* LL or UG ? */
+} LLUGElm, *LLUGElmPtr;
+
+typedef struct LLUGTable
+{
+    Int4 count;
+    Int4 allocated;
+    LLUGElmPtr pelms;
+} LLUGTable, *LLUGTablePtr;
+
 #define NUMARG (sizeof(flt_args)/sizeof(flt_args[0]))
 
 Args flt_args[] = {
-    { "Title for output database file", /* 0 */
+    { "Title for output database file",                 /* 0 */
       NULL, NULL, NULL, TRUE, 't', ARG_STRING, 0.0, 0, NULL},
     {"Input file for the filtering (this parameter must be set)", /* 1 */
      NULL, NULL,NULL,FALSE,'i',ARG_FILE_IN, 0.0,0,NULL},
-    {"Input file with a list of gis", /* 2 */
+    {"Input file with a list of gis",                   /* 2 */
      NULL, NULL,NULL,TRUE,'g',ARG_FILE_IN, 0.0,0,NULL},
-    {"Logfile name:",           /* 3 */
+    {"Logfile name:",                                   /* 3 */
      "fdfilter.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
-    {"Create sparse indexes in the filtered database", /* 4 */
+    {"Create sparse indexes in the filtered database",  /* 4 */
      "F", NULL,NULL,TRUE,'s',ARG_BOOLEAN, 0.0,0,NULL},
-    {"Query string for creating database subset", /* 5 */
+    {"Query string for creating database subset",       /* 5 */
      NULL, NULL,NULL,TRUE,'q',ARG_STRING, 0.0,0,NULL},
-    {"Input database is proten", /* 6 */
+    {"Input database is proten",                        /* 6 */
      "T", NULL,NULL,TRUE,'p',ARG_BOOLEAN, 0.0,0,NULL},
-    {"Reverse query request to negative", /* 7 */
+    {"Reverse query request to negative",               /* 7 */
      "F", NULL,NULL,TRUE,'r',ARG_BOOLEAN, 0.0,0,NULL},
-    {"Input file with PDB ranks", /* 8 */
+    {"Input file with PDB ranks",                       /* 8 */
      NULL, NULL,NULL,TRUE,'y',ARG_FILE_IN, 0.0,0,NULL},
+    {"Input file with UG memberships",                  /* 9 */
+     NULL, NULL,NULL,TRUE,'u',ARG_FILE_IN, 0.0,0,NULL},
+    {"Input file with LL memberships",                  /* 10 */
+     NULL, NULL,NULL,TRUE,'k',ARG_FILE_IN, 0.0,0,NULL},
 };
 
 #define FLT_Input    flt_args[1].strvalue
@@ -197,18 +254,6 @@ static void FDB_optionsFree(FDB_optionsPtr options)
     MemFree(options);
     
     return;
-}
-
-static SeqIdPtr MySeqIdFree(SeqIdPtr sip)
-{
-    SeqIdPtr sip_tmp;
-    do {
-        sip_tmp = sip->next;
-        SeqIdFree(sip);
-        sip = sip_tmp;
-    } while(sip != NULL);
-    
-    return NULL;
 }
 
 static Boolean SRReadCharData(CharPtr buffer, CharPtr PNTR div_in)
@@ -331,13 +376,21 @@ static FDB_optionsPtr FDB_CreateCLOptions(void)
     options->dump_info = FALSE;
     options->sparse_idx = flt_args[4].intvalue;
 
+#if 0
+    if(flt_args[9].intvalue)
+        options->version = FORMATDB_VER;
+    else
+        options->version = FORMATDB_VER_TEXT;
+#endif
+
     return options;
 }
 #define HASH_ALLOC_CHUNK 1024
 #define GI_ALLOC_CHUNK 1024
 #define PDB_ALLOC_CHUNK 1024
+#define LLUG_ALLOC_CHUNK 1024
 
-static int PDBCompare(VoidPtr i, VoidPtr j)
+static int GICompare(VoidPtr i, VoidPtr j)
 {
     if (*(Int4Ptr)i > *(Int4Ptr)j)
         return (1);
@@ -415,10 +468,86 @@ PDBTablePtr FDBCreatePDBIndex(CharPtr filename)
         FDBAddNewPDB(pdbp, gi, group, rank);
     }
     
-    HeapSort(pdbp->pelms, pdbp->count, sizeof(PDBElm), PDBCompare);
+    HeapSort(pdbp->pelms, pdbp->count, sizeof(PDBElm), GICompare);
     
     return pdbp;
 }
+
+static void FDBAddNewLLUG(LLUGTablePtr llugp, Int4 gi, Int4 id, Int4 link)
+{
+    LLUGElmPtr pelm;
+    
+    /* Reallocate if necessary */
+    
+    if(llugp->allocated <= llugp->count) {
+        llugp->allocated += LLUG_ALLOC_CHUNK + 1;
+        llugp->pelms = (LLUGElmPtr) 
+            Realloc (llugp->pelms, llugp->allocated * sizeof(LLUGElm));
+    }
+    
+    pelm = &llugp->pelms[llugp->count];
+    
+    pelm->gi   = gi;
+    pelm->id   = id;
+    pelm->link = link;
+    
+    llugp->count++;
+    
+    return;
+}
+static LLUGTablePtr LLUGTableNew(void)
+{
+    LLUGTablePtr llugp;
+    
+    llugp = MemNew(sizeof(LLUGTable));
+    llugp->allocated = LLUG_ALLOC_CHUNK;
+    llugp->pelms = (LLUGElmPtr) MemNew (llugp->allocated * sizeof(LLUGElm));
+    
+    return llugp;
+}
+
+static void DestroyLLUGIndex(LLUGTablePtr llugp)
+{
+    if(llugp == NULL)
+        return;
+    
+    MemFree(llugp->pelms);
+    MemFree(llugp);
+    
+    return;
+}
+
+LLUGTablePtr CreateLLUGIndex(CharPtr filename)
+{
+    LLUGTablePtr llugp;
+    Int4 length;
+    Char buffer[1024];
+    FILE *fd;
+    Int4 gi, id, link = 0;
+    Char div[32];
+    
+    llugp = LLUGTableNew();
+    
+    length = sizeof(buffer);
+    
+    if((fd = FileOpen(filename, "r")) == NULL) {
+        ErrPostEx(SEV_ERROR, 0,0, "Unable to open input index file");
+        return NULL;
+    }
+    
+    while(fgets(buffer, length, fd) != NULL) {
+        if(*buffer == '#')
+            continue;
+        /* sscanf(buffer, "%d %d %d", &gi, &id, &link); */
+        sscanf(buffer, "%d %d", &gi, &id);
+        FDBAddNewLLUG(llugp, gi, id, link);
+    }
+    
+    HeapSort(llugp->pelms, llugp->count, sizeof(LLUGElm), GICompare);
+    
+    return llugp;
+}
+
 static HashTablePtr FDBHashTableNew(void)
 {
     HashTablePtr htp;
@@ -602,9 +731,10 @@ static void DefListFree(DefListPtr dlp)
 
     return;
 }
-
-static Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type, Int4 gi,
-                              Int4 pdb_rank)
+/* Note: pointers to Blast defline ASN.1 structures do not belong to
+   this def-list - so the should be freed elsewhere */
+static Boolean DefListAddLine(DefListPtr dlp, BlastDefLinePtr bdp, 
+                              CharPtr line, Int4 type, Int4 gi, Int4 pdb_rank)
 {
     DefLinePtr dp;
     
@@ -616,6 +746,7 @@ static Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type, Int4 gi,
     dp = dlp->defs[dlp->count];
     
     dp->line = StringSave(line);
+    dp->bdp  = bdp;
     dp->type = type;
     dp->gi = gi;
     dp->pdb_rank = pdb_rank;
@@ -632,8 +763,6 @@ static CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
     CharPtr chptr, dline = NULL;
     Char buffer[512];
     
-    HeapSort(dlp->defs, dlp->count, sizeof(DefLinePtr), DefListCompare);
-
     for(i = 0; i < dlp->count; i++) {
         dp = dlp->defs[i];
 
@@ -652,14 +781,40 @@ static CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
     return dline;
 }
 
+static BlastDefLinePtr FinalBdfpOut(DefListPtr dlp)
+{
+    Int4 i;
+    DefLinePtr dp;
+    BlastDefLinePtr bdp_head, bdp_tail;
+    
+    bdp_head = bdp_tail = NULL;
+    
+    for(i = 0; i < dlp->count; i++) {
+        
+        dp = dlp->defs[i];
+        
+        if(i == 0) {
+            bdp_head = bdp_tail = dp->bdp;
+        } else {
+            bdp_tail->next = dp->bdp;
+            bdp_tail = dp->bdp;
+        }
+    }
+
+    return bdp_head;
+}
+
 static Int4 GetPDBRankByGi(PDBTablePtr pdbp, Int4 gi)
 {
 
     Int4 m, b, e;
-
+    
+    if(pdbp == NULL)
+        return 0;
+    
     b = 0;
     e = pdbp->count;
-
+    
     while (b < e - 1) {
 	m = (b + e) / 2;
 	if ((pdbp->pelms[m].gi) > gi)
@@ -674,28 +829,31 @@ static Int4 GetPDBRankByGi(PDBTablePtr pdbp, Int4 gi)
         return 0;
 }
 
-static Int4 GetMinimalType(PDBTablePtr pdbp, CharPtr defline, 
+static Int4 GetMinimalType(PDBTablePtr pdbp, SeqIdPtr sip, CharPtr defline, 
                            Int4Ptr gip, Int4Ptr pdb_rank)
 {
-    SeqIdPtr sip, sip_tmp;
+    SeqIdPtr sip_tmp;
     Int4 order, order1 = INT2_MAX;
     Char buffer[512];
     CharPtr chptr;
-    Boolean is_pdb = FALSE;
+    Boolean is_pdb = FALSE, sip_allocated = FALSE;
 
-    if(defline == NULL || gip == NULL)
+    if(pdbp == NULL || gip == NULL)
         return -1;
     
     *gip = -1;                  /* Default if NOT found */
 
-    StringNCpy(buffer, defline, sizeof(buffer) - 1);
-    
-    if((chptr = StringChr(buffer, ' ')) != NULL)
-        *chptr = NULLB;
-    else
-        return -1;
-
-    sip = SeqIdParse(buffer);
+    if(sip == NULL) {
+        StringNCpy(buffer, defline, sizeof(buffer) - 1);
+        
+        if((chptr = StringChr(buffer, ' ')) != NULL)
+            *chptr = NULLB;
+        else
+            return -1;
+        
+        sip = SeqIdParse(buffer);
+        sip_allocated = TRUE;
+    }
 
     *pdb_rank = 0;
     is_pdb = FALSE;
@@ -716,25 +874,145 @@ static Int4 GetMinimalType(PDBTablePtr pdbp, CharPtr defline,
     }
     
     if(is_pdb && *gip != 0)
-        *pdb_rank = GetPDBRankByGi(pdbp, *gip);
+       *pdb_rank = GetPDBRankByGi(pdbp, *gip);
     
-    MySeqIdFree(sip);
+    if(sip_allocated)
+        SeqIdSetFree(sip);
+    
     return order1;
+}
+
+Int4 Check_UGLL_ID(LLUGTablePtr llugp, Int4 gi)
+{    
+    Int4 m, b, e;
+    
+    if(llugp == NULL)
+        return 0;
+    
+    b = 0;
+    e = llugp->count;
+    
+    while (b < e - 1) {
+	m = (b + e) / 2;
+	if ((llugp->pelms[m].gi) > gi)
+	    e = m;
+	else
+	    b = m;
+    }
+    
+    if(llugp->pelms[b].gi == gi)
+        return llugp->pelms[b].id;
+    else                        /* Gi was not found */
+        return 0;
+}
+    
+Boolean FDRAddLinksMembership(BlastDefLinePtr bdp, HashElmPtr hep, 
+                              ReadDBFILEPtr rdfp,
+                              LLUGTablePtr UGp, LLUGTablePtr LLp)
+{
+    Int4 mem_int = 0, link_int = 0;
+    ValNodePtr vnp, vnp_last;
+    Int4 ug_id, ll_id;
+
+    if(bdp == NULL)
+        return FALSE;
+    
+    bdp->taxid = hep->tax_id;
+
+    /* Setting bits for EST_MOUSE and EST_HUMAN databases */
+    switch (bdp->taxid) {
+    case 9606:
+        mem_int += EST_HUMAN_BIT;
+        break;
+    case 10090:
+    case 10091:
+    case 10092:
+    case 35531:
+    case 80274:
+    case 57486:
+        mem_int += EST_MOUSE_BIT;
+        break;
+    default:
+        break;
+    }
+
+    switch(hep->owner) {
+    case 6:
+        mem_int += SWISSPROT_BIT;
+        break;
+    case 10:
+        mem_int += PDB_BIT;
+        break;
+    case 20:
+        mem_int += REFSEQ_BIT;
+        break;
+    case 28:
+        mem_int += CONTIG_BIT;
+        break;
+    default:
+        break;
+    }
+
+    if(mem_int != 0) {
+        vnp = ValNodeNew(NULL);
+        vnp->data.intvalue = mem_int;
+        bdp->memberships = vnp;
+    }
+
+    ug_id = Check_UGLL_ID(UGp, hep->gi);
+    
+    if(ug_id != 0) {
+        link_int += IS_UG_ELEMENT;   /* First bit for UNIGENE */
+    }
+    
+    ll_id = Check_UGLL_ID(LLp, hep->gi);
+    
+    if(ll_id != 0) {
+        link_int += IS_LL_ELEMENT;   /* Second bit for Locus link */
+    }
+
+    if(link_int > 0) {
+        vnp = ValNodeNew(NULL);
+        vnp->data.intvalue = link_int;
+        bdp->links = vnp;
+        vnp_last =  bdp->links;
+    }
+
+#ifdef ADD_UGLL_IDS
+    if(link_int & IS_UG_ELEMENT) { /* UG ? */
+        vnp = ValNodeNew(NULL);
+        vnp->data.intvalue = ug_id;
+        vnp_last->next = vnp;
+        vnp_last = vnp;
+    }
+    
+    if(link_int & IS_LL_ELEMENT) { /* LL ? */
+        vnp = ValNodeNew(NULL);
+        vnp->data.intvalue = ll_id;
+        vnp_last->next = vnp;
+        vnp_last = vnp;
+    }
+#endif
+
+    return TRUE;
 }
 
 /* --------------------------------------------------- */
 
-static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count, 
+static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
+                           BlastDefLinePtr * bdp_out,
                            ValNodePtr PNTR seqid, CharPtr PNTR defline, 
                            BioseqPtr PNTR bsp, FILE *fd_info, Int4 seq_num,
-                           PDBTablePtr pdbp)
+                           PDBTablePtr pdbp,  
+                           LLUGTablePtr UGp, LLUGTablePtr LLp)
 {
     Int4 i, hash_val, length, len_seq;
     Int4 first, next_count = 0, type;
     UcharPtr sequence, buffer;
-    CharPtr dline;
+    CharPtr dline = NULL;
     DefListPtr dlp;
-    Int4 gi, pdb_rank;
+    Int4 gi = 0, pdb_rank = 0;
+    BlastDefLinePtr bdp;
     
     dlp = DefListNew();
     
@@ -749,26 +1027,36 @@ static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
         if(length <= 0)
             return -1;
         
+        bdp = NULL;
+
         if(first) {
             sequence = buffer;
             len_seq = length;
-            *bsp = readdb_get_bioseq(rdfp, htp->hep[i].seq_num);
-            
+
+            *bsp = readdb_get_bioseq(rdfp, htp->hep[i].seq_num);            
             if(*bsp == NULL)
                 return -1;
-            
-            /* readdb_get_descriptor(rdfp, htp->hep[i].seq_num, 
-               seqid, &dline); */
-            
 
-            readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
-            type = GetMinimalType(pdbp, dline, &gi, &pdb_rank);
+            if(rdfp->formatdb_ver == FORMATDB_VER_TEXT) {            
+
+                readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
+                
+                if(dline == NULL)
+                    return -1;
+
+            } else {            
+                bdp = FDReadDeflineAsn(rdfp, htp->hep[i].seq_num);
+                FDRAddLinksMembership(bdp, &htp->hep[i], rdfp, UGp, LLp);
+            }
+
             
-            if(dline == NULL)
-                return -1;
+            type = GetMinimalType(pdbp, bdp == NULL ? NULL : bdp->seqid, 
+                                  dline, &gi, &pdb_rank);
+            DefListAddLine(dlp, bdp, dline, type, gi, pdb_rank);
             
-            DefListAddLine(dlp, dline, type, gi, pdb_rank);
-            MemFree(dline);          
+            if(rdfp->formatdb_ver == FORMATDB_VER_TEXT) {            
+                MemFree(dline); 
+            }
             
             first = FALSE;
         } else {
@@ -777,18 +1065,27 @@ static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
                 if(next_count == 0) next_count = i;
                 continue;
             }
-            readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
             
-            if(dline == NULL)
-                return -1;
+            if(rdfp->formatdb_ver == FORMATDB_VER_TEXT) { 
+                readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
+                if(dline == NULL)
+                    return -1; 
+            } else {            
+                bdp = FDReadDeflineAsn(rdfp, htp->hep[i].seq_num);
+                FDRAddLinksMembership(bdp, &htp->hep[i], rdfp, UGp, LLp);
+            }
+            
+            type = GetMinimalType(pdbp, bdp == NULL ? NULL : bdp->seqid, 
+                                  dline, &gi, &pdb_rank);
+            DefListAddLine(dlp, bdp, dline, type, gi, pdb_rank);
 
-            type = GetMinimalType(pdbp, dline, &gi, &pdb_rank);
-            DefListAddLine(dlp, dline, type, gi, pdb_rank);
-            MemFree(dline);
-                
+            if(rdfp->formatdb_ver == FORMATDB_VER_TEXT) { 
+                MemFree(dline); 
+            }
+
             htp->hep[i].seq_num = -1; /* Label do not pass second time */
         }
-
+        
         fprintf(fd_info, "%d %d %d %d %s %d %d %d\n", 
                 seq_num, htp->hep[i].gi, htp->hep[i].tax_id, 
                 htp->hep[i].owner, htp->hep[i].div, 
@@ -799,8 +1096,14 @@ static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
         /* DumpInfoFile(&htp->hep[i], fd_info, seq_num); */
     }
 
-    *defline = FinalDefLineOut(dlp, seqid);
+    HeapSort(dlp->defs, dlp->count, sizeof(DefLinePtr), DefListCompare);
 
+    if(rdfp->formatdb_ver == FORMATDB_VER_TEXT) {
+        *defline = FinalDefLineOut(dlp, seqid);
+    } else {
+        *bdp_out = FinalBdfpOut(dlp);
+    }
+    
     DefListFree(dlp);
     
     if(next_count == 0) next_count = i;
@@ -1024,14 +1327,16 @@ Int2 Main(void)
     GiListPtr glp = NULL;
 
     Char buffer[128];
-    SeqIdPtr sip, sip_tmp;
+    SeqIdPtr sip = NULL, sip_tmp;
     Int4 next_number = 0;
     Char tmpbuf[128];
-    CharPtr defline;
+    CharPtr defline = NULL;
     FILE *fd_info;
     SR_InfoPtr srip;
     Boolean is_prot;
     PDBTablePtr pdbp;
+    BlastDefLinePtr bdp = NULL;
+    LLUGTablePtr LLp, UGp;
 
     /* ---------------------------------------------- */
     /* ----- Initializing formatdb structures ------- */
@@ -1049,6 +1354,10 @@ Int2 Main(void)
                   "Failure to intialise database %s", FLT_Input);
         return 1;
     }
+
+    /* New database will have authomatically the same version as
+       old one */
+    options->version = rdfp->formatdb_ver;
     
     is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
     
@@ -1093,6 +1402,21 @@ Int2 Main(void)
         else
             pdbp = NULL;
 
+        /* Locus Link and UniGene information processing */
+
+        UGp = NULL,  LLp = NULL;
+        
+        if(rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
+            
+            if(flt_args[9].strvalue != NULL) {
+                UGp = CreateLLUGIndex(flt_args[9].strvalue);
+            }
+            
+            if(flt_args[10].strvalue != NULL) {
+                LLp = CreateLLUGIndex(flt_args[10].strvalue);
+            }
+        }
+
         sprintf(buffer, "%s.%cdi", options->db_file, is_prot? 'p' : 'n');
         fd_info = FileOpen(buffer, "w");
     }
@@ -1103,6 +1427,14 @@ Int2 Main(void)
 
     if ((fdbp = FormatDBInit(options)) == NULL)
         return -1;
+
+#ifdef TAX_CS_LOOKUP
+    /* These functions will create taxonomy lookup database */
+    if(rdfp->formatdb_ver > FORMATDB_VER_TEXT && options->parse_mode) {
+        options->tax_lookup = RDTaxLookupInit();
+        options->tax_callback = FDBTaxCallback;
+    }
+#endif    
     
     /* ---------------------------------------------- */
     /* ---------------- Main loop ------------------- */
@@ -1112,10 +1444,12 @@ Int2 Main(void)
     if(htp != NULL) { /* filtering by hash value */
         next_number = 0;
         do {
-            next_number =  NewUniqueFASTA(rdfp, htp, next_number, &sip, 
-                                          &defline, &bsp, fd_info, 
-                                          fdbp->num_of_seqs, pdbp);
-
+            sip = NULL;
+            next_number =  NewUniqueFASTA(rdfp, htp, next_number, &bdp, 
+                                          &sip, &defline, &bsp, 
+                                          fd_info, fdbp->num_of_seqs, 
+                                          pdbp, UGp, LLp);
+            
             if(next_number < 0) {
                 ErrPostEx(SEV_ERROR, 0, 0, "Failure to get sequence");
                 return 1;
@@ -1124,19 +1458,30 @@ Int2 Main(void)
             SeqIdWrite(sip, tmpbuf, 
                        PRINTID_FASTA_LONG, sizeof(tmpbuf));
             
-            FDBAddSequence (fdbp, 0, tmpbuf, defline, 0, 0, 0, 
-                            bsp->seq_data_type, &bsp->seq_data, 
-                            bsp->length, 0);
-            sip = MySeqIdFree(sip);
-            bsp = BioseqFree(bsp);        
-            defline = MemFree(defline);
-        } while (next_number < count); 
+            FDBAddSequence(fdbp, bdp, bsp->seq_data_type, 
+                           &bsp->seq_data, bsp->length, 
+                           tmpbuf, defline, 0, 0, 0, 0, 0);
 
+            if(sip)
+                sip = SeqIdSetFree(sip);
+
+            bsp = BioseqFree(bsp);        
+            
+            if(defline)
+                defline = MemFree(defline);
+
+            if(bdp)
+                BlastDefLineSetFree(bdp);
+            
+        } while (next_number < count); 
+        
         FileClose(fd_info);
 
         FDBDestroyHashIndex(htp);
         FDBDestroyPDBIndex(pdbp);
-        
+        DestroyLLUGIndex(UGp);
+        DestroyLLUGIndex(LLp);
+
     }  else { /* list of gis */
         
         for(i = 0; i < glp->count; i++) {
@@ -1150,9 +1495,9 @@ Int2 Main(void)
             SeqIdWrite(sip, tmpbuf, 
                        PRINTID_FASTA_LONG, sizeof(tmpbuf));
             
-            FDBAddSequence (fdbp, 0, tmpbuf, defline, 0, 0, 0, 
-                            bsp->seq_data_type, &bsp->seq_data, 
-                            bsp->length, 0);
+            FDBAddSequence(fdbp, NULL, bsp->seq_data_type, 
+                           &bsp->seq_data, bsp->length, 
+                           tmpbuf, defline, 0, 0, 0, 0, 0);
             
             BioseqFree(bsp);
             MemFree(defline);
@@ -1180,16 +1525,10 @@ Int2 Main(void)
         
         SeqIdWrite(sip, tmpbuf, PRINTID_FASTA_LONG, sizeof(tmpbuf));
         
-        FDBAddSequence (fdbp, 0, tmpbuf, defline, 0, 0, 0, 
-                        bsp->seq_data_type,
-                        &bsp->seq_data, bsp->length, 0);
+        FDBAddSequence(fdbp, NULL, bsp->seq_data_type, 
+                       &bsp->seq_data, bsp->length, 
+                       tmpbuf, defline, 0, 0, 0, 0, 0);
     
-        /*    SeqIdWrite(bsp->id, tmpbuf, 
-              PRINTID_FASTA_LONG, sizeof(tmpbuf));
-              FDBAddSequence (fdbp, 0, tmpbuf, BioseqGetTitle(bsp), 0, 0, 0, 
-              bsp->seq_data_type,
-              &bsp->seq_data, bsp->length, 0); */
-
         BioseqFree(bsp);
         MemFree(defline);
         
@@ -1204,6 +1543,12 @@ Int2 Main(void)
 
     if(FormatDBClose(fdbp))
         return 3;
+
+#ifdef TAX_CS_LOOKUP
+    if(options->tax_lookup != NULL) {
+        RDTaxLookupClose(options->tax_lookup);
+    }
+#endif
     
     readdb_destruct(rdfp);
     FDB_optionsFree(options);

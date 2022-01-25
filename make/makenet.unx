@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.125 2001/02/21 22:08:36 lavr Exp $
+#	$Id: makenet.unx,v 6.126 2001/06/28 12:32:37 beloslyu Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -506,7 +506,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff spidey
 
 .WAIT:
 	echo Waiting...go
@@ -649,6 +649,7 @@ copy :
 	$(SRCCOPY) ../demo/udvmain.c .
 	$(SRCCOPY) ../demo/rtestval.c .
 	$(SRCCOPY) ../demo/asn2ff.c .
+	$(SRCCOPY) ../demo/spideymain.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -1150,6 +1151,10 @@ rtestval :	rtestval.c
 # remote asn2ff program (rasn2ff)
 rasn2ff :	asn2ff.c
 	$(CC) -o rasn2ff -DENABLE_ENTREZ -DENABLE_ID1 $(LDFLAGS) asn2ff.c $(LIB8) $(LIB3) $(LIB7) $(LIB6) $(LIB41) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# demo program (spidey)
+spidey :	spideymain.c
+	$(CC) -o spidey $(LDFLAGS) spideymain.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (electronic PCR)
 

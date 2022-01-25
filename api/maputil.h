@@ -1,4 +1,4 @@
-/* $Id: maputil.h,v 6.7 1998/07/22 00:02:37 zjing Exp $
+/* $Id: maputil.h,v 6.8 2001/06/26 16:42:59 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/21/97
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         External include file for graphical alignments
 *
 * $Log: maputil.h,v $
+* Revision 6.8  2001/06/26 16:42:59  vakatov
+* POINT --> BAND_POINT  (to avoid conflicts with MS-Win standard headers)
+*
 * Revision 6.7  1998/07/22 00:02:37  zjing
 * move SortValNode from maputil to jzmisc
 *
@@ -56,12 +59,15 @@
 * Revision 5.9  1997/07/23 13:45:29  zjing
 * look up for the sequence index map
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         External include file for graphical alignments
 *
 * $Log: maputil.h,v $
+* Revision 6.8  2001/06/26 16:42:59  vakatov
+* POINT --> BAND_POINT  (to avoid conflicts with MS-Win standard headers)
+*
 * Revision 6.7  1998/07/22 00:02:37  zjing
 * move SortValNode from maputil to jzmisc
 *
@@ -396,7 +402,7 @@ NLM_EXTERN Uint1 ck_cyto_type PROTO((SeqFeatPtr sfp));
 #define CEN 4 		/*centromere*/
 
 /*band used for Human chromosome*/
-#define POINT 5		/*inclue the centromere and telemere*/	
+#define BAND_POINT 5		/*inclue the centromere and telemere*/	
 #define GIEMSA_POS 6	/*Giemsa positive*/
 #define GIEMSA_NEG 7	/*Giemsa negative*/
 #define ACRO_CENTRIC 8	/*Acrocentric*/

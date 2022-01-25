@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.87  2001/05/02 19:42:48  egorov
+* Make the NetBlastGetMatrix() external
+*
+* Revision 1.86  2001/04/26 21:55:43  juran
+* Squelch compiler warnings.
+*
 * Revision 1.85  2001/04/02 18:49:13  dondosha
 * Removed readdb_new_ex call
 *
@@ -783,7 +789,6 @@ BlastNet3BlockDestruct(BlastNet3BlockPtr blnet)
 
 {
 	BlastResponsePtr next, response;
-	SeqEntryPtr sep;
 
 	if (blnet == NULL)
 		return NULL;
@@ -937,7 +942,7 @@ BlastGetDbInfo (BlastNet3BlockPtr blnet3blkptr)
 	return dbinfo_head;
 }
 
-NLM_EXTERN BlastMatrixPtr LIBCALL
+BlastMatrixPtr LIBCALL
 NetBlastGetMatrix(BlastNet3BlockPtr blnet3blkptr)
 
 {
@@ -1189,7 +1194,7 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean
 	BlastResponsePtr response = NULL;
 	ValNodePtr node;
 	SeqAlignPtr seqalign=NULL;
-	Uint1 err_id;
+	/* Uint1 err_id; */
 
 #if 0        
 	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id, TRUE);
@@ -1256,7 +1261,7 @@ BlastBioseqByParts (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, B
 	BlastResponsePtr response = NULL;
 	ValNodePtr node;
 	BlastPartsPtr blast_parts=NULL;
-	Uint1 err_id;
+	/* Uint1 err_id; */
 
 #if 0        
 	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id, TRUE);
@@ -1303,7 +1308,7 @@ BlastBioseqByParts (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, B
 
 /* ------------ Set os functions to support PHI-Blast ----------- */
 
-NLM_EXTERN BlastPhialignPtr LIBCALL
+static BlastPhialignPtr LIBCALL
 SeedBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, 
             Boolean PNTR status, ValNodePtr PNTR vnp_out)
      
@@ -1313,7 +1318,7 @@ SeedBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns,
     BlastResponsePtr response = NULL;
     ValNodePtr node, vnp = NULL;
     SeqAlignPtr seqalign=NULL;
-    Uint1 err_id;
+    /* Uint1 err_id; */
     BlastPhialignPtr bphp = NULL;
     
     search = BlastSearchNew();
@@ -1887,7 +1892,7 @@ MegaBlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, Char
 	Int2 status;
 	SeqAlignPtr seqalign = NULL;
 	TxDfDbInfoPtr txdbinfo;
-	ValNodePtr descr, mask;
+	ValNodePtr mask;
 	SeqEntryPtr sep;
 	BioseqPtr bsp;
 	Uint2 entityID = 0;
@@ -2399,10 +2404,7 @@ TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr o
 
     if (mb_results) {
        /* Results come as alignment endpoints only from Mega BLAST */
-       MegaBlastHitPtr mb_hit = mb_results->mbhits, next_hit;
-       SeqIdPtr sid, qid;
-       CharPtr query_buffer, subject_buffer;
-       Int4 subject_gi;
+       MegaBlastHitPtr mb_hit = mb_results->mbhits /*, next_hit */ ;
 
 
        while (mb_hit) {
@@ -2669,7 +2671,7 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                 options->perc_identity = (FloatLo) parameters->percent_identity;
         }
 
-	if (status = BLASTOptionValidateEx(options, program, error_return)) {
+	if ((status = BLASTOptionValidateEx(options, program, error_return))) {
             return NULL;
 	}
 

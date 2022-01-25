@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,31 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.22  2001/04/26 16:47:40  juran
+* Refactored CreateDir to quash warnings.
+*
+* Revision 6.21  2001/04/06 20:09:00  juran
+* Disabled #include of FullPath.h.
+#if'ed out MacFSSpec2FullPathname(), which uses FullPath,
+but which we're not using.
+Disabled includes of other MoreFiles headers from MoreFilesExtras.c.
+We should be entirely free of MoreFiles now.
+Removed disabled CD routines.
+*
+* Revision 6.20  2001/04/05 22:30:27  juran
+* Inserted five functions from MoreFileExtras.c.
+*
+* Revision 6.19  2001/04/05 21:59:13  juran
+* Added back #include of MoreFilesExtras.h.
+*
+* Revision 6.18  2001/04/05 21:36:08  juran
+* Mac changes:
+* Added support for converting between an FSSpec an an arbitrarily long C 
+* string containing a pathname.
+* Added a wrapper for DirCreate() that takes a pathname and uses said 
+* support.  Changed Nlm_CreateDir() to use it.
+* Disabled CD routines.
+*
 * Revision 6.17  2000/10/16 17:54:46  kans
 * null out param block for FileLengthEx on Mac
 *
@@ -174,6 +199,191 @@
 extern char *g_corelib;
 static char * _this_file = __FILE__;
 
+#ifdef OS_MAC
+#define INLINE_MOREFILES
+//#include "FullPath.h"
+//#include "MoreFilesExtra.h"
+#ifdef INLINE_MOREFILES
+
+// MoreFilesExtras.c
+// -----------------
+
+/*
+**	Apple Macintosh Developer Technical Support
+**
+**	A collection of useful high-level File Manager routines.
+**
+**	by Jim Luther, Apple Developer Technical Support Emeritus
+**
+**	File:		MoreFilesExtras.c
+**
+**	Copyright © 1992-1999 Apple Computer, Inc.
+**	All rights reserved.
+**
+**	You may incorporate this sample code into your applications without
+**	restriction, though the sample code has been provided "AS IS" and the
+**	responsibility for its operation is 100% yours.  However, what you are
+**	not permitted to do is to redistribute the source as "DSC Sample Code"
+**	after having made changes. If you're going to re-distribute the source,
+**	we require that you make it clear in the source that the code was
+**	descended from Apple Sample Code, but that you've made changes.
+*/
+
+#include <Types.h>
+#include <Traps.h>
+#include <OSUtils.h>
+#include <Errors.h>
+#include <Files.h>
+#include <Devices.h>
+#include <Finder.h>
+#include <Folders.h>
+#include <FSM.h>
+#include <Disks.h>
+#include <Gestalt.h>
+#include <TextUtils.h>
+#include <Script.h>
+#include <Math64.h>
+#include <CodeFragments.h>
+#include <stddef.h>
+
+#define	__COMPILINGMOREFILES
+
+#if 0
+#include "MoreFiles.h"
+#include "MoreFilesExtras.h"
+#include "MoreDesktopMgr.h"
+#include "FSpCompat.h"
+#endif
+
+/*
+**	GetVolumeInfoNoName uses pathname and vRefNum to call PBHGetVInfoSync
+**	in cases where the returned volume name is not needed by the caller.
+**	The pathname and vRefNum parameters are not touched, and the pb
+**	parameter is initialized by PBHGetVInfoSync except that ioNamePtr in
+**	the parameter block is always returned as NULL (since it might point
+**	to the local tempPathname).
+**
+**	I noticed using this code in several places, so here it is once.
+**	This reduces the code size of MoreFiles.
+*/
+static pascal	OSErr	GetVolumeInfoNoName(ConstStr255Param pathname,
+									short vRefNum,
+									HParmBlkPtr pb)
+{
+	Str255 tempPathname;
+	OSErr error;
+	
+	/* Make sure pb parameter is not NULL */ 
+	if ( pb != NULL )
+	{
+		pb->volumeParam.ioVRefNum = vRefNum;
+		if ( pathname == NULL )
+		{
+			pb->volumeParam.ioNamePtr = NULL;
+			pb->volumeParam.ioVolIndex = 0;		/* use ioVRefNum only */
+		}
+		else
+		{
+			BlockMoveData(pathname, tempPathname, pathname[0] + 1);	/* make a copy of the string and */
+			pb->volumeParam.ioNamePtr = (StringPtr)tempPathname;	/* use the copy so original isn't trashed */
+			pb->volumeParam.ioVolIndex = -1;	/* use ioNamePtr/ioVRefNum combination */
+		}
+		error = PBHGetVInfoSync(pb);
+		pb->volumeParam.ioNamePtr = NULL;	/* ioNamePtr may point to local	tempPathname, so don't return it */
+	}
+	else
+	{
+		error = paramErr;
+	}
+	return ( error );
+}
+
+/*****************************************************************************/
+
+static pascal	OSErr	DetermineVRefNum(ConstStr255Param pathname,
+								 short vRefNum,
+								 short *realVRefNum)
+{
+	HParamBlockRec pb;
+	OSErr error;
+
+	error = GetVolumeInfoNoName(pathname,vRefNum, &pb);
+	if ( error == noErr )
+	{
+		*realVRefNum = pb.volumeParam.ioVRefNum;
+	}
+	return ( error );
+}
+
+/*****************************************************************************/
+
+static pascal	OSErr GetCatInfoNoName(short vRefNum,
+							   long dirID,
+							   ConstStr255Param name,
+							   CInfoPBPtr pb)
+{
+	Str31 tempName;
+	OSErr error;
+	
+	/* Protection against File Sharing problem */
+	if ( (name == NULL) || (name[0] == 0) )
+	{
+		tempName[0] = 0;
+		pb->dirInfo.ioNamePtr = tempName;
+		pb->dirInfo.ioFDirIndex = -1;	/* use ioDirID */
+	}
+	else
+	{
+		pb->dirInfo.ioNamePtr = (StringPtr)name;
+		pb->dirInfo.ioFDirIndex = 0;	/* use ioNamePtr and ioDirID */
+	}
+	pb->dirInfo.ioVRefNum = vRefNum;
+	pb->dirInfo.ioDrDirID = dirID;
+	error = PBGetCatInfoSync(pb);
+	pb->dirInfo.ioNamePtr = NULL;
+	return ( error );
+}
+
+/*****************************************************************************/
+
+static pascal	OSErr	GetDirectoryID(short vRefNum,
+							   long dirID,
+							   ConstStr255Param name,
+							   long *theDirID,
+							   Boolean *isDirectory)
+{
+	CInfoPBRec pb;
+	OSErr error;
+
+	error = GetCatInfoNoName(vRefNum, dirID, name, &pb);
+	if ( error == noErr )
+	{
+		*isDirectory = (pb.hFileInfo.ioFlAttrib & kioFlAttribDirMask) != 0;
+		if ( *isDirectory )
+		{
+			*theDirID = pb.dirInfo.ioDrDirID;
+		}
+		else
+		{
+			*theDirID = pb.hFileInfo.ioFlParID;
+		}
+	}
+	
+	return ( error );
+}
+
+/*****************************************************************************/
+
+static pascal	OSErr	FSpGetDirectoryID(const FSSpec *spec,
+								  long *theDirID,
+								  Boolean *isDirectory)
+{
+	return ( GetDirectoryID(spec->vRefNum, spec->parID, spec->name,
+			 theDirID, isDirectory) );
+}
+
+#endif  /* INLINE_MOREFILES */
+#endif  /* OS_MAC */
 
 /*****************************************************************************
 *
@@ -182,26 +392,154 @@ static char * _this_file = __FILE__;
 *****************************************************************************/
 
 #ifdef OS_MAC
+
+static OSErr MacPathname2FSSpec(const char *inPathname, FSSpec *outFSS)
+{
+	OSErr err;
+	size_t len;
+	char *p;
+	short vRefNum;
+	long dirID;
+	FSSpec fss;
+	
+	if (inPathname == NULL || outFSS == NULL) {
+		return paramErr;
+	}
+	
+	err = HGetVol(NULL, &vRefNum, &dirID);  // default volume and directory
+	if (err != noErr) return err;
+	
+	len = strlen(inPathname);
+	
+	p = strchr(inPathname, ':');
+	if (p == NULL) {
+		// Partial pathname -- filename only
+		Str31 filename;
+		assert(len <= 31);
+		c2pstrcpy(filename, inPathname);
+		err = FSMakeFSSpec(vRefNum, dirID, filename, outFSS);
+	} else {
+		Str31 name;
+		int nameLen;
+		if (inPathname[0] == ':') {
+			// Relative pathname including directory path
+			
+		} else {
+			// Absolute pathname
+			//Str31 volName;  // We would use Str28 if it was defined -- 27, plus 1 for ':'.
+			nameLen = p - inPathname;
+			assert(nameLen <= 27);
+			name[0] = nameLen + 1;
+			memcpy(name + 1, inPathname, nameLen + 1);  // Copy the volume name and the colon.
+			err = DetermineVRefNum(name, 0, &vRefNum);
+			if (err != noErr) return err;
+			dirID = 2;
+		}
+		// vRefNum and dirID now specify the directory in which we should descend
+		// the path pointed to by p (pointing to the first colon).
+		p++;
+		while (p != NULL && *p != '\0') {
+			char *q = strchr(p, ':');
+			if (q != NULL) {
+				Boolean isDir;
+				nameLen = q - p;
+				assert(nameLen <= 31);
+				name[0] = nameLen;
+				memcpy(name + 1, p, nameLen);
+				err = FSMakeFSSpec(vRefNum, dirID, name, &fss);
+				if (err != noErr) return err;
+				if (q[1] == '\0') {
+					p = NULL;
+					*outFSS = fss;
+				} else {
+					err = FSpGetDirectoryID(&fss, &dirID, &isDir);
+					assert(isDir == true);
+					if (err != noErr) return err;
+					p = q + 1;
+				}
+			} else {
+				q = strchr(p, '\0');  // go to end of string
+				nameLen = q - p;
+				assert(nameLen > 0);
+				assert(nameLen <= 31);
+				c2pstrcpy(name, p);
+				p = NULL;
+				err = FSMakeFSSpec(vRefNum, dirID, name, outFSS);
+			}
+		}
+	}
+	return err;
+}
+
+#if 0
+static OSErr MacFSSpec2FullPathname(const FSSpec *inFSS, char **outPathname)
+{
+	OSErr err;
+	Handle h;
+	short fullPathLength;
+	static char *fullPath = NULL;
+	
+	if (fullPath != NULL) {
+		Nlm_Free(fullPath);
+		fullPath = NULL;
+	}
+	err = FSpGetFullPath(inFSS, &fullPathLength, &h);
+	if (err != noErr) return err;
+	
+	assert(fullPathLength >= 2);  // An absolute pathname must be at least two chars long
+	fullPath = (char *)Nlm_Malloc(fullPathLength + 1);
+	if (fullPath == NULL) {
+		err = memFullErr;
+	} else {
+		strncpy(fullPath, *h, fullPathLength);
+	}
+	
+	DisposeHandle(h);
+	
+	*outPathname = fullPath;
+	return err;
+}
+#endif
+
+static OSErr MacCreateDirectory(const char *inPathname)
+{
+	OSErr err;
+	FSSpec fss;
+	ScriptCode scriptTag = 0;
+	long createdDirID;
+	
+	err = MacPathname2FSSpec(inPathname, &fss);
+	if (err != noErr) return err;
+	
+	err = FSpDirCreate(&fss, scriptTag, &createdDirID);
+	return err;
+}
+
+#if 0
+/* This function takes an absolute pathname and returns the volume reference number. */
+
 static short Nlm_MacGetVRefNum (Nlm_CharPtr pathname, OSErr *errptr)
 
 {
   OSErr           err;
-  Nlm_Char        filename [FILENAME_MAX];
+  //Nlm_Char        filename [FILENAME_MAX];
   Nlm_Char        path [256];
   HParamBlockRec  pbh;
   Nlm_CharPtr     ptr;
 
-  memset (&pbh, 0, sizeof (HParamBlockRec));
+#if 0
+#else
   Nlm_StringNCpy_0(path, pathname, sizeof(path));
   ptr = Nlm_StringRChr (path, (int) DIRDELIMCHR);
   if (ptr != NULL) {
     ptr++;
-    Nlm_StringNCpy_0(filename, ptr, sizeof(filename));
+    //Nlm_StringNCpy_0(filename, ptr, sizeof(filename));
     *ptr = '\0';
     Nlm_CtoPstr ((Nlm_CharPtr) path);
+    memset (&pbh, 0, sizeof (HParamBlockRec));
     pbh.volumeParam.ioNamePtr = (StringPtr) path;
     pbh.volumeParam.ioVolIndex = -1;
-    err = PBHGetVInfo (&pbh, FALSE);
+    err = PBHGetVInfoSync (&pbh);
     if (errptr != NULL) {
       *errptr = err;
     }
@@ -212,7 +550,15 @@ static short Nlm_MacGetVRefNum (Nlm_CharPtr pathname, OSErr *errptr)
     }
     return 0;
   }
+#endif
 }
+
+/*	This function takes a relative pathname and a volume reference number,
+ *	and returns the directory ID.
+ *	
+ *	However, I believe it will return the parent directory's ID if the trailing colon
+ *	is omitted.
+ */
 
 static long Nlm_MacGetDirID (Nlm_CharPtr pathname, short newVRefNum, OSErr *errptr)
 
@@ -246,6 +592,7 @@ static long Nlm_MacGetDirID (Nlm_CharPtr pathname, short newVRefNum, OSErr *errp
 }
 
 #endif
+#endif  /* 0 */
 
 /*****************************************************************************
 *
@@ -713,19 +1060,24 @@ NLM_EXTERN void LIBCALL Nlm_FileCreate (Nlm_CharPtr fileName, Nlm_CharPtr type, 
 *
 *****************************************************************************/
 
+#ifdef OS_MAC
+NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_CreateDir (Nlm_CharPtr pathname)
+{
+  if (pathname != NULL && pathname [0] != '\0') {
+    OSErr err;
+    err = MacCreateDirectory(pathname);
+    return (Nlm_Boolean) (err == noErr || err == dupFNErr);
+  }
+  return FALSE;
+}
+#endif
+
+#ifndef OS_MAC
 NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_CreateDir (Nlm_CharPtr pathname)
 {
 #ifndef OS_VMS
   size_t          len;
   Nlm_Char        path[PATH_MAX];
-#endif
-#ifdef OS_MAC
-  long            dirID;
-  Nlm_Char        dirname [FILENAME_MAX];
-  OSErr           err;
-  HParamBlockRec  pbh;
-  Nlm_CharPtr     ptr;
-  short           vRefNum;
 #endif
 #ifdef OS_UNIX
   mode_t          oldmask;
@@ -733,31 +1085,6 @@ NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_CreateDir (Nlm_CharPtr pathname)
   Nlm_Boolean     rsult = FALSE;
 
   if (pathname != NULL && pathname [0] != '\0') {
-#ifdef OS_MAC
-    Nlm_StringNCpy_0(path, pathname, sizeof(path));
-    len = Nlm_StringLen (path);
-    if (len > 0 && path [len - 1] == DIRDELIMCHR) {
-        path [len - 1] = '\0';
-    }
-    memset (&pbh, 0, sizeof (HParamBlockRec));
-    vRefNum = Nlm_MacGetVRefNum (path, &err);
-    if (err == noErr) {
-      dirID = Nlm_MacGetDirID (path, vRefNum, &err);
-      if (err == noErr) {
-        ptr = Nlm_StringRChr (path, (int) DIRDELIMCHR);
-        if (ptr != NULL) {
-          ptr++;
-          Nlm_StringNCpy_0(dirname, ptr, sizeof(dirname));
-          Nlm_CtoPstr ((Nlm_CharPtr) dirname);
-          pbh.fileParam.ioNamePtr = (StringPtr) dirname;
-          pbh.fileParam.ioVRefNum = vRefNum;
-          pbh.fileParam.ioDirID = dirID;
-          err = PBDirCreate (&pbh, FALSE);
-          rsult = (Nlm_Boolean) (err == noErr || err == dupFNErr);
-        }
-      }
-    }
-#endif
 #if defined(OS_MSWIN) || defined(OS_NT)
     Nlm_StringNCpy_0(path, pathname, sizeof(path));
     len = Nlm_StringLen (path);
@@ -788,6 +1115,7 @@ NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_CreateDir (Nlm_CharPtr pathname)
   }
   return rsult;
 }
+#endif
 
 /*****************************************************************************
 *
@@ -1011,211 +1339,4 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam (Nlm_CharPtr s)
 #endif
 #endif
 }
-
-/*****************************************************************************
-*
-*   CD-ROM Ejection Routines
-*
-*****************************************************************************/
-
-NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_EjectCd(Nlm_CharPtr sVolume, Nlm_CharPtr deviceName,
-			Nlm_CharPtr rawDeviceName, 
-			Nlm_CharPtr mountPoint,
-			Nlm_CharPtr mountCmd)
-{
-    Nlm_Boolean retval = FALSE;
-#ifdef OS_MAC
-    OSErr err;
-    Nlm_CharPtr prob_area = "Ejection";
-    Nlm_Char    temp [64];
-
-    
-    Nlm_StringNCpy_0(temp, sVolume, sizeof(temp) - 1);
-    Nlm_StringCat (temp, ":");
-    if ((err = Eject((StringPtr) NULL, Nlm_MacGetVRefNum(temp, NULL))) == noErr)
-    {
-        if ((err = UnmountVol((StringPtr) NULL, Nlm_MacGetVRefNum(temp, NULL))) == noErr)
-        	return TRUE;
-        
-        /* We should still return TRUE if we Eject() successfully but failed to    */
-        /* unmount the volume; however, we need to warn them, because a subsequent */
-        /* GetFInfo() will result in a bus error, at least with System 7.0.        */
-        retval = TRUE;
-        prob_area = "Unmounting";
-    }
-
-    switch (err) {
-    case bdNamErr:
-	ErrPostEx(SEV_ERROR,E_File,E_CdEject,"%s error - bad volume name %s", prob_area, sVolume);
-	break;
-    case extFSErr:
-	ErrPostEx(SEV_ERROR,E_File,E_CdEject,"%s error - external file system %s", prob_area, sVolume);
-	break;
-    case ioErr:
-	ErrPostEx(SEV_ERROR,E_File,E_CdEject,"%s error - I/O error %s", prob_area, sVolume);
-	break;
-    case nsDrvErr:
-	ErrPostEx(SEV_ERROR,E_File,E_CdEject,"%s error - No such drive %s", prob_area, sVolume);
-	break;
-    case nsvErr:
-	ErrPostEx(SEV_ERROR,E_File,E_CdEject,"%s error - No such volume %s", prob_area, sVolume);
-	break;
-    case paramErr:
-	ErrPostEx(SEV_ERROR,E_File,E_CdEject,"%s error - No default volume %s", prob_area, sVolume);
-	break;
-    }
-    
-    return retval;
-#endif /* OS_MAC */
-
-#ifdef OS_UNIX
-	char cmd[100];
-#endif
-#ifdef OS_UNIX_SUN
-	int fd;
-
-	if (deviceName == NULL)
-	{
-		deviceName = DEFAULT_CDROM;
-	}
-
-	if (rawDeviceName == NULL)
-	{
-		rawDeviceName = DEFAULT_RAW_CDROM;
-	}
-
-	/* Open the CD-ROM character-based device */
-	if ((fd = open(rawDeviceName, O_RDONLY, 0)) < 0)
-	{
-		ErrPostEx(SEV_ERROR,E_File,E_CdEject,"Ejection error - Unable to open device %s", rawDeviceName);
-		return FALSE;
-	}
-
-	retval = ioctl(fd, CDROMEJECT, 0) >= 0;
-	close (fd);
-
-	if (! retval)
-	{
-		ErrPostEx(SEV_ERROR,E_File,E_CdEject,"Ejection error - Ioctl failure for %s", rawDeviceName);
-    	return FALSE;
-	}
-#endif /* OS_UNIX_SUN */
-
-#ifdef OS_UNIX
-	/* Now try to unmount device using (un)mount-script */
-	if (mountCmd != NULL)
-	{
-		sprintf(cmd, "%s -u %s >/dev/null 2>/dev/null", mountCmd,
-				deviceName);
-		retval = system(cmd) == 0;
-	}
-	else {
-		if (deviceName != NULL)
-		{
-			retval = Message(MSG_OKC,
-				            "Unmount device <%s> now; select OK when completed",
-						    deviceName) != ANS_CANCEL;
-		}
-		else
-		if (sVolume != NULL)
-		{
-			retval = Message(MSG_OKC,
-						    "Unmount volume <%s> now; select OK when completed",
-						    sVolume) != ANS_CANCEL;
-		}
-		else
-		{
-			retval = Message(MSG_OKC,
-							"Unmount CD-ROM now; select OK when completed") !=
-							ANS_CANCEL;
-		}
-	}
-#endif /* OS_UNIX */
-
-#ifdef OS_VMS
-	char  cmd[100];
-	char  tmp[100];
-	char* cPtr;
-
-
-	if ( mountPoint == NULL || *mountPoint == '\0' ) 
-		strcpy(tmp,DEFAULT_CDROM); 
-	else {
-		strcpy(tmp,mountPoint);
-		if ( cPtr = strchr(tmp,':') ) *(cPtr+1) = '\0';
-	}
-	/* 
-	** Try to mount device using mount-script 
-	*/
-
-	sprintf(cmd, "CD_DISMOUNT/UNLOAD %s",tmp);
-	retval = (system(cmd) == 0);
-
-	 Message(MSG_OK,
-		"Press the eject button on <%s>.",tmp);
-
-#endif
-	
-    return retval;
-}
-
-NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_MountCd(Nlm_CharPtr sVolume, Nlm_CharPtr deviceName,
-			Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd)
-{
-	Nlm_Boolean retval = FALSE;
-
-#ifdef OS_UNIX
-	char cmd[100];
-
-	if (deviceName == NULL)
-	{
-		deviceName = DEFAULT_CDROM;
-	}
-
-	/* Try to mount device using mount-script */
-	if (mountCmd != NULL)
-	{
-		sprintf(cmd, "%s -m %s %s >/dev/null 2>/dev/null", mountCmd, deviceName,
-				mountPoint != NULL ? mountPoint : "");
-		retval = system(cmd) == 0;
-	}
-	else {
-		if (deviceName != NULL)
-		{
-		}
-		else
-		{
-			retval = Message(MSG_OKC,
-							"Mount CD-ROM now; select OK when completed") !=
-							ANS_CANCEL;
-		}
-	}
-#endif
-
-#ifdef OS_VMS
-	char  cmd[100];
-	char  tmp[100];
-	char* cPtr;
-
-
-	if ( mountPoint == NULL || *mountPoint == '\0' ) 
-		strcpy(tmp,DEFAULT_CDROM); 
-	else {
-		strcpy(tmp,mountPoint);
-		if ( cPtr = strchr(tmp,':') ) *(cPtr+1) = '\0';
-	}
-
-
-	/* Try to mount device using mount-script */
-
-	sprintf(cmd, "CD_MOUNT/MEDIA=CDROM/OVERRIDE=IDENTIFICATION/NOASSIST %s",
-          tmp);
-
-	retval = (system(cmd) == 0);
-
-#endif
-
-	return retval;
-}
-
 

@@ -38,6 +38,9 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: accmmdbs.c,v $
+ * Revision 6.2  2001/06/21 14:21:55  thiessen
+ * add BiostrucId... stubs
+ *
  * Revision 6.1  1999/03/03 21:27:34  kans
  * added stub for ClearStructures
  *
@@ -214,3 +217,13 @@ NLM_EXTERN BiostrucFeatureSetPtr LIBCALL BiostrucFeatureSetNew(void)
 
 NLM_EXTERN BiostrucFeaturePtr LIBCALL BiostrucFeatureNew(void)
 { return NULL; }
+
+NLM_EXTERN BiostrucIdPtr LIBCALL BiostrucIdFree(BiostrucIdPtr ptr)
+{ return NULL; }
+
+NLM_EXTERN BiostrucIdPtr LIBCALL BiostrucIdAsnRead(AsnIoPtr io, AsnTypePtr type)
+{ return NULL; }
+
+NLM_EXTERN Boolean LIBCALL BiostrucIdAsnWrite(BiostrucIdPtr id, AsnIoPtr io, AsnTypePtr type)
+{ return FALSE; }
+

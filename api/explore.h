@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -338,6 +338,32 @@ NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures (
   SeqLocPtr locationFilter,
   BoolPtr seqFeatFilter,
   BoolPtr featDefFilter
+);
+
+/*****************************************************************************
+*
+*   SeqMgrGetFeatureByLabel returns the a feature with the desired label
+*   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
+*     in &context as the last parameter
+*   SeqMgrGetNextFeatureByLabel works like SeqMgrGetNextFeature, except that
+*     the order is by alphabetized label, not by chromosomal position
+*
+*****************************************************************************/
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (
+  BioseqPtr bsp,
+  CharPtr label,
+  Uint1 seqFeatChoice,
+  Uint1 featDefChoice,
+  SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByLabel (
+  BioseqPtr bsp,
+  SeqFeatPtr curr,
+  Uint1 seqFeatChoice,
+  Uint1 featDefChoice,
+  SeqMgrFeatContext PNTR context
 );
 
 /*****************************************************************************

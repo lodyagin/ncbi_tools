@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.41 $
+* $Revision: 6.45 $
 *
 * File Description: 
 *
@@ -47,6 +47,18 @@
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.45  2001/06/26 20:41:16  kans
+* FlatLocPoint as last resort prints gi|#####
+*
+* Revision 6.44  2001/06/25 19:18:13  kans
+* get_feats SEQFEAT_CDREGION finds core without changing scope, if using indexes it indexes the entity if necessary, never goes to old gather code
+*
+* Revision 6.43  2001/04/12 22:48:52  yaschenk
+* removing excessive ObjMgr calls
+*
+* Revision 6.42  2001/04/05 21:44:51  tatiana
+* additional synonym in GeneRefInfoToGsp()
+*
 * Revision 6.41  2001/02/01 23:06:32  tatiana
 * check for NULL added in MatchNAGeneToFeat
 *
@@ -400,14 +412,12 @@ NLM_EXTERN CharPtr FlatLocHalfCaret
 NLM_EXTERN Boolean FlatLocPoint (SeqIdPtr pointIdPtr, SeqIdPtr this_sidp, CharPtr piecebuf, Int4 point, IntFuzzPtr pointfuzzPtr)
 /* FLATLOC_CONTEXT_LOC is removed 08.31.95 */
 {
-	BioseqPtr bs;
 	SeqIdPtr use_id;
 	Char buf_space[MAX_CHAR_LOCATION +1], halfbuf_space[MAX_CHAR_LOCATION +1];
 	CharPtr buf, halfbuf, temp;
 	static Boolean order_initialized = FALSE;
 	static Uint1 order[18];
 	ObjectIdPtr ob;
-	Boolean was_lock = FALSE;
 	
 if ( ! order_initialized){
 	int dex;
@@ -439,28 +449,18 @@ if ( ! order_initialized){
 
 	if (pointIdPtr) {
 		if ( ! SeqIdIn ( pointIdPtr, this_sidp)){
-			use_id = pointIdPtr;
-            bs = BioseqFind(use_id);
-#if 0
-            if (bs == NULL) {
-            	bs = BioseqLockById(use_id);
-            	was_lock = TRUE;
-            }
-#endif
-			if ( bs ){
-				use_id = SeqIdSelect ( bs -> id, order, 18);
-			} else if (pointIdPtr->choice == SEQID_GI) {
+			if (pointIdPtr->choice == SEQID_GI) {
 				use_id = GetSeqIdForGI(pointIdPtr->data.intvalue);
+			} else {
+				use_id = pointIdPtr;
 			}
-			if (use_id) {
-				SeqIdWrite( use_id, buf, 
-						PRINTID_TEXTID_ACC_VER, MAX_CHAR_LOCATION);
-			} else if (pointIdPtr->choice == SEQID_GI) {
-				SeqIdWrite( pointIdPtr, buf, 
-						PRINTID_FASTA_LONG, MAX_CHAR_LOCATION);
+			
+			SeqIdWrite( use_id, buf, PRINTID_TEXTID_ACC_VER, MAX_CHAR_LOCATION);
+			if(*buf == '\0') {
+				SeqIdWrite(use_id, buf,PRINTID_FASTA_LONG, MAX_CHAR_LOCATION);
 			}
-			if (was_lock) {
-				BioseqUnlock(bs);
+			if (*buf == '\0' && use_id == NULL && pointIdPtr->choice == SEQID_GI) {
+				SeqIdWrite (pointIdPtr, buf, PRINTID_FASTA_LONG, MAX_CHAR_LOCATION);
 			}
 			if (*buf == '\0') {
 				StringCpy(buf,"?00000");
@@ -478,9 +478,8 @@ if ( ! order_initialized){
 		}
 	}
 	FlatLocHalf(halfbuf, point+1, pointfuzzPtr);
-    temp = StringMove(temp, halfbuf);
-		StringMove(piecebuf, buf);
-
+	temp = StringMove(temp, halfbuf);
+	StringMove(piecebuf, buf);
 	return TRUE;
 }
 
@@ -1797,6 +1796,7 @@ static Boolean get_feats (GatherContextPtr gcp)
 	SeqFeatPtr 		new_sfp, psfp;
 	Int4 			index;
 	Boolean 		temp = FALSE;
+	Uint2           entityID;
 	SeqMgrFeatContext fcontext;
 	
 	ofp = gcp->userdata;
@@ -1949,6 +1949,10 @@ static Boolean get_feats (GatherContextPtr gcp)
 			if (p_bsp != NULL)    /*Bioseq is (or has been) in memory */
 			{
 				if (ofp->useSeqMgrIndexes) {
+					entityID = ObjMgrGetEntityIDForPointer (p_bsp);
+					if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+						SeqMgrIndexFeatures (entityID, NULL);
+					}
 					psfp = SeqMgrGetBestProteinFeature (p_bsp, NULL);
 					if (psfp != NULL) {
 						psfp = SeqMgrGetNextFeature (p_bsp, NULL, 0, 0, &fcontext);
@@ -1968,8 +1972,8 @@ static Boolean get_feats (GatherContextPtr gcp)
 							}
 							psfp = SeqMgrGetNextFeature (p_bsp, psfp, 0, 0, &fcontext);
 						}
-						return TRUE;
 					}
+					return TRUE;
 				}
 				opp = (OrganizeProtPtr) MemNew(sizeof(OrganizeProt));
 				opp->size = 0;
@@ -2065,7 +2069,7 @@ static Boolean is_embl(GBEntryPtr gbp)
 static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp, SeqFeatPtr sfp)
 
 {
-	ValNodePtr syn;
+	ValNodePtr syn, vsyn = NULL;
 	
 	if (grp == NULL) {
 		return;
@@ -2074,16 +2078,25 @@ static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp, SeqFeatPtr sfp)
 	if (grp->locus != NULL) {
 		if (gsp->gene != NULL && 
 			StringCmp(gsp->gene->data.ptrvalue, grp->locus) != 0) {
+			if (syn != NULL) {
+				vsyn = ValNodeCopyStr(&(vsyn), 0, syn->data.ptrvalue);
+				gsp->gene->next=vsyn;
+			}
 			return;
 		}
 		if (gsp->gene == NULL) {
 			gsp->gene = ValNodeCopyStr(&(gsp->gene), 0, grp->locus);
 		}
-	} else if (syn != NULL) {
-		gsp->gene = ValNodeCopyStr(&(gsp->gene), 0, syn->data.ptrvalue);
-		syn=syn->next;
 	} else if (grp->desc != NULL) {
 		gsp->gene = ValNodeCopyStr(&(gsp->gene), 0, grp->desc);
+	}
+	if (syn != NULL) {
+			vsyn = ValNodeCopyStr(&(vsyn), 0, syn->data.ptrvalue);
+		if (gsp->gene == NULL) {
+			gsp->gene = vsyn;
+		} else {
+			gsp->gene->next=vsyn;
+		}
 	}
 	if (gsp->map[0] == NULL && grp->maploc)
 		gsp->map[0] = grp->maploc;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -68,12 +68,18 @@ NLM_EXTERN void EntrezSetProgramName (
   CharPtr progname
 );
 
-/* for development testing, later to override ncbi named service */
+/* to be phased out, currently overrides ncbi named service, goes directly to URL */
 
 NLM_EXTERN void EntrezSetServer (
   CharPtr host_machine,
   Uint2 host_port,
   CharPtr host_path
+);
+
+/* use Entrez2Test to override default Entrez2 ncbi named service */
+
+NLM_EXTERN void EntrezSetService (
+  CharPtr service
 );
 
 /* low-level connection functions */

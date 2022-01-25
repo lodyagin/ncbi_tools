@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.59 2001/03/15 21:30:22 beloslyu Exp $
+# $Id: makedis.csh,v 1.62 2001/06/15 16:56:17 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -23,6 +23,7 @@
 #  Please cite the author in any work or product based on this material.   
 #  Author: Karl Sirotkin <sirotkin@ncbi.nlm.nih.gov>
 #
+#  IBM AIX section: cpsosa@us.ibm.com  Jun-2001
 #
 # Script to untar and make the NCBI toolkit on Solaris.
 #
@@ -116,7 +117,14 @@ case OSF1:
 	set platform=alphaOSF1
 	breaksw
 case Linux:
-	set platform=linux
+	switch (`uname -m`)
+	case "ppc":
+		set platform=ppclinux
+		breaksw
+	default:
+		set platform=linux
+		breaksw
+	endsw
 	#check do we have Motif on linux installed
 	set HAVE_MOTIF=0
 	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
@@ -157,7 +165,12 @@ case NetBSD:
 	end
 	breaksw
 case AIX:
-	set platform=r6k
+	set arch=`uname -M | sed 's/.*-//'`
+	if ($arch == 150 || $arch == 170 || $arch == 260 || $arch == 270 ) then
+		set platform=ibm_pwr3
+	else
+		set platform=ibm_auto
+	endif
 	set HAVE_MOTIF=0
 	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
 		/usr/include/X11 )
@@ -191,8 +204,8 @@ set noglob
 # (1) remove comments at the beginning of the lines
 # (2) change variable referenses to be in curly brackets - $AAA -> ${AAA}
 # (3) remove excessive spaces around the equal sign
-# (4) change Makefile assignments to csh ones: AAA=bb cc -> set AAA = "bb cc"
-eval `sed -e 's/^ *#.*//g' -e 's/\$(\([a-zA-Z_]*\))/\${\1}/g' -e 's/ *= */=/g' -e 's/^\([^=]*\)=\(.*\)$/set \1 = "\2";/' < $NCBI_DOT_MK`
+# (4) change Makefile assignments to csh ones: AAA=bb cc -> setenv AAA "bb cc"
+eval `sed -e 's/^ *#.*//g' -e 's/\$(\([a-zA-Z_]*\))/\${\1}/g' -e 's/ *= */=/g' -e 's/^\([^=]*\)=\(.*\)$/setenv \1 "\2";/' < $NCBI_DOT_MK`
 unset noglob
 
 cd ncbi/build

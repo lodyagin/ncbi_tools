@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  Header file for asn2gb files.
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff.h,v $
+* Revision 6.14  2001/04/05 21:52:18  tatiana
+* format and strand added to SeqEntryToEntrez
+*
 * Revision 6.13  2001/03/15 21:42:00  tatiana
 * SeqEntryToEntrez added
 *
@@ -156,7 +159,7 @@ NLM_EXTERN LinkStrPtr asn2ff_print_to_mem PROTO ((Asn2ffJobPtr job, LinkStrPtr l
 
 NLM_EXTERN Asn2ffJobPtr Asn2ffJobCreate PROTO ((SeqEntryPtr sep, SeqSubmitPtr ssp, SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mode, StdPrintOptionsPtr	Spop));
 
-NLM_EXTERN Boolean SeqEntryToEntrez PROTO ((SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid,  Uint1 display, Int4 from, Int4 to));
+NLM_EXTERN Boolean SeqEntryToEntrez PROTO ((SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, Uint1 format, Uint1 display, Int4 from, Int4 to, Uint1 strand));
 
 NLM_EXTERN CharPtr PNTR SeqEntryToStrArray PROTO ((SeqEntryPtr sep, Uint1 format, Uint1 mode));
 

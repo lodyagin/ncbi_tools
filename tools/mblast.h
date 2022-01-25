@@ -32,8 +32,14 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.33 $ 
+/* $Revision: 6.35 $ 
 * $Log: mblast.h,v $
+* Revision 6.35  2001/06/13 21:40:54  dondosha
+* Moved GetGisFromFile declaration from mblast.h to blast.h
+*
+* Revision 6.34  2001/05/04 15:55:21  dondosha
+* Take into account removal of short sequences in function BlastFillQueryOffsets
+*
 * Revision 6.33  2000/12/21 22:29:29  dondosha
 * Added prototype for MegaBlastGetHspPercentIdentity
 *
@@ -198,8 +204,7 @@ BioseqMegaBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr datab
 SeqAlignPtr PNTR
 BioseqMegaBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix));
 
-BlastSearchBlkPtr BlastFillQueryOffsets PROTO((BlastSearchBlkPtr search, SeqLocPtr
-					query_slp));
+BlastSearchBlkPtr BlastFillQueryOffsets PROTO((BlastSearchBlkPtr search, SeqLocPtr query_slp, Int4 wordsize));
 
 Boolean MegaBlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp,
 					Int2Ptr first_context, Int2Ptr
@@ -223,7 +228,6 @@ MegaBlastPackAlignmentsByQuery PROTO((BlastSearchBlkPtr search,
 Int2 LIBCALL
 MegaBlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_length, Int4 effective_length));
 
-BlastDoubleInt4Ptr GetGisFromFile PROTO((CharPtr file_name, Int4Ptr gi_list_size));
 int LIBCALLBACK compare PROTO((VoidPtr v1, VoidPtr v2));
 Uint1Ptr GetPrivatTranslationTable PROTO((CharPtr genetic_code, Boolean
 					  reverse_complement));

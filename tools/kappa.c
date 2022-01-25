@@ -1,4 +1,4 @@
-/* $Id: kappa.c,v 6.15 2001/03/20 15:07:34 madden Exp $ 
+/* $Id: kappa.c,v 6.18 2001/07/09 15:12:47 shavirin Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,19 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.15 $
+ $Revision: 6.18 $
 
  $Log: kappa.c,v $
+ Revision 6.18  2001/07/09 15:12:47  shavirin
+ Functions BLbasicSmithWatermanScoreOnly() and BLSmithWatermanFindStart()
+ used to calculate Smith-waterman alignments on low level become external.
+
+ Revision 6.17  2001/05/25 19:40:46  vakatov
+ Nested comment typo fixed
+
+ Revision 6.16  2001/04/13 20:47:36  madden
+ Eliminated use of PRO_K_MULTIPLIER in adjusting E-values Added allocateStartFreqs and freeStartFreqs and getStartFreqRatios to enable the score matrix scaling to work entirely with frequency ratios and round to integers only at the very end of the scaling calculation.
+
  Revision 6.15  2001/03/20 15:07:34  madden
  Fix from AS for (near) exact matches
 
@@ -105,7 +115,6 @@ Contents: Utilities for doing Smith-Waterman alignments and adjusting
 #define EVALUE_STRETCH 5 /*by what factor might initially reported E-value
                            exceed true Evalue*/
 #define PRO_TRUE_ALPHABET_SIZE 20
-#define PRO_K_MULTIPLIER 1.2
 #define scoreRange 10000
 
 
@@ -346,7 +355,7 @@ void segResult(BioseqPtr bsp, Uint1 * inputString, Uint1 * resultString, Int4 le
   kbp holds the Karlin-Altschul parameters 
   positionSpecific determines whether matrix is position specific or not*/
 
-static Nlm_FloatHi BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq, 
+Nlm_FloatHi BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq, 
    Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, 
    Int4 gapOpen, Int4 gapExtend,  Int4 *matchSeqEnd, Int4 *queryEnd, Int4 *score,
    BLAST_KarlinBlkPtr kbp, Nlm_FloatHi effSearchSpace, Boolean positionSpecific)
@@ -447,7 +456,7 @@ static Nlm_FloatHi BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq,
   the score is also returned
   positionSpecific determines whether matrix is position specific or not*/
   
-static Int4 BLSmithWatermanFindStart(Uint1 * matchSeq, 
+Int4 BLSmithWatermanFindStart(Uint1 * matchSeq, 
    Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, 
    Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score,
    Int4 *matchSeqStart, Int4 *queryStart, Boolean positionSpecific)
@@ -829,6 +838,32 @@ static void freeScaledMatrix(BLAST_Score **matrix, Int4 numPositions)
   MemFree(matrix);
 }
 
+/*allocate a frequency ratio matrix with numPositionbs positions and return
+  the matrix*/
+static Nlm_FloatHi **allocateStartFreqs(Int4 numPositions)
+{
+  Nlm_FloatHi **returnMatrix; /*allocated matrix to return*/
+  Int4 row; /*loop index*/
+  Int4 c; /*loop index over characters*/
+
+  returnMatrix = (Nlm_FloatHi**) MemNew((numPositions + 1) * sizeof(Nlm_FloatHi *));
+  for(row = 0; row <= numPositions; row++)
+    returnMatrix[row] = (Nlm_FloatHi *) MemNew(PROTEIN_ALPHABET * sizeof(Nlm_FloatHi));
+  for(c = 0; c < PROTEIN_ALPHABET; c++)
+    returnMatrix[numPositions][c] = BLAST_SCORE_MIN;
+  return(returnMatrix);
+}
+
+/*deallocate a frequency ratio matrix*/
+static void freeStartFreqs(Nlm_FloatHi **matrix, Int4 numPositions)
+{
+  int row; /*loop index*/
+
+  for(row = 0; row <= numPositions; row++)
+    MemFree(matrix[row]);
+  MemFree(matrix);
+}
+
 /*matrix is a position-specific score matrix with matrixLength positions
   queryProbArray is an array containing the probability of occurrence
   of each residue in the query
@@ -959,24 +994,144 @@ static void fillResidueProbability(Uint1Ptr sequence, Int4 length, Nlm_FloatHi *
   }
 }
 
+
+#define posEpsilon 0.0001
+
+/*Return the a matrix of the frequency ratios that underlie the
+  score matrix being used on this pass. The returned matrix
+  is position-specific, so if we are in the first pass, use
+  query to convert the 20x20 standard matrix into a posiion-specific
+  variant. matrixname is the name of the underlying 20x20
+  score matrix used. numPositions is the length of the query;
+  startNumerator is the amtrix of frequency ratios as stored
+  in posit.c. It needs to be divided by the frequency of the
+  second character to get the intended ratio */
+static Nlm_FloatHi **getStartFreqRatios(BlastSearchBlkPtr search,
+					Uint1Ptr query,
+					Char *matrixName, 
+					Nlm_FloatHi **startNumerator,
+					Int4 numPositions, 
+					Boolean positionSpecific)
+{
+   Nlm_FloatHi ** returnRatios; /*frequency ratios to start investigating each pair*/
+   BLAST_ResFreqPtr stdrfp; /* gets standard frequencies in prob field */
+   Nlm_FloatHi *standardProb; /*probabilities of each letter*/
+   Int4 i,j;
+   returnRatios = allocateStartFreqs(numPositions);
+   if (positionSpecific) {
+     for(i = 0; i < numPositions; i++) {
+       for(j = 0; j < PROTEIN_ALPHABET; j++) {
+	 if ((0 == strcmp(matrixName,"BLOSUM62")) ||
+	     (0 == strcmp(matrixName,"BLOSUM62_20"))) {
+	   returnRatios[i][j] = BLOSUM62_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM62_20A")) {
+	   returnRatios[i][j] = 0.9666 * BLOSUM62_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM62_20B")) {
+	   returnRatios[i][j] = 0.9344 * BLOSUM62_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM45")) {
+	   returnRatios[i][j] = BLOSUM45_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM80")) {
+	   returnRatios[i][j] = BLOSUM80_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM50")) {
+	   returnRatios[i][j] = BLOSUM50_FREQRATIOS[query[i]][j];
+	 }
+
+	 if (0 == strcmp(matrixName,"BLOSUM90")) {
+	   returnRatios[i][j] = BLOSUM90_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"PAM250")) {
+	   returnRatios[i][j] = PAM250_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"PAM30")) {
+	   returnRatios[i][j] = PAM30_FREQRATIOS[query[i]][j];
+	 }
+	 if (0 == strcmp(matrixName,"PAM70")) {
+	   returnRatios[i][j] = PAM70_FREQRATIOS[query[i]][j];
+	 }
+       }
+     }
+     stdrfp = BlastResFreqNew(search->sbp);
+     BlastResFreqStdComp(search->sbp,stdrfp); 
+     standardProb = MemNew(PROTEIN_ALPHABET * sizeof(Nlm_FloatHi));
+     for(i = 0; i < PROTEIN_ALPHABET; i++)
+       standardProb[i] = stdrfp->prob[i];
+     /*reverse multiplication done in posit.c*/
+     for(i = 0; i < numPositions; i++) 
+       for(j = 0; j < PROTEIN_ALPHABET; j++) 
+	 if ((standardProb[query[i]] > posEpsilon) && (standardProb[j] > posEpsilon) &&     
+	     (j != StarChar) && (j != Xchar)
+	     && (startNumerator[i][j] > posEpsilon))
+	   returnRatios[i][j] = startNumerator[i][j]/standardProb[j];
+     stdrfp = BlastResFreqDestruct(stdrfp);
+   }
+
+   else {
+     for(i = 0; i < PROTEIN_ALPHABET; i++) {
+       for(j = 0; j < PROTEIN_ALPHABET; j++) {
+	 if ((0 == strcmp(matrixName,"BLOSUM62")) ||
+	     (0 == strcmp(matrixName,"BLOSUM62_20"))) {
+	   returnRatios[i][j] = BLOSUM62_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM62_20A")) {
+	   returnRatios[i][j] = 0.9666 * BLOSUM62_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM62_20B")) {
+	   returnRatios[i][j] = 0.9344 * BLOSUM62_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM45")) {
+	   returnRatios[i][j] = BLOSUM45_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM80")) {
+	   returnRatios[i][j] = BLOSUM80_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM50")) {
+	   returnRatios[i][j] = BLOSUM50_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"BLOSUM90")) {
+	   returnRatios[i][j] = BLOSUM90_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"PAM250")) {
+	   returnRatios[i][j] = PAM250_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"PAM30")) {
+	   returnRatios[i][j] = PAM30_FREQRATIOS[i][j];
+	 }
+	 if (0 == strcmp(matrixName,"PAM70")) {
+	   returnRatios[i][j] = PAM70_FREQRATIOS[i][j];
+	 }
+       }
+     }
+   }
+   return(returnRatios);
+}
+
 /************************************************************************
-/*take every entry of startMatrix that is not BLAST_SCORE_MIN and
-*multiply it by LambdaRatio then round to the nearest integer and
+ *take every entry of startFreqRatios that is not corresponding to
+ * a score of BLAST_SCORE_MIN and take its log, divide by Lambda and
+*multiply  by LambdaRatio then round to the nearest integer and
 *put the result in the corresponding entry of matrix.
 *startMatrix and matrix have dimensions numPositions X PROTEIN_ALPHABET
 ************************************************************************/
-static void scaleMatrix(BLAST_Score ** matrix, BLAST_Score **startMatrix, Int4 numPositions, Nlm_FloatHi LambdaRatio)
+static void scaleMatrix(BLAST_Score **matrix, BLAST_Score **startMatrix, 
+			Nlm_FloatHi **startFreqRatios, Int4 numPositions, 
+			Nlm_FloatHi Lambda, Nlm_FloatHi LambdaRatio)
 {
-  Int4 p, c; /*indices over positions and characters*/
-  Nlm_FloatHi temp; /*intermediate term in computation*/
+   Int4 p, c; /*indices over positions and characters*/
+   Nlm_FloatHi temp; /*intermediate term in computation*/
 
    for (p = 0; p < numPositions; p++) {
      for (c = 0; c < PROTEIN_ALPHABET; c++) {
        if (matrix[p][c] == BLAST_SCORE_MIN)
 	 matrix[p][c] = startMatrix[p][c];
        else {
-         temp = ((Nlm_FloatHi) (startMatrix[p][c]));
-	 temp = temp * LambdaRatio;
+         temp = log(startFreqRatios[p][c]);
+         temp = temp/Lambda;
+	 temp = temp * LambdaRatio; 
 	 matrix[p][c] = Nlm_Nint(temp);
        }
      }
@@ -988,7 +1143,7 @@ static void scaleMatrix(BLAST_Score ** matrix, BLAST_Score **startMatrix, Int4 n
 Compute a scaled up version of the standard matrix encoded by matrix
 name. Standard matrices are in half-bit units.
 ************************************************************************/
-static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
+static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName, Nlm_FloatHi Lambda)
 {
    int i,j; /*loop indices*/
    Nlm_FloatHi temp; /*intermediate term in computation*/
@@ -1000,7 +1155,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM62_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(BLOSUM62_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp = log(BLOSUM62_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1012,7 +1167,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM62_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(0.9666 * BLOSUM62_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp =  log(0.9666 * BLOSUM62_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1024,7 +1179,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM62_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(0.9344 * BLOSUM62_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp = log(0.9344 * BLOSUM62_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1036,7 +1191,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == PAM30_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(PAM30_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp = log(PAM30_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1048,7 +1203,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == PAM70_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(PAM70_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp =  log(PAM70_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1060,7 +1215,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM45_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 3 * log(BLOSUM45_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp =  log(BLOSUM45_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1072,7 +1227,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM80_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(BLOSUM80_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp =  log(BLOSUM80_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1084,7 +1239,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM50_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(BLOSUM50_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp =  log(BLOSUM50_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1096,7 +1251,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == BLOSUM90_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(BLOSUM90_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp = log(BLOSUM90_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1108,7 +1263,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName)
          if(0.0 == PAM250_FREQRATIOS[i][j])
 	   matrix[i][j] = BLAST_SCORE_MIN;
 	 else {
-	   temp = scalingFactor * 2 * log(PAM250_FREQRATIOS[i][j])/NCBIMATH_LN2;
+	   temp =  log(PAM250_FREQRATIOS[i][j])/Lambda;
            matrix[i][j] = Nlm_Nint(temp);
 	 }
        }
@@ -1308,8 +1463,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    Nlm_FloatHi bestEvalue, newEvalue; /*Evalue for best and newest Smith_Waterman alignment*/
    BLAST_Score score; /*score of optimal local alignment*/
    Int4 *alignScript, *reverseAlignScript; 
-        /*edit script that describes pairwise alignment*
-   GapAlignBlkPtr gap_align; /*keeps track of gapped alignment parameters*/
+   /*edit script that describes pairwise alignment*/
    Int4 XdropAlignScore; /*alignment score obtained using
 			   X-dropoff method rather than Smith-Waterman*/
    Int4 doublingCount; /*number of times X-dropoff had to be doubled*/
@@ -1325,6 +1479,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 			       overlapping alignment*/
    BLAST_Score **matrix; /*score matrix*/
    BLAST_Score **startMatrix; /*score matrix to start investigating each pair*/
+   Nlm_FloatHi ** startFreqRatios; /*frequency ratios to start investigating each pair*/
    BLAST_Score **holdMatrix; /*matrix to hold what was originally passed in*/
    Int4 gapOpen, gapExtend, gapDecline; /*costs for opening and extending a gap*/
    Nlm_FloatHi localScalingFactor; /*scaling factor for scoring system*/
@@ -1405,17 +1560,24 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      if (search->positionBased) {
        matrix = allocateScaledMatrix(queryLength);
        startMatrix = allocateScaledMatrix(queryLength);
+       startFreqRatios = getStartFreqRatios(search, query, options->matrix, 
+					search->sbp->posFreqs,
+					queryLength, TRUE); 
        scalePosMatrix(matrix,  search->sbp->matrix, options->matrix, search->sbp->posFreqs,                    query,  queryLength, search->sbp);
        for(i = 0; i < queryLength; i++)
 	 for(j = 0; j < PROTEIN_ALPHABET; j++)
 	   startMatrix[i][j] = matrix[i][j];
        initialUngappedLambda = search->sbp->kbp_std[0]->Lambda;
+       scaledInitialUngappedLambda = initialUngappedLambda/localScalingFactor;
      }
      else {
        matrix = allocateScaledMatrix(PROTEIN_ALPHABET);
        startMatrix = allocateScaledMatrix(PROTEIN_ALPHABET);
+       startFreqRatios = getStartFreqRatios(search, query,options->matrix, 
+					NULL,PROTEIN_ALPHABET,FALSE);
        initialUngappedLambda = search->sbp->kbp_psi[0]->Lambda;
-       computeScaledStandardMatrix(matrix,options->matrix);
+       scaledInitialUngappedLambda = initialUngappedLambda/localScalingFactor;
+       computeScaledStandardMatrix(matrix,options->matrix, scaledInitialUngappedLambda);
        for(i = 0; i < PROTEIN_ALPHABET; i++)
 	 for(j = 0; j < PROTEIN_ALPHABET; j++)
 	   startMatrix[i][j] = matrix[i][j];
@@ -1424,7 +1586,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      /*set up Karlin-Altschul parameters and put in place here*/
      kbp =  BlastKarlinBlkCreate();
      kbp->Lambda = holdkbp->Lambda / localScalingFactor;
-     kbp->K = holdkbp->K * PRO_K_MULTIPLIER;
+     kbp->K = holdkbp->K;
      kbp->logK = log(kbp->K);
      kbp->H = holdkbp->H;
      if (search->positionBased) 
@@ -1470,6 +1632,10 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        matchingSequence = NULL;
        bsp_db = NULL;
      }
+
+     /*filteredMatchingSequence = matchingSequence;*/
+
+     /* switch to this if we want to filter the match*/
      filteredMatchingSequence = MemNew((matchingSequenceLength+1) * sizeof(Uint1));
      segResult(bsp_db, matchingSequence, filteredMatchingSequence, matchingSequenceLength); 
      bsp_db = BioseqFree(bsp_db);
@@ -1554,9 +1720,11 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	   if (LambdaRatio > 0) {
 	     doThis = TRUE;
 	     if (search->positionBased)
-	       scaleMatrix(matrix,startMatrix,queryLength,LambdaRatio);
+	       scaleMatrix(matrix,startMatrix,startFreqRatios, queryLength,
+			   scaledInitialUngappedLambda,LambdaRatio);
 	     else
-	       scaleMatrix(matrix,startMatrix,PROTEIN_ALPHABET,LambdaRatio);
+	       scaleMatrix(matrix,startMatrix,startFreqRatios,PROTEIN_ALPHABET,
+			   scaledInitialUngappedLambda,LambdaRatio);
 	     if (search->positionBased) 
 	       gap_align->posMatrix = gap_align->matrix = search->sbp->posMatrix = matrix;
 	     else 
@@ -1792,12 +1960,14 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        search->sbp->kbp_gap_psi[0] = holdkbp;
        freeScaledMatrix(matrix,queryLength);
        freeScaledMatrix(startMatrix,queryLength);
+       freeStartFreqs(startFreqRatios,queryLength);
      }
      else {
        search->sbp->matrix = holdMatrix;
        search->sbp->kbp_gap_std[0] = holdkbp;
        freeScaledMatrix(matrix,PROTEIN_ALPHABET);
        freeScaledMatrix(startMatrix,PROTEIN_ALPHABET);
+       freeStartFreqs(startFreqRatios,PROTEIN_ALPHABET);
        MemFree(queryProb);
      }
      MemFree(kbp);

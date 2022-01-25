@@ -4566,7 +4566,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 MegaBlastResultsAsnWrite(MegaBlastResultsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

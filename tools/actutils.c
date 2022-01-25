@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.22  2001/05/22 12:01:07  wheelan
+* changes to avoid overflow on alpha platform
+*
 * Revision 6.21  2001/03/26 16:45:57  wheelan
 * fixed uninitialized variables
 *
@@ -658,6 +661,8 @@ NLM_EXTERN void ACT_EstimateConfidence(ACTProfilePtr app)
          }
          if (max > 0)
             conf = conf*max;
+         if (conf > INT4_MAX)
+            conf = INT4_MAX;
       }
       app->confidence = conf;
       app = app->next;

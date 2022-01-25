@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnprint.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnprint.h,v $
+* Revision 6.4  2001/06/26 22:02:42  juran
+* Make C++-compatible.
+*
 * Revision 6.3  2000/12/12 15:56:14  ostell
 * added support BigInt
 *
@@ -79,6 +82,10 @@
 #define NLM_EXTERN extern
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
 *
 *   prototypes
@@ -104,6 +111,10 @@ NLM_EXTERN void AsnPrintCharBlock PROTO((CharPtr str, AsnIoPtr aip));
 NLM_EXTERN int AsnPrintGetWordBreak PROTO((CharPtr str, int maxlen));
 NLM_EXTERN void AsnPrintOpenStruct PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN void AsnPrintCloseStruct PROTO((AsnIoPtr aip, AsnTypePtr atp));
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #undef NLM_EXTERN

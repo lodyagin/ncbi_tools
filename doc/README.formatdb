@@ -150,6 +150,29 @@ formatdb arguments:
 	BLAST to better present taxonomic information as well as information 
 	about other resources (e.g., UniGene, LocusLink) for a database sequence.
 
+  	-L  Create an alias file with this name
+        	use the gifile arg (below) if set to calculate db size
+        	use the BLAST db specified with -i (above) [File Out]  Optional
+
+	This option produces a BLAST database alias file using a specified
+	database, but limiting the sequences searched to those in the GI list
+	given by the -F argument.  See the section "Note on creating an alias file 
+	for a GI list" for more information.
+
+  	-F  Gifile (file containing list of gi's) [File In]  Optional
+
+	This option can be used to specify the GI list for the alias file
+	construction (-L option above) or to produce a binary GI list if
+	the -B option (below) is set.
+
+  	-B  Binary Gifile produced from the Gifile specified above [File Out]  Optional
+
+	This option specifies the name of a binary GI list file.  This option should
+	be used with the -F option.  A text GI list may be specified with the -F
+	option and the -B option will produce that GI list in binary format.  The
+	binary file is smaller and BLAST does not need to convert it, so it can
+	be read faster.  
+
 
 
 Formatdb Notes/Troubleshooting:
@@ -196,10 +219,10 @@ option (-s) for formatdb described above.
 C.) Note on formatting large (4 Gig and larger) FASTA files:
 
 A single BLAST database can contain up to 4 billion letters.  If one
-wishes to formatdb a FASTA file containing more letters than this, then
-it is necessary to use the '-v' (volume) option to produce a number of
-BLAST databases, each containing 4 billion or fewer letters.  An
-example usage of formatdb for this would be:
+wishes to formatdb a FASTA file containing more letters than this, several
+databases, each of a maximum size of 4 billion bases, will be produced.
+This will be done automatically if the -v argument is not set.  One may 
+also specify a smaller size for the volume databases by using the -v option:
 
 formatdb -i hugefasta -p F -v 2000000000
 
@@ -303,6 +326,51 @@ sequences and use these as a database source file for searching. All
 BLAST database source files must be in FASTA format. In order to use
 the formatdb option -o T, especially for use with NCBI tool kit retrieval
 tools the FASTA defline must follow a specific format.
+
+F) Note on creating an alias file for a GI list.
+
+Formatdb can now produce a BLAST database alias file that specifies a (real)
+BLAST database to search as well as a GI list to limit the search.  This
+is useful if one often searches a subset of a database (e.g., based
+on organism or a curated list).  The alias file makes the search appear as
+if one were searching a real database rather than the subset of one.
+The procedure to produce an alias file for searching (protein) nr limiting it to a
+list of zebrafish GI's would be:
+
+1.) obtain the list of zebrafish GI's from Entrez or some other source and
+keep it in a file called "zebrafish.gi.in".
+
+2.) invoke formatdb to convert the text GI list to the more efficient binary format:
+
+formatdb -F zebrafish.gi.in -B zebrafish.gi
+
+3.) invoke formatdb with the following options:
+
+formatdb -i nr -p T -L zebrafish -F zebrafish.gi -t "My zebrafish database"
+
+This will produce the alias file zebrafish.pal listing the database title, the
+real database to be searched, the GI file, and some statistics:
+
+#
+# Alias file created Thu Jul  5 15:04:29 2001
+#
+#
+TITLE My zebrafish database
+#
+DBLIST nr
+#
+GILIST zebrafish.gi
+#
+#OIDLIST
+#
+NSEQ 1836
+LENGTH 640724
+
+
+One can search this by invoking (for example):
+
+blastall -p blastp -d zebrafish -i MYQUERY -o MYOUTPUT
+
 
 FASTA Defline Format
 --------------------

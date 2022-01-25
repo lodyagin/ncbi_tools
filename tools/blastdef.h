@@ -30,8 +30,23 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.117 $ 
+/* $Revision: 6.122 $ 
 * $Log: blastdef.h,v $
+* Revision 6.122  2001/07/12 19:50:24  madden
+* Changed release date
+*
+* Revision 6.121  2001/06/28 13:42:09  madden
+* Fixes to prevent overflow on number of hits reporting
+*
+* Revision 6.120  2001/06/12 19:48:56  madden
+* Introduce total_hsp_limit, check before making SeqAlign
+*
+* Revision 6.119  2001/04/13 20:56:08  madden
+* Updated version to 2.2.1, changed date
+*
+* Revision 6.118  2001/04/11 20:56:21  madden
+* Added scalingFactor for rpsblast, changed release date
+*
 * Revision 6.117  2001/03/30 21:58:18  madden
 * Change release date and version
 *
@@ -757,8 +772,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.1.3"
-#define BLAST_RELEASE_DATE "Apr-1-2001"
+#define BLAST_ENGINE_VERSION "2.2.1"
+#define BLAST_RELEASE_DATE "Jul-12-2001"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -966,6 +981,8 @@ typedef struct _blast_optionsblk {
         Int4     longest_intron;     /* the length of longest intron for linking HSPs */
         FloatLo  perc_identity;      /* Identity percentage cut-off */
         VoidPtr  output;             /* Output stream to put results to */
+	FloatHi	scalingFactor;	     /* scaling factor used when constructing pssm for rpsblast. */ 
+	Int4	total_hsp_limit;	/* total number of HSP's that will be processed to SeqAligns, zero means no limit. */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -1058,6 +1075,8 @@ typedef struct _blast_parameterblk {
         Int4            shift_pen;  /* Out-Of-Frame shift penalty */
         Int4    longest_intron;     /* the length of longest intron for linking HSPs */
         FloatLo  perc_identity;     /* Identity percentage cut-off */
+	FloatHi	scalingFactor;	     /* scaling factor used when constructing pssm for rpsblast. */ 
+	Int4	total_hsp_limit;	/* total number of HSP's that will be processed to SeqAligns, zero means no limit. */
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
@@ -1720,7 +1739,7 @@ a field is allocated, then it's bit is non-zero.
       
       This counting is performed only if BLAST_COLLECT_STATS is defined.
       */
-    Int4	first_pass_hits,	/* no. of hits on 1st pass. */
+    Int8	first_pass_hits,	/* no. of hits on 1st pass. */
         second_pass_hits,	/* no. of hits on 2nd pass. */
         second_pass_trys,	/* no. of seqs that made it to 2nd pass. */
         first_pass_extends,	/* no. extended on 1st pass. */

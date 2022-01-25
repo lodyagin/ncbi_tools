@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 *
 * RCS Modification History:
 * $Log: ni_net.h,v $
+* Revision 6.2  2001/04/05 02:36:22  juran
+* Removed obsolete includes.
+*
 * Revision 6.1  1999/11/23 21:43:30  vakatov
 * [WIN32] Always #define NETP_INET_WSOCK for Win32
 *
@@ -80,10 +83,8 @@
 #include <netdb.h>
 #include <s_types.h>
 #include <s_socket.h>
-#include <s_ioctl.h>
 #include <neti_in.h>
 #include <a_inet.h>
-#include <s_time.h>
 #define _NI_NET_
 #endif /* NETP_INET_MACTCP */
 
@@ -208,10 +209,6 @@
 
   /*** included from ni_msg.c *****/
 
-#ifdef NETP_INET_MACTCP
-#include <s_fcntl.h>
-#include <neterrno.h> /* missing error numbers on Mac */
-#endif /* NETP_INET_MACTCP */
 #ifdef OS_VMS
 #include <perror.h>
 #endif /* OS_VMS */

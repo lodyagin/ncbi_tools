@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.22  2001/05/25 17:58:27  vakatov
+* [MAC] OpenConfigFile() -- replaced C++ style comments by the C-style ones
+*
+* Revision 6.21  2001/05/25 15:44:26  vakatov
+* [AIX]  Tweaked conditions for NLM_POSIX1B
+*
 * Revision 6.20  2001/01/19 20:14:44  kans
 * added checks for OS_UNIX_DARWIN (contributed by William Van Etten)
 *
@@ -467,9 +473,11 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
 
 
 #ifdef OS_UNIX
-#define NLM_POSIX1B (_POSIX1B || _POSIX1C || \
-                     (_POSIX_C_SOURCE - 0 >= 199309L) || \
-                     defined(_POSIX_PTHREAD_SEMANTICS))
+#define NLM_POSIX1B \
+    (_POSIX1B || _POSIX1C || \
+    (_POSIX_C_SOURCE - 0 >= 199309L) || \
+    defined(_POSIX_PTHREAD_SEMANTICS) || \
+    (defined(OS_UNIX_AIX)  &&  (_XOPEN_SOURCE==500)  &&  !defined(_UNIX95)))
 
 #ifndef LOGNAME_MAX
 #  if defined(MAXLOGNAME)
@@ -741,36 +749,38 @@ Nlm_OpenConfigFile(const Nlm_Char* file,
         return NULL;
     }
 
-    // copy no more than (FILENAME_MAX - 4) to allow for the length of our postfix
+    /* copy no more than (FILENAME_MAX - 4) to allow for the length of
+     * our postfix */
     Nlm_StringNCpy_0(str, file, sizeof(str) - 4);
     if ( ! Nlm_Qualified (str) ) {
-        // if the user has already supplied a name with .xxx use that name
-        // otherwise add the .cnf here
+        /* if the user has already supplied a name with .xxx use that name
+         * otherwise add the .cnf here */
         Nlm_StringCat(str, ".cnf");
     }
-    // if the name isn't all lowercase, make it so now 
+    /* if the name isn't all lowercase, make it so now */
     len = (Nlm_Int2) Nlm_StringLen (str);
     for (i = 0; i < len; i++) {
       str [i] = TO_LOWER (str [i]);
     }
     
-    // convert to pascal string for Mac toolbox
+    /* convert to pascal string for Mac toolbox */
     Nlm_CtoPstr( str);
 
-    // Make sure we can use FindFolder() if not, then report error and
-    // return NULL
+    /* Make sure we can use FindFolder() if not, then report error and
+     * return NULL */
     if ( Gestalt (gestaltFindFolderAttr, &gesResponse) != noErr ||
         (gesResponse & (1 << gestaltFindFolderPresent) == 0)) {
-        // notify user of the error
-        Nlm_Message( MSG_OK, "We need Mac OS 7.0 or newer, continue at your own risk.");
+        /* notify user of the error */
+        Nlm_Message(MSG_OK,
+                    "We need Mac OS 7.0 or newer, continue at your own risk.");
         return NULL;
     }
 
-    // store the current active directory
+    /* store the current active directory */
     HGetVol( (StringPtr) 0, &saveVRefNum, &saveDirID);
 
-    // first look for file in "system", then "preferences".  Only create it
-    // in prefs if both of those fail...
+    /* first look for file in "system", then "preferences".  Only create it
+     * in prefs if both of those fail... */
     err = FindFolder(kOnSystemDisk, kSystemFolderType,
                        kDontCreateFolder, &vRefNum, &dirID);
     if (err == noErr) {
@@ -778,8 +788,8 @@ Nlm_OpenConfigFile(const Nlm_Char* file,
     }
 
     if( err != noErr){
-        // i.e. file not in "system"
-        // find the preferences folder in the active System folder
+        /* i.e. file not in "system"
+         * find the preferences folder in the active System folder */
         err = FindFolder(kOnSystemDisk, kPreferencesFolderType,
                        kCreateFolder, &vRefNum, &dirID);
         if (err == noErr) {
@@ -787,10 +797,10 @@ Nlm_OpenConfigFile(const Nlm_Char* file,
         }
     }
 
-    // convert to back to C string for fopen
+    /* convert to back to C string for fopen */
     Nlm_PtoCstr( str);
 
-    if( err == noErr){      // the file is already there
+    if( err == noErr){      /* the file is already there */
         HSetVol( (StringPtr) 0, vRefNum, dirID);
         if (writeMode) {
             fp = fopen (str, "w");
@@ -800,18 +810,19 @@ Nlm_OpenConfigFile(const Nlm_Char* file,
         HSetVol( (StringPtr) 0, saveVRefNum, saveDirID);
     }
     else if( err == fnfErr && create){
-        // no file with that name was found, create one
+        /* no file with that name was found, create one */
         err = FSpCreate( &spec, '    ', 'TEXT', smSystemScript);
         if( err == noErr){
-            // set the default directory (same as doing "cd" in unix)
-            // and actually open the file
+            /* set the default directory (same as doing "cd" in unix)
+             * and actually open the file */
             HSetVol( (StringPtr) 0, vRefNum, dirID);
             fp = fopen (str, "w");
             HSetVol( (StringPtr) 0, saveVRefNum, saveDirID);
         }
         if( fp == NULL){
             Nlm_Message( MSG_OK, 
-            "Couldn't create the preferences file, is the boot volume locked?");
+                         "Couldn't create the preferences file, "
+                         "is the boot volume locked?");
         }
     }
   return fp;

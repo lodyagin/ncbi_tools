@@ -1,4 +1,4 @@
-/* $Id: posit.c,v 6.53 2001/02/16 16:11:50 dondosha Exp $
+/* $Id: posit.c,v 6.55 2001/04/09 13:00:09 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,16 @@
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.53 $ 
+  $Revision: 6.55 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.55  2001/04/09 13:00:09  madden
+ * Fixed error in posComputeExtents; adjustment of interval sizes when the query contained an X had been asymmetric.
+ *
+ * Revision 6.54  2001/04/03 19:38:24  madden
+ * Changed IDENTITY_PERCENTAGE to 0.94, Added to output of -Q option in outputPosMatrix
+ *
  * Revision 6.53  2001/02/16 16:11:50  dondosha
  * In WposComputation, compute posMatrix from posFreqs if seqalign argument is NULL
  *
@@ -294,7 +300,7 @@ extern BLAST_ScoreFreqPtr BlastScoreFreqDestruct (BLAST_ScoreFreqPtr sfp);
 #define POS_RESTING 0
 #define POS_COUNTING 1
 
-#define IDENTITY_RATIO 0.95
+#define IDENTITY_RATIO 0.94
 
 
 /*Allocate memory for  data structures inside posSearch used in
@@ -325,8 +331,9 @@ void LIBCALL posAllocateMemory(posSearchItems * posSearch,
       posSearch->posC[i][j] = 0;
  
   }
-
-
+  posSearch->posGaplessColumnWeights = (Nlm_FloatHi *) MemNew((querySize + 1) * sizeof(Nlm_FloatHi));
+  if (NULL == posSearch->posGaplessColumnWeights)
+    exit(EXIT_FAILURE);
   posSearch->posMatchWeights = (Nlm_FloatHi **) MemNew((querySize+1) * sizeof(Nlm_FloatHi *));
   if (NULL == posSearch->posMatchWeights)
     exit(EXIT_FAILURE);
@@ -450,6 +457,7 @@ static void posFreeMemory(posSearchItems *posSearch, Int4 querySize)
   MemFree(posSearch->posMatrix);
   MemFree(posSearch->posPrivateMatrix);
   MemFree(posSearch->posDescMatrix);
+  MemFree(posSearch->posGaplessColumnWeights);
   MemFree(posSearch->posMatchWeights);
   MemFree(posSearch->posA);
   MemFree(posSearch->posRowSigma);
@@ -1015,6 +1023,7 @@ void LIBCALL posComputeExtents(posSearchItems *posSearch, compactSearchItems * c
        }
      for(qplace = 0; qplace < length; qplace++) 
        if (posSearch->posDescMatrix[seqIndex+1][qplace].used) {
+	 /* comment next if out to spread gap costs*/
 	 /* if (posSearch->posDescMatrix[seqIndex+1][qplace].letter != GAP_CHAR) { */
 	   posSearch->posExtents[qplace].leftExtent = MAX(posSearch->posExtents[qplace].leftExtent,
 							posSearch->posDescMatrix[seqIndex+1][qplace].leftExtent);
@@ -1022,7 +1031,7 @@ void LIBCALL posComputeExtents(posSearchItems *posSearch, compactSearchItems * c
 							   posSearch->posDescMatrix[seqIndex+1][qplace].rightExtent);
 	 
 	 }
-     /*       }*/
+     /*}*/ /*comment this out if we want to spread gap costs out */
 
      for(qplace = 0; qplace < length; qplace++) 
        /*used to check qplace for GAP_CHAR here*/ /*XX*/
@@ -1038,7 +1047,11 @@ void LIBCALL posComputeExtents(posSearchItems *posSearch, compactSearchItems * c
      if(Xchar == q[qplace]) {
        posSearch->posIntervalSizes[qplace] = 0;
        for(qplace2 = 0; qplace2 <qplace; qplace2++) {
-	 if(posSearch->posExtents[qplace2].rightExtent >= qplace)
+	 if((Xchar != q[qplace2]) && (posSearch->posExtents[qplace2].rightExtent >= qplace))
+	   posSearch->posIntervalSizes[qplace2]--;
+       }
+       for(qplace2 = length-1; qplace2 > qplace; qplace2--) {
+	 if((Xchar != q[qplace2]) && (posSearch->posExtents[qplace2].leftExtent <= qplace))
 	   posSearch->posIntervalSizes[qplace2]--;
        }
      }
@@ -1086,6 +1099,7 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
    }
    numParticipating = 0;
    for(qplace = 0; qplace < length; qplace++) {
+     posSearch->posGaplessColumnWeights[qplace] = 0.0;
      if ((posSearch->posCount[qplace] > 1) && (posSearch->posIntervalSizes[qplace] > 0)) {
        oldNumParticipating = numParticipating;
        for(p =0; p < numParticipating; p++)
@@ -1097,6 +1111,7 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
 	 /* if ((posSearch->posDescMatrix[seqIndex][qplace].used) &&
 	     (posSearch->posDescMatrix[seqIndex][qplace].letter != GAP_CHAR)) {
 	 */
+	 /*change to this if we want to spread gap costs*/
 	 if (posSearch->posDescMatrix[seqIndex][qplace].used) {
 	     participatingSequences[numParticipating] = seqIndex; 
 	   numParticipating++;
@@ -1154,6 +1169,7 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
 	   posSearch->posA[thisSeq] = posSearch->posRowSigma[thisSeq]/
 	    (posSearch->posExtents[qplace].rightExtent -
 	       posSearch->posExtents[qplace].leftExtent +1);
+	   /*spread gap weight here*/
            posSearch->posA[thisSeq] = pow(posSearch->posA[thisSeq],
                                           weightExponent);
 	   weightSum += posSearch->posA[thisSeq];
@@ -1173,6 +1189,8 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
        for (seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
 	 thisSeq = participatingSequences[seqIndex];
 	 posSearch->posMatchWeights[qplace][posSearch->posDescMatrix[thisSeq][qplace].letter] += posSearch->posA[thisSeq];
+         if(posSearch->posDescMatrix[thisSeq][qplace].letter)
+           posSearch->posGaplessColumnWeights[qplace] += posSearch->posA[thisSeq]; 
        }
      }
    }
@@ -1212,6 +1230,7 @@ void LIBCALL posCheckWeights(posSearchItems *posSearch, compactSearchItems * com
            runningSum += posSearch->posMatchWeights[c][a];
        if((runningSum < 0.99) || (runningSum > 1.01))
          ErrPostEx(SEV_ERROR, 0, 0, "\nERROR IN WEIGHTS, column %d, value %lf\n",c, runningSum);
+       /* spread out gap weight here*/
        for(a = 1; a < alphabetSize; a++) 
 	 if (compactSearch->standardProb[a] > posEpsilon)
 	   posSearch->posMatchWeights[c][a] = posSearch->posMatchWeights[c][a] +
@@ -1746,7 +1765,7 @@ Uint1 LIBCALL ResToInt(Char input)
 void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *compactSearch, FILE *matrixfp)
 {
    Uint1Ptr q; /*query sequence*/
-   Int4 i, index; /*loop indices*/
+   Int4 i; /*loop indices*/
    Int4 c; /*index over alphabet*/
    Int4 length; /*length of query*/
    Int4 charOrder[EFFECTIVE_ALPHABET]; /*standard order of letters according to S. Altschul*/
@@ -1779,7 +1798,6 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 
    q = compactSearch->query;
    length = compactSearch->qlength;
-   index = 0;   
    
 /* Used ifdef until final decision is made on output. */
 
@@ -1802,7 +1820,7 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
    printf(" Extent ");
    for(i=0; i < length; i++) {
      printf("\n%5d %c   ", i + 1, getRes(q[i]));
-     if ((posSearch->posCount[index+i] > 1) && (Xchar != q[index+i]))
+     if ((posSearch->posCount[i] > 1) && (Xchar != q[i]))
        printf("%4d ", (Int4) posit_rounddown(10 * countsFunction
 				     (posSearch->posSigma[i],posSearch->posIntervalSizes[i])));
      else
@@ -1818,10 +1836,12 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
    printf("\n\n");
 #endif
    if (NULL != matrixfp) {
-     fprintf(matrixfp,"\nLast position-specific scoring matrix computed\n");
+     fprintf(matrixfp,"\nLast position-specific scoring matrix computed, weighted observed percentages rounded down, information per position, and relative weight of gapless real matches to pseudocounts\n");
      fprintf(matrixfp,"         ");
      for (c = 0; c< EFFECTIVE_ALPHABET; c++)
        fprintf(matrixfp,"  %c",getRes((Char) charOrder[c]));
+     for (c = 0; c< EFFECTIVE_ALPHABET; c++)
+       fprintf(matrixfp,"   %c",getRes((Char) charOrder[c]));
      for(i=0; i < length; i++) {
        fprintf(matrixfp,"\n%5ld %c   ", (long) (i + 1), getRes(q[i]));
        /*fprintf(matrixfp,"\n          ");*/
@@ -1830,6 +1850,17 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 	   fprintf(matrixfp,"-I ");
 	 else
 	   fprintf(matrixfp,"%2ld ", (long) posSearch->posMatrix[i][charOrder[c]]);
+       for (c = 0; c < EFFECTIVE_ALPHABET; c++) 
+	 if(posSearch->posMatrix[i][charOrder[c]] != BLAST_SCORE_MIN)
+	   fprintf(matrixfp, "%4d", (Int4) posit_rounddown(100 * posSearch->posMatchWeights[i][charOrder[c]]));
+       fprintf(matrixfp," %5.2lf", posSearch->posInformation[i]); 
+       if ((posSearch->posCount[i] > 1) && (Xchar != q[i]))
+	 fprintf(matrixfp," %.2lf", countsFunction(posSearch->posSigma[i],
+                 posSearch->posIntervalSizes[i]) * 
+                 posSearch->posGaplessColumnWeights[i]/
+                 compactSearch->pseudoCountConst);
+       else
+	 fprintf(matrixfp,"    0.00");
      }
      fprintf(matrixfp,"\n\n");
      fprintf(matrixfp,"                      K         Lambda\n");

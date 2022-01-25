@@ -1,7 +1,7 @@
 #ifndef NCBI_CONNECTION__H
 #define NCBI_CONNECTION__H
 
-/*  $Id: ncbi_connection.h,v 6.6 2001/03/02 20:07:33 lavr Exp $
+/*  $Id: ncbi_connection.h,v 6.8 2001/06/28 22:00:31 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -46,6 +46,13 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_connection.h,v $
+ * Revision 6.8  2001/06/28 22:00:31  lavr
+ * Added function: CONN_SetCallback
+ * Added callback: eCONN_OnClose
+ *
+ * Revision 6.7  2001/04/24 21:19:29  lavr
+ * Introduced CONN_DEFAULT_TIMEOUT for use as a CONNECTOR-specific timeout
+ *
  * Revision 6.6  2001/03/02 20:07:33  lavr
  * Typo fixed
  *
@@ -87,6 +94,8 @@ typedef struct SConnectionTag* CONN;      /* connection handle */
  * NOTE:  The real connection will not be established right away. Instead,
  *        it will be established at the moment of the first call to one of
  *        "Wait", "WaitAsync", "Write" or "Read".
+ * NOTE:  Initial timeout values are set to CONN_DEFAULT_TIMEOUT, meaning
+ *        that connector-specific timeouts are in force for the connection.
  */
 extern EIO_Status CONN_Create
 (CONNECTOR connector,  /* [in]  connector                        */
@@ -112,7 +121,8 @@ extern EIO_Status CONN_ReInit
 /* Specify timeout for the connection i/o (including "CONNECT" and "CLOSE").
  * This function can be called at any time during the connection lifetime.
  * NOTE: if "new_timeout" is NULL then set the timeout to the maximum.
- * NOTE: the default timeout is the maximum possible (wait "ad infinitum").
+ * NOTE: if "new_timeout" is CONN_DEFAULT_TIMEOUT then underlying
+ *       connector-specific value is used (this is the default).
  */
 extern void CONN_SetTimeout
 (CONN            conn,        /* [in] connection handle */
@@ -123,7 +133,8 @@ extern void CONN_SetTimeout
 
 /* Retrieve current timeout (return NULL if it is infinite).
  * The returned pointer is guaranteed to point to the valid timeout structure
- * (or NULL) until the next CONN_SetTimeout or CONN_Close function call.
+ * (or NULL, or CONN_DEFAULT_TIMEOUT) until the next CONN_SetTimeout or
+ * CONN_Close function call.
  */
 extern const STimeout* CONN_GetTimeout
 (CONN      conn,  /* [in]  connection handle                  */
@@ -132,8 +143,9 @@ extern const STimeout* CONN_GetTimeout
 
 
 /* Block on the connection until it becomes available for either read or
- * write (dep. on "event"), or until the timeout expires (if "timeout"
- * is NULL then assume it infinite), or until any error.
+ * write (dep. on "event"), or until the timeout expires, or until any error.
+ * NOTE:  "timeout" can also be one of two special values:
+ *         NULL (means infinite), CONN_DEFAULT_TIMEOUT (connector-defined).
  */
 extern EIO_Status CONN_Wait
 (CONN            conn,    /* [in] connection handle                  */
@@ -188,8 +200,8 @@ extern EIO_Status CONN_Read
  * connector layer.
  */
 extern EIO_Status CONN_Status
-(CONN           conn,   /* [in]  connection handle       */
- EIO_Event      dir     /* [in] = {eIO_Read | eIO_Write} */
+(CONN      conn,   /* [in]  connection handle       */
+ EIO_Event dir     /* [in] = {eIO_Read | eIO_Write} */
  );
 
 
@@ -208,8 +220,36 @@ extern EIO_Status CONN_Close
  * unknown connection type.
  */
 extern const char* CONN_GetType
-(CONN        conn       /* [in]  connection handle */ 
+(CONN conn  /* [in]  connection handle */ 
  );
+
+
+/* Set user callback function to be called upon an event specified by the
+ * callback type. Note that the callback function is always called prior to
+ * the event to happen, e.g. the eCONN_OnClose callback is called when
+ * the connection is about to close, but not closed yet.
+ * The callback function is supplied with 3 arguments: connection handle,
+ * type of event, and user data (specified when the callback was set).
+ * CONN_SetCallback stores previous callback in "old_cb" (if it is not NULL).
+ */
+typedef enum {
+    eCONN_OnClose = 0
+#define CONN_N_CALLBACKS 1
+} ECONN_Callback;
+
+typedef void (*FConnCallback)(CONN conn, ECONN_Callback type, void* data);
+
+typedef struct {
+    FConnCallback func;  /* Function to call on event                */
+    void*         data;  /* Data to pass to the callback as last arg */
+} SCONN_Callback;
+
+EIO_Status CONN_SetCallback
+(CONN                  conn,    /* [in]  connection to set callback for     */
+ ECONN_Callback        type,    /* [in]  callback type                      */
+ const SCONN_Callback* new_cb,  /* [in]  callback to set (may be 0)         */
+ SCONN_Callback*       old_cb   /* [out] to save old callback at (may be 0) */
+);
 
 
 #ifdef IMPLEMENTED__CONN_WaitAsync

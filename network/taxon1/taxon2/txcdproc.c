@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.8  2001/06/13 21:23:19  soussov
+* makes purify happy
+*
 * Revision 1.7  1999/12/20 17:05:16  soussov
 * taxid4gi added
 *
@@ -1118,7 +1121,7 @@ Boolean txc_loadGCs(void)
 
 static Boolean ReestablishNetTaxArch(void)
 {
-    return GenericReestablishNet("Taxon2", TRUE);
+    return GenericReestablishNet("Taxon2", FALSE);
 }
 
 /*****************************************************************************

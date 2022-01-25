@@ -3,9 +3,12 @@
 *   -- all routines for checking genbank feature table
 *   -- all extern variables are in gbftglob.c
 *                                                                  10-11-93
-$Revision: 6.6 $
+$Revision: 6.7 $
 *
 * $Log: gbfeat.c,v $
+* Revision 6.7  2001/06/08 20:09:53  bazhin
+* From now on "absent" is a legal value for /cons_splice qualifier.
+*
 * Revision 6.6  2000/02/02 22:10:19  kans
 * use TextSave instead of TextSaveEx, which is not available
 *
@@ -1173,19 +1176,22 @@ NLM_EXTERN int CkQualSite ( GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
    int retval = GB_FEAT_ERR_NONE;
    CharPtr  bptr, str;
    Boolean ok=FALSE;
-   CharPtr yes_or_no = "not \'YES\' or \'NO\'";
+   CharPtr yes_or_no = "not \'YES\', \'NO\' or \'ABSENT\'";
 
    str = gbqp->val;
    if (StringNICmp(str, "(5'site:", 8) == 0) {
       bptr = str;
       str += 8;
 
-      if (StringNICmp(str, "YES", 3) == 0 || StringNICmp(str, "NO", 2) == 0) {
+      if (StringNICmp(str, "YES", 3) == 0 || StringNICmp(str, "NO", 2) == 0 ||
+          StringNICmp(str, "ABSENT", 6) == 0) {
 
          if (StringNICmp(str, "YES", 3) == 0)
             str += 3;
-         else
+         else if (StringNICmp(str, "NO", 2) == 0)
             str += 2;
+         else
+            str += 6;
 
          for (; *str == ' '; str++);
          for (; *str == ','; str++);
@@ -1195,12 +1201,15 @@ NLM_EXTERN int CkQualSite ( GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
          if (StringNICmp(str, "3'site:", 7) == 0) {
             str += 7;
 
-            if (StringNICmp(str, "YES", 3) == 0 
-                                        || StringNICmp(str, "NO", 2) == 0) {
+            if (StringNICmp(str, "YES", 3) == 0 ||
+                StringNICmp(str, "NO", 2) == 0 ||
+                StringNICmp(str, "ABSENT", 6) == 0) {
                if (StringNICmp(str, "YES", 3) == 0)
                   str += 3;
-               else
+               else if (StringNICmp(str, "NO", 2) == 0)
                   str += 2;
+               else
+                  str += 6;
 
                if (*str == ')') {
    

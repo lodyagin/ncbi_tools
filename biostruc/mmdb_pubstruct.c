@@ -1,4 +1,4 @@
-/*  $Id: mmdb_pubstruct.c,v 6.3 1999/12/01 23:27:26 kimelman Exp $
+/*  $Id: mmdb_pubstruct.c,v 6.4 2001/05/25 01:42:10 kimelman Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: mmdb_pubstruct.c,v 6.3 1999/12/01 23:27:26 kimelman Exp $
+* File Name:  $Id: mmdb_pubstruct.c,v 6.4 2001/05/25 01:42:10 kimelman Exp $
 *
 * File Description: Defines MMDB access using sybase retrival.
 *                   
@@ -33,6 +33,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdb_pubstruct.c,v $
+* Revision 6.4  2001/05/25 01:42:10  kimelman
+* mmdb2livemmdb
+*
 * Revision 6.3  1999/12/01 23:27:26  kimelman
 * added guards to avoid repeatable connect/disconnect
 *
@@ -74,6 +77,18 @@ static ps_handle_t db = NULL;
 /**************************************************************
  *  PUBLIC INTERFACE
  **************************************************************/
+Boolean  LIBCALL
+MMDB2liveMMDB(DocUid *mmdb,Int4Ptr live,CharPtr pdb)
+{
+  Boolean b;
+  if (!db && pubstruct[0]==0) {
+    strcpy(pubstruct,"BACH:PubStruct=anyone,allowed");
+  }
+  MMDBInit();
+  b = PubStruct_mmdb2livemmdb(db,*mmdb,mmdb,live,pdb);
+  MMDBFini();
+  return b;
+}
 
 DocUid  LIBCALL
 MMDBEvalPDB (CharPtr str)
@@ -195,5 +210,5 @@ MMDBFini (void)
 CharPtr LIBCALL
 MMDB_configuration(void)
 {
-  return "Version:\t$Id: mmdb_pubstruct.c,v 6.3 1999/12/01 23:27:26 kimelman Exp $\nConfiguration: PubStruct" ;
+  return "Version:\t$Id: mmdb_pubstruct.c,v 6.4 2001/05/25 01:42:10 kimelman Exp $\nConfiguration: PubStruct" ;
 }

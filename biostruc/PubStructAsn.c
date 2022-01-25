@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.33 2000/12/29 17:26:28 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.35 2001/05/29 17:15:12 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.35  2001/05/29 17:15:12  kimelman
+ * bugfix
+ *
+ * Revision 6.34  2001/05/25 01:42:10  kimelman
+ * mmdb2livemmdb
+ *
  * Revision 6.33  2000/12/29 17:26:28  kimelman
  * PDQBACH -> BACH
  *
@@ -1240,6 +1246,69 @@ PubStruct_pdb2mmdb1(ps_handle_t db,CharPtr pdb)
         }
     }
   return mmdb_id;
+}
+
+Boolean LIBCALL
+PubStruct_mmdb2livemmdb(ps_handle_t db,Int4 ommdb,Int4Ptr newmmdbid,Int4Ptr live,CharPtr pdb)
+{
+  char   buf[1024];
+  CS_COMMAND PNTR cmd;
+  CS_INT          count,restype;
+  CS_RETCODE      retcode;
+  Int4            status;
+
+  if(!db)            return FALSE;
+  if(!db->clu.ctcmd) return FALSE;
+  
+  db->action=PS_READ; db->pending=0;
+  cmd = db->clu.ctcmd;
+  sprintf(buf,"exec livemmdb %d",ommdb);
+#ifdef DEBUG_MODE
+  ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"execute(%s)",buf);
+#endif
+
+  CTRUN ( ct_command(cmd,CS_LANG_CMD,(Pointer)buf,CS_NULLTERM,CS_UNUSED) );
+  CTRUN ( ct_send(cmd) );
+  CTRUN ( ct_results(cmd,&restype));
+
+  /* skip 'exec' status line */
+  CTlib_TYPERES(restype);
+  if (restype == CS_STATUS_RESULT)
+    {
+      CTRUN(ct_cancel(NULL,cmd, CS_CANCEL_CURRENT));
+      CTRUN ( ct_results(cmd,&restype));
+      CTlib_TYPERES(restype);
+    }
+  
+  if (!(restype == CS_ROW_RESULT || restype == CS_PARAM_RESULT))
+    goto errexit;
+  count = 0;
+  CTRUN1 ( ct_fetch(cmd,CS_UNUSED,CS_UNUSED,CS_UNUSED,&count),2) ;
+  if (count==1)
+    {    
+      CS_INT     val;
+      CS_TINYINT val1;
+      
+      if(pdb) {
+        CTRUN1(ct_get_data(cmd,1,buf,(CS_INT)sizeof(buf),&val),3);
+        buf[val]=0;
+        strcpy(pdb,buf);
+      }
+      CTRUN1(ct_get_data(cmd,2,&val,(CS_INT)sizeof(val),NULL),3);
+      if(newmmdbid) *newmmdbid = val;
+      CTRUN1(ct_get_data(cmd,3,&val1,(CS_INT)sizeof(val1),NULL),2);
+      if(live) *live = val1;
+      db->pending=1; 
+    }
+  pubstruct_db_close(db);
+  return TRUE;  /* SUCCESSFULL exit */
+
+errexit:
+  /* FAILURE exit */
+  ErrPostEx(SEV_FATAL, 0, 0,"PubStruct lookup unsuccessfull");
+  ErrShow();
+  pubstruct_db_close(db);
+  return FALSE;
 }
 
 Int4     LIBCALL

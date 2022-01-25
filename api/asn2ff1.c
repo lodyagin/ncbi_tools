@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.99 $
-* $Revision: 6.99 $
+* $Revision: 6.106 $
+* $Revision: 6.106 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -374,7 +374,7 @@ Asn2ffJobPtr Asn2ffJobCreate(SeqEntryPtr sep, SeqSubmitPtr ssp, SeqLocPtr slp, F
 		if ((bsp = BioseqFindFromSeqLoc(slp)) != NULL) {
     		entityID = ObjMgrGetEntityIDForPointer (bsp);
     	} else {
-			ErrPostStr(SEV_WARNING, 0, 0, "Couldn't get Bioseq from location");
+			fprintf(stderr, "Couldn't get Bioseq from location %s", SeqLocPrint(slp));
 			MemFree(ajp);
 			return NULL;
 		}
@@ -450,6 +450,33 @@ NLM_EXTERN LinkStrPtr asn2ff_print_to_mem(Asn2ffJobPtr ajp, LinkStrPtr lsp)
 
     return(lsp);
 }
+static Boolean is_contig(BioseqPtr bsp)
+{
+	SeqLocPtr slp=NULL;
+	DeltaSeqPtr dsp;
+	SeqEntryPtr	oldscope;
+
+	oldscope=SeqEntrySetScope(GetTopSeqEntryForEntityID(ObjMgrGetEntityIDForPointer(bsp)));
+	
+	if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
+		if (bsp->seq_ext_type == 1) {
+			slp = (SeqLocPtr) bsp->seq_ext;
+		} else if (bsp->seq_ext_type == 4) {
+			for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp; dsp=dsp->next) {
+				if (dsp->choice == 1) {  /* SeqLoc */
+					slp = (SeqLocPtr)(dsp->data.ptrvalue);
+					break;
+				}
+			}
+		}
+	}
+	if (slp && BioseqFindCore(SeqLocId(slp)) == NULL) {
+		SeqEntrySetScope(oldscope);
+		return TRUE;
+	}
+	SeqEntrySetScope(oldscope);
+	return FALSE;
+}
 
 /***********************************************************************
 *
@@ -462,24 +489,48 @@ NLM_EXTERN LinkStrPtr asn2ff_print_to_mem(Asn2ffJobPtr ajp, LinkStrPtr lsp)
 *	display = 2	- generates CONTIG and all parts regardless of seqid
 *
 **************************************************************************/
-NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid,  Uint1 display, Int4 from, Int4 to)
+NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid,  Uint1 format, Uint1 display, Int4 from, Int4 to, Uint1 strand)
 {
 	Boolean				rsult=FALSE;
 	Asn2ffJobPtr		ajp;
-	StdPrintOptionsPtr	Spop = NULL;
 	BioseqPtr 			bsp;
 	BioseqSetPtr		bssp;
-	SeqLocPtr 			slp;
-	SeqIntPtr			sip;
-	Int2				format;
+	SeqLocPtr 			slp = NULL;
+	DeltaSeqPtr			dsp;
+	SeqLoc				sl;
+	SeqInt				seqint;
+	StdPrintOptionsPtr  Spop = NULL;
+	SeqLocPtr			slp_region=NULL;
 
+	if (sep == NULL) {
+		return FALSE;
+	}
+	if(format == GENPEPT_FMT) {
+	    if(Template_load == FALSE) {
+		    PrintTemplateSetLoad("asn2ff.prt");
+		    Template_load = TRUE;
+	    }
+	    Spop = StdPrintOptionsNew(NULL);
+	    if(Spop != NULL) {
+		    Spop->newline = "~";
+		    Spop->indent = "";
+	    } else {
+		    ErrPostStr(SEV_FATAL, 0, 0, "StdPrintOptionsNew failed");
+		    return FALSE;
+	    }
+    }
+	
 	if (seqid == NULL) {  /*should never happen */
 		if (IS_Bioseq(sep)) {
 			if ((bsp = (BioseqPtr) sep->data.ptrvalue) == NULL) {
 				return rsult;
 			}
-			format = (bsp->mol == Seq_mol_aa) ? GENPEPT_FMT : GENBANK_FMT;
-			return (SeqEntryToFlat(sep, fp, format, RELEASE_MODE));
+			if (is_contig(bsp)) {
+				return (SeqEntryToFlatEx(sep, fp, format, 
+							RELEASE_MODE, seqid, FF_TOP_CONTIG));
+			}
+			return (SeqEntryToFlatEx(sep, fp, format, 
+							RELEASE_MODE, seqid, FF_TOP_COMPLETE));
 		} else {
     		if ((bssp = (BioseqSetPtr) sep->data.ptrvalue) == NULL) {
 				return rsult;
@@ -490,31 +541,36 @@ NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, 
         			rsult = SeqEntryToFlat (sep, fp, GENBANK_FMT, RELEASE_MODE);
 				}
 				return rsult;
-			} else if (bssp->_class == 2) { /*segmented set*/
-				bsp = find_big_bioseq(sep);
-				if (bsp->mol == Seq_mol_aa)	{
+			} else { 
+				if (format == GENPEPT_FMT)	{
 					return (SeqEntryToFlatEx(sep, fp, GENPEPT_FMT, 
 							RELEASE_MODE, seqid, FF_TOP_COMPLETE));
-				} else {
+				} else if (display == 1) {
 					return (SeqEntryToFlatEx(sep, fp, GENBANK_FMT, 
 							RELEASE_MODE, seqid, FF_TOP_CONTIG));
-				}	
+				} else {
+					return (SeqEntryToFlatEx(sep, fp, GENBANK_FMT, 
+							RELEASE_MODE, seqid, FF_REGULAR));
+				}
 			}
 		}
-		return rsult;
 	}
 	if ((bsp = BioseqFind(seqid)) == NULL) {
 		return FALSE;
 	}
-	format = (bsp->mol == Seq_mol_aa) ? GENPEPT_FMT : GENBANK_FMT;
 	if (from > 0 && to > 0) {
-		sip = SeqIntNew();
-		sip->from = from;
-		sip->to = to;
-		ValNodeAddPointer(&slp, SEQLOC_INT, sip);
-		return (SeqLocToFlat(slp, fp, format, RELEASE_MODE));
+		seqint.from = from-1;
+		seqint.to = to-1;
+		seqint.id=seqid;
+		seqint.strand=strand;
+		seqint.if_from=NULL;
+		seqint.if_to=NULL;
+		sl.choice= SEQLOC_INT;
+		sl.data.ptrvalue=&seqint;
+		sl.next=NULL;
+		slp_region=&sl;
 	}
-	ajp = Asn2ffJobCreate(sep, NULL, NULL, fp, format, RELEASE_MODE, NULL);
+	ajp = Asn2ffJobCreate(sep, NULL, slp_region, fp, format, RELEASE_MODE, Spop);
 	if (ajp == NULL) {
 		return FALSE;
 	}
@@ -523,25 +579,40 @@ NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, 
 	ajp->gb_style = FALSE;
 	ajp->id_print = seqid;
 	ajp->sep = sep;
-	if (bsp->repr == Seq_repr_seg) {    /* always print CONTIG view first */
-		if ((slp = bsp->seq_ext) != NULL) {
-    		ajp->only_one = TRUE;				
-			ajp->genome_view = TRUE;
-			ajp->gb_style = FALSE;
-			ajp->sep = sep;
-			rsult = asn2ff_print(ajp);
-			if (BioseqFindCore(SeqLocId(slp)) == NULL || display < 2) { 
-				MemFree(ajp);
-				return rsult;
-			} else if (display == 2) { /* contig and parts */
-				ajp->gb_style = TRUE;
-				ajp->id_print = NULL;
-				ajp->only_one = FALSE;
-	 			rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
+	if(ajp->entityID > 0 && SeqMgrFeaturesAreIndexed (ajp->entityID) == 0) {
+                 SeqMgrIndexFeatures (ajp->entityID, NULL);
+        }
+
+	if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {   
+/* always print CONTIG view first */
+		if (slp_region == NULL) {
+		 	if (bsp->repr == Seq_repr_delta && !is_contig(bsp)) { 
+				ajp->genome_view = FALSE;
+/* delta with internal parts cannot use CONTIG view */
+			} else {
+				ajp->genome_view = TRUE;
 			}
+		}					
+		ajp->only_one = TRUE;
+		ajp->gb_style = FALSE;
+		ajp->sep = sep;
+		if (is_contig(bsp) && slp_region == NULL) { 
+			ajp->contig_view = TRUE;
+			ajp->show_seq = FALSE;
+		}
+		rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
+		if (display == 2) { 
+			ajp->only_one = FALSE;				
+			ajp->contig_view = FALSE;
+			ajp->genome_view = FALSE;
+			ajp->gb_style = TRUE;
+			ajp->id_print = NULL;
+			ajp->only_one = FALSE;
+			ajp->show_seq = TRUE;
+			rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
 		}
 	} else {
-	 rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
+		rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
 	}
 	return rsult;
 }
@@ -824,7 +895,6 @@ NLM_EXTERN LinkStrPtr SeqEntryToStrArrayEx(SeqEntryPtr sep, Uint1 format,
 					if (StringNCmp(tsip->accession, "NT_", 3) == 0) {
 						ajp->contig_view = TRUE;
 						ajp->genome_view = TRUE;
-						ajp->show_seq = FALSE;
 						break;
 					}
 				}
@@ -1305,26 +1375,27 @@ NLM_EXTERN Boolean SeqEntryToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, Ui
 	if (mode == RELEASE_MODE) {
 		ajp->show_gi = FALSE;
 	}
+	if (type == FF_REGULAR) {
+		ajp->gb_style = TRUE;
+		ajp->id_print = NULL;
+	}
+	if (type == FF_TOP_COMPLETE) {
+		ajp->gb_style = FALSE;
+		ajp->only_one = TRUE;
+		ajp->ignore_top = TRUE;
+	}
+	if (type == FF_TOP_CONTIG) {
+		ajp->gb_style = FALSE;
+		ajp->only_one = TRUE;
+		ajp->ignore_top = TRUE;
+		ajp->genome_view = TRUE;
+		ajp->show_seq = FALSE;
+	}
 	if (seqid != NULL) {
 		ajp->gb_style = FALSE;
 		ajp->id_print = seqid;
 		bsp = BioseqFind(seqid);
     	if (bsp->repr == Seq_repr_seg) {
-			if (type == FF_REGULAR) {
-				ajp->gb_style = TRUE;
-				ajp->id_print = NULL;
-			}
-			if (type == FF_TOP_COMPLETE) {
-				ajp->gb_style = FALSE;
-				ajp->only_one = TRUE;
-				ajp->ignore_top = TRUE;
-			}
-			if (type == FF_TOP_CONTIG) {
-				ajp->gb_style = FALSE;
-				ajp->only_one = TRUE;
-				ajp->ignore_top = TRUE;
-				ajp->genome_view = TRUE;
-			}
 			ajp->sep = sep;
 		} else {
 			ajp->sep = SeqMgrGetSeqEntryForData((Pointer)bsp);
@@ -1471,7 +1542,8 @@ NLM_EXTERN Boolean SeqLocToFlat (SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mo
 	if (ajp == NULL) {
 		return FALSE;
 	}
-    ajp->only_one = TRUE;
+	ajp->show_version = TRUE; 
+	ajp->only_one = TRUE; 
 	ajp->ignore_top = FALSE;
 	ajp->id_print = SeqLocId(slp);
 	
@@ -2049,7 +2121,7 @@ static void GetFeatDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	ItemInfoPtr		iip;
 	DescrStructPtr	dsp = NULL;
 	Uint1			tech = 0;
-	SeqFeatPtr		sfp;
+	SeqFeatPtr		sfp=NULL;
 	
 	buf = (CharPtr)MemNew(buflen+1);
 	gbp->descr = NULL;
@@ -2276,7 +2348,7 @@ Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 		}
 		flat2asn_delete_locus_user_string();
 		flat2asn_install_locus_user_string(gbp->locus);
-		if (ajp->slp && ajp->itemID) {
+		if (ajp->slp || ajp->itemID) {
 			GetFeatDefinitionLine(ajp, gbp);
 		} else {
 			GetDefinitionLine(ajp, gbp);

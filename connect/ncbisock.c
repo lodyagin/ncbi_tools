@@ -1,4 +1,4 @@
-/* $Id: ncbisock.c,v 6.3 2000/12/07 19:16:59 vakatov Exp $
+/* $Id: ncbisock.c,v 6.5 2001/04/03 22:17:05 juran Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.c,v $
+ * Revision 6.5  2001/04/03 22:17:05  juran
+ * Backout previous change.
+ *
  * Revision 6.3  2000/12/07 19:16:59  vakatov
  * Use new NCBI_SOCKET API imported from the C++ Toolkit
  *

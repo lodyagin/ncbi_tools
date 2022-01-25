@@ -1,4 +1,4 @@
-/*  $Id: ncbi_server_info.c,v 6.24 2001/03/26 18:39:38 lavr Exp $
+/*  $Id: ncbi_server_info.c,v 6.29 2001/06/19 19:12:01 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,22 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.c,v $
+ * Revision 6.29  2001/06/19 19:12:01  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
+ * Revision 6.28  2001/06/05 14:11:29  lavr
+ * SERV_MIME_UNDEFINED split into 2 (typed) constants:
+ * SERV_MIME_TYPE_UNDEFINED and SERV_MIME_SUBTYPE_UNDEFINED
+ *
+ * Revision 6.27  2001/06/04 17:01:06  lavr
+ * MIME type/subtype added to server descriptor
+ *
+ * Revision 6.26  2001/05/03 16:35:46  lavr
+ * Local bonus coefficient modified: meaning of negative value changed
+ *
+ * Revision 6.25  2001/04/24 21:38:21  lavr
+ * Additions to code to support new locality and bonus attributes of servers.
+ *
  * Revision 6.24  2001/03/26 18:39:38  lavr
  * Casting to (unsigned char) instead of (int) for ctype char.class macros
  *
@@ -116,14 +132,15 @@
 #include <connect/ncbi_socket.h>
 #include <assert.h>
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 
-#define MAX_IP_ADDR_LEN 16 /* sizeof("255.255.255.255") */
-#ifndef MAXHOSTNAMELEN
-#define MAXHOSTNAMELEN 64
+#define MAX_IP_ADDR_LEN  16 /* sizeof("255.255.255.255") */
+#ifndef   MAXHOSTNAMELEN
+#  define MAXHOSTNAMELEN 64
 #endif
 
 
@@ -257,11 +274,29 @@ static const char *k_FlagTag[N_FLAG_TAGS] = {
 
 char* SERV_WriteInfo(const SSERV_Info* info)
 {
-    const SSERV_Attr* attr = s_GetAttrByType(info->type);
-    size_t reserve = attr->tag_len+1 + MAX_IP_ADDR_LEN + 5+1/*port*/ +
-        10+1/*algorithm*/ + 12+1/*time*/ + 12+1/*rate*/ + 6/*sful*/;
+    char c_t[MAX_CONTENT_TYPE_LEN];    
+    const SSERV_Attr* attr;
+    size_t reserve;
     char* str;
 
+    if (info->mime_t != SERV_MIME_TYPE_UNDEFINED &&
+        info->mime_s != SERV_MIME_SUBTYPE_UNDEFINED) {
+        char* p;
+        if (!MIME_ComposeContentTypeEx(info->mime_t, info->mime_s,
+                                       eENCOD_None, c_t, sizeof(c_t)))
+            return 0;
+        assert(c_t[strlen(c_t) - 2] == '\r' && c_t[strlen(c_t) - 1] == '\n');
+        c_t[strlen(c_t) - 2] = 0;
+        p = strchr(c_t, ' ');
+        assert(p);
+        p++;
+        memmove(c_t, p, strlen(p) + 1);
+    } else
+        *c_t = 0;
+    attr = s_GetAttrByType(info->type);
+    reserve = attr->tag_len+1 + strlen(c_t)+3 + MAX_IP_ADDR_LEN + 5+1/*port*/ +
+        10+1/*algorithm*/ + 12+1/*time*/ + 12+1/*rate*/ + 12+1/*coef*/ +
+        5+1/*locl*/ + 5+1/*sful*/ + 1/*EOL*/;
     /* write server-specific info */
     if ((str = attr->vtable.Write(reserve, &info->u)) != 0) {
         char* s = str;
@@ -271,18 +306,20 @@ char* SERV_WriteInfo(const SSERV_Info* info)
         s += attr->tag_len;
         *s++ = ' ';
         s += s_Write_HostPort(s, info->host, info->port);
-        *s++ = ' ';
         if ((n = strlen(str + reserve)) != 0) {
+            *s++ = ' ';
             memmove(s, str + reserve, n+1);
             s = str + strlen(str);
-            *s++ = ' ';
         }
+        if (*c_t)
+            s += sprintf(s, " C=%s", c_t);
         assert(info->flag < N_FLAG_TAGS);
         if (k_FlagTag[info->flag])
-            s += sprintf(s, "%s ", k_FlagTag[info->flag]);
-        s += sprintf(s, "T=%lu R=%.2f", (unsigned long)info->time, info->rate);
+            s += sprintf(s, " %s", k_FlagTag[info->flag]);
+        s += sprintf(s, " T=%lu R=%.2f B=%.2f L=%s", (unsigned long)info->time,
+                     info->rate, info->coef, info->locl ? "yes" : "no");
         if (!(info->type & fSERV_Http))
-            sprintf(s, " S=%s", info->sful ? "yes" : "no");
+            s += sprintf(s, " S=%s", info->sful ? "yes" : "no");
     }
     return str;
 }
@@ -293,7 +330,7 @@ SSERV_Info* SERV_ReadInfo(const char* info_str)
     /* detect server type */
     ESERV_Type  type;
     const char* str = SERV_ReadType(info_str, &type);
-    int/*bool*/ sful, rate, time;
+    int/*bool*/ mime, time, rate, coef, locl, sful;
     unsigned short port;                /* host (native) byte order */
     unsigned int host;                  /* network byte order       */
     SSERV_Info *info;
@@ -313,29 +350,73 @@ SSERV_Info* SERV_ReadInfo(const char* info_str)
     info->host = host;
     if (port)
         info->port = port;
-    time = rate = sful = 0; /* unassigned */
+    mime = time = rate = coef = locl = sful = 0; /* unassigned */
     /* continue reading server info: optional parts: ... */
     while (*str && isspace((unsigned char)(*str)))
         str++;
     while (*str) {
         if (*(str + 1) == '=') {
+            EMIME_Type    mime_t;
+            EMIME_SubType mime_s;
             unsigned long t;
             char s[4];
-            double r;
+            double d;
             
             switch (toupper(*str++)) {
+            case 'C':
+                if (!mime && MIME_ParseContentTypeEx(str + 1,
+                                                     &mime_t, &mime_s, 0)) {
+                    info->mime_t = mime_t;
+                    info->mime_s = mime_s;
+                    mime = 1;
+                    while (*str && !isspace((unsigned char)(*str)))
+                        str++;
+                }
+                break;
             case 'T':
                 if (!time && sscanf(str, "=%lu%n", &t, &n) >= 1) {
                     str += n;
-                    info->time = (time_t)t;
+                    info->time = (TNCBI_Time) t;
                     time = 1;
                 }
                 break;
             case 'R':
-                if (!rate && sscanf(str, "=%lf%n", &r, &n) >= 1) {
+                if (!rate && sscanf(str, "=%lf%n", &d, &n) >= 1) {
                     str += n;
-                    info->rate = r;
+                    if (fabs(d) < 0.01)
+                        d = 0.0;
+                    else if (fabs(d) > 100000.0)
+                        d = (d < 0 ? -1.0 : 1.0)*100000.0;
+                    info->rate = d;
                     rate = 1;
+                }
+                break;
+            case 'B':
+                if (!coef && sscanf(str, "=%lf%n", &d, &n) >= 1) {
+                    str += n;
+                    if (d < -100.0)
+                        d = -100.0;
+                    else if (d < 0.0)
+                        d = (d < -0.1 ? d : -0.1);
+                    else if (d < 0.01)
+                        d = 0.0;
+                    else if (d > 1000.0)
+                        d = 1000.0;
+                    info->coef = d;
+                    coef = 1;
+                }
+                break;
+            case 'L':
+                if (!locl && sscanf(str, "=%3s%n", s, &n) >= 1) {
+                    if (strcasecmp(s, "YES") == 0) {
+                        info->locl = 1/*true*/;
+                        str += n;
+                        locl = 1;
+                    } else if (strcasecmp(s, "NO") == 0) {
+                        info->locl = 0/*false*/;
+                        str += n;
+                        locl = 1;
+                    }
                 }
                 break;
             case 'S':
@@ -457,10 +538,14 @@ SSERV_Info* SERV_CreateNcbidInfo
         info->host         = host;
         info->port         = port;
         info->sful         = 0;
+        info->locl         = 0;
         info->flag         = SERV_DEFAULT_FLAG;
         info->time         = 0;
-        info->rate         = 0;
-        info->u.ncbid.args = sizeof(info->u.ncbid);
+        info->coef         = 0.0;
+        info->rate         = 0.0;
+        info->mime_t       = SERV_MIME_TYPE_UNDEFINED;
+        info->mime_s       = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->u.ncbid.args = (TNCBI_Size) sizeof(info->u.ncbid);
         if (strcmp(args, "''") == 0) /* special case */
             args = 0;
         strcpy(SERV_NCBID_ARGS(&info->u.ncbid), args ? args : "");
@@ -510,13 +595,17 @@ SSERV_Info* SERV_CreateStandaloneInfo
     SSERV_Info *info = (SSERV_Info*) malloc(sizeof(SSERV_Info));
 
     if (info) {
-        info->type = fSERV_Standalone;
-        info->host = host;
-        info->port = port;
-        info->sful = 0;
-        info->flag = SERV_DEFAULT_FLAG;
-        info->time = 0;
-        info->rate = 0;
+        info->type   = fSERV_Standalone;
+        info->host   = host;
+        info->port   = port;
+        info->sful   = 0;
+        info->locl   = 0;
+        info->flag   = SERV_DEFAULT_FLAG;
+        info->time   = 0;
+        info->coef   = 0.0;
+        info->rate   = 0.0;
+        info->mime_t = SERV_MIME_TYPE_UNDEFINED;
+        info->mime_s = SERV_MIME_SUBTYPE_UNDEFINED;
     }
     return info;
 }
@@ -619,11 +708,16 @@ SSERV_Info* SERV_CreateHttpInfo
         info->host        = host;
         info->port        = port;
         info->sful        = 0;
+        info->locl        = 0;
         info->flag        = SERV_DEFAULT_FLAG;
         info->time        = 0;
-        info->rate        = 0;
-        info->u.http.path = sizeof(info->u.http);
-        info->u.http.args = info->u.http.path + strlen(path ? path : "")+1;
+        info->coef        = 0.0;
+        info->rate        = 0.0;
+        info->mime_t      = SERV_MIME_TYPE_UNDEFINED;
+        info->mime_s      = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->u.http.path = (TNCBI_Size) sizeof(info->u.http);
+        info->u.http.args = (TNCBI_Size) (info->u.http.path +
+                                          strlen(path ? path : "")+1);
         strcpy(SERV_HTTP_PATH(&info->u.http), path ? path : "");
         strcpy(SERV_HTTP_ARGS(&info->u.http), args ? args : "");
     }

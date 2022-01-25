@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.3 2001/03/23 17:24:44 madden Exp $
+/* $Id: txalign.h,v 6.6 2001/06/21 19:42:18 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,16 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.6  2001/06/21 19:42:18  shavirin
+* Moved here definitions related to Taxonomy names.
+*
+* Revision 6.5  2001/06/21 18:26:27  shavirin
+* Moved here functions to get Taxonomy names information encoded in
+* the Bioseq returned from the Blast database.
+*
+* Revision 6.4  2001/05/15 17:18:26  egorov
+* Added txalign_options to AlignStatOption structure
+*
 * Revision 6.3  2001/03/23 17:24:44  madden
 * Add FDGetDeflineAsnFromBioseq from readdb.[ch]
 *
@@ -206,6 +216,7 @@
 #define TXALIGN_NEW_GIF		((Uint4)1048576)	/* print new.gif near new alignments (HTML only) */
 #define TXALIGN_NO_ENTREZ	((Uint4)2097152)	/* Use dumpgnl syntax instead of ENTREZ. */
 #define TXALIGN_NO_DUMPGNL	((Uint4)4194304)	/* No dumpgnl output, even if GNL. */
+#define TXALIGN_TARGET_IN_LINKS	((Uint4)8388608)	/* Put TARGET in Entrez links */
 /*
 	Used by psi-blast to distinguish first from subsequent passes.
 */
@@ -215,6 +226,33 @@
 #define NOT_FIRST_PASS_NEW  3
 
 #define ASN_DEFLINE_OBJ_LABEL "ASN1_BlastDefLine"
+#define TAX_DATA_OBJ_LABEL    "TaxNamesData"
+
+/* Bit meanings in membership element of ASN.1 structured 
+   definition lines */
+#define EST_HUMAN_BIT 0x1
+#define EST_MOUSE_BIT 0x2
+#define SWISSPROT_BIT 0x4
+#define PDB_BIT       0x8
+#define REFSEQ_BIT    0x10
+#define CONTIG_BIT    0x20
+
+#define NUM_TAX_NAMES 4
+#define SCI_NAME_POS    0
+#define COMMON_NAME_POS 1
+#define BLAST_NAME_POS  2
+#define S_KING_POS      3
+
+/* ---------------------------------------------------------------------*/
+/* -- Here is set of definitions used with taxonomy info database ----- */
+/* ---------------------------------------------------------------------*/
+typedef	struct _RDBTaxNames {
+    Int4 tax_id;
+    CharPtr sci_name;
+    CharPtr common_name;
+    CharPtr blast_name;
+    Char  s_king[3];
+} RDBTaxNames, *RDBTaxNamesPtr;
 
 /****************************************************************************/
 /* TYPEDEFS */
@@ -297,6 +335,7 @@ typedef struct align_stat_option { /*options for printing the statistics*/
     CharPtr segs; /* <start> "-" <stop> ("," <start> "-" <stop>)* */
     CharPtr db_name; /* searched databases list */
     CharPtr blast_type; /* string used to choose proper config parms */
+    Uint4	txalign_options;/* the TXALIGN_* options */
 }AlignStatOption, PNTR AlignStatOptionPtr;
 
 /****************************************************************************/
@@ -587,6 +626,7 @@ NLM_EXTERN void OOFDisplayTraceBack2(Int4Ptr a, CharPtr dna, CharPtr pro,
                                      Int4 q_start, Int4 p_start);
 
 BlastDefLinePtr FDGetDeflineAsnFromBioseq(BioseqPtr bsp);
+RDBTaxNamesPtr FDGetTaxNamesFromBioseq(BioseqPtr bsp, Int4 taxid);
 
 #ifdef __cplusplus
 }

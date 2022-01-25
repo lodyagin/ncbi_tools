@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *       Vibrant scroll bar functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibsbars.c,v $
+* Revision 6.3  2001/04/05 03:23:07  juran
+* Carbon UPP fix and removed pre-UPP support.
+*
 * Revision 6.2  1997/12/12 21:08:43  kans
 * a number of symbols changed in the latest CodeWarrior release, now using headers from Apple
 *
@@ -492,13 +495,9 @@ static Nlm_Boolean Nlm_ScrollClick (Nlm_GraphiC b, Nlm_PoinT pt)
     }
   else
     {
-#ifdef __CONDITIONALMACROS__
-      ControlActionUPP proc = NewControlActionProc( (ProcPtr)ScrollAction );
+      ControlActionUPP proc = NewControlActionUPP(ScrollAction);
       TrackControl(c, ptool, proc);
-      DisposeRoutineDescriptor( proc );
-#else
-      TrackControl(c, ptool, (ProcPtr)ScrollAction);
-#endif
+      DisposeControlActionUPP( proc );
     }
 
   return TRUE;

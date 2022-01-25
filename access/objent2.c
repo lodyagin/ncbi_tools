@@ -31,7 +31,7 @@ objent2AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.10 at Mar 28, 2001 11:38 AM
+*    Generated using ASNCODE Revision: 6.10 at May 11, 2001  2:35 PM
 *    Manual addition to swap bytes in id list if IS_LITTLE_ENDIAN
 *
 **************************************************/
@@ -2717,6 +2717,7 @@ Entrez2ReplyFree(Entrez2ReplyPtr ptr)
    E2ReplyFree(ptr -> reply);
    MemFree(ptr -> server);
    MemFree(ptr -> msg);
+   MemFree(ptr -> key);
    MemFree(ptr -> cookie);
    return MemFree(ptr);
 }
@@ -2797,6 +2798,13 @@ Entrez2ReplyAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> msg = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_REPLY_key) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> key = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == ENTREZ2_REPLY_cookie) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -2869,6 +2877,10 @@ Entrez2ReplyAsnWrite(Entrez2ReplyPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> msg != NULL) {
       av.ptrvalue = ptr -> msg;
       retval = AsnWrite(aip, ENTREZ2_REPLY_msg,  &av);
+   }
+   if (ptr -> key != NULL) {
+      av.ptrvalue = ptr -> key;
+      retval = AsnWrite(aip, ENTREZ2_REPLY_key,  &av);
    }
    if (ptr -> cookie != NULL) {
       av.ptrvalue = ptr -> cookie;

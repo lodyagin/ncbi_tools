@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.128 $
+* $Revision: 6.130 $
 *
 * File Description: 
 *
@@ -47,17 +47,11 @@
 #include <valid.h>
 #include <cdrgn.h>
 #include <suggslp.h>
-#include <urkptpf.h>
-#include <entrez.h>
-#include <accentr.h>
-#include <urlquery.h>
 #include <toasn3.h>
 #include <subutil.h>
 #include <explore.h>
 #include <medarch.h>
 #include <medutil.h>
-#include <vecscnapi.h>
-#include <qblastapi.h>
 
 typedef struct evidenceformdata {
   FEATURE_FORM_BLOCK
@@ -3739,2152 +3733,2769 @@ extern void EditSequenceHistory (IteM i)
   Update ();
 }
 
-extern void HandleProjectAsn (ProjectPtr proj, Uint2 entityID)
+/* automatic defline generator */
+
+typedef struct deffeats {
+  SeqFeatPtr  sfp;
+  SeqFeatPtr  gene;
+  SeqFeatPtr  prot;
+  CharPtr     genename;
+  CharPtr     allelename;
+  CharPtr     protname;
+  Boolean     alreadyTrimmed;
+  Uint2       entityID;
+  Uint2       itemID;
+  Uint2       subtype;
+  Boolean     lastInString;
+  Boolean     lastInGroup;
+  Boolean     lastInType;
+  Boolean     lastInPenultimate;
+  Boolean     pseudo;
+  Boolean     ignore;
+  Boolean     suppressprefix;
+  Int2        altSplices;
+  Int2        numUnknown;
+} DefFeatsData, PNTR DefFeatsPtr;
+
+static Boolean GetMolBioFeatsGatherFunc (GatherContextPtr gcp, Boolean getGene, Boolean getMrna)
 
 {
-  Int2              db = -1;
-  EntrezGlobalsPtr  egp;
-  Int4              i;
-  ValNodePtr        list;
-  Int4              num;
-  ValNodePtr        pip;
-  Int4Ptr           uids;
-  ValNodePtr        vnp;
-
-  if (proj == NULL) return;
-  if (! useEntrez) return;
-  egp = (EntrezGlobalsPtr) GetAppProperty ("EntrezGlobals");
-  if (egp == NULL) return;
-  pip = proj->data;
-  if (pip == NULL) return;
-  list = (ValNodePtr) pip->data.ptrvalue;
-  if (list == NULL) return;
-  if (pip->choice >= ProjectItem_protent && pip->choice <= ProjectItem_genomeent) {
-    if (egp->retrieveProjectProc == NULL) return;
-    if (! EntrezIsInited ()) {
-      SequinEntrezInit ("Sequin", FALSE, NULL);
-    }
-    egp->retrieveProjectProc (NULL, (Pointer) proj);
-    Update ();
-    return;
-  }
-  if (egp->retrieveDocsProc == NULL) return;
-  switch (pip->choice) {
-    case ProjectItem_pmuid :
-      db = 0;
-      break;
-    case ProjectItem_protuid :
-      db = 1;
-      break;
-    case ProjectItem_nucuid :
-      db = 2;
-      break;
-    case ProjectItem_genomeuid :
-      db = 4;
-      break;
-    case ProjectItem_structuid :
-      db = 3;
-      break;
-    default :
-      break;
-  }
-  if (db == -1) return;
-  if (! EntrezIsInited ()) {
-    SequinEntrezInit ("Sequin", FALSE, NULL);
-  }
-  num = ValNodeLen (list);
-  uids = MemNew ((size_t) (num * sizeof (Int4)));
-  if (uids == NULL) return;
-  for (i = 0, vnp = list; i < 32766 && vnp != NULL; i++, vnp = vnp->next) {
-    uids [i] = vnp->data.intvalue;
-  }
-  if (egp->retrieveDocsProc != NULL) {
-    egp->retrieveDocsProc (NULL, (Int2) num, 0, uids, db);
-  }
-  MemFree (uids);
-  Update ();
-}
-
-/* BioseqViewOrDocSumChoice allows a single callback for each analysis item */
-static Int2 BioseqViewOrDocSumChoice (NewObjectPtr nop)
-
-{
-  Int2  which = 0;   /* 1 = bioseq viewer, 2 = docsum window */
-
-  if (nop == NULL) return 0;
-#ifdef WIN_MAC
-  if (bioseqViewUp) {
-    which = 1;
-  } else if (docSumUp) {
-    which = 2;
-  }
-#else
-  if (nop->bspOK) {
-    which = 1;
-  } else if (nop->dsmOK) {
-    which = 2;
-  }
-#endif
-  return which;
-}
-
-/*
-#define TEST_APPLE_EVENT_MESSAGING
-*/
-
-#ifndef TEST_APPLE_EVENT_MESSAGING
-static void AddRestrictionSite (SeqAnnotPtr annot, PackSeqPntPtr pspp, CharPtr name)
-
-{
-  DbtagPtr     dbt;
-  ObjectIdPtr  oip;
-  RsiteRefPtr  rrp;
-  SeqFeatPtr   sfp, lastsfp;
-  SeqLocPtr    slp;
-
-  if (annot == NULL || pspp == NULL || name == NULL) return;
-  slp = ValNodeNew (NULL);
-  if (slp == NULL) return;
-  slp->choice = SEQLOC_PACKED_PNT;
-  slp->data.ptrvalue = (Pointer) pspp;
-  sfp = SeqFeatNew ();
-  if (sfp == NULL) return;
-
-  sfp->data.choice = SEQFEAT_RSITE;
-  sfp->location = slp;
-  dbt = DbtagNew ();
-  if (dbt != NULL) {
-    dbt->db = StringSave ("REBASE");
-    oip = ObjectIdNew ();
-    if (oip != NULL) {
-      oip->str = StringSave (name);
-    }
-    dbt->tag = oip;
-  }
-  rrp = ValNodeNew (NULL);
-  if (rrp != NULL) {
-    rrp->choice = 2;
-    rrp->data.ptrvalue = dbt;
-  }
-  sfp->data.value.ptrvalue = (Pointer) rrp;
-
-  if (annot->data == NULL) {
-    annot->data = (Pointer) sfp;
-  } else {
-    lastsfp = (SeqFeatPtr) annot->data;
-    while (lastsfp->next != NULL) {
-      lastsfp = lastsfp->next;
-    }
-    lastsfp->next = sfp;
-  }
-}
-
-static void RestrictionSearchProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  SeqAnnotPtr    annot;
-  BioseqPtr      bsp;
-  ComPatPtr      cpp, cpph;
-  ValNodePtr     desc;
-  SeqAnnotPtr    lastannot;
-  PackSeqPntPtr  pspp;
-  Int4           pt;
-  SeqAlignPtr    sap;
-  SeqLocPtr      slp, slpn;
-
-  if (sep == NULL) return;
-  if (! IS_Bioseq (sep)) return;
-  bsp = (BioseqPtr) sep->data.ptrvalue;
-  if (bsp == NULL) return;
-  if (! ISA_na (bsp->mol)) return;
-
-  desc = ValNodeNew (NULL);
-  desc->choice = Annot_descr_name;
-  desc->data.ptrvalue = StringSave ("cutsites");
-
-  annot = SeqAnnotNew ();
-  annot->type = 1;
-  annot->desc = desc;
-  annot->data = NULL;
-
-  cpph = (ComPatPtr) mydata;
-  cpp = cpph;
-  while (cpp != NULL) {
-    sap = PatternMatchBioseq (bsp, cpp, 0);
-    slp = MatchSa2Sl (&sap);
-    if (slp != NULL) {
-      pspp = PackSeqPntNew ();
-      pspp->id = SeqIdDup (SeqIdFindBest (bsp->id, 0));
-      while (slp != NULL) {
-        pt = SeqLocStart (slp);
-        PackSeqPntPut (pspp, pt);
-        slpn = slp->next;
-        SeqLocFree (slp);
-        slp = slpn;
-      }
-      AddRestrictionSite (annot, pspp, cpp->name);
-    }
-    cpp = cpp->nextpattern;
-  }
-
-  if (annot->data == NULL) {
-    SeqAnnotFree (annot);
-    return;
-  }
-  if (bsp->annot == NULL) {
-    bsp->annot = annot;
-  } else {
-    lastannot = bsp->annot;
-    while (lastannot->next != NULL) {
-      lastannot = lastannot->next;
-    }
-    lastannot->next = annot;
-  }
-}
-#endif
-
-static void SimpleRsiteProc (IteM i)
-
-{
-  BaseFormPtr   bfp;
-  BioseqPtr     bsp;
-  NewObjectPtr  nop;
-  SeqEntryPtr   sep = NULL;
-  Int2          which;
-#ifdef TEST_APPLE_EVENT_MESSAGING
-  AsnIoPtr      aip;
-  Char          tmp [PATH_MAX];
-#else
-  ComPatPtr     cpph;
-  Char          enzyme [64];
-  Int2          j;
-  Char          temp [32];
-  ValNodePtr    enzymes;
-#endif
-
-  nop = (NewObjectPtr) GetObjectExtra (i);
-  if (nop == NULL) return;
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = nop->bfp;
-#endif
-  if (bfp == NULL) return;
-  which = BioseqViewOrDocSumChoice (nop);
-  if (which != 1) return;
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp != NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-  } else {
-    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  }
-  if (sep == NULL) return;
-
-#ifdef TEST_APPLE_EVENT_MESSAGING
-  TmpNam (tmp);
-  aip = AsnIoOpen (tmp, "w");
-  if (aip != NULL) {
-    SeqEntryAsnWrite (sep, aip, NULL);
-    AsnIoClose (aip);
-    /* Nlm_SendOpenDocAppleEventEx (tmp, "REST", NULL, TRUE); */
-    Nlm_SendOpenDocAppleEventEx (tmp, NULL, "RsiteFind", TRUE);
-  }
-#else
-  enzymes = NULL;
-  j = 1;
-  sprintf (temp, "ENZ_%d", (int) j);
-  while (GetAppParam ("SEQNCGIS", "ENZYMES", temp, NULL, enzyme, sizeof (enzyme) - 1)) {
-    ValNodeCopyStr (&enzymes, 0, enzyme);
-    j++;
-    sprintf (temp, "ENZ_%d", (int) j);
-  }
-  if (enzymes == NULL) {
-    ValNodeCopyStr (&enzymes, 0, "BamHI");
-    ValNodeCopyStr (&enzymes, 0, "EcoRI");
-    ValNodeCopyStr (&enzymes, 0, "HindIII");
-  }
-  cpph = ReadRENPattern ("ncbiren.dat", FALSE, enzymes);
-  /* PalindromeCheck (cpph); */
-  SeqEntryExplore (sep, (Pointer) cpph, RestrictionSearchProc);
-  ComPatFree (cpph);
-  ValNodeFreeData (enzymes);
-
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  Update ();
-#endif
-}
-
-static VQUEUE  vsquerylist = NULL;
-
-static void LIBCALLBACK AnnounceCallback (CharPtr requestID, CharPtr seqID, Int2 estimatedSeconds)
-
-{
-  if (StringHasNoText (requestID)) {
-    requestID = "?";
-  }
-  if (StringHasNoText (seqID)) {
-    seqID = "?";
-  }
-  Message (MSG_POST, "Queued rID %s, seqID %s, estimated seconds = %d",
-           requestID, seqID, (int) estimatedSeconds);
-}
-
-static Boolean LIBCALLBACK VecScreenCallback (
-  CharPtr filename,
-  VoidPtr userdata,
-  CharPtr requestID,
-  CharPtr seqID,
-  Boolean success
-)
-
-{
-  if (StringHasNoText (requestID)) {
-    requestID = "?";
-  }
-  if (StringHasNoText (seqID)) {
-    seqID = "?";
-  }
-  if (success) {
-    if (! SequinHandleNetResults (filename)) {
-      /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
-    }
-  } else {
-    Message (MSG_POST, "Failure of rID '%s', seqID %s", requestID, seqID);
-  }
-  return TRUE;
-}
-
-static void SimpleUniVecScreenProc (IteM i)
-
-{
-  BaseFormPtr   bfp;
-  BioseqPtr     bsp;
-  NewObjectPtr  nop;
-  SeqEntryPtr   sep = NULL;
-  Int2          which;
-
-  nop = (NewObjectPtr) GetObjectExtra (i);
-  if (nop == NULL) return;
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = nop->bfp;
-#endif
-  if (bfp == NULL) return;
-  which = BioseqViewOrDocSumChoice (nop);
-  if (which != 1) return;
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp != NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-  } else {
-    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  }
-  if (sep == NULL) return;
-
-  VecScreenAsynchronousRequest ("UniVec", bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
-}
-
-static void SimpleUniVecCoreScreenProc (IteM i)
-
-{
-  BaseFormPtr   bfp;
-  BioseqPtr     bsp;
-  NewObjectPtr  nop;
-  SeqEntryPtr   sep = NULL;
-  Int2          which;
-
-  nop = (NewObjectPtr) GetObjectExtra (i);
-  if (nop == NULL) return;
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = nop->bfp;
-#endif
-  if (bfp == NULL) return;
-  which = BioseqViewOrDocSumChoice (nop);
-  if (which != 1) return;
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp != NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-  } else {
-    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  }
-  if (sep == NULL) return;
-
-  VecScreenAsynchronousRequest ("UniVec_Core", bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
-}
-
-static QBQUEUE  qbquerylist = NULL;
-
-static void LIBCALLBACK QBAnnounceCallback (CharPtr requestID, CharPtr seqID, Int2 estimatedSeconds)
-
-{
-  if (StringHasNoText (requestID)) {
-    requestID = "?";
-  }
-  if (StringHasNoText (seqID)) {
-    seqID = "?";
-  }
-  Message (MSG_POST, "Queued rID %s, seqID %s, estimated seconds = %d",
-           requestID, seqID, (int) estimatedSeconds);
-}
-
-static Boolean LIBCALLBACK QBCallback (
-  CharPtr filename,
-  VoidPtr userdata,
-  CharPtr requestID,
-  CharPtr seqID,
-  Boolean success
-)
-
-{
-  if (StringHasNoText (requestID)) {
-    requestID = "?";
-  }
-  if (StringHasNoText (seqID)) {
-    seqID = "?";
-  }
-  if (success) {
-    if (! SequinHandleNetResults (filename)) {
-      /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
-    }
-  } else {
-    Message (MSG_POST, "Failure of rID '%s', seqID %s", requestID, seqID);
-  }
-  return TRUE;
-}
-
-static void SimpleQBlastProc (IteM i)
-
-{
-  BaseFormPtr   bfp;
-  BioseqPtr     bsp;
-  NewObjectPtr  nop;
-  SeqEntryPtr   sep = NULL;
-  Int2          which;
-
-  nop = (NewObjectPtr) GetObjectExtra (i);
-  if (nop == NULL) return;
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = nop->bfp;
-#endif
-  if (bfp == NULL) return;
-  which = BioseqViewOrDocSumChoice (nop);
-  if (which != 1) return;
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp != NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-  } else {
-    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  }
-  if (sep == NULL) return;
-
-  QBlastAsynchronousRequest ("nr", "blastn", bsp, &qbquerylist, QBCallback, QBAnnounceCallback, NULL);
-}
-
-/* Analysis menu can launch external programs or use Web services */
-
-static QUEUE  urlquerylist = NULL;
-
-static Int4 pendingqueries = 0;
-
-static Boolean LIBCALLBACK SubmitToNCBIResultProc (CONN conn, VoidPtr userdata, EIO_Status status)
-
-{
-  AsnIoPtr     aop;
-  FILE         *fp;
-  Char         path [PATH_MAX];
-  SeqEntryPtr  sep;
-
-  TmpNam (path);
-  fp = FileOpen (path, "wb");
-  QUERY_CopyResultsToFile (conn, fp);
-  FileClose (fp);
-  aop = AsnIoOpen (path, "rb");
-  sep = SeqEntryAsnRead (aop, NULL);
-  AsnIoClose (aop);
-  aop = AsnIoOpen (path, "w");
-  SeqEntryAsnWrite (sep, aop, NULL);
-  AsnIoFlush (aop);
-  AsnIoClose (aop);
-  LaunchGeneralTextViewer (path, "Echo binary transformation of Seq-entry");
-  FileRemove (path);
-  return TRUE;
-}
-
-extern void SubmitToNCBI (IteM i);
-extern void SubmitToNCBI (IteM i)
-
-{
-  AsnIoPtr     aop;
-  BaseFormPtr  bfp;
-  CONN         conn;
-  FILE         *fp;
-  Char         path [PATH_MAX];
-  Char         progname [64];
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-
-  sprintf (progname, "Sequin/%s", SEQUIN_APPLICATION);
-
-  TmpNam (path);
-
-  aop = AsnIoOpen (path, "wb");
-  SeqEntryAsnWrite (sep, aop, NULL);
-  AsnIoFlush (aop);
-  AsnIoClose (aop);
-
-  conn = QUERY_OpenUrlQuery ("cruncher.nlm.nih.gov", 80,
-                             "/cgi-bin/Sequin/testcgi.cgi", "request=echo",
-                             progname, 30, eMIME_T_NcbiData, eMIME_AsnBinary,
-                             eENCOD_Url,
-                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
-
-  fp = FileOpen (path, "rb");
-  QUERY_CopyFileToQuery (conn, fp);
-  FileClose (fp);
-
-  QUERY_SendQuery (conn);
-
-  QUERY_AddToQueue (&urlquerylist, conn, SubmitToNCBIResultProc, NULL, TRUE);
-
-  pendingqueries++;
-
-  FileRemove (path);
-}
-
-extern void SequinCheckSocketsProc (void)
-
-{
-  Int4  remaining;
-
-  remaining = QUERY_CheckQueue (&urlquerylist);
-  if (remaining < pendingqueries) {
-    Beep ();
-    pendingqueries--;
-  }
-  remaining = VecScreenCheckQueue (&vsquerylist);
-  remaining = QBlastCheckQueue (&qbquerylist);
-}
-
-static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, EIO_Status status)
-
-{
-  FILE  *fp;
-  Char  path [PATH_MAX];
-
-  TmpNam (path);
-  fp = FileOpen (path, "w");
-  QUERY_CopyResultsToFile (conn, fp);
-  FileClose (fp);
-  LaunchGeneralTextViewer (path, "QueueFastaQueryToURL results");
-  FileRemove (path);
-  return TRUE;
-}
-
-static Boolean LIBCALLBACK SequinHandleURLResults (CONN conn, VoidPtr userdata, EIO_Status status)
-
-{
-  FILE  *fp;
-  Char  path [PATH_MAX];
-
-  TmpNam (path);
-  fp = FileOpen (path, "w");
-  QUERY_CopyResultsToFile (conn, fp);
-  FileClose (fp);
-  if (! SequinHandleNetResults (path)) {
-    /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
-  }
-  FileRemove (path);
-  return TRUE;
-}
-
-static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
-
-{
-  CONN             conn;
-  FILE             *fp;
-  Char             progname [64];
-  QueryResultProc  resultproc;
-  EMIME_SubType    subtype;
-
-  sprintf (progname, "Sequin/%s", SEQUIN_APPLICATION);
-
-  if (nop->demomode) {
-    resultproc = DemoModeResultProc;
-  } else {
-    resultproc = nop->resultproc;
-  }
-  if (nop->format == 1) {
-    subtype = eMIME_Fasta;
-  } else if (nop->format == 2) {
-    subtype = eMIME_AsnText;
-  } else {
-    subtype = eMIME_Unknown;
-  }
-
-  conn = QUERY_OpenUrlQuery (nop->host_machine, nop->host_port,
-                             nop->host_path, arguments,
-                             progname, nop->timeoutsec,
-                             eMIME_T_NcbiData, subtype, eENCOD_Url,
-                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
-  if (conn == NULL) return;
-
-  fp = FileOpen (path, "r");
-  QUERY_CopyFileToQuery (conn, fp);
-  FileClose (fp);
-
-  QUERY_SendQuery (conn);
-
-  QUERY_AddToQueue (&urlquerylist, conn, resultproc, NULL, TRUE);
-
-  pendingqueries++;
-}
-
-static void DoAnalysisProc (NewObjectPtr nop, BaseFormPtr bfp, Int2 which, CharPtr arguments, ResultProc dotheanalysis)
-
-{
-  AsnIoPtr     aop;
-  BioseqPtr    bsp;
-  Char         path1 [PATH_MAX];
-  SeqEntryPtr  sep;
-
-  if (nop == NULL || bfp == NULL) return;
-  switch (which) {
-    case 1 :
-      if (BioseqViewCanSaveFasta (bfp->form, nop->fastaNucOK, nop->fastaProtOK, nop->onlyBspTarget)) {
-        TmpNam (path1);
-        switch (nop->format) {
-          case 1 :
-            ExportBioseqViewFasta (bfp->form, path1, nop->fastaNucOK, nop->fastaProtOK, nop->onlyBspTarget);
-            break;
-          case 2 :
-            sep = NULL;
-            if (nop->onlyBspTarget) {
-              bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-              sep = SeqMgrGetSeqEntryForData (bsp);
-            } else {
-              sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-            }
-            if (sep != NULL) {
-              aop = AsnIoOpen (path1, "w");
-              SeqEntryAsnWrite (sep, aop, NULL);
-              AsnIoFlush (aop);
-              AsnIoClose (aop);
-            }
-            break;
-          default :
-            break;
-        }
-        if (dotheanalysis != NULL) {
-          dotheanalysis (path1);
-        } else {
-          FinishURLProc (nop, arguments, path1);
-        }
-        FileRemove (path1);
-      } else {
-        ErrPostEx (SEV_ERROR, 0, 0, "BioseqView cannot save fasta format");
+  DefFeatsPtr  dfp;
+  RnaRefPtr    rrp;
+  SeqFeatPtr   sfp;
+  CharPtr      str;
+  Uint1        type;
+  ValNodePtr   PNTR vnpp;
+
+  if (gcp == NULL || gcp->thisitem == NULL || gcp->userdata == NULL) return TRUE;
+  if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
+  vnpp = (ValNodePtr PNTR) gcp->userdata;
+  sfp = (SeqFeatPtr) gcp->thisitem;
+  switch (sfp->data.choice) {
+    case SEQFEAT_GENE :
+      if (getGene) {
+        dfp = MemNew (sizeof (DefFeatsData));
+        if (dfp == NULL) return TRUE;
+        dfp->entityID = gcp->entityID;
+        dfp->itemID = gcp->itemID;
+        dfp->sfp = sfp;
+        dfp->subtype = FEATDEF_GENE;
+        ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
       }
       break;
-    case 2 :
-      if (DocSumCanSaveFasta (bfp->form, nop->fastaNucOK, nop->fastaProtOK)) {
-        TmpNam (path1);
-        ExportDocSumFasta (bfp->form, path1, nop->fastaNucOK, nop->fastaProtOK);
-        if (dotheanalysis != NULL) {
-          dotheanalysis (path1);
-        } else {
-          FinishURLProc (nop, arguments, path1);
-        }
-        FileRemove (path1);
-      } else {
-        ErrPostEx (SEV_ERROR, 0, 0, "DocSum cannot save fasta format");
-      }
+    case SEQFEAT_CDREGION :
+      dfp = MemNew (sizeof (DefFeatsData));
+      if (dfp == NULL) return TRUE;
+      dfp->entityID = gcp->entityID;
+      dfp->itemID = gcp->itemID;
+      dfp->sfp = sfp;
+      dfp->subtype = FEATDEF_CDS;
+      dfp->altSplices = 1;
+      ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
       break;
-    default :
-      break;
-  }
-}
-
-/* encodes spaces as %20 in URLs */
-static CharPtr StrSaveNoNullEncodeSpaces (CharPtr from)
-
-{
-  Char     ch;
-  size_t   len = 0;
-  CharPtr  p;
-  CharPtr  q;
-  CharPtr  to;
-
-  if (StringHasNoText (from)) return NULL;
-  p = from;
-  ch = *p;
-  while (ch != '\0') {
-    if (ch == ' ') {
-      len += 3;
-    } else {
-      len++;
-    }
-    p++;
-    ch = *p;
-  }
-  to = MemNew (len + 1);
-  if (to == NULL) return NULL;
-
-  q = to;
-  p = from;
-  ch = *p;
-  while (ch != '\0') {
-    if (ch == ' ') {
-      *q = '%';
-      q++;
-      *q = '2';
-      q++;
-      *q = '0';
-      q++;
-    } else {
-      *q = ch;
-      q++;
-    }
-    p++;
-    ch = *p;
-  }
-  *q = '\0';
-  return to;
-}
-
-typedef struct urlargform {
-  FORM_MESSAGE_BLOCK
-
-  NewObjectPtr nop;
-  BaseFormPtr  bfp;
-  ValNodePtr   controls;
-  ValNodePtr   helps;
-  Int2         which;
-} UrlArgForm, PNTR UrlArgFormPtr;
-
-static void AcceptArgumentFormProc (ButtoN b)
-
-{
-  CharPtr        args = NULL;
-  CharPtr        arguments = NULL;
-  ButtoN         btn;
-  Char           ch;
-  Int2           choice;
-  Char           cpy [256];
-  GrouP          grp;
-  ValNodePtr     head = NULL;
-  Int2           i;
-  CharPtr        itms;
-  CharPtr        last;
-  size_t         len;
-  LisT           lst;
-  NewObjectPtr   nop;
-  Boolean        notFirst = FALSE;
-  PopuP          pop;
-  ValNodePtr     ppt;
-  CharPtr        ptr;
-  CharPtr        str;
-  Char           tmp [256];
-  TexT           txt;
-  UrlArgFormPtr  ufp;
-  UrlParamPtr    upp;
-  Int2           val;
-  ValNodePtr     vnp;
-
-  ufp = (UrlArgFormPtr) GetObjectExtra (b);
-  if (ufp == NULL) return;
-  Hide (ufp->form);
-  Update ();
-  nop = ufp->nop;
-  if (nop != NULL) {
-    if (! StringHasNoText (nop->prefix)) {
-      ValNodeCopyStr (&head, 0, nop->prefix);
-    }
-    for (vnp = ufp->controls, ppt = nop->paramlist;
-         vnp != NULL && ppt != NULL;
-         vnp = vnp->next, ppt = ppt->next) {
-      upp = (UrlParamPtr) ppt->data.ptrvalue;
-      if (upp == NULL) continue;
-      choice = vnp->choice;
-      switch (upp->type) {
-        case 1 :
-          txt = (TexT) vnp->data.ptrvalue;
-          str = SaveStringFromText (txt);
-          if (str != NULL) {
-            sprintf (tmp, "%s=%s", upp->param, str);
-            ValNodeCopyStr (&head, ppt->choice, tmp);
-            MemFree (str);
-          }
-          break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp == NULL) return TRUE;
+      switch (rrp->type) {
         case 2 :
-          btn = (ButtoN) vnp->data.ptrvalue;
-          if (GetStatus (btn)) {
-            sprintf (tmp, "%s=TRUE", upp->param);
-          } else {
-            sprintf (tmp, "%s=FALSE", upp->param);
+          if (getMrna) {
+            dfp = MemNew (sizeof (DefFeatsData));
+            if (dfp == NULL) return TRUE;
+            dfp->entityID = gcp->entityID;
+            dfp->itemID = gcp->itemID;
+            dfp->sfp = sfp;
+            dfp->subtype = FEATDEF_mRNA;
+            ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
           }
-          ValNodeCopyStr (&head, ppt->choice, tmp);
           break;
         case 3 :
-          pop = (PopuP) vnp->data.ptrvalue;
-          val = GetValue (pop);
-          if (val > 0) {
-            i = 0;
-            itms = upp->choices;
-            StringNCpy_0 (tmp, itms, sizeof (tmp));
-            last = tmp;
-            ptr = last;
-            ch = *ptr;
-            while (ch != '\0') {
-              if (ch == ',') {
-                *ptr = '\0';
-                i++;
-                if (val == i) {
-                  sprintf (cpy, "%s=%s", upp->param, last);
-                  ValNodeCopyStr (&head, ppt->choice, cpy);
-                }
-                ptr++;
-                last = ptr;
-                ch = *ptr;
-              } else {
-                ptr++;
-                ch = *ptr;
-              }
-            }
-            if (! StringHasNoText (last)) {
-              i++;
-              if (val == i) {
-                sprintf (cpy, "%s=%s", upp->param, last);
-                ValNodeCopyStr (&head, ppt->choice, cpy);
-              }
-            }
-          }
+          dfp = MemNew (sizeof (DefFeatsData));
+          if (dfp == NULL) return TRUE;
+          dfp->entityID = gcp->entityID;
+          dfp->itemID = gcp->itemID;
+          dfp->sfp = sfp;
+          dfp->subtype = FEATDEF_tRNA;
+          ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
           break;
         case 4 :
-          grp = (GrouP) vnp->data.ptrvalue;
-          val = GetValue (grp);
-          if (val > 0) {
-            i = 0;
-            itms = upp->choices;
-            StringNCpy_0 (tmp, itms, sizeof (tmp));
-            last = tmp;
-            ptr = last;
-            ch = *ptr;
-            while (ch != '\0') {
-              if (ch == ',') {
-                *ptr = '\0';
-                i++;
-                if (val == i) {
-                  sprintf (cpy, "%s=%s", upp->param, last);
-                  ValNodeCopyStr (&head, ppt->choice, cpy);
-                }
-                ptr++;
-                last = ptr;
-                ch = *ptr;
-              } else {
-                ptr++;
-                ch = *ptr;
-              }
-            }
-            if (! StringHasNoText (last)) {
-              i++;
-              if (val == i) {
-                sprintf (cpy, "%s=%s", upp->param, last);
-                ValNodeCopyStr (&head, ppt->choice, cpy);
-              }
-            }
-          }
+          dfp = MemNew (sizeof (DefFeatsData));
+          if (dfp == NULL) return TRUE;
+          dfp->entityID = gcp->entityID;
+          dfp->itemID = gcp->itemID;
+          dfp->sfp = sfp;
+          dfp->subtype = FEATDEF_rRNA;
+          ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
           break;
-        case 5 :
-          lst = (LisT) vnp->data.ptrvalue;
-          val = GetValue (lst);
-          if (val > 0) {
-            i = 0;
-            itms = upp->choices;
-            StringNCpy_0 (tmp, itms, sizeof (tmp));
-            last = tmp;
-            ptr = last;
-            ch = *ptr;
-            while (ch != '\0') {
-              if (ch == ',') {
-                *ptr = '\0';
-                i++;
-                if (val == i) {
-                  sprintf (cpy, "%s=%s", upp->param, last);
-                  ValNodeCopyStr (&head, ppt->choice, cpy);
-                }
-                ptr++;
-                last = ptr;
-                ch = *ptr;
-              } else {
-                ptr++;
-                ch = *ptr;
-              }
-            }
-            if (! StringHasNoText (last)) {
-              i++;
-              if (val == i) {
-                sprintf (cpy, "%s=%s", upp->param, last);
-                ValNodeCopyStr (&head, ppt->choice, cpy);
-              }
+        case 255 :
+          if (rrp->ext.choice == 1) {
+            str = (CharPtr) rrp->ext.value.ptrvalue;
+            if (StringICmp (str, "internal transcribed spacer 1") == 0 ||
+                StringICmp (str, "internal transcribed spacer 2") == 0 ||
+                StringICmp (str, "internal transcribed spacer 3") == 0 ||
+                StringICmp (str, "internal transcribed spacer ITS1") == 0 ||
+                StringICmp (str, "internal transcribed spacer ITS2") == 0 ||
+                StringICmp (str, "internal transcribed spacer ITS3") == 0 ||
+                StringICmp (str, "ITS1") == 0 ||
+                StringICmp (str, "ITS2") == 0 ||
+                StringICmp (str, "ITS3") == 0) {
+              dfp = MemNew (sizeof (DefFeatsData));
+              if (dfp == NULL) return TRUE;
+              dfp->entityID = gcp->entityID;
+              dfp->itemID = gcp->itemID;
+              dfp->sfp = sfp;
+              dfp->subtype = FEATDEF_otherRNA;
+              ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
             }
           }
           break;
         default :
           break;
       }
-    }
-    head = SortValNode (head, SortByVnpChoice);
-    if (! StringHasNoText (nop->suffix)) {
-      ValNodeCopyStr (&head, 0, nop->suffix);
-    }
-    for (len = 0, vnp = head; vnp != NULL; vnp = vnp->next) {
-      len += StringLen ((CharPtr) vnp->data.ptrvalue) + 1;
-    }
-    if (len > 0) {
-      arguments = MemNew (len + 5);
-      if (arguments != NULL) {
-        vnp = head;
-        notFirst = FALSE;
-        while (vnp != NULL) {
-          if (notFirst) {
-            StringCat (arguments, "&");
-          }
-          StringCat (arguments, (CharPtr) vnp->data.ptrvalue);
-          notFirst = TRUE;
-          vnp = vnp->next;
-        }
+      break;
+    case SEQFEAT_IMP :
+      type = FindFeatDefType (sfp);
+      if (type == FEATDEF_LTR || type == FEATDEF_exon) {
+        dfp = MemNew (sizeof (DefFeatsData));
+        if (dfp == NULL) return TRUE;
+        dfp->entityID = gcp->entityID;
+        dfp->itemID = gcp->itemID;
+        dfp->sfp = sfp;
+        dfp->subtype = type;
+        ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
       }
-    }
-    args = /* StrSaveNoNullEncodeSpaces */ StringSave (arguments);
-    MemFree (arguments);
-    DoAnalysisProc (nop, ufp->bfp, ufp->which, args, NULL);
-    MemFree (args);
+      break;
+    default :
+      break;
   }
-  Remove (ufp->form);
+  return TRUE;
 }
 
-static void ShowArgumentHelp (ButtoN b)
+static Boolean GetCDStRNArRNAGatherFunc (GatherContextPtr gcp)
 
 {
-  NewObjectPtr   nop;
-  ValNodePtr     ppt;
-  CharPtr        str;
-  UrlArgFormPtr  ufp;
-  UrlParamPtr    upp;
-  ValNodePtr     vnp;
-
-  ufp = (UrlArgFormPtr) GetObjectExtra (b);
-  if (ufp == NULL) return;
-  nop = ufp->nop;
-  if (nop == NULL) return;
-  for (vnp = ufp->helps, ppt = nop->paramlist;
-         vnp != NULL && ppt != NULL;
-         vnp = vnp->next, ppt = ppt->next) {
-    upp = (UrlParamPtr) ppt->data.ptrvalue;
-    if (upp == NULL) continue;
-    if ((Pointer) b == (Pointer) vnp->data.ptrvalue) {
-      str = upp->help;
-      Message (MSG_OK, "%s", str);
-      return;
-    }
-  }
-  Beep ();
+  return GetMolBioFeatsGatherFunc (gcp, FALSE, FALSE);
 }
 
-static void ArgumentFormMessage (ForM f, Int2 mssg)
+static Boolean GetGeneCDStRNArRNAGatherFunc (GatherContextPtr gcp)
 
 {
-  UrlArgFormPtr  ufp;
-
-  ufp = (UrlArgFormPtr) GetObjectExtra (f);
-  if (ufp != NULL) {
-    switch (mssg) {
-      case VIB_MSG_CLOSE :
-        Remove (f);
-        break;
-      default :
-        if (ufp->appmessage != NULL) {
-          ufp->appmessage (f, mssg);
-        }
-        break;
-    }
-  }
+  return GetMolBioFeatsGatherFunc (gcp, TRUE, FALSE);
 }
 
-static void CleanupArgumentForm (GraphiC g, VoidPtr data)
+static Boolean GetGeneCDStRNArRNAmRNAGatherFunc (GatherContextPtr gcp)
 
 {
-  UrlArgFormPtr  ufp;
-
-  ufp = (UrlArgFormPtr) data;
-  if (ufp != NULL) {
-    ValNodeFree (ufp->controls);
-    ValNodeFree (ufp->helps);
-  }
-  StdCleanupFormProc (g, data);
+  return GetMolBioFeatsGatherFunc (gcp, TRUE, TRUE);
 }
 
-static ValNodePtr RearrangeParamList (ValNodePtr paramlist)
+static void LabelAModifier (CharPtr str, CharPtr text, Boolean labelMods)
 
 {
-  ValNodePtr       curr;
-  CharPtr          group;
-  ValNodePtr       head = NULL;
-  ValNodePtr       list;
-  ValNodePtr       next;
-  ValNodePtr PNTR  prev;
-  ValNodePtr       ppt;
-  UrlParamPtr      upp;
+  Char     ch;
+  CharPtr  ptr;
 
-  ppt = paramlist;
-  while (ppt != NULL) {
-    list = ppt->next;
-    ppt->next = NULL;
-    ValNodeLink (&head, ppt);
-    upp = (UrlParamPtr) ppt->data.ptrvalue;
-    if (upp == NULL) {
-      ppt = list;
-      continue;
-    }
-    group = upp->group;
-    curr = list;
-    prev = &list;
-    while (curr != NULL) {
-      next = curr->next;
-      upp = (UrlParamPtr) curr->data.ptrvalue;
-      if (upp == NULL) {
-        prev = &(curr->next);
-        curr = next;
-        continue;
-      }
-      if (StringICmp (upp->group, group) == 0) {
-        *prev = next;
-        curr->next = NULL;
-        ValNodeLink (&head, curr);
-      } else {
-        prev = &(curr->next);
-      }
-      curr = next;
-    }
-    ppt = list;
-  }
-  return head;
-}
-
-static void BuildArgumentForm (NewObjectPtr nop, BaseFormPtr bfp, Int2 which)
-
-{
-  ButtoN             b;
-  ButtoN             btn;
-  GrouP              c;
-  Char               ch;
-  CharPtr            def;
-  Int2               delta;
-  TexT               first = NULL;
-  GrouP              g;
-  GrouP              grp;
-  GrouP              h;
-  ValNodePtr         hlp;
-  Int2               i;
-  CharPtr            itms;
-  CharPtr            last;
-  CharPtr            lastGroup = " ";
-  LisT               lst;
-  GrouP              m;
-  Int2               max;
-  Int2               min;
-  ValNodePtr         moveMe = NULL;
-  Nlm_Handle         obj1, obj2;
-  PopuP              pop;
-  PrompT             prmpt;
-  ValNodePtr         ppt;
-  CharPtr            ptr;
-  RecT               r;
-  StdEditorProcsPtr  sepp;
-  CharPtr            str;
-  Char               tmp [128];
-  TexT               txt;
-  UrlArgFormPtr      ufp;
-  UrlParamPtr        upp;
-  Int2               val;
-  ValNodePtr         vnp;
-  WindoW             w;
-
-  if (nop == NULL || bfp == NULL) return;
-  ufp = (UrlArgFormPtr) MemNew (sizeof (UrlArgForm));
-  if (ufp == NULL) return;
-
-  nop->paramlist = RearrangeParamList (nop->paramlist);
-
-  w = FixedWindow (-50, -33, -10, -10, "Arguments", NULL);
-  SetObjectExtra (w, ufp, CleanupArgumentForm);
-  ufp->form = (ForM) w;
-  ufp->formmessage = ArgumentFormMessage;
-
-  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
-  if (sepp != NULL) {
-    SetActivate (w, sepp->activateForm);
-    ufp->appmessage = sepp->handleMessages;
-  }
-
-  ufp->bfp = bfp;
-  ufp->nop = nop;
-  ufp->which = which;
-
-  m = HiddenGroup (w, 1, 0, NULL);
-
-  g = NULL;
-  for (ppt = nop->paramlist;
-       ppt != NULL;
-       ppt = ppt->next) {
-    upp = (UrlParamPtr) ppt->data.ptrvalue;
-    if (upp == NULL) continue;
-    if (StringICmp (upp->group, lastGroup) != 0) {
-      if (StringHasNoText (upp->group)) {
-        if (StringHasNoText (lastGroup)) {
-          g = HiddenGroup (m, 3, 0, NULL);
-        } else {
-          g = NormalGroup (m, 3, 0, "", programFont, NULL);
-        }
-      } else {
-        g = NormalGroup (m, 3, 0, upp->group, programFont, NULL);
-      }
-      lastGroup = upp->group;
-    }
-    if (g == NULL) {
-      g = HiddenGroup (m, 3, 0, NULL);
-    }
-    switch (upp->type) {
-      case 1 :
-        str = upp->prompt;
-        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
-        def = upp->dfault;
-        if (StringHasNoText (def)) {
-          def = "";
-        }
-        txt = DialogText (g, def, 10, NULL);
-        if (first == NULL) {
-          first = txt;
-        }
-        ValNodeAddPointer (&(ufp->controls), 1, (Pointer) txt);
-        ValNodeAddPointer (&moveMe, 0, (Pointer) txt);
-        b = PushButton (g, "?", ShowArgumentHelp);
-        SetObjectExtra (b, ufp, NULL);
-        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
-        break;
-      case 2 :
-        str = upp->prompt;
-        btn = CheckBox (g, str, NULL);
-        def = upp->dfault;
-        if (StringICmp (def, "TRUE") == 0) {
-          SetStatus (btn, TRUE);
-        }
-        prmpt = StaticPrompt (g, "", 0, 0, programFont, 'l');
-        ValNodeAddPointer (&moveMe, 0, (Pointer) prmpt);
-        ValNodeAddPointer (&(ufp->controls), 2, (Pointer) btn);
-        b = PushButton (g, "?", ShowArgumentHelp);
-        SetObjectExtra (b, ufp, NULL);
-        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
-        break;
-      case 3 :
-        str = upp->prompt;
-        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
-        h = HiddenGroup (g, 1, 0, NULL);
-        pop = PopupList (h, TRUE, NULL);
-        def = upp->dfault;
-        val = 0;
-        i = 0;
-        itms = upp->choices;
-        StringNCpy_0 (tmp, itms, sizeof (tmp));
-        last = tmp;
-        ptr = last;
-        ch = *ptr;
-        while (ch != '\0') {
-          if (ch == ',') {
-            *ptr = '\0';
-            PopupItem (pop, last);
-            i++;
-            if (StringICmp (def, last) == 0) {
-              val = i;
-            }
-            ptr++;
-            last = ptr;
-            ch = *ptr;
-          } else {
-            ptr++;
-            ch = *ptr;
-          }
-        }
-        if (! StringHasNoText (last)) {
-          PopupItem (pop, last);
-          i++;
-          if (StringICmp (def, last) == 0) {
-            val = i;
-          }
-        }
-        if (val > 0) {
-          SetValue (pop, val);
-        }
-        ValNodeAddPointer (&(ufp->controls), 3, (Pointer) pop);
-        ValNodeAddPointer (&moveMe, 0, (Pointer) pop);
-        b = PushButton (g, "?", ShowArgumentHelp);
-        SetObjectExtra (b, ufp, NULL);
-        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
-        break;
-      case 4 :
-        str = upp->prompt;
-        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
-        h = HiddenGroup (g, 1, 0, NULL);
-        grp = HiddenGroup (h, -3, 0, NULL);
-        def = upp->dfault;
-        val = 0;
-        i = 0;
-        itms = upp->choices;
-        StringNCpy_0 (tmp, itms, sizeof (tmp));
-        last = tmp;
-        ptr = last;
-        ch = *ptr;
-        while (ch != '\0') {
-          if (ch == ',') {
-            *ptr = '\0';
-            RadioButton (grp, last);
-            i++;
-            if (StringICmp (def, last) == 0) {
-              val = i;
-            }
-            ptr++;
-            last = ptr;
-            ch = *ptr;
-          } else {
-            ptr++;
-            ch = *ptr;
-          }
-        }
-        if (! StringHasNoText (last)) {
-          RadioButton (grp, last);
-          i++;
-          if (StringICmp (def, last) == 0) {
-            val = i;
-          }
-        }
-        if (val > 0) {
-          SetValue (grp, val);
-        }
-        ValNodeAddPointer (&(ufp->controls), 4, (Pointer) grp);
-        ValNodeAddPointer (&moveMe, 0, (Pointer) grp);
-        b = PushButton (g, "?", ShowArgumentHelp);
-        SetObjectExtra (b, ufp, NULL);
-        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
-        break;
-      case 5 :
-        str = upp->prompt;
-        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
-        h = HiddenGroup (g, 1, 0, NULL);
-        lst = SingleList (h, 10, 3, NULL);
-        def = upp->dfault;
-        val = 0;
-        i = 0;
-        itms = upp->choices;
-        StringNCpy_0 (tmp, itms, sizeof (tmp));
-        last = tmp;
-        ptr = last;
-        ch = *ptr;
-        while (ch != '\0') {
-          if (ch == ',') {
-            *ptr = '\0';
-            ListItem (lst, last);
-            i++;
-            if (StringICmp (def, last) == 0) {
-              val = i;
-            }
-            ptr++;
-            last = ptr;
-            ch = *ptr;
-          } else {
-            ptr++;
-            ch = *ptr;
-          }
-        }
-        if (! StringHasNoText (last)) {
-          ListItem (lst, last);
-          i++;
-          if (StringICmp (def, last) == 0) {
-            val = i;
-          }
-        }
-        if (val > 0) {
-          SetValue (lst, val);
-        }
-        ValNodeAddPointer (&(ufp->controls), 5, (Pointer) lst);
-        ValNodeAddPointer (&moveMe, 0, (Pointer) lst);
-        b = PushButton (g, "?", ShowArgumentHelp);
-        SetObjectExtra (b, ufp, NULL);
-        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
-        break;
-      default :
-        break;
-    }
-  }
-
-  min = 0;
-  max = 0;
-  for (vnp = moveMe; vnp != NULL; vnp = vnp->next) {
-    obj1 = (Nlm_Handle) vnp->data.ptrvalue;
-    GetPosition (obj1, &r);
-    min = MAX (min, r.left);
-  }
-  for (vnp = moveMe; vnp != NULL; vnp = vnp->next) {
-    obj1 = (Nlm_Handle) vnp->data.ptrvalue;
-    GetPosition (obj1, &r);
-    delta = min - r.left;
-    OffsetRect (&r, delta, 0);
-    SetPosition (obj1, &r);
-    AdjustPrnt (obj1, &r, FALSE);
-    max = MAX (max, r.right);
-  }
-  max += 3;
-  for (vnp = moveMe, hlp = ufp->helps;
-       vnp != NULL && hlp != NULL;
-       vnp = vnp->next, hlp = hlp->next) {
-    obj2 = (Nlm_Handle) hlp->data.ptrvalue;
-    GetPosition (obj2, &r);
-    delta = max - r.left;
-    OffsetRect (&r, delta, 0);
-    SetPosition (obj2, &r);
-    AdjustPrnt (obj2, &r, TRUE);
-  }
-
-  c = HiddenGroup (w, 2, 0, NULL);
-  SetGroupSpacing (c, 10, 3);
-  b = PushButton (c, "Accept", AcceptArgumentFormProc);
-  SetObjectExtra (b, ufp, NULL);
-  PushButton (c, "Cancel", StdCancelButtonProc);
-
-  AlignObjects (ALIGN_CENTER, (HANDLE) m, (HANDLE) c, NULL);
-  RealizeWindow (w);
-  Show (w);
-  Select (w);
-  if (first != NULL) {
-    Select (first);
-  }
-}
-
-static void DoURLProc (IteM i)
-
-{
-  CharPtr       args = NULL;
-  BaseFormPtr   bfp;
-  size_t        len;
-  NewObjectPtr  nop;
-  Int2          which;
-
-  nop = (NewObjectPtr) GetObjectExtra (i);
-  if (nop == NULL) return;
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = nop->bfp;
-#endif
-  if (bfp == NULL) return;
-  which = BioseqViewOrDocSumChoice (nop);
-  if (nop->paramlist == NULL) {
-    len = StringLen (nop->prefix) + StringLen (nop->suffix);
-    if (len > 0) {
-      args = MemNew (sizeof (Char) * (len + 2));
-      StringCpy (args, nop->prefix);
-      if (! StringHasNoText (nop->suffix)) {
-        StringCat (args, "&");
-        StringCat (args, nop->suffix);
-      }
-    }
-    DoAnalysisProc (nop, bfp, which, args, NULL);
+  if (str == NULL || text == NULL) return;
+  if (StringHasNoText (text)) {
+    str [0] = '\0';
+    text [0] = '\0';
   } else {
-    BuildArgumentForm (nop, bfp, which);
-  }
-}
-
-extern void EnableAnalysisItems (BaseFormPtr bfp, Boolean isDocSum)
-
-{
-  Boolean       hasFastaNuc;
-  Boolean       hasFastaProt;
-  NewObjectPtr  nop;
-
-  if (bfp == NULL) return;
-#ifdef WIN_MAC
-  nop = (NewObjectPtr) macUserDataPtr;
-#else
-  nop = (NewObjectPtr) bfp->userDataPtr;
-#endif
-  if (isDocSum) {
-  } else {
-  }
-  while (nop != NULL) {
-    if (nop->kind == 1) {
-      /* annotate menu item, ignore it */
-    } else if (isDocSum) {
-      if (nop->dsmOK) {
-        hasFastaNuc = DocSumCanSaveFasta (bfp->form, TRUE, FALSE);
-        hasFastaProt = DocSumCanSaveFasta (bfp->form, FALSE, TRUE);
-        if (nop->fastaNucOK && hasFastaNuc) {
-          SafeEnable (nop->item);
-        } else if (nop->fastaProtOK && hasFastaProt) {
-          SafeEnable (nop->item);
-        } else {
-          SafeDisable (nop->item);
-        }
-      } else {
-        SafeDisable (nop->item);
+    if (labelMods) {
+      ptr = str;
+      while (*ptr != '\0') {
+        ch = *ptr;
+        *ptr = TO_LOWER (ch);
+        ptr++;
       }
+      StringCat (str, " ");
     } else {
-      if (nop->bspOK) {
-        hasFastaNuc = BioseqViewCanSaveFasta (bfp->form, TRUE, FALSE, nop->onlyBspTarget);
-        hasFastaProt = BioseqViewCanSaveFasta (bfp->form, FALSE, TRUE, nop->onlyBspTarget);
-        if (nop->fastaNucOK && hasFastaNuc) {
-          SafeEnable (nop->item);
-        } else if (nop->fastaProtOK && hasFastaProt) {
-          SafeEnable (nop->item);
-        } else {
-          SafeDisable (nop->item);
+      str [0] = '\0';
+    }
+    StringCat (str, text);
+  }
+}
+
+static int LIBCALLBACK SortCDStRNArRNAByLocation (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  BioseqPtr    bsp1;
+  BioseqPtr    bsp2;
+  DefFeatsPtr  dfp1;
+  DefFeatsPtr  dfp2;
+  Int4         leftend1;
+  Int4         leftend2;
+  Int4         rightend1;
+  Int4         rightend2;
+  SeqFeatPtr   sfp1;
+  SeqFeatPtr   sfp2;
+  ValNodePtr   vnp1;
+  ValNodePtr   vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
+      dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
+      if (dfp1 != NULL && dfp2 != NULL) {
+        sfp1 = dfp1->sfp;
+        sfp2 = dfp2->sfp;
+        if (sfp1 != NULL && sfp2 != NULL) {
+          bsp1 = GetBioseqGivenSeqLoc (sfp1->location, dfp1->entityID);
+          bsp2 = GetBioseqGivenSeqLoc (sfp2->location, dfp2->entityID);
+          if (bsp1 != NULL && bsp2 != NULL) {
+            leftend1 = GetOffsetInBioseq (sfp1->location, bsp1, SEQLOC_LEFT_END);
+            leftend2 = GetOffsetInBioseq (sfp2->location, bsp2, SEQLOC_LEFT_END);
+            rightend1 = GetOffsetInBioseq (sfp1->location, bsp1, SEQLOC_RIGHT_END);
+            rightend2 = GetOffsetInBioseq (sfp2->location, bsp2, SEQLOC_RIGHT_END);
+            if (leftend1 > leftend2) {
+              return 1;
+            } else if (leftend1 < leftend2) {
+              return -1;
+            } else if (sfp2->data.choice == SEQFEAT_GENE) {
+              return 1;
+            } else if (sfp1->data.choice == SEQFEAT_GENE) {
+              return -1;
+            } else if (rightend1 > rightend2) {
+              return 1;
+            } else if (rightend1 < rightend2) {
+              return -1;
+            } else {
+              return 0;
+            }
+          }
         }
-      } else {
-        SafeDisable (nop->item);
-      }
-    }
-    nop = nop->next;
-  }
-}
-
-static VoidPtr LinkNewObjectLists (NewObjectPtr list1, NewObjectPtr list2)
-
-{
-  NewObjectPtr  nop;
-
-  if (list1 == NULL) return list2;
-  nop = list1;
-  while (nop->next != NULL) {
-    nop = nop->next;
-  }
-  nop->next = list2;
-  return list1;
-}
-
-static void CleanupAnalysisExtraProc (GraphiC g, VoidPtr data)
-
-{
-  NewObjectPtr  nop;
-  ValNodePtr    ppt;
-  UrlParamPtr   upp;
-
-  nop = (NewObjectPtr) data;
-  if (nop != NULL) {
-    MemFree (nop->host_machine);
-    MemFree (nop->host_path);
-    for (ppt = nop->paramlist; ppt != NULL; ppt = ppt->next) {
-      upp = (UrlParamPtr) ppt->data.ptrvalue;
-      if (upp == NULL) continue;
-      MemFree (upp->param);
-      MemFree (upp->prompt);
-      MemFree (upp->dfault);
-      MemFree (upp->choices);
-      MemFree (upp->group);
-      MemFree (upp->help);
-    }
-    ValNodeFreeData (nop->paramlist);
-    MemFree (nop->prefix);
-    MemFree (nop->suffix);
-  }
-  MemFree (data);
-}
-
-typedef struct sbstruc {
-  CharPtr    name;
-  MenU       menu;
-} Sbstruc, PNTR SbstrucPtr;
-
-static ValNodePtr  analysissubmenulist = NULL;
-
-static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
-                             Boolean bspviewOK, Boolean docsumOK,
-                             Boolean nucOK, Boolean protOK, Boolean onlyBspTarget,
-                             CharPtr host_machine, Uint2 host_port,
-                             CharPtr host_path, CharPtr program,
-                             Uint2 timeoutsec, Int2 format, Boolean demomode,
-                             QueryResultProc resultproc, ValNodePtr paramlist,
-                             CharPtr prefix, CharPtr suffix,
-                             CharPtr title, CharPtr submenu,
-                             ItmActnProc actn, NewObjectPtr PNTR head)
-
-{
-  IteM          i;
-  NewObjectPtr  last;
-  size_t        len;
-  NewObjectPtr  nop;
-  SbstrucPtr    sbp;
-  CharPtr       tmp;
-  ValNodePtr    vnp;
-  MenU          x;
-
-  if (m == NULL || actn == NULL) return;
-  x = NULL;
-  if (! StringHasNoText (submenu)) {
-    vnp = analysissubmenulist;
-    while (vnp != NULL && x == NULL) {
-      sbp = (SbstrucPtr) vnp->data.ptrvalue;
-      if (sbp != NULL && StringICmp (sbp->name, submenu) == 0) {
-        x = sbp->menu;
-      }
-      vnp = vnp->next;
-    }
-    if (x == NULL) {
-      sbp = (SbstrucPtr) MemNew (sizeof (Sbstruc));
-      if (sbp != NULL) {
-        sbp->name = StringSave (submenu);
-        sbp->menu = SubMenu (m, sbp->name);
-        x = sbp->menu;
-        ValNodeAddPointer (&analysissubmenulist, 0, (VoidPtr) sbp);
-      }
-    }
-  }
-  if (x == NULL) {
-    x = m;
-  }
-  i = CommandItem (x, title, actn);
-  nop = (NewObjectPtr) MemNew (sizeof (NewObjectData));
-  if (nop != NULL) {
-    nop->kind = 2; /* analysis menu item */
-    nop->bfp = bfp;
-    nop->item = i;
-    nop->bspOK = bspviewOK;
-    nop->dsmOK = docsumOK;
-    nop->fastaNucOK = nucOK;
-    nop->fastaProtOK = protOK;
-    nop->onlyBspTarget = onlyBspTarget;
-    nop->host_machine = /* StrSaveNoNullEncodeSpaces */ StringSave (host_machine);
-    nop->host_port = host_port;
-    len = StringLen (host_path);
-    tmp = MemNew (len + StringLen (program) + 5);
-    if (tmp != NULL) {
-      StringCpy (tmp, host_path);
-      if (len > 1 && tmp [len - 1] != '/') {
-        StringCat (tmp, "/");
-      }
-      StringCat (tmp, program);
-    }
-    nop->host_path = /* StrSaveNoNullEncodeSpaces */ StringSave (tmp);
-    MemFree (tmp);
-    nop->query = NULL;
-    /*
-    nop->host_path = StrSaveNoNullEncodeSpaces (host_path);
-    nop->query = StrSaveNoNullEncodeSpaces (program);
-    */
-    nop->timeoutsec = timeoutsec;
-    nop->format = format;
-    nop->demomode = demomode;
-    nop->resultproc = resultproc;
-    nop->paramlist = paramlist;
-    nop->prefix = StringSaveNoNull (prefix);
-    nop->suffix = StringSaveNoNull (suffix);
-  }
-  SetObjectExtra (i, (Pointer) nop, CleanupAnalysisExtraProc);
-  if (head == NULL) return;
-  last = *head;
-  if (last != NULL) {
-    while (last->next != NULL) {
-     last = last->next;
-    }
-    last->next = nop;
-  } else {
-    *head = nop;
-  }
-}
-
-/* Sample seqncgis.cnf/seqncgis.ini/.seqncgisrc/sequincgi.cfg config file.
-   PATH can contain query (separated by ? symbol), or separate QUERY item can
-   be used, or multiple QUERY and TITLE items can also be used.
-
-[SERVICES]
-PATH=mydisk:Common Files:services:
-
-[ORDER]
-ORDER_1=tRNAscan
-ORDER_2=Seg
-
-[tRNAscan]
-PROGRAM=testcgi.cgi?request=trnascan
-HOST=www.myserver.myschool.edu
-PORT=80
-PATH=/MyServices/cgi-bin/testcgi.cgi
-SUBMENU=Search
-FORMATIN=FASTA
-FLAGS=SEQ,NUC,TRG
-TIMEOUT=30
-
-[Seg]
-PROGRAM=segify
-HOST=www.myserver.myschool.edu
-PORT=80
-PATH=/MyServices/cgi-bin/testcgi.cgi
-FORMATIN=fasta
-FLAGS=SEQ,DOC,PRT,TRG
-SUBMENU=Secondary structure prediction
-PROMPT_1=Window Size
-PARAM_1=window
-DESCRIPTION_1=window size for determining low-complexity segments
-TYPE_1=text
-DEFAULT_1=12
-REQUIRED_1=FALSE
-IMPORTANCE_1=
-GROUP_1=Algorithm
-HELP_1=window size for determining low-complexity segments
-PROMPT_2=Trigger Complexity
-PARAM_2=trigger
-DESCRIPTION_2=trigger complexity for determining low-complexity segments
-TYPE_2=text
-DEFAULT_2=2.2
-REQUIRED_2=FALSE
-IMPORTANCE_2=
-GROUP_2=Algorithm
-HELP_2=trigger complexity for determining low-complexity segments
-...
-
-[ENZYMES]
-ENZ_1=BamHI
-ENZ_2=EcoRI
-ENZ_3=HindIII
-
-*/
-
-static Int2 GetServiceParam (ValNodePtr head, CharPtr type, CharPtr buf, Int2 buflen)
-
-{
-  size_t      len;
-  Boolean     seenBracket = FALSE;
-  CharPtr     str;
-  ValNodePtr  vnp;
-
-  if (buf == NULL || buflen <= 0) return 0;
-  *buf = '\0';
-  len = StringLen (type);
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if (str != NULL) {
-      if (str [0] == '[') {
-        if (seenBracket) return 0;
-        seenBracket = TRUE;
-      } else if (StringNICmp (str, type, len) == 0) {
-        str += len;
-        StringNCpy_0 (buf, str, buflen);
-        return (Int2) StringLen (buf);
       }
     }
   }
   return 0;
 }
 
-static ValNodePtr GetConfigParamAndPromptLists (CharPtr sect)
+static int LIBCALLBACK SortCDSAfterExons (VoidPtr ptr1, VoidPtr ptr2)
 
 {
-  Int2         i;
-  ValNodePtr   paramlist = NULL;
-  Uint1        paramtype;
-  Char         title [512];
-  Char         tmp [32];
-  UrlParamPtr  upp;
+  DefFeatsPtr  dfp1;
+  DefFeatsPtr  dfp2;
+  ValNodePtr   vnp1;
+  ValNodePtr   vnp2;
 
-  if (sect == NULL) return NULL;
-  i = 1;
-  sprintf (tmp, "PARAM_%d", (int) i);
-  while (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-    upp = (UrlParamPtr) MemNew (sizeof (UrlParamData));
-    if (upp == NULL) continue;
-    upp->param = StringSave (title);
-    sprintf (tmp, "TYPE_%d", (int) i);
-    paramtype = 1;
-    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      if (StringICmp (title, "text") == 0) {
-        paramtype = 1;
-      } else if (StringICmp (title, "checkbox") == 0) {
-        paramtype = 2;
-      } else if (StringICmp (title, "popup") == 0) {
-        paramtype = 3;
-      } else if (StringICmp (title, "radio") == 0) {
-        paramtype = 4;
-      } else if (StringICmp (title, "list") == 0) {
-        paramtype = 5;
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
+      dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
+      if (dfp1 != NULL && dfp2 != NULL) {
+        if (dfp1->subtype == FEATDEF_CDS && dfp2->subtype == FEATDEF_exon) {
+          return 1;
+        } else if (dfp1->subtype == FEATDEF_exon && dfp2->subtype == FEATDEF_CDS) {
+          return -1;
+        } else {
+          /* return 0; */
+          return SortCDStRNArRNAByLocation (ptr1, ptr2);
+        }
       }
     }
-    upp->type = paramtype;
-    sprintf (tmp, "PROMPT_%d", (int) i);
-    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      upp->prompt = StringSave (title);
-    } else {
-      upp->prompt = StringSave (upp->param);
-    }
-    sprintf (tmp, "DEFAULT_%d", (int) i);
-    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      upp->dfault = StringSave (title);
-    } else {
-      upp->dfault = StringSave (" ");
-    }
-    sprintf (tmp, "CHOICES_%d", (int) i);
-    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      upp->choices = StringSave (title);
-    } else {
-      upp->choices = StringSave (" ");
-    }
-    sprintf (tmp, "GROUP_%d", (int) i);
-    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      upp->group = StringSave (title);
-    } else {
-      upp->group = StringSave (" ");
-    }
-    sprintf (tmp, "HELP_%d", (int) i);
-    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      upp->help = StringSave (title);
-    } else {
-      upp->help = StringSave (" ");
-    }
-    ValNodeAddPointer (&paramlist, i, (Pointer) upp);
-    i++;
-    sprintf (tmp, "PARAM_%d", (int) i);
   }
-  return paramlist;
+  return 0;
 }
 
-static ValNodePtr GetServiceParamAndPromptLists (ValNodePtr list)
+extern EnumFieldAssoc  orgmod_subtype_alist [];
+extern EnumFieldAssoc  subsource_subtype_alist [];
+
+static Int2  orgmod_rank [32];
+static Int2  subsource_rank [26];
+
+static Boolean StrainAlreadyInParentheses (CharPtr taxname, CharPtr strain)
 
 {
-  Int2         i;
-  ValNodePtr   paramlist = NULL;
-  Uint1        paramtype;
-  Char         title [512];
-  Char         tmp [32];
-  UrlParamPtr  upp;
+  size_t   len;
+  CharPtr  ptr;
 
-  if (list == NULL) return NULL;
-  i = 1;
-  sprintf (tmp, "PARAM_%d=", (int) i);
-  while (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-    upp = (UrlParamPtr) MemNew (sizeof (UrlParamData));
-    if (upp == NULL) continue;
-    upp->param = StringSave (title);
-    sprintf (tmp, "TYPE_%d", (int) i);
-    paramtype = 1;
-    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      if (StringICmp (title, "text") == 0) {
-        paramtype = 1;
-      } else if (StringICmp (title, "checkbox") == 0) {
-        paramtype = 2;
-      } else if (StringICmp (title, "popup") == 0) {
-        paramtype = 3;
-      } else if (StringICmp (title, "radio") == 0) {
-        paramtype = 4;
-      } else if (StringICmp (title, "list") == 0) {
-        paramtype = 5;
-      }
-    }
-    upp->type = paramtype;
-    sprintf (tmp, "PROMPT_%d=", (int) i);
-    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      upp->prompt = StringSave (title);
-    } else {
-      upp->prompt = StringSave (upp->param);
-    }
-    sprintf (tmp, "DEFAULT_%d=", (int) i);
-    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      upp->dfault = StringSave (title);
-    } else {
-      upp->dfault = StringSave (" ");
-    }
-    sprintf (tmp, "CHOICES_%d=", (int) i);
-    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      upp->choices = StringSave (title);
-    } else {
-      upp->choices = StringSave (" ");
-    }
-    sprintf (tmp, "GROUP_%d=", (int) i);
-    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      upp->group = StringSave (title);
-    } else {
-      upp->group = StringSave (" ");
-    }
-    sprintf (tmp, "HELP_%d=", (int) i);
-    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      upp->help = StringSave (title);
-    } else {
-      upp->help = StringSave (" ");
-    }
-    ValNodeAddPointer (&paramlist, i, (Pointer) upp);
-    i++;
-    sprintf (tmp, "PARAM_%d=", (int) i);
-  }
-  return paramlist;
+  ptr = StringChr (taxname, '(');
+  if (ptr == NULL) return FALSE;
+  ptr++;
+  len = StringLen (strain);
+  if (StringNCmp (taxname, strain, len) != 0) return FALSE;
+  ptr += len;
+  if (*ptr != ')') return FALSE;
+  return TRUE;
 }
 
-static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
-                                    Boolean bspviewOK, Boolean docsumOK,
-                                    NewObjectPtr PNTR head)
+static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Boolean labelMods)
 
 {
-  Boolean     demomode = FALSE;
-  Int2        format = 1;
-  Char        host [128];
-  Boolean     nucOK = FALSE;
-  Boolean     onlyBspTarget = FALSE;
-  ValNodePtr  paramlist = NULL;
-  Char        program [128];
-  Char        path [256];
-  Uint2       port = 80;
-  Char        prefix [128];
-  Boolean     protOK = FALSE;
-  Char        submenu [128];
-  Char        suffix [128];
-  Uint2       timeoutsec = 30;
-  Char        title [128];
-  Char        tmp [32];
-  unsigned    int  val;
+  EnumFieldAssocPtr  ap;
+  OrgModPtr          mod;
+  OrgNamePtr         onp;
+  OrgRefPtr          orp;
+  CharPtr            ptr;
+  SubSourcePtr       ssp;
+  Char               str [128];
+  Char               text [64];
 
-  if (! GetAppParam ("SEQNCGIS", sect, "TITLE", NULL, title, sizeof (title) - 1)) {
-    StringNCpy_0 (title, sect, sizeof (title));
-  }
-  if (GetAppParam ("SEQNCGIS", sect, "HOST", NULL, host, sizeof (host) - 1)) {
-    if (GetAppParam ("SEQNCGIS", sect, "FLAGS", NULL, tmp, sizeof (tmp) - 1)) {
-      if (StringStr (tmp, "SEQ") == NULL) {
-        bspviewOK = FALSE;
-      }
-      if (StringStr (tmp, "DOC") == NULL) {
-        docsumOK = FALSE;
-      }
-      if (StringStr (tmp, "NUC") != NULL) {
-        nucOK = TRUE;
-      }
-      if (StringStr (tmp, "PRT") != NULL) {
-        protOK = TRUE;
-      }
-      if (StringStr (tmp, "TRG") != NULL) {
-        onlyBspTarget = TRUE;
-      }
-    }
-
-    if ((! bspviewOK) && (! docsumOK)) return;
-
-    if (GetAppParam ("SEQNCGIS", sect, "PORT", NULL, tmp, sizeof (tmp) - 1) && 
-        sscanf (tmp, "%u", &val) == 1) {
-      port = (Uint2) val;
-    } else {
-      port = 80;
-    }
-    if (GetAppParam ("SEQNCGIS", sect, "FORMATIN", NULL, tmp, sizeof (tmp) - 1)) {
-      if (StringICmp (tmp, "FASTA") == 0) {
-        format = 1;
-      } else if (StringICmp (tmp, "ASN.1") == 0) {
-        format = 2;
-      }
-    }
-    if (GetAppParam ("SEQNCGIS", sect, "TIMEOUT", NULL, tmp, sizeof (tmp) - 1) && 
-        sscanf (tmp, "%u", &val) == 1) {
-      timeoutsec = (Uint2) val;
-    } else {
-      timeoutsec = 30;
-    }
-    submenu [0] = '\0';
-    GetAppParam ("SEQNCGIS", sect, "SUBMENU", NULL, submenu, sizeof (submenu) - 1);
-    if (GetAppParam ("SEQNCGIS", sect, "DEMO", NULL, tmp, sizeof (tmp) - 1)) {
-      if (StringICmp (tmp, "TRUE") == 0) {
-        demomode = TRUE;
+  if (stringsPtr != NULL && biop != NULL) {
+    orp = biop->org;
+    if (orp != NULL) {
+      onp = orp->orgname;
+      if (onp != NULL) {
+        mod = onp->mod;
+        while (mod != NULL) {
+          if (mod->subtype < 32 && orgmod_rank [mod->subtype] > 0) {
+            if (mod->subtype == 2 && StrainAlreadyInParentheses (orp->taxname, mod->subname)) {
+              /* do not add strain if already parenthetical in organism name */
+            } else {
+              text [0] = '\0';
+              str [0] = '\0';
+              StringNCpy_0 (text, mod->subname, sizeof (text));
+              for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
+                if (ap->value == mod->subtype) {
+                  StringNCpy_0 (str, ap->name, sizeof (str));
+                }
+              }
+              LabelAModifier (str, text, labelMods);
+              if (! StringHasNoText (str)) {
+                ValNodeCopyStr (stringsPtr, orgmod_rank [mod->subtype], str);
+              }
+            }
+          }
+          mod = mod->next;
+        }
       }
     }
 
-    if (GetAppParam ("SEQNCGIS", sect, "PATH", NULL, path, sizeof (path) - 1)) {
-      if (GetAppParam ("SEQNCGIS", sect, "PROGRAM", NULL, program, sizeof (program) - 1)) {
-        paramlist = GetConfigParamAndPromptLists (sect);
-        prefix [0] = '\0';
-        GetAppParam ("SEQNCGIS", sect, "PREFIX", NULL, prefix, sizeof (prefix) - 1);
-        suffix [0] = '\0';
-        GetAppParam ("SEQNCGIS", sect, "SUFFIX", NULL, suffix, sizeof (suffix) - 1);
-        AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
-                         nucOK, protOK, onlyBspTarget,
-                         host, port, path, program, timeoutsec, format, demomode,
-                         SequinHandleURLResults, paramlist, prefix, suffix,
-                         title, submenu, DoURLProc, head);
+    ssp = biop->subtype;
+    while (ssp != NULL) {
+      if (ssp->subtype < 26 && subsource_rank [ssp->subtype] > 0) {
+        text [0] = '\0';
+        str [0] = '\0';
+        StringNCpy_0 (text, ssp->name, sizeof (text));
+        for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
+          if (ap->value == ssp->subtype) {
+            StringNCpy_0 (str, ap->name, sizeof (str));
+            ptr = StringStr (str, "-name");
+            if (ptr != NULL) {
+              *ptr = '\0';
+            }
+            if (ssp->subtype == 23) { /* country */
+              ptr = StringStr (text, ":");
+              if (ptr != NULL) {
+                *ptr = '\0';
+              }
+            }
+          }
+        }
+        if (ssp->subtype == 23 /* && (! labelMods) */) {
+          StringCpy (str, "from");
+        }
+        LabelAModifier (str, text, labelMods || (ssp->subtype == 23));
+        if (! StringHasNoText (str)) {
+          ValNodeCopyStr (stringsPtr, subsource_rank [ssp->subtype], str);
+        }
       }
+      ssp = ssp->next;
     }
   }
 }
 
-static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
-                                   MenU m, BaseFormPtr bfp,
-                                   Boolean bspviewOK, Boolean docsumOK,
-                                   NewObjectPtr PNTR head)
+static CharPtr GetExonNumber (GBQualPtr gbq)
 
 {
-  Char          ch;
-  ValNodePtr    choicelist = NULL;
-  Boolean       demomode = FALSE;
-  ValNodePtr    dfaultlist = NULL;
-  Int2          format = 1;
-  FILE          *fp;
-  Boolean       goOn = TRUE;
-  ValNodePtr    helplist = NULL;
-  Char          host [128];
-  Boolean       keepGoing;
-  ValNodePtr    list = NULL;
-  Boolean       nucOK = FALSE;
-  Boolean       onlyBspTarget = FALSE;
-  ValNodePtr    paramlist = NULL;
-  Char          program [128];
-  ValNodePtr    promptlist = NULL;
-  Char          path [PATH_MAX];
-  Uint2         port = 80;
-  Char          prefix [128];
-  Boolean       protOK = FALSE;
+  while (gbq != NULL) {
+    if (StringICmp (gbq->qual, "number") == 0) {
+      return gbq->val;
+    }
+  }
+
+  return NULL;
+}
+
+static Boolean NextIsExon (ValNodePtr vnp)
+
+{
+  DefFeatsPtr  nextdfp;
+  ValNodePtr   nextvnp;
+
+  if (vnp == NULL) return FALSE;
+  nextvnp = vnp->next;
+  if (nextvnp == NULL) return FALSE;
+  nextdfp = (DefFeatsPtr) nextvnp->data.ptrvalue;
+  if (nextdfp != NULL && nextdfp->subtype == FEATDEF_exon) return TRUE;
+  return FALSE;
+}
+
+static CharPtr organelleByGenome [] = {
+  NULL,
+  NULL,
+  "chloroplast",
+  "chromoplast",
+  "kinetoplast",
+  "mitochondrial",
+  "plastid",
+  "",
+  "",
+  "", 
+  "",
+  "",
+  "cyanelle",
+  "",
+  "",
+  "",
+  "apicoplast",
+  "leucoplast",
+  "proplastid",
+  NULL
+};
+
+static CharPtr organelleByPopup [] = {
+  NULL,
+  "mitochondrial",
+  "chloroplast",
+  "kinetoplast",
+  "plastid",
+  "chromoplast",
+  "cyanelle",
+  "apicoplast",
+  "leucoplast",
+  "proplastid",
+  NULL
+};
+
+static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
+                               ValNodePtr head, BioseqPtr target,
+                               SeqEntryPtr nsep, MolInfoPtr mip,
+                               ValNodePtr strings, BioSourcePtr biop,
+                               Int2 mitochloroflag)
+
+{
+  Int2          count;
+  Boolean       ddbjstyle = FALSE;
+  DefFeatsPtr   dfp;
+  CharPtr       exonnumber;
+  Int2          mitocount;
+  DefFeatsPtr   nextdfp;
   CharPtr       ptr;
-  Boolean       seenBracket;
-  Char          str [256];
-  Char          submenu [128];
-  Char          suffix [128];
-  Uint2         timeoutsec = 30;
-  Char          title [128];
-  Char          tmp [32];
-  unsigned int  val;
+  RnaRefPtr     rrp;
+  SeqFeatPtr    sfp;
+  Char          str [380];
+  tRNAPtr       trna;
+  ValNodePtr    ttl;
+  Char          text [64];
+  Char          orgnelle [80];
   ValNodePtr    vnp;
 
-  if (path == NULL || config == NULL || config->data.ptrvalue == NULL) return;
-  StringNCpy_0 (path, pathbase, sizeof (path));
-  FileBuildPath (path, NULL, (CharPtr) config->data.ptrvalue);
-  fp = FileOpen (path, "r");
-  if (fp == NULL) return;
-  while (fgets (str, sizeof (str), fp) != NULL) {
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0' && ch != '\n' && ch != '\r') {
-      ptr++;
-      ch = *ptr;
+  if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "DDBJ") == 0) {
+      ddbjstyle = TRUE;
     }
-    *ptr = '\0';
-    ValNodeCopyStr (&list, 1, str);
+  }
+  vnp = head;
+  count = 0;
+  mitocount = 0;
+  while (vnp != NULL) {
+    str [0] = '\0';
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp != NULL) {
+      sfp = dfp->sfp;
+      if (sfp != NULL || dfp->numUnknown > 0) {
+        count++;
+        mitocount++;
+        /* FindGeneAndProtForCDS (entityID, sfp, &(dfp->gene), &(dfp->prot)); */
+        /* StringCpy (str, "unknown"); */
+        text [0] = '\0';
+        if (dfp->subtype == FEATDEF_CDS && dfp->prot != NULL) {
+          if (dfp->suppressprefix) {
+            str [0] = '\0';
+            if (dfp->sfp->partial) {
+              StringCat (str, "partial cds");
+            } else {
+              StringCat (str, "complete cds");
+            }
+            if (dfp->altSplices > 1) {
+              StringCat (str, ", alternatively spliced");
+            }
+          } else if (dfp->protname != NULL) {
+            if (StringICmp (dfp->protname, "unknown") == 0 && (! StringHasNoText (dfp->genename))) {
+              StringNCpy_0 (text, dfp->genename, sizeof (text));
+              /* StringCat (str, "("); */
+              StringCat (str, text);
+              /* StringCat (str, ")"); */
+            } else {
+              StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
+              if (dfp->genename != NULL) {
+                StringNCpy_0 (text, dfp->genename, sizeof (text));
+                if (! StringHasNoText (text)) {
+                  StringCat (str, " (");
+                  StringCat (str, text);
+                  StringCat (str, ")");
+                }
+              }
+            }
+            if (dfp->lastInGroup || dfp->lastInType) {
+              if (mip != NULL) {
+                ptr = StringISearch (str, "precursor");
+                if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
+                  StringCat (str, ",");
+                }
+                if (mip->biomol == MOLECULE_TYPE_MRNA) {
+                  StringCat (str, " mRNA");
+                } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+                  StringCat (str, " precursor RNA");
+                } else {
+                  StringCat (str, " gene");
+                }
+              }
+              if (count > 1) {
+                StringCat (str, "s");
+              }
+              if (count < 2 && /* dfp->altSplices < 2 && */ (! StringHasNoText (dfp->allelename))) {
+                StringNCpy_0 (text, dfp->allelename, sizeof (text));
+                StringCat (str, ", ");
+                StringCat (str, text);
+                StringCat (str, " allele");
+              }
+              if (dfp->sfp->partial) {
+                StringCat (str, ", partial cds");
+              } else {
+                StringCat (str, ", complete cds");
+              }
+              if (dfp->altSplices > 1) {
+                StringCat (str, ", alternatively spliced");
+              }
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_CDS && dfp->pseudo) {
+          if (dfp->genename != NULL) {
+            StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
+          }
+          if (dfp->lastInGroup || dfp->lastInType) {
+            StringCat (str, " pseudogene");
+            if (count > 1) {
+              StringCat (str, "s");
+            }
+            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
+              StringNCpy_0 (text, dfp->allelename, sizeof (text));
+              StringCat (str, ", ");
+              StringCat (str, text);
+              StringCat (str, " allele");
+            }
+            if (dfp->sfp->partial) {
+              StringCat (str, ", partial sequence");
+            } else {
+              StringCat (str, ", complete sequence");
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_CDS && dfp->prot == NULL && dfp->genename != NULL) {
+          StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
+          if (dfp->lastInGroup || dfp->lastInType) {
+            if (mip != NULL) {
+              ptr = StringISearch (str, "precursor");
+              if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
+                StringCat (str, ",");
+              }
+              if (mip->biomol == MOLECULE_TYPE_MRNA) {
+                StringCat (str, " mRNA");
+              } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+                StringCat (str, " precursor RNA");
+              } else {
+                StringCat (str, " gene");
+              }
+            }
+            if (count > 1) {
+              StringCat (str, "s");
+            }
+            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
+              StringNCpy_0 (text, dfp->allelename, sizeof (text));
+              StringCat (str, ", ");
+              StringCat (str, text);
+              StringCat (str, " allele");
+            }
+            if (dfp->sfp->partial) {
+              StringCat (str, ", partial cds");
+            } else {
+              StringCat (str, ", complete cds");
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_GENE) {
+          if (dfp->genename != NULL) {
+            StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
+          }
+          if (dfp->lastInGroup || dfp->lastInType) {
+            if (mip != NULL) {
+              if (mip->biomol == MOLECULE_TYPE_MRNA) {
+                StringCat (str, " mRNA");
+              } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+                StringCat (str, " precursor RNA");
+              } else {
+                StringCat (str, " gene");
+              }
+            } else {
+              StringCat (str, " gene");
+            }
+            if (count > 1) {
+              StringCat (str, "s");
+            }
+            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
+              StringNCpy_0 (text, dfp->allelename, sizeof (text));
+              StringCat (str, ", ");
+              StringCat (str, text);
+              StringCat (str, " allele");
+            }
+            if (dfp->sfp->partial) {
+              StringCat (str, ", partial sequence");
+            } else {
+              StringCat (str, ", complete sequence");
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_rRNA || dfp->subtype == FEATDEF_otherRNA) {
+          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+          if (rrp != NULL) {
+            if (rrp->ext.choice == 1) {
+              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str) - 50);
+              if (dfp->subtype == FEATDEF_rRNA) {
+                ptr = StringISearch (str, " rRNA");
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                }
+                ptr = StringISearch (str, " ribosomal RNA");
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                }
+                if (! StringHasNoText (str)) {
+                  StringCat (str, " ribosomal RNA");
+                }
+              } else if (dfp->subtype == FEATDEF_otherRNA) {
+              }
+              if (dfp->genename != NULL) {
+                StringNCpy_0 (text, dfp->genename, sizeof (text));
+                if (! StringHasNoText (text)) {
+                  StringCat (str, " (");
+                  StringCat (str, text);
+                  StringCat (str, ")");
+                }
+              }
+              if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
+                if (dfp->subtype == FEATDEF_rRNA && mip->biomol == MOLECULE_TYPE_GENOMIC) {
+                  StringCat (str, " gene");
+                  if (count > 1) {
+                    StringCat (str, "s");
+                  }
+                }
+              }
+              if (dfp->lastInGroup || dfp->lastInType) {
+                if (dfp->sfp->partial) {
+                  StringCat (str, ", partial sequence");
+                } else {
+                  StringCat (str, ", complete sequence");
+                }
+              }
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_tRNA) {
+          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+          if (rrp != NULL) {
+            if (rrp->ext.choice == 2) {
+              trna = rrp->ext.value.ptrvalue;
+              if (trna != NULL) {
+                if (FeatDefLabel (dfp->sfp, str, sizeof (str) - 2, OM_LABEL_CONTENT) > 0) {
+                  if (dfp->genename != NULL) {
+                    StringNCpy_0 (text, dfp->genename, sizeof (text));
+                    if (! StringHasNoText (text)) {
+                      StringCat (str, " (");
+                      StringCat (str, text);
+                      StringCat (str, ")");
+                    }
+                  }
+                  if (dfp->lastInGroup || dfp->lastInType) {
+                    StringCat (str, " gene");
+                    if (count > 1) {
+                      StringCat (str, "s");
+                    }
+                    if (dfp->sfp->partial) {
+                      StringCat (str, ", partial sequence");
+                    } else {
+                      StringCat (str, ", complete sequence");
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_LTR) {
+          if (! StringHasNoText (sfp->comment)) {
+            StringNCpy_0 (str, sfp->comment, sizeof (str));
+            ptr = StringISearch (str, " long terminal repeat");
+            if (ptr != NULL) {
+              *ptr = '\0';
+            }
+            ptr = StringISearch (str, " long terminal repeat");
+            if (ptr != NULL) {
+              *ptr = '\0';
+            }
+            if (! StringHasNoText (str)) {
+              StringCat (str, " long terminal repeat");
+            }
+          } else {
+            /* StringCpy (str, "uncharacterized"); */
+            StringCpy (str, "long terminal repeat");
+          }
+          if (dfp->lastInGroup || dfp->lastInType) {
+            if (dfp->sfp->partial) {
+              StringCat (str, ", partial sequence");
+            } else {
+              StringCat (str, ", complete sequence");
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_exon && target != NULL) {
+          if (dfp->protname != NULL) {
+            str [0] = '\0';
+            if (! dfp->suppressprefix) {
+              StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
+              if (dfp->genename != NULL) {
+                StringNCpy_0 (text, dfp->genename, sizeof (text));
+                if (! StringHasNoText (text)) {
+                  StringCat (str, " (");
+                  StringCat (str, text);
+                  StringCat (str, ") gene,");
+                  if (/* count < 2 && */ /* dfp->altSplices < 2 && */ (! StringHasNoText (dfp->allelename))) {
+                    StringNCpy_0 (text, dfp->allelename, sizeof (text));
+                    StringCat (str, " ");
+                    StringCat (str, text);
+                    StringCat (str, " allele,");
+                  }
+                }
+              }
+            }
+            if ((! StringHasNoText (str)) || dfp->suppressprefix) {
+              exonnumber = GetExonNumber (sfp->qual);
+              if (! dfp->suppressprefix) {
+                if (exonnumber == NULL) {
+                  if (StringStr (sfp->comment, "exon") != NULL && (! NextIsExon (vnp))) {
+                  } else {
+                    StringCat (str, " exon");
+                    if (NextIsExon (vnp)) {
+                      StringCat (str, "s");
+                    }
+                  }
+                } else {
+                  StringCat (str, " exon");
+                  if (NextIsExon (vnp)) {
+                    StringCat (str, "s");
+                  }
+                }
+              }
+              if (exonnumber != NULL) {
+                if (! dfp->suppressprefix) {
+                  StringCat (str, " ");
+                }
+                StringCat (str, exonnumber);
+              } else {
+                if (! StringHasNoText (sfp->comment)) {
+                  if (! dfp->suppressprefix) {
+                    StringCat (str, " ");
+                  }
+                  StringCat (str, sfp->comment);
+                }
+              }
+            }
+          } else if (dfp->genename != NULL) {
+            str [0] = '\0';
+            if (! dfp->suppressprefix) {
+              StringNCpy_0 (str, dfp->genename, sizeof (str));
+              StringCat (str, " gene,");
+            }
+            if ((! StringHasNoText (str)) || dfp->suppressprefix) {
+              exonnumber = GetExonNumber (sfp->qual);
+              if (! dfp->suppressprefix) {
+                if (exonnumber == NULL) {
+                  if (StringStr (sfp->comment, "exon") != NULL && (! NextIsExon (vnp))) {
+                  } else {
+                    StringCat (str, " exon");
+                    if (NextIsExon (vnp)) {
+                      StringCat (str, "s");
+                    }
+                  }
+                } else {
+                  StringCat (str, " exon");
+                  if (NextIsExon (vnp)) {
+                    StringCat (str, "s");
+                  }
+                }
+              }
+              if (exonnumber != NULL) {
+                if (! dfp->suppressprefix) {
+                  StringCat (str, " ");
+                }
+                StringCat (str, exonnumber);
+              } else {
+                if (! StringHasNoText (sfp->comment)) {
+                  if (! dfp->suppressprefix) {
+                    StringCat (str, " ");
+                  }
+                  StringCat (str, sfp->comment);
+                }
+              }
+            }
+          } else {
+            StringCpy (str, "uncharacterized exon");
+          }
+          /*
+          if (dfp->lastInGroup || dfp->lastInType) {
+            if (dfp->sfp->partial) {
+              StringCat (str, ", partial sequence");
+            } else {
+              StringCat (str, ", complete sequence");
+            }
+          }
+          */
+        } else if (dfp->numUnknown > 0) {
+          if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
+            StringCat (str, "unknown mRNA");
+          } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+            StringCat (str, " unknown precursor RNA");
+          } else {
+            StringCat (str, "unknown gene");
+          }
+          if (dfp->numUnknown > 1) {
+            StringCat (str, "s");
+          }
+        }
+      }
+    }
+    vnp = vnp->next;
+    if (! StringHasNoText (str)) {
+      if (vnp == NULL) {
+        if (biop != NULL) {
+          orgnelle [0] = '\0';
+          switch (biop->genome) {
+            case GENOME_chloroplast :
+            case GENOME_chromoplast :
+            case GENOME_kinetoplast :
+            case GENOME_mitochondrion :
+            case GENOME_plastid :
+            case GENOME_cyanelle :
+            case GENOME_apicoplast :
+            case GENOME_leucoplast :
+            case GENOME_proplastid :
+              if (mitocount > 1) {
+                sprintf (orgnelle, "; %s genes for %s products", organelleByGenome [biop->genome], organelleByGenome [biop->genome]);
+              } else {
+                sprintf (orgnelle, "; %s gene for %s product", organelleByGenome [biop->genome], organelleByGenome [biop->genome]);
+              }
+              StringCat (str, orgnelle);
+              break;
+            default :
+              if (mitochloroflag > 0) {
+                if (mitocount > 1) {
+                  sprintf (orgnelle, "; nuclear genes for %s products", organelleByPopup [mitochloroflag]);
+                } else {
+                  sprintf (orgnelle, "; nuclear gene for %s product", organelleByPopup [mitochloroflag]);
+                }
+                StringCat (str, orgnelle);
+              }
+              break;
+          }
+          /*
+          if (biop->genome == GENOME_mitochondrion) {
+            if (mitocount > 1) {
+              StringCat (str, "; mitochondrial genes for mitochondrial products");
+            } else {
+              StringCat (str, "; mitochondrial gene for mitochondrial product");
+            }
+          } else if (biop->genome == GENOME_chloroplast) {
+            if (mitocount > 1) {
+              StringCat (str, "; chloroplast genes for chloroplast products");
+            } else {
+              StringCat (str, "; chloroplast gene for chloroplast product");
+            }
+          } else if (mitochloroflag > 0) {
+            switch (mitochloroflag) {
+              case 1 :
+                if (mitocount > 1) {
+                  StringCat (str, "; nuclear genes for mitochondrial products");
+                } else {
+                  StringCat (str, "; nuclear gene for mitochondrial product");
+                }
+                break;
+              case 2 :
+                if (mitocount > 1) {
+                   StringCat (str, "; nuclear genes for chloroplast products");
+                 } else {
+                   StringCat (str, "; nuclear gene for chloroplast product");
+                 }
+                break;
+              case 3 :
+                if (mitocount > 1) {
+                  StringCat (str, "; mitochondrial genes for mitochondrial products");
+                } else {
+                  StringCat (str, "; mitochondrial gene for mitochondrial product");
+                }
+                break;
+              case 4 :
+                if (mitocount > 1) {
+                   StringCat (str, "; chloroplast genes for chloroplast products");
+                 } else {
+                   StringCat (str, "; chloroplast gene for chloroplast product");
+                 }
+                break;
+              default :
+                break;
+            }
+          }
+          */
+        }
+        StringCat (str, ".");
+      } else if (vnp->next == NULL) {
+        nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+        if (dfp->lastInPenultimate) {
+          if ((dfp->subtype == FEATDEF_rRNA && nextdfp->subtype == FEATDEF_otherRNA &&
+               dfp->sfp->partial == nextdfp->sfp->partial) ||
+              (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA &&
+               dfp->sfp->partial == nextdfp->sfp->partial)) {
+            StringCat (str, ", and");
+          } else if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_exon /* &&
+               dfp->sfp->partial == nextdfp->sfp->partial */) {
+            StringCat (str, " and");
+          } else {
+            StringCat (str, "; and");
+          }
+        } else if (dfp->lastInType || dfp->lastInGroup) {
+          if (count > 1) {
+            StringCat (str, ", and");
+          } else {
+            StringCat (str, " and");
+          }
+        } else if (nextdfp->lastInType || nextdfp->lastInGroup) {
+          if (count > 1) {
+            StringCat (str, ", and");
+          } else {
+            StringCat (str, " and");
+          }
+        } else {
+          if (count > 1) {
+            StringCat (str, ", and");
+          } else {
+            StringCat (str, " and");
+          }
+        }
+      } else {
+        nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+        if (dfp->lastInPenultimate) {
+          if ((dfp->subtype == FEATDEF_rRNA && nextdfp->subtype == FEATDEF_otherRNA &&
+               dfp->sfp->partial == nextdfp->sfp->partial) ||
+              (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA &&
+               dfp->sfp->partial == nextdfp->sfp->partial)) {
+            StringCat (str, ", and");
+          } else if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_exon /* &&
+               dfp->sfp->partial == nextdfp->sfp->partial */) {
+            StringCat (str, ",");
+          } else {
+            StringCat (str, "; and");
+          }
+        } else if (dfp->lastInType || dfp->lastInGroup) {
+          StringCat (str, ";");
+        } else if (nextdfp->lastInType || nextdfp->lastInGroup) {
+          if (count > 1) {
+            StringCat (str, ", and");
+          } else {
+            StringCat (str, " and");
+          }
+        } else {
+          StringCat (str, ",");
+        }
+      }
+      ValNodeCopyStr (&strings, 0, str);
+    }
+    if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
+      count = 0;
+    }
+  }
+
+  ptr = MergeValNodeStrings (strings, FALSE);
+  if (nsep != NULL) {
+    ttl = SeqEntryGetSeqDescr (nsep, Seq_descr_title, NULL);
+    if (ttl == NULL) {
+      ttl = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
+    }
+    if (ttl == NULL) {
+      ttl = CreateNewDescriptor (nsep, Seq_descr_title);
+    }
+    if (ttl != NULL) {
+      MemFree (ttl->data.ptrvalue);
+      ttl->data.ptrvalue = ptr;
+      ptr = NULL;
+    }
+  }
+  MemFree (ptr);
+  ValNodeFreeData (strings);
+  ValNodeFreeData (head);
+}
+
+static void CombineProteinNames (DefFeatsPtr dfp1, DefFeatsPtr dfp2)
+
+{
+  Int2     i, j, lastspace, lastdash, lastcomma;
+  size_t   len1, len2;
+  CharPtr  str1 = NULL, str2 = NULL;
+
+  if (dfp1 == NULL || dfp2 == NULL) return;
+  if (dfp1->protname == NULL && dfp2->protname == NULL) return;
+  len1 = StringLen (dfp1->protname);
+  len2 = StringLen (dfp2->protname);
+  if (len1 < 1 || len2 < 1) return;
+  i = 0;
+  j = 0;
+  lastspace = 0;
+  lastdash = 0;
+  lastcomma = 0;
+  while (i < len1 && j < len2 && dfp1->protname [i] == dfp2->protname [j]) {
+    if (dfp1->protname [i] == ' ') {
+      lastspace = i;
+    }
+    if (dfp1->protname [i] == '-') {
+      lastdash = i;
+    }
+    if (dfp1->protname [i] == ',') {
+      lastcomma = i;
+    }
+    i++;
+    j++;
+  }
+  str1 = StringSave (dfp1->protname);
+  if (str1 != NULL) {
+    str1 [i] = '\0';
+    if (! dfp1->alreadyTrimmed) {
+      if (lastcomma > 0) {
+        str1 [lastcomma] = '\0';
+        dfp1->alreadyTrimmed = TRUE;
+      } else if (lastdash > 0) {
+        str1 [lastdash] = '\0';
+        dfp1->alreadyTrimmed = TRUE;
+      } else if (lastspace > 0) {
+        str1 [lastspace] = '\0';
+        dfp1->alreadyTrimmed = TRUE;
+      }
+    }
+  }
+
+  i = len1;
+  j = len2;
+  while (i > 0 && j > 0 && dfp1->protname [i - 1] == dfp2->protname [j - 1]) {
+    i--;
+    j--;
+  }
+  str2 = StringSave (dfp1->protname + i);
+  TrimSpacesAroundString (str1);
+  TrimSpacesAroundString (str2);
+  len1 = StringLen (str1);
+  len2 = StringLen (str2);
+  if (len1 > len2) {
+    dfp1->protname = str1;
+    MemFree (str2);
+  } else {
+    dfp1->protname = str2;
+    MemFree (str1);
+  }
+}
+
+static Boolean AreAltSpliceGenes (DefFeatsPtr dfp1, DefFeatsPtr dfp2)
+
+{
+  Int2        comp;
+  SeqFeatPtr  sfp1, sfp2;
+  Uint1       strand1, strand2;
+
+  if (dfp1 == NULL || dfp2 == NULL) return FALSE;
+  if (dfp1->prot == NULL || dfp2->prot == NULL) return FALSE;
+  if (dfp1->pseudo || dfp2->pseudo) return FALSE;
+  sfp1 = dfp1->sfp;
+  sfp2 = dfp2->sfp;
+  if (sfp1 == NULL || sfp2 == NULL) return FALSE;
+  if (sfp1->partial != sfp2->partial) return FALSE;
+  strand1 = SeqLocStrand (sfp1->location);
+  strand2 = SeqLocStrand (sfp2->location);
+  if (strand1 != strand2) return FALSE;
+  comp = SeqLocCompare (sfp1->location, sfp2->location);
+  if (comp == SLC_NO_MATCH) return FALSE;
+  if (dfp1->genename == NULL || dfp2->genename == NULL) return FALSE;
+  if (StringICmp (dfp1->genename, dfp2->genename) != 0) return FALSE;
+  CombineProteinNames (dfp1, dfp2);
+  return TRUE;
+}
+
+static void MergeAltSpliceCDSs (ValNodePtr head)
+
+{
+  DefFeatsPtr  dfp1, dfp2;
+  ValNodePtr   nextvnp;
+  ValNodePtr   PNTR prevvnp;
+  ValNodePtr   vnp1, vnp2;
+
+  vnp1 = head;
+  while (vnp1 != NULL) {
+    dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
+    if (dfp1 != NULL && dfp1->subtype == FEATDEF_CDS) {
+      vnp2 = vnp1->next;
+      prevvnp = &(vnp1->next);
+      while (vnp2 != NULL) {
+        nextvnp = vnp2->next;
+        dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
+        if (dfp2 != NULL && dfp2->subtype == FEATDEF_CDS) {
+          if (AreAltSpliceGenes (dfp1, dfp2)) {
+            (dfp1->altSplices)++;
+            *prevvnp = vnp2->next;
+            vnp2->next = NULL;
+            ValNodeFreeData (vnp2);
+          } else {
+            prevvnp = (ValNodePtr PNTR) &(vnp2->next);
+          }
+        } else {
+          prevvnp = (ValNodePtr PNTR) &(vnp2->next);
+        }
+        vnp2 = nextvnp;
+      }
+    }
+    vnp1 = vnp1->next;
+  }
+}
+
+static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
+                         Boolean labelMods, Int2 maxMods, Boolean leaveInParen,
+                         BioseqPtr target, BioseqPtr seg, ValNodePtr nonUniqueOrgs,
+                         Int2 mitochloroflag, Boolean suppressAltSplice, BioseqPtr parent)
+
+{
+  Char            allele [256];
+  BioseqContextPtr  bcp;
+  BioSourcePtr    biop;
+  BioseqPtr       bsp;
+  BioseqSetPtr    bssp;
+  SeqFeatPtr      cds;
+  Boolean         change;
+  CdRegionPtr     crp;
+  DefFeatsData    df;
+  DefFeatsPtr     dfp;
+  DefFeatsPtr     dfpx;
+  SeqMgrFeatContext  fcontext;
+  GBQualPtr       gbq;
+  SeqFeatPtr      gene;
+  Int2            group;
+  GeneRefPtr      grp;
+  GatherScope     gs;
+  ValNodePtr      head;
+  SeqLocPtr       lastslp;
+  Int4            left;
+  size_t          lenallele;
+  size_t          lenlocus;
+  MolInfoPtr      mip;
+  DefFeatsPtr     nextdfp;
+  SeqLocPtr       nextslp;
+  ValNodePtr      nextvnp;
+  SeqEntryPtr     nsep;
+  Int2            numUnknown;
+  BioseqPtr       part;
+  DefFeatsPtr     penult;
+  ValNodePtr      PNTR prevvnp;
+  ProtRefPtr      prp;
+  CharPtr         ptr;
+  Int4            right;
+  ValNodePtr      sdp;
+  SeqFeatPtr      sfp;
+  SeqIdPtr        sip;
+  SeqLocPtr       slp;
+  Char            str [128];
+  ValNodePtr      ttl;
+  ValNodePtr      strings;
+  ValNode         vn;
+  ValNodePtr      vnp;
+  ValNodePtr      vnpx;
+  SeqFeatXrefPtr  xref;
+
+  if (sep == NULL) return;
+  if (target == NULL && seg == NULL) {
+    if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp == NULL) return;
+      if (bssp->_class == 7 ||
+          (bssp->_class >= 13 && bssp->_class <= 16)) {
+        for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+          AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, NULL);
+        }
+        return;
+      }
+    }
+
+    nsep = FindNucSeqEntry (sep);
+    if (nsep != NULL) {
+      bsp = (BioseqPtr) nsep->data.ptrvalue;
+      if (bsp != NULL && bsp->repr == Seq_repr_seg && bsp->seq_ext != NULL && bsp->seq_ext_type == 1) {
+        vn.choice = SEQLOC_MIX;
+        vn.next = NULL;
+        vn.data.ptrvalue = bsp->seq_ext;
+        slp = SeqLocFindNext (&vn, NULL);
+        while (slp != NULL) {
+          nextslp = SeqLocFindNext (&vn, slp);
+          sip = SeqLocId (slp);
+          if (sip != NULL) {
+            part = BioseqFind (sip);
+            if (part != NULL) {
+              AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, part, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, bsp);
+            }
+          }
+          slp = nextslp;
+        }
+        AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, bsp, nonUniqueOrgs, mitochloroflag, suppressAltSplice, bsp);
+        return;
+      }
+    }
+  } else if (target != NULL) {
+    nsep = SeqMgrGetSeqEntryForData (target);
+  } else {
+    nsep = SeqMgrGetSeqEntryForData (seg);
+  }
+
+  biop = NULL;
+  strings = NULL;
+  str [0] = '\0';
+
+  SeqEntryToBioSource (sep, NULL, str, sizeof (str) - 1, &biop);
+  if (! leaveInParen) {
+    ptr = StringStr (str, "(");
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+  }
+  TrimSpacesAroundString (str);
+  if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
+    StringCpy (str, "HIV-1");
+  } else if (StringICmp (str, "Human immunodeficiency virus type 2") == 0) {
+    StringCpy (str, "HIV-2");
+  }
+  str [0] = TO_UPPER (str [0]);
+  ValNodeCopyStr (&strings, 0, str);
+
+  mip = NULL;
+  if (nsep != NULL) {
+    bsp = (BioseqPtr) nsep->data.ptrvalue;
+    bcp = BioseqContextNew (bsp);
+    sdp = BioseqContextGetSeqDescr (bcp, Seq_descr_molinfo, NULL, NULL);
+    BioseqContextFree (bcp);
+    if (sdp != NULL) {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+      if (mip != NULL) {
+        if (mip->tech == MI_TECH_htgs_0 ||
+            mip->tech == MI_TECH_htgs_1 ||
+            mip->tech == MI_TECH_htgs_2 ||
+            mip->tech == MI_TECH_est ||
+            mip->tech == MI_TECH_sts ||
+            mip->tech == MI_TECH_survey) {
+          ttl = ValNodeExtract (&(bsp->descr), Seq_descr_title);
+          if (ttl != NULL) {
+            ttl = ValNodeFreeData (ttl);
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  /*
+  nsep = FindNucSeqEntry (sep);
+  if (nsep != NULL) {
+    sdp = SeqEntryGetSeqDescr (nsep, Seq_descr_molinfo, NULL);
+    if (sdp == NULL) {
+      sdp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
+    }
+    if (sdp != NULL) {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+    }
+  }
+  */
+
+  if (nonUniqueOrgs != NULL) {
+    for (vnp = nonUniqueOrgs; vnp != NULL; vnp = vnp->next) {
+      if (StringICmp ((CharPtr) vnp->data.ptrvalue, str) == 0) {
+        if (vnp->choice == 1) {
+          addMods = FALSE; /* if only one organism in record, already unique defline */
+        }
+      }
+    }
+  }
+  if (addMods) {
+    AddOrgModsToDef (&strings, biop, labelMods);
+    strings = SortValNode (strings, SortByVnpChoice);
+    vnp = strings;
+    while (vnp != NULL && maxMods > 0) {
+      maxMods--;
+      vnp = vnp->next;
+    }
+    if (vnp != NULL) {
+      vnp->next = ValNodeFreeData (vnp->next);
+    }
+  }
+
+  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+  gs.seglevels = 1;
+  gs.get_feats_location = TRUE;
+  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
+  gs.ignore[OBJ_BIOSEQ] = FALSE;
+  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+  gs.ignore[OBJ_SEQANNOT] = FALSE;
+  gs.ignore[OBJ_SEQFEAT] = FALSE;
+  gs.scope = sep;
+  gs.target = NULL;
+  if (target != NULL) {
+    slp = ValNodeNew (NULL);
+    slp->choice = SEQLOC_WHOLE;
+    sip = SeqIdStripLocus (SeqIdDup (SeqIdFindBest (target->id, 0)));
+    slp->data.ptrvalue = sip;
+    gs.target = slp;
+  }
+  head = NULL;
+  GatherEntity (entityID, (Pointer) (&head), GetGeneCDStRNArRNAGatherFunc, &gs);
+  gs.target = SeqLocFree (gs.target);
+  head = SortValNode (head, SortCDStRNArRNAByLocation);
+
+  if (head == NULL && mip != NULL && mip->tech == MI_TECH_survey) {
+    ValNodeCopyStr (&strings, 0, ", genome survey sequence.");
+  }
+
+  numUnknown = 0;
+  vnp = head;
+  while (vnp != NULL) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp != NULL) {
+      sfp = dfp->sfp;
+      if (sfp != NULL) {
+        FindGeneAndProtForCDS (entityID, sfp, &(dfp->gene), &(dfp->prot));
+        grp = SeqMgrGetGeneXref (sfp);
+        if (SeqMgrGeneIsSuppressed (grp)) {
+          dfp->gene = NULL;
+        }
+        dfp->pseudo = FALSE;
+        dfp->genename = NULL;
+        dfp->allelename = NULL;
+        grp = NULL;
+        if (dfp->gene != NULL) {
+          grp = (GeneRefPtr) dfp->gene->data.value.ptrvalue;
+          if (grp != NULL && grp->pseudo) {
+            dfp->pseudo = TRUE;
+          }
+        }
+        xref = sfp->xref;
+        while (xref != NULL && xref->data.choice != SEQFEAT_GENE) {
+          xref = xref->next;
+        }
+        if (xref != NULL) {
+          grp = (GeneRefPtr) xref->data.value.ptrvalue;
+        }
+        if (grp != NULL) {
+          dfp->genename = (CharPtr) grp->locus;
+          if ((! StringHasNoText (grp->locus)) && (! StringHasNoText (grp->allele))) {
+            lenallele = StringLen (grp->allele);
+            lenlocus = StringLen (grp->locus);
+            if (lenallele > lenlocus && StringNICmp (grp->locus, grp->allele, lenlocus) == 0) {
+              sprintf (allele, "%s", grp->allele);
+            } else if (StringNCmp (grp->allele, "-", 1) == 0) {
+              sprintf (allele, "%s%s", grp->locus, grp->allele);
+            } else {
+              sprintf (allele, "%s-%s", grp->locus, grp->allele);
+            }
+            dfp->allelename = StringSave (allele);
+          }
+          if (grp->pseudo) {
+            dfp->pseudo = TRUE;
+          }
+        }
+        if (dfp->subtype == FEATDEF_CDS) {
+          if (target != NULL) {
+            lastslp = NULL;
+            slp = SeqLocFindNext (sfp->location, NULL);
+            while (slp != NULL) {
+              lastslp = slp;
+              slp = SeqLocFindNext (sfp->location, slp);
+            }
+            if (lastslp != NULL && nsep != NULL) {
+              bsp = (BioseqPtr) nsep->data.ptrvalue;
+              if (GetBioseqGivenSeqLoc (lastslp, entityID) != bsp) {
+                dfp->ignore = TRUE;
+              }
+            }
+          }
+          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+          if (crp != NULL) {
+            if (crp->orf) {
+              dfp->ignore = TRUE;
+            }
+          }
+          gbq = sfp->qual;
+          while (gbq != NULL) {
+            if (StringICmp (gbq->qual, "pseudo") == 0) {
+              dfp->pseudo = TRUE;
+            }
+            gbq = gbq->next;
+          }
+          if (dfp->pseudo) {
+          } else if (dfp->prot == NULL) {
+            if (dfp->gene == NULL) {
+              dfp->ignore = TRUE;
+            }
+          } else {
+            prp = (ProtRefPtr) dfp->prot->data.value.ptrvalue;
+            if (prp != NULL) {
+              if (prp->name == NULL || StringHasNoText ((CharPtr) prp->name->data.ptrvalue)) {
+                if (prp->desc == NULL || StringHasNoText (prp->desc)) {
+                  dfp->ignore = TRUE;
+                } else {
+                  dfp->protname = prp->desc;
+                }
+              } else {
+                dfp->protname = (CharPtr) prp->name->data.ptrvalue;
+              }
+              if (! dfp->ignore) {
+                if (StringICmp (dfp->protname, "unknown") == 0) {
+                  if (StringHasNoText (dfp->genename)) {
+                    numUnknown++;
+                    dfp->ignore = TRUE;
+                  }
+                }
+              }
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_exon && target == NULL) {
+          dfp->ignore = TRUE;
+        }
+      }
+    }
+    vnp = vnp->next;
+  }
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp != NULL) {
+      sfp = dfp->sfp;
+      if (sfp != NULL) {
+        if (sfp->data.choice == SEQFEAT_GENE) {
+          for (vnpx = vnp->next; vnpx != NULL; vnpx = vnpx->next) {
+            dfpx = (DefFeatsPtr) vnpx->data.ptrvalue;
+            if (dfpx != NULL) {
+              if (sfp == dfpx->gene) {
+                dfp->ignore = TRUE;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  vnp = head;
+  prevvnp = &head;
+  while (vnp != NULL) {
+    nextvnp = vnp->next;
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp->ignore) {
+      *prevvnp = vnp->next;
+      vnp->next = NULL;
+      ValNodeFreeData (vnp);
+    } else {
+      prevvnp = (ValNodePtr PNTR) &(vnp->next);
+    }
+    vnp = nextvnp;
+  }
+
+  if (! suppressAltSplice) {
+    MergeAltSpliceCDSs (head);
+  }
+
+  if (target != NULL) {
+    head = SortValNode (head, SortCDSAfterExons);
+  }
+
+  if (numUnknown > 0) {
+    dfp = (DefFeatsPtr) MemNew (sizeof (DefFeatsData));
+    if (dfp != NULL) {
+      dfp->entityID = entityID;
+      dfp->subtype = 0;
+      dfp->numUnknown = numUnknown;
+      ValNodeAddPointer (&head, 0, (Pointer) dfp);
+    }
+  }
+
+  if (target != NULL) {
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+      if (dfp != NULL && dfp->subtype == FEATDEF_exon && dfp->gene != NULL) {
+        gene = SeqMgrGetDesiredFeature (entityID, NULL, 0, 0, dfp->gene, &fcontext);
+        if (gene == dfp->gene && (! gene->pseudo)) {
+          left = fcontext.left;
+          right = fcontext.right;
+          cds = SeqMgrGetNextFeature (parent, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+          while (cds != NULL) {
+            if (fcontext.left >= left && fcontext.right <= right && (! cds->pseudo)) {
+              if (dfp->protname == NULL) {
+                dfp->protname = fcontext.label; /* points to stable string */
+              } else {
+                df.protname = fcontext.label;
+                CombineProteinNames (dfp, &df);
+              }
+            }
+            cds = SeqMgrGetNextFeature (parent, cds, SEQFEAT_CDREGION, 0, &fcontext);
+          }
+        }
+      }
+    }
+    vnp = head;
+    while (vnp != NULL) {
+      dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+      vnp = vnp->next;
+      if (dfp != NULL && dfp->subtype == FEATDEF_exon && vnp != NULL) {
+        nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+        if (nextdfp != NULL && (nextdfp->subtype == FEATDEF_exon || nextdfp->subtype == FEATDEF_CDS)) {
+          if (StringCmp (dfp->genename, nextdfp->genename) == 0 &&
+              StringCmp (dfp->protname, nextdfp->protname) == 0) {
+            nextdfp->suppressprefix = TRUE;
+          }
+        }
+      }
+    }
+  }
+
+  vnp = head;
+  group = 0;
+  penult = NULL;
+  while (vnp != NULL) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    vnp->choice = (Uint1) group;
+    vnp = vnp->next;
+    if (vnp != NULL) {
+      change = FALSE;
+      nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+      if ((dfp->subtype == FEATDEF_rRNA && nextdfp->subtype == FEATDEF_otherRNA) ||
+          (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA)) {
+        dfp->lastInString = TRUE;
+        if (dfp->sfp->partial != nextdfp->sfp->partial) {
+          dfp->lastInGroup = TRUE;
+        }
+        change = TRUE;
+      } else if (dfp->subtype != nextdfp->subtype) {
+        if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_CDS && nextdfp->suppressprefix) {
+          /* no separator between exons and appropriate cds */
+        } else {
+          dfp->lastInType = TRUE;
+          change = TRUE;
+        }
+      } else if (dfp->sfp->partial != nextdfp->sfp->partial) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      } else if (dfp->pseudo != nextdfp->pseudo) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      } else if (dfp->allelename != NULL || nextdfp->allelename != NULL) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      } else if (dfp->altSplices > 1 || nextdfp->altSplices > 1) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
+      }
+      if (change) {
+        group++;
+        penult = dfp;
+      }
+    } else {
+      dfp->lastInString = TRUE;
+      dfp->lastInGroup = TRUE;
+      dfp->lastInType = TRUE;
+      group++;
+    }
+  }
+  if (penult != NULL) {
+    penult->lastInPenultimate = TRUE;
+  }
+
+  FinishAutoDefProc (entityID, sep, head, target, nsep, mip, strings, biop, mitochloroflag);
+}
+
+static CharPtr sourceModRankList [] = {
+  "Strain", "Isolate", "Clone", "Type", "Cultivar", "Haplotype",
+  "Substrain", "Subclone", "Subtype", "Serotype", "Serogroup", "Serovar",
+  "Variety", "Pathovar", "Chemovar", "Biovar", "Biotype", "Group", "Subgroup",
+  "Cell-line", "Cell-type", "Tissue-type", "Clone-lib", "Tissue-lib", "Dev-stage",
+  "Lab-host", "Pop-variant", "Frequency", "Germline", "Rearranged",
+  "Chromosome", "Segment", "Map", "Genotype", "Sex", "Plasmid-name", "Transposon-name",
+  "Ins-seq-name", "Endogenous-virus-name", "Plastid-name", "Country", "Old Name",
+  "Common", "Acronym", "Dosage", "Natural-host", "Sub-species", "Specimen-voucher",
+  "Authority", "Forma", "Forma-specialis", "Ecotype", "Synonym", "Anamorph",
+  "Teleomorph", "Breed",
+  NULL
+};
+
+typedef struct deflineform {
+  FORM_MESSAGE_BLOCK
+  SeqEntryPtr    sep;
+  ButtoN         addLabels;
+  GrouP          customGrp;
+  GrouP          sourceListGrp;
+  ButtoN         PNTR sourceBoxList;
+  PopuP          modLimit;
+  ButtoN         onlyModifyTargeted;
+  BioseqPtr      target;
+  ButtoN         leaveInParentheses;
+  /*
+  GrouP          nucformitoorchloro;
+  */
+  PopuP          nucformitoorchloro;
+  Boolean        smartMods;
+  ButtoN         suppressAltSplice;
+} DeflineForm, PNTR DeflineFormPtr;
+
+static Boolean GatherOrgnamesFunc (GatherContextPtr gcp)
+
+{
+  BioSourcePtr     biop;
+  OrgRefPtr        orp;
+  ValNodePtr       sdp;
+  SeqFeatPtr       sfp;
+  CharPtr          str;
+  ValNodePtr PNTR  vnpp;
+
+  if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
+  if (gcp->thistype != OBJ_SEQFEAT  && gcp->thistype != OBJ_SEQDESC) return TRUE;
+  vnpp = (ValNodePtr PNTR) gcp->userdata;
+  if (vnpp == NULL) return TRUE;
+
+  orp = NULL;
+  biop = NULL;
+  switch (gcp->thistype) {
+    case OBJ_SEQFEAT :
+      sfp = (SeqFeatPtr) gcp->thisitem;
+      switch (sfp->data.choice) {
+        case SEQFEAT_ORG :
+          orp = (OrgRefPtr) sfp->data.value.ptrvalue;
+          break;
+        case SEQFEAT_BIOSRC :
+          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+          break;
+        default :
+          break;
+      }
+      break;
+    case OBJ_SEQDESC :
+      sdp = (ValNodePtr) gcp->thisitem;
+      switch (sdp->choice) {
+        case Seq_descr_org :
+          orp = (OrgRefPtr) sdp->data.ptrvalue;
+          break;
+        case Seq_descr_source :
+          biop = (BioSourcePtr) sdp->data.ptrvalue;
+          break;
+        default :
+          break;
+      }
+      break;
+    default :
+      break;
+  }
+
+  if (orp == NULL && biop != NULL) {
+    orp = biop->org;
+  }
+  if (orp != NULL) {
+    str = StringSave (orp->taxname);
+    if (str == NULL) return TRUE;
+    TrimSpacesAroundString (str);
+    if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
+      StringCpy (str, "HIV-1");
+    } else if (StringICmp (str, "Human immunodeficiency virus type 2") == 0) {
+      StringCpy (str, "HIV-2");
+    }
+    str [0] = TO_UPPER (str [0]);
+    ValNodeAddStr (vnpp, 1, str);
+  }
+  return TRUE;
+}
+
+static void DefLineModFormAcceptProc (ButtoN b)
+
+{
+  EnumFieldAssocPtr  ap;
+  Int2               count;
+  DeflineFormPtr     dfp;
+  GatherScope        gs;
+  Boolean            labelMods;
+  Boolean            leaveInParen;
+  Int2               maxMods;
+  Int2               mitochloroflag;
+  ValNodePtr         nextvnp;
+  ValNodePtr         nonUniqueOrgs;
+  Boolean            suppressAltSplice;
+  Int2               val;
+  ValNodePtr         vnp;
+
+  dfp = (DeflineFormPtr) GetObjectExtra (b);
+  if (dfp == NULL) return;
+  WatchCursor ();
+  Hide (dfp->form);
+  Update ();
+  labelMods = GetStatus (dfp->addLabels);
+
+  if (dfp->sourceBoxList != NULL && GetValue (dfp->customGrp) == 2) {
+    count = 0;
+    while (sourceModRankList [count] != NULL && dfp->sourceBoxList [count] != NULL) {
+      if (! GetStatus (dfp->sourceBoxList [count])) {
+        for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
+          if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
+              ap->value > 0 && ap->value < 32) {
+            orgmod_rank [ap->value] = 0;
+          }
+        }
+        for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
+          if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
+              ap->value > 0 && ap->value < 25) {
+            subsource_rank [ap->value] = 0;
+          }
+        }
+      }
+      count++;
+    }
+  }
+
+  maxMods = INT2_MAX;
+  val = GetValue (dfp->modLimit);
+  if (val > 1) {
+    maxMods = val - 1;
+  }
+
+  if (dfp->onlyModifyTargeted != NULL && GetStatus (dfp->onlyModifyTargeted)) {
+    dfp->sep = GetBestTopParentForData (dfp->input_entityID, dfp->target);
+  }
+
+  leaveInParen = FALSE;
+  if (dfp->leaveInParentheses != NULL && GetStatus (dfp->leaveInParentheses)) {
+    leaveInParen = TRUE;
+  }
+
+  nonUniqueOrgs = NULL;
+  if (dfp->smartMods) {
+    MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+    gs.seglevels = 1;
+    MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
+    gs.ignore[OBJ_BIOSEQ] = FALSE;
+    gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+    gs.ignore[OBJ_SEQANNOT] = FALSE;
+    gs.ignore[OBJ_SEQFEAT] = FALSE;
+    gs.ignore[OBJ_SEQDESC] = FALSE;
+    GatherEntity (dfp->input_entityID, (Pointer) (&nonUniqueOrgs), GatherOrgnamesFunc, &gs);
+    nonUniqueOrgs = SortValNode (nonUniqueOrgs, SortByName);
+    vnp = nonUniqueOrgs;
+    while (vnp != NULL) {
+      nextvnp = vnp->next;
+      if (nextvnp != NULL && StringICmp ((CharPtr) vnp->data.ptrvalue, (CharPtr) nextvnp->data.ptrvalue) == 0) {
+        vnp->next = nextvnp->next;
+        nextvnp->next = NULL;
+        ValNodeFreeData (nextvnp);
+        nextvnp = vnp;
+        (vnp->choice)++;
+      }
+      vnp = nextvnp;
+    }
+  }
+
+  mitochloroflag = GetValue (dfp->nucformitoorchloro) - 1;
+  suppressAltSplice = GetStatus (dfp->suppressAltSplice);
+  AutoDefProc (dfp->input_entityID, dfp->sep, TRUE, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, NULL);
+  ValNodeFreeData (nonUniqueOrgs);
+  ArrowCursor ();
+  Remove (dfp->form);
+  Update ();
+  ObjMgrSetDirtyFlag (dfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, dfp->input_entityID, 0, 0);
+}
+
+static void ChangeCustomGrp (GrouP g)
+
+{
+  DeflineFormPtr  dfp;
+
+  dfp = (DeflineFormPtr) GetObjectExtra (g);
+  if (dfp == NULL) return;
+  if (GetValue (g) == 1) {
+    SafeDisable (dfp->sourceListGrp);
+  } else {
+    SafeEnable (dfp->sourceListGrp);
+  }
+}
+
+static void CleanupDeflineForm (GraphiC g, VoidPtr data)
+
+{
+  DeflineFormPtr  dfp;
+
+  dfp = (DeflineFormPtr) data;
+  if (dfp != NULL) {
+    MemFree (dfp->sourceBoxList);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+static void DeflineMessageProc (ForM f, Int2 mssg)
+
+{
+  StdEditorProcsPtr  sepp;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    if (sepp->handleMessages != NULL) {
+      sepp->handleMessages (f, mssg);
+    }
+  }
+}
+
+static ForM CreateDefLineModForm (Uint2 entityID, SeqEntryPtr sep, BioseqPtr target,
+                                  Boolean smartMods, Int2 maxCount)
+
+{
+  ButtoN          b;
+  GrouP           c;
+  Int2            count;
+  DeflineFormPtr  dfp;
+  GrouP           h;
+  Int2            i;
+  GrouP           p;
+  GrouP           q;
+  Char            str [16];
+  WindoW          w;
+
+  w = NULL;
+  dfp = MemNew (sizeof (DeflineForm));
+  if (dfp != NULL) {
+    w = FixedWindow (-50, -33, -10, -10, "Defline Modifier Customization", StdCloseWindowProc);
+    SetObjectExtra (w, dfp, CleanupDeflineForm);
+    dfp->form = (ForM) w;
+    dfp->formmessage = DeflineMessageProc;
+    dfp->input_entityID = entityID;
+    dfp->sep = sep;
+    dfp->target = target;
+    dfp->smartMods = smartMods;
+
+    h = HiddenGroup (w, -1, 0, NULL);
+    SetGroupSpacing (h, 10, 10);
+
+    dfp->addLabels = CheckBox (h, "Use Labels (e.g., 'strain BALB/c')", NULL);
+    if (smartMods) {
+      SetStatus (dfp->addLabels, TRUE);
+    }
+
+    p = NormalGroup (h, -1, 0, "Modifier Classes", programFont, ChangeCustomGrp);
+    SetGroupSpacing (p, 10, 10);
+
+    dfp->customGrp = HiddenGroup (p, 2, 0, ChangeCustomGrp);
+    SetObjectExtra (dfp->customGrp, dfp, NULL);
+    RadioButton (dfp->customGrp, "All");
+    RadioButton (dfp->customGrp, "Custom");
+    SetValue (dfp->customGrp, 1);
+
+    dfp->sourceListGrp = HiddenGroup (p, 3, 0, NULL);
+    count = 0;
+    while (sourceModRankList [count] != NULL) {
+      count++;
+    }
+    dfp->sourceBoxList = MemNew (sizeof (ButtoN) * (count + 3));
+    count = 0;
+    if (dfp->sourceBoxList != NULL) {
+      while (sourceModRankList [count] != NULL && count < maxCount) {
+        dfp->sourceBoxList [count] = CheckBox (dfp->sourceListGrp, sourceModRankList [count], NULL);
+        count++;
+      }
+    }
+    Disable (dfp->sourceListGrp);
+
+    q = HiddenGroup (h, 4, 0, NULL);
+    StaticPrompt (q, "Maximum modifiers per line", 0, popupMenuHeight, programFont, 'l');
+    dfp->modLimit = PopupList (q, TRUE, NULL);
+    PopupItem (dfp->modLimit, "no limit");
+    for (i = 1; i <= count; i++) {
+      sprintf (str, "%d", (int) i);
+      PopupItem (dfp->modLimit, str);
+    }
+    if (smartMods) {
+      SetValue (dfp->modLimit, 2);
+    } else {
+      SetValue (dfp->modLimit, 1);
+    }
+
+    /*
+    dfp->nucformitoorchloro = HiddenGroup (h, -1, 0, NULL);
+    RadioButton (dfp->nucformitoorchloro, "No mitochondrial or chloroplast suffix");
+    RadioButton (dfp->nucformitoorchloro, "Nuclear gene(s) for mitochondrial product(s)");
+    RadioButton (dfp->nucformitoorchloro, "Nuclear gene(s) for chloroplast product(s)");
+    RadioButton (dfp->nucformitoorchloro, "Mitochondrial gene(s) for mitochondrial product(s)");
+    RadioButton (dfp->nucformitoorchloro, "Chloroplast gene(s) for chloroplast product(s)");
+    */
+    dfp->nucformitoorchloro = PopupList (h, FALSE, NULL);
+    PopupItem (dfp->nucformitoorchloro, "No mitochondrial or chloroplast suffix");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for mitochondrial product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for chloroplast product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for kinetoplast product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for plastid product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for chromoplast product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for cyanelle product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for apicoplast product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for leucoplast product(s)");
+    PopupItem (dfp->nucformitoorchloro, "Nuclear gene(s) for proplastid product(s)");
+    SetValue (dfp->nucformitoorchloro, 1);
+
+    dfp->leaveInParentheses = CheckBox (w, "Leave in parenthetical organism info", NULL);
+    SetStatus (dfp->leaveInParentheses, TRUE);
+
+    dfp->suppressAltSplice = CheckBox (w, "Suppress alternative splice phrase", NULL);
+
+    dfp->onlyModifyTargeted = NULL;
+    if (target != NULL) {
+      dfp->onlyModifyTargeted = CheckBox (w, "Only modify targeted record", NULL);
+    }
+
+    c = HiddenGroup (w, 4, 0, NULL);
+    b = PushButton (c, "Accept", DefLineModFormAcceptProc);
+    SetObjectExtra (b, dfp, NULL);
+    PushButton (c, "Cancel", StdCancelButtonProc);
+
+    AlignObjects (ALIGN_CENTER, (HANDLE) dfp->addLabels, (HANDLE) dfp->customGrp,
+                  (HANDLE) dfp->sourceListGrp, (HANDLE) q,
+                  (HANDLE) dfp->leaveInParentheses,
+                  (HANDLE) dfp->suppressAltSplice,
+                  (HANDLE) dfp->nucformitoorchloro, (HANDLE) c,
+                  (HANDLE) dfp->onlyModifyTargeted, NULL);
+
+    RealizeWindow (w);
+  }
+  if (smartMods) {
+    DefLineModFormAcceptProc (b);
+    return NULL;
+  }
+  return (ForM) w;
+}
+
+extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean smartMods, ButtoN b)
+
+{
+  EnumFieldAssocPtr  ap;
+  BaseFormPtr        bfp;
+  BioseqSetPtr       bssp;
+  Int2               count;
+  ForM               f;
+  Int2               maxCount;
+  SeqEntryPtr        sep;
+  BioseqPtr          target;
+
+  if (b != NULL) {
+    bfp = GetObjectExtra (b);
+  } else {
+#ifdef WIN_MAC
+    bfp = currentFormDataPtr;
+#else
+    bfp = GetObjectExtra (i);
+#endif
+  }
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  MemSet ((Pointer) (orgmod_rank), (int)(0), sizeof(orgmod_rank));
+  MemSet ((Pointer) (subsource_rank), (int)(0), sizeof(subsource_rank));
+
+  count = 0;
+  while (sourceModRankList [count] != NULL) {
+    for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
+      if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
+          ap->value > 0 && ap->value < 32) {
+        orgmod_rank [ap->value] = count + 1;
+      }
+    }
+    for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
+      if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
+          ap->value > 0 && ap->value < 25) {
+        subsource_rank [ap->value] = count + 1;
+      }
+    }
+    count++;
+  }
+
+  if (smartMods) {
+    if (CountSeqEntryComponents (sep) == 1) {
+      smartMods = FALSE;
+    } else if (IS_Bioseq_set (sep) && b != NULL /* from toolbar */ ) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp != NULL && bssp->_class == BioseqseqSet_class_genbank) {
+        smartMods = FALSE;
+      }
+    }
+  }
+
+  if (addMods || smartMods) {
+    target =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+    if (addMods) {
+      maxCount = INT2_MAX;
+    } else {
+      maxCount = 6;
+    }
+    f = CreateDefLineModForm (bfp->input_entityID, sep, target, smartMods, maxCount);
+    if (addMods && f != NULL) {
+      Show (f);
+      Select (f);
+    } else if (bfp->activate != NULL) {
+      bfp->activate ((WindoW) bfp->form);
+    }
+    return;
+  }
+
+  WatchCursor ();
+  Update ();
+  AutoDefProc (bfp->input_entityID, sep, FALSE, FALSE, INT2_MAX, TRUE, NULL, NULL, NULL, 0, FALSE, NULL);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+void GenerateAutoDefLinesNoMods (IteM i)
+
+{
+  GenerateAutomaticDefLinesCommon (i, FALSE, FALSE, NULL);
+}
+
+void GenerateAutoDefLinesWithMods (IteM i)
+
+{
+  GenerateAutomaticDefLinesCommon (i, TRUE, FALSE, NULL);
+}
+
+void GenerateAutoDefLinesSmartMods (IteM i)
+
+{
+  GenerateAutomaticDefLinesCommon (i, FALSE, TRUE, NULL);
+}
+
+static void StringToLower (CharPtr str)
+
+{
+  Char  ch;
+
+  if (str == NULL) return;
+  ch = *str;
+  while (ch != '\0') {
+    *str = TO_LOWER (ch);
+    str++;
+    ch = *str;
+  }
+}
+
+static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  EnumFieldAssocPtr  ap;
+  BioseqContextPtr   bcp;
+  BioSourcePtr       biop;
+  BioseqPtr          bsp;
+  OrgModPtr          mod;
+  OrgNamePtr         onp;
+  OrgRefPtr          orp;
+  SeqDescrPtr        sdp;
+  SubSourcePtr       ssp;
+  CharPtr            str;
+  Char               text [256];
+  ValNodePtr         ttl;
+  ValNodePtr         vnp;
+
+  if (sep == NULL) return;
+  if (! IS_Bioseq (sep)) return;
+  bsp = sep->data.ptrvalue;
+  if (bsp == NULL) return;
+  if (! ISA_na (bsp->mol)) return;
+  bcp = BioseqContextNew (bsp);
+  sdp = BioseqContextGetSeqDescr (bcp, Seq_descr_source, NULL, NULL);
+  BioseqContextFree (bcp);
+  if (sdp == NULL) return;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return;
+  if (bsp->descr != NULL) {
+    vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
+    vnp = ValNodeFreeData (vnp);
+  }
+  str = MemNew (2000);
+
+  orp = biop->org;
+  if (orp != NULL) {
+    StringCpy (text, "[org=");
+    StringCat (text, orp->taxname);
+    StringCat (text, "] ");
+    StringCat (str, text);
+  }
+
+  ssp = biop->subtype;
+  while (ssp != NULL) {
+    for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
+      if (ssp->subtype == ap->value) {
+        StringCpy (text, "[");
+        if (ap->value != 255) {
+          StringCat (text, ap->name);
+        } else {
+          StringCat (text, "subsource");
+        }
+        StringToLower (text);
+        StringCat (text, "=");
+        StringCat (text, ssp->name);
+        StringCat (text, "] ");
+        StringCat (str, text);
+      }
+    }
+    ssp = ssp->next;
+  }
+  orp = biop->org;
+  if (orp != NULL) {
+    onp = orp->orgname;
+    if (onp != NULL) {
+      mod = onp->mod;
+      while (mod != NULL) {
+        for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
+          if (mod->subtype == ap->value) {
+            StringCpy (text, "[");
+            if (ap->value != 255) {
+              StringCat (text, ap->name);
+            } else {
+              StringCat (text, "note");
+            }
+            StringToLower (text);
+            StringCat (text, "=");
+            StringCat (text, mod->subname);
+            StringCat (text, "] ");
+            StringCat (str, text);
+          }
+        }
+        mod = mod->next;
+      }
+    }
+  }
+
+  TrimSpacesAroundString (str);
+  if (! StringHasNoText (str)) {
+    ttl = CreateNewDescriptor (sep, Seq_descr_title);
+    if (ttl != NULL) {
+      ttl->data.ptrvalue = StringSave (str);
+    }
+  }
+  MemFree (str);
+}
+
+extern Int2 LIBCALLBACK MakeSequinProteinTitles (Pointer data);
+extern Int2 LIBCALLBACK MakeSequinNucleotideTitles (Pointer data);
+extern Int2 LIBCALLBACK MakeSequinFeatureTable (Pointer data);
+extern Int2 LIBCALLBACK MakeContigBuildTable (Pointer data);
+
+extern Int2 LIBCALLBACK MakeSequinNucleotideTitles (Pointer data)
+
+{
+  OMProcControlPtr  ompcp;
+  SeqEntryPtr       sep;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      break;
+    case OBJ_BIOSEQSET :
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  SeqEntryExplore (sep, NULL, MakeNucleotideTitlesInSequinStyle);
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  return OM_MSG_RET_DONE;
+}
+
+static void MakeProteinTitlesInSequinStyle (Uint2 entityID, SeqEntryPtr sep)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  DefFeatsPtr   dfp;
+  GeneRefPtr    grp;
+  GatherScope   gs;
+  ValNodePtr    head;
+  SeqEntryPtr   nsep;
+  ProtRefPtr    prp;
+  SeqEntryPtr   psep;
+  Char          str [256];
+  Char          text [256];
+  ValNodePtr    ttl;
+  ValNodePtr    vnp;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    if (bssp->_class == 7 ||
+        (bssp->_class >= 13 && bssp->_class <= 16)) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        MakeProteinTitlesInSequinStyle (entityID, sep);
+      }
+      return;
+    }
+  }
+  nsep = FindNucSeqEntry (sep);
+  if (nsep == NULL) return;
+
+  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+  gs.seglevels = 1;
+  gs.get_feats_location = TRUE;
+  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
+  gs.ignore[OBJ_BIOSEQ] = FALSE;
+  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+  gs.ignore[OBJ_SEQANNOT] = FALSE;
+  gs.ignore[OBJ_SEQFEAT] = FALSE;
+  gs.scope = sep;
+  gs.target = NULL;
+  head = NULL;
+  GatherEntity (entityID, (Pointer) (&head), GetCDStRNArRNAGatherFunc, &gs);
+  /* head = SortValNode (head, SortCDStRNArRNAByLocation); */
+  if (head == NULL) return;
+
+  vnp = head;
+  while (vnp != NULL) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp != NULL && dfp->sfp != NULL && dfp->subtype == FEATDEF_CDS) {
+      FindGeneAndProtForCDS (entityID, dfp->sfp, &(dfp->gene), &(dfp->prot));
+      bsp = GetBioseqGivenSeqLoc (dfp->sfp->product, entityID);
+      if (bsp != NULL) {
+        str [0] = '\0';
+        if (dfp->gene != NULL) {
+          grp = (GeneRefPtr) dfp->gene->data.value.ptrvalue;
+          if (grp != NULL) {
+            StringNCpy_0 (text, (CharPtr) grp->locus, sizeof (text));
+            if (! StringHasNoText (text)) {
+              StringCat (str, "[gene=");
+              StringCat (str, text);
+              StringCat (str, "]");
+            }
+          }
+        }
+        if (dfp->prot != NULL) {
+          prp = (ProtRefPtr) dfp->prot->data.value.ptrvalue;
+          if (prp != NULL && prp->name != NULL) {
+            StringNCpy_0 (text, (CharPtr) prp->name->data.ptrvalue, sizeof (text));
+            if (! StringHasNoText (text)) {
+              if (str [0] != '\0') {
+                StringCat (str, " ");
+              }
+              StringCat (str, "[prot=");
+              StringCat (str, text);
+              StringCat (str, "]");
+            }
+          }
+        }
+        if (! StringHasNoText (str)) {
+          psep = SeqMgrGetSeqEntryForData (bsp);
+          if (psep != NULL) {
+            ttl = CreateNewDescriptor (psep, Seq_descr_title);
+            if (ttl != NULL) {
+              ttl->data.ptrvalue = StringSave (str);
+            }
+          }
+        }
+      }
+    }
+    vnp = vnp->next;
+  }
+  ValNodeFreeData (head);
+}
+
+extern Int2 LIBCALLBACK MakeSequinProteinTitles (Pointer data)
+
+{
+  OMProcControlPtr  ompcp;
+  SeqEntryPtr       sep;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      break;
+    case OBJ_BIOSEQSET :
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  MakeProteinTitlesInSequinStyle (ompcp->input_entityID, sep);
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  return OM_MSG_RET_DONE;
+}
+
+static void PrintFtableIntervals (FILE *fp, SeqLocPtr location, Uint2 entityID, CharPtr label)
+
+{
+  BioseqPtr  bsp;
+  SeqLocPtr  slp;
+  Int4       start;
+  Int4       stop;
+
+  if (fp == NULL || location == NULL || StringHasNoText (label)) return;
+  bsp = BioseqFindFromSeqLoc (location);
+  if (bsp == NULL) return;
+  slp = SeqLocFindNext (location, NULL);
+  if (slp == NULL) return;
+  start = GetOffsetInBioseq (slp, bsp, SEQLOC_START) + 1;
+  stop = GetOffsetInBioseq (slp, bsp, SEQLOC_STOP) + 1;
+  fprintf (fp, "%ld\t%ld\t%s\n", (long) start, (long) stop, label);
+  while ((slp = SeqLocFindNext (location, slp)) != NULL) {
+    start = GetOffsetInBioseq (slp, bsp, SEQLOC_START) + 1;
+    stop = GetOffsetInBioseq (slp, bsp, SEQLOC_STOP) + 1;
+    if (start != 0 && stop != 0) {
+      fprintf (fp, "%ld\t%ld\n", (long) start, (long) stop);
+    }
+  }
+}
+
+static void MakeFeatureInSequinStyle (Uint2 entityID, SeqEntryPtr sep, FILE *fp)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  DefFeatsPtr   dfp;
+  GeneRefPtr    grp;
+  GatherScope   gs;
+  ValNodePtr    head;
+  SeqEntryPtr   nsep;
+  ProtRefPtr    prp;
+  RnaRefPtr     rrp;
+  SeqIdPtr      sip;
+  Char          str [256];
+  ValNodePtr    syn;
+  ValNodePtr    vnp;
+
+  if (sep == NULL || fp == NULL) return;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    if (bssp->_class == 7 ||
+        (bssp->_class >= 13 && bssp->_class <= 16)) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        MakeFeatureInSequinStyle (entityID, sep, fp);
+      }
+      return;
+    }
+  }
+  nsep = FindNucSeqEntry (sep);
+  if (nsep == NULL) return;
+  bsp = nsep->data.ptrvalue;
+  if (bsp == NULL) return;
+
+  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+  gs.seglevels = 1;
+  gs.get_feats_location = TRUE;
+  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
+  gs.ignore[OBJ_BIOSEQ] = FALSE;
+  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+  gs.ignore[OBJ_SEQANNOT] = FALSE;
+  gs.ignore[OBJ_SEQFEAT] = FALSE;
+  gs.scope = sep;
+  gs.target = NULL;
+  head = NULL;
+  GatherEntity (entityID, (Pointer) (&head), GetGeneCDStRNArRNAmRNAGatherFunc, &gs);
+  head = SortValNode (head, SortCDStRNArRNAByLocation);
+  if (head == NULL) return;
+
+  sip = SeqIdFindBest (bsp->id, 0);
+  SeqIdWrite (sip, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
+  if (! StringHasNoText (str)) {
+    fprintf (fp, ">Feature %s\n", str);
+  }
+
+  vnp = head;
+  while (vnp != NULL) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp != NULL && dfp->sfp != NULL) {
+      str [0] = '\0';
+      switch (dfp->subtype) {
+        case FEATDEF_GENE :
+          PrintFtableIntervals (fp, dfp->sfp->location, entityID, "gene");
+          grp = (GeneRefPtr) dfp->sfp->data.value.ptrvalue;
+          if (grp != NULL) {
+            StringNCpy_0 (str, (CharPtr) grp->locus, sizeof (str));
+            if (! StringHasNoText (str)) {
+              fprintf (fp, "\t\t\tgene\t%s\n", str);
+            }
+            for (syn = grp->syn; syn != NULL; syn = syn->next) {
+              StringNCpy_0 (str, (CharPtr) syn->data.ptrvalue, sizeof (str));
+              if (! StringHasNoText (str)) {
+                fprintf (fp, "\t\t\tgene\t%s\n", str);
+              }
+            }
+          }
+          break;
+        case FEATDEF_CDS :
+          PrintFtableIntervals (fp, dfp->sfp->location, entityID, "CDS");
+          FindGeneAndProtForCDS (entityID, dfp->sfp, &(dfp->gene), &(dfp->prot));
+          if (dfp->gene != NULL) {
+            grp = (GeneRefPtr) dfp->gene->data.value.ptrvalue;
+            if (grp != NULL) {
+              StringNCpy_0 (str, (CharPtr) grp->locus, sizeof (str));
+              if (! StringHasNoText (str)) {
+                fprintf (fp, "\t\t\tgene\t%s\n", str);
+              }
+            }
+          }
+          if (dfp->prot != NULL) {
+            prp = (ProtRefPtr) dfp->prot->data.value.ptrvalue;
+            if (prp != NULL) {
+              if (prp->name != NULL) {
+                StringNCpy_0 (str, (CharPtr) prp->name->data.ptrvalue, sizeof (str));
+              } else if (prp->desc != NULL) {
+                StringNCpy_0 (str, prp->desc, sizeof (str));
+              }
+              if (! StringHasNoText (str)) {
+                fprintf (fp, "\t\t\tproduct\t%s\n", str);
+              }
+            }
+          }
+          break;
+        case FEATDEF_mRNA :
+          PrintFtableIntervals (fp, dfp->sfp->location, entityID, "mRNA");
+          FindGeneAndProtForCDS (entityID, dfp->sfp, &(dfp->gene), NULL);
+          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+          if (rrp != NULL) {
+            if (rrp->ext.choice == 1) {
+              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
+            }
+            if (! StringHasNoText (str)) {
+              fprintf (fp, "\t\t\tproduct\t%s\n", str);
+            }
+          }
+          break;
+      }
+    }
+    vnp = vnp->next;
+  }
+  ValNodeFreeData (head);
+}
+
+static Boolean LIBCALLBACK SequinFTableFeature (SeqFeatPtr sfp, SeqMgrFeatContextPtr context)
+
+{
+  DbtagPtr     dbt;
+  FILE         *fp;
+  GBQualPtr    gbq;
+  GeneRefPtr   grp;
+  CharPtr      label;
+  ObjectIdPtr  oip;
+  BioseqPtr    prod;
+  SeqFeatPtr   prot;
+  ProtRefPtr   prp;
+  RnaRefPtr    rrp;
+  SeqIdPtr     sip;
+  Char         str [256];
+  tRNAPtr      trna;
+  ValNodePtr   vnp;
+
+  if (sfp == NULL) return TRUE;
+  fp = (FILE *) context->userdata;
+  label = (CharPtr) FeatDefTypeLabel (sfp);
+  if (StringCmp (label, "Gene") == 0) {
+    label = "gene";
+  }
+  PrintFtableIntervals (fp, sfp->location, context->entityID, label);
+  switch (context->seqfeattype) {
+    case SEQFEAT_GENE :
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp != NULL) {
+        StringNCpy_0 (str, (CharPtr) grp->locus, sizeof (str));
+        if (! StringHasNoText (str)) {
+          fprintf (fp, "\t\t\tgene\t%s\n", str);
+        }
+        for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+          StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+          if (! StringHasNoText (str)) {
+            fprintf (fp, "\t\t\tgene_syn\t%s\n", str);
+          }
+        }
+      }
+      break;
+    case SEQFEAT_CDREGION :
+      prod = BioseqFind (SeqLocId (sfp->product));
+      prot = SeqMgrGetBestProteinFeature (prod, NULL);
+      if (prot != NULL) {
+        prp = (ProtRefPtr) prot->data.value.ptrvalue;
+        if (prp != NULL) {
+          if (prp->name != NULL) {
+            for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+              StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+              if (! StringHasNoText (str)) {
+                fprintf (fp, "\t\t\tproduct\t%s\n", str);
+              }
+            }
+          } else if (prp->desc != NULL) {
+            StringNCpy_0 (str, prp->desc, sizeof (str));
+            if (! StringHasNoText (str)) {
+              fprintf (fp, "\t\t\tproduct\t%s\n", str);
+            }
+          }
+          for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
+            StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+            if (! StringHasNoText (str)) {
+              fprintf (fp, "\t\t\tfunction\t%s\n", str);
+            }
+          }
+          for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+            StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+            if (! StringHasNoText (str)) {
+              fprintf (fp, "\t\t\tEC_number\t%s\n", str);
+            }
+          }
+        }
+      }
+      if (prod != NULL) {
+        for (sip = prod->id; sip != NULL; sip = sip->next) {
+          if (sip->choice == SEQID_GENBANK ||
+              sip->choice == SEQID_EMBL ||
+              sip->choice == SEQID_DDBJ) {
+            if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+              fprintf (fp, "\t\t\tprotein_id\t%s\n", str);
+            }
+          } else if (sip->choice == SEQID_GENERAL) {
+            if (SeqIdWrite (sip, str, PRINTID_FASTA_LONG, sizeof (str)) != NULL) {
+              fprintf (fp, "\t\t\tprotein_id\t%s\n", str);
+            }
+          }
+        }
+      }
+      break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL) {
+        switch (rrp->ext.choice) {
+          case 1 :
+            StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
+            if (! StringHasNoText (str)) {
+              fprintf (fp, "\t\t\tproduct\t%s\n", str);
+            }
+            break;
+          case 2 :
+            trna = rrp->ext.value.ptrvalue;
+            if (trna != NULL) {
+              FeatDefLabel (sfp, str, sizeof (str) - 1, OM_LABEL_CONTENT);
+              if (! StringHasNoText (str)) {
+                fprintf (fp, "\t\t\tproduct\t%s\n", str);
+              }
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      break;
+    default :
+      break;
+  }
+  if (! StringHasNoText (sfp->comment)) {
+    fprintf (fp, "\t\t\tnote\t%s\n", sfp->comment);
+  }
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (! StringHasNoText (gbq->qual)) {
+      if (! StringHasNoText (gbq->val)) {
+        fprintf (fp, "\t\t\t%s\t%s\n", gbq->qual, gbq->val);
+      }
+    }
+  }
+  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt != NULL) {
+      if (! StringHasNoText (dbt->db)) {
+        oip = dbt->tag;
+        if (oip->str != NULL && (! StringHasNoText (oip->str))) {
+          fprintf (fp, "\t\t\tdb_xref\t%s:%s\n", dbt->db, oip->str);
+        } else {
+          fprintf (fp, "\t\t\tdb_xref\t%s:%ld\n", dbt->db, (long) oip->id);
+        }
+      }
+    }
+  }
+  return TRUE;
+}
+
+static Boolean LIBCALLBACK SequinFTableBioseq (BioseqPtr bsp, SeqMgrBioseqContextPtr context)
+
+{
+  FILE      *fp;
+  SeqIdPtr  sip;
+  Char      str [42];
+
+  if (bsp == NULL) return TRUE;
+  fp = (FILE *) context->userdata;
+  sip = SeqIdFindBest (bsp->id, 0);
+  SeqIdWrite (sip, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
+  if (! StringHasNoText (str)) {
+    fprintf (fp, ">Feature %s\n", str);
+  }
+  SeqMgrExploreFeatures (bsp, (Pointer) fp, SequinFTableFeature, NULL, NULL, NULL);
+  return TRUE;
+}
+
+extern Int2 LIBCALLBACK MakeSequinFeatureTable (Pointer data)
+
+{
+  FILE              *fp;
+  OMProcControlPtr  ompcp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      break;
+    case OBJ_BIOSEQSET :
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  if (fp == NULL) return OM_MSG_RET_ERROR;
+  if (SeqMgrFeaturesAreIndexed (ompcp->input_entityID) != 0) {
+    SeqMgrExploreBioseqs (ompcp->input_entityID, NULL, (Pointer) fp, SequinFTableBioseq, TRUE, FALSE, FALSE);
+  } else {
+    MakeFeatureInSequinStyle (ompcp->input_entityID, sep, fp);
   }
   FileClose (fp);
-  while (goOn) {
-    goOn = FALSE;
-    title [0] = '\0';
-    if (GetServiceParam (list, "TITLE=", tmp, sizeof (tmp) - 1)) {
-      StringNCpy_0 (title, tmp, sizeof (title));
-    }
-    if (StringHasNoText (title)) {
-      if (GetServiceParam (list, "[", title, sizeof (title) - 1)) {
-        ptr = StringChr (title, ']');
-        if (ptr != NULL) {
-          *ptr = '\0';
-        }
-      }
-    }
-    if (title [0] != '\0' && GetServiceParam (list, "HOST=", host, sizeof (host) - 1)) {
-      if (GetServiceParam (list, "FLAGS=", tmp, sizeof (tmp) - 1)) {
-        if (StringStr (tmp, "SEQ") == NULL) {
-          bspviewOK= FALSE;
-        }
-        if (StringStr (tmp, "DOC") == NULL) {
-          docsumOK= FALSE;
-        }
-        if (StringStr (tmp, "NUC") != NULL) {
-          nucOK= TRUE;
-        }
-        if (StringStr (tmp, "PRT") != NULL) {
-          protOK= TRUE;
-        }
-        if (StringStr (tmp, "TRG") != NULL) {
-          onlyBspTarget= TRUE;
-        }
-      }
-
-      if (bspviewOK || docsumOK) {
-
-        if (GetServiceParam (list, "PORT=", tmp, sizeof (tmp) - 1) && 
-            sscanf (tmp, "%u", &val) == 1) {
-          port = (Uint2) val;
-        } else {
-          port = 80;
-        }
-        if (GetServiceParam (list, "FORMATIN=", tmp, sizeof (tmp) - 1)) {
-          if (StringICmp (tmp, "FASTA") == 0) {
-            format = 1;
-          } else if (StringICmp (tmp, "ASN.1") == 0) {
-            format = 2;
-          }
-        }
-       if (GetServiceParam (list, "TIMEOUT=", tmp, sizeof (tmp) - 1) && 
-            sscanf (tmp, "%u", &val) == 1) {
-          timeoutsec = (Uint2) val;
-        } else {
-          timeoutsec = 30;
-        }
-        submenu [0] = '\0';
-        GetServiceParam (list, "SUBMENU=", submenu, sizeof (submenu) - 1);
-        if (GetServiceParam (list, "DEMO=", tmp, sizeof (tmp) - 1)) {
-          if (StringICmp (tmp, "TRUE") == 0) {
-            demomode = TRUE;
-          }
-        }
-
-        if (GetServiceParam (list, "PATH=", path, sizeof (path) - 1)) {
-          if (GetServiceParam (list, "PROGRAM=", program, sizeof (program) - 1)) {
-            paramlist = GetServiceParamAndPromptLists (list);
-            prefix [0] = '\0';
-            GetServiceParam (list, "PREFIX=", prefix, sizeof (prefix) - 1);
-            suffix [0] = '\0';
-            GetServiceParam (list, "SUFFIX=", suffix, sizeof (suffix) - 1);
-            AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
-                             nucOK, protOK, onlyBspTarget,
-                             host, port, path, program, timeoutsec, format, demomode,
-                             SequinHandleURLResults, paramlist, prefix, suffix,
-                             title, submenu, DoURLProc, head);
-          }
-        }
-
-      }
-    }
-
-    seenBracket = FALSE;
-    keepGoing = TRUE;
-    for (vnp = list; vnp != NULL && keepGoing; vnp = vnp->next) {
-      ptr = (CharPtr) vnp->data.ptrvalue;
-      if (ptr != NULL) {
-        if (ptr [0] == '[') {
-          if (seenBracket) {
-            keepGoing = FALSE;
-          } else {
-            seenBracket = TRUE;
-          }
-        }
-        if (keepGoing) {
-          vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
-        }
-      }
-    }
-
-  }
-
-  ValNodeFreeData (list);
+  LaunchGeneralTextViewer (path, "Gene - CDS Feature Table");
+  FileRemove (path);
+  return OM_MSG_RET_DONE;
 }
 
-extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Boolean docsumOK)
+/* the following two functions are modified from PrintGenome in wprint.c */
+
+static void SqLitPrintGenome(SeqLitPtr slp, FILE *fp)
+{
+	static Char		val[166];
+
+	if (slp->seq_data != NULL)         /* not a gap */
+	{
+		if (slp->length == 0)  /* unknown length */
+		{
+			fprintf(fp, "gap\t0\t0\t0\n");
+		} else {
+/* don't know what to do here */
+		}
+	} else {                  /* gap length was set */
+			fprintf(fp, "gap\t0\t0\t%ld\n", (long) slp->length);
+	}
+}
+
+static void SqLocPrintGenome(SeqLocPtr slp_head, FILE *fp)
+{
+	SeqLocPtr	slp;
+	static Char		buf[11];
+	SeqIdPtr	sid, newid;
+	Int4 		start, stop;
+		
+	for (slp = slp_head; slp; slp = slp->next) {
+		sid = SeqLocId(slp);
+		if (slp->choice == SEQLOC_INT || slp->choice == SEQLOC_WHOLE) {
+			start = SeqLocStart(slp);
+			stop = SeqLocStop(slp);
+		} else if (slp->choice == SEQLOC_NULL){
+			fprintf(fp, "gap\t0\t0\t0\n");
+			continue;
+		} else {
+			continue;
+		}
+		if (sid->choice == SEQID_GI) {
+			newid = GetSeqIdForGI(sid->data.intvalue);
+		} else if (sid->choice == SEQID_GENERAL) {
+			newid = sid;
+		} else {
+			newid = sid;
+		}
+		SeqIdWrite(newid, buf, PRINTID_TEXTID_ACCESSION, 10);
+		fprintf(fp, "%s\t%ld\t%ld\n", buf, (long) start+1, (long) stop+1);
+	}
+}
+
+static Boolean DeltaLitOnly (BioseqPtr bsp)
 
 {
-  NewObjectPtr  first;
-  ValNodePtr    head1 = NULL, head2 = NULL;
-  Int2          i;
-  size_t        len;
-  MenU          m;
-  Char          path1 [PATH_MAX];
-  Char          path2 [PATH_MAX];
-  CharPtr       ptr;
-  SbstrucPtr    sbp;
-  Char          sect [256];
-  Char          temp [32];
-  ValNodePtr    vnp;
+  ValNodePtr  vnp;
 
-  ProgramPath (path1, sizeof (path1));
-  ptr = StringRChr (path1, DIRDELIMCHR);
-  if (ptr != NULL) {
-    ptr++;
-    *ptr = '\0';
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
+  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) return FALSE;
   }
-  FileBuildPath (path1, "services", NULL);
-  head1 = DirCatalog (path1);
+  return TRUE;
+}
 
-  if (GetAppParam ("SEQNCGIS", "SERVICES", "PATH", NULL, path2, sizeof (path2) - 1)) {
-    len = StringLen (path2);
-    if (path2 [len - 1] != DIRDELIMCHR) {
-      StringCat (path2, DIRDELIMSTR);
-    }
-    if (StringCmp (path1, path2) != 0) {
-      head2 = DirCatalog (path2);
-    }
-  }
+extern Int2 LIBCALLBACK MakeContigBuildTable (Pointer data)
 
-  if ((! extraServices) && (! indexerVersion) && (! genomeCenter) &&
-      head1 == NULL && head2 == NULL) {
-    if (! GetAppParam ("SEQNCGIS", "ORDER", NULL, NULL, sect, sizeof (sect) - 1)) {
-      return NULL;
-    }
+{
+  BioseqPtr         bsp;
+  DeltaSeqPtr       dsp;
+  FILE              *fp;
+  SeqLitPtr 	    litp;
+  OMProcControlPtr  ompcp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  bsp = NULL;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      bsp = (BioseqPtr) ompcp->input_data;
+      break;
+    default :
+      return OM_MSG_RET_ERROR;
   }
-  m = PulldownMenu (w, "Analysis");
-  if (m == NULL) return NULL;
-  analysissubmenulist = NULL;
-  first = NULL;
-  if (bspviewOK) {
-    AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                     NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
-                     "Restriction Search", "Search",
-                     SimpleRsiteProc, &first);
-    if (indexerVersion) {
-      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
-                       "Vector Screen - UniVec", "Search",
-                       SimpleUniVecScreenProc, &first);
-      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
-                       "Vector Screen - UniVec Core", "Search",
-                       SimpleUniVecCoreScreenProc, &first);
-      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
-                       "QBlast Test", "Search",
-                       SimpleQBlastProc, &first);
-    }
-  }
-  if (bspviewOK || docsumOK) {
-    if (useEntrez) {
-      i = 1;
-      sprintf (temp, "ORDER_%d", (int) i);
-      while (GetAppParam ("SEQNCGIS", "ORDER", temp, NULL, sect, sizeof (sect) - 1)) {
-        ReadAnalysisConfigFile (sect, m, bfp, bspviewOK, docsumOK, &first);
-        i++;
-        sprintf (temp, "ORDER_%d", (int) i);
-      }
-      for (vnp = head1; vnp != NULL; vnp = vnp->next) {
-        if (vnp->choice == 0) {
-          ReadServiceConfigFile (path1, vnp, m, bfp, bspviewOK, docsumOK, &first);
-        }
-      }
-      for (vnp = head2; vnp != NULL; vnp = vnp->next) {
-        if (vnp->choice == 0) {
-          ReadServiceConfigFile (path2, vnp, m, bfp, bspviewOK, docsumOK, &first);
-        }
-      }
-    }
-  }
-  if (bspviewOK) {
-  }
-  if (docsumOK) {
-  }
-#ifdef WIN_MAC
-  macUserDataPtr = LinkNewObjectLists (macUserDataPtr, first);
-#else
-  bfp->userDataPtr = LinkNewObjectLists (bfp->userDataPtr, first);
-#endif
-  for (vnp = analysissubmenulist; vnp != NULL; vnp = vnp->next) {
-    sbp = (SbstrucPtr) vnp->data.ptrvalue;
-    if (sbp != NULL) {
-      sbp->name = MemFree (sbp->name);
-    }
-  }
-  analysissubmenulist = ValNodeFreeData (analysissubmenulist);
-  ValNodeFreeData (head1);
-  ValNodeFreeData (head2);
-  return m;
+  if (bsp == NULL) return OM_MSG_RET_ERROR;
+  sep = GetBestTopParentForData (ompcp->input_entityID, bsp);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  if (IsAGenomeRecord (sep) ||
+      IsSegmentedBioseqWithoutParts (sep)) {
+  } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
+  } else return OM_MSG_RET_ERROR;
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  if (fp == NULL) return OM_MSG_RET_ERROR;
+/* the following code is modified from PrintGenome in wprint.c */
+	if (bsp->seq_ext_type == 1) {
+		SqLocPrintGenome((SeqLocPtr) bsp->seq_ext, fp);
+	} else if (bsp->seq_ext_type == 4) {
+		for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp; dsp=dsp->next) {
+			if (dsp->choice == 1) {  /* SeqLoc */
+				SqLocPrintGenome((SeqLocPtr)(dsp->data.ptrvalue), fp);
+			} else {
+				litp = (SeqLitPtr)(dsp->data.ptrvalue);
+				if (litp == NULL) continue;
+				SqLitPrintGenome(litp, fp);
+			}
+		}
+	}
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "Contig Build Table");
+  FileRemove (path);
+  return OM_MSG_RET_DONE;
 }
 

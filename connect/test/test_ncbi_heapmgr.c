@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_heapmgr.c,v 6.6 2001/01/23 23:22:05 lavr Exp $
+/*  $Id: test_ncbi_heapmgr.c,v 6.8 2001/07/03 20:53:38 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  *
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_heapmgr.c,v $
+ * Revision 6.8  2001/07/03 20:53:38  lavr
+ * HEAP_Copy() test added
+ *
+ * Revision 6.7  2001/06/19 19:12:04  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
  * Revision 6.6  2001/01/23 23:22:05  lavr
  * Patched logging (in a few places)
  *
@@ -68,12 +74,12 @@
 extern "C" {
 #endif
 
-static char *s_Expand(char *base, size_t size)
+static char* s_Expand(char* base, TNCBI_Size size)
 {
     if (base && size)
-        return (char *)realloc(base, size);
+        return (char*) realloc(base, size);
     else if (size)
-        return (char *)malloc(size);
+        return (char*) malloc(size);
     else
         free(base);
     return 0;
@@ -86,10 +92,10 @@ static char *s_Expand(char *base, size_t size)
 
 int main(void)
 {
-    SHEAP_Block *blk;
+    SHEAP_Block* blk;
     int r, j, i;
     HEAP heap;
-    char *c;
+    char* c;
 
     CORE_SetLOGFILE(stderr, 0/*false*/);
     for (j = 1; j <= 3; j++) {
@@ -99,7 +105,7 @@ int main(void)
             CORE_LOG(eLOG_Error, "Cannot create heap");
         while (rand() != 12345) {
             r = rand() & 7;
-            if (r == 2 || r == 4) {
+            if (r == 1 || r == 2) {
                 i = rand() & 0xFF;
                 if (i) {
                     CORE_LOGF(eLOG_Note, ("Allocating %d bytes", i));
@@ -107,11 +113,11 @@ int main(void)
                         CORE_LOG(eLOG_Error, "Allocation failed");
                     else
                         CORE_LOG(eLOG_Note, "Done");
-                    c = (char *)blk + sizeof(*blk);
+                    c = (char*) blk + sizeof(*blk);
                     while (i--)
                         *c++ = rand();
                 }
-            } else if (r == 1 || r == 3 || r == 5) {
+            } else if (r == 3 || r == 4) {
                 blk = 0;
                 i = 0;
                 do {
@@ -120,14 +126,14 @@ int main(void)
                         break;
                     i++;
                 } while (rand() & 0x7);
-                if (blk && (short)blk->flag) {
+                if (blk && (short) blk->flag) {
                     CORE_LOGF(eLOG_Note,
                               ("Deleting block #%d, size %u", i,
-                               (unsigned)(blk->size - sizeof(*blk))));
+                               (unsigned) (blk->size - sizeof(*blk))));
                     HEAP_Free(heap, blk);
                     CORE_LOG(eLOG_Note, "Done");
                 }
-            } else if (r == 7) {
+            } else if (r == 5) {
                 blk = 0;
                 i = 0;
                 CORE_LOG(eLOG_Note, "Walking the heap");
@@ -136,26 +142,33 @@ int main(void)
                     if (blk)
                         CORE_LOGF(eLOG_Note,
                                   ("Block #%d (%s), size %u", ++i,
-                                   (short)blk->flag ? "used" : "free",
-                                   (unsigned)(blk->size - sizeof(*blk))));
+                                   (short) blk->flag ? "used" : "free",
+                                   (unsigned) (blk->size - sizeof(*blk))));
                 } while (blk);
                 CORE_LOGF(eLOG_Note,
                           ("Total of %d block%s", i, i == 1 ? "" : "s"));
-            } else if (r == 6) {
-                HEAP newheap = HEAP_Attach(/* HACK! */*(char **)heap);
+            } else if (r == 6 || r == 7) {
+                HEAP newheap;
+
+                if (r == 6)
+                    newheap = HEAP_Attach(/* HACK! */*(char **)heap);
+                else
+                    newheap = HEAP_Copy(heap);
 
                 if (!newheap)
-                    CORE_LOG(eLOG_Error, "Attach failed");
+                    CORE_LOGF(eLOG_Error, ("%s failed",
+                                           r == 6 ? "Attach" : "Copy"));
                 blk = 0;
                 i = 0;
-                CORE_LOG(eLOG_Note, "Walking the newheap");
+                CORE_LOGF(eLOG_Note, ("Walking %s heap",
+                                      r == 6 ? "attached" : "copied"));
                 do {
                     blk = HEAP_Walk(newheap, blk);
                     if (blk)
                         CORE_LOGF(eLOG_Note,
                                   ("Block #%d (%s), size %u", ++i,
-                                   (short)blk->flag ? "used" : "free",
-                                   (unsigned)(blk->size - sizeof(*blk))));
+                                   (short) blk->flag ? "used" : "free",
+                                   (unsigned) (blk->size - sizeof(*blk))));
                 } while (blk);
                 CORE_LOGF(eLOG_Note,
                           ("Total of %d block%s", i, i == 1 ? "" : "s"));

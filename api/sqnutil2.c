@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.94 $
+* $Revision: 6.101 $
 *
 * File Description: 
 *
@@ -442,6 +442,14 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
       left = GetOffsetInBioseq (curr, target, SEQLOC_LEFT_END);
       right = GetOffsetInBioseq (curr, target, SEQLOC_RIGHT_END);
       strand = SeqLocStrand (curr);
+      /* left > right if within a minus strand delta seq component, flip strand here */
+      if (left > right) {
+        if (strand == Seq_strand_minus) {
+          strand = Seq_strand_plus;
+        } else {
+          strand = Seq_strand_minus;
+        }
+      }
       if (left != -1 && right != -1) {
         slrp = MemNew (sizeof (SeqLocRange));
         if (slrp != NULL) {
@@ -457,7 +465,7 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
             SeqLocRangeFree (head);
             return NULL;
           }
-        last = slrp;
+          last = slrp;
         }
       }
     }
@@ -808,7 +816,11 @@ NLM_EXTERN Boolean SeqLocBadSortOrder (BioseqPtr bsp, SeqLocPtr slp)
   if (SeqLocId (slp) == NULL) return FALSE;
   */
   head = CollectRanges (bsp, slp);
-  if (head == NULL || head->next == NULL) return FALSE;
+  if (head == NULL) return FALSE;
+  if (head->next == NULL) {
+    SeqLocRangeFree (head);
+    return FALSE;
+  }
   last = head;
   curr = head->next;
   while (curr != NULL) {
@@ -1428,7 +1440,7 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
 
 static CharPtr molinfo_biomol_list [] = {
   "?", "genomic", "precursor RNA", "mRNA", "rRNA", "tRNA", "snRNA",
-  "scRNA", "peptide", "other-genetic", "genomic-mRNA", NULL
+  "scRNA", "peptide", "other-genetic", "genomic-mRNA", "cRNA", "snoRNA", NULL
 };
 
 static CharPtr molinfo_tech_list [] = {
@@ -1623,6 +1635,9 @@ static CharPtr ReadALineOfScores (CharPtr str, size_t size, FILE *fp, BoolPtr no
   CharPtr  ptr;
   CharPtr  rsult;
 
+  if (nonewline != NULL) {
+    *nonewline = FALSE;
+  }
   if (str == NULL || size < 1 || fp == NULL) return NULL;
   *str = '\0';
   rsult = fgets (str, size, fp);
@@ -3441,7 +3456,7 @@ static Boolean ParseQualIntoSnpUserObject (SeqFeatPtr sfp, CharPtr qual, CharPtr
 }
 
 static CharPtr stsQualList [] = {
-  "", "sts_dsegs", "sts_aliases", NULL
+  "", "sts_dsegs", "sts_aliases", "weight", NULL
 };
 
 static UserObjectPtr CreateStsUserObject (void)
@@ -3452,7 +3467,7 @@ static UserObjectPtr CreateStsUserObject (void)
 
   uop = UserObjectNew ();
   oip = ObjectIdNew ();
-  oip->str = StringSave ("stsUserObect");
+  oip->str = StringSave ("stsUserObject");
   uop->type = oip;
 
   return uop;
@@ -3471,7 +3486,7 @@ static UserObjectPtr GetStsUserObject (SeqFeatPtr sfp)
   uop = sfp->ext;
   if (uop == NULL) return NULL;
   oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "stsUserObect") != 0) return NULL;
+  if (oip == NULL || StringICmp (oip->str, "stsUserObject") != 0) return NULL;
   return uop;
 }
 
@@ -3499,7 +3514,7 @@ static Boolean ParseQualIntoStsUserObject (SeqFeatPtr sfp, CharPtr qual, CharPtr
 }
 
 static CharPtr cloneQualList [] = {
-  "", "clone_id", "method", "sequence", "bac-ends", "STS", NULL
+  "", "clone_id", "method", "sequence", "bac-ends", "STS", "weight", NULL
 };
 
 static UserObjectPtr CreateCloneUserObject (void)
@@ -3808,6 +3823,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
     vnp->next = sfp->dbxref;
     sfp->dbxref = vnp;
     return;
+  } else if (qnum == GBQUAL_replace && StringCmp (val, "-") == 0) {
+    val = "";
   }
 
   if (sfp->data.choice == SEQFEAT_GENE) {
@@ -4053,8 +4070,9 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   ImpFeatPtr     ifp;
   Int2           j;
   CharPtr        label;
-  Char           line [1023];
+  Char           line [2047];
   CharPtr        loc;
+  Boolean        nonewline;
   long int       num;
   Int4           offset = 0;
   OrgRefPtr      orp;
@@ -4081,7 +4099,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   if (sip == NULL) return NULL;
 
   pos = ftell (fp);
-  str = ReadALine (line, sizeof (line), fp);
+  str = ReadALineOfScores (line, sizeof (line), fp, &nonewline);
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -4163,6 +4181,8 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
                   rnatype = 5;
                 } else if (StringCmp (feat, "scRNA") == 0) {
                   rnatype = 6;
+                } else if (StringCmp (feat, "snoRNA") == 0) {
+                  rnatype = 7;
                 } else if (StringCmp (feat, "misc_RNA") == 0) {
                   rnatype = 255;
                 }
@@ -4281,8 +4301,14 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
 
     }
 
+    /* if humongously long line (e.g., /note), truncate by ignoring */
+
+    while (nonewline && str != NULL) {
+      str = ReadALineOfScores (line, sizeof (line), fp, &nonewline);
+    }
+
     pos = ftell (fp);
-    str = ReadALine (line, sizeof (line), fp);
+    str = ReadALineOfScores (line, sizeof (line), fp, &nonewline);
   }
 
   SeqIdFree (sip);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.28  2001/04/05 19:45:50  juran
+* Carbon fixes.
+*
 * Revision 6.27  2000/02/07 20:17:35  lewisg
 * minor bug fixes, use gui font for win32
 *
@@ -304,6 +307,22 @@ typedef struct gdImageStruct { void* dummy; } gdImage;
 #endif
 
 Nlm_Boolean  Nlm_nowPrinting = FALSE;
+
+#ifdef WIN_MAC
+# include "MoreCarbonAccessors.h"
+# if TARGET_API_MAC_CARBON
+#  define GetPortAndCall(function, arg)           \
+	do {                                          \
+		GrafPtr port_;                            \
+		GetPort(&port_);                          \
+		function(GetWindowFromPort(port_), (arg));  \
+	} while (0)
+#  define InvalRect(rect)  GetPortAndCall(InvalWindowRect, (rect))
+#  define InvalRgn(rgn)    GetPortAndCall(InvalWindowRgn,  (rgn ))
+#  define ValidRect(rect)  GetPortAndCall(ValidWindowRect, (rect))
+#  define ValidRgn(rgn)    GetPortAndCall(ValidWindowRgn,  (rgn ))
+# endif
+#endif
 
 #ifdef WIN_MAC
 RGBColor     Nlm_RGBforeColor;
@@ -1384,7 +1403,6 @@ extern Nlm_Uint4 Nlm_GetColor (void)
 #ifdef WIN_MAC
   Nlm_Uint1  colors [4];
   RGBColor   foreColor;
-  GrafPtr    port;
   Nlm_Int4   fgColor;
 
   fgColor = 0;
@@ -1395,11 +1413,14 @@ extern Nlm_Uint4 Nlm_GetColor (void)
     colors [2] = (Nlm_Uint1) (foreColor.green >> 8);
     colors [3] = (Nlm_Uint1) (foreColor.blue >> 8);
     fgColor = *((Nlm_Int4Ptr) colors);
+#if !OPAQUE_TOOLBOX_STRUCTS
   } else {
+  	GrafPtr port;
     GetPort (&port);
     if (port != NULL) {
       fgColor = port->fgColor;
     }
+#endif
   }
   return (Nlm_Uint4) fgColor;
 #endif
@@ -1492,16 +1513,17 @@ extern void Nlm_InvertColors (void)
 #ifdef WIN_MAC
   RGBColor  backColor;
   RGBColor  foreColor;
-  GrafPtr   port;
-  Nlm_Int4  bkColor;
-  Nlm_Int4  fgColor;
 
   if (Nlm_hasColorQD) {
     GetForeColor (&foreColor);
     GetBackColor (&backColor);
     RGBForeColor (&backColor);
     RGBBackColor (&foreColor);
+#if !OPAQUE_TOOLBOX_STRUCTS
   } else {
+    Nlm_Int4  bkColor;
+    Nlm_Int4  fgColor;
+  	GrafPtr port;
     GetPort (&port);
     if (port != NULL) {
       fgColor = port->fgColor;
@@ -1509,6 +1531,7 @@ extern void Nlm_InvertColors (void)
       ForeColor (bkColor);
       BackColor (fgColor);
     }
+#endif
   }
 #endif
 #ifdef WIN_MSWIN
@@ -4180,9 +4203,11 @@ extern void Nlm_ScrollRect (Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy)
   Nlm_RectTool  rtool;
 
   if (r != NULL) {
+    GrafPtr port;
+    GetPort(&port);
     Local__RecTToRectTool (r, &rtool);
     ScrollRect (&rtool, dx, dy, (Nlm_RgnTool) Nlm_scrollRgn);
-    InvalRgn ((Nlm_RgnTool) Nlm_scrollRgn);
+    InvalWindowRgn (GetWindowFromPort(port), (Nlm_RgnTool) Nlm_scrollRgn);
   }
 #endif
 #ifdef WIN_MSWIN
@@ -5942,7 +5967,7 @@ extern void Nlm_CopyBits (Nlm_RectPtr r, Nlm_VoidPtr source)
 
 {
 #ifdef WIN_MAC
-  BitMap    dstBits;
+  const BitMap *dstBitsPtr;
   Nlm_Int2  mode;
   PenState  pnState;
   GrafPtr   port;
@@ -5976,8 +6001,12 @@ extern void Nlm_CopyBits (Nlm_RectPtr r, Nlm_VoidPtr source)
     srcBits.baseAddr = (Ptr) source;
     srcBits.rowBytes = (rect.right - rect.left - 1) / 8 + 1;
     srcBits.bounds = srcRect;
-    dstBits = port->portBits;
-    CopyBits (&srcBits, &dstBits, &srcRect, &rect, mode, NULL);
+#if OPAQUE_TOOLBOX_STRUCTS
+    dstBitsPtr = GetPortBitMapForCopyBits(port);
+#else
+    dstBitsPtr = &port->portBits;
+#endif
+    CopyBits (&srcBits, dstBitsPtr, &srcRect, &rect, mode, NULL);
   }
 #endif
 #ifdef WIN_MSWIN
@@ -6214,8 +6243,12 @@ extern void Nlm_CopyPixmap ( Nlm_RectPtr r, Nlm_Int1Ptr source,
   pixelMap->bounds.left = 0;
   pixelMap->bounds.top = 0;
   pixelMap->cmpSize = 8;
+// 2001-03-22:  Joshua Juran
+// Evidently these two members don't exist in Carbon.  So don't set them.
+#if !TARGET_API_MAC_CARBON
   pixelMap->planeBytes = 0;
   pixelMap->pmReserved = 0;
+#endif
   pixelMap->pmVersion = 0;
   pixelMap->packType = 0;
   pixelMap->packSize = 0;
@@ -6236,7 +6269,7 @@ extern void Nlm_CopyPixmap ( Nlm_RectPtr r, Nlm_Int1Ptr source,
                                      (Nlm_Uint2)colorTable[i].green;
       tabPtr->ctTable[i].rgb.blue =  (Nlm_Uint2)colorTable[i].blue<<8 | 
                                      (Nlm_Uint2)colorTable[i].blue; 
-      if (i>=254) break;
+      if (i >= 254) break;
     }
     tabPtr->ctSeed = GetCTSeed();
     HUnlock((Handle)tabHandle );
@@ -6245,13 +6278,13 @@ extern void Nlm_CopyPixmap ( Nlm_RectPtr r, Nlm_Int1Ptr source,
     rectSrc.left = 0;  rectSrc.right = width;
     rectDst.top = r->top;   rectDst.bottom = r->bottom;
     rectDst.left = r->left;  rectDst.right = r->right;
-    GetPort (&port);
+    GetPort(&port);
 #ifdef CopyBits
 #undef CopyBits
-#endif  
+#endif
     CopyBits((BitMap*)pixelMap,
-             (BitMap*)&port->portBits,
-             &rectSrc,&rectDst,srcCopy,NULL);
+             GetPortBitMapForCopyBits(port),
+             &rectSrc, &rectDst, srcCopy, NULL);
     DisposeCTable(tabHandle);
   }
   MemFree(pixelMap);
@@ -6304,7 +6337,7 @@ extern void Nlm_CopyPixmap ( Nlm_RectPtr r, Nlm_Int1Ptr source,
 extern void Nlm_SetUpDrawingTools (void)
 {
 #ifdef WIN_MAC
-  RgnPtr     rptr;
+  Rect bounds;
   Nlm_FontSpec fsp;
   long       gval;
   char       tmpFontName[256];
@@ -6314,10 +6347,10 @@ extern void Nlm_SetUpDrawingTools (void)
 
   Nlm_updateRgn = (Nlm_RegioN) (NewRgn ());
   SetRectRgn ((Nlm_RgnTool) Nlm_updateRgn, -32768, -32768, 32767, 32767);
-  HLock ((Handle) Nlm_updateRgn);
-  rptr = (RgnPtr) *((Handle) Nlm_updateRgn);
-  Local__RectToolToRecT (&(rptr->rgnBBox), &Nlm_updateRect);
-  HUnlock ((Handle) Nlm_updateRgn);
+  //HLock ((Handle) Nlm_updateRgn);
+  GetRegionBounds(Nlm_updateRgn, &bounds);
+  Local__RectToolToRecT (&bounds, &Nlm_updateRect);
+  //HUnlock ((Handle) Nlm_updateRgn);
 
   Nlm_fontList = NULL;
   Nlm_fontInUse = NULL;

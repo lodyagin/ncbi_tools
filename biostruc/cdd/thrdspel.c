@@ -1,4 +1,4 @@
-/* $Id: thrdspel.c,v 1.2 2001/03/02 23:14:12 hurwitz Exp $
+/* $Id: thrdspel.c,v 1.3 2001/04/25 15:43:29 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspel.c,v $
+* Revision 1.3  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.2  2001/03/02 23:14:12  hurwitz
 * run threading faster for PSSM weight=1, bug fix
 *
@@ -161,8 +164,8 @@ ms=0; s0=0;
 		if(t1<0) continue;
 		ms+=psm->ww[j][t1];
 	
-		for(k=0;k<psm->AlphabetSize;k++){
-		s0+=psm->ww[j][k]*spc->rt[k]; }
+/*		for(k=0;k<psm->AlphabetSize;k++){
+		s0+=psm->ww[j][k]*spc->rt[k]; }*/
 
 	}
 

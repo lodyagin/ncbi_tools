@@ -1,4 +1,4 @@
-/* $Id: thrdcxei.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdcxei.c,v 1.4 2001/05/25 19:12:54 vakatov Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.4 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdcxei.c,v $
+* Revision 1.4  2001/05/25 19:12:54  vakatov
+* Nested comment typo fixed
+*
+* Revision 1.3  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
+* Revision 1.2  2001/04/24 17:43:03  hurwitz
+* bug fix
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -55,7 +64,7 @@
 /* side-chain to fixed-residue contacts are stored in cxe.  Pairwise and */
 /* hydrophobic components of the potential are included in the sums. */
 
-int cxei(Seg_Nsm* spn, Seg_Cmp* spc, Rcx_Ptl* pmf, Thd_Cxe* cxe) {
+int cxei(Seg_Nsm* spn, Seg_Cmp* spc, Rcx_Ptl* pmf, Cur_Loc* sli, Seq_Mtf* psm, Cor_Def* cdf, Thd_Cxe* cxe) {
 /*--------------------------------------------------------*/
 /* spn:  Partial sums of contact counts by segment pair   */
 /* spc:  Residue type composition of current threaded seq */
@@ -76,10 +85,17 @@ int	**pmd;		/* Pointer to distance level of potential */
 int	*pmr;		/* Pointer to a residue-row of the potential */
 int     *fnd;           /* Fixed contact counts for a distance interval */
 int     fnr;            /* Fixed contact counts for a residue type */
+int     nsc;            /* Number of threaded segments in core definition */
+int     s0, ss0;
+int     mn, mx, mn1, mx1;
+int     t1;
+int     ntot, ms;
+int     mnq, mxq;
 
 nrt=cxe->nrt;
 ndi=cxe->ndi;
 ppi=pmf->ppi;
+nsc=spc->nsc;
 /* printf("cxe->nrt:%d ndi:%d pmf->ppi:%d\n",cxe->nrt,cxe->ndi,pmf->ppi); */
 
 /* Compute residue type frequency from counts */
@@ -127,7 +143,7 @@ for(i=0; i<ndi; i++) {
 	for(j=0;j<nrt;j++) fsm+=((float)pmr[j])*cxe->rp[j]; 
 	cxe->rpe[i]=fsm; 
 	}
-/* for(i=0; i<ndi; i++) printf("%.2f ",cxe->rpe[i]); printf("cxe->rpe\n"); *?
+/* for(i=0; i<ndi; i++) printf("%.2f ",cxe->rpe[i]); printf("cxe->rpe\n"); */
 
 
 /* Compute expected residue-residue contact energy by distance interval. */
@@ -162,6 +178,28 @@ for(i=0; i<ndi; i++) {
 		for(k=0; k<nrt; k++) fsm+=((float)(fnr*pmr[k]))*cxe->rp[k]; }
 	cxe->rfe[i]=fsm/(float)spn->srf[i]; } 
 /* for(i=0; i<ndi; i++) printf("%.4f ",cxe->rfe[i]); printf("cxe->rfe\n"); */
+
+/* Compute expected energy for template sequence motif and profile-profile term */
+
+ms=0; s0=0;
+nrt=spc->nrt;
+
+for(i=0;i<nsc;i++){
+
+	mn=cdf->sll.rfpt[i]-sli->no[i];
+	mx=cdf->sll.rfpt[i]+sli->co[i];
+
+  for(j=mn;j<=mx;j++) {
+    for(k=0;k<(nrt-1);k++){
+      s0+=psm->ww[j][k]*spc->rt[k];
+    }
+  }
+}
+
+ntot=0;
+for(i=0;i<(nrt-1);i++)ntot+=spc->rt[i];
+
+psm->ww0=s0/ntot;
 
 }
 

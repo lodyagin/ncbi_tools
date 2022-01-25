@@ -29,13 +29,46 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.79 $
+* $Revision: 6.90 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.90  2001/07/03 21:42:01  kans
+* added macros and accession prefixes for TPA (third-party annotation) records
+*
+* Revision 6.89  2001/06/06 17:53:42  kans
+* added BI and BJ accession prefixes
+*
+* Revision 6.88  2001/06/05 16:28:40  kans
+* restored logic of GetThePointForOffset, with comment that SeqLocStart returns sintp->from even on minus strand, different behavior than SEQLOC_START
+*
+* Revision 6.87  2001/06/04 19:31:14  kans
+* PDB lower case chain now represented by double upper case letter, modified SeqIdWrite, SeqIdParse, SeqIdComp, removed DeltaSeqsToSeqLoc call and variables from CheckPointInBioseq
+*
+* Revision 6.86  2001/06/04 19:07:48  kans
+* fixed buggy logic for minus strand LEFT_END/RIGHT_END in GetThePointForOffset
+*
+* Revision 6.85  2001/06/01 21:11:45  kans
+* CheckPointInBioseq now works for far delta sequences, calls SeqMgrMapPartToSegmentedBioseq, allowing NG propagation onto NT genomic records
+*
+* Revision 6.84  2001/05/30 22:47:23  kans
+* fixed Mac compiler warnings about unwanted assignments, moved function prototypes to header, removed unused variables
+*
+* Revision 6.83  2001/05/30 20:30:31  shoemake
+* Fixed bug in SeqIdParse for VB chain in SEQID_PDBs.
+*
+* Revision 6.82  2001/05/14 19:42:37  sicotte
+* Added BH prefix for ncbi GSS
+*
+* Revision 6.81  2001/05/04 22:09:45  dondosha
+* Small modification in GetAccessionFromSeqId for local id
+*
+* Revision 6.80  2001/04/27 15:46:20  madden
+* Add function RebuildDNA_4na
+*
 * Revision 6.79  2001/03/23 16:56:26  dondosha
 * Correction in function GetAccessionFromSeqId
 *
@@ -510,6 +543,7 @@ static char *this_file = __FILE__;
 #include <gather.h>
 #include <seqport.h>
 #include <sqnutils.h> /* prototype for SeqIdFindWorst */
+#include <edutil.h>
 
 
 /****  Static variables used for randomized sequence conversions ****/
@@ -632,6 +666,7 @@ typedef struct {
 *      SeqEntryExplore function used by SeqEntryFind()
 *
 *****************************************************************************/
+NLM_EXTERN void FindSE (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 NLM_EXTERN void FindSE (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
 	fseptr fep;
@@ -1334,6 +1369,7 @@ NLM_EXTERN ByteStorePtr BSConvertSeq (ByteStorePtr from, Uint1 newcode,
 
   return to;
 }
+
 /*****************************************************************************
 *
 *   BSRebuildDNA(bytestoreptr, len, lbytes)
@@ -1379,39 +1415,30 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA (ByteStorePtr from, Int4 len,
 }
 /*****************************************************************************
 *
-*   BSRebuildDNA_4na(bytestoreptr, lbytes)
+*   RebuildDNA_4na(buffer, length, lbytes)
+	works with Uint1 buffer, not ByteStore.
 *       restore ncbi4na sequence with abmiguity characters
-*       lbytes[0] == length of this storage
-*       frees old bytestore
-*       returns pointer to new one, or NULL on fail.
+*       returns TRUE on success, FALSE on failure.
 *       lbytes is pointer to ambiguity storage
 *
 *****************************************************************************/
-NLM_EXTERN ByteStorePtr BSRebuildDNA_4na (ByteStorePtr from, Uint4Ptr lbytes)
+NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes)
      
 {
-    Int4      i, amb_num, bs_length;
+    Int4      i, amb_num;
     Uint4Ptr  amb_buff;
     Uint1     char_l, char_r, row_len;
-    Uint1Ptr  buffer;
     Uint1     C_Mask[] = {0x0F, 0xF0};
-    Int4      j, position = 0, pos =0 , rem =0 , index, num_bytes;
+    Int4      j, position = 0, pos =0 , rem =0 , index;
     
-    if(from == NULL)
-        return NULL;
+    if(buffer == NULL || length == 0)
+        return FALSE;
     
-    if(lbytes == NULL)
-        return from;
+    if(lbytes == NULL) 
+        return TRUE;
     
     amb_num  = *lbytes;
     amb_buff = lbytes + 1;
-    
-    bs_length = BSLen(from);
-    buffer = (Uint1Ptr) MemNew(bs_length + sizeof(Char));
-    BSSeek(from, 0, SEEK_SET);
-
-    if((num_bytes = BSRead(from, buffer, bs_length)) != bs_length)
-        return NULL;
     
     for(i = 0; i < amb_num; i++) {
 
@@ -1432,6 +1459,41 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA_4na (ByteStorePtr from, Uint4Ptr lbytes)
             if(!rem) index++;
         }
     }
+    
+    return TRUE;
+}
+/*****************************************************************************
+*
+*   BSRebuildDNA_4na(bytestoreptr, lbytes)
+*       restore ncbi4na sequence with abmiguity characters
+*       lbytes[0] == length of this storage
+*       frees old bytestore
+*       returns pointer to new one, or NULL on fail.
+*       lbytes is pointer to ambiguity storage
+*
+*****************************************************************************/
+NLM_EXTERN ByteStorePtr BSRebuildDNA_4na (ByteStorePtr from, Uint4Ptr lbytes)
+     
+{
+    Int4      bs_length;
+    Uint1Ptr  buffer;
+    Int4      position = 0, pos =0 , rem =0 , num_bytes;
+    
+    if(from == NULL)
+        return NULL;
+    
+    if(lbytes == NULL)
+        return from;
+    
+    bs_length = BSLen(from);
+    buffer = (Uint1Ptr) MemNew(bs_length + sizeof(Char));
+    BSSeek(from, 0, SEEK_SET);
+
+    if((num_bytes = BSRead(from, buffer, bs_length)) != bs_length)
+        return NULL;
+    
+    if (RebuildDNA_4na(buffer, bs_length, lbytes) == FALSE)
+	return NULL;
     
     BSSeek(from, 0, SEEK_SET);
     BSWrite(from, buffer, bs_length);
@@ -2170,6 +2232,7 @@ NLM_EXTERN Uint1 LastResidueInCode (SeqCodeTablePtr sctp)
 *   	returns INVALID_RESIDUE if no good
 *
 *****************************************************************************/
+NLM_EXTERN Uint1 GetIndexForResidue(SeqCodeTablePtr sctp, Uint1 residue);
 NLM_EXTERN Uint1 GetIndexForResidue(SeqCodeTablePtr sctp, Uint1 residue)
 {
 	if (sctp == NULL) return INVALID_RESIDUE;
@@ -2580,6 +2643,7 @@ NLM_EXTERN Uint1 Bioseq_set_class (SeqEntryPtr sep)
 *       callback used by SeqEntryConvert()
 *
 *****************************************************************************/
+NLM_EXTERN void SeqEntryDoConvert (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 NLM_EXTERN void SeqEntryDoConvert (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
 {
@@ -2894,7 +2958,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 	ObjectIdPtr oip;
 	PatentSeqIdPtr patsip;
 	Boolean got_gi = FALSE;
-	Char chainbuf[2];
+	Char chainbuf[3];
 	Char versionbuf[10];
 	Int2 version = 0;
 
@@ -3097,8 +3161,12 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
             break;
         case SEQID_PDB:
 			psip = (PDBSeqIdPtr) sip->data.ptrvalue;
-			chainbuf[0] = psip->chain;
+			chainbuf[0] = TO_UPPER (psip->chain);
 			chainbuf[1] = '\0';
+			chainbuf[2] = '\0';
+			if (IS_LOWER (psip->chain)) {
+			  chainbuf[1] = chainbuf [0];
+			}
 			Nlm_LabelCopyNext(&tmp, psip->mol, &buflen);
 			if (format == PRINTID_FASTA_SHORT)
 			{
@@ -3160,8 +3228,8 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
          *id = (CharPtr) MemNew(id_len+1);
          sprintf(*id, "%s", oip->str);
       } else {
-         *id = (CharPtr) MemNew(6);
-         sprintf(*id, "%d", oip->id);
+         *gi = oip->id;
+         numeric_id_type = TRUE;
       }
       break;
    case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: 
@@ -3219,7 +3287,7 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
 NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 {
 	char localbuf[SEQID_PARSE_BUF_SIZE + 2];
-	char * tmp, *strt, * tokens[6];
+	char * tmp, *strt, * tokens[6], *chain;
 	char d;
 	long num;
 	CharPtr tp;
@@ -3453,11 +3521,18 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 					*tmp = TO_UPPER(*tmp);
 					tmp++;
 				}
-				if (! StringICmp(tokens[1], "VB"))
+				chain = tokens [1];
+				if ((! StringICmp(tokens[1], "VB")) ||
+                                    *(buf-1) == d)
 					psip->chain = '|';
 				else if (! StringHasNoText (tokens[1]))
 					psip->chain = *tokens[1];
-				psip->chain = TO_UPPER(psip->chain);
+				/* double letter for chain indicates lower case */
+				if (StringLen (chain) == 2 && TO_UPPER (chain [0]) == TO_UPPER (chain [1])) {
+					psip->chain = TO_LOWER(psip->chain);
+				} else {
+					psip->chain = TO_UPPER(psip->chain);
+				}
         	    break;
 	    }
 		last = sip;
@@ -3597,8 +3672,13 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
             if ( StringICmp(((PDBSeqIdPtr)a->data.ptrvalue)->mol,
                 ((PDBSeqIdPtr)b->data.ptrvalue)->mol))
                 return SIC_NO;
+            /*
             if (TO_UPPER(((PDBSeqIdPtr)a->data.ptrvalue)->chain) !=
                 TO_UPPER(((PDBSeqIdPtr)b->data.ptrvalue)->chain))
+                return SIC_NO;
+			*/
+            if (((PDBSeqIdPtr)a->data.ptrvalue)->chain !=
+                ((PDBSeqIdPtr)b->data.ptrvalue)->chain)
                 return SIC_NO;
 			return SIC_YES;
 		case SEQID_GENERAL:  /* general */
@@ -5735,7 +5815,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 	ValNode sl;
 	BioseqPtr bsp;
 	Int4 retval = -1;
-	SeqLocPtr slp, curr;
+	SeqLocPtr slp = NULL, curr;
 	Int4 offset, offset2, strt, stp;
 	SeqIdPtr sip;
 	Boolean locked = FALSE;
@@ -5760,6 +5840,10 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 			sl.data.ptrvalue = in->seq_ext;
 			slp = &sl;
 			break;
+
+		case Seq_repr_delta:
+			break;
+
 		default:
 			return -1;
 	}
@@ -5771,7 +5855,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 	 	if (bsp != NULL)
 	 		locked = TRUE;
 	 }
-	if (in->repr == Seq_repr_seg) {
+	if (in->repr == Seq_repr_seg || in->repr == Seq_repr_delta) {
 		retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id);
 	}
 	if (retval == -1) {
@@ -5822,7 +5906,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 		}
 		offset += SeqLocLen(curr);
 	}
-	
+
 	return retval;    /* all failed */
 }
 
@@ -5878,6 +5962,7 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 			return FALSE;   /* error */
 	}
 
+	/* SeqLocStart returns 'from', and SeqLocStop returns 'to', regardless of strand! */
 
 	if (getstart)
 		target->point = SeqLocStart(tmp);
@@ -7673,14 +7758,14 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
                             sip->choice = SEQID_GENBANK;
                             bsp = BioseqLockById(sip);
                             if(bsp) {
-                                if(bsp->mol=Seq_mol_aa)
+                                if(bsp->mol==Seq_mol_aa)
                                     PIR=TRUE;
                                 BioseqUnlock(bsp);
                             } else {
                                 sip->choice = SEQID_PIR;
                                 bsp = BioseqLockById(sip);
                                 if(bsp) {
-                                    if(bsp->mol=Seq_mol_aa)
+                                    if(bsp->mol==Seq_mol_aa)
                                         PIR=TRUE;
                                     BioseqUnlock(bsp);
                                 } else if (!FavorNucleotide) {
@@ -7728,7 +7813,7 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
                                      */
                 bsp = BioseqLockById(sip);
                 if(bsp) {
-                    if(bsp->mol=Seq_mol_aa) {
+                    if(bsp->mol==Seq_mol_aa) {
                         SeqIdPtr sip2;
                         ErrPostEx(SEV_WARNING,0,0,"%s Should NOT be a protein but IS\n",accession);
                         sip2 = SeqIdFindBestAccession(bsp->id);
@@ -7759,7 +7844,7 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
                     tsp->accession = NULL;
                     bsp = BioseqLockById(sip);
                     if(bsp) {
-                        if(bsp->mol=Seq_mol_aa) {
+                        if(bsp->mol==Seq_mol_aa) {
                             SeqIdPtr sip2;
                             sip2 = SeqIdFindBestAccession(bsp->id);
                             if(sip->choice != SEQID_PIR) {
@@ -7942,7 +8027,7 @@ static Uint4 LIBCALL N_accession (CharPtr s) {
   Take into account that N-accession can belong to many databases.
 */
 
-Boolean LIBCALL NAccnIsGENBANK (CharPtr s) {
+NLM_EXTERN Boolean LIBCALL NAccnIsGENBANK (CharPtr s) {
     Boolean retstatus;
     Int4 id;
     id = atoi(s+1);
@@ -7964,7 +8049,7 @@ Boolean LIBCALL NAccnIsGENBANK (CharPtr s) {
     return retstatus;
 }
 
- Boolean LIBCALL NAccnIsEMBL (CharPtr s) {
+NLM_EXTERN Boolean LIBCALL NAccnIsEMBL (CharPtr s) {
     Boolean retstatus;
     Int4 id;
     id = atoi(s+1);
@@ -7984,7 +8069,7 @@ Boolean LIBCALL NAccnIsGENBANK (CharPtr s) {
     return retstatus;
 }
 
-Boolean LIBCALL NAccnIsDDBJ (CharPtr s) {
+NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s) {
     Boolean retstatus;
     Int4 id;
     id = atoi(s+1);
@@ -8218,6 +8303,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           
           if ((StringICmp(temp,"AAA") >= 0) && (StringICmp(temp,"AZZ") <= 0)) { 
               retcode = ACCN_NCBI_PROT;
+          } else if ((StringICmp(temp,"DAA") >= 0) && (StringICmp(temp,"DZZ") <= 0)) { 
+              retcode = ACCN_NCBI_PROT;
+              if ((StringICmp(temp,"DAA") == 0)) {
+                retcode = ACCN_NCBI_TPA_PROT;
+              }
           } else if ((StringICmp(temp,"CAA") >= 0) && (StringICmp(temp,"CZZ") <= 0)) { 
               retcode = ACCN_EMBL_PROT;
           } else  if ((StringICmp(temp,"BAA") >= 0) && (StringICmp(temp,"BZZ") <= 0)) { 
@@ -8238,7 +8328,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"AI") == 0) || 
 	      (StringICmp(temp,"AW") == 0) || 
 	      (StringICmp(temp,"BE") == 0) || 
-	      (StringICmp(temp,"BF") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"BF") == 0) || 
+	      (StringICmp(temp,"BI") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
@@ -8255,12 +8346,15 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AD") == 0)) {      /* NCBI accessions assigned to GSDB entries */
               retcode = ACCN_NCBI_GSDB;
           } else if ((StringICmp(temp,"AQ") == 0) ||
-                     (StringICmp(temp,"AZ") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"AZ") == 0) ||
+                     (StringICmp(temp,"BH") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
+          } else if((StringICmp(temp,"BK")==0)) {         /* NCBI third-party annotation */
+              retcode = ACCN_NCBI_TPA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0)) {     /* EMBL's direct submission */
               retcode = ACCN_EMBL_DIRSUB;
@@ -8273,7 +8367,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
                      (StringICmp(temp,"AV") == 0) ||
-                     (StringICmp(temp,"BB") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"BB") == 0) ||
+                     (StringICmp(temp,"BJ") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;

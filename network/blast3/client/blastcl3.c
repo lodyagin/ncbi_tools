@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.24 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.25  2001/04/13 23:01:22  juran
+* Removed unused variable.
+*
 * Revision 1.24  2001/01/19 21:30:09  dondosha
 * Call readdb...._ex functions to possibly save some time when finding db length
 *
@@ -539,7 +542,7 @@ Int2 Main (void)
     retval=0;
 
     if (options->is_megablast_search) {
-       Int4 total_length, num_bsps, index;
+       Int4 total_length, num_bsps;
        Boolean done;
        SeqLocPtr last_mask, mask_slp;
        Int2 ctr = 1;

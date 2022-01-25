@@ -23,13 +23,18 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************/
-/* $Revision 1.0$ */ 
-/* $Log: gil2bin.c,v $
-/* Revision 6.1  2000/02/09 19:44:30  madden
-/* Converts text gi list to binary gi list
-/*
+
+/* $Revision 1.0$
  *
-*/
+ * $Log: gil2bin.c,v $
+ * Revision 6.2  2001/05/25 19:28:21  vakatov
+ * Nested comment typo fixed
+ *
+ * Revision 6.1  2000/02/09 19:44:30  madden
+ * Converts text gi list to binary gi list
+ */
+
+
 #include <ncbi.h>
 #include <readdb.h>
 

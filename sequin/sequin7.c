@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.83 $
+* $Revision: 6.86 $
 *
 * File Description: 
 *
@@ -4782,23 +4782,33 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
   SeqEntryPtr      oldsep;
   FFPrintArrayPtr  pap = NULL;
   Int4             pap_size;
-  SeqEntryPtr      sep;
+  SeqEntryPtr      sep = NULL;
   SelStructPtr     sel;
   CharPtr          string;
   SeqEntryPtr      topsep;
 
   ajp = (Asn2ffJobPtr) MemNew (sizeof (Asn2ffJob));
   if (ajp == NULL) return;
+
+  if (itemID == 0)
+    sep = GetTopSeqEntryForEntityID (entityID);
+  else {
+    bsp = GetBioseqGivenIDs (entityID, itemID, itemtype);
+    if (bsp == NULL)
+      return;
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    if (bsp->repr == Seq_repr_seg) {
+      sep = GetBestTopParentForData (entityID, bsp);
+    }
+  }
+
+  if (sep == NULL)
+    return;
+
   level = ErrSetMessageLevel (SEV_MAX);
   WatchCursor ();
   Update ();
 
-  bsp = GetBioseqGivenIDs (entityID, itemID, itemtype);
-  sep = SeqMgrGetSeqEntryForData (bsp);
-  if (bsp->repr == Seq_repr_seg) {
-    sep = GetBestTopParentForData (entityID, bsp);
-  }
-  /* sep = GetTopSeqEntryForEntityID (entityID); */
   ajp->sep = sep;
   ajp->mode = mode;
   ajp->format = format;

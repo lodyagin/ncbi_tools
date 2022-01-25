@@ -1,4 +1,4 @@
-/* $Id: jzcoll.c,v 6.16 2000/11/16 22:10:37 shavirin Exp $
+/* $Id: jzcoll.c,v 6.17 2001/06/26 16:42:58 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/97
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.c,v $
+* Revision 6.17  2001/06/26 16:42:58  vakatov
+* POINT --> BAND_POINT  (to avoid conflicts with MS-Win standard headers)
+*
 * Revision 6.16  2000/11/16 22:10:37  shavirin
 * Moved many functions from txalign.c - due to move of txalign.c to
 * distrib/tools directory and libncbitool.a library.
@@ -3741,7 +3744,7 @@ static Boolean collseqfunc(GatherContextPtr gcp)
 				band = get_band_type(uop);
 				fnp->band = band;
 				fnp->label = StringSave(get_band_name(uop));
-				if(band < POINT)	/*for flybase*/
+				if(band < BAND_POINT)	/*for flybase*/
 				{
 					for(ufp = uop->data; ufp!=NULL; ufp=ufp->next)
 					{

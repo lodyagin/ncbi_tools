@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.95 2000/07/17 17:46:48 hurwitz Exp $
+/*  $Id: ddvopen.c,v 1.96 2001/04/26 16:41:20 juran Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.95 $
+* $Revision: 1.96 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.96  2001/04/26 16:41:20  juran
+* Squelch warnings.
+*
 * Revision 1.95  2000/07/17 17:46:48  hurwitz
 * made it so show/hide dialog only updates view when ok is clicked
 *
@@ -1977,7 +1980,7 @@ Int2				procval;
 				SetAppProperty("ddvinterndata",(void *)dmp);
 				procval=GatherProcLaunch ((dmp->bEditor==TRUE? OMPROC_EDIT : OMPROC_VIEW), FALSE, 
 					entityID, itemID, OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
-				if (procval=OM_MSG_RET_ERROR)
+				if ((procval = OM_MSG_RET_ERROR))
 					mWin_d->Show_logo=TRUE;
 				RemoveAppProperty("ddvinterndata");
 			}
@@ -2207,7 +2210,7 @@ Uint2           The_entityID;
 			SetAppProperty("ddvinterndata",(void *)dmp);
 			procval=GatherProcLaunch ((dmp->bEditor==TRUE? OMPROC_EDIT : OMPROC_VIEW), FALSE, 
 				entityID, itemID, OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
-			if (procval=OM_MSG_RET_ERROR)
+			if ((procval = OM_MSG_RET_ERROR))
 				mWin_d->Show_logo=TRUE;
 			RemoveAppProperty("ddvinterndata");
 		}
@@ -2640,7 +2643,7 @@ NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp)
     if(idp->mode & DDVIMP2SE) {
         value = GetValue(idp->DDV_lsip); /*one-base value*/
         for(pvn = idp->pvnSips, i = 1; i != value && pvn != NULL;
-        i++, pvn = pvn->next);
+            i++, pvn = pvn->next) continue;
         if(pvn != NULL)
             bsp1 = BioseqLockById((SeqId *)pvn->data.ptrvalue);
     } else bsp1 = BioseqLockById(idp->sip);
@@ -2991,7 +2994,7 @@ Int2		  procval;
 			SetAppProperty("ddvinterndata",(void *)dmp);
 			procval=GatherProcLaunch ((dmp->bEditor==TRUE? OMPROC_EDIT : OMPROC_VIEW), FALSE, entityID, itemID, 
 				OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
-			if (procval=OM_MSG_RET_ERROR)
+			if ((procval = OM_MSG_RET_ERROR))
 				mWin_d->Show_logo=TRUE;
 			RemoveAppProperty("ddvinterndata");
 		}
@@ -3045,8 +3048,6 @@ static void DDV_HideList(Nlm_LisT l)
     WindoW hHideDlg;
     DDV_HideDialog *hdp;
     Int4 i, LastRow, count = 0;
-    Boolean status;
-    Int2  HScroll, VScroll;
 
     hHideDlg = (WindoW)ParentWindow(l);
     if(hHideDlg == NULL) return;	

@@ -31,6 +31,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.c,v $
+* Revision 6.7  2001/06/21 14:44:29  thiessen
+* add new user annotations
+*
+* Revision 6.6  2001/06/14 14:21:32  thiessen
+* add style dictionary to mime blobs
+*
 * Revision 6.5  1999/09/16 17:12:02  ywang
 * use SeqAnnotSetAsnRead/Write to replace AsnGenericUserSeqOfAsnRead/Write to remove problem with seqannotset
 *
@@ -729,6 +735,8 @@ BiostrucAlignFree(BiostrucAlignPtr ptr)
    BiostrucAnnotSetFree(ptr -> alignments);
    AsnGenericChoiceSeqOfFree(ptr -> sequences, (AsnOptFreeFunc) SeqEntryFree);
    AsnGenericUserSeqOfFree(ptr -> seqalign, (AsnOptFreeFunc) SeqAnnotFree);
+   Cn3dStyleDictionaryFree(ptr -> style_dictionary); /* paul */
+   Cn3dUserAnnotationsFree(ptr -> user_annotations);
    return MemFree(ptr);
 }
 
@@ -816,6 +824,21 @@ BiostrucAlignAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> seqalign = SeqAnnotSetAsnRead(aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E);     
       atp = AsnReadId(aip,amp, atp);
    }
+   /* paul */
+   if (atp == BIOSTRUC_ALIGN_style_dictionary) {
+      ptr -> style_dictionary = Cn3dStyleDictionaryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+      ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -883,6 +906,18 @@ BiostrucAlignAsnWrite(BiostrucAlignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 /* AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E); */
        /* yanli comment it out, and add the following, Sept. 16, 1999 */
    SeqAnnotSetAsnWrite(ptr -> seqalign, aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E);
+   /* paul */
+   if (ptr -> style_dictionary != NULL) {
+      if ( ! Cn3dStyleDictionaryAsnWrite(ptr -> style_dictionary, aip, BIOSTRUC_ALIGN_style_dictionary)) {
+         goto erret;
+      }
+   }
+   if (ptr -> user_annotations != NULL) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+         goto erret;
+      }
+   }
+
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -926,6 +961,8 @@ BiostrucAlignSeqFree(BiostrucAlignSeqPtr ptr)
    }
    AsnGenericChoiceSeqOfFree(ptr -> sequences, (AsnOptFreeFunc) SeqEntryFree);
    AsnGenericUserSeqOfFree(ptr -> seqalign, (AsnOptFreeFunc) SeqAnnotFree);
+   Cn3dStyleDictionaryFree(ptr -> style_dictionary); /* paul */
+   Cn3dUserAnnotationsFree(ptr -> user_annotations);
    return MemFree(ptr);
 }
 
@@ -992,6 +1029,21 @@ BiostrucAlignSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> seqalign = SeqAnnotSetAsnRead(aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E);
       atp = AsnReadId(aip,amp, atp);
    }
+   /* paul */
+   if (atp == ALIGN_SEQ_style_dictionary) {
+      ptr -> style_dictionary = Cn3dStyleDictionaryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+      ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1047,6 +1099,18 @@ BiostrucAlignSeqAsnWrite(BiostrucAlignSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 /* AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E); */
      /* yanli comment it out, and add the following, Sept. 16, 1999 */
    SeqAnnotSetAsnWrite(ptr -> seqalign, aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E);
+   /* paul */
+   if (ptr -> style_dictionary != NULL) {
+      if ( ! Cn3dStyleDictionaryAsnWrite(ptr -> style_dictionary, aip, ALIGN_SEQ_style_dictionary)) {
+         goto erret;
+      }
+   }
+   if (ptr -> user_annotations != NULL) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+         goto erret;
+      }
+   }
+
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1090,6 +1154,8 @@ BiostrucSeqFree(BiostrucSeqPtr ptr)
    }
    BiostrucFree(ptr -> structure);
    AsnGenericChoiceSeqOfFree(ptr -> sequences, (AsnOptFreeFunc) SeqEntryFree);
+   Cn3dStyleDictionaryFree(ptr -> style_dictionary); /* paul */
+   Cn3dUserAnnotationsFree(ptr -> user_annotations);
    return MemFree(ptr);
 }
 
@@ -1155,6 +1221,21 @@ BiostrucSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   /* paul */
+   if (atp == BIOSTRUC_SEQ_style_dictionary) {
+      ptr -> style_dictionary = Cn3dStyleDictionaryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+      ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1212,6 +1293,18 @@ BiostrucSeqAsnWrite(BiostrucSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BIOSTRUC_SEQ_sequences, BIOSTRUC_SEQ_sequences_E);
+   /* paul */
+   if (ptr -> style_dictionary != NULL) {
+      if ( ! Cn3dStyleDictionaryAsnWrite(ptr -> style_dictionary, aip, BIOSTRUC_SEQ_style_dictionary)) {
+         goto erret;
+      }
+   }
+   if (ptr -> user_annotations != NULL) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+         goto erret;
+      }
+   }
+
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1256,6 +1349,8 @@ BiostrucSeqsFree(BiostrucSeqsPtr ptr)
    BiostrucFree(ptr -> structure);
    AsnGenericChoiceSeqOfFree(ptr -> sequences, (AsnOptFreeFunc) SeqEntryFree);
    AsnGenericUserSeqOfFree(ptr -> seqalign, (AsnOptFreeFunc) SeqAnnotFree);
+   Cn3dStyleDictionaryFree(ptr -> style_dictionary); /* paul */
+   Cn3dUserAnnotationsFree(ptr -> user_annotations);
    return MemFree(ptr);
 }
 
@@ -1329,6 +1424,21 @@ BiostrucSeqsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> seqalign = SeqAnnotSetAsnRead(aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E);
       atp = AsnReadId(aip,amp, atp);
    }
+   /* paul */
+   if (atp == BIOSTRUC_SEQS_style_dictionary) {
+      ptr -> style_dictionary = Cn3dStyleDictionaryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_ALIGN_user_annotations) {
+      ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1389,6 +1499,18 @@ BiostrucSeqsAsnWrite(BiostrucSeqsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 /* AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E); */
    /* yanli comment this out, and the following, Sept. 16, 1998 */
    SeqAnnotSetAsnWrite(ptr -> seqalign, aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E);
+   /* paul */
+   if (ptr -> style_dictionary != NULL) {
+      if ( ! Cn3dStyleDictionaryAsnWrite(ptr -> style_dictionary, aip, BIOSTRUC_SEQS_style_dictionary)) {
+         goto erret;
+      }
+   }
+   if (ptr -> user_annotations != NULL) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, BIOSTRUC_ALIGN_user_annotations)) {
+         goto erret;
+      }
+   }
+
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

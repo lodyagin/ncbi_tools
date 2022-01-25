@@ -1,7 +1,7 @@
 #ifndef NCBI_SERVER_INFO__H
 #define NCBI_SERVER_INFO__H
 
-/*  $Id: ncbi_server_info.h,v 6.17 2001/03/06 23:52:57 lavr Exp $
+/*  $Id: ncbi_server_info.h,v 6.24 2001/06/19 19:09:35 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,28 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.h,v $
+ * Revision 6.24  2001/06/19 19:09:35  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
+ * Revision 6.23  2001/06/12 20:45:23  lavr
+ * Less ambiguous comment for SSERV_Info::time
+ *
+ * Revision 6.22  2001/06/05 14:10:20  lavr
+ * SERV_MIME_UNDEFINED split into 2 (typed) constants:
+ * SERV_MIME_TYPE_UNDEFINED and SERV_MIME_SUBTYPE_UNDEFINED
+ *
+ * Revision 6.21  2001/06/04 16:59:56  lavr
+ * MIME type/subtype added to server descriptor
+ *
+ * Revision 6.20  2001/05/17 14:49:46  lavr
+ * Typos corrected
+ *
+ * Revision 6.19  2001/05/03 16:35:34  lavr
+ * Local bonus coefficient modified: meaning of negative value changed
+ *
+ * Revision 6.18  2001/04/24 21:24:05  lavr
+ * New server attributes added: locality and bonus coefficient
+ *
  * Revision 6.17  2001/03/06 23:52:57  lavr
  * SERV_ReadInfo can now consume either hostname or IP address
  *
@@ -59,7 +81,7 @@
  * order, whereas binary port addresses now use native (host) representation
  *
  * Revision 6.11  2000/10/20 17:05:48  lavr
- * TServType made 'unsigned'
+ * TSERV_Type made 'unsigned int'
  *
  * Revision 6.10  2000/10/05 21:25:45  lavr
  * ncbiconf.h removed
@@ -95,8 +117,7 @@
  * ==========================================================================
  */
 
-#include <stddef.h>
-#include <time.h>
+#include <connect/ncbi_connutil.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -115,7 +136,7 @@ typedef enum {
 
 #define fSERV_Any           0
 #define fSERV_StatelessOnly 0x80
-typedef unsigned TSERV_Type;  /* bit-wise OR of "ESERV_Type" flags */
+typedef unsigned int TSERV_Type;  /* bit-wise OR of "ESERV_Type" flags */
 
 
 /* Flags to specify the algorithm for selecting the most preferred
@@ -127,7 +148,9 @@ typedef enum {
 } ESERV_Flags;
 typedef int TSERV_Flags;
 
-#define SERV_DEFAULT_FLAG       fSERV_Regular
+#define SERV_DEFAULT_FLAG           fSERV_Regular
+#define SERV_MIME_TYPE_UNDEFINED    ((EMIME_Type)(-1))
+#define SERV_MIME_SUBTYPE_UNDEFINED ((EMIME_SubType)(-1))
 
 
 /* Verbal representation of a server type (no internal spaces allowed)
@@ -146,19 +169,19 @@ const char* SERV_ReadType(const char* str, ESERV_Type* type);
 /* Meta-addresses for various types of NCBI servers
  */
 typedef struct {
-    size_t         args;
-#define SERV_NCBID_ARGS(ui)     ((char *)(ui) + (ui)->args)
+    TNCBI_Size     args;
+#define SERV_NCBID_ARGS(ui)     ((char*) (ui) + (ui)->args)
 } SSERV_NcbidInfo;
 
 typedef struct {
-    int            dummy;       /* placeholder, not used */
+    char           dummy;       /* placeholder, not used */
 } SSERV_StandaloneInfo;
 
 typedef struct {
-    size_t         path;
-    size_t         args;
-#define SERV_HTTP_PATH(ui)      ((char *)(ui) + (ui)->path)
-#define SERV_HTTP_ARGS(ui)      ((char *)(ui) + (ui)->args)
+    TNCBI_Size     path;
+    TNCBI_Size     args;
+#define SERV_HTTP_PATH(ui)      ((char*) (ui) + (ui)->path)
+#define SERV_HTTP_ARGS(ui)      ((char*) (ui) + (ui)->args)
 } SSERV_HttpInfo;
 
 
@@ -171,14 +194,18 @@ typedef union {
 } USERV_Info;
 
 typedef struct {
-    ESERV_Type     type;        /* type of server                            */
-    unsigned int   host;        /* host the server running on, network b.o.  */
-    unsigned short port;        /* port the server running on, host b.o.     */
-    unsigned short sful;        /* true if this is a stateful server (def=no)*/
-    ESERV_Flags    flag;        /* algorithm flag for the server             */
-    time_t         time;        /* relaxation/expiration time/period         */
-    double         rate;        /* rate of the server                        */
-    USERV_Info     u;           /* server type-specific data/params          */
+    ESERV_Type            type; /* type of server                            */
+    unsigned int          host; /* host the server running on, network b.o.  */
+    unsigned short        port; /* port the server running on, host b.o.     */
+    unsigned char/*bool*/ sful; /* true for stateful-only server (default=no)*/
+    unsigned char/*bool*/ locl; /* true for local (LBSMD-only) server(def=no)*/
+    ESERV_Flags           flag; /* algorithm flag for the server             */
+    TNCBI_Time            time; /* relaxation period / expiration time       */
+    double                coef; /* bonus coefficient for server run locally  */
+    double                rate; /* rate of the server                        */
+    EMIME_Type          mime_t; /* type and                                  */
+    EMIME_SubType       mime_s; /*     subtype for content-type              */
+    USERV_Info            u;    /* server type-specific data/params          */
 } SSERV_Info;
 
 
@@ -230,24 +257,37 @@ char* SERV_WriteInfo(const SSERV_Info* info);
  *                   Empty additional arguments denoted as '' (double quotes).
  *                   Note that arguments must not contain space characters.
  *
- *    HTTP* servers: Path (required) and args in the form path[?args].
+ *    HTTP* servers: Path (required) and args (optional) in the form
+ *                   path[?args] (here brackets denote the optional part).
  *                   Note that no spaces allowed within this parameter.
  *
- * Tags may follow in no specific order but no more than one instance
+ * Tags may follow in no particular order but no more than one instance
  * of each flag is allowed:
  *
  *    Load average calculation for the server:
  *       Regular (default)
  *       Blast
  *
+ *    Local server:
+ *       L=no           (default)
+ *       L=yes
+ *           Local servers are accessible only by direct clients of LBSMD,
+ *           i.e. such servers cannot be accessed by means of DISPD.
+ *
+ *    Stateful server:
+ *       S=no           (default)
+ *       S=yes
+ *           Indication of stateful server, which allows only dedicated socket
+ *           (stateful) connections. (Tag is not allowed for HTTP* servers.)
+ *
  *    Validity period:
- *       T=integer    [0 = default]
+ *       T=integer      [0 = default]
  *           specifies the time in seconds this server entry is valid
  *           without update. (If equal to 0 then defaulted by
  *           the LBSM Daemon to some reasonable value.)
  *
  *    Reachability coefficient:
- *       R=double     [0 = default]
+ *       R=double       [0.0 = default]
  *           specifies availability ratio for the server, expressed as
  *           a floating point number with 0.0 meaning the server is down
  *           (unavailable) and 1000.0 meaning the server is up and running.
@@ -255,9 +295,41 @@ char* SERV_WriteInfo(const SSERV_Info* info);
  *           favorable for choosing by LBSM Daemon, as this coefficient is
  *           directly used as a multiplier in the load-average calculation
  *           for the entire family of servers for the same service.
- *           (If equal to 0 then defaulted by the LBSM Daemon to 1000.0
- *           if the server is running and to 0, if not.)
+ *           (If equal to 0.0 then defaulted by the LBSM Daemon to 1000.0.)
+ *           Normally, LBSMD keeps track of server reachability, and
+ *           dynamically switches this rate to be maximal specified when
+ *           the server is up, and to be zero when the server is down.
  *           Note that negative values are reserved for LBSMD private use.
+ *           To specify that a server as inactive in LBSMD configuration file,
+ *           one can use any negative number (note that value "0" in the config
+ *           file means "default" and replaced with the value 1000.0).
+ *
+ *    Bonus coefficient:
+ *       B=double       [0.0 = default]
+ *           specifies a multiplicative bonus given to a server run locally,
+ *           when calculating reachability rate.
+ *           Special rules apply to negative/zero values:
+ *           0.0 means not to use the described rate increase at all (default
+ *           rate calculation is used, which only slightly increases rates
+ *           of locally run servers).
+ *           Negative value denotes that locally run server should
+ *           be taken in first place, regardless of its rate, if this rate
+ *           is larger than percent of expressed by the absolute value
+ *           of this coefficient of average rate coefficient of other
+ *           servers for the same service. That is -5 instructs to
+ *           ignore locally run server if its status is less than 5% of
+ *           average status of remaining servers for the same service.
+ *
+ *    Content type indication:
+ *       C=type/subtype [no default]
+ *           specification of Content-Type, which server accepts.
+ *           The value of this tag gets added automatically to any packet
+ *           which is sent e.g. by SERVICE connector. The client has,
+ *           however, to know the data type accepted by the server, i.e.
+ *           a protocol, which server understands, in order to communicate.
+ *           This flag just helps insure that HTTP packets all get proper
+ *           content type, defined at service configuration.
+ *
  *
  * Note that optional arguments can be omitted along with all preceding
  * optional arguments, that is the following 2 server specifications are

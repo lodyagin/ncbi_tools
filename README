@@ -800,8 +800,8 @@ ALL -
 
 Unix
     tested on Sun Sparc (Solaris 2.6, Sunos 4.1.3),
-	Silicon Graphics IRIX 5.* and 6.*, DEC Alpha with OSF/1 V4.0,
-	Linux (Red Hat Linux release 5.2 with kernel 2.0.36) on Intel,
+	Silicon Graphics IRIX 5.* and 6.*, DEC Alpha with OSF/1 V5.1,
+	Linux (Red Hat Linux release 6.2 with kernel 2.2.16) on Intel,
 	Sun Solaris for Intel (Solaris 2.7).
 
 	Run the script ncbi/make/makedis.csh keeping it's output in the

@@ -1,5 +1,5 @@
 #
-# $Id: sgi-mips4.ncbi.mk,v 1.5 2001/02/02 14:52:02 beloslyu Exp $
+# $Id: sgi-mips4.ncbi.mk,v 1.6 2001/06/12 21:11:56 vakatov Exp $
 #
 # The SGI IRIX 6.* in 64-bit mode
 #
@@ -55,3 +55,7 @@ OPENGL_LIBS = -lGL -lGLU
 # output support into Cn3D (OpenGL version only)
 #LIBPNG_DIR = /usr/people/thiessen/Programs/libpng
 #ZLIB_DIR = /usr/people/thiessen/Programs/zlib
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+

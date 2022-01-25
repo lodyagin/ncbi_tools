@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.25 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
@@ -1877,6 +1877,8 @@ static ENUM_ALIST(molinfo_biomol_alist)
   {"Peptide",                8},
   {"Other-Genetic",          9},
   {"Genomic-mRNA",          10},
+  {"cRNA",                  11},
+  {"Small nucleolar RNA",   12},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -1891,6 +1893,8 @@ static ENUM_ALIST(molinfo_biomol_nuc_alist)
   {"Small cytoplasmic RNA",  7},
   {"Other-Genetic",          9},
   {"Genomic-mRNA",          10},
+  {"cRNA",                  11},
+  {"Small nucleolar RNA",   12},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -1906,6 +1910,8 @@ static ENUM_ALIST(molinfo_biomol_nucX_alist)
   {"Small cytoplasmic RNA",  7},
   {"Other-Genetic",          9},
   {"Genomic-mRNA",          10},
+  {"cRNA",                  11},
+  {"Small nucleolar RNA",   12},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -2007,7 +2013,7 @@ END_ENUM_ALIST
 static Uint1 check_biomol (Uint1 biomol)
 
 {
-  if (biomol > 10 && biomol < 253) return 0;
+  if (biomol > 12 && biomol < 253) return 0;
   return biomol;
 }
 

@@ -1,5 +1,5 @@
 #
-# $Id: darwin.ncbi.mk,v 1.3 2001/02/02 14:52:02 beloslyu Exp $
+# $Id: darwin.ncbi.mk,v 1.4 2001/06/12 21:11:56 vakatov Exp $
 #
 # Tested on Darwin localhost 1.2 Darwin Kernel Version 1.2: Wed Aug 30 23:32:53 PDT 2000;
 # root:xnu/xnu-103.obj~1/RELEASE_PPC  Power Macintosh powerpc
@@ -26,3 +26,7 @@ NCBI_RANLIB = ranlib
 NCBI_MT_OTHERLIBS = 
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+

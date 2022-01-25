@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.6  2001/07/03 20:03:11  juran
+* Don't corruptly parse argv in Mac OS.
+*
 * Revision 6.5  2000/06/15 20:51:41  vakatov
 * Use "const" in Args code
 *
@@ -225,9 +228,6 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           return FALSE;
         }
       arg++;
-#ifdef OS_MAC
-      arg++;
-#endif
 
       if (*arg == '\0')
         {

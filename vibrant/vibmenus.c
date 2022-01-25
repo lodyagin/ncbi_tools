@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.13  2001/05/17 22:04:26  kans
+* separator item in mswin creates a fake status item link, so GetChildPosition is correct, and thus later submenus have the correct position for enabling and disabling
+*
+* Revision 6.12  2001/04/03 22:10:19  juran
+* Carbon fixes.
+*
 * Revision 6.11  2001/01/24 18:43:00  kans
 * remove artifact bar caused by popup label on Solaris (TF)
 *
@@ -239,6 +245,7 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
+# include "MoreCarbonAccessors.h"
 #define Nlm_MenuTool   MenuHandle
 #define Nlm_PopupTool  Nlm_Handle
 #define Nlm_ItemTool   Nlm_Handle
@@ -1675,9 +1682,11 @@ static void Nlm_DrawWindowMenuBar (Nlm_GraphiC mb)
   Nlm_MenU        m;
   Nlm_RecT        r;
   Nlm_WindowTool  wptr;
+  Rect bounds;
 
   wptr = Nlm_ParentWindowPtr (mb);
-  Nlm_RectToolToRecT (&(wptr->portRect), &r);
+  GetPortBounds(GetWindowPort(wptr), &bounds);
+  Nlm_RectToolToRecT (&bounds, &r);
   r.top = 19;
   r.bottom = 21;
   if (Nlm_RectInRgn (&r, Nlm_updateRgn)) {
@@ -2019,7 +2028,7 @@ static void Nlm_EnableDesktopMenu (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boole
   tempPort = Nlm_SavePortIfNeeded (m, savePort);
   Nlm_SetEnabled (m, TRUE);
   h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-  EnableItem (h, 0);
+  EnableMenuItem (h, 0);
   if (Nlm_GetVisible (m)) {
     DrawMenuBar ();
   }
@@ -2041,7 +2050,7 @@ static void Nlm_EnablePulldown (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean 
     if (Nlm_GetVisible (m) && Nlm_GetAllParentsVisible (m)) {
       Nlm_WindoW tempPort = Nlm_SavePortIfNeeded (m, savePort);
       h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-      EnableItem (h, 0);
+      EnableMenuItem (h, 0);
       Nlm_DoDraw (m);
       p = Nlm_GetMenuPrompt ((Nlm_MenU) m);
       Nlm_DoEnable ((Nlm_GraphiC) p, TRUE, FALSE);
@@ -2090,7 +2099,7 @@ static void Nlm_EnablePopup (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean sav
     if (Nlm_GetVisible (m) && Nlm_GetAllParentsVisible (m)) {
       tempPort = Nlm_SavePortIfNeeded (m, savePort);
       h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-      EnableItem (h, 0);
+      EnableMenuItem (h, 0);
       Nlm_DoDraw (m);
       Nlm_RestorePort (tempPort);
     }
@@ -2119,7 +2128,7 @@ static void Nlm_EnablePopList (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean s
     tempPort = Nlm_SavePortIfNeeded (m, savePort);
 #ifdef WIN_MAC
     h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-    EnableItem (h, 0);
+    EnableMenuItem (h, 0);
     if (Nlm_GetVisible (m) && Nlm_GetAllParentsVisible (m)) {
       Nlm_DoDraw (m);
     }
@@ -2159,7 +2168,7 @@ static void Nlm_EnableMenuItem (Nlm_GraphiC i, Nlm_Boolean setFlag, Nlm_Boolean 
   h = Nlm_GetMenuHandle (m);
   itm = Nlm_GetFirstItem ((Nlm_IteM) i);
 #ifdef WIN_MAC
-  EnableItem (h, itm);
+  EnableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
   id = Nlm_ItemToID (m, itm);
@@ -2229,7 +2238,7 @@ static void Nlm_EnableChoice (Nlm_GraphiC c, Nlm_Boolean setFlag, Nlm_Boolean sa
   h = Nlm_GetMenuHandle (m);
   while (num > 0) {
 #ifdef WIN_MAC
-    EnableItem (h, itm);
+    EnableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
     if (! Nlm_IsItAPopupList ((Nlm_ChoicE) c)) {
@@ -2279,7 +2288,7 @@ static void Nlm_EnableChoiceGroup (Nlm_GraphiC c, Nlm_Boolean setFlag, Nlm_Boole
   h = Nlm_GetMenuHandle (m);
   while (num > 0) {
 #ifdef WIN_MAC
-    EnableItem (h, itm);
+    EnableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
     if (! Nlm_IsItAPopupList ((Nlm_ChoicE) c)) {
@@ -2322,7 +2331,7 @@ static void Nlm_EnableChoiceItem (Nlm_GraphiC i, Nlm_Boolean setFlag, Nlm_Boolea
     h = Nlm_GetMenuHandle (m);
     itm = (Nlm_Int2)(Nlm_GetFirstItem( (Nlm_IteM)c ) + index - 1);
 #ifdef WIN_MAC
-    EnableItem (h, itm);
+    EnableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
     if (! Nlm_IsItAPopupList ((Nlm_ChoicE) c)) {
@@ -2348,7 +2357,7 @@ static void Nlm_DisableDesktopMenu (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Bool
   tempPort = Nlm_SavePortIfNeeded (m, savePort);
   Nlm_SetEnabled (m, FALSE);
   h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-  DisableItem (h, 0);
+  DisableMenuItem (h, 0);
   if (Nlm_GetVisible (m)) {
     DrawMenuBar ();
   }
@@ -2370,7 +2379,7 @@ static void Nlm_DisablePulldown (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean
   if (Nlm_GetVisible (m) && Nlm_GetAllParentsVisible (m)) {
     tempPort = Nlm_SavePortIfNeeded (m, savePort);
     h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-    DisableItem (h, 0);
+    DisableMenuItem (h, 0);
     Nlm_DoDraw (m);
     p = Nlm_GetMenuPrompt ((Nlm_MenU) m);
     Nlm_DoDisable ((Nlm_GraphiC) p, TRUE, FALSE);
@@ -2416,7 +2425,7 @@ static void Nlm_DisablePopup (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean sa
   if (Nlm_GetVisible (m) && Nlm_GetAllParentsVisible (m)) {
     tempPort = Nlm_SavePortIfNeeded (m, savePort);
     h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-    DisableItem (h, 0);
+    DisableMenuItem (h, 0);
     Nlm_DoDraw (m);
     Nlm_RestorePort (tempPort);
   }
@@ -2444,7 +2453,7 @@ static void Nlm_DisablePopList (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean 
 #ifdef WIN_MAC
   if (Nlm_GetVisible (m) && Nlm_GetAllParentsVisible (m)) {
     h = Nlm_GetMenuHandle ((Nlm_MenU) m);
-    DisableItem (h, 0);
+    DisableMenuItem (h, 0);
     Nlm_DoDraw (m);
   }
 #endif
@@ -2482,7 +2491,7 @@ static void Nlm_DisableMenuItem (Nlm_GraphiC i, Nlm_Boolean setFlag, Nlm_Boolean
   h = Nlm_GetMenuHandle (m);
   itm = Nlm_GetFirstItem ((Nlm_IteM) i);
 #ifdef WIN_MAC
-  DisableItem (h, itm);
+  DisableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
   id = Nlm_ItemToID (m, itm);
@@ -2552,7 +2561,7 @@ static void Nlm_DisableChoice (Nlm_GraphiC c, Nlm_Boolean setFlag, Nlm_Boolean s
   h = Nlm_GetMenuHandle (m);
   while (num > 0) {
 #ifdef WIN_MAC
-    DisableItem (h, itm);
+    DisableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
     if (! Nlm_IsItAPopupList ((Nlm_ChoicE) c)) {
@@ -2601,7 +2610,7 @@ static void Nlm_DisableChoiceGroup (Nlm_GraphiC c, Nlm_Boolean setFlag, Nlm_Bool
   h = Nlm_GetMenuHandle (m);
   while (num > 0) {
 #ifdef WIN_MAC
-    DisableItem (h, itm);
+    DisableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
     if (! Nlm_IsItAPopupList ((Nlm_ChoicE) c)) {
@@ -2645,7 +2654,7 @@ static void Nlm_DisableChoiceItem (Nlm_GraphiC i, Nlm_Boolean setFlag, Nlm_Boole
     h = Nlm_GetMenuHandle (m);
     itm = (Nlm_Int2)(Nlm_GetFirstItem( (Nlm_IteM)c ) + index - 1);
 #ifdef WIN_MAC
-    DisableItem (h, itm);
+    DisableMenuItem (h, itm);
 #endif
 #ifdef WIN_MSWIN
     if (! Nlm_IsItAPopupList ((Nlm_ChoicE) c)) {
@@ -3087,7 +3096,7 @@ static void Nlm_ResetMenu (Nlm_GraphiC m, Nlm_Boolean savePort)
 
   {{ /* reset platform-dependent menu structures */
 #if   defined(WIN_MAC)
-    Nlm_Int2 cnt = CountMItems( h );
+    Nlm_Int2 cnt = CountMenuItems( h );
     while (cnt-- > 0)
       DeleteMenuItem(h, cnt);
 #elif defined(WIN_MSWIN)
@@ -3138,7 +3147,7 @@ static void Nlm_ResetPopList (Nlm_GraphiC c, Nlm_Boolean savePort)
   m = (Nlm_MenU) Nlm_GetParent (c);
 #ifdef WIN_MAC
   h = Nlm_GetMenuHandle (m);
-  cnt = CountMItems (h);
+  cnt = CountMenuItems (h);
   while (cnt > 0) {
     DeleteMenuItem (h, cnt);
     cnt--;
@@ -3199,7 +3208,7 @@ static Nlm_Int2 Nlm_CountMenuItems (Nlm_GraphiC m)
   rsult = 0;
   h = Nlm_GetMenuHandle ((Nlm_MenU) m);
 #ifdef WIN_MAC
-  rsult = CountMItems (h);
+  rsult = CountMenuItems (h);
 #endif
 #ifdef WIN_MSWIN
   rsult = (Nlm_Int2)GetMenuItemCount( h );
@@ -5545,6 +5554,10 @@ extern void Nlm_SeparatorItem (Nlm_MenU m)
 #ifdef WIN_MAC
   Nlm_Char      temp [256];
 #endif
+#ifdef WIN_MSWIN
+  Nlm_IteM      i;
+  Nlm_RecT      r;
+#endif
 #ifdef WIN_MOTIF
   Nlm_ItemTool  itool;
   Cardinal      n;
@@ -5559,6 +5572,12 @@ extern void Nlm_SeparatorItem (Nlm_MenU m)
     AppendMenu (h, (StringPtr) temp);
 #endif
 #ifdef WIN_MSWIN
+    Nlm_LoadRect (&r, 0, 0, 0, 0);
+    i = (Nlm_IteM) Nlm_CreateLink ((Nlm_GraphiC) m, &r, sizeof (Nlm_ItemRec), statusItemProcs);
+    if (i != NULL) {
+      Nlm_NewStat (i, NULL, NULL);
+      Nlm_SetVisible ((Nlm_GraphiC) i, TRUE);
+    }
     AppendMenu (h, MF_SEPARATOR, 0, NULL);
 #endif
 #ifdef WIN_MOTIF

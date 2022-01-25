@@ -1,4 +1,4 @@
-/* $Id: xmlblast.c,v 6.17 2001/02/28 21:37:25 shavirin Exp $ */
+/* $Id: xmlblast.c,v 6.18 2001/05/01 20:54:32 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,15 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.18  2001/05/01 20:54:32  madden
+* Set glb_matrix in BXMLSeqAlignToHits if not already set
+*
 * Revision 6.17  2001/02/28 21:37:25  shavirin
 * Fixed XML printing in case when definition line is missing.
 *
@@ -663,6 +666,10 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
     /* We assume, that  seqalignes in this set ordered by 
        database sequences and by e-values for a given database sequence */
 
+    /* For optimization BLOSUM62 may be loaded ones */
+    if(glb_matrix == NULL)
+        glb_matrix = load_default_matrix ();
+    
     hitp_head = NULL;
     hit_count = 1;              /* Hits starting with 1 */
     

@@ -1951,7 +1951,7 @@ Boolean DrawCytoMap(ValNodePtr PNTR features, MapPosPtr mpp, Int4 scale, SegmenT
 					color = RED_COLOR;
 					shading = SOLID_SHADING;
 					break;
-				case POINT:
+				case BAND_POINT:
 					color = RED_COLOR;
 					shading = SOLID_SHADING;
 					break;

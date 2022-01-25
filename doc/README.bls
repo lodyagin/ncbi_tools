@@ -1,6 +1,6 @@
 	
 			README for stand-alone BLAST
-			   (last updated 4/2/2001)
+			   (last updated 7/5/2001)
 
 
 
@@ -9,10 +9,10 @@ setting up stand-alone BLAST, command-line options for stand-alone BLAST,
 and a release history of the different versions.
 
 BLAST binaries are provided for IRIX6.2, Solaris2.6 (Sparc) Solaris2.7 (Intel), 
-DEC OSF1 (ver. 4.0d), LINUX, HPUX, MacIntosh, and Win32 systems. We will attempt 
-to produce binaries for other platforms upon request.
+DEC OSF1 (ver. 5.1), LINUX/Intel, HPUX, MacIntosh, and Win32 systems.
+We will attempt to produce binaries for other platforms upon request.
 
-Stand-alone binaries are available from ftp://ncbi.nlm.nih.gov/blast/executables.
+Stand-alone binaries are available from ftp://ncbi.nlm.nih.gov/blast/executables/
 
 Please remember to FTP in binary mode.
 
@@ -1002,6 +1002,48 @@ References
 
 Release History
 ---------------
+
+Notes for 2.2.1 release:
+
+Enhancements:
+
+1.) BLAST and PSI-BLAST improvements as described in 
+Schaffer et al., Nucleic Acids Research 2001 Jul 15;29(14).
+These include improvements the use of composition-based statistics
+and improvements to the edge-correction effects.  Composition-based 
+statistics were initially implemented in release 2.1.1, but the 
+implementation is improved in release 2.2.1.
+
+2.) Formatdb automatically produces database volumes for input
+consisting of more than 4 billion letters.
+
+3.) Formatdb can produce an alias file for a given database and GI list
+as well as convert a GI list to the more efficient binary format.  See
+details in README.formatdb.
+
+4.) RPSBLAST now works properly with 'scaled' databases.  The scaling factor must
+be set when executing the program 'makemat' (which takes PSI-BLAST checkpoints
+as input).  Scaling-up the matrix improves the precision of the (integer) calculations.
+
+5.) Tabular output has now been added to blastpgp and rpsblast, use the "-m 8" option.
+
+6.) Blastpgp will now process multiple queries.
+
+Bug fixes:
+
+1.) A problem with the -K option (for culling) that caused BLAST to crash has been fixed.
+
+2.) A problem with the "gnl" identifier and multi-volume databases has been fixed.
+
+3.) A problem that caused BLASTN to very rarely find suboptimal alignments has been fixed.
+
+4.) A problem that could cause makemat to crash has been fixed.
+
+4.) Some multi-threading problem pointed out by Henry Gabb of KAI were fixed.
+
+5.) Some PC-lint errors and warnings pointed out by Russ Williams of United Devices
+were fixed.
+
 
 Notes for 2.1.3 release:
 

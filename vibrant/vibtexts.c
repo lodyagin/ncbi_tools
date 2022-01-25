@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.8  2001/05/14 20:29:04  juran
+* Redesign Mac clipboard support.
+*
 * Revision 6.7  2000/05/02 22:02:15  vakatov
 * Nlm_TextCallback():  get rid of an extra condition
 *
@@ -1910,6 +1913,48 @@ extern Nlm_TexT Nlm_CurrentText (void)
   return currentText;
 }
 
+#ifdef WIN_MAC
+
+static void Clipboard_TEToDeskScrap()
+{
+	OSErr err;
+	// Clear the desk scrap.
+#if TARGET_API_MAC_CARBON
+	OSStatus status = ClearCurrentScrap();
+#else
+	ZeroScrap();
+#endif
+	// Copy the TE scrap to the desk scrap.
+	err = TEToScrap();
+}
+
+static void Clipboard_TECut(TEHandle inTE)
+{
+	// Cut the text into the TE scrap.
+	TECut(inTE);
+	// Update the desk scrap.
+	Clipboard_TEToDeskScrap();
+}
+
+static void Clipboard_TECopy(TEHandle inTE)
+{
+	// Copy the text into the TE scrap.
+	TECopy(inTE);
+	// Update the desk scrap.
+	Clipboard_TEToDeskScrap();
+}
+
+static void Clipboard_TEPaste(TEHandle inTE)
+{
+//#if TARGET_API_MAC_CARBON
+	//ScrapRef scrap;
+	//OSStatus status = GetCurrentScrap(&scrap);
+	OSErr err = TEFromScrap();
+	TEPaste(inTE);
+}
+
+#endif  /* WIN_MAC */
+
 extern void Nlm_CutText (Nlm_TexT t)
 
 {
@@ -1918,7 +1963,7 @@ extern void Nlm_CutText (Nlm_TexT t)
   if (t != NULL) {
     h = Nlm_GetTextHandle (t);
 #ifdef WIN_MAC
-    TECut (h);
+    Clipboard_TECut(h);
 #endif
 #ifdef WIN_MSWIN
     allowTextCallback = FALSE;
@@ -1943,7 +1988,7 @@ extern void Nlm_CopyText (Nlm_TexT t)
   if (t != NULL) {
     h = Nlm_GetTextHandle (t);
 #ifdef WIN_MAC
-    TECopy (h);
+    Clipboard_TECopy(h);
 #endif
 #ifdef WIN_MSWIN
     allowTextCallback = FALSE;
@@ -1968,7 +2013,7 @@ extern void Nlm_PasteText (Nlm_TexT t)
     if (! Nlm_GetTextEditable (t)) return;
     h = Nlm_GetTextHandle (t);
 #ifdef WIN_MAC
-    TEPaste (h);
+    Clipboard_TEPaste(h);
 #endif
 #ifdef WIN_MSWIN
     allowTextCallback = FALSE;

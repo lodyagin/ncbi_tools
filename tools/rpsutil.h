@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.13 2000/11/03 22:38:18 kans Exp $
+/* $Id: rpsutil.h,v 6.15 2001/06/29 18:07:07 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.15  2001/06/29 18:07:07  madden
+* Add function RPSInitEx that passes in BLAST_OptionsBlkPtr
+*
+* Revision 6.14  2001/06/27 16:20:00  dondosha
+* Enabled tabular output for RPS Blast
+*
 * Revision 6.13  2000/11/03 22:38:18  kans
 * added RemoveDuplicateCDDs - just removes CDDs with identical locations and identical dbxrefs, keeping one with highest score - later will want to fuse overlapping CDDs with identical dbxrefs
 *
@@ -172,7 +178,7 @@ typedef struct _rps_blast_options {
     ReadDBFILEPtr rdfp;         /* Handle of the sequence database */
     FILE *outfp;                /* Output file opened descriptor */
     CharPtr out_filename;       /* Output filename */
-
+   Boolean is_tabular;
 } RPSBlastOptions, PNTR RPSBlastOptionsPtr;
 
 /* Definitions of multi-threaded batch RPS Blast search */    
@@ -196,6 +202,7 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
                            to PSI matrix set
    Returns:     Poiner to created RPSInfoPtr
   ------------------------------------------------------------------*/
+RPSInfoPtr RPSInitEx(CharPtr database, Int4 query_is_prot, BLAST_OptionsBlkPtr blast_options);
 RPSInfoPtr RPSInit(CharPtr database, Int4 query_is_prot);
 
 /* ----------------------  RPSClose --------------------------

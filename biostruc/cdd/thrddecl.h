@@ -1,4 +1,4 @@
-/* $Id: thrddecl.h,v 1.12 2001/03/02 23:14:12 hurwitz Exp $
+/* $Id: thrddecl.h,v 1.14 2001/04/26 17:23:38 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.12 $
+* $Revision: 1.14 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrddecl.h,v $
+* Revision 1.14  2001/04/26 17:23:38  thiessen
+* fix bug in updating aligned residue types
+*
+* Revision 1.13  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.12  2001/03/02 23:14:12  hurwitz
 * run threading faster for PSSM weight=1, bug fix
 *
@@ -108,7 +114,7 @@ int spci(Cor_Def* cdf, Qry_Seq* qsq, Cur_Loc* sli, Cur_Aln* sai,
 
 int spni(Cxl_Los** cpl, Cur_Loc* sli, int n, Seg_Nsm* spn);
 
-int cxei(Seg_Nsm* spn, Seg_Cmp* spc, Rcx_Ptl* pmf, Thd_Cxe* cxe);
+int cxei(Seg_Nsm* spn, Seg_Cmp* spc, Rcx_Ptl* pmf, Cur_Loc* sli, Seq_Mtf* psm, Cor_Def* cdf, Thd_Cxe* cxe);
 
 int cpll(Cor_Def* cdf, Rcx_Ptl* pmf, Qry_Seq* qsq, Cxl_Los** cpr,
          Cur_Aln* sai, Cxl_Los** cpl);
@@ -135,7 +141,8 @@ int algs(Rnd_Smp* pvl, int tm);
 int slor(Fld_Mtf* mtf, Cor_Def* cdf, Qry_Seq* qsq, Cur_Loc* sli, Cur_Aln* sai,
          int cs, int ct, int* mn, int*mx);
 
-int slou(Fld_Mtf* mtf, Cor_Def* cdf, int cs, int ct, int of, Cur_Loc* sli);
+int slou(Fld_Mtf* mtf, Cor_Def* cdf, int cs, int ct, int of, Cur_Loc* sli,
+	Cur_Aln* sai, Qry_Seq* qsq);
 
 float bwfi(Thd_Tbl* ttb, Gib_Scd* gsp, Thd_Tst* tts);
 
@@ -143,7 +150,7 @@ float zsc(Thd_Tbl* ttb, Seq_Mtf* psm, Qry_Seq* qsq, Cxl_Los** cpr,
           Cor_Def* cdf, Rcx_Ptl* pmf, Seg_Gsm* spe, Cur_Aln* sai, Rnd_Smp* pvl,
           double ScalingFactor);
 
-int g(Seg_Gsm* spe, Seq_Mtf* psm, Thd_Gsm* tdg, Seg_Cmp* spc);
+int g(Seg_Gsm* spe, Seq_Mtf* psm, Thd_Gsm* tdg);
 
 float g0(Seg_Nsm* spn, Thd_Cxe* cxe);
 

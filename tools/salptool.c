@@ -2191,7 +2191,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  bsp1 = BioseqLockById(lclsip);
                  bsp2 = BioseqLockById(dbsip);
                  if ( bsp1 != NULL && bsp2 != NULL && bsp1->length > 0 && bsp2->length > 0) {
-                 options = BLASTOptionNew("blastn", FALSE);
+                 options = BLASTOptionNew("blastn", TRUE);
 /*
                  options->penalty = -5; 
                  options->cutoff_s = totlenlcl; 
@@ -2201,7 +2201,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  len = bsp2->length;
                  BioseqUnlock(bsp1);
                  BioseqUnlock(bsp2);
-                 bestsalp = SeqAlignBestHit (seqalign, bsp1->length, 100);
+                 bestsalp = SeqAlignBestHit (seqalign, bsp1->length, 99);
                  if (bestsalp) 
                  {
                     SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);

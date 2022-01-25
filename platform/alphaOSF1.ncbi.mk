@@ -1,5 +1,5 @@
 #
-# $Id: alphaOSF1.ncbi.mk,v 1.7 2001/03/16 13:27:05 beloslyu Exp $
+# $Id: alphaOSF1.ncbi.mk,v 1.8 2001/06/12 21:11:55 vakatov Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = alf
@@ -25,3 +25,7 @@ NCBI_RANLIB = ls -l
 NCBI_MT_OTHERLIBS = -lpthread
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+

@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: casn.c,v 6.0 1997/08/25 18:12:41 madden Exp $
+ * RCS $Id: casn.c,v 6.1 2001/04/27 18:00:30 juran Exp $
  *
  * Author:  Greg Schuler
  *
@@ -47,6 +47,9 @@
  *                      modification comments.
  *
  * Revision $Log: casn.c,v $
+ * Revision Revision 6.1  2001/04/27 18:00:30  juran
+ * Revision Warnings.
+ * Revision
  * Revision Revision 6.0  1997/08/25 18:12:41  madden
  * Revision Revision changed to 6.0
  * Revision
@@ -75,7 +78,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.0 $"
+#define REVISION_STR "$Revision: 6.1 $"
 
 
 #include <asn.h>
@@ -261,7 +264,7 @@ NLM_EXTERN SeqEntry* LIBCALL CASN_NextSeqEntry (CASN_Handle handle)
 	AsnTypePtr atp;
 
 	ASSERT(Handle_IsValid(handle));
-	if(atp = AsnReadId(handle->aio, handle->amp, handle->atp)) {
+	if ((atp = AsnReadId(handle->aio, handle->amp, handle->atp))) {
 	  SeqEntryPtr sep = SeqEntryAsnRead(handle->aio, atp);
 	  while(handle->compr != -1) {
 	    char buf[4];

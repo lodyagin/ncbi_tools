@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.39 $
+* $Revision: 6.41 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.41  2001/05/25 20:04:39  vakatov
+* Nested comment typo fixed
+*
+* Revision 6.40  2001/05/15 15:57:25  juran
+* Include glu.h instead of GL/glu.h on the Mac.
+*
 * Revision 6.39  2000/08/17 16:13:21  thiessen
 * fix X/OpenGL initialization bug
 *
@@ -249,7 +255,11 @@
 #endif
 
 #include <GL/gl.h>
+#ifdef WIN_MAC
+#include <glu.h>
+#else
 #include <GL/glu.h>
+#endif
 
 #endif /* _OPENGL */
 
@@ -2933,7 +2943,6 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
  */
 static int Nlm_OGLColorPreferences[][4] = {
 /* dbl.buf.  cIndexBits  RGBbits  z-depth  */
-/*
 /* */
   {   1    ,      0    ,    8   ,    8     },
   {   1    ,      0    ,    4   ,    8     },

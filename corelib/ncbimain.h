@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *     NCBI Main() function and cmd.-line argument-handling routines
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimain.h,v $
+* Revision 6.3  2001/04/12 22:13:54  vakatov
+* #define GetArgs only if it is not defined yet
+*
 * Revision 6.2  2000/06/15 20:51:41  vakatov
 * Use "const" in Args code
 *
@@ -134,7 +137,9 @@ NLM_EXTERN Nlm_Int4         Nlm_GetArgc(void);
 
 
 #define Main           Nlm_Main
-#define GetArgs        Nlm_GetArgs
+#if !defined(GetArgs)
+#  define GetArgs      Nlm_GetArgs
+#endif
 #define FreeArgs       Nlm_FreeArgs
 #define GetArgsSilent  Nlm_GetArgsSilent
 #define GetArgv        Nlm_GetArgv

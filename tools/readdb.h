@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.76 $
+* $Revision: 6.86 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,38 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.86  2001/07/12 19:27:45  madden
+* Add alias_file_name to Options
+*
+* Revision 6.85  2001/06/21 18:27:28  shavirin
+* Moved into files txalign.[c,h] functions returning taxonomy names
+* from Bioseq created from Blast database.
+*
+* Revision 6.84  2001/06/14 16:22:46  madden
+* Add prototype for FD_MakeAliasFile
+*
+* Revision 6.83  2001/05/23 21:17:24  shavirin
+* Added definitions for bits related to sequence-to-database affiliation.
+*
+* Revision 6.82  2001/05/11 19:59:41  madden
+* Add gi_file_bin to FDOptions, oidlist and gifile to FD_CreateAliasFileEx
+*
+* Revision 6.81  2001/05/10 17:19:53  madden
+* Add number_seqs arg to FD_CreateAliasFileEx
+*
+* Revision 6.80  2001/05/08 21:58:28  shavirin
+* Added possibility to generate tax_id for every definition in Blast FASTA
+* definition set in ASN.1 structured definition lines.
+*
+* Revision 6.79  2001/05/02 16:22:05  dondosha
+* Add NSEQ and LENGTH to alias files in case of multiple inputs to formatdb
+*
+* Revision 6.78  2001/04/11 21:00:53  dondosha
+* Made functions FD_CreateAliasFile(Ex) public
+*
+* Revision 6.77  2001/04/11 20:14:06  dondosha
+* Added volume information to FDB_options structure
+*
 * Revision 6.76  2001/03/29 20:15:59  madden
 * Removed unneeded #define
 *
@@ -425,6 +457,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 #include <sequtil.h>
 #include <ncbisam.h>
 #include <tofasta.h>
+#include <txalign.h>
 
 /* This define should be added here to pacify NT build */
 #ifndef NLM_GENERATED_CODE_PROTO
@@ -514,6 +547,7 @@ belong to the same sequence. */
 #define FORMATDB_VER_TEXT 3
 #define FORMATDB_VER      4
 
+
 /* 'Magic' number at the beginning of a binary gi list that indicates it is binary. */
 #define READDB_MAGIC_NUMBER UINT4_MAX
 
@@ -598,7 +632,7 @@ typedef struct	CommonIndexHead {
     Nlm_MemMapPtr	memmap;
     Int2		num_of_DBs;
     DataBaseIDPtr	dbids;
-    Int4		maxgi; /* maximum GI number permited */
+    Int4		maxgi; /* maximum GI number permitted */
 } CommonIndexHead, *CommonIndexHeadPtr;
 
 typedef	struct	OIDList {
@@ -634,14 +668,6 @@ typedef	struct _RDBTaxInfo {
     FILE        *name_fd;        /* Pointer to the file with taxonomy names */
 } RDBTaxInfo, *RDBTaxInfoPtr;
 
-typedef	struct _RDBTaxNames {
-    Int4 tax_id;
-    CharPtr sci_name;
-    CharPtr common_name;
-    CharPtr blast_name;
-    Char  s_king[3];
-} RDBTaxNames, *RDBTaxNamesPtr;
-
 typedef	struct _RDBTaxLookup {
     Int4 all_taxid_count; /* Total number of taxids in the database */
     Int4 taxids_in_db;
@@ -650,7 +676,7 @@ typedef	struct _RDBTaxLookup {
                                   if  any */
     VoidPtr tax_data;      /* This data may be set and used by the callback */
 } RDBTaxLookup, *RDBTaxLookupPtr;
-    
+
 typedef Boolean (*TaxCallbackFunc) (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
 
 /*    ----
@@ -1019,13 +1045,14 @@ typedef struct _FDB_options {
     CharPtr LogFileName; /* Used only in formatdb.c */
     Int4 is_protein;     /* Is this protein database ? */
     Int4 parse_mode;     /* Do we assume, that deflines are started from 
-                             valif SeqIds ? */
+                             valid SeqIds ? */
     Int4 isASN;          /* read from file or ASN - used only in formatdb.c */
     Int4 asnbin;         /* What is this type of ASN? used only 
                             in formatdb.c */
     Int4 is_seqentry;    /* What is this type of ASN? used only 
                              in formatdb.c */
     CharPtr base_name;   /* Name for db files to be created 'OUT' name */
+    CharPtr	alias_file_name; /* name to be used for BLAST alias-file. */
     Int4  dump_info;     /* To printout file with information about tax_id,
                              owner, hash etc. - used for dump from ID */
                              
@@ -1038,13 +1065,17 @@ typedef struct _FDB_options {
 
     TaxCallbackFunc tax_callback; /* Function to retrieve taxonomy names from
                                      Taxonomy server */
+   Int8 bases_in_volume;  /* The maximal number of bases that can be stored in
+                             one volume of the database */
+   Int2 volume;      /* Largest volume */
+   CharPtr	alias_file, /* name of alias file to be generated. */
+		gi_file,	/* Gi file to be used in processing. */
+		gi_file_bin;	/* Gi file to be used in processing. */
 } FDB_options, PNTR FDB_optionsPtr;
     
 typedef struct formatdb 
 {
     /* CharPtr	dbname;	(db_file)  name of input database */
-    /* CharPtr	basename; (base_name)  base-name to be used for 
-       BLAST databases. */
     /* CharPtr	DbTitle; (db_title) database title */
     
     /* file handlers */
@@ -1093,11 +1124,14 @@ typedef struct formatdb
 /* Function prototypes for formatdb library*/
 
 FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
-Int2 FDBAddSequence (FormatDBPtr fdbp, Int4 gi, CharPtr seq_id,
-                     CharPtr title, Int4 tax_id, CharPtr div, 
-                     Int4 owner, Uint1 seq_data_type, 
-                     ByteStorePtr *seq_data, Int4 SequenceLen, Int4 date);
-Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, Int4 tax_id);
+
+Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp, 
+                     Uint1 seq_data_type, ByteStorePtr *seq_data, 
+                     Int4 SequenceLen, 
+                     CharPtr seq_id, CharPtr title, 
+                     Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date);
+    
+Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
 void FDB_FreeCLOptions(FDB_optionsPtr options);
@@ -1153,6 +1187,17 @@ Int4 FastaToBlastDB PROTO((FDB_optionsPtr options, CharPtr basename,
 			   Int4 Bases_In_Volume));
 
 BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number);
+
+Boolean FD_CreateAliasFileEx PROTO((CharPtr title, CharPtr basename, 
+            Int4 volumes, Boolean is_protein, CharPtr parent,
+            Int4 first_oid, Int4 last_oid, Int8 total_length, Int4 number_seqs,
+	    CharPtr oidlist, CharPtr gifile));
+
+Boolean FD_CreateAliasFile PROTO((CharPtr title, CharPtr basename, 
+                                    Int4 volumes, Boolean is_protein));
+
+/* simple function to make alias file give FDB_optionsPtr, alias file is only made if appropriate. */
+Boolean FD_MakeAliasFile PROTO((FDB_optionsPtr options));
 
 #ifdef __cplusplus
 }

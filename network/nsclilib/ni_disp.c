@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.8 $
+* $Revision: 4.9 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,9 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.9  2001/04/13 14:59:40  kans
+* header for dup on Mac
+*
 * Revision 4.8  2001/01/04 22:42:50  vakatov
 * NI_ServerACK(), NI_ServerNACK() -- to do nothing, always return 0.
 *
@@ -390,6 +393,10 @@ extern "C" {
 
 #ifdef OS_UNIX
   extern char *getlogin(void);
+#endif
+
+#ifdef OS_MAC
+  extern int dup(int fildes);
 #endif
 
 #ifdef __cplusplus

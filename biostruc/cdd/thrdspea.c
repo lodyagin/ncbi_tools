@@ -1,4 +1,4 @@
-/* $Id: thrdspea.c,v 1.2 2001/03/02 23:14:12 hurwitz Exp $
+/* $Id: thrdspea.c,v 1.3 2001/04/25 15:43:29 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspea.c,v $
+* Revision 1.3  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.2  2001/03/02 23:14:12  hurwitz
 * run threading faster for PSSM weight=1, bug fix
 *
@@ -82,7 +85,7 @@ int	gs;		/* Potential profile energy sum */
 int	ms;		/* Motif energy sum */
 int	cs;		/* Conservation energies sum */
 int	ls;		/* Loopout energies sum */
-int	s0;		/* Expected motif energy sum */
+/*int	s0;*/		/* Expected motif energy sum */
 int	mn, mx;		
 int     nrt;            /* Number of residue types in potential */
 
@@ -141,10 +144,9 @@ for(i=0; i<nsc; i++) printf("%d ",spe->gs[i]); printf("spe->gs\n"); */
 
 /* Sum motif energies */
 
-ms=0; s0=0;
-	mn=cdf->sll.rfpt[n]-cdf->sll.nomn[n];
-	mx=cdf->sll.rfpt[n]+cdf->sll.comn[n];
-
+ms=0; /*s0=0;*/
+	mn=cdf->sll.rfpt[n]-sli->no[n];
+	mx=cdf->sll.rfpt[n]+sli->co[n]; 
 
 /*printf("\nAligned segment number:");printf("%d\n",n);
 printf("sll.rfpt[n],cdf->sll.nomn[n],cdf->sll.comn[n]:");
@@ -159,8 +161,8 @@ for(j=mn;j<=mx;j++) {
 	if(t1<0) continue;
 	ms+=psm->ww[j][t1];
 
-	for(k=0;k<psm->AlphabetSize;k++){
-	s0+=psm->ww[j][k]*spc->rt[k]; }
+/*	for(k=0;k<psm->AlphabetSize;k++){
+	s0+=psm->ww[j][k]*spc->rt[k]; } */
 
 	}
 
@@ -168,18 +170,20 @@ for(j=mn;j<=mx;j++) {
 
 
 spe->ms[n]=ms;
-spe->s0[n]=s0;
 
 /* Sum conservation energies */
 
+/*
 cs=0;
 spe->cs[n]=cs;
+*/
 
 /* Sum loopout energies */
 
+/*
 ls=0;
 spe->ls[n]=ls;
-
+*/
 
 }
 

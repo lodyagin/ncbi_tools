@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *
@@ -48,6 +48,9 @@
 *
 * RCS Modification History:
 * $Log: ni_defin.h,v $
+* Revision 6.2  2001/05/08 16:43:57  juran
+* Use errno, not errno_long.
+*
 * Revision 6.1  1999/11/23 21:43:30  vakatov
 * [WIN32] Always #define NETP_INET_WSOCK for Win32
 *
@@ -316,7 +319,7 @@
 /* The errno_long mechanism is used for interoperability between the           */
 /* network services library and the NCSA socket library, which need not have   */
 /* been compiled with the same integer size (2 byte vs. 4 byte)                */
-#define SOCK_ERRNO errno_long
+#define SOCK_ERRNO errno
 #endif /* NETP_INET_MACTCP */
 
 

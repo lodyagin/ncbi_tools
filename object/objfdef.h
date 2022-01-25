@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objfdef.h,v $
+* Revision 6.2  2001/05/29 22:46:03  kans
+* added FEATDEF_snoRNA, increased FEATDEF_MAX
+*
 * Revision 6.1  1998/06/29 20:31:28  kans
 * explicit defines for FEATDEF_MAX, SEQFEAT_MAX, and SEQDESCR_MAX Boolean array sizes
 *
@@ -329,8 +332,9 @@ NLM_EXTERN FeatDefPtr LIBCALL FeatDefFindNext PROTO((FeatDefPtr curr, Uint1Ptr k
 #define FEATDEF_mat_peptide_aa 87
 #define FEATDEF_sig_peptide_aa 88
 #define FEATDEF_transit_peptide_aa 89
+#define FEATDEF_snoRNA 90
 
-#define FEATDEF_MAX 90 /* size of array needed for featdef filter parameters */
+#define FEATDEF_MAX 91 /* size of array needed for featdef filter parameters */
 
 
 #ifdef __cplusplus

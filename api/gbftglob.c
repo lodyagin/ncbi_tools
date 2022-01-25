@@ -4,6 +4,12 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.17  2001/04/10 22:17:11  tatiana
+* GBQUAL_endogenous_virus backed off to /note
+*
+* Revision 6.16  2001/04/10 21:59:28  tatiana
+* GBQUAL_endogenous_virus added
+*
 * Revision 6.15  2001/01/30 16:20:02  kans
 * precursor_RNA allows /product
 *
@@ -147,7 +153,7 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"usedin", Class_token}, {"variety", Class_text}, {"virion", Class_none},
  {"focus", Class_none}, { "specimen_voucher", Class_text},
  {"protein_id", Class_text}, { "country", Class_text},
- {"organelle", Class_text}, {"transcript_id", Class_text}, 
+ {"organelle", Class_text}, {"transcript_id", Class_text},   
  };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -495,7 +501,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 46,
+   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 47,
      {GBQUAL_cell_line, GBQUAL_cell_type, GBQUAL_chloroplast, 
       GBQUAL_chromoplast, GBQUAL_chromosome,
       GBQUAL_citation, GBQUAL_clone, GBQUAL_clone_lib, GBQUAL_country, GBQUAL_cultivar,

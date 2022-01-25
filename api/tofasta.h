@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.14  2001/06/25 23:47:48  kans
+* added InstantiateProteinTitles and ClearProteinTitles
+*
 * Revision 6.13  2001/02/27 21:52:37  madden
 * Added BioseqToFastaDump and FastaDumpFileFunc for dumping BLAST db in FASTA
 *
@@ -403,6 +406,18 @@ Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot);
 *****************************************************************************/
 NLM_EXTERN void NC_Cleanup (Uint2 entityID, Pointer ptr);
 NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr);
+
+/*****************************************************************************
+*
+*   InstantiateProteinTitles (entityID, ptr) and ClearProteinTitles (entityID, ptr)
+*     allows proteins titles to be kept as Seq_descr_title rather than always
+*     being generated on the fly
+*
+*****************************************************************************/
+NLM_EXTERN void InstantiateProteinTitles (Uint2 entityID, Pointer ptr);
+NLM_EXTERN void ClearProteinTitles (Uint2 entityID, Pointer ptr);
+
+
 #ifdef __cplusplus
 }
 #endif

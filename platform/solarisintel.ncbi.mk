@@ -1,5 +1,5 @@
 #
-# $Id: solarisintel.ncbi.mk,v 1.13 2001/02/12 17:28:45 beloslyu Exp $
+# $Id: solarisintel.ncbi.mk,v 1.14 2001/06/12 21:11:56 vakatov Exp $
 #
 NCBI_DEFAULT_LCL = sin
 NCBI_MAKE_SHELL = /usr/bin/sh
@@ -64,3 +64,7 @@ NCBI_LAGOTHERLIBS = $(NCBI_OTHERLIBS)
 NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/usr/dt/lib -DWIN_MOTIF
 NCBI_DBUGEXTRA = -g
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+

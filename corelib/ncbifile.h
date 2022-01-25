@@ -32,7 +32,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   	prototypes for portable file routines
@@ -40,6 +40,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbifile.h,v $
+* Revision 6.5  2001/04/05 21:36:05  juran
+* EjectCd and MountCd #defined to FALSE.
+*
 * Revision 6.4  2000/03/08 17:55:48  vakatov
 * Use Int8 for the file size.
 * Also, get rid of the WIN16 code, do other cleanup.
@@ -93,8 +96,6 @@ NLM_EXTERN void LIBCALL Nlm_FileCreate(Nlm_CharPtr fileName, Nlm_CharPtr type, N
 NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CreateDir(Nlm_CharPtr pathname);
 NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname);
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam(Nlm_CharPtr s);
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_EjectCd(Nlm_CharPtr sVolume, Nlm_CharPtr deviceName, Nlm_CharPtr rawDeviceName, Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd);
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_MountCd(Nlm_CharPtr sVolume, Nlm_CharPtr deviceName, Nlm_CharPtr mountPoint, Nlm_CharPtr mountCmd);
 NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook(Nlm_FileOpenHook hook);
 
 #define FileOpen Nlm_FileOpen
@@ -114,8 +115,8 @@ NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook(Nlm_FileOpenHook hook);
 #define CreateDir Nlm_CreateDir
 #define DirCatalog Nlm_DirCatalog
 #define TmpNam Nlm_TmpNam
-#define EjectCd Nlm_EjectCd
-#define MountCd Nlm_MountCd
+#define EjectCd(sVolume, deviceName, rawDeviceName, mountPoint, mountCmd)  FALSE
+#define MountCd(sVolume, deviceName, mountPoint, mountCmd)                 FALSE
 
 
 #ifdef __cplusplus

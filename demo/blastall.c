@@ -1,5 +1,5 @@
-/* $Id: blastall.c,v 6.87 2001/04/02 13:52:15 madden Exp $
-/**************************************************************************
+/* $Id: blastall.c,v 6.97 2001/07/05 15:40:33 madden Exp $
+**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
 *                                                                         *
@@ -26,6 +26,36 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.97  2001/07/05 15:40:33  madden
+ * Comment out DO_NOT_SUPPRESS_BLAST_OP for release
+ *
+ * Revision 6.96  2001/07/03 20:50:33  madden
+ * Commented out call to PrintTabularOutputHeader
+ *
+ * Revision 6.95  2001/06/21 21:49:55  dondosha
+ * No need to declare extra variable vnp
+ *
+ * Revision 6.94  2001/06/21 21:29:08  dondosha
+ * Fixed memory leaks: destroy all error returns, free private_slp
+ *
+ * Revision 6.93  2001/06/15 21:20:19  dondosha
+ * Moved -m9 option to -m8; added header for tabular output
+ *
+ * Revision 6.92  2001/06/07 19:30:03  dondosha
+ * Pass believe query argument to BlastPrintTabulatedResults
+ *
+ * Revision 6.91  2001/06/06 21:22:44  dondosha
+ * Added (query) Bioseq and SeqLoc arguments to function BlastPrintTabulatedResults
+ *
+ * Revision 6.90  2001/05/25 19:26:36  vakatov
+ * Nested comment typo fixed
+ *
+ * Revision 6.89  2001/05/23 22:38:47  dondosha
+ * Added option -m 9 to print post-search tabulated output
+ *
+ * Revision 6.88  2001/04/10 19:20:52  madden
+ * Unsuppress some options suppressed for the release
+ *
  * Revision 6.87  2001/04/02 13:52:15  madden
  * Fix for last checkin, properly suppress some options
  *
@@ -481,6 +511,10 @@ BlastGetMaskingLoc(FILE *infp, FILE *outfp, CharPtr instructions)
 	return 0;
 }
 
+/*
+#define DO_NOT_SUPPRESS_BLAST_OP 
+*/
+
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
 static Args myargs [] = {
@@ -492,7 +526,7 @@ static Args myargs [] = {
       "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tab-delimited fields", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "BLAST report Output File", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -569,12 +603,12 @@ static Args myargs [] = {
     { "Location on query sequence",/* 36 */
       NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
     { "Multiple Hits window size (zero for single hit algorithm)", /* 37 */
-      "40", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL}
+      "40", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
 #ifdef DO_NOT_SUPPRESS_BLAST_OP
     { "Frame shift penalty (OOF algorithm for blastx)", /* 38 */
       "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL},
     { "Length of the largest intron allowed in tblastn for linking HSPs (0 disables linking)", /* 39 */
-      "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL}, 
+      "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL} 
 #endif
 };
 
@@ -756,12 +790,9 @@ Int2 Main (void)
        options->block_width = 0;
     }
     
-    if (align_view == 8) {
+    if (align_view == 8 && options->is_megablast_search) {
        options->output = (VoidPtr) outfp;
-       if (options->is_megablast_search)
-          handle_results = MegaBlastPrintAlignInfo;
-       else
-          handle_results = BlastPrintAlignInfo;
+       handle_results = MegaBlastPrintAlignInfo;
     } else 
        handle_results = NULL;
 
@@ -1241,7 +1272,23 @@ Int2 Main (void)
         ReadDBBioseqSetDbGeneticCode(options->db_genetic_code);
 
         tmp_slp = slp;
+        if (slp)
+           query_bsp = NULL;
+
         if (seqalign) {
+           if (align_view == 8) {
+/*
+              PrintTabularOutputHeader(blast_database, query_bsp, slp, 
+                                       blast_program, 0, believe_query,
+                                       global_fp);
+*/
+              BlastPrintTabulatedResults(seqalign, query_bsp, slp, 
+                                         number_of_alignments,
+                                         blast_program, 
+                                         !options->gapped_calculation,
+                                         believe_query, from, 0, global_fp);
+              SeqAlignSetFree(seqalign);
+           } else {
            while (seqalign) {
               if (!options->is_megablast_search)
                  next_seqalign = NULL;
@@ -1272,7 +1319,7 @@ Int2 Main (void)
                  bsp = BioseqLockById(SeqLocId(tmp_slp));
                  init_buff_ex(85);
                  fprintf(outfp, "\n");
-                 AcknowledgeBlastQuery(bsp, 70, outfp, FALSE, html);
+                 AcknowledgeBlastQuery(bsp, 70, outfp, believe_query, html);
                  free_buff();
                  BioseqUnlock(bsp);
               }
@@ -1326,6 +1373,7 @@ Int2 Main (void)
                  seqannot = SeqAnnotFree(seqannot);
               seqalign = next_seqalign;
            }
+           }
         } else {         /* seqalign is NULL */
            if(align_view == 7 && !options->is_ooframe) {
               BlastErrorMsgPtr error_msg;
@@ -1337,20 +1385,20 @@ Int2 Main (void)
                  error_msg = error_returns->data.ptrvalue;
                  message = error_msg->msg;
               }
-              
+           
               BXMLPrintOutput(xml_aip, NULL, 
                               options, blast_program, blast_database, 
                               fake_bsp, other_returns, 0, message);
               
-              if (error_returns != NULL) {
-                 MemFree(error_msg->msg);
-                 MemFree(error_msg);
-                 MemFree(error_returns);
-              }
-              
               AsnIoReset(xml_aip);
            } else if (align_view < 8) {
               fprintf(outfp, "\n\n ***** No hits found ******\n\n");
+           }
+           if (error_returns != NULL) {
+              for (vnp = error_returns; vnp; vnp = vnp->next) {
+                 BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
+              }
+              ValNodeFree(error_returns);
            }
         }
         

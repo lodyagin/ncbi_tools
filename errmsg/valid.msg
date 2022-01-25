@@ -188,6 +188,12 @@ $^   MultipleChromosomes, 16
 There are multiple chromosome qualifiers on this Bioseq.  With the exception of
 some pseudoautosomal genes, this is likely to be a biological annotation error.
 
+$^   BadSubSource, 17
+Unassigned SubSource subtype.
+
+$^   BadOrgMod, 18
+Unassigned OrgMod subtype.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -439,6 +445,17 @@ transcription of the mRNA feature. Please determine why they are different.
 $^   TranscriptMismatches, 46
 The mRNA sequence and the transcription of the mRNA feature are different.
 If the number is large, it may indicate incorrect intron/exon boundaries.
+
+$^   CDSproductPackagingProblem, 47
+The nucleotide location and protein product of the CDS are not packaged together
+in the same nuc-prot set.  This may be an error in the software used to create
+the record.
+
+$^   DuplicateInterval, 48
+The location has identical adjacent intervals, e.g., a duplicate exon reference.
+
+$^   PolyAsiteNotPoint, 49
+A polyA_site should be at a single nucleotide position.
 
 $$ SEQ_ALIGN, 6
 

@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.20 2001/03/07 20:29:19 bauer Exp $
+/* $Id: cddserver.c,v 1.24 2001/06/20 20:50:50 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.20 $
+* $Revision: 1.24 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.24  2001/06/20 20:50:50  bauer
+* fixed a problem with gi's for PDB-derived sequences
+*
+* Revision 1.23  2001/06/19 16:02:37  bauer
+* fixed URL for linking to SMART by accession
+*
+* Revision 1.22  2001/05/31 22:04:45  bauer
+* changes to accomodate new type of Smart accessions
+*
+* Revision 1.21  2001/05/23 21:19:02  bauer
+* fix a problem with displaying CDs without consensus
+*
 * Revision 1.20  2001/03/07 20:29:19  bauer
 * cddserver.c
 *
@@ -164,14 +176,24 @@ static Boolean CddGetParams()
                 ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no URLcgi...\n");
                 return FALSE;
   }
-  GetAppParam("cdd", "CDDSRV", "PFAMcgi", "", PFAMcgi, PATH_MAX);
-  if (PFAMcgi[0] == '\0') {
-                ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no PFAMcgi...\n");
+  GetAppParam("cdd", "CDDSRV", "PFAMcgiUS", "", PFAMcgiUS, PATH_MAX);
+  if (PFAMcgiUS[0] == '\0') {
+                ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no PFAMcgiUS...\n");
+                return FALSE;
+  }
+  GetAppParam("cdd", "CDDSRV", "PFAMcgiUK", "", PFAMcgiUK, PATH_MAX);
+  if (PFAMcgiUK[0] == '\0') {
+                ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no PFAMcgiUK...\n");
                 return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "SMARTcgi", "", SMARTcgi, PATH_MAX);
   if (SMARTcgi[0] == '\0') {
                 ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no SMARTcgi...\n");
+                return FALSE;
+  }
+  GetAppParam("cdd", "CDDSRV", "SMACCcgi", "", SMACCcgi, PATH_MAX);
+  if (SMACCcgi[0] == '\0') {
+                ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no SMACCcgi...\n");
                 return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "ENTREZurl", "", ENTREZurl, PATH_MAX);
@@ -679,11 +701,16 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
         case CddDescr_source:
           strcpy(source,pCddesc->data.ptrvalue);
           if (strcmp("Smart",source) == 0) {
-            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
-                    SMARTcgi,cCDDid,source);
+	    if (StrNCmp(cCDDid,"smart0",6) == 0) {
+              fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                      SMACCcgi,&cCDDid[5],source);
+	    } else {
+              fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                      SMARTcgi,cCDDid,source);
+            }
           } else if (strcmp("Pfam",source) == 0) {
-            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
-                    PFAMcgi,&cCDDid[4],source);
+            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s[US]</A>, <A HREF=\"%s%s\">%s[UK]</A></TD></TD>\n",
+                    PFAMcgiUS,&cCDDid[4],source,PFAMcgiUK,&cCDDid[4],source);
           } else {
             fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%s</TD></TD>\n",source);
           }
@@ -1044,11 +1071,16 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
         case CddDescr_source:
           strcpy(source,pCddesc->data.ptrvalue);
           if (strcmp("Smart",source) == 0) {
-            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
-                    SMARTcgi,cCDDid,source);
+	    if (StrNCmp(cCDDid,"smart0",6) == 0) {
+              fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                      SMACCcgi,&cCDDid[5],source);
+	    } else {
+              fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                      SMARTcgi,cCDDid,source);
+            }
           } else if (strcmp("Pfam",source) == 0) {
-            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
-                    PFAMcgi,&cCDDid[4],source);
+            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s[US]</A>, <A HREF=\"%s%s\">%s[UK]</A></TD></TD>\n",
+                    PFAMcgiUS,&cCDDid[4],source,PFAMcgiUK,&cCDDid[4],source);
           } else {
             fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%s</TD></TD>\n",source);
           }
@@ -1218,11 +1250,16 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
         case CddDescr_source:
           strcpy(source,pCddesc->data.ptrvalue);
           if (strcmp("Smart",source) == 0) {
-            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
-                    SMARTcgi,cCDDid,source);
+	    if (StrNCmp(cCDDid,"smart0",6) == 0) {
+              printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                      SMACCcgi,&cCDDid[5],source);
+	    } else {
+              printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                      SMARTcgi,cCDDid,source);
+            }
           } else if (strcmp("Pfam",source) == 0) {
-            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
-                    PFAMcgi,&cCDDid[4],source);
+            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s[US]</A>, <A HREF=\"%s%s\">%s[UK]</A></TD></TD>\n",
+                    PFAMcgiUS,&cCDDid[4],source,PFAMcgiUK,&cCDDid[4],source);
           } else {
             printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%s</TD></TD>\n",source);
           }
@@ -1458,6 +1495,18 @@ Int2 Main()
   } else {
     www_arg = WWWGetValueByIndex(www_info, indx);
     strcpy(dbversion,www_arg);
+  }
+/*---------------------------------------------------------------------------*/
+/* kludge to reset version number to 1.51 if an OLD Smart accession is used  */
+/*---------------------------------------------------------------------------*/
+  if (StringNCmp(cCDDid,"smart0",6)) {
+    if (StringNCmp(cCDDid,"pfam",4)) {
+      if (StringNCmp(cCDDid,"LOAD_",5)) {
+        if (StringCmp(dbversion,"v1.52") == 0) {
+          strcpy(dbversion,"v1.51"); 
+        }
+      }
+    }
   }
 
 /*---------------------------------------------------------------------------*/
@@ -1782,6 +1831,12 @@ Int2 Main()
     }
   } else bMode = FALSE;            /* can't show alignment if none available */
 
+/*---------------------------------------------------------------------------*/
+/* fix problem with displaying CDs that have no consensus, 3D structures,    */
+/* but a regular sequence as the representative/master                       */
+/*---------------------------------------------------------------------------*/
+  if (!bHave3dRep) bHasPdb = FALSE;
+  if (!bHasConsensus && !pcds->bIsPdb) bHasPdb=FALSE;
 
 /*---------------------------------------------------------------------------*/
 /* in case we're dealing with Blast output formatting, add alignment on top  */
@@ -1976,7 +2031,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   if (!bMode) {
     if (pcds) {
-      CddServerShowTracks(pcds,pcdd,iTaxId,nPdb > 0,dbversion,bHasConsensus,bShowTax);
+      CddServerShowTracks(pcds,pcdd,iTaxId,bHasPdb,dbversion,bHasConsensus,bShowTax);
     } else {
       CddServerShowTracks(pcds,pcdd,iTaxId,FALSE,dbversion,bHasConsensus,bShowTax);
     }
@@ -2020,7 +2075,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* automatically change the iSeqStrMode settings if a structure is available */
 /*---------------------------------------------------------------------------*/
-  if (nPdb) {
+  if (bHasPdb) {
     if (iSeqStrMode==CDDSEQUONLY) iSeqStrMode = CDDONESTRUC;
     if (nPdb > 1 && CddGetStatus(pcdd)!=3) {
       if (iSeqStrMode==CDDONESTRUC) iSeqStrMode = CDDSEVSTRUC;
@@ -2036,7 +2091,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* retrieve Master structure in the case of a single-structure CD            */
 /*---------------------------------------------------------------------------*/
-  if (bMode && nPdb) { 
+  if (bMode && bHasPdb) { 
     if (!bHasConsensus) {
       strcpy(szName,pcds->cPdbId);
     } else {
@@ -2119,13 +2174,13 @@ Int2 Main()
       bMode = CDDALIGNMENT;
       iSeqStrMode = CDDSEQUONLY;
     } else if (cMode == 's') {
-      if (nPdb){ bMode = CDDALIGNMENT;
-                 iSeqStrMode = CDDONESTRUC;
-               }
+      if (bHasPdb){ bMode = CDDALIGNMENT;
+        iSeqStrMode = CDDONESTRUC;
+      }
     } else if (cMode == 'v') {
-      if (nPdb > 1) { bMode = CDDALIGNMENT;
-                      iSeqStrMode = CDDSEVSTRUC;
-                    }
+      if (bHasPdb && nPdb > 1) { bMode = CDDALIGNMENT;
+        iSeqStrMode = CDDSEVSTRUC;
+      }
     } else if (cMode == 'c' || cMode == 'C') bMode = CDDSUMMARY;       
 #ifdef DEBUG
     printf(" DEBUG: mode selected as %c, interpreted as %d\n",cMode,bMode);
@@ -2139,7 +2194,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* if more than one structure present, VAST results have to be retrieved     */
 /*---------------------------------------------------------------------------*/
-  if (nPdb > 1 && iSeqStrMode != CDDSEQUONLY) {
+  if (bHasPdb && nPdb > 1 && iSeqStrMode != CDDSEQUONLY) {
     pbsa = (BiostrucAnnotSetPtr) pcdd->features;
     pbsfCopy = NULL;
     pbsfTail = NULL;
@@ -2213,7 +2268,7 @@ Int2 Main()
   while (sep) {
     bsp = sep->data.ptrvalue;
     sip = bsp->id;
-    if (sip->choice == SEQID_PDB) {
+    if (sip->choice == SEQID_PDB && NULL == sip->next) {
       sipNew = ValNodeNew(NULL);
       sipNew->choice = SEQID_GI;
       sipNew->data.intvalue = EntrezFindSeqId(sip);

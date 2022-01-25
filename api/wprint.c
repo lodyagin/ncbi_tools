@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.53 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -45,6 +45,12 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.55  2001/04/23 22:40:04  tatiana
+ * estimated size increased in www_featkey()
+ *
+ * Revision 6.54  2001/04/12 22:31:37  yaschenk
+ * fixing string size estimates in www_accession
+ *
  * Revision 6.53  2001/02/01 16:23:09  tatiana
  * typo fixed in RGD link
  *
@@ -669,7 +675,7 @@ NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Int2
 	if (www) {
 		l = StringLen(link_ff);
 		ll = StringLen("<a href=%sgi=%ld&id=%d&entity=%d>");
-		s = (CharPtr)MemNew(l+ ll + 5);
+		s = (CharPtr)MemNew(l+ ll + 3*7);
 		sprintf(s, "<a href=%sgi=%ld&id=%d&entity=%d>", 
 							link_ff, (Int4) gi, itemID, entityID);
 		AddLink(s);
@@ -2018,7 +2024,7 @@ NLM_EXTERN void LIBCALL www_accession (CharPtr string)
 	} else {
 			link = link_seq;
 			prefix = "<a href=%sval=%s>";
-			s = (CharPtr)MemNew(StringLen(link_seq)+ StringLen(prefix) + 10);
+			s = (CharPtr)MemNew(StringLen(link_seq)+ StringLen(prefix) + StringLen(string) + 10);
 			sprintf(s, prefix, link, string);
 			AddLink(s);
 			MemFree(s);

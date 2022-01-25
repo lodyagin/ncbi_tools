@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
@@ -732,7 +732,8 @@ static void RunTrnaScan (CharPtr tempfile)
   pclose (fp);
 
   if (idNotSent) {
-    printf (">Message\ntRNAscan-SE found no tRNA genes in this sequence\n");
+    sprintf (str, ">Message\ntRNAscan-SE found no tRNA genes in this sequence\n");
+    EncodeAndWrite (str, strlen (str), stdout);
     fflush (stdout);
   }
 }

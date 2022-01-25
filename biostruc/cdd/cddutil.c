@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.38 2001/03/07 20:27:37 bauer Exp $
+/* $Id: cddutil.c,v 1.43 2001/05/24 15:02:22 kans Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.38 $
+* $Revision: 1.43 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.43  2001/05/24 15:02:22  kans
+* included salpacc for Mac compiler
+*
+* Revision 1.42  2001/05/23 21:18:05  bauer
+* added functions for alignment block structure control
+*
+* Revision 1.41  2001/04/11 19:49:56  kans
+* include profiles.h for Mac compiler
+*
+* Revision 1.40  2001/04/10 20:26:23  bauer
+* *** empty log message ***
+*
+* Revision 1.39  2001/04/10 20:18:09  bauer
+* write out ascii-formatted mtx-Files for copymat
+*
 * Revision 1.38  2001/03/07 20:27:37  bauer
 * fixed bug in CddBioseqCopy
 *
@@ -175,6 +190,8 @@
 #include <blastpri.h>
 #include <accid1.h>
 #include <thrddecl.h>
+#include <profiles.h>
+#include <salpacc.h>
 
 static void CddCposCompPart1(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
                              compactSearchItems* compactSearch, ValNodePtr* LetterHead,
@@ -1897,16 +1914,8 @@ CddExpAlignPtr CddExpAlignFree(CddExpAlignPtr pCDea)
 
   if (!pCDea) return NULL;
   if (NULL != pCDea->adata) free(pCDea->adata);
-  if (pCDea->bIdAlloc) {
-    sip = pCDea->ids;
-    while (sip) {
-      sipNext = sip->next;
-      SeqIdFree(sip);
-      sip = sipNext;
-    }
-  }
-  free(pCDea);
-  return(pCDea);
+  pCDea->ids = SeqIdSetFree(pCDea->ids);
+  return MemFree(pCDea);
 }
 
 void           CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength)
@@ -1933,7 +1942,7 @@ CddExpAlignPtr SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep)
   
   pCDea = CddExpAlignNew();
   ddp = salp->segs;
-  pCDea->ids = ddp->id;
+  pCDea->ids = SeqIdDupList(ddp->id);
   sip = SeqIdDup(pCDea->ids);
   bsp1 = CddRetrieveBioseqById(sip,sep);
   SeqIdFree(sip);
@@ -1977,7 +1986,7 @@ CddExpAlignPtr InvertCddExpAlign(CddExpAlignPtr pCDea, SeqEntryPtr sep)
 /*---------------------------------------------------------------------------*/
 /* Convert an Explicit Alignment Object (with proper IDs) to a SeqAlign      */
 /*---------------------------------------------------------------------------*/
-SeqAlignPtr    CddExpAlignToSeqAlign(CddExpAlignPtr pCDea)
+SeqAlignPtr CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter)
 {
   SeqAlignPtr   salp;
   DenseDiagPtr  ddp, ddplast = NULL;
@@ -2002,7 +2011,8 @@ SeqAlignPtr    CddExpAlignToSeqAlign(CddExpAlignPtr pCDea)
       ddp->starts[0] = i;
       ddp->starts[1] = pCDea->adata[i];
       ddp->len = 1;
-      while (i<(pCDea->length-1) &&  pCDea->adata[i+1]==(pCDea->adata[i]+1)) {
+      while (i<(pCDea->length-1) && pCDea->adata[i+1]==(pCDea->adata[i]+1) &&
+             (NULL == iBreakAfter || iBreakAfter[i] == 0)) {
 	ddp->len++;
 	i++;
       }
@@ -2828,7 +2838,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
       pCDea->adata[pCEACell[0][k].seqpos]=pCEACol[k].conpos;
     }
   }
-  *salpCons = CddExpAlignToSeqAlign(pCDea);
+  *salpCons = CddExpAlignToSeqAlign(pCDea,NULL);
   pCDea = CddExpAlignFree(pCDea);
 
 /*---------------------------------------------------------------------------*/
@@ -2846,7 +2856,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
         pCDea->adata[pCEACol[k].conpos]=pCEACell[i][k].seqpos;
       }
     }
-    salpThis = CddExpAlignToSeqAlign(pCDea);
+    salpThis = CddExpAlignToSeqAlign(pCDea,NULL);
     pCDea = CddExpAlignFree(pCDea);
     if (!salpNew) {
       salpNew = salpThis;
@@ -3203,7 +3213,7 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
     bop->options = options;
     bop->query_bsp = bsp; 
     BLASTOptionSetGapParams(options, matrix_name, 0, 0);
-    bop->is_xml_output = FALSE;
+    /* bop->is_xml_output = FALSE; */
     bop->align_options = 0;
     bop->print_options = 0;
     options->required_start = 0;
@@ -3260,6 +3270,85 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
     return bop;
 }
 
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* write out a matrix-file (ASCII formatted) for use with copymat/formatdb   */
+/* routines from makemat, 4/9/01                                             */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+static void CddputMatrixKbp(FILE *checkFile, BLAST_KarlinBlkPtr kbp,
+                            Boolean scaling, Nlm_FloatHi scalingDown)
+{
+  if (scaling)
+    fprintf(checkFile,"%le\n",kbp->Lambda * scalingDown);
+  else
+    fprintf(checkFile,"%le\n",kbp->Lambda);
+  fprintf(checkFile,"%le\n",kbp->K);
+  fprintf(checkFile,"%le\n",kbp->logK);
+  fprintf(checkFile,"%le\n",kbp->H);
+}
+
+static void CddputMatrixMatrix(FILE *checkFile, 
+                               compactSearchItems *compactSearch,
+			       posSearchItems *posSearch,
+			       Boolean scaleScores)
+{
+  Int4 i, j;                                                  /*loop indices*/
+
+  if (scaleScores) {
+    for(i = 0; i < compactSearch->qlength; i++) {
+      for(j = 0; j < compactSearch->alphabetSize; j++)
+        fprintf(checkFile,"%ld  ", (long) posSearch->posPrivateMatrix[i][j]);
+      fprintf(checkFile,"\n");
+    }
+  }
+  else {
+    for(i = 0; i < compactSearch->qlength; i++) {
+      for(j = 0; j < compactSearch->alphabetSize; j++)
+        fprintf(checkFile,"%ld  ", (long) posSearch->posMatrix[i][j]);
+      fprintf(checkFile,"\n");
+    }
+  }
+}
+
+static Boolean CddtakeMatrixCheckpoint(compactSearchItems *compactSearch,
+                                       posSearchItems *posSearch,
+				       BLAST_ScoreBlkPtr sbp, 
+                                       Char *fileName,ValNodePtr *error_return,
+				       Boolean scaleScores,
+				       Nlm_FloatHi scalingFactor)
+{
+  FILE * checkFile;                  /* file in which to take the checkpoint */
+  Int4 length;              /* length of query sequence, and an index for it */
+  Int4 i;                                /* indices to position and alphabet */
+  Char localChar;                                     /* temporary character */
+
+  checkFile = FileOpen(fileName, "w");
+  if (NULL == checkFile) {
+    BlastConstructErrorMessage("posTakeCheckpoint", "Could not open checkpoint file", 1, error_return);
+    return(FALSE);
+  }
+  length = compactSearch->qlength;
+  fprintf(checkFile,"%ld\n",(long) length);
+  for(i = 0; i < length; i++) {
+    localChar = getRes(compactSearch->query[i]);
+    fprintf(checkFile,"%c",localChar);
+    posSearch->posMatrix[i][Xchar] = Xscore;
+    posSearch->posPrivateMatrix[i][Xchar] = Xscore * scalingFactor;
+  }  
+  fprintf(checkFile,"\n");
+  CddputMatrixKbp(checkFile, compactSearch->kbp_gap_std[0], scaleScores, 1/scalingFactor);
+  CddputMatrixKbp(checkFile, compactSearch->kbp_gap_psi[0], scaleScores, 1/scalingFactor);
+  CddputMatrixKbp(checkFile, sbp->kbp_ideal, scaleScores, 1/scalingFactor);
+  CddputMatrixMatrix(checkFile, compactSearch, posSearch, scaleScores);
+  FileClose(checkFile);
+  return(TRUE);
+}
+
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* updated version of the PSSM calculation routine, modified from blastpgp.c */
@@ -3278,9 +3367,10 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   ValNodePtr              ColumnHead, LetterHead, newRow, RowHead, newLetter;
   SeqCodeTablePtr         sctp;
   Int4                    numSeqs, numASeqs, alignLength, index, a, iNew, i;
-  Int4                    scale_factor, j, OutLen, jj;
-  Char                    takeCkptFileName[PATH_MAX];
+  Int4                    scale_factor, j, OutLen, jj, c;
+  Char                    ckptFileName[PATH_MAX];
   Char                    cseqFileName[PATH_MAX];
+  Char                    mtrxFileName[PATH_MAX];
   FILE                   *fp;
   Boolean                 bHasConsensus;
   Nlm_FloatHi            *AInf, SumAInf = 0.0;
@@ -3331,7 +3421,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   compactSearch = compactSearchNew(compactSearch);
   copySearchItems(compactSearch, search, bop->options->matrix);
   posInitializeInformation(posSearch,search);
-
+  
 /*---------------------------------------------------------------------------*/
 /* section modelled after BposComputation, posit.c as of 12/28/2000          */
 /*---------------------------------------------------------------------------*/
@@ -3358,16 +3448,35 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /* Construct name for checkpoint file and write out (if in a CD context)     */
 /*---------------------------------------------------------------------------*/
   if (pcdd) {
-    strcpy(takeCkptFileName,pcdd->name);
-    strcat(takeCkptFileName,CKPTEXT);
-    if (NULL != takeCkptFileName)
-      posTakeCheckpoint(posSearch, compactSearch, takeCkptFileName, NULL);
+    strcpy(ckptFileName,pcdd->name);
+    strcat(ckptFileName,CKPTEXT);
+    if (NULL != ckptFileName)
+      posTakeCheckpoint(posSearch, compactSearch, ckptFileName, NULL);
   }
 
   posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
+/*---------------------------------------------------------------------------*/
+/* kludge to set the matrix column for matches to * (stop codons) to the     */
+/* most negative value used, so that matrix-file corresponds to what makemat */
+/* produces.                                                                 */
+/*---------------------------------------------------------------------------*/
+  ASSERT(compactSearch->alphabetSize == 26);                 /* sanity check */
+  for (c=0;c<compactSearch->qlength;c++) {
+    posSearch->posPrivateMatrix[c][compactSearch->alphabetSize-1] = BLAST_SCORE_MIN;
+  }
+
   posScaling(posSearch, compactSearch);
 
   if (pcdd) {
+/*---------------------------------------------------------------------------*/
+/* also, write out the PSSM as an ASCII-formatted MATRIX file, for use with  */
+/* copymat                                                                   */
+/*---------------------------------------------------------------------------*/
+    strcpy(mtrxFileName,pcdd->name);
+    strcat(mtrxFileName,MTRXEXT);
+    CddtakeMatrixCheckpoint(compactSearch,posSearch,search->sbp,mtrxFileName,
+                            NULL,FALSE,1.0);
+
     sctp = SeqCodeTableFind(Seq_code_ncbistdaa);
     LetterHead = NULL;
     for (a=0;a<compactSearch->alphabetSize;a++) {
@@ -3605,7 +3714,7 @@ SeqAlignPtr LIBCALL CddReindexSeqAlign(SeqAlignPtr salp, SeqIdPtr sipMaster,
   }
   pCDea1 = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpThis,bssp->seq_set);
   pCDeaR = (CddExpAlignPtr) InvertCddExpAlign(pCDea1, bssp->seq_set);
-  salpNew = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR);
+  salpNew = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL);
   pCDeaR = CddExpAlignFree(pCDeaR);
   salpTail = salpNew;
   salpHead = salp;
@@ -3614,7 +3723,7 @@ SeqAlignPtr LIBCALL CddReindexSeqAlign(SeqAlignPtr salp, SeqIdPtr sipMaster,
     if (i!= iNotThis) {    
       pCDea = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpHead, bssp->seq_set);
       pCDeaR = (CddExpAlignPtr) CddReindexExpAlign(pCDea1,mlength,pCDea,0,i);
-      salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR);
+      salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL);
       pCDeaR = CddExpAlignFree(pCDeaR);
       pCDea = CddExpAlignFree(pCDea);
       salpTail->next = salpThis;
@@ -3625,4 +3734,194 @@ SeqAlignPtr LIBCALL CddReindexSeqAlign(SeqAlignPtr salp, SeqIdPtr sipMaster,
   
   pCDea1 = CddExpAlignFree(pCDea1);
   return (salpNew);
+}
+/********************************************************************/
+/* Remove all description/annotation info from the bioseq,	    */
+/* except for tax and mmdb info.				    */
+/********************************************************************/
+void LIBCALL CddShrinkBioseq(BioseqPtr bsp)
+{
+    SeqDescrPtr next,sdp,sdp2=NULL;
+    SeqAnnotPtr sap,sap_next,sap2=NULL;
+
+    sdp=bsp->descr;
+    while (sdp != NULL) {
+	next = sdp->next;
+	sdp->next = NULL;
+	if(sdp->choice == Seq_descr_title ||
+	   sdp->choice == Seq_descr_org ||
+	   sdp->choice == Seq_descr_source) {
+	    ValNodeLink(&sdp2, sdp);
+	} else SeqDescFree(sdp);
+	sdp = next;
+    }
+    bsp->descr = sdp2;
+
+    sap = bsp->annot;
+    while (sap != NULL) {
+        sap_next = sap->next;
+	if(sap->type == 4 && ((SeqIdPtr)sap->data)->choice == SEQID_GENERAL
+	   && strcmp(((DbtagPtr)((SeqIdPtr)sap->data)->
+		      data.ptrvalue)->db,"mmdb") == 0 && sap2 == NULL) {
+	    sap2 = sap;
+        } else SeqAnnotFree(sap);
+        sap = sap_next;
+    }
+    bsp->annot = sap2;
+    
+}
+/********************************************************************/
+/* Make a list of m-s seq-aligns proper, aligning only columns	    */
+/* found in all pairs.						    */
+/********************************************************************/
+Int2 LIBCALL CddTrimSeqAligns(CddPtr pcdd)
+{
+    CddExpAlignPtr	ceap,tceap;
+    SeqAlignPtr		salp,salp2,head,head2=NULL;
+    SeqEntryPtr		sep;
+    ValNodePtr		vnp,vhead=NULL;
+    Int2		i;
+    Int4Ptr             iBreakAfter;
+
+    if(pcdd == NULL) return 1;
+    sep = ((BioseqSetPtr)pcdd->sequences->data.ptrvalue)->seq_set;
+    head = pcdd->seqannot->data;
+    if(head == NULL || head->next == NULL) return 1;
+
+    tceap = (CddExpAlignPtr)SeqAlignToCddExpAlign(head, sep);
+    iBreakAfter = MemNew(tceap->length * sizeof(Int4));
+    for (i=0;i<tceap->length;i++) iBreakAfter[i] = 0;
+    for(salp=head; salp; salp=salp->next) {
+      ceap = (CddExpAlignPtr)SeqAlignToCddExpAlign(salp, sep);
+      ValNodeAddPointer(&vhead, 0, ceap);
+      if(SeqIdComp(tceap->ids,ceap->ids) != SIC_YES) {
+	for(vnp=vhead; vnp; vnp=vnp->next) {
+	  ceap = vnp->data.ptrvalue;
+	  ceap->ids = SeqIdSetFree(ceap->ids);
+	  CddExpAlignFree(ceap);
+	}
+	tceap->ids = SeqIdSetFree(tceap->ids);
+	CddExpAlignFree(tceap);
+	ErrPostEx(SEV_WARNING,0,0,"Not master/slave alignments");
+	return 1;
+      }
+      for(i=0; i<tceap->length; i++) {
+	if(ceap->adata[i] == -1) { 
+	  tceap->adata[i] = -1;
+	  if (i > 0) { 
+	    if (ceap->adata[i-1] != -1)  iBreakAfter[i-1] = 1;
+	    if (tceap->adata[i-1] != -1) iBreakAfter[i-1] = 1;
+          }
+	} else {
+	  if (i > 0) {
+	    if (tceap->adata[i-1] != -1 && (tceap->adata[i]-tceap->adata[i-1])>1)
+	      iBreakAfter[i-1] = 1;
+	    if (ceap->adata[i-1] != -1 && (ceap->adata[i]-ceap->adata[i-1])>1)
+	      iBreakAfter[i-1] = 1;
+	  }
+	}
+      }
+    }
+    for(vnp=vhead; vnp; vnp=vnp->next) {
+      ceap = vnp->data.ptrvalue;
+      for(i=0; i<tceap->length; i++)
+	if(tceap->adata[i] == -1) ceap->adata[i] = -1;
+      if(head2) {
+	salp2->next = (SeqAlignPtr)CddExpAlignToSeqAlign(ceap,iBreakAfter);
+	salp2 = salp2->next;
+      } else
+	head2 = salp2 = (SeqAlignPtr)CddExpAlignToSeqAlign(ceap,iBreakAfter);
+      ceap->ids = SeqIdSetFree(ceap->ids);
+      CddExpAlignFree(ceap);
+    }
+
+    tceap->ids = SeqIdSetFree(tceap->ids);
+    MemFree(iBreakAfter);
+    CddExpAlignFree(tceap);
+    ValNodeFree(vhead);
+    SeqAlignListFree(pcdd->seqannot->data);
+    pcdd->seqannot->data = head2;
+
+    return 0;
+}
+
+/********************************************************************/
+/* Make a list of m-s seq-aligns proper, aligning only columns	    */
+/* found in all pairs.	If !modify, don't change seq-aligns, only   */
+/* read them to populate iBreakAfter.				    */
+/********************************************************************/
+Int2 LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify,
+				Int4Ptr *iBreakAfter)
+{
+    CddExpAlignPtr	ceap,tceap;
+    SeqAlignPtr		salp,salp2,head,head2=NULL;
+    SeqEntryPtr		sep;
+    ValNodePtr		vnp,vhead=NULL;
+    Int2		i;
+    Int4Ptr             iBrkAft;
+
+    if(pcdd == NULL) return 1;
+    sep = ((BioseqSetPtr)pcdd->sequences->data.ptrvalue)->seq_set;
+    head = pcdd->seqannot->data;
+    if(head == NULL || head->next == NULL) return 1;
+
+    tceap = (CddExpAlignPtr)SeqAlignToCddExpAlign(head, sep);
+    iBrkAft = MemNew(tceap->length * sizeof(Int4));
+    for (i=0;i<tceap->length;i++) iBrkAft[i] = 0;
+    for(salp=head; salp; salp=salp->next) {
+      ceap = (CddExpAlignPtr)SeqAlignToCddExpAlign(salp, sep);
+      ValNodeAddPointer(&vhead, 0, ceap);
+      if(SeqIdComp(tceap->ids,ceap->ids) != SIC_YES) {
+	for(vnp=vhead; vnp; vnp=vnp->next) {
+	  ceap = vnp->data.ptrvalue;
+	  ceap->ids = SeqIdSetFree(ceap->ids);
+	  CddExpAlignFree(ceap);
+	}
+	tceap->ids = SeqIdSetFree(tceap->ids);
+	CddExpAlignFree(tceap);
+	MemFree(iBrkAft);
+	ErrPostEx(SEV_WARNING,0,0,"Not master/slave alignments");
+	return 1;
+      }
+      for(i=0; i<tceap->length; i++) {
+	if(ceap->adata[i] == -1) { 
+	  tceap->adata[i] = -1;
+	  if (i > 0) { 
+	    if (ceap->adata[i-1] != -1)  iBrkAft[i-1] = 1;
+	    if (tceap->adata[i-1] != -1) iBrkAft[i-1] = 1;
+          }
+	} else {
+	  if (i > 0) {
+	    if (tceap->adata[i-1] != -1 && (tceap->adata[i]-tceap->adata[i-1])>1)
+	      iBrkAft[i-1] = 1;
+	    if (ceap->adata[i-1] != -1 && (ceap->adata[i]-ceap->adata[i-1])>1)
+	      iBrkAft[i-1] = 1;
+	  }
+	}
+      }
+    }
+    if(modify) {
+	for(vnp=vhead; vnp; vnp=vnp->next) {
+	    ceap = vnp->data.ptrvalue;
+	    for(i=0; i<tceap->length; i++)
+		if(tceap->adata[i] == -1) ceap->adata[i] = -1;
+	    if(head2) {
+		salp2->next = (SeqAlignPtr)CddExpAlignToSeqAlign(ceap,iBrkAft);
+		salp2 = salp2->next;
+	    } else
+		head2 = salp2 = (SeqAlignPtr)CddExpAlignToSeqAlign(ceap,iBrkAft);
+	    ceap->ids = SeqIdSetFree(ceap->ids);
+	    CddExpAlignFree(ceap);
+	}
+	SeqAlignListFree(pcdd->seqannot->data);
+	pcdd->seqannot->data = head2;
+    }
+
+    if(iBreakAfter) *iBreakAfter = iBrkAft;
+    else            MemFree(iBrkAft);
+    tceap->ids = SeqIdSetFree(tceap->ids);
+    CddExpAlignFree(tceap);
+    ValNodeFree(vhead);
+
+    return 0;
 }

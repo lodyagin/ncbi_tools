@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.9 2001/03/07 20:28:38 bauer Exp $
+/* $Id: cddumper.c,v 1.11 2001/05/23 21:18:06 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.9 $
+* $Revision: 1.11 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.11  2001/05/23 21:18:06  bauer
+* added functions for alignment block structure control
+*
+* Revision 1.10  2001/04/10 20:28:45  bauer
+* optional flag for not saving out the CD
+*
 * Revision 1.9  2001/03/07 20:28:38  bauer
 * CddFree commented out
 *
@@ -80,7 +86,7 @@
 #include "cddsrv.h"
 #include "cddutil.h"
 
-#define NUMARGS 18
+#define NUMARGS 21
 static Args myargs[NUMARGS] = {
   {"Cd-Name",                                                /*0*/
    "RHO",      NULL,NULL,FALSE,'c',ARG_STRING, 0.0,0,NULL},
@@ -117,7 +123,14 @@ static Args myargs[NUMARGS] = {
   { "Scoring Matrix",                                       /*16*/
     "BLOSUM62",NULL,NULL,FALSE,'M',ARG_STRING, 0.0,0,NULL},
   { "Make this PDB-derived sequence the new master",        /*17*/
-    NULL,      NULL,NULL,TRUE, 'R',ARG_STRING, 0.0,0,NULL}
+    NULL,      NULL,NULL,TRUE, 'R',ARG_STRING, 0.0,0,NULL},
+  { "Output PSSMs only",                                    /*18*/
+    "F",       NULL,NULL,FALSE,'o',ARG_BOOLEAN,0.0,0,NULL},
+  { "trim Bioseqs",                                         /*19*/
+    "T",       NULL,NULL,FALSE,'T',ARG_BOOLEAN,0.0,0,NULL},
+  { "trim SeqAligns if not an oAsIs CD",                    /*20*/
+    "T",       NULL,NULL,FALSE,'A',ARG_BOOLEAN,0.0,0,NULL}
+    
 };
 
 /*---------------------------------------------------------------------------*/
@@ -352,7 +365,8 @@ static CddSumPtr CddSumLink(CddSumPtr PNTR head, CddSumPtr newnode)
 /* Process Sequence Alignment                                                */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeqPtr pbsaSeq)
+CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeqPtr pbsaSeq,
+                           Boolean bTrimBioseq)
 {
   BioseqPtr      bspNew;
   CddSumPtr      pcdsThis, pcds = NULL;
@@ -405,6 +419,7 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
             sep = (SeqEntryPtr) ID1SeqEntryGet(uid,retcode);
             if (sep == NULL) CddSevError("Unable to get MasterSeqEntry from Entrez");
             bspNew = (BioseqPtr) CddExtractBioseq(sep,sip);
+	    if (bTrimBioseq) CddShrinkBioseq(bspNew);
 /*---------------------------------------------------------------------------*/
 /* Add Additional SequenceIds in case this is a 3D structure                 */
 /*---------------------------------------------------------------------------*/
@@ -459,6 +474,7 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
             }
             if (UniqueUid(uid,pcdsThis->bIsPdb,pcds)) {
               bspNew = (BioseqPtr) CddExtractBioseq(sep,sip);
+	      if (bTrimBioseq) CddShrinkBioseq(bspNew);
 /*---------------------------------------------------------------------------*/
 /* Add Additional SequenceIds in case this is a 3D structure                 */
 /*---------------------------------------------------------------------------*/
@@ -1774,7 +1790,8 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* process the Seqalign                                                      */
 /*---------------------------------------------------------------------------*/
-    pcds = (CddSumPtr) CddProcessSeqAln(&salpHead,&nPdb,pbsaSeq);
+    pcds = (CddSumPtr) CddProcessSeqAln(&salpHead,&nPdb,pbsaSeq,
+                                        myargs[19].intvalue);
     if (nPdb > 1) {
       salpHead = CddAlignSort(salpHead,pcds);
       pcds = CddSumSort(pcds);
@@ -1885,7 +1902,10 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* note whether CD has link to 3D-Structure                                  */
 /*---------------------------------------------------------------------------*/
-    if (nPdb) CddAssignDescr(pcdd, strdup(cLink), CddDescr_comment,0);
+    if (nPdb) {
+      CddAssignDescr(pcdd, strdup(cLink), CddDescr_comment,0);
+      
+    }
     CddAssignDescr(pcdd, NULL, CddDescr_status , myargs[8].intvalue);
 
 /*---------------------------------------------------------------------------*/
@@ -2083,7 +2103,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
     pCDea1 = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpCons,bssp->seq_set);
     pCDeaR = (CddExpAlignPtr) InvertCddExpAlign(pCDea1, bssp->seq_set);
-    salpNew = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR); 
+    salpNew = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL); 
     pCDeaR = CddExpAlignFree(pCDeaR);   
     salpTail = salpNew;
     salpCopy = salpHead;
@@ -2093,7 +2113,7 @@ Int2 Main()
       i++;
       pCDea = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpHead, bssp->seq_set);
       pCDeaR = (CddExpAlignPtr) CddReindexExpAlign(pCDea1,bspCons->length,pCDea,0,i);
-      salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR);
+      salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL);
       pCDeaR = CddExpAlignFree(pCDeaR);
       pCDea = CddExpAlignFree(pCDea);
       salpTail->next = salpThis;
@@ -2106,56 +2126,70 @@ Int2 Main()
   }
   
 /*---------------------------------------------------------------------------*/
+/* if the CD needs to be written to disk, fill in the missing data items     */
+/*---------------------------------------------------------------------------*/
+  if (myargs[18].intvalue == 0) {
+
+
+/*---------------------------------------------------------------------------*/
 /* do the following steps only if the CD-status is not 2, pending release    */
 /*---------------------------------------------------------------------------*/
-  if (myargs[8].intvalue != 2) {
+    if (myargs[8].intvalue != 2) {
 
 /*---------------------------------------------------------------------------*/
 /* Calculate pairwise percent identities between the sequences, for alignment*/
 /* formatting purposes                                                       */
 /*---------------------------------------------------------------------------*/
-    pTri = (TrianglePtr) CddCalculateTriangle(pcdd);
-    if (pTri) pcdd->distance = pTri;
-  } else {
-    pcdd->posfreq = NULL;
-    pcdd->scoremat = NULL;
-  }
+      pTri = (TrianglePtr) CddCalculateTriangle(pcdd);
+      if (pTri) pcdd->distance = pTri;
+    } else {
+      pcdd->posfreq = NULL;
+      pcdd->scoremat = NULL;
+    }
 
 /*---------------------------------------------------------------------------*/
 /* create/update the CD taxonomy data item                                   */
 /*---------------------------------------------------------------------------*/
-  CddAddTax(pcdd);
+    CddAddTax(pcdd);
+
+/*---------------------------------------------------------------------------*/
+/* check if CD is a proper CD, and trim the seqaligns if necessary           */
+/*---------------------------------------------------------------------------*/
+    if (myargs[8].intvalue !=3 && myargs[20].intvalue > 0) {
+      if (CddTrimSeqAligns(pcdd)) CddSevError("Crashed while trimming seqaligns!");
+    }
 
 /*---------------------------------------------------------------------------*/
 /* for output, convert the pairwise master-slave densediag to a multiple     */
 /* dense-diag alignment if the block-structure is consistent - and if        */
 /* specified in the command line                                             */
 /*---------------------------------------------------------------------------*/
-  if (myargs[5].intvalue > 0) {
-    pcdd->seqannot->data = (SeqAlignPtr)CddMSLDenDiagToMULDenDiag(pcdd->seqannot->data);
-  }
+    if (myargs[5].intvalue > 0) {
+      pcdd->seqannot->data = (SeqAlignPtr)CddMSLDenDiagToMULDenDiag(pcdd->seqannot->data);
+    }
 
-  strcpy(cOutFile,cCDDid);
-  strcat(cOutFile,".");
-  strcat(cOutFile,myargs[1].strvalue);
+    strcpy(cOutFile,cCDDid);
+    strcat(cOutFile,".");
+    strcat(cOutFile,myargs[1].strvalue);
 
-  if (!CddWriteToFile(pcdd,cOutFile,(Boolean) myargs[2].intvalue))
-    CddSevError("Could not write ASN.1 output / CDD to file!");
+    if (!CddWriteToFile(pcdd,cOutFile,(Boolean) myargs[2].intvalue))
+      CddSevError("Could not write ASN.1 output / CDD to file!");
 
 /*---------------------------------------------------------------------------*/
 /* output the corresponding Cdd tree-file                                    */
 /*---------------------------------------------------------------------------*/
-  strcpy(cOutFile,cCDDid);
-  strcat(cOutFile,".");
-  strcat(cOutFile,myargs[6].strvalue);
+    strcpy(cOutFile,cCDDid);
+    strcat(cOutFile,".");
+    strcat(cOutFile,myargs[6].strvalue);
   
-  pcddt              = CddTreeNew();
-  pcddt->name        = pcdd->name;
-  pcddt->id          = pcdd->id;
-  pcddt->description = pcdd->description;
+    pcddt              = CddTreeNew();
+    pcddt->name        = pcdd->name;
+    pcddt->id          = pcdd->id;
+    pcddt->description = pcdd->description;
 
-  if (!CddTreeWriteToFile(pcddt,cOutFile,(Boolean) myargs[2].intvalue))
-    CddSevError("Could not write CDD-tree");
+    if (!CddTreeWriteToFile(pcddt,cOutFile,(Boolean) myargs[2].intvalue))
+      CddSevError("Could not write CDD-tree");
+  }
 
 /*---------------------------------------------------------------------------*/
 /* Cleanup                                                                   */

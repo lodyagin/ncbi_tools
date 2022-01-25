@@ -17,6 +17,7 @@ sequence submission file) for high throughput genome sequencing
 projects. Presently we have built fa2htgs for the following platforms:
 
    alphaOSF1.tar.Z
+      ibmaix.tar.Z
        linux.tar.Z
          sgi.tar.Z
      solaris.tar.Z

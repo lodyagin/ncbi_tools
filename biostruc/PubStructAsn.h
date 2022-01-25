@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.h,v 6.6 1999/08/02 19:50:51 kimelman Exp $
+/*   $Id: PubStructAsn.h,v 6.7 2001/05/25 01:42:10 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.h,v $
+ * Revision 6.7  2001/05/25 01:42:10  kimelman
+ * mmdb2livemmdb
+ *
  * Revision 6.6  1999/08/02 19:50:51  kimelman
  * keep connection alive foor mmdbsrv & vastsrv sessions
  *
@@ -89,6 +92,7 @@ NLM_EXTERN Int4     LIBCALL PubStruct_lookup1(ps_handle_t server,Int4 mmdb,int s
 
 NLM_EXTERN Int4     LIBCALL PubStruct_pdb2mmdb(char *server,CharPtr pcPdb);
 NLM_EXTERN Int4     LIBCALL PubStruct_pdb2mmdb1(ps_handle_t server,CharPtr pcPdb);
+NLM_EXTERN Boolean  LIBCALL PubStruct_mmdb2livemmdb(ps_handle_t server,Int4 ommdb,Int4Ptr newmmdbid,Int4Ptr live,CharPtr pdb);
 
 /**
  * PubStruct_newasn opens AsnIo stream to created new entry in the database. When

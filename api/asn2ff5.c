@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: asn2ff5.c,v $
+ * Revision 6.11  2001/06/25 22:39:05  kans
+ * format_patent puts patent seqid in GenPept format
+ *
  * Revision 6.10  2000/05/15 23:13:35  kans
  * format_thesis forgot to add space for afp->affil
  *
@@ -1104,8 +1107,10 @@ static CharPtr format_patent (Uint1 format, ValNodePtr the_pub, Int4 pat_seqid, 
 	if (pat_seqid > 0) {
 		if (embl_format) {
 			sprintf(buf,"%s%ld%s", "/", (long) pat_seqid, ", ");
+		/*
 		} else if (format == GENPEPT_FMT) {
 			sprintf(buf,"%s", " ? ");
+		*/
 		} else {
 			sprintf(buf,"%s%ld ", " ", (long) pat_seqid);
 		}

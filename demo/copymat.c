@@ -34,6 +34,12 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.21  2001/06/07 16:45:08  shavirin
+Removed bug related to 64bit address structure on SGI platform.
+
+Revision 6.20  2001/04/12 19:50:12  madden
+Comment out unrescaling of matrix
+
 Revision 6.19  2000/11/14 23:17:52  shavirin
 Removed serious bug under NT platform related to diffence in "w" and "wb"
 flag when opening file on PC NT computer. Removed unused header files.
@@ -143,7 +149,6 @@ static void  freeMatrix(ScoreRow *posMatrix)
   the memory is reused for each different matrix*/
 static ScoreRow * allocateMatrix(Int4 maxSequenceLength)
 {
-  Int4 i; /*row index for matrix*/
   ScoreRow *returnMatrix; /*matrix to return*/
 
   returnMatrix = (ScoreRow *) MemNew(maxSequenceLength * sizeof(ScoreRow));
@@ -160,7 +165,6 @@ static void readNextMatrix(FILE * thisMatrixFile,
 {
   Int4 i, r; /*row indices for sequence and matrix*/
   Int4 lengthInFile; /*length of query*/
-  Char junkChar; /*used to read in useless characters*/
   Nlm_FloatHi junkLambda, junkK, junklogK, junkH; /*used to read in useless
 						    Karlin blocks*/
   Char *sequence;  /*sequence to read in*/
@@ -342,6 +346,8 @@ Boolean RPSUpdatePointers(LookupTablePtr lookup)
         if(mod_lt[index].num_used <= 3)
             continue;
 
+#if 1
+
         /* Taking pointer to 4/8 bytes address */        
         lpp= (ModLookupPositionPtr *) &mod_lt[index].entries[1];
         
@@ -349,7 +355,21 @@ Boolean RPSUpdatePointers(LookupTablePtr lookup)
         mlpp_address -= (long) start_address;
         
         /* Now this is new relative address - usually small  */
-        *lpp  = (ModLookupPositionPtr) mlpp_address;         
+        *lpp  = (ModLookupPositionPtr) mlpp_address;
+
+#if defined(OS_UNIX_IRIX)
+        if(sizeof(ModLookupPositionPtr) == 8) { /* 64bit build */
+            mlpp_address = mod_lt[index].entries[1];
+            mod_lt[index].entries[1] = mod_lt[index].entries[2];
+            mod_lt[index].entries[2] = mlpp_address;
+        }
+#endif
+        
+#else
+        mod_lt[index].entries[1] -= (int) start_address;
+        mod_lt[index].entries[2] = 0; /* Not used */
+#endif
+
     }
     return TRUE;
 }
@@ -383,7 +403,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
 {
     LookupTablePtr lookup;
     BlastAllWordPtr all_words;
-    Int4 start, len, i, j, header_size, all_length, magicNumber;
+    Int4 start, i, header_size, all_length, magicNumber;
     FILE *fd;
     Int4Ptr offsets;
     BLAST_ScorePtr PNTR posMatrix;
@@ -453,6 +473,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     FileWrite(offsets, sizeof(Int4), num_lookups + 1, fd);
     FileClose(fd);
     
+/* comment out for now, why is this here?
     if (scalingFactor != 1.0) {
         for(j = 0; j < all_length; j++) {
             for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
@@ -460,6 +481,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
             }
         }
     }
+*/
 
     /* Final memory cleenup */
     
@@ -527,8 +549,6 @@ Int2  Main(void)
     FILE *sequencesfp; /*files descriptor for file containing list of sequences*/
     FILE *matrixnamefp; /*file descriptor for file containing matrix names*/
     FILE *bigmatrixfile; /*file descriptor for file containing single big matrix*/
-    Int4  queryLength;  /*length of query sequence*/
-    Int4 maxLength; /*maximum length of a sequnce*/
     Int4 numProfiles; /*number of profiles*/
     Int4 totalProfileLength; /*total length of all profiles*/
     ScoreRow *combinedMatrix; /*combined matrix for all profiles*/

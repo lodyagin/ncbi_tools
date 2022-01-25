@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.23 $
+* $Revision: 1.24 $
 *
 * File Description: 
 *
@@ -86,11 +86,15 @@ static CharPtr EntrezGetProgramName (
   return ptr;
 }
 
-/* for development testing, later to override ncbi named service */
+/* override URL paths or service name */
 
 static CharPtr  e2_host_machine = NULL;
 static Uint2    e2_host_port = 0;
 static CharPtr  e2_host_path = NULL;
+
+static CharPtr  e2_service = NULL;
+
+/* to be phased out, currently overrides ncbi named service, goes directly to URL */
 
 NLM_EXTERN void EntrezSetServer (
   CharPtr host_machine,
@@ -112,6 +116,19 @@ NLM_EXTERN void EntrezSetServer (
   }
 }
 
+/* use EntrezTest to override default Entrez ncbi named service */
+
+NLM_EXTERN void EntrezSetService (
+  CharPtr service
+)
+
+{
+  if (! StringHasNoText (service)) {
+    e2_service = MemFree (e2_service);
+    e2_service = StringSaveNoNull (service);
+  }
+}
+
 /* low-level connection functions */
 
 NLM_EXTERN CONN EntrezOpenConnection (
@@ -122,6 +139,7 @@ NLM_EXTERN CONN EntrezOpenConnection (
   CharPtr  host_machine = e2_host_machine;
   Uint2    host_port = e2_host_port;
   CharPtr  host_path = e2_host_path;
+  CharPtr  host_service = e2_service;
 
   if (StringHasNoText (host_machine)) {
     host_machine = "www.ncbi.nlm.nih.gov";
@@ -132,11 +150,22 @@ NLM_EXTERN CONN EntrezOpenConnection (
   if (StringHasNoText (host_path)) {
     host_path = "/entrez/utils/entrez2server.fcgi";
   }
+  if (StringHasNoText (host_service)) {
+    host_service = "Entrez2";
+  }
 
-  return QUERY_OpenUrlQuery (host_machine, host_port, host_path,
-                             NULL, EntrezGetProgramName (),
-                             30, eMIME_T_NcbiData, eMIME_AsnBinary,
-                             eENCOD_None, 0);
+  /* temporarily for direct access to URL, to be phased out */
+
+  if (e2_host_machine != NULL || e2_host_port != 0 || e2_host_path != NULL) {
+    return QUERY_OpenUrlQuery (host_machine, host_port, host_path,
+                               NULL, EntrezGetProgramName (),
+                               30, eMIME_T_NcbiData, eMIME_AsnBinary,
+                               eENCOD_None, 0);
+  }
+
+  /* use new named service, Entrez or EntrezTest */
+
+  return QUERY_OpenServiceQuery (host_service, NULL, 30);
 }
 
 #ifdef OS_MAC

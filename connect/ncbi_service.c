@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.18 2001/03/21 21:23:30 lavr Exp $
+/*  $Id: ncbi_service.c,v 6.24 2001/06/25 15:35:54 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,8 +30,26 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.c,v $
+ * Revision 6.24  2001/06/25 15:35:54  lavr
+ * Added function: SERV_GetNextInfoEx
+ *
+ * Revision 6.23  2001/06/20 17:27:49  kans
+ * include <time.h> for Mac compiler
+ *
+ * Revision 6.22  2001/06/19 19:12:01  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
+ * Revision 6.21  2001/05/24 21:28:12  lavr
+ * Timeout for skip servers increased to 1 year period
+ *
+ * Revision 6.20  2001/05/17 15:02:51  lavr
+ * Typos corrected
+ *
+ * Revision 6.19  2001/04/24 21:37:26  lavr
+ * New code for: SERV_MapperName() and SERV_Penalize().
+ *
  * Revision 6.18  2001/03/21 21:23:30  lavr
- * Explicit type converion size_t -> unsigned in printf
+ * Explicit type conversion size_t -> unsigned in printf
  *
  * Revision 6.17  2001/03/20 22:03:32  lavr
  * BUGFIX in SERV_Print (miscalculation of buflen for accepted server types)
@@ -98,6 +116,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 SERV_ITER SERV_OpenSimple(const char* service)
@@ -106,13 +125,6 @@ SERV_ITER SERV_OpenSimple(const char* service)
     SERV_ITER iter = SERV_Open(service, fSERV_Any, 0, info);
     ConnNetInfo_Destroy(info);
     return iter;
-}
-
-
-SERV_ITER SERV_Open(const char* service, TSERV_Type type,
-                    unsigned int preferred_host, const SConnNetInfo* info)
-{
-    return SERV_OpenEx(service, type, preferred_host, info, 0, 0);
 }
 
 
@@ -143,25 +155,27 @@ SERV_ITER SERV_OpenEx(const char* service, TSERV_Type type,
                       const SSERV_Info* const skip[], size_t n_skip)
 {
     const SSERV_VTable* op;
-    time_t t = time(0);
     SERV_ITER iter;
+    TNCBI_Time t;
     size_t i;
 
     if (!service || !*service ||
-        !(iter = (SERV_ITER)malloc(sizeof(*iter) + strlen(service) + 1)))
+        !(iter = (SERV_ITER) malloc(sizeof(*iter) + strlen(service)+1)))
         return 0;
-    
-    iter->service = (char *)iter + sizeof(*iter);
-    strcpy((char *)iter->service, service);
+
+    iter->service = (char*) iter + sizeof(*iter);
+    strcpy((char*) iter->service, service);
     iter->type = type;
     iter->preferred_host =
-        preferred_host == SERV_LOCALHOST ?
-        SOCK_gethostbyname(0) : preferred_host;
+        preferred_host == SERV_LOCALHOST
+        ? SOCK_gethostbyname(0) : preferred_host;
     iter->n_skip = iter->n_max_skip = 0;
     iter->skip = 0;
+    iter->last = 0;
     iter->op = 0;
     iter->data = 0;
 
+    t = (TNCBI_Time) time(0);
     for (i = 0; i < n_skip; i++) {
         size_t infolen = SERV_SizeOfInfo(skip[i]);
         SSERV_Info* info = (SSERV_Info*) malloc(infolen);
@@ -171,7 +185,7 @@ SERV_ITER SERV_OpenEx(const char* service, TSERV_Type type,
             return 0;
         }
         memcpy(info, skip[i], infolen);
-        info->time = t + 3600*24*60 /* 2 months - long enough :-) */;
+        info->time = t + 3600/*hour*/*24/*day*/*365/*year - long enough :-) */;
         if (!s_AddSkipInfo(iter, info)) {
             free(info);
             SERV_Close(iter);
@@ -203,8 +217,8 @@ SERV_ITER SERV_OpenEx(const char* service, TSERV_Type type,
 
 static void s_SkipSkip(SERV_ITER iter)
 {
+    TNCBI_Time t = (TNCBI_Time) time(0);
     size_t i;
-    time_t t = time(0);
 
     i = 0;
     while (i < iter->n_skip) {
@@ -220,7 +234,7 @@ static void s_SkipSkip(SERV_ITER iter)
 }
 
 
-const SSERV_Info* SERV_GetNextInfo(SERV_ITER iter)
+const SSERV_Info* SERV_GetNextInfoEx(SERV_ITER iter, char** env)
 {
     SSERV_Info* info = 0;
 
@@ -230,12 +244,27 @@ const SSERV_Info* SERV_GetNextInfo(SERV_ITER iter)
     s_SkipSkip(iter);
     /* Next, obtain a fresh entry from the actual mapper */
     if (iter->op && iter->op->GetNextInfo &&
-        (info = (*iter->op->GetNextInfo)(iter)) != 0 &&
+        (info = (*iter->op->GetNextInfo)(iter, env)) != 0 &&
         !s_AddSkipInfo(iter, info)) {
         free(info);
         info = 0;
     }
+    iter->last = iter->skip[iter->n_skip - 1];
     return info;
+}
+
+
+const char* SERV_MapperName(SERV_ITER iter)
+{
+    return iter && iter->op ? iter->op->name : 0;
+}
+
+
+int/*bool*/ SERV_Penalize(SERV_ITER iter, double penalty)
+{
+    if (!iter || !iter->op || !iter->op->Penalize || !iter->last)
+        return 0;
+    return (*iter->op->Penalize)(iter, penalty);
 }
 
 
@@ -268,9 +297,10 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text)
 char* SERV_Print(SERV_ITER iter)
 {
     static const char accepted_types[] = "Accepted-Server-Types:";
-    TSERV_Type type = (iter->type & ~fSERV_StatelessOnly), t;
+    TSERV_Type type = (TSERV_Type) (iter->type & ~fSERV_StatelessOnly);
     char buffer[128], *str;
     size_t buflen, i;
+    TSERV_Type t;
     BUF buf = 0;
     
     /* Form accepted server types (as customized header) */
@@ -278,7 +308,7 @@ char* SERV_Print(SERV_ITER iter)
     buflen = sizeof(accepted_types) - 1;
     for (t = 1; t; t <<= 1) {
         if (type & t) {
-            const char *name = SERV_TypeStr((ESERV_Type)t);
+            const char *name = SERV_TypeStr((ESERV_Type) t);
             size_t namelen = strlen(name);
 
             if (namelen) {
@@ -317,7 +347,7 @@ char* SERV_Print(SERV_ITER iter)
                 s2++;
             memmove(s1, s2, strlen(s2) + 1);
         }
-        buflen = sprintf(buffer, "Skip-Info-%u: ", (unsigned)i + 1); 
+        buflen = sprintf(buffer, "Skip-Info-%u: ", (unsigned) i + 1); 
         assert(buflen < sizeof(buffer)-1);
         if (!BUF_Write(&buf, buffer, buflen) ||
             !BUF_Write(&buf, str, strlen(str)) ||
@@ -330,7 +360,7 @@ char* SERV_Print(SERV_ITER iter)
     if (i >= iter->n_skip) {
         /* Ok then, we have filled the entire header, <CR><LF> terminated */
         if ((buflen = BUF_Size(buf)) != 0) {
-            if ((str = (char *)malloc(buflen + 1)) != 0) {
+            if ((str = (char*) malloc(buflen + 1)) != 0) {
                 if (BUF_Read(buf, str, buflen) != buflen) {
                     free(str);
                     str = 0;

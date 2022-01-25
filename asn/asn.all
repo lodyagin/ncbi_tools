@@ -8,7 +8,7 @@
 --
 --**********************************************************************
 
---$Revision: 6.2 $
+--$Revision: 6.3 $
 --**********************************************************************
 --
 --  NCBI General Data elements
@@ -44,12 +44,12 @@ EXPORTS Date, Person-id, Object-id, Dbtag, Int-fuzz, User-object;
 -- } Nlm_ByteStore, PNTR Nlm_ByteStorePtr;
 --
 -- AsnTool incorporates this as a primitive type, so the definition
---   is here just for completness
+--   is here just for completeness
 -- 
 --  StringStore ::= [APPLICATION 1] IMPLICIT OCTET STRING
 --
 
--- BigInt is really an INTEGER. It is used to warn the recieving code to expect
+-- BigInt is really an INTEGER. It is used to warn the receiving code to expect
 --   a value bigger than Int4 (actually Int8). It will be stored in DataVal.bigintvalue
 --
 --   Like StringStore, AsnTool incorporates it as a primitive. The definition would be:
@@ -103,7 +103,7 @@ Name-std ::= SEQUENCE { -- Structured names
     last VisibleString ,
     first VisibleString OPTIONAL ,
     middle VisibleString OPTIONAL ,
-    full VisibleString OPTIONAL ,    -- full name eg. "J. John Poop, Esq"
+    full VisibleString OPTIONAL ,    -- full name eg. "J. John Smith, Esq"
     initials VisibleString OPTIONAL,  -- first + middle initials
     suffix VisibleString OPTIONAL ,   -- Jr, Sr, III
     title VisibleString OPTIONAL }    -- Dr., Sister, etc
@@ -160,7 +160,7 @@ User-field ::= SEQUENCE {
 
 END
 
---$Revision: 6.1 $
+--$Revision: 6.2 $
 --****************************************************************
 --
 --  NCBI Bibliographic data elements
@@ -340,7 +340,7 @@ Author ::= SEQUENCE {
         patent-assignee (3),
         translator (4) } OPTIONAL ,
     affil Affil OPTIONAL ,
-    is-corr BOOLEAN OPTIONAL }          -- TRUE if corressponding author
+    is-corr BOOLEAN OPTIONAL }          -- TRUE if corresponding author
 
 Affil ::= CHOICE {
     str VisibleString ,                 -- unparsed string
@@ -383,7 +383,7 @@ Imprint ::= SEQUENCE {                  -- Imprint group
     cprt Date OPTIONAL,                     -- copyright date, "    "   "
     part-sup VisibleString OPTIONAL ,       -- part/sup of volume
     language VisibleString DEFAULT "ENG" ,  -- put here for simplicity
-    prepub ENUMERATED {                     -- for prepublication citaions
+    prepub ENUMERATED {                     -- for prepublication citations
         submitted (1) ,                     -- submitted, not accepted
         in-press (2) ,                      -- accepted, not published
         other (255)  } OPTIONAL ,
@@ -733,7 +733,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.2 $
+--$Revision: 6.3 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -833,7 +833,8 @@ MolInfo ::= SEQUENCE {
         peptide (8) ,
         other-genetic (9) ,      -- other genetic material
         genomic-mRNA (10) ,      -- reported a mix of genomic and cdna sequence
-	cRNA (11) ,              -- viral RNA genome copy intermediate
+        cRNA (11) ,              -- viral RNA genome copy intermediate
+        snoRNA (12) ,            -- small nucleolar RNA
         other (255) } DEFAULT unknown ,
     tech INTEGER {
         unknown (0) ,
@@ -853,9 +854,9 @@ MolInfo ::= SEQUENCE {
         htgs-1 (14) ,           -- unordered High Throughput sequence contig
         htgs-2 (15) ,           -- ordered High Throughput sequence contig
         htgs-3 (16) ,           -- finished High Throughput sequence
-	fli-cdna (17) ,         -- full length insert cDNA
-	htgs-0 (18) ,           -- single genomic reads for coordination
-	htc (19) ,              -- high throughput cDNA
+        fli-cdna (17) ,         -- full length insert cDNA
+        htgs-0 (18) ,           -- single genomic reads for coordination
+        htc (19) ,              -- high throughput cDNA
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
@@ -967,7 +968,7 @@ Pubdesc ::= SEQUENCE {              -- how sequence presented in pub
 		no-target (3) }         -- nothing specified (EMBL)
 		DEFAULT seq }
 
-Heterogen ::= VisibleString       -- cofactor, prosthetic group, inibitor, etc
+Heterogen ::= VisibleString       -- cofactor, prosthetic group, inhibitor, etc
 
 --*** Instances of sequences *******************************
 --*
@@ -1494,7 +1495,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.4 $
+--$Revision: 6.6 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1548,7 +1549,7 @@ Seq-feat ::= SEQUENCE {
         experimental (1) ,        -- any reasonable experimental check
         not-experimental (2) } OPTIONAL , -- similarity, pattern, etc
     xref SET OF SeqFeatXref OPTIONAL ,   -- cite other relevant features
-	dbxref SET OF Dbtag OPTIONAL ,  -- support for xref to other databases
+    dbxref SET OF Dbtag OPTIONAL ,  -- support for xref to other databases
     pseudo BOOLEAN OPTIONAL ,     -- annotated on pseudogene?
     except-text VisibleString OPTIONAL } -- explain if except=TRUE
 
@@ -1608,7 +1609,7 @@ SeqFeatData ::= CHOICE {
     het Heterogen ,         -- cofactor, prosthetic grp, etc, bound to seq
     biosrc BioSource }
 
-SeqFeatXref ::= SEQUENCE {		 -- both optional because can have one or both
+SeqFeatXref ::= SEQUENCE {       -- both optional because can have one or both
     id Feat-id OPTIONAL ,        -- the feature copied
     data SeqFeatData OPTIONAL }  -- the specific data
     
@@ -1635,7 +1636,7 @@ Cdregion ::= SEQUENCE {
 
                     -- each code is 64 cells long, in the order where
                     -- T=0,C=1,A=2,G=3, TTT=0, TTC=1, TCA=4, etc
-                    -- NOTE: this order does NOT corresspond to a Seq-data
+                    -- NOTE: this order does NOT correspond to a Seq-data
                     -- encoding.  It is "natural" to codon usage instead.
                     -- the value in each cell is the AA coded for
                     -- start= AA coded only if first in peptide
@@ -1729,13 +1730,14 @@ RNA-ref ::= SEQUENCE {
         rRNA (4) ,
         snRNA (5) ,
         scRNA (6) ,
+        snoRNA (7) ,
         other (255) } ,
     pseudo BOOLEAN OPTIONAL ,  
     ext CHOICE {
         name VisibleString ,        -- for naming "other" type
         tRNA Trna-ext } OPTIONAL }  -- for tRNAs
 
-Trna-ext ::= SEQUENCE {                -- tRNA feature extensions
+Trna-ext ::= SEQUENCE {                 -- tRNA feature extensions
     aa CHOICE {                         -- aa this carries
         iupacaa INTEGER ,
         ncbieaa INTEGER ,
@@ -1767,13 +1769,13 @@ IMPORTS Dbtag FROM NCBI-General;
 --*
 
 Gene-ref ::= SEQUENCE {
-    locus VisibleString OPTIONAL ,     -- Official gene symbol
-    allele VisibleString OPTIONAL ,    -- Official allele designation
-    desc VisibleString OPTIONAL ,      -- descriptive name
-    maploc VisibleString OPTIONAL ,    -- descriptive map location
-    pseudo BOOLEAN DEFAULT FALSE ,          -- pseudogene
-    db SET OF Dbtag OPTIONAL ,      -- ids in other dbases
-    syn SET OF VisibleString OPTIONAL }      -- synonyms for locus
+    locus VisibleString OPTIONAL ,        -- Official gene symbol
+    allele VisibleString OPTIONAL ,       -- Official allele designation
+    desc VisibleString OPTIONAL ,         -- descriptive name
+    maploc VisibleString OPTIONAL ,       -- descriptive map location
+    pseudo BOOLEAN DEFAULT FALSE ,        -- pseudogene
+    db SET OF Dbtag OPTIONAL ,            -- ids in other dbases
+    syn SET OF VisibleString OPTIONAL }   -- synonyms for locus
 
 END
 
@@ -1821,7 +1823,7 @@ OrgName ::= SEQUENCE {
     lineage VisibleString OPTIONAL ,       -- lineage with semicolon separators
     gcode INTEGER OPTIONAL ,               -- genetic code (see CdRegion)
     mgcode INTEGER OPTIONAL ,              -- mitochondrial genetic code
-	div VisibleString OPTIONAL }           -- GenBank division code
+    div VisibleString OPTIONAL }           -- GenBank division code
     
 
 OrgMod ::= SEQUENCE {
@@ -1846,17 +1848,17 @@ OrgMod ::= SEQUENCE {
         acronym (19) ,
         dosage (20) ,		-- chromosome dosage of hybrid
         nat-host (21) ,		-- natural host of this specimen
-	sub-species (22) ,
+        sub-species (22) ,
         specimen-voucher (23) ,
-	authority (24) ,
-	forma (25) ,
-	forma-specialis (26) ,
-	ecotype (27) ,
-	synonym (28) ,
-	anamorph (29) ,
-	teleomorph (30) ,
-	breed (31) ,
-	old-lineage (253) ,
+        authority (24) ,
+        forma (25) ,
+        forma-specialis (26) ,
+        ecotype (27) ,
+        synonym (28) ,
+        anamorph (29) ,
+        teleomorph (30) ,
+        breed (31) ,
+        old-lineage (253) ,
         old-name (254) ,
         other (255) } ,         -- ASN5: old-name (254) will be added to next spec
     subname VisibleString ,
@@ -1919,15 +1921,15 @@ BioSource ::= SEQUENCE {
         plasmid (9) ,
         transposon (10) ,
         insertion-seq (11) ,
-	cyanelle (12) ,
-	proviral (13) ,
-	virion (14) ,
-	nucleomorph (15) ,
-	apicoplast (16) ,
-	leucoplast (17) ,
-	proplastid (18) ,
-	endogenous-virus (19)
-	 } DEFAULT unknown ,
+        cyanelle (12) ,
+        proviral (13) ,
+        virion (14) ,
+        nucleomorph (15) ,
+        apicoplast (16) ,
+        leucoplast (17) ,
+        proplastid (18) ,
+        endogenous-virus (19)
+      } DEFAULT unknown ,
                                        -- 4 more genome values coming
                                        -- nucleomorph (15)
                                        -- apicoplast (16)
@@ -1936,7 +1938,7 @@ BioSource ::= SEQUENCE {
     origin INTEGER {
       unknown (0) ,
       natural (1) ,                    -- normal biological entity
-      natmut (2) ,                     -- naturally occuring mutant
+      natmut (2) ,                     -- naturally occurring mutant
       mut (3) ,                        -- artificially mutagenized
       artificial (4) ,                 -- artificially engineered
       synthetic (5) ,                  -- purely synthetic
@@ -1969,9 +1971,9 @@ SubSource ::= SEQUENCE {
         transposon-name (20) ,
         insertion-seq-name (21) ,
         plastid-name (22) ,
-	country (23) ,
-	segment (24) ,
-	endogenous-virus-name (25) ,
+        country (23) ,
+        segment (24) ,
+        endogenous-virus-name (25) ,
         other (255) } ,
     name VisibleString ,
     attrib VisibleString OPTIONAL }    -- attribution/source of this name
@@ -2008,8 +2010,8 @@ Prot-ref ::= SEQUENCE {
        not-set (0) ,
        preprotein (1) ,
        mature (2) ,
-	   signal-peptide (3) ,
-	   transit-peptide (4) } DEFAULT not-set }
+       signal-peptide (3) ,
+       transit-peptide (4) } DEFAULT not-set }
 
 
 
@@ -2312,6 +2314,181 @@ Contact-info ::= SEQUENCE {      -- who to contact to discuss the submission
 
 END
 
+--$Revision: 1.4 $
+--**********************************************************************
+--
+--  Definitions for Cn3D-specific data (rendering settings,
+--    user annotations, etc.)
+--
+--  by Paul Thiessen
+--
+--  National Center for Biotechnology Information
+--  National Institutes of Health
+--  Bethesda, MD 20894 USA
+--
+-- asntool -m cn3d.asn -w 100 -o cn3d.h
+-- asntool -B objcn3d -m cn3d.asn -G -w 100 -K cn3d.h -I mapcn3d.h \
+--   -M ../mmdb1.asn,../mmdb2.asn,../mmdb3.asn
+--**********************************************************************
+
+NCBI-Cn3d DEFINITIONS ::=
+-- Cn3D-specific information
+
+BEGIN
+
+EXPORTS  Cn3d-style-dictionary, Cn3d-user-annotations;
+
+IMPORTS  Biostruc-id FROM MMDB
+         Molecule-id, Residue-id FROM MMDB-Chemical-graph;
+
+
+-- values of enumerations must match those in cn3d/style_manager.hpp!
+
+Cn3d-backbone-type ::= ENUMERATED {     -- for different types of backbones
+    off (1),
+    trace (2),
+    partial (3),
+    complete (4)
+}
+
+Cn3d-drawing-style ::= ENUMERATED {     -- atom/bond/object rendering styles
+    -- for atoms and bonds
+    wire (1),
+    tubes (2),
+    ball-and-stick (3),
+    space-fill (4),
+    wire-worm (5),
+    tube-worm (6),
+    -- for 3d-objects
+    with-arrows (7),
+    without-arrows (8)
+}
+
+Cn3d-color-scheme ::= ENUMERATED {  -- available color schemes (not all
+                                    -- necessarily applicable to all objects)
+    element (1),
+    object (2),
+    molecule (3),
+    domain (4),
+    secondary-structure (5),
+    user-select (6),
+    -- different alignment conservation coloring (currently only for proteins)
+    aligned (7),
+    identity (8),
+    variety (9),
+    weighted-variety (10),
+    information-content (11),
+    fit (12)
+}
+
+-- RGB triplet, interpreted (after division by the scale-factor) as floating
+-- point values which should range from [0..1]. The default scale-factor is
+-- 255, so that one can conveniently set integer byte values [0..255] for
+-- colors with the scale-factor already set appropriately to map to [0..1].
+--    An alpha value is allowed, but is currently ignored by Cn3D.
+Cn3d-color ::= SEQUENCE {
+    scale-factor INTEGER DEFAULT 255,
+    red INTEGER,
+    green INTEGER,
+    blue INTEGER,
+    alpha INTEGER DEFAULT 255
+}
+
+Cn3d-backbone-style ::= SEQUENCE {  -- style blob for backbones only
+    type Cn3d-backbone-type,
+    style Cn3d-drawing-style,
+    color-scheme Cn3d-color-scheme,
+    user-color Cn3d-color
+}
+
+Cn3d-general-style ::= SEQUENCE {   -- style blob for everything else
+    is-on BOOLEAN,
+    style Cn3d-drawing-style,
+    color-scheme Cn3d-color-scheme,
+    user-color Cn3d-color
+}
+
+-- rendering settings for Cn3D (mirrors StyleSettings class)
+Cn3d-style-settings ::= SEQUENCE {
+    protein-backbone Cn3d-backbone-style,       -- backbone styles
+    nucleotide-backbone Cn3d-backbone-style,
+    protein-sidechains Cn3d-general-style,      -- styles for other stuff
+    nucleotide-sidechains Cn3d-general-style,
+    heterogens Cn3d-general-style,
+    solvents Cn3d-general-style,
+    connections Cn3d-general-style,
+    helix-objects Cn3d-general-style,
+    strand-objects Cn3d-general-style,
+    virtual-disulfides-on BOOLEAN,              -- virtual disulfides
+    virtual-disulfide-color Cn3d-color,
+    hydrogens-on BOOLEAN,                       -- hydrogens
+    background-color Cn3d-color,                -- background
+    -- floating point parameters - scale-factor applies to all the following:
+    scale-factor INTEGER,
+    space-fill-proportion INTEGER,
+    ball-radius INTEGER,
+    stick-radius INTEGER,
+    tube-radius INTEGER,
+    tube-worm-radius INTEGER,
+    helix-radius INTEGER,
+    strand-width INTEGER,
+    strand-thickness INTEGER
+}
+
+Cn3d-style-table-id ::= INTEGER
+
+Cn3d-style-table-item ::= SEQUENCE {
+    id Cn3d-style-table-id,
+    style Cn3d-style-settings
+}
+
+-- the global settings, and a lookup table of styles for user annotations.
+Cn3d-style-dictionary ::= SEQUENCE {
+    global-style Cn3d-style-settings,
+    style-table SEQUENCE OF Cn3d-style-table-item OPTIONAL
+}
+
+-- a range of residues in a chain, identified by MMDB residue-id
+-- (e.g., numbered from 1)
+Cn3d-residue-range ::= SEQUENCE {
+    from Residue-id,
+    to Residue-id
+}
+
+-- set of locations on a particular chain
+Cn3d-molecule-location ::= SEQUENCE {
+    molecule-id Molecule-id,    -- MMDB molecule id
+    -- which residues; whole molecule implied if absent
+    residues SEQUENCE OF Cn3d-residue-range OPTIONAL
+}
+
+-- set of locations on a particular structure object (e.g., a PDB/MMDB
+-- structure), which may include multiple ranges of residues each on
+-- multiple chains.
+Cn3d-object-location ::= SEQUENCE {
+    structure-id Biostruc-id,
+    residues SEQUENCE OF Cn3d-molecule-location
+}
+
+-- information for an individual user annotation
+Cn3d-user-annotation ::= SEQUENCE {
+    name VisibleString,                 -- a (short) name for this annotation
+    description VisibleString OPTIONAL, -- an optional longer description
+    style-id Cn3d-style-table-id,       -- how to draw this annotation
+    residues SEQUENCE OF Cn3d-object-location,  -- which residues to cover
+    is-on BOOLEAN   -- whether this annotation is to be turned on in Cn3D
+}
+
+-- The list of annotations for a given CDD/mime. If residue regions overlap
+-- between annotations that are turned on, the last annotation in this list
+-- that contains these residues will be used as the display style for these
+-- residues.
+Cn3d-user-annotations ::= SEQUENCE {
+    annotations SEQUENCE OF Cn3d-user-annotation
+}
+
+END
+
 --$Revision: 6.3 $
 --****************************************************************
 --
@@ -2445,7 +2622,7 @@ FeatDefGroupSet ::= SEQUENCE {
 END
 
     
---$Revision: 6.4 $
+--$Revision: 6.6 $
 --****************************************************************
 --
 --  NCBI MIME type (chemical/ncbi-asn1-ascii and chemical/ncbi-asn1-binary)
@@ -2460,14 +2637,15 @@ EXPORTS Ncbi-mime-asn1;
 IMPORTS Biostruc, Biostruc-annot-set FROM MMDB
 	Seq-entry FROM NCBI-Seqset
 	Seq-annot FROM NCBI-Sequence
-	Medline-entry FROM NCBI-Medline;
-	
+    Medline-entry FROM NCBI-Medline
+    Cn3d-style-dictionary, Cn3d-user-annotations FROM NCBI-Cn3d;
+
 Ncbi-mime-asn1 ::= CHOICE {
 	entrez	Entrez-general,			-- just a structure
-	alignstruc	Biostruc-align,			-- structures & sequences & alignments
+	alignstruc	Biostruc-align,	-- structures & sequences & alignments
 	alignseq	Biostruc-align-seq,	-- sequence alignment
-    strucseq    Biostruc-seq,	-- structure & sequences
-    strucseqs   Biostruc-seqs	    -- structure & sequences & alignments 
+	strucseq    Biostruc-seq,	-- structure & sequences
+	strucseqs   Biostruc-seqs	-- structure & sequences & alignments
 	-- others may be added here in the future
 }
 
@@ -2476,20 +2654,32 @@ Biostruc-align ::= SEQUENCE {
 	slaves	SET OF Biostruc,
 	alignments	Biostruc-annot-set,	-- structure alignments
 	sequences SET OF Seq-entry,	-- sequences
-	seqalign SET OF Seq-annot }
+	seqalign SET OF Seq-annot,
+	style-dictionary Cn3d-style-dictionary OPTIONAL,
+	user-annotations Cn3d-user-annotations OPTIONAL
+}
 
 Biostruc-align-seq ::= SEQUENCE {	-- display seq structure align only
 	sequences SET OF Seq-entry,	-- sequences
-	seqalign SET OF Seq-annot }	
+	seqalign SET OF Seq-annot,
+	style-dictionary Cn3d-style-dictionary OPTIONAL,
+	user-annotations Cn3d-user-annotations OPTIONAL
+}
 
-Biostruc-seq ::= SEQUENCE {	-- display  structure seq added by yanli 
-    structure Biostruc,
-	sequences SET OF Seq-entry }
+Biostruc-seq ::= SEQUENCE {	-- display  structure seq added by yanli
+	structure Biostruc,
+	sequences SET OF Seq-entry,
+	style-dictionary Cn3d-style-dictionary OPTIONAL,
+	user-annotations Cn3d-user-annotations OPTIONAL
+}
 
-Biostruc-seqs ::= SEQUENCE { -- display blast alignment along with neighbor's structure added by yanli 
-    structure Biostruc,
+Biostruc-seqs ::= SEQUENCE { -- display blast alignment along with neighbor's structure added by yanli
+	structure Biostruc,
 	sequences SET OF Seq-entry,	-- sequences
-	seqalign SET OF Seq-annot }
+	seqalign SET OF Seq-annot,
+	style-dictionary Cn3d-style-dictionary OPTIONAL,
+	user-annotations Cn3d-user-annotations OPTIONAL
+}
 
 Entrez-style ::= ENUMERATED {
 	docsum (1),

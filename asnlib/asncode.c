@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.12  2001/06/28 02:14:40  juran
+* Fixed log message.
+* Testing how new MacCVS Pro handles multi-line comments.
+*
+* Revision 6.11  2001/06/28 01:53:32  juran
+* Mac compatibility:
+* Redefine NULL to 0L, which gets promoted to any pointer type.
+* Cast result of MemNew() to appropriate pointer type.
+*
 * Revision 6.10  2000/12/12 15:56:09  ostell
 * added support BigInt
 *
@@ -112,6 +121,8 @@
 #include "asnbuild.h"
 #include "asntool.h"
 
+#undef NULL
+#define NULL 0L
 
 /*****************************************************************************
 *
@@ -121,7 +132,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.10 $";
+static char     RCS_Rev [] = "$Revision: 6.12 $";
 
 /*******************
  * Interator structure
@@ -1932,7 +1943,7 @@ AsnCode_seqstart (struct struct_asniter PNTR iter)
 			}
 		}
 		if ( ! safe_node){
-			temp = safe_name = MemNew(30);
+			temp = safe_name = (char *)MemNew(30);
 			sprintf(fail_buf,"%d",fail_count++);
 			temp = StringMove(temp,"FAIL__NAME_");
 			temp = StringMove(temp,fail_buf);
@@ -3332,7 +3343,7 @@ AsnCodeFinishedRoutine (struct struct_asniter PNTR iter)
 void
 AsnCodeNewRoutine (struct struct_asniter PNTR iter)
 {
-   AsnCodeSpooledPtr new_routine = MemNew (sizeof (AsnCodeSpooled));
+   AsnCodeSpooledPtr new_routine = (AsnCodeSpooledPtr)MemNew (sizeof (AsnCodeSpooled));
    AsnCodeSpooledPtr scanner;
 
    if (iter->cur_routine != NULL) {
@@ -4088,7 +4099,7 @@ AsnCodeIterRecursiveCall (AsnIterPtr iter, FnPtr start_slot, FnPtr end_slot, Asn
 void
 AsnCodePush (AsnIterPtr iter, AsnTypePtr atp, Int2 type, Int2 recurtype)
 {
-   AsnCodeNodePtr  node = MemNew (sizeof (AsnCodeNode));
+   AsnCodeNodePtr  node = (AsnCodeNodePtr)MemNew (sizeof (AsnCodeNode));
    char            buf[60];
    AsnOptionPtr    slot_option;
    AsnOptionPtr    obj_option;
@@ -4106,7 +4117,7 @@ AsnCodePush (AsnIterPtr iter, AsnTypePtr atp, Int2 type, Int2 recurtype)
 	    StringSave (AsnCodeCleanName (atp->name, buf,
 					  CLEAN_FOR_SLOT, iter -> acip -> maxDefineLength));
       } else {
-	 node->slot_name = StringSave (slot_option->data.ptrvalue);
+	 node->slot_name = StringSave ((char *)slot_option->data.ptrvalue);
 	 if ((iter->acip->debug_level) > 1) {
 	    AsnCodeShowDepth (iter);
 	    fprintf ((iter->acip -> bug_fp), "... override SLOT name %s found.\n",
@@ -4120,7 +4131,7 @@ AsnCodePush (AsnIterPtr iter, AsnTypePtr atp, Int2 type, Int2 recurtype)
 	    StringSave (AsnCodeCleanName (atp->name, buf,
 					  CLEAN_FOR_OBJ_NAME, iter -> acip -> maxDefineLength));
       } else {
-	 node->obj_name = StringSave (obj_option->data.ptrvalue);
+	 node->obj_name = StringSave ((char *)obj_option->data.ptrvalue);
 	 if ((iter->acip->debug_level) > 1) {
 	    AsnCodeShowDepth (iter);
 	    fprintf ((iter->acip -> bug_fp), "... override OBJ name %s found.\n",
@@ -4355,7 +4366,7 @@ AsnCode (AsnCodeInfoPtr acip)
    char            buf[BUF_LEN];
    CharPtr         pnt, hold_buf;
    CharPtr         include_name = NULL;
-   AsnIterPtr      iter = MemNew (sizeof (AsnIter));
+   AsnIterPtr      iter = (AsnIterPtr)MemNew (sizeof (AsnIter));
    Int2            mode;
    Char            dateTime[24];
 

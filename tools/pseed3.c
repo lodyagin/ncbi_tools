@@ -1,4 +1,4 @@
-/* $Id: pseed3.c,v 6.35 2000/08/07 20:45:10 madden Exp $ */
+/* $Id: pseed3.c,v 6.36 2001/05/04 14:14:52 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +33,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.35 $
+$Revision: 6.36 $
 
 $Log: pseed3.c,v $
+Revision 6.36  2001/05/04 14:14:52  madden
+Fixes for multiple patterns in phi-blast
+
 Revision 6.35  2000/08/07 20:45:10  madden
 Proper casting of int to long for printf
 
@@ -1648,6 +1651,7 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
                                                  lenPatMatch, is_dna, gap_align,
                                                  patternSearch, seedSearch,
                                                  search->thr_info);
+	search->thr_info->gi_current = 0;
         parallel_seed_search((VoidPtr) seedParallelArray[0]);
         (*matchIndex) += seedParallelArray[0]->matchIndex;
         (*totalOccurrences) += seedParallelArray[0]->totalOccurrences;

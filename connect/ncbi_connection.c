@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connection.c,v 6.10 2001/02/26 22:52:44 kans Exp $
+/*  $Id: ncbi_connection.c,v 6.15 2001/06/29 21:06:46 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,14 +31,31 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connection.c,v $
+ * Revision 6.15  2001/06/29 21:06:46  lavr
+ * BUGFIX: CONN_LOG now checks for non-NULL get_type virtual function
+ *
+ * Revision 6.14  2001/06/28 22:00:48  lavr
+ * Added function: CONN_SetCallback
+ * Added callback: eCONN_OnClose
+ *
+ * Revision 6.13  2001/06/07 17:54:36  lavr
+ * Modified exit branch in s_CONN_Read()
+ *
+ * Revision 6.12  2001/05/30 19:42:44  vakatov
+ * s_CONN_Read() -- do not issue warning if requested zero bytes
+ * (by A.Lavrentiev)
+ *
+ * Revision 6.11  2001/04/24 21:29:04  lavr
+ * CONN_DEFAULT_TIMEOUT is used everywhere when timeout is not set explicitly
+ *
  * Revision 6.10  2001/02/26 22:52:44  kans
- * initialize x_read in s_CONN_Read
+ * Initialize x_read in s_CONN_Read
  *
  * Revision 6.9  2001/02/26 16:32:01  kans
- * including string.h instead of cstring
+ * Including string.h instead of cstring
  *
  * Revision 6.8  2001/02/25 21:41:50  kans
- * include <cstring> on Mac to get memset
+ * Include <cstring> on Mac to get memset
  *
  * Revision 6.7  2001/02/09 17:34:18  lavr
  * CONN_GetType added; severities of some messages changed
@@ -57,7 +74,7 @@
  *
  * Revision 6.2  2000/12/29 17:52:59  lavr
  * Adapted to use new connector structure; modified to have
- * internal tri-state {Unusable | Open | Closed }.
+ * Internal tri-state {Unusable | Open | Closed }.
  *
  * Revision 6.1  2000/03/24 22:53:34  vakatov
  * Initial revision
@@ -84,20 +101,18 @@
 #include <connect/ncbi_buffer.h>
 
 #include <stdlib.h>
-#include <memory.h>
-
-#if defined(__POWERPC__) || defined(powerc) || defined(__powerc) || defined(__POWERPC)
 #include <string.h>
-#endif
 
 
 /* Standard logging message
  */
-#define CONN_LOG(level, descr) \
-  CORE_LOGF(level, \
-            ("%s (connector \"%s\", error \"%s\")", \
-            descr, \
-            (*conn->meta.get_type)(conn->meta.c_get_type), \
+#define CONN_LOG(level, descr)                               \
+  CORE_LOGF(level,                                           \
+            ("%s (connector \"%s\", error \"%s\")",          \
+            descr,                                           \
+            conn->meta.get_type                              \
+             ? (*conn->meta.get_type)(conn->meta.c_get_type) \
+             : "<unknown>",                                  \
             IO_StatusStr(status)))
 
 
@@ -111,7 +126,6 @@ typedef enum eCONN_StateTag {
     eCONN_Open = 1
 } eCONN_State;
 
-
 /* Connection internal data
  */
 typedef struct SConnectionTag {
@@ -121,15 +135,19 @@ typedef struct SConnectionTag {
     SConnectorAsyncHandler async_data; /* info of curr. async event handler */
 #endif
     eCONN_State            state;      /* connection state                  */
-    /* "[c|r|w|l]_timeout" is either 0 or points to "[cc|rr|ww|ll]_timeout" */
-    STimeout* c_timeout;               /* timeout on connect                */
-    STimeout* r_timeout;               /* timeout on reading                */
-    STimeout* w_timeout;               /* timeout on writing                */
-    STimeout* l_timeout;               /* timeout on close                  */
-    STimeout  cc_timeout;              /* storage for "c_timeout"           */
-    STimeout  rr_timeout;              /* storage for "r_timeout"           */
-    STimeout  ww_timeout;              /* storage for "w_timeout"           */
-    STimeout  ll_timeout;              /* storage for "l_timeout"           */
+    /* "[c|r|w|l]_timeout" is either 0 (means infinite), CONN_DEFAULT_TIMEOUT
+       (to use connector-specific one), or points to "[cc|rr|ww|ll]_timeout" */
+    const STimeout* c_timeout;         /* timeout on connect                */
+    const STimeout* r_timeout;         /* timeout on reading                */
+    const STimeout* w_timeout;         /* timeout on writing                */
+    const STimeout* l_timeout;         /* timeout on close                  */
+    STimeout        cc_timeout;        /* storage for "c_timeout"           */
+    STimeout        rr_timeout;        /* storage for "r_timeout"           */
+    STimeout        ww_timeout;        /* storage for "w_timeout"           */
+    STimeout        ll_timeout;        /* storage for "l_timeout"           */
+
+    SCONN_Callback   callback[CONN_N_CALLBACKS];
+
 } SConnection;
 
 
@@ -145,7 +163,14 @@ extern EIO_Status CONN_Create
     EIO_Status status = eIO_Unknown;
     
     if (conn) {
+        int i;
         conn->state = eCONN_Unusable;
+        conn->c_timeout = CONN_DEFAULT_TIMEOUT;
+        conn->r_timeout = CONN_DEFAULT_TIMEOUT;
+        conn->w_timeout = CONN_DEFAULT_TIMEOUT;
+        conn->l_timeout = CONN_DEFAULT_TIMEOUT;
+        for (i = 0; i < CONN_N_CALLBACKS; i++)
+            memset(&conn->callback[i], 0, sizeof(conn->callback[i]));
         status = CONN_ReInit(conn, connector);
         if (status != eIO_Success) {
             free(conn);
@@ -168,8 +193,8 @@ extern EIO_Status CONN_ReInit
     if (!connector && !conn->meta.list) {
         status = eIO_Unknown;
         CONN_LOG(eLOG_Error,
-                 "[CONN_ReInit]  Cannot reinit empty connection with NULL");
-        return status;    
+                 "[CONN_ReInit]  Cannot re-init empty connection with NULL");
+        return status;
     }
 
     /* reset and close current connector(s), if any */
@@ -264,39 +289,37 @@ extern void CONN_SetTimeout
  const STimeout* new_timeout)
 {
     if (event == eIO_Open) {
-        if (new_timeout) {
+        if (new_timeout && new_timeout != CONN_DEFAULT_TIMEOUT) {
             conn->cc_timeout = *new_timeout;
             conn->c_timeout  = &conn->cc_timeout;
         } else
-            conn->c_timeout  = 0;
-
+            conn->c_timeout  = new_timeout;
         return;
     }
 
     if (event == eIO_Close) {
-        if (new_timeout) {
+        if (new_timeout && new_timeout != CONN_DEFAULT_TIMEOUT) {
             conn->ll_timeout = *new_timeout;
             conn->l_timeout  = &conn->ll_timeout;
         } else
-            conn->l_timeout  = 0;
-
+            conn->l_timeout  = new_timeout;
         return;
     }
 
     if (event == eIO_ReadWrite || event == eIO_Read) {
-        if ( new_timeout ) {
+        if (new_timeout && new_timeout != CONN_DEFAULT_TIMEOUT) {
             conn->rr_timeout = *new_timeout;
             conn->r_timeout  = &conn->rr_timeout;
         } else
-            conn->r_timeout  = 0;
+            conn->r_timeout  = new_timeout;
     }
 
     if (event == eIO_ReadWrite || event == eIO_Write) {
-        if ( new_timeout ) {
+        if (new_timeout && new_timeout != CONN_DEFAULT_TIMEOUT) {
             conn->ww_timeout = *new_timeout;
             conn->w_timeout  = &conn->ww_timeout;
         } else
-            conn->w_timeout  = 0;
+            conn->w_timeout  = new_timeout;
     }
 }
 
@@ -347,7 +370,8 @@ extern EIO_Status CONN_Wait
     
     if (status != eIO_Success) {
         if (status == eIO_Timeout) {
-            ELOG_Level level = (timeout && !timeout->sec && !timeout->usec)
+            ELOG_Level level = (timeout && timeout != CONN_DEFAULT_TIMEOUT &&
+                                !timeout->sec && !timeout->usec)
                 ? eLOG_Trace : eLOG_Warning;
             CONN_LOG(level, "[CONN_Wait]  I/O timed out");
         } else {
@@ -428,7 +452,7 @@ static EIO_Status s_CONN_Read
         return eIO_InvalidArg;
 
     /* perform open, if not yet */
-    if (conn->state != eCONN_Open && (status = s_Open(conn)) != eIO_Success)
+    if (conn->state != eCONN_Open  &&  (status = s_Open(conn)) != eIO_Success)
         return status;
     
     /* flush the unwritten output data, if any */
@@ -437,14 +461,14 @@ static EIO_Status s_CONN_Read
     *n_read = 0;
 
     /* check if the read method is specified at all */
-    if (!conn->meta.read) {
+    if ( !conn->meta.read ) {
         status = eIO_NotSupported;
         CONN_LOG(eLOG_Error, "[CONN_Read]  Unable to read data");
         return status;
     }
 
     /* read data from the internal "peek-buffer", if any */
-    if (size) {
+    if ( size ) {
         *n_read = peek ?
             BUF_Peek(conn->buf, buf, size) : BUF_Read(conn->buf, buf, size);
         if (*n_read == size)
@@ -452,7 +476,7 @@ static EIO_Status s_CONN_Read
         buf = (char*) buf + *n_read;
         size -= *n_read;
     }
-    
+
     /* read data from the connection */
     {{
         size_t x_read = 0;
@@ -460,23 +484,21 @@ static EIO_Status s_CONN_Read
         status = (*conn->meta.read)(conn->meta.c_read,
                                     buf, size, &x_read, conn->r_timeout);
         *n_read += x_read;
-        if (peek && x_read)  /* save the read data in the "peek-buffer" */
+        if (peek  &&  x_read)  /* save the read data in the "peek-buffer" */
             verify(BUF_Write(&conn->buf, buf, x_read));
     }}
-    
+
     if (status != eIO_Success) {
-        if (*n_read) {
+        if ( *n_read ) {
             CONN_LOG(eLOG_Trace, "[CONN_Read]  Read error");
-            return eIO_Success;
-        } else {
+            status = eIO_Success;
+        } else  if ( size ) {
             CONN_LOG((status == eIO_Closed ? eLOG_Trace : eLOG_Warning),
                      "[CONN_Read]  Cannot read data");
-            return status;  /* error or EOF */
         }
     }
-    
-    /* success */
-    return eIO_Success;
+
+    return status;
 }
 
 
@@ -542,6 +564,12 @@ extern EIO_Status CONN_Status(CONN conn, EIO_Event dir)
 
 extern EIO_Status CONN_Close(CONN conn)
 {
+    /* callback established? call it first, if yes! */
+    if (conn->callback[eCONN_OnClose].func)
+        (*conn->callback[eCONN_OnClose].func)
+            (conn, eCONN_OnClose, conn->callback[eCONN_OnClose].data);
+
+    /* now close the connection */
     if (conn->meta.list)
         CONN_ReInit(conn, 0);
     BUF_Destroy(conn->buf);
@@ -554,6 +582,23 @@ extern const char* CONN_GetType(CONN conn)
 {
     return conn->meta.get_type ?
         (*conn->meta.get_type)(conn->meta.c_get_type) : 0;
+}
+
+
+extern EIO_Status CONN_SetCallback(CONN conn, ECONN_Callback type,
+                                   const SCONN_Callback* new_cb,
+                                   SCONN_Callback*       old_cb)
+{
+    int i = (int) type;
+    
+    if (i >= CONN_N_CALLBACKS)
+        return eIO_InvalidArg;
+
+    if (old_cb)
+        *old_cb = conn->callback[i];
+    if (new_cb)
+        conn->callback[i] = *new_cb;
+    return eIO_Success;
 }
 
 

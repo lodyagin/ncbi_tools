@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -102,6 +102,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   TexT            geneSymbol;       \
   TexT            geneDesc;         \
   ButtoN          editGeneBtn;      \
+  TexT            protXrefName;     \
   DialoG          location;         \
   DialoG          product;          \
   DialoG          featcits;         \

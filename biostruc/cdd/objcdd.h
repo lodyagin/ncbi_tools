@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.10 at Feb 5, 2001  5:11 PM
+*    Generated using ASNCODE Revision: 6.10 at Jun 14, 2001  4:37 PM
 *
 **************************************************/
 
@@ -76,6 +76,16 @@ typedef struct struct_Cdd {
    struct struct_Matrix PNTR   posfreq;
    struct struct_Matrix PNTR   scoremat;
    struct struct_Triangle PNTR   distance;
+   ValNodePtr   parents;
+   ValNodePtr   children;
+   ValNodePtr   siblings;
+   ValNodePtr   neighbors;
+   struct struct_Update_align PNTR   pending;
+   struct struct_Reject_id PNTR   rejects;
+   ValNodePtr   master3d;
+   struct struct_Align_annot PNTR   alignannot;
+   struct struct_Cn3d_style_dictionary PNTR   style_dictionary;
+   struct struct_Cn3d_user_annotations PNTR   user_annotations;
 } Cdd, PNTR CddPtr;
 
 
@@ -119,6 +129,7 @@ typedef struct struct_Cdd_tree {
    ValNodePtr   parents;
    ValNodePtr   children;
    ValNodePtr   siblings;
+   ValNodePtr   neighbors;
 } CddTree, PNTR CddTreePtr;
 
 
@@ -177,6 +188,9 @@ typedef ValNode CddDescr;
 #define CddDescr_tax_source 6
 #define CddDescr_source 7
 #define CddDescr_status 8
+#define CddDescr_update_date 9
+#define CddDescr_scrapbook 10
+#define CddDescr_source_id 11
 
 
 NLM_EXTERN CddDescrPtr LIBCALL CddDescrFree PROTO ((CddDescrPtr ));
@@ -234,6 +248,7 @@ NLM_EXTERN Boolean LIBCALL MatrixAsnWrite PROTO (( MatrixPtr , AsnIoPtr, AsnType
 typedef struct struct_Triangle {
    Int4   nelements;
    ScorePtr   scores;
+   ValNodePtr   div_ranks;
 } Triangle, PNTR TrianglePtr;
 
 
@@ -241,6 +256,110 @@ NLM_EXTERN TrianglePtr LIBCALL TriangleFree PROTO ((TrianglePtr ));
 NLM_EXTERN TrianglePtr LIBCALL TriangleNew PROTO (( void ));
 NLM_EXTERN TrianglePtr LIBCALL TriangleAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL TriangleAsnWrite PROTO (( TrianglePtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr UpdateCommentPtr;
+typedef ValNode UpdateComment;
+#define UpdateComment_comment 1
+#define UpdateComment_addthis 2
+#define UpdateComment_replaces 3
+#define UpdateComment_reject_loc 4
+#define UpdateComment_reference 5
+
+
+NLM_EXTERN UpdateCommentPtr LIBCALL UpdateCommentFree PROTO ((UpdateCommentPtr ));
+NLM_EXTERN UpdateCommentPtr LIBCALL UpdateCommentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL UpdateCommentAsnWrite PROTO (( UpdateCommentPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    UpdateAlign
+*
+**************************************************/
+typedef struct struct_Update_align {
+   struct struct_Update_align PNTR next;
+   ValNodePtr   description;
+   struct seqannot PNTR   seqannot;
+   Int4   type;
+} UpdateAlign, PNTR UpdateAlignPtr;
+
+
+NLM_EXTERN UpdateAlignPtr LIBCALL UpdateAlignFree PROTO ((UpdateAlignPtr ));
+NLM_EXTERN UpdateAlignPtr LIBCALL UpdateAlignNew PROTO (( void ));
+NLM_EXTERN UpdateAlignPtr LIBCALL UpdateAlignAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL UpdateAlignAsnWrite PROTO (( UpdateAlignPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    RejectId
+*
+**************************************************/
+typedef struct struct_Reject_id {
+   struct struct_Reject_id PNTR next;
+   ValNodePtr   description;
+   ValNodePtr   ids;
+} RejectId, PNTR RejectIdPtr;
+
+
+NLM_EXTERN RejectIdPtr LIBCALL RejectIdFree PROTO ((RejectIdPtr ));
+NLM_EXTERN RejectIdPtr LIBCALL RejectIdNew PROTO (( void ));
+NLM_EXTERN RejectIdPtr LIBCALL RejectIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RejectIdAsnWrite PROTO (( RejectIdPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr FeatureEvidencePtr;
+typedef ValNode FeatureEvidence;
+#define FeatureEvidence_comment 1
+#define FeatureEvidence_reference 2
+#define FeatureEvidence_bsannot 3
+#define FeatureEvidence_seqfeat 4
+
+
+NLM_EXTERN FeatureEvidencePtr LIBCALL FeatureEvidenceFree PROTO ((FeatureEvidencePtr ));
+NLM_EXTERN FeatureEvidencePtr LIBCALL FeatureEvidenceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL FeatureEvidenceAsnWrite PROTO (( FeatureEvidencePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    AlignAnnot
+*
+**************************************************/
+typedef struct struct_Align_annot {
+   struct struct_Align_annot PNTR next;
+   ValNodePtr   location;
+   CharPtr   description;
+   ValNodePtr   evidence;
+} AlignAnnot, PNTR AlignAnnotPtr;
+
+
+NLM_EXTERN AlignAnnotPtr LIBCALL AlignAnnotFree PROTO ((AlignAnnotPtr ));
+NLM_EXTERN AlignAnnotPtr LIBCALL AlignAnnotNew PROTO (( void ));
+NLM_EXTERN AlignAnnotPtr LIBCALL AlignAnnotAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AlignAnnotAsnWrite PROTO (( AlignAnnotPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    AlignAnnotSet
+*
+**************************************************/
+typedef struct struct_Align_annot AlignAnnotSet;
+typedef struct struct_Align_annot PNTR AlignAnnotSetPtr;
+#define AlignAnnotSetNew() AlignAnnotNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN AlignAnnotSetPtr LIBCALL AlignAnnotSetFree PROTO ((AlignAnnotSetPtr ));
+NLM_EXTERN AlignAnnotSetPtr LIBCALL AlignAnnotSetNew PROTO (( void ));
+NLM_EXTERN AlignAnnotSetPtr LIBCALL AlignAnnotSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AlignAnnotSetAsnWrite PROTO (( AlignAnnotSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 #ifdef __cplusplus
 /* { */ }

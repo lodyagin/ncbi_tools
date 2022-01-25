@@ -1,4 +1,4 @@
-/* $Id: ncbiwww.h,v 6.3 1999/09/29 19:08:43 shavirin Exp $
+/* $Id: ncbiwww.h,v 6.5 2001/05/10 14:58:35 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   This file contains main definitions to read and process HTTP 
@@ -37,6 +37,13 @@
 *   Currently it works for all ncbi supported platforms.
 *
 * $Log: ncbiwww.h,v $
+* Revision 6.5  2001/05/10 14:58:35  shavirin
+* Fixed typo.
+*
+* Revision 6.4  2001/05/09 19:25:35  shavirin
+* Added function WWWGetProxiedIP() to get 'real' address of the client
+* using PROXIED_IP environment set by proxy server.
+*
 * Revision 6.3  1999/09/29 19:08:43  shavirin
 * Added new functions: WWWGetLastValueByName and WWWFindNameEx
 *
@@ -134,7 +141,8 @@ typedef struct WWWInfoData {
   CharPtr doc_root;       /* Document directory of current server */
   CharPtr script_name;    /* Script name - CGI program */
   CharPtr host;           /* remote host of client */
-  CharPtr address;        /* remote address of client */
+  CharPtr address;        /* remote address of client - may be proxy */
+  CharPtr proxied_ip;     /* 'real' remote address of client as set by proxy */
   CharPtr agent;          /* Label of remote client */
   CharPtr query;          /* Complete input buffer */
   Int4 browser;           /* Value derived from Label */
@@ -308,6 +316,13 @@ NLM_EXTERN CharPtr WWWGetAddress(WWWInfoPtr info);
    Returns:     Document root directory or NULL if error 
   ------------------------------------------------------------------*/
 NLM_EXTERN CharPtr WWWGetDocRoot(WWWInfoPtr info_in);
+
+/* ----------------------  WWWGetProxedIP  -------------------------
+   Purpose:     Return 'real' client address as set by proxy server
+   Parameters:  WWWInfoPtr
+   Returns:     Host used or NULL if error 
+  ------------------------------------------------------------------*/
+NLM_EXTERN CharPtr WWWGetProxiedIP(WWWInfoPtr info_in);
 
 
 /* ----------------------  WWWGetHost  -------------------------

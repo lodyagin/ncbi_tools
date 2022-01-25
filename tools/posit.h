@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.21 2001/01/03 01:49:38 bauer Exp $
+/* $Id: posit.h,v 6.22 2001/04/03 19:38:24 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,14 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.21 $
+$Revision: 6.22 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.22  2001/04/03 19:38:24  madden
+* Changed IDENTITY_PERCENTAGE to 0.94, Added to output of -Q option in outputPosMatrix
+*
 * Revision 6.21  2001/01/03 01:49:38  bauer
 * Changed from static to "LIBCALL":
 *  posAllocateMemory
@@ -196,6 +199,7 @@ typedef struct posSearchItems {
   BLAST_Score **posMatrix;
   BLAST_Score **posPrivateMatrix;
   Nlm_FloatHi **posFreqs;
+  Nlm_FloatHi *posGaplessColumnWeights;
   Int4 posNumSequences;
   Int4 posResultsCounter;
   Int4 *posResultSequences;

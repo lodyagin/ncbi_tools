@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,20 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.12  2001/07/07 00:46:15  juran
+* A vain attempt to plug serious memory leakage.
+*
+* Revision 6.11  2001/07/03 20:04:02  juran
+* Oops, don't redefine NULL after all.
+*
+* Revision 6.10  2001/06/28 02:19:39  juran
+* Mac compatibility:
+* Redefine NULL to 0L, which gets promoted to any pointer type.
+* Cast result of MemNew() and MemFree() to appropriate pointer type.
+*
+* Revision 6.9  2001/06/12 14:45:17  lewisg
+* reindent to make readable
+*
 * Revision 6.8  2000/08/11 14:01:46  beloslyu
 * fix the bug. Karl
 *
@@ -148,19 +162,19 @@ Args asnargs[NUMARGS] = {
 
 Int2 Main (void)
 {
-Int2 m_argModuleIn=0, f_arg_moduleOut=1, 
+    Int2 m_argModuleIn=0, f_arg_moduleOut=1, 
 	X_argDTDModuleOut=2, T_argTreeDumpOut=3, 
 	v_argPrintFileIn = 4, p_argPrintFileOut = 5,
 	x_argXMLDataOut=6, d_argBinaryFileIn = 7
-     , t_argAsnTypeName = 8, e_argBinaryFileOut = 9
-     , o_argHeadFile = 10, l_argLoadFile = 11
-     , b_argBufferSize = 12, w_argTokenMax = 13
-/*--- args below here are capitilized and for code generation, only--*/
-/*--  Except for the 'M' arg, which will also affect normal use ---*/
-     , G_argGenerateCode = 14, M_argMoreModuleFiles = 15
-     , B_argCodeFileName = 16, D_argCodeGenDebugLevel = 17
-     , S_argDebugFileName = 18, I_argExtraIncludeName = 19
-     , Z_argBitTwiddle = 20, K_argLoadName = 21
+	, t_argAsnTypeName = 8, e_argBinaryFileOut = 9
+	, o_argHeadFile = 10, l_argLoadFile = 11
+	, b_argBufferSize = 12, w_argTokenMax = 13
+	/*--- args below here are capitilized and for code generation, only--*/
+	/*--  Except for the 'M' arg, which will also affect normal use ---*/
+	, G_argGenerateCode = 14, M_argMoreModuleFiles = 15
+	, B_argCodeFileName = 16, D_argCodeGenDebugLevel = 17
+	, S_argDebugFileName = 18, I_argExtraIncludeName = 19
+	, Z_argBitTwiddle = 20, K_argLoadName = 21
 	, J_objMgrEntry = 22, L_objMgrLabel = 23;
 
 	AsnIoPtr aip = NULL,
@@ -169,19 +183,22 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 		aipencode = NULL;
 	FILE * fp;
 	AsnModulePtr amp = NULL,
-				currentmod = NULL,
-				nextmod, thisamp;
+		currentmod = NULL,
+		nextmod, thisamp;
 	AsnTypePtr atp;
 	Boolean print_each_module = FALSE;
- AsnCodeInfoPtr acip = MemNew(sizeof(AsnCodeInfo));
-   CharPtr         filename = NULL, p, last_comma, objmgrentry = NULL;
- int len;
+	AsnCodeInfoPtr acip = (AsnCodeInfoPtr)MemNew(sizeof(AsnCodeInfo));
+	CharPtr filename = NULL, p, last_comma, objmgrentry = NULL;
+	int len;
 
 
+    /* never abort on error, but show it */
+    ErrSetFatalLevel(SEV_MAX);
+    ErrSetMessageLevel(SEV_MIN);
 
-	                          /* never abort on error, but show it */
-	ErrSetFatalLevel(SEV_MAX);
-        ErrSetMessageLevel(SEV_MIN);
+    if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
+	return 1;
+    ErrClear();
 
 	if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
 		return 1;
@@ -190,154 +207,154 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
     if (! AsnIoSetBufsize(NULL, (Int2)asnargs[b_argBufferSize].intvalue))
         return 1;
 
-	if ((aip = AsnIoOpen(asnargs[m_argModuleIn].strvalue, "r")) == NULL)
+    if ((aip = AsnIoOpen(asnargs[m_argModuleIn].strvalue, "r")) == NULL)
 	{
+	    ErrShow();
+	    return 1;
+	}
+
+    acip -> loadname = asnargs[m_argModuleIn].strvalue;
+
+    if (asnargs[K_argLoadName].strvalue != NULL) {
+	acip -> loadname = asnargs[K_argLoadName].strvalue; /* overrides m_argModuleIn, if set */
+    }
+
+    if (asnargs[e_argBinaryFileOut].strvalue != NULL)    /* output a binary value file */
+	if ((aipencode = AsnIoOpen(asnargs[e_argBinaryFileOut].strvalue, "wb")) == NULL)
+	    {
 		ErrShow();
 		return 1;
-	}
-
-	acip -> loadname = asnargs[m_argModuleIn].strvalue;
-
-	if (asnargs[K_argLoadName].strvalue != NULL) {
-		acip -> loadname = asnargs[K_argLoadName].strvalue; /* overrides m_argModuleIn, if set */
-	}
-
-	if (asnargs[e_argBinaryFileOut].strvalue != NULL)    /* output a binary value file */
-		if ((aipencode = AsnIoOpen(asnargs[e_argBinaryFileOut].strvalue, "wb")) == NULL)
-		{
-			ErrShow();
-			return 1;
-		}
+	    }
 
 				/**  parse the module(s)  ***/
 	
-	if (asnargs[f_arg_moduleOut].strvalue != NULL)
+    if (asnargs[f_arg_moduleOut].strvalue != NULL)
 	{
-		if ((aipout = AsnIoOpen(asnargs[f_arg_moduleOut].strvalue, "w")) == NULL)
+	    if ((aipout = AsnIoOpen(asnargs[f_arg_moduleOut].strvalue, "w")) == NULL)
 		{
-			ErrShow();
-			return 1;
+		    ErrShow();
+		    return 1;
 		}
 	}
 
-	thisamp = NULL;
-	while ((nextmod = AsnLexTReadModule(aip)) != NULL )
+    thisamp = NULL;
+    while ((nextmod = AsnLexTReadModule(aip)) != NULL )
 	{
-		if (thisamp == NULL)
-			thisamp = nextmod;
+	    if (thisamp == NULL)
+		thisamp = nextmod;
 
-		if (amp == NULL)
-			amp = nextmod;
-		else
-			currentmod->next = nextmod;
-		currentmod = nextmod;
+	    if (amp == NULL)
+		amp = nextmod;
+	    else
+		currentmod->next = nextmod;
+	    currentmod = nextmod;
 	}
- acip ->  last_amp = currentmod; /* last module of main file */
-	AsnStoreTree(acip->loadname, thisamp); /* store and link tree */
+    acip ->  last_amp = currentmod; /* last module of main file */
+    AsnStoreTree(acip->loadname, thisamp); /* store and link tree */
 
-/*--- read additional module files that will be used for everything
+    /*--- read additional module files that will be used for everything
       but code generation.
----*/
+      ---*/
 
-		if (asnargs[M_argMoreModuleFiles].strvalue != NULL)
-   for (p = asnargs[M_argMoreModuleFiles].strvalue; *p; p = last_comma + 1) {
-/*--- extract next filename for reading ASN.1 definitions ---*/
-      for (last_comma = p; *last_comma; last_comma++) {
+    if (asnargs[M_argMoreModuleFiles].strvalue != NULL)
+	for (p = asnargs[M_argMoreModuleFiles].strvalue; *p; p = last_comma + 1) {
+	    /*--- extract next filename for reading ASN.1 definitions ---*/
+	    for (last_comma = p; *last_comma; last_comma++) {
 	        if (*last_comma == ',')
-	           break;
-      }
-      len = last_comma - p;
-      filename = MemFree (filename);
-      filename = MemNew (len + 1);
-      StringNCpy (filename, p, len);
-      filename[len] = '\0';
+		    break;
+	    }
+	    len = last_comma - p;
+	    filename = (char *)MemFree (filename);
+	    filename = (char *)MemNew (len + 1);
+	    StringNCpy (filename, p, len);
+	    filename[len] = '\0';
 #ifdef WIN_DUMB
-      printf ("Loading %s \n", filename);
+	    printf ("Loading %s \n", filename);
 #endif
 
-	     if ((aip = AsnIoOpen(filename, "r")) == NULL)
-	     {
-		     ErrShow();
-		     return 1;
-	     }
-/*--- read the modules in this current file ---*/
-	     thisamp = NULL;
-	     while ((nextmod = AsnLexTReadModule(aip)) != NULL )
-	     {
-		if (thisamp == NULL)
+	    if ((aip = AsnIoOpen(filename, "r")) == NULL)
+		{
+		    ErrShow();
+		    return 1;
+		}
+	    /*--- read the modules in this current file ---*/
+	    thisamp = NULL;
+	    while ((nextmod = AsnLexTReadModule(aip)) != NULL )
+		{
+		    if (thisamp == NULL)
 			thisamp = nextmod;
-		     if (amp == NULL)
-			     amp = nextmod;
-		     else
-			     currentmod->next = nextmod;
-		     currentmod = nextmod;
-	     }
-	AsnStoreTree(filename, thisamp); /* store and link tree */
-      if (!*last_comma)
+		    if (amp == NULL)
+			amp = nextmod;
+		    else
+			currentmod->next = nextmod;
+		    currentmod = nextmod;
+		}
+	    AsnStoreTree(filename, thisamp); /* store and link tree */
+	    if (!*last_comma)
 	        break;
-	     aip = AsnIoClose(aip);
-   }
+	    aip = AsnIoClose(aip);
+	}
 
-	aip = AsnIoClose(aip);
+    aip = AsnIoClose(aip);
 
-	if (amp == NULL)
+    if (amp == NULL)
 	{
-		ErrPostEx(SEV_FATAL,0,0, "Unable to continue due to bad ASN.1 module");
-		ErrShow();
-		return 1;
+	    ErrPostEx(SEV_FATAL,0,0, "Unable to continue due to bad ASN.1 module");
+	    ErrShow();
+	    return 1;
 	}
 
 
-	if (asnargs[f_arg_moduleOut].strvalue != NULL)
+    if (asnargs[f_arg_moduleOut].strvalue != NULL)
 	{
-		if ((aipout = AsnIoOpen(asnargs[f_arg_moduleOut].strvalue, "w")) == NULL)
+	    if ((aipout = AsnIoOpen(asnargs[f_arg_moduleOut].strvalue, "w")) == NULL)
 		{
-			ErrShow();
-			return 1;
+		    ErrShow();
+		    return 1;
 		}
 
-		currentmod = amp;
-		do
+	    currentmod = amp;
+	    do
 		{
-			AsnPrintModule(currentmod, aipout);
-			if (currentmod == acip->last_amp)  /* last main module */
-				currentmod = NULL;
-			else
-				currentmod = currentmod->next;
+		    AsnPrintModule(currentmod, aipout);
+		    if (currentmod == acip->last_amp)  /* last main module */
+			currentmod = NULL;
+		    else
+			currentmod = currentmod->next;
 		} while (currentmod != NULL);
 
-		aipout = AsnIoClose(aipout);
+	    aipout = AsnIoClose(aipout);
 	}
 	
-	if (asnargs[X_argDTDModuleOut].strvalue != NULL)
+    if (asnargs[X_argDTDModuleOut].strvalue != NULL)
 	{
-		Char tbuf[250];
-		CharPtr ptr;
+	    Char tbuf[250];
+	    CharPtr ptr;
 
-		if (! StringCmp(asnargs[X_argDTDModuleOut].strvalue, "m"))
+	    if (! StringCmp(asnargs[X_argDTDModuleOut].strvalue, "m"))
 		{
-			print_each_module = TRUE;
+		    print_each_module = TRUE;
 		}
-		else
+	    else
 		{
-			if ((aipout = AsnIoOpen(asnargs[X_argDTDModuleOut].strvalue, "wx")) == NULL)
+		    if ((aipout = AsnIoOpen(asnargs[X_argDTDModuleOut].strvalue, "wx")) == NULL)
 			{
-				ErrShow();
-				return 1;
+			    ErrShow();
+			    return 1;
 			}
 		}
 
-		currentmod = amp;
-		do
+	    currentmod = amp;
+	    do
 		{
-			if (print_each_module)
+		    if (print_each_module)
 			{
 			    StringMove(tbuf, currentmod->modulename);
 			    for (ptr = tbuf; *ptr != '\0'; ptr++)
-			    {
-				if (*ptr == '-')
+				{
+				    if (*ptr == '-')
 					*ptr = '_';
-			    }
+				}
 			    StringMove(ptr, ".dtd");
 
 			    AsnPrintModuleXMLInc(currentmod, tbuf);
@@ -348,141 +365,144 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 			}
 			
 
-			AsnPrintModuleXML(currentmod, aipout);
+		    AsnPrintModuleXML(currentmod, aipout);
 
-			if (print_each_module)
-				aipout = AsnIoClose(aipout);
-
-			if (currentmod == acip->last_amp)  /* last main module */
-				currentmod = NULL;
-			else
-				currentmod = currentmod->next;
-		} while (currentmod != NULL);
-
-		if (! print_each_module)
+		    if (print_each_module)
 			aipout = AsnIoClose(aipout);
-	}
-	
-	if (asnargs[T_argTreeDumpOut].strvalue != NULL)
-	{
-		if ((fp = FileOpen(asnargs[T_argTreeDumpOut].strvalue, "w")) == NULL)
-		{
-			ErrShow();
-			return 1;
-		}
 
-		currentmod = amp;
-		do
-		{
-			AsnPrintTreeModule(currentmod, fp);
-			if (currentmod == acip->last_amp)  /* last main module */
-				currentmod = NULL;
-			else
-				currentmod = currentmod->next;
+		    if (currentmod == acip->last_amp)  /* last main module */
+			currentmod = NULL;
+		    else
+			currentmod = currentmod->next;
 		} while (currentmod != NULL);
 
-		FileClose(fp);
+	    if (! print_each_module)
+		aipout = AsnIoClose(aipout);
 	}
-
-
- acip -> amp = amp;
 	
-                             /* print a value file */
-
-	if (asnargs[p_argPrintFileOut].strvalue != NULL)
+    if (asnargs[T_argTreeDumpOut].strvalue != NULL)
 	{
-		if ((aipout = AsnIoOpen(asnargs[p_argPrintFileOut].strvalue, "w")) == NULL)
+	    if ((fp = FileOpen(asnargs[T_argTreeDumpOut].strvalue, "w")) == NULL)
 		{
-			ErrShow();
-			return 1;
-		}
-	}
-                             /* print an XML file */
-
-	if (asnargs[x_argXMLDataOut].strvalue != NULL)
-	{
-		if ((xaipout = AsnIoOpen(asnargs[x_argXMLDataOut].strvalue, "wx")) == NULL)
-		{
-			ErrShow();
-			return 1;
-		}
-	}
-
-	if (asnargs[v_argPrintFileIn].strvalue != NULL)        /* read a printvalue file */
-	{
-		if ((aip = AsnIoOpen(asnargs[v_argPrintFileIn].strvalue, "r")) == NULL)
-		{
-			ErrShow();
-			return 1;
+		    ErrShow();
+		    return 1;
 		}
 
-		AsnTxtReadValFile(amp, aip, aipout, aipencode, xaipout);
-                ErrShow();
+	    currentmod = amp;
+	    do
+		{
+		    AsnPrintTreeModule(currentmod, fp);
+		    if (currentmod == acip->last_amp)  /* last main module */
+			currentmod = NULL;
+		    else
+			currentmod = currentmod->next;
+		} while (currentmod != NULL);
+
+	    FileClose(fp);
 	}
 
-	aip = AsnIoClose(aip);
 
-	if (asnargs[d_argBinaryFileIn].strvalue != NULL)        /* read a ber file */
+    acip -> amp = amp;
+	
+    /* print a value file */
+
+    if (asnargs[p_argPrintFileOut].strvalue != NULL)
 	{
-		if ((asnargs[t_argAsnTypeName].strvalue == NULL) || (! TO_UPPER(*asnargs[t_argAsnTypeName].strvalue)))
+	    if ((aipout = AsnIoOpen(asnargs[p_argPrintFileOut].strvalue, "w")) == NULL)
+		{
+		    ErrShow();
+		    return 1;
+		}
+	}
+    /* print an XML file */
+
+    if (asnargs[x_argXMLDataOut].strvalue != NULL)
+	{
+	    if ((xaipout = AsnIoOpen(asnargs[x_argXMLDataOut].strvalue, "wx")) == NULL)
+		{
+		    ErrShow();
+		    return 1;
+		}
+	}
+
+    if (asnargs[v_argPrintFileIn].strvalue != NULL)        /* read a printvalue file */
+	{
+	    if ((aip = AsnIoOpen(asnargs[v_argPrintFileIn].strvalue, "r")) == NULL)
+		{
+		    ErrShow();
+		    return 1;
+		}
+
+	    AsnTxtReadValFile(amp, aip, aipout, aipencode, xaipout);
+	    ErrShow();
+	}
+
+    aip = AsnIoClose(aip);
+
+    if (asnargs[d_argBinaryFileIn].strvalue != NULL)        /* read a ber file */
+	{
+	    if ((asnargs[t_argAsnTypeName].strvalue == NULL) || (! TO_UPPER(*asnargs[t_argAsnTypeName].strvalue)))
                 {
-			ErrPostEx(SEV_FATAL,0,0, "Must use -t Type to define contents of decode file");
-                        ErrShow();
-                        return 1;
+		    ErrPostEx(SEV_FATAL,0,0, "Must use -t Type to define contents of decode file");
+		    ErrShow();
+		    return 1;
 		}
 
-		atp = AsnTypeFind(amp, asnargs[t_argAsnTypeName].strvalue);
-		if (atp == NULL)
+	    atp = AsnTypeFind(amp, asnargs[t_argAsnTypeName].strvalue);
+	    if (atp == NULL)
                 {
 #ifdef WIN_MSWIN
-			ErrPostEx(SEV_FATAL,0,0, "Couldn't find Type %Fs", asnargs[t_argAsnTypeName].strvalue);
+		    ErrPostEx(SEV_FATAL,0,0, "Couldn't find Type %Fs", asnargs[t_argAsnTypeName].strvalue);
 #else
-			ErrPostEx(SEV_FATAL,0,0, "Couldn't find Type %s", asnargs[t_argAsnTypeName].strvalue);
+		    ErrPostEx(SEV_FATAL,0,0, "Couldn't find Type %s", asnargs[t_argAsnTypeName].strvalue);
 #endif
-                        ErrShow();
-                        return 1;
+		    ErrShow();
+		    return 1;
 		}
 
-		if ((aip = AsnIoOpen(asnargs[d_argBinaryFileIn].strvalue, "rb")) == NULL)
+	    if ((aip = AsnIoOpen(asnargs[d_argBinaryFileIn].strvalue, "rb")) == NULL)
 		{
-			ErrShow();
-			return 1;
-	    }
+		    ErrShow();
+		    return 1;
+		}
 
 
-		AsnBinReadValFile(atp, aip, aipout, aipencode, xaipout);
-                ErrShow();
+	    AsnBinReadValFile(atp, aip, aipout, aipencode, xaipout);
+	    ErrShow();
 	}
 
-	AsnIoClose(xaipout);
-	AsnIoClose(aipout);
-	AsnIoClose(aip);
-	AsnIoClose(aipencode);
+    AsnIoClose(xaipout);
+    AsnIoClose(aipout);
+    AsnIoClose(aip);
+    AsnIoClose(aipencode);
 
-	if (asnargs[o_argHeadFile].strvalue != NULL)         /* produce header file */
-		AsnOutput(asnargs[o_argHeadFile].strvalue, amp, FALSE, (Int2)asnargs[w_argTokenMax].intvalue);
+    if (asnargs[o_argHeadFile].strvalue != NULL)         /* produce header file */
+	AsnOutput(asnargs[o_argHeadFile].strvalue, amp, FALSE, (Int2)asnargs[w_argTokenMax].intvalue);
 
     if (asnargs[l_argLoadFile].strvalue != NULL)        /* produce loader file */
         AsnOutput(asnargs[l_argLoadFile].strvalue, amp, TRUE, (Int2)asnargs[w_argTokenMax].intvalue);
 
     if (asnargs[G_argGenerateCode ].intvalue != 0)
-    {
-       acip ->  filename = asnargs[B_argCodeFileName].strvalue;
-       acip ->  do_bit_twiddle = asnargs[Z_argBitTwiddle].intvalue;
-       acip ->  include_filename = asnargs[I_argExtraIncludeName].strvalue;
-       acip ->  maxDefineLength = asnargs[w_argTokenMax].intvalue;
-       acip -> debug_level = asnargs[D_argCodeGenDebugLevel ].intvalue;
-       acip -> object_manager_entry = asnargs[J_objMgrEntry].strvalue;
-       acip -> object_label = asnargs[L_objMgrLabel].strvalue;
-       if (asnargs[S_argDebugFileName].strvalue != NULL) {
-          (acip -> bug_fp) = FileOpen (asnargs[S_argDebugFileName].strvalue, "w");
-       } else {
-          (acip -> bug_fp) = FileOpen ("stderr", "w");
-       }
-       AsnCode(acip);
-    }
+	{
+	    acip ->  filename = asnargs[B_argCodeFileName].strvalue;
+	    acip ->  do_bit_twiddle = asnargs[Z_argBitTwiddle].intvalue;
+	    acip ->  include_filename = asnargs[I_argExtraIncludeName].strvalue;
+	    acip ->  maxDefineLength = asnargs[w_argTokenMax].intvalue;
+	    acip -> debug_level = asnargs[D_argCodeGenDebugLevel ].intvalue;
+	    acip -> object_manager_entry = asnargs[J_objMgrEntry].strvalue;
+	    acip -> object_label = asnargs[L_objMgrLabel].strvalue;
+	    if (asnargs[S_argDebugFileName].strvalue != NULL) {
+		(acip -> bug_fp) = FileOpen (asnargs[S_argDebugFileName].strvalue, "w");
+	    } else {
+		(acip -> bug_fp) = FileOpen ("stderr", "w");
+	    }
+	    AsnCode(acip);
+	}
+	
+	MemFree(acip);
+	MemFree(filename);
 
-	return 0;
+    return 0;
 }
 /*****************************************************************************
 *

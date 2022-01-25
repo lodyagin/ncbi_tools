@@ -35,6 +35,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.91  2001/07/08 21:18:50  kans
+* if ssp->subtype is 0, use ? as tag in note
+*
+* Revision 6.90  2001/06/26 19:50:07  kans
+* call AddPID with is_NC as an option for showing /protein_id with the gi
+*
+* Revision 6.89  2001/06/25 22:22:17  kans
+* ProteinFromCdRegion and GetProductFromCDS only if sfp->product and ! ajp->genome_view, should eliminate unwanted fetches to get far delta components
+*
+* Revision 6.88  2001/05/31 17:42:18  kans
+* NC and NG RefSeq records allow remote fetching for /protein_id and /transcript_id, show gi if fetching not enabled
+*
 * Revision 6.87  2001/03/17 00:51:30  tatiana
 * GeneID added to dbxref array
 *
@@ -546,7 +558,7 @@ NLM_EXTERN void AddProteinQuals PROTO ((SeqFeatPtr sfp, SeqFeatPtr sfp_out, Note
 static void GetGeneticCode PROTO ((CharPtr ptr, SeqFeatPtr sfp));
 NLM_EXTERN void ComposeGBQuals PROTO((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr gbp, SortStructPtr p, Boolean note_pseudo));
 NLM_EXTERN CharPtr ComposeNoteFromNoteStruct PROTO ((NoteStructPtr nsp, GeneStructPtr gsp));
-NLM_EXTERN void AddPID PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out));
+NLM_EXTERN void AddPID PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, Boolean is_NTorNG));
 NLM_EXTERN void Add_trid PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out));
 NLM_EXTERN Int2 MakeGBSelectNote PROTO ((CharPtr ptr, SeqFeatPtr sfp));
 static void GetProtRefComment PROTO ((SeqFeatPtr sfp, BioseqPtr bsp, Asn2ffJobPtr ajp, OrganizeProtPtr opp, NoteStructPtr nsp, Uint1 method));
@@ -1553,7 +1565,7 @@ static void PutTranslationLast(SeqFeatPtr sfp)
 NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 {
     ObjectIdPtr		oip;
-	UserFieldPtr	ufp, uf, u, uu;
+	UserFieldPtr	ufp, u, uu;
 	CharPtr			method, ptr, ne_name;
 	static Char		temp[20];
 	Int2			ptrlen=0, np=0, nd=0, nm=0, ne=0;
@@ -2647,27 +2659,30 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 				sprintf(buf_ptr, "1"); 
 			sfp_out->qual = AddGBQual(sfp_out->qual, "codon_start", buf_ptr);
 		}
-		byte_sp = ProteinFromCdRegion(sfp_in, FALSE);
+		if (product && (! ajp->genome_view)) {
+			byte_sp = ProteinFromCdRegion(sfp_in, FALSE);
 
-		if (product) {
-			length = bsp->length;
-			protein_seq = GetProductFromCDS(product, sfp_in->location, length);
+			if (product) {
+				length = bsp->length;
+				protein_seq = GetProductFromCDS(product, sfp_in->location, length);
 /* check conflict flag and fix it */
-			if (cdr->conflict == TRUE) {
-				if (CompareTranslation(byte_sp, protein_seq)) {
-					cdr->conflict = FALSE;
-				} else {
-					method = METHOD_concept_transl_a;
+				if (cdr->conflict == TRUE) {
+					if (CompareTranslation(byte_sp, protein_seq)) {
+						cdr->conflict = FALSE;
+					} else {
+						method = METHOD_concept_transl_a;
+					}
+				}
+				if (protein_seq) {
+					if ((GBQualPresent("pseudo", sfp_in->qual)) == FALSE &&
+						 gsp->pseudo == FALSE && sfp_in->pseudo == FALSE) {
+						sfp_out->qual = AddGBQual(sfp_out->qual, 
+										"translation", protein_seq);
+					}
+					MemFree(protein_seq);
 				}
 			}
-			if (protein_seq) {
-				if ((GBQualPresent("pseudo", sfp_in->qual)) == FALSE &&
-					 gsp->pseudo == FALSE && sfp_in->pseudo == FALSE) {
-					sfp_out->qual = AddGBQual(sfp_out->qual, 
-									"translation", protein_seq);
-				}
-				MemFree(protein_seq);
-			}
+			BSFree(byte_sp);
 		}
 		if (sfp_in->pseudo) {
 			sfp_out->qual = AddGBQual(sfp_out->qual, "pseudo", NULL);
@@ -2722,8 +2737,8 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			}
 			MemFree(protein_seq);
 		}
-*/
 		BSFree(byte_sp);
+*/
 		break;
 	case SEQFEAT_RNA:
 		rrp = sfp_in->data.value.ptrvalue;
@@ -3124,7 +3139,7 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 	ValNodePtr pub, pubq, pubset;
 	ImpFeatPtr ifp;
 	BioseqPtr bsp;
-	Boolean is_contig = FALSE, is_NC = FALSE;
+	Boolean is_contig = FALSE, is_NC = FALSE, is_NG = FALSE;
 	SeqIdPtr sid;
 	TextSeqIdPtr tsip;
 
@@ -3141,6 +3156,9 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 			if (StringNCmp(tsip->accession, "NC", 2) == 0 
 					|| StringNCmp(tsip->accession, "NP", 2) == 0) {
 				is_NC = TRUE;
+			}
+			if (StringNCmp(tsip->accession, "NG", 2) == 0) {
+				is_NG = TRUE;
 			}
 		}
 	}
@@ -3241,9 +3259,9 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 		}
 	}
 	if (ajp->mode != DIRSUB_MODE) {
-		AddPID(ajp, sfp_out);
+		AddPID(ajp, sfp_out, (Boolean) (is_contig || is_NG || is_NC));
 	}
-	if (is_contig) {
+	if (is_contig || is_NG) {
 		if (sfp != NULL && sfp->data.choice == SEQFEAT_RNA) {
 			Add_trid(ajp, sfp_out); 
 		}
@@ -3497,10 +3515,7 @@ NLM_EXTERN void Add_trid (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 	ImpFeatPtr ifp;
 	Int4 gi = -1;
 	SeqIdPtr sip, newid=NULL;
-	ValNodePtr product, vnp;
-	BioseqPtr p_bsp;
-	DbtagPtr db;
-	Char val[20];
+	ValNodePtr product;
 	Char buf[MAX_ACCESSION_LEN+5];
 	
 	ifp = sfp_out->data.value.ptrvalue;
@@ -3532,14 +3547,14 @@ NLM_EXTERN void Add_trid (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 *	the PID number is gotten from the product SeqId
 *****************************************************************************/
 
-NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
+NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, Boolean is_NTorNG)
 
 {
 	ImpFeatPtr ifp;
 	Int4 gi = -1;
 	SeqIdPtr sip, new_id=NULL;
 	ValNodePtr product, vnp;
-	BioseqPtr p_bsp;
+	BioseqPtr p_bsp = NULL;
 	DbtagPtr db;
 	Char val[20];
 	Char buf[MAX_ACCESSION_LEN+1];
@@ -3554,7 +3569,14 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 	}
 	sip = GetProductSeqId(product);
 	if (sip) {	/* Get protein bsp	*/
-		if ((p_bsp = BioseqFind(sip)) != NULL) {
+		if (sip->choice == SEQID_GI && is_NTorNG) {
+			if ((new_id = GetSeqIdForGI(sip->data.intvalue)) != NULL) {
+				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
+			} else {
+				sprintf(buf, "%ld", sip->data.intvalue);
+			}
+			sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
+		} else if ((p_bsp = BioseqFind(sip)) != NULL) {
 			new_id = GetSeqIdChoice(p_bsp->id);
 			if (ajp->forgbrel && new_id == NULL) {
 				ErrPostStr(SEV_ERROR, ERR_ACCESSION_NoAccessNum, "");
@@ -3564,6 +3586,17 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 				sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
 			}
 		}
+		/*
+		if (new_id == NULL && sip->choice == SEQID_GI) {
+			new_id = GetSeqIdForGI (sip->data.intvalue);
+			if (new_id != NULL) {
+				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER,
+														MAX_ACCESSION_LEN+1);
+				sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
+				SeqIdFree (new_id);
+			}
+		}
+		*/
 	}
 	if (p_bsp == NULL) {
 		gi = GetGINumFromSip(sip);
@@ -4370,8 +4403,10 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 			qual = "note";
 		} else if (ssp->subtype > num_subtype) {
 			qual = NULL;
-		} else {
+		} else if (ssp->subtype > 0) {
 			qual = subtype[ssp->subtype - 1];
+		} else {
+			qual = "?";
 		}
 		val = ssp->name;
 		if (ssp->subtype != 14 && ssp->subtype != 15) {

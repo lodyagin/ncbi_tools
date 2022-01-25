@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objsset.h,v $
+* Revision 6.5  2001/05/14 19:54:20  kans
+* redefine BioseqseqSet_class_gen_prod_set to 17, now in ASN.1 spec
+*
 * Revision 6.4  2001/02/14 23:57:28  kans
 * added define for BioseqseqSet_class_eco_set
 *
@@ -173,7 +176,7 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
 #define BioseqseqSet_class_pop_set 14
 #define BioseqseqSet_class_phy_set 15
 #define BioseqseqSet_class_eco_set 16
-#define BioseqseqSet_class_gen_prod_set 255
+#define BioseqseqSet_class_gen_prod_set 17
 #define BioseqseqSet_class_other 255
 
 /*****************************************************************************

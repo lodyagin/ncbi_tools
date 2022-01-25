@@ -1,7 +1,7 @@
 #ifndef NCBI_LBSM__H
 #define NCBI_LBSM__H
 
-/*  $Id: ncbi_lbsm.h,v 6.12 2001/03/29 21:13:56 lavr Exp $
+/*  $Id: ncbi_lbsm.h,v 6.18 2001/06/25 15:35:30 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,29 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_lbsm.h,v $
+ * Revision 6.18  2001/06/25 15:35:30  lavr
+ * Renamed and redesigned functions:
+ *   LBSM_Search -> LBSM_LookupService
+ *   LBSM_RevokeAll removed
+ *   LBSM_LookupHost added, new
+ *   LBSM_Publish -> LBSM_PublishService
+ *   LBSM_PublishHost added, new
+ *
+ * Revision 6.17  2001/06/19 19:12:01  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
+ * Revision 6.16  2001/05/24 21:26:41  lavr
+ * LBSM_SERV_RATE_MIN, LBSM_SERV_RATE_MAX -> LBSM_DEFAULT_SERV_RATE
+ *
+ * Revision 6.15  2001/05/24 16:23:14  lavr
+ * Dummy service name defined
+ *
+ * Revision 6.14  2001/04/24 21:39:19  lavr
+ * Feedback file moved from cleanable '/tmp' into more safe '/var/tmp'.
+ *
+ * Revision 6.13  2001/04/05 23:11:36  lavr
+ * Added function: LBSM_SubmitPenalty
+ *
  * Revision 6.12  2001/03/29 21:13:56  lavr
  * Default feedback file name added; 'penalty' changed to 'fine'
  *
@@ -86,13 +109,14 @@ extern "C" {
 /* #define LBSM_DEBUG 1 */
 #endif
 
-#define LBSM_DEFAULT_CFGFILE  "lbsmd.cfg"
-#define LBSM_DEFAULT_LOGFILE  "lbsmd.log"
-#define LBSM_DEFAULT_RUNFILE  "lbsmd.pid"
-#define LBSM_DEFAULT_FEEDFILE "/tmp/lbsm"
-#define LBSM_DEFAULT_PORT     0x7321    /* Port number, host byte order      */
-#define LBSM_DEFAULT_TIME     30        /* Exp.time for svc. to be used      */
-#define LBSM_DEFAULT_TTL      5         /* Svc unpublished after TTL expires */
+#define LBSM_DEFAULT_CFGFILE   "lbsmd.cfg"
+#define LBSM_DEFAULT_LOGFILE   "lbsmd.log"
+#define LBSM_DEFAULT_RUNFILE   "lbsmd.pid"
+#define LBSM_DEFAULT_FEEDFILE  "/var/tmp/lbsm"
+#define LBSM_DEFAULT_PORT      0x7321   /* Port number, host byte order      */
+#define LBSM_DEFAULT_TIME      30       /* Exp.time for svc. to be used      */
+#define LBSM_DEFAULT_TTL       5        /* Entry removed after TTL expires   */
+#define LBSM_DEFAULT_SERV_RATE 1000.0   /* For SLBSM_Service.info.rate below */
 
 
 /* Load parameters of the machine
@@ -110,27 +134,47 @@ typedef  struct {
 /* Uptime parameters of the machine
  */
 typedef struct {
-    time_t       sys_uptime;      /* Time the system booted up  */
-    time_t       start_time;      /* Time the daemon started up */
+    TNCBI_Time   sys_uptime;      /* time the system booted up      */
+    TNCBI_Time   start_time;      /* time the daemon started up     */
 } SLBSM_Uptime;
 
 
-/* Service rate limits (for "SLBSM_Service.rate" below)
+/* Types of blocks in the heap
  */
-#define LBSM_SERV_RATE_MIN  0.     /* Not available, e.g. down */
-#define LBSM_SERV_RATE_MAX  1000.  /* Perfectly available      */
+typedef enum {
+    eLBSM_Invalid = 0,            /* not a valid entry              */
+    eLBSM_Host,                   /* host entry                     */
+    eLBSM_Service                 /* service entry                  */
+} ELBSM_Type;
+
+
+/* Prefix header of the heap entry
+ */
+typedef struct {
+    SHEAP_Block    head;          /* heap manager stuff             */
+    ELBSM_Type     type;          /* type of the block              */
+    unsigned short ttl;           /* time-to-live (rundown counter) */ 
+} SLBSM_Entry;
+
+
+/* Host information as kept in the heap
+ */
+typedef struct {
+    SLBSM_Entry    entry;         /* entry header                   */
+    unsigned int   addr;          /* host IP addr (net byte order)  */
+    SLBSM_Load     load;          /* load information               */
+    SLBSM_Uptime   uptime;        /* uptime information             */
+    TNCBI_Size     env;           /* offset to host environment     */
+} SLBSM_Host;
 
 
 /* Full service info structure as kept in the heap
  */
 typedef struct {
-    SHEAP_Block    head;   /* heap manager stuff             */
-    size_t         name;   /* Name of this service (offset)  */
-    unsigned short ttl;    /* time-to-live (rundown counter) */
-    SLBSM_Load     load;   /* load information               */
-    SLBSM_Uptime   uptime; /* uptime information             */
-    double         fine;   /* feedback on unreachability, %  */
-    SSERV_Info     info;   /* server descriptor              */
+    SLBSM_Entry    entry;         /* entry header                   */
+    TNCBI_Size     name;          /* name of this service (offset)  */
+    double         fine;          /* feedback on unreachability, %  */
+    SSERV_Info     info;          /* server descriptor              */
 } SLBSM_Service;
 
 
@@ -139,41 +183,55 @@ typedef struct {
 void LBSM_Setup(HEAP heap);
 
 
-/* Get next service info from the LBSM heap.
+/* Get next service info from the LBSM heap
  */
-const SLBSM_Service* LBSM_Search
+const SLBSM_Service* LBSM_LookupService
 (const char*          service_name,  /* name of service we are looking for */
  const SLBSM_Service* prev_service   /* previously found info (or NULL)    */
  );
 
 
-/* Put (allocate + copy) new service info to the LBSM heap,
- * and assign this service a default ttl (if original ttl == 0).
- * If same service exists already, replace the information.
+/* Get host info from the LBSM heap.
  */
-int/*bool*/ LBSM_Publish(const SLBSM_Service* service);
+const SLBSM_Host*    LBSM_LookupHost
+(unsigned             addr           /* host IP addr (n.b.o) to look for   */
+ );
 
 
-/* Traverse through all service info blocks in the LBSM heap,
- * "age" them (decrement "SLBSM_Service.ttl" field),
- * and remove expired service infos (those with "ttl" == 0).
+/* Put (allocate + copy) new service/host info to the LBSM heap,
+ * and assign this service/host a default ttl (if original ttl == 0).
+ * If same service/host exists already, replace the information
+ */
+int/*bool*/ LBSM_PublishService(const SLBSM_Service* service);
+
+int/*bool*/ LBSM_PublishHost(const SLBSM_Host* host);
+
+
+/* Traverse through all blocks in the LBSM heap, "age" them (decrement
+ * "SLBSM_Entry.ttl" field), and remove expired blocks (whose "ttl" == 0)
  */
 void LBSM_AgeAll(void);
-
-
-/* Revoke all services, running on 'host' and having non-negative
- * rating coefficients, that is all dynamic, aka lb, (vs. static) services.
- */
-void LBSM_RevokeAll(unsigned int host);
 
 
 /* Calculate status of the service based on machine load and rating.
  */
 double LBSM_CalculateStatus
-(const SLBSM_Load* load,   /* [in]  machine load parameters                */
- double            rate,   /* [in]  service rate                           */
- ESERV_Flags       flags,  /* [in]  status calculation flags (Reg | Blast) */
- double            fine    /* [in]  feedback penalty from application(s)   */
+(const SLBSM_Load* load,   /* [in] machine load parameters                   */
+ double            rate,   /* [in] service rate                              */
+ ESERV_Flags       flags,  /* [in] status calculation flags (Reg | Blast)    */
+ double            fine    /* [in] feedback penalty from application(s)      */
+);
+
+
+/* Set penalty (expressed in percents of unavailability) via LBSM daemon,
+ * so that every LBSM host will have this information soon. Return 0 if
+ * penalty submission failed; 1 otherwise.
+ */
+int/*bool*/ LBSM_SubmitPenalty
+(const char*  name,        /* [in] service name to be penalized              */
+ ESERV_Type   type,        /* [in] service type (must be valid)              */
+ double       penalty,     /* [in] penalty to be set, in range [0.0..100.0]  */
+ unsigned int host         /* [in] optional host address; default(0) - local */
 );
 
 

@@ -22,6 +22,7 @@ Additional documentation:
 
 2. Download the appropriate asn2xml binary for your platform
 ftp://ncbi.nlm.nih.gov/toolbox/xml/asn2xml/
+	 asn2xml.ibmaix.tar.Z         AIX  4.3.3
      asn2xml.alphaOSF1.tar.Z      OSF1 V5.1
      asn2xml.linux.tar.Z          Intel x86/Linux
      asn2xml.sgi.tar.Z            IRIX 6.4/IRIX 6.5 

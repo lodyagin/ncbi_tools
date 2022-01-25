@@ -1,7 +1,7 @@
 #ifndef NCBI_LBSM_IPC__H
 #define NCBI_LBSM_IPC__H
 
-/*  $Id: ncbi_lbsm_ipc.h,v 6.10 2001/03/19 23:07:51 lavr Exp $
+/*  $Id: ncbi_lbsm_ipc.h,v 6.15 2001/07/05 16:58:12 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,23 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_lbsm_ipc.h,v $
+ * Revision 6.15  2001/07/05 16:58:12  lavr
+ * Comments updated to show calls for use by daemon only
+ *
+ * Revision 6.14  2001/07/03 20:46:45  lavr
+ * Added function: LBSM_Shmem_Retry() to delete hanging locks.
+ * Modified function: LBSM_Shmem_Create() - timeout argument added
+ *
+ * Revision 6.13  2001/06/04 20:55:03  lavr
+ * Widened the trick to get rid of 'union semun' definition on IRIX
+ * (the former trick has a side effect of not defining hton*() and ntoh*())
+ *
+ * Revision 6.12  2001/05/14 14:01:37  lavr
+ * Fixed: Linux compilation fails due to 'union semun' undefined
+ *
+ * Revision 6.11  2001/05/11 15:29:39  lavr
+ * Added additional condition whether to define union semun with GNU Library
+ *
  * Revision 6.10  2001/03/19 23:07:51  lavr
  * Log typo corrected :-(
  *
@@ -73,6 +90,25 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifndef HAVE_SEMUN
+/* This sequence of defines causes 'union semun' be undefined on IRIX */
+#  ifdef _XOPEN_SOURCE
+#    define _XOPEN_SOURCE_SAVE _XOPEN_SOURCE
+#    undef  _XOPEN_SOURCE
+#  endif
+#  define _XOPEN_SOURCE 1
+#endif
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+#ifndef HAVE_SEMUN
+#  undef _XOPEN_SOURCE
+#  ifdef _XOPEN_SOURCE_SAVE
+#    define _XOPEN_SOURCE _XOPEN_SOURCE_SAVE
+#  endif
+#endif
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,7 +123,8 @@ extern "C" {
                            S_IRGRP | S_IWGRP | \
                            S_IROTH | S_IWOTH )
 
-#if !defined(HAVE_SEMUN) && !defined(__FreeBSD__)
+#if !defined(HAVE_SEMUN) && !defined(__FreeBSD__) && \
+    (!defined(__GNU_LIBRARY__) || defined(_SEM_SEMUN_UNDEFINED))
 union semun {
     int              val;
     struct semid_ds* buf;
@@ -121,12 +158,13 @@ int LBSM_LBSMD(int/*bool*/ check_n_lock);
 pid_t LBSM_UnLBSMD(int/*bool*/ undaemon);
 
 
-/* Create shared memory based LBSM heap to work with
+/* Create shared memory based LBSM heap to work with.
+ * Designed for use solely by LBSM daemon.
  */
-HEAP LBSM_Shmem_Create(void);
+HEAP LBSM_Shmem_Create(int timeout);
 
 
-/* Destroy the shared memory based LBSM heap
+/* Destroy the shared memory based LBSM heap (created by LBSM_Shmem_Create)
  */
 void LBSM_Shmem_Destroy(HEAP heap);
 
@@ -136,14 +174,27 @@ void LBSM_Shmem_Destroy(HEAP heap);
 HEAP LBSM_Shmem_Attach(void);
 
 
-/* Detach the shared memory based LBSM heap
+/* Detach the shared memory based LBSM heap (attached by LBSM_Shmem_Attach)
  */
 void LBSM_Shmem_Detach(HEAP heap);
+
+
+/* Return a snapshot of LBSMD shared memory (must be later freed by caller).
+ * Shared memory gets firstly attached and lastly detached by this call.
+ */
+HEAP LBSM_Shmem_Copy(void);
 
 
 /* Lock the shared memory for exclusive use
  */
 int/*bool*/ LBSM_Shmem_Lock(void);
+
+
+/* Modification of LBSM_Shmem_Lock, which will lock the shared memory even
+ * if existing lock is pending at least timeout seconds by removing the lock.
+ * This call is intended for exlcusive use by LBSM daemon.
+ */
+int/*bool*/ LBSM_Shmem_Retry(int timeout);
 
 
 /* Unlock the shared memory

@@ -1,5 +1,5 @@
 #
-# $Id: netbsd.ncbi.mk,v 1.5 2001/02/02 14:52:02 beloslyu Exp $
+# $Id: netbsd.ncbi.mk,v 1.6 2001/06/12 21:11:56 vakatov Exp $
 #
 # That platform is not supported and is contributed to NCBI by 
 #                     Brook Milligan <brook@trillium.NMSU.Edu>
@@ -25,3 +25,7 @@ NCBI_RANLIB = ranlib
 NCBI_MT_OTHERLIBS = 
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+

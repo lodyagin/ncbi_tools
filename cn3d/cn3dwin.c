@@ -1,4 +1,4 @@
-/*  $Id: cn3dwin.c,v 6.160 2000/08/17 16:09:53 thiessen Exp $
+/*  $Id: cn3dwin.c,v 6.162 2001/05/25 19:16:15 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dwin.c,v $
+* Revision 6.162  2001/05/25 19:16:15  vakatov
+* Nested comment typo fixed
+*
+* Revision 6.161  2001/04/27 20:08:07  juran
+* Heed warnings.
+*
 * Revision 6.160  2000/08/17 16:09:53  thiessen
 * fix X/OpenGL initialization bug
 *
@@ -712,7 +718,7 @@ static GrouP Cn3D_gDisplayCtrl; /* For display control, Yanli  */
 static GrouP Cn3D_gModelCtrl;   /* For modeling, Yanli  */
 static GrouP Cn3D_gViewCtrl;
 #ifdef _OPENGL
-/*static GrouP Cn3D_gOGLCtrl;     /* group that controls 3D view, including animation */
+/*static GrouP Cn3D_gOGLCtrl;*/     /* group that controls 3D view, including animation */
 static GrouP Cn3D_gOGLQuality;  /* group that controls rendering quality */
 #endif                          /* _OPENGL */
 
@@ -2037,7 +2043,7 @@ static void Cn3D_ZoomInCB(IteM i)
  */
 static MenU Cn3D_Menus(WindoW w, ItmActnProc netconfig)
 {
-    MenU file_menu, color_menu, color_submenu, menu, align_menu;
+    MenU file_menu, color_menu, color_submenu, menu;
     int i;
 
     /* FILE top menu
@@ -2156,7 +2162,7 @@ static MenU Cn3D_Menus(WindoW w, ItmActnProc netconfig)
     CommandItem(color_submenu, "Strand/Sheet...", Cn3D_StrandColor);
     CommandItem(color_submenu, "Turn...", Cn3D_TurnColor);
     CommandItem(color_submenu, "Coil...", Cn3D_CoilColor);
-#else /* ndef _OPENGL */
+#else /* _OPENGL */
     CommandItem(color_menu, "Helix...", Cn3D_HelixColor);
     CommandItem(color_menu, "Strand/Sheet...", Cn3D_StrandColor);
     CommandItem(color_menu, "Turn...", Cn3D_TurnColor);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/02/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *   	object loaders for Network Entrez
@@ -45,6 +45,9 @@
 *
 * RCS Modification History:
 * $Log: objneten.c,v $
+* Revision 6.1  2001/04/12 22:42:26  juran
+* Remove unused variable.
+*
 * Revision 6.0  1997/08/25 18:35:08  madden
 * Revision changed to 6.0
 *
@@ -3142,7 +3145,6 @@ static ChildLinkPtr LIBCALL ChildLinkAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError;
    AsnReadFunc func;
    ChildLinkPtr ChildPtr;
 

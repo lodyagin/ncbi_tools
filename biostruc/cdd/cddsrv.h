@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.5 2001/02/01 17:52:35 bauer Exp $
+/* $Id: cddsrv.h,v 1.6 2001/05/31 22:04:46 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.6  2001/05/31 22:04:46  bauer
+* changes to accomodate new type of Smart accessions
+*
 * Revision 1.5  2001/02/01 17:52:35  bauer
 * changes for consensus CDDsrv
 *
@@ -136,8 +139,10 @@ typedef struct realind {
 /*---------------------------------------------------------------------------*/
 static Char    URLBase[PATH_MAX];
 static Char    URLcgi[PATH_MAX];
-static Char    PFAMcgi[PATH_MAX];
+static Char    PFAMcgiUS[PATH_MAX];
+static Char    PFAMcgiUK[PATH_MAX];
 static Char    SMARTcgi[PATH_MAX];
+static Char    SMACCcgi[PATH_MAX];
 static Char    TAXcgi[PATH_MAX];
 static Char    DATApath[PATH_MAX];
 static Char    REFpath[PATH_MAX];

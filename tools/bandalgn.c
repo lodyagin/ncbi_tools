@@ -30,17 +30,21 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform both local and global banded alignments.
 
 ****************************************************************************/
-/* $Revision: 6.15 $ */
-/* $Log: bandalgn.c,v $
-/* Revision 6.15  2000/02/10 22:47:06  vakatov
-/* DLL'zation for MSVC on PC, Win-NT
-/*
-/* Revision 6.14  1999/09/01 21:46:49  chappey
-/* SeqPortFree in load_data
-/*
-* Revision 6.13  1999/07/13 15:39:48  sicotte
-* Fixed casting warnings
-*
+/* $Revision: 6.16 $
+ *
+ * $Log: bandalgn.c,v $
+ * Revision 6.16  2001/05/25 19:32:48  vakatov
+ * Nested comment typo fixed
+ *
+ * Revision 6.15  2000/02/10 22:47:06  vakatov
+ * DLL'zation for MSVC on PC, Win-NT
+ *
+ * Revision 6.14  1999/09/01 21:46:49  chappey
+ * SeqPortFree in load_data
+ *
+ * Revision 6.13  1999/07/13 15:39:48  sicotte
+ * Fixed casting warnings
+ *
  * Revision 6.12  1999/04/06 15:21:00  sicotte
  * Fixed prototype problems and lint casting and.
  *

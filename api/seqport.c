@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.67 $
+* $Revision: 6.69 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.69  2001/06/21 14:46:18  kans
+* set spp->eos = TRUE when returning SEQPORT_VIRT from SeqPortGetResidue (JO)
+*
+* Revision 6.68  2001/04/09 17:16:30  kans
+* fixed complementBase in SeqSearch, SeqSearchProcessBioseq handles circular molecules
+*
 * Revision 6.67  2001/02/18 20:58:51  kans
 * added GetSequenceByBsp
 *
@@ -359,6 +365,7 @@ static char *this_file = __FILE__;
 #include <gather.h>    /* for SeqLocOffset function */
 #include <sqnutils.h>
 #include <explore.h>   /* for BioseqFindFromSeqLoc function */
+#include <subutil.h>
 
 
 
@@ -1687,8 +1694,10 @@ NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue (SeqPortPtr spp)
     if ((spp == NULL) || ((spp->bp == NULL) && (spp->oldcode)))
         return SEQPORT_EOF;
 
-	if (spp->isa_null)  /* NULL interval */
+	if (spp->isa_null) { /* NULL interval */
+		spp->eos = TRUE; /* moving off the segment */
 		return SEQPORT_VIRT;
+	}
 
 	if (spp->eos)       /* end of reverse complement spp */
 		return SEQPORT_EOF;
@@ -4341,7 +4350,7 @@ NLM_EXTERN void TransTableFreeAll (void)
     return;
 }
 
-/* convenience function calls SeqSearchProcessCharacter for entire bioseq */
+/* convenience function does translation for entire bioseq */
 
 NLM_EXTERN void TransTableProcessBioseq (
   TransTablePtr tbl,
@@ -4962,6 +4971,7 @@ typedef struct seqstate {
 typedef struct SeqSearch {
   SeqStatePtr         stateArray;
   SeqPatternPtr       patternList;
+  Int4                maxPatLen;
   Int2                maxState;
   Int2                highState;
   Int2                currentState;
@@ -5332,7 +5342,7 @@ NLM_EXTERN SeqSearchPtr SeqSearchNew (
 {
   Char          charToNuc [5] = "NACGT";
   Char          ch, lttr;
-  CharPtr       complementBase = " TVGH  CD  M KN   YWAABS R ";
+  CharPtr       complementBase = " TVGH  CD  M KN   YSAABW R ";
   Int2          i;
   SeqSearchPtr  tbl;
 
@@ -5342,6 +5352,7 @@ NLM_EXTERN SeqSearchPtr SeqSearchNew (
 
   tbl->stateArray = NULL;
   tbl->patternList = NULL;
+  tbl->maxPatLen = 0;
   tbl->maxState = 0;
   tbl->highState = 0;
   tbl->currentState = 0;
@@ -5428,6 +5439,7 @@ static void StoreSeqPattern (
 )
 
 {
+  Int4           patLen;
   SeqPatternPtr  pp;
 
   pp = (SeqPatternPtr) MemNew (sizeof (SeqPatternItem));
@@ -5440,6 +5452,10 @@ static void StoreSeqPattern (
 
   pp->next = tbl->patternList;
   tbl->patternList = pp;
+  patLen = StringLen (str);
+  if (patLen > tbl->maxPatLen) {
+    tbl->maxPatLen = patLen;
+  }
 }
 
 static void ExpandSeqPattern (
@@ -5560,14 +5576,16 @@ NLM_EXTERN void SeqSearchAddNucleotidePattern (
 
 /* program passes each character in turn to finite state machine */
 
-NLM_EXTERN void SeqSearchProcessCharacter (
+static void SeqSearchProcessCharacterEx (
   SeqSearchPtr tbl,
-  Char ch
+  Char ch,
+  Int4 length
 )
 
 {
   Int2         curr, next;
   SeqMatchPtr  mp;
+  Int4         patLen;
   SeqStatePtr  sp;
 
   if (tbl == NULL) return;
@@ -5599,10 +5617,25 @@ NLM_EXTERN void SeqSearchProcessCharacter (
 
   sp = &(tbl->stateArray [(int) next]);
   for (mp = sp->matches; mp != NULL; mp = mp->next) {
-    tbl->matchproc (tbl->currentPos - StringLen (mp->pattern),
-                    mp->name, mp->pattern, mp->cutSite,
-                    mp->strand, tbl->userdata);
+
+    /* for circular sequences, prevent multiple reports of patterns */
+
+    patLen = StringLen (mp->pattern);
+    if (tbl->currentPos - patLen < length) {
+      tbl->matchproc (tbl->currentPos - patLen,
+                      mp->name, mp->pattern, mp->cutSite,
+                      mp->strand, tbl->userdata);
+    }
   }
+}
+
+NLM_EXTERN void SeqSearchProcessCharacter (
+  SeqSearchPtr tbl,
+  Char ch
+)
+
+{
+  SeqSearchProcessCharacterEx (tbl, ch, INT4_MAX);
 }
 
 /* convenience function calls SeqSearchProcessCharacter for entire nucleotide bioseq */
@@ -5614,6 +5647,8 @@ NLM_EXTERN void SeqSearchProcessBioseq (
 
 {
   Byte        bases [400];
+  Char        extra [128];
+  Int4        length;
   Uint1       residue;
   Int2        ctr, i;
   SeqPortPtr  spp;
@@ -5631,14 +5666,28 @@ NLM_EXTERN void SeqSearchProcessBioseq (
     SeqPortSet_do_virtual (spp, TRUE);
   }
 
+  length = bsp->length;
+
   /* use SeqPortRead rather than SeqPortGetResidue for faster performance */
 
   ctr = SeqPortRead (spp, bases, sizeof (bases));
   i = 0;
   residue = (Uint1) bases [i];
+
+  /* for circular molecules, copy beginning bases for use at end */
+
+  extra [0] = '\0';
+  if (bsp->topology == TOPOLOGY_CIRCULAR &&
+      ctr > 1 &&
+      residue != SEQPORT_EOF &&
+      (Int4) ctr > tbl->maxPatLen &&
+      tbl->maxPatLen < sizeof (extra)) {
+    MemCopy ((Pointer) extra, (Pointer) bases, (size_t) tbl->maxPatLen);
+  }
+
   while (residue != SEQPORT_EOF) {
     if (IS_residue (residue)) {
-      SeqSearchProcessCharacter (tbl, (Char) residue);
+      SeqSearchProcessCharacterEx (tbl, (Char) residue, length);
     }
     i++;
     if (i >= ctr) {
@@ -5651,6 +5700,18 @@ NLM_EXTERN void SeqSearchProcessBioseq (
       }
     }
     residue = (Uint1) bases [i];
+  }
+
+  /* for circular molecules, check for patterns spanning origin */
+
+  if (! StringHasNoText (extra)) {
+    for (i = 0, residue = (Uint1) extra [i];
+         residue != SEQPORT_EOF && i < tbl->maxPatLen;
+         i++, residue = (Uint1) extra [i]) {
+      if (IS_residue (residue)) {
+        SeqSearchProcessCharacterEx (tbl, (Char) residue, length);
+      }
+    }
   }
 
   SeqPortFree (spp);

@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.c,v $
+* Revision 6.167  2001/04/27 19:53:36  juran
+* Heed some warnings.
+*
 * Revision 6.166  2000/07/28 21:05:56  lewisg
 * more c++ fixes
 *
@@ -853,7 +856,7 @@ static Nlm_Int2 Cn3d_nEnsembles = 0, Cn3d_currentEnsemble;
 static Nlm_Char Cn3d_altConfIDs[MAXALTCONF][MAXALTCONF];
 
 /* find the PALD structure with the current cAltConf, if ensembles are on */
-PALD GetAtomAltLocs(PMAD pmadThis, Nlm_Int2 iModel)
+static PALD GetAtomAltLocs(PMAD pmadThis, Nlm_Int2 iModel)
 {
     PALD pald, paldHead;
     PMMD pmmdThis;
@@ -885,7 +888,7 @@ PALD GetAtomAltLocs(PMAD pmadThis, Nlm_Int2 iModel)
 
 /***********************************/
 
-DDV_ColorCell *LIBCALL ColorFromSS(PMGD pmgdThis)
+static DDV_ColorCell *LIBCALL ColorFromSS(PMGD pmgdThis)
 {
     Int2 rsult = 0;
 
@@ -1138,7 +1141,9 @@ static void MasterChangeRenderProc(PopuP p)
     PDNMS pdnmsThis = NULL;
     UIEnum val;
     UIEnum eSetting;
+#ifdef _OPENGL
     Uint1 r, g, b;
+#endif
 
     /* fetch the active structure */
     pdnmsThis = GetSelectedModelstruc();
@@ -2420,10 +2425,14 @@ extern void Nlm_FindAvailableFonts(PopuP);
 
 GrouP LIBCALL LabelControls(Nlm_GrouP prnt)
 {
-    GrouP g, h, h2, h3, h4, h5, h6, h7;
+    GrouP g, h;
     Int2 k;
     PrompT ppt[4];
-    PrompT ppt1, ppt2, ppt3, ppt4, ppt7, ppt8, ppt9, ppt10, ppt11;
+    PrompT ppt1, ppt2, ppt3, ppt4, ppt7, ppt8, ppt9;
+#ifdef _OPENGL
+    GrouP h2, h3, h4, h5, h6, h7;
+    PrompT ppt10, ppt11;
+#endif
 
     g = HiddenGroup(prnt, -1, 0, NULL);
     StaticPrompt(g, "", 0, stdLineHeight, systemFont, 'l');
@@ -2873,12 +2882,16 @@ static PopuP ColorStyle(GrouP h, Int2 i)
 
 GrouP LIBCALL RenderControls(Nlm_GrouP prnt)
 {
-    GrouP g, h, bg;
+    GrouP g, h;
     Int2 k;
     PrompT ppt[10];
-    PrompT ppt1, ppt2, ppt3, ppt4, ppt5;
+    PrompT ppt1, ppt2, ppt3, ppt4;
     RecT pptPos, btnPos;
     Int2 delta;
+#ifdef _OPENGL
+    GrouP bg;
+    PrompT ppt5;
+#endif
 
     g = HiddenGroup(prnt, -1, 0, NULL);
     if (!g)
@@ -3528,8 +3541,10 @@ static void RenderBond(PALD paldFrom, PALD paldTo, DDV_ColorCell * iColor,
     /* paldFrom owns the bond */
 
     FloatLo fXFrom, fYFrom, fZFrom;
+    /*
     FloatLo fXTempF, fYTempF, fZTempF;
     FloatLo fXTempT, fYTempT, fZTempT;
+    */
     FloatLo fXTo, fYTo, fZTo;
 #ifndef _OPENGL
     Int4 iXTo, iYTo, iZTo;
@@ -3615,7 +3630,7 @@ static void RenderBond(PALD paldFrom, PALD paldTo, DDV_ColorCell * iColor,
 
 /* returns a pointer to the next atom down a linear chain of
    virual bonds 1-2-3; used when bonds describe a virtualBB  (thiessen) */
-PMAD GetAtomAfter(PALD pald1, PALD pald2)
+static PMAD GetAtomAfter(PALD pald1, PALD pald2)
 {
     ValNodePtr pvnB2;
     PMAD pmad1, pmad2, pmad3 = NULL;
@@ -3739,7 +3754,6 @@ void LIBCALL RenderAnAtom(PALD paldAtom, DDV_ColorCell * iColor,
     Int4 iRadius;
 #endif
     FloatLo fXAtom, fYAtom, fZAtom;
-    FloatLo fXTempF, fYTempF, fZTempF;
     PMSD pmsdParent = NULL;
     PMAD pmadFrom = NULL;
     PMAD pmadAtom = NULL;

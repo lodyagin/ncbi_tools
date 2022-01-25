@@ -1,7 +1,7 @@
 #ifndef NCBI_SOCKET__H
 #define NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.11 2001/03/22 17:44:14 vakatov Exp $
+/*  $Id: ncbi_socket.h,v 6.13 2001/05/21 15:11:46 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -67,6 +67,9 @@
  *  SOCK_Write
  *  SOCK_GetAddress
  *
+ *  SOCK_SetReadOnWriteAPI
+ *  SOCK_SetReadOnWrite
+ *
  * Data logging:
  *
  *  SOCK_SetDataLoggingAPI
@@ -80,6 +83,15 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.13  2001/05/21 15:11:46  ivanov
+ * Added (with Denis Vakatov) automatic read on write data from the socket
+ * (stall protection).
+ * Added functions SOCK_SetReadOnWriteAPI(), SOCK_SetReadOnWrite()
+ * and internal function s_SelectStallsafe().
+ *
+ * Revision 6.12  2001/04/23 22:22:06  vakatov
+ * SOCK_Read() -- special treatment for "buf" == NULL
+ *
  * Revision 6.11  2001/03/22 17:44:14  vakatov
  * + SOCK_AllowSigPipeAPI()
  *
@@ -181,7 +193,7 @@ typedef struct SOCK_tag*  SOCK;  /* socket:  handle */
  */
 
 
-/* By default("log_data" == eDefault), the data is not logged.
+/* By default ("log_data" == eDefault,eOff), the data is not logged.
  * To start logging the data, call this func with "log_data" == eOn.
  * To stop  logging the data, call this func with "log_data" == eOff.
  */
@@ -361,6 +373,9 @@ extern const STimeout* SOCK_GetTimeout
  * If there is no data available to read (also, if eIO_Persist and cannot
  * read exactly "size" bytes) and the timeout(see SOCK_SetTimeout) is expired
  * then return eIO_Timeout.
+ * If "buf" is passed NULL, then:
+ *   1) if PEEK -- read up to "size" bytes and store them in internal buffer;
+ *   2) else -- discard up to "size" bytes from internal buffer and socket.
  * NOTE1: Theoretically, eIO_Closed may indicate an empty message
  *        rather than a real closure of the connection...
  * NOTE2: If on input "size" == 0, then "*n_read" is set to 0, and
@@ -439,6 +454,21 @@ extern EIO_Status SOCK_GetOSHandle
  void*  handle_buf,  /* pointer to a memory area to put the OS handle at */
  size_t handle_size  /* the exact(!) size of the expected OS handle      */
  );
+
+
+/* By default ("on_off" == eDefault,eOff), sockets will not try to read data
+ * from inside SOCK_Write(). If you want to automagically upread the data
+ * (and cache it in the internal socket buffer) when the write operation
+ * is not immediately available, call this func with "on_off" == eOn.
+ */
+extern void SOCK_SetReadOnWriteAPI(ESwitch on_off);
+
+
+/* Control the reading-while-writing feature for socket "sock" individually.
+ * To reset to the global default behavior (as set by
+ * SOCK_SetReadOnWriteAPI), call this function with "on_off" == eDefault.
+ */
+extern void SOCK_SetReadOnWrite(SOCK sock, ESwitch on_off);
 
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -559,7 +559,9 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
   GeneGatherList  ggl;
   GeneRefPtr      grp;
   GatherScope     gs;
+  ProtRefPtr      prp;
   CharPtr         str;
+  ValNodePtr      vnp;
   SeqFeatXrefPtr  xref;
   /*
   Char            ch;
@@ -601,6 +603,19 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       ggl.slp = sfp->location;
       ggl.genexref = NULL;
       grp = NULL;
+      xref = sfp->xref;
+      while (xref != NULL && xref->data.choice != SEQFEAT_PROT) {
+        xref = xref->next;
+      }
+      if (xref != NULL) {
+        prp = (ProtRefPtr) xref->data.value.ptrvalue;
+        if (prp != NULL && ffp->protXrefName != NULL) {
+          vnp = prp->name;
+          if (vnp != NULL) {
+            SetTitle (ffp->protXrefName, (CharPtr) vnp->data.ptrvalue);
+          }
+        }
+      }
       xref = sfp->xref;
       while (xref != NULL && xref->data.choice != SEQFEAT_GENE) {
         xref = xref->next;
@@ -777,6 +792,37 @@ static Boolean HasExceptionGBQual (SeqFeatPtr sfp)
   return rsult;
 }
 
+static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName)
+
+{
+  ProtRefPtr      prp;
+  Char            str [256];
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL || protXrefName == NULL) return;
+  GetTitle (protXrefName, str, sizeof (str) - 1);
+  if (StringHasNoText (str)) return;
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->data.choice == SEQFEAT_PROT) break;
+  }
+  if (xref == NULL) {
+    xref = SeqFeatXrefNew ();
+    if (xref != NULL) {
+      prp = ProtRefNew ();
+      xref->data.choice = SEQFEAT_PROT;
+      xref->data.value.ptrvalue = (Pointer) prp;
+      xref->next = sfp->xref;
+      sfp->xref = xref;
+    }
+  }
+  if (xref != NULL && xref->data.choice == SEQFEAT_PROT) {
+    prp = (ProtRefPtr) xref->data.value.ptrvalue;
+    xref->data.value.ptrvalue = ProtRefFree (prp);
+    prp = CreateNewProtRef (str, NULL, NULL, NULL);
+    xref->data.value.ptrvalue = (Pointer) prp;
+  }
+}
+
 extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
 
 {
@@ -950,6 +996,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
+        AddProtRefXref (sfp, ffp->protXrefName);
         if (! ObjMgrRegister (OBJ_SEQFEAT, (Pointer) sfp)) {
           Message (MSG_ERROR, "ObjMgrRegister failed");
         }
@@ -962,6 +1009,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
+        AddProtRefXref (sfp, ffp->protXrefName);
         ompc.output_itemtype = OBJ_SEQFEAT;
         if (ompc.input_itemtype == OBJ_BIOSEQ) {
           bsp = GetBioseqGivenIDs (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
@@ -999,6 +1047,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
+        AddProtRefXref (sfp, ffp->protXrefName);
         if (! ReplaceDataForProc (&ompc, FALSE)) {
           Message (MSG_ERROR, "ReplaceDataForProc failed");
         }

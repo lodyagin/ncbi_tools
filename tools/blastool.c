@@ -32,8 +32,92 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.128 $
+* $Revision: 6.156 $
 * $Log: blastool.c,v $
+* Revision 6.156  2001/07/09 14:17:24  madden
+* Fix PC-lint complaints from R. Williams
+*
+* Revision 6.155  2001/07/09 13:12:04  madden
+* Removed unused variables
+*
+* Revision 6.154  2001/07/06 13:59:02  madden
+* Fixed compiler and lint warnings
+*
+* Revision 6.153  2001/06/29 20:45:21  dondosha
+* If percent identity close but less than 100, print 99.99 in tabular output
+*
+* Revision 6.152  2001/06/28 21:22:20  dondosha
+* Do not print query information in tabular output header if it is not available
+*
+* Revision 6.151  2001/06/28 13:42:09  madden
+* Fixes to prevent overflow on number of hits reporting
+*
+* Revision 6.150  2001/06/25 18:04:24  madden
+* Fix to BlastComputeProbs to ignore score > max or < min
+*
+* Revision 6.149  2001/06/18 21:45:16  dondosha
+* Adjusted PrintTabularOutputHeader for web BLAST
+*
+* Revision 6.148  2001/06/15 21:18:39  dondosha
+* Added function PrintTabularOutputHeader
+*
+* Revision 6.147  2001/06/15 16:38:46  dondosha
+* Correction to previous changes
+*
+* Revision 6.146  2001/06/15 15:48:38  dondosha
+* Fixed uninitialized variable bug
+*
+* Revision 6.145  2001/06/14 22:09:15  dondosha
+* Rearranged code for gi lists and oid masks processing to get rid of duplication
+*
+* Revision 6.144  2001/06/14 16:33:35  dondosha
+* Fixed bug in the new function BlastDbGiListToOidList
+*
+* Revision 6.143  2001/06/13 21:45:09  dondosha
+* Search of multiple databases with gi files implemented
+*
+* Revision 6.142  2001/06/07 19:30:03  dondosha
+* Pass believe query argument to BlastPrintTabulatedResults
+*
+* Revision 6.141  2001/06/06 21:22:43  dondosha
+* Added (query) Bioseq and SeqLoc arguments to function BlastPrintTabulatedResults
+*
+* Revision 6.140  2001/06/05 22:16:15  dondosha
+* Check if KarlinBlk exists in FormatBlastParameters
+*
+* Revision 6.139  2001/05/29 22:00:46  dondosha
+* Tabulated output bug fixes
+*
+* Revision 6.138  2001/05/24 16:25:22  dondosha
+* Correction for query and subject ids printed with post-search tabulated format
+*
+* Revision 6.137  2001/05/23 22:38:48  dondosha
+* Added option -m 9 to print post-search tabulated output
+*
+* Revision 6.136  2001/05/15 19:19:26  shavirin
+* Fixed minor bug in the function convertSeqAlignListToValNodeList().
+*
+* Revision 6.135  2001/05/11 22:05:20  dondosha
+* Added BlastPrintTabulatedResults function for post-search formatting
+*
+* Revision 6.134  2001/05/10 21:58:58  dondosha
+* Always print full ids in non-megablast tabulated output
+*
+* Revision 6.133  2001/05/04 22:14:41  dondosha
+* Do not call BioseqLockById from MegaBlastPrintAlignInfo in case of local ids in the database
+*
+* Revision 6.132  2001/05/04 14:14:28  madden
+* Fixes for multiple patterns in phi-blast
+*
+* Revision 6.131  2001/04/26 16:43:10  madden
+* Correction to convertValNodeListToSeqAlignList from AS
+*
+* Revision 6.130  2001/04/25 13:04:03  madden
+* Fix from AS to convertValNodeListToSeqAlignList for multiple occurrences of a pattern
+*
+* Revision 6.129  2001/04/10 17:01:15  dondosha
+* Fixed purify errors, including problem with multithreaded tabulated output
+*
 * Revision 6.128  2001/04/06 18:15:08  madden
 * Move UNIX-specific stuff (HeyIAmInMemory) to bqueue.[ch]
 *
@@ -548,7 +632,7 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 
 	if (pbp->two_pass_method == FALSE)
 	{
-		sprintf(buffer, "Number of Hits to DB: %ld", (long) search->second_pass_hits);
+		sprintf(buffer, "Number of Hits to DB: %s", Nlm_Int8tostr((Int8) search->second_pass_hits, 1));
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		
 		readdb_get_totals_ex(search->rdfp, &total_length, &num_entries, TRUE);
@@ -562,8 +646,8 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 	}
 	else
 	{
-		sprintf(buffer, "Number of Hits to DB: 1st pass: %ld, 2nd pass: %ld", 
-			(long) search->first_pass_hits, (long) search->second_pass_hits);
+		sprintf(buffer, "Number of Hits to DB: 1st pass: %s, 2nd pass: %s", 
+			Nlm_Int8tostr((Int8) search->first_pass_hits, 1), Nlm_Int8tostr((Int8) search->second_pass_hits, 1));
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		readdb_get_totals_ex(search->rdfp, &total_length, &num_entries, TRUE);
 		sprintf(buffer, "Number of Sequences: 1st pass: %ld, 2nd pass: %ld", 
@@ -603,20 +687,27 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 		sprintf(buffer, "Number of HSP's gapped (non-prelim): %ld", (long) search->real_gap_number_of_hsps);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	}
-
-	sprintf(buffer, "length of query: %ld", (long) search->context[search->first_context].query->length);
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "length of database: %s", Nlm_Int8tostr ((Int8) search->dblen, 1));
+        /* The following makes sense only when there is only one query */
+        if (search->last_context <= 1) {
+           sprintf(buffer, "length of query: %ld", (long) search->context[search->first_context].query->length);
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+        }
+        sprintf(buffer, "length of database: %s", Nlm_Int8tostr ((Int8) search->dblen, 1));
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 
 	sprintf(buffer, "effective HSP length: %ld", (long) search->length_adjustment);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "effective length of query: %ld", (long) search->context[search->first_context].query->effective_length);
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+
+        if (search->last_context <= 1) {
+           sprintf(buffer, "effective length of query: %ld", (long) search->context[search->first_context].query->effective_length);
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+        }
 	sprintf(buffer, "effective length of database: %s", Nlm_Int8tostr ((Int8) search->dblen_eff, 1));
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "effective search space: %8.0f", ((Nlm_FloatHi) search->dblen_eff)*((Nlm_FloatHi) search->context[search->first_context].query->effective_length));
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+        if (search->last_context <= 1) {
+           sprintf(buffer, "effective search space: %8.0f", ((Nlm_FloatHi) search->dblen_eff)*((Nlm_FloatHi) search->context[search->first_context].query->effective_length));
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+        }
 	sprintf(buffer, "effective search space used: %8.0f", (Nlm_FloatHi) search->searchsp_eff);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 
@@ -630,40 +721,38 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	}
 
-	sprintf(buffer, "T: %ld", (long) search->pbp->threshold_second);
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "A: %ld", (long) search->pbp->window_size);
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "X1: %ld (%4.1f bits)", (long) (-search->pbp->dropoff_1st_pass), ((-search->pbp->dropoff_1st_pass)*(search->sbp->kbp[search->first_context]->Lambda/NCBIMATH_LN2)));
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	if (StringCmp(search->prog_name, "blastn") == 0 || search->pbp->gapped_calculation == FALSE)
-	{
-		sprintf(buffer, "X2: %ld (%4.1f bits)", (long) search->pbp->gap_x_dropoff, ((search->pbp->gap_x_dropoff)*(search->sbp->kbp[search->first_context]->Lambda/NCBIMATH_LN2)));
-		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	}
-	else
-	{
-		sprintf(buffer, "X2: %ld (%4.1f bits)", (long) search->pbp->gap_x_dropoff, ((search->pbp->gap_x_dropoff)*(search->sbp->kbp_gap[search->first_context]->Lambda/NCBIMATH_LN2)));
-		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-		sprintf(buffer, "X3: %ld (%4.1f bits)", (long) search->pbp->gap_x_dropoff_final, ((search->pbp->gap_x_dropoff_final)*(search->sbp->kbp_gap[search->first_context]->Lambda/NCBIMATH_LN2)));
-		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	}
-	sprintf(buffer, "S1: %ld (%4.1f bits)", (long) search->pbp->gap_trigger, ((((search->pbp->gap_trigger)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2));
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	cutoff = 0;
-	evalue = pbp->cutoff_e;
-	if (StringCmp(search->prog_name, "blastn") == 0 || search->pbp->gapped_calculation == FALSE)
-	{
-		BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
-		sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2);
-	}
-	else
-	{
-		BlastCutoffs(&cutoff, &evalue, search->sbp->kbp_gap[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
-		sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp_gap[search->first_context]->Lambda))-(search->sbp->kbp_gap[search->first_context]->logK))/NCBIMATH_LN2);
-	}
-	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-
+        if (!search->pbp->is_megablast_search) {
+           sprintf(buffer, "T: %ld", (long) search->pbp->threshold_second);
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+           sprintf(buffer, "A: %ld", (long) search->pbp->window_size);
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+           sprintf(buffer, "X1: %ld (%4.1f bits)", (long) (-search->pbp->dropoff_1st_pass), ((-search->pbp->dropoff_1st_pass)*(search->sbp->kbp[search->first_context]->Lambda/NCBIMATH_LN2)));
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+           if (StringCmp(search->prog_name, "blastn") == 0 || search->pbp->gapped_calculation == FALSE) {
+              sprintf(buffer, "X2: %ld (%4.1f bits)", (long) search->pbp->gap_x_dropoff, ((search->pbp->gap_x_dropoff)*(search->sbp->kbp[search->first_context]->Lambda/NCBIMATH_LN2)));
+              add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+           } else {
+              sprintf(buffer, "X2: %ld (%4.1f bits)", (long) search->pbp->gap_x_dropoff, ((search->pbp->gap_x_dropoff)*(search->sbp->kbp_gap[search->first_context]->Lambda/NCBIMATH_LN2)));
+              add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+              sprintf(buffer, "X3: %ld (%4.1f bits)", (long) search->pbp->gap_x_dropoff_final, ((search->pbp->gap_x_dropoff_final)*(search->sbp->kbp_gap[search->first_context]->Lambda/NCBIMATH_LN2)));
+              add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+           }
+           sprintf(buffer, "S1: %ld (%4.1f bits)", (long) search->pbp->gap_trigger, ((((search->pbp->gap_trigger)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2));
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+           cutoff = 0;
+        }
+        if (search->last_context <= 1) {
+           evalue = pbp->cutoff_e;
+           if (StringCmp(search->prog_name, "blastn") == 0 ||
+               search->pbp->gapped_calculation == FALSE) {
+              BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
+              sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2);
+           } else {
+              BlastCutoffs(&cutoff, &evalue, search->sbp->kbp_gap[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
+              sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp_gap[search->first_context]->Lambda))-(search->sbp->kbp_gap[search->first_context]->logK))/NCBIMATH_LN2);
+           }
+           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+        }
 	return ret_buffer;
 }
 
@@ -877,7 +966,7 @@ void LIBCALL BlastErrorPrintExtra(ValNodePtr error_return, Boolean errpostex, FI
         error_msg = error_return->data.ptrvalue;
         msg = error_msg->msg;
         
-        if(error_msg->level < 0 || error_msg->level > 5)
+        if(error_msg->level > 5)
             error_msg->level = 0;
         
         if(error_msg->level == 4)
@@ -1754,8 +1843,8 @@ Boolean
 BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, OIDListPtr oidlist, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total)
 
 {
-	Int4 count, db_number_start, ordinal_id;
-        Int8	db_length_private, db_length_start;
+	Int4 count, ordinal_id;
+        Int8	db_length_private;
 	SeqIdPtr sip;
 
 		
@@ -1848,6 +1937,484 @@ BlastGiListNew(BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_point
 	return blast_gi_list;
 }
 
+/* This is a simple callback comparison function for sorting */
+static int LIBCALLBACK
+blast_double_int_compare(VoidPtr v1, VoidPtr v2)
+
+{
+	BlastDoubleInt4Ptr h1, h2;
+	BlastDoubleInt4Ptr *hp1, *hp2;
+
+	hp1 = (BlastDoubleInt4Ptr PNTR) v1;
+	hp2 = (BlastDoubleInt4Ptr PNTR) v2;
+	h1 = *hp1;
+	h2 = *hp2;
+
+	if (h1->ordinal_id < h2->ordinal_id)
+		return -1;
+	if (h1->ordinal_id > h2->ordinal_id)
+		return 1;
+
+	return 0;
+}
+static int LIBCALLBACK
+blast_double_int_gi_compare(VoidPtr v1, VoidPtr v2)
+
+{
+	BlastDoubleInt4Ptr h1, h2;
+	BlastDoubleInt4Ptr *hp1, *hp2;
+
+	hp1 = (BlastDoubleInt4Ptr PNTR) v1;
+	hp2 = (BlastDoubleInt4Ptr PNTR) v2;
+	h1 = *hp1;
+	h2 = *hp2;
+
+	if (h1->gi < h2->gi)
+		return -1;
+	if (h1->gi > h2->gi)
+		return 1;
+
+	return 0;
+}
+
+/* The function below returns an intersection of the two gi lists, if the first
+   list is non-empty. However it returns the second gi list, if the first list
+   is empty. 
+*/
+static
+BlastGiListPtr MergeBlastGiLists(BlastGiListPtr gi_list, BlastGiListPtr
+                                 gi_list_1)
+{
+    Int4 index, index1, gi, new_total = 0;
+    BlastDoubleInt4Ptr new_gi_list;
+    BlastDoubleInt4Ptr *gi_list_pointers, *gi_list_1_pointers;
+
+    gi_list_1_pointers = gi_list_1->gi_list_pointer;
+
+    /* If first list is empty, sort second list by ordinal ids 
+       and return it */
+    if (gi_list == NULL) {
+       HeapSort(gi_list_1_pointers, gi_list_1->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_compare);
+       return gi_list_1;
+    }
+
+    /* Sort both lists by gis */
+    HeapSort(gi_list_1_pointers, gi_list_1->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_gi_compare);
+   
+    gi_list_pointers = gi_list->gi_list_pointer;
+    HeapSort(gi_list_pointers, gi_list->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_gi_compare);
+
+    for (index=0, index1=0; index<gi_list_1->total; index++) {
+        gi = gi_list_1_pointers[index]->gi;
+        for ( ; index1<gi_list->total && 
+                  gi_list_pointers[index1]->gi < gi; 
+              index1++);
+        if (index1<gi_list->total && gi_list_pointers[index1]->gi == gi)
+            gi_list_1_pointers[new_total++] = gi_list_1_pointers[index];
+        else
+            gi_list_1_pointers[index] = NULL;
+    }
+
+
+    new_gi_list = (BlastDoubleInt4Ptr)
+        MemNew(new_total*sizeof(BlastDoubleInt4));
+
+    for (index=0; index<new_total; index++) {
+        MemCpy(&(new_gi_list[index]), gi_list_1_pointers[index], 
+               sizeof(BlastDoubleInt4));
+        gi_list_1_pointers[index] = &(new_gi_list[index]);
+    }
+
+    MemFree(gi_list_1->gi_list);
+    gi_list_1->gi_list = new_gi_list;
+    gi_list_1->total = new_total;
+
+    /* Now re-sort by ordinal ids */
+    HeapSort(gi_list_1_pointers, gi_list_1->total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_compare);
+    /* Don't need the first list any more */
+    BlastGiListDestruct(gi_list, TRUE);
+
+    return gi_list_1;
+} 
+
+static
+BlastDoubleInt4Ptr CombineDoubleInt4Lists(BlastDoubleInt4Ptr list1, Int4Ptr new_total,
+                                          BlastDoubleInt4Ptr list2, Int4 total2)
+{
+   BlastDoubleInt4Ptr new_list;
+   Int4 total1;
+
+   if (list1 == NULL) {
+      *new_total = total2;
+      return list2;
+   }
+
+   total1 = *new_total;
+
+   new_list = (BlastDoubleInt4Ptr) 
+      Realloc(list1, (total1+total2)*sizeof(BlastDoubleInt4));
+   if (!new_list) {
+      ErrPostEx(SEV_WARNING, 0, 0, "Failed to reallocate a gi list");
+      MemFree(list2);
+      return list1;
+   }
+   
+   MemCpy(&(new_list[total1]), list2, total2*sizeof(BlastDoubleInt4));
+   MemFree(list2);
+   *new_total = total1 + total2;
+   
+   return new_list;
+}
+
+/* The following function creates ordinal id lists from gi lists
+   for each of the databases in the readdb chain separately;
+   Function returns the union of all gi lists, which needs to be
+   saved for formatting */
+static
+BlastGiListPtr BlastDbGiListToOidList(ReadDBFILEPtr rdfp_chain) 
+{
+   Int4	gi_list_total=0, total, i, start, maxoid, num_gis, index;
+   BlastDoubleInt4Ptr	gi_list=NULL, full_gi_list = NULL;
+   BlastDoubleInt4Ptr *gi_list_pointers;
+   OIDListPtr	oidlist;
+   ReadDBFILEPtr  rdfp;
+   Int4		virtual_mask_index, virtual_oid;
+   Uint4	virtual_oid_bit;
+   BlastGiListPtr blast_gi_list = NULL;
+         
+   for (rdfp = rdfp_chain; rdfp; rdfp = rdfp->next) {
+      if (!rdfp->gifile)
+         continue;
+
+      gi_list = GetGisFromFile(rdfp->gifile, &num_gis);
+      
+      if (gi_list) {
+         maxoid = 0;
+         for (index=0, i=0; i < num_gis; i++) {
+            gi_list[index].ordinal_id = readdb_gi2seq(rdfp, gi_list[i].gi, &start);
+            if (gi_list[index].ordinal_id >= 0) {
+               gi_list[index].gi = gi_list[i].gi;
+               gi_list[index].start = start;
+               maxoid = MAX(maxoid, gi_list[index].ordinal_id);
+               index++;
+            }
+         }
+         num_gis = index;
+
+
+         /* allocate space for mask for virtual database */
+         oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+         oidlist->total = maxoid + 1;
+         total = maxoid/MASK_WORD_SIZE + 2;
+         oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
+         oidlist->memory = oidlist->list;
+
+         for (i=0; i < num_gis; i++) {
+            /* populate the mask */
+            virtual_oid = gi_list[i].ordinal_id - gi_list[i].start;
+            
+            if (virtual_oid >= 0) {
+               virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+               virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+               oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+            }
+         }
+         for (i=0; i<total; i++) {
+            oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
+         }
+
+         rdfp->oidlist = oidlist;
+         full_gi_list = CombineDoubleInt4Lists(full_gi_list, &gi_list_total, 
+                                               gi_list, num_gis);
+      }
+   }
+   
+   if (gi_list && gi_list_total > 0) {
+      gi_list_pointers = (BlastDoubleInt4Ptr *) 
+         MemNew(gi_list_total*sizeof(BlastDoubleInt4Ptr));
+      for (i=0; i<gi_list_total; i++)
+         gi_list_pointers[i] = &(full_gi_list[i]);
+      HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_gi_compare);
+      blast_gi_list = BlastGiListNew(full_gi_list, gi_list_pointers, gi_list_total);
+      blast_gi_list->gilist_not_owned = FALSE;
+   }
+   return blast_gi_list;
+
+}
+
+static Int4 BlastGiListToOid(BlastGiListPtr blast_gi_list, Int4 gi, 
+                             Int4Ptr start, Int4Ptr first_index)
+{
+   BlastDoubleInt4Ptr *gi_list_pointers = blast_gi_list->gi_list_pointer;
+   Int4 total = blast_gi_list->total;
+   Int4 index;
+   Boolean found = FALSE;
+
+   for (index = *first_index; index < total &&
+           gi > gi_list_pointers[index]->gi; index++);
+      
+   if (index < total && gi == gi_list_pointers[index]->gi) {
+      found = TRUE;
+      *start = gi_list_pointers[index]->start;
+   }
+   *first_index = index;
+   if (found)
+      return gi_list_pointers[index]->ordinal_id;
+   else 
+      return -1;
+}
+
+void
+BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
+                    BlastDoubleInt4Ptr gi_list, Int4Ptr gi_list_size)
+{
+   Int4		i, maxoid, virtual_oid, total, start;
+   Int4         gi_list_total = *gi_list_size;
+   OIDListPtr	oidlist, alias_oidlist;
+   Boolean	use_private_gilist = FALSE, done;
+   Int4		mask_index, virtual_mask_index;
+   Uint4	oid_bit, virtual_oid_bit;
+   ValNodePtr	vnp;
+   ReadDBFILEPtr rdfp;
+   BlastGiListPtr db_gi_list;
+   BlastDoubleInt4Ptr PNTR gi_list_pointers;
+   
+   /* Create individual ordinal id masks for those databases 
+      which have gi lists */
+   db_gi_list = BlastDbGiListToOidList(search->rdfp);
+   
+   /* non-NULL gi_list means that standalone program called the function */
+   /* non-NULL options->gilist means that server got this gilist from client */
+   if(options->gilist) {
+      /* translate list of gis from ValNodePtr to BlastDoubleInt4Ptr */
+      
+      gi_list = MemNew(ValNodeLen(options->gilist) * sizeof(BlastDoubleInt4));
+      
+      for (vnp=options->gilist, i=0; vnp; vnp = vnp->next, ++i) {
+         gi_list[i].gi = vnp->data.intvalue;
+      }
+      gi_list_total = i;
+   }
+   
+   /* Using "options->gifile" file and gi_list,
+      construct new gi_list with all needed gis */
+   
+   if (options->gifile && StringCmp(options->gifile, "")) {
+      Int4	gi_list_total_2;
+      BlastDoubleInt4Ptr	gi_list_2, tmptr;
+      Int4	size = sizeof(BlastDoubleInt4);
+      
+      gi_list_2 = GetGisFromFile(options->gifile, &gi_list_total_2);
+      
+      /* replace or append this list to main one */
+      if (gi_list && gi_list_2) {
+         /* append */
+         tmptr = MemNew((gi_list_total+gi_list_total_2)*size);
+         MemCpy(tmptr, gi_list, gi_list_total * size);
+         MemCpy(tmptr+gi_list_total, gi_list_2, gi_list_total_2 * size);
+         
+         MemFree(gi_list);
+         MemFree(gi_list_2);
+         
+         gi_list = tmptr;
+         gi_list_total += gi_list_total_2;
+      } else if (gi_list_2) {
+         /* replace */
+         gi_list = gi_list_2;
+         gi_list_total = gi_list_total_2;
+      }
+   }
+   
+   if (gi_list) {
+      /* transform the list into OID mask */
+      use_private_gilist = TRUE;
+      
+      gi_list_pointers = 
+         Nlm_Malloc(gi_list_total*sizeof(BlastDoubleInt4Ptr));
+      for (i=0; i < gi_list_total; i++)
+         gi_list_pointers[i] = &(gi_list[i]);
+      if (db_gi_list)
+         HeapSort(gi_list_pointers, gi_list_total,
+                  sizeof(BlastDoubleInt4Ptr PNTR),
+                  blast_double_int_gi_compare);
+      
+      maxoid = 0;
+      if (options->gilist_already_calculated == TRUE)
+         { /* gi to ordinalID already done, probably for neighboring software. */
+            for (i=0; i < gi_list_total; i++) {
+               /* get virtual OID and start position for the database this gi is in */
+               maxoid = MAX(maxoid, gi_list[i].ordinal_id);
+               gi_list_pointers[i] = &(gi_list[i]);
+            }
+         }
+      else
+         {
+            Int4 first_index = 0;
+            for (i=0; i < gi_list_total; i++) {
+               /* get virtual OID and start position for the database 
+                  this gi is in */
+               gi_list[i].ordinal_id = -1;
+               if (db_gi_list)
+                  gi_list[i].ordinal_id = 
+                     BlastGiListToOid(db_gi_list, gi_list[i].gi, 
+                                      &start, &first_index);
+               if (gi_list[i].ordinal_id == -1)
+                  gi_list[i].ordinal_id = readdb_gi2seq(search->rdfp, gi_list[i].gi, &start);
+               gi_list[i].start = start;
+               maxoid = MAX(maxoid, gi_list[i].ordinal_id);
+            }
+         }
+      
+      /* allocate space for mask for virtual database */
+      oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+      oidlist->total = maxoid + 1;
+      total = maxoid/MASK_WORD_SIZE + 2;
+      oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
+      oidlist->memory = oidlist->list;
+      
+      /* Merge this list with virtual database (OID list) */
+      
+      for (i=0; i < gi_list_total; i++) {
+         /* get start possition in that database */
+         start = gi_list[i].start;
+         
+         /* find out if this is an mask database */
+         
+         done = FALSE;
+         rdfp = search->rdfp;
+         
+         alias_oidlist = NULL;
+         while (rdfp && !done) {
+            if (rdfp->start == start) {
+               alias_oidlist = rdfp->oidlist;
+               done = TRUE;
+            } else if (rdfp->start > start) {
+               done = TRUE;
+            } else {
+               rdfp = rdfp->next;
+            }
+         }
+         
+         /* populate the mask */
+         virtual_oid = gi_list[i].ordinal_id;
+         
+         if (virtual_oid >= 0) {
+            virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+            if (alias_oidlist) {
+               mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
+               oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
+            }
+            
+            virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+            
+            if ((!alias_oidlist) ||
+                (alias_oidlist && alias_oidlist->list && 
+                 (Nlm_SwapUint4(alias_oidlist->list[mask_index])) & oid_bit)) { 
+               oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+            }
+         }
+      }
+      
+      for (i=0; i<total; i++) {
+         oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
+      }
+      /* The individual database oid masks are not needed any more */
+      for (rdfp = search->rdfp; rdfp; rdfp = rdfp->next) {
+         rdfp->oidlist = OIDListFree(rdfp->oidlist);
+      }
+      search->rdfp->oidlist = oidlist;
+      
+      /* in this case, the case when we have .gil file, the only database mask
+         should be used in Blast Search, so set number of sequences for the first
+         database in rdfp list to 0 avoiding search this real database: */
+      search->rdfp->num_seqs = 0;
+      
+      /* keep list of gi's (needed for formating) */
+      if (options->sort_gi_list && !db_gi_list)
+         HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), blast_double_int_compare);
+      search->thr_info->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
+      search->thr_info->blast_gi_list->gilist_not_owned =
+         options->gilist_already_calculated;
+      *gi_list_size = gi_list_total;
+   } else {
+      /* Ok, we do not have a gi-list specified, but maybe
+         we have an a mask database in the list of databases,
+         we need to create one mask for all such databases */
+      OIDListPtr		virtual_oidlist = NULL;
+      Int4		final_virtual_db_seq=0, final_db_seq=0;
+      Int4		mask, oid, virtual_oid, maskindex,
+         virtual_mask_index, total_virtual_mask,
+         base;
+      Uint4		virtual_oid_bit;
+      ReadDBFILEPtr       mask_rdfp = NULL;
+      
+      rdfp = search->rdfp;
+      while (rdfp) {
+         
+         final_virtual_db_seq = rdfp->stop;
+         if (!rdfp->oidlist)
+            final_db_seq = rdfp->stop;
+         rdfp = rdfp->next;
+      }
+      
+      rdfp = search->rdfp;
+      while (rdfp) {
+         if (rdfp->oidlist) {
+            if (mask_rdfp == NULL)
+               mask_rdfp = rdfp;
+            if (!virtual_oidlist) {
+				/* create new oidlist for virtual database */
+               virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+               virtual_oidlist->total = final_virtual_db_seq + 1;
+               total_virtual_mask = final_virtual_db_seq/MASK_WORD_SIZE + 2;
+               virtual_oidlist->list = (Uint4Ptr) MemNew (total_virtual_mask*sizeof(Int4));
+                                /* use the 'memory' field to OIDListFee this memory after use */
+               virtual_oidlist->memory = virtual_oidlist->list;
+            }
+            /* Now populate the virtual_oidlist */
+            maskindex = 0;
+            base = 0;
+            
+            while (maskindex < (rdfp->oidlist->total/MASK_WORD_SIZE +1)) {
+				/* for each long-word mask */
+               mask = Nlm_SwapUint4(rdfp->oidlist->list[maskindex]);
+               
+               i = 0;
+               while (mask) {
+                  if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
+                     oid = base + i;
+                     virtual_oid = oid + rdfp->start;
+                     
+                     virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
+                     virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
+                     virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
+                  }
+                  mask <<= 1;
+                  i++;
+               }
+               maskindex++;
+               base += MASK_WORD_SIZE;
+            }
+            
+            /* free old mask */
+            rdfp->oidlist = OIDListFree(rdfp->oidlist);
+         }
+         rdfp = rdfp->next;
+      }
+      if (virtual_oidlist) {
+         for (i=0; i<total_virtual_mask; i++) {
+            virtual_oidlist->list[i] = Nlm_SwapUint4(virtual_oidlist->list[i]);
+         }
+         mask_rdfp->oidlist = virtual_oidlist;
+      }
+   }
+   /* Save the gi lists from databases; if blast_gi_list exists,
+      then take intersection */
+   if (db_gi_list) 
+      search->thr_info->blast_gi_list = 
+         MergeBlastGiLists(search->thr_info->blast_gi_list, db_gi_list);
+}
+
 
 #define POSIT_PERCENT 0.05
 #define POSIT_NUM_ITERATIONS 10
@@ -1924,6 +2491,8 @@ BlastComputeProbs(BlastMatrixRescalePtr matrix_rescale, Boolean position_depende
        for (c = 0; c < dim2; c++) {
 	 /*Increment the weight for the score in position [p][std_alphabet[c]] */
 	 score = matrix[p][std_alphabet[c]];
+	 if (score <= BLAST_SCORE_MIN || score >= BLAST_SCORE_MAX)
+		continue;
 	 increment =
 	   (matrix_rescale->standardProb[std_alphabet[c]]/ effectiveLength);
 	 sfp->sprob[score]+= increment;
@@ -2698,35 +3267,66 @@ list store in a ValNodePtr; the list lastSeqAligns
 specifies where to break up seqAlignList */
 ValNodePtr convertSeqAlignListToValNodeList(SeqAlignPtr seqAlignList, SeqAlignPtr * lastSeqAligns, Int4 numLastSeqAligns)
 {
-
-   ValNodePtr  returnValNodePtr, thisValNodePtr, nextValNodePtr;
-   SeqAlignPtr thisSeqAlign;
-   Int4 lastAlignIndex;
-
-   returnValNodePtr = (ValNodePtr) MemNew (sizeof(ValNode));
-   returnValNodePtr->data.ptrvalue = seqAlignList;
-   returnValNodePtr->next = NULL;
-   thisValNodePtr = returnValNodePtr;
-   thisSeqAlign = seqAlignList;
-   lastAlignIndex = 0;
-   while ((NULL != thisSeqAlign) && (lastAlignIndex < (numLastSeqAligns -1))) {
-   /*last in sublist but not last overall*/
-
-     if ((thisSeqAlign == lastSeqAligns[lastAlignIndex]) &&
-          (NULL != (thisSeqAlign->next))) {
-       nextValNodePtr = (ValNodePtr) MemNew (sizeof(ValNode));
-       nextValNodePtr->data.ptrvalue = thisSeqAlign->next;
-       thisValNodePtr->next = nextValNodePtr;
-       nextValNodePtr->next = NULL;
-       thisValNodePtr = nextValNodePtr;
-       thisSeqAlign = thisSeqAlign->next;
-       lastSeqAligns[lastAlignIndex]->next = NULL;
-       lastAlignIndex++;
-     } 
-     else      
-       thisSeqAlign = thisSeqAlign->next;
-   }
-   return (returnValNodePtr);
+    ValNodePtr  returnValNodePtr, thisValNodePtr, nextValNodePtr;
+    SeqAlignPtr thisSeqAlign;
+    Int4 lastAlignIndex;
+    Int4 lastNonEmptyAlignIndex;
+    
+    if(seqAlignList == NULL)
+        return NULL;
+    
+    lastAlignIndex = 0;
+    lastNonEmptyAlignIndex = 0;
+    returnValNodePtr = (ValNodePtr) MemNew (sizeof(ValNode));
+    if (NULL == lastSeqAligns[lastAlignIndex]) 
+        returnValNodePtr->data.ptrvalue = NULL;
+    else
+        returnValNodePtr->data.ptrvalue = seqAlignList;
+    returnValNodePtr->next = NULL;
+    thisValNodePtr = returnValNodePtr;
+    thisSeqAlign = seqAlignList;
+    
+    /*Find first sub-list that is non-NULL and set it
+      to point to seqAlignList*/
+    while ((lastAlignIndex < (numLastSeqAligns -1) &&
+            (NULL == lastSeqAligns[lastAlignIndex]))) {
+        nextValNodePtr = (ValNodePtr) MemNew (sizeof(ValNode));
+        if (NULL == lastSeqAligns[lastAlignIndex+1]) 
+            nextValNodePtr->data.ptrvalue = NULL;
+        else {
+            nextValNodePtr->data.ptrvalue = seqAlignList;
+            lastNonEmptyAlignIndex = lastAlignIndex +1;
+        }
+        thisValNodePtr->next = nextValNodePtr;
+        nextValNodePtr->next = NULL;
+        thisValNodePtr = nextValNodePtr;
+        lastAlignIndex++;
+    }
+    
+    while ((NULL != thisSeqAlign) || (lastAlignIndex < (numLastSeqAligns -1))) { 
+        if ((lastAlignIndex < (numLastSeqAligns -1)) &&
+            ((NULL == lastSeqAligns[lastAlignIndex])  ||
+             (thisSeqAlign == lastSeqAligns[lastAlignIndex]))) {
+            nextValNodePtr = (ValNodePtr) MemNew (sizeof(ValNode));
+            
+            if (NULL != lastSeqAligns[lastAlignIndex+1]) {
+                nextValNodePtr->data.ptrvalue = thisSeqAlign->next;
+                thisSeqAlign = thisSeqAlign->next;
+                lastSeqAligns[lastNonEmptyAlignIndex]->next = NULL;
+                lastNonEmptyAlignIndex = lastAlignIndex +1;
+            } else {
+                nextValNodePtr->data.ptrvalue = NULL;
+            }
+            thisValNodePtr->next = nextValNodePtr;
+            nextValNodePtr->next = NULL;
+            thisValNodePtr = nextValNodePtr;
+            lastAlignIndex++;
+        } else {
+            if (NULL != thisSeqAlign)
+                thisSeqAlign = thisSeqAlign->next;
+        }
+    }
+    return (returnValNodePtr);
 }
 
 /*converts a 2-level list of SeqAligns stored as a ValNodePtr */
@@ -2736,9 +3336,10 @@ convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList,
                                  SeqAlignPtr ** lastSeqAligns, 
                                  Int4 * numLastSeqAligns)
 {
-    ValNodePtr thisValNodePtr;
+    ValNodePtr thisValNodePtr, secondValNodePtr;
     SeqAlignPtr returnSeqAlign, thisSeqAlign;
     Int4 numValNodePtrs, indexValNodePtrs;
+
     
     thisValNodePtr = seqAlignDoubleList;
     numValNodePtrs = 0;
@@ -2759,15 +3360,33 @@ convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList,
         *lastSeqAligns = (SeqAlignPtr *) MemNew (numValNodePtrs * sizeof(SeqAlignPtr));
         returnSeqAlign = seqAlignDoubleList->data.ptrvalue;
         thisValNodePtr = seqAlignDoubleList;
-        while (NULL != thisValNodePtr->next) {
-            thisSeqAlign = thisValNodePtr->data.ptrvalue;
-            while (thisSeqAlign->next != NULL) 
-                thisSeqAlign = thisSeqAlign->next;
-            (*lastSeqAligns)[indexValNodePtrs] = thisSeqAlign;
-            indexValNodePtrs++;
-            thisSeqAlign->next = thisValNodePtr->next->data.ptrvalue;
-            thisValNodePtr = thisValNodePtr->next;
-        }
+	do {
+	  thisSeqAlign = thisValNodePtr->data.ptrvalue;
+	  if (thisSeqAlign != NULL) {
+	    while (thisSeqAlign->next != NULL) 
+	      thisSeqAlign = thisSeqAlign->next;
+	  }
+	  (*lastSeqAligns)[indexValNodePtrs] = thisSeqAlign;
+	  indexValNodePtrs++;
+	  /*find next non-empty list to link in*/
+	  if (thisSeqAlign != NULL) {
+	    secondValNodePtr = thisValNodePtr->next;
+	    while (NULL != secondValNodePtr) {
+	      if (NULL != secondValNodePtr->data.ptrvalue)
+	      {
+		thisSeqAlign->next = secondValNodePtr->data.ptrvalue;
+		break;
+	      }
+	      else
+		secondValNodePtr = secondValNodePtr->next;
+	    }
+	    /*if all remaning ValNodePtrs have NULL seqAligns, finish off
+	      list of seqAligns with a NULL*/
+	    if (NULL == secondValNodePtr)
+	      thisSeqAlign->next = NULL;
+	  }
+	  thisValNodePtr = thisValNodePtr->next;
+        } while (NULL != thisValNodePtr);
         return returnSeqAlign;
     }
 }
@@ -3410,8 +4029,7 @@ SeqAlignPtr BLASTFilterOverlapRegions(SeqAlignPtr sap, Int4 pct,
                                       Boolean is_ooframe,
                                       Boolean sort_array)
 {
-    SeqAlignPtr seqalign, head, tail, next_tail;
-    SeqAlignPtr PNTR sapp;
+    SeqAlignPtr seqalign, head, tail=NULL, next_tail;
     SappSetPtr  ssp, ssp_tmp;
     
     if(sap == NULL)
@@ -3508,7 +4126,7 @@ BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id)
 	    {
 		for (index=0; index<BLAST_ERROR_BULEN-1; index++)
 		{
-			if (title[index] == ' ')
+			if (title[index] == NULLB || title[index] == ' ')
 			{
 				break;
 			}
@@ -3537,9 +4155,52 @@ BlastDeleteUserErrorString(Uint1 err_id)
 	return;
 }
 
+static Int4
+BlastBioseqGetNumIdentical(BioseqPtr q_bsp, BioseqPtr s_bsp, Int4 q_start, 
+                     Int4 s_start, Int4 length, 
+                     Uint1 q_strand, Uint1 s_strand)
+{
+   SeqLocPtr q_slp, s_slp;
+   SeqPortPtr q_spp, s_spp;
+   Int4 i, ident = 0;
+   Uint1 q_res, s_res;
+
+   if (!q_bsp || !s_bsp)
+      return 0;
+
+   q_slp = SeqLocIntNew(q_start, q_start+length-1, q_strand, q_bsp->id); 
+   s_slp = SeqLocIntNew(s_start, s_start+length-1, s_strand, s_bsp->id); 
+   if (ISA_na(q_bsp->mol))
+      q_spp = SeqPortNewByLoc(q_slp, Seq_code_ncbi4na);
+   else
+      q_spp = SeqPortNewByLoc(q_slp, Seq_code_ncbistdaa);
+   if (ISA_na(s_bsp->mol))
+      s_spp = SeqPortNewByLoc(s_slp, Seq_code_ncbi4na);
+   else
+      s_spp = SeqPortNewByLoc(s_slp, Seq_code_ncbistdaa);
+
+   for (i=0; i<length; i++) {
+      while ((q_res = SeqPortGetResidue(q_spp)) != SEQPORT_EOF &&
+             !IS_residue(q_res));
+      while ((s_res = SeqPortGetResidue(s_spp)) != SEQPORT_EOF &&
+             !IS_residue(s_res));
+      if (q_res == SEQPORT_EOF || s_res == SEQPORT_EOF)
+         break;
+      else if (q_res == s_res)
+         ident++;
+   }
+
+   SeqLocFree(q_slp);
+   SeqLocFree(s_slp);
+   SeqPortFree(q_spp);
+   SeqPortFree(s_spp);
+
+   return ident;
+}
+
 Int4
 BlastGetNumIdentical(Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
-                         Int4 s_start, Int4 length, Boolean reverse)
+                     Int4 s_start, Int4 length, Boolean reverse)
 {
    Int4 i, ident = 0;
    Uint1Ptr q, s;
@@ -3563,31 +4224,314 @@ BlastGetNumIdentical(Uint1Ptr query, Uint1Ptr subject, Int4 q_start,
    return ident;
 }
 
+static void ScoreAndEvalueToBuffers(FloatHi bit_score, FloatHi evalue, 
+                                  CharPtr *bit_score_buf, CharPtr *evalue_buf)
+{
+   if (evalue < 1.0e-180)
+      sprintf(*evalue_buf, "0.0");
+   else if (evalue < 1.0e-99)
+      sprintf(*evalue_buf, "%2.0le", evalue);
+   else if (evalue < 0.0009) 
+         sprintf(*evalue_buf, "%3.1le", evalue);
+   else if (evalue < 1.0) 
+      sprintf(*evalue_buf, "%4.3lf", evalue);
+   else 
+      sprintf(*evalue_buf, "%5.1lf", evalue);
+   
+   if (bit_score > 9999)
+      sprintf(*bit_score_buf, "%4.3le", bit_score);
+   else if (bit_score > 99.9)
+      sprintf(*bit_score_buf, "%4.1lf", bit_score);
+   else
+      sprintf(*bit_score_buf, "%4.2lf", bit_score);
+}
+
+/* 
+   Function to print results in tab-delimited format, given a SeqAlign list.
+   q_shift and s_shift are the offsets in query and subject in case of a
+   subsequence search 
+*/
+void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
+                                SeqLocPtr query_slp, Int4 num_alignments, 
+                                CharPtr blast_program, Boolean is_ungapped, 
+                                Boolean believe_query, Int4 q_shift, 
+                                Int4 s_shift, FILE *fp)
+{
+   SeqAlignPtr sap, sap_tmp = NULL;
+   FloatHi perc_ident, bit_score, evalue;
+   Int4 numseg, num_gap_opens, num_mismatches, num_ident, score;
+   Int4 number, align_length, index, i;
+   Int4 q_start, q_end, s_start, s_end;
+   CharPtr eval_buff, bit_score_buff;
+   Boolean is_translated;
+   SeqIdPtr query_id, old_query_id = NULL, subject_id, old_subject_id = NULL;
+   BioseqPtr subject_bsp=NULL;
+   Char query_buffer[BUFFER_LENGTH+1], subject_buffer[BUFFER_LENGTH+1];
+   DenseSegPtr dsp;
+   StdSegPtr ssp = NULL;
+   DenseDiagPtr ddp = NULL;
+   AlignSumPtr asp = NULL;
+   CharPtr defline, title;
+   SeqLocPtr slp;
+
+   is_translated = (StringCmp(blast_program, "blastn") &&
+                    StringCmp(blast_program, "blastp"));
+   
+   eval_buff = Malloc(10);
+   bit_score_buff = Malloc(10);
+   if (is_translated) {
+      asp = MemNew(sizeof(AlignSum));
+      asp->matrix = load_default_matrix();
+      asp->is_aa = TRUE;
+   }
+
+   if (is_ungapped)
+      sap_tmp = SeqAlignNew();
+
+   slp = query_slp;
+   if (query_bsp)
+      query_id = query_bsp->id;
+
+   for (sap = seqalign; sap; sap = sap->next) {
+      if (query_slp)
+         query_id = TxGetQueryIdFromSeqAlign(sap);
+      if (SeqIdComp(query_id, old_query_id) != SIC_YES) {
+         /* New query: find the corresponding SeqLoc */
+         while (slp && SeqIdComp(query_id, SeqLocId(slp)) != SIC_YES)
+            slp = slp->next;
+         if (slp != NULL) {
+            query_id = old_query_id = SeqLocId(slp);
+         } else if (query_bsp)
+            old_query_id = query_bsp->id;
+         defline = (CharPtr) Malloc(BUFFER_LENGTH+1);
+         SeqIdWrite(query_id, defline, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+         if (StringNCmp(defline, "lcl|", 4))
+            StringCpy(query_buffer, defline);
+         else if (!believe_query) {
+            if (slp) {
+               BioseqUnlock(query_bsp);
+               query_bsp = BioseqLockById(query_id);
+            }
+            if ((title = StringSave(BioseqGetTitle(query_bsp))) != NULL) {
+               defline = MemFree(defline);
+               defline = StringTokMT(title, " ", &title);
+               StringCpy(query_buffer, defline);
+               defline = MemFree(defline);
+            } else
+               StringCpy(query_buffer, defline+4);
+            defline = MemFree(defline);
+         } else
+            StringCpy(query_buffer, defline+4);
+      } else
+         query_id = old_query_id;      
+
+      perc_ident = 0;
+      align_length = 0;
+      num_gap_opens = 0;
+      num_mismatches = 0;
+
+      GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
+
+      ScoreAndEvalueToBuffers(bit_score, evalue, 
+                              &bit_score_buff, &eval_buff);
+
+      subject_id = TxGetSubjectIdFromSeqAlign(sap);
+
+      if (SeqIdComp(subject_id, old_subject_id) != SIC_YES) {
+         /* New subject sequence has been found in the seqalign list */
+         if (--num_alignments < 0)
+            break;
+         BioseqUnlock(subject_bsp);
+         subject_bsp = BioseqLockById(subject_id);
+      
+         if (!subject_bsp)
+            continue;
+         if (subject_bsp->id->choice != SEQID_GENERAL ||
+             StringCmp(((DbtagPtr)subject_id->data.ptrvalue)->db, "BL_ORD_ID")) {
+            defline = (CharPtr) Malloc(BUFFER_LENGTH+1);
+            SeqIdWrite(subject_bsp->id, defline, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+            if (StringNCmp(defline, "lcl|", 4))
+               StringCpy(subject_buffer, defline);
+            else
+               StringCpy(subject_buffer, defline+4);
+         } else {
+            defline = StringSave(BioseqGetTitle(subject_bsp));
+            defline = StringTokMT(defline, " \t", &title);
+            StringCpy(subject_buffer, defline);
+         }
+         defline = MemFree(defline);
+      }
+      
+      /* Loop on segments within this seqalign (in ungapped case) */
+      while (TRUE) {
+         if (sap->segtype == SAS_DENSEG) {
+            dsp = (DenseSegPtr) sap->segs;
+            numseg = dsp->numseg;
+            
+            for (i=0; i<numseg; i++) {
+               align_length += dsp->lens[i];
+               if (dsp->starts[2*i] != -1 && dsp->starts[2*i+1] != -1) {
+                  num_ident = BlastBioseqGetNumIdentical(query_bsp, subject_bsp, 
+                                 dsp->starts[2*i], dsp->starts[2*i+1], 
+                                 dsp->lens[i], 
+                                 dsp->strands[2*i], dsp->strands[2*i+1]);
+                  perc_ident += num_ident;
+                  num_mismatches += dsp->lens[i] - num_ident;
+               } else
+                  num_gap_opens++;
+            }
+            perc_ident = perc_ident / align_length * 100;
+            
+            if (dsp->strands[0] != dsp->strands[1]) {
+               q_start = dsp->starts[2*numseg-2] + 1;
+               q_end = dsp->starts[0] + dsp->lens[0];
+               s_end = dsp->starts[1] + 1;
+               s_start = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
+            } else {
+               q_start = dsp->starts[0] + 1;
+               q_end = dsp->starts[2*numseg-2] + dsp->lens[numseg-1];
+               s_start = dsp->starts[1] + 1;
+               s_end = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
+            }
+         } else if (sap->segtype == SAS_STD) {
+            if (!ssp)
+               ssp = (StdSegPtr) sap->segs;
+            
+            if (is_ungapped) {
+               sap_tmp->segtype = SAS_STD;
+               sap_tmp->segs = ssp;
+               GetScoreAndEvalue(sap_tmp, &score, &bit_score, &evalue, &number);
+               ScoreAndEvalueToBuffers(bit_score, evalue, 
+                                       &bit_score_buff, &eval_buff);
+               find_score_in_align(sap_tmp, 1, asp);
+            } else
+               find_score_in_align(sap, 1, asp);
+            
+            if (asp->m_frame < 0)
+               q_start = SeqLocStop(ssp->loc) + 1;
+            else
+               q_start = SeqLocStart(ssp->loc) + 1;
+            
+            if (asp->t_frame < 0)
+               s_start = SeqLocStop(ssp->loc->next) + 1;
+            else
+               s_start = SeqLocStart(ssp->loc->next) + 1;
+            
+            if (!is_ungapped) {
+               for (index=1; ssp->next; index++)
+                  ssp = ssp->next;
+               num_gap_opens = index / 2;
+            } else 
+               num_gap_opens = 0;
+
+            if (asp->m_frame < 0)
+               q_end = SeqLocStart(ssp->loc) + 1;
+            else
+               q_end = SeqLocStop(ssp->loc) + 1;
+            
+            if (asp->t_frame < 0)
+               s_end = SeqLocStart(ssp->loc->next) + 1;
+            else
+               s_end = SeqLocStop(ssp->loc->next) + 1;
+            
+            align_length = asp->totlen;
+            num_mismatches = asp->totlen - asp->gaps - asp->identical;
+            perc_ident = ((FloatHi) 100*asp->identical)/ (asp->totlen);
+         } else if (sap->segtype == SAS_DENDIAG) {
+            if (!ddp)
+               ddp = (DenseDiagPtr) sap->segs;
+            sap_tmp->segtype = SAS_DENDIAG;
+            sap_tmp->segs = ddp;
+            GetScoreAndEvalue(sap_tmp, &score, &bit_score, &evalue, &number);
+            ScoreAndEvalueToBuffers(bit_score, evalue, 
+                                    &bit_score_buff, &eval_buff);
+
+            MemFree(sap_tmp);
+            align_length = ddp->len;
+            if (ddp->strands[0] == Seq_strand_minus) {
+               q_start = ddp->starts[0] + align_length;
+               q_end = ddp->starts[0] + 1;
+            } else {
+               q_start = ddp->starts[0] + 1;
+               q_end = ddp->starts[0] + align_length;
+            }
+
+            if (ddp->strands[1] == Seq_strand_minus) {
+               s_start = ddp->starts[1] + align_length;
+               s_end = ddp->starts[1] + 1;
+            } else {
+               s_start = ddp->starts[1] + 1;
+               s_end = ddp->starts[1] + align_length;
+            }
+            num_gap_opens = 0;
+            num_ident = BlastBioseqGetNumIdentical(query_bsp, subject_bsp, 
+                           ddp->starts[0], ddp->starts[1], align_length, 
+                           ddp->strands[0], ddp->strands[1]);
+            num_mismatches = align_length - num_ident;
+            perc_ident = ((FloatHi)num_ident) / align_length * 100;
+         }
+         if (!is_translated) {
+            /* Adjust coordinates if query and/or subject is a subsequence */
+            q_start += q_shift;
+            q_end += q_shift;
+            s_start += s_shift;
+            s_end += s_shift;
+         }
+         
+         if (perc_ident >= 99.995 && perc_ident < 100.00)
+            perc_ident = 99.99;
+         
+         fprintf(fp, 
+                 "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+                 query_buffer, subject_buffer, perc_ident, align_length, 
+                 num_mismatches, num_gap_opens, q_start, 
+                 q_end, s_start, s_end, eval_buff, bit_score_buff);
+         old_subject_id = subject_id;
+         if (sap->segtype == SAS_DENSEG)
+            break;
+         else if (sap->segtype == SAS_DENDIAG) {
+            if ((ddp = ddp->next) == NULL)
+               break;
+         } else if (sap->segtype == SAS_STD) {
+            if ((ssp = ssp->next) == NULL)
+               break;
+         }
+      }
+   }
+
+   if (is_translated) {
+      free_default_matrix(asp->matrix);
+      MemFree(asp);
+   }
+   MemFree(eval_buff);
+   MemFree(bit_score_buff);
+   BioseqUnlock(subject_bsp);
+   if (query_slp)
+      BioseqUnlock(query_bsp);
+}
+
 int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
 {
    BlastSearchBlkPtr search = (BlastSearchBlkPtr) srch;
    BLAST_HSPPtr hsp, PNTR hsp_array; 
-   Int4 i, subject_gi;
-   Int2 context;
-   CharPtr query_buffer, title;
+   Int4 i;
+   CharPtr title, ptr;
+   Char query_buffer[BUFFER_LENGTH+1], subject_buffer[BUFFER_LENGTH+1];
    SeqIdPtr sip, subject_id, query_id; 
-   Int4 descr_len;
-   Int4 index, hsp_index, score;
+   Int4 index, score;
    Int4 num_mismatches, num_gap_opens, align_length, num_ident;
-   BLAST_KarlinBlkPtr kbp;
    Uint1Ptr query_seq, subject_start=NULL, subject_seq, rev_subject=NULL;
    FloatHi perc_ident, bit_score, evalue;
    Char eval_buff[10], bit_score_buff[10];
-   GapXEditScriptPtr esp;
-   Int4 length, query_length, subject_length=0, rev_subject_length=0;
+   Int4 length=0, query_length, subject_length=0, rev_subject_length=0;
    Int4 q_start, q_end, s_start, s_end, q_shift=0, s_shift=0;
-   CharPtr subject_descr = NULL, subject_buffer, buffer;
-   Int4 buffer_size, cutoff_s;
-   Boolean numeric_sip_type = FALSE, is_na, is_translated;
+   CharPtr subject_descr = NULL;
+   Int4 cutoff_s;
+   Boolean numeric_sip_type = FALSE, is_na, is_translated, db_is_na;
    Int4 hspcnt, new_hspcnt, number, numseg;
    SeqAlignPtr seqalign = NULL, sap;
    FILE *fp = (FILE *)search->output;
-   BioseqPtr bsp = NULL;
+   BioseqPtr bsp = NULL, query_bsp;
    SeqPortPtr spp;
    SeqLocPtr subject_slp = NULL;
    Uint1 residue;
@@ -3615,7 +4559,11 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
       cutoff_s = search->pbp->cutoff_s;
    else
       cutoff_s = 0;
-   
+  
+   db_is_na = (search->prog_number != blast_type_blastp && 
+               search->prog_number != blast_type_tblastn);
+   ReadDBBioseqFetchEnable("blastall", search->rdfp->filename, db_is_na, TRUE);
+ 
    if (search->rdfp)
       readdb_get_descriptor(search->rdfp, search->subject_id, &sip,
                             &subject_descr);
@@ -3722,29 +4670,20 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
       spp = SeqPortFree(spp);
    }
 
-   if (sip->choice == SEQID_LOCAL) {
-      bsp = BioseqLockById(sip);
-      title = StringSave(BioseqGetTitle(bsp));
-      if (title)
-         subject_buffer = StringTokMT(title, " ", &title);
+   if (sip->choice != SEQID_GENERAL ||
+       StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
+      ptr = (CharPtr) Malloc(BUFFER_LENGTH+1);
+      SeqIdWrite(sip, ptr, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+      if (StringNCmp(ptr, "lcl|", 4))
+         StringCpy(subject_buffer, ptr);
       else
-         numeric_sip_type = GetAccessionFromSeqId(bsp->id, &subject_gi, 
-                                                  &subject_buffer);
-      BioseqUnlock(bsp);
-   } else if (sip->choice != SEQID_GENERAL ||
-              StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
-      numeric_sip_type = GetAccessionFromSeqId(SeqIdFindBestAccession(sip), 
-                                               &subject_gi, &subject_buffer);
+         StringCpy(subject_buffer, ptr+4);
+      ptr = MemFree(ptr);
    } else {
-      subject_buffer = StringTokMT(subject_descr, " \t", &subject_descr);
-      subject_descr = subject_buffer;
+      ptr = StringTokMT(subject_descr, " \t", &subject_descr);
+      subject_descr = ptr;
+      StringCpy(subject_buffer, ptr);
    }
-   if (numeric_sip_type) {
-      subject_buffer = (CharPtr) Malloc(16);
-      sprintf(subject_buffer, "%ld", subject_gi);
-   }
-
-   buffer = (CharPtr) Malloc(LARGE_BUFFER_LENGTH);
 
    query_id = search->query_id;
    if (is_na) 
@@ -3753,30 +4692,29 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
    else
       query_length = search->context[0].query->length;
 
+   query_bsp = BioseqLockById(query_id);
    if (query_id->choice == SEQID_LOCAL) {
-      BioseqPtr query_bsp = BioseqLockById(query_id);
-      title = StringSave(BioseqGetTitle(query_bsp));
-      if (title)
-         query_buffer = StringTokMT(title, " ", &title);
-      else {
-         Int4 query_gi;
-         Boolean numeric_query_id =
-            GetAccessionFromSeqId(query_bsp->id, &query_gi,
-                                  &query_buffer);
-         if (numeric_query_id) {
-            query_buffer = (CharPtr) Malloc(16);
-            sprintf(query_buffer, "%ld", query_gi);
-         }
+      title = BioseqGetTitle(query_bsp);
+      if (title) {
+         ptr = StringTokMT(title, " ", &title);
+         StringCpy(query_buffer, ptr);
+      } else {
+         ptr = (CharPtr) Malloc(BUFFER_LENGTH+1);
+         SeqIdWrite(query_bsp->id, ptr, PRINTID_FASTA_LONG, 
+                    BUFFER_LENGTH);
+         if (StringNCmp(ptr, "lcl|", 4))
+            StringCpy(query_buffer, ptr);
+         else
+            StringCpy(query_buffer, ptr+4);
+         ptr = MemFree(ptr);
+         
       }  
-      BioseqUnlock(query_bsp);
    } else {
-      query_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
-      SeqIdWrite(SeqIdFindBestAccession(query_id), query_buffer,
-                 PRINTID_TEXTID_ACC_VER, BUFFER_LENGTH);
+      SeqIdWrite(query_bsp->id, query_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
    }
-
+   BioseqUnlock(query_bsp);
+   
    if (is_na) {
-      kbp = search->sbp->kbp_gap[search->first_context];
       search->sbp->kbp_gap[search->first_context] = 
          search->sbp->kbp[search->first_context];
    }
@@ -3823,15 +4761,13 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
          GapXEditBlockDelete(search->current_hitlist->hsp_array[index]->gap_info);
    }
 
-   if (is_na)
-      search->sbp->kbp_gap[search->first_context] = kbp;
-
-   if (is_translated) {
+   if (is_translated || !search->pbp->gapped_calculation) {
       asp = MemNew(sizeof(AlignSum));
       asp->matrix = NULL;
       asp->matrix = load_default_matrix();
       asp->is_aa = !is_na;
-      AdjustOffSetsInSeqAlign(seqalign, search->query_slp, subject_slp);
+      if (is_translated)
+         AdjustOffSetsInSeqAlign(seqalign, search->query_slp, subject_slp);
    }
 
    /* Now print the tab-delimited fields, using seqalign */
@@ -3863,7 +4799,7 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
 
       query_seq = search->context[search->first_context].query->sequence;
 
-      if (!is_translated) {
+      if (!is_translated && search->pbp->gapped_calculation) {
          DenseSegPtr dsp = (DenseSegPtr) sap->segs;
          numseg = dsp->numseg;
          
@@ -3935,6 +4871,9 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
          s_end += s_shift;
       }
 
+      if (perc_ident >= 99.995 && perc_ident < 100.00)
+         perc_ident = 99.99;
+         
       fprintf(fp, 
               "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
               query_buffer, subject_buffer, perc_ident, align_length, 
@@ -3947,15 +4886,12 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
       MemFree(asp);
    }
 
+   ReadDBBioseqFetchDisable();
+   
    MemFree(subject_start);
    MemFree(rev_subject);
    SeqAlignSetFree(seqalign);
-
-   if (!numeric_sip_type && subject_buffer != subject_descr)
-      MemFree(subject_buffer);
    MemFree(subject_descr);
-   MemFree(buffer);
-   MemFree(query_buffer);
    fflush(fp);
    return 0;
 }
@@ -3971,8 +4907,7 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    Int2 context;
    CharPtr query_buffer, title;
    SeqIdPtr sip, subject_id, query_id; 
-   Int4 descr_len;
-   Int4 index, hsp_index, score;
+   Int4 hsp_index;
    Int4 num_mismatches, num_gap_opens, align_length, num_ident;
    BLAST_KarlinBlkPtr kbp;
    Uint1Ptr query_seq, subject_seq = NULL;
@@ -3984,7 +4919,6 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    Int4Ptr length, start;
    Uint1Ptr strands;
    CharPtr subject_descr=NULL, subject_buffer, buffer;
-   Int4 buffer_size;
    Boolean numeric_sip_type = FALSE;
    FILE *fp = (FILE *) search->output;
 
@@ -4003,17 +4937,8 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
 
    subject_id = SeqIdFindBestAccession(sip);
 
-   if (subject_id->choice == SEQID_LOCAL) {
-      BioseqPtr bsp = BioseqLockById(sip);
-      title = StringSave(BioseqGetTitle(bsp));
-      if (title)
-         subject_buffer = StringTokMT(title, " ", &title);
-      else
-         numeric_sip_type = GetAccessionFromSeqId(bsp->id, &subject_gi, 
-                                                  &subject_buffer);
-      BioseqUnlock(bsp);
-   } else if (subject_id->choice != SEQID_GENERAL ||
-      StringCmp(((DbtagPtr)subject_id->data.ptrvalue)->db, "BL_ORD_ID")) {
+   if (subject_id->choice != SEQID_GENERAL ||
+       StringCmp(((DbtagPtr)subject_id->data.ptrvalue)->db, "BL_ORD_ID")) {
       if (search->pbp->megablast_full_deflines) { 
          subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
          SeqIdWrite(subject_id, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
@@ -4093,7 +5018,7 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
                                      &query_buffer);
             if (numeric_query_id) {
                query_buffer = (CharPtr) Malloc(16);
-               sprintf(query_buffer, "%ld", query_gi);
+               sprintf(query_buffer, "%ld", (long) query_gi);
             }
          }  
          BioseqUnlock(query_bsp);
@@ -4142,6 +5067,9 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
             num_gap_opens++;
       }
       perc_ident = perc_ident / align_length * 100;
+      /* Avoid printing 100.00 when the hit is not an exact match */
+      if (perc_ident >= 99.995 && perc_ident < 100.00)
+         perc_ident = 99.99;
 
       if (perc_ident < search->pbp->perc_identity) {
          GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
@@ -4167,16 +5095,16 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
 
       if (numeric_sip_type)
          fprintf(fp, 
-                 "%s\t%ld\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
-                 query_buffer, subject_gi, perc_ident, align_length, 
-                 num_mismatches, num_gap_opens, q_start, q_end, s_start, 
-                 s_end, eval_buff, bit_score_buff);
+                 "%s\t%ld\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\n",
+                 query_buffer, (long) subject_gi, perc_ident, (long) align_length, 
+                 (long) num_mismatches, (long) num_gap_opens, (long) q_start, (long) q_end, (long) s_start, 
+                 (long) s_end, eval_buff, bit_score_buff);
       else 
 	 fprintf(fp, 
-                 "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
-                 query_buffer, subject_buffer, perc_ident, align_length, 
-                 num_mismatches, num_gap_opens, q_start, q_end, s_start, 
-                 s_end, eval_buff, bit_score_buff);
+                 "%s\t%s\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\n",
+                 query_buffer, subject_buffer, perc_ident, (long) align_length, 
+                 (long) num_mismatches, (long) num_gap_opens, (long) q_start, (long) q_end, (long) s_start, 
+                 (long) s_end, eval_buff, bit_score_buff);
 
       MemFree(start);
       MemFree(length);
@@ -4190,4 +5118,56 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    sip = SeqIdSetFree(sip);
    fflush(fp);
    return 0;
+}
+
+void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
+                              SeqLocPtr query_slp, CharPtr blast_program,
+                              Int4 iteration, Boolean believe_query,
+                              FILE *outfp)
+{
+   Char buffer[BUFFER_LENGTH];
+   CharPtr program;
+   Boolean no_bioseq = (query_bsp == NULL);
+
+   asn2ff_set_output(outfp, NULL);
+   
+   ff_StartPrint(0, 0, BUFFER_LENGTH, NULL);
+
+   program = StringSave(blast_program);
+   Nlm_StrUpper(program);
+   sprintf(buffer, "# %s %s [%s]", program, BlastGetVersionNumber(),
+           BlastGetReleaseDate());
+   ff_AddString(buffer);
+   NewContLine();
+
+   ff_AddString("# Database: ");
+   ff_AddString(blast_database);
+   NewContLine();
+   
+   if (iteration > 0) {
+      ff_AddString("# Iteration: ");
+      ff_AddString(Ltostr((long) iteration, 1));
+      NewContLine();
+   }
+
+   if (query_bsp || query_slp) {
+      ff_AddString("# Query: ");
+      if (no_bioseq)
+         query_bsp = BioseqLockById(SeqLocId(query_slp));
+      if (query_bsp->id && believe_query) {
+         SeqIdWrite(query_bsp->id, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+         if (StringNCmp(buffer, "lcl|", 4) == 0)
+            ff_AddString(buffer+4);
+         else
+            ff_AddString(buffer);
+         ff_AddChar(' ');
+      }
+      ff_AddString(BioseqGetTitle(query_bsp));
+      if (no_bioseq)
+         BioseqUnlock(query_bsp);
+      
+      NewContLine();
+   }
+   ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score");
+   ff_EndPrint();
 }

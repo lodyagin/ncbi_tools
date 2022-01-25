@@ -1,4 +1,4 @@
-/* $Id: thrdatd.c,v 1.18 2001/03/02 23:14:12 hurwitz Exp $
+/* $Id: thrdatd.c,v 1.20 2001/04/26 17:23:37 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.18 $
+* $Revision: 1.20 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.c,v $
+* Revision 1.20  2001/04/26 17:23:37  thiessen
+* fix bug in updating aligned residue types
+*
+* Revision 1.19  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.18  2001/03/02 23:14:12  hurwitz
 * run threading faster for PSSM weight=1, bug fix
 *
@@ -750,7 +756,7 @@ for(i=0; i<ndi; i++) printf("%d ",spn->srf[i]); printf("spn->srf\n");
 */
 
 /* Compute expected contact energy. */
-cxei(spn,spc,pmf,cxe);
+cxei(spn,spc,pmf,sli,psm,cdf,cxe);
 
 
 /* printf("cxe->nrt:%d ndi:%d\n",cxe->nrt,cxe->ndi);
@@ -870,7 +876,7 @@ for(i=0;i<sli->nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
 				/* printf("spcd:%d\n",spcd); */
 
 				/* If necessary update expected energy. */
-				if(spcd!=0) cxei(spn,spc,pmf,cxe);
+				if(spcd!=0) cxei(spn,spc,pmf,sli,psm,cdf,cxe);
 
 				/* Assign thread energy for this aligment. */
 				pvl->e[j]=dgri(spe,spn,cxe,tdg,psm,spc); 
@@ -891,7 +897,7 @@ for(i=0;i<sli->nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
 			spcd=spci(cdf,qsq,sli,sai,cs,spc);
 
 			/* If necessary update expected energies. */
-			if(spcd) cxei(spn,spc,pmf,cxe);
+			if(spcd) cxei(spn,spc,pmf,sli,psm,cdf,cxe);
 
 			/* Assign thread energy */
 			dgri(spe,spn,cxe,tdg,psm,spc); 
@@ -1013,7 +1019,7 @@ for(i=0;i<nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
 			for(k=0; k<=mx-mn; k++) { of=mn+k;
 		
 				/* Assign the extent. */
-				slou(mtf,cdf,cs,ct,of,sli);
+				slou(mtf,cdf,cs,ct,of,sli,sai,qsq);
 				/* printf("assigned cs:%d ct:%d of:%d\n",
 					cs,ct,of); */
 
@@ -1029,7 +1035,7 @@ for(i=0;i<nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
         }
 
 				/* Update expected contact energy. */
-                                cxei(spn,spc,pmf,cxe);
+                                cxei(spn,spc,pmf,sli,psm,cdf,cxe);
 
 				/* Assign thread energy for this extent. */
 				pvl->e[k]=dgri(spe,spn,cxe,tdg,psm,spc); 
@@ -1039,7 +1045,7 @@ for(i=0;i<nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
 			of=mn+algs(pvl,gsp->tml[nts]);
 
 			/* Assign the chosen extent for this terminus. */
-			slou(mtf,cdf,cs,ct,of,sli);
+			slou(mtf,cdf,cs,ct,of,sli,sai,qsq);
 			/* printf("chose by sampling cs:%d ct:%d of:%d\n",
 				cs,ct,of);  */
 
@@ -1055,7 +1061,7 @@ for(i=0;i<nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
       }
 
 			/* Update expected contact energy. */
-			cxei(spn,spc,pmf,cxe);
+			cxei(spn,spc,pmf,sli,psm,cdf,cxe);
 
 			/* Update thread energy */
 			dgri(spe,spn,cxe,tdg,psm,spc); } }

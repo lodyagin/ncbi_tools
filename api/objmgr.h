@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.27 $
+* $Revision: 6.29 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.29  2001/05/31 22:58:25  kans
+* added ObjMgrReapOne, DEFAULT_MAXOBJ, autoclean reaps and frees one entity at a time, as needed
+*
+* Revision 6.28  2001/05/31 22:33:03  kans
+* added autoclean and maxobj to ObjMgr structure, ObjMgrAddFunc optionally calls ObjMgrReap and ObjMgrFreeCache to completely clear out least recently accessed objects if currobj >= maxobj
+*
 * Revision 6.27  2001/02/16 21:34:49  ostell
 * changed GetSecs() to ObjMgrTouchCnt() to reduce system calls
 *
@@ -626,9 +632,13 @@ typedef struct objmng {        /* functions for data management */
 
 	OMUserDataPtr userdata;      /* for global messageing */
 
+	Boolean autoclean;           /* if TRUE, reap and free cache if currobj > maxobj */
+	Uint2 maxobj;                /* number of objects that tiggers autocleaning */
+
 } ObjMgr, PNTR ObjMgrPtr;
 
 #define DEFAULT_MAXTEMP 5   /* default number of temp entries to keep */
+#define DEFAULT_MAXOBJ 50000   /* default number of objects to keep for autocleaning */
 
 /*****************************************************************************
 *
@@ -966,6 +976,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetChoice PROTO((Uint2 type, ValNodePtr choice,
 NLM_EXTERN Int4 LIBCALL ObjMgrLock PROTO((Uint2 type, Pointer data, Boolean lockit));
 NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad PROTO((ObjMgrPtr omp, Pointer ptr));
 NLM_EXTERN Boolean LIBCALL ObjMgrReap PROTO((ObjMgrPtr omp));
+NLM_EXTERN Boolean LIBCALL ObjMgrReapOne PROTO((ObjMgrPtr omp));
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindTop PROTO((ObjMgrPtr omp, ObjMgrDataPtr smdp));
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrGetDataStruct PROTO((ObjMgrPtr omp,
 														   Uint2 entityID));

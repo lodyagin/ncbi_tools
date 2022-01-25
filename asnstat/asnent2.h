@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnent2.h16";
+static char * asnfilename = "asnent2.h19";
 static AsnValxNode avnx[10] = {
     {20,"and" ,1,0.0,&avnx[1] } ,
     {20,"or" ,2,0.0,&avnx[2] } ,
@@ -22,7 +22,7 @@ static AsnValxNode avnx[10] = {
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } };
 
-static AsnType atx[191] = {
+static AsnType atx[192] = {
   {401, "Entrez2-dt" ,1,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[2]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {402, "Entrez2-db-id" ,1,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[4]} ,
@@ -213,10 +213,11 @@ static AsnType atx[191] = {
   {0, "dt" ,128,1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[188]} ,
   {0, "server" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[189]} ,
   {0, "msg" ,128,3,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[190]} ,
-  {0, "cookie" ,128,4,0,1,0,0,0,0,NULL,&atx[3],NULL,0,NULL} };
+  {0, "key" ,128,4,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[191]} ,
+  {0, "cookie" ,128,5,0,1,0,0,0,0,NULL,&atx[3],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Entrez2" , "asnent2.h16",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Entrez2" , "asnent2.h19",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -330,7 +331,8 @@ static AsnModulePtr amp = ampx;
 #define ENTREZ2_REPLY_dt &at[187]
 #define ENTREZ2_REPLY_server &at[188]
 #define ENTREZ2_REPLY_msg &at[189]
-#define ENTREZ2_REPLY_cookie &at[190]
+#define ENTREZ2_REPLY_key &at[190]
+#define ENTREZ2_REPLY_cookie &at[191]
 
 #define E2REPLY &at[86]
 #define E2REPLY_error &at[87]

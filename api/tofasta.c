@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.78 $
+* $Revision: 6.82 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.82  2001/06/25 23:47:47  kans
+* added InstantiateProteinTitles and ClearProteinTitles
+*
+* Revision 6.81  2001/06/08 14:41:35  kans
+* FindProtDefLine sees if features are indexed, and if so never calls the old gather-based functions if the indexed function returns NULL
+*
+* Revision 6.80  2001/04/18 22:07:41  kans
+* initialized mfa.printid_general in SeqEntrysToDefline
+*
+* Revision 6.79  2001/04/18 21:17:21  madden
+* set printid_general to fix umr in BioseqRawToFastaExtra
+*
 * Revision 6.78  2001/02/27 21:52:37  madden
 * Added BioseqToFastaDump and FastaDumpFileFunc for dumping BLAST db in FASTA
 *
@@ -958,6 +970,7 @@ NLM_EXTERN Boolean SeqEntrysToDefline(SeqEntryPtr sep,
   mfa.do_virtual = FALSE;
   mfa.formatdb = FALSE;
   mfa.tech = 0;
+  mfa.printid_general = FALSE;
 
   tfa.mfp = &mfa;
   tfa.is_na = is_na;
@@ -1007,9 +1020,9 @@ NLM_EXTERN Boolean BioseqRawToFastaExtra (BioseqPtr bsp, FILE *fp, Int2 line_len
 	mfa.organism = NULL;
 	mfa.do_virtual = FALSE;
 	mfa.tech = 0;
-        mfa.no_sequence = FALSE;
-    	mfa.formatdb	= FALSE;
-    
+	mfa.no_sequence = FALSE;
+	mfa.formatdb = FALSE;
+	mfa.printid_general = FALSE;
 
  	return BioseqRawToFastaX(bsp, &mfa, ISA_na(bsp->mol));
 }
@@ -2017,7 +2030,7 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
                     chptr = StringChr (ptr, '"');
                 } else {
                    for (chptr = ptr; *chptr != NULLB && !IS_WHITESP(*chptr);
-                        chptr++);
+                        chptr++) continue;
                    if (*chptr == NULLB)
                       chptr = NULL;
                 }
@@ -2591,12 +2604,19 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 	Int4 diff_lowest = /* 0 */ INT4_MAX, diff_current;
 	Int2 length = 0;
 	SeqFeatPtr best_gene = NULL;
+	Uint2 entityID;
+	Boolean indexed;
 		
 	if (bsp == NULL) {
 		return NULL;
 	}
-	sfp = SeqMgrGetBestProteinFeature (bsp, NULL);
-	if (sfp == NULL) {
+	entityID = ObjMgrGetEntityIDForPointer (bsp);
+	indexed = SeqMgrFeaturesAreIndexed (entityID);
+
+	sfp = NULL;
+	if (indexed) {
+		sfp = SeqMgrGetBestProteinFeature (bsp, NULL);
+	} else {
 		sfp = GatherSeqFeatProt(bsp);
 	}
 	if (sfp != NULL) {
@@ -2621,8 +2641,10 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 		}
 	} 
 	if (title == NULL) {
-		sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
-		if (sfp == NULL) {
+		sfp = NULL;
+		if (indexed) {
+			sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
+		} else {
 			sfp = GatherProtCDS(bsp);
 		}
 		if (sfp != NULL) {
@@ -2649,8 +2671,10 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 				}
 			}
 			if (title == NULL) {
-				best_gene = SeqMgrGetOverlappingGene (loc, NULL);
-				if (best_gene == NULL) {
+				best_gene = NULL;
+				if (indexed) {
+					best_gene = SeqMgrGetOverlappingGene (loc, NULL);
+				} else {
 					vnp = GatherGenesForCDS(loc);
 					for (v=vnp; v; v=v->next) {
 						f = (SeqFeatPtr) v->data.ptrvalue;
@@ -3171,11 +3195,13 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		buflen -= diff;
 		buf += diff;
 	}
-	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank);
-	if (vnp != NULL) {
-		gbp = (GBBlockPtr) vnp->data.ptrvalue;
-	}
 	diff = 0;
+	if (htg_tech) {
+		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank);
+		if (vnp != NULL) {
+			gbp = (GBBlockPtr) vnp->data.ptrvalue;
+		}
+	}
 	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
 	if (vnp != NULL) {
 		title = StringSaveNoNull((CharPtr)vnp->data.ptrvalue);
@@ -3686,5 +3712,76 @@ NLM_EXTERN void NC_Cleanup (Uint2 entityID, Pointer ptr)
   MemSet ((Pointer) objMgrFilt, FALSE, sizeof (objMgrFilt));
   objMgrFilt [OBJ_BIOSEQ] = TRUE;
   GatherObjectsInEntity (entityID, 0, NULL, AddNcTitles, NULL, objMgrFilt);
+}
+
+static void ClearProtTitlesProc (BioseqPtr bsp, Pointer userdata)
+
+{
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp;
+
+  if (bsp == NULL) return;
+  if (! ISA_aa (bsp->mol)) return;
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice == Seq_descr_title) {
+      if (sdp->extended != 0) {
+        ovp = (ObjValNodePtr) sdp;
+        ovp->idx.deleteme = TRUE;
+      }
+    }
+  }
+}
+
+NLM_EXTERN void ClearProteinTitles (Uint2 entityID, Pointer ptr)
+
+{
+  SeqEntryPtr  sep;
+
+  if (entityID == 0) {
+    entityID = ObjMgrGetEntityIDForPointer (ptr);
+  }
+  if (entityID == 0) return;
+  sep = GetTopSeqEntryForEntityID (entityID);
+  VisitBioseqsInSep (sep, NULL, ClearProtTitlesProc);
+  DeleteMarkedObjects (entityID, 0, NULL);
+}
+
+static void AddProtTitles (BioseqPtr bsp, Pointer userdata)
+
+{
+  Char         buf [512];
+  SeqDescrPtr  sdp;
+  CharPtr      str;
+
+  if (bsp == NULL) return;
+
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice == Seq_descr_title) return;
+  }
+
+  if (CreateDefLine (NULL, bsp, buf, sizeof (buf), 0, NULL, NULL)) {
+    if (! StringHasNoText (buf)) {
+      str = StringSaveNoNull (buf);
+      if (str != NULL) {
+        SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+      }
+    }
+  }
+}
+
+NLM_EXTERN void InstantiateProteinTitles (Uint2 entityID, Pointer ptr)
+
+{
+  SeqEntryPtr  sep;
+
+  if (entityID == 0) {
+    entityID = ObjMgrGetEntityIDForPointer (ptr);
+  }
+  if (entityID == 0) return;
+
+  AssignIDsInEntity (entityID, 0, NULL);
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  VisitBioseqsInSep (sep, NULL, AddProtTitles);
 }
 

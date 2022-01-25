@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-BlastOutput
-*    Generated using ASNCODE Revision: 6.9 at Nov 24, 2000 11:42 AM
+*    Generated using ASNCODE Revision: 6.10 at May 3, 2001  1:46 PM
 *
 **************************************************/
 

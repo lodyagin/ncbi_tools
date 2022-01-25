@@ -1,4 +1,4 @@
-/* $Id: thrdslou.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdslou.c,v 1.2 2001/04/26 17:23:38 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdslou.c,v $
+* Revision 1.2  2001/04/26 17:23:38  thiessen
+* fix bug in updating aligned residue types
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -49,7 +52,8 @@
 #include <thrdatd.h>
 #include <thrddecl.h>
 
-int slou(Fld_Mtf* mtf, Cor_Def* cdf, int cs, int ct, int of, Cur_Loc* sli) {
+int slou(Fld_Mtf* mtf, Cor_Def* cdf, int cs, int ct, int of, Cur_Loc* sli,
+    Cur_Aln* sai, Qry_Seq* qsq) {
 /*--------------------------------------------------------*/
 /* mtf:  Contact matrices defining the folding motif      */
 /* cdf:  Core definition contains min/max segment extents */
@@ -65,6 +69,7 @@ int	mx,mn;		/* Range of motif indices */
 int	rf;		/* Reference point for core segment offsets */
 int	nt;		/* Terminus of neighboring segment */
 int	ns;		/* Neighbor segment index */
+int	ci, si;
 
 /* Number of core segments */
 nsc=cdf->sll.n;
@@ -97,6 +102,14 @@ switch(ct) {
 
 /* Raise in-core flags for all positions in the new element */
 for(i=mn; i<=mx; i++) sli->cr[i]=cs;
+
+/* update aligned residue types */
+mn=sai->al[cs]-sli->no[cs];
+mx=sai->al[cs]+sli->co[cs];
+ci=cdf->sll.rfpt[cs]-sli->no[cs];
+for(si=mn; si<=mx; si++) {
+    sai->sq[ci]=qsq->sq[si];
+    ci++; }
 
 }
 

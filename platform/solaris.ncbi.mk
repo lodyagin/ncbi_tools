@@ -1,5 +1,5 @@
 #
-# $Id: solaris.ncbi.mk,v 1.14 2001/02/12 17:28:45 beloslyu Exp $
+# $Id: solaris.ncbi.mk,v 1.15 2001/06/12 21:11:56 vakatov Exp $
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
@@ -77,3 +77,7 @@ OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU
 NCBI_OGLLIBS = -lGL -lGLU
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+

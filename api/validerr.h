@@ -50,6 +50,8 @@
 #define ERR_SEQ_DESCR_BioSourceNeedsFocus  2,14
 #define ERR_SEQ_DESCR_BadOrganelle  2,15
 #define ERR_SEQ_DESCR_MultipleChromosomes  2,16
+#define ERR_SEQ_DESCR_BadSubSource  2,17
+#define ERR_SEQ_DESCR_BadOrgMod  2,18
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -114,6 +116,9 @@
 #define ERR_SEQ_FEAT_mRNAgeneRange  5,44
 #define ERR_SEQ_FEAT_TranscriptLen  5,45
 #define ERR_SEQ_FEAT_TranscriptMismatches  5,46
+#define ERR_SEQ_FEAT_CDSproductPackagingProblem  5,47
+#define ERR_SEQ_FEAT_DuplicateInterval  5,48
+#define ERR_SEQ_FEAT_PolyAsiteNotPoint  5,49
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

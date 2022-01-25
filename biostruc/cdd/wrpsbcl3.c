@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.16 2001/03/21 17:00:48 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.18 2001/05/31 22:04:46 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.16 $
+* $Revision: 1.18 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.18  2001/05/31 22:04:46  bauer
+* changes to accomodate new type of Smart accessions
+*
+* Revision 1.17  2001/05/23 21:18:38  bauer
+* *** empty log message ***
+*
 * Revision 1.16  2001/03/21 17:00:48  bauer
 * fixes for changes in LOAD accessions
 *
@@ -657,7 +663,7 @@ static Boolean WRPSBDrawPage()
   printf("<OPTION VALUE=\"1\">Color Scheme 2\n");
   printf("<OPTION SELECTED VALUE=\"2\">Color Scheme 3\n");
   printf("</SELECT><BR>\n");
-  printf("Print Graphics using&nbsp<SELECT NAME=\"GWIDTH\">\n");
+  printf("Print Graphics using&nbsp<SELECT NAME=\"GW\">\n");
   printf("<OPTION VALUE=\"-5\">5 pixels per residue\n");
   printf("<OPTION VALUE=\"-2\">2 pixels per residue\n");
   printf("<OPTION SELECTED VALUE=\"-1\">Default Width\n");
@@ -1183,7 +1189,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
   fclose(gifout);
   gdImageDestroy(im);
   fprintf(table,"</map>\n");
-  fprintf(table,"<img src=\"snph-viewgif.cgi?%s\" usemap=\"#img_map\" border=0 ISMAP>\n",
+  fprintf(table,"<img src=\"%snph-viewgif.cgi?%s\" usemap=\"#img_map\" border=0 ISMAP>\n",
           URLcgi,path);
   fprintf(table,"</CENTER>\n");
 }
@@ -1394,17 +1400,25 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->cDatabase = strdup(strtok(NULL,"|"));
       strcpy(path,strtok(NULL,"|"));
       aapThis->cCDDid = strdup(strtok(path," "));
+      MemFree(cTemp);
     } else WRPSBHtmlError("Could not interpret subject defline!");
     aapThis->bIsProfile = FALSE;
     if (StringICmp(aapThis->cDatabase,"Smart")==0) {
       aapThis->red = 255;
       aapThis->green = aapThis->blue = iColValue;
-      aapThis->cGraphId = aapThis->cCDDid;
+      if (StrNCmp(aapThis->cCDDid,"smart0",6) == 0) {
+        cTemp = strdup(txsp->title);
+        aapThis->cGraphId = strdup(strtok(cTemp,","));
+	MemFree(cTemp);
+      } else {
+        aapThis->cGraphId = aapThis->cCDDid;
+      }
     } else if (StringICmp(aapThis->cDatabase,"Pfam") ==0) {
       aapThis->blue = 255;
       aapThis->red = aapThis->green = iColValue;
       cTemp = strdup(txsp->title);
       aapThis->cGraphId = strdup(strtok(cTemp,","));
+      MemFree(cTemp);
     } else if (StringICmp(aapThis->cDatabase,"scop1.39") ==0) {
       aapThis->green = 255;
       aapThis->red = aapThis->blue = iColValue;
@@ -1421,6 +1435,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
         strtok(cTemp,"_");
         aapThis->cGraphId = strdup(strtok(NULL,"_"));
       }
+      MemFree(cTemp);
     } else {
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    
@@ -1765,6 +1780,7 @@ Int2 Main (void)
   Uint4               align_options, print_options;
   Int4                iPassHit        = 0;
   Int4                indx, gi, numgi;
+  Int4                qlength;
   Int4                startloc, endloc;
   Int4                number_of_descriptions, number_of_alignments;
   Int4                iGraphMode      = 1;
@@ -1822,7 +1838,6 @@ Int2 Main (void)
 /* retrieve names for directories etc.                                       */
 /*---------------------------------------------------------------------------*/
   if (!CddGetParams()) WRPSBHtmlError("Couldn't read from config file...");
-
   StringCpy(blast_program, myargs [0].strvalue);
 
 /*---------------------------------------------------------------------------*/
@@ -1854,9 +1869,25 @@ Int2 Main (void)
   if (!bMode)
     if (!WRPSBDrawPage()) WRPSBHtmlError("Could not draw initial page...");
   info = (WWWInfoDataPtr) www_info;
+/*---------------------------------------------------------------------------*/
+/* try to determine browser/client                                           */
+/*---------------------------------------------------------------------------*/
   if (StringStr(info->agent,"Mozilla/4")) bIsNetscape = TRUE;
   if (StringStr(info->agent,"MSIE")) bIsNetscape = FALSE;
-/*  WRPSBHtmlError(info->agent); */
+
+/*---------------------------------------------------------------------------*/
+/* parse input designating wrpsb.cgi as a graphics formatter                 */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info,"QL")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+    qlength = (Int4) atoi(www_arg);
+    if (qlength <= 0) WRPSBHtmlError("Error in image formating!");  
+    
+  
+  }
+  
+
+
 /*---------------------------------------------------------------------------*/
 /* anything beyond this point assumes that a search is launched and results  */
 /* are being formatted                                                       */
@@ -1993,7 +2024,7 @@ Int2 Main (void)
     if (iGraphMode > 2) iGraphMode = 2;
     if (iGraphMode < 0) iGraphMode = 0;
   }
-  if ((indx = WWWFindName(www_info,"GWIDTH")) >= 0) {
+  if ((indx = WWWFindName(www_info,"GW")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
     GraphWidth = (Int4) atoi(www_arg);
     if (GraphWidth == -1) GraphWidth = WRPSB_GRAPH_WIDTH;
@@ -2061,6 +2092,7 @@ Int2 Main (void)
         if (gi > 0) ValNodeAddInt(&sip,SEQID_GI,gi); 
       } else WRPSBHtmlError("Could not find sequence!");
       bsp = BioseqLockById(sip);
+      if (!bsp) WRPSBHtmlError("Could not access sequence data!");
       if (ISA_na(bsp->mol)) query_is_na = TRUE;
     }
     if ((query_bsp = bsp) == NULL || bsp->length <= 0)

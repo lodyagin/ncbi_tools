@@ -15,7 +15,8 @@ A. The binaries of NCBI toolkit may be downloaded at:
 	CN3D:		ftp://ncbi.nlm.nih.gov/cn3d/
 
 Currently NCBI prepares the binaries for the following platforms:
-	DEC Alpha -- OSF1 V4.0
+	IBM       -- AIX 4.3.3
+	DEC Alpha -- OSF1 V5.1
 	SGI       -- IRIX 6.4
 	SGI       -- IRIX 5.3
 	Sun/Sparc -- Solaris 2.6

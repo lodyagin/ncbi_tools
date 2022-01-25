@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_lbsmd.c,v 6.17 2001/03/29 21:14:35 lavr Exp $
+/*  $Id: ncbi_service_lbsmd.c,v 6.26 2001/07/05 17:00:23 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,34 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_service_lbsmd.c,v $
+ * Revision 6.26  2001/07/05 17:00:23  lavr
+ * Severity change eLOG_Warning->eLOG_Error in log for failed heap lock
+ *
+ * Revision 6.25  2001/07/03 20:50:21  lavr
+ * RAND_MAX included in the interval search.
+ * Log error message if unable to lock the heap.
+ *
+ * Revision 6.24  2001/06/25 15:36:53  lavr
+ * s_GetNextInfo now takes one additional argument for host environment
+ *
+ * Revision 6.23  2001/06/19 19:12:01  lavr
+ * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
+ *
+ * Revision 6.22  2001/05/24 21:27:37  lavr
+ * Skip pre-expired servers (with zero expiration time)
+ *
+ * Revision 6.21  2001/05/03 16:58:16  lavr
+ * FIX: Percent is taken of local bonus coef instead of the value itself
+ *
+ * Revision 6.20  2001/05/03 16:35:58  lavr
+ * Local bonus coefficient modified: meaning of negative value changed
+ *
+ * Revision 6.19  2001/04/26 20:20:01  lavr
+ * Better way of choosing local server with a tiny (e.g. penalized) status
+ *
+ * Revision 6.18  2001/04/24 21:35:03  lavr
+ * Penalty interface added; treatment of bonus coefficient for local servers
+ *
  * Revision 6.17  2001/03/29 21:14:35  lavr
  * 'penalty' changed to 'fine'
  *
@@ -93,7 +121,9 @@
 
 #include "ncbi_lbsm.h"
 #include "ncbi_lbsm_ipc.h"
+#include "ncbi_priv.h"
 #include "ncbi_servicep_lbsmd.h"
+#include <connect/ncbi_ansi_ext.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -101,24 +131,32 @@
 #include <unistd.h>
 
 
+/* Default rate increase if svc runs locally */
+#define SERV_LBSMD_LOCAL_SVC_BONUS 1.1
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-    static SSERV_Info* s_GetNextInfo(SERV_ITER iter);
-
-    static const SSERV_VTable s_op = { s_GetNextInfo, 0, 0 };
+    static SSERV_Info* s_GetNextInfo(SERV_ITER iter, char** env);
+    static int/*bool*/ s_Penalize(SERV_ITER iter, double penalty);
+    
+    static const SSERV_VTable s_op = {
+        s_GetNextInfo, 0, s_Penalize, 0, "LBSMD"
+    };
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
 
-static SSERV_Info* s_GetNextInfo(SERV_ITER iter)
+static SSERV_Info* s_GetNextInfo(SERV_ITER iter, char** env)
 {
-    double total = 0.0, point, status;
+    double total = 0.0, point = -1.0, access = 0.0, p = 0.0, status;
     struct SSERV_List {
         double               status;
+        const SLBSM_Host*    host;
         const SLBSM_Service* svc;
     }* list = 0;
     size_t i, n_list, n_max_list;
@@ -127,22 +165,25 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter)
     TSERV_Type type;
     HEAP heap;
 
-    if (!LBSM_Shmem_Lock())
+    if (!LBSM_Shmem_Lock()) {
+        CORE_LOG_SYS_ERRNO(eLOG_Error, "Cannot lock LBSMD heap");
         return 0;
+    }
 
     stateless_only = (iter->type & fSERV_StatelessOnly) != 0;
     type = iter->type & ~fSERV_StatelessOnly;
     n_list = n_max_list = 0;
     if ((heap = LBSM_Shmem_Attach()) != 0) {
         const SLBSM_Service *svc = 0;
+        const SLBSM_Host *host;
         LBSM_Setup(heap);
 
-        while ((svc = LBSM_Search(iter->service, svc)) != 0) {
-            if (!svc->info.rate)
+        while ((svc = LBSM_LookupService(iter->service, svc)) != 0) {
+            if (!svc->info.rate/*not working*/ || !svc->info.time/*expired*/)
                 continue;
 
             if (type && !(type & (int)svc->info.type))
-                continue;
+                continue; /* type doesn't match */
 
             if (stateless_only && svc->info.sful) {
                 /* Skip stateful-only non-CGI (NCBID and standalone) svc */
@@ -154,6 +195,17 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter)
                 if (SERV_EqualInfo(&svc->info, iter->skip[i]))
                     break;
             if (i < iter->n_skip)
+                continue; /* excluded */
+
+            if (!(host = LBSM_LookupHost(svc->info.host)) &&
+                svc->info.rate > 0.0) {
+                CORE_LOG(eLOG_Error, "No host entry for dynamic service");
+                continue; /* no host information for non-static service */
+            }
+
+            status = LBSM_CalculateStatus(&host->load, svc->info.rate,
+                                          svc->info.flag, svc->fine);
+            if (status <= 0.0)
                 continue;
 
             /* This server should be taken into consideration */
@@ -169,35 +221,53 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter)
                 list = temp;
                 n_max_list = n;
             }
-            list[n_list].svc    = svc;
-            status              = LBSM_CalculateStatus(&svc->load,
-                                                       svc->info.rate,
-                                                       svc->info.flag,
-                                                       svc->fine);
-            if (svc->info.host == iter->preferred_host)
-                status *= SERV_LBSMD_LOCAL_SVC_BONUS;
+            if (svc->info.host == iter->preferred_host) {
+                if (svc->info.coef > 0.0)
+                    status *= svc->info.coef;
+                else {
+                    status *= SERV_LBSMD_LOCAL_SVC_BONUS;
+                    if (svc->info.coef < 0.0 && access < status) {
+                        access = status;
+                        point  = total; /* Latch this local server */
+                        p      = -svc->info.coef;
+                    }
+                }
+            }
             total              += status;
             list[n_list].status = total;
+            list[n_list].host   = host;
+            list[n_list].svc    = svc;
             n_list++;
         }
 
         if (list) {
             size_t info_size;
 
-            point = (total * rand()) / (double)RAND_MAX;
+            /* We will take pre-chosen local server only if its status is
+               not less than p% of the average rest status; otherwise, we
+               ignore the server, and apply the general procedure by seeding
+               a random point. */
+            if (point < 0.0 || access*(n_list - 1) < p*0.01*(total - access))
+                point = (total * rand()) / (double) RAND_MAX;
             for (i = 0; i < n_list; i++) {
-                if (point < list[i].status)
+                if (point <= list[i].status)
                     break;
             }
             assert(i < n_list);
-            
+
             info_size = SERV_SizeOfInfo(&list[i].svc->info);
             if ((info = (SSERV_Info*) malloc(info_size)) != 0) {
                 memcpy(info, &list[i].svc->info, info_size);
                 info->rate = list[i].status - (i ? list[i - 1].status : 0.0);
-                info->time += time(0);  /* Set 'expiration time' */
+                info->time += (TNCBI_Time) time(0);  /* Expiration time now */
             }
-            
+            if (env) {
+                if ((host = list[i].host) != 0 && host->env)
+                    *env = strdup((const char*) host + host->env);
+                else
+                    *env = 0;
+            }
+
             free(list);
         }
 
@@ -207,6 +277,13 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter)
     LBSM_Shmem_Unlock();
 
     return info;
+}
+
+
+static int/*bool*/ s_Penalize(SERV_ITER iter, double penalty)
+{
+    return LBSM_SubmitPenalty(iter->service, iter->last->type,
+                              penalty, iter->last->host);
 }
 
 
@@ -223,7 +300,7 @@ const SSERV_VTable *SERV_LBSMD_Open(SERV_ITER iter)
     if (LBSM_LBSMD(0) <= 0 || errno != EAGAIN)
         return 0;
     srand((int)time(0) + (int)getpid());
-    if (!(info = s_GetNextInfo(iter)))
+    if (!(info = s_GetNextInfo(iter, 0)))
         return 0;
     free(info);
     return &s_op;

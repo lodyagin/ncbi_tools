@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.13 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.16  2001/06/07 20:17:34  kans
+* in QUERY_OpenServiceQuery, pass service to ConnNetInfo_Create
+*
+* Revision 6.15  2001/06/07 20:07:41  kans
+* added QUERY_OpenServiceQuery
+*
+* Revision 6.14  2001/04/25 15:14:27  lavr
+* SConnNetInfo::timeout is now a pointer
+*
 * Revision 6.13  2001/02/25 21:42:27  kans
 * changed several Uint4s to size_t due to new prototypes
 *
@@ -137,8 +146,10 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   }
   StringNCpy_0(info->path, host_path, sizeof(info->path));
 
-  info->timeout.sec  = timeoutsec;
-  info->timeout.usec = 0;
+  if ( info->timeout ) {
+      info->timeout->sec  = timeoutsec;
+      info->timeout->usec = 0;
+  }
 
   connector = HTTP_CreateConnector(info, user_header, flags);
   status = CONN_Create(connector, &conn);
@@ -148,6 +159,41 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 
   /* cleanup & return */
   ConnNetInfo_Destroy(info);
+  return conn;
+}
+
+
+NLM_EXTERN CONN QUERY_OpenServiceQuery (
+  Nlm_CharPtr service, Nlm_CharPtr arguments, Nlm_Uint4 timeoutsec
+)
+
+{
+  CONN            conn = 0;
+  CONNECTOR       connector;
+  SConnNetInfo*   info;
+  EIO_Status      status;
+
+  /* fill in connection info fields and create the connection */
+  info = ConnNetInfo_Create (service);
+  ASSERT( info );
+
+  if ( !StringHasNoText (arguments) ) {
+      StringNCpy_0 (info->args, arguments, sizeof(info->args));
+  }
+
+  if ( info->timeout ) {
+      info->timeout->sec  = timeoutsec;
+      info->timeout->usec = 0;
+  }
+
+  connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info);
+  status = CONN_Create (connector, &conn);
+  if (status != eIO_Success) {
+    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
+  }
+
+  /* cleanup & return */
+  ConnNetInfo_Destroy (info);
   return conn;
 }
 

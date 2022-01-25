@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -462,6 +462,11 @@ static OrgStuff commonOrgStuff [] = {
     "PLN", 1, 1, 4577
   },
   {
+    "Caenorhabditis elegans",
+    "Eukaryota; Metazoa; Nematoda; Chromadorea; Rhabditida; Rhabditoidea; Rhabditidae; Peloderinae; Caenorhabditis",
+    "INV", 1, 5, 6239
+  },
+  {
     NULL, NULL, NULL, 0, 0, 0
   }
 };
@@ -683,6 +688,66 @@ static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap)
   return bsp;
 }
 
+static CharPtr TrimBracketsFromString (CharPtr str)
+
+{
+  Uchar    ch;	/* to use 8bit characters in multibyte languages */
+  CharPtr  dst;
+  CharPtr  ptr;
+
+  if (StringHasNoText (str)) return str;
+
+  /* remove bracketed fields */
+
+  dst = str;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '[') {
+      ptr++;
+      ch = *ptr;
+      while (ch != '\0' && ch != ']') {
+        ptr++;
+        ch = *ptr;
+      }
+      ptr++;
+      ch = *ptr;
+    } else {
+      *dst = ch;
+      dst++;
+      ptr++;
+      ch = *ptr;
+    }
+  }
+  *dst = '\0';
+
+  /* remove runs of whitespace characters */
+
+  dst = str;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (IS_WHITESP (ch)) {
+      *dst = ch;
+      dst++;
+      ptr++;
+      ch = *ptr;
+      while (IS_WHITESP (ch)) {
+        ptr++;
+        ch = *ptr;
+      }
+    } else {
+      *dst = ch;
+      dst++;
+      ptr++;
+      ch = *ptr;
+    }
+  }
+  *dst = '\0';
+
+  return str;
+}
+
 static void ProcessOneNuc (
   Uint2 entityID,
   BioseqPtr bsp,
@@ -702,7 +767,8 @@ static void ProcessOneNuc (
   OrgRefPtr     orp;
   SeqEntryPtr   sep;
   SqnTagPtr     stp = NULL;
-  CharPtr       ttl;
+  CharPtr       str;
+  CharPtr       ttl = NULL;
   ValNodePtr    vnp;
 
   if (bsp == NULL) return;
@@ -778,6 +844,13 @@ static void ProcessOneNuc (
   if (stp != NULL) {
     SqnTagFree (stp);
   }
+
+  TrimBracketsFromString (ttl);
+  if (! StringHasNoText (ttl)) {
+    str = StringSave (ttl);
+    SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+  }
+
   ValNodeFreeData (vnp);
 }
 
@@ -1307,6 +1380,8 @@ Int2 Main (void)
   if (src != NULL) {
     BioSourceFree (src);
   }
+
+  SeqDescrFree (sdphead);
 
   TransTableFreeAll ();
 

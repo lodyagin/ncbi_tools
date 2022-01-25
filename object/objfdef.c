@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -718,7 +718,8 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"proprotein\" , menulabel \"Proprotein\" , featdef-key 86 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"mat_peptide\" , menulabel \"Mature Peptide\" , featdef-key 87 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"sig_peptide\" , menulabel \"Signal Peptide\" , featdef-key 88 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
-"{ typelabel \"transit_peptide\" , menulabel \"Transit Peptide\" , featdef-key 89 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } } };\n";
+"{ typelabel \"transit_peptide\" , menulabel \"Transit Peptide\" , featdef-key 89 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
+"{ typelabel \"snoRNA\" , menulabel \"Small Nucleolar RNA\" , featdef-key 90 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } } };\n";
 #endif
 
 /*****************************************************************************
@@ -940,6 +941,8 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
 					return FEATDEF_snRNA;
 				case 6:
 					return FEATDEF_scRNA;
+				case 7:
+					return FEATDEF_snoRNA;
 				case 255:
 					return FEATDEF_otherRNA;
 			}

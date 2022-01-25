@@ -28,6 +28,9 @@
 * Author:  Karl Sirotkin
 *
 * $Log: gbparint.c,v $
+* Revision 6.5  2001/06/07 17:00:54  tatiana
+* added gi option in Nlm_gbparselex()
+*
 * Revision 6.4  2000/03/20 23:38:39  aleksey
 * Finally submitted the changes which have been made by serge bazhin
 * and been kept in my local directory.
@@ -1980,7 +1983,7 @@ Nlm_gbparselex(CharPtr linein, ValNodePtr PNTR lexed)
 				break;
 			
 /*------
- *  GAP or GROUP
+ *  GAP or GROUP or GI
  *------*/
 			case 'g':
 				skip_new_token = FALSE;
@@ -1994,6 +1997,12 @@ Nlm_gbparselex(CharPtr linein, ValNodePtr PNTR lexed)
 				    current_col += 2;
 				    current_token->data.ptrvalue = MemNew(4);
 				    StringCpy(current_token->data.ptrvalue, "gap");
+				    break;
+				}
+				if(StringNCmp(current_col, "gi|", 3) == 0) {
+				    current_token->choice = GBPARSE_INT_ACCESION;
+				    current_col += 3;
+					for (; IS_DIGIT(*current_col); current_col++) ;
 				    break;
 				}
 				current_token -> choice = GBPARSE_INT_GROUP;
@@ -2357,7 +2366,7 @@ Nlm_gbparselex_ver(CharPtr linein, ValNodePtr PNTR lexed, Boolean accver)
 				break;
 			
 /*------
- *  GAP or GROUP
+ *  GAP or GROUP or GI
  *------*/
 			case 'g':
 				skip_new_token = FALSE;
@@ -2371,6 +2380,12 @@ Nlm_gbparselex_ver(CharPtr linein, ValNodePtr PNTR lexed, Boolean accver)
 				    current_col += 2;
 				    current_token->data.ptrvalue = MemNew(4);
 				    StringCpy(current_token->data.ptrvalue, "gap");
+				    break;
+				}
+				if(StringNCmp(current_col, "gi|", 3) == 0) {
+				    current_token->choice = GBPARSE_INT_ACCESION;
+				    current_col += 3;
+					for (; IS_DIGIT(*current_col); current_col++) ;
 				    break;
 				}
 				current_token -> choice = GBPARSE_INT_GROUP;

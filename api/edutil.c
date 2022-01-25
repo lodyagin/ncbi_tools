@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.14  2001/06/01 18:07:20  kans
+* changes to SeqLocAdd to allow one plus and one unknown strand to be accepted
+*
 * Revision 6.13  2001/02/23 21:30:09  shkeda
 * Fixed SeqLocAdd: Int-fuzz pointers should be set to NULL after IntFuzzFree
 *
@@ -259,12 +262,27 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocAdd (SeqLocPtr PNTR head, SeqLocPtr slp, Bool
 		if ((last->choice == SEQLOC_INT) && (slp->choice == SEQLOC_INT))
 		{
 			SeqIntPtr sip1, sip2;
+			Boolean samestrand;
+			Uint1 strand = Seq_strand_unknown;
 
 			sip1 = (SeqIntPtr)(last->data.ptrvalue);
 			sip2 = (SeqIntPtr)(slp->data.ptrvalue);
-			if ((sip1->strand == sip2->strand) && (SeqIdForSameBioseq(sip1->id, sip2->id)))
+			samestrand = FALSE;
+			if ((sip1->strand == sip2->strand) ||
+				(sip1->strand == Seq_strand_unknown && sip2->strand != Seq_strand_minus) ||
+          		(sip1->strand == Seq_strand_unknown && sip2->strand != Seq_strand_minus)) {
+				samestrand = TRUE;
+				if (sip1->strand == Seq_strand_minus || sip1->strand == Seq_strand_minus) {
+					strand = Seq_strand_minus;
+				} else if (sip1->strand == Seq_strand_plus || sip1->strand == Seq_strand_plus) {
+					strand = Seq_strand_plus;
+				} else {
+					strand = Seq_strand_unknown;
+				}
+          	}
+			if (samestrand && (SeqIdForSameBioseq(sip1->id, sip2->id)))
 			{
-				if (sip1->strand == Seq_strand_minus)
+				if (strand == Seq_strand_minus)
 				{
 					if (sip1->from == (sip2->to + 1))  /* they are adjacent */
 					{
@@ -280,6 +298,7 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocAdd (SeqLocPtr PNTR head, SeqLocPtr slp, Bool
 								sip1->if_from = sip2->if_from;
 								sip2->if_from = NULL;
 							}
+							sip1->strand = strand;
 						}
 						merged = TRUE;
 					}
@@ -300,6 +319,7 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocAdd (SeqLocPtr PNTR head, SeqLocPtr slp, Bool
 								sip1->if_to = sip2->if_to;
 								sip2->if_to = NULL;
 							}
+							sip1->strand = strand;
 						}
 						merged = TRUE;
 					}

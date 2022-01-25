@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06-04-93
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   	Application Property functions.
@@ -41,6 +41,10 @@
 * 06-14-94 Schuler     Added GetProgramName and SetProgramName macros
 *
 * $Log: ncbiprop.h,v $
+* Revision 6.1  2001/04/12 22:42:42  vakatov
+* Define #GetProgramName and #SetProgramName only if they have not
+* been defined yet
+*
 * Revision 6.0  1997/08/25 18:16:59  madden
 * Revision changed to 6.0
 *
@@ -99,8 +103,13 @@ NLM_EXTERN long  LIBCALL Nlm_GetAppProcessID PROTO((void));
 #define EnumAppProperties Nlm_EnumAppProperties
 #define GetAppProcessID Nlm_GetAppProcessID
 
-#define GetProgramName()   (const char*)GetAppProperty("ProgramName")
-#define SetProgramName(x)  MemFree(SetAppProperty("ProgramName",(void*)(x)))
+#if !defined(GetProgramName)
+#  define GetProgramName()   (const char*)GetAppProperty("ProgramName")
+#endif
+
+#if !defined(SetProgramName)
+#  define SetProgramName(x)  MemFree(SetAppProperty("ProgramName",(void*)(x)))
+#endif
 
 #ifdef __cplusplus
 }

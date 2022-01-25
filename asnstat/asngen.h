@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asngen.h62";
+static char * asnfilename = "asngen.h63";
 static AsnValxNode avnx[7] = {
     {20,"unk" ,0,0.0,&avnx[1] } ,
     {20,"gt" ,1,0.0,&avnx[2] } ,
@@ -98,7 +98,7 @@ static AsnType atx[76] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[45],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-General" , "asngen.h62",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-General" , "asngen.h63",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

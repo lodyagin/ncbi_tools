@@ -28,13 +28,22 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.171 $
+* $Revision: 6.174 $
 *
 * File Description: SeqAlign indexing and messaging functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.c,v $
+* Revision 6.174  2001/05/30 12:13:58  wheelan
+* AlnMsgNew and AlnMsgReNew initialize from_m and to_m
+*
+* Revision 6.173  2001/04/30 17:51:58  wheelan
+* minor bug fix
+*
+* Revision 6.172  2001/04/19 17:59:58  wheelan
+* added protection against NULL strands in AlnMgrIndexSingleChildSeqAlign
+*
 * Revision 6.171  2001/03/21 19:59:21  hurwitz
 * remove AlnMgrMergeNeighbors call from AlnMgrMakeMultByIntersectOnMaster
 *
@@ -790,6 +799,7 @@ NLM_EXTERN AlnMsgPtr AlnMsgNew(void)
    AlnMsgPtr  amp;
 
    amp = (AlnMsgPtr)MemNew(sizeof(AlnMsg));
+   amp->to_m = -1;
    amp->send_space = FALSE;
    amp->row_num = -1;
    amp->prev = -2;
@@ -807,6 +817,8 @@ NLM_EXTERN AlnMsgPtr AlnMsgFree(AlnMsgPtr amp)
 
 NLM_EXTERN AlnMsgPtr AlnMsgReNew(AlnMsgPtr amp)
 {
+   amp->from_m = 0;
+   amp->to_m = -1;
    amp->send_space = FALSE;
    amp->row_num = -1;
    amp->prev = -2;
@@ -844,7 +856,9 @@ NLM_EXTERN Boolean AlnMgrIndexSingleSeqAlign(SeqAlignPtr sap)
 
 NLM_EXTERN Boolean AlnMgrIndexSingleChildSeqAlign(SeqAlignPtr sap)
 {
-   SeqAlignPtr sap_next;
+   DenseSegPtr  dsp;
+   Int4         i;
+   SeqAlignPtr  sap_next;
 
    if (sap == NULL)
       return FALSE;
@@ -863,6 +877,15 @@ NLM_EXTERN Boolean AlnMgrIndexSingleChildSeqAlign(SeqAlignPtr sap)
       AlnMgrIndexLinkedSegs(sap);
    else if (sap->segtype == SAS_DENDIAG)
       AlnMgrIndexSingleSeqAlign(sap);
+   dsp = (DenseSegPtr)(sap->segs);
+   if (dsp->strands == NULL)
+   {
+      dsp->strands = (Uint1Ptr)MemNew((dsp->dim*dsp->numseg)*sizeof(Uint1));
+      for (i=0; i<dsp->dim*dsp->numseg; i++)
+      {
+         dsp->strands[i] = Seq_strand_plus;
+      }
+   }
    sap->next = sap_next;
    if (sap->saip)
       return TRUE;
@@ -3365,7 +3388,7 @@ NLM_EXTERN Boolean AlnMgrGetNextAlnBit (SeqAlignPtr sap, AlnMsgPtr amp)
                   amp->to_b = amp->from_b + amaip->lens[start_m] - offset - 1;
                amp->gap = 0;
                amp->real_from += amp->to_b - amp->from_b + 1;
-            } else
+            } else if (j<amaip->numsaps)
             {
                amp->from_b = AlnMgrMapToBsqCoords(amaip->saps[j], amaip->starts[j+(amaip->numsaps)*start_m]+offset, NULL, NULL);
                if (amp->from_b >= 0)

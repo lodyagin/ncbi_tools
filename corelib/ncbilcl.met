@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/31/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,17 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: ncbilcl.met,v $
+* Revision 6.4  2001/07/03 17:42:35  juran
+* Don't redefine NULL under C++.
+* Throw a preprocessor error if targeting 68K.
+* Fix newlines in previous log entry.
+*
+* Revision 6.3  2001/04/05 02:44:13  juran
+* Corrected capitalization for system include files.
+* Removed #ifdef NULL before redefining it, because NULL must be defined 
+* since we include headers like ctype.h.
+* And if it wasn't, the conditional would leave it undefined, which is Bad.
+*
 * Revision 6.2  1997/12/12 21:42:26  kans
 * Strings.h dragged in QuickDraw.h, so it is now out of the header
 *
@@ -82,6 +93,7 @@
 #define PROC_PPC
 #else
 #define PROC_MC680X0
+#error "The NCBI C Toolkit does not support Mac OS on the 680x0 processor."
 #endif
 
 /*----------------------------------------------------------------------*/
@@ -91,12 +103,13 @@
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */
 /*----------------------------------------------------------------------*/
+
+#include <MacMemory.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
-#include <Memory.h>
-#include <String.h>
-#include <Math.h>
+#include <string.h>
+#include <math.h>
 #include <errno.h>
 #include <limits.h>
 #include <float.h>
@@ -115,9 +128,10 @@
 /*      Aliased Logicals, Datatypes                                     */
 /*----------------------------------------------------------------------*/
 
-#ifdef NULL
-#undef NULL
-#define NULL ((void *)0)
+/* NULL may not be a (void *) in C++. */
+#ifndef __cplusplus
+#	undef NULL
+#	define NULL ((void *)0)
 #endif
 
 /*----------------------------------------------------------------------*/

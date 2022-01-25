@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.21 2001/03/07 16:30:33 bauer Exp $
+/* $Id: cddutil.h,v 1.24 2001/05/23 21:18:06 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.21 $
+* $Revision: 1.24 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.24  2001/05/23 21:18:06  bauer
+* added functions for alignment block structure control
+*
+* Revision 1.23  2001/04/10 20:25:57  bauer
+* cddutil.c
+*
+* Revision 1.22  2001/04/10 20:18:09  bauer
+* write out ascii-formatted mtx-Files for copymat
+*
 * Revision 1.21  2001/03/07 16:30:33  bauer
 * fixed alignment reindexing bug
 *
@@ -110,9 +119,13 @@ extern "C" {
 #include <objcdd.h>
 #include <blastdef.h>
 #include <thrdatd.h>
+#include <posit.h>
 
 #define CKPTEXT ".chk"
 #define CSEQEXT ".csq"
+#define MTRXEXT ".mtx"
+
+#define Xscore (-1)
 
 /* column order of residue-types after PSSM is calculated from CD's */
 #define InputOrder "-ABCDEFGHIKLMNPQRSTVWXYZU*"
@@ -169,7 +182,6 @@ typedef struct _pgp_blast_options {
     Boolean html;
     Boolean believe_query;
     Uint4 align_options, print_options;
-    Boolean is_xml_output;
 } PGPBlastOptions, PNTR PGPBlastOptionsPtr;
 
 /*---------------------------------------------------------------------------*/
@@ -208,6 +220,7 @@ BioseqPtr LIBCALL CddFindSip(SeqIdPtr sip, SeqEntryPtr sep);
 BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
                                  Int4 to, Uint1 strand, Boolean do_feat);
 BioseqPtr LIBCALL CddExtractBioseq(SeqEntryPtr sep, SeqIdPtr sip);
+void      LIBCALL CddShrinkBioseq(BioseqPtr bsp);
 
 /*---------------------------------------------------------------------------*/
 /* Cdd specific sequence alignment format converters                         */
@@ -215,6 +228,7 @@ BioseqPtr LIBCALL CddExtractBioseq(SeqEntryPtr sep, SeqIdPtr sip);
 SeqAlignPtr LIBCALL CddMSLDenDiagToMSLDenSeg(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddMSLDenDiagToMULDenDiag(SeqAlignPtr salp);
+Int2        LIBCALL CddTrimSeqAligns(CddPtr pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* various routines for calculating PSSM/Alignment information content       */
@@ -235,6 +249,18 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
 void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
                                        BioseqPtr bspF, CddPtr pcdd, Int4 pseudoCnt);
 void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd);
+static void CddputMatrixKbp(FILE *checkFile, BLAST_KarlinBlkPtr kbp,
+                            Boolean scaling, Nlm_FloatHi scalingDown);
+static void CddputMatrixMatrix(FILE *checkFile, 
+                               compactSearchItems *compactSearch,
+			       posSearchItems *posSearch,
+			       Boolean scaleScores);
+static Boolean CddtakeMatrixCheckpoint(compactSearchItems *compactSearch,
+                                       posSearchItems *posSearch,
+				       BLAST_ScoreBlkPtr sbp, 
+                                       Char *fileName,ValNodePtr *error_return,
+				       Boolean scaleScores,
+				       Nlm_FloatHi scalingFactor);
 Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
                                       SeqAlignPtr salp, CddPtr pcdd,
 				      BioseqPtr bspOut, double Weight,
@@ -298,6 +324,8 @@ CddExpAlignPtr CddExpAlignNew();
 CddExpAlignPtr CddExpAlignFree(CddExpAlignPtr pCDea);
 void           CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength);
 CddExpAlignPtr CddReindexExpAlign(CddExpAlignPtr pCDea1, Int4 newlength, CddExpAlignPtr pCDea2, Int4 iOuter, Int4 iInner);
+SeqAlignPtr    CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter);
+Int2   LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify, Int4Ptr *iBreakAfter);
 FloatHi        CddGetPairId(TrianglePtr pTri, Int4 idx1, Int4 idx2);
 static Boolean HitYet(Int4Ptr retlist, Int4 index, Int4 i);
 Int4Ptr        CddMostDiverse(TrianglePtr pTri, Int4 length);

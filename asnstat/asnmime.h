@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnmime.h64";
+static char * asnfilename = "asnmime.h66";
 static AsnValxNode avnx[13] = {
     {20,"docsum" ,1,0.0,&avnx[1] } ,
     {20,"genbank" ,2,0.0,&avnx[2] } ,
@@ -25,15 +25,15 @@ static AsnValxNode avnx[13] = {
     {20,"pdb" ,12,0.0,&avnx[12] } ,
     {20,"kinemage" ,13,0.0,NULL } };
 
-static AsnType atx[52] = {
+static AsnType atx[62] = {
   {401, "Ncbi-mime-asn1" ,1,0,0,0,0,1,0,0,NULL,&atx[16],&atx[1],0,&atx[13]} ,
   {0, "entrez" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[22]} ,
-  {407, "Entrez-general" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[3],0,&atx[23]} ,
+  {409, "Entrez-general" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[3],0,&atx[23]} ,
   {0, "title" ,128,0,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[5]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[16],&atx[6],0,&atx[17]} ,
   {0, "ml" ,128,0,0,0,0,0,0,0,NULL,&atx[7],NULL,0,&atx[8]} ,
-  {406, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[2]} ,
+  {406, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[35]} ,
   {0, "prot" ,128,1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[10]} ,
   {404, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[33]} ,
   {0, "nuc" ,128,2,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[11]} ,
@@ -44,12 +44,12 @@ static AsnType atx[52] = {
   {403, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[9]} ,
   {315, "CHOICE" ,0,-1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "style" ,128,2,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[20]} ,
-  {412, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[19],&avnx[0],0,NULL} ,
+  {414, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[19],&avnx[0],0,NULL} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "location" ,128,3,0,1,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "alignstruc" ,128,1,0,0,0,0,0,0,NULL,&atx[23],NULL,0,&atx[34]} ,
-  {408, "Biostruc-align" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[24],0,&atx[35]} ,
+  {0, "alignstruc" ,128,1,0,0,0,0,0,0,NULL,&atx[23],NULL,0,&atx[38]} ,
+  {410, "Biostruc-align" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[24],0,&atx[39]} ,
   {0, "master" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[25]} ,
   {0, "slaves" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[26],0,&atx[28]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[13],NULL,0,NULL} ,
@@ -57,30 +57,40 @@ static AsnType atx[52] = {
   {0, "alignments" ,128,2,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[29]} ,
   {0, "sequences" ,128,3,0,0,0,0,0,0,NULL,&atx[27],&atx[30],0,&atx[31]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
-  {0, "seqalign" ,128,4,0,0,0,0,0,0,NULL,&atx[27],&atx[32],0,NULL} ,
+  {0, "seqalign" ,128,4,0,0,0,0,0,0,NULL,&atx[27],&atx[32],0,&atx[34]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} ,
   {405, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[7]} ,
-  {0, "alignseq" ,128,2,0,0,0,0,0,0,NULL,&atx[35],NULL,0,&atx[40]} ,
-  {409, "Biostruc-align-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[36],0,&atx[41]} ,
-  {0, "sequences" ,128,0,0,0,0,0,0,0,NULL,&atx[27],&atx[37],0,&atx[38]} ,
+  {0, "style-dictionary" ,128,5,0,1,0,0,0,0,NULL,&atx[35],NULL,0,&atx[36]} ,
+  {407, "Cn3d-style-dictionary" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[37]} ,
+  {0, "user-annotations" ,128,6,0,1,0,0,0,0,NULL,&atx[37],NULL,0,NULL} ,
+  {408, "Cn3d-user-annotations" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[2]} ,
+  {0, "alignseq" ,128,2,0,0,0,0,0,0,NULL,&atx[39],NULL,0,&atx[46]} ,
+  {411, "Biostruc-align-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[40],0,&atx[47]} ,
+  {0, "sequences" ,128,0,0,0,0,0,0,0,NULL,&atx[27],&atx[41],0,&atx[42]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
-  {0, "seqalign" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[39],0,NULL} ,
+  {0, "seqalign" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[43],0,&atx[44]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} ,
-  {0, "strucseq" ,128,3,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[45]} ,
-  {410, "Biostruc-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[42],0,&atx[46]} ,
-  {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[43]} ,
-  {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[44],0,NULL} ,
+  {0, "style-dictionary" ,128,2,0,1,0,0,0,0,NULL,&atx[35],NULL,0,&atx[45]} ,
+  {0, "user-annotations" ,128,3,0,1,0,0,0,0,NULL,&atx[37],NULL,0,NULL} ,
+  {0, "strucseq" ,128,3,0,0,0,0,0,0,NULL,&atx[47],NULL,0,&atx[53]} ,
+  {412, "Biostruc-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[48],0,&atx[54]} ,
+  {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[49]} ,
+  {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[50],0,&atx[51]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
-  {0, "strucseqs" ,128,4,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
-  {411, "Biostruc-seqs" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[47],0,&atx[18]} ,
-  {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[48]} ,
-  {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[49],0,&atx[50]} ,
+  {0, "style-dictionary" ,128,2,0,1,0,0,0,0,NULL,&atx[35],NULL,0,&atx[52]} ,
+  {0, "user-annotations" ,128,3,0,1,0,0,0,0,NULL,&atx[37],NULL,0,NULL} ,
+  {0, "strucseqs" ,128,4,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
+  {413, "Biostruc-seqs" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[55],0,&atx[18]} ,
+  {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[56]} ,
+  {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[57],0,&atx[58]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
-  {0, "seqalign" ,128,2,0,0,0,0,0,0,NULL,&atx[27],&atx[51],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} };
+  {0, "seqalign" ,128,2,0,0,0,0,0,0,NULL,&atx[27],&atx[59],0,&atx[60]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} ,
+  {0, "style-dictionary" ,128,3,0,1,0,0,0,0,NULL,&atx[35],NULL,0,&atx[61]} ,
+  {0, "user-annotations" ,128,4,0,1,0,0,0,0,NULL,&atx[37],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Mime" , "asnmime.h64",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Mime" , "asnmime.h66",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -97,9 +107,9 @@ static AsnModulePtr amp = ampx;
 #define NCBI_MIME_ASN1 &at[0]
 #define NCBI_MIME_ASN1_entrez &at[1]
 #define NCBI_MIME_ASN1_alignstruc &at[22]
-#define NCBI_MIME_ASN1_alignseq &at[34]
-#define NCBI_MIME_ASN1_strucseq &at[40]
-#define NCBI_MIME_ASN1_strucseqs &at[45]
+#define NCBI_MIME_ASN1_alignseq &at[38]
+#define NCBI_MIME_ASN1_strucseq &at[46]
+#define NCBI_MIME_ASN1_strucseqs &at[53]
 
 #define ENTREZ_GENERAL &at[2]
 #define ENTREZ_GENERAL_title &at[3]
@@ -122,23 +132,31 @@ static AsnModulePtr amp = ampx;
 #define BIOSTRUC_ALIGN_sequences_E &at[30]
 #define BIOSTRUC_ALIGN_seqalign &at[31]
 #define BIOSTRUC_ALIGN_seqalign_E &at[32]
+#define BIOSTRUC_ALIGN_style_dictionary &at[34]
+#define BIOSTRUC_ALIGN_user_annotations &at[36]
 
-#define BIOSTRUC_ALIGN_SEQ &at[35]
-#define BIOSTRUC_ALIGN_SEQ_sequences &at[36]
-#define BIOSTRUC_ALIGN_SEQ_sequences_E &at[37]
-#define BIOSTRUC_ALIGN_SEQ_seqalign &at[38]
-#define BIOSTRUC_ALIGN_SEQ_seqalign_E &at[39]
+#define BIOSTRUC_ALIGN_SEQ &at[39]
+#define BIOSTRUC_ALIGN_SEQ_sequences &at[40]
+#define BIOSTRUC_ALIGN_SEQ_sequences_E &at[41]
+#define BIOSTRUC_ALIGN_SEQ_seqalign &at[42]
+#define BIOSTRUC_ALIGN_SEQ_seqalign_E &at[43]
+#define ALIGN_SEQ_style_dictionary &at[44]
+#define ALIGN_SEQ_user_annotations &at[45]
 
-#define BIOSTRUC_SEQ &at[41]
-#define BIOSTRUC_SEQ_structure &at[42]
-#define BIOSTRUC_SEQ_sequences &at[43]
-#define BIOSTRUC_SEQ_sequences_E &at[44]
+#define BIOSTRUC_SEQ &at[47]
+#define BIOSTRUC_SEQ_structure &at[48]
+#define BIOSTRUC_SEQ_sequences &at[49]
+#define BIOSTRUC_SEQ_sequences_E &at[50]
+#define BIOSTRUC_SEQ_style_dictionary &at[51]
+#define BIOSTRUC_SEQ_user_annotations &at[52]
 
-#define BIOSTRUC_SEQS &at[46]
-#define BIOSTRUC_SEQS_structure &at[47]
-#define BIOSTRUC_SEQS_sequences &at[48]
-#define BIOSTRUC_SEQS_sequences_E &at[49]
-#define BIOSTRUC_SEQS_seqalign &at[50]
-#define BIOSTRUC_SEQS_seqalign_E &at[51]
+#define BIOSTRUC_SEQS &at[54]
+#define BIOSTRUC_SEQS_structure &at[55]
+#define BIOSTRUC_SEQS_sequences &at[56]
+#define BIOSTRUC_SEQS_sequences_E &at[57]
+#define BIOSTRUC_SEQS_seqalign &at[58]
+#define BIOSTRUC_SEQS_seqalign_E &at[59]
+#define BIOSTRUC_SEQS_style_dictionary &at[60]
+#define BIOSTRUC_SEQS_user_annotations &at[61]
 
 #define ENTREZ_STYLE &at[18]

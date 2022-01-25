@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.18 2001/03/26 18:37:09 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.21 2001/05/31 21:30:57 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,15 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.21  2001/05/31 21:30:57  vakatov
+ * MIME_ParseContentTypeEx() -- a more accurate parsing
+ *
+ * Revision 6.20  2001/05/29 21:15:43  vakatov
+ * + eMIME_Plain
+ *
+ * Revision 6.19  2001/04/24 21:29:43  lavr
+ * Special text value "infinite" accepted as infinite timeout from environment
+ *
  * Revision 6.18  2001/03/26 18:37:09  lavr
  * #include <ctype.h> not used, removed
  *
@@ -207,12 +216,18 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
     /* connection timeout */
     REG_VALUE(REG_CONN_TIMEOUT, str, 0);
-    dbl = atof(str);
-    if (dbl <= 0.0)
-        dbl = DEF_CONN_TIMEOUT;
-    info->timeout.sec  = (unsigned int) dbl;
-    info->timeout.usec = (unsigned int) ((dbl - info->timeout.sec) * 1000000);
-
+    if (*str && strncasecmp(str, "infinite", strlen(str)) == 0)
+        info->timeout = 0;
+    else {
+        info->timeout = &info->tmo;
+        dbl = atof(str);
+        if (dbl <= 0.0)
+            dbl = DEF_CONN_TIMEOUT;
+        info->timeout->sec  = (unsigned int) dbl;
+        info->timeout->usec = (unsigned int)
+            ((dbl - info->timeout->sec) * 1000000);
+    }
+    
     /* max. # of attempts to establish a connection */
     REG_VALUE(REG_CONN_MAX_TRY, str, 0);
     val = atoi(str);
@@ -327,6 +342,10 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
 
     x_info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo));
     *x_info = *info;
+    if (info->timeout && info->timeout != CONN_DEFAULT_TIMEOUT) {
+        x_info->tmo = *info->timeout;
+        x_info->timeout = &x_info->tmo;
+    }
     x_info->http_user_header = 0;
     ConnNetInfo_SetUserHeader(x_info, info->http_user_header);
     return x_info;
@@ -363,8 +382,11 @@ extern void ConnNetInfo_Print(const SConnNetInfo* info, FILE* fp)
                        ? "GET" :
                        (info->req_method == eReqMethod_Post
                         ? "POST" : "Unknown")));
-        s_PrintULong (fp, "timeout(sec)",    info->timeout.sec);
-        s_PrintULong (fp, "timeout(usec)",   info->timeout.usec);
+        if (info->timeout) {
+            s_PrintULong (fp, "timeout(sec)", info->timeout->sec);
+            s_PrintULong (fp, "timeout(usec)",info->timeout->usec);
+        } else
+            s_PrintString(fp, "timeout",     "infinite");
         s_PrintULong (fp, "max_try",         info->max_try);
         s_PrintString(fp, "http_proxy_host", info->http_proxy_host);
         s_PrintULong (fp, "http_proxy_port", info->http_proxy_port);
@@ -451,7 +473,9 @@ extern SOCK URL_Connect
 
     /* connect to HTTPD */
     if (SOCK_Create(host, port, c_timeout, &sock) != eIO_Success) {
-        CORE_LOG(eLOG_Error, "[URL_Connect]  Socket connect failed");
+        CORE_LOGF(eLOG_Error,
+                  ("[URL_Connect]  Socket connect to %s:%hu failed",
+                   host, port));
         return 0/*error*/;
     }
     
@@ -512,7 +536,9 @@ extern SOCK URL_Connect
         SOCK_Write(sock, (const void*) "\r\n", 2, 0)
         != eIO_Success)
         {
-            CORE_LOG(eLOG_Error, "[URL_Connect]  Error sending HTTP header");
+            CORE_LOGF(eLOG_Error,
+                      ("[URL_Connect]  Error sending HTTP header to %s:%hu",
+                       host, port));
             if ( x_args )
                 free(x_args);
             SOCK_Close(sock);
@@ -870,6 +896,7 @@ static const char* s_MIME_SubType[eMIME_Unknown+1] = {
     "x-fasta",
     "x-www-form",
     "html",
+    "plain",
     "x-unknown"
 };
 
@@ -962,29 +989,35 @@ extern int/*bool*/ MIME_ParseContentTypeEx
 
     if ( type ) {
         for (i = 0;  i < (int) eMIME_T_Unknown;  i++) {
-            if ( !strncmp(x_type, s_MIME_Type[i], strlen(s_MIME_Type[i])) ) {
+            if ( !strcmp(x_type, s_MIME_Type[i]) ) {
                 *type = (EMIME_Type) i;
+                break;
             }
         }
     }
 
-    if ( subtype ) {
-        for (i = 0;  i < (int) eMIME_Unknown;  i++) {
-            if ( !strncmp(x_subtype, s_MIME_SubType[i],
-                          strlen(s_MIME_SubType[i])) ) {
-                *subtype = (EMIME_SubType) i;
-            }
-        }
-    }
-
-    if ( encoding ) {
-        for (i = 0;  i < (int) eENCOD_None;  i++) {
-            if (strstr(x_subtype, s_MIME_Encoding[i]) != 0) {
+    for (i = 0;  i < (int) eENCOD_None;  i++) {
+        char* x_encoding = strstr(x_subtype, s_MIME_Encoding[i]);
+        if (x_encoding  &&
+            x_encoding != x_subtype  &&  *(x_encoding - 1) == '-'  &&
+            strcmp(x_encoding, s_MIME_Encoding[i]) == 0) {
+            if ( encoding ) {
                 *encoding = (EMIME_Encoding) i;
             }
+            *(x_encoding - 1) = '\0';
+            break;
         }
     }
   
+    if ( subtype ) {
+        for (i = 0;  i < (int) eMIME_Unknown;  i++) {
+            if ( !strcmp(x_subtype, s_MIME_SubType[i]) ) {
+                *subtype = (EMIME_SubType) i;
+                break;
+            }
+        }
+    }
+
     free(x_buf);
     return 1/*true*/;
 }

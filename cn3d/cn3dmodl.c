@@ -1,4 +1,4 @@
-/* $Id: cn3dmodl.c,v 6.91 2000/04/08 00:37:31 lewisg Exp $
+/* $Id: cn3dmodl.c,v 6.92 2001/04/27 20:07:59 juran Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -22,13 +22,16 @@
 *  purpose.
 * =========================================================================== 
 *
-* File Name: $Id: cn3dmodl.c,v 6.91 2000/04/08 00:37:31 lewisg Exp $
+* File Name: $Id: cn3dmodl.c,v 6.92 2001/04/27 20:07:59 juran Exp $
 *
 * Author: Yanli Wang
 *
 * Version Creation Date: 18/9/1998
 *
 * $Log: cn3dmodl.c,v $
+* Revision 6.92  2001/04/27 20:07:59  juran
+* Heed warnings.
+*
 * Revision 6.91  2000/04/08 00:37:31  lewisg
 * multiple seqentries, NEWSEQ message, etc.
 *
@@ -630,8 +633,6 @@ void AssignDomainAlignedStatus(void)
 
     Int2 iDomainMaster = 0, iDomainSlave = 0;
 
-    Char iDomain[2];
-
     pdnmsMaster = GetSelectedModelstruc();
     if (!pdnmsMaster)
         return;
@@ -1125,8 +1126,7 @@ void LIBCALL ResetDisplayCtrls(void)
 GrouP LIBCALL DisplayControls(Nlm_GrouP prnt)
 {
     GrouP g, h;
-    RecT r1, r2;
-    PrompT ppt1, ppt2, ppt3, ppt4;
+    PrompT ppt1, /*ppt2,*/ ppt3, ppt4;
 
     g = HiddenGroup(prnt, -1, 0, NULL);
     if (!g)

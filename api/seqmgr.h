@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.37  2001/04/26 19:48:47  kans
+* added SeqMgrGetFeatureByLabel, bspextra->featsByLabel
+*
 * Revision 6.36  2001/03/29 22:31:12  kans
 * added fields for descriptor indexing
 *
@@ -835,6 +838,7 @@ typedef struct bioseqextra {
   SMFeatItemPtr PNTR  featsByID;      /* array of all features on bioseq in original itemID order */
   SMFeatItemPtr PNTR  featsBySfp;     /* array of all features on bioseq sorted by SeqFeatPtr */
   SMFeatItemPtr PNTR  featsByPos;     /* array of all features on bioseq sorted by location */
+  SMFeatItemPtr PNTR  featsByLabel;   /* array of all features on bioseq sorted by label */
 
   SMFeatItemPtr PNTR  genesByPos;     /* subset of featsByPos array containing only gene features */
   SMFeatItemPtr PNTR  mRNAsByPos;     /* subset of featsByPos array containing only mRNA features */

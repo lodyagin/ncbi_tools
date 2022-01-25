@@ -1,9 +1,11 @@
 #
-# $Id: linux.ncbi.mk,v 1.19 2001/04/03 11:01:18 beloslyu Exp $
+# $Id: linux.ncbi.mk,v 1.21 2001/06/12 21:11:56 vakatov Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
-NCBI_CC = gcc -pipe
+#warning, the flags -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64 will allow
+#you to work with large (>4Gb) files only if you have glibc version >= 2.1
+NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2
 NCBI_OPTFLAG = -O2
@@ -41,4 +43,7 @@ NCBI_OGLLIBS = -L/usr/X11R6/lib -lGL -lGLU
 # output support into Cn3D (OpenGL version only)
 #LIBPNG_DIR = /home/paul/Programs/libpng
 #ZLIB_DIR = /home/paul/Programs/zlib
+
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
 

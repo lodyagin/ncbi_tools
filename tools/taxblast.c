@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.6 2001/02/06 22:28:00 shavirin Exp $
+/* $Id: taxblast.c,v 6.10 2001/06/21 19:34:28 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,27 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.6 $
+* $Revision: 6.10 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.10  2001/06/21 19:34:28  shavirin
+* Fixed problem in the function FDBTaxCallback().
+*
+* Revision 6.9  2001/05/18 21:02:30  shavirin
+* Added possibility to extract taxonomy id information from SEQID_GENERAL
+* seqids in the form NAME_taxid.
+*
+* Revision 6.8  2001/05/16 19:32:47  shavirin
+* Added possibility to create taxonomy reports from Blast databases with
+* SEQID_GENERAL types of SeqIds and tax_ids as database name.
+*
+* Revision 6.7  2001/05/08 21:58:28  shavirin
+* Added possibility to generate tax_id for every definition in Blast FASTA
+* definition set in ASN.1 structured definition lines.
+*
 * Revision 6.6  2001/02/06 22:28:00  shavirin
 * Default output was set to "stdout".
 *
@@ -99,6 +114,7 @@ typedef struct hitobj {
     FloatHiPtr bit_scores;
     FloatHiPtr e_values;
     Int4Ptr    taxoffs;
+    CharPtr    *accs;
 } HitObj, PNTR HitObjPtr;
 
 typedef struct cnames {
@@ -150,15 +166,25 @@ static HitObjPtr HitObjNew (void)
 
 static void HitObjFree (HitObjPtr hitobj)
 {
+    Int4 i, count;
+    
     if (hitobj == NULL) 
         return;
-
+    
     MemFree(hitobj->gis);
     MemFree(hitobj->scores);
     MemFree(hitobj->e_values);
     MemFree(hitobj->bit_scores);
     MemFree(hitobj->taxoffs);
+    
+    count = hitobj->numhits;
+    
+    for(i = 0; i < count; i++)
+        MemFree(hitobj->accs[i]);
+    
+    MemFree(hitobj->accs);    
     MemFree(hitobj);
+
     return;
 }
 
@@ -318,22 +344,53 @@ static Int4 CountAligns (SeqAlignPtr sap)
     
     return(count);
 }
-static Int4 TXBGetGiFromSeqId(SeqIdPtr sip)
+static Int4 TXBGetGiFromSeqId(SeqIdPtr sip, Int4Ptr tax_idp, 
+                              CharPtr * accessionp)
 {
     SeqIdPtr sip_tmp;
-    Int4 gi;
+    Int4 gi, value;
+    DbtagPtr dbtag;
+    ObjectIdPtr oip;
+    Char buffer[256];
+    CharPtr chptr;
 
-    gi = -1;
+    gi = -1; *tax_idp = 0;
     for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
-        if(sip_tmp->choice == SEQID_GI) {
+        switch(sip_tmp->choice) {
+
+        case SEQID_GI:
             gi = sip_tmp->data.intvalue;
+            break;
+            
+        case SEQID_GENERAL:
+            *tax_idp = 0;
+            dbtag = sip_tmp->data.ptrvalue;
+            if((value = atol(dbtag->db)) != 0) {
+                *tax_idp = value;
+            } else if((chptr = StringChr(dbtag->db, '_')) != NULL) {
+                chptr++;
+                if((value = atol(chptr)) != 0) {
+                    *tax_idp = value;
+                }
+            }
+            oip = (ObjectIdPtr) dbtag->tag;
+
+            if (oip != NULL) {
+                if (oip->id != NULL) {
+                    sprintf(buffer, "%d", oip->id);
+                    *accessionp = StringSave(buffer);
+                } else if (oip->str)
+                    *accessionp = StringSave(oip->str);
+            }
             break;
         }
     }
+    
     return gi;
 }
 
-static Int4 TXBGetTardetGi(SeqAlignPtr sap)
+static Int4 TXBGetTargetGi(SeqAlignPtr sap, Int4Ptr tax_idp, 
+                           CharPtr PNTR accessionp)
 {
     Int4 gi;
     SeqIdPtr sip;
@@ -346,7 +403,7 @@ static Int4 TXBGetTardetGi(SeqAlignPtr sap)
         ddp = (DenseDiagPtr)(sap->segs);
         if(ddp != NULL && ddp->id != NULL) {
             sip = ddp->id->next; /* target sequence is the second id */
-            gi = TXBGetGiFromSeqId(sip);
+            gi = TXBGetGiFromSeqId(sip, tax_idp, accessionp);
         }
         break;
         
@@ -354,7 +411,7 @@ static Int4 TXBGetTardetGi(SeqAlignPtr sap)
         dsp = (DenseSegPtr)(sap->segs);
         if(dsp != NULL && dsp->ids != NULL) {
             sip = dsp->ids->next; /* target sequence is the second id */
-            gi = TXBGetGiFromSeqId(sip);
+            gi = TXBGetGiFromSeqId(sip, tax_idp, accessionp);
         }
         break;
         
@@ -362,15 +419,15 @@ static Int4 TXBGetTardetGi(SeqAlignPtr sap)
         ssp = (StdSegPtr)(sap->segs);
         if(ssp != NULL && ssp->ids != NULL) {
             sip = ssp->ids->next; /* target sequence is the second id */
-            gi = TXBGetGiFromSeqId(sip);
+            gi = TXBGetGiFromSeqId(sip, tax_idp, accessionp);
         }
         break;
     case SAS_DISC:
         for(sap = sap->segs; sap != NULL; sap = sap->next) {
-            gi =  TXBGetTardetGi(sap);
+            gi =  TXBGetTargetGi(sap, tax_idp, accessionp);
         }
         break;
-            
+        
     default:
         ErrPostEx(SEV_ERROR, 0, 0, "Unusual seqalign type found %d\n", 
                   sap->segtype);
@@ -386,11 +443,12 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
     ScorePtr score;
     DenseSegPtr seg;
     SeqIdPtr ids;
-    Int4 numhits;
+    Int4 numhits, tax_id;
     Int4Ptr gis, taxoffs, scores;
     FloatHiPtr e_values, bit_scores;
     HitObjPtr hitobj;
-    
+    CharPtr accession;
+
     numhits = CountAligns (sap);
     
     hitobj = HitObjNew();
@@ -402,6 +460,9 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
         (FloatHiPtr) MemNew (numhits*sizeof(FloatHi));
     bit_scores = hitobj->bit_scores = 
         (FloatHiPtr) MemNew (numhits*sizeof(FloatHi));
+
+    /* Array of accessions for gnl processing */
+    hitobj->accs = (CharPtr PNTR)  MemNew (numhits*sizeof(CharPtr));
     
     while (sap) {
         for(score = (ScorePtr) sap->score; score != NULL; 
@@ -415,9 +476,16 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
             } 
 	}
         
-        if((gis[0] = TXBGetTardetGi(sap)) == -1) {
-            ErrPostEx(SEV_ERROR, 0, 0,"Failure to extract gi from SeqAlign\n");
-            return NULL;
+        tax_id = 0;
+        if((gis[0] = TXBGetTargetGi(sap, &tax_id, &accession)) == -1) {
+            if(tax_id == 0) {
+                ErrPostEx(SEV_ERROR, 0, 0,"Failure to extract gi "
+                          "from SeqAlign\n");
+                return NULL;
+            } else {
+                taxoffs[count] = tax_id;
+                hitobj->accs[count] = accession; /* Memory was allocated */
+            }
         }
         
         gis++;
@@ -450,6 +518,9 @@ static Int4 FindTaxid (Int4 taxid, OrgObjPtr orgobj)
 static void TaxNameFree(TaxNamePtr names, Int4 num_names)
 {
     Int4 i;
+
+    if(num_names == 0)
+        return;
     
     for(i = 0; i < num_names; i++) {
         MemFree(names[i].name_txt);
@@ -529,10 +600,18 @@ static OrgObjPtr GetOrgData (HitObjPtr hitobj)
     
     for (i=0; i<numhits; i++) {
 
-        taxid = tax1_getTaxId4GI (gis[i]);
-
+        /* If taxoffs[i] data is not 0 - it was used to store taxonomy ID
+           taken directly from SeqAlign ASN in accordance to gnl||
+           convention */
+        
+        if(taxoffs[i] == 0) {
+            taxid = tax1_getTaxId4GI (gis[i]);
+        } else {
+            taxid = taxoffs[i];
+        }
+        
         taxoff = FindTaxid (taxid, orgobj);
-
+        
         if (taxoff>=0) {
             taxoffs[i] = taxoff;
             ValNodeAddInt (&hitlists[taxoff], 0, i);
@@ -1245,10 +1324,14 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
                 fprintf (outfile, " [<a href=http://www.ncbi.nlm.nih.gov/htbin-post/Taxonomy/wgetorg?id=%d>%s</a>]", orgobj->bnames[orgoff]->taxid, orgobj->bnames[orgoff]->name);
             else fputs(" []", outfile);
             for (j=size_bnames[i]; j<=max_bnames; j++) fputc(' ', outfile);
-            
-            gi = hitobj->gis[hitoff];
 
-            if((seqno = readdb_gi2seq(rdfp, gi, NULL)) < 0) {
+            if((gi = hitobj->gis[hitoff]) > 0) {
+                seqno = readdb_gi2seq(rdfp, gi, NULL);
+            } else {
+                seqno = readdb_acc2fasta(rdfp, hitobj->accs[hitoff]);
+            }
+
+            if(seqno < 0) {
                 ErrPostEx(SEV_ERROR, 0, 0, "Gi %d was not found in the BLAST database", gi);
                 title = StringSave("Title was not found");
             } else {
@@ -1258,12 +1341,19 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
 
             if (StringLen(title) > 60) 
                 title[59] = '\0';
-            
-            if (hitobj->query_is_na) {
-                fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Nucleotide&list_uids=%d&dopt=GenBank>%s</a>", gi, title);
-	    } else {
-                fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Protein&list_uids=%d&dopt=GenPept>%s</a>", gi, title);
-	    }
+
+            if(title == NULL)   /* gnl case may have no title */
+                title = StringSave(hitobj->accs[hitoff]);
+
+            if(gi > 0) {            
+                if (hitobj->query_is_na) {
+                    fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Nucleotide&list_uids=%d&dopt=GenBank>%s</a>", gi, title);
+                } else {
+                    fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Protein&list_uids=%d&dopt=GenPept>%s</a>", gi, title);
+                }
+            } else {
+                fprintf (outfile, " %s", title);
+            }
 
             MemFree (title);
             fputc('\n', outfile);
@@ -1309,19 +1399,25 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
         gi_last = 0;
         for (valnode=orgobj->hitlists[i]; valnode; valnode=valnode->next) {
             hitoff = valnode->data.intvalue;
-            gi = hitobj->gis[hitoff];
 
-            if (gi == gi_last) 
-                continue;
-            else 
-                gi_last = gi;
-            
-            if((seqno = readdb_gi2seq(rdfp, gi, NULL)) < 0) {
+            if((gi = hitobj->gis[hitoff]) > 0) {
+                if (gi == gi_last) 
+                    continue;
+                else 
+                    gi_last = gi;
+
+                seqno = readdb_gi2seq(rdfp, gi, NULL);
+            } else {
+                seqno = readdb_acc2fasta(rdfp, hitobj->accs[hitoff]);
+            }
+            if(seqno < 0) {
                 ErrPostEx(SEV_ERROR, 0, 0, "Gi %d was not found in the BLAST database", gi);
                 title = StringSave("Title was not found");
                 sprintf(buffer, "SeqId not found");
             } else {
                 TXBGetDefLine(rdfp, seqno, &seqid, &title);
+                if(title == NULL)
+                    title = StringSave(hitobj->accs[hitoff]);
                 SeqIdWrite (seqid, buffer, PRINTID_FASTA_LONG, BUFFLEN);
                 SeqIdSetFree(seqid);
             }
@@ -1366,12 +1462,16 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
 
             /*  if (strlen(title)>60) 
                 title[59]='\0'; */
-            
-            if (hitobj->query_is_na) {
-                fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Nucleotide&list_uids=%d&dopt=GenBank>%s</a>", gi, ptr_start);
-	    } else {
-                fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Protein&list_uids=%d&dopt=GenPept>%s</a>", gi, ptr_start);
-	    }
+
+            if(gi > 0) {            
+                if (hitobj->query_is_na) {
+                    fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Nucleotide&list_uids=%d&dopt=GenBank>%s</a>", gi, ptr_start);
+                } else {
+                    fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Protein&list_uids=%d&dopt=GenPept>%s</a>", gi, ptr_start);
+                }
+            } else {
+                fprintf (outfile, " %s", ptr_start);
+            }
             
             fprintf(outfile, " %s", title);
 
@@ -1582,6 +1682,10 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
     if(tax_lookup == NULL)
         return FALSE;
 
+    /* If this tax id already exist just return OK */
+    if(tax_lookup->tax_array[tax_id] != NULL)
+        return TRUE;
+
     if(tax_id == 0) {
         /* For unresolved tax_id we will eventually create some
            entry */
@@ -1591,13 +1695,10 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
         tnames->blast_name = StringSave("Unknown");
         StringCpy(tnames->s_king, "-");
         tax_lookup->tax_array[0] = tnames;
+        tax_lookup->taxids_in_db++;
 
         return TRUE;
     }
-
-    /* If this tax id already exist just return OK */
-    if(tax_lookup->tax_array[tax_id] != NULL)
-        return TRUE;
     
     tax_lookup->taxids_in_db++;
     tdp = (TAXDataPtr) tax_lookup->tax_data;
@@ -1640,10 +1741,11 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
     }
 
     if(tnames->sci_name == NULL) {
-        MemFree(tnames);
-        return FALSE;
+        /* MemFree(tnames);
+           return FALSE; */
+        tnames->sci_name = StringSave("Unknown");
     }
-
+    
     if(tnames->common_name == NULL)
         tnames->common_name = StringSave(tnames->sci_name);
     if(tnames->blast_name == NULL)
@@ -1708,7 +1810,24 @@ RDBTaxLookupPtr RDTaxLookupInit(void)
 
 void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup)
 {
+    RDBTaxNamesPtr tnames;
+    Int4 i;
+
     MemFree(tax_lookup->tax_data);
+    
+    for(i = 0; i < tax_lookup->all_taxid_count; i++) {        
+        
+        tnames = tax_lookup->tax_array[i];
+        
+        if(tnames != NULL) {
+            MemFree(tnames->sci_name);
+            MemFree(tnames->common_name);
+            MemFree(tnames->blast_name);
+            MemFree(tnames);
+        }
+    }
+    
+    MemFree(tax_lookup->tax_array);
     MemFree(tax_lookup);
     
     tax1_fini();

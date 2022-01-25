@@ -1,4 +1,4 @@
-/* $Id: qrpsb.c,v 1.4 2001/03/21 17:00:48 bauer Exp $
+/* $Id: qrpsb.c,v 1.5 2001/05/31 22:04:46 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 11/27/2000
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description:
 *         WWW-RPS BLAST using the BLAST queue
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: qrpsb.c,v $
+* Revision 1.5  2001/05/31 22:04:46  bauer
+* changes to accomodate new type of Smart accessions
+*
 * Revision 1.4  2001/03/21 17:00:48  bauer
 * fixes for changes in LOAD accessions
 *
@@ -1354,16 +1357,24 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       strcpy(path,strtok(NULL,"|"));
       aapThis->cCDDid = strdup(strtok(path," "));
     } else WRPSBHtmlError("Could not interpret subject defline!");
+    MemFree(cTemp);
     aapThis->bIsProfile = FALSE;
     if (StringICmp(aapThis->cDatabase,"Smart")==0) {
       aapThis->red = 255;
       aapThis->green = aapThis->blue = iColValue;
-      aapThis->cGraphId = aapThis->cCDDid;
+      if (StrNCmp(aapThis->cCDDid,"smart0",6) == 0) {
+        cTemp = strdup(txsp->title);
+        aapThis->cGraphId = strdup(strtok(cTemp,","));
+	MemFree(cTemp);
+      } else {
+        aapThis->cGraphId = aapThis->cCDDid;
+      }
     } else if (StringICmp(aapThis->cDatabase,"Pfam") ==0) {
       aapThis->blue = 255;
       aapThis->red = aapThis->green = iColValue;
       cTemp = strdup(txsp->title);
       aapThis->cGraphId = strdup(strtok(cTemp,","));
+      MemFree(cTemp);
     } else if (StringICmp(aapThis->cDatabase,"scop1.39") ==0) {
       aapThis->green = 255;
       aapThis->red = aapThis->blue = iColValue;
@@ -1380,6 +1391,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
         strtok(cTemp,"_");
         aapThis->cGraphId = strdup(strtok(NULL,"_"));
       }
+      MemFree(cTemp);
     } else {
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    

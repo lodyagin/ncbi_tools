@@ -1,7 +1,7 @@
 #ifndef NCBI_SERVICEP__H
 #define NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.7 2001/03/06 23:57:49 lavr Exp $
+/*  $Id: ncbi_servicep.h,v 6.11 2001/06/25 15:38:00 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,21 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_servicep.h,v $
+ * Revision 6.11  2001/06/25 15:38:00  lavr
+ * Heap of services is now not homogeneous, but can
+ * contain entries of different types. As of now,
+ * Service and Host entry types are introduced and defined
+ *
+ * Revision 6.10  2001/05/11 15:30:02  lavr
+ * Correction in comment
+ *
+ * Revision 6.9  2001/04/26 14:18:45  lavr
+ * SERV_MapperName moved to the private header
+ *
+ * Revision 6.8  2001/04/24 21:33:58  lavr
+ * Added members of mapper V-table: penalize(method) and name(data).
+ * Service iterator has got new field 'last' to keep the latest given info.
+ *
  * Revision 6.7  2001/03/06 23:57:49  lavr
  * Minor beautifications
  *
@@ -69,9 +84,11 @@ extern "C" {
 /* Table of iterator "virtual functions"
  */
 typedef struct {
-    SSERV_Info* (*GetNextInfo)(SERV_ITER iter);
+    SSERV_Info* (*GetNextInfo)(SERV_ITER iter, char** env);
     int/*bool*/ (*Update)(SERV_ITER iter, const char* text);
+    int/*bool*/ (*Penalize)(SERV_ITER iter, double penalty);
     void        (*Close)(SERV_ITER iter);
+    const char* name;
 } SSERV_VTable;
 
 
@@ -84,6 +101,7 @@ struct SSERV_IterTag {
     SSERV_Info** skip;           /* servers to skip                        */
     size_t       n_skip;         /* number of servers in the array         */
     size_t       n_max_skip;     /* number of allocated slots in the array */
+    SSERV_Info*  last;           /* last server info taken out             */
 
     const SSERV_VTable* op;      /* table of virtual functions             */
 
@@ -92,7 +110,7 @@ struct SSERV_IterTag {
 
 
 /* Private interface: update mapper information from the given text
- * (<CR><LF> separated lines, usually kept from HTTP header).
+ * (<CR><LF> separated lines, usually taken from HTTP header).
  */
 int/*bool*/ SERV_Update(SERV_ITER iter, const char* text);
 
@@ -103,6 +121,11 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text);
  * Return value must be 'free'd.
  */
 char* SERV_Print(SERV_ITER iter);
+
+
+/* Get name of underlying service mapper.
+ */
+const char* SERV_MapperName(SERV_ITER iter);
 
 
 #ifdef __cplusplus

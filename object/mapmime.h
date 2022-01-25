@@ -2,3 +2,4 @@
 #include <objmedli.h>
 #include <objsset.h>
 #include <objmmdb1.h>
+#include <objcn3d.h>

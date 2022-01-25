@@ -1,6 +1,6 @@
 #include <ncbilcl.h>
 
-#if defined(LB_DIRECT)  &&  !defined(OS_UNIX_SOL)  &&  !defined(OS_UNIX_IRIX)
+#if defined(LB_DIRECT) && !defined(OS_UNIX_SOL) && !defined(OS_UNIX_IRIX) && !defined(OS_UNIX_LINUX)
 #undef LB_DIRECT
 #endif
 
@@ -11,7 +11,7 @@
 #ifndef LBAPI__H
 #define LBAPI__H
 
-/* $Id: lbapi.h,v 1.9 1999/01/22 22:02:38 vakatov Exp $
+/* $Id: lbapi.h,v 1.10 2001/06/07 21:09:33 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -42,12 +42,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 1.9 $
+* $Revision: 1.10 $
 *
 * File Description:
 *        Definitions for the load-balancing API.
 *
 * $Log: lbapi.h,v $
+* Revision 1.10  2001/06/07 21:09:33  beloslyu
+* we really need this for linux
+*
 * Revision 1.9  1999/01/22 22:02:38  vakatov
 * Added important NOTE for LBGetIPAddress()
 *

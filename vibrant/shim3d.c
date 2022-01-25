@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.74 $
+* $Revision: 6.78 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.78  2001/05/25 19:46:58  vakatov
+* Nested comment typo fixed
+*
+* Revision 6.77  2001/04/23 16:05:45  juran
+* Include MoreCarbonAccessors.h, which now has GetPortText{Font,Face,Size}().
+*
+* Revision 6.76  2001/04/21 02:36:10  juran
+* Very simple Carbon fixes.
+*
+* Revision 6.75  2001/04/18 16:33:54  kans
+* moved define to first column
+*
 * Revision 6.74  2000/07/28 21:05:54  lewisg
 * more c++ fixes
 *
@@ -267,6 +279,7 @@
 #elif defined(macintosh)
 #include <agl.h>
 #include <fonts.h>
+#include "MoreCarbonAccessors.h"
 
 #elif defined(WIN_MOTIF)
 #include <GL/glx.h>
@@ -456,7 +469,7 @@ static Nlm_VoidPtr OGL_CurrentName = NULL;
 
 /* define this to do (frequent) checking of GL error status - but this is
    very expensive, so be sure to turn off for production! */
-/* #define DEBUG_GL 1 /* */
+/* #define DEBUG_GL 1 */
 #if defined(_DEBUG) && !defined(DEBUG_GL)
 #define DEBUG_GL 1
 #endif
@@ -909,7 +922,7 @@ void OGL_AddCylinder3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
 
     /* to rotate from initial position, so bond points right direction;
        handle special case where both ends share ~same x,y */
-    #define DEGREES(rad) ((rad)*180.0/3.14159265358979323846)
+#define DEGREES(rad) ((rad)*180.0/3.14159265358979323846)
     if (fabs(y1 - y2) < 0.000001 &&
         fabs(x2 - x1) < 0.000001) {
         if (z2 - z1 < 0.0) glRotated(180.0,1.0,0.0,0.0);
@@ -2268,7 +2281,7 @@ NLM_EXTERN void SetOGLFont(TOGL_Data *OGL_Data, Nlm_Int2 fontNameIndex, Nlm_Int2
 #elif defined(WIN_MAC)
 	{
     	FontInfo fInfo;
-    	GrafPort *currentPort;
+    	GrafPtr currentPort;
     	GLint ID = OGLFontList[currentIndex].familyID;
     	Style face = 0;
 
@@ -2290,9 +2303,9 @@ NLM_EXTERN void SetOGLFont(TOGL_Data *OGL_Data, Nlm_Int2 fontNameIndex, Nlm_Int2
         OGL_Data->SpaceWidth = CharWidth('A');
         GetFontInfo(&fInfo);
         OGL_Data->SpaceHeight = fInfo.ascent + fInfo.descent;
-        TextFont(currentPort->txFont); /* restore previous font */
-        TextFace(currentPort->txFace);
-        TextSize(currentPort->txSize);
+        TextFont(GetPortTextFont(currentPort)); /* restore previous font */
+        TextFace(GetPortTextFace(currentPort));
+        TextSize(GetPortTextSize(currentPort));
     }
 
 #elif defined(WIN_MOTIF)
@@ -2670,7 +2683,7 @@ void OGL_DrawViewer3D(TOGL_Data * OGL_Data)
         /* swap when double buffering */
 #if defined(WIN32)
         wglSwapLayerBuffers(wglGetCurrentDC(), WGL_SWAP_MAIN_PLANE);/**/
-        /*SwapBuffers(wglGetCurrentDC());/**/
+        /*SwapBuffers(wglGetCurrentDC());*/
 #elif defined(WIN_MOTIF)
         glXSwapBuffers((Display *) OGL_Data->display, glXGetCurrentDrawable());
 #elif defined(WIN_MAC)

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/13/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *   Determine which Macintosh MacTCP device is in-use (e.g., "Ethernet", "PPP")
@@ -51,6 +51,15 @@
 *
 * RCS Modification History:
 * $Log: ni_macdv.c,v $
+* Revision 6.3  2001/04/20 18:31:58  juran
+* Bring obsolete preprocessor symbol up to date.
+*
+* Revision 6.2  2001/04/20 17:49:53  kans
+* check for Carbon before using obsolete symbol
+*
+* Revision 6.1  2001/04/05 02:38:33  juran
+* Carbon fix, and also plug a leaked Handle lock.
+*
 * Revision 6.0  1997/08/25 18:38:55  madden
 * Revision changed to 6.0
 *
@@ -100,7 +109,7 @@ typedef unsigned char uchar;
 
 extern Boolean ResLoad;
 
-#if GENERATINGPOWERPC
+#if TARGET_CPU_PPC
 #pragma options align=mac68k
 #endif
 
@@ -222,7 +231,7 @@ field */
 
 
 
-#if GENERATINGPOWERPC
+#if TARGET_CPU_PPC
 #pragma options align=reset
 #endif
 
@@ -331,24 +340,24 @@ exit:
 static char * ParseLAPType(IPConfig **configH )
 {
         const IPConfig *ipc;
-        static  char   laptype[256];
+        static  char   laptypebuf[256];
+        char *laptype = laptypebuf;  // Added to allow having a single exit point
         uchar   hs;
 
         hs = HGetState( (Handle) configH );
-        HLock( (Handle) configH );
+        HLock( (Handle) configH );  // Don't forget to HSetState()!
         ipc = *configH;
 
         // Check if MacTCP is using LocalTalk or Ethernet
         if( ipc->activeLap == 128 || ipc->activeLap == 129 ){
                 if (ipc->activeLap == 128)
-                        return "LocalTalk";
+                        laptype = "LocalTalk";
                 else
-                        return "Ethernet";
+                        laptype = "Ethernet";
+        } else {
+        	p2cstrcpy(laptype, (const unsigned char *)ipc->filename);
         }
-
-        memcpy(laptype, ipc->filename, ipc->filename[0] + 1);
-        p2cstr((unsigned char *)laptype);
-        
+        HSetState((Handle)configH, hs);
         return laptype;
 }
 

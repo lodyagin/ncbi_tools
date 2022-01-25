@@ -1,4 +1,4 @@
-/* $Id: thrdatd.h,v 1.7 2001/03/02 23:14:12 hurwitz Exp $
+/* $Id: thrdatd.h,v 1.8 2001/04/25 15:43:29 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.h,v $
+* Revision 1.8  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.7  2001/03/02 23:14:12  hurwitz
 * run threading faster for PSSM weight=1, bug fix
 *
@@ -275,6 +278,7 @@ typedef struct _Thd_Gsm {		/* Total thread energy */
   float	dg;		/* Overall thread energy */
   float	ps;		/* G(r|m)-G0(r|m)-overall potential energy */
   float	ms;		/* Overall motif energy */
+  float m0;   /* Average motif score for random assignment*/
   float	cs;		/* Overall conservation energy */
   float	ls;		/* Overall loopout energy */
 } Thd_Gsm;
@@ -344,6 +348,7 @@ typedef struct _Seq_Mtf {		/* Sequence motif parameters */
   int **freqs;      /* residue frequencies */
   int	n;		        /* Number of residues in structure */
   int AlphabetSize; /* Number of letters in alphabet */
+  float ww0;        /* Expected energy of template profile term */
 } Seq_Mtf;
 
 

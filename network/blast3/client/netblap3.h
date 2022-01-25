@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.27  2001/05/02 19:42:48  egorov
+* Make the NetBlastGetMatrix() external
+*
 * Revision 1.26  2000/11/16 22:25:39  dondosha
 * Added other_returns argument to BlastBioseq
 *
@@ -240,6 +243,10 @@ NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids,
                                       Boolean is_na, Boolean count_only);
 
 NLM_EXTERN Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish));
+
+
+NLM_EXTERN BlastMatrixPtr LIBCALL NetBlastGetMatrix(BlastNet3BlockPtr blnet3blkptr);
+
 #ifdef __cplusplus
 }
 #endif

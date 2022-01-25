@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.h,v $
+* Revision 6.10  2001/06/07 20:07:41  kans
+* added QUERY_OpenServiceQuery
+*
 * Revision 6.9  2001/02/21 22:02:04  lavr
 * Changes for use new CONN interface
 *
@@ -62,6 +65,7 @@
 
 #include <ncbi.h>
 #include <connect/ncbi_http_connector.h>
+#include <connect/ncbi_service_connector.h>
 #include <asn.h>
 
 
@@ -104,6 +108,14 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   EMIME_SubType subtype,
   EMIME_Encoding encoding,
   THCC_Flags flags
+);
+
+/*
+   Returns connection to NCBI named service.
+*/
+
+NLM_EXTERN CONN QUERY_OpenServiceQuery (
+  Nlm_CharPtr service, Nlm_CharPtr arguments, Nlm_Uint4 timeoutsec
 );
 
 /*

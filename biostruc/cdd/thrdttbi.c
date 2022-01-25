@@ -1,4 +1,4 @@
-/* $Id: thrdttbi.c,v 1.3 2000/12/20 18:56:41 hurwitz Exp $
+/* $Id: thrdttbi.c,v 1.4 2001/04/25 15:43:29 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdttbi.c,v $
+* Revision 1.4  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.3  2000/12/20 18:56:41  hurwitz
 * new random num gen, more debug printing
 *
@@ -178,6 +181,7 @@ else {
 ttb->tg[in]=tdg->dg;
 ttb->ps[in]=tdg->ps;
 ttb->ms[in]=tdg->ms;
+ttb->m0[in]=tdg->m0;
 ttb->cs[in]=tdg->cs;
 ttb->lps[in]=tdg->ls;
 /*printf("%d,%f,%f,%f\n",in,ttb->ps[in],ttb->ms[in],ttb->tg[in]);*/

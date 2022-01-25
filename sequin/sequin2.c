@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.100 $
+* $Revision: 6.103 $
 *
 * File Description: 
 *
@@ -1275,6 +1275,8 @@ static ENUM_ALIST(biomol_nucX_alist)
   {"Small nuclear RNA",        6},
   {"Small cytoplasmic RNA",    7},
   {"Other-Genetic [plasmid]",  9},
+  {"cRNA",                    11},
+  {"Small nucleolar RNA",     12},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biomol_nucGen_alist)
@@ -5586,7 +5588,7 @@ static void ParseInMoreProteinsCommon (IteM i, Boolean doSuggest)
   SeqEntryPtr  sep;
   SeqIdPtr     sip;
   SeqLocPtr    slp;
-  Char         str [32];
+  Char         str [64];
   BioseqPtr    target = NULL;
   Char         tmp [128];
   ValNodePtr   vnp;
@@ -6023,6 +6025,7 @@ have any questions.";
 
 static Int4 AccessionToGi (CharPtr string)
 {
+   /*
    CharPtr str;
    LinkSetPtr lsp;
    Int4 gi;
@@ -6038,6 +6041,15 @@ static Int4 AccessionToGi (CharPtr string)
    }
    gi = lsp->uids [0];
    LinkSetFree (lsp);
+   return gi;
+   */
+   Int4      gi;
+   SeqIdPtr  sip;
+
+   sip = SeqIdFromAccessionDotVersion (string);
+   if (sip == NULL) return 0;
+   gi = GetGIForSeqId (sip);
+   SeqIdFree (sip);
    return gi;
 }
 

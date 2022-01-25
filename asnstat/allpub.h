@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "allpub.h62";
+static char * asnfilename = "allpub.h63";
 static AsnValxNode avnx[71] = {
     {20,"unk" ,0,0.0,&avnx[1] } ,
     {20,"gt" ,1,0.0,&avnx[2] } ,
@@ -407,7 +407,7 @@ static AsnType atx[321] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[296],NULL,0,NULL} };
 
 static AsnModule ampx[4] = {
-  { "NCBI-General" , "allpub.h62",&atx[0],NULL,&ampx[1],0,0} ,
+  { "NCBI-General" , "allpub.h63",&atx[0],NULL,&ampx[1],0,0} ,
   { "NCBI-Biblio" , NULL,&atx[76],NULL,&ampx[2],0,0} ,
   { "NCBI-Medline" , NULL,&atx[232],NULL,&ampx[3],0,0} ,
   { "NCBI-Pub" , NULL,&atx[279],NULL,NULL,0,0} };

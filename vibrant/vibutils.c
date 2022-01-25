@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.36 $
+* $Revision: 6.40 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,22 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.40  2001/05/17 17:52:34  juran
+* Implement Nlm_ClipPrintingRect() for Carbon.General cleanup -- heed all warnings.
+*
+* Revision 6.39  2001/05/16 23:44:31  juran
+* Segregate Nlm_PrintingRect() into four functions, implement for Carbon.
+*
+* Revision 6.38  2001/05/14 20:36:46  juran
+* Refactor Mac scrap-thwapping code.
+*
+* Revision 6.37  2001/04/05 20:00:43  juran
+* Major Carbon changes.
+Most notably, we attempt to use the new Carbon Printing Manager under 
+Carbon, though this has not been tested.
+Pre-Carbon printing should work fine, though this has not been tested 
+either.
+*
 * Revision 6.36  2000/07/31 13:28:46  lewisg
 * Nlm_GetExecPath
 *
@@ -334,9 +350,12 @@
 #include <ncbiport.h>
 
 #ifdef WIN_MAC
-#ifdef PROC_PPC
-#include <Navigation.h>
-#endif
+# include <Navigation.h>
+# if TARGET_API_MAC_CARBON
+// Use non-session APIs of the Carbon Printing Manager, for easy porting
+#  define PM_USE_SESSION_APIS 0
+#  include <PMApplication.h>
+# endif
 #endif
 
 #ifdef WIN_MAC
@@ -376,8 +395,14 @@ static Nlm_BoX          recentBox = NULL;
 static Nlm_BoxData      recentBoxData;
 
 #ifdef WIN_MAC
+# if TARGET_API_MAC_CARBON
+static PMPageFormat    pageFormat = kPMNoPageFormat;
+static PMPrintSettings printSettings = kPMNoPrintSettings;
+static PMPrintContext  thePrintingPort = kPMNoReference;
+# else
 static THPrint   prHdl = NULL;
 static TPPrPort  prPort = NULL;
+# endif
 static Nlm_Int2  prerr;
 static Nlm_Char  fileTypes [32] = {0};
 #endif
@@ -1191,7 +1216,7 @@ static void Nlm_SelectMonitor (Nlm_WindoW w)
   Nlm_WindowTool wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
 #ifdef WIN_MAC
   /* SelectWindow (wptr); */
-  SetPort (wptr);
+  SetPortWindowPort(wptr);
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
 #endif
@@ -3540,12 +3565,26 @@ extern void Nlm_EndPicture (Nlm_WindoW w)
   PicPtr  picPtr;
 
   ClosePicture ();
+#if TARGET_API_MAC_CARBON
+  { OSStatus status = ClearCurrentScrap(); }
+#else
   ZeroScrap ();
+#endif
   Nlm_textScrapFull = FALSE;
   if (picHdl != NULL) {
-    len = (long) GetHandleSize ((Handle) picHdl);
+    len = GetHandleSize ((Handle) picHdl);
     picPtr = (PicPtr) Nlm_HandLock (picHdl);
-    PutScrap ((long) len, 'PICT', (Ptr) picPtr);
+#if TARGET_API_MAC_CARBON
+    {
+      OSStatus status;
+      ScrapRef scrap;
+      ScrapFlavorFlags flags = 0;
+      status = GetCurrentScrap(&scrap);
+      status = PutScrapFlavor(scrap, kScrapFlavorTypePicture, flags, len, picPtr);
+    }
+#else
+    { OSErr err = PutScrap (len, 'PICT', (Ptr) picPtr); }
+#endif
     Nlm_HandUnlock (picHdl);
     KillPicture (picHdl);
   }
@@ -3626,13 +3665,26 @@ extern void Nlm_StringToClipboard (Nlm_CharPtr str)
 {
 #ifdef WIN_MAC
   long    len;
+  OSErr err;
 
+# if TARGET_API_MAC_CARBON
+  { OSStatus status = ClearCurrentScrap(); }
+# else
   ZeroScrap ();
+# endif
   Nlm_textScrapFull = FALSE;
   len = (long) Nlm_StringLen (str);
   if (len > 0) {
-    PutScrap ((long) len, 'TEXT', (Ptr) str);
-    TEFromScrap ();
+# if TARGET_API_MAC_CARBON
+    OSStatus status;
+    ScrapRef scrap;
+    ScrapFlavorFlags flags = 0;
+    status = GetCurrentScrap(&scrap);
+    status = PutScrapFlavor(scrap, kScrapFlavorTypeText, flags, len, str);
+# else
+    PutScrap (len, 'TEXT', (Ptr) str);
+# endif
+    err = TEFromScrap ();
   }
 #endif
 #ifdef WIN_MSWIN
@@ -3706,18 +3758,17 @@ extern Nlm_Boolean Nlm_ClipboardHasString (void)
 {
 #ifdef WIN_MAC
   long  len;
-  long  offset;
+  OSErr err;
 
-  if (Nlm_textScrapFull) {
-    ZeroScrap ();
-    TEToScrap ();
-  }
-  len = GetScrap (NULL, 'TEXT', &offset);
+  err = TEFromScrap();
+  len = TEGetScrapLength();
   return (Nlm_Boolean) (len > 0);
 #endif
+
 #ifdef WIN_MSWIN
   return (Nlm_Boolean) (IsClipboardFormatAvailable (CF_TEXT));
 #endif
+
 #ifdef WIN_MOTIF
   Nlm_Boolean   result = FALSE;
   Nlm_Char      str[2];
@@ -3751,32 +3802,24 @@ extern Nlm_CharPtr Nlm_ClipboardToString (void)
 
 {
 #ifdef WIN_MAC
-  Handle       hdl;
   long         len;
-  long         offset;
-  Nlm_CharPtr  ptr;
   Nlm_CharPtr  str;
+  Handle hdl;
 
-  if (Nlm_textScrapFull) {
-    ZeroScrap ();
-    TEToScrap ();
-  }
-  str = NULL;
-  len = GetScrap (NULL, 'TEXT', &offset);
+# if TARGET_API_MAC_CARBON
+  { OSErr err = TEFromScrap(); }
+# endif
+  hdl = TEScrapHandle();
+  len = TEGetScrapLength();
   if (len > 0 && len < 32766) {
     str = (Nlm_CharPtr) Nlm_MemNew ((size_t) len + 2);
     if (str != NULL) {
-      hdl = NewHandle (0);
+      str [len] = '\0';
       if (hdl != NULL) {
-        GetScrap (hdl, 'TEXT', &offset);
-        MoveHHi (hdl);
-        HLock (hdl);
+        Nlm_CharPtr  ptr;
         ptr = (Nlm_CharPtr) *hdl;
         Nlm_MemCpy (str, ptr, (size_t) len);
-        str [len] = '\0';
-        HUnlock (hdl);
       }
-      DisposeHandle (hdl);
     }
   }
   return str;
@@ -3854,23 +3897,40 @@ static void Nlm_SetupPrinterDeviceContext(HDC prHDC)
 }
 #endif
 
-extern Nlm_WindoW Nlm_StartPrinting (void)
-
-{
-  Nlm_WindoW  w;
-#ifdef WIN_MSWIN
-  DWORD       commdlgerr;
-  DOCINFO     di;
-  char        docName [256];
-#endif
-
-  w = Nlm_CurrentWindow ();
 #ifdef WIN_MAC
-#if TARGET_API_MAC_CARBON >= 1
+# if TARGET_API_MAC_CARBON
+extern Nlm_WindoW Nlm_StartPrinting (void)
+{
+  OSStatus status;
+  Boolean accepted;
+  
+  status = PMBegin();
+  if (status != noErr) return NULL;
+  status = PMNewPageFormat(&pageFormat);
+  if (status != noErr || pageFormat == kPMNoPageFormat) return NULL;
+  status = PMDefaultPageFormat(pageFormat);
+  if (status != noErr) return NULL;
+  status = PMNewPrintSettings(&printSettings);
+  if (status != noErr || printSettings == kPMNoPrintSettings) return NULL;
+  status = PMDefaultPrintSettings(printSettings);
+  if (status != noErr) return NULL;
+  status = PMPrintDialog(printSettings, pageFormat, &accepted);
+  if (!accepted) status = kPMCancel;
+  if (status != noErr) return NULL;
+  
+  status = PMBeginDocument(printSettings, pageFormat, &thePrintingPort);
+  if ((status != noErr) || (thePrintingPort == kPMNoReference)) return NULL;
+  
+  return Nlm_CurrentWindow();
+}
+
+# else  /* not TARGET_API_MAC_CARBON */
+
+extern Nlm_WindoW Nlm_StartPrinting (void)
+{
+  Nlm_WindoW  w = Nlm_CurrentWindow ();
+
   PrOpen ();
-#else
-  PrOpen ();
-#endif
   if (prHdl == NULL) {
     prHdl = (THPrint) Nlm_HandNew (sizeof (TPrint));
     if (prHdl != NULL) {
@@ -3903,8 +3963,19 @@ extern Nlm_WindoW Nlm_StartPrinting (void)
   } else {
     w = NULL;
   }
-#endif
+  return w;
+}
+# endif  /* not TARGET_API_MAC_CARBON */
+#endif  /* WIN_MAC */
+
 #ifdef WIN_MSWIN
+extern Nlm_WindoW Nlm_StartPrinting (void)
+{
+  Nlm_WindoW  w = Nlm_CurrentWindow ();
+  DWORD       commdlgerr;
+  DOCINFO     di;
+  char        docName [256];
+  
   abortPrint = FALSE;
   memset (&pd, 0, sizeof (PRINTDLG));
   pd.lStructSize = sizeof (PRINTDLG);
@@ -3935,22 +4006,62 @@ extern Nlm_WindoW Nlm_StartPrinting (void)
   } else {
     w = NULL;
   }
-#endif
-#ifdef WIN_MOTIF
-  w = NULL;
-#endif
   return w;
 }
+#endif  /* WIN_MSWIN */
 
-extern void Nlm_EndPrinting (Nlm_WindoW w)
-
+#ifdef WIN_MOTIF
+extern Nlm_WindoW Nlm_StartPrinting (void)
 {
-#ifdef WIN_MAC
-  TPrStatus  prStat;
+  return NULL;
+}
 #endif
 
-  Nlm_nowPrinting = FALSE;
+
 #ifdef WIN_MAC
+# if TARGET_API_MAC_CARBON
+
+extern void Nlm_EndPrinting (Nlm_WindoW w)
+{
+  OSStatus status;
+
+  Nlm_nowPrinting = FALSE;
+  if (w != NULL) {
+    (void)PMEndDocument(thePrintingPort);
+    status = PMError();
+    if (status != noErr) {
+      Nlm_Message (MSG_ERROR, "PMEndDocument error %d", status);
+    }
+// This call is not supported under Carbon, need to figure out
+// how Apple wants us to deal with this ...  churchill 12/28/99
+#if 0
+    PrPicFile (prHdl, 0L, 0L, 0L, &prStat);
+    prerr = PrError ();
+    if (prerr != noErr) {
+      Nlm_Message (MSG_ERROR, "PrPicFile error %d", prerr);
+    }
+    prPort = NULL;
+    Nlm_UseWindow (w);
+#endif
+  }
+  if (pageFormat != kPMNoPageFormat) {
+    (void)PMDisposePageFormat(pageFormat);
+    pageFormat = kPMNoPageFormat;
+  }
+  if (printSettings != kPMNoPrintSettings) {
+    (void)PMDisposePrintSettings(printSettings);
+    printSettings = kPMNoPrintSettings;
+  }
+  (void)PMEnd();
+}
+
+# else  // not TARGET_API_MAC_CARBON
+
+extern void Nlm_EndPrinting (Nlm_WindoW w)
+{
+  TPrStatus  prStat;
+
+  Nlm_nowPrinting = FALSE;
   if (w != NULL) {
     PrCloseDoc (prPort);
     prerr = PrError ();
@@ -3967,13 +4078,17 @@ extern void Nlm_EndPrinting (Nlm_WindoW w)
     prPort = NULL;
     Nlm_UseWindow (w);
   }
-#if TARGET_API_MAC_CARBON >= 1
   PrClose ();
-#else
-  PrClose ();
+}
+
+# endif  /* not TARGET_API_MAC_CARBON */
 #endif
-#endif
+
+
 #ifdef WIN_MSWIN
+extern void Nlm_EndPrinting (Nlm_WindoW w)
+{
+  Nlm_nowPrinting = FALSE;
   if (w != NULL) {
     if (hPr != NULL) {
       if (! abortPrint) {
@@ -3992,22 +4107,50 @@ extern void Nlm_EndPrinting (Nlm_WindoW w)
     }
     Nlm_UseWindow (w);
   }
+}
 #endif
+
 #ifdef WIN_MOTIF
+extern void Nlm_EndPrinting (Nlm_WindoW w)
+{
+  Nlm_nowPrinting = FALSE;
+}
 #endif
+
+
+#ifdef WIN_MAC
+
+extern Nlm_Boolean Nlm_ClipPrintingRect(const Nlm_RecT PNTR rpt)
+{
+	Nlm_RecT r;
+	
+	if (rpt == NULL || 
+#if TARGET_API_MAC_CARBON
+		thePrintingPort == kPMNoReference)
+#else
+		prHdl == NULL || *prHdl == NULL)
+#endif
+	{
+		return FALSE;
+	}
+	
+	r = *rpt;
+	Nlm_InsetRect(&r, -1, -1);
+	
+	Nlm_ClipRect( &r );
+	return TRUE;
 }
 
+#endif  /* WIN_MAC */
+
+
+#ifdef WIN_MSWIN
 
 extern Nlm_Boolean Nlm_ClipPrintingRect(const Nlm_RecT PNTR rpt)
 {
   Nlm_RecT r;
 
-#ifdef WIN_MSWIN
   POINT    pt;
-#endif
-#ifdef WIN_MAC
-  TPPrint  prPtr;
-#endif
 
   if (rpt == NULL)
     return FALSE;
@@ -4015,15 +4158,6 @@ extern Nlm_Boolean Nlm_ClipPrintingRect(const Nlm_RecT PNTR rpt)
   r = *rpt;
   Nlm_InsetRect(&r, -1, -1);
 
-#if defined(WIN_MAC)
-  if (prHdl == NULL)
-    return FALSE;
-  prPtr = (TPPrint)Nlm_HandLock( prHdl );
-  if (prPtr == NULL)
-    return FALSE;
-  Nlm_HandUnlock (prHdl);
-
-#elif defined(WIN_MSWIN)
   if (hPr == NULL)
     return FALSE;
 
@@ -4039,47 +4173,92 @@ extern Nlm_Boolean Nlm_ClipPrintingRect(const Nlm_RecT PNTR rpt)
   r.right = (Nlm_Int2)pt.x;
   r.top   = (Nlm_Int2)pt.y;
 
-#else
-  return FALSE;
-#endif
-
   Nlm_ClipRect( &r );
   return TRUE;
 }
 
+#endif
+
+#if !defined(WIN_MAC) && !defined(WIN_MSWIN)
+
+extern Nlm_Boolean Nlm_ClipPrintingRect(const Nlm_RecT PNTR rpt)
+{
+  return FALSE;
+}
+
+#endif
+
+
+#ifdef WIN_MAC
+# if TARGET_API_MAC_CARBON
 
 extern Nlm_Boolean Nlm_PrintingRect(Nlm_RectPtr rpt)
 {
-#ifdef WIN_MAC
-  TPPrint       prPtr;
-  Nlm_RectTool  rtool;
-#endif
-#ifdef WIN_MSWIN
-  POINT         physPageSize;
-  POINT         pixelsPerInch;
-  Nlm_PoinT     pt;
-#endif
+	OSStatus status;
+	PMRect pmRect;
+	SInt16 left, top, right, bottom;
+	
+	if (rpt == NULL)
+		return FALSE;
+	
+	Nlm_LoadRect (rpt, 0, 0, 0, 0);
+	
+	status = PMGetAdjustedPageRect(pageFormat, &pmRect);
+	if (status != noErr) return FALSE;
+	
+	left   = pmRect.left;
+	top    = pmRect.top;
+	right  = pmRect.right;
+	bottom = pmRect.bottom;
+	
+	Nlm_LoadRect (rpt, left, top, right, bottom);
+	
+	return TRUE;
+}
 
+# else  /* not TARGET_API_MAC_CARBON */
+
+extern Nlm_Boolean Nlm_PrintingRect(Nlm_RectPtr rpt)
+{
   if (rpt == NULL)
     return FALSE;
 
   Nlm_LoadRect (rpt, 0, 0, 0, 0);
-
-#ifdef WIN_MAC
-  if (prHdl == NULL)
+  
+  if (prHdl == NULL) {
     return FALSE;
+  } else {
+    TPPrint       prPtr;
+    Nlm_RectTool  rtool;
+    prPtr = (TPPrint)Nlm_HandLock( prHdl );
+    if (prPtr == NULL)
+      return FALSE;
+  
+    rtool = prPtr->prInfo.rPage;
+    Nlm_RectToolToRecT(&rtool, rpt);
+    Nlm_InsetRect(rpt, 10, 10);
+    Nlm_HandUnlock (prHdl);
+  }
+  
+  return TRUE;
+}
 
-  prPtr = (TPPrint)Nlm_HandLock( prHdl );
-  if (prPtr == NULL)
-    return FALSE;
-
-  rtool = prPtr->prInfo.rPage;
-  Nlm_RectToolToRecT(&rtool, rpt);
-  Nlm_InsetRect(rpt, 10, 10);
-  Nlm_HandUnlock (prHdl);
-#endif
+# endif  /* not TARGET_API_MAC_CARBON */
+#endif  /* WIN_MAC */
 
 #ifdef WIN_MSWIN
+
+extern Nlm_Boolean Nlm_PrintingRect(Nlm_RectPtr rpt)
+{
+  POINT         physPageSize;
+  POINT         pixelsPerInch;
+  Nlm_PoinT     pt;
+  
+  if (rpt == NULL)
+    return FALSE;
+
+  Nlm_LoadRect (rpt, 0, 0, 0, 0);
+  
   if (hPr == NULL)
     return FALSE;
 
@@ -4094,23 +4273,45 @@ extern Nlm_Boolean Nlm_PrintingRect(Nlm_RectPtr rpt)
   DPtoLP(hPr, &pixelsPerInch, 1);
   Nlm_InsetRect(rpt, (Nlm_Int2)(pixelsPerInch.x / 4),
                      (Nlm_Int2)(pixelsPerInch.y / 4));
-#endif
-
-#ifdef WIN_MOTIF
-  return FALSE;
-#else
+  
   return TRUE;
-#endif
 }
 
+#endif  /* WIN_MSWIN */
+
+#ifdef WIN_MOTIF
+
+extern Nlm_Boolean Nlm_PrintingRect(Nlm_RectPtr rpt)
+{
+  if (rpt != NULL)
+    Nlm_LoadRect (rpt, 0, 0, 0, 0);
+  
+  return FALSE;
+}
+
+#endif  /* WIN_MOTIF */
+
+
+#ifdef WIN_MAC
+# if TARGET_API_MAC_CARBON
 
 extern Nlm_Boolean Nlm_StartPage (void)
+{
+  OSStatus status;
+  
+  status = PMBeginPage(thePrintingPort, NULL);
+  if (status != noErr) return false;  // ??
+  
+  return true;
+}
 
+# else
+
+extern Nlm_Boolean Nlm_StartPage (void)
 {
   Nlm_Boolean  rsult;
 
   rsult = TRUE;
-#ifdef WIN_MAC
   if (prPort != NULL) {
     PrOpenPage (prPort, NULL);
     prerr = PrError ();
@@ -4121,8 +4322,20 @@ extern Nlm_Boolean Nlm_StartPage (void)
   } else {
     rsult = FALSE;
   }
+  return rsult;
+}
+
+# endif
 #endif
+
+
 #ifdef WIN_MSWIN
+
+extern Nlm_Boolean Nlm_StartPage (void)
+{
+  Nlm_Boolean  rsult;
+
+  rsult = TRUE;
   if (hPr != NULL) {
     Nlm_SetupPrinterDeviceContext (hPr);
     prerr = StartPage (hPr);
@@ -4132,20 +4345,42 @@ extern Nlm_Boolean Nlm_StartPage (void)
     }
     Nlm_SetPort ((HWND) NULL, (HDC) hPr);
   }
-#endif
-#ifdef WIN_MOTIF
-  rsult = FALSE;
-#endif
   return rsult;
 }
 
-extern Nlm_Boolean Nlm_EndPage (void)
+#endif
 
+
+#ifdef WIN_MOTIF
+
+extern Nlm_Boolean Nlm_StartPage (void)
+{
+  return FALSE;
+}
+
+#endif
+
+
+#ifdef WIN_MAC
+# if TARGET_API_MAC_CARBON
+
+extern Nlm_Boolean Nlm_EndPage (void)
+{
+  OSStatus status;
+  
+  status = PMEndPage(thePrintingPort);
+  if (status != noErr) return false;  // ??
+  
+  return true;
+}
+
+# else
+
+extern Nlm_Boolean Nlm_EndPage (void)
 {
   Nlm_Boolean  rsult;
 
   rsult = TRUE;
-#ifdef WIN_MAC
   if (prPort != NULL) {
     PrClosePage (prPort);
     prerr = PrError ();
@@ -4156,8 +4391,19 @@ extern Nlm_Boolean Nlm_EndPage (void)
   } else {
     rsult = FALSE;
   }
+  return rsult;
+}
+
+# endif
 #endif
+
+
 #ifdef WIN_MSWIN
+extern Nlm_Boolean Nlm_EndPage (void)
+{
+  Nlm_Boolean  rsult;
+
+  rsult = TRUE;
   if (hPr != NULL) {
     prerr = EndPage (hPr);
     if (prerr < 0) {
@@ -4168,12 +4414,16 @@ extern Nlm_Boolean Nlm_EndPage (void)
   } else {
     rsult = FALSE;
   }
-#endif
-#ifdef WIN_MOTIF
-  rsult = FALSE;
-#endif
   return rsult;
 }
+#endif
+
+#ifdef WIN_MOTIF
+extern Nlm_Boolean Nlm_EndPage (void)
+{
+  return FALSE;
+}
+#endif
 
 #ifdef WIN_MAC
 static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
@@ -4188,6 +4438,11 @@ static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
   return rsult;
 }
 
+// 2001-03-22:  Joshua Juran
+// Working directory records are gone in Carbon.
+// However, so is Standard File.  The code which calls Nav Services instead of SF
+// doesn't need this function, so we don't define it.
+# if !TARGET_API_MAC_CARBON
 static void Nlm_GetFilePath (Nlm_Int2 currentVol, Nlm_CharPtr path, size_t maxsize)
 
 {
@@ -4203,7 +4458,7 @@ static void Nlm_GetFilePath (Nlm_Int2 currentVol, Nlm_CharPtr path, size_t maxsi
   block.ioVRefNum = currentVol;
   block.ioWDIndex = 0;
   block.ioWDProcID = 0;
-  PBGetWDInfo (&block, FALSE);
+  PBGetWDInfoSync(&block);
   dirID = block.ioWDDirID;
   vRefNum = block.ioWDVRefNum;
   temp [0] = '\0';
@@ -4221,6 +4476,7 @@ static void Nlm_GetFilePath (Nlm_Int2 currentVol, Nlm_CharPtr path, size_t maxsi
   } while (params.dirInfo.ioDrDirID != fsRtDirID);
   Nlm_StringNCpy_0 (path, temp, maxsize);
 }
+# endif  /* !TARGET_API_MAC_CARBON */
 #endif
 
 #ifdef WIN_MOTIF
@@ -4381,7 +4637,7 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
 {
     NavDialogOptions    dialogOptions;
     AEDesc              defaultLocation;
-    NavEventUPP         eventProc = NewNavEventProc(MyNavEventProc);
+    NavEventUPP         eventProc = NewNavEventUPP(MyNavEventProc);
     NavObjectFilterUPP  filterProc;
     OSErr               anErr = noErr;
     FSSpec              fss;
@@ -4389,9 +4645,9 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
 	Nlm_Boolean         rsult = FALSE;
 
     if (StringCmp (macType, "TEXT") == 0) {
-        filterProc = NewNavObjectFilterProc(MyNavTextFilterProc);
+        filterProc = NewNavObjectFilterUPP(MyNavTextFilterProc);
     } else {
-        filterProc = NewNavObjectFilterProc(MyNavFilterProc);
+        filterProc = NewNavObjectFilterUPP(MyNavFilterProc);
     }
 
     //  Specify default options for dialog box
@@ -4461,8 +4717,8 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
             (void) AEDisposeDesc(&defaultLocation);
         }
     }
-    DisposeRoutineDescriptor(eventProc);
-    DisposeRoutineDescriptor(filterProc);
+    DisposeNavEventUPP(eventProc);
+    DisposeNavObjectFilterUPP(filterProc);
     return rsult;
 }
 #endif
@@ -4473,7 +4729,9 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
 
 {
 #ifdef WIN_MAC
-//#ifdef PROC_MC680X0
+# if TARGET_API_MAC_CARBON
+    return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
+# else
   Nlm_Char       currentFileName [64];
   Nlm_Char       currentPath [256];
   SFTypeList     fTypeList;
@@ -4490,12 +4748,9 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   Nlm_Char       str [5];
   Nlm_PoinT      where;
 
-#ifdef PROC_PPC
   if (Nlm_usesMacNavServices) {
     return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
   }
-#endif
-
   where.x = 90;
   where.y = 100;
   lengthTypes = sizeof (fileTypes);
@@ -4542,8 +4797,8 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   }
   Nlm_Update ();
   return rsult;
-//#endif
-#endif	// ifdef WIN_MAC
+# endif
+#endif	/* WIN_MAC */
 
 #ifdef WIN_MSWIN
   char  szDirName [256];
@@ -4735,7 +4990,7 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
     FSSpec              fss;
     OSType              fileTypeToSave = 'TEXT';
     OSType              creatorType;
-    NavEventUPP         eventProc = NewNavEventProc (MyNavEventProc);
+    NavEventUPP         eventProc = NewNavEventUPP (MyNavEventProc);
 	char                filename [256];
 	Nlm_Boolean         rsult = FALSE;
 
@@ -4801,7 +5056,7 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
             }
         }
         (void) AEDisposeDesc(&defaultLocation);
-        DisposeRoutineDescriptor(eventProc);
+        DisposeNavEventUPP(eventProc);
     }
     return rsult;
 }
@@ -4813,8 +5068,9 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
 
 {
 #ifdef WIN_MAC
-//#endif
-//#ifdef PROC_MC680X0
+# if TARGET_API_MAC_CARBON
+    return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
+# else  /* not TARGET_API_MAC_CARBON */
   Nlm_Char       currentFileName [64];
   Nlm_Char       currentPath [256];
   unsigned char  original [256];
@@ -4828,11 +5084,9 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   PenState       state;
   Nlm_PoinT      where;
 
-#ifdef PROC_PPC
   if (Nlm_usesMacNavServices) {
     return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
   }
-#endif
 
   where.x = 90;
   where.y = 100;
@@ -4864,7 +5118,8 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   }
   Nlm_Update ();
   return rsult;
-#endif // ifdef WIN_MAC
+# endif  /* not TARGET_API_MAC_CARBON */
+#endif /* ifdef WIN_MAC */
 
 #ifdef WIN_MSWIN
   FILE  *f;
@@ -5655,7 +5910,7 @@ static Nlm_Int2 Nlm_FntDlgGetSysFontList (Nlm_Boolean monoSpace )
   menuHforFontList = NewMenu ( 100, (StringPtr) "" );
   AppendResMenu ( menuHforFontList, 'FONT' );
   if ( monoSpace ){
-    for (curItemNum = (Nlm_Int2)CountMItems(menuHforFontList);
+    for (curItemNum = (Nlm_Int2)CountMenuItems(menuHforFontList);
          curItemNum > 0; curItemNum-- ){
       GetMenuItemText ( menuHforFontList, curItemNum, (StringPtr) fontName );
       GetFNum((StringPtr) fontName, &famId);
@@ -5670,7 +5925,7 @@ static Nlm_Int2 Nlm_FntDlgGetSysFontList (Nlm_Boolean monoSpace )
     }
     Nlm_SelectFont (Nlm_systemFont);
   }
-  return (Nlm_Int2)CountMItems(menuHforFontList);
+  return (Nlm_Int2)CountMenuItems(menuHforFontList);
 }
 
 static void Nlm_FntDlgGetSysFontName (Nlm_Int2 n, Nlm_CharPtr buf,

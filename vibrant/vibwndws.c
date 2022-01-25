@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.38 $
+* $Revision: 6.41 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.41  2001/05/14 20:50:09  juran
+* Remove Mac clipboard code -- the scrap is updated whenever it's used.
+*
+* Revision 6.40  2001/04/18 18:39:29  juran
+* AE handlers take a UInt32 refCon.
+*
+* Revision 6.39  2001/04/05 20:32:34  juran
+* Major Carbon changes, including the new Scrap Manager (not tested).
+*
 * Revision 6.38  2000/06/15 20:51:45  vakatov
 * Use "const" in Args code
 *
@@ -562,11 +571,10 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
-#ifdef PROC_PPC
 #include <Appearance.h>
 #include <Navigation.h>
 #include <Profiler.h>
-#endif
+# include "MoreCarbonAccessors.h"
 #endif
 
 #if defined(WIN_MOTIF) && defined(_DEBUG) && !defined(__hpux)
@@ -2087,14 +2095,14 @@ static Nlm_WindoW Nlm_MakeWindowLink (Nlm_RectPtr r, Nlm_Int2 recordSize,
 extern void Nlm_SetUpdateRegion (WindowPtr wptr)
 
 {
-  RgnPtr  rptr;
+  Rect bounds;
 
   if (wptr != NULL) {
-    CopyRgn (wptr->visRgn, (Nlm_RgnTool) Nlm_updateRgn);
-    HLock ((Handle) Nlm_updateRgn);
-    rptr = (RgnPtr) *((Handle) Nlm_updateRgn);
-    Nlm_RectToolToRecT (&(rptr->rgnBBox), &Nlm_updateRect);
-    HUnlock ((Handle) Nlm_updateRgn);
+    GetPortVisibleRegion(GetWindowPort(wptr), Nlm_updateRgn);
+    //HLock ((Handle) Nlm_updateRgn);
+    GetRegionBounds(Nlm_updateRgn, &bounds);
+    Nlm_RectToolToRecT (&bounds, &Nlm_updateRect);
+    //HUnlock ((Handle) Nlm_updateRgn);
   }
 }
 #endif
@@ -2552,7 +2560,6 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   vsb  = 0;
 
 #ifdef WIN_MAC
-  wptr = (Nlm_WindowTool) Nlm_MemNew (sizeof (WindowRecord));
   behindNone = (Nlm_WindowTool) (-1);
   TextFont (0);
   TextSize (0);
@@ -2561,14 +2568,14 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
     goAway = FALSE;
   }
   if (hasColorQD) {
-    wptr = (WindowPtr) NewCWindow ((Ptr) wptr, &rtool, (StringPtr) temp,
+    wptr = (WindowPtr) NewCWindow (NULL, &rtool, (StringPtr) temp,
                                    FALSE, procID,(Nlm_WindowTool) behindNone,
                                    goAway, 0);
   } else {
-    wptr = NewWindow ((Ptr) wptr, &rtool, (StringPtr) temp, FALSE, procID,
+    wptr = NewWindow (NULL, &rtool, (StringPtr) temp, FALSE, procID,
                       (Nlm_WindowTool) behindNone, goAway, 0);
   }
-  SetPort (wptr);
+  SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   prt = (Nlm_PortTool) wptr;
   Nlm_SetUpdateRegion (wptr);
@@ -2759,17 +2766,17 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
 static Nlm_WindoW Nlm_NextVisWindow (Nlm_WindoW w)
 
 {
-  WindowPeek  p;
-  WindowPeek  q;
+  WindowPtr  p;
+  WindowPtr  q;
 
   if (w == Nlm_desktopWindow) {
     return Nlm_desktopWindow;
   } else {
-    p = (WindowPeek) Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
+    p = Nlm_ParentWindowPtr((Nlm_GraphiC) w);
     while (p != NULL) {
-      q = p->nextWindow;
+      q = GetNextWindow(p);
       if (q != NULL) {
-        if (q->visible != 0) {
+        if (IsWindowVisible(q)) {
           p = NULL;
         } else {
           p = q;
@@ -3454,9 +3461,9 @@ extern void Nlm_UseWindow (Nlm_WindoW w)
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
     if (wptr  &&  !Nlm_IsWindowDying( w )) {
 #ifdef WIN_MAC
-      SetPort (wptr);
+      SetPortWindowPort(wptr);
       Nlm_SetUpdateRegion (wptr);
-      Nlm_ResetDrawingTools ();
+      Nlm_ResetDrawingTools();
       Nlm_theWindow = w;
 #endif
 #ifdef WIN_MSWIN
@@ -3515,26 +3522,26 @@ extern Nlm_WindoW Nlm_ActiveWindow (void)
 static Nlm_WindoW Nlm_PrevVisWindow (Nlm_WindoW w)
 
 {
-  WindowPeek  p;
-  WindowPeek  q;
-  WindowPeek  t;
+  WindowPtr  p;
+  WindowPtr  q;
+  WindowPtr  t;
 
   if (frontWindow == Nlm_desktopWindow) {
     return Nlm_desktopWindow;
   } else if (frontWindow == w) {
     return frontWindow;
   } else {
-    p = (WindowPeek) Nlm_ParentWindowPtr ((Nlm_GraphiC) frontWindow);
+    p = Nlm_ParentWindowPtr ((Nlm_GraphiC) frontWindow);
     q = p;
-    t = (WindowPeek) Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
+    t = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
     while (p != NULL) {
       if (p == t) {
         p = NULL;
-      } else if (p->visible != 0) {
+      } else if (IsWindowVisible(p)) {
         q = p;
-        p = p->nextWindow;
+        p = GetNextWindow(p);
       } else {
-        p = p->nextWindow;
+        p = GetNextWindow(p);
       }
     }
     return (Nlm_FindWindowRec ((Nlm_WindowTool) q));
@@ -3557,9 +3564,9 @@ static void Nlm_SelectWindow(Nlm_GraphiC w, Nlm_Boolean savePort)
 
 #ifdef WIN_MAC
   SelectWindow (wptr);
-  SetPort (wptr);
-  Nlm_SetUpdateRegion (wptr);
-  Nlm_ResetDrawingTools ();
+  SetPortWindowPort(wptr);
+  Nlm_SetUpdateRegion(wptr);
+  Nlm_ResetDrawingTools();
 #endif
 #ifdef WIN_MSWIN
   BringWindowToTop (wptr);
@@ -3653,18 +3660,20 @@ extern void Nlm_EraseWindow (Nlm_WindoW w)
   Nlm_RecT        r;
   Nlm_PortTool    temp;
   Nlm_WindowTool  wptr;
+  Rect bounds;
 
   if (w != NULL) {
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
-    GetPort (&temp);
-    SetPort (wptr);
-    Nlm_ResetDrawingTools ();
+    GetPort(&temp);
+    SetPortWindowPort(wptr);
+    Nlm_ResetDrawingTools();
     Nlm_currentWindowTool = wptr;
-    Nlm_RectToolToRecT (&(wptr->portRect), &r);
-    Nlm_EraseRect (&r);
-    SetPort (temp);
-    Nlm_currentWindowTool = temp;
-    Nlm_Update ();
+    GetPortBounds(GetWindowPort(wptr), &bounds);
+    Nlm_RectToolToRecT (&bounds, &r);
+    Nlm_EraseRect(&r);
+    SetPort(temp);
+    Nlm_currentWindowTool = GetWindowFromPort(temp);
+    Nlm_Update();
   }
 #endif
 #ifdef WIN_MSWIN
@@ -3684,6 +3693,7 @@ static Nlm_Boolean Nlm_DragClick (Nlm_GraphiC w, Nlm_PoinT pt)
   Nlm_Int2        windowLoc;
   Nlm_WindowData  wdata;
   Nlm_WindowTool  wptr;
+  Rect bounds;
 
   rsult = FALSE;
   Nlm_PoinTToPointTool (Nlm_globalMouse, &ptool);
@@ -3692,7 +3702,8 @@ static Nlm_Boolean Nlm_DragClick (Nlm_GraphiC w, Nlm_PoinT pt)
     Nlm_GetWindowData ((Nlm_WindoW) w, &wdata);
     Nlm_RecTToRectTool (&(wdata.dragArea), &rtool);
     DragWindow (wptr, ptool, &rtool);
-    Nlm_RectToolToRecT (&(wptr->portRect), &r);
+    GetPortBounds(GetWindowPort(wptr), &bounds);
+    Nlm_RectToolToRecT (&bounds, &r);
     Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.left));
     Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.right));
     Nlm_SetRect (w, &r);
@@ -3706,15 +3717,17 @@ static void Nlm_UpdateScrollBar (Nlm_GraphiC w)
 {
   Nlm_RecT        barArea;
   Nlm_WindowTool  wptr;
+  Rect bounds;
 
   wptr = Nlm_ParentWindowPtr (w);
-  Nlm_RectToolToRecT (&(wptr->portRect), &barArea);
+  GetPortBounds(GetWindowPort(wptr), &bounds);
+  Nlm_RectToolToRecT (&bounds, &barArea);
   barArea.left = barArea.right - 16;
   if (Nlm_GetWindowMenuBar ((Nlm_WindoW) w) != NULL) {
     barArea.top = barArea.top + 21;
   }
   Nlm_InvalRect (&barArea);
-  Nlm_RectToolToRecT (&(wptr->portRect), &barArea);
+  Nlm_RectToolToRecT (&bounds, &barArea);
   barArea.top = barArea.bottom - 16;
   Nlm_InvalRect (&barArea);
 }
@@ -3733,6 +3746,7 @@ static Nlm_Boolean Nlm_GrowClick (Nlm_GraphiC w, Nlm_PoinT pt)
   Nlm_WindowData   wdata;
   Nlm_Int2         windowLoc;
   Nlm_WindowTool   wptr;
+  Rect bounds;
 
   rsult = FALSE;
   Nlm_PoinTToPointTool (Nlm_globalMouse, &ptool);
@@ -3749,8 +3763,9 @@ static Nlm_Boolean Nlm_GrowClick (Nlm_GraphiC w, Nlm_PoinT pt)
  /* dgg -- bug fix: simple click on grow box caused it to resize to 0 --
     should check here for 0 == no change.  Also make minsize bigger.
  */
+    GetPortBounds(GetWindowPort(wptr), &bounds);
     if (! newSize) {
-      ClipRect (&(wptr->portRect));
+      ClipRect (&bounds);
       return rsult;
     }
     if (wd < 50) {
@@ -3759,12 +3774,14 @@ static Nlm_Boolean Nlm_GrowClick (Nlm_GraphiC w, Nlm_PoinT pt)
     if (ht < 32) {
       ht = 32;
     }
+    bounds.right = bounds.left + wd;
+    bounds.bottom = bounds.top + ht;
     Nlm_UpdateScrollBar (w);
     SizeWindow (wptr, wd, ht, TRUE);
     Nlm_UpdateScrollBar (w);
     wptr = Nlm_GetWindowPtr ((Nlm_WindoW) w);
-    Nlm_RectToolToRecT (&(wptr->portRect), &r);
-    ClipRect (&(wptr->portRect));
+    Nlm_RectToolToRecT (&bounds, &r);
+    ClipRect (&bounds);
     Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.left));
     Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.right));
     Nlm_SetRect (w, &r);
@@ -3785,11 +3802,13 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
   PenState        state;
   Nlm_PortTool    temp;
   Nlm_WindowTool  wptr;
+  Rect bounds;
 
   GetPort (&temp);
   GetPenState (&state);
   wptr = Nlm_ParentWindowPtr (w);
-  Nlm_RectToolToRecT (&(wptr->portRect), &r);
+  GetPortBounds(GetWindowPort(wptr), &bounds);
+  Nlm_RectToolToRecT (&bounds, &r);
   if (drawbar && Nlm_GetWindowMenuBar ((Nlm_WindoW) w) != NULL) {
     Nlm_RecTToRectTool (&r, &rtool);
     ClipRect (&rtool);
@@ -3805,7 +3824,7 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
     DrawGrowIcon (wptr);
   }
   Nlm_RecTToRectTool (&r, &rtool);
-  r.top = wptr->portRect.top;
+  r.top = bounds.top;
 #ifdef DCLAP
   /* dgg- this cliprect is the culprit for preventing scrollbar updates by subviews */
   /* try clipping a region that excludes just the growicon?? */
@@ -3817,9 +3836,9 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
 #endif
   Nlm_RecTToRectTool (&r, &rtool);
   ClipRect (&rtool);
-  SetPort (temp);
-  Nlm_currentWindowTool = temp;
-  Nlm_SetUpdateRegion (temp);
+  SetPort(temp);
+  Nlm_currentWindowTool = GetWindowFromPort(temp);
+  Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
 }
 
@@ -3832,30 +3851,49 @@ static Nlm_Boolean Nlm_ZoomClick (Nlm_GraphiC w, Nlm_PoinT pt)
   Nlm_Boolean      rsult;
   Nlm_WindowData   wdata;
   Nlm_Int2         windowLoc;
-  WindowPeek       wpeek;
   Nlm_WindowTool   wptr;
-  WStateData       **wshdl;
-  WStateData       *wsptr;
 
   rsult = FALSE;
   Nlm_PoinTToPointTool (Nlm_globalMouse, &ptool);
   windowLoc = FindWindow (ptool, &wptr);
   if (windowLoc == inZoomIn || windowLoc == inZoomOut) {
+#if OPAQUE_TOOLBOX_STRUCTS
+    Point idealSize;
+    int part;
+#else
+    Rect stdRect;
+    WStateDataHandle wshdl;
+#endif
+    Nlm_GetWindowData ((Nlm_WindoW) w, &wdata);
+    r = wdata.zoomArea;
+#if OPAQUE_TOOLBOX_STRUCTS
+    idealSize.v = r.bottom - r.top;
+    idealSize.h = r.right - r.left;
+    
+    part = IsWindowInStandardState(wptr, &idealSize, NULL) ? inZoomIn : inZoomOut;
+    windowLoc = part;
+#endif
+    
     if (TrackBox (wptr, ptool, windowLoc)) {
-      wpeek = (WindowPeek) wptr;
-      wshdl = (WStateData**) wpeek->dataHandle;
-      wsptr = *wshdl;
-      Nlm_GetWindowData ((Nlm_WindoW) w, &wdata);
-      r = wdata.zoomArea;
-      Nlm_RecTToRectTool (&r, &(wsptr->stdState));
-      Nlm_RectToolToRecT (&(wptr->portRect), &r);
-      ClipRect (&(wptr->portRect));
+      Rect bounds;
+      // WindowPeek::dataHandle is not supported under Carbon.
+#if OPAQUE_TOOLBOX_STRUCTS
+      ZoomWindowIdeal(wptr, part, &idealSize);
+#else
+      wshdl = (WStateDataHandle) ((WindowPeek)wptr)->dataHandle;
+      Nlm_RecTToRectTool (&r, &stdRect);
+      (*wshdl)->stdState = stdRect;
+      GetPortBounds(GetWindowPort(wptr), &bounds);
+      Nlm_RectToolToRecT (&bounds, &r);
+      ClipRect (&bounds);
       Nlm_EraseRect (&r);
       ZoomWindow (wptr, windowLoc, FALSE);
+#endif
+      GetPortBounds(GetWindowPort(wptr), &bounds);
       Nlm_UpdateScrollBar (w);
       wptr = Nlm_GetWindowPtr ((Nlm_WindoW) w);
-      Nlm_RectToolToRecT (&(wptr->portRect), &r);
-      ClipRect (&(wptr->portRect));
+      Nlm_RectToolToRecT (&bounds, &r);
+      ClipRect (&bounds);
       Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.left));
       Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.right));
       Nlm_SetRect (w, &r);
@@ -3983,7 +4021,7 @@ static Nlm_Boolean Nlm_CommonClick (Nlm_GraphiC w, Nlm_PoinT pt,
     wptr = Nlm_ParentWindowPtr (w);
     GetPort (&temp);
     GetPenState (&state);
-    SetPort (wptr);
+    SetPortWindowPort(wptr);
     Nlm_currentWindowTool = wptr;
     Nlm_SetUpdateRegion (wptr);
     Nlm_ResetDrawingTools ();
@@ -3995,9 +4033,9 @@ static Nlm_Boolean Nlm_CommonClick (Nlm_GraphiC w, Nlm_PoinT pt,
     } else {
       rsult = Nlm_ContentClick (w, pt);
     }
-    SetPort (temp);
-    Nlm_currentWindowTool = temp;
-    Nlm_SetUpdateRegion (temp);
+    SetPort(temp);
+    Nlm_currentWindowTool = GetWindowFromPort(temp);
+    Nlm_SetUpdateRegion (GetWindowFromPort(temp));
     SetPenState (&state);
   } else if (chosenWindow != NULL) {
     Nlm_DoSelect ((Nlm_GraphiC) chosenWindow, TRUE);
@@ -4049,14 +4087,14 @@ static Nlm_Boolean Nlm_ModalClick (Nlm_GraphiC w, Nlm_PoinT pt)
         wptr = Nlm_ParentWindowPtr (w);
         GetPort (&temp);
         GetPenState (&state);
-        SetPort (wptr);
+        SetPortWindowPort(wptr);
         Nlm_currentWindowTool = wptr;
         Nlm_SetUpdateRegion (wptr);
         Nlm_ResetDrawingTools ();
         cls ((Nlm_WindoW) w);
-        SetPort (temp);
-        Nlm_currentWindowTool = temp;
-        Nlm_SetUpdateRegion (temp);
+        SetPort(temp);
+        Nlm_currentWindowTool = GetWindowFromPort(temp);
+        Nlm_SetUpdateRegion (GetWindowFromPort(temp));
         SetPenState (&state);
       }
     }
@@ -4086,14 +4124,14 @@ static Nlm_Boolean Nlm_MovableModalClick (Nlm_GraphiC w, Nlm_PoinT pt)
         wptr = Nlm_ParentWindowPtr (w);
         GetPort (&temp);
         GetPenState (&state);
-        SetPort (wptr);
+        SetPortWindowPort(wptr);
         Nlm_currentWindowTool = wptr;
         Nlm_SetUpdateRegion (wptr);
         Nlm_ResetDrawingTools ();
         cls ((Nlm_WindoW) w);
-        SetPort (temp);
-        Nlm_currentWindowTool = temp;
-        Nlm_SetUpdateRegion (temp);
+        SetPort(temp);
+        Nlm_currentWindowTool = GetWindowFromPort(temp);
+        Nlm_SetUpdateRegion(GetWindowFromPort(temp));
         SetPenState (&state);
       }
     }
@@ -4117,8 +4155,12 @@ static Nlm_Boolean Nlm_FloatingClick (Nlm_GraphiC w, Nlm_PoinT pt)
   return TRUE;
 }
 
+// 2001-03-22:  Joshua Juran
+// SystemClick() is not supported in Carbon.  It's unnecessary.
+#if TARGET_API_MAC_CARBON
+# define SystemClick(event, window)
+#endif
 static Nlm_Boolean Nlm_SystemClick (Nlm_GraphiC w, Nlm_PoinT pt)
-
 {
   Nlm_WindowTool  wptr;
 
@@ -4186,7 +4228,7 @@ static void Nlm_FloatingSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPort (wptr);
+  SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
@@ -4196,9 +4238,9 @@ static void Nlm_FloatingSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   } else {
     Nlm_ContentClick (w, Nlm_globalMouse);
   }
-  SetPort (temp);
-  Nlm_currentWindowTool = temp;
-  Nlm_SetUpdateRegion (temp);
+  SetPort(temp);
+  Nlm_currentWindowTool = GetWindowFromPort(temp);
+  Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
   Nlm_localMouse = Nlm_globalMouse;
   Nlm_GlobalToLocal (&Nlm_localMouse);
@@ -4222,9 +4264,9 @@ static void Nlm_DesktopSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   GetPenState (&state);
   PenNormal ();
   Nlm_DesktopClick (w, Nlm_globalMouse);
-  SetPort (temp);
-  Nlm_currentWindowTool = temp;
-  Nlm_SetUpdateRegion (temp);
+  SetPort(temp);
+  Nlm_currentWindowTool = GetWindowFromPort(temp);
+  Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
 #endif
 }
@@ -4259,7 +4301,7 @@ static Nlm_Boolean Nlm_NormalKey (Nlm_GraphiC w, Nlm_Char ch)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPort (wptr);
+  SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
@@ -4286,9 +4328,9 @@ static Nlm_Boolean Nlm_NormalKey (Nlm_GraphiC w, Nlm_Char ch)
       Nlm_DesktopKey ((Nlm_GraphiC) Nlm_desktopWindow, ch);
     }
   }
-  SetPort (temp);
-  Nlm_currentWindowTool = temp;
-  Nlm_SetUpdateRegion (temp);
+  SetPort(temp);
+  Nlm_currentWindowTool = GetWindowFromPort(temp);
+  Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
   return TRUE;
 }
@@ -4308,7 +4350,7 @@ static Nlm_Boolean Nlm_FloatingKey (Nlm_GraphiC w, Nlm_Char ch)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPort (wptr);
+  SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
@@ -4336,9 +4378,9 @@ static Nlm_Boolean Nlm_FloatingKey (Nlm_GraphiC w, Nlm_Char ch)
       Nlm_DoKey ((Nlm_GraphiC) nw, ch);
     }
   }
-  SetPort (temp);
-  Nlm_currentWindowTool = temp;
-  Nlm_SetUpdateRegion (temp);
+  SetPort(temp);
+  Nlm_currentWindowTool = GetWindowFromPort(temp);
+  Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
   return TRUE;
 }
@@ -4364,11 +4406,12 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   PenState        state;
   Nlm_PortTool    temp;
   Nlm_WindowTool  wptr;
+  Rect bounds;
 
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPort (wptr);
+  SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
 
   Nlm_ResetDrawingTools ();
@@ -4377,7 +4420,8 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
 
   BeginUpdate (wptr);
   Nlm_SetUpdateRegion (wptr);
-  Nlm_RectToolToRecT (&(wptr->portRect), &r);
+  GetPortBounds(GetWindowPort(wptr), &bounds);
+  Nlm_RectToolToRecT (&bounds, &r);
   Nlm_EraseRect (&r);
 
   if (okayToDrawContents) {
@@ -4402,9 +4446,9 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   EndUpdate (wptr);
   Nlm_ResetDrawingTools ();
   Nlm_ResetClip ();
-  SetPort (temp);
-  Nlm_currentWindowTool = temp;
-  Nlm_SetUpdateRegion (temp);
+  SetPort(temp);
+  Nlm_currentWindowTool = GetWindowFromPort(temp);
+  Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
 }
 
@@ -4951,7 +4995,9 @@ extern void Nlm_ArrowCursor (void)
 
 {
 #ifdef WIN_MAC
-  SetCursor (&qd.arrow);
+  Cursor cursor;
+  GetQDGlobalsArrow(&cursor);
+  SetCursor (&cursor);
 #endif
 #ifdef WIN_MSWIN
   Nlm_currentCursor = LoadCursor (NULL, IDC_ARROW);
@@ -5109,14 +5155,14 @@ Nlm_RegisterResultProc (Nlm_ResultProc resultProc)
 }
 
 #ifdef WIN_MAC
-static pascal OSErr HandleAEQuitApp (AppleEvent *event, AppleEvent *reply, long ref)
+static pascal OSErr HandleAEQuitApp (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
 
 {
   Nlm_QuitProgram ();
   return noErr;
 }
 
-static pascal OSErr HandleAEIgnore (AppleEvent *event, AppleEvent *reply, long ref)
+static pascal OSErr HandleAEIgnore (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
 
 {
   return noErr;
@@ -5157,7 +5203,7 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
   *dst = '\0';
 }
 
-static pascal OSErr HandleAEOpenDoc (AppleEvent *event, AppleEvent *reply, long ref)
+static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
 
 {
   register OSErr stat;
@@ -5223,7 +5269,7 @@ static pascal OSErr HandleAEOpenDoc (AppleEvent *event, AppleEvent *reply, long 
   return noErr;
 }
 
-static pascal OSErr HandleAEAnswer (AppleEvent *event, AppleEvent *reply, long ref)
+static pascal OSErr HandleAEAnswer (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
 
 {
   register OSErr stat;
@@ -5273,7 +5319,6 @@ static void Nlm_HandleEvent (void)
   Nlm_Int2        key;
   Nlm_Uint4       mess;
   Nlm_PointTool   ptool;
-  Nlm_PoinT       where;
   Nlm_Int2        windowLoc;
   Nlm_WindowTool  wptr;
 
@@ -5317,13 +5362,14 @@ static void Nlm_HandleEvent (void)
       mess = (Nlm_currentEvent.message & osEvtMessageMask) >> 24;
       if (mess == suspendResumeMessage) {
         if (Nlm_currentEvent.message & resumeFlag) {
+          // Resume
           if (Nlm_currentEvent.message & convertClipboardFlag) {
-            err = TEFromScrap ();
-            Nlm_textScrapFull = TRUE;
+            // 2001-05-14:  JDJ
+            // We always convert the clipboard.
+            // If it turns out that pasting is noticeably slow, I'll change it.
           }
-        } else if (Nlm_textScrapFull) {
-          ZeroScrap ();
-          err = TEToScrap ();
+        } else {
+          // Suspend
         }
       } else if (mess == mouseMovedMessage) {
         if (mouseMovedAction != NULL) {
@@ -5341,14 +5387,19 @@ static void Nlm_HandleEvent (void)
         Nlm_DoDeactivate ((Nlm_GraphiC) Nlm_theWindow, FALSE);
       }
       break;
+// 2001-03-22:  Joshua Juran
+// Carbon doesn't support DIBadMount() and will not send diskEvt in the first place.
+#if !TARGET_API_MAC_CARBON
     case diskEvt:
       if (HiWord (Nlm_currentEvent.message) != 0) {
+        Nlm_PoinT where;
         where.x = 90;
         where.y = 100;
         Nlm_PoinTToPointTool (where, &ptool);
         DIBadMount (ptool, Nlm_currentEvent.message);
       }
       break;
+#endif
     case kHighLevelEvent:
       err = AEProcessAppleEvent (&Nlm_currentEvent);
       break;
@@ -5376,7 +5427,7 @@ static void Nlm_ReturnCursor (Cursor *cursor, Nlm_Int2 cursorID)
     *cursor = *pCurs;
     HUnlock ((Handle) hCurs);
   } else {
-    *cursor = qd.arrow;
+    GetQDGlobalsArrow(cursor);
   }
 }
 
@@ -5386,6 +5437,7 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   Nlm_PoinT  pt;
   Nlm_RecT   r;
   long  gval;
+  BitMap myScreenBits;
 
   Nlm_ReturnCursor (&cross, 2);
   Nlm_ReturnCursor (&iBeam, 1);
@@ -5394,7 +5446,8 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   Nlm_WatchCursor ();
   Nlm_ClearKeys ();
   Nlm_LoadPt (&pt, 0, 0);
-  Nlm_RectToolToRecT (&(qd.screenBits.bounds), &screenBitBounds);
+  GetQDGlobalsScreenBits(&myScreenBits);
+  Nlm_RectToolToRecT (&(myScreenBits.bounds), &screenBitBounds);
   r = screenBitBounds;
   Nlm_screenRect = screenBitBounds;
   Nlm_desktopWindow = (Nlm_WindoW) Nlm_HandNew (sizeof (Nlm_WindowRec));
@@ -6289,25 +6342,29 @@ static void Nlm_CleanUpWindows (void)
 void main ()
 {
   long gval;
-  Nlm_Int2  i;
   OSErr  err;
-  long  offset;
 
 #if __profile__
   ProfilerInit (collectDetailed, bestTimeBase, 100, 20);
   ProfilerSetStatus (FALSE);
 #endif
 
-  MaxApplZone ();
 #if TARGET_API_MAC_CARBON >= 1
   // carbon changes the API: pass the number of master pointers to allocate
-  MoreMasters (1280);
+  //MoreMasters (1280);
+  // 2001-03-22:  Joshua Juran
+  // CarbonDater report says to use MoreMasterPointers() instead of MoreMasters().
+  // Universal Interfaces 3.3.2 declares MoreMasters(void) under Carbon.
+  MoreMasterPointers(1280);
   FlushEvents (everyEvent, 0);
-  InitCursor ();
   // the rest of the toolbox is done for us can't init them...
 #else
-  for (i = 0; i < 20; i++) {
-    MoreMasters ();
+  MaxApplZone ();
+  if (1) {
+    Nlm_Int2 i;
+    for (i = 0; i < 20; i++) {
+      MoreMasters ();
+    }
   }
   InitGraf (&qd.thePort);
   InitFonts ();
@@ -6316,17 +6373,16 @@ void main ()
   InitMenus ();
   TEInit ();
   InitDialogs (0);
-  InitCursor ();
 #endif
+  InitCursor ();
 
   err = Gestalt (gestaltAppleEventsAttr, &gval);
   if (err == noErr && ((short) gval & (1 << gestaltAppleEventsPresent)) != 0) {
-#ifdef __CONDITIONALMACROS__
     /* Create Routine Descriptors - from RasMol */
-    HandleAEIgnorePtr = NewAEEventHandlerProc(HandleAEIgnore);
-    HandleAEOpenDocPtr = NewAEEventHandlerProc(HandleAEOpenDoc);
-    HandleAEQuitAppPtr = NewAEEventHandlerProc(HandleAEQuitApp);
-    HandleAEAnswerPtr = NewAEEventHandlerProc(HandleAEAnswer);
+    HandleAEIgnorePtr = NewAEEventHandlerUPP(HandleAEIgnore);
+    HandleAEOpenDocPtr = NewAEEventHandlerUPP(HandleAEOpenDoc);
+    HandleAEQuitAppPtr = NewAEEventHandlerUPP(HandleAEQuitApp);
+    HandleAEAnswerPtr = NewAEEventHandlerUPP(HandleAEAnswer);
 
     /* Install Required Event Handlers */
     AEInstallEventHandler(kCoreEventClass,kAEOpenApplication,
@@ -6339,23 +6395,9 @@ void main ()
                           HandleAEQuitAppPtr, 0, FALSE);
     AEInstallEventHandler(kCoreEventClass,kAEAnswer,
                           HandleAEAnswerPtr, 0, FALSE);
-#else
-    /* Install Required Event Handlers */
-    AEInstallEventHandler(kCoreEventClass,kAEOpenApplication,
-                          HandleAEIgnore, 0, FALSE);
-    AEInstallEventHandler(kCoreEventClass,kAEOpenDocuments,
-                          HandleAEOpenDoc, 0, FALSE);
-    AEInstallEventHandler(kCoreEventClass,kAEPrintDocuments,
-                          HandleAEIgnore, 1, FALSE);
-    AEInstallEventHandler(kCoreEventClass,kAEQuitApplication,
-                          HandleAEQuitApp, 0, FALSE);
-    AEInstallEventHandler(kCoreEventClass,kAEAnswer,
-                          HandleAEAnswer, 0, FALSE);
-#endif
   }
 
   Nlm_usesMacNavServices = FALSE;
-#ifdef PROC_PPC
   err = Gestalt (gestaltAppleEventsAttr, &gval);
   if (err == noErr && ((short) gval & (1 << gestaltAppearanceExists)) != 0) {
     if (NavServicesAvailable ()) {
@@ -6365,7 +6407,6 @@ void main ()
   if (Nlm_usesMacNavServices) {
     NavLoad ();
   }
-#endif
 
   Nlm_InitVibrantHooks ();
 
@@ -6387,10 +6428,8 @@ void main ()
   Nlm_SetupArguments(0, NULL);
   Nlm_GetReady ();
 
-  if (GetScrap (NULL, 'TEXT', &offset)) {
-    err = TEFromScrap ();
-    Nlm_textScrapFull = TRUE;
-  }
+  // There is no need to initialize the TE private scrap because
+  // we never assume it's current.
 
   Nlm_Main ();
 
@@ -6409,11 +6448,9 @@ void main ()
   Nlm_FreeTexts ();
   Nlm_FreeConfigStruct ();
   Nlm_ErrSetLogfile (NULL,0);
-#ifdef PROC_PPC
   if (Nlm_usesMacNavServices) {
     NavUnload ();
   }
-#endif
 
 #if __profile__
   ProfilerDump ("\pvibrant.prof");
@@ -6664,7 +6701,7 @@ extern void Nlm_RemoveDyingWindows (void)
 #ifdef WIN_MAC
     GetPort (&tempPort);
     GetPenState (&state);
-    SetPort (wptr);
+    SetPortWindowPort(wptr);
     Nlm_currentWindowTool = wptr;
     Nlm_SetUpdateRegion (wptr);
 #endif
@@ -6710,12 +6747,13 @@ extern void Nlm_RemoveDyingWindows (void)
       DisposePalette ( wdata.cMap );
       wdata.cMap = NULL;
     }
-    SetPort (tempPort);
-    Nlm_currentWindowTool = tempPort;
-    Nlm_SetUpdateRegion (tempPort);
+    SetPort(tempPort);
+    Nlm_currentWindowTool = GetWindowFromPort(tempPort);
+    Nlm_SetUpdateRegion (GetWindowFromPort(tempPort));
     SetPenState (&state);
-    CloseWindow (wptr);
-    Nlm_MemFree (wptr);
+    // 2001-03-22:  Joshua Juran
+    // Carbon does not support application-supplied storage for windows.
+    DisposeWindow(wptr);
 #endif
 #ifdef WIN_MSWIN
     if ( wdata.cMap != NULL ){

@@ -1,4 +1,4 @@
-/* $Id: wwwutils.c,v 6.10 2000/03/16 16:34:47 shavirin Exp $
+/* $Id: wwwutils.c,v 6.12 2001/05/10 14:58:34 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   This file contains functions to read and process HTTP 
@@ -38,6 +38,13 @@
 *   
 *---------------------------------------------------------------------------
 * $Log: wwwutils.c,v $
+* Revision 6.12  2001/05/10 14:58:34  shavirin
+* Fixed typo.
+*
+* Revision 6.11  2001/05/09 19:25:35  shavirin
+* Added function WWWGetProxiedIP() to get 'real' address of the client
+* using PROXIED_IP environment set by proxy server.
+*
 * Revision 6.10  2000/03/16 16:34:47  shavirin
 * Removed check for NetscapeOK in case of mutipart/form-data protocol.
 *
@@ -150,6 +157,7 @@ NLM_EXTERN void WWWInfoFree(WWWInfoPtr info_in)
   info->script_name = (CharPtr) MemFree(info->script_name);
   info->host        = (CharPtr) MemFree(info->host);
   info->address     = (CharPtr) MemFree(info->address);
+  info->proxied_ip  = (CharPtr) MemFree(info->proxied_ip);
   info->agent       = (CharPtr) MemFree(info->agent);
   info->doc_root    = (CharPtr) MemFree(info->doc_root);
   info->query       = (CharPtr) MemFree(info->query);
@@ -265,6 +273,16 @@ NLM_EXTERN CharPtr WWWGetHost(WWWInfoPtr info_in)
     return NULL;
 
   return(info->host);
+}
+
+NLM_EXTERN CharPtr WWWGetProxiedIP(WWWInfoPtr info_in)
+{
+  WWWInfoDataPtr info;
+  
+  if((info = (WWWInfoDataPtr) info_in) == NULL)
+    return NULL;
+
+  return(info->proxied_ip);
 }
 
 NLM_EXTERN CharPtr WWWGetQuery(WWWInfoPtr info_in)
@@ -666,53 +684,59 @@ NLM_EXTERN CharPtr WWWReadFileInMemory(FILE *fd, Int4 len, Boolean filter)
 
 static Boolean WWWReadEnvironment(WWWInfoDataPtr info)
 {
-  CharPtr Method;
+    CharPtr Method;
 
-  if(!info) return 0;
+    if(!info) return 0;
   
-  info->method = COMMAND_LINE;
+    info->method = COMMAND_LINE;
   
-  if((Method = getenv("REQUEST_METHOD")) != NULL) {
-
-    if(!StringICmp(Method, "GET")) {    
-      info->method = WWW_GET;
-    } else if (!StringICmp(Method, "POST")) {
-      info->method= WWW_POST;
+    if((Method = getenv("REQUEST_METHOD")) != NULL) {
+        
+        if(!StringICmp(Method, "GET")) {    
+            info->method = WWW_GET;
+        } else if (!StringICmp(Method, "POST")) {
+            info->method= WWW_POST;
+        }
     }
-  }
-
-  if((info->host = StringSave(getenv("REMOTE_HOST"))) == NULL)
-    info->host = StringSave("Host unknown");
-  if((info->address = StringSave(getenv("REMOTE_ADDR"))) == NULL)
-    info->address =StringSave("Address unknown");
-  if((info->doc_root = StringSave(getenv("DOCUMENT_ROOT"))) == NULL)
-    info->doc_root =StringSave("_unknown_");
-  if((info->agent = StringSave(getenv("HTTP_USER_AGENT"))) == NULL)
-    info->agent =StringSave("Agent unknown"); 
-  if((getenv("SERVER_PORT") == NULL) || 
-     (info->port = atol(getenv("SERVER_PORT"))) == 0)
-    info->port = -1; 
-  if((info->server_name = StringSave(getenv("SERVER_NAME"))) == NULL)
-    info->server_name = StringSave("Server unknown"); 
-  if((info->script_name = StringSave(getenv("SCRIPT_NAME"))) == NULL)
-    info->script_name = StringSave("Script unknown"); 
-  
-  info->browser = MISC_BROWSER;
-  
-  if(StringStr(info->agent, "Mozilla/2") ||
-     StringStr(info->agent, "Mozilla/3") ||
-     StringStr(info->agent, "Mozilla/4") ||
-     StringStr(info->agent, "Mozilla/5"))
-      info->browser = NETSCAPE;
-  
-  /*  if(StringStr(info->agent, "MSIE") ||
-      StringStr(info->agent, "Microsoft"))
-      info->browser = EXPLORER; */
-  
-  if(info->method == WWW_POST || info->method == WWW_GET)
-      return TRUE;
-  else
-      return FALSE;
+    
+    if((info->host = StringSave(getenv("REMOTE_HOST"))) == NULL)
+        info->host = StringSave("Host unknown");
+    
+    if((info->address = StringSave(getenv("REMOTE_ADDR"))) == NULL)
+        info->address =StringSave("Address unknown");
+    
+    if((info->proxied_ip = StringSave(getenv("PROXIED_IP"))) == NULL)
+        info->proxied_ip = StringSave(info->address);
+    
+    if((info->doc_root = StringSave(getenv("DOCUMENT_ROOT"))) == NULL)
+        info->doc_root =StringSave("_unknown_");
+    
+    if((info->agent = StringSave(getenv("HTTP_USER_AGENT"))) == NULL)
+        info->agent =StringSave("Agent unknown"); 
+    
+    if((getenv("SERVER_PORT") == NULL) || 
+       (info->port = atol(getenv("SERVER_PORT"))) == 0)
+        info->port = -1; 
+    
+    if((info->server_name = StringSave(getenv("SERVER_NAME"))) == NULL)
+        info->server_name = StringSave("Server unknown"); 
+    
+    if((info->script_name = StringSave(getenv("SCRIPT_NAME"))) == NULL)
+        info->script_name = StringSave("Script unknown"); 
+    
+    info->browser = MISC_BROWSER;
+    
+    if(StringStr(info->agent, "Mozilla"))
+        info->browser = NETSCAPE;
+    
+    /*  if(StringStr(info->agent, "MSIE") ||
+        StringStr(info->agent, "Microsoft"))
+        info->browser = EXPLORER; */
+    
+    if(info->method == WWW_POST || info->method == WWW_GET)
+        return TRUE;
+    else
+        return FALSE;
 }
   
 static void WWWGetWord(CharPtr word, CharPtr line, Char stop) {

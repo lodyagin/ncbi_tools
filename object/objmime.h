@@ -31,6 +31,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.h,v $
+* Revision 6.7  2001/06/21 14:44:29  thiessen
+* add new user annotations
+*
+* Revision 6.6  2001/06/14 14:21:33  thiessen
+* add style dictionary to mime blobs
+*
 * Revision 6.5  1998/12/07 17:41:05  kans
 * restored hand changes from struct_Seq_annot to seqannot - needed because of limitation of asncode
 *
@@ -133,6 +139,8 @@ typedef struct struct_Biostruc_align {
    struct struct_Biostruc_annot_set PNTR   alignments;
    ValNodePtr   sequences;
    struct seqannot PNTR   seqalign;   /* hand change -- lyg */
+   struct struct_Cn3d_style_dictionary PNTR   style_dictionary; /* paul */
+   struct struct_Cn3d_user_annotations PNTR   user_annotations;
 } BiostrucAlign, PNTR BiostrucAlignPtr;
 
 
@@ -151,6 +159,8 @@ NLM_EXTERN Boolean LIBCALL BiostrucAlignAsnWrite PROTO (( BiostrucAlignPtr , Asn
 typedef struct struct_Biostruc_align_seq {
    ValNodePtr   sequences;
   struct seqannot PNTR   seqalign;   /* hand change struct -- lyg */
+   struct struct_Cn3d_style_dictionary PNTR   style_dictionary; /* paul */
+   struct struct_Cn3d_user_annotations PNTR   user_annotations;
 } BiostrucAlignSeq, PNTR BiostrucAlignSeqPtr;
 
 
@@ -169,6 +179,8 @@ NLM_EXTERN Boolean LIBCALL BiostrucAlignSeqAsnWrite PROTO (( BiostrucAlignSeqPtr
 typedef struct struct_Biostruc_seq {
    struct struct_Biostruc PNTR   structure;
    ValNodePtr   sequences;
+   struct struct_Cn3d_style_dictionary PNTR   style_dictionary; /* paul */
+   struct struct_Cn3d_user_annotations PNTR   user_annotations;
 } BiostrucSeq, PNTR BiostrucSeqPtr;
 
 
@@ -188,6 +200,8 @@ typedef struct struct_Biostruc_seqs {
    struct struct_Biostruc PNTR   structure;
    ValNodePtr   sequences;
    struct seqannot PNTR   seqalign;   /* hand change struct -- lyg */
+   struct struct_Cn3d_style_dictionary PNTR   style_dictionary; /* paul */
+   struct struct_Cn3d_user_annotations PNTR   user_annotations;
 } BiostrucSeqs, PNTR BiostrucSeqsPtr;
 
 

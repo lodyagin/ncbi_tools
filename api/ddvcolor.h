@@ -1,4 +1,4 @@
-/*   $Id: ddvcolor.h,v 1.17 2000/02/15 22:40:57 lewisg Exp $
+/*   $Id: ddvcolor.h,v 1.18 2001/05/08 19:04:29 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,22 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: ddvcolor.h,v 1.17 2000/02/15 22:40:57 lewisg Exp $
+* File Name:  $Id: ddvcolor.h,v 1.18 2001/05/08 19:04:29 lewisg Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   6/2/99
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: Shared color information for viewers
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcolor.h,v $
+* Revision 1.18  2001/05/08 19:04:29  lewisg
+* bitfield to unsigned
+*
 * Revision 1.17  2000/02/15 22:40:57  lewisg
 * add ability to launch udv so that it colors by row, fixes to colormgr, track rows from viewmgr, fix visual c projects
 *
@@ -163,7 +166,7 @@ typedef struct _DDV_Range {
 
 typedef struct _DDV_ColorCell {
   Uint1 rgb[3];  /* standard rgb color cell */
-  Boolean LowerCase:1, TopBox:1, RightBox:1, BottomBox:1, LeftBox:1, UseBold:1, UseItalic:1, UseUnderline:1;
+  unsigned LowerCase:1, TopBox:1, RightBox:1, BottomBox:1, LeftBox:1, UseBold:1, UseItalic:1, UseUnderline:1;
 } DDV_ColorCell;
 
 typedef struct _DDV_Color {

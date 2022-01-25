@@ -31,6 +31,9 @@
 *
 *
 * $Log: parttree.c,v $
+* Revision 1.12  2001/06/13 21:23:19  soussov
+* makes purify happy
+*
 * Revision 1.11  2001/01/19 17:57:43  soussov
 * yet another fixed bug in tax_ptree_addNode related to secondary tax_id
 *
@@ -195,7 +198,7 @@ static Boolean known_id(TreeCursorPtr cursor, Int4 id)
 Boolean tax_ptree_addNode(TreePtr ptree, Int4 tax_id)
 {
     Int4 lin_size, i;
-    Uint2 s;
+    Uint2 s= 0;
     TXC_TreeNodePtr* lineage;
     TreeCursorPtr cursor;
     TreeNodeId nid;

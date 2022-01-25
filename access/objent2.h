@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.10 at Mar 28, 2001 11:38 AM
+*    Generated using ASNCODE Revision: 6.10 at May 11, 2001  2:35 PM
 *
 **************************************************/
 
@@ -299,6 +299,7 @@ typedef struct struct_Entrez2_reply {
    Int4   dt;
    CharPtr   server;
    CharPtr   msg;
+   CharPtr   key;
    CharPtr   cookie;
 } Entrez2Reply, PNTR Entrez2ReplyPtr;
 

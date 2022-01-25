@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.34  2001/07/06 17:27:38  kans
+* AssignIDs does not clear deleteme flag
+*
 * Revision 6.33  2000/12/18 14:48:07  tatiana
 * turn off reordering
 *
@@ -6110,7 +6113,7 @@ static void AssignIDs (InternalACCPtr iap, GatherIndexPtr gip, Uint1 itemtype, U
     gip->itemID = iap->itemIDs [itemtype];
     gip->itemtype = itemtype;
     gip->subtype = subtype;
-    gip->deleteme = 0;
+    /* gip->deleteme = 0; */
     gip->parenttype = parenttype;
     gip->parentptr = parent;
     gip->prevlink = prevlink;

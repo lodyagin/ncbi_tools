@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.90 2001/03/30 22:02:04 madden Exp $ */
+/* $Id: blastpgp.c,v 6.97 2001/07/03 20:50:33 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,29 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.90 $ 
+ * $Revision: 6.97 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.97  2001/07/03 20:50:33  madden
+ * Commented out call to PrintTabularOutputHeader
+ *
+ * Revision 6.96  2001/06/22 13:48:39  dondosha
+ * Declare variable vnp
+ *
+ * Revision 6.95  2001/06/21 21:56:37  dondosha
+ * Fixed memory leak: destroy all error returns; uncommented ObjMgrFreeCache
+ *
+ * Revision 6.94  2001/06/15 21:19:28  dondosha
+ * Added tabular output option -m 8
+ *
+ * Revision 6.93  2001/06/11 20:31:19  shavirin
+ * Added possibility to make Batch searches in iteractive mode.
+ *
+ * Revision 6.92  2001/04/13 20:46:01  madden
+ * Changed default e-value threshold for inclusion in multipass model from 0.002 to 0.005, Changed default constant in pseudocounts for multipass version from 7 to 9
+ *
+ * Revision 6.91  2001/04/10 19:20:52  madden
+ * Unsuppress some options suppressed for the release
+ *
  * Revision 6.90  2001/03/30 22:02:04  madden
  * Suppress options not yet ready for prime-time
  *
@@ -411,9 +432,7 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
     return 0;
 }
 
-/*
 #define YES_TO_DECLINE_TO_ALIGN
-*/
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
@@ -428,7 +447,7 @@ static Args myargs [] = {
       "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 4 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", /* 5 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = Tabular output", /* 5 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 6 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -457,9 +476,9 @@ static Args myargs [] = {
     { "Show GI's in deflines",  /* 18 */
       "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},
     { "e-value threshold for inclusion in multipass model", /* 19 */
-      "0.002", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
+      "0.005", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
     { "Constant in pseudocounts for multipass version", /* 20 */
-      "7", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
+      "9", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
     { "Maximum number of passes to use in  multipass version", /* 21 */
       "1", NULL, NULL, FALSE, 'j', ARG_INT, 0.0, 0, NULL},
     { "Believe the query defline", /* 22 */
@@ -573,10 +592,16 @@ void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out,
 }
 void PGPFreeBlastOptions(PGPBlastOptionsPtr bop)
 {
+
     bop->options = BLASTOptionDelete(bop->options);
+    
+    FileClose(bop->infp);
+    FileClose(bop->outfp);
+    
     MemFree(bop->blast_database);
     MemFree(bop->patfile);
     MemFree(bop->seedSearch);
+
     MemFree(bop);
 
     return;
@@ -658,7 +683,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
 
     if(myargs[5].intvalue == 7) {
         bop->is_xml_output = TRUE;
-    } else {
+    } else if (myargs[5].intvalue != 8) {
         PGPGetPrintOptions(options->gapped_calculation, &bop->align_options, 
                            &bop->print_options);
     }
@@ -785,30 +810,63 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     if (options == NULL)
         return NULL;
 
-    if (bop->believe_query == TRUE) {
+    if(bop->believe_query) {
         bop->fake_bsp = bop->query_bsp;
     } else {
-        bop->fake_bsp = BioseqNew();
-        bop->fake_bsp->descr = bop->query_bsp->descr;
-        bop->fake_bsp->repr = bop->query_bsp->repr;
-        bop->fake_bsp->mol = bop->query_bsp->mol;
-        bop->fake_bsp->length = bop->query_bsp->length;
-        bop->fake_bsp->seq_data_type = bop->query_bsp->seq_data_type;
-        bop->fake_bsp->seq_data = bop->query_bsp->seq_data;
+        bop->fake_bsp = BlastMakeFakeBioseq(bop->query_bsp, NULL);
         
-        obidp = ObjectIdNew();
-        obidp->str = StringSave("QUERY");
-        ValNodeAddPointer(&(bop->fake_bsp->id), SEQID_LOCAL, obidp);
-        
-        /* FASTA defline not parsed, ignore the "lcl|tempseq" ID. */
-        bop->query_bsp->id = SeqIdSetFree(bop->query_bsp->id);
-
-        BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, 
+        BLASTUpdateSeqIdInSeqInt(bop->options->query_lcase_mask, 
                                  bop->fake_bsp->id);
     }
-    
+
     return bop;
 }
+
+Boolean PGPReadNextQuerySequence(PGPBlastOptionsPtr bop)
+{
+    SeqEntryPtr sep;
+
+    /* Cleaning up stuff from previous query run */
+
+    bop->options->query_lcase_mask = SeqLocSetFree(bop->options->query_lcase_mask);
+
+    if (bop->believe_query == TRUE) { /* Not corect - to be fixed */
+        BioseqFree(bop->query_bsp);
+    } else {
+        BioseqFree(bop->fake_bsp);
+    }
+
+    if(myargs[41].intvalue) {
+        if((sep = FastaToSeqEntryForDb (bop->infp, FALSE, NULL, bop->believe_query, NULL, NULL, &bop->options->query_lcase_mask)) == NULL) {
+            return FALSE;
+        }
+    } else {
+        if((sep = FastaToSeqEntryEx(bop->infp, FALSE, NULL, 
+                                    bop->believe_query)) == NULL) {
+            return FALSE;
+        }
+    }
+
+    bop->query_bsp = NULL;
+    SeqEntryExplore(sep, &bop->query_bsp, FindProt);    
+    
+    if (bop->query_bsp == NULL) {
+        ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+        return NULL;
+    }    
+    
+    if(bop->believe_query) {
+        bop->fake_bsp = bop->query_bsp;
+    } else {
+        bop->fake_bsp = BlastMakeFakeBioseq(bop->query_bsp, NULL);
+        
+        BLASTUpdateSeqIdInSeqInt(bop->options->query_lcase_mask, 
+                                 bop->fake_bsp->id);
+    }
+
+    return TRUE;
+}
+
 Boolean PGPFormatHeader(PGPBlastOptionsPtr bop)
 {
     Boolean html = myargs[37].intvalue;
@@ -942,7 +1000,7 @@ SeqAlignPtr PGPSeedSearch(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search,
                              is a list of lists of SeqAligns, one
                              list of SeqAligns per pattern occurrence*/
     
-    ValNodePtr info_vnp;  /* Output text messages from seedEngineCore() */
+    ValNodePtr vnp, info_vnp;  /* Output text messages from seedEngineCore() */
     
     query = BlastGetSequenceFromBioseq(bop->fake_bsp, &queryLength);
     seg_slp = BlastBioseqFilter(bop->fake_bsp, 
@@ -1000,7 +1058,13 @@ SeqAlignPtr PGPSeedSearch(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search,
     PGPOutTextMessages(info_vnp, bop->outfp);
     ValNodeFreeData(info_vnp);
     
-    BlastErrorPrint(search->error_return);
+    if (search->error_return) {
+       BlastErrorPrint(search->error_return);
+       for (vnp = search->error_return; vnp; vnp = vnp->next) {
+          BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
+       }
+       ValNodeFree(search->error_return);
+    }
     *seqloc_duplicate = seqloc;
     head = convertValNodeListToSeqAlignList(seedReturn, lastSeqAligns, 
                                             numLastSeqAligns);
@@ -1043,12 +1107,28 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
     BlastPruneSapStructPtr prune;
     BLAST_MatrixPtr matrix;
     Int4Ptr PNTR txmatrix;
+    Boolean tabular_output = (myargs[5].intvalue == 8);
+    BioseqPtr query_bsp;
 
     if(head == NULL) {
         fprintf(bop->outfp, "\n\n ***** No hits found ******\n\n");
         return;
     }
     
+    if (tabular_output) {
+       query_bsp = (bop->believe_query) ? bop->query_bsp : bop->fake_bsp;
+/*
+       PrintTabularOutputHeader(bop->blast_database, query_bsp, NULL, 
+                                "blastp", thisPassNum, bop->believe_query,
+                                bop->outfp);
+*/
+       BlastPrintTabulatedResults(head, query_bsp, NULL, 
+                                  bop->number_of_alignments,
+                                  "blastp", FALSE,
+                                  bop->believe_query, 0, 0, bop->outfp);
+       return;
+    }
+
     seqannot = SeqAnnotNew();
     seqannot->type = 2;
     AddAlignInfoToSeqAnnot(seqannot, 2);
@@ -1173,7 +1253,7 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
 
     search->positionBased = TRUE;
     ObjMgrClearHold();
-    /* ObjMgrFreeCache(0); */
+    ObjMgrFreeCache(0);
 
     matrix = BLAST_MatrixDestruct(matrix);
     if (txmatrix)
@@ -1220,6 +1300,9 @@ Int2 Main (void)
     Boolean  freqCheckpoint = FALSE;
     Boolean  alignCheckpoint = FALSE;
     Boolean  checkReturn = FALSE;
+    Boolean  next_query = FALSE;
+    Boolean tabular_output;
+
     SeqAlignPtr PNTR lastSeqAligns = NULL; 
                                 /*keeps track of the last SeqAlign in
                                   each list of seedReturn so that the
@@ -1228,6 +1311,7 @@ Int2 Main (void)
     Int4 numLastSeqAligns = 0;
 
     PSIXmlPtr psixp = NULL;
+    ValNodePtr vnp;
 
     /* ----- End of definitions ----- */
     
@@ -1241,294 +1325,325 @@ Int2 Main (void)
         return 1;    
     
     bop = PGPReadBlastOptions();
+
+    /* Here we will start main do/while loop over many query entries in 
+       the input file. If there is an option for checkpoint recover or
+       Output File for PSI-BLAST Checkpointing all but first entries in
+       the input file will be discarded */
+
+    do {    
+        search = BLASTSetUpSearchWithReadDb(bop->fake_bsp, "blastp", 
+                                            bop->query_bsp->length, 
+                                            bop->blast_database,
+                                            bop->options, NULL);
     
-    search = BLASTSetUpSearchWithReadDb(bop->fake_bsp, "blastp", 
-                                        bop->query_bsp->length, 
-                                        bop->blast_database,
-                                        bop->options, NULL);
-    
-    if (search == NULL)
-        return 1;
-    
-    if(bop->is_xml_output) {
-        AsnIoPtr aip;
-        if((aip = AsnIoOpen(myargs[6].strvalue, "wx")) == NULL)
+        if (search == NULL)
             return 1;
-        
-        psixp = PSIXmlInit(aip, "blastp", bop->blast_database, bop->options, 
-                           bop->fake_bsp, 0);
-    }
     
-    /*AAS*/
-    if ((NULL != myargs[29].strvalue) || (NULL != myargs[39].strvalue)) {
-        recoverCheckpoint = TRUE;
-        if (NULL != myargs[29].strvalue) {
-            freqCheckpoint = TRUE;
-            alignCheckpoint = FALSE;
-        } else {
-            freqCheckpoint = FALSE;
-            alignCheckpoint = TRUE;
-        }
-    }
-    
-    if (recoverCheckpoint)
-        search->positionBased = TRUE;
-    else
-        search->positionBased = FALSE;
-    
-    global_fp = bop->outfp;
-
-    if(!bop->is_xml_output) {   
-        PGPFormatHeader(bop);
-    }
-
-    posSearch = NULL;
-    thisPassNum = 0;
-    compactSearch = NULL;
-    search->posConverged = FALSE;
-    global_fp = bop->outfp;
-    search->error_return = NULL;
-    /*AAS*/
-    if (recoverCheckpoint) {
-        posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
-        compactSearch = compactSearchNew(compactSearch);
-        copySearchItems(compactSearch, search, bop->options->matrix);
-        posInitializeInformation(posSearch,search);
-        /*AAS*/
-        if (freqCheckpoint) {
-            checkReturn = posReadCheckpoint(posSearch, compactSearch, myargs[29].strvalue, &(search->error_return));
-            search->sbp->posMatrix = posSearch->posMatrix;
-	    if (NULL == search->sbp->posFreqs)
-	      search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, compactSearch->alphabetSize);
-	    copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
-        } else {
-            search->sbp->posMatrix = BposComputation(posSearch, search, compactSearch, myargs[39].strvalue, myargs[28].strvalue, &(search->error_return)); 
-            if (NULL == search->sbp->posMatrix)
-                checkReturn = FALSE;
-            else
-                checkReturn = TRUE;
-        }
-        
-        BlastErrorPrint(search->error_return);
-        if (!checkReturn) {
-            ErrPostEx(SEV_FATAL, 0, 0, "blast: Error recovering from checkpoint");
-            return 1;
-        }
-        
-        /* Print out Pos matrix if necessary */
-        if (myargs[38].strvalue != NULL)
-            PGPrintPosMatrix(myargs[38].strvalue, posSearch, compactSearch);
-    }
-    
-    do {  /*AAS*/
-        thisPassNum++;
-        if (thisPassNum > 1)
-            bop->options->isPatternSearch = FALSE;
-
-        if(head != NULL)
-            SeqAlignSetFree(head);
-        
-#ifdef OS_UNIX
-        if(!bop->is_xml_output) {
-            search->thr_info->tick_callback =  tick_callback;
-            fprintf(global_fp, "%s", "Searching");
-            fflush(global_fp);
-        }
-#endif
-        if (1 == thisPassNum && (!recoverCheckpoint)) {
-            
-            posSearch = (posSearchItems *) 
-                MemNew(1 * sizeof(posSearchItems));
-        }
-
-        /* ----- Here is real BLAST search done ------- */
-
-        if (bop->options->isPatternSearch && 
-            (1 == thisPassNum && (!recoverCheckpoint))) {
-            head = PGPSeedSearch(bop, search, posSearch, 
-                                 &seed_seqloc,
-                                 &lastSeqAligns, &numLastSeqAligns);
-        } else {
-	  if ((bop->options->tweak_parameters) && (thisPassNum > 1)) {
-          /*allows for extra matches in first pass of screening,
-           hitlist_size will be restored in
-           BioseqBlastEngineCore for the second pass. */
-	    bop->options->original_expect_value = bop->options->expect_value;
-	    bop->options->hitlist_size *= 2; 
-	  }
-
-            if ((1 == thisPassNum) && (!recoverCheckpoint))
-                head = BioseqBlastEngineCore(search, bop->options, NULL);
-            else
-                head = BioseqBlastEngineCore(search, bop->options, search->sbp->posMatrix);  
-        }
-        /* ---------------------------------------------- */
-
-        if (recoverCheckpoint) {
-            compactSearchDestruct(compactSearch);
-            recoverCheckpoint = FALSE;
-            alreadyRecovered = TRUE;
-        }
-        
-        if (thisPassNum == 1) {
-            compactSearch = compactSearchNew(compactSearch);
-        } else {
-            MemFree(compactSearch->standardProb);
-        }
-
-        copySearchItems(compactSearch, search, bop->options->matrix);
-        
-
-        /* The next two calls (after the "if") are diagnostics 
-           for Stephen. Don't perform this if only one pass will 
-           be made (i.e., standard BLAST) */
-        
-        if (ALL_ROUNDS && 1 != search->pbp->maxNumPasses) {
-            if ((1 == thisPassNum)  && (!alreadyRecovered))
-                posInitializeInformation(posSearch, search);
-            posPrintInformation(posSearch, search, thisPassNum);
-        }
-        
-#ifdef OS_UNIX
-        if(!bop->is_xml_output) {
-            fprintf(global_fp, "%s", "done\n\n");
-        }
-#endif
-        
-        /* AAS */
-        if (thisPassNum == 1) {
-            ReadDBBioseqFetchEnable ("blastpgp", bop->blast_database, 
-                                     FALSE, TRUE);
-        } else {
-        
-            /* Have things converged? */
-            if (ALL_ROUNDS && search->pbp->maxNumPasses != 1) {
-                posConvergenceTest(posSearch, search, head, thisPassNum);
-            }
-        }
-
-        /*AAS*/
-        search->positionBased = TRUE;
-
-        /* Here is all BLAST formating of the main output done */
-
         if(bop->is_xml_output) {
-
-            ValNodePtr other_returns;
-            IterationPtr iterp;
-
-            other_returns = BlastOtherReturnsPrepare(search);
-
-            if (head == NULL) {                
-                iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, "No hits found");
+            AsnIoPtr aip;
+            if((aip = AsnIoOpen(myargs[6].strvalue, "wx")) == NULL)
+                return 1;
+        
+            psixp = PSIXmlInit(aip, "blastp", bop->blast_database, 
+                               bop->options, 
+                               bop->fake_bsp, 0);
+        }
+    
+        /*AAS*/
+        if ((NULL != myargs[29].strvalue) || (NULL != myargs[39].strvalue)) {
+            recoverCheckpoint = TRUE;
+            if (NULL != myargs[29].strvalue) {
+                freqCheckpoint = TRUE;
+                alignCheckpoint = FALSE;
             } else {
-                iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, search->posConverged ? "CONVERGED" : NULL);
+                freqCheckpoint = FALSE;
+                alignCheckpoint = TRUE;
             }
-
-            IterationAsnWrite(iterp, psixp->aip, psixp->atp);
-            AsnIoFlush(psixp->aip);
-
-            IterationFree(iterp);
-            BlastOtherReturnsFree(other_returns);
-        } else {
-            PGPFormatMainOutput(head, bop, search, thisPassNum,
-                                lastSeqAligns, numLastSeqAligns, 
-                                seed_seqloc, posSearch->posRepeatSequences);
-        }
-
-        if (alreadyRecovered) {
-            posCheckpointFreeMemory(posSearch, compactSearch->qlength);
-            alreadyRecovered = FALSE;
         }
         
-        if (ALL_ROUNDS && thisPassNum > 1) {
-            posCleanup(posSearch, compactSearch);
+        if (recoverCheckpoint)
+            search->positionBased = TRUE;
+        else
+            search->positionBased = FALSE;
+        
+        global_fp = bop->outfp;
+        tabular_output = (myargs[5].intvalue == 8);
+
+        if(!bop->is_xml_output && !tabular_output) {   
+            PGPFormatHeader(bop);
         }
         
-        if (!search->posConverged && (search->pbp->maxNumPasses == 0 || 
-                            (thisPassNum < search->pbp->maxNumPasses))) {
-            if (ALL_ROUNDS) {
-                search->sbp->posMatrix = 
-                    CposComputation(posSearch, search, compactSearch, 
-                                    head, myargs[28].strvalue, 
-                                    (bop->options->isPatternSearch && 
-                                     (1== thisPassNum)), 
-                                    &(search->error_return), 1.0); /*AAS*/
-                BlastErrorPrint(search->error_return);
+        posSearch = NULL;
+        thisPassNum = 0;
+        compactSearch = NULL;
+        search->posConverged = FALSE;
+        global_fp = bop->outfp;
+        search->error_return = NULL;
+        /*AAS*/
+        if (recoverCheckpoint) {
+            posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
+            compactSearch = compactSearchNew(compactSearch);
+            copySearchItems(compactSearch, search, bop->options->matrix);
+            posInitializeInformation(posSearch,search);
+            /*AAS*/
+            if (freqCheckpoint) {
+                checkReturn = posReadCheckpoint(posSearch, compactSearch, myargs[29].strvalue, &(search->error_return));
+                search->sbp->posMatrix = posSearch->posMatrix;
+                if (NULL == search->sbp->posFreqs)
+                    search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, compactSearch->alphabetSize);
+                copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
             } else {
-                search->sbp->posMatrix = 
-                    WposComputation(compactSearch, head, search->sbp->posFreqs); 
+                search->sbp->posMatrix = BposComputation(posSearch, search, compactSearch, myargs[39].strvalue, myargs[28].strvalue, &(search->error_return)); 
+                if (NULL == search->sbp->posMatrix)
+                    checkReturn = FALSE;
+                else
+                    checkReturn = TRUE;
             }
-#if 0
-            /* DEBUG Printing of the matrix */
-            {{
-                Int4 i, j;
-                FILE *fd;
-                
-                fd = FileOpen("omatrix.out", "w");
-                for(i = 0; i < bop->query_bsp->length; i++) {
-                    for(j = 0; j < 26; j++) {
-                        fprintf(fd, "%d ", search->sbp->posMatrix[i][j]);
-                    } 
-                    fprintf(fd, "\n");
-                } 
-                FileClose(fd);
-            }}
-#endif
-        } else {
-            search->sbp->posMatrix = NULL;
-        }
-        
-        if (ALL_ROUNDS && thisPassNum > 1) {
-            MemFree(posSearch->posRepeatSequences);
-        }
-
-        if (!search->posConverged && (0 == search->pbp->maxNumPasses || 
-                              thisPassNum < search->pbp->maxNumPasses)) {
             
-            /* Print out pos matrix if necessary */
-            if (ALL_ROUNDS && (myargs[38].strvalue != NULL))
-                PGPrintPosMatrix(myargs[38].strvalue, posSearch, 
-                                 compactSearch);
+
+            if (search->error_return) {
+               BlastErrorPrint(search->error_return);
+               for (vnp = search->error_return; vnp; vnp = vnp->next) {
+                  BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
+               }
+               ValNodeFree(search->error_return);
+            }
+            if (!checkReturn) {
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Error recovering from checkpoint");
+                return 1;
+            }
+        
+            /* Print out Pos matrix if necessary */
+            if (myargs[38].strvalue != NULL)
+                PGPrintPosMatrix(myargs[38].strvalue, posSearch, compactSearch);
         }
         
-    } while (( 0 == search->pbp->maxNumPasses || thisPassNum < (search->pbp->maxNumPasses)) && (! (search->posConverged)));
+        do {  /*AAS*/
+            thisPassNum++;
+            if (thisPassNum > 1)
+                bop->options->isPatternSearch = FALSE;
+            
+            if(head != NULL)
+                head = SeqAlignSetFree(head);
+            
+#ifdef OS_UNIX
+            if(!bop->is_xml_output && !tabular_output) {
+                search->thr_info->tick_callback =  tick_callback;
+                fprintf(global_fp, "%s", "Searching");
+                fflush(global_fp);
+            }
+#endif
+            if (1 == thisPassNum && (!recoverCheckpoint)) {
+                
+                posSearch = (posSearchItems *) 
+                    MemNew(1 * sizeof(posSearchItems));
+            }
+            
+            /* ----- Here is real BLAST search done ------- */
+            
+            if (bop->options->isPatternSearch && 
+                (1 == thisPassNum && (!recoverCheckpoint))) {
+                head = PGPSeedSearch(bop, search, posSearch, 
+                                     &seed_seqloc,
+                                     &lastSeqAligns, &numLastSeqAligns);
+            } else {
+                if ((bop->options->tweak_parameters) && (thisPassNum > 1)) {
+                    /*allows for extra matches in first pass of screening,
+                      hitlist_size will be restored in
+                      BioseqBlastEngineCore for the second pass. */
+                    bop->options->original_expect_value = 
+                        bop->options->expect_value;
+                    bop->options->hitlist_size *= 2; 
+                }
+                
+                if ((1 == thisPassNum) && (!recoverCheckpoint))
+                    head = BioseqBlastEngineCore(search, bop->options, NULL);
+                else
+                    head = BioseqBlastEngineCore(search, bop->options, 
+                                                 search->sbp->posMatrix);  
+            }
+            /* ---------------------------------------------- */
+            
+            if (recoverCheckpoint) {
+                compactSearchDestruct(compactSearch);
+                recoverCheckpoint = FALSE;
+                alreadyRecovered = TRUE;
+            }
+            
+            if (thisPassNum == 1) {
+                compactSearch = compactSearchNew(compactSearch);
+            } else {
+                MemFree(compactSearch->standardProb);
+            }
+            
+            copySearchItems(compactSearch, search, bop->options->matrix);
+            
+            
+            /* The next two calls (after the "if") are diagnostics 
+               for Stephen. Don't perform this if only one pass will 
+               be made (i.e., standard BLAST) */
+            
+            if (ALL_ROUNDS && 1 != search->pbp->maxNumPasses) {
+                if ((1 == thisPassNum)  && (!alreadyRecovered))
+                    posInitializeInformation(posSearch, search);
+                posPrintInformation(posSearch, search, thisPassNum);
+            }
+            
+#ifdef OS_UNIX
+            if(!bop->is_xml_output && !tabular_output) {
+                fprintf(global_fp, "%s", "done\n\n");
+            }
+#endif
+            
+            /* AAS */
+            if (thisPassNum == 1) {
+                ReadDBBioseqFetchEnable ("blastpgp", bop->blast_database, 
+                                         FALSE, TRUE);
+            } else {
+                
+                /* Have things converged? */
+                if (ALL_ROUNDS && search->pbp->maxNumPasses != 1) {
+                    posConvergenceTest(posSearch, search, head, thisPassNum);
+                }
+            }
 
-    if (bop->aip_out != NULL && head != NULL)
-        PGPSeqAlignOut(bop, head);
+            /*AAS*/
+            search->positionBased = TRUE;
+            
+            /* Here is all BLAST formating of the main output done */
+            
+            if(bop->is_xml_output) {
+                
+                ValNodePtr other_returns;
+                IterationPtr iterp;
 
-    SeqAlignSetFree(head);
-    
-    /* Here we will print out footer of BLAST output */
+                other_returns = BlastOtherReturnsPrepare(search);
 
-    if(!bop->is_xml_output) {
-        PGPFormatFooter(bop, search);
-    }
-    
+                if (head == NULL) {                
+                    iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, "No hits found");
+                } else {
+                    iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, search->posConverged ? "CONVERGED" : NULL);
+                }
+                
+                IterationAsnWrite(iterp, psixp->aip, psixp->atp);
+                AsnIoFlush(psixp->aip);
+                
+                IterationFree(iterp);
+                BlastOtherReturnsFree(other_returns);
+            } else {
+                PGPFormatMainOutput(head, bop, search, thisPassNum,
+                                    lastSeqAligns, numLastSeqAligns, 
+                                    seed_seqloc, posSearch->posRepeatSequences);
+            }
+            
+            if (alreadyRecovered) {
+                posCheckpointFreeMemory(posSearch, compactSearch->qlength);
+                alreadyRecovered = FALSE;
+            }
+            
+            if (ALL_ROUNDS && thisPassNum > 1) {
+                posCleanup(posSearch, compactSearch);
+            }
+        
+            if (!search->posConverged && (search->pbp->maxNumPasses == 0 || 
+                                          (thisPassNum < search->pbp->maxNumPasses))) {
+                if (ALL_ROUNDS) {
+                    search->sbp->posMatrix = 
+                        CposComputation(posSearch, search, compactSearch, 
+                                        head, myargs[28].strvalue, 
+                                        (bop->options->isPatternSearch && 
+                                         (1== thisPassNum)), 
+                                        &(search->error_return), 1.0); /*AAS*/
+                    if (search->error_return) {
+                       BlastErrorPrint(search->error_return);
+                       for (vnp = search->error_return; vnp; vnp = vnp->next) {
+                          BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
+                       }
+                       ValNodeFree(search->error_return);
+                    }
+                } else {
+                    search->sbp->posMatrix = 
+                        WposComputation(compactSearch, head, search->sbp->posFreqs); 
+                }
+#if 0
+                /* DEBUG Printing of the matrix */
+                {{
+                    Int4 i, j;
+                    FILE *fd;
+                    
+                    fd = FileOpen("omatrix.out", "w");
+                    for(i = 0; i < bop->query_bsp->length; i++) {
+                        for(j = 0; j < 26; j++) {
+                            fprintf(fd, "%d ", search->sbp->posMatrix[i][j]);
+                        } 
+                        fprintf(fd, "\n");
+                    } 
+                    FileClose(fd);
+                }}
+#endif
+            } else {
+                search->sbp->posMatrix = NULL;
+            }
+            
+            if (ALL_ROUNDS && thisPassNum > 1) {
+                MemFree(posSearch->posRepeatSequences);
+            }
+            
+            if (!search->posConverged && (0 == search->pbp->maxNumPasses || 
+                                          thisPassNum < search->pbp->maxNumPasses)) {
+                
+                /* Print out pos matrix if necessary */
+                if (ALL_ROUNDS && (myargs[38].strvalue != NULL))
+                    PGPrintPosMatrix(myargs[38].strvalue, posSearch, 
+                                     compactSearch);
+            }
+            
+        } while (( 0 == search->pbp->maxNumPasses || thisPassNum < (search->pbp->maxNumPasses)) && (! (search->posConverged)));
+
+        if (bop->aip_out != NULL && head != NULL)
+            PGPSeqAlignOut(bop, head);
+        
+        head = SeqAlignSetFree(head);
+        
+        /* Here we will print out footer of BLAST output */
+        
+        if(!bop->is_xml_output && !tabular_output) {
+            PGPFormatFooter(bop, search);
+        }
+
+        /* PGPOneQueryCleanup */
+
+        if (bop->options->isPatternSearch) {
+            bop->seedSearch = MemFree(bop->seedSearch);
+            FileClose(bop->patfp);
+        }
+        
+        if (ALL_ROUNDS) {
+            posFreeInformation(posSearch);
+            MemFree(posSearch);
+        }    
+        compactSearchDestruct(compactSearch);
+        search = BlastSearchBlkDestruct(search);
+
+        /* If these options are set we are not going to proceed with another
+           queryes in the input file if any */
+        
+        if(recoverCheckpoint || myargs[38].strvalue != NULL)
+            break;
+        
+        next_query = FALSE;
+        next_query = PGPReadNextQuerySequence(bop);
+        
+    } while (next_query);       /* End of main do {} while (); loop */
+
     ReadDBBioseqFetchDisable();
-    if (bop->options->isPatternSearch) {
-        bop->seedSearch = MemFree(bop->seedSearch);
-        FileClose(bop->patfp);
-    }
-    
-    if (ALL_ROUNDS) {
-        posFreeInformation(posSearch);
-        MemFree(posSearch);
-    }
-    
-    compactSearchDestruct(compactSearch);
-    bop->options = BLASTOptionDelete(bop->options);
-    search = BlastSearchBlkDestruct(search);
-    
-/*
-    ObjMgrFreeCache(0);
-*/
+
     
     if(psixp != NULL) {
         PSIXmlClose(psixp);
     }
     
-    FileClose(bop->infp);
     PGPFreeBlastOptions(bop);
     
     return 0;

@@ -14,29 +14,40 @@
 	 3/15/00	Churchill   Modified for OpenTransport work in progress
 	 4/19/00	Kans		Only need to copy ncbilcl.met to ncbilcl.h
 	11/01/00	Kans		Removed 68K support
+	 4/19/01	Juran		Major redesign, added Carbon support
 
-	This file now subsumes the functions of the old copyhdrs.met AppleScript.
+	This file now subsumes the old copyhdrs.met and makenet.met AppleScripts.
 
 	================================================================================ *)
 
-property MAKEPROJECTS : true
-property MAKELIBS : true
+property pProjectFileExtension : ".mcp"
+
+property pAlwaysCreateProjects : false
+property pShouldBuild : true
+property pBuildObsoleteLibraries : false
+
+-- Which targets to create.
+-- If these are changed you must recreate the project files.  There is no direct effect on building.
+property pCreateBlueTargets : true -- 'Blue' was the codename for System 7.  Here, it means pre-Carbon.
+property pCreateCarbonTargets : true
+property pCreateDebugTargets : true
+property pCreateOptimizedTargets : true
+
+property DOPNG : false
 
 (* ==== These symbols will be derived ==== *)
 
-global HARDDISK
-global METRO
-global METROWERKSCW
-global OTLIB
+global gStartupDisk
+global gMW6root
+global OGLSDK
 
 global NCBISOURCE
 global LIBRARIES
 global BUILDTEST
+global CTOOLS
 
 global INCLUDEFILES
-global DOOPENTPT
-global DEBUGSYMBOLS
-global OPTIMIZE
+global DOOPENGL
 
 on ResolveAlias(pathname)
 	tell application "Finder"
@@ -52,15 +63,13 @@ end ResolveAlias
 on DoSetGlobals()
 	tell application "Finder"
 		
-		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "Metrowerks CodeWarrior 6.0:" as string
-		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
-		set OTLIB to METROWERKSCW & "MacOS Support:OpenTransport:Open Tpt Client Developer:PPC Libraries:"
+		set gStartupDisk to startup disk as string
+		set gMW6root to gStartupDisk & "Metrowerks CodeWarrior 6.0:"
 		
-		set NCBISOURCE to METRO & "ncbi:" as string
+		set NCBISOURCE to gMW6root & "ncbi:"
 		
 		try
-			tell me to set Dev to ResolveAlias(HARDDISK & "Development")
+			tell me to set Dev to ResolveAlias(gStartupDisk & "Development")
 			tell me to set Trees to ResolveAlias(Dev & "Trees")
 			tell me to set NCBIgroup to ResolveAlias(Trees & "NCBI")
 			tell me to set Vault to ResolveAlias(NCBIgroup & "ncbi.vault")
@@ -68,24 +77,17 @@ on DoSetGlobals()
 			set NCBISOURCE to Distrib
 		end try
 		
-		set INCLUDEFILES to NCBISOURCE & "include:" as string
-		set LIBRARIES to NCBISOURCE & "lib:" as string
-		set BUILDTEST to NCBISOURCE & "build:" as string
+		set INCLUDEFILES to NCBISOURCE & "include:"
+		set LIBRARIES to NCBISOURCE & "lib:"
+		set BUILDTEST to NCBISOURCE & "build:"
+		set CTOOLS to NCBISOURCE & "ctools:"
 		
-		if (exists (file "debug.flg" of folder METRO)) then
-			set DEBUGSYMBOLS to true
+		set results to every folder of folder gMW6root whose name starts with "OpenGL SDK"
+		if (count results) > 0 then
+			set OGLSDK to item 1 of results as string
+			set DOOPENGL to true
 		else
-			set DEBUGSYMBOLS to false
-		end if
-		set OPTIMIZE to not DEBUGSYMBOLS
-		
-		if (exists (folder OTLIB)) then
-			set DOOPENTPT to true
-		else
-			set DOOPENTPT to false
-			display dialog "Did not find OpenTransport folder inside MacOS Support folder" & return & Â
-				return & "Will use MacTCP interfaces to build networking" & return Â
-				buttons "OK" default button 1
+			set DOOPENGL to false
 		end if
 		
 	end tell
@@ -102,6 +104,10 @@ on CreateFolders()
 			make new folder at folder NCBISOURCE with properties {name:"lib"}
 		end if
 		
+		if not (exists (folder CTOOLS)) then
+			make new folder at folder NCBISOURCE with properties {name:"ctools"}
+		end if
+		
 		if not (exists (folder BUILDTEST)) then
 			make new folder at folder NCBISOURCE with properties {name:"build"}
 		end if
@@ -109,25 +115,76 @@ on CreateFolders()
 	end tell
 end CreateFolders
 
+on HeaderExists(header, headerDir)
+	tell application "Finder"
+		
+		if headerDir is "" then set headerDir to folder INCLUDEFILES
+		return exists file header of headerDir
+		
+	end tell
+end HeaderExists
+
+on IsOlderThan(fileA, fileB)
+	tell application "Finder"
+		
+		return (the modification date of fileA < the modification date of fileB)
+		
+	end tell
+end IsOlderThan
+
+on UpdateRenameHeader(canonicalName, canonicalDir, dotHName, dotHDir)
+	tell application "Finder"
+		
+		set needRename to (dotHName is not "")
+		if not needRename then set dotHName to canonicalName
+		if dotHDir is "" then set dotHDir to folder INCLUDEFILES
+		
+		-- This file is only present if the script was interrupted.
+		if needRename and my HeaderExists(canonicalName, dotHDir) then
+			delete file canonicalName of dotHDir
+		end if
+		
+		-- The native config file.
+		set canonicalFile to file canonicalName of canonicalDir
+		
+		set needCopy to true
+		if my HeaderExists(dotHName, dotHDir) then
+			set dotHFile to file dotHName of dotHDir
+			if my IsOlderThan(dotHFile, canonicalFile) then
+				delete dotHFile
+			else
+				set needCopy to false
+			end if
+		end if
+		
+		if needCopy then
+			duplicate canonicalFile to dotHDir
+			if needRename then set name of file canonicalName of dotHDir to dotHName
+		end if
+		
+	end tell
+end UpdateRenameHeader
+
+on UpdateHeader(headerName, headerDir)
+	
+	UpdateRenameHeader(headerName, headerDir, "", "")
+	
+end UpdateHeader
+
 on CopyPrefixes()
 	tell application "Finder"
 		
-		if (exists (file "ncbilcl.met" of folder INCLUDEFILES)) then
-			delete file "ncbilcl.met" of (folder INCLUDEFILES)
-		end if
-		
-		if (exists (file "ncbilcl.h" of (folder INCLUDEFILES))) then
-			delete file "ncbilcl.h" of (folder INCLUDEFILES)
-		end if
-		
-		copy {file "ncbilcl.met" of (folder "corelib" of folder NCBISOURCE)} to {folder INCLUDEFILES}
-		set name of file "ncbilcl.met" of (folder INCLUDEFILES) to "ncbilcl.h"
+		my UpdateRenameHeader("ncbilcl.met", folder "corelib" of folder NCBISOURCE, "ncbilcl.h", "")
+		my UpdateRenameHeader("asn_connection.h", folder "connect" of folder NCBISOURCE, "", folder CTOOLS)
 		
 	end tell
+	
+	--set asnConH to file "asn_connection.h" of (folder "connect" of folder NCBISOURCE)
+	--copy {asnConH} to {folder CTOOLS}
 end CopyPrefixes
 
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 4.1"
+	tell application "CodeWarrior IDE 4.1.0.3"
 		
 		(* ===== Panel Target ===== *)
 		Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
@@ -179,17 +236,6 @@ on DoSetPreferences()
 				, Schedule:false Â
 				, Peephole Optimizer:false}
 		
-		(* ===== Panel PPC Global Optimizer ===== *)
-		if OPTIMIZE then
-			Set Preferences of panel "PPC Global Optimizer" to Â
-				{Optimize For:code_Speed Â
-					, Level:1}
-		else
-			Set Preferences of panel "PPC Global Optimizer" to Â
-				{Optimize For:code_Speed Â
-					, Level:0}
-		end if
-		
 		(* ===== Panel PPC Linker ===== *)
 		Set Preferences of panel "PPC Linker" to Â
 			{Generate SYM File:true Â
@@ -222,7 +268,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 4.1"
+	tell application "CodeWarrior IDE 4.1.0.3"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -238,418 +284,451 @@ on DoSetPaths1()
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 4.1"
+	tell application "CodeWarrior IDE 4.1.0.3"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Universal:", recursive:true, origin:shell relative}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Profiler:", recursive:true, origin:shell relative}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MSL:MSL_C:", recursive:true, origin:shell relative}}}
-		if DOOPENTPT then
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:OpenTransport:", recursive:true, origin:shell relative}}}
+		set dirsToAdd to {Â
+			":MacOS Support:Headers:", Â
+			":MacOS Support:Libraries:", Â
+			":MacOS Support:Universal:", Â
+			":MacOS Support:Profiler:", Â
+			":MSL:MSL_C:", Â
+			":MacOS Support:OpenTransport:"}
+		if DOOPENGL then
+			copy OGLSDK to end of dirsToAdd
 		end if
+		if DOPNG then
+			copy gMW6root & "zlib:" to end of dirsToAdd
+			copy gMW6root & "libpng:" to end of dirsToAdd
+		end if
+		
+		set pathsToAdd to {}
+		repeat with i in dirsToAdd
+			copy {name:i, recursive:true, origin:shell relative} to end of pathsToAdd
+		end repeat
+		Set Preferences of panel "Access Paths" to {System Paths:pathsToAdd}
 		
 	end tell
 end DoSetPaths2
 
-on SetDebugSymbols()
-	tell application "CodeWarrior IDE 4.1"
-		set the debug of every target file of target 1 of project document 1 to DEBUGSYMBOLS
-	end tell
-end SetDebugSymbols
-
-on DoCompileLibraries()
-	tell application "CodeWarrior IDE 4.1"
+on SetupTarget(projName, projFiles, prefixFile, flags)
+	tell application "CodeWarrior IDE 4.1.0.3"
 		
-		open (LIBRARIES & "ncsasock.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
+		if flags contains "Carbon" then
+			set targetAPI to "Carbon"
+		else
+			set targetAPI to "Blue"
+		end if
+		if flags contains "debug" then
+			set targetDebug to "debug"
+		else
+			set targetDebug to ""
+		end if
+		set targetName to projName & " " & targetAPI
+		set targetFilename to projName & "-" & targetAPI
+		if targetDebug is not "" then
+			set targetName to targetName & " " & targetDebug
+			set targetFilename to targetFilename & "-" & targetDebug
+		end if
+		set targetFilename to targetFilename & ".lib"
 		
-		if DOOPENTPT then
-			open (LIBRARIES & "ncsasockOT.mcp")
-			my SetDebugSymbols()
-			Make Project
-			Close Project
+		make new target at project document 1 with properties {name:targetName}
+		set the current target of project document 1 to the result
+		Set Preferences of panel "PPC Project" to {File Name:targetFilename}
+		
+		my DoSetPreferences()
+		--Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & projPath, origin:absolute}}}
+		my DoSetPaths2()
+		
+		if flags contains "Carbon" then
+			if prefixFile is "" then
+				set prefixFile to "CarbonPrefix.h"
+			else
+				set prefixFile to "Carbon-" & prefixFile
+			end if
+		end if
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:prefixFile}
+		
+		repeat with group in projFiles
+			set projPath to projPath of group
+			set fileList to group's fileList
+			set filesToAdd to {}
+			repeat with i in fileList
+				copy NCBISOURCE & projPath & i & ".c" to end of filesToAdd
+			end repeat
+			Add Files filesToAdd
+		end repeat
+		
+		if flags contains "debug" then
+			set the debug of every target file of target (count targets of project document 1) Â
+				of project document 1 to true
+			Set Preferences of panel "PPC Global Optimizer" to Â
+				{Optimize For:code_Speed, Level:0}
+		else
+			Set Preferences of panel "PPC Global Optimizer" to Â
+				{Optimize For:code_Speed, Level:1}
 		end if
 		
-		open (LIBRARIES & "ncbi.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbiobj.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbicdr.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "vibrant.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "vibgif.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbiacc.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbidesk.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ddvlib.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbitool.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbimmdb.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncbicn3d.mcp")
-		my SetDebugSymbols()
-		Make Project
-		Close Project
+		Reset File Paths
 		
 	end tell
-end DoCompileLibraries
+end SetupTarget
 
-(* ==== This section populates and builds the libraries ==== *)
-
-with timeout of 60000 seconds
-	my DoSetGlobals()
-	
-	my CreateFolders()
-	my CopyPrefixes()
-	
-	tell application "CodeWarrior IDE 4.1"
+on CreateProject(projName, projFiles, prefixFile)
+	tell application "CodeWarrior IDE 4.1.0.3"
 		
-		activate
-		
-		if MAKEPROJECTS then
+		set projFilename to projName & pProjectFileExtension
+		set projPathname to LIBRARIES & projFilename
+		if pAlwaysCreateProjects or not (exists file projPathname of application "Finder") then
 			
-			(* ==== This subsection populates all the libraries with the appropriate source files ==== *)
+			try
+				close (the first project document whose name is projFilename)
+			end try
 			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncsasock.mcp"}
+			Create Project {projPathname}
 			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncsasock"}
-			Set Preferences of panel "PPC CodeGen" to {Struct Alignment:Align_68k}
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-			Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "connect:ncsasock:", origin:absolute}}}
-			my DoSetPaths2()
+			if pCreateBlueTargets and pCreateDebugTargets then
+				my SetupTarget(projName, projFiles, prefixFile, "Blue debug")
+			end if
 			
-			repeat with i in {"dprintf", "netdb", "rexec", "socket", "sock_std", "sock_tcp", "sock_udp", "sock_utl", "syslog", "tcpglue", "unixlib"}
-				Add Files {NCBISOURCE & "connect:ncsasock:" & i & ".c"} To Segment 1
-			end repeat
+			if pCreateBlueTargets and pCreateOptimizedTargets then
+				my SetupTarget(projName, projFiles, prefixFile, "Blue")
+			end if
 			
-			Add Files {METROWERKSCW & "MacOS Support:Headers:MacTCP Headers:dnr.c"} To Segment 1
+			if pCreateCarbonTargets and pCreateDebugTargets then
+				my SetupTarget(projName, projFiles, prefixFile, "Carbon debug")
+			end if
 			
-			Reset File Paths
+			if pCreateCarbonTargets and pCreateOptimizedTargets then
+				my SetupTarget(projName, projFiles, prefixFile, "Carbon")
+			end if
+			
+			set the current target of project document 1 to target 1 of project document 1
+			
 			Close Project
 			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncsasockOT.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncsasockOT"}
-			Set Preferences of panel "PPC CodeGen" to {Struct Alignment:Align_68k}
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-			Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "connect:ncsasock:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"dprintf", "OTnetdb", "rexec", "socket", "sock_std", "sock_tcp", "sock_udp", "OTsock_utl", "syslog", "OTtcpglue", "unixlib"}
-				Add Files {NCBISOURCE & "connect:ncsasock:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:ThreadsLib"} To Segment 1
-			
-			repeat with i in {"OpenTransportAppPPC.o", "OpenTptInetPPC.o", "OpenTransportLib", "OpenTptInternetLib"}
-				Add Files {OTLIB & i} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbi.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbi"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "corelib:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "connect:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "asnlib:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"ncbibs", "ncbienv", "ncbierr", "ncbifile", "ncbimath", "ncbimem", "ncbimisc", "ncbimsg", "ncbiprop", "ncbisgml", Â
-				"ncbistr", "ncbitime", "ncbilang", "gifgen", "togif", "ncbithr", "tsprintf", "tree", "wwwutils", "matrix", "binary"}
-				Add Files {NCBISOURCE & "corelib:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"ncbibuf", "ncbi_buffer", "ncbisock", Â
+		end if
+		
+	end tell
+end CreateProject
+
+on CreateSimpleProject(projName, projPath, projFiles)
+	
+	CreateProject(projName, {{projPath:projPath, fileList:projFiles}}, "")
+	
+end CreateSimpleProject
+
+on CreateAllProjects()
+	
+	(* ==== This handler populates all the libraries with the appropriate source files ==== *)
+	
+	CreateSimpleProject("mitsock", "connect:mitsock:", Â
+		{"OTSocketInternal", "OTErrno", "OTSockets", "OTidle", "OTNetdbServices", "OTnetdb"}, "")
+	
+	
+	CreateProject("ncbi", {Â
+		Â
+			{projPath:"corelib:", fileList:{Â
+				"ncbibs", "ncbienv", "ncbierr", "ncbifile", "ncbimath", "ncbimem", "ncbimisc", Â
+				"ncbimsg", "ncbiprop", "ncbisgml", "ncbistr", "ncbitime", "ncbilang", "gifgen", Â
+				"togif", "ncbithr", "tsprintf", "tree", "wwwutils", "matrix", "binary"}}, Â
+		Â
+			{projPath:"connect:", fileList:{Â
+				"ncbibuf", "ncbi_buffer", "ncbisock", Â
 				"ncbi_socket_", "ncbi_core", "ncbi_util", "ncbi_priv", Â
 				"ncbi_ansi_ext", "ncbi_connection", "ncbi_connector", "ncbi_connutil", Â
 				"ncbi_file_connector", "ncbi_http_connector", Â
 				"ncbi_server_info", "ncbi_service", Â
 				"ncbi_service_connector", "ncbi_service_dispd", Â
 				"ncbi_service_lbsmd_stub", "ncbi_socket_connector", Â
-				"ncbi_sendmail_", "urlquery"}
-				Add Files {NCBISOURCE & "connect:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"asnbufo", "asndebin", "asnenbin", "asngen", "asngenob", "asnio", "asnlex", "asnlext", "asnout", "asnprint", "asntypes"}
-				Add Files {NCBISOURCE & "asnlib:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbiobj.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbiobj"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "object:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "access:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "api:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "ddv:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"objacces", "objalign", "objall", "objbibli", "objblock", "objcode", "objfdef", "objfeat", "objgen", "objloc", Â
-				"objmdrs", "objmedli", "objmime", "objproj", "objprt", "objpub", "objpubme", "objres", "objseq", "objsset", "objalignloc", "objsub"}
-				Add Files {NCBISOURCE & "object:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"objent2", "ent2api", "pmfapi", "strucapi", "qblastapi", "vecscnapi", "objmim", "mimapi"}
-				Add Files {NCBISOURCE & "access:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"asn2ff1", "asn2ff2", "asn2ff3", "asn2ff4", "asn2ff5", "asn2ff6", "codon", "edutil", "ffprint", Â
-				"findrepl", "ftusrstr", "gather", "gbfeat", "gbftglob", "gbparint", "jzcoll", "jzmisc", "lsqfetch", Â
-				"maputil", "mconsist", "objmgr", "prtutil", "satutil", "seqmgr", "seqport", "sequtil", "simple", Â
-				"sqnutil1", "sqnutil2", "sqnutil3", "subutil", "tofasta", "tofile", "tomedlin", "utilpars", Â
-				"utilpub", "salpstat", "salpedit", "valid", "alignmgr", "alignval", "wprint", "salpacc", "salprop", Â
-				"salsap", "salstruc", "salutil", "udvseq", "blocks", "pgppop", "samutil", "ddvcolor", "viewmgr", Â
-				"jsavlt", "needleman", "fdlobj", "txalign"}
-				Add Files {NCBISOURCE & "api:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"ddvcreate"}
-				Add Files {NCBISOURCE & "ddv:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbicdr.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbicdr"}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"casn", "cdconfig", "cdentrez", "cdnewlib", "cdromlib", "objentr"}
-				Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "vibrant.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"vibrant"}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "vibrant:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"ncbidraw", "vibbutns", "vibextra", "vibfiles", "vibforms", "vibgroup", "viblists", "vibmenus", Â
-				"vibprmpt", "vibsbars", "vibslate", "vibtexts", "vibutils", "vibwndws", "document", "drawing", "mapping", Â
-				"palette", "picture", "table", "viewer", "diagnost", "image", "pictur3d", "prim3d1", "prim3d2", "prim3d3", Â
-				"prim3d4", "prim3d5", "viewer3d", "vibmouse", "imagelst", "treeview", "shim3d", "odlbox"}
-				Add Files {NCBISOURCE & "vibrant:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "vibgif.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"vibgif"}
-			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"gif.pfx"}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "gif:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "vibrant:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"gdfontg", "gdfontl", "gdfontmb", "gdfonts", "gdfontt", "pictogif"}
-				Add Files {NCBISOURCE & "gif:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"ncbidraw", "drawing", "mapping", "picture"}
-				Add Files {NCBISOURCE & "vibrant:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbiacc.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbiacc"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"accentr", "accutils", "accmmdbs", "acccn3ds"}
-				Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbidesk.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbidesk"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "desktop:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"biosrc", "bspview", "cdrgn", "dlgutil1", "dlgutil2", "dotmatrx", "drawseq", Â
-				"fea2seg", "fstyle", "glbpic", "gbfview", "gphview", "gphdraw", "gxydraw", "gtrdraw", "import", Â
-				"layout", "mapgene", "medview", "prtgene", "pubdesc", "saldist", "saled", "salfiles", "salpanel", Â
-				"salparam", "salsa", "seqsub", "seqfltr", "seqgraph", "seqgrphx", "seqmtrx", "seqpcc", "seqanal", Â
-				"aacomp", "seqscrl", "smdlg1", "smdlg2", "smdlg3", "smtools", "styleman", "stylemui", "vsm", Â
-				"vsmfile", "vsmutil", "udvgraph", "udvopen", "udvpanel", "salogif", "dotvibrant"}
-				Add Files {NCBISOURCE & "desktop:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ddvlib.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ddvlib"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "ddv:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"ddvclick", "ddvgraph", "ddvopen", "ddvpanel"}
-				Add Files {NCBISOURCE & "ddv:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbitool.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbitool"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "tools:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"csim", "db_slist", "dust", "falign", "g_any", "pobutil", "stsutil", "sec", "sim2", "sim3", Â
-				"sim4", "simutil", "slist", "suggadj", "suggest", "suggslp", "tfuns", "toasn3", "toporg", Â
-				"blast", "blastutl", "blastool", "splutil", "actutils", "gapxdrop", "bandalg0", "bandalg1", Â
-				"bandalg2", "bandalg3", "bandalg4", "bandalg5", "bandalgn", "blastkar", "lookup", "posit", Â
-				"readdb", "ncbisam", "ncbisort", "salign", "salptool", "urkutil", "urkpcc", "urkptpf", "urkepi", Â
-				"urkfltr", "urkdust", "urksigu", "seg", "urkbias", "urkcnsrt", "urktree", "pattern1", "pseed3", Â
-				"impatool", "posit2", "newkar", "mbalign", "mbutils", "mblast", "vecscrn", "rpsutil", "kappa", Â
-				"xmlblast", "bxmlobj", "dotseq"}
-				Add Files {NCBISOURCE & "tools:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbimmdb.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbimmdb"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "biostruc:", origin:absolute}}}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "biostruc:cdd:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"corematx", "dvncode", "objmmdb1", "objmmdb2", "objmmdb3", "mmdbapi", "mmdbapi1", "mmdbapi2", Â
-				"mmdbapi3", "mmdbapi4", "mmdbentr", "vastsubs", "prunebsc"}
-				Add Files {NCBISOURCE & "biostruc:" & i & ".c"} To Segment 1
-			end repeat
-			
-			repeat with i in {"objcdd", "cddutil", "cddposutil", Â
+				"ncbi_sendmail_", "asn_connection", "urlquery"}}, Â
+		Â
+			{projPath:"asnlib:", fileList:{Â
+				"asnbufo", "asndebin", "asnenbin", "asngen", "asngenob", "asnio", "asnlex", Â
+				"asnlext", "asnout", "asnprint", "asntypes"}}}, "")
+	
+	
+	CreateProject("ncbiobj", {Â
+		Â
+			{projPath:"object:", fileList:{Â
+				"objacces", "objalign", "objall", "objbibli", "objblock", "objcode", "objfdef", Â
+				"objfeat", "objgen", "objloc", "objmdrs", "objmedli", "objmime", "objproj", Â
+				"objprt", "objpub", "objpubme", "objres", "objseq", "objsset", "objalignloc", Â
+				"objsub"}}, Â
+		Â
+			{projPath:"biostruc:cn3d:", fileList:{Â
+				"objcn3d"}}, Â
+		Â
+			{projPath:"access:", fileList:{Â
+				"objent2", "ent2api", "pmfapi", "strucapi", "qblastapi", "vecscnapi", "objmim", Â
+				"mimapi"}}, Â
+		Â
+			{projPath:"api:", fileList:{Â
+				"asn2ff1", "asn2ff2", "asn2ff3", "asn2ff4", "asn2ff5", "asn2ff6", "codon", "edutil", Â
+				"ffprint", "findrepl", "ftusrstr", "gather", "gbfeat", "gbftglob", "gbparint", Â
+				"jzcoll", "jzmisc", "lsqfetch", "maputil", "mconsist", "objmgr", "prtutil", "satutil", Â
+				"seqmgr", "seqport", "sequtil", "simple", "sqnutil1", "sqnutil2", "sqnutil3", Â
+				"subutil", "tofasta", "tofile", "tomedlin", "utilpars", "utilpub", "salpstat", Â
+				"salpedit", "valid", "alignmgr", "aliparse", "aliread", "alignval", "wprint", Â
+				"salpacc", "salprop", "salsap", "salstruc", "salutil", "udvseq", "blocks", Â
+				"pgppop", "samutil", "ddvcolor", "viewmgr", "jsavlt", "needleman", "fdlobj", "txalign"}}, Â
+		Â
+			{projPath:"ddv:", fileList:{Â
+				"ddvcreate"}}}, "")
+	
+	
+	CreateProject("ncbicdr", {Â
+		Â
+			{projPath:"cdromlib:", fileList:{Â
+				"casn", "cdconfig", "cdentrez", "cdnewlib", "cdromlib", "objentr"}}}, "")
+	
+	
+	CreateProject("vibrant", {Â
+		Â
+			{projPath:"vibrant:", fileList:{Â
+				"ncbidraw", "vibbutns", "vibextra", "vibfiles", "vibforms", "vibgroup", "viblists", Â
+				"vibmenus", "vibprmpt", "vibsbars", "vibslate", "vibtexts", "vibutils", Â
+				"vibwndws", "document", "drawing", "mapping", "palette", "picture", "table", Â
+				"viewer", "diagnost", "image", "pictur3d", "prim3d1", "prim3d2", "prim3d3", Â
+				"prim3d4", "prim3d5", "viewer3d", "vibmouse", "imagelst", "treeview", "shim3d", Â
+				"odlbox"}}}, "")
+	
+	CreateProject("ncbidesk", {Â
+		Â
+			{projPath:"desktop:", fileList:{Â
+				"biosrc", "bspview", "cdrgn", "dlgutil1", "dlgutil2", "dotmatrx", "drawseq", Â
+				"fea2seg", "fstyle", "glbpic", "gbfview", "gphview", "gphdraw", "gxydraw", Â
+				"gtrdraw", "ingengraph", "import", "layout", "mapgene", "medview", "prtgene", Â
+				"pubdesc", "saldist", "saled", "salfiles", "salpanel", "salparam", "salsa", "seqsub", Â
+				"seqfltr", "seqgraph", "seqgrphx", "seqmtrx", "seqpcc", "seqanal", "aacomp", Â
+				"seqscrl", "smdlg1", "smdlg2", "smdlg3", "smtools", "styleman", "stylemui", Â
+				"vsm", "vsmfile", "vsmutil", "udvgraph", "udvopen", "udvpanel", "salogif", Â
+				"dotvibrant"}}}, "")
+	
+	CreateProject("ddvlib", {Â
+		Â
+			{projPath:"ddv:", fileList:{Â
+				"ddvclick", "ddvgraph", "ddvopen", "ddvpanel"}}}, "")
+	
+	
+	if pBuildObsoleteLibraries then
+		
+		CreateProject("ncbiacc", {Â
+			Â
+				{projPath:"cdromlib:", fileList:{Â
+					"accentr", "accutils", "accmmdbs", "acccn3ds"}}}, "")
+		
+		
+		CreateProject("vibgif", {Â
+			Â
+				{projPath:"gif:", fileList:{Â
+					"gdfontg", "gdfontl", "gdfontmb", "gdfonts", "gdfontt", "pictogif"}}, Â
+			Â
+				{projPath:"vibrant:", fileList:{Â
+					"ncbidraw", "drawing", "mapping", "picture"}}}, "gif.pfx")
+		
+	end if
+	
+	
+	CreateProject("ncbitool", {Â
+		Â
+			{projPath:"tools:", fileList:{Â
+				"csim", "db_slist", "dust", "falign", "g_any", "pobutil", "stsutil", "sec", "sim2", Â
+				"sim3", "sim4", "simutil", "slist", "suggadj", "suggest", "suggslp", "tfuns", Â
+				"toasn3", "toporg", "blast", "blastutl", "blastool", "splutil", "actutils", "gapxdrop", Â
+				"bandalg0", "bandalg1", "bandalg2", "bandalg3", "bandalg4", "bandalg5", Â
+				"bandalgn", "blastkar", "lookup", "posit", "readdb", "ncbisam", "ncbisort", "salign", Â
+				"salptool", "urkutil", "urkpcc", "urkptpf", "urkepi", "urkfltr", "urkdust", Â
+				"urksigu", "seg", "urkbias", "urkcnsrt", "urktree", "pattern1", "pseed3", Â
+				"impatool", "posit2", "newkar", "mbalign", "mbutils", "mblast", "vecscrn", Â
+				"rpsutil", "kappa", "xmlblast", "bxmlobj", "dotseq", "spidey"}}}, "")
+	
+	
+	CreateProject("ncbimmdb", {Â
+		Â
+			{projPath:"biostruc:", fileList:{Â
+				"corematx", "dvncode", "objmmdb1", "objmmdb2", "objmmdb3", "mmdbapi", Â
+				"mmdbapi1", "mmdbapi2", "mmdbapi3", "mmdbapi4", "mmdbentr", "vastsubs", Â
+				"prunebsc"}}, Â
+		Â
+			{projPath:"biostruc:cdd:", fileList:{Â
+				"objcdd", "cddutil", "cddposutil", Â
 				"thrdalgs", "thrdatd", "thrdbwfi", "thrdcpal", Â
 				"thrdcpll", "thrdcprl", "thrdcxei", "thrddgri", "thrdrsmp", Â
 				"thrdsal0", "thrdsalr", "thrdsalu", "thrdsgoi", "thrdslo0", Â
 				"thrdslor", "thrdslou", "thrdspci", "thrdspea", "thrdspel", Â
-				"thrdspni", "thrdttb0", "thrdttbi", "thrdzsc"}
-				Add Files {NCBISOURCE & "biostruc:cdd:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
-			
-			
-			(* ================================================================================ *)
-			Create Project {LIBRARIES & "ncbicn3d.mcp"}
-			
-			my DoSetPreferences()
-			Set Preferences of panel "PPC Project" to {File Name:"ncbicn3d"}
-			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
-			my DoSetPaths2()
-			
-			repeat with i in {"algorend", "cn3dwin", "cn3dentr", "cn3dmsel", "cn3dopen", "cn3dsave", "cn3dxprt", "cn3dmsg", Â
-				"cn3dmatn", "cn3dmodl", "cn3dshim", "cn3dmesh", "cn3dstyl", "seqcons"}
-				Add Files {NCBISOURCE & "cn3d:" & i & ".c"} To Segment 1
-			end repeat
-			
-			Reset File Paths
-			Close Project
+				"thrdspni", "thrdttb0", "thrdttbi", "thrdzsc"}}}, "gif.pfx")
+	
+	
+	CreateProject("ncbicn3d", {Â
+		Â
+			{projPath:"cn3d:", fileList:{Â
+				"algorend", "cn3dwin", "cn3dentr", "cn3dmsel", "cn3dopen", "cn3dsave", Â
+				"cn3dxprt", "cn3dmsg", "cn3dmatn", "cn3dmodl", "cn3dshim", "cn3dmesh", Â
+				"cn3dstyl", "seqcons"}}}, "")
+	
+	
+	if DOOPENGL then
+		if DOPNG then
+			set openGLPrefixFile to "opengl-png.pfx"
+		else
+			set openGLPrefixFile to "opengl.pfx"
 		end if
+		
+		
+		CreateProject("vibrantOGL", {Â
+			Â
+				{projPath:"vibrant:", fileList:{Â
+					"ncbidraw", "vibbutns", "vibextra", "vibfiles", "vibforms", "vibgroup", Â
+					"viblists", "vibmenus", "vibprmpt", "vibsbars", "vibslate", "vibtexts", Â
+					"vibutils", "vibwndws", "document", "drawing", "mapping", "palette", Â
+					"picture", "table", "viewer", "diagnost", "image", "pictur3d", "prim3d1", Â
+					"prim3d2", "prim3d3", "prim3d4", "prim3d5", "viewer3d", "vibmouse", Â
+					"imagelst", "treeview", "shim3d", "odlbox"}}}, openGLPrefixFile)
+		
+		
+		CreateProject("ncbicn3dOGL", {Â
+			Â
+				{projPath:"cn3d:", fileList:{Â
+					"algorend", "cn3dwin", "cn3dentr", "cn3dmsel", "cn3dopen", "cn3dsave", Â
+					"cn3dxprt", "cn3dmsg", "cn3dmatn", "cn3dmodl", "cn3dshim", "cn3dmesh", Â
+					"cn3dstyl", "seqcons"}}}, openGLPrefixFile)
+		
+		
+	end if
+	
+	
+	CreateProject("ncbiNacc", {Â
+		Â
+			{projPath:"cdromlib:", fileList:{Â
+				"accentr", "accutils", "accmmdbs", "acccn3ds"}}}, "net.pfx")
+	
+	
+	CreateProject("netentr", {Â
+		Â
+			{projPath:"network:entrez:client:", fileList:{Â
+				"netentr", "netlib", "objneten"}}}, "net.pfx")
+	
+	
+	CreateProject("netcli", {Â
+		Â
+			{projPath:"network:nsclilib:", fileList:{Â
+				"ncbicli", "ncbiurl", "ni_disp", "ni_encrs", "ni_serv", "ni_error", "ni_lib_", Â
+				"ni_macdv", "ni_msg", "ni_www", "ni_debug"}}}, "net.pfx")
+	
+	
+	CreateProject("ncbibls3", {Â
+		Â
+			{projPath:"network:blast3:client:", fileList:{Â
+				"netblap3", "objblst3"}}}, "")
+	
+	
+	CreateProject("ncbiid1", {Â
+		Â
+			{projPath:"network:id1arch:", fileList:{Â
+				"id1gen", "id1arch", "accid1"}}}, "net.pfx")
+	
+	
+	CreateProject("ncbimla", {Â
+		Â
+			{projPath:"network:medarch:client:", fileList:{Â
+				"medarch", "medutil", "objmla"}}}, "")
+	
+	
+	CreateProject("ncbitxc2", {Â
+		Â
+			{projPath:"network:taxon1:taxon2:", fileList:{Â
+				"parttree", "taxcs", "tc2proc", "txcdproc"}}, Â
+		Â
+			{projPath:"network:taxon1:common:", fileList:{Â
+				"objtax1", "taxutil"}}}, "tax2.pfx")
+	
+	
+	CreateProject("vibnet", {Â
+		Â
+			{projPath:"network:vibnet:", fileList:{Â
+				"netcnfg", "trmlst", "docsum"}}}, "net.pfx")
+	
+	
+end CreateAllProjects
+
+on BuildLibraries(myLibs)
+	tell application "CodeWarrior IDE 4.1.0.3"
 		
 		(* ==== This subsection compiles the newly-populated libraries ==== *)
 		
-		if MAKELIBS then
-			my DoCompileLibraries()
-		end if
-		
-		beep
+		repeat with proj in myLibs
+			open (LIBRARIES & proj & pProjectFileExtension)
+			repeat with i from 2 to (count targets of project document 1)
+				set the current target of project document 1 to target i of project document 1
+				Make Project
+				-- If there were compiler warnings, then a compiler window will be in front.
+				-- For whatever reason, this causes the next "set the current target..." to fail.
+				-- An easy way to make the window go away without having to know if it's there or not 
+				-- is to build again, which, because everything is already compiled, finishes instantly
+				-- and produces no warnings.
+				--Make Project
+				-- An even better way is to check for the window and close it.
+				if the name of window 1 is "Errors & Warnings" then
+					close first window -- "close window 1" becomes "Close Window 1" (different event)
+				end if
+			end repeat
+			set the current target of project document 1 to target 1 of project document 1
+			Close Project
+		end repeat
 		
 	end tell
+end BuildLibraries
+
+on BuildAllLibraries()
+	set myLibs to {"mitsock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", Â
+		"ncbidesk", "ncbitool", "ncbimmdb", "ddvlib", "ncbicn3d"}
+	
+	BuildLibraries(myLibs)
+	
+	if DOOPENGL then
+		BuildLibraries({"vibrantOGL", "ncbicn3dOGL"})
+	end if
+	
+	-- network
+	set myLibs to {"ncbiNacc", "netentr", "netcli", "ncbibls3", "ncbiid1", "ncbimla", Â
+		"ncbitxc2", "vibnet"}
+	
+	BuildLibraries(myLibs)
+	
+	if pBuildObsoleteLibraries then
+		BuildLibraries("ncbiacc", "vibgif")
+	end if
+	
+end BuildAllLibraries
+
+on SignalCompletion()
+	
+	try
+		say "Make complete."
+	on error
+		beep
+	end try
+	
+end SignalCompletion
+
+(* ==== This section populates and builds the libraries ==== *)
+
+with timeout of 60000 seconds
+	DoSetGlobals()
+	
+	CreateFolders()
+	CopyPrefixes()
+	
+	tell application "CodeWarrior IDE 4.1.0.3" to activate
+	
+	CreateAllProjects()
+	
+	if pShouldBuild then
+		BuildAllLibraries()
+	end if
+	
+	SignalCompletion()
+	
 end timeout
 

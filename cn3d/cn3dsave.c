@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.c,v $
+* Revision 6.32  2001/04/27 20:08:02  juran
+* Heed warnings.
+*
 * Revision 6.31  2000/07/21 18:55:14  thiessen
 * allow dynamic slave->master transformation
 *
@@ -369,7 +372,6 @@ static void Cn3D_ExportAsnNow(ButtoN b)
     BiostrucFeaturePtr pbsfThis;
     /*PDNTRN pdnTransform = NULL;*/
     AsnIoPtr aip = NULL;
-    ValNodePtr pvnAlignment;
     PDNML pdnmlThis = NULL;
 
 /*   if (GetStatus(Cn3D_bFeatOn) == FALSE)
@@ -442,50 +444,6 @@ static void Cn3D_ExportAsnNow(ButtoN b)
 
 
         while (pdnmsSlave) {
-
-#if 0 /* no longer need any of this junk, since coordinates aren't transformed */
-
-            /* begin reverse transform */
-
-            pmsdSlave = pdnmsSlave->data.ptrvalue;
-            pdnTransform = NULL;
-            pvnAlignment =
-                ValNodeFindNext(pbsfThis->Location_location, NULL,
-                                Location_location_alignment);
-            if (pvnAlignment == NULL)
-                break;
-            /* create the spatial transformation */
-            TransformToDNTRN(&pdnTransform,
-                             ((ChemGraphAlignmentPtr) pvnAlignment->data.
-                              ptrvalue)->transform);
-            if (pdnTransform == NULL)
-                break;
-            /* loop over the slave's models with the transformation */
-            pdnmlThis = pmsdSlave->pdnmlModels;
-            while (pdnmlThis) {
-                TraverseAtoms(pdnmsSlave, pdnmlThis->choice, 0,
-                              pdnTransform, DoReverseTransform);
-                TraverseSolids(pdnmsSlave, pdnmlThis->choice, 0,
-                               pdnTransform, DoReverseTransform);
-                pdnmlThis = pdnmlThis->next;
-            }
-            pbsfThis = pbsfThis->next;
-
-            /* end reverse transform */
-
-            iTest = WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave, iCn3d);
-
-            pdnmlThis = pmsdSlave->pdnmlModels;
-            while (pdnmlThis) {
-                TraverseAtoms(pdnmsSlave, pdnmlThis->choice, 0,
-                              pdnTransform, DoApplyTransform);
-                TraverseSolids(pdnmsSlave, pdnmlThis->choice, 0,
-                               pdnTransform, DoApplyTransform);
-                pdnmlThis = pdnmlThis->next;
-            }
-            /* after creating ASN.1, get the coordinates back for this run, yanli */
-            FreeDNTRN(pdnTransform);
-#endif
 
             iTest = WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave, iCn3d);
             if (!iTest) {

@@ -512,6 +512,12 @@ PrintTemplateSet ::= {
                 text {
                    } } ,
             {
+              asn1 "Pub.pmid" ,
+              label "PubMed id: " ,
+              form
+                text {
+                   } } ,
+            {
               asn1 "Pub.article" ,
               form
                 use-template "StdCitArt" } ,

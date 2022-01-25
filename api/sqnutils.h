@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.72 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
@@ -338,6 +338,7 @@ feature table with ReadAsnFastaOrFlatFile) to stand-alone gene features or prote
 and protein bioseqs.  It processes ALL features in the list - you give it the FIRST sfp. */
 
 NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID);
+NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop, Boolean remove_trailingX);
 
 /* SetEmptyGeneticCodes imposes genetic code on all coding regions within a feature table */
 

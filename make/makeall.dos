@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.130 2001/03/23 21:13:12 madden Exp $
+# $Id: makeall.dos,v 6.136 2001/06/29 19:05:31 kans Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -28,17 +28,17 @@ OBJ1  = \
         +ncbi_server_info.obj +ncbi_service.obj \
         +ncbi_service_connector.obj +ncbi_service_dispd.obj \
 	+ncbi_service_lbsmd_stub.obj +ncbi_socket_connector.obj \
-	+urlquery.obj +binary.obj +ncbi_sendmail_.obj
+	+urlquery.obj +binary.obj +ncbi_sendmail_.obj +asn_connection.obj
 
 OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
-	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objpubme.obj \
+	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objcn3d.obj +objpubme.obj \
 	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj +pmfapi.obj \
 	+strucapi.obj +qblastapi.obj +vecscnapi.obj +objmim.obj +mimapi.obj +seqport.obj \
 	+sequtil.obj +prtutil.obj \
 	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
-	+alignmgr.obj +alignval.obj +subutil.obj +edutil.obj \
+	+alignmgr.obj +aliparse.obj +aliread.obj +alignval.obj +subutil.obj +edutil.obj \
 	+asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
 	+asn2ff4.obj +asn2ff5.obj +asn2ff6.obj +ftusrstr.obj +gbfeat.obj \
 	+gbftglob.obj +gbparint.obj +utilpars.obj +utilpub.obj +ffprint.obj \
@@ -73,7 +73,7 @@ OBJ20 = +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+layout.obj +vsm.obj +vsmfile.obj +vsmutil.obj +udvgraph.obj +udvopen.obj \
 	+udvpanel.obj +dotvibrant.obj +dlgutil1.obj +dlgutil2.obj +medview.obj \
 	+bspview.obj +gbfview.obj +gphview.obj \
-	+gphdraw.obj +gxydraw.obj +gtrdraw.obj \
+	+gphdraw.obj +gxydraw.obj +gtrdraw.obj +ingengraph.obj \
 	+biosrc.obj +cdrgn.obj +import.obj +pubdesc.obj +seqsub.obj \
 	+saldist.obj +saled.obj +salfiles.obj +salpanel.obj +salparam.obj \
 	+salsa.obj +dotmatrx.obj +fea2seg.obj \
@@ -107,7 +107,7 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
 	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj \
 	+vecscrn.obj +mblast.obj +rpsutil.obj +kappa.obj  \
-	+xmlblast.obj +bxmlobj.obj +dotseq.obj 
+	+xmlblast.obj +bxmlobj.obj +dotseq.obj +spidey.obj
 
 OBJ28 = +ncbidrwg.obj +drawing.obj +mapping.obj +picture.obj +pictogif.obj \
 	+gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
@@ -175,6 +175,7 @@ copy_reg:
 !else
 	-mkdir $(INCPATH)
 	-mkdir $(INCPATH)\connect
+	-mkdir $(INCPATH)\ctools
 	-mkdir $(LIBPATH)
 	-copy *.dos $(LIBPATH)
 	-copy *.bat $(LIBPATH)
@@ -201,6 +202,8 @@ copy_reg:
 	copy ..\connect\*.h $(INCPATH)
 	$(DEL) ..\include\ncbi_*.h
 	copy ..\connect\ncbi_*.h $(INCPATH)\connect
+	$(DEL) ..\include\asn_connection.h
+	copy ..\connect\asn_connection.h $(INCPATH)\ctools
 	copy ..\object\*.c .
 	copy ..\object\*.h $(INCPATH)
 	copy ..\access\*.c .
@@ -214,6 +217,8 @@ copy_reg:
 	copy ..\biostruc\*.c .
 	copy ..\biostruc\cdd\*.h $(INCPATH)
 	copy ..\biostruc\cdd\*.c .
+	copy ..\biostruc\cn3d\*.h $(INCPATH)
+	copy ..\biostruc\cn3d\*.c .
 	copy ..\tools\*.h $(INCPATH)
 	copy ..\tools\*.c .
 	copy ..\link\mswin\*.rc .

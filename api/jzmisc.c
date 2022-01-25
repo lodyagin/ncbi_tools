@@ -725,6 +725,11 @@ NLM_EXTERN Uint1 label_feature(SeqFeatPtr sfp, CharPtr fmark, Int2 order, Boolea
 	       add_name_partial(fmark, trunc5, trunc3);
 	       return TRUE;
 	     }
+	     if(rrp->type == 7){
+	       StringCpy(fmark, "snoRNA");
+	       add_name_partial(fmark, trunc5, trunc3);
+	       return TRUE;
+	     }
 	     if(rrp->type == 255){
 	       StringCpy(fmark, "Other");
 	       add_name_partial(fmark, trunc5, trunc3);

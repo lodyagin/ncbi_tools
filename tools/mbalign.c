@@ -1,4 +1,4 @@
-/* $Id: mbalign.c,v 6.27 2001/03/30 22:12:11 dondosha Exp $
+/* $Id: mbalign.c,v 6.31 2001/05/23 20:14:47 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,24 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.27 $
+* $Revision: 6.31 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.31  2001/05/23 20:14:47  dondosha
+* Corrected the row shift in non-affine greedy algorithm
+*
+* Revision 6.30  2001/05/07 22:05:24  dondosha
+* Small correction in affine extension
+*
+* Revision 6.29  2001/05/03 21:48:28  dondosha
+* Handle some cases when memory allocation fails
+*
+* Revision 6.28  2001/05/02 21:32:16  dondosha
+* Return null from GreedyAlignMemFree
+*
 * Revision 6.27  2001/03/30 22:12:11  dondosha
 * Improved protection from moving beyond sequence boundaries
 *
@@ -359,6 +371,10 @@ MBSpacePtr new_mb_space()
     p = Nlm_Malloc(sizeof(MBSpace));
     amount = MAX_SPACE;
     p->space_array = Nlm_Malloc(sizeof(ThreeVal)*amount);
+    if (p->space_array == NULL) {
+       p = MemFree(p);
+       return NULL;
+    }
     p->used = 0; 
     p->size = amount;
     p->next = NULL;
@@ -425,7 +441,10 @@ ThreeValPtr get_mb_space(MBSpacePtr S, Int4 amount)
     
     while (S->used+amount > S->size) {
        if (S->next == NULL)
-          S->next = new_mb_space();
+          if ((S->next = new_mb_space()) == NULL) {
+	     ErrPostEx(SEV_WARNING, 0, 0, "Cannot get new space for greedy extension");
+	     return NULL;
+          }
        S = S->next;
     }
 
@@ -1238,6 +1257,7 @@ BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
       }
       search->abmp->flast_d[0] = Malloc((max_d + max_d + 6) * sizeof(Int4) * 2);
       if (search->abmp->flast_d[0] == NULL) {
+	 ErrPostEx(SEV_WARNING, 0, 0, "Failed to allocate %ld bytes for abmp", (max_d + max_d + 6) * sizeof(Int4) * 2);
          search->abmp = GreedyAlignMemFree(search->abmp);
          return search;
       }
@@ -1293,7 +1313,7 @@ GreedyAlignMemPtr GreedyAlignMemFree(GreedyAlignMemPtr abmp)
    MemFree(abmp->max_row_free);
    if (abmp->space)
       free_mb_space(abmp->space);
-   MemFree(abmp);
+   abmp = MemFree(abmp);
    return abmp;
 }
 
@@ -1365,7 +1385,7 @@ Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
     else 
        refresh_mb_space(space);
     
-    max_row = max_row_free + X_pen/Op_cost;
+    max_row = max_row_free + D_diff;
     for (k = 0; k < D_diff; k++)
 	max_row_free[k] = 0;
     
@@ -1386,8 +1406,8 @@ Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
 	fl0 = flower;
 	fu0 = fupper;
 	for (k = fl0; k <= fu0; k++) {
-	   row = MAX(flast_d[d - 1][k + 1], flast_d[d - 1][k]) + 1;
-	   row = MAX(row, flast_d[d - 1][k - 1]);
+	    row = MAX(flast_d[d - 1][k + 1], flast_d[d - 1][k]) + 1;
+	    row = MAX(row, flast_d[d - 1][k - 1]);
 	    col = row + k - ORIGIN;
 	    if (row + col >= x)
 		fupper = k;
@@ -1453,12 +1473,16 @@ Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
 	if (!nupper) fupper++;
 	if (S==NULL)
 	   flast_d[d] = flast_d[d - 2];
-	else 
+	else {
            /* space array consists of ThreeVal structures which are 
               3 times larger than Int4, so divide requested amount by 3
            */
-	   flast_d[d] = (Int4Ptr) get_mb_space(space, (fupper-flower+7)/3)
-              - flower + 2;
+	   flast_d[d] = (Int4Ptr) get_mb_space(space, (fupper-flower+7)/3);
+	   if (flast_d[d] != NULL)
+              flast_d[d] = flast_d[d] - flower + 2;
+           else
+	      return return_val;
+        }
     }
     
     if (S!=NULL) { /*trace back*/
@@ -1635,7 +1659,7 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
 		    flast_d[d][k].C = -2;
 		continue;
 	    }
-            if (row > max_len || row < 0) {
+            if (row > max_len || row < -2) {
                flower = k; nlower = k+1; 
             } else {
                /* slide down the diagonal */
@@ -1699,8 +1723,11 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
 	   if (S==NULL) {
 	      /*if (d > max_cost)*/
 	      flast_d[d] = flast_d[d - max_cost-1];
-	   } else 
+	   } else {
 	      flast_d[d] = get_mb_space(space, fupper-flower+1)-flower;
+	      if (flast_d[d] == NULL)
+		 return return_val;
+           }
 	}
     }
     

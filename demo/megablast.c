@@ -1,5 +1,5 @@
-/* $Id: megablast.c,v 6.69 2001/03/19 22:39:25 dondosha Exp $
-/**************************************************************************
+/* $Id: megablast.c,v 6.75 2001/07/03 20:50:33 madden Exp $
+**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
 *                                                                         *
@@ -26,6 +26,24 @@
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.75  2001/07/03 20:50:33  madden
+ * Commented out call to PrintTabularOutputHeader
+ *
+ * Revision 6.74  2001/06/28 21:23:33  dondosha
+ * Print header for the -D3 output; added window size argument -A
+ *
+ * Revision 6.73  2001/06/21 21:49:55  dondosha
+ * No need to declare extra variable vnp
+ *
+ * Revision 6.72  2001/06/21 21:43:57  dondosha
+ * Destroy error returns
+ *
+ * Revision 6.71  2001/05/25 19:30:00  vakatov
+ * Nested comment typo fixed
+ *
+ * Revision 6.70  2001/04/26 14:10:06  egorov
+ * Call ReadDBBioseqFetchEnable function before fetching sequences.
+ *
  * Revision 6.69  2001/03/19 22:39:25  dondosha
  * Allow location on the first query sequence for megablast
  *
@@ -709,7 +727,9 @@ static Args myargs [] = {
   {"Identity percentage cut-off", 
         "0", NULL, NULL, FALSE, 'p', ARG_FLOAT, 0.0, 0, NULL},     /* 30 */
   { "Location on query sequence",                             
-        NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL}     /* 31 */
+        NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},    /* 31 */
+  { "Multiple Hits window size (zero for single hit algorithm)",   /* 32 */
+        "0", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL}
 };
 
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
@@ -844,7 +864,8 @@ Int2 Main (void)
         options->block_width  = myargs[19].intvalue;
 
 	options->strand_option = myargs[20].intvalue;
-
+        options->window_size = myargs[32].intvalue;
+        
         print_options = 0;
         align_options = 0;
         align_options += TXALIGN_COMPRESS;
@@ -990,6 +1011,7 @@ Int2 Main (void)
 	   other_returns = NULL;
 	   error_returns = NULL;
 	   
+	   ReadDBBioseqFetchEnable ("megablast", blast_database, db_is_na, TRUE);
 #if 0
 	   fprintf(stderr, "Process %d queries with total length %ld\n", 
 		   num_bsps, total_length);
@@ -1006,13 +1028,19 @@ Int2 Main (void)
 						     &other_returns, &error_returns,
 						     dummy_callback, NULL, NULL, 0,
 						     MegaBlastPrintSegments);
-	   else if (myargs[12].intvalue==MBLAST_ALIGN_INFO) 
+	   else if (myargs[12].intvalue==MBLAST_ALIGN_INFO) {
+/*
+              PrintTabularOutputHeader(blast_database, 
+                                  (num_bsps==1) ? query_bsp_array[0] : NULL,
+                                  NULL, "megablast", 0, believe_query,
+                                  global_fp);
+*/
 	      seqalign_array = BioseqMegaBlastEngine(query_bsp_array, blast_program,
 						     blast_database, options,
 						     &other_returns, &error_returns,
 						     dummy_callback, NULL, NULL, 0,
 						     MegaBlastPrintAlignInfo);
-	   else /* if (myargs[12].intvalue==MBLAST_ALIGNMENTS) */
+	   } else /* if (myargs[12].intvalue==MBLAST_ALIGNMENTS) */
 	      seqalign_array = BioseqMegaBlastEngine(query_bsp_array, blast_program,
 				  blast_database, options, &other_returns, 
                                   &error_returns, align_view != 7 ? tick_callback : NULL,
@@ -1022,7 +1050,15 @@ Int2 Main (void)
 	   fflush(global_fp);
 #endif
 
-           BlastErrorPrint(error_returns);
+           if (error_returns) {
+              BlastErrorPrint(error_returns);
+              for (vnp = error_returns; vnp; vnp = vnp->next) {
+                 BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
+              }
+              ValNodeFree(error_returns);
+           }
+              
+              
 	   if (myargs[12].intvalue==MBLAST_ALIGNMENTS) {
 	      dbinfo = NULL;
 	      ka_params = NULL;
@@ -1067,7 +1103,6 @@ Int2 Main (void)
               }
 #endif
 	      
-              ReadDBBioseqFetchEnable ("megablast", blast_database, db_is_na, TRUE);
               masked_query_file = myargs[26].strvalue;
               hits_found = FALSE;
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.34 $
+* $Revision: 6.37 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.37  2001/05/31 22:58:25  kans
+* added ObjMgrReapOne, DEFAULT_MAXOBJ, autoclean reaps and frees one entity at a time, as needed
+*
+* Revision 6.36  2001/05/31 22:33:02  kans
+* added autoclean and maxobj to ObjMgr structure, ObjMgrAddFunc optionally calls ObjMgrReap and ObjMgrFreeCache to completely clear out least recently accessed objects if currobj >= maxobj
+*
+* Revision 6.35  2001/05/24 21:54:34  kans
+* check for incrementing totobj or currobj above UINT2_MAX, reducing currobj below 0
+*
 * Revision 6.34  2001/02/16 21:34:49  ostell
 * changed GetSecs() to ObjMgrTouchCnt() to reduce system calls
 *
@@ -711,6 +720,7 @@ NLM_EXTERN ObjMgrPtr LIBCALL ObjMgrGet (void)
 	                             /*** have to initialize it **/
 		omp = (ObjMgrPtr) MemNew (sizeof(ObjMgr));
 		omp->maxtemp = DEFAULT_MAXTEMP;
+		omp->maxobj = DEFAULT_MAXOBJ;
 		omp_RWlock = NlmRWinit();  /* initialize RW lock */
 		global_omp = omp;       /* do this last for mutex safety */
 	}
@@ -1049,7 +1059,10 @@ static Boolean NEAR ObjMgrExtend (ObjMgrPtr omp)
 	for (i = 0; i < NUM_OMD; i++, j++)
 		tmp[j] = &(omdp->data[i]);
 
-	omp->totobj += NUM_OMD;
+	if (omp->totobj < UINT2_MAX - NUM_OMD)
+		omp->totobj += NUM_OMD;
+	else
+		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrExtend: incrementing totobj above UINT2_MAX");
 	omp->datalist = tmp;
 
 	result = TRUE;
@@ -1091,6 +1104,12 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 
 	fp = FileOpen("ObjMgr.log", "a");
 #endif
+
+	/* if autoclean is set and above maxobj, remove least recently accessed objects */
+	if (omp->autoclean && omp->currobj >= omp->maxobj) {
+		ObjMgrReapOne (omp);
+		ObjMgrFreeCache (0);
+	}
 
 	if (omp->currobj >= omp->totobj)
 	{
@@ -1149,7 +1168,10 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 	}
 
 	omdpp[i] = omdp;    /* put in the pointer in order */
-	omp->currobj++;     /* got one more */
+	if (omp->currobj < UINT2_MAX)
+		omp->currobj++;     /* got one more */
+	else
+		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrAddFunc: incrementing currobj above UINT2_MAX");
 
 	omdp->dataptr = data;  /* fill in the values */
 	omdp->datatype = type;
@@ -1572,7 +1594,10 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 	}
 
 	MemSet((Pointer)omdp, 0, sizeof(ObjMgrData));
-	omp->currobj--;
+	if (omp->currobj)
+		omp->currobj--;
+	else
+		ErrPostEx(SEV_ERROR, 0,0, "ObjMgrDelete: reducing currobj below 0");
 	j = omp->currobj - i;
 	if (j)
 	{
@@ -2508,6 +2533,105 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 #endif
 
 	}
+
+	return TRUE;
+}
+
+/*****************************************************************************
+*
+*   ObjMgrReapOne(omp)
+*   	Reaps the single least recently accessed entity
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL ObjMgrReapOne (ObjMgrPtr omp)
+{
+	Uint4 lowest;
+	Int4 num, j;
+	ObjMgrDataPtr tmp, ditch, PNTR omdpp;
+	Boolean is_write_locked, did_one = FALSE;
+
+	if (omp->hold)      /* keep all tempload records around while hold is on */
+		return FALSE;
+
+	if (omp->reaping)   /* protect against recursion caused by ObjMgrSendMsg */
+		return FALSE;
+
+		lowest = UINT4_MAX;
+		
+		num = omp->currobj;
+		omdpp = omp->datalist;
+		ditch = NULL;
+		for (j = 0; j < num; j++, omdpp++)
+		{
+			tmp = *omdpp;
+			if ((tmp->tempload == TL_LOADED) && (! tmp->lockcnt))
+			{
+				if (lowest > tmp->touch)
+				{
+					lowest = tmp->touch;
+					ditch = tmp;
+				}
+			}
+		}
+		if (ditch == NULL)    /* nothing to free */
+			return FALSE;
+
+		omp->reaping = TRUE;
+		ditch->tempload = TL_CACHED;
+		ObjMgrSendMsgFunc(omp, ditch, OM_MSG_CACHED, ditch->EntityID, 0, 0, 0, 0, 0, NULL);
+		omp->tempcnt--;
+		is_write_locked = omp->is_write_locked;
+
+		/* null out feature pointers in seqmgr feature indices via reap function */
+
+		if (ditch->extradata != NULL && ditch->reapextra != NULL) {
+			ditch->reapextra ((Pointer) ditch);
+		}
+
+		if (ditch->choice != NULL)
+		{
+			switch (ditch->choicetype)
+			{
+				case OBJ_SEQENTRY:
+					did_one = TRUE;
+					ObjMgrUnlock();
+					SeqEntryFreeComponents(ditch->choice);
+					break;
+			}
+		}
+		else
+		{
+			switch (ditch->datatype)
+			{
+				case OBJ_BIOSEQ:
+					did_one = TRUE;
+					ObjMgrUnlock();
+					BioseqFreeComponents((BioseqPtr)(ditch->dataptr));
+					break;
+				case OBJ_BIOSEQSET:
+					did_one = TRUE;
+					ObjMgrUnlock();
+					BioseqSetFreeComponents((BioseqSetPtr)(ditch->dataptr), FALSE);
+					break;
+				default:
+					ErrPostEx(SEV_ERROR,0,0,"ObjMgrUnlock: ditching unknown type");
+					break;
+			}
+		}
+
+		if (did_one)
+		{
+			if (is_write_locked)
+				omp = ObjMgrWriteLock();
+			else
+				omp = ObjMgrReadLock();
+		}
+		
+		omp->reaping = FALSE;
+
+#ifdef DEBUG_OBJMGR
+	ObjMgrDump(NULL, "ObjMgrReapOne");
+#endif
 
 	return TRUE;
 }

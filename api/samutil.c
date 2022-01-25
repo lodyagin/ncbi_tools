@@ -1,4 +1,4 @@
-/*   $Id: samutil.c,v 1.72 2001/02/07 16:51:36 hurwitz Exp $
+/*   $Id: samutil.c,v 1.73 2001/05/25 19:05:36 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,22 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.c,v 1.72 2001/02/07 16:51:36 hurwitz Exp $
+* File Name:  $Id: samutil.c,v 1.73 2001/05/25 19:05:36 vakatov Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.72 $
+* $Revision: 1.73 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.c,v $
+* Revision 1.73  2001/05/25 19:05:36  vakatov
+* Nested comment typo fixed
+*
 * Revision 1.72  2001/02/07 16:51:36  hurwitz
 * bug fix
 *
@@ -2095,7 +2098,7 @@ NLM_EXTERN Boolean DDE_ShowNewRow(DDE_StackPtr pStack, Int4 Row, Boolean Save) {
 
 NLM_EXTERN Boolean DDE_HideAllRows(DDE_StackPtr pStack, Boolean Save) {
 /*----------------------------------------------------------------------------
-/*  hide all rows
+*  hide all rows
 *---------------------------------------------------------------------------*/
   Int4  i, NumRows;
 
@@ -2113,7 +2116,7 @@ NLM_EXTERN Boolean DDE_HideAllRows(DDE_StackPtr pStack, Boolean Save) {
 
 NLM_EXTERN Boolean DDE_ShowAllRows(DDE_StackPtr pStack, Boolean Save) {
 /*----------------------------------------------------------------------------
-/*  show all rows
+*  show all rows
 *---------------------------------------------------------------------------*/
   Int4  i, NumRows;
 

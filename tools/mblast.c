@@ -38,9 +38,45 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.104 $
+ * $Revision: 6.116 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.116  2001/06/21 21:44:49  dondosha
+ * Free allocated SeqLocs before error return from search set up
+ *
+ * Revision 6.115  2001/06/15 17:35:13  dondosha
+ * Correction to previous changes
+ *
+ * Revision 6.114  2001/06/14 22:09:15  dondosha
+ * Rearranged code for gi lists and oid masks processing to get rid of duplication
+ *
+ * Revision 6.113  2001/06/13 21:46:27  dondosha
+ * Comparison function name in heapsort of gi list changed
+ *
+ * Revision 6.112  2001/06/05 22:15:10  dondosha
+ * If some queries completely mask, destroy respective KarlinBlk
+ *
+ * Revision 6.111  2001/05/16 14:17:09  dondosha
+ * Correction for previous revision
+ *
+ * Revision 6.110  2001/05/15 20:02:27  dondosha
+ * Adjustments to accommodate query in a Bioseq form
+ *
+ * Revision 6.109  2001/05/08 20:18:16  dondosha
+ * Corrections for removal of short queries and score reevaluation for affine gaps
+ *
+ * Revision 6.108  2001/05/04 19:50:45  dondosha
+ * Improved error message when all queries are shorter than word size
+ *
+ * Revision 6.107  2001/05/04 15:55:21  dondosha
+ * Take into account removal of short sequences in function BlastFillQueryOffsets
+ *
+ * Revision 6.106  2001/05/03 21:48:27  dondosha
+ * Handle some cases when memory allocation fails
+ *
+ * Revision 6.105  2001/04/16 16:19:59  dondosha
+ * Remove query sequences with length less than wordsize, print warning
+ *
  * Revision 6.104  2001/03/22 19:23:09  dondosha
  * Changed hsp array new size variable Int4 from Int2
  *
@@ -620,14 +656,8 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
 	Int2 status, first_context, last_context;
         Int8	dblen;
 	Int4	query_length;
-        ValNodePtr	vnp;
         Int4		i;
 	Nlm_FloatHi	searchsp_eff=0;
-	Boolean		use_private_gilist = FALSE;
-	OIDListPtr	alias_oidlist;
-	Int4		mask_index, virtual_mask_index;
-	Uint4		oid_bit, virtual_oid_bit;
-	ReadDBFILEPtr	tmprdfp;
         
 	/* Allocate default options if none are allocated yet. */
 	if (options == NULL)
@@ -639,12 +669,14 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
      
 	/* last context is the total number of contexts in concatenated 
 	   queries */
-	MegaBlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
-	if (query_slp)
+	if (query_slp) {
 	   query_length = SeqLocTotalLen(prog_name, query_slp);
-	else
+           MegaBlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
+	} else {
 	   query_length = query_bsp->length;
+           BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
+        }
 		
 	/* Pass 0 length, since we don't need to allocate ewp here */
 	search = BlastSearchBlkNewExtra(options->wordsize, 0,
@@ -665,305 +697,77 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
 	   }
 	   readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));
 
-           /* non-NULL gi_list means that standalone program called the function */
-           /* non-NULL options->gilist means that server got this gilist from client */
-           if(options->gilist) {
-              /* translate list of gis from ValNodePtr to BlastDoubleInt4Ptr */
-              
-              gi_list = Nlm_Malloc(ValNodeLen(options->gilist) * sizeof(BlastDoubleInt4));
-              for (vnp=options->gilist, i=0; vnp; vnp = vnp->next, ++i) {
-                 gi_list[i].gi = vnp->data.intvalue;
-              }
-              gi_list_total = i;
-           }
-        
-           if (!options->gifile || !StringCmp(options->gifile, ""))
-              options->gifile = search->rdfp->gifile;
-
-           /* Using "options->gifile" file and gi_list,
-              construct new gi_list with all needed gis */
+           if (seqid_list)
+              BlastAdjustDbNumbers(search->rdfp, &(dblen), 
+                                   &(search->dbseq_num),
+                                   seqid_list, NULL, NULL, NULL, 0);
            
-           if (options->gifile && StringCmp(options->gifile, "")) {
-              Int4	gi_list_total_2;
-              BlastDoubleInt4Ptr	gi_list_2, tmptr;
-              Int4	size = sizeof(BlastDoubleInt4);
-              Char	buf[PATH_MAX], blast_dir[PATH_MAX];
-              
-              /**
-               * first looking in current directory, then checking .ncbirc,
-               * then $BLASTDB and then assuming BLASTDB_DIR
-               */
-              if (FileLength(options->gifile) > 0) {
-                 char *path = Nlm_FilePathFind(options->gifile);
-                 if (StringLen(path) > 0) {
-                    StringCpy(blast_dir, path);
-                 }
-                 else {
-                    StringCpy(blast_dir, ".");
-                 }
-                 MemFree(path);
-              }
-              else {
-#ifdef OS_UNIX
-                 if (getenv("BLASTDB"))
-		    Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
-                 else
-#endif
-		    Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
-              }
-              sprintf(buf, "%s%s%s", blast_dir, DIRDELIMSTR, FileNameFind(options->gifile));
-              
-              gi_list_2 = GetGisFromFile(buf, &gi_list_total_2);
-              
-              /* replace or append this list to main one */
-              if (gi_list && gi_list_2) {
-                 /* append */
-                 tmptr = Malloc((gi_list_total+gi_list_total_2)*size);
-                 MemCpy(tmptr, gi_list, gi_list_total * size);
-                 MemCpy(tmptr+gi_list_total, gi_list_2, gi_list_total_2 * size);
-                 
-                 MemFree(gi_list);
-                 MemFree(gi_list_2);
-                 
-                 gi_list = tmptr;
-                 gi_list_total += gi_list_total_2;
-              }
-              else if (gi_list_2) {
-                 /* replace */
-                 gi_list = gi_list_2;
-                 gi_list_total = gi_list_total_2;
-              }
+           
+           BlastProcessGiLists(search, options, gi_list, &gi_list_total);
+           /* Intended for use when a list of gi's is sent in, but the real size is needed. */
+           /* It's probably still necessary to call BlastAdjustDbNumbers, but it would be nice
+              if this were not required. */
+           /* Adjust db size; it should be <= to size of the gi list */
+           if (gi_list_total > 0 && !options->use_real_db_size)
+              BlastAdjustDbNumbers(search->rdfp, &(dblen), 
+                                   &(search->dbseq_num), NULL, NULL, 
+                                   search->rdfp->oidlist, NULL, 0);
+      
+
+           if (gi_list_total == 0 || options->use_real_db_size) {
+              readdb_get_totals_ex(search->rdfp, &(dblen), 
+                                   &(search->dbseq_num), TRUE);
            }
-
-
-	   if (seqid_list)
-	      BlastAdjustDbNumbers(search->rdfp, &(dblen), 
-				   &(search->dbseq_num), seqid_list, NULL, 
-				   NULL, NULL, 0);
-
-           if (gi_list) {
-			/* transform the list into OID mask */
-
-		    Int4		i;
-		    Int4		maxoid, virtual_oid, oid;
-		    OIDListPtr		oidlist;
-		    Int4		total;
-		    Int4		start;
-		    Boolean		done;
-
-		    BlastDoubleInt4Ptr PNTR gi_list_pointers;
-
-		    use_private_gilist = TRUE;
-		    gi_list_pointers = Nlm_Malloc(gi_list_total*sizeof(BlastDoubleInt4Ptr));
-		    maxoid = 0;
-		    for (i=0; i < gi_list_total; i++) {
-			/* get virtual OID and start position for the 
-			   database this gi is in */
-			gi_list[i].ordinal_id = readdb_gi2seq(search->rdfp, gi_list[i].gi, &start);
-			gi_list[i].start = start;
-			maxoid = MAX(maxoid, gi_list[i].ordinal_id);
-			gi_list_pointers[i] = &(gi_list[i]);
-		    }
-
-		    /* allocate space for mask for virtual database */
-		    oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-		    oidlist->total = maxoid + 1;
-		    total = maxoid/MASK_WORD_SIZE + 2;
-		    oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
-		    oidlist->memory = oidlist->list;
-		    /* Merge this list with virtual database (OID list) */
-
-		    for (i=0; i < gi_list_total; i++) {
-			/* get start possition in that database */
-			start = gi_list[i].start;
-
-			/* find out if this is an mask database */
-
-			done = FALSE;
-			tmprdfp = search->rdfp;
-
-			alias_oidlist = NULL;
-			while (tmprdfp && !done) {
-			    if (tmprdfp->start == start) {
-				alias_oidlist = tmprdfp->oidlist;
-				done = TRUE;
-			    } else if (tmprdfp->start > start) {
-				done = TRUE;
-			    } else {
-				tmprdfp = tmprdfp->next;
-			    }
-			}
-
-			/* populate the mask */
-			virtual_oid = gi_list[i].ordinal_id;
-
-			if (virtual_oid >= 0) {
-			    virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-			    if (alias_oidlist) {
-				mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
-				oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
-			    }
-
-			    virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-
-			    if ((!alias_oidlist) ||
-				    (alias_oidlist && alias_oidlist->list && 
-				     (Nlm_SwapUint4(alias_oidlist->list[mask_index])) & oid_bit)) { 
-				oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-			    }
-			}
-		    }
-		    for (i=0; i<total; i++) {
-			oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
-		    }
-
-		    search->rdfp->oidlist = oidlist;
-
-		    search->rdfp->parameters |= READDB_CONTENTS_ALLOCATED;
-		    /*search->rdfp->contents_allocated = TRUE;*/
-
-		    /* in this case, the case when we have .gil file, the only database mask
-		       should be used in Blast Search, so set number of sequences for the first
-		       database in rdfp list to 0 avoiding search this real database: */
-		    search->rdfp->num_seqs = 0;
-
-		    /* Adjust db size; the size should be equal to size of the
-		       .gil */
-		    if (!options->use_real_db_size)
-		       BlastAdjustDbNumbers(search->rdfp, &(dblen), &(search->dbseq_num), 
-		      NULL, NULL, oidlist, NULL, 0);
-
-		    /* keep list of gi's (needed for formating) */
-		    if (options->sort_gi_list)
-		       HeapSort(gi_list_pointers, gi_list_total, sizeof(BlastDoubleInt4Ptr PNTR), compare);
-		    search->thr_info->blast_gi_list = BlastGiListNew(gi_list, gi_list_pointers, gi_list_total);
-		} else {
-		    /* Ok, we do not have a gi-list specified, but maybe
-		       we have an a mask database in the list of databases,
-		       we need to create one mask for all such databases */
-		    OIDListPtr		virtual_oidlist = NULL;
-		    Int4		final_virtual_db_seq=0, final_db_seq=0;
-		    Int4		mask, oid, virtual_oid, maskindex,
-					virtual_mask_index, total_virtual_mask,
-					base;
-		    Uint4		virtual_oid_bit;
-
-		    tmprdfp = search->rdfp;
-		    while (tmprdfp) {
-
-			final_virtual_db_seq = tmprdfp->stop;
-			if (!tmprdfp->oidlist)
-			    final_db_seq = tmprdfp->stop;
-			tmprdfp = tmprdfp->next;
-		    }
-
-		    tmprdfp = search->rdfp;
-		    while (tmprdfp) {
-			if (tmprdfp->oidlist) {
-			    if (!virtual_oidlist) {
-				/* create new oidlist for virtual database */
-				virtual_oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
-				virtual_oidlist->total = final_virtual_db_seq + 1;
-				total_virtual_mask = final_virtual_db_seq/MASK_WORD_SIZE + 2;
-				virtual_oidlist->list = (Uint4Ptr) MemNew (total_virtual_mask*sizeof(Int4));
-			    }
-			    /* Now populate the virtual_oidlist */
-			    maskindex = 0;
-			    base = 0;
-
-			    while (maskindex < (tmprdfp->oidlist->total/MASK_WORD_SIZE +1)) {
-				/* for each long-word mask */
-				mask = Nlm_SwapUint4(tmprdfp->oidlist->list[maskindex]);
-
-				i = 0;
-				while (mask) {
-				    if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
-					oid = base + i;
-					virtual_oid = oid + tmprdfp->start;
-
-					virtual_mask_index = virtual_oid/MASK_WORD_SIZE;
-					virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
-					virtual_oidlist->list[virtual_mask_index] |= virtual_oid_bit;
-				    }
-				    mask <<= 1;
-				    i++;
-				}
-				maskindex++;
-				base += MASK_WORD_SIZE;
-			    }
-
-			    /* free old mask */
-			    tmprdfp->oidlist = OIDListFree(tmprdfp->oidlist);
-			}
-			tmprdfp = tmprdfp->next;
-		    }
-		    if (virtual_oidlist) {
-			for (i=0; i<total_virtual_mask; i++) {
-			    virtual_oidlist->list[i] = Nlm_SwapUint4(virtual_oidlist->list[i]);
-			}
-		    }
-		    search->rdfp->oidlist = virtual_oidlist;
-
-		    readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num), TRUE);
-
-		}
-		/* Intended for use when a list of gi's is sent in, but the real size is needed. */
-		/* It's probably still necessary to call BlastAdjustDbNumbers, but it would be nice
-			if this were not required. */
-		if (options->use_real_db_size && gi_list)
-		      search->dbseq_num = MIN(search->dbseq_num, gi_list_total);
-
 #if 0
 		/* use length and num of seqs of the database from alias file */
-		if (search->rdfp->aliaslen && !gi_list)
-		    dblen = search->rdfp->aliaslen;
-		if (search->rdfp->aliasnseq && !gi_list) 
-		    search->dbseq_num = search->rdfp->aliasnseq;
+           if (search->rdfp->aliaslen && !gi_list)
+              dblen = search->rdfp->aliaslen;
+           if (search->rdfp->aliasnseq && !gi_list) 
+              search->dbseq_num = search->rdfp->aliasnseq;
 #endif
-		/* command-line/options trump alias file. */
-		if (options->db_length > 0)
-			dblen = options->db_length;
-		if (options->dbseq_num > 0)
-			search->dbseq_num = options->dbseq_num;
-		if (options->searchsp_eff > 0)
-			searchsp_eff = options->searchsp_eff;
+           /* command-line/options trump alias file. */
+           if (options->db_length > 0)
+              dblen = options->db_length;
+           if (options->dbseq_num > 0)
+              search->dbseq_num = options->dbseq_num;
+           if (options->searchsp_eff > 0)
+              searchsp_eff = options->searchsp_eff;
+           
+           search->dblen = dblen;
+           search->searchsp_eff = searchsp_eff;
+           status = MegaBlastSetUpSearchInternalByLoc (search, query_slp, query_bsp,
+                                                       prog_name, qlen, options,
+                                                       callback);
+           /* 
+              Turn off the index thread by setting this flag.  
+              Don't wait for a join, as the search will take much 
+              longer than the one second for this to die.
+           */
+           search->thr_info->awake_index = FALSE;
+           
+           if (search->pbp->no_traceback)
+              search->mb_endpoint_results = ValNodeNew(NULL);
+           
+           if (status != 0) {
+              ErrPostEx(SEV_WARNING, 0, 0, "MegaBlastSetUpSearch failed.");
+              search->query_invalid = TRUE;
+           }
 
-		search->dblen = dblen;
-		search->searchsp_eff = searchsp_eff;
-		status = MegaBlastSetUpSearchInternalByLoc (search, query_slp, query_bsp,
-							prog_name, qlen, options,
-							callback);
-                /* 
-                   Turn off the index thread by setting this flag.  
-                   Don't wait for a join, as the search will take much 
-                   longer than the one second for this to die.
-                */
-                search->thr_info->awake_index = FALSE;
-
-                if (search->pbp->no_traceback)
-                   search->mb_endpoint_results = ValNodeNew(NULL);
-
-		if (status != 0)
-		{
-	  		ErrPostEx(SEV_WARNING, 0, 0, "MegaBlastSetUpSearch failed.");
-			search->query_invalid = TRUE;
-		}
-
-		if (search->pbp->is_megablast_search && 
-                    !search->query_invalid) {
-		   search = GreedyAlignMemAlloc(search);
-                   if (search->abmp == NULL) {
-                      ErrPostEx(SEV_WARNING, 0, 0, "Memory allocation for greedy algorithm failed.");
-                      search->query_invalid = TRUE;
-                   }
-		} else 
-		   search->abmp = NULL;
-		search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
+           if (search->pbp->is_megablast_search && 
+               !search->query_invalid) {
+              search = GreedyAlignMemAlloc(search);
+              if (search->abmp == NULL) {
+                 BlastConstructErrorMessage("Mega BLAST", "Memory allocation for greedy algorithm failed.", 2, &(search->error_return));
+                 search->query_invalid = TRUE;
+              } 
+           } else 
+              search->abmp = NULL;
+           search->rdfp = ReadDBCloseMHdrAndSeqFiles(search->rdfp);
 	}
 	
 	if (options_alloc)
-		options = BLASTOptionDelete(options);
-
+           options = BLASTOptionDelete(options);
+        
 	return search;
 }
 
@@ -1025,30 +829,31 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
    
    context = search->first_context; 
    
-   search = BlastFillQueryOffsets(search, query_slp);
-   query_length = SeqLocTotalLen(search->prog_name, query_slp);
    num_queries = search->last_context / 2 + 1;
    search->qid_array = (SeqIdPtr PNTR) MemNew(num_queries*sizeof(SeqIdPtr));
+
+   if (!query_slp) {
+      query_length = query_bsp->length;
+      private_slp = SeqLocIntNew(0, query_length-1 , Seq_strand_plus, SeqIdFindBest(query_bsp->id, SEQID_GI));
+      private_slp_rev = SeqLocIntNew(0, query_length-1 , Seq_strand_minus, SeqIdFindBest(query_bsp->id, SEQID_GI));
+      private_slp_delete = FALSE;
+      search->query_slp = private_slp;
+      search->allocated += BLAST_SEARCH_ALLOC_QUERY_SLP;
+   } else {
+      search->query_slp = query_slp;
+      query_length = SeqLocTotalLen(search->prog_name, query_slp);
+   }
 
    if ((search->context[search->first_context].query->sequence_start = 
       (Uint1Ptr) Malloc((query_length+2)*sizeof(Uint1))) == NULL) {
       ErrPostEx(SEV_WARNING, 0, 0, "Memory allocation for query sequence failed");
-      return 1;
+      retval = 1;
+      goto MegaBlastSetUpReturn;
    }
 
-   if (!query_slp) {
-      private_slp = SeqLocIntNew(0, query_bsp->length-1 , Seq_strand_plus, SeqIdFindBest(query_bsp->id, SEQID_GI));
-      private_slp_rev = SeqLocIntNew(0, query_bsp->length-1 , Seq_strand_minus, SeqIdFindBest(query_bsp->id, SEQID_GI));
-      private_slp_delete = FALSE;
-   }
+   search = BlastFillQueryOffsets(search, search->query_slp, 
+                                  options->wordsize);
 
-   if (query_slp) {
-      search->query_slp = query_slp;
-   }	else {
-      search->query_slp = private_slp;
-      search->allocated += BLAST_SEARCH_ALLOC_QUERY_SLP;
-   }
-   
    search->translation_buffer = NULL;
    search->translation_buffer_size = 0;
    
@@ -1089,7 +894,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       status = BlastScoreBlkMatFill(search->sbp, "BLOSUM62");
    if (status != 0) {
       ErrPostEx(SEV_WARNING, 0, 0, "BlastScoreBlkMatFill returned non-zero status");
-      return 1;
+      retval = 1;
+      goto MegaBlastSetUpReturn;
    }
    
    /* This is used right below. */
@@ -1114,7 +920,7 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       private_slp_rev = SeqLocFree(private_slp_rev);
    
    search->query_id = NULL;
-   slp = query_slp;
+   slp = search->query_slp;
    
    if (search->pbp->is_neighboring) {
       homo_gifile = FindBlastDBFile("Homo_sapiens.n.gil");
@@ -1144,9 +950,11 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
 
       query_length = 0;
       query_length = SeqLocLen(tmp_slp);
-      if (query_length == 0) {
-	 sprintf(buffer, "Invalid query sequence %d", context/2 + 1);
-         ErrPostEx(SEV_WARNING, 0, 0, buffer);
+      if (query_length < options->wordsize - 4) {
+         SeqIdWrite(SeqLocId(tmp_slp), buffer, PRINTID_FASTA_LONG, 127);
+         ErrPostEx(SEV_WARNING, 0, 0, 
+                   "Query sequence %s removed: length %ld is less than wordsize %d", 
+                   buffer, query_length, options->wordsize - 4);
          slp = slp->next;
          context += 2;
 	 continue;
@@ -1187,7 +995,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
 
       if (query_seq_combined == NULL) {
          ErrPostEx(SEV_WARNING, 0, 0, "Memory allocation for query sequence failed");
-         return 1;
+         retval = 1;
+         goto MegaBlastSetUpReturn;
       }
 
       query_seq_combined[0] = 0x0f;
@@ -1206,7 +1015,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       
       if (bsp == NULL) {
 	 ErrPostEx(SEV_WARNING, 0, 0, "No valid query sequence, BioseqLockById returned NULL\n");
-	 return 1;
+	 retval = 1;
+         goto MegaBlastSetUpReturn;
       }
       seq_data_type = bsp->seq_data_type;
       if (seq_data_type != Seq_code_ncbi4na && 
@@ -1229,7 +1039,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
 	 if ((query_seq_start = (Uint1Ptr)
               Malloc(((query_length)+2)*sizeof(Char))) == NULL) {
             ErrPostEx(SEV_WARNING, 0, 0, "Memory allocation for query sequence failed");
-            return 1;
+            retval = 1;
+            goto MegaBlastSetUpReturn;
          }
 
 	 query_seq = query_seq_start+1;
@@ -1295,7 +1106,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
 	 if ((query_seq_start_rev = (Uint1Ptr)
 	    Malloc(((query_length)+2)*sizeof(Char))) == NULL) {
             ErrPostEx(SEV_WARNING, 0, 0, "Memory allocation for query sequence failed");
-            return 1;
+            retval = 1;
+            goto MegaBlastSetUpReturn;
          }
 	 query_seq_rev = query_seq_start_rev+1;
 	 index=0;
@@ -1380,13 +1192,15 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       }
       context++;
 
+   MegaBlastSetUpReturn:      
       /* No longer needed. */
       filter_slp = SeqLocSetFree(filter_slp);
-      
       if (private_slp)
 	 private_slp = SeqLocFree(private_slp);
       if (private_slp_rev)
 	 private_slp_rev = SeqLocFree(private_slp_rev);
+      if (retval)
+         return retval;
       slp = slp->next;
    } /* End of loop over query contexts (strands) */
    
@@ -1395,19 +1209,27 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
    
    retval = 1;
    for (index=search->first_context; index<=search->last_context; index++) {
-         length = search->query_context_offsets[index+1] - 
-            search->query_context_offsets[index] - 1;
-      if (length > 0)
+      length = search->query_context_offsets[index+1] - 
+         search->query_context_offsets[index] - 1;
+      if (length > 0) {
+         retval = 2;
          status = BlastScoreBlkFill(search->sbp, (CharPtr)
                                     search->context[index].query->sequence,
                                     length, index);
-      if (status==0)
-         retval = 0;
+         if (status==0)
+            retval = 0;
+         else
+            search->sbp->kbp_std[index] = 
+               BlastKarlinBlkDestruct(search->sbp->kbp_std[index]);
+      }
    }
 
    /* Error only if all query sequences failed! */
    if (retval != 0) {
-      sprintf(buffer, "Unable to calculate Karlin-Altschul params, check query sequence");
+      if (retval == 1)
+         sprintf(buffer, "All queries are shorter than word size, no search performed");
+      else 
+         sprintf(buffer, "Unable to calculate Karlin-Altschul parameters, check query sequence");
       BlastConstructErrorMessage("BLASTSetUpSearch", buffer, 2, &(search->error_return));
    }
 
@@ -1417,13 +1239,16 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
    /* If retval was set non-zero above (by the routines calculating Karlin-Altschul params),
       return here before these values are used.
    */
-   if (retval) {
+   if (retval)
       return retval;
-   }
-
    context = search->first_context;
-   length = search->context[context].query->length;
 
+   length = search->context[context].query->length;
+   
+   /* Find first valid Karlin block - needed if first query is 
+      completely masked */
+   while (!search->sbp->kbp[context])
+      context++;
    min_query_length = (Int4) 1/(search->sbp->kbp[context]->K);
    
    last_length_adjustment = 0;
@@ -1508,8 +1333,6 @@ available) this needs to be set higher up. */
      (options->gap_x_dropoff*NCBIMATH_LN2 /
      search->sbp->kbp[search->first_context]->Lambda);*/
    search->pbp->gap_x_dropoff = options->gap_x_dropoff;
-   search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp[search->first_context]->Lambda);
-   search->pbp->gap_trigger = (BLAST_Score) ((options->gap_trigger*NCBIMATH_LN2+search->sbp->kbp[search->first_context]->logK)/ search->sbp->kbp[search->first_context]->Lambda);
    /* Ensures that gap_x_dropoff_final is at least as large as gap_x_dropoff. */
    search->pbp->gap_x_dropoff_final = MAX(search->pbp->gap_x_dropoff_final, search->pbp->gap_x_dropoff);
    
@@ -1595,7 +1418,8 @@ Int4 SeqLocTotalLen(CharPtr prog_name, SeqLocPtr slp)
 }
 
 BlastSearchBlkPtr 
-BlastFillQueryOffsets(BlastSearchBlkPtr search, SeqLocPtr query_slp)
+BlastFillQueryOffsets(BlastSearchBlkPtr search, SeqLocPtr query_slp,
+                      Int4 wordsize)
 {
    SeqLocPtr slp = query_slp;
    Int2 num_contexts;
@@ -1608,13 +1432,14 @@ BlastFillQueryOffsets(BlastSearchBlkPtr search, SeqLocPtr query_slp)
       convenience of computing each individual query length later */
    for (slp=query_slp, num_contexts=0; slp; slp=slp->next, num_contexts+=2);
       
-
    search->query_context_offsets = (Int4Ptr) Malloc((num_contexts+1)*sizeof(Int4));
    
    search->query_context_offsets[0] = 0;
+   wordsize -= 4; /* Actual wordsize is 4 less than what's stored in options */
    for (slp = query_slp; slp; slp = slp->next) {
       length = SeqLocLen(slp) + 1;
-      if (length == 1) /* Empty sequence */
+      if (length <= wordsize)
+         /* Sequence shorter than word size will be removed */
          length = 0;
       if (search->first_context == 0) 
 	 search->query_context_offsets[i+1] = 
@@ -2365,7 +2190,7 @@ MBToGapXEditScript (edit_script_t PNTR ed_script)
       esp->num = EDIT_VAL(ed_script->op[i]); 
       esp->op_type = 3 - EDIT_OPC(ed_script->op[i]);
       if (esp->op_type == 3)
-         fprintf(stdout, "op_type = 3\n");
+         fprintf(stderr, "op_type = 3\n");
       if (i==0) 
 	 esp_start = esp_prev = esp;
       else {
@@ -2527,12 +2352,14 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
       factor = 2;
    else 
       factor = 1;
-   gap_open = factor*search->pbp->gap_open;
 
-   if (search->pbp->gap_extend == 0)
-      gap_extend = (search->sbp->reward - 2*search->sbp->penalty) * factor / 2;
-   else
+   if (search->pbp->gap_open == 0 && search->pbp->gap_extend == 0) {
+      gap_open = gap_extend = 
+         (search->sbp->reward - 2*search->sbp->penalty) * factor / 2;
+   } else {
+      gap_open = factor*search->pbp->gap_open;
       gap_extend = factor*search->pbp->gap_extend;
+   }
 
    matrix = search->sbp->matrix;
 
@@ -2567,10 +2394,10 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
                subject++;
             }
          } else if (esp->op_type == GAPALIGN_DEL) {
-            score -= gap_open + gap_extend * esp->num;
+            score -= gap_open + gap_extend * (esp->num - 1);
             subject += esp->num;
          } else if (esp->op_type == GAPALIGN_INS) {
-            score -= gap_open + gap_extend * esp->num;
+            score -= gap_open + gap_extend * (esp->num - 1);
             query += esp->num;
          }
          esp = esp->next;

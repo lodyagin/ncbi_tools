@@ -1,14 +1,54 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-#include <stdio.h>
+/*  $Id: toasn3.h,v 6.8 2001/06/05 21:23:43 vakatov Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author:  
+ *
+ * File Description:
+ *   
+ *
+ * ===========================================================================
+ */
+
+
 #include <ncbi.h>
 #include <seqport.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define INFO_ASNOLD 0
 #define INFO_ASNNEW 1
 #define ERR_REJECT  2
 #define ERR_INPUT   4
+
 
 typedef struct {
 	ValNodePtr	pept;
@@ -69,41 +109,41 @@ typedef struct toasn3 {
 	Boolean had_molinfo;
 } ToAsn3, PNTR ToAsn3Ptr;
 
-Int4 ToAsn4 PROTO((SeqEntryPtr sep));
-Int4 SeqEntryPubsAsn4 PROTO((SeqEntryPtr sep));
-Int4 SeqEntryPubsAsn3 PROTO((SeqEntryPtr sep));
-Int4 SeqEntryToAsn3 PROTO((SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun));
-Int4 SeqEntryToAsn3Ex PROTO((SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge));
-Int2 seq_loc_compare PROTO(( SeqLocPtr a, SeqLocPtr b));
-void compare_quals PROTO((GBQualPtr PNTR qual1, GBQualPtr PNTR qual2));
-Boolean feat_join PROTO((SeqFeatPtr f1, SeqFeatPtr f2, SeqFeatPtr head));
-void count_join PROTO((SeqFeatPtr f1, SeqFeatPtr f2));
-void CountSourceFeat PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-void CorrectSourceFeat PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
+Int4 ToAsn4(SeqEntryPtr sep);
+Int4 SeqEntryPubsAsn4(SeqEntryPtr sep);
+Int4 SeqEntryPubsAsn3(SeqEntryPtr sep);
+Int4 SeqEntryToAsn3(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun);
+Int4 SeqEntryToAsn3Ex(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+Int2 seq_loc_compare( SeqLocPtr a, SeqLocPtr b);
+void compare_quals(GBQualPtr PNTR qual1, GBQualPtr PNTR qual2);
+Boolean feat_join(SeqFeatPtr f1, SeqFeatPtr f2, SeqFeatPtr head);
+void count_join(SeqFeatPtr f1, SeqFeatPtr f2);
+void CountSourceFeat(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+void CorrectSourceFeat(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 
 Boolean CheckLocWhole(BioseqPtr bsp, SeqLocPtr slp);
-void FindOrg PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-void CheckQuals PROTO((BioSourcePtr bsp, GBQualPtr sfp));
-void CheckQualsWithComm PROTO((BioSourcePtr bsp, SeqFeatPtr sfp));
-MolInfoPtr new_info PROTO((MolInfoPtr mfi));
-MolInfoPtr ModToMolInfo PROTO((MolInfoPtr mfi, Uint1 mod));
-void ModToBiosource PROTO((BioSourcePtr bsp, Uint1 mod));
-void StripOld PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-void CkOrg PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-void MergeBSinDescr PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-Int4 FixNucProtSet PROTO((SeqEntryPtr sep));
-void CheckBS PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-Int4 BSComparison PROTO((BioSourcePtr one, BioSourcePtr two));
-Int4 BSComparisonEx PROTO((BioSourcePtr one, BioSourcePtr two, Boolean clone));
-Int2 BioSourceToGeneticCode PROTO((BioSourcePtr biop));
-ValNodePtr GetMultBiosource PROTO((SeqEntryPtr sep));
+void FindOrg(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+void CheckQuals(BioSourcePtr bsp, GBQualPtr sfp);
+void CheckQualsWithComm(BioSourcePtr bsp, SeqFeatPtr sfp);
+MolInfoPtr new_info(MolInfoPtr mfi);
+MolInfoPtr ModToMolInfo(MolInfoPtr mfi, Uint1 mod);
+void ModToBiosource(BioSourcePtr bsp, Uint1 mod);
+void StripOld(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+void CkOrg(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+void MergeBSinDescr(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+Int4 FixNucProtSet(SeqEntryPtr sep);
+void CheckBS(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+Int4 BSComparison(BioSourcePtr one, BioSourcePtr two);
+Int4 BSComparisonEx(BioSourcePtr one, BioSourcePtr two, Boolean clone);
+Int2 BioSourceToGeneticCode(BioSourcePtr biop);
+ValNodePtr GetMultBiosource(SeqEntryPtr sep);
 
 /****************************************************
 * Does a SeqEntryExplore, calling ImpFeatToCdregion() on
 *  each feature table found
 *
 ****************************************************/
-void EntryChangeImpFeat PROTO((SeqEntryPtr sep));
+void EntryChangeImpFeat(SeqEntryPtr sep);
 
 /****************************************************
 *  Changes a SeqFeat of type Imp-feat CDS to a real
@@ -113,9 +153,9 @@ void EntryChangeImpFeat PROTO((SeqEntryPtr sep));
 *    (so also returns FALSE if not an Imp-feat of type CDS)
 *
 *****************************************************/
-Boolean ImpFeatToCdregion PROTO((SeqFeatPtr sfp));
+Boolean ImpFeatToCdregion(SeqFeatPtr sfp);
 
-void CdCheck PROTO((SeqEntryPtr sep, FILE *fp));
+void CdCheck(SeqEntryPtr sep, FILE *fp);
 
 /****************************************************
 *  Creates source string from BioSource structure
@@ -123,7 +163,7 @@ void CdCheck PROTO((SeqEntryPtr sep, FILE *fp));
 *  deletes GBBlock.source if it's the same as from BioSource
 *
 *****************************************************/
-void EntryChangeGBSource PROTO((SeqEntryPtr sep));
+void EntryChangeGBSource(SeqEntryPtr sep);
 
 /****************************************************
 *  Finds multiple biosource descriptors on the same chain with
@@ -131,7 +171,7 @@ void EntryChangeGBSource PROTO((SeqEntryPtr sep));
 *  other blocks, conservatively, deletes second biosource
 *
 *****************************************************/
-void EntryMergeDupBioSources PROTO((SeqEntryPtr sep));
+void EntryMergeDupBioSources(SeqEntryPtr sep);
 
 /****************************************************
 *  Checks GBBlock.source, .taxonomy, and .div, removes any empty
@@ -139,14 +179,14 @@ void EntryMergeDupBioSources PROTO((SeqEntryPtr sep));
 *  than PAT or SYN division) exists in the these fields
 *
 *****************************************************/
-Boolean EntryCheckGBBlock PROTO((SeqEntryPtr sep));
+Boolean EntryCheckGBBlock(SeqEntryPtr sep);
 
-void EntryChangeImpFeatToProt PROTO((SeqEntryPtr sep));
+void EntryChangeImpFeatToProt(SeqEntryPtr sep);
 
-void CombineBSFeat PROTO((SeqEntryPtr sep));
-void ChangeReplaceToQual PROTO((SeqFeatPtr sfp));
-void AddReplaceQual PROTO((SeqFeatPtr sfp, CharPtr p));
-Boolean SeqEntryMoveDbxrefs  PROTO((SeqEntryPtr sep));
+void CombineBSFeat(SeqEntryPtr sep);
+void ChangeReplaceToQual(SeqFeatPtr sfp);
+void AddReplaceQual(SeqFeatPtr sfp, CharPtr p);
+Boolean SeqEntryMoveDbxrefs (SeqEntryPtr sep);
 
 /* functions moved from Sequin */
 
@@ -161,7 +201,7 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
 
 /* from move_cds (S. Bazhin) */
 
-Uint2 move_cds PROTO((SeqEntryPtr sep));
+Uint2 move_cds(SeqEntryPtr sep);
 
 /* more functions moved from Sequin, placed in toporg.c */
 
@@ -179,5 +219,9 @@ extern void ConvertFullLenPubFeatToDesc (SeqEntryPtr sep);
 
 extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
 
+
+#ifdef __cplusplus
+}
 #endif
 
+#endif

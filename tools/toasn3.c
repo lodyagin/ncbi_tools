@@ -3847,6 +3847,50 @@ static CharPtr TASNTrimSpacesAndTrailingSemicolons (CharPtr str)
   return str;
 }
 
+static CharPtr TASNTrimInternalSemicolons (CharPtr str)
+
+{
+  Uchar    ch;	/* to use 8bit characters in multibyte languages */
+  CharPtr  dst;
+  Boolean  hasspace;
+  CharPtr  ptr;
+  CharPtr  tmp;
+
+  if (str != NULL && str [0] != '\0') {
+    dst = str;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == ';') {
+        *dst = ch;
+        dst++;
+        ptr++;
+        ch = *ptr;
+        tmp = ptr;
+        hasspace = FALSE;
+        while (ch == ';' || ch == ' ' || ch == '\t') {
+          if (ch == ' ') {
+            hasspace = TRUE;
+          }
+          ptr++;
+          ch = *ptr;
+        }
+        if (hasspace) {
+          *dst = ' ';
+          dst++;
+        }
+      } else {
+        *dst = ch;
+        dst++;
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    *dst = '\0';
+  }
+  return str;
+}
+
 static Boolean TASNStringHasNoText (CharPtr str)
 
 {
@@ -3871,6 +3915,7 @@ static void CleanVisString (CharPtr PNTR strp)
   if (strp == NULL) return;
   if (*strp == NULL) return;
   TASNTrimSpacesAndTrailingSemicolons (*strp);
+  TASNTrimInternalSemicolons (*strp);
   if (TASNStringHasNoText (*strp)) {
     *strp = MemFree (*strp);
   }
@@ -3882,6 +3927,7 @@ static void CleanVisStringJunk (CharPtr PNTR strp)
   if (strp == NULL) return;
   if (*strp == NULL) return;
   TrimSpacesAndJunkFromEnds (*strp, TRUE);
+  TASNTrimInternalSemicolons (*strp);
   if (TASNStringHasNoText (*strp)) {
     *strp = MemFree (*strp);
   }

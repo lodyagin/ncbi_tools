@@ -17,7 +17,7 @@ Directions for building the NCBI toolkit on Macintosh computers
     the ncbi folder is put anywhere else.
 6)  Inside the ncbi:make subfolder are four files with .met extensions.
     Double click on CodeWarrior IDE 4.1, then run makeall.met.  The libraries
-    are built in the ncbi:lib folder.  When this is done, run makenet.met.
+    are built in the ncbi:lib folder.
     You may need to restart CodeWarrior before running the make script.
 7)  After the libraries are built, run makedemo.met.  This builds application
     programs such as Entrez, Sequin, and Cn3D.

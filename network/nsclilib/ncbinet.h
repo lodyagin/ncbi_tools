@@ -1,4 +1,4 @@
-/* $Id: ncbinet.h,v 6.5 2000/07/08 20:44:05 vakatov Exp $      
+/* $Id: ncbinet.h,v 6.6 2001/04/05 04:02:21 juran Exp $      
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbinet.h,v $
+* Revision 6.6  2001/04/05 04:02:21  juran
+* Removed MacTCP-enabling preprocessor hacks.
+*
 * Revision 6.5  2000/07/08 20:44:05  vakatov
 * Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
@@ -79,16 +82,6 @@
 #include <ni_lib_.h>
 
 #ifdef NETP_INET_MACTCP
-#include "macsockd.h"
-#define __TYPES__       /* avoid Mac <Types.h> */
-#define __MEMORY__      /* avoid Mac <Memory.h> */
-#define ipBadLapErr     /* avoid Mac <MacTCPCommonTypes.h> */
-#define APPL_SOCK_DEF
-#ifdef __NI_LIB__
-#define DONT_DEFINE_INET
-#else
-#define SOCK_DEFS_ONLY
-#endif
 
 #include "sock_ext.h"
 extern void bzero PROTO((CharPtr target, long numbytes));

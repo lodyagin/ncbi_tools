@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnout.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnout.h,v $
+* Revision 6.1  2001/06/26 22:03:04  juran
+* Make C++-compatible.
+*
 * Revision 6.0  1997/08/25 18:10:16  madden
 * Revision changed to 6.0
 *
@@ -72,6 +75,10 @@
 
 
 #define SYMBOLLEN_MAX	31	/* maximum length of defined symbol in chars */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct tmptype {
 	AsnTypePtr ptr;
@@ -108,6 +115,9 @@ NLM_EXTERN void AsnOutNewValueChain PROTO((AsnProcPtr app, AsnValxNodePtr avnp))
 NLM_EXTERN void AsnOutDefineType PROTO((FILE *fp, AsnProcPtr app, AsnTypePtr atp, Int2 maxDefineLength));
 NLM_EXTERN void AsnOutDefineElement PROTO((FILE *fp, AsnProcPtr app, AsnTypePtr atp, CharPtr buf, CharPtr pnt, Int2 maxDefineLength));
 
+#ifdef __cplusplus
+}
+#endif
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT

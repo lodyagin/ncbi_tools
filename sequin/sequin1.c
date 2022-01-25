@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.298 $
+* $Revision: 6.305 $
 *
 * File Description: 
 *
@@ -125,7 +125,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "3.55"
+#define SEQ_APP_VER "3.70"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -210,6 +210,7 @@ static IteM  editseqsubitem = NULL;
 static IteM  edithistoryitem = NULL;
 static MenU  updateSeqMenu = NULL;
 static MenU  addSeqMenu = NULL;
+static IteM  featPropItem = NULL;
 static IteM  updalignitem = NULL;
 
 static IteM  docsumfontItem = NULL;
@@ -2848,14 +2849,15 @@ static Int4 LIBCALL CountSeqEntryAligns (Uint2 entityID, SeqEntryPtr sep)
 static void EnableEditAlignItem (BaseFormPtr bfp)
 
 {
-  /*
   BioseqPtr     bsp;
-  */
+  BioseqSetPtr  bssp;
   IteM          editalign;
   IteM          editdup;
+  IteM          editfeatprop;
   IteM          editupwthaln;
   Int2          mssgalign;
   Int2          mssgdup;
+  Int2          mssgfeatprop;
   Int2          mssgupwthaln;
   Int4          num;
   SeqEntryPtr   sep;
@@ -2864,9 +2866,11 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   if (bfp == NULL && bfp->input_entityID != 0) return;
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgdup = RegisterFormMenuItemName ("SequinDuplicateItem");
+  mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
   mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
   editalign = FindFormMenuItem (bfp, mssgalign);
   editdup = FindFormMenuItem (bfp, mssgdup);
+  editfeatprop = FindFormMenuItem (bfp, mssgfeatprop);
   editupwthaln = FindFormMenuItem (bfp, mssgupwthaln);
   sel = ObjMgrGetSelected ();
   sep = NULL;
@@ -2906,6 +2910,17 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   } else {
     Disable (editdup);
   }
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (num > 0 && bsp != NULL && sep != NULL && IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && bssp->_class >= 13 && bssp->_class <= 16) {
+      Enable (editfeatprop);
+    } else {
+      Disable (editfeatprop);
+    }
+  } else {
+    Disable (editfeatprop);
+  }
 }
 
 static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
@@ -2933,7 +2948,7 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   editsub = FindFormMenuItem (bfp, mssgsub);
   editupd = (MenU) FindFormMenuItem (bfp, mssgupd);
   editadd = (MenU) FindFormMenuItem (bfp, mssgadd);
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (bsp != NULL) {
     Enable (editseq);
     Enable (editupd);
@@ -2948,10 +2963,16 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
     } else {
       Disable (editadd);
     }
+#ifdef WIN_MAC
+    Enable (featPropItem);
+#endif
   } else {
     Disable (editseq);
     Disable (editupd);
     Disable (editadd);
+#ifdef WIN_MAC
+    Disable (featPropItem);
+#endif
   }
   omdp = ObjMgrGetData (bfp->input_entityID);
   if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
@@ -3008,7 +3029,6 @@ static void BioseqViewFormActivated (WindoW w)
                    (HANDLE) restoreItem,
                    (HANDLE) printItem,
                    (HANDLE) orfItem,
-                   (HANDLE) aluItem,
                    (HANDLE) targetItem,
                    (HANDLE) newDescMenu,
                    (HANDLE) newFeatMenu,
@@ -3017,6 +3037,7 @@ static void BioseqViewFormActivated (WindoW w)
                    (HANDLE) validateItem,
                    (HANDLE) edithistoryitem,
                    NULL);
+  Enable (aluItem);
   Enable (submitItem);
   Enable (specialMenu);
   Enable (analysisMenu);
@@ -3134,6 +3155,18 @@ static void StdValidatorFormActivated (WindoW w)
                    (HANDLE) importItem,
                    (HANDLE) exportItem,
                    (HANDLE) printItem,
+                   NULL);
+}
+
+extern void UpdateSequenceFormActivated (WindoW w);
+extern void UpdateSequenceFormActivated (WindoW w)
+
+{
+  currentFormDataPtr = (VoidPtr) GetObjectExtra (w);
+  initialFormsActive = FALSE;
+  RepeatProcOnHandles (Enable,
+                   (HANDLE) openItem,
+                   (HANDLE) closeItem,
                    NULL);
 }
 
@@ -3276,7 +3309,6 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) findItem,
                    (HANDLE) findFFItem,
                    (HANDLE) orfItem,
-                   (HANDLE) aluItem,
                    (HANDLE) targetItem,
                    (HANDLE) newDescMenu,
                    (HANDLE) newFeatMenu,
@@ -3289,8 +3321,10 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) edithistoryitem,
                    (HANDLE) updateSeqMenu,
                    (HANDLE) addSeqMenu,
+                   (HANDLE) featPropItem,
                    (HANDLE) updalignitem,
                    NULL);
+  Disable (aluItem);
   Disable (submitItem);
   Disable (vectorScreenItem);
   Disable (powerBlastItem);
@@ -3483,7 +3517,8 @@ static Boolean LookupTaxonomyFunc (Uint2 entityID)
 }
 /*#endif*/
 
-static void QuitProc (void)
+extern void QuitProc (void);
+extern void QuitProc (void)
 
 {
   Boolean        dirty;
@@ -5216,6 +5251,10 @@ extern void NewUpdateSequence (
   IteM i
 );
 
+extern void NewFeaturePropagate (
+  IteM i
+);
+
 /*
 static void UpdateSeqTEST (IteM i)
 
@@ -5453,12 +5492,15 @@ static void CommonAddSeq (IteM i, Int2 type)
           vnp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
           if (vnp == NULL || title != NULL) {
             ptr = StringISearch (title, "[org=");
-            StringNCpy_0 (str, ptr + 5, sizeof (str));
-            ptr = StringChr (str, ']');
-            if (ptr == NULL) {
-              ptr = StringISearch (title, "[organism=");
-              StringNCpy_0 (str, ptr + 10, sizeof (str));
+            if (ptr != NULL) {
+              StringNCpy_0 (str, ptr + 5, sizeof (str));
               ptr = StringChr (str, ']');
+            } else {
+              ptr = StringISearch (title, "[organism=");
+              if (ptr != NULL) {
+                StringNCpy_0 (str, ptr + 10, sizeof (str));
+                ptr = StringChr (str, ']');
+              }
             }
             if (ptr != NULL) {
               *ptr = '\0';
@@ -5698,6 +5740,7 @@ static void BioseqViewFormMenus (WindoW w)
   Int2           mssgadd;
   Int2           mssgalign;
   Int2           mssgdup;
+  Int2           mssgfeatprop;
   Int2           mssgseq;
   Int2           mssgsub;
   Int2           mssgupd;
@@ -5832,6 +5875,7 @@ static void BioseqViewFormMenus (WindoW w)
     mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
     mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
     mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+    mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
     mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
     FormCommandItem (m, "Edit Sequence...", bfp, mssgseq);
     FormCommandItem (m, "Edit Alignment...", bfp, mssgalign);
@@ -5876,6 +5920,10 @@ static void BioseqViewFormMenus (WindoW w)
       i = CommandItem (sub, "FASTA Set", DoUpdatesSeq);
       SetObjectExtra (i, bfp, NULL);
     }
+    SeparatorItem (m);
+    i = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
+    SetObjectExtra (i, bfp, NULL);
+    SetFormMenuItem (bfp, mssgfeatprop, i);
     SeparatorItem (m);
     sub = SubMenu (m, "Add Sequence");
     SetFormMenuItem (bfp, mssgadd, (IteM) sub);
@@ -8201,6 +8249,7 @@ static void SetupMacMenus (void)
   Int2  mssgadd;
   Int2  mssgalign;
   Int2  mssgdup;
+  Int2  mssgfeatprop;
   Int2  mssgseq;
   Int2  mssgsub;
   Int2  mssgupd;
@@ -8263,6 +8312,7 @@ static void SetupMacMenus (void)
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
   mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editsequenceitem = FormCommandItem (m, "Edit Sequence...", NULL, mssgseq);
   editseqalignitem = FormCommandItem (m, "Edit Alignment...", NULL, mssgalign);
@@ -8297,6 +8347,9 @@ static void SetupMacMenus (void)
     SeparatorItem (updateSeqMenu);
     CommandItem (updateSeqMenu, "FASTA Set", DoUpdatesSeq);
   }
+  SeparatorItem (m);
+  featPropItem = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
+  SetFormMenuItem (NULL, mssgfeatprop, featPropItem);
   SeparatorItem (m);
   addSeqMenu = SubMenu (m, "Add Sequence");
   SetFormMenuItem (NULL, mssgadd, (IteM) addSeqMenu);
@@ -9693,6 +9746,23 @@ Int2 Main (void)
             smartPort = SM_SERVER_PORT;
         }
 #endif
+      }
+  }}
+#endif
+
+#ifdef WIN_MSWIN
+  {{
+    Nlm_Int2         i;
+    Nlm_Int4         argc = GetArgc();
+    Nlm_CharPtr PNTR argv = GetArgv();
+    for (i = 1;  i < argc;  i++)
+      {
+        if (StringCmp (argv[i], "-x") == 0)
+          stdinMode = TRUE;
+        else if (StringCmp (argv[i], "-e") == 0)
+          entrezMode = TRUE;
+        else if (StringCmp (argv[i], "-h") == 0)
+          nohelpMode = TRUE;
       }
   }}
 #endif

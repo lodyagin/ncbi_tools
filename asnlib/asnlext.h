@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnio.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnlext.h,v $
+* Revision 6.2  2001/06/26 22:03:17  juran
+* Make C++-compatible.
+*
 * Revision 6.1  2000/05/12 20:44:00  ostell
 * make changes to collect comments from spec and print in DTD
 *
@@ -123,6 +126,10 @@
 #define ISMODULE_TOKEN 458 /* signal from PrintModule to AsnPrintIndent */
 #define COMMENT_TOKEN 459  /* for comment on same line as an element */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*****************************************************************************
 *
 *   prototypes
@@ -146,6 +153,10 @@ NLM_EXTERN AsnTypePtr AsnTypeNew PROTO((AsnIoPtr aip, AsnModulePtr amp));
 NLM_EXTERN AsnTypePtr AsnElementTypeNew PROTO((AsnIoPtr aip));
 NLM_EXTERN AsnModulePtr AsnCheckModule PROTO((AsnModulePtr amp, AsnIoPtr aip));
 NLM_EXTERN void AsnSetTags PROTO((AsnTypePtr atp));
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #undef NLM_EXTERN

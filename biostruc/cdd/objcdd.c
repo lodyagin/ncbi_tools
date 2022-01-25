@@ -6,6 +6,7 @@
 #include <objmmdb1.h>
 #include <objmmdb3.h>
 #include <objcdd.h>
+#include <objcn3d.h>
 
 static Boolean loaded = FALSE;
 
@@ -34,7 +35,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.10 at Feb 5, 2001  5:11 PM
+*    Generated using ASNCODE Revision: 6.10 at Jun 14, 2001  4:37 PM
 *
 **************************************************/
 
@@ -367,6 +368,16 @@ CddFree(CddPtr ptr)
    MatrixFree(ptr -> posfreq);
    MatrixFree(ptr -> scoremat);
    TriangleFree(ptr -> distance);
+   CddIdSetFree(ptr -> parents);
+   CddIdSetFree(ptr -> children);
+   CddIdSetFree(ptr -> siblings);
+   CddIdSetFree(ptr -> neighbors);
+   AsnGenericUserSeqOfFree(ptr -> pending, (AsnOptFreeFunc) UpdateAlignFree);
+   AsnGenericUserSeqOfFree(ptr -> rejects, (AsnOptFreeFunc) RejectIdFree);
+   AsnGenericChoiceSeqOfFree(ptr -> master3d, (AsnOptFreeFunc) SeqIdFree);
+   AlignAnnotSetFree(ptr -> alignannot);
+   Cn3dStyleDictionaryFree(ptr -> style_dictionary);
+   Cn3dUserAnnotationsFree(ptr -> user_annotations);
    return MemFree(ptr);
 }
 
@@ -495,6 +506,76 @@ CddAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CDD_parents) {
+      ptr -> parents = CddIdSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_children) {
+      ptr -> children = CddIdSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_siblings) {
+      ptr -> siblings = CddIdSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_neighbors) {
+      ptr -> neighbors = CddIdSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_pending) {
+      ptr -> pending = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UpdateAlignAsnRead, (AsnOptFreeFunc) UpdateAlignFree);
+      if (isError && ptr -> pending == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_rejects) {
+      ptr -> rejects = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) RejectIdAsnRead, (AsnOptFreeFunc) RejectIdFree);
+      if (isError && ptr -> rejects == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_master3d) {
+      ptr -> master3d = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqIdAsnRead, (AsnOptFreeFunc) SeqIdFree);
+      if (isError && ptr -> master3d == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_alignannot) {
+      ptr -> alignannot = AlignAnnotSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_style_dictionary) {
+      ptr -> style_dictionary = Cn3dStyleDictionaryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_user_annotations) {
+      ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -596,6 +677,45 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   if (ptr -> parents != NULL) {
+      if ( ! CddIdSetAsnWrite(ptr -> parents, aip, CDD_parents)) {
+         goto erret;
+      }
+   }
+   if (ptr -> children != NULL) {
+      if ( ! CddIdSetAsnWrite(ptr -> children, aip, CDD_children)) {
+         goto erret;
+      }
+   }
+   if (ptr -> siblings != NULL) {
+      if ( ! CddIdSetAsnWrite(ptr -> siblings, aip, CDD_siblings)) {
+         goto erret;
+      }
+   }
+   if (ptr -> neighbors != NULL) {
+      if ( ! CddIdSetAsnWrite(ptr -> neighbors, aip, CDD_neighbors)) {
+         goto erret;
+      }
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> pending, (AsnWriteFunc) UpdateAlignAsnWrite, aip, CDD_pending, CDD_pending_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> rejects, (AsnWriteFunc) RejectIdAsnWrite, aip, CDD_rejects, CDD_rejects_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> master3d, (AsnWriteFunc) SeqIdAsnWrite, aip, CDD_master3d, CDD_master3d_E);
+   if (ptr -> alignannot != NULL) {
+      if ( ! AlignAnnotSetAsnWrite(ptr -> alignannot, aip, CDD_alignannot)) {
+         goto erret;
+      }
+   }
+   if (ptr -> style_dictionary != NULL) {
+      if ( ! Cn3dStyleDictionaryAsnWrite(ptr -> style_dictionary, aip, CDD_style_dictionary)) {
+         goto erret;
+      }
+   }
+   if (ptr -> user_annotations != NULL) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, CDD_user_annotations)) {
+         goto erret;
+      }
+   }
+
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -757,6 +877,7 @@ CddTreeFree(CddTreePtr ptr)
    CddIdSetFree(ptr -> parents);
    CddIdSetFree(ptr -> children);
    CddIdSetFree(ptr -> siblings);
+   CddIdSetFree(ptr -> neighbors);
    return MemFree(ptr);
 }
 
@@ -850,6 +971,13 @@ CddTreeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CDD_TREE_neighbors) {
+      ptr -> neighbors = CddIdSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -927,6 +1055,11 @@ CddTreeAsnWrite(CddTreePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    if (ptr -> siblings != NULL) {
       if ( ! CddIdSetAsnWrite(ptr -> siblings, aip, CDD_TREE_siblings)) {
+         goto erret;
+      }
+   }
+   if (ptr -> neighbors != NULL) {
+      if ( ! CddIdSetAsnWrite(ptr -> neighbors, aip, CDD_TREE_neighbors)) {
          goto erret;
       }
    }
@@ -1285,6 +1418,15 @@ CddDescrFree(ValNodePtr anp)
    case CddDescr_source:
       MemFree(anp -> data.ptrvalue);
       break;
+   case CddDescr_update_date:
+      DateFree(anp -> data.ptrvalue);
+      break;
+   case CddDescr_scrapbook:
+      AsnGenericBaseSeqOfFree((ValNodePtr) pnt,ASNCODE_PTRVAL_SLOT);
+      break;
+   case CddDescr_source_id:
+      CddIdSetFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -1388,6 +1530,22 @@ CddDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == CDD_DESCR_update_date) {
+      choice = CddDescr_update_date;
+      func = (AsnReadFunc) DateAsnRead;
+   }
+   else if (atp == CDD_DESCR_scrapbook) {
+      choice = CddDescr_scrapbook;
+      anp -> data.ptrvalue = 
+      AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+   else if (atp == CDD_DESCR_source_id) {
+      choice = CddDescr_source_id;
+      func = (AsnReadFunc) CddIdSetAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -1480,6 +1638,16 @@ CddDescrAsnWrite(CddDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case CddDescr_status:
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, CDD_DESCR_status, &av);
+      break;
+   case CddDescr_update_date:
+      writetype = CDD_DESCR_update_date;
+      func = (AsnWriteFunc) DateAsnWrite;
+      break;
+   case CddDescr_scrapbook:
+      retval = AsnGenericBaseSeqOfAsnWrite((Pointer) pnt,ASNCODE_PTRVAL_SLOT, aip, CDD_DESCR_scrapbook, CDD_DESCR_scrapbook_E);            break;
+   case CddDescr_source_id:
+      writetype = CDD_DESCR_source_id;
+      func = (AsnWriteFunc) CddIdSetAsnWrite;
       break;
    }
    if (writetype != NULL) {
@@ -1828,6 +1996,7 @@ TriangleFree(TrianglePtr ptr)
       return NULL;
    }
    ScoreSetFree(ptr -> scores);
+   AsnGenericBaseSeqOfFree(ptr -> div_ranks ,ASNCODE_INTVAL_SLOT);
    return MemFree(ptr);
 }
 
@@ -1893,6 +2062,13 @@ TriangleAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == TRIANGLE_div_ranks) {
+      ptr -> div_ranks = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> div_ranks == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1951,9 +2127,1045 @@ TriangleAsnWrite(TrianglePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> div_ranks ,ASNCODE_INTVAL_SLOT, aip, TRIANGLE_div_ranks, TRIANGLE_div_ranks_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    UpdateCommentFree()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateCommentPtr LIBCALL
+UpdateCommentFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case UpdateComment_comment:
+      MemFree(anp -> data.ptrvalue);
+      break;
+   case UpdateComment_addthis:
+      SeqLocFree(anp -> data.ptrvalue);
+      break;
+   case UpdateComment_replaces:
+      SeqLocFree(anp -> data.ptrvalue);
+      break;
+   case UpdateComment_reject_loc:
+      SeqLocFree(anp -> data.ptrvalue);
+      break;
+   case UpdateComment_reference:
+      PubFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    UpdateCommentAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateCommentPtr LIBCALL
+UpdateCommentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* UpdateComment ::= (self contained) */
+      atp = AsnReadId(aip, amp, UPDATE_COMMENT);
+   } else {
+      atp = AsnLinkType(orig, UPDATE_COMMENT);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == UPDATE_COMMENT_comment) {
+      choice = UpdateComment_comment;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
+   else if (atp == UPDATE_COMMENT_addthis) {
+      choice = UpdateComment_addthis;
+      func = (AsnReadFunc) SeqLocAsnRead;
+   }
+   else if (atp == UPDATE_COMMENT_replaces) {
+      choice = UpdateComment_replaces;
+      func = (AsnReadFunc) SeqLocAsnRead;
+   }
+   else if (atp == UPDATE_COMMENT_reject_loc) {
+      choice = UpdateComment_reject_loc;
+      func = (AsnReadFunc) SeqLocAsnRead;
+   }
+   else if (atp == UPDATE_COMMENT_reference) {
+      choice = UpdateComment_reference;
+      func = (AsnReadFunc) PubAsnRead;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    UpdateCommentAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+UpdateCommentAsnWrite(UpdateCommentPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, UPDATE_COMMENT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case UpdateComment_comment:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, UPDATE_COMMENT_comment, &av);
+      break;
+   case UpdateComment_addthis:
+      writetype = UPDATE_COMMENT_addthis;
+      func = (AsnWriteFunc) SeqLocAsnWrite;
+      break;
+   case UpdateComment_replaces:
+      writetype = UPDATE_COMMENT_replaces;
+      func = (AsnWriteFunc) SeqLocAsnWrite;
+      break;
+   case UpdateComment_reject_loc:
+      writetype = UPDATE_COMMENT_reject_loc;
+      func = (AsnWriteFunc) SeqLocAsnWrite;
+      break;
+   case UpdateComment_reference:
+      writetype = UPDATE_COMMENT_reference;
+      func = (AsnWriteFunc) PubAsnWrite;
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    UpdateAlignNew()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateAlignPtr LIBCALL
+UpdateAlignNew(void)
+{
+   UpdateAlignPtr ptr = MemNew((size_t) sizeof(UpdateAlign));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    UpdateAlignFree()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateAlignPtr LIBCALL
+UpdateAlignFree(UpdateAlignPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericChoiceSeqOfFree(ptr -> description, (AsnOptFreeFunc) UpdateCommentFree);
+   SeqAnnotFree(ptr -> seqannot);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    UpdateAlignAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateAlignPtr LIBCALL
+UpdateAlignAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   UpdateAlignPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* UpdateAlign ::= (self contained) */
+      atp = AsnReadId(aip, amp, UPDATE_ALIGN);
+   } else {
+      atp = AsnLinkType(orig, UPDATE_ALIGN);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = UpdateAlignNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == UPDATE_ALIGN_description) {
+      ptr -> description = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UpdateCommentAsnRead, (AsnOptFreeFunc) UpdateCommentFree);
+      if (isError && ptr -> description == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == UPDATE_ALIGN_seqannot) {
+      ptr -> seqannot = SeqAnnotAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == UPDATE_ALIGN_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = UpdateAlignFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    UpdateAlignAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+UpdateAlignAsnWrite(UpdateAlignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, UPDATE_ALIGN);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> description, (AsnWriteFunc) UpdateCommentAsnWrite, aip, UPDATE_ALIGN_description, UPDATE_ALIGN_description_E);
+   if (ptr -> seqannot != NULL) {
+      if ( ! SeqAnnotAsnWrite(ptr -> seqannot, aip, UPDATE_ALIGN_seqannot)) {
+         goto erret;
+      }
+   }
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, UPDATE_ALIGN_type,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    RejectIdNew()
+*
+**************************************************/
+NLM_EXTERN 
+RejectIdPtr LIBCALL
+RejectIdNew(void)
+{
+   RejectIdPtr ptr = MemNew((size_t) sizeof(RejectId));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    RejectIdFree()
+*
+**************************************************/
+NLM_EXTERN 
+RejectIdPtr LIBCALL
+RejectIdFree(RejectIdPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericChoiceSeqOfFree(ptr -> description, (AsnOptFreeFunc) UpdateCommentFree);
+   AsnGenericChoiceSeqOfFree(ptr -> ids, (AsnOptFreeFunc) SeqIdFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    RejectIdAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+RejectIdPtr LIBCALL
+RejectIdAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   RejectIdPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* RejectId ::= (self contained) */
+      atp = AsnReadId(aip, amp, REJECT_ID);
+   } else {
+      atp = AsnLinkType(orig, REJECT_ID);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = RejectIdNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == REJECT_ID_description) {
+      ptr -> description = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UpdateCommentAsnRead, (AsnOptFreeFunc) UpdateCommentFree);
+      if (isError && ptr -> description == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == REJECT_ID_ids) {
+      ptr -> ids = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqIdAsnRead, (AsnOptFreeFunc) SeqIdFree);
+      if (isError && ptr -> ids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = RejectIdFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    RejectIdAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+RejectIdAsnWrite(RejectIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, REJECT_ID);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> description, (AsnWriteFunc) UpdateCommentAsnWrite, aip, REJECT_ID_description, REJECT_ID_description_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> ids, (AsnWriteFunc) SeqIdAsnWrite, aip, REJECT_ID_ids, REJECT_ID_ids_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    FeatureEvidenceFree()
+*
+**************************************************/
+NLM_EXTERN 
+FeatureEvidencePtr LIBCALL
+FeatureEvidenceFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case FeatureEvidence_comment:
+      MemFree(anp -> data.ptrvalue);
+      break;
+   case FeatureEvidence_reference:
+      PubFree(anp -> data.ptrvalue);
+      break;
+   case FeatureEvidence_bsannot:
+      BiostrucAnnotSetFree(anp -> data.ptrvalue);
+      break;
+   case FeatureEvidence_seqfeat:
+      SeqFeatFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    FeatureEvidenceAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+FeatureEvidencePtr LIBCALL
+FeatureEvidenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* FeatureEvidence ::= (self contained) */
+      atp = AsnReadId(aip, amp, FEATURE_EVIDENCE);
+   } else {
+      atp = AsnLinkType(orig, FEATURE_EVIDENCE);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == FEATURE_EVIDENCE_comment) {
+      choice = FeatureEvidence_comment;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
+   else if (atp == FEATURE_EVIDENCE_reference) {
+      choice = FeatureEvidence_reference;
+      func = (AsnReadFunc) PubAsnRead;
+   }
+   else if (atp == FEATURE_EVIDENCE_bsannot) {
+      choice = FeatureEvidence_bsannot;
+      func = (AsnReadFunc) BiostrucAnnotSetAsnRead;
+   }
+   else if (atp == FEATURE_EVIDENCE_seqfeat) {
+      choice = FeatureEvidence_seqfeat;
+      func = (AsnReadFunc) SeqFeatAsnRead;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    FeatureEvidenceAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+FeatureEvidenceAsnWrite(FeatureEvidencePtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, FEATURE_EVIDENCE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case FeatureEvidence_comment:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, FEATURE_EVIDENCE_comment, &av);
+      break;
+   case FeatureEvidence_reference:
+      writetype = FEATURE_EVIDENCE_reference;
+      func = (AsnWriteFunc) PubAsnWrite;
+      break;
+   case FeatureEvidence_bsannot:
+      writetype = FEATURE_EVIDENCE_bsannot;
+      func = (AsnWriteFunc) BiostrucAnnotSetAsnWrite;
+      break;
+   case FeatureEvidence_seqfeat:
+      writetype = FEATURE_EVIDENCE_seqfeat;
+      func = (AsnWriteFunc) SeqFeatAsnWrite;
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    AlignAnnotNew()
+*
+**************************************************/
+NLM_EXTERN 
+AlignAnnotPtr LIBCALL
+AlignAnnotNew(void)
+{
+   AlignAnnotPtr ptr = MemNew((size_t) sizeof(AlignAnnot));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    AlignAnnotFree()
+*
+**************************************************/
+NLM_EXTERN 
+AlignAnnotPtr LIBCALL
+AlignAnnotFree(AlignAnnotPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqLocFree(ptr -> location);
+   MemFree(ptr -> description);
+   AsnGenericChoiceSeqOfFree(ptr -> evidence, (AsnOptFreeFunc) FeatureEvidenceFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    AlignAnnotAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+AlignAnnotPtr LIBCALL
+AlignAnnotAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   AlignAnnotPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* AlignAnnot ::= (self contained) */
+      atp = AsnReadId(aip, amp, ALIGN_ANNOT);
+   } else {
+      atp = AsnLinkType(orig, ALIGN_ANNOT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = AlignAnnotNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ALIGN_ANNOT_location) {
+      ptr -> location = SeqLocAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ALIGN_ANNOT_description) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> description = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ALIGN_ANNOT_evidence) {
+      ptr -> evidence = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) FeatureEvidenceAsnRead, (AsnOptFreeFunc) FeatureEvidenceFree);
+      if (isError && ptr -> evidence == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = AlignAnnotFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    AlignAnnotAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+AlignAnnotAsnWrite(AlignAnnotPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ALIGN_ANNOT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> location != NULL) {
+      if ( ! SeqLocAsnWrite(ptr -> location, aip, ALIGN_ANNOT_location)) {
+         goto erret;
+      }
+   }
+   if (ptr -> description != NULL) {
+      av.ptrvalue = ptr -> description;
+      retval = AsnWrite(aip, ALIGN_ANNOT_description,  &av);
+   }
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> evidence, (AsnWriteFunc) FeatureEvidenceAsnWrite, aip, ALIGN_ANNOT_evidence, ALIGN_ANNOT_evidence_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    AlignAnnotSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+AlignAnnotSetPtr LIBCALL
+AlignAnnotSetFree(AlignAnnotSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) AlignAnnotFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    AlignAnnotSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+AlignAnnotSetPtr LIBCALL
+AlignAnnotSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   AlignAnnotSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* AlignAnnotSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, ALIGN_ANNOT_SET);
+   } else {
+      atp = AsnLinkType(orig, ALIGN_ANNOT_SET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) AlignAnnotAsnRead, (AsnOptFreeFunc) AlignAnnotFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = AlignAnnotSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    AlignAnnotSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+AlignAnnotSetAsnWrite(AlignAnnotSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ALIGN_ANNOT_SET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) AlignAnnotAsnWrite, aip, atp, ALIGN_ANNOT_SET_E);
    retval = TRUE;
 
 erret:

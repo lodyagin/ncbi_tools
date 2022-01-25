@@ -32,8 +32,24 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.43 $ 
+/* $Revision: 6.48 $ 
 * $Log: blast.h,v $
+* Revision 6.48  2001/07/09 15:12:47  shavirin
+* Functions BLbasicSmithWatermanScoreOnly() and BLSmithWatermanFindStart()
+* used to calculate Smith-waterman alignments on low level become external.
+*
+* Revision 6.47  2001/06/18 16:09:25  dondosha
+* Added prototype for PrintTabularOutputHeader
+*
+* Revision 6.46  2001/06/13 21:40:54  dondosha
+* Moved GetGisFromFile declaration from mblast.h to blast.h
+*
+* Revision 6.45  2001/04/16 21:28:11  dondosha
+* Added function BlastPruneSeqAlignByEvalueRange
+*
+* Revision 6.44  2001/04/12 21:34:50  dondosha
+* Added function BlastPruneSeqAlignByGiList
+*
 * Revision 6.43  2001/04/06 18:15:08  madden
 * Move UNIX-specific stuff (HeyIAmInMemory) to bqueue.[ch]
 *
@@ -525,6 +541,25 @@ void BLASTAddBlastDBTitleToSeqAnnot PROTO((SeqAnnotPtr seqannot,
 Int4 reverse_seq (Uint1 *seq, Uint1 *pos, Uint1 *target);
 
 int LIBCALLBACK RPSResultHspScoreCmp(VoidPtr v1, VoidPtr v2);
+
+SeqAlignPtr 
+BlastPruneSeqAlignByGiList PROTO((SeqAlignPtr seqalign, Int4Ptr gi_list, Int4 gi_list_total));
+SeqAlignPtr 
+BlastPruneSeqAlignByEvalueRange PROTO((SeqAlignPtr seqalign, FloatHi expect_low, FloatHi expect_high));
+
+BlastDoubleInt4Ptr GetGisFromFile PROTO((CharPtr file_name, Int4Ptr gi_list_size));
+void PrintTabularOutputHeader PROTO((CharPtr blast_database, BioseqPtr query_bsp,
+                              SeqLocPtr query_slp, CharPtr blast_program,
+                              Int4 iteration, Boolean believe_query,
+                                     FILE *outfp));
+
+/* ------ Functions related to Smith-Waterman algorithm ------ */
+
+Nlm_FloatHi BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *matchSeqEnd, Int4 *queryEnd, Int4 *score, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi effSearchSpace, Boolean positionSpecific);
+
+Int4 BLSmithWatermanFindStart(Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score, Int4 *matchSeqStart, Int4 *queryStart, Boolean positionSpecific);
+
+/* ----------------------------------------------------------- */
 
 /* DEBUG */
 /* time mesuaring utilities */

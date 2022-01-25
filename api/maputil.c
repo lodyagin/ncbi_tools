@@ -397,7 +397,7 @@ NLM_EXTERN Uint1 get_band_type(UserObjectPtr uop)
                        if(StringCmp(ufp->data.ptrvalue, "Acrocentric") ==0)
                                 return ACRO_CENTRIC;
                        if(StringCmp(ufp->data.ptrvalue, "Point") ==0)
-                                return POINT;
+                                return BAND_POINT;
                        if(StringCmp(ufp->data.ptrvalue, "VariableReg") ==0)
                                 return VARIABLE_REG;
                        return 0;
@@ -589,7 +589,7 @@ NLM_EXTERN Uint1 ck_cyto_type(SeqFeatPtr sfp)
 		band = get_band_type(uop);
 		if(band >= BND && band <= CEN)
 			return FLY_CYTO;
-		if(band >= POINT && band <= VARIABLE_REG)
+		if(band >= BAND_POINT && band <= VARIABLE_REG)
 			return HUMAN_CYTO;
 	}
 

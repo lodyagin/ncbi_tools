@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.37 2001/01/09 20:11:41 shavirin Exp $
+/* $Id: rpsutil.c,v 6.42 2001/07/09 13:12:03 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,27 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.37 $
+* $Revision: 6.42 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.42  2001/07/09 13:12:03  madden
+* Removed unused variables
+*
+* Revision 6.41  2001/07/02 21:13:31  madden
+* Replace NlmThreadJoinAll with calls to NlmThreadJoin
+*
+* Revision 6.40  2001/06/29 18:07:07  madden
+* Add function RPSInitEx that passes in BLAST_OptionsBlkPtr
+*
+* Revision 6.39  2001/05/31 14:45:54  bauer
+* fix in RPSBgetCddHits to prepare for upcoming changes in Smart accessions
+*
+* Revision 6.38  2001/04/11 20:56:06  madden
+* Added scalingFactor for rpsblast
+*
 * Revision 6.37  2001/01/09 20:11:41  shavirin
 * Function RPSResultHspScoreCmp() moved to blast.[c,h].
 *
@@ -247,11 +262,54 @@ void RPSInfoDetach(RPSInfoPtr rpsinfo)
     return;
 }
 
+/*get information from matrixAuxiliaryFile
+*/
+static Boolean getAuxInformation(CharPtr auxFile, Nlm_FloatHiPtr scalingFactor)
+{
+    Char underlyingMatrixName[PATH_MAX]; /*name of matrix to read*/
+    Nlm_FloatHi privateScalingFactor;
+    Int4 maxLength; /*maximum length of sequence*/
+    Int4 dbLength; /*length of database*/
+    Nlm_FloatHi Kungapped, Hungapped; /*two values to read*/
+    Int4 gap_open, gap_extend; /*gap costs to skip over in reading*/
+    FILE *matrixAuxiliaryFile;
+
+    
+    if (scalingFactor)
+    	*scalingFactor = 0.0;
+     /* No aux file. */
+    if (!auxFile || FileLength(auxFile) <= 0)
+	return FALSE;
+
+    matrixAuxiliaryFile = FileOpen(auxFile, "r"); 
+    fscanf(matrixAuxiliaryFile,"%s",underlyingMatrixName);
+    fscanf(matrixAuxiliaryFile,"%d\n", &gap_open);
+    fscanf(matrixAuxiliaryFile,"%d\n", &gap_extend);
+    fscanf(matrixAuxiliaryFile, "%le", &Kungapped);
+    fscanf(matrixAuxiliaryFile, "%le", &Hungapped);
+    fscanf(matrixAuxiliaryFile, "%d", &maxLength);
+    fscanf(matrixAuxiliaryFile, "%d", &dbLength);
+    fscanf(matrixAuxiliaryFile, "%lf", &privateScalingFactor);
+    FileClose(matrixAuxiliaryFile);
+
+    if (scalingFactor)
+    	*scalingFactor = privateScalingFactor;
+   
+
+    return TRUE; 
+}
+
 RPSInfoPtr RPSInit(CharPtr dbname, Int4 query_is_prot)
 {
+	return RPSInitEx(dbname, query_is_prot, NULL);
+}
+
+RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr blast_options)
+{
+    Nlm_FloatHi scalingFactor;
     RPSInfoPtr rpsinfo;
     Int4Ptr header;
-    Char rps_matrix[128], rps_lookup[128];
+    Char rps_matrix[PATH_MAX], rps_lookup[PATH_MAX], rps_aux[PATH_MAX];
 
     rpsinfo = MemNew(sizeof(RPSInfo));
     
@@ -265,6 +323,7 @@ RPSInfoPtr RPSInit(CharPtr dbname, Int4 query_is_prot)
 
     sprintf(rps_matrix, "%s.rps", rpsinfo->rdfp->full_filename);
     sprintf(rps_lookup, "%s.loo", rpsinfo->rdfp->full_filename);
+    sprintf(rps_aux, "%s.aux", rpsinfo->rdfp->full_filename);
     
     
     if((rpsinfo->mmMatrix = Nlm_MemMapInit(rps_matrix)) == NULL) {
@@ -297,6 +356,11 @@ RPSInfoPtr RPSInit(CharPtr dbname, Int4 query_is_prot)
 
     rpsinfo->lookup = RPSInitLookup(rps_lookup);
 
+    /* Now look in aux file. */
+    getAuxInformation(rps_aux, &scalingFactor);
+
+    if (blast_options && scalingFactor != 0.0)
+	blast_options->scalingFactor = scalingFactor;
     
     return rpsinfo;
 }
@@ -466,7 +530,6 @@ void RPSequenceFree(RPSequencePtr rpseqp)
 
 void RPSUpdateDbSize(BLAST_OptionsBlkPtr options, RPSInfoPtr rpsinfo, Int4 query_length)
 {
-    Int4 db_length;
 
     options->dbseq_num = rpsinfo->matrixCount;
 
@@ -588,10 +651,7 @@ static void RPSapSortFree(RPSapSortPtr ssp)
 Boolean RPSReturnQuery(BlastSearchBlkPtr search, BioseqPtr query_bsp,
                        Uint1Ptr query_seq_start)
 {
-    SeqPortPtr spp;
-    Int4 index, query_length;
-    /*    Uint1Ptr query_seq, query_seq_start;
-          Uint1 residue; */
+    Int4 query_length;
   
     if(search == NULL || query_bsp == NULL)
         return FALSE;
@@ -620,7 +680,6 @@ Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search,
                                 RPSequencePtr rpseq, Boolean update_lookup)
 {
     Int4 hitlist_max;
-    SeqLocPtr slp;
     LookupTablePtr lookup;
     
     if(search == NULL || rpseq == NULL)
@@ -727,7 +786,7 @@ void RPSExchangeInt(Int4 *a, Int4 *b)
 Boolean RPSUpdateCoordinates(ReadDBFILEPtr rdfp, BLASTResultHitlistPtr result,
                              Boolean reverse)
 {
-    Int4 hspcnt, index, index2;
+    Int4 hspcnt, index;
     BLASTResultHspPtr hsp_array;
     Int4 seq_no1, seq_no2, sequence_start1, seq_length1; 
     Int4 sequence_start2, seq_length2;
@@ -1106,7 +1165,7 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
         RPSubstituteQueryLookup(search, rpseq, FALSE);
 	/* Correct statistics for proteins, should also be doen for nucleotides. */
 	if (rpsinfo->query_is_prot == TRUE) {
-            if(!RPSimpalaStatCorrections(rpseq, &lambda_ratio, 1.0, 
+            if(!RPSimpalaStatCorrections(rpseq, &lambda_ratio, search->pbp->scalingFactor, 
                                          subject_length, subject_seq)) {
                 Char tmp[64];
 
@@ -1252,7 +1311,7 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
                             BioseqPtr query_bsp, RPSInfoPtr rpsinfo)
 {
     Int2 status;
-    Int4 index, MaxProfiles;
+    Int4 index;
     SeqAlignPtr seqalign=NULL, head = NULL, seqalign_var = NULL;
     SeqPortPtr spp;
     Uint1Ptr subject_seq, subject_seq_start;
@@ -1456,7 +1515,7 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
 {
   CddHitPtr         cdhThis, cdhHead = NULL, cdhTail = NULL;
   CharPtr	    tmp=NULL;
-  Int4              i, number;
+  Int4              number;
   SeqIdPtr          sip = NULL;
   BioseqPtr         bsp = NULL;
   Boolean           found_score = FALSE;
@@ -1481,7 +1540,6 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
 	if (bsp->id->choice == SEQID_GENERAL)
 	{
 		DbtagPtr dbtag;
-		ObjectIdPtr objid;
 		
 		dbtag = bsp->id->data.ptrvalue;
 		dbname = StringSave(dbtag->db);
@@ -1491,9 +1549,15 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
           cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
 	  if (tmp)
           	cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ',');
-        } else if (StrCmp(dbname,"Smart") == 0) {
-          cdhThis->ShortName = StringSave(cdhThis->CDDid);
-          cdhThis->Definition = SaveUntilChar(title, &tmp, ';');
+        } else if (StrCmp(dbname,"Smart") == 0) {  
+          if (StrNCmp(cdhThis->CDDid,"smart0",6) == 0) { /*new style accession*/
+            cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
+	    if (tmp)
+          	  cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ';');
+          } else {                                       /*old style accession*/
+            cdhThis->ShortName = StringSave(cdhThis->CDDid);
+            cdhThis->Definition = SaveUntilChar(title, &tmp, ';');
+          }
         } else if (StrCmp(dbname,"Load") == 0) {
           cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
 	  if (tmp)
@@ -1549,7 +1613,7 @@ static VoidPtr RPSEngineThread(VoidPtr data)
 
     RPS_MTDataStructPtr mtdata;
     SeqAlignPtr seqalign;
-    ValNodePtr other_returns, error_returns;
+    ValNodePtr other_returns;
     BlastSearchBlkPtr search;
     RPSBlastOptionsPtr rpsbop;
     BioseqPtr bsp, query_bsp, fake_bsp;
@@ -1694,7 +1758,6 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
                          VoidPtr print_user_data)
 {
     
-    BioseqPtr bsp;
     RPS_MTDataStructPtr mtdata;
     RPSInfoPtr rpsinfo_main;
     Int4 i;
@@ -1702,8 +1765,8 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
     mtdata = MemNew(sizeof(RPS_MTDataStruct));
     
     /* Initializing RPS Blast database */
-    if((rpsinfo_main = RPSInit(rpsbop->rps_database, 
-                               rpsbop->query_is_protein)) == NULL) {
+    if((rpsinfo_main = RPSInitEx(rpsbop->rps_database, 
+                               rpsbop->query_is_protein, rpsbop->options)) == NULL) {
         ErrPostEx(SEV_ERROR, 0,0, 
                   "Failure to initialize RPS Blast database");
         return FALSE;
@@ -1722,17 +1785,25 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
     while(!search_is_done) {
     
         if(rpsbop->num_threads > 1 && NlmThreadsAvailable()) {
+
+	    TNlmThread* thread_array = (TNlmThread PNTR) MemNew((rpsbop->num_threads)*sizeof(TNlmThread));
+	    VoidPtr status=NULL;
+
             for(i = 0; i < rpsbop->num_threads; i++) {
-                if(NlmThreadCreate(RPSEngineThread, (VoidPtr) mtdata) == NULL_thread) {
+                if((thread_array[i]=NlmThreadCreate(RPSEngineThread, (VoidPtr) mtdata)) == NULL_thread) {
                     ErrPostEx(SEV_ERROR, 0, errno, "Failure to create thread");
                     return FALSE;
                 }
             }
+
+            for (i=0; i<rpsbop->num_threads; i++) {
+            	NlmThreadJoin(thread_array[i], &status);
+            }
+
         } else {
             RPSEngineThread((VoidPtr) mtdata);
         }
         
-        NlmThreadJoinAll();
         ObjMgrFreeCache(0);
         /* ObjMgrResetAll(); */
         glb_sequence_count = 0;
@@ -1790,7 +1861,6 @@ Int4Ptr PNTR RPSReadPSMatrix(CharPtr filename, Int4Ptr mat_len)
 BioseqPtr RPSGetBioseqFromMatrix(Int4Ptr PNTR psmatrix, Int4 length)
 {
     BioseqPtr bsp;
-    ByteStorePtr seqbs;
     CharPtr buffer;
     Int4 i, j, score, old_score, j_max;
     ValNodePtr     vnp = NULL;

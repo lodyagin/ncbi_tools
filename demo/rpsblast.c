@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.34 2001/03/26 14:28:53 madden Exp $
+/* $Id: rpsblast.c,v 6.37 2001/07/03 20:50:33 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.34 $
+* $Revision: 6.37 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.37  2001/07/03 20:50:33  madden
+* Commented out call to PrintTabularOutputHeader
+*
+* Revision 6.36  2001/06/27 16:20:00  dondosha
+* Enabled tabular output for RPS Blast
+*
+* Revision 6.35  2001/04/13 14:19:08  madden
+* Do not print verison banner for XML
+*
 * Revision 6.34  2001/03/26 14:28:53  madden
 * Fix XML problems
 *
@@ -166,7 +175,7 @@ static Args myargs [] = {
      "T", NULL,NULL,TRUE, 'p', ARG_BOOLEAN, 0.0,0,NULL},
     { "Expectation value (E)",        /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular output", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -326,12 +335,13 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, "BLOSUM62", 0, 0);
     
-    if(myargs[4].intvalue == 7) {
-        rpsbop->is_xml_output = TRUE;
-    } else {    
-        PGPGetPrintOptions(options->gapped_calculation, 
-                           &rpsbop->align_options, &rpsbop->print_options);
-    }
+    if(myargs[4].intvalue == 7)
+       rpsbop->is_xml_output = TRUE;
+    else if (myargs[4].intvalue == 8)
+       rpsbop->is_tabular = TRUE;
+    else
+       PGPGetPrintOptions(options->gapped_calculation, 
+                          &rpsbop->align_options, &rpsbop->print_options);
     
     /* decrement by one to agree with program values. */
     options->required_start = myargs[14].intvalue - 1;
@@ -603,6 +613,17 @@ static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
                        "blastp" : "tblastn", rpsbop->rps_database, 
                        query_bsp, other_returns, 0, NULL);
        AsnIoClose(aip);
+    } else if (rpsbop->is_tabular) {
+/*
+       PrintTabularOutputHeader(rpsbop->rps_database, query_bsp, NULL, 
+                                "rps-blast", 0, rpsbop->believe_query,
+                                rpsbop->outfp);
+*/
+       BlastPrintTabulatedResults(seqalign, query_bsp, NULL, 
+                                  rpsbop->number_of_alignments,
+                                  rpsbop->query_is_protein ? 
+                                  "blastp" : "tblastn", FALSE,
+                                  rpsbop->believe_query, 0, 0, rpsbop->outfp);
     } else {
         RPSViewSeqAlign(query_bsp, seqalign, rpsbop, other_returns);
         RPSFormatFooter(rpsbop, other_returns);
@@ -655,12 +676,12 @@ Int2 Main(void)
         return 1;
     }
 
-    BlastPrintVersionInfo("RPS-BLAST", rpsbop->html, rpsbop->outfp);
+    if (!rpsbop->is_xml_output && !rpsbop->is_tabular)
+	    BlastPrintVersionInfo("RPS-BLAST", rpsbop->html, rpsbop->outfp);
     
     /* VoidPtr bsp_data = NULL, print_data = NULL; */
     RPSBlastSearchMT(rpsbop, RPSGetNextSeqEntry, NULL, 
                      RPSResultsCallback, NULL);
-    
     RPSBlastOptionsFree(rpsbop);
     
     return 0;

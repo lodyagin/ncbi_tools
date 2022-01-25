@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket.c,v 6.22 2001/03/29 21:15:36 lavr Exp $
+/*  $Id: ncbi_socket.c,v 6.32 2001/06/20 21:26:18 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,46 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.c,v $
+ * Revision 6.32  2001/06/20 21:26:18  vakatov
+ * As per A.Grichenko/A.Lavrentiev report:
+ *   SOCK_Shutdown() -- typo fixed (use "how" rather than "x_how").
+ *   SOCK_Shutdown(READ) -- do not call system shutdown if EOF was hit.
+ *   Whenever shutdown on both READ and WRITE:  do the WRITE shutdown first.
+ *
+ * Revision 6.31  2001/06/04 21:03:08  vakatov
+ * + HAVE_SOCKLEN_T
+ *
+ * Revision 6.30  2001/05/31 15:42:10  lavr
+ * INADDR_* constants are all and always in host byte order -
+ * this was mistakenly forgotten, and now fixed by use of htonl().
+ *
+ * Revision 6.29  2001/05/23 21:03:35  vakatov
+ * s_SelectStallsafe() -- fix for the interpretation of "default" R-on-W mode
+ * (by A.Lavrentiev)
+ *
+ * Revision 6.28  2001/05/21 15:10:32  ivanov
+ * Added (with Denis Vakatov) automatic read on write data from the socket
+ * (stall protection).
+ * Added functions SOCK_SetReadOnWriteAPI(), SOCK_SetReadOnWrite()
+ * and internal function s_SelectStallsafe().
+ *
+ * Revision 6.27  2001/04/25 19:16:01  juran
+ * Set non-blocking mode on Mac OS. (from pjc)
+ *
+ * Revision 6.26  2001/04/24 21:03:42  vakatov
+ * s_NCBI_Recv()   -- restore "r_status" to eIO_Success on success.
+ * SOCK_Wait(READ) -- return eIO_Success if data pending in the buffer.
+ * (w/A.Lavrentiev)
+ *
+ * Revision 6.25  2001/04/23 22:22:08  vakatov
+ * SOCK_Read() -- special treatment for "buf" == NULL
+ *
+ * Revision 6.24  2001/04/04 14:58:59  vakatov
+ * Cleaned up after R6.23 (and get rid of the C++ style comments)
+ *
+ * Revision 6.23  2001/04/03 20:30:15  juran
+ * Changes to work with OT sockets.  Not all of pjc's changes are here -- I will test them shortly.
+ *
  * Revision 6.22  2001/03/29 21:15:36  lavr
  * More accurate length calculation in 'SOCK_gethostbyaddr'
  *
@@ -151,28 +191,14 @@
 #  include <winsock2.h>
 
 #elif defined(NCBI_OS_MAC)
-#  include <macsockd.h>
-#  define __TYPES__       /* avoid Mac <Types.h> */
-#  define __MEMORY__      /* avoid Mac <Memory.h> */
-#  define ipBadLapErr     /* avoid Mac <MacTCPCommonTypes.h> */
-#  define APPL_SOCK_DEF
-#  define SOCK_DEFS_ONLY
 #  include <sock_ext.h>
 extern void bzero(char* target, long numbytes);
 #  include <netdb.h>
 #  include <s_types.h>
 #  include <s_socket.h>
-#  include <s_ioctl.h>
 #  include <neti_in.h>
 #  include <a_inet.h>
-#  include <s_time.h>
-#  include <s_fcntl.h>
 #  include <neterrno.h> /* missing error numbers on Mac */
-/* cannot write more than SOCK_WRITE_SLICE at once on Mac; so we have to split
- * big output buffers into smaller(<SOCK_WRITE_SLICE) slices before writing
- * them to the socket
- */
-#  define SOCK_WRITE_SLICE 2048
 
 #else
 #  error "Unsupported platform, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN, NCBI_OS_MAC !!!"
@@ -274,7 +300,9 @@ typedef int TSOCK_Handle;
 #  define SOCK_SHUTDOWN_WR    1
 
 /* (but see ni_lib.c line 2508 for gethostname substitute for Mac) */
+#ifndef NCBI_OS_MAC
 extern int gethostname(char* machname, long buflen);
+#endif
 
 #endif /* NCBI_OS_MSWIN, NCBI_OS_UNIX, NCBI_OS_MAC */
 
@@ -301,6 +329,7 @@ typedef struct SOCK_tag {
     STimeout        c_to;       /* finite close timeout value (aux., temp.) */
     unsigned int    host;       /* peer host (in the network byte order) */
     unsigned short  port;       /* peer port (in the network byte order) */
+    ESwitch         r_on_w;     /* enable/disable automatic read-on-write */
     BUF             buf;        /* read buffer */
 
     /* current status and EOF indicator */
@@ -480,16 +509,18 @@ static int/*bool*/ s_SetNonblock(TSOCK_Handle sock, int/*bool*/ nonblock)
 #if defined(NCBI_OS_MSWIN)
     unsigned long argp = nonblock ? 1 : 0;
     return (ioctlsocket(sock, FIONBIO, &argp) == 0);
-#elif defined(NCBI_OS_UNIX)
+#elif defined(NCBI_OS_UNIX) || defined(NCBI_OS_MAC)
     return (fcntl(sock, F_SETFL,
                   nonblock ?
                   fcntl(sock, F_GETFL, 0) | O_NONBLOCK :
-                  fcntl(sock, F_GETFL, 0) & (int)~O_NONBLOCK) != -1);
+                  fcntl(sock, F_GETFL, 0) & (int) ~O_NONBLOCK) != -1);
+/*	removed 2/22/01 pjc
 #elif defined(NCBI_OS_MAC)
     return (fcntl(sock, F_SETFL,
                   nonblock ?
                   fcntl(sock, F_GETFL, 0) | O_NDELAY :
-                  fcntl(sock, F_GETFL, 0) & (int)~O_NDELAY) != -1);
+                  fcntl(sock, F_GETFL, 0) & (int) ~O_NDELAY) != -1);
+ */
 #else
     assert(0);
     return 0/*false*/;
@@ -529,8 +560,9 @@ static EIO_Status s_Select(TSOCK_Handle          sock,
                        timeout ? &tmout : 0);
         assert(-1 <= n_dfs  &&  n_dfs <= 2);
         if ((n_dfs < 0  &&  SOCK_ERRNO != SOCK_EINTR)  ||
-            FD_ISSET(sock, &e_fds))
+            FD_ISSET(sock, &e_fds)) {
             return eIO_Unknown;
+        }
     } while (n_dfs < 0);
 
     /* timeout has expired */
@@ -638,13 +670,14 @@ extern EIO_Status LSOCK_Accept(LSOCK           lsock,
     }}
 
     {{ /* accept next connection */
-        struct sockaddr_in addr;
-#ifdef NCBI_OS_MAC
-        long addrlen = sizeof(struct sockaddr);
+#if defined(HAVE_SOCKLEN_T)
+        typedef socklen_t SOCK_socklen_t;
 #else
-        int addrlen = sizeof(struct sockaddr);
+        typedef int       SOCK_socklen_t;
 #endif
-        if ((x_sock = accept(lsock->sock, (struct sockaddr *)&addr, &addrlen))
+        struct sockaddr_in addr;
+	SOCK_socklen_t addrlen = sizeof(struct sockaddr);
+        if ((x_sock = accept(lsock->sock, (struct sockaddr*) &addr, &addrlen))
             == SOCK_INVALID) {
             CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Error,
                            "[LSOCK_Accept]  Failed accept()");
@@ -665,6 +698,7 @@ extern EIO_Status LSOCK_Accept(LSOCK           lsock,
     (*sock)->port = x_port;
     BUF_SetChunkSize(&(*sock)->buf, SOCK_BUF_CHUNK_SIZE);
     (*sock)->log_data = eDefault;
+    (*sock)->r_on_w   = eDefault;
     (*sock)->id = ++s_ID_Counter * 1000;
     return eIO_Success;
 }
@@ -717,6 +751,13 @@ extern EIO_Status LSOCK_GetOSHandle(LSOCK  lsock,
 /******************************************************************************
  *  SOCKET
  */
+
+
+/* Read-while-writing switch.
+ * NOTE: no read-while-writing by default
+ */
+static ESwitch s_ReadOnWrite = eDefault;
+
 
 
 /* Connect the (pre-allocated) socket to the specified "host:port" peer.
@@ -866,13 +907,13 @@ static EIO_Status s_Close(SOCK sock)
     }
 
     /* Shutdown in both directions */
-    if (SOCK_Shutdown(sock, eIO_Read) != eIO_Success) {
-        CORE_LOG(eLOG_Warning,
-                 "[SOCK::s_Close]  Cannot shutdown socket for reading");
-    }
     if (SOCK_Shutdown(sock, eIO_Write) != eIO_Success) {
         CORE_LOG(eLOG_Warning,
                  "[SOCK::s_Close]  Cannot shutdown socket for writing");
+    }
+    if (SOCK_Shutdown(sock, eIO_Read) != eIO_Success) {
+        CORE_LOG(eLOG_Warning,
+                 "[SOCK::s_Close]  Cannot shutdown socket for reading");
     }
 
     /* Close (persistently retry if interrupted by a signal) */
@@ -901,59 +942,78 @@ static EIO_Status s_Close(SOCK sock)
  * (MSG_PEEK is not implemented on Mac, and it is poorly implemented
  * on Win32, so we had to implement this feature by ourselves)
  */
-static int s_NCBI_Recv(SOCK          sock,
-                       void*         buffer,
-                       size_t        size,
-                       int  /*bool*/ peek)
+static int s_NCBI_Recv(SOCK        sock,
+                       void*       buffer,
+                       size_t      size,
+                       int/*bool*/ peek)
 {
+    char   xx_buffer[4096];
     char*  x_buffer = (char*) buffer;
-    size_t n_readbuf;
-    int    n_readsock;
+    size_t n_read;
 
     /* read (or peek) from the internal buffer */
-    n_readbuf = peek ?
+    n_read = peek ?
         BUF_Peek(sock->buf, x_buffer, size) :
         BUF_Read(sock->buf, x_buffer, size);
-    if (n_readbuf == size  ||  sock->r_status == eIO_Closed) {
-        return (int) n_readbuf;
+    if (n_read == size  ||  sock->r_status == eIO_Closed) {
+        return (int) n_read;
     }
-    x_buffer += n_readbuf;
-    size     -= n_readbuf;
 
     /* read (not just peek) from the socket */
-    n_readsock = recv(sock->sock, x_buffer, size, 0);
-
-    /* catch EOF */
-    if (n_readsock == 0  ||
-        (n_readsock < 0  &&  SOCK_ERRNO == SOCK_ENOTCONN)) {
-        sock->r_status = eIO_Closed;
-        sock->is_eof   = 1/*true*/;
-        return (int) (n_readbuf ? n_readbuf : 0);
-    }
-    /* catch unknown ERROR */
-    if (n_readsock < 0) {
-        int x_errno = SOCK_ERRNO;
-        if (x_errno != SOCK_EWOULDBLOCK  &&
-            x_errno != SOCK_EAGAIN  &&
-            x_errno != SOCK_EINTR) {
-            sock->r_status = eIO_Unknown;
+    do {
+        /* recv */
+        int    x_readsock;
+        size_t n_todo = size - n_read;
+        if ( buffer ) {
+            /* read to the data buffer provided by user */
+            x_buffer += n_read;
+            x_readsock = recv(sock->sock, x_buffer, n_todo, 0);
+        } else {
+            /* read to the temporary buffer (to store or discard later) */
+            if (n_todo > sizeof(xx_buffer)) {
+                n_todo = sizeof(xx_buffer);
+            }
+            x_readsock = recv(sock->sock, xx_buffer, n_todo, 0);
+            x_buffer = xx_buffer;
         }
-        return n_readbuf ? (int)n_readbuf : -1;
-    }
 
-    /* if "peek" -- store the new read data in the internal buffer */
-    if ( peek ) {
-        verify(BUF_Write(&sock->buf, x_buffer, n_readsock));
-    }
+        /* catch EOF */
+        if (x_readsock == 0  ||
+            (x_readsock < 0  &&  SOCK_ERRNO == SOCK_ENOTCONN)) {
+            sock->r_status = eIO_Closed;
+            sock->is_eof   = 1/*true*/;
+            return n_read ? (int) n_read : 0;
+        }
+        /* catch unknown ERROR */
+        if (x_readsock < 0) {
+            int x_errno = SOCK_ERRNO;
+            if (x_errno != SOCK_EWOULDBLOCK  &&
+                x_errno != SOCK_EAGAIN  &&
+                x_errno != SOCK_EINTR) {
+                sock->r_status = eIO_Unknown;
+            }
+            return n_read ? (int) n_read : -1;
+        }
+        /* successful read */
+        assert(x_readsock > 0);
+        sock->r_status = eIO_Success;
 
-    /* statistics & logging */
-    if (sock->log_data == eOn  ||
-        (sock->log_data == eDefault  &&  s_LogData == eOn)) {
-        s_DoLogData(sock, eIO_Read, x_buffer, (size_t) n_readsock);
-    }
-    sock->n_read += n_readsock;
+        /* if "peek" -- store the new read data in the internal buffer */
+        if ( peek ) {
+            verify(BUF_Write(&sock->buf, x_buffer, (size_t) x_readsock));
+        }
 
-    return (int) (n_readbuf + n_readsock);
+        /* statistics & logging */
+        if (sock->log_data == eOn  ||
+            (sock->log_data == eDefault  &&  s_LogData == eOn)) {
+            s_DoLogData(sock, eIO_Read, x_buffer, (size_t) x_readsock);
+        }
+        sock->n_read += x_readsock;
+        n_read       += x_readsock;
+    }
+    while (!buffer  &&  n_read < size);
+
+    return (int) n_read;
 }
 
 
@@ -1018,6 +1078,61 @@ static EIO_Status s_Recv(SOCK        sock,
 }
 
 
+/* Stall protection: try pull incoming data from the socket.
+ * Available only for eIO_Write & eIO_ReadWrite events.
+ * For event == eIO_Read, or if read-on-write is disabled, or if
+ * the READ stream is closed, then this function 
+ * is equivalent to s_Select().
+ */
+static EIO_Status s_SelectStallsafe(SOCK                  sock,
+                                    EIO_Event             event,
+                                    const struct timeval* timeout)
+{
+    EIO_Status status;
+    static struct timeval s_ZeroTimeout = {0, 0};
+
+    /* just checking */
+    if (sock->sock == SOCK_INVALID) {
+        CORE_LOG(eLOG_Error,
+                 "[SOCK::s_Select]  Attempted to stall protection on an "
+                 "invalid socket");
+        assert(0);
+        return eIO_Unknown;
+    }
+
+    /* check if to use a "regular" s_Select() */
+    if (event == eIO_Read  ||
+        sock->r_status == eIO_Closed  ||
+        sock->r_on_w == eOff  ||
+        (sock->r_on_w == eDefault  &&  s_ReadOnWrite != eOn)) {
+        /* wait until event (up to timeout) */
+        return s_Select(sock->sock, event, timeout);
+    }
+
+    /* check if immediately writable */
+    status = s_Select(sock->sock, event, &s_ZeroTimeout);
+    if (status != eIO_Timeout)
+        return status;
+
+    /* do wait (and try read data if it is not writable yet) */
+    do {
+        /* try upread data to the internal buffer */
+        s_NCBI_Recv(sock, 0, 100000000/*read as much as possible*/, 1/*peek*/);
+
+        /* wait for r/w */
+        status = s_Select(sock->sock, eIO_ReadWrite, timeout);
+        if (status == eIO_Success  &&
+            s_Select(sock->sock, eIO_Write, &s_ZeroTimeout) == eIO_Success) {
+            break;  /* can write now */
+        }
+    }
+    while (status == eIO_Success);
+
+    /* return status;*/
+    return status;
+}
+
+
 /* Write data to the socket "as is" (the whole buffer at once)
  */
 static EIO_Status s_WriteWhole(SOCK        sock,
@@ -1058,9 +1173,11 @@ static EIO_Status s_WriteWhole(SOCK        sock,
         x_errno = SOCK_ERRNO;
 
         /* blocked -- retry if unblocked before the timeout is expired */
+        /* (use stall protection if specified) */
         if (x_errno == SOCK_EWOULDBLOCK  ||  x_errno == SOCK_EAGAIN) {
-            EIO_Status status =
-                s_Select(sock->sock, eIO_Write, sock->w_timeout);
+            /* stall protection:  try pull incoming data from the socket */
+            EIO_Status status = s_SelectStallsafe(sock, eIO_Write, 
+                                                  sock->w_timeout);
             if (status != eIO_Success)
                 return status;
             continue;
@@ -1134,6 +1251,7 @@ extern EIO_Status SOCK_Create(const char*     host,
 
     /* Success */
     x_sock->log_data = eDefault;
+    x_sock->r_on_w   = eDefault;
     x_sock->id = ++s_ID_Counter * 1000;
     *sock = x_sock;
     return eIO_Success;
@@ -1163,11 +1281,13 @@ extern EIO_Status SOCK_Shutdown(SOCK      sock,
     switch ( how ) {
     case eIO_Read:
         if (sock->r_status == eIO_Closed) {
-            if ( !sock->is_eof ) {
-                return eIO_Success;  /* has been shutdown already */
-            } else {
-                sock->is_eof = 0/*false*/;  /* hit EOF, but not shutdown yet */
+            if ( sock->is_eof ) {
+                /* Hit EOF, but not shutdown yet. So, flag it as shutdown, but
+                 * do not call the actual system shutdown(), as it can cause
+                 * smart OS'es like Linux to complain. */
+                sock->is_eof = 0/*false*/;
             }
+            return eIO_Success;
         }
         x_how = SOCK_SHUTDOWN_RD;
         sock->r_status = eIO_Closed;
@@ -1180,8 +1300,8 @@ extern EIO_Status SOCK_Shutdown(SOCK      sock,
         sock->w_status = eIO_Closed;
         break;
     case eIO_ReadWrite:
-        verify(SOCK_Shutdown(sock, eIO_Read ) == eIO_Success);
         verify(SOCK_Shutdown(sock, eIO_Write) == eIO_Success);
+        verify(SOCK_Shutdown(sock, eIO_Read ) == eIO_Success);
         return eIO_Success;
     default:
         CORE_LOG(eLOG_Warning, "[SOCK_Shutdown]  Invalid argument");
@@ -1189,7 +1309,8 @@ extern EIO_Status SOCK_Shutdown(SOCK      sock,
     }
 
     if (SOCK_SHUTDOWN(sock->sock, x_how) != 0) {
-        CORE_LOG(eLOG_Warning, "[SOCK_Shutdown]  shutdown() failed");
+        CORE_LOGF(eLOG_Warning, ("[SOCK_Shutdown]  shutdown(%s) failed",
+                                 how == eIO_Read ? "read" : "write"));
     }
     return eIO_Success;
 }
@@ -1211,9 +1332,13 @@ extern EIO_Status SOCK_Wait(SOCK            sock,
     /* Check against already shutdown socket */
     switch ( event ) {
     case eIO_Read:
+        if (BUF_Size(sock->buf) != 0) {
+            return eIO_Success;
+        }
         if (sock->r_status == eIO_Closed) {
-            CORE_LOG(eLOG_Warning,
-                     "[SOCK_Wait(Read)]  Attempt to wait on shutdown socket");
+            CORE_LOGF(eLOG_Warning,
+                     ("[SOCK_Wait(Read)]  Attempt to wait on %s socket",
+                      sock->is_eof ? "closed" : "shutdown"));
             return eIO_Closed;
         }
         break;
@@ -1225,14 +1350,18 @@ extern EIO_Status SOCK_Wait(SOCK            sock,
         }
         break;
     case eIO_ReadWrite:
+        if (BUF_Size(sock->buf) != 0) {
+            return eIO_Success;
+        }
         if (sock->r_status == eIO_Closed  &&  sock->w_status == eIO_Closed) {
             CORE_LOG(eLOG_Warning,
                      "[SOCK_Wait(RW)]  Attempt to wait on shutdown socket");
             return eIO_Closed;
         }
         if (sock->r_status == eIO_Closed) {
-            CORE_LOG(eLOG_Note,
-                     "[SOCK_Wait(RW)]  Attempt to wait on R-shutdown socket");
+            CORE_LOGF(eLOG_Note,
+                     ("[SOCK_Wait(RW)]  Attempt to wait on %s socket",
+                      sock->is_eof ? "closed" : "R-shutdown"));
             event = eIO_Write;
             break;
         }
@@ -1249,10 +1378,10 @@ extern EIO_Status SOCK_Wait(SOCK            sock,
         return eIO_InvalidArg;
     }
 
-    /* Do select */
+    /* Do wait */
     {{
         struct timeval tv;
-        return s_Select(sock->sock, event, s_to2tv(timeout, &tv));
+        return s_SelectStallsafe(sock, event, s_to2tv(timeout, &tv));
     }}
 }
 
@@ -1321,8 +1450,8 @@ extern EIO_Status SOCK_Read(SOCK           sock,
         *n_read = 0;
         do {
             size_t x_read;
-            status = SOCK_Read(sock, (char*) buf + *n_read, size, &x_read,
-                               eIO_Plain);
+            status = SOCK_Read(sock, (char*) buf + (buf ? *n_read : 0), size,
+                               &x_read, eIO_Plain);
             *n_read += x_read;
             if (status != eIO_Success)
                 return status;
@@ -1419,6 +1548,17 @@ extern EIO_Status SOCK_GetOSHandle(SOCK   sock,
 }
 
 
+extern void SOCK_SetReadOnWriteAPI(ESwitch on_off)
+{
+    s_ReadOnWrite = on_off;
+}
+
+
+extern void SOCK_SetReadOnWrite(SOCK sock, ESwitch on_off)
+{
+    sock->r_on_w = on_off;
+}
+
 
 extern int SOCK_gethostname(char*  name,
                             size_t namelen)
@@ -1481,7 +1621,7 @@ extern unsigned int SOCK_gethostbyname(const char* hostname)
     }
 
     host = inet_addr(hostname);
-    if (host == INADDR_NONE) {
+    if (host == htonl(INADDR_NONE)) {
         struct hostent* hp;
 #if defined(HAVE_GETHOSTBYNAME_R)
         struct hostent x_hp;

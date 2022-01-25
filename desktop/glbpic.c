@@ -1372,7 +1372,7 @@ static Boolean draw_human_cyto_map(BioseqPtr bsp, Int4 left, Int4 top, Int4 righ
 			draw_band = TRUE;
 			switch(band)
 			{
-				case POINT:
+				case BAND_POINT:
 					color = RED_COLOR;
 					shading = SOLID_SHADING;
 					break;

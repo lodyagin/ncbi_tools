@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dshim.c,v $
+* Revision 6.30  2001/04/27 20:08:04  juran
+* Heed warnings.
+*
 * Revision 6.29  2000/07/23 12:37:23  thiessen
 * allow dynamic slave->master transformation
 *
@@ -351,7 +354,7 @@ NLM_EXTERN BiostrucFeatureSetPtr Cn3D_AddFeatureSet(
         return *bsfspp;
     }
     else {
-        for(bsfsp = *bsfspp; bsfsp->next != NULL; bsfsp = bsfsp->next);
+        for (bsfsp = *bsfspp; bsfsp->next != NULL; bsfsp = bsfsp->next) continue;
         bsfsp->next = BiostrucFeatureSetNew();
         return bsfsp->next;
     }

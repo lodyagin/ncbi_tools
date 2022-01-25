@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: image.c,v $
+* Revision 6.5  2001/04/05 03:24:12  juran
+* Carbon fixes.
+*
 * Revision 6.4  1999/11/22 14:46:45  thiessen
 * moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
 *
@@ -105,6 +108,10 @@
 #include <vibprocs.h>
 #include <vibincld.h>
 #include <math.h>
+
+#ifdef WIN_MAC
+# include "MoreCarbonAccessors.h"
+#endif
 
 #ifndef _IMAGE_
 #include <image.h>
@@ -353,8 +360,12 @@ Nlm_Boolean Nlm_AllocateImage ( Nlm_Image image, Nlm_Uint2Ptr width,
   im->pixelMap->bounds.left = 0;
   im->pixelMap->bounds.top = 0;
   im->pixelMap->cmpSize = 8;
+// 2001-03-22:  Joshua Juran
+// Evidently these two members don't exist in Carbon.  So don't set them.
+#if !TARGET_API_MAC_CARBON
   im->pixelMap->planeBytes = 0;
   im->pixelMap->pmReserved = 0;
+#endif
   im->pixelMap->pmVersion = 0;
   im->pixelMap->packType = 0;
   im->pixelMap->packSize = 0;
@@ -1116,8 +1127,8 @@ Nlm_Boolean Nlm_ImageShow(Nlm_Image image, Nlm_PoinT p)
   rectDst.left = p.x;  rectDst.right = im->width+p.x;
   GetPort (&port);
   CopyBits((BitMap*)im->pixelMap,
-           (BitMap*)&port->portBits,
-           &rectSrc,&rectDst,srcCopy,NULL);
+           GetPortBitMapForCopyBits(port),
+           &rectSrc, &rectDst, srcCopy, NULL);
   BackColor(blackColor);
   Nlm_UnlockPixMapImage(image);
 #endif

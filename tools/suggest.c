@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -66,6 +66,9 @@
 *     
 *     A detailed change log follows:
 *     $Log: suggest.c,v $
+*     Revision 6.8  2001/05/25 19:43:53  vakatov
+*     Nested comment typo fixed
+*
 *     Revision 6.7  1998/06/17 21:55:47  kans
 *     fixed 64-bit SGI compiler warnings
 *
@@ -403,6 +406,8 @@ for any particular segment
 /* with the cursor on this line, the following
 command adds comments on defines
 :+6,+25s/#define DEBUG\([ _A-Z]*\)/ \/\* #define DEBUG\1 \*\/
+*/
+
 /* with the cursor on this line, the following
 command removes comments on defines
 :+3,+22s/ \/\* #define DEBUG\([ _A-Z]*\) \*\//#define DEBUG\1/ */
@@ -484,7 +489,7 @@ Int4 Total_len;
 
 #define fatal(m)	{ErrPostEx(SEV_FATAL, 0, 0, "%s:  %s", module, m); goto Error;}
 
-static char * suggest_revision = "$Revision: 6.7 $";
+static char * suggest_revision = "$Revision: 6.8 $";
 
 static Int4	suggest_get_frames_init = 1;
 

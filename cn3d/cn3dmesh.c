@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *                   
@@ -100,8 +100,6 @@ Boolean MeshLoaded = FALSE;
 static void Cn3D_MeshAcceptProc(ButtoN b)
 {
     Char str[PATH_MAX];
-    unsigned char szBegin[10], sCompare;
-    PDNMS pdnmsModelstruc;
     PMSD pmsdThis = NULL;
     FILE *hFile;
     FloatLo fDummy;

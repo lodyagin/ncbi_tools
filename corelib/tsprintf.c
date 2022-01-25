@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/10/96
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   	Memory- and MT-safe "sprintf()"
@@ -38,6 +38,9 @@
 * --------------------------------------------------------------------------
 *
  * $Log: tsprintf.c,v $
+ * Revision 6.8  2001/04/17 13:49:55  beloslyu
+ * changes for Linux PPC, contributed by Gary Bader <gary.bader@utoronto.ca>
+ *
  * Revision 6.7  2001/03/23 14:04:14  beloslyu
  * fix the name of strnlen to my_strnlen. It appears IBM's AIX has it's own function with this name
  *
@@ -336,6 +339,14 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
         {
           int len;
           const char *s = va_arg(args, const char *);
+#ifdef OS_UNIX_PPCLINUX
+/*
+ *  comment from Gary Bader <gary.bader@utoronto.ca>
+ *	LinuxPPC has problems with using variable arguments in certain cases.
+ *	I'm not completely sure if this is necessary, but it works
+ */
+			counter += 8;   /*add 8 for PPCLINUX*/
+#endif
           if ( !s ) {
             while (*fmt != '%')
               fmt--;
@@ -461,9 +472,19 @@ NLM_EXTERN const Char PNTR Nlm_TSPrintfArgs(const Char PNTR fmt, va_list args)
   size_t  cut_fmt;
   char   *x_fmt;
 
+#ifdef OS_UNIX_PPCLINUX
+/*
+ *  comment from Gary Bader <gary.bader@utoronto.ca>
+ *	LinuxPPC has problems with using variable arguments in certain cases.
+ *	I'm not completely sure if this is necessary, but it works
+ */
+  parsed_size = 2048;
+  cut_fmt = 0;
+#else
   parsed_size = vsprintf_count_args(fmt, args, &cut_fmt);
   if (parsed_size == 0)
     return NULL;
+#endif
 
   temp_buf = Nlm_GetScratchBuffer(parsed_size + 1);
   if (temp_buf == NULL)

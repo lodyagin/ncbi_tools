@@ -1,4 +1,4 @@
-/* $Id: thrddgri.c,v 1.2 2000/08/17 16:31:25 hurwitz Exp $
+/* $Id: thrddgri.c,v 1.3 2001/04/25 15:43:29 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrddgri.c,v $
+* Revision 1.3  2001/04/25 15:43:29  hurwitz
+* initial check-in of Anna's code to fix problem of duplicate alignments with different scores
+*
 * Revision 1.2  2000/08/17 16:31:25  hurwitz
 * got rid of C++ style comments
 *
@@ -52,12 +55,11 @@
 
 /* Compute sum of contact potentials G(r|m) */
 
-int g(Seg_Gsm* spe, Seq_Mtf* psm, Thd_Gsm* tdg, Seg_Cmp* spc) {
+int g(Seg_Gsm* spe, Seq_Mtf* psm, Thd_Gsm* tdg) {
 /*--------------------------------------------------------*/
 /* spe:  Partial sums of contact energies by segment pair */
 /* psm:  Sequence motif parameters                        */
 /* tdg:  Total thread energy                              */
-/* spc:  Residue type composition of current threaded seq */
 /*--------------------------------------------------------*/
 
 int     nsc;            /* Number of threaded segments in core definition */
@@ -65,15 +67,15 @@ int	i,j;		/* Counters */
 int	g;		/* Partial energy sum */
 int	*gi;		/* Pointer to current row in segment pair table */
 int	ms,cs,ls;
-int	nrt;		/* Number of residue types */
-int	ntot;		/* Number of residues in the alignment */
+/*int	nrt;*/		/* Number of residue types */
+/*int	ntot;*/		/* Number of residues in the alignment */
 int	s0;
 
-nrt=spc->nrt;		
-ntot=0;
+/*nrt=spc->nrt;*/
+/*ntot=0;*/
 
 
-for(i=0;i<nrt-1;i++)ntot+=spc->rt[i];
+/*for(i=0;i<nrt-1;i++)ntot+=spc->rt[i];*/
 
 /* Sum energies for segments and segment pairs */
 
@@ -84,16 +86,16 @@ for(i=0;i<nsc;i++) {
 	ms+=spe->ms[i];
 	cs+=spe->cs[i];
 	ls+=spe->ls[i];
-	s0+=spe->s0[i];
 
 	gi=spe->gss[i];
 	for(j=0;j<nsc;j++) g+=gi[j]; }
 
-	tdg->ms=(float)ms-(float)(s0/ntot);
-	tdg->cs=(float)cs; tdg->ls=(float)ls;
+	tdg->ms=(float)ms-psm->ww0;
+	tdg->cs=(float)cs;
+  tdg->ls=(float)ls;
+  tdg->m0=psm->ww0;
 
 return(g);
-
 }
 
 
@@ -146,7 +148,7 @@ float dgri(Seg_Gsm* spe, Seg_Nsm* spn, Thd_Cxe* cxe, Thd_Gsm* tdg,
 
 /* Find overall energy coming from the potential */
 
-tdg->g=g(spe,psm,tdg,spc);
+tdg->g=g(spe,psm,tdg);
 tdg->g0=g0(spn,cxe);
 tdg->ps=((float)tdg->g)-tdg->g0;
 

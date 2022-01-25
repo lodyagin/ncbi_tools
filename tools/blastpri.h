@@ -32,8 +32,26 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.77 $ 
+/* $Revision: 6.83 $ 
 * $Log: blastpri.h,v $
+* Revision 6.83  2001/06/15 16:38:46  dondosha
+* Correction to previous changes
+*
+* Revision 6.82  2001/06/14 22:09:15  dondosha
+* Rearranged code for gi lists and oid masks processing to get rid of duplication
+*
+* Revision 6.81  2001/06/13 21:42:19  dondosha
+* Added prototypes for functions needed to deal with gi lists
+*
+* Revision 6.80  2001/06/07 19:30:03  dondosha
+* Pass believe query argument to BlastPrintTabulatedResults
+*
+* Revision 6.79  2001/06/06 21:22:43  dondosha
+* Added (query) Bioseq and SeqLoc arguments to function BlastPrintTabulatedResults
+*
+* Revision 6.78  2001/05/11 22:04:42  dondosha
+* Added prototype for BlastPrintTabulatedResults function
+*
 * Revision 6.77  2001/03/19 18:54:50  madden
 * Added BlastSeqLocFillDoubleIntEx, changed BlastSeqLocFillDoubleIntRev
 *
@@ -881,6 +899,10 @@ StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length,
 
 int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
 int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
+void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp));
+void
+BlastProcessGiLists PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
+                           BlastDoubleInt4Ptr gi_list, Int4Ptr gi_list_size));
 
 #ifdef __cplusplus
 }

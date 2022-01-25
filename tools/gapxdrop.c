@@ -32,8 +32,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.57 $
+/* $Revision: 6.58 $
 * $Log: gapxdrop.c,v $
+* Revision 6.58  2001/04/25 13:25:47  madden
+* Do not memset tback
+*
 * Revision 6.57  2000/12/29 20:45:38  madden
 * Fix for ALIGN_packed_nucl
 *
@@ -1901,7 +1904,10 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
     query = gap_align->query;
     subject = gap_align->subject;
     
+/*
     tback = tback1 = MemNew((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
+*/
+    tback = tback1 = Nlm_Malloc((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
     include_query = gap_align->include_query;
 
     gap_align->tback = tback;

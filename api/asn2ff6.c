@@ -29,13 +29,55 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.47 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.61  2001/07/03 20:01:41  kans
+* AddGBQual ASN2GNBK_STRIP_NOTE_PERIODS trim trailing tilde first
+*
+* Revision 6.60  2001/07/03 00:05:51  kans
+* TrimSpacesAndJunkFromEnds on genbankblock->source if ASN2GNBK_STRIP_NOTE_PERIODS
+*
+* Revision 6.59  2001/06/26 23:43:35  kans
+* moved second period check to inside last period check
+*
+* Revision 6.58  2001/06/26 23:36:06  kans
+* in AddGBQual if ASN2GNBK_STRIP_NOTE_PERIODS, trim one or two periods at end
+*
+* Revision 6.57  2001/06/13 14:41:58  yaschenk
+* changing increment of 10 to 1024 in EnlargeSortList()
+*
+* Revision 6.56  2001/06/04 21:30:52  kans
+* TrimSpacesAndSemicolons trims leading semicolons as well as leading spaces
+*
+* Revision 6.55  2001/06/01 18:46:26  tatiana
+* NG_ added to ValidateAccession
+*
+* Revision 6.54  2001/05/31 23:45:48  kans
+* if ASN2GNBK_STRIP_NOTE_PERIODS and IsEllipsis, do not strip period
+*
+* Revision 6.53  2001/05/29 23:27:47  kans
+* added support for snoRNA - flatfile prints as misc_RNA for now
+*
+* Revision 6.52  2001/04/16 16:51:42  tatiana
+* GetDivision(): CON division never use for aa
+*
+* Revision 6.51  2001/04/06 12:47:43  beloslyu
+* missing flatloc declaration was added
+*
+* Revision 6.50  2001/04/05 21:41:26  tatiana
+* REGION added in GetLocusPartsAwp()
+*
+* Revision 6.49  2001/04/04 22:05:16  kans
+* In GB_PrintPubs under ASN2GNBK_STRIP_NOTE_PERIODS clean up comma/space/semicolon (TF)
+*
+* Revision 6.48  2001/04/04 21:46:56  kans
+* TrimSpacesAndJunkFromEnds if ASN2GNBK_STRIP_NOTE_PERIODS (TF)
+*
 * Revision 6.47  2001/04/02 21:25:19  kans
 * AddGBQual under ASN2GNBK_STRIP_NOTE_PERIODS also removes ; ; substrings
 *
@@ -283,6 +325,7 @@
 #include <utilpub.h>
 #include <ffprint.h>
 #include <explore.h>
+#include <sqnutils.h>
 
 #define BUF_EXT_LENGTH 4
 #define NUM_ORDER 16
@@ -569,8 +612,8 @@ NLM_EXTERN SortStructPtr EnlargeSortList(SortStructPtr List, Int4 size)
 {
 	SortStructPtr NewList;
 
-	if (size % 10 == 0) {
-		NewList = (SortStructPtr) MemNew((size+10)*sizeof(SortStruct));
+	if (size % 1024 == 0) {
+		NewList = (SortStructPtr) MemNew((size+1024)*sizeof(SortStruct));
 		if (size > 0) {
 			MemCopy(NewList, List, (size * sizeof(SortStruct)));
 			MemFree(List);
@@ -847,6 +890,9 @@ NLM_EXTERN Boolean GetNAFeatKey(Boolean is_new, CharPtr PNTR buffer, SeqFeatPtr 
 				break;
 			case 6:
 				*buffer = StringSave("scRNA");
+				break;
+			case 7:
+				*buffer = StringSave("misc_RNA"); /* snoRNA */
 				break;
 			case 255:
 				*buffer = StringSave("misc_RNA");
@@ -1222,6 +1268,22 @@ NLM_EXTERN GBQualPtr AddGBQualEx (CharPtr PNTR key, GBQualPtr gbqual, CharPtr qu
 *   doesn't add qual if it's already there /tatiana/
 * 	doesn't add empty ("") val if qual is translation
 ***********************************************************************/
+#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
+static Boolean IsEllipsis (
+  CharPtr str
+)
+
+{
+  size_t   len;
+  CharPtr  ptr;
+
+  if (StringHasNoText (str)) return FALSE;
+  len = StringLen (str);
+  if (len < 3) return FALSE;
+  ptr = str + len - 3;
+  return (Boolean) (ptr [0] == '.' && ptr [1] == '.' && ptr [2] == '.');
+}
+#endif
 
 NLM_EXTERN GBQualPtr AddGBQual (GBQualPtr gbqual, CharPtr qual, CharPtr val)
 {
@@ -1259,9 +1321,20 @@ NLM_EXTERN GBQualPtr AddGBQual (GBQualPtr gbqual, CharPtr qual, CharPtr val)
 		size_t len;
 		CharPtr p, q;
 		len = StringLen (note->val);
-		if (len > 0 && note->val [len - 1] == '.') {
- 			note->val [len - 1] = '\0';
+		if (len > 0 && note->val [len - 1] == '~') {
+			note->val [len - 1] = '\0';
 		}
+		if (! IsEllipsis (note->val)) {
+			len = StringLen (note->val);
+			if (len > 0 && note->val [len - 1] == '.') {
+ 				note->val [len - 1] = '\0';
+				if (len > 1 && note->val [len - 2] == '.') {
+ 					note->val [len - 2] = '\0';
+				}
+			}
+		}
+		TrimSpacesAndJunkFromEnds (note->val,TRUE);
+		TrimSpacesAndSemicolons (note->val);
 		p = note->val;
 		q = note->val;
 		while (*p) {
@@ -1330,6 +1403,11 @@ NLM_EXTERN CharPtr GetGBSourceLine (GBBlockPtr gb)
 	if(gb && gb->source)
 		source = StringSave(gb->source);
 
+#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
+	if (source != NULL) {
+		TrimSpacesAndJunkFromEnds (source,TRUE);
+	}
+#endif
 	return source;
 }
 
@@ -1932,6 +2010,21 @@ void GB_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 	ff_AddString("JOURNAL");
 	TabToColumn(13);
 	if (journal ) {
+#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
+		CharPtr p, q;
+		p = journal;
+		q = journal;
+		while (*p) {
+		  if (*p == ',' && p [1] == ' ' && p [2] == ';') {
+		    p += 2;
+		  } else {
+		    *q = *p;
+		    p++;
+		    q++;
+		  }
+		}
+		*q = '\0';
+#endif
 		StrStripSpaces(journal);
 		ff_AddString(journal);
 	} else {
@@ -2510,6 +2603,9 @@ static CharPtr GetDivision(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (buffer[0] == NULLB) {
 		StringNCpy_0(buffer, "   ", buflen);
 	}
+	if (gbp->bsp && gbp->bsp->mol == Seq_mol_aa) {
+		return buffer;
+	}
 	if (ajp->genome_view) {
 		StringNCpy_0(buffer, "CON", buflen);
 	}
@@ -2737,7 +2833,8 @@ Int2 ValidateAccession(CharPtr new_buf, CharPtr orig_buf)
 			stop_count = 7;
 			if (orig_buf[0] == 'N' || orig_buf[0] == 'X') {
 				if ((orig_buf[1] == 'M' || orig_buf[1] == 'C' 
-						|| orig_buf[1] == 'T'  || orig_buf[1] == 'P') 
+						|| orig_buf[1] == 'T'  || orig_buf[1] == 'P' 
+													 || orig_buf[1] == 'G') 
 												&&  orig_buf[2] == '_') {
 						start_count = 3;
 						stop_count = 8;
@@ -3009,18 +3106,24 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 	if (ajp->slp) {
 		for (gbp = awp->gbp; gbp; gbp = gbp->next) {
 			buffer = GetDivision(ajp, gbp);
-			gbp->gi = -1;
 			if (buffer[0] != NULLB) {
 				StringNCpy_0(gbp->div, buffer, 4);
 				MemFree(buffer);
 			}
 			if ((bsp = BioseqFindFromSeqLoc(ajp->slp)) != NULL) {
-				SeqIdWrite(SeqIdFindBest(bsp->id, SEQID_GENBANK), 
+				CharPtr flatloc;
+
+				isip = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_ORDER);
+				if (isip == NULL)
+					isip = gbp->bsp->id;
+				SeqIdWrite(isip, 
 					buf_acc, PRINTID_TEXTID_ACCESSION, MAX_ACCESSION_LEN);
-				StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
-				sprintf(gbp->locus, "%-10s", buf_acc); 
+				sprintf(gbp->locus, "%-10s", buf_acc);
+				flatloc =  FlatLoc(bsp, ajp->slp);
+				sprintf(gbp->accession, "%s REGION: %s", buf_acc, flatloc);
+				flatloc = MemFree(flatloc);
 				if (ajp->show_version) {
-					SeqIdWrite(SeqIdFindBest(bsp->id, SEQID_GENBANK),
+					SeqIdWrite(isip,
 					buf_acc, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
 					StringNCpy_0(gbp->version,
 								 buf_acc, MAX_ACCESSION_LEN+1);

@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.c,v 1.39 2000/07/24 22:00:08 hurwitz Exp $
+/*  $Id: ddvgraph.c,v 1.40 2001/04/27 20:12:46 juran Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.39 $
+* $Revision: 1.40 $
 *
 * File Description: graphic engine of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.c,v $
+* Revision 1.40  2001/04/27 20:12:46  juran
+* Heed warnings:  Make functions static.Block out 'dead code' (functions that aren't called anywhere in ncbi).
+*
 * Revision 1.39  2000/07/24 22:00:08  hurwitz
 * fixed bug that 1/2 characters were displayed sometimes
 *
@@ -212,6 +215,8 @@
 #include <alignmgr.h>
 #include <ddvcreate.h>
 
+#undef WANTDEADCODE
+
 static void DDV_DrawAlignmentBoundaries(PaneL p, DdvMainPtr dmp);
 
 /*******************************************************************************
@@ -223,7 +228,8 @@ static void DDV_DrawAlignmentBoundaries(PaneL p, DdvMainPtr dmp);
   Return value : -
 
 *******************************************************************************/
-extern void DDV_ReorderParaG(ValNodePtr PNTR TableHead,Int4 nRow)
+#ifdef WANTDEADCODE
+static void DDV_ReorderParaG(ValNodePtr PNTR TableHead, Int4 nRow)
 {
 Int4       Startline=0,i,nLines;
 ParaGPtr   pgp;
@@ -244,6 +250,7 @@ ValNodePtr vnp;
 		Startline+=nLines;
 	}
 }
+#endif
 
 /*******************************************************************************
 
@@ -254,7 +261,8 @@ ValNodePtr vnp;
   Return value : -
 
 *******************************************************************************/
-extern void DDV_ChangeRulerStyleForSeq(ValNodePtr PNTR TableHead,Int4 nRow,
+#ifdef WANTDEADCODE
+static void DDV_ChangeRulerStyleForSeq(ValNodePtr PNTR TableHead,Int4 nRow,
 		Uint1 RulerStyle)
 {
 ParaGPtr   pgp;
@@ -267,6 +275,7 @@ ValNodePtr vnp;
 		vnp=vnp->next;
 	}
 }
+#endif
 
 /*******************************************************************************
 
@@ -346,7 +355,9 @@ WindoW     temport;
   Return value : the sequence 
 
 *******************************************************************************/
-extern void DDV_GetBspRangeInSeg(SegmentPtr segp,Int4Ptr start,Int4Ptr stop)
+
+#ifdef WANTDEADCODE
+static void DDV_GetBspRangeInSeg(SegmentPtr segp,Int4Ptr start,Int4Ptr stop)
 {
 SegmentPtr segp2;
 Int4       from,to;
@@ -365,6 +376,7 @@ Int4       from,to;
 	*start=from;
 	*stop=to;
 }
+#endif
 
 
 /*******************************************************************************
@@ -1284,7 +1296,7 @@ extern void DDV_GreyOut(DdvMainWinPtr mWin_d, Boolean Start, Boolean End) {
   Return value : none
 
 *******************************************************************************/
-extern void  DDV_DrawPanelContent_V (PaneL p,DdvMainPtr dmp)
+static void  DDV_DrawPanelContent_V (PaneL p,DdvMainPtr dmp)
 {/*not yet implemented*/
 	return;
 }

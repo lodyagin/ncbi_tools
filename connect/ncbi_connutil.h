@@ -1,7 +1,7 @@
 #ifndef NCBI_CONNUTIL__H
 #define NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.12 2001/03/07 23:00:15 lavr Exp $
+/*  $Id: ncbi_connutil.h,v 6.15 2001/06/01 16:01:58 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,6 +60,15 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.15  2001/06/01 16:01:58  vakatov
+ * MIME_ParseContentTypeEx() -- extended description
+ *
+ * Revision 6.14  2001/05/29 21:15:42  vakatov
+ * + eMIME_Plain
+ *
+ * Revision 6.13  2001/04/24 21:21:38  lavr
+ * Special text value "infinite" accepted as infinite timeout from environment
+ *
  * Revision 6.12  2001/03/07 23:00:15  lavr
  * Default value for SConnNetInfo::stateless set to empty (FALSE)
  *
@@ -143,7 +152,7 @@ typedef struct {
     char           path[1024];       /* service: path(e.g. to  a CGI script) */
     char           args[1024];       /* service: args(e.g. for a CGI script) */
     EReqMethod     req_method;       /* method to use in the request         */
-    STimeout       timeout;          /* i/o timeout                          */
+    STimeout*      timeout;          /* ptr to i/o tmo (infinite if NULL)    */
     unsigned int   max_try;          /* max. # of attempts to establish conn */
     char           http_proxy_host[64];  /* hostname of HTTP proxy server    */
     unsigned short http_proxy_port;      /* port #   of HTTP proxy server    */
@@ -156,6 +165,7 @@ typedef struct {
 
     /* the following field(s) are for the internal use only! */
     int/*bool*/    http_proxy_adjusted;
+    STimeout       tmo;              /* Default storage for finite timeout   */
 } SConnNetInfo;
 
 
@@ -216,9 +226,9 @@ typedef struct {
  *   path               PATH
  *   args               ARGS
  *   req_method         REQUEST_METHOD
- *   timeout            TIMEOUT             "<sec>.<usec>": "30.0", "0.005"
+ *   timeout            TIMEOUT     "<sec>.<usec>": "30.0", "0.005", "infinite"
  *   max_try            MAX_TRY  
- *   http_proxy_host    HTTP_PROXY_HOST     no HTTP proxy if empty/NULL
+ *   http_proxy_host    HTTP_PROXY_HOST no HTTP proxy if empty/NULL
  *   http_proxy_port    HTTP_PROXY_PORT
  *   proxy_host         PROXY_HOST
  *   debug_printout     DEBUG_PRINTOUT
@@ -444,6 +454,7 @@ typedef enum {
     eMIME_WwwForm,       /* "x-www-form" */
     /* standard MIMEs */
     eMIME_Html,          /* "html" */
+    eMIME_Plain,         /* "plain" */
     /* eMIME_???,           "<subtype>"   here go other NCBI subtypes */
     eMIME_Unknown        /* "x-unknown"     (an arbitrary binary data) */
 } EMIME_SubType;
@@ -485,6 +496,13 @@ extern char* MIME_ComposeContentType
  * can be in the following two formats:
  *   Content-Type: <type>/x-<subtype>-<encoding>
  *   <type>/x-<subtype>-<encoding>
+ *
+ * NOTE:  all leading spaces and all trailing spaces (and any trailing symbols,
+ *        if they separated from the content type by at least one space) will
+ *        be ignored, e.g. these are valid content type strings:
+ *           "   Content-Type: text/plain  foobar"
+ *           "  text/html \r\n  barfoo coocoo ....\n boooo"
+ *
  * If it does not match any of NCBI MIME type/subtypes/encodings, then
  * return TRUE, eMIME_T_Unknown, eMIME_Unknown or eENCOD_None, respectively.
  * If the passed "str" has an invalid (non-HTTP ContentType) format

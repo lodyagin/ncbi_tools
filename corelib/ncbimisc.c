@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.21  2001/04/05 03:03:28  juran
+* Defined our own C2PStr() and P2Cstr() for use with Carbon (which omits them).
+*
 * Revision 6.20  2000/10/30 18:11:41  beloslyu
 * FreeBSD was added
 *
@@ -1114,6 +1117,28 @@ NLM_EXTERN Nlm_Boolean LIBCALL NodeListDelete (ValNodePtr head, Nlm_Int2 item)
 *****************************************************************************/
 
 #ifdef OS_MAC
+
+// 2001-03-22:  Joshua Juran
+// C2PStr() and P2CStr() do not exist in Carbon, so we roll our own.
+# if TARGET_API_MAC_CARBON
+static void C2PStr(char *ioStr)
+{
+	size_t len = strlen(ioStr);
+	if (len > 255) {
+		len = 255;
+	}
+	memmove(ioStr + 1, ioStr, len);
+	ioStr[0] = len;
+}
+
+static void P2CStr(StringPtr ioStr)
+{
+	Byte len = ioStr[0];
+	memmove(ioStr, ioStr + 1, len);
+	ioStr[len] = '\0';
+}
+# endif
+
 /*  p_churchill 12/99 removed conditional compilation support for 
  *  THINKC and MPW
  */

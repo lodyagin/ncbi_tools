@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.21 2000/08/04 19:54:17 shavirin Exp $
+/* $Id: ncbisam.c,v 6.23 2001/07/09 14:17:24 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.21 $
+* $Revision: 6.23 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.23  2001/07/09 14:17:24  madden
+* Fix PC-lint complaints from R. Williams
+*
+* Revision 6.22  2001/06/08 20:31:01  madden
+* Fix memory leaks
+*
 * Revision 6.21  2000/08/04 19:54:17  shavirin
 * Fixed problem with counting line when data not tested to be non- unique.
 *
@@ -720,7 +726,10 @@ static ISAMErrorCode ISAMMakeStringIndex(
     /* Create the sample file. */
     
     if (!(tf_fd = FileOpen(data->IndexFileName, "wb")))
+    {
+	MemFree(MasterPos);
         return ISAMBadFileName;
+    }
     
     /* Write the term counts and offsets to the sample file. */
     value = SwapUint4(Version);     
@@ -1967,6 +1976,9 @@ ISAMErrorCode SISAMFindAllData(ISAMObjectPtr object,
                             &value, (Uint4Ptr) &index)) != ISAMNoError) {
         return error;
     }
+
+    MemFree(key_out);
+    MemFree(value);
     
     if(data->mmp != NULL)
         FileStart = (CharPtr)data->mmp->mmp_begin;

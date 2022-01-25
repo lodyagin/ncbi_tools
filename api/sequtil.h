@@ -29,13 +29,22 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.32 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.32  2001/07/03 21:42:02  kans
+* added macros and accession prefixes for TPA (third-party annotation) records
+*
+* Revision 6.31  2001/05/30 22:47:23  kans
+* fixed Mac compiler warnings about unwanted assignments, moved function prototypes to header, removed unused variables
+*
+* Revision 6.30  2001/04/27 15:46:20  madden
+* Add function RebuildDNA_4na
+*
 * Revision 6.29  2001/01/04 15:05:33  sicotte
 * fix ACCN_IS_AMBIGOUSDB macro
 *
@@ -472,6 +481,7 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr BSRebuildDNA(ByteStorePtr from, Int4 len, 
                                  Uint4Ptr PNTR lbytes);
+NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes);
 
 /*****************************************************************************
 *
@@ -1012,6 +1022,9 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
 NLM_EXTERN Boolean LIBCALL ACCN_PIR_FORMAT( CharPtr s);
 NLM_EXTERN Boolean LIBCALL ACCN_1_5_FORMAT( CharPtr s);
 NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s);
+NLM_EXTERN Boolean LIBCALL NAccnIsGENBANK (CharPtr s);
+NLM_EXTERN Boolean LIBCALL NAccnIsEMBL (CharPtr s);
+NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 
 
 /*
@@ -1082,6 +1095,9 @@ NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s);
 #define ACCN_GB_DDBJ 46
 #define ACCN_EMBL_GB_DDBJ 47
 
+#define ACCN_NCBI_TPA 48
+#define ACCN_NCBI_TPA_PROT 49
+
 
 /* Some accessions prefix can be either protein or nucleotide 
    such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
@@ -1097,7 +1113,7 @@ NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s);
 /*
  Accession definitively points to a protein record 
 */
-#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED))
+#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_NCBI_TPA_PROT))
 
 /*
   Accession definitively points to a nucleotide record 
@@ -1117,6 +1133,8 @@ NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s);
    REFSEQ project
 */
 #define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || (((c)&65535)== ACCN_REFSEQ) )
+
+#define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT))
 
 #define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)))
 

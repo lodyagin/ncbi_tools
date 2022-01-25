@@ -1,4 +1,4 @@
---$Revision: 6.2 $
+--$Revision: 6.3 $
 --**********************************************************************
 --
 --  NCBI General Data elements
@@ -34,12 +34,12 @@ EXPORTS Date, Person-id, Object-id, Dbtag, Int-fuzz, User-object;
 -- } Nlm_ByteStore, PNTR Nlm_ByteStorePtr;
 --
 -- AsnTool incorporates this as a primitive type, so the definition
---   is here just for completness
+--   is here just for completeness
 -- 
 --  StringStore ::= [APPLICATION 1] IMPLICIT OCTET STRING
 --
 
--- BigInt is really an INTEGER. It is used to warn the recieving code to expect
+-- BigInt is really an INTEGER. It is used to warn the receiving code to expect
 --   a value bigger than Int4 (actually Int8). It will be stored in DataVal.bigintvalue
 --
 --   Like StringStore, AsnTool incorporates it as a primitive. The definition would be:
@@ -93,7 +93,7 @@ Name-std ::= SEQUENCE { -- Structured names
     last VisibleString ,
     first VisibleString OPTIONAL ,
     middle VisibleString OPTIONAL ,
-    full VisibleString OPTIONAL ,    -- full name eg. "J. John Poop, Esq"
+    full VisibleString OPTIONAL ,    -- full name eg. "J. John Smith, Esq"
     initials VisibleString OPTIONAL,  -- first + middle initials
     suffix VisibleString OPTIONAL ,   -- Jr, Sr, III
     title VisibleString OPTIONAL }    -- Dr., Sister, etc
@@ -150,7 +150,7 @@ User-field ::= SEQUENCE {
 
 END
 
---$Revision: 6.1 $
+--$Revision: 6.2 $
 --****************************************************************
 --
 --  NCBI Bibliographic data elements
@@ -330,7 +330,7 @@ Author ::= SEQUENCE {
         patent-assignee (3),
         translator (4) } OPTIONAL ,
     affil Affil OPTIONAL ,
-    is-corr BOOLEAN OPTIONAL }          -- TRUE if corressponding author
+    is-corr BOOLEAN OPTIONAL }          -- TRUE if corresponding author
 
 Affil ::= CHOICE {
     str VisibleString ,                 -- unparsed string
@@ -373,7 +373,7 @@ Imprint ::= SEQUENCE {                  -- Imprint group
     cprt Date OPTIONAL,                     -- copyright date, "    "   "
     part-sup VisibleString OPTIONAL ,       -- part/sup of volume
     language VisibleString DEFAULT "ENG" ,  -- put here for simplicity
-    prepub ENUMERATED {                     -- for prepublication citaions
+    prepub ENUMERATED {                     -- for prepublication citations
         submitted (1) ,                     -- submitted, not accepted
         in-press (2) ,                      -- accepted, not published
         other (255)  } OPTIONAL ,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.138 $
+* $Revision: 6.149 $
 *
 * File Description: 
 *
@@ -1589,7 +1589,7 @@ NLM_EXTERN void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode)
   }
 }
 
-NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
+NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop, Boolean remove_trailingX)
 
 {
   ByteStorePtr         bs;
@@ -1622,7 +1622,7 @@ NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
   SeqEntryPtr          psep;
   CharPtr              ptr;
   SeqEntryPtr          sep;
-  SeqIdPtr             sip = NULL;
+  SeqIdPtr             sip;
   SeqEntryPtr          target = NULL;
   Uint4                version = 0;
   long int             val;
@@ -1671,7 +1671,7 @@ NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
 /**
             crp->frame = 0;
 **/
-            bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+            bs = ProteinFromCdRegionEx (sfp, include_stop, remove_trailingX);
             if (bs != NULL) {
               protseq = BSMerge (bs, NULL);
               bs = BSFree (bs);
@@ -1712,6 +1712,7 @@ NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
                 gbq = sfp->qual;
                 prevqual = (GBQualPtr PNTR) &(sfp->qual);
                 id [0] = '\0';
+                sip = NULL;
                 while (gbq != NULL) {
                   nextqual = gbq->next;
                   if (StringICmp (gbq->qual, "protein_id") == 0) {
@@ -1816,6 +1817,12 @@ NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
   }
 }
 
+NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
+
+{
+  PromoteXrefsEx (sfp, bsp, entityID, TRUE, FALSE);
+}
+
 /* begin BasicSeqEntryCleanup section */
 
 static Boolean HasNoText (CharPtr str)
@@ -1848,8 +1855,8 @@ NLM_EXTERN CharPtr TrimSpacesAndSemicolons (CharPtr str)
     dst = str;
     ptr = str;
     ch = *ptr;
-    if (ch != '\0' && ch <= ' ') {
-      while (ch != '\0' && ch <= ' ') {
+    if (ch != '\0' && (ch <= ' ' || ch == ';')) {
+      while (ch != '\0' && (ch <= ' ' || ch == ';')) {
         ptr++;
         ch = *ptr;
       }
@@ -2154,7 +2161,6 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
 
 {
   CodeBreakPtr  cbp;
-  Choice        cp;
   CdRegionPtr   crp;
   Int4          diff;
   CodeBreakPtr  lastcbp;
@@ -2184,11 +2190,10 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
   }
   if (sip == NULL) return FALSE;
 
-  cp.choice = 1; /* ncbieaa */
-  cp.value.intvalue = (Int4) GetQualValueAa (val);
   cbp = CodeBreakNew ();
   if (cbp == NULL) return FALSE;
-  cbp->aa = cp;
+  cbp->aa.choice = 1; /* ncbieaa */
+  cbp->aa.value.intvalue = (Int4) GetQualValueAa (val);
 
   /* parse location */
   pos = SimpleValuePos (val);
@@ -2957,7 +2962,7 @@ static CharPtr illegalGbqualList [NUM_ILLEGAL_QUALS] = {
   "note",
   "PCR_conditions",
   "protein_id",
-  "translation"
+  "translation",
   "transl_except",
   "transl_table",
 };
@@ -3252,7 +3257,7 @@ static CharPtr StringHasPrefix (CharPtr str, CharPtr pref, size_t len, Boolean n
 
 static CharPtr unstructured_orgmod_list [] = {
   "?", "?", "strain", "substrain", "type", "subtype", "variety",
-  "serotype", "serogroup", "serovar" "cultivar", "pathovar", "chemovar",
+  "serotype", "serogroup", "serovar", "cultivar", "pathovar", "chemovar",
   "biovar", "biotype", "group", "subgroup", "isolate", "common name",
   "acronym", "dosage", "natural host", "sub-species", "specimen-voucher",
   "authority", "forma", "forma-specialis", "ecotype", "synonym",
@@ -3540,21 +3545,372 @@ static void CleanupDuplicateCits (ValNodePtr PNTR prevvnp)
   }
 }
 
+/* name processing code from Sequin editors */
+
+static void FirstNameToInitials (CharPtr first, CharPtr inits, size_t maxsize)
+
+{
+  Char  ch;
+  Int2  i;
+
+  if (inits != NULL && maxsize > 0) {
+    inits [0] = '\0';
+    if (first != NULL) {
+      i = 0;
+      ch = *first;
+      while (ch != '\0' && i < maxsize) {
+        while (ch != '\0' && (ch <= ' ' || ch == '-')) {
+          first++;
+          ch = *first;
+        }
+        if (IS_ALPHA (ch)) {
+          inits [i] = ch;
+          i++;
+          first++;
+          ch = *first;
+        }
+        while (ch != '\0' && ch > ' ' && ch != '-') {
+          first++;
+          ch = *first;
+        }
+        if (ch == '-') {
+          inits [i] = ch;
+          i++;
+          first++;
+          ch = *first;
+        }
+      }
+      inits [i] = '\0';
+    }
+  }
+}
+
+static void StripPeriods (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  dst;
+
+  if (str != NULL) {
+    dst = str;
+    ch = *str;
+    while (ch != '\0') {
+      if (ch != '.') {
+        *dst = ch;
+        dst++;
+      }
+      str++;
+      ch = *str;
+    }
+    *dst = '\0';
+  }
+}
+
+static void TrimLeadingSpaces (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  dst;
+
+  if (str != NULL && str [0] != '\0') {
+    dst = str;
+    ch = *str;
+    while (ch != '\0' && ch <= ' ') {
+      str++;
+      ch = *str;
+    }
+    while (ch != '\0') {
+      *dst = ch;
+      dst++;
+      str++;
+      ch = *str;
+    }
+    *dst = '\0';
+  }
+}
+
+static CharPtr NameStdPtrToTabbedString (NameStdPtr nsp)
+
+{
+  Char   first [64];
+  Char   frstinits [16];
+  Char   initials [16];
+  Int2   j;
+  Char   last [64];
+  Char   str [128];
+  Char   suffix [16];
+
+  if (nsp == NULL) return NULL;
+  str [0] = '\0';
+  StringNCpy_0 (first, nsp->names [1], sizeof (first));
+  StringNCpy_0 (initials, nsp->names [4], sizeof (initials));
+  StripPeriods (initials);
+  TrimLeadingSpaces (initials);
+  StringNCpy_0 (last, nsp->names [0], sizeof (last));
+  TrimLeadingSpaces (last);
+  if (StringCmp (initials, "al") == 0 &&
+      StringCmp (last, "et") == 0 &&
+      first [0] == '\0') {
+    initials [0] = '\0';
+    StringCpy (last, "et al.");
+  }
+  /*
+  if (first [0] == '\0') {
+    StringNCpy_0 (first, initials, sizeof (first));
+    if (IS_ALPHA (first [0])) {
+      if (first [1] == '-') {
+        first [3] = '\0';
+      } else {
+        first [1] = '\0';
+      }
+    } else {
+      first [0] = '\0';
+    }
+  }
+  */
+  FirstNameToInitials (first, frstinits, sizeof (frstinits) - 1);
+  StripPeriods (first);
+  TrimLeadingSpaces (first);
+  if (first [0] != '\0') {
+    StringCat (str, first);
+  } else {
+    /*
+    StringCat (str, " ");
+    */
+  }
+  StringCat (str, "\t");
+  j = 0;
+  while (initials [j] != '\0' && initials [j] == frstinits [j]) {
+    j++;
+  }
+  if (initials [j] != '\0') {
+    StringCat (str, initials + j);
+  } else {
+    /*
+    StringCat (str, " ");
+    */
+  }
+  StringCat (str, "\t");
+  StringCat (str, last);
+  StringNCpy_0 (suffix, nsp->names [5], sizeof (suffix));
+  StringCat (str, "\t");
+  StripPeriods (suffix);
+  TrimLeadingSpaces (suffix);
+  if (suffix [0] != '\0') {
+    StringCat (str, suffix);
+  } else {
+    /*
+    StringCat (str, " ");
+    */
+  }
+  StringCat (str, "\n");
+  return StringSave (str);
+}
+
+static CharPtr XtractTagListColumn (CharPtr source, Int2 col)
+
+{
+  Char     ch;
+  size_t   count;
+  CharPtr  ptr;
+  CharPtr  str;
+
+  if (source == NULL || source [0] == '\0' || col < 0) return NULL;
+
+  ptr = source;
+  ch = *ptr;
+  while (col > 0 && ch != '\n' && ch != '\0') {
+    while (ch != '\t' && ch != '\n' && ch != '\0') {
+      ptr++;
+      ch = *ptr;
+    }
+    if (ch == '\t') {
+      ptr++;
+      ch = *ptr;
+    }
+    col--;
+  }
+
+  count = 0;
+  ch = ptr [count];
+  while (ch != '\t' && ch != '\n' && ch != '\0') {
+    count++;
+    ch = ptr [count];
+  }
+  str = (CharPtr) MemNew(count + 1);
+  if (str != NULL) {
+    MemCpy (str, ptr, count);
+  }
+  return str;
+}
+
+static NameStdPtr TabbedStringToNameStdPtr (CharPtr txt)
+
+{
+  Char        ch;
+  CharPtr     first;
+  Char        initials [16];
+  Int2        j;
+  Int2        k;
+  Char        last;
+  Int2        len;
+  NameStdPtr  nsp;
+  Char        periods [32];
+  CharPtr     str;
+  Char        str1 [16];
+  Char        suffix [20];
+
+  if (txt == NULL) return NULL;
+  nsp = NameStdNew ();
+  if (nsp == NULL) return NULL;
+  nsp->names [0] = XtractTagListColumn (txt, 2);
+  TrimLeadingSpaces (nsp->names [0]);
+  first = XtractTagListColumn (txt, 0);
+  StripPeriods (first);
+  nsp->names [1] = StringSave (first);
+  TrimLeadingSpaces (nsp->names [1]);
+  FirstNameToInitials (first, str1, sizeof (str1) - 1);
+  str = XtractTagListColumn (txt, 1);
+  StringNCat (str1, str, sizeof (str1) - 1);
+  MemFree (str);
+  j = 0;
+  k = 0;
+  ch = str1 [j];
+  while (ch != '\0') {
+    if (ch != ' ') {
+      initials [k] = ch;
+      k++;
+    }
+    j++;
+    ch = str1 [j];
+  }
+  initials [k] = '\0';
+  periods [0] = '\0';
+          j = 0;
+          ch = initials [j];
+          while (ch != '\0') {
+            if (ch == ',') {
+              initials [j] = '.';
+            }
+            j++;
+            ch = initials [j];
+          }
+          str = StringStr (initials, ".ST.");
+          if (str != NULL) {
+            *(str + 2) = 't';
+          }
+  j = 0;
+  k = 0;
+  ch = initials [j];
+  while (ch != '\0') {
+    if (ch == '-') {
+      periods [k] = ch;
+      k++;
+      j++;
+      ch = initials [j];
+    } else if (ch == '.') {
+      j++;
+      ch = initials [j];
+            } else if (ch == ' ') {
+              j++;
+              ch = initials [j];
+    } else {
+      periods [k] = ch;
+              last = ch;
+      k++;
+      j++;
+      ch = initials [j];
+              if (ch == '\0') {
+                if (! (IS_LOWER (last))) {
+                  periods [k] = '.';
+                  k++;
+                }
+              /* } else if (ch == '.' && initials [j + 1] == '\0') { */
+              } else if (! (IS_LOWER (ch))) {
+                periods [k] = '.';
+                k++;
+              }
+    }
+  }
+  periods [k] = '\0';
+  nsp->names [4] = StringSave (periods);
+  TrimLeadingSpaces (nsp->names [4]);
+  str = XtractTagListColumn (txt, 3);
+  StringNCpy_0 (str1, str, sizeof (str1));
+  MemFree (str);
+  j = 0;
+  k = 0;
+  ch = str1 [j];
+  while (ch != '\0') {
+    if (ch != ' ') {
+      suffix [k] = ch;
+      k++;
+    }
+    j++;
+    ch = str1 [j];
+  }
+  suffix [k] = '\0';
+  if (suffix [0] != '\0') {
+    len = StringLen (suffix);
+    if (len > 0 && suffix [len - 1] == '.') {
+      suffix [len - 1] = '\0';
+    }
+    if (StringICmp (suffix, "1d") == 0) {
+      StringCpy (suffix, "I");
+    } else if (StringICmp (suffix, "1st") == 0) {
+      StringCpy (suffix, "I");
+    } else if (StringICmp (suffix, "2d") == 0) {
+      StringCpy (suffix, "II");
+    } else if (StringICmp (suffix, "2nd") == 0) {
+      StringCpy (suffix, "II");
+    } else if (StringICmp (suffix, "3d") == 0) {
+      StringCpy (suffix, "III");
+    } else if (StringICmp (suffix, "3rd") == 0) {
+      StringCpy (suffix, "III");
+    } else if (StringICmp (suffix, "4th") == 0) {
+      StringCpy (suffix, "IV");
+    } else if (StringICmp (suffix, "5th") == 0) {
+      StringCpy (suffix, "V");
+    } else if (StringICmp (suffix, "6th") == 0) {
+      StringCpy (suffix, "VI");
+    } else if (StringICmp (suffix, "Sr") == 0) {
+      StringCpy (suffix, "Sr.");
+    } else if (StringICmp (suffix, "Jr") == 0) {
+      StringCpy (suffix, "Jr.");
+    }
+    /*
+    len = StringLen (suffix);
+    if (len > 0 && suffix [len - 1] != '.') {
+      StringCat (suffix, ".");
+    }
+    */
+    nsp->names [5] = StringSave (suffix);
+    TrimLeadingSpaces (nsp->names [5]);
+  }
+  if (StringCmp (nsp->names [0], "et al") == 0) {
+    nsp->names [0] = MemFree (nsp->names [0]);
+    nsp->names [0] = StringSave ("et al.");
+  }
+  return nsp;
+}
+
 static void NormalizeAuthors (AuthListPtr alp)
 
 {
   AuthorPtr    ap;
+  ValNodePtr   names;
+  NameStdPtr   nsp;
+  PersonIdPtr  pid;
+  CharPtr      str;
+  /*
   Char         ch;
   CharPtr      initials;
   Int2         j;
   Int2         k;
   Char         last;
   size_t       len;
-  ValNodePtr   names;
-  NameStdPtr   nsp;
   CharPtr      periods;
-  PersonIdPtr  pid;
-  CharPtr      str;
+  */
 
 #ifndef SUPPRESS_TRIVIAL_FLATFILE_DIFFERENCES
   if (alp == NULL || alp->choice != 1) return;
@@ -3564,7 +3920,13 @@ static void NormalizeAuthors (AuthListPtr alp)
       pid = ap->name;
       if (pid != NULL && pid->choice == 2) {
         nsp = pid->data;
-        if (nsp != NULL && nsp->names [4] != NULL) {
+        if (nsp != NULL /* && nsp->names [4] != NULL */) {
+          str = NameStdPtrToTabbedString (nsp);
+          pid->data = NameStdFree (nsp);
+          nsp = TabbedStringToNameStdPtr (str);
+          pid->data = nsp;
+          MemFree (str);
+#if 0
           initials = nsp->names [4];
           len = MAX ((size_t) (StringLen (initials) * 2 + 4), (size_t) 64);
           periods = MemNew (len);
@@ -3620,6 +3982,7 @@ static void NormalizeAuthors (AuthListPtr alp)
           nsp->names [4] = MemFree (nsp->names [4]);
           nsp->names [4] = StringSave (periods);
           MemFree (periods);
+#endif
           CleanVisString (&(nsp->names [0]));
           CleanVisString (&(nsp->names [1]));
           CleanVisString (&(nsp->names [2]));
@@ -4492,7 +4855,7 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
       } else {
         CleanVisStringList (&(gbp->keywords));
       }
-      CleanVisString (&(gbp->source));
+      CleanVisStringJunk (&(gbp->source));
       CleanVisString (&(gbp->origin));
       CleanVisString (&(gbp->date));
       CleanVisString (&(gbp->div));
@@ -4926,9 +5289,89 @@ static void ChangeCitsOnFeats (SeqFeatPtr sfp, Pointer userdata)
   }
 }
 
+static Int4 GetPmidForMuid (ValNodePtr pairlist, Int4 muid)
+
+{
+  ValNodePtr  vnp;
+
+  vnp = pairlist;
+  while (vnp != NULL) {
+    if (muid == vnp->data.intvalue) {
+      vnp = vnp->next;
+      if (vnp == NULL) return 0;
+      return vnp->data.intvalue;
+    } else {
+      vnp = vnp->next;
+      if (vnp == NULL) return 0;
+      vnp = vnp->next;
+    }
+  }
+
+  return 0;
+}
+
+static void ChangeFeatCitsToPmid (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Int4        muid = 0;
+  Int4        pmid = 0;
+  ValNodePtr  ppr;
+  ValNodePtr  psp;
+  ValNodePtr  vnp;
+
+  psp = sfp->cit;
+  if (psp != NULL && psp->data.ptrvalue) {
+    for (ppr = (ValNodePtr) psp->data.ptrvalue; ppr != NULL; ppr = ppr->next) {
+      vnp = NULL;
+      if (ppr->choice == PUB_Muid) {
+        vnp = ppr;
+      } else if (ppr->choice == PUB_Equiv) {
+        for (vnp = (ValNodePtr) ppr->data.ptrvalue;
+             vnp != NULL && vnp->choice != PUB_Muid;
+             vnp = vnp->next) continue;
+      }
+      if (vnp != NULL && vnp->choice == PUB_Muid) {
+        muid = vnp->data.intvalue;
+        if (muid != 0) {
+          pmid = GetPmidForMuid ((ValNodePtr) userdata, muid);
+          if (pmid != 0) {
+            vnp->choice = PUB_PMid;
+            vnp->data.intvalue = pmid;
+          }
+        }
+      }
+    }
+  }
+}
+
+static void GetMuidPmidPairs (PubdescPtr pdp, Pointer userdata)
+
+{
+  Int4        muid = 0;
+  Int4        pmid = 0;
+  ValNodePtr  vnp;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    switch (vnp->choice) {
+      case PUB_Muid :
+        muid = vnp->data.intvalue;
+        break;
+      case PUB_PMid :
+        pmid = vnp->data.intvalue;
+        break;
+      default :
+        break;
+    }
+  }
+  if (muid == 0 || pmid == 0) return;
+  ValNodeAddInt ((ValNodePtr PNTR) userdata, 0, muid);
+  ValNodeAddInt ((ValNodePtr PNTR) userdata, 0, pmid);
+}
+
 NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
 
 {
+  ValNodePtr   pairlist = NULL;
   ValNodePtr   publist = NULL;
   SeqEntryPtr  oldscope;
 
@@ -4940,6 +5383,15 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
     VisitFeaturesInSep (sep, (Pointer) publist, ChangeCitsOnFeats);
   }
   ValNodeFreeData (publist);
+
+  /* now get muid/pmid pairs, update sfp->cits to pmids */
+
+  VisitPubdescsInSep (sep, (Pointer) &pairlist, GetMuidPmidPairs);
+  if (pairlist != NULL) {
+    VisitFeaturesInSep (sep, (Pointer) pairlist, ChangeFeatCitsToPmid);
+  }
+  ValNodeFree (pairlist);
+
   SeqEntrySetScope (oldscope);
 }
 
@@ -5700,6 +6152,9 @@ NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype)
       return SEQFEAT_BIOSRC;
     default :
       if (subtype >= FEATDEF_preRNA && subtype <= FEATDEF_otherRNA) {
+        return SEQFEAT_RNA;
+      }
+      if (subtype == FEATDEF_snoRNA) {
         return SEQFEAT_RNA;
       }
       if (subtype >= FEATDEF_IMP && subtype <= FEATDEF_site_ref) {

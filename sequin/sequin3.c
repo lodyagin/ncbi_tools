@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.163 $
+* $Revision: 6.165 $
 *
 * File Description: 
 *
@@ -4543,6 +4543,8 @@ static ENUM_ALIST(molinfo_biomol_alist)
   {"Peptide",                8},
   {"Other-Genetic",          9},
   {"Genomic-mRNA",          10},
+  {"cRNA",                  11},
+  {"Small nucleolar RNA",   12},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -7516,6 +7518,52 @@ static void DoSSECleanup (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void DoRemoveProtTitles (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  ClearProteinTitles (bfp->input_entityID, NULL);
+
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void DoPTCleanup (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  InstantiateProteinTitles (bfp->input_entityID, NULL);
+
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static void MakePhrap (IteM i)
 
 {
@@ -7600,6 +7648,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SeparatorItem (s);
   i = CommandItem (s, "NC_Cleanup", DoNCCleanup);
   SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "PT_Cleanup", DoPTCleanup);
+  SetObjectExtra (i, bfp, NULL);
   if (indexerVersion) {
     SeparatorItem (s);
     i = CommandItem (s, "SeriousSeqEntryCleanup", DoSSECleanup);
@@ -7652,6 +7703,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Remove RNA Qual", RemoveRNA);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Remove Pub", RemovePub);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Remove Protein Titles", DoRemoveProtTitles);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Strip Serial Numbers", StripSerials);
   SetObjectExtra (i, bfp, NULL);

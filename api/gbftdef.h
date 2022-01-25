@@ -3,6 +3,12 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.10  2001/04/10 22:17:03  tatiana
+* GBQUAL_endogenous_virus backed off to /note
+*
+* Revision 6.9  2001/04/10 21:59:17  tatiana
+* GBQUAL_endogenous_virus added
+*
 * Revision 6.8  2000/11/29 20:34:29  tatiana
 * virion key removed, GBQUAL_transcript_id added
 *

@@ -844,6 +844,15 @@ FeatDefGroupSet ::= {
     entrygroup 1 ,
     displaygroup 1 ,
     molgroup aa
+  } ,
+  {                   -- snoRNA
+    typelabel "snoRNA" ,
+    menulabel "Small Nucleolar RNA" ,
+    featdef-key 90 ,
+    seqfeat-key 5 ,
+    entrygroup 3 ,
+    displaygroup 3 ,
+    molgroup na
   }
 
 }
