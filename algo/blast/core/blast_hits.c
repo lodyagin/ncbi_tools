@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.282 2016/08/17 18:44:14 fukanchi Exp $
+/* $Id: blast_hits.c,v 1.283 2016/09/13 14:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -319,7 +319,7 @@ BlastHSP* Blast_HSPClone(const BlastHSP* hsp)
 
         /* copy phi-blast pattern data */
         if (hsp->pat_info) {
-            retval->pat_info = 
+            retval->pat_info =
                 (SPHIHspInfo*) BlastMemDup(hsp->pat_info, sizeof(SPHIHspInfo));
         }
     }
@@ -1138,7 +1138,7 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
     if (target_t->partial && (start ||
         (stop < target_t->subject_blk->length / CODON_LENGTH -3)))
     {
-    	 const int kMaxTranslation = 2100; /* Needs to be divisible by three (?) */
+    	 const int kMaxTranslation = 99; /* Needs to be divisible by three (?) */
          Int4 nucl_length = 0;
          Int4 translation_length = 0;
          Int4 nucl_start = 0;

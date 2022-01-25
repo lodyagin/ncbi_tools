@@ -962,10 +962,19 @@ FeatDefGroupSet ::= {
     displaygroup 1 ,
     molgroup na
   } ,
+  {                   -- Imp
+    typelabel "propeptide" ,
+    menulabel "Propeptide labeled on Nuc Acid" ,
+    featdef-key 103 ,
+    seqfeat-key 8 ,
+    entrygroup 0 ,
+    displaygroup 2 ,
+    molgroup na
+  } ,
   {                   -- Prot
     typelabel "propeptide" ,
     menulabel "Propeptide" ,
-    featdef-key 103 ,
+    featdef-key 104 ,
     seqfeat-key 4 ,
     entrygroup 1 ,
     displaygroup 1 ,

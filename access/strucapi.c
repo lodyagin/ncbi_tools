@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.18 $
+* $Revision: 1.19 $
 *
 * File Description: 
 *
@@ -66,7 +66,7 @@ NLM_EXTERN CONN StrucOpenConnection (
   sprintf (query, "uid=%ld%s", (long) uid,
            "&save=asntext&form=6&db=t&Dopt=j&Complexity=Cn3D%20Subset");
 
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Structure/mmdb/mmdbsrv.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/Structure/mmdb/mmdbsrv.cgi",
                              NULL, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_WwwForm, eENCOD_Url, 0);
  

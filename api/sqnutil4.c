@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/27/2007
 *
-* $Revision: 1.257 $
+* $Revision: 1.259 $
 *
 * File Description: 
 * This file contains functions for automatically generating definition lines.
@@ -14338,7 +14338,7 @@ NLM_EXTERN Boolean ConvertProtToProtFunc
     case FEATDEF_transit_peptide_aa :
       prp->processed = 4;
       break;
-    case FEATDEF_propeptide :
+    case FEATDEF_propeptide_aa :
       prp->processed = 5;
       break;
     default :
@@ -14851,7 +14851,7 @@ NLM_EXTERN Boolean ConvertRegionToProtFunc (SeqFeatPtr sfp, Uint2 featdef_to)
         case FEATDEF_transit_peptide_aa :
           prp->processed = 4;
           break;
-        case FEATDEF_propeptide :
+        case FEATDEF_propeptide_aa :
           prp->processed = 5;
           break;
         default :
@@ -14984,7 +14984,7 @@ NLM_EXTERN Boolean ConvertImpToProtFunc
     case FEATDEF_transit_peptide_aa :
       prp->processed = 4;
       break;
-    case FEATDEF_propeptide :
+    case FEATDEF_propeptide_aa :
       prp->processed = 5;
       break;
   }
@@ -15101,7 +15101,7 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
       if (4 != prp->processed)
         return FALSE;
       break;
-    case FEATDEF_propeptide :
+    case FEATDEF_propeptide_aa :
       if (5 != prp->processed)
         return FALSE;
       break;
@@ -21752,11 +21752,6 @@ CharPtr latlon_onedegree [] = {
   "\t18\t-73\t-67",
   "\t17\t-73\t-67",
   "\t16\t-72\t-70",
-  "East Timor",
-  "\t-7\t123\t128",
-  "\t-8\t123\t128",
-  "\t-9\t123\t128",
-  "\t-10\t123\t127",
   "Ecuador",
   "\t2\t-80\t-77",
   "\t1\t-81\t-74",
@@ -23524,6 +23519,11 @@ CharPtr latlon_onedegree [] = {
   "\t6\t97\t103",
   "\t5\t98\t103",
   "\t4\t99\t102",
+  "Timor-Leste",
+  "\t-7\t123\t128",
+  "\t-8\t123\t128",
+  "\t-9\t123\t128",
+  "\t-10\t123\t127",
   "Togo",
   "\t12\t-1\t1",
   "\t11\t-1\t2",

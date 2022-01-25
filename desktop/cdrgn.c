@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.153 $
+* $Revision: 6.154 $
 *
 * File Description: 
 *
@@ -6209,8 +6209,10 @@ extern Int2 LIBCALLBACK ProtGenFunc (Pointer data)
       if (ppp != NULL) {
         if (subtype == FEATDEF_PROT) {
           SetValue (ppp->processed, 1);
-        } else if (subtype >= FEATDEF_preprotein && subtype <= FEATDEF_propeptide) {
+        } else if (subtype >= FEATDEF_preprotein && subtype <= FEATDEF_transit_peptide_aa) {
           SetValue (ppp->processed, subtype - FEATDEF_preprotein + 2);
+        } else if (subtype == FEATDEF_propeptide) {
+          SetValue (ppp->processed, 6);
         } else {
           SetValue (ppp->processed, 1);
         }

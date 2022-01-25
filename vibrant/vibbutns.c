@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -1441,5 +1441,175 @@ extern void Nlm_SetButtonDefault (Nlm_ButtoN b, Nlm_Boolean dflt)
       bp->button.defaultBtn = dflt;
       Nlm_HandUnlock (b);
     }
+}
+
+
+static void Nlm_NewButtonEx(Nlm_ButtoN b, Nlm_CharPtr title,
+    Nlm_Int2 type, Nlm_Int2 shrinkX,
+    Nlm_Int2 shrinkY, Nlm_BtnActnProc actn, Nlm_FonT font)
+{
+    Nlm_FonT saveFont = Nlm_systemFont;
+    Nlm_systemFont = font;
+
+    Nlm_NewButton(b, title, type, shrinkX, shrinkY, actn);
+
+    Nlm_systemFont = saveFont;
+}
+
+static Nlm_ButtoN Nlm_CommonButtonEx(Nlm_GrouP prnt, Nlm_CharPtr title,
+    Nlm_Int2 type, Nlm_BtnActnProc actn,
+    Nlm_GphPrcsPtr classPtr, Nlm_FonT font)
+
+{
+    Nlm_ButtoN  b = NULL;
+    Nlm_Int2    hgt;
+    Nlm_PoinT   npt;
+    Nlm_RecT    r;
+    Nlm_Int2    shrinkX = 0;
+    Nlm_Int2    shrinkY = 0;
+    Nlm_WindoW  tempPort;
+    Nlm_Int2    wid;
+
+    if (prnt == NULL)  return NULL;
+
+    tempPort = Nlm_SavePort((Nlm_GraphiC)prnt);
+    Nlm_GetNextPosition((Nlm_GraphiC)prnt, &npt);
+#if 1
+    Nlm_SelectFont(font);
+#else
+    Nlm_SelectFont(Nlm_systemFont);
+#endif
+    wid = Nlm_StringWidth(title);
+
+#ifdef WIN_MAC
+    hgt = Nlm_stdLineHeight;
+    wid += 20;
+    switch (type) {
+    case PUSH_STYLE:
+    case DEFAULT_STYLE:
+        hgt += 3;
+        break;
+    }
+    if (Nlm_HasAquaMenuLayout()) {
+        switch (type) {
+        case PUSH_STYLE:
+            wid += 10;
+            hgt = 26;
+            shrinkX = 6;
+            shrinkY = 6;
+            break;
+        case DEFAULT_STYLE:
+            wid += 10;
+            hgt = 26;
+            shrinkX = 6;
+            shrinkY = 6;
+            break;
+        case CHECK_STYLE:
+            wid += 4;
+            break;
+        case RADIO_STYLE:
+            wid += 4;
+            break;
+        default:
+            wid += 0;
+            break;
+        }
+    }
+#endif
+
+#ifdef WIN_MSWIN
+    switch (type) {
+    case PUSH_STYLE:
+        hgt = Nlm_stdLineHeight + 8;
+        wid += 20;
+        break;
+    case DEFAULT_STYLE:
+        hgt = Nlm_stdLineHeight + 8;
+        wid += 20;
+        break;
+    case CHECK_STYLE:
+        hgt = Nlm_stdLineHeight + 3;
+        wid += 20;
+        break;
+    case RADIO_STYLE:
+        hgt = Nlm_stdLineHeight + 3;
+        wid += 20;
+        break;
+    default:
+        hgt = Nlm_stdLineHeight;
+        wid += 20;
+        break;
+    }
+#endif
+
+#ifdef WIN_MOTIF
+    hgt = 0;
+    wid = 0;
+#endif
+
+    Nlm_LoadRect(&r, npt.x, npt.y, (Nlm_Int2)(npt.x + wid), (Nlm_Int2)(npt.y + hgt));
+    b = (Nlm_ButtoN)Nlm_CreateLink((Nlm_GraphiC)prnt, &r, sizeof(Nlm_ButtonRec), classPtr);
+    if (b != NULL) {
+        Nlm_NewButtonEx(b, title, type, shrinkX, shrinkY, actn, font);
+        Nlm_GetRect((Nlm_GraphiC)b, &r);
+        Nlm_DoAdjustPrnt((Nlm_GraphiC)b, &r, TRUE, FALSE);
+        Nlm_DoShow((Nlm_GraphiC)b, TRUE, FALSE);
+    }
+    Nlm_RestorePort(tempPort);
+
+    return b;
+}
+
+extern Nlm_ButtoN Nlm_PushButtonEx(Nlm_GrouP prnt, Nlm_CharPtr title,
+    Nlm_BtnActnProc actn, Nlm_FonT font)
+
+{
+    Nlm_ButtoN  b;
+
+    b = Nlm_CommonButtonEx(prnt, title, PUSH_STYLE, actn, pushProcs, font);
+    return b;
+}
+
+extern Nlm_ButtoN Nlm_DefaultButtonEx(Nlm_GrouP prnt, Nlm_CharPtr title,
+    Nlm_BtnActnProc actn, Nlm_FonT font)
+
+{
+    Nlm_ButtoN  b;
+
+    b = Nlm_CommonButtonEx(prnt, title, DEFAULT_STYLE, actn, defaultProcs, font);
+    return b;
+}
+
+extern Nlm_ButtoN Nlm_CheckBoxEx(Nlm_GrouP prnt, Nlm_CharPtr title,
+    Nlm_BtnActnProc actn, Nlm_FonT font)
+
+{
+    Nlm_ButtoN  b;
+
+    b = Nlm_CommonButtonEx(prnt, title, CHECK_STYLE, actn, checkProcs, font);
+    return b;
+}
+
+extern Nlm_ButtoN Nlm_RadioButtonEx(Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_FonT font)
+
+{
+    Nlm_ButtoN  b;
+
+    b = Nlm_CommonButtonEx(prnt, title, RADIO_STYLE, NULL, radioProcs, font);
+    return b;
+}
+
+extern Nlm_PopuP Nlm_PopupListEx(Nlm_GrouP prnt, Nlm_Boolean macLike,
+    Nlm_PupActnProc actn, Nlm_FonT font)
+
+{
+    Nlm_FonT saveFont = Nlm_systemFont;
+    Nlm_systemFont = font;
+
+    Nlm_PopuP result = Nlm_PopupList(prnt, macLike, actn);
+
+    Nlm_systemFont = saveFont;
+
+    return result;
 }
 

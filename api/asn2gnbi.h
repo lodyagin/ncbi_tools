@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.166 $
+* $Revision: 1.173 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -276,6 +276,8 @@ typedef struct asn2gbwork {
   BIG_ID           prevGi;
   BIG_ID           nextGi;
   ValNodePtr       gilistpos;
+  Char             currAccVer [SEQID_MAX_LEN];
+  Char             currAccVerLabel [SEQID_MAX_LEN];
 
   Boolean          showAllFeats;
 
@@ -731,6 +733,9 @@ typedef enum {
   FTQUAL_pseudogene,
   FTQUAL_pyrrolysine,
   FTQUAL_pyrrolysine_note,
+  FTQUAL_recombination_class,
+  FTQUAL_recombination_note,
+  FTQUAL_recombination_other,
   FTQUAL_region,
   FTQUAL_region_name,
   FTQUAL_regulatory_class,
@@ -1107,6 +1112,7 @@ NLM_EXTERN CharPtr FFFlatLoc (
 NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc);
 
 NLM_EXTERN void FF_asn2gb_www_featkey (
+  IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   CharPtr key,
   SeqFeatPtr sfp,
@@ -1118,6 +1124,7 @@ NLM_EXTERN void FF_asn2gb_www_featkey (
 );
 
 NLM_EXTERN void FF_asn2gb_www_featkey_Ex (
+  IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   CharPtr key,
   SeqFeatPtr sfp,
@@ -1135,7 +1142,8 @@ NLM_EXTERN CharPtr AddJsInterval (
   CharPtr pfx,
   BioseqPtr target,
   Uint1 featdeftype,
-  SeqLocPtr location
+  SeqLocPtr location,
+  CharPtr currAccVer
 );
 
 NLM_EXTERN SeqFeatPtr GetGeneByXref (
@@ -1436,6 +1444,13 @@ NLM_EXTERN void SetIfpFeatCount (
   Boolean isProt
 );
 
+NLM_EXTERN Boolean GetAccVerForBioseq (
+  BioseqPtr bsp,
+  CharPtr buf,
+  size_t buflen,
+  Boolean hideGi,
+  Boolean isSpan
+);
 
 #ifdef __cplusplus
 }

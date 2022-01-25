@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.235 $
+* $Revision: 1.238 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -51,6 +51,7 @@
 #include <subutil.h>
 #include <tofasta.h>
 #include <explore.h>
+#include <gather.h>
 #include <gbfeat.h>
 #include <gbftdef.h>
 #include <edutil.h>
@@ -101,7 +102,7 @@ static CharPtr link_seqn = "https://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "https://www.ncbi.nlm.nih.gov/protein/";
 
 /*
-static CharPtr link_omim = "http://www.ncbi.nlm.nih.gov/omim/";
+static CharPtr link_omim = "https://www.ncbi.nlm.nih.gov/omim/";
 */
 
 
@@ -1465,7 +1466,7 @@ NLM_EXTERN void AddLocusBlock (
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
 
-    sprintf (buf, "<a name=\"locus_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"locus_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
 
     buf [0] = '\0';
@@ -1510,25 +1511,31 @@ NLM_EXTERN void AddLocusBlock (
     StringCpy (buf, "<div class=\"localnav\"><ul class=\"locals\">");
 
     if (hasComment) {
-      sprintf (sect, "<li><a href=\"#comment_%ld\" title=\"Jump to the comment section of this record\">Comment</a></li>", (long) awp->currGi);
+      sprintf (sect, "<li><a href=\"#comment_%s\" title=\"Jump to the comment section of this record\">Comment</a></li>",
+               awp->currAccVerLabel);
       StringCat (buf, sect);
     }
-    sprintf (sect, "<li><a href=\"#feature_%ld\" title=\"Jump to the feature table of this record\">Features</a></li>", (long) awp->currGi);
+    sprintf (sect, "<li><a href=\"#feature_%s\" title=\"Jump to the feature table of this record\">Features</a></li>",
+             awp->currAccVerLabel);
     StringCat (buf, sect);
     if (willshowwgs) {
-      sprintf (sect, "<li><a href=\"#wgs_%ld\" title=\"Jump to WGS section of this record\">WGS</a></li>", (long) awp->currGi);
+      sprintf (sect, "<li><a href=\"#wgs_%s\" title=\"Jump to WGS section of this record\">WGS</a></li>",
+               awp->currAccVerLabel);
       StringCat (buf, sect);
     }
     if (willshowgenome) {
-      sprintf (sect, "<li><a href=\"#genome_%ld\" title=\"Jump to the genome section of this record\">Genome</a></li>", (long) awp->currGi);
+      sprintf (sect, "<li><a href=\"#genome_%s\" title=\"Jump to the genome section of this record\">Genome</a></li>",
+               awp->currAccVerLabel);
       StringCat (buf, sect);
     }
     if (willshowcontig) {
-      sprintf (sect, "<li><a href=\"#contig_%ld\" title=\"Jump to the contig section of this record\">Contig</a></li>", (long) awp->currGi);
+      sprintf (sect, "<li><a href=\"#contig_%s\" title=\"Jump to the contig section of this record\">Contig</a></li>",
+               awp->currAccVerLabel);
       StringCat (buf, sect);
     }
     if (willshowsequence) {
-      sprintf (sect, "<li><a href=\"#sequence_%ld\" title=\"Jump to the sequence of this record\">Sequence</a></li>", (long) awp->currGi);
+      sprintf (sect, "<li><a href=\"#sequence_%s\" title=\"Jump to the sequence of this record\">Sequence</a></li>",
+               awp->currAccVerLabel);
       StringCat (buf, sect);
     }
 
@@ -5022,6 +5029,21 @@ static void AddOrgBlk (
   }
 }
 
+static Boolean x_NotSpecialTaxName (
+  CharPtr taxname
+)
+
+{
+  if (StringHasNoText (taxname)) return TRUE;
+
+  if (StringICmp (taxname, "synthetic construct") == 0) return FALSE;
+  if (StringICmp (taxname, "artificial sequence") == 0) return FALSE;
+  if (StringStr (taxname, "vector") != NULL) return FALSE;
+  if (StringStr (taxname, "Vector") != NULL) return FALSE;
+
+  return TRUE;
+}
+
 NLM_EXTERN void AddSourceOrganismBlock (
   Asn2gbWorkPtr awp
 )
@@ -5047,7 +5069,10 @@ NLM_EXTERN void AddSourceOrganismBlock (
   SeqDescrPtr        sdp;
   ValNodePtr         sdplist = NULL;
   SeqFeatPtr         sfp;
+  SeqIntPtr          sintp;
   SeqIdPtr           sip;
+  SeqLocPtr          slp, slpx;
+  SeqPntPtr          spp;
   Boolean            super_kingdoms_different = FALSE;
   CharPtr            super_kingdom_name = NULL;
   CharPtr            taxname;
@@ -5077,6 +5102,53 @@ NLM_EXTERN void AddSourceOrganismBlock (
     gbp = (GBBlockPtr) sdp->data.ptrvalue;
     if (gbp != NULL && StringDoesHaveText (gbp->source)) {
       gbsdp = sdp;
+    }
+  }
+
+  if (ISA_aa (bsp->mol)) {
+
+    /* if protein, get sources applicable to DNA location of CDS */
+
+    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
+    if (sdp != NULL && sdp->choice == Seq_descr_source) {
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      if (biop != NULL) {
+        orp = biop->org;
+        if (orp != NULL) {
+          taxname = orp->taxname;
+          if (StringHasNoText (taxname) || x_NotSpecialTaxName (taxname)) {
+            cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+            if (cds != NULL) {
+              dna = BioseqFindFromSeqLoc (cds->location);
+              if (dna != NULL) {
+                slp = AsnIoMemCopy ((Pointer) cds->location, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+                if (slp != NULL) {
+                  for (slpx = SeqLocFindNext (slp, NULL); slpx != NULL; slpx = SeqLocFindNext (slp, slpx)) {
+                    if (slpx->choice == SEQLOC_INT) {
+                      sintp = (SeqIntPtr) slpx->data.ptrvalue;
+                      if (sintp != NULL) {
+                        sintp->strand = Seq_strand_both;
+                      }
+                    } else if (slpx->choice == SEQLOC_PNT) {
+                      spp = (SeqPntPtr) slpx->data.ptrvalue;
+                      if (spp != NULL) {
+                        spp->strand = Seq_strand_both;
+                      }
+                    }
+                  }
+                }
+                sfp = SeqMgrGetOverlappingSource (slp, &fcontext);
+                SeqLocFree (slp);
+                if (sfp != NULL) {
+                  AddSrcBlk (awp, sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT);
+                  AddOrgBlk (awp, sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT);
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 
@@ -6547,7 +6619,7 @@ NLM_EXTERN void AddWGSBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"wgs_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -6850,7 +6922,7 @@ NLM_EXTERN void AddTSABlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"wgs_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -7012,7 +7084,7 @@ NLM_EXTERN void AddCAGEBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"wgs_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -7162,7 +7234,7 @@ NLM_EXTERN void AddGenomeBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"genome_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"genome_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -7364,7 +7436,7 @@ NLM_EXTERN void AddSequenceBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"sequence_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"sequence_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -7438,7 +7510,7 @@ NLM_EXTERN void AddContigBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"contig_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"contig_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
   bbp = Asn2gbAddBlock (awp, CONTIG_BLOCK, sizeof (BaseBlock));
@@ -7465,7 +7537,7 @@ NLM_EXTERN void AddSlashBlock (
   /*
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"slash_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"slash_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
   */
@@ -7477,7 +7549,7 @@ NLM_EXTERN void AddSlashBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "//</pre>\n<a name=\"slash_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "//</pre>\n<a name=\"slash_%s\"></a>", awp->currAccVerLabel);
     str = StringSave (buf);
   } else if (GetWWW (ajp)) {
     sprintf (buf, "//</pre>\n");

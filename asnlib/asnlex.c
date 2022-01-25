@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *   Routines for parsing ASN.1 value nototation (text) messages
@@ -660,7 +660,7 @@ static Pointer AsnLexReadStringEx (AsnIoPtr aip, AsnTypePtr atp, Uint1 fix_non_p
 			BSFree(ssp);
 			return result;
 		}
-		token = AsnLexWord(aip);
+		token = AsnLexWordEx (aip, fix_non_print);
 	}
 
 	if (token == ERROR_TOKEN) return NULL;

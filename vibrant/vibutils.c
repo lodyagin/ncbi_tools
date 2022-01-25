@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.81 $
+* $Revision: 6.82 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -4970,6 +4970,229 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
     }
   }
   return fileBoxRsult;
+#endif
+}
+
+extern Nlm_Boolean Nlm_GetInputFileNameEx(Nlm_CharPtr fileName, size_t maxsize,
+	Nlm_CharPtr extType, Nlm_CharPtr macType,
+	Nlm_CharPtr initialDir)
+
+{
+	/* if initialDir is NULL, use cwd */
+
+#ifdef WIN_MAC
+# if TARGET_API_MAC_CARBON
+	return Nlm_NavServGetInputFileName(fileName, maxsize, extType, macType);
+# else
+	Nlm_Char       currentFileName[64];
+	Nlm_Char       currentPath[256];
+	SFTypeList     fTypeList;
+	Nlm_Int2       i;
+	Nlm_Int2       lengthTypes;
+	Nlm_Int2       numTypes;
+	Nlm_PointTool  ptool;
+	Nlm_RecT       r;
+	SFReply        reply;
+	Nlm_Boolean    rsult;
+	Nlm_RectTool   rtool;
+	GrafPtr        tempPort;
+	PenState       state;
+	Nlm_Char       str[5];
+	Nlm_PoinT      where;
+
+	if (Nlm_usesMacNavServices) {
+		return Nlm_NavServGetInputFileName(fileName, maxsize, extType, macType);
+	}
+	where.x = 90;
+	where.y = 100;
+	lengthTypes = sizeof(fileTypes);
+	for (i = 0; i < lengthTypes; i++) {
+		fileTypes[i] = '\0';
+	}
+	if (macType != NULL && macType[0] != '\0') {
+		Nlm_StringNCpy(fileTypes, macType, 6); /* remains StringNCpy, not _0 */
+		fileTypes[4] = '\0';
+	}
+	if (fileTypes[0] != '\0') {
+		numTypes = 0;
+		i = 0;
+		while (numTypes < 4 && i <= lengthTypes) {
+			Nlm_StrngSeg(str, fileTypes, i, 4, sizeof(str));
+			fTypeList[numTypes] = Nlm_GetOSType(str, '    ');
+			numTypes++;
+			i += 4;
+		}
+	}
+	else {
+		numTypes = -1;
+	}
+	GetPenState(&state);
+	GetPort(&tempPort);
+	Nlm_PoinTToPointTool(where, &ptool);
+	SFGetFile(ptool, NULL, NULL, numTypes, fTypeList, NULL, &reply);
+	SetPort(tempPort);
+	SetPenState(&state);
+	Nlm_GetRect((Nlm_GraphiC)Nlm_desktopWindow, &r);
+	Nlm_RecTToRectTool(&r, &rtool);
+	ClipRect(&rtool);
+	if (reply.good != 0 && fileName != NULL  &&  maxsize > 0) {
+		Nlm_StringNCpy_0(currentFileName, (Nlm_CharPtr)&(reply.fName),
+			sizeof(currentFileName));
+		Nlm_PtoCstr(currentFileName);
+		currentPath[0] = '\0';
+		Nlm_GetFilePath(reply.vRefNum, currentPath, sizeof(currentPath));
+		Nlm_StringNCat(currentPath, currentFileName,
+			sizeof(currentPath) - Nlm_StringLen(currentPath) - 1);
+		Nlm_StringNCpy_0(fileName, currentPath, maxsize);
+		rsult = TRUE;
+	}
+	else {
+		rsult = FALSE;
+	}
+	Nlm_Update();
+	return rsult;
+# endif
+#endif	/* WIN_MAC */
+
+#ifdef WIN_MSWIN
+	char  szDirName[256];
+	char  szFile[256];
+	char  szFileTitle[256];
+	UINT  i;
+	UINT  cbString;
+	char  chReplace;
+	char  szFilter[256];
+
+	/* Get the current working directory: */
+	szDirName[0] = '\0';
+	_getcwd(szDirName, sizeof(szDirName));
+	szFile[0] = '\0';
+	if (extType != NULL && extType[0] != '\0') {
+		Nlm_StringCpy(szFilter, "Filtered Files (*");
+		if (extType[0] != '.') {
+			Nlm_StringCat(szFilter, ".");
+		}
+		Nlm_StringNCat(szFilter, extType, 5);
+		Nlm_StringCat(szFilter, ")|*");
+		if (extType[0] != '.') {
+			Nlm_StringCat(szFilter, ".");
+		}
+		Nlm_StringNCat(szFilter, extType, 5);
+		Nlm_StringCat(szFilter, "|");
+	}
+	else {
+		Nlm_StringCpy(szFilter, "All Files (*.*)|*.*|");
+	}
+	cbString = (UINT)Nlm_StringLen(szFilter);
+	chReplace = szFilter[cbString - 1];
+	for (i = 0; szFilter[i] != '\0'; i++) {
+		if (szFilter[i] == chReplace) {
+			szFilter[i] = '\0';
+		}
+	}
+	memset(&ofn, 0, sizeof(OPENFILENAME));
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = Nlm_currentHWnd;
+	ofn.lpstrFilter = szFilter;
+	ofn.nFilterIndex = 1;
+	ofn.lpstrFile = szFile;
+	ofn.nMaxFile = sizeof(szFile);
+	ofn.lpstrFileTitle = szFileTitle;
+	ofn.nMaxFileTitle = sizeof(szFileTitle);
+
+	if (initialDir != NULL) {
+		ofn.lpstrInitialDir = initialDir;
+	}
+	else {
+		ofn.lpstrInitialDir = szDirName;
+	}
+
+	ofn.Flags =
+		OFN_SHOWHELP | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+	if (GetOpenFileName(&ofn) && fileName != NULL  &&  maxsize > 0) {
+		Nlm_StringNCpy_0(fileName, ofn.lpstrFile, maxsize);
+		AnsiToOemBuff(fileName, fileName, maxsize);
+		return TRUE;
+	}
+	else {
+		return FALSE;
+	}
+#endif
+
+#ifdef WIN_MOTIF
+	XmString  dirmask;
+	char      *lastSlash;
+	char      str[256];
+	char      *text;
+	Widget    txt;
+
+	Nlm_CreateFileDialogShell();
+	if (Nlm_fileDialogShell != NULL && fileName != NULL) {
+		if (fileDialog == NULL) {
+			Cardinal  n = 0;
+			Arg       wargs[4];
+			XtSetArg(wargs[n], XmNcolormap, Nlm_VibrantDefaultColormap());  n++;
+			XtSetArg(wargs[n], XmNvisual, Nlm_VibrantDefaultVisual());  n++;
+			XtSetArg(wargs[n], XmNdepth, Nlm_VibrantDefaultDepth());  n++;
+
+			if (initialDir != NULL) {
+				XtSetArg(wargs[n], XmNdirectory, XmStringCreateLtoR(initialDir, XmSTRING_DEFAULT_CHARSET));  n++;
+			}
+
+			fileDialog = XmCreateFileSelectionDialog(Nlm_fileDialogShell,
+				(String) "file_selection", wargs, n);
+			XtAddCallback(fileDialog, XmNcancelCallback, Nlm_FileCancelCallback, NULL);
+			XtAddCallback(fileDialog, XmNokCallback, Nlm_FileOkCallback, NULL);
+			XtAddCallback(fileDialog, XmNnoMatchCallback, Nlm_FileNoMatchCallback, NULL);
+			XtAddCallback(fileDialog, XmNmapCallback, Nlm_FileMapCallback, NULL);
+			XtVaSetValues(fileDialog, XmNdefaultPosition, FALSE,
+				XmNdialogStyle, XmDIALOG_FULL_APPLICATION_MODAL, NULL);
+		}
+		if (fileDialog != NULL) {
+			txt = XmFileSelectionBoxGetChild(fileDialog, XmDIALOG_FILTER_TEXT);
+			text = XmTextGetString(txt);
+			Nlm_StringNCpy_0(str, text, sizeof(str));
+			lastSlash = Nlm_StringRChr(str, DIRDELIMCHR);
+			if (lastSlash != NULL) {
+				lastSlash[1] = '\0';
+			}
+			else {
+				lastSlash = &(str[Nlm_StringLen(str) - 1]);
+			}
+			if (extType != NULL && extType[0] != '\0') {
+				Nlm_StringCat(str, "*");
+				if (extType[0] != '.') {
+					Nlm_StringCat(str, ".");
+				}
+				Nlm_StringNCat(str, extType, 5);
+				dirmask = XmStringCreateLtoR(str, XmSTRING_DEFAULT_CHARSET);
+				XmFileSelectionDoSearch(fileDialog, dirmask);
+				XmStringFree(dirmask);
+				if (lastSlash != NULL) {
+					lastSlash[1] = '\0';
+				}
+			}
+			XtFree(text);
+			txt = XmFileSelectionBoxGetChild(fileDialog, XmDIALOG_TEXT);
+			XmTextSetString(txt, str);
+			XtVaSetValues(fileDialog, XmNmustMatch, TRUE, NULL);
+			fileBoxUp = TRUE;
+			fileBoxRsult = FALSE;
+			XtManageChild(fileDialog);
+			XSync(Nlm_currentXDisplay, FALSE);
+			while (fileBoxUp) {
+				XEvent event;
+				XPeekEvent(Nlm_currentXDisplay, &event);
+				Nlm_ProcessAnEvent();
+			}
+			if (fileBoxRsult) {
+				Nlm_StringNCpy_0(fileName, filePath, maxsize);
+			}
+			XtUnmanageChild(fileDialog);
+			XSync(Nlm_currentXDisplay, FALSE);
+		}
+	}
+	return fileBoxRsult;
 #endif
 }
 

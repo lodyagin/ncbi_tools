@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.36 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -161,6 +161,8 @@ Nlm_WindoW  Nlm_FloatingWindow PROTO((Nlm_Int2 left, Nlm_Int2 top, Nlm_Int2 widt
 Nlm_WindoW  Nlm_ShadowWindow PROTO((Nlm_Int2 left, Nlm_Int2 top, Nlm_Int2 width, Nlm_Int2 height, Nlm_WndActnProc close));
 Nlm_WindoW  Nlm_PlainWindow PROTO((Nlm_Int2 left, Nlm_Int2 top, Nlm_Int2 width, Nlm_Int2 height, Nlm_WndActnProc close));
 
+Nlm_WindoW  Nlm_ResizableModalWindow(Nlm_Int2 left, Nlm_Int2 top, Nlm_Int2 width, Nlm_Int2 height, Nlm_CharPtr title, Nlm_WndActnProc close, Nlm_WndActnProc resize);
+
 /* esl++ */
 Nlm_WindoW  Nlm_MovableModalWindow PROTO((Nlm_Int2 left, Nlm_Int2 top, Nlm_Int2 width, Nlm_Int2 height, Nlm_CharPtr title, Nlm_WndActnProc close));
 void        Nlm_SetModalWindowOwner PROTO((Nlm_WindoW w, Nlm_WindoW owner));
@@ -236,6 +238,12 @@ Nlm_ButtoN  Nlm_DefaultButton PROTO((Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_BtnA
 Nlm_ButtoN  Nlm_CheckBox PROTO((Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_BtnActnProc actn));
 Nlm_ButtoN  Nlm_RadioButton PROTO((Nlm_GrouP prnt, Nlm_CharPtr title));
 
+/* These buttons take a font parameter */
+Nlm_ButtoN  Nlm_PushButtonEx PROTO((Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_BtnActnProc actn, Nlm_FonT font));
+Nlm_ButtoN  Nlm_DefaultButtonEx PROTO((Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_BtnActnProc actn, Nlm_FonT font));
+Nlm_ButtoN  Nlm_CheckBoxEx PROTO((Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_BtnActnProc actn, Nlm_FonT font));
+Nlm_ButtoN  Nlm_RadioButtonEx PROTO((Nlm_GrouP prnt, Nlm_CharPtr title, Nlm_FonT font));
+
 /***  Scrolling Choice List Objects  ***/
 
 /*
@@ -281,6 +289,7 @@ Nlm_IteM    Nlm_StatusItem PROTO((Nlm_MenU m, Nlm_CharPtr title, Nlm_ItmActnProc
 Nlm_ChoicE  Nlm_ChoiceGroup PROTO((Nlm_MenU m, Nlm_ChsActnProc actn));
 Nlm_IteM    Nlm_ChoiceItem PROTO((Nlm_ChoicE c, Nlm_CharPtr title));
 Nlm_PopuP   Nlm_PopupList PROTO((Nlm_GrouP prnt, Nlm_Boolean macLike, Nlm_PupActnProc actn));
+Nlm_PopuP   Nlm_PopupListEx PROTO((Nlm_GrouP prnt, Nlm_Boolean macLike, Nlm_PupActnProc actn, Nlm_FonT font));
 void        Nlm_PopupItem PROTO((Nlm_PopuP p, Nlm_CharPtr title));
 void        Nlm_PopupItems PROTO((Nlm_PopuP p, Nlm_CharPtr PNTR titles));
 void        Nlm_DeskAccGroup PROTO((Nlm_MenU m));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/19/99
 *
-* $Revision: 6.395 $
+* $Revision: 6.403 $
 *
 * File Description:
 *
@@ -74,7 +74,7 @@
 #include <findrepl.h>
 #include <connect/ncbi_gnutls.h>
 
-#define CLEANASN_APP_VER "17.9"
+#define CLEANASN_APP_VER "18.2"
 
 CharPtr CLEANASN_APPLICATION = CLEANASN_APP_VER;
 
@@ -2154,6 +2154,30 @@ static void ExpandSeqs (BioseqPtr bsp, Pointer userdata)
 }
 //LCOV_EXCL_STOP
 
+static void RecalculateSegLen (BioseqPtr bsp, Pointer userdata)
+
+{
+  Int4        len, len2;
+  ValNode     head;
+  ValNodePtr  vnp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_seg) return;
+
+  head.choice = SEQLOC_MIX;
+  head.data.ptrvalue = bsp->seq_ext;
+  head.next = NULL;
+
+  len = 0;
+  vnp = NULL;
+  while ((vnp = SeqLocFindNext (&head, vnp)) != NULL) {
+    len2 = SeqLocLen (vnp);
+    if (len2 > 0)
+      len += len2;
+  }
+
+  bsp->length = len;
+}
+
 // Used for -P j
 static CharPtr FindISOJTA (CharPtr title)
 
@@ -2176,14 +2200,14 @@ static CharPtr FindISOJTA (CharPtr title)
     if (title [8] == 'x') {
       title [8] = 'X';
     }
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bissn%5D", NULL);
   }
 
   if (str == NULL) {
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bmulti%5D+AND+ncbijournals%5Bsb%5D", NULL);
@@ -2224,7 +2248,7 @@ static CharPtr FindISOJTA (CharPtr title)
     microbiology reading, england
     */
 
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bjour%5D", NULL);
@@ -2258,7 +2282,7 @@ static CharPtr FindISOJTA (CharPtr title)
 
   if (jids == NULL) return NULL;
 
-  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                    "/entrez/eutils/esummary.fcgi",
                                    "db=nlmcatalog&retmax=200&version=2.0&id=",
                                    jids, NULL, NULL);
@@ -6726,6 +6750,7 @@ static void AuthStdMlCallback (
 }
 */
 
+/*
 #define IS_INSD 1
 #define IS_REFSEQ 2
 
@@ -6900,6 +6925,26 @@ static void FarFeatScan (
     }
   }  
 }
+*/
+
+static void FindWrongFuzz (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  CleanFlagPtr  cfp;
+
+  if (sfp == NULL || userdata == NULL) return;
+  cfp = (CleanFlagPtr) userdata;
+
+  if (FixWrongFuzzOnPlusStrand (sfp->location)) {
+    fprintf (cfp->logfp, "FUZZ\t%s\n", cfp->buf);
+  }
+  if (FixWrongFuzzOnMinusStrand (sfp->location)) {
+    fprintf (cfp->logfp, "ZUFF\t%s\n", cfp->buf);
+  }
+}
 
 static void DoASNScan (
   SeqEntryPtr sep,
@@ -6907,13 +6952,17 @@ static void DoASNScan (
 )
 
 {
-  Uint2 entityID;
-
   if (sep == NULL || cfp == NULL || cfp->logfp == NULL) return;
+
+  VisitFeaturesInSep (sep, (Pointer) cfp, FindWrongFuzz);
+
+  /*
+  Uint2 entityID;
 
   entityID = ObjMgrGetEntityIDForChoice (sep);
   SeqMgrIndexFeatures (entityID, 0);
   VisitBioseqsInSep (sep, (Pointer) cfp, FarFeatScan);
+  */
 
   /*
   VisitPubdescsInSep (sep, (Pointer) cfp, AuthStdMlCallback);
@@ -9253,7 +9302,7 @@ static Int4 DoUnpubHydraQuery (
 
   if (StringHasNoText (query)) return 0;
 
-  str = QUERY_UrlSynchronousQuery ("intranet.ncbi.nlm.nih.gov", 80,
+  str = QUERY_UrlSynchronousQuery ("intranet.ncbi.nlm.nih.gov", 0,
                                    "/projects/hydra/hydra_search.cgi",
                                    "search=pubmed_search_citation_top_20.1&query=",
                                    query, NULL, NULL);
@@ -10005,6 +10054,7 @@ static void TryEntrezQueries (
   fflush (cfp->logfp);
 }
 
+//LCOV_EXCL_START
 static void CountUnpubPub (
   PubdescPtr pdp,
   Pointer userdata
@@ -10042,6 +10092,7 @@ static void CountUnpubPub (
 
   (cfp->unpubcount)++;
 }
+//LCOV_EXCL_STOP
 
 //LCOV_EXCL_START
 static void ProcessUnpubPub (
@@ -11646,6 +11697,23 @@ static void CheckForSegSeq (
 //LCOV_EXCL_STOP
 
 //LCOV_EXCL_START
+static void CheckForSegProt (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  isSegP;
+
+  if (bsp == NULL || userdata == NULL) return;
+  if (bsp->repr == Seq_repr_seg && ISA_aa (bsp->mol)) {
+    isSegP = (BoolPtr) userdata;
+    *isSegP = TRUE;
+  }
+}
+//LCOV_EXCL_STOP
+
+//LCOV_EXCL_START
 static void CheckForPPMEW (
   BioseqSetPtr bssp,
   Pointer userdata
@@ -12319,7 +12387,7 @@ static time_t DoCleanup (
   Boolean              all_digits = TRUE, isDdbj = FALSE, isEmbl = FALSE,
                        isGenBank = FALSE, isNcbi = FALSE, isRefSeq = FALSE,
                        isNucProt = FALSE, isPPMEW = FALSE, isSegmented = FALSE,
-                       stripSerial = TRUE, hasCDS = FALSE,
+                       isSegProt = FALSE, stripSerial = TRUE, hasCDS = FALSE,
                        small_genome_set = FALSE;
   BioseqPtr            bsp, nbsp;
   BioseqSetPtr         bssp, nbssp;
@@ -12563,6 +12631,28 @@ static time_t DoCleanup (
 //LCOV_EXCL_START
       VisitBioseqsInSep(sep, (Pointer)&isSegmented, CheckForSegSeq);
       if (isSegmented) {
+        if (failed != NULL) {
+          *failed = TRUE;
+        }
+        return 0;
+      }
+//LCOV_EXCL_STOP
+    }
+    if (StringChr (cfp->branch, 'x') != NULL) {
+//LCOV_EXCL_START
+      VisitBioseqsInSep (sep, (Pointer) &isSegProt, CheckForSegProt);
+      if (! isSegProt) {
+        if (failed != NULL) {
+          *failed = TRUE;
+        }
+        return 0;
+      }
+//LCOV_EXCL_STOP
+    }
+    if (StringChr (cfp->branch, 'y') != NULL) {
+//LCOV_EXCL_START
+      VisitBioseqsInSep(sep, (Pointer)&isSegProt, CheckForSegProt);
+      if (isSegProt) {
         if (failed != NULL) {
           *failed = TRUE;
         }
@@ -12953,6 +13043,9 @@ static time_t DoCleanup (
     VisitBioseqsInSep (sep, NULL, ExpandSeqs);
   }
 //LCOV_EXCL_STOP
+  if (StringChr (cfp->conv, 'l') != NULL) {
+    VisitBioseqsInSep (sep, NULL, RecalculateSegLen);
+  }
   if (StringChr (cfp->conv, 'v') != NULL) {
 //LCOV_EXCL_START
     // Only for SegSets
@@ -14280,7 +14373,9 @@ Args myargs [] = {
    "      t Only Nuc-Prot Sets\n"
    "      u Exclude Nuc-Prot Sets\n"
    "      v Only Segmented Sequences\n"
-   "      w Exclude Segmented Sequences\n", NULL, NULL, NULL,
+   "      w Exclude Segmented Sequences\n"
+   "      x Only Segmented Proteins\n"
+   "      y Exclude Segmented Proteins\n", NULL, NULL, NULL,
     TRUE, 'B', ARG_STRING, 0.0, 0, NULL},
   {"Report\n"
    "      c Record Count\n"
@@ -14394,6 +14489,7 @@ Args myargs [] = {
   {"Sequence\n"
    "      c Compress\n"
    "      d Decompress\n"
+   "      l Recalculated Segmented Sequence Length\n"
    "      v Virtual Gaps inside Seg Seq\n"
    "      s Convert Seg Set to Delta Seq\n"
    "      t Non-NucProt Seg Set to Delta Seq\n"

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/* $Id: ncbi_connutil.h,v 6.112 2016/07/18 22:39:13 fukanchi Exp $
+/* $Id: ncbi_connutil.h,v 6.114 2016/12/19 22:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -110,6 +110,11 @@ typedef enum {
     eReqMethod_Connect,      /*  4 */
     /* HTTP/1.1 */
     eReqMethod_v1  = 8,
+    eReqMethod_Any11             = eReqMethod_v1 | eReqMethod_Any,
+    eReqMethod_Get11             = eReqMethod_v1 | eReqMethod_Get,
+    eReqMethod_Post11            = eReqMethod_v1 | eReqMethod_Post,
+    eReqMethod_Head11            = eReqMethod_v1 | eReqMethod_Head,
+    eReqMethod_Connect11         = eReqMethod_v1 | eReqMethod_Connect,
     eReqMethod_Put = 16,     /* 16 */
     eReqMethod_Patch,        /* 17 */
     eReqMethod_Trace,        /* 18 */
@@ -166,15 +171,16 @@ typedef struct {  /* NCBI_FAKE_WARNING: ICC */
     EBURLScheme     scheme:3;         /* only pre-defined types (limited)    */
     TReqMethod      req_method:5;     /* method to use in the request (HTTP) */
     unsigned        version:1;        /* HTTP/1.v (or selected by req_method)*/
+    unsigned        external:1;       /* mark service request as external    */
     EBFWMode        firewall:2;       /* to use firewall (relay otherwise)   */
     unsigned        stateless:1;      /* to connect in HTTP-like fashion only*/
     unsigned        lb_disable:1;     /* to disable local load-balancing     */
     EBDebugPrintout debug_printout:2; /* switch to printout some debug info  */
     unsigned        http_push_auth:1; /* push authorize tags even w/o 401/407*/
     unsigned        http_proxy_leak:1;/* non-zero when can fallback to direct*/
-    unsigned        reserved:15;      /* MBZ */
-    char            user[64];         /* username (if specified)             */
-    char            pass[64];         /* password (if any)                   */
+    unsigned        reserved:14;      /* MBZ                                 */
+    char            user[64];         /* username (if specified or required) */
+    char            pass[64];         /* password (if any for non-empty user)*/
     char            host[256];        /* host to connect to                  */
     unsigned short  port;             /* port to connect to, host byte order */
     char            path[2048];       /* path (e.g. to  a CGI script or page)*/
@@ -245,6 +251,9 @@ typedef struct {  /* NCBI_FAKE_WARNING: ICC */
 #define REG_CONN_MAX_TRY          "MAX_TRY"
 #define DEF_CONN_MAX_TRY          3
 
+#define REG_CONN_EXTERNAL         "EXTERNAL"
+#define DEF_CONN_EXTERNAL         ""
+
 #define REG_CONN_FIREWALL         "FIREWALL"
 #define DEF_CONN_FIREWALL         ""
 
@@ -286,13 +295,14 @@ typedef struct {  /* NCBI_FAKE_WARNING: ICC */
  * 4. Registry key "param" (with "CONN_", if there was any, stripped)
  *    in the section "[CONN]".
  * Steps 1 & 2 skipped for "service" passed as NULL or empty ("").
- * Steps 3 & 4 skipped for non-empty "service" and "param" already beginning
- * with "CONN_".
- * If the found match's value has enveloping quotes (single '', or double "")
- * then they are stripped from the result (which may then become empty).
+ * Steps 3 & 4 skipped for non-empty "service" and the "param" that already
+ * begins with "CONN_".
+ * If the found match's value has enveloping quotes (either single '' or
+ * double ""), then they are stripped from the result, which can then become
+ * empty.
  * The first "value_size" bytes (including the terminating '\0') of the result
- * get copied to the "value" buffer (which may cause truncation!), and
- * the passed "value" address gets returned.
+ * get copied to the "value" buffer (which may cause truncation!), and the
+ * passed "value" address gets returned.
  * When no match is found, the "value" gets filled with "def_value" (or an
  * empty string), which then gets returned.  Return 0 only on out of memory.
  */
@@ -333,6 +343,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_Boolean
  *  http_push_auth    HTTP_PUSH_AUTH    Send credentials pre-emptively
  *  timeout           TIMEOUT           "<sec>.<usec>": "3.00005", "infinite"
  *  max_try           MAX_TRY  
+ *  external          EXTERNAL
  *  firewall          FIREWALL
  *  stateless         STATELESS
  *  lb_disable        LB_DISABLE        obsolete

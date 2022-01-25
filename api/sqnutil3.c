@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.1153 $
+* $Revision: 6.1154 $
 *
 * File Description: 
 *
@@ -2332,7 +2332,8 @@ static FeatdefNameData featdefWithName [] = {
   { FEATDEF_primer_bind ,        "primer_bind"        },
   { FEATDEF_prim_transcript ,    "prim_transcript"    },
   { FEATDEF_promoter ,           "promoter"           },
-  { FEATDEF_propeptide ,         "propeptide"         },
+  { FEATDEF_propeptide_aa ,      "propeptide"         },
+  { FEATDEF_propeptide ,         "propeptide_nt"      },
   { FEATDEF_PROT ,               "Protein"            },
   { FEATDEF_protein_bind ,       "protein_bind"       },
   { FEATDEF_RBS ,                "RBS"                },
@@ -2505,6 +2506,7 @@ static CharPtr featurekeys [] = {
   "telomere", 
   "assembly_gap",
   "regulatory",
+  "propeptide",
   "propeptide"
 };
 

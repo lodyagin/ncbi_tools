@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,22 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.21  2016/10/20 15:13:34  choi
+* JIRA SM-99
+* Added new function Nlm_ResizableModalWindow.
+*
+* Revision 6.20  2016/10/20 14:58:38  choi
+* JIRA SM-99
+* Added new function Nlm_PopupListEx that takes a font parameter.
+*
+* Revision 6.19  2016/10/19 17:17:01  choi
+* JIRA SM-99
+* Checked in new funtions for buttons that take a font parameter
+* 1) PushButtonEx
+* 2) DefaultButtonEx
+* 3) CheckBoxEx
+* 4) RadioButtonEx
+*
 * Revision 6.18  2013/05/31 23:26:17  kans
 * added hooks for menu and button action
 *
@@ -271,6 +287,8 @@ extern "C" {
 #define ShadowWindow Nlm_ShadowWindow
 #define PlainWindow Nlm_PlainWindow
 
+#define ResizableModalWindow Nlm_ResizableModalWindow
+
 /* esl++ */
 #define MovableModalWindow Nlm_MovableModalWindow
 #define SetModalWindowOwner Nlm_SetModalWindowOwner
@@ -300,6 +318,11 @@ extern "C" {
 #define CheckBox Nlm_CheckBox
 #define RadioButton Nlm_RadioButton
 
+#define PushButtonEx Nlm_PushButtonEx
+#define DefaultButtonEx Nlm_DefaultButtonEx
+#define CheckBoxEx Nlm_CheckBoxEx
+#define RadioButtonEx Nlm_RadioButtonEx
+
 #define SingleList Nlm_SingleList
 #define MultiList Nlm_MultiList
 #define ExtendedList Nlm_ExtendedList
@@ -315,6 +338,7 @@ extern "C" {
 #define ChoiceGroup Nlm_ChoiceGroup
 #define ChoiceItem Nlm_ChoiceItem
 #define PopupList Nlm_PopupList
+#define PopupListEx Nlm_PopupListEx
 #define PopupItem Nlm_PopupItem
 #define PopupItems Nlm_PopupItems
 #define DeskAccGroup Nlm_DeskAccGroup

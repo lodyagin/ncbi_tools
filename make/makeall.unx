@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.320 2016/07/22 18:48:43 ucko Exp $
+#	$Id: makeall.unx,v 6.321 2016/12/31 22:35:10 ucko Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -181,7 +181,7 @@ SRC1e =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_service_connector.c ncbi_ftp_connector.c ncbi_dispd.c \
 	ncbi_lb.c ncbi_local.c ncbi_socket_connector.c urlquery.c binary.c \
 	ncbi_sendmail.c ncbi_base64.c asn_connection.c ncbi_lbos.c parson.c \
-        raw_scoremat.c drwnflpt.c drwnfspc.c drwnmfls.c
+        ncbi_ipv6.c raw_scoremat.c drwnflpt.c drwnfspc.c drwnmfls.c
 SRC1 =	ncbimain.c $(SRC1e)
 
 SRCTLS = ncbi_gnutls.c
@@ -329,7 +329,7 @@ OBJ1e =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_service_connector.o ncbi_ftp_connector.o ncbi_dispd.o \
 	ncbi_lb.o ncbi_local.o ncbi_socket_connector.o urlquery.o binary.o \
 	ncbi_sendmail.o ncbi_base64.o asn_connection.o ncbi_lbos.o parson.o \
-        raw_scoremat.o drwnflpt.o drwnfspc.o drwnmfls.o
+        ncbi_ipv6.o raw_scoremat.o drwnflpt.o drwnfspc.o drwnmfls.o
 OBJ1 =	ncbimain.o $(OBJ1e)
 
 OBJTLS = ncbi_gnutls.o

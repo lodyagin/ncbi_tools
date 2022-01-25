@@ -69,7 +69,8 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"pseudogene", Class_text}, {"mobile_element_type", Class_text},
  {"gap_type", Class_text }, {"linkage_evidence", Class_text },
  {"altitude", Class_text }, {"metagenome_source", Class_text},
- {"type_material", Class_text}, {"regulatory_class", Class_text}
+ {"type_material", Class_text}, {"regulatory_class", Class_text},
+ {"recombination_class", Class_text}
 };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -632,7 +633,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1}},
-   {"misc_recomb", 0, {-1, -1, -1, -1, -1}, 15,
+   {"misc_recomb", 0, {-1, -1, -1, -1, -1}, 16,
      {
       GBQUAL_allele,
       GBQUAL_citation,
@@ -647,13 +648,14 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_note,
       GBQUAL_old_locus_tag,
       GBQUAL_partial,
+      GBQUAL_recombination_class,
       GBQUAL_standard_name,
       GBQUAL_usedin,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+      -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"misc_RNA", 0, {-1, -1, -1, -1, -1}, 22,
      {
       GBQUAL_allele,
@@ -1185,13 +1187,14 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1}},
-   {"rep_origin", 0, {-1, -1, -1, -1, -1}, 16,
+   {"rep_origin", 0, {-1, -1, -1, -1, -1}, 17,
      {
       GBQUAL_allele,
       GBQUAL_citation,
       GBQUAL_db_xref,
       GBQUAL_direction,
       GBQUAL_evidence,
+      GBQUAL_function,
       GBQUAL_experiment,
       GBQUAL_gene,
       GBQUAL_gene_synonym,
@@ -1207,7 +1210,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+      -1, -1, -1, -1, -1, -1, -1, -1}},
    {"rRNA", 0, {-1, -1, -1, -1, -1}, 21,
      {
       GBQUAL_allele,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1216 $
+* $Revision: 6.1219 $
 *
 * File Description: 
 *
@@ -144,7 +144,7 @@ static char *time_of_compilation = "now";
 
 #include <connect/ncbi_gnutls.h>
 
-#define SEQ_APP_VER "15.30"
+#define SEQ_APP_VER "15.50"
 
 CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
 CharPtr SEQUIN_SERVICES = NULL;

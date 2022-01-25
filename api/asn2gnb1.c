@@ -31,7 +31,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.280 $
+* $Revision: 1.285 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -63,6 +63,75 @@
 #include <Profiler.h>
 #endif
 #endif
+
+NLM_EXTERN Boolean GetAccVerForBioseq (BioseqPtr bsp, CharPtr buf, size_t buflen, Boolean hideGi, Boolean isSpan) {
+
+  Char      ch;
+  BIG_ID    gi;
+  SeqIdPtr  sip;
+  CharPtr   tmp;
+  Boolean   acc_found = FALSE;
+
+  if (buf == NULL || buflen < 1) {
+    return FALSE;
+  }
+  *buf = '\0';
+  if (bsp == NULL) {
+    return FALSE;
+  }
+
+  if (! hideGi) {
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_GI) {
+        gi = (BIG_ID) sip->data.intvalue;
+        if (gi > 0) {
+          sprintf (buf, "%lld", (long long) gi);
+          return TRUE;
+        }
+      }
+    }
+  }
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENBANK ||
+               sip->choice == SEQID_EMBL ||
+               sip->choice == SEQID_DDBJ ||
+               sip->choice == SEQID_GPIPE ||
+               sip->choice == SEQID_TPG ||
+               sip->choice == SEQID_TPE ||
+               sip->choice == SEQID_TPD ||
+               sip->choice == SEQID_PIR ||
+               sip->choice == SEQID_SWISSPROT ||
+               sip->choice == SEQID_PRF ||
+               sip->choice == SEQID_PDB || 
+               sip->choice == SEQID_OTHER) {
+      SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, buflen - 1);
+      acc_found = TRUE;
+    }
+    /* RefSeq, GPipe and PDB accessions can contain an underscore character '_',
+     * which is used as delimiter in the Javascript functions processing the
+     * HTML markup, hence change '_' to '-'.
+     */
+    if (sip->choice == SEQID_OTHER || 
+        sip->choice == SEQID_PDB ||
+        sip->choice == SEQID_GPIPE) {
+      if (isSpan) {
+        tmp = buf;
+        ch = *tmp;
+        while (ch != '\0') {
+          if (ch == '_') {
+            *tmp = '-';
+          }
+          tmp++;
+          ch = *tmp;
+        }
+      }
+    }
+    if (acc_found)
+       return TRUE;
+  }
+
+  return FALSE;
+}
 
 static Boolean FFIsStartOfLinkEx (StringItemPtr iter, Int4 pos, Int4Ptr lenP);
 
@@ -2521,6 +2590,7 @@ NLM_EXTERN void DoOneSection (
   awp->slp = slp;
   (awp->sectionCount)++;
   awp->currGi = 0;
+  awp->currAccVer [0] = '\0';
   awp->seg = seg;
   awp->numsegs = numsegs;
   awp->from = from;
@@ -2634,12 +2704,27 @@ NLM_EXTERN void DoOneSection (
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
       isRefSeq = TRUE;
+      SeqIdWrite (sip, awp->currAccVer, PRINTID_TEXTID_ACC_VER, sizeof (awp->currAccVer) - 1);
     } else if (sip->choice == SEQID_GI) {
       awp->currGi = (BIG_ID) sip->data.intvalue;
     } else if (sip->choice == SEQID_GPIPE) {
       isGpipe = TRUE;
+      SeqIdWrite (sip, awp->currAccVer, PRINTID_TEXTID_ACC_VER, sizeof (awp->currAccVer) - 1);
+    } else if (sip->choice == SEQID_GENBANK ||
+               sip->choice == SEQID_EMBL ||
+               sip->choice == SEQID_DDBJ ||
+               sip->choice == SEQID_TPG ||
+               sip->choice == SEQID_TPE ||
+               sip->choice == SEQID_TPD ||
+               sip->choice == SEQID_PIR ||
+               sip->choice == SEQID_SWISSPROT ||
+               sip->choice == SEQID_PRF ||
+               sip->choice == SEQID_PDB) {
+      SeqIdWrite (sip, awp->currAccVer, PRINTID_TEXTID_ACC_VER, sizeof (awp->currAccVer) - 1);
     }
   }
+
+  GetAccVerForBioseq (bsp, awp->currAccVerLabel, sizeof (awp->currAccVerLabel), ajp->hideGI, TRUE);
 
   /* start exploring and populating paragraphs */
 
@@ -4876,6 +4961,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.currGi = 0;
   aw.prevGi = prevGi;
   aw.nextGi = nextGi;
+  aw.currAccVer [0] = '\0';
 
   /* internal format pointer if writing at time of creation */
 

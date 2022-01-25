@@ -391,6 +391,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\connect\ncbi_lbos.c" />
+    <ClCompile Include="..\..\..\..\connect\ncbi_ipv6.c" />
     <ClInclude Include="..\..\..\..\connect\parson.c" />
     <ClCompile Include="..\..\..\..\ctools\asn_connection.c">
     </ClCompile>
@@ -536,6 +537,7 @@
     <ClInclude Include="..\..\..\..\connect\ncbi_local.h" />
     <ClInclude Include="..\..\..\..\connect\ncbi_priv.h" />
     <ClInclude Include="..\..\..\..\connect\parson.h" />
+    <ClInclude Include="..\..\..\..\connect\ipv6.h" />
     <ClInclude Include="..\..\..\..\ctools\asn_connection.h" />
     <ClInclude Include="..\..\..\..\asnlib\asndebin.h" />
     <ClInclude Include="..\..\..\..\asnlib\asnenbin.h" />

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.93 $
+* $Revision: 1.94 $
 *
 * File Description: 
 *
@@ -3630,7 +3630,7 @@ NLM_EXTERN SeqDescrPtr SeqDescrFromBioSample (CharPtr number)
   }
   query = (CharPtr) MemNew (sizeof (Char) * (StringLen (query_fmt) + StringLen (number)));
   sprintf (query, query_fmt, number);
-  conn = QUERY_OpenUrlQuery (host, 80, url,
+  conn = QUERY_OpenUrlQuery (host, 0, url,
                              query, "Sequin", 30, eMIME_T_NcbiData,
                              eMIME_Fasta, eENCOD_None, 0);
   query = MemFree (query);

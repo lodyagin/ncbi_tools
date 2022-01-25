@@ -2367,6 +2367,11 @@ clipped region (3' clip).
 transcription, or reverse transcription. Includes site(s) for synthetic
 e.g., PCR primer elements.
 
+*propeptide
+
+#Coding sequence for the domain of a proprotein that is cleaved to form
+the mature protein product.
+
 *protein_bind
 
 #Non-covalent protein binding site on nucleic acid.
@@ -3990,7 +3995,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk
 </A></P>
-<P CLASS=medium1>Revised February 29, 2016
+<P CLASS=medium1>Revised December 5, 2016
 
 </CENTER>
 

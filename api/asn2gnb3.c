@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.232 $
+* $Revision: 1.238 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -65,11 +65,11 @@
 
 static CharPtr ref_link = "https://www.ncbi.nlm.nih.gov/RefSeq/";
 
-static CharPtr doc_link = "http://www.ncbi.nlm.nih.gov/genome/annotation_euk/process/";
+static CharPtr doc_link = "https://www.ncbi.nlm.nih.gov/genome/annotation_euk/process/";
 
-static CharPtr ev_link = "http://www.ncbi.nlm.nih.gov/sutils/evv.cgi?";
+static CharPtr ev_link = "https://www.ncbi.nlm.nih.gov/sutils/evv.cgi?";
 
-static CharPtr link_encode = "http://www.nhgri.nih.gov/10005107";
+static CharPtr link_encode = "https://www.genome.gov/10005107";
 
 static CharPtr link_seqn = "https://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "https://www.ncbi.nlm.nih.gov/protein/";
@@ -2722,7 +2722,7 @@ NLM_EXTERN void AddCommentBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"comment_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"comment_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -2875,7 +2875,7 @@ NLM_EXTERN void AddCommentBlock (
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, " to Study ", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, "http://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, authaccessvalue, FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
         FFAddOneString (ffstring, authaccessvalue, FALSE, FALSE, TILDE_IGNORE);
@@ -4004,7 +4004,7 @@ NLM_EXTERN void AddCommentBlock (
                         FALSE, FALSE, TILDE_IGNORE);
       if ( GetWWW(ajp) ) {
         FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        FF_Add_NCBI_Base_URL (ffstring, "http://www.ncbi.nlm.nih.gov/refseq/rsg/");
+        FF_Add_NCBI_Base_URL (ffstring, "https://www.ncbi.nlm.nih.gov/refseq/rsg/");
         FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "RefSeqGene", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -5107,7 +5107,7 @@ NLM_EXTERN void AddFeatHeaderBlock (
 
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
-    sprintf (buf, "<a name=\"feature_%ld\"></a>", (long) awp->currGi);
+    sprintf (buf, "<a name=\"feature_%s\"></a>", awp->currAccVerLabel);
     DoQuickLinkFormat (awp->afp, buf);
   }
 
@@ -5462,8 +5462,11 @@ static void GetSourcesOnBioseq (
   ValNodePtr         sdplist = NULL;
   SeqFeatPtr         sfp;
   SeqInt             sint;
+  SeqIntPtr          sintp;
   SeqIdPtr           sip;
+  SeqLocPtr          slp, slpx;
   Boolean            split;
+  SeqPntPtr          spp;
   Int4               start;
   Int4               stop;
   Uint1              strand;
@@ -5480,7 +5483,24 @@ static void GetSourcesOnBioseq (
   if (ajp == NULL) return;
 
   if (cds != NULL) {
-    sfp = SeqMgrGetOverlappingSource (cds->location, &fcontext);
+    slp = AsnIoMemCopy ((Pointer) cds->location, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+    if (slp != NULL) {
+      for (slpx = SeqLocFindNext (slp, NULL); slpx != NULL; slpx = SeqLocFindNext (slp, slpx)) {
+        if (slpx->choice == SEQLOC_INT) {
+          sintp = (SeqIntPtr) slpx->data.ptrvalue;
+          if (sintp != NULL) {
+            sintp->strand = Seq_strand_both;
+          }
+        } else if (slpx->choice == SEQLOC_PNT) {
+          spp = (SeqPntPtr) slpx->data.ptrvalue;
+          if (spp != NULL) {
+            spp->strand = Seq_strand_both;
+          }
+        }
+      }
+    }
+    sfp = SeqMgrGetOverlappingSource (slp, &fcontext);
+    SeqLocFree (slp);
     if (sfp != NULL) {
       biop = (BioSourcePtr) sfp->data.value.ptrvalue;
       bbp = AddSource (awp, &(awp->srchead), biop, sfp->comment);
@@ -5951,7 +5971,6 @@ NLM_EXTERN void AddSourceFeatBlock (
   BioseqPtr          bsp;
   SeqFeatPtr         cds;
   SeqMgrFeatContext  context;
-  BIG_ID             currGi = 0;
   BioseqPtr          dna;
   SeqLocPtr          duploc;
   Boolean            excise;
@@ -6059,15 +6078,16 @@ NLM_EXTERN void AddSourceFeatBlock (
 
     FFStartPrint (ffstring, awp->format, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
 
+    /*
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
       if (sip->choice == SEQID_GI) {
         currGi = (BIG_ID) sip->data.intvalue;
       }
     }
-
+    */
     if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans &&
         (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
-      sprintf (pfx, "<span id=\"feature_%ld_source_0\" class=\"feature\">", (long) currGi);
+      sprintf (pfx, "<span id=\"feature_%s_source_0\" class=\"feature\">", awp->currAccVerLabel);
     }
 
     FFAddOneString(ffstring, "source", FALSE, FALSE, TILDE_IGNORE);
@@ -6465,7 +6485,7 @@ static void GetFeatsOnCdsProduct (
         pcontext.featdeftype == FEATDEF_sig_peptide_aa ||
         pcontext.featdeftype == FEATDEF_transit_peptide_aa ||
         pcontext.featdeftype == FEATDEF_preprotein ||
-        (pcontext.featdeftype == FEATDEF_propeptide /* && isRefSeq */)) {
+        (pcontext.featdeftype == FEATDEF_propeptide_aa /* && isRefSeq */)) {
 
       if (awp->hideSitesBondsRegions && (pcontext.featdeftype == FEATDEF_REGION ||
                                          pcontext.featdeftype == FEATDEF_SITE ||
@@ -6648,7 +6668,7 @@ static void GetRemoteFeatsOnCdsProduct (
         prt->idx.subtype == FEATDEF_sig_peptide_aa ||
         prt->idx.subtype == FEATDEF_transit_peptide_aa ||
         prt->idx.subtype == FEATDEF_preprotein ||
-        (prt->idx.subtype == FEATDEF_propeptide /* && isRefSeq */)) {
+        (prt->idx.subtype == FEATDEF_propeptide_aa /* && isRefSeq */)) {
 
       if (awp->hideSitesBondsRegions && (prt->idx.subtype == FEATDEF_REGION ||
                                          prt->idx.subtype == FEATDEF_SITE ||

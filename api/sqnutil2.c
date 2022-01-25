@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.633 $
+* $Revision: 6.635 $
 *
 * File Description: 
 *
@@ -7511,6 +7511,15 @@ static SeqAnnotPtr ReadFeatureTableEx (FileCachePtr fcp, CharPtr seqid, CharPtr 
               if (prp != NULL) {
                 sfp->data.value.ptrvalue = (Pointer) prp;
                 prp->processed = 4;
+              }
+
+            } else if (StringCmp (feat, "propeptide") == 0) {
+
+              sfp->data.choice = SEQFEAT_PROT;
+              prp = ProtRefNew ();
+              if (prp != NULL) {
+                sfp->data.value.ptrvalue = (Pointer) prp;
+                prp->processed = 5;
               }
 
             } else if (StringCmp (feat, "source") == 0) {
@@ -22043,11 +22052,15 @@ Boolean DeltaLitOnly (
 )
 
 {
+  SeqLocPtr   slp;
   ValNodePtr  vnp;
 
   if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
   for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
+    if (vnp->choice != 1) continue;
+    slp = (SeqLocPtr) vnp->data.ptrvalue;
+    if (slp == NULL) continue;
+    if (slp->choice != SEQLOC_NULL) return FALSE;
   }
   return TRUE;
 }

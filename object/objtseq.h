@@ -40,7 +40,7 @@ typedef struct struct_TSeq {
 
 #define OB__TSeq_gi 0
 
-   Int4   gi;
+   BIG_ID    gi;
    CharPtr   accver;
    CharPtr   sid;
    CharPtr   local;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.676 $
+* $Revision: 6.677 $
 *
 * File Description: 
 *
@@ -8234,7 +8234,7 @@ static BioseqPtr ReadFromTraceDb (CharPtr number)
   if (StringHasNoText (number)) return NULL;
   if (sscanf (number, "%lu", &val) != 1) return NULL;
   sprintf (query, "cmd=raw&query=retrieve+fasta+%lu", (long) val);
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Traces/trace.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/Traces/trace.cgi",
                              query, "Sequin", 30, eMIME_T_NcbiData,
                              eMIME_Fasta, eENCOD_None, 0);
   if (conn == NULL) return NULL;

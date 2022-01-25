@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.163 $
+* $Revision: 1.167 $
 *
 * File Description:
 *
@@ -54,7 +54,7 @@
 #include <lsqfetch.h>
 #include <connect/ncbi_gnutls.h>
 
-#define ASN2ALL_APP_VER "13.7"
+#define ASN2ALL_APP_VER "14.3"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 

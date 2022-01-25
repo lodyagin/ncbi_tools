@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.10 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -59,7 +59,7 @@ NLM_EXTERN CONN MimOpenConnection (
 
   /*
   sprintf (query, "cmd=ASN.1&id=%ld", (long) uid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/dispomim.cgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/dispomim.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
   */

@@ -1,4 +1,4 @@
-/* $Id: ncbi_core_c.c,v 6.29 2014/03/27 19:48:31 lavr Exp $
+/* $Id: ncbi_core_c.c,v 6.30 2017/01/03 17:12:24 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,6 +43,7 @@
 #include <ncbistr.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 /***********************************************************************

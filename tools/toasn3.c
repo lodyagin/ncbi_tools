@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.147 2015/09/04 15:37:58 bollin Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.150 2016/11/02 23:36:09 kans Exp $";
 
 /*****************************************************************************
 *
@@ -3825,7 +3825,7 @@ static void ChangeGBSource (SeqEntryPtr sep, Pointer data, Int4 index, Int2 inde
             len = StringLen (s);
             if (len > 5 && StringCmp (s + len - 5, " DNA.") == 0) {
               s [len - 5] = '\0';
-            } else if (len > 6 && StringCmp (s + len - 5, " rRNA.") == 0) {
+            } else if (len > 6 && StringCmp (s + len - 6, " rRNA.") == 0) {
               s [len - 6] = '\0';
             }
             TrimPeriodFromEnd (s);
@@ -4783,7 +4783,8 @@ static Boolean OutOfFramePeptideButEmblOrDdbj (SeqFeatPtr sfp, SeqFeatPtr cds)
   if (ifp == NULL) return FALSE;
   if (StringCmp (ifp->key, "mat_peptide") != 0 &&
       StringCmp (ifp->key, "sig_peptide") != 0 &&
-      StringCmp (ifp->key, "transit_peptide") != 0) return FALSE;
+      StringCmp (ifp->key, "transit_peptide") != 0 &&
+      StringCmp (ifp->key, "propeptide") != 0) return FALSE;
 
   crp = (CdRegionPtr) cds->data.value.ptrvalue;
   if (crp == NULL) return FALSE;
@@ -4826,6 +4827,25 @@ static Boolean OutOfFramePeptideButEmblOrDdbj (SeqFeatPtr sfp, SeqFeatPtr cds)
   return FALSE;
 }
 
+static Boolean IncompatibleStrands (SeqLocPtr loc1, SeqLocPtr loc2)
+
+{
+  Boolean  minus1 = FALSE, minus2 = FALSE;
+  Uint1    strand1, strand2;
+
+  if (loc1 == NULL || loc2 == NULL) return FALSE;
+
+  strand1 = SeqLocStrand (loc1);
+  strand2 = SeqLocStrand (loc2);
+
+  minus1 = (Boolean) (strand1 == Seq_strand_minus || strand1 == Seq_strand_both_rev);
+  minus2 = (Boolean) (strand2 == Seq_strand_minus || strand2 == Seq_strand_both_rev);
+
+  if (minus1 != minus2) return TRUE;
+
+  return FALSE;
+}
+
 static void ImpFeatToProtRef(SeqFeatArr sfa)
 {
     SeqFeatPtr f1, f2, best_cds, sfp;
@@ -4855,6 +4875,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
         best_cds = NULL;
         for (tmp2=sfa.cds; tmp2; tmp2=tmp2->next) {
             f2 = tmp2->data.ptrvalue;
+            if (IncompatibleStrands (loc, f2->location)) continue;
             diff_current = SeqLocAinB(loc, f2->location);
             if (diff_current < 0) continue;
             /* if no best yet, take first candidate */
@@ -4965,6 +4986,8 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
                     prot->processed = 3;
                 if (StringCmp(ifp->key, "transit_peptide") == 0)
                     prot->processed = 4;
+                if (StringCmp(ifp->key, "propeptide") == 0)
+                    prot->processed = 5;
                 if (f1->comment != NULL) {
                     if ((prot->processed == 2 || prot->name == NULL) && StringICmp (f1->comment, "putative") != 0) {
                         ValNodeAddStr(&(prot->name), 0,StringSave(f1->comment));
@@ -5089,7 +5112,8 @@ static void GetCdRegionsWithPeptides (SeqEntryPtr sep, Pointer data, Int4 index,
                 ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
                 if (StringCmp(ifp->key, "mat_peptide") == 0 ||
                     StringCmp(ifp->key, "sig_peptide") == 0 ||
-                    StringCmp(ifp->key, "transit_peptide") == 0) {
+                    StringCmp(ifp->key, "transit_peptide") == 0 ||
+                    StringCmp(ifp->key, "propeptide") == 0) {
                     tmp = ValNodeNew(NULL);
                     tmp->choice = SEQFEAT_PROT;
                     tmp->data.ptrvalue = sfp;
@@ -5218,6 +5242,9 @@ static void ProtFeatOnNucToImpFeat (SeqFeatPtr sfp, Pointer userdata)
       break;
     case 4:
       key = "transit_peptide";
+      break;
+    case 5:
+      key = "propeptide";
       break;
     default:
       return;

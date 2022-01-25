@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.92 $
+* $Revision: 6.93 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -4763,6 +4763,35 @@ extern Nlm_WindoW Nlm_ModalWindow (Nlm_Int2 left, Nlm_Int2 top,
   }
   Nlm_SetModalWindowOwner (w, owner); /* esl */
   return w;
+}
+
+extern Nlm_WindoW Nlm_ResizableModalWindow(Nlm_Int2 left, Nlm_Int2 top,
+    Nlm_Int2 width, Nlm_Int2 height,
+    Nlm_CharPtr title,
+    Nlm_WndActnProc close,
+    Nlm_WndActnProc resize)
+{
+    Nlm_RecT    r;
+    Nlm_WindoW  w = 0;
+    Nlm_WindoW  owner = Nlm_ActiveWindow(); 
+
+    Nlm_LoadRect(&r, left, top, width, height);
+    w = Nlm_MakeWindowLink(&r, sizeof(Nlm_WindowRec), movableModalProcs);
+    if (w != NULL) {
+#ifdef WIN_MAC
+        Nlm_NewWindow(w, MODAL_STYLE, 5, FALSE, NULL, 0, title, close, resize);
+#endif
+#ifdef WIN_MSWIN
+        Nlm_NewWindow(w, MODAL_STYLE, 0, FALSE, windowclass, WS_POPUP |
+            WS_CAPTION | WS_SYSMENU | WS_THICKFRAME, title, close, resize);
+#endif
+#ifdef WIN_MOTIF
+        Nlm_NewWindow(w, MODAL_STYLE, 0, FALSE, NULL, 0, title, close, resize);
+#endif
+    }
+    Nlm_SetModalWindowOwner(w, owner); 
+
+    return w;
 }
 
 /* esl: movable dialog with caption */

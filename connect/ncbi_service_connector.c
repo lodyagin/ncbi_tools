@@ -1,4 +1,4 @@
-/* $Id: ncbi_service_connector.c,v 6.149 2016/07/27 15:09:15 fukanchi Exp $
+/* $Id: ncbi_service_connector.c,v 6.152 2016/12/30 17:29:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -127,7 +127,7 @@ static EHTTP_HeaderParse s_ParseHeader(const char* header,
                                        int/*bool*/ user_callback_enabled)
 {
     static const char   kStateless[] = "TRY_STATELESS";
-    static const size_t klen = sizeof(kStateless) - 1;
+    static const size_t kSLen = sizeof(kStateless) - 1;
     SServiceConnector*  uuu = (SServiceConnector*) user_data;
     EHTTP_HeaderParse   header_parse;
 
@@ -151,8 +151,8 @@ static EHTTP_HeaderParse s_ParseHeader(const char* header,
             header += sizeof(HTTP_CONNECTION_INFO) - 1;
             while (*header  &&  isspace((unsigned char)(*header)))
                 header++;
-            if (strncasecmp(header, kStateless, klen) == 0  &&
-                (!header[klen]  ||  isspace((unsigned char) header[klen]))) {
+            if (strncasecmp(header, kStateless, kSLen) == 0  &&
+                (!header[kSLen]  ||  isspace((unsigned char) header[kSLen]))) {
                 /* Special keyword for switching into stateless mode */
                 uuu->host = (unsigned int)(-1);
 #if defined(_DEBUG)  &&  !defined(NDEBUG)
@@ -529,7 +529,11 @@ static int/*bool*/ s_Adjust(SConnNetInfo* net_info,
     char*              iter_header;
     SSERV_InfoCPtr     info;
 
-    assert(n > 0  &&  (!net_info->firewall  ||  net_info->stateless));
+    assert(n  ||  uuu->extra.adjust);
+    assert(!net_info->firewall  ||  net_info->stateless);
+
+    if (!n)
+        return uuu->extra.adjust(net_info, uuu->extra.data, 0);
 
     if (uuu->retry >= uuu->net_info->max_try)
         return 0/*failure - too many errors*/;
@@ -869,10 +873,14 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
     assert(!uuu->descr);
     uuu->descr = ConnNetInfo_URL(net_info);
     return !uuu->extra.adjust
-        ||  uuu->extra.adjust(net_info, uuu->extra.data, 0)
+        ||  uuu->extra.adjust(net_info, uuu->extra.data, (unsigned int)(-1))
         ? HTTP_CreateConnectorEx(net_info,
                                  (uuu->extra.flags
-                                  & (fHTTP_Flushable | fHTTP_NoAutoRetry))
+                                  & (fHTTP_Flushable       |
+                                     fHTTP_NoAutoRetry     |
+                                     (uuu->extra.adjust
+                                      ? fHTTP_AdjustOnRedirect
+                                      : 0)))
                                  | fHTTP_AutoReconnect,
                                  s_ParseHeaderUCB, uuu/*user_data*/,
                                  s_Adjust, 0/*cleanup*/)
@@ -957,12 +965,11 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
         if (!uuu->iter  &&  !s_OpenDispatcher(uuu))
             break;
 
-        if (uuu->net_info->firewall
-            &&  strcasecmp(SERV_MapperName(uuu->iter), "local") != 0) {
-            info = 0;
-        } else if (!(info = s_GetNextInfo(uuu, 0/*any*/)))
+        if (!(info = s_GetNextInfo(uuu, 0/*any*/))
+            &&  (!uuu->net_info->firewall
+                 ||  strcasecmp(SERV_MapperName(uuu->iter), "local") == 0)) {
             break;
-
+        }
         if (uuu->type) {
             free((void*) uuu->type);
             uuu->type = 0;
@@ -989,7 +996,7 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
 
         /* Setup the new connector on a temporary meta-connector... */
         memset(&uuu->meta, 0, sizeof(uuu->meta));
-        if ((status = METACONN_Add(&uuu->meta, c)) != eIO_Success) {
+        if ((status = METACONN_Insert(&uuu->meta, c)) != eIO_Success) {
             x_DestroyConnector(c);
             continue;
         }
@@ -1033,15 +1040,13 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
             break;
 
         if (!stateless  &&  (!info  ||  info->type == fSERV_Firewall)) {
-            static const char kFWLink[] = { "http://www.ncbi.nlm.nih.gov"
-                                            "/IEB/ToolBox/NETWORK"
-                                            "/dispatcher.html#Firewalling" };
+            static const char kFWDLink[] = CONN_FWD_LINK;
             CORE_LOGF_X(6, eLOG_Error,
                         ("[%s]  %s connection failure (%s) usually"
                          " indicates possible firewall configuration"
                          " problems; please consult <%s>", uuu->service,
                          !info ? "Firewall" : "Stateful relay",
-                         IO_StatusStr(status), kFWLink));
+                         IO_StatusStr(status), kFWDLink));
         }
 
         s_Close(connector, timeout, 0/*retain*/);

@@ -1,4 +1,4 @@
-/* $Id: blast_traceback_mt_priv.c,v 1.3 2016/05/04 14:59:32 fukanchi Exp $
+/* $Id: blast_traceback_mt_priv.c,v 1.4 2016/09/15 14:44:12 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -191,7 +191,7 @@ BlastHSPResults* SThreadLocalDataArrayConsolidateResults(SThreadLocalDataArray* 
                 : MAX(thread_hitlist->worst_evalue, hits4query->worst_evalue);
             hits4query->low_score = !tid
                 ? thread_hitlist->low_score
-                : MAX(thread_hitlist->low_score, hits4query->low_score);
+                : MIN(thread_hitlist->low_score, hits4query->low_score);
         }
     }
 

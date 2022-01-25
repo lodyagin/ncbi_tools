@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.c,v 1.12 2016/06/27 15:54:11 fukanchi Exp $
+/* $Id: blast_query_info.c,v 1.13 2016/10/17 19:04:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -92,6 +92,10 @@ BlastQueryInfo* BlastQueryInfoNew(EBlastProgramType program, int num_queries)
             ASSERT(retval->contexts[i].frame != INT1_MAX);
 
             retval->contexts[i].is_valid = TRUE;
+
+            if (Blast_ProgramIsMapping(program)) {
+                retval->contexts[i].segment_flags = eNoSegments;
+            }
         }
     }
 

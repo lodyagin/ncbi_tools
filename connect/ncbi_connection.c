@@ -1,4 +1,4 @@
-/* $Id: ncbi_connection.c,v 6.104 2016/03/08 19:54:14 fukanchi Exp $
+/* $Id: ncbi_connection.c,v 6.105 2016/09/08 15:49:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -327,7 +327,7 @@ static EIO_Status x_ReInit(CONN conn, CONNECTOR connector, int/*bool*/ close)
     if (!x_conn  &&  connector) {
         assert(conn->state == eCONN_Unusable);
         /* setup the new connector */
-        if ((status = METACONN_Add(&conn->meta, connector)) != eIO_Success)
+        if ((status = METACONN_Insert(&conn->meta, connector)) != eIO_Success)
             return status;
         assert(conn->meta.list);
         conn->state = eCONN_Closed;
@@ -426,6 +426,7 @@ extern EIO_Status CONN_CreateEx
         CONN_LOG(2, Create, eLOG_Error, "NULL connector");
     }
 
+    assert(!conn == (status != eIO_Success));
     CONN_CALLTRACE(Create);
     *connection = conn;
     return status;

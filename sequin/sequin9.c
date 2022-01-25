@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.528 $
+* $Revision: 6.529 $
 *
 * File Description: 
 *
@@ -1118,7 +1118,7 @@ extern void SubmitToNCBI (IteM i)
   AsnIoFlush (aop);
   AsnIoClose (aop);
 
-  conn = QUERY_OpenUrlQuery ("cruncher.nlm.nih.gov", 80,
+  conn = QUERY_OpenUrlQuery ("cruncher.nlm.nih.gov", 0,
                              "/cgi-bin/Sequin/testcgi.cgi", "request=echo",
                              progname, 30, eMIME_T_NcbiData, eMIME_AsnBinary,
                              eENCOD_Url,
@@ -2693,7 +2693,7 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
   ValNodePtr    paramlist = NULL;
   Char          program [128];
   Char          path [PATH_MAX];
-  Uint2         port = 80;
+  Uint2         port = 0;
   Char          prefix [128];
   Boolean       protOK = FALSE;
   CharPtr       ptr;
@@ -2762,7 +2762,7 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
             sscanf (tmp, "%u", &val) == 1) {
           port = (Uint2) val;
         } else {
-          port = 80;
+          port = 0;
         }
         if (GetServiceParam (list, "FORMATIN=", tmp, sizeof (tmp) - 1)) {
           if (StringICmp (tmp, "FASTA") == 0) {

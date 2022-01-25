@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_connutil_hit.c,v 6.24 2016/08/01 17:49:11 fukanchi Exp $
+/* $Id: test_ncbi_connutil_hit.c,v 6.25 2016/10/31 16:04:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -99,12 +99,12 @@ int main(int argc, char** argv)
     timeout.usec = 0;
     
     /* Connect */
-    sock = URL_Connect(host, port, path, args,
+    sock = URL_Connect(host, port, path, args, /*NCBI_FAKE_WARNING*/
                        eReqMethod_Any, content_length,
                        &timeout, &timeout, user_header, 1/*true*/,
                        port == CONN_PORT_HTTPS
                        ? fSOCK_LogDefault | fSOCK_Secure
-                       : fSOCK_LogDefault); /*NCBI_FAKE_WARNING*/
+                       : fSOCK_LogDefault);
     if ( !sock )
         return 3;
 

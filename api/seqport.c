@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.197 $
+* $Revision: 6.198 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -5877,8 +5877,8 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
   }
 
   if ((! SetGenCode (genCode, &ncbieaa, &sncbieaa)) || ncbieaa == NULL || sncbieaa == NULL) {
-    ncbieaa = "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG";
-    sncbieaa = "---M---------------M---------------M----------------------------";
+    ncbieaa =  "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG";
+    sncbieaa = "---M------**--*----M---------------M----------------------------";
   }
 
   tbl->genCode = genCode;
@@ -6401,7 +6401,7 @@ static ByteStorePtr TransTableTranslateCommon (
   Char           aa;
   Int2           j, state = 0;
   Boolean        bad_base, no_start, check_start, got_stop,
-                 incompleteLastCodon, use_break, is_first;
+                 incompleteLastCodon, use_break = FALSE, is_first;
   CharPtr        bases, txt, protseq;
   ByteStorePtr   bs;
   ValNodePtr     codebreakhead = NULL, vnp;
@@ -6583,6 +6583,19 @@ static ByteStorePtr TransTableTranslateCommon (
 
   if (k > total) {
     incompleteLastCodon = TRUE;
+  }
+
+  if ((! got_stop) && (! incompleteLastCodon) && q > 0 && (! partial) && (! use_break)) {
+    /* check for stop codon that normally encodes an amino acid */
+    aa = GetStartResidue (tbl, state, TTBL_TOP_STRAND);
+    if (aa == '*') {
+      if (include_stop) {
+        protseq [q - 1] = aa;
+      } else {
+        q--;
+      }
+      got_stop = TRUE;
+    }
   }
 
   if ((! got_stop) && incompleteLastCodon && q > 0) {

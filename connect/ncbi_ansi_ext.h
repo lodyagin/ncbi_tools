@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ANSI_EXT__H
 #define CONNECT___NCBI_ANSI_EXT__H
 
-/* $Id: ncbi_ansi_ext.h,v 6.26 2012/09/04 12:24:35 kazimird Exp $
+/* $Id: ncbi_ansi_ext.h,v 6.27 2016/10/31 15:49:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -101,7 +101,7 @@ int strcasecmp(const char* s1, const char* s2);
 NCBI_XCONNECT_EXPORT
 int strncasecmp(const char* s1, const char* s2, size_t n);
 
-#endif/*HAVE_STRCASECMP*/
+#endif /*HAVE_STRCASECMP*/
 
 
 #ifdef   strupr
@@ -134,6 +134,21 @@ NCBI_XCONNECT_EXPORT
 char* strncpy0(char* s1, const char* s2, size_t n);
 
 
+#ifndef HAVE_MEMCCHR
+
+#ifdef   memcchr
+#  undef memcchr
+#endif
+#define  memcchr       NCBI_memcchr
+
+/* Find address of the first occurrence of a byte that is NOT char "c" within
+ * "n" bytes of memory at the address "s".  Return NULL if all bytes are "c".
+ */
+void* memcchr(const void* s, int c, size_t n);
+
+#endif /*!HAVE_MEMCCHR*/
+
+
 #ifndef HAVE_MEMRCHR
 
 #ifdef   memrchr
@@ -146,7 +161,7 @@ char* strncpy0(char* s1, const char* s2, size_t n);
  */
 void* memrchr(const void* s, int c, size_t n);
 
-#endif/*!HAVE_MEMRCHR*/
+#endif /*!HAVE_MEMRCHR*/
 
 
 /* Locale-independent double-to-ASCII conversion of value "f" into a character

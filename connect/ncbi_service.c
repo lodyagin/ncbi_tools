@@ -1,4 +1,4 @@
-/* $Id: ncbi_service.c,v 6.150 2016/01/01 00:39:17 fukanchi Exp $
+/* $Id: ncbi_service.c,v 6.152 2016/12/27 19:44:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -239,7 +239,7 @@ static SERV_ITER x_Open(const char*         service,
         iter->reverse_dns   = 1;
     if (types & fSERV_Stateless)
         iter->stateless     = 1;
-    iter->external          = external;
+    iter->external          = external ? 1 : 0;
     if (arg  &&  *arg) {
         iter->arg           = arg;
         iter->arglen        = strlen(arg);
@@ -275,6 +275,8 @@ static SERV_ITER x_Open(const char*         service,
     iter->o_skip = iter->n_skip;
 
     if (net_info) {
+        if (net_info->external)
+            iter->external = 1;
         if (net_info->firewall)
             iter->types |= fSERV_Firewall;
         if (net_info->stateless)
@@ -692,7 +694,7 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text, int code)
 }
 
 
-static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
+static void s_SetDefaultReferer(SConnNetInfo* net_info, SERV_ITER iter)
 {
     char* str, *referer = 0;
 
@@ -733,8 +735,8 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
     static const char kAcceptedServerTypes[] = "Accepted-Server-Types:";
     static const char kClientRevision[] = "Client-Revision: %u.%u\r\n";
     static const char kUsedServerInfo[] = "Used-Server-Info: ";
+    static const char kNcbiExternal[] = NCBI_EXTERNAL ": Y\r\n";
     static const char kNcbiFWPorts[] = "NCBI-Firewall-Ports: ";
-    static const char kServerCount[] = "Server-Count: ";
     static const char kPreference[] = "Preference: ";
     static const char kSkipInfo[] = "Skip-Info-%u: ";
     static const char kAffinity[] = "Affinity: ";
@@ -754,7 +756,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
     if (iter) {
         assert(iter->op);
         if (net_info  &&  !net_info->http_referer  &&  iter->op->mapper)
-            s_SetDefaultReferer(iter, net_info);
+            s_SetDefaultReferer(net_info, iter);
         /* Accepted server types */
         buflen = sizeof(kAcceptedServerTypes) - 1;
         memcpy(buffer, kAcceptedServerTypes, buflen);
@@ -767,7 +769,8 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
                 buffer[buflen++] = ' ';
                 memcpy(buffer + buflen, name, namelen);
                 buflen += namelen;
-            }
+            } else if (iter->types < t)
+                break;
         }
         if (buffer[buflen - 1] != ':') {
             strcpy(&buffer[buflen], "\r\n");
@@ -777,13 +780,9 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
                 return 0;
             }
         }
-        if (iter->ismask  ||  (iter->pref  &&  (iter->host | iter->port))) {
-            /* FIXME: To obsolete? */
-            /* How many server-infos for the dispatcher to send to us */
-            if (!BUF_Write(&buf, kServerCount, sizeof(kServerCount) - 1)  ||
-                !BUF_Write(&buf,
-                           iter->ismask ? "10\r\n" : "ALL\r\n",
-                           iter->ismask ?       4  :        5)) {
+        if (iter->external) {
+            /* External */
+            if (!BUF_Write(&buf, kNcbiExternal, sizeof(kNcbiExternal)-1)) {
                 BUF_Destroy(buf);
                 return 0;
             }
@@ -830,7 +829,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
         iter->time = (TNCBI_Time) time(0);
         s_SkipSkip(iter);
         /* Put all the rest into rejection list */
-        for (i = 0;  i < iter->n_skip;  i++) {
+        for (i = 0;  i < iter->n_skip;  ++i) {
             /* NB: all skip infos are now kept with names (perhaps, empty) */
             const char* name    = SERV_NameOfInfo(iter->skip[i]);
             size_t      namelen = name  &&  *name ? strlen(name) : 0;

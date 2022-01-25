@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.405 $
+* $Revision: 6.410 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -3728,7 +3728,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                     oip->id = (Int4)num;
                     if (*tokens[0] != '0' && (numdigits < 10 ||
                         (numdigits == 10 && StringCmp (tokens [0], "2147483647") <= 0))) {
-                        sscanf(tokens[0], "%ld", &num);
+                        sscanf(tokens[0], "%lld", &num);
                         oip->id = (Int4)num;
                     } else {
                         oip->str = StringSave(tokens[0]);
@@ -5325,28 +5325,28 @@ static Int2 CompareMultiPartLocToMultiPartLoc(SeqLocPtr a, SeqLocPtr b, Boolean 
   b_idx = 0;
   while ((a_idx < a_sorted_len) && (b_idx < b_sorted_len))
   {
-      retval2 = SeqLocCompareEx(a_sorted[a_idx], b_sorted[b_idx], compare_strand);
+      retval2 = SeqLocCompareEx(b_sorted[b_idx], a_sorted[a_idx], compare_strand);
       if (retval2 > SLC_NO_MATCH)
           got_one = TRUE;
       switch (retval2)
       {
           case SLC_NO_MATCH:
-              ++b_idx;
+              ++a_idx;
               break;
           case SLC_A_EQ_B:
               ++a_idx;
               ++b_idx;
               break;
           case SLC_A_IN_B:
-              ++a_idx;
+              ++b_idx;
               break;
           case SLC_B_IN_A:
           case SLC_A_OVERLAP_B:
-              b_idx = b_sorted_len;
+              a_idx = a_sorted_len;
               break;
       }
   }
-  if (a_idx == a_sorted_len) {   /* a all in b */
+  if (b_idx == b_sorted_len) {   /* b all in a */
       retval = SLC_B_IN_A;
       goto done;
   }
@@ -5404,8 +5404,8 @@ NLM_EXTERN Int2 SeqLocCompareEx (SeqLocPtr a, SeqLocPtr b, Boolean compare_stran
         { 4,4,4,4,4 }};
     static Uint1 rettable2 [5][5] = {      /* for developing return values */
         { 0,1,4,1,4 } ,                      /* when b is longer than a */
-        { 1,1,4,1,1 } ,
-        { 4,4,2,2,4 } ,
+        { 1,1,1,1,1 } ,
+        { 4,1,2,2,4 } ,
         { 1,1,4,3,4 } ,
         { 4,1,4,4,4 }};
 
@@ -8410,6 +8410,8 @@ SeqLocPrintProc
                 BSPutByte(bsp, delim2);
                 break;
             case SEQLOC_INT:    /* int */
+            {
+                Uint1 seqid_format = PRINTID_FASTA_SHORT;
                 sip = (SeqIntPtr)(slp->data.ptrvalue);
                 thisid = sip->id;
                 if (use_best_id)
@@ -8417,12 +8419,14 @@ SeqLocPrintProc
                   seq = BioseqFind (thisid);
                   if (seq != NULL)
                   {
-                    thisid = SeqIdFindBest (seq->id, SEQID_GENBANK);
+                      /* JIRA ID-3530 : Find Seq-id containing accession */
+                      thisid = SeqIdFindBestAccession (seq->id);
+                      seqid_format = PRINTID_TEXTID_ACC_VER;
                   }
                 }
                 if (! SeqIdMatch(sip->id, lastid))
                 {
-                    SeqIdWrite(thisid, buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
+                    SeqIdWrite(thisid, buf, seqid_format, sizeof(buf) - 1);
                     BSstring(bsp, buf);
                     BSPutByte(bsp, ':');
                 }
@@ -8452,6 +8456,7 @@ SeqLocPrintProc
                 BSstring(bsp, buf);
 
                 break;
+            }
             case SEQLOC_PNT:    /* pnt */
                 lastid = SeqPointWriteEx((SeqPntPtr)(slp->data.ptrvalue), 
                                            buf, lastid, sizeof(buf) - 1, use_best_id);
@@ -10837,7 +10842,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                     (StringICmp(temp,"KR") == 0) ||
                     (StringICmp(temp,"KT") == 0) ||
                     (StringICmp(temp,"KU") == 0) ||
-                    (StringICmp(temp,"KX") == 0)) {
+                    (StringICmp(temp,"KX") == 0) ||
+                    (StringICmp(temp,"KY") == 0)) {
               retcode = ACCN_NCBI_TSA;
           } else if((StringICmp(temp,"FX") == 0) ||
                     (StringICmp(temp,"LA") == 0) ||
@@ -10944,7 +10950,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"HZ") == 0) || 
                      (StringICmp(temp,"LF") == 0) || 
                      (StringICmp(temp,"LG") == 0) || 
-                     (StringICmp(temp,"LV") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"LV") == 0) || 
+                     (StringICmp(temp,"LX") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
                      (StringICmp(temp,"DH") == 0) || 

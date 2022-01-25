@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.318 2016/08/09 20:24:11 fukanchi Exp $
+/* $Id: blast_engine.c,v 1.320 2016/12/06 20:44:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -78,9 +78,9 @@
 #define CONV_NUCL2PROT_COORDINATES(length) (length) / CODON_LENGTH
 
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 5;
+NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 6;
 NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 0;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "September-09-2016";
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "January-09-2017";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers
     to various preallocated structures and arrays. */

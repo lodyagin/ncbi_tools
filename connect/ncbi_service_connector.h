@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE_CONNECTOR__H
 #define CONNECT___NCBI_SERVICE_CONNECTOR__H
 
-/* $Id: ncbi_service_connector.h,v 6.18 2015/04/15 18:29:19 kazimird Exp $
+/* $Id: ncbi_service_connector.h,v 6.19 2016/12/30 17:29:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,8 +62,8 @@ typedef struct {
     FHTTP_Adjust         adjust;        /* Called when data source is HTTP(S)*/
     FSERVICE_Cleanup     cleanup;       /* Called prior to connector destroy */
     FHTTP_ParseHeader    parse_header;  /* Called when data source is HTTP(S)*/
-    FSERVICE_GetNextInfo get_next_info; /* Called to get connection point    */
-    THTTP_Flags          flags;         /* fHTTP_Flushable|fHTTP_NoAutoRetry */
+    FSERVICE_GetNextInfo get_next_info; /* Called to get connection point(s) */
+    THTTP_Flags          flags;         /* fHTTP_Flushable|NoAutoRy|AdjOnRed */
 } SSERVICE_Extra;
 
 

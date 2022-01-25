@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.238 $
+* $Revision: 6.242 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -56,7 +56,7 @@
 /* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
 #include <asn2gnbi.h>
 
-#define ASN2GB_APP_VER "17.6"
+#define ASN2GB_APP_VER "18.0"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 

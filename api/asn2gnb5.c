@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.282 $
+* $Revision: 1.286 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -206,7 +206,7 @@ typedef struct dbxrefurldata {
 } UrlData, PNTR UrlDataPtr;
 
 static UrlData Nlm_url_base [] = {
-  {"AceView/WormGenes",     "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="},
+  {"AceView/WormGenes",     "https://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="},
   {"AFTOL",                 "http://wasabi.lutzonilab.net/pub/displayTaxonInfo?aftol_id="},
   {"AntWeb",                "http://www.antweb.org/specimen.do?name="},
   {"APHIDBASE",             "http://bipaa.genouest.org/apps/grs-2.3/grs?reportID=aphidbase_transcript_report&objectID="},
@@ -222,23 +222,25 @@ static UrlData Nlm_url_base [] = {
   {"BEETLEBASE",            "http://www.beetlebase.org/cgi-bin/report.cgi?name="},
   {"BEI",                   "https://www.beiresources.org/Catalog/animalViruses/"},
   {"BGD",                   "http://bovinegenome.org/genepages/btau40/genes/"},
-  {"BioProject",            "http://www.ncbi.nlm.nih.gov/bioproject/"},
-  {"BioSample",             "http://www.ncbi.nlm.nih.gov/biosample/"},
+  {"BioProject",            "https://www.ncbi.nlm.nih.gov/bioproject/"},
+  {"BioSample",             "https://www.ncbi.nlm.nih.gov/biosample/"},
   {"BOLD",                  "http://www.boldsystems.org/connectivity/specimenlookup.php?processid="},
-  {"CCDS",                  "http://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="},
-  {"CDD",                   "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="},
+  {"CCDS",                  "https://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="},
+  {"CDD",                   "https://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="},
   {"CGD",                   "http://www.candidagenome.org/cgi-bin/locus.pl?locus="},
   {"CGNC",                  "http://birdgenenames.org/cgnc/GeneReport?id="},
   {"CK",                    "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="},
-  {"COG",                   "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="},
+  {"COG",                   "https://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="},
   {"CollecTF",              "http://collectf.umbc.edu/"},
-  {"dbClone",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clone&cmd=Retrieve&list_uids="},
-  {"dbCloneLib",            "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clonelib&cmd=Retrieve&list_uids="},
-  {"dbEST",                 "http://www.ncbi.nlm.nih.gov/nucest/"},
-  {"dbProbe",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=probe&cmd=Retrieve&list_uids="},
-  {"dbSNP",                 "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="},
+  {"dbClone",               "https://www.ncbi.nlm.nih.gov/sites/entrez?db=clone&cmd=Retrieve&list_uids="},
+  {"dbCloneLib",            "https://www.ncbi.nlm.nih.gov/sites/entrez?db=clonelib&cmd=Retrieve&list_uids="},
+  {"dbEST",                 "https://www.ncbi.nlm.nih.gov/nucest/"},
+  {"dbProbe",               "https://www.ncbi.nlm.nih.gov/sites/entrez?db=probe&cmd=Retrieve&list_uids="},
+  {"dbSNP",                 "https://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="},
   {"dbSTS",                 "https://www.ncbi.nlm.nih.gov/nuccore/"},
   {"dictyBase",             "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="},
+  {"DSM",                   "https://www.dsmz.de/catalogues/details/culture/DSM-"},
+  {"DSMZ",                  "https://www.dsmz.de/catalogues/details/culture/PV-"},
   {"ECOCYC",                "http://biocyc.org/ECOLI/new-image?type=GENE&object="},
   {"EcoGene",               "http://www.ecogene.org/gene/"},
   {"ENSEMBL",               "http://www.ensembl.org/id/"},
@@ -252,7 +254,7 @@ static UrlData Nlm_url_base [] = {
   {"GABI",                  "http://www.gabipd.org/database/cgi-bin/GreenCards.pl.cgi?Mode=ShowSequence&App=ncbi&SequenceId="},
   {"GenBank",               "https://www.ncbi.nlm.nih.gov/nuccore/"},
   {"GeneDB",                "http://old.genedb.org/genedb/Search?organism=All%3A*&name="},
-  {"GeneID",                "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
+  {"GeneID",                "https://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
   {"GO",                    "http://amigo.geneontology.org/amigo/term/GO:"},
   {"GOA",                   "http://www.ebi.ac.uk/ego/GProtein?ac="},
   {"Greengenes",            "http://greengenes.lbl.gov/cgi-bin/show_one_record_v2.pl?prokMSA_id="},
@@ -269,7 +271,7 @@ static UrlData Nlm_url_base [] = {
   {"IMGT/GENE-DB",          "http://www.imgt.org/IMGT_GENE-DB/GENElect?species=Homo+sapiens&query=2+"},
   {"IMGT/HLA",              "http://www.ebi.ac.uk/cgi-bin/ipd/imgt/hla/get_allele.cgi?"},
   {"IMGT/LIGM",             "http://www.imgt.org/cgi-bin/IMGTlect.jv?query=201+"},
-  {"InterimID",             "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
+  {"InterimID",             "https://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
   {"InterPro",              "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="},
   {"IntrepidBio",           "http://server1.intrepidbio.com/FeatureBrowser/gene/browse/"},
   {"IRD",                   "http://www.fludb.org/brc/fluSegmentDetails.do?irdSubmissionId="},
@@ -278,11 +280,11 @@ static UrlData Nlm_url_base [] = {
   {"ISHAM-ITS",             "http://its.mycologylab.org/BioloMICS.aspx?Table=Sequences&ExactMatch=T&Name=MITS"},
   {"JCM",                   "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="},
   {"JGIDB",                 "http://genome.jgi-psf.org/cgi-bin/jgrs?id="},
-  {"LocusID",               "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
+  {"LocusID",               "https://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
   {"MaizeGDB",              "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?"},
-  {"MedGen",                "http://www.ncbi.nlm.nih.gov/medgen/"},
+  {"MedGen",                "https://www.ncbi.nlm.nih.gov/medgen/"},
   {"MGI",                   "http://www.informatics.jax.org/marker/MGI:"},
-  {"MIM",                   "http://www.ncbi.nlm.nih.gov/omim/"},
+  {"MIM",                   "https://www.ncbi.nlm.nih.gov/omim/"},
   {"miRBase",               "http://www.mirbase.org/cgi-bin/mirna_entry.pl?acc="},
   {"MycoBank",              "http://www.mycobank.org/MycoTaxo.aspx?Link=T&Rec="},
   {"NASONIABASE",           "http://hymenopteragenome.org/cgi-bin/gbrowse/nasonia10_scaffold/?name="},
@@ -320,10 +322,10 @@ static UrlData Nlm_url_base [] = {
   {"taxon",                 "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"},
   {"TIGRFAM",               "http://www.jcvi.org/cgi-bin/tigrfams/HmmReportPage.cgi?acc="},
   {"TubercuList",           "http://tuberculist.epfl.ch/quicksearch.php?gene+name="},
-  {"UniGene",               "http://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="},
+  {"UniGene",               "https://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="},
   {"UniProtKB/Swiss-Prot",  "http://www.uniprot.org/uniprot/"},
   {"UniProtKB/TrEMBL",      "http://www.uniprot.org/uniprot/"},
-  {"UniSTS",                "http://www.ncbi.nlm.nih.gov/probe?term="},
+  {"UniSTS",                "https://www.ncbi.nlm.nih.gov/probe?term="},
   {"UNITE",                 "http://unite.ut.ee/bl_forw.php?nimi="},
   {"VBASE2",                "http://www.dnaplot.de/vbase2/vgene.php?id="},
   {"VBRC",                  "http://vbrc.org/query.asp?web_view=curation&web_id="},
@@ -368,6 +370,9 @@ static Int2 DbNameIsValid (
   return -1;
 }
 
+static const Char* kNCBIUrl = "http://www.ncbi.nlm.nih.gov/";
+static const Char* kNCBISUrl = "https://www.ncbi.nlm.nih.gov/";
+
 static void FF_www_get_url (
   StringItemPtr ffstring,
   CharPtr db,
@@ -376,11 +381,11 @@ static void FF_www_get_url (
 )
 
 {
-  CharPtr  base = NULL, prefix = NULL, profix = NULL, ident = NULL,
+  CharPtr  base = NULL, prefix = NULL, ident = NULL,
            suffix = NULL, url = NULL, redundant = NULL, ptr, str;
-  Char     ch, buf [128], id [20], taxname [128];
+  Char     ch, buf [128], id [20], taxname [128], zeroes [16];
   Boolean  is_numeric;
-  Int2     num_alpha, num_digit, num_unscr, R;
+  Int2     len, num_alpha, num_digit, num_unscr, R;
 
   if (ffstring == NULL || StringHasNoText (db) || StringHasNoText (identifier)) return;
 
@@ -398,19 +403,17 @@ static void FF_www_get_url (
   url = Nlm_url_base [R].url;
 
   /* NCBI URL can be overridden by configuration file */
-
-  if (StringNICmp (url, "http://www.ncbi.nlm.nih.gov/", 28) == 0) {
-    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
-      if (StringDoesHaveText (buf)) {
+   
+  if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
+    if (StringDoesHaveText (buf)) {
+      Uint1 len = 0;
+      if (StringNICmp (url, kNCBIUrl, strlen(kNCBIUrl)) == 0)
+        len = strlen(kNCBIUrl);
+      else if (StringNICmp (url, kNCBISUrl, strlen(kNCBISUrl)) == 0) 
+        len = strlen(kNCBISUrl);
+      if (len > 0) {
+        url += len;
         base = buf;
-        url += 28;
-      }
-    }
-  } else if (StringNICmp (url, "https://www.ncbi.nlm.nih.gov/", 29) == 0) {
-    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
-      if (StringDoesHaveText (buf)) {
-        base = buf;
-        url += 29;
       }
     }
   }
@@ -540,7 +543,7 @@ static void FF_www_get_url (
 
   } else if (StringCmp (db, "IMGT/HLA") == 0) {
 
-    if (StringNICmp (identifier, "HLA", 3) != NULL ) {
+    if (StringNICmp (identifier, "HLA", 3) != 0 ) {
       url = "http://www.ebi.ac.uk/Tools/dbfetch/dbfetch?db=imgthla;id=";
     }
 
@@ -644,6 +647,14 @@ static void FF_www_get_url (
       ident += 4;
     }
 
+  } else if (StringCmp (db, "NBRC") == 0) {
+
+    len = StringLen (identifier);
+    if (len < 8) {
+      StringCpy (zeroes, "00000000");
+      prefix = zeroes + len;
+    }
+
   }
 
   /* now generate URL */
@@ -655,9 +666,6 @@ static void FF_www_get_url (
   FFAddOneString (ffstring, url, FALSE, FALSE, TILDE_IGNORE);
   if (StringDoesHaveText (prefix)) {
     FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-  }
-  if (StringDoesHaveText (profix)) {
-    FFAddOneString (ffstring, profix, FALSE, FALSE, TILDE_IGNORE);
   }
   if (StringDoesHaveText (ident)) {
     FFAddOneString (ffstring, ident, FALSE, FALSE, TILDE_IGNORE);
@@ -721,18 +729,16 @@ NLM_EXTERN void FF_Add_NCBI_Base_URL (
 
   /* NCBI URL can be overridden by configuration file */
 
-  if (StringNICmp (url, "http://www.ncbi.nlm.nih.gov/", 28) == 0) {
-    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
-      if (StringDoesHaveText (buf)) {
+  if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
+    if (StringDoesHaveText (buf)) {
+      Uint1 len = 0;
+      if (StringNICmp (url, kNCBIUrl, strlen(kNCBIUrl)) == 0)
+        len = strlen(kNCBIUrl);
+      else if (StringNICmp (url, kNCBISUrl, strlen(kNCBISUrl)) == 0)
+        len = strlen(kNCBISUrl);
+      if (len > 0) {
+        url += len;
         base = buf;
-        url += 28;
-      }
-    }
-  } else if (StringNICmp (url, "https://www.ncbi.nlm.nih.gov/", 29) == 0) {
-    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
-      if (StringDoesHaveText (buf)) {
-        base = buf;
-        url += 29;
       }
     }
   }

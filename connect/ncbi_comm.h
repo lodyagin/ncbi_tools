@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_COMM__H
 #define CONNECT___NCBI_COMM__H
 
-/* $Id: ncbi_comm.h,v 6.22 2014/05/30 18:49:35 kazimird Exp $
+/* $Id: ncbi_comm.h,v 6.25 2016/10/04 18:54:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,22 +34,28 @@
  *
  */
 
-#define NCBID_WEBPATH          "/Service/ncbid.cgi"
-#define NCBI_DISP_VERSION      "1.2"
-#define HTTP_CONNECTION_INFO   "Connection-Info:"
-#define HTTP_DISP_FAILURES     "Dispatcher-Failures:"
-#define HTTP_DISP_MESSAGES     "Dispatcher-Messages:"
-#define HTTP_NCBI_MESSAGE      "NCBI-Message:"
-#define HTTP_NCBI_SID          "NCBI-SID:"
-#define HTTP_NCBI_PHID         "NCBI-PHID:"
-#define LBSM_DEFAULT_TIME      30     /* Default expiration time, in seconds */
-#define LBSM_DEFAULT_RATE      1000.0 /* For SLBSM_Service::info::rate       */
-#define LBSM_STANDBY_THRESHOLD 0.01
-#define DISPATCHER_CFGPATH     "/etc/lbsmd/"
-#define DISPATCHER_CFGFILE     "servrc.cfg"
-#define DISPATCHER_MSGFILE     ".dispd.msg"
-#define CONN_FWD_PORT_MIN      5860
-#define CONN_FWD_PORT_MAX      5870
+#define NCBID_WEBPATH           "/Service/ncbid.cgi"
+#define NCBI_DISP_VERSION       "1.2"
+#define HTTP_CONNECTION_INFO    "Connection-Info:"
+#define HTTP_DISP_FAILURES      "Dispatcher-Failures:"
+#define HTTP_DISP_MESSAGES      "Dispatcher-Messages:"
+#define HTTP_NCBI_MESSAGE       "NCBI-Message:"
+#define HTTP_NCBI_SID           "NCBI-SID:"
+#define HTTP_NCBI_PHID          "NCBI-PHID:"
+#define LBSM_DEFAULT_TIME       30      /* Default expiration time, seconds */
+#define LBSM_DEFAULT_RATE       1000.0  /* For SLBSM_Service::info::rate    */
+#define LBSM_STANDBY_THRESHOLD  0.01
+#define DISPATCHER_CFGPATH      "/etc/lbsmd/"
+#define DISPATCHER_CFGFILE      "servrc.cfg"
+#define DISPATCHER_MSGFILE      ".dispd.msg"
+#define CONN_FWD_PORT_MIN       5860
+#define CONN_FWD_PORT_MAX       5870
+#define CONN_FWD_BASE                                   \
+    "https://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK"
+#define CONN_FWD_LINK           CONN_FWD_BASE "/dispatcher.html#Firewalling"
+#define CONN_FWD_URL            CONN_FWD_BASE "/firewall.html#Settings"
+#define NCBI_EXTERNAL           "NCBI-External"
+
 
 #ifdef __cplusplus
 extern "C" {

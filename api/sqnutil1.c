@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.906 $
+* $Revision: 6.913 $
 *
 * File Description: 
 *
@@ -10891,14 +10891,14 @@ static void CleanupFeatureStrings (
       vnp = prp->db;
       prp->db = NULL;
       ValNodeLink ((&sfp->dbxref), vnp);
-      if (prp->processed != 3 && prp->processed != 4 &&
+      if (prp->processed != 3 && prp->processed != 4 && prp->processed != 5 &&
           prp->name == NULL && sfp->comment != NULL) {
         if (StringICmp (sfp->comment, "putative") != 0) {
           ValNodeAddStr (&(prp->name), 0, sfp->comment);
           sfp->comment = NULL;
         }
       }
-      if (prp->processed == 3 || prp->processed == 4) {
+      if (prp->processed == 3 || prp->processed == 4 || prp->processed == 5) {
         if (prp->name != NULL) {
           str = (CharPtr) prp->name->data.ptrvalue;
           if ((StringStr (str, "putative") != NULL ||
@@ -10911,7 +10911,7 @@ static void CleanupFeatureStrings (
           }
         }
       }
-      if ((prp->processed == 1 || prp->processed == 2 || prp->processed == 5) && prp->name == NULL) {
+      if ((prp->processed == 1 || prp->processed == 2) && prp->name == NULL) {
         ValNodeCopyStr (&(prp->name), 0, "unnamed");
       }
       for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
@@ -11936,6 +11936,124 @@ static void CheckForJournalScanID (SeqEntryPtr sep, Pointer mydata, Int4 index, 
   }
 }
 
+NLM_EXTERN Boolean FixWrongFuzzOnPlusStrand (SeqLocPtr location)
+
+{
+  SeqLocPtr   firstSlp;
+  IntFuzzPtr  ifp;
+  SeqLocPtr   lastSlp;
+  Boolean     res = FALSE;
+  SeqIntPtr   sip;
+  SeqLocPtr   slp;
+  SeqPntPtr   spp;
+
+  if (location == NULL) return FALSE;
+
+  firstSlp = NULL;
+  lastSlp = NULL;
+  slp = SeqLocFindNext (location, NULL);
+  while (slp != NULL) {
+    if (firstSlp == NULL) {
+      firstSlp = slp;
+    }
+    lastSlp = slp;
+    slp = SeqLocFindNext (location, slp);
+  }
+
+  if (firstSlp != NULL && firstSlp->choice == SEQLOC_INT && firstSlp->data.ptrvalue != NULL) {
+    sip = (SeqIntPtr) firstSlp->data.ptrvalue;
+    if (sip != NULL && (sip->strand == Seq_strand_plus || sip->strand == Seq_strand_unknown)) {
+      if (sip->if_to != NULL && sip->if_from == NULL) {
+        sip->if_from = IntFuzzFree (sip->if_from);
+        ifp = IntFuzzNew ();
+        if (ifp != NULL) {
+          ifp->choice = 4;
+          sip->if_from = ifp;
+          ifp->a = 2;
+          res = TRUE;
+        }
+      }
+    }
+  }
+
+  if (lastSlp != NULL && lastSlp->choice == SEQLOC_INT && lastSlp->data.ptrvalue != NULL) {
+    sip = (SeqIntPtr) lastSlp->data.ptrvalue;
+    if (sip != NULL && (sip->strand == Seq_strand_plus || sip->strand == Seq_strand_unknown)) {
+      if (sip->if_to == NULL && sip->if_from != NULL) {
+        sip->if_to = IntFuzzFree (sip->if_to);
+        ifp = IntFuzzNew ();
+        if (ifp != NULL) {
+          ifp->choice = 4;
+          sip->if_to = ifp;
+          ifp->a = 1;
+          res = TRUE;
+        }
+      }
+    }
+  }
+
+  return res;
+}
+
+NLM_EXTERN Boolean FixWrongFuzzOnMinusStrand (SeqLocPtr location)
+
+{
+  SeqLocPtr   firstSlp;
+  IntFuzzPtr  ifp;
+  SeqLocPtr   lastSlp;
+  Boolean     res = FALSE;
+  SeqIntPtr   sip;
+  SeqLocPtr   slp;
+  SeqPntPtr   spp;
+
+  if (location == NULL) return FALSE;
+
+  firstSlp = NULL;
+  lastSlp = NULL;
+  slp = SeqLocFindNext (location, NULL);
+  while (slp != NULL) {
+    if (firstSlp == NULL) {
+      firstSlp = slp;
+    }
+    lastSlp = slp;
+    slp = SeqLocFindNext (location, slp);
+  }
+
+  if (firstSlp != NULL && firstSlp->choice == SEQLOC_INT && firstSlp->data.ptrvalue != NULL) {
+    sip = (SeqIntPtr) firstSlp->data.ptrvalue;
+    if (sip != NULL && (sip->strand == Seq_strand_minus || sip->strand == Seq_strand_both_rev)) {
+      if (sip->if_to == NULL && sip->if_from != NULL) {
+        sip->if_from = IntFuzzFree (sip->if_from);
+        ifp = IntFuzzNew ();
+        if (ifp != NULL) {
+          ifp->choice = 4;
+          sip->if_to = ifp;
+          ifp->a = 1;
+          res = TRUE;
+        }
+      }
+    }
+  }
+
+  if (lastSlp != NULL && lastSlp->choice == SEQLOC_INT && lastSlp->data.ptrvalue != NULL) {
+    sip = (SeqIntPtr) lastSlp->data.ptrvalue;
+    if (sip != NULL && (sip->strand == Seq_strand_minus || sip->strand == Seq_strand_both_rev)) {
+      if (sip->if_to != NULL && sip->if_from == NULL) {
+        sip->if_to = IntFuzzFree (sip->if_to);
+        ifp = IntFuzzNew ();
+        if (ifp != NULL) {
+          ifp->choice = 4;
+          sip->if_from = ifp;
+          ifp->a = 2;
+          res = TRUE;
+        }
+      }
+    }
+  }
+
+  return res;
+}
+
 NLM_EXTERN void CleanUpSeqLoc (SeqLocPtr slp)
 
 {
@@ -12071,6 +12189,11 @@ NLM_EXTERN void CleanUpSeqLoc (SeqLocPtr slp)
   }
 
   NormalizeNullsBetween (slp);
+
+  /*
+  FixWrongFuzzOnPlusStrand (slp);
+  FixWrongFuzzOnMinusStrand (slp);
+  */
 }
 
 typedef struct cbloc {
@@ -12260,6 +12383,30 @@ extern Boolean IsStringInRegulatoryClassList (CharPtr str)
 
   if (StringHasNoText (str)) return FALSE;
   for (p = regulatoryClassList; *p != NULL; p++)
+  {
+    if (StringICmp (str, *p) == 0)
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+CharPtr recombinationClassList[] = {
+"chromosome_breakpoint",
+"meiotic_recombination",
+"mitotic_recombination",
+"non_allelic_homologous_recombination",
+"other",
+NULL};
+
+extern Boolean IsStringInRecombinationClassList (CharPtr str)
+
+{
+  CharPtr PNTR p;
+
+  if (StringHasNoText (str)) return FALSE;
+  for (p = recombinationClassList; *p != NULL; p++)
   {
     if (StringICmp (str, *p) == 0)
     {
@@ -15982,10 +16129,10 @@ NLM_EXTERN Uint1 FindFeatFromFeatDefType (Uint2 subtype)
       if (subtype >= FEATDEF_gap && subtype <= FEATDEF_oriT) {
         return SEQFEAT_IMP;
       }
-      if (subtype >= FEATDEF_mobile_element && subtype <= FEATDEF_regulatory) {
+      if (subtype >= FEATDEF_mobile_element && subtype <= FEATDEF_propeptide) {
         return SEQFEAT_IMP;
       }
-      if (subtype == FEATDEF_propeptide) {
+      if (subtype == FEATDEF_propeptide_aa) {
         return SEQFEAT_PROT;
       }
   }

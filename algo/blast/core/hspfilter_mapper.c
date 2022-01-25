@@ -1,4 +1,4 @@
-/*  $Id: hspfilter_mapper.c,v 1.4 2016/07/01 15:49:12 fukanchi Exp $
+/*  $Id: hspfilter_mapper.c,v 1.9 2017/01/05 18:34:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -775,27 +775,64 @@ static Int4 s_TrimHSP(BlastHSP* hsp, Int4 num, Boolean is_query,
 
     /* update the Jumper edit script */
     if (is_start) {
-        Int4 pos = hsp->query.offset + delta_query;
-        i = 0;
-        while (i < hsp->map_info->edits->num_edits &&
-               hsp->map_info->edits->edits[i].query_pos < pos) {
-            i++;
-        }
-        if (i > 0) {
-            for (k = 0;k < hsp->map_info->edits->num_edits - i;k++) {
-                hsp->map_info->edits->edits[k] =
-                    hsp->map_info->edits->edits[k + i];
+        Int4 k = hsp->map_info->edits->num_edits - 1;
+        Int4 p = hsp->query.end - 1;
+        const Uint1 kGap = 15;
+        for (i = hsp->gap_info->size - 1;i >= 0;i--) {
+            if (hsp->gap_info->op_type[i] != eGapAlignDel) {
+
+                p -= hsp->gap_info->num[i];
+                while (k >= 0 &&
+                       hsp->map_info->edits->edits[k].query_pos > p &&
+                       hsp->map_info->edits->edits[k].query_base != kGap) {
+
+                    k--;
+                }
             }
-            hsp->map_info->edits->num_edits -= i;
+            else {
+                Int4 j;
+                for (j = 0;j < hsp->gap_info->num[i];j++) {
+                    ASSERT(k >= 0);
+                    ASSERT(hsp->map_info->edits->edits[k].query_base == kGap);
+                    k--;
+                }
+            }
+        }
+        k++;
+        if (k > 0) {
+            for (i = 0;i < hsp->map_info->edits->num_edits - k;i++) {
+                hsp->map_info->edits->edits[i] =
+                    hsp->map_info->edits->edits[i + k];
+            }
+            hsp->map_info->edits->num_edits -= k;
+            ASSERT(hsp->map_info->edits->num_edits >= 0);
         }
     }
     else {
-        Int4 pos = hsp->query.end - delta_query - 1;
-        i = hsp->map_info->edits->num_edits - 1;
-        while (i >= 0 && hsp->map_info->edits->edits[i].query_pos > pos) {
-            i--;
+        Int4 k = 0;
+        Int4 p = hsp->query.offset;
+        const Uint1 kGap = 15;
+
+        for (i = 0;i < hsp->gap_info->size;i++) {
+            if (hsp->gap_info->op_type[i] != eGapAlignDel) {
+
+                p += hsp->gap_info->num[i];
+                while (k < hsp->map_info->edits->num_edits &&
+                       hsp->map_info->edits->edits[k].query_pos < p &&
+                       hsp->map_info->edits->edits[k].query_base != kGap) {
+
+                    k++;
+                }
+            }
+            else {
+                Int4 j;
+                for (j = 0;j < hsp->gap_info->num[i];j++) {
+                    ASSERT(hsp->map_info->edits->edits[k].query_base == kGap);
+                    k++;
+                }
+            }
         }
-        hsp->map_info->edits->num_edits = i + 1;
+        hsp->map_info->edits->num_edits = k;
     }
 
     /* update HSP start positions */
@@ -1560,7 +1597,9 @@ static int s_FindRearrangedPairs(HSPChain** saved,
         }
 
         /* skip queries that do not have pairs */
-        if (!query_info->contexts[query_idx * NUM_STRANDS].has_pair) {
+        if (query_info->contexts[query_idx * NUM_STRANDS].segment_flags !=
+            eFirstSegment) {
+
             continue;
         }
 
@@ -2219,7 +2258,7 @@ static HSPPath* HSPPathNew(void)
 }
 
 
-#define NUM_SIGNALS 14
+#define NUM_SIGNALS 23
 
 /* Find a split for HSPs overlapping on the query by finding splice signals in
    the subject sequence. The first HSP must have smaller query offset than the
@@ -2235,23 +2274,32 @@ s_FindSpliceJunctionsForOverlaps(BlastHSP* first, BlastHSP* second,
                                  Uint1* query, Int4 query_len)
 {
     Int4 i, k;
-    /* splice signal pairs from PMC3167048 and spline output */
+    /* splice signal pairs from include/algo/sequence/consensus_splice.hpp */
     Uint1 signals[NUM_SIGNALS] = {0xb2, /* GTAG */
                                   0x71, /* CTAC (reverse complement) */
-                                  0x72, /* CTAG */
                                   0x92, /* GCAG */
-                                  0x9e, /* GCTG */
-                                  0x90, /* GCAA */
-                                  0x9a, /* GCGG */
-                                  0xbe, /* GTTG */
-                                  0xb0, /* GTAA */
+                                  0x79, /* CTGC */
                                   0x31, /* ATAC */
-                                  0x30, /* ATAA */
+                                  0xb3, /* GTAT */
+                                  0xbe, /* GTTG */
+                                  0x41, /* CAAC */
+                                  0xba, /* GTGG */
+                                  0x51, /* CCAC */
+                                  0xb0, /* GTAA */
+                                  0xf1, /* TTAC */
+                                  0x82, /* GAAG */
+                                  0x7d, /* CTTC */
+                                  0xf2, /* TTAG */
+                                  0x70, /* CTAA */
                                   0x32, /* ATAG */
-                                  0x33, /* ATAT */
-                                  
-                                  /*0x45, */ /* CACC */
-                                  0x1f  /* ACTT */};
+                                  0x73, /* CTAT */
+                                  0xa2, /* GGAG */
+                                  0x75, /* CTCC */
+                                  0x33, /* ATAT (revese complemented is self) */
+                                  0x30, /* ATAA */
+                                  0xf3  /* TTAT */};
+
+
     Boolean found = FALSE;
     Uint1* subject = NULL;
     Int4 overlap_len;
@@ -2306,13 +2354,32 @@ s_FindSpliceJunctionsForOverlaps(BlastHSP* first, BlastHSP* second,
                 Int4 num_edits = first->map_info->edits->num_edits;
                 Int4 trim_by;
                 
-                if (edits[num_edits - 1].query_pos == query_len - 1) {
-                    edge >>= 2;
-                    edge |= edits[num_edits - 1].subject_base << 2;
+                if (edits[num_edits - 1].query_pos >= first->query.end - 1) {
+                    if (edits[num_edits - 1].subject_base != kGap) {
+                        edge >>= 2;
+                        edge |= edits[num_edits - 1].subject_base << 2;
+                    }
+                }
+                else if (edits[num_edits - 1].query_pos == query_len - 2 &&
+                         edits[num_edits - 1].subject_base == kGap) {
+
+                    edge = (edge << 2) | query[query_len - 1];
                 }
                 else {
-                    edge = (edits[num_edits - 1].subject_base << 2) |
-                        query[edits[num_edits - 1].query_pos + 1];
+                    if (edits[num_edits - 1].subject_base != kGap &&
+                        edits[num_edits - 1].query_base != kGap) {
+
+                        edge = (edits[num_edits - 1].subject_base << 2) |
+                            query[edits[num_edits - 1].query_pos + 1];
+                    }
+                    else if (edits[num_edits - 1].subject_base == kGap) {
+                        edge = (query[edits[num_edits - 1].query_pos + 1] << 2 ) |
+                            query[edits[num_edits - 1].query_pos + 2];
+                    }
+                    else {
+                        edge = (edits[num_edits - 1].subject_base << 2) |
+                            query[edits[num_edits - 1].query_pos];
+                    }
                 }
 
                 trim_by = first->query.end -  edits[
@@ -2340,12 +2407,25 @@ s_FindSpliceJunctionsForOverlaps(BlastHSP* first, BlastHSP* second,
                 Int4 trim_by;
 
                 if (edits[0].query_pos == 0) {
-                    edge <<= 2;
-                    edge |= edits[0].subject_base;
+                    if (edits[0].subject_base != kGap) {
+                        edge <<= 2;
+                        edge |= edits[0].subject_base;
+                    }
+                }
+                else if (edits[0].query_pos == 1 &&
+                         edits[0].subject_base == kGap) {
+
+                    edge = (edge << 2) | query[0];
                 }
                 else {
+
                     edge = (query[edits[0].query_pos - 1] << 2) |
                         edits[0].subject_base;
+
+                    if (edits[0].subject_base == kGap) {
+                        edge = (query[edits[0].query_pos - 2] << 2) |
+                            query[edits[0].query_pos - 1];
+                    }
                 }
 
                 trim_by = edits[0].query_pos - second->query.offset + 1;
@@ -2699,6 +2779,14 @@ s_FindSpliceJunctionsForGap(BlastHSP* first, BlastHSP* second,
     Int4 q;
     Uint1 signal = 0;
     /* use only cannonical splice signals here */
+    /* The procedure does not maximize score for unaligned bases of the query.
+       It only finds splice signals and then the best alignment it can find
+       for the unaligned bases. For limited number of unaligned query bases,
+       we can be sure of the splice site vs a continuous alignment, because a
+       continuous alignment would score better. But we do not compare
+       alignment scores between different splice sites, so we do not know
+       which splice site and signal is better; and many splice signals here
+       would lead to finding wrong splice sites. */
     Uint1 signals[NUM_SIGNALS_CONSENSUS] = {0xb2, /* GTAG */
                                             0x71  /* CTAC */};
 
@@ -3778,9 +3866,6 @@ static Boolean s_FindBestPairs(HSPChain** first_list,
             pair_info[num_pairs].trim_second = 0;
             pair_info[num_pairs].valid_pair = 0;
 
-            /* this is assumed if not other configuration is found */
-            pair_info[num_pairs].conf = PAIR_PARALLEL;
-
             /* if the chains align on the opposite strands */
             ASSERT(first_frame != 0 && second_frame != 0);
             if (SIGN(first_frame) != SIGN(second_frame)) {
@@ -3896,6 +3981,12 @@ static Boolean s_FindBestPairs(HSPChain** first_list,
                     continue;
                 }
 
+                num_pairs++;
+            }
+            else {
+                /* for read pairs aligned in the same direction */
+                pair_info[num_pairs].conf = PAIR_PARALLEL;
+                pair_info[num_pairs].score -= 1;
                 num_pairs++;
             }
         }
@@ -4114,7 +4205,9 @@ s_BlastHSPMapperSplicedPairedRun(void* data, BlastHSPList* hsp_list)
     while (i < hsp_list->hspcnt) {
 
         Int4 context = hsp_array[i]->context;
-        Boolean has_pair = query_info->contexts[context].has_pair;
+        /* is this query the first segment of a pair */
+        Boolean has_pair = (query_info->contexts[context].segment_flags ==
+                            eFirstSegment);
         Int4 query_idx  = context / NUM_STRANDS;
         Int4 first_context = query_idx * NUM_STRANDS;
         Int4 context_next_fragment = has_pair ? (query_idx + 2) * NUM_STRANDS :

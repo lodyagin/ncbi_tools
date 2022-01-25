@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.245 $
+* $Revision: 6.246 $
 *
 * File Description: 
 *
@@ -11964,6 +11964,32 @@ static Boolean ParseSatelliteOk (CharPtr txt)
   }
 }
 
+CharPtr recombination_class_keywords[] = 
+{ " ",
+  "meiotic_recombination",
+  "mitotic_recombination",
+  "non_allelic_homologous_recombination",
+  "chromosome_breakpoint",
+  "other",
+  NULL};
+
+
+static DialoG CreateRecombClassDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                       TaglistCallback tlp_callback,
+                                       Pointer callback_data)
+{
+  return CreateControlPlusFreeDialog (h, sep, name, tlp_callback, callback_data, recombination_class_keywords);
+}
+
+static Boolean ParseRecombClassOk (CharPtr txt)
+{
+
+  if (GetControlNum (txt, recombination_class_keywords, NULL) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
 
 typedef struct truefalsedlg {
   DIALOG_MESSAGE_BLOCK
@@ -12472,36 +12498,38 @@ typedef struct gbqualeditlist {
 } GBQualEditListData, PNTR GBQualEditListPtr;
 
 GBQualEditListData gbqual_edit_list[] = {
-  {"chloroplast",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"chromoplast",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"codon_start",           CodonStartQualDialog,        ParseCodonStartOk,       NULL },
-  {"collection_date",       CollectionDateDialog,        ParseCollectionDateOk,   NULL },
-  {"cyanelle",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"direction",             DirectionQualDialog,         ParseDirectionOk,        NULL },
-  {"germline",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"kinetoplast",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"macronuclear",          TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"mitochondrion",         TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"mobile_element",        CreateMobileElementDialog,   ParseMobileElementOk,    CopyTextToControlPlusFreeDialog },
-  {"mobile_element_type",   CreateMobileElementDialog,   ParseMobileElementOk,    CopyTextToControlPlusFreeDialog },
-  {"mol_type",              MolTypeQualDialog,           ParseMolTypeOk,          NULL },
-  {"organelle",             OrganelleQualDialog,         ParseOrganelleOk,        NULL },
-  {"partial",               TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"proviral",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"pseudo",                TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"rearranged",            TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"rpt_type",              RptTypeQualDialog,           ParseRptTypeOk,          NULL },
-  {"rpt_unit_range",        CreateRptUnitRangeDialog,    ParseRptUnitRangeOk,     NULL } ,
-  {"satellite",             CreateSatelliteDialog,       ParseSatelliteOk,        CopyTextToControlPlusFreeDialog },
-  {"virion",                TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"focus",                 TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"transgenic",            TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"environmental_sample",  TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"ribosomal_slippage",    TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"trans_splicing",        TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"metagenomic",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
-  {"regulatory_class",      CreateRegulatoryClassDialog, ParseRegulatoryClassOk,  CopyTextToControlPlusFreeDialog },
-  {"regulatory_class_type", CreateRegulatoryClassDialog, ParseRegulatoryClassOk,  CopyTextToControlPlusFreeDialog },
+  {"chloroplast",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"chromoplast",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"codon_start",              CodonStartQualDialog,        ParseCodonStartOk,       NULL },
+  {"collection_date",          CollectionDateDialog,        ParseCollectionDateOk,   NULL },
+  {"cyanelle",                 TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"direction",                DirectionQualDialog,         ParseDirectionOk,        NULL },
+  {"germline",                 TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"kinetoplast",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"macronuclear",             TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"mitochondrion",            TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"mobile_element",           CreateMobileElementDialog,   ParseMobileElementOk,    CopyTextToControlPlusFreeDialog },
+  {"mobile_element_type",      CreateMobileElementDialog,   ParseMobileElementOk,    CopyTextToControlPlusFreeDialog },
+  {"mol_type",                 MolTypeQualDialog,           ParseMolTypeOk,          NULL },
+  {"organelle",                OrganelleQualDialog,         ParseOrganelleOk,        NULL },
+  {"partial",                  TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"proviral",                 TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"pseudo",                   TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"rearranged",               TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"rpt_type",                 RptTypeQualDialog,           ParseRptTypeOk,          NULL },
+  {"rpt_unit_range",           CreateRptUnitRangeDialog,    ParseRptUnitRangeOk,     NULL } ,
+  {"satellite",                CreateSatelliteDialog,       ParseSatelliteOk,        CopyTextToControlPlusFreeDialog },
+  {"virion",                   TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"focus",                    TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"transgenic",               TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"environmental_sample",     TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"ribosomal_slippage",       TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"trans_splicing",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"metagenomic",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"regulatory_class",         CreateRegulatoryClassDialog, ParseRegulatoryClassOk,  CopyTextToControlPlusFreeDialog },
+  {"regulatory_class_type",    CreateRegulatoryClassDialog, ParseRegulatoryClassOk,  CopyTextToControlPlusFreeDialog },
+  {"recombination_class",      CreateRecombClassDialog,     ParseRecombClassOk,      CopyTextToControlPlusFreeDialog },
+  {"recombination_class_type", CreateRecombClassDialog,     ParseRecombClassOk,      CopyTextToControlPlusFreeDialog },
   {NULL, NULL, NULL}};
 
 

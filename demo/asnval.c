@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.182 $
+* $Revision: 1.185 $
 *
 * File Description:
 *
@@ -66,7 +66,7 @@
 #endif
 #include <connect/ncbi_gnutls.h>
 
-#define ASNVAL_APP_VER "15.1"
+#define ASNVAL_APP_VER "15.4"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 

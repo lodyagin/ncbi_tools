@@ -128,8 +128,9 @@
 #define GBQUAL_metagenome_source    118
 #define GBQUAL_type_material        119
 #define GBQUAL_regulatory_class     120
+#define GBQUAL_recombination_class  121
 
-#define ParFlat_TOTAL_GBQUAL    121
+#define ParFlat_TOTAL_GBQUAL    122
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

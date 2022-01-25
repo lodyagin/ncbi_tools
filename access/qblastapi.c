@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.33 $
+* $Revision: 1.34 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.34  2016/10/25 16:53:07  kans
+* JIRA:SQD-4098 QUERY_OpenUrlQuery sends port 0 instead of 80
+*
 * Revision 1.33  2006/07/13 17:03:51  bollin
 * resolved compiler warnings
 *
@@ -160,7 +163,7 @@ NLM_EXTERN CONN QBlastOpenConnection (
 )
 
 {
- return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/blast/Blast.cgi",
+ return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/blast/Blast.cgi",
                              NULL, "qblastapp", 30, eMIME_T_Application,
                              eMIME_WwwForm, eENCOD_Url, 0);
 }
@@ -828,7 +831,7 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRIDEx(CharPtr RID,
             (long) query_number);
 
     conn = QUERY_OpenUrlQuery ((host_machine == NULL) ? "www.ncbi.nlm.nih.gov" : host_machine, 
-				(host_port <= 0) ? 80 : host_port, 
+				(host_port <= 0) ? 0 : host_port, 
                                	(host_path == NULL) ? "/blast/Blast.cgi" : host_path, 
 				NULL, "BLASTGetSeqAnnotByRIDEx()", 
                                240, eMIME_T_Application, 
@@ -872,7 +875,7 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRIDEx(CharPtr RID, int query_num)
             RID,
             (long) query_num);
     
-    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
+    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, 
                                "/blast/Blast.cgi", NULL, 
                                "BLASTGetQueryBioseqByRIDEx()", 
                                60, eMIME_T_Application, 
@@ -940,7 +943,7 @@ NLM_EXTERN CharPtr BLASTGetBOByRIDEx(CharPtr RID,
     sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1", RID);
 
     conn = QUERY_OpenUrlQuery ((host_machine == NULL) ? "www.ncbi.nlm.nih.gov" : host_machine,
-                                (host_port <= 0) ? 80 : host_port,
+                                (host_port <= 0) ? 0 : host_port,
                                 (host_path == NULL) ? "/blast/Blast.cgi" : host_path,
 				NULL,
                                "BLASTGetBOByRIDEx()", 

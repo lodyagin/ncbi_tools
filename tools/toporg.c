@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.250 2016/07/29 01:49:57 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.251 2016/11/02 23:36:10 kans Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -3300,7 +3300,7 @@ extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 inde
           }
         } else if (sfp->data.choice == SEQFEAT_PROT && sfp->data.value.ptrvalue != NULL) {
           prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-          if (prp->processed != 3 && prp->processed != 4 &&
+          if (prp->processed != 3 && prp->processed != 4 && prp->processed != 5 &&
               prp->name == NULL && sfp->comment != NULL) {
             if (StringICmp (sfp->comment, "putative") != 0) {
               ValNodeAddStr (&(prp->name), 0, sfp->comment);
@@ -3310,7 +3310,7 @@ extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 inde
           if (prp->processed == 2 && prp->name == NULL) {
             ValNodeCopyStr (&(prp->name), 0, "unnamed");
           }
-          if (prp->processed != 3 && prp->processed != 4) {
+          if (prp->processed != 3 && prp->processed != 4 && prp->processed != 5) {
             vnp = prp->name;
             if ((vnp == NULL || EmptyOrNullString ((CharPtr) vnp->data.ptrvalue)) &&
                 EmptyOrNullString (prp->desc) &&

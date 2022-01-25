@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: 
 *
@@ -77,7 +77,7 @@ NLM_EXTERN CONN VecScreenOpenConnection (
 
 {
   /*
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0,
                              "/VecScreen/vecscreenQB.cgi",
                              query, "vecscreenapp",
                              30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,

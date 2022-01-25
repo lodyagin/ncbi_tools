@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.2003 $
+* $Revision: 6.2010 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -5905,7 +5905,7 @@ static void ValidatePopSet (BioseqSetPtr bssp, ValidStructPtr vsp)
     if (bssp1 == NULL) continue;
 
     if (bssp1->_class == BioseqseqSet_class_genbank) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_PKG_InternalGenBankSet,
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
   }
@@ -5967,7 +5967,7 @@ static void ValidateMutSet (BioseqSetPtr bssp, ValidStructPtr vsp)
     if (bssp1 == NULL) continue;
 
     if (bssp1->_class == BioseqseqSet_class_genbank) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
+        ValidErr(vsp, SEV_INFO, ERR_SEQ_PKG_InternalGenBankSet,
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
   }
@@ -6002,7 +6002,7 @@ static void ValidateGenbankSet (BioseqSetPtr bssp, ValidStructPtr vsp)
     if (bssp1 == NULL) continue;
 
     if (bssp1->_class == BioseqseqSet_class_genbank) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
+        ValidErr(vsp, SEV_INFO, ERR_SEQ_PKG_InternalGenBankSet,
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
   }
@@ -6024,7 +6024,7 @@ static void ValidatePhyEcoWgsSet (BioseqSetPtr bssp, ValidStructPtr vsp)
     if (bssp1 == NULL) continue;
 
     if (bssp1->_class == BioseqseqSet_class_genbank) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
+        ValidErr(vsp, SEV_INFO, ERR_SEQ_PKG_InternalGenBankSet,
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
   }
@@ -8747,12 +8747,16 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
                 //LCOV_EXCL_START
                 //by definition this code cannot be reached, because it is examining a segment
                 //that is a Seq-loc, and DeltaLitOnly only returns true if there are no Seq-loc segments
-              str = SeqLocPrint ((SeqLocPtr) (vnp->data.ptrvalue));
-              if (str == NULL) {
-                str = StringSave ("?");
+                // - NOW IT CAN BECAUSE DeltaLitOnly ALLOWS null NULL
+              slp = (SeqLocPtr) (vnp->data.ptrvalue);
+              if (slp != NULL && slp->choice != SEQLOC_NULL) {
+                str = SeqLocPrint ((SeqLocPtr) (vnp->data.ptrvalue));
+                if (str == NULL) {
+                  str = StringSave ("?");
+                }
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_SeqLocLength, "Short length (%ld) on seq-loc (%s) of delta seq_ext", (long) len2, str);
+                MemFree (str);
               }
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_SeqLocLength, "Short length (%ld) on seq-loc (%s) of delta seq_ext", (long) len2, str);
-              MemFree (str);
               //LCOV_EXCL_STOP
             }
             break;
@@ -9509,7 +9513,11 @@ static Boolean HasNoName (ValNodePtr name)
               return FALSE;
             }
           }
-        } else if (pid->choice == 5) {
+        } else if (pid->choice == 3 || pid->choice == 4) {
+           if (!HasNoText ((CharPtr) pid->data)) {
+            return FALSE;
+          }
+       } else if (pid->choice == 5) {
           /* consortium */
           if (!HasNoText ((CharPtr) pid->data)) {
             return FALSE;
@@ -11210,7 +11218,6 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Djibouti",
   "Dominica",
   "Dominican Republic",
-  "East Timor",
   "Ecuador",
   "Egypt",
   "El Salvador",
@@ -11393,6 +11400,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Tanzania",
   "Tasman Sea",
   "Thailand",
+  "Timor-Leste",
   "Togo",
   "Tokelau",
   "Tonga",
@@ -11429,6 +11437,7 @@ static CharPtr  Nlm_formerly_valid_country_codes [] = {
   "British Guiana",
   "Burma",
   "Czechoslovakia",
+  "East Timor",
   "Korea",
   "Netherlands Antilles",
   "Serbia and Montenegro",
@@ -14032,7 +14041,7 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
       str = CheckInstCollName (inst, &type);
       if (StringCmp (str, inst) == 0) {
         *ptr = '<';
-        ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_BadInstitutionCountry, "Institution code %s should not should not be qualified with a <COUNTRY> designation", inst, ptr + 1);
+        ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_BadInstitutionCountry, "Institution code %s should not be qualified with a <COUNTRY> designation", inst, ptr + 1);
         return;
       }
       *ptr = '<';
@@ -24012,12 +24021,31 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
     for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
       if (StringICmp (gbqual->qual, "regulatory_class") != 0) continue;
       if (StringHasNoText (gbqual->val)) continue;
+      if (StringICmp (gbqual->val, "other") == 0 && StringHasNoText (sfp->comment)) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "The regulatory_class 'other' is missing the required /note");
+      }
       if (IsStringInRegulatoryClassList (gbqual->val)) continue;
       if (StringICmp (gbqual->val, "other") == 0) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "The regulatory_class value should not be '%s'", gbqual->val);
       } else {
         /*
         ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_InvalidQualifierValue, "Other regulatory_class value '%s'", gbqual->val);
+        */
+      }
+    }
+  } else if (StringICmp (key, "misc_recomb") == 0) {
+    for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
+      if (StringICmp (gbqual->qual, "recombination_class") != 0) continue;
+      if (StringHasNoText (gbqual->val)) continue;
+      if (StringICmp (gbqual->val, "other") == 0 && StringHasNoText (sfp->comment)) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "The recombination_class 'other' is missing the required /note");
+      }
+      if (IsStringInRecombinationClassList (gbqual->val)) continue;
+      if (StringICmp (gbqual->val, "other") == 0) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "The recombination_class value should not be '%s'", gbqual->val);
+      } else {
+        /*
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_InvalidQualifierValue, "Other recombination_class value '%s'", gbqual->val);
         */
       }
     }

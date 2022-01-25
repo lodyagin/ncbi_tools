@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.178 $
+* $Revision: 1.179 $
 *
 * File Description: 
 *
@@ -2798,7 +2798,7 @@ static CONN NetTestOpenConnection (void)
   size_t      n_written;
   EIO_Status  status;
 
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Service/bounce.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/Service/bounce.cgi",
                              NULL, "Entrez2Tool", 0, eMIME_T_Text,
                              eMIME_Plain, eENCOD_None, 0);
   if (conn == NULL) return NULL;

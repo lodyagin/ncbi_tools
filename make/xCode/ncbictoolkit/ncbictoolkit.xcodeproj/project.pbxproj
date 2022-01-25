@@ -1160,6 +1160,8 @@
 		3797484D0FF3CAA000138501 /* alnread.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4A0FF2AF7C004C8F4B /* alnread.h */; };
 		3797484E0FF3CAA000138501 /* creaders_export.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4B0FF2AF7C004C8F4B /* creaders_export.h */; };
 		379748500FF3CAC000138501 /* raw_scoremat.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4E0FF2AF7C004C8F4B /* raw_scoremat.h */; };
+		37B453931E1C524C0089E99F /* ncbi_ipv6.h in Headers */ = {isa = PBXBuildFile; fileRef = 37B453921E1C524C0089E99F /* ncbi_ipv6.h */; };
+		37B453951E1C52830089E99F /* ncbi_ipv6.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B453941E1C52830089E99F /* ncbi_ipv6.c */; };
 		37BC99881D19B3C9006E7656 /* hspfilter_mapper.c in Sources */ = {isa = PBXBuildFile; fileRef = 37BC99871D19B3C9006E7656 /* hspfilter_mapper.c */; };
 		37BC998A1D19B3DE006E7656 /* jumper.c in Sources */ = {isa = PBXBuildFile; fileRef = 37BC99891D19B3DE006E7656 /* jumper.c */; };
 		37BC998C1D19B402006E7656 /* hspfilter_mapper.h in Headers */ = {isa = PBXBuildFile; fileRef = 37BC998B1D19B402006E7656 /* hspfilter_mapper.h */; };
@@ -2397,6 +2399,8 @@
 		3734FB920FF2AF7C004C8F4B /* viewerp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = viewerp.h; path = ../../../vibrant/viewerp.h; sourceTree = SOURCE_ROOT; };
 		3747EF8B11BE9AA50064168E /* ncbi_base64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_base64.c; sourceTree = "<group>"; };
 		3747EF8F11BE9ABF0064168E /* ncbi_base64.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_base64.h; sourceTree = "<group>"; };
+		37B453921E1C524C0089E99F /* ncbi_ipv6.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_ipv6.h; sourceTree = "<group>"; };
+		37B453941E1C52830089E99F /* ncbi_ipv6.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_ipv6.c; sourceTree = "<group>"; };
 		37BC99871D19B3C9006E7656 /* hspfilter_mapper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = hspfilter_mapper.c; sourceTree = "<group>"; };
 		37BC99891D19B3DE006E7656 /* jumper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = jumper.c; sourceTree = "<group>"; };
 		37BC998B1D19B402006E7656 /* hspfilter_mapper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hspfilter_mapper.h; sourceTree = "<group>"; };
@@ -2866,6 +2870,7 @@
 				3716A70C0FF2A5C10081C789 /* ncbi_heapmgr.c */,
 				3716A70E0FF2A5C10081C789 /* ncbi_host_info.c */,
 				3716A7110FF2A5C10081C789 /* ncbi_http_connector.c */,
+				37B453941E1C52830089E99F /* ncbi_ipv6.c */,
 				3716A7130FF2A5C10081C789 /* ncbi_lb.c */,
 				3716A7180FF2A5C10081C789 /* ncbi_lbsmd_stub.c */,
 				3716A7190FF2A5C10081C789 /* ncbi_local.c */,
@@ -3709,6 +3714,7 @@
 				3734F9480FF2AF7C004C8F4B /* ncbi_host_info.h */,
 				3734F9490FF2AF7C004C8F4B /* ncbi_host_infop.h */,
 				3734F94B0FF2AF7C004C8F4B /* ncbi_http_connector.h */,
+				37B453921E1C524C0089E99F /* ncbi_ipv6.h */,
 				3734F94D0FF2AF7C004C8F4B /* ncbi_lb.h */,
 				3734F9500FF2AF7C004C8F4B /* ncbi_lbsmd.h */,
 				3734F9530FF2AF7C004C8F4B /* ncbi_local.h */,
@@ -4536,6 +4542,7 @@
 				3734FDF70FF2AF7D004C8F4B /* import.h in Headers */,
 				3734FDF90FF2AF7D004C8F4B /* ingenext.h in Headers */,
 				3734FDFB0FF2AF7D004C8F4B /* ingengraph.h in Headers */,
+				37B453931E1C524C0089E99F /* ncbi_ipv6.h in Headers */,
 				3734FDFD0FF2AF7D004C8F4B /* ingenwin.h in Headers */,
 				3734FDFF0FF2AF7D004C8F4B /* layout.h in Headers */,
 				3734FE000FF2AF7D004C8F4B /* legend.h in Headers */,
@@ -5237,6 +5244,7 @@
 				3716AC810FF2A5C20081C789 /* objres.c in Sources */,
 				3716AC830FF2A5C20081C789 /* objscoremat.c in Sources */,
 				3716AC850FF2A5C20081C789 /* objseq.c in Sources */,
+				37B453951E1C52830089E99F /* ncbi_ipv6.c in Sources */,
 				3716AC870FF2A5C20081C789 /* objsset.c in Sources */,
 				3716AC890FF2A5C20081C789 /* objsub.c in Sources */,
 				3716AC8B0FF2A5C20081C789 /* objtable.c in Sources */,

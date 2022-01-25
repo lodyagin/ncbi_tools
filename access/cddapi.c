@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.13 $
+* $Revision: 1.14 $
 *
 * File Description: 
 *
@@ -132,7 +132,7 @@ NLM_EXTERN CONN CddOpenConnection (
   /*
   sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&SEQUENCE=>%s%s%s",
            feats, dataLib, expect, filter, graph, id, "%0A", str);
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Structure/cdd/wrpsb.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/Structure/cdd/wrpsb.cgi",
                              NULL, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written, eIO_WritePersist);

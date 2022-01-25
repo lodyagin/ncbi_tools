@@ -433,5 +433,11 @@
     <ClInclude Include="..\..\..\..\connect\parson.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\connect\ncbi_ipv6.c">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\connect\ncbi_ipv6.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

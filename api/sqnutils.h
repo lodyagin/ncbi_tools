@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.744 $
+* $Revision: 6.747 $
 *
 * File Description: 
 *
@@ -717,6 +717,9 @@ NLM_EXTERN void CleanupStringsForOneDescriptor (SeqDescPtr sdp, SeqEntryPtr sep)
 NLM_EXTERN void CleanUpSeqFeat (SeqFeatPtr sfp, Boolean isEmblOrDdbj, Boolean isJscan, Boolean stripSerial, Boolean modernizeFeats, ValNodePtr PNTR publist);
 
 NLM_EXTERN void CleanUpSeqLoc (SeqLocPtr slp);
+
+NLM_EXTERN Boolean FixWrongFuzzOnPlusStrand (SeqLocPtr location);
+NLM_EXTERN Boolean FixWrongFuzzOnMinusStrand (SeqLocPtr location);
 
 NLM_EXTERN void CleanupSubSourceOrgModOtherFeat (SeqFeatPtr sfp, Pointer userdata);
 NLM_EXTERN void CleanupSubSourceOrgModOtherDesc (SeqDescrPtr sdp, Pointer userdata);
@@ -1640,6 +1643,7 @@ extern CharPtr ncrnaClassList[];
 extern Int4 NcrnaOTHER;
 extern Boolean IsStringInNcRNAClassList (CharPtr str);
 extern Boolean IsStringInRegulatoryClassList (CharPtr str);
+extern Boolean IsStringInRecombinationClassList (CharPtr str);
 extern ValNodePtr ListFeaturesInLocation (BioseqPtr bsp, SeqLocPtr slp, Uint1 seqfeatChoice, Uint1 featdefChoice);
 extern ValNodePtr ListCodingRegionsContainedInSourceFeatures (SeqEntryPtr sep);
 extern ValNodePtr ListFeaturesOverlappingLocationEx (BioseqPtr bsp, SeqLocPtr slp, Uint1 seqfeatChoice, Uint1 featdefChoice, ValNodePtr constraint);

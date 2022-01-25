@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.371 $
+* $Revision: 1.381 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -73,13 +73,13 @@ static CharPtr link_featp = "https://www.ncbi.nlm.nih.gov/protein/";
 static CharPtr link_seqn = "https://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "https://www.ncbi.nlm.nih.gov/protein/";
 
-static CharPtr link_lat_lon = "http://www.ncbi.nlm.nih.gov/projects/Sequin/latlonview.html?";
+static CharPtr link_lat_lon = "https://www.ncbi.nlm.nih.gov/projects/Sequin/latlonview.html?";
 
 static CharPtr link_gold_stamp_id = "http://genomesonline.org/cgi-bin/GOLD/bin/GOLDCards.cgi?goldstamp=";
 
-static CharPtr link_annot_soft_ver = "http://www.ncbi.nlm.nih.gov/genome/annotation_euk/release_notes/#version";
+static CharPtr link_annot_soft_ver = "https://www.ncbi.nlm.nih.gov/genome/annotation_euk/release_notes/#version";
 
-static CharPtr link_annot_ver = "http://www.ncbi.nlm.nih.gov/genome/annotation_euk/";
+static CharPtr link_annot_ver = "https://www.ncbi.nlm.nih.gov/genome/annotation_euk/";
 
 /* ordering arrays for qualifiers and note components */
 
@@ -444,7 +444,7 @@ NLM_EXTERN SourceType subSourceToSourceIdx [45] = {
 
 /* format functions allocate printable string for given paragraph */
 
-/* superset of http://www.ncbi.nlm.nih.gov/collab/db_xref.html and RefSeq db_xrefs */
+/* superset of https://www.ncbi.nlm.nih.gov/collab/db_xref.html and RefSeq db_xrefs */
 
 NLM_EXTERN CharPtr legalDbXrefs [] = {
   "AceView/WormGenes",
@@ -479,6 +479,8 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "dbSNP",
   "dbSTS",
   "dictyBase",
+  "DSM",
+  "DSMZ",
   "EcoGene",
   "ENSEMBL",
   "EnsemblGenomes",
@@ -583,6 +585,8 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "ATCC(in host)",
   "BEI",
   "BOLD",
+  "DSM",
+  "DSMZ",
   "FANTOM_DB",
   "FBOL",
   "FLYBASE",
@@ -3915,11 +3919,12 @@ static CharPtr FullNameFromInstCode (CharPtr code)
 #define s_ccug_base  "http://www.ccug.se/default.cfm?page=search_record.cfm&db=mc&s_tests=1&ccugno="
 #define s_cfmr_base  "http://www.fpl.fs.fed.us/search/mycologysearch_action.php?sorting_rule=1u&phrasesAndKeywords02="
 #define s_cori_base  "http://ccr.coriell.org/Sections/Search/Search.aspx?q="
-#define s_dsmz_base  "http://www.dsmz.de/catalogues/details/culture/DSM-"
+#define s_dsm_base   "https://www.dsmz.de/catalogues/details/culture/DSM-"
+#define s_dsmz_base  "https://www.dsmz.de/catalogues/details/culture/PV-"
 #define s_frr_base   "http://www.foodscience.csiro.au/cgi-bin/rilax/search.pl?stpos=0&stype=AND&query="
 #define s_fsu_base   "http://www.prz.uni-jena.de/data.php?fsu="
 #define s_jcm_base   "http://www.jcm.riken.jp/cgi-bin/jcm/jcm_number?JCM="
-#define s_kctc_base  "http://www.brc.re.kr/English/_SearchView.aspx?sn="
+#define s_kctc_base  "http://kctc.kribb.re.kr/English/_SearchView.aspx?sn="
 #define s_ku_base    "https://ichthyology.specify.ku.edu/specify/bycatalog/"
 #define s_lcr_base   "http://scd.landcareresearch.co.nz/Specimen/"
 #define s_maff_base  "http://www.gene.affrc.go.jp/databases-micro_search_detail_en.php?maff="
@@ -3995,7 +4000,8 @@ static VouchData Nlm_spec_vouchers [] = {
   {  "DGR:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
   {  "DMNS:Bird",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
   {  "DMNS:Mamm",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
-  {  "DSM",               s_dsmz_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "DSM",               s_dsm_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "DSMZ",              s_dsmz_base,  FALSE,  0, "",   NULL,          NULL        },
   {  "FRR",               s_frr_base,   FALSE,  0, "",   NULL,          NULL        },
   {  "FSU<DEU>",          s_fsu_base,   FALSE,  0, "",   NULL,          NULL        },
   {  "ICMP",              s_lcr_base,   TRUE,   0, "",   s_uscr_pfx,    NULL        },
@@ -4032,7 +4038,7 @@ static VouchData Nlm_spec_vouchers [] = {
   {  "MVZ:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
   {  "MVZ:Page",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
   {  "MVZObs:Herp",       s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
-  {  "NBRC",              s_nbrc_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NBRC",              s_nbrc_base,  FALSE,  8, "0",  NULL,          NULL        },
   {  "NBSB:Bird",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
   {  "NCIMB",             s_ncimb_base, FALSE,  0, "",   NULL,          NULL        },
   {  "NCTC",              s_nctc_base,  FALSE,  0, "",   NULL,          NULL        },
@@ -4307,8 +4313,13 @@ static void Do_www_lat_lon (
   }
 
   FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+  /*
   FF_Add_NCBI_Base_URL (ffstring, link_lat_lon);
   sprintf (tmp, "lat=%s%s&lon=%s%s", ns, tokens [0], ew, tokens [2]);
+  FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+  */
+  FF_Add_NCBI_Base_URL (ffstring, "https://www.google.com/maps/place/");
+  sprintf (tmp, "%s%s+%s%s", ns, tokens [0], ew, tokens [2]);
   FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
   FFAddTextToString (ffstring, "\">", lat_lon, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
@@ -4360,7 +4371,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   BioseqSetPtr       bssp;
   Char               buf [128], pfx [512], sfx [128];
   CharPtr            common = NULL;
-  BIG_ID             currGi = 0;
+  Char               currAccVer [SEQID_MAX_LEN];
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
@@ -4468,11 +4479,15 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   FFStartPrint (ffstring, afp->format, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
 
+  /*
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_GI) {
       currGi = (BIG_ID) sip->data.intvalue;
     }
   }
+  */
+  currAccVer [0] = '\0';
+  GetAccVerForBioseq (bsp, currAccVer, sizeof (currAccVer), ajp->hideGI, TRUE);
 
   iasp = (IntAsn2gbSectPtr) asp;
 
@@ -4484,7 +4499,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans &&
       (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
-    sprintf (pfx, "<span id=\"feature_%ld_source_%ld\" class=\"feature\">", (long) currGi, (long) isp->source_count);
+    sprintf (pfx, "<span id=\"feature_%s_source_%ld\" class=\"feature\">", currAccVer, (long) isp->source_count);
   }
 
   FFAddOneString (ffstring, "source", FALSE, FALSE, TILDE_IGNORE);
@@ -4507,7 +4522,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   }
 
   if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans) {
-    js = AddJsInterval (iasp, pfx, bsp, FEATDEF_BIOSRC, location);
+    js = AddJsInterval (iasp, pfx, bsp, FEATDEF_BIOSRC, location, currAccVer);
   }
   if ( GetWWW(ajp) ) {
     FF_www_featloc (ffstring, str);
@@ -5374,6 +5389,7 @@ static void PrintSeqLine (
   FmtType format,
   CharPtr buf,
   BIG_ID gi,
+  CharPtr currAccVer,
   Int4 startwithoutgap,
   Int4 start,
   Int4 stop
@@ -5396,7 +5412,7 @@ static void PrintSeqLine (
     FFAddOneString(ffstring, pos, FALSE, FALSE, TILDE_TO_SPACES);
     FFAddOneChar(ffstring, ' ', FALSE);
     if (ajp != NULL && GetWWW (ajp) && ajp->seqspans) {
-      sprintf (tmp, "<span class=\"ff_line\" id=\"gi_%ld_%ld\">", (long) gi, (long) (startwithoutgap + 1));
+      sprintf (tmp, "<span class=\"ff_line\" id=\"gi_%s_%ld\">", currAccVer, (long) (startwithoutgap + 1));
       FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_TO_SPACES);
     }
     FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
@@ -5474,17 +5490,18 @@ static void PrintGenome (
   Boolean is_na
 )
 {
-  Char         buf[128], gibuf [32], vbuf [128];
+  Char         buf[128], /* gibuf [32], */ vbuf [128];
   Boolean      first = TRUE;
   SeqIdPtr     freeid = NULL, sid = NULL, newid = NULL;
   SeqLocPtr    slp = NULL;
   Int4         start = 0, stop = 0;
   BIG_ID       gi = 0;
+  Char         currAccVer [SEQID_MAX_LEN];
   BioseqPtr    bsp = NULL;
   Int2         p1 = 0, p2 = 0;
 
   buf [0] = '\0';
-  gibuf [0] = '\0';
+  /* gibuf [0] = '\0'; */
   vbuf [0] = '\0';
   for (slp = slp_head; slp; slp = slp->next) {
     sid = SeqLocId (slp);
@@ -5508,7 +5525,6 @@ static void PrintGenome (
     if (sid->choice == SEQID_GI) {
       gi = (BIG_ID) sid->data.intvalue;
       if (GetAccnVerFromServer (gi, buf)) {
-        /* no need to call GetSeqIdForGI */
       } else {
         newid = GetSeqIdForGI (gi);
         if (newid != NULL) {
@@ -5558,7 +5574,11 @@ static void PrintGenome (
     if (SeqLocStrand (slp) == Seq_strand_minus) {
       FFAddOneString (ffstring, "complement(", FALSE, FALSE, TILDE_IGNORE);
     }
-    if ( GetWWW (ajp) && gi > 0) {
+    currAccVer [0] = '\0';
+    if (bsp != NULL) {
+      GetAccVerForBioseq (bsp, currAccVer, sizeof (currAccVer), ajp->hideGI, FALSE);
+    }
+    if ( GetWWW (ajp) && StringDoesHaveText (currAccVer)) {
       if (newid == NULL) {
         newid = sid;
       }
@@ -5569,8 +5589,8 @@ static void PrintGenome (
         } else {
           FF_Add_NCBI_Base_URL (ffstring, link_seqp);
         }
-        sprintf (gibuf, "%ld", (long) gi);
-        FFAddTextToString (ffstring, /* "val=" */ NULL, gibuf, "\">", FALSE, FALSE, TILDE_IGNORE);
+        /* sprintf (gibuf, "%ld", (long) gi); */
+        FFAddTextToString (ffstring, /* "val=" */ NULL, currAccVer, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddTextToString (ffstring, NULL, buf, "</a>", FALSE, FALSE, TILDE_IGNORE);
       }
     } else {
@@ -6010,8 +6030,11 @@ static Int2 ProcessGapSpecialFormat (
 {
   Char      fmt_buf [64];
   Char      gapbuf [80];
+  /*
   BIG_ID    gi;
   Char      gi_buf [32];
+  */
+  Char      currAccVer [SEQID_MAX_LEN];
   Boolean   is_na;
   Char      pad;
   Char      rgn_buf [64];
@@ -6044,14 +6067,18 @@ static Int2 ProcessGapSpecialFormat (
     FFAddOneString (ffstring, gapbuf, FALSE, FALSE, TILDE_TO_SPACES);
     if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE && afp != NULL &&
       (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+      /*
       gi = 0;
       for (sip = bsp->id; sip != NULL; sip = sip->next) {
         if (sip->choice == SEQID_GI) {
           gi = (BIG_ID) sip->data.intvalue;
         }
       }
-      if (gi > 0) {
-        sprintf(gi_buf, "%ld", (long) gi);
+      */
+      currAccVer [0] = '\0';
+      GetAccVerForBioseq (bsp, currAccVer, sizeof (currAccVer), ajp->hideGI, FALSE);
+      if (StringDoesHaveText (currAccVer)) {
+        /* sprintf(gi_buf, "%ld", (long) gi); */
         sprintf(fmt_buf, "?fmt_mask=%ld", (long) EXPANDED_GAP_DISPLAY);
         if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
           StringCat (fmt_buf, "&report=gbwithparts");
@@ -6069,7 +6096,7 @@ static Int2 ProcessGapSpecialFormat (
         } else {
           FF_Add_NCBI_Base_URL (ffstring, link_featp);
         }
-        FFAddOneString (ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, currAccVer, FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, fmt_buf, FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "\">Expand Ns", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -6154,6 +6181,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   CharPtr           str = NULL;
   CharPtr           tmp;
   StringItemPtr     ffstring;
+  Char              currAccVer [SEQID_MAX_LEN];
 
   if (afp == NULL || bbp == NULL) return NULL;
   sbp = (SeqBlockPtr) bbp;
@@ -6277,6 +6305,9 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
    gi = (BIG_ID) sip->data.intvalue;
   }
 
+  currAccVer [0] = '\0';
+  GetAccVerForBioseq (bsp, currAccVer, sizeof (currAccVer), ajp->hideGI, TRUE);
+
   /* format subsequence cached with SeqPortStream */
 
   ffstring = FFGetString (ajp);
@@ -6310,7 +6341,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
       }
       if (StringDoesHaveText (buf)) {
         ExpandSeqLine (buf);
-        PrintSeqLine (ajp, ffstring, afp->format, buf, gi, start, start + startgapgap, start + lin);
+        PrintSeqLine (ajp, ffstring, afp->format, buf, gi, currAccVer, start, start + startgapgap, start + lin);
       }
       count = 0;
       blk = 0;
@@ -6327,7 +6358,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     }
     if (StringDoesHaveText (buf)) {
       ExpandSeqLine (buf);
-      PrintSeqLine (ajp, ffstring, afp->format, buf, gi, start, start + startgapgap, start + lin);
+      PrintSeqLine (ajp, ffstring, afp->format, buf, gi, currAccVer, start, start + startgapgap, start + lin);
     }
   }
 

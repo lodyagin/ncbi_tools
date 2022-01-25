@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.77 2016/08/16 21:59:19 lavr Exp $
+# $Id: fwd_check.sh,v 1.78 2016/11/10 16:49:46 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -11,6 +11,7 @@ netcat="`which nc 2>/dev/null`"
 temp="/tmp/`basename $0`.$$.tmp"
 helper="./fwd_failure_helper.exe"
 test -z "$netcat"  &&  netcat="`whereis nc | sed 's/^[^:]*://;s/ //g'`"
+test -z "$HTTP_NCBI_EXTERNAL"  &&  HTTP_CAF_EXTERNAL="$HTTP_NCBI_EXTERNAL"
 
 cat <<EOF
 http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html
@@ -80,9 +81,10 @@ while read x_host x_port x_status ; do
   if [ "$x_port" -lt "5860" -o "$x_port" -gt "5870" ]; then
     if [ "$x_port" -ne "22" -a "$x_port" -ne "443" ]; then
       test "$x_status" = "RESERVED"  &&  continue
-      if [ _"$HTTP_CAF" = _"" -o _"$HTTP_CAF_EXTERNAL" != _"" ]; then
-        test _"$HTTP_NCBI_RELAY" = _"" &&  continue
+      if [ "$x_status" = "INTERNAL" ]; then
+        test _"$HTTP_CAF_EXTERNAL" != _"" -o _"$HTTP_NCBI_RELAY" != _""  &&  continue
       fi
+      test _"$HTTP_CAF" = _""  &&  continue
     fi
   fi
   if [ "$x_status" = "RETIRED" -o "$x_status" = "RESERVED" -o "$x_status" = "PENDING" ]; then
@@ -90,9 +92,9 @@ while read x_host x_port x_status ; do
     continue
   fi
   unset fb_port
-  test "$x_status" = "FB-OK" && fb_port="TRUE"
+  test "$x_status" = "FB-OK"  &&  fb_port="TRUE"
   test "$x_status" = "READYING"  &&  unset x_status
-  ( echo ; test -z "$netcat" && sleep ${delay_sec} ) | ${netcat:-telnet} $x_host $x_port >$temp 2>&1 &
+  ( echo ; test -z "$netcat"  &&  sleep ${delay_sec} ) | ${netcat:-telnet} ${netcat:+-w 1} $x_host $x_port >$temp 2>&1 &
   pid=$!
   trap 'rm -f $temp; kill $pid >/dev/null 2>&1' 1 2 15
   ( sleep `expr $delay_sec + 1`  &&  kill $pid ) >/dev/null 2>&1 &

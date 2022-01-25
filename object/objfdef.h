@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -321,8 +321,9 @@ NLM_EXTERN FeatDefPtr LIBCALL FeatDefFindNext PROTO((FeatDefPtr curr, Uint1Ptr k
 #define FEATDEF_assembly_gap 101
 #define FEATDEF_regulatory 102
 #define FEATDEF_propeptide 103
+#define FEATDEF_propeptide_aa 104
 
-#define FEATDEF_MAX 104 /* size of array needed for featdef filter parameters */
+#define FEATDEF_MAX 105 /* size of array needed for featdef filter parameters */
 
 
 #ifdef __cplusplus

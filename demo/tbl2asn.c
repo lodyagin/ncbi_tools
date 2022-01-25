@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.494 $
+* $Revision: 6.496 $
 *
 * File Description:
 *
@@ -76,7 +76,7 @@ static char *date_of_compilation = __DATE__;
 #include <macroapi.h>
 #include <connect/ncbi_gnutls.h>
 
-#define TBL2ASN_APP_VER "25.1"
+#define TBL2ASN_APP_VER "25.3"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 

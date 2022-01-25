@@ -1,4 +1,4 @@
-/* $Id: blast_nalookup.h,v 1.12 2016/06/20 15:49:13 fukanchi Exp $
+/* $Id: blast_nalookup.h,v 1.13 2016/12/06 15:29:16 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -674,7 +674,8 @@ Int4 BlastNaHashLookupTableNew(BLAST_SequenceBlk* query,
                                BlastNaHashLookupTable** lut,
                                const LookupTableOptions* opt, 
                                const QuerySetUpOptions* query_options,
-                               BlastSeqSrc* seqsrc);
+                               BlastSeqSrc* seqsrc,
+                               Uint4 num_threads);
 
 
 /** Free a nucleotide lookup table.

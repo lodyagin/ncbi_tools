@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.71 $
+* $Revision: 1.72 $
 *
 * File Description:
 *
@@ -62,7 +62,7 @@
 #endif
 #include <connect/ncbi_gnutls.h>
 
-#define ASN2FSA_APP_VER "5.9"
+#define ASN2FSA_APP_VER "6.1"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 

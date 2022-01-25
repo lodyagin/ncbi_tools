@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.118 $
+* $Revision: 1.120 $
 *
 * File Description: 
 *
@@ -278,7 +278,7 @@ NLM_EXTERN CONN PubMedFetchOpenConnection (
 
   /*
   sprintf (query, "db=PubMed&retmode=asn.1&id=%ld", (long) uid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/eutils/efetch.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/eutils/efetch.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
   */
@@ -330,7 +330,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
 
 #ifdef PUB_SEQ_FETCH_DEBUG
   sprintf (query, "save=idf&view=1&maxplex=%d&extrafeat=%ld&val=%lld", (int) retcode, (long) flags, (long long) uid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
 #endif
@@ -399,7 +399,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnectionString (
 
 #ifdef PUB_SEQ_FETCH_DEBUG
   sprintf (query, "save=idf&view=1&maxplex=%d&extrafeat=%ld&val=%s", (int) retcode, (long) flags, id);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
 #endif
@@ -468,7 +468,7 @@ NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
 
 #ifdef PUB_SEQ_FETCH_DEBUG
   sprintf (query, "save=idf&view=1&maxplex=%d&extrafeat=%ld&val=0:TRACE:%lu", (int) retcode, (long) flags, (unsigned long) tid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
 #endif
@@ -529,14 +529,14 @@ NLM_EXTERN CONN PubSeqFetchSRAOpenConnection (
 
 #ifdef PUB_SEQ_FETCH_DEBUG
   sprintf (query, "save=idf&view=1&val=gnl|SRA|%s", sraid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
 #endif
 
   /*
   sprintf (query, "save=idf&view=0&val=gnl|SRA|%s", sraid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnBinary, eENCOD_None, 0);
   */
@@ -614,7 +614,7 @@ NLM_EXTERN CONN GiRevHistOpenConnection (
   }
 
   /*
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/sutils/girevhist.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/sutils/girevhist.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   */
@@ -664,7 +664,7 @@ NLM_EXTERN CONN GiAccVerOpenConnection (
   }
 
   /*
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/sutils/girevhist.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/sutils/girevhist.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   */
@@ -692,7 +692,7 @@ NLM_EXTERN CONN AccnRevHistOpenConnection (
   
   /*
   sprintf (query, "save=idf&view=gi&maxplex=0&val=%s", accn);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   */
@@ -713,7 +713,7 @@ NLM_EXTERN CONN GiSeqIdSetOpenConnection (
 
   /*
   sprintf (query, "cmd=seqid&txt=on&seqid=asntext&os=PUBSEQ_OS&val=%lld", (long long) gi);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/sutils/girevhist.cgi",
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/sutils/girevhist.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   */
@@ -762,7 +762,7 @@ NLM_EXTERN CONN AccnListOpenConnection (
   }
 
   /*
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/sutils/girevhist.cgi",
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 0, "/entrez/sutils/girevhist.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   */
@@ -1234,10 +1234,12 @@ typedef struct psconfirm {
   Uint4    tid;
   CharPtr  sid;
   SeqIdPtr ssid;
-  BIG_ID    gi;
+  BIG_ID   gi;
   Uint4    ti;
   CharPtr  si;
   SeqIdPtr ssi;
+  CharPtr  str;
+  Boolean  found;
 } PsConfirm, PNTR PsConfirmPtr;
 
 
@@ -1253,6 +1255,8 @@ static void InitPsConfirm (PsConfirmPtr p)
     p->si = NULL;
     p->ssid = NULL;
     p->ssi = NULL;
+    p->str = NULL;
+    p->found = FALSE;
   }
 }
 
@@ -1285,20 +1289,29 @@ static void ConfirmAccStrInSep (
 )
 
 {
+  Char          buf [64];
   PsConfirmPtr  psp;
-  SeqIdPtr      sip;
+  SeqIdPtr      sip, tmp;
   Uint1         cmp;
 
   if (bsp == NULL || userdata == NULL) return;
   psp = (PsConfirmPtr) userdata;
+  if (psp->found) return;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    cmp = SeqIdComp (sip, psp->ssid);
+    tmp = SeqIdStripLocus (SeqIdDup (sip));
+    SeqIdWrite (bsp->id, buf, PRINTID_TEXTID_ACC_ONLY, sizeof (buf) - 1);
+    if (StringICmp (psp->str, buf) == 0) {
+      psp->found = TRUE;
+      return;
+    }
+    cmp = SeqIdComp (tmp, psp->ssid);
     if (cmp == SIC_YES) {
       psp->ssi = sip;
     } else if (psp->ssi == NULL && cmp == SIC_DIFF) {
       psp->ssi = sip;
     }
   }
+  SeqIdFree (tmp);
 }
 
 
@@ -1383,17 +1396,25 @@ static void VerifyAccStrInSeqEntry (
 {
   PsConfirm    ps;
   Char         id_buf[PATH_MAX];
+  CharPtr      ptr;
 
   InitPsConfirm (&ps);
+  ps.str = StringSaveNoNull (id_str);
+  ptr = StringChr (ps.str, '.');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
   ps.ssid = MakeSeqID (id_str);
+  
   VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmAccStrInSep);
-  if (SeqIdComp (ps.ssid, ps.ssi) != SIC_YES) {
+  if ((! ps.found) && SeqIdComp (ps.ssid, ps.ssi) != SIC_YES) {
     SeqIdWrite (ps.ssi, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
     ErrPostEx (SEV_ERROR, 0, 0,
                "PubSeqSynchronousQuery requested %s but received %s",
                  id_str, id_buf);
   }
   ps.ssid = SeqIdFree (ps.ssid);
+  ps.str = MemFree (ps.str);
 }
 
 

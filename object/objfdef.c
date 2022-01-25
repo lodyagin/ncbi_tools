@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -711,7 +711,8 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"telomere\" , menulabel \"Telomere\" , featdef-key 100 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"assembly_gap\" , menulabel \"Assembly Gap\" , featdef-key 101 , seqfeat-key 8 , entrygroup 0 , displaygroup 4 , molgroup na } ,\n" \
 "{ typelabel \"regulatory\" , menulabel \"Regulatory\" , featdef-key 102 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
-"{ typelabel \"propeptide\" , menulabel \"Propeptide\" , featdef-key 103 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } } };\n";
+"{ typelabel \"propeptide\" , menulabel \"Propeptide labeled on Nuc Acid\" , featdef-key 103 , seqfeat-key 8 , entrygroup 0 , displaygroup 2 , molgroup na } ,\n" \
+"{ typelabel \"propeptide\" , menulabel \"Propeptide\" , featdef-key 104 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } } };\n";
 #endif
 
 /*****************************************************************************
@@ -927,7 +928,7 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
                 case 4:
                     return FEATDEF_transit_peptide_aa;
                 case 5:
-                    return FEATDEF_propeptide;
+                    return FEATDEF_propeptide_aa;
             }
             return FEATDEF_BAD;
         case SEQFEAT_RNA:

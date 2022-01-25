@@ -1,4 +1,4 @@
-/* $Id: urlquery.c,v 6.67 2012/02/13 22:27:46 kans Exp $
+/* $Id: urlquery.c,v 6.69 2016/10/20 16:25:39 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.67 $
+ * $Revision: 6.69 $
  *
  * File Description: 
  *
@@ -117,6 +117,9 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   /* fill in connection info fields and create the connection */
   net_info = ConnNetInfo_Create (0);
   ASSERT ( net_info );
+
+  /* explicit setting to https is needed for CCC-23 */
+  net_info->scheme = eURL_Https;
 
   x_SetupUserHeader (net_info, appName, type, subtype, encoding);
 
@@ -630,14 +633,14 @@ NLM_EXTERN CharPtr QUERY_UrlSynchronousQuery (
 
 #ifdef OS_MAC 
   timeout.sec = 0;
-  timeout.usec = 0;
+  timeout.usec = 1000;
 #else
   timeout.sec = 100;
   timeout.usec = 0;
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
+  while (max < 300 && (status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout) {
     currtime = GetSecs ();
     max = currtime - starttime;
   }

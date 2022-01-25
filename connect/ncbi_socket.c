@@ -1,4 +1,4 @@
-/* $Id: ncbi_socket.c,v 6.473 2016/08/29 16:54:13 fukanchi Exp $
+/* $Id: ncbi_socket.c,v 6.476 2016/10/17 19:19:12 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -133,12 +133,17 @@
 
 #ifdef NCBI_MONKEY
 /* A hack - we know that SOCK variable has name "sock" in code.
- * If the desired behavior is timeout, "sock" will be replaced with a
- * connection to non-working server */
-#   define send(a,b,c,d)  ((g_MONKEY_Send == NULL)    ? send(a,b,c,d)  : g_MONKEY_Send(a,b,c,d,&sock))
-#   define recv(a,b,c,d)  ((g_MONKEY_Recv == NULL)    ? recv(a,b,c,d)  : g_MONKEY_Recv(a,b,c,d,&sock))
-#   define connect(a,b,c) ((g_MONKEY_Connect == NULL) ? connect(a,b,c) : g_MONKEY_Connect(a,b,c))
-#endif
+   If the desired behavior is timeout, "sock" will be replaced with a
+   connection to non-working server */
+#  define send(a,b,c,d)                                                 \
+    (g_MONKEY_Send    ? g_MONKEY_Send(a,b,c,d,&sock) : send(a,b,c,d))
+#  define recv(a,b,c,d)                                                 \
+    (g_MONKEY_Recv    ? g_MONKEY_Recv(a,b,c,d,&sock) : recv(a,b,c,d))
+#  define connect(a,b,c)                                                \
+    (g_MONKEY_Connect ? g_MONKEY_Connect(a,b,c)      : connect(a,b,c))
+#endif /*NCBI_MONKEY*/
+
+
 /******************************************************************************
  *  TYPEDEFS & MACROS
  */
@@ -279,7 +284,7 @@ static const char* s_StrError(SOCK sock, int error)
         return 0;
 
     if (sock) {
-        FSSLError sslerror = s_SSL ? s_SSL->Error : 0;
+        FSSLError sslerror = sock->session  &&  s_SSL ? s_SSL->Error : 0;
         if (sslerror) {
             const char* strerr = sslerror(sock->session == SESSION_INVALID
                                           ? 0 : sock->session, error);
@@ -2678,11 +2683,11 @@ static EIO_Status s_IsConnected(SOCK sock, const struct timeval* tv)
     EIO_Status  status = s_IsConnected_(sock, tv, &what, &unused, 0);
     if (s_ErrHook  &&  status != eIO_Success  &&  status != eIO_Timeout) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
         if (sock->port) {
-            char addr[40];
             SOCK_ntoa(sock->host, addr, sizeof(addr));
             info.host =       addr;
             info.port = sock->port;
@@ -3022,11 +3027,11 @@ static EIO_Status s_Read(SOCK    sock,
         &&  (status != eIO_Closed
              ||  !(sock->r_status == eIO_Success  &&  sock->eof))) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
         if (sock->port) {
-            char addr[40];
             SOCK_ntoa(sock->host, addr, sizeof(addr));
             info.host =       addr;
             info.port = sock->port;
@@ -3589,11 +3594,11 @@ static EIO_Status s_Write(SOCK        sock,
     EIO_Status status = s_Write_(sock, data, size, n_written, oob);
     if (s_ErrHook  &&  status != eIO_Success) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
         if (sock->port) {
-            char addr[40];
             SOCK_ntoa(sock->host, addr, sizeof(addr));
             info.host =       addr;
             info.port = sock->port;
@@ -3947,20 +3952,23 @@ static EIO_Status s_Close_(SOCK sock, int abort)
 
 static EIO_Status s_Close(SOCK sock)
 {
-#if defined NCBI_MONKEY
-    /* Not interception of close(). 
+    EIO_Status status;
+
+#ifdef NCBI_MONKEY
+    /* Not interception of close().
        We only tell Monkey to "forget" this socket */
-    if (g_MONKEY_Close != NULL)
+    if (g_MONKEY_Close)
         g_MONKEY_Close(sock->sock);
-#endif /* NCBI_MONKEY */
-    EIO_Status status = s_Close_(sock, 0/*orderly*/);
+#endif /*NCBI_MONKEY*/
+
+    status = s_Close_(sock, 0/*orderly*/);
     if (s_ErrHook  &&  status != eIO_Success) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
         if (sock->port) {
-            char addr[40];
             SOCK_ntoa(sock->host, addr, sizeof(addr));
             info.host =       addr;
             info.port = sock->port;
@@ -3973,8 +3981,8 @@ static EIO_Status s_Close(SOCK sock)
         info.status = status;
         s_ErrorCallback(&info);        
     }
-    return status;
 
+    return status;
 }
 
 
@@ -4054,6 +4062,11 @@ static EIO_Status s_Connect_(SOCK            sock,
     } else
 #endif /*NCBI_OS_UNIX*/
     {
+        /* first, set the port to connect to (same port if zero) */
+        if (port)
+            sock->port = port;
+        else
+            assert(sock->port);
         /* get address of the remote host (assume the same host if NULL) */
         if (host && !(sock->host = s_gethostbyname(host, (ESwitch)sock->log))){
             CORE_LOGF_X(22, eLOG_Error,
@@ -4062,11 +4075,6 @@ static EIO_Status s_Connect_(SOCK            sock,
                          s_ID(sock, _id), MAXHOSTNAMELEN, host));
             return eIO_Unknown;
         }
-        /* set the port to connect to (same port if zero) */
-        if (port)
-            sock->port = port;
-        else
-            assert(sock->port);
         addrlen = (TSOCK_socklen_t) sizeof(addr.in);
 #ifdef HAVE_SIN_LEN
         addr.in.sin_len         = addrlen;
@@ -4095,12 +4103,13 @@ static EIO_Status s_Connect_(SOCK            sock,
     sock->eof      = 0/*false*/;
     sock->w_status = eIO_Success;
     assert(sock->w_len == 0);
+
 #ifdef NCBI_MONKEY
     /* Bind created x_sock to the sock in Chaos Monkey, this information is 
-     * important to keep rules working */
-    if (g_MONKEY_SockHasSocket != 0)
+       important to keep rules working */
+    if (g_MONKEY_SockHasSocket)
         g_MONKEY_SockHasSocket(sock, x_sock);
-#endif /* NCBI_MONKEY */
+#endif /*NCBI_MONKEY*/
 
 #ifdef NCBI_OS_MSWIN
     assert(!sock->event);
@@ -4291,22 +4300,16 @@ static EIO_Status s_Connect(SOCK            sock,
     EIO_Status status = s_Connect_(sock, host, port, timeout);
     if (status != eIO_Success) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
-        if (sock->port) {
-            char addr[40];
-            if (sock->host) {
-                SOCK_ntoa(sock->host, addr, sizeof(addr));
-                info.host = addr;
-            } else
-                info.host = host;
-            info.port = port;
-        }
-#ifdef NCBI_OS_UNIX
-        else
-            info.host = sock->path;
-#endif /*NCBI_OS_UNIX*/
+        if (sock->host) {
+            SOCK_ntoa(sock->host, addr, sizeof(addr));
+            info.host = addr;
+        } else
+            info.host = host;
+        info.port = port;
         info.status = status;
         s_ErrorCallback(&info);
     }
@@ -6259,11 +6262,11 @@ extern EIO_Status SOCK_Shutdown(SOCK      sock,
     status = s_Shutdown(sock, dir, SOCK_GET_TIMEOUT(sock, c));
     if (s_ErrHook  &&  status != eIO_Success) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
         if (sock->port) {
-            char addr[40];
             SOCK_ntoa(sock->host, addr, sizeof(addr));
             info.host =       addr;
             info.port = sock->port;
@@ -6475,11 +6478,11 @@ extern EIO_Status SOCK_Wait(SOCK            sock,
     status = s_Wait(sock, event, timeout);
     if (s_ErrHook  &&  status != eIO_Success  &&  status != eIO_Timeout) {
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
         if (sock->port) {
-            char addr[40];
             SOCK_ntoa(sock->host, addr, sizeof(addr));
             info.host =       addr;
             info.port = sock->port;
@@ -6502,22 +6505,23 @@ extern EIO_Status SOCK_Poll(size_t          n,
                             size_t*         n_ready)
 {
     EIO_Status status;
-#if defined NCBI_MONKEY
+    struct timeval tv;
+    size_t         i;
+
+#ifdef NCBI_MONKEY
     int/*bool*/ call_intercepted = 0;
-    size_t      orig_n = n;
     SSOCK_Poll* orig_polls = polls; /* to know if 'polls' was replaced */
     EIO_Status  mnk_status = -1;
-    if (g_MONKEY_Poll != NULL) {
+    size_t      orig_n = n;
+    if (g_MONKEY_Poll) {
         /* Not a poll function itself, just removes some of "polls" items */
         call_intercepted = g_MONKEY_Poll(&n, &polls, &mnk_status);
     }
-    /* Even if call was intercepted, s_Select continues as if nothing
-    happened, because what we did is just removed some SSOCK_Poll pointers.
-    The changes made in s_Select will appear in the original array, but only
-    for those SSOCK_Poll's that were left by Monkey */
-#endif /* defined NCBI_MONKEY */
-    struct timeval tv;
-    size_t         i;
+    /* Even if call was intercepted, s_Select() continues as if nothing
+       happened, because what we did was just removed some SSOCK_Poll pointers.
+       The changes made in s_Select() will appear in the original array, but
+       only for those SSOCK_Poll's that were left by Monkey */
+#endif /*NCBI_MONKEY*/
 
     if (n  &&  !polls) {
         if (n_ready)
@@ -6548,22 +6552,22 @@ extern EIO_Status SOCK_Poll(size_t          n,
     }
 
     status = s_SelectStallsafe(n, polls, s_to2tv(timeout, &tv), n_ready);
-#if defined NCBI_MONKEY
-    /* Copy poll results to the original array. Probably Monkey excluded 
-     * some sockets from array, so we need two iterators */
+
+#ifdef NCBI_MONKEY
+    /* Copy poll results to the original array.  Probably Monkey excluded some
+       sockets from array, so we need two iterators */
     if (orig_polls != polls) {
         size_t orig_iter, new_iter;
-        /* First - initialize events with eIO_Open (no event) */
         for (orig_iter = 0;  orig_iter < orig_n;  orig_iter++) {
-            orig_polls[orig_iter].event = eIO_Open /* no event */;
-            orig_polls[orig_iter].revent = eIO_Open /* no event */;
+            orig_polls[orig_iter].event  = eIO_Open/*no event*/;
+            orig_polls[orig_iter].revent = eIO_Open/*no event*/;
         }
         for (new_iter = 0;  new_iter < n;  new_iter++) {
             for (orig_iter = 0;  orig_iter < orig_n;  orig_iter++) {
-                if (orig_polls[orig_iter].sock->sock 
-                                           == polls[new_iter].sock->sock) {
-                    orig_polls[orig_iter]  = polls[new_iter];
-                    break; /* Item found! Now increase new_iter */
+                if (orig_polls[orig_iter].sock->sock
+                    == polls[new_iter].sock->sock) {
+                    orig_polls[orig_iter] = polls[new_iter];
+                    break;
                 }
             }
         }
@@ -6573,7 +6577,8 @@ extern EIO_Status SOCK_Poll(size_t          n,
             return mnk_status;
         }
     }
-#endif /* defined NCBI_MONKEY */
+#endif /*NCBI_MONKEY*/
+
     return status;
 }
 
@@ -7575,8 +7580,8 @@ extern EIO_Status DSOCK_RecvMsg(SOCK            sock,
     status = s_RecvMsg(sock, buf, bufsize, msgsize, msglen,
                        sender_addr, sender_port);
     if (s_ErrHook  &&  status != eIO_Success) {
-        char          addr[40];
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
@@ -7618,8 +7623,8 @@ extern EIO_Status DSOCK_SendMsg(SOCK           sock,
 
     status = s_SendMsg(sock, host, port, data, datalen);
     if (s_ErrHook  &&  status != eIO_Success) {
-        char          addr[40];
         SSOCK_ErrInfo info;
+        char          addr[40];
         memset(&info, 0, sizeof(info));
         info.type = eSOCK_ErrIO;
         info.sock = sock;
@@ -8033,7 +8038,7 @@ extern int/*bool*/ SOCK_IsLoopbackAddress(unsigned int ip)
             &&  (addr & IN_CLASSA_NET) == (IN_LOOPBACKNET << IN_CLASSA_NSHIFT);
 #else
         return !((addr & 0xFF000000) ^ (INADDR_LOOPBACK-1));
-#  endif /*IN_CLASSA && IN_CLASSA_NET && IN_CLASSA_NSHIFT*/
+#endif /*IN_CLASSA && IN_CLASSA_NET && IN_CLASSA_NSHIFT*/
     }
     return 0/*false*/;
 }

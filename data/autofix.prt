@@ -3990,764 +3990,6 @@ Macro-action-list ::= {
           is-first-each-cap FALSE } } } } ,
   aecr {
     action
-      parse {
-        portion {
-          left-marker
-            free-text "CBS" ,
-          include-left TRUE ,
-          include-right FALSE ,
-          inside TRUE ,
-          case-sensitive TRUE ,
-          whole-word FALSE } ,
-        fields
-          source-qual {
-            field-from strain ,
-            field-to culture-collection } ,
-        remove-from-parsed FALSE ,
-        remove-left FALSE ,
-        remove-right FALSE ,
-        transform {
-          edit {
-            find-txt "CBS" ,
-            repl-txt "CBS:" ,
-            location beginning ,
-            case-insensitive FALSE } } ,
-        existing-text leave-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "CBS" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "," ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text ";" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "ATCC" ,
-          match-location contains ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "ATCC" ,
-              synonyms {
-                "DSM" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "CBS" ,
-          match-location starts ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } } } ,
-  aecr {
-    action
-      parse {
-        portion {
-          left-marker
-            free-text "ATCC" ,
-          include-left TRUE ,
-          include-right FALSE ,
-          inside TRUE ,
-          case-sensitive TRUE ,
-          whole-word FALSE } ,
-        fields
-          source-qual {
-            field-from strain ,
-            field-to culture-collection } ,
-        remove-from-parsed FALSE ,
-        remove-left FALSE ,
-        remove-right FALSE ,
-        transform {
-          edit {
-            find-txt "ATCC" ,
-            repl-txt "ATCC:" ,
-            location beginning ,
-            case-insensitive FALSE } } ,
-        existing-text leave-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "ATCC" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text ";" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "," ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "CBS" ,
-          match-location contains ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "CBS" ,
-              synonyms {
-                "DSM" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "ATCC" ,
-          match-location starts ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } } } ,
-  aecr {
-    action
-      parse {
-        portion {
-          left-marker
-            free-text "DSMZ" ,
-          include-left TRUE ,
-          include-right FALSE ,
-          inside TRUE ,
-          case-sensitive TRUE ,
-          whole-word FALSE } ,
-        fields
-          source-qual {
-            field-from strain ,
-            field-to culture-collection } ,
-        remove-from-parsed FALSE ,
-        remove-left FALSE ,
-        remove-right FALSE ,
-        transform {
-          edit {
-            find-txt "DSMZ" ,
-            repl-txt "DSM:" ,
-            location beginning ,
-            case-insensitive FALSE } } ,
-        existing-text leave-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "DSM" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          ignore-words {
-            {
-              word "DSM" ,
-              synonyms {
-                "DSMZ" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text ";" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "," ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "CBS" ,
-          match-location contains ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "CBS" ,
-              synonyms {
-                "ATCC" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "DSMZ" ,
-          match-location starts ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "DSMZ" ,
-              synonyms {
-                "DSM" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } } } ,
-  aecr {
-    action
-      parse {
-        portion {
-          left-marker
-            free-text "DSM" ,
-          include-left TRUE ,
-          include-right FALSE ,
-          inside TRUE ,
-          case-sensitive TRUE ,
-          whole-word FALSE } ,
-        fields
-          source-qual {
-            field-from strain ,
-            field-to culture-collection } ,
-        remove-from-parsed FALSE ,
-        remove-left FALSE ,
-        remove-right FALSE ,
-        transform {
-          edit {
-            find-txt "DSM" ,
-            repl-txt "DSM:" ,
-            location beginning ,
-            case-insensitive FALSE } } ,
-        existing-text leave-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "DSM" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text ";" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "," ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "ATCC" ,
-          match-location contains ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "ATCC" ,
-              synonyms {
-                "CBS" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual strain ,
-        constraint {
-          match-text "DSM" ,
-          match-location starts ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } } } ,
-  aecr {
-    action
-      parse {
-        portion {
-          left-marker
-            free-text "ATCC" ,
-          include-left TRUE ,
-          include-right FALSE ,
-          inside TRUE ,
-          case-sensitive TRUE ,
-          whole-word FALSE } ,
-        fields
-          source-qual {
-            field-from cell-line ,
-            field-to culture-collection } ,
-        remove-from-parsed FALSE ,
-        remove-left FALSE ,
-        remove-right FALSE ,
-        transform {
-          edit {
-            find-txt "ATCC" ,
-            repl-txt "ATCC:" ,
-            location beginning ,
-            case-insensitive FALSE } } ,
-        existing-text leave-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      source {
-        field1
-          textqual cell-line ,
-        constraint {
-          match-text "ATCC" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual cell-line ,
-        constraint {
-          match-text ";" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual cell-line ,
-        constraint {
-          match-text "," ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual cell-line ,
-        constraint {
-          match-text "DSM" ,
-          match-location contains ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "DSM" ,
-              synonyms {
-                "CBS" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual cell-line ,
-        constraint {
-          match-text "ATCC" ,
-          match-location starts ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } } } ,
-  aecr {
-    action
-      parse {
-        portion {
-          left-marker
-            free-text "ATCC" ,
-          include-left TRUE ,
-          include-right FALSE ,
-          inside TRUE ,
-          case-sensitive TRUE ,
-          whole-word FALSE } ,
-        fields
-          source-qual {
-            field-from tissue-type ,
-            field-to culture-collection } ,
-        remove-from-parsed FALSE ,
-        remove-left FALSE ,
-        remove-right FALSE ,
-        transform {
-          edit {
-            find-txt "ATCC" ,
-            repl-txt "ATCC:" ,
-            location beginning ,
-            case-insensitive FALSE } } ,
-        existing-text leave-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      source {
-        field1
-          textqual tissue-type ,
-        constraint {
-          match-text "ATCC" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual tissue-type ,
-        constraint {
-          match-text ";" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual tissue-type ,
-        constraint {
-          match-text "," ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual tissue-type ,
-        constraint {
-          match-text "DSM" ,
-          match-location contains ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "DSM" ,
-              synonyms {
-                "CBS" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } ,
-      source {
-        field1
-          textqual tissue-type ,
-        constraint {
-          match-text "ATCC" ,
-          match-location starts ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE ,
-          is-first-cap FALSE ,
-          is-first-each-cap FALSE } ,
-        type-constraint any } } } ,
-  aecr {
-    action
       edit {
         edit {
           find-txt "ATCC:" ,
@@ -4818,6 +4060,430 @@ Macro-action-list ::= {
           source-qual
             textqual strain } ,
     also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "JCM:" ,
+          repl-txt "JCM " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "NBRC:" ,
+          repl-txt "NBRC " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "LMG:" ,
+          repl-txt "LMG " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "CCUG:" ,
+          repl-txt "CCUG " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "KCTC:" ,
+          repl-txt "KCTC " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "DSM" ,
+          repl-txt "DSMZ " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSM" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "DSMZ" ,
+          repl-txt "DSM " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "DSM" ,
+          repl-txt "DSMZ " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual culture-collection } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual culture-collection ,
+        constraint {
+          match-text "DSM" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual culture-collection ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "DSMZ" ,
+          repl-txt "DSM " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual culture-collection } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual culture-collection ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "DSMZ" ,
+          repl-txt "DSMZ " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ " ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "DSM" ,
+          repl-txt "DSM " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSM " ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSM" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
   aecr {
     action
       edit {
@@ -5018,8 +4684,8 @@ Macro-action-list ::= {
     action
       edit {
         edit {
-          find-txt "DSMZ" ,
-          repl-txt "DSMZ " ,
+          find-txt "JCM" ,
+          repl-txt "JCM " ,
           location beginning ,
           case-insensitive FALSE } ,
         field
@@ -5031,7 +4697,7 @@ Macro-action-list ::= {
         field1
           textqual strain ,
         constraint {
-          match-text "DSMZ " ,
+          match-text "JCM " ,
           match-location contains ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
@@ -5049,7 +4715,7 @@ Macro-action-list ::= {
         field1
           textqual strain ,
         constraint {
-          match-text "DSMZ" ,
+          match-text "JCM" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space FALSE ,
@@ -5067,8 +4733,8 @@ Macro-action-list ::= {
     action
       edit {
         edit {
-          find-txt "DSM" ,
-          repl-txt "DSM " ,
+          find-txt "NBRC" ,
+          repl-txt "NBRC " ,
           location beginning ,
           case-insensitive FALSE } ,
         field
@@ -5080,7 +4746,7 @@ Macro-action-list ::= {
         field1
           textqual strain ,
         constraint {
-          match-text "DSM " ,
+          match-text "NBRC " ,
           match-location contains ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
@@ -5094,6 +4760,1266 @@ Macro-action-list ::= {
           is-first-cap FALSE ,
           is-first-each-cap FALSE } ,
         type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "NBRC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "LMG" ,
+          repl-txt "LMG " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "LMG " ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "LMG" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "CCUG" ,
+          repl-txt "CCUG " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CCUG " ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CCUG" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "KCTC" ,
+          repl-txt "KCTC " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "KCTC " ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "KCTC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "CBS" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "CBS" ,
+            repl-txt "CBS:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "ATCC" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ATCC" ,
+              synonyms {
+                "DSM" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "ATCC" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "ATCC" ,
+            repl-txt "ATCC:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "ATCC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "DSM" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "ATCC" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "JCM" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "JCM" ,
+            repl-txt "JCM:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "JCM" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "DSM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" ,
+                "ATCC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "JCM" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "NBRC" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "NBRC" ,
+            repl-txt "NBRC:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "NBRC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "DSM" ,
+                "JCM" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" ,
+                "ATCC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "NBRC" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "LMG" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "LMG" ,
+            repl-txt "LMG:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "LMG" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "DSM" ,
+                "JCM" ,
+                "NBRC" ,
+                "CCUG" ,
+                "KCTC" ,
+                "ATCC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "LMG" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "CCUG" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "CCUG" ,
+            repl-txt "CCUG:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CCUG" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "DSM" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "KCTC" ,
+                "ATCC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CCUG" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "KCTC" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "KCTC" ,
+            repl-txt "KCTC:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "KCTC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "DSM" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "ATCC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "KCTC" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "DSMZ" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "DSMZ" ,
+            repl-txt "DSM:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSM" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          ignore-words {
+            {
+              word "DSM" ,
+              synonyms {
+                "DSMZ" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "CBS" ,
+              synonyms {
+                "ATCC" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "DSMZ" ,
+              synonyms {
+                "DSM" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "DSM" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "DSM" ,
+            repl-txt "DSM:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
       source {
         field1
           textqual strain ,
@@ -5116,13 +6042,510 @@ Macro-action-list ::= {
         field1
           textqual strain ,
         constraint {
-          match-text "DSMZ" ,
+          match-text ";" ,
           match-location contains ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
           ignore-punct FALSE ,
           whole-word FALSE ,
           not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "ATCC" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ATCC" ,
+              synonyms {
+                "CBS" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSM" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "DSMZ" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "DSMZ" ,
+            repl-txt "DSMZ:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "ATCC" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ATCC" ,
+              synonyms {
+                "CBS" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "DSMZ" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual taxid ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "ATCC" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from cell-line ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "ATCC" ,
+            repl-txt "ATCC:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual cell-line ,
+        constraint {
+          match-text "ATCC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual cell-line ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual cell-line ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual cell-line ,
+        constraint {
+          match-text "DSM" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "DSM" ,
+              synonyms {
+                "CBS" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual cell-line ,
+        constraint {
+          match-text "ATCC" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "ATCC" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from tissue-type ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "ATCC" ,
+            repl-txt "ATCC:" ,
+            location beginning ,
+            case-insensitive FALSE } } ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual tissue-type ,
+        constraint {
+          match-text "ATCC" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual tissue-type ,
+        constraint {
+          match-text ";" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual tissue-type ,
+        constraint {
+          match-text "," ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual tissue-type ,
+        constraint {
+          match-text "DSM" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "DSM" ,
+              synonyms {
+                "CBS" ,
+                "JCM" ,
+                "NBRC" ,
+                "LMG" ,
+                "CCUG" ,
+                "KCTC" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE ,
+          is-first-cap FALSE ,
+          is-first-each-cap FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual tissue-type ,
+        constraint {
+          match-text "ATCC" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
           is-all-caps FALSE ,
           is-all-lower FALSE ,
           is-all-punct FALSE ,
