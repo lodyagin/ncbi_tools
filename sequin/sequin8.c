@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.79 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *
@@ -50,9 +50,12 @@
 #include <urkptpf.h>
 #include <entrez.h>
 #include <accentr.h>
-#include <ncbiurl.h>
+#include <urlquery.h>
 #include <toasn3.h>
 #include <subutil.h>
+#include <explore.h>
+#include <medarch.h>
+#include <medutil.h>
 
 typedef struct evidenceformdata {
   FEATURE_FORM_BLOCK
@@ -1240,26 +1243,29 @@ static void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
       next = xref->next;
       if (xref->data.choice == SEQFEAT_GENE && sfp->data.choice != SEQFEAT_GENE) {
         grp = (GeneRefPtr) xref->data.value.ptrvalue;
-        xref->data.value.ptrvalue = NULL;
-        if (grp != NULL) {
-          sep = SeqMgrGetSeqEntryForData (bsp);
-          if (ExtendGene (grp, sep, sfp->location)) {
-            GeneRefFree (grp);
-          } else {
-            gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
-            if (gene != NULL) {
-              gene->data.value.ptrvalue = (Pointer) grp;
-              gene->location = SeqLocFree (gene->location);
-              gene->location = AsnIoMemCopy (sfp->location,
-                                             (AsnReadFunc) SeqLocAsnRead,
-                                             (AsnWriteFunc) SeqLocAsnWrite);
+        if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) {
+        } else {
+          xref->data.value.ptrvalue = NULL;
+          if (grp != NULL) {
+            sep = SeqMgrGetSeqEntryForData (bsp);
+            if (ExtendGene (grp, sep, sfp->location)) {
+              GeneRefFree (grp);
+            } else {
+              gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
+              if (gene != NULL) {
+                gene->data.value.ptrvalue = (Pointer) grp;
+                gene->location = SeqLocFree (gene->location);
+                gene->location = AsnIoMemCopy (sfp->location,
+                                               (AsnReadFunc) SeqLocAsnRead,
+                                               (AsnWriteFunc) SeqLocAsnWrite);
+              }
             }
           }
+          *(prev) = next;
+          xref->next = NULL;
+          xref->data.choice = 0;
+          SeqFeatXrefFree (xref);
         }
-        *(prev) = next;
-        xref->next = NULL;
-        xref->data.choice = 0;
-        SeqFeatXrefFree (xref);
       } else if (xref->data.choice == SEQFEAT_PROT && sfp->data.choice == SEQFEAT_CDREGION) {
         prp = (ProtRefPtr) xref->data.value.ptrvalue;
         xref->data.value.ptrvalue = NULL;
@@ -1375,6 +1381,68 @@ static void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
   }
 }
 
+static void LookupPublications (SeqAnnotPtr sap)
+
+{
+  MonitorPtr  mon = NULL;
+  PubdescPtr  pdp;
+  SeqFeatPtr  sfp;
+  ValNodePtr  tmp;
+  Int4        uid;
+  Boolean     usingMedarch = FALSE;
+  ValNodePtr  vnp;
+
+  if (! useMedarch) return;
+  if (sap == NULL || sap->type != 1) return;
+  for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+    if (sfp->data.choice == SEQFEAT_PUB) {
+      pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+      if (pdp != NULL) {
+        vnp = pdp->pub;
+        if (vnp != NULL && vnp->next == NULL) {
+          if (vnp->choice == PUB_Muid || vnp->choice == PUB_PMid) {
+            if (! usingMedarch) {
+              WatchCursor ();
+              mon = MonitorStrNewEx ("Processing Publications", 40, FALSE);
+              MonitorStrValue (mon, "Connecting to MedArch");
+              Update ();
+              if (MedArchInit ()) {
+                usingMedarch = TRUE;
+              } else {
+                MonitorFree (mon);
+                ArrowCursor ();
+                Update ();
+                Message (MSG_POST, "Unable to connect to MedArch");
+                return;
+              }
+            }
+          }
+          tmp = NULL;
+          if (vnp->choice == PUB_Muid) {
+            uid = vnp->data.intvalue;
+            tmp = MedArchGetPub (uid);
+          } else if (vnp->choice == PUB_PMid) {
+            uid = vnp->data.intvalue;
+            tmp = MedArchGetPubPmId (uid);
+          }
+          if (tmp != NULL) {
+            tmp->next = vnp;
+            pdp->pub = tmp;
+          }
+        }
+      }
+    }
+  }
+  if (usingMedarch) {
+    MonitorStrValue (mon, "Closing MedArch");
+    Update ();
+    MedArchFini ();
+    MonitorFree (mon);
+    ArrowCursor ();
+    Update ();
+  }
+}
+
 extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
 
 {
@@ -1394,6 +1462,7 @@ extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
       sep = GetBestTopParentForData (entityID, bsp);
       genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
       SetEmptyGeneticCodes (sap, genCode);
+      LookupPublications (sap);
     } else if (sap->type == 2) {
       TakeTop10Alignments (sap);
     }
@@ -3550,6 +3619,8 @@ static void SimpleRsiteProc (IteM i)
 
 /* Analysis menu can launch external programs or use Web services */
 
+static QUEUE  urlquerylist = NULL;
+
 static Int4 pendingqueries = 0;
 
 extern void SequinCheckSocketsProc (void)
@@ -3557,53 +3628,76 @@ extern void SequinCheckSocketsProc (void)
 {
   Int4  remaining;
 
-  remaining = SOCK_CheckURLQuery ();
+  remaining = QUERY_CheckQueue (&urlquerylist);
   if (remaining < pendingqueries) {
     Beep ();
     pendingqueries--;
   }
 }
 
-static Boolean LIBCALLBACK DemoModeResultProc (CharPtr path, CharPtr format, VoidPtr mydata)
+static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
 
 {
+  FILE  *fp;
+  Char  path [PATH_MAX];
+
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  QUERY_CopyResultsToFile (conn, fp);
+  FileClose (fp);
   LaunchGeneralTextViewer (path, "QueueFastaQueryToURL results");
+  FileRemove (path);
   return TRUE;
 }
 
-static Boolean LIBCALLBACK SequinHandleURLResults (CharPtr path, CharPtr format, VoidPtr mydata)
+static Boolean LIBCALLBACK SequinHandleURLResults (CONN conn, VoidPtr userdata, EConnStatus status)
 
 {
-  if (StringCmp (format, "pretty") == 0) {
-    return DemoModeResultProc (path, format, mydata);
-  }
+  FILE  *fp;
+  Char  path [PATH_MAX];
+
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  QUERY_CopyResultsToFile (conn, fp);
+  FileClose (fp);
   if (! SequinHandleNetResults (path)) {
     LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed");
   }
+  FileRemove (path);
   return TRUE;
 }
 
 static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
 
 {
-  Boolean  posted = FALSE;
-  Char     str [64];
+  CONN             conn;
+  FILE             *fp;
+  Char             progname [64];
+  QueryResultProc  resultproc;
 
-  sprintf (str, "Sequin/%s", SEQUIN_APP_VERSION);
+  sprintf (progname, "Sequin/%s", SEQUIN_APP_VERSION);
+
   if (nop->demomode) {
-    posted = SOCK_SendURLQuery (nop->host_machine, nop->host_port,
-                                nop->host_path, nop->query, arguments,
-                                path, DemoModeResultProc, nop->timeoutsec,
-                                FALSE, FALSE, str, NULL);
+    resultproc = DemoModeResultProc;
   } else {
-    posted = SOCK_SendURLQuery (nop->host_machine, nop->host_port,
-                                nop->host_path, nop->query, arguments,
-                                path, nop->resultproc, nop->timeoutsec,
-                                FALSE, FALSE, str, NULL);
+    resultproc = nop->resultproc;
   }
-  if (posted) {
-    pendingqueries++;
-  }
+
+  conn = QUERY_OpenUrlQuery (nop->host_machine, nop->host_port,
+                             nop->host_path, arguments,
+                             progname, nop->timeoutsec,
+                             wwwencoded, URLC_SURE_FLUSH);
+  if (conn == NULL) return;
+
+  fp = FileOpen (path, "r");
+  QUERY_CopyFileToQuery (conn, fp);
+  FileClose (fp);
+
+  QUERY_SendQuery (conn);
+
+  QUERY_AddToQueue (&urlquerylist, conn, resultproc, NULL);
+
+  pendingqueries++;
 }
 
 static void DoAnalysisProc (NewObjectPtr nop, BaseFormPtr bfp, Int2 which, CharPtr arguments, ResultProc dotheanalysis)
@@ -3762,6 +3856,9 @@ static void AcceptArgumentFormProc (ButtoN b)
   Update ();
   nop = ufp->nop;
   if (nop != NULL) {
+    if (! StringHasNoText (nop->prefix)) {
+      ValNodeCopyStr (&head, 0, nop->prefix);
+    }
     for (vnp = ufp->controls, ppt = nop->paramlist;
          vnp != NULL && ppt != NULL;
          vnp = vnp->next, ppt = ppt->next) {
@@ -3897,6 +3994,9 @@ static void AcceptArgumentFormProc (ButtoN b)
       }
     }
     head = SortValNode (head, SortByVnpChoice);
+    if (! StringHasNoText (nop->suffix)) {
+      ValNodeCopyStr (&head, 0, nop->suffix);
+    }
     for (len = 0, vnp = head; vnp != NULL; vnp = vnp->next) {
       len += StringLen ((CharPtr) vnp->data.ptrvalue) + 1;
     }
@@ -3915,7 +4015,7 @@ static void AcceptArgumentFormProc (ButtoN b)
         }
       }
     }
-    args = StrSaveNoNullEncodeSpaces (arguments);
+    args = /* StrSaveNoNullEncodeSpaces */ StringSave (arguments);
     MemFree (arguments);
     DoAnalysisProc (nop, ufp->bfp, ufp->which, args, NULL);
     MemFree (args);
@@ -4332,8 +4432,9 @@ static void BuildArgumentForm (NewObjectPtr nop, BaseFormPtr bfp, Int2 which)
 static void DoURLProc (IteM i)
 
 {
-  CharPtr       arguments = NULL;
+  CharPtr       args = NULL;
   BaseFormPtr   bfp;
+  size_t        len;
   NewObjectPtr  nop;
   Int2          which;
 
@@ -4347,7 +4448,16 @@ static void DoURLProc (IteM i)
   if (bfp == NULL) return;
   which = BioseqViewOrDocSumChoice (nop);
   if (nop->paramlist == NULL) {
-    DoAnalysisProc (nop, bfp, which, NULL, NULL);
+    len = StringLen (nop->prefix) + StringLen (nop->suffix);
+    if (len > 0) {
+      args = MemNew (sizeof (Char) * (len + 2));
+      StringCpy (args, nop->prefix);
+      if (! StringHasNoText (nop->suffix)) {
+        StringCat (args, "&");
+        StringCat (args, nop->suffix);
+      }
+    }
+    DoAnalysisProc (nop, bfp, which, args, NULL);
   } else {
     BuildArgumentForm (nop, bfp, which);
   }
@@ -4441,6 +4551,8 @@ static void CleanupAnalysisExtraProc (GraphiC g, VoidPtr data)
       MemFree (upp->help);
     }
     ValNodeFreeData (nop->paramlist);
+    MemFree (nop->prefix);
+    MemFree (nop->suffix);
   }
   MemFree (data);
 }
@@ -4458,7 +4570,8 @@ static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
                              CharPtr host_machine, Uint2 host_port,
                              CharPtr host_path, CharPtr program,
                              Uint2 timeoutsec, Int2 format, Boolean demomode,
-                             URLResultProc resultproc, ValNodePtr paramlist,
+                             QueryResultProc resultproc, ValNodePtr paramlist,
+                             CharPtr prefix, CharPtr suffix,
                              CharPtr title, CharPtr submenu,
                              ItmActnProc actn, NewObjectPtr PNTR head)
 
@@ -4507,7 +4620,7 @@ static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
     nop->fastaNucOK = nucOK;
     nop->fastaProtOK = protOK;
     nop->onlyBspTarget = onlyBspTarget;
-    nop->host_machine = StrSaveNoNullEncodeSpaces (host_machine);
+    nop->host_machine = /* StrSaveNoNullEncodeSpaces */ StringSave (host_machine);
     nop->host_port = host_port;
     len = StringLen (host_path);
     tmp = MemNew (len + StringLen (program) + 5);
@@ -4518,7 +4631,7 @@ static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
       }
       StringCat (tmp, program);
     }
-    nop->host_path = StrSaveNoNullEncodeSpaces (tmp);
+    nop->host_path = /* StrSaveNoNullEncodeSpaces */ StringSave (tmp);
     MemFree (tmp);
     nop->query = NULL;
     /*
@@ -4530,6 +4643,8 @@ static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
     nop->demomode = demomode;
     nop->resultproc = resultproc;
     nop->paramlist = paramlist;
+    nop->prefix = StringSaveNoNull (prefix);
+    nop->suffix = StringSaveNoNull (suffix);
   }
   SetObjectExtra (i, (Pointer) nop, CleanupAnalysisExtraProc);
   if (head == NULL) return;
@@ -4711,6 +4826,7 @@ static ValNodePtr GetServiceParamAndPromptLists (ValNodePtr list)
   i = 1;
   sprintf (tmp, "PARAM_%d=", (int) i);
   while (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
+    upp = (UrlParamPtr) MemNew (sizeof (UrlParamData));
     if (upp == NULL) continue;
     upp->param = StringSave (title);
     sprintf (tmp, "TYPE_%d", (int) i);
@@ -4780,14 +4896,18 @@ static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
   Char        program [128];
   Char        path [256];
   Uint2       port = 80;
+  Char        prefix [128];
   Boolean     protOK = FALSE;
   Char        submenu [128];
+  Char        suffix [128];
   Uint2       timeoutsec = 30;
   Char        title [128];
   Char        tmp [32];
   unsigned    int  val;
 
-  StringNCpy_0 (title, sect, sizeof (title));
+  if (! GetAppParam ("SEQNCGIS", sect, "TITLE", NULL, title, sizeof (title) - 1)) {
+    StringNCpy_0 (title, sect, sizeof (title));
+  }
   if (GetAppParam ("SEQNCGIS", sect, "HOST", NULL, host, sizeof (host) - 1)) {
     if (GetAppParam ("SEQNCGIS", sect, "FLAGS", NULL, tmp, sizeof (tmp) - 1)) {
       if (StringStr (tmp, "SEQ") == NULL) {
@@ -4839,10 +4959,14 @@ static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
     if (GetAppParam ("SEQNCGIS", sect, "PATH", NULL, path, sizeof (path) - 1)) {
       if (GetAppParam ("SEQNCGIS", sect, "PROGRAM", NULL, program, sizeof (program) - 1)) {
         paramlist = GetConfigParamAndPromptLists (sect);
+        prefix [0] = '\0';
+        GetAppParam ("SEQNCGIS", sect, "PREFIX", NULL, prefix, sizeof (prefix) - 1);
+        suffix [0] = '\0';
+        GetAppParam ("SEQNCGIS", sect, "SUFFIX", NULL, suffix, sizeof (suffix) - 1);
         AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
                          nucOK, protOK, onlyBspTarget,
                          host, port, path, program, timeoutsec, format, demomode,
-                         SequinHandleURLResults, paramlist,
+                         SequinHandleURLResults, paramlist, prefix, suffix,
                          title, submenu, DoURLProc, head);
       }
     }
@@ -4873,11 +4997,13 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
   ValNodePtr    promptlist = NULL;
   Char          path [PATH_MAX];
   Uint2         port = 80;
+  Char          prefix [128];
   Boolean       protOK = FALSE;
   CharPtr       ptr;
   Boolean       seenBracket;
   Char          str [256];
   Char          submenu [128];
+  Char          suffix [128];
   Uint2         timeoutsec = 30;
   Char          title [128];
   Char          tmp [32];
@@ -4903,10 +5029,15 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
   while (goOn) {
     goOn = FALSE;
     title [0] = '\0';
-    if (GetServiceParam (list, "[", title, sizeof (title) - 1)) {
-      ptr = StringChr (title, ']');
-      if (ptr != NULL) {
-        *ptr = '\0';
+    if (GetServiceParam (list, "TITLE=", tmp, sizeof (tmp) - 1)) {
+      StringNCpy_0 (title, tmp, sizeof (title));
+    }
+    if (StringHasNoText (title)) {
+      if (GetServiceParam (list, "[", title, sizeof (title) - 1)) {
+        ptr = StringChr (title, ']');
+        if (ptr != NULL) {
+          *ptr = '\0';
+        }
       }
     }
     if (title [0] != '\0' && GetServiceParam (list, "HOST=", host, sizeof (host) - 1)) {
@@ -4960,10 +5091,14 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
         if (GetServiceParam (list, "PATH=", path, sizeof (path) - 1)) {
           if (GetServiceParam (list, "PROGRAM=", program, sizeof (program) - 1)) {
             paramlist = GetServiceParamAndPromptLists (list);
+            prefix [0] = '\0';
+            GetServiceParam (list, "PREFIX=", prefix, sizeof (prefix) - 1);
+            suffix [0] = '\0';
+            GetServiceParam (list, "SUFFIX=", suffix, sizeof (suffix) - 1);
             AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
                              nucOK, protOK, onlyBspTarget,
                              host, port, path, program, timeoutsec, format, demomode,
-                             SequinHandleURLResults, paramlist,
+                             SequinHandleURLResults, paramlist, prefix, suffix,
                              title, submenu, DoURLProc, head);
           }
         }
@@ -5041,7 +5176,7 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
   first = NULL;
   if (bspviewOK) {
     AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                     NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL,
+                     NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                      "Restriction Search", "Search",
                      SimpleRsiteProc, &first);
   }

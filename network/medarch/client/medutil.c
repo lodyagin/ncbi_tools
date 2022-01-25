@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.2  1999/05/06 18:53:53  kans
+* FixPubEquiv now works on PMID as well as MUID
+*
 * Revision 6.1  1998/09/14 20:54:51  bazhin
 * Changes in "ten_authors()" : if successful medline lookup has returned
 * no authors, then will use input ones.
@@ -499,10 +502,10 @@ ValNodePtr SplitMedlineEntry(MedlineEntryPtr mep)
 *****************************************************************************/
 ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 {
-	ValNodePtr tmp, newpub, muidptr=NULL, citartptr=NULL, mepptr = NULL,
+	ValNodePtr tmp, newpub, muidptr=NULL, pmidptr=NULL, citartptr=NULL, mepptr = NULL,
 		otherptr = NULL, tmp2, next, new;
-	Int2 muidctr = 0, citartctr = 0, mepctr = 0, otherctr = 0;
-	Int4 muid = 0, oldmuid=0;
+	Int2 muidctr = 0, pmidctr = 0, citartctr = 0, mepctr = 0, otherctr = 0;
+	Int4 muid = 0, oldmuid=0, pmid = 0, oldpmid=0;
 	Int2 num, numnew;
 	ValNodePtr v;
 	CitArtPtr	cit;
@@ -522,6 +525,17 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 				else
 				{
 					for (tmp2 = muidptr; tmp2->next != NULL; tmp2 = tmp2->next)
+						continue;
+					tmp2->next = tmp;
+				}
+				break;
+			case PUB_PMid:
+				pmidctr++;
+				if (pmidptr == NULL)
+					pmidptr = tmp;
+				else
+				{
+					for (tmp2 = pmidptr; tmp2->next != NULL; tmp2 = tmp2->next)
 						continue;
 					tmp2->next = tmp;
 				}
@@ -584,7 +598,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 			continue;
 	}
 	
-	if ((muidctr != 0) && (! fpop->always_look))   /* got an muid */
+	if ((muidctr != 0 || pmidctr != 0) && (! fpop->always_look))   /* got an muid */
 	{
 		if (mepptr != NULL)
 		{
@@ -595,6 +609,18 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 			}
 			else
 				tmp2->next = mepptr;
+			
+			while (tmp2->next != NULL)
+				tmp2 = tmp2->next;
+		}
+		if (pmidptr != NULL) {
+			if (tmp2 == NULL)
+			{
+				tmp2 = pmidptr;
+				pube = tmp2;
+			}
+			else
+				tmp2->next = pmidptr;
 			
 			while (tmp2->next != NULL)
 				tmp2 = tmp2->next;
@@ -633,6 +659,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 			mepptr->next = PubEquivFree(mepptr->next);
 		}
 		PubEquivFree(muidptr);   /* ditch others */
+		PubEquivFree(pmidptr);
 		PubEquivFree(citartptr);
 		tmp = SplitMedlineEntry((MedlineEntryPtr)(mepptr->data.ptrvalue));
 		ValNodeFree(mepptr);
@@ -641,6 +668,23 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 		else
 			tmp2->next = tmp;
 		return pube;
+	}
+
+	if (pmidctr != 0)    /* have a pmid */
+	{
+		oldpmid = pmidptr->data.intvalue;
+		if (pmidctr > 1)     /* more than one, just take the first */
+		{
+			for (tmp = pmidptr->next; tmp != NULL; tmp = tmp->next)
+			{
+				if (tmp->data.intvalue != pmid)
+				{
+					ErrPostEx(SEV_WARNING, ERR_REFERENCE_Multiple_muid, "Two different pmids in Pub-equiv [%ld] [%ld]\n",
+						(long) oldpmid, (long) (tmp->data.intvalue));
+				}
+			}
+		 	pmidptr->next = PubEquivFree(pmidptr->next);
+		}
 	}
 
 	if (muidctr != 0)    /* have an muid */
@@ -751,6 +795,35 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 
 	}
 		
+	if (oldpmid != 0)    /* have a pmid but no cit-art */
+	{
+		fpop->fetches_attempted++;
+		tmp = MedArchGetPubPmId(oldpmid);
+		if (tmp == NULL)
+		{
+			ErrPostEx(SEV_WARNING, ERR_REFERENCE_No_reference, "Cant find article for pmid [%ld]", (long) oldpmid);
+		}
+		else
+		{
+			fpop->fetches_succeeded++;
+			if (fpop->replace_cit)
+			{
+				tmp = MedlineToISO(tmp);
+				if (tmp2 == NULL)
+				 	pube = tmp;
+				else
+					tmp2->next = tmp;
+				tmp2 = tmp;
+			} else {
+				PubFree(tmp);
+			}
+		}
+		if (tmp2 == NULL)
+		 	pube = pmidptr;
+		else
+			tmp2->next = pmidptr;
+	}
+
 	if (oldmuid != 0)    /* have an muid but no cit-art */
 	{
 		fpop->fetches_attempted++;

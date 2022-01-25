@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Simple sequence loader
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: simple.c,v $
+* Revision 6.2  1999/03/11 23:32:07  kans
+* sprintf casts
+*
 * Revision 6.1  1999/01/11 16:07:00  kans
 * obj mgr type load OBJ_FASTA as SimpleSeq
 *
@@ -301,7 +304,7 @@ NLM_EXTERN SimpleSeqPtr SimpleSeqAsnRead (AsnIoPtr aip)
                 {
                     AsnReadVal(aip, atp, &av);
                     if (is_num)
-                        sprintf(buf, "%s_%ld", ids[i], av.intvalue);
+                        sprintf(buf, "%s_%ld", ids[i], (long) av.intvalue);
                     else
                     {
                         tmp = StringMove(buf, ids[i]);

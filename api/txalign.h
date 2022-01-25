@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.13 1999/01/13 21:52:43 victorov Exp $
+/* $Id: txalign.h,v 6.17 1999/04/15 20:57:23 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.17 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,19 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.17  1999/04/15 20:57:23  madden
+* overview printing for vector stuff
+*
+* Revision 6.16  1999/04/06 15:13:25  madden
+* Add support for non-gnl queries with dumpgnl syntax
+*
+* Revision 6.15  1999/02/26 21:28:06  victorov
+* taking different sections of config file depending on WWW_BLAST_TYPE
+*
+* Revision 6.14  1999/02/19 20:51:07  victorov
+* changed URL to the tool reporting incomplete
+* sequences. URL now includes starts/stops for all hits
+*
 * Revision 6.13  1999/01/13 21:52:43  victorov
 * added links to incomplete genomes in hit details
 *
@@ -146,6 +159,7 @@
 #define TXALIGN_CHECK_BOX	((Uint4)262144)	/* place checkbox before the line (HTML only) */
 #define TXALIGN_CHECK_BOX_CHECKED	((Uint4)524288)	/* make default value for checkboxes ON (HTML only) */
 #define TXALIGN_NEW_GIF		((Uint4)1048576)	/* print new.gif near new alignments (HTML only) */
+#define TXALIGN_NO_ENTREZ	((Uint4)2097152)	/* Use dumpgnl syntax instead of ENTREZ. */
 /*
 	Used by psi-blast to distinguish first from subsequent passes.
 */
@@ -201,6 +215,7 @@ typedef struct align_stat_option { /*options for printing the statistics*/
 	Boolean html_hot_link;			/* Prepare HTML output. */
 	Boolean html_hot_link_relative;		/* Make the HTML link relative. */
 	Boolean show_gi;
+	Boolean no_entrez;			/* Do not use Entrez format for HTML links. */
 	FILE *fp;
 	CharPtr buf;
 	BioseqPtr bsp;
@@ -214,8 +229,9 @@ typedef struct align_stat_option { /*options for printing the statistics*/
 		t_strand;	/* strand of the database sequence. */
 	Int2	m_frame,	/* Frame of the query. */
 		t_frame;	/* Frame of the database sequence. */
-	Int4 start, stop; /* hit start/stop positions */
+	CharPtr segs; /* <start> "-" <stop> ("," <start> "-" <stop>)* */
 	CharPtr db_name; /* searched databases list */
+	CharPtr blast_type; /* string used to choose proper config parms */
 }AlignStatOption, PNTR AlignStatOptionPtr;
 
 /****************************************************************************/
@@ -299,7 +315,8 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot2 PROTO((
                     Int4Ptr PNTR matrix, ValNodePtr mask_loc,
                     int (LIBCALLBACK *fmt_score_func)
                     PROTO((AlignStatOptionPtr)),
-                    CharPtr db_name
+                    CharPtr db_name,
+                    CharPtr blast_type
                     ));
 
 
@@ -341,7 +358,8 @@ NLM_EXTERN Boolean ShowAlignNodeText2 PROTO((
                      Int4Ptr PNTR u_matrix, 
                      int (LIBCALLBACK *fmt_score_func)
                      PROTO((AlignStatOptionPtr)),
-                     CharPtr db_name
+                     CharPtr db_name,
+                     CharPtr blast_type
                      ));
 
 /***********************************************************************
@@ -413,7 +431,8 @@ NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignEx2 PROTO((
 		    Int4 mode, 
 		    Int2Ptr marks, 
 		    Int4 number_of_descriptions,
-		    CharPtr db_name
+		    CharPtr db_name,
+		    CharPtr blast_type
 		    ));
 
 /*
@@ -468,6 +487,11 @@ typedef struct MarkSeqAlign {
 
 SeqIdPtr LIBCALL GetUseThisGi PROTO((SeqAlignPtr seqalign));
 Boolean LIBCALL FilterTheDefline PROTO((BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 buffer_id_length, CharPtr PNTR titlepp));
+
+
+/* Printoverview stuff. */
+Boolean LIBCALL MakeDisplaySeqLoc PROTO((SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length));
+Boolean LIBCALL PrintOverviewFromSeqLocs PROTO((ValNodePtr vnp, Int4 query_length, FILE *outfp));
 
 
 #ifdef __cplusplus

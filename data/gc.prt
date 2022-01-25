@@ -4,6 +4,14 @@
 --  Addition of Eubacterial and Alternative Yeast by J.Ostell at NCBI
 --  Base 1-3 of each codon have been added as comments to facilitate
 --    readability at the suggestion of Peter Rice, EMBL
+--  Later additions by Taxonomy Group staff at NCBI
+--
+--  Version 3.5
+--     Added code 21, Trematode Mitochondrial
+--       (as deduced from: Garey & Wolstenholme,1989; Ohama et al, 1990)
+--     Added code 16, Chlorophycean Mitochondrial
+--       (TAG can translated to Leucine instaed to STOP in chlorophyceans
+--        and fungi)
 --
 --  Version 3.4
 --     Added CTG,TTG as allowed alternate start codons in Standard code.
@@ -158,6 +166,24 @@ Genetic-code-table ::= {
   id 15 ,
   ncbieaa  "FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
   sncbieaa "-----------------------------------M----------------------------"
+  -- Base1  TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG
+  -- Base2  TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG
+  -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
+ } ,
+ {
+  name "Chlorophycean Mitochondrial" ,
+  id 16 ,
+  ncbieaa  "FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+  sncbieaa "-----------------------------------M----------------------------"
+  -- Base1  TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG
+  -- Base2  TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG
+  -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
+ } ,
+ {
+  name "Trematode Mitochondrial" ,
+  id 21 ,
+  ncbieaa  "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
+  sncbieaa "-----------------------------------M---------------M------------"
   -- Base1  TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG
   -- Base2  TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG

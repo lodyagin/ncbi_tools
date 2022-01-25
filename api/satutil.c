@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 4/25/96
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Copy Seq-feat based on sequence alignment
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: satutil.c,v $
+* Revision 6.2  1999/02/22 23:07:05  chappey
+* fix in SeqAlignReplaceId
+*
 * Revision 6.1  1998/03/17 19:49:03  zjing
 * adjust the protein product coordinates to the stop codon in CDS for feature propagation
 *
@@ -1456,13 +1459,14 @@ NLM_EXTERN void DeleteBogoProduct (UserObjectPtr PNTR head)
 *       with a new Seq-Id (newId)
 * 
 *********************************************************************/
-NLM_EXTERN SeqAlignPtr SeqAlignReplaceId (SeqIdPtr oldId, SeqIdPtr newId, SeqAlignPtr salp)
+NLM_EXTERN SeqAlignPtr SeqAlignReplaceId (SeqIdPtr oldId, SeqIdPtr the_newId, SeqAlignPtr salp)
 {
   SeqAlignPtr  salptmp =NULL;
   DenseSegPtr  dsp = NULL;
   DenseDiagPtr ddp = NULL;
   StdSegPtr    ssp = NULL;
-  SeqIdPtr     sip, pre;
+  SeqIdPtr     sip, pre,
+               newId;
 
   if (salp==NULL) return NULL;
   for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
@@ -1477,12 +1481,16 @@ NLM_EXTERN SeqAlignPtr SeqAlignReplaceId (SeqIdPtr oldId, SeqIdPtr newId, SeqAli
            pre = sip;
         }
         if (sip!=NULL){
+           newId = SeqIdDup (the_newId);
+           newId->next = NULL;
            if (pre==NULL)
                  ddp->id = newId;
            else  pre->next = newId;
-           newId->next = sip->next;
-           oldId->next = NULL;
-           SeqIdFree (oldId);
+           if (sip->next) {
+              newId->next = sip->next;
+              sip->next = NULL;
+           }
+           SeqIdFree (sip);
         }
      }   
      else if (salp->segtype == 2)
@@ -1496,12 +1504,17 @@ NLM_EXTERN SeqAlignPtr SeqAlignReplaceId (SeqIdPtr oldId, SeqIdPtr newId, SeqAli
            pre = sip;
         }
         if (sip!=NULL){
+           newId = SeqIdDup (the_newId);
+           newId->next = NULL;
            if (pre==NULL)
                  dsp->ids = newId;
            else  pre->next = newId;
-           newId->next = sip->next;
-           oldId->next = NULL;
-           SeqIdFree (oldId);
+           if (sip->next) {
+              newId->next = sip->next;
+              sip->next = NULL;
+           }
+           SeqIdFree (sip);
+           sip = newId->next;
         }
      }
      else if (salp->segtype == 3)
@@ -1515,12 +1528,16 @@ NLM_EXTERN SeqAlignPtr SeqAlignReplaceId (SeqIdPtr oldId, SeqIdPtr newId, SeqAli
            pre = sip;
         }
         if (sip!=NULL){
+           newId = SeqIdDup (the_newId);
+           newId->next = NULL;
            if (pre==NULL)
                  ssp->ids = newId;
            else  pre->next = newId;
-           newId->next = sip->next;
-           oldId->next = NULL;
-           SeqIdFree (oldId);
+           if (sip->next) {
+              newId->next = sip->next;
+              sip->next = NULL;
+           }
+           SeqIdFree (sip);
         }
      }
   }

@@ -7,7 +7,10 @@
 /*	Kenneth J. Addess August 25, 1998		    */
 /************************************************************/ 
 /*
-* $Log: prunebiostruc.c,v $
+* $Log: prunebsc.c,v $
+* Revision 6.1  1999/05/07 20:01:09  kans
+* renaming prunebiostruc to prunebsc
+*
 * Revision 6.4  1998/12/01 15:13:47  addess
 * cleaned up code to remove memory leaks
 *
@@ -19,7 +22,7 @@
  *
 */
 
-#include "prunebiostruc.h"
+#include "prunebsc.h"
 	
 /*static void My_StringNCpy(CharPtr str1, CharPtr str2, Int4 len)
 {
@@ -216,7 +219,7 @@ static BiostrucFeatureSetPtr PruneFeatureSet(BiostrucFeatureSetPtr bsfsp, Int4 i
    
   pbsfs = BiostrucFeatureSetNew();
   pbsfs->id = bsfsp->id;
-  bsfsp->id = NULL;
+  bsfsp->id = 0;
   pbsfs->descr = bsfsp->descr;
   pbsfs->features = NULL;
   bsfp = bsfsp->features;

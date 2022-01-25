@@ -34,9 +34,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dxprt.c,v $
-* Revision 6.0  1997/08/25 18:13:54  madden
-* Revision changed to 6.0
+* Revision 6.3  1999/04/06 20:19:26  lewisg
+* more opengl
 *
+* Revision 6.2  1999/03/12 18:37:30  kans
+* fixed ErrPostEx problems
+*
+* Revision 6.1  1999/02/25 23:14:32  ywang
+* move around menu item and callback function, change menu item names
+*
+ * Revision 6.0  1997/08/25  18:13:54  madden
+ * Revision changed to 6.0
+ *
 * Revision 5.0  1996/05/28 14:05:44  ostell
 * Set to revision 5.0
 *
@@ -120,7 +129,7 @@ static void Cn3D_ExportPDBNow(ButtoN b)
     if (iCount == 0) 
       {
                ErrClear(); 
-               ErrPostEx(SEV_INFO,0,0, "Nothing to save!", path);
+               ErrPostEx(SEV_INFO,0,0, "Nothing to save!");
                ErrShow();
 	       Disable(Cn3D_bPDBOk);
 	       return;
@@ -280,7 +289,7 @@ static void Cn3D_ExportKinNow(ButtoN b)
     if (iCount == 0) 
       {
                ErrClear(); 
-               ErrPostEx(SEV_INFO,0,0, "Nothing to save!", path);
+               ErrPostEx(SEV_INFO,0,0, "Nothing to save!");
                ErrShow();
 	       Disable(Cn3D_bKinOk);
 	       return;
@@ -425,6 +434,28 @@ static void Cn3D_ExportKin(IteM i)
     return;
 }
 
+static void Cn3D_GifSaveProc(IteM i)
+{
+  Char fname[PATH_MAX];
+  Char defname[32];
+  PDNMS pdnmsThis = GetSelectedModelstruc();
+
+  fname[0] = '\0';
+  defname[0] = '\0';
+
+  if (pdnmsThis == NULL)
+    StringNCpy_0(defname,
+                 pdnmsThis ? GetStrucStrings(pdnmsThis, PDB_ACC) : "cn3d",
+                 sizeof(defname) - 4);
+  StringCat(defname, ".gif");
+
+  if ( GetOutputFileName(fname, sizeof(fname), defname) )
+    {
+#ifndef _OPENGL
+      SaveImageGIF(Nlm_GetViewerImage3D(Cn3D_v3d), fname);
+#endif
+    }
+}
 
 MenU LIBCALL Cn3D_ExportSub (MenU m)
 {
@@ -434,6 +465,7 @@ MenU LIBCALL Cn3D_ExportSub (MenU m)
   s = SubMenu (m, "Export");
   i = CommandItem (s, "PDB File", Cn3D_ExportPDB);
   i = CommandItem (s, "Kinemage File", Cn3D_ExportKin);
+  i = CommandItem (s, "GIF/S", Cn3D_GifSaveProc);
   return s;
 }
 

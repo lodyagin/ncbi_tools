@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  14 Jan 1997  
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Used to provide Biostrucs data using
 * Conventional Entrez subsystems (Network or CDRom) 
@@ -38,6 +38,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: mmdbentr.c,v $
+* Revision 6.1  1999/04/22 01:59:18  kimelman
+* MMDB_configuration added
+*
 * Revision 6.0  1997/08/25 18:11:23  madden
 * Revision changed to 6.0
 *
@@ -102,4 +105,12 @@ DocUid LIBCALL MMDBEvalPDB(CharPtr str)
    LinkSetFree(plsLink); 
 
    return duUID;
+}
+
+CharPtr  LIBCALL MMDB_configuration(void)
+{
+  return
+    "Version:\t$Id: mmdbentr.c,v 6.1 1999/04/22 01:59:18 kimelman Exp $\nConfiguration:"
+    " Entrez"
+    "\n";
 }

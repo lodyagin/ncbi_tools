@@ -142,7 +142,7 @@ Int4 LIBCALL gband_l3gap(Uint1Ptr A, Uint1Ptr B,
 	
   if (score != c) {
     ErrPostEx(SEV_WARNING, 0, 0, "Check_Score = %ld align_score = %ld ", 
-	      score, c);
+	      (long) score, (long) c);
 	return 0;
   }
 

@@ -1,4 +1,4 @@
-/*  $Id: matrix.c,v 6.0 1997/08/25 18:55:54 madden Exp $
+/*  $Id: matrix.c,v 6.1 1999/04/02 20:43:30 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,9 @@
 *
 * ===========================================================================
 * $Log: matrix.c,v $
-* Revision 6.0  1997/08/25 18:55:54  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1997/05/20 14:40:00  vakatov
-* Initial revision
-*
+* Revision 6.1  1999/04/02 20:43:30  vakatov
+* DLL'd for MS-Win
+* Added detailed API function descriptions
 *
 * ==========================================================================
 */
@@ -46,8 +43,7 @@
 #include <ncbierr.h>
 
 
-typedef struct Nlm_MatrixTag
-{
+typedef struct Nlm_MatrixTag {
   Nlm_Uint4 n_row;
   Nlm_Uint4 n_column;
   Nlm_FloatHi m[1];
@@ -62,15 +58,12 @@ static Nlm_FloatHiPtr VALPtr(Nlm_Matrix mat, Nlm_Uint4 row, Nlm_Uint4 column)
 }
 #define VAL(mat,row,column) (*VALPtr(mat,row,column))
 #else  /* CHECK_RANGE_MATRIX */
-#define VAL(matrix, row, column) \
-  (matrix->m[row * matrix->n_column + column])
+#define VAL(matrix, row, column) (matrix->m[row * matrix->n_column + column])
 #endif /* CHECK_RANGE_MATRIX */
 
 
 
-#define MAT_SIZE(mat) \
-  (sizeof(Nlm_MatrixStruct) + \
-   (mat->n_row * mat->n_column - 1) * sizeof(Nlm_FloatHi))
+#define MAT_SIZE(mat) (sizeof(Nlm_MatrixStruct) + (mat->n_row * mat->n_column - 1) * sizeof(Nlm_FloatHi))
 
 
 /***********************************************************************
@@ -78,7 +71,9 @@ static Nlm_FloatHiPtr VALPtr(Nlm_Matrix mat, Nlm_Uint4 row, Nlm_Uint4 column)
  ***********************************************************************/
 
 
-static Nlm_Boolean lu_decompose(Nlm_Matrix mat, Nlm_Uint4Ptr indx)
+static Nlm_Boolean lu_decompose
+(Nlm_Matrix   mat,
+ Nlm_Uint4Ptr indx)
 {
   Nlm_Uint4 i, j, k, imax = UINT4_MAX;
   Nlm_FloatHi max, temp, sum;
@@ -158,8 +153,10 @@ static Nlm_Boolean lu_decompose(Nlm_Matrix mat, Nlm_Uint4Ptr indx)
 }
 
 
-static Nlm_Matrix lu_back_subst(const Nlm_Matrix mat, Uint4Ptr indx,
-                                const Nlm_Matrix vector)
+static Nlm_Matrix lu_back_subst
+(const Nlm_Matrix mat,
+ Uint4Ptr         indx,
+ const Nlm_Matrix vector)
 {
   Uint4 i,j;
   Uint4 n = mat->n_row;
@@ -203,10 +200,13 @@ static Nlm_Matrix lu_back_subst(const Nlm_Matrix mat, Uint4Ptr indx,
  ***********************************************************************/
 
 
-extern Nlm_Matrix Nlm_MatrixNew(Nlm_Uint4 n_row, Nlm_Uint4 n_column)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixNew
+(Nlm_Uint4 n_row,
+ Nlm_Uint4 n_column)
 {
-  Nlm_Matrix mat = (Nlm_Matrix)Nlm_MemNew(sizeof(Nlm_MatrixStruct) +
-                                 (n_row * n_column - 1) * sizeof(Nlm_FloatHi));
+  Nlm_Matrix mat = (Nlm_Matrix)
+    Nlm_MemNew(sizeof(Nlm_MatrixStruct) +
+               (n_row * n_column - 1) * sizeof(Nlm_FloatHi));
   ASSERT ( n_row  &&  n_column );
 
   mat->n_row    = n_row;
@@ -215,24 +215,28 @@ extern Nlm_Matrix Nlm_MatrixNew(Nlm_Uint4 n_row, Nlm_Uint4 n_column)
 }
 
 
-extern void Nlm_MatrixDelete(Nlm_Matrix mat)
+NLM_EXTERN void Nlm_MatrixDelete
+(Nlm_Matrix mat)
 {
   Nlm_MemFree( mat );
 }
 
 
-extern void Nlm_MatrixSetNode(Nlm_Matrix mat,
-                              Nlm_Uint4 row, Nlm_Uint4 column,
-                              Nlm_FloatHi value)
+NLM_EXTERN void Nlm_MatrixSetNode
+(Nlm_Matrix  mat,
+ Nlm_Uint4   row,
+ Nlm_Uint4   column,
+ Nlm_FloatHi value)
 {
   VAL(mat, row, column) = value;
 }
 
 
-extern void Nlm_MatrixSetRow(Nlm_Matrix       mat,
-                             Nlm_Uint4        row,
-                             const Nlm_Matrix mat_src,
-                             Nlm_Uint4        row_src)
+NLM_EXTERN void Nlm_MatrixSetRow
+(Nlm_Matrix       mat,
+ Nlm_Uint4        row,
+ const Nlm_Matrix mat_src,
+ Nlm_Uint4        row_src)
 {
   Uint4 j;
   ASSERT ( mat->n_column == mat_src->n_column );
@@ -242,10 +246,11 @@ extern void Nlm_MatrixSetRow(Nlm_Matrix       mat,
 }
 
 
-extern void Nlm_MatrixSetColumn (Nlm_Matrix       mat,
-                                 Nlm_Uint4        column,
-                                 const Nlm_Matrix mat_src,
-                                 Nlm_Uint4        column_src)
+NLM_EXTERN void Nlm_MatrixSetColumn
+(Nlm_Matrix       mat,
+ Nlm_Uint4        column,
+ const Nlm_Matrix mat_src,
+ Nlm_Uint4        column_src)
 {
   Uint4 i;
   ASSERT ( mat->n_row == mat_src->n_row );
@@ -255,14 +260,18 @@ extern void Nlm_MatrixSetColumn (Nlm_Matrix       mat,
 }
 
 
-extern Nlm_FloatHi Nlm_MatrixNode(const Nlm_Matrix mat,
-                                  Nlm_Uint4 row, Nlm_Uint4 column)
+NLM_EXTERN Nlm_FloatHi Nlm_MatrixNode
+(const Nlm_Matrix mat,
+ Nlm_Uint4        row,
+ Nlm_Uint4        column)
 {
   return VAL(mat, row, column);
 }
 
 
-extern Nlm_Matrix Nlm_MatrixRow(const Nlm_Matrix mat, Nlm_Uint4 row)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixRow
+(const Nlm_Matrix mat,
+ Nlm_Uint4        row)
 {
   Uint4 j;
   Nlm_Matrix row_mat = Nlm_MatrixNew(1, mat->n_column);
@@ -274,7 +283,9 @@ extern Nlm_Matrix Nlm_MatrixRow(const Nlm_Matrix mat, Nlm_Uint4 row)
 }
 
 
-extern Nlm_Matrix Nlm_MatrixColumn(const Nlm_Matrix mat, Nlm_Uint4 column)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixColumn
+(const Nlm_Matrix mat,
+ Nlm_Uint4        column)
 {
   Uint4 i;
   Nlm_Matrix column_mat = Nlm_MatrixNew(mat->n_row, 1);
@@ -286,15 +297,19 @@ extern Nlm_Matrix Nlm_MatrixColumn(const Nlm_Matrix mat, Nlm_Uint4 column)
 }
 
 
-extern Nlm_Boolean Nlm_MatrixCompare(const Nlm_Matrix mat1,
-                                     const Nlm_Matrix mat2)
+NLM_EXTERN Nlm_Boolean Nlm_MatrixCompare
+(const Nlm_Matrix mat1,
+ const Nlm_Matrix mat2)
 {
-  return (Nlm_Boolean)(
-           Nlm_MemCmp((VoidPtr)mat1, (VoidPtr)mat2, MAT_SIZE(mat1)) == 0);
+  ASSERT ( mat1->n_row    == mat1->n_row    );
+  ASSERT ( mat1->n_column == mat1->n_column );
+  return (Nlm_Boolean)
+    (Nlm_MemCmp((VoidPtr)mat1, (VoidPtr)mat2, MAT_SIZE(mat1)) == 0);
 }
 
  
-extern Nlm_Matrix Nlm_MatrixCopy(const Nlm_Matrix mat)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixCopy
+(const Nlm_Matrix mat)
 {
   size_t mat_size = MAT_SIZE( mat );
   Nlm_Matrix c_mat = (Nlm_Matrix)Nlm_MemNew( mat_size );
@@ -304,7 +319,8 @@ extern Nlm_Matrix Nlm_MatrixCopy(const Nlm_Matrix mat)
 }
 
 
-extern Nlm_Matrix Nlm_MatrixTranspose(const Nlm_Matrix mat)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixTranspose
+(const Nlm_Matrix mat)
 {
   Uint4 i,j;
   Nlm_Matrix t_mat = Nlm_MatrixNew(mat->n_column, mat->n_row);
@@ -317,8 +333,9 @@ extern Nlm_Matrix Nlm_MatrixTranspose(const Nlm_Matrix mat)
 }
 
 
-extern Nlm_Matrix Nlm_MatrixMultiply (const Nlm_Matrix mat_left,
-                                      const Nlm_Matrix mat_right)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixMultiply
+(const Nlm_Matrix mat_left,
+ const Nlm_Matrix mat_right)
 {
   Uint4 n_row    = mat_left->n_row;
   Uint4 n_column = mat_right->n_column;
@@ -339,8 +356,9 @@ extern Nlm_Matrix Nlm_MatrixMultiply (const Nlm_Matrix mat_left,
 }
 
 
-extern Nlm_Matrix Nlm_MatrixSolve(const Nlm_Matrix mat,
-                                  const Nlm_Matrix vector)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixSolve
+(const Nlm_Matrix mat,
+ const Nlm_Matrix vector)
 {
   Nlm_Matrix   d_mat = Nlm_MatrixCopy( mat );
   Nlm_Uint4Ptr indx = (Uint4Ptr)Nlm_MemNew(sizeof(Nlm_Uint4) * mat->n_row);
@@ -360,42 +378,43 @@ extern Nlm_Matrix Nlm_MatrixSolve(const Nlm_Matrix mat,
 }
 
 
-extern Nlm_Matrix Nlm_MatrixInvert(const Nlm_Matrix mat)
+NLM_EXTERN Nlm_Matrix Nlm_MatrixInvert
+(const Nlm_Matrix mat)
 {
   Nlm_Matrix res_matrix  = Nlm_MatrixNew(mat->n_row, mat->n_column);
   Nlm_Matrix unit_vector = Nlm_MatrixNew(mat->n_row, 1);
 
   Uint4 j;
-  for (j = 0;  j < mat->n_column;  j++)
-    {
-      VAL(unit_vector, j, 0) = 1.0;
-      {{
-        Nlm_Matrix res_vector = Nlm_MatrixSolve(mat, unit_vector);
-        Nlm_MatrixSetColumn(res_matrix, j, res_vector, 0);
-        Nlm_MatrixDelete( res_vector );
-      }}
-      VAL(unit_vector, j, 0) = 0;
-    }
+  for (j = 0;  j < mat->n_column;  j++) {
+    VAL(unit_vector, j, 0) = 1.0;
+    {{
+      Nlm_Matrix res_vector = Nlm_MatrixSolve(mat, unit_vector);
+      Nlm_MatrixSetColumn(res_matrix, j, res_vector, 0);
+      Nlm_MatrixDelete( res_vector );
+    }}
+    VAL(unit_vector, j, 0) = 0;
+  }
 
   Nlm_MatrixDelete( unit_vector );
   return res_matrix;
 }
 
 
-extern void Nlm_MatrixPrint(const Nlm_Matrix mat,
-                            FILE *fd, const Char *descr)
+NLM_EXTERN void Nlm_MatrixPrint
+(const Nlm_Matrix mat,
+ FILE*            fd,
+ const Char*      descr)
 {
   Uint4 i,j;
 
   if ( descr )
     fprintf(fd, "\n%s:\n", descr);
 
-  for (i = 0;  i < mat->n_row;  i++)
-    {
-      for (j = 0;  j < mat->n_column;  j++)
-        fprintf(fd, "%13g  ",  VAL(mat, i, j));
-      fprintf(fd, "\n");
-    }
+  for (i = 0;  i < mat->n_row;  i++) {
+    for (j = 0;  j < mat->n_column;  j++)
+      fprintf(fd, "%13g  ",  VAL(mat, i, j));
+    fprintf(fd, "\n");
+  }
 }
 
 

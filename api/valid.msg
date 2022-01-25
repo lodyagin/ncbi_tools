@@ -299,3 +299,12 @@ recognized database abbreviations.
 $^ FarLocation, 29
 The location has a reference to a bioseq that is not packaged in this record.
 
+$^ DuplicateFeat, 30
+The intervals on this feature are identical to another feature of the same type.
+This is likely to be an error in annotating the record.  Note that GenBank format
+suppresses duplicate features, so use of Graphic view is recommended.
+
+$^ UnnecessaryGeneXref, 31
+This feature has a gene xref that is identical to the overlapping gene.  This is
+redundant, and probably should be removed.
+

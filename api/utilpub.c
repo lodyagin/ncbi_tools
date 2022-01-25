@@ -840,10 +840,10 @@ static CharPtr  space_save(CharPtr str)
 	if (str == NULL) {
 		return NULL;
 	}
-	for (; isspace(*str) || *str == ','; str++);
+	for (; isspace(*str) || *str == ','; str++) continue;
 	for (s = str; *s != '\0'; s++) {
 		if (*s == '\n') {
-			for (ss = s+1; isspace(*ss); ss++);
+			for (ss = s+1; isspace(*ss); ss++) continue;
 			*s = ' ';
 			strcpy(s+1, ss);
 		}
@@ -1486,12 +1486,36 @@ static void StripSerialNumber (SeqEntryPtr sep, Pointer data, Int4 index, Int2 i
 	} 	
 }
 
+static void CheckForSwissProtID (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr  bsp;
+  SeqIdPtr   sip;
+  BoolPtr    stripSerial;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    stripSerial = (BoolPtr) mydata;
+    if (stripSerial == NULL) return;
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_SWISSPROT) {
+        *stripSerial = FALSE;
+      }
+    }
+  }
+}
+
 NLM_EXTERN void EntryStripSerialNumber (SeqEntryPtr sep)
 {
-	if (sep == NULL)
-		return;
-	SeqEntryExplore(sep, NULL, StripSerialNumber);
-	return;
+	Boolean  stripSerial = TRUE;
+
+	if (sep == NULL) return;
+	SeqEntryExplore (sep, (Pointer) &stripSerial, CheckForSwissProtID);
+	if (stripSerial) {
+		SeqEntryExplore(sep, NULL, StripSerialNumber);
+	}
 }
 
 NLM_EXTERN ValNodePtr remove_node(ValNodePtr head, ValNodePtr x)

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.21 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -44,9 +44,47 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
-* Revision 6.21  1998/12/16 19:30:12  ywang
-* add flag for highlight status to MGD
+* Revision 6.29  1999/05/07 20:48:59  kans
+* including new name of prunebsc.h
 *
+* Revision 6.28  1999/05/07 14:07:07  zimmerma
+*  new code to call prunebiostruc (lines starting at 3807)
+*
+*  InstBSAnnotSet - added params: Boolean Chain, CharPtr Path and
+* 		  modified to call PruneBiostruc (KA)
+*
+*  InstallAlignedSlave -  added params: Boolean Chain, CharPtr Path and
+* 			modified to call PruneBiostruc (KA)
+*
+*  InstallStrucFeature -  added params: Boolean Chain, CharPtr Path and
+* 			propagate to InstallAlignedSlave (KA)
+*
+*  BiostrucAddFeature -  added params: Boolean Chain, CharPtr Path and
+* 			propagate to InstallStrucFeature (KA)
+*
+*  Moved isBiopoly and isHet from mkbioseqB.c - DZ
+*
+* Revision 6.27  1999/04/26 20:49:59  lewisg
+* changed arguments named list to fix visual c++ bug
+*
+* Revision 6.26  1999/03/18 21:04:29  lewisg
+* reverse transform for saving
+*
+* Revision 6.25  1999/03/01 20:22:10  ywang
+* add bTurnedOff flag on MGD
+*
+* Revision 6.24  1999/02/25 23:11:32  ywang
+* keep ASN.1 features intact
+*
+* Revision 6.23  1999/02/24 22:58:09  ywang
+* add iMimeType to MSD node and other minor name change
+*
+* Revision 6.22  1999/02/02 22:27:00  ywang
+* add bJustHighlighted flag to MGD for feature edit
+*
+ * Revision 6.21  1998/12/16  19:30:12  ywang
+ * add flag for highlight status to MGD
+ *
  * Revision 6.20  1998/11/06  23:02:01  ywang
  * add FeatureOn to MGD for feature on/off control
  *
@@ -208,7 +246,9 @@
 NLM_EXTERN void VnpHeapSort PROTO ((ValNodePtr PNTR vnp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr ))));	
   /* this should be #include <utilpub.h> but this conflicts with mmdbdata.h. fix this. lyg */
 #include <mmdbapi.h>
-  
+#include <mmdbapi1.h>
+#include <matrix.h>
+#include "prunebsc.h"  
 
 PMBD LIBCALL NewMBD(void)
 {
@@ -295,7 +335,9 @@ PMGD LIBCALL NewMGD(void)
       pmgdNew->bReserved = 0;
       pmgdNew->bVisible = 1;   /* be displayed by default */
       pmgdNew->bHighlighted = 0;   /* be displayed by default */
-      pmgdNew->iFeature = 0;
+      pmgdNew->bJustHighlighted = 0;   /* be displayed by default */
+      pmgdNew->bTurnedOff = 0;   /* be displayed by default */
+      pmgdNew->iUserDefinedFeature = 0;
       pmgdNew->FeatureOn = 0;
                                /* Yanli */
       pmgdNew->pbMasterReserved = NULL;
@@ -354,13 +396,13 @@ PSFS LIBCALL NewSFS(void)
     return psfsNew;
 }
 
-PDNSFS LIBCALL NewDNSFS(PDNSFS PNTR list,  Int2 choice)
+PDNSFS LIBCALL NewDNSFS(PDNSFS PNTR ppdnsfsList,  Int2 choice)
 {
     PDNSFS pdnsfsNew = NULL;
     PSFS psfsNew = NULL;
     psfsNew = NewSFS();   
     if (!psfsNew) return NULL;
-    pdnsfsNew = DValNodeAddPointer(list, choice, (Nlm_VoidPtr) psfsNew);
+    pdnsfsNew = DValNodeAddPointer(ppdnsfsList, choice, (Nlm_VoidPtr) psfsNew);
     psfsNew->pdnsfsSet = pdnsfsNew; /* link to parent */
     return pdnsfsNew; 
 }
@@ -384,14 +426,14 @@ void LIBCALL FreeSFS(PSFS psfsThis)
 
 
    
-PVNSFF LIBCALL NewVNSFF(PVNSFF PNTR list,  Int2 choice)
+PVNSFF LIBCALL NewVNSFF(PVNSFF PNTR ppvnsffList,  Int2 choice)
 {
     PVNSFF pvnsffNew = NULL;
     PSFF psffNew = NULL;
  
     psffNew = NewSFF();   
     if (!psffNew) return NULL;
-    pvnsffNew = ValNodeAddPointer(list, choice, (Nlm_VoidPtr) psffNew);
+    pvnsffNew = ValNodeAddPointer(ppvnsffList, choice, (Nlm_VoidPtr) psffNew);
     return pvnsffNew; 
 }
 
@@ -676,53 +718,53 @@ names in vastsrv?        if (pmsdThis->pseqaSeqannot) SeqAnnotFree(pmsdThis->pse
  * otherwise head is new node
  */
 
-PVNMB LIBCALL NewVNMB(PVNMB PNTR list,  Int2 choice)
+PVNMB LIBCALL NewVNMB(PVNMB PNTR ppvnmbList,  Int2 choice)
 {
     PVNMB pvnmbNew = NULL;
     PMBD pmbdNew = NULL;
     pmbdNew = NewMBD();
     if (!pmbdNew) return NULL; 
-    pvnmbNew = ValNodeAddPointer(list, choice, (Nlm_VoidPtr) pmbdNew);
+    pvnmbNew = ValNodeAddPointer(ppvnmbList, choice, (Nlm_VoidPtr) pmbdNew);
     pmbdNew->pvnmbLink = pvnmbNew;  /* back link */
     return pvnmbNew;
 }
 
-PVNMO LIBCALL NewVNMO(PVNMO PNTR list,  Int2 choice)
+PVNMO LIBCALL NewVNMO(PVNMO PNTR ppvnmoList,  Int2 choice)
 {
     PVNMO pvnmoNew = NULL;
     PMOD pmodNew = NULL;
     pmodNew = NewMOD();
     if (!pmodNew) return NULL; 
-    pvnmoNew = ValNodeAddPointer(list, choice, (Nlm_VoidPtr) pmodNew);
+    pvnmoNew = ValNodeAddPointer(ppvnmoList, choice, (Nlm_VoidPtr) pmodNew);
     pmodNew->pvnmoLink = pvnmoNew;  /* back link */
     return pvnmoNew;
 }
 
 
-PVNMD LIBCALL NewVNMD(PVNMD PNTR list,  Int2 choice)
+PVNMD LIBCALL NewVNMD(PVNMD PNTR ppvnmdList,  Int2 choice)
 {
     PVNMD pvnmdNew = NULL;
     PMDD pmddNew = NULL;
     pmddNew = NewMDD();
     if (!pmddNew) return NULL; 
-    pvnmdNew = ValNodeAddPointer(list, choice, (Nlm_VoidPtr) pmddNew);
+    pvnmdNew = ValNodeAddPointer(ppvnmdList, choice, (Nlm_VoidPtr) pmddNew);
     pmddNew->pvnmdLink = pvnmdNew;  /* back link */
     return pvnmdNew;
 }
 
 
-PVNMA LIBCALL NewVNMA(PVNMA PNTR list,  Int2 choice)
+PVNMA LIBCALL NewVNMA(PVNMA PNTR ppvnmaList,  Int2 choice)
 {
     PVNMA pvnmaNew = NULL;
     PMAD pmadNew = NULL;
     pmadNew = NewMAD();
     if (!pmadNew) return NULL;
-    pvnmaNew = ValNodeAddPointer(list,  choice, (Nlm_VoidPtr) pmadNew);
+    pvnmaNew = ValNodeAddPointer(ppvnmaList,  choice, (Nlm_VoidPtr) pmadNew);
     pmadNew->pvnmaLink = pvnmaNew;
     return pvnmaNew;
 }
 
-PVNAL LIBCALL NewVNAL(PVNAL PNTR list, Int2 choice)
+PVNAL LIBCALL NewVNAL(PVNAL PNTR ppvnalList, Int2 choice)
 {
  /* picks either paldlNew or paldNew as data node */  
  /* choice is model number - which will end up as a Uint1 */
@@ -730,40 +772,40 @@ PVNAL LIBCALL NewVNAL(PVNAL PNTR list, Int2 choice)
     PALD paldNew = NULL;
     paldNew = NewALD();
     if (!paldNew) return NULL;
-    pvnalNew = ValNodeAddPointer(list, choice, (Nlm_VoidPtr) paldNew);
+    pvnalNew = ValNodeAddPointer(ppvnalList, choice, (Nlm_VoidPtr) paldNew);
     paldNew->pvnalLink = pvnalNew; /* link to ValNode */
     return pvnalNew; 
 }
 
-PDNMG LIBCALL NewDNMG(PDNMG PNTR list,  Int2 choice)
+PDNMG LIBCALL NewDNMG(PDNMG PNTR ppdnmgList,  Int2 choice)
 {
     PDNMG pdnmgNew = NULL;
     PMGD pmgdNew = NULL;
     pmgdNew = NewMGD();   
     if (!pmgdNew) return NULL;
-    pdnmgNew = DValNodeAddPointer(list, choice, (Nlm_VoidPtr) pmgdNew);
+    pdnmgNew = DValNodeAddPointer(ppdnmgList, choice, (Nlm_VoidPtr) pmgdNew);
     pmgdNew->pdnmgLink = pdnmgNew;
     return pdnmgNew; 
 }
 
-PDNMM LIBCALL NewDNMM(PDNMM PNTR list,  Int2 choice)
+PDNMM LIBCALL NewDNMM(PDNMM PNTR ppdnmmList,  Int2 choice)
 {
     PDNMM pdnmmNew = NULL;
     PMMD pmmdNew = NULL;
     pmmdNew = NewMMD(); 
     if (!pmmdNew) return NULL;
-    pdnmmNew = DValNodeAddPointer(list, choice,  (Nlm_VoidPtr) pmmdNew);
+    pdnmmNew = DValNodeAddPointer(ppdnmmList, choice,  (Nlm_VoidPtr) pmmdNew);
     pmmdNew->pdnmmLink = pdnmmNew;
     return pdnmmNew;
 }
 
-PDNMS LIBCALL NewDNMS(PDNMS PNTR list,  Int2 choice)
+PDNMS LIBCALL NewDNMS(PDNMS PNTR ppdnmsList,  Int2 choice)
 {
     PDNMS pdnmsNew = NULL;
     PMSD pmsdNew = NULL;
     pmsdNew = NewMSD();
     if (!pmsdNew) return NULL;
-    pdnmsNew = DValNodeAddPointer(list,  choice, (Nlm_VoidPtr) pmsdNew);
+    pdnmsNew = DValNodeAddPointer(ppdnmsList,  choice, (Nlm_VoidPtr) pmsdNew);
     pmsdNew->pdnmsLink = pdnmsNew;
     return pdnmsNew;
 }
@@ -2369,7 +2411,7 @@ ValNodePtr LIBCALL MakeChemGraphNodeList(PDNMS pdnmsThis,  ChemGraphPntrsPtr pcg
 
 Int2 SortOn=0;
 
-PDNTRN LIBCALL NewDNTRN(PDNTRN PNTR list,  Int2 choice)
+PDNTRN LIBCALL NewDNTRN(PDNTRN PNTR ppdntrnList,  Int2 choice)
 {
     PDNTRN pdntrnNew = NULL;
     FloatLoPtr pflvNew = NULL;
@@ -2380,13 +2422,13 @@ PDNTRN LIBCALL NewDNTRN(PDNTRN PNTR list,  Int2 choice)
       {
 	  pflvNew = FLVector(0, 2); 
 	  if (!pflvNew) return NULL;
-	  pdntrnNew = DValNodeAddPointer(list, choice, (Nlm_VoidPtr) pflvNew);
+	  pdntrnNew = DValNodeAddPointer(ppdntrnList, choice, (Nlm_VoidPtr) pflvNew);
       }
     if ((int) choice == Move_rotate)
       {
           ppflmNew = FLMatrix(0, 2, 0, 2);
 	  if (!ppflmNew) return NULL;
-	  pdntrnNew = DValNodeAddPointer(list, choice, (Nlm_VoidPtr) ppflmNew);
+	  pdntrnNew = DValNodeAddPointer(ppdntrnList, choice, (Nlm_VoidPtr) ppflmNew);
       }
     return pdntrnNew;  
 }
@@ -2578,6 +2620,154 @@ void LIBCALLBACK DoApplyTransform(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer
 } 
 
 
+static void TransformMultiply(FloatLoPtr pflvData, FloatLoPtrPtr ppflm)
+{
+    Nlm_Matrix Matrix, Vector, Result, Invert;
+    Nlm_Uint4 m, n;  /* matrix indices */
+
+    Matrix = Nlm_MatrixNew(3, 3);
+    if (!Matrix) return;
+    Vector = Nlm_MatrixNew(1, 3);
+    if (!Vector) return;
+
+    for(m = 0; m < 3; m++) {
+	for(n = 0; n < 3; n++) {
+	    Nlm_MatrixSetNode(Matrix, m, n, (Nlm_FloatHi) ppflm[m][n]);
+	}
+    }
+    for(m = 0; m < 3; m++) Nlm_MatrixSetNode(Vector, 0, m, (Nlm_FloatHi) pflvData[m]);
+    Invert = Nlm_MatrixInvert(Matrix);
+    Result = Nlm_MatrixMultiply(Vector, Invert);
+    for(m = 0; m < 3; m++) pflvData[m] = (Nlm_FloatLo) Nlm_MatrixNode(Result, 0, m);
+    Nlm_MatrixDelete(Matrix);
+    Nlm_MatrixDelete(Vector);
+    Nlm_MatrixDelete(Result);
+    Nlm_MatrixDelete(Invert);
+}
+
+
+void LIBCALLBACK DoReverseTransform(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr)
+{
+  PMAD pmadAtom = NULL;
+  PMOD pmodThis = NULL;
+  PALD paldLoc = NULL;
+  PMSD pmsdThis = NULL;
+  PDNTRN pdntrnThis = NULL;
+  FloatLoPtr pflv = NULL;
+  FloatLoPtr pflvData = NULL;
+  FloatLoPtrPtr ppflmData = NULL;
+  FloatLoPtrPtr ppflm = NULL;  
+  FloatLo flX,  flY,  flZ;
+  Int2 i,  j;
+  
+  if (IsAtomNode(pfbThis))
+      {
+          pmadAtom = (PMAD) pfbThis;
+          paldLoc = GetAtomLocs(pmadAtom, iModel);
+          pmsdThis = (PMSD) ptr;
+          /* go through each location for this particular atom and model */ 
+          while (paldLoc) 
+            {    
+	       pdntrnThis = (PDNTRN) ptr;  /* reset to head of transformations */
+	       /* then go to the end */
+	       while (pdntrnThis->next)  pdntrnThis = pdntrnThis->next;
+	       pflvData = paldLoc->pflvData;
+               while (pdntrnThis)
+	         {
+		   if (pdntrnThis->choice == Move_translate)
+		     {
+		      pflv = (FloatLoPtr) pdntrnThis->data.ptrvalue;
+	              pflvData[0] = pflvData[0] - pflv[0];
+	              pflvData[1] = pflvData[1] - pflv[1];
+	              pflvData[2] = pflvData[2] - pflv[2];
+                     }
+                  if (pdntrnThis->choice == Move_rotate)
+	             {
+		       ppflm = (FloatLoPtrPtr) pdntrnThis->data.ptrvalue;
+		       TransformMultiply(pflvData, ppflm);
+		       /*
+	               flX =(pflvData[0] * ppflm[0][0] +
+			     pflvData[1] * ppflm[1][0] +
+			     pflvData[2] * ppflm[2][0]);
+	               flY =(pflvData[0] * ppflm[0][1] +
+			     pflvData[1] * ppflm[1][1] +
+			     pflvData[2] * ppflm[2][1]);
+	               flZ = (pflvData[0] * ppflm[0][2] +
+			     pflvData[1]* ppflm[1][2] +
+			     pflvData[2] * ppflm[2][2]);
+		       pflvData[0] = flX;
+		       pflvData[1] = flY;
+		       pflvData[2] = flZ;
+		       */
+        	     } 
+	          pdntrnThis = pdntrnThis->last; /* get previous transform */
+               }
+	      paldLoc = paldLoc->next; /* get next location */
+          }  /* while paldLoc */
+      }  /* if IsAtomNode */
+      
+    if (IsObjectNode(pfbThis))
+      {
+         /* deal with the objects too */
+      pmodThis = (PMOD) pfbThis;
+      pdntrnThis = (PDNTRN) ptr;  /* reset to head of transformations */
+      /* then go to the end */
+      while (pdntrnThis->next)  pdntrnThis = pdntrnThis->next;
+      ppflmData = pmodThis->ppflObject;
+      while (pdntrnThis)
+      {
+        switch (pmodThis->bWhat)
+        {
+          
+        case OBJ_CYLINDER:
+		        i = 2;
+            break;
+        case OBJ_BRICK:
+		        i = 8;
+            break;
+        default: i=0;
+        }
+        
+        if (pdntrnThis->choice == Move_translate)
+        {
+          pflv = (FloatLoPtr) pdntrnThis->data.ptrvalue;
+          for (j = 0; j<i; j++)
+		        {		        
+            pflvData = ppflmData[j];
+            pflvData[0] = pflvData[0] - pflv[0];
+            pflvData[1] = pflvData[1] - pflv[1];
+            pflvData[2] = pflvData[2] - pflv[2];
+		        }
+        }
+        if (pdntrnThis->choice == Move_rotate)
+        {
+          ppflm = (FloatLoPtrPtr) pdntrnThis->data.ptrvalue;
+          for (j = 0; j<i; j++)
+		        {
+	TransformMultiply(ppflmData[j], ppflm);
+	/*
+            flX =(ppflmData[j][0] * ppflm[0][0] +
+              ppflmData[j][1] * ppflm[1][0] +
+              ppflmData[j][2] * ppflm[2][0]);
+            flY =(ppflmData[j][0] * ppflm[0][1] +
+              ppflmData[j][1] * ppflm[1][1] +
+              ppflmData[j][2] * ppflm[2][1]);
+            flZ = (ppflmData[j][0] * ppflm[0][2] +
+              ppflmData[j][1]* ppflm[1][2] +
+              ppflmData[j][2] * ppflm[2][2]);
+            ppflmData[j][0] = flX;
+            ppflmData[j][1] = flY;
+            ppflmData[j][2] = flZ;
+	*/
+            
+          }
+        }  
+        pdntrnThis = pdntrnThis->last; /* get next transform */
+      } /* while pdntrnThis */
+   }  /* if IsObjectNode */     
+} 
+
+
 
 PDNMS LIBCALL FindLoadedBiostruc(CharPtr pcPDBID, Int4 iId)
 {
@@ -2598,22 +2788,31 @@ PDNMS LIBCALL FindLoadedBiostruc(CharPtr pcPDBID, Int4 iId)
  return NULL; 
 }
 
-Boolean InstBSAnnotSet(BiostrucAnnotSetPtr pbsasThis)
-{
+Boolean InstBSAnnotSet(BiostrucAnnotSetPtr pbsasThis, CharPtr JobID,
+		       Boolean Chain, CharPtr Path) {
   Int2 iTest;
   Int4 iMMDBId;
   PDNMS pdnmsThis = NULL;
   PMSD  pmsdThis = NULL;
-  BiostrucPtr pbsThis = NULL;
+  BiostrucPtr pbsThis = NULL, pbsTemp = NULL;
   BiostrucIdPtr pbsidThis = NULL;
   BiostrucFeatureSetPtr pbsfsThis = NULL;
   BiostrucFeaturePtr pbsfThis = NULL;
   PSFS psfsThis = NULL;
- 
+
+  CharPtr szTemp;		/* NEW - K.A. 5/4/99 for pruning master/slave */
+  Char szName[5];
+  Char AsnPath[PATH_MAX];
+  Char AsnName[10];
+  Char MasterChain[2];
+  Char SlaveChain[2];
+
  /* the Feature set either attaches to an in-memory Modelstruc */
  /* or, if it specifies a new Modelstruc - attempts a retrieval */
  
   if (pbsasThis == NULL) return FALSE;
+  MasterChain[0] = '\0';
+  SlaveChain[0] = '\0';
 
 /* grab the id out of the Biostruc-descr */
 
@@ -2625,15 +2824,49 @@ Boolean InstBSAnnotSet(BiostrucAnnotSetPtr pbsasThis)
     }
 
   pdnmsThis = FindLoadedBiostruc(NULL, iMMDBId);
-  if (!pdnmsThis)
-    {
-      /* try to load it using all NCBI models */
+
+  if (!pdnmsThis) {
+    szTemp = pbsasThis->features->features->name;  
+    szName[0] = szTemp[0];
+    szName[1] = szTemp[1];
+    szName[2] = szTemp[2];
+    szName[3] = szTemp[3];
+    szName[4] = '\0';
+    /* try to load it using all NCBI models */
+    /* JobID points to dir containing biostruc of a query protein from VAST Search */  
+
+    /* First get the structure using MMDBBiostrucGet or FetchBS, then prune if needed */
+
+    if (JobID == NULL)
       pbsThis = MMDBBiostrucGet(iMMDBId, ALLSIMPLEMDL, 3);
-      if (!pbsThis) goto nogomem;
-      pdnmsThis =  MakeAModelstruc(pbsThis);
-       /* side effect is that this is now the selected modelstruc too */
-      if (!pdnmsThis) goto nogomem;  
+    else {
+      AsnName[0]='\0';
+      StringCpy(AsnName, "/b");
+      StringCat(AsnName, szName);
+      AsnPath[0]='\0';
+      StringCpy(AsnPath, Path);
+      StringCat(AsnPath, JobID);
+      StringCat(AsnPath, AsnName);
+      pbsThis = FetchBS(AsnPath, 0, ALLSIMPLEMDL, 3, POWER_VIEW);
     }
+
+    if (Chain) {
+      if (szTemp[4] != ' ') {
+        MasterChain[0] = szTemp[4];
+        MasterChain[1] = '\0';
+        pbsTemp = (BiostrucPtr)PruneBiostruc(pbsThis, MasterChain);
+        pbsThis = NULL;
+        pbsThis = pbsTemp;
+      }
+      SlaveChain[0] = szTemp[11];
+      SlaveChain[1] = '\0';
+    } 
+
+    if (!pbsThis) goto nogomem;
+    pdnmsThis =  MakeAModelstruc(pbsThis);
+    /* side effect is that this is now the selected modelstruc too */
+    if (!pdnmsThis) goto nogomem;  
+  }
   pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
 
   /****** WARNING: fix this if this code is ever used to recognize Neighbor mode *********/
@@ -2644,7 +2877,7 @@ Boolean InstBSAnnotSet(BiostrucAnnotSetPtr pbsasThis)
 
   while (pbsfsThis)  /* walk through each feature-set */
     {
-    iTest = BiostrucAddFeature(pbsfsThis,pdnmsThis);
+    iTest = BiostrucAddFeature(pbsfsThis,pdnmsThis, Chain, SlaveChain);  /* new slave args passed */
     if (iTest < 0) goto nogomem; /* a malloc error */
       if (!iTest) goto nogo;  /* bad feature table error - fatal */
       pbsfsThis = pbsfsThis->next;
@@ -2659,8 +2892,6 @@ nogo:
   BiostrucAnnotSetFree(pbsasThis);
   return FALSE;
 }   
-
-
 
 /************************************************************
 produce a sequence alignment from a structure-alignment
@@ -3549,12 +3780,10 @@ ValNodePtr LIBCALL MakeRegionNodeList(PDNMS pdnmsThis, RegionPntrsPtr prgpThis)
    return NULL;  
 }
 
-
-
-void LIBCALL InstallAlignedSlave(PDNMS pdnmsMaster, ChemGraphAlignmentPtr pcgaAlign, PSFD psfdThis)
-{
+void LIBCALL InstallAlignedSlave(PDNMS pdnmsMaster, ChemGraphAlignmentPtr pcgaAlign,
+				 PSFD psfdThis, Boolean Chain, CharPtr SlaveChain) {
    Int4 iId = 0;
-   BiostrucPtr pbsSlave = NULL; 
+   BiostrucPtr pbsSlave = NULL, pbsTemp = NULL;
    PDNMS pdnmsSlave = NULL;
    PMSD  pmsdSlave = NULL;
    PFB   pfbThis = NULL;
@@ -3603,6 +3832,17 @@ printf("Biostruc Slave Fetch failed %d \n", (int) iId);
     }
 
    pbsSlave = MMDBBiostrucGet(iId, ALLSIMPLEMDL, 3);
+/*****************************************************************************/
+/* This is code added by KA so that we only have to call one MMDBBiostrucGet */   
+/*****************************************************************************/
+   if (Chain == TRUE) {
+     if (SlaveChain[0] != ' ') {
+       pbsTemp = (BiostrucPtr)PruneBiostruc(pbsSlave, SlaveChain);
+       pbsSlave = NULL;
+       pbsSlave = pbsTemp;
+      }
+   }  
+/*****************************************************************************/
    if (!pbsSlave) { 
           SetNeighborOff(); 
 
@@ -3715,11 +3955,9 @@ printf("Transformed Models \n");
   return;
 }
             
-    	  
-	  
-      
- 
-PSFD  LIBCALL InstallStrucFeature(PDNMS pdnmsThis, PDNSFS pdnsfsThis, BiostrucFeaturePtr pbsfThis)
+
+PSFD  LIBCALL InstallStrucFeature(PDNMS pdnmsThis, PDNSFS pdnsfsThis, BiostrucFeaturePtr pbsfThis,
+				  Boolean Chain, CharPtr SlaveChain)
 {
 
 /* This procedure adds a new Feature to the Feature-Set registry
@@ -3814,7 +4052,7 @@ printf("in  alignment case \n");
 	     pbsfThis->Location_location = NULL; 
  	     InstallAlignedSlave(pdnmsThis, 
                                  (ChemGraphAlignmentPtr) psfsThis->psfdFeats->pData, 
-                                  psfsThis->psfdFeats );
+                                  psfsThis->psfdFeats, Chain, SlaveChain);
           break;
         case Feature_type_similarity:
         case Feature_type_region:
@@ -3841,12 +4079,9 @@ printf("in  alignment case \n");
   return psfsThis->psfdFeats;
 }
 
-
-
-Int2 LIBCALL BiostrucAddFeature(BiostrucFeatureSetPtr pbsfsThis,
-                                PDNMS pdnmsThis)
+Int2 LIBCALL BiostrucAddFeature(BiostrucFeatureSetPtr pbsfsThis, PDNMS pdnmsThis,
+				Boolean Chain, CharPtr SlaveChain)
 {
-
   BiostrucFeaturePtr pbsfThis = NULL;
   PDNSFS pdnsfsThis = NULL;
   PSFS psfsThis = NULL;
@@ -3887,8 +4122,10 @@ printf("in BiostrucAddFeature \n");
   psfsThis = (PSFS) pdnsfsThis->data.ptrvalue;
   psfsThis->iId = pbsfsThis->id;
   
-  psfsThis->pvnDescr = (ValNodePtr) pbsfsThis->descr;  /* link stub for descr */
-  pbsfsThis->descr = NULL; /* detach and save from free-ing descr  */
+/*psfsThis->pvnDescr = (ValNodePtr) pbsfsThis->descr; */ /* link stub for descr */
+/*pbsfsThis->descr = NULL; */ /* detach and save from free-ing descr  */
+               /* yanli comment the above two line out, instead do the following */
+  psfsThis->pvnDescr = AsnIoMemCopy((ValNodePtr) pbsfsThis->descr, (AsnReadFunc)BiostrucFeatureSetDescrAsnRead, (AsnWriteFunc)BiostrucFeatureSetDescrAsnWrite); 
 
   pvnThis = NULL;
   pvnThis = ValNodeFindNext(psfsThis->pvnDescr, NULL,  BiostrucFeatureSetDescr_name); 
@@ -3955,7 +4192,9 @@ printf("in BiostrucAddFeature \n");
 
      /* Installs feature entry in feature registry */   
      /* any data is attached and owned by the psfdThis node */
-     psfdThis = InstallStrucFeature(pdnmsThis, pdnsfsThis,  pbsfThis);
+
+     psfdThis = InstallStrucFeature(pdnmsThis, pdnsfsThis, pbsfThis, Chain, SlaveChain);
+
      if (!psfdThis) return 0;
      
      /* this registers the installed feature into the appropriate PFB node(s) */
@@ -4695,14 +4934,14 @@ printf("\nINTER-MOL bond from %s to %s ", pmbdThis->pmadFrom->pcAName,
 	   pbsfsThis = pbsBS->features;
 	   while (pbsfsThis)
     	     {
-	        iTest = BiostrucAddFeature(pbsfsThis, pdnmsThis);
+	        iTest = BiostrucAddFeature(pbsfsThis, pdnmsThis, FALSE, NULL);
           if (iTest < 0) goto erret;
 	        if (!iTest) goto allocerror;
 		pbsfsThis=pbsfsThis->next;
 	     }
 	              /* blow away the internal Feature Set ASN.1 */
-	   BiostrucFeatureSetFree(pbsfsThis);
-           pbsBS->features = NULL;
+/*         BiostrucFeatureSetFree(pbsfsThis);
+           pbsBS->features = NULL;      */
            /* stubs to reconstruc Feature-set descr fields remain */
            /* as well as feature-contents */
 
@@ -5004,4 +5243,47 @@ Boolean LIBCALL BiostrucAvail (void)
 
 {
   return TRUE;
+}
+
+/*	These 2 Bool funs were moved from mkbioseqB.c - DZ 4/27/99    */
+
+/***********************************************************************/
+/*  isBiopoly()					                       */
+/*							               */
+/*  Given a molecule id, checks whether the corresponding molecule is  */
+/*  either protein, DNA, or RNA and has coordinates.		       */
+/*							               */
+/***********************************************************************/ 
+
+Boolean LIBCALL isBiopoly(Int4 molecule_id, MoleculeGraphPtr currentbp)
+{
+  Boolean ret=FALSE;
+  while (currentbp) {
+    if (currentbp->id == molecule_id) {
+      ret = TRUE;
+      break;
+    }
+    currentbp = currentbp->next;
+  }
+  return ret;
+}
+/*************************************************************************/
+/*	isHet()							         */
+/*								         */
+/*  Given a molecule id, checks whether the corresponding molecule is    */
+/*  a heterogen but not solvent or of unknown type, and has coordinates. */
+/*									 */
+/*************************************************************************/ 
+
+Boolean LIBCALL isHet(Int4 molecule_id, MoleculeGraphPtr currenthet)
+{
+  Boolean ret=FALSE;
+  while (currenthet) {
+    if (currenthet->id == molecule_id) {
+      ret = TRUE;
+      break;
+    }
+    currenthet = currenthet->next;
+  }
+  return ret;
 }

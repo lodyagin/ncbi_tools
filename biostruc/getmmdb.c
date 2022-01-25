@@ -43,7 +43,7 @@ Nlm_Int2 Main ()
 	 
 	/* Initialize MMDBAPI  */ 
 
- 	if (! OpenMMDBAPI(0, NULL, (Int2) myargs[1].intvalue)) 
+ 	if (! OpenMMDBAPI(0, NULL)) 
 	  {
 	        printf("Have not opened mmdbapi");
 	        return 2;	

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -587,6 +587,8 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetValue (ffp->evidence, sfp->exp_ev + 1);
       SetStatus (ffp->partial, sfp->partial);
       SetStatus (ffp->exception, sfp->excpt);
+      SetStatus (ffp->pseudo, sfp->pseudo);
+      SetTitle (ffp->exceptText, sfp->except_text);
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
       SetTitle (ffp->geneDesc, "");
@@ -664,6 +666,8 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetValue (ffp->evidence, 1);
       SetStatus (ffp->partial, FALSE);
       SetStatus (ffp->exception, FALSE);
+      SetStatus (ffp->pseudo, FALSE);
+      SetTitle (ffp->exceptText, "");
       SetValue (ffp->gene, 1);
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
@@ -849,6 +853,8 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       }
       sfp->partial = GetStatus (ffp->partial);
       sfp->excpt = GetStatus (ffp->exception);
+      sfp->pseudo = GetStatus (ffp->pseudo);
+      sfp->except_text = SaveStringFromText (ffp->exceptText);
       sfp->title = NULL;
       sfp->product = DialogToPointer (ffp->product);
       sfp->location = DialogToPointer (ffp->location);
@@ -3452,6 +3458,7 @@ static void DbtagPtrToRWDbtagDialog (DialoG d, Pointer data)
 static Pointer DbtagDialogToDbtagPtr (DialoG d)
 
 {
+  Boolean      alldigits = TRUE;
   Char         ch;
   DbtagPtr     dp;
   ValNodePtr   head;
@@ -3460,6 +3467,7 @@ static Pointer DbtagDialogToDbtagPtr (DialoG d)
   ValNodePtr   list;
   ObjectIdPtr  oid;
   Boolean      okay;
+  CharPtr      ptr;
   CharPtr      str;
   TagListPtr   tlp;
   CharPtr      tmp;
@@ -3495,11 +3503,26 @@ static Pointer DbtagDialogToDbtagPtr (DialoG d)
             dp->tag = oid;
             if (oid != NULL) {
               tmp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
-              if (tmp != NULL && sscanf (tmp, "%ld", &val) == 1) {
-                oid->id = (Int4) val;
-                MemFree (tmp);
+              TrimSpacesAroundString (tmp);
+              if (tmp != NULL) {
+                ptr = tmp;
+                ch = *ptr;
+                while (ch != '\0') {
+                  if (ch == ' ' || ch == '+' || ch == '-') {
+                  } else if (! (IS_DIGIT (ch))) {
+                    alldigits = FALSE;
+                  }
+                  ptr++;
+                  ch = *ptr;
+                }
+                if (alldigits && sscanf (tmp, "%ld", &val) == 1) {
+                  oid->id = (Int4) val;
+                  MemFree (tmp);
+                } else {
+                  oid->str = tmp;
+                }
               } else {
-                oid->str = tmp;
+                oid->str = StringSave ("?");
               }
             }
           }

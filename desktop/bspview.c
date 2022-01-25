@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.58 $
+* $Revision: 6.62 $
 *
 * File Description: 
 *
@@ -1363,7 +1363,7 @@ static Boolean ShortDefFastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint
 	FILE * fp;
 	size_t  len;
 	Char  org [200];
-	CharPtr  ptr;
+	/* CharPtr  ptr; */
 	SeqEntryPtr  sep;
 	Char  tmp [16];
 
@@ -1387,19 +1387,23 @@ static Boolean ShortDefFastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint
 			}
 			len = StringLen (buf) + StringLen (org) + 20;
 			buffer = MemNew (len);
+			/*
 			ptr = StringChr (buf, ' ');
 			if (ptr != NULL) {
 			  *ptr = '\0';
 			  ptr++;
 			}
 			StringCpy (buffer, buf);
+			*/
 			if (org [0] != '\0') {
-			  StringCat (buffer, " [org=");
+			  StringCat (buffer, "[org=");
 			  StringCat (buffer, org);
+			  if (! StringHasNoText (buf)) {
+			    StringCat (buffer, " ");
+			  }
 			}
-			if (! StringHasNoText (ptr)) {
-			  StringCat (buffer, " ");
-			  StringCat (buffer, ptr);
+			if (! StringHasNoText (buf)) {
+			  StringCat (buffer, buf);
 			}
 			if (StringLen (buffer) > 253) {
 			  buffer [251] = '.';
@@ -1407,7 +1411,7 @@ static Boolean ShortDefFastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint
 			  buffer [253] = '.';
 			  buffer [254] = '\0';
 			}
-			fprintf(fp, ">%s\n", buffer);
+			fprintf(fp, "%s\n", buffer);
 			MemFree (buffer);
 			break;
 		case FASTA_SEQLINE:
@@ -2125,11 +2129,14 @@ static void LaunchPubSeqArticle (ButtoN b)
 #ifdef WIN_MSWIN
   argv [0] = str;
   argv [1] = NULL;
-  if (browser == NULL || StringHasNoText (browser)) {
-    browser = "netscape";
-  }
-  if (! Execv (browser, argv)) {
-    Message (MSG_POST, "Unable to launch %s", browser);
+  if (browser != NULL && (! StringHasNoText (browser))) {
+    if (! Execv (browser, argv)) {
+      Message (MSG_POST, "Unable to launch %s", browser);
+    }
+  } else {
+    if (! Nlm_MSWin_OpenDocument (str)) {
+      Message (MSG_POST, "Unable to launch browser");
+    }
   }
 #endif
 #ifdef WIN_MOTIF
@@ -2166,7 +2173,7 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
   BioseqPagePtr tmp;
   Int2          wid;
 
-  if (bfp != NULL & svpp != NULL && bpp != NULL) {
+  if (bfp != NULL && svpp != NULL && bpp != NULL) {
     count = 0;
     for (tmp = bpp; tmp != NULL; tmp = tmp->next) {
       count++;
@@ -2683,6 +2690,9 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     if (bfp->bvd.launchEditors) {
       bfp->bvd.clickMe = StaticPrompt (g, "Double click on an item to launch the appropriate editor.",
                                        0, 0, programFont, 'l');
+      if (bsp != NULL && bsp->hist != NULL && bsp->hist->replaced_by_ids != NULL) {
+        SetTitle (bfp->bvd.clickMe, "This accession has been replaced by a newer record.");
+      }
       Hide (bfp->bvd.clickMe);
     }
 

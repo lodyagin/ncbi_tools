@@ -30,11 +30,32 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.13 $
+   $Revision: 6.20 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.20  1999/04/26 21:06:19  shavirin
+   Fixed minor bug.
+
+   Revision 6.19  1999/04/26 19:37:45  shavirin
+   Dumping info set to FALSE.
+
+   Revision 6.18  1999/04/26 14:53:16  shavirin
+   Fixed memory leaks in FDBAddSequence() function.
+
+   Revision 6.17  1999/04/21 21:44:34  shavirin
+   Many functions were moved to "readdb.c" file.
+
+   Revision 6.16  1999/03/21 19:16:59  madden
+   Fix problem on round numbers
+
+   Revision 6.15  1999/03/05 21:34:48  madden
+   Changes for accession.version
+
+   Revision 6.14  1999/02/04 18:01:48  madden
+   Add -n option for basename
+
    Revision 6.13  1998/11/16 18:34:42  madden
    Add return-value checks
 
@@ -130,53 +151,10 @@
 #include <tofasta.h>
 #include <sequtil.h>
 #include <readdb.h>
-#include <ncbisam.h>
-#include <ncbisort.h>
-#include <blast.h>
 
-#define STRLENGTH     4096
-#define INDEX_ARRAY_CHUNKS 100000
+/* program's arguments */
 
-#define LOOKUP_CHUNK   5
-#define LOOKUP_SIZE    12
-#define LOOKUP_ID_SIZE 8
-
-#define FORMATDB_SIZE 4
-#define ID_MAX_SIZE   64
-
-#define LOOKUP_NO_ERROR  0
-#define ERR_GI_FAILED    1
-#define ERR_SEQID_FAILED 2
-
-#define NON_SEQID_PREFIX "gnl|BL_ORD_ID|"
-#define CREATE_DEFLINE_INDEX 1
-
-#define SEQID_FIELD   1
-#define ACCN_FIELD    2
-#define DEFLINE_FIELD 4
-
-
-
-    /* static functions */
-
-static Boolean		FormatDbUint4Write(Uint4 number, FILE *fp);
-static Int4		UpdateLookupInfo(CharPtr defline, FASTALookupPtr lookup, 
-                                         Int4 num_of_seqs, FILE *fd_stmp,
-                                         Boolean ParseSeqid);
-static int LIBCALLBACK	ID_Compare(VoidPtr i, VoidPtr j);
-static FASTALookupPtr	FASTALookupNew(void);
-static void		FASTALookupFree(FASTALookupPtr lookup);
-static Boolean		FormatdbCreateStringIndex(const CharPtr FileName, 
-                                         Boolean ProteinDump);
-static Boolean	SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num);
-
-static	Int2	process_sep (SeqEntryPtr sep, FormatDBPtr fdbp);
-static	Int2	finish_formatDB (FormatDBPtr fdbp);
-
-
-    /* program's arguments */
-
-#define NUMARG 8
+#define NUMARG 9
 
 Args dump_args[NUMARG] = {
     { "Title for database file", 
@@ -201,82 +179,123 @@ Args dump_args[NUMARG] = {
      "         T - binary, \n"
      "         F - text mode.\n",
      "F", NULL,NULL,TRUE,'b',ARG_BOOLEAN,0.0,0,NULL},
-    {"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL}
+    {"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
+    { "Base name for BLAST files", 
+      NULL, NULL, NULL, TRUE, 'n', ARG_STRING, 0.0, 0, NULL}
 };
 
-#define db_title	(const CharPtr) dump_args[0].strvalue 
-#define db_file		(const CharPtr) dump_args[1].strvalue 
-#define LogFileName	(const CharPtr) dump_args[2].strvalue  
-#define is_protein	dump_args[3].intvalue
-#define parse_mode	dump_args[4].intvalue
-#define isASN		dump_args[5].intvalue
-#define asnbin		dump_args[6].intvalue
-#define is_seqentry	dump_args[7].intvalue
+/*#define db_title	(const CharPtr) dump_args[0].strvalue 
+  #define db_file		(const CharPtr) dump_args[1].strvalue 
+  #define LogFileName	(const CharPtr) dump_args[2].strvalue  
+  #define is_protein	dump_args[3].intvalue
+  #define parse_mode	dump_args[4].intvalue
+  #define isASN		dump_args[5].intvalue
+  #define asnbin		dump_args[6].intvalue
+  #define is_seqentry	dump_args[7].intvalue
+  #define base_name	(CharPtr) dump_args[8].strvalue */
+
+FDB_optionsPtr FDB_CreateCLOptions(void)
+{
+    FDB_optionsPtr options;
+    
+    options = MemNew(sizeof(FDB_options));
+    
+    if ( !GetArgs ("formatdb", NUMARG, dump_args) )
+        return NULL;
+    
+    if ( !ErrSetLog (dump_args[2].strvalue) ) { /* Logfile */
+        ErrShow();
+    } else {
+        ErrSetOpts (ERR_CONTINUE, ERR_LOG_ON);
+    }
+    
+    options->db_title = StringSave(dump_args[0].strvalue);
+    options->db_file = StringSave(dump_args[1].strvalue);
+    options->LogFileName = StringSave(dump_args[2].strvalue);
+    options->is_protein = dump_args[3].intvalue;
+    options->parse_mode = dump_args[4].intvalue;
+    options->isASN = dump_args[5].intvalue;
+    options->asnbin = dump_args[6].intvalue;
+    options->is_seqentry = dump_args[7].intvalue;
+    options->base_name = StringSave(dump_args[8].strvalue);
+    options->dump_info = FALSE;
+
+    return options;
+}
 
 
-Int4 OffsetAllocated = INDEX_ARRAY_CHUNKS;
-
-    /* main() */
+/* main() */
 
 Int2 Main(void) 
 {
     SeqEntryPtr sep;
     FormatDBPtr	fdbp;
     Uint1 group_segs = 0;
+    FDB_optionsPtr options;
+    BioseqPtr bsp;
+    ByteStorePtr seq_data_new;
 
-        /* get arguments */
+    /* get arguments */
 
-    if ( !GetArgs ("formatdb", NUMARG, dump_args) ) {
-        return -1;
-    }
-    if ( !ErrSetLog (LogFileName) ) {
-        ErrShow();
-    } else {
-        ErrSetOpts (ERR_CONTINUE, ERR_LOG_ON);
-    }
-
+    if((options = FDB_CreateCLOptions()) == NULL)
+        return 1;
+    
         /* Initialize formatdb structure */
-    if ((fdbp =
-         FormatDBInit(db_file, db_title, is_protein, parse_mode, isASN, asnbin))
-        == NULL)
+    if ((fdbp = FormatDBInit(options)) == NULL)
         return -1;
      
     
-        /* Input database file maybe either in ASN.1 or in FASTA format */
+    /* Input database file maybe either in ASN.1 or in FASTA format */
     
-    if (!isASN) {
-            /* FASTA format of input database */
-
-            /* Get sequences */
-        while ((sep = FastaToSeqEntryEx(fdbp->fd, (Boolean)!is_protein,
-                                        NULL, parse_mode)) != NULL) {
-
+    if (!options->isASN) {
+        /* FASTA format of input database */
+        
+        /* Get sequences */
+        while ((sep = FastaToSeqEntryEx(fdbp->fd, 
+                                        (Boolean)!options->is_protein,
+                                        NULL, options->parse_mode)) != NULL) {
+            
             if(!IS_Bioseq(sep)) { /* Not Bioseq - failure */
                 ErrLogPrintf("Error in readind Bioseq Formating failed.\n");
                 return -1;
             }
             
+#ifdef FDB_OLD_STYLE
             if (process_sep(sep, fdbp))
                 return -1;
+#else
+            SeqEntrySetScope(sep);
+            bsp = (BioseqPtr) sep->data.ptrvalue;
+            
+            {{
+                Int4 gi = 555;
+                CharPtr div = "";
+                Int4 tax_id = 7;
+                Int4 owner = 67;
+                Int4 date = time(NULL); 
                 
+                FDBAddSequence (fdbp, gi, bsp->id, BioseqGetTitle(bsp), 
+                                tax_id, div, 
+                                owner, bsp->seq_data_type, 
+                                &bsp->seq_data, bsp->length, date);
+            }}
+#endif                
             SeqEntryFree(sep);
-            fdbp->num_of_seqs++;  
         }
-    }
-    else {
-            /* ASN.1 format of input database */
+    } else {
+        /* ASN.1 format of input database */
         AsnTypePtr atp, atp2;
         AsnModulePtr amp;
-
+        
         if (! SeqEntryLoad())
             ErrShow();
-
-            /* get pointer to all loaded ASN.1 modules */
         
-            /* get pointer to all loaded ASN.1 modules */
+        /* get pointer to all loaded ASN.1 modules */
+        
+        /* get pointer to all loaded ASN.1 modules */
         amp = AsnAllModPtr();
-        if (amp == NULL)
-        {
+
+        if (amp == NULL) {
             ErrLogPrintf("Could not load ASN.1 modules.\n");
             return -1;
         }
@@ -284,44 +303,37 @@ Int2 Main(void)
             /* get the initial type pointers */
         
         atp = AsnFind("Bioseq-set");
-        if (atp == NULL)
-        {
+        if (atp == NULL) {
             ErrLogPrintf("Could not get type pointer for Bioseq-set.\n");
             return -1;
         }
-
+        
         atp2 = AsnFind("Bioseq-set.seq-set.E");
-        if (atp2 == NULL)
-        {
+        if (atp2 == NULL) {
             ErrLogPrintf("Could not get type pointer for Bioseq-set.seq-set.E\n");
             return -1;
         }
 
-        if ((fdbp->aip = AsnIoOpen (db_file, asnbin ? "rb":"r")) == NULL)
-        {
+        if ((fdbp->aip = AsnIoOpen (options->db_file, 
+                                    options->asnbin ? "rb":"r")) == NULL) {
             ErrLogPrintf("Cannot open input database file. Formating failed...\n");
             return -1;
         }
-
-        if (is_seqentry) {
-                /* Seq entry */
-            sep = SeqEntryAsnRead(fdbp->aip, NULL);
-            SeqEntrysToBLAST(sep, fdbp, !(is_protein), group_segs);
-            SeqEntryFree(sep);
-        }
-        else {
-            /* Bioseq-set */
         
-            while ((atp = AsnReadId(fdbp->aip, amp, atp)) != NULL)
-            {
-                if (atp == atp2)    /* top level Seq-entry */
-                {
+        if (options->is_seqentry) {
+            /* Seq entry */
+            sep = SeqEntryAsnRead(fdbp->aip, NULL);
+            SeqEntrysToBLAST(sep, fdbp, !(options->is_protein), group_segs);
+            SeqEntryFree(sep);
+        } else {
+            /* Bioseq-set */
+            
+            while ((atp = AsnReadId(fdbp->aip, amp, atp)) != NULL) {
+                if (atp == atp2) {   /* top level Seq-entry */
                     sep = SeqEntryAsnRead(fdbp->aip, atp);
-                    SeqEntrysToBLAST(sep, fdbp, !(is_protein), group_segs);
+                    SeqEntrysToBLAST(sep, fdbp, !(options->is_protein), group_segs);
                     SeqEntryFree(sep);
-                }
-                else
-                {
+                } else {
                     AsnReadVal(fdbp->aip, atp, NULL);
                 }
             }
@@ -329,983 +341,13 @@ Int2 Main(void)
         
     } /* end "if FASTA or ASN.1" */
     
-        /* write files */
-    if (finish_formatDB(fdbp))
+    /* Deallocate structure, arrays, etc. */
+    if(FormatDBClose(fdbp))
         return -1;
     
-        /* Deallocate structure, arrays, etc. */
-    fdbp = FormatDBDestruct(fdbp);
-
     return 0;
     
 } /* main()*/
 
 
-NLM_EXTERN Boolean SeqEntrysToBLAST (SeqEntryPtr sep, FormatDBPtr fdbp,
-                                     Boolean is_na, Uint1 group_segs)
-{
-    FastaDat tfa;
-    MyFsa mfa;
-    Char buf[255];
-    
-    if ((sep == NULL) || (fdbp == NULL))
-        return FALSE;
-    
-    mfa.buf	= buf;
-    mfa.buflen	= 254;
-    mfa.seqlen	= 70;
-    mfa.mydata	= (Pointer)fdbp;
-    mfa.myfunc	= BLASTFileFunc;
-    mfa.bad_asn1	= FALSE;
-    mfa.order		= 0;
-    mfa.accession	= NULL;
-    mfa.organism	= NULL;
-    mfa.do_virtual	= FALSE;
-    mfa.tech		= 0;
-    mfa.no_sequence	= FALSE;
-    mfa.formatdb	= TRUE;
 
-    if (is_na)
-            /* in case of "formatdb" we wont use this parameter */
-        mfa.code = Seq_code_ncbi2na;
-    else
-        mfa.code = Seq_code_ncbistdaa;
-    
-    tfa.mfp = &mfa;
-    tfa.is_na = is_na;
-    if (group_segs == 3)  /* do 2 things */
-    {
-        mfa.do_virtual = TRUE;
-        group_segs = 1;
-    }
-    tfa.group_segs = group_segs;
-    tfa.last_indent = -1;
-    tfa.parts = -1;
-    tfa.seg = -1;
-    tfa.got_one = FALSE;
-    SeqEntryExplore(sep, (Pointer)&tfa, SeqEntryFasta);
-    return tfa.got_one;
-}
-
-
-/*****************************************************************************
- *
- *   FastaFileFunc(key, buf, data)
- *       standard "write to file" callback
- *
- *****************************************************************************/
-NLM_EXTERN Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen,
-                                  Pointer data)
-{
-    FormatDBPtr	fdbp = (FormatDBPtr) data;
-    Int4		SequenceLen;
-    Uint4		i, total, index;
-    
-    switch (key)
-    {
-        case FASTA_ID:
-
-            SequenceLen = bsp->length;
-            fdbp->TotalLen += SequenceLen;
-            
-            if (fdbp->MaxSeqLen < SequenceLen)
-                fdbp->MaxSeqLen = SequenceLen;
-            
-            if(OffsetAllocated <= fdbp->num_of_seqs) {
-                OffsetAllocated += INDEX_ARRAY_CHUNKS;
-                
-                fdbp->DefOffsetTable = (Int4Ptr)Realloc(fdbp->DefOffsetTable, 
-                                                        OffsetAllocated*sizeof(Uint4));
-                fdbp->SeqOffsetTable = (Int4Ptr)Realloc(fdbp->SeqOffsetTable, 
-                                                        OffsetAllocated*sizeof(Uint4));
-                if(!fdbp->isProtein) {
-                    fdbp->AmbOffsetTable = (Int4Ptr)Realloc(fdbp->AmbOffsetTable, 
-                                                            OffsetAllocated*sizeof(Uint4));
-                }
-            }
-            
-            fdbp->DefOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_def); 
-            fdbp->SeqOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq);
-            
-            if (FileWrite(buf, buflen, 1, fdbp->fd_def) != (Uint4) 1)
-		return FALSE;
-            if (FileWrite(" ", 1, 1, fdbp->fd_def) != (Uint4) 1)
-		return FALSE;
-
-                    /* Now adding new entried into lookup hash table */
-            
-            if((UpdateLookupInfo(buf, fdbp->lookup, 
-                                 fdbp->num_of_seqs, fdbp->fd_stmp, fdbp->ParseMode)) 
-               != LOOKUP_NO_ERROR) {
-                return -1;
-            } 
-            break;
-        case FASTA_DEFLINE:
-	    if (FileWrite(buf, buflen, 1, fdbp->fd_def) != (Uint4) 1)
-		return FALSE;
-	    break;
-        case FASTA_SEQLINE:
-            if (FileWrite(buf, buflen, 1, fdbp->fd_seq) != (Uint4) 1)
-		return FALSE;
-            break;
-        case FASTA_EOS:   /* end of sequence */
-            if(fdbp->isProtein) {
-                i=0;
-                if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1)
-			return FALSE;
-            } else {
-                    /* dump ambiguity characters. */
-                fdbp->AmbOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq); /* Anyway... */
-                
-                    /* if AmbCharPtr is not NULL, then there was ambiguity. */
-                if(fdbp->AmbCharPtr != NULL) 
-                {
-                        /* The first Uint4 holds the total number of ambig. bp. */
-                    total = (*(fdbp->AmbCharPtr))+1;
-                    for (index=0; index<total; index++) {
-                        if (!FormatDbUint4Write(fdbp->AmbCharPtr[index], fdbp->fd_seq))
-				return FALSE;
-                    }
-                    MemFree(fdbp->AmbCharPtr);
-                    fdbp->AmbCharPtr = NULL;
-                }
-            }
-            fdbp->num_of_seqs++;
-            break;
-        case FASTA_FORMATDB_AMB:
-        {
-            Int4 len;
-            Char tmpbuff[1024];
-                /* In case of "formatdb" nucleotides have to be compressed */
-            
-            fdbp->AmbCharPtr = NULL;
-            
-            if (bsp->seq_data_type == Seq_code_ncbi4na && bsp->seq_data != NULL){
-                
-                    /* ncbi4na require compression into ncbi2na */
-                
-                if((bsp->seq_data = 
-                    BSCompressDNA(bsp->seq_data, bsp->length, 
-                                  &(fdbp->AmbCharPtr))) == NULL) {
-                    ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
-                                 "Formating failed.\n");
-                    return -1;
-                }
-                
-                bsp->seq_data_type = Seq_code_ncbi2na; /* just for information */
-            } else {
-                    /* if sequence already in ncbi2na format we have to update last byte */
-                Uint1 ch, remainder; 
-                
-                if((remainder = (bsp->length%4)) == 0) {
-                    BSSeek(bsp->seq_data, bsp->length/4+1, SEEK_SET);
-                    BSPutByte(bsp->seq_data, NULLB);
-                } else {
-                    BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                    ch = remainder + BSGetByte(bsp->seq_data);
-                    BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                    BSPutByte(bsp->seq_data, ch);
-                }
-            }
-                /* Now dumping sequence */
-            
-            BSSeek(bsp->seq_data, 0, SEEK_SET);
-            while((len = BSRead(bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) {
-                BLASTFileFunc(bsp, FASTA_SEQLINE, tmpbuff, len, data);
-            }
-            
-            BLASTFileFunc(bsp, FASTA_EOS, NULL, 0, data);
-        }
-            break;
-        default:
-            break;
-    }
-    return TRUE;
-}
-    
-
-/*******************************************************************************
- * Initializing FormatDB structure (see formatdb.h),
- ******************************************************************************* 
- * Parameters:
- *	dbname		- name of the input file
- *	isProtein	- true, if file with protein seqs
- *
- * Returns pointer to allocated FormatDB structure (FormatDBPtr)
- *	
- ******************************************************************************/
-
-FormatDBPtr	FormatDBInit(const CharPtr dbname, const CharPtr dbtitle,
-                             Boolean isProtein, Boolean ParseMode,
-                             Boolean is_asn, Boolean asn_binmode)
-{
-
-    FormatDBPtr		fdbp;
-    Char		filenamebuf[FILENAME_MAX];
-    Uint4		i = 0;
-    
-    fdbp = (FormatDBPtr) MemNew (sizeof(*fdbp));
-    
-    fdbp->dbname = dbname;
-    fdbp->DbTitle = dbtitle;
-    fdbp->num_of_seqs = 0;
-    fdbp->isProtein = isProtein;
-    fdbp->ParseMode = ParseMode;
-    fdbp->TotalLen=0, fdbp->MaxSeqLen=0;
-
-        /* open input database */
-    if (is_asn) {
-#if 0        
-        if ((fdbp->aip = AsnIoOpen (dbname, asn_binmode ? "rb":"r")) == NULL)
-        {
-            ErrLogPrintf("Cannot open input database file. Formating failed...\n");
-            return NULL;
-        }
-        fdbp->fd = NULL;
-#endif        
-    }
-    else {
-        
-        if((fdbp->fd = FileOpen(dbname, "r")) == NULL) {
-            ErrLogPrintf("Cannot open input database file. Formating failed...\n");
-            return NULL;
-        }
-        fdbp->aip = NULL;
-    }
-    
-        /* open output BLAST files */
-    
-        /* Defline file */
-    
-    sprintf(filenamebuf, "%s.%chr", 
-            dbname, fdbp->isProtein ? 'p' : 'n'); 
-    fdbp->fd_def = FileOpen(filenamebuf, "wb");        
-    
-        /* Sequence file */
-    
-    sprintf(filenamebuf, "%s.%csq",
-            dbname, fdbp->isProtein ? 'p' : 'n'); 
-    fdbp->fd_seq = FileOpen(filenamebuf, "wb");        
-    
-    if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1) /* Sequence file started from NULLB */
-	return NULL;
-    
-        /* Index file */
-    
-    sprintf(filenamebuf, "%s.%cin",
-            dbname, fdbp->isProtein ? 'p' : 'n'); 
-    fdbp->fd_ind = FileOpen(filenamebuf, "wb");      
-    
-        /* String (accession) index temporary file */
-
-    fdbp->fd_stmp = NULL;
-    if(ParseMode) {
-        sprintf(filenamebuf, "%s.%ctm",
-                dbname, fdbp->isProtein ? 'p' : 'n'); 
-        fdbp->fd_stmp = FileOpen(filenamebuf, "wb");      
-    }
-    
-    ErrLogPrintf("Version %s [%s]\n", BlastGetVersionNumber(), BlastGetReleaseDate()); 
-    ErrLogPrintf("Started database file \"%s\"\n", dbname);
-
-        /* Allocating space for offset tables */
-    fdbp->DefOffsetTable = (Int4Ptr)MemNew(OffsetAllocated*sizeof(Uint4));
-    fdbp->SeqOffsetTable = (Int4Ptr)MemNew(OffsetAllocated*sizeof(Uint4));
-    if(!isProtein) 
-        fdbp->AmbOffsetTable = (Int4Ptr)MemNew(OffsetAllocated*sizeof(Uint4));
-    else
-        fdbp->AmbOffsetTable = NULL;
-
-        /* Allocating space for lookup table */
-    
-    if((fdbp->lookup = FASTALookupNew()) == NULL) {
-        ErrLogPrintf("Error initializing Lookup structure. Formatting failed.\n");
-        return NULL;
-    }
-
-    return fdbp;
-}
-
-
-/*******************************************************************************
- * Free memory allocated for given variable of FormatDB
- ******************************************************************************* 
- * Parameters:
- *	fdbp	- pointer to memory to be freed
- *
- * Returns NULL
- ******************************************************************************/
-
-
-FormatDBPtr	FormatDBDestruct(FormatDBPtr fdbp)
-{
-
-    MemFree(fdbp->DefOffsetTable);
-    MemFree(fdbp->SeqOffsetTable);
-    
-    if(!fdbp->isProtein) {
-        MemFree(fdbp->AmbOffsetTable);
-    }
-    
-    FASTALookupFree(fdbp->lookup);
-
-    if (fdbp->fd)
-        FileClose(fdbp->fd);
-    FileClose(fdbp->fd_def);
-    FileClose(fdbp->fd_ind);
-    FileClose(fdbp->fd_seq);
-    
-    if (fdbp->aip)
-        AsnIoClose(fdbp->aip);
-    
-    MemFree (fdbp);
-    
-    return NULL;
-}
-
-
-/*******************************************************************************
- * Pass thru each bioseq into given SeqEntry and write corresponding information
- * into "def", "index", ...., files
- ******************************************************************************* 
- * Parameters:
- *	fdbp	- pointer to memory to be freed
- *
- * Returns NULL
- ******************************************************************************/
-static	Int2	process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
-{
-
-    Int4		SequenceLen;
-    BioseqPtr		bsp = NULL;
-    CharPtr		defline;
-    Char		tmpbuff[1024];
-    Int4		buffer_size=0, defline_len=0;
-    CharPtr		buffer=NULL;
-    Int4		len, id_length;
-    Uint4Ptr		AmbCharPtr = NULL;
-    Uint1		ch, remainder;
-    Uint4		i, total, index;
-
-    if (IS_Bioseq(sep))
-        bsp = (BioseqPtr) sep->data.ptrvalue;
-    else
-            /* This is Bioseq-set.  Exit */
-        return 0;
-
-        /* Make a convertion to stadard form */
-
-    if (fdbp->isProtein)
-        BioseqRawConvert(bsp, Seq_code_ncbistdaa);
-    
-    SequenceLen = bsp->length;
-    fdbp->TotalLen += SequenceLen;
-    
-    if (fdbp->MaxSeqLen < SequenceLen)
-        fdbp->MaxSeqLen = SequenceLen;
-        
-    if(OffsetAllocated <= fdbp->num_of_seqs) {
-        OffsetAllocated += INDEX_ARRAY_CHUNKS;
-        
-        fdbp->DefOffsetTable = (Int4Ptr)Realloc(fdbp->DefOffsetTable, 
-                                          OffsetAllocated*sizeof(Uint4));
-        fdbp->SeqOffsetTable = (Int4Ptr)Realloc(fdbp->SeqOffsetTable, 
-                                          OffsetAllocated*sizeof(Uint4));
-        if(!fdbp->isProtein) {
-            fdbp->AmbOffsetTable = (Int4Ptr)Realloc(fdbp->AmbOffsetTable, 
-                                              OffsetAllocated*sizeof(Uint4));
-        }
-    }
-    
-    fdbp->DefOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_def); 
-    fdbp->SeqOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq);
-    
-        /* ---------------------- */
-
-    if(fdbp->ParseMode == FALSE) 
-    {
-        sprintf(tmpbuff, "%s%d ", NON_SEQID_PREFIX, fdbp->num_of_seqs);
-        if (FileWrite(tmpbuff, StringLen(tmpbuff), 1, fdbp->fd_def) != (Uint4) 1)
-		return 1;
-        defline = (CharPtr)bsp->descr->data.ptrvalue;
-    }
-    else
-    {
-        if (bsp->descr)
-            defline_len = StringLen(BioseqGetTitle(bsp));
-        else
-            defline_len = 0;
-        defline_len += 255;	/* Sufficient for an ID. */
-        if (buffer_size < defline_len)
-        {
-            if (buffer)
-                buffer = MemFree(buffer);
-            buffer = MemNew((defline_len+1)*sizeof(Char));
-            buffer_size = defline_len;
-        }
-        SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, STRLENGTH);
-        id_length = StringLen(buffer);
-        buffer[id_length] = ' ';
-        id_length++;
-        StringCpy(&buffer[id_length], BioseqGetTitle(bsp));
-        defline = buffer;
-    }
-    if (FileWrite(defline, StringLen(defline), 1, fdbp->fd_def) != (Uint4) 1)
-	return 1;
-    
-        /* -------- Now adding new entried into lookup hash table */
-    
-    if((UpdateLookupInfo(defline, fdbp->lookup, 
-                         fdbp->num_of_seqs, fdbp->fd_stmp, fdbp->ParseMode)) 
-       != LOOKUP_NO_ERROR) {
-        return -1;
-    }
-
-    defline = NULL;
-    if (buffer)
-	MemFree(buffer);
-    
-    if(!fdbp->isProtein)  {
-        AmbCharPtr = NULL;
-        if (bsp->seq_data_type == Seq_code_ncbi4na && bsp->seq_data != NULL){
-            
-                /* ncbi4na require compression into ncbi2na */
-            
-            if((bsp->seq_data = 
-                BSCompressDNA(bsp->seq_data, bsp->length, 
-                              &AmbCharPtr)) == NULL) {
-                ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
-                             "Formating failed.\n");
-                return -1;
-            }
-            
-            bsp->seq_data_type = Seq_code_ncbi2na; /* just for information */
-        } else {
-                /* if sequence already in ncbi2na format we have to update last byte */
-            
-            if((remainder = (bsp->length%4)) == 0) {
-                BSSeek(bsp->seq_data, bsp->length/4+1, SEEK_SET);
-                BSPutByte(bsp->seq_data, NULLB);
-            } else {
-                BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                ch = remainder + BSGetByte(bsp->seq_data);
-                BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                BSPutByte(bsp->seq_data, ch);
-            }
-        }
-    }
-        /* Now dumping sequence */
-    
-    BSSeek(bsp->seq_data, 0, SEEK_SET);
-
-    while((len = BSRead(bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) 
-    {
-        if (FileWrite(tmpbuff, len, 1, fdbp->fd_seq) != (Uint4) 1)
-		return 1;
-    }
-    
-    if(fdbp->isProtein) {
-        i=0;
-        if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1)
-		return 1;
-    } else {
-            /* dump ambiguity characters. */
-        fdbp->AmbOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq); /* Anyway... */
-        
-            /* if AmbCharPtr is not NULL, then there was ambiguity. */
-        if(AmbCharPtr != NULL) 
-        { /* The first Uint4 holds the total number of ambig. bp. */
-            total = (*AmbCharPtr)+1;
-            for (index=0; index<total; index++) {
-                if (!FormatDbUint4Write(AmbCharPtr[index], fdbp->fd_seq))
-			return 1;
-            }
-            MemFree(AmbCharPtr);
-            AmbCharPtr = NULL;
-        }
-    }
-
-    return 0;
-}    
-
-
-
-
-
-/*******************************************************************************
- * Finish stage - out offset tables, etc, into files.  Is to be called before
- * FormatDBDestruct()
- ******************************************************************************* 
- * Parameters:
- *	
- *
- * Returns  void
- ******************************************************************************/
-
-static	Int2	finish_formatDB (FormatDBPtr fdbp) 
-{
-    Char	DBName[FILENAME_MAX];
-    Int4	title_len;
-    Char	dateTime[30];
-    ISAMObjectPtr object;
-    ISAMErrorCode error;
-    Uint4	i;
-    Char	filenamebuf[FILENAME_MAX];
-    
-   
-    fdbp->DefOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_def); 
-    
-    if(!fdbp->isProtein) {
-        fdbp->AmbOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq);
-        fdbp->SeqOffsetTable[fdbp->num_of_seqs] =
-            fdbp->AmbOffsetTable[fdbp->num_of_seqs];
-    } else {
-        fdbp->SeqOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq);
-    }
-    
-        /* Parsing finished - now dumping index file */
-    
-    if(fdbp->ParseMode)
-        FileClose(fdbp->fd_stmp);
-    
-        /* Information */
-    
-    if (!FormatDbUint4Write(FORMATDB_VER, fdbp->fd_ind))
-	return 1;
-    if (!FormatDbUint4Write(fdbp->isProtein, fdbp->fd_ind))
-	return 1;
-    
-    if(fdbp->DbTitle != NULL)
-        title_len = StringLen(fdbp->DbTitle);
-    else
-        title_len = 0;
-    
-    if (!FormatDbUint4Write(title_len, fdbp->fd_ind))
-	return 1;
-    
-    if (title_len != 0)
-        if (FileWrite(fdbp->DbTitle, title_len, 1, fdbp->fd_ind) != (Uint4) 1)
-		return 1;
-    
-    Nlm_DayTimeStr(dateTime, TRUE, TRUE);
-    if (!FormatDbUint4Write(StringLen(dateTime), fdbp->fd_ind))
-	return 1;
-    if (FileWrite(dateTime, StringLen(dateTime), 1, fdbp->fd_ind) != 1)
-	return 1;
-    
-    if (!FormatDbUint4Write(fdbp->num_of_seqs, fdbp->fd_ind))
-	return 1;
-    if (!FormatDbUint4Write(fdbp->TotalLen, fdbp->fd_ind))
-	return 1;
-    if (!FormatDbUint4Write(fdbp->MaxSeqLen, fdbp->fd_ind))
-	return 1;
-    
-        /* Offset tables */
-    
-    for(i=0; i <= fdbp->num_of_seqs; i++) {
-        if (!FormatDbUint4Write(fdbp->DefOffsetTable[i], fdbp->fd_ind))
-		return 1;
-    }
-    
-    for(i=0; i <= fdbp->num_of_seqs; i++) {
-        if (!FormatDbUint4Write(fdbp->SeqOffsetTable[i], fdbp->fd_ind))
-		return 1;
-    }
-    if(!fdbp->isProtein) {
-        for(i=0; i <= fdbp->num_of_seqs; i++) {
-            if (!FormatDbUint4Write(fdbp->AmbOffsetTable[i], fdbp->fd_ind))
-		return 1;
-        }
-    }
-    
-        /* Numeric lookup table sort & dump */
-    
-    if(fdbp->ParseMode && fdbp->lookup->used > 0) {
-        FILE	*fd_lookup;
-        
-        sprintf(DBName, "%s.%cnd",
-                fdbp->dbname, fdbp->isProtein ? 'p' : 'n'); 
-        fd_lookup = FileOpen(DBName, "wb");          
-        
-        HeapSort(fdbp->lookup->table, fdbp->lookup->used/2,
-                 sizeof(Uint4)*2, ID_Compare); 
-        
-        for(i=0; i < fdbp->lookup->used; i++) {
-            if (!FormatDbUint4Write(fdbp->lookup->table[i], fd_lookup))
-		return 1;
-        }
-        
-        FileClose(fd_lookup);
-        
-            /* Now creating numeric ISAM index */
-        
-        sprintf(filenamebuf, "%s.%cni", 
-                fdbp->dbname, fdbp->isProtein ? 'p' : 'n'); 
-        
-        if((object = ISAMObjectNew(ISAMNumeric, 
-                                   DBName, filenamebuf)) == NULL) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Failed to create ISAM object.\n");
-            return 1;
-        }
-        
-        if((error = ISAMMakeIndex(object, 0)) != ISAMNoError) {
-            if (error == ISAMNoOrder) {
-                ErrPostEx(SEV_ERROR, 0, 0, "Failed to create index."
-                          "  Possibly a gi included more than once in the database.\n", (long) error);
-            } else {
-                ErrPostEx(SEV_ERROR, 0, 0, "Failed to create index.\n", (long) error);
-            }
-            return 1;
-        }
-        ISAMObjectFree(object);
-    }
-    
-        /* String file sorting */
-    
-    if(fdbp->ParseMode)
-    {
-        if (!FormatdbCreateStringIndex(fdbp->dbname, fdbp->isProtein))
-		return 1;
-    }
-    
-    ErrLogPrintf("Formated %d sequences\n", fdbp->num_of_seqs);
-
-    return 0;
-    
-} /* end finish_formatDB() */
-
-
-/*******************************************************/
-static Boolean FormatdbCreateStringIndex(const CharPtr FileName, 
-                                         Boolean ProteinType)
-{
-    SORTObjectPtr sop;
-    Char filenamebuf[FILENAME_MAX], DBName[FILENAME_MAX];
-    FILE *fd_out;
-    CharPtr files;
-    ISAMErrorCode error;
-    ISAMObjectPtr isamp;
-
-    /*  object for unique sorting */
-    
-    if((sop = SORTObjectNew(NULL, '\0', 0,
-                            FALSE, TRUE)) == NULL) { 
-        ErrPostEx(SEV_ERROR, 0, 0, "Failed to create SORT Object");
-        return FALSE;
-    }
-
-    sprintf(filenamebuf, "%s.%ctm",
-            FileName, ProteinType ? 'p' : 'n'); 
-    
-    sprintf(DBName, "%s.%csd",
-            FileName, ProteinType ? 'p' : 'n'); 
-    
-    if((fd_out = FileOpen(DBName, "w")) == NULL)
-    {
-        return FALSE;
-    }
-    files = filenamebuf;
-    
-    if (SORTFiles(&files, 1, fd_out, sop) != SORTNoError)
-    {
-        ErrPostEx(SEV_ERROR, 0, 0, "SORTFiles failed");
-	return FALSE;
-    }
-    SORTObjectFree(sop);
-
-    FileClose(fd_out);
-    FileRemove(filenamebuf);
-
-    sprintf(filenamebuf, "%s.%csi",
-            FileName, ProteinType ? 'p' : 'n'); 
-    
-    if((isamp = ISAMObjectNew(ISAMString, DBName, 
-                              filenamebuf)) == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Creating of ISAM object failed");
-        return FALSE;
-    }
-    
-    if((error = ISAMMakeIndex(isamp, 0)) != ISAMNoError) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Creating of index failed with error code %ld\n", (long) error);
-        ISAMObjectFree(isamp);
-        return FALSE;
-    } 
-    
-    ISAMObjectFree(isamp);
-    
-    return TRUE;
-}
-
-static Int4 UpdateLookupInfo(CharPtr defline, 
-                             FASTALookupPtr lookup, 
-                             Int4 num_of_seqs,
-                             FILE *fd_stmp,
-                             Boolean ParseSeqid
-                             )
-{
-    CharPtr p, d = defline;
-    Int4 i, gi = 0;
-    Char TextId[ID_MAX_SIZE+1];
-    SeqIdPtr sip, sip_tmp;
-    
-    if(defline == NULL)
-        return LOOKUP_NO_ERROR;
-    
-    if(!ParseSeqid)
-        return LOOKUP_NO_ERROR;
-    
-    for(p = d = defline; ;d = p + StringLen(TextId)) {
-        
-        MemSet(TextId, 0, sizeof(TextId));
-        
-        for(i=0; !isspace(*p) && i < ID_MAX_SIZE; p++,i++)
-            TextId[i]=*p;
-        
-        if((sip = SeqIdParse(TextId)) == NULL) {/* Bad SeqId string */
-            ErrLogPrintf("Sequence id \"%s\" is not parseable. "
-                         "Formating failed at %s\n", TextId, defline);
-            return ERR_SEQID_FAILED;
-        }
-     
-        for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
-            if(sip_tmp->choice == SEQID_GI) {
-                gi = sip_tmp->data.intvalue;
-                break;
-            }
-        }
-
-        if(gi != 0) { /* GI not found */
-            
-            if((lookup->used + 2) >= lookup->allocated) {
-                lookup->allocated += LOOKUP_CHUNK;
-                lookup->table = (Int4Ptr)Realloc(lookup->table, 
-                                                 lookup->allocated*(sizeof(Int4))); 
-            }
-            
-            lookup->table[lookup->used] = gi;
-            lookup->table[lookup->used+1] = num_of_seqs;
-            lookup->used += 2;    
-        }
-        
-        if(!SeqIdSetE2Index (sip, fd_stmp, num_of_seqs)) {
-            ErrLogPrintf("SeIdSetE2Index failed. Exiting..\n");
-            return FALSE;
-        }
-        
-	sip = SeqIdSetFree(sip);
-        
-        if((p = StringChr(d, READDB_DEF_SEPARATOR)) == NULL)
-            break;
-        else
-            p++;
-    }
-    return LOOKUP_NO_ERROR;
-}
-
-/* Size of variable that is manipulated, and swapped 
-   for big/little endian stuff. */
-
-static Boolean
-FormatDbUint4Write(Uint4 number, FILE *fp)
-  
-{
-  Uint4 value;
-
-  /* If FORMATDB_SIZE changes, this must be changed. */
-  value = Nlm_SwapUint4(number);	
-  if (FileWrite(&(value), FORMATDB_SIZE, 1, fp) != (Uint4) 1)
-	return FALSE;
-
-  return TRUE;
-}
-
-static FASTALookupPtr FASTALookupNew(void) {
-  FASTALookupPtr lookup;
-  
-  if((lookup = (FASTALookupPtr)MemNew(sizeof(FASTALookup))) == NULL)
-    return NULL;
-  if((lookup->table = (Int4Ptr)MemNew(LOOKUP_CHUNK*4)) == NULL)
-    return NULL;
-  
-  lookup->allocated = LOOKUP_CHUNK;
-  lookup->used = 0;
-  return lookup;
-}
-static void FASTALookupFree(FASTALookupPtr lookup)
-{
-  MemFree(lookup->table);
-  MemFree(lookup);
-}
-/* ------------------------------------------------------------------
-                This is handler for HeapSort function
-   ------------------------------------------------------------------*/
-static int LIBCALLBACK ID_Compare(VoidPtr i, VoidPtr j)
-{
-  if (*(Int4Ptr)i > *(Int4Ptr)j)
-    return (1);
-  if (*(Int4Ptr)i < *(Int4Ptr)j)
-    return (-1);
-  return (0);
-}
-
-/*****************************************************************************
-*
-*   SeqIdE2Index(anp)
-*   	atp is the current type (if identifier of a parent struct)
-*       if atp == NULL, then assumes it stands alone (SeqId ::=)
-*
-*****************************************************************************/
-static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num)
-{
-    Boolean retval = FALSE;
-    TextSeqIdPtr tsip = NULL;
-    ObjectIdPtr oid;
-    PDBSeqIdPtr psip;
-    Boolean do_gb = FALSE;
-    Uint1 tmptype;
-    CharPtr tmp, ptr=NULL;
-    Char buf[81];
-    Int4 length, i;
-    DbtagPtr dbt;
-    Uint1 chain = 0;
-
-    if (anp == NULL)
-        return FALSE;
-    
-    switch (anp->choice) {
-
-    case SEQID_LOCAL:     /* local */
-	oid = (ObjectIdPtr)(anp->data.ptrvalue);
-	ptr = oid->str;
-        break;
-    case SEQID_GIBBSQ:    /* gibbseq */
-        sprintf(buf, "%ld", (long)(anp->data.intvalue));
-        ptr = buf;
-        break;
-    case SEQID_GIBBMT:    /* gibbmt */
-        break;
-    case SEQID_GIIM:      /* giimid */
-        return TRUE;      /* not indexed */
-    case SEQID_EMBL:      /* embl */
-    case SEQID_DDBJ:      /* ddbj */
-        do_gb = TRUE;     /* also index embl, ddbj as genbank */
-    case SEQID_GENBANK:   /* genbank */
-    case SEQID_PIR:       /* pir   */
-    case SEQID_SWISSPROT: /* swissprot */
-    case SEQID_OTHER:     /* other */
-    case SEQID_PRF:       /* prf   */
-        tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
-        break;
-    case SEQID_PATENT:    /* patent seq id */
-        break;
-    case SEQID_GENERAL:   /* general */
-        dbt = (DbtagPtr)(anp->data.ptrvalue);
-        ptr = dbt->tag->str;
-        break;
-    case SEQID_GI:        /* gi */
-        break;
-    case SEQID_PDB:       /* pdb   */
-	psip = (PDBSeqIdPtr)(anp->data.ptrvalue);
-	ptr = psip->mol;
-        chain = psip->chain;
-        break;
-    }
-    
-    SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-
-    length = StringLen(buf);
-    for(i = 0; i < length; i++)
-        buf[i] = TO_LOWER(buf[i]);
-    fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-
-    if (ptr != NULL)   /* write a single string */
-    {
-	StringMove(buf, ptr);
-        length = StringLen(buf);
-        for(i = 0; i < length; i++)
-            buf[i] = TO_LOWER(buf[i]);
-        fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
- 
-        if (chain != 0) /* PDB only. */
-        {
-            fprintf(fd, "%s|%c%c%ld\n", buf, chain, ISAM_DATA_CHAR, (long) seq_num);
-            fprintf(fd, "%s %c%c%ld\n", buf, chain, ISAM_DATA_CHAR, (long) seq_num);
-        }
-    }
-
-    if (tsip != NULL) {   /* separately index accession and locus */
-        if ((tsip->accession != NULL) && (tsip->name != NULL)) {
-            tmp = tsip->accession;
-            tsip->accession = NULL;
-            SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-            length = StringLen(buf);
-            for(i = 0; i < length; i++)
-                buf[i] = TO_LOWER(buf[i]);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-            tsip->accession = tmp;
-            tmp = tsip->name;
-            tsip->name = NULL;
-            SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-            length = StringLen(buf);
-            for(i = 0; i < length; i++)
-                buf[i] = TO_LOWER(buf[i]);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-            tsip->name = tmp;
-        }
-
-               /* now index as separate strings */
-	if (tsip->name != NULL)
-	{
-		StringMove(buf, tsip->name);
-		length = StringLen(buf);
-            for(i = 0; i < length; i++)
-                buf[i] = TO_LOWER(buf[i]);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-	}
-        if (tsip->accession != NULL)
-        {
-                StringMove(buf, tsip->accession);
-                length = StringLen(buf);
-            for(i = 0; i < length; i++)
-                buf[i] = TO_LOWER(buf[i]);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-	}
- 
-    }
-    
-    if (do_gb) {   /* index embl and ddbj as genbank */
-        tmptype = anp->choice;
-        anp->choice = SEQID_GENBANK;
-        SeqIdE2Index(anp, fd, seq_num);
-        anp->choice = tmptype;
-    }
-
-    retval = TRUE;
-    return retval;
-}
-
-/*****************************************************************************
-*
-*   SeqIdSetE2Index(anp, e2p, settype, elementtype)
-*
-*****************************************************************************/
-Boolean SeqIdSetE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num)
-{
-    SeqIdPtr oldanp;
-    Boolean retval = FALSE;
-    
-    if (anp == NULL)
-        return FALSE;
-    
-    oldanp = anp;
-
-    while (anp != NULL) {
-        if (!SeqIdE2Index(anp, fd, seq_num))
-            goto erret;
-        anp = anp->next;
-    }
-    
-    retval = TRUE;
-erret:
-    return retval;
-}

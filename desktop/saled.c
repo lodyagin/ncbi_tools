@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.43 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *
@@ -703,7 +703,7 @@ static void update_prompt (PaneL pnl, CharPtr label, Int4 position)
         SetTitle (wdp->pos, str);
      }
      else {
-        sprintf (str, "");
+        sprintf (str, " ");
         SetTitle (wdp->pos, str);
      }
   }
@@ -736,7 +736,7 @@ static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
         if (choice==PRINTID_GIcc)
            tmp = SeqIdFindBest (bsp->id, 0);
         else
-           tmp = bsp->id;
+           tmp = SeqIdFindWorst (bsp->id);
         if (tmp)
         {
            SeqIdWrite (tmp, str, choice, 120);
@@ -776,7 +776,7 @@ extern void to_update_prompt (PaneL pnl, SelStructPtr ssp, SeqAlignPtr salp, Val
   slp = (SeqLocPtr) ssp->region;
   sip = SeqLocId(slp);
   if (choice == 0)
-     choice = PRINTID_TEXTID_ACCESSION;
+     choice = PRINTID_FASTA_LONG;  /*PRINTID_TEXTID_ACCESSION;*/
   seqid = seqid_tolabel (sip, choice);
   selp = is_selectedbyID (ssp->entityID, ssp->itemID, ssp->itemtype);
   if (selp != NULL) 

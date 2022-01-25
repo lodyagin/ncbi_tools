@@ -1,4 +1,4 @@
-/*  $Id: vibmouse.h,v 6.0 1997/08/25 18:57:23 madden Exp $
+/*  $Id: vibmouse.h,v 6.1 1999/04/06 14:23:26 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * ==========================================================================
 * $Log: vibmouse.h,v $
+* Revision 6.1  1999/04/06 14:23:26  lewisg
+* add opengl replacement for viewer3d
+*
 * Revision 6.0  1997/08/25 18:57:23  madden
 * Revision changed to 6.0
 *
@@ -44,7 +47,10 @@
 #ifndef VIBMOUSE_H
 #define VIBMOUSE_H
 
-#include <vibrant.h>
+/* #include <vibrant.h> lyg */
+#include <vibtypes.h>
+#include <vibprocs.h>
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,7 +102,7 @@ typedef enum
 struct _MA;
 typedef struct _MA PNTR MAPtr;
 
-extern MAPtr MA_Create(MenU group_menu, MenU action_menu);
+extern MAPtr MA_Create(Nlm_MenU group_menu, Nlm_MenU action_menu);
 
 
 /*---[ MA_AddAction ]----------------------------------------------------
@@ -109,8 +115,8 @@ typedef struct _MAction PNTR MActionPtr;
 
 typedef struct
 {
-  PoinT start;
-  PoinT end;
+  Nlm_PoinT start;
+  Nlm_PoinT end;
 }
 MA_Trace, PNTR MA_TracePtr;
 
@@ -120,7 +126,7 @@ typedef void (*MA_Func)  PROTO (
 (
  MAPtr       ma,     /* handle of the MA controls */
  MA_TracePtr trace,  /* aux. memory area(unique for each MA) */
- PoinT       point,  /* present coordinates of the mouse */
+ Nlm_PoinT       point,  /* present coordinates of the mouse */
  VoidPtr     extra   /* extra data(specified by user in MA_AddAction()) */
  )
 );
@@ -133,7 +139,7 @@ extern MActionPtr MA_AddAction(MAPtr            ma,
                                const Char PNTR  name);
 
 /* Dummy callback to use in MA_AddAction() -- just for user's convenience */
-extern void DoNothingMA(MAPtr ma, MA_TracePtr trace, PoinT point,
+extern void DoNothingMA(MAPtr ma, MA_TracePtr trace, Nlm_PoinT point,
                         VoidPtr extra);
 
 
@@ -203,13 +209,13 @@ extern Boolean MA_UnsetGroup(MA_GroupPtr group);
  *       overwritten and then used by the MA internals! (Thus, the
  *       panel's extra data must have size at least sizeof(MAPtr).)
  */
-extern Boolean MA_LinkPanel(MAPtr ma, PaneL panel);
+extern Boolean MA_LinkPanel(MAPtr ma, Nlm_PaneL panel);
 
 
 /*---[ MA_GetPanel ]-----------------------------------------------------
  * Get handle of the panel presently linked to the "ma"
  */
-extern PaneL MA_GetPanel(MAPtr ma);
+extern Nlm_PaneL MA_GetPanel(MAPtr ma);
 
 
 /*---[ MA_UnlinkPanel ]--------------------------------------------------

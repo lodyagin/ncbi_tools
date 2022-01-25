@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -103,13 +103,15 @@
 #define SALSA_INTERLEAVE  7 
 #define SALSA_NEXUS       8 
 #define SALSA_PHYLIP      9 
-#define SALSA_SHWTXT     10 
-#define SALSAA_FASTA     11 
-#define SALSAA_PHYLIP    12
-#define SALSA_CLUSTALV   13
+#define SALSA_CLUSTALV   10
+#define SALSA_SHWTXT     11 
+#define SALSAA_FASTA     12 
+#define SALSAA_CONTIGUOUS 13 
 #define SALSAA_FASTGAP   14 
-#define SALSAA_NEXUS     15
-#define SALSAA_GCG       16 
+#define SALSAA_INTERLEAVE 15 
+#define SALSAA_PHYLIP    16
+#define SALSAA_NEXUS     17
+#define SALSAA_GCG       18
 
 #define PRG_ANYALIGN      0
 #define PRG_FASTA_IMPORT  1 

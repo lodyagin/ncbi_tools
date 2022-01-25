@@ -33,6 +33,27 @@
 *
 * Modifications:
 * $Log: cn3dmsg.h,v $
+* Revision 6.41  1999/04/06 20:12:57  lewisg
+* more opengl
+*
+* Revision 6.40  1999/03/30 22:36:19  ywang
+* add functions to color salsa for NcbiMimeAsn1_strucseqs & code reorganization
+*
+* Revision 6.39  1999/03/22 22:41:14  ywang
+* remove argument in MediaObjSelect
+*
+* Revision 6.38  1999/02/12 15:34:01  ywang
+* include Cn3DSendColorMsg
+*
+* Revision 6.37  1999/02/11 22:40:15  ywang
+* rename functions
+*
+* Revision 6.36  1999/02/11 18:48:15  lewisg
+* delete color index functions
+*
+* Revision 6.35  1999/02/10 23:49:43  lewisg
+* use RGB values instead of indexed palette
+*
 * Revision 6.34  1999/01/20 22:57:25  ywang
 * customize color for secondary structure & rearrange Option menu
 *
@@ -73,7 +94,13 @@
 #include <vibrant.h>
 #include <salsa.h>
 #include <salmedia.h>
+
+#ifdef _OPENGL
+#include <shim3d.h>
+#else
 #include <viewer3d.h>
+#endif
+
 #include <mmdbapi1.h>
 
 #ifdef __cplusplus
@@ -103,7 +130,7 @@ FORM_MESSAGE_BLOCK
 #define REGISTER_BIOSEQ_BIOSTRUC_MEDIA ObjMgrProcLoad(OMPROC_VIEW, "Seq-Struc Communication", "Media", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, SeqStrucMediaFunc, 0)
 
 extern Int2 LIBCALLBACK SeqStrucMediaFunc PROTO((Pointer data));
-extern void MediaObjSelect(PDNMG pdnmgThis, PALD paldThis, Boolean highlight);
+extern void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight);
 extern void MediaRegister(void);
 extern void MediaLaunch(void);
 extern void MediaDataLoad(SeqAlignPtr salp);
@@ -114,24 +141,29 @@ extern void fnPreCHLresidue(PDNMG pdnmgThis, Boolean highlight);
 /* extern PMMD FindMM(Int4 Gi, Int4 iCount); */
 extern PMMD FindMM(SeqIdPtr sip, Int4 iCount);   
 extern void DoCHighlightSeg(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr, Boolean highlight);
-extern void fnCHLresidue(PDNMG pdnmgThis, Viewer3D  vvv, Boolean highlight);
+extern void fnCHLresidue(PDNMG pdnmgThis,
+#ifndef _OPENGL
+                         Viewer3D  vvv,
+#endif
+                         Boolean highlight);
 extern void LaunchMediaViewer(BioseqPtr bsp);
 extern void SalsaRegister(void);
 extern void LaunchSalsa(SeqAlignPtr salp);
-extern void ColorSalsa(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 to, Uint1Ptr rgb);
 extern void ColorSalsa_BYMG(PMGD pmgdThis, Uint1Ptr rgb);
 extern void ResetSalsaColor(void);
-extern Uint1Ptr GetRGB(Int2 iColor);
-extern void RealColorSalsa(void);
+extern void Cn3DSendColorMsg(void);
+extern void ColorSalsa(void);
 extern void Cn3dObjRegister(void);
-extern void PrepareColorMsg(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb);
 extern void Cn3dObjMgrGetSelected(void);
 extern void DoMediaHL(PMMD  pmmdThis, Int4 from, Int4 to, Boolean highlight);
 extern void LaunchSequenceWindow(void);
 extern void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap);
-extern Int2 GetColorIndexForMG(PMGD pmgdThis);
-extern Int2 GetColorIndex(Uint1 colorR, Uint1 colorG,Uint1 colorB);
-extern void LIBCALLBACK Cn3DCheckHighlight PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
+extern ResidueColorCell * GetColorIndexForMG(PMGD pmgdThis);
+extern void LIBCALLBACK Cn3DCheckAndDoHighlight PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
+extern void Cn3DSendColorMsgForBioseq(Int4 iCount);
+extern void Cn3DColorSalsaForStrucSeqs(void);
+extern void Cn3DCheckAlignmentStatusForStrucSeqs(void);
+extern void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void);
 #ifdef __cplusplus
 }
 #endif

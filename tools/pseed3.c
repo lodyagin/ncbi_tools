@@ -214,83 +214,88 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr 
 	      (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
              fprintf(outfp, "Pattern %s is too likely to occur in the database to be informative\n",pname);
           }
-          else {
-	    *seed_seq_loc = NULL;
-	    adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
-	    if (0.0 < searchSpEff)
-	      adjustdbLength = searchSpEff;
+	  else {
+            if (patternSearch->wildcardProduct > WILDCARD_THRESH) {
+              fprintf(outfp, "Due to variable wildcards pattern %s is likely to occur too many times in a single sequence\n",pname);
+            }
+	    else {
+	      *seed_seq_loc = NULL;
+	      adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
+	      if (0.0 < searchSpEff)
+		adjustdbLength = searchSpEff;
 
-	    for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
-	      seed = occurArray[occurIndex];
-              if (showDiagnostics)
-		fprintf(outfp, "%s pattern %s at position %d of query sequence\n",
-		     pname, pattern, seed);
-	      if ((twiceNumMatches=find_hits(list, &query[seed-1], search->sbp->query_length-seed+1, FALSE, patternSearch)) < 2 || 
-		  list[1] != 0) {
-		fprintf(outfp, "twiceNumMatches=%d list[1]=%d\n", twiceNumMatches, list[1]);
-		BlastConstructErrorMessage("seedEngineCore", "pattern does not match the query at the place", 1, &(search->error_return));
-		exit(1);
-	      }
-	      seq_int = SeqIntNew();
-	      seq_int->from = occurArray[occurIndex] - 1;
-	      seq_int->to = list[2*occurIndex] - list[2*occurIndex+1]
-                             + seq_int->from;
-	      seq_int->id = SeqIdDup(search->query_id);
-	      ValNodeAddPointer(seed_seq_loc, SEQLOC_INT, seq_int);
-	      if (program_flag != PAT_MATCH_FLAG) {
-		lenPatMatch = list[0]+1;
-		matchIndex = 0;
-		query_seq = split_target_seq(query, seed, lenPatMatch, search->sbp->query_length);
-                if (showDiagnostics)
-		  fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", adjustdbLength, 
-		       patternSearch->patternProbability, 
-		       patternSearch->patternProbability * adjustdbLength);
-		if (!is_dna) {
-                  /*extra caution about what values are tolerated*/
-		  seedSearch->cutoffScore = eValueFit(
-                     MIN(MAX_EVALUE, 10 * options->expect_value), adjustdbLength, 
-	        seedSearch, effectiveOccurrences, patternSearch->patternProbability);
+	      for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
+		seed = occurArray[occurIndex];
+		if (showDiagnostics)
+		  fprintf(outfp, "%s pattern %s at position %d of query sequence\n",
+			  pname, pattern, seed);
+		if ((twiceNumMatches=find_hits(list, &query[seed-1], search->sbp->query_length-seed+1, FALSE, patternSearch)) < 2 || 
+		    list[1] != 0) {
+		  fprintf(outfp, "twiceNumMatches=%ld list[1]=%ld\n", (long) twiceNumMatches, (long) list[1]);
+		  BlastConstructErrorMessage("seedEngineCore", "pattern does not match the query at the place", 1, &(search->error_return));
+		  exit(1);
 		}
-	      }
-              totalOccurrences = 0;
+		seq_int = SeqIntNew();
+		seq_int->from = occurArray[occurIndex] - 1;
+		seq_int->to = list[2*occurIndex] - list[2*occurIndex+1]
+                             + seq_int->from;
+		seq_int->id = SeqIdDup(search->query_id);
+		ValNodeAddPointer(seed_seq_loc, SEQLOC_INT, seq_int);
+		if (program_flag != PAT_MATCH_FLAG) {
+		  lenPatMatch = list[0]+1;
+		  matchIndex = 0;
+		  query_seq = split_target_seq(query, seed, lenPatMatch, search->sbp->query_length);
+		  if (showDiagnostics)
+		    fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", adjustdbLength, 
+			    patternSearch->patternProbability, 
+			    patternSearch->patternProbability * adjustdbLength);
+		  if (!is_dna) {
+		    /*extra caution about what values are tolerated*/
+		    seedSearch->cutoffScore = eValueFit(
+							MIN(MAX_EVALUE, 10 * options->expect_value), adjustdbLength, 
+							seedSearch, effectiveOccurrences, patternSearch->patternProbability);
+		  }
+		}
+		totalOccurrences = 0;
 
-	      if (program_flag != PAT_MATCH_FLAG) {
+		if (program_flag != PAT_MATCH_FLAG) {
 
-		do_the_seed_search(search, rdpt, num_seq,
+		  do_the_seed_search(search, rdpt, num_seq,
 				   query_seq, lenPatMatch, is_dna, 
 				   gap_align, patternSearch, seedSearch,
                                    &matchIndex, &totalOccurrences,
                                    seedResults);
 
-		if (matchIndex > 0) 
-		  quicksort_hits(matchIndex, seedResults);
-                if (showDiagnostics)
-		  fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
-                search->second_pass_hits += totalOccurrences;
-                search->second_pass_extends += totalOccurrences;
-		thisSeqAlign = output_hits(rdpt, FALSE, query, query_seq, 
-			    lenPatMatch, adjustdbLength, gap_align, is_dna, 
-			    effectiveOccurrences, seedSearch, seedResults,
-			    patternSearch, reverseDb, totalOccurrences, 
-                            options->expect_value,  
-                            search->query_id, posEThresh, posSearch, 
-                            matchIndex, &totalBelowEThresh, showDiagnostics,
-                            outfp);
+		  if (matchIndex > 0) 
+		    quicksort_hits(matchIndex, seedResults);
+		  if (showDiagnostics)
+		    fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
+		  search->second_pass_hits += totalOccurrences;
+		  search->second_pass_extends += totalOccurrences;
+		  thisSeqAlign = output_hits(rdpt, FALSE, query, query_seq, 
+					     lenPatMatch, adjustdbLength, gap_align, is_dna, 
+					     effectiveOccurrences, seedSearch, seedResults,
+					     patternSearch, reverseDb, totalOccurrences, 
+					     options->expect_value,  
+					     search->query_id, posEThresh, posSearch, 
+					     matchIndex, &totalBelowEThresh, showDiagnostics,
+					     outfp);
 
-		nextValNodePtr = (ValNodePtr) MemNew(sizeof(ValNode));
-                nextValNodePtr->data.ptrvalue = thisSeqAlign;
-		if (NULL == seqAlignList)
-		  seqAlignList = nextValNodePtr;
-		else
-		  lastValNodePtr->next = nextValNodePtr;
-		lastValNodePtr = nextValNodePtr;
-
-                search->number_of_seqs_better_E += totalBelowEThresh;
-                search->second_pass_good_extends += totalBelowEThresh;
-		seed_free_all(seedResults);
-	      } /*if (program_flag...) */
-	    } /*for (occurIndex ...)*/
-	  }  /*else*/
+		  nextValNodePtr = (ValNodePtr) MemNew(sizeof(ValNode));
+		  nextValNodePtr->data.ptrvalue = thisSeqAlign;
+		  if (NULL == seqAlignList)
+		    seqAlignList = nextValNodePtr;
+		  else
+		    lastValNodePtr->next = nextValNodePtr;
+		  lastValNodePtr = nextValNodePtr;
+		  
+		  search->number_of_seqs_better_E += totalBelowEThresh;
+		  search->second_pass_good_extends += totalBelowEThresh;
+		  seed_free_all(seedResults);
+		} /*if (program_flag...) */
+	      } /*for (occurIndex ...)*/
+	    }  /*else*/
+	  } /*else*/
 	}
         MemFree(occurArray);
 	rdpt = readdb_destruct(rdpt);
@@ -523,12 +528,12 @@ Char * LIBCALL get_a_pat(FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHi
 	    twiceNumHits = find_hits(hitArray, seq, len, FALSE, patternSearch);
             twiceUnfilteredHits = find_hits(unfilterHitArray, unfilter_seq, len, FALSE, patternSearch);
             if ((twiceUnfilteredHits > twiceNumHits) && showDiagnostics )
-              fprintf(outfp,"\nWARNING: SEG filtering has wiped out %d occurrence(s) of this pattern\n", ((twiceUnfilteredHits - twiceNumHits)/2));
+              fprintf(outfp,"\nWARNING: SEG filtering has wiped out %ld occurrence(s) of this pattern\n", (long) ((twiceUnfilteredHits - twiceNumHits)/2));
 
           }
           if (program_flag == PAT_SEED_FLAG)
             if (showDiagnostics)
-	      fprintf(outfp,"\n%d occurrence(s) of pattern in query\n", twiceNumHits/2);
+	      fprintf(outfp,"\n%ld occurrence(s) of pattern in query\n", (long) twiceNumHits/2);
 	  if (twiceNumHits >0) {
 	    /* copy start and stop positions. */
 	    for (hitIndex=0; hitIndex<twiceNumHits; hitIndex++)
@@ -981,9 +986,9 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	    if (oneMatch->seqno != oldNumber) {
 	      fprintf(outfp,"%d\t%s\n", oneMatch->seqno, buff);
 	    }
-	    fprintf(outfp,"%.3g Total Score %d Outside Pattern Score %d Match start in db seq %d\n       Extent in query seq %d %d Extent in db seq %d %d\n", eValueForMatch, 
-		   oneHit->score, oneHit->l_score, oneHit->hit_pos,
-		   oneHit->bi+1, oneHit->ei, oneHit->bj+1, oneHit->ej);
+	    fprintf(outfp,"%.3g Total Score %ld Outside Pattern Score %ld Match start in db seq %ld\n       Extent in query seq %ld %ld Extent in db seq %ld %ld\n", eValueForMatch, 
+		   oneHit->score, (long) oneHit->l_score, (long) oneHit->hit_pos,
+		   (long) oneHit->bi+1, (long) oneHit->ei, (long) oneHit->bj+1, (long) oneHit->ej);
 	  }
           else
 	    if (oneMatch->seqno != oldNumber)
@@ -1404,7 +1409,7 @@ ValNodePtr * error_return, FILE *outfp)
 	  }
 	  for (i = 0; i < numMatches; i+=2) {
             if (is_dna)
-              fprintf(outfp,"HI (%d %d)\n", hitArray[i+1], hitArray[i]);
+              fprintf(outfp,"HI (%ld %ld)\n", (long) hitArray[i+1], (long) hitArray[i]);
 	    else
 	      pat_output(seq, hitArray[i+1], hitArray[i], patternSearch, outfp);
 	  }

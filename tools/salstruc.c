@@ -29,6 +29,9 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.56  1999/05/03 22:15:37  chappey
+* cs_option.slabel_format = PRINTID_FASTA_LONG
+*
 * Revision 6.55  1999/01/25 17:21:49  durand
 * .
 *
@@ -2390,7 +2393,7 @@ extern ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Ui
   if(seq_entityID == 0)
       return FALSE;
   cs_option.nointerval = FALSE;
-  cs_option.slabel_format = PRINTID_TEXTID_ACCESSION;
+  cs_option.slabel_format = PRINTID_FASTA_LONG;   /*PRINTID_TEXTID_ACCESSION;*/
   cs_option.seglevels = 0;
   for( j = 0; j < FEATDEF_ANY; ++j)   
   {
@@ -4166,7 +4169,6 @@ extern SeqAlignPtr PairSeqAlign2MultiSeqAlign (SeqAlignPtr salp)
   {
    if (is_dim2seqalign (salp)) 
    {
-     CleanStrandsSeqAlign (salp);
      sap = multseqalign_from_pairseqalign (salp);
      if (sap!=NULL && sap->type==2) 
      {

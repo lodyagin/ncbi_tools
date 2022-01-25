@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.18 1998/11/19 23:53:38 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.19 1999/04/28 18:23:42 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.19  1999/04/28 18:23:42  kimelman
+ * bugfix: reinit dbserver in case of connection failure & retry
+ *
  * Revision 6.18  1998/11/19 23:53:38  kimelman
  * ct_cancel problem workaround
  *
@@ -236,9 +239,8 @@ pubstruct_db_open(char *server,ps_action_t action)
   if (server == NULL)
     server = DEF_SRV;
   db->srv = MemNew(strlen(server)+1);
-  strcpy(db->srv,server);
   {
-    char *os = strstr(db->srv,"_OS");
+    char *os = strstr(server,"_OS");
     if (os)
       {
         db->open_server = 1;
@@ -250,9 +252,10 @@ pubstruct_db_open(char *server,ps_action_t action)
 
   while(retries++<20)
     {
+      strcpy(db->srv,server);
       if(!CTLibInit(&db->clu,db->srv,NULL,NULL,NULL,0,NULL))
         {
-          sleep(60);
+          sleep(10);
           continue;
         }
       if(context==NULL)

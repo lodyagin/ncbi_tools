@@ -13,6 +13,10 @@
 
 #include <objtax1.h>
 
+#ifdef __cplusplus
+extern "C" { /* } */
+#endif
+
 /* API functions prototypes */
 
 /*---------------------------------------------
@@ -149,5 +153,9 @@ Int2 tax1_getAllNames(Int4 tax_id, CharPtr **names, Boolean unique);
  * 2. Ids consists of tax_ids. Caller is responsible to free this memory
  */
 Int4 tax1_getTaxId4Str(CharPtr search_str, CharPtr* orgname, Int4Ptr *Ids_out);
+
+#ifdef __cplusplus
+/* { */ }
+#endif
 
 #endif

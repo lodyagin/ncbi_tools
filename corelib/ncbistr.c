@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,13 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.6  1999/04/15 20:24:06  vakatov
+* Dont use "list" name as it can clash with the standard "list<>" template
+* on some raw C++ compilers
+*
+* Revision 6.5  1999/03/11 16:10:00  kans
+* StringHasNoText and TrimSpacesAroundString moved from vibforms
+*
 * Revision 6.4  1998/11/23 00:09:47  kans
 * fixed bug in StringTokMT (found by Hugues)
 *
@@ -297,9 +304,9 @@ NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringSaveNoNull (const char FAR *from)
     return (from  && *from) ? Nlm_StrSave(from) : 0;
 }
 
-NLM_EXTERN size_t LIBCALL  Nlm_StringCnt (const char FAR *str, const char FAR *list)
+NLM_EXTERN size_t LIBCALL  Nlm_StringCnt (const char FAR *str, const char FAR *x_list)
 {
-    return (str && list) ? Nlm_StrCnt(str,list) : 0;
+    return (str && x_list) ? Nlm_StrCnt(str,x_list) : 0;
 }
 
 NLM_EXTERN char * LIBCALL Nlm_StringUpper (char *string)
@@ -469,15 +476,74 @@ NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StrMove (char FAR *to, const char FAR *from)
 	return to;
 }
 
-NLM_EXTERN size_t LIBCALL  Nlm_StrCnt (const char FAR *s, const char FAR *list)
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText (Nlm_CharPtr str)
+
+{
+  Nlm_Uchar  ch;	/* to use 8bit characters in multibyte languages */
+
+  if (str != NULL) {
+    ch = *str;
+    while (ch != '\0') {
+      if (ch > ' ') {
+        return FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+  }
+  return TRUE;
+}
+
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString (Nlm_CharPtr str)
+
+{
+  Nlm_Uchar    ch;	/* to use 8bit characters in multibyte languages */
+  Nlm_CharPtr  dst;
+  Nlm_CharPtr  ptr;
+
+  if (str != NULL && str [0] != '\0') {
+    dst = str;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0' && ch <= ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    while (ch != '\0') {
+      *dst = ch;
+      dst++;
+      ptr++;
+      ch = *ptr;
+    }
+    *dst = '\0';
+    dst = NULL;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch != ' ') {
+        dst = NULL;
+      } else if (dst == NULL) {
+        dst = ptr;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    if (dst != NULL) {
+      *dst = '\0';
+    }
+  }
+  return str;
+}
+
+NLM_EXTERN size_t LIBCALL Nlm_StrCnt(const char FAR *s, const char FAR *x_list)
 {
 	size_t	cmap[1<<CHAR_BIT];
 	Nlm_Byte	c;
 	size_t	u, cnt;
 	const Nlm_Byte *bs = (const Nlm_Byte*)s;
-	const Nlm_Byte *blist = (const Nlm_Byte*)list;
+	const Nlm_Byte *blist = (const Nlm_Byte*)x_list;
 
-	if (s == NULL || list == NULL)
+	if (s == NULL || x_list == NULL)
 		return 0;
 
 	for (u = 0; u < DIM(cmap); ++u)

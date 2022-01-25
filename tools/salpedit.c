@@ -3,6 +3,9 @@
 #include <jzmisc.h>
 #include <simutil.h>
 #include <salpedit.h>
+#include <salpacc.h>
+#include <salutil.h>
+
 
 #define MIN_SEG_SIZE 10
 #define MIN_DIAG_LEN	20	/*minimal amount of overlap required*/
@@ -42,7 +45,6 @@ static Boolean merge_two_seg(ValNodePtr PNTR v_starts, ValNodePtr vs_starts, Val
 static Boolean dsp_process(DenseSegPtr f_dsp, Int4 from, Int4 to, Uint1 strand, SeqIdPtr from_id, SeqIdPtr to_id, Int4 pos, ValNodePtr PNTR vs_starts, ValNodePtr PNTR vs_strands, ValNodePtr PNTR vs_lens);
 static Int2 get_cur_seg(ValNodePtr lens);
 static Boolean DenseSegMerge(DenseSegPtr f_dsp, SeqIdPtr from_id, Int4 from, Int4 to, Uint1 strand, SeqIdPtr to_id, Int4 pos, DenseSegPtr t_dsp);
-static SeqAlignPtr SeqAlignLink(SeqAlignPtr new_salp, SeqAlignPtr align);
 static SeqAlignPtr make_new_align(DenseSegPtr f_dsp, Int4 from, Int4 to, Uint1 strand, SeqIdPtr from_id, SeqIdPtr to_id, Int4 pos, SeqAlignPtr head);
 static SeqAlignPtr JZSeqAlignMerge(SeqAlignPtr f_align, SeqIdPtr from_id, Int4 from, Int4 to, Uint1 strand, SeqIdPtr to_id, Int4 pos, SeqAlignPtr t_align);
 static SeqAlignPtr AttachSeqInAlign(SeqIdPtr from_id, Int4 from, Int4 to, Uint1 strand, SeqIdPtr to_id, Int4 pos, SeqAlignPtr head);
@@ -60,7 +62,7 @@ static Boolean clean_up_discrepancies (Int4Ptr val, Int4 size, Boolean descend, 
 static void clean_genomic_order (ValNodePtr PNTR head, Int2 s_order, Uint1 strand, Int4Ptr score_order);
 static Int4 get_score_from_list (ScorePtr scores);
 static Int4 get_score_from_DenseDiag (DenseDiagPtr ddp);
-static Boolean filter_this_seg (DenseDiagPtr curr, DenseDiagPtr PNTR h_list, Uint1 order);
+static Boolean filter_this_seg (DenseDiagPtr curr, DenseDiagPtr PNTR h_list, Int2 order);
 static Boolean is_same_orientation(Uint1 strand_1, Uint1 strand_2);
 static void filter_wrong_orientation (SeqAlignPtr align, Boolean same_orient);
 static FloatHi get_overlap(BoolPtr status, Int4 from, Int4 len, Int4Ptr poverlap);
@@ -90,9 +92,9 @@ static Boolean FigureAlignRange(SeqAlignPtr align, SeqLocPtr m_loc, SeqLocPtr s_
 static Boolean reload_seq_loc(SeqLocPtr slp, Int4 from, Int4 to, Uint1 strand);
 static Boolean get_end_seg(DenseSegPtr dsp, Int4 min_seg_len, SeqLocPtr loc_1, SeqLocPtr loc_2, Boolean head);
 static Boolean is_loc_overlap(SeqLocPtr loc_1, SeqLocPtr loc_2, Int4Ptr min_val, Int4Ptr max_val, Int4 gap_len, Int4 max_align_size, Int4Ptr p_gap_val);
-static Int4 find_matching_position(DenseSegPtr dsp, Int4 pos, Uint1 pos_order);
+static Int4 find_matching_position(DenseSegPtr dsp, Int4 pos, Int2 pos_order);
 static void SeqAnnotWrite(SeqAlignPtr align);
-static Boolean select_overlap_loc(SeqLocPtr loc_1_1, SeqLocPtr loc_2_1, SeqLocPtr loc_1_2, SeqLocPtr loc_2_2, Uint1Ptr p_order);
+static Boolean select_overlap_loc(SeqLocPtr loc_1_1, SeqLocPtr loc_2_1, SeqLocPtr loc_1_2, SeqLocPtr loc_2_2, Int2Ptr p_order);
 static SeqAlignPtr MergeTwoDspBySIM4(SeqAlignPtr align_1, SeqAlignPtr align_2);
 static Int4 get_align_len_in_overlap (SeqAlignPtr align, Int4 from, Int4 to, Int2 order);
 static int LIBCALLBACK AlignOverlapCompProc (VoidPtr ptr1, VoidPtr ptr2);
@@ -105,13 +107,13 @@ static Int4 get_score_value(ScorePtr sp);
 static void load_big_score (SeqAlignPtr align_1, SeqAlignPtr align_2);
 static Boolean merge_two_align(SeqAlignPtr align_1, SeqAlignPtr align_2, Int4 from, Int4 to, Int2 order);
 static SeqAlignPtr extract_align_from_list(SeqAlignPtr PNTR list, SeqAlignPtr align);
-static void reverse_alignment(SeqAlignPtr align, Uint1 order);
+static void reverse_alignment(SeqAlignPtr align, Int2 order);
 static void link_this_align(SeqAlignPtr PNTR h_align, SeqAlignPtr align);
 static Int4 get_align_length(SeqAlignPtr align);
 static int LIBCALLBACK CompareAlignInfoProc(VoidPtr ptr1, VoidPtr ptr2);
 static SeqAlignPtr sort_align_by_length(SeqAlignPtr align);
-static Int4 get_align_mid_point(SeqAlignPtr align, Uint1 order);
-static SeqAlignPtr sort_align_by_region(SeqAlignPtr align, Uint1 order);
+static Int4 get_align_mid_point(SeqAlignPtr align, Int2 order);
+static SeqAlignPtr sort_align_by_region(SeqAlignPtr align, Int2 order);
 static Int4 get_align_list_len(SeqAlignPtr align);
 static SeqAlignPtr MergeToOneAlignment(SeqAlignPtr PNTR palign);
 static SeqAlignPtr extract_align_with_sameID(SeqAlignPtr PNTR align, SeqIdPtr sip_1, SeqIdPtr sip_2);
@@ -1146,17 +1148,6 @@ static Boolean DenseSegMerge(DenseSegPtr f_dsp, SeqIdPtr from_id, Int4 from, Int
     return TRUE;
 }
 
-static SeqAlignPtr SeqAlignLink(SeqAlignPtr new_salp, SeqAlignPtr align)
-{
-   if(align == NULL)
-	return new_salp;
-   while(align->next != NULL)
-	align = align->next;
-   align->next = new_salp;
-   return new_salp;
-
-}
-
 static SeqAlignPtr make_new_align(DenseSegPtr f_dsp, Int4 from, Int4 to, Uint1 strand, SeqIdPtr from_id, SeqIdPtr to_id, Int4 pos, SeqAlignPtr head)
 {
    ValNodePtr vs_starts, vs_strands, vs_lens;
@@ -1180,7 +1171,7 @@ static SeqAlignPtr make_new_align(DenseSegPtr f_dsp, Int4 from, Int4 to, Uint1 s
        if(head == NULL)
 	  head = align;
 	else
-	  SeqAlignLink(align, head);
+	  head = SeqAlignLink(align, head);
     }
     return head;
 }
@@ -1226,7 +1217,7 @@ static SeqAlignPtr JZSeqAlignMerge(SeqAlignPtr f_align, SeqIdPtr from_id, Int4 f
 	       if(t_align == NULL)
 		   t_align = new_salp;
 	       else
-	           SeqAlignLink(new_salp, t_align);
+	           t_align = SeqAlignLink(new_salp, t_align);
 	}
 	return t_align;
 
@@ -1267,7 +1258,7 @@ static SeqAlignPtr AttachSeqInAlign(SeqIdPtr from_id, Int4 from, Int4 to, Uint1 
    if(head == NULL)
         head = align;
    else
-	SeqAlignLink(align, head);
+	head = SeqAlignLink(align, head);
    return head;
 
 }
@@ -1317,7 +1308,7 @@ static void attach_new_align(SeqAlignPtr new_salp, SeqAlignPtr PNTR old) {
 	if(*old== NULL)
 		*old = new_salp;
 	else
-		SeqAlignLink(new_salp, (*old));
+		(*old) = SeqAlignLink(new_salp, (*old));
 
 }
 
@@ -1696,7 +1687,7 @@ static Int4 get_score_from_DenseDiag (DenseDiagPtr ddp)
 	return get_score_from_list (ddp->scores);
 }
 	
-static Boolean filter_this_seg (DenseDiagPtr curr, DenseDiagPtr PNTR h_list, Uint1 order)
+static Boolean filter_this_seg (DenseDiagPtr curr, DenseDiagPtr PNTR h_list, Int2 order)
 {
 	Int4 start, stop, t_start, t_stop;
 	Int4 a_start, a_stop;
@@ -2429,7 +2420,7 @@ static void sort_list_order(ValNodePtr PNTR ph_list, Uint1 strand)
                     Message(MSG_ERROR, "Fail in get_lns");
                     exit(1);
                 }
-                /* inconsistent orientation from LNS //
+                // inconsistent orientation from LNS //
             if((strand == Seq_strand_minus && val == 0) || 
                (strand != Seq_strand_minus && val== 1)) 
                 {
@@ -3219,7 +3210,7 @@ static Boolean is_loc_overlap(SeqLocPtr loc_1, SeqLocPtr loc_2, Int4Ptr min_val,
 *	ppos is the position of the known sequence, trying to find the matching sequence 
 *	position
 */
-static Int4 find_matching_position(DenseSegPtr dsp, Int4 pos, Uint1 pos_order)
+static Int4 find_matching_position(DenseSegPtr dsp, Int4 pos, Int2 pos_order)
 {
 	Int2 i;
 	Int4 start_1, start_2;
@@ -3271,7 +3262,7 @@ static void SeqAnnotWrite(SeqAlignPtr align)
         SeqAnnotFree(annot);
 }
 
-static Boolean select_overlap_loc(SeqLocPtr loc_1_1, SeqLocPtr loc_2_1, SeqLocPtr loc_1_2, SeqLocPtr loc_2_2, Uint1Ptr p_order)
+static Boolean select_overlap_loc(SeqLocPtr loc_1_1, SeqLocPtr loc_2_1, SeqLocPtr loc_1_2, SeqLocPtr loc_2_2, Int2Ptr p_order)
 {
 	Int4 start_1, stop_1, start_2, stop_2;
 	Int4 overlap_1, overlap_2;
@@ -3335,7 +3326,6 @@ static SeqAlignPtr MergeTwoDspBySIM4(SeqAlignPtr align_1, SeqAlignPtr align_2)
 	Int4 start, stop;
 	Int4 match_start, match_stop;
 	Boolean found = FALSE;
-	Uint1 order;
 	BioseqPtr bsp;
 	SeqAlignPtr align, t_align;
 	DenseSegPtr dsp_1, dsp_2;
@@ -3347,6 +3337,7 @@ static SeqAlignPtr MergeTwoDspBySIM4(SeqAlignPtr align_1, SeqAlignPtr align_2)
 	SeqIdPtr sip;
 	Boolean reverse = FALSE;
 	Boolean has_overlap;
+	Int2 order;
 
 	if(align_1 == NULL || align_2 == NULL)
 		return NULL;
@@ -4208,7 +4199,7 @@ static SeqAlignPtr extract_align_from_list(SeqAlignPtr PNTR list, SeqAlignPtr al
 	return NULL;
 }
 
-static void reverse_alignment(SeqAlignPtr align, Uint1 order)
+static void reverse_alignment(SeqAlignPtr align, Int2 order)
 {
 	DenseSegPtr dsp;
 	Int4Ptr starts, lens;
@@ -4413,7 +4404,7 @@ static SeqAlignPtr sort_align_by_length(SeqAlignPtr align)
 }
 
 	
-static Int4 get_align_mid_point(SeqAlignPtr align, Uint1 order)
+static Int4 get_align_mid_point(SeqAlignPtr align, Int2 order)
 {
 	DenseSegPtr dsp;
 	Int4 start, stop;
@@ -4438,7 +4429,7 @@ static Int4 get_align_mid_point(SeqAlignPtr align, Uint1 order)
 	return -1;
 }
 		
-static SeqAlignPtr sort_align_by_region(SeqAlignPtr align, Uint1 order)
+static SeqAlignPtr sort_align_by_region(SeqAlignPtr align, Int2 order)
 {
 	AlignInfoPtr aip;
 	ValNodePtr vnp = NULL, curr;
@@ -4913,7 +4904,199 @@ NLM_EXTERN SeqAlignPtr SeqAlignSplitBlastTwoSeq(SeqLocPtr slp1, SeqLocPtr slp2,
 	return align;
 }
 
+NLM_EXTERN PSeqAlignInfoPtr SeqAlignToPSeqAlignInfo (SeqAlignPtr sap)
+{
+        PSeqAlignInfoPtr alip, alip_head, newalip;
+        Int2 found;
+        SeqAlignPtr alip_sap;
+        SeqIdPtr sip;
 
+        if (!sap)
+                return NULL;
+        alip = (PSeqAlignInfoPtr)MemNew(sizeof(PSeqAlignInfo));
+        alip_head = alip;
+        sip = SeqIdPtrFromSeqAlign(sap);
+        alip->sap = sap;
+        alip->sip = SeqIdDupList(sip);
+        alip->next = NULL;
+        sap = sap->next;
+        alip->sap->next=NULL;
+        while (sap)
+        {
+                sip = SeqIdPtrFromSeqAlign(sap);
+                found = 0;
+                alip = alip_head;
+                while (alip && !found)
+                {
+                        if (SeqIdComp(sip->next, alip->sip->next))
+                        {
+                                alip_sap = alip->sap;
+                                while(alip_sap->next !=NULL)
+                                        alip_sap = alip_sap->next;
+                                alip_sap->next = sap;
+                                sap = sap->next;
+                                alip_sap->next->next = NULL;
+                                found = 1;
+                        }
+                        alip = alip->next;
+                }
+                if (found == 0)
+                {
+                        alip = alip_head;
+                        while(alip->next != NULL)
+                                alip = alip->next;
+                        newalip = (PSeqAlignInfoPtr)MemNew(sizeof(PSeqAlignInfo));
+                        newalip->sip = SeqIdDupList(sip);
+                        newalip->sap = sap;
+                        newalip->next = NULL;
+                        sap = sap->next;
+                        newalip->sap->next = NULL;
+                        alip->next = newalip;
+                }
+        }
+        return alip;
+}
+
+NLM_EXTERN SeqAlignPtr ReassembleSeqAlignFromPSeqAlignInfo(PSeqAlignInfoPtr alip)
+{
+        SeqAlignPtr sap, head_sap, sap_curr;
+        PSeqAlignInfoPtr prevalip;
+
+        head_sap = NULL;
+        while(alip)
+        {
+                if (!head_sap)
+                {
+                        head_sap = alip->sap;
+                        sap_curr = head_sap;
+                } else
+                {
+                        sap = alip->sap;
+                        sap_curr->next = sap;
+                        while (sap_curr->next)
+                                sap_curr = sap_curr->next;
+                }
+                prevalip = alip;
+                alip = alip->next;
+                prevalip->sip = SeqIdSetFree(prevalip->sip);
+                MemFree(prevalip);
+        }
+        return head_sap;
+}
+
+NLM_EXTERN SeqAlignPtr SeqAlignSplitGappedBlast(SeqLocPtr slp1, CharPtr progname, CharPtr database, ValNodePtr *other_returns, ValNodePtr *error_returns, Int4 split_len, Int4 overlap_len, BLAST_OptionsBlkPtr options)
+{
+        Boolean split = FALSE;
+        Int4 len1;
+        SeqAlignPtr t_align;
+        Int4 num, i;
+        SeqLocPtr slp;
+        SeqIntPtr sint;
+        Int4 pstop;
+        PSeqAlignInfoPtr alip, t_alip, head_alip=NULL, head_t_alip=NULL;
+        Int2 beg=0;
+
+
+        if(slp1 == NULL)
+                return NULL;
+        len1 = SeqLocLen(slp1);
+        if(len1 == 0)
+                return NULL;
+
+
+        if(len1 > 10000 && len1 > split_len)
+                split = TRUE;
+
+        alip = NULL;
+        if(split)
+        {
+                num = (len1 - overlap_len)/(split_len - overlap_len);
+                if((len1 - overlap_len)%(split_len - overlap_len) > split_len/2)
+                        ++num;
+                slp = SeqLocIntNew(SeqLocStart(slp1), SeqLocStop(slp1),
+                        SeqLocStrand(slp1), SeqLocId(slp1));
+                sint = (SeqIntPtr) slp->data.ptrvalue;
+                pstop = -1;
+                for(i = 0; i<num; ++i)
+                {
+
+                        if(i == 0)
+                        {
+                                sint->from = SeqLocStart(slp1);
+                                sint->to = sint->from + split_len -1;
+                        }
+                        else
+                        {
+                                sint->from = sint->to -overlap_len;
+                                sint->to = MIN(sint->from + split_len -1, SeqLocStop(slp1));
+                        }
+                        if(i == num -1)
+                                sint->to = SeqLocStop(slp1);
+                        sint->strand = SeqLocStrand(slp1);
+                        t_align = BioseqBlastEngineByLoc(slp, progname, database, options, other_returns, error_returns, NULL);
+                        if(t_align != NULL)
+                        {
+                                t_alip = SeqAlignToPSeqAlignInfo(t_align);
+                                if(alip == NULL)
+                                {
+                                        alip = t_alip;
+                                        head_alip = alip;
+                                }
+                                else if(pstop != -1)
+                                {
+                                        alip = head_alip;
+                                        head_t_alip = t_alip;
+                                        while (alip != NULL)
+                                        {
+                                                t_alip = head_t_alip;
+                                                while (t_alip != NULL)
+                                                {
+                                                        if (SeqIdComp(t_alip->sip->next, alip->sip->next)
+
+                                                                && t_alip->used == FALSE)
+                                                        {
+                                                                MergeTwoAlignList(alip->sap, &t_alip->sap,
+                                                                        sint->from, pstop, 0);
+                                                                if (t_alip->sap !=NULL)
+                                                                {
+                                                                        alip->sap = SeqAlignLink(t_alip->sap,
+                                                                                alip->sap);
+                                                                }
+                                                                t_alip->used = TRUE;
+                                                        }
+                                                        t_alip = t_alip->next;
+                                                }
+                                                alip = alip->next;
+                                        }
+                                        alip = head_alip;
+                                        while (alip->next != NULL)
+                                                alip = alip->next;
+                                        t_alip = head_t_alip;
+                                        while (t_alip)
+                                        {
+                                                if (t_alip->used == FALSE)
+                                                {
+                                                        alip->next = t_alip;
+                                                        t_alip = t_alip->next;
+                                                        alip = alip->next;
+                                                        alip->next = NULL;
+                                                } else
+                                                        t_alip = t_alip->next;
+                                        }
+                                        t_alip = head_t_alip = NULL;
+                                }
+                                pstop = sint->to;
+                        }
+                }
+                SeqLocFree(slp);
+                t_align = ReassembleSeqAlignFromPSeqAlignInfo(head_alip);
+        } else
+        {
+            t_align = BioseqBlastEngineByLoc(slp1, progname, database, options, other_returns, error_returns, NULL);
+        }
+
+        return t_align;
+}
 /* Filter SeqAlign by removing bad hits and hits off the main diagonal (as defined by the
    first hit .. which is the highest scoring in blast */
 static SeqAlignPtr SeqAlignConsistentDiagFilter(SeqAlignPtr align,SeqLocPtr slp1, SeqLocPtr slp2, 
@@ -5308,14 +5491,14 @@ static SeqAlignPtr SeqAlignSetGlobalFromLocal(SeqAlignPtr align,SeqLocPtr loc_1,
 	if(len_1 <=0)
 	{
 		MuskSeqIdWrite(SeqLocId(loc_1), label, 100, PRINTID_TEXTID_ACCESSION, TRUE, TRUE);
-		fprintf(fp, "bad length %ld in sequence %s\n", len_1, label);
+		fprintf(fp, "bad length %ld in sequence %s\n", (long)len_1, label);
 		return NULL;
 	}
 	len_2 = SeqLocLen(loc_2);
 	if(len_2 <=0)
 	{
 		MuskSeqIdWrite(SeqLocId(loc_2), label, 100, PRINTID_TEXTID_ACCESSION, TRUE, TRUE);
-		fprintf(fp, "bad length %ld in sequence %s\n", len_1, label);
+		fprintf(fp, "bad length %ld in sequence %s\n", (long) len_1, label);
 		return NULL;
 	}
 
@@ -5351,14 +5534,14 @@ static SeqAlignPtr compute_alignment(SeqLocPtr loc_1, SeqLocPtr loc_2, BioseqPtr
 	if(len_1 <=0)
 	{
 		MuskSeqIdWrite(SeqLocId(loc_1), label, 100, PRINTID_TEXTID_ACCESSION, TRUE, TRUE);
-		fprintf(fp, "bad length %ld in sequence %s\n", len_1, label);
+		fprintf(fp, "bad length %ld in sequence %s\n", (long)len_1, label);
 		return NULL;
 	}
 
 	if(len_2 <=0)
 	{
 		MuskSeqIdWrite(SeqLocId(loc_2), label, 100, PRINTID_TEXTID_ACCESSION, TRUE, TRUE);
-		fprintf(fp, "bad length %ld in sequence %s\n", len_1, label);
+		fprintf(fp, "bad length %ld in sequence %s\n", (long)len_1, label);
 		return NULL;
 	}
 

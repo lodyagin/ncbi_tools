@@ -31,6 +31,12 @@
 *
 *
 * $Log: taxext.h,v $
+* Revision 1.3  1999/03/26 19:18:46  soussov
+* fixed bug in tax1e_needUpdate
+*
+* Revision 1.2  1999/03/25 21:14:58  soussov
+* tax1e_needUpdate added
+*
 * Revision 1.1  1998/02/10 20:12:00  soussov
 * taxon2 related soft
 *
@@ -84,5 +90,24 @@ This function makes a copy of tax_name, you have to free this memory
 CharPtr tax1e_getTaxName(TreeCursorPtr cursor);
 
 
+/*-------------------------------------
+  Check if OrgRef needs to be updated
+  Returns: 
+  -2 - Taxonomy server internal error
+  -1 - Organism is not in taxonomy database
+   0 - OrgRef is up to date
+   1 - wrong tax_id
+   2 - wrong genetic code
+   3 - wrong mitogen code
+   4 - inp_orgRef has empty OrgName
+   10 - wrong taxname
+   20 - wrong lineage
+   30 - wrong common name
+   40 - wrong OrgName
+   50 - wrong division
+   100 - wrong OrgMod
+  
+*/
+Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef);
 
 #endif

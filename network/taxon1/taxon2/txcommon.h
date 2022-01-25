@@ -31,6 +31,9 @@
 *
 *
 * $Log: txcommon.h,v $
+* Revision 1.3  1999/01/28 15:43:11  soussov
+* rename the formal argument
+*
 * Revision 1.2  1998/06/12 15:16:07  soussov
 * kill some warnings
 *
@@ -194,7 +197,7 @@ Boolean tax_setDesignator(CharPtr name, Int4 tax_id);
 
 Int4    tax_issueTaxId(void);
 
-Boolean tax_addName(Int4 tax_id, CharPtr name, CharPtr uname, Int2 class, Boolean designat);
+Boolean tax_addName(Int4 tax_id, CharPtr name, CharPtr uname, Int2 name_class, Boolean designat);
 Int4    tax_getOrgNames(Int4 tax_id, TaxNamePtr* org_names);
 CharPtr tax_getTaxName(Int4 tax_id, CharPtr* unique_name);
 Boolean tax_delName(Int4 tax_id, CharPtr dname);

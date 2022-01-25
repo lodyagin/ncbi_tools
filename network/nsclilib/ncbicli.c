@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbicli.c,v $  $Revision: 4.14 $  $Date: 1999/01/22 22:04:58 $
+/*  $RCSfile: ncbicli.c,v $  $Revision: 4.17 $  $Date: 1999/03/12 22:38:23 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,16 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.c,v $
+* Revision 4.17  1999/03/12 22:38:23  vakatov
+* More detailed debug printout in "s_ProcessReply_WWWClient()"
+*
+* Revision 4.16  1999/03/11 19:26:30  vakatov
+* s_ProcessReply_WWWClient():  Use nic->server_host(Int4) rather then
+* nic->server_host(unsigned long) in the SOCK_Address()
+*
+* Revision 4.15  1999/03/11 15:20:20  vakatov
+* Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
+*
 * Revision 4.14  1999/01/22 22:04:58  vakatov
 * Uint4toInaddr() to take address in the network byte order
 *
@@ -222,8 +232,8 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
     buffer[buf_read] = '\0';
 
     if ( debug_printout ) {
-      fprintf(stderr, "[WWW Special Client, reply %lu:%lu]: \"%s\"",
-              (unsigned long)buf_read, (unsigned long)(buf_read + n_read),
+      fprintf(stderr, "[WWW Special Client, reply %lu:%lu]: \"%s\"\n",
+              (unsigned long)(buf_read - n_read), (unsigned long)buf_read,
               buffer + buf_read - n_read);
     }
 
@@ -239,10 +249,10 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
       }
 
       /* the dispatcher's reply has been parsed successfully */
-      if ( cern_nontransparent_proxy ) { /* substitute server host */
-        SOCK_Address(nic->sock, &server_host, 0, FALSE);
-      }
       nic->server_host = server_host;
+      if ( cern_nontransparent_proxy ) { /* substitute server host */
+        SOCK_Address(nic->sock, &nic->server_host, 0, FALSE);
+      }
       nic->server_port = (Uint2)server_port;
       nic->ticket      = Nlm_htonl((Uint4)ticket);
       break;
@@ -266,12 +276,19 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
   {{ /* Connect to the "real" server and send back the ticket */
     VERIFY( Uint4toInaddr(Nlm_htonl(nic->server_host),
                           buffer, sizeof(buffer)) );
-    if (SOCK_Create(buffer, nic->server_port, &nic->sock) != eSOCK_ESuccess) {
+    if (SOCK_Create(buffer, nic->server_port, timeout, &nic->sock)
+        != eSOCK_ESuccess) {
       ErrPostEx(SEV_ERROR, NIC_ERROR, 7,
                 "[WWW Special] Cannot connect to server \"%s\", port %u",
                 buffer, (unsigned int)nic->server_port);
       return FALSE;
     }
+    if ( debug_printout ) {
+      fprintf(stderr,
+              "[WWW Special Client] Connected to server \"%s\", port %u\n",
+              buffer, (unsigned int)nic->server_port);
+    }
+
 
     VERIFY( SOCK_SetTimeout(nic->sock, eSOCK_OnReadWrite, timeout, 0, 0)
             == eSOCK_ESuccess );
@@ -281,6 +298,9 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
       ErrPostEx(SEV_ERROR, NIC_ERROR, 8,
                 "[WWW Special] Cannot send the ticket back to server");
       return FALSE;
+    }
+    if ( debug_printout ) {
+      fprintf(stderr, "[WWW Special Client] Sent ticket back to the server\n");
     }
   }}
 
@@ -362,7 +382,8 @@ NLM_EXTERN NIC NIC_GetService
 
   for (;;) {{ /* TRY to establish a connection */
     /* connect to dispatcher(or server) */
-    if (SOCK_Create(disp_host, disp_port, &nic->sock) != eSOCK_ESuccess) {
+    if (SOCK_Create(disp_host, disp_port, timeout, &nic->sock)
+        != eSOCK_ESuccess) {
       ErrPostEx(SEV_ERROR, NIC_ERROR, 1,
                 "[NIC_GetService]  Cannot connect to host \"%s\", port %d;",
                 disp_host, (int)disp_port);

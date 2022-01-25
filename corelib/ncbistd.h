@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -46,38 +46,35 @@
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-* 04-12-93 Schuler     Misc. Windows-isms needed for DLL support
-* 12-16-93 Schuler     Added EXPORT to LIBCALL in _WINDLL case
-*
 * $Log: ncbistd.h,v $
+* Revision 6.4  1999/04/14 20:04:47  vakatov
+* For better consistency, moved <ncbiopt.h> from <ncbi.h> to <ncbistd.h>
+*
+* Revision 6.3  1999/03/17 15:37:24  vakatov
+* Set the default(<ncbistd.h>) "Nlm_Int4" to "int" rather tnan "long";
+* the same for "Nlm_Uint4";  modifyed the concerned "ncbilcl.*" files
+* accordingly.
+*
+* Revision 6.2  1999/03/04 20:49:24  vakatov
+* + "Nlm_STimeout" typedef
+*
 * Revision 6.1  1998/06/11 21:06:28  shavirin
 * Fixed old style definition warning.
 *
-* Revision 6.0  1997/08/25 18:17:04  madden
-* Revision changed to 6.0
+* Revision 4.2  1995/12/18  17:37:27  epstein
+* add TIME_MAX
 *
-* Revision 5.0  1996/05/28 13:18:57  ostell
-* Set to revision 5.0
+* Revision 4.1  1995/09/13  18:31:24  epstein
+* Add BigScalar type for compatability with DEC Alpha
 *
- * Revision 4.2  1995/12/18  17:37:27  epstein
- * add TIME_MAX
- *
- * Revision 4.1  1995/09/13  18:31:24  epstein
- * Add BigScalar type for compatability with DEC Alpha
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.10  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
+* 04-12-93 Schuler     Misc. Windows-isms needed for DLL support
+* 12-16-93 Schuler     Added EXPORT to LIBCALL in _WINDLL case
 * ==========================================================================
 */
 #ifndef _NCBISTD_
 #define _NCBISTD_
+
+#include <ncbiopt.h>
 
 #ifndef LITTLE_ENDIAN
 #define LITTLE_ENDIAN	1234
@@ -189,18 +186,18 @@ typedef unsigned short	Nlm_Uint2, PNTR Nlm_Uint2Ptr;
 #endif
 
 #ifndef Int4
-typedef long		Nlm_Int4, PNTR Nlm_Int4Ptr;
-#define Int4		Nlm_Int4
-#define Int4Ptr		Nlm_Int4Ptr
-#define INT4_MIN	LONG_MIN
-#define INT4_MAX	LONG_MAX
+typedef signed int  Nlm_Int4, PNTR Nlm_Int4Ptr;
+#define Int4        Nlm_Int4
+#define Int4Ptr     Nlm_Int4Ptr
+#define INT4_MIN    (-2147483647-1)
+#define INT4_MAX    2147483647
 #endif
 
 #ifndef Uint4
-typedef unsigned long	Nlm_Uint4, PNTR Nlm_Uint4Ptr;
-#define Uint4		Nlm_Uint4
-#define Uint4Ptr	Nlm_Uint4Ptr
-#define UINT4_MAX	ULONG_MAX
+typedef unsigned int  Nlm_Uint4, PNTR Nlm_Uint4Ptr;
+#define Uint4         Nlm_Uint4
+#define Uint4Ptr      Nlm_Uint4Ptr
+#define UINT4_MAX     4294967295U
 #endif
 
 #ifndef TIME_MAX
@@ -222,6 +219,15 @@ typedef double		Nlm_FloatHi, PNTR Nlm_FloatHiPtr;
 #ifndef BigScalar
 #define BigScalar long
 #endif
+
+/* Timeout structure
+ */
+typedef struct {
+  Nlm_Uint4 sec;   /* seconds(gets truncated to platform-dep. max. limit) */
+  Nlm_Uint4 usec;  /* microseconds(always get truncated to 10**6)         */
+} Nlm_STimeout;
+#define STimeout Nlm_STimeout
+
 
 /*----------------------------------------------------------------------*/
 /*      Misc Common Macros                                              */

@@ -31,11 +31,42 @@ Author: Tom Madden
 Contents: Utilities for BLAST
 
 ******************************************************************************/
-/* $Revision: 6.40 $ */
-/* $Log: blastool.c,v $
-/* Revision 6.40  1999/01/08 22:08:42  madden
-/* BlastScaleMatrix returns factor as FloatHi
 /*
+* $Revision: 6.51 $
+* $Log: blastool.c,v $
+* Revision 6.51  1999/04/27 17:22:27  madden
+* Set hsp_num_max for ungapped BLAST
+*
+* Revision 6.50  1999/04/14 14:53:48  madden
+* Correction for databases over 2 Gig
+*
+* Revision 6.49  1999/04/01 21:42:47  madden
+* Fix memory leaks when gi list is used
+*
+* Revision 6.48  1999/03/22 15:19:03  beloslyu
+* corrections to compile on Red Hat Linux v5.2
+*
+* Revision 6.47  1999/03/18 16:43:57  shavirin
+* Added function Boolean HeyIAmInMemory(Int4 program)
+*
+* Revision 6.46  1999/03/17 13:21:07  madden
+* Fix comment in comment problem
+*
+* Revision 6.45  1999/03/12 15:03:45  egorov
+* Add proper Int4-long type casting
+*
+* Revision 6.44  1999/02/19 14:18:25  madden
+* Added back check for negative nucl. penalty
+*
+* Revision 6.43  1999/02/19 14:16:20  madden
+* list manipulation bug for seed
+*
+* Revision 6.41  1999/01/26 18:26:54  madden
+* make updateLambdaK public
+*
+* Revision 6.40  1999/01/08 22:08:42  madden
+* BlastScaleMatrix returns factor as FloatHi
+*
  * Revision 6.39  1998/12/31 18:17:06  madden
  * Added strand option
  *
@@ -166,6 +197,65 @@ Contents: Utilities for BLAST
 #include <posit.h>
 #include <seed.h>
 
+#ifdef OS_UNIX
+/* Here is function to calculate number of BLAST jobs running on spesific
+   computer. This function uses array of 5 semaphores with the single key
+   0xACACACAC. Each semaphore in this array represents spesific BLAST
+   program, so at any given time we know exactly number of processes for
+   each BLAST program. Function will increase specific semaphore by one
+   and OS will reset this back whenever process will exit from memory */
+
+#include <sys/types.h>
+#if defined(__linux__)
+/* that is needed because of the bug in Linux Red Hat v5.2 */
+#define __USE_XOPEN
+typedef __key_t key_t;
+#endif
+#include <sys/ipc.h>
+#include <sys/sem.h>
+
+#define BLAST_SERVER_KEY 0xACACACAC
+
+static struct sembuf BLASTSemaCmd[5] =
+{
+    {blast_type_blastn - 1,  1, SEM_UNDO},  /* Increase 0 semaphore by one  - blastn  */
+    {blast_type_blastp - 1,  1, SEM_UNDO},  /* Increase 1 semaphore by one  - blastp  */
+    {blast_type_blastx - 1,  1, SEM_UNDO},  /* Increase 2 semaphore by one  - blastx  */
+    {blast_type_tblastn - 1, 1, SEM_UNDO},  /* Increase 3 semaphore by one  - tblastn */
+    {blast_type_tblastx - 1, 1, SEM_UNDO}  /* Increase 4 semaphore by one  - tblastx */
+};
+
+static Boolean HeyAlreadyCalled = FALSE;
+
+Boolean HeyIAmInMemory(Int4 program)
+{
+    register int id;
+    
+    if(HeyAlreadyCalled)
+        return TRUE;
+
+    if(program < blast_type_blastn || program > blast_type_tblastx)
+        return FALSE;
+    
+    if ((id = semget (BLAST_SERVER_KEY, 5, 0666 | IPC_CREAT)) < 0) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Cannot create semaphore\n");
+        return FALSE;     /* permission problem or tables full */
+    }
+    
+    /* Increasing "program" semaphore by one */
+    
+    if(semop(id, &BLASTSemaCmd[program - 1], 1) < 0) {
+        ErrPostEx(SEV_ERROR, errno, 0, "semop: cannot increase by one");
+        return FALSE;
+    }
+    
+    HeyAlreadyCalled = TRUE;
+    
+    return TRUE;
+}
+
+#endif
+
 #define BUFFER_LENGTH 255
 
 /*
@@ -259,24 +349,24 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 		
 	    	sprintf(buffer, "Number of Sequences: %ld", (long) readdb_get_num_entries(search->rdfp));
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-		sprintf(buffer, "Number of extensions: %ld", search->second_pass_extends);
+		sprintf(buffer, "Number of extensions: %ld", (long) search->second_pass_extends);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-		sprintf(buffer, "Number of successful extensions: %ld", search->second_pass_good_extends);
+		sprintf(buffer, "Number of successful extensions: %ld", (long) search->second_pass_good_extends);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	}
 	else
 	{
 		sprintf(buffer, "Number of Hits to DB: 1st pass: %ld, 2nd pass: %ld", 
-			search->first_pass_hits, search->second_pass_hits);
+			(long) search->first_pass_hits, (long) search->second_pass_hits);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		sprintf(buffer, "Number of Sequences: 1st pass: %ld, 2nd pass: %ld", 
-			readdb_get_num_entries(search->rdfp), search->second_pass_trys);
+			(long) readdb_get_num_entries(search->rdfp), (long) search->second_pass_trys);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		sprintf(buffer, "Number of extensions: 1st pass: %ld, 2nd pass: %ld", 
-			search->first_pass_extends, search->second_pass_extends);
+			(long) search->first_pass_extends, (long) search->second_pass_extends);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 		sprintf(buffer, "Number of successful extensions: 1st pass: %ld, 2nd pass: %ld", 
-			search->first_pass_good_extends, search->second_pass_good_extends);
+			(long) search->first_pass_good_extends, (long) search->second_pass_good_extends);
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	}
 
@@ -309,7 +399,7 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 
 	sprintf(buffer, "length of query: %ld", (long) search->context[search->first_context].query->length);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "length of database: %lld", (Int8) search->dblen);
+	sprintf(buffer, "length of database: %s", Nlm_Int8tostr ((Int8) search->dblen, 1));
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 
 	sprintf(buffer, "effective HSP length: %ld", (long) search->length_adjustment);
@@ -331,9 +421,9 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 		add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	}
 
-	sprintf(buffer, "T: %ld", search->pbp->threshold_second);
+	sprintf(buffer, "T: %ld", (long) search->pbp->threshold_second);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "A: %ld", search->pbp->window_size);
+	sprintf(buffer, "A: %ld", (long) search->pbp->window_size);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	sprintf(buffer, "X1: %ld (%4.1f bits)", (long) (-search->pbp->dropoff_1st_pass), ((-search->pbp->dropoff_1st_pass)*(search->sbp->kbp[search->first_context]->Lambda/NCBIMATH_LN2)));
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
@@ -905,15 +995,16 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 	if (gapped)
 	{
 		options->gapped_calculation = TRUE;
-		/* for testing
+/* for testing
 		options->do_sum_stats = FALSE;
-		*/
+*/
 		options->do_sum_stats = TRUE;
 	}
 	else
 	{
 		options->gapped_calculation = FALSE;
 		options->do_sum_stats = TRUE;
+		options->hsp_num_max = 100;
 	}
 
 	options->discontinuous = FALSE;	/* discontinuous is default. */
@@ -1016,6 +1107,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 			options->gapped_calculation = FALSE;
 			options->do_sum_stats = TRUE;
 			options->strand_option  = BLAST_BOTH_STRAND;
+			options->hsp_num_max = 100;
 		}
 	}
 
@@ -1096,6 +1188,12 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 
 	if (StringICmp(progname, "blastn") == 0)
 	{
+               if (options->penalty >= 0)
+               {
+                       BlastConstructErrorMessage("BLASTOptionValidateEx", "BLASTN penalty must be negative", 1, error_return);
+                       return 1;
+               }
+
 		if (options->wordsize < 7 || options->wordsize > 19)
 		{
 			BlastConstructErrorMessage("BLASTOptionValidateEx", "Valid wordsize range is 7 to 19", 1, error_return);
@@ -1413,9 +1511,18 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 	the associated arrays.
 */
 BlastGiListPtr 
-BlastGiListDestruct(BlastGiListPtr blast_gi_list)
+BlastGiListDestruct(BlastGiListPtr blast_gi_list, Boolean contents)
 
 {
+	if (blast_gi_list == NULL)
+		return NULL;
+
+	if (contents)
+	{ /* On the main thread.  Deallocate contents. */
+		MemFree(blast_gi_list->gi_list);
+		MemFree(blast_gi_list->gi_list_pointer);
+	}
+
 	return MemFree(blast_gi_list);
 }
 
@@ -1524,7 +1631,8 @@ BlastComputeProbs(BlastMatrixRescalePtr matrix_rescale, Boolean position_depende
    return(sfp);
 }
 
-static void updateLambdaK(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent)
+void LIBCALL
+updateLambdaK(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent)
 {
   BLAST_ScoreFreqPtr sfp;
  
@@ -2181,6 +2289,7 @@ ValNodePtr convertSeqAlignListToValNodeList(SeqAlignPtr seqAlignList, SeqAlignPt
        nextValNodePtr->data.ptrvalue = thisSeqAlign->next;
        thisValNodePtr->next = nextValNodePtr;
        nextValNodePtr->next = NULL;
+       thisValNodePtr = nextValNodePtr;
        thisSeqAlign = thisSeqAlign->next;
        lastSeqAligns[lastAlignIndex]->next = NULL;
        lastAlignIndex++;
@@ -2221,6 +2330,7 @@ SeqAlignPtr convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList, SeqA
         while (thisSeqAlign->next != NULL) 
           thisSeqAlign = thisSeqAlign->next;
         (*lastSeqAligns)[indexValNodePtrs] = thisSeqAlign;
+        indexValNodePtrs++;
         thisSeqAlign->next = thisValNodePtr->next->data.ptrvalue;
         thisValNodePtr = thisValNodePtr->next;
       }

@@ -107,7 +107,7 @@ static Boolean print_sfp_ext (SeqFeatPtr sfp, FILE *fp, CharPtr buf, Int4 buf_si
 				if(StringCmp(oip->str, "Bin Order") == 0)
 				{	/* the order of the 1000:1 bin */
 					if(ufp->choice == 2)	/*integer */
-						sprintf(temp, "Bin Order is %ld\n", ufp->data.intvalue);
+						sprintf(temp, "Bin Order is %ld\n", (long) ufp->data.intvalue);
 						print_store_buf(temp, buf, buf_size, &len, fp);
 				}
 				else if(StringCmp(oip->str, "Marker Type" ) == 0)
@@ -310,14 +310,14 @@ static Boolean print_citation (SeqFeatPtr sfp, FILE *fp, CharPtr buf, Int4 buf_s
 				}
 				if(is_html)
 				{
-					sprintf(temp, "%ld", muid);
-					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", muid);
+					sprintf(temp, "%ld", (long) muid);
+					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", (long) muid);
 					print_store_for_html(temp, HTML_buffer, &index, prt_col.width, fp);
 					print_store_for_html(" ", NULL, &index, prt_col.width, fp);
 				}
 				else
 				{
-					sprintf(temp, "%ld ", muid);
+					sprintf(temp, "%ld ", (long) muid);
 					print_store_buf(temp, buf, buf_size, &len, fp);
 				}
 			}
@@ -342,14 +342,14 @@ static Boolean print_citation (SeqFeatPtr sfp, FILE *fp, CharPtr buf, Int4 buf_s
 						}
 						if(is_html)
 						{
-							sprintf(temp, "%ld", muid);
-							sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", muid);
+							sprintf(temp, "%ld", (long) muid);
+							sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov:80/htbin-post/Entrez/query?-guid=%ld&form=6&db=m&Dopt=r\">", (long) muid);
 							print_store_for_html(temp, HTML_buffer, &index, prt_col.width, fp);
 							print_store_for_html(" ", NULL, &index, prt_col.width, fp);
 						}
 						else
 						{
-							sprintf(temp, "%ld ", muid);
+							sprintf(temp, "%ld ", (long) muid);
 							print_store_buf(temp, buf, buf_size, &len, fp);
 						}
 					}
@@ -476,14 +476,14 @@ static Boolean print_gene_dblst(ValNodePtr db, FILE *fp, CharPtr buf, Int4 buf_s
 			{
 				sprintf(HTML_buffer, "<a href=\"http://gdbwww.gdb.org/"
 				"gdb-bin/genera/genera/hgd/DBObject/"
-				"GDB:%ld\">",oip->id);
+				"GDB:%ld\">", (long) oip->id);
 
 				html_buf = HTML_buffer;
 			}
 			else if(StringICmp(dbtag->db, "MIM") == 0 && oip->id > 0)
 			{
 				sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/htbin-post/Omim/dispmim?"
-				"%ld\">",oip->id);
+				"%ld\">",(long) oip->id);
 				html_buf = HTML_buffer;
 			}
 			else if(StringICmp(dbtag->db, "GenBank") == 0 && oip->str != NULL)
@@ -494,7 +494,7 @@ static Boolean print_gene_dblst(ValNodePtr db, FILE *fp, CharPtr buf, Int4 buf_s
 				{
 					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
                 				"htbin-post/Entrez/query?form=6&dopt=g&db=n&"
-                 				"uid=%08ld\">",gi);
+                 				"uid=%08ld\">",(long) gi);
 					html_buf = HTML_buffer;
 				}
 				SeqIdFree(t_sip);
@@ -520,7 +520,7 @@ static Boolean print_gene_dblst(ValNodePtr db, FILE *fp, CharPtr buf, Int4 buf_s
 			}
 		}
 		else
-			sprintf(temp, "%s %ld%s", dbtag->db, oip->id, separator);
+			sprintf(temp, "%s %ld%s", dbtag->db, (long) oip->id, separator);
 		if(is_html)
 		{
 			if(curr->next == NULL)
@@ -660,8 +660,8 @@ static Boolean PrintGeneRefToFile(SeqFeatPtr sfp, FILE *fp, Uint1 match_type, Ui
 
 	if(print_loc == PRINT_LOC_BOGO || np == NULL)
 	{
-		fprintf(fp, "Region %ld-%ld\n", SeqLocStart(sfp->location), 
-			SeqLocStop(sfp->location));
+		fprintf(fp, "Region %ld-%ld\n", (long) SeqLocStart(sfp->location), 
+			(long) SeqLocStop(sfp->location));
 	}
 	else if(print_loc == PRINT_LOC_NUM)
 	{
@@ -865,7 +865,7 @@ static Boolean print_store_seqid(SeqIdPtr sip, CharPtr buf, Int4 buf_size, Int4P
 		{
 			sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
                 "htbin-post/Entrez/query?form=6&dopt=g&db=n&"
-                 "uid=%08ld\">",sip->data.intvalue);
+                 "uid=%08ld\">", (long) sip->data.intvalue);
 			html_buf = HTML_buffer;
 		}
 	}
@@ -878,7 +878,7 @@ static Boolean print_store_seqid(SeqIdPtr sip, CharPtr buf, Int4 buf_size, Int4P
 			{
 				oip = db_tag->tag;
 				sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/"
-                "cgi-bin/Schuler/clust2html?Homo+sapiens+%ld\">",oip->id);
+                "cgi-bin/Schuler/clust2html?Homo+sapiens+%ld\">",(long) oip->id);
 				html_buf = HTML_buffer;
 			}
 			print_seqid (sip, temp, 100);
@@ -943,7 +943,7 @@ static Boolean PrintSequenceToFile(SeqLocPtr slp, FILE *fp, Uint1 print_loc, Num
 	if(print_loc != PRINT_LOC_NONE)
 	{	/*print out the location on the genome */
 		if(print_loc == PRINT_LOC_BOGO || np == NULL)
-			sprintf(temp, ": %ld - %ld (bp)", grp->left, grp->right);
+			sprintf(temp, ": %ld - %ld (bp)", (long) grp->left, (long) grp->right);
 		else
 		{
 
@@ -1098,7 +1098,7 @@ static void print_seqid (SeqIdPtr sip, CharPtr buf, Int2 buf_size)
 		if(oip->str != NULL)
 			sprintf(buf, "%s %s", db_tag->db, oip->str);
 		else
-			sprintf(buf, "%s %ld", db_tag->db, oip->id);
+			sprintf(buf, "%s %ld", db_tag->db, (long) oip->id);
 	}
 	else
 		SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, buf_size);
@@ -1125,7 +1125,7 @@ static void print_bioseq_descriptor (BioseqPtr bsp, SeqLocPtr slp, FILE *fp, Int
 			SendTextToFile(fp, buf, &prt_par, &prt_col);
 		}
 	}
-	sprintf (buf, "Region: %ld-%ld(bp) on the Chromosome\n", SeqLocStart(slp), SeqLocStop(slp));
+	sprintf (buf, "Region: %ld-%ld(bp) on the Chromosome\n", (long) SeqLocStart(slp), (long) SeqLocStop(slp));
 	SendTextToFile(fp, buf, &prt_par, &prt_col);
 	for(i =0; i<line_len; ++i)
 		fprintf(fp, "*");

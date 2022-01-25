@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.34 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -48,6 +48,7 @@
 #include <salstruc.h>
 #include <fstyle.h>
 #include <salmedia.h>
+#include <sequtil.h>
 
 #define OBJ_VIRT 254
 
@@ -531,7 +532,9 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
             }
          }
          else {
-            ErrPostEx (SEV_ERROR, 0, 0, "fail in next_to_draw [46] subtype %ld type %ld", itemsubtype, curssp->itemtype); 
+/**
+            ErrPostEx (SEV_ERROR, 0, 0, "fail in next_to_draw [46] subtype %ld type %ld", (long) itemsubtype, (long) curssp->itemtype); 
+**/
             return NULL;
          }
          if (next)
@@ -1393,7 +1396,7 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
   CharPtr      masterstrptr = NULL;
   RecT         rct;
   Int4         lg2 = MIN (lg, adp->visibleWidth); 
-  Uint4        blackColor = GetColorRGB(0,0,0),
+  Uint4        blackColor = GetColorRGB(0,0,0), whiteColor = GetColorRGB(255, 255, 255),
                newColor;
 
 	Boolean      pretty = (Boolean) (seq_color!=NULL);
@@ -1447,8 +1450,13 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
      else {
         newColor = adp->colorRefs[(Uint1)(vstr[k] - '*')];
      }
-     if (newColor == (Uint4)172)
-        newColor = blackColor;
+/*   if (newColor == (Uint4)172)
+        newColor = blackColor; */ 
+                             /* yanli comment it out so that residues */ 
+                            /* with magenta color can be seen in salsa */
+     if (newColor == whiteColor) newColor = blackColor;
+                            /* yanli added this so that residues colored with white */
+       /* in Cn3D(with color by Domain) are drawn as black in salsa to be visible */
 
      if ( adp->colonne [from +k -adp->bufferstart] < 0 ) 
      {
@@ -1498,10 +1506,23 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         if ( draw_diff && masterstrptr != NULL ) 
         {
            if (vstr[k] !='-') {
-              if ( *masterstrptr == vstr[k] || TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k])) 
-                 *strPtr = '.';
-              else 
+              if (*masterstrptr == vstr[k]) {
+                 if (ISA_na(adp->mol_type)) {
+                    if (vstr[k]<65 || vstr[k]>91)
+                       *strPtr = '.';
+                    else 
+                       *strPtr = vstr[k];
+                 } 
+                 else {
+                    if (TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k]))
+                       *strPtr = '.';
+                    else 
+                       *strPtr = vstr[k];
+                 }
+              } 
+              else {
                  *strPtr = vstr[k];
+              }
            }
            else 
               *strPtr = vstr[k];
@@ -1525,12 +1546,25 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         if ( draw_diff && masterstrptr != NULL ) 
         {
            if (vstr[k] !='-') {
-              if ( *masterstrptr == vstr[k] || TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k]))
-                 *strPtr = '.';
-              else 
+              if (*masterstrptr == vstr[k]) {
+                 if (ISA_na(adp->mol_type)) {
+                    if (vstr[k]<65 || vstr[k]>91)
+                       *strPtr = '.';
+                    else 
+                       *strPtr = vstr[k];
+                 } 
+                 else {
+                    if (TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k]))
+                       *strPtr = '.';
+                    else 
+                       *strPtr = vstr[k];
+                 }
+              } 
+              else {
                  *strPtr = vstr[k];
+              }
            }
-           else
+           else 
               *strPtr = vstr[k];
            masterstrptr++;
         } 
@@ -1740,12 +1774,14 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
   SeqLocPtr     slp;
   ValNodePtr    startp = NULL;
 
+SeqIdPtr sesp_sip= NULL;
+SeqIntPtr sinp = NULL;
+
 	SeqEditViewProcsPtr svpp;
 	ValNodePtr          vnp_seqinfo;
 	ValNodePtr          vnp_color = NULL;
 	SeqIdPtr            vnpcn3d_sip = NULL;
 	MediaInfoPtr        MIPtr;
-
 
   ptx = ptlh.x +adp->margin.left;
   pty = ptlh.y;
@@ -1780,19 +1816,33 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
 
 
   svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
-  if (svpp->Cn3D_On) {
+
+  if(sesp->regiontype == 1){
+     slp = sesp->region;
+     sinp = slp->data.ptrvalue;
+     sesp_sip = sinp->id;
+  }               
+  if (svpp) {
+     if (svpp->Cn3D_On && sesp_sip) {
 	vnp_seqinfo = svpp->seqinfo;
+
 	while(vnp_seqinfo){
 		MIPtr=(MediaInfoPtr)vnp_seqinfo->data.ptrvalue;
-		if (MIPtr->entityID==sesp->entityID && MIPtr->itemID==sesp->itemID){
+/*      if (MIPtr->entityID==sesp->entityID && MIPtr->itemID==sesp->itemID){
 			vnp_color=MIPtr->seq_color;
                         vnpcn3d_sip = MIPtr->sip;
-			break;
-		}
+  	        break;  
+		}         */    /* yanli comment it out, instead doing the following */
+
+        if(SeqIdForSameBioseq(sesp_sip, MIPtr->sip)){
+           vnp_color=MIPtr->seq_color;
+           vnpcn3d_sip = MIPtr->sip;
+                     /* do not break so as to get the latest one */
+        }    
 		vnp_seqinfo=vnp_seqinfo->next;
 	}
+     }
   }
-
   if (iCount > 0) {
      k = 0;
      k1 = from;
@@ -2044,7 +2094,7 @@ static void draw_trans (EditAlignDataPtr adp, SelEdStructPtr cds, CharPtr trans,
   left  = (Int4) MAX ((Int4) from, (Int4) SeqLocStart(slp));
   right = (Int4) MIN ((Int4) from+drw_width, (Int4) SeqLocStop(slp)+1);
   if (right < left) {
-     ErrPostEx (SEV_ERROR, 0, 0, "fail in draw_trans: left %ld right %ld",left,right);
+     ErrPostEx (SEV_ERROR, 0, 0, "fail in draw_trans: left %ld right %ld", (long) left, (long) right);
   }
   transtr = MemNew ((size_t)(512 * (sizeof (Char))));
   emptystring (transtr, 512);
@@ -2179,6 +2229,7 @@ static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
   SeqIdPtr  tmp = NULL;
   Char      str[120];
   CharPtr   strp;
+  Uint4     val;
 
   str[0] = '\0';
   if (choice > 0 && choice <= PRINTID_GIcc)
@@ -2192,6 +2243,11 @@ static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
            tmp = bsp->id;
         if (tmp)
         {
+           SeqIdWrite (tmp, str, PRINTID_TEXTID_ACCESSION, 120);
+           val=WHICH_db_accession(str);
+           if (val==0)
+              choice = PRINTID_FASTA_SHORT;
+
            SeqIdWrite (tmp, str, choice, 120);
            BioseqUnlock(bsp);
            strp = StringSave (str);
@@ -2264,6 +2320,14 @@ extern void on_draw (PaneL p)
   if ( (adp = GetAlignDataPanel (p)) == NULL ) 
          return;
   if ( adp->seqnumber == 0 ) return;
+
+  if (adp->showfeat) {
+     HideFeatureFunc (adp);
+     ShowFeatureFunc (adp);
+     data_collect_arrange (adp, TRUE);
+     SeqEdSetCorrectBarMax (p, adp->nlines, adp->voffset);
+  }
+
   salp = (SeqAlignPtr) adp->sap_align->data;
 
   if ( adp->firstssp == NULL ) {
@@ -2574,7 +2638,9 @@ extern void on_draw (PaneL p)
             }
          }
          else {
-            ErrPostEx (SEV_ERROR, 0, 0, "fail in on_draw [46] subtype %ld type %ld", itemsubtype, curssp->itemtype); 
+/**
+            ErrPostEx (SEV_ERROR, 0, 0, "fail in on_draw [46] subtype %ld type %ld", (long) itemsubtype, (long) curssp->itemtype); 
+**/
             return;
          }
          if (line == adp->pnlLine) 

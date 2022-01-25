@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.44 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
@@ -762,6 +762,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
 
 {
   Char        activity [256];
+  CharPtr     allele = NULL;
   BioseqPtr   bsp;
   Char        ec [32];
   GeneRefPtr  grp;
@@ -793,12 +794,17 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             if (ptr != NULL) {
               *ptr = '\0';
               ptr++;
+              allele = StringChr (ptr, ';');
+              if (allele != NULL) {
+                *allele = '\0';
+                allele++;
+              }
             }
             StringNCpy_0 (best, str, maxsize);
             if (StringHasNoText (best)) {
               StringNCpy_0 (best, ptr, maxsize);
             }
-            grp = CreateNewGeneRef (str, NULL, ptr, FALSE);
+            grp = CreateNewGeneRef (str, allele, ptr, FALSE);
             if (grp != NULL) {
               if (ExtendGene (grp, nsep, slp)) {
                 grp = GeneRefFree (grp);
@@ -1358,7 +1364,8 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
 {
   SeqEntryPtr  sep, oldsep, the_entry, nextsep;
   NCBISubPtr nsp;
-  Uint1 htgs_phase;
+  Int2 htgs_phase = -1;
+  Uint1 tech;
   CharPtr seqname = NULL, accession = NULL, orgname = NULL;
   CharPtr clone = NULL, chromosome = NULL;
   CharPtr remark = NULL, title = NULL, seqbuf = NULL;
@@ -1379,7 +1386,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
 
   if (ffp == NULL || ssp == NULL) return;
 
-  htgs_phase = (Uint1) GetValue (ffp->htgsphase);
+  htgs_phase = GetValue (ffp->htgsphase) - 1;
   orgname = SaveStringFromText (ffp->orgname);
   seqname = SaveStringFromText (ffp->seqname);
   if (GetStatus (ffp->update)) {
@@ -1598,7 +1605,24 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
    AddBiomolToEntry(nsp, the_entry, 1);
    if (ffp->buildContig) {
    } else {
-     AddTechToEntry(nsp, the_entry, (Uint1)(MI_TECH_htgs_1 + htgs_phase - 1));
+     switch (htgs_phase) {
+       case 0 :
+         tech = MI_TECH_htgs_0;
+         break;
+       case 1 :
+         tech = MI_TECH_htgs_1;
+         break;
+       case 2 :
+         tech = MI_TECH_htgs_2;
+         break;
+       case 3 :
+         tech = MI_TECH_htgs_3;
+         break;
+       default :
+         tech = MI_TECH_htgs_3;
+         break;
+     }
+     AddTechToEntry(nsp, the_entry, tech);
    }
    vnp = NewDescrOnSeqEntry (the_entry, Seq_descr_create_date);
    if (vnp != NULL) {
@@ -2287,8 +2311,9 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
   ffp->htgsphase = NULL;
   if (! buildContig) {
     StaticPrompt (g, "Phase", 0, stdLineHeight, programFont, 'l');
-    ffp->htgsphase = HiddenGroup (g, 3, 0, (GrpActnProc) SetFa2htgsAcceptBtn);
+    ffp->htgsphase = HiddenGroup (g, 4, 0, (GrpActnProc) SetFa2htgsAcceptBtn);
     SetObjectExtra (ffp->htgsphase, ffp, NULL);
+    RadioButton (ffp->htgsphase, "HTGS-0");
     RadioButton (ffp->htgsphase, "HTGS-1");
     RadioButton (ffp->htgsphase, "HTGS-2");
     RadioButton (ffp->htgsphase, "HTGS-3");

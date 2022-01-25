@@ -163,7 +163,7 @@ Int4 LIBCALL gband_linear_gap(Uint1Ptr A, Uint1Ptr B,
 				exit (1);
 #else
 		ErrPostEx(SEV_WARNING, 0, 0, "Check_Score = %ld align_score = %ld ",
-			  score, c);
+			  (long) score, (long) c);
 		return 0;
 #endif
 	}
@@ -606,6 +606,8 @@ static Int4 gb_linear_CHECK_SCORE(Uint1Ptr A, Uint1Ptr B,
       		score = score - (data->g - op * data->zzh);
       		i = i - op;
     	}
+	if (i==M)
+		break;
 	}
 	if (!rgA && op < 0) {
 		score += (data->g - op * data->zzh);

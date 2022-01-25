@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.39 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.40  1999/03/03 18:26:02  kans
+* calls ClearStructures before MakeAModelstruc
+*
 * Revision 6.39  1999/01/14 19:18:46  kans
 * new parameters for Cn3DWin_Entrez
 *
@@ -1069,6 +1072,7 @@ static CharPtr FetchPDB (DoC d, Int2 item, Pointer ptr)
   maxModels = 1;
   bsp = EntrezBiostrucGet (uid, complexity, maxModels);
   if (bsp == NULL) return failed;
+  ClearStructures ();
   pdnms = MakeAModelstruc (bsp);
   if (pdnms == NULL) return failed;
   str = NULL;
@@ -4025,6 +4029,7 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
     Message (MSG_OK, "Unable to find this record in the database.");
     return;
   }
+  ClearStructures ();
   pdnms = MakeAModelstruc (bsp);
   if (pdnms == NULL) {
     ArrowCursor ();

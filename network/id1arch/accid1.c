@@ -158,7 +158,7 @@ ID1BioseqFetchDisable(void)
 *       callback for ID1SeqIdForGI
 *
 *****************************************************************************/
-static Int2 
+static Int2 LIBCALLBACK
 s_ID1SeqIdForGIFunc(Pointer data)
 {
 	OMProcControlPtr ompcp;
@@ -197,7 +197,7 @@ s_ID1SeqIdForGIFunc(Pointer data)
 *       callback for ID1GIForSeqId
 *
 *****************************************************************************/
-static Int2 
+static Int2 LIBCALLBACK
 s_ID1GIForSeqIdFunc (Pointer data)
 {
 	OMProcControlPtr	ompcp;
@@ -246,7 +246,7 @@ s_ID1GIForSeqIdFunc (Pointer data)
 *
 *****************************************************************************/
 
-static Int2
+static Int2 LIBCALLBACK
 s_ID1BioseqFetchFunc(Pointer data)
 {
 	OMProcControlPtr	ompcp;

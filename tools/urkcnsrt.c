@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description: consort
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkcnsrt.c,v $
+* Revision 6.19  1999/04/02 20:13:17  kans
+* cast added
+*
+* Revision 6.18  1999/03/12 14:08:05  kuzio
+* cast
+*
 * Revision 6.17  1998/10/20 16:07:40  kuzio
 * one pass: hash-sort-count for Markov
 *
@@ -611,12 +617,12 @@ static Boolean getgene1cdn (GatherContextPtr gcp)
               }
               else
               {
-                sprintf (buf, "ORF_%ld", gcdsp->genecurrent+1);
+                sprintf (buf, "ORF_%ld", (long) (gcdsp->genecurrent+1));
               }
               if (buf[0] == '\0')
               {
                 sprintf (gcdsp->genename[gcdsp->genecurrent],
-                         "ORF_%ld", gcdsp->genecurrent+1);
+                         "ORF_%ld", (long) (gcdsp->genecurrent+1));
               }
               else
               {
@@ -1053,7 +1059,7 @@ extern void Conform (Int4Ptr freq, FILE *fn)
     perthou = whatthou (freq, i, codons);
     percent = perthou / 10.0;
     fprintf (fn, "%3.3s    %3.3s    %5d   %6.2f\n",
-             amino[i], trips[i], freq[i], percent);
+             amino[i], trips[i], (int) (freq[i]), percent);
   }
   fprintf (fn, "\n");
 

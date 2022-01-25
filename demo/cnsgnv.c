@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: consign - codon biased orf assignment
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: cnsgnv.c,v $
+* Revision 6.10  1999/03/13 03:43:16  kuzio
+* cast
+*
 * Revision 6.9  1998/10/13 17:15:26  kuzio
 * colored graph opt
 *
@@ -995,7 +998,7 @@ static void ConsignProc (ButtoN b)
       sprintf (numberbuffer, "%ld", 1L);
       AddLabel (seg, gsp->box.left, gsp->bottom-20,
                 numberbuffer, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
-      sprintf (numberbuffer, "%ld", xosp->bsp->length);
+      sprintf (numberbuffer, "%ld", (long) xosp->bsp->length);
       AddLabel (seg, gsp->box.left+xosp->bsp->length, gsp->bottom-20,
                 numberbuffer, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
     }

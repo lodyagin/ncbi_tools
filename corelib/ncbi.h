@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *   	this includes typedefs, defines, and prototypes for the basic
@@ -38,6 +38,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbi.h,v $
+* Revision 6.2  1999/04/14 20:04:46  vakatov
+* For better consistency, moved <ncbiopt.h> from <ncbi.h> to <ncbistd.h>
+*
 * Revision 6.1  1998/08/11 22:11:05  vakatov
 * + <ncbiopt.h>
 *
@@ -52,7 +55,6 @@
 #define _NCBI_
 
 #include <ncbilcl.h>
-#include <ncbiopt.h>
 #include <ncbistd.h>
 #include <ncbimem.h>
 #include <ncbimsg.h>

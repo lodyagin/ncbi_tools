@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.9 $
+* $Revision: 1.14 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,21 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.14  1999/04/20 14:51:59  madden
+* Error message if TraditionalReport returns FALSE
+*
+* Revision 1.13  1999/04/13 14:59:31  madden
+* Add more options (searchsp, culling, strand)
+*
+* Revision 1.12  1999/04/02 16:25:36  madden
+* FileClose on error, check NULL pointer
+*
+* Revision 1.11  1999/03/26 15:59:51  madden
+* Add option to use filter string, gifile, and get HTML output
+*
+* Revision 1.10  1999/03/05 15:43:41  madden
+* added matrix option
+*
 * Revision 1.9  1999/01/03 22:33:20  kans
 * now calls UseLocalAsnloadDataAndErrMsg
 *
@@ -217,7 +232,7 @@ PrintMotd(CharPtr string, FILE *fp, Boolean html_format)
 }
 
 
-#define NUMARGS 25
+#define NUMARGS 32
 
 static Args myargs [NUMARGS] = {
  { "Program Name",
@@ -233,7 +248,7 @@ static Args myargs [NUMARGS] = {
   { "BLAST report Output File", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
   { "Filter query sequence (DUST with blastn, SEG with others)",
-        "T", NULL, NULL, FALSE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
+        "T", NULL, NULL, FALSE, 'F', ARG_STRING, 0.0, 0, NULL},
   { "Cost to open a gap (zero invokes default behavior)",
 	"0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},
   { "Cost to extend a gap (zero invokes default behavior)",
@@ -270,6 +285,20 @@ static Args myargs [NUMARGS] = {
         "1", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
   { "End of the  sequence (-1 is entire sequence)", 
         "-1", NULL, NULL, FALSE, 'B', ARG_INT, 0.0, 0, NULL},
+  { "Matrix",
+        "BLOSUM62", NULL, NULL, FALSE, 'M', ARG_STRING, 0.0, 0, NULL},
+  { "Produce HTML output",
+        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Restrict search of database to list of GI's",
+        NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
+  { "Number of best hits from a region to keep",
+        "100", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
+  { "Length of region used to judge hits",
+        "20", NULL, NULL, FALSE, 'L', ARG_INT, 0.0, 0, NULL},
+  { "Effective length of the search space (use zero for the real size)",
+        "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
+  { "Query strands to search against database (for blast[nx], and tblastx).  3 is both, 1 is top, 2 is bottom",
+        "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
 };
 
 /*********************************************************************
@@ -290,6 +319,7 @@ Int2 Main (void)
 	BlastNet3Hptr	bl3hp;
 	BlastVersionPtr	blast_version;
 	Boolean		db_is_na, query_is_na, show_gi, believe_query=FALSE;
+	Boolean		html=FALSE, status;
 	CharPtr		ret_buffer=NULL, params_buffer=NULL;
     CharPtr		date, motd, version;
 	Int2		num_of_queries, retval;
@@ -319,6 +349,8 @@ Int2 Main (void)
         blast_database = myargs [1].strvalue;
         blast_inputfile = myargs [2].strvalue;
         blast_outputfile = myargs [5].strvalue;
+        if (myargs[26].intvalue)
+                html = TRUE;
 
 	if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
 	{
@@ -369,6 +401,7 @@ Int2 Main (void)
 	if (options == NULL)
 		return 3;
 
+	BLASTOptionSetGapParams(options, myargs[25].strvalue, 0, 0);
         options->expect_value  = (Nlm_FloatHi) myargs [3].floatvalue;
 	number_of_descriptions = myargs[13].intvalue;	
 	number_of_alignments = myargs[14].intvalue;	
@@ -379,14 +412,17 @@ Int2 Main (void)
 		options->gap_extend = myargs[8].intvalue;
 	if (myargs[9].intvalue != 0)
 		options->gap_x_dropoff = myargs[9].intvalue;
-	options->filter = FILTER_NONE;
-	if (myargs[6].intvalue != 0)
-	{
-		if (StringICmp("blastn", blast_program) == 0)
-			options->filter = FILTER_DUST;
-		else
-			options->filter = FILTER_SEG;
-	}
+        if (StringICmp(myargs[6].strvalue, "T") == 0)
+        {
+                if (StringICmp("blastn", blast_program) == 0)
+                        options->filter_string = StringSave("D");
+                else
+                        options->filter_string = StringSave("S");
+        }
+        else
+        {
+                options->filter_string = StringSave(myargs[6].strvalue);
+        }
 
 	show_gi = (Boolean) myargs[10].intvalue;
 	if (StringICmp("blastn", blast_program) == 0)
@@ -441,8 +477,32 @@ Int2 Main (void)
                         align_options += TXALIGN_SHOW_QS;
 	}
 
+        if (html)
+        {
+                align_options += TXALIGN_HTML;
+                print_options += TXALIGN_HTML;
+        }
+
+        if (myargs[27].strvalue)
+        {
+                options->gifile = StringSave(myargs[27].strvalue);
+        }
+
+	options->hsp_range_max  = myargs[28].intvalue;
+        if (options->hsp_range_max != 0)
+                options->perform_culling = TRUE;
+        options->block_width  = myargs[29].intvalue;
+
+	if (myargs[29].floatvalue)
+                 options->searchsp_eff = (Nlm_FloatHi) myargs[30].floatvalue;
+
+	options->strand_option = myargs[31].intvalue;
+
+
 	if (! BlastInit("blastcl3", &bl3hp, &response)) {
 	      ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize BLAST service");
+		FileClose(infp);
+		FileClose(outfp);
 		return (1);
 	}
 
@@ -452,16 +512,26 @@ Int2 Main (void)
 		version = blast_version->version;
 		date = blast_version->date;
 	}
+	else
+	{
+	  	ErrPostEx(SEV_FATAL, 0, 0, "Unable to connect to service");
+		FileClose(infp);
+		FileClose(outfp);
+		return 1;
+	}
 
 	BlastNetBioseqFetchEnable(bl3hp, blast_database, db_is_na, TRUE);
 	
 	motd = Blast3GetMotd(bl3hp);
-	PrintMotd(motd, outfp, FALSE);
+	PrintMotd(motd, outfp, html);
 	motd = MemFree(motd);
 
-	BlastPrintVersionInfoEx(blast_program, FALSE, version, date, outfp);
+        if (html)
+                fprintf(outfp, "<PRE>\n");
+
+	BlastPrintVersionInfoEx(blast_program, html, version, date, outfp);
 	fprintf(outfp, "\n");
-	BlastPrintReference(FALSE, 80, outfp);
+	BlastPrintReference(html, 80, outfp);
 	fprintf(outfp, "\n");
 	num_of_queries=0;
 	retval=0;
@@ -486,16 +556,18 @@ Int2 Main (void)
 	   		retval = 2;
 			break;
 		}
-		AcknowledgeBlastQuery(query_bsp, 70, outfp, FALSE, FALSE);
+		AcknowledgeBlastQuery(query_bsp, 70, outfp, FALSE, html);
 
 		if (startloc || endloc != query_bsp->length - 1)
-		    TraditionalBlastReportLoc(slp, options, bl3hp, blast_program, blast_database, 
+		    status = TraditionalBlastReportLoc(slp, options, bl3hp, blast_program, blast_database, 
 			    FALSE, outfp, TRUE, print_options, align_options, 
 			    number_of_descriptions, number_of_alignments, NULL);
 		else
-		    TraditionalBlastReport(query_bsp, options, bl3hp, blast_program, blast_database, 
+		    status = TraditionalBlastReport(query_bsp, options, bl3hp, blast_program, blast_database, 
 			    FALSE, outfp, TRUE, print_options, align_options, 
 			    number_of_descriptions, number_of_alignments, NULL);
+		if (status == FALSE)
+	  	 	ErrPostEx(SEV_ERROR, 0, 0, "An error has occurred on the server\n");
 
 		sep = SeqEntryFree(sep);
 	}

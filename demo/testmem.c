@@ -5,6 +5,7 @@
 *
 *****************************************************************************/
 #include <objsset.h>
+#include <sequtil.h>
 
 #define NUMARG 3
 Args myargs[NUMARG] = {

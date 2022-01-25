@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.90 $
+* $Revision: 6.96 $
 *
 * File Description: 
 *
@@ -409,9 +409,9 @@ static Boolean LIBCALLBACK RemoveDupGenesOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
   SeqFeatPtr         last = NULL;
   CharPtr            label;
   Boolean            leave;
-  Int2               left;
+  Int4               left;
   size_t             len;
-  Int2               right;
+  Int4               right;
   SeqAnnotPtr        sap;
   SeqFeatPtr         sfp;
   CharPtr            str;
@@ -530,17 +530,34 @@ static void RemoveDuplicateGenes (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static Boolean IvalsMatch (Int2 numivals1, Int4Ptr ivals1, Int2 numivals2, Int4Ptr ivals2)
+
+{
+  Int2  i, j;
+
+  if (numivals1 != numivals2 || ivals1 == NULL || ivals2 == NULL) return FALSE;
+  for (i = 0, j = 0; i < numivals1; i++) {
+    if (ivals1 [j] != ivals2 [j]) return FALSE;
+    j++;
+    if (ivals1 [j] != ivals2 [j]) return FALSE;
+    j++;
+  }
+  return TRUE;
+}
+
 static Boolean LIBCALLBACK RemoveDupFeatsOnBioseqs (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
 
 {
   SeqMgrFeatContext  fcontext;
   Uint2              featdeftype;
+  Int4Ptr            ivals;
   SeqFeatPtr         last = NULL;
   CharPtr            label;
   Boolean            leave;
-  Int2               left;
+  Int4               left;
   size_t             len;
-  Int2               right;
+  Int2               numivals;
+  Int4               right;
   SeqAnnotPtr        sap;
   SeqFeatPtr         sfp;
   CharPtr            str;
@@ -555,7 +572,8 @@ static Boolean LIBCALLBACK RemoveDupFeatsOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
         if (fcontext.strand == strand ||
             strand == Seq_strand_unknown ||
             fcontext.strand == Seq_strand_unknown) {
-          if (StringICmp (fcontext.label, label) == 0 && fcontext.sap == sap) {
+          if (IvalsMatch (fcontext.numivals, fcontext.ivals, numivals, ivals) &&
+              StringICmp (fcontext.label, label) == 0 && fcontext.sap == sap) {
             DupFeatRemovalWarning (sfp);
             SeqFeatDataFree (&sfp->data);             /* free duplicate feature data */
             sfp->data.choice = SEQFEAT_GENE;         /* fake as empty gene, to be removed */
@@ -599,6 +617,8 @@ static Boolean LIBCALLBACK RemoveDupFeatsOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
       last = sfp;
       left = fcontext.left;
       right = fcontext.right;
+      ivals = fcontext.ivals;
+      numivals = fcontext.numivals;
       label = fcontext.label;
       strand = fcontext.strand;
       featdeftype = fcontext.featdeftype;
@@ -1928,6 +1948,7 @@ static void CommonQualifierCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
   RnaRefPtr          rrp;
   SeqAnnotPtr        sap;
   SeqFeatPtr         sfp;
+  CharPtr            str;
   Uint2              subtype;
   Int2               val;
 
@@ -2060,6 +2081,24 @@ static void CommonQualifierCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
                     rrp->type = 1;
                   } else {
                     rrp->type = 255;
+                  }
+                }
+              } else if (choice == SEQFEAT_REGION &&
+                         (newval == FEATDEF_misc_RNA ||
+                         newval == FEATDEF_precursor_RNA)) {
+                rrp = RnaRefNew ();
+                if (rrp != NULL) {
+                  str = (CharPtr) sfp->data.value.ptrvalue;
+                  sfp->data.choice = SEQFEAT_RNA;
+                  sfp->data.value.ptrvalue = (Pointer) rrp;
+                  if (newval == FEATDEF_precursor_RNA) {
+                    rrp->type = 1;
+                  } else {
+                    rrp->type = 255;
+                  }
+                  if (! StringHasNoText (str)) {
+                    rrp->ext.choice = 1;
+                    rrp->ext.value.ptrvalue = str;
                   }
                 }
               } else if (choice == SEQFEAT_IMP && newchoice == SEQFEAT_RNA) {
@@ -2300,6 +2339,7 @@ static void DoProcessQualifier (ButtoN b)
           /* convert to mat_peptide, sig_peptide, or transit_peptide imp feat (briefly) */
         } else if (choice == SEQFEAT_IMP && (val == FEATDEF_misc_RNA || val == FEATDEF_precursor_RNA)) {
           /* convert to misc_RNA or pre_RNA imp feat (briefly) */
+        } else if (choice == SEQFEAT_REGION && (val == FEATDEF_misc_RNA || val == FEATDEF_precursor_RNA)) {
         } else if (choice == SEQFEAT_IMP && newchoice == SEQFEAT_RNA) {
           /* now allowed */
         } else if (choice == SEQFEAT_COMMENT && val == FEATDEF_misc_feature) {
@@ -3581,6 +3621,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"Seq-Pept-Overlap",  11},
   {"Seq-Pept-Homol",    12},
   {"Concept-Trans-A",   13},
+  {"HTGS 0",            18},
   {"HTGS 1",            14},
   {"HTGS 2",            15},
   {"HTGS 3",            16},
@@ -6116,6 +6157,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Parse Local ID to Source", ParseLocalIDToSource);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Parse File to Source", ParseFileToSource);
+  SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Append Strain to Organism", AddStrainToOrg);
   SetObjectExtra (i, bfp, NULL);
@@ -6165,6 +6208,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Remove RNA Qual", RemoveRNA);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Remove Pub", RemovePub);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Remove Text Inside String", RemoveTextInsideString);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Remove Duplicate Genes", RemoveDuplicateGenes);

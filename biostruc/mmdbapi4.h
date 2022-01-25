@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/18/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Code for Modelstruc -> Biostruc conversion 
 *                    And User-feature handling.
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: mmdbapi4.h,v $
+* Revision 6.2  1999/02/26 14:17:52  beloslyu
+* fixed declaration of WriteAsnModelList function to synchronize with cn3d to save out mime data
+*
 * Revision 6.1  1998/03/10 04:31:11  lewisg
 * change name of MakePDBSeqId to MakePDBSeqId2 to avoid name conflict
 *
@@ -112,7 +115,7 @@ Boolean LIBCALL WriteAsnLocalDict(PDNMS pdnmsThis, CharPtr pcSave,  Byte bSave,
 	Boolean SaveId);
 Boolean LIBCALL FreeSingleModel(PDNMS pdnmsThis, Int2 iModel);
 Boolean LIBCALL WriteAsnModelList(PDNMS pdnmsThis,   Int2 iNumModels,  Int2Ptr i2Vec,  
-				    CharPtr pcSave,  Byte bSave );
+				    CharPtr pcSave,  Byte bSave, Boolean iCn3d);
 Boolean LIBCALL WriteAsnOneModel(PDNMS pdnmsThis,  Int2 iModel,  CharPtr pcSave,  
 					Byte bSave);
 Boolean LIBCALL WriteAsnAllModel(PDNMS pdnmsThis,  CharPtr pcSave,  Byte bSave);

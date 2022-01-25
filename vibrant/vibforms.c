@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.2  1999/03/11 16:10:25  kans
+* StringHasNoText and TrimSpacesAroundString moved to ncbistr
+*
 * Revision 6.1  1997/11/26 21:30:17  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -894,47 +897,6 @@ extern void SafeSetTitle (Handle a, CharPtr title)
   }
 }
 
-extern CharPtr TrimSpacesAroundString (CharPtr str)
-
-{
-  Uchar    ch;	/* to use 8bit characters in multibyte languages */
-  CharPtr  dst;
-  CharPtr  ptr;
-
-  if (str != NULL && str [0] != '\0') {
-    dst = str;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0' && ch <= ' ') {
-      ptr++;
-      ch = *ptr;
-    }
-    while (ch != '\0') {
-      *dst = ch;
-      dst++;
-      ptr++;
-      ch = *ptr;
-    }
-    *dst = '\0';
-    dst = NULL;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0') {
-      if (ch != ' ') {
-        dst = NULL;
-      } else if (dst == NULL) {
-        dst = ptr;
-      }
-      ptr++;
-      ch = *ptr;
-    }
-    if (dst != NULL) {
-      *dst = '\0';
-    }
-  }
-  return str;
-}
-
 extern CharPtr SaveStringFromText (TexT t)
 
 {
@@ -984,24 +946,6 @@ extern ValNodePtr GetVnpFromText (TexT t, ValNodePtr vnp, Boolean last)
     }
   }
   return vnp;
-}
-
-extern Boolean StringHasNoText (CharPtr str)
-
-{
-  Uchar  ch;	/* to use 8bit characters in multibyte languages */
-
-  if (str != NULL) {
-    ch = *str;
-    while (ch != '\0') {
-      if (ch > ' ') {
-        return FALSE;
-      }
-      str++;
-      ch = *str;
-    }
-  }
-  return TRUE;
 }
 
 extern Boolean TextHasNoText (TexT t)

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -52,6 +52,19 @@
 /*************************************
 *
 =======
+* $Log: asn2ff4.c,v $
+* Revision 6.25  1999/04/29 22:49:20  tatiana
+* added REFSEQ dbxrefs in GenPept format
+*
+* Revision 6.24  1999/03/30 22:23:33  kans
+* pseudo can be on grp or sfp
+*
+* Revision 6.23  1999/03/30 19:47:40  tatiana
+* use non-strict binding for REFSEQ
+*
+* Revision 6.22  1999/03/25 00:26:38  kans
+* restored first sort in SortOrganizeFeat
+*
 * Revision 5.31  1997/06/19 18:37:07  vakatov
 * [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
 *
@@ -357,7 +370,7 @@ if ( ! order_initialized){
 		order[SEQID_EMBL ] = 2;
 		order[SEQID_DDBJ ] = 3;
 		order[SEQID_LOCAL ] =4;
-		order[SEQID_GI ] =5;
+		order[SEQID_GI ] =13;
 		order[SEQID_GIBBSQ ] =6;
 		order[SEQID_GIBBMT ] =7;
 		order[SEQID_PRF ] =8;
@@ -365,7 +378,7 @@ if ( ! order_initialized){
 		order[SEQID_PIR ] =10;
 		order[SEQID_SWISSPROT ] =11;
 		order[SEQID_PATENT ] =12;
-		order[SEQID_OTHER ] =13;
+		order[SEQID_OTHER ] =5;
 		order[SEQID_GENERAL ] =14;
 		order[SEQID_GIIM ] =15;
 }
@@ -391,7 +404,7 @@ if ( ! order_initialized){
 			}
 			if (use_id) {
 				SeqIdWrite( use_id, buf, 
-						PRINTID_TEXTID_ACCESSION, MAX_CHAR_LOCATION);
+						PRINTID_TEXTID_ACC_VER, MAX_CHAR_LOCATION);
 			} else if (pointIdPtr->choice == SEQID_GI) {
 				SeqIdWrite( pointIdPtr, buf, 
 						PRINTID_FASTA_LONG, MAX_CHAR_LOCATION);
@@ -440,7 +453,7 @@ if ( ! order_initialized){
 		order[SEQID_EMBL ] = 2;
 		order[SEQID_DDBJ ] = 3;
 		order[SEQID_LOCAL ] =4;
-		order[SEQID_GI ] =5;
+		order[SEQID_GI ] =13;
 		order[SEQID_GIBBSQ ] =6;
 		order[SEQID_GIBBMT ] =7;
 		order[SEQID_PRF ] =8;
@@ -448,7 +461,7 @@ if ( ! order_initialized){
 		order[SEQID_PIR ] =10;
 		order[SEQID_SWISSPROT ] =11;
 		order[SEQID_PATENT ] =12;
-		order[SEQID_OTHER ] =13;
+		order[SEQID_OTHER ] =5;
 		order[SEQID_GENERAL ] =14;
 		order[SEQID_GIIM ] =15;
 }
@@ -466,8 +479,7 @@ if ( ! order_initialized){
 			if ( bs ){
 				use_id = SeqIdSelect ( bs -> id, order,18);
 			}
-			SeqIdWrite( use_id, buf, 
-				PRINTID_TEXTID_ACCESSION, MAX_CHAR_LOCATION);
+			SeqIdWrite( use_id, buf, PRINTID_TEXTID_ACC_VER, MAX_CHAR_LOCATION);
 			temp = StringMove (temp, buf);
 			temp = StringMove(temp,":");
 		}
@@ -1528,6 +1540,8 @@ static SeqFeatPtr CreateImpFeatFromProt(Uint1 format, SeqFeatPtr psfp, SeqFeatPt
 	Char 			buf[2];
 	CdRegionPtr 	cdr;
 	CharPtr 		tmp;
+	GeneRefPtr		grp;
+	SeqFeatXrefPtr	xrp;
 	
 	sfp = SeqFeatNew();
 	ifp = ImpFeatNew();
@@ -1564,12 +1578,21 @@ static SeqFeatPtr CreateImpFeatFromProt(Uint1 format, SeqFeatPtr psfp, SeqFeatPt
 			AddSiteNoteQual(psfp, sfp);
 	} else if (psfp->data.choice == SEQFEAT_REGION) {
 		tmp = MemNew(StringLen(psfp->data.value.ptrvalue) + 9);
-		sprintf(tmp, "Region: %s", psfp->data.value.ptrvalue);
+		sprintf(tmp, "Region: %s", (CharPtr) psfp->data.value.ptrvalue);
 		ifp->key = StringSave("misc_feature");
 				sfp->qual = AddGBQual(sfp->qual, "note", tmp);
 		tmp = MemFree(tmp);
 	}
 	sfp->excpt = psfp->excpt;
+	for (xrp=psfp->xref; xrp; xrp=xrp->next) {
+		if (xrp->data.choice == SEQFEAT_GENE) {
+			grp = (GeneRefPtr) xrp->data.value.ptrvalue;
+			sfp->xref = AsnIoMemCopy(xrp, 
+				(AsnReadFunc) SeqFeatXrefAsnRead, 
+					(AsnWriteFunc) SeqFeatXrefAsnWrite);
+			break;
+		}
+	}
 	if ((sfp->partial = psfp->partial) == TRUE) {
 		cdr = (CdRegionPtr) cds->data.value.ptrvalue;
 		if (cdr->frame) {
@@ -1934,7 +1957,7 @@ static Boolean is_embl(GBEntryPtr gbp)
 *	is given by the grp, that field is filled on the gsp
 ****************************************************************************/
 
-static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp)
+static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp, SeqFeatPtr sfp)
 
 {
 	ValNodePtr syn;
@@ -1960,6 +1983,8 @@ static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp)
 	if (gsp->map[0] == NULL && grp->maploc)
 		gsp->map[0] = grp->maploc;
 	if (grp->pseudo) {
+		gsp->pseudo = TRUE;
+	} else if (sfp != NULL && sfp->pseudo) {
 		gsp->pseudo = TRUE;
 	} else {
 		gsp->pseudo = FALSE;
@@ -2067,7 +2092,7 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 		/*	GetDBXrefFromGene(grp, sfp);*/
 			gsp->grp = AsnIoMemCopy(grp, 
 			(AsnReadFunc) GeneRefAsnRead, (AsnWriteFunc) GeneRefAsnWrite);
-			GeneRefInfoToGsp(gsp, grp);  /*copy GeRefInfo to GeneStruct */
+			GeneRefInfoToGsp(gsp, grp, best_gene_feat);  /*copy GeRefInfo to GeneStruct */
 			GetGeneQuals(sfp, gsp); /* copy quals info to GenStruct */
 			return;
 		}
@@ -2102,7 +2127,7 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 	/*	GetDBXrefFromGene(grp, sfp);*/
 			gsp->grp = AsnIoMemCopy(grp, 
 			(AsnReadFunc) GeneRefAsnRead, (AsnWriteFunc) GeneRefAsnWrite);
-	GeneRefInfoToGsp(gsp, grp);  /*copy GeRefInfo to GeneStruct */
+	GeneRefInfoToGsp(gsp, grp, best_gene_feat);  /*copy GeRefInfo to GeneStruct */
 	GetGeneQuals(sfp, gsp); /* copy quals info to GenStruct */
 	
 	return;
@@ -2129,7 +2154,7 @@ static Boolean CheckCdregionGeneXref (SortStructPtr p, Uint1 format)
 		if (xrp->data.choice == SEQFEAT_GENE) {
 			retval = TRUE;
 			grp = (GeneRefPtr) xrp->data.value.ptrvalue;
-			GeneRefInfoToGsp(gsp, grp);
+			GeneRefInfoToGsp(gsp, grp, sfp);
 		} else if (xrp->data.choice == SEQFEAT_PROT) {
 			prp = (ProtRefPtr) xrp->data.value.ptrvalue;
 			GetProtRefInfo(format, gsp, nsp, prp);
@@ -2212,7 +2237,7 @@ NLM_EXTERN void MatchAAGeneToFeat (OrganizeFeatPtr ofp, SortStructPtr p)
 		gene = gofp->Genelist->sfp;
  		if (gene != NULL) {
 			grp = gene->data.value.ptrvalue;
-			GeneRefInfoToGsp(gsp, grp);  /*copy GeRefInfo to GeneStruct */
+			GeneRefInfoToGsp(gsp, grp, gene);  /*copy GeRefInfo to GeneStruct */
 		}
 		MemFree(gofp->Genelist);
 		MemFree(gofp);
@@ -2241,7 +2266,10 @@ NLM_EXTERN void MatchAAGeneToFeat (OrganizeFeatPtr ofp, SortStructPtr p)
 	}
 	if (best_gene_feat != NULL) {
 		grp = best_gene_feat->data.value.ptrvalue;
-		GeneRefInfoToGsp(gsp, grp);  /*copy GeRefInfo ti GeneStruct */
+		GeneRefInfoToGsp(gsp, grp, best_gene_feat);  /*copy GeRefInfo to GeneStruct */
+		if (bsp->id->choice == SEQID_OTHER) {
+			GetDBXrefFromGene(grp, sfp);
+		}
 	}
 	MemFree(gofp->Genelist);
 	MemFree(gofp);
@@ -2261,12 +2289,13 @@ NLM_EXTERN void SortOrganizeFeat(OrganizeFeatPtr ofp)
 	
 	if (ofp == NULL)
 		return;
-	if (ofp->sfpListsize > 0 && ofp->sortListsize < ofp->sfpListsize) {
-		HeapSort((VoidPtr) (ofp->List + ofp->sortListsize), 
-			(size_t) (ofp->sfpListsize - ofp->sortListsize), 
-				sizeof(SortStruct), CompareSfpForHeap);
-		UniqueFeat(ofp->List + ofp->sortListsize, ofp->sfpListsize - ofp->sortListsize);
-	}
+		if (ofp->sfpListsize > 0 && ofp->sortListsize < ofp->sfpListsize) {
+			HeapSort((VoidPtr) (ofp->List + ofp->sortListsize), 
+				(size_t) (ofp->sfpListsize - ofp->sortListsize), 
+					sizeof(SortStruct), CompareSfpForHeap);
+			UniqueFeat(ofp->List + ofp->sortListsize,
+						ofp->sfpListsize - ofp->sortListsize);
+		}
 	if (ofp->sfpCommsize > 0 && ofp->sortCommsize < ofp->sfpCommsize)
 		HeapSort((VoidPtr) (ofp->Commlist + ofp->sortCommsize), 
 			(size_t) (ofp->sfpCommsize - ofp->sortCommsize), 
@@ -2366,6 +2395,7 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	SeqFeatPtr 		mrna, gene = NULL, newg;
 	GeneRefPtr 		grp;
 	SeqMgrFeatContext fcontext;
+	SeqIdPtr		sip;
 
 	ofp = CreateOrganizeFeat();
 	ofp->lock_bsp = NULL;
@@ -2402,6 +2432,11 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	ofp->seg_bsp = ajp->asn2ffwep->seg;
 	ofp->format = ajp->format;
 	ofp->non_strict = ajp->non_strict;
+	for (sip=bsp->id; sip; sip=sip->next) { /* non_strict binding for REFSEQ*/
+		if (sip->choice == SEQID_OTHER) {
+			ofp->non_strict = FALSE;
+		}
+	}
 	ofp->show_gene = ajp->show_gene;
 	GatherEntity(ajp->entityID, ofp, get_feats, &gsc);
 	if (slp) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.7 $
+* $Revision: 6.11 $
 *
 * File Description: Main entry point for Cn3d 
 *                   
@@ -37,6 +37,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.h,v $
+* Revision 6.11  1999/04/06 16:06:11  coremake
+* Fixes of typos
+*
+* Revision 6.10  1999/04/06 14:23:30  lewisg
+* add opengl replacement for viewer3d
+*
+* Revision 6.9  1999/02/11 18:48:15  lewisg
+* delete color index functions
+*
+* Revision 6.8  1999/02/10 23:49:43  lewisg
+* use RGB values instead of indexed palette
+*
 * Revision 6.7  1999/01/14 19:07:17  kans
 * network availability is configurable
 *
@@ -98,12 +110,28 @@
 #ifndef _CN3DMAIN_
 #define _CN3DMAIN_
 
-#define CN3D_COLOR_MAX 64
+/* number of colors used for secondary structure */
+#define CN3D_COLOR_SS 4
+/* colors used for secondary structure */
+#define CN3D_COLOR_HELIX 0
+#define CN3D_COLOR_STRAND 1
+#define CN3D_COLOR_TURN 2
+#define CN3D_COLOR_COIL 3
+/* total number of colors in fixed palette */
+#define CN3D_COLOR_MAX 33
+/* total number of colors allowed in indexed palettes. keep room for background */
+#define CN3D_MAX_PALETTE 100
 
+#ifdef _OPENGL
+#include <vibrant.h>
+#include <shim3d.h>
+#else
 #include <viewer3d.h>
+#endif
 #include <math.h>
 #include <objalign.h>
 #include <mmdbapi.h>
+#include <salmedia.h>
 
 
 #undef NLM_EXTERN
@@ -117,14 +145,38 @@
 extern "C" {
 #endif
 
-extern Viewer3D Cn3D_v3d;  /* the 3d view pane */
+    /* standard color entry */
+typedef struct _Cn3D_Color {
+    ResidueColorCell ColorCell;  /* pointer to the color cell */
+    Char * Name;  /* the name of the color */
+    Char * Paints;  /* what the color paints */
+    Int4 Index; /* an index assigned to the colors after they are allocated */
+} TCn3D_Color;
+
+typedef struct _Cn3D_ColorData {
+    TCn3D_Color SSColors[CN3D_COLOR_SS];  /* secondary structure palette */
+    TCn3D_Color Highlight;  /* this is the highlight color */
+    ValNodePtr Palette;  /* valnode list of Cn3D_Colors.  type is TCn3D_Color */
+#ifdef _OPENGL
+    TOGL_Data * OGL_Data; /* pointer to OGL data */
+#endif
+} TCn3D_ColorData;
+
+extern ResidueColorCell Cn3d_PaletteRGB[];   /* yanli */
+
+extern TCn3D_ColorData Cn3D_ColorData;  /* where all dynamic color info is kept */
+#ifndef _OPENGL
+    extern Viewer3D Cn3D_v3d;  /* the 3d view pane */
+#endif
 
 extern void LIBCALL Cn3D_EnableFileOps(void);
 extern void LIBCALL Cn3D_DisableFileOps(void);
 extern void LIBCALL Cn3D_DisableMenus(void);
 extern void LIBCALL Cn3D_EnableMenus(void);
 extern Boolean LIBCALL readErrors (void);
+#ifndef _OPENGL
 extern void LIBCALL Cn3D_SaveActiveCam(void);
+#endif
 NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New); 
 NLM_EXTERN void LIBCALL Cn3D_ResetActiveStrucProc(void);
 extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu, ItmActnProc netconfig, Boolean usingEntrez);

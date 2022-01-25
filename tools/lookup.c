@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,9 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.7  1999/04/27 15:40:12  madden
+* Use aux lookup only for short words
+*
 * Revision 6.6  1998/09/22 16:27:47  madden
 * Added function lookup_position_aux_destruct
 *
@@ -275,12 +278,11 @@ lookup_new(Int2 alphabet_size, Int2 wordsize)
 		lookup = lookup_destruct(lookup);
 		ErrPostEx(SEV_ERROR, 0, 0, "Unable to allocate lookup->position");
 	}
-	lookup->position_aux =
-		(LookupPositionPtr PNTR) MemNew((lookup->array_size)*sizeof(LookupPositionPtr));
-	if (lookup->position_aux == NULL)
+	/* Only allocate the auxillary structure if it's less than 1 Meg. */
+	if ((lookup->array_size)*sizeof(LookupPositionPtr) < 1000000)
 	{
-		lookup = lookup_destruct(lookup);
-		ErrPostEx(SEV_ERROR, 0, 0, "Unable to allocate lookup->position_aux");
+		lookup->position_aux =
+			(LookupPositionPtr PNTR) MemNew((lookup->array_size)*sizeof(LookupPositionPtr));
 	}
 
 	return lookup;
@@ -375,15 +377,28 @@ AddPositionToLookupTable(LookupTablePtr lookup, Int4 index, Int4 position, Int1 
 		lookup_pos[index] = new;
 		lookup_pos[index]->position = position;
 		lookup_pos[index]->context = context;
+		if (lookup_pos_aux)
+		{
+			lookup_pos_aux[index] = new;
+		}
 	}
 	else
-	{
-		last = lookup_pos_aux[index];
+	{	/* Go to last link, use aux struct if it exists. */
+		if (lookup_pos_aux)
+		{
+			last = lookup_pos_aux[index];
+			lookup_pos_aux[index] = new;
+		}
+		else
+		{
+			last = lookup_pos[index];
+			while (last->next)
+				last = last->next;
+		}
 		last->next = new;
 		new->position = position;
 		new->context = context;
 	}
-	lookup_pos_aux[index] = new;
 
 	return;
 }

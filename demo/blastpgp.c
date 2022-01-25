@@ -25,6 +25,25 @@
 **************************************************************************/
 /* $Revision 1.0$ */ 
 /* $Log: blastpgp.c,v $
+/* Revision 6.45  1999/03/31 16:58:04  madden
+/* Removed static FindProt and FindNuc
+/*
+/* Revision 6.44  1999/03/24 18:16:33  madden
+/* zero-out groupOrder and featureOrder
+/*
+/* Revision 6.43  1999/03/21 19:43:23  madden
+/* Added -Q option to store ASCII version of last position-specific matrix in a file
+/*
+/* Revision 6.42  1999/03/04 14:17:20  egorov
+/* Added new parameter to BlastMaskTheResidues() function for correct masking
+/* when query is seqloc.  The paramter is not used in this file and is 0.
+/*
+/* Revision 6.41  1999/02/18 21:13:11  madden
+/* Check for non-pattern search before call to BlastPruneSapStructDestruct
+/*
+/* Revision 6.40  1999/02/10 21:12:27  madden
+/* Added HTML and GI list option, fixed filtering
+/*
 /* Revision 6.39  1999/01/22 17:24:51  madden
 /* added line breaks for alignment views
 /*
@@ -260,39 +279,9 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 	return 0;
 }
 
-/* find the last nucleotide bioseq in the bioseqset */
-static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_na(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
-
-/* find the last protein bioseq in the bioseqset */
-static void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_aa(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
 
 
-
-#define NUMARG 37
+#define NUMARG 39
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -368,7 +357,11 @@ static Args myargs [NUMARG] = {
   { "program option for PHI-BLAST",
         "blastpgp", NULL, NULL, FALSE, 'p', ARG_STRING, 0.0, 0, NULL},
   { "Hit File for PHI-BLAST", 
-	"hit_file", NULL, NULL, FALSE, 'k', ARG_FILE_IN, 0.0, 0, NULL}
+	"hit_file", NULL, NULL, FALSE, 'k', ARG_FILE_IN, 0.0, 0, NULL},
+  { "Produce HTML output",
+        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Output File for PSI-BLAST Matrix in ASCII", 
+	NULL, NULL, NULL, TRUE, 'Q', ARG_FILE_OUT, 0.0, 0, NULL}
 }; 
 
 Int2 Main (void)
@@ -381,6 +374,7 @@ Int2 Main (void)
 	BLAST_OptionsBlkPtr options;
 	BlastPruneSapStructPtr prune;
 	Boolean query_is_na, show_gi, believe_query=FALSE;
+	Boolean html=FALSE;
 	CharPtr params_buffer=NULL;
 	Int4 number_of_descriptions, number_of_alignments;
 	ObjectIdPtr obidp;
@@ -405,6 +399,7 @@ Int2 Main (void)
 
 	CharPtr blast_database, blast_inputfile, blast_outputfile;
 	FILE *infp, *outfp;
+        FILE *matrixfp = NULL; /*output file for ASCII version of PSI-BLAST matrix*/
  
         /*following declarations are for PHI-BLAST*/
         CharPtr patfile;
@@ -446,6 +441,8 @@ Int2 Main (void)
         blast_database = myargs [0].strvalue;
         blast_inputfile = myargs [1].strvalue;
         blast_outputfile = myargs [6].strvalue;
+	if (myargs[37].intvalue)
+		html = TRUE;
 
 	if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
 	{
@@ -627,14 +624,14 @@ Int2 Main (void)
  
 
 		if (options->isPatternSearch) {
-		  query = BlastGetSequenceFromBioseq(query_bsp,&queryLength);
-		  seg_slp = BlastBioseqFilter(query_bsp, options->filter_string);
+		  query = BlastGetSequenceFromBioseq(fake_bsp,&queryLength);
+		  seg_slp = BlastBioseqFilter(fake_bsp, options->filter_string);
 		  if (seg_slp)
 		    {
 		      unfilter_query = MemNew((queryLength + 1) * sizeof(Uint1));
 		      for (i = 0; i < queryLength; i++)
 			unfilter_query[i] = query[i];
-		      BlastMaskTheResidues(query,queryLength,21,seg_slp,FALSE);
+		      BlastMaskTheResidues(query,queryLength,21,seg_slp,FALSE, 0);
 		    }
 		}
 
@@ -655,14 +652,19 @@ Int2 Main (void)
 
 		global_fp = outfp;
 
+		if (html)
+			fprintf(outfp, "<PRE>\n");
                 init_buff_ex(90);
-		BlastPrintVersionInfo("blastp", FALSE, outfp);
+		BlastPrintVersionInfo("blastp", html, outfp);
 		fprintf(outfp, "\n");
-		BlastPrintReference(FALSE, 90, outfp);
+		BlastPrintReference(html, 90, outfp);
 		fprintf(outfp, "\n");
-		AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, FALSE);
-		PrintDbInformation(blast_database, TRUE, 70, outfp, FALSE);
+		AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
+		PrintDbInformation(blast_database, TRUE, 70, outfp, html);
 		free_buff();
+
+		MemSet((Pointer)(groupOrder), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
+		MemSet((Pointer)(featureOrder), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
 
 		posSearch = NULL;
                 thisPassNum = 0;
@@ -684,6 +686,16 @@ Int2 Main (void)
 		  }
                   else 
                     search->sbp->posMatrix = posSearch->posMatrix;
+		  if (myargs[38].strvalue != NULL) {
+		    if ((matrixfp = FileOpen(myargs[38].strvalue, "w")) == NULL)
+		      {
+			ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open matrix output file %s\n", myargs[38].strvalue);
+			return (1);
+		      }
+		    outputPosMatrix(posSearch, compactSearch, matrixfp); /* a diagnostic, partly an option with -Q. */
+                    if (NULL != matrixfp)
+		      FileClose(matrixfp);
+		  }
 		}
 
                 do {  /*AAS*/
@@ -807,12 +819,11 @@ Int2 Main (void)
 		   print_options += TXALIGN_SHOW_GI;
 		 } 
 
-/*
-align_options += TXALIGN_HTML;
-align_options += TXALIGN_HTML_RELATIVE;
-print_options += TXALIGN_HTML;
-print_options += TXALIGN_HTML_RELATIVE;
-*/
+		if (html)
+		{
+			align_options += TXALIGN_HTML;
+			print_options += TXALIGN_HTML;
+		}
 
 		if (myargs[5].intvalue != 0)
 		{
@@ -908,7 +919,8 @@ print_options += TXALIGN_HTML_RELATIVE;
 				    ShowTextAlignFromAnnotExtra(query_bsp, pruneSeed, seqloc_duplicate, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, FormatScoreFunc);
 				    }
 				seqannot->data = head;
-				prune = BlastPruneSapStructDestruct(prune);
+                                if (!(options->isPatternSearch)) 
+					prune = BlastPruneSapStructDestruct(prune);
 				search->positionBased = TRUE;
 				ObjMgrClearHold();
 				ObjMgrFreeCache(0);
@@ -923,8 +935,18 @@ print_options += TXALIGN_HTML_RELATIVE;
                 if (ALL_ROUNDS && thisPassNum > 1) {
 		  MemFree(posSearch->posRepeatSequences);
                 }
-		if (!search->posConverged && (0 == search->pbp->maxNumPasses || thisPassNum < search->pbp->maxNumPasses))
-		    outputPosMatrix(posSearch, compactSearch); /* a diagnostic, possibly make an option. */
+		if (!search->posConverged && (0 == search->pbp->maxNumPasses || thisPassNum < search->pbp->maxNumPasses)) {
+		  if (ALL_ROUNDS && (myargs[38].strvalue != NULL)) {
+		    if ((matrixfp = FileOpen(myargs[38].strvalue, "w")) == NULL)
+		      {
+			ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open matrix output file %s\n", myargs[38].strvalue);
+			return (1);
+		      }
+		  }
+		  outputPosMatrix(posSearch, compactSearch, matrixfp); /* a diagnostic, partly an option with -Q. */
+                    if (NULL != matrixfp)
+		      FileClose(matrixfp);
+		}
 		  
 		} while (( 0 == search->pbp->maxNumPasses || thisPassNum < (search->pbp->maxNumPasses)) && (! (search->posConverged)));
 

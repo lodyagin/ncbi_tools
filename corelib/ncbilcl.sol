@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,13 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.sol,v $
+* Revision 6.5  1999/04/20 18:59:43  vakatov
+* [__cplusplus && NCBI_USE_NEW_HEADERS]  Use new standard C++ system headers
+*
+* Revision 6.4  1999/03/19 17:03:42  vakatov
+* Made "Int4" be "long" again, for the 32-to64-bit transition period
+* (mostly for the PubMed group)
+*
 * Revision 6.3  1998/02/24 19:20:38  vakatov
 * #define __EXTENSIONS__ only if it is not #define'd yet(- cpp warning)
 *
@@ -94,6 +101,21 @@
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */
 /*----------------------------------------------------------------------*/
+#if defined(__cplusplus) && defined(NCBI_USE_NEW_HEADERS)
+#include <sys/types.h>
+#include <climits>
+#include <sys/stat.h>
+#include <cstddef>
+#include <cstdio>
+#include <cctype>
+#include <cstring>
+#include <cstdlib>
+#include <cmath>
+#include <cfloat>
+#include <cerrno>
+#include <malloc.h>
+#include <unistd.h>
+#else /* __cplusplus && NCBI_USE_NEW_HEADERS */
 #include <sys/types.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -108,6 +130,7 @@
 #include <float.h>
 #include <unistd.h>
 #include <errno.h>
+#endif /* __cplusplus && NCBI_USE_NEW_HEADERS */
 
 /*----------------------------------------------------------------------*/
 /*      Missing ANSI-isms                                               */
@@ -120,6 +143,15 @@
 /*----------------------------------------------------------------------*/
 /*      Aliased Logicals, Datatypes                                     */
 /*----------------------------------------------------------------------*/
+typedef signed   long  Nlm_Int4,  *Nlm_Int4Ptr;
+typedef unsigned long  Nlm_Uint4, *Nlm_Uint4Ptr;
+#define Int4           Nlm_Int4
+#define Int4Ptr        Nlm_Int4Ptr
+#define Uint4          Nlm_Uint4
+#define Uint4Ptr       Nlm_Uint4Ptr
+#define INT4_MIN       (-2147483647-1)
+#define INT4_MAX       2147483647
+#define UINT4_MAX      4294967295U
 
 /*----------------------------------------------------------------------*/
 /*      Misc Macros                                                     */

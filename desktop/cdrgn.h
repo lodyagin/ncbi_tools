@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -51,7 +51,7 @@ extern "C" {
 
 #include <dlogutil.h>
 
-#define REGISTER_CDRGN_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit CdRgn","CdRgn",OBJ_SEQFEAT,FEATDEF_CDS,OBJ_SEQFEAT,FEATDEF_CDS,NULL,CdRgnGenFunc,PROC_PRIORITY_DEFAULT)
+#define REGISTER_CDRGN_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit CdRgn","CDS",OBJ_SEQFEAT,FEATDEF_CDS,OBJ_SEQFEAT,FEATDEF_CDS,NULL,CdRgnGenFunc,PROC_PRIORITY_DEFAULT)
 
 extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
                              SeqFeatPtr sfp, SeqEntryPtr sep,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: urk utilities header
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkutil.h,v $
+* Revision 6.3  1999/01/27 15:08:42  kuzio
+* ErrorDescString
+*
 * Revision 6.2  1998/09/16 14:20:10  kuzio
 * testing cvs logging on boilerplate (?)
 *
@@ -60,6 +63,7 @@ extern "C" {
 #define L_DEF    220
 
 extern CharPtr FastaTitle (BioseqPtr bsp, CharPtr pretext, CharPtr posttext);
+extern CharPtr ErrorDescString (SeqIdPtr sip);
 
 #ifdef __cplusplus
 }

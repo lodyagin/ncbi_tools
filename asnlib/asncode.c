@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.6  1999/03/08 15:20:22  kans
+* changed single ampersand to double ampersand
+*
 * Revision 6.5  1998/06/12 19:27:44  kans
 * fixed unix compiler warnings
 *
@@ -106,7 +109,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.5 $";
+static char     RCS_Rev [] = "$Revision: 6.6 $";
 
 /*******************
  * Interator structure
@@ -3267,7 +3270,7 @@ AsnCodeIsEnumType (AsnTypePtr atp)
 	    retval = TRUE;
 	    break;
 	 }
-         if (now_atp->type->isa <= 400 & ! now_atp -> imported  ) {
+         if (now_atp->type->isa <= 400 && ! now_atp -> imported  ) {
 	    break;
          }
       }

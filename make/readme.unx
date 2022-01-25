@@ -6,70 +6,41 @@ DIRECTIONS for building the toolkit on UNIX platforms
 
 ==========================================================================
 || W A R N I N G !!
-|| That readme.unx file is valid only for old NCBI toolkit issued
-|| at January 1999
+|| That readme.unx file is valid only for new NCBI toolkit issued
+|| after April, 6, 1999
 ==========================================================================
 
 Building the NCBI toolkit
 -----------------------------
 
-1) Get a platform specific tar from the ftp site.  After extraction, at the upper level, find
-   the file ncbi.mk.  It will have the platform specific rules, used as shown below.
+1) Take the sources of NCBI tookit at
+	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+Extract that file to some empty directory, for example "toolkit" :
+	mkdir toolkit
+	cd toolkit
+	#assume that the file ncbi.tar.Z is already here
+	compress -d < ncbi.tar.Z | tar xf -
+The platform-dependent config files are located in directory ncbi/platform/
+and you can modify them or make your own ports to different platforms.
 
-  Examples of these platform specific tars, which are needed in addition to the
-  ncbi.tar.Z containing the source code are:
+2) you will see files in ncbi/make:
 
-fa2htgs/sun.tar.Z        sequin/solaris.tar.Z
-fa2htgs/alphaOSF1.tar.Z  sequin/alphaOSF1.tar.Z   sequin/sun.tar.Z
-fa2htgs/linux.tar.Z      sequin/linux.tar.Z
-fa2htgs/sgi.tar.Z        sequin/sgi.tar.Z
-fa2htgs/solaris.tar.Z    sequin/sgi5.tar.Z
-
-
-   (Note that these tars will have binaries that you might be able to use without even
-    compiling.  For this purpose, you only need one of the above.)
-
-   This file is in the platform specific area so we can be sure they actually worked
-   on those platform at the time the platform specific binaries were compiled by us.
-
-   (This documentation does not state exactly how to do this, so they can be moved
-    without obsoleting this readme.  Email to sd@ncbi.nlm.nih.gov, if you need
-    help finding these files.)
-
-2) The NCBI environmental variable needs to point to the directory which contains this
-   file (ncbi.mk).  So if you are in that directory,
-
-   setenv NCBI `pwd`
-
-   would work for a csh.  It is assumed that this shell will continue to be used in the following.
-   If you are using sh or bash, use the following command:
-   NCBI=`pwd`;export NCBI
-
-3) untar the toolkit directory into a directory called 'ncbi'
-   (Alternatively, you may provide the path to the tar file instead of using the
-    '-', in 4 (ii) below.)
-
-4) you will see files in ncbi/make:
-
-   (i) showmake.csh
+   (i) ./ncbi/make/showmake.csh
   
-       This file should show you what make would do, without actually doing the make.
+       This file should show you what make would do, without actually doing
+	   the make.
 
-   (ii) makedis.csh
+   (ii) ./ncbi/make/makedis.csh
 
        This file should actually do the make.
 
-  * * * Since you have untarred the file, most likely, use the * * *
-  * * *  '-' parameter instead of supplying the path to the    * * *
-  * * * file.
-
-       Normally, its output is trapped as 
+       Normally, its output is trapped  as 
  
-            makedis.csh - |& tee out.makedis.csh
+			in case of bash or sh or zsh:
+            ./ncbi/make/makedis.csh 2>&1 | tee out.makedis.csh
+			in case of csh or tcsh
+            ./ncbi/make/makedis.csh |& tee out.makedis.csh
 
-       if you are using csh or tcsh and as
-            makedis.csh - 2>&1 | tee out.makedis.csh
-       if you are using sh or bash
        If there are problems with the make, this is the file which should be
        sent to toolbox@ncbi.nlm.nih.gov
 
@@ -79,15 +50,16 @@ fa2htgs/solaris.tar.Z    sequin/sgi5.tar.Z
 
        should also be sent.
 
-5) Errors relating to the 'internal/' directory can be ignored.  It is normal
-   for outside users to see these messages.  (We use the same makefiles, internally,
-   for the price of external users seeing these ignored errors, we have only one
-   set of makefiles to maintain for inside and outside of NCBI.)
+3) Errors relating to the 'internal/' directory can be ignored.  It is normal
+   for outside users to see these messages.  (We use the same makefiles,
+   internally, for the price of external users seeing these ignored errors,
+   we have only one set of makefiles to maintain for inside and outside of
+   NCBI.)
 
 Karl Sirotkin Fri Jul 24 16:50:19 EDT 1998
 
 
-6) GNU compilers [Denis Vakatov, Wed Aug 19 14:21:54 EDT 1998]
+4) GNU compilers [Denis Vakatov, Wed Aug 19 14:21:54 EDT 1998]
 For some platforms there is a possibility to use GNU compiler "gcc"
 instead of the native one(usually "cc"). If you want to use "gcc"
 just make the following fixes in your "$NCBI/ncbi.mk":
@@ -100,226 +72,6 @@ Solaris:
 	NCBI_DEFAULT_LCL = sol
 	NCBI_CC = gcc
 
-7) There is some useful information about NCBI toolkit located at:
-	ftp://ftp.ncbi.nlm.nih.gov/toolbox/FAQ.html
-	
-8) Here is sample scenario to build NCBI toolkit on SGI IRIX 6.5
-I'm using bash as login shell
-
-
-$ exec /bin/bash
-xena|~|427> uname -a
-IRIX64 xena 6.5 11051732 IP25
-
-First I'm creating an empty directory with name 'toolkit'
-
-xena|~|428> mkdir toolkit
-xena|~|429> cd toolkit
-xena|~/toolkit|430> ls -ltra
-total 8
-drwxr-xr-x    2 ncbiduse dispgroup      9 Apr  7 14:48 .
-drwxr-xr-x   13 ncbiduse blastmgr    4096 Apr  7 14:48 ..
-
-Now I need to download the latest version of NCBI toolkit:
-
-xena|~/toolkit|431> ftp ftp.ncbi.nlm.nih.gov
-Connected to ncbi.nlm.nih.gov.
-220-Welcome to the NCBI FTP Server (ncbi.nlm.nih.gov)
-220-
-220 ncbi FTP server (Version wu-2.4.2-academ[BETA-18-VR13](1) Thu Feb 18
-10:06:3
-7 EST 1999) ready.
-Name (ftp.ncbi.nlm.nih.gov:ncbiduse): ftp
-331 Guest login ok, send your complete e-mail address as password.
-Password:
-230 Guest login ok, access restrictions apply.
-Remote system type is UNIX.
-Using binary mode to transfer files.
-ftp> cd toolbox/ncbi_tools
-250 CWD command successful.
-ftp> ls -ltra
-200 PORT command successful.
-150 Opening ASCII mode data connection for /bin/ls.
-total 70238
--rwxr-xr-x   1 0        506          303 Aug  3  1993 .cache
-drwxr-sr-x   2 1042     506          512 Sep  9  1997 newdoc
-drwxrws---   2 4039     506          512 Oct  2  1998 LastToolKit
--rw-r--r--   2 3755     511      6707959 Jan 26 15:09 ncbi.tar.gz
--rw-r--r--   2 3755     511      10917541 Jan 26 15:09 ncbi.tar.Z
--rw-r--r--   2 3755     506      9760631 Jan 26 15:15 ncbi.hqx
--rw-r--r--   2 3755     506      6948839 Jan 26 22:24 ncbiz.exe
--rw-rw-r--   2 4039     506        49384 Jan 27 14:49 README
-drwxr-sr-x   3 3755     506          512 Jan 27 14:50 old
--rw-r--r--   2 3755     511       112063 Jan 27 15:07 asnload.tar.Z
--rw-r--r--   2 3755     511      1387197 Jan 27 15:10 data.tar.Z
-drwxrwsr-x   5 1042     506          512 Jan 27 15:10 .
-drwxrwsr-x   9 1042     506          512 Feb 18 19:01 ..
-226 Transfer complete.
-ftp> bin
-200 Type set to I.
-ftp> get ncbi.tar.Z
-local: ncbi.tar.Z remote: ncbi.tar.Z
-200 PORT command successful.
-150 Opening BINARY mode data connection for ncbi.tar.Z (10917541 bytes).
-226 Transfer complete.
-10917541 bytes received in 26.41 seconds (403.64 Kbytes/s)
-ftp> quit
-221 Goodbye.
-
-OK, here it is.
-
-xena|~/toolkit|432> ls -l
-total 21328
--rw-r--r--    1 ncbiduse dispgroup10917541 Apr  7 14:50 ncbi.tar.Z
-
-Now I'm extracting the archive to the current directory:
-
-xena|~/toolkit|433> compress -d < ncbi.tar.Z |tar xf -
-
-Now I need to download any binary NCBI product for SGI because it contains the
-proper
-platform-specific file ncbi.mk
-
-xena|~/toolkit|434> ftp ftp.ncbi.nlm.nih.gov
-Connected to ncbi.nlm.nih.gov.
-220-Welcome to the NCBI FTP Server (ncbi.nlm.nih.gov)
-220-
-220 ncbi FTP server (Version wu-2.4.2-academ[BETA-18-VR13](1) Thu Feb 18
-10:06:3
-7 EST 1999) ready.
-Name (ftp.ncbi.nlm.nih.gov:ncbiduse): ftp
-331 Guest login ok, send your complete e-mail address as password.
-Password:
-230 Guest login ok, access restrictions apply.
-Remote system type is UNIX.
-Using binary mode to transfer files.
-ftp> cd sequin/CURRENT
-250 CWD command successful.
-250 CWD command successful.
-ftp> ls -ltra
-200 PORT command successful.
-150 Opening ASCII mode data connection for /bin/ls.
-total 85918
--rw-r--r--   2 3755     511      3924920 Jan 26 16:09 sequin.sun.tar.Z
--rw-r--r--   2 3755     511      2905593 Jan 26 16:09 sequin.solarisintel.tar.Z
--rw-r--r--   2 3755     511      3135696 Jan 26 16:09 sequin.solaris.tar.Z
--rw-r--r--   2 3755     511      5882185 Jan 26 16:09 sequin.sgi5.tar.Z
--rw-r--r--   2 3755     511      5729593 Jan 26 16:09 sequin.sgi.tar.Z
--rw-r--r--   2 3755     511      3471941 Jan 26 16:09 sequin.linux.tar.Z
--rw-r--r--   2 3755     511      6519265 Jan 26 16:09 sequin.alphaOSF1.tar.Z
--rw-r--r--   2 3755     511      6546158 Jan 26 16:09 sequin.Mac.hqx
-drwxr-sr-x   2 3755     511          512 Jan 26 16:09 .
--rw-r--r--   2 3755     511      2715044 Jan 26 22:26 sequin.win32.exe
--rw-r--r--   2 3755     511      3010872 Jan 26 22:27 sequin.win16.exe
-drwxrwsr-x  26 3755     511         1024 Mar  1 17:39 ..
--rw-rw-r--   1 3755     511        20674 Mar  2 20:52 README
-226 Transfer complete.
-ftp> get sequin.sgi.tar.Z
-local: sequin.sgi.tar.Z remote: sequin.sgi.tar.Z
-200 PORT command successful.
-150 Opening BINARY mode data connection for sequin.sgi.tar.Z (5729593 bytes).
-226 Transfer complete.
-5729593 bytes received in 11.13 seconds (502.83 Kbytes/s)
-ftp> bye
-221 Goodbye.
-
-I got the file sequin.sgi.tar.Z and now I want to be sure that files ncbi.mk
-and mk.sh.sed are inside:
-
-xena|~/toolkit|435> compress -d < sequin.sgi.tar.Z |tar tvf -
-rwxr-xr-x 3755/511 dir           Jan 26 10:28 1999 ./
-rw-r--r-- 3755/511           194 Jan 26 10:28 1999 Cn3D.ReadMe
-rwxr-xr-x 3755/511 dir           Jan 26 10:28 1999 config/
-rw-r--r-- 3755/511            71 Aug 25 14:14 1997 config/ncbidtrc
-rw-r--r-- 3755/511         14163 Aug 25 14:14 1997 config/nlmstmanrc
-rw-r--r-- 3755/511           256 Aug 25 14:14 1997 config/sequinrc
-rwxr-xr-x 3755/511 dir           Jan 26 10:28 1999 data/
-r--r--r-- 4007/228          2122 Feb 20 16:36 1997 data/BLOSUM62
-rw-rw-r-- 1042/511          1521 Oct  9 16:29 1997 data/KSat.flt
-rw-rw-r-- 1042/511           736 Oct  9 16:29 1997 data/KSchoth.flt
-rw-rw-r-- 1042/511          1521 Oct  9 16:29 1997 data/KSgc.flt
-rw-rw-r-- 1042/511           852 Oct  9 16:29 1997 data/KShopp.flt
-rw-rw-r-- 1042/511          2024 Oct  9 16:29 1997 data/KShr30bi.mat
-rw-rw-r-- 1042/511           940 Oct  9 16:29 1997 data/KSkyte.flt
-rw-rw-r-- 1042/511          1204 Oct  9 16:29 1997 data/KSpcc.dat
-rw-rw-r-- 1042/511          1521 Oct  9 16:29 1997 data/KSpur.flt
-rw-rw-r-- 1042/511          1521 Oct  9 16:29 1997 data/KSpyr.flt
-rw-rw-r-- 1042/511         68308 Jul 13 10:16 1995 data/asn2ff.prt
-rw-rw-r-- 1042/511        148763 Sep  8 16:51 1995 data/bstdt.val
-rw-rw-r-- 1042/511          7431 Oct 23 17:09 1997 data/featdef.val
-rw-rw-r-- 1042/511          2496 Dec 30 15:08 1998 data/gc.val
-rw-rw-r-- 1042/511         50078 Apr 15 11:03 1997 data/humrep.fsa
-rw-rw-r-- 1042/511         83491 Jan  5 16:21 1999 data/lineages.txt
-rw-rw-r-- 1042/511         64663 Jul 13 10:16 1995 data/makerpt.prt
-rw-rw-r-- 1042/511         49661 Jul 13 10:16 1995 data/objprt.prt
-rw-rw-r-- 1042/511          1113 Aug  1 17:25 1994 data/pubkey.enc
-rw-rw-r-- 1042/511          6021 Apr  6 13:40 1998 data/seqcode.val
-rw-rw-r-- 1042/511        167103 May  4 16:16 1998 data/sequin.hlp
-rw-rw-r-- 1042/511           480 Aug  1 17:25 1994 data/sgmlbb.ent
-rw-rw-r-- 1042/511         32433 Jan  5 16:20 1999 data/taxlist.txt
-rwxr-xr-x 3755/511 dir           Jan 26 10:28 1999 errmsg/
-rw-rw-r-- 1042/511          3936 Feb 25 18:48 1997 errmsg/a2ferr.msg
-rw-rw-r-- 1042/511         12860 Oct  8 17:26 1998 errmsg/flat2asn.msg
-rw-rw-r-- 4153/511           739 Mar 23 15:09 1998 errmsg/htgs.msg
-rw-rw-r-- 4189/511          4250 Oct  7 14:30 1998 errmsg/indx_err.msg
-rw-rw-r-- 4189/511           356 Mar 10 13:28 1995 errmsg/medarch.msg
-rw-rw-r-- 4189/511          2261 May 12 12:23 1995 errmsg/pir2asn.msg
-rw-rw-r-- 4189/228           142 Nov 14 14:21 1995 errmsg/taxarch.msg
-rw-rw-r-- 4189/228           142 Mar 20 10:58 1996 errmsg/taxutil.msg
-rw-rw-r-- 4189/511           735 Dec  8 18:03 1997 errmsg/toasn3.msg
-rw-rw-r-- 4189/228            69 Nov 14 14:31 1995 errmsg/utilpub.msg
-rw-rw-r-- 1042/511         10340 Oct 23 11:20 1998 errmsg/valid.msg
-rw-rw-r-- 1042/511           746 Jan 21 18:13 1997 errmsg/validatr.msg
-rw-r--r-- 3755/511           112 Jan 26 10:28 1999 mk.csh.sed
-rw-r--r-- 3755/511            68 Jan 26 10:28 1999 mk.sh.sed
-rw-r--r-- 3755/511          1103 Jan 26 10:28 1999 ncbi.mk
-rwxr-xr-x 3755/511      10592532 Jan 26 10:28 1999 sequin
-
-Now I'm extracting the files ncbi.mk and mk.csh.sed
-
-xena|~/toolkit|436> compress -d < sequin.sgi.tar.Z |tar xvf - ncbi.mk
-mk.csh.sed
-x mk.csh.sed, 112 bytes, 1 block
-x ncbi.mk, 1103 bytes, 3 blocks
-
-Now what I have now:
-
-xena|~/toolkit|437> ls -l
-total 32552
--rw-r--r--    1 ncbiduse dispgroup     112 Jan 26 10:28 mk.csh.sed
-drwxr-xr-x   29 ncbiduse dispgroup    4096 Apr  7 14:51 ncbi
--rw-r--r--    1 ncbiduse dispgroup    1103 Jan 26 10:28 ncbi.mk
--rw-r--r--    1 ncbiduse dispgroup10917541 Apr  7 14:50 ncbi.tar.Z
--rw-r--r--    1 ncbiduse dispgroup 5729593 Apr  7 14:51 sequin.sgi.tar.Z
-
-Now I should create environment variable NCBI and assign it the value of
-current dir.
-
-xena|~/toolkit|438> export NCBI=`pwd`
-
-If you have any other login shell then bash, you can use the command like:
-        for csh/tcsh :
-                setenv NCBI `pwd`
-        for sh/zsh
-                NCBI=`pwd`;export NCBI
-
-Now I'm ready to start the build process.
-By default the file ncbi.mk I got in sequin.sgi.tar.Z is configured for
-multithreaded
-version of tools. So no need to edit the file ncbi.mk
-Starting build process:
-xena|~/toolkit|439> ./ncbi/make/makedis.csh - 2>&1 | tee .err
-make SHELL=/bin/sh LCL=sgi RAN=ls CC=cc -mips1 -32  VIBLIBS=-B static -lXm -B
-dy
-namic -lXmu -lXt -lX11 -lgen LIB30=libncbicn3d.a LIB28=libvibgif.a
-LIB4=libvibra
-nt.a LIB20=libncbidesk.a VIBFLAG=-DWIN_MOTIF all
-         chmod +w ../include/*
-[...output skipped...]
-
-If all is correct, you will find newly built executables in directory
-./ncbi/build/
-
-Good luck!
-
-
+=======================================================================	
+ $Id: readme.unx,v 6.9 1999/04/07 18:36:41 beloslyu Exp $
+=======================================================================	

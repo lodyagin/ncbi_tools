@@ -1,10 +1,20 @@
 /*
- * $Id: Entrez.scr,v 6.5 1998/10/26 20:53:43 kimelman Exp $
+ * $Id: Entrez.scr,v 6.8 1999/05/03 14:47:26 kimelman Exp $
  * 
  * This file contains the additions to PubStruct Database on Public 
  * Entrez Servers
  *
  * $Log: Entrez.scr,v $
+ * Revision 6.8  1999/05/03 14:47:26  kimelman
+ * spaces
+ *
+ * Revision 6.7  1999/04/22 01:51:51  kimelman
+ * Move Entrez indexing procs to _active DB only
+ * create list2index mode for selected reindexing
+ *
+ * Revision 6.6  1999/03/16 16:56:28  kimelman
+ * new ID fixes
+ *
  * Revision 6.5  1998/10/26 20:53:43  kimelman
  * bugfix: timerounding to minutes before comparision and print format fioxes
  *
@@ -51,10 +61,10 @@ PRINT '/*****           PROCEDURE    id_find_gi                     *****/'
 go
 
 create proc
-id_find_gi(
-          @gi  int,  /* mmdb */
-          @state tinyint  = 0
-          )
+id_find_gi (
+            @gi  int,  /* mmdb */
+            @state tinyint  = 0
+           )
 as
   declare @acc int
 
@@ -70,13 +80,13 @@ as
        declare @acc1 int
        
        select @acc=acc
-       from Struct s, EntrezControl..SatKeyInfo i(1)
+       from Struct s, EntrezControl..SatKeyFlags i
        where s.mmdb_id = @gi and s.state = 0 and s.acc = i.sat_key and i.sat = 10 and i. dumped4entrez = 1
    
        if @@rowcount = 0 /* looks to be removed */
          select @acc = -1
   end
-  select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0)
+  select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0),0,0,"01/01/1900"
   from Struct
   where acc = @acc
 go
@@ -99,7 +109,8 @@ go
 create proc
 id_get_asnprop ( @sat_key int)
 as
-  select  state=100,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), length=datalength(blob)
+  select  state=100,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), 
+          length=datalength(blob), owner=convert(smallint,0),"unknown"
     from  Struct
    where  acc = @sat_key
  
@@ -147,7 +158,7 @@ PRINT '/*****           PROCEDURE    id_get_gi_content              *****/'
 go
 
 create proc
-id_get_gi_content(
+id_get_gi_content (
      @sat_key        int,
      @sat            smallint=10
      )
@@ -177,7 +188,7 @@ as
    where  state = 0 and mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
    
    select @create_date=isnull(min(i.date_entrez),@create_date)
-   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   from   Struct s, EntrezControl..SatKeyFlags i
    where  s.state = 0 and s.mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
      and  s.acc = i.sat_key and i.sat = 10
 
@@ -187,13 +198,13 @@ as
    where  s.state = 0 and s.mmdb_id = @mmdb_id 
 
    select @mod_date=isnull(min(i.date_entrez),@mod_date)
-   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   from   Struct s, EntrezControl..SatKeyFlags i
    where  s.state = 0 and s.mmdb_id = @mmdb_id 
       and s.acc = i.sat_key and i.sat = 10
 
    /* Entrez Publication Date */
    select @date_entrez=min(i.date_entrez)
-   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   from   Struct s, EntrezControl..SatKeyFlags i
    where  s.mmdb_id = @mmdb_id and s.state = 0 and s.acc = i.sat_key and i.sat = 10 
           and i.date_entrez is not null 
 
@@ -241,7 +252,7 @@ as
   if(@sat_key=0)
     begin
       select @sat_key = acc
-      from Struct s, EntrezControl..SatKeyInfo i(1)
+      from Struct s, EntrezControl..SatKeyFlags i
       where mmdb_id = @gi and state = 0 and s.acc = i.sat_key and i.sat = 10 and i.dumped4entrez =1
       if(@@rowcount = 0)
         return 100
@@ -261,6 +272,10 @@ go
 GRANT EXECUTE ON id_get_asn  TO public
 go
 
+/************************************************************************/
+PRINT '/*****           PROCEDURE    post_index                     *****/'
+/************************************************************************/
+go
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'post_index'
     AND   uid = user_id('dbo')
@@ -271,67 +286,8 @@ END
 go
 
 /************************************************************************/
-PRINT '/*****           PROCEDURE    post_index                     *****/'
+PRINT '/*****           PROCEDURE    post_remove                    *****/'
 /************************************************************************/
-go
-
-create proc
-post_index(@index_key int, @minutes int = null)
-as
-  declare @acc int
-  declare @date datetime
-  declare @mod_date datetime
-  declare @mmdb_id        int
-
-  if ( @minutes is null )
-    select @date = getdate()
-  else
-    begin
-        select @date = dateadd(minute,@minutes,'Jan 1 1900')
-        if ( @date < getdate() )
-          begin
-            /* we come to this cased only if we update mmdb entry or just reindex it */
-            /* make sure the date we got is the same we sent to e2index */
-            select @mmdb_id= mmdb_id
-            from   Struct
-            where  acc = @index_key
-            
-            select @mod_date=min(date)
-            from   Struct s
-            where  s.state = 0 and s.mmdb_id = @mmdb_id 
-            
-            select @mod_date=isnull(min(i.date_entrez),@mod_date)
-            from   Struct s, EntrezControl..SatKeyInfo i(1)
-            where  s.state = 0 and s.mmdb_id = @mmdb_id 
-            and s.acc = i.sat_key and i.sat = 10
-
-            /* round time to minutes */
-            select @minutes = datediff(minute,'Jan 1 1900',@mod_date)
-            select @mod_date = dateadd(minute,@minutes,'Jan 1 1900')
-
-            if ( @mod_date is not null and @mod_date != @date )
-              begin
-                print "Post_index: modification dates incosistence: db=%1!, entrez=%2! ", @mod_date, @date
-                return 100
-              end
-            select @date = getdate()
-          end
-    end
-
-  update EntrezControl..SatKeyInfo
-  set dumped4entrez = 0
-  from EntrezControl..SatKeyInfo i, Struct a, Struct b
-  where i.sat = 10 and i.dumped4entrez != 1 and i.sat_key = a.acc
-    and a.mmdb_id=b.mmdb_id and b.acc = @index_key
-                                 
-  update EntrezControl..SatKeyInfo
-  set dumped4entrez = 1, date_entrez = isnull(date_entrez,@date)
-  where sat = 10 and sat_key = @index_key
-go
-
-/*****        Grant and Revoke permissions post_index               *****/
-go
-GRANT EXECUTE ON post_index  TO anyone
 go
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'post_remove'
@@ -340,26 +296,6 @@ IF EXISTS (SELECT * FROM sysobjects
 BEGIN
     DROP PROCEDURE dbo.post_remove
 END
-go
-/************************************************************************/
-PRINT '/*****           PROCEDURE    post_remove                    *****/'
-/************************************************************************/
-go
-
-create proc
-post_remove(@index_key int) as
-  declare @acc  int
-  declare @date datetime
-
-  update EntrezControl..SatKeyInfo
-  set dumped4entrez = 0
-  from EntrezControl..SatKeyInfo i(1), Struct a, Struct b
-  where i.sat = 10 and i.dumped4entrez = 1 and i.sat_key = a.acc
-    and a.mmdb_id= @index_key
-go
-/*****        Grant and Revoke permissions post_remove              *****/
-go
-GRANT EXECUTE ON post_remove  TO anyone
 go
 
 IF EXISTS (SELECT * FROM sysobjects
@@ -376,30 +312,45 @@ PRINT '/*****           PROCEDURE    list2index                    *****/'
 go
 
 create proc
-list2index(@full int = 0)
+list2index(@full int = 0,@mmdb_id int = 0)
 as
 begin
   if (@full = 1)
      begin
-      select 'fresh '  , s.acc, '10', mod_date=datediff(minute,'Jan 1 1900', isnull(min(i.date_entrez),min(s1.date)))
-      from Struct s, Struct s1, EntrezControl..SatKeyInfo i(1), EntrezControl..SatKeyInfo i1(1)
-      where s.state = 0 and s.suppressed = 0 and i1.sat_key = s.acc and i1.sat=10 and  i1.date_entrez is null
-            and s1.state = 0 and s.mmdb_id = s1.mmdb_id and i.sat_key = s1.acc and i.sat=10
+      select 'fresh '  , s.acc, '10',
+             mod_date=datediff(minute,'Jan 1 1900', isnull(min(i1.date_entrez),min(s1.date)))
+        from Struct s, Struct s1, EntrezControl..SatKeyFlags i, EntrezControl..SatKeyFlags i1
+       where s.state = 0 and s.suppressed = 0 and i.sat_key = s.acc and i.sat=10 and  i.date_entrez is null
+         and s.mmdb_id = s1.mmdb_id
+         and s1.state = 0 and i1.sat_key = s1.acc and i1.sat=10
+       group by s.acc
+       order by mod_date,s.acc
+    end
+  else if(@full = 2) /* enforced reindex cases */
+    begin
+     select 'fresh '  , s.acc, '10',
+            mod_date=datediff(minute,'Jan 1 1900', isnull(min(i1.date_entrez),min(s1.date)))
+       from Struct s, Struct s1, EntrezControl..SatKeyFlags i1
+      where s.state = 0 and s.suppressed = 0 
+        and s.mmdb_id = s1.mmdb_id
+        and s1.state = 0  and i1.sat_key = s1.acc and i1.sat=10
+        and s.mmdb_id = @mmdb_id
       group by s.acc
-      order by mod_date,s.acc
     end
   else if(@full = -1)
     begin
       select 'removed ', mmdb_id
-      from Struct s, EntrezControl..SatKeyInfo i(1)
+      from Struct s, EntrezControl..SatKeyFlags i
       where state = 0 and suppressed > 0 and i.sat_key = s.acc and i.sat=10 and i.dumped4entrez = 1
-        and not exists ( select * from Struct b where b.mmdb_id = s.mmdb_id and b.state = 0 and b.suppressed = 0 )
+      and not exists ( select * from Struct b
+                       where b.mmdb_id = s.mmdb_id and b.state = 0 and b.suppressed = 0 )
       order by mmdb_id
     end
   else if(@full = 0)
     begin
-      select 'data '   , s.acc, '10', mod_date=datediff(minute,'Jan 1 1900', isnull(min(i.date_entrez),min(s1.date)))
-      from Struct s, Struct s1, EntrezControl..SatKeyInfo i(1)
+      select 'data '   , s.acc, '10',
+            mod_date=datediff(minute,'Jan 1 1900', isnull(min(i.date_entrez),min(s1.date)))
+      from Struct s, Struct s1, EntrezControl..SatKeyFlags i
       where s1.state = 0 and s.mmdb_id = s1.mmdb_id and s.state = 0 and s.suppressed = 0 and
             i.sat_key = s1.acc and i.sat=10
       group by s.acc
@@ -424,7 +375,7 @@ PRINT '/*****           PROCEDURE    vacuum_entrez                  *****/'
 go
 
 create proc
-vacuum_entrez(@days int = 0)
+vacuum_entrez (@days int = 0)
 as
   declare @acc int
   declare @obv_date datetime
@@ -435,9 +386,51 @@ as
   select @stamp = getdate()
 
   select acc
-  from Struct s, EntrezControl..SatKeyInfo i(1)
+  from Struct s, EntrezControl..SatKeyFlags i(1)
   where s.state = 0 and i.sat_key = s.acc and i.sat = 10 and s.suppressed >0
        and date < @obv_date and datalength(blob) > 0 and i.dumped4entrez = 0
 go
 GRANT EXECUTE ON vacuum_entrez TO anyone
+go
+
+/************************************************************************/
+PRINT '/*****           TRIGGER  at_insert                         *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'at_insert'
+    AND   uid = user_id('dbo')
+    AND   type = 'TR')
+BEGIN
+    DROP trigger dbo.at_insert
+END
+go
+
+/************************************************************************/
+PRINT '/*****           TRIGGER  at_delete                          *****/'
+/************************************************************************/
+go
+  
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'at_delete'
+    AND   uid = user_id('dbo')
+    AND   type = 'TR')
+BEGIN
+    DROP trigger dbo.at_delete
+END
+go
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    fill_satinfo                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'fill_satinfo'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.fill_satinfo
+END
 go

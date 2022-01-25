@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   Routines for outputing ASN.1 parse trees from asntool
@@ -41,6 +41,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnout.c,v $
+* Revision 6.1  1999/03/11 23:43:17  kans
+* fprintf casts
+*
 * Revision 6.0  1997/08/25 18:10:14  madden
 * Revision changed to 6.0
 *
@@ -216,7 +219,7 @@ NLM_EXTERN void AsnOutput (CharPtr filename, AsnModulePtr amp, Boolean loader, I
 		    		fprintf(fp, "NULL,");
 			    else
 				    fprintf(fp, "\"%s\" ,", atvp->name);
-    			fprintf(fp,"%ld,", atvp->intvalue);
+    			fprintf(fp,"%ld,", (long) atvp->intvalue);
 	    		if (atvp->realvalue == (FloatHi) 0.0)
 		    		fprintf(fp,"0.0,");
 			    else
@@ -237,7 +240,7 @@ NLM_EXTERN void AsnOutput (CharPtr filename, AsnModulePtr amp, Boolean loader, I
 		    		fprintf(ld, "-32000 ");
 			    else
 				    fprintf(ld, "%s ", atvp->name);
-    			fprintf(ld,"%ld ", atvp->intvalue);
+    			fprintf(ld,"%ld ", (long) atvp->intvalue);
 	    		if (atvp->realvalue == (FloatHi) 0.0)
 		    		fprintf(ld,"0.0 ");
 			    else

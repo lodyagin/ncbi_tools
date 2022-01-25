@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *               system dependent header
@@ -39,6 +39,11 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.msw,v $
+* Revision 6.2  1999/03/17 15:37:23  vakatov
+* Set the default(<ncbistd.h>) "Nlm_Int4" to "int" rather tnan "long";
+* the same for "Nlm_Uint4";  modifyed the concerned "ncbilcl.*" files
+* accordingly.
+*
 * Revision 6.1  1998/07/28 20:28:42  vakatov
 * [WIN32,_MT]  #define WIN32_THREADS_AVAIL
 *
@@ -118,6 +123,16 @@
 #define NEAR   __near
 #endif
 
+typedef signed   long  Nlm_Int4,  FAR * Nlm_Int4Ptr;
+typedef unsigned long  Nlm_Uint4, FAR * Nlm_Uint4Ptr;
+#define Int4           Nlm_Int4
+#define Int4Ptr        Nlm_Int4Ptr
+#define Uint4          Nlm_Uint4
+#define Uint4Ptr       Nlm_Uint4Ptr
+#define INT4_MIN       (-2147483647-1)
+#define INT4_MAX       2147483647
+#define UINT4_MAX      4294967295U
+
 #endif  /* WIN16 */
 
 
@@ -192,6 +207,15 @@
 #define PASCAL  __pascal
 #define CDECL	__cdecl
 #endif
+typedef signed   long  Nlm_Int4,  FAR * Nlm_Int4Ptr;
+typedef unsigned long  Nlm_Uint4, FAR * Nlm_Uint4Ptr;
+#define Int4           Nlm_Int4
+#define Int4Ptr        Nlm_Int4Ptr
+#define Uint4          Nlm_Uint4
+#define Uint4Ptr       Nlm_Uint4Ptr
+#define INT4_MIN       (-2147483647-1)
+#define INT4_MAX       2147483647
+#define UINT4_MAX      4294967295U
 #endif
 
 #ifdef _MPPC_

@@ -27,7 +27,7 @@
 *
 * Author:  Denis Vakatov, Jinghui Zhang
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *  Draw style-dependent feature images for the feature legend map
@@ -35,6 +35,9 @@
 *
 * ----------------------------------------------------------------------------
 * $Log: fea2seg.c,v $
+* Revision 6.3  1999/05/06 21:21:13  vakatov
+* Stricter type casting
+*
 * Revision 6.2  1998/06/16 18:33:46  kans
 * fixed unix compiler warnings
 *
@@ -343,7 +346,7 @@ static Boolean feature2label(SegmenT seg, Int2 feature,
 
     if (max_length < StringLen( str ))
       {
-        str = StringNCat(MemNew(max_length + 1), str, max_length);
+        str = StringNCat((char*)MemNew(max_length + 1), str, max_length);
         if ( !str )
           return FALSE;
         free_str = TRUE;

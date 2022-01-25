@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.15 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -296,6 +296,7 @@ static Boolean MatchItemInFlatFileProc (GatherContextPtr gcp)
   msp = (MatchStrucPtr) gcp->userdata;
   if (msp == NULL) return FALSE;
   sfp = (SeqFeatPtr) gcp->thisitem;
+  /*
   if (msp->slashgene) {
     itemID = GetBestGeneOrProteinFeature (gcp->entityID, NULL, sfp->location, SEQFEAT_GENE);
     if (itemID != 0) {
@@ -310,6 +311,7 @@ static Boolean MatchItemInFlatFileProc (GatherContextPtr gcp)
   if (msp->found) {
     return TRUE;
   }
+  */
   if (sfp->data.choice == SEQFEAT_CDREGION) {
     itemID = GetBestGeneOrProteinFeature (gcp->entityID, NULL, sfp->product, SEQFEAT_PROT);
     if (itemID != 0) {
@@ -320,6 +322,7 @@ static Boolean MatchItemInFlatFileProc (GatherContextPtr gcp)
       }
     }
   }
+  /*
   if (! msp->slashgene) {
     itemID = GetBestGeneOrProteinFeature (gcp->entityID, NULL, sfp->location, SEQFEAT_GENE);
     if (itemID != 0) {
@@ -330,6 +333,7 @@ static Boolean MatchItemInFlatFileProc (GatherContextPtr gcp)
       }
     }
   }
+  */
   return FALSE;
 }
 
@@ -391,7 +395,7 @@ static void ReleaseIcon (DoC d, PoinT pt)
           WatchCursor ();
           Update ();
           editItemID = itemID;
-          if (itemtype == OBJ_SEQFEAT) {
+          if (itemtype == OBJ_SEQFEAT && GetAppProperty ("InternalNcbiSequin") != NULL) {
             str = GetDocText (d, item, row, 1);
             TrimSpacesAroundString (str);
             src = str;
@@ -518,7 +522,7 @@ static Boolean DeltaLitOnly (BioseqPtr bsp)
   return TRUE;
 }
 
-static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, Uint1 mode)
+static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, Uint1 mode, Boolean show_gene)
 
 {
   Asn2ffJobPtr   ajp;
@@ -553,7 +557,7 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
       ajp->error_msgs = FALSE;
       ajp->non_strict = TRUE;
       ajp->Spop = spop;
-      ajp->show_gene = TRUE;
+      ajp->show_gene = show_gene;
       if (IsAGenomeRecord (sep) ||
           IsSegmentedBioseqWithoutParts (sep)) {
         ajp->only_one = TRUE;
@@ -578,7 +582,7 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
   return rsult;
 }
 
-static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format)
+static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene)
 
 {
   BioseqPtr    bsp;
@@ -665,7 +669,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format)
     }
     FileRemove (path);
   } else {
-    PopulateFF (doc, sep, bsp, format, mode);
+    PopulateFF (doc, sep, bsp, format, mode, show_gene);
     SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
     SetDocProcs (doc, ClickIcon, NULL, ReleaseIcon, NULL);
     SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
@@ -684,7 +688,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format)
 static void PopulateGenBank (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT);
+  PopulateFlatFile (bvp, GENBANK_FMT, TRUE);
 }
 
 static void PopulateEMBL (BioseqViewPtr bvp)
@@ -692,22 +696,22 @@ static void PopulateEMBL (BioseqViewPtr bvp)
 {
   if (bvp == NULL) return;
   if (bvp->hasTargetControl) {
-    PopulateFlatFile (bvp, PSEUDOEMBL_FMT);
+    PopulateFlatFile (bvp, PSEUDOEMBL_FMT, TRUE);
   } else {
-    PopulateFlatFile (bvp, EMBL_FMT);
+    PopulateFlatFile (bvp, EMBL_FMT, TRUE);
   }
 }
 
 static void PopulateDDBJ (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT);
+  PopulateFlatFile (bvp, GENBANK_FMT, FALSE);
 }
 
 static void PopulateGenPept (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENPEPT_FMT);
+  PopulateFlatFile (bvp, GENPEPT_FMT, TRUE);
 }
 
 static void PopulateFasta (BioseqViewPtr bvp)

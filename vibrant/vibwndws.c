@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.26 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,28 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.26  1999/04/22 15:19:01  vakatov
+* Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
+* "post-mortem" callbacks(registered by XtAddEventHandler()) get
+* triggered for the destroyed widget. Reason: the widget may not be
+* immediately destroyed if XtDestroyWidget() was called in a nested
+* event dispatch loop.
+*
+* Revision 6.25  1999/04/06 14:23:27  lewisg
+* add opengl replacement for viewer3d
+*
+* Revision 6.24  1999/03/17 15:10:50  vakatov
+* + Nlm_XLoadStandardFont() to find a "last-resort" font
+*
+* Revision 6.23  1999/02/11 21:34:37  kans
+* check __profile__ symbol to turn on Mac profiling
+*
+* Revision 6.22  1999/02/10 22:22:14  kans
+* added commented-out CodeWarrior Profiler setup instructions
+*
+* Revision 6.21  1999/01/29 18:42:57  kans
+* appearancelib and navigationlib ifdef OS_MAC and PROC_PPC
+*
 * Revision 6.20  1999/01/21 23:58:32  kans
 * Mac navigation services code ifdefed out because is available function does not appear to work properly
 *
@@ -503,12 +525,13 @@
 #include <vibprocs.h>
 #include <vibincld.h>
 
-/*
 #ifdef WIN_MAC
+#ifdef PROC_PPC
 #include <Appearance.h>
 #include <Navigation.h>
+#include <Profiler.h>
 #endif
-*/
+#endif
 
 #if defined(WIN_MOTIF) && defined(_DEBUG)
 #include <X11/Xmu/Editres.h>
@@ -537,9 +560,6 @@
 #ifndef Nlm_MainTool
 #define Nlm_MainTool    Nlm_Handle
 #endif
-#ifndef Nlm_ColorMTool
-#define Nlm_ColorMTool  PaletteHandle
-#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -555,9 +575,6 @@
 #ifndef Nlm_MainTool
 #define Nlm_MainTool    Nlm_Handle
 #endif
-#ifndef Nlm_ColorMTool
-#define Nlm_ColorMTool  HPALETTE
-#endif
 #endif
 
 #ifdef WIN_MOTIF
@@ -572,9 +589,6 @@
 #endif
 #ifndef Nlm_MainTool
 #define Nlm_MainTool    Widget
-#endif
-#ifndef Nlm_ColorMTool
-#define Nlm_ColorMTool  Colormap
 #endif
 #endif
 
@@ -1307,6 +1321,7 @@ extern void Nlm_SetColorMap (Nlm_WindoW w, Nlm_Uint2 totalColors,
         if ( wdata.cMap != NULL ) {
           SelectPalette ( Nlm_currentHDC,wdata.cMap,FALSE );
           RealizePalette ( Nlm_currentHDC );
+
         }
       }
     }
@@ -5764,7 +5779,8 @@ extern Nlm_CharPtr Nlm_XrmGetResource(const Nlm_Char PNTR _resource)
 }
 
 
-extern XFontStruct *Nlm_XLoadQueryFont PROTO((Display *, Nlm_CharPtr, Nlm_Boolean));
+extern XFontStruct *Nlm_XLoadStandardFont(void); /* <-- see in "ncbidraw.c" */
+
 static Nlm_Boolean Nlm_SetupWindows (void)
 {
   Nlm_Int4   height;
@@ -5893,9 +5909,9 @@ static Nlm_Boolean Nlm_SetupWindows (void)
 
   Nlm_currentCursor = arrow;
   
-  font = Nlm_XLoadQueryFont(Nlm_currentXDisplay,
-                            "-*-helvetica-bold-r-*--14-*", TRUE);
-  Nlm_XfontList = XmFontListCreate (font, "dummy");
+  font = Nlm_XLoadStandardFont();
+
+  Nlm_XfontList = XmFontListCreate(font, "dummy");
 
   Nlm_fileDialogShell = NULL;
 
@@ -6151,6 +6167,11 @@ main ()
   OSErr  err;
   long  offset;
 
+#if __profile__
+  ProfilerInit (collectDetailed, bestTimeBase, 100, 20);
+  ProfilerSetStatus (FALSE);
+#endif
+
   MaxApplZone ();
   for (i = 0; i < 20; i++) {
     MoreMasters ();
@@ -6200,7 +6221,7 @@ main ()
   }
 
   Nlm_usesMacNavServices = FALSE;
-  /*
+#ifdef PROC_PPC
   err = Gestalt (gestaltAppleEventsAttr, &gval);
   if (err == noErr && ((short) gval & (1 << gestaltAppearanceExists)) != 0) {
     if (NavServicesAvailable ()) {
@@ -6210,7 +6231,7 @@ main ()
   if (Nlm_usesMacNavServices) {
     NavLoad ();
   }
-  */
+#endif
 
   Nlm_InitVibrantHooks ();
 
@@ -6254,11 +6275,17 @@ main ()
   Nlm_FreeTexts ();
   Nlm_FreeConfigStruct ();
   Nlm_ErrSetLogfile (NULL,0);
-  /*
+#ifdef PROC_PPC
   if (Nlm_usesMacNavServices) {
     NavUnload ();
   }
-  */
+#endif
+
+#if __profile__
+  ProfilerDump ("\pvibrant.prof");
+  ProfilerTerm ();
+#endif
+
   ExitToShell ();
 }
 #endif
@@ -6305,11 +6332,14 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
   if (! (Nlm_RegisterTexts ())) {
     return FALSE;
   }
+
   if (! (Nlm_RegisterSlates ())) {
     sprintf (str, "Nlm_WindowClass%ld", (long) (int) Nlm_currentHInst);
     UnregisterClass (str, Nlm_currentHInst);
     return FALSE;
   }
+
+
   ParseSetupArguments(Nlm_currentHInst, StringSave(lpszCmdLine));
   Nlm_GetReady ();
 
@@ -6577,27 +6607,14 @@ extern void Nlm_RemoveDyingWindows (void)
 
     {{
       Nlm_ShellTool shl = Nlm_GetWindowShell( w );
+      XtUnrealizeWidget(shl);
       if (
 #ifdef NLM_MOTIF_CASCADEB_BUG
           !mb  &&
 #endif
-          (!NLM_QUIET  ||  Nlm_WindowHasBeenShown( w )))
+          (!NLM_QUIET  ||  Nlm_WindowHasBeenShown( w ))) {
         XtDestroyWidget( shl );
-      else
-        {
-#ifdef _DEBUG
-          XtRemoveEventHandler(shl,
-                               (EventMask) 0, True,
-                               (XtEventHandler) _XEditResCheckMessages, NULL);
-#endif
-          XtRemoveEventHandler(shl, StructureNotifyMask|FocusChangeMask, FALSE,
-                               WindowStructFocusCallback, (XtPointer) w);
-          XtRemoveEventHandler (shl, EnterWindowMask, FALSE,
-                                WindowEnterCallback, (XtPointer) w);
-          XtRemoveEventHandler (shl, LeaveWindowMask, FALSE,
-                                WindowLeaveCallback, (XtPointer) w);
-          XtUnmapWidget( shl );
-        }
+      }
     }}
     XSync (Nlm_currentXDisplay, FALSE);
 #endif

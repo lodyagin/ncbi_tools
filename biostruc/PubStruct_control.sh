@@ -1,5 +1,5 @@
 #! /bin/sh
-#    $Id: PubStruct_control.sh,v 6.21 1998/11/19 23:52:42 kimelman Exp $
+#    $Id: PubStruct_control.sh,v 6.22 1999/05/03 14:46:10 kimelman Exp $
 #  ===========================================================================
 # 
 #                             PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 #  Modifications:  
 #  --------------------------------------------------------------------------
 #  $Log: PubStruct_control.sh,v $
+#  Revision 6.22  1999/05/03 14:46:10  kimelman
+#  schema initialization dropped from list : too risky.
+#
 #  Revision 6.21  1998/11/19 23:52:42  kimelman
 #  dust cleaning
 #
@@ -127,8 +130,6 @@ DBpasswrd=kmlmNu
 FILEpath=/net/vaster/mmdb/mmdb/data
 tempname=/tmp/$$
 
-reload_schema=no
-reload_proc=no
 load_list=empty
 download_list=empty
 delete_list=empty
@@ -154,9 +155,6 @@ cat <<EOF
   Usage : $progname [ options ]
 
 options:
-    --reload_schema - drops tables and data and create new tables from PubStruct.scr
-    --reload_proc   - drops all of the stored procs and create proc from PubStruct_proc.scr
-
     --delete_list <filename> 
                     - delete Structures with mmdb_id listed in <filename>
     --path <path_to_gzipped_files>   (default $FILEpath)
@@ -186,14 +184,16 @@ options:
 
 Examples:
 
- creating data and loading full structure data from /net/vaster/mmdb/mmdb/data:
-  agate{kml}pubstruct> $progname --reload_schema --load_list all ;
+ loading full structure data from /net/vaster/mmdb/mmdb/data:
+  agate{kml}pubstruct> $progname --load_list all ;
  
  The same but loading data from saturn :
-  agate{kml}pubstruct> $progname --reload_schema --load_list all --path /net/saturn/pubmed2/MMDB
+  agate{kml}pubstruct> $progname --load_list all --path /net/saturn/pubmed2/MMDB
   
  Montly update (/net/vaster/mmdb/mmdb/data has already been updated):
   agate{kml}pubstruct> $progname --delete_list ../deleted --load_list ../updated
+ or just 
+  agate{kml}pubstruct> $progname --load_list update
 
 EOF
     exit $1
@@ -211,14 +211,6 @@ while [ $# -gt 0 ]; do
     esac
   fi
   case "$1" in
-    ## remove everything in DB and createw it from scrath
-    "--reload_schema" )
-        reload_schema=yes
-        reload_proc=yes
-    ;;
-    "--reload_proc" )
-        reload_proc=yes
-    ;;
     "--load_list" )
         [ $has_param = yes ] || usage 1
         load_list="$2"
@@ -302,17 +294,10 @@ done
 
 # QA : check options for correctness
 #------------------------------------
-if [ $reload_proc != yes -a $reload_schema != yes -a $load_list = empty -a \
-     $download_list = empty -a  $delete_list = empty ] ; then
+if [ $load_list = empty -a $download_list = empty -a  $delete_list = empty ] ; then
   echo "WARNING: No action specified!!!"
   echo "${progname}: ${options}" 
   usage 0
-fi
-
-if [  $reload_schema = yes -a $delete_list != empty ] ; then
-  echo "WARNING: 'delete_list' option is useless with 'reload_schema', exit - NO ACTION TAKEN"
-  echo "${progname}: ${options}"
-  usage 1
 fi
 
 # QA passed
@@ -325,48 +310,27 @@ fi
 
 ISQL="$SYBASE_isql -S$DBserver -U$DBuser -P$DBpasswrd"
 
-drops() { #--------<< drop objects >>------------------------------
-    ## prepare list of objects to drop.
-    cat >clean1 <<EOF
-use $DBname
-go
-select 'drop $1    '+name from sysobjects where type = '$2'
-go
-EOF
-   ## prepared dropping script
-   cat >clean2 <<EOF
-use $DBname
-go
-`$ISQL <clean1 | grep "drop" `
-go
-EOF
-   ## run it
-   $ISQL < clean2
-   rm -f clean1 clean2
-} #--------<< drop objects >>--------------------------------------
-
 atexit() {
     for fn in clean clean1 clean2 $tempname
     do
         [ ! -f $fn ] || rm -f $fn
     done
-    for ext in down rm dl 1 2 3 plus minus 4 5 a b c all allf ndiff new
-    do
-        [ ! -f $tempname.$ext ] || rm -f $tempname.$ext
-    done
+    rm $tempname.* 2>/dev/null
+}
+
+get_alive() {
+  if [ ! -r $tempname.DB_alive ] ; then
+    DB_alive_query="select '__mmdb__', mmdb_id from Struct where state=0 and suppressed=0 order by mmdb_id"
+    printf "use $DBname\ngo\n${DB_alive_query}\ngo\n" | $ISQL | grep '__mmdb__' | awk '  { print $2 }' >$tempname.DB_alive
+  fi
 }
 
 cook_deletelist() { #  $remove_list
   ls $FILEpath | grep gz | sed 's/[.]val[.]gz$//g' | sort -n >$tempname.a
-  cat >clean1 <<EOF
-use $DBname
-go
-select 'data',  mmdb_id from Struct where state=0 and suppressed=0 order by mmdb_id
-go
-EOF
-  $ISQL <clean1 | grep 'data' | awk '  { print $2 }' >$tempname.b
-  diff -c $tempname.b $tempname.a | grep "^- " | awk ' { print $2 }' >$1
-  rm $tempname.a $tempname.b clean1
+
+  get_alive
+  diff -c $tempname.DB_alive $tempname.a | grep "^- " | awk ' { print $2 }' >$1
+  rm $tempname.a
 }
 
 difflist() { 
@@ -389,17 +353,6 @@ difflist() {
 # Start Actions
 #
 
-if [ $reload_schema = yes ] ; then
-    drops table U
-   ## recreate DB schema
-   $ISQL <PubStruct.scr
-fi
-
-if [ $reload_proc = yes ] ; then
-   ## recreate DB stored procedures
-   $ISQL <PubStruct_proc.scr
-fi
-
 trap atexit 0 1
 
 if [ $load_list = all ] ; then
@@ -408,42 +361,37 @@ if [ $load_list = all ] ; then
   ls $FILEpath | grep gz | sed 's/[.]val[.]gz$//g' | sort -n >$load_list
 elif [ $load_list != empty ] ; then
   ## prepare list of files to load
-  cat >clean1 <<EOF
-use $DBname
-go
-select 'data',  min(datediff(day,date,getdate())) from Struct where state=0 and suppressed=0
-go
-select '__mmdb__', mmdb_id from Struct where state=0 and suppressed=0 order by mmdb_id
-go
-EOF
-  $ISQL <clean1 >$tempname.1 
-  DAYS="`cat $tempname.1 | grep 'data' | awk '  { print $2 }'`"
-  cat $tempname.1 | grep '__mmdb__' | awk '  { print $2 }' >$tempname.all
-  ( cd $FILEpath ; find .               -type f -name "*.val.gz" | sed 's/^[.]\///g;s/[.]val[.]gz$//g' | sort -n ) >$tempname.allf &
-  a1=$!
-  ( cd $FILEpath ; find . -mtime -$DAYS -type f -name "*.val.gz" | sed 's/^[.]\///g;s/[.]val[.]gz$//g' | sort -n ) >$tempname      &
-  fresh=$!
-  rm clean1 $tempname.1
-  wait $a1
-  if diff $tempname.all $tempname.allf 2>/dev/null >$tempname.ndiff ; then
-    echo "" >$tempname.new
-  else
-    cat $tempname.ndiff | grep "^> " | awk ' { print $2 }' >$tempname.new
-  fi
-  rm $tempname.all $tempname.allf $tempname.ndiff
-  wait $fresh
-  if diff  $tempname $tempname.new 2>/dev/null >$tempname.ndiff ; then
-    echo "" >$tempname.new
-  else
-    cat $tempname.ndiff | grep "^> " | awk ' { print $2 }' >>$tempname
-  fi
-  rm $tempname.new $tempname.ndiff
 
+  # calculate number of days since last load to PubStruct
+  DB_last_load_query="select 'data',  min(datediff(day,date,getdate())) from Struct where state=0 and suppressed=0"
+  DAYS=`printf "use $DBname\ngo\n${DB_last_load_query}\ngo\n" | $ISQL | grep 'data' | awk '  { print $2 }'`
+  
+  # create list of all alive entries in pubstruct
+  get_alive
+  
+  ( # create list of entries which exist in file repository but not in DB :
+      ( cd $FILEpath ; # create list of all entries on file repository
+        find .               -type f -name "*.val.gz" | sed 's/^[.]\///g;s/[.]val[.]gz$//g' | sort -n 
+      ) >$tempname.fr_all
+      diff $tempname.DB_alive $tempname.fr_all 2>/dev/null | grep "^> " | awk ' { print $2 }' >$tempname.new
+      rm $tempname.fr_all
+  ) &
+  ( # create list files which were changed since last DB update
+      ( cd $FILEpath 
+        find . -mtime -$DAYS -type f -name "*.val.gz" | sed 's/^[.]\///g;s/[.]val[.]gz$//g' | sort -n 
+      ) >$tempname.fresh
+  ) &
+  wait
+  # here we add 'new' entries to 'fresh' list even if they have older update date
+  diff  $tempname.fresh $tempname.new 2>/dev/null | grep "^> " | awk ' { print $2 }' >>$tempname.fresh
+  rm $tempname.new
+  mv $tempname.fresh $tempname
+  
   if [ $load_list = update ]; then
     load_list=$tempname
     [ $delete_list != empty ] || delete_list=update
-  else 
-    # let's check user-provide list for correctness
+  else
+    # let's check user-provided list for correctness
     if [ ! -f $load_list ] ; then
         echo "can not open $load_list"
         exit 1
@@ -465,15 +413,8 @@ EOF
   fi
 fi
 if [ $download_list = all ] ; then
-  cat >clean1 <<EOF
-use $DBname
-go
-select distinct 'id ', mmdb_id from Struct where state = 0 and suppressed = 0
-go
-EOF
-  download_list=$tempname.down
-  $ISQL < clean1 | grep 'id ' | awk ' { print $2 }' >$download_list
-  rm clean1
+  get_alive
+  cat $tempname.DB_alive >$download_list
 fi
 
 OPTS="--dbpath=$DBserver:$DBname=$DBuser,$DBpasswrd --path=$FILEpath"
@@ -499,7 +440,7 @@ if [ $delete_list != empty ] ; then
   if [ $delete_list = update ] ; then
     delete_list=$tempname.dl
   else
-    # let's check user-provide list for correctness
+    # let's check user-provided list for correctness
     if [ ! -f $delete_list ] ; then
         echo "can not open $delete_list"
         exit 1
@@ -552,17 +493,6 @@ EOF
 fi
 [ ! -d mmdb1 ] || rm -rf mmdb1
 [ ! -d mmdb  ] || [ -r $download_list ] || rm -rf mmdb
-
-if [ $reload_schema = yes -a $load_list != empty ] ; then
-   cat >clean2 <<EOF
-use $DBname
-go
-exec initial_timestamps
-go
-EOF
-  $ISQL < clean2
-  rm -f clean2
-fi
 
 exit 0
 

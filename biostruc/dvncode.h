@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  25 JULY 95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *   	Doubly-linked list functions like ValNode.  	
@@ -42,6 +42,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: dvncode.h,v $
+* Revision 6.1  1999/04/26 20:49:59  lewisg
+* changed arguments named list to fix visual c++ bug
+*
 * Revision 6.0  1997/08/25 18:10:37  madden
 * Revision changed to 6.0
 *
@@ -95,9 +98,9 @@ Nlm_Boolean LIBCALL DValNodeRead (DValNodePtr dvp, Nlm_VoidPtr ptr, size_t size)
 Nlm_Boolean LIBCALL DValNodeWrite (DValNodePtr dvp, Nlm_VoidPtr ptr, size_t size,  pFreeFunc freefn);
 Nlm_Boolean LIBCALL DVNodeListAppend (DValNodePtr head, Nlm_VoidPtr ptr, size_t size);
 Nlm_Boolean LIBCALL DValNodeInsert (DValNodePtr where,  DValNodePtr what);
-DValNodePtr LIBCALL DValNodeHeadLink (DValNodePtr list,  DValNodePtr dvp);
-DValNodePtr LIBCALL DValNodeUnlink (DValNodePtr list, DValNodePtr dvp);
-DValNodePtr LIBCALL DValNodeListDelNode (DValNodePtr list,  DValNodePtr dvp,  pFreeFunc freefn);
+DValNodePtr LIBCALL DValNodeHeadLink (DValNodePtr pdnList,  DValNodePtr dvp);
+DValNodePtr LIBCALL DValNodeUnlink (DValNodePtr pdnList, DValNodePtr dvp);
+DValNodePtr LIBCALL DValNodeListDelNode (DValNodePtr pdnList,  DValNodePtr dvp,  pFreeFunc freefn);
 Nlm_Boolean LIBCALL DValNodeListInsert(DValNodePtr wherelist,  DValNodePtr whatlist);
 Nlm_Boolean LIBCALL DValNodeListCat(DValNodePtr dest,  DValNodePtr source);
 Nlm_Boolean LIBCALL ValNodeListCat(ValNodePtr dest, ValNodePtr source);

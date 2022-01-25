@@ -1,4 +1,4 @@
-/* $Id: lbapi.c,v 1.9 1998/12/07 19:01:50 shavirin Exp $
+/* $Id: lbapi.c,v 1.11 1999/02/26 21:17:36 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,19 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 1.9 $
+* $Revision: 1.11 $
 *
 * File Description:
 *        Utilities for the load balancing client library
 *
 * $Log: lbapi.c,v $
+* Revision 1.11  1999/02/26 21:17:36  shavirin
+* Moved al ntohl function to the lbdaemon area.
+*
+* Revision 1.10  1999/02/02 21:10:28  shavirin
+* Changed formula to calculate status:
+* Added adjustment of load and used 4th lb-parameter.
+*
 * Revision 1.9  1998/12/07 19:01:50  shavirin
 * Added complience with little-big endian platforms.
 *
@@ -101,8 +108,21 @@ static LBUserInfo theinfo;
 
 static float LBCalculateStatus(LB_MessagePtr msgp)
 {
-    return (0.01 + 25600*ntohl(msgp->load[1]) / 
-            (float)(ntohl(msgp->load[0])*ntohl(msgp->load[2]) + 1));
+    float status;
+    int cpuload;
+
+    /* Penalize machine if load[0]/256 > load[1] */
+
+    cpuload = msgp->load[0];
+
+    if(msgp->load[0] > (msgp->load[1]<<8))
+	cpuload *= exp(msgp->load[0] / (256.0*msgp->load[1]) - 1.0);
+    
+    status = 0.01 + 256000*msgp->load[1] / (float)(cpuload*msgp->load[2] + 1);
+    
+    status = status * msgp->load[3];
+    
+    return status;
 }
 
 static int LBClientInit(void)
@@ -150,7 +170,7 @@ extern int LBPrintTable(void)
           printf("%-10.2f ", status);
           
           for(i = 0; i < NUM_LOAD_PARAMETERS; i++)
-              printf("%5d ", ntohl(lbtable[j].load[i]));
+              printf("%5d ", lbtable[j].load[i]);
           
           for(i = 0; i < MAX_NUM_SERVICES; i++) {
               if(*lbtable[j].service[i] != '\0')

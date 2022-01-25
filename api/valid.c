@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.48 $
+* $Revision: 6.57 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,33 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.57  1999/05/07 15:31:20  kans
+* added ERR_SEQ_FEAT_UnnecessaryGeneXref
+*
+* Revision 6.56  1999/05/05 19:11:41  kans
+* for no pubs or biosource anywhere, needed to set vsp->gcp for ValidErr/ErrPostItem
+*
+* Revision 6.55  1999/05/05 13:03:14  kans
+* no org or pub anywhere after clearing error counts
+*
+* Revision 6.54  1999/05/03 20:06:35  kans
+* if no pubs or no biosource, report only once, not once per bioseq
+*
+* Revision 6.53  1999/03/31 20:57:48  kans
+* htgs phase 1 and 2 messages also check for phase 0
+*
+* Revision 6.52  1999/03/04 19:55:49  kans
+* inconsistent create_date messages now sev_warning
+*
+* Revision 6.51  1999/02/25 21:53:58  kans
+* relax duplicate feature severity to warning if label or comment are different, or if FEATDEF_PUB
+*
+* Revision 6.50  1999/02/16 22:19:02  kans
+* fixed interval comparison in duplicate feature detection
+*
+* Revision 6.49  1999/02/02 16:39:10  kans
+* added ERR_SEQ_FEAT_DuplicateFeat
+*
 * Revision 6.48  1999/01/05 23:20:50  kans
 * SpliceCheckEx does not check exon junction if partial
 *
@@ -629,6 +656,55 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
 	return TRUE;
 }
 
+static void LookForAnyPubAndOrg (SeqEntryPtr sep, BoolPtr no_pub, BoolPtr no_biosrc)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  SeqAnnotPtr   sap = NULL;
+  ValNodePtr    sdp = NULL;
+  SeqFeatPtr    sfp;
+  SeqEntryPtr   tmp;
+
+  if (sep == NULL || no_pub == NULL || no_biosrc == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    sap = bsp->annot;
+    sdp = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+      LookForAnyPubAndOrg (tmp, no_pub, no_biosrc);
+    }
+    sap = bssp->annot;
+    sdp = bssp->descr;
+  } else return;
+  while (sap != NULL) {
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      while (sfp != NULL) {
+        if (sfp->data.choice == SEQFEAT_PUB) {
+          *no_pub = FALSE;
+        } else if (sfp->data.choice == SEQFEAT_BIOSRC) {
+          *no_biosrc = FALSE;
+        }
+        sfp = sfp->next;
+      }
+    }
+    sap = sap->next;
+  }
+  while (sdp != NULL) {
+    if (sdp->choice == Seq_descr_pub) {
+      *no_pub = FALSE;
+    } else if (sdp->choice == Seq_descr_source) {
+      *no_biosrc = FALSE;
+    }
+    sdp = sdp->next;
+  }
+}
+
 NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 {
 	Uint2 entityID;
@@ -636,9 +712,17 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 	BioseqSetPtr bssp;
 	Boolean do_many = FALSE;
 	Int2 errors[6], i;
+	Boolean suppress_no_pubs = TRUE;
+	Boolean suppress_no_biosrc = TRUE;
+	GatherContextPtr gcp = NULL;
+	GatherContext gc;
 
 	for (i =0; i < 6; i++)  /* keep errors between clears */
 		errors[i] = 0;
+
+	/* if no pubs or biosource, only one message, not one per bioseq */
+
+	LookForAnyPubAndOrg (sep, &suppress_no_pubs, &suppress_no_biosrc);
 
 	if (IS_Bioseq_set(sep))
 	{
@@ -668,6 +752,19 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 		ValidStructClear(vsp);
       	vsp->sep = sep;
 
+      	MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
+      	gcp = &gc;
+      	gc.entityID = ObjMgrGetEntityIDForChoice (sep);
+      	gc.itemID = 1;
+      	if (IS_Bioseq (sep)) {
+      		gc.thistype = OBJ_BIOSEQ;
+      	} else {
+      		gc.thistype = OBJ_BIOSEQSET;
+      	}
+     	vsp->gcp = gcp; /* above needed for ValidErr */
+      	vsp->suppress_no_pubs = suppress_no_pubs;
+      	vsp->suppress_no_biosrc = suppress_no_biosrc;
+ 
 		/* build seqmgr feature indices if not already done */
 
 		if (vsp->useSeqMgrIndexes) {
@@ -677,6 +774,13 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 
 			SeqMgrIndexFeatures (entityID, NULL);
 		}
+
+      	if (suppress_no_pubs) {
+			ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoPubFound, "No publications anywhere on this entire record.");
+      	}
+      	if (suppress_no_biosrc) {
+			ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name anywhere on this entire record.");
+      	}
 
       	GatherSeqEntry(sep, (Pointer)vsp, Valid1GatherProc, &gs);
 
@@ -1402,7 +1506,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 		if (vnp != NULL) {
 			mip = (MolInfoPtr) vnp->data.ptrvalue;
 			if (mip != NULL) {
-				if (mip->tech != MI_TECH_htgs_1 && mip->tech != MI_TECH_htgs_2) {
+				if (mip->tech != MI_TECH_htgs_0 && mip->tech != MI_TECH_htgs_1 && mip->tech != MI_TECH_htgs_2) {
 					ValidErr(vsp, SEV_ERROR, ERR_SEQ_INST_BadDeltaSeq,"Delta seq technique should not be [%d]",(int)(mip->tech));
 				}
 			}
@@ -1429,8 +1533,8 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 	{
 		if (bsp->repr == Seq_repr_delta) {
 			if (mip != NULL) {
-				if (mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
-					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_LongHtgsSequence,"Phase 1 or 2 HTGS sequence exceeds 350kbp limit");
+				if (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_LongHtgsSequence,"Phase 0, 1 or 2 HTGS sequence exceeds 350kbp limit");
 				} else if (mip->tech == MI_TECH_htgs_3) {
 					ValidErr(vsp, SEV_FATAL, ERR_SEQ_INST_SequenceTooLong,"Phase 3 HTGS sequence exceeds 350kbp limit");
 				} else {
@@ -1465,8 +1569,8 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 				mip = (MolInfoPtr) vnp->data.ptrvalue;
 			}
 			if (mip != NULL) {
-				if (mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
-					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_LongHtgsSequence,"Phase 1 or 2 HTGS sequence exceeds 350kbp limit");
+				if (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_LongHtgsSequence,"Phase 0, 1 or 2 HTGS sequence exceeds 350kbp limit");
 				} else if (mip->tech == MI_TECH_htgs_3) {
 					ValidErr(vsp, SEV_FATAL, ERR_SEQ_INST_SequenceTooLong,"Phase 3 HTGS sequence exceeds 350kbp limit");
 				} else {
@@ -1942,7 +2046,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 				{
 					DatePrint((DatePtr)(vnp->data.ptrvalue), buf1);
 					DatePrint((DatePtr)(bvsp->last_create->data.ptrvalue), buf2);
-					ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_Inconsistent, "Inconsistent create_dates [%s] and [%s]",
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_Inconsistent, "Inconsistent create_dates [%s] and [%s]",
 						buf1, buf2);
 				}
 			}
@@ -1956,7 +2060,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 				{
 					DatePrint((DatePtr)(vnp->data.ptrvalue), buf1);
 					DatePrint((DatePtr)(bvsp->last_update->data.ptrvalue), buf2);
-					ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_Inconsistent, "Inconsistent create_date [%s] and update_date [%s]",
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_Inconsistent, "Inconsistent create_date [%s] and update_date [%s]",
 						buf1, buf2);
 				}
 			}
@@ -1970,7 +2074,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 				{
 					DatePrint((DatePtr)(bvsp->last_create->data.ptrvalue), buf1);
 					DatePrint((DatePtr)(vnp->data.ptrvalue), buf2);
-					ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_Inconsistent, "Inconsistent create_date [%s] and update_date [%s]",
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_Inconsistent, "Inconsistent create_date [%s] and update_date [%s]",
 						buf1, buf2);
 				}
 			}
@@ -2157,6 +2261,25 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
 	SeqSubmitPtr ssp;
 	SubmitBlockPtr sbp;
 	GatherContextPtr gcp;
+	SeqFeatPtr sfp;
+	SeqMgrFeatContext fcontext;
+	Uint2 featdeftype;
+	SeqFeatPtr last = NULL;
+	Boolean leave;
+	CharPtr label;
+	CharPtr comment;
+	Int4 left;
+	Int4 right;
+	Uint1 strand;
+	Int2 numivals;
+	Int4Ptr ivals;
+	Boolean ivalssame;
+	SeqAnnotPtr sap;
+	Uint2 olditemtype;
+	Uint2 olditemid;
+	Int2 i;
+	Int2 j;
+	int severity;
 
 	gcp = bvsp->gcp;
 	vsp = bvsp->vsp;
@@ -2165,6 +2288,70 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
 	vsp->gcp = gcp;   /* needed for ValidErr */
 
 	SeqMgrExploreFeatures (bsp, (Pointer) bvsp, ValidateSeqFeatIndexed, NULL, NULL, NULL);
+
+	if (gcp != NULL) {
+		olditemid = gcp->itemID;
+		olditemtype = gcp->thistype;
+	}
+	sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+	while (sfp != NULL) {
+		leave = TRUE;
+		if (last != NULL) {
+			if (fcontext.left == left && fcontext.right == right &&
+				fcontext.featdeftype == featdeftype) {
+				if (fcontext.strand == strand ||
+					strand == Seq_strand_unknown ||
+					fcontext.strand == Seq_strand_unknown) {
+					ivalssame = TRUE;
+					if (fcontext.numivals != numivals || fcontext.ivals == NULL || ivals == NULL) {
+						ivalssame = FALSE;
+					} else {
+						for (i = 0, j = 0; i < numivals; i++, j += 2) {
+							if (fcontext.ivals [j] != ivals [j]) {
+								ivalssame = FALSE;
+							}
+							if (fcontext.ivals [j + 1] != ivals [j + 1]) {
+								ivalssame = FALSE;
+							}
+						}
+					}
+					if (ivalssame && /* StringICmp (fcontext.label, label) == 0 && */ fcontext.sap == sap) {
+						if (gcp != NULL) {
+							gcp->itemID = fcontext.itemID;
+							gcp->thistype = OBJ_SEQFEAT;
+						}
+						vsp->descr = NULL;
+						vsp->sfp = sfp;
+						severity = SEV_ERROR;
+						if (StringICmp (fcontext.label, label) != 0 ||
+							StringICmp (sfp->comment, comment) != 0 ||
+							featdeftype == FEATDEF_PUB) {
+							severity = SEV_WARNING;
+						}
+						ValidErr (vsp, severity,ERR_SEQ_FEAT_DuplicateFeat, "Possible duplicate feature");
+						vsp->sfp = NULL;
+						if (gcp != NULL) {
+							gcp->itemID = olditemid;
+							gcp->thistype = olditemtype;
+						}
+					}
+				}
+			}
+		}
+		if (leave) {
+			last = sfp;
+			left = fcontext.left;
+			right = fcontext.right;
+			label = fcontext.label;
+			comment = sfp->comment;
+			strand = fcontext.strand;
+			featdeftype = fcontext.featdeftype;
+			numivals = fcontext.numivals;
+			ivals = fcontext.ivals;
+			sap = fcontext.sap;
+		}
+		sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+	}
 
 	SeqMgrExploreDescriptors (bsp, (Pointer) bvsp, ValidateSeqDescrIndexed, NULL);
 
@@ -2326,10 +2513,10 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
 	vsp->descr = NULL;
 	vsp->sfp = NULL;
 
-	if (! bvs.got_a_pub)
+	if ((! bvs.got_a_pub) && (! vsp->suppress_no_pubs))
 		ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoPubFound, "No publications refer to this Bioseq.");
 
-	if (! bvs.last_org)
+	if ((! bvs.last_org) && (! vsp->suppress_no_biosrc))
 		ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name has been applied to this Bioseq.");
 
 
@@ -2569,6 +2756,11 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 	DbtagPtr db = NULL;
 	Int4 id = -1;
 	SeqMgrDescContext context;
+	GeneRefPtr grpx;
+	SeqFeatPtr sfpx;
+	Boolean redundantgenexref;
+	SeqMgrFeatContext fcontext;
+	CharPtr syn1, syn2, label = NULL;
 
 	vsp = (ValidStructPtr)(gcp->userdata);
 	sfp = (SeqFeatPtr)(gcp->thisitem);
@@ -2877,6 +3069,37 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 			ValidErr(vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidType, "Invalid SeqFeat type [%d]",
 				(int)(type));
 			break;
+	}
+	if (type != SEQFEAT_GENE) {
+	  grp = SeqMgrGetGeneXref (sfp);
+	  if (grp == NULL || SeqMgrGeneIsSuppressed (grp)) return;
+	  sfpx = SeqMgrGetOverlappingGene (sfp->location, &fcontext);
+	  if (sfpx == NULL || sfpx->data.choice != SEQFEAT_GENE) return;
+	  grpx = (GeneRefPtr) sfpx->data.value.ptrvalue;
+	  if (grpx == NULL) return;
+	  redundantgenexref = FALSE;
+	  label = fcontext.label;
+	  if ((! StringHasNoText (grp->locus)) && (! StringHasNoText (grpx->locus))) {
+	    if ((StringICmp (grp->locus, grpx->locus) == 0)) {
+	      redundantgenexref = TRUE;
+	      label = grp->locus;
+	    }
+	  } else if (grp->syn != NULL && grpx->syn != NULL) {
+	    syn1 = (CharPtr) grp->syn->data.ptrvalue;
+	    syn2 = (CharPtr) grpx->syn->data.ptrvalue;
+	    if ((! StringHasNoText (syn1)) && (! StringHasNoText (syn2))) {
+	      if ((StringICmp (syn1, syn2) == 0)) {
+	        redundantgenexref = TRUE;
+	        label = syn1;
+	      }
+	    }
+	  }
+	  if (redundantgenexref) {
+	    if (StringHasNoText (label)) {
+	      label = "?";
+	    }
+		ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_UnnecessaryGeneXref, "Unnecessary gene cross-reference %s", label);
+	  }
 	}
 	return;
 }

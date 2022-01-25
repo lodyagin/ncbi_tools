@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: sentinel graphs
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gphdraw.c,v $
+* Revision 6.8  1999/03/12 14:23:34  kuzio
+* cast
+*
 * Revision 6.7  1998/10/13 17:13:56  kuzio
 * colored superimposable graphs
 *
@@ -423,10 +426,10 @@ extern SegmenT DrawSeqGraphSegment (SeqGraphPtr sgp, BioseqPtr bsp,
   {
     if (gsp->seg != NULL)
     {
-      sprintf (str, "%ld", leftend);
+      sprintf (str, "%ld", (long) leftend);
       AddLabel (gsp->seg, gsp->box.left, gsp->bottom-20,
                 str, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
-      sprintf (str, "%ld", rightend);
+      sprintf (str, "%ld", (long) rightend);
       AddLabel (gsp->seg, gsp->box.left+(sgp->numval/scaleX), gsp->bottom-20,
                 str, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
     }
@@ -486,7 +489,7 @@ extern void DrawGraphToPanel (SeqGraphPtr sgp, Int4 Xscale,
   sprintf (numberbuffer, "%ld", (long) min);
   PaintStringEx (numberbuffer, (Int2) (rp->left+((len/Xscale)+10)),
                  rp->bottom);
-  sprintf (numberbuffer, "%ld", leftend);
+  sprintf (numberbuffer, "%ld", (long) leftend);
   PaintStringEx (numberbuffer, rp->left,
                  (Int2) (rp->bottom+20));
   sprintf (numberbuffer, "%ld", (long) rightend);

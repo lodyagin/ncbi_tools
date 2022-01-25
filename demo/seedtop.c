@@ -104,36 +104,6 @@ static Args myargs [NUMARG] = {
 	"F", NULL, NULL, FALSE, 'F', ARG_BOOLEAN, 0.0, 0, NULL}     
 };
 
-/* find the last nucleotide bioseq in the bioseqset */
-static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_na(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
-
-/* find the last protein bioseq in the bioseqset */
-static void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_aa(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
-
 
 Int2 Main(void)
 {
@@ -287,7 +257,7 @@ Int2 Main(void)
 		unfilter_query = MemNew((queryLength + 1) * sizeof(Uint1));
 		for (i = 0; i < queryLength; i++)
 		  unfilter_query[i] = query[i];
-		BlastMaskTheResidues(query,queryLength,21,seg_slp,FALSE);
+		BlastMaskTheResidues(query,queryLength,21,seg_slp,FALSE, 0);
 	      }
 
 	      init_order(gap_align->matrix, program_flag, is_dna, seedSearch);
@@ -329,63 +299,68 @@ Int2 Main(void)
 	      (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
              fprintf(outfp,"Pattern %s is too likely to occur in the database to be informative\n",pname);
           }
-          else {
+	  else {
+            if (patternSearch->wildcardProduct > WILDCARD_THRESH) {
+              fprintf(outfp, "Due to variable wildcards pattern %s is likely to occur too many times in a single sequence\n",pname);
+            }
+	    else {
 
-	    adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
+	      adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
 
-	    for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
-	      seed = occurArray[occurIndex];
-              totalOccurrences = 0;
-	      fprintf(outfp,"Name  %sPattern %s At position %d of query sequence\n",
+	      for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
+		seed = occurArray[occurIndex];
+		totalOccurrences = 0;
+		fprintf(outfp,"Name  %sPattern %s At position %d of query sequence\n",
 		     pname, pattern, seed);
-	      if ((twiceNumMatches=find_hits(list, &query[seed-1], queryLength-seed+1, FALSE, patternSearch)) < 2 || 
-		  list[1] != 0) {
-		fprintf(outfp,"twiceNumMatches=%d list[1]=%d\n", i, list[1]);
-		ErrPostEx(SEV_FATAL, 0, 0, "pattern does not match the query at the place\n");
-		return 1;
-	      }
-	      if (program_flag != PAT_MATCH_FLAG) {
-		lenPatMatch = list[0]+1;
+		if ((twiceNumMatches=find_hits(list, &query[seed-1], queryLength-seed+1, FALSE, patternSearch)) < 2 || 
+		    list[1] != 0) {
+		  fprintf(outfp,"twiceNumMatches=%d list[1]=%d\n", i, list[1]);
+		  ErrPostEx(SEV_FATAL, 0, 0, "pattern does not match the query at the place\n");
+		  return 1;
+		}
+		if (program_flag != PAT_MATCH_FLAG) {
+		  lenPatMatch = list[0]+1;
 	      
-		matchIndex = 0;
-		query_seq = split_target_seq(query, seed, lenPatMatch, queryLength);
+		  matchIndex = 0;
+		  query_seq = split_target_seq(query, seed, lenPatMatch, queryLength);
 
-		fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", (Nlm_FloatHi) adjustdbLength, 
-		       patternSearch->patternProbability, 
-		       patternSearch->patternProbability * adjustdbLength);
-		if (!is_dna) {
-                  /*extra caution about what values are tolerated*/
-		  seedSearch->cutoffScore = eValueFit(
-                     MIN(MAX_EVALUE, 10 * eThresh), adjustdbLength, 
-	        seedSearch, effectiveOccurrences, patternSearch->patternProbability);
-		}
-		else
-		  seedSearch->cutoffScore = myargs[8].intvalue;
-
-		for (num_seq = 0; num_seq < rdpt->num_seqs; num_seq++) {	    	
-		  lenSeqFromDb = readdb_get_sequence(rdpt, num_seq, &seqFromDb);
-		  /*if (num_seq == 3530)
-		    printf("\n Stop here");*/
-		  hit_list = get_hits(query_seq, lenPatMatch, seqFromDb, 
-		          lenSeqFromDb, gap_align, is_dna, patternSearch, 
-                          seedSearch, &newOccurrences);
-		  if (newOccurrences > 0)
-		    totalOccurrences += newOccurrences;
-		  if (hit_list) {
-		    storeOneMatch(hit_list, num_seq, seqFromDb, seedResults); 
-		    matchIndex++;
+		  fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", (Nlm_FloatHi) adjustdbLength, 
+			  patternSearch->patternProbability, 
+			  patternSearch->patternProbability * adjustdbLength);
+		  if (!is_dna) {
+		    /*extra caution about what values are tolerated*/
+		    seedSearch->cutoffScore = eValueFit(
+							MIN(MAX_EVALUE, 10 * eThresh), adjustdbLength, 
+							seedSearch, effectiveOccurrences, patternSearch->patternProbability);
 		  }
+		  else
+		    seedSearch->cutoffScore = myargs[8].intvalue;
+
+		  for (num_seq = 0; num_seq < rdpt->num_seqs; num_seq++) {	    	
+		    lenSeqFromDb = readdb_get_sequence(rdpt, num_seq, &seqFromDb);
+		    /*if (num_seq == 3530)
+		      printf("\n Stop here");*/
+		    hit_list = get_hits(query_seq, lenPatMatch, seqFromDb, 
+					lenSeqFromDb, gap_align, is_dna, patternSearch, 
+					seedSearch, &newOccurrences);
+		    if (newOccurrences > 0)
+		      totalOccurrences += newOccurrences;
+		    if (hit_list) {
+		      storeOneMatch(hit_list, num_seq, seqFromDb, seedResults); 
+		      matchIndex++;
+		    }
+		  }
+		  if (matchIndex > 0) 
+		    quicksort_hits(matchIndex, seedResults);
+		  fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
+		  /*Note: for stand-alone program, score only will be shown*/
+		  output_hits(rdpt, TRUE, query, query_seq, 
+			      lenPatMatch, adjustdbLength, gap_align, is_dna, 
+			      effectiveOccurrences, seedSearch, seedResults,
+			      patternSearch, FALSE, totalOccurrences, eThresh,
+			      NULL, 0.0, NULL, matchIndex, NULL, TRUE, outfp);
+		  seed_free_all(seedResults);
 		}
-		if (matchIndex > 0) 
-		  quicksort_hits(matchIndex, seedResults);
-		fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
-		/*Note: for stand-alone program, score only will be shown*/
-		output_hits(rdpt, TRUE, query, query_seq, 
-			    lenPatMatch, adjustdbLength, gap_align, is_dna, 
-			    effectiveOccurrences, seedSearch, seedResults,
-			    patternSearch, FALSE, totalOccurrences, eThresh,
-                            NULL, 0.0, NULL, matchIndex, NULL, TRUE, outfp);
-		seed_free_all(seedResults);
 	      }
 	    }
 	  }

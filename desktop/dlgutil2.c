@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -919,8 +919,9 @@ static Boolean ShouldBeAGBQual (Int2 qual, Boolean allowProductGBQual)
   if (qual < 0) return FALSE;
   if (allowProductGBQual && qual == GBQUAL_product) return TRUE;
   if (qual == GBQUAL_citation || qual == GBQUAL_db_xref || qual == GBQUAL_evidence ||
-      qual == GBQUAL_gene || qual == GBQUAL_label || qual == GBQUAL_map ||
-      qual == GBQUAL_note || qual == GBQUAL_partial || qual == GBQUAL_product) {
+      qual == GBQUAL_exception || qual == GBQUAL_gene || qual == GBQUAL_label ||
+      qual == GBQUAL_map || qual == GBQUAL_note || qual == GBQUAL_partial ||
+      qual == GBQUAL_product || qual == GBQUAL_pseudo) {
     return FALSE;
   }
   if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) {
@@ -970,6 +971,7 @@ extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
 extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp)
 
 {
+  /*
   FieldPagePtr  fpf;
   Int2          i;
 
@@ -991,6 +993,7 @@ extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp)
           }
         }
   }
+  */
 
 }
 
@@ -1121,8 +1124,10 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
         }
       }
     } else if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+      /*
       seen [GBQUAL_exception] = LEGAL_FEATURE;
       seen [GBQUAL_pseudo] = LEGAL_FEATURE;
+      */
     }
 
     while (gbq != NULL) {
@@ -1257,7 +1262,9 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
   GrouP    m;
   GrouP    p;
   Int2     page;
+  ButtoN   pseudo = NULL;
   GrouP    q;
+  GrouP    r;
   GrouP    t;
   GrouP    v;
   GrouP    x;
@@ -1298,20 +1305,32 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
 
     c = HiddenGroup (p, -1, 0, NULL);
     SetGroupSpacing (c, 10, 10);
-    f = HiddenGroup (c, 7, 0, NULL);
-    StaticPrompt (f, "Flags", 0, popupMenuHeight, programFont, 'l');
-    ffp->partial = CheckBox (f, "Partial", NULL);
-    ffp->exception = CheckBox (f, "Exception", NULL);
-    StaticPrompt (f, "Evidence", 0, popupMenuHeight, programFont, 'l');
-    ffp->evidence = PopupList (f, TRUE, NULL);
+    f = HiddenGroup (c, -1, 0, NULL);
+    r = HiddenGroup (f, 7, 0, NULL);
+    StaticPrompt (r, "Flags", 0, popupMenuHeight, programFont, 'l');
+    ffp->partial = CheckBox (r, "Partial", NULL);
+    if (ffp->pseudo == NULL) {
+      ffp->pseudo = CheckBox (r, "Pseudo", NULL);
+      pseudo = ffp->pseudo; /* allows pseudo control on earlier feature-specific page */
+    }
+    StaticPrompt (r, "Evidence", 0, popupMenuHeight, programFont, 'l');
+    ffp->evidence = PopupList (r, TRUE, NULL);
     PopupItem (ffp->evidence, " ");
     PopupItem (ffp->evidence, "Experimental");
     PopupItem (ffp->evidence, "Non-Experimental");
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->partial,
-                  (HANDLE) ffp->exception, (HANDLE) ffp->evidence, NULL);
+                  (HANDLE) ffp->evidence, (HANDLE) pseudo, NULL);
+    r = HiddenGroup (f, 4, 0, NULL);
+    ffp->exception = CheckBox (r, "Exception", NULL);
+    StaticPrompt (r, "Explanation", 0, dialogTextHeight, programFont, 'l');
+    ffp->exceptText = DialogText (r, "", 12, NULL);
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->exception,
+                 (HANDLE) ffp->exceptText, NULL);
 
     if (cdsQuals) {
+      /*
       ffp->gbquals = CreateImportFields (c, NULL, sfp, FALSE);
+      */
     }
 
     g = NULL;

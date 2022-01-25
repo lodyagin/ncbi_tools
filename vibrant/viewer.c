@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   10/25/92
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewer.c,v $
+* Revision 6.7  1999/03/02 19:09:50  vakatov
+* PrintAllViewer() -- fixed typos introduced in R6.6
+*
 * Revision 6.6  1998/06/12 20:10:36  kans
 * fixed unix compiler warnings
 *
@@ -1585,12 +1588,14 @@ void PrintAllViewer (VieweR viewer)
           print_port->right  = print_port->left   + pageWidth  - 1;
           print_port->top    = print_port->bottom + pageHeight - 1;
 
-          if ( (Boolean) (ok = StartPage()) )
+          ok = StartPage();
+          if ( !ok )
             break;
 
           Nlm_DrawSegment((SegPPtr)pict, &dInfo);
 
-          if ( (Boolean) (ok = EndPage()) )
+          ok = EndPage();
+          if ( !ok )
             break;
 
           dInfo.scale.offsetY += pageHeight;

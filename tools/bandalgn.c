@@ -30,11 +30,14 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform both local and global banded alignments.
 
 ****************************************************************************/
-/* $Revision: 6.11 $ */
+/* $Revision: 6.12 $ */
 /* $Log: bandalgn.c,v $
-/* Revision 6.11  1998/08/24 20:20:32  kans
-/* fixed -v -fd warnings
+/* Revision 6.12  1999/04/06 15:21:00  sicotte
+/* Fixed prototype problems and lint casting and.
 /*
+ * Revision 6.11  1998/08/24 20:20:32  kans
+ * fixed -v -fd warnings
+ *
  * Revision 6.10  1998/05/04 19:58:21  tatiana
  * change SEV_ERROR to SEV_WARNING
  *
@@ -530,13 +533,15 @@ BAND_LOCAL_ALIGN(Uint1Ptr A, Uint1Ptr B,
       if (e > c) {
 	if (e > 0) {
 	  dp->CC = e; e-=H;
-	  *((Int4Ptr) (dp++)-1) = d-H;
+	  *(((Int4Ptr) (dp++))-1) = d-H;
 	} else {
-	  dp->CC = *((Int4Ptr) (dp++)-1) = 0;
+	  dp->CC = *(((Int4Ptr) (dp))-1) = 0;
+          dp++;
 	}
       } else {
 	if (c <= 0) {
-	  dp->CC = *((Int4Ptr) (dp++)-1) = 0;
+	  dp->CC = *(((Int4Ptr) (dp))-1) = 0;
+          dp++;
 	} else {
 	  if (c > best_score) {
 	    best_score = c;
@@ -618,30 +623,31 @@ BAND_LOCAL_ALIGN(Uint1Ptr A, Uint1Ptr B,
   options->width = up - (startj - starti) - low + 1;
 
   switch(align_type) {
+      /* XXX Float Score is converted to Int4 --> Round-off Errors */
   case L_BAND_LINEAR:
-    return gband_linear(A + starti - 1, B + startj - 1,
+    return (Int4) (gband_linear(A + starti - 1, B + startj - 1,
 			endi - starti + 1, endj - startj + 1,
-			matrix, options, S, &Slen) / BND_DIGIT;
+			matrix, options, S, &Slen) / BND_DIGIT);
   case L_BAND_QUADRATIC:
-    return gband_quadratic(A + starti - 1, B + startj - 1,
+    return (Int4) ( gband_quadratic(A + starti - 1, B + startj - 1,
 			   endi - starti + 1, endj - startj + 1,
-			   matrix, options, S, &Slen) / BND_DIGIT; 
+			   matrix, options, S, &Slen) / BND_DIGIT); 
   case L_BAND_LGAP:
-    return gband_linear_gap(A + starti - 1, B + startj - 1,
+    return (Int4) ( gband_linear_gap(A + starti - 1, B + startj - 1,
 			    endi - starti + 1, endj - startj + 1,
-			    matrix, options, S, &Slen) / BND_DIGIT; 
+			    matrix, options, S, &Slen) / BND_DIGIT); 
   case L_BAND_QGAP:
-    return gband_linear_qgap(A + starti - 1, B + startj - 1,
+    return (Int4) ( gband_linear_qgap(A + starti - 1, B + startj - 1,
 			     endi - starti + 1, endj - startj + 1,
-			     matrix, options, S, &Slen) / BND_DIGIT; 
+			     matrix, options, S, &Slen) / BND_DIGIT); 
   case L_BAND_L3GAP:
-    return gband_l3gap(A + starti - 1, B + startj - 1,
+    return (Int4) ( gband_l3gap(A + starti - 1, B + startj - 1,
 		       endi - starti + 1, endj - startj + 1,
-		       matrix, options, S, &Slen) / BND_DIGIT; 
+		       matrix, options, S, &Slen) / BND_DIGIT); 
   case L_BAND_Q3GAP:
-    return gband_q3gap(A + starti - 1, B + startj - 1,
+    return (Int4) ( gband_q3gap(A + starti - 1, B + startj - 1,
 		       endi - starti + 1, endj - startj + 1,
-		       matrix, options, S, &Slen) / BND_DIGIT; 
+		       matrix, options, S, &Slen) / BND_DIGIT); 
   default:
     ErrPostEx(SEV_ERROR, 0, 0, "Unknown method.");
     return -1;
@@ -821,9 +827,9 @@ static Uint1Ptr load_data (SeqLocPtr slp,Boolean is_prot)
 {
   SeqPortPtr       spp;
   Uint1Ptr         seq = NULL;
-  Int2             code;
   Int4 len;
   Int4 index;
+  Uint1             code;
 
   if (is_prot)
     code = Seq_code_ncbistdaa;
@@ -846,7 +852,6 @@ GlobalBandStructPtr CreatBandStruct(SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR
 	Int4 len1, len2;
 	Int2 gopen, gext;  /* default values */
 	Int4 ma=1, ms = -2; /* default values */
-	Uint1 code = Seq_code_ncbi4na;
   
 	if (is_prot) {
 		gopen = 5;
@@ -860,7 +865,7 @@ GlobalBandStructPtr CreatBandStruct(SeqLocPtr slp1, SeqLocPtr slp2, Int4Ptr PNTR
 
 	seq1 = load_data(slp1, is_prot);
 	seq2 = load_data(slp2, is_prot);
-	gbsp = GlobalBandStructCreate(method);
+	gbsp = GlobalBandStructCreate((Uint1)method);
 	gbsp->seq1 = seq1;
 	gbsp->seq2 = seq2;
 	gbsp->seq1_length = len1;
@@ -913,7 +918,7 @@ void SetLowUpFromBlast(PSUGapOptionsPtr opt, Boolean is_prot, Int2 type, Int2 wi
 	Int2 index1, i2;
 	Int4 x,y,maxy,miny,mindi,maxdi,mindi_low,maxdi_up;
 	Int4 len,len1,len2,maxlen=0,alnlen,lastx,lowestx,diag;
-	DenseDiagPtr  ddp, maxddp = NULL;
+	DenseDiagPtr  ddp;
 	ScorePtr score;
 	FloatHi val, maxsc = 0;
 	DenseSegPtr	dsp;
@@ -1073,7 +1078,6 @@ SeqAlignPtr GlobalBandByLoc(GlobalBandStructPtr gbsp, SeqLocPtr slp1, SeqLocPtr 
 
 SeqAlignPtr ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2)
 {
-   DenseDiagPtr  ddp;
    DenseSegPtr   dsp;
    Int4          index1;
    Int4Ptr       n_starts, n_lens;
@@ -1086,7 +1090,9 @@ SeqAlignPtr ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1
    if (start1==x1 && start2==y1 && stop1==x2 && stop2==y2)
       return sap;
    if (sap->segtype == 1) {
-      ddp = sap->segs;
+       DenseDiagPtr  ddp;
+       ddp = sap->segs;
+       ErrPostEx(SEV_WARNING,0,0,"ExtendSeqAlign doesn't support segtype==1\n");
    } else if (sap->segtype == 2) {
       dsp = sap->segs;
       n = dsp->numseg;
@@ -1146,7 +1152,6 @@ SeqAlignPtr ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1
 
 SeqAlignPtr CC_ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 stop1, Int4 stop2, Int4 x1, Int4 y1, Int4 x2, Int4 y2, Uint1 strand1, Uint1 strand2)
 {
-   DenseDiagPtr  ddp;
    DenseSegPtr   dsp;
    Int4Ptr       n_starts, n_lens;
    Uint1Ptr      n_strands;
@@ -1160,7 +1165,9 @@ SeqAlignPtr CC_ExtendSeqAlign(SeqAlignPtr sap, Int4 start1, Int4 start2, Int4 st
    if (start1==x1 && start2==y1 && stop1==x2 && stop2==y2)
       return sap;
    if (sap->segtype == 1) {
-      ddp = (DenseDiagPtr) sap->segs;
+       DenseDiagPtr  ddp; 
+     ddp = (DenseDiagPtr) sap->segs;
+       ErrPostEx(SEV_WARNING,0,0,"ExtendSeqAlign doesn't support segtype==1\n");
    } else if (sap->segtype == 2) {
       dsp = (DenseSegPtr) sap->segs;
       n = dsp->numseg;

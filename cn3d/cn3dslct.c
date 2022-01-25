@@ -34,6 +34,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dslct.c,v $
+* Revision 6.9  1999/04/06 20:17:41  lewisg
+* more opengl
+*
 * Revision 6.8  1999/01/20 18:21:20  ywang
 * include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
@@ -84,7 +87,13 @@
 * ==========================================================================
 */
 
+#ifdef _OPENGL
+#include <vibrant.h>
+#include <shim3d.h>
+#else
 #include <viewer3d.h>
+#endif
+
 #include <mmdbapi.h>
 #include <cn3dslct.h>
 #include <cn3dmain.h>
@@ -105,8 +114,10 @@ static void  Cn3D_SelectStrucProc(ButtoN B)
      
 /* save the current camera for the active model before picking a new one */
 
+#ifndef _OPENGL
     Cn3D_SaveActiveCam();
- 
+#endif
+    
     pdnmsThis = GetFirstModelstruc();
     while (pdnmsThis)
      {

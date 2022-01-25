@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,21 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.8  1999/04/22 15:18:57  vakatov
+* Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
+* "post-mortem" callbacks(registered by XtAddEventHandler()) get
+* triggered for the destroyed widget. Reason: the widget may not be
+* immediately destroyed if XtDestroyWidget() was called in a nested
+* event dispatch loop.
+*
+* Revision 6.7  1999/03/09 17:55:48  vakatov
+* [WIN_MOTIF]  Fixed for the ">63 items menu overflow" in
+*              Nlm_AppendChoice() and Nlm_AppendOnePopListChoice()
+*
+* Revision 6.6  1999/02/08 15:46:55  vakatov
+* [WIN_MOTIF]  Nlm_SetPopListValue() catch(and just ignore) attempts to
+* se a value larger than 63
+*
 * Revision 6.5  1997/12/12 21:08:35  kans
 * a number of symbols changed in the latest CodeWarrior release, now using headers from Apple
 *
@@ -2695,9 +2710,8 @@ static void Nlm_RemoveWindowMenuBar (Nlm_GraphiC mb, Nlm_Boolean savePort)
 #endif
 #ifdef WIN_MOTIF
   h = Nlm_GetMenuBarHandle ((Nlm_MenuBaR) mb);
-#ifdef NLM_MOTIF_CASCADEB_BUG
-  XtUnmanageChild( h );
-#else
+  XtUnrealizeWidget(h);
+#ifndef NLM_MOTIF_CASCADEB_BUG
   XtDestroyWidget( h );
 #endif
 #endif
@@ -2824,6 +2838,7 @@ static void Nlm_RemovePopupMenu (Nlm_GraphiC m, Nlm_Boolean savePort)
 #ifdef WIN_MOTIF
   h = Nlm_GetMenuHandle ((Nlm_MenU) m);
   if (h != NULL) {
+    XtUnrealizeWidget(h);
     /*
       This code will, for some unknown reason, crash on the next
       update if you run a program from outside the window manager.
@@ -3637,7 +3652,7 @@ static void Nlm_SetPopListValue (Nlm_GraphiC c, Nlm_Int2 value, Nlm_Boolean save
   u = Nlm_GetMenuPopup (m);
   if (u != NULL) {
     hdls = Nlm_GetChoiceHandles ((Nlm_ChoicE) c);
-    if (value > 0) {
+    if (value > 0  &&  value < 64) {
       XtVaSetValues (u, XmNmenuHistory, hdls [value - 1], NULL);
       XtUnmanageChild (hdls [63]);
     } else {
@@ -4028,12 +4043,14 @@ static Nlm_IteM Nlm_AppendChoice (Nlm_ChoicE c, Nlm_CharPtr title,
   Nlm_IteM      i;
   Nlm_ItemTool  itool;
   Nlm_MenU      m;
-  Nlm_Int2      num;
+  Nlm_Int2      num = Nlm_GetNumItems(c);
   Nlm_RecT      r;
   Nlm_Char      temp [256];
   Nlm_WindoW    tempPort;
 #ifdef WIN_MOTIF
   Nlm_ItemTool  *hdls;
+  if (num < 0  ||  63 <= num)
+    return 0;
 #endif
 
   i = NULL;
@@ -4050,20 +4067,22 @@ static Nlm_IteM Nlm_AppendChoice (Nlm_ChoicE c, Nlm_CharPtr title,
       Nlm_SetVisible ((Nlm_GraphiC) i, TRUE);
     }
   }
-  num = Nlm_GetNumItems (c);
+
   num++;
-  Nlm_SetNumItems (c, num);
   Nlm_LoadItemData (i, NULL, num, NULL);
 #ifdef WIN_MOTIF
   hdls = Nlm_GetChoiceHandles (c);
   if (hdls == NULL) {
-    hdls = (Nlm_ItemTool *) Nlm_MemNew (64 * sizeof (Nlm_ItemTool));
+    hdls = (Nlm_ItemTool *) Nlm_MemNew(64 * sizeof (Nlm_ItemTool));
     Nlm_SetChoiceHandles (c, hdls);
   }
-  if (hdls != NULL && num > 0 && num < 64) {
-    hdls [num - 1] = itool;
+  if ( hdls ) {
+    Nlm_SetNumItems(c, num);
+    hdls[num - 1] = itool;
+    XtManageChild(itool);
   }
-  XtManageChild (itool);
+#else
+  Nlm_SetNumItems (c, num);
 #endif
 
   Nlm_RestorePort (tempPort);
@@ -4251,7 +4270,6 @@ static Nlm_IteM Nlm_AppendOnePopListChoice (Nlm_ChoicE c, Nlm_CharPtr title)
   itool = Nlm_AppendOnePopListItem (m, (Nlm_IteM) c, temp);
   num = Nlm_GetNumItems (c);
   num++;
-  Nlm_SetNumItems (c, num);
   Nlm_LoadItemData (i, NULL, num, NULL);
 #ifdef WIN_MOTIF
   hdls = Nlm_GetChoiceHandles (c);
@@ -4261,8 +4279,11 @@ static Nlm_IteM Nlm_AppendOnePopListChoice (Nlm_ChoicE c, Nlm_CharPtr title)
   }
   if (hdls != NULL && num > 0 && num < 64) {
     hdls [num - 1] = itool;
+    Nlm_SetNumItems (c, num);
+    XtManageChild (itool);
   }
-  XtManageChild (itool);
+#else
+  Nlm_SetNumItems (c, num);
 #endif
 
   return i;

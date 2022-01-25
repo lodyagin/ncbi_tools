@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager interface for type Pubdesc from
 *                    NCBI-Sequence.  This is separate to avoid typedef
@@ -45,6 +45,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objpubd.h,v $
+* Revision 6.2  1999/02/12 18:45:22  ostell
+* added MI_TECH_htgs_0
+*
 * Revision 6.1  1998/06/12 18:02:26  kans
 * added MI_TECH_fli_cdna 17 define
 *
@@ -217,6 +220,7 @@ typedef struct molinfo {
 #define MI_TECH_htgs_2 15  /* ordered High Throughput sequence contig */
 #define MI_TECH_htgs_3 16  /* finished High Throughut sequence */
 #define MI_TECH_fli_cdna 17  /* full-length insert cDNA sequence */
+#define MI_TECH_htgs_0 18    /* unordered single pass reads */
 #define MI_TECH_other 255           /* doesnt' fit anything */
 
 NLM_EXTERN MolInfoPtr LIBCALL MolInfoNew PROTO((void));

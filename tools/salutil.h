@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -155,7 +155,6 @@ extern SeqIdPtr     SeqIdDupBestList (SeqIdPtr id_list);
 extern SeqIdPtr     SeqIdListfromSeqLoc (ValNodePtr vnpslp);
 extern SeqIdPtr     ValNodeSeqIdListDup (ValNodePtr id_list);
 extern CharPtr PNTR SeqIdListToCharArray (SeqIdPtr id_list, Int2 n);
-extern Int2         position_inIdlist (SeqIdPtr a, SeqIdPtr b);
 
 extern SeqIdPtr     SeqIdReplaceID (SeqIdPtr head, SeqIdPtr pre, SeqIdPtr sip, SeqIdPtr next);
 extern BioseqPtr    BioseqReplaceID (BioseqPtr bsp, SeqIdPtr newsip);

@@ -29,19 +29,18 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: vibforms.h,v $
-* Revision 6.0  1997/08/25 18:57:02  madden
-* Revision changed to 6.0
+* Revision 6.2  1999/05/06 21:23:44  vakatov
+* Get rid of the erroneous 'extern "C"' around the #include's
+*
+* Revision 6.1  1999/03/11 16:10:25  kans
+* StringHasNoText and TrimSpacesAroundString moved to ncbistr
 *
 * Revision 5.7  1997/05/05 15:01:31  kans
 * implemented MultiLinePromptEx
@@ -65,9 +64,6 @@
  *
  * Revision 5.1  1996/07/18  19:44:33  kans
  * added userdataptr, cleanupuser, activate slots in form structure
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
  *
  * Revision 4.18  1996/03/21  00:46:49  kans
  * added TAGLIST_LIST to TAGLIST_TEXT and TAGLIST_POPUP
@@ -96,9 +92,6 @@
  * Revision 4.10  1995/12/30  19:41:45  kans
  * added CreateTextTabs, FormCommandItem, FindFormMenuItem, and VIB_MSG_CLOSE
  *
- * Revision 4.9  1995/12/30  01:57:30  kans
- * *** empty log message ***
- *
  * Revision 4.8  1995/12/30  00:46:29  kans
  * new messages for enter, init, reset, redraw dialog/form
  *
@@ -117,41 +110,25 @@
  * Revision 4.3  1995/11/08  23:30:31  kans
  * removed edit block fields, which belong in the application
  *
- * Revision 4.2  1995/08/11  17:03:44  kans
- * *** empty log message ***
- *
- * Revision 4.1  1995/08/11  15:06:30  kans
- * *** empty log message ***
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
  * Revision 1.7  1995/07/20  17:31:56  kans
  * added TrimSpacesAroundString function
  *
- * Revision 1.6  1995/06/04  19:32:02  kans
- * *** empty log message ***
- *
  * Revision 1.5  1995/05/24  21:06:19  kans
  * add initial page parameter to folder tabs
- *
- * Revision 1.4  1995/05/17  15:15:14  kans
- * added Log line
- *
-*
 * ==========================================================================
 */
 
 #ifndef _VIBFORMS_
 #define _VIBFORMS_
 
+#ifndef _VIBRANT_
+#include <vibrant.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#ifndef _VIBRANT_
-#include <vibrant.h>
-#endif
 
 typedef Nlm_Int4 Nlm_UIEnum, PNTR Nlm_UIEnumPtr;
 
@@ -203,7 +180,6 @@ extern void Nlm_SafeSetValue (Nlm_Handle a, Nlm_Int2 value);
 extern void Nlm_SafeSetStatus (Nlm_Handle a, Nlm_Boolean status);
 extern void Nlm_SafeSetTitle (Nlm_Handle a, Nlm_CharPtr title);
 
-extern Nlm_CharPtr Nlm_TrimSpacesAroundString (Nlm_CharPtr str);
 extern Nlm_CharPtr Nlm_SaveStringFromText (Nlm_TexT t);
 extern ValNodePtr Nlm_SetTextFromVnp (Nlm_TexT t, ValNodePtr vnp);
 extern ValNodePtr Nlm_GetVnpFromText (Nlm_TexT t, ValNodePtr vnp, Nlm_Boolean last);
@@ -214,7 +190,8 @@ extern Nlm_GrouP Nlm_MultiLinePromptEx (Nlm_GrouP prnt, Nlm_CharPtr text, Nlm_In
 
 extern void Nlm_JustInvalObject (Nlm_Handle a);
 
-extern Nlm_Boolean Nlm_StringHasNoText (Nlm_CharPtr str);
+/* extern Nlm_CharPtr Nlm_TrimSpacesAroundString (Nlm_CharPtr str);  - now in ncbistr.h */
+/* extern Nlm_Boolean Nlm_StringHasNoText (Nlm_CharPtr str); - now in ncbistr.h */
 extern Nlm_Boolean Nlm_TextHasNoText (Nlm_TexT t);
 
 /*****************************************************************************

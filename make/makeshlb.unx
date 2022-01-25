@@ -1,4 +1,7 @@
 #
+#
+#	$Id: makeshlb.unx,v 6.1 1999/03/18 17:31:11 beloslyu Exp $
+#
 # Builds shared NCBI libraries
 #  Defaults below are for Solaris; other platforms are driven from
 #  makeall.unx and makenet.unx

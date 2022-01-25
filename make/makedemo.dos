@@ -27,28 +27,34 @@ CHECKSUB_EXE = checksub.___
 ASN2FF_EXE   = asn2ff.___
 ASNDHUFF_EXE = asndhuff.___
 FA2HTGS_EXE  = fa2htgs.___
-FORMATDB_EXE  = formatdb.___
-FMERGE_EXE  = fmerge.___
-BLASTALL_EXE  = blastall.___
-BLASTPGP_EXE  = blastpgp.___
+
+# WIN32 CONSOLE only
+!ifdef WIN32
+!ifndef MSWINDOWS
+FMERGE_EXE   = fmerge.___
+FORMATDB_EXE = formatdb.___
+FASTACMD_EXE = fastacmd.___
+BLASTALL_EXE = blastall.___
+BLASTPGP_EXE = blastpgp.___
 SEEDTOP_EXE  = seedtop.___
+MAKEMAT_EXE  = makemat.___
+COPYMAT_EXE  = copymat.___
+IMPALA_EXE  = impala.___
+!endif
+!endif
 
 # exclusions
-!ifndef WIN32
-!undef BLASTALL_EXE
-!undef BLASTPGP_EXE
-!undef SEEDTOP_EXE
-!undef FORMATDB_EXE
-!undef FMERGE_EXE
-!endif
-
 !ifdef B16
-!ifdef DBUG
-!undef CDSCAN_EXE
-!undef ASN2FF_EXE
+!undef TESTOBJ_EXE
 !undef SEQTEST_EXE
+!undef DOSIMPLE_EXE
+!undef GETSEQ_EXE
+!undef CDSCAN_EXE
+!undef GETFEAT_EXE
+!undef CHECKSUB_EXE
+!undef ASN2FF_EXE
+!undef ASNDHUFF_EXE
 !undef FA2HTGS_EXE
-!endif
 !endif
 
 nocopy: \
@@ -70,9 +76,13 @@ $(ASNDHUFF_EXE) \
 $(FA2HTGS_EXE)	\
 $(FORMATDB_EXE)	\
 $(FMERGE_EXE)	\
+$(FASTACMD_EXE)	\
 $(BLASTALL_EXE)	\
 $(BLASTPGP_EXE) \
-$(SEEDTOP_EXE)
+$(SEEDTOP_EXE)  \
+$(MAKEMAT_EXE) \
+$(COPYMAT_EXE) \
+$(IMPALA_EXE)
 
 
 ##################################################
@@ -280,10 +290,23 @@ RES = 1
 $(INCLUDE_EXE)
 <<
 !endif
+##########################################################
+!ifdef FASTACMD_EXE
+$(FASTACMD_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = fastacmd
+TEST_OBJ = fastacmd.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
 ##################################################
 !ifdef BLASTALL_EXE
 $(BLASTALL_EXE):
 	$(MAKE) -f <<
+MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = blastall
 TEST_OBJ = blastall.obj
@@ -296,6 +319,7 @@ $(INCLUDE_EXE)
 !ifdef BLASTPGP_EXE
 $(BLASTPGP_EXE):
 	$(MAKE) -f <<
+MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = blastpgp
 TEST_OBJ = blastpgp.obj
@@ -308,9 +332,49 @@ $(INCLUDE_EXE)
 !ifdef SEEDTOP_EXE
 $(SEEDTOP_EXE):
 	$(MAKE) -f <<
+MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = seedtop
 TEST_OBJ = seedtop.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef MAKEMAT_EXE
+$(MAKEMAT_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = makemat
+TEST_OBJ = makemat.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef COPYMAT_EXE
+$(COPYMAT_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = copymat
+TEST_OBJ = copymat.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef IMPALA_EXE
+$(IMPALA_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = impala
+TEST_OBJ = profiles.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

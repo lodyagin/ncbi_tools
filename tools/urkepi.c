@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: epi - low complexity
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkepi.c,v $
+* Revision 6.18  1999/02/25 15:06:48  kuzio
+* commutative prob func optimization
+*
 * Revision 6.17  1998/11/16 14:29:50  kuzio
 * flagBoundaryCondition
 *
@@ -510,7 +513,7 @@ extern FloatHiPtr PredictEpiBioseq (BioseqPtr bsp,
   if (bsp == NULL || epip == NULL)
     return NULL;
 
-  flagIsAA = ISA_aa (bsp->mol);
+  flagIsAA = (Boolean) ISA_aa (bsp->mol);
 
   if (flagIsAA)
     spp = SeqPortNew (bsp, 0, bsp->length-1, 0, Seq_code_iupacaa);
@@ -860,6 +863,232 @@ static void OptimizeEpiHP (CharPtr seq, Int4 window, SeqLocPtr slp,
   return;
 }
 
+typedef struct CFArray
+{
+  FloatHi score;
+  Int4    left, right;
+  struct  CFArray PNTR next;
+} CFA, PNTR CFAPtr;
+
+static int LIBCALLBACK CFACompProc (VoidPtr ptr1, VoidPtr ptr2)
+{
+  CFAPtr cfap1, cfap2;
+
+  if (ptr1 != NULL && ptr2 != NULL)
+  {
+    cfap1 = *((CFAPtr PNTR) ptr1);
+    cfap2 = *((CFAPtr PNTR) ptr2);
+    if (cfap1 != NULL && cfap2 != NULL)
+    {
+      if (cfap1->score > cfap2->score)
+        return 1;
+      else if (cfap1->score < cfap2->score)
+        return -1;
+    }
+  }
+  return 0;
+}
+
+extern void SortCFArray (CFAPtr PNTR cfap)
+{
+  CFAPtr cfapt, PNTR cfaph;
+  Int4 num, i;
+
+  num = 0;
+  cfapt = *cfap;
+  while (cfapt != NULL)
+  {
+    num++;
+    cfapt = cfapt->next;
+  }
+
+  if (num > 1)
+  {
+    cfaph = MemNew ((size_t) ((num+1) * sizeof (CFAPtr)));
+    i = 0;
+    cfapt = *cfap;
+    while (cfapt != NULL && i < num)
+    {
+      cfaph[i] = cfapt;
+      cfapt = cfapt->next;
+      i++;
+    }
+    HeapSort (cfaph, num, sizeof (CFAPtr), CFACompProc);
+    for (i = 0; i < num; ++i)
+    {
+      cfapt = cfaph[i];
+      cfapt->next = cfaph[i+1];
+    }
+    *cfap = cfaph[0];
+    MemFree (cfaph);
+  }
+  return;
+}
+
+static void OptimizeEpiProbFunc (CharPtr seq, Int4 window, SeqLocPtr slp,
+                                 Boolean flagIsAA)
+{
+  Int4      i, n, j, k, start, stop, loop, fact, left, right;
+  Int4      factarr[32], PNTR dfactarr;
+  Int4      alphabet;
+  FloatHi   score, tscore;
+  EpiDatPtr epip;
+  CFAPtr    cfaph = NULL, cfapt, cfap;
+  SeqIntPtr sint;
+
+  if (seq == NULL || slp == NULL)
+    return;
+  if (StrLen (seq) == 0)
+    return;
+
+  if (flagIsAA)
+    alphabet = 21;
+  else
+    alphabet = 5;
+  epip = EpiDatNew ();
+  dfactarr = (Int4Ptr) MemNew ((size_t) (sizeof (Int4) * window));
+  while (slp != NULL)
+  {
+    sint = slp->data.ptrvalue;
+    start = SeqLocStart (slp);
+    stop = SeqLocStop (slp);
+    for (i = start; i <= stop - window; i++)
+    {
+      for (k = (Int4) 'A'; k <= (Int4) 'Z'; k++)
+        epip->epiarray[k] = 0;
+      loop = 0;
+      score = -1.0;
+      for (n = i; n <= stop; n++)
+      {
+        if (flagIsAA)
+        {
+          switch (seq[n])
+          {
+           case '*':
+           case 'B':
+           case 'J':
+           case 'O':
+           case 'U':
+           case 'X':
+           case 'Z':
+            epip->epiarray['X'] += 1;
+            break;
+           default:
+            epip->epiarray[seq[n]] += 1;
+            break;
+          }
+        }
+        else
+        {
+          switch (seq[n])
+          {
+           case 'A':
+           case 'C':
+           case 'G':
+           case 'T':
+            epip->epiarray[seq[n]] += 1;
+            break;
+           default:
+            epip->epiarray['N'] += 1;
+            break;
+          }
+        }
+        loop++;
+        if (loop >= window)
+        {
+          for (j = 0; j < 32; j++)
+            factarr[j] = 0;
+          for (j = 0; j < window; j++)
+            dfactarr[j] = 0;
+          for (j = 0, k = (Int4) 'A'; k <= (Int4) 'Z'; j++, k++)
+            if (epip->epiarray[k] > 0)
+              factarr[j] = epip->epiarray[k];
+          for (j = 0; j < 32; j++)
+            if (factarr[j] > 0)
+              dfactarr[factarr[j]] += 1;
+          tscore = 1.0;
+/* window */
+          for (j = 2; j <= loop; j++)
+            tscore *= (FloatHi) j;
+/* residues */
+          for (j = 0; j < 32; j++)
+            for (k = 2; k <= factarr[j]; k++)
+              tscore /= (FloatHi) k;
+/* alphabet */
+          for (j = 2; j <= alphabet; j++)
+            tscore *= (FloatHi) j;
+/* counts */
+          for (j = 0; j < window; j++)
+            for (k = 2; k <= dfactarr[j]; k++)
+              tscore /= (FloatHi) k;
+          fact = 0;
+          for (j = 0; j < window; j++)
+            if (dfactarr[j] > 0)
+              fact++;
+          fact = alphabet - fact;
+          for (j = 2; j < fact; j++)
+            tscore /= (FloatHi) j;
+/* score */
+          if (score < 0.0)
+          {
+            left = i;
+            right = n;
+            score = tscore;
+          }
+          if (tscore < score)
+          {
+            left = i;
+            right = n;
+            score = tscore;
+          }
+        }
+        cfap = (CFAPtr) MemNew (sizeof (CFA));
+        cfap->score = score;
+        cfap->left = left;
+        cfap->right = right;
+        if (cfaph == NULL)
+        {
+          cfaph = cfap;
+        }
+        else
+        {
+          cfapt = cfaph;
+          while (cfapt->next != NULL)
+            cfapt = cfapt->next;
+          cfapt->next = cfap;
+        }
+      }
+      if (cfaph != NULL)
+      {
+        SortCFArray (&cfaph);
+        cfap = cfaph;
+        tscore = cfap->score;
+        sint->from = cfap->left;
+        sint->to = cfap->right;
+        while (cfap != NULL && tscore >= cfap->score)
+        {
+          if (sint->from > cfap->left)
+            sint->from = cfap->left;
+          if (sint->to < cfap->right)
+            sint->to = cfap->right;
+          cfap = cfap->next;
+        }
+        cfap = cfaph;
+        while (cfap != NULL)
+        {
+          cfaph = cfap->next;
+          MemFree (cfap);
+          cfap = cfaph;
+        }
+      }
+    }
+    slp = slp->next;
+  }
+  EpiDatFree (epip);
+  MemFree (dfactarr);
+  return;
+}
+
 extern SeqLocPtr FilterEpi (EpiDatPtr epip, CharPtr seq, Int4 length,
                             SeqIdPtr sip, Boolean flagHighPass,
                             Boolean flagIsAA,
@@ -952,6 +1181,9 @@ extern SeqLocPtr FilterEpi (EpiDatPtr epip, CharPtr seq, Int4 length,
    case 2:
     OptimizeEpiHP (seq, epip->window, slph, flagIsAA);
     break;
+   case 3:
+    OptimizeEpiProbFunc (seq, epip->window, slph, flagIsAA);
+    break;
   }
 
   if (epip->linker > 0)
@@ -1021,7 +1253,7 @@ extern SeqLocPtr FilterEpiBioseq (EpiDatPtr epip, BioseqPtr bsp,
   if (epip == NULL || epip->score == NULL || bsp == NULL)
     return NULL;
 
-  flagIsAA = ISA_aa (bsp->mol);
+  flagIsAA = (Boolean) ISA_aa (bsp->mol);
 
   if (epip->method != 0)
   {

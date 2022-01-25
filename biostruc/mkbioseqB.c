@@ -29,6 +29,9 @@
  * Author: Ken Addess
  *
  * $Log: mkbioseqB.c,v $
+ * Revision 6.3  1999/05/07 14:03:21  zimmerma
+ * Moved LIBCALL isBiopoly() and LIBCALL isHet() into mmdbapi1.c
+ *
  * Revision 6.2  1998/12/01 15:13:36  addess
  * cleaned up code to remove memory leaks
  *
@@ -64,60 +67,6 @@ BiostrucPtr LIBCALL readBiostruc(CharPtr filename, Int2 mode, Int4 mdlLvl)
    lbsp = FetchBS(filename, mode, mdlLvl, 1000, POWER_VIEW);
 
    return lbsp;
-}
-/************************************************************
-/*							    */
-/*	isBiopoly()					    */
-/*							    */
-/*	Given a molecule id, checks whether the 	    */
-/*	corresponding molecule is either protein, DNA, or   */
-/*	RNA and has coordinates.			    */
-/*							    */
-/************************************************************/ 
-
-Boolean LIBCALL isBiopoly(Int4 molecule_id, MoleculeGraphPtr currentbp)
-{
-   Boolean ret=FALSE;
-
-   while (currentbp)
-   {
-      if (currentbp->id == molecule_id)
-      {
-	 ret = TRUE;
-	 break;
-      }
-
-      currentbp = currentbp->next;
-   }
-
-   return ret;
-}
-/************************************************************
-/*							    */
-/*	isHet()						    */
-/*							    */
-/*	Given a molecule id, checks whether the 	    */
-/*	corresponding molecule is a heterogen that is not   */
-/*	solvent or of unknown type, and has coordinates.    */
-/*							    */
-/************************************************************/ 
-
-Boolean LIBCALL isHet(Int4 molecule_id, MoleculeGraphPtr currenthet)
-{
-   Boolean ret=FALSE;
-
-   while (currenthet)
-   {
-      if (currenthet->id == molecule_id)
-      {
-	 ret = TRUE;
-	 break;
-      }
-
-      currenthet = currenthet->next;
-   }
-
-   return ret;
 }
 
 Int4 LIBCALL getHetIdx(Int4 molecule_id, MoleculeGraphPtr currenthet)

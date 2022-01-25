@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -765,11 +765,14 @@ static void LaunchPubMedArticle (ButtoN b)
 #ifdef WIN_MSWIN
   argv [0] = str;
   argv [1] = NULL;
-  if (browser == NULL || StringHasNoText (browser)) {
-    browser = "netscape";
-  }
-  if (! Execv (browser, argv)) {
-    Message (MSG_POST, "Unable to launch %s", browser);
+  if (browser != NULL && (! StringHasNoText (browser))) {
+    if (! Execv (browser, argv)) {
+      Message (MSG_POST, "Unable to launch %s", browser);
+    }
+  } else {
+    if (! Nlm_MSWin_OpenDocument (str)) {
+      Message (MSG_POST, "Unable to launch browser");
+    }
   }
 #endif
 #ifdef WIN_MOTIF

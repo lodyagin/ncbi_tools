@@ -31,11 +31,14 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.4 $ */
-/* $Log: gapxdrop.h,v $
-/* Revision 6.4  1998/11/17 13:39:03  madden
-/* Made ALIGN non-static
-/*
+/* $Revision: 6.5 $ 
+* $Log: gapxdrop.h,v $
+* Revision 6.5  1999/03/17 16:49:10  madden
+* Removed comment within comment
+*
+* Revision 6.4  1998/11/17 13:39:03  madden
+* Made ALIGN non-static
+*
  * Revision 6.3  1998/08/26 18:51:08  kans
  * fixed -v -fd warning
  *

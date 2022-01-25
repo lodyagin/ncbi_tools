@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,16 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.9  1999/04/22 15:18:59  vakatov
+* Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
+* "post-mortem" callbacks(registered by XtAddEventHandler()) get
+* triggered for the destroyed widget. Reason: the widget may not be
+* immediately destroyed if XtDestroyWidget() was called in a nested
+* event dispatch loop.
+*
+* Revision 6.8  1999/04/06 14:23:26  lewisg
+* add opengl replacement for viewer3d
+*
 * Revision 6.7  1998/12/14 18:39:10  kans
 * okayToDrawContents extern, used to inhibit slate drawing
 *
@@ -131,17 +141,29 @@
 #include <vibprocs.h>
 #include <vibincld.h>
 
+#ifdef _OPENGL
+#ifdef WIN32  /* braindead MS GL header dependency */
+#include <windows.h>
+#endif /* WIN32 */
+#include <GL/gl.h>
+#include <GL/glu.h>
+#endif /* _OPENGL */
+
+
 #ifdef WIN_MAC
 #define Nlm_SlateTool Nlm_Handle
-#endif
+#endif /* WIN_MAC */
 
 #ifdef WIN_MSWIN
 #define Nlm_SlateTool HWND
-#endif
+#endif /* WIN_MSWIN */
 
 #ifdef WIN_MOTIF
 #define Nlm_SlateTool Widget
-#endif
+#endif /* WIN_MOTIF */
+
+
+
 
 typedef  struct  Nlm_slatedata {
   Nlm_SlateTool    handle;
@@ -159,7 +181,11 @@ typedef  struct  Nlm_slatedata {
   Nlm_SltCharProc  keyProc;
   Nlm_Boolean      hasFocus;
   Nlm_Int4         policy;
+#if _OPENGL
+  Nlm_ColorMTool   cMap;  /* used to hold the palette */
+#endif /* _OPENGL */
 } Nlm_SlateData;
+
 
 typedef  struct  Nlm_paneldata {
   Nlm_PnlClckProc  click;
@@ -171,6 +197,7 @@ typedef  struct  Nlm_paneldata {
   Nlm_PnlActnProc  reset;
   Nlm_PaneL        prev;
 } Nlm_PanelData;
+
 
 /* 
 *  Panel data is on top of a slate record to allow simple and
@@ -184,6 +211,7 @@ typedef  struct  Nlm_panelslaterec {
   Nlm_PanelData  panel;
   long           align; /* unused; for improved portability */
 } Nlm_PanelRec, Nlm_SlateRec, PNTR Nlm_PnlPtr, PNTR Nlm_SltPtr;
+
 
 typedef  struct  Nlm_offsetrec {
   Nlm_Int2  offset;
@@ -251,6 +279,7 @@ extern Nlm_Boolean okayToDrawContents;
 extern void Nlm_AddSubwindowShell (Nlm_WindoW w, Nlm_ShellTool shell );
 extern void Nlm_DelSubwindowShell (Nlm_WindoW w, Nlm_ShellTool shell );
 
+
 static void Nlm_LoadSlateData (Nlm_SlatE s, Nlm_SlateTool hdl,
                                Nlm_BaR vsb, Nlm_BaR hsb,
                                Nlm_Handle rhdl, Nlm_Handle chdl,
@@ -281,6 +310,9 @@ static void Nlm_LoadSlateData (Nlm_SlatE s, Nlm_SlateTool hdl,
     sptr->vAction = vact;
     sptr->keyProc = key;
     sptr->hasFocus = fcs;
+#ifdef _OPENGL
+    sptr->cMap = NULL;
+#endif
     Nlm_HandUnlock (s);
     recentSlate = NULL;
   }
@@ -1495,6 +1527,7 @@ static void Nlm_RemoveSlate (Nlm_GraphiC s, Nlm_Boolean savePort)
   DestroyWindow (h);
 #endif
 #ifdef WIN_MOTIF
+  XtUnrealizeWidget(h);
   XtDestroyWidget (h);
   Nlm_DelSubwindowShell ( Nlm_GetParentWindow((Nlm_GraphiC)s),
                           (Nlm_ShellTool) h );
@@ -2555,6 +2588,357 @@ static void Nlm_NewSlate (Nlm_SlatE s, Nlm_Boolean border,
 }
 
 
+#ifdef _OPENGL
+/* 
+Nlm_Set3DColorMap sets the color map for an OpenGL window.  A separate function
+is necessary because on windows, the pallete must be set using the device context
+bound to the OpenGL context.  Changing the palette of the parent window has no effect.
+lyg 
+*/
+
+extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
+                             Nlm_Uint1Ptr red, Nlm_Uint1Ptr green,
+                             Nlm_Uint1Ptr blue)
+{
+  Nlm_SlateData  wdata;
+
+#ifdef WIN_MSWIN
+  Nlm_Uint2       i;
+  LOGPALETTE    * palette;
+  PALETTEENTRY  * p;
+#endif
+#ifdef WIN_MAC
+  Nlm_Int2        i;
+  RGBColor        col;
+#endif
+
+
+  if (w == NULL  ||  totalColors > 256)
+    return;
+
+  Nlm_GetSlateData ((Nlm_SlatE)w, &wdata);
+
+#ifdef WIN_MSWIN
+  if ( GetDeviceCaps (wglGetCurrentDC(), RASTERCAPS) &  RC_PALETTE ){
+    if ( wdata.cMap != NULL ){
+      DeleteObject( wdata.cMap );
+      wdata.cMap = NULL;
+    }
+    if ( totalColors!=0 ) {
+      palette = (LOGPALETTE*)MemNew (sizeof(LOGPALETTE) +
+                                     totalColors*sizeof(PALETTEENTRY));
+      if ( palette != NULL ) {
+        palette->palVersion = 0x300;
+        palette->palNumEntries = totalColors;
+        for( i=0; i<totalColors; i++ ) {
+          p = &(palette->palPalEntry[i]);
+          p->peFlags = (BYTE)((i != 0) ? 0 : PC_RESERVED);
+          p->peRed   = red[i];
+          p->peGreen = green[i];
+          p->peBlue  = blue[i];
+        }
+        wdata.cMap = CreatePalette(palette);
+        MemFree (palette);
+        if ( wdata.cMap != NULL ) {
+          SelectPalette ( wglGetCurrentDC(),wdata.cMap,FALSE );
+          RealizePalette ( wglGetCurrentDC() );
+
+        }
+      }
+    }
+  }
+#endif
+
+#ifdef WIN_MAC
+  if ( wdata.cMap != NULL ){
+    if ( wdata.cMapStatus ){
+      SetPalette( wdata.handle, NULL, FALSE);
+    }
+    DisposePalette ( wdata.cMap );
+    wdata.cMap = NULL;
+  }
+  wdata.cMapStatus = 0;
+  if ( totalColors!=0 ) {
+    wdata.cMap = NewPalette(totalColors,(CTabHandle)0,pmTolerant,0);
+    if ( wdata.cMap != NULL ) {
+      for( i=0; i<totalColors; i++ ) {
+        col.red   = (Nlm_Uint2)red[i]<<8 | (Nlm_Uint2)red[i];
+        col.green = (Nlm_Uint2)green[i]<<8 | (Nlm_Uint2)green[i];
+        col.blue  = (Nlm_Uint2)blue[i]<<8 | (Nlm_Uint2)blue[i];
+        SetEntryColor(wdata.cMap,i,&col);
+      }
+      SetPalette( wdata.handle, wdata.cMap, FALSE);
+      ActivatePalette ( wdata.handle );
+      wdata.cMapStatus = 1;
+    }
+  }
+#endif
+
+#ifdef WIN_MOTIF
+  do { /* TRY */
+    unsigned long  pixel;
+    int            n_savedColors = 0;
+    XColor         colorCells[256];
+
+    /* Uninstall, store first several colors and free current
+     * colormap -- if necessary */ 
+    if ( wdata.cMap )
+      {
+        n_savedColors = 32;
+        if (n_savedColors > (int)totalColors)
+          return;
+
+        if ( wdata.cMapStatus )
+          {
+            XUninstallColormap(Nlm_currentXDisplay, wdata.cMap);
+            wdata.cMapStatus = 0;
+          }
+
+        if ( !wdata.cMap_fixed )
+          {
+            if (totalColors != 0)
+              {            
+                for (pixel = 0;  pixel < n_savedColors;  pixel++)
+                  colorCells[pixel].pixel = pixel;
+                XQueryColors(Nlm_currentXDisplay, wdata.cMap,
+                             colorCells, n_savedColors);
+              }
+
+            XFreeColormap(Nlm_currentXDisplay, wdata.cMap);
+            wdata.cMap = (Nlm_ColorMTool) 0;
+          }
+      }
+
+    if (totalColors == 0)
+      break;    /* no colors specified for the new colormap */
+
+    /* Create new colormap, if necessary */
+    if ( !wdata.cMap )
+      {
+        XVisualInfo    visinfo;
+        unsigned long  plane_m[1];
+        unsigned long  pixels[256];
+
+        if (!XMatchVisualInfo(Nlm_currentXDisplay, Nlm_currentXScreen,
+                              8, PseudoColor, &visinfo)  &&
+            !XMatchVisualInfo(Nlm_currentXDisplay, Nlm_currentXScreen,
+                              8, GrayScale,   &visinfo))
+          break;  /* no matching visuals found */
+
+        wdata.cMap = XCreateColormap(Nlm_currentXDisplay,
+                                     RootWindow(Nlm_currentXDisplay,
+                                                Nlm_currentXScreen),
+                                     visinfo.visual, AllocNone);
+        if (wdata.cMap == DefaultColormap(Nlm_currentXDisplay,
+                                          Nlm_currentXScreen))
+          {
+            wdata.cMap = (Nlm_ColorMTool) 0;
+            break;  /* hardware colormap is immutable */
+          }
+
+        if ( !XAllocColorCells ( Nlm_currentXDisplay, wdata.cMap, FALSE,
+                                 (unsigned long*) plane_m, 0,
+                                 (unsigned long*) pixels, totalColors) )
+          {
+            XFreeColormap (Nlm_currentXDisplay,wdata.cMap);
+            wdata.cMap = (Nlm_ColorMTool) 0;
+            break;  /* cannot allocate color cells for the new colormap */
+          }
+      }
+
+    for (pixel = n_savedColors;  pixel < totalColors;  pixel++)
+      {
+        colorCells[pixel].red   = (((Nlm_Uint2)red  [pixel]) << 8) |
+          (Nlm_Uint2)red  [pixel];
+        colorCells[pixel].green = (((Nlm_Uint2)green[pixel]) << 8) |
+          (Nlm_Uint2)green[pixel];
+        colorCells[pixel].blue  = (((Nlm_Uint2)blue [pixel]) << 8) |
+          (Nlm_Uint2)blue [pixel];
+        
+        colorCells[pixel].flags = DoRed | DoGreen | DoBlue;
+        colorCells[pixel].pixel = pixel;
+        colorCells[pixel].pad = 0;
+      }
+    XStoreColors(Nlm_currentXDisplay, wdata.cMap,
+                 colorCells + n_savedColors,
+                 (int)(pixel - n_savedColors));
+
+    XInstallColormap(Nlm_currentXDisplay, wdata.cMap);
+    XSetWindowColormap (Nlm_currentXDisplay, XtWindow( wdata.shell ),
+                        wdata.cMap);
+#if 0
+    /* hopefully we don't need all of this shell stuff */
+    {{
+      Nlm_ShellDataPtr sptr = wdata.allShells;
+      while (sptr != NULL)
+        {
+          XSetWindowColormap (Nlm_currentXDisplay, XtWindow( sptr->shell ),
+                              wdata.cMap);
+          sptr = sptr->next;
+        }
+    }}
+#endif /* 0 */
+
+    wdata.cMapStatus = 1;
+  }  while ( 0 );
+#endif
+
+  Nlm_SetSlateData ((Nlm_SlatE)w, &wdata);
+}
+
+
+static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
+                          Nlm_Boolean vScroll, Nlm_Boolean hScroll,
+                          Nlm_SltScrlProc4 vscrl4, Nlm_SltScrlProc4 hscrl4,
+                          Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl,
+                          Nlm_Int2 extra, Nlm_Boolean *IndexMode)
+
+{
+  Nlm_SlateTool   h;
+  Nlm_BaR         hsb;
+  Nlm_PoinT       npt;
+  Nlm_RecT        r;
+  Nlm_BaR         vsb;
+  Nlm_WindowTool  wptr;
+#ifdef WIN_MOTIF
+  Cardinal        n;
+  Arg             wargs [10];
+  String          trans =
+    "<Btn1Down>:     slate(down)   ManagerGadgetArm()  \n\
+     <Btn1Up>:       slate(up)     ManagerGadgetActivate() \n\
+     <Btn1Motion>:   slate(motion) ManagerGadgetButtonMotion() \n\
+     <Key>:          DrawingAreaInput()";
+#endif
+
+#ifdef WIN_MSWIN
+  PIXELFORMATDESCRIPTOR pfd;
+  int pf;
+  HDC hDC;				/* device context */
+  HGLRC hRC;				/* opengl context */
+  int BitsPixel;
+#endif /* WIN_MSWIN */
+
+  Nlm_GetRect ((Nlm_GraphiC) s, &r);
+  h = NULL;
+  vsb = NULL;
+  hsb = NULL;
+  wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) s);
+  *IndexMode = FALSE;
+
+#ifdef WIN_MSWIN
+  h = CreateWindow (slateclass, "", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                    r.left, r.top, r.right - r.left + 1,
+                    r.bottom - r.top + 1, wptr, 0,
+                    Nlm_currentHInst, NULL);
+  if (h != NULL) {
+    SetProp (h, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) s);
+  }
+
+	hDC = GetDC(h);
+
+    BitsPixel = GetDeviceCaps(hDC, BITSPIXEL);  /* number of bits per pixel */
+    /* there is no guarantee that the contents of the stack that become
+       the pfd are zeroed, therefore _make sure_ to clear these bits. */
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.nSize        = sizeof(pfd);
+    pfd.nVersion     = 1;
+    pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+
+    /* use colorindex mode if less that 16 bits per pixel */
+    if (BitsPixel < 16) {
+        pfd.iPixelType   = PFD_TYPE_COLORINDEX;
+        *IndexMode = TRUE;
+    }
+    else {
+        pfd.iPixelType   = PFD_TYPE_RGBA;
+        *IndexMode = FALSE;
+    }
+
+    pfd.cColorBits   = BitsPixel;
+
+    pf = ChoosePixelFormat(hDC, &pfd);
+    if (pf == 0) {
+	MessageBox(NULL, "ChoosePixelFormat() failed:  "
+		   "Cannot find a suitable pixel format.", "Error", MB_OK); 
+    } 
+ 
+    if (SetPixelFormat(hDC, pf, &pfd) == FALSE) {
+	MessageBox(NULL, "SetPixelFormat() failed:  "
+		   "Cannot set format specified.", "Error", MB_OK);
+    } 
+
+    DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
+
+	hRC = wglCreateContext(hDC);
+    wglMakeCurrent(hDC, hRC);
+	glEnable(GL_DEPTH_TEST);
+/* Do not ReleaseDC(h, hDC).  GL owns this */
+
+#endif
+
+#ifdef WIN_MOTIF
+  n = 0;
+  XtSetArg (wargs [n], XmNx, (Position) r.left); n++;
+  XtSetArg (wargs [n], XmNy, (Position) r.top); n++;
+  XtSetArg (wargs [n], XmNwidth, (Dimension) (r.right - r.left + 1)); n++;
+  XtSetArg (wargs [n], XmNheight, (Dimension) (r.bottom - r.top + 1)); n++;
+  XtSetArg (wargs [n], XmNmarginHeight, 0); n++;
+  XtSetArg (wargs [n], XmNmarginWidth, 0); n++;
+  XtSetArg (wargs [n], XmNborderWidth, (Dimension) 0); n++;
+  XtSetArg (wargs [n], XmNtranslations, XtParseTranslationTable (trans)); n++;
+  h = XtCreateManagedWidget ((String) "", xmDrawingAreaWidgetClass,
+                             wptr, wargs, n);
+  Nlm_AddSubwindowShell(Nlm_GetParentWindow((Nlm_GraphiC)s), (Nlm_ShellTool)h);
+
+  XtVaSetValues(h, XmNuserData, (XtPointer)s, NULL);
+  XtAddCallback(h, XmNexposeCallback, Nlm_SlateDrawCallback,  (XtPointer)s);
+  XtAddCallback(h, XmNinputCallback,  Nlm_SlateInputCallback, (XtPointer)s);
+  XtAddEventHandler(h, FocusChangeMask, FALSE, Nlm_SlateFocusCB, (XtPointer)s);
+  XtManageChild( h );
+#endif
+
+  if (vScroll) {
+    Nlm_GetRect ((Nlm_GraphiC) s, &r);
+    r.left = r.right + 1;
+    r.right += Nlm_vScrollBarWidth;
+    if (vscrl4 != NULL) {
+      vsb = Nlm_VertScrollBar4((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4)vscrl4);
+    } else if (vscrl != NULL) {
+      vsb = Nlm_VertScrollBar ((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc) vscrl);
+    } else {
+      vsb = Nlm_VertScrollBar ((Nlm_GraphiC) s, &r,
+                               (Nlm_BarScrlProc) Nlm_SlateVertScrollAction);
+    }
+  }
+
+  if (hScroll) {
+    Nlm_GetRect ((Nlm_GraphiC) s, &r);
+    r.top = r.bottom + 1;
+    r.bottom += Nlm_hScrollBarHeight;
+    if (hscrl4 != NULL) {
+      hsb = Nlm_HorizScrollBar4 ((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4) hscrl4);
+    } else if (hscrl != NULL) {
+      hsb = Nlm_HorizScrollBar ((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc) hscrl);
+    } else {
+      hsb = Nlm_HorizScrollBar ((Nlm_GraphiC) s, &r,
+                                (Nlm_BarScrlProc) Nlm_SlateHorizScrollAction);
+    }
+  }
+
+  Nlm_GetRect ((Nlm_GraphiC) s, &r);
+  Nlm_InsetRect (&r, 4, 4);
+  Nlm_LoadPt (&npt, r.left, r.top);
+  Nlm_LoadBoxData ((Nlm_BoX) s, npt, npt, npt, npt.y, npt.x, 0, 0, 0, 0, 0, 0);
+  Nlm_GetRect ((Nlm_GraphiC) s, &r);
+  Nlm_LoadSlateData (s, h, vsb, hsb, NULL, NULL, 0, 0,
+                     border, 0, 0, 0, NULL, NULL, FALSE);
+  Nlm_SetSlatePolicy(s, DEFAULT_SLATE_POLICY);
+  Nlm_LoadPanelData ((Nlm_PaneL) s, NULL, NULL, NULL, NULL, NULL, extra, NULL, NULL);
+}
+
+#endif /* _OPENGL */
+
+
 static void Nlm_NewPanel (Nlm_PaneL p, Nlm_PnlActnProc draw,
                           Nlm_Int2 extra, Nlm_PnlActnProc reset)
 
@@ -2951,6 +3335,76 @@ extern Nlm_PaneL Nlm_AutonomousPanel4 (Nlm_GrouP prnt, Nlm_Int2 pixwidth,
   }
   return p;
 }
+
+
+#ifdef _OPENGL
+
+
+extern Nlm_PaneL Nlm_Autonomous3DPanel (Nlm_GrouP prnt, Nlm_Int2 pixwidth,
+                                      Nlm_Int2 pixheight, Nlm_PnlActnProc draw,
+                                      Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl,
+                                      Nlm_Int2 extra, Nlm_PnlActnProc reset,
+                                      Nlm_GphPrcsPtr classPtr, Nlm_Boolean *IndexMode)
+
+/*
+*  Note that an autonomous panel is really a combination of slate and
+*  panel in one object, and thus uses the slateProcs class function.
+*/
+
+{
+  Nlm_Boolean      border;
+  Nlm_GraphicData  gdata;
+  Nlm_Boolean      hScroll;
+  Nlm_PoinT        npt;
+  Nlm_PaneL        p;
+  Nlm_RecT         r;
+  Nlm_WindoW       tempPort;
+  Nlm_Boolean      vScroll;
+
+
+  p = NULL;
+  if (prnt != NULL) {
+    tempPort = Nlm_SavePort ((Nlm_GraphiC) prnt);
+    Nlm_GetNextPosition ((Nlm_GraphiC) prnt, &npt);
+    Nlm_SelectFont (Nlm_systemFont);
+    border = (Nlm_Boolean) (vscrl != NULL || hscrl != NULL);
+    vScroll = (Nlm_Boolean) (vscrl != NULL);
+    hScroll = (Nlm_Boolean) (hscrl != NULL);
+    if (vScroll || hScroll) {
+      Nlm_LoadRect(&r, npt.x, npt.y,
+                  (Nlm_Int2)(npt.x+pixwidth+8), (Nlm_Int2)(npt.y+pixheight+8));
+    } else {
+      Nlm_LoadRect(&r, npt.x, npt.y,
+                  (Nlm_Int2)(npt.x+pixwidth), (Nlm_Int2)(npt.y+pixheight));
+    }
+    p = (Nlm_PaneL)Nlm_CreateLink((Nlm_GraphiC) prnt, &r,
+                                  (Nlm_Int2)(sizeof(Nlm_PanelRec) + extra),
+                                  classPtr);
+    if (p != NULL) {
+      if (classPtr != NULL) {
+        classPtr->ancestor = slateProcs;
+      } else {
+        Nlm_GetGraphicData ((Nlm_GraphiC) p, &gdata);
+        gdata.classptr = slateProcs;
+        Nlm_SetGraphicData ((Nlm_GraphiC) p, &gdata);
+      }
+      Nlm_New3DSlate ((Nlm_SlatE) p, border, vScroll, hScroll, NULL, NULL, vscrl, hscrl, extra, IndexMode);
+      Nlm_NewPanel (p, draw, extra, reset);
+      if (vScroll) {
+        r.right += Nlm_vScrollBarWidth;
+      }
+      if (hScroll) {
+        r.bottom += Nlm_hScrollBarHeight;
+      }
+      Nlm_DoAdjustPrnt ((Nlm_GraphiC) p, &r, TRUE, FALSE);
+      Nlm_DoShow ((Nlm_GraphiC) p, TRUE, FALSE);
+    }
+    Nlm_RestorePort (tempPort);
+  }
+  return p;
+}
+
+#endif /* _OPENGL */
 
 extern Nlm_PaneL Nlm_AutonomousPanel (Nlm_GrouP prnt, Nlm_Int2 pixwidth,
                                       Nlm_Int2 pixheight, Nlm_PnlActnProc draw,
@@ -3515,6 +3969,8 @@ LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
   Nlm_currentWindowTool = tempHWnd;
   return rsult;
 }
+
+
 
 extern Nlm_Boolean Nlm_RegisterSlates (void)
 

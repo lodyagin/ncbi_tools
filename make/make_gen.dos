@@ -1,4 +1,4 @@
-# $Id: make_gen.dos,v 6.8 1998/06/24 18:09:28 vakatov Exp $
+# $Id: make_gen.dos,v 6.9 1999/03/15 22:54:52 vakatov Exp $
 ########################################################################
 #  This file specifies attributes common for the NCBI toolkit
 #  makefiles "makeall.dos", "makedemo.dos", "makenet.dos",
@@ -262,6 +262,9 @@ LIB36 = $(LIBPATH)\$(XLIB36).lib
 XLIB40= ncbitxc2
 LIB40 = $(LIBPATH)\$(XLIB40).lib
 LIB29 = $(LIB40)
+
+XLIB41= ncbiid1
+LIB41 = $(LIBPATH)\$(XLIB41).lib
 
 !ifdef MSWINDOWS
 XLIB4 = vibrant

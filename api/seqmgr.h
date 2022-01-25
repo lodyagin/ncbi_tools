@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.22  1999/04/01 20:44:14  kans
+* Int2 lengths to Int4 to allow CountGapsInDeltaSeq with buffer > 32K
+*
 * Revision 6.21  1998/11/24 22:21:25  kans
 * index mRNA and CDS by position, allow arbitrary sorted feature array index
 *
@@ -672,7 +675,7 @@ NLM_EXTERN Boolean LIBCALL SpreadGapsInDeltaSeq PROTO((BioseqPtr bsp));
 *      returns TRUE if values in argument were set.
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq PROTO((BioseqPtr bsp, Int4Ptr num_segs, Int4Ptr num_gaps, Int4Ptr known_residues, Int4Ptr num_gaps_faked, CharPtr buf, Int2 buflen));
+NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq PROTO((BioseqPtr bsp, Int4Ptr num_segs, Int4Ptr num_gaps, Int4Ptr known_residues, Int4Ptr num_gaps_faked, CharPtr buf, Int4 buflen));
 
 /*****************************************************************************
 *

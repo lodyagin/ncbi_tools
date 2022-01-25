@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.23 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,21 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.28  1999/05/06 15:25:27  egorov
+* Remove static function declaration
+*
+* Revision 6.27  1999/04/26 14:36:29  shavirin
+* Added ability to dump statistics.
+*
+* Revision 6.26  1999/04/21 22:55:39  kans
+* was not checked in
+*
+* Revision 6.25  1999/02/22 21:48:03  egorov
+* Optimize GIs2OIDs not reinitializing ISAM indicies for non-exclisive databases, but use already initialized rdfp's field for that.
+*
+* Revision 6.24  1999/02/05 13:47:05  madden
+* Add basename for formatdb
+*
 * Revision 6.23  1998/12/14 21:49:23  egorov
 * new max gi number memeber in CommonIndexHead structure and therefore no need for COMMON_INDEX_TABLE_SIZE
 *
@@ -375,26 +390,6 @@ typedef struct	CommonIndexHead {
     Int4		maxgi; /* maximum GI number permited */
 } CommonIndexHead, *CommonIndexHeadPtr;
 
-/* Function prototypes */
-Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int2 *dbid);
-Int2	DBShift(Int2 num_of_DBs, DataBaseIDPtr dbids, CharPtr dbname, Boolean is_prot);
-CharPtr	DBName(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift);
-Boolean	DBisProt(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift);
-CommonIndexResultPtr	GIs2OIDs(CommonIndexHeadPtr cih,
-			Int4Ptr gis, Int4 number_of_gis, Int4 dbshift);
-Int2	SeniorBit(Int4	bitmask);
-CommonIndexHeadPtr	CommonIndexInit(CharPtr indexfilename);
-void	CommonIndexDestruct(CommonIndexHeadPtr cihp);
-Int2	bit_engine_firstbit (Int4 word);
-Int2Ptr	bit_engine_arr(Int4 word);
-Int2	bit_engine_numofbits(Int4 word);
-Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path);
-
-/* mmap's */
- 
-NLM_EXTERN Nlm_MemMapPtr EA_MemMapInit(const Nlm_Char PNTR name, Boolean readonly);
-
-
 typedef struct read_db_file {
 	struct read_db_file PNTR next;
 /* the contents of this struct. were allocated, or not.  Does NOT include
@@ -430,6 +425,25 @@ if there is no mem-mapping or it failed. */
 	CommonIndexHeadPtr	cih;	/* head of the common index */
 	Int2			filebit;/* bit corresponding to the DB file */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
+
+/* Function prototypes */
+Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int2 *dbid, ReadDBFILEPtr rdfp);
+Int2	DBShift(Int2 num_of_DBs, DataBaseIDPtr dbids, CharPtr dbname, Boolean is_prot);
+CharPtr	DBName(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift);
+Boolean	DBisProt(Int2 num_of_DBs, DataBaseIDPtr dbids, Int2 shift);
+CommonIndexResultPtr	GIs2OIDs(CommonIndexHeadPtr cih,
+			Int4Ptr gis, Int4 number_of_gis, Int4 dbshift, ReadDBFILEPtr rdfp);
+Int2	SeniorBit(Int4	bitmask);
+CommonIndexHeadPtr	CommonIndexInit(CharPtr indexfilename);
+void	CommonIndexDestruct(CommonIndexHeadPtr cihp);
+Int2	bit_engine_firstbit (Int4 word);
+Int2Ptr	bit_engine_arr(Int4 word);
+Int2	bit_engine_numofbits(Int4 word);
+Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path);
+
+/* mmap's */
+ 
+NLM_EXTERN Nlm_MemMapPtr EA_MemMapInit(const Nlm_Char PNTR name, Boolean readonly);
 
 /****************************************************************************/
 /* FINCTION DEFINITIONS */
@@ -651,47 +665,78 @@ typedef struct FASTALookup {
     Int4    used;           /* Number of Uint4 used      */
 } FASTALookup, PNTR FASTALookupPtr;
 
+typedef struct _FDB_options {
+    CharPtr db_title;
+    CharPtr db_file;
+    CharPtr LogFileName;
+    Int4 is_protein;
+    Int4 parse_mode;
+    Int4 isASN;
+    Int4 asnbin;
+    Int4 is_seqentry;
+    CharPtr base_name;
+    Int4  dump_info;
+} FDB_options, PNTR FDB_optionsPtr;
+
 typedef struct formatdb 
 {
-    CharPtr	dbname;	/* name of input database */
-    CharPtr	DbTitle;/* database title */
+    /* CharPtr	dbname;	(db_file)  name of input database */
+    /* CharPtr	basename; (base_name)  base-name to be used for 
+       BLAST databases. */
+    /* CharPtr	DbTitle; (db_title) database title */
     
-        /* file handlers */
-    FILE	*fd,
-        	*fd_ind,
-        	*fd_seq,
-        	*fd_def,
-        	*fd_stmp;
+    /* file handlers */
+
+    FILE *fd,
+        *fd_ind,
+        *fd_seq,
+        *fd_def,
+        *fd_sdi,  /* This is file for misc. info data */
+        *fd_stmp;
     
-        /* ASN.1 input, if the "-a" specified */
+    /* ASN.1 input, if the "-a" specified */
     AsnIoPtr	aip;
     
-    Boolean	isProtein;	/* true, if input database contains proteins */
-    Boolean	ParseMode;	/* true, if ISAM needed */
-    Int4	num_of_seqs;	/* number of parsed sequences */
-    Int4	TotalLen, MaxSeqLen;
- 
-        /* offset tables */
+    /* Boolean	isProtein;  is_protein true, if input database 
+       contains proteins */
+
+    /* Boolean ParseMode; parse_mode  true, if ISAM needed */
+
+    Int4 num_of_seqs;  /* number of parsed sequences */
+    Int4 TotalLen, MaxSeqLen;
+    
+    /* offset tables */
     Int4Ptr	DefOffsetTable,	/* definitions */
         	SeqOffsetTable,	/* sequences */
         	AmbOffsetTable;	/* ambiguities */
 
-        /* lookup table */
+    /* lookup table */
+
     FASTALookupPtr	lookup;
+
+    /* General formatdb options */
+
+    FDB_optionsPtr options;
 
     Uint4Ptr	AmbCharPtr;	/* ambiguity characters while
                                  * convert from ncbi2na->ncbi4na */
+
+    Int4 OffsetAllocated; /* storage for allocation size */
+
+    
 } FormatDB, *FormatDBPtr;
 
-    /* Function prototypes */
-FormatDBPtr	FormatDBInit(const CharPtr databasename,
-                             const CharPtr titlename,
-                             Boolean isProtein, Boolean ParseMode,
-                             Boolean isASN, Boolean asn_binmode);
+/* Function prototypes for formatdb library*/
 
-FormatDBPtr	FormatDBDestruct(FormatDBPtr);
+FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
+Int2 FDBAddSequence (FormatDBPtr fdbp, Int4 gi, ValNodePtr seq_id,
+                     CharPtr title, Int4 tax_id, CharPtr div, 
+                     Int4 owner, Uint1 seq_data_type, 
+                     ByteStorePtr *seq_data, Int4 SequenceLen, Int4 date);
+Int2 FormatDBClose(FormatDBPtr fdbp);
 
-Boolean		SeqIdSetE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num);
+
+Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp);
 
 NLM_EXTERN Boolean SeqEntrysToBLAST (SeqEntryPtr sep, FormatDBPtr fdbp,
                                      Boolean is_na, Uint1 group_segs);

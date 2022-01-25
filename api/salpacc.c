@@ -1,0 +1,980 @@
+/* ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ * $Id: salpacc.c,v 6.12 1999/04/29 19:46:23 sicotte Exp $
+ Collection of SeqAlign Accession utilities.
+ Maintainer: Hugues Sicotte
+ Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
+
+*/
+
+/** for ErrPostEx() ****/
+
+static char *this_module = "salpacc";
+#define THIS_MODULE this_module
+static char *this_file = __FILE__;
+#define THIS_FILE this_file
+
+
+
+#include <sequtil.h>
+#include <salpacc.h>
+#include <txalign.h>
+#include <salsap.h> /* for CompSegPtr definition */
+/* 
+   Function to return a pointers to a linked list of SeqAligns
+   that are in the SeqAligns. The user may NOT free these
+   SeqIds, as they are in the SeqAlign data-structure
+*/
+
+NLM_EXTERN SeqIdPtr LIBCALL SeqIdPtrFromSeqAlign(SeqAlignPtr salp) {
+
+    SeqIdPtr sip=NULL;
+    if(salp==NULL) 
+        return NULL;
+    if(salp->segtype==1) { /* DenseDiag */
+        DenseDiagPtr ddp;
+        ddp=(DenseDiagPtr)salp->segs;
+        if(ddp!=NULL) 
+            sip=ddp->id;
+    } else if (salp->segtype==2) { /* DenseSeg */
+        DenseSegPtr dsp;
+        dsp = (DenseSegPtr) salp->segs;
+        if(dsp!=NULL)
+            sip=dsp->ids;
+    } else if (salp->segtype==3) { /* StdSeg */
+        StdSegPtr ssp;
+        ssp = (StdSegPtr)salp->segs;
+        if(ssp!=NULL) {
+            Int4 numids=0;
+            sip=ssp->ids;
+            while(sip) {/* SeqIds are optional at this level */
+                numids++;
+                sip=sip->next;
+            }
+            if(numids==ssp->dim) { /* salp->dim is optional, while ssp->dim is not */
+                sip = ssp->ids;
+            } else {/* Look in the SeqLocs */
+                SeqLocPtr slp;
+                SeqIdPtr sip_tmp,sip_last=NULL;
+                if (ssp->ids!=NULL) {
+                    ssp->ids = SeqIdSetFree(ssp->ids);
+                    numids=0;
+                }
+                slp = ssp->loc;
+                while(slp!=NULL) {
+                    sip_tmp = SeqIdDup(SeqLocId(slp));
+                    if(ssp->ids==NULL) /* "Cache" SeqIds in ids slot */
+                        ssp->ids = sip_tmp;
+                    else if(sip_last!=NULL)
+                        sip_last->next=sip_tmp;
+                    if(sip_tmp!=NULL)
+                        sip_last=sip_tmp;
+                    else {
+                        ErrPostEx(SEV_WARNING,0,0,"SeqLoc in StdSeg has NULL SeqLocId()\n");
+                    }
+                    numids++;
+                    slp=slp->next;
+                }
+                sip = ssp->ids;
+                if(numids!=ssp->dim) {
+                    ErrPostEx(SEV_WARNING,0,0,"Number of SeqLocs differs from SeqAlign ssp->dim\n");
+                    ssp->dim = numids;
+                }
+            }
+        }
+    } else if(salp->segtype==4) { /* Packed Seg. Optimal for editing alignments */
+        PackSegPtr psp;
+        psp = (PackSegPtr) salp->segs;
+        if (psp!=NULL)
+            sip = psp->ids;
+    } else if (salp->segtype ==5) {/* Assume that Linked list of SeqAlign set
+                                      always refers to the same set of sequences */
+        SeqAlignPtr salp_tmp;
+        salp_tmp = (SeqAlignPtr) salp->segs;
+        sip = SeqIdPtrFromSeqAlign(salp_tmp);
+    } else if (salp->segtype == 6) { /* Temporarely Supported SeqAlign Type */
+        CompSegPtr csp;
+        csp = (CompSegPtr) salp->segs;
+        sip = csp->ids;
+    } else {
+        ErrPostEx(SEV_WARNING,0,0,"Undefined Seqalign segtype=%d\n",(int)salp->segtype);
+    }
+    return sip;
+}
+NLM_EXTERN SeqIdPtr LIBCALL SeqAlignId (SeqAlignPtr salp, Int2 index)
+{
+  SeqIdPtr    sip = NULL;
+  Int2        j;
+
+  if (salp!=NULL) {
+     sip = SeqIdPtrFromSeqAlign(salp);
+     if (sip != NULL)
+     {
+        for (j=0; j<index; j++)
+           sip = sip->next;
+     }
+  }
+  return sip;
+}
+
+NLM_EXTERN Boolean LIBCALL SeqAlignFindSeqId (SeqAlignPtr salphead, SeqIdPtr sip)
+{
+  SeqAlignPtr salp;
+  SeqIdPtr    tmpsip;
+
+  for (salp = salphead; salp!= NULL; salp=salp->next)
+  {
+     tmpsip = SeqIdPtrFromSeqAlign (salp);
+     if ((SeqIdOrderInList(sip, tmpsip)) > 0)
+     {
+        return TRUE;
+     }
+  }
+  return FALSE;
+}
+
+NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignIdReplace (SeqAlignPtr salp, Int2 index, SeqIdPtr newsip)
+{
+  DenseSegPtr  dsp;
+  DenseDiagPtr ddp;
+  SeqIdPtr     sip = NULL,
+               presip;
+  Int2         j;
+
+  if (newsip==NULL)
+     return salp;
+  newsip = SeqIdDup(newsip);
+  if (salp!=NULL) {
+     if (salp->segtype == 2) {
+        dsp = (DenseSegPtr) salp->segs;
+        if (dsp!=NULL) {
+           sip = dsp->ids;
+           if (index==0)
+              dsp->ids = newsip;
+           else
+           {
+              presip = dsp->ids;
+              sip=sip->next;
+              for (j=0; j<index-1; j++, sip=sip->next)
+                 presip = presip->next;
+              presip->next = newsip;
+           }
+           newsip->next = sip->next;
+           sip->next = NULL;
+           SeqIdFree (sip);
+        }
+     } 
+     else if (salp->segtype == 1) {
+        ddp = (DenseDiagPtr) (salp->segs);
+        if(ddp!=NULL) {
+           sip = ddp->id;
+           if (index==0)
+              ddp->id = newsip;
+           else
+           {
+              presip = ddp->id;
+              sip=sip->next;
+              for (j=0; j<index-1; j++, sip=sip->next)
+                 presip = presip->next;
+              presip->next = newsip;
+           }
+           newsip->next = sip->next;
+           sip->next = NULL;
+           SeqIdFree (sip);
+        }
+     }
+  }
+  return salp;
+}
+
+
+
+/*
+  Returns the length (aligned bases+gaps(if type 2)) of a SeqAlign
+ */
+
+NLM_EXTERN Int4 LIBCALL SeqAlignLength (SeqAlignPtr salp)
+{
+  DenseSegPtr  dsp;
+  DenseDiagPtr ddp;
+  CompSegPtr   csp;
+  Int4Ptr      lenp;
+  Int4         lens = 0;
+  Int2         j;
+
+  if (salp!=NULL) {
+     if (salp->segtype == 2) {
+        dsp = (DenseSegPtr) salp->segs;
+        if (dsp) { 
+           lenp = (Int4Ptr) dsp->lens;
+           for (j=0; j<dsp->numseg; j++, lenp++)
+              lens += *lenp;
+        }
+     } 
+     else if (salp->segtype == 1) {
+       ddp = (DenseDiagPtr)salp->segs;
+       if(ddp!=NULL) 
+          lens=(Int4)ddp->len;
+     }
+     else if (salp->segtype == COMPSEG) {
+        csp = (CompSegPtr)salp->segs;      
+        if (csp) {
+          lenp = (Int4Ptr) csp->lens;
+          for (j=0; j<csp->numseg; j++, lenp++)
+             lens += *lenp;
+        }
+     }
+  }
+  return lens;
+}
+
+
+
+NLM_EXTERN Int4 LIBCALL SeqAlignLengthForId (SeqAlignPtr salp, SeqIdPtr sip)
+{
+  DenseSegPtr  dsp;
+  Int4Ptr      lenp, startp;
+  Int4         j,
+               length=0;
+  Int2         index;
+
+  if (salp==NULL)
+     return 0;
+  index = SeqIdOrderInList(sip,SeqIdPtrFromSeqAlign(salp));
+  if (index==0)
+     return 0;
+  if (salp->segtype == 2) {
+     dsp = (DenseSegPtr) salp->segs;
+     if (dsp) {
+        lenp = (Int4Ptr) dsp->lens;
+        startp= (Int4Ptr) dsp->starts;
+        startp = startp + (index-1);
+        for (j=0; j<dsp->numseg; j++, lenp++, startp += dsp->dim)
+        {
+           if (*startp > -1)
+              length += *lenp;
+        }
+     }
+  }
+  return length; 
+}
+
+
+/*
+  returns the Strand of the "indexed" (0,1,..) sequence.
+  Returns the first Strand that is not unknown.. and
+  assumes that all strands are the same in that SeqAlign Node.
+ */
+NLM_EXTERN Uint1 LIBCALL SeqAlignStrand (SeqAlignPtr salp, Int2 index)
+{
+  DenseDiagPtr ddp;
+  DenseSegPtr  dsp;
+  Int4         j = (Int4)index;
+  Uint1        strand = Seq_strand_unknown;
+
+  if (salp == NULL)
+     return 0;
+  if (salp->segtype == 1)
+  {
+     ddp = (DenseDiagPtr) salp->segs;
+     if (ddp != NULL) {
+        if ((Boolean)(ddp->strands != NULL))
+           strand = *(ddp->strands);
+     }
+  }
+  else if (salp->segtype == 2)
+  {
+     dsp = (DenseSegPtr) salp->segs;
+     if (dsp!=NULL)
+     {
+        if ((Boolean)(dsp->strands != NULL)) {
+           strand = (dsp->strands)[j];
+           while (strand!=Seq_strand_plus && strand!=Seq_strand_minus) {
+              j+=dsp->dim;
+              if (j >= (Int4)(dsp->dim*dsp->numseg))
+                 break;
+              strand = (dsp->strands)[j];
+           }
+        }
+     }
+  }
+  return strand;
+}
+
+NLM_EXTERN Int4 LIBCALL SeqAlignStart (SeqAlignPtr salp, Int2 index)
+{
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  CompSegPtr    csp;
+  Int4          j, 
+                val = -1;
+  Uint1         strand;
+  
+  if (salp == NULL)
+     return -1;
+  if (salp->segtype == 1) 
+  {
+      Int4Ptr       startp;
+      ddp = (DenseDiagPtr) salp->segs;
+      if (ddp != NULL) {
+          startp = ddp->starts;
+          if (index > 0)
+              startp += index;
+          val = *startp;
+      }
+  } else if (salp->segtype == 2)  {
+      Int4Ptr       startp;
+      strand = SeqAlignStrand (salp, index);
+      dsp = (DenseSegPtr) salp->segs;
+      if (dsp!=NULL) 
+          {
+              startp = dsp->starts;
+              if (index > 0)
+                  startp += index;
+              for (j = 0; j < dsp->numseg; j++, startp += dsp->dim) 
+                  if (*startp > -1)
+                      break;
+              if (j < dsp->numseg) {
+                  if (strand == Seq_strand_minus)
+                      val = *startp + dsp->lens[j] - 1;
+                  else
+              val = *startp;              
+              }
+          }
+  } else if (salp->segtype == 3) {
+      StdSegPtr ssp;
+      SeqLocPtr loc;
+      Int2 i;
+      ssp = (StdSegPtr) salp->segs;
+      val=-1;
+      while(val==-1 && ssp!=NULL) {
+          loc = ssp->loc;
+          for(i=0;i!=index && loc!=NULL;i++,loc=loc->next);
+          if(i==index && loc!=NULL)
+              val = SeqLocStart(loc);
+          ssp=ssp->next;
+      }
+  } else if (salp->segtype == COMPSEG) {
+          csp = (CompSegPtr) salp->segs;
+          val = csp->from[index];
+      }
+  return val;
+}
+
+NLM_EXTERN Int4 LIBCALL SeqAlignStop (SeqAlignPtr salp, Int2 index)
+{
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  CompSegPtr    csp;
+  Int4Ptr       startp;
+  BoolPtr       startb;
+  Int4          j, 
+                val = (Int4)-1;
+  Uint1         strand;
+  
+  if (salp == NULL)
+     return -1;
+  if (salp->segtype == 1) 
+  {
+     ddp = (DenseDiagPtr) salp->segs;
+     if (ddp != NULL) {
+        startp = ddp->starts;
+        if (index > 0)
+           startp += index;
+        val = *startp + ddp->len;
+     }
+  } 
+  else if (salp->segtype == 2) 
+  {
+     dsp = (DenseSegPtr) salp->segs;
+     if (dsp!=NULL) 
+     {
+        if ((Boolean)(dsp->strands != NULL))
+           strand = dsp->strands[index];
+        else
+           strand = Seq_strand_plus;
+        startp = dsp->starts + ((dsp->dim * dsp->numseg) - dsp->dim);
+        if (index > 0)
+           startp += index;
+        for (j = dsp->numseg-1; j >= 0; j--, startp-=dsp->dim) 
+           if (*startp > -1)
+              break;
+        if (j >= 0) {
+           if (strand == Seq_strand_minus)
+              val = *startp;
+           else
+              val = *startp + dsp->lens[j] - 1;              
+        }
+     }
+  } else if (salp->segtype == 3) {
+      StdSegPtr ssp;
+      SeqLocPtr loc;
+      Int2 i;
+      val =-1;
+      ssp = (StdSegPtr) salp->segs;
+      /* Find last non-gap segment */
+      while(ssp!=NULL) {
+          Int4 this_stop;
+          loc = ssp->loc;
+          for(i=0;i!=index && loc!=NULL;i++,loc=loc->next);
+          if(i==index && loc!=NULL)
+              this_stop = SeqLocStop(loc);
+          if(this_stop!=-1)
+              val=this_stop;
+          ssp=ssp->next;
+      }
+  }  else if (salp->segtype == COMPSEG)
+  {
+     csp = (CompSegPtr) salp->segs;
+     val = csp->from[index];
+     startb=csp->starts;
+     for (j=0; j<csp->numseg; j++)
+     {
+        if (*startb)
+           val+=csp->lens[j]; 
+        startb+=csp->dim;
+     } 
+  }
+  return val;
+}
+
+
+NLM_EXTERN Uint1 LIBCALL SeqAlignMolType (SeqAlignPtr salp)
+{
+  DenseSegPtr  dsp;
+  DenseDiagPtr ddp;
+  StdSegPtr    ssp;
+  BioseqPtr    bsp;
+  SeqIdPtr     sip = NULL;
+  Int2         k;
+  Int2         dim;
+  Uint1        moltype = 0;
+  Boolean      molb;
+ 
+  if (salp==NULL)
+     return FALSE;
+  if (salp->segtype == 1) {
+     ddp = (DenseDiagPtr) salp->segs;
+     sip = ddp->id;
+     dim = ddp->dim;
+  }
+  else if (salp->segtype == 2) {
+     dsp = (DenseSegPtr) salp->segs;
+     sip = dsp->ids;
+     dim = dsp->dim;
+  }
+  else if (salp->segtype == 3) {
+     ssp = (StdSegPtr) salp->segs;
+     sip = ssp->ids;
+     dim = ssp->dim; 
+  }
+  if (sip!=NULL) {
+   for (k = 0; k < dim && sip!=NULL; k++, sip = sip->next)
+   {
+     bsp = BioseqLockById (sip);
+     if (bsp!=NULL)
+     {   
+        break;
+     }
+   }
+   if (bsp!=NULL) {
+      moltype = bsp->mol;
+      molb = (Boolean) (ISA_aa(moltype));
+      BioseqUnlock (bsp);
+      for (; k < dim && sip!=NULL; k++, sip = sip->next)
+      {
+         bsp = BioseqLockById (sip);
+         if (bsp!=NULL)
+         {   
+            if ((Boolean) (ISA_aa(bsp->mol)) != molb) {
+               BioseqUnlock (bsp);
+               moltype = 0;
+               ErrPostEx (SEV_ERROR, 0, 0, "All Source Bioseq's are not Nucleotide");
+               break;
+            }
+            BioseqUnlock (bsp);
+         }
+      }
+   }
+  }
+  return moltype;
+}
+
+NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotForSeqAlign (SeqAlignPtr salp)
+{
+  SeqAnnotPtr sap;
+
+  if (salp==NULL)
+     return NULL;
+  sap = SeqAnnotNew ();
+  sap->type = 2;
+  sap->data = (Pointer) salp;
+  return sap;
+}
+
+
+
+/**********************************************************************
+*
+*       SeqAlignLink(head, new)
+*       link the new align to the end of head align. return the
+*       start of the linked chain
+*
+**********************************************************************/
+
+NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignLink(SeqAlignPtr head, SeqAlignPtr a_new)
+{
+        SeqAlignPtr curr;
+
+        curr = head;
+        if(curr!= NULL){
+                while(curr->next != NULL)
+                        curr= curr->next;
+                curr->next = a_new;
+                return head;
+        }
+        else
+                return a_new;
+
+}
+
+/***********************************************************************
+***    
+***    SeqLocListFromSeqAlign
+***      read SeqAlignPtr
+***      return list of ValNodePtr-SeqLocPtr
+***
+************************************************************************/
+NLM_EXTERN SeqLocPtr LIBCALL SeqLocListFromSeqAlign (SeqAlignPtr salp)
+{
+  SeqAlignPtr   salptmp;
+  ValNodePtr    vnp = NULL;
+
+  SeqLocPtr     slp;
+  SeqIdPtr      sip;
+  Int4          start, 
+                stop;
+  Uint1         strand; 
+  Int2          offset;
+  
+  if (salp==NULL) 
+     return NULL;
+  for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
+  {
+     sip = SeqAlignId (salptmp, 0);
+     if (sip != NULL)
+     {
+        offset = 0;
+        for (; sip != NULL; sip = sip->next)
+        {
+           start = SeqAlignStart (salptmp, offset);
+           stop = SeqAlignStop (salptmp, offset);
+           strand = SeqAlignStrand (salptmp, offset);
+           slp = SeqLocIntNew (start, stop, strand, sip);
+           if (slp!=NULL) {
+              ValNodeAddPointer (&vnp, 0, (Pointer) slp);
+           }
+           offset++;
+        }
+     }
+  }
+  return (SeqLocPtr) vnp;
+}
+
+/*
+  Returns A chain of "dim" SeqLocs representing the area covered by a
+  single SeqAlign
+ */
+
+NLM_EXTERN SeqLocPtr LIBCALL SeqLocFromSeqAlign (SeqAlignPtr salp, SeqIdPtr sip)
+{
+  SeqLocPtr     slp = NULL;
+  SeqIdPtr      sip1 = NULL, 
+                siptmp;
+  Int4          start, 
+                stop;
+  Uint1         strand; 
+  Int2          offset;
+ 
+  if (salp != NULL)
+  {
+     offset = 0;
+     sip1=SeqAlignId(salp, 0);
+     if (sip  == NULL)
+        siptmp = sip1;
+     else 
+     {
+        sip = SeqIdFindBest (sip, 0);
+        for (siptmp=sip1; siptmp!=NULL; siptmp=siptmp->next, offset++) {
+           if (SeqIdForSameBioseq (sip,siptmp))
+              break;
+        }
+     }
+     if (siptmp!=NULL)
+     {
+        start = SeqAlignStart (salp, offset);
+        stop = SeqAlignStop (salp, offset);
+        strand = SeqAlignStrand (salp, offset);
+        slp = SeqLocIntNew (start, stop, strand, siptmp);
+     }
+     
+  }
+  return slp; 
+}
+
+NLM_EXTERN void LIBCALL SeqAlignScoreRead(SeqAlignPtr seqalign,Int4Ptr Score,FloatHi PNTR Bit_Score,FloatHi PNTR Evalue) {
+    ScorePtr sp=NULL;
+    if(Score)
+        *Score=0;
+    if(Bit_Score)
+        *Bit_Score=0.0;
+    if(Evalue)
+        *Evalue=(FloatHi)INT_MAX;
+    if(seqalign!=NULL) {
+        for(sp=seqalign->score;sp!=NULL;sp=sp->next) {
+            if(sp->id!=NULL) {
+                if (StringCmp(sp->id->str,"e_value")==0) {
+                    if(Evalue)
+                        *Evalue=sp->value.realvalue;
+                } else if (StringCmp(sp->id->str,"sum_e")==0) {
+                    if(Evalue)
+                        *Evalue=sp->value.realvalue;
+                } else if (StringCmp(sp->id->str,"score")==0) {
+                    if(Score)
+                        *Score=sp->value.intvalue;
+                } else if (StringCmp(sp->id->str,"bit_score")==0) {
+                    if(Bit_Score)
+                        *Bit_Score=sp->value.realvalue;
+                }
+            }
+        }
+    }
+}
+
+NLM_EXTERN ScorePtr LIBCALL SeqAlignScorePtrGet(SeqAlignPtr salp) {
+  if(salp!=NULL) {
+    if(salp->score!=NULL) {
+        return salp->score;
+    } else if (salp->segtype == 1) {
+        DenseDiagPtr ddp;
+        ddp = (DenseDiagPtr) salp->segs;
+        return ddp->scores;
+    } else if (salp->segtype == 2) {
+        DenseSegPtr dsp;
+        dsp = (DenseSegPtr) salp->segs;
+        return dsp->scores;
+    } else if (salp->segtype == 3) {
+        /* e.g. for Translating searched */
+        StdSegPtr ssp;
+        ssp = (StdSegPtr) salp->segs;
+        return ssp->scores;
+    } else if (salp->segtype == 4) {
+        PackSegPtr psp;
+        psp = (PackSegPtr) salp->segs;
+        return psp->scores;
+    }
+  }
+  return NULL;
+}
+
+
+NLM_EXTERN FloatHi LIBCALL ScoreRead(ScorePtr score) {
+  if(score!=NULL) {
+    if(score->choice ==1) {
+      return (FloatHi) score->value.intvalue;
+    } else if(score->choice ==2) {
+      return (FloatHi) score->value.realvalue;
+    } else {
+      return (FloatHi) 0.0;
+    }
+  }
+ return (FloatHi)0.0;
+}
+
+
+/* Quick SeqAlign Output function: Can be used while Debugging 
+   to write to a file.
+ */
+NLM_EXTERN void LIBCALL SeqAlignWrite(SeqAlignPtr salp,CharPtr file) {
+    SeqAnnotPtr sap;
+    AsnIoPtr aip;
+    if(salp) {
+        aip=AsnIoOpen(file,"w");
+        sap = SeqAnnotForSeqAlign(salp);
+        if(sap) {
+            if (aip!=NULL) { 
+                SeqAnnotAsnWrite((SeqAnnotPtr) sap, aip, NULL);
+                AsnIoReset(aip); 
+            } 
+            sap->data=NULL;
+            SeqAnnotFree(sap);
+        } else {
+            ErrPostEx(SEV_WARNING,0,0,"NULL SeqAnnot from Non-NULL SeqAlign\n");
+        }
+        AsnIoClose(aip);
+    }
+}
+
+/* Simple SeqAlign printing function:
+   Can be used while debugging.. options kept to a minimum 
+   fp==NULL ==> stdout 
+*/
+NLM_EXTERN void LIBCALL SeqAlignPrint(SeqAlignPtr salp,FILE* fp) {
+    SeqAnnotPtr sap;
+    Int4 align_options;
+    if(salp) {
+        if(salp->segtype==5) {
+            sap = SeqAnnotForSeqAlign((SeqAlignPtr)salp->segs);
+        } else{
+            sap = SeqAnnotForSeqAlign(salp);
+        }
+        if(sap) {
+            align_options =TXALIGN_COMPRESS+TXALIGN_END_NUM+TXALIGN_MASTER+TXALIGN_MISMATCH;
+            ShowTextAlignFromAnnot(sap, 70, fp==NULL ? stdout : fp, NULL, NULL, align_options, NULL, NULL, FormatScoreFunc);
+
+            sap->data=NULL;
+            SeqAnnotFree(sap);
+        } else {
+            ErrPostEx(SEV_WARNING,0,0,"NULL SeqAnnot from Non-NULL SeqAlign\n");
+        }
+    }
+}
+
+/*
+  Subroutine to return the order of a Bioseq in a SeqId Chain 
+  
+  returns -1 as order if it fails.
+
+   */
+NLM_EXTERN void LIBCALL BioseqOrderInSeqIdList(SeqIdPtr sip,BioseqPtr bsp,Int4Ptr order) {
+
+    if(order)
+        *order=-1;
+    if(!order || !sip || !bsp)
+        return;
+    {
+        Int4 i;
+        for(i =0 ; sip != NULL; i++,sip = sip->next) {
+            if(*order ==-1 && BioseqMatch(bsp, sip)) {
+                *order = i;
+                break;
+            }
+        }
+    }
+    return;
+}
+
+/*
+  Subroutine to return the order (position) of two
+  sequences in a possibly multiple alignment.
+ */
+
+NLM_EXTERN void LIBCALL SeqAlignBioseqsOrder(SeqAlignPtr align,BioseqPtr query_bsp,BioseqPtr subject_bsp,Int4Ptr a_order, Int4Ptr b_order) {
+  if(align) {
+      SeqIdPtr sip;
+      sip =SeqIdPtrFromSeqAlign(align);
+      if(a_order) {
+          if(query_bsp) {
+              *a_order=-1;
+              BioseqOrderInSeqIdList(sip,query_bsp,a_order);
+          } else {
+              *a_order=0;
+          }
+      }
+      if(b_order) {
+          if(subject_bsp) {
+              *b_order=-1; 
+              BioseqOrderInSeqIdList(sip,subject_bsp,b_order);
+          } else {
+              *b_order=1;
+          }
+      }
+  }
+  return;
+}
+
+NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignListFree (SeqAlignPtr salp)
+{
+  SeqAlignPtr next;
+  while (salp!=NULL) {
+     next = salp->next;
+     salp->next = NULL;
+     SeqAlignFree (salp);
+     salp = next;
+  }
+  return NULL;
+}
+
+
+NLM_EXTERN Boolean LIBCALL SeqAlignStartStop(Int4Ptr a_start, Int4Ptr a_stop, Int4Ptr b_start, 
+			   Int4Ptr b_stop, 
+			   SeqAlignPtr align, BioseqPtr query_bsp, BioseqPtr subject_bsp)
+{
+  Int4 a_order=-1, b_order=-1, i;
+
+  if(align==NULL)
+      return FALSE;
+  SeqAlignBioseqsOrder(align,query_bsp,subject_bsp,&a_order, &b_order);
+  if(a_order == -1 || b_order == -1)
+      return FALSE;
+      if(a_start)
+          *a_start=-1;
+      if(b_start)
+          *b_start=-1;
+      if(a_stop)
+          *a_stop=-1;
+      if(b_stop)
+          *b_stop=-1;
+
+  if(align->segtype==1) {
+      DenseDiagPtr ddp;
+      Int4 lcl_a_start=-1,lcl_a_stop=-1,lcl_b_start=-1,lcl_b_stop=-1;
+      ddp=(DenseDiagPtr) align->segs;
+      while(ddp!=NULL) {
+          Int4 tmp;
+	  if((tmp=ddp->starts[a_order]) != -1) {
+	      if(a_start && (lcl_a_start == -1 || lcl_a_start > tmp))
+		  lcl_a_start = tmp;
+	      if(a_stop &&(lcl_a_stop == -1 || lcl_a_stop < (tmp + ddp->len -1)))
+		  lcl_a_stop= tmp + ddp->len -1;
+	  }
+	  if((tmp=ddp->starts[b_order]) != -1) {
+	      if(b_start && (lcl_b_start == -1 || lcl_b_start > tmp))
+		  lcl_b_start = tmp;
+	      if(b_stop && (lcl_b_stop == -1 || lcl_b_stop < (tmp + ddp->len -1)))
+		  lcl_b_stop= tmp + ddp->len -1;
+	  }
+	  ddp=ddp->next;
+      }
+      if(a_start)
+          *a_start=lcl_a_start;
+      if(b_start)
+          *b_start=lcl_b_start;
+      if(a_stop)
+          *a_stop=lcl_a_stop;
+      if(b_stop)
+          *b_stop=lcl_b_stop;
+  } else if (align->segtype==2) {
+      DenseSegPtr dsp;
+      Int4 lcl_a_start=-1,lcl_a_stop=-1,lcl_b_start=-1,lcl_b_stop=-1;
+      dsp = (DenseSegPtr) align->segs;
+      for(i = 0; i<dsp->numseg; ++i) {
+          Int4 ipos,jpos;
+          ipos=2*i+a_order;
+          jpos=2*i+b_order;
+          if(dsp->starts[ipos] != -1) {
+              if(a_start) {
+                  Int4 tmp = dsp->starts[ipos];
+                  if(lcl_a_start == -1 || lcl_a_start > tmp)
+                      lcl_a_start = tmp;
+              }
+              if(a_stop) {
+                  Int4 tmp = dsp->starts[ipos]+dsp->lens[i]-1;
+                  if(lcl_a_stop == -1 || lcl_a_stop < tmp) 
+                      lcl_a_stop = tmp;
+              }
+          }
+          if(dsp->starts[jpos] != -1) {
+              if(b_start) {
+                  Int4 tmp = dsp->starts[jpos];
+                  if(lcl_b_start == -1 || lcl_b_start > tmp)
+                      lcl_b_start = tmp;
+              }
+              if(b_stop) {
+                  Int4 tmp = dsp->starts[jpos]+dsp->lens[i]-1;
+                  if(lcl_b_stop == -1 || lcl_b_stop < tmp) 
+                      lcl_b_stop = tmp;
+              }
+          }
+      }
+      if(a_start)
+          *a_start=lcl_a_start;
+      if(b_start)
+          *b_start=lcl_b_start;
+      if(a_stop)
+          *a_stop=lcl_a_stop;
+      if(b_stop)
+          *b_stop=lcl_b_stop;
+  } else if (align->segtype==3) {
+        /* e.g. for Translating searched */
+
+      ErrPostEx(SEV_WARNING,0,0,"SeqAlignStartStop : Not yet SeqAlign Type=%d\n",align->segtype);
+  } else if (align->segtype==4) {
+      /* PackSegPtr psp;
+      psp = (PackSegPtr) align->segs; */
+      ErrPostEx(SEV_WARNING,0,0,"SeqAlignStartStop : Not yet SeqAlign Type=%d\n",align->segtype);
+  } else if (align->segtype==5) {
+      Int4 lcl_a_start=-1,lcl_b_start=-1,lcl_a_stop=-1,lcl_b_stop=-1;
+      SeqAlignPtr salp;
+      /* SeqAlignSet */
+      salp = (SeqAlignPtr) align->segs;
+      while(salp!=NULL) {
+          if(SeqAlignStartStop(&lcl_a_start, &lcl_a_stop, &lcl_b_start, &lcl_b_stop,
+                               salp, query_bsp, subject_bsp)) {
+              if(a_start && (*a_start ==-1 || *a_start>lcl_a_start))
+                  *a_start=lcl_a_start;
+              if(b_start && (*b_start ==-1 || *b_start>lcl_b_start))
+                  *b_start=lcl_b_start;
+              if(a_stop && (*a_stop ==-1 || *a_stop<lcl_a_stop))
+                  *a_stop=lcl_a_stop;
+              if(b_stop && (*b_stop ==-1 || *b_stop<lcl_b_stop))
+                  *b_stop=lcl_b_stop;
+          }
+          salp=salp->next;
+      }
+  } else {
+      ErrPostEx(SEV_WARNING,0,0,"SeqAlignStartStop : Unsupported SeqAlign Type=%d\n",align->segtype);
+  }
+  return ((!a_start || *a_start != -1) && (!a_stop || *a_stop != -1)  && (!b_start || *b_start != -1) && (!b_stop || *b_stop != -1));
+}
+
+/*
+  Find the Absolute Starts and Stops of a Linked List of SeqAlign.
+ */
+NLM_EXTERN void LIBCALL SeqAlignListStartStop(Int4Ptr qstart,Int4Ptr qstop,Int4Ptr sstart,Int4Ptr sstop,SeqAlignPtr salp, BioseqPtr query,BioseqPtr subject) {
+    Int4 qs,qe,ss,se;
+
+    if(qstart)
+        *qstart = -1;
+    if(sstart)
+        *sstart = -1;
+    if(qstop)
+        *qstop=-1;
+    if(sstop)
+        *sstop=-1;
+    while(salp!=NULL) {
+        if(SeqAlignStartStop(&qs,&qe,&ss,&se,salp,query,subject)) {
+            if(qstart && ((qs!=-1 && qs<*qstart) || *qstart==-1))
+                *qstart=qs;
+            if(sstart && ((ss!=-1 && ss<*sstart) || *sstart==-1))
+                *sstart=ss;
+            if(sstop && se!=-1 && se>*sstop)
+                *sstop=se;
+            if(qstop && qe!=-1 && qe>*qstop)
+                *qstop=qe;
+        }
+        salp=salp->next;
+    }
+}
+

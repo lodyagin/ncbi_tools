@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.87 $
+* $Revision: 6.92 $
 *
 * File Description: 
 *
@@ -46,6 +46,7 @@
 #include <sqnutils.h>
 #include <ncbi.h>
 #include <salutil.h>
+#include <salpacc.h>
 #include <salstruc.h>
 #include <salsap.h>
 #include <edutil.h>
@@ -53,6 +54,7 @@
 #include <bandalgn.h>
 #include <blast.h>
 #include <objalign.h>
+
 
 #ifdef SALSA_DEBUG
 #include <simutil.h>
@@ -182,12 +184,12 @@ extern CharPtr ReadBufferFromSap (CharPtr str, CharPtr buffer, SeqAlignPtr salp,
          ErrPostEx (SEV_ERROR, 0, 0, "fail in ReadBufferFromSap [3-3]\n");
          return NULL;
   }
-  index = position_inIdlist (sip, dsp->ids);
-  if (index == 0) {
+  index = SeqIdOrderInBioseqIdList (sip, dsp->ids);
+  if (index < 1) {
          ErrPostEx (SEV_ERROR, 0, 0, "fail in ReadBufferFromSap [3-4]");
          return NULL;
   }
-  index -= 1;
+  index -=1;
   dim = dsp->dim;
   dspfrom = *(dsp->from + index);
   dspstart = dsp->starts + index;
@@ -1043,7 +1045,8 @@ extern CharPtr matching_seqid (SeqIdPtr sip1)
 
   for (siptmp1 = sip1; siptmp1!=NULL; siptmp1=siptmp1->next) {
     first = TRUE;
-    for (siptmp2 = sip1; siptmp2!=NULL; siptmp2=siptmp2->next) {
+    for (siptmp2 = sip1; siptmp2!=NULL; siptmp2=siptmp2->next) 
+    {
        if (SeqIdForSameBioseq(siptmp1, siptmp2))  {
           if (first) 
              first = FALSE;
@@ -1187,24 +1190,6 @@ extern CharPtr PNTR SeqIdListToCharArray (SeqIdPtr id_list, Int2 n)
          SeqIdWrite (idtmp, idarray [k], PRINTID_FASTA_SHORT, 50);
   }
   return idarray;
-}
-
-/******************************************************************/
-extern Int2 position_inIdlist (SeqIdPtr a, SeqIdPtr b)
-{
-  SeqIdPtr siptmp;
-  Int2     index = 1;
-  Boolean  retval;
- 
-  if (a!=NULL && b!=NULL) 
-     for (siptmp = b; siptmp != NULL; siptmp = siptmp->next)
-     {
-        retval = SeqIdForSameBioseq (a, siptmp);
-        if (retval == TRUE)
-           return index;
-        index++;
-     }
-  return 0;
 }
 
 /******************************************************************/
@@ -2705,8 +2690,8 @@ extern Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
   if (dsp == NULL) {
      return GAP_RESIDUE;
   }
-  index = position_inIdlist (sip, dsp->ids);
-  if (index == 0) {
+  index = SeqIdOrderInBioseqIdList (sip, dsp->ids);
+  if (index < 1) {
      return GAP_RESIDUE;
   }
   index -= 1;
@@ -2739,17 +2724,14 @@ extern Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
            lensplus = abs (position - from - seqlens);
         seen = TRUE;
      }
-     else if (*dspstart && position <= stop) {
-/**
-        if (is_end == APPEND_RESIDUE ) 
-**/
-        {
+     else if (*dspstart && position <= stop 
+          /***/ && is_end == APPEND_RESIDUE ) /***!!!!!!!!!**********/
+     {
            if (dspstrand ==Seq_strand_minus)
               lensplus = abs (from + seqlens - position);
            else
               lensplus = abs (position - from - seqlens);
            seen = TRUE;
-        }
      }
      else if ( numseg == dsp->numseg ) 
      {
@@ -2809,8 +2791,8 @@ extern Int4 AlignCoordToSeqCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
   dsp = (CompSegPtr) salp->segs;
   if (dsp == NULL) 
      return (Int4)GAP_RESIDUE;
-  index = position_inIdlist (sip, dsp->ids);
-  if (index == 0) 
+  index = SeqIdOrderInBioseqIdList (sip, dsp->ids);
+  if (index < 1) 
      return (Int4)GAP_RESIDUE;
   index -= 1;
   from = *(dsp->from + index);
@@ -2920,8 +2902,8 @@ extern Int4 AlignCoordToSeqCoord2 (Int4 position, SeqIdPtr sip, SeqAlignPtr salp
   dsp = (CompSegPtr) salp->segs;
   if (dsp == NULL) 
      return (Int4)GAP_RESIDUE;
-  index = position_inIdlist (sip, dsp->ids);
-  if (index == 0) 
+  index = SeqIdOrderInBioseqIdList (sip, dsp->ids);
+  if (index < 1) 
      return (Int4)GAP_RESIDUE;
   index -= 1;
   from = *(dsp->from + index);
@@ -3621,7 +3603,7 @@ extern MashPtr MashNew (Boolean is_prot)
      msp->lg2_open =0; 
      msp->rg1_open =0; 
      msp->rg2_open =0; 
-     msp->blast_threshold = 80;
+     msp->blast_threshold = 50;
      msp->choice_blastfilter = 2;      /* 1 */
      msp->splicing = TRUE;              /*FALSE;*/
      msp->map_align = FALSE;
@@ -4327,7 +4309,6 @@ static SeqAlignPtr align_extrem (SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp
               slpstop1, slpstop2;
   Uint1       strand1, strand2;
   
-  CleanStrandsSeqAlign (salp);
   sip1 = SeqLocId(slp1);
   sip2 = SeqLocId(slp2);
   strand1 = SeqAlignStrand (salp, 0);
@@ -5045,45 +5026,6 @@ static SeqAlignPtr aaSeqAlign_to_dnaSeqAlignFunc (SeqAlignPtr PNTR salpnahead, S
   return *salpnahead;
 }
 
-static Boolean same_moltype (ValNodePtr list, Boolean *prot)
-{
-  ValNodePtr vnp;
-  BioseqPtr  bsp;
-  SeqLocPtr  slp;
-  Boolean    is_prot;
-  
-  if (list==NULL)
-     return FALSE;
-  vnp=list;
-  slp = (SeqLocPtr)vnp->data.ptrvalue;
-  bsp = BioseqLockById (SeqLocId (slp));
-  if (bsp!=NULL)
-  {
-     is_prot = ISA_aa(bsp->mol);
-     BioseqUnlock (bsp);
-     for (; vnp!=NULL; vnp=vnp->next)
-     {
-        slp = (SeqLocPtr)vnp->data.ptrvalue;
-        bsp = BioseqLockById (SeqLocId (slp));
-        if (bsp!=NULL) 
-        {
-           if (is_prot != ISA_aa(bsp->mol)) {
-              ErrPostEx(SEV_ERROR, 0, 0, "One imported sequence does not have the same molecule type");
-              BioseqUnlock (bsp);
-              return FALSE;
-           }
-           BioseqUnlock (bsp);
-        }
-        else {
-           ErrPostEx(SEV_ERROR, 0, 0, "Can not find one Bioseq");
-           return FALSE;
-        }
-     }        
-  }
-  *prot = is_prot;
-  return TRUE;
-}
-
 static SeqAlignPtr AlignAnyway (SeqLocPtr slp1, SeqLocPtr slp2, Boolean is_prot, MashPtr msp, Boolean message)
 {
   SeqAlignPtr salp,
@@ -5260,10 +5202,6 @@ extern SeqAlignPtr SeqLocListToSeqAlign (ValNodePtr sqloc_list, Int2 choice, Poi
      ErrPostEx(SEV_WARNING, 0, 0, "Can not read master sequence");
      return NULL;
   }
-  if (!same_moltype (sqloc_list, &is_prot)) {
-     ErrPostEx(SEV_WARNING, 0, 0, "Different mol_type");
-     return NULL;
-  }  
   seq_number = 1;
   msp = (MashPtr)param;
   if (msp == NULL) {

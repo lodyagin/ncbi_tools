@@ -589,6 +589,8 @@ and variety. For example, [org=Homo sapiens] [cell-line=HeLa].
 Some population studies are a mixture of integrated provirus and excised virion.
 These can be indicated by molecule and location qualifiers. For example,
 [molecule=dna] [location=proviral] or [molecule=rna] [location=virion].
+You can also embed [moltype=genomic] or [moltype=mRNA] to indicate from what
+source the molecule was isolated.
 If you're unsure of which modifier to use, use [note=...], and database staff will
 determine the appropriate modifier to use.
 
@@ -1137,20 +1139,24 @@ begin data;
         matrix
 
 [     1                                                   50]
-ABC-1 ???ATTGCGT TATGGAAATT CGAAACTGCC AAATACTATG TCACCATCAT
-ABC-2 GATATTGCTT TATGGAAATT CGAAACTGCC AAATACTATG TCACCATCAT
-ABC-3 ???ATTGCTT TATGGAAATT CGAAACTGCC AAATACTATG TTA-------
+ABC_1 ???ATTGCGT TATGGAAATT CGAAACTGCC AAATACTATG TCACCATCAT
+ABC_2 GATATTGCTT TATGGAAATT CGAAACTGCC AAATACTATG TCACCATCAT
+ABC_3 ???ATTGCTT TATGGAAATT CGAAACTGCC AAATACTATG TTA-------
 
 [     51                                                 100]
-ABC-1 TGATGCACCT GGACACAGAG ATTTCATCAA GAACATGATC ACTGGTACTT
-ABC-2 TGATGCACCT GGACACAGAA ATTTCATCAA GAACATGATC ACTGGTACTT
-ABC-3 TGATGCACCT GGACACAGAG ATTTCATCAA AAACATGATC ACTGGTACTT
+ABC_1 TGATGCACCT GGACACAGAG ATTTCATCAA GAACATGATC ACTGGTACTT
+ABC_2 TGATGCACCT GGACACAGAA ATTTCATCAA GAACATGATC ACTGGTACTT
+ABC_3 TGATGCACCT GGACACAGAG ATTTCATCAA AAACATGATC ACTGGTACTT
 ;
-ENDBLOCK;
+END;
 
+begin ncbi;
+sequin
 >[org=Saccharomyces cerevisiae][strain=ABC][clone=1]
 >[org=Saccharomyces cerevisiae][strain=ABC][clone=2]
 >[org=Saccharomyces cerevisiae][strain=ABC][clone=3]
+;
+end;
 </pre>
 
 <p align="left">
@@ -1164,19 +1170,25 @@ begin data;
         format datatype=dna  missing=? gap=-  ;
         matrix
 
-ABC-1   
+ABC_1   
 ???ATTGCGT TATGGAAATT CGAAACTGCC AAATACTATG TCACCATCAT
 TGATGCACCT GGACACAGAG ATTTCATCAA GAACATGATC ACTGGTACTT
-ABC-2  
+ABC_2  
 GATATTGCTT TATGGAAATT CGAAACTGCC AAATACTATG TCACCATCAT
 TGATGCACCT GGACACAGAA ATTTCATCAA GAACATGATC ACTGGTACTT
-ABC-3  
+ABC_3  
 ???ATTGCTT TATGGAAATT CGAAACTGCC AAATACTATG TTA-------
 TGATGCACCT GGACACAGAG ATTTCATCAA AAACATGATC ACTGGTACTT
+;
+END;
 
+begin ncbi;
+sequin
 >[org=Saccharomyces cerevisiae][strain=ABC][clone=1]
 >[org=Saccharomyces cerevisiae][strain=ABC][clone=2]
 >[org=Saccharomyces cerevisiae][strain=ABC][clone=3]
+;
+end;
 </pre>
 
 <p align="left">

@@ -25,6 +25,12 @@
 **************************************************************************/
 /* $Revision 1.0$ */ 
 /* $Log: blastall.c,v $
+/* Revision 6.30  1999/03/31 16:58:04  madden
+/* Removed static FindProt and FindNuc
+/*
+/* Revision 6.29  1999/02/10 21:12:26  madden
+/* Added HTML and GI list option, fixed filtering
+/*
 /* Revision 6.28  1999/01/22 17:24:51  madden
 /* added line breaks for alignment views
 /*
@@ -185,37 +191,8 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 	return 0;
 }
 
-/* find the last nucleotide bioseq in the bioseqset */
-static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
 
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_na(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
-
-/* find the last protein bioseq in the bioseqset */
-static void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-    BioseqPtr PNTR bp;
-    BioseqPtr local_bsp;
-
-    bp = (BioseqPtr PNTR) data;
-    if (IS_Bioseq(sep))
-    {
-        local_bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (ISA_aa(local_bsp->mol))
-          *bp = local_bsp;
-    }
-}
-
-#define NUMARG 29
+#define NUMARG 31
 
 static Args myargs [NUMARG] = {
  { "Program Name",
@@ -276,6 +253,10 @@ static Args myargs [NUMARG] = {
         "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
   { "Query strands to search against database (for blast[nx], and tblastx).  3 is both, 1 is top, 2 is bottom",
         "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
+  { "Produce HTML output",
+        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Restrict search of database to list of GI's",
+	NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
@@ -289,6 +270,7 @@ Int2 Main (void)
 	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
 	BlastPruneSapStructPtr prune;
 	Boolean db_is_na, query_is_na, show_gi, believe_query=FALSE;
+	Boolean html=FALSE;
 	Char buffer[256];
 	CharPtr ret_buffer=NULL, params_buffer=NULL;
 	Int4 number_of_descriptions, number_of_alignments;
@@ -321,6 +303,8 @@ Int2 Main (void)
         blast_database = myargs [1].strvalue;
         blast_inputfile = myargs [2].strvalue;
         blast_outputfile = myargs [5].strvalue;
+	if (myargs[29].intvalue)
+		html = TRUE;
 
 	if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
 	{
@@ -458,6 +442,17 @@ Int2 Main (void)
                         align_options += TXALIGN_SHOW_QS;
 	}
 
+	if (html)
+	{
+                align_options += TXALIGN_HTML;
+                print_options += TXALIGN_HTML;
+	}
+
+	if (myargs[30].strvalue)
+	{
+		options->gifile = StringSave(myargs[30].strvalue);
+	}
+
 	while ((sep=FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query)) != NULL) 
 	{
 		query_bsp = NULL;
@@ -486,13 +481,15 @@ Int2 Main (void)
 
 		global_fp = outfp;
 
+		if (html)
+			fprintf(outfp, "<PRE>\n");
 		init_buff_ex(90);
-		BlastPrintVersionInfo(blast_program, FALSE, outfp);
+		BlastPrintVersionInfo(blast_program, html, outfp);
 		fprintf(outfp, "\n");
-		BlastPrintReference(FALSE, 90, outfp);
+		BlastPrintReference(html, 90, outfp);
 		fprintf(outfp, "\n");
-		AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, FALSE);
-                PrintDbInformation(blast_database, !db_is_na, 70, outfp, FALSE);
+		AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
+                PrintDbInformation(blast_database, !db_is_na, 70, outfp, html);
                 free_buff();
 
 #ifdef OS_UNIX

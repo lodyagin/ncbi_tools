@@ -1,7 +1,7 @@
 #ifndef NCBISOCK__H
 #define NCBISOCK__H
 
-/*  $RCSfile: ncbisock.h,v $  $Revision: 4.7 $  $Date: 1999/01/22 22:05:00 $
+/*  $RCSfile: ncbisock.h,v $  $Revision: 4.14 $  $Date: 1999/03/11 15:20:15 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,22 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbisock.h,v $
+* Revision 4.14  1999/03/11 15:20:15  vakatov
+* Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
+*
+* Revision 4.13  1999/03/04 20:56:50  vakatov
+* Removed the "Nlm_STimeout" typedef -- it went to "ncbistd.h"
+* Dont include <ncbistd.h> here
+*
+* Revision 4.10  1999/02/12 20:31:44  vakatov
+* Added "SOCK_ReadPersist()"
+*
+* Revision 4.9  1999/02/09 21:52:42  vakatov
+* Added "SOCK_Reconnect()"
+*
+* Revision 4.8  1999/02/03 23:22:39  vakatov
+* Declared Nlm_htonl() as NLM_EXTERN
+*
 * Revision 4.7  1999/01/22 22:05:00  vakatov
 * Uint4toInaddr() to take address in the network byte order
 *
@@ -51,7 +67,6 @@
 * ==========================================================================
 */
 
-#include <ncbistd.h>
 
 /* for ErrPost */
 #define SOCK_ERRCODE  777
@@ -76,7 +91,10 @@
 #define SOCK_SetTimeout    Nlm_SOCK_SetTimeout
 #define SOCK_Select        Nlm_SOCK_Select
 #define SOCK_Read          Nlm_SOCK_Read
+#define SOCK_ReadPersist   Nlm_SOCK_ReadPersist
+#define SOCK_Peek          Nlm_SOCK_Peek
 #define SOCK_Write         Nlm_SOCK_Write
+#define SOCK_Reconnect     Nlm_SOCK_Reconnect
 #define SOCK_Close         Nlm_SOCK_Close
 
 
@@ -97,6 +115,8 @@ typedef struct Nlm_LSOCKtag *LSOCK; /* listening socket:  handle */
 struct Nlm_SOCKtag;               /* socket:  internal storage  */
 typedef struct Nlm_SOCKtag *SOCK; /* socket:  handle */
 
+/* Error code
+ */
 typedef enum
 {
   eSOCK_ESuccess = 0, /* everything is fine, no errors occured          */
@@ -107,16 +127,13 @@ typedef enum
 } ESOCK_ErrCode;
 
 
+/* I/O direction
+ */
 typedef enum {
   eSOCK_OnRead,
   eSOCK_OnWrite,
   eSOCK_OnReadWrite
 } ESOCK_Mode;
-
-typedef struct {
- Nlm_Uint4 sec;   /* seconds(get truncated to platform-dep. max. limit) */
- Nlm_Uint4 usec;  /* microseconds(always get truncated to 10**6)        */
-} STimeout;
 
 
 /* Return (const) verbal description for the passed error code
@@ -155,12 +172,29 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Close
 
 
 /* [CLIENT-side]  Connect client to another(server-side, listening) socket
- * (socket() + connect())
+ * (socket() + connect() [+ select()])
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_Create
-(const Nlm_Char *host, /* [in] server host */
- Nlm_Uint2       port, /* [in] server port */
- SOCK           *sock  /* [out]  handle of the created socket */
+(const Nlm_Char *host,    /* [in] server host */
+ Nlm_Uint2       port,    /* [in] server port */
+ const STimeout *timeout, /* [in] the connect timeout */
+ SOCK           *sock     /* [out] handle of the created socket */
+);
+
+
+/* [CLIENT-side]  Close the socket referred by "sock" and then connect
+ * it to another "host:port";  fail if it takes more than "timeout".
+ * (close() + connect() [+ select()])
+ *
+ * HINT: if "host" is NULL then connect to the same host address as before
+ *       if "port" is zero then connect to the same port # as before
+ * NOTE: "new" socket inherits the i/o timeouts,
+ */
+NLM_EXTERN ESOCK_ErrCode SOCK_Reconnect
+(SOCK            sock,    /* [in/out] handle of the socket to reconnect */
+ const Nlm_Char *host,    /* [in] server host */
+ Nlm_Uint2       port,    /* [in] server port */
+ const STimeout *timeout  /* [in] the connect timeout */
  );
 
 
@@ -212,6 +246,19 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Read
  Nlm_Uint4   size,
  Nlm_Uint4  *n_read
  );
+
+
+/* Operate just like SOCK_Read() but it pessistently tries to read *exactly*
+ * "size" bytes, and it reads again and again -- until timeout expiration or
+ * error 
+ */
+NLM_EXTERN ESOCK_ErrCode SOCK_ReadPersist
+(SOCK        sock,
+ Nlm_VoidPtr buf,
+ Nlm_Uint4   size,
+ Nlm_Uint4  *n_read
+ );
+
 
 /* Operate just like SOCK_Read() but dont remove the read data from the
  * input queue
@@ -271,7 +318,7 @@ NLM_EXTERN Nlm_Boolean Uint4toInaddr
  );
 
 /* KLUDGE(dont use this beast, please) */
-extern Nlm_Uint4 Nlm_htonl(Nlm_Uint4 value);
+NLM_EXTERN Nlm_Uint4 Nlm_htonl(Nlm_Uint4 value);
 
 
 #ifdef __cplusplus

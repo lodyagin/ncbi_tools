@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-09-17
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: nucleotide or peptide pattern match
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: searchv.c,v $
+* Revision 6.2  1999/03/13 03:43:45  kuzio
+* cast
+*
 * Revision 6.1  1998/09/21 14:49:38  kuzio
 * vibrant srchaa srchnt
 *
@@ -469,7 +472,7 @@ static SegmenT PlotSites (BioseqPtr bsp, SeqLocPtr slp, CharPtr name,
     StrCpy (tname, name);
     if (StrLen (tname) > 10)
       tname[10] = '\0';
-    sprintf (buffer, "%10s %6ld", tname, count);
+    sprintf (buffer, "%10s %6ld", tname, (long) count);
     AddLabel (seg, length, top-5, buffer, SMALL_TEXT, 0, MIDDLE_RIGHT, 0);
   }
   return seg;

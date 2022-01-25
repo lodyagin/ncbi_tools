@@ -31,7 +31,13 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2mage.c,v $
- * Revision 6.6  1998/10/14 17:17:35  addess
+ * Revision 6.8  1999/05/07 13:53:02  zimmerma
+ * Changed call to InstBSAnnotSet() to pass Chain and SlaveChain params
+ *
+ * Revision 6.7  1999/02/10 14:42:53  addess
+ * fixed problem with not being able to read new files
+ *
+ * Revision 6.6  1998/10/14  17:17:35  addess
  * sending aligned chains to MAGE
  *
  * Revision 6.5  1998/07/17  18:47:15  madej
@@ -377,8 +383,7 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 	AsnIoPtr aip = NULL; 
 	Byte bRender;
 	Char *IPAddress = getenv("REMOTE_HOST");
- 
-
+        Boolean Chain;
 
 	if ((indx = WWWFindName(www_info, "uid")) < 0) {
 		printf("Content-type: text/html\n\n");
@@ -496,7 +501,7 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 	OpenMMDBAPI((POWER_VIEW /* ^ FETCH_ENTREZ */), NULL);
 
 	if (JobID == NULL)
-		pbsa = VASTBsAnnotSetGet(GetGi);
+		pbsa = VASTBsAnnotSetGet(Fsid);
 	else
 		pbsa = LocalGetFeatureSet(GetGi, Fsid, JobID);
 
@@ -536,10 +541,8 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 	 * between the two.  It looks like the slaves are loaded in the latter routine.
 	 * InstBSAnnotSet calls BiostrucAddFeature.
 	 */
-	if ((JobID == NULL) && (Chain == FALSE))
-          InstBSAnnotSet(pbsaShort);
-        else
-          InstBSAnnotSetVS(pbsaShort, JobID);
+
+        InstBSAnnotSet(pbsaShort, JobID, Chain, VSPATH); /* now uses mmdbapi1 version */
 	pdnmsMaster = GetMasterModelstruc();
 	/***** This is causing a problem at line 126, where pmsdThis->pbsBS does not exist!
 	pdnmsMaster = GetSelectedModelstruc();

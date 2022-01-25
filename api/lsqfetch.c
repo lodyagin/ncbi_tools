@@ -37,6 +37,12 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.4  1999/04/01 22:26:13  sicotte
+* Make lsqfetch Attempt to Parse the fasta defline, otherwise use the supplied SeqId
+*
+* Revision 6.3  1999/03/11 23:39:33  kans
+* sprintf and sscanf casts
+*
 * Revision 6.2  1998/02/06 17:41:33  zjing
 * make the function CheckDnaResidue external
 *
@@ -44,6 +50,12 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.4  1999/04/01 22:26:13  sicotte
+* Make lsqfetch Attempt to Parse the fasta defline, otherwise use the supplied SeqId
+*
+* Revision 6.3  1999/03/11 23:39:33  kans
+* sprintf and sscanf casts
+*
 * Revision 6.2  1998/02/06 17:41:33  zjing
 * make the function CheckDnaResidue external
 *
@@ -167,7 +179,7 @@ static SeqEntryPtr Sep_from_ByteStore(ByteStorePtr bsp, Int4 length, Boolean is_
 
 }
 
-static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is_DNA)
+static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is_DNA,SeqIdPtr PNTR sip)
 {
    Int4 n_len, pos, seq_len;
    Char temp[1001];
@@ -176,8 +188,9 @@ static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is
    Boolean is_found, is_end;
    Boolean check_DNA = FALSE;
    Int4 i;
- 
- 
+
+   if(sip)
+       *sip=NULL;
 	if(name != NULL)
 	{
 		rewind(ifp);
@@ -189,17 +202,33 @@ static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is
 		if(temp[0] == '>')
 		{
 			if(name!=NULL)
-			{
+ 			{
 				i = 1;
 				while(IS_WHITESP(temp[i]))
 					++i;
-				if(StringNCmp(temp+i, name, (size_t)n_len) ==0)
-					is_found = TRUE;
-				else
+				if(StringNCmp(temp+i, name, (size_t)n_len) ==0) {
+                                    is_found = TRUE;
+                                    if(sip)
+                                        *sip = SeqIdParse(temp+i);
+				} else
 					is_found = FALSE;
 			}
-			else
-				is_found = TRUE;
+			else {
+                            i=1;
+                            while(IS_WHITESP(temp[i]))
+                                    ++i;
+                            if(sip) {
+                                CharPtr blank;
+                                blank = StringChr(temp+i,' ');
+                                if(blank)
+                                    *blank='\0';
+                                *sip = SeqIdParse(temp+i);
+                                if(blank)
+                                    *blank=' ';
+                                
+                            }                            
+                            is_found = TRUE;
+                        }
 		}
 		if(is_found)
 		{
@@ -214,7 +243,6 @@ static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is
 					seq_len += (StringLen(temp) -1);
 			}
 		}
-				
 	}
 
 
@@ -270,10 +298,12 @@ NLM_EXTERN SeqEntryPtr fasta_lib_sep(FILE *fp, CharPtr seq_name, SeqIdPtr sip)
 	ByteStorePtr bsp;
 	Int4 length;
 	Boolean is_dna;
-
-	if((bsp = make_lib(fp, seq_name, &length, &is_dna)) != NULL)
-		return Sep_from_ByteStore(bsp, length, is_dna, sip);
-	else
+        SeqIdPtr sipnew;
+	if((bsp = make_lib(fp, seq_name, &length, &is_dna,&sipnew)) != NULL) {
+            if(sipnew)
+                sip=sipnew;
+            return Sep_from_ByteStore(bsp, length, is_dna, sip);
+	} else
 		return NULL;
 }
 
@@ -525,7 +555,7 @@ NLM_EXTERN Boolean seqid_to_string(SeqIdPtr sip, CharPtr name, Boolean use_locus
             if(obj_id->str)
                 StringCpy(name, obj_id->str);
             else
-                sprintf(name, "%ld", obj_id->id);
+                sprintf(name, "%ld", (long) obj_id->id);
             break;
 
           case 5:       /**genbank**/
@@ -549,7 +579,7 @@ NLM_EXTERN Boolean seqid_to_string(SeqIdPtr sip, CharPtr name, Boolean use_locus
             if(obj_id->str)
               StringCpy(name, obj_id->str);
             else
-                sprintf(name, "%ld", obj_id->id);
+                sprintf(name, "%ld", (long) obj_id->id);
             break;
  
           case 4:       /**giim**/

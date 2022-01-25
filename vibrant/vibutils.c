@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.22 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.22  1999/03/21 18:44:05  kans
+* needed ampsersand before creatorType in MemSet
+*
+* Revision 6.19  1999/02/03 23:26:18  vakatov
+* Nlm_ProcessKeydown() to return "TRUE" when moving the input focus
+*
 * Revision 6.15  1999/01/13 20:49:37  vakatov
 * Nlm_Execv():  precations for the MT applications
 *
@@ -287,11 +293,11 @@
 #include <vibincld.h>
 #include <ncbiport.h>
 
-/*
 #ifdef WIN_MAC
+#ifdef PROC_PPC
 #include <Navigation.h>
 #endif
-*/
+#endif
 
 #ifdef WIN_MAC
 Nlm_Int2     Nlm_nextIdNumber = 2;
@@ -4218,8 +4224,8 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 }
 #endif
 
-#ifndef OS_MAC /* these ifdefs guarantee this block is not compiled */
-#ifdef WIN_MAC
+#ifdef OS_MAC
+#ifdef PROC_PPC
 static pascal void MyNavEventProc (NavEventCallbackMessage callBackSelector,
                                    NavCBRecPtr callBackParms,
                                    NavCallBackUserData callBackUD)
@@ -4266,8 +4272,8 @@ static pascal Boolean MyNavFilterProc (AEDesc* theItem, void* info,
 #endif
 #endif
 
-#ifndef OS_MAC /* these ifdefs guarantee this block is not compiled */
-#ifdef WIN_MAC
+#ifdef OS_MAC
+#ifdef PROC_PPC
 static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                                 Nlm_CharPtr extType, Nlm_CharPtr macType)
 
@@ -4382,11 +4388,11 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   Nlm_Char       str [5];
   Nlm_PoinT      where;
 
-  /*
+#ifdef PROC_PPC
   if (Nlm_usesMacNavServices) {
     return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
   }
-  */
+#endif
   where.x = 90;
   where.y = 100;
   lengthTypes = sizeof (fileTypes);
@@ -4610,8 +4616,8 @@ static void Nlm_CopyDefaultName (Nlm_CharPtr dst, Nlm_CharPtr src)
 }
 #endif
 
-#ifndef OS_MAC /* these ifdefs guarantee this block is not compiled */
-#ifdef WIN_MAC
+#ifdef OS_MAC
+#ifdef PROC_PPC
 static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                                  Nlm_CharPtr dfault)
 
@@ -4622,7 +4628,7 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
     AEDesc              defaultLocation;
     FSSpec              fss;
     OSType              fileTypeToSave = 'TEXT';
-    OSType              creatorType = '????';
+    OSType              creatorType;
     NavEventUPP         eventProc = NewNavEventProc (MyNavEventProc);
 	char                filename [256];
 	Nlm_Boolean         rsult = FALSE;
@@ -4645,6 +4651,7 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
             Nlm_StringNCpy_0 ((Nlm_CharPtr) dialogOptions.savedFileName, dfault, 255);
             Nlm_CtoPstr ((Nlm_CharPtr) dialogOptions.savedFileName);
 
+            Nlm_MemSet ((void *) &creatorType, '?', 4);
             anErr = NavPutFile( &defaultLocation, &reply, &dialogOptions, eventProc,
                                 fileTypeToSave, creatorType, 0 );
             if (anErr == noErr && reply.validRecord)
@@ -4713,11 +4720,11 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   PenState       state;
   Nlm_PoinT      where;
 
-  /*
+#ifdef PROC_PPC
   if (Nlm_usesMacNavServices) {
     return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
   }
-  */
+#endif
   where.x = 90;
   where.y = 100;
   GetPenState (&state);
@@ -5316,6 +5323,22 @@ extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, N
     StringNCpy_0 (type, (Nlm_CharPtr) (&fType), 5);
     StringNCpy_0 (creator, (Nlm_CharPtr) (&fCreator), 5);
   }
+}
+#endif
+
+
+#ifdef WIN_MSWIN
+extern Nlm_Boolean Nlm_MSWin_OpenDocument(const Nlm_Char* doc_name)
+{
+  int status = (int)ShellExecute(0, "open", doc_name,
+                                 NULL, NULL, SW_SHOWNORMAL);
+  if (status <= 32) {
+    Nlm_ErrPostEx(SEV_WARNING, 0, 0,
+                  "Unable to open document \"%s\", error=%d",
+                  doc_name, status);
+    return FALSE;
+  }
+  return TRUE;
 }
 #endif
 
@@ -6278,6 +6301,7 @@ extern Nlm_Boolean Nlm_ProcessKeydown(Nlm_GraphiC g, WPARAM wParam,
     }
 
   Nlm_DoSendFocus(g, ch);
+  return TRUE;
 }
 #endif
 

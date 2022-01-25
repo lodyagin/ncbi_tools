@@ -1,6 +1,32 @@
+/**************************************************************************
+*                                                                         *
+*                             COPYRIGHT NOTICE                            *
+*                                                                         *
+* This software/database is categorized as "United States Government      *
+* Work" under the terms of the United States Copyright Act.  It was       *
+* produced as part of the author's official duties as a Government        *
+* employee and thus can not be copyrighted.  This software/database is    *
+* freely available to the public for use without a copyright notice.      *
+* Restrictions can not be placed on its present or future use.            *
+*                                                                         *
+* Although all reasonable efforts have been taken to ensure the accuracy  *
+* and reliability of the software and data, the National Library of       *
+* Medicine (NLM) and the U.S. Government do not and can not warrant the   *
+* performance or results that may be obtained by using this software,     *
+* data, or derivative works thereof.  The NLM and the U.S. Government     *
+* disclaim any and all warranties, expressed or implied, as to the        *
+* performance, merchantability or fitness for any particular purpose or   *
+* use.                                                                    *
+*                                                                         *
+* In any work or product derived from this material, proper attribution   *
+* of the author(s) as the source of the software or data would be         *
+* appreciated.                                                            *
+*                                                                         *
+**************************************************************************/
 #include <txalign.h>
 #include <codon.h>
 #include <ncbimisc.h>
+#include <salpacc.h>
 
 #define BUFFER_LENGTH 512
 #define MIN_INS_SPACE 50
@@ -24,6 +50,8 @@ typedef struct _txdfline_struct {
 	Boolean found_score;
 	Boolean isnew;		/* used to print mark "new.gif" near defline */
 	Boolean waschecked;	/* used to print some another .gif near such defline */
+	CharPtr segs_str;
+	size_t segs_buflen;
 } TxDfLineStruct, *TxDfLineStructPtr;
 
 
@@ -32,8 +60,8 @@ static Int4 get_num_empty_space(Boolean compress)
 	return (compress ? (8+5 +1) : B_SPACE+POS_SPACE+STRAND_SPACE +1);
 }
 
-static Int4 SeqAlignStart(SeqAlignPtr salp, Int2 index);
-static Int4 SeqAlignStop(SeqAlignPtr salp, Int2 index);
+static Boolean SeqAlignSegsStr(SeqAlignPtr salp, Int2 index, CharPtr *dst, size_t *size);
+static CharPtr StringAppend(CharPtr *dst, size_t *size, CharPtr src);
 
 
 static ValNodePtr ProcessTextInsertion PROTO((AlignNodePtr anp, Int4 m_left, Int4 m_right, BioseqPtr bsp, Int4 line_len, Int1 frame));
@@ -368,6 +396,11 @@ static Int1 get_alignment_frame(ValNodePtr anp_list, BioseqPtr m_bsp)
 *
 *       Given a chain of annots (ValNodePtrs) they are all printed out, one pattern
 *       at a time.
+*	
+*	For a give annot all alignments from one database sequence are assumed to be grouped together.
+*	
+*	The Alignments from one databases sequence are currently ranked by expect value.
+*	It has been suggested that this be changed and should not be relied on indefinitely.
 *
 *************************************************************************************/
 
@@ -403,7 +436,7 @@ ShowTextAlignFromAnnotExtra(BioseqPtr bsp, ValNodePtr vnp, SeqLocPtr seqloc,
                 sfp->data.value.ptrvalue = StringSave("pattern");
                 annot->data = sfp;
                 fprintf(fp, "\nSignificant alignments for pattern occurrence %ld at position %ld\n\n",
-                        index, SeqLocStart(seqloc)+1);
+                        (long) index, (long) (SeqLocStart(seqloc)+1));
                 ShowTextAlignFromAnnot(seqannot, line_len, fp, featureOrder, groupOrder, option, matrix, mask_loc, fmt_score_func);
                 seqloc->next = next;
                 seqloc = seqloc->next;
@@ -440,13 +473,13 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot(SeqAnnotPtr hannot, Int4 line_len, FIL
 	ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
 {
 	return ShowTextAlignFromAnnot2(hannot, line_len, fp, featureOrder,
-		groupOrder, option, matrix, mask_loc, fmt_score_func, NULL);
+		groupOrder, option, matrix, mask_loc, fmt_score_func, NULL, NULL);
 }
 
 NLM_EXTERN Boolean ShowTextAlignFromAnnot2(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, 
 	Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, 
 	ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)),
-	CharPtr db_name)
+	CharPtr db_name, CharPtr www_blast_type)
 {
 	SeqAlignPtr align, h_align, n_align, prev;
 	SeqLocPtr m_loc;
@@ -611,7 +644,7 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot2(SeqAnnotPtr hannot, Int4 line_len, FI
 				m_bsp->seq_data_type = code;
 			}
 		}
-		retval = ShowAlignNodeText2(anp_node, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name);
+		retval = ShowAlignNodeText2(anp_node, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type);
 		FreeAlignNode(anp_node);
 	}
 	else
@@ -656,12 +689,12 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot2(SeqAnnotPtr hannot, Int4 line_len, FI
 
 					if(annot_head != NULL)
 					{
-						retval = ShowAlignNodeText2(annot_head, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name);
+						retval = ShowAlignNodeText2(annot_head, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type);
 						annot_head->next = NULL;
 					}
 					
 					else
-						retval = ShowAlignNodeText2(curr_list, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name);
+						retval = ShowAlignNodeText2(curr_list, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name, www_blast_type);
 					if(retval == TRUE)
 						fprintf(fp, "\n\n");
 					FreeAlignNode(curr_list);
@@ -989,15 +1022,15 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 					if (already_done)
 					{
 					
-					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
+					sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/"
                             		"htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-                            		"uid=%08ld\">",HTML_db, (Int4)sip->data.intvalue);
+                            		"uid=%08ld\">",HTML_db, (long)sip->data.intvalue);
 					}
 					else
 					{
-					sprintf(HTML_buffer, "<a name = %d></a><a href=\"http://www3.ncbi.nlm.nih.gov/"
+					sprintf(HTML_buffer, "<a name = %ld></a><a href=\"http://www.ncbi.nlm.nih.gov/"
                             		"htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-                            		"uid=%08ld\">",(Int4) sip->data.intvalue, HTML_db, (Int4)sip->data.intvalue);
+                            		"uid=%08ld\">",(long) sip->data.intvalue, HTML_db, (long)sip->data.intvalue);
 					ValNodeAddInt(already_linked, SEQID_GI, sip->data.intvalue);
 					}
 					html_len = StringLen(HTML_buffer);
@@ -1015,7 +1048,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 						oip = db_tag->tag;
 						if(oip->id != 0)
 						{
-							sprintf(HTML_buffer, "<a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", oip->id);
+							sprintf(HTML_buffer, "<a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id);
 
 							html_len = StringLen(HTML_buffer);
 							sprintf(docbuf+pos, HTML_buffer);
@@ -1037,7 +1070,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 		pos += StringLen(tdp->buf);
 		if(stop_val >=0 && is_first)
 		{
-			sprintf(temp, " %ld\n", stop_val+1);
+			sprintf(temp, " %ld\n", (long) (stop_val+1));
 			sprintf(docbuf+pos, "%s", temp);
 			pos += StringLen(temp);
 		}
@@ -1129,7 +1162,7 @@ NLM_EXTERN Boolean make_scale_bar_str(CharPtr PNTR bar, CharPtr PNTR num_str,
 		curr = *num_str;
 		if((i+1)%10==0)
 		{
-			sprintf(temp, "%ld", (i+1));
+			sprintf(temp, "%ld", (long) (i+1));
 			len = StringLen(temp);
 			for(j = 0; j<len; ++j)
 				curr[i+num_empty-(len-1-j)] = temp[j];
@@ -1683,8 +1716,11 @@ static Boolean load_align_sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
 			++(asp->identical);
 		else if(asp->matrix != NULL && asp->is_aa)
 		{
-			if(asp->matrix[m_res][t_res] >0)
-				++(asp->positive);
+			if (IS_residue(m_res) && IS_residue(t_res))
+			{
+				if(asp->matrix[m_res][t_res] >0)
+					++(asp->positive);
+			}
 		}
 	}
 	asp->totlen = ddp->len;
@@ -1810,8 +1846,11 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 					++(asp->identical);
 				else if(asp->matrix != NULL && asp->is_aa)
 				{
-					if(asp->matrix[m_res][t_res] >0)
-						++(asp->positive);
+					if (IS_residue(m_res) && IS_residue(t_res))
+					{
+						if(asp->matrix[m_res][t_res] >0)
+							++(asp->positive);
+					}
 				}
 			}
 
@@ -2254,7 +2293,7 @@ static Int4 get_max_coordinates_len (ValNodePtr anp_list, Int4Ptr max_label_size
 				max_num = MAX(ABS(anp->seqpos), max_num);
 			else
 			{
-				seqpos = anp->seqpos;
+				seqpos = anp->seqpos - 1;
 				for(asp = anp->segs; asp != NULL; asp = asp->next)
 				{
 					if(asp->type != GAP_SEG)
@@ -2262,7 +2301,7 @@ static Int4 get_max_coordinates_len (ValNodePtr anp_list, Int4Ptr max_label_size
 						if(asp->type == INS_SEG)
 							seqpos += (asp->gr.right -1);
 						else
-							seqpos += (asp->gr.right - asp->gr.left);
+							seqpos += (asp->gr.right - asp->gr.left + 1);
 					}
 				}
 				max_num = MAX(seqpos, max_num);
@@ -2276,7 +2315,7 @@ static Int4 get_max_coordinates_len (ValNodePtr anp_list, Int4Ptr max_label_size
 		anp_list = anp_list->next;
 	}
 	buf[0] = '\0';
-	sprintf(buf, "%ld", max_num+1);
+	sprintf(buf, "%ld", (long) (max_num+1));
 	return StringLen(buf);
 }
 
@@ -2477,7 +2516,7 @@ static void convert_label_to_gi(ValNodePtr anp_list)
 			anp = anp_list->data.ptrvalue;
 			if(anp && anp->sip && anp->sip->choice == SEQID_GI)
 			{
-				sprintf(temp, "%ld", anp->sip->data.intvalue);
+				sprintf(temp, "%ld", (long) anp->sip->data.intvalue);
 				if(anp->label != NULL)
 					MemFree(anp->label);
 				anp->label = StringSave(temp);
@@ -2557,6 +2596,22 @@ static void modify_tblastx_value (ValNodePtr anp_list, Int4 val, Boolean inverse
 	}
 }
 
+static
+SeqIdPtr
+get_seq_id(SeqAlignPtr sap, Int2 index)
+{
+	SeqIdPtr sip = NULL;
+	if (sap->segtype == 1) {
+		DenseDiagPtr ddp = (DenseDiagPtr)sap->segs;
+		sip = ddp->id;
+	}
+	else if (sap->segtype == 2) {
+		DenseSegPtr dsp = (DenseSegPtr)sap->segs;
+		sip = dsp->ids;
+	}
+	for (; sip != NULL && --index >= 0; sip = sip->next);
+	return sip;
+}
 
 /***********************************************************************
 *
@@ -2584,13 +2639,13 @@ NLM_EXTERN Boolean ShowAlignNodeText(ValNodePtr anp_list, Int2 num_node, Int4 li
 						  int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
 {
 	return ShowAlignNodeText2(anp_list, num_node, line_len, fp, left, right,
-		option, matrix, fmt_score_func, NULL);
+		option, matrix, fmt_score_func, NULL, NULL);
 }
 
 NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 line_len, 
 						  FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, 
 						  int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)),
-						  CharPtr db_name)
+						  CharPtr db_name, CharPtr blast_type)
 {
 
 	CharPtr bar, sep_bar;
@@ -2764,6 +2819,11 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 		aso.indent_len = (Int2)empty_space;
 		aso.line_len = (Int2)(line_len + empty_space);
 		aso.html_hot_link_relative = FALSE;
+		if (option & TXALIGN_NO_ENTREZ)
+			aso.no_entrez = TRUE;
+		else
+			aso.no_entrez = FALSE;
+
 		if (option & TXALIGN_HTML)
 		{
 			aso.html_hot_link = TRUE;
@@ -2781,6 +2841,14 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 		aso.fp = fp;
 		aso.buf = NULL;
 		id_list = NULL;
+		aso.segs = NULL;
+		if (blast_type == NULL) {
+			aso.blast_type = StringSave("UNFIN_GEN");
+		}
+		else {
+			aso.blast_type = StringSave(blast_type);
+			StringUpper(aso.blast_type);
+		}
 		for(curr = anp_list; curr != NULL; curr = curr->next)
 		{
 			if(curr->choice != OBJ_SEQANNOT)
@@ -2816,8 +2884,6 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 							aso.follower = anp->follower;
 							aso.bsp = bsp;
 							aso.sp = sp;
-							aso.start = SeqAlignStart(align, 1);
-							aso.stop = SeqAlignStop(align, 1);
 							aso.db_name = db_name;
 							if(asp != NULL)
 							{
@@ -2850,16 +2916,39 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 								aso.m_strand = asp->m_strand;
 								aso.t_strand = asp->t_strand;
 							}
-							else
+							else {
 								aso.align_len = 0;
+							}
+							{{
+								SeqAlignPtr sap;
+								size_t size = 0;
+
+								aso.segs = NULL;
+								for (sap = align; sap != NULL; sap = sap->next) {
+									if (SeqIdMatch(TxGetSubjectIdFromSeqAlign(align), TxGetSubjectIdFromSeqAlign(sap))) {
+										if (aso.segs != NULL) {
+											StringAppend(&aso.segs, &size, ",");
+										}
+										SeqAlignSegsStr(sap, 1, &aso.segs, &size);
+									}
+								}
+								if (aso.segs == NULL) {
+									/**
+									 * Something is really wrong if we're here
+									 */
+									aso.segs = StringSave("");
+								}
+							}}
 							fmt_score_func(&aso);
 						}
+						aso.segs = MemFree(aso.segs);
 					}
 					if(bsp != NULL)
 						BioseqUnlock(bsp);
 				}
 			}
 		}
+		aso.blast_type = MemFree(aso.blast_type);
 		ValNodeFree(id_list);
 	}
 
@@ -3181,7 +3270,7 @@ static Boolean load_text(BioseqPtr bsp, Int4 pos1, Int4 pos2, CharPtr l_seq,
 			l_seq[maxlen-1] = '\0';
 		else
 			l_seq[c_pos] = '\0';
-		sprintf(temp, "(length=%ld)", length);
+		sprintf(temp, "(length=%ld)", (long) length);
 		s_len = StringLen(temp);
 		StringCat(l_seq, temp);
 		*l_pos = c_pos+s_len;
@@ -3917,7 +4006,7 @@ static Int4 get_long_insert_len(Int4 length)
 {
 	Char temp[50];
 
-	sprintf(temp, "(length=%ld)", length);
+	sprintf(temp, "(length=%ld)", (long) length);
 	return (StringLen(temp) + 13);
 }
 
@@ -4329,12 +4418,14 @@ FilterTheDefline (BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 
 	bsp_title = BioseqGetTitle(bsp);
 	bsp_title_ptr = bsp_title;
 	/* This is the longest it could be, this could be done more efficiently. */
-	title = MemNew((1+StringLen(bsp_title))*sizeof(Char));
+	title = MemNew((10+StringLen(bsp_title))*sizeof(Char));
 	title_ptr = title;
 	*titlepp = title;
 
+/*
 	if (bsp_title_ptr == NULL)
 		return FALSE;
+*/
 
 	first_time = TRUE;
 	found_first_gi = TRUE;
@@ -4345,16 +4436,19 @@ FilterTheDefline (BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 
 		{
 			index=0;
 			id_buf[0] = NULLB;
-			while (*bsp_title_ptr != NULLB)
+			if (bsp_title_ptr)
 			{
-				if (*bsp_title_ptr == ' ')
+				while (*bsp_title_ptr != NULLB)
 				{
-					id_buf[index] = NULLB;
-					break;
+					if (*bsp_title_ptr == ' ')
+					{
+						id_buf[index] = NULLB;
+						break;
+					}
+					id_buf[index] = *bsp_title_ptr;
+					bsp_title_ptr++;
+					index++;
 				}
-				id_buf[index] = *bsp_title_ptr;
-				bsp_title_ptr++;
-				index++;
 			}
 			if (id_buf[0] == NULLB)
 				break;
@@ -4369,7 +4463,7 @@ FilterTheDefline (BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 
 		gi_list = gi_list_head;
 		while (gi_list)
 		{
-			if(SeqIdIn(sip, gi_list) == TRUE)
+			if(SeqIdIn(gi_list, sip) == TRUE)
 			{
 				found_gi = TRUE;
 				break;
@@ -4393,26 +4487,37 @@ FilterTheDefline (BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 
 				found_first_gi = FALSE;
 			}
 
-			while (*bsp_title_ptr != '>' && *bsp_title_ptr != NULLB)
+			if (bsp_title_ptr)
 			{
-				*title_ptr = *bsp_title_ptr;
-				bsp_title_ptr++;
-				title_ptr++;
+				while (*bsp_title_ptr != '>' && *bsp_title_ptr != NULLB)
+				{
+					*title_ptr = *bsp_title_ptr;
+					bsp_title_ptr++;
+					title_ptr++;
+				}
 			}
 		}
 		else
 		{
-			while (*bsp_title_ptr != '>' && *bsp_title_ptr != NULLB)
-				bsp_title_ptr++;
+			if (bsp_title_ptr)
+			{
+				while (*bsp_title_ptr != '>' && *bsp_title_ptr != NULLB)
+					bsp_title_ptr++;
+			}
 		}
-		if (*bsp_title_ptr == '>')
-			bsp_title_ptr++;
-
-		if (*bsp_title_ptr == NULLB)
+		
+		if (bsp_title_ptr)
 		{
-			*title_ptr = NULLB;
-			break;
+			if (*bsp_title_ptr == '>')
+				bsp_title_ptr++;
+
+			if (*bsp_title_ptr == NULLB)
+			{
+				*title_ptr = NULLB;
+				break;
+			}
 		}
+
 		if (first_time)
 		{
 			first_time = FALSE;
@@ -4488,7 +4593,7 @@ PrintDefLinesExtra(ValNodePtr vnp, Int4 line_length, FILE *outfp, Uint4 options,
 		index++;
                 seqalign = vnp->data.ptrvalue;
 		sprintf(buffer, "\nSignificant matches for pattern occurrence %ld at position %ld\n\n",
-                        index, SeqLocStart(seqloc)+1);
+                        (long) index, (long) (SeqLocStart(seqloc)+1));
                 ff_AddString(buffer);
 		ff_EndPrint(); 
 		retval = PrintDefLinesFromSeqAlign(seqalign, line_length, outfp, options, mode, marks);
@@ -4504,210 +4609,121 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions)
 {
 	return PrintDefLinesFromSeqAlignEx2(seqalign, line_length, outfp, options,
-			mode, marks, number_of_descriptions, (CharPtr)NULL);
+			mode, marks, number_of_descriptions, (CharPtr)NULL, (CharPtr)NULL);
 }
 
+/**
+ * transforms a string so that it becomes safe to be used as part of URL
+ * the function converts characters with special meaning (such as
+ * semicolon -- protocol separator) to escaped hexadecimal (%xx)
+ */
 static
 CharPtr
-MakeURLSafe(CharPtr src, CharPtr buf, Int4 buflen)
+MakeURLSafe(CharPtr src)
 {
 	static Char HEXDIGS[] = "0123456789ABCDEF";
+	CharPtr buf;
+	size_t len;
+	CharPtr p;
 	Char c;
 
-	if (src == NULL || buf == NULL || buflen <= 0) {
+	if (src == NULL) {
 		return NULL;
 	}
-	for (; (c = *(src++)) != '\0'; ) {
+	/* first pass to calculate required buffer size */
+	for (p = src, len = 0; (c = *(p++)) != '\0'; ) {
 		switch (c) {
 		default:
 			if (c < '0' || (c > '9' && c < 'A') ||
 					(c > 'Z' && c < 'a') || c > 'z') {
-				if ((buflen -= 3) <= 0) {
-					goto out;
-				}
-				*(buf++) = '%';
-				*(buf++) = HEXDIGS[(c >> 4) & 0xf];
-				*(buf++) = HEXDIGS[c & 0xf];
+				len += 3;
 				break;
 			}
 		case '-': case '_': case '.': case '!': case '~':
 		case '*': case '\'': case '(': case ')':
-			if (--buflen <= 0) {
-				goto out;
-			}
-			*(buf++) = c;
+			++len;
 		}
 	}
-out:
-	*buf = '\0';
+	buf = (CharPtr)MemNew(len + 1);
+	/* second pass -- conversion */
+	for (p = buf; (c = *(src++)) != '\0'; ) {
+		switch (c) {
+		default:
+			if (c < '0' || (c > '9' && c < 'A') ||
+					(c > 'Z' && c < 'a') || c > 'z') {
+				*(p++) = '%';
+				*(p++) = HEXDIGS[(c >> 4) & 0xf];
+				*(p++) = HEXDIGS[c & 0xf];
+				break;
+			}
+		case '-': case '_': case '.': case '!': case '~':
+		case '*': case '\'': case '(': case ')':
+			*(p++) = c;
+		}
+	}
+	*p = '\0';
 	return buf;
 }
 
-/**
- * these three are only local copies to avoid package dependencies
- * TODO: SeqAlignStart/Stop/Strand should go to ncbi/api package
- * in the future
- */
 static
-Uint1
-SeqAlignStrand (SeqAlignPtr salp, Int2 index)
+CharPtr
+StringAppend(CharPtr *dst, size_t *size, CharPtr src)
 {
-  DenseDiagPtr ddp;
-  DenseSegPtr  dsp;
-  Int4         j = (Int4)index;
-  Uint1        strand = Seq_strand_unknown;
+	size_t pos, len;
 
-  if (salp == NULL)
-     return 0;
-  if (salp->segtype == 1)
-  {
-     ddp = (DenseDiagPtr) salp->segs;
-     if (ddp != NULL) {
-        if ((Boolean)(ddp->strands != NULL))
-           strand = *(ddp->strands);
-     }
-  }
-  else if (salp->segtype == 2)
-  {
-     dsp = (DenseSegPtr) salp->segs;
-     if (dsp!=NULL)
-     {
-        if ((Boolean)(dsp->strands != NULL)) {
-           strand = (dsp->strands)[j];
-           while (strand!=Seq_strand_plus && strand!=Seq_strand_minus) {
-              j+=dsp->dim;
-              if (j >= (Int4)(dsp->dim*dsp->numseg))
-                 break;
-              strand = (dsp->strands)[j];
-           }
-        }
-     }
-  }
-  return strand;
+	if (*dst == NULL) {
+		*size = 1;
+		pos = 0;
+	}
+	else {
+		pos = StringLen(*dst);
+	}
+	if (src == NULL) {
+		return *dst;
+	}
+	len = StringLen(src);
+	if (*dst == NULL || pos + len + 1 > *size) {
+		/**
+		 * extending destination buffer
+		 */
+		CharPtr old = *dst;
+		for (; pos + len + 1 > *size; *size *= 2);
+		*dst = (CharPtr)MemNew(*size);
+		**dst = '\0';
+		if (old != NULL) {
+			StringCpy(*dst, old);
+			MemFree(old);
+		}
+	}
+	StringCpy((*dst) + pos, src);
+	return *dst;
 }
 
-static
-Int4
-SeqAlignStart(SeqAlignPtr salp, Int2 index)
-{
-  DenseDiagPtr  ddp;
-  DenseSegPtr   dsp;
-  /*CompSegPtr    csp;*/
-  Int4Ptr       startp;
-  Int4          j, 
-                val = (Int4)-1;
-  Uint1         strand;
-  
-  if (salp == NULL)
-     return -1;
-  if (salp->segtype == 1) 
-  {
-     ddp = (DenseDiagPtr) salp->segs;
-     if (ddp != NULL) {
-        startp = ddp->starts;
-        if (index > 0)
-           startp += index;
-        val = *startp;
-     }
-  } 
-  else if (salp->segtype == 2) 
-  {
-     strand = SeqAlignStrand (salp, index);
-     dsp = (DenseSegPtr) salp->segs;
-     if (dsp!=NULL) 
-     {
-        startp = dsp->starts;
-        if (index > 0)
-           startp += index;
-        for (j = 0; j < dsp->numseg; j++, startp += dsp->dim) 
-           if (*startp > -1)
-              break;
-        if (j < dsp->numseg) {
-           if (strand == Seq_strand_minus)
-              val = *startp + dsp->lens[j] - 1;
-           else
-              val = *startp;              
-        }
-     }
-  }
-  /*
-  else if (salp->segtype == COMPSEG)
-  {
-     csp = (CompSegPtr) salp->segs;
-     val = csp->from[index];
-  }
-  */
-  return val;
-}
 
 static
-Int4
-SeqAlignStop(SeqAlignPtr salp, Int2 index)
+Boolean
+SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size)
 {
-  DenseDiagPtr  ddp;
-  DenseSegPtr   dsp;
-  /*CompSegPtr    csp;*/
-  Int4Ptr       startp;
-  /*BoolPtr       startb;*/
-  Int4          j, 
-                val = (Int4)-1;
-  Uint1         strand;
-  
-  if (salp == NULL)
-     return -1;
-  if (salp->segtype == 1) 
-  {
-     ddp = (DenseDiagPtr) salp->segs;
-     if (ddp != NULL) {
-        startp = ddp->starts;
-        if (index > 0)
-           startp += index;
-        val = *startp + ddp->len;
-     }
-  } 
-  else if (salp->segtype == 2) 
-  {
-     dsp = (DenseSegPtr) salp->segs;
-     if (dsp!=NULL) 
-     {
-        if ((Boolean)(dsp->strands != NULL))
-           strand = dsp->strands[index];
-        else
-           strand = Seq_strand_plus;
-        startp = dsp->starts + ((dsp->dim * dsp->numseg) - dsp->dim);
-        if (index > 0)
-           startp += index;
-        for (j = dsp->numseg-1; j >= 0; j--, startp-=dsp->dim) 
-           if (*startp > -1)
-              break;
-        if (j >= 0) {
-           if (strand == Seq_strand_minus)
-              val = *startp;
-           else
-              val = *startp + dsp->lens[j] - 1;              
-        }
-     }
-  }
-  /*
-  else if (salp->segtype == COMPSEG)
-  {
-     csp = (CompSegPtr) salp->segs;
-     val = csp->from[index];
-     startb=csp->starts;
-     for (j=0; j<csp->numseg; j++)
-     {
-        if (*startb)
-           val+=csp->lens[j]; 
-        startb+=csp->dim;
-     } 
-  }
-  */
-  return val;
+	Char buf[128];
+	Int4 start, stop;
+
+	start = SeqAlignStart(sap, 1);
+	stop = SeqAlignStop(sap, 1);
+
+	if (sap == NULL) {
+		return FALSE;
+	}
+
+	sprintf(buf, "%ld-%ld", (long)(start), (long)(stop));
+	StringAppend(dst, size, buf);
+
+	return TRUE;
 }
 
 NLM_EXTERN Boolean LIBCALL
 PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
-		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions, CharPtr db_name)
+		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions,
+		CharPtr db_name, CharPtr blast_type)
 
 {
 	BioseqPtr bsp;
@@ -4725,6 +4741,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 	Int4	countdescr = number_of_descriptions;
 	Int4	numalign;
 	Char passwd[128];
+	Char tool_url[128];
 
 	if (outfp == NULL)
 	{
@@ -4815,12 +4832,16 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				txsp->evalue = evalue;
 			if (number < txsp->number)
 				txsp->number = number;
+			StringAppend(&txsp->segs_str, &txsp->segs_buflen, ",");
+			SeqAlignSegsStr(seqalign, 1, &txsp->segs_str, &txsp->segs_buflen);
 			subject_id = SeqIdFree(subject_id);
 		}
 		else
 		{
 			bsp = BioseqLockById(subject_id);	
 			txsp = MemNew(sizeof(TxDfLineStruct));
+			txsp->segs_str = NULL;
+			txsp->segs_buflen = 0;
 			if(bsp != NULL)
 			{
 				gi_list = GetUseThisGi(seqalign);
@@ -4853,6 +4874,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 			txsp->evalue = evalue;
 			txsp->number = number;
 			txsp->found_score = found_score;
+			SeqAlignSegsStr(seqalign, 1, &txsp->segs_str, &txsp->segs_buflen);
 			if (marks) {
 			    /* seq is new if it was not Good on previous iteration */
 			    txsp->isnew = (Boolean) !(marks[numalign] & SEQ_ALIGN_MARK_PREVGOOD);
@@ -4876,7 +4898,16 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 
 
 	txsp = txsp_head;
-	GetAppParam("NCBI", "DUMPGNL", "PASSWD", "", passwd, sizeof(passwd));
+	if (blast_type == NULL) {
+		blast_type = StringSave("UNFIN_GEN");
+	}
+	else {
+		blast_type = StringSave(blast_type);
+		StringUpper(blast_type);
+	}
+	GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, sizeof(passwd));
+	GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
+	blast_type = MemFree(blast_type);
 	while (txsp)
 	{
 		found_next_one = FALSE;
@@ -4891,7 +4922,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 			gi = 0;
 			make_link = FALSE;
 			bestid = SeqIdFindBest(txsp->id, SEQID_GI);
-			if (bestid != NULL && bestid->choice == SEQID_GI)
+			if (bestid != NULL && bestid->choice == SEQID_GI && !(options & TXALIGN_NO_ENTREZ))
 			{
 				gi = bestid->data.intvalue;
 				if (options & TXALIGN_CHECK_BOX && options & TXALIGN_CHECK_BOX_CHECKED) {
@@ -4945,19 +4976,19 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				fprintf(outfp, "%s", HTML_buffer);
 				make_link = TRUE;
 			}
-			else if (bestid != NULL && bestid->choice == SEQID_GENERAL)
+			else if (bestid != NULL && (bestid->choice == SEQID_GENERAL || (options & TXALIGN_NO_ENTREZ)))
 			{
 				/**
-				 * victorov: links to incomplete genomes
+				 * links to incomplete genomes
 				 */
-				Char str[256], gnl[256];
+				Char gnl[256];
+				CharPtr str;
 				Uchar buf[32];
 				Int4 length;
-				Int4 start, stop;
+				CharPtr segs;
 				MD5Context context;
 
-				start = SeqAlignStart(txsp->seqalign, 1);
-				stop = SeqAlignStop(txsp->seqalign, 1);
+				segs = txsp->segs_str;
 				/*
 				 * Need to protect start and stop positions
 				 * to avoid web users sending us hand-made URLs
@@ -4968,31 +4999,25 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
 				SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
 				MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
-				sprintf(str, "%ld", (long)start);
-				MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
-				sprintf(str, "%ld", (long)stop);
-				MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
+				MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
 				MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
 				MD5Final(&context, (UcharPtr)buf);
 
-				MakeURLSafe(db_name == NULL ? "nr" : db_name, str, sizeof(str));
+				str = MakeURLSafe(db_name == NULL ? "nr" : db_name);
 				fprintf(outfp,
-					"<a href=\"http://www3.ncbi.nlm.nih.gov/"
-					"htbin-post/nph-dumpgnl?db=%s&na=%d&",
-					/* debug:
-					"<a href=\"http://ray:6224/"
-					"cgi-bin/BLAST/nph-dumpgnl?db=%s&na=%d&",
-					*/
-					str, txsp->is_na);
-				MakeURLSafe(gnl, str, sizeof(str));
+					"<a href=\"%s?db=%s&na=%d&",
+					tool_url, str, txsp->is_na);
+				str = MemFree(str);
+				str = MakeURLSafe(gnl);
 				fprintf(outfp,
-					"gnl=%s&start=%ld&stop=%ld&seal=%02X%02X%02X%02X"
+					"gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
 					"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
-					str, (long)start, (long)stop,
+					str, segs,
 					buf[0], buf[1], buf[2], buf[3],
 					buf[4], buf[5], buf[6], buf[7],
 					buf[8], buf[9], buf[10], buf[11],
 					buf[12], buf[13], buf[14], buf[15]);
+				str = MemFree(str);
 				make_link = TRUE;
 			}
 		}
@@ -5260,6 +5285,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 		txsp->title = MemFree(txsp->title);
 		txsp->buffer_id = MemFree(txsp->buffer_id);
 		txsp->id = SeqIdSetFree(txsp->id);
+		txsp->segs_str = MemFree(txsp->segs_str);
 		txsp_var = txsp;
 		txsp = txsp->next;
 		MemFree(txsp_var);
@@ -5357,7 +5383,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 			gi = 0;
 			if (bestid != NULL)
 			{
-				if (bestid->choice == SEQID_GI)
+				if (bestid->choice == SEQID_GI && asop->no_entrez == FALSE)
 				{
 					gi = bestid->data.intvalue;
 					make_link = TRUE;
@@ -5377,21 +5403,21 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 					asop->html_hot_link_relative == TRUE ? "" : TXALIGN_HREF,
 					HTML_database,  (long) gi);
 				}
-				else if (bestid->choice == SEQID_GENERAL)
+				else if (bestid->choice == SEQID_GENERAL || asop->no_entrez == TRUE)
 				{
 					/**
-					 * victorov: links to incomplete genomes
+					 * links to incomplete genomes
 					 */
-					Char str[256], gnl[256];
+					Char gnl[256];
+					CharPtr str;
 					Uchar buf[32];
 					Int4 length;
-					Int4 start, stop;
 					MD5Context context;
 					Char passwd[128];
-	
-					start = asop->start;
-					stop = asop->stop;
-					GetAppParam("NCBI", "DUMPGNL", "PASSWD", "", passwd, sizeof(passwd));
+					Char tool_url[128];
+
+					GetAppParam("NCBI", asop->blast_type, "PASSWD", "", passwd, sizeof(passwd));
+					GetAppParam("NCBI", asop->blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
 					/*
 					 * Need to protect start and stop positions
 					 * to avoid web users sending us hand-made URLs
@@ -5402,31 +5428,25 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 					MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
 					SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
 					MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
-					sprintf(str, "%ld", (long)start);
-					MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
-					sprintf(str, "%ld", (long)stop);
-					MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
+					MD5Update(&context, (UcharPtr)asop->segs, (Uint4)StringLen(asop->segs));
 					MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
 					MD5Final(&context, (UcharPtr)buf);
 
-					MakeURLSafe(asop->db_name == NULL ? "nr" : asop->db_name, str, sizeof(str));
+					str = MakeURLSafe(asop->db_name == NULL ? "nr" : asop->db_name);
 					fprintf(asop->fp,
-						"<a href=\"http://www3.ncbi.nlm.nih.gov/"
-						"htbin-post/nph-dumpgnl?db=%s&na=%d&",
-						/* debug:
-						"<a href=\"http://ray:6224/"
-						"cgi-bin/BLAST/nph-dumpgnl?db=%s&na=%d&",
-						*/
-						str, bsp->mol != Seq_mol_aa);
-					MakeURLSafe(gnl, str, sizeof(str));
+						"<a href=\"%s?db=%s&na=%d&",
+						tool_url, str, bsp->mol != Seq_mol_aa);
+					str = MemFree(str);
+					str = MakeURLSafe(gnl);
 					fprintf(asop->fp,
-						"gnl=%s&start=%ld&stop=%ld&seal=%02X%02X%02X%02X"
+						"gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
 						"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
-						str, (long)start, (long)stop,
+						str, asop->segs,
 						buf[0], buf[1], buf[2], buf[3],
 						buf[4], buf[5], buf[6], buf[7],
 						buf[8], buf[9], buf[10], buf[11],
 						buf[12], buf[13], buf[14], buf[15]);
+					str = MemFree(str);
 					make_link = TRUE;
 				}
 			}
@@ -5646,9 +5666,9 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 		/* Don't show positives for blastn, which has these set to 255. */
 	   if (asop->m_frame == 255 && asop->t_frame == 255 &&
 		asop->m_strand != Seq_strand_unknown && asop->t_strand != Seq_strand_unknown)
-	   	sprintf(buffer, " Identities = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, percent_identical);
+	   	sprintf(buffer, " Identities = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, (long) percent_identical);
 	   else
-	   	sprintf(buffer, " Identities = %ld/%ld (%ld%%), Positives = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, percent_identical, (long) (asop->positive+asop->identical), (long) asop->align_len, (percent_identical+percent_positive));
+	   	sprintf(buffer, " Identities = %ld/%ld (%ld%%), Positives = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, (long) percent_identical, (long) (asop->positive+asop->identical), (long) asop->align_len, (long) (percent_identical+percent_positive));
 	   ff_AddString(buffer);
 	   if (asop->gaps > 0)
 	   {
@@ -5748,3 +5768,623 @@ NLM_EXTERN Uint4 GetTxAlignOptionValue (Uint1 tx_option, BoolPtr hide_feature,
 	return option;
 }
 
+/* Used for the '62' notation stuff. */
+#define DEFINE_62 62
+
+/*********************************************************** 
+
+CoordTo62Notation converts a position into the '62' notation.
+The '62' notation decomposes a number (X) into two parts:
+
+1.) the largest multiple of 62 that is still less than X. Let
+this number be A.
+
+2.) the difference between the number found in 1.) and X.  Let 
+this number be B.
+
+The original number can be reconstructed from:
+
+X = 62*A + B
+
+In CoordTo62Notation the first Int4 is the position that should be decomposed.
+The two CharPtr's are (respectively) for A and B.  These CharPtr's should be
+allocated with at least two spaces and will be filled in with A and B.
+
+****************************************************************/
+static Boolean
+CoordTo62Notation (Int4 position, CharPtr major_part, CharPtr minor_part)
+
+{
+	Int4 major_num, minor_num;
+
+	if (major_part == NULL || minor_part == NULL)
+		return FALSE;
+
+	major_num = position/DEFINE_62;
+	minor_num = position%DEFINE_62;
+
+
+	if (major_num < 10)
+		sprintf(major_part, "%ld", major_num);
+	else if (major_num < 36)
+		*major_part = 'A' + major_num - 10;
+	else
+		*major_part = 'a' + major_num - 36;
+		
+
+	if (minor_num < 10)
+		sprintf(minor_part, "%ld", minor_num);
+	else if (minor_num < 36)
+		*minor_part = 'A' + minor_num - 10;
+	else
+		*minor_part = 'a' + minor_num - 36;
+
+	return TRUE;
+}
+
+#define ADD_TO_BUFFER_FOR_BLAST 100
+
+/*
+	Given a SeqLocPtr (for a query of length query_length), fill in
+	buffer with starts and stops in '62' notation (see above doc.).
+*/
+
+static Boolean
+Print62Notation(SeqLocPtr seqloc, Int4 query_length, CharPtr *buffer)
+{
+	Char a1[2], a2[2], b1[2], b2[2];
+	CharPtr ptr, my_buffer, my_new_buffer;
+	Int4 buffer_size, position, length, start, stop;
+	Nlm_FloatHi block_size, screen_width;
+
+	if (seqloc == NULL)
+		return FALSE;
+
+
+/*
+	screen_width = (Nlm_FloatHi) MIN(600, query_length);
+*/
+	screen_width = 600.0;
+	block_size = ((Nlm_FloatHi) query_length)/screen_width;
+	
+	if (seqloc->choice == SEQLOC_PACKED_INT)
+		seqloc = seqloc->data.ptrvalue;
+
+	position = 0;
+	buffer_size = ADD_TO_BUFFER_FOR_BLAST;
+	my_buffer = (CharPtr) MemNew(buffer_size*sizeof(Char));
+	ptr = my_buffer;
+	while (seqloc)
+	{
+		if (position+4 > buffer_size)
+		{
+			buffer_size += ADD_TO_BUFFER_FOR_BLAST;
+			my_new_buffer = (CharPtr) MemNew(buffer_size*sizeof(Char));
+			MemCpy(my_new_buffer, my_buffer, position);
+			my_buffer = MemFree(my_buffer);
+			my_buffer = my_new_buffer;
+			ptr = my_buffer + position;
+		}
+		if (SeqLocStrand(seqloc) == Seq_strand_minus)
+		{
+			start = SeqLocStop(seqloc)/block_size;
+			stop = (SeqLocStart(seqloc)+1)/block_size;
+		}
+		else
+		{
+			start = SeqLocStart(seqloc)/block_size;
+			stop = (SeqLocStop(seqloc)+1)/block_size;
+		}
+		CoordTo62Notation(start, a1, b1);
+		CoordTo62Notation(stop, a2, b2);
+		*ptr = *a1; ptr++;
+		*ptr = *b1; ptr++;
+		*ptr = *a2; ptr++;
+		*ptr = *b2; ptr++;
+		position += 4;
+		seqloc = seqloc->next;
+	}
+	*ptr = NULLB;
+
+	*buffer = my_buffer;
+
+	return TRUE;
+}
+
+/*
+	Changes the SeqLoc to the PLUS strand.  Only works for SeqInt.
+*/
+
+static void
+SeqLocToPlusStrand(SeqLocPtr seqloc)
+
+{
+	Int4 start, stop;
+	SeqIntPtr seq_int;
+
+	if (seqloc == NULL || seqloc->choice != SEQLOC_INT)
+		return;
+
+	while (seqloc)
+	{
+		if (SeqLocStrand(seqloc) == Seq_strand_minus)
+		{
+			seq_int = seqloc->data.ptrvalue;
+
+			start = seq_int->from;
+			stop = seq_int->to;
+
+			seq_int->from = MIN(start, stop);
+			seq_int->to = MAX(start, stop);
+			seq_int->strand = Seq_strand_plus;
+		}
+		seqloc = seqloc->next;
+	}
+
+	return;
+}
+
+/* Append a SeqAlign to a linked list of SeqAlign's.
+*/
+
+static Boolean
+AddToSeqAlign (SeqAlignPtr PNTR head, SeqAlignPtr seqalign)
+
+{
+	SeqAlignPtr tmp;
+
+	if (!head || !seqalign)
+		return FALSE;
+
+	if (*head == NULL)
+		*head = seqalign; 
+	else
+	{
+		tmp = *head;
+		while (tmp->next)
+			tmp = tmp->next;
+
+		tmp->next = seqalign;
+	}
+
+	return TRUE;
+}
+
+#define KITTS_DISTANCE_TO_END 24
+/*
+	Scans the SeqAlignPtr's, producing SeqLocPtr's as specified.
+	Each ValNodePtr points to a list of SeqLoc's.
+
+	Note that the SeqLoc's are merged, checked for redundancy, etc.  The
+	SeqAlignPtr is changed to reflect this.
+*/
+
+Boolean LIBCALL
+MakeDisplaySeqLoc (SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length)
+
+{
+	Int4 start, stop, score, num, tmp;
+	Nlm_FloatHi bit_score, evalue;
+	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, seqloc, seqloc_tmp;
+	SeqAlignPtr seqalign, head=NULL, next;
+
+	seqalign = *seqalign_ptr;
+	
+	while (seqalign)
+	{
+		next = seqalign->next;
+		GetScoreAndEvalue(seqalign, &score, &bit_score, &evalue, &num);
+		start = SeqAlignStart(seqalign, 0);
+		stop = SeqAlignStop(seqalign, 0);
+		if (start > stop)
+		{ /* reverse for minus strand. */
+			tmp = start;
+			start = stop;
+			stop = tmp;
+		}
+		if (score >= 30 || (score >= 24 && (start <= KITTS_DISTANCE_TO_END || length-stop <= KITTS_DISTANCE_TO_END)))
+		{
+			AddToSeqAlign(&head, seqalign);
+			seqalign->next = NULL;
+			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
+			SeqLocToPlusStrand(seqloc_tmp);
+			ValNodeLink(&seqloc1, seqloc_tmp);
+		}
+		else if (score >= 25 || (score >= 19 && (start <= KITTS_DISTANCE_TO_END || length-stop <= KITTS_DISTANCE_TO_END)))
+		{
+			AddToSeqAlign(&head, seqalign);
+			seqalign->next = NULL;
+			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
+			SeqLocToPlusStrand(seqloc_tmp);
+			ValNodeLink(&seqloc2, seqloc_tmp);
+		}
+		else if (score >= 23 || (score >= 16 && (start <= KITTS_DISTANCE_TO_END || length-stop <= KITTS_DISTANCE_TO_END)))
+		{
+			AddToSeqAlign(&head, seqalign);
+			seqalign->next = NULL;
+			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
+			SeqLocToPlusStrand(seqloc_tmp);
+			ValNodeLink(&seqloc3, seqloc_tmp);
+		}
+		else
+		{
+			SeqAlignFree(seqalign);
+		}
+		seqalign = next;
+	}
+
+	*vnp = NULL;
+
+	if (seqloc1)
+	{
+		seqloc = NULL;
+		ValNodeAddPointer(&seqloc, SEQLOC_PACKED_INT, seqloc1);	
+		ValNodeAddPointer(vnp, 1, seqloc);	
+	} 
+
+	if (seqloc2)
+	{
+		seqloc = NULL;
+		ValNodeAddPointer(&seqloc, SEQLOC_PACKED_INT, seqloc2);	
+		ValNodeAddPointer(vnp, 2, seqloc);	
+	}
+
+	if (seqloc3)
+	{
+		seqloc = NULL;
+		ValNodeAddPointer(&seqloc, SEQLOC_PACKED_INT, seqloc3);	
+		ValNodeAddPointer(vnp, 3, seqloc);	
+	}
+
+	*seqalign_ptr = head;
+
+	return TRUE;
+}
+
+/* Check for overlap between seqloc1 and seqloc2.  
+Keep only seqloc1 if there is an overlap.
+Return a new SeqLocPtr with these SeqLoc's.
+*/
+static SeqLocPtr 
+CheckForOverlap(SeqLocPtr seqloc1, SeqLocPtr seqloc2)
+
+{
+	SeqLocPtr seqloc, seqloc_last, next_seqloc;
+	SeqLocPtr new_seqloc=NULL, retval=NULL, current;
+
+	if (seqloc1 == NULL || seqloc1->choice != SEQLOC_PACKED_INT)
+		return seqloc2;
+
+	if (seqloc2 == NULL || seqloc2->choice != SEQLOC_PACKED_INT)
+		return NULL;
+
+	seqloc = seqloc2->data.ptrvalue;
+	seqloc_last = NULL;
+
+	while (seqloc)
+	{
+		if (SeqLocAinB(seqloc, seqloc1) >= 0)
+		{
+			seqloc = seqloc->next;
+		}
+		else
+		{
+			if (!new_seqloc)
+			{
+				new_seqloc = seqloc;
+				current = new_seqloc;
+			}
+			else 
+			{
+				current->next = seqloc;
+				current = current->next;
+			}
+			next_seqloc = seqloc->next;
+			seqloc->next = NULL;
+			seqloc = next_seqloc;
+		}
+	}
+	if (new_seqloc)
+		ValNodeAddPointer(&retval, SEQLOC_PACKED_INT, new_seqloc);
+
+	return retval;
+}
+
+int LIBCALLBACK SeqLocSortByStartPosition(VoidPtr vp1, VoidPtr vp2)
+
+{
+	SeqLocPtr slp1, slp2;
+
+	slp1 = *((SeqLocPtr PNTR) vp1);
+	slp2 = *((SeqLocPtr PNTR) vp2);
+
+	if (SeqLocStart(slp1) < SeqLocStart(slp2))
+		return -1;
+	else if (SeqLocStart(slp1) > SeqLocStart(slp2))
+		return 1;
+	else
+		return 0;
+}
+
+/*
+	Combine two SeqLoc's that overlap.
+*/
+
+static SeqLocPtr
+CombineSeqLoc (SeqLocPtr seqloc)
+
+{
+	Int4 start, stop;
+	SeqLocPtr retval=NULL, next, last, seqloc_var, seqloc_var2, new_seqloc=NULL;
+	SeqIntPtr seq_int;
+
+	if (seqloc == NULL)
+		return NULL;
+
+	if (seqloc->choice == SEQLOC_PACKED_INT)
+		seqloc = seqloc->data.ptrvalue;
+
+	seqloc = (SeqLocPtr) SortValNode((ValNodePtr) seqloc, SeqLocSortByStartPosition);
+
+	start = SeqLocStart(seqloc);
+	stop = SeqLocStop(seqloc);
+	seqloc_var = seqloc;
+
+	while (seqloc_var)
+	{
+		if (seqloc_var->next && stop+1 >= SeqLocStart(seqloc_var->next))
+		{
+			stop = MAX(stop, SeqLocStop(seqloc_var->next));
+		}
+		else
+		{
+			seq_int = SeqIntNew();
+			seq_int->from = start;
+			seq_int->to = stop;
+			seq_int->strand = Seq_strand_plus;
+			seq_int->id = SeqIdDup(SeqIdFindBest(SeqLocId(seqloc_var), SEQID_GI));
+                	ValNodeAddPointer(&new_seqloc, SEQLOC_INT, seq_int);
+			if (seqloc_var->next)
+			{
+				start = SeqLocStart(seqloc_var->next);
+				stop = SeqLocStop(seqloc_var->next);
+			}
+		}
+		seqloc_var = seqloc_var->next;
+	}
+
+	if (new_seqloc)
+		ValNodeAddPointer(&retval, SEQLOC_PACKED_INT, new_seqloc);
+
+	return retval;
+}
+
+/* Get intervening SeqLoc's if the two SeqLoc's are within distance_permitted.  */
+
+static SeqLocPtr 
+GetInterveningSeqLoc (SeqLocPtr seqloc, Int4 distance_permitted, Int4 query_length)
+
+{
+	Int4 start, stop;
+	SeqLocPtr retval=NULL, next, last, seqloc_var, seqloc_var2, new_seqloc=NULL;
+	SeqLocPtr my_seqloc=NULL, tmp_seqloc;
+	SeqIntPtr seq_int;
+
+	if (seqloc == NULL)
+		return NULL;
+
+	if (seqloc->choice != SEQLOC_PACKED_INT)
+		return NULL;
+
+	while (seqloc)
+	{
+		tmp_seqloc = seqloc->data.ptrvalue;
+		while (tmp_seqloc)
+		{
+			ValNodeLink(&my_seqloc, (SeqLocPtr) AsnIoMemCopy ((Pointer) tmp_seqloc,
+                                     (AsnReadFunc) SeqLocAsnRead,
+                                     (AsnWriteFunc) SeqLocAsnWrite));
+			tmp_seqloc = tmp_seqloc->next;
+		}
+		seqloc = seqloc->next;
+	}
+
+	my_seqloc = (SeqLocPtr) SortValNode((ValNodePtr) my_seqloc, SeqLocSortByStartPosition);
+
+	seqloc_var = my_seqloc;
+
+	if (SeqLocStart(seqloc_var) < distance_permitted &&
+		SeqLocStart(seqloc_var) > 0)
+	{
+			seq_int = SeqIntNew();
+			seq_int->from = 0;
+			seq_int->to = SeqLocStart(seqloc_var) - 1;
+			seq_int->strand = Seq_strand_plus;
+			seq_int->id = SeqIdDup(SeqIdFindBest(SeqLocId(seqloc_var), SEQID_GI));
+                	ValNodeAddPointer(&new_seqloc, SEQLOC_INT, seq_int);
+	}
+
+	while (seqloc_var)
+	{
+		if (seqloc_var->next && SeqLocStop(seqloc_var)+1 < SeqLocStart(seqloc_var->next) && SeqLocStop(seqloc_var)+distance_permitted >= SeqLocStart(seqloc_var->next))
+		{
+			stop = SeqLocStop(seqloc_var->next);
+			seq_int = SeqIntNew();
+			seq_int->from = SeqLocStop(seqloc_var) + 1;
+			seq_int->to = SeqLocStart(seqloc_var->next) - 1;
+			seq_int->strand = Seq_strand_plus;
+			seq_int->id = SeqIdDup(SeqIdFindBest(SeqLocId(seqloc_var), SEQID_GI));
+                	ValNodeAddPointer(&new_seqloc, SEQLOC_INT, seq_int);
+		}
+		else if ((seqloc_var->next == NULL || SeqLocStop(seqloc_var->next) < SeqLocStop(seqloc_var)) && query_length - (SeqLocStop(seqloc_var)+1) < distance_permitted && query_length - (SeqLocStop(seqloc_var)+1) > 0) /* Check distance to end. */
+		{
+			seq_int = SeqIntNew();
+			seq_int->from = SeqLocStop(seqloc_var) + 1;
+			seq_int->to = query_length - 1;
+			seq_int->strand = Seq_strand_plus;
+			seq_int->id = SeqIdDup(SeqIdFindBest(SeqLocId(seqloc_var), SEQID_GI));
+                	ValNodeAddPointer(&new_seqloc, SEQLOC_INT, seq_int);
+		}
+		seqloc_var = seqloc_var->next;
+	}
+
+	if (new_seqloc)
+		ValNodeAddPointer(&retval, SEQLOC_PACKED_INT, new_seqloc);
+
+	return retval;
+}
+
+
+Boolean LIBCALL
+PrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
+
+{
+	CharPtr buffer50=NULL, buffer25=NULL, buffer20=NULL, buffer15=NULL, buffer1=NULL;
+	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, tmp;
+	SeqLocPtr n_seqloc1=NULL, n_seqloc2=NULL, n_seqloc3=NULL, n_seqloc4=NULL;
+	ValNodePtr var=NULL;
+
+	var = vnp;
+	while (var)
+	{
+		if (var->choice == 1)
+		{
+			seqloc1 = var->data.ptrvalue;
+		}
+		else if (var->choice == 2)
+		{
+			seqloc2 = var->data.ptrvalue;
+		}
+		else if (var->choice == 3)
+		{
+			seqloc3 = var->data.ptrvalue;
+		}
+		var = var->next;
+	}
+
+	if (seqloc1)
+	{
+		n_seqloc1 = CombineSeqLoc(seqloc1);
+		Print62Notation(n_seqloc1, query_length, &buffer50);
+	}
+
+	seqloc2 = CheckForOverlap(n_seqloc1, seqloc2);
+	if (seqloc2)
+	{
+		n_seqloc2 = CombineSeqLoc(seqloc2);
+		Print62Notation(n_seqloc2, query_length, &buffer25);
+	}
+
+	seqloc3 = CheckForOverlap(n_seqloc1, seqloc3);
+	seqloc3 = CheckForOverlap(n_seqloc2, seqloc3);
+
+	if (seqloc3)
+	{
+		n_seqloc3 = CombineSeqLoc(seqloc3);
+		Print62Notation(n_seqloc3, query_length, &buffer20);
+	}
+
+	ValNodeLink(&n_seqloc4, n_seqloc1);
+	ValNodeLink(&n_seqloc4, n_seqloc2);
+	ValNodeLink(&n_seqloc4, n_seqloc3);
+
+	n_seqloc4 = GetInterveningSeqLoc(n_seqloc4, 50, query_length);
+	if (n_seqloc4)
+	{
+		Print62Notation(n_seqloc4, query_length, &buffer15);
+	}
+
+
+	fprintf(outfp, "<B>Distribution of Vector Matches on the Query Sequence</B>\n\n");
+	fprintf(outfp, "<IMG hspace=1 SRC=http://www.ncbi.nlm.nih.gov/cgi-bin/Entrez/tunf?450x12-1(1)150(%ld)300(%ld)450(%ld)600(%ld)\n", query_length/4, query_length/2, 3*query_length/4, query_length); 
+	fprintf(outfp, ">\n");
+	fprintf(outfp, "<IMG hspace=1 SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(009g)");
+	if (buffer20)
+		fprintf(outfp, "00FF00(%s)", buffer20);
+	if (buffer25)
+		fprintf(outfp, "FF00FF(%s)", buffer25);
+	if (buffer50)
+		fprintf(outfp, "FF0000(%s)", buffer50);
+	if (buffer15)
+		fprintf(outfp, "FFFF00(%s)", buffer15);
+
+	fprintf(outfp, ">\n");
+	fprintf(outfp, "   <B>Match to Vector: </B>");
+	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FF0000(000M)> <B>Strong </B>  ");
+	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FF00FF(000M)> <B>Moderate </B>  ");
+	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)00FF00(000M)> <B>Weak </B>  ");
+	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FFFF00(000M)> <B>Segment of suspect origin</B>  \n\n");
+
+
+	fprintf(outfp, "<B>Segments matching vector: </B>\n");
+	if (n_seqloc1)
+	{
+		if (n_seqloc1->choice == SEQLOC_PACKED_INT)
+			tmp = n_seqloc1->data.ptrvalue;
+		fprintf(outfp, "Strong match:  ");
+		while (tmp)
+		{
+			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			if (tmp->next)
+				fprintf(outfp, ",");
+			else
+				fprintf(outfp, "\n");
+			tmp = tmp->next;
+		}
+	}
+
+	if (n_seqloc2)
+	{
+		if (n_seqloc2->choice == SEQLOC_PACKED_INT)
+			tmp = n_seqloc2->data.ptrvalue;
+		fprintf(outfp, "Moderate match:");
+		while (tmp)
+		{
+			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			if (tmp->next)
+				fprintf(outfp, ",");
+			else
+				fprintf(outfp, "\n");
+			tmp = tmp->next;
+		}
+	}
+
+	if (n_seqloc3)
+	{
+		if (n_seqloc3->choice == SEQLOC_PACKED_INT)
+			tmp = n_seqloc3->data.ptrvalue;
+		fprintf(outfp, "Weak match:    ");
+		while (tmp)
+		{
+			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			if (tmp->next)
+				fprintf(outfp, ",");
+			else
+				fprintf(outfp, "\n");
+			tmp = tmp->next;
+		}
+	}
+
+	if (n_seqloc4)
+	{
+		if (n_seqloc4->choice == SEQLOC_PACKED_INT)
+			tmp = n_seqloc4->data.ptrvalue;
+		fprintf(outfp, "Suspect origin:");
+		while (tmp)
+		{
+			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			if (tmp->next)
+				fprintf(outfp, ",");
+			else
+				fprintf(outfp, "\n");
+			tmp = tmp->next;
+		}
+	}
+
+
+	fprintf(outfp, "\n");
+
+
+	return TRUE;
+
+}

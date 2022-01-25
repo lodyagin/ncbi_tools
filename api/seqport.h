@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.8  1999/02/12 20:48:24  kans
+* made fast byte expansion functions public
+*
 * Revision 6.7  1998/12/14 20:56:24  kans
 * dnaLoc_to_aaLoc takes allowTerminator parameter to handle stop codons created by polyA tail
 *
@@ -238,11 +241,21 @@ NLM_EXTERN SeqPortPtr SeqPortFree PROTO((SeqPortPtr spp));
 NLM_EXTERN Int4 SeqPortTell PROTO((SeqPortPtr spp));
 NLM_EXTERN Int2 SeqPortSeek PROTO((SeqPortPtr spp, Int4 offset, Int2 origin));
 NLM_EXTERN Int4 SeqPortLen PROTO((SeqPortPtr spp));
-NLM_EXTERN Uint1 SeqPortGetResidue PROTO((SeqPortPtr spp));
-NLM_EXTERN Int2 SeqPortRead PROTO((SeqPortPtr spp, BytePtr buf, Int2 len));
+NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue PROTO((SeqPortPtr spp));
+NLM_EXTERN Int2 LIBCALL SeqPortRead PROTO((SeqPortPtr spp, BytePtr buf, Int2 len));
 NLM_EXTERN Uint1 GetGapCode PROTO((Uint1 seqcode));
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpFields PROTO((SeqPortPtr spp, Int4 start, Int4 stop, Uint1 strand, Uint1 newcode));
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpAlphabet PROTO((SeqPortPtr spp, Uint1 curr_code, Uint1 newcode));
+
+/*
+the following functions are for quick alphabet expansion, and require buffers
+allocated with 4-byte or 2-byte alignment, because they cast 2 or 4 bytes into
+Uint2 or Uint4 for fast integer copying.
+*/
+
+NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteToIUPACString PROTO((Uint1Ptr bytep, Uint4Ptr buf, Int4 total));
+NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACString PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
+NLM_EXTERN Uint2Ptr LIBCALL MapNa2ByteToNa4String PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
 
 /*****************************************************************************
 *

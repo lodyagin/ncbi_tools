@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *       API for BLAST service
@@ -47,6 +47,9 @@
 *
 * RCS Modification History:
 * $Log: netblap2.c,v $
+* Revision 6.5  1999/03/12 14:38:43  madden
+* Fixed formatting problems
+*
 * Revision 6.4  1998/08/05 21:22:03  madden
 * Fix for FMR by reassigning asn pointers after reconnect
 *
@@ -502,7 +505,7 @@ Blast2callbackWithMon (BLAST0ResponsePtr brp, Boolean PNTR cancel)
 		if (queue_mon == NULL)
 		{
 		   queue_mon=Nlm_MonitorStrNew ("Queued", 20);
-		   sprintf(buffer, "Waiting for %ld jobs to finish", queue->length);
+		   sprintf(buffer, "Waiting for %ld jobs to finish", (long) queue->length);
 		   retval = Nlm_MonitorStrValue (queue_mon, buffer);
        		   if (retval == FALSE)
        		   { /* If cancelled, then shutdown monitor */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.29 $
+* $Revision: 6.35 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,24 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.c,v $
+* Revision 6.35  1999/04/06 20:14:09  lewisg
+* more opengl
+*
+* Revision 6.34  1999/03/30 22:36:19  ywang
+* add functions to color salsa for NcbiMimeAsn1_strucseqs & code reorganization
+*
+* Revision 6.33  1999/03/18 22:28:58  ywang
+* add functions for saveout+readin+index user defined features
+*
+* Revision 6.32  1999/03/03 23:17:22  lewisg
+* one master struct at a time, list slaves in structure info, bug fixes
+*
+* Revision 6.31  1999/02/25 23:14:31  ywang
+* move around menu item and callback function, change menu item names
+*
+* Revision 6.30  1999/02/24 23:00:49  ywang
+* record mime type at MSD node
+*
 * Revision 6.29  1999/01/20 18:21:20  ywang
 * include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
@@ -182,6 +200,79 @@ Boolean Mime_ReadIn = FALSE;
 
 Int2 Cn3DMime = 0;
 
+/*------------------------------------------------------*/
+void fnMarkAlignedResiduesForStrucSeqs(PDNMS pdnmsThis)
+{
+  PMSD pmsdThis = NULL;
+  PMMD pmmdThis = NULL;
+  PMGD pmgdThis = NULL;
+
+  SeqIdPtr sip = NULL;
+  SeqAnnotPtr sap = NULL;
+  SeqAlignPtr salp = NULL, salp_curr = NULL;
+  DenseSegPtr dssp = NULL;
+  Int4Ptr starts = NULL;
+  Int4Ptr lens = NULL;
+
+  Int4 from = 0, to = 0, nres = 0;
+  Int4 numseg = 0;
+
+
+  pmsdThis = pdnmsThis->data.ptrvalue;
+  if(pmsdThis == NULL)return;
+
+  sap = pmsdThis->psaAlignment;
+  if(sap == NULL) return;
+
+  while(sap){
+     if(sap->type == 2){
+        salp = sap->data;
+        break;
+     }
+     sap = sap->next;
+  }
+
+  if(salp == NULL) return;     
+  salp_curr = salp;
+  if(salp_curr){
+     dssp = salp->segs;
+     sip = dssp->ids;
+     pmmdThis = GetMMFromMSDBySeqId(pmsdThis, sip);
+         /* assume the first sip is for the sequence with known structure */
+  }
+
+  if(pmmdThis == NULL) return;
+
+  salp_curr = salp;
+  while(salp_curr){
+     pmsdThis->bAligned++;
+     salp_curr = salp_curr->next;
+  }
+
+  salp_curr = salp;
+  while(salp){
+     dssp = salp->segs;
+     starts = dssp->starts;
+     lens = dssp->lens;
+
+     for(numseg = 0; numseg < dssp->numseg; numseg++, lens++){
+        from = *starts; to = from + *lens;
+        if(from == -1){starts++; starts++; continue;}
+        starts++;
+        if(*starts != -1){
+           for(nres = from; nres < to; nres++){
+              pmgdThis = GetMGFromMM(pmmdThis, nres + 1);
+              if(pmgdThis) pmgdThis->bReserved++;
+           }
+        }
+        starts++;
+     }
+
+     salp = salp->next;
+  }   
+
+}
+/*----------------------------------------------------*/
 /**********
 fnMarkAlignedResidue()
 Given a master and model, mark all of the residues in the slave and master that are aligned.
@@ -301,7 +392,7 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
     case NcbiMimeAsn1_entrez:
       egp = (EntrezGeneralPtr)mime->data.ptrvalue;
       if (!egp  ||  !egp->Data_data) break; /* THROW */
-      
+      ClearStructures();
       retval = TRUE;
       title = egp->title ? egp->title : "MIME Display";
       switch ( egp->Data_data->choice )
@@ -311,6 +402,9 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
         if ( !pdnms ) break;
         
         pmsdThis = (PMSD)pdnms->data.ptrvalue;
+
+        pmsdThis->iMimeType = NcbiMimeAsn1_entrez;
+
         pdnmlThis = pmsdThis->pdnmlModels;
         /* set up for doing one model or animation */
         while ( pdnmlThis )
@@ -329,7 +423,6 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
         Mime_ReadIn = TRUE;
         Cn3D_ObjMgrOpen = FALSE;
 
-        Cn3D_ResetActiveStrucProc();
         break;
         
       case Data_data_nuc:
@@ -342,11 +435,15 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
       break;
                          /* yanli start */
       case NcbiMimeAsn1_strucseq:
+	ClearStructures();
         bssp = (BiostrucSeqPtr)mime->data.ptrvalue;
         pdnms = MakeAModelstruc( (BiostrucPtr)bssp->structure);
         if ( !pdnms ) break;
 
         pmsdThis = (PMSD)pdnms->data.ptrvalue;
+
+        pmsdThis->iMimeType = NcbiMimeAsn1_strucseq;
+
         pdnmlThis = pmsdThis->pdnmlModels;
         /* set up for doing one model or animation */
         while ( pdnmlThis )
@@ -366,17 +463,20 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
 
         Cn3D_ObjMgrOpen = FALSE;
 
-        Cn3D_ResetActiveStrucProc();
 
         Mime_ReadIn = TRUE;
         break;
 
       case NcbiMimeAsn1_strucseqs:
+	ClearStructures();
         bsssp = (BiostrucSeqsPtr)mime->data.ptrvalue;
         pdnms = MakeAModelstruc( (BiostrucPtr)bsssp->structure);
         if ( !pdnms ) break;
 
         pmsdThis = (PMSD)pdnms->data.ptrvalue;
+        
+        pmsdThis->iMimeType = NcbiMimeAsn1_strucseqs;
+
         pdnmlThis = pmsdThis->pdnmlModels;
         /* set up for doing one model or animation */
         while ( pdnmlThis )
@@ -396,9 +496,12 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
         pmsdThis->psaAlignment = bsssp->seqalign;
         pmsdThis->pseqaSeqannot = bsssp->seqalign;
 
-        Cn3D_ObjMgrOpen = FALSE;
+        fnMarkAlignedResiduesForStrucSeqs(pdnms);
 
-        Cn3D_ResetActiveStrucProc();
+        parsThis = NewStrucSeqsRenderSet();
+        pmsdThis->pExtra = parsThis;
+
+        Cn3D_ObjMgrOpen = FALSE;
 
         Mime_ReadIn = TRUE;
         break;
@@ -421,12 +524,15 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
         pbsaThis = (BiostrucAlignPtr)mime->data.ptrvalue;
         if (!pbsaThis ) break; /* THROW */
       retval = TRUE;
-
+        ClearStructures();
         /* load in the master */
         pdnmsMaster = MakeAModelstruc( (BiostrucPtr)pbsaThis->master );  /* grab the master struc */
         if ( !pdnmsMaster ) break;
 
         pmsdMaster = (PMSD)pdnmsMaster->data.ptrvalue;
+
+        pmsdMaster->iMimeType = NcbiMimeAsn1_alignstruc;
+
         parsThis = NewAlignRenderSet();
         pmsdMaster->pExtra = parsThis;
         pmsdMaster->bVisible = TRUE;
@@ -525,7 +631,6 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
         Mime_ReadIn = TRUE;
         Cn3D_ObjMgrOpen = FALSE;
 
-        Cn3D_ResetActiveStrucProc();
 
         break;
       default:
@@ -539,8 +644,20 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
   }
   ArrowCursor();
 
+  Cn3DIndexUserDefinedFeature();     
+  Cn3D_ResetActiveStrucProc();     
+
   Cn3dObjRegister();        /*  yanli  */
   if(Mime_ReadIn) LaunchSequenceWindow();
+  pdnmsMaster = GetSelectedModelstruc();
+  if(pdnmsMaster){
+     pmsdMaster = pdnmsMaster->data.ptrvalue; 
+     if(pmsdMaster){
+        if(pmsdMaster->iMimeType == NcbiMimeAsn1_strucseqs){
+           Cn3DColorSalsaForStrucSeqs(); 
+        }
+     }
+  }
 
   return retval;
 }
@@ -577,7 +694,10 @@ static void Cn3D_NetOpenAcceptProc(ButtoN b)
  
   WatchCursor();
   SetNeighborOff();   /* we don't load in neighbors thru this route */
+#ifndef _OPENGL
   Cn3D_SaveActiveCam();
+#endif
+  ClearStructures();
   GetTitle(Cn3D_tOpen, str, sizeof(str));
    
   switch (GetValue(Cn3D_gMdlLvl))
@@ -668,6 +788,7 @@ static void Cn3D_NetOpenAcceptProc(ButtoN b)
 
   Cn3D_ObjMgrOpen = FALSE;
 
+  Cn3DIndexUserDefinedFeature();
   Cn3D_ResetActiveStrucProc();
 
   Cn3dObjRegister();
@@ -780,7 +901,10 @@ static void Cn3D_OpenAcceptProc(ButtoN b)
   
   WatchCursor();
   SetNeighborOff(); /* we don't load in slaves here */
+#ifndef _OPENGL
   Cn3D_SaveActiveCam();
+#endif
+  ClearStructures();
   GetTitle(Cn3D_tOpen, str, sizeof(str));
   hFile = FileOpen(str, "rb");
   FileGets((CharPtr) szBegin, 2, hFile);
@@ -831,6 +955,7 @@ static void Cn3D_OpenAcceptProc(ButtoN b)
       return;
     }  
 
+  Cn3DIndexUserDefinedFeature();
   Cn3D_ResetActiveStrucProc();
 
   } /* switch between mime and non-mime */
@@ -913,11 +1038,11 @@ MenU LIBCALL Cn3D_OpenSub (MenU m, Boolean usingEntrez)
   MenU s;
 
   s = SubMenu (m, "Open");
-  i = CommandItem (s, "Biostruc - MMDB/N", Cn3D_NetOpenBiostruc);
+  i = CommandItem (s, "Network/N", Cn3D_NetOpenBiostruc);
   if (! usingEntrez) {
     Disable (i);
   }
-  i = CommandItem (s, "Biostruc - Local/B", Cn3D_OpenBiostruc);
+  i = CommandItem (s, "Local File/B", Cn3D_OpenBiostruc);
 /* i = CommandItem (s, "Feature-set/F", Cn3D_OpenFeature); */
  
   return s;

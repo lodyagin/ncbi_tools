@@ -34,6 +34,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.c,v $
+* Revision 6.32  1999/04/27 20:47:37  lewisg
+* add cn3d gif batch mode to cn3d
+*
+* Revision 6.31  1999/02/10 23:49:42  lewisg
+* use RGB values instead of indexed palette
+*
 * Revision 6.30  1999/01/20 18:21:19  ywang
 * include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
@@ -208,6 +214,64 @@ static void NetConfigureProc (IteM i)
                      ConfigTurnedOff, netCurrentlyOn);
 }
 
+
+static void Cn3D_PrintImage(Char * str)
+/* this is only used in batch mode to create a gifs of the structure */
+{
+    BiostrucPtr pbsBiostruc = NULL;
+    PDNMS pdnmsModelstruc = NULL;
+    PMSD  pmsdThis = NULL;
+    Int4 MdlNo,  MdlLvl;
+    PDNML pdnmlThis = NULL;
+    PDNML pdnmlFirst = NULL;
+    PMLD pmldThis = NULL;
+    PMLD pmldOne = NULL;
+    PMLD pmldAll = NULL;
+    PMLD pmldVec = NULL;
+    
+    SetNeighborOff();   /* we don't load in neighbors thru this route */
+#ifndef _OPENGL
+    Cn3D_SaveActiveCam();
+#endif
+    ClearStructures();
+    
+    MdlLvl = ALLSIMPLEMDL;   
+    MdlNo = 1; 
+       
+    pbsBiostruc = FetchBS(str,  INP_GI, MdlLvl, MdlNo, GetMMDBAPIbExtent());
+    if (pbsBiostruc != NULL)
+    {
+        pdnmsModelstruc= MakeAModelstruc(pbsBiostruc);	
+    }	
+    if (pdnmsModelstruc == NULL)
+    {
+        /* return a not found error here */
+        return;
+    }    
+    /* turn off backbone model if "All" models present */
+    pmsdThis = (PMSD) pdnmsModelstruc->data.ptrvalue;
+    pdnmlThis = pmsdThis->pdnmlModels;
+    /* set up for doing one model or animation */
+    while (pdnmlThis)
+    {
+        pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
+        if (pmldThis->iType == Model_type_ncbi_vector)
+            pmldVec = pmldThis;
+        if (pmldThis->iType == Model_type_ncbi_backbone)
+            pmldOne = pmldThis;
+        if(pmldThis->iType == Model_type_ncbi_all_atom)
+            pmldAll = pmldThis;
+        pdnmlThis = pdnmlThis->next;
+    }
+    if ((pmldOne != NULL) && (pmldAll != NULL))
+        pmldOne->bSelected &= (Byte) 0xFE;
+     
+    Cn3D_ResetActiveStrucProc();
+    
+    return;
+}
+
+
 Int2 Main(void)
 {
   char buffer [PATH_MAX];
@@ -253,6 +317,35 @@ Int2 Main(void)
 #if defined(OS_UNIX) || defined(WIN_MSWIN)
 	  if (GetArgc() == 2)
 	    OpenMimeFile( GetArgv()[1] );
+      else if (GetArgc() == 4) {
+          /* 
+             runs Cn3D in batch mode to produce gifs.  Arguments are mmdb id, width, and height.  
+             gifs are saved with a file name constructed using the mmdb id.
+           */
+          CharPtr defname;
+          Nlm_RecT rect;
+
+          rect.left = 0;
+          rect.right = atoi(GetArgv()[2]);
+          rect.top = 0;
+          rect.bottom = atoi(GetArgv()[3]);
+          if(rect.right < 1 || rect.bottom < 1) return 0;
+
+          defname = StringSave(GetArgv()[1]);
+          if (atoi(defname) < 1 ) return 0;
+          Cn3D_PrintImage(defname);
+          StringCat(defname, ".gif");
+          Show(www);
+          Cn3D_Redraw(TRUE);
+#if _OPENGL
+          OGL_SetPosition3D(Cn3D_ColorData.OGL_Data, &rect);
+#else /* _OPENGL */
+          SetPosition3D(Cn3D_v3d, &rect);
+#endif /* else _OPENGL */
+          Update();
+          SaveImageGIF(Nlm_GetViewerImage3D(Cn3D_v3d), defname);
+          return 0;
+     } 
 	  else {
 	    if (GetAppParam("Cn3D","demo","optional_file","", buffer, sizeof(buffer)) > 0)
 	      {
@@ -272,6 +365,9 @@ Int2 Main(void)
 
   CloseMMDBAPI();
   
+
+  /* to do: delete OGL global information in viewer3D.  lyg */
+
   if (useEntrez) {
     EntrezBioseqFetchDisable ();
     if (EntrezIsInited ()) {

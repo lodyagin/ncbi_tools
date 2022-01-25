@@ -32,11 +32,14 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.11 $ */
-/* $Log: blastkar.h,v $
-/* Revision 6.11  1998/12/31 18:17:05  madden
-/* Added strand option
-/*
+/* $Revision: 6.12 $ 
+* $Log: blastkar.h,v $
+* Revision 6.12  1999/03/17 16:49:11  madden
+* Removed comment within comment
+*
+* Revision 6.11  1998/12/31 18:17:05  madden
+* Added strand option
+*
  * Revision 6.10  1998/09/11 19:02:07  madden
  * Added paramC
  *

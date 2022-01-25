@@ -1730,9 +1730,11 @@ void DeletePubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	bsp = (BioseqPtr)(sep->data.ptrvalue);
 	if ((bsp->repr != Seq_repr_raw) && (bsp->repr != Seq_repr_const))
 		return;
+	/*
 	if (bsp->mol == Seq_mol_aa) {
 		return;
 	}
+	*/
 	descr = bsp->descr;
 	for(v = descr; v; v = vnext) {
 		vnext = v->next;
@@ -2189,6 +2191,116 @@ SeqDescrPtr remove_descr(SeqDescrPtr head, SeqDescrPtr x)
 
 
 /* Cleanup functions originally from Sequin */
+
+static void FindConsistentMolInfo (SeqEntryPtr sep, MolInfoPtr PNTR mipp, BoolPtr consist)
+
+{
+  BioseqPtr     bsp = NULL;
+  BioseqSetPtr  bssp = NULL;
+  MolInfoPtr    mip;
+  ValNodePtr    sdp = NULL;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sdp = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sdp = bssp->descr;
+  } else return;
+  while (sdp != NULL) {
+    if (sdp->choice == Seq_descr_molinfo) {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+      if (mip != NULL) {
+        if (*mipp == NULL) {
+          *mipp = mip;
+        } else {
+          if ((*mipp)->biomol != mip->biomol ||
+              (*mipp)->tech != mip->tech ||
+              (*mipp)->completeness != mip->completeness ||
+              StringICmp ((*mipp)->techexp, mip->techexp) != 0) {
+            *consist = FALSE;
+          }
+        }
+      }
+    }
+    sdp = sdp->next;
+  }
+  if (bssp == NULL) return;
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    FindConsistentMolInfo (sep, mipp, consist);
+  }
+}
+
+static void RemoveMolInfoCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  ValNodePtr    nextsdp;
+  Pointer PNTR  prevsdp;
+  ValNodePtr    sdp;
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sdp = bsp->descr;
+    prevsdp = (Pointer PNTR) &(bsp->descr);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sdp = bssp->descr;
+    prevsdp = (Pointer PNTR) &(bssp->descr);
+  } else return;
+  while (sdp != NULL) {
+    nextsdp = sdp->next;
+    if (sdp->choice == Seq_descr_molinfo) {
+      *(prevsdp) = sdp->next;
+      sdp->next = NULL;
+      SeqDescFree (sdp);
+    } else {
+      prevsdp = (Pointer PNTR) &(sdp->next);
+    }
+    sdp = nextsdp;
+  }
+}
+
+extern void NormalizeSegSeqMolInfo (SeqEntryPtr sep)
+
+{
+  BioseqSetPtr  bssp;
+  Boolean       consistent;
+  MolInfoPtr    master;
+  MolInfoPtr    mip;
+  ValNodePtr    sdp;
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    if (bssp != NULL && bssp->_class != BioseqseqSet_class_segset) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        NormalizeSegSeqMolInfo (sep);
+      }
+      return;
+    }
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_segset) {
+      mip = NULL;
+      consistent = TRUE;
+      FindConsistentMolInfo (sep, &mip, &consistent);
+      if (mip != NULL && consistent) {
+        master = MolInfoNew ();
+        if (master == NULL) return;
+        master->biomol = mip->biomol;
+        master->tech = mip->tech;
+        master->completeness = mip->completeness;
+        master->techexp = StringSaveNoNull (mip->techexp);
+        SeqEntryExplore (sep, NULL, RemoveMolInfoCallback);
+        sdp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+        if (sdp != NULL) {
+          sdp->data.ptrvalue = (Pointer) master;
+        }
+      }
+    }
+  }
+}
 
 static void CollectPseudoCdsProducts (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
@@ -2668,10 +2780,15 @@ static Int4 LoopSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
 extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
 
 {
-  Uint2 entityID;
+  Uint2   entityID;
+  ErrSev  lsev;
+  ErrSev  msev;
 
   if (sep == NULL) return;
+  msev = ErrSetMessageLevel (SEV_MAX);
+  lsev = ErrSetLogLevel (SEV_MAX);
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
+  BasicSeqEntryCleanup (sep);
   SeqEntryExplore (sep, NULL, CleanupGenbankCallback);
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   SeqEntryExplore (sep, NULL, MergeAdjacentAnnotsCallback);
@@ -2692,5 +2809,7 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
   SeqEntryExplore (sep, NULL, GetRidOfEmptyFeatsDescCallback);
   CleanUpPseudoProducts (entityID, sep);
   CdCheck (sep, NULL);
+  ErrSetMessageLevel (msev);
+  ErrSetLogLevel (lsev);
 }
 

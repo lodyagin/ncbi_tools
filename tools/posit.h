@@ -34,11 +34,20 @@ Contents: header file for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.5 $ */
-/* $Log: posit.h,v $
-/* Revision 6.5  1998/09/28 12:31:32  madden
-/* Used BlastConstructErrorMessage
-/*
+/* $Revision: 6.8 $ *
+* $Log: posit.h,v $
+* Revision 6.8  1999/03/21 19:40:30  madden
+* Added 3rd argument matrixfp to definition of outputPosMatrix
+*
+* Revision 6.7  1999/03/17 16:49:11  madden
+* Removed comment within comment
+*
+* Revision 6.6  1999/01/26 18:27:58  madden
+* Made functions public for AS
+*
+* Revision 6.5  1998/09/28 12:31:32  madden
+* Used BlastConstructErrorMessage
+*
  * Revision 6.3  1998/04/24 19:29:50  madden
  * Added ideal values to compactSearch
  *
@@ -108,6 +117,13 @@ extern "C" {
 
 #define ALL_ROUNDS 1 /*do all rounds without interruption*/
 
+/* Front-ends to retrieve numbers. */
+
+#define  getCkptNlm_FloatHi(d, ckptFile)  (getCkptNumber(&(d),sizeof(Nlm_FloatHi),ckptFile))
+#define  getCkptInt4(i, ckptFile)         (getCkptNumber(&(i),sizeof(Int4),ckptFile))
+#define  getCkptChar(c, ckptFile)         (getCkptNumber(&(c),sizeof(Char),ckptFile))
+
+
 typedef struct posDesc {
   Int1 letter;  /*what is the preferred letter here*/
   Boolean used;  /*is there any letter here */
@@ -158,7 +174,7 @@ typedef struct compactSearchItems {
 } compactSearchItems;
   
 
-void LIBCALL outputPosMatrix PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch));
+void LIBCALL outputPosMatrix PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, FILE *matrixfp));
 
 Int4Ptr * LIBCALL CposComputation PROTO((posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return));
 
@@ -186,6 +202,14 @@ Boolean LIBCALL posTakeCheckpoint(posSearchItems * posSearch, compactSearchItems
 Boolean LIBCALL posReadCheckpoint(posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, ValNodePtr * error_return);
 
 void LIBCALL posCheckpointFreeMemory(posSearchItems *posSearch, Int4 querySize);
+
+void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch);
+
+Uint1 LIBCALL ResToInt(Char input);
+
+void    LIBCALL getCkptFreqMatrix (Nlm_FloatHi ** theMatrix, Int4 length, Int4 width, FILE * ckptFile);
+
+void  LIBCALL getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile );
 
 #ifdef __cplusplus
 

@@ -31,7 +31,13 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2pdb.c,v $
- * Revision 6.6  1998/10/14 17:18:42  addess
+ * Revision 6.8  1999/05/07 13:59:42  zimmerma
+ * Changed call to InstBSAnnotSet() to pass Chain and SlaveChain params
+ *
+ * Revision 6.7  1999/02/17 19:30:31  addess
+ * fixed problem with not being able to read new files
+ *
+ * Revision 6.6  1998/10/14  17:18:42  addess
  * sending aligned chains to RASMOL
  *
  * Revision 6.5  1998/07/17  18:47:44  madej
@@ -94,8 +100,8 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
   AsnIoPtr aip = NULL; 
   Char giBuf[20], URL[200];
   char *IPAddress = getenv("REMOTE_HOST");
+  Boolean Chain;
 
- 
   if ((indx = WWWFindName(www_info, "uid")) < 0) {
     printf("Content-type: text/html\n\n");
     printf("<h2>VASTSERV (VastToPDB)</h2>\n");
@@ -208,7 +214,7 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
 
   OpenMMDBAPI((POWER_VIEW /* ^ FETCH_ENTREZ */), NULL);
   if (JobID == NULL)
-    pbsa = VASTBsAnnotSetGet(GetGi);
+    pbsa = VASTBsAnnotSetGet(Fsid);
   else
     pbsa = LocalGetFeatureSet(GetGi, Fsid, JobID);
 
@@ -241,10 +247,10 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
    AsnIoClose(aip);
  */
  
-  if ((JobID == NULL) && (Chain == FALSE))
-     InstBSAnnotSet(pbsaShort);
-  else
-     InstBSAnnotSetVS(pbsaShort, JobID);
+  /* K.A. changed 4/26/99 - previously used InstBSAnnotSet and InstBSAnnotSetVS */
+  /* collapsed to single version w/NULL JobID and Chain where not needed      */
+
+  InstBSAnnotSet(pbsaShort, JobID, Chain, VSPATH);
   pdnmsMaster = GetSelectedModelstruc();
   pdnmsSlave = GetSlaveModelstruc();
   if (!pdnmsMaster)

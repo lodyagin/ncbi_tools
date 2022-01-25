@@ -32,11 +32,14 @@ Contents: prototypes for functions that produce blast18 ASN.1 from
 
 ******************************************************************************/
 
-/* $Revision: 6.0 $ */
-/* $Log: blastasn.h,v $
-/* Revision 6.0  1997/08/25 18:34:00  madden
-/* Revision changed to 6.0
-/*
+/* $Revision: 6.1 $ 
+* $Log: blastasn.h,v $
+* Revision 6.1  1999/03/17 16:59:19  madden
+* remove comment in comment
+*
+* Revision 6.0  1997/08/25 18:34:00  madden
+* Revision changed to 6.0
+*
  * Revision 1.3  1996/11/27 18:04:28  madden
  * Added prototype for MakeBLAST0DbDesc
  *

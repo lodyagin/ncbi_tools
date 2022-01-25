@@ -1,4 +1,4 @@
-/* $Id: ncbiwww.h,v 6.0 1997/08/25 18:17:27 madden Exp $
+/* $Id: ncbiwww.h,v 6.1 1999/01/26 19:43:27 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,13 +29,17 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   This file contains main definitions to read and process HTTP 
 *   protocols input for WWW CGI programs
 *   Currently it works for all ncbi supported platforms.
-*   
+*
+* $Log: ncbiwww.h,v $
+* Revision 6.1  1999/01/26 19:43:27  vakatov
+* Adopted for 32-bit MS-Windows DLLs
+*
 * Revision 5.1  1997/05/09 16:01:25  vakatov
 * "ncbicoll.[ch]" is not being used anywhere anymore -- remove it!
 * Move "ncbiwww.h" and "wwwutils.c" from /network/www2(ncbiwww2.lib)
@@ -76,6 +80,14 @@ o
 #ifndef _NCBI_
 #include <ncbi.h>
 #endif
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
 
 /****************************************************************************/
 /* DEFINES */
@@ -152,9 +164,9 @@ extern "C" {
    NOTE:        RFC 1867 may be enabled only with Netscape Version 2 and 
                 higher.
   ------------------------------------------------------------------*/
-
-WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries, CharPtr WWWBuffer, 
-                               Boolean NetscapeOK);
+NLM_EXTERN WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries,
+                                          CharPtr WWWBuffer, 
+                                          Boolean NetscapeOK);
 
 /* --------------------  WWWGetEntriesFomData  -----------------------
    Purpose:     Assuming, that input buffer is in RFC 1867
@@ -162,16 +174,14 @@ WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries, CharPtr WWWBuffer,
                 (multipart/form-data) encoding this function 
                 converts input into array of name, value pairs 
                 in the form of WWWEntry -es.
-
    Parameters:  WWWBuffer   - main input HTTP buffer
                 entries - pointer to array of WWWEntry -es
-
    Returns:     Number of WWW entries returned
    NOTE:        RFC 1867 may be enabled only with Netscape Version 2 and 
                 higher.
   ------------------------------------------------------------------*/
-Int4 WWWGetEntriesFormData(WWWEntryPtr PNTR entries, 
-                           CharPtr WWWBuffer);
+NLM_EXTERN Int4 WWWGetEntriesFormData(WWWEntryPtr PNTR entries, 
+                                      CharPtr WWWBuffer);
 
 /* -----------------------  WWWGetArgs  ---------------------------
    Purpose:     This function read HTML input in POST, GET or
@@ -180,20 +190,17 @@ Int4 WWWGetEntriesFormData(WWWEntryPtr PNTR entries,
                 function will return valid WWWInfo structure
                 with all field blank exept info->method, that
                 will be set to COMMAND_LINE. 
-
-                if argc == 1 this function will read WWW buffer 
+                If argc == 1 this function will read WWW buffer 
                 from STDIN, otherwise it will treat argv[1] as
                 WWW buffer.
-
    Parameters:  None
-
    Returns:     WWWInfoPtr structure with processed HTTP input and
                 environment
    NOTE:        This function will filer input for non-printing
                 characters. Transfer of binary files is not supported.
 
   ------------------------------------------------------------------*/
-WWWErrorCode WWWGetArgs(WWWInfoPtr PNTR info);
+NLM_EXTERN WWWErrorCode WWWGetArgs(WWWInfoPtr PNTR info);
 
 
 /* ----------------------  WWWReadPosting  -------------------------
@@ -203,18 +210,16 @@ WWWErrorCode WWWGetArgs(WWWInfoPtr PNTR info);
                 function will return valid WWWInfo structure
                 with all field blank exept info->method, that
                 will be set to COMMAND_LINE
-
                 No more proccesing will be performed.               
-
    Parameters:  None
-
    Returns:     WWWInfoPtr structure with processed HTTP input and
                 environment
    NOTE:        This function will filer input for non-printing
                 characters. Transfer of binary files is not supported.
 
   ------------------------------------------------------------------*/
-WWWErrorCode WWWReadPosting(WWWInfoPtr PNTR info);
+NLM_EXTERN WWWErrorCode WWWReadPosting(WWWInfoPtr PNTR info);
+
 
 /* -------------------  WWWReadFileInMemory  -----------------------
    Purpose:     Function reads data from file or stdin into 
@@ -233,97 +238,87 @@ WWWErrorCode WWWReadPosting(WWWInfoPtr PNTR info);
                 absolutely differently if len == 0 or len != 0
 
   ------------------------------------------------------------------*/
-CharPtr WWWReadFileInMemory(FILE *fd, Int4 len, Boolean filter);
+NLM_EXTERN CharPtr WWWReadFileInMemory(FILE *fd, Int4 len, Boolean filter);
+
 
 /* ----------------------  WWWInfoFree  -------------------------
    Purpose:     Free WWWInfo structure
-
    Parameters:  WWWInfo structure
-
    Returns:     None
   ------------------------------------------------------------------*/
-void WWWInfoFree(WWWInfoPtr info);
+NLM_EXTERN void WWWInfoFree(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetWWWEntry  -------------------------
    Purpose:     Return pointer to array of name=value tags
-
    Parameters:  WWWInfoPtr
-
    Returns:     Method used or -1 if error 
   ------------------------------------------------------------------*/
-WWWEntryPtr PNTR WWWGetWWWEntries(WWWInfoPtr info);
+NLM_EXTERN WWWEntryPtr PNTR WWWGetWWWEntries(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetMethod  -------------------------
    Purpose:     Return method used in WWW Request or COMMAND_LINE
-
    Parameters:  WWWInfoPtr
-
    Returns:     Method used or -1 if error 
   ------------------------------------------------------------------*/
-Int4 WWWGetMethod(WWWInfoPtr info);
+NLM_EXTERN Int4 WWWGetMethod(WWWInfoPtr info);
 
 /* ----------------------  WWWGetBrowser  -------------------------
    Purpose:     Return browser used in WWW Request
-
    Parameters:  WWWInfoPtr
-
    Returns:     Browser used or -1 if error 
   ------------------------------------------------------------------*/
-Int4 WWWGetBrowser(WWWInfoPtr info);
+NLM_EXTERN Int4 WWWGetBrowser(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetNumEntries  -------------------------
    Purpose:     Return number of name=value tags in WWW Request
-
    Parameters:  WWWInfoPtr
-
    Returns:     Number of Entries or -1 if error
   ------------------------------------------------------------------*/
-Int4 WWWGetNumEntries(WWWInfoPtr info);
+NLM_EXTERN Int4 WWWGetNumEntries(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetAgent  -------------------------
    Purpose:     Return agent used in WWW Request 
-
    Parameters:  WWWInfoPtr
-
    Returns:     Agent used or NULL if error 
   ------------------------------------------------------------------*/
-CharPtr WWWGetAgent(WWWInfoPtr info);
+NLM_EXTERN CharPtr WWWGetAgent(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetAddress  -------------------------
    Purpose:     Return address used in WWW Request 
-   
    Parameters:  WWWInfoPtr
-   
    Returns:     Address used or NULL if error 
    ------------------------------------------------------------------*/
-CharPtr WWWGetAddress(WWWInfoPtr info);
+NLM_EXTERN CharPtr WWWGetAddress(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetDocRoot  -------------------------
    Purpose:     Return DOCUMENT_ROOT directory of current server 
-   
    Parameters:  WWWInfoPtr
-   
    Returns:     Document root directory or NULL if error 
   ------------------------------------------------------------------*/
-CharPtr WWWGetDocRoot(WWWInfoPtr info_in);
+NLM_EXTERN CharPtr WWWGetDocRoot(WWWInfoPtr info_in);
+
 
 /* ----------------------  WWWGetHost  -------------------------
    Purpose:     Return host used in WWW Request 
-   
    Parameters:  WWWInfoPtr
-   
    Returns:     Host used or NULL if error 
   ------------------------------------------------------------------*/
-CharPtr WWWGetHost(WWWInfoPtr info);
+NLM_EXTERN CharPtr WWWGetHost(WWWInfoPtr info);
+
 
 /* ----------------------  WWWGetServer  -------------------------
    Purpose:     Return HTTPD server name used in WWW Request 
-   
    Parameters:  WWWInfoPtr
-   
    Returns:     Server name used or NULL if error 
   ------------------------------------------------------------------*/
-CharPtr WWWGetServer(WWWInfoPtr info_in);
+NLM_EXTERN CharPtr WWWGetServer(WWWInfoPtr info_in);
+
 
 /* ----------------------  WWWGetQuery  -------------------------
    Purpose:     Return full query used in WWW Request 
@@ -332,98 +327,95 @@ CharPtr WWWGetServer(WWWInfoPtr info_in);
    
    Returns:     Query used or NULL if error 
   ------------------------------------------------------------------*/
-CharPtr WWWGetQuery(WWWInfoPtr info);
+NLM_EXTERN CharPtr WWWGetQuery(WWWInfoPtr info);
 
 /* ----------------------  WWWGetPort  -------------------------
    Purpose:     Return port used in WWW Request
-
    Parameters:  WWWInfoPtr
-
    Returns:     Port used or -1 if error 
   ------------------------------------------------------------------*/
-Int4 WWWGetPort(WWWInfoPtr info);
+NLM_EXTERN Int4 WWWGetPort(WWWInfoPtr info);
+
 
 /* ----------------------  WWWInfoNew  -------------------------
    Purpose:     Allocates WWWInfo structure
-
    Parameters:  None
-
    Returns:     WWWInfo structure
   ------------------------------------------------------------------*/
-/* WWWInfoPtr WWWInfoNew(void); */
+/* NLM_EXTERN WWWInfoPtr WWWInfoNew(void); */
+
 
 /* ----------------------  WWWFindName  -------------------------
    Purpose:     This function look for Name in WWW Entries structure
-
    Parameters:  info - WWWInfo structure
                 find - Name to find 
-
    Returns:     index in WWWEntry structue if "find" found and -1 if not 
   ------------------------------------------------------------------*/
-Int4 WWWFindName(WWWInfoPtr info, CharPtr find);
+NLM_EXTERN Int4 WWWFindName(WWWInfoPtr info, CharPtr find);
+
 
 /* ----------------------  WWWGetNameByIndex  ----------------------
    Purpose:     This function get Name correspondig to specific
                 index. 
-
    Parameters:  info - WWWInfo structure
                 index - Index in WWW Entries structure
-               
    Returns:     Pointer to Name or NULL if index invalid
   ------------------------------------------------------------------*/
-CharPtr WWWGetNameByIndex(WWWInfoPtr info, Int4 index);
+NLM_EXTERN CharPtr WWWGetNameByIndex(WWWInfoPtr info, Int4 index);
+
 
 /* -------------------  WWWGetValueByIndex  ---------------------
    Purpose:     This function get Value correspondig to specific
                 index. 
-
    Parameters:  info - WWWInfo structure
                 index - Index in WWW Entries structure
-               
    Returns:     Pointer to Value or NULL if index invalid
   ------------------------------------------------------------------*/
-CharPtr WWWGetValueByIndex(WWWInfoPtr info, Int4 index);
+NLM_EXTERN CharPtr WWWGetValueByIndex(WWWInfoPtr info, Int4 index);
+
 
 /* -------------------  WWWGetValueByName  ---------------------
    Purpose:     This function get Value correspondig to specific
                 Name. 
-
    Parameters:  info - WWWInfo structure
                 name - name to look for
                 start - Index in WWW Entries structure to start from
-               
    Returns:     Pointer to Value or NULL if Name was not found 
   ------------------------------------------------------------------*/
-CharPtr WWWGetValueByName(WWWInfoPtr info, CharPtr name);
+NLM_EXTERN CharPtr WWWGetValueByName(WWWInfoPtr info, CharPtr name);
+
 
 /* -------------------  WWWSubstituteValue  ---------------------
    Purpose:     This function substitute "old" value by "new"
                 value in WWWInfo structure.
-
    Parameters:  info_in - WWWInfo structure
                 old - value to change
                 new - new value to assign
-               
    Returns:     FALSE if "old" value not found, otherwise TRUE
   ------------------------------------------------------------------*/
-Boolean WWWSubstituteValue(WWWInfoPtr info_in,
-                           CharPtr old, CharPtr new_value);
+NLM_EXTERN Boolean WWWSubstituteValue(WWWInfoPtr info_in,
+                                      CharPtr old, CharPtr new_value);
 
 /* -------------------  WWWSubstituteValueByName  -------------------
    Purpose:     This function substitute  value corresponding to "name"
                 by "new" value in WWWInfo structure.
-
    Parameters:  info_in - WWWInfo structure
                 name - corresponding name
                 new - new value to assign
-               
    Returns:     FALSE if "name" was not found, otherwise TRUE
   ------------------------------------------------------------------*/
-Boolean WWWSubstituteValueByName(WWWInfoPtr info_in,
-                                 CharPtr new_value, CharPtr name);
+NLM_EXTERN Boolean WWWSubstituteValueByName(WWWInfoPtr info_in,
+                                            CharPtr new_value, CharPtr name);
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif

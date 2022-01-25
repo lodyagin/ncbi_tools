@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: epi - protein and nucleic acid low complexity
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: epi.c,v $
+* Revision 6.22  1999/02/25 15:09:17  kuzio
+* optimization 3
+*
 * Revision 6.21  1998/12/18 16:24:55  kuzio
 * big GIs
 *
@@ -95,7 +98,8 @@ Args myargs[] =
     'x', ARG_BOOLEAN, 0.0, 0, NULL},
   { "numeric output", "FALSE", "FALSE", "TRUE", TRUE,
     'N', ARG_BOOLEAN, 0.0, 0, NULL},
-  { "optimization 0=none 1=composition 2=homopolymer", "0", "0", "2", TRUE,
+  { "optimization 0=none 1=composition 2=homopolymer 3=probability function",
+    "0", "0", "3", TRUE,
     'O', ARG_INT, 0.0, 0, NULL},
   { "extra blank line between output entries", "FALSE", "FALSE", "TRUE", TRUE,
     'R', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -261,7 +265,7 @@ Int2 Main (void)
         slpn = FilterEpiBioseq (epip, gbsp->bsp,
                                 (Boolean) myargs[8].intvalue,
                                 (Boolean) myargs[16].intvalue);
-        flagIsAA = ISA_aa (gbsp->bsp->mol);
+        flagIsAA = (Boolean) ISA_aa (gbsp->bsp->mol);
         if (myargs[10].intvalue == TRUE)
         {
           slp = slpn;

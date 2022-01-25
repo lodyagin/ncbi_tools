@@ -3,6 +3,9 @@
 # default flags for compiling and loading
 #
 # $Log: make.mmdbsrv,v $
+# Revision 6.24  1999/04/22 01:53:20  kimelman
+# follow up to wrapper fixes.
+#
 # Revision 6.23  1998/11/06 18:59:07  kimelman
 # PubStruct loading transaction granularity changed
 #
@@ -101,6 +104,7 @@ INCPATH = $(NCBI_INCDIR)
 LIBPATH = $(NCBI_LIBDIR)
 SYBLIBRARY = $(NCBI_SYBLIBS_CT)
 #SYBLIBRARY = $(NCBI_SYBLIBS_CT_r)
+
 webdir=/net/neptune/pubmed/WWW/live/www.server/cgi-bin/Entrez/Structure
 utildir=/net/vaster/usr/people2/bryant/MDB/Pubstruct
 
@@ -154,8 +158,6 @@ install_web: $(webdir) mmdbsrv mmdbsrv.wrapper index/st_configure.sh
 	cp mmdbsrv.wrapper $(webdir)
 	chmod a+x $(webdir)/st_configure.sh $(webdir)/mmdbsrv.wrapper
 	cd $(webdir) ; [ -r mmdbsrv ] || ln -s mmdbsrv.wrapper mmdbsrv ;
-	[ ! -d $(webdir)/new ] || ( cd $(webdir)/new ; [ ! -f mmdbsrv.db ] || rm mmdbsrv.db )
-	[ ! -d $(webdir)/new ] || ( cd $(webdir)/new ; ln -s ../mmdbsrv.REAL mmdbsrv.db; )
 	[ ! -f $(webdir)/.syb_set ] || ( cd $(webdir) ; rm -rf .syb_set )
 	SYBASE=$(NCBI_SYBASE) ; export SYBASE ; cd $(webdir) ; ./st_configure.sh
 
@@ -233,17 +235,17 @@ loader.nodb :
 MAKEDEBUG=$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAG="-g" \
                   CFLAGS1="-c -Iinclude" LDFLAGS1=-Llib webdir=../qa utildir=bin
 
-debugc:
-	$(MAKEDEBUG) compile 
+debugc    :
+	$(MAKEDEBUG) compile
 debug_web :
 	$(MAKEDEBUG) compile install test_web
 debug_bin :
 	$(MAKEDEBUG) compile install test_util
-debug :
+debug     :
 	$(MAKEDEBUG) compile install test_util test_web
 
 test_web  :
-	cd $(webdir) ; [ -f mmdb.tester -a -f httpd_settings ] && ( echo "1" | ./mmdb.tester )
+	cd $(webdir) ; echo "1" | ./mmdbsrv
 
 test_util: install_util
 	@echo "1" >.testset

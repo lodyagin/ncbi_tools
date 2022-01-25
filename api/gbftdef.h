@@ -3,6 +3,12 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.4  1999/02/05 15:40:39  tatiana
+* GBQUAL_country added
+*
+* Revision 6.3  1999/01/29 16:18:58  tatiana
+* protein_id qualifier added to CDS
+*
 * Revision 6.2  1998/04/30 21:43:11  tatiana
 * *** empty log message ***
 *
@@ -130,8 +136,10 @@
 #define GBQUAL_virion            70
 #define GBQUAL_focus             71
 #define GBQUAL_specimen_voucher  72
+#define GBQUAL_protein_id	     73
+#define GBQUAL_country		     74
 
-#define ParFlat_TOTAL_GBQUAL     73
+#define ParFlat_TOTAL_GBQUAL     75
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

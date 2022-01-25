@@ -1,4 +1,4 @@
---$Revision: 1.7 $
+--$Revision: 1.8 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -145,7 +145,13 @@ Blast-parameters ::= SEQUENCE {
 	matrix		VisibleString OPTIONAL,	-- specifies a matrix to use
 	filter-string	VisibleString OPTIONAL,	-- filtering commands to be executed
 	entrez-query	VisibleString OPTIONAL,	-- query to Entrez
-	word-size	INTEGER OPTIONAL	-- word-size used in BLAST search.
+	word-size	INTEGER OPTIONAL,	-- word-size used in BLAST search.
+	db-length	INTEGER OPTIONAL,	-- lenght of the db for statistics purposes
+	searchsp-eff	REAL OPTIONAL,		-- effective search space to be used
+	hsp-range-max	INTEGER OPTIONAL,	-- range for keeping HSPs in culling
+	block-width	INTEGER OPTIONAL,	-- width of block to be used in culling
+	perform-culling	BOOLEAN OPTIONAL,	-- perform culling?
+	strand-option	INTEGER OPTIONAL	-- indicates strand to use.
 }
 
 				-- series of these when the request is queued

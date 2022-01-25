@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.4  1999/03/11 21:12:23  vakatov
+* Get in-sync the "printf"/"scanf"'s format and args in some places
+*
 * Revision 6.3  1998/01/21 20:55:43  vakatov
 * Nlm_GetArgs():  fixed memory leak(in the override of default str value)
 *
@@ -124,12 +127,18 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
               else
                 curarg->intvalue = 0;
               break;
-            case ARG_INT:
-              sscanf(curarg->defaultvalue, "%ld", &curarg->intvalue);
+            case ARG_INT: {
+              long val;
+              sscanf(curarg->defaultvalue, "%ld", &val);
+              curarg->intvalue = val;
               break;
-            case ARG_FLOAT:
-              sscanf(curarg->defaultvalue, "%lf", &curarg->floatvalue);
+            }
+            case ARG_FLOAT: {
+              double val;
+              sscanf(curarg->defaultvalue, "%lf", &val);
+              curarg->floatvalue = val;
               break;
+            }
             case ARG_STRING:
             case ARG_FILE_IN:
             case ARG_FILE_OUT:
@@ -193,7 +202,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
       Nlm_CharPtr arg = xx_argv[i];
       if (*arg != '-')
         {
-          ErrPostEx(SEV_ERROR, 0, 0, "Arguments must start with '-' (the offending argument #%d was: '%s')", i, arg);
+          ErrPostEx(SEV_ERROR, 0, 0, "Arguments must start with '-' (the offending argument #%d was: '%s')", (int)i, arg);
           Nlm_MemFree( resolved );
           Nlm_FreeArgs(numargs, ap);
           return FALSE;
@@ -268,20 +277,22 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
           }
           break;
 
-        case ARG_INT:
+        case ARG_INT: {
+          long val;
           range = TRUE;
-          if (sscanf(arg, "%ld", &curarg->intvalue) <= 0)
+          if (sscanf(arg, "%ld", &val) <= 0)
             range = FALSE;
+          curarg->intvalue = val;
           if (range  &&  curarg->from)
             {
-              Nlm_Int4 ifrom;
+              long ifrom;
               sscanf(curarg->from, "%ld", &ifrom);
               if (curarg->intvalue < ifrom)
                 range = FALSE;
             }
           if (range  &&  curarg->to)
             {
-              Nlm_Int4 ito;
+              long ito;
               sscanf(curarg->to, "%ld", &ito);
               if (curarg->intvalue > ito)
                 range = FALSE;
@@ -299,21 +310,24 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
               return FALSE;
             }
           break;
+        }
 
-        case ARG_FLOAT:
+        case ARG_FLOAT: {
+          double val;
           range = TRUE;
-          if (sscanf(arg, "%lf", &curarg->floatvalue) <= 0)
+          if (sscanf(arg, "%lf", &val) <= 0)
             range = FALSE;
+          curarg->floatvalue = val;
           if (range  &&  curarg->from)
             {
-              Nlm_FloatHi ffrom;
+              double ffrom;
               sscanf(curarg->from, "%lf", &ffrom);
               if (curarg->floatvalue < ffrom)
                 range = FALSE;
             }
           if (range  &&  curarg->to)
             {
-              Nlm_FloatHi fto;
+              double fto;
               sscanf(curarg->to, "%lf", &fto);
               if (curarg->floatvalue > fto)
                 range = FALSE;
@@ -330,6 +344,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
               return FALSE;
             }
           break;
+        }
 
         case ARG_STRING:
         case ARG_FILE_IN:

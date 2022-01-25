@@ -1,4 +1,4 @@
-/* $Id: batch.c,v 6.14 1998/12/15 17:56:05 vakatov Exp $
+/* $Id: batch.c,v 6.15 1999/02/24 16:49:23 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/16/1996
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *         Main file for WWW and Command Line BatchEntrez programs
 *
 * $Log: batch.c,v $
+* Revision 6.15  1999/02/24 16:49:23  kans
+* use accutils copy of IS_ntdb_accession and IS_protdb_accession
+*
 * Revision 6.14  1998/12/15 17:56:05  vakatov
 * Fixed a tyny C++ compilation bug
 *
@@ -192,8 +195,6 @@ typedef struct BGenBank {
 #define SEARCH_LIMIT  20000
 #define SEARCH_DLIMIT 70000
 
-static Boolean IS_ntdb_accession(CharPtr s);
-static Boolean IS_protdb_accession(CharPtr s);
 static void WWWSendBatchPage(Int4 which);
 
 static Int4 AccessionToGi(CharPtr string,  Int4Ptr PNTR giptr, Int2 seqtype);
@@ -1215,169 +1216,3 @@ void BatchTail(VoidPtr pointer, FILE *fd)
   return;
 }
 
-/*****************************************************************************
-*
-*  Function:	IS_ntdb_accession
-*
-*  Description:	Return TRUE if the input string is a validly formatted
-*		nucleotide database accession number (GenBank, EMBL, DDBJ)
-*
-*  Arguments:	s : CharPtr; pointer to accession number string.
-*		    Must be null terminated.
-*
-*  Author:	Mark Cavanaugh
-*  Date:	7/96
-*
-*  WARNING:	IS_ntdb_accession() does not communicate with any central
-*		resource about accession numbers. So there's no way to
-*		inform it automatically about new accession number prefixes.
-*
-*****************************************************************************/
-static Boolean IS_ntdb_accession(CharPtr s)
-{
-  Boolean retval = TRUE;
-  
-  Boolean first = TRUE;
-  CharPtr temp;
-  
-  if (s == NULL || ! *s)
-    return FALSE;
-  
-  switch (StringLen(s)) {
-    
-  case 6:			/* Old-style 6-character accession */
-    while (*s) {
-      if (retval == FALSE)
-        break;
-      
-      if (first) {
-        if (! IS_ALPHA(*s)) {
-          retval = FALSE;
-          break;
-        }
-        
-      switch (TO_UPPER(*s)) {
-      case 'H': case 'N': case 'R': case 'T': case 'W': /* GenBank : EST */
-        break;
-      case 'B': case 'G': case 'I': case 'S': case 'U': /* GenBank : non-EST */
-        break;
-      case 'J': case 'K': case 'L': case 'M':	   /* GenBank : before NCBI */
-        break;
-      case 'A': case 'F': case 'V': case 'X': case 'Y': case 'Z':  /* EMBL */
-        break;
-      case 'C': case 'D': case 'E':		   /* DDBJ */
-        break;
-      default:
-        retval = FALSE;
-        break;
-      }
-      first = FALSE;
-      }
-      else {
-        if (! IS_DIGIT(*s)) {
-          retval = FALSE;
-        }
-      }
-      s++;
-    }
-    break;
-    
-    case 8: /* New 8-character accession, two letters + 6 digits */
-
-      /* Copy the first two chars of the accession to a buffer */
-
-      temp = (CharPtr) MemNew(3);	
-      
-      temp[0] = *s; s++;
-      temp[1] = *s; s++;
-      temp[2] = '\0';
-      
-      if ((StringICmp(temp,"AA") == 0) ||	/* NCBI EST */
-	  (StringICmp(temp,"AC") == 0) ||	/* NCBI HTGS */
-	  (StringICmp(temp,"AF") == 0) ||	/* NCBI ??? */
-          (StringICmp(temp,"AE") == 0) ||       /* NCBI ??? */
-	  (StringICmp(temp,"AD") == 0) ) {	/* NCBI accessions assigned to GSDB entries */
-        /* No-op */
-      }
-      else if ( (StringICmp(temp,"AB") == 0) ) {	/* DDBJ */
-        /* No-op */
-      }
-      else {
-        retval = FALSE;
-        break;
-      }
-      
-      while (*s) {
-        if (! IS_DIGIT(*s)) {
-          retval = FALSE;
-          break;
-        }
-        s++;
-      }
-      break;
-      
-  default:
-    retval = FALSE;
-    break;
-  }			/* Endswitch, StringLen(s) */
-  
-  return retval;
-}
-/*****************************************************************************
-*
-*  Function:	IS_protdb_accession
-*
-*  Description:	Return TRUE if the input string is a validly formatted
-*		protein database accession number (SWISS-PROT)
-*
-*  Arguments:	s : CharPtr; pointer to accession number string.
-*		    Must be null terminated.
-*
-*  Author:	Mark Cavanaugh
-*  Date:	8/96
-*
-*  WARNING:	IS_protdb_accession() does not communicate with any central
-*		resource about accession numbers. So there's no way to
-*		inform it automatically about new accession number prefixes.
-*
-*****************************************************************************/
-static Boolean IS_protdb_accession(CharPtr s)
-{
-  Boolean retval = TRUE;
-  Boolean first = TRUE;
-  
-  if (s == NULL || ! *s)
-    return FALSE;
-
-  if (StringLen(s) != 6)
-    return FALSE;
-  
-  while (*s) {
-    if (retval == FALSE)
-      break;
-
-    if (first) {
-      if (! IS_ALPHA(*s)) {
-        retval = FALSE;
-        break;
-      }
-	    
-      switch (TO_UPPER(*s)) {
-      case 'P': case 'Q':		  /* SWISS-PROT accessions */
-        break;
-      default:
-        retval = FALSE;
-        break;
-      }
-      first = FALSE;
-    }
-    else {
-      if (! IS_DIGIT(*s)) {
-        retval = FALSE;
-        break;
-      }
-    }
-    s++;
-  }
-  return retval;
-}

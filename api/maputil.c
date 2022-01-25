@@ -40,7 +40,7 @@ NLM_EXTERN EnzPtr make_enzyme_list(CharPtr file_name)
   Char buff[100];
   Char name[100];
   Char pattern[100];
-  Int4 cut_pos;
+  long cut_pos;
   EnzPtr head = NULL, e_new;
   EnzDataPtr data;
   Uint1 order =0;
@@ -302,9 +302,9 @@ NLM_EXTERN Boolean map_unit_label(Int4 pos, NumberingPtr np, CharPtr label, Bool
 		  if(use_kb)
                   	pos = pos/1000;
 		  if(use_kb && pos != 0)
-                  	sprintf(label, "%ldK", (Int4)pos);
+                  	sprintf(label, "%ldK", (long) pos);
 		  else
-			sprintf(label, "%ld", (Int4)pos);
+			sprintf(label, "%ld", (long) pos);
                   return FALSE;
                 }
                 else

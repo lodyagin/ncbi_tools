@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -2923,7 +2923,7 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotSetAsnRead (AsnIoPtr aip, AsnTypePtr set,
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SET OF */
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0,0, "Empty SET OF Seq-annot.  line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0,0, "Empty SET OF Seq-annot.  line %ld", (long) aip->linenumber);
 ret:
 	AsnUnlinkType(element);       /* unlink local tree */
 	return first;
@@ -3712,7 +3712,7 @@ NLM_EXTERN DeltaSeqPtr LIBCALL DeltaSeqSetAsnRead (AsnIoPtr aip, AsnTypePtr set,
     if (AsnReadVal(aip, atp, &av) <= 0)      /* read END_STRUCT */
         goto erret;
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0,0, "Empty SET OF Delta-seq.  line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0,0, "Empty SET OF Delta-seq.  line %ld", (long) aip->linenumber);
 ret:
     AsnUnlinkType(element);
 	return first;
@@ -3959,7 +3959,7 @@ NLM_EXTERN AnnotIdPtr LIBCALL AnnotIdSetAsnRead (AsnIoPtr aip, AsnTypePtr settyp
     if (AsnReadVal(aip, atp, &av) <= 0)    /* end struct */
         goto erret;
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0,0, "Empty SET OF Annot-id. line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0,0, "Empty SET OF Annot-id. line %ld", (long) aip->linenumber);
 ret:
     AsnUnlinkType(elementtype);
     return first;

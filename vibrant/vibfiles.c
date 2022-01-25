@@ -29,34 +29,19 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *       Vibrant file functions
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: vibfiles.c,v $
-* Revision 6.0  1997/08/25 18:56:56  madden
-* Revision changed to 6.0
+* Revision 6.1  1999/03/11 20:26:27  vakatov
+* Get in-sync the printf's format and args in some functions
 *
 * Revision 5.1  1997/01/29 16:41:22  kans
 * using StringNCpy_0
-*
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.9  1995/05/17  15:15:14  kans
- * added Log line
- *
-*
 * ==========================================================================
 */
 
@@ -719,7 +704,7 @@ extern void Nlm_CardToStr (Nlm_Uint2 cardval, Nlm_CharPtr str,
 {
   Nlm_Char  temp [80];
 
-  sprintf (temp, "%*u", length, cardval);
+  sprintf (temp, "%*u", length, (int)cardval);
   Nlm_StringNCpy_0 (str, temp, maxsize);
 }
 
@@ -739,7 +724,7 @@ extern void Nlm_LongToStr (Nlm_Int4 longval, Nlm_CharPtr str,
 {
   Nlm_Char  temp [80];
 
-  sprintf (temp, "%*ld", length, longval);
+  sprintf (temp, "%*ld", length, (long)longval);
   Nlm_StringNCpy_0 (str, temp, maxsize);
 }
 
@@ -760,7 +745,7 @@ extern void Nlm_RealToStr (Nlm_FloatLo realval, Nlm_CharPtr str,
 {
   Nlm_Char  temp [80];
 
-  sprintf (temp, "%*.*f", length, dec, realval);
+  sprintf (temp, "%*.*f", length, dec, (float)realval);
   Nlm_StringNCpy_0 (str, temp, maxsize);
 }
 
@@ -771,6 +756,6 @@ extern void Nlm_DoubleToStr (Nlm_FloatHi doubleval, Nlm_CharPtr str,
 {
   Nlm_Char  temp [80];
 
-  sprintf (temp, "%*.*lf", length, dec, doubleval);
+  sprintf (temp, "%*.*lf", length, dec, (double)doubleval);
   Nlm_StringNCpy_0 (str, temp, maxsize);
 }

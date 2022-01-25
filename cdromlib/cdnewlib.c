@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: cdnewlib.c,v 6.1 1998/08/24 18:42:16 kans Exp $
+ * RCS $Id: cdnewlib.c,v 6.2 1999/03/12 18:44:57 kans Exp $
  *
  * Author:  Gregory Schuler
  *
@@ -91,6 +91,9 @@
  *                      modification comments.
  *
  * Revision $Log: cdnewlib.c,v $
+ * Revision Revision 6.2  1999/03/12 18:44:57  kans
+ * Revision fixed ErrPostEx problem
+ * Revision
  * Revision Revision 6.1  1998/08/24 18:42:16  kans
  * Revision fixed -v -fd warnings
  * Revision
@@ -132,7 +135,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.1 $"
+#define REVISION_STR "$Revision: 6.2 $"
 
 
 
@@ -3694,7 +3697,7 @@ static int FileNotRecognized (const char *fname)
 {
 	ErrPostEx(SEV_ERROR,ERR_BadFile,SUB_NeedUpdate,
 				"The file %s cannot be read by this release of "
-				"the software.  Please obtain a newer version.");
+				"the software.  Please obtain a newer version.", fname);
 	return FALSE;
 }
 

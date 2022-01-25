@@ -125,7 +125,7 @@ Int4 fs_putInt4(FILE* f, Int4 val, CharPtr marker)
 {
   char buff[32];
 
-  sprintf(buff, "%ld", val);
+  sprintf(buff, "%d", (int)val);
   return fs_putString(f, buff, marker);
 }
 

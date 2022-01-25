@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.32 1998/09/21 16:23:47 kuzio Exp $
+# $Id: makenet.dos,v 6.37 1999/04/20 13:59:15 kans Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -14,13 +14,13 @@
 ##################################################
 # Library object lists
 
-OBJ6  = +ni_lib_.obj +ncbicli.obj +ncbisock.obj +ncbiurl.obj +ni_www.obj \
+OBJ6  = +ni_lib_.obj +ncbicli.obj +ncbiurl.obj +ni_www.obj \
 	+ni_debug.obj +ni_disp.obj +ni_msg.obj +ni_error.obj +ni_encrs.obj
 OBJ7  = +netentr.obj +netlib.obj +objneten.obj
 OBJ8  = +naccentr.obj +accutils.obj
 OBJ9  = +caccentr.obj +accutils.obj
 OBJ11 = +medarch.obj +medutil.obj +objmla.obj
-OBJ15 = +ncbisock.obj +ncbiurl.obj +ni_msg.obj +ni_lib.obj +ni_error.obj \
+OBJ15 = +ncbiurl.obj +ni_msg.obj +ni_lib.obj +ni_error.obj \
 	+ni_encr.obj +desc.obj +digit.obj +digitas.obj +md2c.obj +md5c.obj +nn.obj \
 	+prime.obj +r_encode.obj +r_enhanc.obj +r_keygen.obj +r_random.obj \
 	+r_stdlib.obj +rsa.obj
@@ -71,34 +71,31 @@ VCLIENT_EXE  = vclient.___
 POWBLAST_EXE = powblast.___
 CN3D_EXE     = cn3d.__
 
-#exclusions
+# Exclusions(BEGIN)
 !ifndef WIN32
 !undef CN3D_EXE
-
-!ifdef MSW
-!ifdef DBUG
 !undef SEQUIN_EXE
-!else
-!ifdef ENCR
-!undef SEQUIN_EXE
-!endif
-!endif
-!endif
 
 !ifdef B16
 !undef ENTREZ_EXE
+!undef ENTREZCF_EXE
 !undef NENTREZ_EXE
 !undef CENTREZ_EXE
-!undef SEQUIN_EXE
-!ifdef DBUG
-!undef POWBLAST_EXE
 !undef BLASTCLI_EXE
 !undef BLASTCL3_EXE
+!undef POWBLAST_EXE
+!undef CCPV_EXE
+!undef DUSTV_EXE
+!undef EPIV_EXE
+!undef SIGMEV_EXE
+!undef SEARCHV_EXE
+!undef TWOPV_EXE
+!undef CNSRTV_EXE
+!undef CNSGNV_EXE
 !endif
 !endif
 !endif
-
-!endif
+# Exclusions(END)
 
 
 DO_OBJ =
@@ -168,8 +165,10 @@ copy :
 	copy ..\demo\cnsrt.c .
 	copy ..\demo\cnsgnv.c .
 	copy ..\demo\cnsgn.c .
+!ifdef WIN32
 	copy ..\sequin\*.c .
 	copy ..\sequin\*.h $(INCPATH)
+!endif
 !ifndef WIN32
 	copy ..\network\winsock\*.lib $(LIBPATH)
 	copy ..\network\winsock\*.h   $(INCPATH)
@@ -437,8 +436,8 @@ $(SEQUIN_EXE):
 	$(MAKE) -f <<
 $(INCLUDE_GEN)
 TEST_NAME = sequin
-TEST_OBJ = sequin1.obj sequin2.obj sequin3.obj sequin4.obj sequin5.obj sequin6.obj sequin7.obj sequin8.obj sequinx.obj
-TEST_LIB = $(LIB31) $(LIB30) $(LIB21) $(LIB23) $(LIB22) $(LIB20) $(LIB40) $(LIB11) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
+TEST_OBJ = sequin1.obj sequin2.obj sequin3.obj sequin4.obj sequin5.obj sequin6.obj sequin7.obj sequin8.obj sequin9.obj sequinx.obj
+TEST_LIB = $(LIB31) $(LIB30) $(LIB21) $(LIB23) $(LIB22) $(LIB20) $(LIB40) $(LIB41) $(LIB11) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
 <<
@@ -654,7 +653,7 @@ $(CNSGN_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = cnsgn
 TEST_OBJ = cnsgn.obj
-TEST_LIB = $(LIB23) $(LIB21) $(ENTREZLIBS) $(LIB2) $(LIB1)
+TEST_LIB = $(LIB36) $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
 <<

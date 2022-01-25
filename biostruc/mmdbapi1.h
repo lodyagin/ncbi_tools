@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.15 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -43,9 +43,41 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
-* Revision 6.15  1998/12/16 19:30:14  ywang
-* add flag for highlight status to MGD
+* Revision 6.24  1999/05/07 14:11:25  zimmerma
+* - Modified InstallAlignedSlave(), InstallStrucFeature(), BiostrucAddFeature() and
+* Boolean InstBSAnnotSet() for additional args: Boolean Chain, and CharPtr SlaveChain;
 *
+* - InstBSAnnotSet now also expects argument CharPtr JobID
+*
+* - Added forward DCLs for LIBCALL isBiopoly() and LIBCALL isHet()
+*
+* Revision 6.23  1999/04/26 20:49:59  lewisg
+* changed arguments named list to fix visual c++ bug
+*
+* Revision 6.22  1999/04/15 21:36:18  ywang
+* move iMimeType to data block for MSD
+*
+* Revision 6.21  1999/04/13 23:07:17  ywang
+* move position for Byte bVisible for MOD
+*
+* Revision 6.20  1999/03/18 21:04:30  lewisg
+* reverse transform for saving
+*
+* Revision 6.19  1999/03/17 20:11:10  lewisg
+* fix memory overwrite in pfd
+*
+* Revision 6.18  1999/03/01 20:22:11  ywang
+* add bTurnedOff flag on MGD
+*
+* Revision 6.17  1999/02/24 22:58:10  ywang
+* add iMimeType to MSD node and other minor name change
+*
+* Revision 6.16  1999/02/02 22:27:01  ywang
+* add bJustHighlighted flag to MGD for feature edit
+*
+ * Revision 6.15  1998/12/16  19:30:14  ywang
+ * add flag for highlight status to MGD
+ *
  * Revision 6.14  1998/11/06  23:02:02  ywang
  * add FeatureOn to MGD for feature on/off control
  *
@@ -609,6 +641,7 @@ typedef struct Nlm_msd
      Int4 iIMBCount; /* number of inter-molecule bonds */
      Int4 iHashChange; /* iModels+iFeatures+iObjCount+iDensCount + #ALD's */
 /* data block */
+     Int2 iMimeType;
      PDNML pdnmlModels; /* contains PMLD with Models that are */ 
 /*   PDNSF pdnsfFeatures; */  /*  BiostrucFeatureSetPtrs */ 
                      /* moved to psastrucAlignment */
@@ -642,7 +675,6 @@ typedef struct Nlm_mmd
   	Byte bWhat;  
   	Byte bUpdate;
         Byte bReserved;   
-  	Byte bVisible;  /* to control show/off on MM level -- Yanli  */
   	Int4Ptr pI4vFeatID;  
   	PointerPtr ppvFeatData; 
   	Int2 iNumFeats;  
@@ -653,6 +685,7 @@ typedef struct Nlm_mmd
   	Int2 i2User;
 #endif
 /* bookkeeping block */
+  	Byte bVisible;  /* to control show/off on MM level -- Yanli  */
      PDNMM pdnmmLink;
      ValNodePtr pMolDescr; /* the ASN.1 molecule descr */
      ValNodePtr pSeqId;
@@ -685,9 +718,6 @@ typedef struct Nlm_mgd
   	Byte bWhat;  
   	Byte bUpdate;  
         Byte bReserved;
-    Byte bVisible;     /* control display at residue level */
-    Byte bHighlighted;
-                        /* Yanli */
  	Int4Ptr pI4vFeatID;  
   	PointerPtr ppvFeatData; 
   	Int2 iNumFeats;  
@@ -698,11 +728,16 @@ typedef struct Nlm_mgd
   	Int2 i2User;
 #endif
 /* bookkeeping block */
+    Byte bVisible;     /* control display at residue level */
+    Byte bHighlighted;
+    Byte bJustHighlighted;
+    Byte bTurnedOff;
+                        /* Yanli */
      Byte bNCBISecStru;
      Byte bPDBSecStru;
      PDNMG pdnmgLink;
      Int2 FeatureOn;
-     Int2 iFeature;
+     Int2 iUserDefinedFeature;
      Int2 iDomain;   /* NCBI assigned domain number */
      CharPtr pcGraphName;  /* PDB 3-letter code */
      CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */
@@ -860,6 +895,7 @@ typedef struct Nlm_mod
      PVNMO pvnmoLink;
      ValNodePtr pvnContains;
      struct  Nlm_mld PNTR pmldCoordSet; 
+     Byte bVisible;   /* control object display to synchronize with its partner display -- Yanli  */
   
 /* data block */
      Int4  	   iCoordNo;
@@ -870,8 +906,6 @@ typedef struct Nlm_mod
      FloatLo flRadius;     
      Int2Ptr pi2vColor;  /* colors for each triangle */
     
-     Byte bVisible;   /* control object display to synchronize with its partner display -- Yanli  */
-
      /* cast a matrix Floating pt N x 3 for data */
      /* length 0 for sphere */
      /*        1 for cylinder */
@@ -1008,20 +1042,20 @@ void LIBCALL FreeMDD(PMDD pmddThis);
 void LIBCALL FreeMLD(PMLD pmldThis);
 void LIBCALL FreeKeptModel(PMLD pmldThis);
 void LIBCALL FreeKeptFeature(BiostrucFeatureSetPtr pbsfsThis);
-PVNMB LIBCALL NewVNMB(PVNMB PNTR list,  Int2 choice);
-PVNMO LIBCALL NewVNMO(PVNMO PNTR list,  Int2 choice);
-PVNMD LIBCALL NewVNMD(PVNMD PNTR list,  Int2 choice);
-PVNMA LIBCALL NewVNMA(PVNMA PNTR list,  Int2 choice);
-PVNAL LIBCALL NewVNAL(PVNAL PNTR list, Int2 choice);
-PDNMG LIBCALL NewDNMG(PDNMG PNTR list,  Int2 choice);
-PDNMM LIBCALL NewDNMM(PDNMM PNTR list,  Int2 choice);
-PDNMS LIBCALL NewDNMS(PDNMS PNTR list,  Int2 choice);
+PVNMB LIBCALL NewVNMB(PVNMB PNTR ppvnmbList,  Int2 choice);
+PVNMO LIBCALL NewVNMO(PVNMO PNTR ppvnmoList,  Int2 choice);
+PVNMD LIBCALL NewVNMD(PVNMD PNTR ppvnmdList,  Int2 choice);
+PVNMA LIBCALL NewVNMA(PVNMA PNTR ppvnmaList,  Int2 choice);
+PVNAL LIBCALL NewVNAL(PVNAL PNTR ppvnalList, Int2 choice);
+PDNMG LIBCALL NewDNMG(PDNMG PNTR ppdnmgList,  Int2 choice);
+PDNMM LIBCALL NewDNMM(PDNMM PNTR ppdnmmList,  Int2 choice);
+PDNMS LIBCALL NewDNMS(PDNMS PNTR ppdnmsList,  Int2 choice);
 ValNodePtr LIBCALL FreeVNDataFn (ValNodePtr vnp,  pFreeFunc freefn);
 void LIBCALL FreeListVNAL(PVNAL pvnalList);
 void LIBCALL FreeListDNML(PDNML pdnmlList);
 
-PVNSFF LIBCALL NewVNSFF(PVNSFF PNTR list,  Int2 choice);
-PDNSFS LIBCALL NewDNSFS(PDNSFS PNTR list,  Int2 choice);
+PVNSFF LIBCALL NewVNSFF(PVNSFF PNTR ppvnsffList,  Int2 choice);
+PDNSFS LIBCALL NewDNSFS(PDNSFS PNTR ppdnsfsList,  Int2 choice);
 void LIBCALL FreeListDNSFS(PDNSFS pdnsfsList);
 void LIBCALL FreeListVNSFF(PVNSFF pvnsffList);
 
@@ -1056,16 +1090,36 @@ ValNodePtr LIBCALL MakeChemGraphNodeList(PDNMS pdnmsThis,  ChemGraphPntrsPtr pcg
 ValNodePtr LIBCALL MakeRegionNodeList(PDNMS pdnmsThis, RegionPntrsPtr prgpThis);
 void LIBCALL ResolveAlignChain(PDNMS pdnmsThis);
 Boolean LIBCALL SetNodeFeatureData(PFB pfbThis, PSFD  psfdThis);
-void LIBCALL InstallAlignedSlave(PDNMS pdnmsMaster, ChemGraphAlignmentPtr pcgaAlign, PSFD psfdThis);
-PSFD LIBCALL InstallStrucFeature(PDNMS pdnmsThis, PDNSFS pdnsfsThis, BiostrucFeaturePtr pbsfThis);
-Int2 LIBCALL BiostrucAddFeature(BiostrucFeatureSetPtr pbsfsThis, PDNMS pdnmsThis);
-PDNTRN LIBCALL NewDNTRN(PDNTRN PNTR list,  Int2 choice);
+
+/***************** modified 4/26/99 KA to handle VAST chains **************/
+void LIBCALL InstallAlignedSlave(PDNMS pdnmsMaster, ChemGraphAlignmentPtr pcgaAlign,
+				 PSFD psfdThis, Boolean Chain, CharPtr SlaveChain);
+
+PSFD LIBCALL InstallStrucFeature(PDNMS pdnmsThis, PDNSFS pdnsfsThis, BiostrucFeaturePtr pbsfThis,
+				 Boolean Chain, CharPtr SlaveChain);
+
+Int2 LIBCALL BiostrucAddFeature(BiostrucFeatureSetPtr pbsfsThis, PDNMS pdnmsThis,
+				Boolean Chain, CharPtr SlaveChain);
+/*************************************************************************/
+
+PDNTRN LIBCALL NewDNTRN(PDNTRN PNTR ppdntrnList,  Int2 choice);
 void LIBCALL FreeDNTRN(PDNTRN pdntrnList);
 void LIBCALL TransformToDNTRN(PDNTRN PNTR pplist,  TransformPtr transform);
 void LIBCALLBACK DoApplyTransform(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr);
+void LIBCALLBACK DoReverseTransform(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr);
 BiostrucAnnotSetPtr LIBCALL  BiostrucAnnotSetGetByFid (BiostrucAnnotSetPtr basp, Int4 feature_id, Int4 feature_set_id);
 PDNMS LIBCALL FindLoadedBiostruc(CharPtr pcPDBID, Int4 iId);
-Boolean InstBSAnnotSet(BiostrucAnnotSetPtr pbsasThis);
+
+/***************** modified 4/26/99 KA to handle VAST chains **************/
+Boolean InstBSAnnotSet(BiostrucAnnotSetPtr pbsasThis, CharPtr JobID, Boolean Chain, CharPtr Path);
+
+/****** DZ: moved from mkbioseqB.c 4/27/99 KA to support PruneBiostruc ******/
+
+Boolean LIBCALL isBiopoly(Int4 molecule_id, MoleculeGraphPtr currentbp);
+Boolean LIBCALL isHet(Int4 molecule_id, MoleculeGraphPtr currenthet);
+
+/*************************************************************************/
+
 SeqAnnotPtr LIBCALL BiosToSeq (BiostrucAnnotSetPtr set, Boolean usePValue, 
                                Char* pdbname_master, Char* pdbname_slave);
 SeqAnnotPtr LIBCALL BiostrToSeqAnnotSet (BiostrucAnnotSetPtr set, 

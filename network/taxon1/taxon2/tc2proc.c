@@ -1640,5 +1640,98 @@ Int4 tax1_getTaxId4Str(CharPtr str, CharPtr* substring, Int4Ptr *Ids_out)
     }
     return 0;
 }    
+
+static int nameCmp(CharPtr s1, CharPtr s2)
+{
+    if((s1 == NULL) && (s2 == NULL)) return 0;
+    if((s1 == NULL) || (s2 == NULL)) return 1;
+
+    return strcmp(s1, s2);
+}
+
+static Int4 storedTaxId(OrgRefPtr orp)
+{
+    ValNodePtr vnp;
+    DbtagPtr dbtag;
+    ObjectIdPtr object_id;
+
+    for(vnp= orp->db; vnp != NULL; vnp= vnp->next) {
+	dbtag= vnp->data.ptrvalue;
+	if((dbtag != NULL) && (StringCmp(dbtag->db, "taxon") == 0)) {
+	    ObjectIdPtr object_id= dbtag->tag;
+	    return object_id->id;
+	}
+    }
+
+    return 0;
+}
+
+static Int4 OrgModCmp(OrgModPtr omp1, OrgModPtr omp2)
+{
+    OrgModPtr omp;
+    int found;
+
+    if(omp2 == NULL) return 0;
+    if(omp1 == NULL) return 100;
     
+    for(;omp2 != NULL; omp2= omp2->next) {
+	found= 0;
+	for(omp= omp1; omp != NULL; omp= omp->next) {
+	    if((omp2->subtype == omp->subtype) &&
+	       (nameCmp(omp2->subname, omp->subname) == 0)) {
+		found= 1;
+		break;
+	    }
+	}
+	if(!found) return 100;
+    }    
+}
+
+static Int4 OrgRefCmp(OrgRefPtr orp1, OrgRefPtr orp2)
+{
+    OrgNamePtr onp1= orp1->orgname;
+    OrgNamePtr onp2= orp2->orgname;
+
+    if(onp1 == NULL) return 4;
+    if(onp2 == NULL) return -2;
+
+    if(onp1->gcode != onp2->gcode) return 2;
+    if(onp1->mgcode != onp2->mgcode) return 3;
+
+    if(nameCmp(orp1->taxname, orp2->taxname) != 0) return 10;
+
+    if(nameCmp(onp1->lineage, onp2->lineage) != 0) return 20;
+
+    if(nameCmp(orp1->common, orp2->common) != 0) return 30;
+
+    if(onp1->choice != onp2->choice) return 40;
+
+    if(nameCmp(onp1->div, onp2->div) != 0) return 50;
+
+    return OrgModCmp(onp1->mod, onp2->mod);
+    
+}
+ 
+Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef)
+{
+    Taxon1DataPtr res;
+    Int4 tax_id;
+    OrgRefPtr db_orgRef;
+    int is_species;
+    Boolean need_search_name= TRUE;
+    CharPtr hit_name;
+
+    tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
+    if(tax_id <= 0) return -1;
+
+    if(tax_id != storedTaxId(inp_orgRef)) return 1;
+    
+    db_orgRef= tax1_getOrgRef(tax_id, NULL, NULL, NULL /*res->embl_code*/);
+    if(db_orgRef == NULL) {
+	return -2;
+    }
+
+    return OrgRefCmp(inp_orgRef, db_orgRef);
+}
+
 

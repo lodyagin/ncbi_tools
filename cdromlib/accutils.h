@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* RCS $Id: accutils.h,v 6.3 1997/11/14 22:13:52 vakatov Exp $
+* RCS $Id: accutils.h,v 6.8 1999/04/01 13:56:35 sicotte Exp $
 *
 * Author:  J. Epstein
 *
@@ -41,6 +41,28 @@
 *                      time it is checked into the system.
 
 $Log: accutils.h,v $
+Revision 6.8  1999/04/01 13:56:35  sicotte
+Moved WHICH_db_accession,IS_ntdb_accession,IS_protdb_accession to
+  sequtil.ch
+Removed old static functions of Colombe (that are public in salutil.c)
+The only code left in accutils.c is the Entrez Access code.
+
+Revision 6.7  1999/03/18 20:24:06  sicotte
+changed the define name for NC_ accession
+
+Revision 6.6  1999/03/18 20:18:18  sicotte
+added REFSEQ accession numbers and macro ACCN_IS_GENBANK()
+
+Revision 6.5  1999/03/18 15:34:04  sicotte
+Updated Accession List and added protein Accessions
+for functions IS_ntdb_accession and IS_protdb_accession.
+New function WHICH_db_accession with return code allowing
+to figure out the molecule type and the database from macros
+in accutils.h
+
+Revision 6.4  1999/02/24 16:48:10  kans
+added IS_ntdb_accession and IS_protdb_accession, removed NormalizeSeqAlignId
+
 Revision 6.3  1997/11/14 22:13:52  vakatov
 [WIN32,DLL]  Added NLM_EXTERN's
 
@@ -100,6 +122,11 @@ add GetFullEntrezTermList() function
 #include <tofasta.h>
 #include <lsqfetch.h>
 
+/* 4/1/99 Temporately include sequtil.h to avoid breaking code that
+   uses IS_ntdb_accession
+   */
+#include <sequtil.h>
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -111,7 +138,8 @@ add GetFullEntrezTermList() function
 extern "C" {
 #endif
 
-NLM_EXTERN ValNodePtr NormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp);
+
+
 
 NLM_EXTERN CharPtr LIBCALL EntrezFieldToString PROTO((DocType db, DocField fld));
 NLM_EXTERN DocField LIBCALL EntrezStringToField PROTO((DocType db, CharPtr str));

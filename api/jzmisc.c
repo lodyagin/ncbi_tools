@@ -516,7 +516,7 @@ static Boolean get_cit_edit(CharPtr fmark, Int2 order, ValNodePtr head)
 	       vnp = head;
 	       while(vnp){
 		 if(vnp->choice == 4){
-		   sprintf(fmark, "muid %ld", (Int4)(vnp->data.intvalue));
+		   sprintf(fmark, "muid %ld", (long)(vnp->data.intvalue));
 		   return TRUE;
 		  }
 		  vnp = vnp->next;
@@ -550,7 +550,7 @@ static Boolean get_cit_edit(CharPtr fmark, Int2 order, ValNodePtr head)
 			   if(alp->names){
 			      tmp= alp->names;
 			      if(tmp->choice ==3){
-			      sprintf(fmark, "%s", tmp->data.ptrvalue);
+			      sprintf(fmark, "%s", (CharPtr) tmp->data.ptrvalue);
 			      return TRUE;
 			      }
 			   }
@@ -669,7 +669,7 @@ NLM_EXTERN Uint1 label_feature(SeqFeatPtr sfp, CharPtr fmark, Int2 order, Boolea
 	     vnp = prp->name;
 	     dbase = prp->db;
 	     if(vnp && dbase){
-	       sprintf(temp, "%s %s", dbase->data.ptrvalue, vnp->data.ptrvalue);
+	       sprintf(temp, "%s %s", (CharPtr) dbase->data.ptrvalue, (CharPtr) vnp->data.ptrvalue);
 	       myStringNCpy(fmark, temp, 20);
 	       add_name_partial(fmark, trunc5, trunc3);
 	       return TRUE;
@@ -1717,7 +1717,7 @@ NLM_EXTERN Boolean get_gene_syn(SeqFeatPtr sfp, CharPtr name, BoolPtr has_name, 
 		{
 			if(has_prev)
 			{
-				sprintf(tmp, " %s", vnp->data.ptrvalue);
+				sprintf(tmp, " %s", (CharPtr) vnp->data.ptrvalue);
 				StringCat(syn, tmp);
 			}
 			else

@@ -34,6 +34,45 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.40  1999/05/04 19:41:45  madden
+* done now goes through callback
+*
+* Revision 1.39  1999/04/21 20:54:46  madden
+* Make BlastBioseq non-private
+*
+* Revision 1.38  1999/04/20 14:51:35  madden
+* BlastBioseqNetCore and BlastSeqLocNetCore have return status
+*
+* Revision 1.37  1999/04/16 19:05:40  madden
+* Change done
+*
+* Revision 1.36  1999/04/16 15:53:25  madden
+* Add TraditionalBlastReportExtra function
+*
+* Revision 1.35  1999/04/13 14:59:30  madden
+* Add more options (searchsp, culling, strand)
+*
+* Revision 1.34  1999/04/02 16:25:53  madden
+* Reestablish logic
+*
+* Revision 1.33  1999/03/19 21:47:38  madden
+* Add Blast3GetDbinfo function
+*
+* Revision 1.32  1999/03/15 21:56:10  madden
+* fix for error message that was freed
+*
+* Revision 1.31  1999/03/05 15:42:35  madden
+* Fixed memory leaks
+*
+* Revision 1.30  1999/03/05 15:02:43  egorov
+* Bug fixed.  Return NULL if no kablk found in the list of responses in the BlastGetKaParams function.
+*
+* Revision 1.29  1999/03/04 17:59:57  egorov
+* Allow error_returns == NULL on input
+*
+* Revision 1.28  1999/03/01 20:55:59  egorov
+* Fix infinite loop reestablishing connection to blast server (thanx to Sergei Shavirin)
+*
 * Revision 1.27  1999/01/12 21:05:58  victorov
 * server will now report an error if the ni-queue if full
 *
@@ -144,9 +183,9 @@ TNlmMutex dispatcher_lock = NULL;
 
 static TNlmMutex formating_mutex; /* Mutex to regulate formating in TraditionalBlastReport */
 
-static Boolean BlastInitEx PROTO((CharPtr program_name, BlastNet3Hptr bl3hp, BlastResponsePtr PNTR respp));
+static Boolean BlastInitEx PROTO((CharPtr program_name, BlastNet3Hptr bl3hp, BlastResponsePtr PNTR respp, Boolean reesatblish));
  
-static Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback));
+static Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish));
 static Boolean RealSubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback));
 
 /* error_occurred and old_error_hook should not be accessed directly.
@@ -362,7 +401,7 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs, BlastNet
 
     NetFini(bl3hp, FALSE);
 
-    retval = BlastInitEx(NULL, bl3hp, NULL);
+    retval = BlastInitEx(NULL, bl3hp, NULL, FALSE);
 
     if (!retval)
     {
@@ -374,7 +413,7 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs, BlastNet
             sprintf (buf, "%s get failed; re-requesting %s service",
                      svcName, svcName);
             MonitorStrValue(mon, buf);
-	    retval = BlastInitEx(NULL, bl3hp, NULL);
+	    retval = BlastInitEx(NULL, bl3hp, NULL, FALSE);
         }
         else {
             ErrPost(CTX_UNKNOWN, 1, "Unable to re-contact dispatcher");
@@ -416,7 +455,7 @@ static Boolean ReestablishNetBlast(BlastNet3Hptr bl3hp)
 *
 *****************************************************************************/
 
-static Boolean BlastInitEx (CharPtr program_name, BlastNet3Hptr bl3hp, BlastResponsePtr PNTR respp)
+static Boolean BlastInitEx (CharPtr program_name, BlastNet3Hptr bl3hp, BlastResponsePtr PNTR respp, Boolean reestablish)
 
 {
 	BlastRequestPtr request;
@@ -448,7 +487,7 @@ static Boolean BlastInitEx (CharPtr program_name, BlastNet3Hptr bl3hp, BlastResp
 
 	request = ValNodeNew(NULL);
 	request->choice = BlastRequest_init;
-	SubmitRequest(bl3hp, request, &response, NULL);
+	SubmitRequest(bl3hp, request, &response, NULL, reestablish);
     	BlastRequestFree (request);
 	if (respp)
 		*respp = response;
@@ -483,7 +522,7 @@ BlastInit (CharPtr program_name, BlastNet3Hptr PNTR bl3hpp, BlastResponsePtr PNT
 
 	*bl3hpp = bl3hp_pri;
 
-	return BlastInitEx(program_name, bl3hp_pri, respp);
+	return BlastInitEx(program_name, bl3hp_pri, respp, TRUE);
 }
 
 /*****************************************************************************
@@ -505,7 +544,7 @@ static Boolean s_BlastFini (BlastNet3Hptr bl3hptr)
 
         request = ValNodeNew(NULL);
         request->choice = BlastRequest_fini;
-	SubmitRequest(bl3hptr, request, &response, NULL);
+	SubmitRequest(bl3hptr, request, &response, NULL, FALSE);
         BlastRequestFree (request);
         BlastResponseFree (response);
 
@@ -585,6 +624,12 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->filter_string = StringSave(options->filter_string);
 	parameters->entrez_query = StringSave(options->entrez_query);
         parameters->word_size = options->wordsize;
+        parameters->db_length = options->db_length;
+        parameters->searchsp_eff = options->searchsp_eff;
+        parameters->hsp_range_max = options->hsp_range_max;
+        parameters->block_width = options->block_width;
+        parameters->perform_culling = options->perform_culling;
+        parameters->strand_option = options->strand_option;
         
 	return parameters;
 }
@@ -725,7 +770,7 @@ BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
 		dbinfo_get->type = Blast_dbinfo_get_type_nucleotide;
 
 	ValNodeAddPointer(&request, BlastRequest_db_info_specific, dbinfo_get);
-	SubmitRequest(bl3hp, request, &response, NULL);
+	SubmitRequest(bl3hp, request, &response, NULL, TRUE);
 	response = GetResponsePtr(response, BlastResponse_db_info_specific);
 
 	if (response)
@@ -818,6 +863,7 @@ BlastGetKaParams (BlastNet3BlockPtr blnet3blkptr, Boolean gapped)
 			if (kablk->gapped == gapped)
 				break;
 			response = response->next;	
+			kablk = NULL;
 		}
 	}
 
@@ -936,7 +982,7 @@ PrivateBlastGetBioseq(BlastNet3Hptr bl3hptr, CharPtr database, SeqIdPtr sip, Boo
 	blast_sip->database = database;
 	blast_sip->id = sip;
 	ValNodeAddPointer(&request, BlastRequest_db_seq_get, blast_sip);
-	SubmitRequest(bl3hptr, request, &response, NULL);
+	SubmitRequest(bl3hptr, request, &response, NULL, TRUE);
 	
 	response = GetResponsePtr(response, BlastResponse_db_seq_get);
 	if (response)
@@ -971,7 +1017,7 @@ BlastGetBioseq(BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip)
 */
 
 SeqAlignPtr LIBCALL
-BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns)
+BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status)
 
 {
 	BlastRequestPtr request = NULL;
@@ -996,13 +1042,19 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns)
 	search->mask = blnet3blkptr->mask;
 	search->matrix = BlastMatrixToBlastNetMatrix(blnet3blkptr->blast_matrix);
 	ValNodeAddPointer(&request, BlastRequest_search, search);
-	SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback);
+	*status = SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback, TRUE);
 	
 	blnet3blkptr->response = response;
 	node = GetResponsePtr(response, BlastResponse_alignment);
 	if (node)
 		seqalign = node->data.ptrvalue;
-	*error_returns = GetResponsePtr(response, BlastResponse_error);
+	
+	if (error_returns)
+	{
+	    node = GetResponsePtr(response, BlastResponse_error);
+	    if (node)
+	    	ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
+	}
 
 	/* These four are not allocated here. */
 	search->query = NULL;
@@ -1027,7 +1079,7 @@ Blast3GetMotd(BlastNet3Hptr bl3hptr)
 	
         request = ValNodeNew(NULL);
         request->choice = BlastRequest_motd;
-        SubmitRequest(bl3hptr, request, &response, NULL);
+        SubmitRequest(bl3hptr, request, &response, NULL, TRUE);
         BlastRequestFree (request);
 	if (response == NULL || response->choice != BlastResponse_motd)
 		return NULL;
@@ -1039,37 +1091,44 @@ Blast3GetMotd(BlastNet3Hptr bl3hptr)
 	return string;
 }
 
+BlastDbinfoPtr LIBCALL 
+Blast3GetDbinfo(BlastNet3Hptr bl3hptr)
+
+{
+	BlastResponsePtr response=NULL;
+	BlastRequestPtr request=NULL;
+	BlastDbinfoPtr dbinfo;
+	
+        request = ValNodeNew(NULL);
+        request->choice = BlastRequest_db_info;
+        SubmitRequest(bl3hptr, request, &response, NULL, TRUE);
+        BlastRequestFree (request);
+	if (response == NULL || response->choice != BlastResponse_db_info)
+		return NULL;
+
+	dbinfo = response->data.ptrvalue;
+
+	return dbinfo;
+}
+
 static Boolean
-SubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback)
+SubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish)
 
 {
     Boolean status;
     Int2 index;
 
-#if 0    
-    BlastSetErrorHook();
-#endif    
     for(index=0; index<BLAST_SERVER_RETRIES; index++)
     {
-#if 0    
-	BlastSetErrorStatus(FALSE);
-#endif    
 
 	status = RealSubmitRequest(bl3hptr, blreqp, response, callback);
 
-#if 0    
-	if(status == TRUE && BlastGetErrorStatus() == FALSE)
-		break;
-#else
         if (status == TRUE)
             break;
-#endif    
 
- 	ReestablishNetBlast(bl3hptr);
+	if (reestablish)
+		ReestablishNetBlast(bl3hptr);
     }
-#if 0    
-    BlastResetOldHook();
-#endif    
 
     return status;
 
@@ -1128,24 +1187,17 @@ RealSubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePt
 		{
 		     case BlastResponse_done:
 			done = TRUE;
-			blresp = BlastResponseFree(blresp);
-			break;
-		    
 		     case BlastResponse_queued:
 		     case BlastResponse_start:
 		     case BlastResponse_progress:
 			if (callback)
 			{
-				if (callback(blresp, &cancel) == TRUE)
+				if (callback(blresp, &cancel) != TRUE)
 				{
-					blresp = BlastResponseFree(blresp);
-				}
-				else
-				{
-					blresp = BlastResponseFree(blresp);
 					done = TRUE;
 				}
 			}
+			blresp = BlastResponseFree(blresp);
 			break;
 
 		     case BlastResponse_init:
@@ -1414,19 +1466,23 @@ SeqAlignPtr LIBCALL
 BlastBioseqNet(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback)
 
 {
-	return BlastBioseqNetCore(bl3hp, bsp, program, database, options, other_returns, error_returns, callback, NULL);
+	Boolean status;
+
+	return BlastBioseqNetCore(bl3hp, bsp, program, database, options, other_returns, error_returns, callback, NULL, &status);
 }
 
 SeqAlignPtr LIBCALL
 BlastSeqLocNet(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback)
 
 {
-	return BlastSeqLocNetCore(bl3hp, slp, program, database, options, other_returns, error_returns, callback, NULL);
+	Boolean status;
+
+	return BlastSeqLocNetCore(bl3hp, slp, program, database, options, other_returns, error_returns, callback, NULL, &status);
 }
 
 
 SeqAlignPtr LIBCALL
-BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix)
+BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status)
 
 {
 	BlastKABlkPtr ka_blk;
@@ -1483,7 +1539,7 @@ BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr 
 	blnet->bl3hptr = bl3hp;
 	blnet->blast_matrix = blast_matrix;
 
-	seqalign = BlastBioseq(blnet, error_returns);
+	seqalign = BlastBioseq(blnet, error_returns, ret_status);
 	if (other_returns)
 	{
 		*other_returns = NULL;
@@ -1504,9 +1560,12 @@ BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr 
 			ValNodeAddPointer (other_returns, TXKABLK_GAP, ka_blk);
 		net_matrix = NetBlastGetMatrix(blnet);
 		matrix = BlastNetMatrixToBlastMatrix(net_matrix);
+		net_matrix = BlastMatrixFree(net_matrix);
 		if (matrix)
 			ValNodeAddPointer (other_returns, TXMATRIX, matrix);
 	}
+
+	blnet = BlastNet3BlockDestruct(blnet);
 
 	bsp->descr = descr;
 
@@ -1514,7 +1573,7 @@ BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr 
 }
 
 SeqAlignPtr LIBCALL
-BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix)
+BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status)
 
 {
 	SeqAlignPtr	seqalign = NULL;
@@ -1564,8 +1623,8 @@ BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr 
 
 	/* perform search */
 
-	seqalign = BlastBioseqNet(bl3hp, bsp, program, database, options, 
-		other_returns, error_returns, callback);
+	seqalign = BlastBioseqNetCore(bl3hp, bsp, program, database, options, 
+		other_returns, error_returns, callback, NULL, status);
 		
 	/* offset the alignment */
 
@@ -1631,16 +1690,13 @@ callback (BlastResponsePtr brp, Boolean PNTR cancel)
 #if EA
         fprintf(global_fp, ".");
         fflush(global_fp);
-#endif	
+#endif
 	return TRUE;
+
 }
 
-/*
-	Formats a 'traditional' BLAST report.
-*/
-
-Boolean LIBCALL
-TraditionalBlastReport(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits)
+static Boolean
+TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview)
 
 {
 	BlastDbinfoPtr dbinfo;
@@ -1648,19 +1704,23 @@ TraditionalBlastReport(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr
 	BlastPruneSapStructPtr prune;
 	BLAST_MatrixPtr matrix;
 	Boolean query_is_na, db_is_na;
+	Boolean status;
 	CharPtr params_buffer=NULL;
-	Int4 number_of_hits_private=0;
+	Int4 number_of_hits_private=0, length;
 	SeqAlignPtr seqalign;
         SeqAnnotPtr seqannot=NULL;
 	TxDfDbInfoPtr tx_dbinfo=NULL, tx_dbinfo_head;
-	ValNodePtr mask_loc, other_returns, error_returns, vnp;
+	ValNodePtr mask_loc, other_returns, error_returns, vnp, vnp1=NULL;
         Uint1 align_type;
         Uint1 f_order[FEATDEF_ANY], g_order[FEATDEF_ANY];
 
         MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
         MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
 
-	if (bsp == NULL || bl3hp == NULL || program == NULL || database == NULL || outfp == NULL)
+	if (bsp == NULL && slp == NULL)
+		return FALSE;
+
+	if (bl3hp == NULL || program == NULL || database == NULL || outfp == NULL)
 		return FALSE;
 
 #if EA
@@ -1684,10 +1744,25 @@ NlmMutexUnlock(formating_mutex);
 
 	fprintf(outfp, "Searching");
 
-	seqalign = BlastBioseqNet(bl3hp, bsp, program, database, options, &other_returns, &error_returns, callback);
+	if (bsp)
+		seqalign = BlastBioseqNetCore(bl3hp, bsp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
+	else
+		seqalign = BlastSeqLocNetCore(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
 
 	fprintf(outfp, "done");
 		
+	if (overview)
+	{
+		fprintf(outfp, "\n\n");
+		if (bsp)
+			length= bsp->length;
+		else
+			length= SeqLocLen(slp);
+
+		MakeDisplaySeqLoc(&seqalign, &vnp1, length);
+                PrintOverviewFromSeqLocs(vnp1, length, outfp);
+	}
+
 	BlastErrorPrintExtra(error_returns, TRUE, outfp);
 	
 	mask_loc = NULL;
@@ -1788,147 +1863,39 @@ NlmMutexUnlock(formating_mutex);
 	if (number_of_hits)
 		*number_of_hits = number_of_hits_private;
 
-	return TRUE;
+	return status;
 }
+/*
+	Formats a 'traditional' BLAST report.
+*/
+
+Boolean LIBCALL
+TraditionalBlastReport(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits)
+
+{
+	return TraditionalBlastReportEngine(NULL, bsp, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, BLAST_OVERVIEW_NONE);
+}
+
+Boolean LIBCALL
+TraditionalBlastReportExtra(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview)
+
+{
+	return TraditionalBlastReportEngine(NULL, bsp, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, overview);
+}
+
 
 Boolean LIBCALL
 TraditionalBlastReportLoc(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits)
 
 {
-	BlastDbinfoPtr dbinfo;
-	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
-	BlastPruneSapStructPtr prune;
-	BLAST_MatrixPtr matrix;
-	Boolean query_is_na, db_is_na;
-	CharPtr params_buffer=NULL;
-	SeqAlignPtr seqalign;
-        SeqAnnotPtr seqannot=NULL;
-	TxDfDbInfoPtr tx_dbinfo=NULL, tx_dbinfo_head;
-	ValNodePtr mask_loc, other_returns, error_returns, vnp;
-        Uint1 align_type;
-        Uint1 f_order[FEATDEF_ANY], g_order[FEATDEF_ANY];
+	return TraditionalBlastReportEngine(slp, NULL, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, BLAST_OVERVIEW_NONE);
+}
 
-        MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
-        MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
+Boolean LIBCALL
+TraditionalBlastReportLocExtra(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview)
 
-
-	if (slp == NULL || bl3hp == NULL || program == NULL || database == NULL || outfp == NULL)
-		return FALSE;
-
-	align_type = BlastGetTypes(program, &query_is_na, &db_is_na);
-#if EA
-	global_fp = outfp;
-#endif
-
-       	init_buff_ex(85);
-	dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
-	if (dbinfo)
-       		PrintDbInformationBasic(database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, outfp, html);
-	dbinfo = BlastDbinfoFree(dbinfo);
-       	free_buff();
-
-	fprintf(outfp, "Searching");
-
-	seqalign = BlastSeqLocNet(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback);
-
-	fprintf(outfp, "done");
-
-	mask_loc = NULL;
-
-	BlastErrorPrintExtra(error_returns, TRUE, outfp);
-
-	for (vnp=other_returns; vnp; vnp = vnp->next)
-	{
-			switch (vnp->choice) {
-				case TXDBINFO:
-					tx_dbinfo = vnp->data.ptrvalue;
-					break;
-				case TXKABLK_NOGAP:
-					ka_params = vnp->data.ptrvalue;
-					break;
-				case TXKABLK_GAP:
-					ka_params_gap = vnp->data.ptrvalue;
-					break;
-				case TXPARAMETERS:
-					params_buffer = vnp->data.ptrvalue;
-					break;
-				case TXMATRIX:
-					matrix = vnp->data.ptrvalue;
-					break;
-				case SEQLOC_MASKING_NOTSET:
-				case SEQLOC_MASKING_PLUS1:
-				case SEQLOC_MASKING_PLUS2:
-				case SEQLOC_MASKING_PLUS3:
-				case SEQLOC_MASKING_MINUS1:
-				case SEQLOC_MASKING_MINUS2:
-				case SEQLOC_MASKING_MINUS3:
-#if 1					
-					ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
-#endif					
-					break;
-				default:
-					break;
-			}
-	}	
-
-	if (seqalign)
-	{
-
-		seqannot = SeqAnnotNew();
-        	seqannot->type = 2;
-		AddAlignInfoToSeqAnnot(seqannot, align_type);
-        	seqannot->data = seqalign;
-		prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
-		ObjMgrSetHold();
-       		init_buff_ex(85);
-                PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
-                free_buff();
-
-		prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
-		seqannot->data = prune->sap;
-
-		if (align_options & TXALIGN_MASTER)
-			ShowTextAlignFromAnnot(seqannot, 60, outfp, f_order, g_order, align_options, NULL, mask_loc, NULL);
-		else
-			ShowTextAlignFromAnnot(seqannot, 60, outfp, f_order, g_order, align_options, NULL, mask_loc, FormatScoreFunc);
-		seqannot->data = seqalign;
-		prune = BlastPruneSapStructDestruct(prune);
-		ObjMgrClearHold();
-	}
-
-	if (verbose)
-	{
-       		init_buff_ex(85);
-		tx_dbinfo_head = tx_dbinfo;
-		while (tx_dbinfo)
-		{
-                	PrintDbReport(tx_dbinfo, 70, outfp);
-			tx_dbinfo = tx_dbinfo->next;
-		}
-		tx_dbinfo_head = TxDfDbInfoDestruct(tx_dbinfo_head);
-
-		if (ka_params)
-		{
-                	PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
-			MemFree(ka_params);
-		}
-
-		if (ka_params_gap)
-		{
-                	PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
-			MemFree(ka_params_gap);
-		}
-
-                PrintTildeSepLines(params_buffer, 70, outfp);
-                MemFree(params_buffer);
-                free_buff();
-	}
-
-	if (seqannot)
-		seqannot = SeqAnnotFree(seqannot);
-
-
-	return TRUE;
+{
+	return TraditionalBlastReportEngine(slp, NULL, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, overview);
 }
 
 
@@ -2000,6 +1967,18 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                 /* compensates for client not providing this.  Remove this at some point? */
 		if (parameters->word_size)
                     options->wordsize = parameters->word_size;
+		if (parameters->db_length)
+                    options->db_length = parameters->db_length;
+		if (parameters->searchsp_eff)
+                    options->searchsp_eff = parameters->searchsp_eff;
+		if (parameters->hsp_range_max)
+                    options->hsp_range_max = parameters->hsp_range_max;
+		if (parameters->block_width)
+                    options->block_width = parameters->block_width;
+		if (parameters->perform_culling)
+                    options->perform_culling = parameters->perform_culling;
+		if (parameters->strand_option)
+                    options->strand_option = parameters->strand_option;
         }
 
 	if (status = BLASTOptionValidateEx(options, program, error_return)) {

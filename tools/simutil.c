@@ -37,6 +37,12 @@
 * Date     Name        Description of modification
 *
 * $Log: simutil.c,v $
+* Revision 6.4  1999/03/12 18:38:02  kans
+* fixed ErrPostEx problems
+*
+* Revision 6.3  1999/03/11 23:09:19  kans
+* casts for sscanf, sprintf
+*
 * Revision 6.2  1998/07/21 23:11:52  zjing
 * add Uint4 cast to SIZE_MAX
 *
@@ -267,7 +273,7 @@ CharPtr make_sim_seq(SeqLocPtr slp, Boolean is_sim2, CharPtr t_seq)
 		{
 			SeqIdWrite(SeqLocId(slp), buf, PRINTID_FASTA_LONG, 20);
 			ErrPostEx(SEV_WARNING, 0, 0, "the expected "
-			"length %ld is not the same as the real length %ld for %s", length, i+1, buf);
+			"length %ld is not the same as the real length %ld for %s", (long) length, (long) (i+1), buf);
 			if(i < length +1 && slp->choice == SEQLOC_INT)
 			{
 				sint = slp->data.ptrvalue;
@@ -688,7 +694,7 @@ CharPtr ckalloc(Int4 amount)
                    
         if ((Uint4)amount > (Uint4)SIZE_MAX)
         {
-                ErrPostEx(SEV_FATAL,0,0,"Sorry. Can't allocate that much (%ld), %ld",amount, (Uint4)SIZE_MAX);
+                ErrPostEx(SEV_FATAL,0,0,"Sorry. Can't allocate that much (%ld), %ld", (long) amount, (long) SIZE_MAX);
 		exit(1);
         }
  
@@ -1082,7 +1088,7 @@ static Boolean parse_buf_val(CharPtr buf, CharPtr seq_name, Int4Ptr start, Int4P
 {
 	CharPtr curr;
 	Int2 i=0;
-	Int4 t_start =-1, t_stop =-1;
+	long t_start =-1, t_stop =-1;
 
 	*start = 0;
 	*stop = -1;
@@ -1128,8 +1134,8 @@ static Boolean parse_buf_val(CharPtr buf, CharPtr seq_name, Int4Ptr start, Int4P
 		--t_stop;
 	if(t_start >=0 && t_stop >=0)
 	{
-		*start = MIN(t_start, t_stop);
-		*stop = MAX(t_start, t_stop);
+		*start = (Int4) MIN(t_start, t_stop);
+		*stop = (Int4) MAX(t_start, t_stop);
 	}
 
 

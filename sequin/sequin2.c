@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.62 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
@@ -53,6 +53,7 @@
 #include <subutil.h>
 #include <suggslp.h>
 #include <toasn3.h>
+#include <toporg.h>
 #include <salfiles.h>
 #include <salsap.h>
 #include <salutil.h>
@@ -341,6 +342,9 @@ static void FormatFastaDoc (FastaPagePtr fpp)
         if (LookForSearchString (title, "[molecule=", tmp, FastaFormatBufLen - 1)) {
           AddReportLine (str, "Molecule", tmp);
         }
+        if (LookForSearchString (title, "[moltype=", tmp, FastaFormatBufLen - 1)) {
+          AddReportLine (str, "MolType", tmp);
+        }
         if (LookForSearchString (title, "[location=", tmp, FastaFormatBufLen - 1)) {
           AddReportLine (str, "Location", tmp);
         }
@@ -416,6 +420,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
           ExciseString (title, "[isolate=", "]");
           */
           ExciseString (title, "[molecule=", "]");
+          ExciseString (title, "[moltype=", "]");
           ExciseString (title, "[location=", "]");
           /*
           for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
@@ -857,6 +862,9 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
             if (LookForSearchString (title, "[molecule=", tmp, FastaFormatBufLen - 1)) {
               AddReportLine (str, "Molecule", tmp);
             }
+            if (LookForSearchString (title, "[moltype=", tmp, FastaFormatBufLen - 1)) {
+              AddReportLine (str, "MolType", tmp);
+            }
             if (LookForSearchString (title, "[location=", tmp, FastaFormatBufLen - 1)) {
               AddReportLine (str, "Location", tmp);
             }
@@ -904,6 +912,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
             ExciseString (title, "[isolate=", "]");
             */
             ExciseString (title, "[molecule=", "]");
+            ExciseString (title, "[moltype=", "]");
             ExciseString (title, "[location=", "]");
             /*
             for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
@@ -2310,42 +2319,34 @@ extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 
   }
 }
 
-static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr nsep,
-                                           SeqEntryPtr top, BioSourcePtr masterbiop)
+extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP genome,
+                                          PopuP gencode, SeqEntryPtr nsep, SeqEntryPtr top,
+                                          BioSourcePtr masterbiop);
+extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP genome,
+                                          PopuP gencode, SeqEntryPtr nsep, SeqEntryPtr top,
+                                          BioSourcePtr masterbiop)
 
 {
   EnumFieldAssocPtr  ap;
+  Uint1              biomol;
   BioSourcePtr       biop;
   BioseqSetPtr       bssp;
   Int2               code;
   CharPtr            lin;
   OrgRefPtr          masterorp;
+  MolInfoPtr         mip;
   BioseqPtr          nbsp;
   Boolean            needbiop;
   OrgNamePtr         onp;
   OrgRefPtr          orp;
   CharPtr            ptr;
-  Boolean            rsult;
   SeqEntryPtr        sep;
   Char               str [128];
   CharPtr            title;
-  SeqEntryPtr        tmp;
   UIEnum             val;
   ValNodePtr         vnp;
 
-  if (sqfp == NULL || nsep == NULL || top == NULL) return FALSE;
-  if (IS_Bioseq_set (nsep)) {
-    bssp = (BioseqSetPtr) nsep->data.ptrvalue;
-    rsult = FALSE;
-    if (bssp != NULL) {
-      for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
-        if (AutomaticNucleotideProcess (sqfp, tmp, top, masterbiop)) {
-          rsult = TRUE;
-        }
-      }
-    }
-    return rsult;
-  }
+  if (nsep == NULL || top == NULL) return FALSE;
   nbsp = (BioseqPtr) nsep->data.ptrvalue;
   if (nbsp == NULL) return FALSE;
   if (! ISA_na (nbsp->mol)) return FALSE;
@@ -2356,7 +2357,7 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
     if (vnp != NULL && vnp->data.ptrvalue != NULL) {
       title = (CharPtr) vnp->data.ptrvalue;
       needbiop = FALSE;
-      if (sqfp->seqPackage >= SEQ_PKG_POPULATION && sqfp->seqPackage <= SEQ_PKG_GENBANK) {
+      if (seqPackage >= SEQ_PKG_POPULATION && seqPackage <= SEQ_PKG_GENBANK) {
         needbiop = TRUE;
         if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, sizeof (str))) {
           if (StringICmp (str, "FALSE") == 0) {
@@ -2398,8 +2399,8 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
         ptr = StringChr (str, ']');
         if (ptr != NULL) {
           *ptr = '\0';
-          if (SetBioSourceDialogTaxName (sqfp->genbio, str)) {
-            biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
+          if (SetBioSourceDialogTaxName (genbio, str)) {
+            biop = (BioSourcePtr) DialogToPointer (genbio);
           } else {
             biop = BioSourceNew ();
             if (biop != NULL) {
@@ -2415,8 +2416,8 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
       } else if (needbiop && masterbiop != NULL) {
         masterorp = masterbiop->org;
         if (masterorp != NULL) {
-          if (SetBioSourceDialogTaxName (sqfp->genbio, masterorp->taxname)) {
-            biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
+          if (SetBioSourceDialogTaxName (genbio, masterorp->taxname)) {
+            biop = (BioSourcePtr) DialogToPointer (genbio);
           } else {
             biop = BioSourceNew ();
             if (biop != NULL) {
@@ -2454,7 +2455,7 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
             MemFree (lin);
           }
         }
-        if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+        if (seqPackage == SEQ_PKG_PHYLOGENETIC) {
           orp = biop->org;
           if (orp != NULL) {
             onp = orp->orgname;
@@ -2464,12 +2465,12 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
             }
             if (onp != NULL) {
               if (onp->gcode == 0 && onp->mgcode == 0) {
-                code = gcIndexToId [GetValue (sqfp->gencode)];
-                if (GetEnumPopup (sqfp->genome, biosource_genome_simple_alist, &val)) {
+                code = gcIndexToId [GetValue (gencode)];
+                if (GetEnumPopup (genome, biosource_genome_simple_alist, &val)) {
                   if (val == 4 || val == 5) {
-                    onp->mgcode = gcIndexToId [GetValue (sqfp->gencode)];
+                    onp->mgcode = gcIndexToId [GetValue (gencode)];
                   } else {
-                    onp->gcode = gcIndexToId [GetValue (sqfp->gencode)];
+                    onp->gcode = gcIndexToId [GetValue (gencode)];
                   }
                 }
               }
@@ -2508,9 +2509,9 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
           ptr = StringChr (str, ']');
           if (ptr != NULL) {
             *ptr = '\0';
-            if (StringCmp (str, "dna") == 0) {
+            if (StringICmp (str, "dna") == 0) {
               nbsp->mol = Seq_mol_dna;
-            } else if (StringCmp (str, "rna") == 0) {
+            } else if (StringICmp (str, "rna") == 0) {
               nbsp->mol = Seq_mol_rna;
             }
           }
@@ -2527,6 +2528,30 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
             for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
               if (StringICmp (str, ap->name) == 0) {
                 biop->genome = (Uint1) ap->value;
+              }
+            }
+          }
+        }
+        ptr = StringStr (title, "[moltype=");
+        if (ptr != NULL) {
+          biomol = 0;
+          StringNCpy_0 (str, ptr + 9, sizeof (str));
+          ptr = StringChr (str, ']');
+          if (ptr != NULL) {
+            *ptr = '\0';
+            if (StringICmp (str, "genomic") == 0) {
+              biomol = MOLECULE_TYPE_GENOMIC;
+            } else if (StringICmp (str, "mRNA") == 0) {
+              biomol = MOLECULE_TYPE_MRNA;
+            }
+            if (biomol != 0) {
+              mip = MolInfoNew ();
+              if (mip != NULL) {
+                mip->biomol = biomol;
+                vnp = CreateNewDescriptor (nsep, Seq_descr_molinfo);
+                if (vnp != NULL) {
+                  vnp->data.ptrvalue = (Pointer) mip;
+                }
               }
             }
           }
@@ -2559,6 +2584,7 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
       ExciseString (title, "[org=", "]");
       ExciseString (title, "[lineage=", "]");
       ExciseString (title, "[molecule=", "]");
+      ExciseString (title, "[moltype=", "]");
       ExciseString (title, "[location=", "]");
       TrimSpacesAroundString (title);
       if (StringHasNoText (title) || sep != top) {
@@ -2586,7 +2612,7 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
     }
   } else {
     needbiop = FALSE;
-    if (sqfp->seqPackage >= SEQ_PKG_POPULATION && sqfp->seqPackage <= SEQ_PKG_GENBANK) {
+    if (seqPackage >= SEQ_PKG_POPULATION && seqPackage <= SEQ_PKG_GENBANK) {
       needbiop = TRUE;
       if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, sizeof (str))) {
         if (StringICmp (str, "FALSE") == 0) {
@@ -2598,8 +2624,8 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
       masterorp = masterbiop->org;
       if (masterorp != NULL) {
         biop = NULL;
-        if (SetBioSourceDialogTaxName (sqfp->genbio, masterorp->taxname)) {
-          biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
+        if (SetBioSourceDialogTaxName (genbio, masterorp->taxname)) {
+          biop = (BioSourcePtr) DialogToPointer (genbio);
         } else {
           biop = BioSourceNew ();
           if (biop != NULL) {
@@ -2621,6 +2647,31 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
     }
   }
   return TRUE;
+}
+
+static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr nsep,
+                                           SeqEntryPtr top, BioSourcePtr masterbiop)
+
+{
+  BioseqSetPtr  bssp;
+  Boolean       rsult;
+  SeqEntryPtr   tmp;
+
+  if (sqfp == NULL || nsep == NULL || top == NULL) return FALSE;
+  if (IS_Bioseq_set (nsep)) {
+    bssp = (BioseqSetPtr) nsep->data.ptrvalue;
+    rsult = FALSE;
+    if (bssp != NULL) {
+      for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+        if (AutomaticNucleotideProcess (sqfp, tmp, top, masterbiop)) {
+          rsult = TRUE;
+        }
+      }
+    }
+    return rsult;
+  }
+  return ProcessOneNucleotideTitle (sqfp->seqPackage, sqfp->genbio, sqfp->genome,
+                                    sqfp->gencode, nsep, top, masterbiop);
 }
 
 typedef struct idlist {
@@ -2876,6 +2927,7 @@ static void OnlyOneComponentWarning (SequencesFormPtr sqfp)
 static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boolean partial5, Boolean partial3)
 
 {
+  CharPtr     allele = NULL;
   BioseqPtr   bsp;
   GeneRefPtr  grp;
   SeqLocPtr   gslp;
@@ -2930,8 +2982,13 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
           if (ptr != NULL) {
             *ptr = '\0';
             ptr++;
+            allele = StringChr (ptr, ';');
+            if (allele != NULL) {
+              *allele = '\0';
+              allele++;
+            }
           }
-          grp = CreateNewGeneRef (str, NULL, ptr, FALSE);
+          grp = CreateNewGeneRef (str, allele, ptr, FALSE);
           if (grp != NULL) {
             if (ExtendGene (grp, nucsep, slp)) {
               grp = GeneRefFree (grp);
@@ -3240,6 +3297,43 @@ static void FindRnaByLocationOverlap (SeqEntryPtr sep, SeqLocPtr slp,
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
       FindRnaByLocationOverlap (sep, slp, mindiff, msep);
     }
+  }
+}
+
+static void FuseNucProtBiosources (SeqEntryPtr sep)
+
+{
+  BioSourcePtr  biop1, biop2;
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  ValNodePtr    PNTR prev;
+  ValNodePtr    sdp1, sdp2;
+  SeqEntryPtr   tmp;
+
+  if (sep == NULL) return;
+  if (! IS_Bioseq_set (sep)) return;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_nuc_prot) return;
+  tmp = FindNucSeqEntry (sep);
+  if (tmp == NULL) return;
+  if (! IS_Bioseq (tmp)) return;
+  bsp = (BioseqPtr) tmp->data.ptrvalue;
+  if (bsp == NULL) return;
+  prev = &(bssp->descr);
+  sdp1 = bssp->descr;
+  while (sdp1 != NULL && sdp1->choice != Seq_descr_source) {
+    prev = &(sdp1->next);
+    sdp1 = sdp1->next;
+  }
+  if (sdp1 == NULL) return;
+  sdp2 = SeqEntryGetSeqDescr (tmp, Seq_descr_source, NULL);
+  if (sdp2 == NULL) return;
+  biop1 = (BioSourcePtr) sdp1->data.ptrvalue;
+  biop2 = (BioSourcePtr) sdp2->data.ptrvalue;
+  if (CmpOrgById (biop1, biop2)) {
+    *prev = sdp1->next;
+    sdp1->next = NULL;
+    SeqDescrFree (sdp1);
   }
 }
 
@@ -3653,6 +3747,7 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
     ArrowCursor ();
     Update ();
   }
+  FuseNucProtBiosources (sep);
   return (Pointer) sep;
 }
 
@@ -3877,6 +3972,7 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
       }
     }
   }
+  FuseNucProtBiosources (sep);
   return (Pointer) sep;
 }
 
@@ -5473,9 +5569,29 @@ static Int4 AccessionToGi (CharPtr string)
    return gi;
 }
 
+static void LookForReplacedByCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr   bsp;
+  SeqHistPtr  hist;
+  BoolPtr     rsult;
+
+  if (! IS_Bioseq (sep)) return;
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL) return;
+  hist = bsp->hist;
+  if (hist == NULL) return;
+  if (hist->replaced_by_ids != NULL) {
+    rsult = (BoolPtr) mydata;
+    if (rsult == NULL) return;
+    *rsult = TRUE;
+  }
+}
+
 static void DownloadProc (ButtoN b)
 
 {
+  MsgAnswer     ans;
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   Pointer       dataptr;
@@ -5485,6 +5601,7 @@ static void DownloadProc (ButtoN b)
   FetchFormPtr  ffp;
   Int2          handled;
   Boolean       idTypes [NUM_SEQID];
+  Boolean       isReplaced = FALSE;
   SeqEntryPtr   sep;
   Char          str [32];
   Int4          uid;
@@ -5568,6 +5685,17 @@ static void DownloadProc (ButtoN b)
       return;
     }
     Remove (w);
+    SeqEntryExplore (sep, (Pointer) (&isReplaced), LookForReplacedByCallback);
+    if (isReplaced) {
+      ans = Message (MSG_YN, "This record has been replaced.  Are you sure you want to edit it?");
+      if (ans == ANS_NO) {
+        SeqEntryFree (sep);
+        Show (startupForm);
+        Select (startupForm);
+        ArrowCursor ();
+        return;
+      }
+    }
     dataptr = (Pointer) sep->data.ptrvalue;
     entityID = ObjMgrRegister (datatype, dataptr);
     if (dataptr != NULL && entityID > 0) {

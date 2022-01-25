@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   8/12/98
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiurl.c,v $
+* Revision 6.10  1999/03/11 15:20:21  vakatov
+* Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
+*
 * Revision 6.9  1999/01/07 17:52:36  kans
 * added programName and mydata parameters, fixed bad userAgentName code that Alexey caught and CodeWarrior missed
 *
@@ -132,8 +135,12 @@ NLM_EXTERN Nlm_Boolean SOCK_SendURLQuery (Nlm_CharPtr host_machine, Nlm_Uint2 ho
 
   if (HasNoText (host_machine) || HasNoText (host_path)) return FALSE;
 
+  timeout.sec  = timeoutsec;
+  timeout.usec =  0;
+
   /* Connect to the server */  
-  if (SOCK_Create(host_machine, host_port, &sock) != eSOCK_ESuccess) {
+  if (SOCK_Create(host_machine, host_port, &timeout, &sock)
+      != eSOCK_ESuccess) {
     ErrPostEx(SEV_ERROR, 0, 0,
               "[SendURLQuery] Cannot connect to server \"%s\", port %d;",
               host_machine, (int)host_port);
@@ -141,8 +148,6 @@ NLM_EXTERN Nlm_Boolean SOCK_SendURLQuery (Nlm_CharPtr host_machine, Nlm_Uint2 ho
   }
 
   /* Setup the connection's i/o timeout */
-  timeout.sec  = timeoutsec;
-  timeout.usec =  0;
   if (SOCK_SetTimeout(sock, eSOCK_OnWrite, &timeout, 0, 0)
       != eSOCK_ESuccess) {
     ErrPostEx(SEV_ERROR, 0, 0,

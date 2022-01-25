@@ -40,7 +40,7 @@ Args myargs[NUMARG] = {
    {"Sequence name?",NULL, NULL ,NULL ,FALSE,'s',ARG_STRING,0.0,0,NULL},
    {"length of sequence in bp?","0", NULL ,NULL ,FALSE,'l',ARG_INT,0.0,0,NULL},
    {"Genome Center tag?",NULL, NULL ,NULL ,FALSE,'g',ARG_STRING,0.0,0,NULL},
-   {"HTGS phase?","1", "1" ,"3" ,FALSE,'p',ARG_INT,0.0,0,NULL},
+   {"HTGS phase?","1", "0" ,"3" ,FALSE,'p',ARG_INT,0.0,0,NULL},
    {"GenBank accession (if an update)",NULL, NULL ,NULL ,TRUE,'a',ARG_STRING,0.0,0,NULL},
    {"Remark for update?",NULL, NULL ,NULL ,TRUE,'r',ARG_STRING,0.0,0,NULL},
    {"Clone name?",NULL, NULL ,NULL ,TRUE,'c',ARG_STRING,0.0,0,NULL},
@@ -317,7 +317,8 @@ Int2 Main(void)
    NCBISubPtr nsp;
    SeqEntryPtr sep, oldsep, the_entry, sep_list, nextsep;
    BioseqPtr bsp, the_bsp;
-   Uint1 htgs_phase;
+   Uint1 htgs_phase; /* a value from 0-3 */
+   Uint1 MI_htgs_phase;  /* mapping of htgs_phase to MI_TECH_htgs_? */
    CharPtr  newstr, accession, remark, center, organism, clone, seqbuf,
       seqname, chromosome, title, extra_ac, clone_lib, map,
       comment_fname, comment_fstr, phrap_fname, fasta_fname, contigs, accn_fname;
@@ -331,7 +332,7 @@ Int2 Main(void)
    Int2 index = 0;
    ValNodePtr rescuedsgps = NULL;
 
-   CharPtr tool_ver = "fa2htgs 1.5";
+   CharPtr tool_ver = "fa2htgs 1.6";
 
                /* check command line arguments */
 
@@ -344,6 +345,11 @@ Int2 Main(void)
    length = myargs[6].intvalue;
    center = myargs[7].strvalue;
    htgs_phase = (Uint1)(myargs[8].intvalue);
+   if (htgs_phase == 0)
+     MI_htgs_phase = (Uint1)MI_TECH_htgs_0;
+   else
+     MI_htgs_phase = (Uint1)(MI_TECH_htgs_1 + htgs_phase - 1);
+
    accession = myargs[9].strvalue;
    remark = myargs[10].strvalue;
    clone = myargs[11].strvalue;
@@ -689,7 +695,7 @@ Int2 Main(void)
       AddExtraAc2Entry(the_entry, extra_ac);
 
    AddBiomolToEntry(nsp, the_entry, 1);
-   AddTechToEntry(nsp, the_entry, (Uint1)(MI_TECH_htgs_1 + htgs_phase - 1));
+   AddTechToEntry(nsp, the_entry, MI_htgs_phase);
 
    if (bsp != NULL) {
      for (vnp = rescuedsgps; vnp != NULL; vnp = vnp->next) {

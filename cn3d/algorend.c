@@ -34,6 +34,48 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.c,v $
+* Revision 6.67  1999/05/05 21:12:57  ywang
+* fix typing error bug in RenderGraph
+*
+* Revision 6.66  1999/04/14 16:40:00  ywang
+* color objects by secondary structure for strucseqs
+*
+* Revision 6.65  1999/04/06 22:27:38  lewisg
+* fix endless loop
+*
+* Revision 6.64  1999/04/06 16:06:10  coremake
+* Fixes of typos
+*
+* Revision 6.63  1999/04/06 14:23:29  lewisg
+* add opengl replacement for viewer3d
+*
+* Revision 6.62  1999/03/30 22:36:20  ywang
+* add functions to color salsa for NcbiMimeAsn1_strucseqs & code reorganization
+*
+* Revision 6.61  1999/03/22 22:41:53  ywang
+* redesign feature page, fix bugs
+*
+* Revision 6.60  1999/03/09 18:12:56  lewisg
+* turn on termini labels
+*
+* Revision 6.59  1999/03/08 21:16:22  ywang
+* initialize variables
+*
+* Revision 6.58  1999/03/01 20:21:31  ywang
+* put in options for residue on/off control
+*
+* Revision 6.57  1999/02/24 23:06:37  ywang
+* minor name change for MGD feature
+*
+* Revision 6.56  1999/02/10 23:49:41  lewisg
+* use RGB values instead of indexed palette
+*
+* Revision 6.55  1999/01/27 21:51:51  ywang
+* add label to 'Model' menu
+*
+* Revision 6.54  1999/01/26 17:14:35  ywang
+* redesign Display menu and add 'display highlight residues only' function
+*
 * Revision 6.53  1999/01/20 22:57:24  ywang
 * customize color for secondary structure & rearrange Option menu
 *
@@ -236,8 +278,11 @@
 *
 * ==========================================================================
 */
-
+#ifdef _OPENGL
+#include <shim3d.h>
+#else
 #include <viewer3d.h>
+#endif
 #include <cn3dmain.h>
 #include <math.h>
 #include <mmdbapi.h>
@@ -247,6 +292,7 @@
 #include <cn3dmodl.h>
 #include <saledit.h>
 #include <salparam.h>
+#include <cn3dshim.h>
 
 static ENUM_ALIST(empty_alist)
   {"              ",     1},
@@ -332,7 +378,9 @@ END_ENUM_ALIST
 
 #define VIEWSCALE 1000000.0
 
-static Picture3D pic = NULL;
+#ifndef _OPENGL
+    static Picture3D pic = NULL;
+#endif
 
 static Int2 Cn3d_ParsNow = 0;
 
@@ -344,7 +392,6 @@ static Boolean Cn3d_DoHydrogens = FALSE;
 static Boolean Cn3d_CopyToNode = FALSE;
 static Boolean Cn3d_ColorPass = FALSE;  /* gathering unique colors for palette */
 static Boolean Cn3d_AnyPrim = FALSE;
-PARS parsColor = NULL;  /* holds pointer to PARS for gathering colors */
 static int Cn3d_lSlaveNum = 0;  /* which slave being iterated over 0=master */
 
 
@@ -396,8 +443,6 @@ extern CharPtr KineColors[];
 extern Int1 ElementKinColors[];
 extern Int1 ThermKine[];
 extern Int4 TempsKine[];
-extern Uint1 Cn3d_IndexRGB[];
-extern Nlm_RGBColoR Cn3d_PaletteRGB[];   /* yanli */
 extern SpecialFeaturePtr sfp;
 SpecialFeaturePtr sfpThis = NULL;
 SpecialFeatureInfoPtr sfipThis = NULL;
@@ -410,26 +455,25 @@ Int1 PhobeAAColor[MAX_NCBIstdaa] = {21,20,14,
 	9,12,12,20,21,4,20,4,20,20,14,14,14,4,14,14,20,20,21,20,14,10,1 };
 /* PINK RED BLUE YELLOW GOLD selcys BROWN GREY 26 */
 
-Int1 ColorSS[4] = {8, 10, 11, 6};
 
 /***********************************/
 
-Int2 LIBCALL ColorFromSS(PMGD pmgdThis)
+ResidueColorCell * LIBCALL ColorFromSS(PMGD pmgdThis)
 {
   Int2 rsult = 0;
 
   switch ((int) (pmgdThis->bNCBISecStru)) {
      case SS_HELIX:
-        return ColorSS[0];
+        return &(Cn3D_ColorData.SSColors[CN3D_COLOR_HELIX].ColorCell);
      case SS_SHEET:
      case SS_STRAND:
-        return ColorSS[1];
+        return &(Cn3D_ColorData.SSColors[CN3D_COLOR_STRAND].ColorCell);
      case SS_TURN:
-        return ColorSS[2];
+        return &(Cn3D_ColorData.SSColors[CN3D_COLOR_TURN].ColorCell);
      default:
-        rsult = ColorSS[3];
+        return &(Cn3D_ColorData.SSColors[CN3D_COLOR_COIL].ColorCell);
   }
-  return rsult;
+  return NULL;
 
 }
 
@@ -579,6 +623,79 @@ void LIBCALL SetAlignAlgorRender(PARS pars)
    return;
 }
 
+void LIBCALL SetStrucSeqsAlgorRender(PARS pars)
+{
+
+  if (!pars) return;
+
+  pars->HydrogensOn = FALSE;
+  pars->DisorderOn = FALSE;
+  pars->AnimateOn = TRUE;
+
+  pars->PVirtualBBOn = TRUE;
+  pars->PRealBBOn = FALSE;
+  pars->PExtraBBOn = FALSE;
+  pars->PBBRender = R_THICKWIRE;
+/*pars->PBBColor = C_BYALIGN;  */
+  pars->PBBColor = C_BYCONS;    /*  yanli */
+
+  pars->PBBLabelOn = 1;
+  pars->PBBLabelJust = (Uint1) (LA_CENTER);
+  pars->PBBLabelStyle = (Uint1) L_NAME | L_NUM | L_3LETR;
+  pars->PBBLabelScale = 2;
+
+  pars->PTermLabelOn = FALSE;
+  pars->PTermLabelJust = (Uint1) (LA_CENTER);
+  pars->PTermLabelStyle = (Uint1) 0;
+  pars->PTermLabelScale = 4;
+
+  pars->PResiduesOn = FALSE;
+  pars->PResRender = R_WIRE;
+  pars->PResColor = C_BYCONS;
+
+  pars->NTVirtualBBOn = FALSE;
+  pars->NTRealBBOn = FALSE;
+  pars->NTExtraBBOn = TRUE;
+  pars->NTBBRender = R_THICKWIRE;
+  pars->NTBBColor = C_CPK;
+
+  pars->NTBBLabelOn = 1;
+  pars->NTBBLabelJust = (Uint1) (LA_CENTER);
+  pars->NTBBLabelStyle = (Uint1) L_NAME | L_NUM | L_1LETR;
+  pars->NTBBLabelScale = 2;
+
+  pars->NTResiduesOn = TRUE;
+  pars->NTResRender = R_WIRE;
+  pars->NTResColor = C_CPK;
+
+  pars->NTTermLabelOn = FALSE;
+  pars->NTTermLabelJust = (Uint1) (LA_CENTER);
+  pars->NTTermLabelStyle = (Uint1) 0;
+  pars->NTTermLabelScale = 4;
+
+  pars->HeterogensOn = TRUE;
+  pars->HetRender = R_THICKWIRE;
+  pars->HetColor = C_CPK;
+
+  pars->IonsOn = TRUE;
+  pars->IonRender = R_SPACE;
+  pars->IonColor = C_CPK;
+
+  pars->ConnectOn = FALSE;
+  pars->ConnectRender = R_WIRE;
+  pars->ConnectColor = 9; /* all same color?? */
+
+  pars->SolventOn = FALSE;
+  pars->SolventRender = R_BALLNSTICK;
+  pars->SolventColor = C_CPK;
+
+  pars->ObjectOn = TRUE;
+  pars->ObjectRender = R_DEFAULT;
+  pars->ObjectColor = C_BYSSTRU;
+
+   return;
+}
+
 
 PARS LIBCALL NewAlgorRenderSet(void)
 {
@@ -595,6 +712,15 @@ PARS LIBCALL NewAlignRenderSet(void)
   par = (PARS) MemNew((size_t)(sizeof(ARS)));
   if (!par) return NULL;
   SetAlignAlgorRender(par);
+  return par;
+}
+
+PARS LIBCALL NewStrucSeqsRenderSet(void)
+{
+  PARS par = NULL;
+  par = (PARS) MemNew((size_t)(sizeof(ARS)));
+  if (!par) return NULL;
+  SetStrucSeqsAlgorRender(par);
   return par;
 }
 
@@ -1338,7 +1464,7 @@ void Cn3D_ColSeqCons(IteM i)  /* menu function for setting up color by conservat
   
   SeqEditViewProcsPtr svpp;
   IteM  conscolor;
-  IteM  iByAlign;
+  IteM  iByAlign = NULL;
 
   Cn3D_ColAlign(iByAlign);
 
@@ -1669,6 +1795,10 @@ static void MasterChangeLabelsProc (void)
 
   pars->PBBLabelOn = (Uint1) GetValue(Cn3D_pupLabelAA);
   pars->NTBBLabelOn = (Uint1) GetValue(Cn3D_pupLabelNT);
+
+  /* set termini labels */
+  pars->PTermLabelOn = (Uint1) GetStatus(Cn3D_lOnOffLabel[2]);
+  pars->NTTermLabelOn = (Uint1) GetStatus(Cn3D_lOnOffLabel[3]);
 
   for (i = 0; i < 4; i++) {
   nameval = GetValue(Cn3D_bLName [i]);
@@ -2033,6 +2163,8 @@ GrouP LIBCALL LabelControls ( Nlm_GrouP prnt)
   PrompT ppt1, ppt2, ppt3, ppt4, ppt7, ppt8, ppt9;
 
   g = HiddenGroup ( prnt, -1, 0, NULL );
+  StaticPrompt(g, "", 0, stdLineHeight, systemFont, 'l');
+  StaticPrompt(g, "", 0, stdLineHeight, systemFont, 'l');
   if (!g) return NULL;
   SetGroupSpacing ( g, 3, 9 );
 /*
@@ -2330,7 +2462,7 @@ PRK LIBCALL NewRenderKeep(void)
   if (!prkThis) return NULL;
   prkThis->NodeWhat = (Byte) CONVERT_ALL;
   prkThis->NodeType = (Byte) CONVERT_ALL;
-  prkThis->Color = (Int2) 0; /* a fixed color */
+  /*prkThis->Color = (Int2) 0; /* a fixed color */
   prkThis->Bond = (Byte)  NO_BOND;  /*  use define */
   prkThis->Atom = (Byte)  ATOM_NONE;
   prkThis->BondWidth = (float)0;
@@ -2347,7 +2479,7 @@ PRK LIBCALL CopyRenderKeep(PRK prkThis)
     if (!prkNew) return NULL;
     prkNew->NodeWhat = prkThis->NodeWhat;
     prkNew->NodeType = prkThis->NodeType;
-    prkNew->Color = prkThis->Color; /* a fixed color */
+    Cn3D_CopyColorCell(&(prkNew->Color), &(prkThis->Color)); /* a fixed color */
     prkNew->Bond = prkThis->Bond;  /*  use define */
     prkNew->Atom = prkThis->Atom;
     prkNew->BondWidth = prkThis->BondWidth;
@@ -2433,8 +2565,10 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
     Int4  iXFrom, iYFrom, iZFrom;
     Int4  iXTo, iYTo, iZTo;
     Int4 iCylRadius;
+#ifndef _OPENGL
     Nlm_Prim3D poly;
-    Int2 iColor = 0;
+#endif
+    ResidueColorCell iColor;
 
 #ifdef DEBUG_N
 	  printf("RenderObject\n" );
@@ -2452,15 +2586,15 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
     pars = GetAlgorRenderSet(pmsdThis->pdnmsLink);
     if (!pars) return;  /* cannot render */
     
-    iColor = pars->ObjectColor;
+    Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[pars->ObjectColor]));
     if ( Cn3d_ColorNow == C_BYOBJECT)
     {
-      iColor = ColorNumKinBB[(pmodThis->pmldCoordSet->iNoCoordSet % KIN_COLOR_NUM)];
+      Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[(pmodThis->pmldCoordSet->iNoCoordSet % KIN_COLOR_NUM)]]));
     }
     if ( Cn3d_ColorNow == C_BYCHAIN)
     {
       if (pmodThis->pvnContains == NULL)
-        iColor = ColorNumKinBB[0];
+        Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[0]]));
       else
       {
         pfbThis = (PFB) pmodThis->pvnContains->data.ptrvalue;
@@ -2472,15 +2606,15 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
         if (pfbParent)
         {
           pmmdThis = (PMMD) pfbParent;
-          iColor =  (Int2) ColorNumKinBB[(pmmdThis->pdnmmLink->choice % KIN_COLOR_NUM)];
+          Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[(pmmdThis->pdnmmLink->choice % KIN_COLOR_NUM)]]));
         }
         else
-          iColor = ColorNumKinBB[0];
+          Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[0]]));
       }
     }
     if (Cn3d_ColorNow == C_BYSSTRU   || Cn3d_ColorNow == C_BYDOMAIN)
       if (pmodThis->pvnContains == NULL)
-        iColor = ColorNumKinBB[0];
+        Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[0]]));
       else
       {
         pfbThis = (PFB) pmodThis->pvnContains->data.ptrvalue;
@@ -2494,28 +2628,56 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
           {
             pmgdThis = (PMGD) pfbParent;
             if (Cn3d_ColorNow == C_BYSSTRU)
-              iColor = (Int2) ColorFromSS(pmgdThis);
+               Cn3D_CopyColorCell(&iColor, ColorFromSS(pmgdThis));
             if (Cn3d_ColorNow == C_BYDOMAIN)
-              iColor = (Int2) ColorNumKinBB[(pmgdThis->iDomain % KIN_COLOR_NUM)];
+              Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[(pmgdThis->iDomain % KIN_COLOR_NUM)]]));
           }
           else
-            iColor = ColorNumKinBB[0];
+            Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[0]]));
           else
-            iColor = ColorNumKinBB[0];
+            Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ColorNumKinBB[0]]));
       }
       if (Cn3d_ColorNow == C_BYALIGN)
       {
-        iColor = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
+        Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)]]));
       }
-      if (Cn3d_ColorPass)  { parsColor->IndexRGB[iColor]= 1; return; }
+      if (Cn3d_ColorPass)  { Cn3D_RequestColor(&Cn3D_ColorData, &iColor); return; }
       
 
     switch (pmodThis->bWhat)
       {
 	   case OBJ_CYLINDER:
-#ifdef DEBUG_N
-	  printf("cylinder %d\n", iColor);
-#endif
+#ifdef _OPENGL
+	      fXFrom = (FloatLo) (pmodThis->ppflObject[0][0]);
+	      fYFrom = (FloatLo) (pmodThis->ppflObject[0][1]);
+	      fZFrom = (FloatLo) (pmodThis->ppflObject[0][2]);
+	      fXTo = (FloatLo) (pmodThis->ppflObject[1][0]);
+	      fYTo = (FloatLo) (pmodThis->ppflObject[1][1]);
+	      fZTo = (FloatLo) (pmodThis->ppflObject[1][2]);
+	      RotTransScale( pmsdThis,     fXFrom,
+					   fYFrom,
+					   fZFrom,
+					   &iXFrom,
+					   &iYFrom,
+					   &iZFrom);
+          fXFrom = iXFrom/VIEWSCALE;
+          fYFrom = iYFrom/VIEWSCALE;
+          fZFrom = iZFrom/VIEWSCALE;
+
+	      RotTransScale( pmsdThis,     fXTo,
+					   fYTo,
+					   fZTo,
+					   &iXTo,
+					   &iYTo,
+					   &iZTo);
+          fXTo = iXTo/VIEWSCALE;
+          fYTo = iYTo/VIEWSCALE;
+          fZTo = iZTo/VIEWSCALE;
+
+OGL_AddCylinder3D(Cn3D_ColorData.OGL_Data, &iColor, (FloatHi)fXFrom, (FloatHi)fYFrom, (FloatHi)fZFrom,
+        (FloatHi)fXTo,(FloatHi)fYTo,(FloatHi)fZTo, (FloatHi)(pmodThis->flRadius));
+#else /* _OPENGL */
+
 	      fXFrom = (FloatLo) (pmodThis->ppflObject[0][0]);
 	      fYFrom = (FloatLo) (pmodThis->ppflObject[0][1]);
 	      fZFrom = (FloatLo) (pmodThis->ppflObject[0][2]);
@@ -2537,19 +2699,62 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
 	      iCylRadius = (Int4) (pmodThis->flRadius*VIEWSCALE);
 	      AddCylinder3D (pic, NULL, (BigScalar) pmodThis,
 				      Cn3d_LayerNow ,
-				      Cn3d_IndexRGB[iColor],
+				      Cn3D_ColorIndex(&Cn3D_ColorData, &iColor),
 				      iXFrom,iYFrom,iZFrom,
                                       iXTo,iYTo,iZTo,
 				      iCylRadius  );
-#ifdef DEBUG_N
-	  printf("%ld %ld %ld\n",  (long) iXFrom, (long) iYFrom, (long) iZFrom);
-	  printf("%ld %ld %ld\n",  (long) iXTo, (long) iYTo, (long) iZTo);
-#endif
+#endif /* else _OPENGL */
 	     return;
 	    case  OBJ_BRICK:
-#ifdef DEBUG_N
-	  printf("BRICK %d\n", iColor);
-#endif
+#ifdef _OPENGL
+      {
+          double v1[3], v2[3], v3[3], v4[3];
+          Int4 xv, yv, zv;
+	     RotTransScale( pmsdThis,
+                       pmodThis->ppflObject[0][0],
+					   pmodThis->ppflObject[0][1],
+					   pmodThis->ppflObject[0][2],
+					   &xv,
+					   &yv,
+					   &zv);
+          v1[0] = xv/1000000.0;
+          v1[1] = yv/1000000.0;
+          v1[2] = zv/1000000.0;
+	     RotTransScale( pmsdThis,
+                       pmodThis->ppflObject[1][0],
+					   pmodThis->ppflObject[1][1],
+					   pmodThis->ppflObject[1][2],
+					   &xv,
+					   &yv,
+					   &zv);
+          v2[0] = xv/1000000.0;
+          v2[1] = yv/1000000.0;
+          v2[2] = zv/1000000.0;
+	     RotTransScale( pmsdThis,
+                       pmodThis->ppflObject[5][0],
+					   pmodThis->ppflObject[5][1],
+					   pmodThis->ppflObject[5][2],
+					   &xv,
+					   &yv,
+					   &zv);
+          v3[0] = xv/1000000.0;
+          v3[1] = yv/1000000.0;
+          v3[2] = zv/1000000.0;
+	     RotTransScale( pmsdThis,
+                       pmodThis->ppflObject[4][0],
+					   pmodThis->ppflObject[4][1],
+					   pmodThis->ppflObject[4][2],
+					   &xv,
+					   &yv,
+					   &zv);
+          v4[0] = xv/1000000.0;
+          v4[1] = yv/1000000.0;
+          v4[2] = zv/1000000.0;
+
+    OGL_AddQuad3D(Cn3D_ColorData.OGL_Data, &iColor, v1, v2, v3, v4);
+
+      }
+#else /* _OPENGL */
 	     fXFrom = pmodThis->ppflObject[0][0];
 	     fYFrom = pmodThis->ppflObject[0][1];
 	     fZFrom = pmodThis->ppflObject[0][2];
@@ -2570,14 +2775,14 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
 					   &iZTo);
              Cn3d_AnyPrim = TRUE;
 	     poly = AddPoly3D (pic, NULL, (BigScalar) pmodThis,
-	               Cn3d_LayerNow, Cn3d_IndexRGB[iColor],
+	               Cn3d_LayerNow, Cn3D_ColorIndex(&Cn3D_ColorData, &iColor),
 				      iXFrom,iYFrom,iZFrom,
                                       iXTo,iYTo,iZTo);
 #ifdef DEBUG_N
 	  printf("%ld %ld %ld\n",  (long) iXFrom,  (long)iYFrom, (long) iZFrom);
 	  printf("%ld %ld %ld\n",  (long) iXTo,  (long)iYTo, (long) iZTo);
 #endif
-	  for (i=2; i<8; i++)
+      for (i=2; i<8; i++)
 	      {
 		fXTo =  pmodThis->ppflObject[i][0];
 		fYTo =  pmodThis->ppflObject[i][1];
@@ -2594,7 +2799,8 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
 	  printf("%ld %ld %ld\n",  (long) iXTo, (long) iYTo, (long) iZTo);
 #endif
 	      }
-	     AddVertPoly3D (pic, poly, iXFrom,iYFrom,iZFrom);
+#endif /* else _OPENGL */
+
 #ifdef DEBUG_N
 	  printf("%ld %ld %ld\n",  (long) iXFrom, (long) iYFrom, (long) iZFrom);
 #endif
@@ -2622,7 +2828,7 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
 
 static void RenderLabel(PDNMS pdnmsThis, CharPtr pclabel,
 			  PALD paldCenter, PALD paldFrom,  PALD paldTo,
-			  Int2 iColor, Uint1 Just, Int2 Scale, Int2 Mode)
+			  ResidueColorCell * iColor, Uint1 Just, Int2 Scale, Int2 Mode)
 {
    FloatLo fXFrom,  fYFrom,  fZFrom;
    Int4  iX, iY, iZ;
@@ -2696,25 +2902,36 @@ static void RenderLabel(PDNMS pdnmsThis, CharPtr pclabel,
 			     &iY,
 			     &iZ);
 
+#ifdef _OPENGL
+   flags = 0;
+   if (Just & LA_CENTER) flags =  OGLTEXT3D_MIDDLE | OGLTEXT3D_CENTER;
+   /* if (Just & LA_FRONT) flags = flags | OGLTEXT3D_FRONT;  hard to do in OpenGL
+   todo: get rid of the ui for this
+   */
+
+   OGL_AddText3D(Cn3D_ColorData.OGL_Data, iColor, pclabel, (FloatHi)fXCen, (FloatHi)fYCen, (FloatHi)fZCen, flags);
+#else /* _OPENGL */
    flags = 0;
    if (Just & LA_LEFT) flags = flags | TEXT3D_LEFT;
    if (Just & LA_RIGHT) flags = flags | TEXT3D_RIGTH;
    if (Just & LA_UPPER) flags = flags | TEXT3D_UPPER;
    if (Just & LA_LOWER) flags = flags | TEXT3D_LOWER;
+   /* only LA_CENTER and LA_FRONT are used */
    if (Just & LA_CENTER) flags =  TEXT3D_MIDDLE | TEXT3D_CENTER;
    if (Just & LA_FRONT) flags = flags | TEXT3D_FRONT;
    Cn3d_AnyPrim = TRUE;
    if (paldPrim->pGraphic == NULL)
        paldPrim->pGraphic = (Pointer) AddSegment3D(pic, NULL, (BigScalar) paldPrim, Cn3d_LayerNow);
 
-   AddText3D (pic,  (Segment3D) paldPrim->pGraphic, (BigScalar) 0, Cn3d_LayerNow, Cn3d_IndexRGB[iColor],
+   AddText3D (pic,  (Segment3D) paldPrim->pGraphic, (BigScalar) 0, Cn3d_LayerNow, Cn3D_ColorIndex(&Cn3D_ColorData, iColor),
                  pclabel,  iX, iY , iZ , (Uint4) (Scale*VIEWSCALE/2) , 0, flags);
+#endif /* else _OPENGL */
    return;
 
 }
 
 
-void LIBCALL RenderBond( PALD paldFrom,  PALD paldTo, Int2 iColor,
+void LIBCALL RenderBond( PALD paldFrom,  PALD paldTo, ResidueColorCell * iColor,
 			FloatLo fCylRadius)
 {
 
@@ -2797,22 +3014,36 @@ void LIBCALL RenderBond( PALD paldFrom,  PALD paldTo, Int2 iColor,
     iZTo = (Int4) (fZTo*VIEWSCALE);
     iCylRadius = (Int4) (fCylRadius*VIEWSCALE);
     Cn3d_AnyPrim = TRUE;
+#ifndef _OPENGL
     if (paldFrom->pGraphic == NULL)
        paldFrom->pGraphic = (Pointer) AddSegment3D(pic, NULL,
 			(BigScalar) paldFrom, Cn3d_LayerNow);
+#endif /* ndef _OPENGL */
     if (fCylRadius  <  CYL_THRESHOLD)
-       AddLine3D (pic, (Segment3D) paldFrom->pGraphic , (BigScalar) paldFrom, Cn3d_LayerNow, Cn3d_IndexRGB[iColor], iXFrom,iYFrom,iZFrom,
+#if _OPENGL
+         OGL_AddLine3D(Cn3D_ColorData.OGL_Data, iColor, (FloatHi)fXFrom, (FloatHi)fYFrom, (FloatHi)fZFrom,
+        (FloatHi)fXTo, (FloatHi)fYTo, (FloatHi)fZTo);
+
+#else /* _OPENGL */
+       AddLine3D (pic, (Segment3D) paldFrom->pGraphic , (BigScalar) paldFrom, Cn3d_LayerNow, Cn3D_ColorIndex(&Cn3D_ColorData, iColor), iXFrom,iYFrom,iZFrom,
                                            iXTo,iYTo,iZTo);
+#endif /* else _OPENGL */
     else
-       AddCylinder3D (pic, (Segment3D) paldFrom->pGraphic, (BigScalar) paldFrom, Cn3d_LayerNow , Cn3d_IndexRGB[iColor], iXFrom,iYFrom,iZFrom,
+#if _OPENGL
+        OGL_AddCylinder3D(Cn3D_ColorData.OGL_Data, iColor, (FloatHi)fXFrom, (FloatHi)fYFrom, (FloatHi)fZFrom,
+        (FloatHi)fXTo, (FloatHi)fYTo, (FloatHi)fZTo, (FloatHi)fCylRadius);
+
+#else /* _OPENGL */
+       AddCylinder3D (pic, (Segment3D) paldFrom->pGraphic, (BigScalar) paldFrom, Cn3d_LayerNow , Cn3D_ColorIndex(&Cn3D_ColorData, iColor), iXFrom,iYFrom,iZFrom,
                                            iXTo,iYTo,iZTo, iCylRadius);
+#endif /* else _OPENGL */
    return;
 }
 
 
 
 
-void  LIBCALL  RenderAnAtom(PALD paldAtom, Int2 iColor,
+void  LIBCALL  RenderAnAtom(PALD paldAtom, ResidueColorCell * iColor,
 			FloatLo fRadius)
 {
     Int4  iXAtom, iYAtom, iZAtom;
@@ -2857,16 +3088,23 @@ void  LIBCALL  RenderAnAtom(PALD paldAtom, Int2 iColor,
 	fZAtom = fZTempF;
      }
 
+#if _OPENGL
+  
+    OGL_AddSphere3D(Cn3D_ColorData.OGL_Data, (TOGL_ColorCell *)iColor, (FloatHi)fXAtom, (FloatHi)fYAtom, (FloatHi)fZAtom,
+        (FloatHi)fRadius);
+    Cn3d_AnyPrim = TRUE;  /* this probably can be deleted */
+#else /* _OPENGL */
+
       /* scale */
     iXAtom = (Int4) (fXAtom*VIEWSCALE);
     iYAtom = (Int4) (fYAtom*VIEWSCALE);
     iZAtom = (Int4) (fZAtom*VIEWSCALE);
     iRadius = (Int4) (fRadius*VIEWSCALE);
-    Cn3d_AnyPrim = TRUE;
     if (paldAtom->pGraphic == NULL)
        paldAtom->pGraphic = (Pointer) AddSegment3D(pic, NULL, (BigScalar) paldAtom, Cn3d_LayerNow);
-    AddSphere3D (pic, (Segment3D) paldAtom->pGraphic, (BigScalar) paldAtom, Cn3d_LayerNow,  Cn3d_IndexRGB[iColor],
+    AddSphere3D (pic, (Segment3D) paldAtom->pGraphic, (BigScalar) paldAtom, Cn3d_LayerNow,  Cn3D_ColorIndex(&Cn3D_ColorData, iColor),
                 iXAtom,iYAtom,iZAtom, iRadius);
+#endif /* else _OPENGL */
 
    return;
 }
@@ -2894,7 +3132,7 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
   PALD paldMid = NULL;
   PALD paldDrawTo = NULL;
   PMAD pmadDrawTo = NULL;
-  Int2 iColor;
+  ResidueColorCell iColor;
 /*  PMGD pmgdParent; */
 
   prKeep = (PRK) ptr;
@@ -2930,11 +3168,11 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
 
 
   /* make the atomic-level color decisions here */
-  iColor = prKeep->Color;
+  Cn3D_CopyColorCell(&iColor, &(prKeep->Color));
   if (Cn3d_ColorNow == C_CPK)
     {
-      iColor = (Int2) ElementKinColors[(Int1)pmadThis->pvnmaLink->choice];
-      if (Cn3d_ColorPass) {parsColor->IndexRGB[iColor] = 1; return; }
+      Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ElementKinColors[(Int1)pmadThis->pvnmaLink->choice]]));
+      if (Cn3d_ColorPass) {Cn3D_RequestColor(&Cn3D_ColorData, &iColor); return; }
     }
 
   if (Cn3d_ColorNow == C_BYTEMP)
@@ -2962,8 +3200,8 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
 	      if ((iTemp < TempsKine[iBin+1]) && (iTemp >= TempsKine[iBin]))
 	        break;
 	  }
-	iColor = (Int2) ThermKine[iBin];
-        if (Cn3d_ColorPass)  {parsColor->IndexRGB[iColor]= 1; return; }
+	Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ThermKine[iBin]]));
+        if (Cn3d_ColorPass)  {Cn3D_RequestColor(&Cn3D_ColorData, &iColor); return; }
     }
 
   /* otherwise the color should have been set by the calling routine */
@@ -2990,8 +3228,8 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
 /*printf("atom radius %f ", (float) fRadius);*/
 #endif
    if ((Cn3d_DoHydrogens == FALSE) && (pmadThis->pvnmaLink->choice == 1)) bDraw = FALSE;
-   if (Cn3d_ColorPass)  { parsColor->IndexRGB[iColor]= 1; return; }
-   if (bDraw) RenderAnAtom(paldThis, iColor, fRadius);
+   if (Cn3d_ColorPass)  { Cn3D_RequestColor(&Cn3D_ColorData, &iColor); return; }
+   if (bDraw) RenderAnAtom(paldThis, &iColor, fRadius);
 
    /* the rest of this routine handles half-bond drawing where the bonds */
    /* are owned by the parent atom */
@@ -3041,7 +3279,7 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
  		    if (((int) iIndex == RESIDUES) && (IsAtomBackBone(pmadDrawTo)))
 		      {
  			/* draw a whole bond to bridge */
-		        RenderBond(paldThis, paldDrawTo, iColor, prKeep->BondWidth);
+		        RenderBond(paldThis, paldDrawTo, &iColor, prKeep->BondWidth);
 		      }
 		    else
 		      {
@@ -3059,7 +3297,7 @@ static void RenderAllAtom(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
 		    	if (paldMid && paldThis)
 			  {
 					
-					RenderBond(paldThis, paldMid, iColor,  prKeep->BondWidth);
+					RenderBond(paldThis, paldMid, &iColor,  prKeep->BondWidth);
 			  }
                     	FreeALD(paldMid);
 		      }
@@ -3129,7 +3367,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   PALD paldFrom = NULL;
   PALD paldTo = NULL;
   Byte bReservedThis = 0;
-  Uint1Ptr rgb;
+  /* Uint1Ptr rgb; */
 
   SpecialFeatureInfoPtr sfipThis = NULL;
 
@@ -3143,12 +3381,18 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   pdnmgThis =  DNFromPFB(pfbThis);
   pmgdThis = (PMGD) pfbThis;
 
+  if(Cn3D_DisplayHighlight) {
+     if(pmgdThis && pmgdThis->bHighlighted !=1) goto cyalater;
+  }
+
   if(Cn3d_ParsNow == 0 && pmgdThis->FeatureOn > 0) goto cyalater;
+
   if(Cn3d_ParsNow > 0) {
-     if( pmgdThis->iFeature == 0 || pmgdThis->FeatureOn == 0 || pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater; 
+     if( pmgdThis->iUserDefinedFeature == 0 || pmgdThis->FeatureOn == 0 || pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater; 
   }
 
   if(pmgdThis->bVisible != 1) goto cyalater;
+  if(pmgdThis->bTurnedOff == 1) goto cyalater;
      /* control display show/off on MG level-- Yanli */
 
   pmsdThis = ToMSDParent(pfbThis);
@@ -3160,36 +3404,54 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   {
     if(pmsdThis->bMaster) 
     {
-      if (pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned) && !Cn3D_fAlignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
-      if ((!(pmgdThis->bReserved) || (pmgdThis->bReserved != pmsdThis->bAligned)) && !Cn3D_fUnalignOn&& pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+      if (pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned) && !Cn3D_fAlignOn && pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
+      if ((!(pmgdThis->bReserved) || (pmgdThis->bReserved != pmsdThis->bAligned)) && !Cn3D_fUnalignOn&& pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
     }
     else
     {
       if (pmgdThis->bReserved)
       {
-        if ( (*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
-        if ( (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned)) && !Cn3D_fUnalignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+        if ( (*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn && pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
+        if ( (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned)) && !Cn3D_fUnalignOn && pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
       }
-      if (!(pmgdThis->bReserved) && !Cn3D_fUnalignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+      if (!(pmgdThis->bReserved) && !Cn3D_fUnalignOn && pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
     }
   }
   
   /* else if (pmgdThis->bReserved)
   {
-    if ((*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+    if ((*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn && pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
   }
-  else if ((!(pmgdThis->bReserved) || (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned))) && !Cn3D_fUnalignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+  else if ((!(pmgdThis->bReserved) || (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned))) && !Cn3D_fUnalignOn && pmgdThis->iUserDefinedFeature != Cn3d_ParsNow) goto cyalater;
 */
   /* set the color */
-
-  if(Cn3d_ParsNow != 0 && pmgdThis->iFeature == Cn3d_ParsNow && pmgdThis->FeatureOn > 0){
+#ifdef _OPENGL
+  if(pmgdThis->bHighlighted) {
+      if (IsGraphAminoAcid(pmgdThis)) {
+          Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3D_ColorData.Highlight.ColorCell));
+          if (Cn3d_ColorPass) { Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
+          if( Cn3D_ReColor ){
+              if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
+                  if(iIndex != NTBBLABELSON && iIndex != PBBLABELSON){
+                      /*rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); lyg*/
+                      ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
+                  }
+              }
+          }
+      }
+  }
+  else 
+#endif /* _OPENGL */
+  if(Cn3d_ParsNow != 0 && pmgdThis->iUserDefinedFeature == Cn3d_ParsNow && pmgdThis->FeatureOn > 0){
      if (IsGraphAminoAcid(pmgdThis)) {
-        prkNew->Color = (Int2) Cn3d_ColorNow;
-        if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[Cn3d_ColorNow]));
+        if (Cn3d_ColorPass) { Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
         if( Cn3D_ReColor ){
            if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-              rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-              ColorSalsa_BYMG(pmgdThis, rgb);
+              if(iIndex != NTBBLABELSON && iIndex != PBBLABELSON){
+                 /*rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); lyg*/
+                 ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
+              }
            }
         }
      }
@@ -3199,12 +3461,12 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     if IsGraphAminoAcid(pmgdThis)
     {
       iResId = GetGraphNCBIstdaa(pmgdThis);
-      prkNew->Color = (Int2)  KinAAColor[iResId];
-      if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+      Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[KinAAColor[iResId]]));
+      if (Cn3d_ColorPass) { Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
       if( Cn3D_ReColor ){
          if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-            rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-            ColorSalsa_BYMG(pmgdThis, rgb);
+            /*rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); lyg */
+            ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
          }                    /* yanli */
       }
       if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3213,8 +3475,8 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
       if IsGraphNABase(pmgdThis)
       {
         iResId = GetGraphNCBI4na(pmgdThis);
-        prkNew->Color =(Int2)  KinNAColor[iResId];
-        if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[KinNAColor[iResId]]));
+        if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
       }
   }
   /* if (Cn3d_ColorNow == C_BYLEN)
@@ -3229,12 +3491,12 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   else if (Cn3d_ColorNow == C_BYSSTRU)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
-    prkNew->Color = (Int2) ColorFromSS(pmgdThis);
-    if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+    Cn3D_CopyColorCell(&(prkNew->Color), ColorFromSS(pmgdThis));
+    if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-          rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-          ColorSalsa_BYMG(pmgdThis, rgb);
+          /* rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); lyg */
+          ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
        }                    /* yanli */
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3243,12 +3505,12 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   else if (Cn3d_ColorNow == C_BYALIGN)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
-    prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
-    if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+    Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)]]));
+    if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-          rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-          ColorSalsa_BYMG(pmgdThis, rgb);
+          /* rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); lyg */
+          ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
        }                    /* yanli */
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3265,13 +3527,11 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     {
       if (pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned)) 
       {
-/*      prkNew->Color = (Int2) C_magenta;   */
-        prkNew->Color = (Int2) C_red; /* change conserved color to red */
-                                          /* Yanli */
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[C_red])); /* change conserved color to red */
       }
       else
       {
-        prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)]]));
       }
     }
     else
@@ -3280,27 +3540,25 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
       {
         if (*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) 
         {
-/*        prkNew->Color = (Int2) C_magenta;   */
-          prkNew->Color = (Int2) C_red; /* change conserved color to red */
-                                          /* Yanli */
+          Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[C_red])); /* change conserved color to red */
         }
         else
         {
-          prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
+          Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)]]));
         }
       }
       else
       {
-        prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)]]));
       }
       
     }
     
-    if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+    if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-          rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-          ColorSalsa_BYMG(pmgdThis, rgb);    
+          /* rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); lyg */
+          ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);    
        }                    /* yanli */
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3309,26 +3567,27 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   else if (Cn3d_ColorNow == C_BYSEQCONS)
   {
     if(pmgdThis->bReserved) {
-       prkNew->Color = GetColorIndexForMG(pmgdThis);
+       Cn3D_CopyColorCell(&(prkNew->Color), GetColorIndexForMG(pmgdThis));
     }
     else
     {
-       prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
+       Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)]]));
     }
-    if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+    if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
   }
 
   else if (Cn3d_ColorNow == C_BYDOMAIN)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
-    prkNew->Color = (Int2) ColorNumKinBB[(pmgdThis->iDomain % KIN_COLOR_NUM)] ;
-    if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+    Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[ColorNumKinBB[(pmgdThis->iDomain % KIN_COLOR_NUM)]])) ;
+    if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-          if(prkNew->Color != 0) rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-          else rgb = (Uint1Ptr) GetRGB(16);  /* white is not visible in salsa */
-          ColorSalsa_BYMG(pmgdThis, rgb);
+          if(prkNew->Color.rgb[0] == 255 && prkNew->Color.rgb[1] == 255 
+              && prkNew->Color.rgb[2] == 255) Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[C_black]));
+          /* white is not visible in salsa */
+          ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
        }                    /* yanli */
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3338,12 +3597,12 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     if IsGraphAminoAcid(pmgdThis)
     {
       iResId = GetGraphNCBIstdaa(pmgdThis);
-      prkNew->Color = (Int2) PhobeAAColor[iResId];
-      if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+      Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[PhobeAAColor[iResId]]));
+      if (Cn3d_ColorPass) { Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-          rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-          ColorSalsa_BYMG(pmgdThis, rgb);
+          /* rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color); */
+          ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
        }                    /* yanli */
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3352,16 +3611,16 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
       if IsGraphNABase(pmgdThis)
       {
         iResId = GetGraphNCBI4na(pmgdThis);
-        prkNew->Color = (Int2)  KinNAColor[iResId];
-        if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[KinNAColor[iResId]]));
+        if (Cn3d_ColorPass) { Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
       }
   }
   else if (Cn3d_ColorNow == C_BYCHAIN)
   {
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
-          rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
-          ColorSalsa_BYMG(pmgdThis, rgb);
+          /* rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);*/
+          ColorSalsa_BYMG(pmgdThis, prkNew->Color.rgb);
        }                    /* yanli */
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
@@ -3374,8 +3633,8 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
 
        if (Cn3d_ColorPass)
           {
-	     if (prkNew->Color < C_top)
-               { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+	     /*if (prkNew->Color < C_top)*/
+               { Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto cyalater; }
           }
 
        switch ((int) Cn3d_LabelNow)
@@ -3392,7 +3651,8 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
 		break;
            default: iSkip = 1;
 	 }
-       if ( ((int) pdnmgThis->choice % (int) iSkip) != 0) goto cyalater;
+       if ( ((int) pdnmgThis->choice % (Int4) iSkip) != 0) goto cyalater;
+
        if (IsGraphAminoAcid(pmgdThis) && (prkNew->LStyle & L_NAME))
          {
 
@@ -3508,12 +3768,15 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
 
        RenderLabel(pmsdThis->pdnmsLink, pcL,
 			  paldThis, paldFrom,  paldTo,
-			  prkNew->Color, prkNew->LJust, prkNew->LScale, iEnd);
+			  &(prkNew->Color), prkNew->LJust, prkNew->LScale, iEnd);
        MemFree(pcL);
 
     }
 
  nolabel:
+#ifdef _OPENGL
+		 OGL_LoadName((Nlm_VoidPtr)pmgdThis);
+#endif
 
    /* do the rendering */
    /* deal with setting the NodeType/NodeWhat for virtual/backbone/realbb/residues */
@@ -3538,7 +3801,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
           {
 
 		 /*looks like this is where the color decision has to be made! */
-		 
+
 		 pmadThis = (PMAD) pvnmaThis->data.ptrvalue;
          	RenderAllAtom((PFB)pmadThis, iModel, iIndex, prkNew);
 	    pvnmaThis = pvnmaThis->next;
@@ -3648,10 +3911,10 @@ static void LIBCALLBACK RenderMolecule(PFB pfbThis, Int4 iModel,  Int4 iIndex, P
   if (Cn3d_ColorNow == C_BYCHAIN)
     {  /* homogenous color scheme */
       if ((iIndex == RESIDUES))
-        prkNew->Color =  (Int2) ColorNumKinSC[(pdnmmThis->choice % KIN_COLOR_NUM)];
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[ColorNumKinSC[(pdnmmThis->choice % KIN_COLOR_NUM)]]));
       else
-        prkNew->Color =  (Int2) ColorNumKinBB[(pdnmmThis->choice % KIN_COLOR_NUM)];
-      if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto byelater; }
+        Cn3D_CopyColorCell(&(prkNew->Color), &(Cn3d_PaletteRGB[ColorNumKinBB[(pdnmmThis->choice % KIN_COLOR_NUM)]]));
+      if (Cn3d_ColorPass) {  Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color)); goto byelater; }
     }
 
   if ((iIndex == PTERMLABON))
@@ -3667,13 +3930,13 @@ static void LIBCALLBACK RenderMolecule(PFB pfbThis, Int4 iModel,  Int4 iIndex, P
     }
 
 
-  if ((iIndex == NTTERMLABON) || (iIndex == PTERMLABON))
+  if (iIndex == NTTERMLABON || iIndex == PTERMLABON )
     {  /* take care of   TERMINI here */
              if (Cn3d_ColorPass)
               {
-	         if (prkNew->Color < C_top)
+	         /*if (prkNew->Color < C_top) */
 		   {
-                     parsColor->IndexRGB[prkNew->Color] = 1;
+                     Cn3D_RequestColor(&Cn3D_ColorData,&(prkNew->Color));
 		     goto byelater;
 		   }
               }
@@ -3704,7 +3967,7 @@ static void LIBCALLBACK RenderMolecule(PFB pfbThis, Int4 iModel,  Int4 iIndex, P
 	    	paldFrom = GetAtomLocs(pmadFrom,  iModel);
 	    	RenderLabel(pmsdThis->pdnmsLink, pcTemp,
 			  NULL, paldFrom,  paldTo,
-			  prkNew->Color, prkNew->LJust, prkNew->LScale, RL_EXTRAPOL);
+			  &(prkNew->Color), prkNew->LJust, prkNew->LScale, RL_EXTRAPOL);
                 MemFree(pcTemp);
 	    	pdnmgTo = NULL;
 	    	pdnmgFrom = NULL;
@@ -3735,7 +3998,7 @@ static void LIBCALLBACK RenderMolecule(PFB pfbThis, Int4 iModel,  Int4 iIndex, P
 	    	paldFrom = GetAtomLocs(pmadFrom,  iModel);
 	    	RenderLabel(pmsdThis->pdnmsLink, pcTemp,
 			  NULL, paldFrom, paldTo,
-			  prkNew->Color, prkNew->LJust, prkNew->LScale,
+			  &(prkNew->Color), prkNew->LJust, prkNew->LScale,
 			  RL_EXTRAPOL);
 		MemFree(pcTemp);
 	      }
@@ -3784,7 +4047,8 @@ static void SwitchRender(PDNMS pdnmsThis, Int2 iModel,
     if (!prKeep) return;
     if (iBackType == CONNECTON)
       {  /* do inter-molecule bonds */
-	  prKeep->Color = (Byte) Cn3d_ColorNow; /* yellow */
+	  Cn3D_CopyColorCell(&(prKeep->Color), &Cn3d_PaletteRGB[Cn3d_ColorNow]); /* yellow */
+      /* this really needs to be fixed.  Cn3d_ColorNow should only hold the *type* of coloring */
 	  prKeep->Bond = (Byte) HALF_BOND;
 	  prKeep->Atom = (Byte) ATOM_NONE;
 	  switch (Cn3d_RenderNow)
@@ -3815,7 +4079,7 @@ static void SwitchRender(PDNMS pdnmsThis, Int2 iModel,
 		{
 		    case C_CPK:
 		    case C_BYTEMP:
-		       prKeep->Color = (Int2) 0;
+		       Cn3D_CopyColorCell(&(prKeep->Color), &Cn3d_PaletteRGB[0]);
 		       switch (Cn3d_RenderNow)
 		         {
 			     case R_SPACE:
@@ -3862,9 +4126,9 @@ static void SwitchRender(PDNMS pdnmsThis, Int2 iModel,
 		    case C_BYHYDRO:
 		    case C_BYCHAIN:
 		    default:
-		       prKeep->Color = (Int2) 0;
-                       if (Cn3d_ColorNow < C_top)
-                          prKeep->Color = Cn3d_ColorNow;
+		       Cn3D_CopyColorCell(&(prKeep->Color), &Cn3d_PaletteRGB[Cn3d_ColorNow]);
+                       /* if (Cn3d_ColorNow < C_top) 
+                          prKeep->Color = Cn3d_ColorNow; */
 		       switch (Cn3d_RenderNow)
 		         {
 
@@ -3944,7 +4208,7 @@ void LIBCALL MakePaletteModel(PDNMS pdnmsThis, Int2 iModel )
   PMSD pmsdThis = NULL;
   PVNMO pvnmoThis = NULL;
   PARS pars = NULL;
-
+    ResidueColorCell iColor;
   /* fetch the active structure */
   /*pdnmsThis = GetSelectedModelstruc();*/
 
@@ -3992,12 +4256,18 @@ printf("traversing to make palette\n");
 	      if (Cn3d_ColorNow == C_CPK)
 	        {
 		   /* assume C O N H are protein backbone colors used */
-		   if (Cn3d_DoHydrogens) parsColor->IndexRGB[ElementKinColors[1]] = 1; /* H */
-		   parsColor->IndexRGB[ElementKinColors[6]] = 1; /* C */
+              if (Cn3d_DoHydrogens) {
+                  Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ElementKinColors[1]])); /* H */
+                  Cn3D_RequestColor(&Cn3D_ColorData, &iColor);
+              }
+		   Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ElementKinColors[6]])); /* C */
+           Cn3D_RequestColor(&Cn3D_ColorData, &iColor);
 		   if (pars->PRealBBOn || pars->PExtraBBOn)
 		     {
-		       parsColor->IndexRGB[ElementKinColors[7]] = 1; /* N */
-		       parsColor->IndexRGB[ElementKinColors[8]] = 1; /* O */
+		       Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ElementKinColors[7]])); /* N */
+               Cn3D_RequestColor(&Cn3D_ColorData, &iColor);
+		       Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[ElementKinColors[8]])); /* O */
+               Cn3D_RequestColor(&Cn3D_ColorData, &iColor);
 		     }
 		}
 	    }
@@ -4129,110 +4399,91 @@ static void LIBCALLBACK DoGraphicNull(PFB pfbThis, Int4 iModel, Int4 iIndex, Poi
 
 void LIBCALL fnMSPLoop (PDNMS pdnmsThis)
 {
-  PMSD pmsdThis = NULL;
-  PDNML pdnmlThis = NULL;
-  PDNML pdnmlFirst = NULL;
-  PMLD pmldThis = NULL;
-  PARS pars = NULL;
-
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  if(Cn3d_ParsNow == 0){
-     pars = GetAlgorRenderSet(pdnmsThis);
-     if(!pars) return;
-  }
-  else {
-     pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
-     if(!pars) return;
-  }
-
-  pdnmlThis = pmsdThis->pdnmlModels;
-
-  /* set up for doing one model or animation */
-   while (pdnmlThis)
-   {
-     pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
-     if (pmldThis->bSelected & (Byte) 0x01)
-       {
-          if (!pdnmlFirst) {
-	      pdnmlFirst = pdnmlThis;
-	      MakePaletteModel( pdnmsThis, pdnmlThis->choice );
-	    }
-          if ((pars->AnimateOn == TRUE)  && (pdnmlThis != pdnmlFirst))
-             MakePaletteModel(  pdnmsThis, pdnmlThis->choice );
-       }
-     pdnmlThis = pdnmlThis->next;
-   }
-  return;
+    PMSD pmsdThis = NULL;
+    PDNML pdnmlThis = NULL;
+    PMLD pmldThis = NULL;
+    PARS pars = NULL;
+    
+    
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    
+    
+    pdnmlThis = pmsdThis->pdnmlModels;
+    
+    /* set up for doing one model or animation */
+    while (pdnmlThis)
+    {
+        pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
+        if (pmldThis->bSelected & (Byte) 0x01)
+        {
+            Cn3d_ParsNow = 0;
+            pars = GetAlgorRenderSet(pdnmsThis);
+            if (!pars) return; 
+            MakePaletteModel( pdnmsThis, pdnmlThis->choice );
+            
+            sfpThis = sfp;
+            while(sfpThis){
+                sfipThis = sfpThis->data.ptrvalue;
+                if(sfipThis->On) {
+                    Cn3d_ParsNow = sfpThis->choice;
+                    
+                    pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
+                    if(!pars) return;
+                    MakePaletteModel( pdnmsThis, pdnmlThis->choice );
+                }
+                sfpThis = sfpThis->next;
+            }
+            
+        }
+        pdnmlThis = pdnmlThis->next;
+    }
+    return;
 }
 
 
 void LIBCALL MakeStrucPalette(void)
 {
 
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-  PDNMS pdnmsThisSlave = NULL;
-  Int2 i;
+    PARS pars = NULL;
+    PMSD pmsdThis = NULL;
+    PDNMS pdnmsThis = NULL;
+    PDNMS pdnmsThisSlave = NULL;
+    Int2 i;
 
-  pic = NULL;  /* this should not acesss pic ! - just a color traversing pass */
-  pdnmsThis = GetSelectedModelstruc();
-  if (!pdnmsThis) return;
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;  /* cannot render */
-
-  /* clear out the static list of colors used */
-    for (i=0; i< CN3D_COLOR_MAX; i++) pars->IndexRGB[i] = 0;
-
-  Cn3d_ColorPass = TRUE;
-
-  Cn3d_lSlaveNum = 0;  /* go over the master */
- 
-  Cn3d_ParsNow = 0;
-
-  fnMSPLoop (pdnmsThis);
-
-  sfpThis = sfp;
-  while(sfpThis){
-    Cn3d_ParsNow = sfpThis->choice;
-    sfipThis = sfpThis->data.ptrvalue;
-    if(sfipThis->On) fnMSPLoop (pdnmsThis);
-    sfpThis = sfpThis->next;
-  }
-
-  if(AreNeighborsOn())
-  {
-    pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
-    while(pdnmsThisSlave) 
+#ifndef _OPENGL
+    pic = NULL;  /* this should not acesss pic ! - just a color traversing pass */
+#endif
+    pdnmsThis = GetSelectedModelstruc();
+    if (!pdnmsThis) return;
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    
+    pars = GetAlgorRenderSet(pdnmsThis);
+    if (!pars) return;  /* cannot render */
+    
+    /* clear out the static list of colors used */
+    Cn3D_FreePalette(&(Cn3D_ColorData.Palette));
+    Cn3d_ColorPass = TRUE;
+    Cn3d_lSlaveNum = 0;  /* go over the master */
+    
+    fnMSPLoop (pdnmsThis);
+    
+    if(AreNeighborsOn())
     {
-      Cn3d_lSlaveNum++; 
-      if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) {
-
-         Cn3d_ParsNow = 0;
-
-         fnMSPLoop(pdnmsThisSlave);
-
-         sfpThis = sfp;
-         while(sfpThis){
-            Cn3d_ParsNow = sfpThis->choice;
-            sfipThis = sfpThis->data.ptrvalue;
-            if(sfipThis->On) fnMSPLoop(pdnmsThisSlave);
-            sfpThis = sfpThis->next;
-         }
-      }
-     pdnmsThisSlave = pdnmsThisSlave->next;
+        pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
+        while(pdnmsThisSlave) 
+        {
+            Cn3d_lSlaveNum++; 
+            if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) fnMSPLoop(pdnmsThisSlave);
+            pdnmsThisSlave = pdnmsThisSlave->next;
+        }
     }
-  }
-
-  Cn3d_ColorPass = FALSE;
-  return;
+    
+    Cn3d_ColorPass = FALSE;
+    return;
 }
 
 
+#ifndef _OPENGL
 Picture3D LIBCALL Do3DOrigin(Picture3D p3d)
 {
     FloatLo fFrom[3];
@@ -4244,7 +4495,7 @@ Picture3D LIBCALL Do3DOrigin(Picture3D p3d)
     PMSD pmsdThis = NULL;
     PARS parsColor = NULL;
     Int4 i;
-
+    ResidueColorCell iColor;
 
     /* appends origin onto p3d */
 
@@ -4259,9 +4510,10 @@ Picture3D LIBCALL Do3DOrigin(Picture3D p3d)
     pdnmsThis = GetSelectedModelstruc();
     if (!pdnmsThis) return NULL;
     pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    Cn3D_CopyColorCell(&iColor, &(Cn3d_PaletteRGB[C_white]));
     if (Cn3d_ColorPass)
           {
-            parsColor->IndexRGB[C_white] = 1; return NULL;
+            Cn3D_RequestColor(&Cn3D_ColorData, &iColor); return NULL;
           }
 
 
@@ -4287,9 +4539,9 @@ Picture3D LIBCALL Do3DOrigin(Picture3D p3d)
 					   &iYTo,
 					   &iZTo);
 	        AddLine3D (p3d, NULL, (BigScalar) 0, Cn3d_LayerNow,
-		Cn3d_IndexRGB[C_white], iXFrom,iYFrom,iZFrom,
+		Cn3D_ColorIndex(&Cn3D_ColorData, &iColor), iXFrom,iYFrom,iZFrom,
                                         iXTo,iYTo,iZTo);
-		AddText3D (p3d, NULL, (BigScalar) 0, Cn3d_LayerNow, Cn3d_IndexRGB[C_white],
+		AddText3D (p3d, NULL, (BigScalar) 0, Cn3d_LayerNow, Cn3D_ColorIndex(&Cn3D_ColorData, &iColor),
                  pclabel[i],  iXFrom, iYFrom , iZFrom , (Uint4) (4*VIEWSCALE/2) , 0, 0);
                fFrom[i] = 0.0;
                fTo[i] = 0.0;
@@ -4297,317 +4549,264 @@ Picture3D LIBCALL Do3DOrigin(Picture3D p3d)
 
    return p3d;
 }
+#endif /* ndef _OPENGL */
 
+
+static void fnARModelLoop (PDNMS pdnmsThis, PDNML pdnmlThis, PARS pars)
+{
+    PMSD pmsdThis = NULL;
+    PMLD pmldThis = NULL;
+    PVNMO pvnmoThis = NULL;
+    Int2  iModel = 0;
+    Int2  iTest = 0;
+    Int2 i = 0;
+    
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
+    
+    iModel = (Int2) pdnmlThis->choice;
+    SetActiveModel(((PFB) pmsdThis), iModel);
+    /* do the object traversal */
+    if (pars->ObjectOn)
+    {
+        Cn3d_RenderNow = pars->ObjectRender;
+        Cn3d_ColorNow = pars->ObjectColor;
+        pvnmoThis = pmsdThis->pvnmoHead;
+        while (pvnmoThis)
+        {
+            if ((Int2)pvnmoThis->choice == iModel)
+            {
+                RenderObject(pvnmoThis);
+            }
+            pvnmoThis = pvnmoThis->next;
+        }
+    }
+    
+    Cn3d_DoHydrogens = pars->HydrogensOn;
+    
+    if ((pars->PVirtualBBOn) || (pars->PRealBBOn) || (pars->PExtraBBOn) )
+    {
+        Cn3d_RenderNow = pars->PBBRender;
+        Cn3d_ColorNow = pars->PBBColor;
+    }
+    if (pars->PVirtualBBOn)
+    {
+        /* chop each one out into a separate procedure */
+        /* pass pointers, Model Id's etc, but use LayerNow, RenderNow, ColorNow */
+        SwitchRender(pdnmsThis,iModel, AM_PROT, VIRTUALBB);
+    }
+    if (pars->PRealBBOn || pars->PExtraBBOn)
+    {
+        SwitchRender(pdnmsThis, iModel, AM_PROT,
+            (Byte)(pars->PExtraBBOn ? REALXTRABB : REALBB) );
+    }
+    if (pars->PResiduesOn)
+    {
+        Cn3d_RenderNow = pars->PResRender;
+        Cn3d_ColorNow = pars->PResColor;
+        SwitchRender(pdnmsThis, iModel, AM_PROT,  RESIDUES);
+    }
+    if ((pars->NTVirtualBBOn) || (pars->NTRealBBOn) ||  (pars->NTExtraBBOn))
+    {
+        Cn3d_RenderNow = pars->NTBBRender;
+        Cn3d_ColorNow = pars->NTBBColor;
+    }
+    if (pars->NTVirtualBBOn)
+    {
+        SwitchRender(pdnmsThis, iModel, (Byte) (AM_RNA | AM_DNA), VIRTUALBB);
+    }
+    if (pars->NTRealBBOn || pars->NTExtraBBOn)
+    {
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_RNA | AM_DNA),
+            (Byte)(pars->NTExtraBBOn ? REALXTRABB : REALBB) );
+    }
+    if (pars->NTResiduesOn)
+    {
+        Cn3d_RenderNow = pars->NTResRender;
+        Cn3d_ColorNow = pars->NTResColor;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_RNA | AM_DNA), RESIDUES);
+    }
+    if (pars->HeterogensOn)
+    {
+        Cn3d_RenderNow = pars->HetRender;
+        Cn3d_ColorNow = pars->HetColor;
+        SwitchRender(pdnmsThis, iModel, (Byte) (AM_HET), HETSON);
+        SwitchRender(pdnmsThis, iModel, (Byte) (AM_POLY), HETSON);
+    }
+    if (pars->IonsOn)
+    {
+        Cn3d_RenderNow = pars->IonRender;
+        Cn3d_ColorNow = pars->IonColor;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_ION),  IONSON);
+    }
+    if (pars->ConnectOn)
+    {
+        Cn3d_RenderNow = pars->ConnectRender;
+        Cn3d_ColorNow = pars->ConnectColor;
+        SwitchRender(pdnmsThis, iModel,  0,  CONNECTON);
+    }
+    if (pars->SolventOn)
+    {
+        Cn3d_RenderNow =  pars->SolventRender;
+        Cn3d_ColorNow =  pars->SolventColor;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_SOL | AM_WAT), SOLVENTON);
+    }
+    if (pars->PBBLabelOn > 1)
+    {
+        Cn3d_RenderNow =  R_NAME;
+        Cn3d_ColorNow =   pars->PResColor;
+        Cn3d_LabelNow =   pars->PBBLabelOn;
+        if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
+            || (pars->PBBLabelStyle & L_WHITE)))
+            Cn3d_ColorNow = C_white;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_PROT), PBBLABELSON);
+    }
+    if (pars->NTBBLabelOn > 1)
+    {
+        Cn3d_RenderNow =  R_NAME;
+        Cn3d_ColorNow =   pars->NTResColor;
+        Cn3d_LabelNow =   pars->NTBBLabelOn;
+        if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
+            || (pars->NTBBLabelStyle & L_WHITE)))
+            Cn3d_ColorNow = C_white;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_DNA | AM_RNA), NTBBLABELSON);
+    }
+    if (pars->PTermLabelOn)
+    {
+        Cn3d_RenderNow =  R_NAME;
+        Cn3d_ColorNow =   pars->PBBColor;
+        if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
+            || (pars->PTermLabelStyle & L_WHITE)))
+            Cn3d_ColorNow = C_white;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_PROT), PTERMLABON);
+    }
+    if (pars->NTTermLabelOn)
+    {
+        Cn3d_RenderNow =  R_NAME;
+        Cn3d_ColorNow =   pars->NTBBColor;
+        if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
+            || (pars->NTTermLabelStyle & L_WHITE)))
+            Cn3d_ColorNow = C_white;
+        SwitchRender(pdnmsThis, iModel, (Byte)(AM_DNA | AM_RNA), NTTERMLABON);
+    }
+}
 
 
 void LIBCALL fnARLoop (PDNMS pdnmsThis )
 {  
-  /* the rendering engine  */
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNML pdnmlThis = NULL;
-  PDNML pdnmlFirst = NULL;
-  PMLD pmldThis = NULL;
-  PVNMO pvnmoThis = NULL;
-  Int2  iModel = 0;
-  Int2  iTest = 0;
-  Int2 i = 0;
-
-
-#ifdef DEBUG_N
-printf("in AlgorithmicRendering\n");
-#endif
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  if(Cn3d_ParsNow == 0){
-     pars = GetAlgorRenderSet(pdnmsThis);
-     if (!pars) return; 
-  }
-  else {
-      pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
-      if(!pars) return;
-  }
-
-#ifdef DEBUG_N
-printf("got render set\n");
-#endif
-
-  /* else we are appending to a pic that is in progress */
-
-
-   if(Cn3d_ParsNow == 0){
-      iTest = TraverseModels( pdnmsThis,
-                                TRAVERSE_ATOM,
-                                0,NULL,
-                                DoGraphicNull);
-   }
-
-   pdnmlThis = pmsdThis->pdnmlModels;
-   /* set up for doing one model or animation */
-   while (pdnmlThis)
-   {
-     pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
-     if (pmldThis->bSelected & (Byte) 0x01)
-       {
-          if (!pdnmlFirst)
-	    {
-	      pdnmlFirst = pdnmlThis;
-#ifdef DEBUG_N
-printf("first model - \n");
-#endif
-	    }
-          if ((pars->AnimateOn == FALSE)  && (pdnmlThis != pdnmlFirst))
-    	    {  /* turn off rest of models */
- 	      pmldThis->bSelected &= (Byte) 0xFE;
-              pmldThis->bSelected |= (Byte) 0x02; /* set back later */
+    /* the rendering engine  */
+    PDNML pdnmlThis = NULL;
+    PARS pars = NULL;
+    Int2 iTest;
+    PMSD pmsdThis = NULL;
+    PMLD pmldThis = NULL;
+    
+    
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    
+    iTest = TraverseModels(pdnmsThis, TRAVERSE_ATOM, 0, NULL, DoGraphicNull);
+    
+    pdnmlThis = pmsdThis->pdnmlModels;
+    while (pdnmlThis)
+    {
+        pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
+        if (pmldThis->bSelected & (Byte) 0x01)
+        {  /* draw it */
+#ifdef _OPENGL
+            OGL_Start(Cn3D_ColorData.OGL_Data, Cn3d_LayerNow);
+#endif /* _OPENGL */
+            
+            Cn3d_ParsNow = 0;
+            pars = GetAlgorRenderSet(pdnmsThis);
+            if (!pars) return; 
+            fnARModelLoop (pdnmsThis, pdnmlThis, pars);
+            
+            sfpThis = sfp;
+            while(sfpThis){
+                sfipThis = sfpThis->data.ptrvalue;
+                if(sfipThis->On) {
+                    Cn3d_ParsNow = sfpThis->choice;
+                    
+                    pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
+                    if(!pars) return;
+                    fnARModelLoop (pdnmsThis, pdnmlThis, pars);
+                }
+                sfpThis = sfpThis->next;
             }
-       }
-     pdnmlThis = pdnmlThis->next;
-   }
-  pdnmlThis = pmsdThis->pdnmlModels;
-
- /* Iterate through the structure -finding the active models
-      put each one's bond sets into a different layer (0-255) */
-
-   pdnmlThis = pmsdThis->pdnmlModels;
-   while (pdnmlThis)
-     {
-       pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
-       if (pmldThis->bSelected & (Byte) 0x01)
-         {  /* draw it */
-          iModel = (Int2) pdnmlThis->choice;
-	  SetActiveModel(((PFB) pmsdThis), iModel);
-	  /* do the object traversal */
-	  if (pars->ObjectOn)
-            {
-	  	Cn3d_RenderNow = pars->ObjectRender;
-	  	Cn3d_ColorNow = pars->ObjectColor;
-          	pvnmoThis = pmsdThis->pvnmoHead;
-	  	while (pvnmoThis)
-  	    	{
-		  if ((Int2)pvnmoThis->choice == iModel)
-		    {
-		     	RenderObject(pvnmoThis);
-                    }
-		  pvnmoThis = pvnmoThis->next;
-		}
-	    }
-
-	  Cn3d_DoHydrogens = pars->HydrogensOn;
-
-	  if ((pars->PVirtualBBOn) || (pars->PRealBBOn) || (pars->PExtraBBOn) )
-	    {
-	      Cn3d_RenderNow = pars->PBBRender;
-      	      Cn3d_ColorNow = pars->PBBColor;
-	    }
-	  if (pars->PVirtualBBOn)
-	    {
-	     /* chop each one out into a separate procedure */
-	     /* pass pointers, Model Id's etc, but use LayerNow, RenderNow, ColorNow */
-	     SwitchRender(pdnmsThis,iModel, AM_PROT, VIRTUALBB);
-	    }
-	  if (pars->PRealBBOn || pars->PExtraBBOn)
-	    {
-	     SwitchRender(pdnmsThis, iModel, AM_PROT,
-			(Byte)(pars->PExtraBBOn ? REALXTRABB : REALBB) );
-	    }
-	  if (pars->PResiduesOn)
-	    {
-	     Cn3d_RenderNow = pars->PResRender;
-	     Cn3d_ColorNow = pars->PResColor;
-  	     SwitchRender(pdnmsThis, iModel, AM_PROT,  RESIDUES);
-	    }
-	  if ((pars->NTVirtualBBOn) || (pars->NTRealBBOn) ||  (pars->NTExtraBBOn))
-	    {
-	      Cn3d_RenderNow = pars->NTBBRender;
- 	      Cn3d_ColorNow = pars->NTBBColor;
-	    }
-	  if (pars->NTVirtualBBOn)
-	    {
-	      SwitchRender(pdnmsThis, iModel, (Byte) (AM_RNA | AM_DNA), VIRTUALBB);
-	    }
-	  if (pars->NTRealBBOn || pars->NTExtraBBOn)
-	    {
- 	      SwitchRender(pdnmsThis, iModel, (Byte)(AM_RNA | AM_DNA),
-			(Byte)(pars->NTExtraBBOn ? REALXTRABB : REALBB) );
-	    }
-	  if (pars->NTResiduesOn)
-	    {
-	      Cn3d_RenderNow = pars->NTResRender;
-	      Cn3d_ColorNow = pars->NTResColor;
-  	      SwitchRender(pdnmsThis, iModel, (Byte)(AM_RNA | AM_DNA), RESIDUES);
-	    }
-	  if (pars->HeterogensOn)
-	    {
-	  	Cn3d_RenderNow = pars->HetRender;
-	  	Cn3d_ColorNow = pars->HetColor;
-		SwitchRender(pdnmsThis, iModel, (Byte) (AM_HET), HETSON);
-                SwitchRender(pdnmsThis, iModel, (Byte) (AM_POLY), HETSON);
-	    }
-	  if (pars->IonsOn)
-	    {
-		Cn3d_RenderNow = pars->IonRender;
-	  	Cn3d_ColorNow = pars->IonColor;
-	    	SwitchRender(pdnmsThis, iModel, (Byte)(AM_ION),  IONSON);
-	    }
-	  if (pars->ConnectOn)
- 	   {
-	        Cn3d_RenderNow = pars->ConnectRender;
-	        Cn3d_ColorNow = pars->ConnectColor;
-	 	SwitchRender(pdnmsThis, iModel,  0,  CONNECTON);
-	    }
-	  if (pars->SolventOn)
-	    {
-	        Cn3d_RenderNow =  pars->SolventRender;
-	        Cn3d_ColorNow =  pars->SolventColor;
-		SwitchRender(pdnmsThis, iModel, (Byte)(AM_SOL | AM_WAT), SOLVENTON);
-	    }
-         if (pars->PBBLabelOn > 1)
-            {
-                Cn3d_RenderNow =  R_NAME;
-	        Cn3d_ColorNow =   pars->PResColor;
-                Cn3d_LabelNow =   pars->PBBLabelOn;
-                if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
-                  || (pars->PBBLabelStyle & L_WHITE)))
-                   Cn3d_ColorNow = C_white;
-		SwitchRender(pdnmsThis, iModel, (Byte)(AM_PROT), PBBLABELSON);
-            }
-          if (pars->NTBBLabelOn > 1)
-            {
-                Cn3d_RenderNow =  R_NAME;
-	        Cn3d_ColorNow =   pars->NTResColor;
-                Cn3d_LabelNow =   pars->NTBBLabelOn;
-		if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
-                  || (pars->NTBBLabelStyle & L_WHITE)))
-                   Cn3d_ColorNow = C_white;
-		SwitchRender(pdnmsThis, iModel, (Byte)(AM_DNA | AM_RNA), NTBBLABELSON);
-            }
-	  if (pars->PTermLabelOn)
-	    {
-		Cn3d_RenderNow =  R_NAME;
-	        Cn3d_ColorNow =   pars->PBBColor;
-		if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
-                  || (pars->PTermLabelStyle & L_WHITE)))
-                      Cn3d_ColorNow = C_white;
-		SwitchRender(pdnmsThis, iModel, (Byte)(AM_PROT), PTERMLABON);
-	    }
-	  if (pars->NTTermLabelOn)
-	    {
-		Cn3d_RenderNow =  R_NAME;
-	        Cn3d_ColorNow =   pars->NTBBColor;
-		if (((Cn3d_ColorNow == C_CPK) || (Cn3d_ColorNow == C_BYTEMP)
-                  || (pars->NTTermLabelStyle & L_WHITE)))
-                         Cn3d_ColorNow = C_white;
-		SwitchRender(pdnmsThis, iModel, (Byte)(AM_DNA | AM_RNA), NTTERMLABON);
-	    }
-
-          Cn3d_LayerNow++;
-         }
-       pdnmlThis = pdnmlThis->next;
-
-     }
-  pdnmlThis = pmsdThis->pdnmlModels;
-  while (pdnmlThis)
-   {
-     pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
-     if (pmldThis->bSelected & (Byte) 0x02)
-       {
-              pmldThis->bSelected &= (Byte) 0xFD;  /* clear 0x02 */
-              pmldThis->bSelected |= (Byte) 0x01; /* set back selected status */
-       }
-     pdnmlThis = pdnmlThis->next;
-   }
-
- /* ASSERT ( Cn3d_LayerNow > 0 ); */
+            
+#ifdef _OPENGL
+            OGL_End();
+#endif /* _OPENGL */
+            Cn3d_LayerNow++;
+        }  /* if (pmldThis->bSelected & (Byte) 0x01) */
+        pdnmlThis = pdnmlThis->next;
+    } /* while(pdnmlThis) */
 }
 
 
+#ifdef _OPENGL
+void LIBCALL AlgorithmicRendering(void)
+#else
 Picture3D LIBCALL AlgorithmicRendering(Picture3D p3d)
+#endif
 { 
-  PDNMS pdnmsThis = NULL, pdnmsThisSlave = NULL;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  Int2 Cn3d_LayerNow_sofar = 0;
+    PDNMS pdnmsThis = NULL, pdnmsThisSlave = NULL;
+    PARS pars = NULL;
+    PMSD pmsdThis = NULL;
+    Int2 Cn3d_LayerNow_sofar = 0;
+    
+    Int2 i = 0;
 
-  Int2 i = 0;
+#ifndef _OPENGL
+    pic = p3d;  /* pic is the global 3d picture for algorend.c */
+#endif
+    Cn3d_LayerNow = 0;
+    Cn3d_AnyPrim = FALSE;  /* has any primitive been drawn? */
+    Cn3d_ColorPass = FALSE;
+    Cn3d_lSlaveNum = 0;  /* go over the master */
+    /* fetch the active structure */
+    pdnmsThis = GetSelectedModelstruc();
+    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+    
+    if (!pdnmsThis) return NULL;
+    
+    pars = GetAlgorRenderSet(pdnmsThis);
+    if (!pars) return NULL;  /* cannot render */
+    
+#ifdef _OPENGL
+      OGL_SetLayers(Cn3D_ColorData.OGL_Data, FALSE);  /* null all the layers out */
+#endif /* _OPENGL */
 
-  pic = p3d;  /* pic is the global 3d picture for algorend.c */
-  Cn3d_LayerNow = 0;
-  Cn3d_AnyPrim = FALSE;  /* has any primitive been drawn? */
-  Cn3d_ColorPass = FALSE;
-  Cn3d_lSlaveNum = 0;  /* go over the master */
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  if (!pdnmsThis) return NULL;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return NULL;  /* cannot render */
-
-
-  /* clear out the static list of colors used */
-  for (i=0; i< CN3D_COLOR_MAX; i++) pars->IndexRGB[i] = 0;
-
-  if(pmsdThis->bVisible) {
-
-     Cn3d_ParsNow = 0;
-
-     Cn3d_LayerNow_sofar = Cn3d_LayerNow;
-     fnARLoop(pdnmsThis);
-
-     sfpThis = sfp;
-     while(sfpThis){
-        sfipThis = sfpThis->data.ptrvalue;
-        if(sfipThis->On) {
-           Cn3d_LayerNow = Cn3d_LayerNow_sofar;
-           Cn3d_ParsNow = sfpThis->choice;
-           fnARLoop (pdnmsThis);
-        }
-        sfpThis = sfpThis->next;
-     }
-  }
-
-        /* control master structure diaplsy */
-
-  if(AreNeighborsOn())
-  {
-    pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
-
-    while(pdnmsThisSlave) 
+    if(pmsdThis->bVisible) fnARLoop(pdnmsThis);
+    
+    if(AreNeighborsOn())
     {
-      Cn3d_lSlaveNum++;
-      if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) {
-
-         Cn3d_ParsNow = 0;
-
-         Cn3d_LayerNow_sofar = Cn3d_LayerNow;
-         fnARLoop(pdnmsThisSlave);
-   
-         sfpThis = sfp;
-         while(sfpThis){
-            sfipThis = sfpThis->data.ptrvalue;
-            if(sfipThis->On) {
-               Cn3d_LayerNow = Cn3d_LayerNow_sofar;
-               Cn3d_ParsNow = sfpThis->choice;
-               fnARLoop(pdnmsThisSlave);
+        pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
+        
+        while(pdnmsThisSlave) 
+        {
+            Cn3d_lSlaveNum++;
+            if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) {
+                fnARLoop(pdnmsThisSlave);
             }
-            sfpThis = sfpThis->next;
-         }
-      }
-      pdnmsThisSlave = pdnmsThisSlave->next;
+        pdnmsThisSlave = pdnmsThisSlave->next;
+        }
     }
-  }
+    
+    
+#ifdef _OPENGL
+    OGL_SetLayerTop3D(Cn3D_ColorData.OGL_Data, Cn3d_LayerNow - 1);
+    return;
+#else /* _OPENGL */
+    SetLayerTop3D(Cn3d_LayerNow - 1);
+    if (Cn3d_AnyPrim) return p3d; /* has a primitive been drawn? */
+    else {
+        if (p3d != NULL)
+            DeletePicture3D ( p3d );
+        return NULL;
+    }
+#endif /* else _OPENGL */
 
-
-  SetLayerTop3D(Cn3d_LayerNow - 1);
-  if (Cn3d_AnyPrim) return p3d;
-  else {
-          if (p3d != NULL)
-	   DeletePicture3D ( p3d );
-          return NULL;
-       }
 }  
-  
+
 

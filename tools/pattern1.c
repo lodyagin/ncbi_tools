@@ -54,7 +54,7 @@ Contents: central pattern matching routines for PHI-BLAST and pseed3
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+#define MININT INT4_MIN/2
 
  
 
@@ -142,6 +142,7 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
     Int4 secondIndex; /*second index into pattern*/
     Int4 numIdentical; /*number of consec. positions with identical specification*/
     Int4 charSetMask;  /*index over masks for specific characters*/
+    Int4 currentSetMask, prevSetMask ; /*mask for current and previous character positions*/    
     Int4 thisMask;    /*integer representing a bit pattern for a 
                         set of characters*/
     Int4 minWildcard, maxWildcard; /*used for variable number of wildcard
@@ -155,10 +156,17 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
                                last in pattern (1) or not (0) */
     Nlm_FloatHi positionProbability; /*probability of a set of characters
                                     allowed in one position*/
+    Int4 currentWildcardProduct; /*product of wildcard lengths for
+                                   consecutive character positions that
+                                   overlap*/
 
     patternSearch->flagPatternLength = ONE_WORD_PATTERN; 
     patternSearch->patternProbability = 1.0;
     patternSearch->minPatternMatchLength = 0;
+    patternSearch->wildcardProduct = 1;
+    currentWildcardProduct = 1;
+    prevSetMask = 0;
+
     for (i = 0 ; i < MaxP; i++) {
       patternSearch->inputPatternMasked[i] = 0; 
       localPattern[i] = 0;
@@ -186,6 +194,9 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
 	    else { /*variable number of positions wildcarded*/	  
 	      sscanf((Char*) &pattern[++i], "%d,%d", &minWildcard, &maxWildcard);
 	      maxWildcard = maxWildcard - minWildcard;
+              currentWildcardProduct *= (maxWildcard + 1);
+              if (currentWildcardProduct > patternSearch->wildcardProduct)
+		patternSearch->wildcardProduct = currentWildcardProduct;
               patternSearch->minPatternMatchLength += minWildcard;
 	      while (minWildcard-- > 0) { 
 		/*use one position each for the minimum number of
@@ -223,11 +234,14 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
 	  }
 	  else { 
             /*exactly one character matches*/
-	    charSetMask = (1 << seedSearch->order[c]);
+            prevSetMask = currentSetMask;
+            currentSetMask =  charSetMask = (1 << seedSearch->order[c]);
+            if (!(prevSetMask & currentSetMask)) /*character sets don't overlap*/
+	      currentWildcardProduct = 1;
 	    positionProbability = seedSearch->standardProb[seedSearch->order[c]];
 	  }
 	}
-      } 
+      }
       else {
 	if (c == '[') {  /*start of a set of characters allowed*/
 	  charSetMask = 0;
@@ -243,7 +257,11 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
 	    charSetMask = charSetMask | (1 << seedSearch->order[c]);
 	    positionProbability += seedSearch->standardProb[seedSearch->order[c]];
 	  }
-	} 
+          prevSetMask = currentSetMask;
+          currentSetMask = charSetMask;
+	  if (!(prevSetMask & currentSetMask)) /*character sets don't overlap*/
+	      currentWildcardProduct = 1;
+ 	} 
 	else {   /*start of a set of characters forbidden*/
 	  /*For each character forbidden remove it to the mask and
             subtract its probability from positionProbability*/
@@ -253,6 +271,10 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
 	    charSetMask = charSetMask -  (charSetMask & (1 << seedSearch->order[c]));
 	    positionProbability -= seedSearch->standardProb[seedSearch->order[c]];
 	  }
+          prevSetMask = currentSetMask;
+          currentSetMask = charSetMask;
+	  if (!(prevSetMask & currentSetMask)) /*character sets don't overlap*/
+	      currentWildcardProduct = 1;
 	}
       }
       /*handle a number of positions that are the same */
@@ -391,7 +413,7 @@ do the prefixPos and suffixPos claculations with bit arithmetic*/
 static void setting_tt(Int4Ptr S, Int4 mask, Int4 mask2, Uint4Ptr prefixPos, 
 		       Uint4Ptr suffixPos)
 {
-  Uint1 i; /*index over possible DNA encoded words, 4 bases per word*/
+  Int4 i; /*index over possible DNA encoded words, 4 bases per word*/
   Int4 tmp; /*holds different mask combinations*/
   Int4 maskLeftPlusOne; /*mask shifted left 1 plus 1; guarantees 1
                            1 character match effectively */
@@ -1537,7 +1559,7 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	}
 	position = begin;
 	for (wordIndex = 0; wordIndex < patternSearch->numWords; wordIndex++) {
-	  fprintf(outfp, "(%d %d)", position, position+numPlacesInWord[wordIndex]-1);
+	  fprintf(outfp, "(%ld %ld)", (long) position, (long) position+numPlacesInWord[wordIndex]-1);
 	  position += numPlacesInWord[wordIndex]+spacingArray[wordIndex+1];
 	} 
 	fprintf(outfp, "\n");
@@ -1549,13 +1571,13 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	i++;
       } 
       else {
-	fprintf(outfp, "(%d %d) ", begin+nextMatchStart, begin+i-1);
+	fprintf(outfp, "(%ld %ld) ", (long) (begin+nextMatchStart), (long) (begin+i-1));
 	for (; patternSearch->inputPatternMasked[i] == allone && i <= endSeqMatch; i++) ;
 	nextMatchStart = i;
       }
     }
     if (nextMatchStart != i)  /*last match*/
-      fprintf(outfp,"(%d %d)\n", begin+nextMatchStart, begin+i-1);
+      fprintf(outfp,"(%ld %ld)\n", (long) (begin+nextMatchStart), (long) (begin+i-1));
     else 
       fprintf(outfp, "\n");
 }

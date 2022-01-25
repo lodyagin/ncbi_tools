@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.93 $
+* $Revision: 6.107 $
 *
 * File Description: 
 *
@@ -112,13 +112,13 @@
 
 #define REGISTER_TRIM_GENES ObjMgrProcLoadEx (OMPROC_FILTER,"Trim Genes","TrimGenes",0,0,0,0,NULL,TrimGenes,PROC_PRIORITY_DEFAULT, "Indexer")
 
-#define REGISTER_OPENALED ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 1","Open protein BelVu", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop, PROC_PRIORITY_DEFAULT, "Alignment")
+#define REGISTER_OPENALED ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 1","Open Contiguous Protein Alignment", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop, PROC_PRIORITY_DEFAULT, "Alignment")
 
-#define REGISTER_OPENALED2 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 2","Open protein PHYLIP", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop2, PROC_PRIORITY_DEFAULT, "Alignment")
+#define REGISTER_OPENALED2 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 2","Open Interleave Protein Alignment", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop2, PROC_PRIORITY_DEFAULT, "Alignment")
 
-#define REGISTER_OPENALED3 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 3","Open protein FASTA+GAP", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop3, PROC_PRIORITY_DEFAULT, "Alignment")
+#define REGISTER_OPENALED3 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 3","AA2NASeqAlign", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop3, PROC_PRIORITY_DEFAULT, "Alignment")
 
-#define REGISTER_OPENALED4 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 4","Open protein FASTA", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop4, PROC_PRIORITY_DEFAULT, "Alignment")
+#define REGISTER_OPENALED4 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 4","Alignment Profile", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop4, PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_MAKEEXONINTRON ObjMgrProcLoadEx (OMPROC_FILTER,"Make Exons and Introns","MakeExonIntron",OBJ_SEQFEAT,0,OBJ_SEQFEAT,0,NULL,MakeExonIntron,PROC_PRIORITY_DEFAULT, "Misc")
 
@@ -4112,19 +4112,34 @@ static void DoBioseqReport (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 in
 static Int2 LIBCALLBACK DoBioseqIndexing (Pointer data)
 
 {
-  BioseqPtr         bsp;
+  BioseqPtr         bsp = NULL;
   Uint2             entityID;
   FILE              *fp;
   OMProcControlPtr  ompcp;
   Char              path [PATH_MAX];
   SeqEntryPtr       sep;
+  SeqFeatPtr        sfp = NULL;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->input_entityID == 0) {
     Message (MSG_ERROR, "Please select a Bioseq");
     return OM_MSG_RET_ERROR;
   }
-  bsp = (BioseqPtr) ompcp->input_data;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      bsp = (BioseqPtr) ompcp->input_data;
+      break;
+    case OBJ_SEQFEAT:
+      sfp = (SeqFeatPtr) ompcp->input_data;
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (sfp != NULL) {
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+  }
   if (bsp == NULL) {
     Message (MSG_ERROR, "Please select a Bioseq");
     return OM_MSG_RET_ERROR;
@@ -4139,11 +4154,20 @@ static Int2 LIBCALLBACK DoBioseqIndexing (Pointer data)
   TmpNam (path);
   fp = FileOpen (path, "w");
 
-  fprintf (fp, "Exploring bioseqs\n\n");
-  SeqMgrExploreBioseqs (entityID, 0, (Pointer) fp, GetSeqs, TRUE, TRUE, TRUE);
-  fprintf (fp, "\n");
+  if (sfp != NULL) {
+    
+    fprintf (fp, " Exploring features filtered by location\n\n");
+    SeqMgrExploreFeatures (bsp, (Pointer) fp, GetFeats, sfp->location, NULL, NULL);
+    fprintf (fp, "\n");
 
-  SeqEntryExplore (sep, (Pointer) fp, DoBioseqReport);
+  } else {
+
+    fprintf (fp, "Exploring bioseqs\n\n");
+    SeqMgrExploreBioseqs (entityID, 0, (Pointer) fp, GetSeqs, TRUE, TRUE, TRUE);
+    fprintf (fp, "\n");
+
+    SeqEntryExplore (sep, (Pointer) fp, DoBioseqReport);
+  }
   FileClose (fp);
   LaunchGeneralTextViewer (path, "Bioseq Index Report");
   FileRemove (path);
@@ -4470,15 +4494,13 @@ extern void SetupSequinFilters (void)
   }
 
   if (indexerVersion) {
+    REGISTER_BSP_INDEX;
     REGISTER_NORMALIZE_NUCPROT;
     REGISTER_REMOVE_EXTRANEOUS;
     REGISTER_REMOVE_MESSEDUP;
     REGISTER_GROUP_EXPLODE;
     REGISTER_SPLIT_BIOSEQ;
     REGISTER_DESKTOP_REPORT;
-#ifdef WIN_MAC
-    REGISTER_BSP_INDEX;
-#endif
   }
 
   REGISTER_GROUP_FILTERGC;
@@ -4545,6 +4567,7 @@ typedef struct deffeats {
   SeqFeatPtr  gene;
   SeqFeatPtr  prot;
   CharPtr     genename;
+  CharPtr     allelename;
   CharPtr     protname;
   Boolean     alreadyTrimmed;
   Uint2       entityID;
@@ -4679,6 +4702,12 @@ static Boolean GetCDStRNArRNAGatherFunc (GatherContextPtr gcp)
   return GetMolBioFeatsGatherFunc (gcp, FALSE, FALSE);
 }
 
+static Boolean GetGeneCDStRNArRNAGatherFunc (GatherContextPtr gcp)
+
+{
+  return GetMolBioFeatsGatherFunc (gcp, TRUE, FALSE);
+}
+
 static Boolean GetGeneCDStRNArRNAmRNAGatherFunc (GatherContextPtr gcp)
 
 {
@@ -4751,6 +4780,10 @@ static int LIBCALLBACK SortCDStRNArRNAByLocation (VoidPtr ptr1, VoidPtr ptr2)
             } else if (rightend1 > rightend2) {
               return 1;
             } else if (rightend1 < rightend2) {
+              return -1;
+            } else if (sfp2->data.choice == SEQFEAT_GENE) {
+              return 1;
+            } else if (sfp1->data.choice == SEQFEAT_GENE) {
               return -1;
             } else {
               return 0;
@@ -4869,9 +4902,18 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
             if (ptr != NULL) {
               *ptr = '\0';
             }
+            if (ssp->subtype == 23) { /* country */
+              ptr = StringStr (text, ":");
+              if (ptr != NULL) {
+                *ptr = '\0';
+              }
+            }
           }
         }
-        LabelAModifier (str, text, labelMods);
+        if (ssp->subtype == 23 && (! labelMods)) {
+          StringCpy (str, "from");
+        }
+        LabelAModifier (str, text, labelMods || (ssp->subtype == 23));
         if (! StringHasNoText (str)) {
           ValNodeCopyStr (stringsPtr, subsource_rank [ssp->subtype], str);
         }
@@ -4884,12 +4926,15 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
 static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                                ValNodePtr head, BioseqPtr target,
                                SeqEntryPtr nsep, MolInfoPtr mip,
-                               ValNodePtr strings, ValNodePtr xtras)
+                               ValNodePtr strings, ValNodePtr xtras,
+                               BioSourcePtr biop, Int2 mitochloroflag)
 
 {
   Int2          count;
+  Boolean       ddbjstyle = FALSE;
   DefFeatsPtr   dfp;
   GBQualPtr     gbq;
+  Int2          mitocount;
   DefFeatsPtr   nextdfp;
   CharPtr       ptr;
   RnaRefPtr     rrp;
@@ -4900,8 +4945,14 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
   Char          text [64];
   ValNodePtr    vnp;
 
+  if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "DDBJ") == 0) {
+      ddbjstyle = TRUE;
+    }
+  }
   vnp = head;
   count = 0;
+  mitocount = 0;
   while (vnp != NULL) {
     str [0] = '\0';
     dfp = (DefFeatsPtr) vnp->data.ptrvalue;
@@ -4909,6 +4960,7 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
       sfp = dfp->sfp;
       if (sfp != NULL || dfp->numUnknown > 0) {
         count++;
+        mitocount++;
         /* FindGeneAndProtForCDS (entityID, sfp, &(dfp->gene), &(dfp->prot)); */
         /* StringCpy (str, "unknown"); */
         text [0] = '\0';
@@ -4945,6 +4997,12 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
               if (count > 1) {
                 StringCat (str, "s");
               }
+              if (count < 2 && /* dfp->altSplices < 2 && */ (! StringHasNoText (dfp->allelename))) {
+                StringNCpy_0 (text, dfp->allelename, sizeof (text));
+                StringCat (str, ", ");
+                StringCat (str, text);
+                StringCat (str, " allele");
+              }
               if (dfp->altSplices > 1) {
                 StringCat (str, ", alternative splice products");
               }
@@ -4963,6 +5021,12 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             StringCat (str, " pseudogene");
             if (count > 1) {
               StringCat (str, "s");
+            }
+            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
+              StringNCpy_0 (text, dfp->allelename, sizeof (text));
+              StringCat (str, ", ");
+              StringCat (str, text);
+              StringCat (str, " allele");
             }
             if (dfp->sfp->partial) {
               StringCat (str, ", partial sequence");
@@ -4987,10 +5051,37 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             if (count > 1) {
               StringCat (str, "s");
             }
+            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
+              StringNCpy_0 (text, dfp->allelename, sizeof (text));
+              StringCat (str, ", ");
+              StringCat (str, text);
+              StringCat (str, " allele");
+            }
             if (dfp->sfp->partial) {
               StringCat (str, ", partial cds");
             } else {
               StringCat (str, ", complete cds");
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_GENE) {
+          if (dfp->genename != NULL) {
+            StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
+          }
+          if (dfp->lastInGroup || dfp->lastInType) {
+            StringCat (str, " gene");
+            if (count > 1) {
+              StringCat (str, "s");
+            }
+            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
+              StringNCpy_0 (text, dfp->allelename, sizeof (text));
+              StringCat (str, ", ");
+              StringCat (str, text);
+              StringCat (str, " allele");
+            }
+            if (dfp->sfp->partial) {
+              StringCat (str, ", partial sequence");
+            } else {
+              StringCat (str, ", complete sequence");
             }
           }
         } else if (dfp->subtype == FEATDEF_rRNA || dfp->subtype == FEATDEF_otherRNA) {
@@ -5022,10 +5113,12 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
               }
               if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
                 if (dfp->subtype == FEATDEF_rRNA) {
+                  /*
                   StringCat (str, " gene");
                   if (count > 1) {
                     StringCat (str, "s");
                   }
+                  */
                 }
               }
               if (dfp->lastInGroup || dfp->lastInType) {
@@ -5131,6 +5224,54 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
     vnp = vnp->next;
     if (! StringHasNoText (str)) {
       if (vnp == NULL) {
+        if (biop != NULL) {
+          if (biop->genome == GENOME_mitochondrion) {
+            if (mitocount > 1) {
+              StringCat (str, "; mitochondrial genes for mitochondrial products");
+            } else {
+              StringCat (str, "; mitochondrial gene for mitochondrial product");
+            }
+          } else if (biop->genome == GENOME_chloroplast) {
+            if (mitocount > 1) {
+              StringCat (str, "; chloroplast genes for chloroplast products");
+            } else {
+              StringCat (str, "; chloroplast gene for chloroplast product");
+            }
+          } else if (mitochloroflag > 0) {
+            switch (mitochloroflag) {
+              case 1 :
+                if (mitocount > 1) {
+                  StringCat (str, "; nuclear genes for mitochondrial products");
+                } else {
+                  StringCat (str, "; nuclear gene for mitochondrial product");
+                }
+                break;
+              case 2 :
+                if (mitocount > 1) {
+                   StringCat (str, "; nuclear genes for chloroplast products");
+                 } else {
+                   StringCat (str, "; nuclear gene for chloroplast product");
+                 }
+                break;
+              case 3 :
+                if (mitocount > 1) {
+                  StringCat (str, "; mitochondrial genes for mitochondrial products");
+                } else {
+                  StringCat (str, "; mitochondrial gene for mitochondrial product");
+                }
+                break;
+              case 4 :
+                if (mitocount > 1) {
+                   StringCat (str, "; chloroplast genes for chloroplast products");
+                 } else {
+                   StringCat (str, "; chloroplast gene for chloroplast product");
+                 }
+                break;
+              default :
+                break;
+            }
+          }
+        }
         StringCat (str, ".");
       } else if (vnp->next == NULL) {
         nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
@@ -5343,9 +5484,11 @@ static ValNodePtr MergeAltSpliceCDSs (ValNodePtr head)
 
 static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
                          Boolean labelMods, Int2 maxMods, Boolean leaveInParen,
-                         BioseqPtr target, BioseqPtr seg, ValNodePtr nonUniqueOrgs)
+                         BioseqPtr target, BioseqPtr seg, ValNodePtr nonUniqueOrgs,
+                         Int2 mitochloroflag)
 
 {
+  Char            allele [256];
   BioseqContextPtr  bcp;
   BioSourcePtr    biop;
   BioseqPtr       bsp;
@@ -5353,12 +5496,15 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
   Boolean         change;
   CdRegionPtr     crp;
   DefFeatsPtr     dfp;
+  DefFeatsPtr     dfpx;
   GBQualPtr       gbq;
   Int2            group;
   GeneRefPtr      grp;
   GatherScope     gs;
   ValNodePtr      head;
   SeqLocPtr       lastslp;
+  size_t          lenallele;
+  size_t          lenlocus;
   MolInfoPtr      mip;
   DefFeatsPtr     nextdfp;
   SeqLocPtr       nextslp;
@@ -5379,6 +5525,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
   ValNodePtr      strings;
   ValNode         vn;
   ValNodePtr      vnp;
+  ValNodePtr      vnpx;
   SeqFeatXrefPtr  xref;
   ValNodePtr      xtras = NULL;
 
@@ -5390,7 +5537,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
       if (bssp->_class == 7 || bssp->_class == 13 ||
           bssp->_class == 14 || bssp->_class == 15) {
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-          AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs);
+          AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag);
         }
         return;
       }
@@ -5410,12 +5557,12 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
           if (sip != NULL) {
             part = BioseqFind (sip);
             if (part != NULL) {
-              AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, part, NULL, nonUniqueOrgs);
+              AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, part, NULL, nonUniqueOrgs, mitochloroflag);
             }
           }
           slp = nextslp;
         }
-        AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, bsp, nonUniqueOrgs);
+        AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, bsp, nonUniqueOrgs, mitochloroflag);
         return;
       }
     }
@@ -5454,7 +5601,8 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
     if (sdp != NULL) {
       mip = (MolInfoPtr) sdp->data.ptrvalue;
       if (mip != NULL) {
-        if (mip->tech == MI_TECH_htgs_1 ||
+        if (mip->tech == MI_TECH_htgs_0 ||
+            mip->tech == MI_TECH_htgs_1 ||
             mip->tech == MI_TECH_htgs_2 ||
             mip->tech == MI_TECH_est ||
             mip->tech == MI_TECH_sts ||
@@ -5522,7 +5670,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
     gs.target = slp;
   }
   head = NULL;
-  GatherEntity (entityID, (Pointer) (&head), GetCDStRNArRNAGatherFunc, &gs);
+  GatherEntity (entityID, (Pointer) (&head), GetGeneCDStRNArRNAGatherFunc, &gs);
   gs.target = SeqLocFree (gs.target);
   head = SortValNode (head, SortCDStRNArRNAByLocation);
 
@@ -5538,8 +5686,13 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
       sfp = dfp->sfp;
       if (sfp != NULL) {
         FindGeneAndProtForCDS (entityID, sfp, &(dfp->gene), &(dfp->prot));
+        grp = SeqMgrGetGeneXref (sfp);
+        if (SeqMgrGeneIsSuppressed (grp)) {
+          dfp->gene = NULL;
+        }
         dfp->pseudo = FALSE;
         dfp->genename = NULL;
+        dfp->allelename = NULL;
         grp = NULL;
         if (dfp->gene != NULL) {
           grp = (GeneRefPtr) dfp->gene->data.value.ptrvalue;
@@ -5556,6 +5709,18 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
         }
         if (grp != NULL) {
           dfp->genename = (CharPtr) grp->locus;
+          if ((! StringHasNoText (grp->locus)) && (! StringHasNoText (grp->allele))) {
+            lenallele = StringLen (grp->allele);
+            lenlocus = StringLen (grp->locus);
+            if (lenallele > lenlocus && StringNICmp (grp->locus, grp->allele, lenlocus) == 0) {
+              sprintf (allele, "%s", grp->allele);
+            } else if (StringNCmp (grp->allele, "-", 1) == 0) {
+              sprintf (allele, "%s%s", grp->locus, grp->allele);
+            } else {
+              sprintf (allele, "%s-%s", grp->locus, grp->allele);
+            }
+            dfp->allelename = StringSave (allele);
+          }
           if (grp->pseudo) {
             dfp->pseudo = TRUE;
           }
@@ -5623,6 +5788,25 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
     vnp = vnp->next;
   }
 
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+    if (dfp != NULL) {
+      sfp = dfp->sfp;
+      if (sfp != NULL) {
+        if (sfp->data.choice == SEQFEAT_GENE) {
+          for (vnpx = vnp->next; vnpx != NULL; vnpx = vnpx->next) {
+            dfpx = (DefFeatsPtr) vnpx->data.ptrvalue;
+            if (dfpx != NULL) {
+              if (sfp == dfpx->gene) {
+                dfp->ignore = TRUE;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   vnp = head;
   prevvnp = &head;
   while (vnp != NULL) {
@@ -5680,6 +5864,9 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
       } else if (dfp->pseudo != nextdfp->pseudo) {
         dfp->lastInGroup = TRUE;
         change = TRUE;
+      } else if (dfp->allelename != NULL || nextdfp->allelename != NULL) {
+        dfp->lastInGroup = TRUE;
+        change = TRUE;
       } else if (dfp->altSplices > 1 || nextdfp->altSplices > 1) {
         dfp->lastInGroup = TRUE;
         change = TRUE;
@@ -5699,7 +5886,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
     penult->lastInPenultimate = TRUE;
   }
 
-  FinishAutoDefProc (entityID, sep, head, target, nsep, mip, strings, xtras);
+  FinishAutoDefProc (entityID, sep, head, target, nsep, mip, strings, xtras, biop, mitochloroflag);
 }
 
 static CharPtr sourceModRankList [] = {
@@ -5725,6 +5912,7 @@ typedef struct deflineform {
   ButtoN         onlyModifyTargeted;
   BioseqPtr      target;
   ButtoN         leaveInParentheses;
+  GrouP          nucformitoorchloro;
   Boolean        smartMods;
 } DeflineForm, PNTR DeflineFormPtr;
 
@@ -5831,6 +6019,7 @@ static void DefLineModFormAcceptProc (ButtoN b)
   Boolean            labelMods;
   Boolean            leaveInParen;
   Int2               maxMods;
+  Int2               mitochloroflag;
   ValNodePtr         nextvnp;
   ValNodePtr         nonUniqueOrgs;
   Int2               val;
@@ -5905,7 +6094,8 @@ static void DefLineModFormAcceptProc (ButtoN b)
     }
   }
 
-  AutoDefProc (dfp->input_entityID, dfp->sep, TRUE, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs);
+  mitochloroflag = GetValue (dfp->nucformitoorchloro) - 1;
+  AutoDefProc (dfp->input_entityID, dfp->sep, TRUE, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag);
   ValNodeFreeData (nonUniqueOrgs);
   ArrowCursor ();
   Remove (dfp->form);
@@ -6026,6 +6216,14 @@ static ForM CreateDefLineModForm (Uint2 entityID, SeqEntryPtr sep, BioseqPtr tar
       SetValue (dfp->modLimit, 1);
     }
 
+    dfp->nucformitoorchloro = HiddenGroup (h, -1, 0, NULL);
+    RadioButton (dfp->nucformitoorchloro, "No mitochondrial or chloroplast suffix");
+    RadioButton (dfp->nucformitoorchloro, "Nuclear gene(s) for mitochondrial product(s)");
+    RadioButton (dfp->nucformitoorchloro, "Nuclear gene(s) for chloroplast product(s)");
+    RadioButton (dfp->nucformitoorchloro, "Mitochondrial gene(s) for mitochondrial product(s)");
+    RadioButton (dfp->nucformitoorchloro, "Chloroplast gene(s) for chloroplast product(s)");
+    SetValue (dfp->nucformitoorchloro, 1);
+
     dfp->leaveInParentheses = CheckBox (w, "Leave in parenthetical organism info", NULL);
     SetStatus (dfp->leaveInParentheses, TRUE);
 
@@ -6041,7 +6239,8 @@ static ForM CreateDefLineModForm (Uint2 entityID, SeqEntryPtr sep, BioseqPtr tar
 
     AlignObjects (ALIGN_CENTER, (HANDLE) dfp->addLabels, (HANDLE) dfp->customGrp,
                   (HANDLE) dfp->sourceListGrp, (HANDLE) q,
-                  (HANDLE) dfp->leaveInParentheses, (HANDLE) c,
+                  (HANDLE) dfp->leaveInParentheses,
+                  (HANDLE) dfp->nucformitoorchloro, (HANDLE) c,
                   (HANDLE) dfp->onlyModifyTargeted, NULL);
 
     RealizeWindow (w);
@@ -6122,7 +6321,7 @@ extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean sm
 
   WatchCursor ();
   Update ();
-  AutoDefProc (bfp->input_entityID, sep, FALSE, FALSE, INT2_MAX, TRUE, NULL, NULL, NULL);
+  AutoDefProc (bfp->input_entityID, sep, FALSE, FALSE, INT2_MAX, TRUE, NULL, NULL, NULL, 0);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -6695,7 +6894,8 @@ static Boolean LIBCALLBACK SequinFTableBioseq (BioseqPtr bsp, SeqMgrBioseqContex
   if (! StringHasNoText (str)) {
     fprintf (fp, ">Feature %s\n", str);
   }
-  return SeqMgrExploreFeatures (bsp, (Pointer) fp, SequinFTableFeature, NULL, NULL, NULL);
+  SeqMgrExploreFeatures (bsp, (Pointer) fp, SequinFTableFeature, NULL, NULL, NULL);
+  return TRUE;
 }
 
 static Int2 LIBCALLBACK MakeSequinFeatureTable (Pointer data)

@@ -32,11 +32,36 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.40 $ */
-/* $Log: blastpri.h,v $
-/* Revision 6.40  1999/01/19 13:26:47  madden
-/* Change to HspArrayPurge
-/*
+/* $Revision: 6.48 $ 
+* $Log: blastpri.h,v $
+* Revision 6.48  1999/04/15 13:25:07  madden
+* RealBlastGetGappedAlignmentTraceback returns Int4
+*
+* Revision 6.47  1999/04/01 21:42:47  madden
+* Fix memory leaks when gi list is used
+*
+* Revision 6.46  1999/03/17 16:49:10  madden
+* Removed comment within comment
+*
+* Revision 6.45  1999/03/04 14:18:10  egorov
+* Do correct filter masking when query is seqloc
+* The only BlastMaskTheResidues() function is changed:
+*
+* Revision 6.44  1999/02/11 13:53:31  madden
+* Added combine Boolean to HitRangeToSeqLoc
+*
+* Revision 6.43  1999/01/28 17:20:17  madden
+* Added BlastGetNonSumStatsEvalue prototype
+*
+* Revision 6.42  1999/01/28 16:05:21  madden
+* HspArrayPurge change
+*
+* Revision 6.41  1999/01/26 17:57:14  madden
+* ContextToFrame prototype added
+*
+* Revision 6.40  1999/01/19 13:26:47  madden
+* Change to HspArrayPurge
+*
  * Revision 6.39  1999/01/08 22:08:43  madden
  * BlastScaleMatrix returns factor as FloatHi
  *
@@ -568,7 +593,7 @@ Int2 LIBCALL BlastPreliminaryGappedScore PROTO((BlastSearchBlkPtr search, Uint1P
 
 Int2 LIBCALL BlastHitListPurge PROTO((BLAST_HitListPtr hitlist));
 
-Int4 LIBCALL HspArrayPurge PROTO((BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt));
+Int4 LIBCALL HspArrayPurge PROTO((BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt, Boolean clear_num));
 
 
 void BlastSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context));
@@ -580,7 +605,7 @@ SeqAlignPtr LIBCALL BioseqBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST
 
 Uint1Ptr GetSequenceWithDenseSeg PROTO((DenseSegPtr dsp, Boolean query, Int4Ptr start, Int4Ptr length));
 
-void BlastMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length, Uint1 mask_residue, SeqLocPtr mask_slp, Boolean reverse));
+void BlastMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length, Uint1 mask_residue, SeqLocPtr mask_slp, Boolean reverse, Int4 offset));
 
 BioseqPtr LIBCALL BlastMakeFakeBioseq PROTO((BioseqPtr bsp, CharPtr name));
 
@@ -629,7 +654,7 @@ BlastSeqIdListPtr BlastSeqIdListDestruct PROTO((BlastSeqIdListPtr seqid_list));
 
 Boolean BlastAdjustDbNumbers PROTO((ReadDBFILEPtr rdfp_list, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total));
 
-BlastGiListPtr BlastGiListDestruct PROTO((BlastGiListPtr blast_gi_list));
+BlastGiListPtr BlastGiListDestruct PROTO((BlastGiListPtr blast_gi_list, Boolean contents));
 BlastGiListPtr BlastGiListNew PROTO((BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 total));
 
 
@@ -650,7 +675,7 @@ void BlastStartAwakeThread PROTO((BlastSearchBlkPtr search));
 /* Change the awake flag.  This thread will die in one second. */
 void BlastStopAwakeThread PROTO((void));
 
-SeqLocPtr HitRangeToSeqLoc PROTO((BlastHitRangePtr bhrp, Int4 link_value));
+SeqLocPtr HitRangeToSeqLoc PROTO((BlastHitRangePtr bhrp, Int4 link_value, Boolean combine));
 
 
 ValNodePtr BlastSeqLocFillDoubleInt PROTO((SeqLocPtr mask_slp, Int4 max_length, Boolean reverse));
@@ -666,7 +691,13 @@ SeqAlignPtr convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList, SeqA
 
 void LIBCALL fillCandLambda(seedSearchItems * seedSearch, Char *matrixName, BLAST_OptionsBlkPtr options);
 
-Int2 RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, Uint1Ptr rev_subject, Int4 rev_subject_length, SeqIdPtr subject_id, BLAST_HSPPtr *hsp_array, Int4 hspcnt, SeqAlignPtr *head, BlastHitRangePtr bhrp, Int4 min_score_to_keep, Boolean reverse, Int4 ordinal_id, Boolean do_traceback);
+Int4 RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, Uint1Ptr rev_subject, Int4 rev_subject_length, SeqIdPtr subject_id, BLAST_HSPPtr *hsp_array, Int4 hspcnt, SeqAlignPtr *head, BlastHitRangePtr bhrp, Int4 min_score_to_keep, Boolean reverse, Int4 ordinal_id, Boolean do_traceback);
+
+Int2 ContextToFrame PROTO((BlastSearchBlkPtr search, Int2 context_number));
+
+int LIBCALLBACK score_compare_hsps PROTO((VoidPtr v1, VoidPtr v2));
+
+Int2 LIBCALL BlastGetNonSumStatsEvalue PROTO((BlastSearchBlkPtr search));
 
 #ifdef __cplusplus
 }

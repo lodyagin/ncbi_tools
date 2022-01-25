@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,11 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.2  1999/02/12 16:01:41  vakatov
+* Added a draft version of Nlm_GetEnvParamEx()
+* Got rid of the old "PROTO" and "LIBCALL" prototype junk, etc.
+*
 * Revision 6.1  1997/12/12 20:32:55  kans
 * several new MacOS includes
-*
-* Revision 6.0  1997/08/25 18:17:25  madden
-* Revision changed to 6.0
 *
 * Revision 5.6  1997/07/22 19:11:41  vakatov
 * Separated Main() from GetArg[svc]() functions;  [WIN_MSWIN] converged
@@ -50,26 +51,25 @@
 * Revision 5.5  1997/01/28 21:19:12  kans
 * <Desk.h>, <OSEvents.h> and <GestaltEqu.h> are obsolete in CodeWarrior
 *
- * Revision 5.4  1996/12/30  15:13:32  vakatov
- * [WIN_MSWIN]  Added argument "lpszCmdLine" to Nlm_SetupArguments()
- *
- * Revision 5.3  1996/12/03  21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.2  1996/08/21  20:48:55  vakatov
- * OS_NT --> WIN32
- *
- * Revision 5.1  1996/08/19  18:46:25  vakatov
- * [WIN32]  Made modifications to let one create console applications
- *
- * Revision 4.2  1996/02/17  17:19:44  ostell
- * added OS_NT to include direct.h
- *
- * Revision 4.1  1996/02/15  22:00:49  kans
- * changed platform symbol back to OS_NT
- *
-* 06-14-94 Schuler     Add LIBCALL to SetupArguments
+* Revision 5.4  1996/12/30  15:13:32  vakatov
+* [WIN_MSWIN]  Added argument "lpszCmdLine" to Nlm_SetupArguments()
 *
+* Revision 5.3  1996/12/03  21:48:33  vakatov
+* Adopted for 32-bit MS-Windows DLLs
+*
+* Revision 5.2  1996/08/21  20:48:55  vakatov
+* OS_NT --> WIN32
+*
+* Revision 5.1  1996/08/19  18:46:25  vakatov
+* [WIN32]  Made modifications to let one create console applications
+*
+* Revision 4.2  1996/02/17  17:19:44  ostell
+* added OS_NT to include direct.h
+*
+* Revision 4.1  1996/02/15  22:00:49  kans
+* changed platform symbol back to OS_NT
+*
+* 06-14-94 Schuler     Add LIBCALL to SetupArguments
 * ==========================================================================
 */
 
@@ -239,7 +239,7 @@
 extern "C" {
 #endif
 
-NLM_EXTERN void LIBCALL Nlm_SetupArguments PROTO((int argc, char *argv[]));
+NLM_EXTERN void Nlm_SetupArguments(int argc, char *argv[]);
 
 #ifdef __cplusplus
 }

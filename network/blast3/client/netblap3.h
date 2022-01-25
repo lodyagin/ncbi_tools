@@ -34,6 +34,18 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.15  1999/04/21 20:54:47  madden
+* Make BlastBioseq non-private
+*
+* Revision 1.14  1999/04/20 14:51:36  madden
+* BlastBioseqNetCore and BlastSeqLocNetCore have return status
+*
+* Revision 1.13  1999/04/16 15:53:26  madden
+* Add TraditionalBlastReportExtra function
+*
+* Revision 1.12  1999/03/19 21:47:38  madden
+* Add Blast3GetDbinfo function
+*
 * Revision 1.11  1999/01/12 21:05:58  victorov
 * server will now report an error if the ni-queue if full
 *
@@ -84,6 +96,10 @@ extern "C" {
 #include <blastdef.h>
 #include <blastpri.h>
 
+/* BLAST Overview options, more appropriate somewhere else? */
+#define BLAST_OVERVIEW_NONE 0
+#define BLAST_OVERVIEW_1 1
+
 typedef Boolean (LIBCALLBACK *NetProgressCallback) PROTO((BlastResponsePtr response, Boolean PNTR cancel));
 
 
@@ -112,6 +128,10 @@ This function is MT-safe.
 
 Boolean LIBCALL BlastInit PROTO((CharPtr program_name, BlastNet3Hptr PNTR bl3hpp, BlastResponsePtr PNTR resp));
 
+
+
+SeqAlignPtr LIBCALL BlastBioseq PROTO((BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status));
+
 /*
 The BlastNet3Hptr returned by BlastInitMt must be passed in.
 */
@@ -124,13 +144,6 @@ Boolean LIBCALL BlastFini PROTO((BlastNet3Hptr bl3hptr));
 */
 
 BioseqPtr LIBCALL BlastGetBioseq PROTO((BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip));
-
-/*
-	Function to submit blast queries.  
-
-*/
-
-SeqAlignPtr LIBCALL BlastBioseq PROTO ((BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns));
 
 BlastNet3BlockPtr LIBCALL BlastNet3BlockNew PROTO((CharPtr program, CharPtr dbname));
 
@@ -161,13 +174,17 @@ Boolean LIBCALL TraditionalBlastReport PROTO((BioseqPtr bsp, BLAST_OptionsBlkPtr
 
 Boolean LIBCALL TraditionalBlastReportLoc PROTO((SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits));
 
+Boolean LIBCALL TraditionalBlastReportExtra PROTO((BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview));
+
+Boolean LIBCALL TraditionalBlastReportLocExtra PROTO((SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3Hptr bl3hp, CharPtr program, CharPtr database, Boolean html, FILE *outfp, Boolean verbose, Uint4 print_options, Uint4 align_options, Int4 number_of_descriptions, Int4 number_of_alignments, Int4Ptr number_of_hits, Uint4 overview));
+
 SeqAlignPtr LIBCALL BlastBioseqNet PROTO((BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback));
 
 SeqAlignPtr LIBCALL BlastSeqLocNet PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback));
 
-SeqAlignPtr LIBCALL BlastBioseqNetCore PROTO((BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix));
+SeqAlignPtr LIBCALL BlastBioseqNetCore PROTO((BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status));
 
-SeqAlignPtr LIBCALL BlastSeqLocNetCore PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix));
+SeqAlignPtr LIBCALL BlastSeqLocNetCore PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status));
 
 BLAST_MatrixPtr LIBCALL BlastNetMatrixToBlastMatrix PROTO((BlastMatrixPtr net_matrix));
 
@@ -175,6 +192,8 @@ BlastMatrixPtr LIBCALL BlastMatrixToBlastNetMatrix PROTO((BLAST_MatrixPtr matrix
 
 BLAST_OptionsBlkPtr parametersToOptions (BlastParametersPtr parameters, CharPtr program,
 	ValNodePtr PNTR error_returns);
+
+BlastDbinfoPtr LIBCALL Blast3GetDbinfo PROTO((BlastNet3Hptr bl3hptr));
 
 #ifdef __cplusplus
 }

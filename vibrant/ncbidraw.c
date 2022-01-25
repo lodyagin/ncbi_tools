@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.21  1999/03/17 15:10:47  vakatov
+* + Nlm_XLoadStandardFont() to find a "last-resort" font
+*
 * Revision 6.20  1998/08/12 14:52:26  vakatov
 * [MSWIN] Nlm_DrawLine():  draw at least one point(fix to R6.8)
 *
@@ -1861,7 +1864,33 @@ static Nlm_CharPtr Xi[]={
   "lucida",
   "charter"
 };
+
+extern XFontStruct *Nlm_XLoadStandardFont(void)
+{
+  static char* s_StdXFontName[] = {
+    "-*-helvetica-bold-r-*--14-*",
+    "-*-helvetica-bold-r-*--*-140-*",
+    "-*-helvetica-bold-r-*-*-*-140-*",
+    "-*-fixed-medium-r-*--*-120-*",
+    "-*-courier-medium-r-*--*-120-*",
+    "8x13",
+    "9x15",
+    "fixed"
+  };
+
+  int i;
+  for (i = 0;  i < DIM(s_StdXFontName);  i++) {
+    XFontStruct* font = Nlm_XLoadQueryFont(Nlm_currentXDisplay,
+                                           s_StdXFontName[i], FALSE);
+    if ( font )
+      return font;
+  }
+
+  /* the last-chance font */
+  return Nlm_XLoadQueryFont(Nlm_currentXDisplay, "fixed", TRUE);
+}
 #endif
+
 
 /* esl: main internal procedure to create fonts */
 static Nlm_FonT Nlm_AddNewFont (Nlm_FontSpecPtr fsp, Nlm_Boolean residentp)
@@ -1967,17 +1996,12 @@ static Nlm_FonT Nlm_AddNewFont (Nlm_FontSpecPtr fsp, Nlm_Boolean residentp)
       hdl = Nlm_XLoadQueryFont (Nlm_currentXDisplay, fspec, FALSE);
       if ( !hdl ) {
         sprintf(fspec, "-*-%s-%s-%s-*-*-*-%d-*", ns, bs, is, sz*10);
-        hdl = Nlm_XLoadQueryFont (Nlm_currentXDisplay, fspec, FALSE);
+        hdl = Nlm_XLoadQueryFont(Nlm_currentXDisplay, fspec, FALSE);
       }
     }
-    if (hdl == NULL) { /* use standard font */
-      sprintf (fspec, "-*-helvetica-bold-r-*--*-140-*");
-      hdl = Nlm_XLoadQueryFont(Nlm_currentXDisplay, fspec, TRUE);
-      if ( !hdl ) {
-        sprintf (fspec, "-*-helvetica-bold-r-*-*-*-140-*");
-        hdl = Nlm_XLoadQueryFont(Nlm_currentXDisplay, fspec, TRUE);
-      }
-    }
+
+    if ( !hdl ) /* last resort:  try "standard" font */
+      hdl = Nlm_XLoadStandardFont();
   }}
 #endif /* WIN_X */
 
@@ -6369,16 +6393,23 @@ extern void Nlm_SetUpDrawingTools (void)
     f = Nlm_XLoadQueryFont (Nlm_currentXDisplay, fSpecName, FALSE);
   }
   if ( f == NULL ){
-    f = Nlm_XLoadQueryFont (Nlm_currentXDisplay, "-*-helvetica-bold-r-*--*-140-*", TRUE);
+    f = Nlm_XLoadQueryFont (Nlm_currentXDisplay, "-*-helvetica-bold-r-*--*-140-*", FALSE);
     i = 14;
   }
-  Nlm_systemFont = (Nlm_FonT) Nlm_HandNew (sizeof (Nlm_FontRec));
-  /* esl: LoadFontData changed to work with new FontData format */
-  /*  alexs get font name */
-  memset ( &fsp, 0, sizeof(Nlm_FontSpec));
-  Nlm_StrCpy ( fsp.name, "helvetica" );
+
+  memset(&fsp, 0, sizeof(Nlm_FontSpec));
+  if ( f ) {
+    Nlm_StrCpy(fsp.name, "helvetica");
+    fsp.style = STYLE_BOLD;
+  } else {
+    f = Nlm_XLoadStandardFont();
+    fsp.name[0] = '\0';
+    fsp.style = STYLE_REGULAR;
+    i = f->ascent + f->descent;
+  }
   fsp.size = i;
-  fsp.style = STYLE_BOLD;
+  
+  Nlm_systemFont = (Nlm_FonT) Nlm_HandNew (sizeof (Nlm_FontRec));
   Nlm_LoadFontData (Nlm_systemFont, NULL, -1, &fsp, f, NULL);
 
   sprintf ( fSpecName, "-*-fixed-medium-r-*--%d-*-*", i );
@@ -6390,23 +6421,17 @@ extern void Nlm_SetUpDrawingTools (void)
     p = Nlm_XLoadQueryFont (Nlm_currentXDisplay, "-*-fixed-medium-r-*--*-120-*", FALSE);
     Nlm_StrCpy ( fsp.name, "fixed" );
     fsp.size = 12;
-    fsp.style = STYLE_REGULAR;
   }
   if (p == NULL) {
     p = Nlm_XLoadQueryFont (Nlm_currentXDisplay,
                             "-*-courier-medium-r-*--*-120-*", FALSE);
     Nlm_StrCpy ( fsp.name, "courier" );
     fsp.size = 12;
-    fsp.style = STYLE_REGULAR;
   }
-  if (p == NULL) {
-    p = Nlm_XLoadQueryFont (Nlm_currentXDisplay, "8x13", FALSE);
-    Nlm_StrCpy ( fsp.name, "" );
-    fsp.size = 13;
-    fsp.style = STYLE_REGULAR;
-  }
-  if (p == NULL) {
-    p = Nlm_XLoadQueryFont (Nlm_currentXDisplay, "9x15", TRUE);
+  if ( !p ) {
+    p = Nlm_XLoadStandardFont();
+    fsp.name[0] = '\0';
+    fsp.size = p->ascent + p->descent;
   }
   Nlm_programFont = (Nlm_FonT) Nlm_HandNew (sizeof (Nlm_FontRec));
   /* esl: LoadFontData changed to work with new FontData format */

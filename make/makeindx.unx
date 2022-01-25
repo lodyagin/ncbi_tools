@@ -1,4 +1,7 @@
 #	makefile for flat2asn
+#
+#	$Id: makeindx.unx,v 6.4 1999/04/23 19:10:58 beloslyu Exp $
+#
 #	Sun with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
 #	Sun with Gnu C [ make LCL=gcc RAN=ranlib CC=gcc ]
 #   Sun with Solaris 2.x OS [ make LCL=sol CC="cc -Xa" ]
@@ -28,7 +31,7 @@ SUFFIXLCL = $(LCL)
 CFLAGS1 = $(NCBI_CFLAGS1)
 LDFLAGS1 = $(NCBI_LDFLAGS1)
 CC = cc
-RAN = ls
+RAN = ls -l
 AR=ar
 LIBPATH = -L$(NCBI_ALTLIB)  -L$(NCBI_SYBASE)/lib
 OTHERLIBS = $(LIBPATH) -lncbimla -lncbitax -lnetentr -lnetcli -lncbiobj -lncbi $(NCBI_SYBLIBS) $(NCBI_OTHERLIBS)
@@ -40,6 +43,8 @@ LIBPARSE = libindx.a
 
 CFLAGS = $(CFLAGS1) -I../include -I$(NCBI_INCDIR) 
 LDFLAGS = $(LDFLAGS1) -I../include -I$(NCBI_INCDIR) -L$(NCBI_LIBDIR)
+
+SRCCOPY = cp -p
 
 ##
 ## some things to make
@@ -67,7 +72,7 @@ OBJ_P = add.o asci_blk.o citation.o flat2asn.o flatargs.o \
    
 ## All things to make
 ##
-all : copy nocopy flat2asn
+all : copy .WAIT nocopy flat2asn
 
 nocopy : sources $(LIBPARSE)
 
@@ -78,6 +83,11 @@ sources : $(SRC_I) $(SRC_P)
 clean :
 	- rm -f *.[acho]
 
+.NO_PARALLEL:	copy
+
+.WAIT:
+	echo Waiting...go
+
 ## Implicit actions
 ##
 
@@ -86,13 +96,10 @@ clean :
 ##
 
 copy :
-	- chmod +w ../include/*
-	- chmod +w *
-	cp ../internal/parser/*.h ../include
-	cp ../internal/parser/*.c .
-	- chmod +w *.c
-	- chmod +w ../include/*
-	- chmod +w *
+	- chmod -R ug+rw,o+r .
+	$(SRCCOPY) ../internal/parser/*.h ../include
+	$(SRCCOPY) ../internal/parser/*.c .
+	- chmod -R ug+rw,o+r .
 
 ## make libraries
 ##
@@ -100,7 +107,7 @@ copy :
 $(LIBPARSE) : $(OBJ_I)
 	- rm -f $(LIBPARSE)
 	$(AR) cru $(LIBPARSE) $(OBJ_I) 
-	cp $(LIBPARSE) ../lib
+	$(SRCCOPY) $(LIBPARSE) ../lib
 	$(RAN) ../lib/$(LIBPARSE)
 
 # flat2asn

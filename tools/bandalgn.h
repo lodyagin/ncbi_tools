@@ -30,11 +30,14 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a global gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.4 $ */
-/* $Log: bandalgn.h,v $
-/* Revision 6.4  1998/01/16 21:29:45  chappey
-/* Remove function CC_GetExtremes and use now SeqAlignStart, SeqAlignStop in salsap.c
-/*
+/* $Revision: 6.5 $ 
+* $Log: bandalgn.h,v $
+* Revision 6.5  1999/03/17 16:49:10  madden
+* Removed comment within comment
+*
+* Revision 6.4  1998/01/16 21:29:45  chappey
+* Remove function CC_GetExtremes and use now SeqAlignStart, SeqAlignStop in salsap.c
+*
  * Revision 6.3  1997/10/22 14:41:39  chappey
  * added CC_GetAlignExtremes, ChangeGlobalBandMatrix, CC_ExtendSeqAlign
  *

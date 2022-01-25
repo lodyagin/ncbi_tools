@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: accutils.c,v 6.7 1999/01/06 14:18:36 grisha Exp $
+ * RCS $Id: accutils.c,v 6.15 1999/04/01 13:56:34 sicotte Exp $
  *
  * Author:  J. Epstein
  *
@@ -35,6 +35,37 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: accutils.c,v $
+ * Revision 6.15  1999/04/01 13:56:34  sicotte
+ * Moved WHICH_db_accession,IS_ntdb_accession,IS_protdb_accession to
+ *   sequtil.ch
+ * Removed old static functions of Colombe (that are public in salutil.c)
+ * The only code left in accutils.c is the Entrez Access code.
+ *
+ * Revision 6.14  1999/03/31 21:13:47  sicotte
+ * Add info on N-accessions
+ *
+ * Revision 6.13  1999/03/31 13:34:18  sicotte
+ * in WHICH_ntdb_accession, swapped (C** and B** prot accession for embl/ddbj)
+ *
+ * Revision 6.12  1999/03/18 20:24:05  sicotte
+ * changed the define name for NC_ accession
+ *
+ * Revision 6.11  1999/03/18 20:18:18  sicotte
+ * added REFSEQ accession numbers and macro ACCN_IS_GENBANK()
+ *
+ * Revision 6.10  1999/03/18 15:34:04  sicotte
+ * Updated Accession List and added protein Accessions
+ * for functions IS_ntdb_accession and IS_protdb_accession.
+ * New function WHICH_db_accession with return code allowing
+ * to figure out the molecule type and the database from macros
+ * in accutils.h
+ *
+ * Revision 6.9  1999/02/24 16:48:09  kans
+ * added IS_ntdb_accession and IS_protdb_accession, removed NormalizeSeqAlignId
+ *
+ * Revision 6.8  1999/01/27 16:20:51  chappey
+ * update IS_ntdb_accession with AB, AJ
+ *
  * Revision 6.7  1999/01/06 14:18:36  grisha
  * add defines to switch ID0/ID1 usage
  *
@@ -113,7 +144,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.7 $"
+#define REVISION_STR "$Revision: 6.15 $"
 
 #include <accutils.h>
 #ifndef _CDROMLIB_
@@ -168,444 +199,7 @@ static ValNode nextRealNode;
 static Int2 lastGood = -1;
 static Int2 lastBad = -1;
 
-/****************************COLOMBE **************************/
-
-static Int4 CCAccessionToGi (CharPtr string)
-{
-   CharPtr str;
-   LinkSetPtr lsp;
-   Int4 gi;
-
-   str = MemNew (StringLen (string) + 10);
-   sprintf (str, "\"%s\" [ACCN]", string);
-   lsp = EntrezTLEvalString (str, TYP_NT, -1, NULL, NULL);
-   MemFree (str);
-   if (lsp == NULL) return 0;
-   if (lsp->num <= 0) {
-       LinkSetFree (lsp);
-       return 0;
-   }
-   gi = lsp->uids [0];
-   LinkSetFree (lsp);
-   return gi;
-}
-
-/*****************************************************************************
-*
-*  Function:    IS_ntdb_accession
-*
-*  Description: Return TRUE if the input string is a validly formatted
-*               nucleotide database accession number (GenBank, EMBL, DDBJ)
-*
-*  Arguments:   s : CharPtr; pointer to accession number string.
-*                   Must be null terminated.
-*
-*  Author:      Mark Cavanaugh
-*  Date:        7/96
-*
-*  WARNING:     IS_ntdb_accession() does not communicate with any central
-*               resource about accession numbers. So there's no way to
-*               inform it automatically about new accession number prefixes.
-*
-*****************************************************************************/
-static Boolean IS_ntdb_accession(CharPtr s)
-{
-  Boolean retval = TRUE;
-
-  Boolean first = TRUE;
-  CharPtr temp;
-
-  if (s == NULL || ! *s)
-    return FALSE;
-
-  switch (StringLen(s)) {
-
-  case 6:                       /* Old-style 6-character accession */
-    while (*s) {
-      if (retval == FALSE)
-        break;
-
-      if (first) {
-        if (! IS_ALPHA(*s)) {
-          retval = FALSE;
-          break;
-        }
-
-      switch (TO_UPPER(*s)) {
-      case 'H': case 'N': case 'R': case 'T': case 'W': /* GenBank : EST */
-        break;
-      case 'B': case 'G': case 'I': case 'S': case 'U': /* GenBank : non-EST */
-        break;
-      case 'J': case 'K': case 'L': case 'M':      /* GenBank : before NCBI */
-        break;
-      case 'A': case 'F': case 'V': case 'X': case 'Y': case 'Z':  /* EMBL */
-        break;
-      case 'C': case 'D': case 'E':                /* DDBJ */
-        break;
-      default:
-        retval = FALSE;
-        break;
-      }
-      first = FALSE;
-      }
-      else {
-        if (! IS_DIGIT(*s)) {
-          retval = FALSE;
-        }
-      }
-      s++;
-    }  
-    break;
-    case 8: /* New 8-character accession, two letters + 6 digits */
- 
-      /* Copy the first two chars of the accession to a buffer */
- 
-      temp = (CharPtr) MemNew(3);
-
-      temp[0] = *s; s++;          
-      temp[1] = *s; s++;
-      temp[2] = '\0';
-
-      if ((StringICmp(temp,"AA") == 0) ||       /* NCBI EST */
-          (StringICmp(temp,"AC") == 0) ||       /* NCBI HTGS */
-          (StringICmp(temp,"AF") == 0) ||       /* NCBI ??? */
-          (StringICmp(temp,"AD") == 0) ) {      /* NCBI accessions assigned to GSDB entries */
-        /* No-op */
-      }
-      else if ( (StringICmp(temp,"AB") == 0) ) {        /* DDBJ */
-        /* No-op */
-      }
-      else {
-        retval = FALSE;
-        break;
-      }
-
-      while (*s) {
-        if (! IS_DIGIT(*s)) {
-          retval = FALSE;
-          break;
-        }
-        s++;
-      }  
-      break;
-       
-  default:   
-       
-    retval = FALSE;
-    break;
-  }                     /* Endswitch, StringLen(s) */
-
-  return retval;                                      
-}
-/*****************************************************************************
-*
-*  Function:    IS_protdb_accession
-*
-*  Description: Return TRUE if the input string is a validly formatted
-*               protein database accession number (SWISS-PROT)
-*
-*  Arguments:   s : CharPtr; pointer to accession number string.
-*                   Must be null terminated.
-*
-*  Author:      Mark Cavanaugh
-*  Date:        8/96
-*
-*  WARNING:     IS_protdb_accession() does not communicate with any central
-*               resource about accession numbers. So there's no way to
-*               inform it automatically about new accession number prefixes.
-*
-*****************************************************************************/
-static Boolean IS_protdb_accession(CharPtr s)
-{
-  Boolean retval = TRUE;
-  Boolean first = TRUE;
-
-  if (s == NULL || ! *s)
-    return FALSE;
- 
-  if (StringLen(s) != 6)
-    return FALSE;
-
-  while (*s) {
-    if (retval == FALSE)
-      break;
-
-    if (first) {
-      if (! IS_ALPHA(*s)) {
-        retval = FALSE;
-        break;
-      }  
-
-      switch (TO_UPPER(*s)) {
-      case 'P': case 'Q':                 /* SWISS-PROT accessions */
-        break;
-      default:
-        retval = FALSE;
-        break;
-      }  
-      first = FALSE;
-    }
-    else {
-      if (! IS_DIGIT(*s)) {
-        retval = FALSE;
-        break;
-      }  
-    }  
-    s++;
-  }
-  return retval;
-}
-
-/****************************************************
-***   Copy of Read SeqPort.bsp from SeqPort.start to stop
-***   in : spp, from + to in seq coordinates
-***   out: length of buffer + buffer
-***        compiled with -D SAP
-*****************************************************/
-static Int4 AccutReadBufferFromSep (SeqPortPtr spp, CharPtr buffer, Int4 from, Int4 to, Int4 buffsegstart)
-{
-  Uint1    residue;
-  Int4     k;
-  Int4     pos;
-
-  SeqPortSeek (spp, from, SEEK_SET);
-  k = buffsegstart;
-  pos = from;
-  residue = SeqPortGetResidue(spp);
-  while (pos < to && residue != SEQPORT_EOF)
-  {
-    if ( ! IS_residue(residue)) {
-      /*
-      switch (residue)
-      {  
-           case SEQPORT_VIRT:
-              Message(MSG_OK,"SEQPORT_VIRT [%d=%c] at %ld\n", (int)residue, (char)residue, (long)pos);
-              break;
-           case SEQPORT_EOS:
-              Message(MSG_OK,"[EOS]\n");
-              break;
-           default:
-              Message(MSG_OK,"unknown char\n");
-              break;
-      }  
-      pos++;
-      */
-    } else {
-      buffer[k] = (Char) residue;
-      k++;  
-      pos++;
-    }
-    residue = SeqPortGetResidue(spp);
-  }
-  buffer[k] = '\0';
-  return k;
-}
- 
-
-/*************************************************************
-***
-*** load_seq_data
-***    loads bioseq sequence into a string
-***    sip: SeqId of the bioseq
-***    from, to: included bondaries
-***    returns the length of the string (lenp)
-***
-***************************************************************/
-static CharPtr load_seq_data (SeqIdPtr sip, Int4 from, Int4 to, Int4 *lenp)
-{
-  BioseqPtr        bsp;
-  SeqLocPtr        slp;
-  SeqPortPtr       spp;
-  CharPtr          str = NULL;
-  Int4             lens;
-
-  if (from > -1 && to > -1 && from >= to)
-     return NULL;
-  bsp = BioseqLockById (sip);
-  if (bsp != NULL) {
-     if (from < 0 || from > bsp->length -1)
-        from = 0;
-     if (to < 0 || to > bsp->length -1)
-        to = bsp->length -1;
-     BioseqUnlock (bsp);
-     slp = SeqLocIntNew (from, to, Seq_strand_plus, sip);
-     spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
-     if (spp != NULL) {
-        str = MemNew ((to-from+4) * sizeof(Char));
-        lens = AccutReadBufferFromSep (spp, str, 0, to -from +1, 0);
-        SeqPortFree (spp);
-        if (lenp != NULL)
-           *lenp = lens;
-     }   
-     SeqLocFree (slp);
-  }
-  return str;
-}
-
-static Int4 getlengthforid (SeqIdPtr sip)
-{
-  BioseqPtr        bsp;
-  Int4             lens=0;
- 
-  if (sip==NULL)
-     return 0;
-  bsp = BioseqLockById (sip);
-  if (bsp != NULL) {
-     lens = bsp->length;
-     BioseqUnlock (bsp);
-  }
-  return lens;
-}
-
-/********************************************************
-***
-*** NormalizeSeqAlignId
-***   Checks local seqid . if a seqid string contains "acc"
-***   seqid has a correspondant sequence in db.
-***   This local seqid is replaced by its gi number. 
-***
-***   The local sequence is compared to the sequence from 
-***   the db. If the local sequence is a region of the db sequence
-***   the positions in the seqalign are updaded with the offset.
-***
-***   local copy of IS_ntdb_accession & IS_protdb_accession
-***          Thanks to Mark for this useful function! 
-**********************************************************/
-NLM_EXTERN ValNodePtr NormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
-{
-  ValNodePtr  vnptmp;
-  DenseSegPtr dsp;
-  SeqIdPtr    sip,
-              dbsip,
-              presip, 
-              next,
-              siptmp;
-  CharPtr     TmpBuff, tmp;
-  CharPtr     strlcl,
-              strdb,
-              strtmp;
-  Char        str [52];
-  Int4        gi = 0;
-  Int4        offset;
-  Int4        lenlcl, lendb;
-  Int4        totlenlcl, totlendb;
-  Int4        j, k, k1;
-  Int2        index;
-  Boolean     ok, goOn, found;
-
-  Int4        step = 1000;
-  Int4        window = 1020;
-
-  EntrezInit ("Sequin", FALSE, NULL);
-
-  if (salp!=NULL) {
-     if (salp->segtype == 2) {
-        dsp = (DenseSegPtr) salp->segs;
-        presip = NULL;
-        sip = dsp->ids;
-        index = 0;
-        while (sip != NULL) {
-           next = sip->next;
-           SeqIdWrite (sip, str, PRINTID_FASTA_LONG, 50);
-           tmp = StringStr (str, "acc");
-           if (tmp==NULL) {
-              tmp = StringStr (str, "ACC");
-           }
-           if (tmp!=NULL) {
-              tmp++; tmp++; tmp++;
-              if (*tmp == '|')
-                 tmp++;   
-              TmpBuff = tmp;
-              while (*tmp!='\0' && *tmp != '|' && *tmp!='\n')
-                 tmp++;
-              *tmp = '\0';
-
-              ok = FALSE;
-              j = StringLen (TmpBuff);
-              for(k =0; k < j; k++) {
-                 if(!isdigit(TmpBuff[k])) {
-                    break;
-                 }
-              }
-              if(k != j) {
-                 ok=(IS_ntdb_accession(TmpBuff) || IS_protdb_accession(TmpBuff));
-              }
-              if (ok) {
-                 gi = CCAccessionToGi(TmpBuff);
-                 ok = (gi>0);
-              }
-              if (ok) {
-                 dbsip = ValNodeNew (NULL);
-                 dbsip->choice = SEQID_GI;
-                 dbsip->data.intvalue = (Int4)gi;
-                 sip->next = NULL;
-                 found = FALSE;
-                 totlenlcl = getlengthforid(sip);
-                 strlcl = load_seq_data (sip, 0, MIN(totlenlcl, 20), &lenlcl); 
-                 k1=0;
-                 totlendb = getlengthforid(dbsip);
-                 k = MIN(totlendb, k1+window); 
-                 goOn = (Boolean) (strlcl!=NULL && k > 0); 
-                 while (goOn) 
-                 {
-                    strdb = load_seq_data (dbsip, k1, k, &lendb);
-                    if (strlcl != NULL && strdb != NULL) 
-                    {
-                     offset = 0;
-                     strtmp = StringStr (strdb, strlcl);
-                     if (strtmp != NULL) {
-                       offset =(Int4)abs(abs((long)strdb)-abs((long)strtmp));
-                       offset += k1;
-                       if (offset > 0) {
-                          for (j=0; j<dsp->numseg; j++) {
-                             if (dsp->starts[dsp->dim*j+index] != -1)
-                                dsp->starts[dsp->dim*j+index] += offset;
-                          }
-                       }
-                       if (presip == NULL) {
-                          dsp->ids = dbsip;
-                       } else {
-                          presip->next = dbsip;
-                       }
-                       dbsip->next = next;
-                       vnptmp=NULL;
-                       if (vnp!=NULL) {
-                          for (vnptmp=vnp; vnptmp!=NULL; vnptmp=vnptmp->next) {
-                             siptmp=(SeqIdPtr)vnptmp->data.ptrvalue;
-                             if (SeqIdForSameBioseq(sip, siptmp))
-                                break;
-                          }
-                       }
-                       if (vnptmp==NULL)
-                          ValNodeAddPointer(&vnp, 0, sip);
-                       found = TRUE;
-                       sip = dbsip;
-                     }
-                     MemFree (strdb);
-                    }
-                    goOn = (Boolean)(!found && k<totlendb);
-                    k1=k1+step;
-                    k = MIN(totlendb, k1+window);
-                 }
-                 if (!found)
-                    sip->next = next;
-                 if (strlcl != NULL)
-                    MemFree (strlcl);
-              } 
-           }
-           presip = sip;
-           sip = next;
-           index++;
-        }
-     }
-  }
-  EntrezFini ();
-  return vnp;  
-}
-/****************************COLOMBE **************************/
-
-static
-Int2 LexClassifyChar(Char c)
+static Int2 LexClassifyChar(Char c)
 {
     Int2 retval;
 
@@ -635,8 +229,7 @@ Int2 LexClassifyChar(Char c)
 }
 
 /* Returns -1 if no token available, else the position of the token */
-static Int2
-EntrezLexExpression(CharPtr str, ValNodePtr vnp)
+static Int2 EntrezLexExpression(CharPtr str, ValNodePtr vnp)
 {
     Int2 startPos;
     Int2 classChar;
@@ -841,8 +434,7 @@ static Boolean FindTermRequired(CharPtr term)
 
 /* traverse all the possible fields, and take the "union" of this term */
 /* over all the possibilities for the specified database               */
-static Boolean
-AddAllFields(ValNodePtr elst, CharPtr term, DocType db, Boolean special)
+static Boolean AddAllFields(ValNodePtr elst, CharPtr term, DocType db, Boolean special)
 {
     EntrezInfoPtr eip;
     Boolean first = TRUE;

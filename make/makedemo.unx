@@ -1,4 +1,7 @@
 #	makefile for demo programs
+#
+#	$Id: makedemo.unx,v 6.41 1999/04/23 19:10:58 beloslyu Exp $
+#
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
 #   Sun with Solaris 2.x OS [ make CC="cc -Xa" OTHERLIBS="-lthread -lm" ]
@@ -43,7 +46,7 @@ SUFFIXLCL = $(LCL)
 CFLAGS1 = -c -O
 LDFLAGS1 = -O
 CC = cc
-RAN = ls
+RAN = ls -l
 OTHERLIBS = -lm
 THREAD_OTHERLIBS = -lthread
 THREAD_OTHERLIBS =
@@ -52,9 +55,9 @@ THREAD_OBJ =
 VIBLIBS = 
 VIBFLAG =
 VIB =
-LIBCOPY = cp
-SRCCOPY = cp
-BINCOPY = cp
+LIBCOPY = cp -p
+SRCCOPY = cp -p
+BINCOPY = cp -p
 
 SUFFIXENV = unx
 ASNDIR = asnstat
@@ -90,20 +93,20 @@ EXE1 = testcore makeset \
 	dosimple asn2ff getseq getfeat checksub asndhuff \
 	entrcmd asn2fast errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
-	testval seedtop fmerge
+	testval seedtop fmerge makemat copymat impala
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
     getseq.c getfeat.c checksub.c asndhuff.c \
     entrcmd.c asn2fast.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
-    testval.c seedtop.c fmerge.c
+    testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c
 
 INTERNAL = testgen
 
 ## All things to make
 ##
-all : copy nocopy
+all : copy .WAIT nocopy
 
 nocopy : sources $(EXE1) $(VIB)
 
@@ -115,6 +118,11 @@ internal: $(INTERNAL)
 ##
 clean :
 	- rm -f *.[acho]
+
+.NO_PARALLEL:	copy
+
+.WAIT:
+	echo Waiting...go
 
 ## Implicit actions
 ##
@@ -128,8 +136,7 @@ clean :
 copy :
 	$(SRCCOPY) ../demo/*.* .
 	-$(SRCCOPY) ../internal/*.* .
-	chmod +w *
-	chmod g+w *
+	chmod -R ug+rw,o+r .
 
 ## make applications
 ##
@@ -273,7 +280,32 @@ blastpgp : blastpgp.c $(THREAD_OBJ)
 seedtop : seedtop.c $(THREAD_OBJ)
 	$(CC) -o seedtop $(LDFLAGS) seedtop.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
+# makemat
+
+makemat : makemat.c $(THREAD_OBJ)
+	$(CC) -o makemat $(LDFLAGS) makemat.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# copymat
+
+copymat : copymat.c $(THREAD_OBJ)
+	$(CC) -o copymat $(LDFLAGS) copymat.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# impala
+
+impala : profiles.c $(THREAD_OBJ)
+	$(CC) -o impala $(LDFLAGS) profiles.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
 # testgen
 
 testgen : testgen.c
 	$(CC) -o testgen $(LDFLAGS) testgen.c $(LIB1) $(OTHERLIBS)
+
+#testmem 
+
+testmem : testmem.c
+	$(CC) -o testmem $(LDFLAGS) testmem.c $(LIB2) $(LIB1) $(OTHERLIBS)
+
+#packfilt 
+
+packfilt : packfilt.c
+	$(CC) -o packfilt $(LDFLAGS) packfilt.c $(LIB2) $(LIB1) $(OTHERLIBS)

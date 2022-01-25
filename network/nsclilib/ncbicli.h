@@ -1,7 +1,7 @@
 #ifndef NCBICLI__H
 #define NCBICLI__H
 
-/*  $RCSfile: ncbicli.h,v $  $Revision: 4.4 $  $Date: 1998/12/15 17:24:58 $
+/*  $RCSfile: ncbicli.h,v $  $Revision: 4.5 $  $Date: 1999/02/18 18:47:40 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,10 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.h,v $
+* Revision 4.5  1999/02/18 18:47:40  shavirin
+* Added definition of new functions, those do not interfere with
+* existing API.
+*
 * Revision 4.4  1998/12/15 17:24:58  vakatov
 * +NIC_CERN_PROXY flag(to indicate the use of CERN-like non-transparent proxy)
 *
@@ -123,6 +127,16 @@ NLM_EXTERN Nlm_Boolean NIC_CloseService
 (NIC nic
  );
 
+typedef VoidPtr NETC_HandlePtr;
+
+Boolean NET_Connect(VoidPtr handle);
+
+NETC_HandlePtr NET_GenericGetService (CharPtr defService, 
+                                      CharPtr configSection, 
+                                      Int4 interface);
+    
+Int2 NET_ServiceDisconnect(NETC_HandlePtr handle);
+SOCK NET_GetSOCK(NETC_HandlePtr handle);
 
 #ifdef __cplusplus
 }

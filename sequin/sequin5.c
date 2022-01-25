@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.102 $
+* $Revision: 6.109 $
 *
 * File Description:
 *
@@ -69,9 +69,7 @@
 #include <blast.h>
 #include <blastdef.h>
 #include <satutil.h>
-
-static Boolean IS_ntdb_accession(CharPtr s);
-static Boolean IS_protdb_accession(CharPtr s);
+#include <salpedit.h>
 
 static void CommonLaunchBioseqViewer (SeqEntryPtr sep, CharPtr path, Boolean directToEditor)
 
@@ -533,6 +531,7 @@ typedef struct edlocdata {
   BioseqPtr     bsp;
   TexT          locusname;
   PrompT        accnnumber;
+  Boolean       refgene;
 } EdLocData, PNTR EdLocPtr;
 
 static CharPtr AllToUpper (CharPtr str)
@@ -557,6 +556,7 @@ static void EditLocusActnProc (ForM f)
 
 {
   BioseqPtr     bsp;
+  Uint1         choice = SEQID_GENBANK;
   Int2          count;
   SeqIdPtr      id;
   EdLocPtr      elp;
@@ -575,6 +575,9 @@ static void EditLocusActnProc (ForM f)
   if (elp != NULL) {
     sip = elp->sip;
     bsp = elp->bsp;
+    if (elp->refgene) {
+      choice = SEQID_OTHER;
+    }
     if (indexerVersion && sip == NULL && bsp != NULL && bsp->id != NULL) {
       id = bsp->id;
       while (id->next != NULL) {
@@ -584,7 +587,7 @@ static void EditLocusActnProc (ForM f)
       if (tsip != NULL) {
         sip = ValNodeNew (NULL);
         if (sip != NULL) {
-          sip->choice = SEQID_GENBANK;
+          sip->choice = choice;
           sip->data.ptrvalue = (Pointer) tsip;
         } else {
           TextSeqIdFree (tsip);
@@ -605,7 +608,11 @@ static void EditLocusActnProc (ForM f)
     tsip->name = MemFree (tsip->name);
     GetTitle (elp->locusname, str, sizeof (str) - 1);
     if (str [0] != '\0') {
-      tsip->name = StringSave (AllToUpper (str));
+      if (elp->refgene) {
+        tsip->name = StringSave (str);
+      } else {
+        tsip->name = StringSave (AllToUpper (str));
+      }
     }
     if (bsp != NULL && bsp->repr == Seq_repr_seg && bsp->seq_ext != NULL) {
       if (StringNCmp (str, "SEG_", 4) != 0) {
@@ -649,15 +656,15 @@ static void EditLocusActnProc (ForM f)
             part = BioseqFind (sip);
             if (part != NULL && part->id != NULL) {
               id = part->id;
-              while (id->choice != SEQID_GENBANK && id->next != NULL) {
+              while (id->choice != choice && id->next != NULL) {
                 id = id->next;
               }
-              if (id->choice != SEQID_GENBANK) {
+              if (id->choice != choice) {
                 tsip = TextSeqIdNew ();
                 if (tsip != NULL) {
                   sip = ValNodeNew (NULL);
                   if (sip != NULL) {
-                    sip->choice = SEQID_GENBANK;
+                    sip->choice = choice;
                     sip->data.ptrvalue = (Pointer) tsip;
                   } else {
                     TextSeqIdFree (tsip);
@@ -666,12 +673,16 @@ static void EditLocusActnProc (ForM f)
                   id = sip;
                 }
               }
-              if (id->choice == SEQID_GENBANK) {
+              if (id->choice == choice) {
                 tsip = (TextSeqIdPtr) id->data.ptrvalue;
                 if (tsip != NULL) {
                   tsip->name = MemFree (tsip->name);
                   if (tmp [0] != '\0') {
-                    tsip->name = StringSave (AllToUpper (tmp));
+                    if (elp->refgene) {
+                      tsip->name = StringSave (tmp);
+                    } else {
+                      tsip->name = StringSave (AllToUpper (tmp));
+                    }
                   }
                 }
               }
@@ -721,7 +732,7 @@ static void EditLocusMessage (ForM f, Int2 mssg)
 
 #define NUM_ORDER 16
 
-static SeqIdPtr SeqIdFindGenBank (SeqIdPtr sip)
+static SeqIdPtr SeqIdFindGenBankOrOther (SeqIdPtr sip)
 
 {
   Uint1  order [NUM_ORDER];
@@ -736,7 +747,7 @@ static SeqIdPtr SeqIdFindGenBank (SeqIdPtr sip)
   order [SEQID_PRF] = 255;
   order [SEQID_PDB] = 255;
   order [SEQID_PATENT] = 255;
-  order [SEQID_OTHER] = 255;
+  order [SEQID_OTHER] = 2;
   order [SEQID_GENERAL] = 255;
   order [SEQID_GIBBSQ] = 255;
   order [SEQID_GIBBMT] = 255;
@@ -768,7 +779,7 @@ void EditLocusProc (IteM i)
   if (bfp->input_itemtype != OBJ_BIOSEQ) return;
   bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (bsp == NULL) return;
-  sip = SeqIdFindGenBank (bsp->id);
+  sip = SeqIdFindGenBankOrOther (bsp->id);
   /*if (sip == NULL) return;*/
   elp = (EdLocPtr) MemNew (sizeof (EdLocData));
   if (elp == NULL) return;
@@ -811,6 +822,9 @@ void EditLocusProc (IteM i)
     if (tsip != NULL) {
       SetTitle (elp->locusname, tsip->name);
       SetTitle (elp->accnnumber, tsip->accession);
+    }
+    if (sip->choice == SEQID_OTHER) {
+      elp->refgene = TRUE;
     }
   }
   RealizeWindow (w);
@@ -1130,7 +1144,6 @@ static ValNodePtr nrSeqIdAdd (ValNodePtr vnp, SeqIdPtr sip)
 ***   the db. If the local sequence is a region of the db sequence
 ***   the positions in the seqalign are updaded with the offset.
 ***
-***   local copy of IS_ntdb_accession & IS_protdb_accession
 ***          Thanks to Mark for this useful function! 
 **********************************************************/
 static void showtextalign_fromalign (SeqAlignPtr salp, CharPtr path, FILE *fp)
@@ -1210,7 +1223,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
         found = FALSE;
         while (sip != NULL) {
            next = sip->next;
-           SeqIdWrite (sip, str, PRINTID_FASTA_LONG, 50);
+           lclsip = SeqIdDup (sip);
+           SeqIdWrite (lclsip, str, PRINTID_FASTA_LONG, 50);
            tmp = StringStr (str, "acc");
            if (tmp==NULL) {
               tmp = StringStr (str, "ACC");
@@ -1243,7 +1257,6 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  dbsip->choice = SEQID_GI;
                  dbsip->data.intvalue = (Int4)gi;
                  totlendb = getlengthforid(dbsip); 
-                 lclsip=SeqIdDup(sip);
                  totlenlcl = getlengthforid(lclsip);
                   
                  slp1 = SeqLocIntNew (0, totlenlcl-1, Seq_strand_both, lclsip);
@@ -1312,172 +1325,6 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   EntrezFini ();
   return vnp;  
 }
-
-/*****************************************************************************
-*
-*  Function:    IS_ntdb_accession
-*
-*  Description: Return TRUE if the input string is a validly formatted
-*               nucleotide database accession number (GenBank, EMBL, DDBJ)
-*
-*  Arguments:   s : CharPtr; pointer to accession number string.
-*                   Must be null terminated.
-*
-*  Author:      Mark Cavanaugh
-*  Date:        7/96
-*
-*  WARNING:     IS_ntdb_accession() does not communicate with any central
-*               resource about accession numbers. So there's no way to
-*               inform it automatically about new accession number prefixes.
-*
-*****************************************************************************/
-static Boolean IS_ntdb_accession(CharPtr s)
-{
-  Boolean retval = TRUE;
- 
-  Boolean first = TRUE;
-  CharPtr temp;
- 
-  if (s == NULL || ! *s)
-    return FALSE;
- 
-  switch (StringLen(s)) {
- 
-  case 6:                       /* Old-style 6-character accession */
-    while (*s) {
-      if (retval == FALSE)
-        break;
- 
-      if (first) {
-        if (! IS_ALPHA(*s)) {
-          retval = FALSE;
-          break;
-        }
- 
-      switch (TO_UPPER(*s)) {
-      case 'H': case 'N': case 'R': case 'T': case 'W': /* GenBank : EST */
-        break;
-      case 'B': case 'G': case 'I': case 'S': case 'U': /* GenBank : non-EST */
-        break;
-      case 'J': case 'K': case 'L': case 'M':      /* GenBank : before NCBI */
-        break;
-      case 'A': case 'F': case 'V': case 'X': case 'Y': case 'Z':  /* EMBL */
-        break;
-      case 'C': case 'D': case 'E':                /* DDBJ */
-        break;
-      default:
-        retval = FALSE;
-        break;
-      }  
-      first = FALSE;
-      }  
-      else {
-        if (! IS_DIGIT(*s)) {
-          retval = FALSE;
-        }
-      }  
-      s++;
-    }
-    break;
-    case 8: /* New 8-character accession, two letters + 6 digits */
-
-      /* Copy the first two chars of the accession to a buffer */   
-
-      temp = (CharPtr) MemNew(3);                                 
- 
-      temp[0] = *s; s++;
-      temp[1] = *s; s++;
-      temp[2] = '\0';
- 
-      if ((StringICmp(temp,"AA") == 0) ||       /* NCBI EST */
-          (StringICmp(temp,"AC") == 0) ||       /* NCBI HTGS */
-          (StringICmp(temp,"AF") == 0) ||       /* NCBI ??? */
-          (StringICmp(temp,"AD") == 0) ) {      /* NCBI accessions assigned to GSDB entries */
-        /* No-op */
-      }
-      else if ( (StringICmp(temp,"AB") == 0) ) {        /* DDBJ */
-        /* No-op */
-      }
-      else {
-        retval = FALSE;
-        break;
-      }
- 
-      while (*s) {
-        if (! IS_DIGIT(*s)) {
-          retval = FALSE;
-          break;
-        }
-        s++;
-      }  
-      break;
-       
-  default:   
-
-    retval = FALSE;
-    break;
-  }                     /* Endswitch, StringLen(s) */
- 
-  return retval;
-}
-/*****************************************************************************
-*
-*  Function:    IS_protdb_accession
-*
-*  Description: Return TRUE if the input string is a validly formatted
-*               protein database accession number (SWISS-PROT)
-*
-*  Arguments:   s : CharPtr; pointer to accession number string.
-*                   Must be null terminated.
-*
-*  Author:      Mark Cavanaugh
-*  Date:        8/96
-*
-*  WARNING:     IS_protdb_accession() does not communicate with any central
-*               resource about accession numbers. So there's no way to
-*               inform it automatically about new accession number prefixes.
-*
-*****************************************************************************/
-static Boolean IS_protdb_accession(CharPtr s)
-{
-  Boolean retval = TRUE;
-  Boolean first = TRUE;
- 
-  if (s == NULL || ! *s)
-    return FALSE;
-
-  if (StringLen(s) != 6)
-    return FALSE;
- 
-  while (*s) {
-    if (retval == FALSE)
-      break;
- 
-    if (first) {
-      if (! IS_ALPHA(*s)) {
-        retval = FALSE;
-        break;
-      }
- 
-      switch (TO_UPPER(*s)) {
-      case 'P': case 'Q':                 /* SWISS-PROT accessions */
-        break;
-      default:
-        retval = FALSE;
-        break;
-      }
-      first = FALSE;
-    }  
-    else {
-      if (! IS_DIGIT(*s)) {
-        retval = FALSE;
-        break;
-      }
-    }
-    s++;
-  }  
-  return retval;
-}  
 
 static Boolean check_dbid_seqalign (SeqAlignPtr salp)
 {
@@ -1752,6 +1599,8 @@ static Boolean LIBCALLBACK VectorScreenCallback (BlastResponsePtr brp, Boolean P
           return FALSE;
         }
       }
+      return TRUE;
+    case BlastResponse_queued :
       return TRUE;
     case BlastResponse_done :
       if (mon != NULL) {
@@ -2343,12 +2192,25 @@ static void PowBlastProc (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent
 
 {
 #ifdef USE_BLAST3
+  PSeqAlignInfoPtr   alip;
+  Int2               beg = 0;
   ValNodePtr         error_returns;
+  PSeqAlignInfoPtr   head_alip = NULL;
+  PSeqAlignInfoPtr   head_t_alip = NULL;
+  Int4               i;
+  Int4               len1;
+  Int4               num;
   ValNodePtr         other_returns;
+  Int4               pstop;
   SeqAlignPtr        salp;
+  SeqIntPtr          sint;
+  SeqLocPtr          slp1;
+  Boolean            split = FALSE;
+  PSeqAlignInfoPtr   t_alip;
 #else
   BLAST0ResponsePtr  blastResp;
   BLAST0ResponsePtr  brp1;
+  SeqAnnotPtr        t_sap;
 #endif
   BioseqPtr          bsp;
   SeqAnnotPtr        curr;
@@ -2363,7 +2225,7 @@ static void PowBlastProc (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent
   BioseqPtr dust_bsp;
   SeqLocPtr blastloc, cloc, filterloc, dustloc;
   SeqLocPtr slp;
-  SeqAnnotPtr blast_sap, n_sap, t_sap;
+  SeqAnnotPtr blast_sap, n_sap;
   Int4 max_len, overlap_len;
 
   if (! IS_Bioseq (sep)) return;
@@ -2424,22 +2286,104 @@ static void PowBlastProc (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent
 #ifdef USE_BLAST3
   error_returns = NULL;
   other_returns = NULL;
+  len1 = SeqLocLen(slp);
+  if(len1 == 0)
+     return;
+  if(len1 > 10000 && len1 > max_len)
+     split = TRUE;
+  alip = NULL;
+  if(split)
+    {
+       num = (len1 - overlap_len)/(max_len - overlap_len);
+       if((len1 - overlap_len)%(max_len - overlap_len) > max_len/2)
+          ++num;
+       slp1 = SeqLocIntNew(SeqLocStart(slp), SeqLocStop(slp),
+                  SeqLocStrand(slp), SeqLocId(slp));
+       sint = (SeqIntPtr) slp1->data.ptrvalue;
+       pstop = -1;
+       for(i = 0; i<num; ++i)
+          {
+              if(i == 0)
+              {
+                  sint->from = SeqLocStart(slp);
+                  sint->to = sint->from + max_len -1;
+              }
+              else
+              {
+                  sint->from = sint->to -overlap_len;
+                  sint->to = MIN(sint->from + max_len -1, SeqLocStop(slp));
+              }
+              if(i == num -1)
+                  sint->to = SeqLocStop(slp);
+                  sint->strand = SeqLocStrand(slp);
+                  salp = BlastSeqLocNet(vsp->bl3hp, slp1, vsp->program, vsp->database, vsp->options, &other_returns, &error_returns, VectorScreenCallback);
+                  if(salp != NULL)
+                  {
+                     t_alip = SeqAlignToPSeqAlignInfo(salp);
+                     if(alip == NULL)
+                     {
+                        alip = t_alip;
+                        head_alip = alip;
+                     }
+                     else if(pstop != -1)
+                     {
+                        alip = head_alip;
+                        head_t_alip = t_alip;
+                        while (alip != NULL)
+                           {
+                           t_alip = head_t_alip;
+                           while (t_alip != NULL)
+                           {
+                              if (SeqIdComp(t_alip->sip->next, alip->sip->next)
+                                                  && t_alip->used == FALSE)
+                              {
+                                 MergeTwoAlignList(alip->sap, &t_alip->sap,
+                                                        sint->from, pstop, 0);
+                                 if (t_alip->sap !=NULL)
+                                 {
+                                     SeqAlignLink(t_alip->sap, alip->sap);
+                                 }
+                                 t_alip->used = TRUE;
+                              }
+                              t_alip = t_alip->next;
+                           }
+                           alip = alip->next;
+                        }
+                        alip = head_alip;
+                        while (alip->next != NULL)
+                             alip = alip->next;
+                        t_alip = head_t_alip;
+                        while (t_alip)
+                        {
+                           if (t_alip->used == FALSE)
+                           {
+                               alip->next = t_alip;
+                               t_alip = t_alip->next;
+                               alip = alip->next;
+                               alip->next = NULL;
+                            } else
+                               t_alip = t_alip->next;
+                         }
+                         t_alip = head_t_alip = NULL;
+                      }
+                      pstop = sint->to;
+                   }
+               }
+               SeqLocFree(slp1);
+               salp = ReassembleSeqAlignFromPSeqAlignInfo(head_alip);
+        } else
+        {
+           salp = BlastSeqLocNet(vsp->bl3hp, slp, vsp->program, vsp->database, vsp->options, &other_returns, &error_returns, VectorScreenCallback);
+        }
+  sap = SeqAnnotForSeqAlign (salp);
 #endif
+#ifndef USE_BLAST3
   blastloc = break_blast_job (slp, dust_bsp->id, max_len, overlap_len);
   for (cloc = blastloc; cloc != NULL; cloc = cloc->next) {
-#ifndef USE_BLAST3
     blastResp = NULL;
-#endif
     n_sap = NULL;
-#ifdef USE_BLAST3
-    n_sap = NULL;
-    salp = BlastSeqLocNet (vsp->bl3hp, cloc, vsp->program, vsp->database,
-                           vsp->options, &other_returns, &error_returns, VectorScreenCallback);
-    t_sap = SeqAnnotForSeqAlign (salp);
-#else
     t_sap = BlastSeqLoc2 (cloc, vsp->program, vsp->database,
                           vsp->options, &blastResp, NULL, TRUE);
-#endif
     if (t_sap != NULL) {
       link_two_annot (&n_sap, t_sap);
     }
@@ -2451,16 +2395,15 @@ static void PowBlastProc (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent
       /* clean_all_internal_repeats ((SeqAlignPtr PNTR )(&(sap->data))); */
       /* clean_empty_seqalign ((SeqAlignPtr PNTR )(&(sap->data))); */
     }
-#ifndef USE_BLAST3
     while (blastResp != NULL) {
       brp1 = blastResp;
       blastResp = blastResp->next;
       brp1->next = NULL;
       BLAST0ResponseFree (brp1);
     }
-#endif
   }
   SeqLocSetFree (blastloc);
+#endif
   if (sap != NULL) {
     AddAlignInfoToSeqAnnot (sap, vsp->align_type);
     link_annot_to_end (&blast_sap, sap);
@@ -2546,7 +2489,9 @@ typedef struct powblastform {
   FORM_MESSAGE_BLOCK
   SeqEntryPtr    sep;
   ButtoN         programs [4];
+#ifndef USE_BLAST3
   TexT           params [4];
+#endif
   ButtoN         nucdatabases [NUM_DBS];
   ButtoN         protdatabases [NUM_DBS];
   PopuP          stringency;
@@ -2570,12 +2515,14 @@ static void PowBlastFormAcceptProc (ButtoN b)
 #ifdef USE_BLAST3
   BlastNet3Hptr     bl3hp;
   BlastResponsePtr  response;
+  Int2              stringency;
+#else
+  Char              options [128];
 #endif
   Char              databases [128];
   Int2              i;
   MonitorPtr        mon;
   Int2              numDbs;
-  Char              options [128];
   PowBlastFormPtr   pfp;
   Int2              postProcess = POST_PROCESS_SIM;
   VecScreenData     vsd;
@@ -2611,6 +2558,7 @@ static void PowBlastFormAcceptProc (ButtoN b)
   vsd.filterRepeats = GetStatus (pfp->filterRepeats);
   vsd.topsep = pfp->sep;
 #ifdef USE_BLAST3
+  stringency = GetValue (pfp->stringency);
   vsd.bl3hp = bl3hp;
   vsd.response = response;
 #endif
@@ -2619,7 +2567,9 @@ static void PowBlastFormAcceptProc (ButtoN b)
   }
 
   if (GetStatus (pfp->programs [0])) {
+#ifndef USE_BLAST3
     GetTitle (pfp->params [0], options, sizeof (options));
+#endif
     databases [0] = '\0';
     numDbs = 0;
     for (i = 0; i < NUM_DBS && nucdbs [i] != NULL; i++) {
@@ -2643,7 +2593,24 @@ static void PowBlastFormAcceptProc (ButtoN b)
       vsd.options = BLASTOptionNew (vsd.program, TRUE);
       if (vsd.options != NULL) {
         vsd.options->filter = FILTER_DUST;
-        vsd.options->wordsize = 11;
+        switch (stringency) {
+          case 1 :
+            vsd.options->wordsize = 13;
+            vsd.options->penalty = -5;
+            vsd.options->reward = 1;
+            break;
+          case 2 :
+            vsd.options->wordsize = 11;
+            break;
+          case 3 :
+            vsd.options->wordsize = 10;
+            vsd.options->penalty = -2;
+            vsd.options->reward = 1;
+            break;
+          default :
+            vsd.options->wordsize = 11;
+            break;
+        }
       }
 #else
       vsd.options = options;
@@ -2657,8 +2624,8 @@ static void PowBlastFormAcceptProc (ButtoN b)
   }
 
   if (GetStatus (pfp->programs [3])) {
-    GetTitle (pfp->params [3], options, sizeof (options));
 #ifndef USE_BLAST3
+    GetTitle (pfp->params [3], options, sizeof (options));
     AddFilterSegToOptions (options);
 #endif
     databases [0] = '\0';
@@ -2684,7 +2651,24 @@ static void PowBlastFormAcceptProc (ButtoN b)
       vsd.options = BLASTOptionNew (vsd.program, TRUE);
       if (vsd.options != NULL) {
         vsd.options->filter = FILTER_SEG;
-        vsd.options->threshold_second = 12;
+        switch (stringency) {
+          case 1 :
+            vsd.options->threshold_first = 13;
+            vsd.options->threshold_second = 13;
+            break;
+          case 2 :
+            vsd.options->threshold_first = 11;
+            vsd.options->threshold_second = 11;
+            break;
+          case 3 :
+            vsd.options->threshold_first = 10;
+            vsd.options->threshold_second = 10;
+            break;
+          default :
+            vsd.options->threshold_first = 11;
+            vsd.options->threshold_second = 11;
+            break;
+        }
       }
 #else
       vsd.options = options;
@@ -2698,8 +2682,8 @@ static void PowBlastFormAcceptProc (ButtoN b)
   }
 
   if (GetStatus (pfp->programs [2])) {
-    GetTitle (pfp->params [2], options, sizeof (options));
 #ifndef USE_BLAST3
+    GetTitle (pfp->params [2], options, sizeof (options));
     AddFilterSegToOptions (options);
 #endif
     databases [0] = '\0';
@@ -2725,6 +2709,24 @@ static void PowBlastFormAcceptProc (ButtoN b)
       vsd.options = BLASTOptionNew (vsd.program, TRUE);
       if (vsd.options != NULL) {
         vsd.options->filter = FILTER_SEG;
+        switch (stringency) {
+          case 1 :
+            vsd.options->threshold_first = 14;
+            vsd.options->threshold_second = 14;
+            break;
+          case 2 :
+            vsd.options->threshold_first = 12;
+            vsd.options->threshold_second = 12;
+            break;
+          case 3 :
+            vsd.options->threshold_first = 11;
+            vsd.options->threshold_second = 11;
+            break;
+          default :
+            vsd.options->threshold_first = 12;
+            vsd.options->threshold_second = 12;
+            break;
+        }
       }
 #else
       vsd.options = options;
@@ -2738,8 +2740,8 @@ static void PowBlastFormAcceptProc (ButtoN b)
   }
 
   if (GetStatus (pfp->programs [1])) {
-    GetTitle (pfp->params [1], options, sizeof (options));
 #ifndef USE_BLAST3
+    GetTitle (pfp->params [1], options, sizeof (options));
     AddFilterSegToOptions (options);
 #endif
     databases [0] = '\0';
@@ -2765,6 +2767,24 @@ static void PowBlastFormAcceptProc (ButtoN b)
       vsd.options = BLASTOptionNew (vsd.program, TRUE);
       if (vsd.options != NULL) {
         vsd.options->filter = FILTER_SEG;
+        switch (stringency) {
+          case 1 :
+            vsd.options->threshold_first = 15;
+            vsd.options->threshold_second = 15;
+            break;
+          case 2 :
+            vsd.options->threshold_first = 13;
+            vsd.options->threshold_second = 13;
+            break;
+          case 3 :
+            vsd.options->threshold_first = 12;
+            vsd.options->threshold_second = 12;
+            break;
+          default :
+            vsd.options->threshold_first = 13;
+            vsd.options->threshold_second = 13;
+            break;
+        }
       }
 #else
       vsd.options = options;
@@ -2830,6 +2850,7 @@ static void PowBlastProgProc (ButtoN b)
 static void ChangeStringency (PopuP p)
 
 {
+#ifndef USE_BLAST3
   CharPtr          options;
   PowBlastFormPtr  pfp;
   Int2             stringency;
@@ -2905,6 +2926,7 @@ static void ChangeStringency (PopuP p)
       break;
   }
   SafeSetTitle (pfp->params [3], options);
+#endif
 }
 
 static void PowBlastMessageProc (ForM f, Int2 mssg)
@@ -2996,23 +3018,37 @@ static ForM CreatePowBlastForm (Uint2 entityID, SeqEntryPtr sep)
       n = HiddenGroup (h, -1, 0, NULL);
       SetGroupSpacing (n, 7, 7);
 
+#ifdef USE_BLAST3
+      g = HiddenGroup (n, 1, 0, NULL);
+#else
       g = HiddenGroup (n, 2, 0, NULL);
+#endif
       SetGroupSpacing (g, 5, 5);
       StaticPrompt (g, "Program", 0, 0, programFont, 'c');
+#ifndef USE_BLAST3
       StaticPrompt (g, "Parameters", 0, 0, programFont, 'c');
+#endif
       pfp->programs [0] = CheckBox (g, "blastn", (BtnActnProc) PowBlastProgProc);
       SetObjectExtra (pfp->programs [0], pfp, NULL);
+#ifndef USE_BLAST3
       pfp->params [0] = DialogText (g, "", 18, NULL);
+#endif
       if (! nucOK) {
         Disable (pfp->programs [0]);
+#ifndef USE_BLAST3
         Disable (pfp->params [0]);
+#endif
       }
       pfp->programs [1] = CheckBox (g, "tblastn", (BtnActnProc) PowBlastProgProc);
       SetObjectExtra (pfp->programs [1], pfp, NULL);
+#ifndef USE_BLAST3
       pfp->params [1] = DialogText (g, "", 18, NULL);
+#endif
       if (! protOK) {
         Disable (pfp->programs [1]);
+#ifndef USE_BLAST3
         Disable (pfp->params [1]);
+#endif
       }
 
       t = HiddenGroup (n, 1, 0, NULL);
@@ -3034,24 +3070,38 @@ static ForM CreatePowBlastForm (Uint2 entityID, SeqEntryPtr sep)
       p = HiddenGroup (h, -1, 0, NULL);
       SetGroupSpacing (p, 7, 7);
 
+#ifdef USE_BLAST3
+      g = HiddenGroup (p, 1, 0, NULL);
+#else
       g = HiddenGroup (p, 2, 0, NULL);
+#endif
       SetGroupSpacing (g, 5, 5);
       StaticPrompt (g, "Program", 0, 0, programFont, 'c');
+#ifndef USE_BLAST3
       StaticPrompt (g, "Parameters", 0, 0, programFont, 'c');
+#endif
       /* blastp [3] moved before blastx [2], array order unchanged */
       pfp->programs [3] = CheckBox (g, "blastp", (BtnActnProc) PowBlastProgProc);
       SetObjectExtra (pfp->programs [3], pfp, NULL);
+#ifndef USE_BLAST3
       pfp->params [3] = DialogText (g, "", 18, NULL);
+#endif
       if (! protOK) {
         Disable (pfp->programs [3]);
+#ifndef USE_BLAST3
         Disable (pfp->params [3]);
+#endif
       }
       pfp->programs [2] = CheckBox (g, "blastx", (BtnActnProc) PowBlastProgProc);
       SetObjectExtra (pfp->programs [2], pfp, NULL);
+#ifndef USE_BLAST3
       pfp->params [2] = DialogText (g, "", 18, NULL);
+#endif
       if (! nucOK) {
         Disable (pfp->programs [2]);
+#ifndef USE_BLAST3
         Disable (pfp->params [2]);
+#endif
       }
 
       t = HiddenGroup (p, 1, 0, NULL);
@@ -3108,7 +3158,7 @@ static ForM CreatePowBlastForm (Uint2 entityID, SeqEntryPtr sep)
     PopupItem (pfp->stringency, "Stringent");
     PopupItem (pfp->stringency, "Normal");
     PopupItem (pfp->stringency, "Relaxed");
-    SetValue (pfp->stringency, 1);
+    SetValue (pfp->stringency, 2);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt4, (HANDLE) pfp->stringency, NULL);
 
     c = HiddenGroup (w, 4, 0, NULL);

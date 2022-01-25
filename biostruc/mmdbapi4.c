@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/18/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: Code for Modelstruc -> Biostruc conversion
 *                   And User-feature handling.
@@ -39,6 +39,12 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: mmdbapi4.c,v $
+* Revision 6.6  1999/03/12 18:37:08  kans
+* fixed ErrPostEx problem
+*
+* Revision 6.5  1999/02/25 23:11:53  ywang
+* synchronize with cn3d to save out mime data
+*
 * Revision 6.4  1998/09/02 16:25:27  kans
 * removed comments around debug ifdef to suppress printf statement
 *
@@ -1130,7 +1136,7 @@ Boolean LIBCALL RebuildChemGraphAsn(PDNMS pdnmsThis)
       /* clear all ASN data out - must start save process from scratch */
     FreeRedundantAsn(pdnmsThis);
     ErrClear(); 
-    ErrPostEx(SEV_ERROR,0,0, "Out of memory (at %d) while trying to save.\n Try again after closing other windows/programs.");
+    ErrPostEx(SEV_ERROR,0,0, "Out of memory while trying to save.\n Try again after closing other windows/programs.");
     ErrShow();
     return FALSE;
   
@@ -1467,7 +1473,7 @@ printf("Re-linking pbsmModels\n");
 
 
 Boolean LIBCALL WriteAsnModelList(PDNMS pdnmsThis,   Int2 iNumModels,  Int2Ptr i2Vec,  
-				    CharPtr pcSave,  Byte bSave)
+				    CharPtr pcSave,  Byte bSave, Boolean iCn3d)
 {
     /* The master ASN.1 writer routine */
     /* MODELS not specified for writing are ERASED for congruency */
@@ -1602,7 +1608,14 @@ printf("Refreshing Model failed %d\n ", (int) i2Vec[iIndex]);
 	  }
       }
      
+     if(iCn3d){
+        if(pmsdThis->pbsBS) bRet = TRUE;
+        return bRet;
+               /* leave cn3d handle FreeRedundantAsn - yanli */
+     }
+
      bRet = WriteOutBiostruc(pmsdThis->pbsBS, pcSave, bSave);
+
 #ifdef _DEBUG_5
 if (!bRet) printf("WriteOutBiostruc Failed\n");
 #endif    
@@ -1627,7 +1640,7 @@ Boolean LIBCALL WriteAsnOneModel(PDNMS pdnmsThis,  Int2 iModel,  CharPtr pcSave,
     if (!(pmsdThis->bMe == (Byte) AM_MSD)) return FALSE;
    
     bRet = WriteAsnModelList(pdnmsThis,  1, (Int2Ptr) &iModel, 
-				pcSave, bSave);
+				pcSave, bSave, 0);
     return bRet;
 }
 
@@ -1670,7 +1683,7 @@ Boolean LIBCALL WriteAsnAllModel(PDNMS pdnmsThis,  CharPtr pcSave,  Byte bSave)
 	   }
 	  pdnmlThis = pdnmlThis->next;
 	}
-    bRet = WriteAsnModelList(pdnmsThis, iCount, i2Vec, pcSave, bSave);
+    bRet = WriteAsnModelList(pdnmsThis, iCount, i2Vec, pcSave, bSave, 0);
     if (i2Vec) I2VectorFree(i2Vec, 0);  /* free vector */
     return bRet;	  
 }

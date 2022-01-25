@@ -23,11 +23,14 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************/
-/* $Revision 1.0$ */ 
-/* $Log: dotmatrx.h,v $
-/* Revision 6.1  1998/01/26 17:23:42  madden
-/* Changes to allow color-coding of alignments
-/*
+/* $Revision 1.0$ *
+* $Log: dotmatrx.h,v $
+* Revision 6.2  1999/03/17 17:05:49  madden
+* removed comment from within comment
+*
+* Revision 6.1  1998/01/26 17:23:42  madden
+* Changes to allow color-coding of alignments
+*
  * Revision 6.0  1997/08/25 18:21:46  madden
  * Revision changed to 6.0
  *

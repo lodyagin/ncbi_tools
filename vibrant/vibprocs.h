@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,13 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.9  1999/04/06 14:23:26  lewisg
+* add opengl replacement for viewer3d
+*
+* Revision 6.8  1999/02/19 20:48:36  vakatov
+* [WIN_MSWIN]  Added Nlm_MSWin_OpenDocument(also can be used to
+* auto-launch IE or Netscape if passed an URL)
+*
 * Revision 6.7  1999/01/07 22:32:36  kans
 * added Mac-specific Nlm_SendURLAppleEvent
 *
@@ -553,6 +560,17 @@ Nlm_PaneL  Nlm_SimplePanel PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth, Nlm_Int2 pi
 
 Nlm_PaneL  Nlm_AutonomousPanel4 PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth, Nlm_Int2 pixheight, Nlm_PnlActnProc draw, Nlm_SltScrlProc4 vscrl, Nlm_SltScrlProc4 hscrl, Nlm_Int2 extra, Nlm_PnlActnProc reset, Nlm_GphPrcsPtr classPtr));
 Nlm_PaneL  Nlm_AutonomousPanel PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth, Nlm_Int2 pixheight, Nlm_PnlActnProc draw, Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl, Nlm_Int2 extra, Nlm_PnlActnProc reset, Nlm_GphPrcsPtr classPtr));
+
+
+#ifdef _OPENGL
+void Nlm_Set3DColorMap PROTO((Nlm_PaneL w, Nlm_Uint2 totalColors,
+                             Nlm_Uint1Ptr red, Nlm_Uint1Ptr green,
+                             Nlm_Uint1Ptr blue));
+
+Nlm_PaneL  Nlm_Autonomous3DPanel PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth, Nlm_Int2 pixheight, Nlm_PnlActnProc draw, Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl, Nlm_Int2 extra, Nlm_PnlActnProc reset, Nlm_GphPrcsPtr classPtr, Nlm_Boolean *IndexMode));
+#endif /* _OPENGL */
+
+
 
 void       Nlm_SetPanelClick PROTO((Nlm_PaneL p, Nlm_PnlClckProc click, Nlm_PnlClckProc drag, Nlm_PnlClckProc hold, Nlm_PnlClckProc release));
 
@@ -1120,6 +1138,14 @@ Nlm_VoidPtr Nlm_GetObject PROTO((Nlm_GraphiC a));
 extern void Nlm_SendOpenDocAppleEvent PROTO((Nlm_CharPtr datafile, Nlm_CharPtr sig));
 extern void Nlm_SendOpenDocAppleEventEx PROTO((Nlm_CharPtr datafile, Nlm_CharPtr sig, Nlm_CharPtr prog, Nlm_Boolean wantReply));
 extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_CharPtr prog);
+#endif
+
+#ifdef WIN_MSWIN
+/* Call application registered to open the given type of document.
+ * The doc type is recognized automagically using the file extention;
+ * if the doc is URL then its name must explicitely start from "http://".
+ */
+extern Nlm_Boolean Nlm_MSWin_OpenDocument(const Nlm_Char* doc_name);
 #endif
 
 #ifdef WIN_MOTIF

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.15 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -40,6 +40,38 @@
 *
 *
 * $Log: sequtil.h,v $
+* Revision 6.15  1999/04/08 14:12:03  sicotte
+* Add SeqIdOrderInBioseqIdList (consider synomymous SeqIds)
+*
+* Revision 6.14  1999/04/02 17:32:00  vakatov
+* Added NLM_EXTERN for FindNuc() and FindProt() proto
+*
+* Revision 6.13  1999/04/01 22:23:23  sicotte
+* Fixed doubly occuring prototype.
+*
+* Revision 6.12  1999/04/01 17:41:21  sicotte
+* Added SeqIdInSeqLocList : Check if the Bioseq of SeqId sip is in list: may try to fetch the Bioseq
+*
+* Revision 6.11  1999/04/01 13:54:48  sicotte
+* Added SeqIdOrderInList(To find the position of a SeqId in a Chain)
+*       ExtractAccession ( To parse an accession into it's version and acc.)
+*       SeqIdFromAccession (To make the proper type of SeqId given an
+*                           accession string. (uses WHICH_db_accession)
+*       moved IS_ntdb_accession, IS_protdb_accession, WHICH_db_accession
+*          from accutils.ch to sequtil.ch
+*
+* Revision 6.10  1999/03/31 16:53:40  madden
+* Added FindNuc and FindProt functions for SeqEntryExplore
+*
+* Revision 6.9  1999/03/04 19:38:42  kans
+* now showing versions in accession numbers
+*
+* Revision 6.8  1999/02/02 21:38:12  kans
+* moved SHOWVERSION to header, SeqMgrAddIndexElement with and without version (JO)
+*
+* Revision 6.7  1999/01/27 22:04:46  kans
+* PRINTID_REPORT once again the end of the list
+*
 * Revision 6.6  1999/01/12 18:00:19  kans
 * SeqIdComp now ignores version if < 1, and added PRINTID_TEXTID_ACC_VER and PRINTID_TEXTID_ACC_ONLY formats for SeqIdWrite
 *
@@ -169,6 +201,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+  /*************************************************************
+   *    this define decides if SeqIdWrite shows versions,
+   *    if seqmgr seqid indexing functions use it
+   *    and if e2index uses it
+   *    files depending on SHOWVERSION are:
+   *    sequtil.c, segmgr.c, e2iloc.c
+   *    SHOWVERSION should be removed entirely when we are through
+   *    the transition
+   ************************************************************/
+
+#define SHOWVERSION 1    /* do show versions */
 
 /*****************************************************************************
 *
@@ -503,9 +547,9 @@ NLM_EXTERN Boolean SeqEntryConvert PROTO((SeqEntryPtr sep, Uint1 newcode));
 #define PRINTID_FASTA_LONG ( (Uint1)2)
 #define PRINTID_TEXTID_LOCUS ( (Uint1)3)
 #define PRINTID_TEXTID_ACCESSION ( (Uint1)4)
-#define PRINTID_REPORT ( (Uint1)5)
-#define PRINTID_TEXTID_ACC_VER ( (Uint1)6)
-#define PRINTID_TEXTID_ACC_ONLY ( (Uint1)7)
+#define PRINTID_TEXTID_ACC_VER ( (Uint1)5)
+#define PRINTID_TEXTID_ACC_ONLY ( (Uint1)6)
+#define PRINTID_REPORT ( (Uint1)7)
 
 
 /*****************************************************************************
@@ -871,6 +915,153 @@ NLM_EXTERN Boolean LIBCALL GetScoreAndEvalue PROTO((
 
 NLM_EXTERN void LIBCALL AdjustOffSetsInSeqAlign PROTO((SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp2));
 
+
+/* Used with SeqEntryExplore to find Bioseq's in a SeqEntry. */
+NLM_EXTERN void FindNuc PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
+NLM_EXTERN void FindProt PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
+
+/*****************************************************************************
+*
+*   Boolean SeqIdOrderInList(a, b)
+*     Looks for single SeqId, "a" in chain of SeqIds, "b"
+*     returns the position (>0) if found.. else returns 0;
+*
+*****************************************************************************/
+
+NLM_EXTERN Uint4 LIBCALL SeqIdOrderInList (SeqIdPtr a, SeqIdPtr list);
+
+/*****************************************************************************
+*
+*   Boolean SeqIdOrderInBioseqIdList(a, b)
+*     Looks for single SeqId, "a" in chain of SeqIds, "b"
+*              and looks at all synonymous SeqIds of the Bioseq "b"
+*     returns the position (>0) if found.. else returns 0;
+*
+*****************************************************************************/
+NLM_EXTERN Uint4 LIBCALL SeqIdOrderInBioseqIdList (SeqIdPtr a, SeqIdPtr list);
+
+/* Function to extract the Accession and version number 
+   User must provide string buffers for answer.
+   */
+NLM_EXTERN void LIBCALL ExtractAccession(CharPtr accn,CharPtr accession,CharPtr version);
+
+/*
+  Function to make a proper type SeqId given a string that represents
+  an accession Number 
+  User must Call ExtractAccession function separately before calling this.
+  to split accession and version number.
+*/
+NLM_EXTERN SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version,CharPtr name);
+
+
+    /*
+      Following functions and defines moved from accutils.ch
+      */
+NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s);
+NLM_EXTERN Boolean LIBCALL IS_ntdb_accession (CharPtr s);
+NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
+
+
+/*
+  #defines and macros for WHICH_ntdb_accession and
+                          WHICH_protdb_accession
+
+ The "divisions" implied by the following #defines are not all inclusives.
+   a GSS or EST sequence submitted through DIRSUB, will have the 
+   ACCN_NCBI_DIRSUB code.
+   a sequence can full well be in GSS,EST,etc.. division
+   but not have the appropriate accession number if they were submitted
+   through DIRSUB.
+
+*/
+#define ACCN_UNKNOWN 0
+
+#define ACCN_AMBIGOUS_DB 2 /* Primary can be from any Nucleotide database */
+#define ACCN_SWISSPROT 3
+#define ACCN_NCBI_PROT 4
+#define ACCN_EMBL_PROT 5
+#define ACCN_DDBJ_PROT 6
+
+#define ACCN_GSDB_DIRSUB 7
+
+#define ACCN_NCBI_GSDB  8 /* NCBI-assigned Accn to GSDB records */
+
+#define ACCN_NCBI_EST 9
+#define ACCN_NCBI_DIRSUB 10
+#define ACCN_NCBI_GENOME 11
+#define ACCN_NCBI_PATENT 12 /* Not used .. because all are Ambigous_mol */
+#define ACCN_NCBI_HTGS 13
+#define ACCN_NCBI_GSS 14
+#define ACCN_NCBI_STS 15
+#define ACCN_NCBI_BACKBONE 16 /* "S" record, typed from publications */
+#define ACCN_NCBI_SEGSET 17
+#define ACCN_NCBI_OTHER 18
+
+#define ACCN_EMBL_EST 19
+#define ACCN_EMBL_DIRSUB 20
+#define ACCN_EMBL_GENOME 21
+#define ACCN_EMBL_PATENT 22
+#define ACCN_EMBL_HTGS 23 /* Not defined yet */
+#define ACCN_EMBL_CON 24
+#define ACCN_EMBL_OTHER 25 /* Not defined*/
+
+#define ACCN_DDBJ_EST 26
+#define ACCN_DDBJ_DIRSUB 27
+#define ACCN_DDBJ_GENOME 28
+#define ACCN_DDBJ_PATENT 29
+#define ACCN_DDBJ_HTGS 30
+#define ACCN_DDBJ_CON 31 /* Not defined*/
+#define ACCN_DDBJ_OTHER 32 /* Not defined*/
+
+#define ACCN_REFSEQ_PROT 33
+#define ACCN_REFSEQ_mRNA 34
+#define ACCN_REFSEQ_CONTIG 35
+#define ACCN_REFSEQ_CHROMOSOME 36
+
+
+/* Some accessions prefix can be either protein or nucleotide 
+   such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
+*/
+#define ACCN_AMBIGOUS_MOL 65536 /* Ambigous Molecule */
+
+/* Macro to interpret above #defines */
+/* Accession definitively points to a protein record */
+#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT))
+
+/* Accession definitively points to a nucleotide record */
+#define ACCN_IS_NUC(c) ((((c)&ACCN_AMBIGOUS_MOL)==0) && ((c)!=ACCN_UNKNOWN) && (!ACCN_IS_PROT(c)))
+#define ACCN_IS_AMBIGOUS_MOL(c) (((c)&ACCN_AMBIGOUS_MOL) == ACCN_AMBIGOUS_MOL)
+
+/* 
+   Define to detect Genbank's accessions: Genbank-subsumed GSDB accession numbers
+   are defined to be Genbank's as well as GSDB DIRSUB records.
+*/
+#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT))
+
+/* NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
+   REFSEQ project
+*/
+#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) )
+
+#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)))
+
+/* Macro to detect EMBL accession numbers */
+#define ACCN_IS_EMBL(c) ( (((c)&65535) ==  ACCN_EMBL_EST) ||  (((c)&65535) == ACCN_EMBL_DIRSUB) ||  (((c)&65535) == ACCN_EMBL_GENOME) ||  (((c)&65535) == ACCN_EMBL_PATENT) ||  (((c)&65535) == ACCN_EMBL_HTGS) ||  (((c)&65535) == ACCN_EMBL_CON) ||  (((c)&65535) == ACCN_EMBL_OTHER)  || (((c)&65535) == ACCN_EMBL_PROT))
+
+#define ACCN_IS_DDBJ(c) ((((c)&65535) ==  ACCN_DDBJ_EST) ||  (((c)&65535) == ACCN_DDBJ_DIRSUB) ||  (((c)&65535) == ACCN_DDBJ_GENOME) ||  (((c)&65535) == ACCN_DDBJ_PATENT) ||  (((c)&65535) == ACCN_DDBJ_HTGS) ||  (((c)&65535) == ACCN_DDBJ_CON) ||  (((c)&65535) == ACCN_DDBJ_OTHER) || (((c)&65535) == ACCN_DDBJ_PROT))
+
+#define ACCN_IS_SWISSPROT(c) ((c)== ACCN_SWISSPROT)
+/* A few accessions numbers (N0*-N1*) have been assigned to many databases 
+*/
+#define ACCN_IS_AMBIGOUSDB(c) (((c)&65535)==ACCN_AMBIGOUS_DB)
+#define ACCN_IS_UNKNOWN(c) (((c)&65535)==ACCN_UNKNOWN)
+
+/*
+  Try to Find if the Bioseq represented by a SeqId is a SeqLoc List;
+  May fetch the Bioseq to get all the synonymous SeqIds.
+ */
+
+NLM_EXTERN Boolean LIBCALL SeqIdInSeqLocList(SeqIdPtr sip, ValNodePtr list);
 
 
 #ifdef __cplusplus

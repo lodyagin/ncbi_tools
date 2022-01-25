@@ -40,7 +40,7 @@ Contents: header file for PHI-BLAST and pseed3.
 
 #define ALPHABET_SIZE 25
 #define DNA_ALPHABET_SIZE 4
-#define MAX_HIT 1000
+#define MAX_HIT 2000
 #define PATTERN_SPACE_SIZE 1000
 #define BUF_SIZE 100
 #define PATTERN_BUF_SIZE 2000
@@ -51,7 +51,7 @@ Contents: header file for PHI-BLAST and pseed3.
 #define allone  ((1 << ALPHABET_SIZE) - 1)
 #define SORT_THRESHOLD 20 /*switch from quicksort to bubble sort*/
 #define SEED_INFINITY 1000000 /*large score for array sentinel*/
-#define MININT -9999999  /*used as negative score in alignment routines*/
+
 #define MAX_EVALUE 1000 /*maximum e-value allowed as threshold*/
 
 
@@ -79,6 +79,7 @@ Contents: header file for PHI-BLAST and pseed3.
 
 #define PAT_PROB_THRESH  0.002  /*upper threshold for pattern probabilities*/
 #define EXPECT_MATCH_THRESH 20000 /*upper threshold for number of occurrences*/
+#define WILDCARD_THRESH  30 /*threshold for product of variable-length wildcards*/
 
 /*band amounts for banded alignment*/
 #define BAND_LOW (-5)
@@ -87,7 +88,7 @@ Contents: header file for PHI-BLAST and pseed3.
 /*Limit on length of DNA sequence*/
 #define MAXDNA 200000
 
-/*   The follwoing integer codes used for trace back in align.
+/*   The following integer codes used for trace back in align.
      Each node must implcitly store three pointers to decide where a CC DD, or
      e value comes from. For example the  CC value can come from a sub del or
      ins edge. A DD can come from extension of a gap or an initiation of
@@ -190,7 +191,8 @@ typedef struct patternSearchItems {
    Int4   inputPatternMasked[MaxP];
    Int4   highestPlace; /*number of places in pattern representation
                           as computed in input_pattern; was called num*/
-   Int4   minPatternMatchLength;
+  Int4   minPatternMatchLength; /*minimum length of string to match this pattern*/
+  Int4   wildcardProduct; /*product of wildcard lengths*/
 } patternSearchItems;
 
 typedef struct alignSearchItems {

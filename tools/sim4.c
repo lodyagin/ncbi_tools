@@ -2622,7 +2622,7 @@ static void DISPLAY(Int1 A[], Int1 B[], Int4 M, Int4 N, Int4 S[], Int4 AP, Int4 
         }
       if (a >= ALINE+50 || i >= M && j >= N)
         { *a = *b = *c = '\0';
-          fprintf(stdout, "\n%6d ",50*lines++);
+          fprintf(stdout, "\n%6ld ",(long int)50*lines++);
           for (b = ALINE+10; b <= a; b += 10)
             fprintf(stdout, "    .    :");
           if (b <= a+5)

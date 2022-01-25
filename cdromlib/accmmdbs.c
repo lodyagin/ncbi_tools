@@ -38,6 +38,9 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: accmmdbs.c,v $
+ * Revision 6.1  1999/03/03 21:27:34  kans
+ * added stub for ClearStructures
+ *
  * Revision 6.0  1997/08/25 18:12:33  madden
  * Revision changed to 6.0
  *
@@ -133,6 +136,9 @@ NLM_EXTERN void LIBCALL FreeAModelstruc(PDNMS pdnmsThis)
 
 NLM_EXTERN PDNMS LIBCALL MakeAModelstruc(BiostrucPtr pbsThis)
 { return NULL; }
+
+NLM_EXTERN void LIBCALL ClearStructures(void)
+{ }
 
 NLM_EXTERN BiostrucPtr LIBCALL BiostrucAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 { return NULL; }

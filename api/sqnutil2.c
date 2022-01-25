@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.6 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -54,6 +54,7 @@
 #include <edutil.h>
 #include <tofasta.h>
 #include <simple.h>
+#include <validerr.h>
 
 static CharPtr SqnTrimSpacesAroundString (CharPtr str)
 
@@ -549,7 +550,7 @@ static SeqLocRangePtr MergeOverlaps (SeqLocRangePtr list, Boolean fuse_joints)
         last->right = MAX (this->right, last->right);
         MemFree (this);
         last->next = next;
-      } else if (fuse_joints && this->left == last->right) {
+      } else if (fuse_joints && /* this->left == last->right */ this->left <= last->right + 1 ) {
         last->right = MAX (this->right, last->right);
         MemFree (this);
         last->next = next;
@@ -2389,6 +2390,8 @@ static void StripHyphens (CharPtr str)
   }
 }
 
+extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val);
+
 static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
 
 {
@@ -2400,14 +2403,17 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
   Boolean         isGeneSyn = FALSE;
   Int2            j;
   GBQualPtr       last;
+  PubdescPtr      pdp;
   ProtRefPtr      prp = NULL;
   Int2            qnum;
   RnaRefPtr       rrp;
   tRNAPtr         trna;
+  long            uid;
   ValNodePtr      vnp;
   SeqFeatXrefPtr  xref;
 
-  if (sfp == NULL || HasNoText (qual) || (HasNoText (val) && StringCmp (qual, "pseudo") != 0)) return;
+  if (sfp == NULL || HasNoText (qual) ||
+      (HasNoText (val) && StringCmp (qual, "pseudo") != 0 && StringCmp (qual, "gene") != 0)) return;
   qnum = GBQualNameValid (qual);
   if (qnum <= -1) {
     if (StringNCmp (qual, "gene_syn", 8) == 0) {
@@ -2416,10 +2422,10 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
     }
   }
   if (qnum <= -1) {
-    if (StringCmp (qual, "region_name") == 0 && sfp->data.choice == SEQFEAT_REGION) {
+    if (sfp->data.choice == SEQFEAT_REGION && StringCmp (qual, "region_name") == 0) {
       sfp->data.value.ptrvalue = MemFree (sfp->data.value.ptrvalue);
       sfp->data.value.ptrvalue = StringSave (val);
-    } else if (StringCmp (qual, "bond_type") == 0 && sfp->data.choice == SEQFEAT_BOND) {
+    } else if (sfp->data.choice == SEQFEAT_BOND && StringCmp (qual, "bond_type") == 0) {
       StripHyphens (val);
       sfp->data.value.intvalue = 255;
       for (j = 0; bondList [j] != NULL; j++) {
@@ -2427,7 +2433,7 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
           sfp->data.value.intvalue = j;
         }
       }
-    } else if (StringCmp (qual, "site_type") == 0 && sfp->data.choice == SEQFEAT_SITE) {
+    } else if (sfp->data.choice == SEQFEAT_SITE && StringCmp (qual, "site_type") == 0) {
       StripHyphens (val);
       sfp->data.value.intvalue = 255;
       for (j = 0; siteList [j] != NULL; j++) {
@@ -2435,6 +2441,22 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
           sfp->data.value.intvalue = j;
         }
       }
+    } else if (sfp->data.choice == SEQFEAT_PUB && (StringICmp (qual, "pmid") == 0 || StringICmp (qual, "PubMed") == 0)) {
+      if (sscanf (val, "%ld", &uid) == 1) {
+        pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+        if (pdp != NULL) {
+          ValNodeAddInt (&(pdp->pub), PUB_PMid, (Int4) uid);
+        }
+      }
+    } else if (sfp->data.choice == SEQFEAT_PUB && (StringICmp (qual, "muid") == 0 || StringICmp (qual, "MEDLINE") == 0)) {
+      if (sscanf (val, "%ld", &uid) == 1) {
+        pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+        if (pdp != NULL) {
+          ValNodeAddInt (&(pdp->pub), PUB_Muid, (Int4) uid);
+        }
+      }
+    } else {
+      ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_UnknownImpFeatQual, "Unknown qualifier %s", qual);
     }
     return;
   }
@@ -2487,6 +2509,11 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
       if (grp != NULL) {
         grp->pseudo = TRUE;
       }
+    } else if (qnum == GBQUAL_allele) {
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp != NULL) {
+        grp->allele = StringSave (val);
+      }
     }
     return;
   } else if (sfp->data.choice == SEQFEAT_CDREGION) {
@@ -2517,6 +2544,8 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
         ValNodeCopyStr (&(prp->name), 0, val);
       }
       return;
+    } else if (qnum == GBQUAL_transl_except) {
+      if (ParseCodeBreak (sfp, val)) return;
     }
   } else if (sfp->data.choice == SEQFEAT_RNA) {
     if (qnum == GBQUAL_product) {
@@ -2621,8 +2650,11 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   AnnotDescrPtr  desc;
   CharPtr        feat;
   GeneRefPtr     grp;
+  Int2           idx;
   ImpFeatPtr     ifp;
+  Int2           j;
   Char           line [1023];
+  PubdescPtr     pdp;
   Int4           pos;
   SeqFeatPtr     prev;
   CharPtr        qual;
@@ -2719,6 +2751,10 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
                   rnatype = 3;
                 } else if (StringCmp (feat, "rRNA") == 0) {
                   rnatype = 4;
+                } else if (StringCmp (feat, "snRNA") == 0) {
+                  rnatype = 5;
+                } else if (StringCmp (feat, "scRNA") == 0) {
+                  rnatype = 6;
                 } else if (StringCmp (feat, "misc_RNA") == 0) {
                   rnatype = 255;
                 }
@@ -2740,6 +2776,14 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
               sfp->data.choice = SEQFEAT_SITE;
               sfp->data.value.intvalue = 255;
 
+            } else if (StringICmp (feat, "REFERENCE") == 0) {
+
+              sfp->data.choice = SEQFEAT_PUB;
+              pdp = PubdescNew ();
+              if (pdp != NULL) {
+                sfp->data.value.ptrvalue = (Pointer) pdp;
+              }
+
             } else {
               sfp->data.choice = SEQFEAT_IMP;
               ifp = ImpFeatNew ();
@@ -2747,19 +2791,29 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
                 ifp->key = StringSave (feat);
                 sfp->data.value.ptrvalue = (Pointer) ifp;
               }
+
+              idx = -1;
+              for (j = 0; j < ParFlat_TOTAL_GBFEAT; j++) {
+                if (StringCmp (ParFlat_GBFeat [j].key, feat) == 0) {
+                  idx = j;
+                }
+              }
+              if (idx == -1) {
+                ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_UnknownImpFeatKey, "Unknown feature %s", feat);
+              }
             }
 
             sfp->location = AddIntervalToLocation (NULL, sip, start, stop);
           }
 
-        } else if (start >= 0 && stop >= 0 && feat == NULL && qual == NULL && val == NULL) {
+        } else if (start >= 0 && stop >= 0 && feat == NULL && qual == NULL && val == NULL && sfp != NULL) {
 
           sfp->location = AddIntervalToLocation (sfp->location, sip, start, stop);
 
-        } else if (qual != NULL && (val != NULL || StringCmp (qual, "pseudo") == 0)) {
+        } else if (sfp != NULL && qual != NULL &&
+                   (val != NULL || StringCmp (qual, "pseudo") == 0 || StringCmp (qual, "gene") == 0)) {
 
           AddQualifierToFeature (sfp, qual, val);
-
         }
       }
 
@@ -3096,8 +3150,10 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   Int4           begin;
   ByteStorePtr   bs = NULL;
   BioseqPtr      bsp = NULL;
+  BioseqSetPtr   bssp;
   Char           ch;
   Uint1          choice = 0;
+  Uint2          datatype;
   Int2           db = -1;
   Boolean        inLetters;
   Boolean        isProt = FALSE;
@@ -3105,22 +3161,28 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   Char           line [1023];
   Boolean        mayBeAccessionList = TRUE;
   Boolean        mayBePlainFasta = TRUE;
+  SeqFeatPtr     nextsfp;
   Int2           numDigits;
   Int2           numLetters;
   Int4           numLinks;
   ObjectIdPtr    oip;
+  ObjMgrDataPtr  omdp;
   ObjMgrPtr      omp;
   ObjMgrTypePtr  omtp = NULL;
+  PubdescPtr     pdp;
   Int4           pos;
   ValNodePtr     pip;
+  Pointer PNTR   prevsfp;
   ProjectPtr     proj = NULL;
   BoolPtr        protPtr;
   Pointer        ptr = NULL;
   SeqAnnotPtr    sap = NULL;
   SeqEntryPtr    sep;
+  SeqFeatPtr     sfp;
   Char           seqid [128];
   SimpleSeqPtr   ssp = NULL;
   CharPtr        str;
+  CharPtr        tag;
   CharPtr        title = NULL;
   CharPtr        tmp;
   UserFieldPtr   ufp;
@@ -3155,7 +3217,19 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 
         mayBePlainFasta = FALSE;
         mayBeAccessionList = FALSE;
-        tmp = line;
+
+        /* first skip past empty space at start of line */
+
+        tag = line;
+        ch = *tag;
+        while (ch != '\0' && IS_WHITESP (ch)) {
+          tag++;
+          ch = *tag;
+        }
+
+        /* now find ASN tag */
+
+        tmp = tag;
         ch = *tmp;
         while (ch != '\0' && (! IS_WHITESP (ch))) {
           tmp++;
@@ -3164,12 +3238,13 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
         *tmp = '\0';
 
         omp = ObjMgrReadLock ();
-        omtp = ObjMgrTypeFind (omp, 0, line, NULL);
+        omtp = ObjMgrTypeFind (omp, 0, tag, NULL);
         ObjMgrUnlock ();
 
         if (omtp != NULL) {
           fseek (fp, pos, SEEK_SET);
           aip = AsnIoNew (ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
+          aip->scan_for_start = TRUE;
           ptr = (*(omtp->asnread)) (aip, NULL);
           pos = AsnIoTell (aip);
           AsnIoFree (aip, FALSE);
@@ -3178,11 +3253,36 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
           if (ptr == NULL) {
             ErrPostEx (SEV_ERROR, 0, 0, "Couldn't read type [%s]", omtp->asnname);
           } else {
+            datatype = omtp->datatype;
             if (datatypeptr != NULL) {
-              *datatypeptr = omtp->datatype;
+              *datatypeptr = datatype;
             }
             if (entityIDptr != NULL) {
-              *entityIDptr = ObjMgrRegister (omtp->datatype, ptr);
+              *entityIDptr = ObjMgrRegister (datatype, ptr);
+            }
+            if (datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
+              omp = ObjMgrReadLock ();
+              omdp = ObjMgrFindByData (omp, ptr);
+              ObjMgrUnlock ();
+              if (omdp != NULL && omdp->choice == NULL) {
+                /* always want sep above bsp or bssp */
+                sep = SeqEntryNew ();
+                if (sep != NULL) {
+                  if (datatype == OBJ_BIOSEQ) {
+                    bsp = (BioseqPtr) ptr;
+                    sep->choice = 1;
+                    sep->data.ptrvalue = bsp;
+                    SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+                  } else if (datatype == OBJ_BIOSEQSET) {
+                    bssp = (BioseqSetPtr) ptr;
+                    sep->choice = 2;
+                    sep->data.ptrvalue = bssp;
+                    SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
+                  } else {
+                    sep = SeqEntryFree (sep);
+                  }
+                }
+              }
             }
           }
         } else {
@@ -3280,6 +3380,29 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
           annotname = GetSeqId (seqid, line, sizeof (seqid), TRUE);
           if (! HasNoText (seqid)) {
             sap = ReadFeatureTable (fp, seqid, annotname);
+            if (sap != NULL && sap->type == 1) {
+              sfp = (SeqFeatPtr) sap->data;
+              prevsfp = (Pointer PNTR) &(sap->data);
+              while (sfp != NULL) {
+                nextsfp = sfp->next;
+                if (sfp->data.choice == SEQFEAT_PUB) {
+                  pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+                  if (pdp != NULL && pdp->pub == NULL) {
+                    *(prevsfp) = sfp->next;
+                    sfp->next = NULL;
+                    SeqFeatFree (sfp);
+                  } else {
+                    prevsfp = (Pointer PNTR) &(sfp->next);
+                  }
+                } else {
+                  prevsfp = (Pointer PNTR) &(sfp->next);
+                }
+                sfp = nextsfp;
+              }
+              if (sap->data == NULL) {
+                sap = SeqAnnotFree (sap);
+              }
+            }
             if (sap != NULL) {
               if (datatypeptr != NULL) {
                 *datatypeptr = OBJ_SEQANNOT;

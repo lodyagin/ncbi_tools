@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   25 JULY 95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *   	Doubly-linked list functions like ValNode ones.
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: dvncode.c,v $
+* Revision 6.1  1999/04/26 20:49:59  lewisg
+* changed arguments named list to fix visual c++ bug
+*
 * Revision 6.0  1997/08/25 18:10:35  madden
 * Revision changed to 6.0
 *
@@ -605,19 +608,19 @@ Nlm_Boolean LIBCALL DValNodeInsert (DValNodePtr where,  DValNodePtr what)
  * the list
  */
  
-DValNodePtr LIBCALL DValNodeHeadLink (DValNodePtr list,  DValNodePtr dvp)
+DValNodePtr LIBCALL DValNodeHeadLink (DValNodePtr pdnList,  DValNodePtr dvp)
 {
     if (dvp)
     {
 	if ((!dvp->next) && (!dvp->last))
 	{   /* really is a free node? */
-	    dvp->next = list;
-	    if (list)
-	      list->last = dvp;
+	    dvp->next = pdnList;
+	    if (pdnList)
+	      pdnList->last = dvp;
 	    return dvp;  
 	}
     }
-    return list;
+    return pdnList;
 }
 
 /*
@@ -627,32 +630,32 @@ DValNodePtr LIBCALL DValNodeHeadLink (DValNodePtr list,  DValNodePtr dvp)
  * call list = DValNodeUnlink(list, node to unlink)  
  * then you can free the data, and free the DValnode manually   */
 
-DValNodePtr LIBCALL DValNodeUnlink (DValNodePtr list, DValNodePtr dvp)
+DValNodePtr LIBCALL DValNodeUnlink (DValNodePtr pdnList, DValNodePtr dvp)
 {
-    if (!list) return NULL;
+    if (!pdnList) return NULL;
     if (dvp)
     {
 	if((!dvp->next) && (!dvp->last))
 	{
     	    /* not linked */
 	    /* if the list by definition will have no elements */
-	    if (dvp == list)
+	    if (dvp == pdnList)
 	       return NULL;
 	    else /* some other list! */
-	       return list;   
+	       return pdnList;   
 	}
 	if (!dvp->last)
 	{   /* first case; assumes dvp=list */
-	    list = list->next;
-	    if (list) list->last = NULL;
+	    pdnList = pdnList->next;
+	    if (pdnList) pdnList->last = NULL;
 	    dvp->next = NULL;
-	    return list;
+	    return pdnList;
 	}
 	if (!dvp->next)
 	{   /* last case */
 	    dvp->last->next = NULL;
 	    dvp->last = NULL;
-	    return list;
+	    return pdnList;
 	}
 	else
 	{   /* middle case */
@@ -660,10 +663,10 @@ DValNodePtr LIBCALL DValNodeUnlink (DValNodePtr list, DValNodePtr dvp)
 	    dvp->last->next = dvp->next;
 	    dvp->next = NULL;
 	    dvp->last = NULL;
-	    return list;
+	    return pdnList;
 	}
     }
-    return list;
+    return pdnList;
 }
 
 /*
@@ -675,11 +678,11 @@ DValNodePtr LIBCALL DValNodeUnlink (DValNodePtr list, DValNodePtr dvp)
  */
 
 
-DValNodePtr LIBCALL DValNodeListDelNode (DValNodePtr list,  DValNodePtr dvp,  pFreeFunc freefn)
+DValNodePtr LIBCALL DValNodeListDelNode (DValNodePtr pdnList,  DValNodePtr dvp,  pFreeFunc freefn)
 {
-    list = DValNodeUnlink(list,  dvp);
+    pdnList = DValNodeUnlink(pdnList,  dvp);
     dvp = DValNodeFreeData(dvp,  freefn);
-  return list;
+  return pdnList;
 }
 
 /*

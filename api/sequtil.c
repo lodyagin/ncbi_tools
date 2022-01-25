@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.34 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,56 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.34  1999/04/22 14:52:34  tatiana
+* changes in MuskSeqIdWrite to print human chromosome Ids
+*
+* Revision 6.33  1999/04/20 14:34:53  sicotte
+* Add AV accession prefix for DDBJ EST in WHICH_db_accession
+*
+* Revision 6.32  1999/04/08 14:11:16  sicotte
+* Add SeqIdOrderInBioseqIdList (consider synomymous SeqIds)
+*
+* Revision 6.31  1999/04/02 17:31:59  vakatov
+* Added NLM_EXTERN for FindNuc() and FindProt() proto
+*
+* Revision 6.30  1999/04/01 17:41:20  sicotte
+* Added SeqIdInSeqLocList : Check if the Bioseq of SeqId sip is in list: may try to fetch the Bioseq
+*
+* Revision 6.29  1999/04/01 13:54:47  sicotte
+* Added SeqIdOrderInList(To find the position of a SeqId in a Chain)
+*       ExtractAccession ( To parse an accession into it's version and acc.)
+*       SeqIdFromAccession (To make the proper type of SeqId given an
+*                           accession string. (uses WHICH_db_accession)
+*       moved IS_ntdb_accession, IS_protdb_accession, WHICH_db_accession
+*          from accutils.ch to sequtil.ch
+*
+* Revision 6.28  1999/03/31 16:53:40  madden
+* Added FindNuc and FindProt functions for SeqEntryExplore
+*
+* Revision 6.27  1999/03/11 23:32:06  kans
+* sprintf casts
+*
+* Revision 6.26  1999/03/04 17:10:14  kans
+* check for tsip->release == NULL for showversion (JO)
+*
+* Revision 6.25  1999/02/22 15:34:22  kans
+* print version if > 0 (had erroneously been > 1)
+*
+* Revision 6.24  1999/02/09 20:15:00  kans
+* initialized version, release, in stack textseqid (JO)
+*
+* Revision 6.23  1999/02/02 21:38:12  kans
+* moved SHOWVERSION to header, SeqMgrAddIndexElement with and without version (JO)
+*
+* Revision 6.22  1999/02/01 18:41:02  ostell
+* added SHOWVER define to stop printing versions until ready
+*
+* Revision 6.21  1999/02/01 16:24:45  ostell
+* check for accession.version >0 not just non-zero
+*
+* Revision 6.20  1999/02/01 16:17:12  ostell
+* added version support for SeqIdWrite and SeqIdParse
+*
 * Revision 6.19  1999/01/12 18:00:18  kans
 * SeqIdComp now ignores version if < 1, and added PRINTID_TEXTID_ACC_VER and PRINTID_TEXTID_ACC_ONLY formats for SeqIdWrite
 *
@@ -331,6 +381,7 @@ static char *this_file = __FILE__;
 #include <seqport.h>
 #include <sqnutils.h> /* prototype for SeqIdFindWorst */
 
+
 /****  Static variables used for randomized sequence conversions ****/
 
 /* This array contains final residues for ncbi2na encoding. 
@@ -376,6 +427,38 @@ static Boolean InitNaI2Table(void);
 #define LEN_STEP_MASK 0x1000000
 
 static NumberingPtr stdnum = NULL;  /* std Numbering object (start at 1) */
+
+/* find the last nucleotide bioseq in the bioseqset */
+/* Used by SeqEntryExplore. */
+NLM_EXTERN void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+{
+    BioseqPtr PNTR bp;
+    BioseqPtr local_bsp;
+
+    bp = (BioseqPtr PNTR) data;
+    if (IS_Bioseq(sep))
+    {
+        local_bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (ISA_na(local_bsp->mol))
+          *bp = local_bsp;
+    }
+}
+
+/* find the last protein bioseq in the bioseqset */
+/* Used by SeqEntryExplore. */
+NLM_EXTERN void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+{
+    BioseqPtr PNTR bp;
+    BioseqPtr local_bsp;
+
+    bp = (BioseqPtr PNTR) data;
+    if (IS_Bioseq(sep))
+    {
+        local_bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (ISA_aa(local_bsp->mol))
+          *bp = local_bsp;
+    }
+}
 
 /*****************************************************************************
 *
@@ -2609,6 +2692,7 @@ NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
 	char *ldelim;
 	char d [2];
     CharPtr tmp;
+        char versionbuf[10];
 	static Uint1 fasta_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
  	33, /* 0 = not set */
 	20, /* 1 = local Object-id */
@@ -2632,6 +2716,7 @@ NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
 	ObjectIdPtr oip;
 	PatentSeqIdPtr patsip;
 	Boolean got_gi = FALSE;
+        Int2 version = 0;
 
 	buf[0] = '\0';
 	tmp = buf;
@@ -2741,15 +2826,21 @@ NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
             break;
         case SEQID_GENBANK:
         case SEQID_EMBL:
+        case SEQID_DDBJ:
+        case SEQID_OTHER:
+            tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+	    if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
+                version = tsip->version;  /* write the version */
+	    sprintf(versionbuf, ".%d", (int)version);
         case SEQID_PIR:
         case SEQID_SWISSPROT:
-        case SEQID_DDBJ:
-		case SEQID_PRF:
-        case SEQID_OTHER:
+	case SEQID_PRF:
             tsip = (TextSeqIdPtr)sip->data.ptrvalue;
             if (tsip->accession != NULL)
 			{
-               tmp = StringMove(tmp, tsip->accession);
+                           tmp = StringMove(tmp, tsip->accession);
+                           if (version)
+                              tmp = StringMove(tmp, versionbuf);
 			   if (format == PRINTID_REPORT)
 			 	break;
 			}
@@ -2773,7 +2864,7 @@ NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
 			tmp = StringMove(tmp, ldelim);
 			if (oip->str == NULL)
 			{
-				sprintf(localbuf, "%ld", oip->id);
+				sprintf(localbuf, "%ld", (long) oip->id);
 				tmp = StringMove(tmp, localbuf);
 			}
 			else
@@ -2842,6 +2933,8 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 	PatentSeqIdPtr patsip;
 	Boolean got_gi = FALSE;
 	Char chainbuf[2];
+	Char versionbuf[10];
+	Int2 version = 0;
 
 	buf[0] = '\0';
 	buflen--;
@@ -2924,7 +3017,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 					return tmp;
                 } else if ((format == PRINTID_TEXTID_ACC_VER) 
 					&& (tsip->accession != NULL)) {
-					if (tsip->version > 1) {
+					if (tsip->version > 0) {
 						sprintf(localbuf, "%s.%d", tsip->accession,
 							(int)(tsip->version));
 					} else {
@@ -2970,15 +3063,21 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
             break;
         case SEQID_GENBANK:
         case SEQID_EMBL:
+	case SEQID_DDBJ:
+	case SEQID_OTHER:
+           tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+	   if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
+		version = tsip->version;  /* show versions */
+	   sprintf(versionbuf, ".%d", (int)version);
         case SEQID_PIR:
         case SEQID_SWISSPROT:
-        case SEQID_DDBJ:
-		case SEQID_PRF:
-        case SEQID_OTHER:
+	case SEQID_PRF:
             tsip = (TextSeqIdPtr)sip->data.ptrvalue;
             if (tsip->accession != NULL)
 			{
-				Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
+			   Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
+                           if (version)
+				Nlm_LabelCopyNext(&tmp, versionbuf,&buflen);
 			   if (format != PRINTID_FASTA_SHORT)
 			 	break;
 			}
@@ -3017,7 +3116,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 
 			if (oip->str == NULL)
 			{
-				sprintf(localbuf, "%ld", oip->id);
+				sprintf(localbuf, "%ld", (long) oip->id);
 				Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
 			}
 			else
@@ -3207,6 +3306,23 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 				sip->data.ptrvalue = tsip;
 				if (*tokens[0] != '\0')
 				{
+                                        tmp = tokens[0]; /* check for version */
+                                        while (*tmp != '\0')
+					{
+						if (*tmp == '.')
+						{
+                                                   if (IS_DIGIT(*(tmp+1)))
+                                                   {
+							*tmp = '\0';
+                                                        sscanf((tmp+1),"%ld",&num);
+                                                        tsip->version =(Int2)num;
+						   }
+						   else
+							tmp++;
+						}
+						else
+						  tmp++;
+					}
 					tsip->accession = StringSave(tokens[0]);
 					*(tsip->accession) = TO_UPPER(*(tsip->accession));
 				}
@@ -3430,6 +3546,7 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
 		case SEQID_SWISSPROT:
 		case SEQID_PRF:
 		case SEQID_OTHER:
+
             at = (TextSeqIdPtr)a->data.ptrvalue;
             bt = (TextSeqIdPtr)b->data.ptrvalue;
             if ((at->accession != NULL) && (bt->accession != NULL))
@@ -3581,7 +3698,8 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, 
 	vn.data.ptrvalue = &tsi;
 	tsi.name = NULL;
 	tsi.accession = NULL;
-
+	tsi.version = INT2_MIN;
+	tsi.release = NULL;
 
 	if ((sip == NULL) && (slp != NULL))
 	{
@@ -6734,7 +6852,7 @@ static Boolean format_tigr_thc (SeqIdPtr sip, CharPtr buf, Int2 buflen)
 				oip = db_tag->tag;
 				if(oip->id != 0)
 				{
-					sprintf(temp, "THC%ld", oip->id);
+					sprintf(temp, "THC%ld", (long) oip->id);
 					StringNCpy(buf, temp, buflen);
 					return TRUE;
 				}
@@ -6748,6 +6866,36 @@ static Boolean format_tigr_thc (SeqIdPtr sip, CharPtr buf, Int2 buflen)
 }
 
 			
+
+static Boolean format_human_map_id (SeqIdPtr sip, CharPtr buf, Int2 buflen)
+{
+	DbtagPtr db_tag;
+	Char temp[101];
+	ObjectIdPtr oip;
+
+	for (; sip; sip = sip->next) {
+		if(sip->choice == SEQID_GENERAL) {
+			break;
+		}
+	}
+	if (sip == NULL) {
+		return FALSE;
+	}
+	db_tag = (DbtagPtr) sip->data.ptrvalue;
+	if (db_tag->db == NULL) {
+		return FALSE;
+	}
+	if (StringCmp(db_tag->db, "MIT") == 0 || StringCmp(db_tag->db, "GENETHON") == 0 || StringCmp(db_tag->db, "CHLC") == 0 || StringCmp(db_tag->db, "GDB") == 0 || StringCmp(db_tag->db, "Stanford") == 0 || StringCmp(db_tag->db, "NCBI") == 0) {
+		oip = db_tag->tag;
+		if (oip->str != 0) {
+			sprintf(temp, "%s", oip->str);
+			StringNCpy(buf, temp, buflen);
+			return TRUE;
+		}
+	}
+	
+	return FALSE;
+}
 
 NLM_EXTERN Boolean MuskSeqIdWrite (SeqIdPtr sip, CharPtr buf, Int2 buflen, Uint1 format, Boolean do_find, Boolean do_entrez_find)
 {
@@ -6785,6 +6933,10 @@ NLM_EXTERN Boolean MuskSeqIdWrite (SeqIdPtr sip, CharPtr buf, Int2 buflen, Uint1
 
 	if(format_tigr_thc (sip, buf, buflen))
 	{	/* give special format to the THC sequence*/
+		return TRUE;
+	}
+	if(format_human_map_id (sip, buf, buflen))
+	{	/* special format for human map ids */
 		return TRUE;
 	}
 	SeqIdWrite(sip, buf,format, buflen);	/*in case this function can not work*/
@@ -7203,4 +7355,509 @@ AdjustOffSetsInSeqAlign(SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp2)
               }
               salp = salp->next;
          }   
+}
+
+
+/*****************************************************************************
+*
+*   Boolean SeqIdOrderInList(a, b)
+*     Looks for single SeqId, "a" in chain of SeqIds, "b"
+*     returns the position (>0) if found.. else returns 0;
+*
+*****************************************************************************/
+
+NLM_EXTERN Uint4 LIBCALL SeqIdOrderInList (SeqIdPtr a, SeqIdPtr list) {
+        SeqIdPtr now;
+        Uint4 order;
+        Uint1 retval;
+
+        if (a == NULL)
+            return 0;
+
+        for (now =list,order=1; now != NULL; now = now -> next,order++)
+        {
+            retval = SeqIdComp(a, now);
+            if(retval==SIC_YES)
+                return order;
+        }
+        return 0;
+}
+
+/*****************************************************************************
+*
+*   Boolean SeqIdOrderInBioseqIdList(a, b)
+*     Looks for single SeqId, "a" in chain of SeqIds, "b"
+*              and looks at all synonymous SeqIds of the Bioseq "b"
+*     returns the position (>0) if found.. else returns 0;
+*
+*****************************************************************************/
+
+NLM_EXTERN Uint4 LIBCALL SeqIdOrderInBioseqIdList (SeqIdPtr a, SeqIdPtr list) {
+        SeqIdPtr now;
+        Uint4 order;
+        Uint1 retval;
+
+        if (a == NULL)
+            return 0;
+
+        for (now =list,order=1; now != NULL; now = now -> next,order++)
+        {
+            if(SeqIdForSameBioseq(a, now)) 
+                return order;
+        }
+        return 0;
+}
+
+/* Function to extract the Accession and version number from
+   a \usedin GBQual string. 
+   (works for a plain Accession Number with version too)
+   User must provide string buffers for answer.
+   and make sure that last Character of Accession is not a ')'
+   using a statement like
+   if ((ptr = StringChr (accession, ')')) != NULL) *ptr = '\0';
+   and user must StringTok the GBQual for ',' and repeatedly call this.
+   */
+
+NLM_EXTERN void LIBCALL ExtractAccession(CharPtr accn,CharPtr accession,CharPtr version) {
+    CharPtr verptr;
+    if(accn!=NULL) {
+        if (*accn == '(') {
+                accn++;
+        }
+        verptr = StrChr(accn,'.');
+        if(verptr==NULL) {
+            if(version!=NULL)
+                version[0]='\0';
+            if(accession!=NULL) {
+                StringCpy(accession,accn);
+            }
+        } else {
+            Int4 len;
+            if(version!=NULL)
+                StringCpy(version,verptr+1);
+            len = verptr-accn;
+            if(accession!=NULL) {
+                StringNCpy(accession,accn,len);
+                accession[len]=NULLB;
+            }
+        }
+    } else {
+        if(accession)
+            accession[0]=NULLB;
+        if(version)
+            version[0]=NULLB;
+    }
+}
+
+
+/*
+  Hugues Sicotte:
+  Function to make a proper type SeqId given a string that represents
+   an accession Number 
+   If (UseNetworkForUnknown) ==> Will use network if the accession number
+   cannot be mapped unambigouly mapped to a database.
+   User must Call ExtractAccession function separately before calling this.
+*/
+NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version,CharPtr name) {
+    SeqIdPtr sip;
+    TextSeqIdPtr tsp;
+    Uint4 status;
+    if(accession==NULL || accession[0]=='\0')
+        return NULL;
+    sip=NULL;
+    status = WHICH_db_accession(accession);
+    if(!(ACCN_IS_UNKNOWN(status))) {
+        sip = ValNodeNew(NULL);
+        if(ACCN_IS_GENBANK(status) ) {
+            tsp = TextSeqIdNew();
+            tsp->accession = StringSave(accession);
+            tsp->version = version;
+            sip->data.ptrvalue = tsp;
+            if(ACCN_IS_NCBI(status)) {
+                sip->choice = SEQID_GENBANK;
+                tsp->name = StringSave("GENBANK");
+            } else if (ACCN_IS_EMBL(status)) {
+                sip->choice = SEQID_EMBL;
+                tsp->name = StringSave("EMBL");
+            } else if (ACCN_IS_DDBJ(status)) {
+                sip->choice = SEQID_DDBJ;
+                tsp->name = StringSave("DDBJ");
+            } else if (ACCN_IS_SWISSPROT(status)) {
+                sip->choice = SEQID_SWISSPROT;
+                tsp->name = StringSave("SWISSPROT");
+            } else if (ACCN_IS_AMBIGOUSDB(status)) {
+                /* the ambigous Accession with N are both ddbj and embl */
+                if(TO_UPPER(accession[0])=='N') {
+                    sip->choice = SEQID_EMBL;
+                    tsp->name = StringSave("EMBL");
+                } else {
+                    sip = SeqIdFree(sip);
+                }
+            }
+        } else if(ACCN_IS_REFSEQ(status)) {
+            tsp = TextSeqIdNew();
+            tsp->accession = StringSave(accession);
+            sip->data.ptrvalue = tsp;
+            sip->choice = SEQID_OTHER;
+            tsp->name = StringSave("REFSEQ");
+            tsp->version = version;
+        } else {
+            sip = SeqIdFree(sip);
+        }
+    }
+    return sip;
+}
+
+
+/* list of N* GSDB accession numbers that have been made secondary to
+   embl or ddbj records. These records are the only ones ONLY
+   taken over by one db (namely embl)
+   */
+static CharPtr embl_N_numbers = "00001/00002/00008/00011/00012/00013/00018/00019/00027/00041/00046/00048/00052/00053/00054/18624/";
+
+/*****************************************************************************
+*
+*  Function:    WHICH_db_accession
+*
+*  Description: Returns a non-zero code if the input string is a validly 
+*               formatted database accession number 
+*               The return code can be used to infer known infor
+*               mation about which database this accession belongs to.
+*               using a set of macros in accutils.h
+*               (GenBank, EMBL, DDBJ, Swissprot)
+*
+*  Arguments:   s : CharPtr; pointer to accession number string.
+*                   Must be null terminated.
+*
+*  Author:      Mark Cavanaug, Hugues Sicotte (3/99)
+*  Date:        7/96(IS_ntdb_accession),3/99(WHICH_db_accession)
+*
+*  WARNING:     WHICH_db_accession() does not communicate with any central
+*               resource about accession numbers. So there's no way to
+*               inform it automatically about new accession number prefixes.
+*
+*               Version Number ".integer" MUST have been stripped out
+*               before calling this function.
+*****************************************************************************/
+NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
+{
+  Uint4 retcode = 0;
+  Boolean retval = TRUE;
+  Boolean first = TRUE;
+  CharPtr temp=NULL;
+ 
+  if (s == NULL || ! *s)
+    return FALSE;
+ 
+  switch (StringLen(s)) {
+
+  case 6:                       /* Old-style 6-character accession */
+    while (*s) {
+      if (retval == FALSE)
+        break;
+ 
+      if (first) {
+        if (! IS_ALPHA(*s)) {
+          retval = FALSE;
+          break;
+        }
+ 
+      switch (TO_UPPER(*s)) {
+/* Protein SWISS-PROT accessions */
+      case 'O': case 'P': case 'Q':  
+          retcode = ACCN_SWISSPROT;
+          break;
+
+/* GenBank : EST */
+      case 'H':  case 'R': case 'T': case 'W': 
+        retcode = ACCN_NCBI_EST;
+        break;
+      case 'N':
+          if(IS_DIGIT(*(s+1)) && (*(s+1)) >= '2') {
+              retcode = ACCN_NCBI_EST;
+          } else {
+/* ddbj or GSDB nucleotide direct submission or taken over by EMBL */
+              if(StringStr(embl_N_numbers,s+1)!=NULL)
+                  retcode = ACCN_EMBL_OTHER;
+              else
+                  retcode = ACCN_AMBIGOUS_DB; /* Taken over by BOTH embl&ddbj*/
+          }
+        break;
+/* GenBank : non-EST */
+      case 'B': 
+        retcode = ACCN_NCBI_GSS;
+        break;
+      case 'G': 
+        retcode = ACCN_NCBI_STS;
+        break;
+      case 'S': 
+        retcode = ACCN_NCBI_BACKBONE; /* Scanned journal articles */
+        break;
+      case 'U': 
+        retcode = ACCN_NCBI_EST;
+        break;
+
+/* GenBank : before NCBI */
+      case 'J': case 'K': case 'L': case 'M':      
+        retcode = ACCN_GSDB_DIRSUB;
+        break;
+
+/* EMBL */
+      case 'A':
+        retcode = ACCN_EMBL_PATENT;
+        break;
+      case 'F': 
+        retcode = ACCN_EMBL_EST;
+        break;
+      case 'V': case 'X': case 'Y': case 'Z':  
+        retcode =  ACCN_EMBL_DIRSUB;
+        break;
+
+/* DDBJ */
+      case 'C': 
+        retcode =  ACCN_DDBJ_EST;
+        break;
+      case 'D': 
+        retcode = ACCN_DDBJ_DIRSUB;
+        break;
+      case 'E':
+        retcode = ACCN_DDBJ_PATENT;
+        break;
+
+
+/* Can be either protein or nucleotide */
+
+      case 'I' : /* NCBI patent */
+          retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
+          break;
+      default:
+        retval = FALSE;
+        break;
+      }  
+      first = FALSE;
+      }  
+      else {
+        if (! IS_DIGIT(*s)) {
+          retval = FALSE;
+        }
+      }  
+      s++;
+    }
+    break;
+    case 8: /* New 8-character accession, two letters + 6 digits */
+            /* OR three letters + 5 digits for proteins */
+        /* Check that have 3 letters */
+      if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)))
+          break;
+      if(IS_ALPHA(*(s+2))) {
+          /* New(1999) 8-character protein accession, three letters + 5 digits */
+          temp = (CharPtr) MemNew(4);
+          temp[0] = *s; s++;
+          temp[1] = *s; s++;
+          temp[2] = *s; s++;
+          temp[3] = '\0';
+          
+          if ((StringICmp(temp,"AAA") >= 0) && (StringICmp(temp,"AZZ") <= 0)) { 
+              retcode = ACCN_NCBI_PROT;
+          } else if ((StringICmp(temp,"CAA") >= 0) && (StringICmp(temp,"CZZ") <= 0)) { 
+              retcode = ACCN_EMBL_PROT;
+          } else  if ((StringICmp(temp,"BAA") >= 0) && (StringICmp(temp,"BZZ") <= 0)) { 
+              retcode = ACCN_DDBJ_PROT;
+          } else {
+              retval = FALSE;
+              break;
+          }
+      } else if (IS_DIGIT(*(s+2))) {
+          /* New 8-character protein accession, two letters + 6 digits */
+          temp = (CharPtr) MemNew(3);
+          temp[0] = *s; s++;
+          temp[1] = *s; s++;
+          temp[2] = '\0';
+          
+          if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
+              retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
+          }      else if ((StringICmp(temp,"AA") == 0) || (StringICmp(temp,"AI") == 0)) { /* NCBI EST */
+              retcode = ACCN_NCBI_EST;
+          } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
+              retcode = ACCN_NCBI_HTGS;
+          } else if ((StringICmp(temp,"AF") == 0)) {      /* NCBI direct submission */
+              retcode = ACCN_NCBI_DIRSUB;
+          } else if ((StringICmp(temp,"AE") == 0)) {      /* NCBI genome project data */
+              retcode = ACCN_NCBI_GENOME;
+          } else if ((StringICmp(temp,"AH") == 0)) {      /* NCBI segmented set header Bioseq */
+              retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented
+                                                                 proteins are AH */
+          } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
+              retcode = ACCN_NCBI_OTHER;
+          } else if ((StringICmp(temp,"AD") == 0)) {      /* NCBI accessions assigned to GSDB entries */
+              retcode = ACCN_NCBI_GSDB;
+          } else if ((StringICmp(temp,"AQ") == 0))  {     /* NCBI GSS */
+              retcode = ACCN_NCBI_GSS;
+          } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
+              retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
+          } else if ((StringICmp(temp,"AJ") == 0) ||
+                     (StringICmp(temp,"AM") == 0)) {     /* EMBL's direct submission */
+              retcode = ACCN_EMBL_DIRSUB;
+          } else if ((StringICmp(temp,"AL") == 0)) {      /* EMBL's genome project data*/
+              retcode = ACCN_EMBL_GENOME;
+          } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL's CON division */
+              retcode = ACCN_EMBL_CON;
+          } else if ((StringICmp(temp,"AT") == 0) || 
+                     (StringICmp(temp,"AU") == 0) ||
+                     (StringICmp(temp,"AV") == 0)) {      /* DDBJ EST's */
+              retcode = ACCN_DDBJ_EST;
+          } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
+              retcode = ACCN_DDBJ_DIRSUB;
+          } else if ((StringICmp(temp,"AG") == 0) || 
+                     (StringICmp(temp,"AP") == 0)) {      /* DDBJ genome project data */
+              retcode = ACCN_DDBJ_GENOME;
+          } else if ((StringICmp(temp,"AK") == 0))  {     /* DDBJ HTGS */
+              retcode = ACCN_DDBJ_HTGS;
+          } else {
+              retval = FALSE;
+              break;
+          }
+      
+          while (*s) {
+              if (! IS_DIGIT(*s)) {
+                  retval = FALSE;
+                  break;
+              }
+              s++;
+          }  
+          break;
+      } else {
+          retval = FALSE;
+          break;
+      }
+      break;
+    case 9: /* New 9-character accession, two letters +"_"+ 6 digits */
+      if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)))
+          break;
+      if(*(s+2)!='_')
+          break;
+      /* New(1999) 8-character protein accession, three letters + 5 digits */
+      temp = (CharPtr) MemNew(4);
+      temp[0] = *s; s++;
+      temp[1] = *s; s++;
+      temp[2] = NULLB; s++;
+      
+      if ((StringICmp(temp,"NP") == 0)) { 
+          retcode = ACCN_REFSEQ_PROT;
+      } else if ((StringICmp(temp,"NM") == 0)) { 
+          retcode = ACCN_REFSEQ_mRNA;
+      } else if ((StringICmp(temp,"NT") == 0)) { 
+          retcode = ACCN_REFSEQ_CONTIG;
+      } else if ((StringICmp(temp,"NC") == 0)) { 
+          retcode = ACCN_REFSEQ_CHROMOSOME;
+      } else {
+          retval = FALSE;
+          break;
+      }
+      while (*s) {
+          if (! IS_DIGIT(*s)) {
+              retval = FALSE;
+              break;
+          }
+          s++;
+      }
+      break;
+  default:   
+    retval = FALSE;
+    break;
+  }                     /* Endswitch, StringLen(s) */
+ 
+  if(temp)
+      MemFree(temp);
+  return (retval ? retcode : ACCN_UNKNOWN);
+}
+
+/****************************************************************************
+*
+*  Function:    IS_ntdb_accession
+*
+*  Description: Return TRUE if the input string is a validly formatted
+*               nucleotide database accession number (GenBank, EMBL, DDBJ)
+*
+*  Arguments:   s : CharPtr; pointer to accession number string.
+*                   Must be null terminated.
+*
+*  Author:      Mark Cavanaugh
+*  Date:        7/96
+*
+*  WARNING:     IS_ntdb_accession() does not communicate with any central
+*               resource about accession numbers. So there's no way to
+*               inform it automatically about new accession number prefixes.
+*
+*               Version Number ".integer" MUST have been stripped out
+*               before calling this function.
+*****************************************************************************/
+
+NLM_EXTERN Boolean LIBCALL IS_ntdb_accession (CharPtr s) {
+    Uint4 status;
+    status = WHICH_db_accession(s);
+    return (Boolean)(ACCN_IS_NUC(status));
+}
+
+/*****************************************************************************
+*
+*  Function:    IS_protdb_accession
+*
+*  Description: Return TRUE if the input string is a validly formatted
+*               protein database accession number (SWISS-PROT)
+*               or the new 3 letter protein ID.
+* 
+*
+*  Arguments:   s : CharPtr; pointer to accession number string.
+*                   Must be null terminated.
+*
+*  Author:      Mark Cavanaugh, Hugues Sicotte (3/99)
+*  Date:        8/96, 3/99HS
+*
+*  WARNING:     IS_protdb_accession() does not communicate with any central
+*               resource about accession numbers. So there's no way to
+*               inform it automatically about new accession number prefixes.
+*
+*               Version Number ".integer" MUST have been stripped out
+*               before calling this function.
+*****************************************************************************/
+
+NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s) {
+    Uint4 status;
+    status = WHICH_db_accession(s);
+    return (Boolean)(ACCN_IS_PROT(status));
+}
+
+/*
+  Try to Find if the Bioseq represented by a SeqId is a SeqLoc List;
+  May fetch the Bioseq to get all the synonymous SeqIds.
+ */
+
+NLM_EXTERN Boolean LIBCALL SeqIdInSeqLocList(SeqIdPtr sip, ValNodePtr list) {
+  ValNodePtr vnptmp;
+  SeqIdPtr   siptmp;
+  SeqLocPtr slp;
+
+  for (vnptmp=list; vnptmp!=NULL; vnptmp=vnptmp->next)
+  {
+     siptmp = SeqLocId((SeqLocPtr)vnptmp->data.ptrvalue);
+     if (siptmp!=NULL) {
+        if (SeqIdForSameBioseq(sip, siptmp))
+           return TRUE;
+     } else if((slp=(SeqLocPtr)vnptmp->data.ptrvalue)!=NULL && (
+               slp->choice == SEQLOC_PACKED_INT || 
+               slp->choice == SEQLOC_MIX || 
+               slp->choice == SEQLOC_EQUIV)) {
+         slp = (SeqLocPtr)slp->data.ptrvalue;
+         while(slp!=NULL) {
+             siptmp = SeqLocId(slp);
+             if (siptmp!=NULL) {
+                 if (SeqIdForSameBioseq(sip, siptmp))
+                     return TRUE;
+             }
+             slp=slp->next;
+         }
+     }
+  }
+  return FALSE;
 }

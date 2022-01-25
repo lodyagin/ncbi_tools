@@ -28,6 +28,9 @@
 * Author:  Karl Sirotkin
 *
 * $Log: parsegb.h,v $
+* Revision 6.1  1999/04/06 19:42:56  bazhin
+* Changes, related to flat2asn's ACCESSION.VERSION parsing.
+*
 * Revision 6.0  1997/08/25 18:06:52  madden
 * Revision changed to 6.0
 *
@@ -71,14 +74,19 @@ typedef void (*Nlm_gbparse_errfunc) PROTO((CharPtr, CharPtr));
 typedef Int4 (*Nlm_gbparse_rangefunc) PROTO ((Pointer, SeqIdPtr ));
 
 NLM_EXTERN int Nlm_gbparselex PROTO(( CharPtr linein, ValNodePtr PNTR lexed));
+NLM_EXTERN int Nlm_gbparselex_ver PROTO(( CharPtr linein, ValNodePtr PNTR lexed, Boolean accver));
 NLM_EXTERN CharPtr Nlm_non_white PROTO(( CharPtr ch));
 NLM_EXTERN ValNodePtr Nlm_gbparse_lexfree PROTO(( ValNodePtr anp));
 NLM_EXTERN SeqLocPtr Nlm_gbparseint PROTO(( CharPtr raw_intervals, Boolean PNTR keep_rawPt, Boolean PNTR sites, int PNTR num_errsPt, SeqIdPtr seq_id));
+NLM_EXTERN SeqLocPtr Nlm_gbparseint_ver PROTO(( CharPtr raw_intervals, Boolean PNTR keep_rawPt, Boolean PNTR sites, int PNTR num_errsPt, SeqIdPtr seq_id, Boolean accver));
 NLM_EXTERN CharPtr Nlm_gbparse_point PROTO((ValNodePtr, ValNodePtr));
 NLM_EXTERN int deal_with_complement PROTO ((ValNodePtr PNTR, int PNTR, CharPtr, ValNodePtr));
 NLM_EXTERN SeqLocPtr Nlm_gbloc PROTO((Boolean PNTR, int PNTR, Boolean PNTR, ValNodePtr PNTR, ValNodePtr, int PNTR, SeqIdPtr));
+NLM_EXTERN SeqLocPtr Nlm_gbloc_ver PROTO((Boolean PNTR, int PNTR, Boolean PNTR, ValNodePtr PNTR, ValNodePtr, int PNTR, SeqIdPtr, Boolean));
 NLM_EXTERN SeqLocPtr Nlm_gbreplace PROTO((Boolean PNTR, int PNTR, Boolean PNTR, ValNodePtr PNTR, ValNodePtr , int PNTR, SeqIdPtr));
+NLM_EXTERN SeqLocPtr Nlm_gbreplace_ver PROTO((Boolean PNTR, int PNTR, Boolean PNTR, ValNodePtr PNTR, ValNodePtr , int PNTR, SeqIdPtr, Boolean));
 NLM_EXTERN SeqLocPtr Nlm_gbint PROTO((Boolean PNTR, ValNodePtr PNTR, ValNodePtr , int PNTR, SeqIdPtr));
+NLM_EXTERN SeqLocPtr Nlm_gbint_ver PROTO((Boolean PNTR, ValNodePtr PNTR, ValNodePtr , int PNTR, SeqIdPtr, Boolean));
 NLM_EXTERN SeqPntPtr Nlm_gbpintpnt PROTO(( SeqLocPtr, SeqIntPtr PNTR));
 NLM_EXTERN void Nlm_gbload_number PROTO((Int4 PNTR, IntFuzzPtr PNTR, Boolean PNTR, ValNodePtr PNTR, ValNodePtr , int PNTR, int));
 NLM_EXTERN SeqLocPtr Nlm_gbparse_better_be_done PROTO((int PNTR num_errPt, ValNodePtr currentPt, ValNodePtr headPt, SeqLocPtr ret_so_far, Boolean PNTR keep_rawPt, int paren_count));

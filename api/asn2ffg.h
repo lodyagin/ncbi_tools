@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -45,6 +45,12 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.9  1999/04/02 16:33:15  tatiana
+ * added LinkStr struct and ByteStorePtr to ajp
+ *
+ * Revision 6.8  1999/03/11 19:04:31  tatiana
+ * version added
+ *
  * Revision 6.7  1998/11/10 15:12:59  bazhin
  * Macro NUM_OF_ESTIMATES and static array of integers "line_estimate"
  * moved out to "asn2ff1.c".
@@ -164,6 +170,11 @@
 #define FF_REGULAR 0
 #define FF_TOP_COMPLETE 1
 #define FF_TOP_CONTIG 2
+
+typedef struct _link_str {
+    CharPtr line;
+    struct _link_str PNTR next;
+} LinkStr, PNTR LinkStrPtr;
 
 typedef struct genestruct {
 	ValNodePtr gene;
@@ -295,6 +306,7 @@ typedef struct gbentry {
 	Boolean map;
 	CharPtr defline;
 	struct gbentry PNTR next;
+	Char version[60];    /* accession.version */
 } GBEntry, PNTR GBEntryPtr;
 
 /*****************************************************************************
@@ -372,6 +384,8 @@ typedef struct asn2ff_job {
 	Boolean orgname;    /* new algorithm for /organism in source feature*/
 	SeqIdPtr id_print;
 	Boolean useSeqMgrIndexes;  /* new style indexing to eliminate nested gathers */
+	Boolean show_version;
+	ByteStorePtr byte_st;
 	
 } Asn2ffJob, PNTR Asn2ffJobPtr;
 

@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   10/17/95
 *
-* $Id: findrepl.c,v 6.0 1997/08/25 18:05:38 madden Exp $
-* $Revision: 6.0 $
+* $Id: findrepl.c,v 6.1 1999/03/05 23:31:07 kans Exp $
+* $Revision: 6.1 $
 *
 * File Description:
 *	The implementation of find/replace
@@ -47,6 +47,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.1  1999/03/05 23:31:07  kans
+* FindInEntityX was not initializing flen, replen
+*
 * Revision 6.0  1997/08/25 18:05:38  madden
 * Revision changed to 6.0
 *
@@ -207,7 +210,9 @@ NLM_EXTERN Int4 LIBCALL FindInEntityX(Uint2 EntityID, CharPtr findstr, CharPtr r
 	return -1;
 
     GFStruct.pchFindStr = findstr;
+	GFStruct.flen = StringLen(findstr);
 	GFStruct.pchReplStr = replstr;
+	GFStruct.replen = StringLen(replstr);
     GFStruct.UserFunc = userfunc;
     GFStruct.pUserData = userdata;
     GFStruct.iFoundCount = 0;

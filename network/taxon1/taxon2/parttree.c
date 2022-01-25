@@ -31,6 +31,9 @@
 *
 *
 * $Log: parttree.c,v $
+* Revision 1.5  1999/03/29 23:09:56  soussov
+* performance improvements in tax_ptreeToTaxId
+*
 * Revision 1.4  1998/07/23 18:24:30  soussov
 * Added function for attaching subtrees
 *
@@ -50,6 +53,40 @@
 */
 
 #include <txclient.h>
+
+typedef struct t_ptree_spy_bag {
+    int bag_size;
+    int no_room;
+    TreeNodeId* id_x_ref;
+} _ptree_spy_bag;
+
+static void ptree_spy(TreePtr tree, Int2 spy_id, TreeEvent event, TreeNodeId id1, TreeNodeId id2,
+		      TXC_TreeNodePtr tnp, Int2 s)
+{
+    _ptree_spy_bag* spy_bag= tree_getSpyData(tree, spy_id);
+
+    if(event == TREE_NODE_ADDED) {
+
+#if 0
+	printf("SPY is added %d %s\n", tnp->tax_id, tnp->node_label);
+#endif
+	if((spy_bag->bag_size <= tnp->tax_id) && (spy_bag->no_room == 0)){
+	    TreeNodeId* t= realloc(spy_bag->id_x_ref, (tnp->tax_id + 100)*sizeof(TreeNodeId));
+	    int i;
+	    TreeNodeId id0;
+
+	    if(t != NULL) {
+		id0.idi= 0;
+		for(i= spy_bag->bag_size; i < (tnp->tax_id + 100); spy_bag->id_x_ref[i++]= id0);
+		spy_bag->id_x_ref= t;
+		spy_bag->bag_size= tnp->tax_id + 100;
+	    }
+	    else spy_bag->no_room= 1;
+	}
+	
+	if(spy_bag->bag_size > tnp->tax_id) spy_bag->id_x_ref[tnp->tax_id]= id2;
+    }
+}
 
 static VoidPtr ptree_getNode(TreeCursorPtr cursor, Uint4 format, Uint2Ptr size)
 {
@@ -79,6 +116,24 @@ TreePtr tax_ptree_new(void)
     TreePtr ptree= tree_new();
     TreeCursorPtr cursor= tree_openCursor(ptree, NULL, NULL);
     TXC_TreeNodePtr tnp= MemNew(20);
+    _ptree_spy_bag* spy_bag;
+
+
+    spy_bag= MemNew(sizeof(_ptree_spy_bag));
+
+    do {
+	spy_bag->bag_size= 100000;
+	spy_bag->id_x_ref= MemNew(sizeof(TreeNodeId)*spy_bag->bag_size);
+	if(spy_bag->id_x_ref == NULL) spy_bag->bag_size-= spy_bag->bag_size/8;
+    }
+    while((spy_bag->id_x_ref == NULL) && (spy_bag->bag_size > 100));
+
+    if(spy_bag->id_x_ref == NULL) {
+	spy_bag->bag_size= 0;
+	spy_bag->no_room= 1;
+    }
+
+    tree_addSpy(ptree, (TreeSpyFunc)ptree_spy, spy_bag);
 
     tnp->tax_id= 1;
     tnp->flags= 0;
@@ -155,6 +210,10 @@ static Boolean ptree_toTaxId(TreeCursorPtr cursor, Int4 id)
     TXC_TreeNodePtr tnp;
     Uint2 s;
 
+#if 0
+    printf("ptree_toTaxId runs for $d\n",id);
+#endif
+
     tnp= tree_getNodeData(cursor, &s);
     if(tnp->tax_id == id) return TRUE;
 
@@ -172,6 +231,13 @@ static Boolean ptree_toTaxId(TreeCursorPtr cursor, Int4 id)
 Boolean tax_ptree_toTaxId(TreeCursorPtr cursor, Int4 tax_id, Boolean search_in_subtree)
 {
     TreeNodeId id= tree_getId(cursor);
+    _ptree_spy_bag* spy_bag= tree_getSpyData(cursor->tree, 0);
+
+    if(spy_bag->bag_size > tax_id) {
+	return tree_toNode(cursor, spy_bag->id_x_ref[tax_id]);
+    }
+
+    if(spy_bag->no_room == 0) return FALSE;
 
     if(!search_in_subtree) {
 	tree_root(cursor);
@@ -281,8 +347,11 @@ Boolean tax_ptree_addSubtree(TreeCursorPtr cursor)
     for(i= 0; i < nof_children; i++) {
 	if(child[i] != NULL) {
 	    if((child[i]->flags & TXC_SUFFIX) != 0) {
+		tax_ptree_toTaxId(cursor, child[i]->tax_id, FALSE);
+#if 0
 		tree_root(cursor);
 		ptree_toTaxId(cursor, child[i]->tax_id);
+#endif
 	    }
 	    else {
 		s= 9 + StringLen(child[i]->node_label);

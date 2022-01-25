@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.43 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *
@@ -89,7 +89,7 @@ extern "C" {
 #include <dlogutil.h>
 #include <bspview.h>
 #include <objproj.h>
-#include <ncbiurl.h>
+#include <urlquery.h>
 
 #define SEQ_PKG_SINGLE        1
 #define SEQ_PKG_SEGMENTED     2
@@ -216,31 +216,41 @@ typedef struct urlparamdata {
   CharPtr        dfault;
   CharPtr        choices;  /* choices if param is popup */
   CharPtr        group;    /* used for grouping related controls */
+  CharPtr        descr;
   CharPtr        help;
 } UrlParamData, PNTR UrlParamPtr;
 
 typedef struct newobjectdata {
-  Int2           kind;   /* 1 = feature creation, 2 = analysis */
-  ObjMgrProcPtr  ompp;
-  BaseFormPtr    bfp;
-  IteM           item;
-  Uint1          molgroup;
-  Uint2          descsubtype;
-  Boolean        bspOK;
-  Boolean        dsmOK;
-  Boolean        fastaNucOK;
-  Boolean        fastaProtOK;
-  Boolean        onlyBspTarget;
+  Int2             kind;   /* 1 = feature creation, 2 = analysis */
+  ObjMgrProcPtr    ompp;
+  BaseFormPtr      bfp;
+  IteM             item;
+  Uint1            molgroup;
+  Uint2            descsubtype;
+  Boolean          bspOK;
+  Boolean          dsmOK;
+  Boolean          fastaNucOK;
+  Boolean          fastaProtOK;
+  Boolean          onlyBspTarget;
   /* the next eight fields are for the analysis menu only, for remote URLs */
-  CharPtr        host_machine;
-  Uint2          host_port;
-  CharPtr        host_path;
-  CharPtr        query;
-  Uint4          timeoutsec;
-  Int2           format;     /* 1 = FASTA, 2 = ASN.1 */
-  Boolean        demomode;
-  URLResultProc  resultproc;
-  ValNodePtr     paramlist; /* data.ptrvalue points to UrlParamData block */
+  CharPtr          host_machine;
+  Uint2            host_port;
+  CharPtr          host_path;
+  CharPtr          query;
+  Uint4            timeoutsec;
+  Int2             format;     /* 1 = FASTA, 2 = ASN.1 */
+  Boolean          demomode;
+  QueryResultProc  resultproc;
+  ValNodePtr       paramlist; /* data.ptrvalue points to UrlParamData block */
+  CharPtr          prefix;
+  CharPtr          suffix;
+  CharPtr          homepage;
+  CharPtr          credits;
+  CharPtr          authors;
+  CharPtr          disclaimer;
+  CharPtr          reference;
+  Uint4            pmid;
+  CharPtr          blurb;
   struct newobjectdata PNTR next;
 } NewObjectData, PNTR NewObjectPtr;
 
@@ -363,6 +373,7 @@ extern void EditRNA (IteM i);
 
 extern void ParseDefToSource (IteM i);
 extern void ParseLocalIDToSource (IteM i);
+extern void ParseFileToSource (IteM i);
 extern void AddStrainToOrg (IteM i);
 extern void AddCloneToOrg (IteM i);
 
@@ -403,6 +414,8 @@ extern void SelectBioseq (IteM i);
 extern void FuseFeature (IteM i);
 
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
+extern void RemoveTextInsideString (IteM i);
+extern void GeneralTextConversion (IteM i);
 
 extern void BioseqViewFormToolBar (GrouP h);
 

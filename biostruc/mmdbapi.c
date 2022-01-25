@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/19/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description: MMDBAPI wrappers. 
 *
@@ -41,6 +41,12 @@
 *
 *
 * $Log: mmdbapi.c,v $
+* Revision 6.11  1999/03/05 22:43:59  vakatov
+* Made ClearStructures() function be NLM_EXTERN -- for the DLL build on PC
+*
+* Revision 6.10  1999/03/05 20:22:31  kans
+* ClearStructures clears neighbor bit
+*
 * Revision 6.9  1998/08/26 18:02:38  kans
 * fixed -v -fd warnings
 *
@@ -315,7 +321,7 @@ void LIBCALL FreeAModelstruc(PDNMS pdnmsThis)
 }
 
 
-void LIBCALL ClearStructures(void)
+NLM_EXTERN void LIBCALL ClearStructures(void)
 {
   PDNMS pdnmsThis = NULL;
 
@@ -327,6 +333,7 @@ void LIBCALL ClearStructures(void)
        {
         pmmdbapi->pdnmsMain = NULL;
         pmmdbapi->pdnmsMaster = NULL;
+        pmmdbapi->Neighbor = 0;
        }
        pmmdbapi->pdnmsSlave  = NULL;
        pmmdbapi->pdnmsHolder = NULL;

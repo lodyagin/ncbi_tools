@@ -29,13 +29,26 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
  * $Log: ffprint.c,v $
+ * Revision 6.3  1999/04/09 21:17:18  bazhin
+ * Added functions "FFBSPrint()" and "BSAppend()" to parse ASN.1
+ * data to ByteStore.
+ *
+ * Revision 6.2  1999/04/01 20:44:13  kans
+ * Int2 lengths to Int4 to allow CountGapsInDeltaSeq with buffer > 32K
+ *
+ * Revision 6.1  1999/03/12 17:47:11  tatiana
+ * file was lost
+ *
+ * Revision 6.7  1999/02/02 17:29:20  kans
+ * added ff_MergeString
+ *
  * Revision 6.6  1998/06/15 15:00:31  tatiana
  * UNIX compiler warnings fixed
  *
@@ -192,6 +205,26 @@ NLM_EXTERN void LIBCALL asn2ff_set_output (FILE *fp, CharPtr line_return)
 	}
 }
 
+NLM_EXTERN CharPtr LIBCALL ff_MergeString (void)
+
+{
+	ByteStorePtr byte_sp=NULL;
+	CharPtr string=NULL;
+	BuffStructPtr bfp;
+
+	bfp = GetBuffStruct();
+
+	if (! bfp->fp)
+	{
+		byte_sp = bfp->byte_sp;
+
+		string = BSMerge(byte_sp, NULL);
+		bfp->byte_sp = BSFree(bfp->byte_sp);
+	}
+
+	return string;
+}
+
 NLM_EXTERN CharPtr LIBCALL FFPrint (FFPrintArrayPtr pap, Int4 index, Int4 pap_size)
 {
 	GBEntryPtr gbp;
@@ -234,6 +267,96 @@ NLM_EXTERN CharPtr LIBCALL FFPrint (FFPrintArrayPtr pap, Int4 index, Int4 pap_si
 	}
 
 	return string;
+}
+
+/**********************************************************/
+static ByteStorePtr BSAppend(ByteStorePtr to, ByteStorePtr from)
+{
+    Nlm_BSUnitPtr tobup;
+    Nlm_BSUnitPtr frombup;
+
+    if(from == NULL)
+        return(to);
+
+    if(to == NULL)
+    {
+        to = MemNew(sizeof(Nlm_ByteStore));
+        to->totlen = 0;
+        to->chain = NULL;
+    }
+
+    to->seekptr = 0;
+    to->chain_offset = 0;
+
+    if(to->chain != NULL)
+        for(tobup = to->chain; tobup->next != NULL; tobup = tobup->next)
+            continue;
+    else
+        tobup = NULL;
+
+    for(frombup = from->chain; frombup != NULL; frombup = frombup->next)
+    {
+        to->totlen += frombup->len;
+        if(tobup == NULL)
+        {
+            to->chain = MemNew(sizeof(Nlm_BSUnit));
+            tobup = to->chain;
+        }
+        else
+        {
+            tobup->next = MemNew(sizeof(Nlm_BSUnit));
+            tobup = tobup->next;
+        }
+        tobup->str = MemNew(frombup->len);
+        MemCpy(tobup->str, frombup->str, frombup->len);
+        tobup->len = frombup->len;
+        tobup->len_avail = frombup->len_avail;
+    }
+    to->curchain = to->chain;
+    return(to);
+}
+
+/**********************************************************/
+NLM_EXTERN void LIBCALL FFBSPrint(FFPrintArrayPtr pap, Int4 index,
+                                  Int4 pap_size)
+{
+    GBEntryPtr    gbp;
+    Asn2ffJobPtr  ajp;
+    ByteStorePtr  byte_sp = NULL;
+    FFPrintArray  pa = pap[index];
+    BuffStructPtr bfp;
+
+    bfp = GetBuffStruct();
+
+    gbp = pa.gbp;
+    ajp = pa.ajp;
+    if(ajp == NULL)
+        return;
+
+    ajp->pap_index = pa.index;
+    ajp->pap_last = pa.last;
+
+    if(index == 0 || index == pap_size - 1)
+    {
+        flat2asn_delete_locus_user_string();
+        flat2asn_install_locus_user_string(gbp->locus);
+        flat2asn_delete_accession_user_string();
+        flat2asn_install_accession_user_string(gbp->accession);
+    }
+
+    bfp->n_links = 0;
+    pa.fct(ajp, gbp);
+    if(pa.descr == NULL)
+        pap[index].descr = gbp->descr;
+
+    if(pa.printxx == PRINTXX)
+    {
+        PrintXX();
+    }
+
+    ajp->byte_st = BSAppend(ajp->byte_st, bfp->byte_sp);
+    BSFree(bfp->byte_sp);
+    bfp->byte_sp = NULL;
 }
 
 NLM_EXTERN void LIBCALL ff_print_string (FILE *fp, CharPtr string, CharPtr line_return)
@@ -822,7 +945,7 @@ NLM_EXTERN CharPtr LIBCALL CheckEndPunctuation (CharPtr string, Char end)
 
 {
 	CharPtr stringptr, newstring;
-	Int2 length;
+	Int4 length;
 
 	if (string == NULL)
 		return NULL;

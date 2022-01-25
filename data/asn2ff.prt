@@ -111,11 +111,11 @@ PrintTemplateSet ::= {
               form
                 use-template "StdSPBlock"} ,
             {
-              asn1 "Seq-descr.E.dbxref" ,
-              label "Cross reference" ,
+              asn1 "Seq-descr.E.neighbors" ,
+              label "Neighbors" ,
               prefix " " ,
               form
-                use-template "StdDbtag" } ,
+                null NULL } ,
             {
               asn1 "Seq-descr.E.embl" ,
               label "EMBL block" ,
@@ -165,13 +165,71 @@ PrintTemplateSet ::= {
           components {
             {
               asn1 "Bioseq.id" ,
-	      suffix "~" ,
+              prefix "" ,
+	      suffix ";" ,
       		form
         block {
           components {
             {
               asn1 "Bioseq.id.E.pir" ,
-	      label "PIR:" ,
+	      label "pir:" ,
+	      prefix " " ,
+              form
+                use-template "StdPIRseqId" } ,
+            {
+              asn1 "Bioseq.id.E.other" ,
+	      label "REFSEQ:" ,
+	      prefix " " ,
+              form
+                use-template "StdOtherId" } ,
+            {
+              asn1 "Bioseq.id.E.local" ,
+	      label "userid:" ,
+	      prefix " " ,
+              form
+                use-template "StdLocalId" } ,
+            {
+              asn1 "Bioseq.id.E.genbank" ,
+	      label "genbank:" ,
+	      prefix " " ,
+              form
+                use-template "StdGPseqId" } ,
+            {
+              asn1 "Bioseq.id.E.swissprot" ,
+	      label "swissprot:" ,
+	      prefix " " ,
+              form
+                use-template "StdSPseqId" } ,
+            {
+              asn1 "Bioseq.id.E.prf" ,
+	      label "prf:" ,
+	      prefix " " ,
+              form
+                use-template "StdPRFseqId" } ,
+            {
+              asn1 "Bioseq.id.E.pdb" ,
+	      label "pdb:" ,
+	      prefix " " ,
+              form
+                use-template "StdPDBseqId" } } } } } } } } ,
+  {
+    name "VersionBioseqId" ,
+    format {
+      asn1 "Bioseq" ,
+      form
+        block {
+          separator " " ,
+          components {
+            {
+              asn1 "Bioseq.id" ,
+              prefix "" ,
+	      suffix ";" ,
+      		form
+        block {
+          components {
+            {
+              asn1 "Bioseq.id.E.pir" ,
+	      label "pir:" ,
 	      prefix " " ,
               form
                 use-template "StdPIRseqId" } ,
@@ -183,25 +241,25 @@ PrintTemplateSet ::= {
                 use-template "StdLocalId" } ,
             {
               asn1 "Bioseq.id.E.genbank" ,
-	      label "GENBANK:" ,
+	      label "genbank:" ,
 	      prefix " " ,
               form
-                use-template "StdGPseqId" } ,
+                use-template "VersionGPseqId" } ,
             {
               asn1 "Bioseq.id.E.swissprot" ,
-	      label "SWISS-PROT:" ,
+	      label "swissprot:" ,
 	      prefix " " ,
               form
                 use-template "StdSPseqId" } ,
             {
               asn1 "Bioseq.id.E.prf" ,
-	      label "PRF:" ,
+	      label "prf:" ,
 	      prefix " " ,
               form
                 use-template "StdPRFseqId" } ,
             {
               asn1 "Bioseq.id.E.pdb" ,
-	      label "PDB:" ,
+	      label "pdb:" ,
 	      prefix " " ,
               form
                 use-template "StdPDBseqId" } } } } } } } } ,
@@ -494,7 +552,7 @@ PrintTemplateSet ::= {
       suffix " " ,
       form
         block {
-          separator ".~" ,
+          separator ";~" ,
           components {
             {
               asn1 "SP-block.class" ,
@@ -522,7 +580,7 @@ PrintTemplateSet ::= {
                 true "seq starts with Met"   } } ,
             {
               asn1 "SP-block.plasnm" ,
-	      prefix "plasmid: " ,
+	      prefix " " ,
 	      form
 		block {
 		  separator ", ",
@@ -532,27 +590,6 @@ PrintTemplateSet ::= {
                      form
                        text {
                  		  } } } } } ,
-            {
-              asn1 "SP-block.created" ,
-	      label "created:" ,
-	      prefix " " ,
-	      form
-                user {
-                  printfunc "StdDatePrint" } } ,
-            {
-              asn1 "SP-block.sequpd" ,
-	      label "sequence updated:" ,
-	      prefix " " ,
-	      form
-                user {
-                  printfunc "StdDatePrint" } } ,
-            {
-              asn1 "SP-block.annotupd" ,
-	      label "annotation updated:" ,
-	      prefix " " ,
-	      form
-                user {
-                  printfunc "StdDatePrint" } } ,
             {
               asn1 "SP-block.seqref" ,
 	      label "xrefs:" ,
@@ -595,6 +632,8 @@ PrintTemplateSet ::= {
                         use-template "StdPatentSeqId" } ,
                     {
                       asn1 "Seq-id.other" ,
+	      			label "REFSEQ:" ,
+	      			prefix " " ,
                       form
                         use-template "StdTextseqId" } ,
                     {
@@ -640,7 +679,7 @@ PrintTemplateSet ::= {
                    components {    
                 {
                   asn1 "Dbtag.db" ,
-                 suffix " " ,
+                 suffix ": " ,
                  form
                  text {
                     } } ,
@@ -649,6 +688,27 @@ PrintTemplateSet ::= {
                  form
                  use-template "StdObjectId" } ,
                  } } } } } } ,
+            {
+              asn1 "SP-block.created" ,
+	      label "created:" ,
+	      prefix " " ,
+	      form
+                user {
+                  printfunc "StdDatePrint" } } ,
+            {
+              asn1 "SP-block.sequpd" ,
+	      label "sequence updated:" ,
+	      prefix " " ,
+	      form
+                user {
+                  printfunc "StdDatePrint" } } ,
+            {
+              asn1 "SP-block.annotupd" ,
+	      label "annotation updated:" ,
+	      prefix " " ,
+	      form
+                user {
+                  printfunc "StdDatePrint" } } ,
 		   } } } } ,
   {
     name "StdPirBlock" ,
@@ -658,7 +718,7 @@ PrintTemplateSet ::= {
       suffix "" ,
       form
         block {
-          separator ".~" ,
+          separator ";~" ,
           components {
             {
               asn1 "PIR-block.host" ,
@@ -799,7 +859,7 @@ PrintTemplateSet ::= {
       suffix "" ,
       form
         block {
-          separator ".~" ,
+          separator ";~" ,
           components {
             {
               asn1 "PDB-block.deposition" ,
@@ -846,7 +906,7 @@ PrintTemplateSet ::= {
       suffix "" ,
       form
         block {
-          separator ".~" ,
+          separator ";~" ,
           components {
             {
               asn1 "PDB-replace.date" ,
@@ -877,7 +937,7 @@ PrintTemplateSet ::= {
       suffix "" ,
       form
         block {
-          separator ".~" ,
+          separator ";~" ,
           components {
             {
               asn1 "PRF-block.extra-src" ,
@@ -893,7 +953,7 @@ PrintTemplateSet ::= {
       suffix "" ,
       form
         block {
-          separator ".~" ,
+          separator ";~" ,
           components {
             {
               asn1 "PRF-ExtraSrc.host" ,
@@ -989,7 +1049,7 @@ PrintTemplateSet ::= {
                         null NULL } ,
                     {
                       asn1 "Seq-id.gi" ,
-		      label "gi" ,
+		      label "gi:" ,
 		      prefix " " ,
                       form
                 	text {
@@ -2238,6 +2298,7 @@ PrintTemplateSet ::= {
               asn1 "Textseq-id.name" ,
 	      label "locus" ,
 	      prefix " " ,
+	      suffix " " ,
               form
                 text { 
 		  } } ,
@@ -2257,9 +2318,46 @@ PrintTemplateSet ::= {
 		  } } ,
             {
               asn1 "Textseq-id.version" ,
+	      label "" ,
               form
-                null NULL } ,
-                   } } } } ,
+                text { 
+                   } } } } } } ,
+  {
+    name "VersionTextseqId" ,
+    format {
+      asn1 "Textseq-id" ,
+      form
+        block {
+          components {
+            {
+              asn1 "Textseq-id.name" ,
+	      label "locus" ,
+	      prefix " " ,
+	      suffix " " ,
+              form
+                text { 
+		  } } ,
+            {
+              asn1 "Textseq-id.accession" ,
+	      label "accession" ,
+	      prefix " " ,
+              form
+                text { 
+		  } } ,
+            {
+              asn1 "Textseq-id.release" ,
+	      label "release" ,
+	      prefix " " ,
+              form
+                text { 
+		  } } ,
+            {
+              asn1 "Textseq-id.version" ,
+	      label "." ,
+	      prefix "" ,
+              form
+                text { 
+                   } } } } } } ,
   {
     name "StdPDBseqId" ,
     format {
@@ -2274,8 +2372,14 @@ PrintTemplateSet ::= {
 	      prefix " " ,
 	      suffix ", " ,
               form
-                text {
-		  } } ,
+                block {
+                  separator ", " ,
+                  components {
+                    {
+                      asn1 "PDB-mol-id" ,
+                      form
+                        text {
+                           } } } } } ,
             {
               asn1 "PDB-seq-id.chain" ,
 	      label "chain" ,
@@ -2322,9 +2426,12 @@ PrintTemplateSet ::= {
 		  } } ,
             {
               asn1 "Textseq-id.version" ,
-              form
-                null NULL } ,
-                   } } } } ,
+ 	      label "." ,
+	      prefix "" ,
+             form
+                text { 
+		  } } ,
+                 } } } } ,
   {
     name "StdPIRseqId" ,
     format {
@@ -2439,6 +2546,29 @@ PrintTemplateSet ::= {
                 text {
                    } } } } } } ,
   {
+    name "StdOtherId" ,
+    format {
+      asn1 "Textseq-id" ,
+      form
+        block {
+          components {
+            {
+              asn1 "Textseq-id.name" ,
+	      label "locus" ,
+	      prefix " " ,
+	      suffix "," ,
+              form
+                text { 
+		  } } ,
+            {
+              asn1 "Textseq-id.accession" ,
+	      label " accession" ,
+	      prefix " " ,
+              form
+                text { 
+		  } } ,
+                   } } } } ,
+  {
     name "StdGPseqId" ,
     format {
       asn1 "Textseq-id" ,
@@ -2474,14 +2604,14 @@ PrintTemplateSet ::= {
                 use-template "StdObjectId" } ,
             {
               asn1 "Seq-id.genbank" ,
-	      label "GENBANK: " ,
               form
-                use-template "StdGPseqId" } ,
+                use-template "StdTextseqId" } ,
             {
               asn1 "Seq-id.embl" ,
-	      label "EMBL: " ,
+	      label "embl" ,
+	      prefix " " ,
               form
-                use-template "StdGPseqId" } ,
+                use-template "StdEMBLseqId" } ,
             {
               asn1 "Seq-id.pir" ,
 	      label "pir" ,
@@ -2498,6 +2628,8 @@ PrintTemplateSet ::= {
                  use-template "StdPatentSeqId" } ,
             {
               asn1 "Seq-id.other" ,
+	      label "REFSEQ:" ,
+	      prefix " " ,
               form
                 use-template "StdTextseqId" } ,
             {
@@ -2512,28 +2644,79 @@ PrintTemplateSet ::= {
             	text {
                 	  } } ,
             {
-               asn1 "Seq-id.gibbsq" ,
-	      label "GenBank journal-scan: sequence-id " ,
+              asn1 "Seq-id.ddbj" ,
+              form
+                use-template "StdTextseqId" } ,
+            {
+              asn1 "Seq-id.prf" ,
+              form
+                use-template "StdTextseqId" } ,
+            {
+              asn1 "Seq-id.pdb" ,
+              form
+                use-template "StdPDBseqId" } ,
+		   } 
+		   } } } , 
+  {
+    name "VersionSeqId" ,
+    format {
+      asn1 "Seq-id" ,
+      form
+        block {
+          components {
+            {
+              asn1 "Seq-id.local" ,
+              form
+                use-template "StdObjectId" } ,
+            {
+              asn1 "Seq-id.genbank" ,
+              form
+                use-template "VersionTextseqId" } ,
+            {
+              asn1 "Seq-id.embl" ,
+	      label "embl" ,
 	      prefix " " ,
               form
-            	text {
-                	  } } ,
+                use-template "StdEMBLseqId" } ,
             {
-               asn1 "Seq-id.gibbmt" ,
-	      label "GenBank journal-scan: molecule-id " ,
+              asn1 "Seq-id.pir" ,
+	      label "pir" ,
+	      prefix " " ,
+              form
+                use-template "VersionTextseqId" } ,
+            {
+              asn1 "Seq-id.swissprot" ,
+              form
+                use-template "VersionTextseqId" } ,
+            {
+               asn1 "Seq-id.patent" ,
+               form
+                 use-template "StdPatentSeqId" } ,
+            {
+              asn1 "Seq-id.other" ,
+	      label "REFSEQ:" ,
+	      prefix " " ,
+              form
+                use-template "VersionTextseqId" } ,
+            {
+              asn1 "Seq-id.general" ,
+              form
+                null NULL } ,
+            {
+               asn1 "Seq-id.gi" ,
+	      label "gi:" ,
 	      prefix " " ,
               form
             	text {
                 	  } } ,
             {
               asn1 "Seq-id.ddbj" ,
-	      label "DDBJ: " ,
               form
-                use-template "StdGPseqId" } ,
+                use-template "VersionTextseqId" } ,
             {
               asn1 "Seq-id.prf" ,
               form
-                use-template "StdTextseqId" } ,
+                use-template "VersionTextseqId" } ,
             {
               asn1 "Seq-id.pdb" ,
               form

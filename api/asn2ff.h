@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.10 $
 *
 * File Description:  Header file for asn2gb files.
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff.h,v $
+* Revision 6.10  1999/04/09 21:22:10  bazhin
+* Added function "ByteStorePtr AjpToByteStore()".
+*
+* Revision 6.9  1999/04/02 16:31:46  tatiana
+* asn2ff_print_to_mem and SeqEntryToStrArray changed to NLM_EXTERN
+*
+* Revision 6.8  1999/03/05 16:41:40  tatiana
+* GRAPHIK_FMT changed to 14
+*
+* Revision 6.7  1999/03/04 23:39:53  tatiana
+* GRAPHIK_FMT added
+*
 * Revision 6.6  1998/11/05 16:12:17  bazhin
 * Added 4th parameter "Boolean show_gi" to SeqEntryToGBFlatNoSeq()
 * function. It will say do or does not print GI number into output
@@ -122,6 +134,7 @@ extern "C" {
 #define REVISE_MODE ( (Uint1)11)
 #define DIRSUB_DEBUG_MODE ( (Uint1)12)
 #define PARTIAL_MODE ( (Uint1)13)
+#define GRAPHIK_FMT ( (Uint1)14)
 
 #define NUM_OF_ESTIMATES 20
 #define NUM_SEQ_LINES 10
@@ -133,7 +146,11 @@ NLM_EXTERN void asn2ff_cleanup PROTO ((Asn2ffJobPtr job));
 
 NLM_EXTERN Boolean asn2ff_print PROTO ((Asn2ffJobPtr job));
 
+NLM_EXTERN LinkStrPtr asn2ff_print_to_mem PROTO ((Asn2ffJobPtr job, LinkStrPtr lsp));
+
 NLM_EXTERN Asn2ffJobPtr Asn2ffJobCreate PROTO ((SeqEntryPtr sep, SeqSubmitPtr ssp, SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mode, StdPrintOptionsPtr	Spop));
+
+NLM_EXTERN CharPtr PNTR SeqEntryToStrArray PROTO ((SeqEntryPtr sep, Uint1 format, Uint1 mode));
 
 NLM_EXTERN Boolean SeqEntryToFlatAjp PROTO ((Asn2ffJobPtr ajp, SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToFlat PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
@@ -143,6 +160,7 @@ NLM_EXTERN Boolean SeqSubmitToFlat  PROTO ((SeqSubmitPtr ssp, FILE *fp, Uint1 mo
 NLM_EXTERN Boolean SeqGenomeToFlat PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToPartRpt PROTO ((SeqEntryPtr sep, FILE *fp));
 NLM_EXTERN Boolean SeqLocToFlat PROTO ((SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mode));
+NLM_EXTERN ByteStorePtr AjpToByteStore PROTO ((Asn2ffJobPtr ajp));
 
 NLM_EXTERN Int2 BioseqGetGBDivCode PROTO((BioseqPtr bsp, CharPtr buffer, Int2 buflen, Boolean err_post));
 /* moved from asn2ff1.c to asn2ff6.c */

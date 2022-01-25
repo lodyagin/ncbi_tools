@@ -1,4 +1,4 @@
-/* $Id: wwwutils.c,v 6.7 1998/06/11 19:00:04 shavirin Exp $
+/* $Id: wwwutils.c,v 6.8 1999/01/26 19:43:28 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   This file contains functions to read and process HTTP 
@@ -38,6 +38,9 @@
 *   
 *---------------------------------------------------------------------------
 * $Log: wwwutils.c,v $
+* Revision 6.8  1999/01/26 19:43:28  vakatov
+* Adopted for 32-bit MS-Windows DLLs
+*
 * Revision 6.7  1998/06/11 19:00:04  shavirin
 * Fixed some compiler warnings.
 *
@@ -125,18 +128,12 @@ static Boolean WWWReadEnvironment(WWWInfoDataPtr info);
 static WWWErrorCode WWWGetArgsInternal(WWWInfoPtr PNTR info, Boolean ReadArgv);
 static WWWInfoPtr WWWInfoNew(void);
 
+
 /****************************************************************************/
 /* EXTERNAL FINCTION */
 /****************************************************************************/
 
-/* ----------------------  WWWInfoFree  -------------------------
-   Purpose:     Free WWWInfo structure
-
-   Parameters:  WWWInfo structure
-
-   Returns:     None
-  ------------------------------------------------------------------*/
-void WWWInfoFree(WWWInfoPtr info_in)
+NLM_EXTERN void WWWInfoFree(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info = (WWWInfoDataPtr)info_in;
 
@@ -162,11 +159,10 @@ void WWWInfoFree(WWWInfoPtr info_in)
   info = (WWWInfoDataPtr) MemFree(info);
 }
 
+
 /* ----------------------  WWWInfoNew  -------------------------
    Purpose:     Allocates WWWInfo structure
-
    Parameters:  None
-
    Returns:     WWWInfo structure
   ------------------------------------------------------------------*/
 static WWWInfoPtr WWWInfoNew(void)
@@ -174,7 +170,8 @@ static WWWInfoPtr WWWInfoNew(void)
   return (WWWInfoPtr) MemNew(sizeof(WWWInfoData));
 }
 
-WWWEntryPtr PNTR WWWGetWWWEntries(WWWInfoPtr info_in)
+
+NLM_EXTERN WWWEntryPtr PNTR WWWGetWWWEntries(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -184,7 +181,7 @@ WWWEntryPtr PNTR WWWGetWWWEntries(WWWInfoPtr info_in)
   return(info->entries);
 }
 
-Int4 WWWGetMethod(WWWInfoPtr info_in)
+NLM_EXTERN Int4 WWWGetMethod(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -193,7 +190,8 @@ Int4 WWWGetMethod(WWWInfoPtr info_in)
   
   return(info->method);
 }
-Int4 WWWGetBrowser(WWWInfoPtr info_in)
+
+NLM_EXTERN Int4 WWWGetBrowser(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -202,7 +200,8 @@ Int4 WWWGetBrowser(WWWInfoPtr info_in)
 
   return(info->browser);
 }
-Int4 WWWGetNumEntries(WWWInfoPtr info_in)
+
+NLM_EXTERN Int4 WWWGetNumEntries(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -212,7 +211,7 @@ Int4 WWWGetNumEntries(WWWInfoPtr info_in)
   return(info->num_entries);
 }
 
-CharPtr WWWGetAgent(WWWInfoPtr info_in)
+NLM_EXTERN CharPtr WWWGetAgent(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -221,7 +220,8 @@ CharPtr WWWGetAgent(WWWInfoPtr info_in)
 
   return(info->agent);
 }
-CharPtr WWWGetAddress(WWWInfoPtr info_in)
+
+NLM_EXTERN CharPtr WWWGetAddress(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -230,7 +230,8 @@ CharPtr WWWGetAddress(WWWInfoPtr info_in)
 
   return(info->address);
 }
-CharPtr WWWGetServer(WWWInfoPtr info_in)
+
+NLM_EXTERN CharPtr WWWGetServer(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -239,7 +240,8 @@ CharPtr WWWGetServer(WWWInfoPtr info_in)
 
   return(info->server_name);
 }
-CharPtr WWWGetDocRoot(WWWInfoPtr info_in)
+
+NLM_EXTERN CharPtr WWWGetDocRoot(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -248,7 +250,8 @@ CharPtr WWWGetDocRoot(WWWInfoPtr info_in)
 
   return(info->doc_root);
 }
-CharPtr WWWGetHost(WWWInfoPtr info_in)
+
+NLM_EXTERN CharPtr WWWGetHost(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -258,7 +261,7 @@ CharPtr WWWGetHost(WWWInfoPtr info_in)
   return(info->host);
 }
 
-CharPtr WWWGetQuery(WWWInfoPtr info_in)
+NLM_EXTERN CharPtr WWWGetQuery(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -268,7 +271,7 @@ CharPtr WWWGetQuery(WWWInfoPtr info_in)
   return(info->query);
 }
 
-Int4 WWWGetPort(WWWInfoPtr info_in)
+NLM_EXTERN Int4 WWWGetPort(WWWInfoPtr info_in)
 {
   WWWInfoDataPtr info;
   
@@ -278,18 +281,18 @@ Int4 WWWGetPort(WWWInfoPtr info_in)
   return(info->port);
 }
 
-WWWErrorCode WWWReadPosting(WWWInfoPtr PNTR info)
+NLM_EXTERN WWWErrorCode WWWReadPosting(WWWInfoPtr PNTR info)
 {
   return WWWGetArgsInternal(info, FALSE);
 }
 
-WWWErrorCode WWWGetArgs(WWWInfoPtr PNTR info)
+NLM_EXTERN WWWErrorCode WWWGetArgs(WWWInfoPtr PNTR info)
 {
   return WWWGetArgsInternal(info, TRUE);
 }
 
-Boolean WWWSubstituteValue(WWWInfoPtr info_in,
-                           CharPtr old, CharPtr new_value)
+NLM_EXTERN Boolean WWWSubstituteValue(WWWInfoPtr info_in,
+                                      CharPtr old, CharPtr new_value)
 {
     Int4 i;
     WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
@@ -307,8 +310,8 @@ Boolean WWWSubstituteValue(WWWInfoPtr info_in,
     return FALSE;
 }
 
-Boolean WWWSubstituteValueByName(WWWInfoPtr info_in,
-                                 CharPtr new_value, CharPtr name)
+NLM_EXTERN Boolean WWWSubstituteValueByName(WWWInfoPtr info_in,
+                                            CharPtr new_value, CharPtr name)
 {
     Int4 i;
     WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
@@ -326,22 +329,6 @@ Boolean WWWSubstituteValueByName(WWWInfoPtr info_in,
     return FALSE;
 }
 
-/* ----------------------  WWWReadPosting  -------------------------
-   Purpose:     This function read HTML input in POST, GET or
-                multipart/form-data encoding - depends upon
-                environment. If used from command-line this
-                function will return valid WWWInfo structure
-                with all field blank exept info->method, that
-                will be set to COMMAND_LINE
-
-   Parameters:  None
-
-   Returns:     WWWInfoPtr structure with processed HTTP input and
-                environment
-   NOTE:        This function will filer input for non-printing
-                characters. Transfer of binary files is not supported.
-
-  ------------------------------------------------------------------*/
 static WWWErrorCode WWWGetArgsInternal(WWWInfoPtr PNTR info_out, 
                                        Boolean ReadArgv)
 {
@@ -353,28 +340,21 @@ static WWWErrorCode WWWGetArgsInternal(WWWInfoPtr PNTR info_out,
   if((info = (WWWInfoDataPtr) WWWInfoNew()) == NULL)
     return WWWErrNoMem;
   
-  
-  /* Reading environment from HTTPD */
-  
+    /* Reading environment from HTTPD */
   if(!WWWReadEnvironment(info)) {
     info->method = COMMAND_LINE;
 
     if(ReadArgv == TRUE) {
-      
       WWWargc = GetArgc();
       WWWargv = GetArgv();
       
       /* Now try to initilalize WWWInfo structure from STDIN or command line */
-      
       if(WWWargc == 1) { /* reading STDIN */
-        
         if((info->query = WWWReadFileInMemory(stdin, 0, TRUE)) != NULL) {
           info->entries = WWWGetEntries(&info->num_entries, info->query,
                                         (Boolean)(info->browser == NETSCAPE));
         }
-        
       } else { /* treat 1st parameter as input buffer */
-        
         if((info->query = StringSave(WWWargv[1])) != NULL) {
           info->entries = WWWGetEntries(&info->num_entries, info->query,
                                         (Boolean)(info->browser == NETSCAPE));
@@ -383,17 +363,12 @@ static WWWErrorCode WWWGetArgsInternal(WWWInfoPtr PNTR info_out,
     }
 
     *info_out = (VoidPtr) info;
-
     return WWWErrOk;
-
   } /* COMMAND_LINE */
 
   if(info->method == WWW_GET) { /* Getting GET data */
-    
     info->query = StringSave(getenv("QUERY_STRING"));  
-    
   } else if (info->method == WWW_POST) { /* Getting POST data */
-    
     if((getenv("CONTENT_LENGTH") != NULL) && 
        (WWWLen = atol(getenv("CONTENT_LENGTH"))) > 0) {
       if((info->query = WWWReadFileInMemory(stdin, WWWLen, TRUE)) == NULL)
@@ -408,16 +383,8 @@ static WWWErrorCode WWWGetArgsInternal(WWWInfoPtr PNTR info_out,
   return WWWErrOk;
 }
 
-/* ----------------------  WWWFindName  -------------------------
-   Purpose:     This function look for Name in WWW Entries structure
 
-   Parameters:  info - WWWInfo structure
-                find - Name to find 
-                start - if not 0 search will be started from specific index
-
-   Returns:     index in WWWEntry structue if "find" found and -1 if not 
-  ------------------------------------------------------------------*/
-Int4 WWWFindName(WWWInfoPtr info_in, CharPtr find)
+NLM_EXTERN Int4 WWWFindName(WWWInfoPtr info_in, CharPtr find)
 {
   
   Int4 i;
@@ -435,16 +402,7 @@ Int4 WWWFindName(WWWInfoPtr info_in, CharPtr find)
   return -1;
 }
 
-/* ----------------------  WWWGetNameByIndex  ----------------------
-   Purpose:     This function get Name correspondig to specific
-                index. 
-
-   Parameters:  info - WWWInfo structure
-                index - Index in WWW Entries structure
-               
-   Returns:     Pointer to Name or NULL if index invalid
-  ------------------------------------------------------------------*/
-CharPtr WWWGetNameByIndex(WWWInfoPtr info_in, Int4 index) 
+NLM_EXTERN CharPtr WWWGetNameByIndex(WWWInfoPtr info_in, Int4 index) 
 {
   WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
 
@@ -454,16 +412,7 @@ CharPtr WWWGetNameByIndex(WWWInfoPtr info_in, Int4 index)
   return info->entries[index]->name;
 }
 
-/* -------------------  WWWGetValueByIndex  ---------------------
-   Purpose:     This function get Value correspondig to specific
-                index. 
-
-   Parameters:  info - WWWInfo structure
-                index - Index in WWW Entries structure
-               
-   Returns:     Pointer to Value or NULL if index invalid
-  ------------------------------------------------------------------*/
-CharPtr WWWGetValueByIndex(WWWInfoPtr info_in, Int4 index) 
+NLM_EXTERN CharPtr WWWGetValueByIndex(WWWInfoPtr info_in, Int4 index) 
 {
   WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
 
@@ -473,17 +422,7 @@ CharPtr WWWGetValueByIndex(WWWInfoPtr info_in, Int4 index)
   return info->entries[index]->val;
 }
 
-/* -------------------  WWWGetValueByName  ---------------------
-   Purpose:     This function get Value correspondig to specific
-                Name. 
-
-   Parameters:  info - WWWInfo structure
-                name - name to look for
-                start - Index in WWW Entries structure to start from
-               
-   Returns:     Pointer to Value or NULL if Name was not found 
-  ------------------------------------------------------------------*/
-CharPtr WWWGetValueByName(WWWInfoPtr info_in, CharPtr find) 
+NLM_EXTERN CharPtr WWWGetValueByName(WWWInfoPtr info_in, CharPtr find) 
 {
   Int4 index;
   WWWInfoDataPtr info = (WWWInfoDataPtr) info_in;
@@ -497,22 +436,10 @@ CharPtr WWWGetValueByName(WWWInfoPtr info_in, CharPtr find)
   return info->entries[index]->val;
 }
 
-/* ----------------------  WWWGetEntries  -------------------------
-   Purpose:     Assuming, that input buffer is in HTTP or RFC 1867
-                this function converts input into array of name, value
-                pairs in the form of WWWEntry -es.
-   Parameters:  num_entries - number of paires returned
-                WWWBuffer   - main input HTTP buffer
-                NetscapeOK - if TRUE check for RFC 1867 will 
-                be performed before standard processing
-
-   Returns:     Pointer to array of WWWEntry pairs
-   NOTE:        RFC 1867 may be enabled only with Netscape Version 2 and 
-                higher.
-  ------------------------------------------------------------------*/
-WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries, CharPtr WWWBuffer_in, 
-                               Boolean NetscapeOK) {
-  
+NLM_EXTERN WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries,
+                                          CharPtr WWWBuffer_in, 
+                                          Boolean NetscapeOK)
+{
   register Int4 i;
   Int4 size;
   CharPtr WWWBuffer;
@@ -559,23 +486,9 @@ WWWEntryPtr PNTR WWWGetEntries(Int4Ptr num_entries, CharPtr WWWBuffer_in,
   return entries;
 }
 
-/* --------------------  WWWGetEntriesFomData  -----------------------
-   Purpose:     Assuming, that input buffer is in RFC 1867
-                ftp://ds.internic.net/rfc/rfc1867.txt  
-                (multipart/form-data) encoding this function 
-                converts input into array of name, value pairs 
-                in the form of WWWEntry -es.
-
-   Parameters:  WWWBuffer   - main input HTTP buffer
-                NetscapeOK - if TRUE check for RFC 1867 will 
-                be performed before standard processing
-
-   Returns:     Number of WWW entries returned
-   NOTE:        RFC 1867 may be enabled only with Netscape Version 2 and 
-                higher.
-  ------------------------------------------------------------------*/
-Int4 WWWGetEntriesFormData(WWWEntryPtr PNTR entries, 
-                           CharPtr WWWBuffer) {
+NLM_EXTERN Int4 WWWGetEntriesFormData(WWWEntryPtr PNTR entries, 
+                                      CharPtr WWWBuffer)
+{
   
     Int4 FieldLen, buff_len;
     register Int4 i;
@@ -640,24 +553,7 @@ Int4 WWWGetEntriesFormData(WWWEntryPtr PNTR entries,
     return i;
 }
 
-/* -------------------  WWWReadFileInMemory  -----------------------
-   Purpose:     Function reads data from file or stdin into 
-                string buffer (terminated by NULLB).
-
-   Parameters:  fd - opened file 
-                len - number of bytes to read. If this value set
-                      to 0 file will be read until EOF or closing
-                      external connection (for sockets).
-                      If len != 0 NOT MORE THAN len bytes will
-                      be read from input streem
-                filter - if TRUE filtering of non-printed characters
-                      will be performed
-   Returns:     Pointer to allocated buffer.
-   NOTE:        Please be carefull with "len": function read input
-                absolutely differently if len == 0 or len != 0
-
-  ------------------------------------------------------------------*/
-CharPtr WWWReadFileInMemory(FILE *fd, Int4 len, Boolean filter)
+NLM_EXTERN CharPtr WWWReadFileInMemory(FILE *fd, Int4 len, Boolean filter)
 {
   Int4     bytes = 0;
   CharPtr  in_buff;
@@ -717,9 +613,12 @@ CharPtr WWWReadFileInMemory(FILE *fd, Int4 len, Boolean filter)
   
   return(in_buff);
 }
+
+
 /****************************************************************************/
 /* STATIC FINCTIONS */
 /****************************************************************************/
+
 static Boolean WWWReadEnvironment(WWWInfoDataPtr info)
 {
   CharPtr Method;
@@ -813,14 +712,3 @@ static Char WWWx2c(CharPtr what) {
 
     return(digit);
 }
-
-
-
-
-
-
-
-
-
-
-

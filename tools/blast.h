@@ -32,11 +32,20 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.15 $ */
-/* $Log: blast.h,v $
-/* Revision 6.15  1998/09/22 16:56:12  egorov
-/* Add prototype for BlastErrorPrintExtra()
-/*
+/* $Revision: 6.18 $ 
+* $Log: blast.h,v $
+* Revision 6.18  1999/03/18 16:43:31  shavirin
+* Added definition of the function Boolean HeyIAmInMemory(Int4 program)
+*
+* Revision 6.17  1999/03/17 16:49:11  madden
+* Removed comment within comment
+*
+* Revision 6.16  1999/01/26 18:26:23  madden
+* Add updateLambdaK prototype
+*
+* Revision 6.15  1998/09/22 16:56:12  egorov
+* Add prototype for BlastErrorPrintExtra()
+*
  * Revision 6.14  1998/09/14 15:11:14  egorov
  * Add support for Int8 length databases; remove unused variables
  *
@@ -392,8 +401,11 @@ SeqLocPtr LIBCALL BioseqHitRangeEngineByLoc PROTO((SeqLocPtr slp, CharPtr progna
 SeqLocPtr LIBCALL BioseqHitRangeEngine PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
 
 
+void LIBCALL updateLambdaK PROTO((BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent));
 
-
+#ifdef OS_UNIX
+Boolean HeyIAmInMemory(Int4 program);
+#endif
 
 
 #ifdef __cplusplus

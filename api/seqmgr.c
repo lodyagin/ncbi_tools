@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.69 $
+* $Revision: 6.89 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,66 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.89  1999/04/01 20:44:13  kans
+* Int2 lengths to Int4 to allow CountGapsInDeltaSeq with buffer > 32K
+*
+* Revision 6.88  1999/03/26 21:38:15  kans
+* record sfp, sap, protFeat, cdsOrRnaFeat even if not TL_NOT_TEMP, clear when reaping
+*
+* Revision 6.87  1999/03/24 15:10:32  kans
+* FetchFromSeqIdGiCache trims least recently used IDs if list grows too big
+*
+* Revision 6.86  1999/03/22 00:32:12  kans
+* added SeqMgrGetProtXref
+*
+* Revision 6.85  1999/03/11 23:39:33  kans
+* sprintf and sscanf casts
+*
+* Revision 6.84  1999/03/10 20:34:15  kans
+* SeqMgrExploreFeatures location filter had incorrect binary search, would need array sorted primarily by rightmost coordinate to speed up, so commented out for now
+*
+* Revision 6.83  1999/03/04 17:10:13  kans
+* check for tsip->release == NULL for showversion (JO)
+*
+* Revision 6.82  1999/02/24 17:09:46  kans
+* speed up locationfilter in SeqMgrExploreFeatures
+*
+* Revision 6.81  1999/02/24 13:25:21  kans
+* SeqMgrGetOverlappingFeature takes subtype and containedWithin parameters
+*
+* Revision 6.80  1999/02/16 22:18:36  kans
+* fixed interval sorting
+*
+* Revision 6.79  1999/02/02 21:38:11  kans
+* moved SHOWVERSION to header, SeqMgrAddIndexElement with and without version (JO)
+*
+* Revision 6.78  1999/01/29 16:13:51  kans
+* SeqMgrExploreBioseqs/Segments/Descriptors/Features all return count of visits to callback
+*
+* Revision 6.77  1999/01/27 20:14:09  kans
+* JustExamineBioseqs now sets nucs and prots to true if about to explore parts set
+*
+* Revision 6.76  1999/01/27 15:20:48  kans
+* added SeqMgrGetBioseqContext
+*
+* Revision 6.75  1999/01/27 01:45:29  kans
+* fixes to SeqMgrGetParentOfPart and JustExamineBioseqs
+*
+* Revision 6.74  1999/01/27 00:02:13  kans
+* calculation of index in SeqMgrGetParentOfPart now uses partsByLoc, matching to partsBySeqId segpartptr
+*
+* Revision 6.73  1999/01/26 23:38:07  kans
+* SeqMgrGetParentOfPart now takes SeqMgrSegmentContext PNTR parameter
+*
+* Revision 6.72  1999/01/26 22:54:41  kans
+* added SeqMgrGetParentOfPart
+*
+* Revision 6.71  1999/01/26 20:44:29  kans
+* numsegs field in bioseq context
+*
+* Revision 6.70  1999/01/26 18:26:25  kans
+* BioseqFindFromSeqLoc is a public function that is better than GetBioseqGivenSeqLoc
+*
 * Revision 6.69  1999/01/14 21:50:04  kans
 * added packaging level to descriptor context structure
 *
@@ -1012,42 +1072,6 @@ done_cache:
 
 	MakeReversedSeqIdString (sid, buf, 79); /* common function to make id, call RevStringUpper */
 
-	/*
-	oldchoice = 0;
-	switch (sid->choice)
-	{
-	case SEQID_GI:
-		sprintf(buf, "%ld", (long)(sid->data.ptrvalue));
-		break;
-	case SEQID_EMBL:
-	case SEQID_DDBJ:
-		oldchoice = sid->choice;
-		sid->choice = SEQID_GENBANK;
-	case SEQID_GENBANK:
-	case SEQID_PIR:
-	case SEQID_OTHER:
-	case SEQID_SWISSPROT:
-	case SEQID_PRF:
-		tsip = (TextSeqIdPtr)(sid->data.ptrvalue);
-		if (tsip->accession != NULL)
-		{
-			tmp = tsip->name;
-			tsip->name = NULL;
-			SeqIdWrite(sid, buf, PRINTID_FASTA_SHORT, 79);
-			tsip->name = tmp;
-		}
-		else
- 			SeqIdWrite(sid, buf, PRINTID_FASTA_SHORT, 79);
-		if (oldchoice)
-			sid->choice = oldchoice;
-		break;
-	default:
-  		SeqIdWrite(sid, buf, PRINTID_FASTA_SHORT, 79);
-		break;
-	}
-
-	RevStringUpper(buf);
-	*/
 
 	imin = 0;
 	smp = SeqMgrReadLock();
@@ -1425,6 +1449,7 @@ NLM_EXTERN Int4 LIBCALL GetGIForSeqId (SeqIdPtr sid)
 *****************************************************************************/
 typedef struct seqidblock {
   Int4       uid;
+  time_t     touch;
   SeqIdPtr   sip;
 } SeqIdBlock, PNTR SeqIdBlockPtr;
 
@@ -1463,6 +1488,7 @@ static void RecordInSeqIdGiCache (Int4 gi, SeqIdPtr sip)
 	sibp->uid = gi;
 	if (sip != NULL) {
 		sibp->sip = SeqIdDup (sip);
+		sibp->touch = GetSecs ();
 	}
 	vnp->data.ptrvalue = (Pointer) sibp;
 
@@ -1508,6 +1534,31 @@ ret:
 	return;
 }
 
+/* trim list by sorting older nodes to end of list if list grew too large */
+
+static int LIBCALLBACK SortSeqIdGiCacheTime (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  SeqIdBlockPtr  sibp1;
+  SeqIdBlockPtr  sibp2;
+  ValNodePtr     vnp1;
+  ValNodePtr     vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  sibp1 = (SeqIdBlockPtr) vnp1->data.ptrvalue;
+  sibp2 = (SeqIdBlockPtr) vnp2->data.ptrvalue;
+  if (sibp1 == NULL || sibp2 == NULL) return 0;
+  if (sibp1->touch > sibp2->touch) {
+     return -1;
+  } else if (sibp1->touch < sibp2->touch) {
+    return 1;
+  }
+  return 0;
+}
+
 static Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp)
 
 {
@@ -1533,6 +1584,19 @@ static Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp)
 
 		if (seqidgiarray == NULL)
 		{
+			seqidcount = (Int2) ValNodeLen (seqidgicache);
+
+			/* if list is too large, sort by touch time, cut least recently used ids */
+
+			if (seqidcount > 32000) {
+			  seqidgicache = ValNodeSort (seqidgicache, SortSeqIdGiCacheTime);
+			  for (vnp = seqidgicache; vnp != NULL && seqidcount > 24000;
+			       vnp = vnp->next, seqidcount--) continue;
+			  if (vnp != NULL) {
+			    vnp->next = ValNodeFreeData (vnp->next);
+			  }
+			}
+
 			seqidcount = (Int2) ValNodeLen (seqidgicache);
 			seqidgiarray = MemNew (sizeof (ValNodePtr) * (size_t) (seqidcount + 1));
 			if (seqidgiarray != NULL) {
@@ -1584,6 +1648,7 @@ static Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp)
 		if (left > right + 1 && sibp != NULL) {
 			if (sibp->sip != NULL) {
 				*sipp = SeqIdDup (sibp->sip);
+				sibp->touch = GetSecs ();
 			}
 			done = TRUE;
 		}
@@ -2552,7 +2617,7 @@ NLM_EXTERN Boolean LIBCALL SpreadGapsInDeltaSeq (BioseqPtr bsp)
 *      returns TRUE if values in argument were set.
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs, Int4Ptr num_gaps, Int4Ptr known_residues, Int4Ptr num_gaps_faked, CharPtr buf, Int2 buflen)
+NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs, Int4Ptr num_gaps, Int4Ptr known_residues, Int4Ptr num_gaps_faked, CharPtr buf, Int4 buflen)
 {
 	Boolean retval = FALSE;
 	Int4 residues = 0,
@@ -2568,7 +2633,7 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 	IntFuzzPtr ifp;
 	Boolean unk;
 	static Char tmp[128];
-	Int2 diff;
+	Int2 diff, blen;
 
 	if (bsp == NULL) return retval;
 	if ((bsp->repr != Seq_repr_delta) || (bsp->seq_ext == NULL))
@@ -2589,8 +2654,9 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 				if (slocp->choice == SEQLOC_NULL)  /* gap */
 				{
 					gaps++;
-					sprintf(tmp, "* %ld %ld gap of unknown length~", from, len);
-					diff = LabelCopy(buf, tmp, buflen);
+					sprintf(tmp, "* %ld %ld gap of unknown length~", (long) from, (long) len);
+					blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
+					diff = LabelCopy(buf, tmp, blen);
 					buflen -= diff;
 					buf += diff;
 				}
@@ -2599,8 +2665,9 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 					if (buf != NULL) {
 						tlen =  SeqLocLen(slocp);
 						len  += tlen;
-						sprintf(tmp, "* %8ld %8ld: contig of %ld bp in length~", from, len, tlen);
-						diff = LabelCopy(buf, tmp, buflen);
+						sprintf(tmp, "* %8ld %8ld: contig of %ld bp in length~", (long) from, (long) len, (long) tlen);
+						blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
+						diff = LabelCopy(buf, tmp, blen);
 						buflen -= diff;
 						buf += diff;
 					}
@@ -2615,8 +2682,9 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 				{
 					residues += slp->length;
 					if (buf) {
-						sprintf(tmp, "* %8ld %8ld: contig of %ld bp in length~", from, len, tlen);
-						diff = LabelCopy(buf, tmp, buflen);
+						sprintf(tmp, "* %8ld %8ld: contig of %ld bp in length~", (long) from, (long) len, (long) tlen);
+						blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
+						diff = LabelCopy(buf, tmp, blen);
 						buflen -= diff;
 						buf += diff;
 					}
@@ -2635,17 +2703,19 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 								if (from > len) {
 								sprintf(tmp, "*                    gap of unknown length~");
 								} else {
-								sprintf(tmp, "* %8ld %8ld: gap of unknown length~", from, len);
+								sprintf(tmp, "* %8ld %8ld: gap of unknown length~", (long) from, (long) len);
 								}
-								diff = LabelCopy(buf, tmp, buflen);
+								blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
+								diff = LabelCopy(buf, tmp, blen);
 								buflen -= diff;
 								buf += diff;
 							}
 						}
 					}
 					if (!unk && buf) {
-						sprintf(tmp, "* %8ld %ld: gap of %8ld bp~", from, len, tlen);
-						diff = LabelCopy(buf, tmp, buflen);
+						sprintf(tmp, "* %8ld %ld: gap of %8ld bp~", (long) from, (long) len, (long) tlen);
+						blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
+						diff = LabelCopy(buf, tmp, blen);
 						buflen -= diff;
 						buf += diff;
 					}
@@ -2806,6 +2876,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 	Boolean indexed;
 	TextSeqIdPtr tsip;
 	SeqMgrPtr smp;
+	Int2 version = 0;
 
 	smp = SeqMgrReadLock();
 	if (! smp->NonIndexedBioseqCnt)
@@ -2847,6 +2918,12 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 						oldchoice = sip->choice;
 						sip->choice = SEQID_GENBANK;
 					case SEQID_GENBANK:
+						tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+						if (((tsip->version > 0) && (tsip->release == NULL))
+						    && SHOWVERSION)
+						  {
+						    version = tsip->version;
+						  }
 					case SEQID_PIR:
 					case SEQID_OTHER:
 					case SEQID_SWISSPROT:
@@ -2864,6 +2941,12 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(void)
 						tsip->name = NULL;
  						SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
 						SeqMgrAddIndexElement(smp, bsp, buf);
+						if (version) {
+						  tsip->version = 0;
+						  SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
+						  SeqMgrAddIndexElement(smp, bsp, buf);
+						  tsip->version = version;
+						}
 						tsip->name = tmp;
 						if (oldchoice)
 							sip->choice = oldchoice;
@@ -3300,8 +3383,15 @@ NLM_EXTERN Pointer LIBCALLBACK SeqMgrReapBioseqExtraFunc (Pointer data)
     curr = curr->next;
   }
 
+  /* these were originally only recorded if omdp->tempload == TL_NOT_TEMP */
+
+  bspextra->protFeat = NULL;
+  bspextra->cdsOrRnaFeat = NULL;
+
   return NULL;
 }
+
+/* !!! SeqMgrReloadBioseqExtraFunc is not yet implemented !!! */
 
 NLM_EXTERN Pointer LIBCALLBACK SeqMgrReloadBioseqExtraFunc (Pointer data)
 
@@ -3474,6 +3564,217 @@ static BioseqPtr FindFirstLocalBioseq (SeqLocPtr loc)
   }
 
   return NULL;
+}
+
+/*****************************************************************************
+*
+*   BioseqFindFromSeqLoc finds the segmented bioseq if location is join on parts,
+*     and does so even if some of the intervals are far accessions.
+*
+*****************************************************************************/
+
+NLM_EXTERN BioseqPtr BioseqFindFromSeqLoc (SeqLocPtr loc)
+
+{
+  BioseqPtr  bsp = NULL;
+
+  if (loc == NULL) return NULL;
+  bsp = FindAppropriateBioseq (loc, NULL);
+  if (bsp == NULL) {
+    bsp = FindFirstLocalBioseq (loc);
+  }
+  return bsp;
+}
+
+/*****************************************************************************
+*
+*   SeqMgrGetParentOfPart returns the segmented bioseq parent of a part bioseq,
+*     and fills in the context structure.
+*
+*****************************************************************************/
+
+NLM_EXTERN BioseqPtr LIBCALL SeqMgrGetParentOfPart (BioseqPtr bsp,
+                                                    SeqMgrSegmentContext PNTR context)
+
+{
+  BioseqExtraPtr    bspextra;
+  Char              buf [80];
+  Int2              compare;
+  Uint2             entityID;
+  Int2              i;
+  Int4              numsegs;
+  ObjMgrDataPtr     omdp;
+  BioseqPtr         parent;
+  SMSeqIdxPtr PNTR  partsByLoc;
+  SMSeqIdxPtr PNTR  partsBySeqId;
+  SMSeqIdxPtr       segpartptr;
+  SeqIdPtr          sip;
+  SeqLocPtr         slp;
+  Int2              L, R, mid;
+
+  if (context != NULL) {
+    MemSet ((Pointer) context, 0, sizeof (SeqMgrSegmentContext));
+  }
+
+  omdp = SeqMgrGetOmdpForBioseq (bsp);
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return NULL;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return NULL;
+  entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
+
+  parent = bspextra->parentBioseq;
+  if (parent == NULL) return NULL;
+
+  /* now need parts list from extra data on parent */
+
+  omdp = SeqMgrGetOmdpForBioseq (parent);
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return parent;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return parent;
+
+  partsBySeqId = bspextra->partsBySeqId;
+  numsegs = bspextra->numsegs;
+  if (partsBySeqId == NULL || numsegs < 1) return parent;
+
+  sip = bsp->id;
+  if (sip == NULL) return parent;
+
+  /* binary search into array on segmented bioseq sorted by part seqID (reversed) string */
+
+  while (sip != NULL) {
+    if (MakeReversedSeqIdString (sip, buf, sizeof (buf) - 1)) {
+      L = 0;
+      R = numsegs - 1;
+      while (L < R) {
+        mid = (L + R) / 2;
+        segpartptr = partsBySeqId [mid];
+        compare = StringCmp (segpartptr->seqIdOfPart, buf);
+        if (compare < 0) {
+          L = mid + 1;
+        } else {
+          R = mid;
+        }
+      }
+      segpartptr = partsBySeqId [R];
+      if (segpartptr != NULL && StringCmp (segpartptr->seqIdOfPart, buf) == 0) {
+        if (context != NULL) {
+          slp = segpartptr->slp;
+          context->entityID = entityID;
+          context->itemID = segpartptr->itemID;
+          context->slp = slp;
+          context->parent = segpartptr->parentBioseq;
+          context->cumOffset = segpartptr->cumOffset;
+          context->from = segpartptr->from;
+          context->to = segpartptr->to;
+          context->strand = segpartptr->strand;
+          context->userdata = NULL;
+          context->omdp = (Pointer) omdp;
+          context->index = 0;
+
+          /* now find entry in partsByLoc list to set proper index */
+
+          partsByLoc = bspextra->partsByLoc;
+          if (partsByLoc != NULL) {
+            i = 0;
+            while (i < numsegs) {
+              if (segpartptr == partsByLoc [i]) {
+                context->index = i + 1;
+              }
+              i++;
+            }
+          }
+        }
+        return parent;
+      }
+    }
+    sip = sip->next;
+  }
+
+  return parent;
+}
+
+/*****************************************************************************
+*
+*   SeqMgrGetBioseqContext fills in the context structure for any bioseq.
+*
+*****************************************************************************/
+
+static void SetBspContext (SeqEntryPtr sep, BioseqSetPtr bssp,
+                           BioseqPtr match, Uint2Ptr idx,
+                           SeqMgrBioseqContextPtr context)
+
+{
+  BioseqPtr       bsp;
+  BioseqExtraPtr  bspextra;
+  ObjMgrDataPtr   omdp;
+
+  if (sep == NULL || match == NULL || context == NULL) return;
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+
+    if (idx != NULL) {
+      (*idx)++;
+    }
+
+    if (bsp != match) return;
+
+    /* have now found desired bioseq, set context */
+
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
+    if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return;
+    bspextra = (BioseqExtraPtr) omdp->extradata;
+    if (bspextra == NULL) return;
+
+    context->itemID = bspextra->bspItemID;
+    context->bsp = bsp;
+    context->sep = sep;
+    context->bssp = bssp;
+    context->numsegs = bspextra->numsegs;
+    context->omdp = omdp;
+    if (idx != NULL) {
+      context->index = *idx;
+    }
+
+    return;
+  }
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+
+    /* recursively explore bioseq set until user function returns FALSE */
+
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+      SetBspContext (sep, bssp, match, idx, context);
+    }
+  }
+}
+
+NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext (BioseqPtr bsp,
+                                                   SeqMgrBioseqContext PNTR context)
+
+{
+  Uint2        entityID;
+  Uint2        index = 0;
+  SeqEntryPtr  sep;
+
+  if (bsp == NULL || context == NULL) return FALSE;
+
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  if (entityID == 0) return FALSE;
+
+  sep = SeqMgrGetTopSeqEntryForEntity (entityID);
+  if (sep == NULL) return FALSE;
+
+  context->entityID = entityID;
+  context->index = 0;
+  context->userdata = NULL;
+
+  SetBspContext (sep, NULL, bsp, &index, context);
+
+  return (Boolean) (context->index != 0);
 }
 
 /*****************************************************************************
@@ -3682,7 +3983,11 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (Uint2 entityID, BioseqPtr
     context->partialR = item->partialR;
     context->farloc = item->farloc;
     context->strand = item->strand;
-    context->seqfeattype = FindFeatFromFeatDefType (item->subtype);
+    if (curr != NULL) {
+      context->seqfeattype = curr->data.choice;
+    } else {
+      context->seqfeattype = FindFeatFromFeatDefType (item->subtype);
+    }
     context->featdeftype = item->subtype;
     context->numivals = item->numivals;
     context->ivals = item->ivals;
@@ -3885,9 +4190,9 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherContextP
     MemFree (ptmp);
   }
 
-  if (omdp->tempload == TL_NOT_TEMP) {
+  /* if (omdp->tempload == TL_NOT_TEMP) { */
     bspextra->cdsOrRnaFeat = sfp;
-  }
+  /* } */
   if (sfp->data.choice == SEQFEAT_RNA) return;
 
   /* if protFeat exists it was set by exhaustive gather on protein bioseq */
@@ -3917,9 +4222,9 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherContextP
           if (diff >= 0) {
             if (diff < min) {
               min = diff;
-              if (omdp->tempload == TL_NOT_TEMP) {
+              /* if (omdp->tempload == TL_NOT_TEMP) { */
                 bspextra->protFeat = prt;
-              }
+              /* } */
             }
           }
         }
@@ -3984,11 +4289,11 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
 
       if (curr->data != NULL) {
         item = &(curr->data [curr->index]);
-        if (omdp->tempload == TL_NOT_TEMP) {
+        /* if (omdp->tempload == TL_NOT_TEMP) { */
           item->sfp = sfp;
           item->sap = exindx->lastsap;
           item->bsp = bsp;
-        }
+        /* } */
         FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
         item->label = StringSaveNoNull (buf);
         item->left = left;
@@ -4250,9 +4555,9 @@ static Boolean RecordFeaturesInBioseqs (GatherContextPtr gcp)
     if (diff >= 0) {
       if (diff < bspextra->min) {
         bspextra->min = diff;
-        if (omdp->tempload == TL_NOT_TEMP) {
+        /* if (omdp->tempload == TL_NOT_TEMP) { */
           bspextra->protFeat = sfp;
-        }
+        /* } */
       }
     }
   }
@@ -4541,18 +4846,18 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
 
       /* check left interval */
 
-      if (sp1->ivals [i] > sp2->ivals [i]) {
+      if (sp1->ivals [j] > sp2->ivals [j]) {
         return 1;
-      } else if (sp1->ivals [i] < sp2->ivals [i]) {
+      } else if (sp1->ivals [j] < sp2->ivals [j]) {
         return -1;
       }
       j++;
 
       /* check right interval */
 
-      if (sp1->ivals [i] > sp2->ivals [i]) {
+      if (sp1->ivals [j] > sp2->ivals [j]) {
         return -1; /* was 1 */
-      } else if (sp1->ivals [i] < sp2->ivals [i]) {
+      } else if (sp1->ivals [j] < sp2->ivals [j]) {
         return 1; /* was -1 */
       }
       j++;
@@ -5170,17 +5475,36 @@ NLM_EXTERN time_t LIBCALL SeqMgrFeaturesAreIndexed (Uint2 entityID)
 *
 *****************************************************************************/
 
+NLM_EXTERN ProtRefPtr LIBCALL SeqMgrGetProtXref (SeqFeatPtr sfp)
+
+{
+  ProtRefPtr      prp = NULL;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return NULL;
+  xref = sfp->xref;
+  while (xref != NULL && xref->data.choice != SEQFEAT_PROT) {
+    xref = xref->next;
+  }
+  if (xref != NULL) {
+    prp = (ProtRefPtr) xref->data.value.ptrvalue;
+  }
+  return prp;
+}
+
 static void SetContextForFeature (SeqFeatPtr sfp, SeqMgrFeatContext PNTR context, ObjMgrDataPtr omdp)
 
 {
   SMFeatItemPtr  best;
+  SeqFeatPtr     bst;
 
   if (sfp == NULL || context == NULL || omdp == NULL) return;
   best = SeqMgrFindSMFeatItemPtr (sfp);
   if (best == NULL) return;
+  bst = best->sfp;
   context->entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
   context->itemID = best->itemID;
-  context->sfp = best->sfp;
+  context->sfp = bst;
   context->sap = best->sap;
   context->bsp = best->bsp;
   context->label = best->label;
@@ -5190,6 +5514,11 @@ static void SetContextForFeature (SeqFeatPtr sfp, SeqMgrFeatContext PNTR context
   context->partialR = best->partialR;
   context->farloc = best->farloc;
   context->strand = best->strand;
+  if (bst != NULL) {
+    context->seqfeattype = bst->data.choice;
+  } else {
+    context->seqfeattype = FindFeatFromFeatDefType (best->subtype);
+  }
   context->seqfeattype = FindFeatFromFeatDefType (best->subtype);
   context->featdeftype = best->subtype;
   context->numivals = best->numivals;
@@ -5252,8 +5581,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetRNAgivenProduct (BioseqPtr bsp,
 
 /*****************************************************************************
 *
-*   SeqMgrGetGeneXref, SeqMgrGeneIsSuppressed, SeqMgrGetOverlappingGene,
-*     and SeqMgrGetOverlappingPub
+*   SeqMgrGetGeneXref, SeqMgrGeneIsSuppressed, SeqMgrGetProtXref,
+*     SeqMgrGetOverlappingGene, and SeqMgrGetOverlappingPub
 *
 *****************************************************************************/
 
@@ -5303,13 +5632,16 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed (GeneRefPtr grp)
 }
 
 static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
-                                                SMFeatItemPtr PNTR array, Int4 num, Int4Ptr pos,
+                                                SMFeatItemPtr PNTR array,
+                                                Int4 num, Int4Ptr pos,
+                                                Boolean mustByContainedWithin,
                                                 SeqMgrFeatContext PNTR context)
 
 {
   SMFeatItemPtr   best = NULL;
   BioseqPtr       bsp;
   BioseqExtraPtr  bspextra;
+  SeqFeatPtr      bst;
   Int4            diff;
   SMFeatItemPtr   feat;
   Uint2           index = 0;
@@ -5317,6 +5649,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
   Int4            left;
   Int4            max;
   Int4            mid;
+  Boolean         okay;
   ObjMgrDataPtr   omdp;
   Int4            R;
   Int4            right;
@@ -5388,7 +5721,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
     }
   }
 
-  /* linear scan to smallest covering gene, publication, or biosource */
+  /* linear scan to smallest covering gene, publication, biosource, etc. */
 
   best = NULL;
   index = 0;
@@ -5397,7 +5730,27 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
   max = INT4_MAX;
   strand = SeqLocStrand (slp);
   while (R < num && feat != NULL && feat->left <= right) {
-    if (feat->left <= left && feat->right >= right) {
+    okay = FALSE;
+    if (mustByContainedWithin) {
+
+      /* requires location to be completely contained within gene, etc. */
+
+      if (feat->left <= left && feat->right >= right) {
+        okay = TRUE;
+      }
+    } else {
+
+      /* location must merely be overlapped by gene, etc. */
+
+      if ((feat->left <= left && feat->right > left) ||
+          (feat->left < right && feat->right >= right)) {
+        okay = TRUE;
+      }
+    }
+
+      /* requires feature to be contained within gene, etc. */
+
+    if (okay) {
       if (feat->strand == strand ||
           strand == Seq_strand_unknown ||
           feat->strand == Seq_strand_unknown) {
@@ -5418,6 +5771,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
       *pos = index + 1;
     }
     if (context != NULL) {
+      bst = best->sfp;
       context->entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
       context->itemID = best->itemID;
       context->sfp = best->sfp;
@@ -5430,7 +5784,11 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
       context->partialR = best->partialR;
       context->farloc = best->farloc;
       context->strand = best->strand;
-      context->seqfeattype = FindFeatFromFeatDefType (best->subtype);
+      if (bst != NULL) {
+        context->seqfeattype = bst->data.choice;
+      } else {
+        context->seqfeattype = FindFeatFromFeatDefType (best->subtype);
+      }
       context->featdeftype = best->subtype;
       context->numivals = best->numivals;
       context->ivals = best->ivals;
@@ -5447,39 +5805,42 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_GENE, NULL, 0, NULL, context);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_GENE, NULL, 0, NULL, TRUE, context);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingmRNA (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, context);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_mRNA, NULL, 0, NULL, TRUE, context);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingCDS (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_CDS, NULL, 0, NULL, context);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_CDS, NULL, 0, NULL, TRUE, context);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingPub (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_PUB, NULL, 0, NULL, context);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_PUB, NULL, 0, NULL, TRUE, context);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_BIOSRC, NULL, 0, NULL, context);
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_BIOSRC, NULL, 0, NULL, TRUE, context);
 }
 
 /*****************************************************************************
 *
 *   SeqMgrBuildFeatureIndex builds a sorted array index for any feature type
 *     (gene, mRNA, CDS, publication, and biosource have built-in arrays)
-*   SeqMgrGetOverlappingFeature uses the array to find feature overlap,
-*     returning the position in the index
+*   SeqMgrGetOverlappingFeature uses the array, or a feature subtype (chocies
+*     are FEATDEF_GENE, FEATDEF_CDS, FEATDEF_mRNA, FEATDEF_PUB, or FEATDEF_BIOSRC)
+*     to find feature overlap, requiring either that the location be completely
+*     contained within the feature range, or merely that it be overlapped by the
+*     feature, and returns the position in the index
 *   SeqMgrGetFeatureInIndex gets an arbitrary feature indexed by the array
 *
 *****************************************************************************/
@@ -5544,13 +5905,14 @@ NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex (BioseqPtr bsp, Int4Ptr num,
   return (VoidPtr) array;
 }
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature (SeqLocPtr slp, VoidPtr featarray,
-                                                           Int4 numfeats, Int4Ptr position,
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature (SeqLocPtr slp, Uint2 subtype,
+                                                           VoidPtr featarray, Int4 numfeats,
+                                                           Int4Ptr position, Boolean containedWithin,
                                                            SeqMgrFeatContext PNTR context)
 
 {
-  return SeqMgrGetBestOverlappingFeat (slp, 0, (SMFeatItemPtr PNTR) featarray,
-                                       numfeats, position, context);
+  return SeqMgrGetBestOverlappingFeat (slp, subtype, (SMFeatItemPtr PNTR) featarray,
+                                       numfeats, position, containedWithin, context);
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (BioseqPtr bsp, VoidPtr featarray,
@@ -5589,7 +5951,11 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (BioseqPtr bsp, VoidPtr fe
     context->partialR = item->partialR;
     context->farloc = item->farloc;
     context->strand = item->strand;
-    context->seqfeattype = FindFeatFromFeatDefType (item->subtype);
+    if (curr != NULL) {
+      context->seqfeattype = curr->data.choice;
+    } else {
+      context->seqfeattype = FindFeatFromFeatDefType (item->subtype);
+    }
     context->featdeftype = item->subtype;
     context->numivals = item->numivals;
     context->ivals = item->ivals;
@@ -5757,7 +6123,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeature (BioseqPtr bsp, SeqFeatPtr cu
       curr = item->sfp;
       i++;
       if (curr != NULL) {
-        seqfeattype = FindFeatFromFeatDefType (item->subtype);
+        seqfeattype = curr->data.choice;
         if ((seqFeatChoice == 0 || seqfeattype == seqFeatChoice) &&
             (featDefChoice == 0 || item->subtype == featDefChoice) &&
             (! item->ignore)) {
@@ -5791,14 +6157,16 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeature (BioseqPtr bsp, SeqFeatPtr cu
 
 /*****************************************************************************
 *
-*   SeqMgrExploreBioseqs, SeqMgrExploreDescriptors, and SeqMgrExploreFeatures
+*   SeqMgrExploreBioseqs, SeqMgrExploreSegments, SeqMgrExploreDescriptors,
+*     and SeqMgrExploreFeatures
 *
 *****************************************************************************/
 
 static Boolean JustExamineBioseqs (SeqEntryPtr sep, BioseqSetPtr bssp,
                                    SeqMgrBioseqContextPtr context,
                                    SeqMgrBioseqExploreProc userfunc,
-                                   Boolean nucs, Boolean prots, Boolean parts)
+                                   Boolean nucs, Boolean prots, Boolean parts,
+                                   Int2Ptr count)
 
 {
   BioseqPtr       bsp;
@@ -5825,9 +6193,13 @@ static Boolean JustExamineBioseqs (SeqEntryPtr sep, BioseqSetPtr bssp,
     context->bsp = bsp;
     context->sep = sep;
     context->bssp = bssp;
+    context->numsegs = bspextra->numsegs;
     context->omdp = omdp;
     (context->index)++;
 
+    if (count != NULL) {
+      (*count)++;
+    }
     /* continue until user function returns FALSE, then exit all recursions */
 
     if (! userfunc (bsp, context)) return FALSE;
@@ -5840,24 +6212,32 @@ static Boolean JustExamineBioseqs (SeqEntryPtr sep, BioseqSetPtr bssp,
 
     /* check to see if parts should be explored */
 
-    if (bssp->_class == BioseqseqSet_class_parts && (! parts)) return TRUE;
+    if (bssp->_class == BioseqseqSet_class_parts) {
+      if (! parts) return TRUE;
+
+      /* within the parts set we want to see individual component bioseqs */
+
+      nucs = TRUE;
+      prots = TRUE;
+    }
 
     /* recursively explore bioseq set until user function returns FALSE */
 
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-      if (! JustExamineBioseqs (sep, bssp, context, userfunc, nucs, prots, parts)) return FALSE;
+      if (! JustExamineBioseqs (sep, bssp, context, userfunc, nucs, prots, parts, count)) return FALSE;
     }
   }
 
   return TRUE;
 }
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreBioseqs (Uint2 entityID, Pointer ptr, Pointer userdata,
-                                                 SeqMgrBioseqExploreProc userfunc,
-                                                 Boolean nucs, Boolean prots, Boolean parts)
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreBioseqs (Uint2 entityID, Pointer ptr, Pointer userdata,
+                                              SeqMgrBioseqExploreProc userfunc,
+                                              Boolean nucs, Boolean prots, Boolean parts)
 
 {
   SeqMgrBioseqContext  context;
+  Int2                 count = 0;
   SeqEntryPtr          sep;
 
   if (entityID == 0) {
@@ -5865,8 +6245,8 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreBioseqs (Uint2 entityID, Pointer ptr, Po
   }
   if (entityID == 0) return 0;
   sep = SeqMgrGetTopSeqEntryForEntity (entityID);
-  if (sep == NULL) return FALSE;
-  if (userfunc == NULL) return FALSE;
+  if (sep == NULL) return 0;
+  if (userfunc == NULL) return 0;
 
   context.entityID = entityID;
   context.index = 0;
@@ -5874,17 +6254,18 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreBioseqs (Uint2 entityID, Pointer ptr, Po
 
   /* recursive call to explore SeqEntry and pass appropriate bioseqs to user */
 
-  JustExamineBioseqs (sep, NULL, &context, userfunc, nucs, prots, parts);
+  JustExamineBioseqs (sep, NULL, &context, userfunc, nucs, prots, parts, &count);
 
-  return TRUE;
+  return count;
 }
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreSegments (BioseqPtr bsp, Pointer userdata,
-                                                  SeqMgrSegmentExploreProc userfunc)
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreSegments (BioseqPtr bsp, Pointer userdata,
+                                               SeqMgrSegmentExploreProc userfunc)
 
 {
   BioseqExtraPtr        bspextra;
   SeqMgrSegmentContext  context;
+  Int2                  count = 0;
   Uint2                 entityID;
   Uint2                 i;
   ObjMgrDataPtr         omdp;
@@ -5892,16 +6273,16 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreSegments (BioseqPtr bsp, Pointer userdat
   SMSeqIdxPtr           segpartptr;
   SeqLocPtr             slp;
 
-  if (bsp == NULL || bsp->repr != Seq_repr_seg) return FALSE;
+  if (bsp == NULL || bsp->repr != Seq_repr_seg) return 0;
   omdp = SeqMgrGetOmdpForBioseq (bsp);
-  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return FALSE;
-  if (userfunc == NULL) return FALSE;
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return 0;
+  if (userfunc == NULL) return 0;
   entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
 
   bspextra = (BioseqExtraPtr) omdp->extradata;
-  if (bspextra == NULL) return FALSE;
+  if (bspextra == NULL) return 0;
   partsByLoc = bspextra->partsByLoc;
-  if (partsByLoc == NULL || bspextra->numsegs < 1) return FALSE;
+  if (partsByLoc == NULL || bspextra->numsegs < 1) return 0;
 
   for (i = 0; i < bspextra->numsegs; i++) {
     segpartptr = partsByLoc [i];
@@ -5918,20 +6299,24 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreSegments (BioseqPtr bsp, Pointer userdat
       context.userdata = userdata;
       context.omdp = (Pointer) omdp;
       context.index = i + 1;
-      if (! userfunc (slp, &context)) return TRUE;
+
+      count++;
+
+      if (! userfunc (slp, &context)) return count;
     }
   }
 
-  return TRUE;
+  return count;
 }
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreDescriptors (BioseqPtr bsp, Pointer userdata,
-                                                     SeqMgrDescExploreProc userfunc,
-                                                     BoolPtr seqDescFilter)
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreDescriptors (BioseqPtr bsp, Pointer userdata,
+                                                  SeqMgrDescExploreProc userfunc,
+                                                  BoolPtr seqDescFilter)
 
 {
   BioseqSetPtr       bssp;
   SeqMgrDescContext  context;
+  Int2               count = 0;
   Uint2              entityID;
   Uint2              itemID;
   ObjMgrDataPtr      omdp;
@@ -5939,8 +6324,8 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreDescriptors (BioseqPtr bsp, Pointer user
   SeqEntryPtr        sep;
 
   omdp = SeqMgrGetOmdpForBioseq (bsp);
-  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return FALSE;
-  if (userfunc == NULL) return FALSE;
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return 0;
+  if (userfunc == NULL) return 0;
   entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
 
   context.index = 0;
@@ -5976,7 +6361,10 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreDescriptors (BioseqPtr bsp, Pointer user
         context.userdata = userdata;
         context.omdp = (Pointer) omdp;
         (context.index)++;
-        if (! userfunc (sdp, &context)) return TRUE;
+
+        count++;
+
+        if (! userfunc (sdp, &context)) return count;
       }
       sdp = sdp->next;
     }
@@ -5986,17 +6374,18 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreDescriptors (BioseqPtr bsp, Pointer user
     omdp = SeqMgrGetOmdpForPointer (omdp->parentptr);
     (context.level)++;
   }
-  return TRUE;
+  return count;
 }
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreFeatures (BioseqPtr bsp, Pointer userdata,
-                                                  SeqMgrFeatExploreProc userfunc,
-                                                  SeqLocPtr locationFilter,
-                                                  BoolPtr seqFeatFilter, BoolPtr featDefFilter)
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures (BioseqPtr bsp, Pointer userdata,
+                                               SeqMgrFeatExploreProc userfunc,
+                                               SeqLocPtr locationFilter,
+                                               BoolPtr seqFeatFilter, BoolPtr featDefFilter)
 
 {
   BioseqExtraPtr      bspextra;
   SeqMgrFeatContext   context;
+  Int2                count = 0;
   Uint2               entityID;
   SMFeatItemPtr PNTR  featsByPos;
   Uint2               i;
@@ -6006,31 +6395,64 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreFeatures (BioseqPtr bsp, Pointer userdat
   Int4                right = INT4_MAX;
   Uint1               seqfeattype;
   SeqFeatPtr          sfp;
+  Uint2               start = 0;
 
   omdp = SeqMgrGetOmdpForBioseq (bsp);
-  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return FALSE;
-  if (userfunc == NULL) return FALSE;
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return 0;
+  if (userfunc == NULL) return 0;
   entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
 
   bspextra = (BioseqExtraPtr) omdp->extradata;
-  if (bspextra == NULL) return FALSE;
+  if (bspextra == NULL) return 0;
   featsByPos = bspextra->featsByPos;
-  if (featsByPos == NULL || bspextra->numfeats < 1) return FALSE;
+  if (featsByPos == NULL || bspextra->numfeats < 1) return 0;
 
   if (locationFilter != NULL) {
     left = GetOffsetInBioseq (locationFilter, bsp, SEQLOC_LEFT_END);
     if (left == -1) left = INT4_MIN;
     right = GetOffsetInBioseq (locationFilter, bsp, SEQLOC_RIGHT_END);
     if (right == -1) right = INT4_MAX;
+
+    /*
+    binary search to leftmost candidate would need featsByPos array
+    variant sorted primarily by rightmost position, so comment this
+    out for now, resurrect and add new array only if it turns out to
+    be necessary when we support entrez fetch subrecord by location
+    */
+
+    /*
+    L = 0;
+    R = bspextra->numfeats - 1;
+    while (L < R) {
+      mid = (L + R) / 2;
+      item = featsByPos [mid];
+      if (item != NULL && item->right < left) {
+        L = mid + 1;
+      } else {
+        R = mid;
+      }
+    }
+
+    start = R;
+    */
   }
 
   /* call for every appropriate feature in sorted list */
 
-  for (i = 0; i < bspextra->numfeats; i++) {
+  for (i = start; i < bspextra->numfeats; i++) {
     item = featsByPos [i];
     if (item != NULL) {
+
+      /* can exit once past rightmost limit */
+
+      if (locationFilter != NULL && item->left > right) return count;
+
       sfp = item->sfp;
-      seqfeattype = FindFeatFromFeatDefType (item->subtype);
+      if (sfp != NULL) {
+        seqfeattype = sfp->data.choice;
+      } else {
+        seqfeattype = FindFeatFromFeatDefType (item->subtype);
+      }
       if ((seqFeatFilter == NULL || seqFeatFilter [seqfeattype]) &&
           (featDefFilter == NULL || featDefFilter [item->subtype]) &&
           (locationFilter == NULL || (item->right >= left && item->left <= right)) &&
@@ -6054,11 +6476,14 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreFeatures (BioseqPtr bsp, Pointer userdat
         context.userdata = userdata;
         context.omdp = (Pointer) omdp;
         context.index = item->index + 1;
-        if (! userfunc (sfp, &context)) return TRUE;
+
+        count++;
+
+        if (! userfunc (sfp, &context)) return count;
       }
     }
   }
-  return TRUE;
+  return count;
 }
 
 /*****************************************************************************

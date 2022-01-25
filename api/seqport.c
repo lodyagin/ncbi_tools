@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.14 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.14  1999/02/12 20:48:24  kans
+* made fast byte expansion functions public
+*
+* Revision 6.13  1999/02/12 14:37:42  kans
+* Na2toIUPAC and Na4toIUPAC values copied 4 and 2 characters at a time by casting to Uint4 or Uint2 and doing an integer copy, also speeded up SeqPortRead by getting the minimum of 3 loop conditions
+*
+* Revision 6.12  1999/02/10 22:19:12  kans
+* MapNa2ByteToIUPACString and MapNa4ByteToIUPACString now copy directly to buffer, to overcome biggest profiled bottleneck
+*
+* Revision 6.11  1999/02/09 15:47:00  kans
+* got rid of strange code (spp->curpos > 616) at beginning of SeqPortGetResidue, speeded up SeqPortRead
+*
 * Revision 6.10  1998/12/14 20:56:25  kans
 * dnaLoc_to_aaLoc takes allowTerminator parameter to handle stop codons created by polyA tail
 *
@@ -193,74 +205,95 @@ static char *this_file = __FILE__;
 
 static Uint1Ptr Na2toIUPAC = NULL;
 static Uint1Ptr Na4toIUPAC = NULL;
+static Uint1Ptr Na2toNa4 = NULL;
 static TNlmMutex seqport_mutex = NULL;
 
 
 /*****************************************************************************
 *
-*   MapNa2ByteToIUPACString requires a buffer parameter of at least 5 characters,
-*     4 for the uncompressed bases and 1 for the null byte
-*   MapNa2ByteToIUPACString is similar, but only requires a buffer of at least 3
-*     characters
+*   MapNa2ByteToIUPACString and MapNa4ByteToIUPACString now copy directly to
+*     the expanded character buffer for efficiency
 *
 *****************************************************************************/
 
-static void MapNa2ByteToIUPACString (Uint1 byte, CharPtr buf)
+static void InitNa2toIUPAC (void)
 
 {
   Int2  base [4], index, j;
   Char  convert [4] = {'A', 'C', 'G', 'T'};
   Int4  ret;
 
-  if (buf == NULL) return;
-  buf [0] = '\0';
-
-  /* initialize array if not yet set (first time function is called) */
+  ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa2ByteToIUPACString mutex failed [%ld]", (long) ret);
+    return;
+  }
 
   if (Na2toIUPAC == NULL) {
+    Na2toIUPAC = MemNew (sizeof (Uint1) * 1024);
 
-    ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
-    if (ret) {
-      ErrPostEx (SEV_FATAL, 0, 0, "MapNa2ByteToIUPACString mutex failed [%ld]", (long) ret);
-      return;
-    }
-
-    if (Na2toIUPAC == NULL) {
-      Na2toIUPAC = MemNew (sizeof (Uint1) * 1024);
-
-      if (Na2toIUPAC != NULL) {
-        for (base [0] = 0; base [0] < 4; (base [0])++) {
-          for (base [1] = 0; base [1] < 4; (base [1])++) {
-            for (base [2] = 0; base [2] < 4; (base [2])++) {
-              for (base [3] = 0; base [3] < 4; (base [3])++) {
-                index = 4 * (base [0] * 64 + base [1] * 16 + base [2] * 4 + base [3]);
-                for (j = 0; j < 4; j++) {
-                  Na2toIUPAC [index + j] = convert [(base [j])];
-                }
+    if (Na2toIUPAC != NULL) {
+      for (base [0] = 0; base [0] < 4; (base [0])++) {
+        for (base [1] = 0; base [1] < 4; (base [1])++) {
+          for (base [2] = 0; base [2] < 4; (base [2])++) {
+            for (base [3] = 0; base [3] < 4; (base [3])++) {
+              index = 4 * (base [0] * 64 + base [1] * 16 + base [2] * 4 + base [3]);
+              for (j = 0; j < 4; j++) {
+                Na2toIUPAC [index + j] = convert [(base [j])];
               }
             }
           }
         }
       }
     }
-
-    NlmMutexUnlock (seqport_mutex);
   }
 
-  if (Na2toIUPAC == NULL) return;
+  NlmMutexUnlock (seqport_mutex);
+}
+
+NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteToIUPACString (Uint1Ptr bytep, Uint4Ptr buf, Int4 total)
+
+{
+  Uint4Ptr  bp;
+  Uint1     byte;
+  Int2      index;
+  Int4      k;
+  Uint4Ptr  ptr;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  /* initialize array if not yet set (first time function is called) */
+
+  if (Na2toIUPAC == NULL) {
+    InitNa2toIUPAC ();
+  }
+
+  if (Na2toIUPAC == NULL) return buf;
 
   /* now return 4 character string for each compressed byte */
 
-  if (byte < 256) {
+  for (k = 0; k < total; k++) {
+    byte = *bytep;
+    bytep++;
     index = 4 * byte;
+    bp = (Uint4Ptr) (Na2toIUPAC + index);
+    /* copy 4 bytes at a time */
+    /*
     for (j = 0; j < 4; j++) {
-      buf [j] = Na2toIUPAC [index + j];
+      *ptr = *bp;
+      ptr++;
+      bp++;
     }
-    buf [4] = '\0';
+    */
+    *ptr = *bp;
+    ptr++;
   }
+
+  return ptr;
 }
 
-static void MapNa4ByteToIUPACString (Uint1 byte, CharPtr buf)
+static void InitNa4toIUPAC (void)
 
 {
   Int2  base [2], index, j;
@@ -268,48 +301,144 @@ static void MapNa4ByteToIUPACString (Uint1 byte, CharPtr buf)
                         'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
   Int4  ret;
 
-  if (buf == NULL) return;
-  buf [0] = '\0';
-
-  /* initialize array if not yet set (first time function is called) */
+  ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa4ByteToIUPACString mutex failed [%ld]", (long) ret);
+    return;
+  }
 
   if (Na4toIUPAC == NULL) {
+    Na4toIUPAC = MemNew (sizeof (Uint1) * 512);
 
-    ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
-    if (ret) {
-      ErrPostEx (SEV_FATAL, 0, 0, "MapNa4ByteToIUPACString mutex failed [%ld]", (long) ret);
-      return;
-    }
-
-    if (Na4toIUPAC == NULL) {
-      Na4toIUPAC = MemNew (sizeof (Uint1) * 512);
-
-      if (Na4toIUPAC != NULL) {
-        for (base [0] = 0; base [0] < 16; (base [0])++) {
-          for (base [1] = 0; base [1] < 16; (base [1])++) {
-            index = 2 * (base [0] * 16 + base [1]);
-            for (j = 0; j < 2; j++) {
-              Na4toIUPAC [index + j] = convert [(base [j])];
-            }
+    if (Na4toIUPAC != NULL) {
+      for (base [0] = 0; base [0] < 16; (base [0])++) {
+        for (base [1] = 0; base [1] < 16; (base [1])++) {
+          index = 2 * (base [0] * 16 + base [1]);
+          for (j = 0; j < 2; j++) {
+            Na4toIUPAC [index + j] = convert [(base [j])];
           }
         }
       }
     }
-
-    NlmMutexUnlock (seqport_mutex);
   }
 
-  if (Na4toIUPAC == NULL) return;
+  NlmMutexUnlock (seqport_mutex);
+}
+
+NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACString (Uint1Ptr bytep, Uint2Ptr buf, Int4 total)
+
+{
+  Uint2Ptr  bp;
+  Uint1     byte;
+  Int2      index;
+  Int4      k;
+  Uint2Ptr  ptr;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  /* initialize array if not yet set (first time function is called) */
+
+  if (Na4toIUPAC == NULL) {
+    InitNa4toIUPAC ();
+  }
+
+  if (Na4toIUPAC == NULL) return buf;
 
   /* now return 2 character string for each compressed byte */
 
-  if (byte < 256) {
+  for (k = 0; k < total; k++) {
+    byte = *bytep;
+    bytep++;
     index = 2 * byte;
+    bp = (Uint2Ptr)  (Na4toIUPAC + index);
+    /* copy 2 bytes at a time */
+    /*
     for (j = 0; j < 2; j++) {
-      buf [j] = Na4toIUPAC [index + j];
+      *ptr = *bp;
+      ptr++;
+      bp++;
     }
-    buf [2] = '\0';
+    */
+    *ptr = *bp;
+    ptr++;
   }
+
+  return ptr;
+}
+
+static void InitNa2toNa4 (void)
+
+{
+  Int2   pair [2], index, j;
+  Uint1  convert [16] = {17,  18,  20,  24,  33,  34,  36,  40,
+                         65,  66,  68,  72, 129, 130, 132, 136};
+  Int4   ret;
+
+  ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa2ByteToIUPACString mutex failed [%ld]", (long) ret);
+    return;
+  }
+
+  if (Na2toNa4 == NULL) {
+    Na2toNa4 = MemNew (sizeof (Uint1) * 512);
+
+    if (Na2toNa4 != NULL) {
+      for (pair [0] = 0; pair [0] < 16; (pair [0])++) {
+        for (pair [1] = 0; pair [1] < 16; (pair [1])++) {
+          index = 2 * (pair [0] * 16 + pair [1]);
+          for (j = 0; j < 2; j++) {
+            Na2toNa4 [index + j] = convert [(pair [j])];
+          }
+        }
+      }
+    }
+  }
+
+  NlmMutexUnlock (seqport_mutex);
+}
+
+NLM_EXTERN Uint2Ptr LIBCALL MapNa2ByteToNa4String (Uint1Ptr bytep, Uint2Ptr buf, Int4 total)
+
+{
+  Uint2Ptr  bp;
+  Uint1     byte;
+  Int2      index;
+  Int4      k;
+  Uint2Ptr  ptr;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  /* initialize array if not yet set (first time function is called) */
+
+  if (Na2toNa4 == NULL) {
+    InitNa2toNa4 ();
+  }
+
+  if (Na2toNa4 == NULL) return buf;
+
+  /* now return 2 character byte for each compressed byte */
+
+  for (k = 0; k < total; k++) {
+    byte = *bytep;
+    bytep++;
+    index = 2 * byte;
+    bp = (Uint2Ptr)  (Na2toNa4 + index);
+    /* copy 2 bytes at a time */
+    /*
+    for (j = 0; j < 2; j++) {
+      *ptr = *bp;
+      ptr++;
+      bp++;
+    }
+    */
+    *ptr = *bp;
+    ptr++;
+  }
+
+  return ptr;
 }
 
 /*****************************************************************************
@@ -1128,22 +1257,9 @@ NLM_EXTERN Int4 SeqPortTell (SeqPortPtr spp)
 *       SEQPORT_EOF = end of file
 *
 *****************************************************************************/
-static CharPtr StrMoveNoNullByte (char FAR *to, const char FAR *from)
+static Uint1 LIBCALL SeqPortQuickGetResidue (SeqPortPtr spp, SPCacheQPtr spcpq, Boolean plus_strand)
 
 {
-	while (*from != '\0')
-	{
-		*to = *from;
-		to++; from++;
-	}
-	/* *to = '\0'; */
-	return to;
-}
-
-static Uint1 SeqPortQuickGetResidue (SeqPortPtr spp, SPCacheQPtr spcpq, Boolean plus_strand)
-
-{
-  Char     buf [6];
   Uint1    bytes [100];
   Int4     curpos, pos, lim, diff;
   CharPtr  ptr;
@@ -1195,15 +1311,9 @@ static Uint1 SeqPortQuickGetResidue (SeqPortPtr spp, SPCacheQPtr spcpq, Boolean 
       ptr = spcpq->buf;
 
       if (spp->oldcode == Seq_code_ncbi2na) {
-        for (j = 0; j < total; j++) {
-          MapNa2ByteToIUPACString (bytes [j], buf);
-          ptr = StrMoveNoNullByte (ptr, buf);
-        }
+        ptr = (CharPtr) MapNa2ByteToIUPACString (bytes, (Uint4Ptr) ptr, total);
       } else if (spp->oldcode == Seq_code_ncbi4na) {
-        for (j = 0; j < total; j++) {
-          MapNa4ByteToIUPACString (bytes [j], buf);
-          ptr = StrMoveNoNullByte (ptr, buf);
-        }
+        ptr = (CharPtr) MapNa4ByteToIUPACString (bytes, (Uint2Ptr) ptr, total);
       }
 
       spcpq->total = ptr - spcpq->buf;
@@ -1257,10 +1367,10 @@ static Uint1 SeqPortQuickGetResidue (SeqPortPtr spp, SPCacheQPtr spcpq, Boolean 
   return residue;
 }
 
-NLM_EXTERN Uint1 SeqPortGetResidue (SeqPortPtr spp)
+NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue (SeqPortPtr spp)
 
 {
-    Uint1 residue, the_byte, the_residue, the_code;
+    Uint1 residue = INVALID_RESIDUE, the_byte, the_residue, the_code;
     Boolean plus_strand = TRUE, moveup;
     Int2 bitctr, index;
 	Int4 pos, lim, diff;
@@ -1268,11 +1378,6 @@ NLM_EXTERN Uint1 SeqPortGetResidue (SeqPortPtr spp)
 	SeqPortPtr tmp, prev;
 	SPCacheQPtr spcpq;
 
-	if (spp != NULL && spp->curpos > 616) {
-	  residue = INVALID_RESIDUE;
-	  residue /= 2;
-	  diff = (Int4) residue;
-	}
 	if (spp != NULL && spp->cacheq != NULL && spp->curpos < spp->totlen) {
 		spcpq = spp->cacheq;
 		if (spcpq->ctr < spcpq->total) {
@@ -1580,11 +1685,13 @@ NLM_EXTERN Uint1 GetGapCode (Uint1 seqcode)
 *         same codes as SeqPortGetResidue for EOF or EOS
 *
 *****************************************************************************/
-NLM_EXTERN Int2 SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
+NLM_EXTERN Int2 LIBCALL SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
 
 {
     Int2 ctr = 0;
+    Int4 loopmax;
     Uint1 retval;
+    SPCacheQPtr spcpq;
 
     if ((spp == NULL) || (buf == NULL) || (len <= 0))
         return 0;
@@ -1597,27 +1704,57 @@ NLM_EXTERN Int2 SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
         return ctr;
     }
 
-    while (ctr < len)
-    {                              /* not elegant but works for now */
-        retval = SeqPortGetResidue(spp);
-        if (IS_residue(retval))
-        {
-            *buf = retval;
-            buf++;
-            ctr++;
+    spcpq = spp->cacheq;
+    while (ctr < len) {
+        loopmax = 0;
+        if (spcpq != NULL && spp->curpos < spp->totlen && spcpq->ctr < spcpq->total) {
+            loopmax = MIN ((spp->totlen - spp->curpos), (spcpq->total - spcpq->ctr));
+            loopmax = MIN (loopmax, (Int4) (len - ctr));
         }
-        else
-        {
-            if (! ctr)   /* first one */
+        /* loopmax saves multiple comparisons, speeds up significantly */
+        if (loopmax > 0) {
+            while (loopmax > 0) {
+                retval = spcpq->buf [spcpq->ctr];
+                spcpq->ctr++;
+                spp->curpos++;
+                loopmax--;
+                if (IS_residue (retval)) {
+                    *buf = retval;
+                    buf++;
+                    ctr++;
+                } else {
+                    if (! ctr)   /* first one */
+                    {
+                        ctr = retval;   /* send return as negative number */
+                        ctr *= -1;
+                        return ctr;
+                    } else {
+                        spp->lastmsg = retval;
+                        return ctr;
+                    }
+                }
+            }
+        } else {
+            retval = SeqPortGetResidue(spp);
+            if (IS_residue(retval))
             {
-                ctr = retval;   /* send return as negative number */
-                ctr *= -1;
-                return ctr;
+                *buf = retval;
+                buf++;
+                ctr++;
             }
             else
             {
-                spp->lastmsg = retval;
-                return ctr;
+                if (! ctr)   /* first one */
+                {
+                    ctr = retval;   /* send return as negative number */
+                    ctr *= -1;
+                    return ctr;
+                }
+                else
+                {
+                    spp->lastmsg = retval;
+                    return ctr;
+                }
             }
         }
     }

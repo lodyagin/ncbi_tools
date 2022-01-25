@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.36 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -813,7 +813,7 @@ extern void FileInProc (ButtoN b)
          if ( (fp = FileOpen (namep, "r")) == NULL) {
                 return ;
          }
-         fscanf(fp, "%d %d", &n, &lens);
+         fscanf(fp, "%d %ld", &n, &lens);
          FileClose(fp);
          if (n < 2) {
                 return ;
@@ -2395,8 +2395,10 @@ static void SelectRegionFunc (ButtoN b)
      {
         salp2 = SeqAlignTrunc (salp1, left, right);
         if (salp2)
-           repopulate_panel (w, adp, salp2);
+           LaunchAlignEditor (salp2);
+/*******????????
         SeqAlignFree (salp1);
+**************/
      }
      Remove (wdialog);
   }

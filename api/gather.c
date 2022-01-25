@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -39,6 +39,10 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.9  1999/03/16 13:17:28  ostell
+* changes in SeqLocOffset() to deal with multi-interval seqloc which is
+* a subset of a feature.
+*
 * Revision 6.8  1999/01/13 23:34:19  kans
 * added GatherSpecificProcLaunch
 *
@@ -356,6 +360,9 @@ NLM_EXTERN Boolean SeqLocOffset (SeqLocPtr seq_loc, SeqLocPtr sfp_loc, GatherRan
   SeqLoc sl;
   SeqInt si;
   Boolean across_zero;
+  Int4 toffset, l, r, t;
+  Boolean ltrunc, rtrunc;
+  SeqLocPtr tslp;
 
   if (seq_loc == NULL || sfp_loc == NULL || range == NULL) {
     return FALSE;
@@ -378,32 +385,71 @@ NLM_EXTERN Boolean SeqLocOffset (SeqLocPtr seq_loc, SeqLocPtr sfp_loc, GatherRan
 		return FALSE;
 		
   }
-  if (! SeqLocCompare(seq_loc, sfp_loc))
-	return FALSE;
 
-  strand_loc = SeqLocStrand(seq_loc);
   strand_sfp = SeqLocStrand(sfp_loc);
 
-  range->l_trunc = FALSE;
-  range->r_trunc = FALSE;
-  range->left = GetOffsetInLoc (sfp_loc, seq_loc, SEQLOC_LEFT_END);
-  if (range->left == -1) {
-    range->l_trunc = TRUE;
-    if (strand_loc == Seq_strand_minus) {
-      range->left = SeqLocLen (seq_loc) - 1;
-    } else {
-      range->left = 0;
-    }
+  toffset = 0;
+  l = INT4_MAX;
+  r = -1;
+  tslp = NULL;
+
+  while ((tslp = SeqLocFindNext(seq_loc, tslp)) != NULL)
+  {
+	if (SeqLocCompare(tslp, sfp_loc)) {
+
+		strand_loc = SeqLocStrand(tslp);
+
+		t = GetOffsetInLoc(sfp_loc, tslp, SEQLOC_LEFT_END);
+		if (t == -1) { /* truncated */
+			if (strand_loc == Seq_strand_minus)
+				t = toffset + SeqLocLen(tslp) - 1;
+			else
+				t = toffset;
+			
+			if (t < l)
+			{
+				l = t;
+				ltrunc = TRUE;
+			}
+		}
+		else if ((t + toffset) < l)
+		{
+			l = t + toffset;
+			ltrunc = FALSE;
+		}
+
+		t = GetOffsetInLoc(sfp_loc, tslp, SEQLOC_RIGHT_END);
+		if (t == -1)
+		{
+			if (strand_loc == Seq_strand_minus)
+				t = toffset;
+			else
+				t = toffset + SeqLocLen (tslp) - 1;
+			if (t > r) {
+				r = t;
+				rtrunc = TRUE;
+			}
+
+		}
+		else if ((t + toffset) > r)
+		{
+			rtrunc = FALSE;
+			r = t + toffset;
+		}
+
+	}
+	toffset += SeqLocLen(tslp);
   }
-  range->right = GetOffsetInLoc (sfp_loc, seq_loc, SEQLOC_RIGHT_END);
-  if (range->right == -1) {
-    range->r_trunc = TRUE;
-    if (strand_loc == Seq_strand_minus) {
-      range->right = 0;
-    } else {
-      range->right = SeqLocLen (seq_loc) - 1;
-    }
-  }
+
+  if (r == -1) /* didn't find it */
+	return FALSE;
+
+  range->l_trunc = ltrunc;
+  range->r_trunc = rtrunc;
+  range->left = l + offset;
+  range->right = r + offset;
+
+  strand_loc = SeqLocStrand(seq_loc);
 
   if (strand_loc == Seq_strand_minus)
 	range->strand = StrandCmp(strand_sfp);
@@ -413,8 +459,7 @@ NLM_EXTERN Boolean SeqLocOffset (SeqLocPtr seq_loc, SeqLocPtr sfp_loc, GatherRan
 		strand_sfp = Seq_strand_plus;
 	range->strand = strand_sfp;
   }
-  range->left += offset;
-  range->right += offset;
+
   if(range->left > range->right)
   {
 	temp = range->left;

@@ -34,8 +34,17 @@ Contents: utilities for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.22 $ */
+/* $Revision: 6.25 $ */
 /* $Log: posit.c,v $
+/* Revision 6.25  1999/04/05 14:45:40  madden
+/* Fixed format mismatches
+/*
+/* Revision 6.24  1999/03/21 19:41:51  madden
+/* Added 3rd argument matrixfp to outputPosMatrix, Took some of the code in outputPosMatrix outside the #ifdef POSIT_DEBUG for use with -Q option
+/*
+/* Revision 6.23  1999/01/26 18:27:58  madden
+/* Made functions public for AS
+/*
 /* Revision 6.22  1998/12/09 18:51:51  madden
 /* fixed counting bug in posCancel
 /*
@@ -1092,7 +1101,7 @@ static void  posFreqsToInformation(posSearchItems * posSearch, compactSearchItem
 
 
 /*Convert pseudo-count frequencies to a score matrix */
-static void posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch)
+void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
    Uint1Ptr q;  /*pointer to the query*/
    Int4 length;  /*length of the query*/
@@ -1348,7 +1357,7 @@ static Char getRes(Char input)
         return('?');
     }
 }
-static Uint1 ResToInt(Char input)
+Uint1 LIBCALL ResToInt(Char input)
 {
     switch(input) 
       {
@@ -1411,7 +1420,7 @@ static Uint1 ResToInt(Char input)
 
 
 /*Print out the position-specific matrix*/
-void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *compactSearch)
+void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *compactSearch, FILE *matrixfp)
 {
    Uint1Ptr q; /*query sequence*/
    Int4 i, index; /*loop indices*/
@@ -1450,8 +1459,8 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
    index = 0;   
    
 /* Used ifdef until final decision is made on output. */
-#ifdef POSIT_DEBUG
 
+#ifdef POSIT_DEBUG
    printf("\nCharacter Frequencies by positon\n");
    printf("         ");
    for (c = 0; c< EFFECTIVE_ALPHABET; c++)
@@ -1484,27 +1493,28 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
      printf(" %4d",posSearch->posExtents[i].rightExtent - posSearch->posExtents[i].leftExtent +1);
    }
    printf("\n\n");
-   printf("\nPosition-based scoring matrix used\n");
-   printf("         ");
-   for (c = 0; c< EFFECTIVE_ALPHABET; c++)
-      printf("  %c",getRes((Char) charOrder[c]));
-   for(i=0; i < length; i++) {
-    /* printf("\n%5d %c   ", i + 1, getRes(q[i])); */
-     printf("\n          ");
-     for (c = 0; c < EFFECTIVE_ALPHABET; c++) 
-       if(posSearch->posMatrix[i][charOrder[c]] == BLAST_SCORE_MIN)
-	 printf("-I ");
-       else
-	 printf("%2d ", (Int4) posSearch->posMatrix[i][charOrder[c]]);
-   }
-   printf("\n\n");
-   printf("                      K         Lambda\n");
-   printf("Standard Ungapped    %6.4f     %6.4f\n",compactSearch->kbp_std[0]->K,compactSearch->kbp_std[0]->Lambda);
-   printf("Standard Gapped      %6.4f     %6.4f\n",compactSearch->kbp_gap_std[0]->K,compactSearch->kbp_gap_std[0]->Lambda);
-   printf("PSI Ungapped         %6.4f     %6.4f\n",compactSearch->kbp_psi[0]->K,compactSearch->kbp_psi[0]->Lambda);
-   printf("PSI Gapped           %6.4f     %6.4f\n",compactSearch->kbp_gap_psi[0]->K,compactSearch->kbp_gap_psi[0]->Lambda);
-   printf("\n\n");
 #endif
+   if (NULL != matrixfp) {
+     fprintf(matrixfp,"\nLast position-specific scoring matrix computed\n");
+     fprintf(matrixfp,"         ");
+     for (c = 0; c< EFFECTIVE_ALPHABET; c++)
+       fprintf(matrixfp,"  %c",getRes((Char) charOrder[c]));
+     for(i=0; i < length; i++) {
+       fprintf(matrixfp,"\n%5ld %c   ", (long) (i + 1), getRes(q[i]));
+       /*fprintf(matrixfp,"\n          ");*/
+       for (c = 0; c < EFFECTIVE_ALPHABET; c++) 
+	 if(posSearch->posMatrix[i][charOrder[c]] == BLAST_SCORE_MIN)
+	   fprintf(matrixfp,"-I ");
+	 else
+	   fprintf(matrixfp,"%2ld ", (long) posSearch->posMatrix[i][charOrder[c]]);
+     }
+     fprintf(matrixfp,"\n\n");
+     fprintf(matrixfp,"                      K         Lambda\n");
+     fprintf(matrixfp,"Standard Ungapped    %6.4f     %6.4f\n",compactSearch->kbp_std[0]->K,compactSearch->kbp_std[0]->Lambda);
+     fprintf(matrixfp,"Standard Gapped      %6.4f     %6.4f\n",compactSearch->kbp_gap_std[0]->K,compactSearch->kbp_gap_std[0]->Lambda);
+     fprintf(matrixfp,"PSI Ungapped         %6.4f     %6.4f\n",compactSearch->kbp_psi[0]->K,compactSearch->kbp_psi[0]->Lambda);
+     fprintf(matrixfp,"PSI Gapped           %6.4f     %6.4f\n",compactSearch->kbp_gap_psi[0]->K,compactSearch->kbp_gap_psi[0]->Lambda);
+   }
 }
 
 
@@ -1697,15 +1707,9 @@ static void    putCkptFreqMatrix (Nlm_FloatHi **theMatrix, Int4 length, Int4 wid
 }
 
  
-/* Front-ends to retrieve numbers. */
-
-#define  getCkptNlm_FloatHi(d, ckptFile)  (getCkptNumber(&(d),sizeof(Nlm_FloatHi),ckptFile))
-#define  getCkptInt4(i, ckptFile)         (getCkptNumber(&(i),sizeof(Int4),ckptFile))
-#define  getCkptChar(c, ckptFile)         (getCkptNumber(&(c),sizeof(Char),ckptFile))
- 
 /* General routine for getting the internal representation of a number. */
  
-static void  getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
+void  LIBCALL getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
 {
   FileRead(numberPtr,numberSize,1,ckptFile) ;
 }
@@ -1756,7 +1760,7 @@ static void    getFreqVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptF
 
 /* Code to frequency matrix, vector-by-vector. */
  
-static void    getCkptFreqMatrix (Nlm_FloatHi ** theMatrix, Int4 length, Int4 width, FILE * ckptFile)
+void    LIBCALL getCkptFreqMatrix (Nlm_FloatHi ** theMatrix, Int4 length, Int4 width, FILE * ckptFile)
 {
   Int4  matrixRef;  /*loop index*/
  

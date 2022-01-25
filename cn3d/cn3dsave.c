@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.0 $
+* $Revision: 6.5 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,9 +39,24 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.c,v $
-* Revision 6.0  1997/08/25 18:13:42  madden
-* Revision changed to 6.0
+* Revision 6.5  1999/03/19 19:20:11  kans
+* prototype needed for Cn3DAddUserDefinedFeature
 *
+* Revision 6.4  1999/03/18 22:28:58  ywang
+* add functions for saveout+readin+index user defined features
+*
+* Revision 6.3  1999/03/18 21:04:28  lewisg
+* reverse transform for saving
+*
+* Revision 6.2  1999/02/26 15:44:07  kans
+* boolean initialized to false, not null
+*
+* Revision 6.1  1999/02/25 23:13:41  ywang
+* make cn3d export the entire input mime data
+*
+ * Revision 6.0  1997/08/25  18:13:42  madden
+ * Revision changed to 6.0
+ *
 * Revision 5.1  1996/07/22 00:28:11  hogue
 * Fixed binary ASN.1 saving.
 *
@@ -60,10 +75,14 @@
 
 #include <vibrant.h>
 #include <mmdbapi.h>
+#include <mmdbapi1.h>
 #include <cn3dmain.h>
+#include <algorend.h>
+#include <cn3dmodl.h>
 #include <cn3dsave.h>
 #include <cn3dmsel.h>
-
+#include <asnmime.h>
+#include <objmime.h>
 
 static Boolean  Cn3D_Save_InUse = FALSE;
  
@@ -113,30 +132,152 @@ static void Cn3D_ExportAsnNow(ButtoN b)
     Char path[256];
     Int2 iTest;
     Int4 iCount = 0;
-    PDNMS pdnmsMain = NULL;
     CharPtr pcSave = NULL;
     Byte bSave = 0;  
 
     Int2Ptr i2Vec = NULL;
-   
-     
-     if (GetStatus(Cn3D_bFeatOn) == FALSE)
-       bSave = (Byte) (bSave | (Byte) NOT_FEATURES);
+
+    Boolean iCn3d = TRUE, FirstSlave = FALSE;
+    CharPtr pcSaveMode = NULL;
+
+    PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
+    PMSD  pmsdSlave = NULL, pmsdMaster = NULL;
+    NcbiMimeAsn1Ptr mime = NULL;
+    BiostrucAlignPtr bsap = NULL;
+    BiostrucSeqPtr   bssp = NULL;
+    BiostrucSeqsPtr   bsssp = NULL;
+    BiostrucPtr bsSlaveHead = NULL, bsSlave = NULL, bsSlaveTail = NULL;
+    BiostrucFeaturePtr pbsfThis;
+    PDNTRN pdnTransform = NULL;
+    AsnIoPtr aip = NULL;
+    ValNodePtr pvnAlignment;
+    PDNML pdnmlThis = NULL;
+
+/*   if (GetStatus(Cn3D_bFeatOn) == FALSE)
+       bSave = (Byte) (bSave | (Byte) NOT_FEATURES);  */
+             /* save feature always for now -yanli */
      
      if (GetValue(Cn3D_gBinAscii) == 2)
-          bSave = (Byte)  (bSave | (Byte) SAVE_BINARY);
+          bSave = (Byte)  (bSave | (Byte) SAVE_BINARY);   
+
+     if (bSave & (Byte) SAVE_BINARY) pcSaveMode = SAVE_BINARY_STRING;
+     else pcSaveMode = SAVE_ASCII_STRING;
 
      i2Vec = PickedModels(&iCount); 
      GetTitle(Cn3D_tAsnSave, path, sizeof(path));
-     pdnmsMain = GetSelectedModelstruc();
-     iTest = WriteAsnModelList(pdnmsMain, iCount, i2Vec, path, bSave);
-     if (i2Vec) I2VectorFree(i2Vec, 0);
-     if (!iTest) 
-       {
-               ErrClear(); 
+     pdnmsMaster = GetSelectedModelstruc();
+     iTest = WriteAsnModelList(pdnmsMaster, iCount, i2Vec, path, bSave, iCn3d);
+     pdnmsMaster = (PDNMS) Cn3DAddUserDefinedFeature(pdnmsMaster);
+     if (!iTest)
+         {
+               ErrClear();
                ErrPostEx(SEV_FATAL,0,0, "Unable to Export\nPossibly Corrupt Data in Memory!\n");
                ErrShow();
-       }   
+
+         }
+
+     pmsdMaster = pdnmsMaster->data.ptrvalue;
+
+     aip = AsnIoOpen(path, pcSaveMode);
+
+     mime = (NcbiMimeAsn1Ptr) ValNodeNew(NULL);
+     switch(pmsdMaster->iMimeType){
+         case NcbiMimeAsn1_entrez:
+              BiostrucAsnWrite(pmsdMaster->pbsBS, aip, NULL);
+              break;         
+         case NcbiMimeAsn1_strucseq:
+              mime->choice = NcbiMimeAsn1_strucseq;
+              bssp = BiostrucSeqNew();
+              bssp->structure = pmsdMaster->pbsBS;
+              bssp->sequences = pmsdMaster->pseSequences;
+              mime->data.ptrvalue = bssp;
+              NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+              break;
+         case NcbiMimeAsn1_strucseqs:
+              mime->choice = NcbiMimeAsn1_strucseqs;
+              bsssp = BiostrucSeqsNew();
+              bsssp->structure = pmsdMaster->pbsBS;
+              bsssp->sequences = pmsdMaster->pseSequences;
+              bsssp->seqalign = pmsdMaster->pseqaSeqannot;
+              mime->data.ptrvalue = bsssp;
+              NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+              break;
+         case NcbiMimeAsn1_alignstruc:
+              mime->choice = NcbiMimeAsn1_alignstruc;
+              bsap = BiostrucAlignNew();
+              bsap->master = pmsdMaster->pbsBS;
+              pdnmsSlave = pmsdMaster->pdnmsSlaves;
+              FirstSlave = TRUE;
+
+	      pbsfThis = (BiostrucFeaturePtr)pmsdMaster->psaStrucAlignment->features->features;
+
+
+              while(pdnmsSlave){
+
+		  /* begin reverse transform */
+
+		  pmsdSlave = pdnmsSlave->data.ptrvalue;
+		  pdnTransform = NULL;
+		  pvnAlignment = ValNodeFindNext(pbsfThis->Location_location, NULL, Location_location_alignment);  
+		  if (pvnAlignment == NULL) break;
+		  /* create the spatial transformation */
+		  TransformToDNTRN(&pdnTransform,  ((ChemGraphAlignmentPtr)pvnAlignment->data.ptrvalue)->transform);
+		  if(pdnTransform == NULL) break;
+		  /* loop over the slave's models with the transformation */
+		  pdnmlThis = pmsdSlave->pdnmlModels;
+          
+		  while (pdnmlThis)
+		      {
+			  TraverseAtoms( pdnmsSlave, pdnmlThis->choice, 0, pdnTransform, DoReverseTransform);
+			  TraverseSolids( pdnmsSlave, pdnmlThis->choice, 0, pdnTransform, DoReverseTransform);
+			  pdnmlThis = pdnmlThis->next;
+		      }
+		  FreeDNTRN(pdnTransform);
+		  pbsfThis = pbsfThis->next;
+
+		  /* end reverse transform */
+
+		  iTest = WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave, iCn3d);
+		  if(!iTest)
+		      {
+			  ErrClear();
+			  ErrPostEx(SEV_FATAL,0,0, "Unable to Export\nPossibly Corrupt Data in Memory!\n");
+			  ErrShow();
+
+		      }
+
+		  if(!bsSlaveHead) {
+		      bsSlaveHead = (BiostrucPtr) ((PMSD)pdnmsSlave->data.ptrvalue)->pbsBS;
+		      bsSlaveTail = bsSlaveHead;
+		  }
+		  else {
+		      bsSlave = (BiostrucPtr) ((PMSD)pdnmsSlave->data.ptrvalue)->pbsBS;
+		      bsSlaveTail->next = bsSlave;
+		      bsSlaveTail = bsSlaveTail->next;
+		      bsSlaveTail->next = NULL;
+		  }
+          pdnmsSlave = (PDNMS) Cn3DAddUserDefinedFeature(pdnmsSlave);
+		  pdnmsSlave = pdnmsSlave->next;
+	      }
+	      bsap->slaves = bsSlaveHead;
+	      bsap->sequences = pmsdMaster->pseSequences;   
+             bsap->alignments = pmsdMaster->psaStrucAlignment;
+             bsap->seqalign = pmsdMaster->pseqaSeqannot;    
+             mime->data.ptrvalue = bsap;
+             NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+             break;
+       }
+
+      aip = AsnIoClose(aip);
+
+      FreeRedundantAsn(pdnmsMaster);
+      pdnmsSlave = pmsdMaster->pdnmsSlaves;
+      while(pdnmsSlave){
+         FreeRedundantAsn(pdnmsSlave);
+         pdnmsSlave = pdnmsSlave->next;
+      }
+ 
+      if (i2Vec) I2VectorFree(i2Vec, 0);
       Remove(Cn3D_wAsnSave);
       Cn3D_EnableFileOps();
       Cn3D_Save_InUse = FALSE;
@@ -211,8 +352,9 @@ static void Cn3D_SaveBiostruc(IteM i)
     g6 = HiddenGroup(g5, 0, 2,  NULL);
     SetGroupMargins(g6, 10, 10);
     StaticPrompt(g6, " ", 0, 0, systemFont, 'l'); 
-    Cn3D_bFeatOn =  CheckBox(g6, "Include Features", NULL);
-    SetStatus(Cn3D_bFeatOn,TRUE);
+/*  Cn3D_bFeatOn =  CheckBox(g6, "Include Features", NULL);
+    SetStatus(Cn3D_bFeatOn,TRUE);  */
+            /* save features always for now - yanli */
     Cn3D_AsnEnableProc(NULL);
     Select(Cn3D_bAsnOk);
     /* disable appropriate stuff here */
@@ -325,7 +467,7 @@ MenU LIBCALL Cn3D_SaveSub (MenU m)
   MenU s;
 
   s = SubMenu (m, "Save");
-  i = CommandItem (s, "Biostruc/B", Cn3D_SaveBiostruc);
+  i = CommandItem (s, "All/B", Cn3D_SaveBiostruc);
  /* i = CommandItem (s, "Feature-set/F", NULL); */
   i = CommandItem (s, "Dictionary/D", Cn3D_SaveDictionary);
  return s;

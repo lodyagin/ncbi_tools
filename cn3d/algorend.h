@@ -34,6 +34,21 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: algorend.h,v $
+* Revision 6.17  1999/04/06 20:10:16  lewisg
+* fix typo
+*
+* Revision 6.16  1999/04/06 20:04:39  lewisg
+* more opengl
+*
+* Revision 6.15  1999/03/30 22:36:21  ywang
+* add functions to color salsa for NcbiMimeAsn1_strucseqs & code reorganization
+*
+* Revision 6.14  1999/02/11 18:48:14  lewisg
+* delete color index functions
+*
+* Revision 6.13  1999/02/10 23:49:42  lewisg
+* use RGB values instead of indexed palette
+*
 * Revision 6.12  1998/11/04 00:06:23  ywang
 * add function for modeling: change render/color for special residue(s)
 *
@@ -108,7 +123,11 @@
 #ifndef _ALGOREND_
 #define _ALGOREND_ 1
 
+#ifdef _OPENGL
+#include <shim3d.h>
+#else
 #include <viewer3d.h>
+#endif
 #include <cn3dmain.h>
 
 
@@ -129,6 +148,7 @@ extern "C" {
 #define R_NUMBER 11
 #define R_PDBNUMBER 12
 
+#define C_default  0
 #define C_hotpink  1
 #define C_magenta  2
 #define C_purple   3
@@ -279,8 +299,9 @@ extern "C" {
 typedef struct AlgorRenderSet {
 
 /* this embeds a camera structure inside */
-
+#ifndef _OPENGL
   Int4 dummy[CAMERA_SIZE_I4];
+#endif
    
 /* global settings */
 
@@ -353,7 +374,7 @@ typedef struct AlgorRenderSet {
   Int2 	           ObjectColor;  /* valid are BYCHAIN, BYSSTRU */
   
   Uint1 NumColors;
-  Uint1 IndexRGB[CN3D_COLOR_MAX];
+/*  Uint1 IndexRGB[CN3D_COLOR_MAX];*/
 
 } ARS, PNTR PARS;
 
@@ -363,7 +384,7 @@ typedef struct AlgorRenderSet {
 typedef struct RenderKeep {
    Byte NodeWhat;
    Byte NodeType;
-   Int2 Color; /* a fixed color */
+   ResidueColorCell Color; /* a fixed color */
    Byte Bond;  /*  use define */
    Byte Atom;
    FloatLo BondWidth; 
@@ -379,6 +400,8 @@ extern void  LIBCALL SetDefaultAlgorRender PROTO((PARS pars));
 extern void  LIBCALL SetAlignAlgorRender PROTO((PARS pars));
 extern PARS  LIBCALL NewAlgorRenderSet     PROTO((void));
 extern PARS LIBCALL NewAlignRenderSet PROTO((void));
+extern void  LIBCALL SetStrucSeqsAlgorRender PROTO((PARS pars));
+extern PARS LIBCALL NewStrucSeqsRenderSet PROTO((void));
 extern void  LIBCALL FreeAlgorRenderSet    PROTO((PARS pars));
 extern PARS  LIBCALL GetAlgorRenderSet     PROTO((PDNMS pdnmsThis));
 extern void  LIBCALL ResetRenderCtrls      PROTO((void));
@@ -390,15 +413,19 @@ extern PRK   LIBCALL CopyRenderKeep        PROTO((PRK prkThis));
 extern void  LIBCALL FreeRenderKeep        PROTO((PRK prkThis));
 extern void  LIBCALL RenderObject          PROTO((PVNMO pvnmoThis));
 extern void  LIBCALL RenderBond   PROTO((PALD paldFrom, PALD paldTo,
-                                         Int2 iColor, FloatLo fCylRadius));
+                                         ResidueColorCell * iColor, FloatLo fCylRadius));
 extern void  LIBCALL RenderAnAtom PROTO((PALD paldAtom,
-                                         Int2 iColor, FloatLo fRadius));
+                                         ResidueColorCell *  iColor, FloatLo fRadius));
 extern Int2  LIBCALL GetGraphNCBIstdaa     PROTO((PMGD pmgdThis));
 extern Int2  LIBCALL GetGraphNCBI4na       PROTO((PMGD pmgdThis));
 extern void  LIBCALL MakePaletteModel      PROTO((PDNMS pdnmsThis, Int2 iModel ));
 extern void  LIBCALL MakeStrucPalette      PROTO((void)); 
-extern Picture3D LIBCALL Do3DOrigin PROTO((Picture3D p3d));
-extern Picture3D LIBCALL AlgorithmicRendering PROTO((Picture3D p3d));
+#ifdef _OPENGL
+    extern void LIBCALL AlgorithmicRendering PROTO((void));
+#else
+    extern Picture3D LIBCALL Do3DOrigin PROTO((Picture3D p3d));
+    extern Picture3D LIBCALL AlgorithmicRendering PROTO((Picture3D p3d));
+#endif
 extern void Cn3D_RedrawProc PROTO((ButtoN b));
 extern void LIBCALL fnMSPLoop PROTO((PDNMS pdnmsThis));
 extern void LIBCALL fnARLoop PROTO((PDNMS pdnmsThis ));

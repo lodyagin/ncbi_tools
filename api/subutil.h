@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,12 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.12  1999/03/17 22:49:38  kans
+* changed SUBSOURCE_ to SUBSRC_
+*
+* Revision 6.11  1999/03/17 20:04:40  kans
+* added SUBSOURCE_ and ORGMOD_ defines
+*
 * Revision 6.10  1998/10/02 17:48:12  kans
 * new parameters to AddAccessionToRefGeneTrackUserObject, and added CreateMrnaProteinLinkUserObject
 *
@@ -695,6 +701,31 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 	SeqEntryPtr entry ,
 	Int2	 type );
 
+#define SUBSRC_chromosome 1
+#define SUBSRC_map 2
+#define SUBSRC_clone 3
+#define SUBSRC_subclone 4
+#define SUBSRC_haplotype 5
+#define SUBSRC_genotype 6
+#define SUBSRC_sex 7
+#define SUBSRC_cell_line 8
+#define SUBSRC_cell_type 9
+#define SUBSRC_tissue_type 10
+#define SUBSRC_clone_lib 11
+#define SUBSRC_dev_stage 12
+#define SUBSRC_frequency 13
+#define SUBSRC_germline 14
+#define SUBSRC_rearranged 15
+#define SUBSRC_lab_host 16
+#define SUBSRC_pop_variant 17
+#define SUBSRC_tissue_lib 18
+#define SUBSRC_plasmid_name 19
+#define SUBSRC_transposon_name 20
+#define SUBSRC_insertion_seq_name 21
+#define SUBSRC_plastid_name 22
+#define SUBSRC_country 23
+#define SUBSRC_other 255
+
 /*********************************************
 *  SubSource defines subclasses of source material
 *    (also see OrgMod below for subclasses of organism names)
@@ -732,6 +763,31 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 	SeqEntryPtr entry ,
 	Int2	 type ,
 	CharPtr value);
+
+#define ORGMOD_strain 2
+#define ORGMOD_substrain 3
+#define ORGMOD_type 4
+#define ORGMOD_subtype 5
+#define ORGMOD_variety 6
+#define ORGMOD_serotype 7
+#define ORGMOD_serogroup 8
+#define ORGMOD_serovar 9
+#define ORGMOD_cultivar 10
+#define ORGMOD_pathovar 11
+#define ORGMOD_chemovar 12
+#define ORGMOD_biovar 13
+#define ORGMOD_biotype 14
+#define ORGMOD_group 15
+#define ORGMOD_subgroup 16
+#define ORGMOD_isolate 17
+#define ORGMOD_common 18
+#define ORGMOD_acronym 19
+#define ORGMOD_dosage 20
+#define ORGMOD_nat_host 21
+#define ORGMOD_sub_species 22
+#define ORGMOD_specimen_voucher 23
+#define ORGMOD_old_name 254
+#define ORGMOD_other 255 
 
 /*********************************************
 *  OrgMod defines subclasses of organism names

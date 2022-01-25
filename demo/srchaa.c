@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description: peptide pattern match
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: srchaa.c,v $
+* Revision 6.14  1999/02/26 18:51:54  kuzio
+* mismatch option
+*
+* Revision 6.13  1999/02/25 20:34:19  kuzio
+* print title option
+*
 * Revision 6.12  1998/12/18 16:24:56  kuzio
 * big GIs
 *
@@ -125,7 +131,7 @@ Args myargs[] =
   { "use Prosite SkipFlag", "FALSE", "FALSE", "TRUE", TRUE,
     's', ARG_BOOLEAN, 0.0, 0, NULL },
   { "cut-off below  r  random score [25]", "1000000", "0", "1000000", TRUE,
-    'r' , ARG_INT, 0.0, 0, NULL},
+    'r', ARG_INT, 0.0, 0, NULL},
 #ifndef NO_TAX_NET
   { "use Prosite TaxonomyFlag", "FALSE", "FALSE", "TRUE", TRUE,
     't', ARG_BOOLEAN, 0.0, 0, NULL },
@@ -139,7 +145,11 @@ Args myargs[] =
   { "user names file", NULL, NULL, NULL, TRUE,
     'N', ARG_STRING, 0.0, 0, NULL },
   { "user pattern", NULL, NULL, NULL, TRUE,
-    'S', ARG_STRING, 0.0, 0, NULL }
+    'S', ARG_STRING, 0.0, 0, NULL },
+  { "title on hit only", "FALSE", "FALSE", "TRUE", TRUE,
+    'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "mismatch", "0", "0", "2", TRUE,
+    'M', ARG_INT, 0.0, 0, NULL}
 };
 
 #ifndef NO_TAX_NET
@@ -332,9 +342,9 @@ Int2 Main (void)
 #endif
 
 #ifndef NO_TAX_NET
-  Int2   ia = 4, ib = 5, ic = 6, id = 7, ie = 8, ig = 9;
+  Int2   ia=4, ib=5, ic=6, id=7, ie=8, ig=9, ih=10, ii=11;
 #else
-  Int2           ib = 4, ic = 5, id = 6, ie = 7, ig = 8;
+  Int2         ib=4, ic=5, id=6, ie=7, ig=8, ih=9,  ii=10;
 #endif
 
   argcount = sizeof (myargs) / sizeof (Args);
@@ -482,13 +492,17 @@ Int2 Main (void)
           }
         }
 
-        title = FastaTitle (gpbsp->bsp, ">", NULL);
-        printf ("%s\n", title);
-        MemFree (title);
+        if (!(Boolean) myargs[ih].intvalue)
+        {
+          title = FastaTitle (gpbsp->bsp, ">", NULL);
+          printf ("%s\n", title);
+          MemFree (title);
+        }
         cpp = cpph;
         while (cpp != NULL)
         {
-          sap = PatternMatchBioseq (gpbsp->bsp, cpp, 0);
+          sap = PatternMatchBioseq (gpbsp->bsp, cpp,
+                                    (Int4)myargs[ii].intvalue);
           if (myargs[ib].intvalue)
           {
             printf (">%s\n", cpp->name);
@@ -517,6 +531,12 @@ Int2 Main (void)
           else
           {
             slp = MatchSa2Sl (&sap);
+            if (myargs[ih].intvalue && slp != NULL)
+            {
+              title = FastaTitle (gpbsp->bsp, ">", NULL);
+              printf ("%s\n", title);
+              MemFree (title);
+            }
             while (slp != NULL)
             {
               start = SeqLocStart (slp);

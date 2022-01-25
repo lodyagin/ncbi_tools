@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.2  1999/05/03 20:06:36  kans
+* if no pubs or no biosource, report only once, not once per bioseq
+*
 * Revision 6.1  1998/07/02 17:53:47  kans
 * useSeqMgrIndexes field added to ValidStructPtr, validator can use either old (nested gathers) or new (SeqMgr indexing) method
 *
@@ -120,6 +123,8 @@ typedef struct validstruct {
 	CharPtr errbuf;
 	Boolean patch_seq;             /* repair invalid sequence residues? */
 	Boolean non_ascii_chars;       /* non ascii chars found in read? */
+	Boolean suppress_no_pubs;
+	Boolean suppress_no_biosrc;
 	SpellCheckFunc spellfunc;
 	SpellCallBackFunc spellcallback;
 	GatherContextPtr gcp;          /* used for reporting the errors */

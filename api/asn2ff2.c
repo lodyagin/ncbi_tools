@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -209,9 +209,16 @@ static CharPtr SeqIdWriteProc (Asn2ffJobPtr ajp, SeqIdPtr sip)
 {
 	StdPrintOptionsPtr Spop=ajp->Spop;
 
-	if (! StdFormatPrint((Pointer)sip, 
-		(AsnWriteFunc)SeqIdAsnWrite, "StdSeqId", Spop)) {
-		    ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+	if (ajp->show_version) {
+		if (! StdFormatPrint((Pointer)sip, 
+			(AsnWriteFunc)SeqIdAsnWrite, "VersionSeqId", Spop)) {
+		    	ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+		}
+	} else {
+		if (! StdFormatPrint((Pointer)sip, 
+			(AsnWriteFunc)SeqIdAsnWrite, "StdSeqId", Spop)) {
+		    	ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
+		}
 	}
 	if (Spop->ptr != NULL && *((CharPtr) (Spop->ptr)) != '\0') 
 		return Spop->ptr;
@@ -413,6 +420,45 @@ static ComStructPtr tie_next_comm(ComStructPtr head, ComStructPtr next)
 	return head;
 }
 
+static CharPtr GetStrForUserObject(UserObjectPtr uop)
+{
+    ObjectIdPtr		oip;
+	UserFieldPtr	ufp, tmp, u;
+	CharPtr			ptr=NULL;
+	Int2			i=0;
+	static Char		p[13];
+	
+	if ((oip = uop->type) == NULL) return NULL;
+	if (StringCmp(oip->str, "RefGeneTracking") != 0) return NULL;
+	for (ufp=uop->data; ufp; ufp=ufp->next) {
+		oip = ufp->label;
+		if (StringCmp(oip->str, "Assembly") == 0) {
+			break;
+		}
+	}
+	if (ufp && ufp->choice == 11) {
+		for (tmp=ufp->data.ptrvalue; tmp; tmp=tmp->next, i++) ;
+		ptr = MemNew(StringLen("REFSEQ: This reference sequence was derived from ")
+																 + 10*i + 1);
+		sprintf(ptr, "REFSEQ: This reference sequence was derived from ");
+		for (tmp=ufp->data.ptrvalue; tmp; tmp=tmp->next) {
+			for (u = tmp->data.ptrvalue; u; u=u->next) {
+				oip = u->label;
+				if (StringCmp(oip->str, "accession") == 0) {
+					break;
+				}
+			}
+			if (u && tmp->next) {
+				sprintf(p, "%s, ", u->data.ptrvalue);
+			} else {
+				sprintf(p, "%s.~~", u->data.ptrvalue);
+			}
+			StringCat(ptr, p);
+		}
+	}
+	return ptr;
+}
+
 static CharPtr GetStrForMap(DbtagPtr dbtag)
 {
 	Int2 total;
@@ -458,9 +504,13 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 	ComStructPtr csp;
 	MolInfoPtr mfp;
 	CharPtr buf = NULL, ptr = NULL, string=NULL, new_string=NULL, str=NULL;
-	Int2 buflen = 0;
+	Int4 buflen = 0;
 	Int4 num_s = 0, num_g = 0;
+	Boolean is_other;
 
+	if (bsp && bsp->id) {
+		is_other = (bsp->id->choice == SEQID_OTHER) ? TRUE : FALSE; 
+	}
 	tvnp = GatherDescrListByChoice(ajp, gbp, choice); 
 	for (ds_vnp = tvnp;	ds_vnp; ds_vnp=ds_vnp->next) {
 		dsp = (DescrStructPtr) ds_vnp->data.ptrvalue;
@@ -472,6 +522,9 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 		csp->string = NULL;
 		csp->gsdb_id = FALSE;
 		switch (choice) {
+		case Seq_descr_user:
+			csp->string = GetStrForUserObject(vnp->data.ptrvalue);
+			break;
 		case Seq_descr_comment:
 			csp->string = StringSave(vnp->data.ptrvalue);
 			break;
@@ -486,44 +539,78 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 			csp->string = StringSave(str);
 			break;
 		case Seq_descr_molinfo:
-			mfp = vnp->data.ptrvalue;
-			if (mfp && mfp->tech > 1) {
-				for (d = (DeltaSeqPtr)(bsp->seq_ext); d != NULL; d = d->next) {
-					buflen +=80;
-				}
-				if (buflen > 0) {
-					buf = MemNew(buflen+1);
-					CountGapsInDeltaSeq(bsp, &num_s, 
-						&num_g, NULL, NULL, buf, buflen);
-				}
-				if (mfp->tech == MI_TECH_htgs_1) {
-					tmp = StringSave(
-					"***                                                 ***~*** WARNING: Phase 1 High Throughput Genome Sequence ***~***                                                 ***~* This sequence is unfinished.");
-					if (num_s > 0) {
-						sprintf(buffer, 
-						"It consists of %ld contigs for~* which the order is not known; their order in this record is~* arbitrary. In some cases, the exact lengths of the gaps~* between the contigs are also unknown; these gaps are  presented~* as runs of N as a convenience only.", (long) (num_s-num_g));
-						tmp = Cat2Strings(tmp, buffer, " ", 0);
+			if ((mfp = vnp->data.ptrvalue) != NULL) {
+				if (is_other == TRUE  && mfp->completeness) {
+					switch (mfp->completeness) {
+						case 1:
+				csp->string = StringSave("COMPLETENESS: full length");
+						break;
+						case 2:
+				csp->string = StringSave("COMPLETENESS: not full length");
+						break;
+						case 3:
+			csp->string = StringSave("COMPLETENESS: incomplete on the 5' end");
+						break;
+						case 4:
+			csp->string = StringSave("COMPLETENESS: incomplete on the 3' end");
+						break;
+						case 5:
+			csp->string = StringSave("COMPLETENESS: incomplete on both ends");
+						break;
+						case 6:
+			csp->string = StringSave("COMPLETENESS: complete on the 5' end");
+						break;
+						case 7:
+			csp->string = StringSave("COMPLETENESS: complete on the 3' end");
+						break;
+						default:
+			csp->string = StringSave("COMPLETENESS: unknown");
+						break;
 					}
-					tmp3 = StringSave("When sequencing is complete,~* the sequence data presented in this record will be replaced~*by a single finished sequence with the same accession number.");
-					tmp = Cat2Strings(tmp, tmp3, " ", 0);
-					csp->string = Cat2Strings(tmp, buf, "~", 0);
-				} else if (mfp->tech == MI_TECH_htgs_2) {
-					tmp = StringSave(
-					"***                                                 ***~*** WARNING: Phase 2 High Throughput Genome Sequence ***~***                                                 ***~* This sequence is unfinished."); 
-					if (num_s > 0) {
-						sprintf(buffer, "It consists of %ld contigs for~* which the order is known. The lengths of the gaps have been~* estimated by the submitter but are not known exactly.", (long) (num_s-num_g));
-						tmp = Cat2Strings(tmp, buffer, " ", 0);
+				} else if(mfp->tech > 1) {
+					for (d=(DeltaSeqPtr)(bsp->seq_ext); d != NULL; d=d->next) {
+						buflen +=80;
 					}
-					tmp3 = StringSave("When~* sequencing is complete, the sequence data presented in this~* record will be replaced by a single finished sequence~* with the same accession number.");
-					tmp = Cat2Strings(tmp, tmp3, " ", 0);
-					csp->string = Cat2Strings(tmp, buf, "~", 0);
-				} else if ((str = StringForSeqTech(mfp->tech)) != NULL) {
-                                        ptr = MemNew(StringLen(str) + 10);
-					sprintf(ptr, "Method: %s.", str); 
-					csp->string = StringSave(ptr);
-                                        MemFree(ptr);
+					if (buflen > 0) {
+						buf = MemNew(buflen+1);
+						CountGapsInDeltaSeq(bsp, &num_s, 
+							&num_g, NULL, NULL, buf, buflen);
+					}
+					if (mfp->tech == MI_TECH_htgs_0) {
+						if (num_s > 0) {
+							sprintf(buffer, 
+							"* NOTE: his record contains %ld individual~* sequencing reads that have not been assembled into~* contigs. Runs of N are used to separate the reads~* and the order in which they appear is completely~* arbitrary. Low-pass sequence sampling is useful for~* identifying clones that may be gene-rich and allows~* overlap relationships among clones to be deduced.~* However, it should not be assumed that this clone~* will be sequenced to completion. In the event that~* the record is updated, the accession number will~* be preserved.", (long) (num_s-num_g));
+						}
+						csp->string = Cat2Strings(buffer, buf, "~", 0);
+					} else if (mfp->tech == MI_TECH_htgs_1) {
+						tmp = StringSave(
+						"* NOTE: This is a \"working draft\" sequence.");
+						if (num_s > 0) {
+							sprintf(buffer, 
+							" It currently~* consists of %ld contigs. The true order of the pieces~* is not known and their order in this sequence record is~* arbitrary. Gaps between the contigs are represented as~* runs of N, but the exact sizes of the gaps are unknown.", (long) (num_s-num_g));
+							tmp = Cat2Strings(tmp, buffer, "", 0);
+						}
+						tmp3 = StringSave("* This record will be updated with the finished sequence~* as soon as it is available and the accession number will~* be preserved.");
+						tmp = Cat2Strings(tmp, tmp3, "~", 0);
+						csp->string = Cat2Strings(tmp, buf, "~", 0);
+					} else if (mfp->tech == MI_TECH_htgs_2) {
+						tmp = StringSave(
+						"* NOTE: This is a \"working draft\" sequence."); 
+						if (num_s > 0) {
+							sprintf(buffer, " It currently~* consists of %ld contigs. Gaps between the contigs~* are represented as runs of N. The order of the pieces~* is believed to be correct as given, however the sizes~* of the gaps between them are based on estimates that have~* provided by the submittor.", (long) (num_s-num_g));
+							tmp = Cat2Strings(tmp, buffer, "", 0);
+						}
+						tmp3 = StringSave("* This sequence will be replaced~* by the finished sequence as soon as it is available and~* the accession number will be preserved");
+						tmp = Cat2Strings(tmp, tmp3, "~", 0);
+						csp->string = Cat2Strings(tmp, buf, "~", 0);
+					} else if ((str = StringForSeqTech(mfp->tech)) != NULL) {
+						ptr = MemNew(StringLen(str) + 10);
+						sprintf(ptr, "Method: %s.", str); 
+						csp->string = StringSave(ptr);
+						MemFree(ptr);
+					}
+					MemFree(buf);
 				}
-				MemFree(buf);
 			}
 			break;
 		case Seq_descr_method:
@@ -565,6 +652,8 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	CharPtr strd;
 	
 	gbp->comm_num = 0;
+	GetCommentByChoice(ajp, gbp, Seq_descr_user);
+
 /*  Get GSDB Id */
 	for (sid = gbp->bsp->id; sid; sid=sid->next) {
 		if (sid->choice != SEQID_GENERAL)
@@ -607,7 +696,7 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			sprintf(csp->string, "[WARNING] On %s this sequence was replaced by a newer version", strd);
 			for (sid=hist->replaced_by_ids; sid; sid=sid->next) {
 				if (sid->choice == SEQID_GI) {
-					sprintf(tmp, " gi:%ld", sid->data.intvalue);
+					sprintf(tmp, " gi:%ld", (long) sid->data.intvalue);
 					StringCat(csp->string, tmp);
 				}
 			}
@@ -636,7 +725,7 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			sprintf(csp->string, "On %s this sequence version replaced", strd);
 			for (sid=hist->replace_ids; sid; sid=sid->next) {
 				if (sid->choice == SEQID_GI) {
-					sprintf(tmp, " gi:%ld", sid->data.intvalue);
+					sprintf(tmp, " gi:%ld", (long) sid->data.intvalue);
 					StringCat(csp->string, tmp);
 				}
 			}
@@ -987,6 +1076,7 @@ than the individual parts of a segmented set, at least in Swiss-prot. */
 			(sid->choice == SEQID_DDBJ) || 
 			(sid->choice == SEQID_GIBBSQ) || 
 			(sid->choice == SEQID_GIBBMT) || 
+            (sid->choice == SEQID_OTHER) ||
 			(sid->choice == SEQID_GI) || 
 			(sid->choice == SEQID_GIIM || (ChoicePID(sid) == TRUE))))  {
 		vnp = GetDBSourceForNuclDB(ajp, gbp);
@@ -1456,8 +1546,10 @@ NLM_EXTERN ValNodePtr GatherDescrByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint
 	} else {
 		gsc.target = NULL;
 	}
-	if (ajp->only_one || ajp->genome_view) {
-		gsc.target = NULL;
+	if (ajp->sep && ajp->sep->choice == 1) {
+		if (ajp->only_one || ajp->genome_view) {
+			gsc.target = NULL;
+		}
 	}
 	GatherEntity(ajp->entityID, &dsp, get_descr_vnp, &gsc); 
 	if (slp) {

@@ -1,0 +1,183 @@
+IMPALA: Integrating Matrix Profiles And Local Alignments
+
+1. Files in Distribution
+
+The following IMPALA source code files are distributed:
+
+copymat.c 
+impatool.c
+makemat.c  
+posit2.c
+profiles.c       
+newkar.c
+profiles.h
+Makefile
+
+2. Compilation
+
+Run the following commands in the directory, containing IMPALA source code files:
+
+make makemat
+make copymat
+make impala
+
+This will result in three binary executable files:
+
+makemat	: primary profile preprocessor 
+  (converts a collection of binary profiles, created by the -C option
+   of PSI-BLAST, into portable ASCII form);
+
+copymat	: secondary profile preprocessor 
+  (converts ASCII matrices, produced by the primary preprocessor, 
+   into database that can be read into memory quickly);
+
+impala		: search program (searches a database of score 
+  matrices, prepared by copymat, producing BLAST-like output).
+
+3. Conversion of profiles into searchable database
+
+3.1. Primary preprocessing
+
+Prepare the following files:
+
+i.	a collection of PSI-BLAST-generated profiles with arbitrary 
+       names and suffix .chk; 
+
+ii.	a collection of "profile master sequences", associated with 
+    the profiles, each in a separate file with arbitrary name and a 3 character
+    suffix starting with c;
+    the sequences can have deflines; they need not be sequences in nr or
+    in any other sequence database; if the sequences have deflines, then
+    the deflines must be unique.
+
+iii.	a list of profile file names, one per line, named 
+    <database_name>.pn;
+
+iv.	a list of master sequence file names, one per line, in the same 
+    order as a list of profile names, named 
+     <database_name>.sn;
+
+The following files will be created:
+
+i.	a collection of ASCII files, corresponding to each of the 
+      original profiles, named 
+     <profile_name>.mtx;
+
+ii.	a list of ASCII matrix files, named 
+      <database_name>.mn;
+
+iii.	ASCII file with auxiliary information, named 
+       <database_name>.aux;
+
+Arguments to makemat:
+
+    -P database name (required)
+    -G Cost to open a gap (optional)
+       default = 11
+    -E Cost to extend a gap (optional)
+       default = 1
+    -M Underlying amino acid scoring matrix (optional)
+       default = BLOSUM62
+    -d Underlying sequence database used to create profiles (optional)
+       default = nr
+    -z Effective size of sequence database given by -d
+       default = current size of -d option
+       Note: It may make sense to use -z without -d when the
+       profiles were created with an older, smaller version of an
+       existing database 
+    -S  Scaling factor for  matrix outputs to avoid round-off problems
+       default = PRO_DEFAULT_SCALING_UP (currently defined as 100)
+       Use 1.0 to have no scaling
+       Output scores will be scaled back down to a unit scale to make
+       them look more like BLAST scores, but we found working with a larger
+       scale to help with roundoff problems.
+
+Note: It is not enforced that the values of -G and -E passed to makemat
+were actually used in making the checkpoints. However, the values fed
+in to makemat are propagated to copymat and impala.
+
+3.1. Secondary preprocessing
+
+Prepare the following files:
+
+i.	a collection of ASCII files, corresponding to each of the 
+  original profiles, named 
+  <profile_name>.mtx 
+(created by makemat);
+
+ii.	a collection of "profile master sequences", associated with 
+  the profiles, each in a separate file with arbitrary name and suffix .chx;
+
+iii.	a list of ASCII_matrix files, named 
+     <database_name>.mn 
+   (created by makemat);
+
+iv.	a list of master sequence file names, one per
+  line, in the same order as a list of matrix names, named 
+  <database_name>.sn;
+
+v.	ASCII file with auxiliary information, named 
+  <database_name>.aux 
+(created by makemat);
+
+The files input to copymatices are in ASCII format and thus portable 
+between machines with different encodings for machine-readable files
+
+The following files will be created:
+
+i.	a huge binary file, containing all profile matrices, named
+ <database_name>.mat;
+
+Arguments to copymat
+
+    -P database name (required)
+
+4. Search
+
+Before you start searching, check that in your current directory
+you have copies of or soft links to all the files associated with the PSSM
+library. If the library has K PSSMs, you should have
+     K files with names ending in .mtx
+     K files with names ending in a 3-letter extension starting with c
+     1 file with name ending in .pn
+     1 file with name ending in .sn
+     1 file with name ending in .aux
+     1 file with name ending in .mn
+     1 file with name ending in .mat
+
+Arguments to impala
+
+   -i  query sequence file (required)
+   -P  database of profiles (required)
+   -o  output file (optional)
+       default = stdout
+   -e  Expectation value threshold  (E), (optional, same as for BLAST)
+       default = 10 
+   -m  alignment view (optional, same as for BLAST)
+   -z  effective length of database (optional)
+       default = length given via -z option to makemat
+       0 = e-value adjustment off
+
+5. Output
+
+IMPALA output closely mimics output of BLASTP family programs and
+should be compatible with SEALS BLAST parsers.
+
+This software is in early stages of testing. Send
+suggestions, comments, complaints only to Alejandro Schaffer
+schaffer@helix.nih.gov
+
+
+Reference:
+
+  Schaffer, A.A.,  Wolf, Y.I., Koonin, E.V.,
+Aravind, L., Altschul, S. F., IMPALA: Integrating Matrix Profiles and
+Local Alignments, submitted.
+
+
+
+
+
+
+
+

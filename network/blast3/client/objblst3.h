@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.0 at Dec 21, 1998  9:44 AM
+*    Generated using ASNCODE Revision: 6.0 at Apr 13, 1999  9:19 AM
 *
 **************************************************/
 
@@ -129,6 +129,12 @@ typedef struct struct_Blast_parameters {
    CharPtr   filter_string;
    CharPtr   entrez_query;
    Int4   word_size;
+   Int4   db_length;
+   FloatHi   searchsp_eff;
+   Int4   hsp_range_max;
+   Int4   block_width;
+   Uint1   perform_culling;
+   Int4   strand_option;
 } BlastParameters, PNTR BlastParametersPtr;
 
 

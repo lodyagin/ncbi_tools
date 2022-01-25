@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -37,6 +37,13 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistr.h,v $
+* Revision 6.4  1999/04/15 20:24:07  vakatov
+* Dont use "list" name as it can clash with the standard "list<>" template
+* on some raw C++ compilers
+*
+* Revision 6.3  1999/03/11 16:10:00  kans
+* StringHasNoText and TrimSpacesAroundString moved from vibforms
+*
 * Revision 6.2  1998/11/27 19:08:59  vakatov
 * Removed proto of StringAppend() -- it is not implemented anyway, and
 * there are more standard functions from the "String[N]Cat" family
@@ -106,7 +113,7 @@ NLM_EXTERN int LIBCALL Nlm_StrIPCmp PROTO((const char FAR *a, const char FAR *b)
 NLM_EXTERN int LIBCALL Nlm_StrNIPCmp PROTO((const char FAR *a, const char FAR *b, size_t max));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StrMove PROTO((char FAR *to, const char FAR *from));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StrSave PROTO((const char FAR *from));
-NLM_EXTERN size_t LIBCALL Nlm_StrCnt PROTO((const char FAR *str, const char FAR *list));
+NLM_EXTERN size_t LIBCALL Nlm_StrCnt PROTO((const char FAR *str, const char FAR *x_list));
 
 NLM_EXTERN size_t LIBCALL Nlm_StringLen PROTO((const char *str));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringCpy PROTO((char FAR *to, const char FAR *from));
@@ -143,7 +150,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringTokMT PROTO((char FAR *str1, const cha
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringMove PROTO((char FAR *to, const char FAR *from));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSave PROTO((const char FAR *from));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSaveNoNull PROTO((const char FAR *from));
-NLM_EXTERN size_t LIBCALL Nlm_StringCnt PROTO((const char FAR *str, const char FAR *list));
+NLM_EXTERN size_t LIBCALL Nlm_StringCnt PROTO((const char FAR *str, const char FAR *x_list));
 NLM_EXTERN char* LIBCALL Nlm_StringUpper PROTO((char *string));
 NLM_EXTERN char* LIBCALL Nlm_StringLower PROTO((char *string));
 
@@ -151,6 +158,9 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_MeshStringICmp PROTO((const char FAR *str1, cons
 
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSearch PROTO((const char FAR *str, const char FAR *sub));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringISearch PROTO((const char FAR *str, const char FAR *sub));
+
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString PROTO((Nlm_CharPtr str));
 
 /*****************************************************************************
 *
@@ -364,6 +374,9 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 
 #define StringSearch Nlm_StringSearch
 #define StringISearch Nlm_StringISearch
+
+#define StringHasNoText Nlm_StringHasNoText
+#define TrimSpacesAroundString Nlm_TrimSpacesAroundString
 
 #define LabelCopy Nlm_LabelCopy
 #define LabelCopyExtra Nlm_LabelCopyExtra

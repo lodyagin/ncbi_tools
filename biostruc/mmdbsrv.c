@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.11 1998/11/06 16:25:31 addess Exp $
+/* $Id: mmdbsrv.c,v 6.16 1999/04/28 21:08:30 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,30 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.11 $
+* $Revision: 6.16 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.16  1999/04/28 21:08:30  lewisg
+* fixed double freeing of Biostruc
+*
+* Revision 6.15  1999/04/28 18:26:15  kimelman
+* exit codes changed to 0
+*
+* Revision 6.14  1999/04/22 01:56:44  kimelman
+* 1. pdb reference read completely from configurstion files
+* 2. indentaiton
+* 3. NcbiMimeAsn1Free(mime) commented out <-- lead to core
+*    dump AFTER sending MIME (quick & dirty fix)
+*
+* Revision 6.13  1999/04/19 16:52:57  kimelman
+* spelling fix
+*
+* Revision 6.12  1999/03/05 19:18:47  addess
+* changed URL to link to RCSB structure explorer
+*
 * Revision 6.11  1998/11/06 16:25:31  addess
 * added features for layer-1 and PDB TITLE records
 *
@@ -726,8 +744,7 @@ PrintStructureInfo(PDNMS ModelStruc,  FILE *File, CharPtr tax_save)
   fprintf(File, "<font size=+2>");
   fprintf(File, "MMDB Id: <A HREF=\"%s%s?uid=%ld&form=6&db=t&Dopt=s\">%ld</A>&nbsp ",
 	URLcgi, "mmdbsrv", (long) pmsdThis->iMMDBid, (long) pmsdThis->iMMDBid);
-  fprintf(File, "PDB Id: <A HREF=\"%s?oPDBid=%s\">%s</a>\n", TDBurl,
-	pmsdThis->pcPDBName, pmsdThis->pcPDBName);
+  fprintf(File, "PDB Id: <A HREF=\"%s=%s\">%s</a>\n", TDBurl,pmsdThis->pcPDBName, pmsdThis->pcPDBName);
   if (IsLayerOne(pmsdThis->pbsBS->descr))
     fprintf(File, " - Warning: <A HREF=\"http://www.pdb.bnl.gov/pdb-docs/what_is_LR.html\">Not validated!</A>\n");
   fprintf(File, "</font>");  
@@ -1237,15 +1254,16 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
 	PDNMS ModelStruc;
 	Int4 count, i4Sent = 0, error_flag = 0;
 	AsnIoPtr aip;
-                                                  /* yanli start */
-    NcbiMimeAsn1Ptr mime;
-    BiostrucSeqPtr bssp;
-    BiostrucGraphPtr bsgp;
-    MoleculeGraphPtr mgp;
-    SeqIdPtr sip;
-    SeqEntryPtr sep;
-    Int2 retcode = 3;
-    Int4 This_uid;
+        
+        /* yanli start */
+        NcbiMimeAsn1Ptr mime;
+        BiostrucSeqPtr bssp;
+        BiostrucGraphPtr bsgp;
+        MoleculeGraphPtr mgp;
+        SeqIdPtr sip;
+        SeqEntryPtr sep;
+        Int2 retcode = 3;
+        Int4 This_uid;
 
 	GlobalDisplayName[0] = '\0';
 	StringCat(GlobalDisplayName, TmpNam(NULL)); 
@@ -1270,24 +1288,26 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
 		return 0;
 	}
 
-    bsgp = bsp->chemical_graph;
-    mgp = bsgp->molecule_graphs;
-    sip = mgp->seq_id;
-/*  This_uid =  EntrezFindSeqId(sip);    */
-    while(sip != NULL){
-       if(sip->choice == 12) This_uid = sip->data.intvalue;
-       sip = sip->next;
-    }
-    sep = EntrezSeqEntryGet(This_uid, retcode);
+  /*yanli*/
+        bsgp = bsp->chemical_graph;
+        mgp = bsgp->molecule_graphs;
+        sip = mgp->seq_id;
+        /*  This_uid =  EntrezFindSeqId(sip);    */
+        while(sip != NULL){
+          if(sip->choice == 12) This_uid = sip->data.intvalue;
+          sip = sip->next;
+        }
+        sep = EntrezSeqEntryGet(This_uid, retcode);
      
-    bssp = BiostrucSeqNew();
-    bssp->structure = bsp;
-    ValNodeLink(&(bssp->sequences), sep);     
-
-    mime = (NcbiMimeAsn1Ptr) ValNodeNew(NULL);    /* yanli */
-    mime->choice = NcbiMimeAsn1_strucseq;
-    mime->data.ptrvalue = bssp;
-
+        bssp = BiostrucSeqNew();
+        bssp->structure = bsp;
+        ValNodeLink(&(bssp->sequences), sep);     
+        
+        mime = (NcbiMimeAsn1Ptr) ValNodeNew(NULL);    /* yanli */
+        mime->choice = NcbiMimeAsn1_strucseq;
+        mime->data.ptrvalue = bssp;
+  /*---yanli*/
+        
 	/* the following headers are format-independent */
 	switch (Mime) {
 	case SAVE_FILE:
@@ -1349,6 +1369,7 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
 			fprintf(GlobalDisplayFile, "Content-type: chemical/x-pdb\r\n\r\n");
 
 		ModelStruc = MakeAModelstruc(bsp);
+		bssp->structure = NULL;  /* already linked into modelstruc */
 		WritePDBAllModel(ModelStruc, GlobalDisplayFile);
 		ClearStructures();
 	}
@@ -1358,7 +1379,7 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
 			fprintf(GlobalDisplayFile, "Content-type: chemical/x-kinemage\r\n\r\n");
 
 		ModelStruc = MakeAModelstruc(bsp);
-		WriteKinAllModel(ModelStruc, GlobalDisplayFile, Color, Render);
+		bssp->structure = NULL;  /* already linked into modelstruc */		WriteKinAllModel(ModelStruc, GlobalDisplayFile, Color, Render);
 		ClearStructures();
 	}
 	else {
@@ -1399,7 +1420,7 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
 		i4Sent = 0;
 
 	FileRemove(GlobalDisplayName);
-    NcbiMimeAsn1Free(mime);           /* yanli */
+         NcbiMimeAsn1Free(mime);           /* yanli */
 	return i4Sent;
 
 } /* end SendStructureMIME */
@@ -1790,7 +1811,7 @@ Int2 Main ()
  else
    {
      /* loop over entire set of tag=value entries and add all the UID's found together */
-     /* musht handle uid=1234&uid=1OMD&uid=1234,2345,2134&dopt=s&uid=3INS              */   
+     /* must handle uid=1234&uid=1OMD&uid=1234,2345,2134&dopt=s&uid=3INS              */   
       NumEntries = WWWGetNumEntries(info);
       for (IndexArgs = 0; IndexArgs < NumEntries; IndexArgs++)
         {
@@ -2031,7 +2052,7 @@ cleanout2:
                 WWWGetAddress(info), WWWGetHost(info), WWWGetAgent(info), TimeNowStr, 
                 (long)iBytes); 
    fflush(stdout);
-   exit(1);
+   exit(0);
 
 cleanout:
   CloseMMDBAPI();
@@ -2044,7 +2065,7 @@ cleanout:
                 WWWGetAddress(info), WWWGetHost(info), WWWGetAgent(info), TimeNowStr, 
                 (long)iBytes); 
    fflush(stdout);
-   exit(1);
+   exit(0);
 
 earlyout:
    time_now = GetSecs();
@@ -2056,6 +2077,6 @@ earlyout:
   
   
   fflush(stdout);
-  exit(1);
+  exit(0);
 }
 

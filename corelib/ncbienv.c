@@ -1,4 +1,4 @@
-/*   ncbienv.c
+/*  $Id: ncbienv.c,v 6.8 1999/03/24 22:12:49 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,13 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.8  1999/03/24 22:12:49  vakatov
+* Nlm_ReadConfigFile():  free "Nlm_bottomComment" to avoid mem.leak
+*
+* Revision 6.7  1999/02/12 16:01:39  vakatov
+* Added a draft version of Nlm_GetEnvParamEx()
+* Got rid of the old "PROTO" and "LIBCALL" prototype junk, etc.
+*
 * Revision 6.6  1998/12/10 17:04:06  vakatov
 * Fixed to compile under LINUX(Red Hat 2.XX, gcc, with POSIX threads)
 *
@@ -115,12 +122,6 @@
  * Revision 5.2  1996/08/19  18:46:06  vakatov
  * [WIN32]  Made modifications to let one create console applications
  *
-* Revision 5.1  1996/07/16 19:56:00  vakatov
-* Just castings
-*
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
  * Revision 4.9  1996/02/15  22:00:49  kans
  * changed platform symbol back to OS_NT
  *
@@ -178,25 +179,25 @@
 
 
 typedef struct nlm_env_item {
-  struct nlm_env_item  PNTR next;
-  Nlm_CharPtr          name;
-  Nlm_CharPtr          comment;
-  Nlm_CharPtr          value;
-} Nlm_env_item, PNTR Nlm_env_itemPtr;
+  struct nlm_env_item* next;
+  Nlm_Char*            name;
+  Nlm_Char*            comment;
+  Nlm_Char*            value;
+} Nlm_env_item, *Nlm_env_itemPtr;
 
 typedef struct nlm_env_sect {
-  struct nlm_env_sect  PNTR next;
-  Nlm_CharPtr          name;
-  Nlm_CharPtr          comment;
-  Nlm_Boolean          transientOnly; /* this field used only by Transient fns */
-  struct nlm_env_item  PNTR children;
-} Nlm_env_sect, PNTR Nlm_env_sectPtr;
+  struct nlm_env_sect* next;
+  Nlm_Char*            name;
+  Nlm_Char*            comment;
+  Nlm_Boolean          transientOnly; /* this field used only by Transient */
+  struct nlm_env_item* children;
+} Nlm_env_sect, *Nlm_env_sectPtr;
 
 typedef struct nlm_env_file {
-  struct nlm_env_file  PNTR next;
-  Nlm_CharPtr          name;
+  struct nlm_env_file* next;
+  Nlm_Char*            name;
   Nlm_env_sectPtr      envList;
-} Nlm_env_file, PNTR Nlm_env_filePtr;
+} Nlm_env_file, *Nlm_env_filePtr;
 
 
 static Nlm_env_filePtr Nlm_transientFileList = NULL;
@@ -204,26 +205,26 @@ static Nlm_Boolean caching = FALSE;
 static Nlm_Boolean dirty = FALSE;
 static Nlm_Boolean mustCreateFile = TRUE;
 
-static Nlm_Boolean Nlm_Qualified PROTO((Nlm_CharPtr path));
-static Nlm_Boolean Nlm_TransientLookup PROTO((Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr dflt, Nlm_CharPtr buf, Nlm_Int2 buflen));
-static void Nlm_TransientLogSetApp PROTO((Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value));
-static void Nlm_FreeEnvData PROTO((Nlm_env_sectPtr esp));
-static void Nlm_FreeTransientData PROTO((void));
+static Nlm_Boolean Nlm_Qualified(const Nlm_Char* path);
+static Nlm_Boolean Nlm_TransientLookup(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* dflt, Nlm_Char* buf, size_t buflen);
+static void Nlm_TransientLogSetApp(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value);
+static void Nlm_FreeEnvData(Nlm_env_sectPtr esp);
+static void Nlm_FreeTransientData(void);
 
 #ifndef OS_MSWIN
-static FILE *Nlm_OpenConfigFile PROTO((Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Boolean create));
-static Nlm_CharPtr Nlm_TrimString PROTO((Nlm_CharPtr str));
-static Nlm_Boolean Nlm_ReadConfigFile PROTO((FILE *fp));
-static Nlm_env_sectPtr Nlm_FindConfigSection PROTO((Nlm_CharPtr section));
-static Nlm_env_itemPtr Nlm_FindConfigItem PROTO((Nlm_CharPtr section, Nlm_CharPtr type, Nlm_Boolean create));
-static Nlm_Boolean Nlm_WriteConfigFile PROTO((FILE *fp));
-static void Nlm_PutComment PROTO((Nlm_CharPtr s, FILE *fp));
-static void Nlm_FreeConfigFileData PROTO((void));
-static void Nlm_FlushConfigFile PROTO((Nlm_CharPtr file, Nlm_Boolean create));
+static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm_Boolean create);
+static Nlm_Char* Nlm_TrimString(Nlm_Char* str);
+static Nlm_Boolean Nlm_ReadConfigFile(FILE* fp);
+static Nlm_env_sectPtr Nlm_FindConfigSection(const Nlm_Char* section);
+static Nlm_env_itemPtr Nlm_FindConfigItem(const Nlm_Char* section, const Nlm_Char* type, Nlm_Boolean create);
+static Nlm_Boolean Nlm_WriteConfigFile(FILE* fp);
+static void Nlm_PutComment(const Nlm_Char* s, FILE* fp);
+static void Nlm_FreeConfigFileData(void);
+static void Nlm_FlushConfigFile(const Nlm_Char* file, Nlm_Boolean create);
 
 static Nlm_env_sectPtr Nlm_envList = NULL;
-static Nlm_CharPtr Nlm_lastParamFile = NULL;
-static Nlm_CharPtr Nlm_bottomComment = NULL;
+static Nlm_Char* Nlm_lastParamFile = NULL;
+static Nlm_Char* Nlm_bottomComment = NULL;
 
 /* always FALSE, because this file is trying to emulating MS Windows's  */
 /* handling of comments in Param files; however, just change this value */
@@ -242,7 +243,7 @@ static Nlm_Boolean destroyDeadComments = FALSE;
 *
 *****************************************************************************/
 
-static Nlm_Int2 Nlm_WorkGetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr dflt, Nlm_CharPtr buf, Nlm_Int2 buflen, Nlm_Boolean searchTransient)
+static Nlm_Int2 Nlm_WorkGetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* dflt, Nlm_Char* buf, Nlm_Int2 buflen, Nlm_Boolean searchTransient)
 {
   Nlm_env_itemPtr  eip;
   FILE             *fp;
@@ -327,8 +328,7 @@ static Nlm_Int2 Nlm_WorkGetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_
 *
 *****************************************************************************/
 
-static Nlm_Boolean Nlm_SetAppParam_ST PROTO ((Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value));
-static Nlm_Boolean Nlm_SetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value)
+static Nlm_Boolean Nlm_SetAppParam_ST(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value)
 {
   Nlm_env_itemPtr  eip;
   Nlm_env_sectPtr  esp;
@@ -359,7 +359,7 @@ static Nlm_Boolean Nlm_SetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nl
         eip = Nlm_FindConfigItem (section, type, TRUE);
         if (eip != NULL) {
           if (eip->value != NULL) {
-            eip->value = (Nlm_CharPtr) Nlm_MemFree (eip->value);
+            eip->value = (Nlm_Char*) Nlm_MemFree (eip->value);
           }
           eip->value = Nlm_StringSave (value);
           rsult = TRUE;
@@ -368,7 +368,7 @@ static Nlm_Boolean Nlm_SetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nl
       else { /* wipe out that section */
         esp = Nlm_FindConfigSection (section);
         if (esp != NULL) { /* kill section by deleting name (leave comments)*/
-          esp->name = (Nlm_CharPtr) Nlm_MemFree(esp->name);
+          esp->name = (Nlm_Char*) Nlm_MemFree(esp->name);
           rsult = TRUE;
         }
       }
@@ -391,7 +391,6 @@ static Nlm_Boolean Nlm_SetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nl
 *      flush the current parameter file's parameters to disk
 *
 *****************************************************************************/
-static void Nlm_FlushAppParam_ST PROTO ((void));
 static void Nlm_FlushAppParam_ST(void)
 {
   if (Nlm_lastParamFile != NULL)
@@ -405,7 +404,6 @@ static void Nlm_FlushAppParam_ST(void)
 *      to SetAppParam()
 *
 *****************************************************************************/
-static Nlm_Boolean Nlm_CacheAppParam_ST PROTO ((Nlm_Boolean value));
 static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
 {
   Nlm_Boolean oldvalue = caching;
@@ -430,8 +428,7 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
 *
 *****************************************************************************/
 
-static Nlm_Boolean Nlm_GetHome PROTO((Nlm_CharPtr buf, Nlm_Int2 buflen));
-static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
+static Nlm_Boolean Nlm_GetHome(Nlm_Char* buf, Nlm_Int2 buflen)
 {
   static Nlm_Char saveHome[PATH_MAX + 1];
 
@@ -467,7 +464,7 @@ static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
 #endif
 #else
 
-      Nlm_CharPtr login_name = getlogin();
+      Nlm_Char* login_name = getlogin();
       Nlm_Boolean ok         = (login_name != NULL);
 #endif
 
@@ -540,7 +537,7 @@ static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
 *
 *****************************************************************************/
 
-static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Boolean create)
+static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm_Boolean create)
 
 {
   FILE      *fp;
@@ -626,7 +623,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
 *
 *****************************************************************************/
 
-static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Boolean create)
+static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm_Boolean create)
 
 {
   WDPBRec      block;
@@ -645,7 +642,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
   Nlm_Char     str [FILENAME_MAX+1];
   SysEnvRec    sysenv;
   Nlm_Char     temp [PATH_MAX+1];
-  Nlm_CharPtr  tmp;
+  Nlm_Char*  tmp;
   short        vRefNum;
 
   fp = NULL;
@@ -674,7 +671,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
         params.dirInfo.ioFDirIndex = -1;
         params.dirInfo.ioDrDirID = params.dirInfo.ioDrParID;
         err = PBGetCatInfo (&params, FALSE);
-        Nlm_PtoCstr ((Nlm_CharPtr) directory);
+        Nlm_PtoCstr ((Nlm_Char*) directory);
         Nlm_StringCat (directory, DIRDELIMSTR);
         Nlm_StringCat (directory, temp);
         Nlm_StringCpy (temp, directory);
@@ -693,7 +690,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
             params.dirInfo.ioVRefNum = vRefNum;
             params.dirInfo.ioFDirIndex = -1;
             err = PBGetCatInfo (&params, FALSE);
-            Nlm_PtoCstr ((Nlm_CharPtr) directory);
+            Nlm_PtoCstr ((Nlm_Char*) directory);
             Nlm_StringCat (temp, directory);
             Nlm_StringCat (temp, DIRDELIMSTR);
             tmp = Nlm_StringMove (directory, temp);
@@ -717,7 +714,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
         tmp = Nlm_StringMove (tmp, str);
         fp = Nlm_FileOpen (directory, "w");
         Nlm_StringCpy (temp, directory);
-        Nlm_CtoPstr ((Nlm_CharPtr) temp);
+        Nlm_CtoPstr ((Nlm_Char*) temp);
         fError = GetFInfo ((StringPtr) temp, 0, &finfo);
         if (fError == 0) {
           finfo.fdCreator = 'ttxt';
@@ -730,7 +727,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
       Nlm_StringCpy (temp, directory);
       if (writeMode && fp != NULL) {
         Nlm_FileClose (fp);
-        Nlm_CtoPstr ((Nlm_CharPtr) temp);
+        Nlm_CtoPstr ((Nlm_Char*) temp);
         fType = 'TEXT';
         fCreator = '    ';
         fError = GetFInfo ((StringPtr) temp, 0, &finfo);
@@ -760,8 +757,7 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
 *
 *****************************************************************************/
 
-static Nlm_Boolean Nlm_GetHome PROTO((Nlm_CharPtr buf, Nlm_Int2 buflen));
-static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
+static Nlm_Boolean Nlm_GetHome(Nlm_Char* buf, Nlm_Int2 buflen)
 {
   Nlm_StringNCpy_0(buf, getenv("SYS$LOGIN"), buflen);
   return TRUE;
@@ -780,7 +776,7 @@ static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
 *
 *****************************************************************************/
 
-static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Boolean create)
+static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm_Boolean create)
 
 {
   FILE      *fp;
@@ -874,12 +870,12 @@ static FILE *Nlm_OpenConfigFile (Nlm_CharPtr file, Nlm_Boolean writeMode, Nlm_Bo
 *
 *****************************************************************************/
 
-static Nlm_CharPtr Nlm_TrimString (Nlm_CharPtr str)
+static Nlm_Char* Nlm_TrimString(Nlm_Char* str)
 
 {
-  Nlm_Char     ch;
-  Nlm_CharPtr  spc;
-  Nlm_CharPtr  tmp;
+  Nlm_Char   ch;
+  Nlm_Char*  spc;
+  Nlm_Char*  tmp;
 
   if (str != NULL) {
     ch = *str;
@@ -916,7 +912,7 @@ static Nlm_CharPtr Nlm_TrimString (Nlm_CharPtr str)
 *
 *****************************************************************************/
 
-static Nlm_Boolean Nlm_ReadConfigFile (FILE *fp)
+static Nlm_Boolean Nlm_ReadConfigFile(FILE* fp)
 
 {
   Nlm_Char         ch;
@@ -924,10 +920,10 @@ static Nlm_Boolean Nlm_ReadConfigFile (FILE *fp)
   Nlm_env_sectPtr  esp;
   Nlm_env_itemPtr  lastEip;
   Nlm_env_sectPtr  lastEsp;
-  Nlm_CharPtr      mid;
+  Nlm_Char*      mid;
   Nlm_Char         str [256];
-  Nlm_CharPtr      tmp;
-  Nlm_CharPtr      comment;
+  Nlm_Char*      tmp;
+  Nlm_Char*      comment;
 
   if (fp != NULL) {
     if (Nlm_envList != NULL) {
@@ -947,10 +943,10 @@ static Nlm_Boolean Nlm_ReadConfigFile (FILE *fp)
              comment = Nlm_StringSave(str);
           }
           else { /* append to existing comment */
-             tmp = (Nlm_CharPtr) Nlm_MemNew(StrLen(comment) + StrLen(str) + 1);
+             tmp = (Nlm_Char*) Nlm_MemNew(StrLen(comment) + StrLen(str) + 1);
              StrCpy(tmp, comment);
              StrCat(tmp, str);
-             comment = (Nlm_CharPtr) Nlm_MemFree(comment);
+             comment = (Nlm_Char*) Nlm_MemFree(comment);
              comment = tmp;
           }
         } else if (ch == '[') {
@@ -1006,12 +1002,13 @@ static Nlm_Boolean Nlm_ReadConfigFile (FILE *fp)
     }
 
     /* any comments which appeared after the final key of the final section */
+    Nlm_bottomComment = (Nlm_Char*)Nlm_MemFree(Nlm_bottomComment);
     Nlm_bottomComment = comment;
   }
   return TRUE;
 }
 
-static Nlm_env_sectPtr Nlm_FindConfigSection (Nlm_CharPtr section)
+static Nlm_env_sectPtr Nlm_FindConfigSection(const Nlm_Char* section)
 {
   Nlm_env_sectPtr esp;
 
@@ -1034,7 +1031,7 @@ static Nlm_env_sectPtr Nlm_FindConfigSection (Nlm_CharPtr section)
 *
 *****************************************************************************/
 
-static Nlm_env_itemPtr Nlm_FindConfigItem (Nlm_CharPtr section, Nlm_CharPtr type, Nlm_Boolean create)
+static Nlm_env_itemPtr Nlm_FindConfigItem(const Nlm_Char* section, const Nlm_Char* type, Nlm_Boolean create)
 
 {
   Nlm_env_itemPtr  eip;
@@ -1110,7 +1107,7 @@ static Nlm_env_itemPtr Nlm_FindConfigItem (Nlm_CharPtr section, Nlm_CharPtr type
 *
 *****************************************************************************/
 
-static Nlm_Boolean Nlm_WriteConfigFile (FILE *fp)
+static Nlm_Boolean Nlm_WriteConfigFile(FILE* fp)
 
 {
   Nlm_env_itemPtr  eip;
@@ -1168,13 +1165,13 @@ static Nlm_Boolean Nlm_WriteConfigFile (FILE *fp)
 *
 *****************************************************************************/
 
-static void Nlm_FreeConfigFileData (void)
+static void Nlm_FreeConfigFileData(void)
 
 {
   mustCreateFile = TRUE;
-  Nlm_bottomComment = (Nlm_CharPtr) Nlm_MemFree(Nlm_bottomComment);
+  Nlm_bottomComment = (Nlm_Char*) Nlm_MemFree(Nlm_bottomComment);
   if (Nlm_lastParamFile != NULL)
-    Nlm_lastParamFile = (Nlm_CharPtr) Nlm_MemFree(Nlm_lastParamFile);
+    Nlm_lastParamFile = (Nlm_Char*) Nlm_MemFree(Nlm_lastParamFile);
 
   if (Nlm_envList != NULL) {
     Nlm_FreeEnvData (Nlm_envList);
@@ -1190,9 +1187,9 @@ static void Nlm_FreeConfigFileData (void)
 *
 *****************************************************************************/
 
-static void Nlm_FlushConfigFile(Nlm_CharPtr file, Nlm_Boolean create)
+static void Nlm_FlushConfigFile(const Nlm_Char* file, Nlm_Boolean create)
 {
-  FILE *fp;
+  FILE* fp;
 
   if (dirty && file != NULL)
   {
@@ -1212,8 +1209,7 @@ static void Nlm_FlushConfigFile(Nlm_CharPtr file, Nlm_Boolean create)
 *
 *****************************************************************************/
 
-static void Nlm_FreeConfigStruct_ST PROTO ((void));
-static void Nlm_FreeConfigStruct_ST (void)
+static void Nlm_FreeConfigStruct_ST(void)
 {
   Nlm_FlushAppParam();
   Nlm_FreeConfigFileData ();
@@ -1228,8 +1224,7 @@ static void Nlm_FreeConfigStruct_ST (void)
 *
 *****************************************************************************/
 
-static void Nlm_PutComment (Nlm_CharPtr s, FILE *fp)
-
+static void Nlm_PutComment(const Nlm_Char* s, FILE* fp)
 {
   if (s != NULL)
     fputs(s, fp);
@@ -1248,7 +1243,7 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)  { return TRUE; }
 *      if configuration file is found, trys to read the parameter from it.
 *
 *****************************************************************************/
-static Nlm_Int2 Nlm_WorkGetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr dflt, Nlm_CharPtr buf, Nlm_Int2 buflen, Nlm_Boolean searchTransient)
+static Nlm_Int2 Nlm_WorkGetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* dflt, Nlm_Char* buf, Nlm_Int2 buflen, Nlm_Boolean searchTransient)
 {
   static char _empty_string[] = "";
   Nlm_Char path[PATH_MAX + 1];
@@ -1288,8 +1283,7 @@ static Nlm_Int2 Nlm_WorkGetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_
 *
 *****************************************************************************/
 
-static Nlm_Boolean Nlm_SetAppParam_ST PROTO ((Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value));
-static Nlm_Boolean Nlm_SetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value)    /* value */
+static Nlm_Boolean Nlm_SetAppParam_ST(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value)
 {
   Nlm_Char     path [PATH_MAX+1];
   Nlm_Boolean  rsult;
@@ -1309,14 +1303,10 @@ static Nlm_Boolean Nlm_SetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nl
 }
 
 /*****************************************************************************
-*
 *   Nlm_FreeConfigStruct ()
 *      frees parameter structure in memory
-*
 *****************************************************************************/
-
-static void Nlm_FreeConfigStruct_ST PROTO ((void));
-static void Nlm_FreeConfigStruct_ST (void)
+static void Nlm_FreeConfigStruct_ST(void)
 {
   Nlm_FreeTransientData ();
 }
@@ -1324,10 +1314,10 @@ static void Nlm_FreeConfigStruct_ST (void)
 #endif /* else !OS_MSWIN */
 
 
-static Nlm_Boolean Nlm_Qualified( Nlm_CharPtr path )
+static Nlm_Boolean Nlm_Qualified( const Nlm_Char* path )
 {
   Nlm_Int4 l,k;
-  Nlm_CharPtr  p;
+  const Nlm_Char*  p;
 
   l = Nlm_StrLen(path);
   p = path+l;
@@ -1349,7 +1339,7 @@ static Nlm_Boolean Nlm_Qualified( Nlm_CharPtr path )
 *
 *****************************************************************************/
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FindPath (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr buf, Nlm_Int2 buflen)   /* length of path buffer */
+NLM_EXTERN Nlm_Boolean Nlm_FindPath(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, Nlm_Char* buf, Nlm_Int2 buflen)   /* length of path buffer */
 {
   Nlm_Boolean rsult = FALSE;
 
@@ -1373,8 +1363,7 @@ NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FindPath (Nlm_CharPtr file, Nlm_CharPtr secti
 }
 
 
-static Nlm_Boolean Nlm_TransientSetAppParam_ST PROTO ((Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value));
-static Nlm_Boolean Nlm_TransientSetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value)
+static Nlm_Boolean Nlm_TransientSetAppParam_ST(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value)
 {
   Nlm_env_filePtr  theFile;
   Nlm_env_itemPtr  eip;
@@ -1399,9 +1388,9 @@ static Nlm_Boolean Nlm_TransientSetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr se
             {
               nextEip = eip->next;
               eip->next    = (Nlm_env_itemPtr)(-1);
-              eip->name    = (Nlm_CharPtr) Nlm_MemFree (eip->name);
-              eip->comment = (Nlm_CharPtr) Nlm_MemFree (eip->comment);
-              eip->value   = (Nlm_CharPtr) Nlm_MemFree (eip->value);
+              eip->name    = (Nlm_Char*) Nlm_MemFree (eip->name);
+              eip->comment = (Nlm_Char*) Nlm_MemFree (eip->comment);
+              eip->value   = (Nlm_Char*) Nlm_MemFree (eip->value);
               Nlm_MemFree (eip);
             }
             esp->children = NULL;
@@ -1452,7 +1441,7 @@ static Nlm_Boolean Nlm_TransientSetAppParam_ST (Nlm_CharPtr file, Nlm_CharPtr se
 
 /* SetAppParam is writing a value to the real config file, so log this value,
    if necessary, into the "transient" data structures */
-static void Nlm_TransientLogSetApp (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value)
+static void Nlm_TransientLogSetApp(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value)
 
 {
   Nlm_env_filePtr  theFile;
@@ -1472,7 +1461,7 @@ static void Nlm_TransientLogSetApp (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_C
         {
           if (esp->name != NULL && StringICmp(esp->name, section) == 0)
           { /* delete the section by removing section name */
-            esp->name = (Nlm_CharPtr) MemFree(esp->name);
+            esp->name = (Nlm_Char*) MemFree(esp->name);
           }
         }
       }
@@ -1499,13 +1488,12 @@ static void Nlm_TransientLogSetApp (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_C
   }
 }
 
-static Nlm_Boolean Nlm_TransientLookup (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr dflt, Nlm_CharPtr buf, Nlm_Int2 buflen)
-
+static Nlm_Boolean Nlm_TransientLookup(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* dflt, Nlm_Char* buf, size_t buflen)
 {
   Nlm_env_filePtr  theFile;
   Nlm_env_itemPtr  eip;
   Nlm_env_sectPtr  esp;
-  Nlm_Int2         totlen;
+  Nlm_Int4         totlen;
   Nlm_Int4         bytesToAppend;
 
   if (file == NULL || *file == '\0' || section == NULL || *section == '\0')
@@ -1526,7 +1514,7 @@ static Nlm_Boolean Nlm_TransientLookup (Nlm_CharPtr file, Nlm_CharPtr section, N
             for (eip = esp->children; eip != NULL; eip = eip->next)
             {
               bytesToAppend = StrLen(eip->name) + 1;
-              bytesToAppend = MIN(bytesToAppend, buflen - totlen);
+              bytesToAppend = MIN(bytesToAppend, (Nlm_Int4)buflen - totlen);
               StrNCpy(&buf[totlen], eip->name, bytesToAppend);
               totlen += bytesToAppend;
             }
@@ -1565,7 +1553,7 @@ static Nlm_Boolean Nlm_TransientLookup (Nlm_CharPtr file, Nlm_CharPtr section, N
   return FALSE;
 }
 
-static void Nlm_FreeEnvData (Nlm_env_sectPtr esp)
+static void Nlm_FreeEnvData(Nlm_env_sectPtr esp)
 
 {
   Nlm_env_itemPtr  eip;
@@ -1578,22 +1566,22 @@ static void Nlm_FreeEnvData (Nlm_env_sectPtr esp)
     while (eip != NULL) {
       nextEip = eip->next;
       eip->next    = (Nlm_env_itemPtr)(-1);
-      eip->name    = (Nlm_CharPtr) Nlm_MemFree (eip->name);
-      eip->comment = (Nlm_CharPtr) Nlm_MemFree (eip->comment);
-      eip->value   = (Nlm_CharPtr) Nlm_MemFree (eip->value);
+      eip->name    = (Nlm_Char*) Nlm_MemFree (eip->name);
+      eip->comment = (Nlm_Char*) Nlm_MemFree (eip->comment);
+      eip->value   = (Nlm_Char*) Nlm_MemFree (eip->value);
       Nlm_MemFree (eip);
       eip = nextEip;
     }
     esp->next    = (Nlm_env_sectPtr)(-1);
-    esp->name    = (Nlm_CharPtr) Nlm_MemFree (esp->name);
-    esp->comment = (Nlm_CharPtr) Nlm_MemFree (esp->comment);
+    esp->name    = (Nlm_Char*) Nlm_MemFree (esp->name);
+    esp->comment = (Nlm_Char*) Nlm_MemFree (esp->comment);
     Nlm_MemFree (esp);
     esp = nextEsp;
   }
 }
 
 
-static void Nlm_FreeTransientData (void)
+static void Nlm_FreeTransientData(void)
 {
   Nlm_env_filePtr efp, nextEfp;
 
@@ -1603,12 +1591,82 @@ static void Nlm_FreeTransientData (void)
     Nlm_FreeEnvData (efp->envList);
     efp->envList = NULL;
     efp->next = (Nlm_env_filePtr)(-1);
-    efp->name = (Nlm_CharPtr) Nlm_MemFree (efp->name);
+    efp->name = (Nlm_Char*) Nlm_MemFree (efp->name);
     Nlm_MemFree (efp);
     efp = nextEfp;
   }
   Nlm_transientFileList = NULL;
 }
+
+
+
+extern size_t Nlm_GetEnvParamEx
+(const Nlm_Char* conf_file, const Nlm_Char* conf_section,
+ const Nlm_Char* env_name, const Nlm_Char* conf_name,
+ Nlm_Char* buf, size_t bufsize, const Nlm_Char* dflt)
+{
+  static const Nlm_Char s_DefConfigFile   [] = "ncbi";
+  static const Nlm_Char s_DefConfigSection[] = "NCBI";
+
+  size_t len = 0;
+  ASSERT ( (env_name  &&  *env_name)  ||  (conf_name  &&  *conf_name) );
+  ASSERT ( buf  &&  bufsize );
+  buf[0] = '\0';
+
+  /* arg fallbacks */
+  if (conf_name  &&  *conf_name) {
+    if ( !conf_file )
+      conf_file = s_DefConfigFile;
+    if ( !conf_section )
+      conf_section = s_DefConfigSection;
+  }
+
+  /* Search in the list of transient parameters */
+  if (conf_name  &&  *conf_name  &&
+      Nlm_TransientLookup(conf_file, conf_section, conf_name,
+                          dflt, buf, bufsize)) {
+    return Nlm_StrLen(buf);
+  }
+
+  /* Fetch from the environment variable */
+#if defined(OS_UNIX) || defined(OS_MSWIN)
+  if (env_name  &&  *env_name) {
+    const Nlm_Char* str = getenv(env_name);
+    if (str  &&  *str) {
+      len = Nlm_StrLen(str);
+      if (len >= bufsize)
+        len = 0;
+      else
+        Nlm_StrCpy(buf, str);
+    }
+  }
+#endif
+
+  /* Search in the configuration file */
+  if (!len  &&  conf_name  &&  *conf_name) {
+    len = GetAppParam(conf_file, conf_section, conf_name, dflt, buf, bufsize);
+  }
+
+  /* Store the value in the transient parameter list */
+  ASSERT(len == Nlm_StrLen(buf));
+  if ( len )
+    VERIFY(Nlm_TransientSetAppParam(conf_file, conf_section, conf_name, buf));
+
+  return len;
+}
+
+
+NLM_EXTERN size_t Nlm_GetEnvParam
+(const Nlm_Char* conf_file, const Nlm_Char* conf_section,
+ const Nlm_Char* env_conf_name,
+ Nlm_Char* buf, size_t bufsize, const Nlm_Char* dflt)
+{
+  return Nlm_GetEnvParamEx(conf_file, conf_section,
+                           env_conf_name, env_conf_name,
+                           buf, bufsize, dflt);
+}
+
+
 
 /*****************************************************************************
 *
@@ -1632,7 +1690,7 @@ static Str255       apName;
 static Handle       apParam;
 static short        apRefNum;
 
-static Nlm_Boolean Nlm_SetupArguments_ST_Mac (void)
+static Nlm_Boolean Nlm_SetupArguments_ST_Mac(void)
 {
 #ifdef __CONDITIONALMACROS__
   long                 gval;
@@ -1645,18 +1703,18 @@ static Nlm_Boolean Nlm_SetupArguments_ST_Mac (void)
     pirec.processName = NULL;
     pirec.processAppSpec = &apFileSpec;
     GetProcessInformation (&psn, &pirec);
-    Nlm_PtoCstr ((Nlm_CharPtr) apFileSpec.name);
+    Nlm_PtoCstr ((Nlm_Char*) apFileSpec.name);
   } else {
 #ifdef PROC_MC680X0
     GetAppParms (apName, &apRefNum, &apParam);
-    Nlm_PtoCstr ((Nlm_CharPtr) apName);
+    Nlm_PtoCstr ((Nlm_Char*) apName);
 #else
     return FALSE;
 #endif
   }
 #else
   GetAppParms (apName, &apRefNum, &apParam);
-  Nlm_PtoCstr ((Nlm_CharPtr) apName);
+  Nlm_PtoCstr ((Nlm_Char*) apName);
 #endif
 
   SetAppProperty("ProgramName",(void*)apName);
@@ -1664,8 +1722,7 @@ static Nlm_Boolean Nlm_SetupArguments_ST_Mac (void)
 }
 
 
-static void Nlm_ProgramPath_ST PROTO ((Nlm_CharPtr buf, size_t maxsize));
-static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
+static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
 #ifdef __CONDITIONALMACROS__
   CInfoPBRec  block;
@@ -1677,7 +1734,7 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
     *buf = '\0';
     if (wasSetup) {
       memset (&block, 0, sizeof (CInfoPBRec));
-      Nlm_StringNCpy_0(path, (Nlm_CharPtr)apFileSpec.name, sizeof (path));
+      Nlm_StringNCpy_0(path, (Nlm_Char*)apFileSpec.name, sizeof (path));
 
       block.dirInfo.ioNamePtr = (StringPtr) path;
       block.dirInfo.ioDrParID = apFileSpec.parID;
@@ -1689,7 +1746,7 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
         block.dirInfo.ioDrDirID = block.dirInfo.ioDrParID;
         nErr = PBGetCatInfo (&block, FALSE);
         if (nErr != noErr) break;
-        Nlm_PtoCstr ((Nlm_CharPtr) path);
+        Nlm_PtoCstr ((Nlm_Char*) path);
         Nlm_StringCat (path, DIRDELIMSTR);
         Nlm_StringCat (path, temp);
       } while (block.dirInfo.ioDrDirID != fsRtDirID);
@@ -1704,7 +1761,7 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
   OSErr        err;
   CInfoPBRec   params;
   Nlm_Char     temp [PATH_MAX];
-  Nlm_CharPtr  tmp;
+  Nlm_Char*  tmp;
   short        vRefNum;
 
   if (buf != NULL && maxsize > 0) {
@@ -1726,13 +1783,13 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
         params.dirInfo.ioFDirIndex = -1;
         params.dirInfo.ioDrDirID = params.dirInfo.ioDrParID;
         err = PBGetCatInfo (&params, FALSE);
-        Nlm_PtoCstr ((Nlm_CharPtr) directory);
+        Nlm_PtoCstr ((Nlm_Char*) directory);
         Nlm_StringCat (directory, DIRDELIMSTR);
         Nlm_StringCat (directory, temp);
         Nlm_StringCpy (temp, directory);
       } while (params.dirInfo.ioDrDirID != fsRtDirID);
       tmp = Nlm_StringMove (directory, temp);
-      tmp = Nlm_StringMove (tmp, (Nlm_CharPtr) apName);
+      tmp = Nlm_StringMove (tmp, (Nlm_Char*) apName);
       Nlm_StringNCpy_0(buf, directory, maxsize);
     }
   }
@@ -1742,7 +1799,7 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
 
 
 #if defined(OS_MSWIN) || defined(OS_VMS)
-static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
+static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
   if (!buf  ||  maxsize <= 0)
     return;
@@ -1755,11 +1812,11 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
 
 
 #ifdef OS_UNIX
-static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
+static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
   Nlm_Char     path [PATH_MAX];
-  Nlm_CharPtr  pth;
-  Nlm_CharPtr  ptr;
+  Nlm_Char*  pth;
+  Nlm_Char*  ptr;
 
   if (buf != NULL && maxsize > 0) {
     *buf = '\0';
@@ -1803,7 +1860,7 @@ static void Nlm_ProgramPath_ST (Nlm_CharPtr buf, size_t maxsize)
 * Multi-Thread protected external functions
 *****************************************************************************/
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_TransientSetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value)
+NLM_EXTERN Nlm_Boolean Nlm_TransientSetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value)
 {
   Nlm_Boolean rsult;
   NlmMutexLockEx( &corelibMutex );
@@ -1814,7 +1871,7 @@ NLM_EXTERN Nlm_Boolean LIBCALL Nlm_TransientSetAppParam (Nlm_CharPtr file, Nlm_C
   return rsult;
 }
 
-NLM_EXTERN void LIBCALL Nlm_FreeConfigStruct(void)
+NLM_EXTERN void Nlm_FreeConfigStruct(void)
 {
   NlmMutexLockEx( &corelibMutex );
   Nlm_FreeConfigStruct_ST();
@@ -1822,7 +1879,7 @@ NLM_EXTERN void LIBCALL Nlm_FreeConfigStruct(void)
 }
 
 
-NLM_EXTERN void LIBCALL Nlm_SetupArguments(int argc, char *argv[])
+NLM_EXTERN void Nlm_SetupArguments(int argc, char *argv[])
 {
   NlmMutexLockEx( &corelibMutex );
   wasSetup = TRUE;
@@ -1842,7 +1899,7 @@ NLM_EXTERN void LIBCALL Nlm_SetupArguments(int argc, char *argv[])
   NlmMutexUnlock( corelibMutex );
 }
 
-NLM_EXTERN Nlm_CharPtr PNTR Nlm_GetArgv(void)
+NLM_EXTERN Nlm_Char** Nlm_GetArgv(void)
 {
   return targv;
 }
@@ -1852,21 +1909,21 @@ NLM_EXTERN Nlm_Int4 Nlm_GetArgc(void)
   return targc;
 }
 
-NLM_EXTERN void LIBCALL Nlm_ProgramPath(Nlm_CharPtr buf, size_t maxsize)
+NLM_EXTERN void Nlm_ProgramPath(Nlm_Char* buf, size_t maxsize)
 {
   NlmMutexLockEx( &corelibMutex );
   Nlm_ProgramPath_ST(buf, maxsize);
   NlmMutexUnlock( corelibMutex );
 }
 
-NLM_EXTERN void LIBCALL Nlm_FlushAppParam (void)
+NLM_EXTERN void Nlm_FlushAppParam(void)
 {
   NlmMutexLockEx( &corelibMutex );
   Nlm_FlushAppParam_ST();
   NlmMutexUnlock( corelibMutex );
 }
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CacheAppParam(Nlm_Boolean value)
+NLM_EXTERN Nlm_Boolean Nlm_CacheAppParam(Nlm_Boolean value)
 {
   Nlm_Boolean rsult;
   NlmMutexLockEx( &corelibMutex );
@@ -1877,7 +1934,7 @@ NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CacheAppParam(Nlm_Boolean value)
   return rsult;
 }
 
-NLM_EXTERN Nlm_Int2 LIBCALL Nlm_GetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr dflt, Nlm_CharPtr buf, Nlm_Int2 buflen)
+NLM_EXTERN Nlm_Int2 Nlm_GetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* dflt, Nlm_Char* buf, Nlm_Int2 buflen)
 {
   Nlm_Int2 rsult;
   NlmMutexLockEx( &corelibMutex );
@@ -1888,7 +1945,7 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_GetAppParam (Nlm_CharPtr file, Nlm_CharPtr secti
   return rsult;
 }
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_SetAppParam (Nlm_CharPtr file, Nlm_CharPtr section, Nlm_CharPtr type, Nlm_CharPtr value)
+NLM_EXTERN Nlm_Boolean Nlm_SetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value)
 {
   Nlm_Boolean rsult;
   NlmMutexLockEx( &corelibMutex );
@@ -1909,36 +1966,38 @@ NLM_EXTERN Nlm_Boolean LIBCALL Nlm_SetAppParam (Nlm_CharPtr file, Nlm_CharPtr se
 *
 *****************************************************************************/
 
-NLM_EXTERN Nlm_Boolean LIBCALL GetAppParamBoolean (const char *filebase, const char *sect,
-			const char *key, Nlm_Boolean dflt)
+NLM_EXTERN Nlm_Boolean GetAppParamBoolean
+(const Nlm_Char* filebase, const Nlm_Char* sect, const Nlm_Char* key,
+ Nlm_Boolean dflt)
 {
-	char buffer[32];
-	if (GetAppParam((char*)filebase,(char*)sect,(char*)key,"",buffer,sizeof buffer))
-	{
-		if (strchr("1yYtT",buffer[0]))
-			return TRUE;
-		if (strchr("0nNfF",buffer[0]))
-			return FALSE;
-	}
-	return dflt;
+  Nlm_Char buffer[32];
+  if ( GetAppParam(filebase, sect, key, "", buffer, sizeof(buffer)) ) {
+    if (strchr("1yYtT",buffer[0]))
+      return TRUE;
+    if (strchr("0nNfF",buffer[0]))
+      return FALSE;
+  }
+  return dflt;
 }
 
-NLM_EXTERN Nlm_Boolean LIBCALL SetAppParamBoolean (const char *filebase, const char *sect,
-			const char *key, Nlm_Boolean value)
+NLM_EXTERN Nlm_Boolean SetAppParamBoolean
+(const Nlm_Char* filebase, const Nlm_Char* sect, const Nlm_Char* key,
+ Nlm_Boolean value)
 {
-	return SetAppParam((char*)filebase,(char*)sect,(char*)key,(value)?"Yes":"No");
+  return SetAppParam(filebase, sect, key, value ? "Yes" : "No");
 }
 
-NLM_EXTERN long LIBCALL GetAppParamLong (const char *filebase, const char *sect,
-			const char *key, long dflt)
+NLM_EXTERN long GetAppParamLong(const Nlm_Char* filebase, const Nlm_Char* sect,
+                                const Nlm_Char* key, long dflt)
 {
-	char buffer[32];
-	return (GetAppParam((char*)filebase,(char*)sect,(char*)key,"",buffer,sizeof buffer)) ?
-				atol(buffer) : dflt;
+  Nlm_Char buffer[32];
+  return GetAppParam(filebase, sect, key, "", buffer, sizeof(buffer)) ?
+    atol(buffer) : dflt;
 }
 
-NLM_EXTERN Nlm_Boolean LIBCALL SetAppParamLong (const char *filebase, const char *sect,
-			const char *key, long value)
+NLM_EXTERN Nlm_Boolean SetAppParamLong
+(const Nlm_Char* filebase, const Nlm_Char* sect, const Nlm_Char* key,
+ long value)
 {
 	char buffer[32];
 	sprintf(buffer,"%ld",value);
@@ -1979,7 +2038,7 @@ NLM_EXTERN Nlm_Boolean Nlm_FreeArgs(Nlm_Int2 numargs, Nlm_ArgPtr ap)
         case ARG_FILE_OUT:
         case ARG_DATA_IN:
         case ARG_DATA_OUT:
-          ap->strvalue = (Nlm_CharPtr) Nlm_MemFree( ap->strvalue );
+          ap->strvalue = (Nlm_Char*) Nlm_MemFree( ap->strvalue );
           break;
         default:
           ASSERT ( FALSE );

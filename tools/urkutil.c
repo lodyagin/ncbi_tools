@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: urk utilities
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkutil.c,v $
+* Revision 6.3  1999/01/27 15:08:42  kuzio
+* ErrorDescString
+*
 * Revision 6.2  1998/09/16 14:20:10  kuzio
 * testing cvs logging on boilerplate (?)
 *
@@ -45,8 +48,9 @@
 * ==========================================================================
 */
 
-#include <urkutil.h>
+#include <accentr.h>
 #include <tofasta.h>
+#include <urkutil.h>
 
 extern CharPtr FastaTitle (BioseqPtr bsp, CharPtr pretext, CharPtr posttext)
 {
@@ -99,4 +103,36 @@ extern CharPtr FastaTitle (BioseqPtr bsp, CharPtr pretext, CharPtr posttext)
     }
   }
   return title;
+}
+
+extern CharPtr ErrorDescString (SeqIdPtr sip)
+{
+  SeqIdPtr    sipt;
+  Int4        gi;
+  CharPtr     errbuf;
+
+  if (sip->choice == SEQID_GI)
+    gi = sip->data.intvalue;
+  else
+    gi = EntrezFindSeqId (sip);
+  sipt = EntrezSeqIdForGI (gi);
+  if (sipt == NULL)
+    sipt = SeqIdDup (sip);
+  sipt->next = NULL;
+  if (sipt->choice != SEQID_GI && gi > 0)
+  {
+    sipt->next = (SeqIdPtr) ValNodeNew (NULL);
+    sipt->next->choice = SEQID_GI;
+    sipt->next->data.intvalue = gi;
+  }
+
+/* PRINTID_FASTA_SHORT PRINTID_FASTA_LONG */
+/* (sip, SEQID_GI) or (sip, 0)  undefined */
+
+  errbuf = (CharPtr) MemNew ((size_t) (sizeof (Char) * 32));
+  SeqIdWrite (sipt, errbuf, PRINTID_FASTA_LONG, 32-1);
+  SeqIdFree (sipt->next);
+  SeqIdFree (sipt);
+
+  return errbuf;
 }

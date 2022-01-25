@@ -1,4 +1,4 @@
-/*  $Id: cn3dentr.c,v 6.5 1999/01/20 18:21:18 ywang Exp $
+/*  $Id: cn3dentr.c,v 6.6 1999/04/06 20:05:53 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dentr.c,v $
+* Revision 6.6  1999/04/06 20:05:53  lewisg
+* more opengl
+*
 * Revision 6.5  1999/01/20 18:21:18  ywang
 * include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
@@ -64,6 +67,7 @@
 #include <cn3dentr.h>
 #include <cn3dmsg.h>
 #include <salmedia.h>
+#include <cn3dshim.h>
 
 
 /* QUERY data and callbacks
@@ -90,8 +94,12 @@ static void Cn3D_MyClose(WindoW www)
     QuitProgram();
   else
     {
+#ifdef _OPENGL
+  if ( OGL_IsPlaying() ) OGL_StopPlaying();
+#else
       if ( IsPlaying3D() )
         StopPlaying3D();
+#endif
       ClearStructures();
       Cn3D_Redraw( TRUE );
       Cn3dObjMgrGetSelected();

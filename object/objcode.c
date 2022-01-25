@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.6  1999/04/23 12:47:43  madden
+* Use PATH_MAX in SeqCodeSetLoad
+*
 * Revision 6.5  1999/01/19 19:38:57  vakatov
 * Typo fixed(WIN16 rather than WIN_16)
 *
@@ -1010,7 +1013,7 @@ static Boolean LoadSeqCodeFromLocalString (void)
 
 NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetLoad (void)
 {
-    Char buf[80];
+    Char buf[PATH_MAX];
     AsnIoPtr aip;
 
 	if (scspl != NULL)

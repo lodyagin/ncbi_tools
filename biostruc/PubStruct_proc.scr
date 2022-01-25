@@ -1,7 +1,13 @@
 /*
- * $Id: PubStruct_proc.scr,v 6.13 1998/11/06 18:59:06 kimelman Exp $
+ * $Id: PubStruct_proc.scr,v 6.15 1999/05/03 14:44:35 kimelman Exp $
  *
  * $Log: PubStruct_proc.scr,v $
+ * Revision 6.15  1999/05/03 14:44:35  kimelman
+ * spaces
+ *
+ * Revision 6.14  1999/03/16 16:56:28  kimelman
+ * new ID fixes
+ *
  * Revision 6.13  1998/11/06 18:59:06  kimelman
  * PubStruct loading transaction granularity changed
  *
@@ -90,10 +96,10 @@ PRINT '/*****           PROCEDURE    id_find_gi                     *****/'
 go
 
 create proc
-id_find_gi(
-          @gi  int,  /* mmdb */
-          @state int  = 0
-          )
+id_find_gi (
+            @gi  int,  /* mmdb */
+            @state int  = 0
+           )
 as
    declare @stat int
    select @stat = @state
@@ -103,7 +109,7 @@ as
        from Struct
        where mmdb_id = @gi and suppressed = 0 and state <= -@stat-1
      end
-   select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0)
+   select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0),0,0,"01/01/1900"
    from Struct
    where mmdb_id = @gi and suppressed = 0 and state = @stat
 go
@@ -128,9 +134,10 @@ go
 create proc
 id_get_asnprop ( @sat_key int)
 as
-  select  state=100,confidential, suppress=suppressed, override=convert(tinyint,0), length=datalength(blob)
-    from  Struct
-   where  acc = @sat_key
+   select  state=100,confidential, suppress=suppressed, override=convert(tinyint,0),
+           length=datalength(blob), owner=convert(smallint,0), "unknown"
+   from    Struct
+   where   acc = @sat_key
  
 go
 /*****        Grant and Revoke permissions id_get_asnprop           *****/
@@ -246,7 +253,7 @@ PRINT '/*****           PROCEDURE    id_get_asn                     *****/'
 go
 
 create proc
-id_get_asn(
+id_get_asn (
      @gi             int=0,
      @sat_key        int=0,
      @sat            smallint=0,
@@ -540,23 +547,23 @@ PRINT '/*****           PROCEDURE    vacuum_cleaning                *****/'
 go
 
 create proc
-vacuum_cleaning(@days int = 0)
+vacuum_cleaning ( @days int = 0 )
 as
-  declare @acc int
+  declare @acc      int
   declare @obv_date datetime
-  declare @stamp datetime
-
+  declare @stamp    datetime
+  
   /* set the obvilion date */
   select @obv_date = dateadd(day,-@days,getdate())
   select @stamp = getdate()
-
+  
   delete from Struct 
   where suppressed > 0 and state > 0 and date <  @obv_date
-
+  
   delete Struct
   from Struct s
   where suppressed > 0 and state = 0 and date <  @obv_date and
         datalength(blob) > 0
-
+  
   update statistics Struct
 go

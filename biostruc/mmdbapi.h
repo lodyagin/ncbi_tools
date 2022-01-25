@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   09/18/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: General Header with Macros for MMDBAPI.
 *
@@ -38,6 +38,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdbapi.h,v $
+* Revision 6.4  1999/03/05 22:44:00  vakatov
+* Made ClearStructures() function be NLM_EXTERN -- for the DLL build on PC
+*
 * Revision 6.3  1998/04/16 00:30:01  lewisg
 * get rid of dead code
 *
@@ -239,7 +242,7 @@ extern "C" {
 #endif
 
 PDNMS LIBCALL GetPDNMSMain(void);  
-void LIBCALL ClearStructures(void);
+NLM_EXTERN void LIBCALL ClearStructures(void);
 void LIBCALL fnMMDBCn3Dmode (void); 
 NLM_EXTERN PRGD LIBCALL GetPRGDDictionary(void);
 NLM_EXTERN void LIBCALL ChangeMMDBAPIbExtent(Byte bExtent);

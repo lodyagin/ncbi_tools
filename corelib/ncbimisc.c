@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,28 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.14  1999/04/23 18:00:15  beloslyu
+* change Uint4 to Nlm_Uint4 and CharPtr to Nlm_CharPtr
+*
+* Revision 6.13  1999/04/23 17:28:50  shavirin
+* Changed Uint4 to the Nlm_Uint4
+*
+* Revision 6.12  1999/04/23 16:10:26  shavirin
+* Added new function Nlm_GetChecksum() which calculates
+* checksum from given string
+*
+* Revision 6.11  1999/04/14 19:37:23  madden
+* Add Nlm_ prefix to Int8
+*
+* Revision 6.10  1999/04/14 15:31:06  madden
+* add Nlm_Int8tostr function
+*
+* Revision 6.9  1999/03/11 16:21:51  kans
+* ValNodeSort is more visible copy of jzmisc SortValNode
+*
+* Revision 6.8  1999/01/29 19:23:05  kans
+* use C2PStr and P2CStr from <TextUtils.h>
+*
 * Revision 6.7  1999/01/21 20:08:37  ostell
 * added SwitchUint2 and 4, added integer bytestores
 *
@@ -103,7 +125,7 @@
 #include <ncbiwin.h>
 
 #ifdef OS_MAC
-#include <Strings.h>
+#include <TextUtils.h>
 #endif
 
 /*
@@ -143,7 +165,7 @@ static char	commaray[DIM(divray)];
 static void divray_init PROTO((void));
 
 /* ncbi_ultostr() is the basic (unsigned) integer-to-ASCII conversion engine */
-static void ncbi_ultostr PROTO((char *buff, unsigned long value, int commas));
+static void ncbi_ultostr PROTO((char *buff, Uint8 value, int commas));
 
 /* ulwidth() is the basic length-determiner for integer-ASCII conversions */
 static int ulwidth PROTO((unsigned long value, int commas));
@@ -170,9 +192,9 @@ divray_init (void)
 
 /* ncbi_ultostr is the basic (unsigned) integer->ASCII conversion engine */
 static void
-ncbi_ultostr (char *buff, unsigned long value, int commas)
+ncbi_ultostr (char *buff, Uint8 value, int commas)
 {
-	unsigned long	value_orig = value;
+	Uint8 value_orig = value;
 	int	i, quotient;
 
 	if (divray_max == 0)
@@ -210,6 +232,28 @@ ncbi_ultostr (char *buff, unsigned long value, int commas)
 	*buff = NULLB; /* tack on a NUL terminator */
 	return;
 }
+/* Nlm_Int8tostr -- convert a signed long integer to ASCII */
+NLM_EXTERN char * LIBCALL Nlm_Int8tostr (Nlm_Int8 value, int opts)
+
+{
+	char	*bp0, *bp;
+
+    bp0 = bp = &buf[bufno][0];
+	if (++bufno >= NBUFS)
+		bufno = 0;
+
+	if (value < 0) {
+		*bp++ = '-';
+		value = -value;
+	}
+	else
+		if (opts&MISC_PLUSSIGNS && value > 0)
+			*bp++ = '+';
+
+	ncbi_ultostr(bp, (Uint8)value, opts&MISC_ANYCOMMAS);
+
+    return bp0;
+}
 
 /* Nlm_Ltostr -- convert a signed long integer to ASCII */
 NLM_EXTERN char * LIBCALL Nlm_Ltostr (long value, int opts)
@@ -229,7 +273,7 @@ NLM_EXTERN char * LIBCALL Nlm_Ltostr (long value, int opts)
 		if (opts&MISC_PLUSSIGNS && value > 0)
 			*bp++ = '+';
 
-	ncbi_ultostr(bp, (unsigned long)value, opts&MISC_ANYCOMMAS);
+	ncbi_ultostr(bp, (Uint8)value, opts&MISC_ANYCOMMAS);
 
     return bp0;
 }
@@ -247,7 +291,7 @@ NLM_EXTERN char * LIBCALL Nlm_Ultostr (unsigned long value, int opts)
 	if (opts&MISC_PLUSSIGNS && value > 0)
 		*bp++ = '+';
 
-	ncbi_ultostr(bp, value, opts&MISC_ANYCOMMAS);
+	ncbi_ultostr(bp, (Uint8) value, opts&MISC_ANYCOMMAS);
 
     return bp0;
 }
@@ -643,7 +687,6 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeAddFunction (ValNodePtr PNTR head, Nlm_Int2
 	return newnode;
 }
 
-
 /*****************************************************************************
 *
 *   ValNodeFree(vnp)
@@ -775,6 +818,38 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeFindNext (ValNodePtr head, ValNodePtr curr,
 	}
 
 	return curr;
+}
+
+/*****************************************************************************
+*
+*   ValNodeSort(list, compar)
+*   	Copied from SortValNode in jzcoll, renamed, for more general access
+*   	Makes array from ValNode list, calls HeapSort, reconnects ValNode list
+*
+*****************************************************************************/
+NLM_EXTERN ValNodePtr LIBCALL ValNodeSort (ValNodePtr list, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))
+{
+	ValNodePtr tmp, PNTR head;
+	Nlm_Int4 count, i;
+
+	if (list == NULL) return NULL;
+	
+	count = ValNodeLen (list);
+	head = MemNew (((size_t) count + 1) * sizeof (ValNodePtr));
+	for (tmp = list, i = 0; tmp != NULL && i < count; i++) {
+		head [i] = tmp;
+		tmp = tmp->next;
+	}
+
+	HeapSort (head, (size_t) count, sizeof (ValNodePtr), compar);
+	for (i = 0; i < count; i++) {
+		tmp = head [i];
+		tmp->next = head [i + 1];
+	}
+	list = head [0];
+	MemFree (head);
+
+	return list;
 }
 
 /*****************************************************************************
@@ -1009,7 +1084,7 @@ void Nlm_CtoPstr (Nlm_CharPtr str)
   c2pstr ((char *) str);
 #endif
 #ifdef COMP_METRO
-  c2pstr ((char *) str);
+  C2PStr ((char *) str);
 #endif
 }
 
@@ -1023,7 +1098,7 @@ void Nlm_PtoCstr (Nlm_CharPtr str)
   p2cstr ((StringPtr) str);
 #endif
 #ifdef COMP_METRO
-  p2cstr ((StringPtr) str);
+  P2CStr ((StringPtr) str);
 #endif
 }
 #endif
@@ -1847,3 +1922,74 @@ Nlm_MD5Transform(Nlm_Uint4 buf[4], Nlm_Uint4 in[16])
     buf[3] += d;
 }
 
+/*----- Here is simplified MD4 algorithm, that used in Blast E-mail server
+  and formatdb ------ */
+
+#define F(x, y, z) (((x) & (y)) | ((~x) & (z)))
+#define G(x, y, z) (((x) & (y)) | ((x) & (z)) | ((y) & (z)))
+#define H(x, y, z) ((x) ^ (y) ^ (z))
+#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> (32-(n))))
+
+#define FF(a, b, c, d, x, s) { \
+    (a) += F ((b), (c), (d)) + (x); \
+	(a) = ROTATE_LEFT ((a), (s)); \
+}
+#define GG(a, b, c, d, x, s) { \
+    (a) += G ((b), (c), (d)) + (x) + (Nlm_Uint4)0x5a827999; \
+	(a) = ROTATE_LEFT ((a), (s)); \
+}
+#define HH(a, b, c, d, x, s) { \
+    (a) += H ((b), (c), (d)) + (x) + (Nlm_Uint4)0x6ed9eba1; \
+	(a) = ROTATE_LEFT ((a), (s)); \
+}
+
+/* This function calculates checksum from a buffer */
+Nlm_Uint4 Nlm_GetChecksum(Nlm_CharPtr p)
+{
+    Nlm_Int4 len;
+    struct Hash {
+	Nlm_Uint4 x1;
+	Nlm_Uint4 x2;
+	Nlm_Uint4 x3;
+	Nlm_Uint4 x4;
+	Nlm_Uint4 x5;
+	Nlm_Uint4 x6;
+	Nlm_Uint4 x7;
+	Nlm_Uint4 x8;
+	Nlm_Uint4 x9;
+	Nlm_Uint4 x10;
+	Nlm_Uint4 x11;
+	Nlm_Uint4 x12;
+    } Hash; 
+
+    Nlm_Uint4 a = 0x67452301;
+    Nlm_Uint4 b = 0xefcdab89;
+    Nlm_Uint4 c = 0x98badcfe;
+    Nlm_Uint4 d = 0x10325476;
+
+    if (p == NULL || p[0] == NULLB)
+	return 0;
+
+    MemSet(&Hash, 0, sizeof(Hash));
+    MemCopy(&Hash, p, 
+	    (len = StringLen(p)) > sizeof(Hash)? sizeof(Hash) : len);
+
+    FF (a, b, c, d, Hash.x1, 3);   /* 1 */
+    FF (d, a, b, c, Hash.x2, 7);   /* 2 */
+    FF (c, d, a, b, Hash.x3, 11);  /* 3 */
+    FF (b, c, d, a, Hash.x4, 19);  /* 4 */
+
+    GG (a, b, c, d, Hash.x5, 3);   /* 17 */
+    GG (d, a, b, c, Hash.x6, 5);   /* 18 */
+    GG (c, d, a, b, Hash.x7, 9);   /* 19 */
+    GG (b, c, d, a, Hash.x8, 13);  /* 20 */
+
+    HH (b, c, d, a, Hash.x9, 15);  /* 40 */
+    HH (a, b, c, d, Hash.x10, 3);  /* 41 */
+    HH (d, a, b, c, Hash.x11, 9);  /* 42 */
+    HH (c, d, a, b, Hash.x12, 11); /* 43 */
+
+    return (a+b+c+d);
+}
+
+/*  ----- End of simplified MD4 algorithm ------ */

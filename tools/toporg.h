@@ -45,5 +45,6 @@ BioSourcePtr BioSourceCommon PROTO((BioSourcePtr host, BioSourcePtr guest));
 void StripBSfromTop PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
 void StripBSfromParts PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
 Boolean CmpOrgById PROTO((BioSourcePtr b1, BioSourcePtr b2));
+extern void NormalizeSegSeqMolInfo PROTO((SeqEntryPtr sep));
 
 #endif

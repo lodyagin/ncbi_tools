@@ -74,12 +74,12 @@ Int4 LIBCALL gband_linear(Uint1Ptr Seq1, Uint1Ptr Seq2,
   up = MAX(MIN(N, up), MAX(N - M, 0));
   
   if (up < 0 || low > 0) {
-    ErrPostEx(SEV_ERROR, 0, 0,
+    ErrPostEx(SEV_WARNING, 0, 0,
 	      "The band does not include (0,0) grid point");
     return 0;
   } 
   if (up + M < N || low + M > N) {
-    ErrPostEx(SEV_ERROR, 0, 0,
+    ErrPostEx(SEV_WARNING, 0, 0,
 	      "The band does not include lower corner");
     return 0;
   }
@@ -127,9 +127,11 @@ Int4 LIBCALL gband_linear(Uint1Ptr Seq1, Uint1Ptr Seq2,
     MemFree(data.MP[j]);
   }
   
-  if(score != c)
-    ErrPostEx(SEV_ERROR, 0, 0, "Check_Score = %ld align_score = %ld ", 
-	      score, c);
+  if(score != c) {
+    ErrPostEx(SEV_WARNING, 0, 0, "Check_Score = %ld align_score = %ld ", 
+	      (long) score, (long) c);
+	return 0;
+  }
   
   *Slen = data.sapp - S;
 

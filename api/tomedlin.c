@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: tomedlin.c,v $
+* Revision 6.3  1999/03/11 23:32:08  kans
+* sprintf casts
+*
 * Revision 6.2  1998/06/12 20:05:50  kans
 * fixed unix compiler warnings
 *
@@ -205,7 +208,7 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
     para.openSpace = FALSE;
     ClearString ();
     AddString ("UI  -\t");
-    sprintf (str, "%ld", mep->uid);
+    sprintf (str, "%ld", (long) mep->uid);
     AddString (str);
     AddString ("\n");
     rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
@@ -214,7 +217,7 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
     if ( mep->pmid > 0 ) {
       ClearString ();
       AddString ("PM  -\t");
-      sprintf (str, "%ld", mep->pmid);
+      sprintf (str, "%ld", (long) mep->pmid);
       AddString (str);
       AddString ("\n");
       rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
@@ -696,7 +699,7 @@ NLM_EXTERN MedlinePtr ParseMedline (MedlineEntryPtr mep)
     ClearString ();
     mPtr = MemNew (sizeof (MedlineData));
     if (mPtr != NULL && mep != NULL) {
-      sprintf (str, "%1ld", mep->uid);
+      sprintf (str, "%1ld", (long) mep->uid);
       mPtr->uid = StringSave (str);
       cit = mep->cit;
       if (cit != NULL) {

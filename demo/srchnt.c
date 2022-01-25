@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: nucleotide pattern match
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: srchnt.c,v $
+* Revision 6.15  1999/02/26 18:52:11  kuzio
+* correct cast
+*
 * Revision 6.14  1998/12/18 16:24:57  kuzio
 * big GIs
 *
@@ -305,7 +308,7 @@ Int2 Main (void)
         {
           printf (">%s\n", cpp->name);
           sap = PatternMatchBioseq (gnbsp->bsp, cpp,
-                                    (Boolean) myargs[4].intvalue);
+                                    (Int4) myargs[4].intvalue);
           if (sap != NULL)
             printf ("   Start\n");
           SeqAlignSortByStart (&sap);

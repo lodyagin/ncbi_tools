@@ -1,4 +1,7 @@
 #   makefile for network demo programs and network entrez
+#
+#	$Id: makenet.unx,v 6.66 1999/04/23 19:10:58 beloslyu Exp $
+#
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
 #   Sun with Gnu C [ make CC=gcc RAN=ranlib ]
 #   Sun with Solaris 2.x OS [ make CC="cc -Xa" OTHERLIBS="-lsocket -lnsl -lresolv -lthread -lm" ]
@@ -57,7 +60,7 @@ SUFFIXLCL = $(LCL)
 CFLAGS1 = -c -O
 LDFLAGS1 = -O
 CC = cc
-RAN = ls
+RAN = ls -l
 AR = ar
 OTHERLIBS = -lm
 THREAD_OTHERLIBS = -lthread
@@ -72,9 +75,9 @@ VIB =
 VIBLIBS= -lXm -lXmu -lXt -lX11
 VIBLIBS=
 SEQUIN_OPTS =
-LIBCOPY = cp
-SRCCOPY = cp
-BINCOPY = cp
+LIBCOPY = cp -p
+SRCCOPY = cp -p
+BINCOPY = cp -p
 
 SUFFIXENV = unx
 ASNDIR = asnstat
@@ -261,7 +264,7 @@ LDFLAGS = -I$(NCBI_INCDIR) $(NCBI_OTHERLINKOPTIONS) -L$(NCBI_LINKINGLIBDIR) $(VI
 
 ## sources for libraries
 
-SRC6  = ni_lib_.c ni_www.c ni_debug.c ncbicli.c ncbisock.c ncbiurl.c lbapi.c \
+SRC6  = ni_lib_.c ni_www.c ni_debug.c ncbicli.c ncbiurl.c lbapi.c \
         ni_disp.c ni_msg.c ni_error.c ni_encrs.c
 SRC6_ = ni_lib.c ni_msg.c ni_error.c ni_encrs.c
 
@@ -283,11 +286,11 @@ SRCRSAREF = desc.c digit.c digitas.c md2c.c md5c.c nn.c prime.c r_encode.c \
 SRCSOCKS = Rconnect.c SendGetDst.c check_cconf.c check_user.c \
 	   percent_x.c porttoserv.c saddrtoname.c shell_cmd.c
 
-SRC15 = ncbisock.c ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCRSAREF)
+SRC15 = ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCRSAREF)
 
-SRC16 = ncbisock.c ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encrs.c $(SRCSOCKS)
+SRC16 = ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encrs.c $(SRCSOCKS)
 
-SRC17 = ncbisock.c ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCSOCKS) \
+SRC17 = ncbiurl.c ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCSOCKS) \
 	$(SRCRSAREF)
 
 SRC19 = objspell.c spellapi.c
@@ -326,7 +329,7 @@ NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
 
 # objects for libraries
 
-OBJ6  = ni_lib_.o ncbicli.o ncbisock.o ncbiurl.o ni_www.o ni_debug.o lbapi.o \
+OBJ6  = ni_lib_.o ncbicli.o ncbiurl.o ni_www.o ni_debug.o lbapi.o \
         ni_disp.o ni_msg.o ni_error.o ni_encrs.o
 OBJ6_ = ni_lib.o ni_msg.o ni_error.o ni_encrs.o
 
@@ -348,15 +351,15 @@ OBJRSAREF = desc.o digit.o digitas.o md2c.o md5c.o nn.o prime.o r_encode.o \
 OBJSOCKS = Rconnect.o SendGetDst.o check_cconf.o check_user.o \
 	   percent_x.o porttoserv.o saddrtoname.o shell_cmd.o $(SOCKS_GETPASS)
 
-OBJ15BASE = ncbisock.o ncbiurl.o ni_lib.o ni_msg.o ni_error.o ni_encr.o
+OBJ15BASE = ncbiurl.o ni_lib.o ni_msg.o ni_error.o ni_encr.o
 
 OBJ15 = $(OBJ15BASE) $(OBJRSAREF)
 
-OBJ16BASE = ncbisock.o ncbiurl.o Sni_lib.o ni_msg.o ni_error.o ni_encrs.o
+OBJ16BASE = ncbiurl.o Sni_lib.o ni_msg.o ni_error.o ni_encrs.o
 
 OBJ16 = $(OBJ16BASE) $(OBJSOCKS)
 
-OBJ17BASE = ncbisock.o ncbiurl.o Sni_lib.o ni_msg.o ni_error.o ni_encr.o
+OBJ17BASE = ncbiurl.o Sni_lib.o ni_msg.o ni_error.o ni_encr.o
 
 OBJ17 = $(OBJ17BASE) $(OBJSOCKS) $(OBJRSAREF)
 
@@ -463,7 +466,7 @@ EXEUTIL = srchnt srchaa mts sigme dst ccp epi twop cnsrt cnsgn
 EXEUTILVIB = ccpv dustv epiv sigmev twopv cnsrtv cnsgnv searchv
 
 SRCSEQUIN = sequin1.c sequin2.c sequin3.c sequin4.c sequin5.c sequin6.c \
-	sequin7.c sequin8.c sequinx.c
+	sequin7.c sequin8.c sequin9.c sequinx.c
 
 SRCSESSION =	session.c
 
@@ -483,7 +486,7 @@ SERVERS = $(EXEDISPD) $(EXENCBID) $(EXEECHOD) $(EXEENTSRV) $(EXESVBROKER) \
 
 ## All things to make
 ##
-all : copy nocopy
+all : copy .WAIT nocopy
 
 nocopy : sources $(BLIB6) $(BLIB6_) $(NCBI_ENCR) $(NCBI_SOCKS) \
    $(NCBI_ENCR)$(NCBI_SOCKS) $(BLIB7) \
@@ -497,6 +500,11 @@ servers : $(SERV_SRC) $(SERVERS)
 utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
+
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr Nbatch Nentrcmd genget seqget idfetch blastcl2 pblcmd session
+
+.WAIT:
+	echo Waiting...go
 
 ## encryption
 ##
@@ -640,10 +648,7 @@ copy :
 	-$(SRCCOPY) ../network/suggest/server/*.* .
 	-$(SRCCOPY) ../network/nsdaemon/*.* .
 	$(SRCCOPY) ../network/nsdemocl/*.* .
-	chmod +w *
-	chmod +w ../include/*
-	chmod g+w *
-	chmod g+w ../include/*
+	chmod -R ug+rw,o+r .
 
 
 ## Implicit actions
@@ -1161,6 +1166,8 @@ blastcl3: blastcl3.c $(BNETCLILIB) $(BLIB36)
 pblcmd: pblcmd.c $(BNETCLILIB) $(BLIB21)
 	$(CC) -g -o pblcmd $(LDFLAGS) pblcmd.c pblproc.c $(LIB8) $(LIB7) $(LIB20) $(LIB23) $(LIB21) $(NETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+.NO_PARALLEL:	powblast
+
 powblast: powblast.c $(BNETCLILIB) $(BLIB21)
 	$(CC) -g -o powblast $(LDFLAGS) powblast.c pblproc.c $(LIB4) $(LIB8) $(LIB7) $(LIB20) $(LIB23) $(LIB21) $(NETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
@@ -1285,29 +1292,29 @@ cnsgnv : cnsgnv.c
 
 
 # 'sequin' direct submission tool
-sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB21) \
+sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB21) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o sequin $(SEQUIN_OPTS) -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB21) $(LIB11) \
+	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB41) $(LIB21) $(LIB11) \
 	$(LIB31) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) \
 	$(OTHERLIBS)
 
 # 'sequin' direct submission tool with interprocess communication capability
-Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB21) \
+Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB21) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31) $(ULIB33) $(THREAD_OBJ)
 	$(CC) -o Ssequin $(SEQUIN_OPTS) -DUSE_SMARTNET -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(THREAD_OBJ) $(LIB33) $(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB21) $(LIB11) \
+	$(THREAD_OBJ) $(LIB33) $(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB41) $(LIB21) $(LIB11) \
 	$(LIB31) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # 'Psequin' ("Public Network Sequin") direct submission tool
-Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB40) $(BLIB21) \
+Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB40) $(BLIB41) $(BLIB21) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o Psequin -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSEQUIN) \
-	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB40) $(LIB21) $(LIB11) $(ENTREZLIBS) \
+	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB40) $(LIB41) $(LIB21) $(LIB11) $(ENTREZLIBS) \
 	$(LIB31) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 session : $(SRCSESSION) $(BSRVNETCLILIB)

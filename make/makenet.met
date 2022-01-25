@@ -76,14 +76,21 @@ on DoSetGlobals()
 	end tell
 end DoSetGlobals
 
-on DoSetPPC()
+on DoSetPreferences()
 	tell application "CodeWarrior IDE 3.2"
 		
 		(* ===== Panel Target ===== *)
-		Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		if MASTER = "PPC" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		else if MASTER = "68K" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
+		end if
 		
 		(* ===== Panel PowerPC Project =====  *)
 		Set Preferences of panel "PPC Project" to {Project Type:library}
+		
+		(* ===== Panel 68K Project =====  *)
+		Set Preferences of panel "68K Project" to {Project Type:library}
 		
 		(* ===== Panel C/C++ Language =====  *)
 		Set Preferences of panel "C/C++ Compiler" to Â
@@ -147,49 +154,6 @@ on DoSetPPC()
 				, Expand Uninitialized Data:false Â
 				, Fragment Name:""}
 		
-		my DoSetPaths1()
-		
-	end tell
-end DoSetPPC
-
-on DoSet68K()
-	tell application "CodeWarrior IDE 3.2"
-		
-		(* ===== Panel Target ===== *)
-		Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
-		
-		(* ===== Panel 68K Project =====  *)
-		Set Preferences of panel "68K Project" to {Project Type:library}
-		
-		(* ===== Panel C/C++ Language =====  *)
-		Set Preferences of panel "C/C++ Compiler" to Â
-			{Activate CPlusPlus:false Â
-				, ARM Conformance:false Â
-				, Exception Handling:true Â
-				, Inlining:inline_none Â
-				, RTTI:false Â
-				, Pool Strings:false Â
-				, Dont Reuse Strings:false Â
-				, Require Function Prototypes:true Â
-				, ANSI Strict:false Â
-				, ANSI Keywords Only:false Â
-				, Expand Trigraph Sequences:false Â
-				, MPW Newlines:false Â
-				, MPW Pointer Type Rules:false Â
-				, Enums Always Ints:false Â
-				, Prefix File:""}
-		
-		(* ===== Panel C/C++ Warnings ===== *)
-		Set Preferences of panel "C/C++ Warnings" to Â
-			{Treat Warnings As Errors:false Â
-				, Illegal Pragmas:true Â
-				, Empty Declarations:true Â
-				, Possible Errors:true Â
-				, Unused Variables:true Â
-				, Unused Arguments:false Â
-				, Extra Commas:true Â
-				, Extended Error Checking:true}
-		
 		(* ===== Panel 68K Processor =====  *)
 		Set Preferences of panel "68K CodeGen" to Â
 			{Code Model:large Â
@@ -220,14 +184,6 @@ on DoSet68K()
 		my DoSetPaths1()
 		
 	end tell
-end DoSet68K
-
-on DoSetPreferences()
-	if MASTER = "PPC" then
-		my DoSetPPC()
-	else if MASTER = "68K" then
-		my DoSet68K()
-	end if
 end DoSetPreferences
 
 on DoSetPaths1()
@@ -268,10 +224,6 @@ on DoCompileLibraries()
 		Close Project
 		
 		open (LIBRARIES & "netcli" & SUFFIX & ".µ")
-		Make Project
-		Close Project
-		
-		open (LIBRARIES & "ncsasock" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -330,10 +282,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment 1
-		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment 1
-		Add Files {NCBISOURCE & "cdromlib:accmmdbs.c"} To Segment 1
-		Add Files {NCBISOURCE & "cdromlib:acccn3ds.c"} To Segment 1
+		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
+		
+		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c", NCBICDROMLIB & "accmmdbs.c", NCBICDROMLIB & "acccn3ds.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -350,9 +301,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:entrez:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:entrez:client:netentr.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:entrez:client:netlib.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:entrez:client:objneten.c"} To Segment 1
+		set NCBIENTREZ to NCBISOURCE & "network:entrez:client:" as string
+		
+		Add Files {NCBIENTREZ & "netentr.c", NCBIENTREZ & "netlib.c", NCBIENTREZ & "objneten.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -369,48 +320,11 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:nsclilib:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:nsclilib:ncbicli.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ncbisock.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ncbiurl.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ncbibuf.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_disp.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_encrs.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_error.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_lib_.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_macdv.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_msg.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_www.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:nsclilib:ni_debug.c"} To Segment 1
+		set NCBINSCLILIB to NCBISOURCE & "network:nsclilib:" as string
 		
-		Reset File Paths
-		Close Project
-		
-		
-		(* ================================================================================ *)
-		Create Project {LIBRARIES & "ncsasock" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "PPC Project" to {File Name:"ncsasockppc"}
-		Set Preferences of panel "68K Project" to {File Name:"ncsasock68k"}
-		Set Preferences of panel "PPC CodeGen" to {Struct Alignment:Align_68k}
-		Set Preferences of panel "68K CodeGen" to {Four Bytes Ints:true}
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-		Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:ncsasock:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		Add Files {NCBISOURCE & "network:ncsasock:dprintf.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:netdb.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:rexec.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:socket.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:sock_std.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:sock_tcp.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:sock_udp.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:sock_utl.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:syslog.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:tcpglue.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:ncsasock:unixlib.c"} To Segment 1
-		Add Files {METROWERKSCW & "MacOS Support:Headers:System Extras Headers:MacTCP Headers:dnr.c"} To Segment 1
+		Add Files {NCBINSCLILIB & "ncbicli.c", NCBINSCLILIB & "ncbiurl.c", NCBINSCLILIB & "ni_disp.c", NCBINSCLILIB & "ni_encrs.c"} To Segment 1
+		Add Files {NCBINSCLILIB & "ni_error.c", NCBINSCLILIB & "ni_lib_.c", NCBINSCLILIB & "ni_macdv.c", NCBINSCLILIB & "ni_msg.c"} To Segment 1
+		Add Files {NCBINSCLILIB & "ni_www.c", NCBINSCLILIB & "ni_debug.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -426,11 +340,10 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:blast2:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:blast2:client:blast2.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:blast2:client:blstout2.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:blast2:client:netblap2.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:blast2:client:objblst2.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:blast2:client:blastasn.c"} To Segment 1
+		set NCBIBLAST2 to NCBISOURCE & "network:blast2:client:" as string
+		
+		Add Files {NCBIBLAST2 & "blast2.c", NCBIBLAST2 & "blstout2.c", NCBIBLAST2 & "netblap2.c", NCBIBLAST2 & "objblst2.c"} To Segment 1
+		Add Files {NCBIBLAST2 & "blastasn.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -446,8 +359,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:blast3:client:netblap3.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:blast3:client:objblst3.c"} To Segment 1
+		set NCBIBLAST3 to NCBISOURCE & "network:blast3:client:" as string
+		
+		Add Files {NCBIBLAST3 & "netblap3.c", NCBIBLAST3 & "objblst3.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -463,9 +377,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:id1arch:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:id1arch:id1gen.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:id1arch:id1arch.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:id1arch:accid1.c"} To Segment 1
+		set NCBIID1ARCH to NCBISOURCE & "network:id1arch:" as string
+		
+		Add Files {NCBIID1ARCH & "id1gen.c", NCBIID1ARCH & "id1arch.c", NCBIID1ARCH & "accid1.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -481,9 +395,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:medarch:client:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:medarch:client:medarch.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:medarch:client:medutil.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:medarch:client:objmla.c"} To Segment 1
+		set NCBIMEDARCH to NCBISOURCE & "network:medarch:client:" as string
+		
+		Add Files {NCBIMEDARCH & "medarch.c", NCBIMEDARCH & "medutil.c", NCBIMEDARCH & "objmla.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -501,12 +415,11 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:taxon2:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:taxon1:taxon2:parttree.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:taxon1:taxon2:taxcs.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:taxon1:taxon2:tc2proc.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:taxon1:taxon2:txcdproc.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:taxon1:common:objtax1.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:taxon1:common:taxutil.c"} To Segment 1
+		set NCBITAXON2 to NCBISOURCE & "network:taxon1:taxon2:" as string
+		set NCBITAXONCOMMON to NCBISOURCE & "network:taxon1:common:" as string
+		
+		Add Files {NCBITAXON2 & "parttree.c", NCBITAXON2 & "taxcs.c", NCBITAXON2 & "tc2proc.c", NCBITAXON2 & "txcdproc.c"} To Segment 1
+		Add Files {NCBITAXONCOMMON & "objtax1.c", NCBITAXONCOMMON & "taxutil.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -522,9 +435,9 @@ with timeout of 60000 seconds
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:vibnet:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		Add Files {NCBISOURCE & "network:vibnet:netcnfg.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:vibnet:trmlst.c"} To Segment 1
-		Add Files {NCBISOURCE & "network:vibnet:docsum.c"} To Segment 1
+		set NCBIVIBNET to NCBISOURCE & "network:vibnet:" as string
+		
+		Add Files {NCBIVIBNET & "netcnfg.c", NCBIVIBNET & "trmlst.c", NCBIVIBNET & "docsum.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -543,31 +456,16 @@ with timeout of 60000 seconds
 			Set Preferences of panel "Access Paths" to {User Paths:{{name:ENCRYPTSOURCE & "source:", origin:absolute}}}
 			my DoSetPaths2()
 			
-			Add Files {NCBISOURCE & "network:nsclilib:ncbicli.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ncbisock.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ncbiurl.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ncbibuf.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_disp.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_encrs.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_error.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_lib_.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_macdv.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_msg.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_www.c"} To Segment 1
-			Add Files {NCBISOURCE & "network:nsclilib:ni_debug.c"} To Segment 1
+			set NCBINSCLILIB to NCBISOURCE & "network:nsclilib:" as string
 			
-			Add Files {ENCRYPTSOURCE & "source:desc.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:digit.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:digitas.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:md2c.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:md5c.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:nn.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:prime.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:rsa.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:r_encode.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:r_enhanc.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:r_keygen.c"} To Segment 2
-			Add Files {ENCRYPTSOURCE & "source:r_random.c"} To Segment 2
+			Add Files {NCBINSCLILIB & "ncbicli.c", NCBINSCLILIB & "ncbisock.c", NCBINSCLILIB & "ncbiurl.c", NCBINSCLILIB & "ncbibuf.c"} To Segment 1
+			Add Files {NCBINSCLILIB & "ni_disp.c", NCBINSCLILIB & "ni_encrs.c", NCBINSCLILIB & "ni_error.c", NCBINSCLILIB & "ni_lib_.c"} To Segment 1
+			Add Files {NCBINSCLILIB & "ni_macdv.c", NCBINSCLILIB & "ni_msg.c", NCBINSCLILIB & "ni_www.c", NCBINSCLILIB & "ni_debug.c"} To Segment 1
+			
+			Add Files {ENCRYPTSOURCE & "source:desc.c", ENCRYPTSOURCE & "source:digit.c", ENCRYPTSOURCE & "source:digitas.c"} To Segment 1
+			Add Files {ENCRYPTSOURCE & "source:md2c.c", ENCRYPTSOURCE & "source:md5c.c", ENCRYPTSOURCE & "source:nn.c"} To Segment 1
+			Add Files {ENCRYPTSOURCE & "source:prime.c", ENCRYPTSOURCE & "source:rsa.c", ENCRYPTSOURCE & "source:r_encode.c"} To Segment 1
+			Add Files {ENCRYPTSOURCE & "source:r_enhanc.c", ENCRYPTSOURCE & "source:r_keygen.c", ENCRYPTSOURCE & "source:r_random.c"} To Segment 1
 			Add Files {ENCRYPTSOURCE & "source:r_stdlib.c"} To Segment 2
 			
 			Reset File Paths
@@ -579,8 +477,6 @@ with timeout of 60000 seconds
 		if MAKELIBS = "TRUE" then
 			my DoCompileLibraries()
 		end if
-		
-		quit
 		
 	end tell
 end timeout

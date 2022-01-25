@@ -110,7 +110,7 @@ Int4 LIBCALL gband_linear_qgap(Uint1Ptr A, Uint1Ptr B,
   score = g_band3_CHECK_SCORE(A, B, M, N, S, &data);
   if(c != score) { 
     ErrPostEx(SEV_WARNING, 0, 0, "Check_Score = %ld align_score = %ld ", 
-	      score, c);
+	      (long) score, (long) c);
 	return 0;
   }
   MemFree(data.CD);

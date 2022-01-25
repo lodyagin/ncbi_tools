@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: urkdust
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkdust.c,v $
+* Revision 6.9  1999/03/12 17:11:24  kuzio
+* cast
+*
 * Revision 6.8  1998/09/16 18:03:33  kuzio
 * cvs logging
 *
@@ -569,7 +572,7 @@ extern DustRegionPtr DustSeqPort (SeqPortPtr spp,
       if (invrescount < 3)
       {
         ErrPostEx (SEV_INFO, 5, 1,
-                   "Invalid residue converted to 'A': %ld", pos);
+                   "Invalid residue converted to 'A': %ld", (long) pos);
         ErrShow ();
       }
       invrescount++;
@@ -588,7 +591,7 @@ extern DustRegionPtr DustSeqPort (SeqPortPtr spp,
       if (invrescount < 3)
       {
         ErrPostEx (SEV_INFO, 5, 1,
-                   "Invalid residue converted to 'A': %ld", pos);
+                   "Invalid residue converted to 'A': %ld", (long) pos);
         ErrShow ();
       }
       invrescount++;
@@ -610,7 +613,7 @@ extern DustRegionPtr DustSeqPort (SeqPortPtr spp,
           if (invrescount < 3)
           {
             ErrPostEx (SEV_INFO, 5, 1,
-                       "Invalid residue converted to 'A': %ld", pos);
+                       "Invalid residue converted to 'A': %ld", (long) pos);
             ErrShow ();
           }
           invrescount++;
@@ -651,7 +654,7 @@ extern DustRegionPtr DustSeqPort (SeqPortPtr spp,
     {
       ErrPostEx (SEV_WARNING, 1, 10,
                  "Possible seqport read error: Expected: %ld Actual: %ld",
-                 this_stop, posn);
+                 (long) this_stop, (long) posn);
       ErrShow ();
     }
     drp = Dust (shead, this_start, this_stop, ddp, drp);
@@ -675,7 +678,7 @@ extern DustRegionPtr DustSeqPort (SeqPortPtr spp,
   if (invrescount > 0)
   {
     ErrPostEx (SEV_INFO, 3, 2,
-               "Total invalid residues found: %ld", invrescount);
+               "Total invalid residues found: %ld", (long) invrescount);
     ErrShow ();
   }
   return drphead;

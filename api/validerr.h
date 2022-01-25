@@ -80,5 +80,7 @@
 #define ERR_SEQ_FEAT_PsuedoCdsHasProduct  5,27
 #define ERR_SEQ_FEAT_IllegalDbXref  5,28
 #define ERR_SEQ_FEAT_FarLocation  5,29
+#define ERR_SEQ_FEAT_DuplicateFeat  5,30
+#define ERR_SEQ_FEAT_UnnecessaryGeneXref  5,31
 
 #endif

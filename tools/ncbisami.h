@@ -1,4 +1,4 @@
-/* $Id: ncbisami.h,v 6.0 1997/08/25 18:53:32 madden Exp $
+/* $Id: ncbisami.h,v 6.1 1999/02/19 22:01:59 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *         Internal include file for ISAM library
 *
 * $Log: ncbisami.h,v $
+* Revision 6.1  1999/02/19 22:01:59  madden
+* Add NlmMFILEPtr to ISAMData typedef
+*
 * Revision 6.0  1997/08/25 18:53:32  madden
 * Revision changed to 6.0
 *
@@ -129,6 +132,7 @@ typedef struct ISAMData
     Int4            CAMaxOffset;    /* Offset for switch CA DB/Offset file */
 
     Nlm_MemMapPtr   mmp;            /* Memory map pointer to index file */
+    NlmMFILEPtr     mfp;            /* Memory map pointer to database file for numeric search. */
     CharPtr         FileStart;      /* Pointer to index file if no memmap */
     Int4            NumTerms;       /* Number of terms in database */
     Int4            NumSamples;     /* Number of terms in ISAM index */

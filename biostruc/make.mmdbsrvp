@@ -16,6 +16,14 @@
 #######################################################################
 #
 # $Log: make.mmdbsrvp,v $
+# Revision 6.3  1999/05/07 14:21:55  zimmerma
+# - removed local definition of NCBI_OTHERLIBS_MT
+# - changed OTHERLIBS to NCBI_OTHERLIBS on compile line
+# - redefined SRC to include only mmdbsrv.c and mmdblocl.c
+#
+# Revision 6.2  1999/04/28 18:58:27  lewisg
+# turn off pubstruct define
+#
 # Revision 6.1  1998/06/11 19:15:50  madej
 # Simplified compile (omit Pubstruct).  Allow compile on both SGI and Sun.
 #
@@ -28,13 +36,11 @@ CFLAGS1 = -c
 LDFLAGS1 = 
 OPTFLAG = -g
 OTHERLIBS = -lm
-NCBI_OTHERLIBS_MT = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lthread
 INCPATH = $(NCBI_INCDIR)
 LIBPATH = $(NCBI_LIBDIR)
-DEF =
+DEF = -D__NO_DB__
 # SYMBOLS FOR source, executables.
-# SRC = mmdbsrv.c mmdblocl.c vastlocl.c objmime.c
-SRC = mmdbsrv.c mmdblocl.c vastlocl.c
+SRC = mmdbsrv.c mmdblocl.c
 EXE = mmdbsrv
 
 CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(VIBFLAG) $(DEF)
@@ -94,6 +100,4 @@ all : $(EXE)
 
 $(EXE) : $(SRC)
 	$(CC) -o $(EXE) -DX11 -I./ -I/~/ncbi/build $(LDFLAGS) $(SRC)  \
-         $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(LIB28) $(OTHERLIBS) \
-	 $(NCBI_OTHERLIBS_MT)
-
+         $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(LIB28) $(NCBI_OTHERLIBS) 

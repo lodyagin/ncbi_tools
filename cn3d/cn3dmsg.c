@@ -33,6 +33,15 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
+* Revision 6.44  1999/04/22 21:10:07  ywang
+* fix breaks
+*
+* Revision 6.43  1999/03/30 22:36:19  ywang
+* add functions to color salsa for NcbiMimeAsn1_strucseqs & code reorganization
+*
+* Revision 6.42  1999/03/03 23:17:22  lewisg
+* one master struct at a time, list slaves in structure info, bug fixes
+*
 * Revision 6.41  1999/01/20 18:21:20  ywang
 * include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
@@ -188,6 +197,7 @@ extern void MediaDataLoad2(PDNMM pdnmmHead)
   SeqIdPtr sip;
   Int4 thisGi;
   Int2 iCount = 0;
+  Int4 iRes = 0;
   Uint2 entityID, itemID;
 
                                           /* allocate memory for mediadata */     
@@ -220,7 +230,7 @@ extern void MediaDataLoad2(PDNMM pdnmmHead)
                /* in one biostruc-sequence case from MMDB, it should NOT be zero for NA and Protein */
 /*   sip = make_sip (thisGi);  */
      sip = pmmdThis->pSeqId;
-     mediadata[iCount]->sip = sip;
+     mediadata[iCount]->sip = SeqIdDup(sip);
      mediadata[iCount]->Gi = thisGi;
      bsp = BioseqLockById (sip); /* Remember always lock first! */
                                  /* and by the way to get bsp->length */
@@ -233,6 +243,11 @@ extern void MediaDataLoad2(PDNMM pdnmmHead)
      mediadata[iCount]->itemID = itemID;
      mediadata[iCount]->itemtype = OBJ_BIOSEQ;
      mediadata[iCount]->bVisible = 1;
+     mediadata[iCount]->bAligned = (BytePtr) MemNew((size_t)(mediadata[iCount]->length + 1) * sizeof(Byte));
+     for(iRes = 0; iRes < mediadata[iCount]->length; iRes++){
+        mediadata[iCount]->bAligned[iRes] = 0;
+     }
+
      iCount++;
      errot:
      pdnmmHead = pdnmmHead->next;
@@ -276,6 +291,7 @@ extern void MediaDataLoad(SeqAlignPtr salp)
 {
   SeqIdPtr      sip = NULL, sip2 = NULL;
   Int4 iCount = 0;
+  Int4 iRes = 0;
   Boolean FirstNode = TRUE;
   Uint2 entityID, itemID;
   BioseqPtr bsp;
@@ -311,7 +327,7 @@ extern void MediaDataLoad(SeqAlignPtr salp)
      if (sip2 != NULL) {
        if(!FirstNode) sip2 = sip2->next;
        for(sip = sip2; sip != NULL; sip = sip->next){
-          mediadata[iCount]->sip = sip;
+          mediadata[iCount]->sip = SeqIdDup(sip);
           mediadata[iCount]->Gi = Cn3DGetGIForSeqId(sip);
                  /* NCBI general GetGIForSeqId(sip) can go to EntrezInit eventually */
           mediadata[iCount]->bVisible = TRUE; 
@@ -335,8 +351,15 @@ extern void MediaDataLoad(SeqAlignPtr salp)
      mediadata[iCount]->itemID = itemID;
      mediadata[iCount]->itemtype = OBJ_BIOSEQ;
      mediadata[iCount]->bVisible = 1;
+     mediadata[iCount]->bAligned = (BytePtr) MemNew((size_t)(mediadata[iCount]->length + 1) * sizeof(Byte));
+     for(iRes = 0; iRes < mediadata[iCount]->length; iRes++){
+        mediadata[iCount]->bAligned[iRes] = 0; 
+     }
   }  
   
+  Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq();
+  Cn3DCheckAlignmentStatusForStrucSeqs();
+
   Cn3DAddMediaDataColorTable(); 
 }
 /*-----------------------------------------*/

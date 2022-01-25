@@ -24,6 +24,9 @@
 Description: side panel for aligned structures.  lyg.
 
 * $Log: cn3dpane.c,v $
+* Revision 6.29  1999/04/06 20:15:11  lewisg
+* more opengl
+*
 * Revision 6.28  1999/01/20 18:21:20  ywang
 * include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
@@ -35,7 +38,12 @@ Description: side panel for aligned structures.  lyg.
  *
 */
 
+#ifdef _OPENGL
+#include <shim3d.h>
+#else
 #include <viewer3d.h>
+#endif
+
 #include <cn3dmain.h>
 #include <math.h>
 #include <mmdbapi.h>
@@ -60,7 +68,9 @@ static void fnNeighborMode(ButtoN b)
 if(GetStatus(Cn3D_bShowAlign)) SetNeighborOn();
 else SetNeighborOff();
 SetStatus(Cn3D_bShowAlign, AreNeighborsOn());
+#ifndef _OPENGL
 Cn3D_v3d->is_zoomed = TRUE;  /* keep the proteins from moving */
+#endif
 Cn3D_Redraw(FALSE);
 Cn3dObjMgrGetSelected();
 }
@@ -68,7 +78,9 @@ Cn3dObjMgrGetSelected();
 static void fnAlignOn(ButtoN b)
 {
 Cn3D_fAlignOn = GetStatus(Cn3D_bAlignOn_bak);
+#ifndef _OPENGL
 Cn3D_v3d->is_zoomed = TRUE;  /* keep the proteins from moving */
+#endif
 Cn3D_Redraw(FALSE);
 Cn3dObjMgrGetSelected();
 }
@@ -76,7 +88,9 @@ Cn3dObjMgrGetSelected();
 static void fnUnalignOn(ButtoN b)
 {
 Cn3D_fUnalignOn = GetStatus(Cn3D_bUnalignOn_bak);
+#ifndef _OPENGL
 Cn3D_v3d->is_zoomed = TRUE;  /* keep the proteins from moving */
+#endif
 Cn3D_Redraw(FALSE);
 Cn3dObjMgrGetSelected();
 }

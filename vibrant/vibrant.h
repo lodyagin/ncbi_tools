@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *       This is the master include file for the Vibrant (TM) portable user
@@ -39,23 +39,9 @@
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: vibrant.h,v $
-* Revision 6.0  1997/08/25 18:57:32  madden
-* Revision changed to 6.0
-*
-* Revision 5.0  1996/05/28 13:45:08  ostell
-* Set to revision 5.0
-*
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.3  1995/05/17  15:15:14  kans
- * added Log line
- *
+* Revision 6.1  1999/05/06 21:23:44  vakatov
+* Get rid of the erroneous 'extern "C"' around the #include's
 *
 * ==========================================================================
 */
@@ -63,9 +49,6 @@
 #ifndef _VIBRANT_
 #define _VIBRANT_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /***  GENERAL INFORMATION  ***/
 
@@ -148,10 +131,6 @@ extern "C" {
 #endif
 #ifndef _VIBFORMS_
 #include <vibforms.h>
-#endif
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif

@@ -1,4 +1,4 @@
-/*  $Id: vibmouse.c,v 6.2 1998/07/02 18:24:34 vakatov Exp $
+/*  $Id: vibmouse.c,v 6.3 1999/04/06 14:23:25 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * ===========================================================================
 * $Log: vibmouse.c,v $
+* Revision 6.3  1999/04/06 14:23:25  lewisg
+* add opengl replacement for viewer3d
+*
 * Revision 6.2  1998/07/02 18:24:34  vakatov
 * Cleaned the code & made it pass through the C++ compilation
 *
@@ -58,7 +61,7 @@
 #else
 #include <stdarg.h>
 #endif
-
+#include <vibrant.h>  /* move out of header.  lyg */
 #include <vibmouse.h>
 
 

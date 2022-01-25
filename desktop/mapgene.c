@@ -2858,14 +2858,16 @@ static ValNodePtr CreateFishInfoList (CharPtr band_name)
 	FishInfoPtr fip;
 	FishInfo fi;
 	ValNodePtr list;
+	long muid;
 	Int4 val;
 
 	fp = FileOpen(FISH_MAP_FILE, "r");
 	if(fp == NULL)
 		return NULL;
 	list = NULL;
-	while(fscanf(fp, "%s\t%s\t%s\t%ld\n", fi.band_name, fi.yac_name, fi.author, &(fi.muid)) != EOF)
+	while(fscanf(fp, "%s\t%s\t%s\t%ld\n", fi.band_name, fi.yac_name, fi.author, &muid) != EOF)
 	{
+		fi.muid = muid;
 		val = StringCmp(fi.band_name, band_name);
 		if(val == 0)
 		{
@@ -2897,7 +2899,7 @@ static void modify_label_for_partial(AlignNodePtr anp, CharPtr n_label)
 
 static void create_muid_link(CharPtr buf, Int4 muid)
 {
-	sprintf(buf, "http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=%ld&form=6&db=m&Dopt=r", muid);
+	sprintf(buf, "http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=%ld&form=6&db=m&Dopt=r", (long) muid);
 }
 
 static FishInfoPtr check_fish_mapping(CharPtr yac_name, ValNodePtr fish_list)
@@ -3008,7 +3010,7 @@ static void PrintHTMLContigAlign(CharPtr band_name, CharPtr contig_name,
 		}
 		/*No. of STS*/
 		sts_num = get_YAC_sts_num(anp);
-		fprintf(fp, "<TD align=center>%ld</TD>\n", sts_num);
+		fprintf(fp, "<TD align=center>%ld</TD>\n", (long) sts_num);
 
 		/*CEPH orders*/
 		/* fprintf(fp, "<TD align=center><A href=%s><IMG border=0 SRC=%smark2.gif></A></TD>\n", CEPH_YAC_ORDER, GIF_DIR); */
@@ -3549,7 +3551,7 @@ static void print_accession(CharPtr acc, CharPtr buf)
 	if(uid == 0)
 		StringCpy(buf, acc);
 	else
-		sprintf(buf, "<A href=http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=%ld&form=6&db=n&Dopt=g>%s</A>", uid, acc);
+		sprintf(buf, "<A href=http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=%ld&form=6&db=n&Dopt=g>%s</A>", (long) uid, acc);
 }
 
 

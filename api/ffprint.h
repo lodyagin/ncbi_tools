@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -45,6 +45,24 @@
 /*************************************
 *
  * $Log: ffprint.h,v $
+ * Revision 6.8  1999/04/09 22:21:53  kans
+ * fixed prototype for FFBSPrint
+ *
+ * Revision 6.7  1999/04/09 21:15:27  bazhin
+ * Added function "FFBSPrint()".
+ *
+ * Revision 6.6  1999/04/06 22:37:07  tatiana
+ * www_protein_id() added
+ *
+ * Revision 6.5  1999/03/30 21:02:24  tatiana
+ * www_accession www_taxid added
+ *
+ * Revision 6.4  1999/03/12 17:34:26  tatiana
+ * www_featkey() added
+ *
+ * Revision 6.3  1999/02/02 17:29:21  kans
+ * added ff_MergeString
+ *
  * Revision 6.2  1998/07/23 22:43:08  tatiana
  * added www_PrintComment()
  *
@@ -170,7 +188,9 @@ extern "C" {
 #endif
 
 NLM_EXTERN void LIBCALL asn2ff_set_output PROTO((FILE *fp, CharPtr line_return));
+NLM_EXTERN CharPtr LIBCALL ff_MergeString PROTO((void));
 NLM_EXTERN CharPtr LIBCALL FFPrint PROTO((FFPrintArrayPtr pap, Int4 index, Int4 pap_size));
+NLM_EXTERN void LIBCALL FFBSPrint PROTO((FFPrintArrayPtr pap, Int4 index, Int4 pap_size));
 NLM_EXTERN void LIBCALL ff_print_string PROTO((FILE *fp, CharPtr string, CharPtr line_return));
 NLM_EXTERN Int2 LIBCALL ff_StartPrint PROTO((Int2 init_indent, Int2 cont_indent, Int2 line_max, CharPtr line_prefix));
 NLM_EXTERN void LIBCALL ff_AddString PROTO((CharPtr string));
@@ -202,9 +222,11 @@ NLM_EXTERN Boolean LIBCALL www_muid PROTO((Int4 muid));
 NLM_EXTERN Boolean LIBCALL www_gcode PROTO((CharPtr gcode));
 NLM_EXTERN Boolean LIBCALL www_source PROTO((CharPtr orgname, OrgRefPtr orp));
 NLM_EXTERN Boolean LIBCALL www_organism PROTO((CharPtr orgname, Int4 id));
+NLM_EXTERN Boolean LIBCALL www_taxid PROTO((CharPtr orgname, Int4 id));
 NLM_EXTERN Boolean LIBCALL www_extra_acc PROTO((CharPtr acc, Boolean ncbi));
 NLM_EXTERN Boolean LIBCALL www_note_gi PROTO((CharPtr str));
 NLM_EXTERN Boolean LIBCALL www_db_xref PROTO((CharPtr str));
+NLM_EXTERN Boolean LIBCALL www_protein_id PROTO((CharPtr str));
 NLM_EXTERN Boolean LIBCALL www_map PROTO((CharPtr str));
 NLM_EXTERN Boolean LIBCALL www_genpept_gi PROTO((CharPtr str));
 NLM_EXTERN Boolean LIBCALL www_dbsource PROTO((CharPtr str, Boolean first, Uint1 choice));
@@ -216,6 +238,8 @@ NLM_EXTERN Boolean LIBCALL ff_PrintLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp,
 NLM_EXTERN CharPtr LIBCALL www_featloc PROTO((CharPtr loc));
 NLM_EXTERN void LIBCALL GetHelpMsg PROTO((SeqEntryPtr sep));
 NLM_EXTERN void LIBCALL www_PrintComment  PROTO((CharPtr string, Boolean identifier, Uint1 format));
+NLM_EXTERN Boolean LIBCALL www_featkey PROTO((CharPtr key, Int4 gi, Int2 entityID, Int2 itemID));
+NLM_EXTERN void LIBCALL www_accession PROTO((CharPtr string));
 
 #ifdef __cplusplus
 }

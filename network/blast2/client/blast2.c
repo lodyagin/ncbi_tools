@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Functions to format parts of the traditional BLAST output. 
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: blast2.c,v $
+* Revision 6.2  1999/03/12 14:38:42  madden
+* Fixed formatting problems
+*
 * Revision 6.1  1997/11/28 18:21:57  madden
 * fprintf fixes
 *
@@ -163,6 +166,7 @@ TraditionalBlastReportSetUp(BLAST0ResultPtr result, BLAST0ResponsePtr blresp, Ch
 	CharPtr string;
 	Int4 offset, num_deflines, num_of_aligns;
 	ValNodePtr parms;
+	long l_value;
 
 	if ((blrp=MemNew(sizeof(BlastReportStruct))) == NULL)
 	{
@@ -196,11 +200,20 @@ TraditionalBlastReportSetUp(BLAST0ResultPtr result, BLAST0ResponsePtr blresp, Ch
 		{
 			string = parms->data.ptrvalue;
 			if (StringNCmp(string, "-qoffset", 8) == 0)
-				sscanf(string+9, "%ld", &offset);
+			{
+				sscanf(string+9, "%ld", &l_value);
+				offset = l_value;
+			}
 			else if (StringNCmp(string, "V=", 2) == 0)
-				sscanf(string+2, "%ld", &num_deflines);
+			{
+				sscanf(string+2, "%ld", &l_value);
+				num_deflines = l_value;
+			}
 			else if (StringNCmp(string, "B=", 2) == 0)
-				sscanf(string+2, "%ld", &num_of_aligns);
+			{
+				sscanf(string+2, "%ld", &l_value);
+				num_of_aligns = l_value;
+			}
 			else if (StringNCmp(string, "-gi", 3) == 0)
 				get_gi=TRUE;
 			parms = parms->next;
@@ -800,13 +813,13 @@ TraditionalHistBlastOutput(BlastReportStructPtr blrp)
 	  */
 	 fprintf(fp,
 		 " >>>>>>>>>>>>>>>>>>>>>  Expect = %#0.3lg, Observed = %lu  <<<<<<<<<<<<<<<<<\n",
-		 pHist->expect, pHist->observed);
+		 (long) pHist->expect, (long) pHist->observed);
 	 bNeedCheck = FALSE;
       }
 
       nHistValue = (i < nBars - 1) ? (pBar->n - pBar->next->n) : (pBar->n - pHist->base);
       fprintf(fp, " %s %*lu %*lu %c", print_double(aCh, pBar->x, 6, 3),
-	      nObsWidth, pBar->n, nHistWidth, nHistValue, SEPARATOR_SYMBOL);
+	      nObsWidth, (long) pBar->n, nHistWidth, (long) nHistValue, SEPARATOR_SYMBOL);
 
       /* Draw long line ("=")
 	nHistValue is the number of hits observed, nPerCol is the number of

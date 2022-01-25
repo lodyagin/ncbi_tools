@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.60 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
@@ -156,7 +156,7 @@ static SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep)
   BioseqSetPtr bssp;
   
   if (sep != NULL) {
-     if (IS_Bioseq(sep))
+     if (IS_Bioseq(sep) || IS_Bioseq_set(sep))
      {
         if (sep->next)
         {
@@ -182,7 +182,8 @@ static SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep)
         }
         else sep1=sep;
      }
-     else sep1=sep;
+     else 
+        sep1=sep;
   }
   return sep1;
 }
@@ -374,8 +375,8 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                    SeqMgrReplaceInBioseqIndex (bsp);
                 }
               }
-              j=position_inIdlist(sip,siphead);
-              if (j > 0) {
+              j=SeqIdOrderInBioseqIdList(sip,siphead);
+              if (j > 1) {
                  siptmp = NULL;
                  if (sip != NULL && sip->choice == SEQID_LOCAL) {
                     oid = (ObjectIdPtr) sip->data.ptrvalue;
@@ -395,6 +396,8 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                     sip = bsp->id;
                  }
               }
+              siptmp = SeqIdDup (sip);
+              siphead = AddSeqId (&siphead, siptmp);
             }
             SeqEntryPack (nextsep);
             if (sep != NULL) {     
@@ -409,11 +412,7 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                      segbsp=(BioseqPtr)sepnuc->data.ptrvalue;
                      segsip=segbsp->id;
                      if (segsip != NULL) {
-                       
-                          siptmp = SeqIdDup (segsip);
-                          siphead = AddSeqId (&siphead, siptmp);
                           lastsegsip = segsip;
-
                      }
                   }
                 } 
@@ -434,9 +433,6 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                 if (segcount > segtotal)
                   segtotal = segcount;
                 nseq++;
-                
-                siptmp = SeqIdDup (sip);
-                siphead = AddSeqId (&siphead, siptmp);
                 lastsegsip = sip;
                 
               }
@@ -450,6 +446,7 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                 if (segcount > segtotal)
                   segtotal = segcount;
                 nseq++;
+
               } 
               else {
                 sep = nextsep;
@@ -458,9 +455,6 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                 if (segcount > segtotal)
                   segtotal = segcount;
                 nseq++;
-                
-                siptmp = SeqIdDup (sip);
-                siphead = AddSeqId (&siphead, siptmp);
                 lastsegsip = sip;
                 
               }
@@ -482,7 +476,7 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
           nextsep = FastaToSeqEntryInternal ((void *)fp, 2, NULL, is_na, &errormsg, parseSeqId, &lastchar);
   }
   if (segnumber !=NULL) 
-     *segnumber = segtotal;
+     *segnumber = segtotal; 
   if (sip!=NULL)
      *siplst = siphead;
   else 
@@ -490,7 +484,7 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
   if (lengthmax != NULL)
      *lengthmax = lensmax;
   if(seqnumber != NULL)
-     *seqnumber = nseq;
+     *seqnumber = nseq; 
   return sep;
 }
 
@@ -602,26 +596,50 @@ static SeqAnnotPtr LocalAlignsToSeqAnnotDimn (ValNodePtr vnpal, SeqIdPtr seqsip,
                salptmp;
   ValNodePtr   vnp, 
                tmp;
-  SeqIdPtr     siplst;
+  SeqIdPtr     siplst,
+               siptmp,
+               siptmp2;
+  Int2         k1, k, j=0;
 
   vnp = vnpal; 
   salphead = NULL;
   while (salphead == NULL && vnp != NULL) 
   {
-     siplst = SeqIdDupList (seqsip);
+     siplst=NULL;
+     siptmp = seqsip;
+     for (k=0; k<j; k++) 
+        siptmp=siptmp->next;
+     for (k=0; k<nbseq; k++) {
+        siptmp2=SeqIdDup(siptmp);
+        siplst = AddSeqId (&siplst, siptmp2); 
+        for (k1=0; k1<nbseg; k1++)
+           siptmp=siptmp->next;
+     }
      tmp = (ValNodePtr) vnp->data.ptrvalue;
      sap1 = LocalAlignToSeqAnnotDimn (tmp, siplst, fromp, nbseq, lens, NULL, FALSE);
      if (sap1!=NULL && sap1->data!=NULL)
         salphead = (SeqAlignPtr) sap1->data;
      vnp = vnp->next;
+     j++;
   }
   if (fromp!=NULL)
-     ValNodeFree (fromp);
+     fromp = ValNodeFree (fromp);
   salptmp = salphead;
   while (vnp!=NULL) 
   {
+/*
      fromp = get_lens_fromseqalign (salptmp);
-     siplst = SeqIdDupList (seqsip);
+*/
+     siplst=NULL;
+     siptmp = seqsip;
+     for (k=0; k<j; k++) 
+        siptmp=siptmp->next;
+     for (k=0; k<nbseq; k++) {
+        siptmp2=SeqIdDup(siptmp);
+        siplst = AddSeqId (&siplst, siptmp2); 
+        for (k1=0; k1<nbseg && siptmp!=NULL; k1++)
+           siptmp=siptmp->next;
+     }
      tmp = (ValNodePtr) vnp->data.ptrvalue;
      sap = LocalAlignToSeqAnnotDimn (tmp, siplst, fromp, nbseq, lens, NULL, FALSE);
      if (sap!=NULL && sap->data!=NULL) {
@@ -630,9 +648,9 @@ static SeqAnnotPtr LocalAlignsToSeqAnnotDimn (ValNodePtr vnpal, SeqIdPtr seqsip,
      }
      vnp = vnp->next;
      if (fromp!=NULL)
-        ValNodeFree (fromp);
+        fromp = ValNodeFree (fromp);
+     j++;
   }
-  SeqIdFree (seqsip);
   return sap1;
 }  
 
@@ -794,15 +812,15 @@ static SeqEntryPtr GapFastaRead (CharPtr path, Uint2 mol_type)
   for (siptmp=sip; siptmp!=NULL; siptmp=siptmp->next) {
      nseq++;
   }
-  str=matching_seqid (sip);  
-  if (nseq != seqnumber) {
-     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains %d identical sequence names", (seqnumber-nseq+1));
-     SeqEntryFree (sep);
+  if (nseq != seqnumber*segnumber) {
+     ErrPostEx (SEV_ERROR, 0, 0, "Every sequences should have a sequence ID");
+     sep = SeqEntryFree (sep);
   }
-  else if (str) {
+  str=matching_seqid (sip);  
+  if (str) {
      ErrPostEx (SEV_ERROR, 0, 0, "The submission contains several sequences with the same name \"%s\"", str);
      MemFree (str);
-     SeqEntryFree (sep);
+     sep = SeqEntryFree (sep);
   } 
   else {
      vnp = ReadAlignmentToStrings (path, lmax, segnumber);
@@ -832,9 +850,10 @@ static Boolean has_extrachar (CharPtr str, Char missingchar, Char gapchar)
   for (j=0; j<StrLen(str); j++) {
      if (str[j]!='\n' && str[j]!='\0' && str[j]!='\r' && str[j]!=' ') {
         if (!isdigit(str[j])) {
-           if ( (StringChr ("ABCDGHKMNRSTUVWY", str[j])) == NULL &&
+           if ((StringChr ("ABCDGHKMNRSTUVWY", str[j])) == NULL &&
              (StringChr ("abcdghkmnrstuvwy", str[j])) == NULL &&
-             str[j]!=gapchar && str[j] != missingchar)  {
+             str[j]!=gapchar && str[j] != missingchar &&
+             str[j]!='[' && str[j]!=']')  {
               ret = TRUE;
               break;
            }
@@ -1200,7 +1219,7 @@ static SeqIdPtr NameMacawRead (CharPtr path)
   return siphead;
 }
 
-static SeqEntryPtr MacawRead (CharPtr path, SeqIdPtr seqid, Boolean save_seqentry, Boolean save_sap)
+static SeqEntryPtr MacawRead (CharPtr path, Uint1 mol_type, SeqIdPtr seqid, Boolean save_seqentry, Boolean save_sap)
 {
   SeqEntryPtr sep = NULL;
   ValNodePtr  seqvnp=NULL,
@@ -1233,7 +1252,7 @@ static SeqEntryPtr MacawRead (CharPtr path, SeqIdPtr seqid, Boolean save_seqentr
   if ( save_sap )
      sap = LocalAlignToSeqAnnotDimn (seqvnp, seqid, NULL, n_seq, 0, NULL, FALSE);
   if ( save_seqentry )
-     sep = strings_to_seqentry (seqvnp, Seq_mol_na, seqid, sap);
+     sep = strings_to_seqentry (seqvnp, mol_type, seqid, sap);
   ValNodeFree (seqvnp);
   SeqIdFree (seqid);
   return sep;
@@ -1429,7 +1448,7 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
      else
         leftmargin++;
   }
-  else if (align_format == SALSA_PHYLIP) {
+  else if (align_format == SALSA_PHYLIP || align_format == SALSAA_PHYLIP) {
      if (sscanf (str, "%d %ld", &val1, &val2) == 2) {
         n_seq = (Int2) val1;
         lg_seq = (Int4) val2;
@@ -1448,6 +1467,10 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, I
         top_lines++;
      }
      leftmargin = SALSA_CLUSTALV_MARGIN;
+  }
+  else {
+     ErrPostEx (SEV_ERROR, 0, 0, "We do not support this format yet");
+     return NULL;
   }
   if (n_seq == 0) {
      FileClose(fp);
@@ -1579,8 +1602,7 @@ static SeqIdPtr ReadLocalName (CharPtr path, Int2 nbseq, Int2 leftmargin, Int2 o
   return sip1;
 }
 
-static SeqEntryPtr ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format, 
-        Int2 n_seq, Boolean save_seqentry, Boolean save_sap, SeqIdPtr seqsip) 
+static SeqEntryPtr ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format, Int2 n_seq, Boolean save_seqentry, Boolean save_sap, SeqIdPtr seqsip) 
 {
   SeqEntryPtr  sep = NULL;
   ValNodePtr   seqvnp , vnp;
@@ -1618,7 +1640,7 @@ static SeqEntryPtr ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format
      if ( save_sap )
         sap = LocalAlignToSeqAnnotDimn (seqvnp, seqsip, NULL, n_seq, 0, NULL, FALSE);
      if ( save_seqentry )
-        sep = strings_to_seqentry (seqvnp, Seq_mol_na, seqsip, sap);
+        sep = strings_to_seqentry (seqvnp, mol_type, seqsip, sap);
   }
   ValNodeFree (seqvnp);
   SeqIdFree (seqsip);
@@ -1683,6 +1705,7 @@ extern SeqEntryPtr ReadInterleaveAlign (CharPtr path, Uint1 mol_type)
      } 
      return sep;
   }
+  ErrPostEx (SEV_ERROR, 0, 0, "We do not support this format yet"); 
   return NULL;
 }
 
@@ -1708,7 +1731,7 @@ extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type)
   if (str==NULL)
      return NULL;
 
-  if (str[0] == '>')
+  if (str[0] == '>' || str[0] == '[')
   {
      if (ISA_aa(mol_type))
         sep = ReadLocalAlignment (SALSAA_FASTGAP, path);
@@ -1734,16 +1757,20 @@ extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type)
         sep = ReadLocalAlignment (SALSA_MACAW, path);
      return sep;
   }
+  ErrPostEx (SEV_ERROR, 0, 0, "We do not support this format yet");
   return NULL;  
 }
 
 extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path)
 {
   SeqEntryPtr sep = NULL;
+  Uint1       mol_type=Seq_mol_na;
  
-  sep = ReadInterleaveAlign (path, Seq_mol_na);
+  if (is_prot)
+     mol_type = Seq_mol_aa;
+  sep = ReadInterleaveAlign (path, mol_type);
   if (sep==NULL)
-     sep = ReadContiguouseAlign (path, Seq_mol_na);
+     sep = ReadContiguouseAlign (path, mol_type);
   return sep;
 }
 
@@ -1770,16 +1797,38 @@ extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path)
      case SALSA_INTERLEAVE:
             sep = ReadInterleaveAlign (path, Seq_mol_na);
             break;
+     case SALSAA_INTERLEAVE :
+            sep = ReadInterleaveAlign (path, Seq_mol_aa);
+            break;
      case SALSA_CONTIGUOUS:
             sep = ReadContiguouseAlign (path, Seq_mol_na);
             break;
+     case SALSAA_CONTIGUOUS:
+            sep = ReadContiguouseAlign (path, Seq_mol_aa);
+            break;
 
      case SALSA_FASTA:
+            sep = FastaReadAdvanced (path, Seq_mol_na, NULL, NULL, NULL, NULL); 
+            break;
+     case SALSAA_FASTA:
             sep = FastaReadAdvanced (path, Seq_mol_aa, NULL, NULL, NULL, NULL); 
             break;
 
      case SALSA_FASTGAP:
             sep = GapFastaRead (path, Seq_mol_na);
+            break;
+     case SALSAA_FASTGAP:
+            sep = GapFastaRead (path, Seq_mol_aa);
+            break;
+     case SALSA_PHYLIP:
+     case SALSA_NEXUS:
+            sep = ReadAlignmentFunc (path, Seq_mol_na, format, 0, TRUE, TRUE, NULL);
+            break;
+
+     case SALSAA_PHYLIP:
+     case SALSAA_NEXUS:
+     case SALSAA_GCG:
+            sep = ReadAlignmentFunc (path, Seq_mol_aa, format, 0, TRUE, TRUE, NULL);
             break;
      case SALSA_PAUP:
             TmpNam (tmpfile);
@@ -1790,24 +1839,11 @@ extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path)
             }
             break;
      case SALSA_MACAW :
-            sep = MacawRead (path, NULL, TRUE, TRUE);
+            sep = MacawRead (path, Seq_mol_na, NULL, TRUE, TRUE);
             break;
 
-     case SALSA_PHYLIP:
-     case SALSA_NEXUS:
-            sep = ReadAlignmentFunc (path, Seq_mol_na, format, 0, TRUE, TRUE, NULL);
-            break;
-
-     case SALSAA_FASTGAP:
-            sep = GapFastaRead (path, Seq_mol_aa);
-            break;
-     case SALSAA_PHYLIP:
-     case SALSAA_NEXUS:
-            format = 11;
-     case SALSAA_GCG:
-            sep = ReadAlignmentFunc (path, Seq_mol_aa, format, 0, TRUE, TRUE, NULL);
-            break;
      default:
+            ErrPostEx (SEV_ERROR, 0, 0, "We do not support this format yet");
             break;
   }
   return sep;
@@ -2042,7 +2078,10 @@ static void CCDownloadProc (ButtoN b)
   ffp = (FetchFormPtr) GetObjectExtra (b);
   if (ffp == NULL) return;
   svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
-  if (svpp == NULL || svpp->download == NULL) return;
+  if (svpp == NULL)
+     return;
+  if (svpp->download == NULL) 
+     return;
   w = ffp->form;
   Hide (w);
   Update ();

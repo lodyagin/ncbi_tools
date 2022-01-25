@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:
 *
@@ -44,6 +44,12 @@
 * 95/08/30 C. Hogue    Moved globals into mmdbapi2.c.
 *
 * $Log: mmdbapi2.c,v $
+* Revision 6.5  1999/03/30 23:15:03  kans
+* included sequtil.h
+*
+* Revision 6.4  1999/03/30 22:31:12  ywang
+* add GetMGFromMM & GetMMFromMSDBySeqId
+*
 * Revision 6.3  1998/12/31 17:04:08  ywang
 * work around reassign protein or NA as ion problem
 *
@@ -142,6 +148,7 @@
 #include <asn.h>
 #include <mmdbapi1.h>
 #include <mmdbapi2.h>
+#include <sequtil.h>
 
 CharPtr NCBIstdaaUC = "-ABCDEFGHIKLMNPQRSTVWXYZU*";
 CharPtr NCBI4naUC = "-ACMGRSVTUWYHKDBN";
@@ -1917,4 +1924,42 @@ CharPtr LIBCALL SeqStringFromMol(PDNMM pdnmmThis)
      }
    return pcSeq;
 }
- 
+/*------------------------------------------------------*/
+PMGD LIBCALL GetMGFromMM(PMMD pmmdThis, Int4 iRes)
+{
+  PDNMG pdnmgThis = NULL;
+  PMGD  pmgdThis = NULL;
+
+  pdnmgThis = pmmdThis->pdnmgHead;
+  if(pdnmgThis == NULL) return(NULL);
+
+  while(pdnmgThis){
+     if(pdnmgThis->choice == iRes){
+        pmgdThis = pdnmgThis->data.ptrvalue;
+        break;
+     }
+     pdnmgThis = pdnmgThis->next;
+  }
+
+  return(pmgdThis);
+
+}
+/*------------------------------------------------------*/
+PMMD LIBCALL GetMMFromMSDBySeqId(PMSD pmsdThis, SeqIdPtr sip)
+{
+  PDNMM pdnmmHead = NULL;
+  PMMD pmmdThis = NULL;
+
+  pdnmmHead = pmsdThis->pdnmmHead;
+  while(pdnmmHead){
+     pmmdThis = pdnmmHead->data.ptrvalue;
+     if(pmmdThis){
+        if(SeqIdForSameBioseq(pmmdThis->pSeqId, sip)){
+           break;
+        }
+     }
+     pdnmmHead = pdnmmHead->next;
+  }
+
+  return(pmmdThis);
+}

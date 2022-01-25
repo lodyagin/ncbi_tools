@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: cdentrez.c,v 6.1 1998/08/24 18:42:15 kans Exp $
+ * RCS $Id: cdentrez.c,v 6.2 1999/03/11 23:20:07 kans Exp $
  *
  * Author:  Ostell, Kans
  *
@@ -46,6 +46,9 @@
  *                      modification comments.
  *
  * Revision $Log: cdentrez.c,v $
+ * Revision Revision 6.2  1999/03/11 23:20:07  kans
+ * Revision sprintf cast
+ * Revision
  * Revision Revision 6.1  1998/08/24 18:42:15  kans
  * Revision fixed -v -fd warnings
  * Revision
@@ -149,7 +152,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR  "$Revision: 6.1 $"
+#define REVISION_STR  "$Revision: 6.2 $"
 
 static char * _this_module = "CdEntrez";
 #define THIS_MODULE _this_module
@@ -3705,7 +3708,7 @@ NLM_EXTERN BiostrucAnnotSetPtr CdEntrezBiostrucAnnotSetGet (DocUid uid)
 	
 	if (CdMountEntrezVolume(1,fname,PATH_MAX-32))
 	{
-		sprintf(strchr(fname,0), "/vast/%ld.bas.Z", uid);
+		sprintf(strchr(fname,0), "/vast/%ld.bas.Z", (long) uid);
 		if (FileLength(fname) <= 0)
 		{
 			return NULL;

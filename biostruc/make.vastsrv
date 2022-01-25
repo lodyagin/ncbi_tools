@@ -1,15 +1,4 @@
 ########################################################################
-#
-#			>>>>> IMPORTANT NOTE <<<<<
-#
-# To make vastsrv on vaster (SGI) use:
-#
-#	make -f make.vastsrv MULDEFS=
-#
-# This will override the definition of MULDEFS, which is needed on
-# dorothy (Sun).
-#
-########################################################################
 #       Generic command-line makefile for NCBI applications
 #
 #   This assumes the following variables are set in a file called "ncbi.mk"
@@ -57,6 +46,11 @@
 # default flags for compiling and loading
 #
 # $Log: make.vastsrv,v $
+# Revision 6.8  1999/05/07 14:31:12  zimmerma
+# - removed bsannotvs.c from SRC symbols (file is defunct)
+# - removed comments and switches re MULDEFS - no longer needed
+# - added DFLAGS = __NO_DB__ (turns off pubstruct compilation)
+#
 # Revision 6.7  1998/10/14 17:23:29  addess
 # includes prunebiostruc
 #
@@ -80,9 +74,6 @@
 
 include $(NCBI)/ncbi.mk
 
-# temporary fix for botched include file location
-#NCBI_INCDIR = /usr/ncbi/ncbi/include
-
 CC = $(NCBI_CC)
 CFLAGS1 = $(NCBI_CFLAGS1)
 LDFLAGS1 = $(NCBI_LDFLAGS1)
@@ -93,21 +84,16 @@ VIBFLAG= $(NCBI_VIBFLAG)
 INCPATH = $(NCBI_INCDIR)
 LIBPATH = $(NCBI_LIBDIR)
 DEF =
-#SRC = vastsrv.c vastlocl.c vast2mage.c vast2pdb.c vast2cn3d.c vastsubs.c \
-#	vastchkid.c # vast2salsa.c
+
 SRC = vastsrv.c vastlocl.c vast2mage.c vast2pdb.c vast2cn3d.c vastsubs.c \
-      vastchkid.c mkbioseq_vs.c mkbioseqA.c mkbioseqB.c bsannotvs.c \
-      prunebiostruc.c # mmdbapi.c mmdbapi1.c mmdbapi2.c mmdbapi3.c \
-#      mmdbapi4.c  # vast2salsa.c 
+      vastchkid.c mkbioseq_vs.c mkbioseqA.c mkbioseqB.c  \
+      mmdblocl.c
+
 EXE = vastsrv
 
-#
-# Note: On dorothy (Sun) it is necessary to specify that multiple definitions are
-# allowed (MMDBBiostrucGet).  This is done via "-z muldefs".
-#
 CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(VIBFLAG) $(DEF)
-MULDEFS = -z muldefs
-LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH) $(VIBFLAG) $(DEF) $(MULDEFS)
+LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH) $(VIBFLAG) $(DEF) 
+DFLAGS = -D__NO_DB__
 
 # all NCBI libraries aliased for easy access here
 LIB1 = -lncbi
@@ -164,7 +150,7 @@ all : $(EXE)
 ##$
 
 $(EXE) : $(SRC)
-	$(CC) -o $(EXE) -DX11 -I./ -I/~/ncbi/build $(LDFLAGS) $(SRC)  \
+	$(CC) $(DFLAGS) -o $(EXE) -DX11 -I./ -I/~/ncbi/build $(LDFLAGS) $(SRC)  \
          $(LIB29) $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) \
          $(LIB28) $(OTHERLIBS)
 

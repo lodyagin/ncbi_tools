@@ -31,11 +31,45 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.43 $ */
-/* $Log: blastdef.h,v $
-/* Revision 6.43  1999/01/05 13:57:19  madden
-/* Changed version and release date
-/*
+/* $Revision: 6.54 $ 
+* $Log: blastdef.h,v $
+* Revision 6.54  1999/05/10 18:47:52  madden
+* Changed version to 2.0.9
+*
+* Revision 6.53  1999/05/08 15:04:24  madden
+* Changed version and release date
+*
+* Revision 6.52  1999/04/23 19:25:01  madden
+* Fixes a prototype complaint
+*
+* Revision 6.51  1999/04/23 16:45:54  madden
+* call BQ_IncSemaphore as callback
+*
+* Revision 6.50  1999/04/22 16:46:13  shavirin
+* Added semaphore ID to the search_blk structure.
+*
+* Revision 6.49  1999/04/01 21:42:47  madden
+* Fix memory leaks when gi list is used
+*
+* Revision 6.48  1999/03/18 21:13:32  egorov
+* The "output" filed added to search block.  This is VoidPtr and an application can
+* use it as stream, ASNIO, etc to output blast results.
+*
+* Revision 6.47  1999/03/17 16:49:11  madden
+* Removed comment within comment
+*
+* Revision 6.46  1999/02/17 13:23:01  madden
+* Added hsp_num_max
+*
+* Revision 6.45  1999/01/28 16:04:56  madden
+* do_not_reallocate Boolean for HSPs
+*
+* Revision 6.44  1999/01/26 17:56:37  madden
+* query_id added to HitRange
+*
+* Revision 6.43  1999/01/05 13:57:19  madden
+* Changed version and release date
+*
  * Revision 6.42  1998/12/31 18:17:03  madden
  * Added strand option
  *
@@ -527,8 +561,8 @@ extern "C" {
 #include <gapxdrop.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.8"
-#define BLAST_RELEASE_DATE "Jan-05-1999"
+#define BLAST_ENGINE_VERSION "2.0.9"
+#define BLAST_RELEASE_DATE "May-07-1999"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -698,6 +732,7 @@ typedef struct _blast_optionsblk {
 	CharPtr		entrez_query;	/* user specified Entrez query to make selection from databases */
 	CharPtr		org_name;	/* user specified name of organizm;  corresponding .gil file will be used */
 	Uint1		strand_option;	/* BLAST_TOP_STRAND, BLAST_BOTTOM_STRAND, or BLAST_BOTH_STRAND.  used by blast[nx] and tblastx */
+	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
 	} BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -771,6 +806,7 @@ typedef struct _blast_parameterblk {
 		are set to zero, then the entire database is examined. */
 	Int4		first_db_seq,		/* 1st sequence in db to be compared. */
 			final_db_seq;		/* Final sequence to be compared. */
+	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
@@ -898,6 +934,8 @@ typedef struct _blast_hitlist {
 	Boolean		further_process; /* This sequence has been found interesting,
 					    it should be further processed by a gapped
 					    alignment etc. */
+	Boolean		do_not_reallocate; /* Don't reallocate the HSP's, probably because
+                       		   there is no more memory for this. */
 	} BLAST_HitList, PNTR BLAST_HitListPtr;
 
 /*
@@ -1021,6 +1059,7 @@ typedef struct _blast_hit_range {
         BlastDoubleInt4Ptr      *range_list_pointer;       /* Pointer to above list. */
 	Int4		current,	/* current position in list. */
 			total;		/* total number in list. */
+	SeqIdPtr	query_id;	/* ID to be put on SeqLoc's that are produced. */
 	} BlastHitRange, *BlastHitRangePtr;
 
 /*
@@ -1087,6 +1126,7 @@ typedef struct _blast_matrix_rescale {
 #define BLAST_SEARCH_ALLOC_TRANS_INFO 1024
 #define BLAST_SEARCH_ALLOC_ALL_WORDS 2048
 #define BLAST_SEARCH_ALLOC_QUERY_SLP 4096
+#define BLAST_SEARCH_ALLOC_GILIST 8192
 
 typedef struct blast_search_block {
 	Int4		allocated; 
@@ -1109,6 +1149,7 @@ a field is allocated, then it's bit is non-zero.
 		translation_table_rc
 		all_words		BLAST_SEARCH_ALLOC_ALL_WORDS
 		query_slp		BLAST_SEARCH_ALLOC_QUERY_SLP
+		blast_gi_list		BLAST_SEARCH_ALLOC_GILIST
 */
 
 /*
@@ -1275,6 +1316,10 @@ a field is allocated, then it's bit is non-zero.
         in place of BlastSaveCurrentHitlist.
 */
         int (LIBCALLBACK *handle_results)PROTO((VoidPtr search));
+/*	
+	Output stream to put results to
+*/
+	VoidPtr		output;
 /*
 	These "counters" keep track of how often certain operations
 	were performed.
@@ -1292,7 +1337,10 @@ a field is allocated, then it's bit is non-zero.
 		prelim_gap_no_contest,	/* No. of HSP's under E=10 alone. */
 		prelim_gap_passed,	/* No. of HSP's that passed prelim gapping. */
 		prelim_gap_attempts,	/* No. of HSP's we attempted to gap. */
-		real_gap_number_of_hsps; /* How many HSP's were gapped in BlastGetGappedScore. */
+		real_gap_number_of_hsps, /* How many HSP's were gapped in BlastGetGappedScore. */
+                semid;                  /* Here will be stored ID of load-ballance semaphore */
+	/* Callback for the queueing system. */
+	int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
 } BlastSearchBlk, PNTR BlastSearchBlkPtr;
 
 

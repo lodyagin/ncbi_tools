@@ -33,6 +33,45 @@
 *
 * Modifications:
 * $Log: cn3dmatn.c,v $
+* Revision 6.77  1999/05/04 23:12:47  ywang
+* fix selection retaining problem on show/hide
+*
+* Revision 6.76  1999/04/23 14:25:11  ywang
+* fix bug for Cn3DObjMgrGetSelected
+*
+* Revision 6.75  1999/04/21 21:08:42  ywang
+* fix small memory leak
+*
+* Revision 6.74  1999/04/16 22:21:24  ywang
+* update residue aligned status on mediadata upon sequence SHOW/HIDE
+*
+* Revision 6.73  1999/04/01 17:48:23  ywang
+* fix bug for coloring salsa for strucseqs data
+*
+* Revision 6.72  1999/03/30 22:36:18  ywang
+* add functions to color salsa for NcbiMimeAsn1_strucseqs & code reorganization
+*
+* Revision 6.71  1999/03/22 22:41:14  ywang
+* remove argument in MediaObjSelect
+*
+* Revision 6.70  1999/02/12 15:11:52  ywang
+* send color message to salsa when user changes highlight color from cn3d
+*
+* Revision 6.69  1999/02/11 22:42:39  ywang
+* explicitly call ObjMgrDeSelect to DeHighlight
+*
+* Revision 6.68  1999/02/11 22:40:15  ywang
+* rename functions
+*
+* Revision 6.67  1999/02/11 18:48:15  lewisg
+* delete color index functions
+*
+* Revision 6.66  1999/02/10 23:49:43  lewisg
+* use RGB values instead of indexed palette
+*
+* Revision 6.65  1999/02/10 17:04:21  ywang
+* work around (Uint1) max number 255 problem for valnode choice number
+*
 * Revision 6.64  1999/01/20 22:57:25  ywang
 * customize color for secondary structure & rearrange Option menu
 *
@@ -46,7 +85,7 @@
 * send default rgb to ObjMgrSetColor
 *
 * Revision 6.60  1999/01/19 17:51:06  ywang
-* fix bug in RealColorSalsa on NULL sip
+* fix bug in Cn3DSendColorMsg on NULL sip
 *
 * Revision 6.59  1999/01/19 17:31:51  ywang
 * switch color message from many to once
@@ -67,7 +106,7 @@
  * add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
  *
  * Revision 6.53  1998/10/19  17:43:02  kans
- * prototype needed for RealColorSalsa
+ * prototype needed for Cn3DSendColorMsg
  *
 * Revision 6.52  1998/10/16 22:06:09  ywang
 * make global color array for sequence display
@@ -97,78 +136,12 @@
 #include <cn3dmsg.h>
 #include <salmedia.h>
 #include <sqnutils.h>
+#include <cn3dmain.h>
+#include <algorend.h>
+#include <cn3dshim.h>
+#include <objmime.h>
 
-#define CN3D_COLOR_MAX 64
-ResidueColorCell ObjmgrColorPalette[CN3D_COLOR_MAX] = 
-{
-  255, 255, 255, /* default     0 */
-  255,  20, 147, /* hotpink     1 */
-  255,   0, 255, /* magenta     2 */
-  155,  48, 255, /* purple      3 */
-    0,   0, 255, /* blue        4 */
-   30, 144, 255, /* sky         5 */
-    0, 255, 255, /* cyan        6 */
-    0, 255, 127, /* sea         7 */
-    0, 255,   0, /* green       8 */
-  255, 255,   0, /* yellow      9 */
-  255, 165,   0, /* gold       10 */
-  255,  69,   0, /* orange     11 */
-  255,   0,   0, /* red        12 */
-  255, 114,  86, /* pink       13 */
-  255, 174, 185, /* pinktint   14 */
-  255, 255, 255, /* white      15 */
-    0,   0,   0, /* black      16 */
-  176, 226, 255, /* bluetint   17 */
-  154, 255, 154, /* greentint  18 */
-  255, 236, 139, /* yellowtint 19 */
-  125, 125, 125, /* gray       20 */
-  139,  87,  66, /* brown      21 */
-  255, 255, 255, /* user colors 22 */
-  255, 255, 255, /* user colors 23 */
-  255, 255, 255, /* user colors 24 */
-  255, 255, 255, /* user colors 25 */
-  255, 255, 255, /* user colors 26 */
-  255, 255, 255, /* user colors 27 */
-  255, 255, 255, /* user colors 28 */
-  255, 255, 255, /* user colors 29 */
-  255, 255, 255, /* user colors 30 */
-  255, 255, 255, /* user colors 31 */
-  255, 255, 255, /* user colors 32 */
-  255, 255, 255, /* user colors 33 */
-  255, 255, 255, /* user colors 34 */
-  255, 255, 255, /* user colors 35 */
-  255, 255, 255, /* user colors 36 */
-  255, 255, 255, /* user colors 37 */
-  255, 255, 255, /* user colors 38 */
-  255, 255, 255, /* user colors 39 */
-  255, 255, 255, /* user colors 40 */
-  255, 255, 255, /* user colors 41 */
-  255, 255, 255, /* user colors 42 */
-  255, 255, 255, /* user colors 43 */
-  255, 255, 255, /* user colors 44 */
-  255, 255, 255, /* user colors 45 */
-  255, 255, 255, /* user colors 46 */
-  255, 255, 255, /* user colors 47 */
-  255, 255, 255, /* user colors 48 */
-  255, 255, 255, /* user colors 49 */
-  255, 255, 255, /* user colors 50 */
-  255, 255, 255, /* user colors 51 */
-  255, 255, 255, /* user colors 52 */
-  255, 255, 255, /* user colors 53 */
-  255, 255, 255, /* user colors 54 */
-  255, 255, 255, /* user colors 55 */
-  255, 255, 255, /* user colors 56 */
-  255, 255, 255, /* user colors 57 */
-  255, 255, 255, /* user colors 58 */
-  255, 255, 255, /* user colors 59 */
-  255, 255, 255, /* user colors 60 */
-  255, 255, 255, /* user colors 61 */
-  255, 255, 255, /* user colors 62 */
-  255, 255, 255  /* user colors 63 */
-};
-
-#define Default_Color 16          /* black */
-
+extern Int1 bColorAlignments[];
 /*----------------------------------------------*/
 void SalsaRegister(void)
 {
@@ -271,7 +244,6 @@ PMMD FindMM(SeqIdPtr sip, Int4 iCount){
          if(slaveCount != iCount) goto errot;
       }
       pmsdThis = pdnmsThis->data.ptrvalue;
-      if(!pmsdThis->bVisible) goto errot;
       pdnmmHead = pmsdThis->pdnmmHead;
       while(pdnmmHead){
           pmmdThis = pdnmmHead->data.ptrvalue;
@@ -388,7 +360,7 @@ SeqIdWrite(mediadata[iCount]->sip, str, PRINTID_REPORT, sizeof (str));
 }
 
 /*----------------------------------------------*/
-void MediaObjSelect(PDNMG pdnmgThis, PALD paldThis, Boolean highlight)
+void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
 {
   PMGD pmgdThis = NULL;
   PMMD pmmdThis = NULL;
@@ -407,7 +379,7 @@ void MediaObjSelect(PDNMG pdnmgThis, PALD paldThis, Boolean highlight)
   Boolean bMaster = FALSE, bSlave = FALSE, RegisterThis = FALSE, bSingleMS = FALSE;
   
   Boolean select_success = FALSE;
-  SeqIdPtr sipThis;
+  SeqIdPtr sipThis, sip_dup = NULL;
 
   if(!Cn3D_ObjMgrOpen){
        fnPreCHLresidue(pdnmgThis, highlight);
@@ -496,65 +468,60 @@ void MediaObjSelect(PDNMG pdnmgThis, PALD paldThis, Boolean highlight)
   to = pdnmgThis->choice;
   from = (Int4)(from -1); 
   to = (Int4)(to -1);   
-  slp = SeqLocIntNew (from, to, 0, SeqIdDup(sipThis));
-  select_success = ObjMgrAlsoSelect(entityID, itemID, itemtype, OM_REGION_SEQLOC, slp);
+  sip_dup = SeqIdDup(sipThis);
+  slp = SeqLocIntNew (from, to, 0, sip_dup);
+
+  if(highlight)select_success = ObjMgrAlsoSelect(entityID, itemID, itemtype, OM_REGION_SEQLOC, slp);
+      /* now explicitly use ObjMgrDeSelect */
+  else select_success = ObjMgrDeSelect(entityID, itemID, itemtype, OM_REGION_SEQLOC, slp);
+
+  if(sip_dup) sip_dup = SeqIdFree(sip_dup);
 }
 /*-----------------------------------------------*/
-Uint1Ptr GetRGB(Int2 iColor)
+void Cn3DSendColorMsgForBioseq(Int4 iCount)
 {
-  Uint1Ptr rgb;
-
-  rgb = (ObjmgrColorPalette + iColor)->rgb;
- 
-  return(rgb);
-
-}
-/*-----------------------------------------------*/
-void RealColorSalsa(void)
-{
-  Int4 iCount;
-  ResidueColorCellPtr rgbThis = NULL;
-
-  
   SeqIdPtr sip;
   SelStructPtr  sel;
   SeqIdPtr      sip_dup;
   Int4 from, to;
   Uint1Ptr rgb;
 
-/*for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     ObjMgrSendMsg(OM_MSG_UPDATE, mediadata[iCount]->entityID, mediadata[iCount]->itemID, OBJ_BIOSEQ); 
-    
-  }        */
+  rgb = (Uint1Ptr) &(Cn3d_PaletteRGB[C_default]); /*GetRGB((Int2) 0);*/
 
-  rgb = (Uint1Ptr) GetRGB((Int2) 0);
+  sel = (SelStructPtr)MemNew((size_t)sizeof(SelStruct));
+  if(sel != NULL) {
+     sel->entityID = mediadata[iCount]->entityID;
+     sel->itemtype = OBJ_BIOSEQ;
+     sel->itemID = mediadata[iCount]->itemID;
+     sel->regiontype = OM_REGION_SEQLOC;
+     sip_dup = SeqIdDup(mediadata[iCount]->sip);
 
-  for(iCount = 0; iCount < Num_Bioseq; iCount++){
-     sel = (SelStructPtr)MemNew((size_t)sizeof(SelStruct));
-     if(sel != NULL) {
-        sel->entityID = mediadata[iCount]->entityID;
-        sel->itemtype = OBJ_BIOSEQ;
-        sel->itemID = mediadata[iCount]->itemID;
-        sel->regiontype = OM_REGION_SEQLOC;
-        sip_dup = SeqIdDup(mediadata[iCount]->sip);
+     from = 0; to = mediadata[iCount]->length - 1;
 
-        from = 0; to = mediadata[iCount]->length - 1;
+     sel->region = (SeqLocPtr)SeqLocIntNew(from, to, Seq_strand_unknown, sip_dup);
 
-        sel->region = (SeqLocPtr)SeqLocIntNew(from, to, Seq_strand_unknown, sip_dup);
+     ObjMgrSetColor(sel->entityID, sel->itemID, sel->itemtype, sel->regiontype, sel->region,  rgb);
 
-        ObjMgrSetColor(sel->entityID, sel->itemID, sel->itemtype, sel->regiontype, sel->region,  rgb);     
+     sel->next = NULL;
+     if(sel->region != NULL) SeqLocFree ((SeqLocPtr) sel->region);
+     sel = MemFree(sel);
 
-        sel->next = NULL;
-        if(sel->region != NULL) SeqLocFree ((SeqLocPtr) sel->region);
-        sel = MemFree(sel);
-
-        sip_dup = SeqIdFree(sip_dup);
-     }
+     sip_dup = SeqIdFree(sip_dup);
   }
 
 }
 /*-----------------------------------------------*/
-void ColorSalsa(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 to, Uint1Ptr rgb)
+void Cn3DSendColorMsg(void)
+{
+  Int4 iCount;
+
+  for(iCount = 0; iCount < Num_Bioseq; iCount++){
+     Cn3DSendColorMsgForBioseq(iCount);
+  }
+
+}
+/*-----------------------------------------------*/
+void ColorSalsa_old(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 to, Uint1Ptr rgb)
 {
   SelStructPtr  sel;
   SeqIdPtr      sip_dup;
@@ -580,7 +547,7 @@ void ColorSalsa(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 to, 
   }
 }
 /*-----------------------------------------------*/
-void PrepareColorMsg(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb)
+void PrepareColorMsg_old(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb)
 {
 
   SeqIdPtr  sip;
@@ -592,7 +559,7 @@ void PrepareColorMsg(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb)
   entityID = mediadata[iCount]->entityID;
   itemID = mediadata[iCount]->itemID;
 
-  ColorSalsa(entityID, itemID, sip, from, to, rgb);
+  ColorSalsa_old(entityID, itemID, sip, from, to, rgb);
 
 }
 /*------------------------------------------------*/
@@ -600,6 +567,7 @@ void Cn3DSetResidueColorForSalsa(Int4 iCount, PMGD pmgdThis, Uint1Ptr rgb)
 {
   PDNMG pdnmgThis = NULL;
   ResidueColorCellPtr rgbThis = NULL;
+  Int2 iRes = 1;
 
   ValNodePtr vnp;
 
@@ -607,10 +575,12 @@ void Cn3DSetResidueColorForSalsa(Int4 iCount, PMGD pmgdThis, Uint1Ptr rgb)
 
   vnp = mediadata[iCount]->seq_color;
   while(vnp){
-     if(vnp->choice == pdnmgThis->choice){
+     if(iRes == pdnmgThis->choice){
         rgbThis = vnp->data.ptrvalue;
         *rgbThis->rgb = *rgb; *(rgbThis->rgb + 1)= *(rgb + 1); *(rgbThis->rgb + 2)= *(rgb + 2);
+        break;
      }
+     iRes++;
      vnp = vnp->next;
   }
 
@@ -737,11 +707,169 @@ void ResetSalsaColor(void)
      from = 0; to = length - 1;
      entityID = mediadata[iCount]->entityID;
      itemID = mediadata[iCount]->itemID;
-     rgb = (Uint1Ptr) GetRGB( Default_Color );  /* black--default color */
+     rgb = (Uint1Ptr) &(Cn3d_PaletteRGB[C_black]);  /* black--default color */
      
 /*   ColorSalsa(entityID, itemID, sip, from, to, (Uint1Ptr)rgb);   */
   }
 
+}
+/*-----------------------------------------------*/
+void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void)
+{
+  PDNMS pdnmsThis = NULL;
+  PMSD  pmsdThis = NULL;
+  PMMD pmmdThis = NULL;
+  PDNMG pdnmgThis = NULL;
+  PMGD  pmgdThis = NULL;
+  
+  pdnmsThis = GetSelectedModelstruc();
+  if(!pdnmsThis) return;
+  pmsdThis = pdnmsThis->data.ptrvalue;
+  if(!pmsdThis) return;
+
+  pmmdThis = GetMMFromMSDBySeqId(pmsdThis, mediadata[0]->sip);
+  if(!pmmdThis) return;
+
+  pdnmgThis = pmmdThis->pdnmgHead;
+  while(pdnmgThis){
+     pmgdThis = pdnmgThis->data.ptrvalue;
+     if(pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned)){
+        mediadata[0]->bAligned[pdnmgThis->choice - 1] = 1;
+     }
+     else mediadata[0]->bAligned[pdnmgThis->choice - 1] = 0;
+     
+     pdnmgThis = pdnmgThis->next;
+  }
+
+}
+/*-----------------------------------------------*/
+void Cn3DCheckAlignmentStatusForStrucSeqs(void)
+{
+  PDNMS pdnmsThis = NULL;
+  PMSD  pmsdThis = NULL;
+
+  SeqIdPtr sipThis = NULL;
+  SeqAnnotPtr sap = NULL;
+  SeqAlignPtr salp = NULL, salp_curr = NULL;
+  DenseSegPtr dssp = NULL;
+  Int4Ptr starts = NULL;
+  Int4Ptr lens = NULL;
+
+  Int4 numseg = 0, nres = 0, iCount = 0;
+  Int4 from = 0, to = 0, master_from = 0;
+
+  pdnmsThis = GetSelectedModelstruc();
+  if(!pdnmsThis) return;
+  pmsdThis = pdnmsThis->data.ptrvalue;
+  if(!pmsdThis) return;
+
+  sap = pmsdThis->psaAlignment;
+  if(sap == NULL) return;
+  
+
+  while(sap){
+     if(sap->type == 2){
+        salp = sap->data;
+        break;
+     }
+     sap = sap->next;
+  }
+
+  if(salp == NULL) return;
+
+  iCount = 1;
+  while(salp){
+     if(mediadata[iCount]->bVisible != 1) {
+        for(nres = 0; nres < mediadata[iCount]->length; nres++){
+           mediadata[iCount]->bAligned[nres] = 0;
+        }
+     }
+     else {
+
+     dssp = salp->segs;
+     starts = dssp->starts;
+     lens = dssp->lens;
+
+     for(numseg = 0; numseg < dssp->numseg; numseg++, lens++){
+        master_from = *starts;
+        if(master_from == -1) {
+           starts++; starts++; continue;
+        }
+
+        starts++;
+        from = *starts; to = from + *lens;
+        if(*starts == -1) { starts++; continue;}
+        
+        for(nres = from; nres < to; nres++, master_from++){
+           if(mediadata[0]->bAligned[master_from] == 1) {
+              mediadata[iCount]->bAligned[nres] = 1;
+           }
+        }
+     
+        starts++;
+     }
+
+     }
+     iCount++;
+     salp = salp->next;
+  }
+
+}
+/*-----------------------------------------------*/
+void Cn3DColorSalsaForStrucSeqs(void)
+{
+  Int4 iCount = 0;
+  Int4 iRes = 0;
+
+  ResidueColorCellPtr rgbThis = NULL;
+  ResidueColorCell rgb;
+  ValNodePtr vnp = NULL;
+
+  Byte bAligned = FALSE;
+
+  for(iCount = 1; iCount < Num_Bioseq; iCount++){
+     Cn3D_CopyColorCell(&rgb, &(Cn3d_PaletteRGB[bColorAlignments[(iCount % NUM_SLAVES)]]));
+     vnp = mediadata[iCount]->seq_color;
+     while(vnp){
+        rgbThis = vnp->data.ptrvalue;
+/*      bAligned = Cn3DCheckAlignmentStatusForStrucSeqs(iRes, mediadata[iCount]->sip); */
+        bAligned = mediadata[iCount]->bAligned[iRes];
+        if(bAligned == 0) {
+           rgbThis->rgb[0] = rgb.rgb[0]; rgbThis->rgb[1] = rgb.rgb[1]; rgbThis->rgb[2] = rgb.rgb[2];
+        }
+        else {
+            rgbThis->rgb[0] = 255; rgbThis->rgb[1] = 0; rgbThis->rgb[2] = 0;
+        }
+        vnp = vnp->next;
+        iRes++;
+     }
+  }
+
+}
+/*-----------------------------------------------*/
+void ColorSalsa(void)
+{
+  PDNMS pdnmsThis = NULL;
+  PMSD  pmsdThis = NULL;
+  PARS  pars = NULL;
+
+  pdnmsThis = GetSelectedModelstruc();
+  pars = GetAlgorRenderSet(pdnmsThis);
+  if(!pars) return;
+
+  pmsdThis = pdnmsThis->data.ptrvalue;
+  if(pmsdThis == NULL) return;
+
+  if(pmsdThis->iMimeType == NcbiMimeAsn1_strucseqs){
+     if(pars->PResiduesOn){
+        if (pars->PResColor == C_BYCONS) Cn3DColorSalsaForStrucSeqs();
+     }
+     else if(pars->PBBColor == C_BYCONS){
+        Cn3DColorSalsaForStrucSeqs(); 
+     }
+  }    
+
+  Cn3DSendColorMsg();
 }
 /*-----------------------------------------------*/
 /* void Cn3dObjMgrGetSelected(void)
@@ -758,14 +886,17 @@ void ResetSalsaColor(void)
 
 }   */
 /*-----------------------------------------------*/
-void LIBCALLBACK Cn3DCheckHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr)
+void LIBCALLBACK Cn3DCheckAndDoHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr)
 {
   PMGD pmgdThis = NULL;
   PDNMG  pdnmgThis = NULL;
+  PMMD  pmmdThis = NULL;
+  PMSD  pmsdThis = NULL;
 
   pmgdThis = (PMGD) pfbThis;
   if(pmgdThis && pmgdThis->bHighlighted == 1){
      pdnmgThis = pmgdThis->pdnmgLink;
+
      fnPreCHLresidue(pdnmgThis, TRUE);
   }
 
@@ -783,37 +914,22 @@ void Cn3dObjMgrGetSelected(void)
   pdnmsMaster = GetSelectedModelstruc();
   if(pdnmsMaster != NULL){
       pmsdMaster = pdnmsMaster->data.ptrvalue;
-
-      TraverseGraphs(pdnmsMaster, 0, 0, NULL, Cn3DCheckHighlight);
+ 
+      if(pmsdMaster->bVisible == 1) { 
+         TraverseGraphs(pdnmsMaster, 0, 0, NULL, Cn3DCheckAndDoHighlight);
+      }
       pdnmsSlave = pmsdMaster->pdnmsSlaves;
       while(pdnmsSlave) {
-         TraverseGraphs(pdnmsSlave, 0, 0, NULL, Cn3DCheckHighlight);
+         pmsdSlave = pdnmsSlave->data.ptrvalue;
+         if(pmsdSlave->bVisible == 1) {
+            TraverseGraphs(pdnmsSlave, 0, 0, NULL, Cn3DCheckAndDoHighlight);
+         }
          pdnmsSlave = pdnmsSlave->next;
       }
    }
 }
 /*-----------------------------------------------*/
-Int2 GetColorIndex(Uint1 colorR, Uint1 colorG,Uint1 colorB)
-{
-
-  ResidueColorCellPtr prgb;
-  Int2 iColor;
-  Int4 iCount = 0;
-
-  iColor = 0;
-  prgb = ObjmgrColorPalette;
-  for(iCount = 0; iCount < CN3D_COLOR_MAX; iCount++){
-     if(colorR == prgb->rgb[0] && colorG == prgb->rgb[1] && colorB == prgb->rgb[2]) {
-        iColor = iCount + 1;
-        return(iColor);
-     }
-     prgb++;
-  }
-
-  return(0);
-}
-/*-----------------------------------------------*/
-Int2 GetColorIndexForMG(PMGD pmgdThis)
+ResidueColorCell * GetColorIndexForMG(PMGD pmgdThis)
 {
   PDNMG pdnmgThis = NULL;
   PMMD pmmdThis = NULL;
@@ -821,7 +937,6 @@ Int2 GetColorIndexForMG(PMGD pmgdThis)
   ValNodePtr seq_color;
   ResidueColorCellPtr rgb;
 
-  Int2 iColor;
   Int4 iCount = 0;
 
   pdnmgThis = pmgdThis->pdnmgLink;
@@ -840,7 +955,5 @@ Int2 GetColorIndexForMG(PMGD pmgdThis)
      }
   }
 
-  iColor = GetColorIndex(rgb->rgb[0], rgb->rgb[1], rgb->rgb[2]);
-     
- return(iColor);
+  return rgb;
 }

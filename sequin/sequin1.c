@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.191 $
+* $Revision: 6.202 $
 *
 * File Description: 
 *
@@ -70,6 +70,8 @@
 #include <ffprint.h>
 #include <objproj.h>
 #include <suggslp.h>
+#include <subutil.h>
+#include <explore.h>
 
 /* USE_SMARTNET */
 #ifdef USE_SMARTNET
@@ -111,7 +113,7 @@ extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
 
-CharPtr SEQUIN_APP_VERSION = "2.80";
+CharPtr SEQUIN_APP_VERSION = "2.90";
 
 Boolean  useDesktop = FALSE;
 Boolean  useEntrez = FALSE;
@@ -639,20 +641,50 @@ static CharPtr gbsub = "gb-sub@ncbi.nlm.nih.gov";
 static CharPtr emblsub = "datasubs@ebi.ac.uk";
 static CharPtr ddbjsub = "ddbjsub@ddbj.nig.ac.jp";
 
-static CharPtr ReturnSubmissionEmailAddress (void)
+static CharPtr gbupd = "gb-admin@ncbi.nlm.nih.gov";
+static CharPtr emblupd = "update@ebi.ac.uk";
+static CharPtr ddbjupd = "ddbjupdt@ddbj.nig.ac.jp";
+
+static CharPtr ReturnSubmissionEmailAddress (Uint2 entityID)
 
 {
-  CharPtr  rsult;
-  Char     str [32];
+  ObjMgrDataPtr   omdp;
+  CharPtr         rsult;
+  SubmitBlockPtr  sbp;
+  SeqSubmitPtr    ssp;
+  Char            str [32];
+  Boolean         update = FALSE;
 
   rsult = gbsub;
+  omdp = ObjMgrGetData (entityID);
+  if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
+    ssp = (SeqSubmitPtr) omdp->dataptr;
+    if (ssp != NULL && ssp->datatype == 1) {
+      sbp = ssp->sub;
+      if (sbp != NULL && sbp->subtype == 2) {
+        update = TRUE;
+      }
+    }
+  }
   if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
     if (StringICmp (str, "GenBank") == 0) {
-      rsult = gbsub;
+      if (update) {
+        rsult = gbupd;
+      } else {
+        rsult = gbsub;
+      }
     } else if (StringICmp (str, "EMBL") == 0) {
-      rsult = emblsub;
+      if (update) {
+        rsult = emblupd;
+      } else {
+        rsult = emblsub;
+      }
     } else if (StringICmp (str, "DDBJ") == 0) {
-      rsult = ddbjsub;
+      if (update) {
+        rsult = ddbjupd;
+      } else {
+        rsult = ddbjsub;
+      }
     }
   }
   return rsult;
@@ -743,7 +775,7 @@ static void PrepareSeqSubmitProc (IteM i)
               str = MemNew (StringLen (ptr) + 90);
               if (str != NULL) {
                 sprintf (str, "Submission is now written.  Please e-mail '%s' to %s", ptr,
-                         ReturnSubmissionEmailAddress ());
+                         ReturnSubmissionEmailAddress (bfp->input_entityID));
                 UseWindow ((WindoW) bfp->form);
                 Message (MSG_OK, str);
                 MemFree (str);
@@ -756,7 +788,7 @@ static void PrepareSeqSubmitProc (IteM i)
             str = MemNew (90);
             if (str != NULL) {
               sprintf (str, "Submission is now written.  Please e-mail to %s",
-                       ReturnSubmissionEmailAddress ());
+                       ReturnSubmissionEmailAddress (bfp->input_entityID));
               UseWindow ((WindoW) bfp->form);
               Message (MSG_OK, str);
               MemFree (str);
@@ -913,6 +945,34 @@ static void SmartResetProc (IteM i)
 #endif
 
 #ifdef USE_SMARTNET
+static Boolean LIBCALLBACK AllGenBankOrRefSeq (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
+
+{
+  SeqMgrDescContext  dcontext;
+  MolInfoPtr         mip;
+  BoolPtr            resetUpdateDate;
+  ValNodePtr         sdp;
+  SeqIdPtr           sip;
+
+  resetUpdateDate = (BoolPtr) bcontext->userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_EMBL || sip->choice == SEQID_DDBJ) {
+      *resetUpdateDate = FALSE;
+    }
+  }
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL) {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL) {
+      if (mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2 ||
+          mip->tech == MI_TECH_htgs_3 || mip->tech == MI_TECH_htgs_0) {
+        *resetUpdateDate = FALSE;
+      }
+    }
+  }
+  return TRUE;
+}
+
 static void SmartnetDoneFunc (BaseFormPtr bfp)
 
 {
@@ -927,6 +987,8 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
     OMUserDataPtr omudp;
     SMUserDataPtr sm_usr_data;
     Uint2         entityID;
+
+    Boolean       resetUpdateDate = TRUE;
 
     if(bfp != NULL) {
         f = bfp->form;
@@ -987,7 +1049,11 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
             }
             /* ans = Message (MSG_YN, "Reset Update Date?"); */
             ans = ANS_YES;
-            if (ans == ANS_YES) {
+
+            /* reset update date in smart mode if GenBank or RefGene, and not HTGS */
+
+            SeqMgrExploreBioseqs (entityID, 0, (Pointer) resetUpdateDate, AllGenBankOrRefSeq, TRUE, TRUE, TRUE);
+            if (/* ans == ANS_YES */ resetUpdateDate) {
                 SeqEntryExplore (sep, NULL, RemoveUpdateDates);
                 sdp = CreateNewDescriptor (sep, Seq_descr_update_date);
                 if (sdp != NULL) {
@@ -1211,7 +1277,7 @@ static void ProcessDoneButton (ForM f)
         str = MemNew (90);
         if (str != NULL) {
           sprintf (str, "Submission is now written.  Please e-mail to %s",
-                   ReturnSubmissionEmailAddress ());
+                   ReturnSubmissionEmailAddress (bfp->input_entityID));
           UseWindow ((WindoW) bfp->form);
           Message (MSG_OK, str);
           MemFree (str);
@@ -1719,6 +1785,12 @@ static void GenomeFormActivateProc (WindoW w);
 extern CharPtr repackageMsg =
 "Do you plan to submit this as an update to one of the databases?";
 
+static DialoG hiddengenbio = NULL;
+
+extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP genome,
+                                          PopuP gencode, SeqEntryPtr nsep, SeqEntryPtr top,
+                                          BioSourcePtr masterbiop);
+
 static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean askForSubmit,
                                     CharPtr path, Pointer dataptr, Uint2 datatype, Uint2 entityID)
 
@@ -1726,8 +1798,10 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   Int2          handled;
+  SeqEntryPtr   nsep;
   SeqEntryPtr   sep;
   ForM          w;
+  WindoW        wnd;
 
   if (dataptr != NULL && entityID > 0) {
     if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
@@ -1754,6 +1828,13 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
         sep = GetTopSeqEntryForEntityID (entityID);
       }
       if (sep != NULL) {
+        nsep = FindNucSeqEntry (sep);
+        if (hiddengenbio == NULL) {
+          wnd = FixedWindow (-50, -33, -10, -10, "you should not see me", NULL);
+          hiddengenbio = CreateSimpleBioSourceDialog (wnd, "");
+          RealizeWindow (wnd); /* never show this window - just for biosource dialog */
+        }
+        ProcessOneNucleotideTitle (SEQ_PKG_SINGLE, hiddengenbio, NULL, NULL, nsep, sep, NULL);
         if (! leaveAsOldAsn) {
           MySeqEntryToAsn3 (sep, TRUE, FALSE, FALSE);
         }
@@ -2228,7 +2309,7 @@ static Boolean CommonReadNewAsnProc (Handle obj, Boolean removeold, Boolean askF
   path [0] = '\0';
   if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
     Update ();
-    rsult = DoReadAnythingLoop (bfp, path, path, removeold, askForSubmit, FALSE, FALSE, FALSE);
+    rsult = DoReadAnythingLoop (bfp, path, path, removeold, askForSubmit, FALSE, TRUE, FALSE);
   }
   ArrowCursor ();
   return rsult;
@@ -2256,7 +2337,7 @@ extern Boolean LIBCALLBACK SequinOpenMimeFile (CharPtr filename)
   SafeHide (startupForm); /* if just Hide, triggers MacDeactProc, does not reactivate */
   Update ();
 #endif
-  rsult = DoReadAnythingLoop (NULL, filename, filename, FALSE, FALSE, FALSE, FALSE, FALSE);
+  rsult = DoReadAnythingLoop (NULL, filename, filename, FALSE, FALSE, FALSE, TRUE, FALSE);
   if (! rsult) {
 #ifndef WIN16
     if (BiostrucAvail () && OpenMimeFileWithDeletion (filename, FALSE)) {
@@ -2284,7 +2365,7 @@ extern Boolean LIBCALLBACK SequinOpenMimeFile (CharPtr filename)
 extern Boolean LIBCALLBACK SequinOpenResultFile (CharPtr filename)
 
 {
-  return DoReadAnythingLoop (NULL, filename, NULL, FALSE, FALSE, FALSE, FALSE, FALSE);
+  return DoReadAnythingLoop (NULL, filename, NULL, FALSE, FALSE, FALSE, TRUE, FALSE);
 }
 
 extern Boolean LIBCALLBACK SequinHandleNetResults (CharPtr filename)
@@ -3975,6 +4056,7 @@ static void CommonAddSeq (IteM i, Int2 type)
 {
   EnumFieldAssocPtr  ap;
   BaseFormPtr        bfp;
+  Uint1              biomol;
   BioSourcePtr       biop = NULL;
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
@@ -4138,8 +4220,33 @@ static void CommonAddSeq (IteM i, Int2 type)
                 }
               }
             }
+            ptr = StringStr (title, "[moltype=");
+            if (ptr != NULL) {
+              biomol = 0;
+              StringNCpy_0 (str, ptr + 8, sizeof (str));
+              ptr = StringChr (str, ']');
+              if (ptr != NULL) {
+                *ptr = '\0';
+                if (StringICmp (str, "genomic") == 0) {
+                  biomol = MOLECULE_TYPE_GENOMIC;
+                } else if (StringICmp (str, "mRNA") == 0) {
+                  biomol = MOLECULE_TYPE_MRNA;
+                }
+                if (biomol != 0) {
+                  mip = MolInfoNew ();
+                  if (mip != NULL) {
+                    mip->biomol = biomol;
+                    vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+                    if (vnp != NULL) {
+                      vnp->data.ptrvalue = (Pointer) mip;
+                    }
+                  }
+                }
+              }
+            }
           }
           ExciseString (title, "[molecule=", "]");
+          ExciseString (title, "[moltype=", "]");
           ExciseString (title, "[location=", "]");
           TrimSpacesAroundString (title);
           if (title != NULL && StringHasNoText (title)) {
@@ -5076,8 +5183,8 @@ static Boolean UpdateWithAln (GatherContextPtr gcp)
           if (sep != NULL) {
             SqnReadAlignViewEx (updateTargetBspKludge, sep, PRGALIGNALL);
           }
+          BioseqUnlockById (sip);
         }
-        /* BioseqUnlockById (sip); */
       }
       return TRUE;
     default :
@@ -5312,6 +5419,7 @@ static SeqEntryPtr LIBCALLBACK SeqEdDownload (CharPtr program, CharPtr accession
     bsp = BioseqLockById (&sid);
     if (bsp != NULL) {
       sep = SeqMgrGetSeqEntryForData (bsp);
+      BioseqUnlock (bsp);
     } else {
       sep = EntrezSeqEntryGet (uid, -2);
       if (is_new != NULL) {
@@ -7520,6 +7628,7 @@ Int2 Main (void)
   BioseqSetPtr   bssp;
   Pointer        dataptr;
   BtnActnProc    fetchProc;
+  FILE           *fp;
   Int2           handled;
   SeqEntryPtr    oldsep;
   /*
@@ -7809,7 +7918,12 @@ Int2 Main (void)
     if (subtoolMode) {
       dataptr = SubtoolModeAsnTextFileRead ("stdin", &subtoolDatatype, &subtoolEntityID);
     } else {
+      fp = FileOpen ("stdin", "r");
+      dataptr = ReadAsnFastaOrFlatFile (fp, &subtoolDatatype,  &subtoolEntityID, FALSE, FALSE, TRUE, FALSE);
+      FileClose (fp);
+      /*
       dataptr = ObjMgrGenericAsnTextFileRead ("stdin", &subtoolDatatype, &subtoolEntityID);
+      */
     }
     if (dataptr != NULL && subtoolEntityID > 0) {
       if (subtoolDatatype == OBJ_SEQSUB || subtoolDatatype == OBJ_SEQENTRY ||

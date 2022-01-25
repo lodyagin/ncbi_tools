@@ -32,11 +32,23 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.11 $ */
-/* $Log: gapxdrop.c,v $
-/* Revision 6.11  1998/12/18 16:20:42  madden
-/* Removed unnecessary memsets
-/*
+/* $Revision: 6.16 $ 
+* $Log: gapxdrop.c,v $
+* Revision 6.16  1999/05/03 18:59:33  madden
+* Removed set, but unused, variable count
+*
+* Revision 6.15  1999/03/17 18:39:11  madden
+* Removed unneccessary memset
+*
+* Revision 6.14  1999/02/18 21:18:49  madden
+* MINIINT is INT4_MIN/2
+*
+* Revision 6.13  1999/02/17 19:42:42  madden
+* change INT4_MIN to -9999999 again
+*
+* Revision 6.11  1998/12/18 16:20:42  madden
+* Removed unnecessary memsets
+*
  * Revision 6.10  1998/11/19 14:03:38  madden
  * minor efficiency
  *
@@ -207,10 +219,11 @@ data.last = (data.last > 0) ? (data.sapp[-1] += (k)) : (*data.sapp++ = (k));
 #define REP_ \
 { data.last = *data.sapp++ = 0; }
 
+/* Divide by two to prevent underflows. */
+#define MININT INT4_MIN/2
 #define REPP_ \
 { *data.sapp++ = MININT; data.last = 0; }
 
-#define MININT -9999999
 
 /* Dynamic Programming structure. */
 typedef struct DP {
@@ -327,7 +340,6 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   register Int4 c, d, e, m,t, tt, f, tt_start;
   Int4 best_score = 0;
   register Int4Ptr wa;
-  Int4 count = 0;
   register dp_ptr dp, dyn_prog;
   Uint1Ptr PNTR state, stp, tmp;
   Uint1Ptr state_array;
@@ -384,7 +396,6 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   
   tt = 0;  j = i;
   for(j_r = 1; j_r <= M; j_r++) {
-    count += j - tt; 
      /* Protection against divide by zero. */
     if (gap_extend > 0)
     	state_struct = GapXDropGetState(&gap_align->state_struct, j-tt+5+X/gap_extend);
@@ -479,7 +490,7 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
     state_struct->used += (MAX(i, j) - tt_start + 1);
   }
   i = *pei; j = *pej;
-  tmp = MemNew(i+j);
+  tmp = Nlm_Malloc(i+j);
   for (s=0, c = 0; i> 0 || j > 0; c++) {
       t = state[i][j];
       k  = t %5;
@@ -523,7 +534,7 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   dp_ptr dyn_prog;
   Int4 i, j, cb, j_r, g, decline_penalty;
   register Int4 c, d, e, m, tt, h, X, f;
-  Int4 best_score = 0, count = 0;
+  Int4 best_score = 0;
   Int4Ptr *matrix;
   register Int4Ptr wa;
   register dp_ptr dp;
@@ -544,7 +555,7 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   if(N <= 0 || M <= 0) return 0;
 
   j = (N + 2) * sizeof(dp_node);
-  dyn_prog = (dp_ptr)MemNew(j);
+  dyn_prog = (dp_ptr)Nlm_Malloc(j);
 
   dyn_prog[0].CC = 0; c = dyn_prog[0].DD = -m;
   dyn_prog[0].FF = -m;
@@ -558,7 +569,6 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 
   tt = 0;  j = i;
   for (j_r = 1; j_r <= M; j_r++) {
-      count += j-tt;
       if (!(gap_align->positionBased)) /*AAS*/
 	  wa = matrix[A[j_r]]; 
       else {

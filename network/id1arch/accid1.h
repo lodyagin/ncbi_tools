@@ -16,16 +16,16 @@ extern "C" {
 #endif
 
 
-NLM_EXTERN Boolean LIBCALL ID1Init PROTO((void));
-NLM_EXTERN void LIBCALL ID1Fini PROTO((void));
+NLM_EXTERN Boolean     ID1Init(void);
+NLM_EXTERN void        ID1Fini(void);
 
 /**** Look Up a Uid from a SeqId using ID1 lookup ****/
-NLM_EXTERN Int4 LIBCALL ID1FindSeqId PROTO((SeqIdPtr sip));
+NLM_EXTERN Int4        ID1FindSeqId(SeqIdPtr sip);
 
 /**** Look Up the source SeqId given a GI ****************/
-NLM_EXTERN SeqIdPtr LIBCALL ID1SeqIdForGI PROTO ((Int4 gi));
+NLM_EXTERN SeqIdPtr    ID1SeqIdForGI(Int4 gi);
 
-NLM_EXTERN SeqEntryPtr LIBCALL ID1SeqEntryGet PROTO((Int4 uid, Int2 retcode));
+NLM_EXTERN SeqEntryPtr ID1SeqEntryGet(Int4 uid, Int2 retcode);
 
 
 /*****************************************************************************
@@ -42,8 +42,8 @@ NLM_EXTERN SeqEntryPtr LIBCALL ID1SeqEntryGet PROTO((Int4 uid, Int2 retcode));
 *     call, and yours will be call AFTER ID1.
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ID1BioseqFetchEnable PROTO((CharPtr progname, Boolean now));
-NLM_EXTERN void LIBCALL ID1BioseqFetchDisable PROTO((void));
+NLM_EXTERN Boolean ID1BioseqFetchEnable  (CharPtr progname, Boolean now);
+NLM_EXTERN void    ID1BioseqFetchDisable (void);
 
 #ifdef __cplusplus
 }

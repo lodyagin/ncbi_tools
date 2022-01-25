@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -610,7 +610,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatSetAsnRead (AsnIoPtr aip, AsnTypePtr set, A
         goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF Seq-feat. line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF Seq-feat. line %ld", (long) aip->linenumber);
 ret:
 	AsnUnlinkType(element);       /* unlink local tree */
 	return first;
@@ -3493,7 +3493,7 @@ NLM_EXTERN OrgNamePtr LIBCALL OrgNameSetAsnRead (AsnIoPtr aip, AsnTypePtr set, A
         goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF OrgName. line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF OrgName. line %ld", (long) aip->linenumber);
 ret:
 	AsnUnlinkType(element);       /* unlink local tree */
 	return first;
@@ -4824,7 +4824,7 @@ NLM_EXTERN OrgModPtr LIBCALL OrgModSetAsnRead (AsnIoPtr aip, AsnTypePtr set, Asn
         goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF OrgMod. line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF OrgMod. line %ld", (long) aip->linenumber);
 ret:
 	AsnUnlinkType(element);       /* unlink local tree */
 	return first;
@@ -5066,7 +5066,7 @@ NLM_EXTERN TaxElementPtr LIBCALL TaxElementSetAsnRead (AsnIoPtr aip, AsnTypePtr 
         goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF TaxElement. line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF TaxElement. line %ld", (long) aip->linenumber);
 ret:
 	AsnUnlinkType(element);       /* unlink local tree */
 	return first;
@@ -5623,7 +5623,7 @@ NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetAsnRead (AsnIoPtr aip, AsnTypePtr se
         goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 	if (first == NULL)
-		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF SubSource. line %ld", aip->linenumber);
+		ErrPostEx(SEV_WARNING, 0, 0, "Empty SET OF SubSource. line %ld", (long) aip->linenumber);
 ret:
 	AsnUnlinkType(element);       /* unlink local tree */
 	return first;

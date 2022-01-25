@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.25 $
+* $Revision: 6.31 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,25 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.31  1999/04/07 12:49:06  ostell
+* made changes to rank RefSeq ids higher for BLAST deflines
+*
+* Revision 6.30  1999/03/22 19:15:02  ostell
+* forced generation of unfinished HTG deflines
+*
+* Revision 6.29  1999/03/16 13:42:27  ostell
+* corrected oversight in CreateDefLine so sometimes [organism] would be
+* dropped from protein deflines.
+*
+* Revision 6.28  1999/03/12 18:38:40  kans
+* fixed ErrPostEx cast
+*
+* Revision 6.27  1999/03/12 15:52:21  kans
+* changes to CreateDefLine for HTGS phrases (JO)
+*
+* Revision 6.26  1999/03/11 23:32:08  kans
+* sprintf casts
+*
 * Revision 6.25  1998/11/03 21:43:57  kans
 * call SeqMapTableConvert to map asterisk to appropriate alphabet - BLAST is using ncbistdaa, not ncbieaa or iupacaa
 *
@@ -352,7 +371,7 @@ static Uint1 na_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
 	255, /* 7 = pir */
 	255, /* 8 = swissprot */
 	40,  /* 9 = patent */
-	50, /* 10 = other TextSeqId */
+	15, /* 10 = other TextSeqId (RefGene) */
 	50, /* 11 = general Dbtag */
 	120,  /* 12 = gi */
 	20, /* 13 = ddbj */
@@ -371,7 +390,7 @@ static Uint1 aa_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
 	30, /* 7 = pir */
 	20, /* 8 = swissprot */
 	80,  /* 9 = patent */
-	90, /* 10 = other TextSeqId */
+	15, /* 10 = other TextSeqId (RefGene) */
 	90, /* 11 = general Dbtag */
 	120,  /* 12 = gi */
 	60, /* 13 = ddbj */
@@ -1336,14 +1355,14 @@ static Boolean FastaReadSequenceInternal
             return FALSE;
         
         chptr = "";
-        sprintf (ptr, "%ld illegal %s %s removed:\n", badchars, 
+        sprintf (ptr, "%ld illegal %s %s removed:\n", (long) badchars, 
                  badchars == 1 ? "character" : "characters",
                  badchars == 1 ? "was" : "were"
                  );
         for (ch = 'A', i =0; ch <= 'Z'; ch++, i++) {
             if ((badchar[ch]) > 0) {
                 sprintf (tmp, "%s%d %c%s", 
-                         chptr, badchar[ch], ch,
+                         chptr, (int) badchar[ch], ch,
                          badchar[ch] == 1 ? "" : "s");
                 StringCat (ptr, tmp);
                 chptr = ", ";
@@ -1386,7 +1405,8 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
     CharPtr        chptr = NULL, ptr = NULL;
     register Int4  i;
     CharPtr        defline, buffer= NULL;   /* Working buffers */    
-    Int4           len = 0, BuffSize = FTSE_BUFF_CHUNK; 
+    Int4           BuffSize = FTSE_BUFF_CHUNK;
+    long           len = 0;
     FILE           *fd;    
     const Char     PNTR firstchar;
   
@@ -1548,7 +1568,7 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
             bsp->repr = Seq_repr_virtual;
             
             if(sscanf(defline + 2, "%ld", &len) == 1 && len > 0) {
-                bsp->length =  len;
+                bsp->length =  (Int4) len;
             } else {
                 bsp->length = -1;
             }
@@ -1668,13 +1688,23 @@ NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Int2 buflen,
 	
 	BioseqContextFree(bcp);
 
-	if ((tech >= MI_TECH_htgs_1) && (tech <= MI_TECH_htgs_3))
+	if (((tech >= MI_TECH_htgs_1) && (tech <= MI_TECH_htgs_3)) ||
+	    (tech == MI_TECH_htgs_0))
 	{
+	  if (tech == MI_TECH_htgs_0) {
+	    phase = 0;
+	    StringMove(tbuf, ", LOW-PASS SEQUENCE SAMPLING.");
+	  }
+	  else {
 		phase = (Int2)(tech - MI_TECH_htgs_1 + 1);
-		sprintf(tbuf, "; HTGS phase %d", (int)phase);
+		if (phase != 3)
+		  StringMove(tbuf, ", WORKING DRAFT SEQUENCE");
+	  }
+	  if (phase != 3) {
 		diff = LabelCopy(buf, tbuf, buflen);
 		buflen -= diff;
 		buf += diff;
+	  }
 		
 		if (phase == 3)
 		{
@@ -1684,7 +1714,7 @@ NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Int2 buflen,
 				buf += diff;
 			}
 		}
-		else if (bsp->repr == Seq_repr_delta)
+		else if ((bsp->repr == Seq_repr_delta) && (phase != 0))
 		{
 			if (CountGapsInDeltaSeq(bsp, &num_segs, &num_gaps, NULL, NULL, NULL, 0))
 			{
@@ -2161,11 +2191,15 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	PdbBlockPtr pbp;
 	PatentSeqIdPtr psip;
 	PDBSeqIdPtr	pdbip;	
-	Int2 diff, phase;
+	Int2 diff, phase, i;
+	Boolean doit;
 	Int4 num_segs, num_gaps;
 	static Char tbuf[80];
 	static CharPtr htgs[2] = {
 		"unordered", "ordered" };
+	static CharPtr htg_phrase[2] = {
+		"LOW-PASS SEQUENCE SAMPLING",
+		"WORKING DRAFT SEQUENCE" };
 	Boolean htg_tech = FALSE;
 
 	if ((bsp == NULL) || (buf == NULL) || buflen == 0) return FALSE;
@@ -2173,7 +2207,8 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	buflen--;
 	buf[buflen] = '\0';
 	tbuf[0] = '\0';
-	if ((tech >= MI_TECH_htgs_1) && (tech <= MI_TECH_htgs_3)) {
+	if (((tech >= MI_TECH_htgs_1) && (tech <= MI_TECH_htgs_3)) ||
+	    (tech == MI_TECH_htgs_0)) {
 		htg_tech = TRUE;
 	}
 	if (iip == NULL && accession != NULL) {
@@ -2184,21 +2219,19 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	diff = 0;
 	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
 	if (vnp != NULL) {
-		title = StringSave((CharPtr)vnp->data.ptrvalue);
+		title = StringSaveNoNull((CharPtr)vnp->data.ptrvalue);
 	}
-	if (tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
+	if (tech == MI_TECH_htgs_0 || tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
+		title = MemFree(title);  /* manufacture all HTG titles */
 		if (title == NULL || *title == '\0') {
 			title = UseOrgMods(bsp);
+			organism = NULL;
 		}
-		if (StringStr(title, "*** SEQUENCING IN PROGRESS *** ") == NULL) {
-			diff = LabelCopy(buf, 
-							"*** SEQUENCING IN PROGRESS *** ", buflen);
-			buflen -= diff;
-			buf += diff;
-		}
+
 	} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey) {
 		if (title == NULL || *title == '\0') {
 			title = UseOrgMods(bsp);
+			organism = NULL;
 		}
 	}
 /* some titles may have zero length */
@@ -2261,9 +2294,13 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	buf += diff;
 	
 	if (htg_tech) {
-		phase = (Int2)(tech - MI_TECH_htgs_1 + 1);
+		if (tech == MI_TECH_htgs_0)
+			phase = 0;
+		else
+			phase = (Int2)(tech - MI_TECH_htgs_1 + 1);
 		if (title == NULL|| *title == '\0') {
 			title = UseOrgMods(bsp);
+			organism = NULL;
 			if (title != NULL) {
 				diff = LabelCopy(buf, title, buflen);
 				buflen -= diff;
@@ -2280,17 +2317,31 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 				}
 			}
 		} else {
-			if (StringStr(title, "HTGS phase") == NULL) {
+			doit = FALSE;
+			if (phase == 0) {
+			if (StringStr(title, "LOW-PASS") == NULL) {
+				doit = TRUE;
+				i = 0;
+			}
+			}
+			else if (StringStr(title, "WORKING DRAFT") == NULL) {
+				doit = TRUE;
+				i = 1;
+			}
+
+			if (doit)
+			{
 				if (diff != 0) {
-					sprintf(tbuf, "; HTGS phase %d", (int)phase);
-				} else {
-					sprintf(tbuf, "HTGS phase %d", (int)phase);
+					diff = LabelCopy(buf, ", ", buflen);
+					buflen -= diff;
+					buf += diff;
 				}
-				diff = LabelCopy(buf, tbuf, buflen);
+				diff = LabelCopy(buf, htg_phrase[i], buflen);
 				buflen -= diff;
 				buf += diff;
 			}
-			if (bsp->repr == Seq_repr_delta) {
+
+			if ((phase != 0) && (bsp->repr == Seq_repr_delta)) {
 				if (CountGapsInDeltaSeq(bsp, 
 						&num_segs, &num_gaps, NULL, NULL, NULL, 0))
 				{
@@ -2301,11 +2352,18 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 					buf += diff;
 				}
 			}
+			else if (phase != 0) {
+				sprintf(tbuf, ", in %s pieces", htgs[phase-1]);
+				diff = LabelCopy(buf, tbuf, buflen);
+				buflen -= diff;
+				buf += diff;
+			}
 		}
 
 	} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey) {
 		if (title == NULL|| *title == '\0') {
 			title = UseOrgMods(bsp);
+			organism = NULL;
 			if (title != NULL) {
 				diff = LabelCopy(buf, title, buflen);
 				buflen -= diff;
@@ -2340,7 +2398,13 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	}
 
 	if (iip == NULL && organism != NULL) {
-		LabelCopyExtra(buf, organism, buflen, " [", "]");
+		doit = TRUE;
+		if (title) {
+			if (StringStr(title, organism) != NULL)
+				doit = FALSE;
+		}
+		if (doit)
+			LabelCopyExtra(buf, organism, buflen, " [", "]");
 	}
         MemFree(title);
 	return TRUE;
@@ -2397,7 +2461,7 @@ NLM_EXTERN Boolean FastaSeqLine(SeqPortPtr spp, CharPtr buf, Int2 linelen, Boole
 				FastaId(spp->bsp, idbuf, 39);
 				pos = SeqPortTell(spp);
 				ErrPostEx(SEV_ERROR,0,0, "ToFastA: Invalid residue at position %ld in %s",
-					pos, idbuf);
+					(long) pos, idbuf);
 			}
 			else
 			{

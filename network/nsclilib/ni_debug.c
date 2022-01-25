@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_debug.c,v $  $Revision: 6.1 $  $Date: 1998/05/05 22:23:35 $
+/*  $RCSfile: ni_debug.c,v $  $Revision: 6.2 $  $Date: 1999/03/11 15:20:22 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_debug.c,v $
+* Revision 6.2  1999/03/11 15:20:22  vakatov
+* Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
+*
 * Revision 6.1  1998/05/05 22:23:35  vakatov
 * Initial revision
 *
@@ -152,7 +155,7 @@ static NI_HandPtr s_GenericGetService
 
   /* establish connection to the server */
   for (sock = 0;  !sock  &&  conn_try;  conn_try--) {
-    if (SOCK_Create(srv_host, srv_port, &sock) != eSOCK_ESuccess) {
+    if (SOCK_Create(srv_host, srv_port, 0, &sock) != eSOCK_ESuccess) {
       ErrPostEx(SEV_WARNING, 0, 1,
                 "[Debug NI Client]  Cannot connect to host \"%s\", port %d;",
                 srv_host, (int)srv_port);

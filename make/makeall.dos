@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.40 1999/01/05 00:09:44 kans Exp $
+# $Id: makeall.dos,v 6.55 1999/05/07 20:05:57 kans Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -20,7 +20,9 @@ OBJ1  = +ncbibs.obj +wwwutils.obj +ncbierr.obj +ncbienv.obj +ncbifile.obj \
 	+asnbufo.obj +asndebin.obj +asnenbin.obj +asngen.obj +asngenob.obj \
 	+asnio.obj +asnlex.obj +asnlext.obj +asnout.obj +asnprint.obj \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
-	+ncbithrs.obj +regex.obj +tree.obj
+	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +matrix.obj \
+	+ncbibuf.obj +connectn.obj +connutil.obj +con_url.obj +con_sock.obj \
+	+urlquery.obj
 OBJ2 = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
@@ -33,7 +35,7 @@ OBJ2 = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
 	+jzcoll.obj +jzmisc.obj +maputil.obj +mconsist.obj +codon.obj \
-	+txalign.obj +sqnutil1.obj +sqnutil2.obj
+	+txalign.obj +sqnutil1.obj +sqnutil2.obj +salpacc.obj +udvseq.obj
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
 
@@ -44,10 +46,10 @@ OBJ4_2D = \
 	+vibutils.obj +vibwndws.obj +ncbidraw.obj \
 	+drawing.obj +mapping.obj +picture.obj +viewer.obj \
 	+document.obj +table.obj +palette.obj +diagnost.obj +image.obj \
-	+vibmouse.obj +treeview.obj +imagelst.obj
+	+vibmouse.obj +treeview.obj +imagelst.obj +odlbox.obj
 OBJ4_3D = \
 	+pictur3d.obj +prim3d1.obj +prim3d2.obj +prim3d3.obj \
-	+prim3d4.obj +prim3d5.obj +viewer3d.obj +matrix.obj
+	+prim3d4.obj +prim3d5.obj +viewer3d.obj +shim3d.obj
 !ifdef WIN32
 OBJ4 = $(OBJ4_2D) $(OBJ4_3D)
 !else
@@ -57,8 +59,8 @@ OBJ4 = $(OBJ4_2D)
 OBJ5  = +accentr.obj +accutils.obj
 OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+smdlg3.obj +smtools.obj +styleman.obj +stylemui.obj +glbpic.obj \
-	+layout.obj +vsm.obj +vsmfile.obj +vsmutil.obj +dlgutil1.obj \
-	+dlgutil2.obj +medview.obj \
+	+layout.obj +vsm.obj +vsmfile.obj +vsmutil.obj +udvgraph.obj +udvopen.obj \
+	+udvpanel.obj +dlgutil1.obj +dlgutil2.obj +medview.obj \
 	+bspview.obj +gbfview.obj +gphview.obj \
 	+gphdraw.obj +gxydraw.obj +gtrdraw.obj \
 	+biosrc.obj +cdrgn.obj +import.obj +pubdesc.obj +seqsub.obj \
@@ -70,7 +72,8 @@ OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+mapgene.obj +prtgene.obj
 OBJ22 = +corematx.obj +dvncode.obj +objmmdb1.obj +objmmdb2.obj +objmmdb3.obj \
 	+mmdbapi.obj +mmdbapi1.obj +mmdbapi2.obj +mmdbapi3.obj +mmdbapi4.obj \
-	+mmdbentr.obj +vastsubs.obj
+	+mmdbentr.obj +vastsubs.obj +prunebsc.obj
+
 OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+sim2.obj +sim3.obj +sim4.obj +simutil.obj +slist.obj +sec.obj +tfuns.obj \
 	+toasn3.obj +toporg.obj +pobutil.obj +stsutil.obj +suggadj.obj \
@@ -79,16 +82,17 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+posit.obj +ncbisam.obj \
 	+bandalg0.obj +bandalg1.obj +bandalg2.obj +bandalg3.obj \
 	+bandalg4.obj +bandalg5.obj +bandalgn.obj +ncbisort.obj \
-	+salpacc.obj +salpedit.obj +salsap.obj +salstruc.obj +salutil.obj \
+	+salpedit.obj +salpstat.obj +salsap.obj +salstruc.obj +salutil.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
-	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj
+	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
+	+impatool.obj +posit2.obj +newkar.obj 
 OBJ28 = +ncbidrwg.obj +pictogif.obj \
         +gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
 OBJ30 = +algorend.obj +cn3dmsel.obj +cn3dopen.obj +cn3dsave.obj \
         +cn3dslct.obj +cn3dwipe.obj +cn3dxprt.obj +naybor.obj \
         +cn3dwin.obj  +cn3dentr.obj +cn3dpane.obj \
-        +cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj
+        +cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj +cn3dshim.obj
 
 
 ##################################################
@@ -127,6 +131,7 @@ copy :
 	copy ..\corelib\gifgen.h $(INCPATH)
 	copy ..\corelib\ncbi*.h $(INCPATH)
 	copy ..\corelib\tree*.h $(INCPATH)
+	copy ..\corelib\matrix.h $(INCPATH)
 	copy ..\corelib\ncbilcl.msw $(INCPATH)\ncbilcl.h
 	copy ..\corelib\*.c .
 	copy ..\corelib\core*.h .
@@ -135,6 +140,8 @@ copy :
 	copy asn.h $(INCPATH)
 	$(DEL) asn.h
 	copy ..\asnlib\*.c .
+	copy ..\connect\*.c .
+	copy ..\connect\*.h $(INCPATH)
 	copy ..\object\*.c .
 	copy ..\object\*.h $(INCPATH)
 	copy ..\$(ASNDIR)\*.h $(INCPATH)
@@ -148,6 +155,9 @@ copy :
 	copy ..\tools\*.c .
 	copy ..\network\blast2\client\*.h $(INCPATH)
 	copy ..\network\blast2\client\*.c .
+	copy ..\link\mswin\*.rc .
+	copy ..\link\mswin\*.ico .
+	copy ..\link\mswin\ncbirc.h .
 !ifndef WIN32
 	copy ..\link\mswin\*.def .
 !endif
@@ -156,11 +166,8 @@ copy :
 	copy ..\vibrant\*.c .
 	copy ..\desktop\*.h $(INCPATH)
 	copy ..\desktop\*.c .
-        copy ..\gif\*.c .
-        copy ..\gif\*.h $(INCPATH)
-	copy ..\link\mswin\*.rc .
-	copy ..\link\mswin\*.ico .
-	copy ..\link\mswin\ncbirc.h .
+	copy ..\gif\*.c .
+	copy ..\gif\*.h $(INCPATH)
 !ifdef WIN32
 	copy ..\cn3d\*.h $(INCPATH)
 	copy ..\cn3d\*.c .

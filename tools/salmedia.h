@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/20/98
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -56,6 +56,7 @@ SeqIdPtr sip;
 Int4 Gi, length;
 Uint2 entityID, itemID, itemtype;
 Byte bVisible;
+BytePtr bAligned;
 ValNodePtr seq_color; /* seq_color->data.ptrvalue is ResidueColorCellPtr */
 } MediaInfo, PNTR MediaInfoPtr;
 

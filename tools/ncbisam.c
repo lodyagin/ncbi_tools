@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.8 1998/07/13 15:31:14 egorov Exp $
+/* $Id: ncbisam.c,v 6.11 1999/03/17 21:38:04 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.8 $
+* $Revision: 6.11 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.11  1999/03/17 21:38:04  kans
+* Int4Ptr argument must point to Int4
+*
+* Revision 6.10  1999/03/17 20:56:24  shavirin
+* Fixed warning "long int format"
+*
+* Revision 6.9  1999/02/19 22:01:14  madden
+* Use memory-mapping and binary search on second numerical index
+*
 * Revision 6.8  1998/07/13 15:31:14  egorov
 * make error message more understandable
 *
@@ -114,6 +123,7 @@
 * ==========================================================================
 */
 #include <ncbi.h>
+#include <readdb.h>
 #include <ncbisami.h>
 
 /****************************************************************************/
@@ -320,8 +330,9 @@ ISAMErrorCode ISAMCreateDatabase(CharPtr PNTR files,
     ISAMErrorCode error;
     Char DBName[MAX_FILENAME_LEN], filename[MAX_FILENAME_LEN];
     FILE *ca_fd, *off_fd, *out_fd;
-    Int4 offset, count = 0, ca_count = 0, files_count;
-    Uint4 uid_in, uid_last, field_in;
+    long count = 0, ca_count = 0, files_count;
+    Int4 offset;
+    unsigned long uid_in, uid_last, field_in;
     CharPtr chptr;
     CharPtr term, value;
     Int4 uidf_allocated;
@@ -927,6 +938,8 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
 
         FileInfo = (Int4Ptr)data->mmp->mmp_begin;
     }
+    /* For numeric search. */
+    data->mfp = NlmOpenMFILE(data->DBFileName);
 
     /* Check for consistence of files and parameters */
 
@@ -1000,6 +1013,8 @@ void ISAMObjectFree(ISAMObjectPtr object)
     if(data->db_fd != NULL)
         FileClose(data->db_fd);  
     
+    NlmCloseMFILE(data->mfp);
+
     if(data->max_line_size != 0) {
         data->max_line_size = 0;
         MemFree(data->line);
@@ -1016,6 +1031,7 @@ void ISAMObjectFree(ISAMObjectPtr object)
     return;
 }
 
+#define NCBISAM_ITER_MAX 30
 /* ------------------------ NISAMSearch ----------------------------
    Purpose:     Main search function of Numeric ISAM
    
@@ -1031,11 +1047,13 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
                           Uint4Ptr Index
                           )
 {
+    Boolean found;
     ISAMDataPtr data;
     Int4 Start = 0, Stop, SampleNum;
-    Int4 NumElements, count, *KeyPage;
+    Int4 NumElements, *KeyPage, *KeyPageStart;
+    Int4 first, last, current, index, type;
     Boolean NoData;
-    NISAMKeyDataPtr KeyDataPage, KeyDataSamples;
+    NISAMKeyDataPtr KeyDataPage, KeyDataSamples, KeyDataPageStart;
     Uint4Ptr KeySamples;
     Uint4 Key;
     ISAMErrorCode error;
@@ -1051,6 +1069,7 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     NoData = (data->type == ISAMNumericNoData);
     KeyDataSamples = data->KeyDataSamples;
     KeySamples = data->KeySamples;
+    type = data->type;
   
     /* search the sample file. */
     
@@ -1058,7 +1077,7 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     
     while(Stop >= Start) {
         SampleNum = ((Uint4)(Stop + Start)) >> 1;
-        if (data->type == ISAMNumericNoData)
+        if (type == ISAMNumericNoData)
             Key = SwapUint4(KeySamples[SampleNum]);
         else
             Key = SwapUint4(KeyDataSamples[SampleNum].key);
@@ -1104,31 +1123,74 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     NumElements = GetPageNumElements(data, SampleNum, &Start);
     
     if (NoData) {
-        KeyPage = (Int4Ptr) MemNew((NumElements + 1) * sizeof(Int4));
-        fseek(data->db_fd, Start * sizeof(Int4), SEEK_SET);
-        FileRead(KeyPage, sizeof(Int4), NumElements, data->db_fd);
+	if (data->mfp->mfile_true)
+	{
+		NlmSeekInMFILE(data->mfp, Start*sizeof(Int4), SEEK_SET);
+		KeyPageStart = (Int4Ptr) data->mfp->mmp;
+		KeyPage = KeyPageStart - Start;
+	}
+	else
+	{
+        	KeyPageStart = (Int4Ptr) MemNew((NumElements + 1) * sizeof(Int4));
+        	fseek(data->db_fd, Start * sizeof(Int4), SEEK_SET);
+        	FileRead(KeyPageStart, sizeof(Int4), NumElements, data->db_fd);
+		KeyPage = KeyPageStart - Start;
+	}
     } else {
-        KeyDataPage = (NISAMKeyDataPtr) MemNew((NumElements + 1) * 
+	if (data->mfp->mfile_true)
+	{
+		NlmSeekInMFILE(data->mfp, Start*sizeof(NISAMKeyData), SEEK_SET);
+		KeyDataPageStart = (NISAMKeyDataPtr) data->mfp->mmp;
+		KeyDataPage = KeyDataPageStart - Start;
+	}
+	else
+	{
+        	KeyDataPageStart = (NISAMKeyDataPtr) MemNew((NumElements + 1) * 
                                                sizeof(NISAMKeyData));
-        fseek(data->db_fd,Start * sizeof(NISAMKeyData), SEEK_SET);
-        FileRead(KeyDataPage, sizeof(NISAMKeyData), 
-                 NumElements, data->db_fd);
+        	fseek(data->db_fd,Start * sizeof(NISAMKeyData), SEEK_SET);
+        	FileRead(KeyDataPageStart, sizeof(NISAMKeyData), NumElements, data->db_fd);
+		KeyDataPage = KeyDataPageStart - Start;
+	}
     }
     
+    first = Start;
+    last = Start + NumElements;
+    found = FALSE;
     /* Search the page for the number. */
     if (NoData) {
-        for (count = 0; count < NumElements; count++) {
-            if (SwapUint4(KeyPage[count]) == Number)
-                break;
-        }
+	for (index=0; index<NCBISAM_ITER_MAX; index++)
+	{
+		current = (first+last)/2;
+		if (SwapUint4(KeyPage[current]) > Number)
+			last = current;
+		else if (SwapUint4(KeyPage[current]) < Number)
+			first = current;
+		else
+		{
+			found = TRUE;
+			break;
+		}
+	}
     } else {
-        for (count = 0; count < NumElements; count++) {
-            if ((Key = SwapUint4(KeyDataPage[count].key)) == Number)
-                break;
-        }
+	for (index=0; index<NCBISAM_ITER_MAX; index++)
+	{
+		current = (first+last)/2;
+		Key = KeyDataPage[current].key;
+		if (SwapUint4(Key) > Number)
+			last = current;
+		else if (SwapUint4(Key) < Number)
+			first = current;
+		else
+		{
+			found = TRUE;
+			break;
+		}
+	}
     }
+
     
-    if (count == NumElements) { /* Not found */
+    if (found == FALSE) /* not found. */
+    {
         
         if (Data != NULL)
             *Data = ISAMNotFound;
@@ -1136,28 +1198,34 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
         if(Index != NULL)
             *Index = ISAMNotFound;
         
-        if (NoData)
-            MemFree(KeyPage);
-        else
-            MemFree(KeyDataPage);
+	if (data->mfp->mfile_true == FALSE)
+	{
+    	    if (NoData)
+       	     	MemFree(KeyPageStart);
+       	    else
+       	     	MemFree(KeyDataPageStart);
+	}
         
         return ISAMNotFound;
     }
     
     if (Data != NULL) {
         if (NoData)
-            *Data = Start + count;
+            *Data = Start + current;
         else
-            *Data =  SwapUint4(KeyDataPage[count].data);
+            *Data =  SwapUint4(KeyDataPage[current].data);
     }
     
     if(Index != NULL)
-        *Index = Start + count;
+        *Index = Start + current;
     
-    if (NoData)
-        MemFree(KeyPage);
-    else
-        MemFree(KeyDataPage);
+    if (data->mfp->mfile_true == FALSE)
+    {
+    	    if (NoData)
+       	     	MemFree(KeyPageStart);
+       	    else
+       	     	MemFree(KeyDataPageStart);
+    }
     
     return ISAMNoError;
 }

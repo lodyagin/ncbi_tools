@@ -515,13 +515,16 @@ static void DrawPercent (VieweR v, SegmenT seg)
             if (i != 1)
             {
               if (sgp->next == NULL)
-                sprintf (outbuf, "%ld\t%ld\n", markstart, markend);
+                sprintf (outbuf, "%ld\t%ld\n",
+                         (long) markstart, (long) markend);
               else
-                sprintf (outbuf, "%ld\t%ld\t plus\n", markstart, markend);
+                sprintf (outbuf, "%ld\t%ld\t plus\n",
+                         (long) markstart, (long) markend);
             }
             else
             {
-              sprintf (outbuf, "%ld\t%ld\t minus\n", markstart, markend);
+              sprintf (outbuf, "%ld\t%ld\t minus\n",
+                       (long) markstart, (long) markend);
             }
             eplist = ValNodeNew (ephead);
             if (ephead == NULL)
@@ -663,7 +666,7 @@ static SegmenT DrawSeqGraph (SeqGraphPtr sgp, Int4 window, Uint1 graphtype,
                         FALSE, 0);
           if ((val % ticks) == 0)
           {
-            sprintf (tickpos, "%ld", val*compression);
+            sprintf (tickpos, "%ld", (long) (val*compression));
             top = margin + ((Int4) ((-18 * sgp->a/2) + (Int4) sgp->b));
             if (graphtype == GRAPH_MATRIX_AA)
               top += marginT;

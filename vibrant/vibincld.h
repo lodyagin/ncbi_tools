@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Vibrant inclusion of underlying windowing system toolbox functions,
@@ -43,6 +43,9 @@
 *
 *
 * $Log: vibincld.h,v $
+* Revision 6.2  1999/04/06 14:23:25  lewisg
+* add opengl replacement for viewer3d
+*
 * Revision 6.1  1998/07/14 16:44:27  vakatov
 * Added VibrantIsGUI() and <internal> Nlm_VibrantSetGUI()
 *
@@ -268,11 +271,14 @@ typedef  struct  Nlm_boxrec {
   Nlm_BoxData     box;
 } Nlm_BoxRec, PNTR Nlm_BoxPtr;
 
+
+
 #ifdef WIN_MAC
 #define Nlm_WindowTool  WindowPtr
 #define Nlm_PortTool    GrafPtr
 #define Nlm_ShellTool   Nlm_Handle
 #define Nlm_MainTool    Nlm_Handle
+#define Nlm_ColorMTool  PaletteHandle
 #endif
 
 #ifdef WIN_MSWIN
@@ -280,6 +286,7 @@ typedef  struct  Nlm_boxrec {
 #define Nlm_PortTool    HDC
 #define Nlm_ShellTool   Nlm_Handle
 #define Nlm_MainTool    Nlm_Handle
+#define Nlm_ColorMTool  HPALETTE
 #endif
 
 #ifdef WIN_MOTIF
@@ -287,6 +294,7 @@ typedef  struct  Nlm_boxrec {
 #define Nlm_PortTool    GC
 #define Nlm_ShellTool   Widget
 #define Nlm_MainTool    Widget
+#define Nlm_ColorMTool  Colormap
 #endif
 
 extern  Nlm_WindoW     Nlm_desktopWindow;

@@ -29,6 +29,12 @@
  * Version Creation Date: 10 March 1998
  *
  * $Log: vastsrv.c,v $
+ * Revision 6.17  1999/05/07 14:02:13  zimmerma
+ *  Removed local copy of MMDBBiostrucGet
+ *
+ * Revision 6.16  1999/02/09 15:14:00  addess
+ * Modified by DZ to extract html path dependencies: created two new static char vars: DATApath and VASTpath, and text file getCn3D.txt in data and modified .vastrc to include new vars.
+ *
  * Revision 6.15  1998/12/22 18:01:51  addess
  * changes relevant to reading new type of annot-set data
  *
@@ -117,6 +123,8 @@
 
 static Char URLBase[PATH_MAX];
 static Char URLcgi[PATH_MAX];
+static Char DATApath[PATH_MAX];
+static Char VASTpath[PATH_MAX];
 static Char ENTREZurl[PATH_MAX];
 static Char DOCSUMurl[PATH_MAX];
 static Char MAILto[PATH_MAX];
@@ -176,18 +184,16 @@ VastPageHeader(FILE *table, CharPtr pcPDB, Char cChain, int iDomain, Int4 iMMDBi
 {
 	DocSumPtr dsp;
 
-
-
 	fprintf(table, "Content-type: text/html\n\n");
 	fprintf(table, "<html><title>Vast Results</title>\n");
 	fprintf(table, "<body bgcolor = \"ffffff\">\n");
 	fprintf(table, "<base href=\"%s\">\n", URLBase);
-	fprintf(table, "<img src=\"vast2.gif\" alt=\"VAST Structure Neighbors\" usemap=#map ISMAP>\n");
+	fprintf(table, "<img src=\"%s/vast2.gif\" alt=\"VAST Structure Neighbors\" usemap=#map ISMAP>\n", VASTpath);
 	fprintf(table, "<map name=map>\n");
 	fprintf(table, "<area shape=rect coords=4,5,42,18 href=\"http://www.ncbi.nlm.nih.gov\">\n");
-	fprintf(table, "<area shape=rect coords=43,3,438,18 href=\"vast.html\">\n");
+	fprintf(table, "<area shape=rect coords=43,3,438,18 href=\"%s/vast.html\">\n", VASTpath);
 	fprintf(table, "<area shape=rect coords=439,3,485,18 href=\"%s\">\n", ENTREZurl);
-	fprintf(table, "<area shape=rect coords=490,3,507,18 href=\"vastfaq.html\">\n");
+	fprintf(table, "<area shape=rect coords=490,3,507,18 href=\"%s/vasthelp.html\">\n", VASTpath);
 	fprintf(table, "</map><p>\n");
 	fprintf(table, "\n\n<HR SIZE=5 NOSHADE>\n");
 	if (JobID == NULL)
@@ -224,12 +230,65 @@ VastPageHeader(FILE *table, CharPtr pcPDB, Char cChain, int iDomain, Int4 iMMDBi
 } /* end VastPageHeader */
 
 
+/************************** DZ: extracted from mmdbsrv.c ************************
+ * WWWPrintFileData looks in the current CGI-BIN directory 
+ *  or the "data" subdirectory for the data file.
+ *  and prints it out to pFile
+ */
+ 
+static void WWWPrintFileData(CharPtr FName,  FILE *pFile)
+{
+ 
+   FILE *f = NULL;
+   Char fullpath [PATH_MAX];
+   CharPtr ptr;  
+   Char pcBuf[1024];
+   
+   fullpath[0] = '\0';
+   StringCpy(fullpath,  DATApath); /* look in DATApath */
+   StringCat(fullpath,  FName);
+   f = FileOpen (fullpath, "r");
+   if (f == NULL) {
+       f = FileOpen (FName, "r");  /* look in curent */
+       if (f == NULL)  {  /* look in ./data/ */
+         ProgramPath (fullpath, sizeof (fullpath) - 1);
+         ptr = StringRChr (fullpath, DIRDELIMCHR);
+         if (ptr != NULL) {
+	  *ptr = '\0';
+         }
+         FileBuildPath (fullpath, "data", FName);  
+         f = FileOpen (fullpath, "r");
+         if (f == NULL)  {
+           return;  
+         } 
+       }
+   }
+      
+   do {
+     pcBuf[0] = '\0';
+     ptr = fgets(pcBuf, (size_t)1024, f);
+     if (ptr) fprintf(pFile, ptr);
+   } while (ptr);
+  
+   FileClose(f);
+   return;
+}
+ 
 
 /* Note: A lot of this common html text could be put into a header file, read in, and then
  * spewed out.  Cf. the way this is done in mmdbsrv with WWWPrintFile.  Sometime I'll take
  * the time to write a more general version of the latter function that can be used for this
  * purpose.  T.M.
  */
+
+/* 
+   DZ: most of the HTML file URLs are inside the new VAST subdirectory, and references to these
+   are interwoven with many query-specific references. Becasue of this interleaving, using 
+   WWWPrintFileData would require several invocations and corresponding text files. Instead.
+   WWWPrintFileData is only used to define the new path to CN3D, and all vast html references 
+   are now prefixed with the VASTpath string. This variable has been added to .vastrc and to 
+   the list of parameters to be extracted using GetVastParams. 
+*/
 
 static void
 VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass, 
@@ -254,8 +313,9 @@ VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass,
     *****/
     fprintf(table, "<TR><TH COLSPAN=2 ALIGN=LEFT>\n");
     fprintf(table, "<strong><INPUT TYPE=SUBMIT VALUE=\"View / Save Alignments\"></strong>\n");
-    fprintf(table, "&nbsp<img src=\"/Structure/new.gif\" alt=\"New\">\n");
-    fprintf(table, "&nbsp<a href=\"/Structure/cn3d.html\"><B><I>Get Cn3D 2.0 Now!</I></B></a></TH></TR>");
+    fprintf(table, "&nbsp<img src=\"%s/new.gif\" alt=\"New\">\n", VASTpath);
+    WWWPrintFileData("getCn3D.txt", table);
+    fprintf(table, "</TH></TR>");
     fprintf(table, "<tr><td colspan = 1><strong>Options:</strong></td>\n");
     fprintf(table, "<td colspan = 1><strong>Viewer:</strong></td>\n"); 
     fprintf(table, "<td colspan = 2><strong>Complexity:</strong></td></tr>\n");
@@ -285,25 +345,19 @@ VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass,
     fprintf(table,"<table cellspacing=3 cellpadding=2 width=100%% border=1>\n");
     fprintf(table,"<tr valign=middle>\n");
     fprintf(table,"<th>&nbsp</th>\n");
-    fprintf(table,"<th align=left><pre> <a href=\"%svastfaq.html#Structure\">PDB</a>", URLBase);
-    fprintf(table," <a href=\"%svastfaq.html#C\">C</a>", URLBase);
-    fprintf(table," <a href=\"%svastfaq.html#D\">D</a></pre></th>\n", URLBase);
+    fprintf(table,"<th align=left><pre> <a href=\"%s/vasthelp.html#Structure\">PDB</a>", VASTpath);
+    fprintf(table," <a href=\"%s/vasthelp.html#C\">C</a>", VASTpath);
+    fprintf(table," <a href=\"%s/vasthelp.html#D\">D</a></pre></th>\n", VASTpath);
 
     if (iFull) {
-      fprintf(table,"<th align=right><pre><a href=\"%svastfaq.html#SCORE\">SCO</a></pre></th>\n",
-            URLBase); 
-      fprintf(table,"<th align=right><pre><a href=\"%svastfaq.html#P-VAL\">P-VAL</a></pre></th>\n",
-            URLBase);
+      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#SCORE\">SCO</a></pre></th>\n", VASTpath); 
+      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#P-VAL\">P-VAL</a></pre></th>\n", VASTpath);
     }
     
-    fprintf(table,"<th align=right><pre><a href=\"%svastfaq.html#RMSD\">RMSD</a></pre></th>\n",
-	  URLBase);
-    fprintf(table,"<th align=right><pre><a href=\"%svastfaq.html#NRES\">NRES</a></pre></th>\n",
-	  URLBase);
-    fprintf(table,"<th align=right><pre><a href=\"%svastfaq.html#Id\">%s</a></pre></th>\n",
-	  URLBase, "%Id");
-    fprintf(table,"<th align=left><pre><a href=\"%svastfaq.html#Contents\">Description</pre></th>\n",
-	  URLBase);
+    fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#RMSD\">RMSD</a></pre></th>\n", VASTpath);
+    fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#NRES\">NRES</a></pre></th>\n",VASTpath);
+    fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#Id\">%s</a></pre></th>\n", VASTpath, "%Id");
+    fprintf(table,"<th align=left><pre><a href=\"%s/vasthelp.html#Contents\">Description</pre></th>\n",VASTpath);
     fprintf(table,"</tr><br>\n");
     fflush(table);
 
@@ -557,8 +611,7 @@ VastTableEnd(FILE *table, Int4 iMMDBid, Int4 FSID, BiostrucAnnotSetPtr pbsas, In
     fprintf(table, "&nbsp <small>Hits to display per page:\n");
     fprintf(table, "<INPUT name = \"dispmax\" size=6 Value=%d> choose between 20-100 neighbors per page.</small></TD></TR>\n", HitsPerPage);
     fprintf(table, "<TR>\n");
-    fprintf(table, "<TD><a href=\"%svastfaq.html#NRSet\"><strong>Display Subset:</strong></a></TD>\n",
-	URLBase);
+    fprintf(table, "<TD><a href=\"%s/vasthelp.html#NRSet\"><strong>Display Subset:</strong></a></TD>\n", VASTpath);
     fprintf(table, "<TD COLSPAN=1><strong>Sorted by:</strong></TD>\n");
     fprintf(table, "<TD COLSPAN=1><strong>Column Format:</strong></TD>\n");
     fprintf(table, "</TR>\n");
@@ -893,7 +946,7 @@ MakeVastTable(Int4 FSID, BiostrucAnnotSetPtr pbsas, Int2 iSort, Int4 subsetnum, 
 	}
 	else {
 	    VastPageHeader(table, pcPDB, cChain, iDomain, iMMDBid, JobID);
-	    fprintf(table, "<h1><a href=\"%svastfaq.html#NoNeighbor\">%s</a></h1>\n", URLBase,
+	    fprintf(table, "<h1><a href=\"%s/vasthelp.html#NoNeighbor\">%s</a></h1>\n", VASTpath,
 		"VAST did not find any structure neighbors.");
 	    fprintf(table, "<HR SIZE=5 NOSHADE>\n");
 	    fprintf(table, "</body></html>\n");
@@ -1176,79 +1229,6 @@ Int2 LIBCALL Check_VastSearch_Password(CharPtr pcPassNew, CharPtr JobID)
     return 0;
 }
 
-
-
-/* Attempt to fix pubstruct mess.  Local copy of this routine from mmdblocl.c. */
-
-BiostrucPtr LIBCALL
-MMDBBiostrucGet(DocUid uid, Int4 mdlLvl, Int4 maxModels)
-{
-   AsnIoPtr aip = NULL;
-   AsnTypePtr atp = NULL;
-   Char path[PATH_MAX];
-   Char compath[PATH_MAX];
-   Char tempfile[PATH_MAX];
-   Char pcId[20];    
-   Int2 iFileExists = 0;
-   int  iAvail = 1;
-   BiostrucPtr pbs = NULL, pbsTemp = NULL;
-
-   sprintf(pcId, "%ld", (long) uid);
-   path[0] = '\0';
-   StringCpy(path, MMDBpath);
-   StringCat(path, pcId);
-   StringCat(path, ".val");
-
-   compath[0] = '\0';
-   StringCpy(tempfile, TmpNam(NULL)); 
-   sprintf(compath,"%s -c %s.gz > %s\n", gunzip, path, tempfile);
-   iAvail = system(compath);
-   if (iAvail != 0)
-      {
- 	ErrPostEx(SEV_FATAL,0,0, "MMDBBiostrucGet failed: Can't find gunzip in path.\n");
-	return NULL;
-      }
-   iFileExists = FileLength(tempfile);
-   if (iFileExists == 0)
-      {
-        return NULL;
-      }
-      
-    aip = AsnIoOpen(tempfile, "rb");
-  
-    if (aip) 
-     {
-       pbs = BiostrucAsnGet(aip, NULL,  mdlLvl,  maxModels);
-       AsnIoClose (aip);
-     }
-    /* Chain, MasterChain and SlaveChain are external variables, which I hate. But I would rather   */
-    /* do this than modify mmdbapi, which I may have to do eventually                  */
-    
-    if (Chain == TRUE)
-    {
-      if (MasterChain[0] != ' ') 
-      {
-        pbsTemp = (BiostrucPtr)PruneBiostruc(pbs, MasterChain);
-        pbs = NULL;
-        pbs = pbsTemp;
-      }
-      
-      if (SlaveChain[0] != ' ')
-      {
-        pbsTemp = (BiostrucPtr)PruneBiostruc(pbs, SlaveChain);
-        pbs = NULL;
-        pbs = pbsTemp;
-      }
-    } 
-    FileRemove(tempfile);
-
-    if (!pbs) return NULL;  
-    return pbs;
-
-} /* end MMDBBiostrucGet */
-
-
-
 /* Extract vastsrv parameters from the config file. */
 
 static Boolean
@@ -1313,6 +1293,18 @@ GetVastParams()
 		return FALSE;
 	}
         
+	GetAppParam("vast", "VASTSRV", "DATApath", "", DATApath, PATH_MAX);
+        if (DATApath[0] == '\0') {
+		ErrPostEx(SEV_FATAL, 0, 0, "VAST config file\nVASTSRV section has no VAST Data path...\n");
+		return FALSE;
+	}
+
+	GetAppParam("vast", "VASTSRV", "VASTpath", "", VASTpath, PATH_MAX);
+        if (DATApath[0] == '\0') {
+		ErrPostEx(SEV_FATAL, 0, 0, "VAST config file\nVASTSRV section has no VAST html path...\n");
+		return FALSE;
+	}
+
         return TRUE;
 
 } /* end GetVastParams */

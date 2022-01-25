@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.21 $
+* $Revision: 6.29 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -74,6 +74,7 @@ typedef struct seqmgrbioseqcontext {
   BioseqPtr     bsp;
   SeqEntryPtr   sep;
   BioseqSetPtr  bssp;
+  Int4          numsegs;
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
@@ -144,12 +145,16 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures PROTO((Uint2 entityID, Pointer ptr)
 
 /*****************************************************************************
 *
+*   To find the best protein feature for a CDS, first call SeqMgrGetProtXref.
+*     If it is NULL, call SeqMgrGetBestProteinFeature.
 *   SeqMgrGetBestProteinFeature and SeqMgrGetCDSgivenProduct take a protein
 *     bioseq to get the best protein feature or encoding CDS
 *   SeqMgrGetRNAgivenProduct takes an mRNA (cDNA) bioseq and gets the encoding
 *     mRNA feature on the genomic bioseq
 *
 *****************************************************************************/
+
+NLM_EXTERN ProtRefPtr LIBCALL SeqMgrGetProtXref PROTO((SeqFeatPtr sfp));
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetBestProteinFeature PROTO((BioseqPtr bsp,
                                                                  SeqMgrFeatContext PNTR context));
@@ -252,24 +257,25 @@ typedef Boolean (LIBCALLBACK *SeqMgrFeatExploreProc) PROTO((SeqFeatPtr sfp, SeqM
 *   It is expected that these calls would be flanked by BioseqLock and BioseqUnlock,
 *     so object manager reload could ensure that pointers are valid within the loop,
 *     but these explore functions can work on cached-out records
+*   All of these functions return the number of times the callback was called
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreBioseqs PROTO((Uint2 entityID, Pointer ptr, Pointer userdata,
-                                                       SeqMgrBioseqExploreProc userfunc,
-                                                       Boolean nucs, Boolean prots, Boolean parts));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreBioseqs PROTO((Uint2 entityID, Pointer ptr, Pointer userdata,
+                                                    SeqMgrBioseqExploreProc userfunc,
+                                                    Boolean nucs, Boolean prots, Boolean parts));
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreSegments PROTO((BioseqPtr bsp, Pointer userdata,
-                                                        SeqMgrSegmentExploreProc userfunc));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreSegments PROTO((BioseqPtr bsp, Pointer userdata,
+                                                     SeqMgrSegmentExploreProc userfunc));
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreDescriptors PROTO((BioseqPtr bsp, Pointer userdata,
-                                                          SeqMgrDescExploreProc userfunc,
-                                                          BoolPtr seqDescFilter));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreDescriptors PROTO((BioseqPtr bsp, Pointer userdata,
+                                                       SeqMgrDescExploreProc userfunc,
+                                                       BoolPtr seqDescFilter));
 
-NLM_EXTERN Boolean LIBCALL SeqMgrExploreFeatures PROTO((BioseqPtr bsp, Pointer userdata,
-                                                        SeqMgrFeatExploreProc userfunc,
-                                                        SeqLocPtr locationFilter,
-                                                        BoolPtr seqFeatFilter, BoolPtr featDefFilter));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures PROTO((BioseqPtr bsp, Pointer userdata,
+                                                     SeqMgrFeatExploreProc userfunc,
+                                                     SeqLocPtr locationFilter,
+                                                     BoolPtr seqFeatFilter, BoolPtr featDefFilter));
 
 /*****************************************************************************
 *
@@ -292,10 +298,41 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((Uint2 entityID, Bio
 
 /*****************************************************************************
 *
+*   BioseqFindFromSeqLoc finds the segmented bioseq if location is join on parts,
+*     and does so even if some of the intervals are far accessions.
+*
+*****************************************************************************/
+
+NLM_EXTERN BioseqPtr BioseqFindFromSeqLoc PROTO((SeqLocPtr loc));
+
+/*****************************************************************************
+*
+*   SeqMgrGetParentOfPart returns the segmented bioseq parent of a part bioseq,
+*     and fills in the context structure.
+*
+*****************************************************************************/
+
+NLM_EXTERN BioseqPtr LIBCALL SeqMgrGetParentOfPart PROTO((BioseqPtr bsp,
+                                                          SeqMgrSegmentContext PNTR context));
+
+/*****************************************************************************
+*
+*   SeqMgrGetBioseqContext fills in the context structure for any bioseq.
+*
+*****************************************************************************/
+
+NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext PROTO((BioseqPtr bsp,
+                                                         SeqMgrBioseqContext PNTR context));
+
+/*****************************************************************************
+*
 *   SeqMgrBuildFeatureIndex builds a sorted array index for any feature type
 *     (gene, mRNA, CDS, publication, and biosource have built-in arrays)
-*   SeqMgrGetOverlappingFeature uses the array to find feature overlap,
-*     returning the position in the index
+*   SeqMgrGetOverlappingFeature uses the array, or a feature subtype (chocies
+*     are FEATDEF_GENE, FEATDEF_CDS, FEATDEF_mRNA, FEATDEF_PUB, or FEATDEF_BIOSRC)
+*     to find feature overlap, requiring either that the location be completely
+*     contained within the feature range, or merely that it be overlapped by the
+*     feature, and returns the position in the index
 *   SeqMgrGetFeatureInIndex gets an arbitrary feature indexed by the array
 *
 *****************************************************************************/
@@ -303,8 +340,9 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((Uint2 entityID, Bio
 NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex PROTO((BioseqPtr bsp, Int4Ptr num,
                                                           Uint1 seqFeatChoice, Uint1 featDefChoice));
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature PROTO((SeqLocPtr slp, VoidPtr featarray,
-                                                                 Int4 numfeats, Int4Ptr position,
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature PROTO((SeqLocPtr slp, Uint2 subtype,
+                                                                 VoidPtr featarray, Int4 numfeats,
+                                                                 Int4Ptr position, Boolean containedWithin,
                                                                  SeqMgrFeatContext PNTR context));
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex PROTO((BioseqPtr bsp, VoidPtr featarray,

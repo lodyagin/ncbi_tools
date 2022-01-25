@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -103,7 +103,7 @@ typedef long Int4, * Int4Ptr;
 #define IS_ALPHANUM(c) (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_PRINT(c)	(' '<=(c) && (c)<='~')
 
-/* copy of QUERY_STRING is parsed with strtok into tag and val paired arrays */
+/* copy of query string is parsed with strtok into tag and val paired arrays */
 
 #define MAX_ENTRIES  32
 
@@ -112,7 +112,8 @@ static Int2     num_tags = 0;
 static CharPtr  tag [MAX_ENTRIES];
 static CharPtr  val [MAX_ENTRIES];
 
-static Bool ParseQuery (Bool queryRequired)
+
+static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
 
 {
   Char     ch;
@@ -121,17 +122,12 @@ static Bool ParseQuery (Bool queryRequired)
   CharPtr  to;
 
 /*
-*  given a sample URL:
-*
-*   http://myserver:80/cgi-bin/mydigest.cgi?enzyme=EcoRI&pattern=GAATTC
-*
-*  the QUERY_STRING variable contains enzyme=EcoRI&pattern=GAATTC
+*  given a query string enzyme=EcoRI&pattern=GAATTC&supplemental_input=\n
 */
 
 /* The >Message prefix causes Sequin to display the message to the user */
 
-  ptr = getenv ("QUERY_STRING");
-  if (ptr == NULL) {
+  if (qstr == NULL) {
     printf ("Content-type: text/html\n\n");
     printf (">Message\nFAILURE - Query not detected\n");
     fflush (stdout);
@@ -140,26 +136,34 @@ static Bool ParseQuery (Bool queryRequired)
 
 /* allocates a copy of query string that can be modified during parsing */
 
-  len = strlen (ptr);
+  len = strlen (qstr);
   query = malloc (len + 3);
+
+  if (query == NULL) {
+    printf ("Content-type: text/html\n\n");
+    printf (">Message\nFAILURE - query allocation failed\n");
+    fflush (stdout);
+    return FALSE;
+  }
+
   memset (query, 0, len + 2);
-  /* strcpy (query, ptr); */
+  /* strcpy (query, qstr); */
 
 /* may need to convert %20 encoding in URL to a space */
 
   to = query;
-  ch = *ptr;
+  ch = *qstr;
   while (ch != '\0') {
-    if (ch == '%' && *(ptr + 1) == '2' && *(ptr + 2) == '0') {
+    if (ch == '%' && *(qstr + 1) == '2' && *(qstr + 2) == '0') {
       *to = ' ';
       to++;
-      ptr += 3;
+      qstr += 3;
     } else {
       *to = ch;
       to++;
-      ptr++;
+      qstr++;
     }
-    ch = *ptr;
+    ch = *qstr;
   }
   *to = '\0';
 
@@ -200,6 +204,7 @@ static Bool ParseQuery (Bool queryRequired)
   return TRUE;
 }
 
+
 static CharPtr FindByName (CharPtr find)
 
 {
@@ -216,6 +221,7 @@ static CharPtr FindByName (CharPtr find)
   return NULL;
 }
 
+
 static Int2 ListHasString (CharPtr list [], CharPtr str)
 
 {
@@ -229,6 +235,7 @@ static Int2 ListHasString (CharPtr list [], CharPtr str)
   }
   return -1;
 }
+
 
 #define SEND_FILENAME_ARGS_BEFORE  1
 #define SEND_FILENAME_ARGS_AFTER   2
@@ -312,19 +319,38 @@ static void RunCustom (CharPtr tempfile)
   pclose (fp);
 }
 
+
 static void RunEcho (CharPtr tempfile)
 
 {
-  CharPtr  ptr;
+  size_t  ct;
+  Char    buf [256];
+  FILE*   fp;
+  Int2    i;
 
-/* simply echo URL query string */
+/* reconstruct and print the query string */
 
-  ptr = getenv ("QUERY_STRING");
-  if (ptr != NULL) {
-    printf ("%s\n", ptr);
+  for (i = 0; i < num_tags; i++) {
+    if (i > 0) {
+      printf ("%");
+    }
+    printf ("%s=%s", tag [i], val [i]);
+  }
+  printf ("\n");
+  fflush (stdout);
+
+/* now echo the data file */
+
+  fp = fopen (tempfile, "r");
+  if (fp == NULL) return;
+
+  while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
+    fwrite (buf, 1, ct, stdout);
     fflush (stdout);
   }
+  fclose (fp);
 }
+
 
 static void RunSeg (CharPtr tempfile)
 
@@ -372,6 +398,7 @@ static void RunSeg (CharPtr tempfile)
   }
   pclose (fp);
 }
+
 
 #define MAX_FIELDS  9
 
@@ -466,6 +493,11 @@ static void RunTrnaScan (CharPtr tempfile)
         } else {
           printf ("\t\t\tproduct\t%s\n", aa);
         }
+
+/* empty gene qualifier to suppress /gene (e.g., if tRNA is in an intron) */
+
+        printf ("\t\t\tgene\t\n");
+
         fflush (stdout);
       }
     }
@@ -479,6 +511,7 @@ static void RunTrnaScan (CharPtr tempfile)
   pclose (fp);
 }
 
+
 /* this program can provide several services, specified in URL query string */
 
 static CharPtr services [] = {
@@ -487,15 +520,21 @@ static CharPtr services [] = {
 
 /* main function of cgi program, called by HTTPD server */
 
+#define BUFLEN 4096
+
 main (int argc, char *argv[])
 
 {
-  Char     buf [256];
+  CharPtr  bf;
+  CharPtr  buf;
+  Char     ch;
   size_t   ct;
   FILE*    fp;
   CharPtr  method;
+  CharPtr  ptr;
   CharPtr  request;
   Int2     service;
+  CharPtr  supp;
   Char     tempfile [L_tmpnam];
 
 /* at startup, first verify environment */
@@ -517,31 +556,18 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* parse POST query into tag and val arrays */
+/* backward compatibility for query in URL after ? character */
 
-  if (! ParseQuery (TRUE)) {
-    fflush (stdout);
-    return 1;
-  }
-
-/* expect request=custom, request=echo, request=seg, or request=trnascan */
-
-  request = FindByName ("request");
-  if (request == NULL) {
-    printf ("Content-type: text/html\n\n");
-    printf (">Message\nFAILURE - No service request\n");
-    fflush (stdout);
-    return 1;
-  }
-
-/* compare request value against list of available services */
-
-  service = ListHasString (services, request);
-  if (service < 1) {
-    printf ("Content-type: text/html\n\n");
-    printf (">Message\nFAILURE - Unable to match request '%s'\n", request);
-    fflush (stdout);
-    return 1;
+  ptr = getenv ("QUERY_STRING");
+  if (ptr != NULL && strlen (ptr) > 0) {
+    if (! ParseQuery (ptr, TRUE)) {
+      printf (">Message\nFAILURE - QUERY_STRING parsing failed\n");
+      fflush (stdout);
+      if (query != NULL) {
+        free (query);
+      }
+      return 1;
+    }
   }
 
 /*
@@ -559,16 +585,89 @@ main (int argc, char *argv[])
     return 1;
   }
 
-  while ((ct = fread (buf, 1, sizeof (buf), stdin)) > 0) {
-    fwrite (buf, 1, ct, fp);
+/* allocate large buffer for copying stdin */
+
+  buf = malloc (BUFLEN);
+  if (buf == NULL) {
+    printf ("Content-type: text/html\n\n");
+    printf (">Message\nFAILURE - buffer allocation failed\n");
+    fflush (stdout);
+    return 1;
+  }
+
+  while ((ct = fread (buf, 1, BUFLEN, stdin)) > 0) {
+    bf = buf;
+
+    if (query == NULL) {
+
+/* find supplemental_input= string marking end of query at beginning of POST data */
+
+      supp = "&supplemental_input=";
+      ptr = strstr (buf, supp);
+      if (ptr == NULL) {
+        supp = "supplemental_input=";
+        ptr = strstr (buf, supp);
+      }
+
+/* separate query string and remainder of buffer */
+
+      if (ptr != NULL) {
+        *ptr = '\0';
+
+        ptr += strlen (supp);
+        ptr++;
+        bf = ptr;
+
+        ch = *bf;
+        while (ch == '\n' || ch == '\r') {
+          bf++;
+          ch = *bf;
+        }
+
+        ct -= (bf - buf);
+
+/* parse POST query into tag and val arrays */
+
+        if (! ParseQuery (buf, TRUE)) {
+          printf (">Message\nFAILURE - query parsing failed\n");
+          fflush (stdout);
+          free (buf);
+          return 1;
+        }
+      }
+    }
+
+/* write data part of buffer to temporary file */
+
+    fwrite (bf, 1, ct, fp);
   }
   fflush (fp);
   fclose (fp);
+
+  free (buf);
 
 /* now send required first header information to stdout */
 
   printf ("Content-type: text/html\n\n");
   fflush (stdout);
+
+/* expect request=custom, request=echo, request=seg, or request=trnascan */
+
+  request = FindByName ("request");
+  if (request == NULL) {
+    printf (">Message\nFAILURE - No service request\n");
+    fflush (stdout);
+    return 1;
+  }
+
+/* compare request value against list of available services */
+
+  service = ListHasString (services, request);
+  if (service < 1) {
+    printf (">Message\nFAILURE - Unable to match request '%s'\n", request);
+    fflush (stdout);
+    return 1;
+  }
 
 /* call appropriate external analysis program */
 
@@ -604,19 +703,4 @@ main (int argc, char *argv[])
   free (query);
   return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

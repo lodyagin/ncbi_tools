@@ -160,7 +160,7 @@ on copyIncludes()
 			end if
 		end repeat
 		
-		repeat with j in every file of (folder (NCBISOURCE & "network:ncsasock:"))
+		repeat with j in every file of (folder (NCBISOURCE & "connect:ncsasock:"))
 			try
 				if (j as string) ends with ".h" then
 					copy {j} to {folder INCLUDEFILES}

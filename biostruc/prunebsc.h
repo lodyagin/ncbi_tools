@@ -14,4 +14,6 @@
 #include "strimprt.h"
 #define MAXNUM 50
 
+BiostrucPtr LIBCALL PruneBiostruc(BiostrucPtr bsp, CharPtr chain);
+
 #endif

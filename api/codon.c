@@ -750,8 +750,8 @@ NLM_EXTERN Int4 print_label_to_buffer_all_ex(CharPtr buf, CharPtr label,
 	len = 0;
 	if(pos != -1)
 	{
-		sprintf(buf+i, "%ld", pos);
-		sprintf(temp, "%ld", pos);
+		sprintf(buf+i, "%ld", (long) pos);
+		sprintf(temp, "%ld", (long) pos);
 		len = StringLen(temp);
 		i += len;
 	}
@@ -797,7 +797,7 @@ NLM_EXTERN void print_label(FILE *fp, CharPtr label, Int4 pos, Uint1 strand, Boo
 	len = 0;
 	if(pos != -1)
 	{
-		sprintf(temp, "%ld", pos);
+		sprintf(temp, "%ld", (long) pos);
 		len = StringLen(temp);
 		fprintf(fp, "%s", temp);
 	}

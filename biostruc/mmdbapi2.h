@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Traversers & Data Lookup
 *
@@ -46,6 +46,9 @@
 *
 *
 * $Log: mmdbapi2.h,v $
+* Revision 6.1  1999/03/30 22:31:12  ywang
+* add GetMGFromMM & GetMMFromMSDBySeqId
+*
 * Revision 6.0  1997/08/25 18:11:06  madden
 * Revision changed to 6.0
 *
@@ -197,6 +200,8 @@ PMAD LIBCALL GetMainAtom(PDNMG pdnmgThis);
 void LIBCALLBACK FindMolByChar(PFB pfbThis, Int4 iModel, Int4 iIndex, Pointer ptr);
 PDNMM LIBCALL MolFromPDBChain(PDNMS pdnmsThis,  char c);
 CharPtr LIBCALL SeqStringFromMol(PDNMM pdnmmThis);
+PMGD LIBCALL GetMGFromMM(PMMD pmmdThis, Int4 iRes);
+PMMD LIBCALL GetMMFromMSDBySeqId(PMSD pmsdThis, SeqIdPtr sip);
 
 
 #ifdef __cplusplus

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.17  1999/02/19 19:24:34  chappey
+* Possible deselection of a region included in a selected region
+*
 * Revision 6.16  1999/01/22 16:19:51  chappey
 * AlsoSelect does not Deselect anymore when selected region of an entityID is already selected. Only one selection remains
 *
@@ -3557,13 +3560,15 @@ static SeqLocPtr SeqLocChangeIntervalle (SeqLocPtr slp, Int4 start, Int4 stop)
 static Int2 NEAR ObjMgrRegionComp (Pointer region1,Pointer region2, Boolean direction2_plus)
 {
         SeqLocPtr slp1, slp2;
+        Int2      res;
 
         if ((region1 == NULL) || (region2 == NULL))      
            return FALSE;
 
         slp1 = (SeqLocPtr)region1;
         slp2 = (SeqLocPtr)region2;
-        if (SeqLocCompare(slp1,slp2) == SLC_NO_MATCH)
+        res = SeqLocCompare(slp1,slp2);
+        if (res == SLC_NO_MATCH)
         {
            if (SeqLocStop(slp1) == SeqLocStart(slp2)-1)
               return 2;
@@ -3571,9 +3576,9 @@ static Int2 NEAR ObjMgrRegionComp (Pointer region1,Pointer region2, Boolean dire
               return 3;
            return 0;
         }
-        if (SeqLocCompare(slp1,slp2) == SLC_A_EQ_B)
+        if (res == SLC_A_EQ_B)
            return 1;
-        if (SeqLocCompare(slp1,slp2) == SLC_B_IN_A)
+        if (res == SLC_B_IN_A)
         {
 	   if (SeqLocStart(slp1)==SeqLocStart(slp2))
               return 5;
@@ -3584,9 +3589,9 @@ static Int2 NEAR ObjMgrRegionComp (Pointer region1,Pointer region2, Boolean dire
            else
               return 6;
         }
-        if (SeqLocCompare(slp1,slp2) == SLC_A_IN_B)
+        if (res == SLC_A_IN_B)
            return 4;
-        if (SeqLocCompare(slp1,slp2) == SLC_A_OVERLAP_B)
+        if (res == SLC_A_OVERLAP_B)
         {
            if (SeqLocStart(slp1) < SeqLocStart(slp2))
               return 2;
@@ -3872,6 +3877,7 @@ static Boolean NEAR ObjMgrDeSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 ite
 {
 	SelStructPtr tmp, next;
 	Boolean retval=FALSE, tret, do_it;
+	SeqLocPtr slp;
 
 	if (entityID == 0)
 	{
@@ -3901,6 +3907,26 @@ static Boolean NEAR ObjMgrDeSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 ite
 							tret = ObjMgrDeSelectStructFunc(omp, tmp);
 							if (tret)
 								retval = TRUE;
+						}
+                                                else if (SeqLocCompare(tmp->region, region)==SLC_B_IN_A)
+						{
+							if (SeqLocStart(tmp->region)==SeqLocStart(region))
+							{
+                						SeqLocChangeIntervalle ((SeqLocPtr)tmp->region, (Int4)(SeqLocStop(region)+1), -1);
+                						retval=ObjMgrSendDeSelMsg (omp, entityID, itemID, itemtype, OM_REGION_SEQLOC, region);
+							}
+							else if (SeqLocStop(tmp->region)==SeqLocStop(region))
+							{
+								SeqLocChangeIntervalle ((SeqLocPtr)tmp->region, -1, (Int4)(SeqLocStart(region)-1));
+								retval=ObjMgrSendDeSelMsg (omp, entityID, itemID, itemtype, OM_REGION_SEQLOC, region);
+							}
+							else {
+								slp=SeqLocIntNew(SeqLocStop(region)+1, SeqLocStop((SeqLocPtr)tmp->region), 0, SeqLocId(tmp->region));
+				 				SeqLocChangeIntervalle ((SeqLocPtr)tmp->region, -1, (Int4)(SeqLocStart(region)-1));
+                						ObjMgrAddSelStruct(omp, entityID, itemID, itemtype, regiontype, slp);
+                                                                retval=ObjMgrSendDeSelMsg (omp, entityID, itemID, itemtype, OM_REGION_SEQLOC, region);
+
+							}
 						}
 					}
 				}

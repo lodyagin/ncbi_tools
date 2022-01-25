@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 5/26/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  a utility to find low complexity NA regions
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: dust.c,v $
+* Revision 6.2  1999/03/12 17:03:29  kuzio
+* cast
+*
 * Revision 6.1  1998/09/24 15:26:39  egorov
 * Fix lint complaints
 *
@@ -395,7 +398,7 @@ static Int2 dust_segs (Int4 length, SeqPortPtr spp, Int4 start,
 	if (invrescount > 0)
 	{
 		ErrPostEx (SEV_INFO, 3, 2,
-		   "Total invalid residues found: %ld", invrescount);
+		   "Total invalid residues found: %ld", (long) invrescount);
                 ErrShow ();
 	}
 	return nreg;
@@ -502,7 +505,7 @@ static Int2 dusttripfind (SeqPortPtr spp, UcharPtr s1, Int4 icur, Int4 max,
                 if (*invrescount < 3)
                 {
          		ErrPostEx (SEV_INFO, 5, 1,
-			 "Invalid residue converted to 'A': %ld", pos);
+			 "Invalid residue converted to 'A': %ld", (long) pos);
 			ErrShow ();
 		}
 		(*invrescount)++;
@@ -520,7 +523,7 @@ static Int2 dusttripfind (SeqPortPtr spp, UcharPtr s1, Int4 icur, Int4 max,
                 if (*invrescount < 3)
                 {
          		ErrPostEx (SEV_INFO, 5, 1,
-			 "Invalid residue converted to 'A': %ld", pos);
+			 "Invalid residue converted to 'A': %ld", (long) pos);
 			ErrShow ();
 		}
 		(*invrescount)++;
@@ -539,7 +542,7 @@ static Int2 dusttripfind (SeqPortPtr spp, UcharPtr s1, Int4 icur, Int4 max,
 			if (*invrescount < 3)
 			{
 				ErrPostEx (SEV_INFO, 5, 1,
-				 "Invalid residue converted to 'A': %ld", pos);
+				 "Invalid residue converted to 'A': %ld", (long) pos);
 				ErrShow ();
 			}
 			(*invrescount)++;

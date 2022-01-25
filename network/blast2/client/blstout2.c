@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Creating BLAST report
@@ -45,6 +45,9 @@
 *
 * RCS Modification History:
 * $Log: blstout2.c,v $
+* Revision 6.2  1999/03/12 14:38:43  madden
+* Fixed formatting problems
+*
 * Revision 6.1  1997/11/28 18:21:59  madden
 * fprintf fixes
 *
@@ -831,7 +834,7 @@ Output */
                   if(!use_text_id)
                     sprintf(HTML_tmp, 
                             "<a href = #%08ld>%ld</a>", 
-                            HTML_gi, (long) highScore);
+                            (long) HTML_gi, (long) highScore);
                   else
                     sprintf(HTML_tmp, 
                             "<a href = #%s>%ld</a>", 
@@ -924,9 +927,9 @@ format_an_id (CharPtr id, ValNodePtr vnp, Int2 max_id_length, Boolean get_gi)
 		    if (id != NULL)
 		    {
 			if (get_gi)
-	  	    		sprintf(temp, "gi|%ld|%s", (long) gi, vnp1->data.ptrvalue);
+	  	    		sprintf(temp, "gi|%ld|%s", (long) gi, (CharPtr) vnp1->data.ptrvalue);
 			else
-	  	    		sprintf(temp, "%s", vnp1->data.ptrvalue);
+	  	    		sprintf(temp, "%s", (CharPtr) vnp1->data.ptrvalue);
 		    }
 		    found_id = TRUE;
 		    break;
@@ -965,7 +968,7 @@ format_an_id (CharPtr id, ValNodePtr vnp, Int2 max_id_length, Boolean get_gi)
 		    	length = StringLen(vnp->data.ptrvalue);
 		    	if (id != NULL)
 			{
-	  	    		sprintf(temp, "%s", vnp->data.ptrvalue);
+	  	    		sprintf(temp, "%s", (CharPtr) vnp->data.ptrvalue);
 				temp[length] = NULLB;
 			}
 		    	break;

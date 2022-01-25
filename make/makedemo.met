@@ -55,6 +55,10 @@ with timeout of 60000 seconds
 	CreatePOWBLAST()
 	CreateBLASTCL3()
 	
+	CreateFORMATDB()
+	CreateBLASTALL()
+	CreateBLASTPGP()
+	
 	if MAKEAPPS = "TRUE" then
 		CompilePrograms()
 	end if
@@ -94,14 +98,21 @@ on DoSetGlobals()
 	end tell
 end DoSetGlobals
 
-on DoSetPPC()
+on DoSetPreferences()
 	tell application "CodeWarrior IDE 3.2"
 		
 		(* ===== Panel Target ===== *)
-		Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		if MASTER = "PPC" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		else if MASTER = "68K" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
+		end if
 		
 		(* ===== Panel PowerPC Project =====  *)
 		Set Preferences of panel "PPC Project" to {Project Type:standard application}
+		
+		(* ===== Panel 68K Project =====  *)
+		Set Preferences of panel "68K Project" to {Project Type:standard application}
 		
 		(* ===== Panel C/C++ Language =====  *)
 		Set Preferences of panel "C/C++ Compiler" to Â
@@ -165,49 +176,6 @@ on DoSetPPC()
 				, Expand Uninitialized Data:false Â
 				, Fragment Name:""}
 		
-		my DoSetPaths1()
-		
-	end tell
-end DoSetPPC
-
-on DoSet68K()
-	tell application "CodeWarrior IDE 3.2"
-		
-		(* ===== Panel Target ===== *)
-		Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
-		
-		(* ===== Panel 68K Project =====  *)
-		Set Preferences of panel "68K Project" to {Project Type:standard application}
-		
-		(* ===== Panel C/C++ Language =====  *)
-		Set Preferences of panel "C/C++ Compiler" to Â
-			{Activate CPlusPlus:false Â
-				, ARM Conformance:false Â
-				, Exception Handling:true Â
-				, Inlining:inline_none Â
-				, RTTI:false Â
-				, Pool Strings:false Â
-				, Dont Reuse Strings:false Â
-				, Require Function Prototypes:true Â
-				, ANSI Strict:false Â
-				, ANSI Keywords Only:false Â
-				, Expand Trigraph Sequences:false Â
-				, MPW Newlines:false Â
-				, MPW Pointer Type Rules:false Â
-				, Enums Always Ints:false Â
-				, Prefix File:""}
-		
-		(* ===== Panel C/C++ Warnings ===== *)
-		Set Preferences of panel "C/C++ Warnings" to Â
-			{Treat Warnings As Errors:false Â
-				, Illegal Pragmas:true Â
-				, Empty Declarations:true Â
-				, Possible Errors:true Â
-				, Unused Variables:true Â
-				, Unused Arguments:false Â
-				, Extra Commas:true Â
-				, Extended Error Checking:true}
-		
 		(* ===== Panel 68K Processor =====  *)
 		Set Preferences of panel "68K CodeGen" to Â
 			{Code Model:large Â
@@ -238,14 +206,6 @@ on DoSet68K()
 		my DoSetPaths1()
 		
 	end tell
-end DoSet68K
-
-on DoSetPreferences()
-	if MASTER = "PPC" then
-		my DoSetPPC()
-	else if MASTER = "68K" then
-		my DoSet68K()
-	end if
 end DoSetPreferences
 
 on DoSetPaths1()
@@ -270,6 +230,7 @@ on DoSetPaths2()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":Metrowerks Standard Library:MSL C:", recursive:true, origin:shell relative}}}
+		
 	end tell
 end DoSetPaths2
 
@@ -280,7 +241,10 @@ on AddLibraries()
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.PPC.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.PPC.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:InterfaceLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:AppearanceLib"} To Segment 1
+			Set Project File "AppearanceLib" to {weak link:true}
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:NavigationLib"} To Segment 1
+			Set Project File "NavigationLib" to {weak link:true}
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:MathLib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime PPC:MSL RuntimePPC.Lib"} To Segment 1
 		else if MASTER = "68K" then
@@ -288,7 +252,6 @@ on AddLibraries()
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.68K Fa(4i_8d).Lib"} To Segment 1
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.68K.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS.lib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS Files:Navigation.far.o"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MathLib68K:MathLib68K (Model Far):MathLib68K Fa(4i_8d).Lib"} To Segment 1
 		end if
 	end tell
@@ -314,6 +277,18 @@ on CompilePrograms()
 		Close Project
 		
 		open (BUILDTEST & "blastcl3" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "formatdb" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "blastall" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDTEST & "blastpgp" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -351,18 +326,10 @@ on CreateNENTREZ()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicn3d" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -408,38 +375,27 @@ on CreateSEQUIN()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicn3d" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimla" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitxc2" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimla" & SUFFIX, LIBRARIES & "ncbitxc2" & SUFFIX, LIBRARIES & "ncbiid1" & SUFFIX) To Segment segmentCounter
 		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment segmentCounter
-		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment segmentCounter
+		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
+		
+		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (NCBISOURCE & "sequin:sequin1.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin2.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin3.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin4.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin5.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin6.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin7.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequin8.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "sequin:sequinx.c") To Segment segmentCounter
+		set NCBISEQUIN to NCBISOURCE & "sequin:" as string
+		
+		Add Files (NCBISEQUIN & "sequin1.c", NCBISEQUIN & "sequin2.c", NCBISEQUIN & "sequin3.c") To Segment segmentCounter
+		Add Files (NCBISEQUIN & "sequin4.c", NCBISEQUIN & "sequin5.c", NCBISEQUIN & "sequin6.c") To Segment segmentCounter
+		Add Files (NCBISEQUIN & "sequin7.c", NCBISEQUIN & "sequin8.c", NCBISEQUIN & "sequin9.c") To Segment segmentCounter
+		Add Files (NCBISEQUIN & "sequinx.c") To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -476,23 +432,16 @@ on CreateCn3D()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicn3d" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment segmentCounter
-		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment segmentCounter
+		set NCBICDROMLIB to NCBISOURCE & "cdromlib:" as string
+		
+		Add Files {NCBICDROMLIB & "accentr.c", NCBICDROMLIB & "accutils.c"} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -532,22 +481,14 @@ on CreatePOWBLAST()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiNacc" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "ncbiNacc" & SUFFIX, LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (NCBISOURCE & "demo:powblast.c") To Segment segmentCounter
-		Add Files (NCBISOURCE & "demo:pblproc.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "demo:powblast.c", NCBISOURCE & "demo:pblproc.c") To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -583,12 +524,8 @@ on CreateBLASTCL3()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
 		Add Files (LIBRARIES & "ncbibls3" & SUFFIX) To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
@@ -600,4 +537,133 @@ on CreateBLASTCL3()
 		
 	end tell
 end CreateBLASTCL3
+
+on CreateFORMATDB()
+	tell application "CodeWarrior IDE 3.2"
+		
+		Create Project {BUILDTEST & "formatdb" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"formatdb"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"formatdb"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "demo:formatdb.c"} To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateFORMATDB
+
+on CreateBLASTALL()
+	tell application "CodeWarrior IDE 3.2"
+		
+		Create Project {BUILDTEST & "blastall" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastall"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastall"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "demo:blastall.c"} To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateBLASTALL
+
+on CreateBLASTPGP()
+	tell application "CodeWarrior IDE 3.2"
+		
+		Create Project {BUILDTEST & "blastpgp" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastpgp"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastpgp"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"????", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "demo:blastpgp.c"} To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateBLASTPGP
 

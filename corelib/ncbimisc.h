@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.11 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,21 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.11  1999/04/23 16:25:36  shavirin
+* Added definition of the function Nlm_GetChecksum()
+*
+* Revision 6.10  1999/04/14 19:37:23  madden
+* Add Nlm_ prefix to Int8
+*
+* Revision 6.9  1999/04/14 15:31:07  madden
+* add Nlm_Int8tostr function
+*
+* Revision 6.8  1999/03/11 16:21:51  kans
+* ValNodeSort is more visible copy of jzmisc SortValNode
+*
+* Revision 6.7  1999/01/27 01:59:52  kans
+* cleaned up comment problem
+*
 * Revision 6.6  1999/01/21 20:08:37  ostell
 * added SwitchUint2 and 4, added integer bytestores
 *
@@ -119,6 +134,9 @@ NLM_EXTERN int LIBCALL Nlm_Ulwidth PROTO((unsigned long x, int opts));
 /* Same 1,2,4 opts as Nlm_Lwidth and Nlm_Ulwidth */
 NLM_EXTERN char * LIBCALL Nlm_Ltostr PROTO((long x, int opts));
 NLM_EXTERN char * LIBCALL Nlm_Ultostr PROTO((unsigned long x, int opts));
+/* Nlm_Int8tostr -- convert a signed long integer to ASCII */
+NLM_EXTERN CharPtr LIBCALL Nlm_Int8tostr PROTO((Nlm_Int8 value, int opts));
+
 
 /* Sorting */
 NLM_EXTERN void LIBCALL Nlm_HeapSort PROTO((VoidPtr base, size_t nel, size_t width, int (LIBCALLBACK *cmp) (VoidPtr, VoidPtr) ));
@@ -231,6 +249,10 @@ typedef struct valnode {
 *       If choice < 0 , returns all ValNodes
 *       Returns NULL, when no more found
 *
+*   ValNodeSort (list, compar)
+*   	Copied from SortValNode in jzcoll, renamed, for more general access
+*   	Makes array from ValNode list, calls HeapSort, reconnects ValNode list
+*
 *****************************************************************************/
 NLM_EXTERN ValNodePtr LIBCALL ValNodeNew PROTO((ValNodePtr vnp));
 NLM_EXTERN Nlm_Int4   LIBCALL ValNodeLen PROTO((ValNodePtr vnp));
@@ -248,6 +270,7 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeFreeData PROTO((ValNodePtr vnp));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeExtract PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeExtractList PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeFindNext PROTO((ValNodePtr head, ValNodePtr curr, Nlm_Int2 choice));
+NLM_EXTERN ValNodePtr LIBCALL ValNodeSort PROTO((ValNodePtr list, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
 
 /*** old prototypes ******
 NLM_EXTERN ValNodePtr LIBCALL ValNodeLink PROTO((ValNodePtr vnp, ValNodePtr newnode));
@@ -320,9 +343,9 @@ NLM_EXTERN void Nlm_CtoPstr PROTO((Nlm_CharPtr str));
 NLM_EXTERN void Nlm_PtoCstr PROTO((Nlm_CharPtr str));
 #endif
 
-/*** these functions reverse byte order in integers 
-/*** calling the same function a second time switches it back
-/*** the native ENDIAN nature of the machine is not considered
+/* these functions reverse byte order in integers 
+   calling the same function a second time switches it back
+   the native ENDIAN nature of the machine is not considered
 */
 NLM_EXTERN Uint2 Nlm_SwitchUint2 PROTO ((Uint2 value));
 NLM_EXTERN void Nlm_SwitchUint2Buff PROTO ((Uint2 *buff, int count));
@@ -388,6 +411,8 @@ NLM_EXTERN void LIBCALL Nlm_MD5Transform PROTO((Nlm_Uint4 buf[4], Nlm_Uint4 in[1
 #define MD5Transform Nlm_MD5Transform
 
 /* Error codes for the CTX_NCBIMISC context */
+
+Uint4 Nlm_GetChecksum(CharPtr p);
 
 #ifdef __cplusplus
 }

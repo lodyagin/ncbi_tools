@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.14  1999/05/06 19:00:58  kans
+* enable lookup by pmid button
+*
 * Revision 6.13  1998/12/14 22:36:21  kans
 * trim spaces around muid string
 *
@@ -2277,7 +2280,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
 /*          b = PushButton (c, "Lookup By pmid", LookupByPmidProc); */
           b = PushButton (c, "Lookup By pmid", LookupByMuidProc);
           SetObjectExtra (b, ppp, NULL);
-          Disable (b);
+          /* Disable (b); */
         }
 
         AlignObjects (ALIGN_RIGHT, (HANDLE) ppp->pages, (HANDLE) ppp->year,

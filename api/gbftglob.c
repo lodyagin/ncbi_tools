@@ -4,6 +4,12 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.4  1999/02/05 15:40:47  tatiana
+* GBQUAL_country added
+*
+* Revision 6.3  1999/01/29 16:18:37  tatiana
+* protein_id qualifier added to CDS
+*
 * Revision 6.2  1998/01/15 20:28:08  tatiana
 * increased the size of optional quals array for source feature
 *
@@ -109,8 +115,8 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"translation", Class_text}, {"transl_except", Class_pos_aa}, 
  {"transl_table", Class_int}, {"transposon", Class_text}, 
  {"usedin", Class_token}, {"variety", Class_text}, {"virion", Class_none},
- { "specimen_voucher", Class_text}, 
- {"focus", Class_none}
+ {"focus", Class_none}, { "specimen_voucher", Class_text}, {"protein_id", Class_text}, { "country", Class_text},
+
  };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -157,16 +163,16 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"CDS", 0, {-1, -1, -1, -1, -1}, 22,
+   {"CDS", 0, {-1, -1, -1, -1, -1}, 23,
      {GBQUAL_citation, GBQUAL_codon, GBQUAL_codon_start, GBQUAL_db_xref, 
      GBQUAL_EC_number,GBQUAL_evidence, GBQUAL_exception, GBQUAL_function, 
      GBQUAL_gdb_xref, GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, 
      GBQUAL_number, GBQUAL_partial, GBQUAL_product, GBQUAL_pseudo, 
      GBQUAL_standard_name, GBQUAL_translation, GBQUAL_transl_except, 
-     GBQUAL_transl_table, GBQUAL_usedin,
+     GBQUAL_transl_table, GBQUAL_usedin, GBQUAL_protein_id,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+      -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"conflict",  1, {GBQUAL_citation, -1, -1, -1, -1}, 6,
      {GBQUAL_db_xref, GBQUAL_map, GBQUAL_note, GBQUAL_gene, GBQUAL_usedin,
      GBQUAL_replace, 
@@ -471,7 +477,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 43,
+   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 44,
      {GBQUAL_cell_line, GBQUAL_cell_type, GBQUAL_chloroplast, 
       GBQUAL_chromoplast, GBQUAL_chromosome,
       GBQUAL_citation, GBQUAL_clone, GBQUAL_clone_lib, GBQUAL_cultivar,
@@ -484,8 +490,8 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_serotype, GBQUAL_specific_host, GBQUAL_strain, GBQUAL_sub_clone, 
       GBQUAL_sub_species, GBQUAL_sub_strain, GBQUAL_tissue_lib, 
       GBQUAL_tissue_type, GBQUAL_transposon, GBQUAL_usedin, 
-      GBQUAL_specimen_voucher, GBQUAL_variety, GBQUAL_virion,
-      -1, -1, -1, -1, -1, -1, -1}},
+      GBQUAL_specimen_voucher, GBQUAL_variety, GBQUAL_virion, GBQUAL_country,
+      -1, -1, -1, -1, -1, -1}},
    {"stem_loop",  0, {-1, -1, -1, -1, -1}, 11,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
       GBQUAL_gene,

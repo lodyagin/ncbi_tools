@@ -35,6 +35,24 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.47  1999/04/26 18:53:00  tatiana
+*  added pseuod from sfp in ConvertToNAImpFeat()
+*
+* Revision 6.46  1999/04/06 22:37:45  tatiana
+* protein_id hot link added
+*
+* Revision 6.45  1999/04/06 15:00:16  tatiana
+* www_featkey is not called for slp view
+*
+* Revision 6.44  1999/03/30 22:23:33  kans
+* pseudo can be on grp or sfp
+*
+* Revision 6.43  1999/03/30 19:18:19  tatiana
+* changes for SEQID_OTHER
+*
+* Revision 6.42  1999/03/22 23:09:26  tatiana
+* AddPID() changes
+*
 * Revision 6.41  1998/10/19 15:57:35  tatiana
 * UniGene added to dbtag array
 *
@@ -416,7 +434,7 @@ NLM_EXTERN void AddProteinQuals PROTO ((SeqFeatPtr sfp, SeqFeatPtr sfp_out, Note
 static void GetGeneticCode PROTO ((CharPtr ptr, SeqFeatPtr sfp));
 NLM_EXTERN void ComposeGBQuals PROTO((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr gbp, SortStructPtr p, Boolean note_pseudo));
 NLM_EXTERN CharPtr ComposeNoteFromNoteStruct PROTO ((NoteStructPtr nsp, GeneStructPtr gsp));
-NLM_EXTERN void AddPID PROTO ((SeqFeatPtr sfp_out));
+NLM_EXTERN void AddPID PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out));
 NLM_EXTERN Int2 MakeGBSelectNote PROTO ((CharPtr ptr, SeqFeatPtr sfp));
 static void GetProtRefComment PROTO ((SeqFeatPtr sfp, BioseqPtr bsp, Asn2ffJobPtr ajp, OrganizeProtPtr opp, NoteStructPtr nsp, Uint1 method));
 NLM_EXTERN Int2 MiscFeatOrphanGenes PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp, Int2 index));
@@ -472,7 +490,7 @@ ORGMOD orgmod_subtype[25] = {
 	{"note", 255}, { NULL, 0 }
 };
 
-CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene"};
+CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene", "LocusID"};
 
 
 /*************************************************************************
@@ -526,13 +544,13 @@ static void Add_dbxref (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, SeqFeatPtr sfp)
 		} else if (db->tag) {
 			val = MemNew(StringLen(db->db)+16);
 			if (StringNCmp(db->db, "PIDe", 4) == 0) {
-					sprintf(val, "PID:e%ld", db->tag->id);
+					sprintf(val, "PID:e%ld", (long) db->tag->id);
 			} else if (StringNCmp(db->db, "PIDd", 4) == 0) {
-					sprintf(val, "PID:d%ld", db->tag->id);
+					sprintf(val, "PID:d%ld", (long) db->tag->id);
 			} else if (StringNCmp(db->db, "PIDg", 4) == 0) {
-					sprintf(val, "PID:g%ld", db->tag->id);
+					sprintf(val, "PID:g%ld", (long) db->tag->id);
 			} else {
-				sprintf(val, "%s:%ld", db->db, db->tag->id);
+				sprintf(val, "%s:%ld", db->db, (long) db->tag->id);
 			}
 		}
 		if (val[0] != '\0') {
@@ -542,6 +560,54 @@ static void Add_dbxref (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, SeqFeatPtr sfp)
 	}
 	return;
 }	/* Add_dbxref */
+
+static Boolean CheckSeqIdChoice(SeqIdPtr sip)
+{
+	Uint1 ch;
+	SeqIdPtr si;
+	TextSeqIdPtr tsip;
+	
+	for (si = sip; si; si=si->next) {
+		ch = si->choice;
+		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+static SeqIdPtr GetSeqIdChoice(SeqIdPtr sip)
+{
+	Uint1 ch;
+	SeqIdPtr si;
+	TextSeqIdPtr tsip;
+	
+	for (si = sip; si; si=si->next) {
+		ch = si->choice;
+		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || SEQID_OTHER) {
+			return si;
+		}
+	}
+	return NULL;
+}
+
+static Boolean CheckSeqIdAccVer(SeqIdPtr sip)
+{
+	Uint1 ch;
+	SeqIdPtr si;
+	TextSeqIdPtr tsip;
+	
+	for (si = sip; si; si=si->next) {
+		ch = si->choice;
+		if (ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || ch == SEQID_OTHER) {
+			tsip = si->data.ptrvalue;
+			if (tsip->accession != NULL && tsip->version >= 1) {
+				return TRUE;
+			}
+		}
+	}
+	return FALSE;
+}
 
 static void GetNonGeneQuals (Int2 mode, SeqFeatPtr sfp_in, SeqFeatPtr sfp_out, NoteStructPtr nsp)
 {
@@ -1252,16 +1318,59 @@ static SeqFeatPtr cleanup_sfp(SeqFeatPtr sfp_out)
 	return sfp_out;
 }
 
-/*************************************************************************
-*void PutTranslationLast(SeqFeatPtr sfp)
-*
-*	Check if there is a /translation and, if so, make it the last qualifier.
-*	The sfp should be an ImpFeat with key CDS.
-*
-*	Below we search for the translation qualifier and store it as
-*	qual_temp, until we get to the end of the linked list, then we
-*	stick it back on.
-**************************************************************************/
+static GBQualPtr remove_qual(GBQualPtr head, GBQualPtr x)
+{
+	GBQualPtr	v, p;
+	
+	if (head == NULL) {
+		return NULL;
+	}
+	if (x == head) {
+		head = x->next;
+		x->next = NULL;
+		return head;
+	}
+	for (v = head; v != NULL && v != x; v = v->next) {
+		p = v;
+	}
+	if (v != NULL) {
+		p->next = x->next;
+		x->next = NULL;
+	}
+	return head;
+}
+
+static void PutGeneFirst(SeqFeatPtr sfp)
+
+{
+	Boolean still_looking=TRUE;
+	GBQualPtr gbqual, qual, qual_temp=NULL, qual_gene=NULL;
+	ImpFeatPtr ifp=NULL;
+
+	if ((sfp == NULL) || (sfp->data.choice != 8))
+		return;
+	if (sfp->qual == NULL)
+		return;
+
+	ifp = sfp->data.value.ptrvalue;
+	if (StringCmp(ifp->key, "gene") == 0)
+	{
+		gbqual = sfp->qual;
+		for (qual=gbqual; qual; qual=qual->next) {
+			if (StringCmp("gene", qual->qual) == 0) {
+				qual_gene = qual;
+				break;
+			}
+		}
+		if (qual_gene == NULL) {
+			return;
+		}
+		gbqual = remove_qual(gbqual, qual_gene);
+		qual_gene->next = gbqual;
+		sfp->qual = qual_gene;
+	}
+	return;
+}	/* PutGeneFirst */
 
 static void PutTranslationLast(SeqFeatPtr sfp)
 
@@ -1271,6 +1380,8 @@ static void PutTranslationLast(SeqFeatPtr sfp)
 	ImpFeatPtr ifp=NULL;
 
 	if ((sfp == NULL) || (sfp->data.choice != 8))
+		return;
+	if (sfp->qual == NULL)
 		return;
 
 	ifp = sfp->data.value.ptrvalue;
@@ -1407,9 +1518,12 @@ NLM_EXTERN void PrintNAFeatByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		status = ValidateNAImpFeat(sfp_out);
 		if (sfp_in->data.choice == SEQFEAT_CDREGION) {
 			PutTranslationLast(sfp_out);
+		} else if (sfp_in->data.choice == SEQFEAT_GENE) {
+			PutGeneFirst(sfp_out);
 		}
 		if (status >= 0 || ASN2FF_VALIDATE_FEATURES == FALSE) {
-			PrintImpFeat(ajp, gbp->bsp, sfp_out);
+			PrintImpFeatEx(ajp, gbp->bsp, sfp_out, gbp->gi, p->entityID, p->itemID);
+		/*	PrintImpFeat(ajp, gbp->bsp, sfp_out);*/
 		}
 		flat2asn_delete_feature_user_string();
 	}
@@ -1762,7 +1876,7 @@ Int2 extra_loc_cnt)
 			}
 			if (slp && slp->choice == SEQLOC_INT) {
 				sip = slp->data.ptrvalue;
-				sprintf(ptr, "%ld..%ld", sip->from+1, sip->to+1);
+				sprintf(ptr, "%ld..%ld", (long) sip->from+1, (long) sip->to+1);
 				sprintf(newptr, "(pos:%s,aa:%s)", ptr, aa_ptr);
 				sfp_out->qual = AddGBQual(sfp_out->qual, "anticodon", newptr); 
 				found_anticodon=TRUE;
@@ -2104,8 +2218,8 @@ static void  GatherProductGeneInfo (Asn2ffJobPtr ajp, SeqFeatPtr sfp_in, GBEntry
 
 NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp_in, SeqFeatPtr PNTR sfpp_out, SortStructPtr gp)
 {
-	BioseqPtr bsp=gbp->bsp;
-	Boolean found_key;
+	BioseqPtr bsp=gbp->bsp, pbsp;
+	Boolean found_key, non_pseudo = FALSE;
 	CdRegionPtr cdr;
 	Char buffer[2], printbuf[41], temp[65];
 	CharPtr buf_ptr = &(buffer[0]), protein_seq=NULL, ptr = &(temp[0]);
@@ -2127,7 +2241,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 	Boolean was_gene = FALSE;
 	CharPtr key=NULL, tmp;
 	GeneStructPtr gsp;
-	CharPtr except_msg="No explanation supplied";
+	CharPtr except_msg="No explanation supplied", loc;
 	
 	sfp_out = *sfpp_out;
 
@@ -2141,6 +2255,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 	sfp_out->exp_ev = sfp_in->exp_ev;
 	sfp_out->location = sfp_in->location;
 	sfp_out->product = sfp_in->product;
+	sfp_out->pseudo = sfp_in->pseudo;
 	
 	found_key = GetNAFeatKey(ajp->show_gene, &(key), sfp_in, sfp_out);
 	if (!found_key)
@@ -2182,6 +2297,53 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 		break;	
 	case SEQFEAT_CDREGION:
 		product = sfp_in->product;
+		if (ajp->mode == RELEASE_MODE) {
+			loc = SeqLocPrint(sfp_in->location);
+			if (GBQualPresent("pseudo", sfp_in->qual) == FALSE &&
+						gsp->pseudo == FALSE && sfp_in->pseudo == FALSE) {
+				non_pseudo = TRUE;
+			}
+		  if (non_pseudo) {
+			if (product == NULL) {
+				if (ajp->error_msgs == TRUE) {
+					ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+				    "Dropping CDS due to missing product: %s", SeqLocPrint(sfp_in->location));
+				}
+				return -1;
+			}
+			if (CheckSeqIdChoice(SeqLocId(product)) == FALSE) {
+				if (ajp->error_msgs == TRUE) {
+					ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+				    "Dropping CDS due to missing EMBL/DDBJ/GB protein accession: %s", SeqLocPrint(sfp_in->location));
+				}
+				return -1;
+			}
+			if ((pbsp = BioseqFindCore(SeqLocId(product))) == NULL) {
+				if (ajp->error_msgs == TRUE) {
+					ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+				    "Dropping CDS due to missing protein: %s", loc);
+				}
+				return -1;
+			}
+			if (CheckSeqIdChoice(pbsp->id) == FALSE) {
+				if (ajp->error_msgs == TRUE) {
+						ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+				    		"Dropping CDS due to missing EMBL/DDBJ/GB protein accession: %s", loc);
+				}
+				return -1;
+			}
+			if (ajp->show_version == TRUE) {
+				if (CheckSeqIdAccVer(pbsp->id) == FALSE) {
+					if (ajp->error_msgs == TRUE) {
+						ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+				    	"Dropping CDS due to missing protein accession.version: %s", loc);
+					}
+					return -1;
+				}
+			}
+		  }
+		  MemFree(loc);
+		}
 		cdr = (CdRegionPtr) sfp_in->data.value.ptrvalue;
 		if ((GBQualPresent("codon_start", sfp_in->qual)) == FALSE)
 		{ /* Above checks if codon_start is already present. */
@@ -2206,12 +2368,15 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			}
 			if (protein_seq) {
 				if ((GBQualPresent("pseudo", sfp_in->qual)) == FALSE &&
-					 gsp->pseudo == FALSE) {
+					 gsp->pseudo == FALSE && sfp_in->pseudo == FALSE) {
 					sfp_out->qual = AddGBQual(sfp_out->qual, 
 									"translation", protein_seq);
 				}
 				MemFree(protein_seq);
 			}
+		}
+		if (sfp_in->pseudo) {
+			sfp_out->qual = AddGBQual(sfp_out->qual, "pseudo", NULL);
 		}
 		if (sfp_in->excpt) {
 			if (sfp_in->except_text) {
@@ -2237,12 +2402,15 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 		
 		GatherProductGeneInfo(ajp, sfp_in, gbp, gp, method);
 
-		if (protein_seq == NULL) {
+/******************************************************************************
+- asn2ff shouldn't generate a de-novo /translation for any
+  cdregion that lacks a product, regardless of mode or -V setting  2/15/99
+******************************************************************************
+		if (protein_seq == NULL && ajp->mode != RELEASE_MODE) {
 			protein_seq = BSMerge(byte_sp, NULL);
 			if ( protein_seq && protein_seq[0] != '-') {
 				len_prot = StringLen(protein_seq);
-				/* len_cds = -- NO EFFECT */
-					SeqLocLen(sfp_in->location) - (cdr->frame - 1);
+				SeqLocLen(sfp_in->location) - (cdr->frame - 1);
 				if (len_prot >= 6) {
 					if ((GBQualPresent("pseudo", sfp_in->qual)) == FALSE &&
 						 gsp->pseudo == FALSE) {
@@ -2254,12 +2422,13 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			}
 			MemFree(protein_seq);
 		}
+*/
 		BSFree(byte_sp);
 		break;
 	case SEQFEAT_RNA:
 		rrp = sfp_in->data.value.ptrvalue;
-		/* the following code was taken (almost) directly from Karl
-		Sirotkin's code.					*/
+		/* the following code was taken (almost) directly
+			from Karl Sirotkin's code.					*/
 		switch ( rrp -> type){ /* order of case n: matches tests in
                                 is_RNA_type() of genasn.c in
                                 GenBankConversion directory */
@@ -2275,7 +2444,8 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 					}
 				} else if (rrp->ext.choice == 0 ||
 					rrp->ext.choice == 2) {
-					DotRNAQuals(ajp, gbp, sfp_in, sfp_out, gp->nsp, gp->extra_loc, gp->extra_loc_cnt);
+					DotRNAQuals(ajp, gbp, sfp_in, sfp_out,
+							gp->nsp, gp->extra_loc, gp->extra_loc_cnt);
 				}
 				break;
 			case 4:
@@ -2309,17 +2479,24 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 		ifp_in = (ImpFeatPtr) sfp_in->data.value.ptrvalue;
 		if (ifp_in->loc != NULL)
 			ifp->loc = ifp_in->loc;
-		if (StringCmp(ifp_in->key, "CDS") == 0)
-		{
+		if (StringCmp(ifp_in->key, "CDS") == 0) {
 			if ((GBQualPresent("pseudo", sfp_in->qual)) == FALSE &&
 				ajp->error_msgs == TRUE)
 				ErrPostStr(SEV_INFO, ERR_FEATURE_non_pseudo, 
 				    "ConvertToNAImpFeat: Non-pseudo ImpFeat CDS found");
+			if ((GBQualPresent("translation", sfp_in->qual)) == TRUE &&
+												ajp->mode == RELEASE_MODE) {
+				if (ajp->error_msgs == TRUE) {
+					ErrPostStr(SEV_ERROR, ERR_FEATURE_Dropped, 
+				    "ImpFeat CDS with /translation found");
+				}
+				retval = -1;
+			}
 		}
 		break;
 	case SEQFEAT_REGION:
 		tmp = MemNew(StringLen(sfp_in->data.value.ptrvalue) + 9);
-		sprintf(tmp, "Region: %s", sfp_in->data.value.ptrvalue);
+		sprintf(tmp, "Region: %s", (CharPtr ) sfp_in->data.value.ptrvalue);
 		sfp_out->qual = AddGBQual(sfp_out->qual, "note", tmp);
 		tmp = MemFree(tmp);
 		break;
@@ -2366,7 +2543,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 		for (; syn; syn=syn->next) {
 			CpNoteToCharPtrStack(nsp, NULL, syn->data.ptrvalue);
 		}
-		if (grp->pseudo == TRUE) {
+		if (grp->pseudo == TRUE || sfp_in->pseudo) {
 			if ((GBQualPresent("pseudo", sfp_in->qual)) == FALSE)
 				sfp_out->qual = AddGBQual(sfp_out->qual, "pseudo", NULL);
 		}
@@ -2381,6 +2558,9 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 	}
 	if (gsp->grp) {
 		GetDBXrefFromGene(gsp->grp, sfp_out);
+	}
+	if (sfp_in->pseudo) {
+		sfp_out->qual = AddGBQual(sfp_out->qual, "pseudo", NULL);
 	}
 	if (sfp_out->comment) {
 		CpNoteToCharPtrStack(nsp, NULL, (CharPtr) sfp_out->comment);
@@ -2709,7 +2889,7 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 			note = MemFree(note);
 		}
 	}
-	AddPID(sfp_out);   /* shut down until release 94.0 */
+	AddPID(ajp, sfp_out);
 	Add_dbxref(ajp, sfp_out, sfp); 
 	vnp = gbp->Pub;
 	if (sfp && sfp->cit) {
@@ -2961,17 +3141,18 @@ static Int2 CheckForExtraChars(CharPtr note)
 *	the PID number is gotten from the product SeqId
 *****************************************************************************/
 
-NLM_EXTERN void AddPID (SeqFeatPtr sfp_out)
+NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 
 {
 	ImpFeatPtr ifp;
 	Int4 gi = -1;
-	SeqIdPtr sip;
+	SeqIdPtr sip, new_id;
 	ValNodePtr product, vnp;
 	BioseqPtr p_bsp;
 	DbtagPtr db;
 	Char val[20];
-
+	Char buf[MAX_ACCESSION_LEN+1];
+	
 	ifp = sfp_out->data.value.ptrvalue;
 	if (StringCmp(ifp->key, "CDS") != 0) {
 		return;
@@ -2983,13 +3164,29 @@ NLM_EXTERN void AddPID (SeqFeatPtr sfp_out)
 	sip = GetProductSeqId(product);
 	if (sip) {	/* Get protein bsp	*/
 		p_bsp = BioseqFind(sip);
+		if (ajp->show_version && p_bsp) {
+			if ((new_id = GetSeqIdChoice(p_bsp->id)) == NULL) {
+				ErrPostStr(SEV_ERROR, ERR_ACCESSION_NoAccessNum, "");
+			} else {
+				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER,
+														MAX_ACCESSION_LEN+1);
+				sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
+			}
+		}
 	}
 	if (p_bsp == NULL) {
 		gi = GetGINumFromSip(sip);
 		if (gi != -1) {
-			val[0] = '\0';
-			sprintf(val, "PID:g%ld", (long) gi);
-			if (val[0] != '\0') {
+			if (ajp->show_gi) {
+				val[0] = '\0';
+				sprintf(val, "PID:g%ld", (long) gi);
+				if (val[0] != '\0') {
+					sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
+				}
+			}
+			if (ajp->show_version) {
+				val[0] = '\0';
+				sprintf(val, "GI:%ld", (long) gi);
 				sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
 			}
 		}
@@ -3003,22 +3200,35 @@ NLM_EXTERN void AddPID (SeqFeatPtr sfp_out)
 			}
 			val[0] = '\0';
 			if (StringNCmp(db->db, "PIDe", 4) == 0) {
-					sprintf(val, "PID:e%ld", db->tag->id);
+					sprintf(val, "PID:e%ld", (long) db->tag->id);
+					gi = db->tag->id;
 			} else if (StringNCmp(db->db, "PIDd", 4) == 0) {
-					sprintf(val, "PID:d%ld", db->tag->id);
+					sprintf(val, "PID:d%ld", (long) db->tag->id);
+					gi = db->tag->id;
 			} else if (StringNCmp(db->db, "PID", 3) == 0) {
 				if (db->tag && db->tag->str) {
-					sprintf(val, "%s:%s", db->db, db->tag->str);
+					sprintf(val, "%s:%s", (long) db->db, db->tag->str);
+					gi = atoi((db->tag->str)+1);
 				}
 			}
-			if (val[0] != '\0') {
+			if (ajp->show_gi && val[0] != '\0') {
 				sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
 			}
+			/*if (ajp->show_version) {
+				val[0] = '\0';
+				sprintf(val, "GI:%ld", (long) gi);
+				sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
+			}*/
 		}
 		if (vnp->choice == SEQID_GI) {
-			val[0] = '\0';
-			sprintf(val, "PID:g%ld", vnp->data.intvalue);
-			if (val[0] != '\0') {
+			if (ajp->show_gi) {
+				val[0] = '\0';
+				sprintf(val, "PID:g%ld", (long) vnp->data.intvalue);
+				sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
+			}
+			if (ajp->show_version) {
+				val[0] = '\0';
+				sprintf(val, "GI:%ld", (long) vnp->data.intvalue);
 				sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
 			}
 		}
@@ -3721,7 +3931,7 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (NoteStructPtr nsp, BioSourcePtr biosp
 				sprintf(val, "%s:%s", db->db, db->tag->str);
 			} else if (db->tag) {
 				val = MemNew(StringLen(db->db)+16);
-				sprintf(val, "%s:%ld", db->db, db->tag->id);
+				sprintf(val, "%s:%ld", db->db, (long) db->tag->id);
 			}
 			if (val[0] != '\0') {
 				gbqual = AddGBQual(gbqual, "db_xref", val);
@@ -3757,6 +3967,203 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (NoteStructPtr nsp, BioSourcePtr biosp
 	return gbqual;
 }	/* AddBioSourceToGBQual */
 
+/****************************************************************************
+*PrintImpFeatEx
+*
+*	This code prints out an ImpFeat in GenBank and HTML format.
+*
+****************************************************************************/
+NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp, Int4 gi, Int2 entityID, Int2 itemID)
+{
+	CharPtr flatloc_ptr, key, loc;
+	GBQualPtr gbqp;
+	ImpFeatPtr ifp;
+	Uint1 class_qual, format=ajp->format;
+	Int2 class_equal, gbqual_index;
+	static CharPtr buf = NULL;
+	Uint2 retval;
+	ValNodePtr seqid;
+
+	if (sfp == NULL)
+		return -1;
+	if (sfp->data.choice != SEQFEAT_IMP)
+		return -1;
+	ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+	key = ifp->key;
+	loc = ifp->loc;
+
+	for (seqid = ajp->id_print; seqid; seqid=seqid->next) {
+		if (seqid->choice == SEQID_GI) {
+		}
+	}
+	if (format == EMBL_FMT || format == PSEUDOEMBL_FMT || 
+						format == EMBLPEPT_FMT)
+		ff_StartPrint(5, 21, ASN2FF_EMBL_MAX, "FT");
+	else
+		ff_StartPrint(5, 21, ASN2FF_GB_MAX, NULL);
+
+	if (ajp->slp) {
+		ff_AddString(key);
+	} else {
+		www_featkey(key, gi, entityID, itemID);
+	}
+	TabToColumn(22);
+	if (loc == NULL) {
+		flatloc_ptr = FlatLoc(bsp, sfp->location);
+		if (get_www()) {
+			buf = www_featloc(flatloc_ptr);
+			ff_AddString(buf);
+			MemFree(buf);
+		} else {
+			ff_AddString(flatloc_ptr);
+		}
+		MemFree(flatloc_ptr);
+	} else {
+		if (get_www()) {
+			buf = www_featloc(loc);
+			ff_AddString(buf);
+			MemFree(buf);
+		} else {
+			ff_AddString(loc);
+		}
+	}
+	if (sfp->partial == TRUE) {
+		retval = SeqLocPartialCheck(sfp->location);
+		if (retval == SLP_COMPLETE || retval > SLP_OTHER) {
+			NewContLine();
+			ff_AddString("/partial");
+		}
+	}
+	for (gbqp=sfp->qual; gbqp; gbqp=gbqp->next) {
+		gbqual_index = GBQualNameValid(gbqp->qual);
+		if (gbqual_index != -1) {
+			NewContLine();
+			ff_AddChar( '/');
+			ff_AddString(gbqp->qual);
+			class_qual = ParFlat_GBQual_names[gbqual_index].gbclass;
+			if (class_qual == Class_none) {
+				class_equal=CheckForEqualSign(gbqp->qual);
+				if (class_equal == 1)
+					continue;
+			}
+			ff_AddChar('=');
+			if (class_qual == Class_text && 
+				StringCmp(gbqp->val, "\"\"") == 0) { 
+				ff_AddString(gbqp->val);
+				continue;
+			}
+			if (get_www() && (class_qual == Class_text
+							|| class_qual == Class_note)) {
+				buf = www_featloc(gbqp->val);
+			} else {
+				buf = StringSave(gbqp->val);
+			}
+			if (class_qual == Class_text || class_qual == Class_none
+				|| class_qual == Class_ecnum || class_qual == Class_note)
+				ff_AddString("\"");
+			if (class_qual == Class_note) {
+				www_note_gi(buf);
+			} else if (class_qual != Class_none) {
+				if (StringCmp(gbqp->qual, "transl_table") == 0) {
+					www_gcode(buf);
+				} else if (StringCmp(gbqp->qual, "db_xref") == 0) {
+					www_db_xref(buf);
+				} else if (StringCmp(gbqp->qual, "protein_id") == 0) {
+					www_protein_id(buf);
+				} else {
+					ff_AddString(buf);
+				}
+			}
+			if (class_qual == Class_text || class_qual == Class_none
+				|| class_qual == Class_ecnum || class_qual == Class_note)
+				ff_AddString("\"");
+			if (buf) {
+				MemFree(buf);
+			}
+		} else if (format == GENPEPT_FMT) {
+			if (StringCmp(gbqp->qual, "site_type") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "bond_type") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "region_name") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "sec_str_type") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "non-std-residue") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "heterogen") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "name") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			} else if (StringCmp(gbqp->qual, "coded_by") == 0) {
+				NewContLine();
+				ff_AddChar('/');
+				ff_AddString(gbqp->qual);
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			}
+		} else if (ASN2FF_VALIDATE_FEATURES == FALSE) {
+			NewContLine();
+			ff_AddChar('/');
+			ff_AddString(gbqp->qual);
+			if (gbqp->val != NULL && StringLen(gbqp->val) != 0) {
+				ff_AddChar('=');
+				ff_AddString("\"");
+				ff_AddString(gbqp->val);
+				ff_AddString("\"");
+			}
+		}
+	}
+
+	ff_EndPrint();
+
+	return 1;
+} /*PrintImpFeatEx */
+		
 /****************************************************************************
 *PrintImpFeat
 *
@@ -3797,7 +4204,7 @@ NLM_EXTERN Int2 PrintImpFeat (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp)
 		} else {
 			ff_AddString(flatloc_ptr);
 		}
-		MemFree(flatloc_ptr);	/* FlatLoc allocates this */
+		MemFree(flatloc_ptr);
 	} else {
 		if (get_www()) {
 			buf = www_featloc(loc);
@@ -3941,7 +4348,7 @@ NLM_EXTERN Int2 PrintImpFeat (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp)
 	ff_EndPrint();
 
 	return 1;
-}	/* PrintImpFeat */
+} /*PrintImpFeat */
 		
 #define NOEQUALTOTAL 13
 NLM_EXTERN Int2 CheckForEqualSign(CharPtr qual)

@@ -1,4 +1,4 @@
-/*   cn3dpane.h
+/*   cn3dmodl.h
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -22,9 +22,30 @@
 *  purpose.
 *
 * $Log: cn3dmodl.h,v $
-* Revision 6.8  1998/12/16 22:49:38  ywang
-* fix compiling warnings on Win32
+* Revision 6.17  1999/03/22 23:44:22  kans
+* added Cn3DAddUserDefinedFeature to header
 *
+* Revision 6.16  1999/03/22 22:41:52  ywang
+* redesign feature page, fix bugs
+*
+* Revision 6.14  1999/03/18 22:28:57  ywang
+* add functions for saveout+readin+index user defined features
+*
+* Revision 6.13  1999/02/11 22:38:51  ywang
+* fix bug on display highlight residues only--if no res are highlighted, cn3d sets that button status as FALSE and draw whole structurescn3dwin.c
+*
+* Revision 6.12  1999/02/04 16:16:50  ywang
+* support delete added features
+*
+* Revision 6.10  1999/02/01 20:43:26  ywang
+* improve 'Model' menu
+*
+* Revision 6.9  1999/01/26 17:14:35  ywang
+* redesign Display menu and add 'display highlight residues only' function
+*
+ * Revision 6.8  1998/12/16  22:49:38  ywang
+ * fix compiling warnings on Win32
+ *
  * Revision 6.7  1998/11/04  00:06:20  ywang
  * add function for modeling: change render/color for special residue(s)
  *
@@ -66,14 +87,16 @@ Boolean bVisible, bVisibleParent, bAligned;
 
 typedef struct special_feature_info {
 PARS parsSpecial;
-PRK  prkSpecial; 
-CharPtr title;
+/* PRK  prkSpecial;      */
 Boolean On;
+CharPtr title, description;
 } SpecialFeatureInfo, PNTR SpecialFeatureInfoPtr;
 
 typedef ValNodePtr SpecialFeaturePtr;
 
 extern DomainInfo **domaindata; 
+extern Boolean Cn3D_DisplayHighlight;
+extern Boolean Cn3D_NoSingleHL;
 
 extern GrouP LIBCALL DisplayControls PROTO((Nlm_GrouP prnt));  
 extern GrouP LIBCALL ModelControls PROTO((Nlm_GrouP prnt));  
@@ -81,7 +104,17 @@ extern void LIBCALL ResetDisplayCtrls(void);
 extern void LIBCALL ResetModelCtrls(void);
 extern void LIBCALL Cn3D_CountDomainProc(void);
 extern void LIBCALLBACK DoLinkSpecialFeatureWithMGD  PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
-
+extern void  LIBCALLBACK DoCleanSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern void LIBCALLBACK DoCleanJustHLStatusWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern void LIBCALLBACK DoTurnOnSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern void LIBCALLBACK DoDeHighlightWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern SpecialFeaturePtr LIBCALL SpecialFeatureFree(SpecialFeaturePtr sfpThis);
+extern void LIBCALLBACK DoUnLinkSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern void Cn3D_bDisplayHighlightStatusSet(Boolean Yes);
+extern void Cn3DCheckHighlighted(void);
+extern void LIBCALLBACK Cn3DCheckNoSingleHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
+extern PDNMS Cn3DAddUserDefinedFeature(PDNMS pdnmsThis);
+extern void Cn3DIndexUserDefinedFeature(void);
 #ifdef __cplusplus
 }
 #endif

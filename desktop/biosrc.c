@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -396,7 +396,7 @@ extern void SetupGeneticCodes (void)
           i = 0;
           if (StringLen (str + i) > 0 && index < NUM_GENETIC_CODES - 1) {
             ch = str [i];
-            while (ch == ' ' | ch == ';') {
+            while (ch == ' ' || ch == ';') {
               i++;
               ch = str [i];
             }
@@ -567,6 +567,8 @@ static void ChangeGencodePopups (GenBioPagePtr gbp)
           SafeSetValue (gbp->simplecode, gcIdToIndex [gbp->nuclGC]);
         }
       }
+      SafeSetValue (gbp->gcode, gcIdToIndex [gbp->nuclGC]);
+      SafeSetValue (gbp->mgcode, gcIdToIndex [gbp->mitoGC]);
     } else {
       SafeSetValue (gbp->gcode, gcIdToIndex [gbp->nuclGC]);
       SafeSetValue (gbp->mgcode, gcIdToIndex [gbp->mitoGC]);
@@ -1073,11 +1075,13 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
       if (gbp->simplecode != NULL) {
         if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
           if (genome == 4 || genome == 5) {
-            SafeSetValue (gbp->simplecode, gcIdToIndex [onp->gcode]);
+            SafeSetValue (gbp->simplecode, gcIdToIndex [onp->mgcode]);
           } else {
             SafeSetValue (gbp->simplecode, gcIdToIndex [onp->gcode]);
           }
         }
+        SafeSetValue (gbp->gcode, gcIdToIndex [onp->gcode]);
+        SafeSetValue (gbp->mgcode, gcIdToIndex [onp->mgcode]);
       } else {
         SafeSetValue (gbp->gcode, gcIdToIndex [onp->gcode]);
         SafeSetValue (gbp->mgcode, gcIdToIndex [onp->mgcode]);
@@ -1144,8 +1148,10 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
               if (genome == 4 || genome == 5) {
                 onp->mgcode = gcIndexToId [GetValue (gbp->simplecode)];
+                onp->gcode = gcIndexToId [GetValue (gbp->gcode)];
               } else {
                 onp->gcode = gcIndexToId [GetValue (gbp->simplecode)];
+                onp->mgcode = gcIndexToId [GetValue (gbp->mgcode)];
               }
             }
           } else {
@@ -1412,6 +1418,17 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
     SetValue (gbp->simplecode, 1);
     gbp->gbDiv = DialogText (x, "", 4, NULL);
     Hide (gbp->gbDiv);
+
+/* superimpose two hidden genetic code controls to save both in resulting biosource */
+
+    gbp->gcode = PopupList (x, TRUE, NULL);
+    PopulateGeneticCodePopup (gbp->gcode);
+    SetValue (gbp->gcode, 1);
+    gbp->mgcode = PopupList (x, TRUE, NULL);
+    PopulateGeneticCodePopup (gbp->mgcode);
+    SetValue (gbp->mgcode, 1);
+    Hide (gbp->gcode);
+    Hide (gbp->mgcode);
 
     SelectFont (systemFont);
   }

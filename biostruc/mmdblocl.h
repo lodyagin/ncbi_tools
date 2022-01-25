@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   09/18/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: Special Header for MMDB-locl fetch operations.
 *
@@ -38,6 +38,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdblocl.h,v $
+* Revision 6.2  1999/04/22 01:58:03  kimelman
+* decl of MMDB_configuraion added
+*
 * Revision 6.1  1998/04/15 14:54:03  kimelman
 * 1. Make retrieval unifirm from open server and sql server.
 * 2. mmdbsrv retrival performance tuning:
@@ -67,10 +70,11 @@
 extern "C" {
 #endif
 
-DocUid      LIBCALL MMDBEvalPDB     (CharPtr str);
-BiostrucPtr LIBCALL MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels);
-Boolean     LIBCALL MMDBInit        (   void    );
-void        LIBCALL MMDBFini        (   void    );
+DocUid      LIBCALL MMDBEvalPDB        (CharPtr str);
+BiostrucPtr LIBCALL MMDBBiostrucGet    (DocUid uid, Int4 mdlLvl, Int4 maxModels);
+Boolean     LIBCALL MMDBInit           (   void    );
+void        LIBCALL MMDBFini           (   void    );
+CharPtr     LIBCALL MMDB_configuration (   void    );
 
 #ifdef __cplusplus
 }

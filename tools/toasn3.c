@@ -505,7 +505,7 @@ static void FixProtMolInfo (SeqEntryPtr sep, Pointer data, Int4 index, Int2 inde
 
 {
 	BioseqPtr   bsp;
-	MolInfoPtr  mip;
+	MolInfoPtr  mip = NULL;
 	ValNodePtr  vnp;
 
 	if (! IS_Bioseq(sep)) return;
@@ -521,6 +521,14 @@ static void FixProtMolInfo (SeqEntryPtr sep, Pointer data, Int4 index, Int2 inde
 				}
 			}
 		}
+	}
+	if (mip == NULL) {
+		mip = MolInfoNew ();
+		if (mip == NULL) return;
+		mip->biomol = 8;
+		vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+		if (vnp == NULL) return;
+		vnp->data.ptrvalue = (Pointer) mip;
 	}
 }
 
@@ -967,6 +975,133 @@ ValNodePtr GetMultBiosource(SeqEntryPtr sep)
 }
 
 /*****************************************************************************
+* RemoveEmptyTitleAndPubGenAsOnlyPub removes pub { pub { gen { } } empty pubs
+*****************************************************************************/
+
+/* from utilpub.c */
+static Boolean empty_citgen(CitGenPtr  cit)
+{
+	if (cit == NULL)
+		return TRUE;
+	if (cit->cit)
+		return FALSE;
+	if (cit->authors)
+		return FALSE;
+	if (cit->muid > 0)
+		return FALSE;
+	if (cit->journal)
+		return FALSE;
+	if (cit->volume)
+		return FALSE;
+	if (cit->issue)
+		return FALSE;
+	if (cit->pages)
+		return FALSE;
+	if (cit->date)
+		return FALSE;
+	if (cit->serial_number > 0)
+		return FALSE;
+	if (cit->title)
+		return FALSE;
+	if (cit->pmid > 0)
+		return FALSE;
+	return TRUE;
+}
+
+static Boolean PubIsEffectivelyEmpty (PubdescPtr pdp)
+
+{
+  ValNodePtr       vnp;
+
+  if (pdp == NULL) return FALSE;
+  vnp = pdp->pub;
+  if (vnp != NULL && vnp->next == NULL && vnp->choice == PUB_Gen) {
+    if (empty_citgen ((CitGenPtr) vnp->data.ptrvalue)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  SeqAnnotPtr   nextsap;
+  ValNodePtr    nextsdp;
+  SeqFeatPtr    nextsfp;
+  Pointer PNTR  prevsap;
+  Pointer PNTR  prevsdp;
+  Pointer PNTR  prevsfp;
+  SeqAnnotPtr   sap = NULL;
+  ValNodePtr    sdp = NULL;
+  SeqFeatPtr    sfp;
+  SeqEntryPtr   tmp;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    sap = bsp->annot;
+    prevsap = (Pointer PNTR) &(bsp->annot);
+    sdp = bsp->descr;
+    prevsdp = (Pointer PNTR) &(bsp->descr);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+      RemoveEmptyTitleAndPubGenAsOnlyPub (tmp);
+    }
+    sap = bssp->annot;
+    prevsap = (Pointer PNTR) &(bssp->annot);
+    sdp = bssp->descr;
+    prevsdp = (Pointer PNTR) &(bssp->descr);
+  } else return;
+  while (sap != NULL) {
+    nextsap = sap->next;
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      prevsfp = (Pointer PNTR) &(sap->data);
+      while (sfp != NULL) {
+        nextsfp = sfp->next;
+        if (sfp->data.choice == SEQFEAT_PUB && PubIsEffectivelyEmpty ((PubdescPtr) sfp->data.value.ptrvalue)) {
+          *(prevsfp) = sfp->next;
+          sfp->next = NULL;
+          SeqFeatFree (sfp);
+        } else {
+          prevsfp = (Pointer PNTR) &(sfp->next);
+        }
+        sfp = nextsfp;
+      }
+    }
+    if (sap->data == NULL) {
+      *(prevsap) = sap->next;
+      sap->next = NULL;
+      SeqAnnotFree (sap);
+    } else {
+      prevsap = (Pointer PNTR) &(sap->next);
+    }
+    sap = nextsap;
+  }
+  while (sdp != NULL) {
+    nextsdp = sdp->next;
+    if (sdp->choice == Seq_descr_pub && PubIsEffectivelyEmpty ((PubdescPtr) sdp->data.ptrvalue)) {
+      *(prevsdp) = sdp->next;
+      sdp->next = NULL;
+      SeqDescFree (sdp);
+    } else if (sdp->choice == Seq_descr_title && StringHasNoText ((CharPtr) sdp->data.ptrvalue)) {
+      *(prevsdp) = sdp->next;
+      sdp->next = NULL;
+      SeqDescFree (sdp);
+    } else {
+      prevsdp = (Pointer PNTR) &(sdp->next);
+    }
+    sdp = nextsdp;
+  }
+}
+
+/*****************************************************************************
 *   SeqEntryToAsn3(sep)
 *   	Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
 *		Does the Taxonomy lookup if taxserver = TRUE and taxfun != NULL 
@@ -1044,6 +1179,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	if (sep == NULL) {
 		return ERR_INPUT;
 	}
+	RemoveEmptyTitleAndPubGenAsOnlyPub (sep);
 	if (source_correct) {
 		SeqEntryExplore(sep, (Pointer)(&porg), CorrectSourceFeat);
 	}
@@ -1091,6 +1227,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 			SeqEntryExplore(sep, NULL, MapsToGenref);
 		}
 		CheckGeneticCode(sep);
+		NormalizeSegSeqMolInfo (sep);
 		toasn3_free(&ta);
 		if(qm.name != NULL)
 		{
@@ -1156,6 +1293,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 		SeqEntryExplore(sep, NULL, MapsToGenref);
 	}
 	CheckGeneticCode(sep);
+	NormalizeSegSeqMolInfo (sep);
 	toasn3_free(&ta);
 	if(qm.name)
 		qm.name=MemFree(qm.name);
@@ -2648,14 +2786,14 @@ static void FixPIDDbtag(ValNodePtr PNTR vnpp)
 			if (StringNCmp(db->db, "PIDe", 4) == 0) {
 					MemFree(db->db);
 					db->db = StringSave("PID");
-					sprintf(val, "e%ld", db->tag->id);
+					sprintf(val, "e%ld", (long) db->tag->id);
 					db->tag->str = StringSave(val);
 					db->tag->id = 0;
 					vnp->data.ptrvalue = db;
 			} else if(StringNCmp(db->db, "PIDd", 4) == 0) {
 					MemFree(db->db);
 					db->db = StringSave("PID");
-					sprintf(val, "d%ld", db->tag->id);
+					sprintf(val, "d%ld", (long) db->tag->id);
 					db->tag->str = StringSave(val);
 					db->tag->id = 0;
 					vnp->data.ptrvalue = db;
@@ -3276,6 +3414,10 @@ static void CheckKeywords(GBBlockPtr gbp, Uint1 tech)
 			MemFree(word);
 			gbp->keywords = remove_node(gbp->keywords, vnp);
 		}
+		else if (tech == MI_TECH_htgs_0 && StringCmp(word, "HTGS_PHASE0") == 0) {
+			MemFree(word);
+			gbp->keywords = remove_node(gbp->keywords, vnp);
+		}
 		else if (tech == MI_TECH_htgs_1 && StringCmp(word, "HTGS_PHASE1") == 0) {
 			MemFree(word);
 			gbp->keywords = remove_node(gbp->keywords, vnp);
@@ -3285,6 +3427,14 @@ static void CheckKeywords(GBBlockPtr gbp, Uint1 tech)
 			gbp->keywords = remove_node(gbp->keywords, vnp);
 		}
 		else if (tech == MI_TECH_htgs_3 && StringCmp(word, "HTGS_PHASE3") == 0) {
+			MemFree(word);
+			gbp->keywords = remove_node(gbp->keywords, vnp);
+		}
+		else if (tech == MI_TECH_est && StringCmp(word, "EST") == 0) {
+			MemFree(word);
+			gbp->keywords = remove_node(gbp->keywords, vnp);
+		}
+		else if (tech == MI_TECH_sts && StringCmp(word, "STS") == 0) {
 			MemFree(word);
 			gbp->keywords = remove_node(gbp->keywords, vnp);
 		}
@@ -3323,9 +3473,12 @@ static void ChangeGBDiv (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 				return;
 			}
 			if (mfp) {
-				if (mfp->tech == MI_TECH_htgs_1 
-						|| mfp->tech == MI_TECH_htgs_2 || 
-							mfp->tech == MI_TECH_htgs_3) {
+				if (mfp->tech == MI_TECH_htgs_0 || 
+						mfp->tech == MI_TECH_htgs_1 || 
+						mfp->tech == MI_TECH_htgs_2 || 
+						mfp->tech == MI_TECH_htgs_3 || 
+						mfp->tech == MI_TECH_est ||
+						mfp->tech == MI_TECH_sts) {
 					CheckKeywords(gbp, mfp->tech);
 				}
 			}
@@ -3600,6 +3753,7 @@ void EntryMergeDupBioSources (SeqEntryPtr sep)
 static CharPtr TASNTrimSpacesAndTrailingSemicolons (CharPtr str)
 
 {
+  CharPtr  amp;
   Uchar    ch;	/* to use 8bit characters in multibyte languages */
   CharPtr  dst;
   CharPtr  ptr;
@@ -3619,14 +3773,25 @@ static CharPtr TASNTrimSpacesAndTrailingSemicolons (CharPtr str)
       ch = *ptr;
     }
     *dst = '\0';
+    amp = NULL;
     dst = NULL;
     ptr = str;
     ch = *ptr;
     while (ch != '\0') {
-      if (ch != ' ' && ch != ';') {
+      if (ch == '&') {
+        amp = ptr;
         dst = NULL;
-      } else if (dst == NULL) {
-        dst = ptr;
+      } else if (ch == ' ') {
+        if (dst == NULL) {
+          dst = ptr;
+        }
+        amp = NULL;
+      } else if (ch == ';') {
+        if (dst == NULL && amp == NULL) {
+          dst = ptr;
+        }
+      } else {
+        dst = NULL;
       }
       ptr++;
       ch = *ptr;

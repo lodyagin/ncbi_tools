@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -45,6 +45,12 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.11  1999/04/02 20:35:51  kans
+ * added prototype for GR_PrintPubs
+ *
+ * Revision 6.10  1999/03/22 23:19:19  tatiana
+ * PrintImpFeatEx() added
+ *
  * Revision 6.9  1998/10/19 15:57:04  tatiana
  * DBNUM increased for UniGene tag
  *
@@ -129,6 +135,12 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.11  1999/04/02 20:35:51  kans
+* added prototype for GR_PrintPubs
+*
+* Revision 6.10  1999/03/22 23:19:19  tatiana
+* PrintImpFeatEx() added
+*
 * Revision 6.9  1998/10/19 15:57:04  tatiana
 * DBNUM increased for UniGene tag
 *
@@ -243,7 +255,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 23
+#define DBNUM 24
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));
@@ -251,6 +263,7 @@ NLM_EXTERN void FlatSpliceOn PROTO((SeqEntryPtr the_set, ValNodePtr desc));
 
 NLM_EXTERN void PrintLocusLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintAccessLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
+NLM_EXTERN void PrintVersionLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintNCBI_GI PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintNID PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void GetDefinitionLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
@@ -277,6 +290,7 @@ NLM_EXTERN ValNodePtr GetOrgRef PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN ValNodePtr GetBiosource PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void EMBL_PrintPubs PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp));
 NLM_EXTERN void GB_PrintPubs PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp));
+NLM_EXTERN void GR_PrintPubs PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp));
 NLM_EXTERN Boolean FlatIgnoreThisPatentPub PROTO ((BioseqPtr bsp, ValNodePtr best, Int4Ptr seqidPt));
 NLM_EXTERN CharPtr FlatCleanEquals PROTO ((CharPtr retval));
 NLM_EXTERN ValNodePtr GetAuthors PROTO((Asn2ffJobPtr ajp, ValNodePtr the_pub));
@@ -284,6 +298,7 @@ NLM_EXTERN CharPtr FlatJournal PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, ValNode
 NLM_EXTERN ValNodePtr GetKeywordLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintSourceFeat PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN Int2 PrintImpFeat PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp));
+NLM_EXTERN Int2 PrintImpFeatEx PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp, Int4 gi, Int2 entityID, Int2 itemID));
 NLM_EXTERN void PrintNAFeatAwp PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintNAFeatByNumber PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintAAFeatByNumber PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));

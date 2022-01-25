@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.7  1999/04/06 14:23:25  lewisg
+* add opengl replacement for viewer3d
+*
 * Revision 6.6  1998/06/01 17:20:13  vakatov
 * Added code to draw/fill 90-degree arc/pie (quadrants)
 *
@@ -320,6 +323,9 @@ extern "C" {
 #define SimplePanel Nlm_SimplePanel
 #define AutonomousPanel4 Nlm_AutonomousPanel4
 #define AutonomousPanel Nlm_AutonomousPanel
+#ifdef _OPENGL
+#define Autonomous3DPanel Nlm_Autonomous3DPanel
+#endif /* _OPENGL */
 #define SetPanelClick Nlm_SetPanelClick
 #define SetPanelExtra Nlm_SetPanelExtra
 #define GetPanelExtra Nlm_GetPanelExtra

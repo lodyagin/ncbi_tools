@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -1927,6 +1927,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"Seq-Pept-Overlap",  11},
   {"Seq-Pept-Homol",    12},
   {"Concept-Trans-A",   13},
+  {"HTGS 0",            18},
   {"HTGS 1",            14},
   {"HTGS 2",            15},
   {"HTGS 3",            16},
@@ -1943,6 +1944,7 @@ static ENUM_ALIST(molinfo_tech_nuc_alist)
   {"Genetic Map",        5},
   {"Physical Map",       6},
   {"Derived",            7},
+  {"HTGS 0",            18},
   {"HTGS 1",            14},
   {"HTGS 2",            15},
   {"HTGS 3",            16},
@@ -2007,7 +2009,7 @@ static Uint1 check_biomol (Uint1 biomol)
 static Uint1 check_technique (Uint1 tech)
 
 {
-  if (tech > 17 && tech != 255) return 0;
+  if (tech > 18 && tech != 255) return 0;
   return tech;
 }
 
@@ -2830,10 +2832,12 @@ static void GenBankFormActnProc (ForM f)
   Boolean         changehist;
   GenBankFormPtr  gfp;
   SeqHistPtr      hist;
+  Char            prefix [20];
   SeqIdPtr        sip;
   TextSeqIdPtr    tsip;
   ValNodePtr      tmp;
   ValNodePtr      vnp;
+  Uint4           whichdb;
 
   gfp = (GenBankFormPtr) GetObjectExtra (f);
   if (gfp != NULL) {
@@ -2868,7 +2872,24 @@ static void GenBankFormActnProc (ForM f)
               }
               if (sip != NULL) {
                 tsip = TextSeqIdNew ();
-                sip->choice = SEQID_GENBANK;
+                StringNCpy_0 (prefix, (CharPtr) tmp->data.ptrvalue, sizeof (prefix));
+                /*
+                ptr = &(prefix [0]);
+                ch = *ptr;
+                while (ch != '\0' && IS_ALPHA (ch)) {
+                  ptr++;
+                  ch = *ptr;
+                }
+                *ptr = '\0';
+                */
+                whichdb = WHICH_db_accession (prefix);
+                if (ACCN_IS_EMBL (whichdb)) {
+                  sip->choice = SEQID_EMBL;
+                } else if (ACCN_IS_DDBJ (whichdb)) {
+                  sip->choice = SEQID_DDBJ;
+                } else {
+                  sip->choice = SEQID_GENBANK;
+                }
                 sip->data.ptrvalue = (Pointer) tsip;
                 if (tsip != NULL) {
                   tsip->accession = StringSave (tmp->data.ptrvalue);

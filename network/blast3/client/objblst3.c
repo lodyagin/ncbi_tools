@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.0 at Dec 21, 1998  9:44 AM
+*    Generated using ASNCODE Revision: 6.0 at Apr 13, 1999  9:19 AM
 *
 **************************************************/
 
@@ -1174,6 +1174,48 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> word_size = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_db_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> db_length = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_searchsp_eff) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> searchsp_eff = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_hsp_range_max) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> hsp_range_max = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_block_width) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> block_width = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_perform_culling) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> perform_culling = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_strand_option) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> strand_option = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1377,6 +1419,18 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    av.intvalue = ptr -> word_size;
    retval = AsnWrite(aip, BLAST_PARAMETERS_word_size,  &av);
+   av.intvalue = ptr -> db_length;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_db_length,  &av);
+   av.realvalue = ptr -> searchsp_eff;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_searchsp_eff,  &av);
+   av.intvalue = ptr -> hsp_range_max;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_hsp_range_max,  &av);
+   av.intvalue = ptr -> block_width;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_block_width,  &av);
+   av.boolvalue = ptr -> perform_culling;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_perform_culling,  &av);
+   av.intvalue = ptr -> strand_option;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_strand_option,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
