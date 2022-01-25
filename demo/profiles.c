@@ -1,4 +1,4 @@
-/* $Id: profiles.c,v 6.33 2001/12/28 18:02:33 dondosha Exp $
+/* $Id: profiles.c,v 6.34 2002/10/01 20:46:34 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,12 @@ Contents: main routines for impala program to search a database of
   PSI-BLAST-generated position-specific score matrices
 
 =======
- $Revision: 6.33 $
+ $Revision: 6.34 $
 
  $Log: profiles.c,v $
+ Revision 6.34  2002/10/01 20:46:34  madden
+ Comment out call to SeqEntryFree that generates warning from ObjMgr when -J is set to T
+
  Revision 6.33  2001/12/28 18:02:33  dondosha
  Keep score and scoreThisAlign for each local alignment, so as to allow tie-breaking by score
 
@@ -1791,7 +1794,7 @@ Int2  Main(void)
    if (NULL != query)
      MemFree(query);
    options = BLASTOptionDelete(options);
-   sep = SeqEntryFree(sep);
+   /*sep = SeqEntryFree(sep);*/
    search = BlastSearchBlkDestruct(search);
    if (believe_query == FALSE)
      {

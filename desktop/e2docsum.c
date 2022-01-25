@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.34 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -321,6 +321,34 @@ static Uint1  snpicon [] = {
   0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
 };
 
+static Uint1  journalsicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
+static Uint1  unigeneicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
 static Uint1  genericon [] = {
   0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
   0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
@@ -341,7 +369,7 @@ static Uint1  genericon [] = {
 /* retrieve these documents.               */
 /*-----------------------------------------*/
 
-static CharPtr  defaultRadios [] = { "Summary", "Fields", NULL };
+static CharPtr  defaultRadios [] = { "Summary", "Fields", "Unique ID", NULL };
 static CharPtr  medRadios [] = { "Summary", "Fields", "Abstract", "Citation", "MEDLINE", "PubMed ID", NULL };
 static CharPtr  prtRadios [] = { "Summary", "Fields", "GenPept", "FASTA", "Protein ID", NULL };
 static CharPtr  nucRadios [] = { "Summary", "Fields", "GenBank", "EMBL", "FASTA", "CDS FASTA", "Nucleotide ID", NULL };
@@ -356,8 +384,11 @@ static CharPtr  domainRadios [] = { "Summary", "Fields", "3D Domain ID", NULL };
 static CharPtr  stsRadios [] = { "Summary", "Fields", "UniSTS ID", NULL };
 static CharPtr  cddRadios [] = { "Summary", "Fields", "Conserved Domain ID", NULL };
 static CharPtr  snpRadios [] = { "Summary", "Fields", "SNP ID", NULL };
+static CharPtr  journalsRadios [] = { "Summary", "Fields", "Journals ID", NULL };
+static CharPtr  unigeneRadios [] = { "Summary", "Fields", "UniGene ID", NULL };
 static CharPtr  localBioseqRadios [] = { "FASTA", NULL };
 
+static CharPtr  defaultLaunch [] = { "Web Entrez", NULL };
 static CharPtr  medLaunch [] = { "Local", "Web Entrez", "ASN.1", NULL };
 static CharPtr  prtLaunch [] = { "Local", "Sequin", "Web Entrez", "ASN.1", NULL };
 static CharPtr  nucLaunch [] = { "Local", "Sequin", "Web Entrez", "ASN.1", NULL };
@@ -372,6 +403,8 @@ static CharPtr  domainLaunch [] = { "Web Entrez", NULL };
 static CharPtr  stsLaunch [] = { "Web Entrez", NULL };
 static CharPtr  cddLaunch [] = { "Web Entrez", NULL };
 static CharPtr  snpLaunch [] = { "Web Entrez", NULL };
+static CharPtr  journalsLaunch [] = { "Web Entrez", NULL };
+static CharPtr  unigeneLaunch [] = { "Web Entrez", NULL };
 
 /*-----------------------------------*/
 /* Data structures used to keep info */
@@ -665,6 +698,10 @@ static void DrawIcon (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst)
     icon = cddicon;
   else if (StringICmp (dbName, "snp") == 0)
     icon = snpicon;
+  else if (StringICmp (dbName, "journals") == 0)
+    icon = journalsicon;
+  else if (StringICmp (dbName, "unigene") == 0)
+    icon = unigeneicon;
   else
     icon = genericon;
 
@@ -746,6 +783,7 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   CharPtr               book;
   CharPtr               caption;
   Char                  ch;
+  CharPtr               clustid;
   Int2                  commas;
   CharPtr               comname;
   CharPtr               cpt;
@@ -766,8 +804,12 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   CharPtr               title1;
   CharPtr               ttl;
   CharPtr               tmp;
+  Uint4                 uid;
+  Char                  uidbuf [32];
 
   if (e2DocsumPtr == NULL) return NULL;
+
+  uid = e2DocsumPtr->uid;
 
   cpt = NULL;
   ttl = NULL;
@@ -785,11 +827,13 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   rank = NULL;
   sciname = NULL;
   taxid = NULL;
+  clustid = NULL;
   marker = NULL;
   snpid = NULL;
   dcsum = NULL;
   title = NULL;
   title1 = NULL;
+
   for (e2DocsumDataPtr = e2DocsumPtr->docsum_data; e2DocsumDataPtr != NULL; e2DocsumDataPtr = e2DocsumDataPtr->next) {
     if (StringHasNoText (e2DocsumDataPtr->field_value)) continue;
     if (StringICmp (e2DocsumDataPtr->field_name, "Caption") == 0) {
@@ -805,6 +849,9 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
       extra = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "TaxID") == 0) {
       taxid = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "CID") == 0 ||
+               StringICmp (e2DocsumDataPtr->field_name, "CLUSTERID") == 0) {
+      clustid = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "ScientificName") == 0) {
       sciname = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "CommonName") == 0) {
@@ -844,6 +891,9 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
     cpt = accession;
   }
   if (StringHasNoText (cpt)) {
+    cpt = clustid;
+  }
+  if (StringHasNoText (cpt)) {
     cpt = taxid;
   }
   if (StringHasNoText (cpt)) {
@@ -854,6 +904,10 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   }
   if (StringHasNoText (cpt)) {
     cpt = snpid;
+  }
+  if (StringHasNoText (cpt)) {
+    sprintf (uidbuf, "%ld", uid);
+    cpt = uidbuf;
   }
   if (StringHasNoText (cpt)) {
     cpt = "?";
@@ -1661,6 +1715,12 @@ static void SetDocSumImportExportItems (SummFormPtr sfp)
       labels = cddRadios;
     else if (StringICmp (dbName, "snp") == 0)
       labels = snpRadios;
+    else if (StringICmp (dbName, "journals") == 0)
+      labels = journalsRadios;
+    else if (StringICmp (dbName, "unigene") == 0)
+      labels = unigeneRadios;
+    else
+      labels = defaultRadios;
 
     val = GetValue (sfp->formatPopups [sfp->currDb]);
     if (val > 0) {
@@ -1926,6 +1986,7 @@ static void RecalculateDocSum (SummFormPtr sfp)
 /*                                                                  */
 /*==================================================================*/
 
+static DocPrntProc defaultDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc mlDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchAbstract, FetchCitation, FetchMedline, FetchUid, NULL };
 static DocPrntProc aaDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchGenPept, FetchFastaProt, FetchUid, NULL };
 static DocPrntProc ntDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchGenBank, FetchEmbl, FetchFastaNuc, FetchFastaCDS, FetchUid, NULL };
@@ -1940,6 +2001,8 @@ static DocPrntProc domainDocProcs [] = { Query_FetchDocSum, Query_FetchFields, F
 static DocPrntProc stsDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc cddDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc snpDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc journalsDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc unigeneDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 
 static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
 
@@ -2053,6 +2116,12 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
         retrieveProc = domainDocProcs [val - 1];
       else if (StringICmp (dbName, "snp") == 0)
         retrieveProc = snpDocProcs [val - 1];
+      else if (StringICmp (dbName, "journals") == 0)
+        retrieveProc = journalsDocProcs [val - 1];
+      else if (StringICmp (dbName, "unigene") == 0)
+        retrieveProc = unigeneDocProcs [val - 1];
+      else
+        retrieveProc = defaultDocProcs [val - 1];
 
     }
   }
@@ -2971,6 +3040,14 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
       if (launchType == 1) {
         LaunchEntrezURL ("snp", uid, "DocSum");
       }
+    } else if (StringICmp (dbName, "journals") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("journals", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "unigene") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("unigene", uid, "DocSum");
+      }
     }
   }
 }
@@ -3536,6 +3613,12 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
       labels = cddRadios;
     else if (StringICmp (dbName, "snp") == 0)
       labels = snpRadios;
+    else if (StringICmp (dbName, "journals") == 0)
+      labels = journalsRadios;
+    else if (StringICmp (dbName, "unigene") == 0)
+      labels = unigeneRadios;
+    else
+      labels = defaultRadios;
 
     val = GetValue (sfp->formatPopups [sfp->currDb]);
     if (val > 0)
@@ -3591,6 +3674,12 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
         break;
       case 13:
         fprintf (fp, ">SNP\n");
+        break;
+      case 14:
+        fprintf (fp, ">Journals\n");
+        break;
+      case 15:
+        fprintf (fp, ">UniGene\n");
         break;
       default:
         fprintf (fp, ">?\n");
@@ -4727,6 +4816,12 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = cddRadios;
     else if (StringICmp (e2db->db_name, "snp") == 0)
       labels = snpRadios;
+    else if (StringICmp (e2db->db_name, "journals") == 0)
+      labels = journalsRadios;
+    else if (StringICmp (e2db->db_name, "unigene") == 0)
+      labels = unigeneRadios;
+    else
+      labels = defaultRadios;
 
     dbKey = DBGetIDFromName (e2db->db_name);
 
@@ -4771,6 +4866,12 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = cddLaunch;
     else if (StringICmp (e2db->db_name, "snp") == 0)
       labels = snpLaunch;
+    else if (StringICmp (e2db->db_name, "journals") == 0)
+      labels = journalsLaunch;
+    else if (StringICmp (e2db->db_name, "unigene") == 0)
+      labels = unigeneLaunch;
+    else
+      labels = defaultLaunch;
 
     dbKey = DBGetIDFromName (e2db->db_name);
 

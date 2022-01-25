@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asngbseq.h63";
+static char * asnfilename = "asngbseq.h64";
 static AsnValxNode avnx[19] = {
     {20,"not-set" ,0,0.0,&avnx[1] } ,
     {20,"single-stranded" ,1,0.0,&avnx[2] } ,
@@ -48,14 +48,14 @@ static AsnType atx[66] = {
   {0, "accession-version" ,128,10,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[14]} ,
   {0, "other-seqids" ,128,11,0,1,0,0,0,0,NULL,&atx[17],&atx[15],0,&atx[18]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[16],NULL,0,NULL} ,
-  {402, "Seqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[20]} ,
+  {402, "GBSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[20]} ,
   {312, "SEQUENCE OF" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "secondary-accessions" ,128,12,0,1,0,0,0,0,NULL,&atx[17],&atx[19],0,&atx[21]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[20],NULL,0,NULL} ,
-  {403, "Secondary-accession" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[23]} ,
+  {403, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[23]} ,
   {0, "keywords" ,128,13,0,1,0,0,0,0,NULL,&atx[17],&atx[22],0,&atx[24]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[23],NULL,0,NULL} ,
-  {404, "Keyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[30]} ,
+  {404, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[30]} ,
   {0, "segment" ,128,14,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[25]} ,
   {0, "source" ,128,15,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[26]} ,
   {0, "organism" ,128,16,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[27]} ,
@@ -66,7 +66,7 @@ static AsnType atx[66] = {
   {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[32]} ,
   {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[17],&atx[33],0,&atx[35]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[34],NULL,0,NULL} ,
-  {407, "Author" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[52]} ,
+  {407, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[52]} ,
   {0, "consortium" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[36]} ,
   {0, "title" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[37]} ,
   {0, "journal" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[38]} ,
@@ -100,7 +100,7 @@ static AsnType atx[66] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-GBSeq" , "asngbseq.h63",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-GBSeq" , "asngbseq.h64",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -146,11 +146,11 @@ static AsnModulePtr amp = ampx;
 #define GBSEQ_sequence &at[62]
 #define GBSEQ_contig &at[63]
 
-#define SEQID &at[16]
+#define GBSEQID &at[16]
 
-#define SECONDARY_ACCESSION &at[20]
+#define GBSECONDARY_ACCN &at[20]
 
-#define KEYWORD &at[23]
+#define GBKEYWORD &at[23]
 
 #define GBREFERENCE &at[30]
 #define GBREFERENCE_reference &at[31]
@@ -171,7 +171,7 @@ static AsnModulePtr amp = ampx;
 #define GBFEATURE_quals &at[57]
 #define GBFEATURE_quals_E &at[58]
 
-#define AUTHOR &at[34]
+#define GBAUTHOR &at[34]
 
 #define GBINTERVAL &at[52]
 #define GBINTERVAL_from &at[53]

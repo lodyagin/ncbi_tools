@@ -1299,7 +1299,7 @@ static int LIBCALLBACK CompareStartForHeap (VoidPtr vp1, VoidPtr vp2)
 void VnpHeapSort (ValNodePtr PNTR vnp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))	
 
 {
-	Int2 index, total;
+	Int4 index, total;
 	ValNodePtr vnp1;
 	ValNodePtr PNTR temp;
 

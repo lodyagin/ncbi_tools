@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.20 $
+* $Revision: 1.21 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.21  2002/11/08 22:36:17  kans
+* in synchronous query, loop on == eIO_Timeout instead of != eIO_Success
+*
 * Revision 1.20  2002/08/07 18:45:15  lavr
 * Change from deprecated to current EIO_ReadMethod enums
 *
@@ -140,7 +143,7 @@ NLM_EXTERN EIO_Status QBlastWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
@@ -860,7 +863,6 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
    ASN.1 will be returned as CharPtr buffer*/
 NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
 {
-    Boolean	internal_job;
     Char         query_string[256];
     CONN         conn;
     size_t       n_written;

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket.c,v 6.61 2002/08/28 15:59:24 lavr Exp $
+/*  $Id: ncbi_socket.c,v 6.69 2002/11/08 17:18:18 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -220,7 +220,7 @@ typedef int TSOCK_Handle;
 extern int gethostname(char* machname, long buflen);
 #endif
 
-#endif /* NCBI_OS_MSWIN, NCBI_OS_UNIX, NCBI_OS_MAC */
+#endif /*NCBI_OS_MSWIN, NCBI_OS_UNIX, NCBI_OS_MAC*/
 
 
 /* Listening socket
@@ -452,14 +452,14 @@ static int/*bool*/ s_SetNonblock(TSOCK_Handle sock, int/*bool*/ nonblock)
 
 
 /* Select on the socket i/o (multiple sockets).
- * If eIO_Write event inquired on a socket, and socket is marked for
- * upread, then returned "revent" may include eIO_Read to indicate that
- * an input is available on that socket.
- * Return eIO_Success when at least one socket found ready
+ * If eIO_Write event inquired on a socket, and the socket is marked for
+ * upread, then returned "revent" may also include eIO_Read to indicate
+ * that some input is available on that socket.
+ * Return eIO_Success when at least one socket is found either ready
  * (including eIO_Read event on eIO_Write for upreadable sockets)
  * or failing ("revent" contains eIO_Close).
  * Return eIO_Timeout, if timeout expired before any socket became available.
- * Return other error code to indicate failure.
+ * Any other return code indicates failure.
  */
 static EIO_Status s_Select(size_t                n,
                            SSOCK_Poll            polls[],
@@ -637,12 +637,12 @@ extern EIO_Status LSOCK_Create(unsigned short port,
 
     /* Bind */
     memset(&addr, 0, sizeof(addr));
-#if defined(HAVE_SIN_LEN)
-    addr.sin_len         = sizeof(addr);
-#endif
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(port);
+#if defined(HAVE_SIN_LEN)
+    addr.sin_len         = sizeof(addr);
+#endif
     if (bind(x_lsock, (struct sockaddr*)&addr, sizeof(struct sockaddr)) != 0) {
         CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Error,
                        "[LSOCK::Create]  Failed bind()");
@@ -716,6 +716,7 @@ extern EIO_Status LSOCK_Accept(LSOCK           lsock,
                            "[LSOCK::Accept]  Failed accept()");
             return eIO_Unknown;
         }
+        /* man accept(2) notes that non-blocking state is not inherited */
         if ( !s_SetNonblock(x_sock, 1/*true*/) ) {
             CORE_LOG(eLOG_Error, "[LSOCK::Accept]  "
                      "Cannot set accepted socket to non-blocking mode");
@@ -780,7 +781,7 @@ extern EIO_Status LSOCK_GetOSHandle(LSOCK  lsock,
     if (handle_size != sizeof(lsock->sock)) {
         CORE_LOG(eLOG_Error, "[LSOCK::GetOSHandle]  Invalid handle size");
         assert(0);
-        return eIO_Unknown;
+        return eIO_InvalidArg;
     }
 
     memcpy(handle_buf, &lsock->sock, handle_size);
@@ -809,9 +810,6 @@ static EIO_Status s_Connect(SOCK            sock,
 
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
-#if defined(HAVE_SIN_LEN)
-    server.sin_len         = sizeof(server);
-#endif
 
     /* Initialize internals */
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
@@ -833,10 +831,13 @@ static EIO_Status s_Connect(SOCK            sock,
     assert(port  ||  sock->port);
     x_port = (unsigned short) (port ? htons(port) : sock->port);
 
-    /* Fill out the "server" struct */
+    /* Fill in the "server" struct */
     memcpy(&server.sin_addr, &x_host, sizeof(x_host));
     server.sin_family = AF_INET;
     server.sin_port   = x_port;
+#if defined(HAVE_SIN_LEN)
+    server.sin_len    = sizeof(server);
+#endif
 
     /* Create new socket */
     if ((x_sock = socket(AF_INET, SOCK_STREAM, 0)) == SOCK_INVALID) {
@@ -907,7 +908,7 @@ static EIO_Status s_Connect(SOCK            sock,
                     sprintf(str, "[SOCK::s_Connect]  Failed pending connect"
                             " to %.64s:%d (%.32s)", host ? host : "???",
                             (int) ntohs(x_port), IO_StatusStr(status));
-                    CORE_LOG(eLOG_Error, str);
+                    CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Error, str);
                 }
                 SOCK_CLOSE(x_sock);
                 return status;
@@ -1007,10 +1008,10 @@ static EIO_Status s_Close(SOCK sock)
  * not eIO_Closed |       1       |  Read hit EOF and completed with r_status
  * ---------------+---------------+------------------------------------------
  */
-static int s_NCBI_Recv(SOCK        sock,
-                       void*       buffer,
-                       size_t      size,
-                       int/*bool*/ peek)
+static int s_Recv(SOCK        sock,
+                  void*       buffer,
+                  size_t      size,
+                  int/*bool*/ peek)
 {
     char*  x_buffer = (char*) buffer;
     char   xx_buffer[4096];
@@ -1056,7 +1057,7 @@ static int s_NCBI_Recv(SOCK        sock,
                 /* catch unknown ERROR */
                 sock->r_status = eIO_Unknown;
                 CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Trace,
-                               "[SOCK::s_NCBI_Recv]  Failed recv()");
+                               "[SOCK::s_Recv]  Failed recv()");
             }
             return n_read ? (int) n_read : -1;
         }
@@ -1084,7 +1085,7 @@ static int s_NCBI_Recv(SOCK        sock,
 
 /* Read/Peek data from the socket
  */
-static EIO_Status s_Recv(SOCK        sock,
+static EIO_Status s_Read(SOCK        sock,
                          void*       buf,
                          size_t      size,
                          size_t*     n_read,
@@ -1094,7 +1095,6 @@ static EIO_Status s_Recv(SOCK        sock,
 
     *n_read = 0;
 
-    /* Check against an invalid socket */
     if (sock->sock == SOCK_INVALID) {
         CORE_LOG(eLOG_Error, "[SOCK::Read]  Invalid socket");
         assert(0);
@@ -1106,7 +1106,7 @@ static EIO_Status s_Recv(SOCK        sock,
 
     for (;;) { /* retry if interrupted by a signal */
         /* try to read */
-        int x_read = s_NCBI_Recv(sock, buf, size, peek);
+        int x_read = s_Recv(sock, buf, size, peek);
         if (x_read > 0) {
             assert(x_read <= (int) size);
             *n_read = x_read;
@@ -1192,7 +1192,7 @@ static EIO_Status s_SelectStallsafe(size_t                n,
 
                 assert(polls[i].sock);
                 /* try upread as mush as possible data into internal buffer */
-                s_NCBI_Recv(polls[i].sock, 0, 1000000000, 1/*peek*/);
+                s_Recv(polls[i].sock, 0, 1000000000, 1/*peek*/);
                 /* then poll about writing-only w/o upread */
                 save_r_on_w = polls[i].sock->r_on_w;
                 polls[i].sock->r_on_w = eOff;
@@ -1228,10 +1228,10 @@ static EIO_Status s_SelectStallsafe(size_t                n,
 
 /* Write data to the socket "as is" (as many bytes at once as possible)
  */
-static EIO_Status s_WriteWhole(SOCK        sock,
-                               const void* buf,
-                               size_t      size,
-                               size_t*     n_written)
+static EIO_Status s_Send(SOCK        sock,
+                         const void* buf,
+                         size_t      size,
+                         size_t*     n_written)
 {
     int         x_errno;
 
@@ -1242,6 +1242,7 @@ static EIO_Status s_WriteWhole(SOCK        sock,
         assert(0);
         return eIO_Unknown;
     }
+
     /* Check against already shutdown socket */
     if (sock->w_status == eIO_Closed) {
         CORE_LOG(eLOG_Warning,
@@ -1288,15 +1289,18 @@ static EIO_Status s_WriteWhole(SOCK        sock,
         }
 
         if (x_errno != SOCK_EINTR) {
-            /* forcibly closed by peer or shut down */
-            if (x_errno == SOCK_ECONNRESET  ||  x_errno == SOCK_EPIPE)
-                sock->w_status = eIO_Closed; /* actually closed */
+            /* forcibly closed by peer or shut down? */
+            if (x_errno != SOCK_ECONNRESET  &&  x_errno != SOCK_EPIPE) {
+                CORE_LOG_ERRNO(SOCK_ERRNO,
+                               eLOG_Trace, "[SOCK::s_Send]  Failed send()");
+            } else
+                sock->w_status = eIO_Closed;
             break;
         }
 
-        sock->w_status = eIO_Interrupt;
         if (sock->i_on_sig == eOn ||
             (sock->i_on_sig == eDefault && s_InterruptOnSignal == eOn)) {
+            sock->w_status = eIO_Interrupt;
             break;
         }
     }
@@ -1305,15 +1309,15 @@ static EIO_Status s_WriteWhole(SOCK        sock,
 }
 
 
-#if defined(SOCK_WRITE_SLICE)
-/* Split output buffer by slices (of size <= SOCK_WRITE_SLICE) before writing
- * to the socket
- */
-static EIO_Status s_WriteSliced(SOCK        sock,
-                                const void* buf,
-                                size_t      size,
-                                size_t*     n_written)
+static EIO_Status s_Write(SOCK        sock,
+                          const void* buf,
+                          size_t      size,
+                          size_t*     n_written)
 {
+#if defined(SOCK_WRITE_SLICE)
+    /* Split output buffer by slices (of size <= SOCK_WRITE_SLICE)
+     * before writing to the socket
+     */
     EIO_Status status = eIO_Success;
 
     *n_written = 0;
@@ -1321,7 +1325,7 @@ static EIO_Status s_WriteSliced(SOCK        sock,
     while (size  &&  status == eIO_Success) {
         size_t n_io = size > SOCK_WRITE_SLICE ? SOCK_WRITE_SLICE : size;
         size_t n_io_done;
-        status = s_WriteWhole(sock, (char*)buf + x_written, n_io, &n_io_done);
+        status = s_Send(sock, (char*) buf + x_written, n_io, &n_io_done);
         *n_written += n_io_done;
         if (n_io != n_io_done)
             break;
@@ -1329,21 +1333,9 @@ static EIO_Status s_WriteSliced(SOCK        sock,
     }
 
     return status;
-}
-#endif /* SOCK_WRITE_SLICE */
-
-
-static EIO_Status s_Write(SOCK        sock,
-                          const void* buf,
-                          size_t      size,
-                          size_t*     n_written)
-{
-    /* Do a write */
-#if defined(SOCK_WRITE_SLICE)
-    return s_WriteSliced(sock, buf, size, n_written);
 #else
-    return s_WriteWhole (sock, buf, size, n_written);
-#endif
+    return s_Send(sock, buf, size, n_written);
+#endif /*SOCK_WRITE_SLICE*/
 }
 
 
@@ -1407,11 +1399,13 @@ extern EIO_Status SOCK_Shutdown(SOCK      sock,
                                 EIO_Event how)
 {
     int x_how;
+
     if (sock->sock == SOCK_INVALID) {
         CORE_LOG(eLOG_Error, "[SOCK::Shutdown]  Invalid socket");
         assert(0);
         return eIO_Unknown;
     }
+
     switch ( how ) {
     case eIO_Read:
         if ( sock->is_eof ) {
@@ -1454,7 +1448,6 @@ extern EIO_Status SOCK_Close(SOCK sock)
 {
     EIO_Status status;
 
-    /* Check against an invalid socket */
     if (sock->sock == SOCK_INVALID) {
         CORE_LOG(eLOG_Error, "[SOCK::Close]  Invalid socket");
         assert(0);
@@ -1609,7 +1602,7 @@ extern EIO_Status SOCK_SetTimeout(SOCK            sock,
     default:
         CORE_LOG(eLOG_Error, "[SOCK::SetTimeout]  Invalid argument");
         assert(0);
-        return eIO_Unknown;
+        return eIO_InvalidArg;
     }
     return eIO_Success;
 }
@@ -1643,11 +1636,11 @@ extern EIO_Status SOCK_Read(SOCK           sock,
 
     switch ( how ) {
     case eIO_ReadPlain:
-        status = s_Recv(sock, buf, size, &x_read, 0/*false, read*/);
+        status = s_Read(sock, buf, size, &x_read, 0/*false, read*/);
         break;
 
     case eIO_ReadPeek:
-        status = s_Recv(sock, buf, size, &x_read, 1/*true, peek*/);
+        status = s_Read(sock, buf, size, &x_read, 1/*true, peek*/);
         break;
 
     case eIO_ReadPersist:
@@ -1664,9 +1657,10 @@ extern EIO_Status SOCK_Read(SOCK           sock,
         break;
 
     default:
+        CORE_LOG(eLOG_Error, "[SOCK::Read]  Invalid argument");
         assert(0);
         x_read = 0;
-        status = eIO_Unknown;
+        status = eIO_InvalidArg;
         break;
     }
 
@@ -1685,6 +1679,7 @@ extern EIO_Status SOCK_PushBack(SOCK        sock,
         assert(0);
         return eIO_Unknown;
     }
+
     return BUF_PushBack(&sock->buf, buf, size) ? eIO_Success : eIO_Unknown;
 }
 
@@ -1732,9 +1727,10 @@ extern EIO_Status SOCK_Write(SOCK            sock,
         break;
 
     default:
+        CORE_LOG(eLOG_Error, "[SOCK::Write]  Invalid argument");
         assert(0);
         x_written = 0;
-        status = eIO_Unknown;
+        status = eIO_InvalidArg;
         break;
     }
 
@@ -1747,7 +1743,8 @@ extern EIO_Status SOCK_Write(SOCK            sock,
 extern void SOCK_GetPeerAddress(SOCK            sock,
                                 unsigned int*   host,
                                 unsigned short* port,
-                                ENH_ByteOrder   byte_order) {
+                                ENH_ByteOrder   byte_order)
+{
     if ( host ) {
         *host = (unsigned int)
             (byte_order != eNH_HostByteOrder ? sock->host : ntohl(sock->host));
@@ -1767,7 +1764,7 @@ extern EIO_Status SOCK_GetOSHandle(SOCK   sock,
     if (handle_size != sizeof(sock->sock)) {
         CORE_LOG(eLOG_Error, "[SOCK::GetOSHandle]  Invalid handle size");
         assert(0);
-        return eIO_Unknown;
+        return eIO_InvalidArg;
     }
 
     memcpy(handle_buf, &sock->sock, handle_size);
@@ -1812,34 +1809,43 @@ extern int/*bool*/ SOCK_IsServerSide(SOCK sock)
 extern int SOCK_gethostname(char*  name,
                             size_t namelen)
 {
-    int x_errno;
-    assert(namelen > 0);
+    int error = 0;
+
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
+
+    assert(name && namelen > 0);
     name[0] = name[namelen - 1] = '\0';
-    x_errno = gethostname(name, (int) namelen);
-    if (x_errno  ||  name[namelen - 1]) {
-        CORE_LOG_ERRNO(x_errno, eLOG_Error,
+    if (gethostname(name, (int) namelen) != 0) {
+        CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Error,
                        "[SOCK_gethostname]  Cannot get local hostname");
-        name[0] = '\0';
-        return 1/*failed*/;
+        error = 1;
+    } else if ( name[namelen - 1] ) {
+        CORE_LOG(eLOG_Error, "[SOCK_gethostname]  Buffer too small");
+        error = 1;
     }
-    return 0/*success*/;
+
+    if ( !error )
+        return 0/*success*/;
+
+    name[0] = '\0';
+    return 1/*failed*/;
 }
 
 
 extern int SOCK_ntoa(unsigned int host,
                      char*        buf,
-                     size_t       buf_size)
+                     size_t       buflen)
 {
     const unsigned char* b = (const unsigned char*) &host;
     char str[16];
 
+    assert(buf && buflen > 0);
     verify(sprintf(str, "%u.%u.%u.%u",
                    (unsigned) b[0], (unsigned) b[1],
                    (unsigned) b[2], (unsigned) b[3]) > 0);
     assert(strlen(str) < sizeof(str));
 
-    if (strlen(str) >= buf_size) {
+    if (strlen(str) >= buflen) {
         CORE_LOG(eLOG_Error, "[SOCK_ntoa]  Buffer too small");
         buf[0] = '\0';
         return -1/*failed*/;
@@ -1865,7 +1871,7 @@ extern unsigned short SOCK_HostToNetShort(unsigned short value)
 extern unsigned int SOCK_gethostbyname(const char* hostname)
 {
     unsigned int host;
-    char buf[1024];
+    char buf[256];
 
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
 
@@ -1888,41 +1894,41 @@ extern unsigned int SOCK_gethostbyname(const char* hostname)
         } else {
             host = 0;
         }
-        if (out) {
+        if ( out ) {
             freeaddrinfo(out);
         }
 #else /* Use some variant of gethostbyname */
         struct hostent* he;
-# if defined(HAVE_GETHOSTBYNAME_R)
+#  if defined(HAVE_GETHOSTBYNAME_R)
         struct hostent x_he;
         char           x_buf[1024];
         int            x_err;
-#   if (HAVE_GETHOSTBYNAME_R == 5)
+#    if (HAVE_GETHOSTBYNAME_R == 5)
         he = gethostbyname_r(hostname, &x_he, x_buf, sizeof(x_buf),
                              &x_err);
-#   elif (HAVE_GETHOSTBYNAME_R == 6)
+#    elif (HAVE_GETHOSTBYNAME_R == 6)
         if (gethostbyname_r(hostname, &x_he, x_buf, sizeof(x_buf),
                             &he, &x_err) != 0) {
             assert(he == 0);
             he = 0;
         }
-#   else
-#     error "Unknown HAVE_GETHOSTBYNAME_R value"
-#   endif
-# else
+#    else
+#      error "Unknown HAVE_GETHOSTBYNAME_R value"
+#    endif
+#  else
         CORE_LOCK_WRITE;
         he = gethostbyname(hostname);
-# endif
+#  endif
         if ( he ) {
             memcpy(&host, he->h_addr, sizeof(host));
         } else {
             host = 0;
         }
 
-# if !defined(HAVE_GETHOSTBYNAME_R)
+#  if !defined(HAVE_GETHOSTBYNAME_R)
         CORE_UNLOCK;
-# endif
-#endif /* HAVE_GETADDR_INFO */
+#  endif
+#endif /*HAVE_GETADDR_INFO*/
     }
 
     return host;
@@ -1935,60 +1941,67 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 {
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
 
-    if (host  &&  name  &&  namelen) {
+    assert(name && namelen > 0);
+    if ( !host ) {
+        host = SOCK_gethostbyname(0);
+    }
+
+    if ( host ) {
 #if defined(HAVE_GETNAMEINFO)
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
-# if defined(HAVE_SIN_LEN)
-        addr.sin_len = sizeof(addr);
-# endif
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = host;
+#  if defined(HAVE_SIN_LEN)
+        addr.sin_len = sizeof(addr);
+#  endif
         if (getnameinfo((struct sockaddr *) &addr, sizeof(addr), name, namelen,
-                        0, 0, NI_NAMEREQD) == 0) {
+                        0, 0, 0) == 0) {
             return name;
         } else {
+            name[0] = '\0';
             return 0;
         }
 #else
         struct hostent* he;
-# if defined(HAVE_GETHOSTBYADDR_R)
+#  if defined(HAVE_GETHOSTBYADDR_R)
         struct hostent x_he;
         char           x_buf[1024];
         int            x_errno;
 
-#   if (HAVE_GETHOSTBYADDR_R == 7)
+#    if (HAVE_GETHOSTBYADDR_R == 7)
         he = gethostbyaddr_r((char*) &host, sizeof(host), AF_INET, &x_he,
                              x_buf, sizeof(x_buf), &x_errno);
-#   elif (HAVE_GETHOSTBYADDR_R == 8)
+#    elif (HAVE_GETHOSTBYADDR_R == 8)
         if (gethostbyaddr_r((char*) &host, sizeof(host), AF_INET, &x_he,
                             x_buf, sizeof(x_buf), &he, &x_errno) != 0) {
             assert(he == 0);
             he = 0;
         }
-#   else
-#    error "Unknown HAVE_GETHOSTBYADDR_R value"
-#   endif
-# else
+#    else
+#      error "Unknown HAVE_GETHOSTBYADDR_R value"
+#    endif
+#  else
         CORE_LOCK_WRITE;
         he = gethostbyaddr((char*) &host, sizeof(host), AF_INET);
-# endif
+#  endif
 
-        if (!he  ||  strlen(he->h_name) > namelen - 1) {
-# if !defined(HAVE_GETHOSTBYADDR_R)
-            CORE_UNLOCK;
-# endif
-            return 0;
+        if (!he  ||  strlen(he->h_name) >= namelen) {
+            if (he  ||  SOCK_ntoa(host, name, namelen) != 0) {
+                name[0] = '\0';
+                name = 0;
+            }
+        } else {
+            strcpy(name, he->h_name);
         }
-        strncpy(name, he->h_name, namelen - 1);
-# if !defined(HAVE_GETHOSTBYADDR_R)
+#  if !defined(HAVE_GETHOSTBYADDR_R)
         CORE_UNLOCK;
-# endif
-        name[namelen - 1] = '\0';
+#  endif
         return name;
-#endif /* HAVE_GETNAMEINFO */
+#endif /*HAVE_GETNAMEINFO*/
     }
 
+    name[0] = '\0';
     return 0;
 }
 
@@ -1996,6 +2009,33 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.c,v $
+ * Revision 6.69  2002/11/08 17:18:18  lavr
+ * Minor change: spare -1 in >= by replacing it with >
+ *
+ * Revision 6.68  2002/11/01 20:12:55  lavr
+ * Reimplement SOCK_gethostname() - was somewhat potentally buggy
+ *
+ * Revision 6.67  2002/10/29 22:20:52  lavr
+ * Use proper indentation of preproc. macros; note post-accept() socket state
+ *
+ * Revision 6.66  2002/10/28 15:45:58  lavr
+ * Use "ncbi_ansi_ext.h" privately and use strncpy0()
+ *
+ * Revision 6.65  2002/10/11 19:50:55  lavr
+ * Few renames of internal functions (s_NCBI_Recv, s_Recv, etc)
+ * Interface change: SOCK_gethostbyaddr() returns dotted IP address
+ * when failed to convert given address into FQDN, it also now accepts
+ * 0 to return the name (or dotted IP) of the local host
+ *
+ * Revision 6.64  2002/09/13 19:26:46  lavr
+ * Few style-conforming changes
+ *
+ * Revision 6.63  2002/09/06 15:45:03  lavr
+ * Return eIO_InvalidArg instead of generic eIO_Unknown where appropriate
+ *
+ * Revision 6.62  2002/09/04 15:11:00  lavr
+ * Print ERRNO with failed connection attempt
+ *
  * Revision 6.61  2002/08/28 15:59:24  lavr
  * Removed few redundant checks in s_SelectStallsafe()
  *

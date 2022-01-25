@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.7  2002/11/06 21:22:32  ucko
+* Accept "--help" as a synonym for the less intuitive "-"
+*
 * Revision 6.6  2001/07/03 20:03:11  juran
 * Don't corruptly parse argv in Mac OS.
 *
@@ -165,7 +168,8 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
       return TRUE;
     }
 
-  if (xx_argc == 1  ||  *(xx_argv[1]+1) == '\0')
+  if (xx_argc == 1  ||  *(xx_argv[1]+1) == '\0'
+      ||  !strcmp(xx_argv[1], "--help"))
     {
       printf("\n%s   arguments:\n\n", progname);
       curarg = ap;

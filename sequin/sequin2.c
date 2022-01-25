@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.116 $
+* $Revision: 6.121 $
 *
 * File Description: 
 *
@@ -558,7 +558,7 @@ static Boolean ImportFastaDialog (DialoG d, CharPtr filename)
         insegset = FALSE;
         nextsep = SequinFastaToSeqEntryEx (f, fpp->is_na, &errormsg, fpp->parseSeqId, &lastchar);
         while (nextsep != NULL ||
-               (lastchar != EOF && lastchar != NULLB && lastchar != 255)) {
+               (lastchar != (Char) EOF && lastchar != NULLB && lastchar != 255)) {
           if (nextsep != NULL) {
             count++;
             if (IS_Bioseq (nextsep) && nextsep->data.ptrvalue != NULL) {
@@ -793,7 +793,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
     if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       if (bssp != NULL && (bssp->_class == 7 ||
-                           (bssp->_class >= 13 && bssp->_class <= 16))) {
+                           (IsPopPhyEtcSet (bssp->_class)))) {
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
           num++;
           if (IS_Bioseq (sep)) {
@@ -831,7 +831,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
     if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       if (bssp != NULL && (bssp->_class == 7 ||
-                           (bssp->_class >= 13 && bssp->_class <= 16))) {
+                           (IsPopPhyEtcSet (bssp->_class)))) {
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
           num++;
           len = 0;
@@ -1072,7 +1072,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
       fp = FileOpen (path, "r");
       if (fp != NULL) {
         if (ppp->format >= SEQ_FMT_CONTIGUOUS && ppp->format <= SEQ_FMT_INTERLEAVE) {
-          while (fgets (str, sizeof (str), fp) != NULL) {
+          while (FileGets (str, sizeof (str), fp) != NULL) {
             if (str [0] == '>') {
               ptr = str;
               ch = *ptr;
@@ -1165,7 +1165,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
             if (sep != NULL && IS_Bioseq_set (sep) && SeqEntryHasNoTitles (sep)) {
               bssp = (BioseqSetPtr) sep->data.ptrvalue;
               if (bssp != NULL && (bssp->_class == 7 ||
-                                   (bssp->_class >= 13 && bssp->_class <= 16))) {
+                                   (IsPopPhyEtcSet (bssp->_class)))) {
                 for (tmp = bssp->seq_set, vnp = head;
                      tmp != NULL && vnp != NULL;
                      tmp = tmp->next, vnp = vnp->next) {
@@ -1184,7 +1184,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
             if (sep != NULL && IS_Bioseq_set (sep)) {
               bssp = (BioseqSetPtr) sep->data.ptrvalue;
               if (bssp != NULL && (bssp->_class == 7 ||
-                                   (bssp->_class >= 13 && bssp->_class <= 16))) {
+                                   (IsPopPhyEtcSet (bssp->_class)))) {
                 seqtitles = 0;
                 seqtotals = 0;
                 for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
@@ -1545,13 +1545,13 @@ static ENUM_ALIST(combined_subtype_alist)
   {"Location",            25},
   {"Map",                 12},
   {"Molecule",            24},
-  {"Natural-host",        13},
   {"Old Name",            28},
   {"Organism",             1},
   {"Plasmid-name",        14},
   {"Plastid-name",        15},
   {"Segment",             30},
   {"Sex",                 16},
+  {"Specific-host",       13},
   {"Specimen-voucher",    27},
   {"Strain",              17},
   {"Sub-species",         18},
@@ -1559,7 +1559,6 @@ static ENUM_ALIST(combined_subtype_alist)
   {"Teleomorph",          37},
   {"Tissue-lib",          19},
   {"Tissue-type",         20},
-  {"Transposon-name",     21},
   {"Variety",             22},
   {"Note",                23},
 END_ENUM_ALIST
@@ -3214,7 +3213,7 @@ static void PrefixOrgToDefline (SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         PrefixOrgToDefline (sep);
       }
@@ -4350,7 +4349,7 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
       if (IS_Bioseq_set (sep)) {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
         if (bssp != NULL && (bssp->_class == 7 ||
-                             (bssp->_class >= 13 && bssp->_class <= 16))) {
+                             (IsPopPhyEtcSet (bssp->_class)))) {
           seqtitles = 0;
           seqtotals = 0;
           for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {

@@ -1,4 +1,4 @@
-/* $Id: ncbisock.c,v 6.10 2002/08/27 20:26:23 lavr Exp $
+/* $Id: ncbisock.c,v 6.11 2002/09/13 19:17:36 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.c,v $
+ * Revision 6.11  2002/09/13 19:17:36  lavr
+ * Fix incomplete S2E() mapping
+ *
  * Revision 6.10  2002/08/27 20:26:23  lavr
  * Fixed reference: SOCK_htonl() -> SOCK_HostToNetLong()
  *
@@ -120,6 +123,7 @@ static ESOCK_ErrCode s_ESOCK_ErrCode[eIO_Unknown + 1] = {
   eSOCK_ESuccess,
   eSOCK_ETimeout,
   eSOCK_EClosed,
+  eSOCK_EUnknown,
   eSOCK_EUnknown,
   eSOCK_EUnknown,
   eSOCK_EUnknown

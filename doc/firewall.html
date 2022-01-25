@@ -48,7 +48,7 @@
       <p>&nbsp;</p>
 
 			 <p>
-				<i>Last modified:</i> $Date: 2000/03/20 22:21:11 $<br>
+				<i>Last modified:</i> $Date: 2002/10/03 18:31:52 $<br>
 				<i>Latest version: </i>
 				<a href="http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html">
 				  http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html</a>
@@ -101,7 +101,7 @@ settings to take effect.
 
 <p>
 If you are behind a firewall, it must be configured correctly to access NCBI
-services. Your network administrator may have done this already. If not, please
+services. Your network administrators may have done this already. If not, please
 have them read the section below.
 
 <p>
@@ -115,11 +115,11 @@ your firewall. The ports to open are:
 <pre>
 Firewall Port        IP Address
 --------------------------------
-    5853            130.14.22.1
-    5859            130.14.22.2
-    5840            130.14.22.8
+<!--    5853            130.14.22.1  SERVER RETIRED -->
+<!--    5859            130.14.22.2  SERVER RETIRED -->
+<!--    5840            130.14.22.8  SERVER RETIRED -->
     5845            130.14.22.12  (cannot be accessed from outside NCBI!)
-    5810            130.14.22.30
+<!--    5810            130.14.22.30 SERVER RETIRED -->
     5812            130.14.22.31
     5811            130.14.22.32
 </pre>
@@ -133,16 +133,16 @@ TROUBLESHOOTING:  You can test if these ports are accessible from
 your host by just running, for example (see the "Ports to open" list
 above):
 <pre>
-  telnet 130.14.22.1 5853
+  telnet 130.14.22.31 5812
 </pre>
 and entering a line of arbitrary text in the telnet session.
 If everything is fine, your TELNET session will look as follows
 (the line "test" is your input here):
 
 <pre>
-| > telnet 130.14.22.1 5853
-| Trying 130.14.22.1...
-| Connected to 130.14.22.1.
+| > telnet 130.14.22.31 5812
+| Trying 130.14.22.31...
+| Connected to 130.14.22.31.
 | Escape character is '^]'.
 | test
 | NCBI Firewall Daemon:  Invalid ticket. Connection closed.
@@ -167,10 +167,6 @@ obsoleted, please contact <a href="mailto:info@ncbi.nlm.nih.gov">
 </table>
 <!--  end of content  -->  
 
-   
-
-  
- 
 
 </body>
 </html>

@@ -17,8 +17,8 @@ A full list of command-line options is given in Appendix B.
 are not behind a firewall no further action is required.  If you are behind a 
 firewall, and already use Sequin or Entrez, or if your system administrator has 
 already performed the setup, then you should be able to start performing searches 
-immediately.  Otherwise, please refer to 'firewall.txt' that is included with 
-this archive.  Follow the instructions for "Configuring newer clients".  
+immediately.  Otherwise, please refer to 'dispatcher.html' that is included with 
+this archive.  Follow the instructions for "Taking care of firewall".
 
 	As an alternative to blastcl3, NCBI BLAST web server also supports
 URL API.  For details on the standard commands, please refer to the online

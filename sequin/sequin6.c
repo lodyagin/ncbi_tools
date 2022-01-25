@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.79 $
+* $Revision: 6.91 $
 *
 * File Description: 
 *
@@ -60,6 +60,17 @@
 #define IMPORT_FEAT_TYPE      7
 
 #define NUMBER_OF_TYPES       7
+#define NUMBER_OF_SUFFIXES    7
+
+static ENUM_ALIST(name_suffix_alist)
+  {" ",    0},
+  {"Jr.",  1},
+  {"Sr.",  2},
+  {"III",  3},
+  {"IV",   4},
+  {"V",    5},
+  {"VI",   6},
+END_ENUM_ALIST
 
 static ENUM_ALIST(target_field_alist)
   {" ",                    0},
@@ -198,7 +209,6 @@ static ENUM_ALIST(subsource_and_orgmod_note_subtype_alist)
   {"Isolation-source",       1028},
   {"Lab-host",               1016},
   {"Map",                    1002},
-  {"Natural-host",             21},
   {"Note",                    255},
   {"Old Lineage",             253},
   {"Old Name",                254},
@@ -212,6 +222,7 @@ static ENUM_ALIST(subsource_and_orgmod_note_subtype_alist)
   {"Serotype",                  7},
   {"Serovar",                   9},
   {"Sex",                    1007},
+  {"Specific-host",            21},
   {"Specimen-voucher",         23},
   {"Strain",                    2},
   {"Subclone",               1004},
@@ -263,6 +274,7 @@ typedef struct convertformdata {
   CharPtr            leftstr;
   CharPtr            rightstr;
   CharPtr            foundstr;
+  Boolean            endQuotesFlag;
   GrouP              leftbehav;
   GrouP              rightbehav;
   Boolean            includeleft;
@@ -284,7 +296,10 @@ typedef struct convertformdata {
 #define DO_NOTHING       2
 #define REMOVE_ALL_TEXT  3
 
+/* End values for string trimming */
 
+#define TRIM_LEFT_END    1
+#define TRIM_RIGHT_END   2
 
 /*-------------------------------------------------------------------------*/
 /*                                                                         */
@@ -292,25 +307,37 @@ typedef struct convertformdata {
 /*                                                                         */
 /*-------------------------------------------------------------------------*/
 
-static void TrimOffEndQuotes (CharPtr trimString)
+static Boolean TrimOffEndQuotes (CharPtr trimString, 
+				 Int2    whichEnd)
 {
   Int4 strLen;
   Int4 i;
 
   strLen = StringLen(trimString);
+  if (strLen == 0)
+    return FALSE;
 
   /* If there is a quote at the end, remove it */
 
-  if (trimString[strLen-1] == '"') {
-    strLen--;
-    trimString [strLen] = '\0';
+  if (TRIM_RIGHT_END == whichEnd) {
+    if (trimString[strLen-1] == '"') {
+      strLen--;
+      trimString [strLen] = '\0';
+      return TRUE;
+    }
   }
 
   /* If there is a quote at the beginning, remove it */
 
-  if (trimString[0] == '"')
-    for (i = 0; trimString[i] != '\0'; i++)
-      trimString[i] = trimString [i+1];
+  else {
+    if (trimString[0] == '"') {
+      for (i = 0; trimString[i] != '\0'; i++)
+	trimString[i] = trimString [i+1];
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -847,9 +874,9 @@ static void DeleteFeaturesByText_Callback (SeqEntryPtr sep,
 /*                                                                         */
 /*=========================================================================*/
 
-static void DeleteSourceByText (SeqEntryPtr    sep,
+static void DeleteSourceByText (SeqDescrPtr    sdp,
+				SeqEntryPtr    sep,
 				BioseqPtr      bsp,
-				BioSourcePtr   biop,
 				ConvertFormPtr cfp)
 
 {
@@ -859,12 +886,21 @@ static void DeleteSourceByText (SeqEntryPtr    sep,
   SubSourcePtr  ssp;
   Boolean       found;
   BioseqSetPtr  bssp;
+  BioSourcePtr  biop;
 
   /* Check parameters */
 
-  if (biop == NULL || cfp == NULL)
+  if (sdp == NULL || cfp == NULL)
     return;
 
+  if (Seq_descr_source != sdp->choice)
+    return;
+
+  biop = sdp->data.ptrvalue;
+  if (NULL == biop)
+    return;
+
+  /* Search the source for the given string */
 
   switch (cfp->type) {
     case BIOSOURCE_TYPE :
@@ -995,9 +1031,15 @@ static void DeleteSourceByText (SeqEntryPtr    sep,
 static void DeleteItemsByText (SeqEntryPtr    sep,
 			       ConvertFormPtr cfp)
 {
-  BioseqSetPtr    bssp;
-  BioseqPtr       bsp;
-  BioSourcePtr    biop;
+  BioseqSetPtr      bssp;
+  BioseqPtr         bsp;
+  SeqMgrDescContext descContext;
+  /*
+  Uint2             parenttype;
+  Pointer           parentptr;
+  SeqEntryPtr       parentSep;
+  */
+  SeqDescrPtr       sdp;
 
   /* If we have a Bioseq Set, then recurse until */
   /* we get down to an actual Bioseq.            */
@@ -1028,8 +1070,19 @@ static void DeleteItemsByText (SeqEntryPtr    sep,
       break;
     case BIOSOURCE_TYPE :
     case ORGMOD_SUBSOURCE_TYPE :
+      sdp = SeqMgrGetNextDescriptor (bsp, NULL, 0, &descContext);
+      while (NULL != sdp) {
+	sdp = SeqMgrGetNextDescriptor (bsp, sdp, 0, &descContext);
+	DeleteSourceByText (sdp, sep, bsp, cfp);
+      }
+      /*
       SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
+      if (NULL == biop) {
+	GetSeqEntryParent (sep, &parentptr, &parenttype);
+	SeqEntryToBioSource (parentSep, NULL, NULL, 0, &biop);
+      }
       DeleteSourceByText (sep, bsp, biop, cfp);
+      */
       break;
     default:
       break;
@@ -1057,31 +1110,39 @@ static void DeleteByText_Callback (ButtoN b)
 
   cfp = (ConvertFormPtr) GetObjectExtra (b);
   if (cfp == NULL || cfp->input_entityID == 0) {
+    Remove (cfp->form);
     return;
   }
 
   sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
   if (sep == NULL) {
+    Remove (cfp->form);
     return;
   }
 
   /* Get the string to search for */
 
   cfp->deleteStr = SaveStringFromTextNoStripSpaces (cfp->deleteText);
-  if (StringHasNoText (cfp->deleteStr))
+  if (StringHasNoText (cfp->deleteStr)){ 
+    Remove (cfp->form);
     return;
+  }
 
   /* Get the type of items to search */
 
   GetEnumPopup (cfp->target, ext_target_field_alist, &val);
-  if (0 == val)
+  if (0 == val) {
+    Remove (cfp->form);
     return;
+  }
   else
     cfp->type = (Int2) val;
 
   GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
-  if (0 == val)
+  if (0 == val) {
+    Remove (cfp->form);
     return;
+  }
   else
     cfp->subtype = (Int2) val;
 
@@ -1214,7 +1275,7 @@ extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data)
   for (j = 1; j <= NUMBER_OF_TYPES; j++) {
     if (j == ORGMOD_SUBSOURCE_TYPE) {
       cfp->subtarget [j] =
-	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
+	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetDeleteAcceptButton);
       SetObjectExtra (cfp->subtarget [j], cfp, NULL);
       for (ap = cfp->alists [j]; ap->name != NULL; ap++)
 	ListItem ((LisT) cfp->subtarget [j], ap->name);
@@ -1717,6 +1778,17 @@ static void ConvertFromFlatFile (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr
             okay = FALSE;
           }
         }
+	else if (TRUE == cfp->endQuotesFlag) {
+          rgt = SearchForString (tmp, "\"", FALSE, FALSE);
+          if (rgt != NULL) {
+            if (cfp->includeright) {
+              rgt += StringLen (cfp->rightstr);
+            }
+            *rgt = '\0';
+          } else {
+            okay = FALSE;
+          }
+	}
         if (okay) {
           if (lft != NULL) {
             lft = tmp;
@@ -1747,7 +1819,7 @@ static void DoOneConvert (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, M
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoOneConvert (entityID, sep, cfp, mon);
       }
@@ -2065,7 +2137,7 @@ static void DoOneRemoveText (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoOneRemoveText (entityID, sep, cfp, mon);
       }
@@ -2123,8 +2195,11 @@ static void DoConvertProc (ButtoN b)
       if (cfp->report > 0) {
         cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
         cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
-	TrimOffEndQuotes (cfp->leftstr);
-	TrimOffEndQuotes (cfp->rightstr);
+	TrimOffEndQuotes (cfp->leftstr, TRIM_LEFT_END);
+	if (TRUE == TrimOffEndQuotes (cfp->rightstr, TRIM_RIGHT_END))
+	  cfp->endQuotesFlag = TRUE;
+	else
+	  cfp->endQuotesFlag = FALSE;
         cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
         cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
         mon = MonitorStrNewEx ("Parsing Text From FlatFile", 20, FALSE);
@@ -2165,8 +2240,8 @@ static void DoRemoveTextProc (ButtoN b)
       cfp->subtype = (Int2) val;
       cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
       cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
-      TrimOffEndQuotes (cfp->leftstr);
-      TrimOffEndQuotes (cfp->rightstr);
+      TrimOffEndQuotes (cfp->leftstr, TRIM_LEFT_END);
+      TrimOffEndQuotes (cfp->rightstr, TRIM_RIGHT_END);
       cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
       cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
       mon = MonitorStrNewEx ("Removing Text From String", 20, FALSE);
@@ -3136,7 +3211,7 @@ static void RemOutTxt_AcceptCallback (ButtoN acceptButton)
   else
     cfp->includeright = FALSE;
 
-  if (GetValue (cfp->ifNotFoundGroup) == 1)
+  if (GetValue (cfp->ifNotFoundGroup) == DO_NOTHING)
     cfp->ifNotFound = DO_NOTHING;
   else
     cfp->ifNotFound = REMOVE_ALL_TEXT;
@@ -3160,8 +3235,8 @@ static void RemOutTxt_AcceptCallback (ButtoN acceptButton)
   cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
   cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
 
-  TrimOffEndQuotes (cfp->leftstr);
-  TrimOffEndQuotes (cfp->rightstr);
+  TrimOffEndQuotes (cfp->leftstr, TRIM_LEFT_END);
+  TrimOffEndQuotes (cfp->rightstr, TRIM_RIGHT_END);
 
   /* Do actual work of removing text */
 
@@ -3729,7 +3804,7 @@ static void CountComponentFunc (SeqEntryPtr sep, Int2Ptr cp)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         CountComponentFunc (sep, cp);
       }
@@ -4303,7 +4378,7 @@ static void ApplyBioFeatToAll (Uint2        entityID,
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ApplyBioFeatToAll (entityID, sep, afp);
       }
@@ -4738,7 +4813,7 @@ typedef struct submitform {
   TexT            firstname;
   TexT            middleinit;
   TexT            lastname;
-  TexT            suffix;
+  PopuP           suffix;
   DialoG          phonefaxemail;
   DialoG          authors;
   DialoG          affil;
@@ -4788,7 +4863,10 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
               SafeSetTitle (sbfp->lastname, txt);
               MemFree (txt);
               txt = ExtractTagListColumn (str, 3);
+	      SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
+	      /*
               SafeSetTitle (sbfp->suffix, txt);
+	      */
               MemFree (txt);
               MemFree (str);
             }
@@ -4827,7 +4905,6 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
       SafeSetTitle (sbfp->firstname, "");
       SafeSetTitle (sbfp->middleinit, "");
       SafeSetTitle (sbfp->lastname, "");
-      SafeSetTitle (sbfp->suffix, "");
       PointerToDialog (sbfp->phonefaxemail, NULL);
       PointerToDialog (sbfp->authors, NULL);
       PointerToDialog (sbfp->affil, NULL);
@@ -4847,7 +4924,9 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
   PersonIdPtr     pid;
   SubmitFormPtr   sbfp;
   SequinBlockPtr  sbp;
+  Char            sfx [32];
   Char            str [128];
+  Uint2           suffixVal;
   CharPtr         txt;
 
   sbp = NULL;
@@ -4875,10 +4954,10 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
           StringCat (str, txt);
           StringCat (str, "\t");
           MemFree (txt);
-          txt = SaveStringFromText (sbfp->suffix);
-          StringCat (str, txt);
+          suffixVal = GetValue (sbfp->suffix);
+	  sprintf (sfx, "%d", (int) (suffixVal - 1));
+          StringCat (str, sfx);
           StringCat (str, "\n");
-          MemFree (txt);
           txt = StringSave (str);
           nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
           MemFree (txt);
@@ -4966,7 +5045,10 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
                 SafeSetTitle (sbfp->lastname, txt);
                 MemFree (txt);
                 txt = ExtractTagListColumn (str, 3);
+		SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
+		/*
                 SafeSetTitle (sbfp->suffix, txt);
+		*/
                 MemFree (txt);
                 MemFree (str);
               }
@@ -4998,12 +5080,6 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
       if (dp != NULL) {
         dp->data [3] = 0; /* force to end of month */
         dp = DateAdvance (dp, 12);
-        /*
-        (dp->data [1])++;
-        if (dp->data [2] == 2 && dp->data [3] > 28) {
-          dp->data [3] = 28;
-        }
-        */
         PointerToDialog (sbfp->reldate, (Pointer) dp);
       } else {
         PointerToDialog (sbfp->reldate, NULL);
@@ -5012,7 +5088,7 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
       SafeSetTitle (sbfp->firstname, "");
       SafeSetTitle (sbfp->middleinit, "");
       SafeSetTitle (sbfp->lastname, "");
-      SafeSetTitle (sbfp->suffix, "");
+      SafeSetValue (sbfp->suffix, 0);
       PointerToDialog (sbfp->phonefaxemail, NULL);
       PointerToDialog (sbfp->authors, NULL);
       PointerToDialog (sbfp->affil, NULL);
@@ -5206,7 +5282,7 @@ static Boolean ReadContactPage (ForM f, CharPtr filename)
                   SafeSetTitle (sbfp->lastname, txt);
                   MemFree (txt);
                   txt = ExtractTagListColumn (str, 3);
-                  SafeSetTitle (sbfp->suffix, txt);
+		  SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
                   MemFree (txt);
                   MemFree (str);
                 }
@@ -5235,7 +5311,9 @@ static Boolean WriteContactPage (ForM f, CharPtr filename)
   Char            path [PATH_MAX];
   PersonIdPtr     pid;
   SubmitFormPtr   sbfp;
+  Char            sfx [32];
   Char            str [128];
+  Uint2           suffixVal;
   CharPtr         txt;
 #ifdef WIN_MAC
   FILE            *fp;
@@ -5277,10 +5355,10 @@ static Boolean WriteContactPage (ForM f, CharPtr filename)
               StringCat (str, txt);
               StringCat (str, "\t");
               MemFree (txt);
-              txt = SaveStringFromText (sbfp->suffix);
-              StringCat (str, txt);
+              suffixVal = GetValue (sbfp->suffix);
+              sprintf (sfx, "%d", (int) (suffixVal - 1));
+              StringCat (str, sfx);
               StringCat (str, "\n");
-              MemFree (txt);
               txt = StringSave (str);
               nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
               MemFree (txt);
@@ -5515,7 +5593,9 @@ static void CopyContactToAuthors (SubmitFormPtr sbfp)
   ValNodePtr   names;
   NameStdPtr   nsp;
   PersonIdPtr  pid;
+  Char         sfx [32];
   Char         str [128];
+  Uint2        suffixVal;
   CharPtr      txt;
 
   if (sbfp == NULL) return;
@@ -5546,10 +5626,14 @@ static void CopyContactToAuthors (SubmitFormPtr sbfp)
           StringCat (str, txt);
           StringCat (str, "\t");
           MemFree (txt);
+          suffixVal = GetValue (sbfp->suffix);
+          sprintf (sfx, "%d", (int) (suffixVal - 1));
+          /*
           txt = SaveStringFromText (sbfp->suffix);
-          StringCat (str, txt);
-          StringCat (str, "\n");
           MemFree (txt);
+          */
+          StringCat (str, sfx);
+          StringCat (str, "\n");
           txt = StringSave (str);
           nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
           MemFree (txt);
@@ -5889,7 +5973,15 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     sbfp->firstname = DialogText (n, "", 8, NULL);
     sbfp->middleinit = DialogText (n, "", 4, NULL);
     sbfp->lastname = DialogText (n, "", 9, NULL);
+    /*
     sbfp->suffix = DialogText (n, "", 3, NULL);
+    sbfp->suffix = PopupList (n, TRUE, SuffixPopup_Callback);
+    */
+    sbfp->suffix = PopupList (n, TRUE, NULL);
+    SetObjectExtra (sbfp->suffix, sbfp, NULL);
+    InitEnumPopup (sbfp->suffix, name_suffix_alist, NULL);
+    SetEnumPopup (sbfp->suffix, name_suffix_alist, 0);
+
     sbfp->phonefaxemail = CreateExtAffilDialog (q, NULL, NULL, &x);
     Show (x);
     Show (sbfp->phonefaxemail);
@@ -6746,7 +6838,7 @@ static void DoOneParse (Uint2 entityID, SeqEntryPtr sep, ParseFormPtr pfp, BioSo
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         DoOneParse (entityID, tmp, pfp, topbiop);
       }
@@ -7400,7 +7492,7 @@ static void PopTargetProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 ind
       if (_class > 17) {
         _class = 18;
       }
-      if (_class == 7 || (_class >= 13 && _class <= 16)) {
+      if (_class == 7 || (IsPopPhyEtcSet (bssp->_class))) {
         dfp->hasMutPopPhySet = TRUE;
       }
       if (! dfp->hasMutPopPhySet) {
@@ -8444,7 +8536,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
     heading [0] = '\0';
     section [0] = '\0';
     inTable = FALSE;
-    goOn = (fgets (str, sizeof (str), fp) != NULL);
+    goOn = (FileGets (str, sizeof (str), fp) != NULL);
     while (goOn) {
       ptr = str;
       ch = *ptr;
@@ -8552,7 +8644,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
           }
         }
       }
-      goOn = (Boolean) (goOn && (fgets (str, sizeof (str), fp) != NULL));
+      goOn = (Boolean) (goOn && (FileGets (str, sizeof (str), fp) != NULL));
     }
     if (list != NULL) {
       ptr = MergeValNodeStrings (list, inTable);

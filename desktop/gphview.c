@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description:
 *
@@ -3467,7 +3467,7 @@ BioseqPageData alnPageData = {
 };
 
 BioseqPageData seqPageData = {
-  "Sequence", TRUE, TRUE, FALSE, FALSE, -1,
+  "OldSequence", TRUE, TRUE, FALSE, FALSE, -1,
   PopulateSalsa, ShowSalsa, SelectSalsa,
   NULL, NULL,
   ExportSalsa, NULL, ResizeSalsa, NULL

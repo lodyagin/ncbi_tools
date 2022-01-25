@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.23  2002/11/06 21:25:10  ucko
+* Don't assume MIPS is IRIX, or HPPA is HP/UX; allow Linux too, for both.
+*
 * Revision 6.22  2002/06/13 16:14:07  kans
 * fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
 *
@@ -1692,11 +1695,11 @@ NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void)
   return "Cray";
 #  elif defined(PROC_CONVEX)
   return "Convex";
-#  elif defined(PROC_HPPA)
+#  elif defined(PROC_HPPA) && !defined(OS_UNIX_LINUX)
   return "HPUX";
 #  elif defined(OS_UNIX_NEXT)
   return "NEXT";
-#  elif defined(PROC_MIPS)
+#  elif defined(PROC_MIPS) && !defined(OS_UNIX_LINUX)
   return "SGI_MIPS";
 #  elif defined(OS_UNIX_ULTRIX)
   return "ULTRIX";

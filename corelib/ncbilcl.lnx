@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.lnx,v $
+* Revision 6.7  2002/11/06 21:23:47  ucko
+* Handle non-i386 platforms.
+* Enable large file support here, to ensure consistency.
+*
 * Revision 6.6  2002/07/11 22:13:06  vakatov
 * #define MMAP_AVAIL
 *
@@ -71,7 +75,31 @@
 #define COMP_SYSV
 #define OS_UNIX
 #define OS_UNIX_LINUX
+#if defined(__alpha__) || #cpu(alpha) || #machine(alpha)
+#define PROC_ALPHA
+#elif defined(__arm__) || #cpu(arm) || #machine(arm)
+#define PROC_ARM /* ? (only occurrence) */
+#elif defined(__hppa__) || #cpu(hppa) || #machine(hppa)
+#define PROC_HPPA
+#elif defined(__i386__) || #cpu(i386) || #machine(i386)
 #define PROC_I80X86
+#elif defined(__ia64__) || #cpu(ia64) || #machine(ia64)
+#define PROC_IA64 /* ? */
+#elif defined(m68k) || defined(mc68000) || #cpu(m68k) || #machine(m68k)
+#define PROC_MC680X0
+#elif defined(__mips__) || defined(_mips) || #cpu(mips) || #machine(mips)
+#define PROC_MIPS
+#elif defined(__powerpc__) || defined(__PPC__) || #cpu(powerpc) || #machine(powerpc)
+#define PROC_PPC
+#elif defined(__s390__) || #cpu(s390) || #machine(s390)
+#define PROC_S390 /* ? */
+#elif defined(__sh__) || #cpu(sh) || #machine(sh)
+#define PROC_SH /* ? */
+#elif defined(__sparc__) || #cpu(sparc) || #cpu(sparc64) || #machine(sparc) || #machine(sparc64)
+#define PROC_SPARC
+#else
+#warning Unknown processor type.  Please define something appropriate.
+#endif
 #define WIN_DUMB
 
 /*----------------------------------------------------------------------*/
@@ -85,6 +113,11 @@
 #define _POSIX_SOURCE	1
 #define _POSIX_C_SOURCE 199309L
 #define _XOPEN_SOURCE	500
+
+/* Only effective on glibc 2.1 and newer. */
+#define _LARGEFILE_SOURCE 1
+#define _LARGEFILE64_SOURCE 1
+#define _FILE_OFFSET_BITS 64 /* Should be safe, I think... */
 
 #ifndef _REENTRANT
 #define _REENTRANT
@@ -148,7 +181,12 @@
 #define KBYTE           (1024)
 #define MBYTE           (1048576)
 
+#include <endian.h>
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 #define IS_LITTLE_ENDIAN
+#else
+#define IS_BIG_ENDIAN
+#endif
 #define TEMPNAM_AVAIL
 #define HAVE_MADVISE
 

@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.19 2002/08/13 20:44:19 lavr Exp $
+* $Id: ncbierr.c,v 6.20 2002/10/03 16:22:03 kans Exp $
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.20  2002/10/03 16:22:03  kans
+* changed fgets to Nlm_FileGets
+*
 * Revision 6.19  2002/08/13 20:44:19  lavr
 * Force logging to stderr/stdout if DEBUG_PRINTOUT env.var. is set as follows:
 * STDOUT (case-insensitively) - log to stdout; anything else - log to stderr.
@@ -1005,7 +1008,7 @@ static int ErrMsgRoot_Read (ErrMsgRoot *idx)
     int any_comt;
 
     /* ----- Look for MODULE line ----- */
-    while (fgets(line,sizeof line,fd))
+    while (Nlm_FileGets(line,sizeof line,fd))
       {
         linenum++;
         if ( strchr("#\r\n", line[0]) )
@@ -1032,7 +1035,7 @@ static int ErrMsgRoot_Read (ErrMsgRoot *idx)
     lev1 = lev2 = NULL;
     tmpofs = ftell(fd);
 
-    while (fgets(line,sizeof line,fd))
+    while (Nlm_FileGets(line,sizeof line,fd))
       {
         linenum++;
 

@@ -37,6 +37,10 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.14  2002/11/13 23:07:37  johnson
+* Changed make_lib such that it looks to see if it matches the *whole* seq-id
+* (defined by the next character being non-alphanumeric).
+*
 * Revision 6.13  2002/07/19 20:16:33  johnson
 * bug fix in make_lib -- wasn't properly handling sequences >=1000 residues
 *
@@ -77,6 +81,10 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.14  2002/11/13 23:07:37  johnson
+* Changed make_lib such that it looks to see if it matches the *whole* seq-id
+* (defined by the next character being non-alphanumeric).
+*
 * Revision 6.13  2002/07/19 20:16:33  johnson
 * bug fix in make_lib -- wasn't properly handling sequences >=1000 residues
 *
@@ -261,7 +269,7 @@ static ByteStorePtr make_lib(FILE *ifp, CharPtr name, Int4Ptr length, BoolPtr is
 				i = 1;
 				while(IS_WHITESP(temp[i]))
 					++i;
-				if(StringNCmp(temp+i, name, (size_t)n_len) ==0) {
+				if(StringNCmp(temp+i, name, (size_t)n_len) ==0 && !isalnum(temp[i+n_len])) {
                                     is_found = TRUE;
                                     if(sip)
                                         *sip = SeqIdParse(temp+i);

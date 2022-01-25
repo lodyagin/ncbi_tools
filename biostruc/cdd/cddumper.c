@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.22 2002/08/06 12:54:25 bauer Exp $
+/* $Id: cddumper.c,v 1.24 2002/10/10 20:38:19 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.22 $
+* $Revision: 1.24 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,14 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.24  2002/10/10 20:38:19  bauer
+* changes to accomodate new spec items
+* - old-root node
+* - curation-status
+*
+* Revision 1.23  2002/10/02 17:32:21  bauer
+* avoid merging blocks when reindexing alignments
+*
 * Revision 1.22  2002/08/06 12:54:25  bauer
 * fixes to accomodate COGs
 *
@@ -117,13 +125,20 @@
 #include <txcommon.h>
 #include <objcdd.h>
 #include "cddsrv.h"
-#include <cddutil.h>
+#include "cddutil.h"
 #include <readdb.h>
+
+#ifdef DBNTWIN32
+#include <edutil.h>
+#include <prunebsc.h>
+#include <PubVastApi.h>
+#include <PubStructApi.h>
+#endif
 
 #define NUMARGS 26
 static Args myargs[NUMARGS] = {
   {"Cd-Accession",                                           /*0*/
-   "RHO",      NULL,NULL,FALSE,'c',ARG_STRING, 0.0,0,NULL},
+   "cd00000",  NULL,NULL,FALSE,'c',ARG_STRING, 0.0,0,NULL},
   {"Extension for ASN.1 output file name",                   /*1*/
    "acd",      NULL,NULL,FALSE,'a',ARG_STRING, 0.0,0,NULL},
   { "Binary output CD",                                      /*2*/
@@ -131,7 +146,7 @@ static Args myargs[NUMARGS] = {
   { "Store PSSM in CD",                                      /*3*/
    "F",        NULL,NULL,FALSE,'k',ARG_BOOLEAN,0.0,0,NULL},
   { "Source Identifier",                                     /*4*/
-    NULL,      NULL,NULL,TRUE, 's',ARG_STRING, 0.0,0,NULL},
+    "Cdd",     NULL,NULL,TRUE, 's',ARG_STRING, 0.0,0,NULL},
   { "Convert Dense Diag to true multiple Alignment",         /*5*/
    "F",        NULL,NULL,FALSE,'m',ARG_BOOLEAN,0.0,0,NULL},
   { "File extension for tree file",                          /*6*/
@@ -187,11 +202,13 @@ static Boolean CddGetParams()
 {
   MMDBpath[0] = gunzip[0] = '\0';
 
+#ifndef DBNTWIN32
   GetAppParam("cdd", "CDDSRV", "Gunzip", "", gunzip, (size_t) 256*(sizeof(Char)));
   if (gunzip[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no Gunzip...\n");
     return FALSE;
   }
+#endif
   GetAppParam("cdd", "CDDSRV", "CDDatabase", "", CDDdpath, PATH_MAX);
   if (CDDdpath[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no CDD data path...\n");
@@ -215,7 +232,6 @@ static Boolean CddGetParams()
   return TRUE;
 }                                                       /* end GetVastParams */
 
-
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* Read in Sequence Alignment Data formatted as ASN.1                        */
@@ -228,9 +244,9 @@ SeqAlignPtr CddReadSeqAln() {
   Char                     CDDalign[PATH_MAX];
   SeqAlignPtr              salp;
 
-  strcpy(CDDalign,CDDdpath);
-  strcat(CDDalign,cCDDid);
-  strcat(CDDalign,CDDextens);
+  Nlm_StrCpy(CDDalign,CDDdpath);
+  Nlm_StrCat(CDDalign,cCDDid);
+  Nlm_StrCat(CDDalign,CDDextens);
   aip = AsnIoOpen(CDDalign,"r");
   psaCAlignHead = SeqAnnotAsnRead(aip, NULL);
   AsnIoClose(aip);
@@ -279,7 +295,11 @@ static Int4 ConvertMMDBUID(CharPtr pcString)
   iUID = 0;
   pcTemp = StringSave(pcString);
   CleanSpaces(pcTemp);
+#ifndef DBNTWIN32
   iUID = MMDBEvalPDB(pcTemp);
+#else
+  iUID = constructLiveOrDeadMmdbIdForPdbId(pcTemp);
+#endif
   MemFree(pcTemp);
   return iUID; 
 }
@@ -372,7 +392,11 @@ static SeqEntryPtr CddumperSeqEntryGet(Int4 uid, Int2 retcode)
       return(sep);
     }
   }
-  return PUBSEQSeqEntryGet(uid,retcode);
+#ifdef OS_UNIX
+  return (SeqEntryPtr) PUBSEQSeqEntryGet(uid,retcode);
+#else 
+  return NULL;
+#endif
 }
 
 /*---------------------------------------------------------------------------*/
@@ -407,7 +431,11 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
     sip = ddp->id;
     while (sip) {
       if (sip->choice == SEQID_GI) uid = sip->data.intvalue;
+#ifdef OS_UNIX
       else uid = PUBSEQFindSeqId(sip);
+#else
+      else CddSevError("Can not process all SeqAligns on NT platform");
+#endif
       if (uid) {
         pcdsThis = CddSumNew();
         pcdsThis->uid = uid;
@@ -665,25 +693,25 @@ static void CddReadVASTInfo(CddSumPtr pcds)
   CharPtr          pcTest;
   CddSumPtr        pcdsThis;
 
-  strcpy(path,CDDvpath);
-  strcat(path,cCDDid);
-  strcat(path,".VASTinfo");
+  Nlm_StrCpy(path,CDDvpath);
+  Nlm_StrCat(path,cCDDid);
+  Nlm_StrCat(path,".VASTinfo");
   if (!(fp=FileOpen(path, "r"))) return;
   do {
     pcBuf[0]='\0';
     pcTest = fgets(pcBuf, (size_t)100,fp);
     if (pcTest) {
-      strcpy(cMaster,strtok(pcTest,"\t"));  cMaster[6]  = '\0';
-      strcpy(cSlave,strtok(NULL,"\t"));     cSlave[6]   = '\0';
-      strcpy(cPKBMDom,strtok(NULL,"\t"));   cPKBMDom[6] = '\0';
+      Nlm_StrCpy(cMaster,strtok(pcTest,"\t"));  cMaster[6]  = '\0';
+      Nlm_StrCpy(cSlave,strtok(NULL,"\t"));     cSlave[6]   = '\0';
+      Nlm_StrCpy(cPKBMDom,strtok(NULL,"\t"));   cPKBMDom[6] = '\0';
       strncpy(cPKBDom,strtok(NULL,"\t"),8); cPKBDom[8]  = '\0';
       pcdsThis = pcds;
       while (pcdsThis) {
         if (pcdsThis->bIsPdb && !(pcdsThis->bIsMaster)) {
           if (strncmp(cSlave,pcdsThis->cPdbId,4)==0) {
             if (pcdsThis->cChainId[0]==cSlave[5]) {
-              strcpy(pcdsThis->cPKBMDom,cPKBMDom);
-              strcpy(pcdsThis->cPKBDom,cPKBDom);
+              Nlm_StrCpy(pcdsThis->cPKBMDom,cPKBMDom);
+              Nlm_StrCpy(pcdsThis->cPKBDom,cPKBDom);
             }
           } 
         }
@@ -1023,7 +1051,7 @@ static void CddDetermineFsids(CddSumPtr pcds, PDNMS pModelStruc)
           while (pcdsThis) {
             if (pcdsThis->bIsPdb && !pcdsThis->bIsMaster) {
               if (pcdsThis->cPKBMDom[4]==pmmd->pcMolName[0]) { 
-                strcpy(cDid,&(pcdsThis->cPKBMDom[5]));
+                Nlm_StrCpy(cDid,&(pcdsThis->cPKBMDom[5]));
                 if (atoi(cDid)==domcnt) pcdsThis->iFsid = chndom;
               }
             }
@@ -1089,7 +1117,7 @@ static void CddDetermineFids(CddSumPtr pcds, PDNMS pModelStruc, CharPtr szName)
             if (pcdsThis->bIsPdb && !pcdsThis->bIsMaster) {
               if (strncmp(pcdsThis->cPdbId,szName,4)==0) {
                 if (pcdsThis->cPKBDom[5]==pmmd->pcMolName[0]) { 
-                  strcpy(cDid,&(pcdsThis->cPKBDom[7]));
+                  Nlm_StrCpy(cDid,&(pcdsThis->cPKBDom[7]));
                   chndom = chndom + 1;
                   if (atoi(cDid)==domcnt) {
                      if (pcdsThis->iFid == -1) pcdsThis->iFid = chndom;
@@ -1120,9 +1148,13 @@ static void CddIdentifyFsids(CddSumPtr pcds)
   PDNMS           pModelStruc;
   
   iMMDBid = pcds->iMMDBId;
-  strcpy(szName,pcds->cPdbId);
+  Nlm_StrCpy(szName,pcds->cPdbId);
+#ifndef DBNTWIN32
   pbsXtra = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity,1);
-  strcpy(chain,pcds->cChainId);
+#else
+  pbsXtra = (BiostrucPtr) openBSP(constructLiveOrDeadMmdbIdForPdbId(szName),iModelComplexity,1,TRUE,TRUE,FALSE,NULL,NULL);
+#endif
+  Nlm_StrCpy(chain,pcds->cChainId);
   if (chain[0] != ' ') {
     pbsTemp = (BiostrucPtr)PruneBiostruc(pbsXtra,chain);
     pbsXtra = NULL;
@@ -1134,9 +1166,13 @@ static void CddIdentifyFsids(CddSumPtr pcds)
   pcdsThis = pcds->next;
   while (pcdsThis) {
     if (pcdsThis->bIsPdb) {
-      strcpy(szName,pcdsThis->cPdbId);
+      Nlm_StrCpy(szName,pcdsThis->cPdbId);
+#ifndef DBNTWIN32
       pbsXtra = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity,1);
-      strcpy(chain,pcdsThis->cChainId);
+#else
+      pbsXtra = (BiostrucPtr) openBSP(constructLiveOrDeadMmdbIdForPdbId(szName),iModelComplexity,1,TRUE,TRUE,FALSE,NULL,NULL);
+#endif
+      Nlm_StrCpy(chain,pcdsThis->cChainId);
       if (chain[0] != ' ') {
         pbsTemp = (BiostrucPtr)PruneBiostruc(pbsXtra,chain);
         pbsXtra = NULL;
@@ -1156,6 +1192,7 @@ static void CddIdentifyFsids(CddSumPtr pcds)
 /* stolen from vastlocl.c                                                    */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+#ifndef DBNTWIN32
 static BiostrucAnnotSetPtr CddVASTBsAnnotSetGet (Int4 uid)
 {
   AsnIoPtr            aip = NULL;
@@ -1201,6 +1238,7 @@ static BiostrucAnnotSetPtr CddVASTBsAnnotSetGet (Int4 uid)
    if (!pbsa) return NULL;  
    return pbsa;
 }
+#endif // #ifndef DBNTWIN32
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1242,9 +1280,17 @@ static BiostrucAnnotSetPtr CddLocalGetFeatureSet(Int4 mmdbid, Int4 feature_set_i
   BiostrucFeatureSetPtr pbsfsLast = NULL;
     
   if (CddIsVASTData(mmdbid))
+#ifndef DBNTWIN32
     basp = (BiostrucAnnotSetPtr) CddVASTBsAnnotSetGet(mmdbid);
+#else
+    basp = (BiostrucAnnotSetPtr) constructBASPForLongDomId(mmdbid);
+#endif
   else if (CddIsVASTData(feature_set_id)) {
+#ifndef DBNTWIN32
     basp = (BiostrucAnnotSetPtr) CddVASTBsAnnotSetGet(feature_set_id);
+#else
+    basp = (BiostrucAnnotSetPtr) constructBASPForLongDomId(feature_set_id);
+#endif
     if (basp != NULL) return basp;
   } 
 
@@ -1572,9 +1618,9 @@ static CddDescPtr CddReadDescr() {
     pcTest = fgets(pcBuf, (size_t)CDD_MAX_DESCR, fp);
     if (pcTest) if (pcTest[0] != ' ') {
       pcddThis = CddDescNew();
-      strcpy(pcddThis->cCddId,strtok(pcTest,"\t"));
-      strcpy(pcddThis->cDescr,strtok(NULL,"\t"));
-      strcpy(pcddThis->cSourc,strtok(NULL,"\t"));
+      Nlm_StrCpy(pcddThis->cCddId,strtok(pcTest,"\t"));
+      Nlm_StrCpy(pcddThis->cDescr,strtok(NULL,"\t"));
+      Nlm_StrCpy(pcddThis->cSourc,strtok(NULL,"\t"));
       CddDescLink(&(pcdd),pcddThis);
     }
   } while (pcTest);
@@ -1804,6 +1850,11 @@ Int2 Main()
   Boolean                  bIsFinished             = FALSE;
   CharPtr                  pch;
 
+#ifdef DBNTWIN32
+  if (! MmdbSrvInitialize()) CddSevError("MMDB Initialization failed");
+  if (! VastSrvInitialize()) CddSevError("VAST Initialization failed");
+#endif
+
 /*---------------------------------------------------------------------------*/
 /* Yanli's fix for making binary reading work                                */
 /*---------------------------------------------------------------------------*/
@@ -1845,7 +1896,7 @@ Int2 Main()
       pbsaSeq       = BiostrucAlignSeqNew();
       pbsaSeq->sequences = bssp->seq_set;
       if (myargs[14].strvalue) {
-        strcpy(cCDDid, myargs[14].strvalue);
+        Nlm_StrCpy(cCDDid, myargs[14].strvalue);
       }
     }
   }
@@ -1857,13 +1908,17 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* initialize PUBSEQ interface - this is needed to retrieve sequences        */
 /*---------------------------------------------------------------------------*/
+ #ifdef OS_UNIX
     if (!PUBSEQBioseqFetchEnable("cddump",TRUE))
       CddSevError("Unable to initialize PUBSEQ");
+ #endif
     if (myargs[25].intvalue) {
       if(!(rdfp = readdb_new_ex("nr", READDB_DB_IS_PROT, FALSE)))
       CddSevError("Readdb init failed");
     }
+#ifndef DBNTWIN32
     if (!MMDBInit()) CddSevError("MMDB Initialization failed");
+#endif
     pbsaSeq = BiostrucAlignSeqNew();
 /*---------------------------------------------------------------------------*/
 /* read in the ASN.1-formatted sequence alignment corresponding to this CD   */
@@ -1918,13 +1973,19 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
       CddLoadBSAnnotSets(pcds, &nPdb, &iSeqStrMode, salpHead, pbsaStruct);    
       CloseMMDBAPI();
+#ifndef DBNTWIN32
       VASTFini();
+#else
+
+#endif
     }
 
 /*---------------------------------------------------------------------------*/
 /* Disable BioseqAccess                                                      */
 /*---------------------------------------------------------------------------*/
-     if (iSeqStrMode != CDDUPDATE) PUBSEQFini();  
+#ifdef OS_UNIX
+     if (iSeqStrMode != CDDUPDATE) PUBSEQFini();
+#endif 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* allocate the CDD data structure                                           */
@@ -2005,10 +2066,10 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* Assign references if they can be found                                    */
 /*---------------------------------------------------------------------------*/
-    strcpy(CDDref,REFpath);
-    strcat(CDDref,cCDDid);
-    strcat(CDDref,".");
-    strcat(CDDref,myargs[7].strvalue);
+    Nlm_StrCpy(CDDref,REFpath);
+    Nlm_StrCat(CDDref,cCDDid);
+    Nlm_StrCat(CDDref,".");
+    Nlm_StrCat(CDDref,myargs[7].strvalue);
     fp = FileOpen(CDDref,"r");
     if (fp) {
       MedArchInit();
@@ -2029,11 +2090,13 @@ Int2 Main()
   }                                       /* end if iSeqStrMode != CDDUPDATE */
 
 /*---------------------------------------------------------------------------*/
-/* remove status if present and set to current flag                          */
+/* remove status if present and set to current flag - but only if unfinished */
 /*---------------------------------------------------------------------------*/
   if (!bIsFinished) {
-    CddKillDescr(pcdd,NULL, CddDescr_status, 0);
-    CddAssignDescr(pcdd, NULL, CddDescr_status , myargs[8].intvalue);
+    if (CddGetStatus(pcdd) != 8) {
+      while (CddKillDescr(pcdd,NULL, CddDescr_status, 0)) {};
+      CddAssignDescr(pcdd, NULL, CddDescr_status , myargs[8].intvalue);
+    }
 /*---------------------------------------------------------------------------*/
 /* assign a CD-name automatically if not yet present in the CD               */
 /*---------------------------------------------------------------------------*/
@@ -2154,7 +2217,11 @@ Int2 Main()
     oidp->str = StringSave(cCDDid);
     dbtp = DbtagNew();
     dbtp->tag = oidp;
-    dbtp->db = myargs[4].strvalue;
+    if (myargs[4].strvalue) {
+      dbtp->db = myargs[4].strvalue;
+    } else {
+      dbtp->db = StringSave("Cdd");
+    }
     vnp = pcdd->description;
     while (vnp) {
       if (vnp->choice == CddDescr_comment) {
@@ -2461,11 +2528,15 @@ Int2 Main()
 /* Write the finished CD out to disk                                         */
 /*---------------------------------------------------------------------------*/
     if (myargs[12].strvalue) {
-      strcpy(cOutFile,myargs[12].strvalue);
+      Nlm_StrCpy(cOutFile,myargs[12].strvalue);
+      Nlm_StrCpy(cCDDid,myargs[12].strvalue);
+      for (i=0;i<Nlm_StrLen(cCDDid);i++) {
+        if (cCDDid[i] == '.') cCDDid[i] = '\0';
+      }
     } else {
-      strcpy(cOutFile,cCDDid);
-      strcat(cOutFile,".");
-      strcat(cOutFile,myargs[1].strvalue);
+      Nlm_StrCpy(cOutFile,cCDDid);
+      Nlm_StrCat(cOutFile,".");
+      Nlm_StrCat(cOutFile,myargs[1].strvalue);
     }
     if (!CddWriteToFile(pcdd,cOutFile,(Boolean) myargs[2].intvalue))
       CddSevError("Could not write ASN.1 output / CDD to file!");
@@ -2474,9 +2545,9 @@ Int2 Main()
 /* output the corresponding Cdd tree-file                                    */
 /*---------------------------------------------------------------------------*/
     if (myargs[23].intvalue) {
-      strcpy(cOutFile,cCDDid);
-      strcat(cOutFile,".");
-      strcat(cOutFile,myargs[6].strvalue);
+      Nlm_StrCpy(cOutFile,cCDDid);
+      Nlm_StrCat(cOutFile,".");
+      Nlm_StrCat(cOutFile,myargs[6].strvalue);
   
       pcddt              = CddTreeNew();
       pcddt->name        = pcdd->name;
@@ -2494,7 +2565,14 @@ Int2 Main()
 /*  pcdd        = (CddPtr) CddFreeCarefully(pcdd); */
   pcddeschead = CddDescFree(pcddeschead);
   pcds        = CddSumFree(pcds);
-  if (iSeqStrMode != CDDUPDATE) MMDBFini();
+  if (iSeqStrMode != CDDUPDATE)
+#ifndef DBNTWIN32
+    MMDBFini();
+#endif
   if (myargs[25].intvalue) rdfp = readdb_destruct(rdfp);
+#ifdef DBNTWIN32
+  MmdbSrvFinish();
+  VastSrvFinish();
+#endif
   return 0;
 }

@@ -6,6 +6,15 @@
 --    readability at the suggestion of Peter Rice, EMBL
 --  Later additions by Taxonomy Group staff at NCBI
 --
+--  Version 3.9
+--     Code 14 differs from code 9 only by translating UAA to Tyr rather than
+--     STOP.  A recent study (Telford et al, 2000) has found no evidence that
+--     the codon UAA codes for Tyr in the flatworms, but other opinions exist.
+--     There are very few GenBank records that are translated with code 14,
+--     but a test translation shows that retranslating these records with code
+--     9 can cause premature terminations.  Therefore, GenBank will maintain
+--     code 14 until further information becomes available.
+--
 --  Version 3.8
 --     Added GTG start to Echinoderm mitochondrial code, code 9
 --
@@ -120,7 +129,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  },
  {
-  name "Echinoderm Mitochondrial" ,
+  name "Echinoderm Mitochondrial; Flatworm Mitochondrial" ,
   name "SGC8" ,
   id 9 ,
   ncbieaa  "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
@@ -167,7 +176,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  },
  {
-  name "Flatworm Mitochondrial" ,
+  name "Alternative Flatworm Mitochondrial" ,
   id 14 ,
   ncbieaa  "FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
   sncbieaa "-----------------------------------M----------------------------"

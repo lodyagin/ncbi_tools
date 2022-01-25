@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.52  2002/11/05 17:01:55  kans
+* refgene tracking user object uses comment as name if accession is empty
+*
+* Revision 6.51  2002/09/30 16:31:36  kans
+* support for new BioseqseqSet_class_wgs_set
+*
 * Revision 6.50  2002/07/10 14:36:29  kans
 * fixed TpaAssembly user object - from and to were being placed at wrong level
 *
@@ -908,7 +914,8 @@ NLM_EXTERN SeqEntryPtr AddSeqOnlyToSubmission (
 		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
 			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
 			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 16)) {
+			    (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
+			    targetbssp->_class == BioseqseqSet_class_wgs_set) {
 				tmp = targetbssp->seq_set;
 			}
 		}
@@ -1149,7 +1156,8 @@ NLM_EXTERN SeqEntryPtr AddSegmentedSeqToSubmission (
 		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
 			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
 			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 16)) {
+			    (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
+			    targetbssp->_class == BioseqseqSet_class_wgs_set) {
 				tmp = targetbssp->seq_set;
 			}
 		}
@@ -1579,7 +1587,8 @@ NLM_EXTERN SeqEntryPtr AddNucProtToSubmission (
 		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
 			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
 			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 16)) {
+			    (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
+			    targetbssp->_class == BioseqseqSet_class_wgs_set) {
 				tmp = targetbssp->seq_set;
 			}
 		}
@@ -4506,12 +4515,22 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
 
   /* entry is now in the appropriate list */
 
-  ufp = UserFieldNew ();
-  oip = ObjectIdNew ();
-  oip->str = StringSave ("accession");
-  ufp->label = oip;
-  ufp->choice = 1; /* visible string */
-  ufp->data.ptrvalue = (Pointer) StringSave (accn);
+  if (! StringHasNoText (accn)) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("accession");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) StringSave (accn);
+  } else if (comment != NULL && *comment != '\0') {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("name");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) StringSave (comment);
+    comment = NULL;
+  }
 
   entry->data.ptrvalue = (Pointer) ufp;
   last = ufp;

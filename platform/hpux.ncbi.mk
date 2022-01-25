@@ -1,5 +1,5 @@
 #
-# $Id: hpux.ncbi.mk,v 1.7 2002/02/19 19:30:54 beloslyu Exp $
+# $Id: hpux.ncbi.mk,v 1.8 2002/10/29 01:20:13 lavr Exp $
 #
 # testded on:
 # HP-UX heart B.11.00 U 9000/800 71355 unlimited-user license
@@ -26,6 +26,6 @@ NCBI_MT_OTHERLIBS = -lpthread
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 

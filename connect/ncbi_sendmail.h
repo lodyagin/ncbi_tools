@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SENDMAIL__H
 #define CONNECT___NCBI_SENDMAIL__H
 
-/*  $Id: ncbi_sendmail.h,v 6.8 2002/08/14 18:51:33 lavr Exp $
+/*  $Id: ncbi_sendmail.h,v 6.9 2002/09/24 15:01:17 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *    Send mail (in accordance with RFC821 [protocol] and RFC822 [headers])
+ *   Send mail (in accordance with RFC821 [protocol] and RFC822 [headers])
  *
  */
 
@@ -115,6 +115,9 @@ extern const char* CORE_SendMailEx(const char* to,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_sendmail.h,v $
+ * Revision 6.9  2002/09/24 15:01:17  lavr
+ * File description indented uniformly
+ *
  * Revision 6.8  2002/08/14 18:51:33  lavr
  * Change MX from "nes" to more generic mail hub "mailgw.ncbi.nlm.nih.gov"
  *

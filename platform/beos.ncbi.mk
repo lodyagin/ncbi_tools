@@ -1,5 +1,5 @@
 #
-# $Id: beos.ncbi.mk,v 1.1 2002/06/17 14:28:32 ivanov Exp $
+# $Id: beos.ncbi.mk,v 1.2 2002/10/29 01:20:12 lavr Exp $
 #
 # Untested. Contributed by Howard Feldman <feldman@mshri.on.ca>
 #
@@ -50,5 +50,5 @@ NCBI_OGLLIBS = -L/usr/X11R6/lib -lGL -lGLU
 LIBPNG_DIR = /develop/lib/x86
 ZLIB_DIR = /develop/lib/x86
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o

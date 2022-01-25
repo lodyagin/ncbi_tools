@@ -717,8 +717,9 @@ static void MovePopPhyMutPubsProc (SeqEntryPtr sep, Pointer data, Int4 index, In
   if (! IS_Bioseq_set (sep)) return;
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
-  if (bssp->_class < BioseqseqSet_class_mut_set ||
-      bssp->_class > BioseqseqSet_class_eco_set) return;
+  if ((bssp->_class < BioseqseqSet_class_mut_set ||
+      bssp->_class > BioseqseqSet_class_eco_set) &&
+      bssp->_class != BioseqseqSet_class_wgs_set) return;
   pub = CheckSegsForPopPhyMut (bssp->seq_set);
   if (pub == NULL) return;
 /* check if pub is already on the set descr */
@@ -2952,7 +2953,8 @@ extern void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     if (bssp->_class == 7 ||
-    	(bssp->_class >= 13 && bssp->_class <= 16)) { /* now on phy and mut sets */
+    	(bssp->_class >= 13 && bssp->_class <= 16) ||
+    	bssp->_class == BioseqseqSet_class_wgs_set) { /* now on phy and mut sets */
       sdp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
       if (sdp == NULL) return;
       biop = (BioSourcePtr) sdp->data.ptrvalue;
@@ -3018,7 +3020,8 @@ extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (bssp->_class >= 13 && bssp->_class <= 16) ||
+                         bssp->_class == BioseqseqSet_class_wgs_set)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         if (NoBiosourceOrTaxonId (sep)) return TRUE;
       }
@@ -3099,7 +3102,8 @@ static void ExtendGeneWithinNucProt (SeqEntryPtr sep)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     if (bssp->_class == 7 ||
-        (bssp->_class >= 13 && bssp->_class <= 16)) {
+        (bssp->_class >= 13 && bssp->_class <= 16) ||
+        bssp->_class == BioseqseqSet_class_wgs_set) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ExtendGeneWithinNucProt (sep);
       }
@@ -3315,7 +3319,8 @@ static Int4 LoopSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (bssp->_class >= 13 && bssp->_class <= 16) ||
+                         bssp->_class == BioseqseqSet_class_wgs_set)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         rsult += LoopSeqEntryToAsn3 (sep, strip, correct, taxfun, taxmerge);
       }
@@ -4533,7 +4538,8 @@ static void MarkBadProtTitlesInNucProts (SeqEntryPtr sep)
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
   if (bssp->_class == 7 ||
-      (bssp->_class >= 13 && bssp->_class <= 16)) {
+      (bssp->_class >= 13 && bssp->_class <= 16) ||
+      bssp->_class == BioseqseqSet_class_wgs_set) {
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
       StripTitleFromProtsInNucProts (sep);
     }

@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.23  2002/11/07 17:21:55  yaschenk
+ switching ID1 to new displatcher
+
  Revision 1.22  2002/07/23 19:31:43  butanaev
  Filtered out gi -1
 
@@ -374,11 +377,11 @@ Int2 Main()
 
   if(fp_in || myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   { /*** Statefull mode ***/
-    NI_SetInterface(eNII_WWW);
+        putenv("CONN_STATELESS=FALSE");  /***NI_SetInterface(eNII_WWW);***/
   }
   else
   { /*** Stateless mode ***/
-    NI_SetInterface(eNII_WWWDirect);
+	putenv("CONN_STATELESS=TRUE");   /***NI_SetInterface(eNII_WWWDirect);***/
   }
 
   if(!ID1BioseqFetchEnable("idfetch",TRUE))
@@ -563,8 +566,10 @@ Int2 Main()
   }
   else if(fp_in)
   {
-    while(fgets(tbuf,sizeof(tbuf)-1,fp_in))
+    while(fgets(tbuf,sizeof(tbuf)-1,fp_in)){
       IdFetch_func1(tbuf, myargs[maxplexarg].intvalue);
+      if(fp) fflush(fp);
+    }
   }
   else if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   {
@@ -897,6 +902,9 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
         break;
       case 2:
         ErrPostEx(SEV_WARNING,0,0,"Sequence is not yet available");
+        break;
+      case 10:
+        ErrPostEx(SEV_WARNING,0,0,"GI <%d> is not found",gi );
         break;
       default:
         ErrPostEx(SEV_WARNING,0,0,"Unable to read ASN.1");

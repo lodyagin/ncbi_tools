@@ -30,8 +30,23 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.137 $ 
+/* $Revision: 6.142 $ 
 * $Log: blastdef.h,v $
+* Revision 6.142  2002/11/16 17:12:55  madden
+* Change version and date
+*
+* Revision 6.141  2002/11/04 22:51:13  dondosha
+* Changed FloatHi pvalue to Int4 num_ident in HSP structures
+*
+* Revision 6.140  2002/09/13 19:11:02  camacho
+* Added rps_qlen field
+*
+* Revision 6.139  2002/09/11 21:15:23  camacho
+* Removed obsolete #define and comment about BlastSeqIdList structure
+*
+* Revision 6.138  2002/09/11 20:46:25  camacho
+* Removed deprecated BlastSeqIdListPtr code
+*
 * Revision 6.137  2002/08/26 15:49:51  madden
 * Change release date and version
 *
@@ -817,8 +832,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.4"
-#define BLAST_RELEASE_DATE "Aug-26-2002"
+#define BLAST_ENGINE_VERSION "2.2.5"
+#define BLAST_RELEASE_DATE "Nov-16-2002"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -1321,7 +1336,7 @@ typedef struct _blast_hsp {
 		/* If TRUE this HSP starts a chain along the "link" pointer. */
 		Boolean 	start_of_chain;
 		BLAST_Score	score;
-		Nlm_FloatHi	pvalue;
+		Int4    	num_ident;
 		Nlm_FloatHi	evalue;
 		BLAST_Seg query,	/* query sequence info. */
 			subject;	/* subject sequence info. */
@@ -1386,8 +1401,8 @@ typedef struct _blast_results_hsp {
 		Int4 		number;	/* number of HSP's used to calculate the p-value. */
 		BLAST_Score	score;	/* score of this HSP. */
 		Nlm_FloatHi	e_value,/* expect value of this set of HSP's. */
-				p_value,/* p-value of this set of HSP's. */
 				bit_score; /* above score * lambda/ln2 */
+		Int4		num_ident;/* number of identities in this HSP. */
 		Int2		context;	/* context number of query. */
 		Int2		query_frame, /* frame of query, non-zero if transl. */
 				subject_frame; /* frame of subject, non-zero if transl. */
@@ -1466,14 +1481,6 @@ typedef struct _blast_all_words {
 			specific;	/* specific (limited) words are to be indexed. */
 	} BlastAllWord, *BlastAllWordPtr;
 		
-#if 0 /* deprecated */
-typedef struct _blast_seqid_list {
-    SeqIdPtr 	seqid_list;	/* A list of SeqId's (may or may not be in the database) that should serve as subject sequences for BLAST'ing. */
-    Uint1 		mode;	/* Either BLAST_OWN, or BLAST_NOT_OWN.  Specifies whether they should be deleted. */
-    SeqIdPtr seqid_ptr;
-} BlastSeqIdList, *BlastSeqIdListPtr;
-#endif	
-
 /*
 	Contains gi and ordinal number for use by random access BLAST.
 */
@@ -1567,15 +1574,6 @@ typedef struct _BlastThrInfo {
     /* Mutex for recalculation of ambiguities, in BlastReevaluateWithAmbiguities */
     TNlmMutex ambiguities_mutex;
 
-#if 0 /* deprecated */
-    /*
-      SeqId lists if only a certain number of the database sequences will be
-      used for the search.
-      */
-    BlastSeqIdListPtr blast_seqid_list;
-#endif
-
-
     /*
       GI List to be used if database will be searched by GI.
       current is the current element in the array being worked on.
@@ -1664,8 +1662,7 @@ typedef struct _blast_matrix_rescale {
 #define BLAST_SEARCH_ALLOC_TRANS_INFO 1024
 #define BLAST_SEARCH_ALLOC_ALL_WORDS 2048
 #define BLAST_SEARCH_ALLOC_QUERY_SLP 4096
-/* #define BLAST_SEARCH_ALLOC_GILIST 8192 */
-#define BLAST_SEARCH_ALLOC_THRINFO 8192 /* 16384 */
+#define BLAST_SEARCH_ALLOC_THRINFO 8192
 #define BLAST_SEARCH_ALLOC_MASK1 16384
 
 typedef struct blast_search_block {
@@ -1689,7 +1686,6 @@ a field is allocated, then it's bit is non-zero.
 		translation_table_rc
 		all_words		BLAST_SEARCH_ALLOC_ALL_WORDS
 		query_slp		BLAST_SEARCH_ALLOC_QUERY_SLP
-		blast_gi_list		BLAST_SEARCH_ALLOC_GILIST
 		mask1			BLAST_SEARCH_ALLOC_MASK1
 */
 
@@ -1833,6 +1829,7 @@ a field is allocated, then it's bit is non-zero.
     Int4                    dbseq_num;      /* number of sequences in the database. */
     Int4                    length_adjustment; /* amount removed from end of query and db sequences. */
     Nlm_FloatHi		searchsp_eff;	/* Effective search space (used for statistics). */
+    Int4            rps_qlen; /* original query sequence length (RPS-BLAST only) */
     ReadDBFILEPtr		rdfp, /* I/O PTR for database files. */
         rdfp_list;	/* linked rdfp list of all databases. */
     /* The subject info (id and defline) is kept here for the current sequence
@@ -1840,11 +1837,6 @@ a field is allocated, then it's bit is non-zero.
        be used if rdfp is NULL.
        */
     BLASTSubjectInfoPtr subject_info;
-    /*
-      A list of SeqId's from the database to use for the BLAST run.
-      */
-    /* BlastSeqIdListPtr blast_seqid_list; */
-    /* BlastGiListPtr	blast_gi_list; */
     
     /* Data used in threads - previously global variables */
 

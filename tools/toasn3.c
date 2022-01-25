@@ -5364,7 +5364,8 @@ void StripTitleFromProtsInNucProts (SeqEntryPtr sep)
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
   if (bssp->_class == 7 ||
-      (bssp->_class >= 13 && bssp->_class <= 16)) {
+      (bssp->_class >= 13 && bssp->_class <= 16) ||
+      bssp->_class == BioseqseqSet_class_wgs_set) {
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
       StripTitleFromProtsInNucProts (sep);
     }
@@ -5914,7 +5915,8 @@ Uint2 move_cds_ex (SeqEntryPtr sep, Boolean doPseudo)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return 0;
     if (bssp->_class == 7 ||
-        (bssp->_class >= 13 && bssp->_class <= 16)) {
+        (bssp->_class >= 13 && bssp->_class <= 16) ||
+        bssp->_class == BioseqseqSet_class_wgs_set) {
         found = 0;
     	for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
     	  found += move_cds (sep);

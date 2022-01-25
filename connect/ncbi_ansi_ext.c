@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ansi_ext.c,v 6.9 2002/03/19 22:12:28 lavr Exp $
+/*  $Id: ncbi_ansi_ext.c,v 6.14 2002/10/29 22:18:29 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,52 +26,30 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *    Non-ANSI, yet widely used functions
+ *   Non-ANSI, yet widely used functions
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_ansi_ext.c,v $
- * Revision 6.9  2002/03/19 22:12:28  lavr
- * strcasecmp and strncasecmp are optimized (for ASCII range)
- *
- * Revision 6.8  2001/12/04 15:57:22  lavr
- * Tiny style adjustement
- *
- * Revision 6.7  2000/12/28 21:27:52  lavr
- * ANSI C++ compliant use of malloc (explicit casting of result)
- *
- * Revision 6.6  2000/11/07 21:45:16  lavr
- * Removed isupper/islower checking in strlwr/strupr
- *
- * Revision 6.5  2000/11/07 21:19:38  vakatov
- * Compilation warning fixed;  plus, some code beautification...
- *
- * Revision 6.4  2000/10/18 21:15:53  lavr
- * strupr and strlwr added
- *
- * Revision 6.3  2000/10/06 16:40:23  lavr
- * <string.h> included now in <connect/ncbi_ansi_ext.h>
- * conditional preprocessor statements removed
- *
- * Revision 6.2  2000/05/17 16:11:02  lavr
- * Reorganized for use of HAVE_* defines
- *
- * Revision 6.1  2000/05/15 19:03:41  lavr
- * Initial revision
- *
- * ==========================================================================
  */
 
-#include <connect/ncbi_ansi_ext.h>
+#include "ncbi_ansi_ext.h"
 #include <ctype.h>
 #include <stdlib.h>
 
 
+#ifndef HAVE_STRDUP
+
 extern char* strdup(const char* str)
 {
     size_t size = strlen(str) + 1;
-    return (char*) memcpy(malloc(size), str, size);
+    char*  res  = (char*) malloc(size);
+    if (res)
+        memcpy(res, str, size);
+    return res;
 }
 
+#endif /*HAVE_STRDUP*/
+
+
+#ifndef HAVE_STRCASECMP
 
 /* We assume that we're using ASCII-based charsets */
 extern int strcasecmp(const char* s1, const char* s2)
@@ -117,6 +95,8 @@ extern int strncasecmp(const char* s1, const char* s2, size_t n)
     return c1 - c2;
 }
 
+#endif /*HAVE_STRCASECMP*/
+
 
 extern char* strupr(char* s)
 {
@@ -140,3 +120,60 @@ extern char* strlwr(char* s)
     }
     return s;
 }
+
+
+extern char* strncpy0(char* s1, const char* s2, size_t n)
+{
+    *s1 = '\0';
+    return strncat(s1, s2, n);
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_ansi_ext.c,v $
+ * Revision 6.14  2002/10/29 22:18:29  lavr
+ * Comply with man strdup(2) in the implementation of strdup() here
+ *
+ * Revision 6.13  2002/10/28 18:55:26  lavr
+ * Fix change log to remove duplicate log entry for R6.12
+ *
+ * Revision 6.12  2002/10/28 18:52:07  lavr
+ * Conditionalize definitions of strdup() and str[n]casecmp()
+ *
+ * Revision 6.11  2002/10/28 15:41:56  lavr
+ * Use "ncbi_ansi_ext.h" privately
+ *
+ * Revision 6.10  2002/09/24 15:05:45  lavr
+ * Log moved to end
+ *
+ * Revision 6.9  2002/03/19 22:12:28  lavr
+ * strcasecmp and strncasecmp are optimized (for ASCII range)
+ *
+ * Revision 6.8  2001/12/04 15:57:22  lavr
+ * Tiny style adjustement
+ *
+ * Revision 6.7  2000/12/28 21:27:52  lavr
+ * ANSI C++ compliant use of malloc (explicit casting of result)
+ *
+ * Revision 6.6  2000/11/07 21:45:16  lavr
+ * Removed isupper/islower checking in strlwr/strupr
+ *
+ * Revision 6.5  2000/11/07 21:19:38  vakatov
+ * Compilation warning fixed;  plus, some code beautification...
+ *
+ * Revision 6.4  2000/10/18 21:15:53  lavr
+ * strupr and strlwr added
+ *
+ * Revision 6.3  2000/10/06 16:40:23  lavr
+ * <string.h> included now in <connect/ncbi_ansi_ext.h>
+ * conditional preprocessor statements removed
+ *
+ * Revision 6.2  2000/05/17 16:11:02  lavr
+ * Reorganized for use of HAVE_* defines
+ *
+ * Revision 6.1  2000/05/15 19:03:41  lavr
+ * Initial revision
+ *
+ * ==========================================================================
+ */

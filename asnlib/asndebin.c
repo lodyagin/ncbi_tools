@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -45,6 +45,9 @@
 * 08-01-93 Gish        AsnDeBinReadString calls MemGet instead of MemNew
 *
 * $Log: asndebin.c,v $
+* Revision 6.5  2002/10/09 19:16:31  ivanov
+* Fixed buffer overrun in the AsnDeBinReadReal()
+*
 * Revision 6.4  2000/12/12 15:56:10  ostell
 * added support BigInt
 *
@@ -1200,7 +1203,7 @@ NLM_EXTERN FloatHi AsnDeBinReadReal (AsnIoPtr aip)
 	Int4 len;
 	Int2 bytes, amount;
 	BytePtr bp;
-	char buf[30], *tmp;
+	char buf[200], *tmp;
 
 	aip->tagsaved = FALSE;
 	len = aip->length;

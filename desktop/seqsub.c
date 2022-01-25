@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -45,12 +45,22 @@
 #include <seqsub.h>
 #include <gather.h>
 
+static ENUM_ALIST(name_suffix_alist)
+  {" ",    0},
+  {"Jr.",  1},
+  {"Sr.",  2},
+  {"III",  3},
+  {"IV",   4},
+  {"V",    5},
+  {"VI",   6},
+END_ENUM_ALIST
+
 typedef struct contactpage {
   DIALOG_MESSAGE_BLOCK
   TexT            firstname;
   TexT            middleinit;
   TexT            lastname;
-  TexT            suffix;
+  PopuP           suffix;
   DialoG          affil;
   GrouP           contactGrp [3];
 } ContactPage, PNTR ContactPagePtr;
@@ -93,8 +103,7 @@ static void ContactInfoPtrToContactPage (DialoG d, Pointer data)
               SafeSetTitle (cpp->lastname, txt);
               MemFree (txt);
               txt = ExtractTagListColumn (str, 3);
-              SafeSetTitle (cpp->suffix, txt);
-              MemFree (txt);
+	      SafeSetValue (cpp->suffix, atoi(txt)+1);
               MemFree (str);
             }
           }
@@ -117,6 +126,9 @@ static Pointer ContactPageToContactInfoPtr (DialoG d)
   PersonIdPtr     pid;
   Char            str [128];
   CharPtr         txt;
+  Char            suffix [32];
+  Uint2           suffixVal;
+
 
   cip = NULL;
   cpp = (ContactPagePtr) GetObjectExtra (d);
@@ -144,10 +156,10 @@ static Pointer ContactPageToContactInfoPtr (DialoG d)
           StringCat (str, txt);
           StringCat (str, "\t");
           MemFree (txt);
-          txt = SaveStringFromText (cpp->suffix);
-          StringCat (str, txt);
+          suffixVal = GetValue (cpp->suffix);
+	  sprintf (suffix, "%d", (int) (suffixVal - 1));
+          StringCat (str, suffix);
           StringCat (str, "\n");
-          MemFree (txt);
           txt = StringSave (str);
           nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
           MemFree (txt);
@@ -326,7 +338,10 @@ extern DialoG CreateContactDialog (GrouP h, CharPtr title)
     cpp->firstname = DialogText (g, "", 8, NULL);
     cpp->middleinit = DialogText (g, "", 4, NULL);
     cpp->lastname = DialogText (g, "", 9, NULL);
-    cpp->suffix = DialogText (g, "", 3, NULL);
+    cpp->suffix = PopupList (g, TRUE, NULL);
+    SetObjectExtra (cpp->suffix, cpp, NULL);
+    InitEnumPopup (cpp->suffix, name_suffix_alist, NULL);
+    SetEnumPopup (cpp->suffix, name_suffix_alist, 0);
 
     cpp->affil = CreateExtAffilDialog (k, NULL,
                                        &(cpp->contactGrp [1]),

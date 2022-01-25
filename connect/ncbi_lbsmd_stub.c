@@ -1,7 +1,4 @@
-#ifndef NCBI_SERVICEP_LBSMD__H
-#define NCBI_SERVICEP_LBSMD__H
-
-/*  $Id: ncbi_servicep_lbsmd.h,v 6.5 2002/04/13 06:40:28 lavr Exp $
+/*  $Id: ncbi_lbsmd_stub.c,v 6.5 2002/10/28 20:12:57 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,44 +26,73 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *   Low-level API to resolve NCBI service name to the server meta-address
- *   with the use of NCBI Load-Balancing Service Mapper (LBSMD).
+ *   Dummy LBSMD mapper for non-UNIX platforms.
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_servicep_lbsmd.h,v $
- * Revision 6.5  2002/04/13 06:40:28  lavr
- * Few tweaks to reduce the number of syscalls made
- *
- * Revision 6.4  2001/04/24 21:31:22  lavr
- * SERV_LBSMD_LOCAL_SVC_BONUS moved to .c file
- *
- * Revision 6.3  2000/12/29 18:19:12  lavr
- * BONUS added for services running locally.
- *
- * Revision 6.2  2000/05/22 16:53:13  lavr
- * Rename service_info -> server_info everywhere (including
- * file names) as the latter name is more relevant
- *
- * Revision 6.1  2000/05/12 18:39:18  lavr
- * First working revision
- *
- * ==========================================================================
  */
 
-#include "ncbi_servicep.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "ncbi_lbsmd.h"
 
 
 const SSERV_VTable* SERV_LBSMD_Open(SERV_ITER iter,
-                                    SSERV_Info** info, char** env);
+                                    SSERV_Info** info, HOST_INFO* hinfo)
+{
+    return 0;
+}
 
 
-#ifdef __cplusplus
-}  /* extern "C" */
-#endif
+char* SERV_LBSMD_GetConfig(void)
+{
+    return 0;
+}
 
-#endif /* NCBI_SERVICEP_LBSMD__H */
 
+int LBSM_HINFO_CpuCount(const void* load_ptr)
+{
+    return -1;
+}
+
+
+int LBSM_HINFO_TaskCount(const void* load_ptr)
+{
+    return -1;
+}
+
+
+int/*bool*/ LBSM_HINFO_LoadAverage(const void* load_ptr, double lavg[2])
+{
+    return 0/*failure*/;
+}
+
+
+int/*bool*/ LBSM_HINFO_Status(const void* load_ptr, double status[2])
+{
+    return 0/*failure*/;
+}
+
+
+int/*bool*/ LBSM_HINFO_BLASTParams(const void* load_ptr, unsigned int blast[8])
+{
+    return 0/*failure*/;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_lbsmd_stub.c,v $
+ * Revision 6.5  2002/10/28 20:12:57  lavr
+ * Module renamed and host info API included
+ *
+ * Revision 6.4  2002/10/11 19:52:57  lavr
+ * +SERV_LBSMD_GetConfig()
+ *
+ * Revision 6.3  2002/04/13 06:40:44  lavr
+ * Few tweaks to reduce the number of syscalls made
+ *
+ * Revision 6.2  2001/09/10 21:25:35  lavr
+ * Unimportant code style compliance change
+ *
+ * Revision 6.1  2000/10/06 18:06:03  lavr
+ * Initial revision
+ *
+ * ==========================================================================
+ */

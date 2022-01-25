@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.8  2002/10/28 19:30:34  kans
+* added farFetchCDSproducts to vsp
+*
 * Revision 6.7  2002/07/16 17:13:09  kans
 * added sourceQualTags to vsp, ERR_SEQ_DESCR_StructuredSourceNote by finite state machine text search
 *
@@ -156,6 +159,7 @@ typedef struct validstruct {
 	Boolean validateAlignments;    /* call alignval test suite */
 	Boolean farIDsInAlignments;    /* fetch to get far IDs in alignments */
 	Boolean alwaysRequireIsoJTA;   /* force check for iso_jta */
+	Boolean farFetchCDSproducts;   /* lock CDS->products for CdTransCheck, if necessary */
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 } ValidStruct, PNTR ValidStructPtr;
 

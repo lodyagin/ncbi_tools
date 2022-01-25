@@ -144,6 +144,7 @@
 #define ERR_SEQ_FEAT_CollidingGeneNames  5,57
 #define ERR_SEQ_FEAT_MultiIntervalGene  5,58
 #define ERR_SEQ_FEAT_FeatContentDup  5,59
+#define ERR_SEQ_FEAT_BadProductSeqId  5,60
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

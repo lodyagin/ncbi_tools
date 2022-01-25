@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.36 2002/08/16 19:52:37 bauer Exp $
+/* $Id: cddserver.c,v 1.37 2002/10/09 20:31:13 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.36 $
+* $Revision: 1.37 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.37  2002/10/09 20:31:13  bauer
+* increased max. number of CDART neighbors, and other additions
+*
 * Revision 1.36  2002/08/16 19:52:37  bauer
 * switched to Ben's CddSrvGetStyle2
 *
@@ -171,12 +174,12 @@
 #include "cddutil.h"
 #include "dart.h"
 #include <objcn3d.h>
-#include "cdtrklib.h"
+#include "cdtrkapi.h"
 
 #undef DEBUG
 #undef NOCN3D4
 
-#define USE_CDTRK
+#undef USE_CDTRK
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -349,6 +352,11 @@ static Boolean CddGetParams()
   GetAppParam("cdd", "CDDSRV", "DARTPASS", "", DARTPASS, PATH_MAX);
   if (DARTPASS[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no DARTPASS...\n");
+    return FALSE;
+  }
+  GetAppParam("cdd", "CDDSRV", "CDDlocat", "", CDDlocat, PATH_MAX);
+  if (CDDlocat[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no CDDlocat...\n");
     return FALSE;
   }
 #ifdef USE_CDTRK
@@ -703,8 +711,8 @@ static ValNodePtr CddGetRelatedCDs(CddPtr pcdd, CharPtr thisacc)
   GlobalIdPtr   pGid;
   Dart_Connect *Connection;
   int           Size, i;
-  unsigned      Gilist[50];
-  char          Accession[50][30];
+  unsigned      Gilist[500];
+  char          Accession[500][30];
   Boolean       unique;
   Char          cOutString[PATH_MAX];
   
@@ -722,7 +730,7 @@ static ValNodePtr CddGetRelatedCDs(CddPtr pcdd, CharPtr thisacc)
   putenv("LD_LIBRARY_PATH=/opt/machine/merant/lib");
   Connection = Dart_Init2("CDart", DARTUSER, DARTPASS); 
   if (Connection) {
-    if (Dart_Related(Connection,thisacc,Gilist,50,&Size,NULL)) {
+    if (Dart_Related(Connection,thisacc,Gilist,500,&Size,NULL)) {
       for (i=0;i<Size;i++) {
         if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
 	  Accession[i][0] = '\0';
@@ -1437,8 +1445,18 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
     fprintf(table,"      <tr>\n");
     fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>Proteins:</strong></td>\n");  
     fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" COLSPAN=\"5\"><a href=\"/Structure/lexington/lexington.cgi?cmd=cdd&uid=%d\">\n",iPssmId);  
-    fprintf(table,"        [Click here for CDART summary of Proteins containing %s]</a></td>\n",cCDDid);
-    fprintf(table,"      </tr>\n");
+    fprintf(table,"        [Click here for CDART summary of Proteins containing %s]</a>\n",cCDDid);
+    if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {
+      fprintf(table,"<a href=\"/Structure/lexington/rosaparks.cgi?cmd=reply&input=%s\">[Click here for rosaparks display]</a> ",cCDDid);
+    
+    }
+    fprintf(table,"      </td></tr>\n");
+  } else if (Nlm_StrCmp(CDDlocat,"inhouse")==0){
+    fprintf(table,"      <tr>\n");
+    fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>Proteins:</strong></td>\n");  
+    fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" COLSPAN=\"5\">");  
+    fprintf(table,"        <a href=\"/Structure/lexington/rosaparks.cgi?cmd=reply&input=%s\">[Click here for rosaparks display]</a> ",cCDDid);
+    fprintf(table,"        </td></tr>\n");
   }
   fprintf(table,"    </table>\n");
   fprintf(table,"    <table border=\"0\" cellspacing=\"0\" cellpadding=\"2\" width=\"100%%\" bgcolor=\"#FFFFFF\" class=\"TEXT\">\n");
@@ -1839,7 +1857,7 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
     sap = pbsaSeq->seqalign;
     salp = sap->data;
     piSize = (Int4Ptr) GetAlignmentSize(salp);
-    size = (Uint4) (piSize[0] * (2000 + piSize[1] * 250));
+    size = (Uint4) (piSize[0] * (8000 + piSize[1] * 400));
   }
   buf = MemNew(size);
   aimp = (AsnIoMemPtr) AsnIoMemOpen("wb",buf,size);
@@ -2233,7 +2251,7 @@ static CddPtr CddGetFromCDtrack(Int4 iPssmId, CharPtr cCDDId)
   } else {
     pcdd=RetrievePublishedCdBlobByAcc(CDTRKDBS,"bauer",cCDDid,0,errmsg,1024);
   }
-/*  if (!pcdd) CddHtmlError(errmsg); */
+  if (!pcdd) CddHtmlError(errmsg);
 
 
   return pcdd;
@@ -2400,17 +2418,17 @@ Int2 Main()
 /* check to see if identifier is entirely numerical - if so, convert to acc. */
 /*---------------------------------------------------------------------------*/
 #ifdef USE_CDTRK
-  sprintf(ErrMsg,"ODBCINI=%s",ODBCINI);
-  putenv(ErrMsg);
+/*  sprintf(ErrMsg,"ODBCINI=%s",ODBCINI);
+  putenv(ErrMsg); */
 #endif
   iPssmId = (Int4) atoi(www_arg);
   if (iPssmId > 0) {                 /* successful conversion, uid is PSSMid */
 #ifdef USE_CDTRK
-     PssmId2Accession(CDTRKDBS,"bauer",iPssmId,cCDDid,errmsg,1024);
-/*     if (errmsg[0] != '\0') {
-       sprintf(ErrMsg,"Got Accession %s from CDtrack via PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
-       CddHtmlError(ErrMsg);
-     } */
+    PssmId2Accession(CDTRKDBS,"bauer",iPssmId,cCDDid,errmsg,1024);
+    if (errmsg[0] != '\0') {
+      sprintf(ErrMsg,"Got Accession %s from CDtrack via PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
+      CddHtmlError(ErrMsg);
+    }
 #else
     CddAccFromPssmId(iPssmId, cCDDid, CDDidx);     
 #endif
@@ -2418,6 +2436,10 @@ Int2 Main()
     strcpy(cCDDid,www_arg);          /* uid was an accession, no PSSMid known*/
 #ifdef USE_CDTRK
     iPssmId = Accession2PssmId(CDTRKDBS,"bauer",cCDDid,errmsg,1024);
+    if (errmsg[0] != '\0') {
+      sprintf(ErrMsg,"Used Accession %s in CDtrack to retrieve PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
+      CddHtmlError(ErrMsg);
+    }
 #else
     CddPssmIdFromAcc(&iPssmId, cCDDid, CDDidx);
 #endif
@@ -3427,13 +3449,15 @@ Int2 Main()
         if (iPDB < 7) pbsaCdd->structures->next = pbsaStruct->slaves;
       }
       if (bEvidenceViewer) {
-        pStyles[0] = cdd_def_style;
+/*        pStyles[0] = cdd_def_style;
 	pStyles[1] = cdd_evidence_style;
-        pcdd->style_dictionary = CddSrvGetStyle2(pStyles,2);
+        pcdd->style_dictionary = CddSrvGetStyle2(pStyles,2); */
+        pcdd->style_dictionary = CddSrvGetStyle(TRUE);
 	pcdd->user_annotations = CddMakeUserAnnot(pcdd, iFeatNum, iEvidence);
       } else {
-        pStyles[0] = cdd_def_style;
-        pcdd->style_dictionary = CddSrvGetStyle2(pStyles,1);
+/*        pStyles[0] = cdd_def_style;
+        pcdd->style_dictionary = CddSrvGetStyle2(pStyles,1); */
+        pcdd->style_dictionary = CddSrvGetStyle(FALSE);
       }
       break;
   }

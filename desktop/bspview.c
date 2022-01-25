@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.100 $
+* $Revision: 6.105 $
 *
 * File Description: 
 *
@@ -66,6 +66,7 @@
 #include <blastpri.h>
 #include <explore.h>
 #include <asn2graphic.h>
+#include <seqpanel.h>
 /*
 #include <udviewer.h>
 #include <udvdef.h>
@@ -81,42 +82,6 @@
 extern ForM smartBioseqViewForm;
 ForM smartBioseqViewForm = NULL;
 
-
-typedef struct bioseqviewform {
-  FORM_MESSAGE_BLOCK
-
-  BioseqPagePtr   bioseqNucPageList;
-  BioseqPagePtr   bioseqProtPageList;
-  BioseqPagePtr   currentBioseqPage;
-  ButtoN          pubseq;
-
-  Int2            currentNucPage;
-  Int2            currentProtPage;
-
-  Handle          nucViewControl;
-  Handle          protViewControl;
-  Handle          targetControl;
-  EnumFieldAssoc  PNTR targetAlist;
-  Boolean         usePopupForTarget;
-  Int4            numTargets;
-  Int4            targetScratchSpace;
-  GrouP           controls;
-  GrpActnProc     updateControls;
-  GrouP           retrieveAlignments;
-  SeqViewUpdateFetchCounts  updateCounts;
-  Boolean         hasaligns;
-
-  EnumFieldAssoc  PNTR workingAlist;
-  Int4            workingCount;
-  Int4            workingTargets;
-
-  BioseqViewData  bvd;
-
-  Boolean         cleanupObjectPtr;
-  WndActnProc     activateForm;
-
-  ForM            toolForm;
-} BioseqViewForm, PNTR BioseqViewFormPtr;
 
 static void LookForGenomeTag (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
@@ -1094,6 +1059,13 @@ static void ResizeViewForm (WindoW w)
     SetPosition (bfp->bvd.pnl, &s);
     AdjustPrnt (bfp->bvd.pnl, &s, FALSE);
   }
+  if (bfp->bvd.seqView != NULL) {
+    GetPosition (bfp->bvd.seqView, &s);
+    s.right = width - 10;
+    s.bottom = bottom;
+    SetPosition (bfp->bvd.seqView, &s);
+    AdjustPrnt (bfp->bvd.seqView, &s, FALSE);
+  }
   /*
   if (bfp->bvd.udv != NULL) {
     GetPosition (bfp->bvd.udv, &s);
@@ -2066,6 +2038,19 @@ static void ChangeSalsaControls (PopuP p)
   }
 }
 
+static void ChangeSeqViewControls (PopuP p)
+
+{
+  BioseqViewFormPtr  bfp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp == NULL) return;
+
+  bfp->bvd.moveToOldPos = TRUE;
+  PointerToForm (bfp->form, bfp->bvd.bsp);
+  Update ();
+}
+
 static void ChangeFlatFileMode (PopuP p)
 
 {
@@ -2547,6 +2532,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   SeqViewControlsProc  makeControls = NULL;
   Int2                 mssg;
   Boolean              newGraphicalViewer = FALSE;
+  GrouP                newPnlGrp;
   Int2                 numStyles;
   Int2                 pixheight;
   Int2                 pixwidth;
@@ -3017,6 +3003,37 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     SetObjectExtra (bfp->bvd.pnl, (Pointer) &(bfp->bvd), NULL);
     Hide (bfp->bvd.pnl);
     Hide (bfp->bvd.pnlParentGrp);
+
+    bfp->bvd.seqViewParentGrp = HiddenGroup (h, -1, 0, NULL);
+    GetNextPosition (bfp->bvd.seqViewParentGrp, &pt);
+    pty = pt.y;
+    newPnlGrp = HiddenGroup (bfp->bvd.seqViewParentGrp, 6, 0, NULL);
+    StaticPrompt (newPnlGrp, "Feature display: ", 0, popupMenuHeight, programFont, 'l');
+    bfp->bvd.newFeatControl = PopupList (newPnlGrp, TRUE, ChangeSeqViewControls);
+    SetObjectExtra (bfp->bvd.newFeatControl, bfp, NULL);
+    PopupItem (bfp->bvd.newFeatControl, "On");
+    PopupItem (bfp->bvd.newFeatControl, "Off");
+    SetValue (bfp->bvd.newFeatControl, 1);
+    StaticPrompt (newPnlGrp, " Numbering: ", 0, popupMenuHeight, programFont, 'l');
+    bfp->bvd.newNumControl = PopupList (newPnlGrp, TRUE, ChangeSeqViewControls);
+    SetObjectExtra (bfp->bvd.newNumControl, bfp, NULL);
+    PopupItem (bfp->bvd.newNumControl, "None");
+    PopupItem (bfp->bvd.newNumControl, "Side");
+    PopupItem (bfp->bvd.newNumControl, "Top");
+    SetValue (bfp->bvd.newNumControl, 3);
+    
+    StaticPrompt (newPnlGrp, " Grid: ", 0, popupMenuHeight, programFont, 'l');
+    bfp->bvd.newGridControl = PopupList (newPnlGrp, TRUE, ChangeSeqViewControls);
+    SetObjectExtra (bfp->bvd.newGridControl, bfp, NULL);
+    PopupItem (bfp->bvd.newGridControl, "On");
+    PopupItem (bfp->bvd.newGridControl, "Off");
+    SetValue (bfp->bvd.newGridControl, 2);
+    
+    GetNextPosition (bfp->bvd.seqViewParentGrp, &pt);
+    bfp->bvd.seqView = CreateSeqViewPanel (bfp->bvd.seqViewParentGrp, pixwidth, pixheight - (pt.y - pty));
+    SetObjectExtra (bfp->bvd.seqView, bfp, NULL);
+    Hide (bfp->bvd.seqView);
+    Hide (bfp->bvd.seqViewParentGrp);
 
     /*
     bfp->bvd.udvParentGrp = HiddenGroup (h, -1, 0, NULL);

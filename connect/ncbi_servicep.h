@@ -1,7 +1,7 @@
-#ifndef NCBI_SERVICEP__H
-#define NCBI_SERVICEP__H
+#ifndef CONNECT___NCBI_SERVICEP__H
+#define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.14 2002/05/06 19:17:04 lavr Exp $
+/*  $Id: ncbi_servicep.h,v 6.17 2002/10/28 20:16:00 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,8 +31,100 @@
  * File Description:
  *   Private API to define server iterator structure.
  *
+ */
+
+#include "ncbi_server_infop.h"
+#include <connect/ncbi_service.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+/* Table of iterator "virtual functions"
+ */
+typedef struct {
+    void        (*Reset)(SERV_ITER iter);
+    SSERV_Info* (*GetNextInfo)(SERV_ITER iter, HOST_INFO* host_info);
+    int/*bool*/ (*Update)(SERV_ITER iter, TNCBI_Time now, const char* text);
+    int/*bool*/ (*Penalize)(SERV_ITER iter, double penalty);
+    void        (*Close)(SERV_ITER iter);
+    const char* name;
+} SSERV_VTable;
+
+
+/* Iterator structure
+ */
+struct SSERV_IterTag {
+    const char*  service;        /* requested service name                 */
+    TSERV_Type   type;           /* requested server type(s)               */
+    unsigned int preferred_host; /* preferred host to select, network b.o. */
+    SSERV_Info** skip;           /* servers to skip                        */
+    size_t       n_skip;         /* number of servers in the array         */
+    size_t       n_max_skip;     /* number of allocated slots in the array */
+    SSERV_Info*  last;           /* last server info taken out             */
+
+    const SSERV_VTable* op;      /* table of virtual functions             */
+
+    void*        data;           /* private data field                     */
+};
+
+
+/* Private interface: update mapper information from the given text
+ * (<CR><LF> separated lines, usually taken from HTTP header).
+ */
+int/*bool*/ SERV_Update(SERV_ITER iter, const char* text);
+
+
+/* Private interface: print and return the HTTP-compliant header portion
+ * (<CR><LF> separated lines, including the last line) out of the information
+ * contained in the iterator; to be used in mapping requests to DISPD.
+ * Return value must be 'free'd.
+ */
+char* SERV_Print(SERV_ITER iter);
+
+
+/* Get name of underlying service mapper.
+ */
+const char* SERV_MapperName(SERV_ITER iter);
+
+
+/* Get final service name, using CONN_SERVICE_NAME_service environment
+ * variable, then (if not found) registry section [service] and a key
+ * CONN_SERVICE_NAME. Return resulting name (perhaps, an exact copy of
+ * "service" if no override name was found in environment/registry), which
+ * is to be freed by a caller when no longer needed. Return NULL on error.
+ * NOTE: This procedure does not detect cyclical redefinitions.
+ */
+char* SERV_ServiceName(const char* service);
+
+
+/* Get configuration file name. Returned '\0'-terminated string
+ * is to be free()'d by a caller when no longer needed.
+ * Return NULL if no configuration file name available.
+ */
+char* SERV_GetConfig(void);
+
+
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
+
+
+/*
  * --------------------------------------------------------------------------
  * $Log: ncbi_servicep.h,v $
+ * Revision 6.17  2002/10/28 20:16:00  lavr
+ * Take advantage of host info API
+ *
+ * Revision 6.16  2002/10/11 19:48:25  lavr
+ * +SERV_GetConfig()
+ * const dropped in return value of SERV_ServiceName()
+ *
+ * Revision 6.15  2002/09/19 18:08:43  lavr
+ * Header file guard macro changed; log moved to end
+ *
  * Revision 6.14  2002/05/06 19:17:04  lavr
  * +SERV_ServiceName() - translation of service name
  *
@@ -83,73 +175,4 @@
  * ==========================================================================
  */
 
-#include <connect/ncbi_service.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
-/* Table of iterator "virtual functions"
- */
-typedef struct {
-    void        (*Reset)(SERV_ITER iter);
-    SSERV_Info* (*GetNextInfo)(SERV_ITER iter, char** env);
-    int/*bool*/ (*Update)(SERV_ITER iter, TNCBI_Time now, const char* text);
-    int/*bool*/ (*Penalize)(SERV_ITER iter, double penalty);
-    void        (*Close)(SERV_ITER iter);
-    const char* name;
-} SSERV_VTable;
-
-
-/* Iterator structure
- */
-struct SSERV_IterTag {
-    const char*  service;        /* requested service name                 */
-    TSERV_Type   type;           /* requested server type(s)               */
-    unsigned int preferred_host; /* preferred host to select, network b.o. */
-    SSERV_Info** skip;           /* servers to skip                        */
-    size_t       n_skip;         /* number of servers in the array         */
-    size_t       n_max_skip;     /* number of allocated slots in the array */
-    SSERV_Info*  last;           /* last server info taken out             */
-
-    const SSERV_VTable* op;      /* table of virtual functions             */
-
-    void*        data;           /* private data field                     */
-};
-
-
-/* Private interface: update mapper information from the given text
- * (<CR><LF> separated lines, usually taken from HTTP header).
- */
-int/*bool*/ SERV_Update(SERV_ITER iter, const char* text);
-
-
-/* Private interface: print and return the HTTP-compliant header portion
- * (<CR><LF> separated lines, including the last line) out of the information
- * contained in the iterator; to be used in mapping requests to DISPD.
- * Return value must be 'free'd.
- */
-char* SERV_Print(SERV_ITER iter);
-
-
-/* Get name of underlying service mapper.
- */
-const char* SERV_MapperName(SERV_ITER iter);
-
-
-/* Get final service name, using CONN_SERVICE_NAME_service environment
- * variable, then (if not found) registry section [service] and a key
- * CONN_SERVICE_NAME. Return resulting name (perhaps, an exact copy of
- * "service" if no override name was found in environment/registry),
- * which must be freed by a caller. Return 0 on error.
- * NOTE: This procedure does not detect cyclical redefinitions.
- */
-const char* SERV_ServiceName(const char* service);
-
-
-#ifdef __cplusplus
-}  /* extern "C" */
-#endif
-
-#endif /* NCBI_SERVICEP__H */
+#endif /* CONNECT___NCBI_SERVICEP__H */

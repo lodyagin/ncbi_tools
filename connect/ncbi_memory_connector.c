@@ -1,4 +1,4 @@
-/*  $Id: ncbi_memory_connector.c,v 6.2 2002/04/26 16:32:49 lavr Exp $
+/*  $Id: ncbi_memory_connector.c,v 6.3 2002/10/22 15:11:24 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_memory_connector.c,v $
+ * Revision 6.3  2002/10/22 15:11:24  lavr
+ * Zero connector's handle to crash if revisited
+ *
  * Revision 6.2  2002/04/26 16:32:49  lavr
  * Added setting of default timeout in meta-connector's setup routine
  *
@@ -245,6 +248,7 @@ static void s_Destroy
     SMemoryConnector* xxx = (SMemoryConnector*) connector->handle;
 
     free(xxx);
+    connector->handle = 0;
     free(connector);
 }
 

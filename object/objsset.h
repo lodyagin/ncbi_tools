@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objsset.h,v $
+* Revision 6.7  2002/09/30 13:39:34  kans
+* added wgs_set define
+*
 * Revision 6.6  2002/06/27 16:26:10  kans
 * document eco-set, gen-prod-set in comment
 *
@@ -160,6 +163,7 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
         phy-set (15) ,              -- phylogenetic study
         eco-set (16) ,              -- ecological sample study
         gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein
+        wgs-set (18) ,              -- whole genome shotgun project
         other (255) } DEFAULT not-set ,
 
 *
@@ -182,6 +186,7 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
 #define BioseqseqSet_class_phy_set 15
 #define BioseqseqSet_class_eco_set 16
 #define BioseqseqSet_class_gen_prod_set 17
+#define BioseqseqSet_class_wgs_set 18
 #define BioseqseqSet_class_other 255
 
 /*****************************************************************************

@@ -32,8 +32,14 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.44 $ 
+/* $Revision: 6.46 $ 
 * $Log: mblast.h,v $
+* Revision 6.46  2002/09/03 13:52:45  kans
+* added prototypes for MegaBlastWordFinder and MegaBlastGappedAlign for Mac compiler
+*
+* Revision 6.45  2002/08/30 15:46:36  dondosha
+* Moved some prototypes to blastpri.h and to mblast.c
+*
 * Revision 6.44  2002/08/01 20:47:24  dondosha
 * Prototypes changed for megablast functions related to traceback
 *
@@ -231,87 +237,21 @@ BioseqMegaBlastEngineCoreEx PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr
 
 BlastSearchBlkPtr BlastFillQueryOffsets PROTO((BlastSearchBlkPtr search, SeqLocPtr query_slp, Int4 wordsize));
 
-Boolean MegaBlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp,
-					Int2Ptr first_context, Int2Ptr
-					last_context, Uint1 strand_options));
+BlastSearchBlkPtr 
+MegaBlastSetUpSearchWithReadDbInternal PROTO((SeqLocPtr query_slp,
+    BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname,
+    BLAST_OptionsBlkPtr options, 
+    int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), 
+    SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, 
+    ReadDBFILEPtr rdfp));
 
-Int4 SeqLocTotalLen PROTO((CharPtr prog_name, SeqLocPtr slp));
-
-BlastSearchBlkPtr MegaBlastSetUpSearchWithReadDbInternal PROTO((SeqLocPtr
-								query_slp,
-								BioseqPtr
-								query_bsp,
-								CharPtr
-								prog_name, Int4
-								qlen, CharPtr
-								dbname,
-								BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp));
-
-SeqAlignPtr PNTR 
-MegaBlastPackAlignmentsByQuery PROTO((BlastSearchBlkPtr search,
-						SeqAlignPtr seqalign));
-Int2 LIBCALL
-MegaBlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_length, Int4 effective_length));
-
-int LIBCALLBACK compare PROTO((VoidPtr v1, VoidPtr v2));
-Uint1Ptr GetPrivatTranslationTable PROTO((CharPtr genetic_code, Boolean
-					  reverse_complement));
-
-BioseqPtr BlastMakeTempProteinBioseq PROTO((Uint1Ptr sequence, Int4 length, Uint1
-				      alphabet));
-
-VoidPtr index_proc PROTO((VoidPtr dummy));
-
-CharPtr BlastConstructFilterString PROTO((Int4 filter_value));
-
-int LIBCALLBACK evalue_compare_hits PROTO((VoidPtr v1, VoidPtr v2));
-
-Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4
-				 dropoff_number_of_bits_1st_pass, Int4
-				 dropoff_number_of_bits_2nd_pass, Nlm_FloatHi
-				 avglen, Nlm_FloatHi searchsp, Int4 window));
-void HackSeqLocId PROTO((SeqLocPtr slp, SeqIdPtr id));
-
-Uint1 FrameToDefine PROTO((Int2 frame));
-
-Boolean 
-BlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr first_context, Int2Ptr last_context, Uint1 strand_options));
-
-Int4
-MegaBlastExtendHit PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup, 
-		   Int4 s_off, Int4 q_off));
-Int2
-MegaBlastNtWordExtend PROTO((BlastSearchBlkPtr search, Uint1Ptr subject0, 
-			     Int4 q_off, Int4 s_off));
-
-Int4 
-MegaBlastWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
-
-
-   /*void BlastAdjustHitOffsets PROTO((BlastSearchBlkPtr search));*/
-
-void MegaBlastMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length, Uint1
-			      mask_residue, SeqLocPtr mask_slp, Boolean reverse,
-			      Int4 offset, Boolean lowercase_mask));
-BLAST_WordFinderPtr
-MegaBlastWordFinderDeallocate PROTO((BLAST_WordFinderPtr wfp));
-
-void
-BlastSortUniqHspArray PROTO((BLAST_HitListPtr hitlist));
 
 void
 MegaBlastFillHspGapInfo PROTO((BLAST_HSPPtr hsp, GapXEditScriptPtr esp));
 
-GapXEditScriptPtr
-MBToGapXEditScript PROTO((edit_script_t PNTR ed_script));
-
 SeqAlignPtr
 MegaBlastGapInfoToSeqAlign PROTO((BlastSearchBlkPtr search, Int4 subject_index,
                                   Int2 query_index));
-
-Boolean 
-BlastNeedHumanRepeatFiltering PROTO((BlastDoubleInt4Ptr gi_list, 
-				     Int4 gi_list_size, Uint4 query_gi));
 
 Int4
 MegaBlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject, 
@@ -321,13 +261,7 @@ MegaBlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject,
 Int2
 MegaBlastReevaluateWithAmbiguities PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
 
-Int2 MegaBlastGappedAlign PROTO((BlastSearchBlkPtr search));
-
 Int4 BinarySearchInt4 PROTO((Int4 n, Int4Ptr A, Int4 size));
-
-void BlastLCaseMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length,
-				      SeqLocPtr mask_slp, Boolean reverse, 
-				      Int4 offset));
 
 SeqLocPtr MaskSeqLocFromSeqAlign PROTO((SeqAlignPtr seqalign));
    
@@ -342,7 +276,10 @@ MegaBlastGetHspPercentIdentity PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp
 MegaBlastParameterBlkPtr
 MegaBlastParameterBlkNew PROTO((BLAST_OptionsBlkPtr options));
 
-MBTemplateType GetMBTemplateType PROTO((Int2 weight, Int2 length, MBDiscWordType type));
+Int4 
+MegaBlastWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup);
+Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search);
+
 
 #ifdef __cplusplus
 }

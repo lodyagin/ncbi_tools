@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -237,6 +237,7 @@ static void SetupAppProperties (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &qualPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asnPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &xmlPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbseqPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
 
   SetAppProperty ("NewSequinGraphicalViewer", (void *) 1024);

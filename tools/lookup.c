@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.53 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,12 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.55  2002/10/03 14:43:44  dondosha
+* Bug fix for 2 sequences megablast
+*
+* Revision 6.54  2002/08/30 15:49:01  dondosha
+* MegaBlastWordFinderDeallocate moved from mblast.c
+*
 * Revision 6.53  2002/06/07 18:50:43  dondosha
 * Bug fix for Mega BLAST with two simultaneoue discontiguous word templates of length 21
 *
@@ -862,6 +868,28 @@ BLAST_WordFinderDestruct (BLAST_WordFinderPtr wfp)
     return wfp;
 }
 
+BLAST_WordFinderPtr
+MegaBlastWordFinderDeallocate(BLAST_WordFinderPtr wfp)
+{
+   LookupTablePtr lookup;
+   
+   if (wfp == NULL || (lookup = wfp->lookup) == NULL || 
+       lookup->mb_lt == NULL) 
+      return wfp;
+   if (lookup->mb_lt->estack) {
+      Int4 index;
+      for (index=0; index<lookup->mb_lt->num_stacks; index++)
+	 MemFree(lookup->mb_lt->estack[index]);
+      MemFree(lookup->mb_lt->estack);
+      MemFree(lookup->mb_lt->stack_size);
+      MemFree(lookup->mb_lt->stack_index);
+   }
+   MemFree(lookup->mb_lt);
+   MemFree(lookup);
+   wfp = MemFree(wfp);
+   return wfp;
+}
+
 #if 0
 /* Given a 4-byte integer index, compute a 'size'-bit hash value */
 Int4 MB_GetHashValue(Int4 index, Int4 size) 
@@ -1221,21 +1249,26 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    else
       mb_lt->mask = (1 << (mb_lt->width*8 - 8)) - 1;
       
-   /* Stacks are allocated for word size >= 12, or if query length is too long,
+   /* Stacks are allocated for word size >= 11, or if query length is too long,
       otherwise will use diagonal array (ewp and ewp_params structures) */
-   if (query_length > MAX_DIAG_ARRAY || mb_lt->lpm >= 12) {
+   if (query_length > MAX_DIAG_ARRAY || 
+        search->pbp->mb_params->word_weight >= 11) {
       Int8 total_len, av_search_space;
       Int4 total_num, av_len, stack_size, num_stacks;
-      if (search->dblen > 0 && search->dbseq_num > 0) {
-         total_len = search->dblen;
-         total_num = search->dbseq_num;
+      if (search->rdfp) {
+         if (search->dblen > 0 && search->dbseq_num > 0) {
+            total_len = search->dblen;
+            total_num = search->dbseq_num;
+         } else {
+            readdb_get_totals_ex(search->rdfp, &total_len, &total_num, TRUE);
+         }
+         if (total_num > 0)
+            av_len = total_len / total_num;
+         else
+            av_len = 1000;
       } else {
-         readdb_get_totals_ex(search->rdfp, &total_len, &total_num, TRUE);
+         av_len = search->subject->length;
       }
-      if (total_num > 0)
-         av_len = total_len / total_num;
-      else
-         av_len = 1000;
       av_search_space = 
          ((Int8) search->context[search->first_context].query->length) * av_len;
       num_stacks = MIN(1 + (Int4) sqrt(av_search_space)/100, 500);

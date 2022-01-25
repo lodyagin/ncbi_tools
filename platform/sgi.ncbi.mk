@@ -1,5 +1,5 @@
 #
-# $Id: sgi.ncbi.mk,v 1.20 2001/09/13 18:14:52 lewisg Exp $
+# $Id: sgi.ncbi.mk,v 1.21 2002/10/29 01:20:13 lavr Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
@@ -57,6 +57,6 @@ OPENGL_LIBS = -lGL -lGLU
 #LIBPNG_DIR = /usr/people/thiessen/Programs/libpng
 #ZLIB_DIR = /usr/people/thiessen/Programs/zlib
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 

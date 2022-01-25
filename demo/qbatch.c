@@ -1,4 +1,4 @@
-/* $Id: qbatch.c,v 6.9 2001/03/19 16:18:17 beloslyu Exp $
+/* $Id: qbatch.c,v 6.10 2002/10/24 17:37:36 ucko Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 05/04/2000
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *         WWW and Command-line Batch Entrez using Entre2 and ID1
 *
 * $Log: qbatch.c,v $
+* Revision 6.10  2002/10/24 17:37:36  ucko
+* Kludge around Darwin's lack of ctime_r.
+*
 * Revision 6.9  2001/03/19 16:18:17  beloslyu
 * fix the args for ctime_r for OSF1 on alpha
 *
@@ -890,6 +893,9 @@ Boolean QSRV_Time(CharPtr string, Int4 len, time_t seconds)
     
 #if defined(OS_UNIX_IRIX) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_OSF1)
     ctime_r(&seconds, string);
+#elif defined(OS_UNIX_DARWIN) /* no ctime_r :-/ */
+    strncpy(string, ctime(&seconds), len - 1);
+    string[len - 1] = '\0';
 #else
     ctime_r(&seconds, string, len);
 #endif

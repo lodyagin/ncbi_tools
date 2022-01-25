@@ -1,5 +1,5 @@
 #
-# $Id: freebsd.ncbi.mk,v 1.7 2002/08/04 20:21:31 vakatov Exp $
+# $Id: freebsd.ncbi.mk,v 1.8 2002/10/29 01:20:12 lavr Exp $
 #
 # This platform is not supported. Tested on FreeBSD 4.5-RELEASE
 #
@@ -26,6 +26,6 @@ NCBI_OTHERLIBS_MT = $(NCBI_MT_OTHERLIBS) -lm
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 

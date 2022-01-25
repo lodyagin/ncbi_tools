@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.43 2002/08/17 11:55:08 bauer Exp $
+/* $Id: cddutil.h,v 1.45 2002/10/10 20:38:19 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,21 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.43 $
+* $Revision: 1.45 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.45  2002/10/10 20:38:19  bauer
+* changes to accomodate new spec items
+* - old-root node
+* - curation-status
+*
+* Revision 1.44  2002/10/02 17:32:21  bauer
+* avoid merging blocks when reindexing alignments
+*
 * Revision 1.43  2002/08/17 11:55:08  bauer
 * backed out changes
 *
@@ -227,6 +235,7 @@ typedef struct _cdd_explicit_alignment {
   Boolean      bIdAlloc;
   Int4         length;
   Int4         *adata;
+  Int4         *starts;
 } CddExpAlign, PNTR CddExpAlignPtr;
 
 typedef struct _cdd_idx_data {
@@ -402,7 +411,7 @@ CddTreePtr LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin);
 /* Cdd Data manipulations and queries                                        */
 /*---------------------------------------------------------------------------*/
 void       LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
-void       LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
+Boolean    LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
 CharPtr    LIBCALL CddGetAccession(CddPtr pcdd);
 Int4       LIBCALL CddGetVersion(CddPtr pcdd);
 OrgRefPtr  LIBCALL CddGetOrgRef(CddPtr pcdd);
@@ -436,7 +445,7 @@ Boolean    LIBCALL CddHasPendingAlignments(CddPtr pcdd);
 /*---------------------------------------------------------------------------*/
 /* report Errors in processing and exit immediately                          */
 /*---------------------------------------------------------------------------*/
-void LIBCALL CddHtmlError(CharPtr cErrTxt);
+void LIBCALL CddSimpleHtmlError(CharPtr cErrTxt);
 void LIBCALL CddSevError(CharPtr cErrTxt);
 
 /*---------------------------------------------------------------------------*/

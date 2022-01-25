@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.52 2002/05/21 20:04:15 beloslyu Exp $
+# $Id: makeallchives,v 1.57 2002/11/08 21:06:52 vakatov Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -39,87 +39,78 @@ sequinimages=$TOPDIR/ncbi/doc/images/
 
 #delete the old archive subdir
 test -d archive && rm -rf archive
+
 #make sure we have timestamp file
 test -f ncbi/VERSION || date > ncbi/VERSION
+
 for i in sequin entrez fa2htgs blast netblast asn2xml
 do
+	f=""
 	mkdir -p archive/$i/data
-	for f in $datafiles
+	for file in $datafiles
 	do
-		ln $datadir/$f archive/$i/data/
+		ln $datadir/$file archive/$i/data/
 	done
 	ln ncbi/VERSION archive/$i/VERSION
-done
 
-#
-# FIXES 3/98
+	cat > archive/$i/Cn3D.ReadMe <<EOF
+Cn3D is now distributed separately from $i
+To download Cn3D please look at the Cn3D home page or ftp site:
 
-cat >archive/entrez/README.1st <<EOF
+http://www.ncbi.nlm.nih.gov/Structure/cn3d.html
+ftp://ftp.ncbi.nih.gov/cn3d/
+EOF
+
+	case "$i" in
+	entrez)
+		cat > archive/$i/README.1st <<EOF
 If you have not done so already, please refer to the
 file at ftp://ftp.ncbi.nih.gov/entrez/README
 EOF
-
-cd ncbi/build
-
-#entrez (now it is remote)
-ln -f Nentrez entrez 2>/dev/null
-f="entrez blastcl3 ../doc/firewall.txt"
-ln $f ../../archive/entrez/ || exit 1
-cat > ../../archive/entrez/Cn3D.ReadMe << EOF
-Cn3D is now distributed separately from Network Entrez.
-To download Cn3D please look at the Cn3D home page or ftp site:
-
-http://www.ncbi.nlm.nih.gov/Structure/cn3d.html
-ftp://ftp.ncbi.nih.gov/cn3d/
-EOF
-
-#sequin
-ln -f Psequin sequin 2>/dev/null
-f="sequin tbl2asn"
-ln $f ../../archive/sequin/ || exit 1
-cat > ../../archive/sequin/Cn3D.ReadMe << EOF
-Cn3D is now distributed separately from Sequin.
-To download Cn3D please look at the Cn3D home page or ftp site:
-
-http://www.ncbi.nlm.nih.gov/Structure/cn3d.html
-ftp://ftp.ncbi.nih.gov/cn3d/
-EOF
-
-#asn2xml
-f="asn2xml ../doc/README.asn2xml ../doc/ncbixml.txt"
-ln $f ../../archive/asn2xml/ || exit 1
-#we don't need data dir in this archive
-rm -rf ../../archive/asn2xml/data
-
-#fa2htgs
-f="fa2htgs"
-ln $f ../../archive/fa2htgs/ || exit 1
-
-#Cn3D
-#disabled by Dima, 09/07/01
-#f="Cn3D"
-#ln $f ../../archive/cn3d
-
-#blast
-f="blastall blastpgp seedtop formatdb fastacmd copymat makemat \
+		f="entrez entrez2 blastcl3 ../doc/firewall.html"		
+		(cd ncbi/build; test -f Nentrez && ln Nentrez entrez)
+		;;
+	sequin)
+		f="sequin tbl2asn"
+		(cd ncbi/build; test -f Psequin && ln -f Psequin sequin)
+		mkdir -p archive/sequin/config archive/sequin/errmsg archive/sequin/images
+		test -d $errmsgdir && ln $errmsgdir/* archive/sequin/errmsg/
+		test -d $sequinimages && ln $sequinimages/* archive/sequin/images/
+		test -r $sequindoc && ln $sequindoc archive/sequin/
+		for file in $configfiles
+		do
+			test -r $configdir/$file && ln $configdir/$file archive/sequin/config/
+		done
+		;;
+	asn2xml)
+		f="asn2xml ../doc/README.asn2xml ../doc/ncbixml.txt"
+		#no need in data subdir
+		rm -rf archive/asn2xml/data
+		;;
+	fa2htgs)
+		f="fa2htgs"
+		;;
+	blast)
+		f="blastall blastpgp seedtop formatdb fastacmd copymat makemat \
 impala bl2seq megablast blastclust rpsblast ../doc/README.imp \
 ../doc/README.bls ../doc/README.mbl ../doc/README.bcl ../doc/README.rps \
 ../doc/README.formatdb"
-ln $f ../../archive/blast/ || exit 1
-
-#netblast
-f="blastcl3 ../doc/firewall.txt ../doc/README.nbl"
-ln $f ../../archive/netblast/ || exit 1
-
-#sequin data and images
-cd ../../archive/sequin
-mkdir config errmsg images
-test -d $errmsgdir && ln $errmsgdir/* errmsg/
-test -d $sequinimages && ln $sequinimages/* images/
-test -r $sequindoc && ln $sequindoc .
-for file in $configfiles
-do
-	test -r $configdir/$file && ln $configdir/$file config/
+		;;
+	netblast)
+		f="blastcl3 ../doc/firewall.html ../doc/README.nbl"
+		;;
+	*)
+		;;
+	esac
+	for file in $f
+	do
+		if [ -f ./ncbi/build/$file ] ; then
+			ln ./ncbi/build/$file ./archive/$i/
+		else
+			echo "$i: file $file was not built, skipping the archive"
+			rm -fr ./archive/$i
+		fi
+	done
 done
 
 #cd back to archive
@@ -205,7 +196,7 @@ pwd
 
 for A in sequin entrez fa2htgs
 do
-	cd $A
+	cd $A || continue
 	#if [ $platform = "linux" ] ; then
 	#	touch README.1st
 	#fi
@@ -264,7 +255,7 @@ done
 #for A in sequin entrez fa2htgs cn3d blast netblast asn2xml
 for A in sequin entrez fa2htgs blast netblast asn2xml
 do
-	cd $A
+	cd $A || continue
 	tar cf ../$A.$platform.tar .
 	rm -f ../$A.$platform.tar.Z
 	compress < ../$A.$platform.tar > ../$A.$platform.tar.Z
@@ -279,4 +270,3 @@ do
 	rm -fr $A
 done
 exit 0
-

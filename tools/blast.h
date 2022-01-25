@@ -32,8 +32,26 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.57 $ 
+/* $Revision: 6.63 $ 
 * $Log: blast.h,v $
+* Revision 6.63  2002/10/22 17:57:48  camacho
+* Changes to B2SPssmMultipleQueries
+*
+* Revision 6.62  2002/10/21 23:13:36  camacho
+* Added B2SPssmOnTheFly functions
+*
+* Revision 6.61  2002/09/18 20:23:20  camacho
+* Added BLASTCalculateSearchSpace
+*
+* Revision 6.60  2002/09/02 21:15:20  camacho
+* Changed comment for psi-blast2sequences
+*
+* Revision 6.59  2002/08/30 18:56:02  dondosha
+* Made BlastMakeTempProteinBioseq and HackSeqLocId public: needed for Cn3D
+*
+* Revision 6.58  2002/08/29 20:44:38  camacho
+* Added description of psi-blast2sequences
+*
 * Revision 6.57  2002/08/09 19:39:20  camacho
 * Added constants for some blast search parameters
 *
@@ -418,6 +436,18 @@ Int2 LIBCALL BLASTOptionValidateEx PROTO((BLAST_OptionsBlkPtr options, CharPtr p
 
 Int2 LIBCALL BLASTOptionSetGapParams PROTO((BLAST_OptionsBlkPtr options, CharPtr matrix, Int4 open, Int4 extended));
 
+/********************* BLASTCalculateSearchSpace **************************
+Purpose: Calculate the effective search space for a gapped search with a
+         minimal set of options. Assumes the query is a protein sequence (ie:
+         no multiple contexts to consider).
+Parameters: options [in]: Blast options structure
+            nseq [in]: Number of sequences in the database
+            dblen [in]: Length of the database
+            qlen [in]: Length of the query sequence
+Returns: Effective search space
+**************************************************************************/
+FloatHi LIBCALL BLASTCalculateSearchSpace PROTO((BLAST_OptionsBlkPtr options, 
+            Int4 nseq, Int8 dblen, Int4 qlen)); 
 
 /* 
 	the setup functions, call before running blast.
@@ -468,8 +498,38 @@ SeqAlignPtr LIBCALL BlastTwoSequencesByLoc PROTO((SeqLocPtr slp1, SeqLocPtr slp2
 
 SeqAlignPtr LIBCALL BlastTwoSequencesByLocEx PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
-/* number of rows in matrix must correspond to full length of master sequence
- * slp1 */
+/* Notes for psi-blast2sequences (compare a PSSM with sequence slp2):  (CC)
+ * =============================
+ * 1) This functionality requires (at least) the residue frequencies
+ * (BLAST_MatrixPtr->posFreqs) to compute the PSSM. If the PSSM is 
+ * provided (BLAST_MatrixPtr->matrix), then this takes precedence and the 
+ * PSSM will not be recomputed. Please note that the PSSM and residue 
+ * frequencies are matrices with dimensions 26 by query_length+1. The last 
+ * row should be set to BLAST_SCORE_MIN (for PSSMs) or 0.0 (for residue 
+ * frequencies). 26 is the alphabet size (also defined as PRO_ALPHABET_SIZE in
+ * profiles.h).
+ *
+ * 2) The slp1 parameter is the master sequence for the PSSM (used to display 
+ * the alignment) and can only be shorter than the PSSM (the PSSM will be
+ * trimmed accordingly).
+ *
+ * 3) If the scalingFactor is set to 0.0 (default in the options structure),
+ * the PSSM will be calculated in the same way as psiblast (blastpgp) does it
+ * (that is, without scaling the PSSM). In order to use composition-based
+ * statistics (default in psiblast), please set the options->tweak_parameters
+ * option to TRUE. This is *not* the default in the options structure.
+ *
+ * 4) Also, if the scalingFactor is not 0.0 in the options parameter, this
+ * value will be used to scale the PSSM only if it is calculated by this
+ * function (if the PSSM is calculated outside this function it is assumed
+ * that the PSSM has been scaled already and that the same scalingFactor 
+ * that was used to create it is passed into this function).  This value is 
+ * also used to multiply various parameters such as gap costs, X dropoff 
+ * values, when performing the matrix rescaling, and to adjust the scores 
+ * and Lambda parameters when performing the traceback stage. 
+ * The matrix rescaling step will take place prior to the traceback stage. 
+ * This functionality resembles what rpsblast/impala do.
+ */
 SeqAlignPtr LIBCALL BlastTwoSequencesByLocWithCallback PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)), BLAST_MatrixPtr matrix));
 
 SeqAlignPtr LIBCALL BlastTwoSequencesEx PROTO((BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
@@ -487,6 +547,30 @@ BlastQuerySequenceSetUp PROTO((BioseqPtr bsp, CharPtr progname,
 BlastSearchBlkPtr LIBCALL
 BlastSequencesOnTheFlyEx PROTO((BlastSearchBlkPtr search, BioseqPtr subject_bsp));
    
+/*** PSIBLAST2Sequences API ***/
+Boolean LIBCALL 
+B2SPssmSetupSearch PROTO((BlastSearchBlkPtr search, SeqLocPtr pssm_slp, 
+BLAST_MatrixPtr matrix));
+
+Boolean LIBCALL 
+B2SPssmCleanUpSearch PROTO((BlastSearchBlkPtr search, BLAST_MatrixPtr matrix));
+
+SeqAlignPtr LIBCALL 
+B2SPssmOnTheFly PROTO((BlastSearchBlkPtr search, BioseqPtr subj_bsp));
+
+SeqAlignPtr LIBCALL 
+B2SPssmOnTheFlyByLoc PROTO((BlastSearchBlkPtr search, SeqLocPtr subj_slp));
+
+/* Compare pssm against all sequences in target_seqs. 
+   Returns an array of length ntargets with the corresponding alignments.
+   Caller is responsible for deallocating the return value */
+SeqAlignPtr * LIBCALL 
+B2SPssmMultipleQueries PROTO((SeqLocPtr pssm_slp, BLAST_MatrixPtr matrix, 
+SeqLocPtr *target_seqs, Int4 ntargets, BLAST_OptionsBlkPtr options));
+
+/*** END PSIBLAST2Sequences API ***/
+
+
 SeqAlignPtr LIBCALL SumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length));
 
 Boolean LIBCALL SumBlastGetGappedAlignmentEx PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length, Boolean do_traceback, SeqAlignPtr PNTR seqalignP, BlastHitRangePtr bhrp, Int2 query_number));
@@ -594,6 +678,12 @@ Boolean
 CheckStartForGappedAlignment PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1Ptr query, Uint1Ptr subject, Int4Ptr PNTR matrix));
 
 Int4 GetStartForGappedAlignment PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1Ptr query, Uint1Ptr subject, Int4Ptr PNTR matrix));
+
+BioseqPtr BlastMakeTempProteinBioseq PROTO((Uint1Ptr sequence, Int4 length, 
+                                            Uint1 alphabet));
+
+void HackSeqLocId PROTO((SeqLocPtr slp, SeqIdPtr id));
+
 
 /* ----------------------------------------------------------- */
 

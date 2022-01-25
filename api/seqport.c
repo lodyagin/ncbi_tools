@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.76 $
+* $Revision: 6.79 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.79  2002/11/11 18:02:40  kans
+* added SeqPortStream to efficiently stream through a sequence
+*
+* Revision 6.78  2002/09/10 20:34:39  kans
+* one more place to allow trailing B or Z
+*
+* Revision 6.77  2002/09/10 20:19:02  kans
+* remove trailing X does not remove B or Z
+*
 * Revision 6.76  2002/07/08 15:08:59  kans
 * made ReadCodingRegionBases extern
 *
@@ -387,6 +396,7 @@ static char *this_file = __FILE__;
 #include <sqnutils.h>
 #include <explore.h>   /* for BioseqFindFromSeqLoc function */
 #include <subutil.h>
+#include <tofasta.h>   /* for FastaSeqLineEx function */
 
 
 
@@ -2097,6 +2107,177 @@ NLM_EXTERN Int2 LIBCALL SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
         }
     }
     return ctr;
+}
+
+/*******************************************************************************
+*	
+*	SeqPortStream (bsp, expandGaps, userdata, proc)
+*		Efficient function to stream through sequence
+*
+********************************************************************************/
+
+static void SeqPortStreamRaw (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  Boolean expandGaps,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
+
+{
+  Char        buf [71];
+  Uint1       code;
+  Boolean     do_virtual;
+  Boolean     is_na;
+  SeqPortPtr  spp;
+
+  if (bsp == NULL || proc == NULL) return;
+  if (bsp->repr == Seq_repr_virtual && (! expandGaps)) return;
+
+  is_na = ISA_na (bsp->mol);
+  if (is_na) {
+    code = Seq_code_iupacna;
+  } else {
+    code = Seq_code_ncbieaa;
+  }
+
+  spp = SeqPortNew (bsp, start, stop, strand, code);
+  if (spp == NULL) return;
+
+  do_virtual = FALSE;
+  if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+    SeqPortSet_do_virtual (spp, TRUE);
+    do_virtual = TRUE;
+  }
+
+  SeqPortSeek (spp, 0, SEEK_SET);
+
+  MemSet ((Pointer) &buf, 0, sizeof (buf));
+
+  while (FastaSeqLineEx (spp, buf, sizeof (buf) - 1, is_na, do_virtual)) {
+    proc (buf, userdata);
+  }
+
+  SeqPortFree (spp);
+}
+
+static void SeqPortStreamLit (
+  SeqLitPtr slitp,
+  Boolean is_na,
+  Boolean expandGaps,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
+
+{
+  BioseqPtr  bsp;
+
+  if (slitp == NULL || slitp->length < 1 || proc == NULL) return;
+  if (slitp->seq_data && (! expandGaps)) return;
+
+  bsp = BioseqNew ();
+  if (bsp == NULL) return;
+
+  if (slitp->seq_data != NULL) {
+    bsp->repr = Seq_repr_raw;
+  } else {
+    bsp->repr = Seq_repr_virtual;
+  }
+  if (is_na) {
+    bsp->mol = Seq_mol_dna;
+  } else {
+    bsp->mol = Seq_mol_aa;
+  }
+  bsp->seq_data_type = slitp->seq_data_type;
+  bsp->seq_data = slitp->seq_data;
+  bsp->length = slitp->length;
+  bsp->id = SeqIdParse ("lcl|seqportstream");
+
+  SeqPortStreamRaw (bsp, 0, -1, 0, expandGaps, userdata, proc);
+
+  bsp->seq_data = NULL;
+
+  BioseqFree (bsp);
+}
+
+static void SeqPortStreamLoc (
+  SeqLocPtr slp,
+  Boolean expandGaps,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
+
+{
+  BioseqPtr  bsp;
+  Int4       from;
+  Uint1      strand;
+  Int4       to;
+
+  if (slp == NULL || proc == NULL) return;
+
+  bsp = BioseqLockById (SeqLocId (slp));
+  if (bsp == NULL) return;
+
+  from = SeqLocStart (slp);
+  to = SeqLocStop (slp);
+  strand = SeqLocStrand (slp);
+
+  SeqPortStreamRaw (bsp, from, to, strand, expandGaps, userdata, proc);
+
+  BioseqUnlock (bsp);
+}
+
+NLM_EXTERN void SeqPortStream (
+  BioseqPtr bsp,
+  Boolean expandGaps,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
+
+{
+  DeltaSeqPtr  dsp;
+  SeqLocPtr    slp;
+
+  if (bsp == NULL || proc == NULL) return;
+
+  switch (bsp->repr) {
+
+    case Seq_repr_virtual :
+    case Seq_repr_raw :
+    case Seq_repr_const :
+      SeqPortStreamRaw (bsp, 0, -1, 0, expandGaps, userdata, proc);
+      break;
+
+    case Seq_repr_seg :
+      if (bsp->seq_ext_type == 1) {
+        for (slp = (SeqLocPtr) bsp->seq_ext; slp != NULL; slp = slp->next) {
+          SeqPortStreamLoc (slp, expandGaps, userdata, proc);
+        }
+      }
+      break;
+
+    case Seq_repr_delta :
+      if (bsp->seq_ext_type == 4) {
+        for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
+          switch (dsp->choice) {
+            case 1 :
+              SeqPortStreamLoc ((SeqLocPtr) dsp->data.ptrvalue, expandGaps, userdata, proc);
+              break;
+            case 2 :
+              SeqPortStreamLit ((SeqLitPtr) dsp->data.ptrvalue, ISA_na (bsp->mol), expandGaps, userdata, proc);
+              break;
+            default :
+              break;
+          }
+        }
+      }
+      break;
+
+    default :
+      break;
+  }
 }
 
 /*******************************************************************************
@@ -4814,7 +4995,7 @@ static ByteStorePtr TransTableTranslateCommon (
   if ((! got_stop) && incompleteLastCodon) {
     BSSeek (bs, -1, SEEK_END);  /* remove last X if incomplete last codon */
     aa = (Char) BSGetByte (bs);
-    if ((aa == 'X' || aa == 'B' || aa == 'Z') && BSLen (bs) > 0) {
+    if ((aa == 'X' /* || aa == 'B' || aa == 'Z' */) && BSLen (bs) > 0) {
       BSSeek (bs, -1, SEEK_END);
       BSDelete (bs, 1);
       BSSeek (bs, -1, SEEK_END);
@@ -4824,7 +5005,7 @@ static ByteStorePtr TransTableTranslateCommon (
   if ((! got_stop) && remove_trailingX) { /* only remove trailing X on partial CDS */
     BSSeek (bs, -1, SEEK_END);  /* back up to last residue */
     aa = (Char) BSGetByte (bs);
-    while ((aa == 'X' || aa == 'B' || aa == 'Z') && BSLen (bs) > 0) {
+    while ((aa == 'X' /* || aa == 'B' || aa == 'Z' */) && BSLen (bs) > 0) {
       BSSeek (bs, -1, SEEK_END);
       BSDelete (bs, 1);
       BSSeek (bs, -1, SEEK_END);

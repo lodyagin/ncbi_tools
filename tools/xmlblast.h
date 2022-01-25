@@ -1,4 +1,4 @@
-/* $Id: xmlblast.h,v 6.10 2002/07/17 22:28:13 dondosha Exp $ */
+/* $Id: xmlblast.h,v 6.11 2002/11/14 15:37:18 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,15 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.h,v $
+* Revision 6.11  2002/11/14 15:37:18  dondosha
+* Added functions to extract all hit information from seqalign that can be extracted without loading sequences
+*
 * Revision 6.10  2002/07/17 22:28:13  dondosha
 * Added support for megablast XML output
 *
@@ -137,6 +140,8 @@ PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     
 void PSIXmlClose(PSIXmlPtr psixp);
 void MBXmlClose(PSIXmlPtr mbxp, ValNodePtr other_returns, Boolean ungapped);
+
+HitPtr SeqAlignToHits PROTO((SeqAlignPtr seqalign, Boolean ungapped));
 
 #ifdef __cplusplus
 /* { */ }

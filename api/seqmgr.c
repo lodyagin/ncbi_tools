@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.193 $
+* $Revision: 6.195 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.195  2002/11/04 21:11:58  kans
+* SIMPLE_OVERLAP check now is more inclusive
+*
+* Revision 6.194  2002/10/23 12:57:53  kans
+* do not report cds or rna already set if gps
+*
 * Revision 6.193  2002/06/11 14:41:20  kans
 * added support for locus_tag
 *
@@ -5187,6 +5193,16 @@ static SeqIdPtr SeqIdWithinBioseq (BioseqPtr bsp, SeqLocPtr slp)
   return NULL;
 }
 
+static void FindGPS (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  BoolPtr  is_gpsP;
+
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_gen_prod_set) return;
+  is_gpsP = (BoolPtr) userdata;
+  *is_gpsP = TRUE;
+}
+
 static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherObjectPtr gop)
 
 {
@@ -5242,14 +5258,20 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherObjectPt
     {
       GatherContext     gc;
       GatherContextPtr  gcp;
+      Boolean           is_gps = FALSE;
+      SeqEntryPtr       sep;
       MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
       gcp = &gc;
       gc.entityID = gop->entityID;
       gc.itemID = gop->itemID;
       gc.thistype = gop->itemtype;
-      ErrPostItem (SEV_WARNING, 0, 0,
-                   "SeqMgr indexing cds or rna progenitor already set - Feature: %s - Location [%s] - Product [%s]",
-                   buf, loclbl, prodlbl);
+      sep = GetTopSeqEntryForEntityID (gop->entityID);
+      VisitSetsInSep (sep, (Pointer) &is_gps, FindGPS);
+      if (! is_gps) {
+        ErrPostItem (SEV_WARNING, 0, 0,
+                     "SeqMgr indexing cds or rna progenitor already set - Feature: %s - Location [%s] - Product [%s]",
+                     buf, loclbl, prodlbl);
+      }
     }
     MemFree (ctmp);
     MemFree (ptmp);
@@ -7533,13 +7555,20 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
 
   if (overlapType == SIMPLE_OVERLAP) {
 
-    /* location must merely be overlapped by gene, etc. */
+    /* location must merely be overlapped by gene, etc., or either one inside the other */
 
-    if ((feat->left <= left && feat->right > left) ||
-        (feat->left < right && feat->right >= right)) {
-      diff = (left - feat->left) + (feat->right - right);
+    if (feat->right >= left && feat->left <= right) {
+      diff = ABS (left - feat->left) + ABS (feat->right - right);
       return diff;
     }
+
+    /*
+    if ((feat->left <= left && feat->right > left) ||
+        (feat->left < right && feat->right >= right)) {
+      diff = ABS (left - feat->left) + ABS (feat->right - right);
+      return diff;
+    }
+    */
 
   } else if (overlapType == CONTAINED_WITHIN) {
 

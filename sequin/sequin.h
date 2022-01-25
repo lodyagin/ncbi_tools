@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.79 $
+* $Revision: 6.80 $
 *
 * File Description: 
 *
@@ -156,6 +156,7 @@ extern Boolean  docSumUp;
 extern Boolean  bioseqViewUp;
 #endif
 
+extern void UpdateFastaSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
 extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
 extern SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,

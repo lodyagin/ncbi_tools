@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.50 $
+* $Revision: 6.51 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.51  2002/11/06 21:32:50  ucko
+* Accept "--help" as a synonym for the less intuitive "-"
+*
 * Revision 6.50  2002/07/09 15:20:19  lavr
 * Call CONNECT_Init(0) in initialization sequence
 *
@@ -7557,7 +7560,8 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
 
   /* Print the usage info */
 #ifdef WIN_MOTIF
-  if (xx_argc == 2  &&  xx_argv[1][1] == '\0')
+  if (xx_argc == 2
+      &&  (xx_argv[1][1] == '\0'  ||  !strcmp(xx_argv[1], "--help")))
     {
       printf("\n%s   arguments:\n\n", progname);
       curarg = ap;

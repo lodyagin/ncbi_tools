@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.75 2002/08/17 11:55:07 bauer Exp $
+/* $Id: cddutil.c,v 1.78 2002/10/22 14:54:27 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,24 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.75 $
+* $Revision: 1.78 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.78  2002/10/22 14:54:27  bauer
+* fixed date format in XML dumper
+*
+* Revision 1.77  2002/10/10 20:38:19  bauer
+* changes to accomodate new spec items
+* - old-root node
+* - curation-status
+*
+* Revision 1.76  2002/10/02 17:32:21  bauer
+* avoid merging blocks when reindexing alignments
+*
 * Revision 1.75  2002/08/17 11:55:07  bauer
 * backed out changes
 *
@@ -278,7 +289,7 @@
 #include <objmime.h>
 #include <strimprt.h>
 #include <cdd.h>
-/* #include <bjcdd.h> */
+/* #include <objcdd.h> */
 #include <readdb.h>
 #include <fdlobj.h>
 #include <cddutil.h>
@@ -410,6 +421,12 @@ void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
     case CddDescr_status:
       vnp->data.intvalue = (Int4) iIval;
       break;
+    case CddDescr_curation_status:
+      vnp->data.intvalue = (Int4) iIval;
+      break;
+    case CddDescr_old_root:
+      vnp->data.ptrvalue = (ValNodePtr) pThis;
+      break;
     case CddDescr_scrapbook:
       vnp = ValNodeExtractList(&pcdd->description, CddDescr_scrapbook);
       vnp2 = ValNodeCopyStr(NULL,0,(CharPtr)pThis);
@@ -433,7 +450,7 @@ void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
 /* etc. the content of the description is compared to the input              */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-void LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval) 
+Boolean LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval) 
 {
   ValNodePtr   vnp, vnpold = NULL, vnpthis = NULL, vnpbefore = NULL, pub;
   
@@ -453,6 +470,8 @@ void LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
 	  }
           break;
 	case CddDescr_status:
+	case CddDescr_curation_status:
+	case CddDescr_old_root:
 	case CddDescr_repeats:
           if (!vnpthis) {
 	    vnpthis = vnp;
@@ -481,7 +500,8 @@ void LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
     } else {
       pcdd->description = vnpthis->next;
     }
-  }
+    return TRUE;
+  } else return FALSE;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1118,7 +1138,7 @@ CharPtr LIBCALL CddGetAccession(CddPtr pcdd)
 /* report Errors in processing and exit immediately                          */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-void LIBCALL CddHtmlError(CharPtr cErrTxt) 
+void LIBCALL CddSimpleHtmlError(CharPtr cErrTxt) 
 {
   printf("Content-type: text/html\n\n");
   printf("<h2>Error:</h2>\n");
@@ -1630,6 +1650,7 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   standardProb = MemNew(alphabetSize * sizeof(Nlm_FloatHi));
   for(a = 0; a < alphabetSize; a++) standardProb[a] = stdrfp->prob[a];
   stdrfp = BlastResFreqDestruct(stdrfp);
+  sbp = (BLAST_ScoreBlkPtr) BLAST_ScoreBlkDestruct(sbp);
   ntypes = (Int4 *) MemNew(qlength*sizeof(Int4));
   for (i=0;i<qlength;i++) ntypes[i] = 0;
   typefreq = (Nlm_FloatHi**) MemNew(qlength * sizeof(Nlm_FloatHi *));
@@ -1702,7 +1723,6 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   MemFree(typefreq);
   MemFree(ntypes);
   MemFree(standardProb);
-  sbp = (BLAST_ScoreBlkPtr) BLAST_ScoreBlkDestruct(sbp);
   return(Informativeness);
 }
 
@@ -2650,6 +2670,7 @@ CddExpAlignPtr CddExpAlignNew()
   pCDea->length = 0;
   pCDea->ids = NULL;
   pCDea->adata = NULL;
+  pCDea->starts = NULL;
   pCDea->bIdAlloc = FALSE;
   return(pCDea);
 }
@@ -2661,10 +2682,11 @@ CddExpAlignPtr CddExpAlignFree(CddExpAlignPtr pCDea)
   if (!pCDea) return NULL;
   if (NULL != pCDea->adata) free(pCDea->adata);
   pCDea->ids = SeqIdSetFree(pCDea->ids);
+  if (NULL != pCDea->starts) free(pCDea->starts);
   return MemFree(pCDea);
 }
 
-void           CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength)
+void CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength)
 {
   Int4    i;
   
@@ -2673,6 +2695,9 @@ void           CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength)
   if (NULL != pCDea->adata) free(pCDea->adata);
   pCDea->adata = MemNew(sizeof(Int4)*pCDea->length);  
   for (i=0;i<pCDea->length;i++) pCDea->adata[i] = -1;
+  if (NULL != pCDea->starts) free(pCDea->starts);
+  pCDea->starts = MemNew(sizeof(Int4)*pCDea->length);  
+  for (i=0;i<pCDea->length;i++) pCDea->starts[i] = 0;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2700,6 +2725,7 @@ CddExpAlignPtr SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep)
       }
       pCDea->adata[ddp->starts[0]+i]=ddp->starts[1]+i;
     }
+    pCDea->starts[ddp->starts[0]] = 1;
     ddp = ddp->next;
   }
   return(pCDea);
@@ -2724,6 +2750,9 @@ CddExpAlignPtr InvertCddExpAlign(CddExpAlignPtr pCDea, SeqEntryPtr sep)
   for (i=0;i<pCDea->length;i++) {
     if (pCDea->adata[i] != -1) {
       pCDeaNew->adata[pCDea->adata[i]] = i;
+    }
+    if (pCDea->starts[i] > 0) {
+      pCDeaNew->starts[pCDea->adata[i]] = 1;
     }
   }
   return(pCDeaNew);
@@ -2758,7 +2787,8 @@ SeqAlignPtr CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter)
       ddp->starts[1] = pCDea->adata[i];
       ddp->len = 1;
       while (i<(pCDea->length-1) && pCDea->adata[i+1]==(pCDea->adata[i]+1) &&
-             (NULL == iBreakAfter || iBreakAfter[i] == 0)) {
+             (NULL == iBreakAfter || iBreakAfter[i] == 0) &&
+	     pCDea->starts[i+1] == 0) {
 	ddp->len++;
 	i++;
       }
@@ -2804,6 +2834,7 @@ CddExpAlignPtr CddReindexExpAlign(CddExpAlignPtr pCDea1, Int4 newlength,
 	        iInner, iOuter);
         CddSevError("Error while reindexing explicit alignments!");
       } else  pCDea->adata[iP1] = iP2;
+      if (pCDea1->starts[i] > 0) pCDea->starts[iP1] = 1;
     }
   }
   if (sip1 && sip2) {
@@ -3742,6 +3773,14 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
       pCDea->adata[pCEACell[0][k].seqpos]=pCEACol[k].conpos;
     }
   }
+/*---------------------------------------------------------------------------*/
+/* record block structure present in the input alignment to prevent merges   */
+/*---------------------------------------------------------------------------*/
+  ddp = salp->segs;
+  while (ddp) {
+    pCDea->starts[ddp->starts[0]] = 1;
+    ddp = ddp->next;
+  }
   *salpCons = CddExpAlignToSeqAlign(pCDea,NULL);
   pCDea = CddExpAlignFree(pCDea);
 
@@ -3791,13 +3830,15 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
 }
 
 
-static void CddCposCompPart1(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
-                             compactSearchItems* compactSearch, ValNodePtr* LetterHead,
-                             posSearchItems* posSearch) {
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* first part of CddCposComp()                                               */
 /* basically returns compactSearch, LetterHead, and posSearch                */
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CddCposCompPart1(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
+                             compactSearchItems* compactSearch, ValNodePtr* LetterHead,
+                             posSearchItems* posSearch) {
     Int4                numalign, numseq;    /*number of alignments and seqs */
     BLAST_ScoreBlkPtr   sbp;
     SeqLocPtr           private_slp = NULL;
@@ -4997,10 +5038,12 @@ void LIBCALL CddShrinkBioseq(BioseqPtr bsp)
   bsp->annot = sap2;
 }
 
-/********************************************************************/
-/* Make a list of m-s seq-aligns proper, aligning only columns	    */
-/* found in all pairs.						    */
-/********************************************************************/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Make a list of m-s seq-aligns proper, aligning only columns	             */
+/* found in all pairs.						             */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 Int2 LIBCALL CddTrimSeqAligns(CddPtr pcdd)
 {
     CddExpAlignPtr	ceap,tceap;
@@ -5009,15 +5052,24 @@ Int2 LIBCALL CddTrimSeqAligns(CddPtr pcdd)
     ValNodePtr		vnp,vhead=NULL;
     Int2		i;
     Int4Ptr             iBreakAfter;
+    DenseDiagPtr        ddp;
 
     if(pcdd == NULL) return 1;
     sep = ((BioseqSetPtr)pcdd->sequences->data.ptrvalue)->seq_set;
     head = pcdd->seqannot->data;
-    if(head == NULL || head->next == NULL) return 1;
+    if(head == NULL /*|| head->next == NULL */) return 1;
 
     tceap = (CddExpAlignPtr)SeqAlignToCddExpAlign(head, sep);
     iBreakAfter = MemNew(tceap->length * sizeof(Int4));
+/*---------------------------------------------------------------------------*/
+/* record existing block structure to make sure adjacent blocks aren't merged*/
+/*---------------------------------------------------------------------------*/
     for (i=0;i<tceap->length;i++) iBreakAfter[i] = 0;
+    ddp = head->segs;
+    while (ddp) {
+      iBreakAfter[ddp->starts[0]+ddp->len-1] = 1;
+      ddp = ddp->next;
+    }    
     for(salp=head; salp; salp=salp->next) {
       ceap = (CddExpAlignPtr)SeqAlignToCddExpAlign(salp, sep);
       ValNodeAddPointer(&vhead, 0, ceap);
@@ -5342,9 +5394,9 @@ void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP)
         cPubDate = MemNew(11 * sizeof(Char));
         pDate = (DatePtr) pdescr->data.ptrvalue;
 	if (pDate->data[2] > 0 && pDate->data[3] > 0)
-	  sprintf(cPubDate,"%d/%d/%d",pDate->data[2],pDate->data[3],pDate->data[1]+1900);
+	  sprintf(cPubDate,"%d/%d/%d",pDate->data[1]+1900,pDate->data[2],pDate->data[3]);
         if (pDate->data[2] > 0 && pDate->data[3] == 0)
-          sprintf(cPubDate,"%d/%d",pDate->data[2],pDate->data[1]+1900);
+          sprintf(cPubDate,"%d/%d",pDate->data[1]+1900,pDate->data[2]);
         if (pDate->data[2] == 0 && pDate->data[3] == 0)
           sprintf(cPubDate,"%d",pDate->data[1]+1900);
         break;
@@ -5364,17 +5416,17 @@ void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP)
     cPubDate = MemNew(11 * sizeof(Char));
     pDate = (DatePtr) DateCurr();
     if (pDate->data[2] > 0 && pDate->data[3] > 0)
-      sprintf(cPubDate,"%d/%d/%d",pDate->data[2],pDate->data[3],pDate->data[1]+1900);
+      sprintf(cPubDate,"%d/%d/%d",pDate->data[1]+1900,pDate->data[2],pDate->data[3]);
     if (pDate->data[2] > 0 && pDate->data[3] == 0)
-      sprintf(cPubDate,"%d/%d",pDate->data[2],pDate->data[1]+1900);
+      sprintf(cPubDate,"%d/%d",pDate->data[1]+1900,pDate->data[2]);
     if (pDate->data[2] == 0 && pDate->data[3] == 0)
       sprintf(cPubDate,"%d",pDate->data[1]+1900);
   }
   pDate = (DatePtr) DateCurr();
   if (pDate->data[2] > 0 && pDate->data[3] > 0)
-    sprintf(cEntrezDate,"%d/%d/%d",pDate->data[2],pDate->data[3],pDate->data[1]+1900);
+    sprintf(cEntrezDate,"%d/%d/%d",pDate->data[1]+1900,pDate->data[2],pDate->data[3]);
   if (pDate->data[2] > 0 && pDate->data[3] == 0)
-    sprintf(cEntrezDate,"%d/%d",pDate->data[2],pDate->data[1]+1900);
+    sprintf(cEntrezDate,"%d/%d",pDate->data[1]+1900,pDate->data[2]);
   if (pDate->data[2] == 0 && pDate->data[3] == 0)
     sprintf(cEntrezDate,"%d",pDate->data[1]+1900);
 

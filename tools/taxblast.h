@@ -1,4 +1,4 @@
-/* $Id: taxblast.h,v 6.2 2000/12/08 22:30:57 shavirin Exp $
+/* $Id: taxblast.h,v 6.3 2002/10/07 19:52:07 camacho Exp $
  * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *         Header file for Tax-Blast program
 *
 * $Log: taxblast.h,v $
+* Revision 6.3  2002/10/07 19:52:07  camacho
+* Added RDTaxLookupReset
+*
 * Revision 6.2  2000/12/08 22:30:57  shavirin
 * Added set of functions for creation of Taxonomy lookup database using
 * formatdb API.
@@ -73,6 +76,7 @@ extern "C" {
 
     Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
     RDBTaxLookupPtr RDTaxLookupInit(void);
+    RDBTaxLookupPtr RDTaxLookupReset(RDBTaxLookupPtr tax_lookup);
     void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup);
 
 #ifdef __cplusplus

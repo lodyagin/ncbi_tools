@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.40 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -62,6 +62,14 @@
 extern "C" {
 #endif
 
+typedef struct seqPanelLines {
+  Int4    bioSeqLine;   /* this line refers to bioseq line           */
+  Int2    lineType;     /* what to draw on this line (see ELineType) */
+  Int4    idx;          /* feature index                             */
+  Boolean protProduct;
+} SeqPanLine, PNTR SeqPanLinePtr;
+
+
 /* bioseqviewdata pointer is passed to callbacks to display views */
 
 typedef struct bioseqviewdata {
@@ -84,6 +92,16 @@ typedef struct bioseqviewdata {
   GrouP           modeControlGrp;
   GrouP           newGphControlGrp;
   GrouP           pnlParentGrp;
+
+  PaneL           seqView;
+  GrouP           seqViewParentGrp;
+  PopuP           newFeatControl;
+  PopuP           newNumControl;
+  PopuP           newGridControl;
+
+  Int4            LineHeight, LineSpace, CharHeight, CharWidth, BlocksAtLine, CharsAtLine, TotalLines;
+  Boolean         DrawGrid;
+  SeqPanLinePtr   PNTR SeqPanLines;
 
   GrouP           udvParentGrp;
   /*
@@ -197,9 +215,11 @@ extern BioseqPageData fstaPageData;
 extern BioseqPageData qualPageData;
 extern BioseqPageData asnPageData;
 extern BioseqPageData xmlPageData;
+extern BioseqPageData gbseqPageData;
 extern BioseqPageData dskPageData;
 
 extern BioseqPageData asn2gphGphPageData;
+extern BioseqPageData seqpnlPageData;
 
 /*
 *  The SeqViewProcsPtr may be registered with a call to SetAppProperty
@@ -259,6 +279,42 @@ typedef struct seqviewprocs {
 
   Boolean          lockFarComponents;
 } SeqViewProcs, PNTR SeqViewProcsPtr;
+
+typedef struct bioseqviewform {
+  FORM_MESSAGE_BLOCK
+
+  BioseqPagePtr   bioseqNucPageList;
+  BioseqPagePtr   bioseqProtPageList;
+  BioseqPagePtr   currentBioseqPage;
+  ButtoN          pubseq;
+
+  Int2            currentNucPage;
+  Int2            currentProtPage;
+
+  Handle          nucViewControl;
+  Handle          protViewControl;
+  Handle          targetControl;
+  EnumFieldAssoc  PNTR targetAlist;
+  Boolean         usePopupForTarget;
+  Int4            numTargets;
+  Int4            targetScratchSpace;
+  GrouP           controls;
+  GrpActnProc     updateControls;
+  GrouP           retrieveAlignments;
+  SeqViewUpdateFetchCounts  updateCounts;
+  Boolean         hasaligns;
+
+  EnumFieldAssoc  PNTR workingAlist;
+  Int4            workingCount;
+  Int4            workingTargets;
+
+  BioseqViewData  bvd;
+
+  Boolean         cleanupObjectPtr;
+  WndActnProc     activateForm;
+
+  ForM            toolForm;
+} BioseqViewForm, PNTR BioseqViewFormPtr;
 
 #define REGISTER_NEW_SEQENTRY_VIEW ObjMgrProcLoad(OMPROC_VIEW,"View Bioseq Report","Bioseq Report",OBJ_BIOSEQ,0,OBJ_BIOSEQ,0,NULL,NewSeqEntryViewGenFunc,PROC_PRIORITY_DEFAULT)
 #define REGISTER_SMART_SEQENTRY_VIEW ObjMgrProcLoad(OMPROC_VIEW,"View Smart Bioseq Report","Bioseq Report",OBJ_BIOSEQ,0,OBJ_BIOSEQ,0,NULL,SmartSeqEntryViewGenFunc,PROC_PRIORITY_DEFAULT)

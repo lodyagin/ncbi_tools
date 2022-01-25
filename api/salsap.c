@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -1154,7 +1154,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignTrunc (SeqAlignPtr salp, Int4 from, Int4 
               numseg,
               offset,
               j;
-  Boolean     bool;
+  Boolean     ble;
   
   if (salp == NULL)
      return salp;
@@ -1164,8 +1164,8 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignTrunc (SeqAlignPtr salp, Int4 from, Int4 
      dsp = (DenseSegPtr) salp->segs;
      if (to > 0 && to < tot_length) 
      {
-        bool = get_pos_from_salp (salp, to, &offset, &startp, &lenp, &numseg);
-        if(bool) 
+        ble = get_pos_from_salp (salp, to, &offset, &startp, &lenp, &numseg);
+        if(ble) 
         {
            if (numseg > 0) 
            {
@@ -1179,8 +1179,8 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignTrunc (SeqAlignPtr salp, Int4 from, Int4 
      }
      if (from > 0 && from < tot_length) 
      {
-        bool = get_pos_from_salp (salp, from, &offset, &startp, &lenp, &numseg);
-        if(bool) 
+        ble = get_pos_from_salp (salp, from, &offset, &startp, &lenp, &numseg);
+        if(ble) 
         {
            if (numseg > 1) 
            {

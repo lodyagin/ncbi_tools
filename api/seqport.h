@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.33  2002/11/11 18:02:40  kans
+* added SeqPortStream to efficiently stream through a sequence
+*
 * Revision 6.32  2002/07/08 15:08:59  kans
 * made ReadCodingRegionBases extern
 *
@@ -319,6 +322,18 @@ NLM_EXTERN Int2 LIBCALL SeqPortRead PROTO((SeqPortPtr spp, BytePtr buf, Int2 len
 NLM_EXTERN Uint1 GetGapCode PROTO((Uint1 seqcode));
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpFields PROTO((SeqPortPtr spp, Int4 start, Int4 stop, Uint1 strand, Uint1 newcode));
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpAlphabet PROTO((SeqPortPtr spp, Uint1 curr_code, Uint1 newcode));
+
+typedef void (LIBCALLBACK *SeqPortStreamProc) (
+  CharPtr sequence,
+  Pointer userdata
+);
+
+NLM_EXTERN void SeqPortStream (
+  BioseqPtr bsp,
+  Boolean expandGaps,
+  Pointer userdata,
+  SeqPortStreamProc proc
+);
 
 /*
 the following functions are for quick alphabet expansion, and require buffers

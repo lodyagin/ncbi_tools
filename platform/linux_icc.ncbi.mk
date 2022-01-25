@@ -1,5 +1,5 @@
 #
-# $Id: linux_icc.ncbi.mk,v 1.1 2002/08/26 19:47:09 ivanov Exp $
+# $Id: linux_icc.ncbi.mk,v 1.2 2002/10/29 01:20:13 lavr Exp $
 #
 # ICC 6.0 with optimization options for Pentium 4 processor
 
@@ -49,5 +49,5 @@ NCBI_OGLLIBS = -L/usr/X11R6/lib -lGL -lGLU
 #LIBPNG_DIR = /home/paul/Programs/libpng
 #ZLIB_DIR = /home/paul/Programs/zlib
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o

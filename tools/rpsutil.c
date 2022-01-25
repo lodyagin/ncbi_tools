@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.48 2002/08/26 16:55:52 madden Exp $
+/* $Id: rpsutil.c,v 6.56 2002/10/30 16:35:38 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,38 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.48 $
+* $Revision: 6.56 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.56  2002/10/30 16:35:38  camacho
+* If rpsinfo->query_slp is uninitialized, assume whole query is searched
+*
+* Revision 6.55  2002/10/17 20:36:00  camacho
+* Disallow -L option for tblastn
+*
+* Revision 6.54  2002/10/10 14:49:43  camacho
+*
+* 1. Removed irrelevant options: -E, -G, -S, -H
+* 2. Added -L option to provide range restriction on query sequence
+*
+* Revision 6.53  2002/09/18 20:23:20  camacho
+* Added BLASTCalculateSearchSpace
+*
+* Revision 6.52  2002/09/17 22:18:34  bauer
+* added CDD database class in RPSBgetCddHits
+*
+* Revision 6.51  2002/09/13 19:11:43  camacho
+* Added rps_qlen field
+*
+* Revision 6.50  2002/09/05 15:33:34  camacho
+* Fix to use the effective database length
+*
+* Revision 6.49  2002/08/29 13:56:55  camacho
+* Restore K parameter after impala statistical correction
+*
 * Revision 6.48  2002/08/26 16:55:52  madden
 * Fix for scaling with translated searches
 *
@@ -402,6 +428,12 @@ RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr bla
 		blast_options->matrix = StringSave(matrix_name);
 	}
     }
+
+    rpsinfo->start = blast_options->required_start;
+    rpsinfo->stop  = blast_options->required_end;
+    /* reset kludge */
+    blast_options->required_start = 0;
+    blast_options->required_end = 0; 
     
     return rpsinfo;
 }
@@ -575,36 +607,26 @@ void RPSUpdateDbSize(BLAST_OptionsBlkPtr options, RPSInfoPtr rpsinfo, Int4 query
 {
     Int4 length_adjustment, effective_query_length;
     Int8 dblen, dblen_eff; 
-    BLAST_KarlinBlkPtr kbp;
+    FloatHi searchsp;
 
     if (options == NULL)
-	return;
+        return;
 
     dblen = rpsinfo->offsets[rpsinfo->matrixCount] - (rpsinfo->matrixCount); 
+    if (options->db_length != 0) 
+        dblen = options->db_length;
     options->dbseq_num = rpsinfo->matrixCount;
 
-    kbp = BlastKarlinBlkCreate();
-    BlastKarlinBlkGappedCalcEx(kbp, options->gap_open, options->gap_extend, 
-	options->decline_align, options->matrix, NULL);
+    searchsp = BLASTCalculateSearchSpace(options, options->dbseq_num, dblen,
+            query_length);
 
-    BlastCalculateEffectiveLengths(options, rpsinfo->matrixCount, dblen, query_length, kbp, 
-	&effective_query_length, &length_adjustment);
+    if(options->db_length == 0)
+        options->db_length = dblen;
 
-    kbp = BlastKarlinBlkDestruct(kbp);
+    /* Save the search space, adjusting for tblastn if necessary */
+    if (options->searchsp_eff == 0)
+        options->searchsp_eff = rpsinfo->query_is_prot ? searchsp : searchsp*6;
 
-    if(options->db_length == 0) {
-	options->db_length = dblen;
-    }
-
-    dblen_eff = MAX(options->dbseq_num, dblen - options->dbseq_num*length_adjustment);
-
-    if(options->searchsp_eff == 0) {
-        if(rpsinfo->query_is_prot)
-            options->searchsp_eff = effective_query_length * dblen_eff;
-        else
-            options->searchsp_eff = query_length * 6 * dblen_eff;
-    }
-    
     return;
 }
 
@@ -751,8 +773,11 @@ Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search,
     
     if(search->allocated & BLAST_SEARCH_ALLOC_QUERY_SLP)
         search->query_slp = SeqLocFree(search->query_slp);
-    else 
+    else {
+        if (search->query_slp != NULL)
+            search->query_slp = SeqLocFree(search->query_slp);
         search->allocated += BLAST_SEARCH_ALLOC_QUERY_SLP;
+    }
 
     ValNodeAddPointer(&search->query_slp, SEQLOC_WHOLE, 
                       SeqIdDup(SeqIdFindBest(rpseq->seqid, SEQID_GI)));
@@ -1214,6 +1239,7 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
     }
 
     /* ---------------------- */
+
     for(index = 0; index < result_struct_new->hitlist_max; index++) {
         
         new_result = RPSExtractNewResult(result_struct->results[0]);
@@ -1293,7 +1319,12 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 		for (index1=0; index1<(1+rpseq->seqlen); index1++)
 			MemFree(rpseq->copyMatrix[index1]);
 		rpseq->copyMatrix = MemFree(rpseq->copyMatrix);
-    		search->sbp->posMatrix = posMatrix;
+        search->sbp->posMatrix = posMatrix;
+        if (rpsinfo->karlinK) {
+            /* Restore K */
+            search->sbp->kbp_gap[0]->K /= PRO_K_MULTIPLIER;
+            search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
+        }
 	}
         
         if(seqalign != NULL && (e_value = getEvalueFromSeqAlign(seqalign)) < 
@@ -1391,7 +1422,7 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
     Uint1Ptr subject_seq, subject_seq_start;
     Uint1 residue;
     Int4 subject_length;
-    SeqLocPtr slp;
+    SeqLocPtr slp = NULL;
     BioseqPtr subject_bsp;
     RPSequencePtr rpseq;
     BioseqPtr bsp = NULL;
@@ -1405,10 +1436,16 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
 
     subject_bsp = query_bsp;    /* Reversed ... */
     
-    slp = NULL;
-    ValNodeAddPointer(&slp, SEQLOC_WHOLE, 
-                      SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)));
-    
+    if (rpsinfo->query_slp == NULL || 
+        SeqLocLen(rpsinfo->query_slp) == subject_bsp->length ||
+        ISA_na(subject_bsp->mol)) {
+        ValNodeAddPointer(&slp, SEQLOC_WHOLE, SeqIdDup(subject_bsp->id));
+    } else {
+        slp = SeqLocIntNew(SeqLocStart(rpsinfo->query_slp),
+                SeqLocStop(rpsinfo->query_slp),
+                SeqLocStrand(rpsinfo->query_slp),
+                SeqIdDup(subject_bsp->id));
+    }
     subject_length = SeqLocLen(slp);
     
     search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
@@ -1426,8 +1463,7 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
         spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
         while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
             if (IS_residue(residue)) {
-                subject_seq[index] = residue;
-                index++;
+                subject_seq[index++] = residue;
             }
         }
         subject_seq[index] = NULLB;
@@ -1512,6 +1548,8 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
     search->context[0].query->sequence_start = NULL;
     search->context[0].query->sequence = NULL;
 
+    slp = SeqLocFree(slp);
+
     MemFree(subject_seq_start);
     RPSequenceFree(rpseq);
     BioseqFree(bsp);
@@ -1520,8 +1558,6 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
     search->wfp->lookup->mod_lt = NULL;
     search->wfp->lookup->mod_lookup_table_memory = NULL;
 
-    SeqLocFree(slp);
-    
     return seqalign;
 }
 
@@ -1623,7 +1659,8 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
 		
 		dbtag = bsp->id->data.ptrvalue;
 		dbname = StringSave(dbtag->db);
-		cdhThis->CDDid = StringSave(dbtag->tag->str);
+                if (dbtag->tag->str) 
+		  cdhThis->CDDid = StringSave(dbtag->tag->str);
 	}
         if (StrCmp(dbname,"Pfam") == 0) {
           cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
@@ -1642,6 +1679,10 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
           cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
 	  if (tmp)
           	cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ',');
+        } else if (StrCmp(dbname,"CDD") == 0) {
+          cdhThis->CDDid = SaveUntilChar(title, &tmp, ',');
+          if (tmp) cdhThis->ShortName = SaveUntilChar(tmp+1, &tmp, ',');
+	  if (tmp) cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ';');
         } else {
           cdhThis->ShortName = StringSave(cdhThis->CDDid);
           cdhThis->Definition = StringSave(title);
@@ -1700,9 +1741,9 @@ static VoidPtr RPSEngineThread(VoidPtr data)
     SeqEntryPtr sep;
     Char buffer[64];
     static TNlmMutex print_mutex;
-    SeqLocPtr query_lcase_mask = NULL;
+    SeqLocPtr query_lcase_mask = NULL, query_slp = NULL;
     RPSInfoPtr rpsinfo_local;
-    Int4  old_searchsp_eff;
+    Int4  old_searchsp_eff, qlen;
     static Int4 count_id = 0;
 
     if((mtdata = (RPS_MTDataStructPtr) data) == NULL) {
@@ -1775,14 +1816,55 @@ static VoidPtr RPSEngineThread(VoidPtr data)
         
         NlmMutexLock(print_mutex);
 
+        /* Create the query_slp */
+        if (rpsbop->query_is_protein && rpsinfo_local->query_slp == NULL) {
+            if (rpsinfo_local->start == 0 && rpsinfo_local->stop == 0) {
+                ValNodeAddPointer(&query_slp, SEQLOC_WHOLE,
+                        SeqIdDup(fake_bsp->id));
+            } else {
+
+                rpsinfo_local->start = MAX(rpsinfo_local->start, 0);
+                if (rpsinfo_local->stop <= 0)
+                    rpsinfo_local->stop = fake_bsp->length - 1;
+                rpsinfo_local->stop = MIN(rpsinfo_local->stop, 
+                                          fake_bsp->length-1);
+
+                if (rpsinfo_local->start >= fake_bsp->length) {
+                    ErrPostEx(SEV_ERROR, 0, 0, 
+                        "Incorrect range restriction (%ld-%ld) for query "
+                        "sequence (length %ld). Ignoring range restriction.", 
+                        rpsinfo_local->start, rpsinfo_local->stop, 
+                        fake_bsp->length);
+                    ValNodeAddPointer(&query_slp, SEQLOC_WHOLE,
+                            SeqIdDup(fake_bsp->id));
+                } else {
+                    query_slp = SeqLocIntNew(rpsinfo_local->start,
+                            rpsinfo_local->stop, Seq_strand_unknown,
+                            SeqIdDup(fake_bsp->id));
+                }
+            }
+            rpsinfo_local->query_slp = query_slp;
+        }
+
+
+        if (rpsbop->query_is_protein)
+            qlen = SeqLocLen(query_slp);
+        else
+            qlen = fake_bsp->length;
         old_searchsp_eff = rpsbop->options->searchsp_eff;
-        RPSUpdateDbSize(rpsbop->options, rpsinfo_local, fake_bsp->length);
+        RPSUpdateDbSize(rpsbop->options, rpsinfo_local, qlen);
         
-        search = BLASTSetUpSearch (bsp, rpsbop->query_is_protein ? 
-                                   "blastp" : "tblastn", 
-                                   bsp->length, 0, 
-                                   NULL, rpsbop->options, NULL);
+
+        if (rpsbop->query_is_protein) {
+            search = BLASTSetUpSearchByLoc(query_slp, "blastp",
+                    SeqLocLen(query_slp), 0, NULL, rpsbop->options, NULL);
+        } else {
+            search = BLASTSetUpSearch(bsp, "tblastn", bsp->length, 0, NULL,
+                    rpsbop->options, NULL);
+        }
         rpsbop->options->searchsp_eff = old_searchsp_eff;
+        search->rps_qlen = qlen; /* save for reporting purposes */
+
         NlmMutexUnlock(print_mutex); 
 
         /* External lower-case mask */
@@ -1803,7 +1885,7 @@ static VoidPtr RPSEngineThread(VoidPtr data)
 
         if(!rpsbop->query_is_protein) 
             BioseqFree(bsp);
-        
+
         SeqAlignSetFree(seqalign);
         search = BlastSearchBlkDestruct(search);
         
@@ -1879,6 +1961,7 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
             for (i=0; i<rpsbop->num_threads; i++) {
             	NlmThreadJoin(thread_array[i], &status);
             }
+            thread_array = MemFree(thread_array);
 
         } else {
             RPSEngineThread((VoidPtr) mtdata);

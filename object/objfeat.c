@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1827,7 +1827,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "name \"SGC5\" , id 6 ,\n" \
 "ncbieaa  \"FFLLSSSSYYQQCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
-"{ name \"Echinoderm Mitochondrial\" , name \"SGC8\" , id 9 ,\n" \
+"{ name \"Echinoderm Mitochondrial; Flatworm Mitochondrial\" , name \"SGC8\" , id 9 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M---------------M------------\" } ,\n" \
 "{ name \"Euplotid Nuclear\" , name \"SGC9\" , id 10 ,\n" \
@@ -1842,7 +1842,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "{ name \"Ascidian Mitochondrial\" , id 13 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
-"{ name \"Flatworm Mitochondrial\" , id 14 ,\n" \
+"{ name \"Alternative Flatworm Mitochondrial\" , id 14 ,\n" \
 "ncbieaa  \"FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
 "{ name \"Blepharisma Macronuclear\" , id 15 ,\n" \

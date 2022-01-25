@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.75 2002/07/15 16:40:29 beloslyu Exp $
+# $Id: makedis.csh,v 1.79 2002/11/06 18:57:08 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -115,7 +115,8 @@ case IRIX*:
 		set platform=sgi5
 		breaksw
 	case "6.5":
-		set platform=sgi-mips4
+		#set platform=sgi-mips4
+		set platform=sgi
 		breaksw
 	case "6.[0-4]":
 		set platform=sgi
@@ -314,7 +315,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin Nentrez udv ddv blastcl3 blast.REAL \
-		idfetch asn2xml asn2gb $OGL_TARGETS\") 
+		idfetch asn2xml asn2gb entrez2 $OGL_TARGETS\") 
 else if ( "$HAVE_MAC" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
 		LIB28=libvibgif.a \
@@ -334,7 +335,8 @@ else if ( "$HAVE_MAC" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin\") 
+		VIB=\"Psequin udv ddv blastcl3 blast.REAL \
+                idfetch asn2xml asn2gb entrez2\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -439,7 +441,7 @@ else
 	copymat ddv demo_regexp demo_regexp_grep dosimple entrcmd entrez \
 	errhdr fa2htgs fastacmd findspl fmerge formatdb getfeat getmesh \
 	getpub getseq gil2bin idfetch impala indexpub makemat makeset \
-	megablast ncbisort netentcf rpsblast seedtop seqtest sequin \
+	megablast ncbisort netentcf rpsblast seedtop seqtest sequin entrez2 \
 	tbl2asn test_regexp testcore testobj testval udv vecscreen Cn3D )
 	if ( -x ./$i ) then
 		rm -f ../bin/$i

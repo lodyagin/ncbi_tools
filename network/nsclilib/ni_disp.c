@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.11 $
+* $Revision: 4.12 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,9 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.12  2002/11/06 21:30:08  ucko
+* Don't assume MIPS is IRIX, or HPPA is HP/UX; allow Linux too, for both.
+*
 * Revision 4.11  2002/06/17 15:14:32  ivanov
 * Added fix for BeOS platform to sokselectw()
 *
@@ -2793,13 +2796,13 @@ NLM_EXTERN Int2 NI_GetPlatform (void)
 #ifdef PROC_CONVEX
     retval = NI_PLATFORM_CONVEX;
 #endif
-#ifdef PROC_HPPA
+#if defined(PROC_HPPA) && !defined(OS_UNIX_LINUX)
     retval = NI_PLATFORM_HPUX;
 #endif
 #ifdef OS_UNIX_NEXT
     retval = NI_PLATFORM_NEXT;
 #endif
-#ifdef PROC_MIPS
+#if defined(PROC_MIPS) && !defined(OS_UNIX_LINUX)
     retval = NI_PLATFORM_SGI;
 #endif
 #ifdef OS_UNIX_ULTRIX

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.27  2002/10/03 16:22:03  kans
+* changed fgets to Nlm_FileGets
+*
 * Revision 6.26  2002/03/28 13:29:08  kans
 * checks for OS_UNIX_DARWIN (EN)
 *
@@ -1036,7 +1039,7 @@ static Nlm_Boolean Nlm_ReadConfigFile(FILE* fp)
     eip = NULL;
     lastEip = NULL;
     comment = NULL;
-    while (fgets (str, sizeof (str), fp)) {
+    while (Nlm_FileGets (str, sizeof (str), fp)) {
       ch = *str;
       if (ch != '\n' && ch != '\r') {
         if (ch == ';') { /* comment */

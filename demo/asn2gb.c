@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.40 $
+* $Revision: 6.47 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -456,10 +456,14 @@ static void CompareFlatFiles (
 
 {
 #ifdef OS_UNIX
-  Char     buf [256];
-  Char     cmmd [256];
-  size_t   ct;
-  FILE     *fpo;
+  AsnIoPtr     aip;
+  BioseqPtr    bsp;
+  Char         buf [256];
+  Char         cmmd [256];
+  size_t       ct;
+  int          diff;
+  FILE         *fpo;
+  SeqEntryPtr  fsep;
 
   if (sep == NULL) return;
 
@@ -477,36 +481,85 @@ static void CompareFlatFiles (
     SaveAsn2gnbk (sep, path1, format, SEQUIN_MODE, style, flags, locks);
     SaveAsn2gnbk (sep, path2, format, RELEASE_MODE, style, flags, locks);
 
-  }
+    if (useGbdjoin) {
+      sprintf (cmmd, "%s -o %s -n %s -d reports", gbdjoin, path1, path2);
+      system (cmmd);
 
-  if (useGbdjoin) {
-    sprintf (cmmd, "%s -o %s -n %s -d reports", gbdjoin, path1, path2);
-    system (cmmd);
+      sprintf (cmmd, "rm %s; rm %s", path1, path2);
+      system (cmmd);
+    } else {
+      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
+      system (cmmd);
 
-    sprintf (cmmd, "rm %s; rm %s", path1, path2);
-    system (cmmd);
-  } else {
-    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
-    system (cmmd);
+      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
+      system (cmmd);
 
-    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
-    system (cmmd);
+      sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
+      system (cmmd);
 
-    sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
-    system (cmmd);
-
-    sprintf (cmmd, "cat %s", path3);
-    fpo = popen (cmmd, "r");
-    if (fpo != NULL) {
-      while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
-        fwrite (buf, 1, ct, fp);
-        fflush (stdout);
+      sprintf (cmmd, "cat %s", path3);
+      fpo = popen (cmmd, "r");
+      if (fpo != NULL) {
+        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
+          fwrite (buf, 1, ct, fp);
+          fflush (fp);
+        }
+        pclose (fpo);
       }
-      pclose (fpo);
+
+      sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
+      system (cmmd);
     }
 
-    sprintf (cmmd, "rm %s.suc; rm %s.suc; rm %s", path1, path2, path3);
-    system (cmmd);
+  } else if (batch == 3) {
+
+    aip = AsnIoOpen (path3, "w");
+    if (aip == NULL) return;
+
+    SeqEntryAsnWrite (sep, aip, NULL);
+    AsnIoClose (aip);
+
+    fsep = FindNthBioseq (sep, 1);
+    if (fsep == NULL || fsep->choice != 1) return;
+    bsp = (BioseqPtr) fsep->data.ptrvalue;
+    if (bsp == NULL) return;
+    SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+
+    if (FindNucBioseq (sep) != NULL) {
+
+      sprintf (cmmd, "./oldasn2gb -i %s -o %s", path3, path1);
+      system (cmmd);
+
+      sprintf (cmmd, "./newasn2gb -i %s -o %s", path3, path2);
+      system (cmmd);
+
+    } else {
+
+      sprintf (cmmd, "./oldasn2gb -f p -i %s -o %s", path3, path1);
+      system (cmmd);
+
+      sprintf (cmmd, "./newasn2gb -f p -i %s -o %s", path3, path2);
+      system (cmmd);
+
+    }
+
+    sprintf (cmmd, "diff -b %s %s > %s", path1, path2, path3);
+    diff = system (cmmd);
+
+    if (diff > 0) {
+      sprintf (cmmd, "cat %s", path3);
+      fpo = popen (cmmd, "r");
+      if (fpo != NULL) {
+        fprintf (fp, "\nasn2gb difference in %s\n", buf);
+        fflush (fp);
+        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
+          fwrite (buf, 1, ct, fp);
+          fflush (fp);
+        }
+        pclose (fpo);
+      }
+    }
+
   }
 
 #else
@@ -590,6 +643,7 @@ static Int2 HandleMultipleRecords (
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   Char          buf [41];
+  Char          cmmd [256];
   SeqDescrPtr   descr = NULL;
   FILE          *fp;
   SeqEntryPtr   fsep;
@@ -605,9 +659,9 @@ static Int2 HandleMultipleRecords (
   Char          path3 [PATH_MAX];
   SeqEntryPtr   sep;
   time_t        starttime, stoptime, worsttime;
+  FILE          *tfp;
   Boolean       useGbdjoin;
 #ifdef OS_UNIX
-  Char          cmmd [256];
   CharPtr       gzcatprog;
   int           ret;
   Boolean       usedPopen = FALSE;
@@ -663,7 +717,7 @@ static Int2 HandleMultipleRecords (
         return 1;
       }
     }
-    fp = popen (cmmd, binary? "rb" : "r");
+    fp = popen (cmmd, /* binary? "rb" : */ "r");
     usedPopen = TRUE;
   } else {
     fp = FileOpen (inputFile, binary? "rb" : "r");
@@ -682,7 +736,7 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  if ((batch == 1 || format != GENBANK_FMT) && extra == NULL) {
+  if ((batch == 1 || batch == 3 || format != GENBANK_FMT) && extra == NULL) {
     ofp = FileOpen (outputFile, "w");
     if (ofp == NULL) {
       AsnIoClose (aip);
@@ -692,8 +746,19 @@ static Int2 HandleMultipleRecords (
   }
 
   TmpNam (path1);
+  tfp = FileOpen (path1, "w");
+  fprintf (tfp, "\n");
+  FileClose (tfp);
+
   TmpNam (path2);
+  tfp = FileOpen (path2, "w");
+  fprintf (tfp, "\n");
+  FileClose (tfp);
+
   TmpNam (path3);
+  tfp = FileOpen (path3, "w");
+  fprintf (tfp, "\n");
+  FileClose (tfp);
 
   atp = atp_bss;
 
@@ -730,9 +795,12 @@ static Int2 HandleMultipleRecords (
 #ifdef OS_UNIX
           if (batch != 1) {
             printf ("%s\n", buf);
-            if (ofp != NULL) {
-              fprintf (ofp, "%s\n", buf);
-              fflush (ofp);
+            fflush (stdout);
+            if (batch != 3) {
+              if (ofp != NULL) {
+                fprintf (ofp, "%s\n", buf);
+                fflush (ofp);
+              }
             }
           }
 #endif
@@ -825,6 +893,9 @@ static Int2 HandleMultipleRecords (
     fprintf (logfp, "Total number of records %ld\n", (long) numrecords);
     fflush (logfp);
   }
+
+  sprintf (cmmd, "rm %s; rm %s; rm %s", path1, path2, path3);
+  system (cmmd);
 
   return 0;
 }

@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.203 2002/06/28 16:31:24 kans Exp $
+#	$Id: makeall.unx,v 6.208 2002/10/28 20:31:30 lavr Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -163,7 +163,7 @@ LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(VIBFLAG) $(NCBI_OTHERLINKOPTIONS) -L$(N
 
 # sources needed for versions of asntool and entrez
 THR_SRC = ncbithr.c
-# NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
+# NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
 
 SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbiprop.c ncbimain.c ncbimath.c ncbimem.c ncbimisc.c \
@@ -176,8 +176,8 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_ansi_ext.c ncbi_connection.c ncbi_connector.c ncbi_connutil.c \
 	ncbi_file_connector.c ncbi_heapmgr.c ncbi_http_connector.c \
 	ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
-	ncbi_server_info.c ncbi_service.c \
-	ncbi_service_connector.c ncbi_service_dispd.c \
+	ncbi_host_info.c ncbi_server_info.c ncbi_service.c \
+	ncbi_service_connector.c ncbi_dispd.c \
 	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
 	ncbi_sendmail.c ncbi_sendmail.c asn_connection.c \
 	drwnflpt.c drwnfspc.c drwnmfls.c
@@ -229,8 +229,8 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	seqpcc.c seqanal.c aacomp.c seqscrl.c \
 	vsm.c vsmfile.c vsmutil.c udvgraph.c udvopen.c udvpanel.c dotvibrant.c \
 	dlgutil1.c dlgutil2.c e2trmlst.c e2docsum.c asn2graphic.c \
-	medview.c bspview.c gbfview.c gphview.c \
-	gphdraw.c gxydraw.c gtrdraw.c ingengraph.c ingenext.c ingenwin.c \
+	medview.c bspview.c gbfview.c gphview.c gphdraw.c gxydraw.c gtrdraw.c \
+	seqpanel.c ingengraph.c ingenext.c ingenwin.c \
 	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c salogif.c
 
 SRC45 = ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
@@ -281,7 +281,7 @@ SRC50 = chartables.c get.c maketables.c pcre.c pcreposix.c study.c
 # objects needed for versions of asntool and entrez
 
 THR_OBJ = ncbithr.o
-# NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+# NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 
 OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o \
@@ -294,8 +294,8 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_ansi_ext.o ncbi_connection.o ncbi_connector.o ncbi_connutil.o \
 	ncbi_file_connector.o ncbi_heapmgr.o ncbi_http_connector.o \
 	ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
-	ncbi_server_info.o ncbi_service.o \
-	ncbi_service_connector.o ncbi_service_dispd.o \
+	ncbi_host_info.o ncbi_server_info.o ncbi_service.o \
+	ncbi_service_connector.o ncbi_dispd.o \
 	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
 	ncbi_sendmail.o asn_connection.o \
 	drwnflpt.o drwnfspc.o drwnmfls.o
@@ -357,8 +357,8 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	seqpcc.o seqanal.o aacomp.o seqscrl.o \
 	vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o dotvibrant.o \
 	dlgutil1.o dlgutil2.o e2trmlst.o e2docsum.o asn2graphic.o \
-	medview.o bspview.o gbfview.o gphview.o \
-	gphdraw.o gxydraw.o gtrdraw.o ingengraph.o ingenext.o ingenwin.o \
+	medview.o bspview.o gbfview.o gphview.o gphdraw.o gxydraw.o gtrdraw.o \
+	seqpanel.o ingengraph.o ingenext.o ingenwin.o \
 	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o salogif.o
 
 OBJ45 = ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
@@ -570,7 +570,7 @@ humchrom_dat.c : ideo_gen_obj humchrom.dat
 	- mv -f humchrom_dat.h ../include
 
 ideo_gen_obj: ideo_gen_obj.o ideochrom.o ideoorgs.o
-	$(CC) $(LDFLAGS) -o ideo_gen_obj ideo_gen_obj.o ideochrom.o ideoorgs.o $(LIB1) $(OTHERLIBS)
+	$(CC) $(LDFLAGS) -o ideo_gen_obj ideo_gen_obj.o ideochrom.o ideoorgs.o $(NCBI_LIBDIR)/$(LIB1) $(OTHERLIBS)
 
 ## use subordinate makefile for building shared libraries
 ##
@@ -630,15 +630,17 @@ copy :
 	mv asn.h ../include
 	$(SRCCOPY) ../asnlib/*.c .
 	$(SRCCOPY) ../connect/*.c .
+	$(SRCCOPY) ../connect/ncbi_ansi_ext.h .
 	$(SRCCOPY) ../connect/ncbi_priv.h .
 	$(SRCCOPY) ../connect/ncbi_comm.h .
 	$(SRCCOPY) ../connect/ncbi_config.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm_ipc.h .
+	$(SRCCOPY) ../connect/ncbi_host_infop.h .
 	$(SRCCOPY) ../connect/ncbi_server_infop.h .
 	$(SRCCOPY) ../connect/ncbi_servicep.h .
-	$(SRCCOPY) ../connect/ncbi_servicep_dispd.h .
-	$(SRCCOPY) ../connect/ncbi_servicep_lbsmd.h .
+	$(SRCCOPY) ../connect/ncbi_dispd.h .
+	$(SRCCOPY) ../connect/ncbi_lbsmd.h .
 	$(SRCCOPY) ../connect/*.h ../include
 	-mkdir ../include/connect
 	-chmod ug+rw,o+r ../include/connect

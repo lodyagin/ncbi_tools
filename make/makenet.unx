@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.148 2002/08/07 23:16:29 beloslyu Exp $
+#	$Id: makenet.unx,v 6.149 2002/11/14 18:18:07 beloslyu Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -325,7 +325,7 @@ SRC40 = objtax1.c taxutil.c tc2dproc.c txcdproc.c parttree.c taxcs.c taxblast.c
 
 SRC41 = id1gen.c id1arch.c accid1.c
 
-SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c
+SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c
 
 SRC43 = os_mtutils.c already_running.c
 
@@ -392,7 +392,7 @@ OBJ40 = objtax1.o taxutil.o tc2dproc.o txcdproc.o parttree.o taxcs.o taxblast.o
 
 OBJ41 = id1gen.o id1arch.o accid1.o 
 
-OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o
+OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o
 
 OBJ43 = os_mtutils.o already_running.o
 
@@ -1030,7 +1030,7 @@ $(ULIB44) : $(OBJ44)
 # Since Sybase needs special include, and becuase of the TLIB/DLIB trick
 #  this will not be invoked unless BLIB42 defined on the make line, we
 #  can safely have an NCBI-only rule here
-# SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c
+# SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c
 
 ctlibutils.o : ctlibutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c ctlibutils.c
@@ -1043,6 +1043,9 @@ accpubseq.o : accpubseq.c
 
 password.o : password.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c password.c
+
+gipropmmap.o : gipropmmap.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c gipropmmap.c
 
 os_mtutils.o : os_mtutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c os_mtutils.c

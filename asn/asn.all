@@ -1155,7 +1155,7 @@ Seq-annot ::= SEQUENCE {
 END
 
 
---$Revision: 6.1 $
+--$Revision: 6.2 $
 --**********************************************************************
 --
 --  NCBI Sequence Collections
@@ -1197,8 +1197,9 @@ Bioseq-set ::= SEQUENCE {      -- just a collection
         mut-set (13) ,              -- set of mutations
         pop-set (14) ,              -- population study
         phy-set (15) ,              -- phylogenetic study
-	eco-set (16) ,              -- ecological sample study
-        gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein  
+        eco-set (16) ,              -- ecological sample study
+        gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein
+        wgs-set (18) ,              -- whole genome shotgun project
         other (255) } DEFAULT not-set ,
     release VisibleString OPTIONAL ,
     date Date OPTIONAL ,
@@ -1208,7 +1209,7 @@ Bioseq-set ::= SEQUENCE {      -- just a collection
 
 Seq-entry ::= CHOICE {
         seq Bioseq ,
-        set Bioseq-set } 
+        set Bioseq-set }
 
 END
 

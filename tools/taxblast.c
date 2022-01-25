@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.15 2002/07/02 16:38:04 camacho Exp $
+/* $Id: taxblast.c,v 6.17 2002/11/06 21:31:47 ucko Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.15 $
+* $Revision: 6.17 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.17  2002/11/06 21:31:47  ucko
+* TXBGetGiFromSeqId: Compare oip->id to 0 rather than NULL, as it is an integer.
+*
+* Revision 6.16  2002/10/07 19:52:07  camacho
+* Added RDTaxLookupReset
+*
 * Revision 6.15  2002/07/02 16:38:04  camacho
 * Moved increment of number of taxids in db to end of FDBTaxCallback
 *
@@ -392,7 +398,7 @@ static Int4 TXBGetGiFromSeqId(SeqIdPtr sip, Int4Ptr tax_idp,
             oip = (ObjectIdPtr) dbtag->tag;
 
             if (oip != NULL) {
-                if (oip->id != NULL) {
+                if (oip->id != 0) {
                     sprintf(buffer, "%d", oip->id);
                     *accessionp = StringSave(buffer);
                 } else if (oip->str)
@@ -1833,25 +1839,33 @@ RDBTaxLookupPtr RDTaxLookupInit(void)
     return tax_lookup;
 }
 
-void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup)
+/* Remove all entries from taxonomy lookup structure but don't close the 
+ * connection to the taxonomy service */
+RDBTaxLookupPtr RDTaxLookupReset(RDBTaxLookupPtr tax_lookup)
 {
     RDBTaxNamesPtr tnames;
     Int4 i;
 
-    MemFree(tax_lookup->tax_data);
-    
     for(i = 0; i < tax_lookup->all_taxid_count; i++) {        
         
         tnames = tax_lookup->tax_array[i];
         
-        if(tnames != NULL) {
+        if (tnames != NULL) {
             MemFree(tnames->sci_name);
             MemFree(tnames->common_name);
             MemFree(tnames->blast_name);
             MemFree(tnames);
         }
+        tax_lookup->tax_array[i] = tnames = NULL;
     }
-    
+   	tax_lookup->taxids_in_db = 0; 
+}
+
+void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup)
+{
+	tax_lookup = RDTaxLookupReset(tax_lookup);
+
+    MemFree(tax_lookup->tax_data);
     MemFree(tax_lookup->tax_array);
     MemFree(tax_lookup);
     

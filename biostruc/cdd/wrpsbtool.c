@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.16 2002/08/06 02:39:10 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.17 2002/10/22 14:55:20 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.17  2002/10/22 14:55:20  bauer
+* fixed URL for bottom help link
+*
 * Revision 1.16  2002/08/06 02:39:10  bauer
 * changes to accomodate COGs
 *
@@ -235,7 +238,7 @@ void WRPSBSearchFoot()
   printf("        <td width=\"100%%\"> \n");
   printf("          <br>\n");
   printf("          <div align=\"center\" class=\"medium1\">  \n");
-  printf("            <p><b><a href=\"html/help.html\">Help</a></b> | <a href=\"http://www.ncbi.nlm.nih.gov/About/disclaimer.html\">Disclaimer</a> | <a href=\"mailto:info@ncbi.nlm.nih.gov\">Write to the Help Desk</a><BR><a href=\"http://www.ncbi.nlm.nih.gov\">NCBI</a> | <a href=\"http://www.nlm.nih.gov\">NLM</a> | <a href=\"http://www.nih.gov\">NIH</a> </p>\n");
+  printf("            <p><b><a href=\"cdd_help.shtml\">Help</a></b> | <a href=\"http://www.ncbi.nlm.nih.gov/About/disclaimer.html\">Disclaimer</a> | <a href=\"mailto:info@ncbi.nlm.nih.gov\">Write to the Help Desk</a><BR><a href=\"http://www.ncbi.nlm.nih.gov\">NCBI</a> | <a href=\"http://www.nlm.nih.gov\">NLM</a> | <a href=\"http://www.nih.gov\">NIH</a> </p>\n");
   printf("            <p>&nbsp;</p>\n");
   printf("          </div>\n");
   printf("        </td>\n");

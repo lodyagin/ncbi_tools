@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.154 2002/07/17 13:22:00 kans Exp $
+# $Id: makeall.dos,v 6.157 2002/10/28 20:31:27 lavr Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -26,8 +26,8 @@ OBJ1  = \
 	+ncbi_priv.obj +ncbi_ansi_ext.obj +ncbi_connection.obj +ncbi_connector.obj \
 	+ncbi_connutil.obj +ncbi_file_connector.obj +ncbi_http_connector.obj \
 	+ncbi_memory_connector.obj +ncbi_server_info.obj +ncbi_service.obj \
-	+ncbi_service_connector.obj +ncbi_service_dispd.obj \
-	+ncbi_service_lbsmd_stub.obj +ncbi_socket_connector.obj \
+	+ncbi_host_info.obj +ncbi_service_connector.obj +ncbi_dispd.obj \
+	+ncbi_lbsmd_stub.obj +ncbi_socket_connector.obj \
 	+urlquery.obj +binary.obj +ncbi_sendmail.obj +asn_connection.obj
 
 OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
@@ -195,13 +195,15 @@ copy_reg:
 	$(DEL) asn.h
 	copy ..\asnlib\*.c .
 	copy ..\connect\*.c .
+	copy ..\connect\ncbi_ansi_ext.h .
 	copy ..\connect\ncbi_priv.h .
 	copy ..\connect\ncbi_comm.h .
 	copy ..\connect\ncbi_config.h .
+	copy ..\connect\ncbi_host_infop.h .
 	copy ..\connect\ncbi_server_infop.h .
 	copy ..\connect\ncbi_servicep.h .
-	copy ..\connect\ncbi_servicep_dispd.h .
-	copy ..\connect\ncbi_servicep_lbsmd.h .
+	copy ..\connect\ncbi_dispd.h .
+	copy ..\connect\ncbi_lbsmd.h .
 	copy ..\connect\*.h $(INCPATH)
 	$(DEL) ..\include\ncbi_*.h
 	copy ..\connect\ncbi_*.h $(INCPATH)\connect

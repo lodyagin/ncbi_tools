@@ -42,10 +42,10 @@ static Boolean NetInit PROTO((void));
 static Boolean ForceNetInit PROTO((void));
 static Boolean NetFini PROTO((void));
 static Boolean GenericReestablishNet PROTO((CharPtr svcName, Boolean showErrs));
-static SeqIdPtr s_ID1ArchSeqIdsGet PROTO((Uint4 gi,AsnIoPtr aiopr));
+static SeqIdPtr s_ID1ArchSeqIdsGet PROTO((Uint4 gi,AsnIoPtr aiopr,Boolean PNTR not_found));
 static SeqEntryPtr s_ID1ArchSeqEntryGet PROTO((Int4 uid, CharPtr db, Int4 ent,Int4Ptr status, Int2 maxplex));
 static Int4 s_ID1ArcgGIStateGet PROTO((Uint4 gi));
-static ID1SeqHistPtr s_ID1ArchGIHistGet PROTO((Uint4 gi,Boolean rev,AsnIoPtr aiopr));
+static ID1SeqHistPtr s_ID1ArchGIHistGet PROTO((Uint4 gi,Boolean rev,AsnIoPtr aiopr,Boolean PNTR not_found));
 
 static NI_HandPtr svcp = NULL;
 static AsnIoPtr   asnin = NULL;
@@ -102,20 +102,7 @@ static Boolean s_ID1ArchFini (void)
 Boolean ID1ArchFini (void)
 
 {
-    short erract;
-    ErrDesc err;
-    Boolean retval;
-
-    ErrGetOpts(&erract, NULL);
-    ErrSetOpts(ERR_CONTINUE, 0);
-    ErrFetch(&err);
-
-    retval = s_ID1ArchFini();
-
-    ErrSetOpts(erract, 0);
-    ErrFetch(&err);
-
-    return retval;
+    return  s_ID1ArchFini();
 }
 
 static SeqEntryPtr
@@ -176,42 +163,34 @@ s_ID1ArchSeqEntryGet (Int4 uid, CharPtr db, Int4 ent,Int4Ptr status, Int2 maxple
 SeqEntryPtr
 ID1ArchSeqEntryGet (Int4 gi,CharPtr db, Int4 ent, Int4Ptr status, Int2 maxplex)
 {
-    Int4 i;
-    SeqEntryPtr sep=NULL;
-    short erract;
-    ErrDesc err;
-    Int4 retval = 0;
+	Int4 i;
+	SeqEntryPtr sep=NULL;
+	Int4 retval = 0;
  
-		if (maxplex < 0 || maxplex > 4){
-          ErrPost(CTX_UNKNOWN, 2, "ID1ArchSeqEntryGet: maxplex(%d) out of range (0-4)", maxplex);
-			return NULL;
+	if (maxplex < 0 || maxplex > 4){
+		ErrPost(CTX_UNKNOWN, 2, "ID1ArchSeqEntryGet: maxplex(%d) out of range (0-4)", maxplex);
+		return NULL;
+	}
+	for (i = 0; i < ID_SERV_RETRIES; i++){
+		if (i > 0){
+			if (! ReestablishNetID1Arch())
+			break;
 		}
-	  for (i = 0; i < ID_SERV_RETRIES; i++)
-	  {
-			if (i > 0)
-			{
-				 if (! ReestablishNetID1Arch())
-					  break;
-			}
- 
-			ErrGetOpts(&erract, NULL);
-			ErrSetOpts(ERR_CONTINUE, 0);
-			ErrFetch(&err);
-			sep = s_ID1ArchSeqEntryGet (gi, db, ent, status, maxplex);
-			ErrSetOpts(erract, 0);
-			if (! ErrFetch(&err))
-				 break; /* success */
-	  }
+		sep = s_ID1ArchSeqEntryGet (gi, db, ent, status, maxplex);
+		if (sep) break; /* success */
+		if(status && *status > 0 ) break; /* valid error - no retry */
+	}
 	return sep;
 }
 
 static SeqIdPtr
-s_ID1ArchSeqIdsGet (Uint4 gi,AsnIoPtr aiopr)
+s_ID1ArchSeqIdsGet (Uint4 gi,AsnIoPtr aiopr, Boolean PNTR not_found)
 {
     ID1serverRequestPtr id1reqp;
     ID1serverBackPtr id1bp;
-
     SeqIdPtr sip;
+
+    *not_found=FALSE;
 
     id1reqp = ValNodeNew(NULL);
     id1reqp->choice = ID1serverRequest_getseqidsfromgi;
@@ -223,8 +202,7 @@ s_ID1ArchSeqIdsGet (Uint4 gi,AsnIoPtr aiopr)
     if ((id1bp = NetID1servReadAsn()) == NULL)
         return NULL;
 
-    if (id1bp->choice != ID1serverBack_ids)
-    {
+    if (id1bp->choice != ID1serverBack_ids) {
         ID1serverBackFree (id1bp);
         return NULL;
     }
@@ -235,45 +213,36 @@ s_ID1ArchSeqIdsGet (Uint4 gi,AsnIoPtr aiopr)
     sip = (id1bp->data.ptrvalue);
     id1bp->data.ptrvalue = NULL;
     ID1serverBackFree (id1bp);
-
+    if(sip==NULL) *not_found=TRUE;
     return sip;
 }
 
 SeqIdPtr
 ID1ArchSeqIdsGet(Uint4 gi,AsnIoPtr aiopr)
 {
-    Int4  i;
-    short erract;
-    ErrDesc err;
-    SeqIdPtr sip = NULL;
+	Int4  i;
+	SeqIdPtr sip = NULL;
+	Boolean	not_found=FALSE;
 
-          for (i = 0; i < ID_SERV_RETRIES; i++)
-          {
-                        if (i > 0)
-                        {
-                                 if (! ReestablishNetID1Arch())
-                                          break;
-                        }
+	for (i = 0; i < ID_SERV_RETRIES; i++) {
+		if (i > 0) { if (! ReestablishNetID1Arch()) break; }
 
-                        ErrGetOpts(&erract, NULL);
-                        ErrSetOpts(ERR_CONTINUE, 0);
-                        ErrFetch(&err);
-                        sip = s_ID1ArchSeqIdsGet(gi,aiopr);
-                        ErrSetOpts(erract, 0);
-                        if (! ErrFetch(&err))
-                                 break; /* success */
-          }
-   return sip;
+		sip = s_ID1ArchSeqIdsGet(gi,aiopr,&not_found);
+		if (sip) break; /* success */
+		if (not_found) break; /* not found */
+	}
+	return sip;
 }
 
 static ID1SeqHistPtr
-s_ID1ArchGIHistGet(Uint4 gi,Boolean rev,AsnIoPtr aiopr)
+s_ID1ArchGIHistGet(Uint4 gi,Boolean rev,AsnIoPtr aiopr,Boolean PNTR not_found)
 {
     ID1serverRequestPtr id1reqp;
     ID1serverBackPtr id1bp;
 
     ID1SeqHistPtr ishp;
 
+    *not_found=FALSE;
     id1reqp = ValNodeNew(NULL);
     id1reqp->choice = rev? ID1serverRequest_getgirev : ID1serverRequest_getgihist;
     id1reqp->data.intvalue = gi;
@@ -296,6 +265,7 @@ s_ID1ArchGIHistGet(Uint4 gi,Boolean rev,AsnIoPtr aiopr)
     ishp = (id1bp->data.ptrvalue);
     id1bp->data.ptrvalue = NULL;
     ID1serverBackFree (id1bp);
+    if(ishp==NULL) *not_found=TRUE;
     return ishp;
 }
 
@@ -303,9 +273,8 @@ ID1SeqHistPtr
 ID1ArchGIHistGet(Uint4 gi,Boolean rev,AsnIoPtr aiopr)
 {
     Int4  i;
-    short erract;
-    ErrDesc err;
     ID1SeqHistPtr ishp = NULL;
+    Boolean not_found=FALSE;
 
           for (i = 0; i < ID_SERV_RETRIES; i++)
           {
@@ -315,13 +284,9 @@ ID1ArchGIHistGet(Uint4 gi,Boolean rev,AsnIoPtr aiopr)
                                           break;
                         }
 
-                        ErrGetOpts(&erract, NULL);
-                        ErrSetOpts(ERR_CONTINUE, 0);
-                        ErrFetch(&err);
-                        ishp = s_ID1ArchGIHistGet(gi,rev,aiopr);
-                        ErrSetOpts(erract, 0);
-                        if (! ErrFetch(&err))
-                                 break; /* success */
+                        ishp = s_ID1ArchGIHistGet(gi,rev,aiopr,&not_found);
+                        if (ishp) break; /* success */
+			if(not_found) break; /* not found */
           }
     return ishp;
 }
@@ -343,12 +308,12 @@ s_ID1ArcgGIStateGet(Uint4 gi)
     ID1serverRequestFree (id1reqp);
 
     if ((id1bp = NetID1servReadAsn()) == NULL)
-        return 0;
+        return -1;
 
     if (id1bp->choice != ID1serverBack_gistate)
     {
         ID1serverBackFree (id1bp);
-        return 0;
+        return -1;
     }
     state = id1bp->data.intvalue;
     ID1serverBackFree (id1bp);
@@ -359,45 +324,26 @@ Int4
 ID1ArcgGIStateGet(Uint4 gi)
 {
 	Int4 state=0,i;
-	short erract;
-	ErrDesc err;
+
 	for (i = 0; i < ID_SERV_RETRIES; i++)
 	{
-		if (i > 0)
-		{
-			 if (! ReestablishNetID1Arch())
-				  break;
-		}
-
-		ErrGetOpts(&erract, NULL);
-		ErrSetOpts(ERR_CONTINUE, 0);
-		ErrFetch(&err);
+		if (i > 0 && !ReestablishNetID1Arch()) break; 
 		state = s_ID1ArcgGIStateGet(gi);
-		ErrSetOpts(erract, 0);
-		if (! ErrFetch(&err))
-			 break; /* success */
+		if (state >=0 ) break; /* success */
 	}
 	return state;
 }
 
 static ID1serverBackPtr NetID1servReadAsn(void)
 {
-    ID1serverBackPtr id1bp;
-    short erract;
-    ErrDesc err;
-
-    ErrGetOpts(&erract, NULL);
-    ErrSetOpts(ERR_CONTINUE, 0);
-    ErrFetch(&err); /* clear any pending error */
+    ID1serverBackPtr id1bp=NULL;
 
     id1bp = ID1serverBackAsnRead(asnin, NULL);
 
-    if (ErrFetch(&err))
+    if (!id1bp)
     {
-        ErrPost(CTX_UNKNOWN, 1, "Null message read from server");
+        ErrPostEx(SEV_ERROR, 0, 0, "Null message read from server");
     }
-    ErrSetOpts(erract, 0);
-
     return id1bp;
 }
 
@@ -513,7 +459,7 @@ s_ID1ArchGIGet (SeqIdPtr sip)
     ID1serverRequestFree (id1reqp);
 
     if ((id1bp = NetID1servReadAsn()) == NULL)
-        return 0;
+        return -1;
 
     if (id1bp->choice != ID1serverBack_gotgi)
     {
@@ -529,9 +475,7 @@ s_ID1ArchGIGet (SeqIdPtr sip)
 Int4
 ID1ArchGIGet (SeqIdPtr sip)
 {
-    Int4 gi=0, i;
-    short erract;
-    ErrDesc err;
+    Int4 gi=-1, i;
     Int4 retval = 0;
 
           for (i = 0; i < ID_SERV_RETRIES; i++)
@@ -542,12 +486,8 @@ ID1ArchGIGet (SeqIdPtr sip)
                                           break;
                         }
 
-                        ErrGetOpts(&erract, NULL);
-                        ErrSetOpts(ERR_CONTINUE, 0);
-                        ErrFetch(&err);
                         gi = s_ID1ArchGIGet (sip);
-                        ErrSetOpts(erract, 0);
-                        if (! ErrFetch(&err))
+                        if (gi >= 0)
                                  break; /* success */
           }
         return gi;

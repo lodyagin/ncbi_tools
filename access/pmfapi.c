@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.42 $
+* $Revision: 1.45 $
 *
 * File Description: 
 *
@@ -427,7 +427,7 @@ static EIO_Status CommonWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
@@ -997,7 +997,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
     uid = sip->data.intvalue;
   } else {
     sid = SeqIdDup (sip);
-    SeqIdWrite (sid, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    SeqIdWrite (sid, id, PRINTID_FASTA_SHORT, sizeof (id) - 1);
     SeqIdFree (sid);
     uid = AccnRevHistSynchronousQuery (id);
   }
@@ -1082,7 +1082,8 @@ static Int2 LIBCALLBACK PubSeqGiForSeqIdFunc (Pointer data)
   if (sip == NULL) return OM_MSG_RET_ERROR;
 
   if (sip->choice == SEQID_GI) return OM_MSG_RET_ERROR;
-  SeqIdWrite (sip, buf, PRINTID_FASTA_LONG, sizeof (buf));
+  if (sip->choice == SEQID_LOCAL) return OM_MSG_RET_OK;
+  SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, sizeof (buf));
   if (StringHasNoText (buf)) return OM_MSG_RET_ERROR;
 
   gi = AccnRevHistSynchronousQuery (buf);

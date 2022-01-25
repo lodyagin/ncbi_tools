@@ -1,4 +1,6 @@
 /*----------------*/
+/* $Id: tc2proc.c,v 1.23 2002/10/18 19:48:51 soussov Exp $           */
+/*----------------*/
 
 #include <stdlib.h>
 #include <ncbi.h>
@@ -1281,7 +1283,7 @@ static Boolean bldOrgRef(Int4 id, OrgRefPtr orp, int* is_species, int* is_uncult
       ORGMOD_gb_synonym 34
     */
     /* add some of the nametypes as OrgMods */
-    if(orp->orgname) { // OrgName is not empty
+    if(orp->orgname) { /* OrgName is not empty */
         for(i= 1; i < n; i++) {
             if(nameList[i].class_cde == GB_ACRONYM) {
                 OrgModPtr acr= OrgModNew();
@@ -1403,7 +1405,8 @@ static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp)
         ss= tax_SSget(tax_id, &src_ss);
     }
 
-    if((ss != NULL) && (ss->r_id == tax_id) && (ss->stype == 0)) {
+    if((ss != NULL) && (ss->r_id == tax_id) && (ss->rtype == 0) && 
+       ss->rname && (ss->rname[0] == '-')) {
         /* remove it */
         if(ss->rname != NULL) MemFree(ss->rname);
         omp->next= NULL;
@@ -1411,14 +1414,15 @@ static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp)
         return NULL;
     }
 
-    if((ss != NULL) && (ss->r_id == tax_id) && (ss->stype != 0)) {		
+    if((ss != NULL) && (ss->r_id == tax_id) && (ss->rtype != 0)) {		
         MemFree(omp->subname);
-        omp->subname= src_ss.rname;
+        omp->subname= src_ss.rname; src_ss.rname= NULL;
         omp->subtype= src_ss.rtype;
         return omp;
     }
 
     if(src_ss.rname != NULL) MemFree(src_ss.rname);
+
     return omp;
 }
 
@@ -1441,8 +1445,8 @@ static void CleanOrgMod(Int4 tax_id, OrgNamePtr onp)
 	    
 static void cleanOrgName(Int4 tax_id, OrgNamePtr onp)
 {
-    if(onp->lineage != NULL) MemFree(onp->lineage);
-    if(onp->div != NULL) MemFree(onp->div);
+    if(onp->lineage != NULL) onp->lineage= MemFree(onp->lineage);
+    if(onp->div != NULL) onp->div= MemFree(onp->div);
 #if 1
     /* #if 0 means that we will trust to initial modifier */
     if(onp->mod != NULL) CleanOrgMod(tax_id, onp);
@@ -1452,12 +1456,14 @@ static void cleanOrgName(Int4 tax_id, OrgNamePtr onp)
         switch(onp->choice) {
         case 1 : /* binomial name */
             BinomialOrgNameFree(onp->data);
+            onp->data= NULL;
             break;
         case 2 : /* virus name */
-            MemFree(onp->data);
+            onp->data= MemFree(onp->data);
             break;
         case 5 : /* partial name */
             TaxElementSetFree(onp->data);
+            onp->data= NULL;
             break;
         }
     }

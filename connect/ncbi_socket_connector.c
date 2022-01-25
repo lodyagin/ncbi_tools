@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket_connector.c,v 6.11 2002/08/12 15:12:46 lavr Exp $
+/*  $Id: ncbi_socket_connector.c,v 6.13 2002/10/28 15:46:21 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,11 +33,10 @@
  *
  */
 
-#include <connect/ncbi_ansi_ext.h>
+#include "ncbi_ansi_ext.h"
 #include <connect/ncbi_socket_connector.h>
 #include <connect/ncbi_socket.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define MAX_IP_ADDR_LEN       16 /* sizeof("255.255.255.255") */
 
@@ -282,6 +281,7 @@ static void s_Destroy
     if (xxx->init_data)
         free(xxx->init_data);
     free(xxx);
+    connector->handle = 0;
     free(connector);
 }
 
@@ -375,6 +375,12 @@ extern CONNECTOR SOCK_CreateConnectorOnTopEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_socket_connector.c,v $
+ * Revision 6.13  2002/10/28 15:46:21  lavr
+ * Use "ncbi_ansi_ext.h" privately
+ *
+ * Revision 6.12  2002/10/22 15:11:24  lavr
+ * Zero connector's handle to crash if revisited
+ *
  * Revision 6.11  2002/08/12 15:12:46  lavr
  * Use persistent SOCK_Write()
  *

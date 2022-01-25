@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.36 2002/08/12 15:12:01 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.43 2002/11/13 19:54:13 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,21 +31,14 @@
  *
  */
 
+#include "ncbi_ansi_ext.h"
 #include "ncbi_priv.h"
-#include <connect/ncbi_ansi_ext.h>
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_connutil.h>
 #include <connect/ncbi_socket.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <string.h>
-
-
-#define MAX_IP_ADDR_LEN  16 /* sizeof("255.255.255.255") */
-#ifndef   MAXHOSTNAMELEN
-#  define MAXHOSTNAMELEN 64
-#endif
 
 
 static const char* s_GetValue(const char* service, const char* param,
@@ -68,11 +61,8 @@ static const char* s_GetValue(const char* service, const char* param,
         /* First, environment search for 'service_CONN_param' */
         sprintf(key, "%s_" DEF_CONN_REG_SECTION "_%s", service, param);
         strupr(key);
-        if ((val = getenv(key)) != 0) {
-            strncpy(value, val, value_size);
-            value[value_size - 1] = '\0';
-            return value;
-        }
+        if ((val = getenv(key)) != 0)
+            return strncpy0(value, val, value_size - 1);
         /* Next, search for 'CONN_param' in '[service]' registry section */
         sprintf(key, DEF_CONN_REG_SECTION "_%s", param);
         sec = key + strlen(key) + 1;
@@ -91,11 +81,8 @@ static const char* s_GetValue(const char* service, const char* param,
     }
 
     /* Environment search for 'CONN_param' */
-    if ((val = getenv(key)) != 0) {
-        strncpy(value, val, value_size);
-        value[value_size - 1] = '\0';
-        return value;
-    }
+    if ((val = getenv(key)) != 0)
+        return strncpy0(value, val, value_size - 1);
 
     /* Last resort: Search for 'param' in default registry section */
     strcpy(key, param);
@@ -129,7 +116,8 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
         return 0/*failure*/;
 
     /* client host */
-    SOCK_gethostname(info->client_host, sizeof(info->client_host));
+    if (!SOCK_gethostbyaddr(0, info->client_host, sizeof(info->client_host)))
+        SOCK_gethostname(info->client_host, sizeof(info->client_host));
 
     /* dispatcher host name */
     REG_VALUE(REG_CONN_HOST, info->host, DEF_CONN_HOST);
@@ -263,8 +251,7 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
     }}
 
     assert(sizeof(info->host) >= sizeof(info->http_proxy_host));
-    strncpy(info->host, info->http_proxy_host, sizeof(info->host));
-    info->host[sizeof(info->host) - 1] = '\0';
+    strncpy0(info->host, info->http_proxy_host, sizeof(info->host) - 1);
     info->port = info->http_proxy_port;
     info->http_proxy_adjusted = 1/*true*/;
     return 1/*true*/;
@@ -319,22 +306,21 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         s = url;
 
     /* arguments */
-    if ((a = strchr(s, '?')) != 0) {
-        strncpy(info->args, a + 1, sizeof(info->args));
-        info->args[sizeof(info->args) - 1] = '\0';
-    } else
+    if ((a = strchr(s, '?')) != 0)
+        strncpy0(info->args, a + 1, sizeof(info->args) - 1);
+    else
         a = s + strlen(s);
 
     /* path (NB: can be relative) */
     if (s != url || *s == '/' || !(p = strrchr(info->path, '/'))) {
         /* absolute path */
-        p = info->path - 1;
+        p = info->path;
         if (!*s) {
             s = "/";   /* in case of an empty path we take the root '/' */
             a = s + 1;
         }
-    }
-    p++;
+    } else
+        p++;
     if ((size_t)(a - s) < sizeof(info->path) - (size_t)(p - info->path)) {
         memcpy(p, s, (size_t)(a - s));
         p[(size_t)(a - s)] = '\0';
@@ -354,6 +340,255 @@ extern void ConnNetInfo_SetUserHeader(SConnNetInfo* info,
         free((void*) info->http_user_header);
     info->http_user_header =
         user_header && *user_header ? strdup(user_header) : 0;
+}
+
+
+extern int/*bool*/ ConnNetInfo_AppendUserHeader(SConnNetInfo* info,
+                                                const char*   user_header)
+{
+    size_t oldlen, newlen;
+    char* new_header;
+
+    if (!info->http_user_header || !(oldlen = strlen(info->http_user_header))){
+        ConnNetInfo_SetUserHeader(info, user_header);
+        return !!info->http_user_header == !!user_header ? 1/*ok*/ : 0/*fail*/;
+    }
+
+    if (!user_header || !(newlen = strlen(user_header)))
+        return 1/*success*/;
+
+    new_header = (char*)
+        realloc((void*) info->http_user_header, oldlen + newlen + 1);
+    if (!new_header)
+        return 0/*failure*/;
+
+    memcpy(&new_header[oldlen], user_header, newlen + 1);
+    info->http_user_header = new_header;
+    return 1/*success*/;
+}
+
+
+static int/*bool*/ s_OverrideOrDeleteUserHeader(SConnNetInfo* info,
+                                                const char*   user_header,
+                                                int/*bool*/   do_delete)
+{
+    int/*bool*/ retval;
+    char*  new_header;
+    size_t newlinelen;
+    size_t newhdrlen;
+    char*  newline;
+    size_t hdrlen;
+    char*  hdr;
+
+    if (!(hdr = (char*) info->http_user_header) || !(hdrlen = strlen(hdr))) {
+        if (do_delete)
+            return 1/*success*/;
+        ConnNetInfo_SetUserHeader(info, user_header);
+        return !!info->http_user_header == !!user_header ? 1/*ok*/ : 0/*fail*/;
+    }
+
+    if (!user_header || !(newhdrlen = strlen(user_header)))
+        return 1/*success*/;
+
+    if (!do_delete) {
+        if (!(new_header = (char*) malloc(newhdrlen + 1)))
+            return 0/*failure*/;
+        memcpy(new_header, user_header, newhdrlen + 1);
+    } else
+        new_header = (char*) user_header; /* we actually won't modify it! */
+
+    retval = 1/*assume best: success*/;
+    for (newline = new_header; *newline; newline += newlinelen) {
+        char*  eol = strchr(newline, '\n');
+        char*  eot = strchr(newline,  ':');
+        int/*bool*/ replaced = 0;
+        size_t newtaglen;
+        size_t linelen;
+        char*  line;
+        size_t len;
+
+        newlinelen = (size_t)
+            (eol ? eol - newline + 1 : new_header + newhdrlen - newline);
+        if (!eot || eot > newline + newlinelen ||
+            !(newtaglen = (size_t)(eot - newline)))
+            continue;
+
+        if (!do_delete) {
+            char* newtagval = newline + newtaglen + 1;
+            while (newtagval < newline + newlinelen) {
+                if (isspace((unsigned char)(*newtagval)))
+                    newtagval++;
+                else
+                    break;
+            }
+            len = newtagval < newline + newlinelen ? newlinelen : 0;
+        } else
+            len = 0;
+
+        for (line = hdr; *line; line += linelen) {
+            size_t taglen;
+
+            eol = strchr(line, '\n');
+            eot = strchr(line,  ':');
+
+            linelen = (size_t)(eol ? eol - line + 1 : hdr + hdrlen - line);
+            if (!eot || eot > line + linelen)
+                continue;
+
+            taglen = (size_t)(eot - line);
+            if (newtaglen != taglen || strncasecmp(newline, line, taglen) != 0)
+                continue;
+
+            if (len != linelen) {
+                if (len > linelen) {
+                    char*  temp   = (char*) realloc(hdr, hdrlen+len-linelen+1);
+                    size_t offset = (size_t)(line - hdr);
+                    if (!temp) {
+                        retval = 0/*failure*/;
+                        continue;
+                    }
+                    hdr  = temp;
+                    line = temp + offset;
+                }
+                memmove(line + len, line + linelen,
+                        hdrlen - (size_t)(line - hdr) - linelen + 1);
+                hdrlen -= linelen;
+                hdrlen += len;
+            }
+
+            if (len)
+                memcpy(line, newline, len);
+            linelen = len;
+            replaced = 1;
+        }
+
+        if (do_delete)
+            continue;
+
+        if (replaced || !len) {
+            memmove(newline, newline + newlinelen,
+                    newhdrlen - (size_t)(newline-new_header) - newlinelen + 1);
+            newhdrlen -= newlinelen;
+            newlinelen = 0;
+        }
+    }
+
+    info->http_user_header = hdr;
+    if (!do_delete) {
+        if (!ConnNetInfo_AppendUserHeader(info, new_header))
+            retval = 0/*failure*/;
+        free(new_header);
+    }
+    return retval;
+}
+
+
+extern int/*bool*/ ConnNetInfo_OverrideUserHeader(SConnNetInfo* info,
+                                                  const char*   header)
+{
+    return s_OverrideOrDeleteUserHeader(info, header, 0/*do not delete only*/);
+}
+
+
+extern void ConnNetInfo_DeleteUserHeader(SConnNetInfo* info,
+                                         const char*   header)
+{
+    verify(s_OverrideOrDeleteUserHeader(info, header, 1/*do delete only*/));
+}
+
+
+extern int/*bool*/ ConnNetInfo_AppendArg(SConnNetInfo* info,
+                                         const char*   arg,
+                                         const char*   val)
+{
+    const char* amp = "&";
+
+    if (!arg || !*arg)
+        return 1/*success*/;
+    if (!info->args[0])
+        amp = "";
+    if (strlen(info->args) + strlen(amp) + strlen(arg) +
+        (val ? 1 + strlen(val) : 0) >= sizeof(info->args))
+        return 0/*failure*/;
+    strcat(info->args, amp);
+    strcat(info->args, arg);
+    if (!val || !*val)
+        return 1/*success*/;
+    strcat(info->args, "=");
+    strcat(info->args, val);
+    return 1/*success*/;
+}
+
+
+extern int/*bool*/ ConnNetInfo_PrependArg(SConnNetInfo* info,
+                                          const char*   arg,
+                                          const char*   val)
+{
+    char amp = '&';
+    size_t off;
+
+    if (!arg || !*arg)
+        return 1/*success*/;
+    if (!info->args[0])
+        amp = '\0';
+    off = strlen(arg) + (val && *val ? 1 + strlen(val) : 0) + (amp ? 1 : 0);
+    if (strlen(info->args) + off + 1 >= sizeof(info->args))
+        return 0/*failure*/;
+    memmove(&info->args[off], info->args, strlen(info->args) + 1);
+    strcpy(info->args, arg);
+    if (val && *val) {
+        strcat(info->args, "=");
+        strcat(info->args, val);
+    }
+    if (amp)
+        info->args[off - 1] = amp;
+    return 1/*success*/;
+}
+
+
+extern void ConnNetInfo_DeleteArg(SConnNetInfo* info,
+                                  const char*   arg)
+{
+    size_t argnamelen;
+    size_t arglen;
+    char*  a;
+
+    if (!arg || !(argnamelen = strcspn(arg, "=&")))
+        return;
+    for (a = info->args; *a; a += arglen) {
+        if (*a == '&')
+            a++;
+        arglen = strcspn(a, "&");
+        if (arglen < argnamelen || strncmp(a, arg, argnamelen) != 0 ||
+            (a[argnamelen] && a[argnamelen] != '=' && a[argnamelen] != '&'))
+            continue;
+        memmove(a, a + arglen, strlen(a + arglen) + 1);
+        if (!*a && a != info->args)
+            *--a = '\0'; /* remove '&' at the end */
+        arglen = 0;
+    }
+}
+
+
+extern int/*bool*/ ConnNetInfo_PreOverrideArg(SConnNetInfo* info,
+                                              const char*   arg,
+                                              const char*   val)
+{
+    if (!arg || !*arg)
+        return 1/*success*/;
+    ConnNetInfo_DeleteArg(info, arg);
+    return ConnNetInfo_PrependArg(info, arg, val);
+}
+
+
+extern int/*bool*/ ConnNetInfo_PostOverrideArg(SConnNetInfo* info,
+                                               const char*   arg,
+                                               const char*   val)
+{
+    if (!arg || !*arg)
+        return 1/*success*/;
+    ConnNetInfo_DeleteArg(info, arg);
+    return ConnNetInfo_AppendArg(info, arg, val);
 }
 
 
@@ -1000,8 +1235,7 @@ extern char* MIME_ComposeContentTypeEx
 
     assert(strlen(x_buf) < sizeof(x_buf));
     assert(strlen(x_buf) < buflen);
-    strncpy(buf, x_buf, buflen);
-    buf[buflen - 1] = '\0';
+    strncpy0(buf, x_buf, buflen - 1);
     return buf;
 }
 
@@ -1123,9 +1357,9 @@ extern const char* StringToHostPort(const char*     str,
                                     unsigned int*   host,
                                     unsigned short* port)
 {
-    char abuf[MAXHOSTNAMELEN];
     unsigned short p;
     unsigned int h;
+    char abuf[256];
     const char* s;
     size_t alen;
     int n = 0;
@@ -1139,8 +1373,7 @@ extern const char* StringToHostPort(const char*     str,
     if ((alen = (size_t)(s - str)) > sizeof(abuf) - 1)
         return str;
     if (alen) {
-        strncpy(abuf, str, alen);
-        abuf[alen] = '\0';
+        strncpy0(abuf, str, alen);
         if (!(h = SOCK_gethostbyname(abuf)))
             return str;
     } else
@@ -1162,7 +1395,7 @@ extern size_t HostPortToString(unsigned int   host,
                                char*          buf,
                                size_t         buflen)
 {
-    char abuf[MAX_IP_ADDR_LEN + 10/*:port*/];
+    char abuf[16/*sizeof("255.255.255.255")*/ + 10/*:port*/];
     size_t n;
 
     if (!buf || !buflen)
@@ -1183,6 +1416,33 @@ extern size_t HostPortToString(unsigned int   host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.43  2002/11/13 19:54:13  lavr
+ * ConnNetInfo_DeleteArg(): fix initial argument calculation size
+ *
+ * Revision 6.42  2002/11/12 05:50:33  lavr
+ * Modify client host name discovery
+ *
+ * Revision 6.41  2002/11/01 20:13:50  lavr
+ * Remove MAXHOSTNAMELEN and MAX_IP_ADDR_LEN macros
+ *
+ * Revision 6.40  2002/10/28 15:42:38  lavr
+ * Use "ncbi_ansi_ext.h" privately and use strncpy0()
+ *
+ * Revision 6.39  2002/10/21 18:30:59  lavr
+ * +ConnNetInfo_AppendArg()
+ * +ConnNetInfo_PrependArg()
+ * +ConnNetInfo_DeleteArg()
+ * +ConnNetInfo_PreOverrideArg()
+ * +ConnNetInfo_PostOverrideArg()
+ *
+ * Revision 6.38  2002/10/11 19:42:06  lavr
+ * +ConnNetInfo_AppendUserHeader()
+ * +ConnNetInfo_OverrideUserHeader()
+ * +ConnNetInfo_DeleteUserHeader()
+ *
+ * Revision 6.37  2002/09/24 18:08:34  lavr
+ * Avoid compiler warning in positioning on first but one array element
+ *
  * Revision 6.36  2002/08/12 15:12:01  lavr
  * Use persistent SOCK_Write()
  *

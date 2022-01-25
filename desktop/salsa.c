@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.157 $
+* $Revision: 6.158 $
 *
 * File Description: 
 *
@@ -3910,7 +3910,7 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
   Uint1              showfeat = 0;
   FonT               font;
   Boolean            is_prot = FALSE,
-                     bool;
+                     ble;
   
   if (bsp==NULL)
      return NULL;
@@ -3989,8 +3989,8 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
   else 
   {
      adp->edit_mode = (Uint1)(!svpp->viewer_mode);
-     bool = (Boolean)(!svpp->viewer_mode);
-     SetupMenus (w, FALSE, is_prot, bool, svpp->extended_dist_menu, svpp->extended_align_menu, svpp->extended_tree_menu);
+     ble = (Boolean)(!svpp->viewer_mode);
+     SetupMenus (w, FALSE, is_prot, ble, svpp->extended_dist_menu, svpp->extended_align_menu, svpp->extended_tree_menu);
   }
   if (!is_prot) 
   {
@@ -4105,7 +4105,7 @@ static ForM CreateSeqAlignEditForm (Int2 left, Int2 top, CharPtr windowname, Seq
   Uint1              moltype = 0;
   FonT               font;
   Boolean            is_prot = FALSE,
-                     bool;
+                     ble;
   
   if (salp==NULL)
      return NULL;
@@ -4197,8 +4197,8 @@ static ForM CreateSeqAlignEditForm (Int2 left, Int2 top, CharPtr windowname, Seq
         adp->edit_mode = SEQ_VIEW;
      else 
         adp->edit_mode = ALIGN_EDIT;
-     bool = (Boolean)(!svpp->viewer_mode);
-     SetupMenus (w, TRUE, is_prot, bool, svpp->extended_dist_menu, svpp->extended_align_menu, svpp->extended_tree_menu);
+     ble = (Boolean)(!svpp->viewer_mode);
+     SetupMenus (w, TRUE, is_prot, ble, svpp->extended_dist_menu, svpp->extended_align_menu, svpp->extended_tree_menu);
   }
   if (!is_prot) 
   {

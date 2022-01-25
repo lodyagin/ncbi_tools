@@ -153,6 +153,10 @@ SOURCE=..\..\..\..\connect\ncbi_file_connector.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_host_info.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\connect\ncbi_http_connector.c
 # End Source File
 # Begin Source File
@@ -181,11 +185,11 @@ SOURCE=..\..\..\..\connect\ncbi_service_connector.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\connect\ncbi_service_dispd.c
+SOURCE=..\..\..\..\connect\ncbi_dispd.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\connect\ncbi_service_lbsmd_stub.c
+SOURCE=..\..\..\..\connect\ncbi_lbsmd_stub.c
 # End Source File
 # Begin Source File
 
@@ -388,6 +392,10 @@ SOURCE=..\..\..\..\connect\ncbi_core_c.h
 # Begin Source File
 
 SOURCE=..\..\..\..\connect\ncbi_file_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_host_info.h
 # End Source File
 # Begin Source File
 

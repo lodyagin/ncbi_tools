@@ -1,4 +1,4 @@
-/* $Id: kappa.c,v 6.22 2002/08/20 15:43:08 camacho Exp $ 
+/* $Id: kappa.c,v 6.26 2002/11/06 20:31:14 dondosha Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,21 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.22 $
+ $Revision: 6.26 $
 
  $Log: kappa.c,v $
+ Revision 6.26  2002/11/06 20:31:14  dondosha
+ Added recalculation of the number of identities when computing seqalign from SWResults
+
+ Revision 6.25  2002/10/16 13:33:58  madden
+ Corrected initialization of initialUngappedLambda in RedoAlignmentCore
+
+ Revision 6.24  2002/09/03 13:55:14  kans
+ changed NULL to 0 for Mac compiler
+
+ Revision 6.23  2002/08/29 15:47:49  camacho
+ Changed RedoAlignmentCore to work without readdb facility
+
  Revision 6.22  2002/08/20 15:43:08  camacho
  Fixed memory leak in getStartFreqRatios
 
@@ -779,6 +791,45 @@ static Int4 BLspecialSmithWatermanFindStart(Uint1 * matchSeq,
    return(bestScore);
 }
 
+static Int4 SWAlignGetNumIdentical(SWResults *SWAlign, Uint1Ptr query_seq, 
+                                   GapXEditBlockPtr gap_info)
+{
+   Uint1Ptr q, s;
+   GapXEditScriptPtr esp;
+   Int4 num_ident, i;
+
+   if (!gap_info)
+      return 0;
+ 
+   q = &query_seq[SWAlign->queryStart];
+   s = &SWAlign->seq[SWAlign->seqStart];
+
+   num_ident = 0;
+
+   for (esp = gap_info->esp; esp; esp = esp->next) {
+      switch (esp->op_type) {
+      case GAPALIGN_SUB:
+         for (i=0; i<esp->num; i++) {
+            if (*q++ == *s++)
+               num_ident++;
+         }
+         break;
+      case GAPALIGN_DEL:
+         s += esp->num;
+         break;
+      case GAPALIGN_INS:
+         q += esp->num;
+         break;
+      default: 
+         s += esp->num;
+         q += esp->num;
+         break;
+      }
+   }
+   
+   return num_ident;
+}
+
 /*converts the list of Smith-Waterman alignments to a corresponding list
   of SeqAlignPtrs. kbp stores parameters for computing the score
   Code is adapted from procedure output_hits of pseed3.c */
@@ -792,7 +843,8 @@ static SeqAlignPtr newConvertSWalignsToSeqAligns(SWResults * SWAligns,
     SeqAlignPtr lastSeqAlign = NULL; /*last one on list*/
     SWResults *curSW, *oldSW; /*used to iterate down list*/
     GapXEditBlockPtr nextEditBlock;  /*intermediate structure towards seqlign*/
-    
+    Int4 num_ident;
+
     curSW = SWAligns;
     while (curSW != NULL) {
         nextEditBlock = TracebackToGapXEditBlock(
@@ -807,6 +859,11 @@ static SeqAlignPtr newConvertSWalignsToSeqAligns(SWResults * SWAligns,
         nextSeqAlign->score = addScoresToSeqAlign(curSW->scoreThisAlign, 
                                                   curSW->eValueThisAlign, curSW->Lambda, curSW->logK);
         
+        num_ident = SWAlignGetNumIdentical(curSW, query, nextEditBlock);
+        
+        if (num_ident > 0)
+           MakeBlastScore(&nextSeqAlign->score, "num_ident", 0.0, num_ident);
+
         nextEditBlock = GapXEditBlockDelete(nextEditBlock);
         
         if (NULL == seqAlignList)
@@ -1517,7 +1574,8 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    SWheapRecord *HeapArray = NULL; /*array for heap*/
    Int4 heapSize; /*number of entries in the heap*/
    BioseqPtr bsp_db; /* Bioseq for a database sequence, used for filtering. */
-
+   Boolean bioseq_unlock = FALSE; /* should bsp_db be unlocked or freed? */
+   
    query = search->context[0].query->sequence;
    queryLength = search->context[0].query->length;
    gapOpen = search->pbp->gap_open;
@@ -1583,7 +1641,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        for(i = 0; i < queryLength; i++)
 	 for(j = 0; j < PROTEIN_ALPHABET; j++)
 	   startMatrix[i][j] = matrix[i][j];
-       initialUngappedLambda = search->sbp->kbp_std[0]->Lambda;
+       initialUngappedLambda = search->sbp->kbp_psi[0]->Lambda;
        scaledInitialUngappedLambda = initialUngappedLambda/localScalingFactor;
      }
      else {
@@ -1591,7 +1649,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        startMatrix = allocateScaledMatrix(PROTEIN_ALPHABET);
        startFreqRatios = getStartFreqRatios(search, query,options->matrix, 
 					NULL,PROTEIN_ALPHABET,FALSE);
-       initialUngappedLambda = search->sbp->kbp_psi[0]->Lambda;
+       initialUngappedLambda = search->sbp->kbp_std[0]->Lambda;
        scaledInitialUngappedLambda = initialUngappedLambda/localScalingFactor;
        computeScaledStandardMatrix(matrix,options->matrix, scaledInitialUngappedLambda);
        for(i = 0; i < PROTEIN_ALPHABET; i++)
@@ -1644,9 +1702,28 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        matchingSequenceLength = readdb_get_sequence(search->rdfp, thisMatch->subject_id, (Uint1Ptr PNTR) &matchingSequence);
        bsp_db = readdb_get_bioseq(search->rdfp, thisMatch->subject_id);
      } else {
-       matchingSequenceLength = 0;
-       matchingSequence = NULL;
-       bsp_db = NULL;
+       SeqPortPtr spp = NULL;
+       Uint1 residue;
+       Int4 idx = 0;
+
+       matchingSequenceLength = search->subject_info->length;
+       bsp_db = BioseqLockById(search->subject_info->sip);
+       spp = SeqPortNew(bsp_db, FIRST_RESIDUE, LAST_RESIDUE,
+               Seq_strand_unknown, Seq_code_ncbistdaa);
+       matchingSequence = MemNew((matchingSequenceLength+1)*sizeof(Uint1));
+       while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+         if (IS_residue(residue)) {
+             if (residue == 24) {        /* change selenocysteine to X */
+               residue = 21;
+               fprintf(stderr,"Selenocysteine (U) at position %ld "
+                       "replaced by X\n", idx+1);
+             }
+             matchingSequence[idx++] = residue;
+         }
+       }
+       matchingSequence[idx++] = 0;
+       spp = SeqPortFree(spp);
+       bioseq_unlock = TRUE;
      }
 
      /*filteredMatchingSequence = matchingSequence;*/
@@ -1654,7 +1731,6 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      /* switch to this if we want to filter the match*/
      filteredMatchingSequence = MemNew((matchingSequenceLength+1) * sizeof(Uint1));
      segResult(bsp_db, matchingSequence, filteredMatchingSequence, matchingSequenceLength); 
-     bsp_db = BioseqFree(bsp_db);
      foundFirstAlignment = FALSE;
      if (adjustParameters) {
        if (search->positionBased) {
@@ -1858,8 +1934,8 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	 newSW->Lambda = kbp-> Lambda * localScalingFactor;
 	 newSW->logK = kbp->logK;
 	 newSW->subject_index = thisMatch->subject_id;
-	 readdb_get_descriptor(search->rdfp, thisMatch->subject_id, 
-			       &(newSW->subject_id), NULL);
+         newSW->subject_id = SeqIdSetDup(bsp_db->id);
+         
 	 if (SWPurging != currentState) {
 	   numAligns++;
 	   if (!foundFirstAlignment) {
@@ -1965,6 +2041,14 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      index++;
      if (matchingSequence != filteredMatchingSequence)
        MemFree(filteredMatchingSequence);
+     if (bsp_db) {
+       if (bioseq_unlock) {
+         BioseqUnlock(bsp_db); bsp_db = NULL; 
+         matchingSequence = MemFree(matchingSequence);
+       } else {
+         bsp_db = BioseqFree(bsp_db);
+       }
+     }
    }
    if (SWPurging == currentState)
      SWAligns = convertFromHeapToList(HeapArray, heapSize, &numAligns);

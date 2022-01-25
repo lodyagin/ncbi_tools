@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.h,v $
+* Revision 6.17  2002/10/02 16:12:54  kskatz
+* Added a new option to SPI_Options (bigintron_size) that holds a user-supplied maximum size (default = 220000) for introns and requires the option (bool) bigintron to be set to 'TRUE'; The functions affected are SPI_mRNAPtr SPI_AdjustForSplice(), SPI_is_consistent(), and SPI_FindPiece(); note that the default for bigintron_size is not set in SPI_OptionsNew() (yet)
+*
 * Revision 6.16  2002/06/27 11:53:33  wheelan
 * additions to structures to support off-by-one bug fixes and printing of the cds length
 *
@@ -421,7 +424,8 @@ typedef struct spi_options {
    Int4                  from; /* to restrict genomic interval */
    Int4                  to;   /* " */
    Boolean               makemult; /* make a multiple alignment from numerous returns? */
-   Boolean               bigintron;
+    Boolean               bigintron; 
+    Int4                  bigintron_size; /*added by KSK */
    Uint1                 strand; /* to restrict the search to one genomic strand */
    Boolean               revcomp;
    Int4                  dsplicejunc;

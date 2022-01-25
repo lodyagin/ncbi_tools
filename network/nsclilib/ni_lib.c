@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -266,6 +266,9 @@
 *
 * RCS Modification History:
 * $Log: ni_lib.c,v $
+* Revision 6.15  2002/11/06 21:30:13  ucko
+* Don't assume MIPS is IRIX, or HPPA is HP/UX; allow Linux too, for both.
+*
 * Revision 6.14  2001/01/04 22:35:02  vakatov
 * NI_ServerACK(), NI_ServerNACK() -- to do nothing, always return 0.
 *
@@ -2773,13 +2776,13 @@ NLM_EXTERN Int2 NI_GetPlatform (void)
 #ifdef PROC_CONVEX
     retval = NI_PLATFORM_CONVEX;
 #endif
-#ifdef PROC_HPPA
+#if defined(PROC_HPPA) && !defined(OS_UNIX_LINUX)
     retval = NI_PLATFORM_HPUX;
 #endif
 #ifdef OS_UNIX_NEXT
     retval = NI_PLATFORM_NEXT;
 #endif
-#ifdef PROC_MIPS
+#if defined(PROC_MIPS) && !defined(OS_UNIX_LINUX)
     retval = NI_PLATFORM_SGI;
 #endif
 #ifdef OS_UNIX_ULTRIX

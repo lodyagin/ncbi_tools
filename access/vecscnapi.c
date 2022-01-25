@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.6 $
+* $Revision: 1.7 $
 *
 * File Description: 
 *
@@ -106,7 +106,7 @@ NLM_EXTERN EIO_Status VecScreenWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC

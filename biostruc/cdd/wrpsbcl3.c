@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.27 2002/08/06 02:39:10 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.28 2002/10/09 20:30:05 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.27 $
+* $Revision: 1.28 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.28  2002/10/09 20:30:05  bauer
+* increased max. number of CDART neighbors
+*
 * Revision 1.27  2002/08/06 02:39:10  bauer
 * changes to accomodate COGs
 *
@@ -1088,12 +1091,12 @@ static Boolean WRPSBHitIsNew(AlignmentAbstractPtr aapThis,
 {
   AlignmentAbstractPtr aap;
   int                  Size, i;
-  unsigned             Gilist[50];
-  char                 Accession[50][30];
+  unsigned             Gilist[500];
+  char                 Accession[500][30];
   
   if (!aapThis) return FALSE;
   if (Connection) {
-    if (Dart_Related(Connection,aapThis->cCDDid,Gilist,50,&Size,NULL)) {
+    if (Dart_Related(Connection,aapThis->cCDDid,Gilist,500,&Size,NULL)) {
       for (i=0;i<Size;i++) {
         if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
 	  Accession[i][0] = '\0';

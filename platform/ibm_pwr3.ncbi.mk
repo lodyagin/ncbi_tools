@@ -1,5 +1,5 @@
 #
-# $Id: ibm_pwr3.ncbi.mk,v 1.4 2002/06/06 18:50:10 beloslyu Exp $
+# $Id: ibm_pwr3.ncbi.mk,v 1.5 2002/10/29 01:20:13 lavr Exp $
 #
 # Initial version ddas@us.ibm.com 08/19/1999
 # Replace r6k with ibm_pwr3 or ibm_auto: cpsosa@us.ibm.com Jun-2001
@@ -35,5 +35,5 @@ OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU -lXGLW -lglut -lglobalm5
 NCBI_OGLLIBS = -lGL -lGLU -lXGLW -lglut -lglobalm5
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o

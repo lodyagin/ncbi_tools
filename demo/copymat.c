@@ -34,6 +34,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.23  2002/11/06 21:26:47  ucko
+RPSConcatSequences: provide useful error messages, ignore all trailing space.
+
 Revision 6.22  2002/04/08 19:02:31  madden
 Allow float for threshold
 
@@ -507,22 +510,32 @@ Boolean RPSConcatSequences(FILE *sfp, CharPtr fastaname)
     Char oneFileName[MAXLINELEN]; /*for reading one line per file*/
     Char buffer[1024];
     Int4 bytes;
-    CharPtr chptr;
+    CharPtr chptr, last_non_space;
 
-    if((fasta_fp = FileOpen(fastaname, "w")) == NULL)
+    if((fasta_fp = FileOpen(fastaname, "w")) == NULL) {
+        ErrPostEx(SEV_FATAL, 0, 0, "concatenate sequences: "
+                  "Unable to open target fasta file %s: %s\n",
+                  fastaname, strerror(errno));
         return FALSE;
+    }
 
     rewind(sfp);
     
     while (fgets(oneFileName, MAXLINELEN, sfp)) {
 
-        /* Filtering out '\n' and '\r' characters */
+        /* Remove trailing whitespace */
+        last_non_space = NULL;
         for(chptr = oneFileName; *chptr != NULLB; chptr++) {
-            if(*chptr == '\n' || *chptr == '\r')
-                *chptr = NULLB;
+            if (!isspace(*chptr))
+                last_non_space = chptr;
         }
+        if (last_non_space != NULL)
+            last_non_space[1] = NULLB;
         
         if((fd = FileOpen(oneFileName, "r")) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "concatenate sequences: "
+                      "Unable to open source fasta file %s: %s\n",
+                      oneFileName, strerror(errno));
             FileClose(fasta_fp);
             return FALSE;
         }

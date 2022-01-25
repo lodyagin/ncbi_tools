@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.37 2002/05/06 19:16:50 lavr Exp $
+/*  $Id: ncbi_service.c,v 6.42 2002/11/12 05:53:01 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,8 +28,423 @@
  * File Description:
  *   Top-level API to resolve NCBI service name to the server meta-address.
  *
+ */
+
+#include "ncbi_ansi_ext.h"
+#include "ncbi_dispd.h"
+#include "ncbi_lbsmd.h"
+#include "ncbi_priv.h"
+#include "ncbi_servicep.h"
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define SERV_SERVICE_NAME "SERVICE_NAME"
+
+
+char* SERV_ServiceName(const char* service)
+{
+    char *s, *p;
+    char key[128];
+    char srv[128];
+
+    if (!service || !*service ||
+        sizeof(DEF_CONN_REG_SECTION) + sizeof(SERV_SERVICE_NAME) +
+        strlen(service) >= sizeof(key))
+        return 0/*failure*/;
+    s = key;
+    strcpy(s, DEF_CONN_REG_SECTION);
+    s += sizeof(DEF_CONN_REG_SECTION) - 1;
+    *s++ = '_';
+    strcpy(s, SERV_SERVICE_NAME);
+    s += sizeof(SERV_SERVICE_NAME) - 1;
+    *s++ = '_';
+    strcpy(s, service);
+    strupr(key);
+    /* Looking for "CONN_SERVICE_NAME_service" in environment */
+    if (!(p = getenv(key))) {
+        *--s = '\0';
+        /* Looking for "CONN_SERVICE_NAME" in registry's section [service] */
+        CORE_REG_GET(service, key, srv, sizeof(srv), 0);
+        if (!*srv)
+            return strdup(service);
+    } else
+        strncpy0(srv, p, sizeof(srv) - 1);
+
+    /* No cycle detection in service name redefinition */
+    return SERV_ServiceName(srv);
+}
+
+
+SERV_ITER SERV_OpenSimple(const char* service)
+{
+    SConnNetInfo* net_info = ConnNetInfo_Create(service);
+    SERV_ITER iter = SERV_Open(service, fSERV_Any, 0, net_info);
+    ConnNetInfo_Destroy(net_info);
+    return iter;
+}
+
+
+static int/*bool*/ s_AddSkipInfo(SERV_ITER iter, SSERV_Info* info)
+{
+    if (iter->n_skip == iter->n_max_skip) {
+        SSERV_Info** temp;
+        size_t n = iter->n_max_skip + 10;
+
+        if (iter->skip)
+            temp = (SSERV_Info**) realloc(iter->skip, sizeof(*temp) * n);
+        else
+            temp = (SSERV_Info**) malloc(sizeof(*temp) * n);
+        if (!temp)
+            return 0;
+
+        iter->skip = temp;
+        iter->n_max_skip = n;
+    }
+
+    iter->skip[iter->n_skip++] = info;
+    return 1;
+}
+
+
+static SERV_ITER s_Open(const char* service,
+                        TSERV_Type type, unsigned int preferred_host,
+                        const SConnNetInfo* net_info,
+                        const SSERV_Info* const skip[], size_t n_skip,
+                        SSERV_Info** info, HOST_INFO* host_info)
+{
+    const char* s = SERV_ServiceName(service);
+    const SSERV_VTable* op;
+    SERV_ITER iter;
+    
+    if (!s || !*s || !(iter = (SERV_ITER) malloc(sizeof(*iter))))
+        return 0;
+
+    iter->service = s;
+    iter->type = type;
+    iter->preferred_host = preferred_host == SERV_LOCALHOST
+        ? SOCK_gethostbyname(0) : preferred_host;
+    iter->n_skip = iter->n_max_skip = 0;
+    iter->skip = 0;
+    iter->last = 0;
+    iter->op   = 0;
+    iter->data = 0;
+
+    if (n_skip) {
+        TNCBI_Time t = (TNCBI_Time) time(0);
+        size_t i;
+        for (i = 0; i < n_skip; i++) {
+            size_t infolen = SERV_SizeOfInfo(skip[i]);
+            SSERV_Info* info = (SSERV_Info*) malloc(infolen);
+            if (!info) {
+                SERV_Close(iter);
+                return 0;
+            }
+            memcpy(info, skip[i], infolen);
+            info->time = t + 3600/*hour*/*24/*day*/*365/*year - enough :-) */;
+            if (!s_AddSkipInfo(iter, info)) {
+                free(info);
+                SERV_Close(iter);
+            }
+        }
+    }
+    assert(n_skip == iter->n_skip);
+
+    if (!net_info) {
+        if (!(op = SERV_LBSMD_Open(iter, info, host_info))) {
+            /* LBSMD failed in non-DISPD mapping */
+            SERV_Close(iter);
+            return 0;
+        }
+    } else {
+        if (net_info->stateless)
+            iter->type |= fSERV_StatelessOnly;
+        if (net_info->firewall)
+            iter->type |= fSERV_Firewall;
+        if ((net_info->lb_disable ||
+             !(op = SERV_LBSMD_Open(iter, info, host_info))) &&
+            !(op = SERV_DISPD_Open(iter, net_info, info, host_info))) {
+            SERV_Close(iter);
+            return 0;
+        }
+    }
+
+    assert(op != 0);
+    iter->op = op;
+    return iter;
+}
+
+
+SERV_ITER SERV_OpenEx(const char* service,
+                      TSERV_Type type, unsigned int preferred_host,
+                      const SConnNetInfo* net_info,
+                      const SSERV_Info* const skip[], size_t n_skip)
+{
+    return s_Open(service, type, preferred_host, net_info, skip, n_skip, 0, 0);
+}
+
+
+SSERV_Info* SERV_GetInfoEx(const char* service,
+                           TSERV_Type type, unsigned int preferred_host,
+                           const SConnNetInfo* net_info,
+                           const SSERV_Info* const skip[], size_t n_skip,
+                           HOST_INFO* host_info)
+{
+    SSERV_Info* info = 0;
+    SERV_ITER iter = s_Open(service, type, preferred_host,
+                            net_info, skip, n_skip, &info, host_info);
+    if (iter && !info && iter->op && iter->op->GetNextInfo)
+        info = (*iter->op->GetNextInfo)(iter, host_info);
+    SERV_Close(iter);
+    return info;
+}
+
+
+static void s_SkipSkip(SERV_ITER iter)
+{
+    if (iter->n_skip) {
+        TNCBI_Time t = (TNCBI_Time) time(0);
+        size_t i = 0;
+
+        while (i < iter->n_skip) {
+            SSERV_Info* info = iter->skip[i];
+            if (info->time < t) {
+                if (i < --iter->n_skip)
+                    memmove(iter->skip + i, iter->skip + i + 1,
+                            sizeof(*iter->skip)*(iter->n_skip - i));
+                if (info == iter->last)
+                    iter->last = 0;
+                free(info);
+            } else
+                i++;
+        }
+    }
+}
+
+
+const SSERV_Info* SERV_GetNextInfoEx(SERV_ITER iter, HOST_INFO* host_info)
+{
+    SSERV_Info* info = 0;
+
+    if (iter && iter->op) {
+        /* First, remove all outdated entries from our skip list */
+        s_SkipSkip(iter);
+        /* Next, obtain a fresh entry from the actual mapper */
+        if (iter->op->GetNextInfo &&
+            (info = (*iter->op->GetNextInfo)(iter, host_info)) != 0 &&
+            !s_AddSkipInfo(iter, info)) {
+            free(info);
+            info = 0;
+        }
+        iter->last = info;
+    }
+    return info;
+}
+
+
+const char* SERV_MapperName(SERV_ITER iter)
+{
+    return iter && iter->op ? iter->op->name : 0;
+}
+
+
+int/*bool*/ SERV_Penalize(SERV_ITER iter, double fine)
+{
+    if (!iter || !iter->op || !iter->op->Penalize || !iter->last)
+        return 0;
+    return (*iter->op->Penalize)(iter, fine);
+}
+
+
+char* SERV_GetConfig(void)
+{
+    return SERV_LBSMD_GetConfig();
+}
+
+
+void SERV_Reset(SERV_ITER iter)
+{
+    size_t i;
+    if (!iter)
+        return;
+    for (i = 0; i < iter->n_skip; i++)
+        free(iter->skip[i]);
+    iter->n_skip = 0;
+    iter->last = 0;
+    if (iter->op && iter->op->Reset)
+        (*iter->op->Reset)(iter);
+}
+
+
+void SERV_Close(SERV_ITER iter)
+{
+    if (!iter)
+        return;
+    SERV_Reset(iter);
+    if (iter->op && iter->op->Close)
+        (*iter->op->Close)(iter);
+    if (iter->skip)
+        free(iter->skip);
+    if (iter->service)
+        free((void*) iter->service);
+    free(iter);
+}
+
+
+int/*bool*/ SERV_Update(SERV_ITER iter, const char* text)
+{
+    static const char used_server_info[] = "Used-Server-Info-";
+    int retval = 0/*not updated yet*/;
+
+    if (iter && iter->op && text) {
+        TNCBI_Time now = (TNCBI_Time) time(0);
+        const char *c, *b;
+        for (b = text; (c = strchr(b, '\n')) != 0; b = c + 1) {
+            size_t len = (size_t)(c - b);
+            SSERV_Info* info;
+            unsigned int d1;
+            char* p, *t;
+            int d2;
+
+            if (!(t = (char*) malloc(len + 1)))
+                continue;
+            memcpy(t, b, len);
+            if (t[len - 1] == '\r')
+                t[len - 1] = 0;
+            else
+                t[len] = 0;
+            p = t;
+            if (iter->op->Update && (*iter->op->Update)(iter, now, p))
+                retval = 1/*updated*/;
+            if (strncasecmp(p, used_server_info,
+                            sizeof(used_server_info) - 1) == 0) {
+                p += sizeof(used_server_info) - 1;
+                if (sscanf(p, "%u: %n", &d1, &d2) >= 1 &&
+                    (info = SERV_ReadInfo(p + d2)) != 0) {
+                    if (!s_AddSkipInfo(iter, info))
+                        free(info);
+                    else
+                        retval = 1/*updated*/;
+                }
+            }
+            free(t);
+        }
+    }
+    return retval;
+}
+
+
+char* SERV_Print(SERV_ITER iter)
+{
+    static const char accepted_types[] = "Accepted-Server-Types:";
+    static const char client_revision[] = "Client-Revision:";
+    static const char revision[] = "$Revision: 6.42 $";
+    char buffer[128], *str;
+    TSERV_Type type, t;
+    size_t buflen, i;
+    BUF buf = 0;
+
+    /* Put client version number */
+    buflen = sizeof(client_revision) - 1;
+    memcpy(buffer, client_revision, buflen);
+    for (i = 0; revision[i]; i++)
+        if (isspace((unsigned char) revision[i]))
+            break;
+    while (revision[i] && buflen + 2 < sizeof(buffer)) {
+        if (revision[i] == '$') {
+            if (isspace((unsigned char) revision[i - 1]))
+                --buflen;
+            break;
+        } else
+            buffer[buflen++] = revision[i++];
+    }
+    strcpy(&buffer[buflen], "\r\n");
+    assert(strlen(buffer) == buflen + 2  &&  buflen + 2 < sizeof(buffer));
+    if (!BUF_Write(&buf, buffer, buflen + 2)) {
+        BUF_Destroy(buf);
+        return 0;
+    }
+    if (iter) {
+        /* Form accepted server types */
+        buflen = sizeof(accepted_types) - 1;
+        memcpy(buffer, accepted_types, buflen);
+        type = (TSERV_Type) (iter->type & ~fSERV_StatelessOnly);
+        for (t = 1; t; t <<= 1) {
+            if (type & t) {
+                const char* name = SERV_TypeStr((ESERV_Type) t);
+                size_t namelen = strlen(name);
+                if (!namelen || buflen + 1 + namelen + 2 >= sizeof(buffer))
+                    break;
+                buffer[buflen++] = ' ';
+                strcpy(&buffer[buflen], name);
+                buflen += namelen;
+            }
+        }
+        if (buffer[buflen - 1] != ':') {
+            strcpy(&buffer[buflen], "\r\n");
+            assert(strlen(buffer) == buflen+2  &&  buflen+2 < sizeof(buffer));
+            if (!BUF_Write(&buf, buffer, buflen + 2)) {
+                BUF_Destroy(buf);
+                return 0;
+            }
+        }
+        /* Drop any outdated skip entries */
+        s_SkipSkip(iter);
+        /* Put all the rest into rejection list */
+        for (i = 0; i < iter->n_skip; i++) {
+            if (!(str = SERV_WriteInfo(iter->skip[i])))
+                break;
+            buflen = sprintf(buffer, "Skip-Info-%u: ", (unsigned) i + 1); 
+            assert(buflen < sizeof(buffer)-1);
+            if (!BUF_Write(&buf, buffer, buflen) ||
+                !BUF_Write(&buf, str, strlen(str)) ||
+                !BUF_Write(&buf, "\r\n", 2)) {
+                free(str);
+                break;
+            }
+            free(str);
+        }
+        if (i < iter->n_skip) {
+            BUF_Destroy(buf);
+            return 0;
+        }
+    }
+    /* Ok then, we have filled the entire header, <CR><LF> terminated */
+    if ((buflen = BUF_Size(buf)) != 0) {
+        if ((str = (char*) malloc(buflen + 1)) != 0) {
+            if (BUF_Read(buf, str, buflen) != buflen) {
+                free(str);
+                str = 0;
+            } else
+                str[buflen] = '\0';
+        }
+    } else
+        str = 0;
+    BUF_Destroy(buf);
+    return str;
+}
+
+
+/*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.c,v $
+ * Revision 6.42  2002/11/12 05:53:01  lavr
+ * Fit a long line within 80 chars
+ *
+ * Revision 6.41  2002/10/28 20:16:00  lavr
+ * Take advantage of host info API
+ *
+ * Revision 6.40  2002/10/28 15:43:49  lavr
+ * Use "ncbi_ansi_ext.h" privately and use strncpy0()
+ *
+ * Revision 6.39  2002/10/11 19:48:10  lavr
+ * +SERV_GetConfig()
+ * const dropped in return value of SERV_ServiceName()
+ *
+ * Revision 6.38  2002/09/04 15:11:41  lavr
+ * Log moved to end
+ *
  * Revision 6.37  2002/05/06 19:16:50  lavr
  * +#include <stdio.h>, +SERV_ServiceName() - translation of service name
  *
@@ -150,395 +565,3 @@
  *
  * ==========================================================================
  */
-
-#include "ncbi_priv.h"
-#include "ncbi_servicep.h"
-#include "ncbi_servicep_lbsmd.h"
-#include "ncbi_servicep_dispd.h"
-#include <connect/ncbi_ansi_ext.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
-#define SERV_SERVICE_NAME "SERVICE_NAME"
-
-
-const char* SERV_ServiceName(const char* service)
-{
-    char *s, *p;
-    char key[128];
-    char srv[128];
-
-    if (!service || !*service ||
-        sizeof(DEF_CONN_REG_SECTION) + sizeof(SERV_SERVICE_NAME) +
-        strlen(service) >= sizeof(key))
-        return 0/*failure*/;
-    s = key;
-    strcpy(s, DEF_CONN_REG_SECTION);
-    s += sizeof(DEF_CONN_REG_SECTION) - 1;
-    *s++ = '_';
-    strcpy(s, SERV_SERVICE_NAME);
-    s += sizeof(SERV_SERVICE_NAME) - 1;
-    *s++ = '_';
-    strcpy(s, service);
-    strupr(key);
-    /* Looking for "CONN_SERVICE_NAME_service" in environment */
-    if (!(p = getenv(key))) {
-        *--s = '\0';
-        /* Looking for "CONN_SERVICE_NAME" in registry's section [service] */
-        CORE_REG_GET(service, key, srv, sizeof(srv), 0);
-        if (!*srv)
-            return strdup(service);
-    } else {
-        strncpy(srv, p, sizeof(srv) - 1);
-        srv[sizeof(srv) - 1] = '\0';
-    }
-
-    /* No cycle detection in service name redefinition */
-    return SERV_ServiceName(srv);
-}
-
-
-SERV_ITER SERV_OpenSimple(const char* service)
-{
-    SConnNetInfo* net_info = ConnNetInfo_Create(service);
-    SERV_ITER iter = SERV_Open(service, fSERV_Any, 0, net_info);
-    ConnNetInfo_Destroy(net_info);
-    return iter;
-}
-
-
-static int/*bool*/ s_AddSkipInfo(SERV_ITER iter, SSERV_Info* info)
-{
-    if (iter->n_skip == iter->n_max_skip) {
-        SSERV_Info** temp;
-        size_t n = iter->n_max_skip + 10;
-
-        if (iter->skip)
-            temp = (SSERV_Info**) realloc(iter->skip, sizeof(*temp) * n);
-        else
-            temp = (SSERV_Info**) malloc(sizeof(*temp) * n);
-        if (!temp)
-            return 0;
-
-        iter->skip = temp;
-        iter->n_max_skip = n;
-    }
-
-    iter->skip[iter->n_skip++] = info;
-    return 1;
-}
-
-
-static SERV_ITER s_Open(const char* service,
-                        TSERV_Type type, unsigned int preferred_host,
-                        const SConnNetInfo* net_info,
-                        const SSERV_Info* const skip[], size_t n_skip,
-                        SSERV_Info** info, char** env)
-{
-    const char* s = SERV_ServiceName(service);
-    const SSERV_VTable* op;
-    SERV_ITER iter;
-    
-    if (!s || !*s || !(iter = (SERV_ITER) malloc(sizeof(*iter))))
-        return 0;
-
-    iter->service = s;
-    iter->type = type;
-    iter->preferred_host = preferred_host == SERV_LOCALHOST
-        ? SOCK_gethostbyname(0) : preferred_host;
-    iter->n_skip = iter->n_max_skip = 0;
-    iter->skip = 0;
-    iter->last = 0;
-    iter->op   = 0;
-    iter->data = 0;
-
-    if (n_skip) {
-        TNCBI_Time t = (TNCBI_Time) time(0);
-        size_t i;
-        for (i = 0; i < n_skip; i++) {
-            size_t infolen = SERV_SizeOfInfo(skip[i]);
-            SSERV_Info* info = (SSERV_Info*) malloc(infolen);
-            if (!info) {
-                SERV_Close(iter);
-                return 0;
-            }
-            memcpy(info, skip[i], infolen);
-            info->time = t + 3600/*hour*/*24/*day*/*365/*year - enough :-) */;
-            if (!s_AddSkipInfo(iter, info)) {
-                free(info);
-                SERV_Close(iter);
-            }
-        }
-    }
-    assert(n_skip == iter->n_skip);
-
-    if (!net_info) {
-        if (!(op = SERV_LBSMD_Open(iter, info, env))) {
-            /* LBSMD failed in non-DISPD mapping */
-            SERV_Close(iter);
-            return 0;
-        }
-    } else {
-        if (net_info->stateless)
-            iter->type |= fSERV_StatelessOnly;
-        if (net_info->firewall)
-            iter->type |= fSERV_Firewall;
-        if ((net_info->lb_disable ||
-             !(op = SERV_LBSMD_Open(iter, info, env))) &&
-            !(op = SERV_DISPD_Open(iter, net_info, info, env))) {
-            SERV_Close(iter);
-            return 0;
-        }
-    }
-
-    assert(op != 0);
-    iter->op = op;
-    return iter;
-}
-
-
-SERV_ITER SERV_OpenEx(const char* service,
-                      TSERV_Type type, unsigned int preferred_host,
-                      const SConnNetInfo* net_info,
-                      const SSERV_Info* const skip[], size_t n_skip)
-{
-    return s_Open(service, type, preferred_host, net_info, skip, n_skip, 0, 0);
-}
-
-
-SSERV_Info* SERV_GetInfoEx(const char* service,
-                           TSERV_Type type, unsigned int preferred_host,
-                           const SConnNetInfo* net_info,
-                           const SSERV_Info* const skip[], size_t n_skip,
-                           char** env)
-{
-    SSERV_Info* info = 0;
-    SERV_ITER iter = s_Open(service, type, preferred_host,
-                            net_info, skip, n_skip, &info, env);
-    if (iter && !info && iter->op && iter->op->GetNextInfo)
-        info = (*iter->op->GetNextInfo)(iter, env);
-    SERV_Close(iter);
-    return info;
-}
-
-
-static void s_SkipSkip(SERV_ITER iter)
-{
-    if (iter->n_skip) {
-        TNCBI_Time t = (TNCBI_Time) time(0);
-        size_t i = 0;
-
-        while (i < iter->n_skip) {
-            SSERV_Info* info = iter->skip[i];
-            if (info->time < t) {
-                if (i < --iter->n_skip)
-                    memmove(iter->skip + i, iter->skip + i + 1,
-                            sizeof(*iter->skip)*(iter->n_skip - i));
-                if (info == iter->last)
-                    iter->last = 0;
-                free(info);
-            } else
-                i++;
-        }
-    }
-}
-
-
-const SSERV_Info* SERV_GetNextInfoEx(SERV_ITER iter, char** env)
-{
-    SSERV_Info* info = 0;
-
-    if (iter && iter->op) {
-        /* First, remove all outdated entries from our skip list */
-        s_SkipSkip(iter);
-        /* Next, obtain a fresh entry from the actual mapper */
-        if (iter->op->GetNextInfo &&
-            (info = (*iter->op->GetNextInfo)(iter, env)) != 0 &&
-            !s_AddSkipInfo(iter, info)) {
-            free(info);
-            info = 0;
-        }
-        iter->last = info;
-    }
-    return info;
-}
-
-
-const char* SERV_MapperName(SERV_ITER iter)
-{
-    return iter && iter->op ? iter->op->name : 0;
-}
-
-
-int/*bool*/ SERV_Penalize(SERV_ITER iter, double fine)
-{
-    if (!iter || !iter->op || !iter->op->Penalize || !iter->last)
-        return 0;
-    return (*iter->op->Penalize)(iter, fine);
-}
-
-
-void SERV_Reset(SERV_ITER iter)
-{
-    size_t i;
-    if (!iter)
-        return;
-    for (i = 0; i < iter->n_skip; i++)
-        free(iter->skip[i]);
-    iter->n_skip = 0;
-    iter->last = 0;
-    if (iter->op && iter->op->Reset)
-        (*iter->op->Reset)(iter);
-}
-
-
-void SERV_Close(SERV_ITER iter)
-{
-    if (!iter)
-        return;
-    SERV_Reset(iter);
-    if (iter->op && iter->op->Close)
-        (*iter->op->Close)(iter);
-    if (iter->skip)
-        free(iter->skip);
-    if (iter->service)
-        free((void*) iter->service);
-    free(iter);
-}
-
-
-int/*bool*/ SERV_Update(SERV_ITER iter, const char* text)
-{
-    static const char used_server_info[] = "Used-Server-Info-";
-    int retval = 0/*not updated yet*/;
-
-    if (iter && iter->op && text) {
-        TNCBI_Time now = (TNCBI_Time) time(0);
-        const char *c, *b;
-        for (b = text; (c = strchr(b, '\n')) != 0; b = c + 1) {
-            size_t len = (size_t)(c - b);
-            SSERV_Info* info;
-            unsigned int d1;
-            char* p, *t;
-            int d2;
-
-            if (!(t = (char*) malloc(len + 1)))
-                continue;
-            memcpy(t, b, len);
-            if (t[len - 1] == '\r')
-                t[len - 1] = 0;
-            else
-                t[len] = 0;
-            p = t;
-            if (iter->op->Update && (*iter->op->Update)(iter, now, p))
-                retval = 1/*updated*/;
-            if (strncasecmp(p, used_server_info,
-                            sizeof(used_server_info) - 1) == 0) {
-                p += sizeof(used_server_info) - 1;
-                if (sscanf(p, "%u: %n", &d1, &d2) >= 1 &&
-                    (info = SERV_ReadInfo(p + d2)) != 0) {
-                    if (!s_AddSkipInfo(iter, info))
-                        free(info);
-                    else
-                        retval = 1/*updated*/;
-                }
-            }
-            free(t);
-        }
-    }
-    return retval;
-}
-
-
-char* SERV_Print(SERV_ITER iter)
-{
-    static const char accepted_types[] = "Accepted-Server-Types:";
-    static const char client_revision[] = "Client-Revision:";
-    static const char revision[] = "$Revision: 6.37 $";
-    char buffer[128], *str;
-    TSERV_Type type, t;
-    size_t buflen, i;
-    BUF buf = 0;
-
-    /* Put client version number */
-    buflen = sizeof(client_revision) - 1;
-    memcpy(buffer, client_revision, buflen);
-    for (i = 0; revision[i]; i++)
-        if (isspace((unsigned char) revision[i]))
-            break;
-    while (revision[i] && buflen + 2 < sizeof(buffer)) {
-        if (revision[i] == '$') {
-            if (isspace((unsigned char) revision[i - 1]))
-                --buflen;
-            break;
-        } else
-            buffer[buflen++] = revision[i++];
-    }
-    strcpy(&buffer[buflen], "\r\n");
-    assert(strlen(buffer) == buflen + 2 && buflen + 2 < sizeof(buffer));
-    if (!BUF_Write(&buf, buffer, buflen + 2)) {
-        BUF_Destroy(buf);
-        return 0;
-    }
-    if (iter) {
-        /* Form accepted server types */
-        buflen = sizeof(accepted_types) - 1;
-        memcpy(buffer, accepted_types, buflen);
-        type = (TSERV_Type) (iter->type & ~fSERV_StatelessOnly);
-        for (t = 1; t; t <<= 1) {
-            if (type & t) {
-                const char* name = SERV_TypeStr((ESERV_Type) t);
-                size_t namelen = strlen(name);
-                if (!namelen || buflen + 1 + namelen + 2 >= sizeof(buffer))
-                    break;
-                buffer[buflen++] = ' ';
-                strcpy(&buffer[buflen], name);
-                buflen += namelen;
-            }
-        }
-        if (buffer[buflen - 1] != ':') {
-            strcpy(&buffer[buflen], "\r\n");
-            assert(strlen(buffer) == buflen + 2 && buflen + 2 < sizeof(buffer));
-            if (!BUF_Write(&buf, buffer, buflen + 2)) {
-                BUF_Destroy(buf);
-                return 0;
-            }
-        }
-        /* Drop any outdated skip entries */
-        s_SkipSkip(iter);
-        /* Put all the rest into rejection list */
-        for (i = 0; i < iter->n_skip; i++) {
-            if (!(str = SERV_WriteInfo(iter->skip[i])))
-                break;
-            buflen = sprintf(buffer, "Skip-Info-%u: ", (unsigned) i + 1); 
-            assert(buflen < sizeof(buffer)-1);
-            if (!BUF_Write(&buf, buffer, buflen) ||
-                !BUF_Write(&buf, str, strlen(str)) ||
-                !BUF_Write(&buf, "\r\n", 2)) {
-                free(str);
-                break;
-            }
-            free(str);
-        }
-        if (i < iter->n_skip) {
-            BUF_Destroy(buf);
-            return 0;
-        }
-    }
-    /* Ok then, we have filled the entire header, <CR><LF> terminated */
-    if ((buflen = BUF_Size(buf)) != 0) {
-        if ((str = (char*) malloc(buflen + 1)) != 0) {
-            if (BUF_Read(buf, str, buflen) != buflen) {
-                free(str);
-                str = 0;
-            } else
-                str[buflen] = '\0';
-        }
-    } else
-        str = 0;
-    BUF_Destroy(buf);
-    return str;
-}

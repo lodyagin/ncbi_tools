@@ -1,5 +1,5 @@
 #
-# $Id: sgi5.ncbi.mk,v 1.8 2001/06/12 21:11:56 vakatov Exp $
+# $Id: sgi5.ncbi.mk,v 1.9 2002/10/29 01:20:13 lavr Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
@@ -36,5 +36,5 @@ NCBI_ALTSRC =  /usr/ncbi/ncbi5/altsrc
 LIBFASTCGI = -lfcgi
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o

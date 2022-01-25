@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.47 $
+* $Revision: 6.49 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.49  2002/11/14 21:27:05  johnson
+* VibMonCreate no longer assigns focus to new window (on WIN_MOTIF)
+*
+* Revision 6.48  2002/10/28 02:47:56  kans
+* call PMPageSetupDialog for Carbon printing
+*
 * Revision 6.47  2002/06/25 18:51:42  kans
 * ConvertFilename puts null byte at str [fullPathLen]
 *
@@ -1464,7 +1470,9 @@ static int Nlm_VibMonCreate (Nlm_MonitorPtr mon)
       vmp->pnl = pnl;
       vmp->cancel = FALSE;
       Nlm_Show (wind);
+#ifndef WIN_MOTIF
       Nlm_Select (wind);
+#endif
       Nlm_Update ();
     }
   }
@@ -3939,6 +3947,8 @@ extern Nlm_WindoW Nlm_StartPrinting (void)
   status = PMNewPageFormat(&pageFormat);
   if (status != noErr || pageFormat == kPMNoPageFormat) return NULL;
   status = PMDefaultPageFormat(pageFormat);
+  if (status != noErr) return NULL;
+  status = PMPageSetupDialog(pageFormat, &accepted);
   if (status != noErr) return NULL;
   status = PMNewPrintSettings(&printSettings);
   if (status != noErr || printSettings == kPMNoPrintSettings) return NULL;

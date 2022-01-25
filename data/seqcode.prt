@@ -90,7 +90,7 @@ Seq-code-set ::= {
                 { symbol "R", name "Arginine"},
                 { symbol "S", name "Serine"},
                 { symbol "T", name "Threonine"},
-                { symbol "", name ""},
+                { symbol "U", name "Selenocysteine"}, -- was empty
                 { symbol "V", name "Valine"},
                 { symbol "W", name "Tryptophan" },
                 { symbol "X", name "Undetermined or atypical"},
@@ -436,7 +436,7 @@ Seq-code-set ::= {
                 82,
                 83,
                 84,
-                255,  -- U
+                85,  -- U - was 255
                 86,
                 87,
                 88,
@@ -492,7 +492,7 @@ Seq-code-set ::= {
                 82,
                 83,
                 84,
-                88,  -- U -> X
+                85,  -- U was -> X 88
                 86,
                 87,
                 88,
@@ -525,7 +525,7 @@ Seq-code-set ::= {
                 16,
                 17,
                 18,
-                255,  -- U
+                24,  -- U - was 255
                 19,
                 20,
                 21,
@@ -649,7 +649,7 @@ Seq-code-set ::= {
                 88,
                 89,
                 90,
-                88,  -- U
+                85,  -- U - was 88
                 255}  -- *
         } 
     }

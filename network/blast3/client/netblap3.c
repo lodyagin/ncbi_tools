@@ -34,6 +34,15 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.102  2002/10/30 18:54:58  madden
+* NULL out SeqLoc for lower-case masking
+*
+* Revision 1.101  2002/10/29 14:36:53  madden
+* Fix problem with repeated error messages
+*
+* Revision 1.100  2002/10/24 16:41:23  merezhuk
+* update to the BlastBioseq, will return all Blast-error responses instead off the first one
+*
 * Revision 1.99  2002/08/08 20:50:39  madden
 * Remove SPLIT_BLAST macros
 *
@@ -838,6 +847,10 @@ BlastNet3BlockDestruct(BlastNet3BlockPtr blnet)
 	/* The entire gilist is not copied, so this prevents an error. */
 	if (blnet->parameters)
 		blnet->parameters->gilist = NULL;
+
+        /* The following is not allocated here */
+    	blnet->parameters->query_lcase_mask = NULL;
+    
 	BlastParametersFree(blnet->parameters);
 	/* individual elements freed elsewhere. */
 	response = blnet->response;
@@ -1299,10 +1312,16 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean
         }
 	if (error_returns)
 	{
-	    node = (BlastResponsePtr)
-               GetResponsePtr(response, BlastResponse_error);
-	    if (node)
-	    	ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
+	  /* return all blast error responses */
+	    node = (BlastResponsePtr) 
+	      GetResponsePtr(response, BlastResponse_error);
+	    while (node)
+	    {
+		ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
+		node = node->next;
+	    	node = (BlastResponsePtr) 
+	      		GetResponsePtr(node, BlastResponse_error);
+	    }
 	}
 
 	/* These six are not allocated here. */
@@ -1532,7 +1551,7 @@ SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program,
         if (matrix)
             ValNodeAddPointer (other_returns, TXMATRIX, matrix);
     }
-    
+
     blnet = BlastNet3BlockDestruct(blnet);
     
     bsp->descr = descr;

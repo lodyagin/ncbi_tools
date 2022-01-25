@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.24 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.24  2002/11/06 21:24:35  ucko
+* Make sure MADV_NORMAL is actually defined before trying to use madvise.
+*
+* Revision 6.23  2002/10/28 20:19:56  kans
+* removed C++ style comment
+*
 * Revision 6.22  2002/07/11 22:14:31  vakatov
 * [LINUX, MMAP_AVAIL]  #define __USE_BSD to get MADV_*** constants
 *
@@ -922,7 +928,7 @@ NLM_EXTERN void Nlm_MemMapFini(Nlm_MemMapPtr mem_mapp)
 
 NLM_EXTERN Nlm_Boolean Nlm_MemMapAdvise(void* addr, size_t len, EMemMapAdvise advise)
 {
-#if defined(HAVE_MADVISE)
+#if defined(HAVE_MADVISE) && defined(MADV_NORMAL)
   int adv;
   if (!addr || !len) {
     return FALSE;
@@ -939,7 +945,7 @@ NLM_EXTERN Nlm_Boolean Nlm_MemMapAdvise(void* addr, size_t len, EMemMapAdvise ad
 	default:
 	  adv = MADV_NORMAL;
   }
-  // Conversion type of "addr" to char* -- Sun Solaris fix
+  /* Conversion type of "addr" to char* -- Sun Solaris fix */
   return madvise((char*)addr, len, adv) == 0;
 #else
   return TRUE;
@@ -949,7 +955,7 @@ NLM_EXTERN Nlm_Boolean Nlm_MemMapAdvise(void* addr, size_t len, EMemMapAdvise ad
 
 NLM_EXTERN Nlm_Boolean Nlm_MemMapAdvisePtr(Nlm_MemMapPtr ptr, EMemMapAdvise advise)
 {
-#if defined(HAVE_MADVISE)
+#if defined(HAVE_MADVISE) && defined(MADV_NORMAL)
   return ptr ? Nlm_MemMapAdvise(ptr->mmp_begin, ptr->file_size, advise) : FALSE;
 #else
   return TRUE;

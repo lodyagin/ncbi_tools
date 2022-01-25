@@ -1,4 +1,4 @@
-/* $Id: xmlblast.c,v 6.22 2002/07/17 22:28:13 dondosha Exp $ */
+/* $Id: xmlblast.c,v 6.23 2002/11/14 15:37:18 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,15 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.23  2002/11/14 15:37:18  dondosha
+* Added functions to extract all hit information from seqalign that can be extracted without loading sequences
+*
 * Revision 6.22  2002/07/17 22:28:13  dondosha
 * Added support for megablast XML output
 *
@@ -1145,4 +1148,257 @@ void MBXmlClose(PSIXmlPtr mbxp, ValNodePtr other_returns, Boolean ungapped)
     MemFree(mbxp);
     
     return;
+}
+
+static void FillHspScoreInfo(HspPtr hsp, ScorePtr score)
+{
+   ScorePtr sp;
+   for(sp = score; sp != NULL; sp = sp->next) {
+      if(!(StringICmp(sp->id->str, "e_value")) || 
+         !(StringICmp(sp->id->str, "sum_e")))
+         hsp->evalue = sp->value.realvalue;
+      if(!StringICmp(sp->id->str, "bit_score")) {
+         hsp->bit_score = sp->value.realvalue;
+      }
+      if(!StringICmp(sp->id->str, "score")) {
+         hsp->score = sp->value.intvalue;
+      }
+      if(!StringICmp(sp->id->str, "num_ident")) {
+         hsp->identity = sp->value.intvalue;
+      }
+      if (!StringICmp(sp->id->str, "sum_n")) {
+         hsp->num = sp->value.intvalue;
+      }
+   }
+}
+
+static HspPtr GetHspFromSeqAlign(SeqAlignPtr align, Boolean ungapped, 
+                          Int4Ptr hspcnt_ptr)
+{
+    HspPtr hsp, head_hsp = NULL, last_hsp = NULL;
+    ScorePtr score, sp;
+    DenseDiagPtr ddp;
+    DenseSegPtr dsp;
+    StdSegPtr ssp;
+    Int4 hspcnt = 0, last_seg, i;
+
+    *hspcnt_ptr = 0;
+
+    switch (align->segtype) {
+    case 1: /*Dense-diag; blastn, blastp ungapped */
+       ddp = (DenseDiagPtr) align->segs;
+       while(ddp) {
+          if((hsp = HspNew()) == NULL)
+             return head_hsp;
+          if (!head_hsp)
+             head_hsp = last_hsp = hsp;
+          else {
+             last_hsp->next = hsp;
+             last_hsp = last_hsp->next;
+          }
+
+          ++hspcnt;
+          hsp->align_len = ddp->len;
+          if (ddp->strands[0] == Seq_strand_minus) {
+             hsp->query_from = ddp->starts[0] + ddp->len;
+             hsp->query_to = ddp->starts[0] + 1;
+          } else {
+             hsp->query_from = ddp->starts[0] + 1;
+             hsp->query_to = ddp->starts[0] + ddp->len;
+          }
+          if (ddp->strands[1] == Seq_strand_minus) {
+             hsp->hit_from = ddp->starts[1] + ddp->len;
+             hsp->hit_to = ddp->starts[1] + 1;
+          } else {
+             hsp->hit_from = ddp->starts[1];
+             hsp->hit_to = ddp->starts[1] + ddp->len - 1;
+          }
+          FillHspScoreInfo(hsp, ddp->scores);
+          ddp = ddp->next;
+       }
+       break;
+    case 2: /* Dense-seg; blastn, blastp gapped */
+       dsp = (DenseSegPtr) align->segs;
+       if((head_hsp = hsp = HspNew()) == NULL)
+          return head_hsp;
+       if (dsp->scores)
+          score = dsp->scores;
+       else
+          score = align->score;
+       hspcnt = 1;
+       last_seg = dsp->numseg - 1;
+       
+       if (dsp->strands[0] == Seq_strand_minus) {
+          hsp->query_from = dsp->starts[0] + dsp->lens[0];
+          hsp->query_to = dsp->starts[2*last_seg] + 1;
+       } else {
+          hsp->query_from = dsp->starts[0] + 1;
+          hsp->query_to = dsp->starts[2*last_seg] + dsp->lens[last_seg];
+       }
+       if (dsp->strands[1] == Seq_strand_minus) {
+          hsp->hit_from = dsp->starts[1] + dsp->lens[1];
+          hsp->hit_to = dsp->starts[2*last_seg+1] + 1;
+       } else {
+          hsp->hit_from = dsp->starts[1] + 1;
+          hsp->hit_to = dsp->starts[2*last_seg+1] + dsp->lens[last_seg];
+       }
+       
+       for (i=0; i<dsp->numseg; i++) {
+          hsp->align_len += dsp->lens[i];
+          if (dsp->starts[2*i] == -1 || dsp->starts[2*i+1] == -1) {
+             hsp->gaps++;
+          }
+       }
+       FillHspScoreInfo(hsp, score);
+       break;
+    case 3: /* Std-seg; translated gapped or ungapped */
+       ssp = (StdSegPtr) align->segs;
+
+       if (ungapped) {
+          while(ssp) {
+             if((hsp = HspNew()) == NULL)
+                return head_hsp;
+             if (!head_hsp)
+                head_hsp = last_hsp = hsp;
+             else {
+                last_hsp->next = hsp;
+                last_hsp = last_hsp->next;
+             }
+             
+             ++hspcnt;
+             if (ssp->scores)
+                score = ssp->scores;
+             else 
+                score = align->score;
+             
+             FillHspScoreInfo(hsp, score);
+
+             if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
+                hsp->query_to = SeqLocStart(ssp->loc) + 1;
+                hsp->query_from = SeqLocStop(ssp->loc);
+             } else {
+                hsp->query_from = SeqLocStart(ssp->loc) + 1;
+                hsp->query_to = SeqLocStop(ssp->loc);
+             }
+             if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus) {
+                hsp->hit_to = SeqLocStart(ssp->loc->next) + 1;
+                hsp->hit_from = SeqLocStop(ssp->loc->next);
+             } else {
+                hsp->hit_from = SeqLocStart(ssp->loc->next) + 1;
+                hsp->hit_to = SeqLocStop(ssp->loc->next);
+             }
+             if (SeqLocStrand(ssp->loc) == Seq_strand_unknown) {
+                /* Protein location */
+                hsp->align_len = SeqLocLen(ssp->loc);
+             } else { /* Nucleotide location; need to divide length by 3 
+                        to get protein length */
+                hsp->align_len = SeqLocLen(ssp->loc) / 3;
+             }
+             ssp = ssp->next;
+          }
+       } else {
+          SeqLocPtr slp;
+          StdSegPtr last_ssp;
+
+          if((head_hsp = hsp = HspNew()) == NULL)
+             return head_hsp;
+
+          hspcnt = 1;
+          FillHspScoreInfo(hsp, align->score);
+          /* Get relevant endpoints from the first StdSeg in the list */
+          if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
+             hsp->query_from = SeqLocStop(ssp->loc);
+          } else {
+             hsp->query_from = SeqLocStart(ssp->loc) + 1;
+          }
+          if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus) {
+             hsp->hit_from = SeqLocStop(ssp->loc->next);
+          } else {
+             hsp->hit_from = SeqLocStart(ssp->loc->next) + 1;
+          }
+          /* Advance StdSeg to the end of the list, and calculate the 
+             alignment length in the process */
+          for ( ; ssp; ssp = ssp->next) {
+             slp = ((ssp->loc->choice == SEQLOC_EMPTY) ? ssp->loc->next : 
+                    ssp->loc);
+             if (SeqLocStrand(slp) == Seq_strand_unknown) {
+                hsp->align_len += SeqLocLen(slp);
+             } else {
+                hsp->align_len += (SeqLocLen(slp) / 3);
+             }
+             last_ssp = ssp;
+          }
+          /* Get relevant endpoints from the last StdSeg in the list */
+          if (SeqLocStrand(last_ssp->loc) == Seq_strand_minus) {
+             hsp->query_to = SeqLocStart(last_ssp->loc) + 1;
+          } else {
+             hsp->query_to = SeqLocStop(last_ssp->loc);
+          }
+          if (SeqLocStrand(last_ssp->loc->next) == Seq_strand_minus) {
+             hsp->hit_to = SeqLocStart(last_ssp->loc->next) + 1;
+          } else {
+             hsp->hit_to = SeqLocStop(last_ssp->loc->next);
+          }
+       }
+       break;
+    default: break;
+    }    
+    
+    *hspcnt_ptr = hspcnt;
+    return head_hsp;
+}
+
+HitPtr SeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped)
+{
+   HitPtr hitp, hitp_head;
+   SeqAlignPtr sap, sap2;
+   SeqIdPtr subject_id, sip;
+   Char buffer[526];
+   HspPtr hspp;
+   Int4 hsp_count, chain;
+   
+   hitp_head = NULL;
+   
+   for(sap = seqalign; sap != NULL;) {
+      subject_id = TxGetSubjectIdFromSeqAlign(sap);
+      
+      if(hitp_head == NULL) { /* first element */
+         hitp_head = hitp = HitNew();
+      } else {
+         hitp->next = HitNew();
+         hitp = hitp->next;
+      }
+      
+      SeqIdWrite(subject_id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
+      hitp->id = StringSave(buffer);
+      SeqIdWrite(SeqIdFindBestAccession(subject_id), buffer, 
+                 PRINTID_TEXTID_ACCESSION, sizeof(buffer));
+      
+      hitp->accession = StringSave(buffer);
+      
+      for(sap2 = sap; sap2 != NULL; ) {
+         /* Filling info about specific alignments */
+         if (!hitp->hsps) {
+            hspp = hitp->hsps = 
+               GetHspFromSeqAlign(sap2, ungapped, &hsp_count);
+         } else {
+            hspp->next = GetHspFromSeqAlign(sap2, ungapped, &hsp_count);
+            hspp = hspp->next;
+         }
+
+         hitp->num += hsp_count;
+
+         sap2 = sap2->next;
+         sip = TxGetSubjectIdFromSeqAlign(sap2);
+         
+         if(SeqIdMatch(subject_id, sip)) {
+            continue;
+         } else {
+            sap = sap2;
+            break;
+         }
+      }
+   }
+   
+   return hitp_head;
 }

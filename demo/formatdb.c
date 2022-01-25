@@ -30,11 +30,20 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.69 $
+   $Revision: 6.72 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.72  2002/11/06 21:27:46  ucko
+   Make 4294967295 explicitly unsigned to avoid warnings.
+
+   Revision 6.71  2002/09/26 02:14:43  camacho
+   Allow limiting the number of sequences per volume
+
+   Revision 6.70  2002/09/25 20:14:20  camacho
+   Fix for multivolume databases with non-parseable seqids
+
    Revision 6.69  2002/08/09 19:41:25  camacho
    1) Added blast version number to command-line options
    2) Added explanations for some default parameters
@@ -403,6 +412,7 @@ static FDB_optionsPtr FDB_CreateCLOptions(void)
     options->sparse_idx = dump_args[10].intvalue;
     options->test_non_unique = dump_args[11].intvalue;
     options->bases_in_volume = 1000000 * dump_args[9].intvalue;
+    options->total_num_of_seqs = 0;
     options->alias_file = StringSave(dump_args[13].strvalue);
     options->gi_file = StringSave(dump_args[14].strvalue);
     options->gi_file_bin = StringSave(dump_args[15].strvalue);
@@ -528,7 +538,9 @@ Int2 Main(void)
         return 1;
 
     if (options->bases_in_volume == 0)
-	options->bases_in_volume = 4294967295;
+        options->bases_in_volume = 4294967295U;
+    if (options->sequences_in_volume == 0)
+        options->sequences_in_volume = 10000000; /* empiric value */
     
     options->db_file = StringTokMT(options->db_file, " ", &next_db);
     if (next_db) {

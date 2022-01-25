@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.361 $
+* $Revision: 6.368 $
 *
 * File Description: 
 *
@@ -125,7 +125,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "4.10"
+#define SEQ_APP_VER "4.16"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -2094,8 +2094,7 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
         if (IS_Bioseq_set (sep)) {
           bssp = (BioseqSetPtr) sep->data.ptrvalue;
           if (bssp != NULL) {
-            if (bssp->_class >= BioseqseqSet_class_mut_set &&
-                bssp->_class <= BioseqseqSet_class_eco_set) {
+            if (IsPopPhyEtcSet (bssp->_class)) {
               processonenuc = FALSE;
             } else if (bssp->_class == 7) {
               processonenuc = FALSE;
@@ -2606,17 +2605,17 @@ static CharPtr FGetLine (FILE *fp)
   ValNodePtr charp=NULL,
              vnp;
   CharPtr    buffer = NULL;
-  Char       c;
+  int        c;
   Int4       j, len=0;
 
-  c = (Char)fgetc(fp);
+  c = fgetc(fp);
   while (c!=255 && c!=NULLB && c!=EOF && c!='\0' && c!='\n' && c != '\r')
   {
      if (c!='\t' && c!='\015' && c != '\013') {
         ValNodeAddInt (&charp, 1, (Int4)c);
         len++;
      }
-     c = (Char)fgetc(fp);
+     c = fgetc(fp);
   }
   if (charp) {
      buffer = (CharPtr)MemNew((size_t)((len+5)*sizeof(Char)));
@@ -3116,7 +3115,7 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   if (num > 0 && bsp != NULL && sep != NULL && IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL) {
-      if (bssp->_class >= 13 && bssp->_class <= 16) {
+      if (IsPopPhyEtcSet (bssp->_class)) {
         Enable (editfeatprop);
       } else if (bssp->_class == 7 && indexerVersion) {
         Enable (editfeatprop);
@@ -3163,7 +3162,7 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
     sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
     if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      if (bssp != NULL && (bssp->_class == 7 || (bssp->_class >= 13 && bssp->_class <= 16))) {
+      if (bssp != NULL && (bssp->_class == 7 || (IsPopPhyEtcSet (bssp->_class)))) {
         Enable (editadd);
       } else {
         Disable (editadd);
@@ -6345,7 +6344,10 @@ static void BioseqViewFormMenus (WindoW w)
     }
     if (indexerVersion) {
       SeparatorItem (sub);
+      i = CommandItem (sub, "FASTA Set", UpdateFastaSet);
+      /*
       i = CommandItem (sub, "FASTA Set", DoUpdatesSeq);
+      */
       SetObjectExtra (i, bfp, NULL);
     }
     SeparatorItem (m);
@@ -8020,6 +8022,7 @@ extern void SetupBioseqPageList (void)
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
   }
   */
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqpnlPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbgnPageData);
   if (Nlm_GetAppProperty ("SequinUseEMBLStyle") != NULL) {
@@ -8050,6 +8053,7 @@ extern void SetupBioseqPageList (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &qualPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asnPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &xmlPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbseqPageData);
 
   if (extraServices || useDesktop) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
@@ -9144,7 +9148,7 @@ static void FinishPuttingTogether (ForM f)
     Remove (bfp->form);
     if (sep != NULL && entityID > 0 && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      if (bssp != NULL && (bssp->_class >= 13 && bssp->_class <= 16)) {
+      if (bssp != NULL && (IsPopPhyEtcSet (bssp->_class))) {
         if (SeqEntryHasAligns (entityID, sep)) {
           Message (MSG_OK, "%s", canfeatpropagate);
         }
@@ -10304,6 +10308,7 @@ Int2 Main (void)
   BioseqSetPtr   bssp;
   Pointer        dataptr = NULL;
   BtnActnProc    fetchProc;
+  CharPtr        filename = NULL;
   FILE           *fp;
   Int2           handled;
   Boolean        notaxid;
@@ -10395,7 +10400,10 @@ Int2 Main (void)
           workbenchMode = TRUE;
         else if (StringCmp (argv[i], "-x") == 0)
           stdinMode = TRUE;
-        else if (StringCmp (argv[i], "-bse") == 0)
+        else if (StringCmp (argv[i], "-f") == 0 && i + 1 < argc) {
+          stdinMode = TRUE;
+          filename = argv [i + 1];
+        } else if (StringCmp (argv[i], "-bse") == 0)
           binseqentryMode = TRUE;
         else if (StringCmp (argv[i], "-e") == 0)
           entrezMode = TRUE;
@@ -10418,8 +10426,8 @@ Int2 Main (void)
           newAlignReader = FALSE;
         } else if (StringCmp (argv[i], "-oldasn") == 0) {
           leaveAsOldAsn = TRUE;
-        } else if (StringCmp (argv[i], "-newsource") == 0) {
-          SetAppProperty ("NewFlatfileSource", (void *) 1024);
+        } else if (StringCmp (argv[i], "-oldsource") == 0) {
+          SetAppProperty ("OldFlatfileSource", (void *) 1024);
         }
 #ifdef USE_SMARTNET
         else if (StringCmp (argv[i], "-ds") == 0) {
@@ -10448,7 +10456,10 @@ Int2 Main (void)
       {
         if (StringCmp (argv[i], "-x") == 0)
           stdinMode = TRUE;
-        else if (StringCmp (argv[i], "-e") == 0)
+        else if (StringCmp (argv[i], "-f") == 0 && i + 1 < argc) {
+          stdinMode = TRUE;
+          filename = argv [i + 1];
+        } else if (StringCmp (argv[i], "-e") == 0)
           entrezMode = TRUE;
         else if (StringCmp (argv[i], "-h") == 0)
           nohelpMode = TRUE;
@@ -10696,7 +10707,11 @@ Int2 Main (void)
         }
       }
     } else {
-      fp = FileOpen ("stdin", "r");
+      if (! StringHasNoText (filename)) {
+        fp = FileOpen (filename, "r");
+      } else {
+        fp = FileOpen ("stdin", "r");
+      }
       dataptr = ReadAsnFastaOrFlatFile (fp, &subtoolDatatype,  &subtoolEntityID, FALSE, FALSE, TRUE, FALSE);
       FileClose (fp);
       /*

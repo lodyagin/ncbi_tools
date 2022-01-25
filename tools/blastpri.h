@@ -32,8 +32,14 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.103 $ 
+/* $Revision: 6.105 $ 
 * $Log: blastpri.h,v $
+* Revision 6.105  2002/11/04 22:47:02  dondosha
+* Added prototype for BlastHSPGetNumIdentical
+*
+* Revision 6.104  2002/08/30 15:50:06  dondosha
+* Several prototypes moved from mblast.h
+*
 * Revision 6.103  2002/08/01 20:45:35  dondosha
 * Changed prototype of the BLASTPostSearchLogic function to make it
 * more convenient
@@ -965,6 +971,10 @@ Int4
 BlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
                          Int4 s_start, Int4 length, Boolean reverse));
 
+Int2
+BlastHSPGetNumIdentical PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp,
+   BLASTResultHspPtr result_hsp, Int4Ptr num_ident, Int4Ptr align_length));
+
 SeqIdPtr GetTheSeqAlignID PROTO((SeqIdPtr seq_id));
 StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length, BLAST_HSPPtr hsp, SeqIdPtr sip, Boolean reverse, SeqIdPtr gi_list));
 
@@ -1031,9 +1041,25 @@ Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options,
 /*return query fasta style title(id+title). New memory was allocated for this title*/
 CharPtr getFastaStyleTitle(BioseqPtr bsp);
 
-#ifdef SPLIT_BLAST
 CharPtr load_options_to_buffer(CharPtr instructions, CharPtr buffer);
-#endif
+
+VoidPtr index_proc PROTO((VoidPtr dummy));
+
+CharPtr BlastConstructFilterString PROTO((Int4 filter_value));
+
+int LIBCALLBACK evalue_compare_hits PROTO((VoidPtr v1, VoidPtr v2));
+
+Uint1 FrameToDefine PROTO((Int2 frame));
+
+Uint1Ptr
+GetPrivatTranslationTable PROTO((CharPtr genetic_code, 
+                                 Boolean reverse_complement));
+Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4
+                                 dropoff_number_of_bits_1st_pass, Int4
+                                 dropoff_number_of_bits_2nd_pass, Nlm_FloatHi
+                                 avglen, Nlm_FloatHi searchsp, Int4 window));
+Boolean 
+BlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr first_context, Int2Ptr last_context, Uint1 strand_options));
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.26 2002/04/04 17:57:10 camacho Exp $
+/* $Id: ncbisam.c,v 6.28 2002/09/23 19:48:09 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.26 $
+* $Revision: 6.28 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.28  2002/09/23 19:48:09  camacho
+* Avoid the use of data->db_fd when searching the ISAM databases
+*
+* Revision 6.27  2002/09/20 15:17:12  camacho
+* Fixed file descriptor leak
+*
 * Revision 6.26  2002/04/04 17:57:10  camacho
 * Fixed binary search implementation in NISAMSearch
 *
@@ -1332,6 +1338,8 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
     else
         data->KeySamples = (Uint4Ptr)(FileInfo + 9);
 
+#if 0
+    /* CC:This causes a file descriptor leak and it is not being used */
     if(data->PageSize != MEMORY_ONLY_PAGE_SIZE) { 
         /* Special case of memory-only index */
         if (!(data->db_fd = FileOpen(data->DBFileName, "rb"))) {
@@ -1340,6 +1348,7 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
             return ISAMBadFileName;
         }
     }
+#endif
 
     data->initialized = TRUE;
     return ISAMNoError;
@@ -1547,47 +1556,49 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
       last = Start + NumElements - 1;
 
       if (NoData) {
-	if (data->mfp->mfile_true)
-	{
-		NlmSeekInMFILE(data->mfp, Start*sizeof(Int4), SEEK_SET);
-		KeyPageStart = (Int4Ptr) data->mfp->mmp;
-		KeyPage = KeyPageStart - Start;
-	}
-	else
-	{
-        	KeyPageStart = (Int4Ptr) MemNew((NumElements + 1) * sizeof(Int4));
-        	fseek(data->db_fd, Start * sizeof(Int4), SEEK_SET);
-        	FileRead(KeyPageStart, sizeof(Int4), NumElements, data->db_fd);
-		KeyPage = KeyPageStart - Start;
-	}
+          if (data->mfp->mfile_true)
+          {
+              NlmSeekInMFILE(data->mfp, Start*sizeof(Int4), SEEK_SET);
+              KeyPageStart = (Int4Ptr) data->mfp->mmp;
+              KeyPage = KeyPageStart - Start;
+          }
+          else
+          {
+              KeyPageStart = (Int4Ptr) MemNew((NumElements + 1) * sizeof(Int4));
+              NlmSeekInMFILE(data->mfp, Start*sizeof(Int4), SEEK_SET);
+              NlmReadMFILE((Uint1Ptr)KeyPageStart, sizeof(Int4), NumElements,
+                      data->mfp);
+              KeyPage = KeyPageStart - Start;
+          }
       } else {
-	if (data->mfp->mfile_true)
-	{
-		NlmSeekInMFILE(data->mfp, Start*sizeof(NISAMKeyData), SEEK_SET);
-		KeyDataPageStart = (NISAMKeyDataPtr) data->mfp->mmp;
-		KeyDataPage = KeyDataPageStart - Start;
-		/* The following data is used if the next lookup is on the same page. */
-		data->first_gi = SwapUint4(KeyDataPage[first].key);
-		data->last_gi = SwapUint4(KeyDataPage[last].key);
-		data->first = first;
-		data->last = last;
-		data->lastKeyDataPage = KeyDataPage;
-	}
-	else
-	{
-        	KeyDataPageStart = (NISAMKeyDataPtr) MemNew((NumElements + 1) * 
-                                               sizeof(NISAMKeyData));
-        	fseek(data->db_fd,Start * sizeof(NISAMKeyData), SEEK_SET);
-        	FileRead(KeyDataPageStart, sizeof(NISAMKeyData), NumElements, data->db_fd);
-		KeyDataPage = KeyDataPageStart - Start;
-	}
+          if (data->mfp->mfile_true)
+          {
+              NlmSeekInMFILE(data->mfp, Start*sizeof(NISAMKeyData), SEEK_SET);
+              KeyDataPageStart = (NISAMKeyDataPtr) data->mfp->mmp;
+              KeyDataPage = KeyDataPageStart - Start;
+              /* The following data is used if the next lookup is on the same page. */
+              data->first_gi = SwapUint4(KeyDataPage[first].key);
+              data->last_gi = SwapUint4(KeyDataPage[last].key);
+              data->first = first;
+              data->last = last;
+              data->lastKeyDataPage = KeyDataPage;
+          }
+          else
+          {
+              KeyDataPageStart = (NISAMKeyDataPtr) MemNew((NumElements + 1) * 
+                                                 sizeof(NISAMKeyData));
+              NlmSeekInMFILE(data->mfp, Start*sizeof(NISAMKeyData), SEEK_SET);
+              NlmReadMFILE((Uint1Ptr)KeyDataPageStart, sizeof(NISAMKeyData), NumElements,
+                      data->mfp);
+              KeyDataPage = KeyDataPageStart - Start;
+          }
       }
     }
     else
     {
-	first = data->first;
-	last = data->last;
-	KeyDataPage = data->lastKeyDataPage;
+        first = data->first;
+        last = data->last;
+        KeyDataPage = data->lastKeyDataPage;
     }
     
     found = FALSE;
@@ -2047,8 +2058,8 @@ ISAMErrorCode SISAMFindAllData(ISAMObjectPtr object,
     Pos = SwapUint4(data->KeySamples[Start]);
     NumBytes = SwapUint4(data->KeySamples[Stop]) - Pos;
     Page = (CharPtr) MemNew(NumBytes + 1);
-    fseek(data->db_fd, Pos, SEEK_SET);
-    FileRead(Page, sizeof(Char), NumBytes, data->db_fd);
+    NlmSeekInMFILE(data->mfp, Pos, SEEK_SET);
+    NlmReadMFILE((Uint1Ptr)Page, sizeof(Char), NumBytes, data->mfp);
     Page[NumBytes] = NULLB;
     
     /* Now removing all \n and \r characters */
@@ -2230,8 +2241,8 @@ ISAMErrorCode SISAMSearch(ISAMObjectPtr object,
     
     NumBytes = SwapUint4(data->KeySamples[SampleNum + 1]) - Pos;
     Page = (CharPtr) MemNew(NumBytes + 1);
-    fseek(data->db_fd, Pos, SEEK_SET);
-    FileRead(Page, sizeof(Char), NumBytes, data->db_fd);
+    NlmSeekInMFILE(data->mfp, Pos, SEEK_SET);
+    NlmReadMFILE((Uint1Ptr)Page, sizeof(Char), NumBytes, data->mfp);
     Page[NumBytes] = NULLB;
 
     /* Now removing all \n and \r characters */
@@ -2355,14 +2366,14 @@ ISAMErrorCode NISAMFindKeys(ISAMObjectPtr object,
     
     if (NoData) {
         KeyPage = (Int4Ptr)MemNew((TotalNums + 1) * sizeof(Int4));
-        fseek(data->db_fd, First * sizeof(Int4), SEEK_SET);
-        FileRead(KeyPage, sizeof(Int4), TotalNums, data->db_fd);
+        NlmSeekInMFILE(data->mfp, First*sizeof(Int4), SEEK_SET);
+        NlmReadMFILE((Uint1Ptr)KeyPage, sizeof(Int4), TotalNums, data->mfp);
     } else {
         KeyDataPage = (NISAMKeyDataPtr)MemNew((TotalNums + 1) * 
                                               sizeof(NISAMKeyData));
-        fseek(data->db_fd, First * sizeof(NISAMKeyData), SEEK_SET);
-        FileRead(KeyDataPage,sizeof(NISAMKeyData),TotalNums,
-                 data->db_fd);
+        NlmSeekInMFILE(data->mfp, First*sizeof(NISAMKeyData), SEEK_SET);
+        NlmReadMFILE((Uint1Ptr)KeyDataPage, sizeof(NISAMKeyData), TotalNums, 
+                data->mfp);
     }
     
     if (NoData) {  

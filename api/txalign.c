@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.65 2002/07/24 21:08:47 kans Exp $
+/* $Id: txalign.c,v 6.70 2002/11/12 22:37:35 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,28 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.65 $
+* $Revision: 6.70 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.70  2002/11/12 22:37:35  dondosha
+* Compute number of identities from sequence data when formatting, not relying on the score set in seqalign
+*
+* Revision 6.69  2002/11/04 23:04:00  dondosha
+* Take number of identities directly from seqalign
+*
+* Revision 6.68  2002/10/17 16:57:49  jianye
+* added option for get sequence feature
+*
+* Revision 6.67  2002/09/09 21:59:21  jianye
+* fixed problem associated with query-anchored alignment for get sequence checkbox
+*
+* Revision 6.66  2002/09/04 20:32:52  jianye
+* added get sequence feature
+*
 * Revision 6.65  2002/07/24 21:08:47  kans
 * reverted ncbi URL
 *
@@ -483,6 +498,8 @@
 
 /* Used in make_dumpgnl_links, set in getreq.cpp or getreqcmd.cpp */
 const char *RID_glb;
+/*Indicate if db contains sequence with gi*/
+Boolean DbHasGi=FALSE;
 
 /*
 	Used by the functions that format the one-line descriptions.
@@ -507,8 +524,9 @@ typedef struct _txdfline_struct {
 } TxDfLineStruct, *TxDfLineStructPtr;
 
 /* url for linkout*/
-static CharPtr linkoutURL[total_linkout]={"<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>", /* 1, linkout_locuslink*/
-					  "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>" /* 2, linkout_locuslink*/};
+static CharPtr linkoutURL[total_linkout]={"<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>", /* 0, linkout_locuslink*/
+					  "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>", /* 1, linkout_unigen*/
+					  "<a href=\"http://www.ncbi.nlm.nih.gov/%s %d\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"/* 2, linkout_structure*/};
 
 /*fill string with num spaces and null-end the string*/
 static void makeEmptyString(CharPtr str, Int4 num){
@@ -618,7 +636,7 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	
 	if(checkLinkoutType(actualBdlp, linkout_locuslink)){
 	  hasLinkout=TRUE;
-	  fprintf(fp, linkoutURL[linkout_locuslink-1], gi, molType);
+	  fprintf(fp, linkoutURL[0], gi, molType);
 	}
 	 
 	
@@ -628,14 +646,17 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	  if(rnp&&rnp->sci_name){
 	    unigeneName=getNameInitials(rnp->sci_name);
 	    if(unigeneName){
-	      fprintf(fp, linkoutURL[linkout_unigene-1], unigeneName, gi);
+	      fprintf(fp, linkoutURL[1], unigeneName, gi);
 	    }
 	    MemFree(unigeneName);
 	  }
 	 
 	  RDBTaxNamesFree(rnp);
 	}
-	
+	/*	if(checkLinkoutType(actualBdlp, linkout_structure)){
+	  hasLinkout=TRUE;
+	  fprintf(fp, linkoutURL[2], RID_glb, gi);
+	  }*/
       }
       BlastDefLineSetFree(bdlp);
     }
@@ -1102,7 +1123,13 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FI
     annot = hannot;
     while(annot) {
         if(annot->type == 2) {
+	    SeqIdPtr siptemp;
             align = (SeqAlignPtr) annot->data;
+	    siptemp=TxGetSubjectIdFromSeqAlign(align);
+	    if(siptemp&&siptemp->choice==SEQID_GI){
+	      DbHasGi=TRUE;
+	    }
+
             if(m_sip == NULL)
                 m_sip = make_master(align);
             if(m_sip != NULL) {
@@ -1438,6 +1465,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 	Char temp[21];
 	Boolean is_first;
 	SeqIdPtr seqid_var;
+	Int4 getSeqCheckboxLen=200;
 
 	if(tdp_list==NULL)
 		return NULL;
@@ -1482,6 +1510,9 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 	   }
 	   if(tdp->matrix_val)
 		   size += max_len;
+	   if(options&TXALIGN_HTML&&(options&TXALIGN_MASTER)&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
+	     size+=getSeqCheckboxLen;
+	   }
 	}
 	if(size == 0)
 	{
@@ -1490,6 +1521,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 		return NULL;
 	}
 	size += max_pos_val;
+
 	docbuf = (CharPtr) MemNew((size_t)(size) * sizeof(Char));
 	matrix_buf = (CharPtr) MemNew((size_t)max_len * sizeof (Char));
 
@@ -1545,10 +1577,10 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 		}
 		load = FALSE;
 		if(is_html)
-		{
+		  {
 			sip = get_seqid_for_textbuf(tdp, HTML_db, HTML_dopt);
 			while(!load && sip)
-			{
+			  {
 				if(sip->choice == SEQID_GI && sip->data.intvalue != 0)
 				{
 					seqid_var = *already_linked;
@@ -1577,9 +1609,19 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 
        ValNodeAddInt(already_linked, SEQID_GI, sip->data.intvalue);
 					}
+					/*check box for getting sequence*/
+					if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
+					  Char checkboxBuf[200];
+					  sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", sip->data.intvalue);
+					  sprintf(docbuf+pos,checkboxBuf);
+					  
+					  pos += StringLen(checkboxBuf);
+					}
+				
 					html_len = StringLen(HTML_buffer);
 					sprintf(docbuf+pos, HTML_buffer);
 					pos += html_len;
+				
 					pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, 
 						tdp->strand, FALSE, TRUE, label_size, num_size, show_strand, strip_semicolon);
 					load = TRUE;
@@ -1615,10 +1657,17 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 				sip = sip->next;
 			}
 		}
-
-		if(!load)
-			pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, tdp->strand, 
-				FALSE, FALSE, label_size, num_size, show_strand, strip_semicolon);
+	
+		if(!load){
+		  if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
+		    Char checkboxBuf[200];
+		    sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment', 'getSeqMaster')\">");
+		    sprintf(docbuf+pos,checkboxBuf);
+		  
+		    pos += StringLen(checkboxBuf);
+		  }
+		  pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, tdp->strand, FALSE, FALSE, label_size, num_size, show_strand, strip_semicolon);
+		}
 		sprintf(docbuf+pos, "%s", tdp->buf);
 		pos += StringLen(tdp->buf);
 		if(stop_val >=0 && is_first)
@@ -2260,13 +2309,11 @@ static Boolean load_align_sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
         m_res = SeqPortGetResidue(m_spp);
         t_res = SeqPortGetResidue(t_spp);
         if(m_res == t_res)
-            ++(asp->identical);
-        else if(asp->matrix != NULL && asp->is_aa) {
-            if (IS_residue(m_res) && IS_residue(t_res)) {
-                if(asp->matrix[m_res][t_res] >0)
-                    ++(asp->positive);
-            }
-        }
+           ++(asp->identical);
+        else if ((asp->matrix != NULL && asp->is_aa) &&
+                 (IS_residue(m_res) && IS_residue(t_res)) &&
+                 (asp->matrix[m_res][t_res] >0))
+           ++(asp->positive);
     }
     asp->totlen = ddp->len;
     
@@ -2385,22 +2432,19 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
                 m_res = SeqPortGetResidue(m_spp);
                 t_res = SeqPortGetResidue(t_spp);
                 if(m_res == t_res)
-                    ++(asp->identical);
-                else if(asp->matrix != NULL && asp->is_aa) {
-                    if (IS_residue(m_res) && IS_residue(t_res)) {
-
-                        if(asp->posMatrix != NULL) {
-                            stdaa_res = SeqMapTableConvert(smtp, t_res);
-                            if(asp->posMatrix[val+j][stdaa_res] > 0)
-                                ++(asp->positive);
-                        } else {
-                            if(asp->matrix[m_res][t_res] >0)
-                                ++(asp->positive);
-                        }
-                    }
+                   ++(asp->identical);
+                else if ((asp->matrix != NULL && asp->is_aa) &&
+                         (IS_residue(m_res) && IS_residue(t_res))) {
+                   if(asp->posMatrix != NULL) {
+                      stdaa_res = SeqMapTableConvert(smtp, t_res);
+                      if(asp->posMatrix[val+j][stdaa_res] > 0)
+                         ++(asp->positive);
+                   } else {
+                      if(asp->matrix[m_res][t_res] >0)
+                         ++(asp->positive);
+                   }
                 }
             }
-            
         }
         asp->totlen += dsp->lens[i];
     }
@@ -2578,8 +2622,9 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
                     codon[2] = SeqPortGetResidue(spp1);
                     residue2 = AAForCodon(codon, genetic_code2);
                     if (residue1 == residue2)
-                        ++(asp->identical);
-                    else if (asp->matrix != NULL && asp->matrix[residue1][residue2] >0)
+                       ++(asp->identical);
+                    else if (asp->matrix != NULL && 
+                              asp->matrix[residue1][residue2] >0)
                         ++(asp->positive);
                 }
             } else {
@@ -2596,10 +2641,12 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
                     codon[1] = SeqPortGetResidue(spp1);
                     codon[2] = SeqPortGetResidue(spp1);
                     residue2 = AAForCodon(codon, genetic_code1);
+                       
                     if (residue1 == residue2)
-                        ++(asp->identical);
-                    else if (asp->matrix != NULL && asp->matrix[residue1][residue2] >0)
-                        ++(asp->positive);
+                       ++(asp->identical);
+                    else if (asp->matrix != NULL &&
+                             asp->matrix[residue1][residue2] >0)
+                       ++(asp->positive);
                 }
             }
             SeqPortFree(spp1);
@@ -2722,7 +2769,10 @@ NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain,
             if(order == chain) {
                 if(asp != NULL) 
                     load_align_sum_for_StdSeg(ssp, asp);
-                return ssp->scores;
+                if (ssp->scores)
+                   return ssp->scores;
+                else 
+                   return align->score;
             }
             ssp = ssp->next;
         }
@@ -4490,7 +4540,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
             NewContLine();
             NewContLine();
             TabToColumn((Int2)(titleIdAllocated));
-            
+           
             ff_AddString("Score    E");
             NewContLine();
             ff_AddString("Sequences producing significant alignments:");
@@ -5399,8 +5449,14 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp,
     for (tbdsp = *bdsp; tbdsp != NULL; tbdsp = tbdsp->next) {
         
         if(first) {
-            fprintf(asop->fp, ">");
-            first = FALSE;
+	  SeqIdPtr bestid;
+	  bestid = SeqIdFindBest(tbdsp->seqid, SEQID_GI);
+	  if(bestid->choice == SEQID_GI&&asop->html_hot_link&&(asop->txalign_options&TXALIGN_GET_SEQUENCE)){
+	    fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", bestid->data.intvalue);
+	  }
+		    
+	  fprintf(asop->fp, ">");
+	  first = FALSE;
         } else {
             fprintf(asop->fp, " ");
         }
@@ -5439,6 +5495,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     BlastDefLinePtr bdsp = NULL;
     CharPtr warning_msg = NULL;
     Char fastaLongIdBuf[BUFFER_LENGTH+1];
+    Int4 num_ident;
 
     sp = asop->sp;
     bsp = asop->bsp;
@@ -5509,8 +5566,13 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                 if(sip != NULL) {
                     
                     if(first) {
-                        fprintf(asop->fp, ">");
-                        first = FALSE;
+		      SeqIdPtr bestid;
+		      bestid = SeqIdFindBest(bsp->id, SEQID_GI);
+		      if(bestid->choice == SEQID_GI&&asop->html_hot_link&&(asop->txalign_options&TXALIGN_GET_SEQUENCE)){
+			fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", bestid->data.intvalue);
+		      }
+		      fprintf(asop->fp, ">");
+		      first = FALSE;
                     } else {
                         fprintf(asop->fp, " ");
                     }
@@ -5699,6 +5761,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     fprintf(asop->fp, "%s\n", buffer);
     ff_StartPrint(0, 0, (Int2)(asop->line_len+asop->indent_len), NULL);
     if (asop->align_len > 0) {
+        asop->positive += asop->identical;
         percent_identical = (Int4) ((100*asop->identical + 0.5)/ (asop->align_len));
         percent_positive = (Int4) ((100*asop->positive + 0.5)/ (asop->align_len));
         /* Don't show positives for blastn, which has these set to 255. */
@@ -5706,7 +5769,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
             asop->m_strand != Seq_strand_unknown && asop->t_strand != Seq_strand_unknown)
             sprintf(buffer, " Identities = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, (long) percent_identical);
         else
-            sprintf(buffer, " Identities = %ld/%ld (%ld%%), Positives = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, (long) percent_identical, (long) (asop->positive+asop->identical), (long) asop->align_len, (long) (percent_identical+percent_positive));
+            sprintf(buffer, " Identities = %ld/%ld (%ld%%), Positives = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, (long) percent_identical, (long) (asop->positive), (long) asop->align_len, (long) (percent_positive));
         ff_AddString(buffer);
         if (asop->gaps > 0) {
             sprintf(buffer, ", Gaps = %ld/%ld (%ld%%)", (long) asop->gaps, 

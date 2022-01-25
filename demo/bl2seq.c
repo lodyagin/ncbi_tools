@@ -25,6 +25,12 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.51  2002/09/18 18:21:04  camacho
+* Fixed memory leak when using the -U option
+*
+* Revision 6.50  2002/09/13 18:53:26  dondosha
+* Corrected the way query and subject deflines are shown in all types of output
+*
 * Revision 6.49  2002/08/09 19:41:25  camacho
 * 1) Added blast version number to command-line options
 * 2) Added explanations for some default parameters
@@ -186,7 +192,8 @@ FILE *global_fp=NULL;
 
 #define LOCAL_BUFLEN 255
 static BioseqPtr
-BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
+BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na, 
+                    Boolean believe_defline)
 {
    CharPtr accession, new_defline, accver_var, version_str;
    Int4 version=0, gi, number, title_length, id_length;
@@ -325,21 +332,30 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na)
    }
    
    SeqPortFree(spp);
-   title_length = StringLen(BioseqGetTitle(bsp_tmp));
-   SeqIdWrite(bsp_tmp->id, tmp, PRINTID_FASTA_LONG, LOCAL_BUFLEN);
-   id_length = StringLen(tmp);
-   title_length += id_length;
-   title_length +=3;
-   new_defline = (CharPtr) MemNew(title_length*sizeof(Char));
-   StringCpy(new_defline, tmp);
-   *(new_defline+id_length) = ' ';
-   StringCpy(new_defline+id_length+1, BioseqGetTitle(bsp_tmp)); 
-   *(new_defline+title_length-1) = NULLB;
+   if (believe_defline) {
+      new_defline = StringSave(BioseqGetTitle(bsp_tmp));
+   } else {
+      title_length = StringLen(BioseqGetTitle(bsp_tmp));
+      SeqIdWrite(bsp_tmp->id, tmp, PRINTID_FASTA_LONG, LOCAL_BUFLEN);
+      id_length = StringLen(tmp);
+      title_length += id_length;
+      title_length +=3;
+      new_defline = (CharPtr) MemNew(title_length*sizeof(Char));
+      StringCpy(new_defline, tmp);
+      *(new_defline+id_length) = ' ';
+      StringCpy(new_defline+id_length+1, BioseqGetTitle(bsp_tmp));
+      *(new_defline+title_length-1) = NULLB;
+   }
+
    bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, new_defline);
    bsp->id = ValNodeNew(NULL);
    oid = ObjectIdNew();
-   oid->str = (char*) Malloc(64);
-   sprintf(oid->str, "%d", id_num);
+   oid->str = (char*) Malloc(LOCAL_BUFLEN+1);
+   if (believe_defline) {
+      SeqIdWrite(bsp_tmp->id, oid->str, PRINTID_FASTA_LONG, LOCAL_BUFLEN);
+   } else {
+      sprintf(oid->str, "%d", id_num);
+   }
    bsp->id->choice = SEQID_LOCAL;
    bsp->id->data.ptrvalue = (Pointer) oid;
    SeqMgrDeleteFromBioseqIndex(bsp_tmp);
@@ -414,7 +430,8 @@ Int2 Main (void)
 {
 	
 	AsnIoPtr aip;
-	BioseqPtr fake_bsp, fake_subject_bsp, query_bsp, subject_bsp;
+	BioseqPtr fake_bsp = NULL, fake_subject_bsp = NULL, query_bsp, 
+                  subject_bsp;
         BioseqPtr bsp1, bsp2;
 	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
 	BLAST_OptionsBlkPtr options;
@@ -426,7 +443,6 @@ Int2 Main (void)
 	SeqAlignPtr  seqalign;
         SeqAnnotPtr seqannot;
 	SeqEntryPtr sep = NULL, sep1 = NULL;
-	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
 	CharPtr blast_inputfile, blast_inputfile1, program_name, blast_outputfile;
 	FILE *infp, *infp1, *outfp;
 	ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns=NULL, error_returns=NULL;
@@ -437,6 +453,8 @@ Int2 Main (void)
         CharPtr query_accver = NULL, subject_accver = NULL;
         const char *dummystr;
         Char buf[256] = { '\0' };
+        Boolean html, seqannot_output, believe_query;
+        Uint1 tabular_output;
 
     StringCpy(buf, "bl2seq ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
@@ -451,6 +469,9 @@ Int2 Main (void)
 
 	ErrSetMessageLevel(SEV_WARNING);
         entrez_lookup = (Boolean) myargs[20].intvalue;
+        html = (Boolean) myargs[17].intvalue;
+        seqannot_output = (myargs[6].strvalue != NULL);
+
 #ifndef NCBI_ENTREZ_CLIENT
         if (entrez_lookup) {
            ErrPostEx(SEV_WARNING, 0, 0, "Entrez client interface unavailable, -A option cannot be used");
@@ -476,7 +497,6 @@ Int2 Main (void)
 		return (1);
 	}
 	   
-
 	align_type = BlastGetTypes(program_name, &seq1_is_na, &seq2_is_na);
 
 	if (!entrez_lookup && (infp = FileOpen(blast_inputfile, "r")) == NULL)
@@ -499,16 +519,17 @@ Int2 Main (void)
 
         global_fp = outfp;
 	options = BLASTOptionNewEx(program_name, (Boolean) myargs[3].intvalue, (Boolean) myargs[18].intvalue);
-
+        tabular_output = (Uint1) myargs[24].intvalue; 
+        believe_query = (seqannot_output || entrez_lookup); 
         if (entrez_lookup) {
-           query_bsp = BioseqFromAccession(query_accver, 1, seq1_is_na);
+           query_bsp = BioseqFromAccession(query_accver, 1, seq1_is_na, TRUE);
         } else {
            if (myargs[25].intvalue)
-              sep = FastaToSeqEntryForDb(infp, seq1_is_na, NULL, FALSE, 
-                                         NULL, NULL, 
+              sep = FastaToSeqEntryForDb(infp, seq1_is_na, NULL, 
+                                         believe_query, NULL, NULL, 
                                          &options->query_lcase_mask);
            else
-              sep = FastaToSeqEntry(infp, seq1_is_na);
+              sep = FastaToSeqEntryEx(infp, seq1_is_na, NULL, believe_query);
 
            if (sep != NULL) {
               query_bsp = NULL;
@@ -524,17 +545,17 @@ Int2 Main (void)
            return 2;
         }
 
-        if (myargs[24].intvalue == 0)
+        if (!believe_query)
            fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
         if (entrez_lookup) {
-           subject_bsp = BioseqFromAccession(subject_accver, 2, seq2_is_na);
+           subject_bsp = 
+              BioseqFromAccession(subject_accver, 2, seq2_is_na, FALSE);
         } else {
-           if (myargs[6].strvalue != NULL || myargs[17].intvalue != 0
-               || myargs[24].intvalue != 0)
-              sep1 = FastaToSeqEntry(infp1, seq2_is_na);
-           else
-              sep1 = FastaToSeqEntryEx(infp1, seq2_is_na, NULL, FALSE);
-	
+           /*if (believe_query || html != 0)
+             sep1 = FastaToSeqEntry(infp1, seq2_is_na);
+             else*/
+           sep1 = FastaToSeqEntryEx(infp1, seq2_is_na, NULL, FALSE);
+           
            if (sep1 != NULL) {
               subject_bsp = NULL;
               if (seq2_is_na)
@@ -550,29 +571,21 @@ Int2 Main (void)
            return 2;
         }
 
-        if (myargs[6].strvalue == NULL && myargs[17].intvalue == 0 &&
-            myargs[24].intvalue == 0) {
-           if (!entrez_lookup) {
-              fake_subject_bsp = BioseqNew();
-              fake_subject_bsp->descr = subject_bsp->descr;
-              fake_subject_bsp->repr = subject_bsp->repr;
-              fake_subject_bsp->mol = subject_bsp->mol;
-              fake_subject_bsp->length = subject_bsp->length;
-              fake_subject_bsp->seq_data = subject_bsp->seq_data;
-              fake_subject_bsp->seq_data_type = subject_bsp->seq_data_type;
-              dbtagptr = DbtagNew();
-              dbtagptr->db = StringSave("BL_ORD_ID");
-              dbtagptr->tag = ObjectIdNew();
-              dbtagptr->tag->id = 0;
-              ValNodeAddPointer(&fake_subject_bsp->id, SEQID_GENERAL, dbtagptr);
-           } else {
-              Char tmp[256];
-              SeqIdWrite(subject_bsp->id, tmp, PRINTID_FASTA_LONG, 255);
-              fake_subject_bsp = BlastMakeFakeBioseq(subject_bsp, tmp);
-           }
-        }
+        fake_subject_bsp = BioseqNew();
+        fake_subject_bsp->descr = subject_bsp->descr;
+        fake_subject_bsp->repr = subject_bsp->repr;
+        fake_subject_bsp->mol = subject_bsp->mol;
+        fake_subject_bsp->length = subject_bsp->length;
+        fake_subject_bsp->seq_data = subject_bsp->seq_data;
+        fake_subject_bsp->seq_data_type = subject_bsp->seq_data_type;
+        dbtagptr = DbtagNew();
+        dbtagptr->db = StringSave("BL_ORD_ID");
+        dbtagptr->tag = ObjectIdNew();
+        dbtagptr->tag->str = StringSave(BioseqGetTitle(subject_bsp));
+        ValNodeAddPointer(&fake_subject_bsp->id, SEQID_GENERAL, dbtagptr);
+
     	if (myargs[19].floatvalue)
-        	options->searchsp_eff = (Nlm_FloatHi) myargs[19].floatvalue;
+           options->searchsp_eff = (Nlm_FloatHi) myargs[19].floatvalue;
 
 
 	options->filter_string = StringSave(myargs[14].strvalue);
@@ -609,30 +622,23 @@ Int2 Main (void)
 
 	options->strand_option = myargs[16].intvalue;
 
-        /* Input longest intron length is in nucleotide scale; in the lower level
-           code it will be used in protein scale */
+        /* Input longest intron length is in nucleotide scale; in the lower 
+           level code it will be used in protein scale */
         if (myargs[21].intvalue > 0) 
-           options->longest_intron = MAX(myargs[21].intvalue, MAX_INTRON_LENGTH);
-        if (myargs[24].intvalue != 0) {
-           options->output = (VoidPtr) outfp;
-           if (options->is_megablast_search)
-              handle_results = MegaBlastPrintAlignInfo;
-           else
-              handle_results = BlastPrintAlignInfo;
-        } else 
-           handle_results = NULL;
+           options->longest_intron = 
+              MAX(myargs[21].intvalue, MAX_INTRON_LENGTH);
 
-        if (myargs[6].strvalue || myargs[17].intvalue || 
-            handle_results) {
+        if (believe_query) {
            bsp1 = query_bsp;
-           bsp2 = subject_bsp;
         } else {
            bsp1 = fake_bsp;
-           bsp2 = fake_subject_bsp;
         }
 
+        bsp2 = fake_subject_bsp;
+
         if (!myargs[22].strvalue && !myargs[23].strvalue) {
-              seqalign = BlastTwoSequencesWithCallback(bsp1, bsp2, program_name, options, &other_returns, &error_returns, handle_results);
+           seqalign = BlastTwoSequencesWithCallback(bsp1, bsp2, program_name, 
+              options, &other_returns, &error_returns, handle_results);
         } else {
            /* Location(s) are provided */
            CharPtr delimiters = " ,;";
@@ -688,48 +694,43 @@ Int2 Main (void)
            }
            ValNodeFree(error_returns);
         }
-        
-        if (!handle_results) {
-           dbinfo = NULL;
-           ka_params = NULL;
-           ka_params_gap = NULL;
-           params_buffer = NULL;
-           mask_loc = NULL;
-           matrix = NULL;
-           txmatrix = NULL;
-           for (vnp=other_returns; vnp; vnp = vnp->next) {
-              switch (vnp->choice) {
-              case TXDBINFO:
-                 dbinfo = vnp->data.ptrvalue;
-                 break;
-              case TXKABLK_NOGAP:
-                 ka_params = vnp->data.ptrvalue;
-                 break;
-              case TXKABLK_GAP:
-                 ka_params_gap = vnp->data.ptrvalue;
-                 break;
-              case TXPARAMETERS:
-                 params_buffer = vnp->data.ptrvalue;
-                 break;
-              case TXMATRIX:
-                 matrix = vnp->data.ptrvalue;
-                 if (matrix)
-                    txmatrix = BlastMatrixToTxMatrix(matrix);
-                 break;
-              case SEQLOC_MASKING_NOTSET:
-              case SEQLOC_MASKING_PLUS1:
-              case SEQLOC_MASKING_PLUS2:
-              case SEQLOC_MASKING_PLUS3:
-              case SEQLOC_MASKING_MINUS1:
-              case SEQLOC_MASKING_MINUS2:
-              case SEQLOC_MASKING_MINUS3:
-                 ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
-                 break;
-              default:
-                 break;
-              }
-           }	
-
+       
+        ka_params = NULL;
+        ka_params_gap = NULL;
+        params_buffer = NULL;
+        mask_loc = NULL;
+        matrix = NULL;
+        txmatrix = NULL;
+        for (vnp=other_returns; vnp; vnp = vnp->next) {
+           switch (vnp->choice) {
+           case TXKABLK_NOGAP:
+              ka_params = vnp->data.ptrvalue;
+              break;
+           case TXKABLK_GAP:
+              ka_params_gap = vnp->data.ptrvalue;
+              break;
+           case TXPARAMETERS:
+              params_buffer = vnp->data.ptrvalue;
+              break;
+           case TXMATRIX:
+              matrix = vnp->data.ptrvalue;
+              if (matrix && !tabular_output)
+                 txmatrix = BlastMatrixToTxMatrix(matrix);
+              break;
+           case SEQLOC_MASKING_NOTSET:
+           case SEQLOC_MASKING_PLUS1:
+           case SEQLOC_MASKING_PLUS2:
+           case SEQLOC_MASKING_PLUS3:
+           case SEQLOC_MASKING_MINUS1:
+           case SEQLOC_MASKING_MINUS2:
+           case SEQLOC_MASKING_MINUS3:
+              ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
+              break;
+           default:
+              break;
+           }
+        }	
+        if (!tabular_output || seqannot_output) {
            align_options = 0;
            align_options += TXALIGN_MATRIX_VAL;
            align_options += TXALIGN_SHOW_QS;
@@ -739,22 +740,15 @@ Int2 Main (void)
               align_options += TXALIGN_BLASTX_SPECIAL;
            }
            
-           if (myargs[17].intvalue)
+           if (html)
               align_options += TXALIGN_HTML;
-           
-           if (entrez_lookup)
-              AcknowledgeBlastQuery(query_bsp, 70, outfp, TRUE, myargs[17].intvalue);
-           else
-              AcknowledgeBlastQuery(query_bsp, 70, outfp, FALSE, myargs[17].intvalue);
-           
+
            seqannot = SeqAnnotNew();
            seqannot->type = 2;
            AddAlignInfoToSeqAnnot(seqannot, align_type);
            seqannot->data = seqalign;
-           ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, FormatScoreFunc);
-           
            aip = NULL;
-           if (myargs[6].strvalue)
+           if (seqannot_output)
               aip = AsnIoOpen (myargs[6].strvalue,"w");
            
            if (aip && seqannot) {
@@ -762,70 +756,52 @@ Int2 Main (void)
               AsnIoReset(aip);
               aip = AsnIoClose(aip);
            }
-           seqannot = SeqAnnotFree(seqannot);
+        }
+        if (!tabular_output) {    
+           AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
+           ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, FormatScoreFunc);
            
-           matrix = BLAST_MatrixDestruct(matrix);
+           seqannot = SeqAnnotFree(seqannot);
            if (txmatrix)
               txmatrix = TxMatrixDestruct(txmatrix);
            init_buff_ex(85);
-           dbinfo_head = dbinfo;
-           while (dbinfo) {
-              PrintDbReport(dbinfo, 70, outfp);
-              dbinfo = dbinfo->next;
-           }
-           dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
-           
+        
            if (ka_params) {
               PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
-              MemFree(ka_params);
            }
-           
+        
            if (ka_params_gap) {
               PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
-              MemFree(ka_params_gap);
            }
-           
+        
            PrintTildeSepLines(params_buffer, 70, outfp);
-           MemFree(params_buffer);
            free_buff();
-           mask_loc_start = mask_loc;
-           while (mask_loc) {
-              SeqLocSetFree(mask_loc->data.ptrvalue);
-              mask_loc = mask_loc->next;
-           }
-           ValNodeFree(mask_loc_start);
-           
-           fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
-        } else { 
-           /* Just destruct all other_returns parts */
-           for (vnp=other_returns; vnp; vnp = vnp->next) {
-              switch (vnp->choice) {
-              case TXDBINFO:
-                 TxDfDbInfoDestruct(vnp->data.ptrvalue);
-                 break;
-              case TXKABLK_NOGAP:
-              case TXKABLK_GAP:
-              case TXPARAMETERS:
-                 MemFree(vnp->data.ptrvalue);
-                 break;
-              case TXMATRIX:
-                 BLAST_MatrixDestruct(vnp->data.ptrvalue);
-                 break;
-              case SEQLOC_MASKING_NOTSET:
-              case SEQLOC_MASKING_PLUS1:
-              case SEQLOC_MASKING_PLUS2:
-              case SEQLOC_MASKING_PLUS3:
-              case SEQLOC_MASKING_MINUS1:
-              case SEQLOC_MASKING_MINUS2:
-              case SEQLOC_MASKING_MINUS3:
-                 SeqLocSetFree(vnp->data.ptrvalue);
-                 break;
-              default:
-                 break;
-              }
-           }
+        } else {
+           PrintTabularOutputHeader(NULL, query_bsp, NULL, 
+              program_name, 0, believe_query, outfp);
+
+           BlastPrintTabulatedResults(seqalign, query_bsp, NULL, 
+              1, program_name, FALSE,
+              believe_query, 0, 0, outfp, FALSE);
+           SeqAlignSetFree(seqalign);
         }
+
+        matrix = BLAST_MatrixDestruct(matrix);
+        MemFree(ka_params);
+        MemFree(ka_params_gap);
+        MemFree(params_buffer);
+    
+        mask_loc_start = mask_loc;
+        while (mask_loc) {
+           SeqLocSetFree(mask_loc->data.ptrvalue);
+           mask_loc = mask_loc->next;
+        }
+        ValNodeFree(mask_loc_start);
+        
+        fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
+
         other_returns = ValNodeFree(other_returns);
+    options->query_lcase_mask = SeqLocSetFree(options->query_lcase_mask);
 	options = BLASTOptionDelete(options);
 	MemFree(program_name);
 	FileClose(outfp);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 *
 *
 * $Log: ncbisgml.c,v $
+* Revision 6.2  2002/10/03 16:22:04  kans
+* changed fgets to Nlm_FileGets
+*
 * Revision 6.1  1997/10/29 02:44:35  vakatov
 * Type castings to pass through the C++ compiler
 *
@@ -103,7 +106,7 @@ NLM_EXTERN int LIBCALL  Nlm_SgmlLoadTable (void)
 	if ((fp = FileOpen(buf,"r")) ==NULL)
 		return FALSE;
 	
-	if (!fgets(buf,sizeof buf,fp))
+	if (!Nlm_FileGets(buf,sizeof buf,fp))
 	{
 		ErrPostEx(SEV_WARNING,E_SGML,1,"Error reading file [sgmlbb.ent]");
 		return FALSE;
@@ -113,7 +116,7 @@ NLM_EXTERN int LIBCALL  Nlm_SgmlLoadTable (void)
 	sgml_ascii  = (char**) MemNew(x * sizeof(char*));
 	for (i = 0; i < x; i++)
 	{
-		if ((p1 = fgets(buf,sizeof buf,fp)) == NULL) break;
+		if ((p1 = Nlm_FileGets(buf,sizeof buf,fp)) == NULL) break;
 		while ((*p1 < ' ') && (*p1 != '\0')) p1++;  /* skip any leading junk */
 		if (*p1 == '\0') break;
 		if ( (p2 = strchr(p1,'\t')) == NULL )   break;

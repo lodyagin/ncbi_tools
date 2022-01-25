@@ -540,6 +540,7 @@ static void ReadQualScores (SeqEntryPtr sep_list, CharPtr qual_fname)
 {
   BioseqPtr    bsp;
   Char         buf [256];
+  Char         ch;
   FILE         *fp;
   SeqGraphPtr  lastsgp;
   CharPtr      ptr;
@@ -547,6 +548,7 @@ static void ReadQualScores (SeqEntryPtr sep_list, CharPtr qual_fname)
   SeqEntryPtr  sep;
   SeqGraphPtr  sgp;
   CharPtr      str;
+  CharPtr      tmp;
 
   if (sep_list == NULL || qual_fname == NULL) return;
   fp = FileOpen (qual_fname, "r");
@@ -558,6 +560,13 @@ static void ReadQualScores (SeqEntryPtr sep_list, CharPtr qual_fname)
     if (str [0] == '>') {
       ptr = str + 1;
       TrimSpacesAroundString (ptr);
+      tmp = ptr;
+      ch = *tmp;
+      while (ch != '\0' && ch != '\t' && ch != ' ') {
+        tmp++;
+        ch = *tmp;
+      }
+      *tmp = '\0';
       sep = sep_list;
       while (sep != NULL && StringCmp (ptr, BioseqGetLocalIdStr ((BioseqPtr) sep->data.ptrvalue)) != 0) {
         sep = sep->next;

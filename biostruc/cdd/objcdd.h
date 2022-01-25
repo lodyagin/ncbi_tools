@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at May 17, 2002 10:52 AM
+*    Generated using ASNCODE Revision: 6.14 at Oct 31, 2002  9:42 AM
 *
 **************************************************/
 
@@ -211,6 +211,9 @@ typedef ValNode CddDescr;
 #define CddDescr_scrapbook 10
 #define CddDescr_source_id 11
 #define CddDescr_repeats 12
+#define CddDescr_old_root 13
+#define CddDescr_curation_status 14
+#define CddDescr_readonly_status 15
 
 
 NLM_EXTERN CddDescrPtr LIBCALL CddDescrFree PROTO ((CddDescrPtr ));

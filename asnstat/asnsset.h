@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnsset.h61";
-static AsnValxNode avnx[20] = {
+static char * asnfilename = "asnsset.h62";
+static AsnValxNode avnx[21] = {
     {20,"not-set" ,0,0.0,&avnx[1] } ,
     {20,"nuc-prot" ,1,0.0,&avnx[2] } ,
     {20,"segset" ,2,0.0,&avnx[3] } ,
@@ -29,6 +29,7 @@ static AsnValxNode avnx[20] = {
     {20,"phy-set" ,15,0.0,&avnx[16] } ,
     {20,"eco-set" ,16,0.0,&avnx[17] } ,
     {20,"gen-prod-set" ,17,0.0,&avnx[18] } ,
+    {20,"wgs-set" ,18,0.0,&avnx[19] } ,
     {20,"other" ,255,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } };
 
@@ -40,7 +41,7 @@ static AsnType atx[28] = {
   {407, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[12]} ,
   {0, "level" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[7]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "class" ,128,3,0,0,1,0,0,0,&avnx[19],&atx[8],&avnx[0],0,&atx[9]} ,
+  {0, "class" ,128,3,0,0,1,0,0,0,&avnx[20],&atx[8],&avnx[0],0,&atx[9]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "release" ,128,4,0,1,0,0,0,0,NULL,&atx[10],NULL,0,&atx[11]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -63,7 +64,7 @@ static AsnType atx[28] = {
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Seqset" , "asnsset.h61",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Seqset" , "asnsset.h62",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

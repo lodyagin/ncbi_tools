@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.82 $
+* $Revision: 6.83 $
 *
 * File Description: 
 *
@@ -91,6 +91,8 @@ NLM_EXTERN Int2 SeqEntryToBioSource (SeqEntryPtr sep, BoolPtr mito, CharPtr taxn
 NLM_EXTERN SeqLocPtr   CreateWholeInterval (SeqEntryPtr sep);
 NLM_EXTERN SeqFeatPtr  CreateNewFeature (SeqEntryPtr sep, SeqEntryPtr placeHere, Uint1 choice, SeqFeatPtr useThis);
 NLM_EXTERN ValNodePtr  CreateNewDescriptor (SeqEntryPtr sep, Uint1 choice);
+
+NLM_EXTERN Boolean IsPopPhyEtcSet (Uint1 _class);
 
 /* Variants that call SeqMgrGetSeqEntryForData. The feature version allows a location
 to be specified, overriding the default full-length seq-int location.  (If location is

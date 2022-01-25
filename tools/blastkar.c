@@ -47,8 +47,11 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.83 $
+ * $Revision: 6.84 $
  * $Log: blastkar.c,v $
+ * Revision 6.84  2002/10/24 22:52:14  dondosha
+ * When checking config file for matrices path, allow aa or nt subdirectories too
+ *
  * Revision 6.83  2002/07/22 20:10:12  dondosha
  * Correction: previous change did not work for proteins
  *
@@ -1458,20 +1461,35 @@ BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
         
         sbp->name = StringSave(matrix);	/* Save the name of the matrix. */
 
+        /* 1. Try local directory */
         if(FileLength(matrix) > 0)
             fp = FileOpen(matrix, "r");
         
+        /* 2. Try configuration file */
         if (fp == NULL) {
             if(FindPath("ncbi", "ncbi", "data", string, PATH_MAX)) {
-                StringCat(string, matrix);
-                if(FileLength(string) > 0)
-                    fp = FileOpen(string, "r");
+               matrix_dir = StringSave(string);
+               sprintf(string, "%s%s", matrix_dir, matrix);
+               if(FileLength(string) > 0) {
+                  fp = FileOpen(string, "r");
+               } else {
+                  if (sbp->protein_alphabet)
+                     Nlm_StringNCpy(alphabet_type, "aa", 2);
+                  else
+                     Nlm_StringNCpy(alphabet_type, "nt", 2);
+                  alphabet_type[2] = NULLB;
+                  sprintf(string, "%s%s%s%s", matrix_dir, 
+                          alphabet_type, DIRDELIMSTR, matrix);
+                  if(FileLength(string) > 0)
+                     fp = FileOpen(string, "r");
+               }
+               matrix_dir = MemFree(matrix_dir);
             }
         }
         /* Trying to use local "data" directory */
 
         if(fp == NULL) {
-            sprintf(string, "data/%s", matrix);
+            sprintf(string, "data%s%s", DIRDELIMSTR, matrix);
             if(FileLength(string) > 0)
                 fp = FileOpen(string, "r");
         }
@@ -1479,11 +1497,6 @@ BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
 #ifdef OS_UNIX
         /* Get the matrix locations from the environment for UNIX. */
         if (fp == NULL) {
-            if (sbp->protein_alphabet)
-                Nlm_StringNCpy(alphabet_type, "aa", 2);
-            else
-                Nlm_StringNCpy(alphabet_type, "nt", 2);
-            alphabet_type[2] = NULLB;
             
             matrix_dir = getenv("BLASTMAT");
             if (matrix_dir != NULL) {

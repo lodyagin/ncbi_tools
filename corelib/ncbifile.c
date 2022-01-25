@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.25 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,15 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.28  2002/11/06 21:23:04  ucko
+* Don't assume MIPS is IRIX; allow Linux too.
+*
+* Revision 6.27  2002/10/03 17:22:29  kans
+* for OS_MAC or OS_UNIX_DARWIN, Nlm_FileGets does fgetc loop, stopping at the first \n or \r character, and leaving a \n as the last character before the null byte
+*
+* Revision 6.26  2002/10/02 14:34:17  kans
+* Nlm_GetOSType and Nlm_FileCreate have ifdef OS_MAC, not WIN_MAC
+*
 * Revision 6.25  2002/06/13 16:14:07  kans
 * fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
 *
@@ -183,7 +192,7 @@ Removed disabled CD routines.
 #define DEFAULT_RAW_CDROM "/dev/rsr0"
 #endif
 
-#ifdef PROC_MIPS
+#if defined(PROC_MIPS) && !defined(OS_UNIX_LINUX)
 #define DEFAULT_CDROM "/dev/scsi/sc0d4l0"
 #endif
 
@@ -722,9 +731,36 @@ NLM_EXTERN int LIBCALL  Nlm_FilePuts (const char *ptr, FILE *fp)
 *****************************************************************************/
 NLM_EXTERN char * LIBCALL  Nlm_FileGets (Nlm_CharPtr ptr, size_t size, FILE *fp)
 {
-	if ((ptr == NULL) || (size <= 0) || (fp == NULL))
+#if defined(OS_MAC) || defined (OS_UNIX_DARWIN)
+    int         ch;
+	int         count;
+	Nlm_CharPtr tmp;
+#endif
+
+	if ((ptr == NULL) || (size < 1) || (fp == NULL))
 		return NULL;
+#if defined(OS_MAC) || defined (OS_UNIX_DARWIN)
+	ch = fgetc (fp);
+	count = 0;
+	tmp = ptr;
+	while (ch != EOF && ch != '\0' && ch != '\n' && ch != '\r' && count < size - 1) {
+	  *tmp = ch;
+	  tmp++;
+	  count++;
+	  ch = fgetc (fp);
+	}
+	if (ch == '\n' || ch == '\r') {
+	  *tmp = '\n';
+	  tmp++;
+	  count++;
+	}
+	*tmp = '\0';
+	if (count < 1)
+		return NULL;
+	return ptr;
+#else
 	return fgets(ptr,size,fp);
+#endif
 }
 
 
@@ -939,7 +975,7 @@ NLM_EXTERN Nlm_Boolean LIBCALL Nlm_FileRename (Nlm_CharPtr oldFileName, Nlm_Char
 *   FileCreate()
 *
 *****************************************************************************/
-#ifdef WIN_MAC
+#ifdef OS_MAC
 static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
 
 {
@@ -956,7 +992,7 @@ static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
 NLM_EXTERN void LIBCALL Nlm_FileCreate (Nlm_CharPtr fileName, Nlm_CharPtr type, Nlm_CharPtr creator)
 
 {
-#ifdef WIN_MAC
+#ifdef OS_MAC
   Nlm_Int2  fError;
   Nlm_Char  temp [256];
   OSType    fType;
@@ -968,7 +1004,7 @@ NLM_EXTERN void LIBCALL Nlm_FileCreate (Nlm_CharPtr fileName, Nlm_CharPtr type, 
 
   if (fileName != NULL && fileName [0] != '\0') {
 
-#ifdef WIN_MAC
+#ifdef OS_MAC
     // note: the following assumes either full pathname or that the current
     // directory is the proper location to find/create the file
 

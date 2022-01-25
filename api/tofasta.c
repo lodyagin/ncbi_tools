@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.110 $
+* $Revision: 6.111 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.111  2002/11/14 16:20:26  kans
+* added FindNMDefLine for default NM_ defline if no title instantiated
+*
 * Revision 6.110  2002/08/22 17:33:39  madden
 * Print range on FASTA output if only partial sequence written
 *
@@ -593,6 +596,8 @@
 #include <subutil.h>   /* MOLECULE_TYPE_GENOMIC */
 #include <explore.h>
 #include <objloc.h>
+#include <objfdef.h>
+
 #define SeqLocNew(_a) ValNodeNew((_a))
 
 static Uint1 na_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
@@ -2727,6 +2732,95 @@ static ValNodePtr GatherGenesForCDS(SeqLocPtr slp)
 	return vnp;
 }
 
+typedef struct nmdef {
+  SeqFeatPtr  gene;
+  SeqFeatPtr  cds;
+  SeqFeatPtr  prot;
+  Int4        protlen;
+  Int2        numgenes;
+  Int2        numcds;
+  Int2        numprots;
+} NMDef, PNTR NMDefPtr;
+
+static void FindNMFeats (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Int4      len;
+  NMDefPtr  ndp;
+
+  if (sfp == NULL) return;
+  ndp = (NMDefPtr) userdata;
+  if (ndp == NULL) return;
+
+  switch (sfp->data.choice) {
+    case SEQFEAT_GENE :
+      ndp->gene = sfp;
+      (ndp->numgenes)++;
+      break;
+    case SEQFEAT_CDREGION :
+      ndp->cds = sfp;
+      (ndp->numcds++);
+      break;
+    case SEQFEAT_PROT :
+      len = SeqLocLen (sfp->location);
+      if (len > ndp->protlen) {
+        ndp->prot = sfp;
+        ndp->protlen = len;
+        (ndp->numprots)++;
+      }
+      break;
+    default :
+      break;
+  }
+}
+
+static CharPtr FindNMDefLine (BioseqPtr bsp)
+
+{
+  BioSourcePtr  biop;
+  Char          buf [512];
+  CharPtr       cds;
+  Uint2         entityID;
+  CharPtr       gene;
+  size_t        len;
+  NMDef         nd;
+  OrgRefPtr     orp;
+  SeqEntryPtr   sep;
+  CharPtr       str;
+  ValNodePtr    vnp;
+
+  MemSet ((Pointer) &nd, 0, sizeof (NMDef));
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  sep = GetBestTopParentForDataEx (entityID, bsp, TRUE);
+
+  VisitFeaturesInSep (sep, (Pointer) &nd, FindNMFeats);
+  if (nd.numgenes != 1 || nd.numcds != 1 || nd.numprots < 1) return NULL;
+
+  vnp = GatherDescrOnBioseq (NULL, bsp, Seq_descr_source, FALSE);
+  if (vnp == NULL) return NULL;
+  biop = (BioSourcePtr) vnp->data.ptrvalue;
+  orp = biop->org;
+  if (orp == NULL || StringHasNoText (orp->taxname)) return NULL;
+
+  FeatDefLabel (nd.gene, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+  gene = StringSaveNoNull (buf);
+  FeatDefLabel (nd.cds, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+  cds = StringSaveNoNull (buf);
+
+  len = StringLen (orp->taxname) + StringLen (cds) +
+        StringLen (gene) + StringLen ("  (), mRNA") + 10;
+
+  str = (CharPtr) MemNew (len);
+  if (str != NULL) {
+    sprintf (str, "%s %s (%s), mRNA", orp->taxname, cds, gene);
+  }
+
+  MemFree (gene);
+  MemFree (cds);
+
+  return str;
+}
+
 static CharPtr FindProtDefLine(BioseqPtr bsp)
 {
 	SeqFeatPtr sfp = NULL, f;
@@ -3333,7 +3427,8 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		"LOW-PASS SEQUENCE SAMPLING",
 		"WORKING DRAFT SEQUENCE",
 		"*** SEQUENCING IN PROGRESS ***" };
-	Boolean htg_tech = FALSE, htgs_draft = FALSE, htgs_cancelled = FALSE, is_nc = FALSE, is_tpa = FALSE;
+	Boolean htg_tech = FALSE, htgs_draft = FALSE, htgs_cancelled = FALSE,
+	        is_nc = FALSE, is_nm = FALSE, is_tpa = FALSE;
 	MolInfoPtr mip;
 	GBBlockPtr gbp = NULL;
 	Boolean wgsmaster = FALSE;
@@ -3359,6 +3454,8 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 				if (tsip != NULL && tsip->accession != NULL) {
 					if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
 						is_nc = TRUE;
+					} else if (StringNICmp (tsip->accession, "NM_", 3) == 0) {
+						is_nm = TRUE;
 					}
 				}
 				break;
@@ -3456,6 +3553,13 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 				}
 			}
 		}
+	} else if (is_nm && title == NULL) {
+	  title = FindNMDefLine (bsp);
+	  if (title != NULL && iip != NULL) {
+        iip->entityID = 0;
+        iip->itemID = 0;
+        iip->itemtype = 0;
+	  }
 	}
 /* some titles may have zero length */
 	if (title != NULL && *title != '\0') {

@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.13 2002/08/06 12:54:25 bauer Exp $
+/* $Id: cddsrv.h,v 1.14 2002/10/09 20:31:14 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.13 $
+* $Revision: 1.14 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.14  2002/10/09 20:31:14  bauer
+* increased max. number of CDART neighbors, and other additions
+*
 * Revision 1.13  2002/08/06 12:54:25  bauer
 * fixes to accomodate COGs
 *
@@ -204,6 +207,7 @@ static Char    ODBCINI[PATH_MAX];
 static Char    DARTUSER[PATH_MAX];
 static Char    DARTPASS[PATH_MAX];
 static Char    CDTRKDBS[PATH_MAX];
+static Char    CDDlocat[PATH_MAX];
 
 /*---------------------------------------------------------------------------*/
 /* static/local Function prototypes                                          */

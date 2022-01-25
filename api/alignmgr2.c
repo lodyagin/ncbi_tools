@@ -28,13 +28,19 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.39 $
+* $Revision: 6.42 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.42  2002/10/23 16:32:19  todorov
+* CondenseColumns fixed: needed to move the lens too.
+*
+* Revision 6.40  2002/10/16 15:54:28  todorov
+* use the default dim value if not set
+*
 * Revision 6.39  2002/08/07 21:57:33  kans
 * added AlignMgr2GetFirstNForStdSeg
 *
@@ -200,6 +206,7 @@ static void AlnMgr2AddInNewSA(SeqAlignPtr parent, SeqAlignPtr sap);
 static void AlnMgr2AddInNewPairwiseSA(SeqAlignPtr parent, SeqAlignPtr sap);
 static Int4 AlnMgr2MapSegStartToSegStart(SeqAlignPtr sap, Int4 pos, Int4 row1, Int4 row2, Int4 len);
 static Int4 AlnMgr2GetSegForStartPos(SeqAlignPtr sap, Int4 pos, Int4 row);
+static void AlnMgr2CondenseColumns(DenseSegPtr dsp);
 static void AlnMgr2CondenseRows(DenseSegPtr dsp, Int4 whichrow);
 static Boolean AlnMgr2DoCondense(DenseSegPtr dsp, Int4 rownum1, Int4 rownum2);
 static int LIBCALLBACK AlnMgr2CompareCdRows(VoidPtr ptr1, VoidPtr ptr2);
@@ -1461,6 +1468,7 @@ NLM_EXTERN Boolean AlnMgr2IndexAsRows(SeqAlignPtr sap, Uint1 strand, Boolean tru
       sap_tmp->segs = NULL;
       sap_tmp = sap_tmp->next;
    }
+   AlnMgr2CondenseColumns((DenseSegPtr)(amaip->sharedaln->segs));
    AlnMgr2IndexSingleChildSeqAlign(amaip->sharedaln); 
    set_prev->next = NULL;
    sap->segs = (Pointer)(set_head);
@@ -2509,6 +2517,7 @@ static void AlnMgr2BuildAlignmentFromTree(AMVertexPtr PNTR vertexarray, Int4 num
       vertexarray[j]->next = vertexarray[j+1];
       vertexarray[j+1]->next = NULL;
    }
+   AlnMgr2CondenseColumns((DenseSegPtr)(amaip->sharedaln->segs));
    AlnMgr2IndexSingleChildSeqAlign(amaip->sharedaln); 
 }
 
@@ -2996,10 +3005,14 @@ NLM_EXTERN void AlnMgr2AddInNewPairwiseSA(SeqAlignPtr parent, SeqAlignPtr sap)
 
   dsp = (DenseSegPtr)(sap->segs);
   if (dsp->dim != 2) {
-    ErrPostEx(SEV_ERROR, 0,0,
-              "AlnMgr2AddInNewPairwiseSA: dsp->dim (=%d) should be 2.",
-              dsp->dim);
-    return;
+    if (dsp->dim == 0) {
+      dsp->dim = 2; /* set to default */
+    } else {
+      ErrPostEx(SEV_ERROR, 0,0,
+                "AlnMgr2AddInNewPairwiseSA: dsp->dim (=%d) should be 2.",
+                dsp->dim);
+      return;
+    }
   }
   if (dsp->numseg < 1) {
     ErrPostEx(SEV_ERROR, 0,0,
@@ -4174,6 +4187,118 @@ static Int4 AlnMgr2GetSegForStartPos(SeqAlignPtr sap, Int4 pos, Int4 row)
       L = R;
    }
    return srdp->sect[L];
+}
+
+static void AlnMgr2CondenseColumns(DenseSegPtr dsp)
+/***************************************************************************
+*
+*  AlnMgr2CondenseColumns finds adjacent columns which appear to align but
+*  were not put in one column by the mixing mechanism because the input was
+*  a set of pairwise alignment with a gap on the common sequence in this
+*  segment. Or graphically:
+*
+*  ----- ----- ----- -----             -----
+*  AACCG ----- ----- -----   becomes   AACCG
+*  ----- AACCG ----- -----             AACCG
+*  ----- ----- AACCG -----             AACCG
+*  ----- ----- ----- AACCG             AACCG
+*
+***************************************************************************/
+{
+  int gap_start_seg = -1;
+  int gap_end_seg = -1;
+  int row, seg, base_col, col;
+  Boolean can_fit;
+
+  for (seg = 0;  seg < dsp->numseg;  ++seg) {
+    if (dsp->starts[dsp->dim * seg] == -1) {
+      if (gap_start_seg == -1) {
+        gap_start_seg = seg;
+      }
+      else {
+        if (seg == dsp->numseg - 1) {
+          gap_end_seg = seg + 1;
+        }
+      }
+    }
+    else {
+      if (gap_start_seg != -1) {
+        gap_end_seg = seg;
+      }
+    }
+
+    if (gap_end_seg != -1) {
+      for (base_col = gap_start_seg;  base_col<gap_end_seg;  ++base_col) {
+        int len = dsp->lens[base_col];
+        for (col = base_col + 1;  col<gap_end_seg;  ++col) {
+          if (dsp->lens[col] != len) {
+            continue;
+          }
+
+          can_fit = TRUE;
+          for (row = 0;  row < dsp->dim;  ++row) {
+            if (dsp->starts[dsp->dim * col + row] != -1  &&  
+                dsp->starts[dsp->dim * base_col + row] != -1) {
+              can_fit = FALSE;
+              break;
+            }
+          }
+
+          if (can_fit) {
+            for (row = 0;  row<dsp->dim;  ++row) {
+              if (dsp->starts[dsp->dim * col + row] != -1) {
+                dsp->starts[dsp->dim * base_col + row] =
+                  dsp->starts[dsp->dim * col + row];
+              }
+            }
+
+            /* remove column col */
+            {{
+              Int4Ptr       starts, lens;
+              Uint1Ptr      strands;
+              Uint4         pos, new_pos;
+
+              starts = (Int4Ptr)MemNew(dsp->dim*(dsp->numseg-1)*sizeof(Int4));
+              strands = (Uint1Ptr)MemNew(dsp->dim*(dsp->numseg-1)*sizeof(Uint1));
+              lens = (Int4Ptr)MemNew((dsp->numseg-1)*sizeof(Int4));
+              
+              for (pos=0; pos<dsp->dim*col; pos++) {
+                starts[pos] = dsp->starts[pos];
+                strands[pos] = dsp->strands[pos];
+              }
+              for (new_pos=pos, pos+=dsp->dim; pos<dsp->dim*dsp->numseg;
+                   pos++, new_pos++) {
+                starts[new_pos] = dsp->starts[pos];
+                strands[new_pos] = dsp->strands[pos];
+              }
+              
+              for (pos=0; pos<col; pos++) {
+                lens[pos] = dsp->lens[pos];
+              }
+              for (new_pos=pos, pos++; pos<dsp->numseg; pos++, new_pos++) {
+                lens[new_pos] = dsp->lens[pos];
+              }
+
+              MemFree(dsp->starts);
+              MemFree(dsp->strands);
+              dsp->starts = starts;
+              dsp->strands = strands;
+              dsp->lens = lens;
+
+              dsp->numseg--;
+            }}
+
+            --gap_end_seg;
+            --seg;
+            --col;
+          }
+        }
+      }
+      
+      gap_start_seg = -1;
+      gap_end_seg = -1;
+    }
+  }
 }
 
 /* SECTION 2c */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.42  2002/11/06 21:32:25  ucko
+* Nlm_LoadSlateData: initialize sptr->cMap to 0 rather than NULL, as it
+* is an integer rather than a pointer.
+*
 * Revision 6.41  2001/05/25 20:04:39  vakatov
 * Nested comment typo fixed
 *
@@ -424,7 +428,7 @@ static void Nlm_LoadSlateData (Nlm_SlatE s, Nlm_SlateTool hdl,
     sptr->keyProc = key;
     sptr->hasFocus = fcs;
 #ifdef _OPENGL
-    sptr->cMap = NULL;
+    sptr->cMap = 0;
 #endif
     Nlm_HandUnlock (s);
     recentSlate = NULL;

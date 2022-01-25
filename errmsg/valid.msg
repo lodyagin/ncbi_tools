@@ -549,6 +549,10 @@ and the label and comment are also identical. This is likely to be an error in
 annotating the record.  Note that GenBank format suppresses duplicate features,
 so use of Graphic view is recommended.
 
+$^   BadProductSeqId, 60
+The feature product refers to a database ID that has a locus name but no accession.
+This is probably an error in parsing of a submission.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1

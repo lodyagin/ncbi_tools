@@ -229,6 +229,10 @@ SOURCE=..\..\..\desktop\seqmtrx.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\desktop\seqpanel.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\desktop\seqpcc.c
 # End Source File
 # Begin Source File

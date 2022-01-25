@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -50,6 +50,47 @@
 #include <gbfeat.h>
 #include <gbftdef.h>
 #include <edutil.h>
+
+#define NUMBER_OF_SUFFIXES    7
+
+static CharPtr name_suffix_labels [] = {
+  " ", "Jr.", "Sr.", "III", "IV", "V", "VI", NULL
+};
+
+static ENUM_ALIST(name_suffix_alist)
+  {" ",    0},
+  {"Jr.",  1},
+  {"Sr.",  2},
+  {"III",  3},
+  {"IV",   4},
+  {"V",    5},
+  {"VI",   6},
+END_ENUM_ALIST
+
+Uint2 author_types [] = {
+  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP
+};
+
+Uint2 std_author_widths [] = {
+  8, 4, 9, 0
+};
+
+static EnumFieldAssocPtr author_popups [] = {
+  NULL, NULL, NULL, name_suffix_alist
+};
+
+Uint2 str_author_widths [] = {
+  24
+};
+
+typedef struct authordialog {
+  DIALOG_MESSAGE_BLOCK
+  DialoG             stdAuthor;
+  DialoG             strAuthor;
+  GrouP              stdGrp;
+  GrouP              strGrp;
+  Uint1              type;
+} AuthorDialog, PNTR AuthorDialogPtr;
 
 StdPrintOptionsPtr  spop = NULL;
 
@@ -1425,6 +1466,8 @@ extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp)
   Char   middle [128];
   Char   str [512];
   Char   suffix [64];
+  Char   suffixPosition[64];
+  Int2   i;
 
   if (nsp == NULL) return NULL;
   str [0] = '\0';
@@ -1461,9 +1504,6 @@ extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp)
   if (first [0] != '\0') {
     StringCat (str, first);
   } else {
-    /*
-    StringCat (str, " ");
-    */
   }
   StringCat (str, "\t");
   j = 0;
@@ -1473,22 +1513,21 @@ extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp)
   if (initials [j] != '\0') {
     StringCat (str, initials + j);
   } else {
-    /*
-    StringCat (str, " ");
-    */
   }
   StringCat (str, "\t");
   StringCat (str, last);
   StringNCpy_0 (suffix, nsp->names [5], sizeof (suffix));
+  for (i = 0; i <= NUMBER_OF_SUFFIXES; i++)
+    if (StringICmp (suffix, name_suffix_labels [i]) == 0) {
+      sprintf (suffixPosition, "%d", i);
+      break;
+    }
+  if (i == NUMBER_OF_SUFFIXES)
+    sprintf (suffixPosition, "%d", 0);
   StringCat (str, "\t");
-  StripPeriods (suffix);
-  TrimLeadingSpaces (suffix);
   if (suffix [0] != '\0') {
-    StringCat (str, suffix);
+    StringCat (str, suffixPosition);
   } else {
-    /*
-    StringCat (str, " ");
-    */
   }
   StringCat (str, "\t");
   StringCat (str, middle);
@@ -1562,12 +1601,12 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
   Int2        j;
   Int2        k;
   Char        last;
-  Int2        len;
   NameStdPtr  nsp;
   Char        periods [128];
   CharPtr     str;
   Char        str1 [64];
-  Char        suffix [80];
+  CharPtr     suffix;
+  Char        suffixVal [80];
 
   if (txt == NULL) return NULL;
   nsp = NameStdNew ();
@@ -1652,47 +1691,15 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
   ch = str1 [j];
   while (ch != '\0') {
     if (ch != ' ') {
-      suffix [k] = ch;
+      suffixVal [k] = ch;
       k++;
     }
     j++;
     ch = str1 [j];
   }
-  suffix [k] = '\0';
-  if (suffix [0] != '\0') {
-    len = StringLen (suffix);
-    if (len > 0 && suffix [len - 1] == '.') {
-      suffix [len - 1] = '\0';
-    }
-    if (StringICmp (suffix, "1d") == 0) {
-      StringCpy (suffix, "I");
-    } else if (StringICmp (suffix, "1st") == 0) {
-      StringCpy (suffix, "I");
-    } else if (StringICmp (suffix, "2d") == 0) {
-      StringCpy (suffix, "II");
-    } else if (StringICmp (suffix, "2nd") == 0) {
-      StringCpy (suffix, "II");
-    } else if (StringICmp (suffix, "3d") == 0) {
-      StringCpy (suffix, "III");
-    } else if (StringICmp (suffix, "3rd") == 0) {
-      StringCpy (suffix, "III");
-    } else if (StringICmp (suffix, "4th") == 0) {
-      StringCpy (suffix, "IV");
-    } else if (StringICmp (suffix, "5th") == 0) {
-      StringCpy (suffix, "V");
-    } else if (StringICmp (suffix, "6th") == 0) {
-      StringCpy (suffix, "VI");
-    } else if (StringICmp (suffix, "Sr") == 0) {
-      StringCpy (suffix, "Sr.");
-    } else if (StringICmp (suffix, "Jr") == 0) {
-      StringCpy (suffix, "Jr.");
-    }
-    /*
-    len = StringLen (suffix);
-    if (len > 0 && suffix [len - 1] != '.') {
-      StringCat (suffix, ".");
-    }
-    */
+  suffixVal [k] = '\0';
+  if (suffixVal [0] != '\0') {
+    suffix = GetEnumName (atoi(suffixVal), name_suffix_alist);
     nsp->names [5] = StringSave (suffix);
     TrimLeadingSpaces (nsp->names [5]);
   }
@@ -1865,27 +1872,6 @@ static Pointer AuthorDialogToStrAuthListPtr (DialoG d)
   }
   return (Pointer) alp;
 }
-
-Uint2 author_types [] = {
-  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT
-};
-
-Uint2 std_author_widths [] = {
-  8, 4, 9, 3
-};
-
-Uint2 str_author_widths [] = {
-  24
-};
-
-typedef struct authordialog {
-  DIALOG_MESSAGE_BLOCK
-  DialoG             stdAuthor;
-  DialoG             strAuthor;
-  GrouP              stdGrp;
-  GrouP              strGrp;
-  Uint1              type;
-} AuthorDialog, PNTR AuthorDialogPtr;
 
 static void AuthListPtrToAuthorDialog (DialoG d, Pointer data)
 
@@ -2064,7 +2050,8 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     p5 = StaticPrompt (k, "Sfx", 0, 0, programFont, 'c');
 
     adp->stdAuthor = CreateTagListDialog (adp->stdGrp, rows, 4, spacing,
-                                          author_types, std_author_widths, NULL,
+                                          author_types, std_author_widths,
+                                          author_popups,
                                           StdAuthListPtrToAuthorDialog,
                                           AuthorDialogToStdAuthListPtr);
     adp->type = 1;

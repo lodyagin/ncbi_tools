@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.25 $
+* $Revision: 6.28 $
 *
 * File Description:
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.28  2002/11/03 21:10:12  kans
+* do not put standard remark popup in online pub dialog
+*
+* Revision 6.27  2002/11/03 20:53:11  kans
+* added support for online publication
+*
+* Revision 6.26  2002/10/30 18:21:33  kans
+* strAuthor does not take author_popups, and calls to CreateAuthorDialog now use spacing of 2 instead of -1 to make suffix popup look better
+*
 * Revision 6.25  2002/08/01 19:47:10  kans
 * AddConsortiumToAuthList in CitSub
 *
@@ -349,7 +358,8 @@
 #define PUB_PROCCHPTR   5
 #define PUB_PROC        6
 #define PUB_PATENT      7
-#define PUB_SUB         8
+#define PUB_ONLINE      8
+#define PUB_SUB         9
 
 #define ART_JOURNAL     1
 #define ART_BOOK        2
@@ -497,20 +507,23 @@ static CharPtr a8[] = {
       "Abstract", "Remark",
                    NULL, NULL, NULL};
 static CharPtr a9[] = {
+  "Title", "Authors", "Remark",
+                   NULL, NULL, NULL};
+static CharPtr a10[] = {
   "Description", "Authors", "Remark",
                    NULL, NULL, NULL};
 
 static CharPtr PNTR pubdescFormTabs[] = {
-  a1, a2, a3, a4, a5, a6, a7, a8, a9};
+  a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
 
 static Int2 tabcounter[] = {
-   3,  4,  6,  4,  4,  7,  5,  7,  3};
+   3,  4,  6,  4,  4,  7,  5,  7, 3,  3};
 
 static Int2 featTabsPerLine[] = {
-   5,  6,  4,  6,  6,  5,  5,  5,  5};
+   5,  6,  4,  6,  6,  5,  5,  5, 5,  5};
 
 static Int2 descTabsPerLine[] = {
-   3,  4,  6,  4,  4,  4,  5,  4,  3};
+   3,  4,  6,  4,  4,  4,  5,  4, 3,  3};
 
 static ValNodePtr NewPMuidFromText (TexT idtext, Int2 choice)
 {
@@ -892,12 +905,19 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
       switch (ppp->pub_choice)
       {
       case PUB_UNPUB:
+      case PUB_ONLINE:
         cgp = CitGenNew ();
         if (cgp != NULL)
         {
           vnp->choice = PUB_Gen;
           vnp->data.ptrvalue = cgp;
-          cgp->cit = StringSave ("unpublished");
+          if (ppp->pub_choice == PUB_UNPUB) {
+            cgp->cit = StringSave ("unpublished");
+          } else if (ppp->pub_choice == PUB_ONLINE) {
+            cgp->cit = StringSave ("Online Publication");
+          } else {
+            cgp->cit = StringSave ("unpublished");
+          }
           alp = (AuthListPtr) DialogToPointer (ppp->author_list);
           alp = AddConsortiumToAuthList (alp, ppp->consortium);
           if (alp != NULL)
@@ -1098,7 +1118,7 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
         vnp = vnpt;
       }
 
-      if (ppp->pub_choice != PUB_UNPUB)
+      if (ppp->pub_choice != PUB_UNPUB && ppp->pub_choice != PUB_ONLINE)
       {
         vnpt = NewSerialFromText (ppp->serial);
         if (vnpt != NULL)
@@ -2280,7 +2300,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     if (ppp->pub_choice != PUB_BOOK && ppp->pub_choice != PUB_PROC)
     {
       ppp->AuthGroup[0] = m2;
-      ppp->author_list = CreateAuthorDialog (m2, 3, -1);
+      ppp->author_list = CreateAuthorDialog (m2, 3, 2);
       pfp->Author_Page = thispage;
       q = HiddenGroup (m2, 2, 0, NULL);
       StaticPrompt (q, "Consortium", 0, stdLineHeight, programFont, 'l');
@@ -2290,7 +2310,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     else
     {
       ppp->EditGroup[0] = m2;
-      ppp->editor_list = CreateAuthorDialog (m2, 3, -1);
+      ppp->editor_list = CreateAuthorDialog (m2, 3, 2);
     }
     Show (m2);
     m3 = HiddenGroup (g2, -1, 0, NULL);
@@ -2452,7 +2472,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
         g5 = HiddenGroup (g4, 0, 0, NULL);
         m5 = HiddenGroup (g5, -1, 0, NULL);
         ppp->EditGroup[0] = m5;
-        ppp->editor_list = CreateAuthorDialog (m5, 3, -1);
+        ppp->editor_list = CreateAuthorDialog (m5, 3, 2);
         Show (m5);
         m6 = HiddenGroup (g5, -1, 0, NULL);
         ppp->editor_affil = CreateExtAffilDialog (m6, NULL,
@@ -2558,7 +2578,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
         g17 = HiddenGroup (g8, 0, 0, NULL);
         m5 = HiddenGroup (g17, -1, 0, NULL);
         ppp->AppGroup[0] = m5;
-        ppp->pat_applicant = CreateAuthorDialog (m5, 3, -1);
+        ppp->pat_applicant = CreateAuthorDialog (m5, 3, 2);
         Show (m5);
         m6 = HiddenGroup (g17, -1, 0, NULL);
         ppp->pat_app_affil = CreateExtAffilDialog (m6, NULL,
@@ -2581,7 +2601,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
         g19 = HiddenGroup (g18, 0, 0, NULL);
         m8 = HiddenGroup (g19, -1, 0, NULL);
         ppp->AssGroup[0] = m8;
-        ppp->pat_assignee = CreateAuthorDialog (m8, 3, -1);
+        ppp->pat_assignee = CreateAuthorDialog (m8, 3, 2);
         Show (m8);
         m9 = HiddenGroup (g19, -1, 0, NULL);
         ppp->pat_ass_affil = CreateExtAffilDialog (m9, NULL,
@@ -2619,7 +2639,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     ppp->comment = ScrollText (g10, 25, 5, programFont, TRUE, NULL);
 
     g11 = HiddenGroup (g10, -6, 0, NULL);
-    if (pub_choice == PUB_UNPUB || pub_choice == PUB_SUB)
+    if (pub_choice == PUB_UNPUB || pub_choice == PUB_ONLINE || pub_choice == PUB_SUB)
     {
       StaticPrompt (g11, "Year", 0, dialogTextHeight, programFont, 'l');
       ppp->year = DialogText (g11, "", 6, NULL);
@@ -3668,6 +3688,12 @@ static void PubdescInitPtrToPubdescInitForm (ForM w, Pointer d)
              {
                publication = PUB_UNPUB;    /* back to zero */
                forcetounpub = FALSE;
+             } else if (StringICmp (cgp->cit, "Online Publication") == 0 ||
+                        StringICmp (cgp->cit, "Published Only in DataBase") == 0) {
+               Enable (pifp->pub_choice);
+               SetValue (pifp->pub_status, 3);
+               SetValue (pifp->pub_choice, 8);
+               publication = PUB_ONLINE;
              }
             }
        } /* end if cgp */
@@ -3978,7 +4004,7 @@ static void MakeReplaceAuthorsForm (ButtoN b)
     ppp->todialog = PubdescPtrToPubdescPage;
     ppp->fromdialog = PubdescPageToPubdescPtr;
     ppp->testdialog = NULL;
-    ppp->author_list = CreateAuthorDialog (p, 3, -1);
+    ppp->author_list = CreateAuthorDialog (p, 3, 2);
   }
   pfp->data = (DialoG) p;
 
@@ -4063,7 +4089,7 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (g4, "Published");
     SetValue (g4, 1);           /* unpublished */
     g1 = NormalGroup (h1, -1, 0, "Class", programFont, NULL);
-    g5 = HiddenGroup (g1, -4, 0, ChangePublication);
+    g5 = HiddenGroup (g1, -3, 0, ChangePublication);
     pifp->pub_choice = g5;
     SetObjectExtra (g5, pifp, NULL);
 
@@ -4074,6 +4100,7 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (g5, "Proceedings Chapter");
     RadioButton (g5, "Proceedings");
     RadioButton (g5, "Patent");
+    RadioButton (g5, "Online Publication");
     if (GetAppProperty ("InternalNcbiSequin") != NULL) {
       RadioButton (g5, "Submission");
     } else if (pdp != NULL)

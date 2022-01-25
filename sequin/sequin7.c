@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.98 $
+* $Revision: 6.99 $
 *
 * File Description: 
 *
@@ -2917,7 +2917,7 @@ static void ConvertToCDSCallback (SeqEntryPtr sep, Uint2 entityID, ConvCdsPtr cc
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ConvertToCDSCallback (sep, entityID, ccp);
       }
@@ -5776,7 +5776,7 @@ static Int4 DoSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         rsult += DoSeqEntryToAsn3 (sep, strip, correct, force, dotaxon, mon);
       }
@@ -6747,7 +6747,7 @@ static void AddOrgToDef (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subs
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         AddOrgToDef (entityID, sep, orgmod, subsource);
       }

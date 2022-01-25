@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.55 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *
@@ -610,18 +610,56 @@ static void LookForPubs (BioseqPtr bsp, Pointer userdata)
   *hasPub = TRUE;
 }
 
+static void CheckVersionWithGi (BioseqPtr bsp, Pointer userdata)
+
+{
+  Boolean       hasGi = FALSE;
+  BoolPtr       missingVersion;
+  SeqIdPtr      sip;
+  TextSeqIdPtr  tsip;
+  Boolean       zeroVersion = FALSE;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_TPG:
+      case SEQID_TPE:
+      case SEQID_TPD:
+      case SEQID_GENBANK:
+      case SEQID_EMBL:
+      case SEQID_DDBJ:
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL && tsip->version == 0) {
+          zeroVersion = TRUE;
+        }
+        break;
+      case SEQID_GI :
+        hasGi = TRUE;
+        break;
+      default :
+        break;
+    }
+  }
+  if (hasGi && zeroVersion) {
+    missingVersion = (BoolPtr) userdata;
+    *missingVersion = TRUE;
+  }
+}
+
 static CharPtr relmodemsg1 = "Record cannot only have a local Seq-id for release mode";
 static CharPtr relmodemsg2 = "Record must have a publication for release mode";
-static CharPtr relmodemsg3 = "Release mode failure";
+static CharPtr relmodemsg3 = "Record with gi must have version number for release mode";
+static CharPtr relmodemsg4 = "Release mode failure";
 
 static CharPtr RelModeFailText (
   BioseqPtr bsp,
-  SeqEntryPtr usethetop
+  SeqEntryPtr usethetop,
+  SeqEntryPtr topsep
 )
 
 {
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
+  Boolean            missingVersion;
   Boolean            nonLocalID;
   Boolean            hasPubs;
 
@@ -642,14 +680,19 @@ static CharPtr RelModeFailText (
     }
   } else {
     if (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_pub, &dcontext) == NULL) {
-      return StringSave (relmodemsg2);
-    }
-    if (SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_PUB, 0, &fcontext) == NULL) {
-      return StringSave (relmodemsg2);
+      if (SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_PUB, 0, &fcontext) == NULL) {
+        return StringSave (relmodemsg2);
+      }
     }
   }
 
-  return StringSave (relmodemsg3);
+  missingVersion = FALSE;
+  VisitBioseqsInSep (topsep, (Pointer) &missingVersion, CheckVersionWithGi);
+  if (missingVersion) {
+    return StringSave (relmodemsg3);
+  }
+
+  return StringSave (relmodemsg4);
 }
 
 static Int2 asn2gb_line_estimate [25] = {
@@ -894,8 +937,8 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     }
   }
 
-  if (GetAppProperty ("NewFlatfileSource") != NULL) {
-    flags |= USE_NEW_SOURCE_ORG;
+  if (GetAppProperty ("OldFlatfileSource") != NULL) {
+    flags |= USE_OLD_SOURCE_ORG;
   }
 
   svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
@@ -949,7 +992,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
           SetTitle (txt, "(Text is too large to be displayed in this control.)");
         }
       } else if (mode == RELEASE_MODE) {
-        str = RelModeFailText (bsp, usethetop);
+        str = RelModeFailText (bsp, usethetop, topsep);
         if (str != NULL) {
           fprintf (fp, "%s", str);
         }
@@ -977,7 +1020,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
       CorrectBarValue (sb, startsAt + into);
       UpdateDocument (doc, 0, 0);
     } else if (mode == RELEASE_MODE) {
-      str = RelModeFailText (bsp, usethetop);
+      str = RelModeFailText (bsp, usethetop, topsep);
       if (str != NULL) {
         fnt = programFont;
         if (bvp != NULL && bvp->displayFont != NULL) {
@@ -1016,7 +1059,7 @@ static void PopulateEMBL (BioseqViewPtr bvp)
 static void PopulateDDBJ (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT, DDJB_VARIANT_FORMAT);
+  PopulateFlatFile (bvp, GENBANK_FMT, DDBJ_VARIANT_FORMAT);
 }
 
 static void PopulateGenPept (BioseqViewPtr bvp)
@@ -1286,21 +1329,34 @@ static void PopulateQuality (BioseqViewPtr bvp)
   Update ();
 }
 
-static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr mode)
+NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
+
+static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbseq)
 
 {
-  AsnIoPtr     aipout;
+  AsnIoPtr     aipout = NULL;
+  AsnTypePtr   atp = NULL;
   BioseqPtr    bsp;
   DoC          doc;
   Uint2        entityID;
+  XtraPtr      extra = NULL;
   FonT         fnt;
+  GBSeq        gbsq;
+  GBSet        gbst;
   Int2         into;
   Int2         item;
+  Boolean      lockFar = FALSE;
+  Boolean      lookupFar = FALSE;
+  ModType      mode = SEQUIN_MODE;
   Char         path [PATH_MAX];
   BaR          sb = NULL;
   SeqEntryPtr  sep;
   Int4         startsAt;
+  StlType      style = NORMAL_STYLE;
   TexT         txt;
+  Int2         val;
+  Char         xmlbuf [128];
+  XtraBlock    xtra;
 
   if (bvp == NULL) return;
   doc = NULL;
@@ -1340,12 +1396,91 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr mode)
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
   TmpNam (path);
-  aipout = AsnIoOpen (path, mode);
-  if (aipout != NULL) {
-    fnt = programFont;
-    if (bvp != NULL && bvp->displayFont != NULL) {
-      fnt = bvp->displayFont;
+  aipout = AsnIoOpen (path, outmode);
+  fnt = programFont;
+  if (bvp != NULL && bvp->displayFont != NULL) {
+    fnt = bvp->displayFont;
+  }
+  if (doGbseq && aipout != NULL) {
+    if (bvp->hasTargetControl && bvp->ffModeCtrl != NULL) {
+      val = GetValue (bvp->ffModeCtrl);
+      switch (val) {
+        case 1 :
+          mode = RELEASE_MODE;
+          break;
+        case 2 :
+          mode = ENTREZ_MODE;
+          break;
+        case 3 :
+          mode = SEQUIN_MODE;
+          break;
+        case 4 :
+          mode = DUMP_MODE;
+          break;
+        default :
+          break;
+      }
     }
+    /* now using control instead of seqid type */
+    if (bvp->ffStyleCtrl != NULL) {
+      val = GetValue (bvp->ffStyleCtrl);
+      switch (val) {
+        case 1 :
+          style = NORMAL_STYLE;
+          lookupFar = TRUE;
+          break;
+        case 2 :
+          style = SEGMENT_STYLE;
+          lockFar = TRUE;
+          break;
+        case 3 :
+          style = MASTER_STYLE;
+          lockFar = TRUE;
+          break;
+        case 4 :
+          style = CONTIG_STYLE;
+          lookupFar = TRUE;
+          break;
+        default :
+          break;
+      }
+    }
+    if (GetAppParam ("NCBI", "SETTINGS", "XMLPREFIX", NULL, xmlbuf, sizeof (xmlbuf))) {
+      AsnSetXMLmodulePrefix (StringSave (xmlbuf));
+    }
+    objgbseqAsnLoad ();
+    MemSet ((Pointer) &xtra, 0, sizeof (XtraBlock));
+    MemSet ((Pointer) &gbsq, 0, sizeof (GBSeq));
+    xtra.gbseq = &gbsq;
+    xtra.aip = aipout;
+    atp = AsnLinkType (NULL, AsnFind ("GBSet"));
+    xtra.atp = AsnLinkType (NULL, AsnFind ("GBSet.E"));
+    extra = &xtra;
+    MemSet ((Pointer) &gbst, 0, sizeof (GBSet));
+    AsnOpenStruct (aipout, atp, (Pointer) &gbst);
+    if (SeqEntryToGnbk (sep, NULL, GENBANK_FMT, mode, style, CREATE_XML_GBSEQ_FILE, 0, extra, NULL)) {
+      AsnCloseStruct (aipout, atp, NULL);
+      AsnPrintNewLine (aipout);
+      AsnIoClose (aipout);
+      if (bvp->useScrollText) {
+        if (! FileToScrollText (txt, path)) {
+          SetTitle (txt, "(Text is too large to be displayed in this control.)");
+        }
+      } else {
+        DisplayFancy (doc, path, &ffParFmt, &ffColFmt, fnt, 4);
+        SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
+        SetDocAutoAdjust (doc, FALSE);
+        ForceFormat (doc, item);
+        SetDocAutoAdjust (doc, TRUE);
+        AdjustDocScroll (doc);
+        GetItemParams4 (doc, item, &startsAt, NULL, NULL, NULL, NULL);
+        CorrectBarValue (sb, startsAt + into);
+        UpdateDocument (doc, 0, 0);
+      }
+    } else {
+      AsnIoClose (aipout);
+    }
+  } else if (aipout != NULL) {
     if (SeqEntryAsnWrite (sep, aipout, NULL)) {
       AsnIoClose (aipout);
       if (bvp->useScrollText) {
@@ -1375,13 +1510,19 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr mode)
 static void PopulateXML (BioseqViewPtr bvp)
 
 {
-  PopulateAsnOrXML (bvp, "wx");
+  PopulateAsnOrXML (bvp, "wx", FALSE);
 }
 
 static void PopulateAsn (BioseqViewPtr bvp)
 
 {
-  PopulateAsnOrXML (bvp, "w");
+  PopulateAsnOrXML (bvp, "w", FALSE);
+}
+
+static void PopulateGBSeq (BioseqViewPtr bvp)
+
+{
+  PopulateAsnOrXML (bvp, "wx", TRUE);
 }
 
 static void ShowFlatFile (BioseqViewPtr bvp, Boolean show)
@@ -1395,8 +1536,8 @@ static void ShowFlatFile (BioseqViewPtr bvp, Boolean show)
       SafeShow (bvp->doc);
     }
     SafeShow (bvp->baseCtgControlGrp);
-    SafeShow (bvp->docTxtControlGrp);
     SafeShow (bvp->modeControlGrp);
+    SafeShow (bvp->docTxtControlGrp);
     SafeShow (bvp->clickMe);
   } else {
     SafeHide (bvp->text);
@@ -1429,8 +1570,42 @@ static void ShowFastaOrAsn (BioseqViewPtr bvp, Boolean show)
       SafeShow (bvp->doc);
     }
     SafeHide (bvp->modeControlGrp);
-    SafeShow (bvp->docTxtControlGrp);
     SafeHide (bvp->baseCtgControlGrp);
+    SafeShow (bvp->docTxtControlGrp);
+    SafeHide (bvp->clickMe);
+  } else {
+    SafeHide (bvp->text);
+    SafeHide (bvp->doc);
+    Reset (bvp->text);
+    Reset (bvp->doc);
+    SetDocShade (bvp->doc, NULL, NULL, NULL, NULL);
+    SetDocProcs (bvp->doc, NULL, NULL, NULL, NULL);
+    SetDocCache (bvp->doc, NULL, NULL, NULL);
+    SafeHide (bvp->styleControlGrp);
+    SafeHide (bvp->scaleControlGrp);
+    EnableDisableLegendItem (bvp, FALSE);
+    SafeHide (bvp->findGeneGrp);
+    SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
+    SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
+    SafeHide (bvp->clickMe);
+  }
+}
+
+static void ShowGBSeq (BioseqViewPtr bvp, Boolean show)
+
+{
+  if (bvp == NULL) return;
+  if (show) {
+    if (bvp->useScrollText) {
+      SafeShow (bvp->text);
+    } else {
+      SafeShow (bvp->doc);
+    }
+    SafeShow (bvp->modeControlGrp);
+    SafeShow (bvp->baseCtgControlGrp);
+    SafeShow (bvp->docTxtControlGrp);
     SafeHide (bvp->clickMe);
   } else {
     SafeHide (bvp->text);
@@ -1897,6 +2072,13 @@ BioseqPageData asnPageData = {
 BioseqPageData xmlPageData = {
   "XML", TRUE, TRUE, TRUE, FALSE, -1,
   PopulateXML, ShowFastaOrAsn, NULL,
+  CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
+  ExportAsnAfterConfirming, NULL, ResizeFlatFileFastaOrAsn, NULL
+};
+
+BioseqPageData gbseqPageData = {
+  "GBSeq", TRUE, TRUE, TRUE, FALSE, -1,
+  PopulateGBSeq, ShowGBSeq, NULL,
   CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
   ExportAsnAfterConfirming, NULL, ResizeFlatFileFastaOrAsn, NULL
 };

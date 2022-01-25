@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.136 $
+* $Revision: 6.137 $
 *
 * File Description:
 *
@@ -453,7 +453,7 @@ static void ProcessOligo (SeqEntryPtr sep, CharPtr sequence, CharPtr title)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ProcessOligo (sep, sequence, title);
       }

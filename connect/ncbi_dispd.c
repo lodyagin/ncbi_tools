@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_dispd.c,v 6.40 2002/08/12 15:13:50 lavr Exp $
+/*  $Id: ncbi_dispd.c,v 6.49 2002/11/01 20:14:07 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,20 +31,16 @@
  *
  */
 
+#include "ncbi_ansi_ext.h"
 #include "ncbi_comm.h"
-#if defined(_DEBUG) && !defined(NDEBUG)
-#  include "ncbi_priv.h"
-#endif
-#include "ncbi_servicep_dispd.h"
-#include <connect/ncbi_ansi_ext.h>
+#include "ncbi_dispd.h"
+#include "ncbi_priv.h"
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_http_connector.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
-
 
 /* Lower bound of up-to-date/out-of-date ratio */
 #define SERV_DISPD_STALE_RATIO_OK  0.8
@@ -55,13 +51,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    static void s_Reset(SERV_ITER);
-    static SSERV_Info* s_GetNextInfo(SERV_ITER, char**);
-    static int/*bool*/ s_Update(SERV_ITER, TNCBI_Time, const char*);
-    static void s_Close(SERV_ITER);
+    static void        s_Reset      (SERV_ITER);
+    static SSERV_Info* s_GetNextInfo(SERV_ITER, HOST_INFO*);
+    static int/*bool*/ s_Update     (SERV_ITER, TNCBI_Time, const char*);
+    static void        s_Close      (SERV_ITER);
 
     static const SSERV_VTable s_op = {
-        s_Reset, s_GetNextInfo, s_Update, 0, s_Close, "DISPD"
+        s_Reset, s_GetNextInfo, s_Update, 0/*Penalize*/, s_Close, "DISPD"
     };
 #ifdef __cplusplus
 } /* extern "C" */
@@ -136,65 +132,56 @@ static int/*bool*/ s_ParseHeader(const char* header, void *data,
 
 static int/*bool*/ s_Resolve(SERV_ITER iter)
 {
-    static const char service[] = "service=";
-    static const char stateless[] = "Client-Mode: STATELESS_ONLY\r\n";
-    static const char dispatch_mode[] = "Dispatch-Mode: INFORMATION_ONLY\r\n";
-    static const char stateful_capable[] = "Client-Mode: STATEFUL_CAPABLE\r\n";
+    static const char service[]  = "service";
+    static const char address[]  = "address";
+    static const char platform[] = "platform";
     SConnNetInfo *net_info = ((SDISPD_Data*) iter->data)->net_info;
-    const char *tag;
-    size_t buflen;
-    CONNECTOR c;
-    BUF buf = 0;
-    CONN conn;
-    char *s;
+    CONNECTOR conn = 0;
+    const char *argval;
+    char  node[256];
+    char* s;
+    CONN c;
 
-    /* Form service name argument (as CGI argument) */
-    if (sizeof(service) + strlen(iter->service) > sizeof(net_info->args))
-        return 0/*failed*/;
-    strcpy(net_info->args, service);
-    strcat(net_info->args, iter->service);
-    /* Reset request method to be GET (as no HTTP body will follow) */
-    net_info->req_method = eReqMethod_Get;
-    /* Obtain additional header information */
-    if ((s = SERV_Print(iter)) != 0) {
-        int status = BUF_Write(&buf, s, strlen(s));
-        free(s);
-        if (!status) {
-            BUF_Destroy(buf);
-            return 0/*failure*/;
+    /* Dispatcher CGI arguments (sacrifice some if they all do not fit) */
+    if ((argval = CORE_GetPlatform()) != 0 && *argval)
+        ConnNetInfo_PreOverrideArg(net_info, platform, argval);
+    if ((argval = SOCK_gethostbyaddr(0, node, sizeof(node))) != 0 && *argval)
+        ConnNetInfo_PreOverrideArg(net_info, address, argval);
+    if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service)) {
+        ConnNetInfo_DeleteArg(net_info, platform);
+        if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service)) {
+            ConnNetInfo_DeleteArg(net_info, address);
+            if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service))
+                return 0/*failed*/;
         }
     }
-    tag = net_info->stateless ? stateless : stateful_capable;
-    if (!BUF_Write(&buf, tag, strlen(tag)) ||
-        !BUF_Write(&buf, dispatch_mode, sizeof(dispatch_mode)-1)) {
-        BUF_Destroy(buf);
-        return 0/*failure*/;
+    /* Reset request method to be GET ('cause no HTTP body will follow) */
+    net_info->req_method = eReqMethod_Get;
+    /* Obtain additional header information */
+    if ((!(s = SERV_Print(iter))
+         || ConnNetInfo_OverrideUserHeader(net_info, s))                     &&
+        ConnNetInfo_OverrideUserHeader(net_info, net_info->stateless
+                                       ?"Client-Mode: STATELESS_ONLY\r\n"
+                                       :"Client-Mode: STATEFUL_CAPABLE\r\n") &&
+        ConnNetInfo_OverrideUserHeader(net_info,
+                                       "Dispatch-Mode: INFORMATION_ONLY\r\n")){
+        /* All the rest in the net_info structure is fine with us */
+        conn = HTTP_CreateConnectorEx(net_info, fHCC_SureFlush, s_ParseHeader,
+                                      0/*adjust*/, iter/*data*/, 0/*cleanup*/);
     }
-    /* Now the entire user header is ready, take it out of the buffer */
-    buflen = BUF_Size(buf);
-    assert(buflen != 0);
-    if ((s = (char*) malloc(buflen + 1)) != 0) {
-        if (BUF_Read(buf, s, buflen) != buflen) {
-            free(s);
-            s = 0;
-        } else
-            s[buflen] = '\0';
+    if (s) {
+        ConnNetInfo_DeleteUserHeader(net_info, s);
+        free(s);
     }
-    BUF_Destroy(buf);
-    if (!s)
-        return 0/*failure*/;
-    ConnNetInfo_SetUserHeader(net_info, s);
-    assert(strcmp(net_info->http_user_header, s) == 0);
-    free(s);
-    /* All the rest in the net_info structure is fine with us */
-    if (!(c = HTTP_CreateConnectorEx(net_info, 0/*flags*/, s_ParseHeader,
-                                     0/*adj.info*/, iter/*data*/, 0/*clnup*/)))
+    if (!conn || CONN_Create(conn, &c) != eIO_Success) {
+        CORE_LOGF(eLOG_Error, ("[DISPATCHER]  Unable to create aux. %s",
+                               conn ? "connection" : "connector"));
+        assert(0);
         return 0/*failed*/;
-    if (CONN_Create(c, &conn) != eIO_Success)
-        return 0/*failed*/;
-    /* This dummy read will send all the HTTP data, we'll get a callback */
-    CONN_Read(conn, 0, 0, &buflen, eIO_ReadPlain);
-    CONN_Close(conn);
+    }
+    CONN_Flush(c);
+    /* This will also send all the HTTP data, and trigger header callback */
+    CONN_Close(c);
     return ((SDISPD_Data*) iter->data)->n_node != 0;
 }
 
@@ -213,10 +200,7 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
         if (sscanf(p, "%u: %n", &d1, &d2) < 1)
             return 0/*not updated*/;
         if ((info = SERV_ReadInfo(p + d2)) != 0) {
-#if 1/*TEMPORARY PATCH*/
-            if (!info->rate)
-                info->rate = 0.01;
-#endif
+            assert(info->rate != 0.0);
             info->time += now; /* expiration time now */
             if (s_AddServerInfo(data, info))
                 return 1/*updated*/;
@@ -229,7 +213,7 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
         while (*p && isspace((unsigned char)(*p)))
             p++;
         if (data->net_info->debug_printout)
-            CORE_LOGF(eLOG_Warning, ("[DISPATCHER] %s", p));
+            CORE_LOGF(eLOG_Warning, ("[DISPATCHER]  %s", p));
 #endif
         return 1/*updated*/;
     }
@@ -265,7 +249,7 @@ static int/*bool*/ s_IsUpdateNeeded(SDISPD_Data *data)
 }
 
 
-static SSERV_Info* s_GetNextInfo(SERV_ITER iter, char** env)
+static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
 {
     double total = 0.0, point = -1.0, access = 0.0, p = 0.0, status;
     SDISPD_Data* data = (SDISPD_Data*) iter->data;
@@ -316,8 +300,8 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, char** env)
         memmove(data->s_node + i, data->s_node + i + 1,
                 (data->n_node - i)*sizeof(*data->s_node));
     }
-    if (env)
-        *env = 0;
+    if (host_info)
+        *host_info = 0;
 
     return info;
 }
@@ -354,14 +338,14 @@ static void s_Close(SERV_ITER iter)
 
 const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
                                     const SConnNetInfo* net_info,
-                                    SSERV_Info** info, char** env/*unused*/)
+                                    SSERV_Info** info, HOST_INFO* u/*unused*/)
 {
     SDISPD_Data* data;
 
     if (!(data = (SDISPD_Data*) malloc(sizeof(*data))))
         return 0;
     if (!s_RandomSeed) {
-        s_RandomSeed = (int)time(0) + (int)SOCK_gethostbyname(0);
+        s_RandomSeed = (int) time(0) + (int) SOCK_gethostbyname(0);
         srand(s_RandomSeed);
     }
     data->net_info = ConnNetInfo_Clone(net_info); /*called with non-NULL*/
@@ -390,7 +374,36 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 
 /*
  * --------------------------------------------------------------------------
- * $Log: ncbi_service_dispd.c,v $
+ * $Log: ncbi_dispd.c,v $
+ * Revision 6.49  2002/11/01 20:14:07  lavr
+ * Expand hostname buffers to hold up to 256 chars
+ *
+ * Revision 6.48  2002/10/28 20:12:56  lavr
+ * Module renamed and host info API included
+ *
+ * Revision 6.47  2002/10/28 15:46:21  lavr
+ * Use "ncbi_ansi_ext.h" privately
+ *
+ * Revision 6.46  2002/10/21 18:32:35  lavr
+ * Append service arguments "address" and "platform" in dispatcher requests
+ *
+ * Revision 6.45  2002/10/11 19:55:20  lavr
+ * Append dispatcher request query with address and platform information
+ * (as the old dispatcher used to do). Also, take advantage of various new
+ * ConnNetInfo_*UserHeader() routines when preparing aux HTTP request.
+ *
+ * Revision 6.44  2002/09/24 15:08:50  lavr
+ * Change non-zero rate assertion into more readable (info->rate != 0.0)
+ *
+ * Revision 6.43  2002/09/18 16:31:38  lavr
+ * Temporary fix for precision loss removed & replaced with assert()
+ *
+ * Revision 6.42  2002/09/06 17:45:40  lavr
+ * Include <connect/ncbi_priv.h> unconditionally (reported by J.Kans)
+ *
+ * Revision 6.41  2002/09/06 15:44:19  lavr
+ * Use fHCC_SureFlush and CONN_Flush() instead of dummy read
+ *
  * Revision 6.40  2002/08/12 15:13:50  lavr
  * Temporary fix for precision loss in transmission of SERV_Info as text
  *

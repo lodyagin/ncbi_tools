@@ -129,6 +129,23 @@ Misc:
     (default = 1).
  -v <logfile> Progress report destination (printed every 1000 sequences).
     Set to F to suppress report messages (default = stderr).
+ -e <T|F> Enable sequence id parsing in database formatting. Set to F if 
+    multiple sequences have identical ids (default = TRUE).
+ -W Word size to use for initial matches (default = 0, translates to 3 for
+    proteins and 32 for nucleotides). 
+ -c <config file> Configuration file with advanced options, containing any 
+    of the following options with their values, separated by whitespace:
+    -r, -q, -G, -E - match, mismatch, gap open and gap extension scores 
+respectively, 
+    -e - e-value cut off,
+    -y, -X - the dropoff values for the ungapped and gapped extension respectively, 
+    -A - window size for two-hit version,
+    -I - hitlist size,
+    -Y, -z - effective search space and database length respectively, to be used for 
+e-value and bit score calculations,
+    -F - filter string,
+    -s - raw score cut off for nucleotide search,
+    -S - strand option.
 
 7. Credits and complaints:
 

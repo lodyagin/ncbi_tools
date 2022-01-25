@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   10/15/01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: fdlKludge.h,v $
+* Revision 6.6  2002/09/11 19:53:09  jianye
+* Added url defines
+*
 * Revision 6.5  2002/08/22 20:32:35  jianye
 * add parentheses to bit shift
 *
@@ -58,4 +61,13 @@
 #define linkout_locuslink (1<<0)
 #define linkout_unigene   (1<<1)
 #define linkout_structure (1<<2)
+
+/* url for linkout*/
+#define URL_LocusLink "<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>"
+#define URL_Unigene "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"
+
+#define URL_Structure "<a href=\"http://scarecrow:5701/Structure/cblast_new/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s\"><img border=0 height=16 width=16 src=\"/blast/images/R.gif\" alt=\"Structure info\"></a>"
+
+#define URL_Structure_Overview "<a href=\"http://scarecrow:5701/Structure/cblast_new/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s\">Structure Linkout Overview</a>"
+
 #endif

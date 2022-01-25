@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.40 $
+* $Revision: 6.41 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.41  2002/10/29 21:17:31  kans
+* ValidateAccn and ValidateSeqID are public - implemented in asn2gnbk.c but prototyped in sequtil.h
+*
 * Revision 6.40  2002/06/20 18:38:43  kans
 * added FAA and GAA, ACCN_NCBI_WGS_PROT, ACCN_EMBL_WGS_PROT, ACCN_DDBJ_WGS_PROT, and ACCN_IS_WGS
 *
@@ -662,6 +665,22 @@ NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Uint4 buf
 NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
 				     CharPtr PNTR id);
 NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf);
+
+/*****************************************************************************
+*
+*   Int2 ValidateAccn (accession)
+*   Int2 ValidateSeqID (SeqIdPtr)
+*   	Return values are:
+*   	 0: no problem - Accession is in proper format
+*       -1: Accession did not start with a letter (or two or four letters)
+*       -2: Accession did not contain legal number of digits after letters
+*       -3: the original Accession number to be validated was NULL
+*   	-4: the original Accession number is too long (>16)
+*
+*****************************************************************************/
+
+NLM_EXTERN Int2 ValidateAccn (CharPtr accession);
+NLM_EXTERN Int2 ValidateSeqID (SeqIdPtr sip);
 
 /*****************************************************************************
 *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.211 $
+* $Revision: 6.221 $
 *
 * File Description: 
 *
@@ -284,7 +284,7 @@ extern void DoFixupLocus (SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoFixupLocus (sep);
       }
@@ -3442,8 +3442,8 @@ static void FeatConvertPeptideToRegion (SeqFeatPtr sfp)
 }
 
 
-static void FeatConvertImpToImp (SeqFeatPtr sfp,
-				 Int2       toFeatSubType,
+static void FeatConvertImpToImp (SeqFeatPtr     sfp,
+				 Int2           toFeatSubType,
 				 EnumFieldAssoc PNTR alist)
 {
   EnumFieldAssocPtr  ap;
@@ -3812,6 +3812,104 @@ static void FeatConvertPeptideToImp (SeqFeatPtr  sfp,
   ProtRefFree (prp);
 }
 
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* FeatConvertBioSrcToRepeatRegion ()                                  */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void FeatConvertBioSrcToRepeatRegion (SeqFeatPtr sfp)
+{
+  BioSourcePtr  biop;
+  Boolean       doConvert;
+  GBQualPtr     gbqual;
+  ImpFeatPtr    ifp;
+  OrgModPtr     omp;
+  SubSourcePtr  ssp;
+
+  /* Only convert transposon and insertion_seq features */
+
+  doConvert = FALSE;
+  biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next)
+    if ((SUBSRC_transposon_name == ssp->subtype) ||
+	(SUBSRC_insertion_seq_name == ssp->subtype))
+      doConvert = TRUE;
+
+  if (FALSE == doConvert)
+    return;
+
+  /* Create a new Import Feature */
+
+  ifp = ImpFeatNew ();
+  if (NULL == ifp)
+    return;
+  ifp->key = StringSave ("repeat_region");
+
+  /* Copy relevant info from the BioSource */
+  /* feature to the Import feature.        */
+
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+
+    if (biop->org != NULL)
+      if (biop->org->orgname != NULL)
+	for (omp = biop->org->orgname->mod; omp != NULL; omp = omp->next)
+	  if (ORGMOD_other == omp->subtype)
+	    if (!StringHasNoText (omp->subname)) {
+	      gbqual = GBQualNew ();
+	      if (gbqual != NULL) {
+		gbqual->qual = StringSave ("note");
+		gbqual->val = StringSave (omp->subname);
+		gbqual->next = sfp->qual;
+		sfp->qual = gbqual;
+	      }
+	    }
+
+    if (SUBSRC_transposon_name == ssp->subtype) {
+      if (! StringHasNoText (ssp->name)) {
+	gbqual = GBQualNew ();
+	if (gbqual != NULL) {
+	  gbqual->qual = StringSave ("transposon");
+	  gbqual->val = StringSave (ssp->name);
+	  gbqual->next = sfp->qual;
+	  sfp->qual = gbqual;
+	}
+      }
+    }
+    else if (SUBSRC_insertion_seq_name == ssp->subtype) {
+      if (! StringHasNoText (ssp->name)) {
+	gbqual = GBQualNew ();
+	if (gbqual != NULL) {
+	  gbqual->qual = StringSave ("insertion_seq");
+	  gbqual->val = StringSave (ssp->name);
+	  gbqual->next = sfp->qual;
+	  sfp->qual = gbqual;
+	}
+      }
+    }
+    else if (SUBSRC_other == ssp->subtype) {
+      if (! StringHasNoText (ssp->name)) {
+	gbqual = GBQualNew ();
+	if (gbqual != NULL) {
+	  gbqual->qual = StringSave ("note");
+	  gbqual->val = StringSave (ssp->name);
+	  gbqual->next = sfp->qual;
+	  sfp->qual = gbqual;
+	}
+      }
+    }
+  }
+  
+  /* Delete the old BioSource feature */
+
+  sfp->data.value.ptrvalue = BioSourceFree (biop);
+
+  /* Attach the new Import feature in its place */
+
+  sfp->data.choice = SEQFEAT_IMP;
+  sfp->data.value.ptrvalue = ifp;
+}
+
 /*-------------------------------------------------------------------------*/
 /*                                                                         */
 /* FeatConvert () -- Convert a given feature from one type to another.     */
@@ -3879,6 +3977,10 @@ static Boolean FeatConvert (QualFormPtr qfp,
 	    qfp->subtype == FEATDEF_transit_peptide_aa) &&
 	   toFeat == SEQFEAT_REGION)
     FeatConvertPeptideToRegion (sfp);
+  else if (fromFeat == SEQFEAT_BIOSRC &&
+	   toFeat == SEQFEAT_IMP &&
+	   toFeatSubType == FEATDEF_repeat_region)
+    FeatConvertBioSrcToRepeatRegion (sfp);
   else if (fromFeat != toFeat)
     {
       ArrowCursor ();
@@ -4464,7 +4566,6 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Isolation-source",      128},
   {"Lab-host",              116},
   {"Map",                   102},
-  {"Natural-host",           21},
   {"Old Lineage",            53}, /* 253 */
   {"Old Name",               54}, /* 254 */
   {"OrgMod Note",            55},
@@ -4478,6 +4579,7 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Serotype",                7},
   {"Serovar",                 9},
   {"Sex",                   107},
+  {"Specific-host",          21},
   {"Specimen-voucher",       23},
   {"Strain",                  2},
   {"Sub-species",            22},
@@ -5662,7 +5764,10 @@ static Boolean LIBCALLBACK ConvertCDS_BioseqCallback (BioseqPtr bsp,
 
 static void ConvertCDSWithStopCodons (IteM i)
 {
-  BaseFormPtr bfp;
+  BaseFormPtr  bfp;
+  Uint2        parenttype;
+  Pointer      parentptr;
+  SeqEntryPtr  sep;
 
   /* Get the current data */
 
@@ -5675,6 +5780,10 @@ static void ConvertCDSWithStopCodons (IteM i)
   if (bfp == NULL)
     return;
 
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+
   /* Explore all the Bioseqs looking for CDS features */
 
   SeqMgrExploreBioseqs (bfp->input_entityID, NULL, NULL,
@@ -5683,6 +5792,7 @@ static void ConvertCDSWithStopCodons (IteM i)
   /* Force an update and redraw */
 
   DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   ArrowCursor ();
@@ -5813,7 +5923,10 @@ static Boolean LIBCALLBACK ConvertCDSAndKeep_BioseqCallback (BioseqPtr bsp,
 
 static void ConvertCDSToPseudoGeneAndKeep (IteM i)
 {
-  BaseFormPtr bfp;
+  BaseFormPtr  bfp;
+  Uint2        parenttype;
+  Pointer      parentptr;
+  SeqEntryPtr  sep;
 
   /* Get the current data */
 
@@ -5826,6 +5939,10 @@ static void ConvertCDSToPseudoGeneAndKeep (IteM i)
   if (bfp == NULL)
     return;
 
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+
   /* Explore all the Bioseqs looking for CDS features */
 
   SeqMgrExploreBioseqs (bfp->input_entityID, NULL, NULL,
@@ -5834,6 +5951,7 @@ static void ConvertCDSToPseudoGeneAndKeep (IteM i)
   /* Force an update and redraw */
 
   DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   ArrowCursor ();
@@ -5958,7 +6076,10 @@ static Boolean LIBCALLBACK ConvertCDSAndRemove_BioseqCallback (BioseqPtr bsp,
 
 static void ConvertCDSToPseudoGeneAndRemove (IteM i)
 {
-  BaseFormPtr bfp;
+  BaseFormPtr  bfp;
+  Uint2        parenttype;
+  Pointer      parentptr;
+  SeqEntryPtr  sep;
 
   /* Get the current data */
 
@@ -5971,6 +6092,10 @@ static void ConvertCDSToPseudoGeneAndRemove (IteM i)
   if (bfp == NULL)
     return;
 
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+
   /* Explore all the Bioseqs looking for CDS features */
 
   SeqMgrExploreBioseqs (bfp->input_entityID, NULL, bfp,
@@ -5980,6 +6105,7 @@ static void ConvertCDSToPseudoGeneAndRemove (IteM i)
   /* Force an update and redraw */
 
   DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   ArrowCursor ();
@@ -6868,7 +6994,7 @@ static void DoApplyMolInfo (SeqEntryPtr sep, MolInfoEditPtr miep)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
 /* this also delves into nuc-prot sets */
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16) ||
+                         (IsPopPhyEtcSet (bssp->_class)) ||
                          bssp->_class == 1)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoApplyMolInfo (sep, miep);
@@ -7168,6 +7294,7 @@ static ENUM_ALIST(bioseqset_class_alist)
   {"Phy-set",               15},
   {"Eco-set",               16},
   {"Gen-prod-set",          17},
+  {"WGS-set",               18},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -7463,7 +7590,7 @@ static void PrepareTaxListProc (IteM i)
           Message (MSG_POST, "Processing");
           tax1_setSynonyms (TRUE);
           while (goOn) {
-            goOn = (fgets (orgname, sizeof (orgname), fin) != NULL);
+            goOn = (FileGets (orgname, sizeof (orgname), fin) != NULL);
             if (goOn) {
               ptr = orgname;
               ch = *ptr;
@@ -8081,7 +8208,7 @@ static void ReconnectCDSProc (Uint2 entityID, SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ReconnectCDSProc (entityID, sep);
       }
@@ -8753,7 +8880,7 @@ static void EditSeqEndsCallback (Uint2 entityID, EditSeqPtr esp, SeqEntryPtr sep
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         EditSeqEndsCallback (entityID, esp, sep);
       }
@@ -9323,7 +9450,7 @@ static Boolean AddBlastTag (GatherContextPtr gcp)
   Int2         align_type;
   SeqAnnotPtr  sap;
 
-  align_type = (Int2) gcp->userdata;
+  align_type = (Int2) (Int4) gcp->userdata;
   if (gcp->thistype != OBJ_SEQANNOT) return TRUE;
   sap = (SeqAnnotPtr) gcp->thisitem;
   if (sap == NULL || sap->type != 2) return TRUE;
@@ -9348,7 +9475,7 @@ static void CommonAddBlastToSeqAnnot (IteM i, Int2 align_type)
   if (sel != NULL && sel->next == NULL &&
       sel->entityID == bfp->input_entityID &&
       sel->itemtype == OBJ_SEQANNOT) {
-    GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) align_type, AddBlastTag);
+    GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) (Int4) align_type, AddBlastTag);
   }
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -10140,6 +10267,7 @@ extern void ClearMrnaProducts (IteM i);
 extern void MakeRedundantGPS (IteM i);
 extern void FuseSlpJoins (IteM i);
 extern void CreateSeqHistTPA (IteM i);
+extern void CreateSeqHistTPADetailed (IteM i);
 extern void AddGlobalCodeBreak (IteM i);
 extern void FixCdsAfterPropagate (IteM i);
 
@@ -10563,6 +10691,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
     i = CommandItem (s, "Create Seq-Hist for TPA", CreateSeqHistTPA);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Create Seq-Hist for TPA (Detailed)", 
+                     CreateSeqHistTPADetailed);
     SetObjectExtra (i, bfp, NULL);
   }
   if (extraServices) {

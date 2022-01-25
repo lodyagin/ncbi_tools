@@ -1,5 +1,5 @@
 #
-# $Id: solaris-gcc.ncbi.mk,v 1.14 2002/04/28 03:46:11 vakatov Exp $
+# $Id: solaris-gcc.ncbi.mk,v 1.15 2002/10/29 01:20:13 lavr Exp $
 #
 # If you want to use gcc on solaris you need to copy this
 # file to solaris.ncbi.mk
@@ -73,6 +73,6 @@ NCBI_DBUGEXTRA = -g
 LIBFASTCGI=-lfcgi
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 

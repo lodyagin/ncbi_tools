@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_service_connector.c,v 6.20 2002/08/07 16:38:08 lavr Exp $
+/*  $Id: test_ncbi_service_connector.c,v 6.22 2002/10/28 15:47:12 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,10 @@
  *
  */
 
+#include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"
 #include <connect/ncbi_service_connector.h>
 #include <stdlib.h>
-#include <string.h>
 /* This header must go last */
 #include "test_assert.h"
 
@@ -45,6 +45,7 @@ int main(int argc, const char* argv[])
     const char* host = argc > 2 ? argv[2] : "www.ncbi.nlm.nih.gov";
     CONNECTOR connector;
     SConnNetInfo *info;
+    EIO_Status status;
     STimeout  timeout;
     char ibuf[1024];
     CONN conn;
@@ -55,8 +56,7 @@ int main(int argc, const char* argv[])
     info = ConnNetInfo_Create(service);
     strcpy(info->host, host);
     if (argc > 3) {
-        strncpy(obuf, argv[3], sizeof(obuf) - 2);
-        obuf[sizeof(obuf) - 2] = 0;
+        strncpy0(obuf, argv[3], sizeof(obuf) - 2);
         obuf[n = strlen(obuf)] = '\n';
         obuf[++n]              = 0;
     }
@@ -86,14 +86,16 @@ int main(int argc, const char* argv[])
         CORE_LOG(eLOG_Fatal, "Error waiting for reading");
     }
 
-    if (CONN_Read(conn, ibuf, n, &n, eIO_ReadPersist) != eIO_Success) {
-        CONN_Close(conn);
+    status = CONN_Read(conn, ibuf, n, &n, eIO_ReadPersist);
+    if (status != eIO_Success) {
+        if (!n)
+            CONN_Close(conn);
         CORE_LOG(n ? eLOG_Error : eLOG_Fatal, "Error reading from connection");
     }
 
     CORE_LOGF(eLOG_Note,
               ("%d bytes read from service (%s):\n%.*s",
-               (int)n, CONN_GetType(conn), (int)n, ibuf));
+               (int) n, CONN_GetType(conn), (int) n, ibuf));
     CONN_Close(conn);
 
 #if 0
@@ -131,6 +133,12 @@ int main(int argc, const char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_service_connector.c,v $
+ * Revision 6.22  2002/10/28 15:47:12  lavr
+ * Use "ncbi_ansi_ext.h" privately and use strncpy0()
+ *
+ * Revision 6.21  2002/09/24 15:10:09  lavr
+ * Fix test not to dereference NULL pointer resulting from failed connection
+ *
  * Revision 6.20  2002/08/07 16:38:08  lavr
  * EIO_ReadMethod enums changed accordingly; log moved to end
  *

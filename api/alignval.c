@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -350,100 +350,100 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
   {
     case Err_SeqId:
       sprintf(string1, "SeqId");
-      sprintf(string2, "The sequence corresponding to SeqId %s could not be found\n", buf);
+      sprintf(string2, "The sequence corresponding to SeqId %s could not be found", buf);
       break;
 
     case Err_Strand_Rev:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Strand");
-      sprintf(string2, "The strand labels for SeqId %s are inconsistent across the alignment; the first inconsistent region is the %ld(th) region, near sequence position %ld, context %s\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "The strand labels for SeqId %s are inconsistent across the alignment; the first inconsistent region is the %ld(th) region, near sequence position %ld, context %s", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_Denseg_Len_Start:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start/Length");
-      sprintf(string2, "There is a problem with sequence %s, in segment %ld (near sequence position %ld), context %s: the segment is too long or short or the next segment has an incorrect start position\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "There is a problem with sequence %s, in segment %ld (near sequence position %ld), context %s: the segment is too long or short or the next segment has an incorrect start position", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case  Err_Start_Less_Than_Zero:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
-      sprintf(string2, "Start point is less than zero in segment %ld (near sequence position %ld) for sequence ID: %s in the context of %s\n", (long) Intvalue, (long) pos, buf, buf3);
+      sprintf(string2, "Start point is less than zero in segment %ld (near sequence position %ld) for sequence ID: %s in the context of %s", (long) Intvalue, (long) pos, buf, buf3);
       break;
 
     case Err_Start_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
-      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_End_Less_Than_Zero:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s.  This could be a formatting error\n", (long) Intvalue, (int) pos,buf, buf3);
+      sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s.  This could be a formatting error", (long) Intvalue, (int) pos,buf, buf3);
       break;
 
     case Err_End_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_Len_Less_Than_Zero:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "Segment length is less than zero in segment %ld (near sequence position %ld) for sequence ID: %s in the context of %s.  Look for extra characters in this segment or flanking segments\n", (long) Intvalue, (long) pos, buf, buf3); 
+      sprintf(string2, "Segment length is less than zero in segment %ld (near sequence position %ld) for sequence ID: %s in the context of %s.  Look for extra characters in this segment or flanking segments", (long) Intvalue, (long) pos, buf, buf3); 
       break;
 
     case Err_Len_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment", buf, (long) Intvalue, (long) pos, buf3);
       break; 
  
     case Err_Sum_Len_Start:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
-      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment\n", buf, (long) Intvalue, (long) pos, buf3);
+      sprintf(string2, "In sequence %s, segment %ld (near sequence position %ld) context %s, the alignment claims to contain residue coordinates that are past the end of the sequence.  Either the sequence is too short, or there are extra characters or formatting errors in the alignment", buf, (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_SeqAlign_DimSeqId_Not_Match:
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "SeqId");
-      sprintf(string2, "The Seqalign has more or fewer ids than the number of rows in the alignment (context %s).  Look for possible formatting errors in the ids.\n", buf3);
+      sprintf(string2, "The Seqalign has more or fewer ids than the number of rows in the alignment (context %s).  Look for possible formatting errors in the ids.", buf3);
       break;
 
     case Err_Segs_DimSeqId_Not_Match:
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "SeqId");
-      sprintf(string2, "In segment %ld, there are more or fewer rows than there are seqids (context %s).  Look for possible formatting errors in the ids.\n", (long) Intvalue, buf3);
+      sprintf(string2, "In segment %ld, there are more or fewer rows than there are seqids (context %s).  Look for possible formatting errors in the ids.", (long) Intvalue, buf3);
       break;
 
     case Err_Fastalike:
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Fasta");
-      sprintf(string2, "This may be a fasta-like alignment for SeqId: %s in the context of %s\n", buf, buf3); 
+      sprintf(string2, "This may be a fasta-like alignment for SeqId: %s in the context of %s", buf, buf3); 
       break;
 
     case Err_Null_Segs:
       sprintf(string1, "Segs");
-      sprintf(string2, "This alignment is missing all segments.  This is a non-correctable error -- look for serious formatting problems.\n");
+      sprintf(string2, "This alignment is missing all segments.  This is a non-correctable error -- look for serious formatting problems.");
       break;
 
     case Err_Segment_Gap:
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Segs");
-      sprintf(string2, "Segment %ld (near alignment position %ld) contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.\n", (long) Intvalue, (long) pos);
+      sprintf(string2, "Segment %ld (near alignment position %ld) contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.", (long) Intvalue, (long) pos);
       break;
 
     case Err_Segs_Dim_One:
@@ -460,7 +460,7 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
 
     case Err_Segtype :
       sprintf(string1, "Segs");
-      sprintf(string2, "This alignment has a undefined or unsupported Seqalign segtype %ld\n", (long) Intvalue);
+      sprintf(string2, "This alignment has a undefined or unsupported Seqalign segtype %ld", (long) Intvalue);
       break;
 
     defaulf:
@@ -1001,7 +1001,7 @@ static Int4Ptr GetReverseLength (Int2 numseg, Int4Ptr lenptr)
   lenptrtemp=(Int4Ptr)MemNew(numseg*sizeof(Int4Ptr));
   if(!lenptrtemp)
   {
-      ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory\n");
+      ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory");
       return NULL;
   }
   for(p=0; p<numseg; p++)    
@@ -1027,7 +1027,7 @@ static Int4Ptr GetReverseStart(Int2 numseg, Int2 dim, Int4Ptr stptr)
   stptrtemp=(Int4Ptr)MemNew(numseg*dim*sizeof(Int4Ptr));
   if(!stptrtemp)
   {
-      ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory\n"); 
+      ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory"); 
       return NULL; 
   }
   for(p=0; p<numseg; p++)
@@ -1289,7 +1289,7 @@ static void ValidateSeqlengthInPackSeg (PackSegPtr psp, SeqAlignPtr salp)
 	      if(!seqpresence)
 		{
 		  
-		  ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory\n");
+		  ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory");
 		  return;
 		  
 		}
@@ -1519,7 +1519,7 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
 	      if(!seqpresence)
 		{
 		  
-		  ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory\n");
+		  ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory");
 		  return FALSE;
 		  
 		}
@@ -1745,7 +1745,7 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
 		  seqpresence=MemNew(BSLen(psp->present));
 		  if(!seqpresence)
 		    {
-		      ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory\n");
+		      ErrPostEx (SEV_ERROR, 0,0,  "Warning:insufficient memory");
 		      return;
 		      
 		    }

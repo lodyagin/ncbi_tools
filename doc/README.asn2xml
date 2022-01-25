@@ -1,10 +1,16 @@
-README.asn2xml : This file
-Binary: ftp://ftp.ncbi.nih.gov/toolbox/xml/asn2xml/
-Source: ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
-NCBI XML DTDs: ftp://ftp.ncbi.nih.gov/toolbox/xml/xmlspecs/
+Last updated: Fri, March 16, 2001
+File Locator: ftp://ftp.ncbi.nih.gov/toolbox/xml/asn2xml/README.asn2xml
 
-Program Description: asn2xml converts the sequence data in ASN.1 to
-sequence encoding in IUPAC for XML through an internal object loader.
+asn2xml
+
+Program Description: asn2xml is a utility program designed to read 
+sequence data in ASN.1 and output the sequence data as "full XML". For
+further description on "full XML", refer to the NCBI Data in XML Doc.
+
+Binary: ftp://ftp.ncbi.nih.gov/toolbox/xml/asn2xml/
+Source: ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z   
+NCBI XML DTDs: ftp://ftp.ncbi.nih.gov/toolbox/xml/xmlspecs/
+NCBI Data in XML Doc: ftp://ftp.ncbi.nih.gov/toolbox/xml/ncbixml.txt
 
 BASIC INSTRUCTIONS:
 1. Obtain GenBank ASN.1 data file at
@@ -22,7 +28,6 @@ Additional documentation:
 
 2. Download the appropriate asn2xml binary for your platform
 ftp://ftp.ncbi.nih.gov/toolbox/xml/asn2xml/
-	 asn2xml.ibmaix.tar.Z         AIX  4.3.3
      asn2xml.alphaOSF1.tar.Z      OSF1 V5.1
      asn2xml.linux.tar.Z          Intel x86/Linux
      asn2xml.sgi.tar.Z            IRIX 6.4/IRIX 6.5 
@@ -66,9 +71,12 @@ asn2xml -i nc0305.aso -o nc0305.xml2 -l error3.log
 Notes:
 
 1. The uncompressed XML file is about 10 times the size of the compressed
-binary ASN.1 file. The uncompressed XML can be extremely big, you
-have been warned. Note, the ASN.1 contains more than the GenBank files;
-it includes other databases like PDB and RefSeq, gaps of HTG records, and
-shows the quality scores of HTG records. For further, read
+binary ASN.1 file. The uncompressed XML can be extremely big. Note, the
+ASN.1 contains more than the GenBank files; it includes other databases
+like PDB and RefSeq, gaps of HTG records, and shows the quality scores of
+HTG records. For further information, read 
 ftp://ftp.ncbi.nih.gov/ncbi-asn1/README.asn1
 
+
+Email any questions not answered in this documentation to:
+info@ncbi.nih.gov

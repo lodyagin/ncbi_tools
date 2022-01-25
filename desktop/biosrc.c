@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -65,13 +65,13 @@ ENUM_ALIST(orgmod_subtype_alist)
   {"Forma-specialis",  26},
   {"Group",            15},
   {"Isolate",          17},
-  {"Natural-host",     21},
   {"Old Lineage",     253},
   {"Old Name",        254},
   {"Pathovar",         11},
   {"Serogroup",         8},
   {"Serotype",          7},
   {"Serovar",           9},
+  {"Specific-host",    21},
   {"Specimen-voucher", 23},
   {"Strain",            2},
   {"Subgroup",         16},
@@ -100,7 +100,9 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Genotype",               6},
   {"Germline",              14},
   {"Haplotype",              5},
+    /*
   {"Ins-seq-name",          21},
+    */
   {"Isolation-source",      28},
   {"Lab-host",              16},
   {"Map",                    2},
@@ -114,7 +116,9 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Tissue-lib",            18},
   {"Tissue-type",           10},
   {"Transgenic",            26},
+    /*
   {"Transposon-name",       20},
+    */
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_genome_alist)
@@ -128,8 +132,10 @@ static ENUM_ALIST(biosource_genome_alist)
   {"Macronuclear",         7},
   {"Extrachromosomal",     8},
   {"Plasmid",              9},
+    /*
   {"Transposon",          10},
   {"Insertion Sequence",  11},
+    */
   {"Cyanelle",            12},
   {"Proviral",            13},
   {"Virion",              14},
@@ -151,8 +157,10 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Macronuclear",         7},
   {"Extrachromosomal",     8},
   {"Plasmid",              9},
+    /*
   {"Transposon",          10},
   {"Insertion Sequence",  11},
+    */
   {"Cyanelle",            12},
   {"Proviral",            13},
   {"Virion",              14},
@@ -1226,8 +1234,8 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
                 }
               }
               if (f != NULL) {
-                if (fgets (str, sizeof (str), f) != NULL) {
-                  goOn = (Boolean) (fgets (str, sizeof (str), f) != NULL);
+                if (FileGets (str, sizeof (str), f) != NULL) {
+                  goOn = (Boolean) (FileGets (str, sizeof (str), f) != NULL);
                   while (goOn) {
                     ptr = StringChr (str, '\t');
                     if (ptr != NULL) {
@@ -1245,7 +1253,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
                         goOn = FALSE;
                       }
                     }
-                    goOn = (Boolean) (goOn && (fgets (str, sizeof (str), f) != NULL));
+                    goOn = (Boolean) (goOn && (FileGets (str, sizeof (str), f) != NULL));
                   }
                 }
                 FileClose (f);
@@ -2127,11 +2135,11 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
       gbp->gbsyn = DialogText (g, "", 15, NULL);
     } else {
       StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
-      gbp->gbacr = (TexT) StaticPrompt (g, "", stdLineHeight, 15 * stdCharWidth, systemFont, 'l');
+      gbp->gbacr = (TexT) StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
       StaticPrompt (g, "Assigned Anamorph", 0, stdLineHeight, programFont, 'l');
-      gbp->gbana = (TexT) StaticPrompt (g, "", stdLineHeight, 15 * stdCharWidth, systemFont, 'l');
+      gbp->gbana = (TexT) StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
       StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
-      gbp->gbsyn = (TexT) StaticPrompt (g, "", stdLineHeight, 15 * stdCharWidth, systemFont, 'l');
+      gbp->gbsyn = (TexT) StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
     }
 
     Hide (gbp->modGrp [2]);

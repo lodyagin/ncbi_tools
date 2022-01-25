@@ -35,7 +35,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at May 17, 2002 10:52 AM
+*    Generated using ASNCODE Revision: 6.14 at Oct 31, 2002  9:42 AM
 *
 **************************************************/
 
@@ -1603,6 +1603,9 @@ CddDescrFree(ValNodePtr anp)
    case CddDescr_repeats:
       CddRepeatFree(anp -> data.ptrvalue);
       break;
+   case CddDescr_old_root:
+      CddIdSetFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -1726,6 +1729,24 @@ CddDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = CddDescr_repeats;
       func = (AsnReadFunc) CddRepeatAsnRead;
    }
+   else if (atp == CDD_DESCR_old_root) {
+      choice = CddDescr_old_root;
+      func = (AsnReadFunc) CddIdSetAsnRead;
+   }
+   else if (atp == CDD_DESCR_curation_status) {
+      choice = CddDescr_curation_status;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == CDD_DESCR_readonly_status) {
+      choice = CddDescr_readonly_status;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -1832,6 +1853,18 @@ CddDescrAsnWrite(CddDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case CddDescr_repeats:
       writetype = CDD_DESCR_repeats;
       func = (AsnWriteFunc) CddRepeatAsnWrite;
+      break;
+   case CddDescr_old_root:
+      writetype = CDD_DESCR_old_root;
+      func = (AsnWriteFunc) CddIdSetAsnWrite;
+      break;
+   case CddDescr_curation_status:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, CDD_DESCR_curation_status, &av);
+      break;
+   case CddDescr_readonly_status:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, CDD_DESCR_readonly_status, &av);
       break;
    }
    if (writetype != NULL) {

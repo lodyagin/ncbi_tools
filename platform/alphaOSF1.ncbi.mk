@@ -1,5 +1,5 @@
 #
-# $Id: alphaOSF1.ncbi.mk,v 1.10 2002/02/27 21:53:55 beloslyu Exp $
+# $Id: alphaOSF1.ncbi.mk,v 1.12 2002/11/07 21:41:57 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = alf
@@ -12,10 +12,9 @@ NCBI_BIN_COPY = /usr/home/coremake/ncbi/bin
 NCBI_INCDIR = /usr/home/coremake/ncbi/include
 NCBI_LIBDIR = /usr/home/coremake/ncbi/lib
 NCBI_ALTLIB = /usr/home/coremake/ncbi/altlib
-#NCBI_VIBFLAG = -I/usr/X11R6/include -L/usr/X11R6/lib -DWIN_MOTIF
 NCBI_VIBFLAG = -DWIN_MOTIF
-NCBI_VIBLIBS = -lXm -lXmu -lXt -lX11 -lXext
-NCBI_DISTVIBLIBS = -non_shared -lXm -shared -lXmu -lXt -lX11 -lXext -lSM -lICE -ldnet_stub
+NCBI_VIBLIBS = -lXm -lXmu -lXt -lX11
+NCBI_DISTVIBLIBS = -lXm -lXt -lXmu -lX11
 NCBI_OTHERLIBS = -lm
 NCBI_OTHERLIBS_MT = -lm -lpthread
 NCBI_THR_OBJ = $(NCBI_LIBDIR)/ncbithr.o
@@ -26,6 +25,6 @@ NCBI_MT_OTHERLIBS = -lpthread
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 

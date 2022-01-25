@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.50 $
+* $Revision: 6.51 $
 *
 * File Description: 
 *
@@ -4522,7 +4522,7 @@ static void UserObjectPtrToProtein (DialoG d, Pointer data)
       if (ufp != NULL && ufp->choice == 1) {
         oip = ufp->label;
         if (oip != NULL && oip->str != NULL && StringICmp (oip->str, "protein seqID") == 0) {
-          str = (CharPtr) ufp->data.intvalue;
+          str = (CharPtr) ufp->data.ptrvalue;
           if (str != NULL) {
             sip = MakeSeqID (str);
             if (sip != NULL) {

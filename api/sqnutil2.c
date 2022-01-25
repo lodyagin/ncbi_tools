@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.134 $
+* $Revision: 6.137 $
 *
 * File Description: 
 *
@@ -1801,7 +1801,7 @@ static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
 
   if (str == NULL || size < 1 || fp == NULL) return NULL;
   *str = '\0';
-  rsult = fgets (str, size, fp);
+  rsult = FileGets (str, size, fp);
   if (rsult != NULL) {
     ptr = str;
     ch = *ptr;
@@ -1826,7 +1826,7 @@ static CharPtr ReadALineOfScores (CharPtr str, size_t size, FILE *fp, BoolPtr no
   }
   if (str == NULL || size < 1 || fp == NULL) return NULL;
   *str = '\0';
-  rsult = fgets (str, size, fp);
+  rsult = FileGets (str, size, fp);
   if (rsult != NULL) {
     ptr = str;
     ch = *ptr;
@@ -3492,7 +3492,7 @@ static CharPtr orgModList [] = {
   "", "", "Strain", "Substrain", "Type", "Subtype", "Variety",
   "Serotype", "Serogroup", "Serovar", "Cultivar", "Pathovar",
   "Chemovar", "Biovar", "Biotype", "Group", "Subgroup", "Isolate",
-  "Common", "Acronym", "Dosage", "Natural-host", "Sub-species",
+  "Common", "Acronym", "Dosage", "Specific-host", "Sub-species",
   "Specimen-voucher", "Authority", "Forma", "Forma-specialis",
   "Ecotype", "Synonym", "Anamorph", "Teleomorph", "Breed",
   "Old Lineage", "Old Name", "Note", NULL
@@ -4237,49 +4237,49 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
       if (rrp == NULL) return;
       if (rrp->type == 3) {
-        rrp->ext.choice = 2;
-        trna = (tRNAPtr) MemNew (sizeof (tRNA));
-        rrp->ext.value.ptrvalue = (Pointer) trna;
-        if (trna != NULL) {
-          trna->aatype = 2;
-          for (j = 0; j < 6; j++) {
-            trna->codon [j] = 255;
-          }
-          aa = ParseTRnaString (val, &justTrnaText, codon, FALSE);
-          if (aa != 0) {
+        aa = ParseTRnaString (val, &justTrnaText, codon, FALSE);
+        if (aa != 0) {
+          rrp->ext.choice = 2;
+          trna = (tRNAPtr) MemNew (sizeof (tRNA));
+          rrp->ext.value.ptrvalue = (Pointer) trna;
+          if (trna != NULL) {
+            trna->aatype = 2;
+            for (j = 0; j < 6; j++) {
+              trna->codon [j] = 255;
+            }
             if (justTrnaText) {
               for (j = 0; j < 6; j++) {
                 trna->codon [j] = codon [j];
               }
             }
             trna->aa = aa;
-            if (aa == 'M') {
-              if (StringStr (val, "fMet") != NULL) {
-                if (sfp->comment == NULL) {
-                  sfp->comment = StringSave ("fMet");
-                } else {
-                  len = StringLen (sfp->comment) + StringLen ("fMet") + 5;
-                  str = MemNew (sizeof (Char) * len);
-                  StringCpy (str, sfp->comment);
-                  StringCat (str, "; ");
-                  StringCat (str, "fMet");
-                  sfp->comment = MemFree (sfp->comment);
-                  sfp->comment = str;
-                }
+          }
+          if (aa == 'M') {
+            if (StringStr (val, "fMet") != NULL) {
+              if (sfp->comment == NULL) {
+                sfp->comment = StringSave ("fMet");
+              } else {
+                len = StringLen (sfp->comment) + StringLen ("fMet") + 5;
+                str = MemNew (sizeof (Char) * len);
+                StringCpy (str, sfp->comment);
+                StringCat (str, "; ");
+                StringCat (str, "fMet");
+                sfp->comment = MemFree (sfp->comment);
+                sfp->comment = str;
               }
             }
+          }
+        } else {
+          if (sfp->comment == NULL) {
+            sfp->comment = StringSave (val);
           } else {
-            if (sfp->comment == NULL) {
-              sfp->comment = StringSave (val);
-            } else {
-              len = StringLen (sfp->comment) + StringLen (val) + 5;
-              str = MemNew (sizeof (Char) * len);
-              StringCpy (str, sfp->comment);
-              StringCat (str, "; ");
-              StringCat (str, val);
-              sfp->comment = MemFree (sfp->comment);
-              sfp->comment = str;
-            }
+            len = StringLen (sfp->comment) + StringLen (val) + 5;
+            str = MemNew (sizeof (Char) * len);
+            StringCpy (str, sfp->comment);
+            StringCat (str, "; ");
+            StringCat (str, val);
+            sfp->comment = MemFree (sfp->comment);
+            sfp->comment = str;
           }
         }
       } else {

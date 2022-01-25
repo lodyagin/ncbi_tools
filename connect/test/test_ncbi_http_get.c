@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_http_get.c,v 6.6 2002/08/14 14:42:46 lavr Exp $
+/*  $Id: test_ncbi_http_get.c,v 6.7 2002/10/28 15:47:06 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,11 @@
  *
  */
 
+#include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"
-#include <connect/ncbi_ansi_ext.h>
 #include <connect/ncbi_http_connector.h>
 #include <connect/ncbi_util.h>
 #include <stdlib.h>
-#include <string.h>
 /* This header must go last */
 #include "test_assert.h"
 
@@ -107,6 +106,9 @@ int main(int argc, char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_http_get.c,v $
+ * Revision 6.7  2002/10/28 15:47:06  lavr
+ * Use "ncbi_ansi_ext.h" privately
+ *
  * Revision 6.6  2002/08/14 14:42:46  lavr
  * Use fwrite() instead of printf() when printing out the data fetched
  *

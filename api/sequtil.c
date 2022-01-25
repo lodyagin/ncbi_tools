@@ -29,13 +29,25 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.122 $
+* $Revision: 6.126 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.126  2002/11/05 18:50:31  kans
+* fixed bug in SeqLocPartialCheck
+*
+* Revision 6.125  2002/10/19 19:11:21  kans
+* added CA as GenBank EST
+*
+* Revision 6.124  2002/10/03 16:18:35  kans
+* added BZ as NCBI GSS
+*
+* Revision 6.123  2002/09/20 20:47:51  kans
+* added BY as DDBJ EST prefix
+*
 * Revision 6.122  2002/08/28 13:28:54  kans
 * added BX prefix
 *
@@ -5817,7 +5829,7 @@ NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head)
 									retval |= SLP_INTERNAL;
 								if (miss_end)
 								{
-									if (slp == last)
+									if (slp == first /* was last */)
 										retval |= SLP_NOSTART;
 									else
 										retval |= SLP_NOINTERNAL;
@@ -8628,7 +8640,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"BI") == 0) || 
 	      (StringICmp(temp,"BM") == 0) || 
 	      (StringICmp(temp,"BQ") == 0) || 
-	      (StringICmp(temp,"BU") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"BU") == 0) || 
+	      (StringICmp(temp,"CA") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -8648,7 +8661,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_GSDB;
           } else if ((StringICmp(temp,"AQ") == 0) ||
                      (StringICmp(temp,"AZ") == 0) ||
-                     (StringICmp(temp,"BH") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"BH") == 0) ||
+                     (StringICmp(temp,"BZ") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
@@ -8679,7 +8693,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"BB") == 0) ||
                      (StringICmp(temp,"BJ") == 0) ||
                      (StringICmp(temp,"BP") == 0) ||
-                     (StringICmp(temp,"BW") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"BW") == 0) ||
+                     (StringICmp(temp,"BY") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;

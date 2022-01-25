@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.4 2002/06/17 18:21:44 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.5 2002/09/19 18:12:30 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,6 @@
  * File Description:
  *   Configuration wrapper CONNECT library in NCBI C Toolkit
  *
- * ===========================================================================
  */
 
 /* Real configuration

@@ -29,13 +29,17 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.54 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.55  2002/11/06 21:30:57  ucko
+* ChangeViewerLinkData: when extracting a string from vnp->data, use
+* ptrvalue rather than intvalue (which may be the wrong width)
+*
 * Revision 6.54  2002/01/03 16:53:52  kans
 * use left, top passed in
 *
@@ -3604,7 +3608,7 @@ static void ChangeViewerLinkData (LinkGroupPtr lgp, Int2 currDb, Int4 theuid)
         sip = (SeqIdPtr) (&vn);
         SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
         for (vnp = head; vnp != NULL; vnp = vnp->next) {
-          if (vnp->choice == lgp->align_type && StringICmp ((CharPtr) vnp->data.intvalue, str) != 0) {
+          if (vnp->choice == lgp->align_type && StringICmp ((CharPtr) vnp->data.ptrvalue, str) != 0) {
             num++;
           }
         }

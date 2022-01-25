@@ -33,6 +33,13 @@ The sources of NCBI toolkit for Windows are located at:
 And the sources of NCBI toolkit for Mac are located at:
 	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.hqx
 
+Q. I have Macintosh PowerBook with Mac OS 10, what archive should I download?
+A. For Mac OS 10 you should download the sources of NCBI toolkit for Unix
+   located at:
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+   The Darwin is supported, you should have GNU tar and other GNU utils
+   installed. Please follow unix instructions in file ./ncbi/make/readme.unx
+
 Q. How to find the version of the toolkit?
 A. The source of the ToolKit for Unix, which is located at
 	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.185 $
+* $Revision: 6.202 $
 *
 * File Description: 
 *
@@ -58,6 +58,9 @@
 #include <spidey.h>
 #include <blast.h>
 
+#define DEFLINE_MAX_LEN          380
+#define DEFLINE_MAX_GENENAME_LEN 64
+
 typedef struct evidenceformdata {
   FEATURE_FORM_BLOCK
 
@@ -72,7 +75,9 @@ typedef struct evidenceformdata {
   ValNodePtr     head;
   Boolean        stringfound;
   Char           findStr [128];
-} EvidenceFormData, PNTR EvidenceFormPtr;
+} EvidenceFormData, PNTR 
+
+EvidenceFormPtr;
 
 typedef struct codebreakformdata {
   FEATURE_FORM_BLOCK
@@ -745,7 +750,8 @@ extern void MakeGroupsOf200 (IteM i)
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
   _class = bssp->_class;
-  if (_class != 7 && _class != 13 && _class != 14 && _class != 15) return;
+  if (_class != 7 && _class != 13 && _class != 14 &&
+      _class != 15 && _class != 16 && _class != 18) return;
 
   SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
   GetSeqEntryParent (sep, &parentptr, &parenttype);
@@ -1718,7 +1724,7 @@ extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         CorrectGenCodes (sep, entityID);
       }
@@ -3377,6 +3383,7 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
   ValNodePtr    head;
   Int2          i;
   Int2          j;
+  CharPtr       name;
   ObjectIdPtr   oip;
   Boolean       seqChange;
   CharPtr       str;
@@ -3404,6 +3411,7 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
         while (entry != NULL && entry->choice == 11) {
           accession = NULL;
           comment = NULL;
+          name = NULL;
           gi = 0;
           from = 0;
           to = 0;
@@ -3427,6 +3435,8 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
                 annotChange = ufp->data.boolvalue;
               } else if (StringICmp (oip->str, "comment") == 0 && ufp->choice == 1) {
                 comment = (CharPtr) ufp->data.ptrvalue;
+              } else if (StringICmp (oip->str, "name") == 0 && ufp->choice == 1) {
+                name = (CharPtr) ufp->data.ptrvalue;
               }
             }
             ufp = ufp->next;
@@ -3447,6 +3457,15 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
             } else {
               sprintf (str, "%s\t\t%s\t%d\t%d\n", accession, comment, (int) flags, (int) field);
             }
+            vnp = ValNodeNew (head);
+            if (head == NULL) {
+              head = vnp;
+            }
+            if (vnp != NULL) {
+              vnp->data.ptrvalue = StringSave (str);
+            }
+          } else if (name != NULL) {
+            sprintf (str, "\t\t%s\t0\t%d\n", name, (int) field);
             vnp = ValNodeNew (head);
             if (head == NULL) {
               head = vnp;
@@ -3505,14 +3524,18 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
   }
   if (curr != NULL && curr->choice == 1) {
     str = (CharPtr) curr->data.ptrvalue;
-    if (StringICmp (str, "Predicted") == 0) {
+    if (StringICmp (str, "Inferred") == 0) {
       status = 1;
-    } else if (StringICmp (str, "Provisional") == 0) {
+    } else if (StringICmp (str, "Predicted") == 0) {
       status = 2;
-    } else if (StringICmp (str, "Validated") == 0) {
+    } else if (StringICmp (str, "Provisional") == 0) {
       status = 3;
-    } else if (StringICmp (str, "Reviewed") == 0) {
+    } else if (StringICmp (str, "Validated") == 0) {
       status = 4;
+    } else if (StringICmp (str, "Reviewed") == 0) {
+      status = 5;
+    } else if (StringICmp (str, "WGS") == 0) {
+      status = 6;
     }
   }
   for (curr = uop->data; curr != NULL; curr = curr->next) {
@@ -3558,13 +3581,17 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
 
   status = GetValue (rdp->status);
   if (status == 1) {
-    AddStatusToRefGeneTrackUserObject (uop, "Predicted");
+    AddStatusToRefGeneTrackUserObject (uop, "Inferred");
   } else if (status == 2) {
-    AddStatusToRefGeneTrackUserObject (uop, "Provisional");
+    AddStatusToRefGeneTrackUserObject (uop, "Predicted");
   } else if (status == 3) {
-    AddStatusToRefGeneTrackUserObject (uop, "Validated");
+    AddStatusToRefGeneTrackUserObject (uop, "Provisional");
   } else if (status == 4) {
+    AddStatusToRefGeneTrackUserObject (uop, "Validated");
+  } else if (status == 5) {
     AddStatusToRefGeneTrackUserObject (uop, "Reviewed");
+  } else if (status == 6) {
+    AddStatusToRefGeneTrackUserObject (uop, "WGS");
   }
 
   GetTitle (rdp->curator, curator, sizeof (curator));
@@ -3613,10 +3640,16 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
                                                   txt [0], num [1],
                                                   seqChange, annotChange,
                                                   txt [2]);
+          } else if (! StringHasNoText (txt [2])) {
+            /* comment by itself goes into name */
+            AddAccessionToRefGeneTrackUserObject (uop, refgene_labels [i],
+                                                  NULL, num [1],
+                                                  seqChange, annotChange,
+                                                  txt [2]);
           }
-          for (j = 0; j < 5; j++) {
-            txt [j] = MemFree (txt [j]);
-          }
+        }
+        for (j = 0; j < 5; j++) {
+          txt [j] = MemFree (txt [j]);
         }
       }
     }
@@ -3651,12 +3684,14 @@ static DialoG CreateRefGeneDialog (GrouP g)
 
   x = HiddenGroup (p, 4, 0, NULL);
   /* StaticPrompt (x, "Status", 0, stdLineHeight, programFont, 'l'); */
-  rdp->status = HiddenGroup (x, 4, 0, NULL);
+  rdp->status = HiddenGroup (x, 6, 0, NULL);
   SetObjectExtra (rdp->status, rdp, NULL);
+  RadioButton (rdp->status, "Inferred");
   RadioButton (rdp->status, "Predicted");
   RadioButton (rdp->status, "Provisional");
   RadioButton (rdp->status, "Validated");
   RadioButton (rdp->status, "Reviewed");
+  RadioButton (rdp->status, "WGS");
 
   y = HiddenGroup (p, 2, 0, NULL);
   StaticPrompt (y, "Curator", 0, dialogTextHeight, programFont, 'l');
@@ -3885,6 +3920,11 @@ typedef struct cka_acc {
    struct cka_acc PNTR next;
 } CKA_Acc, PNTR CKA_AccPtr;
 
+static Int4     CKA_blast_wordsize;
+static FloatHi  CKA_blast_expect_value;
+static Int4     CKA_blast_detailed_wordsize;
+static FloatHi  CKA_blast_detailed_expect_value;
+
 static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head);
 
 static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id)
@@ -4049,7 +4089,6 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    CKA_AccPtr        acc;
    CKA_AccPtr        PNTR accarray;
    AMAlignIndex2Ptr  amaip;
-   DenseSegPtr       dsp;
    Int4              first, first_align;
    Boolean           found;
    Int4              gi;
@@ -4126,12 +4165,7 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    {
       n++;
    }
-   if (n < i)
-   {
-      dsp = (DenseSegPtr)(accarray[n]->sap->segs);
-      SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(dsp->ids), &gi, &textid);
-   } else
-      SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(accarray[0]->sip_whole), &gi, &textid);
+   SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(accarray[0]->sip_whole), &gi, &textid);
    if (textid == NULL)
    {
       sprintf(textid2, "%d", gi);
@@ -4319,7 +4353,6 @@ static void CKA_RunChecker(SeqEntryPtr sep)
    CKA_AccPtr   acc_head_real;
    CKA_AccPtr   acc_head_tmp;
    BioseqPtr    bsp;
-   DenseSegPtr  dsp;
    Boolean      found;
    Int4         gi;
    SeqIdPtr     lastid;
@@ -4369,12 +4402,7 @@ static void CKA_RunChecker(SeqEntryPtr sep)
          {
             acc = acc->next;
          }
-         if (acc != NULL)
-         {
-            dsp = (DenseSegPtr)(acc->sap->segs);
-            SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(dsp->ids), &gi, &textid);
-         } else
-            SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(acc_head->sip_whole), &gi, &textid);
+         SPI_GetAccessionFromSeqId(SeqIdFindBestAccession(acc_head->sip_whole), &gi, &textid);
          if (textid == NULL)
          {
             sprintf(textid2, "%d", gi);
@@ -4396,7 +4424,8 @@ static void CKA_RunChecker(SeqEntryPtr sep)
 	    Message(MSG_OK, "Alignments were created but are not valid. They are being added to %s for review.", textid);
          else if (sap == NULL) {
             Message(MSG_ERROR, "No alignments could be created for %s.", textid);
-            return;
+            acc_head = acc_head_next;
+            continue;
          }
          AlnMgr2IndexLite(sap);
          AlnMgr2SortAlnSetByNthRowPos(sap, 1);
@@ -4639,10 +4668,12 @@ static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
                         acparray[j]->used = -1;
                      else /* truncate it */
                      {
-                        if (acparray[j]->stops[k] > acparray[i]->stops[k])
+                        if (acparray[j]->stops[k] >
+                            acparray[i]->stops[k] + CKA_blast_wordsize)
                         {
                            newsap = AlnMgr2GetSubAlign(acparray[j]->sap, acparray[i]->stops[k]+1,
  acparray[j]->stops[k], k+1, TRUE);
+                           AlnMgr2IndexSingleChildSeqAlign(newsap);
                            SeqAlignFree(acparray[j]->sap);
                            acparray[j]->sap = newsap;
                            acparray[j]->starts[k] = acparray[i]->stops[k]+1;
@@ -4667,13 +4698,14 @@ static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
                         acparray[j]->used = -1;
                      else /* truncate */
                      {
-                        if (acparray[j]->starts[k] < acparray[i]->starts[k])
+                        if (acparray[j]->starts[k] <
+                            acparray[i]->starts[k] - CKA_blast_wordsize)
                         {
                            newsap = AlnMgr2GetSubAlign(acparray[j]->sap, acparray[j]->starts[k], acparray[i]->starts[k]-1, k+1, TRUE);
+                           AlnMgr2IndexSingleChildSeqAlign(newsap);
                            SeqAlignFree(acparray[j]->sap);
                            acparray[j]->sap = newsap;
-                           AlnMgr2IndexSingleChildSeqAlign(newsap);
-                           acparray[j]->starts[k] = acparray[i]->stops[k]+1;
+                           acparray[j]->stops[k] = acparray[i]->starts[k]-1;
                         } else
                            acparray[j]->used = -1;
                      }
@@ -4713,6 +4745,68 @@ static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
    AlnMgr2IndexLite(sap_head);
 }
 
+static BioseqPtr ReadFromTraceDb (CharPtr number)
+
+{
+  BioseqPtr    bsp = NULL;
+  CONN         conn;
+  time_t       currtime, starttime;
+  FILE         *fp;
+  Int2         max = 0;
+  size_t       n_written;
+  Char         path [PATH_MAX];
+  Char         query [64];
+  SeqEntryPtr  sep = NULL;
+  EIO_Status   status;
+  STimeout     timeout;
+  long int     val;
+
+  if (StringHasNoText (number)) return NULL;
+  if (sscanf (number, "%ld", &val) != 1) return NULL;
+  sprintf (query, "val=%ld&type=t&dopt=fasta", (long) val);
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Traces/trace.cgi",
+                             query, "Sequin", 30, eMIME_T_NcbiData,
+                             eMIME_Fasta, eENCOD_None, 0);
+  if (conn == NULL) return NULL;
+  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
+  if (status != eIO_Success) return NULL;
+  QUERY_SendQuery (conn);
+
+#ifdef OS_MAC
+  timeout.sec = 0;
+  timeout.usec = 0;
+#else
+  timeout.sec = 100;
+  timeout.usec = 0;
+#endif
+
+  starttime = GetSecs ();
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+    currtime = GetSecs ();
+    max = currtime - starttime;
+  }
+
+  if (status == eIO_Success) {
+    TmpNam (path);
+    fp = FileOpen (path, "w");
+    QUERY_CopyResultsToFile (conn, fp);
+    FileClose (fp);
+    /*
+    LaunchGeneralTextViewer (path, "QueueFastaQueryToURL results");
+    */
+    fp = FileOpen (path, "r");
+    sep = FastaToSeqEntry (fp, TRUE);
+    FileClose (fp);
+    FileRemove (path);
+    if (sep != NULL) {
+      bsp = FindNucBioseq (sep);
+    }
+  }
+  CONN_Close (conn);
+
+  return bsp;
+}
+
 
 static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
 {
@@ -4742,17 +4836,23 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
    while (acc != NULL)
    {
       options = BLASTOptionNew("blastn", TRUE);
-      if (bsp->length > 10000)
+      /*if (bsp->length > 10000)*/
       {
 /*    faster with no filtering */
          options->is_megablast_search = TRUE;
          options->gap_open = options->gap_extend = 0;
-         options->wordsize = 100;
+         options->wordsize = CKA_blast_wordsize;
       }/* else
          options->filter_string = StringSave("m L;R");*/
-      options->expect_value = 0.000001;
-      sip = SeqIdFromAccessionDotVersion(acc->accession);
-      bsp_tmp = BioseqLockById(sip);
+      options->expect_value = CKA_blast_expect_value;
+      bsp_tmp = NULL;
+      if (StringNICmp (acc->accession, "ti", 2) == 0) {
+        bsp_tmp = ReadFromTraceDb (acc->accession + 2);
+      } else {
+        sip = SeqIdFromAccessionDotVersion(acc->accession);
+        bsp_tmp = BioseqLockById(sip);
+      }
+      if (bsp_tmp == NULL) break;
       if (bsp_tmp->id->next) {
         /* find the best accession */
         SeqIdPtr sip = SeqIdDup(SeqIdFindBestAccession(bsp_tmp->id));
@@ -4793,7 +4893,7 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
       if (acc->sap != NULL && acc->sap->next != NULL)
       {
          AlnMgr2IndexLite(acc->sap);
-         CKA_RemoveInconsistentAlnsFromSet(acc->sap, 10);
+         CKA_RemoveInconsistentAlnsFromSet(acc->sap, -1);
          sap_tmp = acc->sap;
          acc->sap = (SeqAlignPtr)(acc->sap->segs);
          sap_tmp->segs = NULL;
@@ -4891,9 +4991,7 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
    return allsap;
 }
 
-extern void CreateSeqHistTPA (IteM i);
-
-extern void CreateSeqHistTPA (IteM i)
+static void DoCreateSeqHistTPA (IteM i)
 {
   BaseFormPtr        bfp;
   SeqEntryPtr        sep;
@@ -4911,6 +5009,80 @@ extern void CreateSeqHistTPA (IteM i)
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+extern void CreateSeqHistTPA (IteM i);
+extern void CreateSeqHistTPA (IteM i)
+{
+  CKA_blast_wordsize = 28;
+  CKA_blast_expect_value = 0.000001;
+  DoCreateSeqHistTPA(i);
+}
+
+static TexT blast_wordsize_text = NULL;
+static TexT blast_expect_value_text = NULL;
+static IteM blast_i;
+
+static void DoAcceptBlastOptions (ButtoN b)
+
+{
+   Char    buf [64];
+   long    val1;
+   FloatHi val2;
+
+   GetTitle (blast_wordsize_text, buf, sizeof (buf));
+   if (sscanf (buf, "%ld", &val1) == 1) {
+     CKA_blast_wordsize = CKA_blast_detailed_wordsize = (Int4) val1;
+   }
+   GetTitle (blast_expect_value_text, buf, sizeof (buf));
+   if (sscanf (buf, "%lf", &val2) == 1) {
+     CKA_blast_expect_value = CKA_blast_detailed_expect_value = (FloatHi) val2;
+   }
+   Remove (ParentWindow (b));
+   DoCreateSeqHistTPA(blast_i);
+}
+
+extern void CreateSeqHistTPADetailed (IteM i);
+extern void CreateSeqHistTPADetailed (IteM i)
+{
+   GrouP   c;
+   GrouP   g;
+   GrouP   h;
+   WindoW  w;
+   Char    buf[64];
+
+   blast_i = i;
+
+   w = FixedWindow (-50, -33, -10, -10, "Blast Options", NULL);
+   h = HiddenGroup (w, -1, 0, NULL);
+   SetGroupSpacing (h, 3, 2);
+   g = HiddenGroup (h, 2, 0, NULL);
+
+   StaticPrompt (g, "Word Size", 0, dialogTextHeight, programFont, 'l');
+   if (CKA_blast_detailed_wordsize <= 0) {
+     CKA_blast_detailed_wordsize = 14;
+   }
+   CKA_blast_wordsize = CKA_blast_detailed_wordsize;
+   sprintf(buf, "%d", CKA_blast_wordsize);
+   blast_wordsize_text = DialogText (g, buf, 10, NULL);
+
+   StaticPrompt (g, "Expect Value", 0, dialogTextHeight, programFont, 'l');
+   if (CKA_blast_detailed_expect_value <= 0.0) {
+     CKA_blast_detailed_expect_value = 0.001;
+   }
+   CKA_blast_expect_value = CKA_blast_detailed_expect_value;
+   sprintf(buf, "%f", CKA_blast_expect_value);
+   blast_expect_value_text = DialogText (g, buf, 10, NULL);
+
+   c = HiddenGroup (w, 2, 0, NULL);
+   SetGroupSpacing (c, 5, 5);
+   DefaultButton (c, "Accept", DoAcceptBlastOptions);
+   PushButton (c, "Cancel", StdCancelButtonProc);
+   AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
+   RealizeWindow (w);
+   Show (w);
+   Select (w);
+   Select (blast_wordsize_text);
 }
 
 extern Int2 LIBCALLBACK AssemblyUserGenFunc (Pointer data);
@@ -5782,6 +5954,7 @@ typedef struct deffeats {
   Uint2       entityID;
   Uint2       itemID;
   Uint2       subtype;
+  Boolean     isDNA;
   Boolean     isAlleleGroup;
   Boolean     lastInString;
   Boolean     lastInGroup;
@@ -5804,7 +5977,8 @@ static Boolean GetMolBioFeatsGatherFunc (GatherContextPtr gcp, Boolean getGene, 
   Uint1        type;
   ValNodePtr   PNTR vnpp;
 
-  if (gcp == NULL || gcp->thisitem == NULL || gcp->userdata == NULL) return TRUE;
+  if (gcp == NULL || gcp->thisitem == NULL || gcp->userdata == NULL)
+    return TRUE;
   if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
   vnpp = (ValNodePtr PNTR) gcp->userdata;
   sfp = (SeqFeatPtr) gcp->thisitem;
@@ -5972,44 +6146,67 @@ static int LIBCALLBACK SortCDStRNArRNAByLocation (VoidPtr ptr1, VoidPtr ptr2)
   ValNodePtr   vnp1;
   ValNodePtr   vnp2;
 
-  if (ptr1 != NULL && ptr2 != NULL) {
-    vnp1 = *((ValNodePtr PNTR) ptr1);
-    vnp2 = *((ValNodePtr PNTR) ptr2);
-    if (vnp1 != NULL && vnp2 != NULL) {
-      dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
-      dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
-      if (dfp1 != NULL && dfp2 != NULL) {
-        sfp1 = dfp1->sfp;
-        sfp2 = dfp2->sfp;
-        if (sfp1 != NULL && sfp2 != NULL) {
-          bsp1 = GetBioseqGivenSeqLoc (sfp1->location, dfp1->entityID);
-          bsp2 = GetBioseqGivenSeqLoc (sfp2->location, dfp2->entityID);
-          if (bsp1 != NULL && bsp2 != NULL) {
-            leftend1 = GetOffsetInBioseq (sfp1->location, bsp1, SEQLOC_LEFT_END);
-            leftend2 = GetOffsetInBioseq (sfp2->location, bsp2, SEQLOC_LEFT_END);
-            rightend1 = GetOffsetInBioseq (sfp1->location, bsp1, SEQLOC_RIGHT_END);
-            rightend2 = GetOffsetInBioseq (sfp2->location, bsp2, SEQLOC_RIGHT_END);
-            if (leftend1 > leftend2) {
-              return 1;
-            } else if (leftend1 < leftend2) {
-              return -1;
-            } else if (sfp2->data.choice == SEQFEAT_GENE) {
-              return 1;
-            } else if (sfp1->data.choice == SEQFEAT_GENE) {
-              return -1;
-            } else if (rightend1 > rightend2) {
-              return 1;
-            } else if (rightend1 < rightend2) {
-              return -1;
-            } else {
-              return 0;
-            }
-          }
-        }
-      }
-    }
-  }
-  return 0;
+  /* Check parameters */
+
+  if ((NULL == ptr1) || (NULL == ptr2))
+    return 0;
+
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+
+  if ((NULL == vnp1) || (NULL == vnp2))
+    return 0;
+
+  /* Get the 2 Seqfeats to compare */
+
+  dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
+  dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
+
+  if ((NULL == dfp1) || (NULL == dfp2))
+    return 0;
+
+  sfp1 = dfp1->sfp;
+  sfp2 = dfp2->sfp;
+  
+  if ((NULL == sfp1) || (NULL == sfp2))
+    return 0;
+
+  /*
+  bsp1 = GetBioseqGivenSeqLoc (sfp1->location, dfp1->entityID);
+  bsp2 = GetBioseqGivenSeqLoc (sfp2->location, dfp2->entityID);
+  */
+  bsp1 = BioseqFindFromSeqLoc (sfp1->location);
+  bsp2 = BioseqFindFromSeqLoc (sfp2->location);
+
+  if ((NULL == bsp1) || (NULL == bsp2))
+    return 0;
+
+  /* Get the ends of the two Seqfeats, mapped */
+  /* onto the parent Bioseqs.                 */
+
+  leftend1 = GetOffsetInBioseq (sfp1->location, bsp1, SEQLOC_LEFT_END);
+  leftend2 = GetOffsetInBioseq (sfp2->location, bsp2, SEQLOC_LEFT_END);
+  rightend1 = GetOffsetInBioseq (sfp1->location, bsp1, SEQLOC_RIGHT_END);
+  rightend2 = GetOffsetInBioseq (sfp2->location, bsp2, SEQLOC_RIGHT_END);
+
+  /* Compare the two features and indicate if the first one */
+  /* is greater (return 1) or the 2nd is (return -1).       */
+
+  if (leftend1 > leftend2)
+    return 1;
+  else if (leftend1 < leftend2)
+    return -1;
+  else if (sfp2->data.choice == SEQFEAT_GENE)
+    return 1;
+  else if (sfp1->data.choice == SEQFEAT_GENE)
+    return -1;
+  else if (rightend1 > rightend2)
+    return 1;
+  else if (rightend1 < rightend2)
+    return -1;
+  else
+    return 0;
+
 }
 
 static int LIBCALLBACK SortCDSAfterExons (VoidPtr ptr1, VoidPtr ptr2)
@@ -6020,25 +6217,30 @@ static int LIBCALLBACK SortCDSAfterExons (VoidPtr ptr1, VoidPtr ptr2)
   ValNodePtr   vnp1;
   ValNodePtr   vnp2;
 
-  if (ptr1 != NULL && ptr2 != NULL) {
-    vnp1 = *((ValNodePtr PNTR) ptr1);
-    vnp2 = *((ValNodePtr PNTR) ptr2);
-    if (vnp1 != NULL && vnp2 != NULL) {
-      dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
-      dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
-      if (dfp1 != NULL && dfp2 != NULL) {
-        if (dfp1->subtype == FEATDEF_CDS && dfp2->subtype == FEATDEF_exon) {
-          return 1;
-        } else if (dfp1->subtype == FEATDEF_exon && dfp2->subtype == FEATDEF_CDS) {
-          return -1;
-        } else {
-          /* return 0; */
-          return SortCDStRNArRNAByLocation (ptr1, ptr2);
-        }
-      }
-    }
-  }
-  return 0;
+  /* Check parameters */
+
+  if ((NULL == ptr1) || (NULL == ptr2))
+    return 0;
+
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if ((NULL == vnp1) || (NULL == vnp2))
+    return 0;
+
+  dfp1 = (DefFeatsPtr) vnp1->data.ptrvalue;
+  dfp2 = (DefFeatsPtr) vnp2->data.ptrvalue;
+  if ((NULL == dfp1) || (NULL == dfp2))
+    return 0;
+
+  /* Sort all CDSs after all exons */
+
+  if (dfp1->subtype == FEATDEF_CDS && dfp2->subtype == FEATDEF_exon)
+    return 1;
+  else if (dfp1->subtype == FEATDEF_exon && dfp2->subtype == FEATDEF_CDS)
+    return -1;
+  else
+    return SortCDStRNArRNAByLocation (ptr1, ptr2);
+
 }
 
 extern EnumFieldAssoc  orgmod_subtype_alist [];
@@ -6252,13 +6454,13 @@ static void AutoDef_AddProtein (DefFeatsPtr dfp,
 
   if (StringICmp (dfp->protname, "unknown") == 0 &&
       !(StringHasNoText (dfp->genename))) {
-    StringNCpy_0 (text, dfp->genename, sizeof (text));
+    StringNCpy_0 (text, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
     StringCat (str, text);
   }
   else {
-    StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
+    StringNCpy_0 (str, dfp->protname, DEFLINE_MAX_LEN - 100);
     if (dfp->genename != NULL) {
-      StringNCpy_0 (text, dfp->genename, sizeof (text));
+      StringNCpy_0 (text, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
       if (! StringHasNoText (text)) {
 	StringCat (str, " (");
 	StringCat (str, text);
@@ -6306,6 +6508,280 @@ static void AutoDef_AddProtein (DefFeatsPtr dfp,
 
 /*---------------------------------------------------------------------*/
 /*                                                                     */
+/* AutoDef_AddGene () -- Add a Gene feature to a defline.              */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddGene (DefFeatsPtr dfp,
+			     CharPtr     str,
+			     Int2        featNum,
+			     CharPtr     text,
+			     MolInfoPtr  mip)
+{
+  if (dfp->genename != NULL)
+    StringNCpy_0 (str, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
+  if (dfp->lastInGroup || dfp->lastInType) {
+    if (mip != NULL) {
+      if (mip->biomol == MOLECULE_TYPE_MRNA)
+	StringCat (str, " mRNA");
+      else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA)
+	StringCat (str, " precursor RNA");
+      else
+	StringCat (str, " gene");
+    }
+    else
+      StringCat (str, " gene");
+    if (featNum > 1)
+      StringCat (str, "s");
+    if (featNum < 2 && (! StringHasNoText (dfp->allelename))) {
+      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringCat (str, ", ");
+      StringCat (str, text);
+      StringCat (str, " allele");
+    }
+    if (dfp->sfp->partial)
+      StringCat (str, ", partial sequence");
+    else
+      StringCat (str, ", complete sequence");
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddRRNAandOtherRNA () -- Add an rRNA or other RNA feature   */
+/*                                  to a defline.                      */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddRRNAandOtherRNA (DefFeatsPtr dfp,
+					CharPtr     str,
+					Int2        featNum,
+					CharPtr     text,
+					MolInfoPtr  mip)
+{
+  RnaRefPtr  rrp;
+  CharPtr    ptr;
+
+  rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+  if (rrp != NULL) {
+    if (rrp->ext.choice == 1) {
+      StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue,
+		    DEFLINE_MAX_LEN - 50);
+      if (dfp->subtype == FEATDEF_rRNA) {
+	ptr = StringISearch (str, " rRNA");
+	if (ptr != NULL)
+	  *ptr = '\0';
+	ptr = StringISearch (str, " ribosomal RNA");
+	if (ptr != NULL)
+	  *ptr = '\0';
+	if (! StringHasNoText (str))
+	  StringCat (str, " ribosomal RNA");
+      }
+      else if (dfp->subtype == FEATDEF_otherRNA) {
+      }
+      if (dfp->genename != NULL) {
+	StringNCpy_0 (text, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
+	if (! StringHasNoText (text)) {
+	  StringCat (str, " (");
+	  StringCat (str, text);
+	  StringCat (str, ")");
+	}
+      }
+      if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
+	if (dfp->subtype == FEATDEF_rRNA &&
+	    mip->biomol == MOLECULE_TYPE_GENOMIC) {
+	  StringCat (str, " gene");
+	  if (featNum > 1)
+	    StringCat (str, "s");
+	}
+      }
+      if (dfp->lastInGroup || dfp->lastInType) {
+	if (dfp->sfp->partial)
+	  StringCat (str, ", partial sequence");
+	else
+	  StringCat (str, ", complete sequence");
+      }
+    }
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddtRNA () -- Add a tRNA feature to a defline.              */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddtRNA (DefFeatsPtr dfp,
+			     CharPtr     str,
+			     Int2        featNum,
+			     CharPtr     text)
+{
+  RnaRefPtr  rrp;
+  tRNAPtr    trna;
+
+  rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+  if (rrp != NULL) {
+    if (rrp->ext.choice == 2) {
+      trna = rrp->ext.value.ptrvalue;
+      if (trna != NULL) {
+	if (FeatDefLabel (dfp->sfp, str, DEFLINE_MAX_LEN - 2,
+			  OM_LABEL_CONTENT) > 0) {
+	  if (dfp->genename != NULL) {
+	    StringNCpy_0 (text, dfp->genename,
+			  DEFLINE_MAX_GENENAME_LEN);
+	    if (! StringHasNoText (text)) {
+	      StringCat (str, " (");
+	      StringCat (str, text);
+	      StringCat (str, ")");
+	    }
+	  }
+	  if (dfp->lastInGroup || dfp->lastInType) {
+	    StringCat (str, " gene");
+	    if (featNum > 1)
+	      StringCat (str, "s");
+	    if (dfp->sfp->partial)
+	      StringCat (str, ", partial sequence");
+	    else
+	      StringCat (str, ", complete sequence");
+	  }
+	}
+      }
+    }
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddsnRNA () -- Add a snRNA feature to a defline.            */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddsnRNA (DefFeatsPtr dfp,
+			      CharPtr     str,
+			      Int2        featNum,
+			      CharPtr     text,
+			      MolInfoPtr  mip)
+{
+  RnaRefPtr  rrp;
+
+  rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+  if (rrp != NULL) {
+    if (rrp->ext.choice == 1) {
+      StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, DEFLINE_MAX_LEN);
+      if (! StringHasNoText (str)) {
+	if (dfp->genename != NULL) {
+	  StringNCpy_0 (text, dfp->genename,
+			DEFLINE_MAX_GENENAME_LEN);
+	  if (! StringHasNoText (text)) {
+	    StringCat (str, " (");
+	    StringCat (str, text);
+	    StringCat (str, ")");
+	  }
+	}
+	if (dfp->lastInGroup || dfp->lastInType) {
+	  if (mip == NULL || mip->biomol != MOLECULE_TYPE_SNRNA) {
+	    StringCat (str, " gene");
+	    if (featNum > 1)
+	      StringCat (str, "s");
+	  }
+	  if (dfp->sfp->partial)
+	    StringCat (str, ", partial sequence");
+	  else
+	    StringCat (str, ", complete sequence");
+	}
+      }
+    }
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddsnoRNA () -- Add a snoRNA feature to a defline.          */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddsnoRNA (DefFeatsPtr dfp,
+			       CharPtr     str,
+			       Int2        featNum,
+			       CharPtr     text,
+			       MolInfoPtr  mip)
+{
+  RnaRefPtr  rrp;
+
+  rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+  if (rrp != NULL) {
+    if (rrp->ext.choice == 1) {
+      StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, DEFLINE_MAX_LEN);
+      if (! StringHasNoText (str)) {
+	if (dfp->genename != NULL) {
+	  StringNCpy_0 (text, dfp->genename,
+			DEFLINE_MAX_GENENAME_LEN);
+	  if (! StringHasNoText (text)) {
+	    StringCat (str, " (");
+	    StringCat (str, text);
+	    StringCat (str, ")");
+	  }
+	}
+	if (dfp->lastInGroup || dfp->lastInType) {
+	  if (mip == NULL || mip->biomol != MOLECULE_TYPE_SNORNA) {
+	    StringCat (str, " gene");
+	    if (featNum > 1)
+	      StringCat (str, "s");
+	  }
+	  if (dfp->sfp->partial)
+	    StringCat (str, ", partial sequence");
+	  else
+	    StringCat (str, ", complete sequence");
+	}
+      }
+    }
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddmRNA () -- Add an mRNA feature to a defline.             */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddmRNA (DefFeatsPtr dfp,
+			     CharPtr     str,
+			     Int2        featNum,
+			     CharPtr     text,
+			     MolInfoPtr  mip)
+{
+  CharPtr  ptr;
+
+  StringNCpy_0 (str, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
+  if (dfp->lastInGroup || dfp->lastInType) {
+    if (mip != NULL) {
+      ptr = StringISearch (str, "precursor");
+      if (ptr != NULL && StringICmp (ptr, "precursor") == 0)
+	StringCat (str, ",");
+      if (mip->biomol == MOLECULE_TYPE_MRNA)
+	StringCat (str, " mRNA");
+      else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA)
+	StringCat (str, " precursor RNA");
+      else
+	StringCat (str, " gene");
+    }
+    if (featNum > 1)
+      StringCat (str, "s");
+    if (featNum < 2 && (! StringHasNoText (dfp->allelename))) {
+      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringCat (str, ", ");
+      StringCat (str, text);
+      StringCat (str, " allele");
+    }
+    if (dfp->sfp->partial)
+      StringCat (str, ", partial cds");
+    else
+      StringCat (str, ", complete cds");
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
 /* AutoDef_AddPseudoGene () -- Add a pseudogene feature to a defline.  */
 /*                                                                     */
 /*---------------------------------------------------------------------*/
@@ -6316,7 +6792,7 @@ static void AutoDef_AddPseudoGene (DefFeatsPtr dfp,
 				   CharPtr     text)
 {
   if (dfp->genename != NULL)
-    StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
+    StringNCpy_0 (str, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
 
   if (dfp->lastInGroup || dfp->lastInType) {
     StringCat (str, " pseudogene");
@@ -6339,6 +6815,62 @@ static void AutoDef_AddPseudoGene (DefFeatsPtr dfp,
 
 /*---------------------------------------------------------------------*/
 /*                                                                     */
+/* AutoDef_AddUnknown () -- Add an unknown feature to a defline.       */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddUnknown (DefFeatsPtr dfp,
+				CharPtr     str,
+				MolInfoPtr  mip)
+{
+  if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA)
+    StringCat (str, "unknown mRNA");
+  else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA)
+    StringCat (str, " unknown precursor RNA");
+  else
+    StringCat (str, "unknown gene");
+  if (dfp->numUnknown > 1) {
+    StringCat (str, "s");
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddLTR () -- Add a Long Terminal Repeat feature to          */
+/*                      a defline.                                     */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddLTR (DefFeatsPtr dfp,
+			    CharPtr     str,
+			    SeqFeatPtr  sfp)
+{
+  CharPtr  ptr;
+
+  if (! StringHasNoText (sfp->comment)) {
+    StringNCpy_0 (str, sfp->comment, DEFLINE_MAX_LEN);
+    ptr = StringISearch (str, " long terminal repeat");
+    if (ptr != NULL)
+      *ptr = '\0';
+    ptr = StringISearch (str, " long terminal repeat");
+    if (ptr != NULL)
+      *ptr = '\0';
+    if (! StringHasNoText (str))
+      StringCat (str, " long terminal repeat");
+  }
+  else
+    StringCpy (str, "long terminal repeat");
+
+  if (dfp->lastInGroup || dfp->lastInType) {
+    if (dfp->sfp->partial)
+      StringCat (str, ", partial sequence");
+    else
+      StringCat (str, ", complete sequence");
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
 /* AutoDef_AddExon () -- Add an exon feature to a defline.             */
 /*                                                                     */
 /*---------------------------------------------------------------------*/
@@ -6347,7 +6879,8 @@ static void AutoDef_AddExon (DefFeatsPtr dfp,
 			     CharPtr     str,
 			     CharPtr     text,
 			     ValNodePtr  vnp,
-			     SeqFeatPtr  sfp)
+			     SeqFeatPtr  sfp,
+			     MolInfoPtr  mip)
 {
   CharPtr       exonnumber;
 
@@ -6360,9 +6893,9 @@ static void AutoDef_AddExon (DefFeatsPtr dfp,
     /* is one, the gene name.             */
 
     if (! dfp->suppressprefix) {
-      StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
+      StringNCpy_0 (str, dfp->protname, DEFLINE_MAX_LEN - 100);
       if (dfp->genename != NULL) {
-	StringNCpy_0 (text, dfp->genename, sizeof (text));
+	StringNCpy_0 (text, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
 	if (! StringHasNoText (text)) {
 	  StringCat (str, " (");
 	  StringCat (str, text);
@@ -6375,6 +6908,8 @@ static void AutoDef_AddExon (DefFeatsPtr dfp,
 	  }
 	}
       }
+      else if (MOLECULE_TYPE_GENOMIC == mip->biomol)
+	StringCat (str, " gene,");
     }
 
     /* Add the exon number */
@@ -6422,7 +6957,7 @@ static void AutoDef_AddExon (DefFeatsPtr dfp,
     /* Add the gene name */
 
     if (! dfp->suppressprefix) {
-      StringNCpy_0 (str, dfp->genename, sizeof (str));
+      StringNCpy_0 (str, dfp->genename, DEFLINE_MAX_GENENAME_LEN);
       StringCat (str, " gene,");
     }
 
@@ -6465,9 +7000,156 @@ static void AutoDef_AddExon (DefFeatsPtr dfp,
 
   /* Otherwise, label it as uncharacterized */
 
-  else {
+  else
     StringCpy (str, "uncharacterized exon");
+
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddSeparator () -- Add a separator before two features.     */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddSeparator (DefFeatsPtr dfp,
+				  CharPtr     str,
+				  ValNodePtr  vnp,
+				  Int2        featNum)
+{
+  DefFeatsPtr   nextdfp;
+
+  nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+  if (dfp->lastInPenultimate) {
+    if ((dfp->subtype == FEATDEF_rRNA &&
+	 nextdfp->subtype == FEATDEF_otherRNA &&
+	 dfp->sfp->partial == nextdfp->sfp->partial) ||
+	(dfp->subtype == FEATDEF_otherRNA &&
+	 nextdfp->subtype == FEATDEF_rRNA &&
+	 dfp->sfp->partial == nextdfp->sfp->partial)) 
+      StringCat (str, ", and");
+    else if (dfp->subtype == FEATDEF_exon &&
+	     nextdfp->subtype == FEATDEF_exon)
+      StringCat (str, ",");
+    else
+      StringCat (str, "; and");
   }
+  else if (dfp->lastInType || dfp->lastInGroup)
+    StringCat (str, ";");
+  else if (nextdfp->lastInType || nextdfp->lastInGroup) {
+    if (featNum > 1)
+      StringCat (str, ", and");
+    else
+      StringCat (str, " and");
+  }
+  else
+    StringCat (str, ",");
+}
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddPenultSeparator () -- Add a separator before the last    */
+/*                                  feature.                           */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddPenultSeparator (DefFeatsPtr dfp,
+					CharPtr     str,
+					ValNodePtr  vnp,
+					Int2        featNum)
+{
+  DefFeatsPtr   nextdfp;
+
+  nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
+  if (dfp->lastInPenultimate) {
+    if ((dfp->subtype == FEATDEF_rRNA &&
+	 nextdfp->subtype == FEATDEF_otherRNA &&
+	 dfp->sfp->partial == nextdfp->sfp->partial) ||
+	(dfp->subtype == FEATDEF_otherRNA &&
+	 nextdfp->subtype == FEATDEF_rRNA &&
+	 dfp->sfp->partial == nextdfp->sfp->partial))
+      StringCat (str, ", and");
+    else if (dfp->subtype == FEATDEF_exon &&
+	     nextdfp->subtype == FEATDEF_exon)
+      StringCat (str, " and");
+    else
+      StringCat (str, "; and");
+  }
+  else if (dfp->lastInType || dfp->lastInGroup) {
+    if (featNum > 1)
+      StringCat (str, ", and");
+    else
+      StringCat (str, " and");
+  }
+  else if (nextdfp->lastInType || nextdfp->lastInGroup) {
+    if (featNum > 1)
+      StringCat (str, ", and");
+    else
+      StringCat (str, " and");
+  }
+  else {
+    if (featNum > 1)
+      StringCat (str, ", and");
+    else
+      StringCat (str, " and");
+  }
+}
+
+/*---------------------------------------------------------------------*/
+/*                                                                     */
+/* AutoDef_AddEnding () -- Add an ending on to the definition line     */
+/*                         after the last feature.                     */
+/*                                                                     */
+/*---------------------------------------------------------------------*/
+
+static void AutoDef_AddEnding (CharPtr      str,
+			       BioSourcePtr biop,
+			       Int2         mitocount,
+			       Int2         mitochloroflag)
+{
+  Char orgnelle [80];
+
+  if (biop != NULL) {
+    orgnelle [0] = '\0';
+    switch (biop->genome) {
+    case GENOME_chloroplast :
+    case GENOME_chromoplast :
+    case GENOME_kinetoplast :
+    case GENOME_mitochondrion :
+    case GENOME_plastid :
+    case GENOME_cyanelle :
+    case GENOME_apicoplast :
+    case GENOME_leucoplast :
+    case GENOME_proplastid :
+      if (mitocount > 1)
+	sprintf (orgnelle, "; %s genes for %s products",
+		 organelleByGenome [biop->genome],
+		 organelleByGenome [biop->genome]);
+      else
+	sprintf (orgnelle, "; %s gene for %s product",
+		 organelleByGenome [biop->genome],
+		 organelleByGenome [biop->genome]);
+      StringCat (str, orgnelle);
+      break;
+    default :
+      if (mitochloroflag > 0) {
+	if (mitochloroflag > 10) {
+	  /* beyond list */
+	}
+	else if (mitochloroflag == 10)
+	  StringCat (str, "; alternatively spliced");
+	else {
+	  if (mitocount > 1)
+	    sprintf (orgnelle, "; nuclear genes for %s products",
+		     organelleByPopup [mitochloroflag]);
+	  else
+	    sprintf (orgnelle, "; nuclear gene for %s product",
+		     organelleByPopup [mitochloroflag]);
+	  StringCat (str, orgnelle);
+	}
+      }
+      break;
+    }
+  }
+  StringCat (str, ".");
 }
 
 /*---------------------------------------------------------------------*/
@@ -6489,17 +7171,13 @@ static void FinishAutoDefProc (Uint2        entityID,
                                Int2         mitochloroflag)
 
 {
-  Int2          count;
+  Int2          featNum;
   Boolean       ddbjstyle = FALSE;
   DefFeatsPtr   dfp;
   Int2          mitocount;
-  DefFeatsPtr   nextdfp;
-  Char          orgnelle [80];
   CharPtr       ptr;
-  RnaRefPtr     rrp;
   SeqFeatPtr    sfp;
-  Char          str [380];
-  tRNAPtr       trna;
+  Char          str [DEFLINE_MAX_LEN];
   ValNodePtr    ttl;
   Char          text [64];
   ValNodePtr    vnp;
@@ -6508,387 +7186,102 @@ static void FinishAutoDefProc (Uint2        entityID,
   /* see if we are using DDBJ style.   */  
 
   if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL,
-		   str, sizeof (str))) {
-    if (StringICmp (str, "DDBJ") == 0) {
+		   str, DEFLINE_MAX_LEN)) {
+    if (StringICmp (str, "DDBJ") == 0)
       ddbjstyle = TRUE;
-    }
   }
 
+  /* Loop through all the features, building a */
+  /* defline from the info gathered on them.   */
+
   vnp = head;
-  count = 0;
+  featNum = 0;
   mitocount = 0;
   while (vnp != NULL) {
     str [0] = '\0';
     dfp = (DefFeatsPtr) vnp->data.ptrvalue;
+
+    /* Create a string for the feature */
+
     if (dfp != NULL) {
       sfp = dfp->sfp;
       if (sfp != NULL || dfp->numUnknown > 0) {
-        count++;
+        featNum++;
         mitocount++;
         text [0] = '\0';
-        if (dfp->subtype == FEATDEF_CDS && dfp->prot != NULL) {
-	  AutoDef_AddProtein (dfp, mip, str, count);
-        } else if (dfp->subtype == FEATDEF_CDS && dfp->pseudo) {
-	  AutoDef_AddPseudoGene (dfp, str, count, text);
-        } else if (dfp->subtype == FEATDEF_CDS && dfp->prot == NULL && dfp->genename != NULL) {
-          StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
-          if (dfp->lastInGroup || dfp->lastInType) {
-            if (mip != NULL) {
-              ptr = StringISearch (str, "precursor");
-              if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
-                StringCat (str, ",");
-              }
-              if (mip->biomol == MOLECULE_TYPE_MRNA) {
-                StringCat (str, " mRNA");
-              } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
-                StringCat (str, " precursor RNA");
-              } else {
-                StringCat (str, " gene");
-              }
-            }
-            if (count > 1) {
-              StringCat (str, "s");
-            }
-            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
-              StringNCpy_0 (text, dfp->allelename, sizeof (text));
-              StringCat (str, ", ");
-              StringCat (str, text);
-              StringCat (str, " allele");
-            }
-            if (dfp->sfp->partial) {
-              StringCat (str, ", partial cds");
-            } else {
-              StringCat (str, ", complete cds");
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_GENE) {
-          if (dfp->genename != NULL) {
-            StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
-          }
-          if (dfp->lastInGroup || dfp->lastInType) {
-            if (mip != NULL) {
-              if (mip->biomol == MOLECULE_TYPE_MRNA) {
-                StringCat (str, " mRNA");
-              } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
-                StringCat (str, " precursor RNA");
-              } else {
-                StringCat (str, " gene");
-              }
-            } else {
-              StringCat (str, " gene");
-            }
-            if (count > 1) {
-              StringCat (str, "s");
-            }
-            if (count < 2 && (! StringHasNoText (dfp->allelename))) {
-              StringNCpy_0 (text, dfp->allelename, sizeof (text));
-              StringCat (str, ", ");
-              StringCat (str, text);
-              StringCat (str, " allele");
-            }
-            if (dfp->sfp->partial) {
-              StringCat (str, ", partial sequence");
-            } else {
-              StringCat (str, ", complete sequence");
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_rRNA || dfp->subtype == FEATDEF_otherRNA) {
-          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
-          if (rrp != NULL) {
-            if (rrp->ext.choice == 1) {
-              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str) - 50);
-              if (dfp->subtype == FEATDEF_rRNA) {
-                ptr = StringISearch (str, " rRNA");
-                if (ptr != NULL) {
-                  *ptr = '\0';
-                }
-                ptr = StringISearch (str, " ribosomal RNA");
-                if (ptr != NULL) {
-                  *ptr = '\0';
-                }
-                if (! StringHasNoText (str)) {
-                  StringCat (str, " ribosomal RNA");
-                }
-              } else if (dfp->subtype == FEATDEF_otherRNA) {
-              }
-              if (dfp->genename != NULL) {
-                StringNCpy_0 (text, dfp->genename, sizeof (text));
-                if (! StringHasNoText (text)) {
-                  StringCat (str, " (");
-                  StringCat (str, text);
-                  StringCat (str, ")");
-                }
-              }
-              if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
-                if (dfp->subtype == FEATDEF_rRNA && mip->biomol == MOLECULE_TYPE_GENOMIC) {
-                  StringCat (str, " gene");
-                  if (count > 1) {
-                    StringCat (str, "s");
-                  }
-                }
-              }
-              if (dfp->lastInGroup || dfp->lastInType) {
-                if (dfp->sfp->partial) {
-                  StringCat (str, ", partial sequence");
-                } else {
-                  StringCat (str, ", complete sequence");
-                }
-              }
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_tRNA) {
-          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
-          if (rrp != NULL) {
-            if (rrp->ext.choice == 2) {
-              trna = rrp->ext.value.ptrvalue;
-              if (trna != NULL) {
-                if (FeatDefLabel (dfp->sfp, str, sizeof (str) - 2, OM_LABEL_CONTENT) > 0) {
-                  if (dfp->genename != NULL) {
-                    StringNCpy_0 (text, dfp->genename, sizeof (text));
-                    if (! StringHasNoText (text)) {
-                      StringCat (str, " (");
-                      StringCat (str, text);
-                      StringCat (str, ")");
-                    }
-                  }
-                  if (dfp->lastInGroup || dfp->lastInType) {
-                    StringCat (str, " gene");
-                    if (count > 1) {
-                      StringCat (str, "s");
-                    }
-                    if (dfp->sfp->partial) {
-                      StringCat (str, ", partial sequence");
-                    } else {
-                      StringCat (str, ", complete sequence");
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_snoRNA) {
-          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
-          if (rrp != NULL) {
-            if (rrp->ext.choice == 1) {
-              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
-              if (! StringHasNoText (str)) {
-                if (dfp->genename != NULL) {
-                  StringNCpy_0 (text, dfp->genename, sizeof (text));
-                  if (! StringHasNoText (text)) {
-                    StringCat (str, " (");
-                    StringCat (str, text);
-                    StringCat (str, ")");
-                  }
-                }
-                if (dfp->lastInGroup || dfp->lastInType) {
-                  if (mip == NULL || mip->biomol != MOLECULE_TYPE_SNORNA) {
-		    StringCat (str, " gene");
-		    if (count > 1) {
-		      StringCat (str, "s");
-		    }
-		  }
-                  if (dfp->sfp->partial) {
-                    StringCat (str, ", partial sequence");
-                  } else {
-                    StringCat (str, ", complete sequence");
-                  }
-                }
-              }
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_snRNA) {
-          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
-          if (rrp != NULL) {
-            if (rrp->ext.choice == 1) {
-              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
-              if (! StringHasNoText (str)) {
-                if (dfp->genename != NULL) {
-                  StringNCpy_0 (text, dfp->genename, sizeof (text));
-                  if (! StringHasNoText (text)) {
-                    StringCat (str, " (");
-                    StringCat (str, text);
-                    StringCat (str, ")");
-                  }
-                }
-                if (dfp->lastInGroup || dfp->lastInType) {
-                  if (mip == NULL || mip->biomol != MOLECULE_TYPE_SNRNA) {
-                    StringCat (str, " gene");
-                    if (count > 1) {
-                      StringCat (str, "s");
-                    }
-                  }
-                  if (dfp->sfp->partial) {
-                    StringCat (str, ", partial sequence");
-                  } else {
-                    StringCat (str, ", complete sequence");
-                  }
-                }
-              }
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_LTR) {
-          if (! StringHasNoText (sfp->comment)) {
-            StringNCpy_0 (str, sfp->comment, sizeof (str));
-            ptr = StringISearch (str, " long terminal repeat");
-            if (ptr != NULL) {
-              *ptr = '\0';
-            }
-            ptr = StringISearch (str, " long terminal repeat");
-            if (ptr != NULL) {
-              *ptr = '\0';
-            }
-            if (! StringHasNoText (str)) {
-              StringCat (str, " long terminal repeat");
-            }
-          } else {
-            /* StringCpy (str, "uncharacterized"); */
-            StringCpy (str, "long terminal repeat");
-          }
-          if (dfp->lastInGroup || dfp->lastInType) {
-            if (dfp->sfp->partial) {
-              StringCat (str, ", partial sequence");
-            } else {
-              StringCat (str, ", complete sequence");
-            }
-          }
-        } else if (dfp->subtype == FEATDEF_exon && target != NULL) {
-	  AutoDef_AddExon (dfp, str, text, vnp, sfp);
-        } else if (dfp->numUnknown > 0) {
-          if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
-            StringCat (str, "unknown mRNA");
-          } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
-            StringCat (str, " unknown precursor RNA");
-          } else {
-            StringCat (str, "unknown gene");
-          }
-          if (dfp->numUnknown > 1) {
-            StringCat (str, "s");
-          }
-        }
+        if (dfp->subtype == FEATDEF_CDS && dfp->prot != NULL)
+	  AutoDef_AddProtein (dfp, mip, str, featNum);
+        else if (dfp->subtype == FEATDEF_CDS && dfp->pseudo)
+	  AutoDef_AddPseudoGene (dfp, str, featNum, text);
+        else if (dfp->subtype == FEATDEF_CDS &&
+		 dfp->prot == NULL && dfp->genename != NULL)
+	  AutoDef_AddmRNA (dfp, str, featNum, text, mip);
+	else if (dfp->subtype == FEATDEF_GENE)
+	  AutoDef_AddGene (dfp, str, featNum, text, mip);
+	else if (dfp->subtype == FEATDEF_rRNA ||
+		 dfp->subtype == FEATDEF_otherRNA)
+	  AutoDef_AddRRNAandOtherRNA (dfp, str, featNum, text, mip);
+	else if (dfp->subtype == FEATDEF_tRNA)
+	  AutoDef_AddtRNA (dfp, str, featNum, text);
+	else if (dfp->subtype == FEATDEF_snoRNA)
+	  AutoDef_AddsnoRNA (dfp, str, featNum, text, mip);
+        else if (dfp->subtype == FEATDEF_snRNA)
+	  AutoDef_AddsnRNA (dfp, str, featNum, text, mip);
+	else if (dfp->subtype == FEATDEF_LTR)
+	  AutoDef_AddLTR (dfp, str, sfp);
+	else if (dfp->subtype == FEATDEF_exon && target != NULL)
+	  AutoDef_AddExon (dfp, str, text, vnp, sfp, mip);
+        else if (dfp->numUnknown > 0)
+	  AutoDef_AddUnknown (dfp, str, mip);
       }
     }
+
+    /* Add a separator, or a terminator if */
+    /* it's the last feature.              */
+
     vnp = vnp->next;
     if (! StringHasNoText (str)) {
-      if (vnp == NULL) {
-        if (biop != NULL) {
-          orgnelle [0] = '\0';
-          switch (biop->genome) {
-            case GENOME_chloroplast :
-            case GENOME_chromoplast :
-            case GENOME_kinetoplast :
-            case GENOME_mitochondrion :
-            case GENOME_plastid :
-            case GENOME_cyanelle :
-            case GENOME_apicoplast :
-            case GENOME_leucoplast :
-            case GENOME_proplastid :
-              if (mitocount > 1) {
-                sprintf (orgnelle, "; %s genes for %s products", organelleByGenome [biop->genome], organelleByGenome [biop->genome]);
-              } else {
-                sprintf (orgnelle, "; %s gene for %s product", organelleByGenome [biop->genome], organelleByGenome [biop->genome]);
-              }
-              StringCat (str, orgnelle);
-              break;
-            default :
-              if (mitochloroflag > 0) {
-                if (mitochloroflag > 10) {
-                  /* beyond list */
-                } else if (mitochloroflag == 10) {
-                  StringCat (str, "; alternatively spliced");
-                } else {
-                  if (mitocount > 1) {
-                    sprintf (orgnelle, "; nuclear genes for %s products", organelleByPopup [mitochloroflag]);
-                  } else {
-                    sprintf (orgnelle, "; nuclear gene for %s product", organelleByPopup [mitochloroflag]);
-                  }
-                  StringCat (str, orgnelle);
-                }
-              }
-              break;
-          }
-        }
-        StringCat (str, ".");
-      } else if (vnp->next == NULL) {
-        nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
-        if (dfp->lastInPenultimate) {
-          if ((dfp->subtype == FEATDEF_rRNA && nextdfp->subtype == FEATDEF_otherRNA &&
-               dfp->sfp->partial == nextdfp->sfp->partial) ||
-              (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA &&
-               dfp->sfp->partial == nextdfp->sfp->partial)) {
-            StringCat (str, ", and");
-          } else if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_exon /* &&
-               dfp->sfp->partial == nextdfp->sfp->partial */) {
-            StringCat (str, " and");
-          } else {
-            StringCat (str, "; and");
-          }
-        } else if (dfp->lastInType || dfp->lastInGroup) {
-          if (count > 1) {
-            StringCat (str, ", and");
-          } else {
-            StringCat (str, " and");
-          }
-        } else if (nextdfp->lastInType || nextdfp->lastInGroup) {
-          if (count > 1) {
-            StringCat (str, ", and");
-          } else {
-            StringCat (str, " and");
-          }
-        } else {
-          if (count > 1) {
-            StringCat (str, ", and");
-          } else {
-            StringCat (str, " and");
-          }
-        }
-      } else {
-        nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
-        if (dfp->lastInPenultimate) {
-          if ((dfp->subtype == FEATDEF_rRNA && nextdfp->subtype == FEATDEF_otherRNA &&
-               dfp->sfp->partial == nextdfp->sfp->partial) ||
-              (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA &&
-               dfp->sfp->partial == nextdfp->sfp->partial)) {
-            StringCat (str, ", and");
-          } else if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_exon /* &&
-               dfp->sfp->partial == nextdfp->sfp->partial */) {
-            StringCat (str, ",");
-          } else {
-            StringCat (str, "; and");
-          }
-        } else if (dfp->lastInType || dfp->lastInGroup) {
-          StringCat (str, ";");
-        } else if (nextdfp->lastInType || nextdfp->lastInGroup) {
-          if (count > 1) {
-            StringCat (str, ", and");
-          } else {
-            StringCat (str, " and");
-          }
-        } else {
-          StringCat (str, ",");
-        }
-      }
+      if (vnp == NULL)
+	AutoDef_AddEnding (str, biop, mitocount, mitochloroflag);
+      else if (vnp->next == NULL)
+	AutoDef_AddPenultSeparator (dfp, str, vnp, featNum);
+      else
+	AutoDef_AddSeparator (dfp, str, vnp, featNum);
+    }
+
+    /* Add the feature's string to the */
+    /* valnode list of strings.        */
+
+    if (! StringHasNoText (str))
       ValNodeCopyStr (&strings, 0, str);
-    }
-    if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
-      count = 0;
-    }
+
+    /* Clear the counter if last in a group */
+
+    if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType)
+      featNum = 0;
   }
 
+  /* Merge all the strings into one */
+
   ptr = MergeValNodeStrings (strings, FALSE);
+
+  /* Add the new defline to the descriptor */
+
   if (nsep != NULL) {
     ttl = SeqEntryGetSeqDescr (nsep, Seq_descr_title, NULL);
-    if (ttl == NULL) {
+    if (ttl == NULL)
       ttl = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
-    }
-    if (ttl == NULL) {
+    if (ttl == NULL)
       ttl = CreateNewDescriptor (nsep, Seq_descr_title);
-    }
     if (ttl != NULL) {
       MemFree (ttl->data.ptrvalue);
       ttl->data.ptrvalue = ptr;
       ptr = NULL;
     }
   }
+
+  /* Clean up defore exiting */
+
   MemFree (ptr);
   ValNodeFreeData (strings);
   ValNodeFreeData (head);
@@ -7078,9 +7471,15 @@ static void AutoDef_SetGroupingFlags (ValNodePtr vnp)
         }
       }
 
+      /* If partial state is different, mark it */
+      /* as a new group, except for exons.      */    
+
       else if (dfp->sfp->partial != nextdfp->sfp->partial) {
-        dfp->lastInGroup = TRUE;
-        change = TRUE;
+        if (!(dfp->subtype     == FEATDEF_exon &&
+	      nextdfp->subtype == FEATDEF_exon)) {
+	  dfp->lastInGroup = TRUE;
+	  change = TRUE;
+	}
       }
 
       else if (dfp->pseudo != nextdfp->pseudo) {
@@ -7291,7 +7690,7 @@ static void AutoDefProc (Uint2       entityID,
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   SubSourcePtr       ssp;
-  Char               str [196];
+  Char               taxName [196];
   ValNodePtr         ttl;
   ValNodePtr         strings;
   ValNode            vn;
@@ -7299,16 +7698,25 @@ static void AutoDefProc (Uint2       entityID,
   ValNodePtr         vnpx;
   SeqFeatXrefPtr     xref;
 
-  if (sep == NULL) return;
+  /* Check parameters */
+
+  if (sep == NULL)
+    return;
+
+  /* If we have a Bioseq Set then recurse */
+  /* until we get a Bioseq.               */
+
   if (target == NULL && seg == NULL) {
     if (IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      if (bssp == NULL) return;
+      if (bssp == NULL)
+	return;
       if (bssp->_class == 7 ||
-          (bssp->_class >= 13 && bssp->_class <= 16)) {
-        for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-          AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, NULL);
-        }
+          (IsPopPhyEtcSet (bssp->_class))) {
+        for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+          AutoDefProc (entityID, sep, addMods, labelMods, maxMods,
+		       leaveInParen, NULL, NULL, nonUniqueOrgs,
+		       mitochloroflag, suppressAltSplice, NULL);
         return;
       }
     }
@@ -7316,7 +7724,8 @@ static void AutoDefProc (Uint2       entityID,
     nsep = FindNucSeqEntry (sep);
     if (nsep != NULL) {
       bsp = (BioseqPtr) nsep->data.ptrvalue;
-      if (bsp != NULL && bsp->repr == Seq_repr_seg && bsp->seq_ext != NULL && bsp->seq_ext_type == 1) {
+      if (bsp != NULL && bsp->repr == Seq_repr_seg &&
+	  bsp->seq_ext != NULL && bsp->seq_ext_type == 1) {
         vn.choice = SEQLOC_MIX;
         vn.next = NULL;
         vn.data.ptrvalue = bsp->seq_ext;
@@ -7326,54 +7735,64 @@ static void AutoDefProc (Uint2       entityID,
           sip = SeqLocId (slp);
           if (sip != NULL) {
             part = BioseqFind (sip);
-            if (part != NULL) {
-              AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, part, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, bsp);
-            }
+            if (part != NULL)
+              AutoDefProc (entityID, sep, addMods, labelMods, maxMods,
+			   leaveInParen, part, NULL, nonUniqueOrgs,
+			   mitochloroflag, suppressAltSplice, bsp);
           }
           slp = nextslp;
         }
-        AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, bsp, nonUniqueOrgs, mitochloroflag, suppressAltSplice, bsp);
+        AutoDefProc (entityID, sep, addMods, labelMods, maxMods,
+		     leaveInParen, NULL, bsp, nonUniqueOrgs,
+		     mitochloroflag, suppressAltSplice, bsp);
         return;
       }
     }
-  } else if (target != NULL) {
-    nsep = SeqMgrGetSeqEntryForData (target);
-  } else {
-    nsep = SeqMgrGetSeqEntryForData (seg);
   }
+
+  /* Otherwise, get the SeqEntry and its */
+  /* corresponding BioSource.            */
+
+  else if (target != NULL)
+    nsep = SeqMgrGetSeqEntryForData (target);
+  else
+    nsep = SeqMgrGetSeqEntryForData (seg);
 
   biop = NULL;
   strings = NULL;
-  str [0] = '\0';
+  taxName [0] = '\0';
 
-  SeqEntryToBioSource (sep, NULL, str, sizeof (str) - 1, &biop);
+  SeqEntryToBioSource (sep, NULL, taxName, sizeof (taxName) - 1, &biop);
+
+  /* Perform some cleanup of the taxonomic name */
+
   if (! leaveInParen) {
-    ptr = StringStr (str, "(");
-    if (ptr != NULL) {
+    ptr = StringStr (taxName, "(");
+    if (ptr != NULL)
       *ptr = '\0';
-    }
   }
-  TrimSpacesAroundString (str);
-  if ((StringICmp (str, "Human immunodeficiency virus type 1") == 0) ||
-      (StringICmp (str, "Human immunodeficiency virus 1") == 0)) {
-    StringCpy (str, "HIV-1");
-  } else if ((StringICmp (str, "Human immunodeficiency virus type 2") == 0) ||
-	     (StringICmp (str, "Human immunodeficiency virus 2") == 0)) {
-    StringCpy (str, "HIV-2");
-  }
-  str [0] = TO_UPPER (str [0]);
+
+  TrimSpacesAroundString (taxName);
+  if ((StringICmp (taxName, "Human immunodeficiency virus type 1") == 0) ||
+      (StringICmp (taxName, "Human immunodeficiency virus 1") == 0))
+    StringCpy (taxName, "HIV-1");
+  else if ((StringICmp (taxName,"Human immunodeficiency virus type 2") == 0) ||
+	     (StringICmp (taxName, "Human immunodeficiency virus 2") == 0))
+    StringCpy (taxName, "HIV-2");
+
+  taxName [0] = TO_UPPER (taxName [0]);
 
   is_transgenic = FALSE;
   for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
-    if (ssp->subtype == SUBSRC_transgenic) {
+    if (ssp->subtype == SUBSRC_transgenic)
       is_transgenic = TRUE;
-    }
   }
-  if (is_transgenic) {
-    StringCat (str, " transgenic");
-  }
+  if (is_transgenic)
+    StringCat (taxName, " transgenic");
 
-  ValNodeCopyStr (&strings, 0, str);
+  ValNodeCopyStr (&strings, 0, taxName);
+
+  /**/
 
   mip = NULL;
   if (nsep != NULL) {
@@ -7392,24 +7811,24 @@ static void AutoDefProc (Uint2       entityID,
             mip->tech == MI_TECH_survey ||
             mip->tech == MI_TECH_wgs) {
           ttl = ValNodeExtract (&(bsp->descr), Seq_descr_title);
-          if (ttl != NULL) {
+          if (ttl != NULL)
             ttl = ValNodeFreeData (ttl);
-          }
           return;
         }
       }
     }
   }
 
+  /* Add Org Mods if necessary */
+
   if (nonUniqueOrgs != NULL) {
-    for (vnp = nonUniqueOrgs; vnp != NULL; vnp = vnp->next) {
-      if (StringICmp ((CharPtr) vnp->data.ptrvalue, str) == 0) {
-        if (vnp->choice == 1) {
-          addMods = FALSE; /* if only one organism in record, already unique defline */
-        }
-      }
-    }
+    for (vnp = nonUniqueOrgs; vnp != NULL; vnp = vnp->next)
+      if (StringICmp ((CharPtr) vnp->data.ptrvalue, taxName) == 0)
+	/* If only one organism in record, already unique defline */
+        if (vnp->choice == 1)
+          addMods = FALSE;
   }
+
   if (addMods) {
     AddOrgModsToDef (&strings, biop, labelMods);
     strings = SortValNode (strings, SortByVnpChoice);
@@ -7418,15 +7837,17 @@ static void AutoDefProc (Uint2       entityID,
       maxMods--;
       vnp = vnp->next;
     }
-    if (vnp != NULL) {
+    if (vnp != NULL)
       vnp->next = ValNodeFreeData (vnp->next);
-    }
   }
+
+  /* Gather info on all the Gene, CDS, tRNA, and rRNA features */
 
   MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
   gs.seglevels = 1;
   gs.get_feats_location = TRUE;
-  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
+  MemSet ((Pointer) (gs.ignore), (int)(TRUE),
+	  (size_t) (OBJ_MAX * sizeof(Boolean)));
   gs.ignore[OBJ_BIOSEQ] = FALSE;
   gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
   gs.ignore[OBJ_SEQANNOT] = FALSE;
@@ -7441,13 +7862,17 @@ static void AutoDefProc (Uint2       entityID,
     gs.target = slp;
   }
   head = NULL;
-  GatherEntity (entityID, (Pointer) (&head), GetGeneCDStRNArRNAGatherFunc, &gs);
+  GatherEntity (entityID, (Pointer) (&head), GetGeneCDStRNArRNAGatherFunc,
+		&gs);
   gs.target = SeqLocFree (gs.target);
+
   head = SortValNode (head, SortCDStRNArRNAByLocation);
 
-  if (head == NULL && mip != NULL && mip->tech == MI_TECH_survey) {
+  if (head == NULL && mip != NULL && mip->tech == MI_TECH_survey)
     ValNodeCopyStr (&strings, 0, ", genome survey sequence.");
-  }
+
+  /* Loop through the features, gathering  */
+  /* additional info on them.              */
 
   numUnknown = 0;
   vnp = head;
@@ -7458,43 +7883,39 @@ static void AutoDefProc (Uint2       entityID,
       if (sfp != NULL) {
         FindGeneAndProtForCDS (entityID, sfp, &(dfp->gene), &(dfp->prot));
         grp = SeqMgrGetGeneXref (sfp);
-        if (SeqMgrGeneIsSuppressed (grp)) {
+        if (SeqMgrGeneIsSuppressed (grp))
           dfp->gene = NULL;
-        }
         dfp->pseudo = FALSE;
         dfp->genename = NULL;
         dfp->allelename = NULL;
         grp = NULL;
         if (dfp->gene != NULL) {
           grp = (GeneRefPtr) dfp->gene->data.value.ptrvalue;
-          if (grp != NULL && grp->pseudo) {
+          if (grp != NULL && grp->pseudo)
             dfp->pseudo = TRUE;
-          }
         }
         xref = sfp->xref;
-        while (xref != NULL && xref->data.choice != SEQFEAT_GENE) {
+        while (xref != NULL && xref->data.choice != SEQFEAT_GENE)
           xref = xref->next;
-        }
-        if (xref != NULL) {
+        if (xref != NULL)
           grp = (GeneRefPtr) xref->data.value.ptrvalue;
-        }
         if (grp != NULL) {
           dfp->genename = (CharPtr) grp->locus;
-          if ((! StringHasNoText (grp->locus)) && (! StringHasNoText (grp->allele))) {
+          if ((! StringHasNoText (grp->locus)) &&
+	      (! StringHasNoText (grp->allele))) {
             lenallele = StringLen (grp->allele);
             lenlocus = StringLen (grp->locus);
-            if (lenallele > lenlocus && StringNICmp (grp->locus, grp->allele, lenlocus) == 0) {
+            if (lenallele > lenlocus &&
+		StringNICmp (grp->locus, grp->allele, lenlocus) == 0)
               sprintf (allele, "%s", grp->allele);
-            } else if (StringNCmp (grp->allele, "-", 1) == 0) {
+            else if (StringNCmp (grp->allele, "-", 1) == 0)
               sprintf (allele, "%s%s", grp->locus, grp->allele);
-            } else {
+	    else
               sprintf (allele, "%s-%s", grp->locus, grp->allele);
-            }
             dfp->allelename = StringSave (allele);
           }
-          if (grp->pseudo) {
+          if (grp->pseudo)
             dfp->pseudo = TRUE;
-          }
         }
         if (dfp->subtype == FEATDEF_CDS) {
           if (target != NULL) {
@@ -7506,41 +7927,40 @@ static void AutoDefProc (Uint2       entityID,
             }
             if (lastslp != NULL && nsep != NULL) {
               bsp = (BioseqPtr) nsep->data.ptrvalue;
-              if (GetBioseqGivenSeqLoc (lastslp, entityID) != bsp) {
+              if (GetBioseqGivenSeqLoc (lastslp, entityID) != bsp)
                 dfp->ignore = TRUE;
-              }
             }
           }
           crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-          if (crp != NULL) {
-            if (crp->orf) {
+          if (crp != NULL)
+            if (crp->orf)
               dfp->ignore = TRUE;
-            }
-          }
+
           gbq = sfp->qual;
           while (gbq != NULL) {
-            if (StringICmp (gbq->qual, "pseudo") == 0) {
+            if (StringICmp (gbq->qual, "pseudo") == 0)
               dfp->pseudo = TRUE;
-            }
             gbq = gbq->next;
           }
+
           if (dfp->pseudo) {
-          } else if (dfp->prot == NULL) {
-            if (dfp->gene == NULL) {
+          }
+	  else if (dfp->prot == NULL) {
+            if (dfp->gene == NULL)
               dfp->ignore = TRUE;
-            }
-          } else {
+          }
+	  else {
             prp = (ProtRefPtr) dfp->prot->data.value.ptrvalue;
             if (prp != NULL) {
-              if (prp->name == NULL || StringHasNoText ((CharPtr) prp->name->data.ptrvalue)) {
-                if (prp->desc == NULL || StringHasNoText (prp->desc)) {
+              if (prp->name == NULL ||
+		  StringHasNoText ((CharPtr) prp->name->data.ptrvalue)) {
+                if (prp->desc == NULL || StringHasNoText (prp->desc))
                   dfp->ignore = TRUE;
-                } else {
+		else
                   dfp->protname = prp->desc;
-                }
-              } else {
-                dfp->protname = (CharPtr) prp->name->data.ptrvalue;
               }
+	      else
+                dfp->protname = (CharPtr) prp->name->data.ptrvalue;
               if (! dfp->ignore) {
                 if (StringICmp (dfp->protname, "unknown") == 0) {
                   if (StringHasNoText (dfp->genename)) {
@@ -7551,9 +7971,9 @@ static void AutoDefProc (Uint2       entityID,
               }
             }
           }
-        } else if (dfp->subtype == FEATDEF_exon && target == NULL) {
-          dfp->ignore = TRUE;
         }
+	else if (dfp->subtype == FEATDEF_exon && target == NULL)
+          dfp->ignore = TRUE;
       }
     }
     vnp = vnp->next;
@@ -7567,11 +7987,9 @@ static void AutoDefProc (Uint2       entityID,
         if (sfp->data.choice == SEQFEAT_GENE) {
           for (vnpx = vnp->next; vnpx != NULL; vnpx = vnpx->next) {
             dfpx = (DefFeatsPtr) vnpx->data.ptrvalue;
-            if (dfpx != NULL) {
-              if (sfp == dfpx->gene) {
+            if (dfpx != NULL)
+              if (sfp == dfpx->gene)
                 dfp->ignore = TRUE;
-              }
-            }
           }
         }
       }
@@ -7587,19 +8005,17 @@ static void AutoDefProc (Uint2       entityID,
       *prevvnp = vnp->next;
       vnp->next = NULL;
       ValNodeFreeData (vnp);
-    } else {
-      prevvnp = (ValNodePtr PNTR) &(vnp->next);
     }
+    else
+      prevvnp = (ValNodePtr PNTR) &(vnp->next);
     vnp = nextvnp;
   }
 
-  if (! suppressAltSplice) {
+  if (! suppressAltSplice)
     MergeAltSpliceCDSs (head);
-  }
 
-  if (target != NULL) {
+  if (target != NULL)
     head = SortValNode (head, SortCDSAfterExons);
-  }
 
   if (numUnknown > 0) {
     dfp = (DefFeatsPtr) MemNew (sizeof (DefFeatsData));
@@ -7619,20 +8035,20 @@ static void AutoDefProc (Uint2       entityID,
       vnp = vnp->next;
       if (dfp != NULL && dfp->subtype == FEATDEF_exon && vnp != NULL) {
         nextdfp = (DefFeatsPtr) vnp->data.ptrvalue;
-        if (nextdfp != NULL && (nextdfp->subtype == FEATDEF_exon || nextdfp->subtype == FEATDEF_CDS)) {
+        if (nextdfp != NULL &&
+	    (nextdfp->subtype == FEATDEF_exon ||
+	     nextdfp->subtype == FEATDEF_CDS)) {
           if (StringCmp (dfp->genename, nextdfp->genename) == 0 &&
-              StringCmp (dfp->protname, nextdfp->protname) == 0) {
+              StringCmp (dfp->protname, nextdfp->protname) == 0)
             nextdfp->suppressprefix = TRUE;
-          }
         }
       }
     }
   }
 
-  vnp = head;
-  AutoDef_SetGroupingFlags (vnp);
-
-  FinishAutoDefProc (entityID, sep, head, target, nsep, mip, strings, biop, mitochloroflag);
+  AutoDef_SetGroupingFlags (head);
+  FinishAutoDefProc (entityID, sep, head, target, nsep, mip,
+		     strings, biop, mitochloroflag);
 }
 
 static CharPtr sourceModRankList [] = {
@@ -7644,7 +8060,7 @@ static CharPtr sourceModRankList [] = {
   "Environmental-sample", "Chromosome", "Segment", "Map", "Genotype", "Sex",
   "Plasmid-name", "Transposon-name", "Ins-seq-name", "Endogenous-virus-name",
   "Plastid-name", "Country", "Old Name", "Common", "Acronym", "Dosage",
-  "Natural-host", "Sub-species", "Specimen-voucher", "Isolation-source",
+  "Specific-host", "Sub-species", "Specimen-voucher", "Isolation-source",
   "Authority", "Forma", "Forma-specialis", "Ecotype", "Synonym", "Anamorph",
   "Teleomorph", "Breed",
   NULL
@@ -8391,7 +8807,7 @@ static void MakeProteinTitlesInSequinStyle (Uint2 entityID, SeqEntryPtr sep)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     if (bssp->_class == 7 ||
-        (bssp->_class >= 13 && bssp->_class <= 16)) {
+        (IsPopPhyEtcSet (bssp->_class))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         MakeProteinTitlesInSequinStyle (entityID, sep);
       }

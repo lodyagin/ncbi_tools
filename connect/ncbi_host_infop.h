@@ -1,4 +1,7 @@
-/*  $Id: ncbi_service_lbsmd_stub.c,v 6.3 2002/04/13 06:40:44 lavr Exp $
+#ifndef CONNECT___NCBI_HOST_INFOP__H
+#define CONNECT___NCBI_HOST_INFOP__H
+
+/*  $Id: ncbi_host_infop.h,v 6.2 2002/10/28 21:55:38 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -23,30 +26,40 @@
  *
  * ===========================================================================
  *
- * Author:  Anton Lavrentiev
+ * Author:  Anton Lavrentiev, Denis Vakatov
  *
  * File Description:
- *   Dummy LBSMD mapper for non-UNIX platforms.
+ *   Private API for host information
  *
+ */
+
+#include <connect/ncbi_host_info.h>
+#include <stddef.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+HOST_INFO HINFO_Create(const void* hinfo, size_t hinfo_size, const char* env);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+
+/*
  * --------------------------------------------------------------------------
- * $Log: ncbi_service_lbsmd_stub.c,v $
- * Revision 6.3  2002/04/13 06:40:44  lavr
- * Few tweaks to reduce the number of syscalls made
+ * $Log: ncbi_host_infop.h,v $
+ * Revision 6.2  2002/10/28 21:55:38  lavr
+ * LBSM_HINFO introduced for readability to replace plain "const void*"
  *
- * Revision 6.2  2001/09/10 21:25:35  lavr
- * Unimportant code style compliance change
- *
- * Revision 6.1  2000/10/06 18:06:03  lavr
+ * Revision 6.1  2002/10/28 20:13:45  lavr
  * Initial revision
  *
  * ==========================================================================
  */
 
-#include "ncbi_servicep_lbsmd.h"
-
-
-const SSERV_VTable* SERV_LBSMD_Open(SERV_ITER iter,
-                                    SSERV_Info** info, char** env)
-{
-    return 0;
-}
+#endif /* CONNECT___NCBI_HOST_INFOP__H */

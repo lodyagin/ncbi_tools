@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.248 $
+* $Revision: 6.256 $
 *
 * File Description: 
 *
@@ -124,7 +124,7 @@ typedef struct orgscan {
   Int2          mitoCode;
   Boolean       mito;
   Boolean       plastid;
-  Char          taxname [64];
+  Char          taxname [196];
   BioSourcePtr  biop;
 } OrgScan, PNTR OrgScanPtr;
 
@@ -695,7 +695,9 @@ NLM_EXTERN void AddSeqEntryToSeqEntry (SeqEntryPtr target, SeqEntryPtr insert, B
       } else {
         targetbssp->seq_set = insert;
       }
-    } else if (targetbssp->_class >= 13 && targetbssp->_class <= 16) {
+    } else if ((targetbssp->_class >= BioseqseqSet_class_mut_set &&
+                targetbssp->_class <= BioseqseqSet_class_eco_set) ||
+               targetbssp->_class >= BioseqseqSet_class_wgs_set) {
 
       if (targetbssp->seq_set != NULL) {
         tmp = targetbssp->seq_set;
@@ -866,6 +868,7 @@ NLM_EXTERN void RenormalizeNucProtSets (SeqEntryPtr sep, Boolean relink)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
                          (bssp->_class >= 13 && bssp->_class <= 16) ||
+                         bssp->_class == BioseqseqSet_class_wgs_set ||
                          bssp->_class == BioseqseqSet_class_gen_prod_set)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         RenormalizeNucProtSets (sep, relink);
@@ -1027,10 +1030,11 @@ static Boolean ReturnStackToItem (GatherContextPtr gcp)
         if (gcp->gatherstack [i].itemtype == OBJ_BIOSEQSET) {
           bssp = (BioseqSetPtr) gcp->gatherstack [i].thisitem;
           if (bssp->_class != BioseqseqSet_class_genbank &&
-	      bssp->_class != BioseqseqSet_class_mut_set &&
+              bssp->_class != BioseqseqSet_class_mut_set &&
               bssp->_class != BioseqseqSet_class_pop_set &&
-	      bssp->_class != BioseqseqSet_class_phy_set &&
-	      bssp->_class != BioseqseqSet_class_eco_set &&
+              bssp->_class != BioseqseqSet_class_phy_set &&
+              bssp->_class != BioseqseqSet_class_eco_set &&
+              bssp->_class != BioseqseqSet_class_wgs_set &&
               (bssp->_class != BioseqseqSet_class_gen_prod_set ||
 	       (! tdp->skipGenProdSet))) {
             return FALSE;
@@ -5381,6 +5385,9 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
   CleanVisString (&(sfp->title));
   CleanVisString (&(sfp->except_text));
   CleanDoubleQuote (sfp->comment);
+  if (StringCmp (sfp->comment, ".") == 0) {
+    sfp->comment = MemFree (sfp->comment);
+  }
   switch (sfp->data.choice) {
     case SEQFEAT_BOND :
     case SEQFEAT_PSEC_STR :
@@ -5940,7 +5947,13 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
         CleanVisStringList (&(gbp->keywords));
       }
       CleanVisStringJunk (&(gbp->source));
+      if (StringCmp (gbp->source, ".") == 0) {
+        gbp->source = MemFree (gbp->source);
+      }
       CleanVisStringJunk (&(gbp->origin));
+      if (StringCmp (gbp->origin, ".") == 0) {
+        gbp->origin = MemFree (gbp->origin);
+      }
       CleanVisString (&(gbp->date));
       CleanVisString (&(gbp->div));
       CleanVisString (&(gbp->taxonomy));
@@ -8970,6 +8983,7 @@ NLM_EXTERN Int4 VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElem
     if (bssp == NULL) return index;
     if (bssp->_class == 7 ||
         (bssp->_class >= 13 && bssp->_class <= 16) ||
+        bssp->_class != BioseqseqSet_class_wgs_set ||
         bssp->_class == BioseqseqSet_class_gen_prod_set) {
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         index += VisitElementsInSep (tmp, userdata, callback);
@@ -8982,6 +8996,17 @@ NLM_EXTERN Int4 VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElem
   }
   index++;
   return index;
+}
+
+NLM_EXTERN Boolean IsPopPhyEtcSet (Uint1 _class)
+
+{
+  if (_class == BioseqseqSet_class_mut_set ||
+      _class == BioseqseqSet_class_pop_set ||
+      _class == BioseqseqSet_class_phy_set ||
+      _class == BioseqseqSet_class_eco_set ||
+      _class == BioseqseqSet_class_wgs_set) return TRUE;
+  return FALSE;
 }
 
 
@@ -9044,7 +9069,7 @@ NLM_EXTERN Int4 ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean
         return index;
       }
     }
-    fp = popen (cmmd, binary? "rb" : "r");
+    fp = popen (cmmd, /* binary? "rb" : */ "r");
     usedPopen = TRUE;
   } else {
     fp = FileOpen (inputFile, binary? "rb" : "r");

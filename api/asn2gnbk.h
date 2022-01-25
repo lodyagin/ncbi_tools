@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.40 $
+* $Revision: 6.43 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -102,8 +102,8 @@ typedef unsigned long FlgType;
 #define HIDE_IMP_FEATS         2048
 #define HIDE_SNP_FEATS         4096
 
-#define DDJB_VARIANT_FORMAT    8192
-#define USE_NEW_SOURCE_ORG    16384
+#define DDBJ_VARIANT_FORMAT    8192
+#define USE_OLD_SOURCE_ORG    16384
 
 /* locking behavior for system performance */
 

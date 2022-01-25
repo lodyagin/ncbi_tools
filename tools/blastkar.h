@@ -32,8 +32,14 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.26 $ 
+/* $Revision: 6.28 $ 
 * $Log: blastkar.h,v $
+* Revision 6.28  2002/09/03 14:21:50  camacho
+* Changed type of karlinK from FloatHi to Nlm_FloatHi
+*
+* Revision 6.27  2002/08/29 13:58:08  camacho
+* Added field to store K parameter associated with posMatrix
+*
 * Revision 6.26  2002/03/18 21:31:56  madden
 * Added comments
 *
@@ -354,6 +360,7 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
 	BLASTMatrixStructurePtr matrix_struct;	/* Holds info about matrix. */
 	BLAST_ScorePtr PNTR matrix;  /* Substitution matrix */
 	BLAST_ScorePtr PNTR posMatrix;  /* Sub matrix for position depend BLAST. */
+    Nlm_FloatHi karlinK; /* Karlin-Altschul parameter associated with posMatrix */
 	Int2		mat_dim1, mat_dim2;	/* dimensions of matrix. */
 	BLAST_ScorePtr	maxscore; /* Max. score for each letter */
 	BLAST_Score	loscore, hiscore; /* Min. & max. substitution scores */
@@ -394,7 +401,7 @@ typedef struct _blast_matrix {
 			columns;	/* alphabet size in all cases (26). */
 		Int4Ptr PNTR matrix;
                 Nlm_FloatHi ** posFreqs;
-		FloatHi karlinK;
+		Nlm_FloatHi karlinK;
                 Int4Ptr PNTR original_matrix;
 } BLAST_Matrix, PNTR BLAST_MatrixPtr;
 

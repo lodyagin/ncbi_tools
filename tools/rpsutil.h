@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.17 2002/03/26 16:47:42 madden Exp $
+/* $Id: rpsutil.h,v 6.19 2002/10/17 20:36:00 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,20 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.19  2002/10/17 20:36:00  camacho
+* Disallow -L option for tblastn
+*
+* Revision 6.18  2002/10/10 14:49:43  camacho
+*
+* 1. Removed irrelevant options: -E, -G, -S, -H
+* 2. Added -L option to provide range restriction on query sequence
+*
 * Revision 6.17  2002/03/26 16:47:42  madden
 * Add scaled Karlin-Altschul K paramter to structure
 *
@@ -154,6 +162,10 @@ typedef struct _RPSInfo {
     RPScoreRow PNTR bigMatrix;  /* PSI Matrixes for all sequences */
     RPSLookupPtr lookup;        /* Precalculated lookup tables */
     Boolean query_is_prot;      /* Do we need translate query sequence ? */
+    Int4 start, stop;           /* Range restriction for the query */
+    SeqLocPtr query_slp;        /* Created from the above 2 fields, for
+                                   individual thread use only, supported for
+                                   blastp only */
 } RPSInfo, PNTR RPSInfoPtr;
     
 /* Aron Bauer's structure used to save CDD hits. */

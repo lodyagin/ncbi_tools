@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.13 2002/03/26 23:26:38 dondosha Exp $
+/* $Id: txalign.h,v 6.14 2002/10/17 16:57:50 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.14  2002/10/17 16:57:50  jianye
+* added option for get sequence feature
+*
 * Revision 6.13  2002/03/26 23:26:38  dondosha
 * Added a possibility of a link to Blast 2 sequences from megablast output
 *
@@ -240,6 +243,8 @@
 #define TXALIGN_TARGET_IN_LINKS	((Uint4)0x00800000)	/* Put TARGET in Entrez links */
 #define TXALIGN_SHOW_LINKOUT ((Uint4)0x01000000)        /*print linkout info*/
 #define TXALIGN_BL2SEQ_LINK ((Uint4) 0x02000000)        /* Add link to Blast 2 Sequences */
+#define TXALIGN_GET_SEQUENCE ((Uint4)0x04000000)        /*get sequence ability*/
+
 
 
 /*
@@ -267,6 +272,8 @@
 #define COMMON_NAME_POS 1
 #define BLAST_NAME_POS  2
 #define S_KING_POS      3
+
+
 
 /* ---------------------------------------------------------------------*/
 /* -- Here is set of definitions used with taxonomy info database ----- */
@@ -662,6 +669,7 @@ NLM_EXTERN Boolean checkLinkoutType(BlastDefLinePtr bdfl, Uint1 linkoutType);
 
 /* return bdlp containing the sip from a chain of bdlp*/
 NLM_EXTERN BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip);
+
 #ifdef __cplusplus
 }
 #endif

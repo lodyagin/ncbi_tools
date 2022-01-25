@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.366 2002/08/22 13:39:45 camacho Exp $
+/* $Id: blast.c,v 6.375 2002/11/13 18:03:10 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +47,36 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.366 $
+ * $Revision: 6.375 $
  *
  * $Log: blast.c,v $
+ * Revision 6.375  2002/11/13 18:03:10  dondosha
+ * Correction in BlastReevaluateWithAmbiguities
+ *
+ * Revision 6.374  2002/11/08 14:58:43  kans
+ * first argument to NlmReadMFILE must be cast as Uint1Ptr - Mac compiler picked up this inconsistency with the prototype
+ *
+ * Revision 6.373  2002/11/07 21:06:15  camacho
+ * Made GetGisFromFile work even without mmap
+ *
+ * Revision 6.372  2002/11/04 22:55:56  dondosha
+ * For blastn, calculate number of identities in BlastReevaluateWithAmbiguities
+ *
+ * Revision 6.371  2002/10/28 21:44:03  madden
+ * Added comments about gap-free extensions
+ *
+ * Revision 6.370  2002/09/18 20:23:19  camacho
+ * Added BLASTCalculateSearchSpace
+ *
+ * Revision 6.369  2002/09/11 20:46:25  camacho
+ * Removed deprecated BlastSeqIdListPtr code
+ *
+ * Revision 6.368  2002/08/30 18:56:02  dondosha
+ * Made BlastMakeTempProteinBioseq and HackSeqLocId public: needed for Cn3D
+ *
+ * Revision 6.367  2002/08/30 15:42:48  dondosha
+ * In blastn, use ewp structure only for the first context
+ *
  * Revision 6.366  2002/08/22 13:39:45  camacho
  * Close the header and sequence files only if allocated
  *
@@ -2654,6 +2681,7 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	SeqPortPtr spp=NULL;
 	Uint1Ptr nt_seq, nt_seq_start, subject, subject_start, query, old_query_s, old_query_f, new_query_s, new_query_f=NULL;
 	Uint1Ptr query_start, query_end, subject_real_start=NULL;
+        Int4 num_ident;
 
 /* Only nucl. db's. */
 	if (search->prog_number == blast_type_blastp || search->prog_number == blast_type_blastx)
@@ -2668,9 +2696,11 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 		return 0;
 
 /* Check if there are ambiguites at all, return 0 if there are none. */
-	if(readdb_ambchar_present(search->rdfp, sequence_number) == FALSE)
+	if(search->prog_number != blast_type_blastn &&
+           readdb_ambchar_present(search->rdfp, sequence_number) == FALSE) {
+           
 		return 0;
-
+        }
 	current_hitlist = search->current_hitlist;
 	hspcnt = current_hitlist->hspcnt;
 	hspcnt_max = current_hitlist->hspcnt_max;
@@ -2789,6 +2819,7 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 
 		score = 0;
 		sum = 0;
+                num_ident = 0;
 		subject = subject_start;
 		old_query_s = query_start + hsp_array[index]->query.offset;
 		old_query_f = query_start + hsp_array[index]->query.end; 
@@ -2796,25 +2827,28 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 		new_query_s = old_query_s;
 		for (query=old_query_s; query<old_query_f; query++, subject++)
 		{
-			if ((sum += matrix[*query][*subject]) <= 0)
+                   if (*query == *subject)
+                      ++num_ident;
+
+			if ((sum += matrix[*query][*subject]) < 0)
 			{
 				if (score > 0)
 				{
-					subject = subject_start + (new_query_f-old_query_s); 
 					if (score >= search->pbp->cutoff_s2)
 					{
 						break;
 					}
 				}
 				score = sum = 0;
+                                num_ident = 0;
 				new_query_s = new_query_f = query;
 			}
 			else if (sum > score)
 			{	/* Start of scoring regime. */
-				if (score == 0)
-					new_query_s = query;
-				score = sum;
-				new_query_f = query+1;
+                           if (score == 0)
+                              new_query_s = query;
+                           score = sum;
+                           new_query_f = query+1;
 			}
 		}
 
@@ -2827,6 +2861,7 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 			hsp_array[index]->subject.offset = hsp_array[index]->subject.offset + new_query_s - old_query_s;
 			hsp_array[index]->subject.end = hsp_array[index]->subject.end + new_query_f - old_query_f;
 			hsp_array[index]->subject.length = hsp_array[index]->subject.end - hsp_array[index]->subject.offset;
+                        hsp_array[index]->num_ident = num_ident;
 			hsp_array[index]->linked_set = FALSE;
 			hsp_array[index]->start_of_chain = FALSE;
 			Nlm_MemSet((VoidPtr) &(hsp_array[index]->hsp_link), 0, sizeof(BLAST_HSP_LINK));
@@ -2900,7 +2935,6 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
 {
     Boolean done=FALSE;
     Int4 ordinal_id;
-    SeqIdPtr sip;
     OIDListPtr virtual_oidlist = NULL;
 
     *id_list_number = 0;
@@ -2951,34 +2985,6 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
         } else {
             done = TRUE;
         }
-#if 0 /* deprecated */
-    } else if (thr_info->blast_seqid_list) {
-        /* global_seqid_list indicates there is a list of selected ID's, 
-           global_seqid_ptr is the position in the list. */
-        sip = thr_info->blast_seqid_list->seqid_ptr;
-        if (sip == NULL) {
-            NlmMutexUnlock(thr_info->db_mutex);
-            return TRUE;
-        }
-
-        ordinal_id = SeqId2OrdinalId(rdfp, sip);
-        while (ordinal_id < 0 && sip) {
-            thr_info->blast_seqid_list->seqid_ptr = 
-            thr_info->blast_seqid_list->seqid_ptr->next;
-            sip = thr_info->blast_seqid_list->seqid_ptr;
-            ordinal_id = SeqId2OrdinalId(rdfp, sip);
-        }
-
-        if (thr_info->blast_seqid_list->seqid_ptr) {
-            *start = ordinal_id;
-            *stop = ordinal_id+1;
-            done = FALSE;
-            thr_info->blast_seqid_list->seqid_ptr = 
-            thr_info->blast_seqid_list->seqid_ptr->next;
-        } else {
-            done = TRUE;
-        }
-#endif
     } else {
         /* we have real database with start/stop specified */
         if (thr_info->db_mutex) {
@@ -3332,7 +3338,6 @@ do_the_blast_run(BlastSearchBlkPtr search)
             search->real_gap_number_of_hsps += array[index]->real_gap_number_of_hsps;
 #endif
             /* Not copied at thread start. */
-            /* search->blast_seqid_list = NULL; */
             array[index] = BlastSearchBlkDestruct(array[index]);	
         }
         array = MemFree(array);
@@ -3865,6 +3870,33 @@ Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options,
         *effective_query_length = MAX(length - *length_adjustment, min_query_length);
 	
 	return TRUE;
+}
+
+FloatHi LIBCALL BLASTCalculateSearchSpace(BLAST_OptionsBlkPtr options, 
+        Int4 nseq, Int8 dblen, Int4 qlen)
+{
+    Int4 length_adjustment, qlen_eff;
+    Int8 dblen_eff;
+    BLAST_KarlinBlkPtr kbp;
+    FloatHi searchsp;
+
+    if (options == NULL)
+        return 0;
+
+    kbp = BlastKarlinBlkCreate();
+    BlastKarlinBlkGappedCalcEx(kbp, options->gap_open, options->gap_extend,
+            options->decline_align, options->matrix, NULL);
+
+    BlastCalculateEffectiveLengths(options, nseq, dblen, qlen, kbp,
+            &qlen_eff, &length_adjustment);
+
+    kbp = BlastKarlinBlkDestruct(kbp);
+        
+    length_adjustment = MAX(length_adjustment, 0);
+    dblen_eff = MAX(nseq, dblen - nseq*length_adjustment);
+    searchsp = qlen_eff * dblen_eff;
+
+    return searchsp;
 }
 
 #define DROPOFF_NUMBER_OF_BITS 10.0
@@ -4889,7 +4921,7 @@ GetGisFromFile (CharPtr gifile, Int4Ptr gi_list_size)
     Char		line[LINE_LEN];
     long		tmplong;
     NlmMFILEPtr		mfp;
-    Uint4Ptr		tmp_value;
+    Uint4		tmp_value;
     Char	        file_name[PATH_MAX], blast_dir[PATH_MAX];
     
     /**
@@ -4922,17 +4954,15 @@ GetGisFromFile (CharPtr gifile, Int4Ptr gi_list_size)
         return NULL;
     }
     
-    tmp_value = (Uint4Ptr) mfp->mmp;
-    if (SwapUint4(*tmp_value) == READDB_MAGIC_NUMBER) {
-        mfp->mmp += 4;
-        tmp_value = (Uint4Ptr) mfp->mmp;
-        number = SwapUint4(*tmp_value);
+    NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
+    if (SwapUint4(tmp_value) == READDB_MAGIC_NUMBER) {
+        NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
+        number = SwapUint4(tmp_value);
         gi_list = MemNew(number * sizeof(BlastDoubleInt4));
         index = 0;
         while (index<number) {
-            mfp->mmp += 4;
-            tmp_value = (Uint4Ptr) mfp->mmp;
-            gi_list[index++].gi = SwapUint4(*tmp_value);
+            NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
+            gi_list[index++].gi = SwapUint4(tmp_value);
         }
         *gi_list_size = number;
         mfp = NlmCloseMFILE(mfp);
@@ -7421,6 +7451,50 @@ BlastWordExtend_prelim(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 wo
 
 	q_left--;
 
+/******************************************************************
+
+The extension procedure used here is to:
+
+1.) keep on extending as long as it increases the total score so far, record this
+maximum score and the corresponding extents as each new maximum score is reached.
+
+2.) if extending decreases the total score so far then keep on extending
+until the score has dropped by "X" from the last maximum score to explore
+whether it is only a local minima that has been encountered:
+
+	a.) if the score drops by "X" from the last maximum score, then stop
+	the extension and record the last maximum score as well as the 
+	corresponding extents for query and subject.
+
+	b.) if the score recovers again and becomes higher than the last maximum
+	score, reset the maximum score so far as well as the corresponding
+	query and subject offsets.
+
+
+3.) When the end of a sequence (either query or subject) is encountered record the last 
+maximum score as well as the corresponding extents.
+	
+
+
+In the "while" loop below the maximum score is the variable "score" and "sum"
+is the change since the maximum score was last recorded (i.e., the variable
+"score" was modified).  
+
+Both x and X are negative and the outer "while" loops continues
+as long as sum is less negative than x.  Iterations of the "while" 
+loop with "sum" containing a negative value corresponds to 2.) above.
+
+The inner do-while loop is executed only as long as each extension
+increases the maximum score, corresponding to 1.) above.
+
+There is no explicit check for the end of a sequence here, but
+between sequences in the blast database there is a "sentinel"
+byte.  If this sentinel byte is encountered then matrix[*q][*s]
+will be much more negative than "X" so that the extension will
+stop.  This corresponds to 3.) above.
+
+*******************************************************************/
+
 	sum = 0;
 	x = X;
 	while (sum > x)
@@ -7447,8 +7521,14 @@ q_off - q_left is greater than the window. */
 		q = q_right = q_best_right;
 		s = search->subject->sequence + (q - query) + diag;
 		sum = 0;
-/* "score" is actually the "maxscore", if sum drops by "score", then the
-total new score is zero and the extension can stop. */
+/**************************************************************
+
+The extension to the right is performed in the same way as the extension
+to the left, except that the extension can stop if the score
+drops by X or becomes negative, in which case the last maximum score
+is recorded.
+
+*****************************************************************/
 		if ((x = -score) < X)
 			x = X;
 		while (sum > x)
@@ -8939,6 +9019,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	Int2 deleted;
 	Int4 query_length;
 	SeqIdPtr subject_id=NULL;
+        Int4 align_length;
 
 	if (search == NULL)
 		return 0;	
@@ -8992,7 +9073,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 			hsp_array[index].number = hsp->num;
 			hsp_array[index].score = hsp->score;
 			hsp_array[index].e_value = hsp->evalue;
-			hsp_array[index].p_value = hsp->pvalue;
+			hsp_array[index].num_ident = hsp->num_ident;
 			hsp_array[index].bit_score = ((hsp->score*kbp->Lambda) -
 						      kbp->logK)/NCBIMATH_LN2;
 			if (search->prog_number==blast_type_blastn) {
@@ -9209,6 +9290,7 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	Int2 index;
 	
 	Nlm_FloatHi meff, e, e2;
+        Int2 last_context;
 
 	if (search == NULL)
 		return 1;
@@ -9227,7 +9309,9 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	if (kbp == NULL && kbp_gap == NULL)
 		return 1;
 
-	for (index=search->first_context; index<=search->last_context; index++)
+        last_context = (search->prog_number == blast_type_blastn) ?
+           search->first_context : search->last_context;
+	for (index=search->first_context; index<=last_context; index++)
 	{
 		ewp = search->context[index].ewp;
 		if (ewp == NULL && !pbp->mb_params)
@@ -10568,7 +10652,7 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 			}
 			else
 			{
-				hsp->pvalue = BlastKarlinEtoP(hsp->evalue);
+				/*hsp->pvalue = BlastKarlinEtoP(hsp->evalue);*/
 				hsp_cnt++;
 			}
 		}

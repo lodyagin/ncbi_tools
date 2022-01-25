@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.116 $
+* $Revision: 6.120 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,18 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.120  2002/10/25 16:49:45  camacho
+* Added Michael Kimelman's FDBAddSequence2
+*
+* Revision 6.119  2002/10/03 14:13:44  camacho
+* Added support for gilist field in alias file in multivolume databases
+*
+* Revision 6.118  2002/09/26 02:14:42  camacho
+* Allow limiting the number of sequences per volume
+*
+* Revision 6.117  2002/09/25 20:14:20  camacho
+* Fix for multivolume databases with non-parseable seqids
+*
 * Revision 6.116  2002/07/30 15:28:50  camacho
 * Added fastacmd function to parse SeqLocs
 *
@@ -906,7 +918,8 @@ ReadDBFILEPtr LIBCALL readdb_new_ex PROTO((CharPtr filename, Uint1 is_prot, Bool
 
 /* allows a list of ordinalid's (or list of list of ordinal id's) to be specified.
 */
-ReadDBFILEPtr LIBCALL readdb_new_ex2 PROTO((CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidlist));
+ReadDBFILEPtr LIBCALL readdb_new_ex2 PROTO((CharPtr filename, Uint1 is_prot,
+            Uint1 init_state, CharPtr oidlist, CharPtr gilist));
 
 
 /* 
@@ -1188,7 +1201,10 @@ typedef struct _FDB_options {
                                      Taxonomy server */
    Int8 bases_in_volume;  /* The maximal number of bases that can be stored in
                              one volume of the database */
+   Int4 sequences_in_volume; /* Maximum number of sequences to be stored in a
+                                volume */
    Int2 volume;      /* Largest volume */
+   Int4 total_num_of_seqs; /* total number of sequences for this database */
    CharPtr	alias_file, /* name of alias file to be generated. */
 		gi_file,	/* Gi file to be used in processing. */
 		gi_file_bin;	/* Gi file to be used in processing. */
@@ -1215,7 +1231,7 @@ typedef struct formatdb
     /* ASN.1 defline output if structured defline */
     AsnIoPtr aip_def;
     
-    Int4 num_of_seqs;  /* number of parsed sequences */
+    Int4 num_of_seqs;  /* number of parsed sequences in this volume */
     Int8 TotalLen;
     Int4 MaxSeqLen;
     
@@ -1252,7 +1268,26 @@ Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp,
                      Int4 SequenceLen, 
                      CharPtr seq_id, CharPtr title, 
                      Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date);
-    
+
+Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
+                      Uint1 seq_data_type, ByteStorePtr *seq_data, 
+                      Int4 SequenceLen, 
+                      /* These 2 parameters are left for the backward
+                         compatibility. They are not used for ASN.1 structues
+                         deflines dump */
+                      
+                      CharPtr seq_id, CharPtr title,
+                      
+                      /* These parameters suppose, that this function adds
+                         sequence to the Blast database with single definition 
+                         line. Generally speaking, this is not the common case
+                         and if this function is used to add sequence item
+                         with many definition lines these parameters must not
+                         be used at all. */
+                      
+                      Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date,
+                      Uint4Ptr  AmbCharPtr);
+
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 

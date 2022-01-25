@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,9 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.32  2002/08/30 15:48:17  dondosha
+* MegaBlastWordFinderDeallocate prototype moved from mblast.h
+*
 * Revision 6.31  2002/05/20 21:28:29  dondosha
 * Tiny correction in macro definitions for the optimal 11/18 discontiguous word template
 *
@@ -509,9 +512,11 @@ LookupTablePtr MegaBlastLookupTableDup PROTO((LookupTablePtr lookup));
 LookupTablePtr MegaBlastLookupTableDestruct PROTO((LookupTablePtr lookup));
 
 BLAST_WordFinderPtr BLAST_WordFinderDestruct PROTO((BLAST_WordFinderPtr wfp));
+
 BLAST_WordFinderPtr BLAST_WordFinderNew PROTO((Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, Boolean round_down));
 
-
+BLAST_WordFinderPtr
+MegaBlastWordFinderDeallocate PROTO((BLAST_WordFinderPtr wfp));
 
 #ifdef __cplusplus
 }

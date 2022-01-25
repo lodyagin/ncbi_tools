@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description: main functions for running Spidey as a standalone 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spideymain.c,v $
+* Revision 6.8  2002/10/02 16:47:11  kskatz
+* clarifying the explanation of the -L option
+*
+* Revision 6.7  2002/10/02 16:03:16  kskatz
+* added new command line option (-L) for user to use in conjunction with -X (big intron bool); -L allows user to supply the max size (bp) of the intron to use (default 220000) and sets the SPI_Option bigintron_size to this value
+*
 * Revision 6.6  2002/05/07 18:43:46  wheelan
 * changes to support user-defined splice matrices
 *
@@ -88,11 +94,12 @@
 #define MYARGTO        20
 #define MYARGMULT      21
 #define MYARGXL        22
-#define MYARGSTRAND    23
-#define MYARGDSPLICE   24
-#define MYARGASPLICE   25
+#define MYARGXL_SIZE   23 /* added by KSK */
+#define MYARGSTRAND    24
+#define MYARGDSPLICE   25
+#define MYARGASPLICE   26
 
-#define NUMARGS        26
+#define NUMARGS        27
 
 Args myargs[NUMARGS] = {
    {"Input file -- genomic sequence(s)", NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
@@ -120,6 +127,7 @@ Args myargs[NUMARGS] = {
    {"Stop of genomic interval desired (to)", "0", NULL, NULL, TRUE, 'T', ARG_INT, 0.0, 0, NULL},
    {"Make a multiple alignment of all input mRNAs", "F", NULL, NULL, TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
    {"Use extra-large intron sizes", "F", NULL, NULL, TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
+   {"The extra-large intron size to use", "220000", NULL, NULL, TRUE, 'L', ARG_INT, 0.0, 0, NULL},
    {"Restrict to plus (p) or minus (p) strand of genomic seq?", NULL, NULL, NULL, TRUE, 'S', ARG_STRING, 0.0, 0, NULL},
    {"File with donor splice matrix", NULL, NULL, NULL, TRUE, 'M', ARG_FILE_IN, 0.0, 0, NULL},
    {"File with acceptor splice matrix", NULL, NULL, NULL, TRUE, 'N', ARG_FILE_IN, 0.0, 0, NULL},
@@ -412,7 +420,9 @@ Int2 Main()
    spot->from = myargs[MYARGFROM].intvalue;
    spot->to = myargs[MYARGTO].intvalue;
    spot->makemult = (Boolean)myargs[MYARGMULT].intvalue;
-   spot->bigintron = (Boolean)myargs[MYARGXL].intvalue;
+   /*KSK*/
+   spot->bigintron = (Boolean)myargs[MYARGXL].intvalue; 
+   spot->bigintron_size = myargs[MYARGXL_SIZE].intvalue;
    txt = myargs[MYARGORG].strvalue;
    if (!StringICmp(txt, "d") || !StringICmp(txt, "D"))
       spot->organism = SPI_FLY;

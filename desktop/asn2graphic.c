@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.80 $
+* $Revision: 6.81 $
 *
 * File Description:
 *
@@ -835,6 +835,7 @@ static AppearancePtr ParseAppearance (
       AddAppearanceItemToAppearance (newAIP, AP, i, VCP);
     }
   }
+  AddAppearanceItemToAppearance (AIP, AP, FEATDEF_BAD, VCP);
   return AP;
 }
 

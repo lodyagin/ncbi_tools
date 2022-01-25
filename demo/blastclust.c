@@ -1,4 +1,4 @@
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.31 $  $Date: 2002/05/30 16:20:16 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.33 $  $Date: 2002/10/08 15:32:42 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -26,10 +26,17 @@
 * Author: Ilya Dondoshansky 
 *
 * File Description:
-*   This is server which does neighboring searches
+*   Program to perform a single-linkage clustering of a set of protein or DNA 
+*   sequences. See file README.bcl for description
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.33  2002/10/08 15:32:42  dondosha
+* Corrected file description comment in the NCBI header
+*
+* Revision 6.32  2002/09/03 16:01:11  dondosha
+* Introduced a restriction on the total length of concatenated sequences for nucleotide case
+*
 * Revision 6.31  2002/05/30 16:20:16  dondosha
 * 1. Correction in evaluation of hits for DNA case,
 * 2. Added word size parameter to make DNA clustering more flexible
@@ -787,6 +794,7 @@ static Args myargs [] = {
 #define MAX_GI_LENGTH 9
 #define PROGRESS_INTERVAL 1000
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
+#define MAX_TOTAL_LENGTH 5000000
 
 Int2 Main (void)
 {
@@ -814,6 +822,7 @@ Int2 Main (void)
     FDB_optionsPtr fdb_options;
     Char timestr[24];
     CharPtr tmpdir;
+    Int4 total_query_length;
 
     if (! GetArgs ("blastclust", NUMARG, myargs))
        return (1);
@@ -1118,8 +1127,14 @@ Int2 Main (void)
        num_left = num_queries;
        while (num_left>0) {
           num_bsps = MIN(num_left, MAX_NUM_QUERIES);
-          for (index=0; index<num_bsps; index++)
+          total_query_length = 0;
+          for (index=0; index<num_bsps; index++) {
              query_bsp_array[index] = readdb_get_bioseq(rdfp, index);
+             total_query_length += query_bsp_array[index]->length;
+             if (total_query_length > MAX_TOTAL_LENGTH)
+                break;
+          }
+          num_bsps = index;
           query_bsp_array[num_bsps] = NULL;
           
           head = BioseqMegaBlastEngine(query_bsp_array, blast_program, 

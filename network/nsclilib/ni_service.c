@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.11 $  $Date: 2002/08/16 20:36:19 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.12 $  $Date: 2002/10/04 15:33:42 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.12  2002/10/04 15:33:42  lavr
+ * Few cosmetic changes
+ *
  * Revision 6.11  2002/08/16 20:36:19  lavr
  * Do not override net params which are not defined by old env.interface
  *
@@ -133,8 +136,8 @@ static NI_DispatcherPtr s_GenericInit
     if ( lastDispatcher )
         StringNCpy_0(lastDispatcher, "NCBI Named Service", lastDispLen);
     
-    disp->motd = StringSave("Load-balancing service mapping facility");
-    disp->adminInfo = StringSave("Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)");
+    disp->motd = StringSave("Load-Balanced Service Mapping Facility");
+    disp->adminInfo = StringSave("Anton Lavrentiev <lavr@ncbi.nlm.nih.gov>");
     disp->referenceCount = 1;
     return disp;
 }
@@ -236,9 +239,9 @@ static NI_HandPtr s_GenericGetService
     /* whether to prohibit the use of local LBSMD */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_NO_LB_DIRECT,
                    str, sizeof(str), "");
-    if (*str  &&  (StringICmp(str, "0"   )  != 0 &&
+    if (*str  &&  (StringICmp(str, "0"    ) != 0 &&
                    StringICmp(str, "false") != 0 &&
-                   StringICmp(str, "no" )   != 0))
+                   StringICmp(str, "no"   ) != 0))
         net_info->lb_disable = 1/*true*/;
 
     {{ /* alternate service name */
@@ -254,6 +257,7 @@ static NI_HandPtr s_GenericGetService
     }}
 
     ConnNetInfo_Destroy(def_info);
+
     /* establish connection to the server */
     if (!(c = SERVICE_CreateConnectorEx(str, fSERV_Any, net_info, 0)) ||
         CONN_Create(c, &conn) != eIO_Success) {

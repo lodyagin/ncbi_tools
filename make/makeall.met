@@ -100,10 +100,11 @@ on SetProjectData()
 				"asnlext", "asnout", "asnprint", "asntypes"}}}))
 	
 	AddSimpleProject("ncbiconn", {}, "connect", ¬
-		{"ncbi_buffer", "ncbi_socket", "ncbi_core", "ncbi_core_c", "ncbi_util", "ncbi_priv", "ncbi_ansi_ext", ¬
-			"ncbi_connection", "ncbi_connector", "ncbi_connutil", "ncbi_file_connector", ¬
-			"ncbi_http_connector", "ncbi_memory_connector", "ncbi_server_info", "ncbi_service", ¬
-			"ncbi_service_connector", "ncbi_service_dispd", "ncbi_service_lbsmd_stub", ¬
+		{"ncbi_buffer", "ncbi_socket", "ncbi_core", "ncbi_core_c", "ncbi_util", "ncbi_priv", ¬
+			"ncbi_ansi_ext", "ncbi_connection", "ncbi_connector", "ncbi_connutil", ¬
+			"ncbi_file_connector", "ncbi_host_info.c", "ncbi_http_connector", ¬
+			"ncbi_memory_connector", "ncbi_server_info", "ncbi_service", ¬
+			"ncbi_service_connector", "ncbi_dispd", "ncbi_lbsmd_stub", ¬
 			"ncbi_socket_connector", "ncbi_sendmail"})
 	
 	AddProject(ProjectData("ncbiobj", {}, {¬
@@ -145,7 +146,7 @@ on SetProjectData()
 	AddSimpleProject("ncbidesk", {}, "desktop", ¬
 		{"asn2graphic", "biosrc", "bspview", "cdrgn", "dlgutil1", "dlgutil2", "dotmatrx", "drawseq", ¬
 			"e2trmlst", "e2docsum", "fea2seg", "fstyle", "glbpic", "gbfview", "gphview", "gphdraw", ¬
-			"gxydraw", "gtrdraw", "ingengraph", "ingenext", "ingenwin", "import", "layout", "mapgene", ¬
+			"gxydraw", "gtrdraw", "seqpanel", "ingengraph", "ingenext", "ingenwin", "import", "layout", "mapgene", ¬
 			"medview", "prtgene", "pubdesc", "saldist", "saled", "salfiles", "salpanel", "salparam", ¬
 			"salsa", "seqsub", "seqfltr", "seqgraph", "seqgrphx", "seqmtrx", "seqpcc", "seqanal", ¬
 			"aacomp", "seqscrl", "smdlg1", "smdlg2", "smdlg3", "smtools", "styleman", "stylemui", ¬

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.165 $
+* $Revision: 6.168 $
 *
 * File Description: 
 *
@@ -439,7 +439,7 @@ extern Int2 DoOneSegFixup (SeqEntryPtr sep, Boolean ask)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       choice = 0;
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         if (choice == 0) {
@@ -628,7 +628,7 @@ static Int2 DoOneSegUndo (SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         count += DoOneSegUndo (sep);
       }
@@ -700,7 +700,7 @@ static void DoRepairPartsSet (SeqEntryPtr sep)
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     if (bssp->_class == 7 ||
-        (bssp->_class >= 13 && bssp->_class <= 16)) {
+        (IsPopPhyEtcSet (bssp->_class))) {
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         DoRepairPartsSet (tmp);
       }
@@ -4819,7 +4819,7 @@ static void FixupRBSGenes (Uint2 entityID, SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         FixupRBSGenes (entityID, sep);
       }
@@ -5377,7 +5377,7 @@ static void DoTrimGenesGenes (Uint2 entityID, SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
-                         (bssp->_class >= 13 && bssp->_class <= 16))) {
+                         (IsPopPhyEtcSet (bssp->_class)))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoTrimGenesGenes (entityID, sep);
       }
@@ -5722,7 +5722,7 @@ extern void SetupSequinFilters (void)
   }
 
   if (indexerVersion) {
-    /*REGISTER_DELETE_BY_TEXT;*/
+    REGISTER_DELETE_BY_TEXT;
     REGISTER_FIND_NON_ACGT;
     REGISTER_BSP_INDEX;
     REGISTER_POPSET_WITHIN_GENBANK;
@@ -5873,7 +5873,6 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Lab-host",              116},
   {"Lineage",               203},
   {"Map",                   102},
-  {"Natural-host",           21},
   {"Old Lineage",            53},
   {"Old Name",               54},
   {"OrgMod Note",            55},
@@ -5888,6 +5887,7 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Serotype",                7},
   {"Serovar",                 9},
   {"Sex",                   107},
+  {"Specific-host",          21},
   {"Specimen-voucher",       23},
   {"Strain",                  2},
   {"Sub-species",            22},

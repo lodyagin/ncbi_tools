@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.7 2002/07/05 17:52:46 lavr Exp $
+/*  $Id: ncbi_core_c.c,v 6.9 2002/10/31 17:53:33 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -152,6 +152,9 @@ static void s_LOG_Handler(void* user_data/*unused*/, SLOG_Handler* call_data)
 
     Nlm_ErrPostStr(sev, 0, 0, msg);
 
+    if (call_data->level == eLOG_Trace)
+        Nlm_ErrClear();
+
     free(msg);
 }
 
@@ -169,8 +172,8 @@ extern LOG LOG_c2c(void)
 #ifdef __cplusplus
 extern "C" {
 #endif
-    int/*bool*/ s_LOCK_Handler(void*, EMT_Lock);
-    static void s_LOCK_Cleanup(void*);
+    static int/*bool*/ s_LOCK_Handler(void*, EMT_Lock);
+    static void        s_LOCK_Cleanup(void*);
 #ifdef __cplusplus
 }
 #endif
@@ -228,6 +231,12 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.9  2002/10/31 17:53:33  lavr
+ * Clear error in case of a trace message
+ *
+ * Revision 6.8  2002/09/24 18:07:12  lavr
+ * Declare s_LOCK_Handler static in the first place of declaration
+ *
  * Revision 6.7  2002/07/05 17:52:46  lavr
  * LOCK handler to return -1 in case of an empty lock object
  *

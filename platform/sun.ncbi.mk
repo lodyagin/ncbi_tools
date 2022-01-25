@@ -1,5 +1,5 @@
 #
-# $Id: sun.ncbi.mk,v 1.8 2001/06/12 21:11:56 vakatov Exp $
+# $Id: sun.ncbi.mk,v 1.9 2002/10/29 01:20:14 lavr Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = acc
@@ -22,5 +22,5 @@ NCBI_THREAD_OBJ =
 NCBI_MT_OTHERLIBS =
 NETENTREZVERSION = 2.02c2ASN1SPEC6
 
-NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
-NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
+NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
+NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
