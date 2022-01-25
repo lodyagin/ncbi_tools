@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.71 $
+* $Revision: 6.72 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -50,7 +50,7 @@
 #include <explore.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "2.1"
+#define ASN2GB_APP_VER "2.2"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -1402,6 +1402,9 @@ Int2 Main (
       return 1;
     }
     xtra.aip = aip;
+    if ((Boolean) ((flags & PRODUCE_OLD_GBSEQ) != 0)) {
+      do_insdseq = FALSE;
+    }
     if (do_insdseq) {
       atp = AsnLinkType (NULL, AsnFind ("INSDSet"));
       xtra.atp = AsnLinkType (NULL, AsnFind ("INSDSet.E"));

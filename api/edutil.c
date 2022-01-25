@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.46 $
+* $Revision: 6.47 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.47  2005/04/28 20:10:31  bollin
+* added new function AdjustFeaturesForInsertion which is called by BioseqInsert
+* and also by a new function in sequin3.c for converting a raw bioseq to a delta
+* and inserting gaps
+*
 * Revision 6.46  2005/04/06 19:33:15  bollin
 * made it possible to insert and remove gaps from delta sequences
 *
@@ -2845,6 +2850,134 @@ NLM_EXTERN void LIBCALL IntFuzzClip(IntFuzzPtr ifp, Int4 from, Int4 to, Uint1 st
 	return;
 }
 
+extern void 
+AdjustFeaturesForInsertion 
+(BioseqPtr tobsp, 
+ SeqIdPtr  to_id,
+ Int4 pos, 
+ Int4 len, 
+ Boolean do_split)
+{
+  Uint2             entityID;
+  SeqFeatPtr        sfp;
+  CdRegionPtr       crp;
+  CodeBreakPtr      cbp, prevcbp, nextcbp;
+  RnaRefPtr         rrp;
+  tRNAPtr           trp;
+	SeqMgrFeatContext fcontext;
+	ValNodePtr        prods, vnp;
+	BioseqContextPtr  bcp;
+  
+  if (tobsp == NULL || to_id == NULL)
+  {
+    return;
+  }
+  
+	entityID = ObjMgrGetEntityIDForPointer (tobsp);
+	if (entityID > 0 && SeqMgrFeaturesAreIndexed (entityID)) {
+    sfp = NULL;
+		while ((sfp = SeqMgrGetNextFeature (tobsp, sfp, 0, 0, &fcontext)) != NULL)
+		{
+			sfp->location = SeqLocInsert (sfp->location, to_id,pos, len, do_split, NULL);
+			switch (sfp->data.choice)
+			{
+				case SEQFEAT_CDREGION:   /* cdregion */
+					crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
+				  prevcbp = NULL;
+				  for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp)
+					{
+						nextcbp = cbp->next;
+						cbp->loc = SeqLocInsert (cbp->loc, to_id,pos, len, do_split, NULL);
+						if (cbp->loc == NULL)
+						{
+							if (prevcbp != NULL)
+								prevcbp->next = nextcbp;
+							else
+								crp->code_break = nextcbp;
+							cbp->next = NULL;
+							CodeBreakFree (cbp);
+						}
+						else
+							prevcbp = cbp;
+					}
+					break;
+				case SEQFEAT_RNA:
+					rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
+					if (rrp->ext.choice == 2)   /* tRNA */
+					{
+						trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
+						if (trp->anticodon != NULL)
+						{
+							trp->anticodon = SeqLocInsert (trp->anticodon, to_id,pos, len, do_split, NULL);
+						}
+					}
+					break;
+				default:
+					break;
+			}
+		}
+
+		/* adjust features pointing by product */
+		prods = SeqMgrGetSfpProductList (tobsp);
+		for (vnp = prods; vnp != NULL; vnp = vnp->next) {
+			sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+			if (sfp == NULL) continue;
+			sfp->product = SeqLocInsert (sfp->product, to_id,pos, len, do_split, NULL);
+		}
+
+	} else {
+		bcp = BioseqContextNew(tobsp);
+		sfp = NULL;
+	  /* adjust features pointing by location */
+		while ((sfp = BioseqContextGetSeqFeat(bcp, 0, sfp, NULL, 0)) != NULL)
+		{
+			sfp->location = SeqLocInsert(sfp->location, to_id,pos, len, do_split, NULL);
+			switch (sfp->data.choice)
+			{
+				case SEQFEAT_CDREGION:   /* cdregion */
+					crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
+					prevcbp = NULL;
+					for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp)
+					{
+						nextcbp = cbp->next;
+						cbp->loc = SeqLocInsert(cbp->loc, to_id,pos, len, do_split, NULL);
+						if (cbp->loc == NULL)
+						{
+							if (prevcbp != NULL)
+								prevcbp->next = nextcbp;
+							else
+								crp->code_break = nextcbp;
+							cbp->next = NULL;
+							CodeBreakFree(cbp);
+						}
+						else
+							prevcbp = cbp;
+					}
+					break;
+				case SEQFEAT_RNA:
+					rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
+					if (rrp->ext.choice == 2)   /* tRNA */
+					{
+						trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
+						if (trp->anticodon != NULL)
+						{
+							trp->anticodon = SeqLocInsert(trp->anticodon, to_id,pos, len, do_split, NULL);
+						}
+					}
+					break;
+				default:
+					break;
+			}
+		}
+
+		sfp = NULL;
+	  /* adjust features pointing by product */
+		while ((sfp = BioseqContextGetSeqFeat(bcp, 0, sfp, NULL, 1)) != NULL)
+			sfp->product = SeqLocInsert(sfp->product, to_id,pos, len, do_split, NULL);
+		BioseqContextFree(bcp);
+	}
+}
+
 /*****************************************************************************
 *
 * BioseqInsert (from_id, from, to, strand, to_id, pos, from_feat, to_feat,
@@ -2906,10 +3039,6 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 	RnaRefPtr rrp;
 	tRNAPtr trp;
 	SeqEntryPtr oldscope;
-	Uint2 entityID;
-	SeqMgrFeatContext fcontext;
-	ValNodePtr prods, vnp;
-
 
 	if ((from_id == NULL) || (to_id == NULL)) return FALSE;
 
@@ -3122,110 +3251,7 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 
 	if (to_feat)		     /* fix up sourceid Bioseq feature table(s) */
 	{
-		entityID = ObjMgrGetEntityIDForPointer (tobsp);
-		if (entityID > 0 && SeqMgrFeaturesAreIndexed (entityID)) {
-			sfp = NULL;
-			while ((sfp = SeqMgrGetNextFeature (tobsp, sfp, 0, 0, &fcontext)) != NULL)
-			{
-				sfp->location = SeqLocInsert (sfp->location, to_id,pos, len, do_split, NULL);
-				switch (sfp->data.choice)
-				{
-					case SEQFEAT_CDREGION:   /* cdregion */
-						crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
-						prevcbp = NULL;
-						for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp)
-						{
-							nextcbp = cbp->next;
-							cbp->loc = SeqLocInsert (cbp->loc, to_id,pos, len, do_split, NULL);
-							if (cbp->loc == NULL)
-							{
-								if (prevcbp != NULL)
-									prevcbp->next = nextcbp;
-								else
-									crp->code_break = nextcbp;
-								cbp->next = NULL;
-								CodeBreakFree (cbp);
-							}
-							else
-								prevcbp = cbp;
-						}
-						break;
-					case SEQFEAT_RNA:
-						rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
-						if (rrp->ext.choice == 2)   /* tRNA */
-						{
-							trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
-							if (trp->anticodon != NULL)
-							{
-								trp->anticodon = SeqLocInsert (trp->anticodon, to_id,pos, len, do_split, NULL);
-							}
-						}
-						break;
-					default:
-						break;
-				}
-			}
-
-			/* adjust features pointing by product */
-			prods = SeqMgrGetSfpProductList (tobsp);
-			for (vnp = prods; vnp != NULL; vnp = vnp->next) {
-				sfp = (SeqFeatPtr) vnp->data.ptrvalue;
-				if (sfp == NULL) continue;
-				sfp->product = SeqLocInsert (sfp->product, to_id,pos, len, do_split, NULL);
-			}
-
-		} else {
-			bcp = BioseqContextNew(tobsp);
-			sfp = NULL;
-	                     	        /* adjust features pointing by location */
-			while ((sfp = BioseqContextGetSeqFeat(bcp, 0, sfp, NULL, 0)) != NULL)
-			{
-				sfp->location = SeqLocInsert(sfp->location, to_id,pos, len, do_split, NULL);
-				switch (sfp->data.choice)
-				{
-					case SEQFEAT_CDREGION:   /* cdregion */
-						crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
-						prevcbp = NULL;
-						for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp)
-						{
-							nextcbp = cbp->next;
-							cbp->loc = SeqLocInsert(cbp->loc, to_id,pos, len, do_split, NULL);
-							if (cbp->loc == NULL)
-							{
-								if (prevcbp != NULL)
-									prevcbp->next = nextcbp;
-								else
-									crp->code_break = nextcbp;
-								cbp->next = NULL;
-								CodeBreakFree(cbp);
-							}
-							else
-								prevcbp = cbp;
-						}
-						break;
-					case SEQFEAT_RNA:
-						rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
-						if (rrp->ext.choice == 2)   /* tRNA */
-						{
-							trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
-							if (trp->anticodon != NULL)
-							{
-								trp->anticodon = SeqLocInsert(trp->anticodon, to_id,pos, len, do_split, NULL);
-							}
-						}
-						break;
-					default:
-						break;
-				}
-			}
-
-			sfp = NULL;
-	   	                          /* adjust features pointing by product */
-			while ((sfp = BioseqContextGetSeqFeat(bcp, 0, sfp, NULL, 1)) != NULL)
-				sfp->product = SeqLocInsert(sfp->product, to_id,pos, len, do_split, NULL);
-
-			BioseqContextFree(bcp);
-		}
+    AdjustFeaturesForInsertion (tobsp, to_id, pos, len, do_split);
 	}
 
 	if (from_feat)				/* add source Bioseq features to sourceid */

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.15  2005/04/28 20:10:32  bollin
+* added new function AdjustFeaturesForInsertion which is called by BioseqInsert
+* and also by a new function in sequin3.c for converting a raw bioseq to a delta
+* and inserting gaps
+*
 * Revision 6.14  2005/04/06 19:33:15  bollin
 * made it possible to insert and remove gaps from delta sequences
 *
@@ -227,6 +232,19 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopyEx (SeqIdPtr newid, BioseqPtr oldbsp, Int
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocCopyPart PROTO((SeqLocPtr the_segs, Int4 from, Int4 to,
          Uint1 strand, Boolean group, Int2Ptr first_segp, Int2Ptr last_segp));
+
+/* This function is used by BioseqInsert to adjust features on a sequence after
+ * an insertion.  pos indicates the start of the insertion, len indicates
+ * the length of the inserted sequence, and do_split indicates whether features
+ * that cover the insertion should be split at either side of the insertion.
+ */
+extern void 
+AdjustFeaturesForInsertion 
+(BioseqPtr tobsp, 
+ SeqIdPtr  to_id,
+ Int4 pos, 
+ Int4 len, 
+ Boolean do_split);
 
 /*****************************************************************************
 *

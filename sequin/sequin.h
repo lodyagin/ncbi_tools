@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.288 $
+* $Revision: 6.289 $
 *
 * File Description: 
 *
@@ -434,6 +434,7 @@ extern void RemoveGIsFromBioseqs (IteM i);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
 extern CharPtr JustSaveStringFromText (TexT t);
 
+extern SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp);
 extern void CommonApplyToAllProc (BaseFormPtr bfp, Int2 type);
 extern void ApplyTitle (IteM i);
 extern void ApplyCDS (IteM i);

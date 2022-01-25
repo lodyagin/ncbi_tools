@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.174 $
+* $Revision: 6.175 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.175  2005/04/28 19:24:45  kans
+* DR prefix moved from STS to EST
+*
 * Revision 6.174  2005/04/27 17:24:21  kans
 * support seqid_gpipe in combination with a more public accession type
 *
@@ -9002,10 +9005,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CO") == 0) || 
 	      (StringICmp(temp,"CV") == 0) || 
 	      (StringICmp(temp,"CX") == 0) || 
-	      (StringICmp(temp,"DN") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"DN") == 0) || 
+	      (StringICmp(temp,"DR") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
-          } else if ((StringICmp(temp,"BV") == 0) ||
-                     (StringICmp(temp,"DR") == 0)) {      /* NCBI STS */
+          } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
           } else if ((StringICmp(temp,"AC") == 0) ||
                      (StringICmp(temp,"DP") == 0)) {      /* NCBI HTGS */

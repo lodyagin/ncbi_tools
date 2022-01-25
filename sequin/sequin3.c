@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.549 $
+* $Revision: 6.550 $
 *
 * File Description: 
 *
@@ -69,6 +69,7 @@
 #include <seqpanel.h>
 #include <tax3api.h>
 #include <saledit.h>
+#include <alignmgr2.h>
 
 typedef struct {
   Int2    level;
@@ -2445,6 +2446,446 @@ static void RawSeqToDeltaSeqUnknownWithUnknownLengthGaps (IteM i)
   RealizeWindow (w);
   Show (w);
   Update ();
+}
+
+static Uint2 deltaconversionedittypes [] = 
+{
+  TAGLIST_TEXT, TAGLIST_POPUP, TAGLIST_TEXT
+};
+
+ENUM_ALIST(deltaconversionedit_alist)
+  {"Unknown length",  0},
+  {"Known Length",    1},
+END_ENUM_ALIST
+
+EnumFieldAssocPtr deltaconversionedit_alists [] = {
+  NULL, deltaconversionedit_alist
+};
+
+static Uint2 deltaconversionedit_widths [] = {
+  5, 5, 5,
+};
+
+typedef struct deltaconversion 
+{
+  FEATURE_FORM_BLOCK
+
+  DialoG gap_locations;
+  GrouP  coord_grp;
+  
+} DeltaConversionData, PNTR DeltaConversionPtr;
+
+typedef struct gaplocinfo 
+{
+  Int4    start_pos;
+  Boolean is_known;
+  Int4    length;
+} GapLocInfoData, PNTR GapLocInfoPtr;
+
+static void FixGappedCodingRegionLocation (SeqFeatPtr sfp, Pointer userdata)
+{
+  BioseqPtr gapped_bioseq, sfp_bsp;
+  
+  if (sfp == NULL 
+      || sfp->data.choice != SEQFEAT_CDREGION
+      || sfp->location == NULL
+      || userdata == NULL)
+  {
+    return;
+  }
+  
+  gapped_bioseq = (BioseqPtr) userdata;
+  if (gapped_bioseq->repr != Seq_repr_delta)
+  {
+    return;
+  }
+  
+  sfp_bsp = BioseqFind (SeqLocId (sfp->location));
+  if (sfp_bsp != gapped_bioseq)
+  {
+    return;
+  }
+
+  sfp->location = RemoveGapsFromDeltaLocation (sfp->location, (BioseqPtr) userdata);
+}
+
+static void 
+ConvertRawBioseqToDelta 
+(BioseqPtr bsp,
+ ValNodePtr gaps,
+ SeqAlignPtr salp,
+ Int4        aln_row) 
+
+{
+  CharPtr       bases;
+  Int4          len;
+  ValNodePtr    seq_ext;
+  SeqLitPtr     slp;
+  IntFuzzPtr    ifp;
+  ValNodePtr    gap_vnp;
+  GapLocInfoPtr glip;
+  Int4          orig_seq_offset;
+  Char          tmp_ch;
+  Int4          gap_start;
+  SeqEntryPtr   sep;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_raw || ISA_aa (bsp->mol)
+      || gaps == NULL) 
+  {
+    return;
+  }
+  if (salp != NULL && aln_row < 1)
+  {
+    return;
+  }
+
+  bases = GetSequenceByBsp (bsp);
+  if (bases == NULL) return;
+
+  seq_ext = NULL;
+  len = 0;
+  orig_seq_offset = 0;
+
+  for (gap_vnp = gaps; gap_vnp != NULL; gap_vnp = gap_vnp->next)
+  {
+    glip = (GapLocInfoPtr) gap_vnp->data.ptrvalue;
+    if (glip == NULL)
+    {
+      continue;
+    }
+    gap_start = glip->start_pos;
+    /* remap for alignment coordinates if desired */
+    if (salp != NULL)
+    {
+      gap_start = AlnMgr2MapSeqAlignToBioseq(salp, gap_start, aln_row);
+    }
+    if (gap_start < 1 || gap_start > bsp->length)
+    {
+      continue;
+    }
+    
+    /* add data since last gap */
+    slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+    if (slp != NULL) 
+    {
+      slp->length = gap_start - orig_seq_offset;
+      ValNodeAddPointer (&(seq_ext), (Int2) 2, (Pointer) slp);
+      slp->seq_data = BSNew (slp->length);
+      slp->seq_data_type = Seq_code_iupacna;
+      tmp_ch = bases [gap_start];
+      bases [gap_start] = 0;
+      AddBasesToByteStore (slp->seq_data, bases + orig_seq_offset);
+      bases [gap_start] = tmp_ch;
+      len += slp->length;
+      orig_seq_offset += slp->length;
+    }
+    
+    /* add gap */
+    slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+    if (slp != NULL) 
+    {
+      ValNodeAddPointer ((ValNodePtr PNTR) &(seq_ext), (Int2) 2, (Pointer) slp);
+      if (glip->is_known)
+      {
+        slp->length = glip->length;
+      }
+      else
+      {
+        ifp = IntFuzzNew ();
+        ifp->choice = 4;
+        slp->fuzz = ifp;
+        slp->length = 100;
+      }
+      len += slp->length;
+    }
+  }
+  
+  /* add remaining data after last gap to end */
+  slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+  if (slp != NULL) 
+  {
+    slp->length = bsp->length - orig_seq_offset;
+    ValNodeAddPointer (&(seq_ext), (Int2) 2, (Pointer) slp);
+    slp->seq_data = BSNew (slp->length);
+    slp->seq_data_type = Seq_code_iupacna;
+    AddBasesToByteStore (slp->seq_data, bases + orig_seq_offset);
+    len += slp->length;
+  }
+  
+  MemFree (bases);
+
+  bsp->seq_data = BSFree (bsp->seq_data);
+  bsp->seq_data_type = 0;
+  bsp->repr = Seq_repr_delta;
+  bsp->seq_ext_type = 4;
+  bsp->seq_ext = seq_ext;
+  bsp->length = len;
+
+  BioseqPack (bsp);
+  
+  /* now adjust features for insertion */
+  orig_seq_offset = 0;
+  for (gap_vnp = gaps; gap_vnp != NULL; gap_vnp = gap_vnp->next)
+  {
+    glip = (GapLocInfoPtr) gap_vnp->data.ptrvalue;
+    if (glip == NULL)
+    {
+      continue;
+    }
+    gap_start = glip->start_pos;
+    /* remap for alignment coordinates if desired */
+    if (salp != NULL)
+    {
+      gap_start = AlnMgr2MapSeqAlignToBioseq(salp, gap_start, aln_row);
+    }
+    if (gap_start < 1 || gap_start > bsp->length)
+    {
+      continue;
+    }
+    AdjustFeaturesForInsertion (bsp, bsp->id, 
+                                gap_start + orig_seq_offset,
+                                glip->length,
+                                FALSE);
+    orig_seq_offset += glip->length;
+  }
+
+  sep = GetTopSeqEntryForEntityID (bsp->idx.entityID);
+
+  VisitFeaturesInSep (sep, bsp, FixGappedCodingRegionLocation);
+}
+
+static void ConvertBioseqToDeltaWithSequenceGapList (BioseqPtr bsp, Pointer userdata)
+{
+  ConvertRawBioseqToDelta (bsp, userdata, NULL, -1);
+}
+
+static void ConvertBioseqToDeltaWithAlignmentGapList (BioseqPtr bsp, Pointer userdata)
+{
+  Int4        aln_row = -1;
+  SeqIdPtr    sip, sip_next;
+  SeqAlignPtr salp;
+  
+  if (bsp == NULL || bsp->id == NULL || userdata == NULL)
+  {
+    return;
+  }
+  salp = FindAlignmentsForBioseq (bsp);
+
+  if (salp == NULL)
+  {
+    return;
+  }
+  
+  sip = bsp->id;
+  
+  while (sip != NULL && aln_row == -1)
+  {
+    sip_next = sip->next;
+    sip->next = NULL;
+    aln_row = AlnMgr2GetFirstNForSip (salp, sip);
+    sip->next = sip_next;
+    sip = sip_next;
+  }
+
+  ConvertRawBioseqToDelta (bsp, userdata, salp, aln_row);
+}
+
+static Pointer DeltaLocToData (DialoG d)
+{
+  TagListPtr    tlp;
+  ValNodePtr    result_list = NULL, vnp;
+  CharPtr       str;
+  Int4          start_pos, len;
+  Boolean       is_known;
+  GapLocInfoPtr glip;
+  
+  tlp = (TagListPtr) GetObjectExtra (d);
+  
+  if (tlp == NULL) return NULL;
+  
+  for (vnp = tlp->vnp;
+       vnp != NULL;
+       vnp = vnp->next)
+  {
+    str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
+    if (!StringHasNoText(str))
+    {
+      start_pos = atoi (str) - 1;
+      if (start_pos > 0)
+      {
+        str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
+        if (StringICmp (str, "0"))
+        {
+          is_known = FALSE;
+          len = 100;
+        }
+        else
+        {
+          is_known = TRUE;
+          len = -1;
+          str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 2);
+          if (!StringHasNoText (str))
+          {
+            len = atoi (str);
+          }
+          if (len < 1)
+          {
+            Message (MSG_ERROR, "Must supply a length greater than zero for gaps of known length!");
+            result_list = ValNodeFreeData (result_list);
+            return NULL;
+          }
+        }
+        glip = (GapLocInfoPtr) MemNew (sizeof (GapLocInfoData));
+        if (glip != NULL)
+        {
+          glip->start_pos = start_pos;
+          glip->is_known = is_known;
+          glip->length = len;
+          ValNodeAddPointer (&result_list, 0, glip);
+        }
+      }
+    }
+  }
+  return result_list;
+}
+
+static void DoConvertRawToDeltaWithGapLocations (ButtoN b)
+{
+  DeltaConversionPtr dcp;
+  ValNodePtr         location_list;
+  SeqEntryPtr        sep;
+
+  dcp = (DeltaConversionPtr) GetObjectExtra (b);
+  if (dcp == NULL)
+  {
+    return;
+  }
+  
+  sep = GetTopSeqEntryForEntityID (dcp->input_entityID);
+  if (sep == NULL)
+  {
+    return;
+  }
+
+  location_list = DialogToPointer (dcp->gap_locations);
+  if (location_list == NULL)
+  {
+    Message (MSG_ERROR, "Must supply valid gap locations!");
+    return;
+  }
+  
+  Hide (dcp->form);
+  WatchCursor ();
+  Update (); 
+  if (dcp->coord_grp == NULL || GetValue (dcp->coord_grp) == 1)
+  {
+    VisitBioseqsInSep (sep, location_list, ConvertBioseqToDeltaWithSequenceGapList);
+  }
+  else
+  {
+    VisitBioseqsInSep (sep, location_list, ConvertBioseqToDeltaWithAlignmentGapList);
+  }
+  location_list = ValNodeFreeData (location_list);
+  ObjMgrSetDirtyFlag (dcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, dcp->input_entityID, 0, 0);
+  Remove (dcp->form);    
+  ArrowCursor ();
+  Update (); 
+}
+
+extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
+                                     Int2 spacing, Uint2Ptr types,
+                                     Uint2Ptr textWidths, EnumFieldAssocPtr PNTR alists,
+                                     Boolean useBar, Boolean noExtend,
+                                     ToDialogFunc tofunc, FromDialogFunc fromfunc);
+
+static void ConvertRawToDeltaWithGapLocations (IteM i)
+{
+  BaseFormPtr        bfp;
+  DeltaConversionPtr dcp;
+  WindoW             w;
+  GrouP              h, p, c;
+  ButtoN             b;
+  PrompT             p1, p2, p3;
+  SeqEntryPtr        sep;
+  RecT               r1, r2;
+  TagListPtr         tlp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  dcp = (DeltaConversionPtr) MemNew (sizeof (DeltaConversionData));
+  if (dcp == NULL) return;
+  
+  dcp->input_entityID = bfp->input_entityID;
+  sep = GetTopSeqEntryForEntityID (dcp->input_entityID);
+  if (sep == NULL)
+  {
+    return;
+  }
+  w = FixedWindow (-50, -33, -10, -10, "Convert Raw Sequence to Delta Sequence", StdCloseWindowProc);
+  SetObjectExtra (w, dcp, StdCleanupFormProc);
+  dcp->form = (ForM) w;
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+ 
+  p = HiddenGroup (h, 3, 0, NULL);
+  p1 = StaticPrompt (p, "Start", 0, dialogTextHeight, programFont, 'c');
+  p2 = StaticPrompt (p, "Type", 0, dialogTextHeight, programFont, 'c');
+  p3 = StaticPrompt (p, "Length", 0, dialogTextHeight, programFont, 'c');
+  dcp->gap_locations = CreateTagListDialogEx (h, 4, 3, 2,
+                                              deltaconversionedittypes, 
+                                              deltaconversionedit_widths,
+                                              deltaconversionedit_alists,
+                                              TRUE, FALSE, NULL, DeltaLocToData);
+  dcp->coord_grp = NormalGroup (h, 2, 0, "Coordinates", programFont, NULL);
+  RadioButton (dcp->coord_grp, "Sequence");
+  RadioButton (dcp->coord_grp, "Alignment");
+  SetValue (dcp->coord_grp, 1);
+  if (!SeqEntryHasAligns (dcp->input_entityID, sep))
+  {
+    Disable (dcp->coord_grp);
+  }
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Accept", DoConvertRawToDeltaWithGapLocations);
+  SetObjectExtra (b, dcp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dcp->gap_locations,
+                              (HANDLE) dcp->coord_grp,
+                              (HANDLE) c,
+                              NULL);
+
+  tlp = GetObjectExtra (dcp->gap_locations);
+  if (tlp != NULL)
+  {
+    ObjectRect (tlp->control [0], &r1);
+    ObjectRect (p1, &r2);
+    r2.left = r1.left;
+    r2.right = r1.right;
+    SetPosition (p1, &r2);
+    
+    ObjectRect (tlp->control [1], &r1);
+    ObjectRect (p2, &r2);
+    r2.left = r1.left;
+    r2.right = r1.right;
+    SetPosition (p2, &r2);
+    
+    ObjectRect (tlp->control [2], &r1);
+    ObjectRect (p3, &r2);
+    r2.left = r1.left;
+    r2.right = r1.right;
+    SetPosition (p3, &r2);
+  }
+  RealizeWindow (w);
+  
+  Show (w);
+  Update ();  
 }
 
 typedef struct xrefgenedata {
@@ -15427,6 +15868,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Raw Sequence with Ns to Delta Sequence", 
                    RawSeqToDeltaSeqUnknownWithUnknownLengthGaps);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Convert Raw Sequences To Delta Sequences with Known Gap Locations",
+                   ConvertRawToDeltaWithGapLocations);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   x = SubMenu (s, "Generate GenProdSet Redundancy");

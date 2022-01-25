@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.207 $
+* $Revision: 6.208 $
 *
 * File Description: 
 *
@@ -6298,7 +6298,7 @@ static SeqLocPtr RemoveGapsFromSegmentedLocation (SeqLocPtr slp, BioseqPtr bsp)
   return slp;
 }
 
-static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
+extern SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
 {
   DeltaSeqPtr dsp;
   Int4        seq_offset = 0;

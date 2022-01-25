@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.27 $
+* $Revision: 1.28 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -4612,17 +4612,17 @@ NLM_EXTERN void AddFeatureBlock (
         SeqMgrExploreSegments (bsp, (Pointer) awp, GetFeatsOnSeg);
       }
     }
+  }
 
-    if ((! awp->farFeatsSuppress) || (! awp->featseen)) {
+  if ((! awp->farFeatsSuppress) || (! awp->featseen)) {
 
-      /* reminder - features on near parts are indexed on segmented Bioseq */
+    /* reminder - features on near parts are indexed on segmented Bioseq */
 
-      slp = ajp->ajp.slp;
-      if (slp != NULL && SeqLocStrand (slp) == Seq_strand_minus) {
-        SeqMgrExploreFeaturesRev (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
-      } else {
-        SeqMgrExploreFeatures (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
-      }
+    slp = ajp->ajp.slp;
+    if (slp != NULL && SeqLocStrand (slp) == Seq_strand_minus) {
+      SeqMgrExploreFeaturesRev (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
+    } else {
+      SeqMgrExploreFeatures (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
     }
   }
 
