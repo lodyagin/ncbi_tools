@@ -1,4 +1,4 @@
-/* $Id: ncbi_socket_connector.c,v 6.29 2010/12/14 19:41:14 kazimird Exp $
+/* $Id: ncbi_socket_connector.c,v 6.33 2012/05/07 15:39:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,8 +35,8 @@
 
 #include "ncbi_ansi_ext.h"
 #include "ncbi_assert.h"
+#include "ncbi_socketp.h"
 #include <connect/ncbi_socket_connector.h>
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -47,16 +47,17 @@
  *  INTERNAL -- Auxiliary types and static functions
  ***********************************************************************/
 
-/* All internal data necessary to perform the (re)connect and i/o
+/* All internal data necessary to perform the (re)connect and I/O.
+ * NOTE:  sock must come first!
  */
 typedef struct {
     SOCK           sock;      /* socket;  NULL if not connected yet       */
     const char*    host;      /* server:  host                            */
     unsigned short port;      /* server:  service port                    */
     unsigned short try_own;   /* max.number of attempts to establish conn */
-    const void*    init_data; /* data to send to the server on connect    */
-    size_t         init_size; /* size of the "init_data" buffer           */
     TSOCK_Flags    flags;     /* see socket flags in ncbi_socket.h        */
+    size_t         init_size; /* size of the "init_data" buffer           */
+    const void*    init_data; /* data to send to the server on connect    */
 } SSockConnector;
 
 
@@ -88,8 +89,7 @@ extern "C" {
                                      EIO_Event       dir);
     static EIO_Status  s_VT_Close   (CONNECTOR       connector,
                                      const STimeout* timeout);
-    static void        s_Setup      (SMetaConnector* meta,
-                                     CONNECTOR       connector);
+    static void        s_Setup      (CONNECTOR       connector);
     static void        s_Destroy    (CONNECTOR       connector);
 #ifdef __cplusplus
 } /* extern "C" */
@@ -100,7 +100,7 @@ extern "C" {
 static const char* s_VT_GetType
 (CONNECTOR connector)
 {
-    return "SOCK";
+    return g_kNcbiSockNameAbbr; /*NB: Important!*/
 }
 
 
@@ -220,9 +220,10 @@ static EIO_Status s_VT_Close
 
 
 static void s_Setup
-(SMetaConnector* meta,
- CONNECTOR       connector)
+(CONNECTOR connector)
 {
+    SMetaConnector* meta = connector->meta;
+
     /* initialize virtual table */
     CONN_SET_METHOD(meta, get_type, s_VT_GetType, connector);
     CONN_SET_METHOD(meta, descr,    s_VT_Descr,   connector);
@@ -243,12 +244,9 @@ static void s_Destroy
     SSockConnector* xxx = (SSockConnector*) connector->handle;
     connector->handle = 0;
 
+    xxx->init_data = 0;
+    xxx->init_size = 0;
     xxx->host = 0;
-    if (xxx->init_data) {
-        assert(xxx->init_size);
-        free((void*) xxx->init_data);
-        xxx->init_data = 0;
-    }
     free(xxx);
     free(connector);
 }
@@ -263,19 +261,29 @@ static CONNECTOR s_Init
  size_t         init_size,
  TSOCK_Flags    flags)
 {
-    CONNECTOR       ccc = (SConnector    *) malloc(sizeof(SConnector));
-    SSockConnector* xxx = (SSockConnector*) malloc(sizeof(*xxx)
-                                                   + (host
-                                                      ? strlen(host) + 1
-                                                      : MAX_IP_ADDR_LEN));
+    CONNECTOR       ccc;
+    SSockConnector* xxx;
 
     /* some sanity checks */
     assert(!sock  ||  !(init_size || init_data || flags));
     assert(!init_size  ||  init_data);
 
+    if (!(ccc = (SConnector*) malloc(sizeof(SConnector))))
+        return 0;
+    if (!(xxx = (SSockConnector*) malloc(sizeof(*xxx)
+                                         + (init_data ? init_size : 0)
+                                         + (host
+                                            ? strlen(host) + 1
+                                            : MAX_IP_ADDR_LEN)))) {
+        free(ccc);
+        return 0;
+    }
+
     /* initialize internal data structures */
     if (sock  ||  !host  ||  !port) {
         xxx->sock      = sock;
+        xxx->init_size = 0;
+        xxx->init_data = 0;
         if (host) {
             xxx->host  = strcpy((char*) xxx + sizeof(*xxx), host);
             xxx->port  = 0;
@@ -287,24 +295,20 @@ static CONNECTOR s_Init
             xxx->host  = addr;
             assert(xxx->port);
         } else {
-            /* this signifies invalid state */
+            /* this denotes invalid state */
             xxx->host  = 0;
             xxx->port  = 0;
         }
-        xxx->try_own   = try_own   ? 1                                  : 0;
-        xxx->init_data = 0;
+        xxx->try_own   = try_own   ? 1         : 0;
     } else {
+        void* data     = (char*) xxx + sizeof(*xxx);
         xxx->sock      = 0;
-        xxx->host      = strcpy((char*) xxx + sizeof(*xxx), host);
+        xxx->init_size = init_data ? init_size : 0;
+        xxx->init_data = memcpy(data, init_data, xxx->init_size);
+        xxx->host      = strcpy((char*) data + xxx->init_size, host);
         xxx->port      = port;
-        xxx->try_own   = try_own   ? try_own                            : 1;
+        xxx->try_own   = try_own   ? try_own   : 1;
         xxx->flags     = flags;
-        xxx->init_size = init_data ? init_size                          : 0;
-        if (xxx->init_size) {
-            void* data     = malloc(init_size);
-            xxx->init_data = data  ? memcpy(data, init_data, init_size) : 0;
-        } else
-            xxx->init_data = 0;
     }
 
     /* initialize connector data */

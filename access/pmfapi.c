@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.110 $
+* $Revision: 1.111 $
 *
 * File Description: 
 *
@@ -366,6 +366,75 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
       ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for gi %ld", (long) uid);
     } else {
       ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for gi %ld is %s", (long) uid, str);
+    }
+    MemFree (str);
+  }
+#endif
+
+  return conn;
+}
+
+
+NLM_EXTERN CONN PubSeqFetchOpenConnectionString (
+  CharPtr id,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  Char     buf [40];
+  CONN     conn;
+  Char     query [80];
+#ifdef OS_UNIX
+  CharPtr  str;
+#endif
+
+  if (StringHasNoText (id)) return NULL;
+  if (retcode < 0 || retcode > 4) {
+    retcode = 0;
+  }
+  if (flags < 0) {
+    flags = -1;
+  }
+
+#ifdef PUB_SEQ_FETCH_DEBUG
+  sprintf (query, "save=idf&view=1&maxplex=%d&extrafeat=%ld&val=%s", (int) retcode, (long) flags, id);
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_AsnText, eENCOD_None, 0);
+#endif
+
+  sprintf (query, "maxplex=%d&extrafeat=%ld&val=%s", (int) retcode, (long) flags, id);
+  conn = QUERY_OpenServiceQueryEx ("SeqFetch", query, 30, StringRChr (query, '=') + 1);
+
+#ifdef OS_UNIX
+  if (! log_query_url_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_LOG_URL");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_query_url = TRUE;
+      }
+    }
+    log_query_url_set = TRUE;
+  }
+#endif
+
+  if (conn == NULL) {
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchOpenConnection failed for id %s, date/time %s", id, buf);
+    return conn;
+  }
+
+#ifdef OS_UNIX
+  if (log_query_url) {
+    str = CONN_Description (conn);
+    if (str == NULL) {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for id %s", id);
+    } else {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for id %s is %s", id, str);
     }
     MemFree (str);
   }
@@ -1164,10 +1233,28 @@ typedef struct psconfirm {
   Int4     uid;
   Uint4    tid;
   CharPtr  sid;
+  SeqIdPtr ssid;
   Int4     gi;
   Uint4    ti;
   CharPtr  si;
+  SeqIdPtr ssi;
 } PsConfirm, PNTR PsConfirmPtr;
+
+
+static void InitPsConfirm (PsConfirmPtr p)
+
+{
+  if (p != NULL) {
+    p->uid = 0;
+    p->tid = 0;
+    p->sid = NULL;
+    p->gi = 0;
+    p->ti = 0;
+    p->si = NULL;
+    p->ssid = NULL;
+    p->ssi = NULL;
+  }
+}
 
 
 static void ConfirmGiInSep (
@@ -1187,6 +1274,29 @@ static void ConfirmGiInSep (
     gi = (Int4) sip->data.intvalue;
     if (psp->gi == 0 || gi == psp->uid) {
       psp->gi = gi;
+    }
+  }
+}
+
+
+static void ConfirmAccStrInSep (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  PsConfirmPtr  psp;
+  SeqIdPtr      sip;
+  Uint1         cmp;
+
+  if (bsp == NULL || userdata == NULL) return;
+  psp = (PsConfirmPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    cmp = SeqIdComp (sip, psp->ssid);
+    if (cmp == SIC_YES) {
+      psp->ssi = sip;
+    } else if (psp->ssi == NULL && cmp == SIC_DIFF) {
+      psp->ssi = sip;
     }
   }
 }
@@ -1246,16 +1356,57 @@ static void ConfirmSraidInSep (
 }
 
 
-NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
+static void VerifyGIInSeqEntry (
+  Int4 uid,
+  SeqEntryPtr sep
+)
+
+{
+  PsConfirm    ps;
+
+  InitPsConfirm (&ps);
+  ps.uid = uid;
+  VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
+  if (ps.gi != uid) {
+    ErrPostEx (SEV_ERROR, 0, 0,
+               "PubSeqSynchronousQuery requested gi %ld but received gi %ld",
+               (long) uid, (long) ps.gi);
+  }
+}
+
+
+static void VerifyAccStrInSeqEntry (
+  CharPtr id_str,
+  SeqEntryPtr sep
+)
+
+{
+  PsConfirm    ps;
+  Char         id_buf[PATH_MAX];
+
+  InitPsConfirm (&ps);
+  ps.ssid = MakeSeqID (id_str);
+  VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmAccStrInSep);
+  if (SeqIdComp (ps.ssid, ps.ssi) != SIC_YES) {
+    SeqIdWrite (ps.ssi, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+    ErrPostEx (SEV_ERROR, 0, 0,
+               "PubSeqSynchronousQuery requested %s but received %s",
+                 id_str, id_buf);
+  }
+  ps.ssid = SeqIdFree (ps.ssid);
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
   Int4 uid,
   Int2 retcode,
-  Int4 flags
+  Int4 flags,
+  CharPtr id_str
 )
 
 {
   Char         buf [32];
   CONN         conn;
-  PsConfirm    ps;
   SeqEntryPtr  sep;
   CharPtr      str = NULL;
 #ifdef OS_UNIX
@@ -1264,7 +1415,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   struct tms   timebuf;
 #endif
 
-  if (uid < 1) return NULL;
+  if (uid < 1 && StringHasNoText (id_str)) return NULL;
 
 #ifdef OS_UNIX
   if (! log_sync_query_set) {
@@ -1278,7 +1429,11 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   }
 #endif
 
-  conn = PubSeqFetchOpenConnection (uid, retcode, flags);
+  if (StringHasNoText (id_str)) {
+    conn = PubSeqFetchOpenConnection (uid, retcode, flags);
+  } else {
+    conn = PubSeqFetchOpenConnectionString (id_str, retcode, flags);
+  }
 
   if (conn == NULL) return NULL;
 
@@ -1305,17 +1460,10 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 #endif
 
   if (sep != NULL) {
-    ps.uid = uid;
-    ps.tid = 0;
-    ps.sid = NULL;
-    ps.gi = 0;
-    ps.ti = 0;
-    ps.si = NULL;
-    VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
-    if (ps.gi != uid) {
-      ErrPostEx (SEV_ERROR, 0, 0,
-                 "PubSeqSynchronousQuery requested gi %ld but received gi %ld",
-                 (long) uid, (long) ps.gi);
+    if (uid > 0) {
+      VerifyGIInSeqEntry (uid, sep);
+    } else {
+      VerifyAccStrInSeqEntry (id_str, sep);
     }
   } else {
     MakeDateTimeStamp (buf);
@@ -1329,6 +1477,104 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 
   MemFree (str);
 
+  return sep;
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
+  Int4 uid,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  return PubSeqSynchronousQueryEx (uid, retcode, flags, NULL);
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryId (
+  SeqIdPtr sip,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  Int4 uid;
+  Char id_buf[PATH_MAX];
+
+  if (sip == NULL) {
+    return NULL;
+  } else if (sip->choice == SEQID_GI) {
+    return PubSeqSynchronousQueryEx (sip->data.intvalue, retcode, flags, NULL);
+  } else if (sip->choice != SEQID_LOCAL) {
+    uid = GetGIForSeqId (sip);
+    if (uid > 0) {
+      return PubSeqSynchronousQueryEx (uid, retcode, flags, NULL);
+    } else {
+      SeqIdWrite (sip, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+      return PubSeqSynchronousQueryEx (0, retcode, flags, id_buf);
+    }
+  } else {
+    return NULL;
+  }
+}
+
+
+NLM_EXTERN SeqIdPtr SeqIdFromPubSeqString (CharPtr str)
+
+{
+  Boolean alldigits = TRUE;
+  CharPtr ptr;
+  Char    ch;
+  Int4     uid = 0;
+  long int val;
+  SeqIdPtr sip = NULL;
+
+  if (StringHasNoText (str)) {
+    return NULL;
+  }
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (! IS_DIGIT (ch)) {
+      alldigits = FALSE;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+
+  if (alldigits) {
+    if (sscanf (str, "%ld", &val) == 1) {
+      uid = (Int4) val;
+      sip = ValNodeNew (NULL);
+      sip->choice = SEQID_GI;
+      sip->data.intvalue = uid;
+    }
+  } else if (StringChr (str, '|') == NULL) {    
+    sip = SeqIdFromAccessionDotVersion (str);
+  } else {
+    sip = MakeSeqID (str);
+  }
+  return sip;
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryString (
+  CharPtr str,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  SeqIdPtr sip;
+  SeqEntryPtr sep = NULL;
+
+  if (StringHasNoText (str)) {
+    return NULL;
+  }
+  sip = SeqIdFromPubSeqString (str);
+  sep = PubSeqSynchronousQueryId (sip, retcode, flags);
+  sip = SeqIdFree (sip);
   return sep;
 }
 
@@ -1392,12 +1638,8 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryTI (
 #endif
 
   if (sep != NULL) {
-    ps.uid = 0;
+    InitPsConfirm (&ps);
     ps.tid = tid;
-    ps.sid = NULL;
-    ps.gi = 0;
-    ps.ti = 0;
-    ps.si = NULL;
     VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmTiInSep);
     if (ps.ti != tid) {
       ErrPostEx (SEV_ERROR, 0, 0,
@@ -1477,12 +1719,8 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuerySRA (
 #endif
 
   if (sep != NULL) {
-    ps.uid = 0;
-    ps.tid = 0;
+    InitPsConfirm (&ps);
     ps.sid = sraid;
-    ps.gi = 0;
-    ps.ti = 0;
-    ps.si = NULL;
     VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmSraidInSep);
     if (StringCmp (ps.si, sraid) != 0) {
       ErrPostEx (SEV_ERROR, 0, 0,
@@ -2011,6 +2249,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   SeqEntryPtr       sep = NULL;
   SeqIdPtr          sip;
   Int4              uid = 0;
+  Char              id_buf[PATH_MAX];
 #ifdef OS_UNIX
   Char              id [64];
   BioseqPtr         firstbsp;
@@ -2048,6 +2287,8 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   }
 #endif
 
+  id_buf[0] = 0;
+
   omdp = ObjMgrGetUserData (ompcp->input_entityID, ompp->procid, OMPROC_FETCH, 0);
   if (omdp != NULL) {
     uid = omdp->userdata.intvalue;
@@ -2063,9 +2304,11 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
     uid = GetGIForSeqId (sip);
   }
 
-  if (uid == 0) return OM_MSG_RET_OK;
+  if (uid == 0 && sip->choice != SEQID_LOCAL) {
+    SeqIdWrite (sip, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+  }
 
-  sep = PubSeqSynchronousQuery (uid, retcode, pubseqfetchflags);
+  sep = PubSeqSynchronousQueryEx (uid, retcode, pubseqfetchflags, id_buf);
 
   if (sep == NULL) {
 #ifdef OS_UNIX

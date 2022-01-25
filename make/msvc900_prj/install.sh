@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.2 2011/03/21 13:56:07 ivanov Exp $
+# $Id: install.sh,v 1.3 2011/12/06 16:35:33 ucko Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -144,7 +144,7 @@ cp -p "$builddir"/connect/ncbi_servicep.h       "$srcdir"/connect
 cp -p "$builddir"/connect/ncbi_dispd.h          "$srcdir"/connect
 cp -p "$builddir"/connect/ncbi_lbsmd.h          "$srcdir"/connect
 cp -p "$builddir"/connect/*.h                   "$incdir"
-mv "$incdir"/ncbi_*.h                           "$incdir"/connect
+mv "$incdir"/ncbi_?[^k]*.h                      "$incdir"/connect
 mv "$incdir"/connect_export.h                   "$incdir"/connect
 cp -p "$builddir"/connect/test/*.[ch]           "$srcdir"/connect/test
 cp -p "$builddir"/ctools/*.c                    "$srcdir"/ctools

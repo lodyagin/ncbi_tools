@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/23/2007
 *
-* $Revision: 1.31 $
+* $Revision: 1.43 $
 *
 * File Description: 
 *
@@ -45,11 +45,32 @@
 #ifndef MACRODLG_H
 #define MACRODLG_H
 
-#include <objmacro.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-NLM_EXTERN void LaunchMacroEditor (IteM i);
-NLM_EXTERN void LaunchMacroEditorBaseForm (BaseFormPtr bfp);
+#include <objmacro.h>
+#include <macroapi.h>
+
+typedef void (*MacroCloseCallback) (Pointer userdata, Pointer callback_data);
+NLM_EXTERN void LaunchMacroEditorMenuItem (IteM i);
+NLM_EXTERN void LaunchMacroEditor (Uint2 entityID, CharPtr filename, MacroCloseCallback callback, Pointer callback_data);
 NLM_EXTERN void SelectiveMacroRun (ValNodePtr macro_list);
+
+
+/* moved from macrodlg.c for being used in EraseAllFieldsWhenBlank() in sequin10.c: J. Chen */
+typedef struct tabcolumnconfiglistdialog {
+  DIALOG_MESSAGE_BLOCK
+  DoC                  column_list_doc;
+  DialoG               edit_col_dlg;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+  TabColumnConfigPtr PNTR column_list;
+  CharPtr PNTR            first_values;
+  Int4Ptr                 blank_list;
+  Int4                    num_columns;
+  Int4                    current_column;
+} TabColumnConfigListDlgData, PNTR TabColumnConfigListDlgPtr;
 
 
 NLM_EXTERN DialoG TabColumnConfigDialog 
@@ -60,6 +81,7 @@ NLM_EXTERN DialoG TabColumnConfigDialog
  Pointer                  change_userdata);
 NLM_EXTERN DialoG TabColumnConfigListDialog (GrouP h, ValNodePtr first_values, ValNodePtr blank_list, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN void ChangeDataForTabColumnConfigListDialog (DialoG d, ValNodePtr first_values, ValNodePtr blank_list);
+NLM_EXTERN void PopulateTabConfigListColumnListDoc (DialoG d);
 NLM_EXTERN DialoG MatchTypeDialog (GrouP g, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 /* for ID match location */
 NLM_EXTERN DialoG IdMatchLocationDlg (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
@@ -74,6 +96,21 @@ NLM_EXTERN DialoG FeatureTypeDialogMulti (GrouP h, Nlm_ChangeNotifyProc change_n
 NLM_EXTERN DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_btn, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN DialoG ComplexConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN void ChangeComplexConstraintFieldType (DialoG d, Uint2 qual_type, ValNodePtr rna_type, Int2 feat_type);
+typedef enum {
+  eComplexConstraintType_source = 1,
+  eComplexConstraintType_cdsgeneprot,
+  eComplexConstraintType_pub,
+  eComplexConstraintType_feature_field,
+  eComplexConstraintType_rna_field,
+  eComplexConstraintType_molinfo_field,
+  eComplexConstraintType_seqid,
+  eComplexConstraintType_string,
+  eComplexConstraintType_loc
+} EComplexConstraintType;
+NLM_EXTERN void SetComplexConstraintType (DialoG d, EComplexConstraintType constraint_type);
+
+
+
 NLM_EXTERN DialoG ConstraintSetDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN DialoG SequenceConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN DialoG MolInfoBlockDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
@@ -99,12 +136,14 @@ NLM_EXTERN DialoG ApplyFeatureDetailsDialog (GrouP h, Uint1 featdef_type, ApplyF
 NLM_EXTERN ApplyFeatureDetailsPtr ApplyFeatureDetailsNew (ApplyFeatureActionPtr action);
 NLM_EXTERN ApplyFeatureDetailsPtr ApplyFeatureDetailsFree (ApplyFeatureDetailsPtr details); 
 NLM_EXTERN DialoG ParseDstDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN DialoG CapChangeDialogEx(GrouP h, Nlm_ChangeNotifyProc, Pointer change_userdata, Boolean allow_none);
 NLM_EXTERN DialoG CapChangeDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN void SetCapChangeDialogValue (DialoG d, Int4 cap_change);
 NLM_EXTERN Int2 GetCapChangeDialogValue (DialoG d);
 NLM_EXTERN DialoG TextPortionDialog (GrouP h, Boolean inside, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 
 NLM_EXTERN ForM SingleMacroAction (Uint2 entityID, Boolean indexer_version);
+NLM_EXTERN void GenericMacroActionForm (Uint2 entityID, ValNodePtr action, Boolean indexer_version);
 
 NLM_EXTERN DialoG StructuredCommentDatabaseNameDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN DialoG RemoveDuplicateFeatActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
@@ -113,5 +152,9 @@ NLM_EXTERN void EditMacroTemplate (void);
 NLM_EXTERN void LaunchMacroTemplateEditor (IteM i);
 
 NLM_EXTERN void LaunchSuspectProductRuleEditor (IteM i);
+
+#ifdef __cplusplus 
+} 
+#endif
 
 #endif

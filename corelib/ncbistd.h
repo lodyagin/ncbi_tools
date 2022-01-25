@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -47,6 +47,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistd.h,v $
+* Revision 6.11  2011/12/07 14:57:54  ucko
+* ncbistd.h: enable checks for C/C++ Toolkit version skew.  JIRA: CXX-2814.
+*
 * Revision 6.10  2011/01/20 17:12:42  lavr
 * Remove inclusion of <connect/ncbi_core.h>, replace with <stdint.h> everywhere but Windows NOJIRA
 *
@@ -336,5 +339,7 @@ typedef double		Nlm_FloatHi, PNTR Nlm_FloatHiPtr;
 #ifndef LIBCALLBACK
 #define LIBCALLBACK	FAR PASCAL
 #endif
+
+#include <ncbi_skew_guard.h>
 
 #endif

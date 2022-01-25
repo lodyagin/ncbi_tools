@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ANSI_EXT__H
 #define CONNECT___NCBI_ANSI_EXT__H
 
-/* $Id: ncbi_ansi_ext.h,v 6.23 2011/06/21 18:49:31 kazimird Exp $
+/* $Id: ncbi_ansi_ext.h,v 6.24 2011/11/16 18:09:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -132,12 +132,6 @@ char* strlwr(char* s);
  */
 NCBI_XCONNECT_EXPORT
 char* strncpy0(char* s1, const char* s2, size_t n);
-
-
-/* Copy not more than "n" characters from string "s2" into "s1" scanning
- * backwards, and return the result, which is always null-terminated.
- */
-char* strrncpy0(char* s1, const char* s2, size_t n);
 
 
 #ifndef HAVE_MEMRCHR

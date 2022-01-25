@@ -743,7 +743,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.22 $
+--$Revision: 6.24 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -838,7 +838,7 @@ MolInfo ::= SEQUENCE {
     biomol INTEGER {
         unknown (0) ,
         genomic (1) ,
-        pre-RNA (2) ,              -- precursor RNA of any sort really 
+        pre-RNA (2) ,              -- precursor RNA of any sort really
         mRNA (3) ,
         rRNA (4) ,
         tRNA (5) ,
@@ -903,7 +903,7 @@ MolInfo ::= SEQUENCE {
 GIBB-mol ::= ENUMERATED {       -- type of molecule represented
     unknown (0) ,
     genomic (1) ,
-    pre-mRNA (2) ,              -- precursor RNA of any sort really 
+    pre-mRNA (2) ,              -- precursor RNA of any sort really
     mRNA (3) ,
     rRNA (4) ,
     tRNA (5) ,
@@ -913,7 +913,7 @@ GIBB-mol ::= ENUMERATED {       -- type of molecule represented
     other-genetic (9) ,      -- other genetic material
     genomic-mRNA (10) ,      -- reported a mix of genomic and cdna sequence
     other (255) }
-    
+
 GIBB-mod ::= ENUMERATED {        -- GenInfo Backbone modifiers
     dna (0) ,
     rna (1) ,
@@ -952,13 +952,13 @@ GIBB-method ::= ENUMERATED {        -- sequencing methods
     seq-pept-homol (5) ,   -- sequenced peptide, ordered by homology
     concept-trans-a (6) ,  -- conceptual transl. supplied by author
     other (255) }
-    
+
 Numbering ::= CHOICE {           -- any display numbering system
     cont Num-cont ,              -- continuous numbering
     enum Num-enum ,              -- enumerated names for residues
     ref Num-ref ,                -- by reference to another sequence
     real Num-real }              -- supports mapping to a float system
-    
+
 Num-cont ::= SEQUENCE {          -- continuous display numbering system
     refnum INTEGER DEFAULT 1,         -- number assigned to first residue
     has-zero BOOLEAN DEFAULT FALSE ,  -- 0 used?
@@ -1083,7 +1083,7 @@ Seq-hist ::= SEQUENCE {
 Seq-hist-rec ::= SEQUENCE {
     date Date OPTIONAL ,
     ids SET OF Seq-id }
-    
+
 --*** Various internal sequence representations ************
 --*      all are controlled, fixed length forms
 
@@ -1104,21 +1104,38 @@ Seq-data ::= CHOICE {              -- sequence representations
 Seq-gap ::= SEQUENCE {
     type INTEGER {
         unknown(0),
-        fragment(1),
-        clone(2),
+        fragment(1),               -- Deprecated. Used only for AGP 1.1
+        clone(2),                  -- Deprecated. Used only for AGP 1.1
         short-arm(3),
         heterochromatin(4),
         centromere(5),
         telomere(6),
         repeat(7),
         contig(8),
+        scaffold(9),
         other(255)
     },
     linkage INTEGER {
         unlinked(0),
         linked(1),
         other(255)
-    } OPTIONAL
+    } OPTIONAL,
+    linkage-evidence SET OF Linkage-evidence OPTIONAL
+}
+
+Linkage-evidence ::= SEQUENCE {
+    type INTEGER {
+        paired-ends(0),
+        align-genus(1),
+        align-xgenus(2),
+        align-trnscpt(3),
+        within-clone(4),
+        clone-contig(5),
+        map(6),
+        strobe(7),
+        unspecified(8),
+        other(255)
+    }
 }
 
 IUPACna ::= StringStore       -- IUPAC 1 letter codes, no spaces
@@ -1158,7 +1175,7 @@ Annot-id ::= CHOICE {
     general Dbtag,
     other Textannot-id
 }
-    
+
 Annot-descr ::= SET OF Annotdesc
 
 Annotdesc ::= CHOICE {
@@ -1566,7 +1583,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.47 $
+--$Revision: 6.49 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1853,6 +1870,9 @@ Clone-ref ::= SEQUENCE {
         sts (2),               -- Clone placed by STS
         fish (3),
         fingerprint (4),
+        end-seq-insert-alignment (5), -- combined end-seq and insert align
+        external (253),           -- Placement provided externally
+        curated (254),            -- Human placed or approved
         other (255)
     } OPTIONAL,
     clone-seq Clone-seq-set OPTIONAL
@@ -1868,18 +1888,27 @@ Clone-seq ::= SEQUENCE {
         other (255)
     },
     confidence INTEGER {
-        multiple (0),     -- Multiple hits
-        na (1),           -- Unspecified
-        nohit-rep (2),    -- No hits, repetitive
-        nohitnorep (3),   -- No hits, not repetitive
-        other-chrm (4),   -- Hit on different chromosome
+        multiple (0),        -- Multiple hits
+        na (1),              -- Unspecified
+        nohit-rep (2),       -- No hits, end flagged repetitive
+        nohitnorep (3),      -- No hits, end not flagged repetitive
+        other-chrm (4),      -- Hit on different chromosome
         unique (5),
-        virtual (6),      -- Virtual (hasn't been sequenced)
+        virtual (6),         -- Virtual (hasn't been sequenced)
+        multiple-rep (7),    -- Multiple hits, end flagged repetitive
+        multiplenorep (8),   -- Multiple hits, end not flagged repetitive
+        no-hit (9),          -- No hits
         other (255)
     } OPTIONAL,
-    location Seq-loc,     -- location on sequence
-    seq Seq-loc OPTIONAL, -- clone sequence location
-    align-id Dbtag OPTIONAL
+    location Seq-loc,        -- location on sequence
+    seq Seq-loc OPTIONAL,    -- clone sequence location
+    align-id Dbtag OPTIONAL, -- internal alignment identifier
+    support INTEGER {
+        prototype (0),       -- sequence used to place clone
+        supporting (1),      -- sequence supports placement
+        supports-other(2),   -- supports a different placement
+        non-supporting (3)   -- does not support any placement
+    } OPTIONAL
 }
 
 END
@@ -2067,6 +2096,7 @@ VariantProperties ::= SEQUENCE {
         uniparental     (128),
         not-tested      (256),
         tested-inconclusive (512),
+        not-reported   (1024),
 
         -- stopper - 2^31
         other           (1073741824)
@@ -2944,7 +2974,7 @@ Tx-evidence ::= SEQUENCE {
 
 END
 
---$Revision: 1.5 $
+--$Revision: 1.7 $
 --  ----------------------------------------------------------------------------
 --
 --                            PUBLIC DOMAIN NOTICE
@@ -3058,7 +3088,7 @@ SeqTable-column-info ::= SEQUENCE {
 
 CommonString-table ::= SEQUENCE {
     -- set of possible values
-    strings     SEQUENCE OF VisibleString,
+    strings     SEQUENCE OF UTF8String,
 
     -- indexes of values
     indexes     SEQUENCE OF INTEGER
@@ -3082,7 +3112,7 @@ SeqTable-multi-data ::= CHOICE {
     real        SEQUENCE OF REAL,
 
     -- a set of strings, one per row
-    string      SEQUENCE OF VisibleString,
+    string      SEQUENCE OF UTF8String,
 
     -- a set of byte arrays, one per row
     bytes       SEQUENCE OF OCTET STRING,
@@ -3112,7 +3142,7 @@ SeqTable-single-data ::= CHOICE {
     real        REAL,
 
     -- string
-    string      VisibleString,
+    string      UTF8String,
 
     -- byte array
     bytes       OCTET STRING,
@@ -4663,7 +4693,7 @@ TSeqSet ::= SEQUENCE OF TSeq    -- a bunch of them
 
 END
 
---$Id: scoremat.asn,v 1.12 2008/04/15 15:55:45 kazimird Exp $
+--$Id: scoremat.asn,v 1.14 2011/12/21 15:29:33 kazimird Exp $
 -- ===========================================================================
 --
 --                            PUBLIC DOMAIN NOTICE
@@ -4736,8 +4766,37 @@ LoopConstraint ::= SEQUENCE {
 CoreDef ::= SEQUENCE {
   nblocks        INTEGER,                   -- number of core elements/blocks
   blocks         SEQUENCE OF CoreBlock,     -- nblocks locations
-  loops          SEQUENCE OF LoopConstraint -- (nblocks+1) constraints 
+  loops          SEQUENCE OF LoopConstraint, -- (nblocks+1) constraints
+
+  isDiscontinuous BOOLEAN OPTIONAL,         -- is it a discontinuous domain
+
+  insertions SEQUENCE OF INTEGER OPTIONAL   -- positions of long insertions
 }
+
+Site-annot ::= SEQUENCE {
+  startPosition  INTEGER,                -- location of the annotation,
+  stopPosition   INTEGER,                -- start and stop position in the
+                                         -- PSSM
+
+  description    VisibleString OPTIONAL, -- holds description or names, that
+                                         -- can be used for labels in
+                                         -- visualization
+
+  type           INTEGER OPTIONAL,       -- type of the annotated feature,
+                                         -- similarly to Align-annot in
+                                         -- NCBI-Cdd
+
+  aliases        SEQUENCE OF VisibleString OPTIONAL, -- additional names for
+                                                     -- the annotation
+
+  motif          VisibleString OPTIONAL, -- motif to validate mapping of sites
+
+  motifuse       INTEGER OPTIONAL        -- 0 for validation
+                                         -- 1 for motif in seqloc
+                                         -- 2 for multiple motifs in seqloc
+}
+
+Site-annot-set ::= SEQUENCE OF Site-annot
 
 -- ===========================================================================
 -- PSI-BLAST, formatrpsdb, RPS-BLAST workflow:
@@ -4849,7 +4908,7 @@ PssmIntermediateData ::= SEQUENCE {
     -- -out_ascii_pssm option in psiblast)
     informationContent          SEQUENCE OF REAL OPTIONAL,
 
-    -- Weights for columns of the PSSM without gaps
+    -- Relative weight for columns of the PSSM without gaps to pseudocounts
     -- NOTE: this is needed for diagnostics information only (i.e.:
     -- -out_ascii_pssm option in psiblast)
     gaplessColumnWeights        SEQUENCE OF REAL OPTIONAL,
@@ -4868,7 +4927,11 @@ PssmIntermediateData ::= SEQUENCE {
     -- query)
     -- NOTE: this is needed for diagnostics information only (i.e.:
     -- -out_ascii_pssm option in psiblast)
-    numMatchingSeqs             SEQUENCE OF INTEGER OPTIONAL
+    numMatchingSeqs             SEQUENCE OF INTEGER OPTIONAL,
+
+    -- Number of independent observations per position of the PSSM
+    -- NOTE: this is needed for building CDD database for DELTA-BLAST
+    numIndeptObsr               SEQUENCE OF REAL OPTIONAL
 }
 
 -- Position-specific scoring matrix
@@ -4957,7 +5020,13 @@ PssmParameters ::= SEQUENCE {
 
     -- alignment constraints needed by sequence-structure threader
     -- and other global or local block-alignment algorithms
-	constraints	CoreDef OPTIONAL
+    constraints     CoreDef OPTIONAL,
+
+    -- bit score threshold for specific conserved domain hits
+    bitScoreThresh  REAL OPTIONAL,
+
+    -- conserved functional sites with annotations
+    annotatedSites  Site-annot-set OPTIONAL
 }
 
 -- Envelope containing PSSM and the parameters used to create it. 
@@ -4986,7 +5055,7 @@ PssmWithParameters ::= SEQUENCE {
 }
 
 END
---$Revision: 1.118 $
+--$Revision: 1.143 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -5668,7 +5737,8 @@ DBLink-field-type ::= ENUMERATED {
   trace-assembly (1) ,
   bio-sample (2) ,
   probe-db (3) ,
-  sequence-read-archve (4) }
+  sequence-read-archve (4) ,
+  bio-project (5) }
 
 DBLink-field-pair ::= SEQUENCE {
   from DBLink-field-type ,
@@ -5772,6 +5842,7 @@ Sequence-constraint ::= SEQUENCE {
     seqtype Sequence-constraint-mol-type-constraint OPTIONAL ,
     id String-constraint OPTIONAL ,
     feature Macro-feature-type ,
+    num-type-features Quantity-constraint OPTIONAL ,
     num-features Quantity-constraint OPTIONAL ,
     length Quantity-constraint OPTIONAL ,
     strandedness Feature-strandedness-constraint DEFAULT any }
@@ -5877,7 +5948,11 @@ Cap-change ::= ENUMERATED {
     tolower (1) ,
     toupper (2) ,
     firstcap (3) ,
-    firstcaprestnochange (4) }
+    firstcaprestnochange (4) ,
+    firstlower-restnochange (5) ,
+    cap-word-space (6) ,
+    cap-word-space-punc (7)
+    }
 
 Text-transform ::= CHOICE {
   edit Field-edit ,
@@ -5913,6 +5988,11 @@ AECRParse-action ::= SEQUENCE {
 Remove-action ::= SEQUENCE {
     field Field-type }
 
+Remove-outside-action ::= SEQUENCE {
+    portion Text-portion ,
+    field Field-type ,
+    remove-if-not-found BOOLEAN DEFAULT FALSE }
+
 Action-choice ::= CHOICE {
     apply Apply-action ,
     edit Edit-action ,
@@ -5920,7 +6000,8 @@ Action-choice ::= CHOICE {
     copy Copy-action ,
     swap Swap-action ,
     remove Remove-action ,
-    parse AECRParse-action }
+    parse AECRParse-action ,
+    remove-outside Remove-outside-action }
 
 AECR-action ::= SEQUENCE {
     action Action-choice ,
@@ -6137,6 +6218,11 @@ Convert-location-type ::= ENUMERATED {
   order (2) ,
   merge (3) }
 
+Extend-to-feature ::= SEQUENCE {
+  type Macro-feature-type ,
+  include-feat BOOLEAN ,
+  distance Quantity-constraint OPTIONAL }
+  
 Location-edit-type ::= CHOICE {
   strand Edit-location-strand ,
   set-5-partial Partial-5-set-action ,
@@ -6147,12 +6233,15 @@ Location-edit-type ::= CHOICE {
   clear-both-partial Partial-both-clear-constraint ,
   convert Convert-location-type ,
   extend-5 NULL ,
-  extend-3 NULL }
+  extend-3 NULL ,
+  extend-5-to-feat Extend-to-feature ,
+  extend-3-to-feat Extend-to-feature }
 
 Edit-feature-location-action ::= SEQUENCE {
   type Macro-feature-type ,
   action Location-edit-type ,
   retranslate-cds BOOLEAN OPTIONAL ,
+  also-edit-gene BOOLEAN OPTIONAL ,
   constraint Constraint-choice-set OPTIONAL }
 
 Molinfo-block ::= SEQUENCE {
@@ -6181,11 +6270,17 @@ Remove-descriptor-action ::= SEQUENCE {
 Autodef-list-type ::= ENUMERATED {
   feature-list (1) ,
   complete-sequence (2) ,
-  complete-genome (3) }
+  complete-genome (3) ,
+  sequence (4) }
   
+Autodef-misc-feat-parse-rule ::= ENUMERATED {
+  use-comment-before-first-semicolon (1) ,
+  look-for-noncoding-products (2) }
+
 Autodef-action ::= SEQUENCE {
   modifiers SET OF Source-qual OPTIONAL ,
-  clause-list-type Autodef-list-type }
+  clause-list-type Autodef-list-type ,
+  misc-feat-parse-rule Autodef-misc-feat-parse-rule DEFAULT look-for-noncoding-products }
 
 Fix-pub-caps-action ::= SEQUENCE {
   title BOOLEAN OPTIONAL ,
@@ -6205,11 +6300,15 @@ Sort-fields-action ::= SEQUENCE {
   order Sort-order ,
   constraint Constraint-choice-set OPTIONAL }
   
+Fix-author-caps ::= SEQUENCE {
+  last-name-only BOOLEAN }
+
 Fix-caps-action ::= CHOICE {
   pub Fix-pub-caps-action ,
   src-country NULL ,
   mouse-strain NULL ,
-  src-qual Source-qual }
+  src-qual Source-qual ,
+  author Fix-author-caps }
 
 Fix-format-action ::= CHOICE {
   collection-date NULL ,
@@ -6259,6 +6358,69 @@ Author-fix-action ::= SEQUENCE {
   fix-type Author-fix-type ,
   constraint Constraint-choice-set OPTIONAL }  
 
+Update-sequences-action ::= SEQUENCE {
+  filename VisibleString ,
+  add-cit-subs BOOLEAN DEFAULT FALSE }
+
+Create-TSA-ids-src ::= CHOICE {
+  local-id NULL ,
+  defline Text-portion
+}
+
+Create-TSA-ids-action ::= SEQUENCE {
+  src Create-TSA-ids-src ,
+  suffix VisibleString OPTIONAL ,
+  id-text-portion Text-portion OPTIONAL }  
+
+Autofix-action ::= SEQUENCE {
+  test-name VisibleString }
+
+Fix-sets-action ::= CHOICE {
+  remove-single-item-set NULL ,
+  renormalize-nuc-prot-sets NULL ,
+  fix-pop-to-phy NULL
+}
+
+Table-match-type ::= CHOICE {
+  feature-id NULL ,
+  gene-locus-tag NULL ,
+  protein-id NULL,
+  dbxref NULL ,
+  nuc-id NULL ,
+  src-qual Source-qual-choice ,
+  protein-name NULL ,
+  any NULL
+}
+
+Table-match ::= SEQUENCE {
+  match-type Table-match-type ,
+  match-location String-location DEFAULT equals
+}
+
+
+Apply-table-extra-data ::= CHOICE {
+  table NULL }
+
+Apply-table-action ::= SEQUENCE {
+  filename VisibleString ,
+  match-type Table-match ,
+  in-memory-table Apply-table-extra-data OPTIONAL
+}
+
+Add-file-action ::= SEQUENCE {
+  filename VisibleString ,
+  in-memory-table Apply-table-extra-data OPTIONAL
+} 
+
+Add-descriptor-list-action ::= SEQUENCE {
+  descriptor-list Add-file-action ,
+  constraint Constraint-choice-set OPTIONAL
+}
+
+Remove-sequences-action ::= SEQUENCE {
+  constraint Constraint-choice-set
+}
+
 Macro-action-choice ::= CHOICE {
   aecr AECR-action ,
   parse Parse-action ,
@@ -6286,7 +6448,19 @@ Macro-action-choice ::= CHOICE {
   remove-xrefs Remove-xrefs-action ,
   make-gene-xrefs Make-gene-xref-action ,
   make-bold-xrefs NULL ,
-  fix-author Author-fix-action }
+  fix-author Author-fix-action ,
+  update-sequences Update-sequences-action ,
+  add-trans-splicing NULL ,
+  remove-invalid-ecnumbers NULL ,
+  create-tsa-ids Create-TSA-ids-action ,
+  perform-autofix Autofix-action ,
+  fix-sets Fix-sets-action ,
+  apply-table Apply-table-action ,
+  remove-sequences Remove-sequences-action ,
+  propagate-sequence-technology NULL ,
+  add-file-descriptors Add-descriptor-list-action ,
+  propagate-missing-old-name NULL ,
+  autoapply-structured-comments NULL }
 
 
 Macro-action-list ::= SET OF Macro-action-choice
@@ -6320,26 +6494,27 @@ Replace-rule ::= SEQUENCE {
 Fix-type ::= ENUMERATED {
   none (0) ,
   typo (1) ,
-  quickfix (2) ,
-  no-organelle-for-prokaryote (3),
-  might-be-nonfunctional (4),
-  database (5),
-  remove-organism-name (6),
-  inappropriate-symbol (7),
-  evolutionary-relationship (8),
-  use-protein (9),
-  hypothetical (10),
-  british (11),
-  description (12),
-  gene (13) }  
-  
+  putative-typo (2) ,
+  quickfix (3) ,
+  no-organelle-for-prokaryote (4),
+  might-be-nonfunctional (5),
+  database (6),
+  remove-organism-name (7),
+  inappropriate-symbol (8),
+  evolutionary-relationship (9),
+  use-protein (10),
+  hypothetical (11),
+  british (12),
+  description (13),
+  gene (14) }  
 
 Suspect-rule ::= SEQUENCE {
   find Search-func ,
   except Search-func OPTIONAL ,
   feat-constraint Constraint-choice-set OPTIONAL ,
   rule-type Fix-type DEFAULT none ,
-  replace Replace-rule OPTIONAL }  
+  replace Replace-rule OPTIONAL ,
+  description VisibleString OPTIONAL }  
 
 Suspect-rule-set ::= SET OF Suspect-rule
 

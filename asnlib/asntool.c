@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -40,78 +40,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: asntool.c,v $
-* Revision 6.17  2009/11/05 16:54:12  gouriano
-* Added option to use quoted syntax form to include headers. JIRA: CXX-1402
-*
-* Revision 6.16  2005/01/24 17:12:11  kans
-* added force_choice_struct (-V) to force struct plus object instead of ValNode for choices - for compatibility with old hand-coded object loaders
-*
-* Revision 6.15  2004/07/08 15:27:37  kans
-* commented out second unnecessary call to GetArgs
-*
-* Revision 6.14  2004/04/01 13:43:05  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.13  2001/10/11 14:39:08  ostell
-* added support for XMLModulePrefix
-*
-* Revision 6.12  2001/07/07 00:46:15  juran
-* A vain attempt to plug serious memory leakage.
-*
-* Revision 6.11  2001/07/03 20:04:02  juran
-* Oops, don't redefine NULL after all.
-*
-* Revision 6.10  2001/06/28 02:19:39  juran
-* Mac compatibility:
-* Redefine NULL to 0L, which gets promoted to any pointer type.
-* Cast result of MemNew() and MemFree() to appropriate pointer type.
-*
-* Revision 6.9  2001/06/12 14:45:17  lewisg
-* reindent to make readable
-*
-* Revision 6.8  2000/08/11 14:01:46  beloslyu
-* fix the bug. Karl
-*
-* Revision 6.7  2000/07/25 20:30:57  ostell
-* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
-*
-* Revision 6.6  2000/05/10 17:45:00  ostell
-* fixed duplicate command line arguments
-*
-* Revision 6.5  2000/05/10 03:12:37  ostell
-* added support for XML DTD and XML data output
-*
-* Revision 6.4  1998/03/25 23:31:39  kans
-* params to register new object manager type, give optional non-default label
-*
-* Revision 6.3  1998/03/23 23:07:10  kans
-* added K parameter for force name of included asn header in asncode-generated object loader
-*
-* Revision 6.2  1997/12/16 21:16:50  sirotkin
-* command line processing fix
-*
-* Revision 6.0  1997/08/25 18:10:22  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/11/26 20:02:42  vakatov
-* Added ErrClear() after GetArgs() to disable warnings occurred during
-* the reading of configuration files
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.1  1995/12/21  22:03:54  epstein
- * generate clean exit in case of bad amp pointer
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.6  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -208,7 +136,7 @@ Int2 Main (void)
 	AsnTypePtr atp;
 	Boolean print_each_module = FALSE;
 	AsnCodeInfoPtr acip = (AsnCodeInfoPtr)MemNew(sizeof(AsnCodeInfo));
-	CharPtr filename = NULL, p, last_comma, objmgrentry = NULL;
+	CharPtr filename = NULL, p, last_comma;
 	int len;
 
 
@@ -217,7 +145,7 @@ Int2 Main (void)
     ErrSetMessageLevel(SEV_MIN);
     asnargs[P_argXMLmodulePrefix].defaultvalue = (const char *)AsnGetXMLmodulePrefix();
 
-    if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
+    if (! GetArgs("AsnTool 5", NUMARGS, asnargs))
 	return 1;
     ErrClear();
 

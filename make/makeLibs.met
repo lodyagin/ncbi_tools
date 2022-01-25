@@ -209,9 +209,8 @@ on SetProjectData()
 			"ncbi_service_connector", "ncbi_dispd", "ncbi_lb", "ncbi_local", "ncbi_lbsmd_stub", Â
 			"ncbi_socket_connector", "ncbi_ftp_connector", "ncbi_sendmail"})
 	
-	AddSimpleProjectExceptFiles("netcli", {}, "network:nsclilib", {"ni_encr.c", "ni_list.c", "ni_lib.c", "ni_disp.c", "ni_encr.c"})
-	
-	
+	AddSimpleProject("netcli", {}, "network:nsclilib")
+		
 	AddSimpleProject("ncbispell", {}, "network:spell:client")
 	
 	AddSimpleProject("ncbiblast", {}, "algo:blast:core")

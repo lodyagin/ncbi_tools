@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.74 $
+* $Revision: 6.75 $
 *
 * File Description: 
 *
@@ -431,8 +431,8 @@ NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Uint
 		l = StringLen(link_ff);
 		ll = StringLen("<a href=%sgi=%ld&id=%d&entity=%d>");
 		s = (CharPtr)MemNew(l+ ll + 3*7);
-		sprintf(s, "<a href=%sgi=%ld&id=%d&entity=%d>", 
-							link_ff, (Int4) gi, itemID, entityID);
+		sprintf(s, "<a href=%sgi=%d&id=%ud&entity=%d>", 
+							link_ff, (Int4) gi, itemID, (Int4)entityID);
 		AddLink(s);
 		MemFree(s);
 		ff_AddString(key);
@@ -475,7 +475,7 @@ NLM_EXTERN Boolean LIBCALL www_muid(Int4 muid)
 		l = StringLen(link_muid);
 		ll = StringLen("<a href=%suid=%ld&form=6&db=m&Dopt=r>");
 		s = (CharPtr)MemNew(l+ ll + 10);
-		sprintf(s, "<a href=%suid=%ld&form=6&db=m&Dopt=r>", 
+		sprintf(s, "<a href=%suid=%d&form=6&db=m&Dopt=r>", 
 												link_muid, (Int4) muid);
 		AddLink(s);
 		MemFree(s);

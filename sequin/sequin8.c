@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.608 $
+* $Revision: 6.634 $
 *
 * File Description: 
 *
@@ -1915,81 +1915,6 @@ static BioseqPtr SqnGetBioseqGivenSeqLoc (SeqLocPtr slp, Uint2 entityID)
     }
   }
   return bsp;
-}
-
-static BioseqPtr GetBioseqReferencedByAnnot (SeqAnnotPtr sap, Uint2 entityID)
-
-{
-  SeqAlignPtr   align;
-  BioseqPtr     bsp;
-  DenseDiagPtr  ddp;
-  DenseSegPtr   dsp;
-  SeqFeatPtr    feat;
-  SeqGraphPtr   graph;
-  SeqIdPtr      sip;
-  SeqLocPtr     slp;
-  StdSegPtr     ssp;
-  SeqLocPtr     tloc;
-
-  if (sap == NULL) return NULL;
-  switch (sap->type) {
-    case 1 :
-      feat = (SeqFeatPtr) sap->data;
-      while (feat != NULL) {
-        slp = feat->location;
-        if (slp != NULL) {
-          bsp = SqnGetBioseqGivenSeqLoc (slp, entityID);
-          if (bsp != NULL) return bsp;
-        }
-        feat = feat->next;
-      }
-      break;
-    case 2 :
-      align = (SeqAlignPtr) sap->data;
-      while (align != NULL) {
-        if (align->segtype == 1) {
-          ddp = (DenseDiagPtr) align->segs;
-          if (ddp != NULL) {
-            for (sip = ddp->id; sip != NULL; sip = sip->next) {
-              bsp = BioseqFind (sip);
-              if (bsp != NULL) return bsp;
-            }
-          }
-        } else if (align->segtype == 2) {
-          dsp = (DenseSegPtr) align->segs;
-          if (dsp != NULL) {
-            for (sip = dsp->ids; sip != NULL; sip = sip->next) {
-              bsp = BioseqFind (sip);
-              if (bsp != NULL) return bsp;
-            }
-          }
-        } else if (align->segtype == 3) {
-          ssp = (StdSegPtr) align->segs;
-          if (ssp != NULL && ssp->loc != NULL) {
-            for (tloc = ssp->loc; tloc != NULL; tloc = tloc->next) {
-              bsp = BioseqFind (SeqLocId (tloc));
-              if (bsp != NULL) return bsp;
-            }
-          }
-        }
-        align = align->next;
-      }
-      break;
-    case 3 :
-      graph = (SeqGraphPtr) sap->data;
-      while (graph != NULL) {
-        slp = graph->loc;
-        if (slp != NULL) {
-          bsp = SqnGetBioseqGivenSeqLoc (slp, entityID);
-          if (bsp != NULL) return bsp;
-        }
-        graph = graph->next;
-      }
-      break;
-    default :
-      break;
-  }
-  return NULL;
 }
 
 static Int4 GetScore (ScorePtr score)
@@ -4371,6 +4296,7 @@ extern Int2 LIBCALLBACK GenomeProjectsDBUserGenFunc (Pointer data)
 
 typedef struct unverifieduserdialog {
   DIALOG_MESSAGE_BLOCK
+  ButtoN  unverified_types[eUnverifiedType_Max];
 } UnverifiedUserDialog, PNTR UnverifiedUserDialogPtr;
 
 typedef struct unverifieduserform {
@@ -4381,14 +4307,36 @@ typedef struct unverifieduserform {
 static void UserObjectPtrToUnverifiedDialog (DialoG d, Pointer data)
 
 {
+  UserFieldPtr             curr;
+  ObjectIdPtr              oip;
   UnverifiedUserDialogPtr  rdp;
+  Int2                     status = 0;
+  CharPtr                  str;
   UserObjectPtr            uop;
+  Int4                     i;
 
   rdp = (UnverifiedUserDialogPtr) GetObjectExtra (d);
   if (rdp == NULL) return;
   uop = (UserObjectPtr) data;
   if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "Unverified") != 0) {
     return;
+  }
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    SetStatus (rdp->unverified_types[i], FALSE);
+  }
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Type") == 0) {
+      if (curr != NULL && curr->choice == 1) {
+        str = (CharPtr) curr->data.ptrvalue;
+        for (i = 0; i < eUnverifiedType_Max; i++) {
+          if (StringICmp (str, GetUnverifiedMatchName (i)) == 0) {
+            SetStatus (rdp->unverified_types[i], TRUE);
+            break;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -4397,6 +4345,8 @@ static Pointer UnverifiedDialogToUserObjectPtr (DialoG d)
 {
   UnverifiedUserDialogPtr  rdp;
   UserObjectPtr            uop;
+  Int4                     i;
+  Boolean                  any = FALSE;
 
   rdp = (UnverifiedUserDialogPtr) GetObjectExtra (d);
   if (rdp == NULL) return NULL;
@@ -4404,16 +4354,51 @@ static Pointer UnverifiedDialogToUserObjectPtr (DialoG d)
   uop = CreateUnverifiedUserObject ();
   if (uop == NULL) return NULL;
 
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    if (GetStatus (rdp->unverified_types[i])) {
+      AddStringToUnverifiedUserObject (uop, "Type", GetUnverifiedMatchName (i));
+      any = TRUE;
+    }
+  }
+  if (!any) {
+    uop = UserObjectFree (uop);
+  }
+
   return uop;
 }
+
+
+static ValNodePtr TestUnverifiedDialog (DialoG d)
+{
+  UnverifiedUserDialogPtr  rdp;
+  ValNodePtr               err = NULL;
+  Int4                     i;
+  Boolean                  any = FALSE;
+
+  rdp = (UnverifiedUserDialogPtr) GetObjectExtra (d);
+  if (rdp == NULL) return NULL;
+
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    if (GetStatus (rdp->unverified_types[i])) {
+      any = TRUE;
+    }
+  }
+  if (!any) {
+    ValNodeAddPointer (&err, 0, "Must select at least one type of unverified data!");
+  }
+
+  return err;
+}
+
 
 static DialoG CreateUnverifiedDialog (GrouP g)
 
 {
   GrouP                      p;
   UnverifiedUserDialogPtr  rdp;
+  Int4                     i;
 
-  p = HiddenGroup (g, -1, 0, NULL);
+  p = HiddenGroup (g, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
 
   rdp = (UnverifiedUserDialogPtr) MemNew (sizeof (UnverifiedUserDialog));
@@ -4423,6 +4408,11 @@ static DialoG CreateUnverifiedDialog (GrouP g)
   rdp->dialog = (DialoG) p;
   rdp->todialog = UserObjectPtrToUnverifiedDialog;
   rdp->fromdialog = UnverifiedDialogToUserObjectPtr;
+  rdp->testdialog = TestUnverifiedDialog;
+
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    rdp->unverified_types[i] = CheckBox (p, GetUnverifiedMatchName (i), NULL);
+  }
 
   return (DialoG) p;
 }
@@ -4458,6 +4448,26 @@ static void UnverifiedUserFormMessage (ForM f, Int2 mssg)
     }
   }
 }
+
+
+static void AcceptUnverifiedDescForm (ButtoN b)
+{
+  UnverifiedUserFormPtr  rfp;
+  ValNodePtr err;
+
+  rfp = (UnverifiedUserFormPtr) GetObjectExtra (b);
+  if (rfp == NULL) {
+    return;
+  }
+  err = TestDialog (rfp->data);
+  if (err != NULL) {
+    Message (MSG_ERROR, "%s", err->data.ptrvalue);
+    err = ValNodeFree (err);
+    return;
+  }
+  StdAcceptFormButtonProc (b);
+}
+
 
 static ForM CreateUnverifiedDescForm (Int2 left, Int2 top, Int2 width,
                                       Int2 height, CharPtr title, ValNodePtr sdp,
@@ -4495,7 +4505,7 @@ static ForM CreateUnverifiedDescForm (Int2 left, Int2 top, Int2 width,
     rfp->data = CreateUnverifiedDialog (g);
 
     c = HiddenGroup (w, 2, 0, NULL);
-    b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
+    b = DefaultButton (c, "Accept", AcceptUnverifiedDescForm);
     SetObjectExtra (b, rfp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
@@ -4622,6 +4632,7 @@ typedef struct dblinkdialog {
   DialoG  biosample;
   DialoG  probedb;
   DialoG  seqreadarch;
+  DialoG  bioproject;
 } DblinkDialog, PNTR DblinkDialogPtr;
 
 typedef struct dblinkform {
@@ -4656,6 +4667,7 @@ static void UserObjectPtrToDblinkDialog (
     PointerToDialog (ddp->biosample, NULL);
     PointerToDialog (ddp->probedb, NULL);
     PointerToDialog (ddp->seqreadarch, NULL);
+    PointerToDialog (ddp->bioproject, NULL);
     return;
   }
 
@@ -4681,7 +4693,7 @@ static void UserObjectPtrToDblinkDialog (
           head = ValNodeFreeData (head);
         }
       }
-    } else if (StringICmp (oip->str, "Bio Sample") == 0) {
+    } else if (StringICmp (oip->str, "BioSample") == 0) {
       if (curr->choice == 7) {
         num = curr->num;
         cpp = (CharPtr PNTR) curr->data.ptrvalue;
@@ -4735,6 +4747,24 @@ static void UserObjectPtrToDblinkDialog (
           head = ValNodeFreeData (head);
         }
       }
+    } else if (StringICmp (oip->str, "BioProject") == 0) {
+      if (curr->choice == 7) {
+        num = curr->num;
+        cpp = (CharPtr PNTR) curr->data.ptrvalue;
+        if (num > 0 && cpp != NULL) {
+          head = NULL;
+          for (i = 0; i < num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              ValNodeCopyStr (&head, 0, str);
+            }
+          }
+          if (head != NULL) {
+            PointerToDialog (ddp->bioproject, (Pointer) head);
+          }
+          head = ValNodeFreeData (head);
+        }
+      }
     }
   }
 }
@@ -4760,7 +4790,7 @@ static Pointer DblinkDialogToUserObjectPtr (
   uop = CreateDBLinkUserObject ();
   if (uop == NULL) return NULL;
 
-  head = (ValNodePtr) DialogToPointer (ddp->traceassm);
+  head = (ValNodePtr) DialogToPointer (ddp->bioproject);
   if (head != NULL) {
     num = 0;
     for (vnp = head; vnp != NULL; vnp = vnp->next) {
@@ -4769,19 +4799,17 @@ static Pointer DblinkDialogToUserObjectPtr (
       num++;
     }
     if (num > 0) {
-      ipp = (Int4Ptr) MemNew (sizeof (Int4) * num);
-      if (ipp != NULL) {
+      cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * num);
+      if (cpp != NULL) {
         i = 0;
         for (vnp = head; vnp != NULL; vnp = vnp->next) {
           str = (CharPtr) vnp->data.ptrvalue;
           if (StringHasNoText (str)) continue;
-          if (sscanf (str, "%ld", &val) == 1) {
-            ipp [i] = (Int4) val;
-            i++;
-          }
+          cpp [i] = str;
+          i++;
         }
         if (i > 0) {
-          AddTraceAssemblyIDsToDBLinkUserObject (uop, i, ipp);
+          AddBioProjectIDsToDBLinkUserObject (uop, i, cpp);
           okay = TRUE;
         }
       }
@@ -4870,6 +4898,35 @@ static Pointer DblinkDialogToUserObjectPtr (
   }
   ValNodeFreeData (head);
 
+  head = (ValNodePtr) DialogToPointer (ddp->traceassm);
+  if (head != NULL) {
+    num = 0;
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      num++;
+    }
+    if (num > 0) {
+      ipp = (Int4Ptr) MemNew (sizeof (Int4) * num);
+      if (ipp != NULL) {
+        i = 0;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          if (sscanf (str, "%ld", &val) == 1) {
+            ipp [i] = (Int4) val;
+            i++;
+          }
+        }
+        if (i > 0) {
+          AddTraceAssemblyIDsToDBLinkUserObject (uop, i, ipp);
+          okay = TRUE;
+        }
+      }
+    }
+  }
+  ValNodeFreeData (head);
+
   if (! okay) {
     uop = UserObjectFree (uop);
   }
@@ -4896,16 +4953,19 @@ static DialoG CreateDblinkDialog (
   ddp->todialog = UserObjectPtrToDblinkDialog;
   ddp->fromdialog = DblinkDialogToUserObjectPtr;
 
-  x = HiddenGroup (p, 0, 8, NULL);
+  x = HiddenGroup (p, 0, 12, NULL);
 
-  StaticPrompt (x, "Trace Assembly", 10 * stdCharWidth, 0, programFont, 'c');
-  ddp->traceassm = CreateVisibleStringDialog (x, 3, -1, 15);
+  StaticPrompt (x, "BioProject", 10 * stdCharWidth, 0, programFont, 'c');
+  ddp->bioproject = CreateVisibleStringDialog (x, 3, -1, 15);
 
-  StaticPrompt (x, "Bio Sample", 10 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (x, "BioSample", 10 * stdCharWidth, 0, programFont, 'c');
   ddp->biosample = CreateVisibleStringDialog (x, 3, -1, 15);
 
   StaticPrompt (x, "ProbeDB", 10 * stdCharWidth, 0, programFont, 'c');
   ddp->probedb = CreateVisibleStringDialog (x, 3, -1, 15);
+
+  StaticPrompt (x, "Trace Assembly", 10 * stdCharWidth, 0, programFont, 'c');
+  ddp->traceassm = CreateVisibleStringDialog (x, 3, -1, 15);
 
   StaticPrompt (x, "Sequence Read Archive", 10 * stdCharWidth, 0, programFont, 'c');
   ddp->seqreadarch = CreateVisibleStringDialog (x, 3, -1, 15);
@@ -8656,7 +8716,7 @@ static BioseqPtr ReadFromTraceDb (CharPtr number)
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
   }
@@ -8692,7 +8752,7 @@ static SeqAlignPtr GetNewBlastTPAHistAlignPiece (BioseqPtr bsp1, BioseqPtr bsp2)
    options->use_megablast = TRUE;
    options->word_size = CKA_blast_wordsize;
    options->cutoff_evalue = CKA_blast_expect_value;
-   options->hint = eNone;
+   options->hint = eBlastHint_None;
    options->gap_x_dropoff = 30;
    options->gap_open = -1;
    options->gap_extend = -1;
@@ -8853,7 +8913,7 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
    options->use_megablast = TRUE;
    options->word_size = CKA_blast_wordsize;
    options->cutoff_evalue = CKA_blast_expect_value;
-   options->hint = eNone;
+   options->hint = eBlastHint_None;
    options->gap_open = -1;
    options->gap_extend = -1;
    options->filter_string = StringSave ("F");
@@ -11137,7 +11197,7 @@ static void UpdateConflicts (Pointer userdata)
     action = atoi (str);
     str = MemFree (str);
     if (action != ip->action) {
-      ip->action = action;
+      ip->action = (EAssemblyIntervalInfoAction) action;
       RecalculateAssemblyIntervalInfoEndpoints (ip, overlap);
       any_change = TRUE;
     }
@@ -12848,7 +12908,7 @@ NLM_EXTERN SeqAlignPtr GetSeqAlignTSA (BioseqPtr bsp1, BioseqPtr bsp2)
    options->filter_string = StringSave ("m L");
    options->word_size = 20;
    options->cutoff_evalue = act_get_eval (1);
-   options->hint = eNone;
+   options->hint = eBlastHint_None;
    if (ISA_na (bsp1->mol))
    {
      options->program = eBlastn;
@@ -13357,14 +13417,6 @@ static Boolean GetCDStRNArRNAGatherFunc (GatherContextPtr gcp)
 }
 
 
-static CharPtr molinfo_tech_list [] = {
-  "?", "standard", "EST", "STS", "survey", "genetic map", "physical map",
-  "derived", "concept-trans", "seq-pept", "both", "seq-pept-overlap",
-  "seq-pept-homol", "concept-trans-a", "htgs 1", "htgs 2", "htgs 3",
-  "fli cDNA", "htgs 0", "htc", "wgs", "barcode", "composite-wgs-htgs", NULL
-};
-
-
 static void AddSubSourceValuesToNucTitle (BioSourcePtr biop, CharPtr str)
 {
   CharPtr       ssp_name;
@@ -13481,7 +13533,7 @@ static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, 
 
   if (tech > 0) {
     StringCpy (text, "[tech=");
-    StringCat (text, molinfo_tech_list [tech]);
+    StringCat (text, TechNameFromTech (tech));
     StringCat (text, "] ");
     StringCat (str, text);
   }
@@ -14869,6 +14921,7 @@ extern void CombineAdjacentGaps (IteM i)
 static void MarkPseudoGenesCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   SeqFeatPtr gene;
+  GBQualPtr gbqual, gg;
   
   if (sfp == NULL || ! sfp->pseudo 
       || sfp->data.choice == SEQFEAT_GENE
@@ -14876,11 +14929,31 @@ static void MarkPseudoGenesCallback (SeqFeatPtr sfp, Pointer userdata)
   {
     return;
   }
+  gbqual = sfp->qual; 
+  while (gbqual != NULL && StringICmp (gbqual->qual, "pseudogene") != 0) {
+    gbqual = gbqual->next;
+  }
   
   gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
   if (gene != NULL) 
   {
     gene->pseudo = TRUE;
+    if (gbqual != NULL) {
+      gg = gene->qual; 
+      while (gg != NULL && StringICmp (gg->qual, "pseudogene") != 0) {
+        gg = gg->next;
+      }
+      if (gg == NULL) {
+        gg = GBQualNew ();
+        gg->qual = StringSave ("pseudogene");
+        gg->val = StringSave (gbqual->val);
+        gg->next = gene->qual;
+        gene->qual = gg;
+      } else {
+        gg->val = MemFree (gg->val);
+        gg->val = StringSave (gbqual->val);
+      }
+    }
   }
 }
 
@@ -16236,8 +16309,10 @@ DISC_DUP_DEFLINE,
 DISC_MISSING_DEFLINES,
 TEST_TAXNAME_NOT_IN_DEFLINE,
 TEST_HAS_PROJECT_ID,
+ONCALLER_BIOPROJECT_ID,
 ONCALLER_DEFLINE_ON_SET,
 TEST_UNWANTED_SET_WRAPPER,
+TEST_COUNT_UNVERIFIED,
 DISC_SRC_QUAL_PROBLEM,
 DISC_FEATURE_COUNT,
 DISC_FEATURE_MOLTYPE_MISMATCH,
@@ -16249,6 +16324,7 @@ DISC_UNPUB_PUB_WITHOUT_TITLE,
 DISC_TITLE_AUTHOR_CONFLICT,
 DISC_SUBMITBLOCK_CONFLICT,
 DISC_CITSUBAFFIL_CONFLICT,
+DISC_CHECK_AUTH_NAME,
 DISC_MISSING_AFFIL,
 DISC_USA_STATE,
 DISC_DUP_SRC_QUAL,
@@ -16258,15 +16334,20 @@ DISC_MISSING_VIRAL_QUALS,
 DISC_INFLUENZA_DATE_MISMATCH,
 DISC_HUMAN_HOST,
 DISC_SPECVOUCHER_TAXNAME_MISMATCH,
+DISC_BIOMATERIAL_TAXNAME_MISMATCH,
+DISC_CULTURE_TAXNAME_MISMATCH,
 DISC_STRAIN_TAXNAME_MISMATCH,
 DISC_BACTERIA_SHOULD_NOT_HAVE_ISOLATE,
 DISC_BACTERIA_MISSING_STRAIN,
+ONCALLER_STRAIN_TAXNAME_CONFLICT,
 TEST_SP_NOT_UNCULTURED,
 DISC_REQUIRED_CLONE,
 TEST_UNNECESSARY_ENVIRONMENTAL,
 TEST_AMPLIFIED_PRIMERS_NO_ENVIRONMENTAL_SAMPLE,
 ONCALLER_MULTISRC,
+ONCALLER_COUNTRY_COLON,
 DUP_DISC_ATCC_CULTURE_CONFLICT,
+DUP_DISC_CBS_CULTURE_CONFLICT,
 ONCALLER_STRAIN_CULTURE_COLLECTION_MISMATCH,
 ONCALLER_MULTIPLE_CULTURE_COLLECTION,
 DISC_TRINOMIAL_SHOULD_HAVE_QUALIFIER,
@@ -16275,6 +16356,9 @@ DISC_MAP_CHROMOSOME_CONFLICT,
 DISC_METAGENOMIC,
 DISC_METAGENOME_SOURCE,
 DISC_RETROVIRIDAE_DNA,
+NON_RETROVIRIDAE_PROVIRAL,
+ONCALLER_HIV_RNA_INCONSISTENT,
+RNA_PROVIRAL,
 TEST_BAD_MRNA_QUAL,
 DISC_MITOCHONDRION_REQUIRED,
 TEST_UNWANTED_SPACER,
@@ -16287,9 +16371,11 @@ TEST_UNNECESSARY_VIRUS_GENE,
 DISC_NON_GENE_LOCUS_TAG,
 DISC_RBS_WITHOUT_GENE,
 ONCALLER_ORDERED_LOCATION,
+MULTIPLE_CDS_ON_MRNA,
 DISC_CDS_WITHOUT_MRNA,
 DISC_mRNA_ON_WRONG_SEQUENCE_TYPE,
 DISC_BACTERIA_SHOULD_NOT_HAVE_MRNA,
+TEST_MRNA_OVERLAPPING_PSEUDO_GENE,
 TEST_EXON_ON_MRNA,
 DISC_CDS_HAS_NEW_EXCEPTION,
 DISC_SHORT_INTRON,
@@ -16298,6 +16384,7 @@ DISC_PSEUDO_MISMATCH,
 DISC_RNA_NO_PRODUCT,
 DISC_BADLEN_TRNA,
 DISC_MICROSATELLITE_REPEAT_TYPE,
+DISC_SHORT_RRNA,
 DISC_POSSIBLE_LINKER,
 DISC_HAPLOTYPE_MISMATCH,
 DISC_FLATFILE_FIND_ONCALLER,
@@ -16305,7 +16392,8 @@ DISC_CDS_PRODUCT_FIND,
 DISC_SUSPICIOUS_NOTE_TEXT,
 DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS,
 DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA,
-ONCALLER_COMMENT_PRESENT
+ONCALLER_COMMENT_PRESENT,
+DISC_SUSPECT_PRODUCT_NAME
 };
 
 static const Uint4 kNumOnCallerToolPriority = sizeof (sOnCallerToolPriorities) / sizeof (Uint4);
@@ -16380,10 +16468,12 @@ static ClickableItemPtr CreateTopLevelCategory (ValNodePtr orig, CharPtr cat_nam
 
 static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
 {
-  ClickableItemPtr cip_mol_type = NULL, cip_cit_sub = NULL, cip_src = NULL;
+  ClickableItemPtr cip_mol_type = NULL, cip_cit_sub = NULL, cip_src = NULL, sub_typo;
   ClickableItemPtr cip_feat = NULL, cip_suspect_text = NULL;
-  ValNodePtr vnp, v_prev = NULL, v_next;
+  ValNodePtr vnp, v_prev = NULL, v_next, subcate;
   ClickableItemPtr cip;
+  Int4 typo_item_cnt;
+  CharPtr typo_item_fmt = "%d product names contain typos";
 
   if (p_clickable_list == NULL || *p_clickable_list == NULL) {
     return;
@@ -16416,6 +16506,7 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_TITLE_AUTHOR_CONFLICT:
       case DISC_SUBMITBLOCK_CONFLICT:
       case DISC_CITSUBAFFIL_CONFLICT:
+      case DISC_CHECK_AUTH_NAME:
       case DISC_MISSING_AFFIL:
       case DISC_USA_STATE:
         if (cip_cit_sub == NULL) {
@@ -16435,15 +16526,20 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_INFLUENZA_DATE_MISMATCH:
       case DISC_HUMAN_HOST:
       case DISC_SPECVOUCHER_TAXNAME_MISMATCH:
+      case DISC_BIOMATERIAL_TAXNAME_MISMATCH:
+      case DISC_CULTURE_TAXNAME_MISMATCH:
       case DISC_STRAIN_TAXNAME_MISMATCH:
       case DISC_BACTERIA_SHOULD_NOT_HAVE_ISOLATE:
       case DISC_BACTERIA_MISSING_STRAIN:
+      case ONCALLER_STRAIN_TAXNAME_CONFLICT:
       case TEST_SP_NOT_UNCULTURED:
       case DISC_REQUIRED_CLONE:
       case TEST_UNNECESSARY_ENVIRONMENTAL:
       case TEST_AMPLIFIED_PRIMERS_NO_ENVIRONMENTAL_SAMPLE:
       case ONCALLER_MULTISRC:
+      case ONCALLER_COUNTRY_COLON:
       case DUP_DISC_ATCC_CULTURE_CONFLICT:
+      case DUP_DISC_CBS_CULTURE_CONFLICT:
       case ONCALLER_STRAIN_CULTURE_COLLECTION_MISMATCH:
       case ONCALLER_MULTIPLE_CULTURE_COLLECTION:
       case DISC_TRINOMIAL_SHOULD_HAVE_QUALIFIER:
@@ -16452,6 +16548,9 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_METAGENOMIC:
       case DISC_METAGENOME_SOURCE:
       case DISC_RETROVIRIDAE_DNA:
+      case NON_RETROVIRIDAE_PROVIRAL:
+      case ONCALLER_HIV_RNA_INCONSISTENT:
+      case RNA_PROVIRAL:
       case TEST_BAD_MRNA_QUAL:
       case DISC_MITOCHONDRION_REQUIRED:
       case TEST_UNWANTED_SPACER:
@@ -16474,9 +16573,11 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_NON_GENE_LOCUS_TAG:
       case DISC_RBS_WITHOUT_GENE:
       case ONCALLER_ORDERED_LOCATION:
+      case MULTIPLE_CDS_ON_MRNA:
       case DISC_CDS_WITHOUT_MRNA:
       case DISC_mRNA_ON_WRONG_SEQUENCE_TYPE:
       case DISC_BACTERIA_SHOULD_NOT_HAVE_MRNA:
+      case TEST_MRNA_OVERLAPPING_PSEUDO_GENE:
       case TEST_EXON_ON_MRNA:
       case DISC_CDS_HAS_NEW_EXCEPTION:
       case DISC_SHORT_INTRON:
@@ -16485,6 +16586,7 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_RNA_NO_PRODUCT:
       case DISC_BADLEN_TRNA:
       case DISC_MICROSATELLITE_REPEAT_TYPE:
+      case DISC_SHORT_RRNA:
         if (cip_feat == NULL) {
           cip_feat = CreateTopLevelCategory (vnp, "Feature tests");
           v_prev = vnp;
@@ -16501,6 +16603,34 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS:
       case DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA:
       case ONCALLER_COMMENT_PRESENT:
+      case DISC_SUSPECT_PRODUCT_NAME:
+        if (DISC_SUSPECT_PRODUCT_NAME == cip->clickable_item_type) {
+           sub_typo = NULL;
+           for (subcate = cip->subcategories; subcate != NULL; subcate = subcate->next) {
+              if ( !StringCmp(((ClickableItemPtr)(subcate->data.ptrvalue))->description, "Typo") ) { 
+                  sub_typo = subcate->data.ptrvalue;
+                  subcate->next = NULL;
+                   break;
+              }
+           }
+           if (sub_typo != NULL) {
+              vnp->data.ptrvalue = cip = sub_typo;
+              typo_item_cnt = 0;
+              for (subcate = cip->subcategories; subcate != NULL; subcate = subcate->next) {
+                   typo_item_cnt += 
+                          ValNodeLen(((ClickableItemPtr)(subcate->data.ptrvalue))->item_list);
+              }
+              cip->description = NULL;
+              cip->description = (CharPtr) MemNew (StringLen(typo_item_fmt) + 5);
+              sprintf(cip->description, typo_item_fmt, typo_item_cnt);
+           }
+           else  {
+              v_prev->next = vnp->next;
+              vnp->next = NULL;
+              vnp = ValNodeFree (vnp);
+              break;
+           }
+        }
         if (cip_suspect_text == NULL) {
           cip_suspect_text = CreateTopLevelCategory (vnp, "Suspect text tests");
           v_prev = vnp;
@@ -16529,7 +16659,7 @@ static void RelabelDiscrepancyItems (ValNodePtr list)
   for (vnp = list; vnp != NULL; vnp = vnp->next) {
     cip = (ClickableItemPtr) vnp->data.ptrvalue;
     if (cip != NULL) {
-      test_name = GetDiscrepancyTestSettingName (cip->clickable_item_type);
+      test_name = GetDiscrepancyTestSettingName ((DiscrepancyType) cip->clickable_item_type);
       if (test_name != NULL) {
         new_desc = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (cip->description) + StringLen (test_name)));
         sprintf (new_desc, fmt, cip->description, test_name);
@@ -16652,7 +16782,7 @@ WriteClickableListReport
     dip = (ClickableItemPtr) vnp->data.ptrvalue;
     if (dip != NULL)
     {
-      if (dip->expanded)
+      if (dip->expanded && dip->subcategories != NULL)
       {
         num_chosen = CountChosenDiscrepancies (dip->subcategories, show_all | dip->chosen);
         if (num_chosen > 0)

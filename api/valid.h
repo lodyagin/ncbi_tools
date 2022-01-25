@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.73 $
+* $Revision: 6.78 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -154,6 +154,7 @@ typedef struct validstruct {
     Boolean rubiscoTest;           /* look for ribulose bisphosphate variants */
     Boolean indexerVersion;        /* special tests for GenBank indexers */
     Boolean disableSuppression;    /* disables suppression of message by ShouldSuppressValidErr */
+    Boolean genomeSubmission;      /* raise severity on numerous warnings for automated genome center submissions */
     Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
                                    /* this section used for finer error reporting callback */
     ValidErrorFunc errfunc;
@@ -168,6 +169,7 @@ typedef struct validstruct {
     Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
     Boolean is_gpipe_in_sep;       /* record has seqid of type gpipe */
     Boolean is_gps_in_sep;         /* record has genomic product set */
+    Boolean is_small_genome_set;   /* record has small genome set */
     Boolean other_sets_in_sep;     /* record has pop/phy/mut/eco/wgs set */
     Boolean is_embl_ddbj_in_sep;   /* record has embl or ddbj seqid */
     Boolean is_old_gb_in_sep;      /* record has old style GenBank accession */
@@ -199,10 +201,16 @@ NLM_EXTERN CharPtr GetValidCategoryName (int errcode);
 NLM_EXTERN CharPtr GetValidErrorName (int errcode, int subcode);
 NLM_EXTERN CharPtr GetValidExplanation (int errcode, int subcode);
 
+NLM_EXTERN Boolean LookForECnumberPattern (CharPtr str);
+NLM_EXTERN Boolean ValidateECnumber (CharPtr str);
+NLM_EXTERN Boolean ECnumberNotInList (CharPtr str);
+NLM_EXTERN Boolean ECnumberWasDeleted (CharPtr str);
+NLM_EXTERN Boolean ECnumberWasReplaced (CharPtr str);
+
 NLM_EXTERN CharPtr PNTR GetValidCountryList (void);
+NLM_EXTERN CharPtr PNTR GetFormerCountryList (void);
 NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP, BoolPtr bad_capP);
 NLM_EXTERN CharPtr GetCorrectedCountryCapitalization (CharPtr name);
-NLM_EXTERN Boolean LookForECnumberPattern (CharPtr str);
 
 NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str);
 

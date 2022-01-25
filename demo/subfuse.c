@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/30/01
 *
-* $Revision: 1.2 $
+* $Revision: 1.5 $
 *
 * File Description: 
 *
@@ -47,6 +47,8 @@
 #include <objsset.h>
 #include <objsub.h>
 #include <objfdef.h>
+#include <sqnutils.h>
+#include <gather.h>
 
 static SeqSubmitPtr ReadOneSubmission (
   CharPtr directory,
@@ -140,9 +142,13 @@ Int2 Main (void)
 {
   CharPtr       base, directory, outfile, suffix, ptr;
   BioseqSetPtr  bssp;
+  Int4          count;
+  Uint2         entityID;
   ValNodePtr    head, vnp;
+  Int4          offset = 0;
   SeqEntryPtr   sep;
   SeqSubmitPtr  ssp;
+  SeqEntryPtr   tmp;
 
   /* standard setup */
 
@@ -192,15 +198,21 @@ Int2 Main (void)
   if (sep == NULL) return 0;
   sep->choice = 2;
   sep->data.ptrvalue = (Pointer) bssp;
+  SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
 
   ssp = SeqSubmitNew ();
   if (ssp == NULL) return 0;
   ssp->datatype = 1;
   ssp->data = (Pointer) sep;
 
+  entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
+  AssignIDsInEntity (entityID, 0, NULL);
+
   /* get list of all files in source directory */
 
   head = DirCatalog (directory);
+
+  head = ValNodeSort (head, SortVnpByNaturalCI);
 
   for (vnp = head; vnp != NULL; vnp = vnp->next) {
     if (vnp->choice == 0) {
@@ -219,6 +231,17 @@ Int2 Main (void)
   /* clean up file list */
 
   ValNodeFreeData (head);
+
+  /* reassign feature IDs, remove nested genbank sets */
+
+  for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+    count = FindHighestFeatureID (tmp);
+    OffsetFeatureIDs (tmp, offset);
+    OffsetFeatureIDXrefs (tmp, offset);
+    offset += count;
+  }
+
+  RemoveDuplicateNestedSetsForEntityID (entityID);
 
   /* write output file */
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *     portable file routines
@@ -1347,7 +1347,7 @@ static void Nlm_FileCacheReadBlock (
     }
 
     fcp->buf [total] = '\0';
-    fcp->total = Nlm_StringLen (fcp->buf);
+    fcp->total = /* Nlm_StringLen (fcp->buf) */ total;
   }
 }
 
@@ -1376,12 +1376,13 @@ static Nlm_Char Nlm_FileCacheGetChar (
   }
 
   if (ch == '\n' || ch == '\r') {
+
+    /* look for carriage return / linefeed pair - DOS file read on Mac or Unix platform */
+
     if (fcp->ctr >= fcp->total) {
       Nlm_FileCacheReadBlock (fcp);
     }
     if (fcp->ctr < fcp->total) {
-
-      /* look for carriage return / linefeed pair - DOS file read on Mac or Unix platform */
 
       nxt = fcp->buf [(int) fcp->ctr];
 
@@ -1397,6 +1398,25 @@ static Nlm_Char Nlm_FileCacheGetChar (
     /* cr or lf returned as newline */
 
     ch = '\n';
+
+  } else if (ch == '\0') {
+
+    /* look for unicode carriage return / linefeed */
+
+    if (fcp->ctr >= fcp->total) {
+      Nlm_FileCacheReadBlock (fcp);
+    }
+    if (fcp->ctr < fcp->total) {
+
+      nxt = fcp->buf [(int) fcp->ctr];
+
+      /* return newline if second character is cr or lf */
+
+      if (nxt == '\n' || nxt == '\r') {
+        (fcp->ctr)++;
+        ch = '\n';
+      }
+    }
   }
 
   return ch;

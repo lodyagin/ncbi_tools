@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.8 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -58,7 +58,7 @@
 #include <objmacro.h>
 #include <macroapi.h>
 
-#define ASNMACRO_APP_VER "1.2"
+#define ASNMACRO_APP_VER "1.3"
 
 CharPtr ASNMACRO_APPLICATION = ASNMACRO_APP_VER;
 
@@ -263,15 +263,25 @@ static AsnIoPtr AsnIoFromOutputStream (OutputStreamPtr osp)
 
 static void WriteOneFile (
   OutputStreamPtr osp,
-  SeqEntryPtr sep
+  SeqEntryPtr sep,
+  SubmitBlockPtr sbp
 )
 
 {
   AsnIoPtr   aip;
+  SeqSubmit  ssb;
 
   aip = AsnIoFromOutputStream (osp);
   if (aip != NULL) {
-    SeqEntryAsnWrite (sep, aip, NULL);
+    if (sbp != NULL) {
+      MemSet ((Pointer) &ssb, 0, sizeof (SeqSubmit));
+      ssb.sub = sbp;
+      ssb.datatype = 1;
+      ssb.data = (Pointer) sep;
+      SeqSubmitAsnWrite (&ssb, aip, NULL);
+    } else {
+      SeqEntryAsnWrite (sep, aip, NULL);
+    }
     AsnIoFlush (aip);
   }
   if (aip != osp->aip) {
@@ -280,16 +290,25 @@ static void WriteOneFile (
 }
 
 
+static SeqAlignPtr Sequin_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
+{
+   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign, GetSeqAlignPiece, TRUE);
+}
+
+
 static Uint2 ProcessOneAsn (
   FILE* fp,
   CharPtr path,
-  ValNodePtr macro
+  ValNodePtr macro,
+  SubmitBlockPtr PNTR sbpp
 )
 
 {
-  Pointer        dataptr;
-  Uint2          datatype, entityID = 0;
-  SeqEntryPtr    sep;
+  Pointer         dataptr;
+  Uint2           datatype, entityID = 0;
+  SubmitBlockPtr  sbp = NULL;
+  SeqEntryPtr     sep;
+  SeqSubmitPtr    ssp;
 
   if (fp == NULL) return 0;
 
@@ -298,10 +317,20 @@ static Uint2 ProcessOneAsn (
     Message (MSG_POSTERR, "Unable to read data from %s.", path);
     return 0;
   }
+  if (datatype == OBJ_SEQSUB) {
+    ssp = (SeqSubmitPtr) dataptr;
+    if (ssp != NULL) {
+      sbp = ssp->sub;
+    }
+  }
 
   SeqMgrIndexFeatures (entityID, NULL);
   sep = GetTopSeqEntryForEntityID (entityID);
-  ApplyMacroToSeqEntry (sep, macro);
+  ApplyMacroToSeqEntryEx (sep, macro, NULL, Sequin_GlobalAlign2Seq);
+
+  if (sbpp != NULL) {
+    *sbpp = sbp;
+  }
 
   return entityID;
 }
@@ -314,15 +343,16 @@ static Int4 ProcessOneRecord (
 )
 
 {
-  Uint2              entityID;
-  FILE               *fp;
-  SeqEntryPtr        sep;
+  Uint2           entityID;
+  FILE            *fp;
+  SubmitBlockPtr  sbp = NULL;
+  SeqEntryPtr     sep;
 
   if (osp == NULL) return -1;
   fp = OpenOneFile (directory, osp->base, osp->suffix);
   if (fp == NULL) return -1;
 
-  entityID = ProcessOneAsn (fp, osp->base == NULL ? "input stream" : osp->base, macro);
+  entityID = ProcessOneAsn (fp, osp->base == NULL ? "input stream" : osp->base, macro, &sbp);
   
   FileClose (fp);
 
@@ -332,7 +362,7 @@ static Int4 ProcessOneRecord (
 
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL) {
-    WriteOneFile (osp, sep);
+    WriteOneFile (osp, sep, sbp);
   }
 
   ObjMgrFreeByEntityID (entityID);
@@ -614,6 +644,10 @@ Int2 Main(void)
 
   macro_file = (CharPtr) myargs [m_argMacroFile].strvalue;
   action_list = ReadMacroFile (macro_file);
+  if (!PreprocessMacroForRepeatedUse (action_list, NULL)) {
+    Message (MSG_FATAL, "Failed to preprocess tables in macro\n");
+    return 1;
+  }
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   osd.results_dir = (CharPtr) myargs [r_argOutputPath].strvalue;
@@ -695,5 +729,7 @@ Int2 Main(void)
     AsnIoFlush (osd.aip);
     AsnIoClose (osd.aip);
   }
+  CleanupMacroAfterRepeatedUse(action_list);
+  action_list = MacroActionListFree (action_list);
   return rval;
 }

@@ -72,6 +72,8 @@
 #define ERR_SEQ_INST_HighNContentStretch  1,68
 #define ERR_SEQ_INST_HighNContentPercent  1,69
 #define ERR_SEQ_INST_BadSegmentedSeq  1,70
+#define ERR_SEQ_INST_SeqLitGapFuzzNot100  1,71
+#define ERR_SEQ_INST_SeqGapProblem  1,72
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -154,6 +156,14 @@
 #define ERR_SEQ_DESCR_LatLonWater  2,79
 #define ERR_SEQ_DESCR_LatLonOffshore  2,80
 #define ERR_SEQ_DESCR_MissingPersonalCollectionName  2,81
+#define ERR_SEQ_DESCR_LatLonPrecision  2,82
+#define ERR_SEQ_DESCR_DBLinkProblem  2,83
+#define ERR_SEQ_DESCR_FinishedStatusForWGS  2,84
+#define ERR_SEQ_DESCR_BadTentativeName  2,85
+#define ERR_SEQ_DESCR_OrganismNotFound  2,86
+#define ERR_SEQ_DESCR_TaxonomyIsSpeciesProblem  2,87
+#define ERR_SEQ_DESCR_TaxonomyConsultRequired  2,88
+#define ERR_SEQ_DESCR_TaxonomyNucleomorphProblem  2,89
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -170,6 +180,7 @@
 #define ERR_GENERIC_SgmlPresentInText  3,13
 #define ERR_GENERIC_UnexpectedPubStatusComment  3,14
 #define ERR_GENERIC_PastReleaseDate  3,15
+#define ERR_GENERIC_MissingISOJTA  3,16
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -381,6 +392,15 @@
 #define ERR_SEQ_FEAT_NeedsNote  5,178
 #define ERR_SEQ_FEAT_RptUnitRangeProblem  5,179
 #define ERR_SEQ_FEAT_TooManyInferenceAccessions  5,180
+#define ERR_SEQ_FEAT_IntervalBeginsOrEndsInGap  5,181
+#define ERR_SEQ_FEAT_InconsistentRRNAstrands  5,182
+#define ERR_SEQ_FEAT_CDSonMinusStrandMRNA  5,183
+#define ERR_SEQ_FEAT_tRNAmRNAmixup  5,184
+#define ERR_SEQ_FEAT_ProductLength  5,185
+#define ERR_SEQ_FEAT_InconsistentPseudogeneCounts  5,186
+#define ERR_SEQ_FEAT_DeletedEcNumber  5,187
+#define ERR_SEQ_FEAT_ReplacedEcNumber  5,188
+#define ERR_SEQ_FEAT_SplitEcNumber  5,189
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

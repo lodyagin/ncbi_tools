@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/15/2007
 *
-* $Revision: 1.129 $
+* $Revision: 1.154 $
 *
 * File Description: 
 *
@@ -117,6 +117,7 @@ NLM_EXTERN CharPtr BiomolNameFromBiomol (Int4 biomol);
 NLM_EXTERN Int4 BiomolFromMoleculeType (Int4 molecule_type);
 NLM_EXTERN ValNodePtr GetMoleculeTypeList (void);
 NLM_EXTERN CharPtr TechNameFromTech (Int4 tech);
+NLM_EXTERN Int4 TechFromTechName (CharPtr tech_name);
 NLM_EXTERN Int4 TechFromTechniqueType (Int4 technique_type);
 NLM_EXTERN ValNodePtr GetTechniqueTypeList (void);
 NLM_EXTERN Int4 CompletenessFromCompletednessType (Int4 completedness_type);
@@ -167,6 +168,9 @@ NLM_EXTERN Boolean RemoveQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field,
 NLM_EXTERN Boolean SetSourceQualInBioSource (BioSourcePtr biop, SourceQualChoicePtr scp, StringConstraintPtr constraint, CharPtr value, Uint2 existing_text);
 NLM_EXTERN Boolean RemoveSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoicePtr scp, StringConstraintPtr constraint);
 NLM_EXTERN Boolean AllowSourceQualMulti (SourceQualChoicePtr s);
+NLM_EXTERN Boolean SetStringInGBQualList (GBQualPtr PNTR list, ValNodePtr field, StringConstraintPtr scp, CharPtr new_val, Uint2 existing_text);
+NLM_EXTERN Boolean RemoveGBQualMatch (GBQualPtr PNTR list, CharPtr qual_name, Int4 subfield, StringConstraintPtr scp);
+NLM_EXTERN CharPtr GetFirstGBQualMatch (GBQualPtr qual, CharPtr qual_name, Int4 subfield, StringConstraintPtr scp);
 
 NLM_EXTERN ValNodePtr SourceQualValsFromBioSourcePtr (BioSourcePtr biop);
 NLM_EXTERN BioSourcePtr BioSourceFromSourceQualVals (ValNodePtr fields);
@@ -206,6 +210,12 @@ NLM_EXTERN Int4 GetNumDBLinkFields (void);
 NLM_EXTERN CharPtr GetDBLinkNameFromDBLinkFieldType (Int4 field_type);
 NLM_EXTERN Int4 GetDBLinkFieldTypeFromDBLinkName (CharPtr field_name);
 
+NLM_EXTERN CharPtr GetBioProjectIdFromBioseq (BioseqPtr bsp, StringConstraintPtr scp);
+
+
+/* Dbtag functions */
+NLM_EXTERN CharPtr GetDbtagString (DbtagPtr db_tag);
+NLM_EXTERN Boolean SetDbtagString (DbtagPtr db_tag, CharPtr value, Uint2 existing_text);
 
 /* other useful functions */
 NLM_EXTERN void GetGeneInfoForFeature (SeqFeatPtr sfp, GeneRefPtr PNTR p_grp, SeqFeatPtr PNTR p_gene);
@@ -260,6 +270,7 @@ NLM_EXTERN Boolean RemoveDuplicateFeaturesInSeqEntry (SeqEntryPtr sep, RemoveDup
 NLM_EXTERN int LIBCALLBACK SortVnpByObject (VoidPtr ptr1, VoidPtr ptr2);
 
 NLM_EXTERN Boolean IsConversionSupported (Uint2 featdef_from, Uint2 featdef_to);
+NLM_EXTERN Boolean ConvertRNAToImpFeat (SeqFeatPtr sfp, Int4 featdef_to);
 
 NLM_EXTERN void ApplyTextTransformsToString (CharPtr PNTR str, ValNodePtr transform_list);
 NLM_EXTERN CharPtr GetTextPortionFromString (CharPtr str, TextPortionPtr text_portion);
@@ -305,7 +316,10 @@ NLM_EXTERN void AddAllDescriptorsToChoiceList (ValNodePtr PNTR descriptor_type_l
 NLM_EXTERN Boolean IsFixPubCapsActionEmpty (FixPubCapsActionPtr action);
 
 NLM_EXTERN void ApplyMacroToSeqEntry (SeqEntryPtr sep, ValNodePtr macro);
-NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FILE *log_fp);
+NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FILE *log_fp, GlobalAlignFunc align_func);
+NLM_EXTERN Boolean ApplyMacroToSeqEntryExEx (SeqEntryPtr sep, ValNodePtr macro, FILE *log_fp, GlobalAlignFunc align_func, Int4Ptr pNumNoOp);
+NLM_EXTERN Boolean PreprocessMacroForRepeatedUse (ValNodePtr macro, FILE *log_fp);
+NLM_EXTERN void CleanupMacroAfterRepeatedUse (ValNodePtr macro);
 
 NLM_EXTERN SeqFeatPtr ApplyOneFeatureToBioseq (BioseqPtr bsp, Uint1 featdef, SeqLocPtr slp, ValNodePtr fields, ValNodePtr src_fields, Boolean add_mrna);
 
@@ -337,8 +351,17 @@ NLM_EXTERN CharPtr SummarizeAuthorFixAction (AuthorFixActionPtr a);
 NLM_EXTERN CharPtr SummarizeWordSubstitution (WordSubstitutionPtr word);
 NLM_EXTERN CharPtr SummarizeFeatureStrandedness (Uint2 strandedness);
 NLM_EXTERN CharPtr SummarizeStringConstraint (StringConstraintPtr constraint);
+NLM_EXTERN CharPtr SummarizeStringConstraintEx (StringConstraintPtr constraint, Boolean short_version);
 NLM_EXTERN CharPtr SummarizeConstraintSet (ValNodePtr constraint_set);
 NLM_EXTERN CharPtr SummarizeConstraint (ValNodePtr constraint);
+NLM_EXTERN CharPtr SummarizeUpdateSequencesAction (UpdateSequencesActionPtr action);
+NLM_EXTERN CharPtr SummarizePerformAutofixAction (AutofixActionPtr action);
+NLM_EXTERN CharPtr SummarizeFixSetsAction (FixSetsActionPtr action);
+NLM_EXTERN CharPtr SummarizeApplyTableAction (ApplyTableActionPtr action);
+NLM_EXTERN CharPtr SummarizeRemoveSequencesAction (RemoveSequencesActionPtr action);
+NLM_EXTERN CharPtr SummarizePropagateSequenceTechnology (Pointer action);
+NLM_EXTERN CharPtr SummarizeMacroAction (ValNodePtr vnp);
+
 
 extern const CharPtr s_QuantityWords [];
 extern const Int4 k_NumQuantityWords;
@@ -367,7 +390,9 @@ typedef enum {
   eTableMatchDbxref,
   eTableMatchNucID,
   eTableMatchBioSource,
-  eTableMatchSourceQual
+  eTableMatchSourceQual,
+  eTableMatchProteinName,    /* J. Chen */
+  eTableMatchAny
 } ETableMatchType;
 
 
@@ -387,6 +412,7 @@ typedef struct tabcolumnconfig {
 } TabColumnConfigData, PNTR TabColumnConfigPtr;
 
 
+
 NLM_EXTERN MatchTypePtr MatchTypeNew ();
 NLM_EXTERN MatchTypePtr MatchTypeFree (MatchTypePtr match_type);
 
@@ -396,7 +422,12 @@ NLM_EXTERN TabColumnConfigPtr TabColumnConfigCopy (TabColumnConfigPtr orig);
 NLM_EXTERN void TabColumnConfigReset (TabColumnConfigPtr t);
 NLM_EXTERN ValNodePtr TabColumnConfigListFree (ValNodePtr columns);
 NLM_EXTERN ValNodePtr TabColumnConfigListCopy (ValNodePtr orig);
+NLM_EXTERN MatchTypePtr MatchTypeFromTableMatchType (TableMatchPtr t);
+NLM_EXTERN TableMatchPtr TableMatchTypeFromMatchType (MatchTypePtr m);
+
 NLM_EXTERN ValNodePtr ValidateTabTableValues (ValNodePtr table, ValNodePtr columns);
+NLM_EXTERN ValNodePtr CheckForDuplicateColumns (ValNodePtr columns);
+NLM_EXTERN void FixDuplicateColumns (ValNodePtr columns);
 NLM_EXTERN ValNodePtr ValidateFeatureFieldColumnNames (ValNodePtr header_line, ValNodePtr PNTR perr_list);
 NLM_EXTERN ValNodePtr FreeObjectTableForTabTable (ValNodePtr table);
 NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr table, ValNodePtr columns, ValNodePtr PNTR p_err_list);
@@ -445,6 +476,11 @@ NLM_EXTERN ProtRefPtr GetProtRefForFeature (SeqFeatPtr sfp);
 NLM_EXTERN Boolean StripSuffixFromAuthor (AuthorPtr pAuthor);
 NLM_EXTERN Boolean TruncateAuthorMiddleInitials (AuthorPtr pAuthor);
 
+NLM_EXTERN Int4 ConvertLocalIdsToTSAIds (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr tp);
+NLM_EXTERN Int4 CreateTSAIDsFromDeflineInSep (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr t);
+NLM_EXTERN Int4 EditTSAIds (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr tp);
+NLM_EXTERN CharPtr SummarizeCreateTSAIDsAction (CreateTSAIdsActionPtr action);
+
 
 /* for product name rules */
 NLM_EXTERN Int4 CountSuspectRuleSet (SuspectRuleSetPtr set);
@@ -452,11 +488,12 @@ NLM_EXTERN Int4 CountSuspectRuleSet (SuspectRuleSetPtr set);
 NLM_EXTERN Boolean IsSearchFuncEmpty (SearchFuncPtr func);
 NLM_EXTERN Boolean IsSuspectRuleEmpty (SuspectRulePtr rule);
 
-NLM_EXTERN CharPtr SummarizeSearchFunc (SearchFuncPtr func);
-NLM_EXTERN CharPtr SummarizeReplaceFunc (ReplaceFuncPtr replace);
+NLM_EXTERN CharPtr SummarizeSearchFunc (SearchFuncPtr func, Boolean short_version);
+NLM_EXTERN CharPtr SummarizeReplaceFunc (ReplaceFuncPtr replace, Boolean short_version);
 NLM_EXTERN CharPtr SummarizeFixType (Uint2 fix_type);
-NLM_EXTERN CharPtr SummarizeReplaceRule (ReplaceRulePtr replace);
+NLM_EXTERN CharPtr SummarizeReplaceRule (ReplaceRulePtr replace, Boolean short_version);
 NLM_EXTERN CharPtr SummarizeSuspectRule (SuspectRulePtr rule);
+NLM_EXTERN CharPtr SummarizeSuspectRuleEx (SuspectRulePtr rule, Boolean short_version);
 
 
 NLM_EXTERN Boolean StringMayContainPlural (CharPtr search);
@@ -481,7 +518,9 @@ NLM_EXTERN void SortSuspectRuleSetByFixTypeThenFind (SuspectRuleSetPtr PNTR rule
 
 NLM_EXTERN void FindDiffsBetweenRuleSets (SuspectRuleSetPtr set1, SuspectRuleSetPtr set2, SuspectRuleSetPtr PNTR in1not2, SuspectRuleSetPtr PNTR in2not1);
 NLM_EXTERN Boolean FindSuspectProductNamesInEntrezGene (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file);
+NLM_EXTERN Boolean FixSuspectProductNamesInEntrezGene (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file);
 NLM_EXTERN void FindSuspectProductNamesInNameList (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file);
+NLM_EXTERN void FixSuspectProductNamesInNameList (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file);
 
 
 /* declarations for product update table handling */
@@ -492,6 +531,8 @@ NLM_EXTERN void ExportProductUpdateTable (SeqEntryPtr sep, FILE *fp);
 NLM_EXTERN void ExportProductUpdateTableWithPrecomputedSuggestions (FILE *fp, SeqEntryPtr sep, SuspectRuleSetPtr rules);
 
 NLM_EXTERN ValNodePtr GetBioseqMatchesForSequenceIDs (ValNodePtr query_list, Uint1 match_location, SeqEntryPtr sep);
+
+NLM_EXTERN ValNodePtr ShuffleUpdateBioseqListWithIndex (ValNodePtr PNTR update_bioseq_list, ValNodePtr orig_bioseq_list);
 
 #ifdef __cplusplus 
 } 

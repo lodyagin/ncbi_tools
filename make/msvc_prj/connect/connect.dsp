@@ -209,6 +209,10 @@ SOURCE=..\..\..\connect\ncbi_types.c
 
 SOURCE=..\..\..\connect\ncbi_util.c
 # End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_version.c
+# End Source File
 # End Group
 # Begin Group "Header Files"
 
@@ -304,6 +308,10 @@ SOURCE=..\..\..\connect\ncbi_types.h
 # Begin Source File
 
 SOURCE=..\..\..\connect\ncbi_util.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_version.h
 # End Source File
 # End Group
 # End Target

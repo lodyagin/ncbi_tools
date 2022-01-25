@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.373 $
+* $Revision: 6.393 $
 *
 * File Description: 
 *
@@ -5621,7 +5621,7 @@ CalculateGapCoverage
                     && seq_offset + slip->length < context.right))
           {
             /* we only count internal gaps */
-            for (k = 0; k < context.numivals; k += 2) 
+            for (k = 0; k < 2 * context.numivals; k += 2) 
             {
               start = context.ivals [k];
               stop = context.ivals [k + 1];
@@ -5635,12 +5635,12 @@ CalculateGapCoverage
                 /* interval covers entire gap */
                 covered += slip->length;
               }
-              else if (seq_offset < start && seq_offset + slip->length < stop)
+              else if (seq_offset < start && seq_offset + slip->length > start)
               {
                 /* gap covers left end of interval */
                 covered += seq_offset + slip->length - start;
               }
-              else if (seq_offset > start && seq_offset + slip->length > stop)
+              else if (seq_offset < stop && seq_offset + slip->length > stop)
               {
                 /* gap covers right end of interval */
                 covered += stop - seq_offset;
@@ -5742,30 +5742,162 @@ RemoveTerminalGapsFromLocation
   return slp_copy;
 }
 
-static void 
-AdjustOneCodingRegionWithTerminalGapsOnBioseq 
-(BioseqPtr         bsp,
- SeqFeatPtr        sfp,
- SeqMgrFeatContext context)
+
+static Int4 TrailingNLength (CharPtr seq)
 {
-  SeqLocPtr         adjusted_loc;
+  Int4 seq_len = StringLen (seq);
+  Int4 trailing_ns = 0;
+  CharPtr cp;
+
+  if (seq == NULL) {
+    return 0;
+  }
+  cp = seq + seq_len - 1;
+  while (cp > seq && *cp == 'N') {
+    cp--;
+    trailing_ns++;
+  }
+  if (*cp == 'N') {
+    trailing_ns++;
+  }
+  return trailing_ns;
+}
+
+
+static SeqLocPtr 
+RemoveTerminalNsFromLocation
+(SeqLocPtr slp)
+{
+  SeqLocPtr         loc = NULL, slp_copy;
+  Int4              seq_offset = 0, start, stop;
+  Boolean           first = TRUE;
+  BioseqPtr         bsp;
+  SeqIdPtr          sip;
+  Boolean           changed = FALSE, partial5, partial3, tmp5, tmp3;
+  CharPtr           buffer = NULL;
+  Int4              buflen = 0;
+  Int4              leading_ns;
+  Int4              trailing_n_start = -1, this_ns;
+  Int4              loc_len;
+  Uint1             strand;
+
+  if (slp == NULL)
+  {
+    return NULL;
+  }
+  
+  bsp = BioseqFindFromSeqLoc (slp);
+  if (bsp == NULL) {
+    return NULL;
+  }
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  
+  slp_copy = (SeqLocPtr) AsnIoMemCopy (slp, 
+                                       (AsnReadFunc) SeqLocAsnRead,
+                                       (AsnWriteFunc) SeqLocAsnWrite);
+  if (!ISA_na (bsp->mol))
+  {
+    return slp_copy;
+  }
+
+  while ((loc = SeqLocFindNext (slp, loc)) != NULL) {
+    start = SeqLocStart (loc);
+    stop = SeqLocStop (loc);
+    strand = SeqLocStrand (loc);
+    loc_len = stop - start + 1;
+    if (buflen < loc_len + 1) {
+      buffer = MemFree (buffer);
+      buflen = loc_len + 1;
+      buffer = (CharPtr) MemNew (sizeof (Char) * buflen);
+    }
+    SeqPortStreamInt (bsp, start, stop, strand, EXPAND_GAPS_TO_DASHES, (Pointer) (buffer), NULL);
+    leading_ns = 0;
+    if (first) {
+      leading_ns = StringSpn (buffer, "N");
+      if (leading_ns > 0) {
+        sip = SeqIdDup (SeqLocId (slp_copy));
+        tmp5 = FALSE;
+        tmp3 = FALSE;
+        if (strand == Seq_strand_minus) {
+          slp_copy = SeqLocDeleteEx (slp_copy, sip,
+                                     stop - leading_ns + 1, stop,
+                                     FALSE, &changed, &tmp5, &tmp3);
+        } else {
+          slp_copy = SeqLocDeleteEx (slp_copy, sip,
+                            start, start + leading_ns - 1,
+                            FALSE, &changed, &tmp5, &tmp3);
+        }
+        partial5 |= tmp5;
+        partial3 |= tmp3;
+        sip = SeqIdFree (sip);
+      }
+    }
+
+    if (!first || leading_ns != loc_len) {
+      this_ns = TrailingNLength (buffer);
+      if (this_ns > 0) {
+        if (this_ns == loc_len && trailing_n_start > -1) {
+          /* add to existing trailing Ns */
+        } else {
+          if (strand == Seq_strand_minus) {
+            trailing_n_start = start + this_ns - 1;
+          } else {
+            trailing_n_start = stop - this_ns + 1;
+          }
+        }
+      }
+    } else {
+      trailing_n_start = -1;
+    }
+
+    if (first && leading_ns != loc_len) {
+      first = FALSE;
+    }
+  }
+
+  if (trailing_n_start > -1) {
+    sip = SeqIdDup (SeqLocId (slp_copy));
+    tmp5 = FALSE;
+    tmp3 = FALSE;
+    if (strand == Seq_strand_minus) {
+      slp_copy = SeqLocDeleteEx (slp_copy, sip,
+                              start, trailing_n_start,
+                              FALSE, &changed, &tmp5, &tmp3);
+    } else {
+      slp_copy = SeqLocDeleteEx (slp_copy, sip,
+                              trailing_n_start, stop,
+                              FALSE, &changed, &tmp5, &tmp3);
+    }
+    partial5 |= tmp5;
+    partial3 |= tmp3;
+    sip = SeqIdFree (sip);
+  }
+
+  if (slp_copy != NULL)  
+  {
+    SetSeqLocPartial (slp_copy, partial5, partial3);
+  }
+
+  buffer = MemFree (buffer);
+
+  return slp_copy;
+}
+
+
+static Boolean AdjustCodingRegionAfterLocAdjustment
+(SeqFeatPtr sfp,
+ BioseqPtr  bsp,
+ SeqLocPtr  adjusted_loc)
+{
   Int4              loc_len, adjusted_len;
   Boolean           partial5, partial3;
   BioseqPtr         protbsp;
   SeqFeatPtr        gene_sfp;
   SeqMgrFeatContext gene_context;
+  Boolean           rval = FALSE;
 
-  if (bsp == NULL || !ISA_na (bsp->mol) 
-      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4
-      || sfp == NULL
-      || (sfp->data.choice != SEQFEAT_CDREGION && sfp->idx.subtype != FEATDEF_mRNA))
-  {
-    return;
-  }
-  
   loc_len = SeqLocLen (sfp->location);
-  
-  adjusted_loc = RemoveTerminalGapsFromLocation (bsp, sfp->location, context);
+
   adjusted_len = SeqLocLen (adjusted_loc);
   if (adjusted_loc != NULL && adjusted_len < loc_len)
   {
@@ -5781,7 +5913,7 @@ AdjustOneCodingRegionWithTerminalGapsOnBioseq
   
     sfp->location = SeqLocFree (sfp->location);
     sfp->location = adjusted_loc;
-    adjusted_loc = NULL;
+    rval = TRUE;
     CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
     sfp->partial = partial5 || partial3;
     
@@ -5799,8 +5931,38 @@ AdjustOneCodingRegionWithTerminalGapsOnBioseq
       SetProductSequencePartials (protbsp, partial5, partial3);
     }
   }
-  
-  adjusted_loc = SeqLocFree (adjusted_loc);
+  return rval;
+}
+
+
+static void 
+AdjustOneCodingRegionWithTerminalGapsOnBioseq 
+(BioseqPtr         bsp,
+ SeqFeatPtr        sfp,
+ SeqMgrFeatContext context)
+{
+  SeqLocPtr         adjusted_loc;
+
+  if (bsp == NULL || !ISA_na (bsp->mol) 
+      || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4
+      || sfp == NULL
+      || (sfp->data.choice != SEQFEAT_CDREGION && sfp->idx.subtype != FEATDEF_mRNA))
+  {
+    return;
+  }
+    
+  adjusted_loc = RemoveTerminalGapsFromLocation (bsp, sfp->location, context);
+
+  if (AdjustCodingRegionAfterLocAdjustment (sfp, bsp, adjusted_loc)) 
+  {
+    if (sfp->idx.subtype == SEQFEAT_CDREGION) {
+      AddCDSGapComment (sfp);
+    }
+  }
+  else
+  {
+    adjusted_loc = SeqLocFree (adjusted_loc);
+  }
   
 }
 
@@ -5848,6 +6010,66 @@ extern void AdjustCodingRegionsEndingInGap (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
+
+
+static void AdjustCodingRegionsWithTerminalNsBioseqCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqMgrFeatContext context;
+  SeqFeatPtr        sfp;
+  SeqLocPtr         adjusted_loc;
+  
+  if (bsp == NULL || !ISA_na (bsp->mol))
+  {
+    return;
+  }
+    
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context))
+  {
+    adjusted_loc = RemoveTerminalNsFromLocation (sfp->location);
+    if (AdjustCodingRegionAfterLocAdjustment (sfp, bsp, adjusted_loc)) 
+    {
+      AddCDSGapComment (sfp);
+    }
+    else
+    {
+      adjusted_loc = SeqLocFree (adjusted_loc);
+    }
+  }
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, FEATDEF_mRNA, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_RNA, FEATDEF_mRNA, &context))
+  {
+    adjusted_loc = RemoveTerminalNsFromLocation (sfp->location);
+    if (!AdjustCodingRegionAfterLocAdjustment (sfp, bsp, adjusted_loc)) 
+    {
+      adjusted_loc = SeqLocFree (adjusted_loc);
+    }
+  }
+}
+
+
+extern void AdjustCodingRegionsWithTerminalNs (IteM i)
+{
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitBioseqsInSep (sep, NULL, AdjustCodingRegionsWithTerminalNsBioseqCallback);
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 
 typedef struct cdstomiscfeatform
 {
@@ -7290,11 +7512,14 @@ typedef struct submitform {
   PopuP           suffix;
   DialoG          phonefaxemail;
   DialoG          authors;
+  ButtoN          use_consortium;
   TexT            consortium;
   DialoG          affil;
 
   Boolean         visitedContact;
   Boolean         visitedAuthor;
+
+  SeqDescrPtr     descriptors;
 
   ButtoN          nextBtn;
   ButtoN          prevBtn;
@@ -7327,24 +7552,27 @@ static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, TexT consortium)
   return alp;
 }
 
-static void AuthListToConsortium (AuthListPtr alp, TexT consortium)
+static Boolean AuthListToConsortium (AuthListPtr alp, TexT consortium)
 
 {
   AuthorPtr    ap;
   ValNodePtr   names;
   PersonIdPtr  pid;
   CharPtr      str;
+  Boolean      rval = FALSE;
 
-  if (alp == NULL || consortium == NULL) return;
-  if (alp->choice != 1) return;
+  if (alp == NULL || consortium == NULL) return FALSE;
+  if (alp->choice != 1) return FALSE;
   for (names = alp->names; names != NULL; names = names->next) {
     ap = names->data.ptrvalue;
     if (ap == NULL) continue;
     pid = ap->name;
-    if (pid == NULL || pid->choice != 5) continue;
+    if (pid == NULL || pid->choice != 5 || StringHasNoText (pid->data)) continue;
     str = (CharPtr) pid->data;
     SafeSetTitle (consortium, str);
+    rval = TRUE;
   }
+  return rval;
 }
 
 static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
@@ -7362,6 +7590,7 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
   sbfp = (SubmitFormPtr) GetObjectExtra (f);
   sbp = (SequinBlockPtr) data;
   if (sbfp != NULL) {
+    sbfp->descriptors = SeqDescrFree (sbfp->descriptors);
     if (sbp != NULL) {
       SafeSetTitle (sbfp->title, sbp->citsubtitle);
       PointerToDialog (sbfp->reldate, (Pointer) sbp->releasedate);
@@ -7397,7 +7626,14 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
         PointerToDialog (sbfp->phonefaxemail, (Pointer) ap->affil);
       }
       PointerToDialog (sbfp->authors, (Pointer) sbp->citsubauthors);
-      AuthListToConsortium (sbp->citsubauthors, sbfp->consortium);
+      if (AuthListToConsortium (sbp->citsubauthors, sbfp->consortium)) {
+        SetStatus (sbfp->use_consortium, TRUE);
+        Enable (sbfp->consortium);
+      } else {
+        SetStatus (sbfp->use_consortium, FALSE);
+        Disable (sbfp->consortium);
+      }
+
       PointerToDialog (sbfp->affil, (Pointer) sbp->citsubaffil);
       if (sbp->holduntilpublished) {
         SafeSetValue (sbfp->hup, 2);
@@ -7408,6 +7644,7 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
       }
       sbfp->visitedAuthor = TRUE;
       SetValue (sbfp->tbs, 0);
+      sbfp->descriptors = (SeqDescrPtr) AsnIoMemCopy (sbp->descriptors, (AsnReadFunc)SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite);
     } else {
       SafeSetTitle (sbfp->title, NULL);
       dp = DateCurr ();
@@ -7602,15 +7839,19 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
       }
       sbp->contactperson = ap;
       sbp->citsubauthors = (AuthListPtr) DialogToPointer (sbfp->authors);
-      sbp->citsubauthors = AddConsortiumToAuthList (sbp->citsubauthors, sbfp->consortium);
+      if (GetStatus (sbfp->use_consortium)) {
+        sbp->citsubauthors = AddConsortiumToAuthList (sbp->citsubauthors, sbfp->consortium);
+      }
       sbp->citsubaffil = (AffilPtr) DialogToPointer (sbfp->affil);
       if (GetValue (sbfp->hup) == 2) {
         sbp->holduntilpublished = TRUE;
         sbp->releasedate = (DatePtr) DialogToPointer (sbfp->reldate);
       }
+      sbp->descriptors = (SeqDescrPtr) AsnIoMemCopy (sbfp->descriptors, (AsnReadFunc)SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite);
       if (sbp->contactperson == NULL &&
           sbp->citsubauthors == NULL &&
-          sbp->citsubaffil == NULL) {
+          sbp->citsubaffil == NULL &&
+          sbp->descriptors == NULL) {
         sbp = SequinBlockFree (sbp);
       }
     }
@@ -7677,7 +7918,13 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
         authors = csp->authors;
         if (authors != NULL) {
           PointerToDialog (sbfp->authors, (Pointer) authors);
-          AuthListToConsortium (authors, sbfp->consortium);
+          if (AuthListToConsortium (authors, sbfp->consortium)) {
+            SetStatus (sbfp->use_consortium, TRUE);
+            Enable (sbfp->consortium);
+          } else {
+            SetStatus (sbfp->use_consortium, FALSE);
+            Disable (sbfp->consortium);
+          }
           PointerToDialog (sbfp->affil, (Pointer) authors->affil);
         }
       }
@@ -7734,6 +7981,98 @@ static void TitleToSubmitBlockForm(ForM f, Pointer data)
   }
 }
 
+
+static void DescriptorsToSubmitBlockForm(ForM f, Pointer data)
+
+{
+  SubmitFormPtr   sbfp;
+  SeqDescrPtr     sdp_list;
+
+  sbfp = (SubmitFormPtr) GetObjectExtra (f);
+  sdp_list = (SeqDescrPtr) data;
+  if (sbfp != NULL) 
+  {
+    sbfp->descriptors = SeqDescrFree (sbfp->descriptors);
+    if (sdp_list != NULL) 
+    {
+      sbfp->descriptors = AsnIoMemCopy (sdp_list, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite);
+    }
+  }
+}
+
+
+static void AddNonPunctFieldToErrList (TexT t, CharPtr name, ValNodePtr PNTR err_list)
+{
+  CharPtr val, cp;
+
+  if (t == NULL || err_list == NULL) {
+    return;
+  }
+  if (TextHasNoText (t)) {
+    *err_list = AddStringToValNodeChain (*err_list, name, TESTRESULT_MISSING);
+  } else {
+    val = SaveStringFromText (t);
+    for (cp = val; *cp != 0 && ispunct (*cp); cp++) {
+    }
+    if (*cp == 0) {
+      *err_list = AddStringToValNodeChain (*err_list, name, TESTRESULT_INVALID);
+    }
+    val = MemFree (val);
+  }
+}
+
+
+static void AddNonPunctStringToErrList (CharPtr val, CharPtr name, ValNodePtr PNTR err_list)
+{
+  CharPtr cp;
+  Boolean any_punct = FALSE;
+
+  if (err_list == NULL) {
+    return;
+  }
+  if (StringHasNoText (val)) {
+    *err_list = AddStringToValNodeChain (*err_list, name, TESTRESULT_MISSING);
+  } else {
+    for (cp = val; *cp != 0 && (unsigned)(*cp + 1) <= 256 && ispunct (*cp); cp++) {
+      any_punct = TRUE;
+    }
+    if (*cp == 0 && any_punct) {
+      *err_list = AddStringToValNodeChain (*err_list, name, TESTRESULT_INVALID);
+    }
+  }
+}
+
+
+static void AddAuthListErrors (AuthListPtr auth, ValNodePtr PNTR err_list)
+{
+  ValNodePtr name;
+	AuthorPtr  ap;
+	NameStdPtr  nsp;
+	PersonIdPtr  pid;
+
+  if (auth == NULL || err_list == NULL) {
+    return;
+  }
+  if (auth->choice == 1) {
+    for (name = auth->names; name != NULL; name = name->next) {
+		  ap = name->data.ptrvalue;
+		  if (ap != NULL) {
+			  pid = ap->name;
+			  if (pid != NULL) {
+				  if (pid->choice == 2) {
+					  nsp = pid->data;
+					  if (nsp != NULL) {
+              AddNonPunctStringToErrList (nsp->names [0], "author last name", err_list);
+              AddNonPunctStringToErrList (nsp->names [1], "author first name", err_list);
+					  }
+				  }
+			  }
+		  }
+    }
+	}
+}
+
+
 static ValNodePtr TestSubmitForm (ForM f)
 
 {
@@ -7746,56 +8085,60 @@ static ValNodePtr TestSubmitForm (ForM f)
   head = NULL;
 
   sbfp = (SubmitFormPtr) GetObjectExtra (f);
-  if (sbfp != NULL) {
-
-    if (TextHasNoText (sbfp->firstname)) {
-      head = AddStringToValNodeChain (head, "first name", 1);
-    }
-    if (TextHasNoText (sbfp->lastname)) {
-      head = AddStringToValNodeChain (head, "last name", 1);
-    }
-    affil = DialogToPointer (sbfp->phonefaxemail);
-    if (affil != NULL) {
-      if (StringHasNoText (affil->phone)) {
-        head = AddStringToValNodeChain (head, "telephone number", 0);
-      }
-      if (StringHasNoText (affil->fax)) {
-        head = AddStringToValNodeChain (head, "fax number", 0);
-      }
-      if (StringHasNoText (affil->email)) {
-        head = AddStringToValNodeChain (head, "e-mail address", 0);
-      }
-    } else {
-      head = AddStringToValNodeChain (head, "telephone number", 0);
-      head = AddStringToValNodeChain (head, "fax number", 0);
-      head = AddStringToValNodeChain (head, "e-mail address", 0);
-    }
-    affil = AffilFree (affil);
-
-    if (GetValue (sbfp->hup) == 2) {
-      dp = DialogToPointer (sbfp->reldate);
-      if (dp == NULL) {
-        head = AddStringToValNodeChain (head, "release date", 1);
-      }
-      dp = DateFree (dp);
-    }
-    if (TextHasNoText (sbfp->title)) {
-      head = AddStringToValNodeChain (head, "manuscript title", 1);
-    }
-
-    authors = DialogToPointer (sbfp->authors);
-    authors = AddConsortiumToAuthList (authors, sbfp->consortium);
-    if (authors == NULL) {
-      head = AddStringToValNodeChain (head, "author names", 1);
-    }
-    authors = AuthListFree (authors);
-    affil = DialogToPointer (sbfp->affil);
-    if (affil == NULL) {
-      head = AddStringToValNodeChain (head, "affiliation", 1);
-    }
-    affil = AffilFree (affil);
-
+  if (sbfp == NULL) {
+    return NULL;
   }
+
+  AddNonPunctFieldToErrList (sbfp->firstname, "first_name", &head);
+  AddNonPunctFieldToErrList (sbfp->firstname, "last name", &head);
+
+  affil = DialogToPointer (sbfp->phonefaxemail);
+  if (affil != NULL) {
+    if (StringHasNoText (affil->phone)) {
+      head = AddStringToValNodeChain (head, "telephone number", TESTRESULT_WARN);
+    }
+    if (StringHasNoText (affil->fax)) {
+      head = AddStringToValNodeChain (head, "fax number", TESTRESULT_WARN);
+    }
+    if (StringHasNoText (affil->email)) {
+      head = AddStringToValNodeChain (head, "e-mail address", TESTRESULT_WARN);
+    }
+  } else {
+    head = AddStringToValNodeChain (head, "telephone number", TESTRESULT_WARN);
+    head = AddStringToValNodeChain (head, "fax number", TESTRESULT_WARN);
+    head = AddStringToValNodeChain (head, "e-mail address", TESTRESULT_WARN);
+  }
+  affil = AffilFree (affil);
+
+  if (GetValue (sbfp->hup) == 2) {
+    dp = DialogToPointer (sbfp->reldate);
+    if (dp == NULL) {
+      head = AddStringToValNodeChain (head, "release date", TESTRESULT_MISSING);
+    }
+    dp = DateFree (dp);
+  }
+  if (TextHasNoText (sbfp->title)) {
+    head = AddStringToValNodeChain (head, "manuscript title", TESTRESULT_MISSING);
+  }
+
+  ValNodeLink (&head, TestDialog (sbfp->authors));
+  authors = DialogToPointer (sbfp->authors);
+  if (GetStatus (sbfp->use_consortium)) {
+    authors = AddConsortiumToAuthList (authors, sbfp->consortium);
+  }
+  if (authors == NULL) {
+    head = AddStringToValNodeChain (head, "author names", TESTRESULT_MISSING);
+  } else {
+    AddAuthListErrors (authors, &head);
+  }
+  authors = AuthListFree (authors);
+  affil = DialogToPointer (sbfp->affil);
+  if (affil == NULL) {
+    head = AddStringToValNodeChain (head, "affiliation", TESTRESULT_MISSING);
+  } else {
+    AddNonPunctStringToErrList (affil->affil, "institution", &head);
+  }
+  affil = AffilFree (affil);
 
   return head;
 }
@@ -7916,75 +8259,88 @@ static Boolean ReadSubmitBlock (ForM f, CharPtr filename)
   CitGenPtr       cgp;
   FILE           * fp;
   PubdescPtr      pdp;
-  ValNodePtr      sdp;
-  
+  ValNodePtr      sdp, vnp;
+  Boolean         is_title_pub = FALSE;
+  SeqDescPtr      sdp_list = NULL;
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
   sbfp = (SubmitFormPtr) GetObjectExtra (f);
-  if (sbfp != NULL) {
-    if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
-	  fp = FileOpen(path, "r");
-      dataptr = ReadNextASNObject (fp, &datatype, &entityID);
-      sbp = NULL;
-      man_title = NULL;
-      while (dataptr != NULL) {
-        if (entityID > 0) {
-          switch (datatype) {
-            case OBJ_SUBMIT_BLOCK :
-              if (sbp == NULL) {
-                sbp = (SubmitBlockPtr) AsnIoMemCopy (dataptr,
+  if (sbfp == NULL) {
+    return FALSE;
+  }
+  if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
+    fp = FileOpen(path, "r");
+    dataptr = ReadNextASNObject (fp, &datatype, &entityID);
+    sbp = NULL;
+    man_title = NULL;
+    /* clear out previous descriptors */
+    sbfp->descriptors = SeqDescrFree (sbfp->descriptors);
+    while (dataptr != NULL) {
+      if (entityID > 0) {
+        switch (datatype) {
+          case OBJ_SUBMIT_BLOCK :
+            if (sbp == NULL) {
+              sbp = (SubmitBlockPtr) AsnIoMemCopy (dataptr,
+                                                   (AsnReadFunc) SubmitBlockAsnRead,
+                                                   (AsnWriteFunc) SubmitBlockAsnWrite);
+            }
+            break;
+          case OBJ_SEQSUB :
+            if (sbp == NULL) {
+              ssp = (SeqSubmitPtr) dataptr;
+              if (ssp != NULL) {
+                sbp = (SubmitBlockPtr) AsnIoMemCopy (ssp->sub,
                                                      (AsnReadFunc) SubmitBlockAsnRead,
                                                      (AsnWriteFunc) SubmitBlockAsnWrite);
               }
-              break;
-            case OBJ_SEQSUB :
-              if (sbp == NULL) {
-                ssp = (SeqSubmitPtr) dataptr;
-                if (ssp != NULL) {
-                  sbp = (SubmitBlockPtr) AsnIoMemCopy (ssp->sub,
-                                                       (AsnReadFunc) SubmitBlockAsnRead,
-                                                       (AsnWriteFunc) SubmitBlockAsnWrite);
+            }
+            break;
+          case OBJ_SEQDESC:
+            sdp = (ValNodePtr) dataptr;
+            is_title_pub = FALSE;
+            if (sdp->choice == Seq_descr_pub && sdp->data.ptrvalue != NULL && man_title == NULL) {
+              pdp = (PubdescPtr) sdp->data.ptrvalue;
+              vnp = pdp->pub;
+              while (vnp != NULL && vnp->choice != PUB_Gen) {
+                vnp = vnp->next;
+              }
+              if (vnp != NULL && vnp->data.ptrvalue != NULL) {
+                cgp = (CitGenPtr) vnp->data.ptrvalue;
+                if (StringICmp (cgp->cit, "unpublished") == 0 
+                    && !StringHasNoText (cgp->title)) {
+                  man_title = StringSave (cgp->title);
+                  is_title_pub = TRUE;
                 }
               }
-              break;
-            case OBJ_SEQDESC:
-              sdp = (ValNodePtr) dataptr;
-              if (sdp->choice == Seq_descr_pub && sdp->data.ptrvalue != NULL && man_title == NULL) {
-                pdp = (PubdescPtr) sdp->data.ptrvalue;
-                sdp = pdp->pub;
-                while (sdp != NULL && sdp->choice != PUB_Gen) {
-                  sdp = sdp->next;
-                }
-                if (sdp != NULL && sdp->data.ptrvalue != NULL) {
-                  cgp = (CitGenPtr) sdp->data.ptrvalue;
-                  if (StringICmp (cgp->cit, "unpublished") == 0 
-                      && !StringHasNoText (cgp->title)) {
-                    man_title = StringSave (cgp->title);
-                  }
-                }
-              }
-              break;
-            default :
-              break;
-          }
+            }
+            if (!is_title_pub) {                
+              ValNodeLink (&sdp_list, (SeqDescPtr) AsnIoMemCopy (sdp, (AsnReadFunc) SeqDescAsnRead, (AsnWriteFunc) SeqDescAsnWrite));
+            }
+            break;
+          default :
+            break;
         }
-        ObjMgrDelete (datatype, dataptr);
-        dataptr = ReadNextASNObject (fp, &datatype, &entityID);
       }
-      FileClose (fp);
-      if (sbp != NULL || man_title != NULL) {
-        if (sbp != NULL) {
-          SubmitBlockPtrToSubmitForm (f, sbp);
-          sbp = SubmitBlockFree (sbp);
-        }
-        if (man_title != NULL) {
-          TitleToSubmitBlockForm (f, man_title);
-          man_title = MemFree (man_title);
-        }
-        Update ();
-        return TRUE;
+      ObjMgrDelete (datatype, dataptr);
+      dataptr = ReadNextASNObject (fp, &datatype, &entityID);
+    }
+    FileClose (fp);
+    if (sbp != NULL || man_title != NULL || sdp_list != NULL) {
+      if (sbp != NULL) {
+        SubmitBlockPtrToSubmitForm (f, sbp);
+        sbp = SubmitBlockFree (sbp);
       }
+      if (man_title != NULL) {
+        TitleToSubmitBlockForm (f, man_title);
+        man_title = MemFree (man_title);
+      }
+      if (sdp_list != NULL) {
+        DescriptorsToSubmitBlockForm (f, sdp_list);
+        sdp_list = SeqDescrFree (sdp_list);
+      }
+      Update ();
+      return TRUE;
     }
   }
   return FALSE;
@@ -8277,7 +8633,13 @@ static Boolean ReadAuthListPage (ForM f, CharPtr filename)
         AsnIoClose (aip);
         if (alp != NULL) {
           PointerToDialog (sbfp->authors, alp);
-          AuthListToConsortium (alp, sbfp->consortium);
+          if (AuthListToConsortium (alp, sbfp->consortium)) {
+            SetStatus (sbfp->use_consortium, TRUE);
+            Enable (sbfp->consortium);
+          } else {
+            SetStatus (sbfp->use_consortium, FALSE);
+            Disable (sbfp->consortium);
+          }
           alp = AuthListFree (alp);
           Update ();
           return TRUE;
@@ -8315,7 +8677,9 @@ static Boolean WriteAuthListPage (ForM f, CharPtr filename)
       aip = AsnIoOpen (path, "w");
       if (aip != NULL) {
         alp = DialogToPointer (sbfp->authors);
-        alp = AddConsortiumToAuthList (alp, sbfp->consortium);
+        if (GetStatus (sbfp->use_consortium)) {
+          alp = AddConsortiumToAuthList (alp, sbfp->consortium);
+        }
         AuthListAsnWrite (alp, aip, NULL);
         AsnIoClose (aip);
         alp = AuthListFree (alp);
@@ -8489,8 +8853,14 @@ static void CopyContactToAuthors (SubmitFormPtr sbfp)
       alp = AuthListFree (alp);
     }
     if (alp != NULL) {
-       PointerToDialog (sbfp->authors, (Pointer) alp);
-       AuthListToConsortium (alp, sbfp->consortium);
+      PointerToDialog (sbfp->authors, (Pointer) alp);
+      if (AuthListToConsortium (alp, sbfp->consortium)) {
+        SetStatus (sbfp->use_consortium, TRUE);
+        Enable (sbfp->consortium);
+      } else {
+        SetStatus (sbfp->use_consortium, FALSE);
+        Disable (sbfp->consortium);
+      }
     }
   }
   alp = AuthListFree (alp);
@@ -8556,7 +8926,9 @@ static void EnterSubmitPage (SubmitFormPtr sbfp, Int2 page)
         break;
       case AUTHOR_PAGE :
         alp = (AuthListPtr) DialogToPointer (sbfp->authors);
-        alp = AddConsortiumToAuthList (alp, sbfp->consortium);
+        if (GetStatus (sbfp->use_consortium)) {
+          alp = AddConsortiumToAuthList (alp, sbfp->consortium);
+        }
         if (sbfp->visitedContact && alp == NULL) {
           CopyContactToAuthors (sbfp);
         }
@@ -8753,6 +9125,57 @@ static void InitSubmitterFormActivate (WindoW w)
   }
 }
 
+static void EnableConsortium (ButtoN b)
+{
+  SubmitFormPtr  sbfp;
+
+  sbfp = (SubmitFormPtr) GetObjectExtra (b);
+  if (sbfp != NULL) {
+    if (GetStatus (sbfp->use_consortium)) {
+      Enable (sbfp->consortium);
+    } else {
+      Disable (sbfp->consortium);
+    }
+  }
+}
+
+
+static void ImportSubmissionTemplate (ButtoN b)
+{
+  SubmitFormPtr sbfp;
+
+  sbfp = (SubmitFormPtr) GetObjectExtra (b);
+  if (sbfp == NULL) {
+    return;
+  }
+  ReadSubmitBlock (sbfp->form, NULL);
+}
+
+
+static void ExportSubmissionTemplate (ButtoN b)
+{
+  SubmitFormPtr sbfp;
+
+  sbfp = (SubmitFormPtr) GetObjectExtra (b);
+  if (sbfp == NULL) {
+    return;
+  }
+  WriteSubmitBlock (sbfp->form, NULL);
+}
+
+
+static void CleanupSubmitterForm (Nlm_GraphiC g, Nlm_VoidPtr data)
+{
+  SubmitFormPtr f;
+
+  f = (SubmitFormPtr) data;
+  if (f != NULL) {
+    SeqDescrFree (f->descriptors);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+
 extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
                                      BtnActnProc goToNext,
                                      BtnActnProc goBack,
@@ -8775,12 +9198,13 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
   GrouP              g1, g2;
   GrouP              p;
   DatePtr            dp;
+  ButtoN             b;
 
   w = NULL;
   sbfp = MemNew (sizeof (SubmitForm));
   if (sbfp != NULL) {
     w = FixedWindow (left, top, -10, -10, title, NULL);
-    SetObjectExtra (w, sbfp, StdCleanupFormProc);
+    SetObjectExtra (w, sbfp, CleanupSubmitterForm);
     sbfp->form = (ForM) w;
     sbfp->toform = SequinBlockPtrToSubmitForm;
     sbfp->fromform = SubmitFormToSequinBlockPtr;
@@ -8843,8 +9267,10 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     t = HiddenGroup (q, 1, 0, NULL);
     StaticPrompt (t, "Tentative title for manuscript (required)", 0, 0, programFont, 'c');
     sbfp->title = ScrollText (t, 25, 4, programFont, TRUE, NULL);
+    b = PushButton (q, "Click here to import a template", ImportSubmissionTemplate);
+    SetObjectExtra (b, sbfp, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) sbfp->reldate,
-                  (HANDLE) sbfp->title, (HANDLE) t, NULL);
+                  (HANDLE) sbfp->title, (HANDLE) t, (HANDLE) b, NULL);
     sbfp->pages [SUBMISSION_PAGE] = q;
     Hide (sbfp->pages [SUBMISSION_PAGE]);
 
@@ -8880,8 +9306,10 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     sbfp->authors = CreateAuthorDialog (q, 3, -1);
     z = HiddenGroup (q, 0, 2, NULL);
     g1 = HiddenGroup (z, 2, 0, NULL);
-    StaticPrompt (g1, "Consortium", 0, stdLineHeight, programFont, 'l');
+    sbfp->use_consortium = CheckBox (g1, "Consortium", EnableConsortium);
+    SetObjectExtra (sbfp->use_consortium, sbfp, NULL);
     sbfp->consortium = DialogText (g1, "", 16, NULL);
+    Disable (sbfp->consortium);
     g2 = HiddenGroup (z, 1, 0, NULL);
     MultiLinePrompt (g2, "The consortium field should be used when a "
                          "consortium is responsible for the sequencing or "
@@ -8898,6 +9326,9 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     sbfp->affil = CreateExtAffilDialog (q, NULL, &g, NULL);
     Show (g);
     Show (sbfp->affil);
+    b = PushButton (q, "Click here to export a template", ExportSubmissionTemplate);
+    SetObjectExtra (b, sbfp, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) sbfp->affil, (HANDLE) b, NULL);
     sbfp->pages [AFFILIATION_PAGE] = q;
     Hide (sbfp->pages [AFFILIATION_PAGE]);
 
@@ -11392,7 +11823,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
   FileCache     fc;
   FILE          *fp;
   Boolean       goOn;
-  Char          heading [64];
+  Char          heading [512];
   HelpIndexPtr  hip;
   Boolean       inTable;
   Int2          level;
@@ -11400,7 +11831,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
   Int2          numItems;
   Char          path [PATH_MAX];
   CharPtr       ptr;
-  Char          section [64];
+  Char          section [512];
   Char          str [512];
   ValNodePtr    vnp;
 
@@ -13669,13 +14100,19 @@ NLM_EXTERN void AddFluComments (IteM i)
 static CharPtr RNA_words[] = {
   "ITS1",
   "ITS2",
+  "internal transcribed spacer 1",
+  "internal transcribed spacer 2",
   "5.8S",
   "16S",
   "18S",
-  "28S"
+  "28S",
+  "5.8S ribosomal RNA", 
+  "16S ribosomal RNA",
+  "18S ribosomal RNA",
+  "28S ribosomal RNA"
 };
 
-static const k_num_RNA_words = sizeof (RNA_words) / sizeof (CharPtr);
+static const Int4 k_num_RNA_words = sizeof (RNA_words) / sizeof (CharPtr);
 
 
 static ValNodePtr RNAWordsFromString (CharPtr str, TextFsaPtr tags)
@@ -13686,7 +14123,7 @@ static ValNodePtr RNAWordsFromString (CharPtr str, TextFsaPtr tags)
   ValNodePtr  matches;
   CharPtr     last_hit = NULL, last_pos = NULL;
   Int4        match_len;
-  ValNodePtr  tokens = NULL;
+  ValNodePtr  tokens = NULL, last_match = NULL;
 
   if (StringHasNoText (str) || tags == NULL) {
     return NULL;
@@ -13700,7 +14137,9 @@ static ValNodePtr RNAWordsFromString (CharPtr str, TextFsaPtr tags)
     state = TextFsaNext (tags, state, ch, &matches);
     if (matches != NULL && (isspace (*(ptr + 1)) || ispunct (*(ptr + 1)) || *(ptr + 1) == 0) && (match_len = StringLen (matches->data.ptrvalue)) > 0
         && (ptr - match_len + 1 == str || isspace (*(ptr - match_len)) || ispunct (*(ptr - match_len)))) {
-      ValNodeAddPointer (&tokens, 0, ptr - match_len + 1);
+      if (last_match == NULL || last_match->data.ptrvalue != ptr - match_len + 1) {
+        last_match = ValNodeAddPointer (&tokens, 0, ptr - match_len + 1);
+      }
       last_pos = ptr;
       last_hit = (CharPtr) matches->data.ptrvalue;
     }
@@ -13748,7 +14187,7 @@ static void FixExplodedRNAProduct (CharPtr PNTR pProduct)
   Char    repl_buf[200];
   CharPtr repl_fmt = "%s ribosomal RNA";
 
-  if (pProduct == NULL || *pProduct == NULL) {
+  if (pProduct == NULL || *pProduct == NULL || StringHasNoText (*pProduct)) {
     return;
   }
 
@@ -13762,7 +14201,7 @@ static void FixExplodedRNAProduct (CharPtr PNTR pProduct)
     cp--;
   }
    
-  if (StringStr (*pProduct, " ribosomal RNA") != NULL) {
+  if (StringStr (*pProduct, " ribosomal RNA") != NULL || StringStr (*pProduct, "internal transcribed spacer") != NULL) {
     return;
   }
   for (i = 2; i < k_num_RNA_words; i++) {
@@ -13772,16 +14211,54 @@ static void FixExplodedRNAProduct (CharPtr PNTR pProduct)
 }
 
 
+static void FixOneExplodedRNA (SeqFeatPtr sfp, CharPtr new_product, Int4 len)
+{
+  RnaRefPtr rrp;
+  RNAGenPtr rgp;
+  CharPtr   adjusted_product;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || (rrp = (RnaRefPtr) sfp->data.value.ptrvalue) == NULL) {
+    return;
+  }
+
+  if (len < 0) {
+    adjusted_product = StringSave (new_product);
+  } else {
+    adjusted_product = (CharPtr) MemNew (sizeof (Char) * (len + 1));
+    StringNCpy (adjusted_product, new_product, len);
+    adjusted_product[len] = 0;
+  }
+  FixExplodedRNAProduct (&adjusted_product);
+
+  if (rrp->ext.choice == 1) {
+    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    rrp->ext.value.ptrvalue = adjusted_product;
+  } else if (rrp->ext.choice == 3) {
+    rgp = rrp->ext.value.ptrvalue;
+    rgp->product = MemFree (rgp->product);
+    rgp->product = StringSave (adjusted_product);
+  } else if (rrp->ext.choice == 0) {
+    rrp->ext.choice = 1;
+    rrp->ext.value.ptrvalue = adjusted_product;
+  }
+  if (StringStr (adjusted_product, "internal transcribed spacer") != NULL) {
+    rrp->type = RNA_TYPE_other;
+  } else {
+    rrp->type = RNA_TYPE_rRNA;
+  }
+}
+
+
 static void ExplodeRNACallback (SeqFeatPtr sfp, Pointer data)
 {
   TextFsaPtr  tags;
-  Int4        num_interval = 0, len;
+  Int4        num_interval = 0;
   SeqLocPtr   tmp;
   ValNodePtr  tokens = NULL, vnp;
-  RnaRefPtr   rrp, rrp_new;
-  RNAGenPtr   rgp, rgp_new;
+  RnaRefPtr   rrp;
+  RNAGenPtr   rgp;
   SeqFeatPtr  sfp_new;
-  CharPtr     new_product;
+  CharPtr     orig_product;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || (tags = (TextFsaPtr) data) == NULL
       || sfp->location == NULL
@@ -13796,61 +14273,42 @@ static void ExplodeRNACallback (SeqFeatPtr sfp, Pointer data)
   if (!StringHasNoText (sfp->comment)
       && (tokens = RNAWordsFromString (sfp->comment, tags)) != NULL
       && (num_interval == ValNodeLen (tokens))) {
+    orig_product = sfp->comment;
+    sfp->comment = NULL;
     ExpandFeatureForIntervals (sfp);
-    for (vnp = tokens->next, sfp_new = sfp->next; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
-      sfp_new->comment = MemFree (sfp_new->comment);
-      sfp_new->comment = StringSave (vnp->data.ptrvalue);
-      if (vnp->next != NULL) {
-        len = (CharPtr) vnp->next->data.ptrvalue - (CharPtr)vnp->data.ptrvalue;
-        sfp_new->comment[len] = 0;
-      }
-      FixExplodedRNAProduct(&(sfp_new->comment));
-    }
-    /* now truncate original */
-    *((CharPtr) tokens->next->data.ptrvalue) = 0;
-    FixExplodedRNAProduct(&(sfp->comment));
+    for (vnp = tokens, sfp_new = sfp; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
+      FixOneExplodedRNA (sfp_new, vnp->data.ptrvalue, 
+                         vnp->next == NULL ? -1 : (CharPtr)vnp->next->data.ptrvalue - (CharPtr) vnp->data.ptrvalue);
+    }  
     tokens = ValNodeFree (tokens);
+    orig_product = MemFree (orig_product);
   } else if ((rrp = (RnaRefPtr) sfp->data.value.ptrvalue) != NULL) {
     if (rrp->ext.choice == 1) {
-      tokens = RNAWordsFromString (rrp->ext.value.ptrvalue, tags);
+      orig_product = rrp->ext.value.ptrvalue;
+      rrp->ext.value.ptrvalue = NULL;
+      tokens = RNAWordsFromString (orig_product, tags);
       if (num_interval == ValNodeLen (tokens)) {
         ExpandFeatureForIntervals (sfp);
-        for (vnp = tokens->next, sfp_new = sfp->next; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
-          rrp_new = sfp_new->data.value.ptrvalue;
-          rrp_new->ext.value.ptrvalue = MemFree (rrp_new->ext.value.ptrvalue);
-          new_product = StringSave (vnp->data.ptrvalue);
-          if (vnp->next != NULL) {
-            len = (CharPtr) vnp->next->data.ptrvalue - (CharPtr)vnp->data.ptrvalue;
-            new_product[len] = 0;
-          }
-          FixExplodedRNAProduct (&new_product);
-          rrp_new->ext.value.ptrvalue = new_product;
+        for (vnp = tokens, sfp_new = sfp; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
+          FixOneExplodedRNA (sfp_new, vnp->data.ptrvalue, 
+                             vnp->next == NULL ? -1 : (CharPtr)vnp->next->data.ptrvalue - (CharPtr) vnp->data.ptrvalue);
         }  
-        *((CharPtr) tokens->next->data.ptrvalue) = 0;
-        new_product = rrp->ext.value.ptrvalue;
-        FixExplodedRNAProduct (&new_product);
-        rrp->ext.value.ptrvalue = new_product;
       }
       tokens = ValNodeFree (tokens);
+      orig_product = MemFree (orig_product);
     } else if (rrp->ext.choice == 3 && (rgp = (RNAGenPtr) rrp->ext.value.ptrvalue) != NULL) {
-      tokens = RNAWordsFromString (rgp->product, tags);
+      orig_product = rgp->product;
+      rgp->product = NULL;
+      tokens = RNAWordsFromString (orig_product, tags);
       if (num_interval == ValNodeLen (tokens)) {
         ExpandFeatureForIntervals (sfp);
-        for (vnp = tokens->next, sfp_new = sfp->next; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
-          rrp_new = sfp_new->data.value.ptrvalue;
-          rgp_new = rrp_new->ext.value.ptrvalue;
-          rgp_new->product = MemFree (rgp_new->product);
-          rgp_new->product = StringSave (vnp->data.ptrvalue);
-          if (vnp->next != NULL) {
-            len = (CharPtr) vnp->next->data.ptrvalue - (CharPtr)vnp->data.ptrvalue;
-            rgp_new->product[len] = 0;
-          }
-          FixExplodedRNAProduct(&(rgp_new->product));
+        for (vnp = tokens, sfp_new = sfp; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
+          FixOneExplodedRNA (sfp_new, vnp->data.ptrvalue,
+                             vnp->next == NULL ? -1 : (CharPtr)vnp->next->data.ptrvalue - (CharPtr) vnp->data.ptrvalue);
         }      
-        *((CharPtr) tokens->next->data.ptrvalue) = 0;
-        FixExplodedRNAProduct (&(rgp->product));
       }
       tokens = ValNodeFree (tokens);
+      orig_product = MemFree (orig_product);
     }
   }
 }
@@ -14210,8 +14668,9 @@ typedef struct feated
   TexT       experiment_text;
   
   /* for pseudo */
-  GrouP      pseudo_action;
+  PopuP      pseudo_action;
   Boolean    pseudo_val;
+  CharPtr    pseudo_str;
   
   /* for inferences */
   DialoG     inference_dlg;
@@ -14382,12 +14841,8 @@ static GrouP FeaturePseudoGroup (GrouP h, FeatEdPtr mp)
   }
   
   g = HiddenGroup (h, 0, 0, NULL);
-
-  mp->pseudo_action = HiddenGroup (g, 2, 0, NULL);
-  SetGroupSpacing (mp->pseudo_action, 10, 10);
-  RadioButton (mp->pseudo_action, "Set Pseudo");
-  RadioButton (mp->pseudo_action, "Clear Pseudo");
-  SetValue (mp->pseudo_action, 1);
+  mp->pseudo_action = PopupList (g, TRUE, NULL);
+  InitEnumPopup (mp->pseudo_action, new_pseudogene_alist, NULL);
   
   return g;  
 }
@@ -15188,7 +15643,7 @@ static void DoPartialFeatureProc (SeqFeatPtr sfp, Pointer userdata)
         }
         break;
       case 7 :
-        if (crp != NULL && crp->frame == 1 && first_char == 'M')
+        if (crp != NULL && (crp->frame == 1 || crp->frame == 0) && first_char == 'M')
         {
           partial5 = FALSE;
         }
@@ -15657,14 +16112,16 @@ FeatureEditorDoOneAction
 
       break;
     case FEAT_ED_PSEUDO:
-      if (GetValue (mp->pseudo_action) == 1)
-      {
-        macro_list = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_pseudo, "TRUE", mp->constraint, NULL);
-      } 
-      else
+      val = GetEnumPopupByName (mp->pseudo_action, new_pseudogene_alist);
+      if (StringHasNoText (val))
       {
         macro_list = MakeRemoveFeatureFieldAction (ftype, Feat_qual_legal_pseudo, mp->constraint);
-      }
+      } 
+      else 
+      {
+        macro_list = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_pseudo, val, mp->constraint, NULL);
+      } 
+      val = MemFree (val);
       break;
     case FEAT_ED_EVIDENCE:
       macro_list = MakeRemoveFeatureFieldAction (ftype, Feat_qual_legal_evidence, mp->constraint);
@@ -15724,7 +16181,7 @@ FeatureEditorDoOneAction
   
   if (macro_list != NULL) 
   {
-    ApplyMacroToSeqEntry (sep, macro_list);
+    ApplyMacroToSeqEntryEx (sep, macro_list, NULL, Sequin_GlobalAlign2Seq);
     macro_list = MacroActionListFree (macro_list);
   }
 
@@ -15784,7 +16241,7 @@ NLM_EXTERN void FeatureEditorBaseForm (BaseFormPtr bfp, Int4 first_action)
   g = FeatureEditorActionGroup (h, mp, first_action);
   
   mp->constraint = ComplexConstraintDialog (h, NULL, NULL);
-  ChangeComplexConstraintFieldType (mp->constraint, FieldType_molinfo_field, NULL, Macro_feature_type_any);                    
+  SetComplexConstraintType (mp->constraint, eComplexConstraintType_string);
   mp->accept_cancel = AcceptCancelDialog (h, FeatureEditorAction, NULL, 
                                           FeatEdClear, 
                                           FeatEdClearText, 

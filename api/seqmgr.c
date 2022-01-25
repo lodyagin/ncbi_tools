@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.314 $
+* $Revision: 6.324 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -1432,7 +1432,7 @@ static Boolean UpdateSeqIdGiArrays (void)
 
           /* now resort one array by seqid string */
 
-          HeapSort (giseqidarray, (size_t) seqidcount, sizeof (ValNodePtr), SortSeqIdGiByString);
+          StableMergeSort (giseqidarray, (size_t) seqidcount, sizeof (ValNodePtr), SortSeqIdGiByString);
         }
       }
 
@@ -3242,7 +3242,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
 
 #if 1
             /****  sort unsorted part ****/
-            HeapSort((VoidPtr) (smp->BioseqIndex+old_BioseqIndexCnt), (size_t) unsorted_size,
+            StableMergeSort((VoidPtr) (smp->BioseqIndex+old_BioseqIndexCnt), (size_t) unsorted_size,
                                   sizeof(SeqIdIndexElementPtr), SeqIdIndexElementCmp);
             /**** move new part to an array ****/
             if(unsorted_size > 1024){
@@ -3277,11 +3277,11 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
                 MemFree(bsindex_buf);
             }
 #else   
-            HeapSort((VoidPtr) (smp->BioseqIndex), (size_t)(smp->BioseqIndexCnt),
+            StableMergeSort((VoidPtr) (smp->BioseqIndex), (size_t)(smp->BioseqIndexCnt),
                                   sizeof(SeqIdIndexElementPtr), SeqIdIndexElementCmp);
 #endif
         } else { /** Heap Sort should be faster ***/
-            HeapSort((VoidPtr) (smp->BioseqIndex), (size_t)(smp->BioseqIndexCnt),
+            StableMergeSort((VoidPtr) (smp->BioseqIndex), (size_t)(smp->BioseqIndexCnt),
                   sizeof(SeqIdIndexElementPtr), SeqIdIndexElementCmp);
         }
     }
@@ -4088,7 +4088,7 @@ NLM_EXTERN Boolean IsNonGappedLiteral (BioseqPtr bsp)
 *
 *****************************************************************************/
 
-static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
+static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst, BoolPtr is_small_genome_set)
 
 {
   BioseqPtr       bsp = NULL;
@@ -4100,6 +4100,9 @@ static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
   SeqIdPtr        sip;
   SeqLocPtr       slp;
 
+  if (is_small_genome_set != NULL) {
+    *is_small_genome_set = FALSE;
+  }
   if (loc == NULL) return NULL;
   sip = SeqLocId (loc);
   if (sip != NULL) {
@@ -4125,7 +4128,7 @@ static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
     return bsp;
   }
 
-  /* otherwise assume location is on multiple parts of a segmented set */
+  /* otherwise assume location is on multiple parts of a segmented set (deprecated) or is in a small genome set */
 
   slp = SeqLocFindNext (loc, NULL);
   if (slp == NULL) return NULL;
@@ -4147,6 +4150,11 @@ static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
               }
             }
           }
+        } else if (bssp->_class == BioseqseqSet_class_small_genome_set) {
+          if (is_small_genome_set != NULL) {
+            *is_small_genome_set = TRUE;
+          }
+          return part;
         }
       }
     }
@@ -4196,7 +4204,7 @@ NLM_EXTERN BioseqPtr BioseqFindFromSeqLoc (SeqLocPtr loc)
   BioseqPtr  bsp = NULL;
 
   if (loc == NULL) return NULL;
-  bsp = FindAppropriateBioseq (loc, NULL);
+  bsp = FindAppropriateBioseq (loc, NULL, NULL);
   if (bsp == NULL) {
     bsp = FindFirstLocalBioseq (loc);
   }
@@ -4434,7 +4442,15 @@ static Int4 GetOffsetInNearBioseq (SeqLocPtr loc, BioseqPtr in, Uint1 which_end)
 }
 
 
-static void GetLeftAndRightOffsetsInNearBioseq (SeqLocPtr loc, BioseqPtr in, Int4Ptr left, Int4Ptr right)
+static void GetLeftAndRightOffsetsInNearBioseq (
+  SeqLocPtr loc,
+  BioseqPtr in,
+  Int4Ptr left,
+  Int4Ptr right,
+  Boolean small_genome_set,
+  Boolean bad_order,
+  Boolean mixed_strand
+)
 
 {
   BioseqPtr  bsp;
@@ -4460,12 +4476,7 @@ static void GetLeftAndRightOffsetsInNearBioseq (SeqLocPtr loc, BioseqPtr in, Int
     bsp = BioseqFind (sip);
   }
   if (bsp != NULL) {
-#if 1
-    GetLeftAndRightOffsetsInBioseq (loc, in, &val_left, &val_right, bsp->topology == TOPOLOGY_CIRCULAR, &left_flip, &right_flip);
-#else
-    val_left = GetOffsetInBioseqEx (loc, in, SEQLOC_LEFT_END, bsp->topology == TOPOLOGY_CIRCULAR);
-    val_right = GetOffsetInBioseqEx (loc, in, SEQLOC_RIGHT_END, bsp->topology == TOPOLOGY_CIRCULAR);
-#endif
+    GetLeftAndRightOffsetsInBioseq (loc, in, &val_left, &val_right, bsp->topology == TOPOLOGY_CIRCULAR, FALSE, &left_flip, &right_flip);
     if (val_left != -1 && val_right != -1) {
       if (left != NULL) {
         *left = val_left;
@@ -4483,7 +4494,7 @@ static void GetLeftAndRightOffsetsInNearBioseq (SeqLocPtr loc, BioseqPtr in, Int
     sip = SeqLocId (slp);
     if (sip != NULL) {
       bsp = BioseqFind (sip);
-      if (bsp != NULL) {
+      if (bsp != NULL && ((! small_genome_set) || bsp == in)) {
         last = slp;
         if (first == NULL) {
           first = slp;
@@ -4554,7 +4565,7 @@ NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemPtr (SeqFeatPtr sfp)
   Int4                R;
 
   if (sfp == NULL) return NULL;
-  bsp = FindAppropriateBioseq (sfp->location, NULL);
+  bsp = FindAppropriateBioseq (sfp->location, NULL, NULL);
   if (bsp == NULL) {
     bsp = FindFirstLocalBioseq (sfp->location);
   }
@@ -4786,6 +4797,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (Uint2 entityID, BioseqPtr
     context->farloc = item->farloc;
     context->bad_order = item->bad_order;
     context->mixed_strand = item->mixed_strand;
+    context->ts_image = item->ts_image;
     context->strand = item->strand;
     if (curr != NULL) {
       context->seqfeattype = curr->data.choice;
@@ -5455,7 +5467,7 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
                               BioseqPtr bsp, ExtraIndexPtr exindx, SeqFeatPtr sfp,
                               Int4 left, Int4 right, Uint4 itemID, Uint2 subtype,
                               Boolean farloc, Boolean bad_order, Boolean mixed_strand,
-                              Boolean ignore)
+                              Boolean ignore, Boolean ts_image)
 
 {
   Char            buf [129];
@@ -5537,6 +5549,7 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
         item->farloc = farloc;
         item->bad_order = bad_order;
         item->mixed_strand = mixed_strand;
+        item->ts_image = ts_image;
         /*
         item->strand = SeqLocStrand (sfp->location);
         if (exindx->flip) {
@@ -5561,7 +5574,7 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
         if (SimpleIvalsCalculation (sfp->location, bsp, exindx->flip, item)) {
           /* don't need to do complex merging to calculate intervals */
         } else {
-          loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE);
+          loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE);
 
           if (exindx->flip) {
             sip = SeqIdFindBest (bsp->id, 0);
@@ -5716,6 +5729,212 @@ static void CheckForTransSplice (
   }
 }
 
+
+static Boolean RecordFeatureOnBioseq (
+  GatherObjectPtr gop,
+  BioseqPtr bsp,
+  SeqFeatPtr sfp,
+  ExtraIndexPtr exindx,
+  Boolean usingLocalBsp,
+  Boolean special_case,
+  Boolean small_gen_set,
+  Boolean ts_image
+)
+
+{
+  Boolean         bad_order;
+  BioseqExtraPtr  bspextra;
+  Char            buf [81];
+  Int2            count;
+  CharPtr         ctmp;
+  Int4            diff;
+  Int4            left;
+  CharPtr         loclbl;
+  Boolean         mixed_strand;
+  ObjMgrDataPtr   omdp;
+  ProtRefPtr      prp;
+  Int4            right;
+  SeqAnnotPtr     sap;
+  SeqLocPtr       slp;
+  Int4            swap;
+  SeqFeatPtr      tmp;
+  ValNode         vn;
+
+  if (gop == NULL || bsp == NULL || sfp == NULL || exindx == NULL) return FALSE;
+
+  omdp = SeqMgrGetOmdpForBioseq (bsp);
+  if (omdp == NULL) return TRUE;
+
+  /* now prepare for adding feature to index */
+
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) {
+    CreateBioseqExtraBlock (omdp, bsp);
+    bspextra = (BioseqExtraPtr) omdp->extradata;
+  }
+  if (bspextra == NULL) return TRUE;
+
+  /* get extreme left and right extents of feature location on near bioseqs */
+  /* merge here to get correct extremes even in case of trans-splicing */
+
+  /* but this broke the handling of genes spanning the origin, so cannot do */
+  /*
+  slp = SeqLocMergeEx (bsp, sfp->location, NULL, TRUE, TRUE, FALSE, FALSE);
+  */
+  if (special_case) {
+    slp = sfp->product;
+  } else {
+    slp = sfp->location;
+  }
+
+  bad_order = FALSE;
+  mixed_strand = FALSE;
+  CheckForTransSplice (sfp, &bad_order, &mixed_strand, /* (Boolean) (bsp->topology == TOPOLOGY_CIRCULAR) */ FALSE);
+
+#if 1
+  GetLeftAndRightOffsetsInNearBioseq (slp, bsp, &left, &right, small_gen_set, bad_order, mixed_strand);
+#else
+  left = GetOffsetInNearBioseq (slp, bsp, SEQLOC_LEFT_END);
+  right = GetOffsetInNearBioseq (slp, bsp, SEQLOC_RIGHT_END);
+#endif
+  /*
+  SeqLocFree (slp);
+  */
+  if (left == -1 || right == -1) {
+    GatherContext     gc;
+    GatherContextPtr  gcp;
+    Char              lastbspid [41];
+    SeqIdPtr          sip;
+    MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
+    gcp = &gc;
+    gc.entityID = gop->entityID;
+    gc.itemID = gop->itemID;
+    gc.thistype = gop->itemtype;
+    lastbspid [0] = '\0';
+    if (exindx->lastbsp != NULL) {
+      sip = SeqIdFindBest (exindx->lastbsp->id, 0);
+      if (sip != NULL) {
+        SeqIdWrite (sip, lastbspid, PRINTID_FASTA_LONG, sizeof (lastbspid));
+      }
+    }
+    FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+    ctmp = SeqLocPrint (sfp->location);
+    loclbl = ctmp;
+    if (loclbl == NULL) {
+      loclbl = "?";
+    }
+    ErrPostItem (SEV_WARNING, 0, 0,
+                 "SeqMgr indexing feature mapping problem - Feature: %s - Location [%s] - Record [%s]",
+                 buf, loclbl, lastbspid);
+    MemFree (ctmp);
+    return TRUE;
+  }
+
+  /* if indexing protein bioseq, store largest protein feature */
+
+  if (sfp->data.choice == SEQFEAT_PROT) {
+    prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+
+    vn.choice = SEQLOC_WHOLE;
+    vn.data.ptrvalue = (Pointer) bsp->id;
+    vn.next = NULL;
+    slp = (Pointer) &vn;
+
+    /* get SeqId in bioseq that matches SeqId used for location */
+
+    vn.data.ptrvalue = (Pointer) SeqIdWithinBioseq (bsp, sfp->location);
+
+    diff = SeqLocAinB (sfp->location, slp);
+    if (diff >= 0 && prp != NULL) {
+      if (diff < bspextra->min) {
+        bspextra->min = diff;
+        bspextra->processed = prp->processed;
+        /* if (omdp->tempload == TL_NOT_TEMP) { */
+          bspextra->protFeat = sfp;
+        /* } */
+      } else if (diff == bspextra->min) {
+        /* unprocessed 0 preferred over preprotein 1 preferred over mat peptide 2 */
+        if ( /* prp != NULL && prp->processed == 0 */ prp->processed < bspextra->processed ) {
+          bspextra->min = diff;
+          bspextra->processed = prp->processed;
+          bspextra->protFeat = sfp;
+        }
+      }
+    }
+  }
+
+  /* add feature item to linked list of blocks */
+
+  if (bspextra->featlisthead == NULL) {
+    bspextra->featlisthead = (SMFeatBlockPtr) MemNew (sizeof (SMFeatBlock));
+
+    /* for first feature indexed on this bioseq, quickly see if few or many
+       additional features, since most features on a bioseq are packaged in
+       the same list, and most proteins only have one bioseq */
+
+    for (tmp = sfp, count = 0;
+         tmp != NULL && count < 50;
+         tmp = tmp->next, count++) continue;
+
+    /* extend count if above features were packaged on a bioseq set (presumably CDS or mRNA) */
+
+    if (exindx->lastbssp != NULL) {
+      for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+        if (sap->type == 1) {
+
+          for (tmp = (SeqFeatPtr) sap->data;
+               tmp != NULL && count < 50;
+               tmp = tmp->next, count++) continue;
+
+        }
+      }
+    }
+
+    bspextra->blocksize = count;
+  }
+  if (bspextra->featlisttail == NULL) {
+    bspextra->featlisttail = bspextra->featlisthead;
+  }
+
+  if (bspextra->featlisttail != NULL) {
+
+    /* if feature spans origin, record with left < 0 */
+
+    if (left > right && bsp->topology == TOPOLOGY_CIRCULAR) {
+      left -= bsp->length;
+    }
+
+    /* some trans-spliced locations can confound GetOffsetInNearBioseq, so normalize here */
+
+    if (left > right) {
+      swap = left;
+      left = right;
+      right = swap;
+    }
+
+    RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left,
+                      right, gop->itemID, gop->subtype, usingLocalBsp,
+                      bad_order, mixed_strand, special_case, ts_image);
+
+    /* record gene, publication, and biosource features twice if spanning the origin */
+
+    if (left < 0 && bsp->topology == TOPOLOGY_CIRCULAR) {
+      if (sfp->data.choice == SEQFEAT_GENE ||
+          sfp->data.choice == SEQFEAT_PUB ||
+          sfp->data.choice == SEQFEAT_BIOSRC ||
+          sfp->idx.subtype == FEATDEF_operon) {
+
+        RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left + bsp->length,
+                          right + bsp->length, gop->itemID, gop->subtype, usingLocalBsp,
+                          bad_order, mixed_strand, TRUE, ts_image);
+
+      }
+    }
+  }
+
+  return TRUE;
+}
+
 typedef struct adpbspdata {
   AnnotDescPtr  adp;
   BioseqPtr     bsp;
@@ -5728,31 +5947,26 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
 {
   AdpBspPtr       abp;
   AnnotDescPtr    adp = NULL;
-  Boolean         bad_order;
   BioseqPtr       bsp = NULL;
   BioseqExtraPtr  bspextra;
   BioseqSetPtr    bssp = NULL;
   Char            buf [81];
-  Int2            count;
   CharPtr         ctmp;
-  Int4            diff;
   ExtraIndexPtr   exindx;
-  Int4            left;
+  ValNodePtr      head = NULL;
+  BioseqPtr       lbsp;
   CharPtr         loclbl;
-  Boolean         mixed_strand;
   ObjMgrDataPtr   omdp;
-  ProtRefPtr      prp;
-  Int4            right;
   SeqAnnotPtr     sap = NULL;
   ValNodePtr      sdp = NULL;
   SeqFeatPtr      sfp = NULL;
   SeqAlignPtr     sal = NULL;
+  SeqIdPtr        sip;
   SeqLocPtr       slp;
+  Boolean         small_gen_set = FALSE;
   Boolean         special_case = FALSE;
-  Int4            swap;
-  SeqFeatPtr      tmp;
+  ValNodePtr      tail = NULL;
   Boolean         usingLocalBsp = FALSE;
-  ValNode         vn;
   ValNodePtr      vnp;
 
   switch (gop->itemtype) {
@@ -5886,7 +6100,7 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
     ProcessFeatureProducts (sfp, gop->itemID, gop);
   }
 
-  bsp = FindAppropriateBioseq (sfp->location, exindx->lastbsp);
+  bsp = FindAppropriateBioseq (sfp->location, exindx->lastbsp, &small_gen_set);
 
   /* failure here can be due to SeqLoc that references far accession */
 
@@ -5942,7 +6156,7 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
       bsp = (BioseqPtr) exindx->topsep->data.ptrvalue;
       if (bsp == NULL || (! ISA_aa (bsp->mol))) return TRUE;
       special_case = TRUE;
-      bsp = FindAppropriateBioseq (sfp->product, exindx->lastbsp);
+      bsp = FindAppropriateBioseq (sfp->product, exindx->lastbsp, &small_gen_set);
       if (bsp == NULL) return TRUE;
     } else {
       if (bsp == NULL) return TRUE;
@@ -5954,173 +6168,45 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
 
   exindx->lastbsp = bsp;
 
-  omdp = SeqMgrGetOmdpForBioseq (bsp);
-  if (omdp == NULL) return TRUE;
+  RecordFeatureOnBioseq (gop, bsp, sfp, exindx, usingLocalBsp, special_case, small_gen_set, FALSE);
 
-  /* now prepare for adding feature to index */
+  /* for small genome set, index mixed-chromosome features on other chromosomes as misc_features for visibility */
 
-  bspextra = (BioseqExtraPtr) omdp->extradata;
-  if (bspextra == NULL) {
-    CreateBioseqExtraBlock (omdp, bsp);
-    bspextra = (BioseqExtraPtr) omdp->extradata;
-  }
-  if (bspextra == NULL) return TRUE;
+  if (sfp->data.choice != SEQFEAT_GENE) return TRUE;
 
-  /* get extreme left and right extents of feature location on near bioseqs */
-  /* merge here to get correct extremes even in case of trans-splicing */
-
-  /* but this broke the handling of genes spanning the origin, so cannot do */
-  /*
-  slp = SeqLocMergeEx (bsp, sfp->location, NULL, TRUE, TRUE, FALSE, FALSE);
-  */
-  if (special_case) {
-    slp = sfp->product;
-  } else {
-    slp = sfp->location;
-  }
-
-#if 1
-  GetLeftAndRightOffsetsInNearBioseq (slp, bsp, &left, &right);
-#else
-  left = GetOffsetInNearBioseq (slp, bsp, SEQLOC_LEFT_END);
-  right = GetOffsetInNearBioseq (slp, bsp, SEQLOC_RIGHT_END);
-#endif
-  /*
-  SeqLocFree (slp);
-  */
-  if (left == -1 || right == -1) {
-    GatherContext     gc;
-    GatherContextPtr  gcp;
-    Char              lastbspid [41];
-    SeqIdPtr          sip;
-    MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
-    gcp = &gc;
-    gc.entityID = gop->entityID;
-    gc.itemID = gop->itemID;
-    gc.thistype = gop->itemtype;
-    lastbspid [0] = '\0';
-    if (exindx->lastbsp != NULL) {
-      sip = SeqIdFindBest (exindx->lastbsp->id, 0);
+  if (small_gen_set) {
+    slp = SeqLocFindNext (sfp->location, NULL);
+    while (slp != NULL) {
+      sip = SeqLocId (slp);
       if (sip != NULL) {
-        SeqIdWrite (sip, lastbspid, PRINTID_FASTA_LONG, sizeof (lastbspid));
-      }
-    }
-    FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
-    ctmp = SeqLocPrint (sfp->location);
-    loclbl = ctmp;
-    if (loclbl == NULL) {
-      loclbl = "?";
-    }
-    ErrPostItem (SEV_WARNING, 0, 0,
-                 "SeqMgr indexing feature mapping problem - Feature: %s - Location [%s] - Record [%s]",
-                 buf, loclbl, lastbspid);
-    MemFree (ctmp);
-    return TRUE;
-  }
-
-  /* if indexing protein bioseq, store largest protein feature */
-
-  if (sfp->data.choice == SEQFEAT_PROT) {
-    prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-
-    vn.choice = SEQLOC_WHOLE;
-    vn.data.ptrvalue = (Pointer) bsp->id;
-    vn.next = NULL;
-    slp = (Pointer) &vn;
-
-    /* get SeqId in bioseq that matches SeqId used for location */
-
-    vn.data.ptrvalue = (Pointer) SeqIdWithinBioseq (bsp, sfp->location);
-
-    diff = SeqLocAinB (sfp->location, slp);
-    if (diff >= 0 && prp != NULL) {
-      if (diff < bspextra->min) {
-        bspextra->min = diff;
-        bspextra->processed = prp->processed;
-        /* if (omdp->tempload == TL_NOT_TEMP) { */
-          bspextra->protFeat = sfp;
-        /* } */
-      } else if (diff == bspextra->min) {
-        /* unprocessed 0 preferred over preprotein 1 preferred over mat peptide 2 */
-        if ( /* prp != NULL && prp->processed == 0 */ prp->processed < bspextra->processed ) {
-          bspextra->min = diff;
-          bspextra->processed = prp->processed;
-          bspextra->protFeat = sfp;
+        lbsp = BioseqFindCore (sip);
+        if (lbsp != NULL) {
+          if (lbsp != bsp) {
+            ValNodeAddPointerEx (&head, &tail, 0, (Pointer) lbsp);
+          }
         }
       }
+      slp = SeqLocFindNext (sfp->location, slp);
     }
-  }
+    if (head != NULL) {
+      head = ValNodeSort (head, SortByPtrvalue);
+      head = UniquePtrValNode (head);
 
-  /* add feature item to linked list of blocks */
+      for (vnp = head; vnp != NULL; vnp = vnp->next) {
+        bsp = (BioseqPtr) vnp->data.ptrvalue;
+        if (bsp == NULL) continue;
 
-  if (bspextra->featlisthead == NULL) {
-    bspextra->featlisthead = (SMFeatBlockPtr) MemNew (sizeof (SMFeatBlock));
+        /*
+        !!! need to add flag so that these features are only fetched by flatfile generator
+        and with a distinct flag so that they show up as something like misc_feature instead
+        of CDS !!!
+        */
 
-    /* for first feature indexed on this bioseq, quickly see if few or many
-       additional features, since most features on a bioseq are packaged in
-       the same list, and most proteins only have one bioseq */
-
-    for (tmp = sfp, count = 0;
-         tmp != NULL && count < 50;
-         tmp = tmp->next, count++) continue;
-
-    /* extend count if above features were packaged on a bioseq set (presumably CDS or mRNA) */
-
-    if (exindx->lastbssp != NULL) {
-      for (sap = bsp->annot; sap != NULL; sap = sap->next) {
-        if (sap->type == 1) {
-
-          for (tmp = (SeqFeatPtr) sap->data;
-               tmp != NULL && count < 50;
-               tmp = tmp->next, count++) continue;
-
-        }
+        exindx->lastbsp = bsp;
+        RecordFeatureOnBioseq (gop, bsp, sfp, exindx, usingLocalBsp, special_case, small_gen_set, TRUE);
       }
-    }
 
-    bspextra->blocksize = count;
-  }
-  if (bspextra->featlisttail == NULL) {
-    bspextra->featlisttail = bspextra->featlisthead;
-  }
-
-  if (bspextra->featlisttail != NULL) {
-
-    /* if feature spans origin, record with left < 0 */
-
-    if (left > right && bsp->topology == TOPOLOGY_CIRCULAR) {
-      left -= bsp->length;
-    }
-
-    /* some trans-spliced locations can confound GetOffsetInNearBioseq, so normalize here */
-
-    if (left > right) {
-      swap = left;
-      left = right;
-      right = swap;
-    }
-
-    bad_order = FALSE;
-    mixed_strand = FALSE;
-    CheckForTransSplice (sfp, &bad_order, &mixed_strand, /* (Boolean) (bsp->topology == TOPOLOGY_CIRCULAR) */ FALSE);
-
-    RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left,
-                      right, gop->itemID, gop->subtype, usingLocalBsp,
-                      bad_order, mixed_strand, special_case);
-
-    /* record gene, publication, and biosource features twice if spanning the origin */
-
-    if (left < 0 && bsp->topology == TOPOLOGY_CIRCULAR) {
-      if (sfp->data.choice == SEQFEAT_GENE ||
-          sfp->data.choice == SEQFEAT_PUB ||
-          sfp->data.choice == SEQFEAT_BIOSRC ||
-          sfp->idx.subtype == FEATDEF_operon) {
-
-        RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left + bsp->length,
-                          right + bsp->length, gop->itemID, gop->subtype, usingLocalBsp,
-                          bad_order, mixed_strand, TRUE);
-
-      }
+      ValNodeFree (head);
     }
   }
 
@@ -6991,7 +7077,7 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
 
       /* sort array by SeqId for binary search */
 
-      HeapSort ((Pointer) partsBySeqId, numsegs, sizeof (SMSeqIdxPtr), SortSeqIdxArray);
+      StableMergeSort ((Pointer) partsBySeqId, numsegs, sizeof (SMSeqIdxPtr), SortSeqIdxArray);
     }
 
   }
@@ -7091,7 +7177,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
         /* sort all features by SeqFeatPtr value */
 
-        HeapSort ((VoidPtr) featsBySfp, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListBySfp);
+        StableMergeSort ((VoidPtr) featsBySfp, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListBySfp);
       }
 
       featsByPos = (SMFeatItemPtr PNTR) MemNew (sizeof (SMFeatItemPtr) * (numfeats + 1));
@@ -7104,7 +7190,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
         /* sort all features by feature location on bioseq */
 
-        HeapSort ((VoidPtr) featsByPos, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByPos);
+        StableMergeSort ((VoidPtr) featsByPos, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByPos);
 
         for (i = 0; i < numfeats; i++) {
           item = featsByPos [i];
@@ -7153,7 +7239,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
           /* optionally sort all features by feature reverse location on bioseq */
 
-          HeapSort ((VoidPtr) featsByRev, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByRev);
+          StableMergeSort ((VoidPtr) featsByRev, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByRev);
         }
       }
 
@@ -7167,7 +7253,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
         /* sort all features by label value */
 
-        HeapSort ((VoidPtr) featsByLabel, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByLabel);
+        StableMergeSort ((VoidPtr) featsByLabel, (size_t) numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByLabel);
       }
 
       genesByPos = bspextra->genesByPos;
@@ -7184,7 +7270,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
           /* sort by locus_tag value */
 
-          HeapSort ((VoidPtr) genesByLocusTag, (size_t) numgenes, sizeof (SMFeatItemPtr), SortFeatItemListByLocusTag);
+          StableMergeSort ((VoidPtr) genesByLocusTag, (size_t) numgenes, sizeof (SMFeatItemPtr), SortFeatItemListByLocusTag);
         }
       }
     }
@@ -7211,7 +7297,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats, Uint4 ba
 
             /* map to segmented bioseq coordinates if necessary */
 
-            segloc = SeqLocMergeExEx (nuc, dnaloc, NULL, FALSE, TRUE, FALSE, FALSE, TRUE, TRUE);
+            segloc = SeqLocMergeExEx (nuc, dnaloc, NULL, FALSE, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE);
 
             SeqLocFree (dnaloc);
             if (segloc != NULL) {
@@ -7581,9 +7667,9 @@ static void IndexRecordedDescriptors (SeqEntryPtr sep, Pointer mydata, Int4 inde
 
       /* sort all descriptors by itemID, SeqDescrPtr value, or index */
 
-      HeapSort ((VoidPtr) descrsByID, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListByID);
-      HeapSort ((VoidPtr) descrsBySdp, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListBySdp);
-      HeapSort ((VoidPtr) descrsByIndex, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListByIndex);
+      StableMergeSort ((VoidPtr) descrsByID, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListByID);
+      StableMergeSort ((VoidPtr) descrsBySdp, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListBySdp);
+      StableMergeSort ((VoidPtr) descrsByIndex, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListByIndex);
     }
   }
 }
@@ -7806,7 +7892,7 @@ static void IndexFeatIDsOnEntity (
 
     /* sort all features on entity-wide list by itemID */
 
-    HeapSort ((VoidPtr) featsByFeatID, (size_t) len, sizeof (SMFidItemPtr), SortFidListByFeatID);
+    StableMergeSort ((VoidPtr) featsByFeatID, (size_t) len, sizeof (SMFidItemPtr), SortFidListByFeatID);
 
     bspextra->featsByFeatID = featsByFeatID;
     bspextra->numfids = len;
@@ -8026,7 +8112,7 @@ static Uint2 LIBCALL s_DoSeqMgrIndexFeatures (
 
             /* sort all features on entity-wide list by itemID */
 
-            HeapSort ((VoidPtr) featsByID, (size_t) count, sizeof (SMFeatItemPtr), SortFeatItemListByID);
+            StableMergeSort ((VoidPtr) featsByID, (size_t) count, sizeof (SMFeatItemPtr), SortFeatItemListByID);
 
             bspextra->featsByID = featsByID;
             bspextra->numfeats = count;
@@ -8206,6 +8292,7 @@ static void SetContextForFeature (SeqFeatPtr sfp, SeqMgrFeatContext PNTR context
   context->farloc = best->farloc;
   context->bad_order = best->bad_order;
   context->mixed_strand = best->mixed_strand;
+  context->ts_image = best->ts_image;
   context->strand = best->strand;
   if (bst != NULL) {
     context->seqfeattype = bst->data.choice;
@@ -8548,6 +8635,7 @@ static void SeqMgrBestOverlapSetContext (
     context->farloc = best->farloc;
     context->bad_order = best->bad_order;
     context->mixed_strand = best->mixed_strand;
+    context->ts_image = best->ts_image;
     context->strand = best->strand;
     if (bst != NULL) {
       context->seqfeattype = bst->data.choice;
@@ -8645,7 +8733,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
   }
   if (slp == NULL) return NULL;
 
-  bsp = FindAppropriateBioseq (slp, NULL);
+  bsp = FindAppropriateBioseq (slp, NULL, NULL);
   if (bsp == NULL) {
     bsp = FindFirstLocalBioseq (slp);
   }
@@ -8748,7 +8836,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
     hier = feat->overlap;
   }
 
-  loc = SeqLocMergeExEx (bsp, slp, NULL, FALSE, /* TRUE */ FALSE, FALSE, FALSE, TRUE, TRUE);
+  loc = SeqLocMergeExEx (bsp, slp, NULL, FALSE, /* TRUE */ FALSE, FALSE, FALSE, TRUE, TRUE, FALSE);
   strand = SeqLocStrand (loc);
   if (overlapType == CHECK_INTERVALS) {
     tmp = NULL;
@@ -8807,7 +8895,9 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
           }
 
           /* diff = (left - feat->left) + (feat->right - right); */
-          if (diff < max) {
+          /* Don't need to check ties because in this loop we always hit the leftmost first */
+          if ( diff < max )
+          {
             best = feat;
             index = R;
             max = diff;
@@ -8847,7 +8937,8 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
           }
 
           /* diff = (left - feat->left) + (feat->right - right); */
-          if (diff < max) {
+          /* For ties, first wins */
+          if (diff < max || ( diff == max && hier < index )) {
             best = feat;
             index = hier;
             max = diff;
@@ -9048,6 +9139,7 @@ static SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabelEx (BioseqPtr bsp, CharPtr labe
           context->farloc = feat->farloc;
           context->bad_order = feat->bad_order;
           context->mixed_strand = feat->mixed_strand;
+          context->ts_image = feat->ts_image;
           context->strand = feat->strand;
           context->seqfeattype = seqfeattype;
           context->featdeftype = feat->subtype;
@@ -9173,6 +9265,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByFeatID (
           context->farloc = feat->farloc;
           context->bad_order = feat->bad_order;
           context->mixed_strand = feat->mixed_strand;
+          context->ts_image = feat->ts_image;
           context->strand = feat->strand;
           context->seqfeattype = sfp->data.choice;;
           context->featdeftype = feat->subtype;
@@ -9266,22 +9359,20 @@ NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex (BioseqPtr bsp, Int4Ptr num,
     *num = numitems;
   }
 
-  /* linear searches to mark overlapping features, now allows full length genes */
-
-  for (j = 0; j < numitems - 1; j++) {
-    item = array [j];
-    for (k = j + 1, overlaps = TRUE; k < numitems && overlaps; k++) {
-      nxtitem = array [k];
-      if ((item->left <= nxtitem->left && item->right > nxtitem->left) ||
-          (item->left < nxtitem->right && item->right >= nxtitem->right)) {
-
-       /* after binary search, also go up the hierarchy chain to avoid traps */
-
-        nxtitem->overlap = j;
-      } else {
-        overlaps = FALSE;
+  for (j = 0; j < numitems - 1; j++) { 
+      item = array [j];
+      for (k = j + 1, overlaps = TRUE; k < numitems && overlaps; k++) {
+          nxtitem = array [k];
+          if ((item->left <= nxtitem->left && item->right > nxtitem->left) ||
+              (item->left < nxtitem->right && item->right >= nxtitem->right)) {
+ 
+              /* after binary search, also go up the hierarchy chain to avoid traps */
+ 
+              nxtitem->overlap = j;
+          } else {
+              overlaps = FALSE;
+          }
       }
-    }
   }
 
   return (VoidPtr) array;
@@ -9370,6 +9461,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (BioseqPtr bsp, VoidPtr fe
     context->farloc = item->farloc;
     context->bad_order = item->bad_order;
     context->mixed_strand = item->mixed_strand;
+    context->ts_image = item->ts_image;
     context->strand = item->strand;
     if (curr != NULL) {
       context->seqfeattype = curr->data.choice;
@@ -9593,6 +9685,7 @@ static SeqFeatPtr LIBCALL SeqMgrGetNextFeatureEx (BioseqPtr bsp, SeqFeatPtr curr
           context->farloc = item->farloc;
           context->bad_order = item->bad_order;
           context->mixed_strand = item->mixed_strand;
+          context->ts_image = item->ts_image;
           context->strand = item->strand;
           context->seqfeattype = seqfeattype;
           context->featdeftype = item->subtype;
@@ -10003,7 +10096,7 @@ static Int4 LIBCALL SeqMgrExploreFeaturesInt (BioseqPtr bsp, Pointer userdata,
 
         /* sort all features by feature reverse location on bioseq */
 
-        HeapSort ((VoidPtr) featsByRev, (size_t) bspextra->numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByRev);
+        StableMergeSort ((VoidPtr) featsByRev, (size_t) bspextra->numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByRev);
       }
     }
 
@@ -10071,7 +10164,7 @@ static Int4 LIBCALL SeqMgrExploreFeaturesInt (BioseqPtr bsp, Pointer userdata,
       }
       if ((seqFeatFilter == NULL || seqFeatFilter [seqfeattype]) &&
           (featDefFilter == NULL || featDefFilter [item->subtype]) &&
-          (locationFilter == NULL || (item->right >= left && item->left <= right)) &&
+          (locationFilter == NULL || (item->right > left && item->left <= right)) &&
           (! item->ignore)) {
         context.entityID = entityID;
         context.itemID = item->itemID;
@@ -10365,7 +10458,7 @@ NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp, Int4
   return BinarySearchPartToSegmentMap (in, 0, bsp, NULL, TRUE, from, to);
 }
 
-NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, BoolPtr flip_strand)
+NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, BoolPtr flip_strand, Boolean relaxed)
 
 {
   BioseqExtraPtr  bspextra;
@@ -10412,10 +10505,10 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, 
 
   /* otherwise do binary search on segmented bioseq mapping data */
 
-  segpartptr = BinarySearchPartToSegmentMap (in, pos, bsp, sip, FALSE, 0, 0);
+  segpartptr = BinarySearchPartToSegmentMap (in, pos, bsp, sip, relaxed, 0, 0);
   if (segpartptr == NULL) return -1;
 
-  if (pos >= segpartptr->from && pos <= segpartptr->to) {
+  if (relaxed || (pos >= segpartptr->from && pos <= segpartptr->to)) {
 
     /* install map up block on part, if it has been loaded, to speed up next search */
 
@@ -12189,7 +12282,7 @@ static void SeqMgrRedoFeatByLabel (ObjMgrDataPtr omdp)
     bspextra->featsByLabel[i]->label = StringSaveNoNull (ptr);
   }
 
-  HeapSort ((VoidPtr) bspextra->featsByLabel, (size_t) bspextra->numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByLabel);
+  StableMergeSort ((VoidPtr) bspextra->featsByLabel, (size_t) bspextra->numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByLabel);
 }
 
 static void SeqMgrRedoFeatByLabelProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)

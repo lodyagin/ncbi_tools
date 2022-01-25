@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.142 $
+* $Revision: 1.155 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -256,7 +256,7 @@ static void AddHTGSCommentString (
       ValNodeCopyStr (&head, 0, "* are represented as runs of N. The order of the pieces~");
       ValNodeCopyStr (&head, 0, "* is believed to be correct as given, however the sizes~");
       ValNodeCopyStr (&head, 0, "* of the gaps between them are based on estimates that have~");
-      ValNodeCopyStr (&head, 0, "* provided by the submittor.");
+      ValNodeCopyStr (&head, 0, "* provided by the submitter.");
     }
     ValNodeCopyStr (&head, 0, "~* This sequence will be replaced~");
     ValNodeCopyStr (&head, 0, "* by the finished sequence as soon as it is available and~");
@@ -379,6 +379,104 @@ static void AddWGSMasterCommentString (
   }
 }
 
+static void AddTSAMasterCommentString (
+  StringItemPtr ffstring,
+  BioseqPtr bsp,
+  CharPtr tsaaccn,
+  CharPtr tsaname
+)
+
+{
+  size_t             acclen;
+  BioSourcePtr       biop;
+  Char               buf [256];
+  SeqMgrDescContext  dcontext;
+  CharPtr            first = NULL;
+  CharPtr            last = NULL;
+  ObjectIdPtr        oip;
+  OrgRefPtr          orp;
+  SeqDescrPtr        sdp;
+  CharPtr            taxname = NULL;
+  UserFieldPtr       ufp;
+  UserObjectPtr      uop;
+  Char               ver [16];
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp != NULL) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop != NULL) {
+      orp = biop->org;
+      if (orp != NULL) {
+        taxname = orp->taxname;
+      }
+    }
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL && StringICmp (oip->str, "TSA-mRNA-List") == 0) {
+        for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+          oip = ufp->label;
+          if (oip == NULL || oip->str == NULL || ufp->choice != 1) continue;
+          if (StringICmp (oip->str, "TSA_accession_first") == 0) {
+            first = (CharPtr) ufp->data.ptrvalue;
+          } else if (StringICmp (oip->str, "TSA_accession_last") == 0) {
+            last = (CharPtr) ufp->data.ptrvalue;
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+
+  if (StringHasNoText (taxname)) {
+    taxname = "?";
+  }
+  ver [0] = '\0';
+  acclen = StringLen (tsaname);
+  if (acclen == 12) {
+    StringCpy (ver, tsaname + 4);
+    ver [2] = '\0';
+  } else if (acclen == 13) {
+    StringCpy (ver, tsaname + 4);
+    ver [2] = '\0';
+  } else if (acclen == 15) {
+    StringCpy (ver, tsaname + 7);
+    ver [2] = '\0';
+  }
+
+  sprintf (buf, "The %s transcriptome shotgun assembly (TSA) project has the project accession %s.", taxname, tsaaccn);
+  FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+
+  sprintf (buf, "  This version of the project (%s) has the accession number %s", ver, tsaname);
+  FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+
+  if (first == NULL && last == NULL) {
+    sprintf (buf, ".");
+    FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+  } else {
+    if (first != NULL && last == NULL) {
+      last = first;
+    } else if (first == NULL && last != NULL) {
+      first = last;
+    }
+    if (StringDoesHaveText (first) && StringDoesHaveText (last)) {
+      if (StringCmp (first, last) != 0) {
+        sprintf (buf, ", and consists of sequences %s-%s.", first, last);
+        FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+      } else {
+        sprintf (buf, ", and consists of sequence %s.", first);
+        FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+      }
+    } else {
+      sprintf (buf, ".");
+      FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+    }
+  }
+}
 
 static CharPtr GetMolInfoCommentString (
   BioseqPtr bsp,
@@ -939,6 +1037,9 @@ static void FindModelEvidenceUop (
 static Boolean DoGetAnnotationComment (
    BioseqPtr bsp,
    CharPtr PNTR namep,
+   Int4Ptr gip,
+   Int4Ptr leftp,
+   Int4Ptr rightp,
    CharPtr PNTR methodp,
    BoolPtr mrnaEv,
    BoolPtr estEv
@@ -947,6 +1048,8 @@ static Boolean DoGetAnnotationComment (
 {
   Int2               ce = 0, cm = 0;
   SeqMgrDescContext  dcontext;
+  Int4               gi = 0, left = 0, right = 0;
+  Int4Ptr            ints;
   CharPtr            method = NULL;
   UserObjectPtr      moduop;
   CharPtr            name = NULL;
@@ -970,6 +1073,14 @@ static Boolean DoGetAnnotationComment (
             if (oip == NULL) continue;
             if (StringCmp (oip->str, "Contig Name") == 0) {
               name = (CharPtr) ufp->data.ptrvalue;
+            } else if (StringCmp (oip->str, "Contig Gi") == 0) {
+              gi = ufp->data.intvalue;
+            } else if (StringCmp (oip->str, "Contig Span") == 0 && ufp->choice == 8 && ufp->num >= 2) {
+              ints = (Int4Ptr) ufp->data.ptrvalue;
+              if (ints != NULL) {
+                left = ints [0] + 1;
+                right = ints [1] + 1;
+              }
             } else if (StringCmp (oip->str, "Method") == 0) {
               method = (CharPtr) ufp->data.ptrvalue;
             } else if (StringCmp (oip->str, "mRNA") == 0) {
@@ -1003,6 +1114,9 @@ static Boolean DoGetAnnotationComment (
   }
   if (StringHasNoText (name)) return FALSE;
   *namep = name;
+  *gip = gi;
+  *leftp = left;
+  *rightp = right;
   if (! StringHasNoText (method)) {
     *methodp = method;
   }
@@ -1012,6 +1126,9 @@ static Boolean DoGetAnnotationComment (
 static Boolean GetAnnotationComment (
    BioseqPtr bsp,
    CharPtr PNTR namep,
+   Int4Ptr gip,
+   Int4Ptr leftp,
+   Int4Ptr rightp,
    CharPtr PNTR methodp,
    BoolPtr mrnaEv,
    BoolPtr estEv
@@ -1020,13 +1137,13 @@ static Boolean GetAnnotationComment (
 {
   SeqFeatPtr  cds;
 
-  if (DoGetAnnotationComment (bsp, namep, methodp, mrnaEv, estEv)) return TRUE;
+  if (DoGetAnnotationComment (bsp, namep, gip, leftp, rightp, methodp, mrnaEv, estEv)) return TRUE;
   if (ISA_aa (bsp->mol)) {
     cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
     if (cds != NULL) {
       bsp = BioseqFindFromSeqLoc (cds->location);
       if (bsp != NULL) {
-        return DoGetAnnotationComment (bsp, namep, methodp, mrnaEv, estEv);
+        return DoGetAnnotationComment (bsp, namep, gip, leftp, rightp, methodp, mrnaEv, estEv);
       }
     }
   }
@@ -1927,39 +2044,6 @@ static CharPtr reftxt33 = "from the";
 static CharPtr reftxt34 = "assembly of the human genome (NCBI build";
 static CharPtr reftxt35 = ").";
 
-/*
-static CharPtr GetDBLinkString (
-  UserObjectPtr uop
-)
-
-{
-  Char          buf [128];
-  Int4Ptr       ip;
-  ObjectIdPtr   oip;
-  UserFieldPtr  ufp;
-  Int4          val;
-
-  if (uop == NULL) return NULL;
-
-  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
-    oip = ufp->label;
-    if (oip == NULL || oip->str == NULL || ufp->choice != 8) continue;
-    if (StringICmp (oip->str, "Trace Assembly Archive") == 0) {
-      ip = (Int4Ptr) ufp->data.ptrvalue;
-      if (ufp->num > 0 && ip != NULL) {
-        val = ip [0];
-        if (val > 0) {
-          sprintf (buf, "Trace Assembly Archive:%ld", (long) val);
-          return StringSave (buf);
-        }
-      }
-    }
-  }
-
-  return NULL;
-}
-*/
-
 static CharPtr GetEncodeString (
   UserObjectPtr uop,
   BioseqPtr bsp
@@ -2029,6 +2113,123 @@ static CharPtr GetEncodeString (
   return str;
 }
 
+
+typedef struct unverifiedtypeinfodata {
+  CharPtr match_name;
+  CharPtr comment_text;
+} UnverifiedTypeInfoData, PNTR UnverifiedTypeInfoPtr;
+
+
+static UnverifiedTypeInfoData s_UnverifiedTypeInfo[] = {
+  { "Organism", "source organism" },
+  { "Features", "sequence and/or annotation" }
+};
+
+
+NLM_EXTERN CharPtr GetUnverifiedMatchName (Int4 unverified_type)
+{
+  if (unverified_type < 0 || unverified_type > eUnverifiedType_Max) {
+    return NULL;
+  } else {
+    return s_UnverifiedTypeInfo[unverified_type].match_name;
+  }
+}
+
+
+static void GetUnverifiedFlags (UserObjectPtr uop, BoolPtr unverified_flags)
+{
+  Int4 i;
+  UserFieldPtr ufp;
+  ObjectIdPtr  oip;
+  CharPtr      str;
+  Boolean any = FALSE;
+
+  if (unverified_flags == NULL) {
+    return;
+  }
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    unverified_flags[i] = FALSE;
+  }
+  if (uop == NULL) {
+    return;
+  }
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip != NULL && StringCmp (oip->str, "Type") == 0 && ufp->choice == 1) {
+      str = (CharPtr) ufp->data.ptrvalue;
+      for (i = 0; i < eUnverifiedType_Max; i++) {
+        if (StringICmp (str, s_UnverifiedTypeInfo[i].match_name) == 0) {
+          unverified_flags[i] = TRUE;
+          any = TRUE;
+          break;
+        }
+      }
+    }
+  }
+  if (!any) {
+    /* default in the past was to use feature if not source */
+    unverified_flags[eUnverifiedType_Features] = TRUE;
+  }
+}
+
+
+static CharPtr CommentTextFromUnverifiedFlags(BoolPtr unverified_flags)
+{
+  Int4 i, len, num_items = 0, item;
+  CharPtr comment_start = "GenBank staff is unable to verify ";
+  CharPtr comment_end = " provided by the submitter.";
+  CharPtr and = "and ";
+  CharPtr comma = ", ";
+  CharPtr comment = NULL;
+
+  if (unverified_flags == NULL) {
+    return NULL;
+  }
+
+  len = StringLen (comment_start) + StringLen (comment_end) + 1;
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    if (unverified_flags[i]) {
+      num_items++;
+      len += StringLen (s_UnverifiedTypeInfo[i].comment_text);
+    }
+  }
+  if (num_items > 1) {
+    len += StringLen (and);
+    if (num_items > 2) {
+      len += StringLen (comma) * (num_items - 1);
+    } else {
+      len += 1;
+    }
+  } else if (num_items == 0) {
+    return NULL;
+  }
+
+  comment = (CharPtr) MemNew (sizeof (Char) * len);
+  StringCpy (comment, comment_start);
+  item = 0;
+  for (i = 0; i < eUnverifiedType_Max; i++) {
+    if (unverified_flags[i]) {
+      if (item > 0) {
+        if (num_items > 2) {
+          StringCat (comment, comma);
+        }
+        if (item == num_items - 1) {
+          if (num_items == 2) {
+            StringCat (comment, " ");
+          }
+          StringCat (comment, and);
+        }
+      }
+      StringCat (comment, s_UnverifiedTypeInfo[i].comment_text);
+      item++;
+    }
+  }
+  StringCat (comment, comment_end);
+  return comment;
+}
+  
+
 NLM_EXTERN void AddCommentBlock (
   Asn2gbWorkPtr awp
 )
@@ -2040,7 +2241,7 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            annotDescCommentToComment;
   IntAsn2gbJobPtr    ajp;
   BioseqPtr          bsp;
-  Char               buf [1024];
+  Char               buf [2048];
   CommentBlockPtr    cbp;
   Char               ch;
   Boolean            didGenome = FALSE;
@@ -2048,9 +2249,6 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            didTPA = FALSE;
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
-  /*
-  UserObjectPtr      dblinkUop = NULL;
-  */
   DeltaSeqPtr        dsp;
   UserObjectPtr      encodeUop = NULL;
   Boolean            estEv = FALSE;
@@ -2074,17 +2272,20 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            is_wgs = FALSE;
   Boolean            isRefSeqStandard = FALSE;
   Boolean            is_unverified = FALSE;
+  Int4               left;
   SeqLitPtr          litp;
   ObjectIdPtr        localID = NULL;
   Char               locusID [32];
   CharPtr            method = NULL;
   MolInfoPtr         mip;
   Boolean            mrnaEv = FALSE;
+  SeqIdPtr           msip;
   CharPtr            name = NULL;
   ObjectIdPtr        ncbifileID = NULL;
   ObjectIdPtr        oip;
   Boolean            okay;
   BioseqPtr          parent;
+  Int4               right;
   SeqDescrPtr        sdp;
   /*
   SeqFeatPtr         sfp;
@@ -2093,15 +2294,20 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            showGBBSource = FALSE;
   SeqIdPtr           sip;
   CharPtr            str;
-  Char               taxID [32];
-  Char               tmp [32];
+  Char               taxID [64];
+  Char               tmp [128];
+  CharPtr            tsaaccn = NULL;
+  CharPtr            tsaname = NULL;
   TextSeqIdPtr       tsip;
   UserFieldPtr       ufp;
   Int4               unverified_itemID = 0;
   UserObjectPtr      uop;
+  Int4               version;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
   StringItemPtr      ffstring = NULL;
+  Boolean            unverified_flags[eUnverifiedType_Max];
+  CharPtr            unverified_comment;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -2118,6 +2324,7 @@ NLM_EXTERN void AddCommentBlock (
   ffstring = FFGetString(ajp);
   if ( ffstring ==  NULL ) return;
 
+  GetUnverifiedFlags(NULL, unverified_flags);
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
   while (sdp != NULL) {
     uop = (UserObjectPtr) sdp->data.ptrvalue;
@@ -2137,16 +2344,12 @@ NLM_EXTERN void AddCommentBlock (
         if (StringICmp (oip->str, "Unverified") == 0) {
           is_unverified = TRUE;
           unverified_itemID = dcontext.itemID;
+          GetUnverifiedFlags(uop, unverified_flags);
         }
         if (StringICmp (oip->str, "ENCODE") == 0) {
           is_encode = TRUE;
           encodeUop = uop;
         }
-        /*
-        if (StringICmp (oip->str, "DBLink") == 0) {
-          dblinkUop = uop;
-        }
-        */
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
@@ -2168,9 +2371,13 @@ NLM_EXTERN void AddCommentBlock (
         FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
       }
 
-        FFAddOneString (ffstring,
-                        "GenBank staff is unable to verify sequence and/or annotation provided by the submitter.",
-                        FALSE, FALSE, TILDE_IGNORE);
+      unverified_comment = CommentTextFromUnverifiedFlags(unverified_flags);
+      if (unverified_comment != NULL) {
+          FFAddOneString (ffstring,
+                          unverified_comment,
+                          FALSE, FALSE, TILDE_IGNORE);
+          unverified_comment = MemFree (unverified_comment);
+      }
 
       cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
       FFRecycleString(ajp, ffstring);
@@ -2182,37 +2389,7 @@ NLM_EXTERN void AddCommentBlock (
     }
   }
 
-  /*
-  if (dblinkUop != NULL) {
-    str = GetDBLinkString (dblinkUop);
-    if (StringDoesHaveText (str)) {
-      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-      if (cbp != NULL) {
-
-        cbp->entityID = awp->entityID;
-        cbp->first = first;
-        first = FALSE;
-
-        if (cbp->first) {
-          FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-        } else {
-          FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-        }
-
-        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-
-        cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
-        FFRecycleString(ajp, ffstring);
-        ffstring = FFGetString(ajp);
-
-        if (awp->afp != NULL) {
-          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
-        }
-      }
-    }
-  }
-  */
-
+  gi = 0;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
@@ -2415,10 +2592,14 @@ NLM_EXTERN void AddCommentBlock (
                    StringNCmp(tsip->accession, "ZP_", 3) == 0) {
 
           name = NULL;
+          gi = 0;
+          version = 0;
+          left = 0;
+          right = 0;
           method = NULL;
           mrnaEv = FALSE;
           estEv = FALSE;
-          if (GetAnnotationComment (bsp, &name, &method, &mrnaEv, &estEv)) {
+          if (GetAnnotationComment (bsp, &name, &gi, &left, &right, &method, &mrnaEv, &estEv)) {
 
             cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
             if (cbp != NULL) {
@@ -2455,8 +2636,33 @@ NLM_EXTERN void AddCommentBlock (
                 } else {
                   FF_Add_NCBI_Base_URL (ffstring, link_seqp);
                 }
-                gi = 0;
-                if (ValidateAccnDotVer (name) == 0 && GetGiFromAccnDotVer (name, &gi)) {
+                if (gi > 0) {
+                  sprintf (tmp, "%ld", (long) gi);
+                  FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+                  msip = GetSeqIdForGI (gi);
+                  if (msip != NULL) {
+                    switch (msip->choice) {
+                      case SEQID_GENBANK:
+                      case SEQID_EMBL:
+                      case SEQID_DDBJ:
+                      case SEQID_OTHER:
+                      case SEQID_TPG:
+                      case SEQID_TPE:
+                      case SEQID_TPD:
+                      case SEQID_PIR:
+                      case SEQID_SWISSPROT:
+                        tsip = (TextSeqIdPtr) msip->data.ptrvalue;
+                        if (tsip != NULL) {
+                          if (StringICmp (name, tsip->accession) == 0) {
+                            version = tsip->version;
+                          }
+                        }
+                        break;
+                      default:
+                        break;
+                    }
+                  }
+                } else if (ValidateAccnDotVer (name) == 0 && GetGiFromAccnDotVer (name, &gi)) {
                   sprintf (tmp, "%ld", (long) gi);
                   FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
                 } else {
@@ -2464,9 +2670,52 @@ NLM_EXTERN void AddCommentBlock (
                 }
                 gi = 0;
                 FFAddOneString (ffstring, "?report=graph", FALSE, FALSE, TILDE_IGNORE);
+                if (left > 0 && right > 0) {
+                  if (left > 500) {
+                    left -= 500;
+                  } else {
+                    left = 1;
+                  }
+                  right += 500;
+                  sprintf (tmp, "&v=%ld:%ld", (long) left, (long) right);
+                  FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+                }
                 FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
+                if (version > 0 && StringChr (name, '.') == NULL) {
+                  sprintf (tmp, ".%ld", (long) version);
+                  FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+                }
                 FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+              } else if (StringChr (name, '.') == NULL && gi > 0) {
+                msip = GetSeqIdForGI (gi);
+                if (msip != NULL) {
+                  switch (msip->choice) {
+                    case SEQID_GENBANK:
+                    case SEQID_EMBL:
+                    case SEQID_DDBJ:
+                    case SEQID_OTHER:
+                    case SEQID_TPG:
+                    case SEQID_TPE:
+                    case SEQID_TPD:
+                    case SEQID_PIR:
+                    case SEQID_SWISSPROT:
+                      tsip = (TextSeqIdPtr) msip->data.ptrvalue;
+                      if (tsip != NULL) {
+                        if (StringICmp (name, tsip->accession) == 0) {
+                          version = tsip->version;
+                        }
+                      }
+                      break;
+                    default:
+                      break;
+                  }
+                }
+                FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
+                if (version > 0) {
+                  sprintf (tmp, ".%ld", (long) version);
+                  FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+                }
               } else {
                 FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
               }
@@ -2552,6 +2801,8 @@ NLM_EXTERN void AddCommentBlock (
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
       if (tsip != NULL && tsip->accession != NULL) {
         acclen = StringLen (tsip->accession);
+        tsaaccn = tsip->accession;
+        tsaname = tsip->name;
         if (acclen == 12) {
           is_wgs = TRUE;
           if (StringCmp (tsip->accession + 6, "000000") == 0) {
@@ -2579,6 +2830,8 @@ NLM_EXTERN void AddCommentBlock (
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
       if (tsip != NULL && tsip->accession != NULL) {
         acclen = StringLen (tsip->accession);
+        tsaaccn = tsip->accession;
+        tsaname = tsip->name;
         if (acclen == 12) {
           is_wgs = TRUE;
           if (StringCmp (tsip->accession + 6, "000000") == 0) {
@@ -3129,6 +3382,43 @@ NLM_EXTERN void AddCommentBlock (
             }
 
             AddWGSMasterCommentString (ffstring, bsp, wgsaccn, wgsname);
+
+            cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+            FFRecycleString(ajp, ffstring);
+            ffstring = FFGetString(ajp);
+
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            if (awp->afp != NULL) {              
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
+            cbp->itemID = 0;
+            cbp->itemtype = 0;
+          }
+        }
+      } else if (mip->tech == MI_TECH_tsa) {
+
+        if (tsaname != NULL && bsp->repr == Seq_repr_virtual) {
+
+          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+          if (cbp != NULL) {
+
+            /*
+            cbp->entityID = dcontext.entityID;
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            */
+            cbp->entityID = awp->entityID;
+            cbp->first = first;
+            first = FALSE;
+
+            if (cbp->first) {
+              FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+            } else {
+              FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+            }
+
+            AddTSAMasterCommentString (ffstring, bsp, tsaaccn, tsaname);
 
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
             FFRecycleString(ajp, ffstring);
@@ -3994,7 +4284,7 @@ static void GetSourcesOnBioseq (
               right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
               strand = SeqLocStrand (ajp->ajp.slp);
               split = FALSE;
-              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, isp->loc, 0, FALSE, ajp->masterStyle);
+              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, isp->loc, 0, FALSE, ajp->masterStyle, ajp->relaxedMapping);
               /*
               newloc = SeqLocCopyRegion (sip, isp->loc, bsp, left, right, strand, &split);
               */
@@ -4356,7 +4646,7 @@ NLM_EXTERN void AddSourceFeatBlock (
       }
     }
 
-    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans &&
         (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
       sprintf (pfx, "<span id=\"feature_%ld_source_0\" class=\"feature\">", (long) currGi);
     }
@@ -4424,7 +4714,7 @@ NLM_EXTERN void AddSourceFeatBlock (
       FFAddTextToString (ffstring, "/mol_type=\"", str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
     }
 
-    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans &&
         (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
       sprintf (sfx, "</span>");
     }
@@ -4793,7 +5083,7 @@ static void GetFeatsOnCdsProduct (
             slp = SeqLocMerge (nbsp, location, NULL, FALSE, TRUE, FALSE);
             if (slp != NULL) {
               sip = SeqIdParse ("lcl|dummy");
-              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
+              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle, ajp->relaxedMapping);
               SeqIdFree (sip);
               SeqLocFree (slp);
               if (newloc == NULL) {
@@ -4961,7 +5251,7 @@ static void GetRemoteFeatsOnCdsProduct (
             slp = SeqLocMerge (nbsp, location, NULL, FALSE, TRUE, FALSE);
             if (slp != NULL) {
               sip = SeqIdParse ("lcl|dummy");
-              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
+              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle, ajp->relaxedMapping);
               SeqIdFree (sip);
               SeqLocFree (slp);
               if (newloc == NULL) {
@@ -5213,7 +5503,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       slp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, TRUE, FALSE);
       if (slp == NULL) return TRUE;
       sip = SeqIdParse ("lcl|dummy");
-      newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
+      newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle, ajp->relaxedMapping);
       SeqIdFree (sip);
       SeqLocFree (slp);
       if (newloc == NULL) return TRUE;
@@ -5542,7 +5832,9 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp->mapToPep = FALSE;
   ifp->left = 0;
   ifp->right = 0;
-  SetIfpFeatCount (ifp, ajp, awp, ISA_aa (bsp->mol));
+  if (bsp != NULL) {
+    SetIfpFeatCount (ifp, ajp, awp, ISA_aa (bsp->mol));
+  }
   ifp->firstfeat = awp->firstfeat;
   awp->firstfeat = FALSE;
 

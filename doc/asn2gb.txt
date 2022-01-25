@@ -254,6 +254,8 @@ Still others are expected to be rarely used, or are for testing new features.
 #define DDBJ_VARIANT_FORMAT    32768
 #define SPECIAL_GAP_DISPLAY    65536
 #define FORCE_PRIMARY_BLOCK   131072
+#define FORCE_ALLOW_FAR_FEATS 262144
+#define RELAXED_MAPPING       524288
 
 
 LOCKS are bits for controlling program performance, and are also ORed
@@ -341,6 +343,12 @@ The CDS /translation can also be suppressed, even with near products.
 Evidence qualifiers, including experiment and inference, can be suppressed.
 
 #define HIDE_EVIDENCE_QUALS   524288
+
+Other custom flags modify the output to support internal NCBI processing.
+
+#define NEW_XML_POLICY       1048576
+#define OLD_GBSEQ_XML        2097152
+#define FORCE_SEQ_SPANS      4194304
 
 
 EXTRA is an opaque pointer used for preparing internal NCBI indices.  Most

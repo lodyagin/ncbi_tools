@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.120  2011/12/19 18:33:53  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 6.119  2006/07/13 17:06:38  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -3725,7 +3728,7 @@ NLM_EXTERN void Add_trid (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 		if ((newid = GetSeqIdForGI(sip->data.intvalue)) != NULL) {
 			SeqIdWrite(newid, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
 		} else {
-			sprintf(buf, "%ld", sip->data.intvalue);
+			sprintf(buf, "%d", sip->data.intvalue);
 		}
 	} else {	
 		SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
@@ -3768,7 +3771,7 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, Boolean is_NTorNG)
 				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
 				SeqIdFree(new_id); /*** need to free it !!! (EY) ***/
 			} else {
-				sprintf(buf, "%ld", sip->data.intvalue);
+				sprintf(buf, "%d", sip->data.intvalue);
 			}
 			sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
 		} else if ((p_bsp = BioseqFind(sip)) != NULL) {

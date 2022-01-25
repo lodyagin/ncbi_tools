@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.93 $
+* $Revision: 6.99 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -5442,7 +5442,7 @@ NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
 
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "Bio Sample") == 0) {
+    if (oip != NULL && StringICmp (oip->str, "BioSample") == 0) {
       break;
     }
     prev = curr;
@@ -5451,7 +5451,7 @@ NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
   if (curr == NULL) {
     curr = UserFieldNew ();
     oip = ObjectIdNew ();
-    oip->str = StringSave ("Bio Sample");
+    oip->str = StringSave ("BioSample");
     curr->label = oip;
     curr->choice = 7; /* sequence of string */
 
@@ -5475,6 +5475,114 @@ NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
   }
   curr->data.ptrvalue = (Pointer) cpp;
 }
+
+NLM_EXTERN void AddSeqReadArchIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  CharPtr PNTR   cpp;
+  UserFieldPtr   curr;
+  Int4           i;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Sequence Read Archive") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Sequence Read Archive");
+    curr->label = oip;
+    curr->choice = 7; /* sequence of string */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 7) return;
+
+  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
+  if (cpp == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    cpp [i] = StringSaveNoNull (values [i]);
+  }
+  curr->data.ptrvalue = (Pointer) cpp;
+}
+
+NLM_EXTERN void AddFieldsToDBLinkUserObject (
+  UserObjectPtr uop,
+  CharPtr field_name,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  CharPtr PNTR   cpp;
+  UserFieldPtr   curr;
+  Int4           i;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, field_name) == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave (field_name);
+    curr->label = oip;
+    curr->choice = 7; /* sequence of string */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 7) return;
+
+  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
+  if (cpp == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    cpp [i] = StringSaveNoNull (values [i]);
+  }
+  curr->data.ptrvalue = (Pointer) cpp;
+}
+
 
 NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
   UserObjectPtr uop,
@@ -5558,6 +5666,59 @@ NLM_EXTERN void AddSeqReadArchiveIDsToDBLinkUserObject (
     curr = UserFieldNew ();
     oip = ObjectIdNew ();
     oip->str = StringSave ("Sequence Read Archive");
+    curr->label = oip;
+    curr->choice = 7; /* sequence of string */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 7) return;
+
+  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
+  if (cpp == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    cpp [i] = StringSaveNoNull (values [i]);
+  }
+  curr->data.ptrvalue = (Pointer) cpp;
+}
+
+NLM_EXTERN void AddBioProjectIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  CharPtr PNTR   cpp;
+  UserFieldPtr   curr;
+  Int4           i;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "BioProject") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("BioProject");
     curr->label = oip;
     curr->choice = 7; /* sequence of string */
 
@@ -5939,23 +6100,26 @@ NLM_EXTERN UserObjectPtr FindUnverifiedUserObject (
 }
 
 
-NLM_EXTERN void AddUnverifiedUserObject (
+NLM_EXTERN UserObjectPtr AddUnverifiedUserObject (
   SeqEntryPtr sep
 )
 
 {
   SeqDescrPtr sdp;
-  UserObjectPtr uop;
+  UserObjectPtr uop = NULL;
 
+  if (sep == NULL) return NULL;
   sdp = CreateNewDescriptor(sep, Seq_descr_user);
   uop = UserObjectNew ();
   uop->type = ObjectIdNew();
   uop->type->str = StringSave ("Unverified");
   sdp->data.ptrvalue = uop;
+
+  return uop;
 }
 
 
-NLM_EXTERN void AddUnverifiedUserObjectToBioseq (
+NLM_EXTERN UserObjectPtr AddUnverifiedUserObjectToBioseq (
   BioseqPtr bsp
 )
 
@@ -5963,9 +6127,10 @@ NLM_EXTERN void AddUnverifiedUserObjectToBioseq (
   SeqDescPtr sdp;
   SeqMgrDescContext context;
   Boolean found = FALSE;
+  UserObjectPtr uop = NULL;
 
   if (bsp == NULL || ISA_aa(bsp->mol)) {
-    return;
+    return NULL;
   }
   for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
        sdp != NULL && !found;
@@ -5976,10 +6141,79 @@ NLM_EXTERN void AddUnverifiedUserObjectToBioseq (
   }
   if (!found) {
     sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
-    sdp->data.ptrvalue = CreateUnverifiedUserObject();
+    uop = CreateUnverifiedUserObject();
+    sdp->data.ptrvalue = uop;
   }
+
+  return uop;
 }
 
+
+NLM_EXTERN UserObjectPtr AddUnverifiedUserObjectToBioseqParent (
+  BioseqPtr bsp
+)
+
+{
+  SeqDescPtr sdp;
+  SeqMgrDescContext context;
+  UserObjectPtr uop = NULL;
+  BioseqSetPtr bssp;
+  SeqEntryPtr sep;
+
+  if (bsp == NULL || ISA_aa(bsp->mol)) return NULL;
+
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+       sdp != NULL;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context)) {
+    if (IsUnverifiedUserObject(sdp->data.ptrvalue)) return NULL;
+  }
+
+  bssp = (BioseqSetPtr) bsp->idx.parentptr;
+  if (bssp == NULL) return NULL;
+  sep = SeqMgrGetSeqEntryForData (bssp);
+  if (sep == NULL) return NULL;
+  sdp = CreateNewDescriptor (sep, Seq_descr_user);
+  if (sdp == NULL) return NULL;
+  uop = CreateUnverifiedUserObject();
+  if (uop == NULL) return NULL;
+  sdp->data.ptrvalue = uop;
+
+  return uop;
+}
+NLM_EXTERN void AddStringToUnverifiedUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  CharPtr str
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || StringHasNoText (field) || StringHasNoText (str)) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "Unverified") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    prev = curr;
+  }
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave (field);
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  curr->data.ptrvalue = (Pointer) StringSave (str);
+
+  /* link item at end of list */
+
+  if (prev != NULL) {
+    prev->next = curr;
+  } else {
+    uop->data = curr;
+  }
+}
 
 static void RemoveUnverifiedDescr(SeqDescrPtr sdp, Pointer data)
 {

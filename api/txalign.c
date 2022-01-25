@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.95 2008/01/07 23:20:06 bealer Exp $
+/* $Id: txalign.c,v 6.96 2011/12/19 18:33:53 gouriano Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.95 $
+* $Revision: 6.96 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.96  2011/12/19 18:33:53  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 6.95  2008/01/07 23:20:06  bealer
 * - Fix condition found by valgrind - conditional statement on
 *   unassigned location.
@@ -1766,7 +1769,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 					/*check box for getting sequence*/
 					if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
 					  Char checkboxBuf[200];
-					  sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%ld', 'getSeqGi', this.checked)\">", sip->data.intvalue, query_number_glb);
+					  sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%d\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%d', 'getSeqGi', this.checked)\">", sip->data.intvalue, query_number_glb);
 					  sprintf(docbuf+pos,checkboxBuf);
 					  
 					  pos += StringLen(checkboxBuf);
@@ -1815,7 +1818,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 		if(!load){
 		  if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
 		    Char checkboxBuf[200];
-		    sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment%ld', 'getSeqMaster')\">", query_number_glb);
+		    sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment%d', 'getSeqMaster')\">", query_number_glb);
 		    sprintf(docbuf+pos,checkboxBuf);
 		  
 		    pos += StringLen(checkboxBuf);

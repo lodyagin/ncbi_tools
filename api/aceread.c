@@ -1,5 +1,5 @@
 /*
- * $Id: aceread.c,v 1.23 2010/12/13 16:28:14 bollin Exp $
+ * $Id: aceread.c,v 1.25 2012/04/02 22:11:35 kans Exp $
  *
  * ===========================================================================
  *
@@ -36,12 +36,6 @@
 #include <ctype.h>
 #include <util/creaders/alnread.h>
 #include <aceread.h>
-
-
-typedef enum {
-    eTrue = -1,
-    eFalse = 0
-} EBool;
 
 
 typedef enum {

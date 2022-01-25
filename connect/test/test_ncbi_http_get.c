@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_http_get.c,v 6.27 2011/06/10 03:39:34 kazimird Exp $
+/* $Id: test_ncbi_http_get.c,v 6.29 2011/11/11 17:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
     SConnNetInfo* net_info;
     char          blk[512];
     EIO_Status    status;
-    THCC_Flags    flags;
+    THTTP_Flags   flags;
     CONN          conn;
     FILE*         fp;
     time_t        t;
@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
         CORE_LOG(eLOG_Note,    "SSL request acknowledged");
         SOCK_SetupSSL(NcbiSetupGnuTls);
 #else
-        CORE_LOG(eLOG_Warning, "SSL requested but may not be supported");
+        CORE_LOG(eLOG_Warning, "SSL requested but may be not supported");
 #endif /*HAVE_LIBGNUTLS*/
     }
 

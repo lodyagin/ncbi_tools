@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.68 2006/07/13 17:06:39 bollin Exp $
+/*  $Id: pgppop.c,v 6.69 2012/03/30 14:22:03 choi Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.68 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
@@ -37,6 +37,10 @@
 * --------------------------------------------------------------------------
 *
 * $Log: pgppop.c,v $
+* Revision 6.69  2012/03/30 14:22:03  choi
+* Fixed bug in DDV_DisplayParaG: write <FONT> tag for minus strand
+* sequences only if html display format was specified.
+*
 * Revision 6.68  2006/07/13 17:06:39  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -2314,11 +2318,11 @@ static ValNodePtr DDV_DisplayParaG
                 else
                     iStuff=2;
             }
-            if (bsp_strand==Seq_strand_minus)
+            if (bsp_strand==Seq_strand_minus && disp_format&DISP_FULL_HTML && !(disp_format&DISP_NOLINKONNAME))
                 szFLine=DDV_ConcatStr(szFLine,"<FONT COLOR=#FF0000>");
             sprintf(szBuf4,"%c ", szStuff[iStuff]);
             szFLine=DDV_ConcatStr(szFLine,szBuf4);
-            if (bsp_strand==Seq_strand_minus)
+            if (bsp_strand==Seq_strand_minus && disp_format&DISP_FULL_HTML && !(disp_format&DISP_NOLINKONNAME))
                 szFLine=DDV_ConcatStr(szFLine,"</FONT>");
         }
         /*display bsp coord if needed*/

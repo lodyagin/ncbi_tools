@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.74 $
+* $Revision: 1.76 $
 *
 * File Description: 
 *
@@ -3208,5 +3208,44 @@ NLM_EXTERN OrgRefPtr GetCommonOrgRefForSeqEntry (SeqEntryPtr sep)
     org->taxname = StringSave ("Mixed organisms");
   }
   return org;
+}
+
+
+NLM_EXTERN BioSourcePtr BioSourceFromBioSample (CharPtr number)
+
+{
+  BioSourcePtr biop = NULL;
+  CONN         conn;
+  AsnIoConnPtr aicp;
+  time_t       max = 0;
+  size_t       n_written;
+  CharPtr      i_query_fmt = "id=%s&format=asn1";
+  CharPtr      a_query_fmt = "accession=%s&format=asn1";
+  CharPtr      query_fmt;
+  CharPtr      query;
+  EIO_Status   status;
+
+  if (StringHasNoText (number)) return NULL;
+  if (isalpha (*number)) {
+    query_fmt = a_query_fmt;
+  } else {
+    query_fmt = i_query_fmt;
+  }
+  query = (CharPtr) MemNew (sizeof (Char) * (StringLen (query_fmt) + StringLen (number)));
+  sprintf (query, query_fmt, number);
+  conn = QUERY_OpenUrlQuery ("intrawebdev2", 80, "/staff/gevorgya/biosample/fetch.cgi",
+                             query, "Sequin", 30, eMIME_T_NcbiData,
+                             eMIME_Fasta, eENCOD_None, 0);
+  query = MemFree (query);
+  if (conn == NULL) return NULL;
+  status = CONN_Write (conn, (const void *) query, StringLen (query),
+                       &n_written, eIO_WritePersist);
+  if (status != eIO_Success) return NULL;
+  QUERY_SendQuery (conn);
+  aicp = QUERY_AsnIoConnOpen ("r", conn);
+  biop = BioSourceAsnRead (aicp->aip, NULL);
+  QUERY_AsnIoConnClose (aicp);
+
+  return biop;
 }
 

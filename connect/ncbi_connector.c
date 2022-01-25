@@ -1,4 +1,4 @@
-/* $Id: ncbi_connector.c,v 6.11 2011/04/17 02:44:31 kazimird Exp $
+/* $Id: ncbi_connector.c,v 6.13 2012/05/07 15:39:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -89,13 +89,13 @@ extern EIO_Status METACONN_Add
 
     if (connector->next  ||  !connector->setup) {
         EIO_Status status = eIO_Unknown;
-        METACONN_LOG(35, eLOG_Error,
+        METACONN_LOG(33, eLOG_Error,
                      "[METACONN_Add]  Connector is in use/uninitable");
         return status;
     }
 
-    connector->setup(meta, connector);
     connector->meta = meta;
+    connector->setup(connector);
     connector->next = meta->list;
     meta->list = connector;
     return eIO_Success;

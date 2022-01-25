@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.52 2011/01/06 18:39:31 kazimird Exp $
+/*  $Id: blast_seqsrc.h,v 1.56 2012/02/09 15:49:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -148,6 +148,13 @@ NCBI_XBLAST_EXPORT
 Int4
 BlastSeqSrcGetMaxSeqLen(const BlastSeqSrc* seq_src);
 
+/** Get the length of the longest sequence in the sequence source.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int4
+BlastSeqSrcGetMinSeqLen(const BlastSeqSrc* seq_src);
+
 /** Get the average length of all sequences in the sequence source.
  * @param seq_src the BLAST sequence source [in]
  */
@@ -193,12 +200,19 @@ NCBI_XBLAST_EXPORT
 Boolean
 BlastSeqSrcGetSupportsPartialFetching(const BlastSeqSrc* seq_src);
 
+#define BLAST_SEQSRC_MINGAP     1024  /**< Minimal gap allowed in range list */
+#define BLAST_SEQSRC_OVERHANG   1024  /**< Extension for each new range added */
+#define BLAST_SEQSRC_MINLENGTH  10    /**< Default minimal sequence length */
+
 /** Structure used as the argument to function SetRanges */
 typedef struct BlastSeqSrcSetRangesArg {
     /** Oid in BLAST database, index in an array of sequences, etc [in] */
     Int4 oid;
     
-    /** Number of ranges to be set [in] */
+    /** initial allocation*/
+    Int4 capacity;
+
+    /** Number of actual ranges contained */
     Int4 num_ranges;
 
     /** Ranges in sorted order [in] */
@@ -209,38 +223,21 @@ typedef struct BlastSeqSrcSetRangesArg {
 BlastSeqSrcSetRangesArg *
 BlastSeqSrcSetRangesArgNew(Int4 num_ranges);
 
+/** add new range 
+ * @return 0 in case of success, otherwise 1
+ */
+Int2
+BlastSeqSrcSetRangesArgAddRange(BlastSeqSrcSetRangesArg *arg, 
+                                Int4 begin, Int4 end);
+
 /** free setrangearg */
 void 
 BlastSeqSrcSetRangesArgFree(BlastSeqSrcSetRangesArg * arg);
 
 
-#define BLAST_SEQSRC_MINGAP     1024  /**< Minimal gap allowed in range list */
-#define BLAST_SEQSRC_OVERHANG   1024  /**< Extension for each new range added */
-
-/** Structure used to build BlastSeqSrcSetRangesArg */
-typedef struct BlastHSPRangeList {
-    Int4 begin;
-    Int4 end;
-    struct BlastHSPRangeList *next;
-} BlastHSPRangeList;
-
-/** new a range list node */
-BlastHSPRangeList *
-BlastHSPRangeListNew(Int4 begin, Int4 end, BlastHSPRangeList *next);
-
-/** add a new range seg into the reange list, keeping begin in sorting order */
-BlastHSPRangeList *
-BlastHSPRangeListAddRange(BlastHSPRangeList *list,
-                          Int4 begin,  Int4 end);
-
 /** build BlastSeqSrcSetRangesArg from range list*/
 void
-BlastHSPRangeBuildSetRangesArg(BlastHSPRangeList *list,
-                               BlastSeqSrcSetRangesArg *arg);
-
-/** free range list */
-void
-BlastHSPRangeListFree(BlastHSPRangeList *list);
+BlastSeqSrcSetRangesArgBuild(BlastSeqSrcSetRangesArg *arg);
 
 /** Setting the ranges for partial fetching */
 NCBI_XBLAST_EXPORT

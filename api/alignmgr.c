@@ -28,13 +28,17 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.180 $
+* $Revision: 6.181 $
 *
 * File Description: SeqAlign indexing and messaging functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.c,v $
+* Revision 6.181  2012/03/30 14:17:43  choi
+* Fixed bug in AlnMgrGetNextAlnBit so that it correctly calculates
+* amp->from_b coordinates for minus strand sequences.
+*
 * Revision 6.180  2008/10/22 17:18:40  bollin
 * Improvement to function for freeing an alignment index - if a freefunc was
 * provided, use it.
@@ -3506,18 +3510,16 @@ NLM_EXTERN Boolean AlnMgrGetNextAlnBit (SeqAlignPtr sap, AlnMsgPtr amp)
                if (amp->strand != Seq_strand_minus)
                {
                   if (endoffset >=0)
-                     amp->to_b = amp->from_b + amaip->lens[start_m] - offset - 1 -
-endoffset;
+                     amp->to_b = amp->from_b + amaip->lens[start_m] - offset - 1 - endoffset;
                   else
-                     amp->to_b = amp->from_b + amaip->lens[start_m] - offset -1;
+                     amp->to_b = amp->from_b + amaip->lens[start_m] - offset - 1;
                } else
                {
                   amp->to_b = amp->from_b;
                   if (endoffset >= 0)
-                     amp->from_b = amp->to_b - amaip->lens[start_m] + 1 + endoffset
-;
+                     amp->from_b = amp->to_b - amaip->lens[start_m] + offset + 1 + endoffset;
                   else
-                     amp->from_b = amp->to_b - amaip->lens[start_m] + 1;
+                     amp->from_b = amp->to_b - amaip->lens[start_m] + offset + 1;
                }
                amp->gap = 0;
             } else

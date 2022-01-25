@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,9 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.14  2012/03/08 20:30:37  kans
+* aip->linelength is now Int2
+*
 * Revision 6.13  2011/04/12 21:28:51  lavr
 * Fix ASN stream flushing: avoid fflush(NULL) that has an effect of flushing ALL open FILE* streams
 *
@@ -1137,7 +1140,8 @@ NLM_EXTERN void LIBCALL  AsnIoSetErrorMsg (AsnIoPtr aip, AsnErrorFunc error_ret)
 NLM_EXTERN void LIBCALL  AsnIoReset (AsnIoPtr aip)
 {
 	FILE * fp;
-	Int1 type, max_type, max_indent, linelength, tabsize;
+	Int1 type, max_type, max_indent, tabsize;
+    Int2 linelength;
 	PstackPtr typestack;
     BoolPtr first;
 	ErrorRetType error_ret;

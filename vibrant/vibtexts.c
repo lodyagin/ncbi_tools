@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -4441,3 +4441,333 @@ extern void Nlm_SetKeepCrNlTextFieldCallback(Nlm_TexT t)
 #endif
     return;
 }
+
+
+static void Nlm_NewDialogTextWithFont (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc actn,
+							   Nlm_FonT font)
+
+{
+  Nlm_TextTool    h;
+  Nlm_Char        local [128];
+  Nlm_RecT        r;
+  Nlm_WindowTool  wptr;
+#ifdef WIN_MAC
+  Nlm_RectTool    rtool;
+#endif
+#ifdef WIN_MSWIN
+  Nlm_Uint4       style;
+  Nlm_FntPtr      fntptr;
+#endif
+#ifdef WIN_MOTIF
+  XmFontList      fontlist;
+  Nlm_FntPtr      fntptr;
+  Cardinal        n;
+  Arg             wargs [20];
+#endif
+
+  Nlm_StringNCpy_0(local, dfault, sizeof(local));
+
+  Nlm_GetRect ((Nlm_GraphiC) t, &r);
+  wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) t);
+
+#ifdef WIN_MAC
+  Nlm_InsetRect (&r, 2, 2);
+  Nlm_RecTToRectTool (&r, &rtool);
+  h = TENew (&rtool, &rtool);
+  Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
+                    FALSE, FALSE, FALSE, 1, NULL, NULL, NULL, NULL, TRUE);
+  Nlm_SetDialogText ((Nlm_GraphiC) t, 0, local, FALSE);
+  if (h != NULL) {
+    TEAutoView (TRUE, h);
+  }
+#endif
+
+#ifdef WIN_MSWIN
+  allowTextCallback = FALSE;
+  style = WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_LEFT;
+  h = CreateWindow ("Edit", local, style,
+                    r.left, r.top, r.right - r.left,
+                    r.bottom - r.top, wptr, 0,
+                    Nlm_currentHInst, NULL);
+  if (h != NULL) {
+    SetProp (h, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) t);
+  }
+  Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
+                    FALSE, FALSE, FALSE, 1, NULL, NULL, NULL, NULL, TRUE);
+  if (lpfnNewTextProc == NULL) {
+    lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
+  }
+  if (lpfnOldTextProc == NULL) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
+    Nlm_Message (MSG_ERROR, "TextProc subclass error");
+  }
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  allowTextCallback = TRUE;
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
+  SetWindowFont(h, fntptr->handle, FALSE);
+  Nlm_HandUnlock(font);
+#endif
+
+#ifdef WIN_MOTIF
+  allowTextCallback = FALSE;
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
+  fontlist = XmFontListCreate (fntptr->handle, XmSTRING_DEFAULT_CHARSET);
+  Nlm_HandUnlock (font);
+
+  n = 0;
+  XtSetArg (wargs [n], XmNx, (Position) r.left); n++;
+  XtSetArg (wargs [n], XmNy, (Position) r.top); n++;
+  XtSetArg (wargs [n], XmNwidth,  (Dimension) (r.right - r.left + 1)); n++;
+  XtSetArg (wargs [n], XmNheight, (Dimension) (r.bottom - r.top + 1)); n++;
+  XtSetArg (wargs [n], XmNfontList, fontlist); n++;
+  XtSetArg (wargs [n], XmNmarginHeight, (Dimension) 1); n++;
+  XtSetArg (wargs [n], XmNmarginWidth,  (Dimension) 2); n++;
+  XtSetArg (wargs [n], XmNborderWidth,  (Dimension) 0); n++;
+  XtSetArg (wargs [n], XmNeditMode, XmSINGLE_LINE_EDIT); n++;
+  XtSetArg (wargs [n], XmNhighlightThickness, 0); n++;
+  XtSetArg (wargs [n], XmNautoShowCursorPosition, TRUE); n++;
+  h = XmCreateText(wptr, (String) "", wargs, n);
+  Nlm_OverrideStdTranslations((Nlm_GraphiC)t, h, VERT_PAGE|VERT_ARROW);
+  Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
+                    FALSE, FALSE, FALSE, 1, NULL, NULL, NULL, NULL, TRUE);
+  XmTextSetString (h, local);
+  XmTextShowPosition (h, 0);
+  XtAddCallback (h, XmNmodifyVerifyCallback, Nlm_TextFieldCallback, (XtPointer)t);
+  XtAddCallback (h, XmNvalueChangedCallback, Nlm_TextCallback, (XtPointer) t);
+  XtAddCallback (h, XmNactivateCallback, Nlm_ReturnCallback, (XtPointer) t);
+  XtAddCallback (h, XmNfocusCallback, Nlm_FocusCallback, (XtPointer) t);
+  XtAddCallback (h, XmNlosingFocusCallback, Nlm_LoseFocusCallback, (XtPointer) t);
+  XtManageChild( h );
+
+  if (fontlist != NULL) XmFontListFree (fontlist);
+  allowTextCallback = TRUE;
+#endif
+
+  Nlm_LoadAction ((Nlm_GraphiC) t, (Nlm_ActnProc) actn);
+}
+
+
+static void Nlm_NewSpecialTextWithFont (Nlm_TexT t, Nlm_CharPtr dfault,
+                                Nlm_TxtActnProc actn, Nlm_TxtActnProc tabProc,
+                                Nlm_TxtActnProc rtnProc,
+                                Nlm_FonT font)
+
+{
+  Nlm_TextTool    h;
+  Nlm_Char        local [128];
+  Nlm_RecT        r;
+  Nlm_WindowTool  wptr;
+#ifdef WIN_MAC
+  Nlm_RectTool    rtool;
+#endif
+#ifdef WIN_MSWIN
+  Nlm_Uint4       style;
+  Nlm_FntPtr fntptr;
+#endif
+#ifdef WIN_MOTIF
+  XmFontList      fontlist;
+  Nlm_FntPtr      fntptr;
+  Cardinal        n;
+  Arg             wargs[20];
+  String          trans =
+    "<Key>Tab:     do_tab()  \n\
+     <Key>Return:  do_return()";
+#endif
+
+  Nlm_StringNCpy_0(local, dfault, sizeof(local));
+
+  Nlm_GetRect ((Nlm_GraphiC) t, &r);
+  wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) t);
+
+#ifdef WIN_MAC
+  Nlm_InsetRect (&r, 2, 2);
+  Nlm_RecTToRectTool (&r, &rtool);
+  h = TENew (&rtool, &rtool);
+  Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
+                    FALSE, FALSE, TRUE, 1, NULL, NULL, tabProc, rtnProc, TRUE);
+  Nlm_SetDialogText ((Nlm_GraphiC) t, 0, local, FALSE);
+  if (h != NULL) {
+    TEAutoView (TRUE, h);
+  }
+#endif
+
+#ifdef WIN_MSWIN
+  allowTextCallback = FALSE;
+  style = WS_CHILD | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | ES_LEFT;
+  h = CreateWindow ("Edit", local, style,
+                    r.left, r.top, r.right - r.left,
+                    r.bottom - r.top, wptr, 0,
+                    Nlm_currentHInst, NULL);
+  if (h != NULL) {
+    SetProp (h, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) t);
+  }
+  Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
+                    FALSE, FALSE, TRUE, 1, NULL, NULL, tabProc, rtnProc, TRUE);
+  if (lpfnNewTextProc == NULL) {
+    lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
+  }
+  if (lpfnOldTextProc == NULL) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
+    Nlm_Message (MSG_ERROR, "TextProc subclass error");
+  }
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  allowTextCallback = TRUE;
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
+  SetWindowFont(h, fntptr->handle, FALSE);
+  Nlm_HandUnlock(font);
+#endif
+
+#ifdef WIN_MOTIF
+  allowTextCallback = FALSE;
+  fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
+  fontlist = XmFontListCreate (fntptr->handle, XmSTRING_DEFAULT_CHARSET);
+  Nlm_HandUnlock (font);
+  Nlm_InsetRect (&r, 3, 3);
+
+  n = 0;
+  XtSetArg (wargs [n], XmNx, (Position) r.left); n++;
+  XtSetArg (wargs [n], XmNy, (Position) r.top); n++;
+  XtSetArg (wargs [n], XmNwidth,  (Dimension) (r.right - r.left + 1)); n++;
+  XtSetArg (wargs [n], XmNheight, (Dimension) (r.bottom - r.top + 1)); n++;
+  XtSetArg (wargs [n], XmNmarginHeight, (Dimension) 1); n++;
+  XtSetArg (wargs [n], XmNmarginWidth,  (Dimension) 2); n++;
+  XtSetArg (wargs [n], XmNborderWidth,  (Dimension) 0); n++;
+  XtSetArg (wargs [n], XmNeditMode, XmMULTI_LINE_EDIT); n++;
+  XtSetArg (wargs [n], XmNfontList, fontlist); n++;
+  XtSetArg (wargs [n], XmNhighlightThickness, 0); n++;
+  XtSetArg (wargs [n], XmNautoShowCursorPosition, TRUE); n++;
+  XtSetArg (wargs [n], XmNverifyBell, FALSE); n++;
+  h = XmCreateText (wptr, (String) "", wargs, n);
+  XtOverrideTranslations (h, XtParseTranslationTable (trans));
+  XtVaSetValues (h, XmNuserData, (XtPointer) t, NULL);
+  Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
+                    FALSE, FALSE, TRUE, 1, NULL, NULL, tabProc, rtnProc, TRUE);
+  XmTextSetString (h, local);
+  XmTextShowPosition (h, 0);
+  XtAddCallback (h, XmNmodifyVerifyCallback, Nlm_RefreshCallback, (XtPointer) t);
+  XtAddCallback (h, XmNvalueChangedCallback, Nlm_TextCallback, (XtPointer) t);
+  XtAddCallback (h, XmNactivateCallback, Nlm_HiddenActivateCallback, (XtPointer) t);
+  XtAddCallback (h, XmNfocusCallback, Nlm_FocusCallback, (XtPointer) t);
+  XtAddCallback (h, XmNlosingFocusCallback, Nlm_LoseFocusCallback, (XtPointer) t);
+  XtManageChild( h );
+
+  if (fontlist != NULL) XmFontListFree (fontlist);
+  allowTextCallback = TRUE;
+#endif
+
+  Nlm_LoadAction ((Nlm_GraphiC) t, (Nlm_ActnProc) actn);
+}
+
+
+extern Nlm_TexT Nlm_DialogTextWithFont (Nlm_GrouP prnt, Nlm_CharPtr dfault,
+                                Nlm_Int2 charWidth, Nlm_TxtActnProc actn,
+								Nlm_FonT font)
+
+{
+  Nlm_Int2    cwid;
+  Nlm_Int2    hbounds;
+  Nlm_PoinT   npt;
+  Nlm_RecT    r;
+  Nlm_TexT    t;
+  Nlm_WindoW  tempPort;
+  Nlm_Int2    vbounds;
+
+  t = NULL;
+  if (prnt != NULL) {
+    tempPort = Nlm_SavePort ((Nlm_GraphiC) prnt);
+    Nlm_GetNextPosition ((Nlm_GraphiC) prnt, &npt);
+    Nlm_SelectFont (font);
+    if (charWidth == 0) {
+      cwid = Nlm_StringWidth (dfault);
+    } else {
+      cwid = (Nlm_Int2)(charWidth * Nlm_stdCharWidth);
+    }
+#ifdef WIN_MAC
+    hbounds = 2;
+    vbounds = 2;
+#endif
+#ifdef WIN_MSWIN
+    hbounds = 3;
+    vbounds = (Nlm_Int2)((Nlm_stdFontHeight * 3 / 2 - Nlm_stdLineHeight) / 2);
+#endif
+#ifdef WIN_MOTIF
+    hbounds = 3;
+    vbounds = 3;
+#endif
+    r.left = npt.x;
+    r.top  = npt.y;
+    r.right  = (Nlm_Int2)(r.left + cwid + 2 + hbounds * 2);
+    r.bottom = (Nlm_Int2)(r.top + Nlm_stdLineHeight + vbounds * 2);
+    t = (Nlm_TexT) Nlm_CreateLink ((Nlm_GraphiC) prnt, &r,
+                                   sizeof (Nlm_TextRec), dialogTextProcs);
+    if (t != NULL) {
+      Nlm_NewDialogTextWithFont (t, dfault, actn, font);
+#ifdef WIN_MAC
+      Nlm_DoSelect ((Nlm_GraphiC) t, FALSE);
+#endif
+      Nlm_DoAdjustPrnt ((Nlm_GraphiC) t, &r, TRUE, FALSE);
+      Nlm_DoShow ((Nlm_GraphiC) t, TRUE, FALSE);
+    }
+    Nlm_RestorePort (tempPort);
+  }
+  return t;
+}
+
+
+extern Nlm_TexT Nlm_SpecialTextWithFont (Nlm_GrouP prnt, Nlm_CharPtr dfault,
+                                 Nlm_Int2 charWidth, Nlm_TxtActnProc actn,
+                                 Nlm_TxtActnProc tabProc, Nlm_TxtActnProc rtnProc,
+                                 Nlm_FonT font)
+
+{
+  Nlm_Int2    cwid;
+  Nlm_Int2    hbounds;
+  Nlm_PoinT   npt;
+  Nlm_RecT    r;
+  Nlm_TexT    t;
+  Nlm_WindoW  tempPort;
+  Nlm_Int2    vbounds;
+
+  t = NULL;
+  if (prnt != NULL) {
+    tempPort = Nlm_SavePort ((Nlm_GraphiC) prnt);
+    Nlm_GetNextPosition ((Nlm_GraphiC) prnt, &npt);
+    Nlm_SelectFont (font);
+    if (charWidth == 0) {
+      cwid = Nlm_StringWidth (dfault);
+    } else {
+      cwid = (Nlm_Int2)(charWidth * Nlm_stdCharWidth);
+    }
+#ifdef WIN_MAC
+    hbounds = 2;
+    vbounds = 2;
+#endif
+#ifdef WIN_MSWIN
+    hbounds = 3;
+    vbounds = (Nlm_Int2)((Nlm_stdFontHeight * 3 / 2 - Nlm_stdLineHeight) / 2);
+#endif
+#ifdef WIN_MOTIF
+    hbounds = 3;
+    vbounds = 3;
+#endif
+    r.left = npt.x;
+    r.top  = npt.y;
+    r.right  = (Nlm_Int2)(r.left + cwid + 2 + hbounds * 2);
+    r.bottom = (Nlm_Int2)(r.top + Nlm_stdLineHeight + vbounds * 2);
+    t = (Nlm_TexT) Nlm_CreateLink ((Nlm_GraphiC) prnt, &r,
+                                   sizeof (Nlm_TextRec), specialTextProcs);
+    if (t != NULL) {
+      Nlm_NewSpecialTextWithFont (t, dfault, actn, tabProc, rtnProc, font);
+#ifdef WIN_MAC
+      Nlm_DoSelect ((Nlm_GraphiC) t, FALSE);
+#endif
+      Nlm_DoAdjustPrnt ((Nlm_GraphiC) t, &r, TRUE, FALSE);
+      Nlm_DoShow ((Nlm_GraphiC) t, TRUE, FALSE);
+    }
+    Nlm_RestorePort (tempPort);
+  }
+  return t;
+}
+

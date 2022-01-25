@@ -1,4 +1,4 @@
-/* $Id: ncbi_util.c,v 6.72 2011/05/05 21:04:50 kazimird Exp $
+/* $Id: ncbi_util.c,v 6.81 2012/02/29 20:14:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,37 +40,28 @@
 #  include <ctype.h>
 #  include <errno.h>
 #  include <stdlib.h>
-#  include <string.h>
 #  include <time.h>
 #endif
 #if defined(NCBI_OS_UNIX)
+#  ifndef HAVE_GETPWUID
+#    error "HAVE_GETPWUID is undefined on a UNIX system!"
+#  endif /*!HAVE_GETPWUID*/
 #  ifndef NCBI_OS_SOLARIS
 #    include <limits.h>
 #  endif
-#  if defined(HAVE_GETPWUID)  ||  defined(NCBI_HAVE_GETPWUID_R)
-#    include <pwd.h>
-#  endif
+#  include <pwd.h>
 #  include <unistd.h>
-#elif defined(NCBI_OS_MSWIN)
-#  if defined(_MSC_VER)  &&  (_MSC_VER > 1200)
-#    define WIN32_LEAN_AND_MEAN
-#  endif
+#  include <sys/stat.h>
+#endif /*NCBI_OS_UNIX*/
+#if defined(NCBI_OS_MSWIN)  ||  defined(NCBI_OS_CYGWIN)
+#  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
-#endif
+#endif /*NCBI_OS_MSWIN || NCBI_OS_CYGWIN*/
 
 #define NCBI_USE_ERRCODE_X   Connect_Util
 
 #define NCBI_USE_PRECOMPILED_CRC32_TABLES 1
 
-
-/* Static function pre-declarations to avoid C++ compiler warnings
- */
-#if defined(__cplusplus)
-extern "C" {
-    static void s_LOG_FileHandler(void* user_data, SLOG_Handler* call_data);
-    static void s_LOG_FileCleanup(void* user_data);
-}
-#endif /* __cplusplus */
 
 
 /******************************************************************************
@@ -312,7 +303,7 @@ extern const char* NcbiMessagePlusError
         release = 1/*true*/;
 #else
         descr = strerror(error);
-#endif
+#endif /*NCBI_OS_MSWIN && _UNICODE*/
     }
     if (!descr) {
         descr = "";
@@ -414,9 +405,9 @@ extern char* LOG_ComposeMessage
         struct tm temp;
         Nlm_GetDayTime(&temp);
         tm = &temp;
-#  endif/*NCBI_CXX_TOOLKIT*/
+#  endif /*NCBI_CXX_TOOLKIT*/
         datetime_len = strftime(datetime, sizeof(datetime), timefmt, tm);
-#endif/*NCBI_OS_MSWIN*/
+#endif /*NCBI_OS_MSWIN*/
     }
     if ((format_flags & fLOG_Level) != 0
         &&  (call_data->level != eLOG_Note
@@ -506,6 +497,9 @@ typedef struct {
 
 
 /* Callback for LOG_ToFILE[_Ex]() */
+#ifdef __cplusplus
+extern "C" {
+#endif /*__cplusplus*/
 static void s_LOG_FileHandler(void* user_data, SLOG_Handler* call_data)
 {
     SLogData* data = (SLogData*) user_data;
@@ -521,9 +515,15 @@ static void s_LOG_FileHandler(void* user_data, SLOG_Handler* call_data)
         }
     }
 }
+#ifdef __cplusplus
+}
+#endif /*__cplusplus*/
 
 
 /* Callback for LOG_ToFILE[_Ex]() */
+#ifdef __cplusplus
+extern "C" {
+#endif /*__cplusplus*/
 static void s_LOG_FileCleanup(void* user_data)
 {
     SLogData* data = (SLogData*) user_data;
@@ -535,6 +535,9 @@ static void s_LOG_FileCleanup(void* user_data)
         fflush(data->fp);
     free(user_data);
 }
+#ifdef __cplusplus
+}
+#endif /*__cplusplus*/
 
 
 extern void LOG_ToFILE_Ex
@@ -592,6 +595,29 @@ extern REG CORE_GetREG(void)
 
 
 /******************************************************************************
+ *  CORE_GetNcbiSid
+ */
+
+extern const char* CORE_GetNcbiSid(void)
+{
+    return g_CORE_GetSid ? g_CORE_GetSid() : getenv("HTTP_NCBI_SID");
+}
+
+
+
+/******************************************************************************
+ *  CORE_GetAppName
+ */
+
+extern const char* CORE_GetAppName(void)
+{
+    const char* an;
+    return !g_CORE_GetAppName  ||  !(an = g_CORE_GetAppName()) ? "" : an;
+}
+
+
+
+/******************************************************************************
  *  CORE_GetPlatform
  */
 
@@ -606,45 +632,59 @@ extern const char* CORE_GetPlatform(void)
 
 
 
-/******************************************************************************
- *  CORE_GetAppName
- */
-
-char g_CORE_AppName[NCBI_CORE_APPNAME_MAXLEN + 1];
-
-extern const char* CORE_GetAppName(void)
-{
-    return *g_CORE_AppName ? g_CORE_AppName : 0;
-}
-
-
-
 /****************************************************************************
  * CORE_GetUsername
  */
 
+static char* x_Savestr(const char* str, char* buf, size_t bufsize)
+{
+    assert(str);
+    if (buf) {
+        size_t len = strlen(str);
+        if (len++ < bufsize)
+            return (char*) memcpy(buf, str, len);
+        errno = ERANGE;
+    } else
+        errno = EINVAL;
+    return 0;
+}
+
 extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 {
 #if defined(NCBI_OS_UNIX)
-#  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETLOGIN_R)
-#    ifndef LOGIN_NAME_MAX
-#      ifdef _POSIX_LOGIN_NAME_MAX
-#        define LOGIN_NAME_MAX _POSIX_LOGIN_NAME_MAX
+    struct passwd* pwd;
+    struct stat    st;
+    uid_t          uid;
+#  ifndef NCBI_OS_SOLARIS
+#    define NCBI_GETUSERNAME_MAXBUFSIZE 1024
+#    ifdef HAVE_GETLOGIN_R
+#      ifndef LOGIN_NAME_MAX
+#        ifdef _POSIX_LOGIN_NAME_MAX
+#          define LOGIN_NAME_MAX _POSIX_LOGIN_NAME_MAX
+#        else
+#          define LOGIN_NAME_MAX 256
+#        endif /*_POSIX_LOGIN_NAME_MAX*/
+#      endif /*!LOGIN_NAME_MAX*/
+#      define     NCBI_GETUSERNAME_BUFSIZE   LOGIN_NAME_MAX
+#    endif /*HAVE_GETLOGIN_R*/
+#    ifdef NCBI_HAVE_GETPWUID_R
+#      ifndef NCBI_GETUSERNAME_BUFSIZE
+#        define   NCBI_GETUSERNAME_BUFSIZE   NCBI_GETUSERNAME_MAXBUFSIZE
 #      else
-#        define LOGIN_NAME_MAX 256
-#      endif
-#    endif
-    char loginbuf[LOGIN_NAME_MAX + 1];
-#  endif
-    struct passwd* pw;
-#  if !defined(NCBI_OS_SOLARIS)  &&  defined(NCBI_HAVE_GETPWUID_R)
-    struct passwd pwd;
-    char pwdbuf[1024];
-#  endif
+#        if       NCBI_GETUSERNAME_BUFSIZE < NCBI_GETUSERNAME_MAXBUFSIZE
+#          undef  NCBI_GETUSERNAME_BUFSIZE
+#          define NCBI_GETUSERNAME_BUFSIZE   NCBI_GETUSERNAME_MAXBUFSIZE
+#        endif /* NCBI_GETUSERNAME_BUFSIZE < NCBI_GETUSERNAME_MAXBUFSIZE */
+#      endif /*NCBI_GETUSERNAME_BUFSIZE*/
+#    endif /*NCBI_HAVE_GETPWUID_R*/
+#    ifdef       NCBI_GETUSERNAME_BUFSIZE
+    char temp   [NCBI_GETUSERNAME_BUFSIZE + sizeof(*pwd)];
+#    endif /*    NCBI_GETUSERNAME_BUFSIZE    */
+#  endif /*!NCBI_OS_SOLARIS*/
 #elif defined(NCBI_OS_MSWIN)
-    TCHAR  loginbuf[256 + 1];
-    DWORD loginbufsize = sizeof(loginbuf)/sizeof(TCHAR) - 1;
-#endif
+    TCHAR temp  [256 + 1];
+    DWORD size = sizeof(temp)/sizeof(temp[0]) - 1;
+#endif /*NCBI_OS*/
     const char* login;
 
     assert(buf  &&  bufsize);
@@ -652,88 +692,92 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 #ifndef NCBI_OS_UNIX
 
 #  ifdef NCBI_OS_MSWIN
-    if (GetUserName(loginbuf, &loginbufsize)) {
-        assert(loginbufsize < sizeof(loginbuf)/sizeof(TCHAR));
-        loginbuf[loginbufsize] = (TCHAR)0;
-        login = UTIL_TcharToUtf8(loginbuf);
-        strncpy0(buf, login, bufsize - 1);
+    if (GetUserName(temp, &size)) {
+        assert(size < sizeof(temp)/sizeof(temp[0]));
+        temp[size] = (TCHAR) 0;
+        login = UTIL_TcharToUtf8(temp);
+        buf = x_Savestr(login, buf, bufsize);
         UTIL_ReleaseBuffer(login);
         return buf;
     }
-    if ((login = getenv("USERNAME")) != 0) {
-        strncpy0(buf, login, bufsize - 1);
-        return buf;
-    }
-#  endif
+    if ((login = getenv("USERNAME")) != 0)
+        return x_Savestr(login, buf, bufsize);
+#  endif /*NCBI_OS_MSWIN*/
 
-#else /*!NCBI_OS_UNIX*/
+#else
 
+    /* NOTE:  getlogin() is not a very reliable call at least on Linux
+     * especially if programs mess up with "utmp":  since getlogin() first
+     * calls ttyname() to get the line name for FD 0, then searches "utmp"
+     * for the record of this line and returns the user name, any discrepancy
+     * can cause a false (stale) name to be returned.  So we use getlogin()
+     * here only as a fallback.
+     */
+    if (!isatty(STDIN_FILENO)  ||  fstat(STDIN_FILENO, &st) < 0) {
 #  if defined(NCBI_OS_SOLARIS)  ||  !defined(HAVE_GETLOGIN_R)
-    /* NB:  getlogin() is MT-safe on Solaris, yet getlogin_r() comes in two
-     * flavors that differ only in return type, so to make things simpler,
-     * use plain getlogin() here */
+        /* NB:  getlogin() is MT-safe on Solaris, yet getlogin_r() comes in two
+         * flavors that differ only in return type, so to make things simpler,
+         * use plain getlogin() here */
 #    ifndef NCBI_OS_SOLARIS
-    CORE_LOCK_WRITE;
-#    endif
-    if ((login = getlogin()) != 0)
-        strncpy0(buf, login, bufsize - 1);
+        CORE_LOCK_WRITE;
+#    endif /*!NCBI_OS_SOLARIS*/
+        if ((login = getlogin()) != 0)
+            buf = x_Savestr(login, buf, bufsize);
 #    ifndef NCBI_OS_SOLARIS
-    CORE_UNLOCK;
-#    endif
-    if (login)
-        return buf;
+        CORE_UNLOCK;
+#    endif /*!NCBI_OS_SOLARIS*/
+        if (login)
+            return buf;
 #  else
-    if (getlogin_r(loginbuf, sizeof(loginbuf) - 1) == 0) {
-        loginbuf[sizeof(loginbuf) - 1] = '\0';
-        strncpy0(buf, loginbuf, bufsize - 1);
-        return buf;
-    }
-#  endif
+        if (getlogin_r(temp, sizeof(temp) - 1) == 0) {
+            temp[sizeof(temp) - 1] = '\0';
+            return x_Savestr(temp, buf, bufsize);
+        }
+#  endif /*NCBI_OS_SOLARIS || !HAVE_GETLOGIN_R*/
+        uid = getuid();
+    } else
+        uid = st.st_uid;
 
-#  if defined(NCBI_OS_SOLARIS)  ||  \
-    (!defined(NCBI_HAVE_GETPWUID_R)  &&  defined(HAVE_GETPWUID))
+#  if defined(NCBI_OS_SOLARIS)  ||  !defined(NCBI_HAVE_GETPWUID_R)
     /* NB:  getpwuid() is MT-safe on Solaris, so use it here, if available */
 #  ifndef NCBI_OS_SOLARIS
     CORE_LOCK_WRITE;
-#  endif
-    if ((pw = getpwuid(getuid())) != 0) {
-        if (pw->pw_name)
-            strncpy0(buf, pw->pw_name, bufsize - 1);
+#  endif /*!NCBI_OS_SOLARIS*/
+    if ((pwd = getpwuid(uid)) != 0) {
+        if (pwd->pw_name)
+            buf = x_Savestr(pwd->pw_name, buf, bufsize);
         else
-            pw = 0;
+            pwd = 0;
     }
 #  ifndef NCBI_OS_SOLARIS
     CORE_UNLOCK;
-#  endif
-    if (pw)
+#  endif /*!NCBI_OS_SOLARIS*/
+    if (pwd)
         return buf;
 #  elif defined(NCBI_HAVE_GETPWUID_R)
 #    if   NCBI_HAVE_GETPWUID_R == 4
     /* obsolete but still existent */
-    pw = getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf));
+    pwd = getpwuid_r(uid, (struct passwd*) temp, temp + sizeof(*pwd),
+                     sizeof(temp) - sizeof(*pwd));
 #    elif NCBI_HAVE_GETPWUID_R == 5
     /* POSIX-conforming */
-    if (getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf), &pw) != 0)
-        pw = 0;
-#    else
-#      error "Unknown value of NCBI_HAVE_GETPWUID_R, 4 or 5 expected."
-#    endif
-    if (pw  &&  pw->pw_name) {
-        assert(pw == &pwd);
-        strncpy0(buf, pw->pw_name, bufsize - 1);
-        return buf;
+    if (getpwuid_r(uid, (struct passwd*) temp, temp + sizeof(*pwd),
+                   sizeof(temp) - sizeof(*pwd), &pwd) != 0) {
+        pwd = 0;
     }
+#    else
+#      error "Unknown value of NCBI_HAVE_GETPWUID_R: 4 or 5 expected."
+#    endif /*NCBI_HAVE_GETPWUID_R*/
+    if (pwd  &&  pwd->pw_name)
+        return x_Savestr(pwd->pw_name, buf, bufsize);
 #  endif /*NCBI_HAVE_GETPWUID_R*/
 
 #endif /*!NCBI_OS_UNIX*/
 
     /* last resort */
-    if (!(login = getenv("USER"))  &&  !(login = getenv("LOGNAME"))) {
-        buf[0] = '\0';
-        return 0;
-    }
-    strncpy0(buf, login, bufsize - 1);
-    return buf;
+    if (!(login = getenv("USER"))  &&  !(login = getenv("LOGNAME")))
+        login = "";
+    return x_Savestr(login, buf, bufsize);
 }
 
 
@@ -748,10 +792,10 @@ size_t CORE_GetVMPageSize(void)
     static size_t ps = 0;
 
     if (!ps) {
-#if defined(NCBI_OS_MSWIN)
+#if defined(NCBI_OS_MSWIN)  ||  defined(NCBI_OS_CYGWIN)
         SYSTEM_INFO si;
-        GetSystemInfo(&si); 
-        ps = (size_t) si.dwAllocationGranularity;
+        GetSystemInfo(&si);
+        ps = (size_t) si.dwPageSize;
 #elif defined(NCBI_OS_UNIX) 
 #  if   defined(_SC_PAGESIZE)
 #    define NCBI_SC_PAGESIZE _SC_PAGESIZE
@@ -1047,23 +1091,9 @@ extern const char* UTIL_TcharToUtf8OnHeap(const TCHAR* buffer)
 }
 
 
-extern const char* UTIL_TcharToUtf8(const TCHAR* buffer)
-{
-    char* p = NULL;
-    if (buffer) {
-        int n = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL,
-                                    0, NULL, NULL);
-        if (n >= 0) {
-            p = (char*) LocalAlloc(LMEM_FIXED, (n + 1) * sizeof(char));
-            if (p) {
-                WideCharToMultiByte(CP_UTF8, 0, buffer, -1, p,
-                                    n, NULL, NULL);
-                p[n] = '\0';
-            }
-        }
-    }
-    return p;
-}
+/*
+ * UTIL_TcharToUtf8() is defined in ncbi_strerror.c
+ */
 
 
 extern const TCHAR* UTIL_Utf8ToTchar(const char* buffer)
@@ -1085,11 +1115,9 @@ extern const TCHAR* UTIL_Utf8ToTchar(const char* buffer)
 #  endif /*_UNICODE*/
 
 
-extern void UTIL_ReleaseBufferOnHeap(const void* buffer)
-{
-    if (buffer)
-        LocalFree((HLOCAL) buffer);
-}
+/*
+ * UTIL_ReleaseBufferOnHeap() is defined in ncbi_strerror.c
+ */
 
 
 #endif /*NCBI_OS_MSWIN*/

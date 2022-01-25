@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.17 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -207,9 +207,9 @@ typedef struct asnio {
 	Int4 used;              /* if tagsaved, bytes used recorded here */
 	Int1 tabsize,           /* spaces per tab */
 		indent_level,       /* current indent level for print output */
-		linelength,         /* max line length on output */
 		max_indent,         /* current maximum indent levels for first */
 		state;              /* parsing state */
+	Int2 linelength;        /* max line length on output */
     BoolPtr first;          /* for first element on indented line for printing */
 	Int4 linenumber;        /* for reporting errors */
 	CharPtr word;           /* current word in linebuf */
@@ -503,7 +503,7 @@ NLM_EXTERN Boolean LIBCALL AsnTxtBufWrite PROTO ((AsnIoPtr aip, AsnTypePtr atp, 
 #define	NUMERICSTRING_TYPE		317	    /* String Types */
 #define	PRINTABLESTRING_TYPE	318
 #define TELETEXSTRING_TYPE		319
-#define VIDEOTEXSTRING_TYPE		320
+#define UTF8STRING_TYPE			320
 #define IA5STRING_TYPE 			321
 #define GRAPHICSTRING_TYPE		322
 #define VISIBLESTRING_TYPE		323

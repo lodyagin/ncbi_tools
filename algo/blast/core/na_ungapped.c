@@ -1,4 +1,4 @@
-/* $Id: na_ungapped.c,v 1.43 2011/07/12 17:54:32 kazimird Exp $
+/* $Id: na_ungapped.c,v 1.44 2012/05/21 15:56:03 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: na_ungapped.c,v 1.43 2011/07/12 17:54:32 kazimird Exp $";
+    "$Id: na_ungapped.c,v 1.44 2012/05/21 15:56:03 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/na_ungapped.h>
@@ -1681,10 +1681,22 @@ Int2 MB_IndexedWordFinder(
     Int4 chunk = subject->chunk;
     Int4 context;
     BlastUngappedCutoffs *cutoffs;
+    T_MB_IdbCheckOid check_oid = 
+        (T_MB_IdbCheckOid)lookup_wrap->check_index_oid;
     T_MB_IdbGetResults get_results = 
                         (T_MB_IdbGetResults)lookup_wrap->read_indexed_db;
+
+    /* In the case oid belongs to the non-indexed part of the
+       database, route the call to the original word finder.
+    */
+    if( check_oid( oid ) == eNotIndexed ) {
+        return BlastNaWordFinder(
+                subject, query, query_info, lookup_wrap, matrix,word_params,
+                ewp, offset_pairs, max_hits, init_hitlist, ungapped_stats );
+    }
+
     ASSERT(get_results);
-    word_size = get_results(lookup_wrap->lut, oid, chunk, init_hitlist);
+    word_size = get_results(/*lookup_wrap->lut, */oid, chunk, init_hitlist);
 
     if( word_size > 0 && word_params->ungapped_extension ) {
         hash = ir_hash_create();

@@ -1,4 +1,4 @@
-/* $Id: blast_rps.h,v 1.11 2006/11/21 16:44:50 papadopo Exp $
+/* $Id: blast_rps.h,v 1.12 2011/12/14 20:11:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -104,6 +104,9 @@ typedef struct BlastRPSInfo {
     BlastRPSLookupFileHeader *lookup_header; /**< for '.loo' file */
     BlastRPSProfileHeader *profile_header;   /**< for '.rps' file */
     BlastRPSAuxInfo aux_info;                /**< for '.aux' file */
+
+    BlastRPSProfileHeader *freq_header;      /**< for '.wcounts' file */
+    BlastRPSProfileHeader *obsr_header;      /**< for '.obsr' file */
 } BlastRPSInfo;
 
 #ifdef __cplusplus

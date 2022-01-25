@@ -2,21 +2,21 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
-      <UniqueIdentifier>{d6dba2ce-a8fb-451b-851b-ef3d6fef3fb4}</UniqueIdentifier>
+      <UniqueIdentifier>{3a498001-1f36-473f-8158-e38feae88edf}</UniqueIdentifier>
       <Extensions>cpp;c;cxx;rc;def;r;odl;idl;hpj;bat</Extensions>
     </Filter>
     <Filter Include="Header Files">
-      <UniqueIdentifier>{66c2d2b6-59de-45f4-8845-42633ac8619a}</UniqueIdentifier>
+      <UniqueIdentifier>{7b7b1e38-f733-4dba-b02d-78c9afc7e4d9}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\..\..\..\link\mswin\ncbi.rc">
+    <ResourceCompile Include="..\..\..\..\..\link\mswin\ncbi.rc">
       <Filter>Source Files</Filter>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\regexp\demo\pcredemo.c">
+    <ClCompile Include="..\..\..\..\..\regexp\demo\pcregrep.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

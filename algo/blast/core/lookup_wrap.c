@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.33 2009/05/27 17:39:36 kazimird Exp $
+/* $Id: lookup_wrap.c,v 1.34 2012/05/21 15:56:03 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.33 2009/05/27 17:39:36 kazimird Exp $";
+    "$Id: lookup_wrap.c,v 1.34 2012/05/21 15:56:03 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -102,6 +102,7 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
       lookup_wrap->lut = NULL;
       break;
 
+   case eMixedMBLookupTable:
    case eSmallNaLookupTable:
    case eNaLookupTable:
    case eMBLookupTable:
@@ -139,6 +140,7 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
                              lookup_options, query_options, lut_width);
           }
       }
+      ASSERT( lookup_wrap->lut_type != eMixedMBLookupTable );
       break;
 
    case ePhiLookupTable: case ePhiNaLookupTable:
@@ -183,6 +185,7 @@ LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup)
       break;
 
    case eIndexedMBLookupTable:
+   case eMixedMBLookupTable:
       lookup->lut = NULL;
       break;
 

@@ -1,4 +1,4 @@
-/* $Id: ncbi_sendmail.c,v 6.51 2011/02/10 21:49:51 kazimird Exp $
+/* $Id: ncbi_sendmail.c,v 6.56 2012/06/20 18:09:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,20 +34,13 @@
 #include "ncbi_priv.h"
 #include <connect/ncbi_connutil.h>
 #include <connect/ncbi_sendmail.h>
-#include <connect/ncbi_socket.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 
 #define NCBI_USE_ERRCODE_X   Connect_Sendmail
 
-#ifdef NCBI_CXX_TOOLKIT
-#define NCBI_SENDMAIL_TOOLKIT "C++"
-#else
-#define NCBI_SENDMAIL_TOOLKIT "C"
-#endif
-
-#define MX_MAGIC_NUMBER 0xBA8ADEDA
+#define MX_MAGIC_COOKIE 0xBA8ADEDA
 #define MX_CRLF         "\r\n"
 
 #define SMTP_READERR    -1      /* Read error from socket               */
@@ -229,12 +222,12 @@ static void x_Sendmail_InitEnv(void)
         return;
 
     if (!ConnNetInfo_GetValue(0, "MX_TIMEOUT", buf, sizeof(buf), 0)
-        ||  (tmo = atof(buf)) <= 0.0) {
+        ||  (tmo = atof(buf)) < 0.000001) {
         tmo = 120.0;
     }
     if (!ConnNetInfo_GetValue(0, "MX_PORT", buf, sizeof(buf), 0)
         ||  !(port = atoi(buf))  ||  port > 65535) {
-        port = 25;
+        port = CONN_PORT_SMTP;
     }
     if (!ConnNetInfo_GetValue(0, "MX_HOST", buf, sizeof(buf), 0)
         ||  !*buf) {
@@ -259,7 +252,6 @@ SSendMailInfo* SendMailInfo_InitEx(SSendMailInfo* info,
 {
     if (info) {
         x_Sendmail_InitEnv();
-        info->magic_number    = MX_MAGIC_NUMBER;
         info->cc              = 0;
         info->bcc             = 0;
         s_MakeFrom(info->from, sizeof(info->from), user);
@@ -269,6 +261,7 @@ SSendMailInfo* SendMailInfo_InitEx(SSendMailInfo* info,
         info->mx_port         = s_MxPort;
         info->mx_timeout      = s_MxTmo;
         info->mx_options      = 0;
+        info->magic_cookie    = MX_MAGIC_COOKIE;
     }
     return info;
 }
@@ -405,8 +398,8 @@ const char* CORE_SendMailEx(const char*          to,
     SOCK sock = 0;
 
     info = uinfo ? uinfo : SendMailInfo_Init(&ainfo);
-    if (info->magic_number != MX_MAGIC_NUMBER)
-        SENDMAIL_RETURN(6, "Invalid magic number");
+    if (info->magic_cookie != MX_MAGIC_COOKIE)
+        SENDMAIL_RETURN(6, "Invalid magic cookie");
 
     if ((!to         ||  !*to)        &&
         (!info->cc   ||  !*info->cc)  &&
@@ -497,7 +490,12 @@ const char* CORE_SendMailEx(const char*          to,
                    "[SendMail]  Subject ignored in as-is messages");
 
     if (!s_SockWrite(sock, "X-Mailer: CORE_SendMail (NCBI "
-                     NCBI_SENDMAIL_TOOLKIT " Toolkit)" MX_CRLF, 0)) {
+#ifdef NCBI_CXX_TOOLKIT
+                     "CXX Toolkit"
+#else
+                     "C Toolkit"
+#endif /*NCBI_CXX_TOOLKIT*/
+                     ")" MX_CRLF, 0)) {
         SENDMAIL_RETURN(20, "Write error in sending mailer information");
     }
 

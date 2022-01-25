@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HEAPMGR__H
 #define CONNECT___NCBI_HEAPMGR__H
 
-/* $Id: ncbi_heapmgr.h,v 6.26 2011/05/26 18:44:32 kazimird Exp $
+/* $Id: ncbi_heapmgr.h,v 6.28 2012/04/19 16:09:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * Author:  Anton Lavrentiev, Denis Vakatov
+ * Authors:  Anton Lavrentiev, Denis Vakatov
  *
  * File Description:
  *   Simple heap manager with a primitive garbage collection
@@ -187,24 +187,27 @@ extern NCBI_XCONNECT_EXPORT HEAP HEAP_Copy
  * a heap, which have been HEAP_Create()'d or HEAP_Attach[Fast]()'d).
  * The heap handle then will be destroyed only when the internal
  * reference counter reaches 0.  No internal locking is provided.
+ * Return the resultant value of the reference counter.
  */
-extern NCBI_XCONNECT_EXPORT void HEAP_AddRef(HEAP heap);
+extern NCBI_XCONNECT_EXPORT unsigned int HEAP_AddRef(HEAP heap);
 
 
 /* Detach heap (previously attached by HEAP_Attach[Fast]).
  * For copy heap, it decrements an internal ref. counter by one, and
  * destroys the heap handle if and only if the counter has reached 0.
  * No internal locking of the reference counter is provided.
- * For heaps that are results of HEAP_Copy() call,
+ * For heaps that are results of the HEAP_Copy() call,
  * both HEAP_Detach() and HEAP_Destroy() can be used interchangeably.
+ * Return the remaining value of the reference counter (0 if the heap is gone).
  */
-extern NCBI_XCONNECT_EXPORT void HEAP_Detach(HEAP heap);
+extern NCBI_XCONNECT_EXPORT unsigned int HEAP_Detach(HEAP heap);
 
 
 /* Destroy heap (previously created by HEAP_Create()).
  * For copy heaps -- see comments for HEAP_Detach() above.
+ * Return the remaining value of the reference counter (0 if the heap is gone).
  */
-extern NCBI_XCONNECT_EXPORT void HEAP_Destroy(HEAP heap);
+extern NCBI_XCONNECT_EXPORT unsigned int HEAP_Destroy(HEAP heap);
 
 
 /* Get base address of the heap.
@@ -219,27 +222,20 @@ extern NCBI_XCONNECT_EXPORT void* HEAP_Base(const HEAP heap);
 extern NCBI_XCONNECT_EXPORT TNCBI_Size HEAP_Size(const HEAP heap);
 
 
-/* Get non-zero serial number of the heap.
- * Return 0 if heap is passed as NULL,
- * or the heap is not a copy but the original.
+/* Get a serial number of the heap as assigned by Attach or Copy.
+ * Return 0 if the heap is not a copy but the original, or passed as NULL.
  */
 extern NCBI_XCONNECT_EXPORT int HEAP_Serial(const HEAP heap);
 
 
-/* Set heap access speed and check level while walking:
+/* Set heap access speed (and ignore second parameter):
  * fast == eOn  turns on fast heap operations (default);
  * fast == eOff turns off fast heap operations (more checks, slower);
- * fast == eDefault does not change current setting;
- * newalk == eOn turns on new heap integrity checks while walking;
- * newalk == eOff turns off new heap integrity checks (default);
- * newalk == eDefault keeps current setting.
+ * fast == eDefault does not change the current setting.
  * This call is intended for internal uses; and default settings (fast ops
- * w/o new structure integrity checks) should suffice for most users.
- * Note that in current implementation, new heap walk is only coupled with
- * slow heap operations, that is if heap access is set to fast==eOn, then
- * newalk setting is read but ignored.
+ * w/o structure integrity checks) should suffice for most users.
  */
-extern NCBI_XCONNECT_EXPORT void HEAP_Options(ESwitch fast, ESwitch newalk);
+extern NCBI_XCONNECT_EXPORT void HEAP_Options(ESwitch fast, ESwitch unused);
 
 
 #ifdef __cplusplus

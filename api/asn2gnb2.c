@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.161 $
+* $Revision: 1.176 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -65,12 +65,18 @@
 
 static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/bioproject/";
 
+static CharPtr link_bioproj = "http://www.ncbi.nlm.nih.gov/bioproject?term=";
+
+static CharPtr link_biosamp = "http://www.ncbi.nlm.nih.gov/biosample?term=";
+
 static CharPtr link_srr = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=sra&term=";
 
 static CharPtr link_accn = "http://www.ncbi.nlm.nih.gov/sites/entrez?";
 
 static CharPtr link_wgs = "http://www.ncbi.nlm.nih.gov/Traces/wgs?";
 static CharPtr link_wgsscaf = "http://www.ncbi.nlm.nih.gov/nuccore?";
+
+static CharPtr link_tsa = "http://www.ncbi.nlm.nih.gov/Traces/wgs?";
 
 static CharPtr link_cage = "http://www.ncbi.nlm.nih.gov/sites/entrez?";
 
@@ -85,7 +91,7 @@ static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
 
 /*
-static CharPtr link_omim = "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id=";
+static CharPtr link_omim = "http://www.ncbi.nlm.nih.gov/omim/";
 */
 
 
@@ -431,6 +437,7 @@ static void LookupAccnForNavLink (
 NLM_EXTERN void AddLocusBlock (
   Asn2gbWorkPtr awp,
   Boolean willshowwgs,
+  Boolean willshowtsa,
   Boolean willshowcage,
   Boolean willshowgenome,
   Boolean willshowcontig,
@@ -508,6 +515,7 @@ NLM_EXTERN void AddLocusBlock (
   CharPtr            suffix = NULL;
   Uint1              tech;
   Uint1              topology;
+  Boolean            tsamaster = FALSE;
   TextSeqIdPtr       tsip;
   UserObjectPtr      uop;
   Char               ver [16];
@@ -749,6 +757,35 @@ NLM_EXTERN void AddLocusBlock (
         }
       }
 
+      if (tech == MI_TECH_tsa && bsp->repr == Seq_repr_virtual) {
+
+        /* check for TSA master record */
+
+        for (sip = bsp->id; sip != NULL; sip = sip->next) {
+          switch (sip->choice) {
+            case SEQID_GENBANK :
+            case SEQID_EMBL :
+            case SEQID_DDBJ :
+              tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+              if (tsip != NULL && tsip->accession != NULL) {
+                acclen = StringLen (tsip->accession);
+                if (acclen == 12) {
+                  if (StringCmp (tsip->accession + 6, "000000") == 0) {
+                    tsamaster = TRUE;
+                  }
+                } else if (acclen == 13) {
+                  if (StringCmp (tsip->accession + 6, "0000000") == 0) {
+                    tsamaster = TRUE;
+                  }
+                }
+              }
+              break;
+            default :
+              break;
+          }
+        }
+      }
+
       if (tech == MI_TECH_other && willshowcage && bsp->repr == Seq_repr_virtual) {
 
         /* check for TAG master record */
@@ -821,6 +858,8 @@ NLM_EXTERN void AddLocusBlock (
     if (awp->newLocusLine) {
 
       if (wgsmaster && (! is_nz)) {
+        sprintf (len, "%ld rc", (long) length);
+      } else if (tsamaster) {
         sprintf (len, "%ld rc", (long) length);
       } else if (cagemaster) {
         sprintf (len, "%ld rc", (long) length);
@@ -2383,97 +2422,228 @@ static void FF_asn2gb_www_SRR (
   }
 }
 
-static CharPtr GetDBLinkString (
+static void FF_asn2gb_www_BP (
   IntAsn2gbJobPtr ajp,
-  UserObjectPtr uop
+  CharPtr buf,
+  CharPtr str
 )
 
 {
-  Char          buf1 [512];
-  Char          buf2 [512];
-  Char          buf3 [512];
-  Char          buf4 [1024];
+  Char           ch;
+  StringItemPtr  ffstring;
+  CharPtr        ptr;
+  CharPtr        tmp;
+
+  if (ajp == NULL || buf == NULL || StringHasNoText (str)) return;
+
+  ffstring = FFGetString (ajp);
+  if (ffstring == NULL) return;
+
+  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+  FF_Add_NCBI_Base_URL (ffstring, link_bioproj);
+  FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
+  tmp = FFEndPrint (ajp, ffstring, ajp->format, 21, 21, 21, 21, NULL);
+  FFRecycleString (ajp, ffstring);
+
+  if (tmp != NULL) {
+    ptr = tmp;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '\n' || ch == '\r' || ch == '\t') {
+        *ptr = ' ';
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    TrimSpacesAroundString (tmp);
+    StringCat (buf, tmp);
+    MemFree (tmp);
+  }
+}
+
+static void FF_asn2gb_www_BS (
+  IntAsn2gbJobPtr ajp,
+  CharPtr buf,
+  CharPtr str
+)
+
+{
+  Char           ch;
+  StringItemPtr  ffstring;
+  CharPtr        ptr;
+  CharPtr        tmp;
+
+  if (ajp == NULL || buf == NULL || StringHasNoText (str)) return;
+
+  ffstring = FFGetString (ajp);
+  if (ffstring == NULL) return;
+
+  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+  FF_Add_NCBI_Base_URL (ffstring, link_biosamp);
+  FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
+  tmp = FFEndPrint (ajp, ffstring, ajp->format, 21, 21, 21, 21, NULL);
+  FFRecycleString (ajp, ffstring);
+
+  if (tmp != NULL) {
+    ptr = tmp;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '\n' || ch == '\r' || ch == '\t') {
+        *ptr = ' ';
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    TrimSpacesAroundString (tmp);
+    StringCat (buf, tmp);
+    MemFree (tmp);
+  }
+}
+
+static CharPtr GetDBLinkString (
+  IntAsn2gbJobPtr ajp,
+  UserObjectPtr uop,
+  CharPtr PNTR bioProjectIDP
+)
+
+{
+  Char          frm [256], tmp [256];
+  CharPtr       buf1, buf2, buf3, buf4, buf5;
   CharPtr PNTR  cpp;
+  ValNodePtr    head, tail;
   Int4          i;
   Int4Ptr       ip;
   size_t        len;
   ObjectIdPtr   oip;
   CharPtr       prefix;
   CharPtr       str;
-  Char          tmp [256];
   UserFieldPtr  ufp;
   Int4          val;
 
+  if (bioProjectIDP != NULL) {
+    *bioProjectIDP = NULL;
+  }
   if (uop == NULL) return NULL;
 
-  buf1 [0] = '\0';
-  buf2 [0] = '\0';
-  buf3 [0] = '\0';
-  buf4 [0] = '\0';
+  buf1 = NULL;
+  buf2 = NULL;
+  buf3 = NULL;
+  buf4 = NULL;
+  buf5 = NULL;
 
   for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
     oip = ufp->label;
     if (oip == NULL || oip->str == NULL) continue;
-    if (StringICmp (oip->str, "Trace Assembly Archive") == 0 && ufp->choice == 8) {
-      ip = (Int4Ptr) ufp->data.ptrvalue;
-      if (ufp->num > 0 && ip != NULL) {
-        val = ip [0];
-        if (val > 0) {
-          sprintf (buf1, "Trace Assembly Archive: %ld", (long) val);
-          for (i = 1; i < ufp->num; i++) {
-            val = ip [i];
-            if (val > 0) {
-              sprintf (tmp, ", %ld", (long) val);
-              StringCat (buf1, tmp);
-            }
-          }
-        }
-      }
-    }
-    if (StringICmp (oip->str, "Bio Sample") == 0 && ufp->choice == 7) {
+    if (StringICmp (oip->str, "BioProject") == 0 && ufp->choice == 7) {
+      head = NULL;
+      tail = NULL;
       cpp = (CharPtr PNTR) ufp->data.ptrvalue;
       if (ufp->num > 0 && cpp != NULL) {
         str = cpp [0];
         if (StringDoesHaveText (str)) {
-          sprintf (buf2, "Bio Sample: %s", str);
+          if (ufp->num == 1 && bioProjectIDP != NULL) {
+            *bioProjectIDP = str;
+          }
+          frm [0] = '\0';
+          if (ajp != NULL && GetWWW (ajp)) {
+            FF_asn2gb_www_BP (ajp, frm, str);
+          } else {
+            StringCpy (frm, str);
+          }
+          sprintf (tmp, "BioProject: %s", frm);
+          ValNodeCopyStrEx (&head, &tail, 0, tmp);
           for (i = 1; i < ufp->num; i++) {
             str = cpp [i];
             if (StringDoesHaveText (str)) {
-              sprintf (tmp, ", %s", str);
-              StringCat (buf2, tmp);
+              tmp [0] = '\0';
+              if (ajp != NULL && GetWWW (ajp)) {
+                FF_asn2gb_www_BP (ajp, tmp, str);
+              } else {
+                StringCpy (tmp, str);
+              }
+              ValNodeCopyStrEx (&head, &tail, 0, tmp);
             }
           }
+          buf1 = ValNodeMergeStrsEx (head, ", ");
+          ValNodeFreeData (head);
+        }
+      }
+    }
+    if (StringICmp (oip->str, "BioSample") == 0 && ufp->choice == 7) {
+      head = NULL;
+      tail = NULL;
+      cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+      if (ufp->num > 0 && cpp != NULL) {
+        str = cpp [0];
+        if (StringDoesHaveText (str)) {
+          frm [0] = '\0';
+          if (ajp != NULL && GetWWW (ajp)) {
+            FF_asn2gb_www_BS (ajp, frm, str);
+          } else {
+            StringCpy (frm, str);
+          }
+          sprintf (tmp, "BioSample: %s", frm);
+          ValNodeCopyStrEx (&head, &tail, 0, tmp);
+          for (i = 1; i < ufp->num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              tmp [0] = '\0';
+              if (ajp != NULL && GetWWW (ajp)) {
+                FF_asn2gb_www_BS (ajp, tmp, str);
+              } else {
+                StringCpy (tmp, str);
+              }
+              ValNodeCopyStrEx (&head, &tail, 0, tmp);
+            }
+          }
+          buf2 = ValNodeMergeStrsEx (head, ", ");
+          ValNodeFreeData (head);
         }
       }
     }
     if (StringICmp (oip->str, "ProbeDB") == 0 && ufp->choice == 7) {
+      head = NULL;
+      tail = NULL;
       cpp = (CharPtr PNTR) ufp->data.ptrvalue;
       if (ufp->num > 0 && cpp != NULL) {
         str = cpp [0];
         if (StringDoesHaveText (str)) {
-          sprintf (buf3, "ProbeDB: %s", str);
+          sprintf (tmp, "ProbeDB: %s", str);
+          ValNodeCopyStrEx (&head, &tail, 0, tmp);
           for (i = 1; i < ufp->num; i++) {
             str = cpp [i];
             if (StringDoesHaveText (str)) {
-              sprintf (tmp, ", %s", str);
-              StringCat (buf3, tmp);
+              ValNodeCopyStrEx (&head, &tail, 0, str);
             }
           }
+          buf3 = ValNodeMergeStrsEx (head, ", ");
+          ValNodeFreeData (head);
         }
       }
     }
     if (StringICmp (oip->str, "Sequence Read Archive") == 0 && ufp->choice == 7) {
+      head = NULL;
+      tail = NULL;
       cpp = (CharPtr PNTR) ufp->data.ptrvalue;
       if (ufp->num > 0 && cpp != NULL) {
         str = cpp [0];
         if (StringDoesHaveText (str)) {
-          tmp [0] = '\0';
+          frm [0] = '\0';
           if (ajp != NULL && GetWWW (ajp)) {
-            FF_asn2gb_www_SRR (ajp, tmp, str);
+            FF_asn2gb_www_SRR (ajp, frm, str);
           } else {
-            StringCpy (tmp, str);
+            StringCpy (frm, str);
           }
-          sprintf (buf4, "Sequence Read Archive: %s", tmp);
+          sprintf (tmp, "Sequence Read Archive: %s", frm);
+          ValNodeCopyStrEx (&head, &tail, 0, tmp);
           for (i = 1; i < ufp->num; i++) {
             str = cpp [i];
             if (StringDoesHaveText (str)) {
@@ -2483,19 +2653,42 @@ static CharPtr GetDBLinkString (
               } else {
                 StringCpy (tmp, str);
               }
-              StringCat (buf4, ", ");
-              StringCat (buf4, tmp);
+              ValNodeCopyStrEx (&head, &tail, 0, tmp);
             }
           }
+          buf4 = ValNodeMergeStrsEx (head, ", ");
+          ValNodeFreeData (head);
+        }
+      }
+    }
+    if (StringICmp (oip->str, "Trace Assembly Archive") == 0 && ufp->choice == 8) {
+      head = NULL;
+      tail = NULL;
+      ip = (Int4Ptr) ufp->data.ptrvalue;
+      if (ufp->num > 0 && ip != NULL) {
+        val = ip [0];
+        if (val > 0) {
+          sprintf (tmp, "Trace Assembly Archive: %ld", (long) val);
+          ValNodeCopyStrEx (&head, &tail, 0, tmp);
+          for (i = 1; i < ufp->num; i++) {
+            val = ip [i];
+            if (val > 0) {
+              sprintf (tmp, "%ld", (long) val);
+              ValNodeCopyStrEx (&head, &tail, 0, tmp);
+            }
+          }
+          buf5 = ValNodeMergeStrsEx (head, ", ");
+          ValNodeFreeData (head);
         }
       }
     }
   }
 
-  if (StringHasNoText (buf1) && StringHasNoText (buf2) && StringHasNoText (buf3) && StringHasNoText (buf4)) return NULL;
+  if (StringHasNoText (buf1) && StringHasNoText (buf2) && StringHasNoText (buf3) &&
+      StringHasNoText (buf4) && StringHasNoText (buf5)) return NULL;
 
-  len = StringLen (buf1) + StringLen (buf2) + StringLen (buf3) + StringLen (buf4);
-  str = (CharPtr) MemNew (sizeof (Char) * (len + 2));
+  len = StringLen (buf1) + StringLen (buf2) + StringLen (buf3) + StringLen (buf4) + StringLen (buf5);
+  str = (CharPtr) MemNew (sizeof (Char) * (len + 20));
   if (str == NULL) return NULL;
 
   prefix = "";
@@ -2523,6 +2716,18 @@ static CharPtr GetDBLinkString (
     prefix = "\n";
   }
 
+  if (StringDoesHaveText (buf5)) {
+    StringCat (str, prefix);
+    StringCat (str, buf5);
+    prefix = "\n";
+  }
+
+  MemFree (buf1);
+  MemFree (buf2);
+  MemFree (buf3);
+  MemFree (buf4);
+  MemFree (buf5);
+
   return str;
 }
 
@@ -2534,6 +2739,7 @@ NLM_EXTERN void AddDblinkBlock (
   IntAsn2gbJobPtr    ajp;
   Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
+  CharPtr            bioProjectID;
   BioseqPtr          bsp;
   Char               buf [32];
   UserFieldPtr       curr;
@@ -2684,7 +2890,7 @@ NLM_EXTERN void AddDblinkBlock (
   }
 
   if (dbuop != NULL) {
-    str = GetDBLinkString (ajp, dbuop);
+    str = GetDBLinkString (ajp, dbuop, &bioProjectID);
     if (StringDoesHaveText (str)) {
       bbp = Asn2gbAddBlock (awp, PROJECT_BLOCK, sizeof (BaseBlock));
       if (bbp == NULL) return;
@@ -2701,6 +2907,10 @@ NLM_EXTERN void AddDblinkBlock (
       first = FALSE;
 
       FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+
+      if (gbseq != NULL && StringDoesHaveText (bioProjectID)) {
+        ValNodeCopyStr (&head, 0, bioProjectID);
+      }
 
       bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
       MemFree (str);
@@ -4007,8 +4217,9 @@ NLM_EXTERN void AddKeywordsBlock (
   IntAsn2gbJobPtr    ajp;
   Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
-  BioseqPtr          bsp;
   BioSourcePtr       biop;
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
   UserFieldPtr       curr;
   SeqMgrDescContext  dcontext;
   EMBLBlockPtr       ebp;
@@ -4023,14 +4234,17 @@ NLM_EXTERN void AddKeywordsBlock (
   Boolean            is_sts = FALSE;
   Boolean            is_env_sample = FALSE;
   Boolean            is_genome_assembly = FALSE;
+  Boolean            is_tsa = FALSE;
   Boolean            is_unverified = FALSE;
   ValNodePtr         keywords;
   CharPtr            kwd;
   MolInfoPtr         mip;
+  BioseqPtr          nbsp;
   ObjectIdPtr        oip;
   PirBlockPtr        pir;
   PrfBlockPtr        prf;
   SeqDescrPtr        sdp;
+  SeqEntryPtr        sep;
   SeqIdPtr           sip;
   SPBlockPtr         sp;
   SubSourcePtr       ssp;
@@ -4171,6 +4385,7 @@ NLM_EXTERN void AddKeywordsBlock (
           ValNodeCopyStr (&head, 0, "TSA");
           ValNodeCopyStr (&head, 0, "; ");
           ValNodeCopyStr (&head, 0, "Transcriptome Shotgun Assembly");
+          is_tsa = TRUE;
           break;
         case MI_TECH_unknown :
         case MI_TECH_standard :
@@ -4184,6 +4399,34 @@ NLM_EXTERN void AddKeywordsBlock (
           break;
         default :
           break;
+      }
+    }
+  }
+
+  if (ISA_aa (bsp->mol) && (! is_tsa)) {
+    if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+      if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
+        sep = bssp->seq_set;
+        if (sep != NULL && IS_Bioseq (sep)) {
+          nbsp = (BioseqPtr) sep->data.ptrvalue;
+          if (nbsp != NULL) {
+            sdp = SeqMgrGetNextDescriptor (nbsp, NULL, Seq_descr_molinfo, &dcontext);
+            if (sdp != NULL) {
+              mip = (MolInfoPtr) sdp->data.ptrvalue;
+              if (mip != NULL) {
+                if (mip->tech == MI_TECH_tsa) {
+                  if (head != NULL) {
+                    ValNodeCopyStr (&head, 0, "; ");
+                  }
+                  ValNodeCopyStr (&head, 0, "TSA");
+                  ValNodeCopyStr (&head, 0, "; ");
+                  ValNodeCopyStr (&head, 0, "Transcriptome Shotgun Assembly");
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -5389,7 +5632,7 @@ static void GetRefsOnBioseq (
             right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
             strand = SeqLocStrand (ajp->ajp.slp);
             split = FALSE;
-            newloc = SeqLocReMapEx (sip, ajp->ajp.slp, irp->loc, 0, FALSE, ajp->masterStyle);
+            newloc = SeqLocReMapEx (sip, ajp->ajp.slp, irp->loc, 0, FALSE, ajp->masterStyle, ajp->relaxedMapping);
             /*
             newloc = SeqLocCopyRegion (sip, irp->loc, bsp, left, right, strand, &split);
             */
@@ -6036,6 +6279,168 @@ NLM_EXTERN void AddWGSBlock (
                       FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
                     }
                   } else {
+                    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                    FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+                    FFAddTextToString(ffstring, /* "val=" */ NULL, first, "\">", FALSE, FALSE, TILDE_IGNORE);
+                    sprintf (buf, "%s", first);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                    FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
+                  }
+                } else {
+                  if (StringCmp (first, last) != 0) {
+                    sprintf (buf, "%s-%s", first, last);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                  } else {
+                    sprintf (buf, "%s", first);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                  }
+                }
+
+                bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 0, 0, NULL);
+                FFRecycleString(ajp, ffstring);
+              }
+
+              bbp->entityID = dcontext.entityID;
+              bbp->itemtype = OBJ_SEQDESC;
+              bbp->itemID = dcontext.itemID;
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, bbp);
+              }
+            }
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+
+  if (gbseq != NULL) {
+    gbseq->alt_seq = asphead;
+  }
+}
+
+NLM_EXTERN void AddTSABlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
+  BaseBlockPtr       bbp;
+  BioseqPtr          bsp;
+  Char               buf [80];
+  SeqMgrDescContext  dcontext;
+  CharPtr            first;
+  GBAltSeqItemPtr    gbaip;
+  GBAltSeqDataPtr    gbasp, asphead = NULL, asplast = NULL;
+  GBSeqPtr           gbseq;
+  CharPtr            last;
+  ObjectIdPtr        oip;
+  SeqDescrPtr        sdp;
+  Int2               tsatype;
+  UserFieldPtr       ufp;
+  UserObjectPtr      uop;
+  StringItemPtr      ffstring;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if ( ajp == NULL ) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
+
+  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
+
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
+
+  if (ajp->gbseq) {
+    gbseq = &asp->gbseq;
+  } else {
+    gbseq = NULL;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      first = NULL;
+      last = NULL;
+      tsatype = 0;
+      if (oip != NULL) {
+        if (StringICmp (oip->str, "TSA-mRNA-List") == 0) {
+          tsatype = 1;
+        }
+        if (tsatype != 0) {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+            oip = ufp->label;
+            if (oip == NULL || oip->str == NULL || ufp->choice != 1) continue;
+            if (StringICmp (oip->str, "TSA_accession_first") == 0) {
+              first = (CharPtr) ufp->data.ptrvalue;
+            } else if (StringICmp (oip->str, "TSA_accession_last") == 0) {
+              last = (CharPtr) ufp->data.ptrvalue;
+            }
+          }
+          if (first != NULL && last != NULL) {
+            if (gbseq != NULL) {
+              gbasp = (GBAltSeqDataPtr) MemNew (sizeof (GBAltSeqData));
+              if (gbasp != NULL) {
+                if (asphead == NULL) {
+                  asphead = gbasp;
+                }
+                if (asplast != NULL) {
+                  asplast->next = gbasp;
+                }
+                asplast = gbasp;
+                if (tsatype == 1) {
+                  gbasp->name = StringSave ("TSA");
+                }
+                gbaip = GBAltSeqItemNew ();
+                if (gbaip != NULL) {
+                  gbaip->first_accn = StringSave (first);
+                  if (StringCmp (first, last) != 0) {
+                    gbaip->last_accn = StringSave (last);
+                  }
+                  gbasp->items = gbaip;
+                }
+              }
+            }
+            bbp = Asn2gbAddBlock (awp, WGS_BLOCK, sizeof (BaseBlock));
+            if (bbp != NULL) {
+              ffstring = FFGetString (ajp);
+              if (ffstring != NULL) {
+                if (tsatype == 1) {
+                  FFStartPrint (ffstring, awp->format, 0, 12, "TSA", 12, 0, 0, NULL, FALSE);
+                }
+              
+                if ( GetWWW(ajp) ) {
+                  if (StringCmp (first, last) != 0) {
+                    /*
+                    sprintf (buf, "%s-%s", first, last);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                    */
+                    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                    FF_Add_NCBI_Base_URL (ffstring, link_tsa);
+                    StringCpy (buf, first);
+                    if (buf [2] == '_') {
+                      buf [9] = '\0';
+                    } else {
+                      buf [6] = '\0';
+                    }
+                    FFAddTextToString(ffstring, "val=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+                    sprintf (buf, "%s-%s", first, last);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                    FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
+                  } else {
+                    /*
+                    sprintf (buf, "%s", first);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                    */
                     FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
                     FF_Add_NCBI_Base_URL (ffstring, link_seqn);
                     FFAddTextToString(ffstring, /* "val=" */ NULL, first, "\">", FALSE, FALSE, TILDE_IGNORE);

@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.92 2011/04/11 14:54:31 kazimird Exp $
+/* $Id: blast_def.h,v 1.93 2012/06/06 16:04:49 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -283,6 +283,9 @@ typedef struct BLAST_SequenceBlk {
                                       seq_ranges */
    ESubjectMaskingType mask_type;          /**< type of subject masking */
    /* END: Data members needed for masking subjects from a BLAST database */
+
+   Uint1 bases_offset; /* Bases offset in first byte for SRA seq */
+
 } BLAST_SequenceBlk;
 
 /** Information about a single pattern occurence in the query. */

@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnfeat.h47";
-static AsnValxNode avnx[430] = {
+static char * asnfilename = "asnfeat.h49";
+static AsnValxNode avnx[441] = {
     {2,NULL,0,0.0,NULL } ,
     {20,"unknown" ,0,0.0,&avnx[2] } ,
     {20,"official" ,1,0.0,&avnx[3] } ,
@@ -235,205 +235,216 @@ static AsnValxNode avnx[430] = {
     {20,"sts" ,2,0.0,&avnx[222] } ,
     {20,"fish" ,3,0.0,&avnx[223] } ,
     {20,"fingerprint" ,4,0.0,&avnx[224] } ,
+    {20,"end-seq-insert-alignment" ,5,0.0,&avnx[225] } ,
+    {20,"external" ,253,0.0,&avnx[226] } ,
+    {20,"curated" ,254,0.0,&avnx[227] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"insert" ,0,0.0,&avnx[226] } ,
-    {20,"end" ,1,0.0,&avnx[227] } ,
+    {20,"insert" ,0,0.0,&avnx[229] } ,
+    {20,"end" ,1,0.0,&avnx[230] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"multiple" ,0,0.0,&avnx[229] } ,
-    {20,"na" ,1,0.0,&avnx[230] } ,
-    {20,"nohit-rep" ,2,0.0,&avnx[231] } ,
-    {20,"nohitnorep" ,3,0.0,&avnx[232] } ,
-    {20,"other-chrm" ,4,0.0,&avnx[233] } ,
-    {20,"unique" ,5,0.0,&avnx[234] } ,
-    {20,"virtual" ,6,0.0,&avnx[235] } ,
+    {20,"multiple" ,0,0.0,&avnx[232] } ,
+    {20,"na" ,1,0.0,&avnx[233] } ,
+    {20,"nohit-rep" ,2,0.0,&avnx[234] } ,
+    {20,"nohitnorep" ,3,0.0,&avnx[235] } ,
+    {20,"other-chrm" ,4,0.0,&avnx[236] } ,
+    {20,"unique" ,5,0.0,&avnx[237] } ,
+    {20,"virtual" ,6,0.0,&avnx[238] } ,
+    {20,"multiple-rep" ,7,0.0,&avnx[239] } ,
+    {20,"multiplenorep" ,8,0.0,&avnx[240] } ,
+    {20,"no-hit" ,9,0.0,&avnx[241] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[237] } ,
-    {20,"untested" ,1,0.0,&avnx[238] } ,
-    {20,"non-pathogenic" ,2,0.0,&avnx[239] } ,
-    {20,"probable-non-pathogenic" ,3,0.0,&avnx[240] } ,
-    {20,"probable-pathogenic" ,4,0.0,&avnx[241] } ,
-    {20,"pathogenic" ,5,0.0,&avnx[242] } ,
-    {20,"drug-response" ,6,0.0,&avnx[243] } ,
-    {20,"histocompatibility" ,7,0.0,&avnx[244] } ,
+    {20,"prototype" ,0,0.0,&avnx[243] } ,
+    {20,"supporting" ,1,0.0,&avnx[244] } ,
+    {20,"supports-other" ,2,0.0,&avnx[245] } ,
+    {20,"non-supporting" ,3,0.0,NULL } ,
+    {20,"unknown" ,0,0.0,&avnx[247] } ,
+    {20,"untested" ,1,0.0,&avnx[248] } ,
+    {20,"non-pathogenic" ,2,0.0,&avnx[249] } ,
+    {20,"probable-non-pathogenic" ,3,0.0,&avnx[250] } ,
+    {20,"probable-pathogenic" ,4,0.0,&avnx[251] } ,
+    {20,"pathogenic" ,5,0.0,&avnx[252] } ,
+    {20,"drug-response" ,6,0.0,&avnx[253] } ,
+    {20,"histocompatibility" ,7,0.0,&avnx[254] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[246] } ,
-    {20,"bac-acgh" ,1,0.0,&avnx[247] } ,
-    {20,"computational" ,2,0.0,&avnx[248] } ,
-    {20,"curated" ,3,0.0,&avnx[249] } ,
-    {20,"digital-array" ,4,0.0,&avnx[250] } ,
-    {20,"expression-array" ,5,0.0,&avnx[251] } ,
-    {20,"fish" ,6,0.0,&avnx[252] } ,
-    {20,"flanking-sequence" ,7,0.0,&avnx[253] } ,
-    {20,"maph" ,8,0.0,&avnx[254] } ,
-    {20,"mcd-analysis" ,9,0.0,&avnx[255] } ,
-    {20,"mlpa" ,10,0.0,&avnx[256] } ,
-    {20,"oea-assembly" ,11,0.0,&avnx[257] } ,
-    {20,"oligo-acgh" ,12,0.0,&avnx[258] } ,
-    {20,"paired-end" ,13,0.0,&avnx[259] } ,
-    {20,"pcr" ,14,0.0,&avnx[260] } ,
-    {20,"qpcr" ,15,0.0,&avnx[261] } ,
-    {20,"read-depth" ,16,0.0,&avnx[262] } ,
-    {20,"roma" ,17,0.0,&avnx[263] } ,
-    {20,"rt-pcr" ,18,0.0,&avnx[264] } ,
-    {20,"sage" ,19,0.0,&avnx[265] } ,
-    {20,"sequence-alignment" ,20,0.0,&avnx[266] } ,
-    {20,"sequencing" ,21,0.0,&avnx[267] } ,
-    {20,"snp-array" ,22,0.0,&avnx[268] } ,
-    {20,"snp-genoytyping" ,23,0.0,&avnx[269] } ,
-    {20,"southern" ,24,0.0,&avnx[270] } ,
-    {20,"western" ,25,0.0,&avnx[271] } ,
-    {20,"optical-mapping" ,26,0.0,&avnx[272] } ,
+    {20,"unknown" ,0,0.0,&avnx[256] } ,
+    {20,"bac-acgh" ,1,0.0,&avnx[257] } ,
+    {20,"computational" ,2,0.0,&avnx[258] } ,
+    {20,"curated" ,3,0.0,&avnx[259] } ,
+    {20,"digital-array" ,4,0.0,&avnx[260] } ,
+    {20,"expression-array" ,5,0.0,&avnx[261] } ,
+    {20,"fish" ,6,0.0,&avnx[262] } ,
+    {20,"flanking-sequence" ,7,0.0,&avnx[263] } ,
+    {20,"maph" ,8,0.0,&avnx[264] } ,
+    {20,"mcd-analysis" ,9,0.0,&avnx[265] } ,
+    {20,"mlpa" ,10,0.0,&avnx[266] } ,
+    {20,"oea-assembly" ,11,0.0,&avnx[267] } ,
+    {20,"oligo-acgh" ,12,0.0,&avnx[268] } ,
+    {20,"paired-end" ,13,0.0,&avnx[269] } ,
+    {20,"pcr" ,14,0.0,&avnx[270] } ,
+    {20,"qpcr" ,15,0.0,&avnx[271] } ,
+    {20,"read-depth" ,16,0.0,&avnx[272] } ,
+    {20,"roma" ,17,0.0,&avnx[273] } ,
+    {20,"rt-pcr" ,18,0.0,&avnx[274] } ,
+    {20,"sage" ,19,0.0,&avnx[275] } ,
+    {20,"sequence-alignment" ,20,0.0,&avnx[276] } ,
+    {20,"sequencing" ,21,0.0,&avnx[277] } ,
+    {20,"snp-array" ,22,0.0,&avnx[278] } ,
+    {20,"snp-genoytyping" ,23,0.0,&avnx[279] } ,
+    {20,"southern" ,24,0.0,&avnx[280] } ,
+    {20,"western" ,25,0.0,&avnx[281] } ,
+    {20,"optical-mapping" ,26,0.0,&avnx[282] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"is-default-population" ,1,0.0,&avnx[274] } ,
-    {20,"is-minor-allele" ,2,0.0,&avnx[275] } ,
+    {20,"is-default-population" ,1,0.0,&avnx[284] } ,
+    {20,"is-minor-allele" ,2,0.0,&avnx[285] } ,
     {20,"is-rare-allele" ,4,0.0,NULL } ,
-    {20,"preserved" ,1,0.0,&avnx[277] } ,
-    {20,"provisional" ,2,0.0,&avnx[278] } ,
-    {20,"has3D" ,4,0.0,&avnx[279] } ,
-    {20,"submitterLinkout" ,8,0.0,&avnx[280] } ,
-    {20,"clinical" ,16,0.0,&avnx[281] } ,
+    {20,"preserved" ,1,0.0,&avnx[287] } ,
+    {20,"provisional" ,2,0.0,&avnx[288] } ,
+    {20,"has3D" ,4,0.0,&avnx[289] } ,
+    {20,"submitterLinkout" ,8,0.0,&avnx[290] } ,
+    {20,"clinical" ,16,0.0,&avnx[291] } ,
     {20,"genotypeKit" ,32,0.0,NULL } ,
-    {20,"in-gene" ,1,0.0,&avnx[283] } ,
-    {20,"near-gene-5" ,2,0.0,&avnx[284] } ,
-    {20,"near-gene-3" ,4,0.0,&avnx[285] } ,
-    {20,"intron" ,8,0.0,&avnx[286] } ,
-    {20,"donor" ,16,0.0,&avnx[287] } ,
-    {20,"acceptor" ,32,0.0,&avnx[288] } ,
-    {20,"utr-5" ,64,0.0,&avnx[289] } ,
-    {20,"utr-3" ,128,0.0,&avnx[290] } ,
-    {20,"in-start-codon" ,256,0.0,&avnx[291] } ,
-    {20,"in-stop-codon" ,512,0.0,&avnx[292] } ,
-    {20,"intergenic" ,1024,0.0,&avnx[293] } ,
+    {20,"in-gene" ,1,0.0,&avnx[293] } ,
+    {20,"near-gene-5" ,2,0.0,&avnx[294] } ,
+    {20,"near-gene-3" ,4,0.0,&avnx[295] } ,
+    {20,"intron" ,8,0.0,&avnx[296] } ,
+    {20,"donor" ,16,0.0,&avnx[297] } ,
+    {20,"acceptor" ,32,0.0,&avnx[298] } ,
+    {20,"utr-5" ,64,0.0,&avnx[299] } ,
+    {20,"utr-3" ,128,0.0,&avnx[300] } ,
+    {20,"in-start-codon" ,256,0.0,&avnx[301] } ,
+    {20,"in-stop-codon" ,512,0.0,&avnx[302] } ,
+    {20,"intergenic" ,1024,0.0,&avnx[303] } ,
     {20,"conserved-noncoding" ,2048,0.0,NULL } ,
-    {20,"no-change" ,0,0.0,&avnx[295] } ,
-    {20,"synonymous" ,1,0.0,&avnx[296] } ,
-    {20,"nonsense" ,2,0.0,&avnx[297] } ,
-    {20,"missense" ,4,0.0,&avnx[298] } ,
-    {20,"frameshift" ,8,0.0,&avnx[299] } ,
-    {20,"up-regulator" ,16,0.0,&avnx[300] } ,
-    {20,"down-regulator" ,32,0.0,&avnx[301] } ,
-    {20,"methylation" ,64,0.0,&avnx[302] } ,
-    {20,"stop-gain" ,128,0.0,&avnx[303] } ,
+    {20,"no-change" ,0,0.0,&avnx[305] } ,
+    {20,"synonymous" ,1,0.0,&avnx[306] } ,
+    {20,"nonsense" ,2,0.0,&avnx[307] } ,
+    {20,"missense" ,4,0.0,&avnx[308] } ,
+    {20,"frameshift" ,8,0.0,&avnx[309] } ,
+    {20,"up-regulator" ,16,0.0,&avnx[310] } ,
+    {20,"down-regulator" ,32,0.0,&avnx[311] } ,
+    {20,"methylation" ,64,0.0,&avnx[312] } ,
+    {20,"stop-gain" ,128,0.0,&avnx[313] } ,
     {20,"stop-loss" ,256,0.0,NULL } ,
-    {20,"has-other-snp" ,1,0.0,&avnx[305] } ,
-    {20,"has-assembly-conflict" ,2,0.0,&avnx[306] } ,
+    {20,"has-other-snp" ,1,0.0,&avnx[315] } ,
+    {20,"has-assembly-conflict" ,2,0.0,&avnx[316] } ,
     {20,"is-assembly-specific" ,4,0.0,NULL } ,
-    {20,"is-uniquely-placed" ,1,0.0,&avnx[308] } ,
-    {20,"placed-twice-on-same-chrom" ,2,0.0,&avnx[309] } ,
-    {20,"placed-twice-on-diff-chrom" ,3,0.0,&avnx[310] } ,
+    {20,"is-uniquely-placed" ,1,0.0,&avnx[318] } ,
+    {20,"placed-twice-on-same-chrom" ,2,0.0,&avnx[319] } ,
+    {20,"placed-twice-on-diff-chrom" ,3,0.0,&avnx[320] } ,
     {20,"many-placements" ,10,0.0,NULL } ,
-    {20,"is-mutation" ,1,0.0,&avnx[312] } ,
-    {20,"above-5pct-all" ,2,0.0,&avnx[313] } ,
-    {20,"above-5pct-1plus" ,4,0.0,&avnx[314] } ,
-    {20,"validated" ,8,0.0,&avnx[315] } ,
-    {20,"above-1pct-all" ,16,0.0,&avnx[316] } ,
+    {20,"is-mutation" ,1,0.0,&avnx[322] } ,
+    {20,"above-5pct-all" ,2,0.0,&avnx[323] } ,
+    {20,"above-5pct-1plus" ,4,0.0,&avnx[324] } ,
+    {20,"validated" ,8,0.0,&avnx[325] } ,
+    {20,"above-1pct-all" ,16,0.0,&avnx[326] } ,
     {20,"above-1pct-1plus" ,32,0.0,NULL } ,
-    {20,"in-haplotype-set" ,1,0.0,&avnx[318] } ,
+    {20,"in-haplotype-set" ,1,0.0,&avnx[328] } ,
     {20,"has-genotypes" ,2,0.0,NULL } ,
-    {20,"contig-allele-missing" ,1,0.0,&avnx[320] } ,
-    {20,"withdrawn-by-submitter" ,2,0.0,&avnx[321] } ,
-    {20,"non-overlapping-alleles" ,4,0.0,&avnx[322] } ,
-    {20,"strain-specific" ,8,0.0,&avnx[323] } ,
+    {20,"contig-allele-missing" ,1,0.0,&avnx[330] } ,
+    {20,"withdrawn-by-submitter" ,2,0.0,&avnx[331] } ,
+    {20,"non-overlapping-alleles" ,4,0.0,&avnx[332] } ,
+    {20,"strain-specific" ,8,0.0,&avnx[333] } ,
     {20,"genotype-conflict" ,16,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[325] } ,
-    {20,"likely-artifact" ,1,0.0,&avnx[326] } ,
+    {20,"unknown" ,0,0.0,&avnx[335] } ,
+    {20,"likely-artifact" ,1,0.0,&avnx[336] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[328] } ,
-    {20,"germline" ,1,0.0,&avnx[329] } ,
-    {20,"somatic" ,2,0.0,&avnx[330] } ,
-    {20,"inherited" ,4,0.0,&avnx[331] } ,
-    {20,"paternal" ,8,0.0,&avnx[332] } ,
-    {20,"maternal" ,16,0.0,&avnx[333] } ,
-    {20,"de-novo" ,32,0.0,&avnx[334] } ,
-    {20,"biparental" ,64,0.0,&avnx[335] } ,
-    {20,"uniparental" ,128,0.0,&avnx[336] } ,
-    {20,"not-tested" ,256,0.0,&avnx[337] } ,
-    {20,"tested-inconclusive" ,512,0.0,&avnx[338] } ,
+    {20,"unknown" ,0,0.0,&avnx[338] } ,
+    {20,"germline" ,1,0.0,&avnx[339] } ,
+    {20,"somatic" ,2,0.0,&avnx[340] } ,
+    {20,"inherited" ,4,0.0,&avnx[341] } ,
+    {20,"paternal" ,8,0.0,&avnx[342] } ,
+    {20,"maternal" ,16,0.0,&avnx[343] } ,
+    {20,"de-novo" ,32,0.0,&avnx[344] } ,
+    {20,"biparental" ,64,0.0,&avnx[345] } ,
+    {20,"uniparental" ,128,0.0,&avnx[346] } ,
+    {20,"not-tested" ,256,0.0,&avnx[347] } ,
+    {20,"tested-inconclusive" ,512,0.0,&avnx[348] } ,
+    {20,"not-reported" ,1024,0.0,&avnx[349] } ,
     {20,"other" ,1073741824,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[340] } ,
-    {20,"homozygous" ,1,0.0,&avnx[341] } ,
-    {20,"heterozygous" ,2,0.0,&avnx[342] } ,
-    {20,"hemizygous" ,3,0.0,&avnx[343] } ,
-    {20,"nullizygous" ,4,0.0,&avnx[344] } ,
+    {20,"unknown" ,0,0.0,&avnx[351] } ,
+    {20,"homozygous" ,1,0.0,&avnx[352] } ,
+    {20,"heterozygous" ,2,0.0,&avnx[353] } ,
+    {20,"hemizygous" ,3,0.0,&avnx[354] } ,
+    {20,"nullizygous" ,4,0.0,&avnx[355] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[346] } ,
-    {20,"germline" ,1,0.0,&avnx[347] } ,
-    {20,"somatic" ,2,0.0,&avnx[348] } ,
-    {20,"inherited" ,4,0.0,&avnx[349] } ,
-    {20,"paternal" ,8,0.0,&avnx[350] } ,
-    {20,"maternal" ,16,0.0,&avnx[351] } ,
-    {20,"de-novo" ,32,0.0,&avnx[352] } ,
-    {20,"biparental" ,64,0.0,&avnx[353] } ,
-    {20,"uniparental" ,128,0.0,&avnx[354] } ,
-    {20,"not-tested" ,256,0.0,&avnx[355] } ,
-    {20,"tested-inconclusive" ,512,0.0,&avnx[356] } ,
+    {20,"unknown" ,0,0.0,&avnx[357] } ,
+    {20,"germline" ,1,0.0,&avnx[358] } ,
+    {20,"somatic" ,2,0.0,&avnx[359] } ,
+    {20,"inherited" ,4,0.0,&avnx[360] } ,
+    {20,"paternal" ,8,0.0,&avnx[361] } ,
+    {20,"maternal" ,16,0.0,&avnx[362] } ,
+    {20,"de-novo" ,32,0.0,&avnx[363] } ,
+    {20,"biparental" ,64,0.0,&avnx[364] } ,
+    {20,"uniparental" ,128,0.0,&avnx[365] } ,
+    {20,"not-tested" ,256,0.0,&avnx[366] } ,
+    {20,"tested-inconclusive" ,512,0.0,&avnx[367] } ,
     {20,"other" ,1073741824,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[358] } ,
-    {20,"homozygous" ,1,0.0,&avnx[359] } ,
-    {20,"heterozygous" ,2,0.0,&avnx[360] } ,
-    {20,"hemizygous" ,3,0.0,&avnx[361] } ,
-    {20,"nullizygous" ,4,0.0,&avnx[362] } ,
+    {20,"unknown" ,0,0.0,&avnx[369] } ,
+    {20,"homozygous" ,1,0.0,&avnx[370] } ,
+    {20,"heterozygous" ,2,0.0,&avnx[371] } ,
+    {20,"hemizygous" ,3,0.0,&avnx[372] } ,
+    {20,"nullizygous" ,4,0.0,&avnx[373] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[364] } ,
-    {20,"identity" ,1,0.0,&avnx[365] } ,
-    {20,"inv" ,2,0.0,&avnx[366] } ,
-    {20,"snv" ,3,0.0,&avnx[367] } ,
-    {20,"mnp" ,4,0.0,&avnx[368] } ,
-    {20,"delins" ,5,0.0,&avnx[369] } ,
-    {20,"del" ,6,0.0,&avnx[370] } ,
-    {20,"ins" ,7,0.0,&avnx[371] } ,
-    {20,"microsatellite" ,8,0.0,&avnx[372] } ,
-    {20,"transposon" ,9,0.0,&avnx[373] } ,
-    {20,"cnv" ,10,0.0,&avnx[374] } ,
-    {20,"direct-copy" ,11,0.0,&avnx[375] } ,
-    {20,"rev-direct-copy" ,12,0.0,&avnx[376] } ,
-    {20,"inverted-copy" ,13,0.0,&avnx[377] } ,
-    {20,"everted-copy" ,14,0.0,&avnx[378] } ,
-    {20,"translocation" ,15,0.0,&avnx[379] } ,
-    {20,"prot-missense" ,16,0.0,&avnx[380] } ,
-    {20,"prot-nonsense" ,17,0.0,&avnx[381] } ,
-    {20,"prot-neutral" ,18,0.0,&avnx[382] } ,
-    {20,"prot-silent" ,19,0.0,&avnx[383] } ,
-    {20,"prot-other" ,20,0.0,&avnx[384] } ,
+    {20,"unknown" ,0,0.0,&avnx[375] } ,
+    {20,"identity" ,1,0.0,&avnx[376] } ,
+    {20,"inv" ,2,0.0,&avnx[377] } ,
+    {20,"snv" ,3,0.0,&avnx[378] } ,
+    {20,"mnp" ,4,0.0,&avnx[379] } ,
+    {20,"delins" ,5,0.0,&avnx[380] } ,
+    {20,"del" ,6,0.0,&avnx[381] } ,
+    {20,"ins" ,7,0.0,&avnx[382] } ,
+    {20,"microsatellite" ,8,0.0,&avnx[383] } ,
+    {20,"transposon" ,9,0.0,&avnx[384] } ,
+    {20,"cnv" ,10,0.0,&avnx[385] } ,
+    {20,"direct-copy" ,11,0.0,&avnx[386] } ,
+    {20,"rev-direct-copy" ,12,0.0,&avnx[387] } ,
+    {20,"inverted-copy" ,13,0.0,&avnx[388] } ,
+    {20,"everted-copy" ,14,0.0,&avnx[389] } ,
+    {20,"translocation" ,15,0.0,&avnx[390] } ,
+    {20,"prot-missense" ,16,0.0,&avnx[391] } ,
+    {20,"prot-nonsense" ,17,0.0,&avnx[392] } ,
+    {20,"prot-neutral" ,18,0.0,&avnx[393] } ,
+    {20,"prot-silent" ,19,0.0,&avnx[394] } ,
+    {20,"prot-other" ,20,0.0,&avnx[395] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"morph" ,0,0.0,&avnx[386] } ,
-    {20,"offset" ,1,0.0,&avnx[387] } ,
-    {20,"del-at" ,2,0.0,&avnx[388] } ,
+    {20,"morph" ,0,0.0,&avnx[397] } ,
+    {20,"offset" ,1,0.0,&avnx[398] } ,
+    {20,"del-at" ,2,0.0,&avnx[399] } ,
     {20,"ins-before" ,3,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"asserted" ,1,0.0,&avnx[391] } ,
-    {20,"reference" ,2,0.0,&avnx[392] } ,
+    {20,"asserted" ,1,0.0,&avnx[402] } ,
+    {20,"reference" ,2,0.0,&avnx[403] } ,
     {20,"variant" ,4,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[394] } ,
-    {20,"compound" ,1,0.0,&avnx[395] } ,
-    {20,"products" ,2,0.0,&avnx[396] } ,
-    {20,"haplotype" ,3,0.0,&avnx[397] } ,
-    {20,"genotype" ,4,0.0,&avnx[398] } ,
-    {20,"mosaic" ,5,0.0,&avnx[399] } ,
-    {20,"individual" ,6,0.0,&avnx[400] } ,
-    {20,"population" ,7,0.0,&avnx[401] } ,
-    {20,"alleles" ,8,0.0,&avnx[402] } ,
-    {20,"package" ,9,0.0,&avnx[403] } ,
+    {20,"unknown" ,0,0.0,&avnx[405] } ,
+    {20,"compound" ,1,0.0,&avnx[406] } ,
+    {20,"products" ,2,0.0,&avnx[407] } ,
+    {20,"haplotype" ,3,0.0,&avnx[408] } ,
+    {20,"genotype" ,4,0.0,&avnx[409] } ,
+    {20,"mosaic" ,5,0.0,&avnx[410] } ,
+    {20,"individual" ,6,0.0,&avnx[411] } ,
+    {20,"population" ,7,0.0,&avnx[412] } ,
+    {20,"alleles" ,8,0.0,&avnx[413] } ,
+    {20,"package" ,9,0.0,&avnx[414] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"experimental" ,1,0.0,&avnx[405] } ,
+    {20,"experimental" ,1,0.0,&avnx[416] } ,
     {20,"not-experimental" ,2,0.0,NULL } ,
-    {20,"not-set" ,0,0.0,&avnx[407] } ,
-    {20,"coordinates" ,1,0.0,&avnx[408] } ,
-    {20,"description" ,2,0.0,&avnx[409] } ,
+    {20,"not-set" ,0,0.0,&avnx[418] } ,
+    {20,"coordinates" ,1,0.0,&avnx[419] } ,
+    {20,"description" ,2,0.0,&avnx[420] } ,
     {20,"existence" ,3,0.0,NULL } ,
-    {20,"not-set" ,0,0.0,&avnx[411] } ,
-    {20,"similar-to-sequence" ,1,0.0,&avnx[412] } ,
-    {20,"similar-to-aa" ,2,0.0,&avnx[413] } ,
-    {20,"similar-to-dna" ,3,0.0,&avnx[414] } ,
-    {20,"similar-to-rna" ,4,0.0,&avnx[415] } ,
-    {20,"similar-to-mrna" ,5,0.0,&avnx[416] } ,
-    {20,"similiar-to-est" ,6,0.0,&avnx[417] } ,
-    {20,"similar-to-other-rna" ,7,0.0,&avnx[418] } ,
-    {20,"profile" ,8,0.0,&avnx[419] } ,
-    {20,"nucleotide-motif" ,9,0.0,&avnx[420] } ,
-    {20,"protein-motif" ,10,0.0,&avnx[421] } ,
-    {20,"ab-initio-prediction" ,11,0.0,&avnx[422] } ,
-    {20,"alignment" ,12,0.0,&avnx[423] } ,
+    {20,"not-set" ,0,0.0,&avnx[422] } ,
+    {20,"similar-to-sequence" ,1,0.0,&avnx[423] } ,
+    {20,"similar-to-aa" ,2,0.0,&avnx[424] } ,
+    {20,"similar-to-dna" ,3,0.0,&avnx[425] } ,
+    {20,"similar-to-rna" ,4,0.0,&avnx[426] } ,
+    {20,"similar-to-mrna" ,5,0.0,&avnx[427] } ,
+    {20,"similiar-to-est" ,6,0.0,&avnx[428] } ,
+    {20,"similar-to-other-rna" ,7,0.0,&avnx[429] } ,
+    {20,"profile" ,8,0.0,&avnx[430] } ,
+    {20,"nucleotide-motif" ,9,0.0,&avnx[431] } ,
+    {20,"protein-motif" ,10,0.0,&avnx[432] } ,
+    {20,"ab-initio-prediction" ,11,0.0,&avnx[433] } ,
+    {20,"alignment" ,12,0.0,&avnx[434] } ,
     {20,"other" ,255,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
@@ -442,7 +453,7 @@ static AsnValxNode avnx[430] = {
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } };
 
-static AsnType atx[460] = {
+static AsnType atx[461] = {
   {401, "Seq-feat" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[1],0,&atx[2]} ,
   {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[12]} ,
   {402, "Feat-id" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[3],0,&atx[92]} ,
@@ -455,8 +466,8 @@ static AsnType atx[460] = {
   {0, "general" ,128,3,0,0,0,0,0,0,NULL,&atx[10],NULL,0,NULL} ,
   {423, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[175]} ,
   {315, "CHOICE" ,0,-1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[372]} ,
-  {425, "SeqFeatData" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[14],0,&atx[379]} ,
+  {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[373]} ,
+  {425, "SeqFeatData" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[14],0,&atx[380]} ,
   {0, "gene" ,128,0,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[39]} ,
   {405, "Gene-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[16],NULL,0,&atx[114]} ,
   {401, "Gene-ref" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[17],0,&atx[32]} ,
@@ -483,7 +494,7 @@ static AsnType atx[460] = {
   {0, "source" ,128,3,0,1,0,0,0,0,NULL,&atx[26],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "org" ,128,1,0,0,0,0,0,0,NULL,&atx[40],NULL,0,&atx[84]} ,
-  {407, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[41],NULL,0,&atx[255]} ,
+  {407, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[41],NULL,0,&atx[256]} ,
   {401, "Org-ref" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[42],0,&atx[48]} ,
   {0, "taxname" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[43]} ,
   {0, "common" ,128,1,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[44]} ,
@@ -535,7 +546,7 @@ static AsnType atx[460] = {
   {0, "gaps" ,128,3,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[90]} ,
   {0, "mismatch" ,128,4,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[91]} ,
   {0, "code" ,128,5,0,1,0,0,0,0,NULL,&atx[92],NULL,0,&atx[103]} ,
-  {403, "Genetic-code" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[93],0,&atx[437]} ,
+  {403, "Genetic-code" ,1,0,0,0,0,1,0,0,NULL,&atx[27],&atx[93],0,&atx[438]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[11],&atx[94],0,NULL} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[95]} ,
   {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[96]} ,
@@ -548,7 +559,7 @@ static AsnType atx[460] = {
   {0, "sncbistdaa" ,128,7,0,0,0,0,0,0,NULL,&atx[98],NULL,0,NULL} ,
   {0, "code-break" ,128,6,0,1,0,0,0,0,NULL,&atx[63],&atx[104],0,&atx[112]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[105],NULL,0,NULL} ,
-  {438, "Code-break" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[106],0,&atx[458]} ,
+  {438, "Code-break" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[106],0,&atx[459]} ,
   {0, "loc" ,128,0,0,0,0,0,0,0,NULL,&atx[107],NULL,0,&atx[108]} ,
   {412, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[6]} ,
   {0, "aa" ,128,1,0,0,0,0,0,0,NULL,&atx[11],&atx[109],0,NULL} ,
@@ -571,7 +582,7 @@ static AsnType atx[460] = {
   {402, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,NULL} ,
   {0, "processed" ,128,5,0,0,1,0,0,0,&avnx[57],&atx[34],&avnx[52],0,NULL} ,
   {0, "rna" ,128,4,0,0,0,0,0,0,NULL,&atx[128],NULL,0,&atx[155]} ,
-  {410, "RNA-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[129],NULL,0,&atx[430]} ,
+  {410, "RNA-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[129],NULL,0,&atx[431]} ,
   {401, "RNA-ref" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[130],0,&atx[135]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[34],&avnx[58],0,&atx[131]} ,
   {0, "pseudo" ,128,1,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[132]} ,
@@ -620,7 +631,7 @@ static AsnType atx[460] = {
   {0, "user" ,128,13,0,0,0,0,0,0,NULL,&atx[175],NULL,0,&atx[176]} ,
   {424, "User-object" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[13]} ,
   {0, "txinit" ,128,14,0,0,0,0,0,0,NULL,&atx[177],NULL,0,&atx[205]} ,
-  {418, "Txinit" ,1,0,0,0,0,0,1,0,NULL,&atx[178],NULL,0,&atx[413]} ,
+  {418, "Txinit" ,1,0,0,0,0,0,1,0,NULL,&atx[178],NULL,0,&atx[414]} ,
   {401, "Txinit" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[179],0,&atx[184]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[180]} ,
   {0, "syn" ,128,1,0,1,0,0,0,0,NULL,&atx[63],&atx[181],0,&atx[182]} ,
@@ -681,8 +692,8 @@ static AsnType atx[460] = {
   {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[236],NULL,0,NULL} ,
   {409, "PCRPrimerName" ,1,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,NULL} ,
   {0, "reverse" ,128,1,0,1,0,0,0,0,NULL,&atx[230],NULL,0,NULL} ,
-  {0, "clone" ,128,20,0,0,0,0,0,0,NULL,&atx[239],NULL,0,&atx[254]} ,
-  {431, "Clone-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[240],0,&atx[404]} ,
+  {0, "clone" ,128,20,0,0,0,0,0,0,NULL,&atx[239],NULL,0,&atx[255]} ,
+  {431, "Clone-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[240],0,&atx[405]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[241]} ,
   {0, "library" ,128,1,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[242]} ,
   {0, "concordant" ,128,2,0,0,1,0,0,0,&avnx[217],&atx[23],NULL,0,&atx[243]} ,
@@ -692,221 +703,222 @@ static AsnType atx[460] = {
   {440, "Clone-seq-set" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[247],0,&atx[248]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[248],NULL,0,NULL} ,
   {441, "Clone-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[249],0,NULL} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[225],0,&atx[250]} ,
-  {0, "confidence" ,128,1,0,1,0,0,0,0,NULL,&atx[4],&avnx[228],0,&atx[251]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[228],0,&atx[250]} ,
+  {0, "confidence" ,128,1,0,1,0,0,0,0,NULL,&atx[4],&avnx[231],0,&atx[251]} ,
   {0, "location" ,128,2,0,0,0,0,0,0,NULL,&atx[107],NULL,0,&atx[252]} ,
   {0, "seq" ,128,3,0,1,0,0,0,0,NULL,&atx[107],NULL,0,&atx[253]} ,
-  {0, "align-id" ,128,4,0,1,0,0,0,0,NULL,&atx[10],NULL,0,NULL} ,
-  {0, "variation" ,128,21,0,0,0,0,0,0,NULL,&atx[255],NULL,0,NULL} ,
-  {408, "Variation-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[256],NULL,0,&atx[212]} ,
-  {401, "Variation-ref" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[257],0,&atx[322]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[258],NULL,0,&atx[259]} ,
-  {409, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[329]} ,
-  {0, "parent-id" ,128,1,0,1,0,0,0,0,NULL,&atx[258],NULL,0,&atx[260]} ,
-  {0, "sample-id" ,128,2,0,1,0,0,0,0,NULL,&atx[261],NULL,0,&atx[262]} ,
-  {408, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[258]} ,
-  {0, "other-ids" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[263],0,&atx[264]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[258],NULL,0,NULL} ,
-  {0, "name" ,128,4,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[265]} ,
-  {0, "synonyms" ,128,5,0,1,0,0,0,0,NULL,&atx[27],&atx[266],0,&atx[267]} ,
+  {0, "align-id" ,128,4,0,1,0,0,0,0,NULL,&atx[10],NULL,0,&atx[254]} ,
+  {0, "support" ,128,5,0,1,0,0,0,0,NULL,&atx[4],&avnx[242],0,NULL} ,
+  {0, "variation" ,128,21,0,0,0,0,0,0,NULL,&atx[256],NULL,0,NULL} ,
+  {408, "Variation-ref" ,1,0,0,0,0,0,1,0,NULL,&atx[257],NULL,0,&atx[212]} ,
+  {401, "Variation-ref" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[258],0,&atx[323]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[259],NULL,0,&atx[260]} ,
+  {409, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[330]} ,
+  {0, "parent-id" ,128,1,0,1,0,0,0,0,NULL,&atx[259],NULL,0,&atx[261]} ,
+  {0, "sample-id" ,128,2,0,1,0,0,0,0,NULL,&atx[262],NULL,0,&atx[263]} ,
+  {408, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[259]} ,
+  {0, "other-ids" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[264],0,&atx[265]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[259],NULL,0,NULL} ,
+  {0, "name" ,128,4,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[266]} ,
+  {0, "synonyms" ,128,5,0,1,0,0,0,0,NULL,&atx[27],&atx[267],0,&atx[268]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[18],NULL,0,NULL} ,
-  {0, "description" ,128,6,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[268]} ,
-  {0, "phenotype" ,128,7,0,1,0,0,0,0,NULL,&atx[27],&atx[269],0,&atx[276]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[270],NULL,0,NULL} ,
-  {405, "Phenotype" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[271],0,&atx[335]} ,
-  {0, "source" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[272]} ,
-  {0, "term" ,128,1,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[273]} ,
-  {0, "xref" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[274],0,&atx[275]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[258],NULL,0,NULL} ,
-  {0, "clinical-significance" ,128,3,0,1,0,0,0,0,NULL,&atx[4],&avnx[236],0,NULL} ,
-  {0, "method" ,128,8,0,1,0,0,0,0,NULL,&atx[27],&atx[277],0,&atx[278]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[4],&avnx[245],0,NULL} ,
-  {0, "population-data" ,128,9,0,1,0,0,0,0,NULL,&atx[27],&atx[279],0,&atx[289]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[280],NULL,0,NULL} ,
-  {404, "Population-data" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[281],0,&atx[270]} ,
-  {0, "population" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[282]} ,
-  {0, "genotype-frequency" ,128,1,0,1,0,0,0,0,NULL,&atx[283],NULL,0,&atx[284]} ,
+  {0, "description" ,128,6,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[269]} ,
+  {0, "phenotype" ,128,7,0,1,0,0,0,0,NULL,&atx[27],&atx[270],0,&atx[277]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[271],NULL,0,NULL} ,
+  {405, "Phenotype" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[272],0,&atx[336]} ,
+  {0, "source" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[273]} ,
+  {0, "term" ,128,1,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[274]} ,
+  {0, "xref" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[275],0,&atx[276]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[259],NULL,0,NULL} ,
+  {0, "clinical-significance" ,128,3,0,1,0,0,0,0,NULL,&atx[4],&avnx[246],0,NULL} ,
+  {0, "method" ,128,8,0,1,0,0,0,0,NULL,&atx[27],&atx[278],0,&atx[279]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[4],&avnx[255],0,NULL} ,
+  {0, "population-data" ,128,9,0,1,0,0,0,0,NULL,&atx[27],&atx[280],0,&atx[290]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[281],NULL,0,NULL} ,
+  {404, "Population-data" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[282],0,&atx[271]} ,
+  {0, "population" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[283]} ,
+  {0, "genotype-frequency" ,128,1,0,1,0,0,0,0,NULL,&atx[284],NULL,0,&atx[285]} ,
   {309, "REAL" ,0,9,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "chromosomes-tested" ,128,2,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[285]} ,
-  {0, "sample-ids" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[286],0,&atx[287]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[261],NULL,0,NULL} ,
-  {0, "allele-frequency" ,128,4,0,1,0,0,0,0,NULL,&atx[283],NULL,0,&atx[288]} ,
-  {0, "flags" ,128,5,0,1,0,0,0,0,NULL,&atx[4],&avnx[273],0,NULL} ,
-  {0, "variant-prop" ,128,10,0,1,0,0,0,0,NULL,&atx[290],NULL,0,&atx[308]} ,
-  {403, "VariantProperties" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[291],0,&atx[280]} ,
-  {0, "version" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[292]} ,
-  {0, "resource-link" ,128,1,0,1,0,0,0,0,NULL,&atx[4],&avnx[276],0,&atx[293]} ,
-  {0, "gene-location" ,128,2,0,1,0,0,0,0,NULL,&atx[4],&avnx[282],0,&atx[294]} ,
-  {0, "effect" ,128,3,0,1,0,0,0,0,NULL,&atx[4],&avnx[294],0,&atx[295]} ,
-  {0, "mapping" ,128,4,0,1,0,0,0,0,NULL,&atx[4],&avnx[304],0,&atx[296]} ,
-  {0, "map-weight" ,128,5,0,1,0,0,0,0,NULL,&atx[4],&avnx[307],0,&atx[297]} ,
-  {0, "frequency-based-validation" ,128,6,0,1,0,0,0,0,NULL,&atx[4],&avnx[311],0,&atx[298]} ,
-  {0, "genotype" ,128,7,0,1,0,0,0,0,NULL,&atx[4],&avnx[317],0,&atx[299]} ,
-  {0, "project-data" ,128,8,0,1,0,0,0,0,NULL,&atx[27],&atx[300],0,&atx[301]} ,
+  {0, "chromosomes-tested" ,128,2,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[286]} ,
+  {0, "sample-ids" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[287],0,&atx[288]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[262],NULL,0,NULL} ,
+  {0, "allele-frequency" ,128,4,0,1,0,0,0,0,NULL,&atx[284],NULL,0,&atx[289]} ,
+  {0, "flags" ,128,5,0,1,0,0,0,0,NULL,&atx[4],&avnx[283],0,NULL} ,
+  {0, "variant-prop" ,128,10,0,1,0,0,0,0,NULL,&atx[291],NULL,0,&atx[309]} ,
+  {403, "VariantProperties" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[292],0,&atx[281]} ,
+  {0, "version" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[293]} ,
+  {0, "resource-link" ,128,1,0,1,0,0,0,0,NULL,&atx[4],&avnx[286],0,&atx[294]} ,
+  {0, "gene-location" ,128,2,0,1,0,0,0,0,NULL,&atx[4],&avnx[292],0,&atx[295]} ,
+  {0, "effect" ,128,3,0,1,0,0,0,0,NULL,&atx[4],&avnx[304],0,&atx[296]} ,
+  {0, "mapping" ,128,4,0,1,0,0,0,0,NULL,&atx[4],&avnx[314],0,&atx[297]} ,
+  {0, "map-weight" ,128,5,0,1,0,0,0,0,NULL,&atx[4],&avnx[317],0,&atx[298]} ,
+  {0, "frequency-based-validation" ,128,6,0,1,0,0,0,0,NULL,&atx[4],&avnx[321],0,&atx[299]} ,
+  {0, "genotype" ,128,7,0,1,0,0,0,0,NULL,&atx[4],&avnx[327],0,&atx[300]} ,
+  {0, "project-data" ,128,8,0,1,0,0,0,0,NULL,&atx[27],&atx[301],0,&atx[302]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
-  {0, "quality-check" ,128,9,0,1,0,0,0,0,NULL,&atx[4],&avnx[319],0,&atx[302]} ,
-  {0, "confidence" ,128,10,0,1,0,0,0,0,NULL,&atx[4],&avnx[324],0,&atx[303]} ,
-  {0, "other-validation" ,128,11,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[304]} ,
-  {0, "allele-origin" ,128,12,0,1,0,0,0,0,NULL,&atx[4],&avnx[327],0,&atx[305]} ,
-  {0, "allele-state" ,128,13,0,1,0,0,0,0,NULL,&atx[4],&avnx[339],0,&atx[306]} ,
-  {0, "allele-frequency" ,128,14,0,1,0,0,0,0,NULL,&atx[283],NULL,0,&atx[307]} ,
+  {0, "quality-check" ,128,9,0,1,0,0,0,0,NULL,&atx[4],&avnx[329],0,&atx[303]} ,
+  {0, "confidence" ,128,10,0,1,0,0,0,0,NULL,&atx[4],&avnx[334],0,&atx[304]} ,
+  {0, "other-validation" ,128,11,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[305]} ,
+  {0, "allele-origin" ,128,12,0,1,0,0,0,0,NULL,&atx[4],&avnx[337],0,&atx[306]} ,
+  {0, "allele-state" ,128,13,0,1,0,0,0,0,NULL,&atx[4],&avnx[350],0,&atx[307]} ,
+  {0, "allele-frequency" ,128,14,0,1,0,0,0,0,NULL,&atx[284],NULL,0,&atx[308]} ,
   {0, "is-ancestral-allele" ,128,15,0,1,0,0,0,0,NULL,&atx[23],NULL,0,NULL} ,
-  {0, "validated" ,128,11,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[309]} ,
-  {0, "clinical-test" ,128,12,0,1,0,0,0,0,NULL,&atx[27],&atx[310],0,&atx[311]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[258],NULL,0,NULL} ,
-  {0, "allele-origin" ,128,13,0,1,0,0,0,0,NULL,&atx[4],&avnx[345],0,&atx[312]} ,
-  {0, "allele-state" ,128,14,0,1,0,0,0,0,NULL,&atx[4],&avnx[357],0,&atx[313]} ,
-  {0, "allele-frequency" ,128,15,0,1,0,0,0,0,NULL,&atx[283],NULL,0,&atx[314]} ,
-  {0, "is-ancestral-allele" ,128,16,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[315]} ,
-  {0, "pub" ,128,17,0,1,0,0,0,0,NULL,&atx[316],NULL,0,&atx[317]} ,
-  {413, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[359]} ,
-  {0, "data" ,128,18,0,0,0,0,0,0,NULL,&atx[11],&atx[318],0,&atx[344]} ,
-  {0, "unknown" ,128,0,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[319]} ,
-  {0, "note" ,128,1,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[320]} ,
-  {0, "uniparental-disomy" ,128,2,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[321]} ,
-  {0, "instance" ,128,3,0,0,0,0,0,0,NULL,&atx[322],NULL,0,&atx[338]} ,
-  {402, "Variation-inst" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[323],0,&atx[290]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[363],0,&atx[324]} ,
-  {0, "delta" ,128,1,0,0,0,0,0,0,NULL,&atx[63],&atx[325],0,&atx[337]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[326],NULL,0,NULL} ,
-  {415, "Delta-item" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[327],0,NULL} ,
-  {0, "seq" ,128,0,0,1,0,0,0,0,NULL,&atx[11],&atx[328],0,&atx[333]} ,
-  {0, "literal" ,128,0,0,0,0,0,0,0,NULL,&atx[329],NULL,0,&atx[330]} ,
-  {410, "Seq-literal" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[367]} ,
-  {0, "loc" ,128,1,0,0,0,0,0,0,NULL,&atx[331],NULL,0,&atx[332]} ,
-  {412, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[316]} ,
+  {0, "validated" ,128,11,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[310]} ,
+  {0, "clinical-test" ,128,12,0,1,0,0,0,0,NULL,&atx[27],&atx[311],0,&atx[312]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[259],NULL,0,NULL} ,
+  {0, "allele-origin" ,128,13,0,1,0,0,0,0,NULL,&atx[4],&avnx[356],0,&atx[313]} ,
+  {0, "allele-state" ,128,14,0,1,0,0,0,0,NULL,&atx[4],&avnx[368],0,&atx[314]} ,
+  {0, "allele-frequency" ,128,15,0,1,0,0,0,0,NULL,&atx[284],NULL,0,&atx[315]} ,
+  {0, "is-ancestral-allele" ,128,16,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[316]} ,
+  {0, "pub" ,128,17,0,1,0,0,0,0,NULL,&atx[317],NULL,0,&atx[318]} ,
+  {413, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[360]} ,
+  {0, "data" ,128,18,0,0,0,0,0,0,NULL,&atx[11],&atx[319],0,&atx[345]} ,
+  {0, "unknown" ,128,0,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[320]} ,
+  {0, "note" ,128,1,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[321]} ,
+  {0, "uniparental-disomy" ,128,2,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[322]} ,
+  {0, "instance" ,128,3,0,0,0,0,0,0,NULL,&atx[323],NULL,0,&atx[339]} ,
+  {402, "Variation-inst" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[324],0,&atx[291]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[374],0,&atx[325]} ,
+  {0, "delta" ,128,1,0,0,0,0,0,0,NULL,&atx[63],&atx[326],0,&atx[338]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[327],NULL,0,NULL} ,
+  {415, "Delta-item" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[328],0,NULL} ,
+  {0, "seq" ,128,0,0,1,0,0,0,0,NULL,&atx[11],&atx[329],0,&atx[334]} ,
+  {0, "literal" ,128,0,0,0,0,0,0,0,NULL,&atx[330],NULL,0,&atx[331]} ,
+  {410, "Seq-literal" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[368]} ,
+  {0, "loc" ,128,1,0,0,0,0,0,0,NULL,&atx[332],NULL,0,&atx[333]} ,
+  {412, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[317]} ,
   {0, "this" ,128,2,0,0,0,0,0,0,NULL,&atx[165],NULL,0,NULL} ,
-  {0, "multiplier" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[334]} ,
-  {0, "multiplier-fuzz" ,128,2,0,1,0,0,0,0,NULL,&atx[335],NULL,0,&atx[336]} ,
-  {406, "Int-fuzz" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[363]} ,
-  {0, "action" ,128,3,0,0,1,0,0,0,&avnx[389],&atx[4],&avnx[385],0,NULL} ,
-  {0, "observation" ,128,2,0,1,0,0,0,0,NULL,&atx[4],&avnx[390],0,NULL} ,
-  {0, "set" ,128,4,0,0,0,0,0,0,NULL,&atx[38],&atx[339],0,&atx[343]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[393],0,&atx[340]} ,
-  {0, "variations" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[341],0,&atx[342]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[256],NULL,0,NULL} ,
+  {0, "multiplier" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[335]} ,
+  {0, "multiplier-fuzz" ,128,2,0,1,0,0,0,0,NULL,&atx[336],NULL,0,&atx[337]} ,
+  {406, "Int-fuzz" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[364]} ,
+  {0, "action" ,128,3,0,0,1,0,0,0,&avnx[400],&atx[4],&avnx[396],0,NULL} ,
+  {0, "observation" ,128,2,0,1,0,0,0,0,NULL,&atx[4],&avnx[401],0,NULL} ,
+  {0, "set" ,128,4,0,0,0,0,0,0,NULL,&atx[38],&atx[340],0,&atx[344]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[404],0,&atx[341]} ,
+  {0, "variations" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[342],0,&atx[343]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[257],NULL,0,NULL} ,
   {0, "name" ,128,2,0,1,0,0,0,0,NULL,&atx[18],NULL,0,NULL} ,
   {0, "complex" ,128,5,0,0,0,0,0,0,NULL,&atx[165],NULL,0,NULL} ,
-  {0, "consequence" ,128,19,0,1,0,0,0,0,NULL,&atx[27],&atx[345],0,&atx[356]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[11],&atx[346],0,NULL} ,
-  {0, "unknown" ,128,0,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[347]} ,
-  {0, "splicing" ,128,1,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[348]} ,
-  {0, "note" ,128,2,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[349]} ,
-  {0, "variation" ,128,3,0,0,0,0,0,0,NULL,&atx[256],NULL,0,&atx[350]} ,
-  {0, "frameshift" ,128,4,0,0,0,0,0,0,NULL,&atx[38],&atx[351],0,&atx[353]} ,
-  {0, "phase" ,128,0,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[352]} ,
+  {0, "consequence" ,128,19,0,1,0,0,0,0,NULL,&atx[27],&atx[346],0,&atx[357]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[11],&atx[347],0,NULL} ,
+  {0, "unknown" ,128,0,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[348]} ,
+  {0, "splicing" ,128,1,0,0,0,0,0,0,NULL,&atx[165],NULL,0,&atx[349]} ,
+  {0, "note" ,128,2,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[350]} ,
+  {0, "variation" ,128,3,0,0,0,0,0,0,NULL,&atx[257],NULL,0,&atx[351]} ,
+  {0, "frameshift" ,128,4,0,0,0,0,0,0,NULL,&atx[38],&atx[352],0,&atx[354]} ,
+  {0, "phase" ,128,0,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[353]} ,
   {0, "x-length" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
-  {0, "loss-of-heterozygosity" ,128,5,0,0,0,0,0,0,NULL,&atx[38],&atx[354],0,NULL} ,
-  {0, "reference" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[355]} ,
+  {0, "loss-of-heterozygosity" ,128,5,0,0,0,0,0,0,NULL,&atx[38],&atx[355],0,NULL} ,
+  {0, "reference" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[356]} ,
   {0, "test" ,128,1,0,1,0,0,0,0,NULL,&atx[18],NULL,0,NULL} ,
-  {0, "location" ,128,20,0,1,0,0,0,0,NULL,&atx[331],NULL,0,&atx[357]} ,
-  {0, "ext-locs" ,128,21,0,1,0,0,0,0,NULL,&atx[27],&atx[358],0,&atx[362]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[359],NULL,0,NULL} ,
-  {414, "Ext-loc" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[360],0,&atx[326]} ,
-  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[261],NULL,0,&atx[361]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[331],NULL,0,NULL} ,
-  {0, "ext" ,128,22,0,1,0,0,0,0,NULL,&atx[363],NULL,0,&atx[364]} ,
-  {407, "User-object" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[261]} ,
-  {0, "somatic-origin" ,128,23,0,1,0,0,0,0,NULL,&atx[27],&atx[365],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[38],&atx[366],0,NULL} ,
-  {0, "source" ,128,0,0,1,0,0,0,0,NULL,&atx[367],NULL,0,&atx[368]} ,
-  {411, "SubSource" ,1,0,0,0,0,0,1,0,NULL,&atx[220],NULL,0,&atx[331]} ,
-  {0, "condition" ,128,1,0,1,0,0,0,0,NULL,&atx[38],&atx[369],0,NULL} ,
-  {0, "description" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[370]} ,
-  {0, "object-id" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[371],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[258],NULL,0,NULL} ,
-  {0, "partial" ,128,2,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[373]} ,
-  {0, "except" ,128,3,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[374]} ,
-  {0, "comment" ,128,4,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[375]} ,
-  {0, "product" ,128,5,0,1,0,0,0,0,NULL,&atx[107],NULL,0,&atx[376]} ,
-  {0, "location" ,128,6,0,0,0,0,0,0,NULL,&atx[107],NULL,0,&atx[377]} ,
-  {0, "qual" ,128,7,0,1,0,0,0,0,NULL,&atx[63],&atx[378],0,&atx[382]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[379],NULL,0,NULL} ,
-  {426, "Gb-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[380],0,&atx[389]} ,
-  {0, "qual" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[381]} ,
+  {0, "location" ,128,20,0,1,0,0,0,0,NULL,&atx[332],NULL,0,&atx[358]} ,
+  {0, "ext-locs" ,128,21,0,1,0,0,0,0,NULL,&atx[27],&atx[359],0,&atx[363]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[360],NULL,0,NULL} ,
+  {414, "Ext-loc" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[361],0,&atx[327]} ,
+  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[262],NULL,0,&atx[362]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[332],NULL,0,NULL} ,
+  {0, "ext" ,128,22,0,1,0,0,0,0,NULL,&atx[364],NULL,0,&atx[365]} ,
+  {407, "User-object" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[262]} ,
+  {0, "somatic-origin" ,128,23,0,1,0,0,0,0,NULL,&atx[27],&atx[366],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[38],&atx[367],0,NULL} ,
+  {0, "source" ,128,0,0,1,0,0,0,0,NULL,&atx[368],NULL,0,&atx[369]} ,
+  {411, "SubSource" ,1,0,0,0,0,0,1,0,NULL,&atx[220],NULL,0,&atx[332]} ,
+  {0, "condition" ,128,1,0,1,0,0,0,0,NULL,&atx[38],&atx[370],0,NULL} ,
+  {0, "description" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[371]} ,
+  {0, "object-id" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[372],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[259],NULL,0,NULL} ,
+  {0, "partial" ,128,2,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[374]} ,
+  {0, "except" ,128,3,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[375]} ,
+  {0, "comment" ,128,4,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[376]} ,
+  {0, "product" ,128,5,0,1,0,0,0,0,NULL,&atx[107],NULL,0,&atx[377]} ,
+  {0, "location" ,128,6,0,0,0,0,0,0,NULL,&atx[107],NULL,0,&atx[378]} ,
+  {0, "qual" ,128,7,0,1,0,0,0,0,NULL,&atx[63],&atx[379],0,&atx[383]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[380],NULL,0,NULL} ,
+  {426, "Gb-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[381],0,&atx[390]} ,
+  {0, "qual" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[382]} ,
   {0, "val" ,128,1,0,0,0,0,0,0,NULL,&atx[18],NULL,0,NULL} ,
-  {0, "title" ,128,8,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[383]} ,
-  {0, "ext" ,128,9,0,1,0,0,0,0,NULL,&atx[175],NULL,0,&atx[384]} ,
-  {0, "cit" ,128,10,0,1,0,0,0,0,NULL,&atx[385],NULL,0,&atx[386]} ,
+  {0, "title" ,128,8,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[384]} ,
+  {0, "ext" ,128,9,0,1,0,0,0,0,NULL,&atx[175],NULL,0,&atx[385]} ,
+  {0, "cit" ,128,10,0,1,0,0,0,0,NULL,&atx[386],NULL,0,&atx[387]} ,
   {421, "Pub-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
-  {0, "exp-ev" ,128,11,0,1,0,0,0,0,NULL,&atx[34],&avnx[404],0,&atx[387]} ,
-  {0, "xref" ,128,12,0,1,0,0,0,0,NULL,&atx[27],&atx[388],0,&atx[392]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[389],NULL,0,NULL} ,
-  {427, "SeqFeatXref" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[390],0,&atx[401]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[391]} ,
+  {0, "exp-ev" ,128,11,0,1,0,0,0,0,NULL,&atx[34],&avnx[415],0,&atx[388]} ,
+  {0, "xref" ,128,12,0,1,0,0,0,0,NULL,&atx[27],&atx[389],0,&atx[393]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[390],NULL,0,NULL} ,
+  {427, "SeqFeatXref" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[391],0,&atx[402]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[392]} ,
   {0, "data" ,128,1,0,1,0,0,0,0,NULL,&atx[13],NULL,0,NULL} ,
-  {0, "dbxref" ,128,13,0,1,0,0,0,0,NULL,&atx[27],&atx[393],0,&atx[394]} ,
+  {0, "dbxref" ,128,13,0,1,0,0,0,0,NULL,&atx[27],&atx[394],0,&atx[395]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[10],NULL,0,NULL} ,
-  {0, "pseudo" ,128,14,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[395]} ,
-  {0, "except-text" ,128,15,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[396]} ,
-  {0, "ids" ,128,16,0,1,0,0,0,0,NULL,&atx[27],&atx[397],0,&atx[398]} ,
+  {0, "pseudo" ,128,14,0,1,0,0,0,0,NULL,&atx[23],NULL,0,&atx[396]} ,
+  {0, "except-text" ,128,15,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[397]} ,
+  {0, "ids" ,128,16,0,1,0,0,0,0,NULL,&atx[27],&atx[398],0,&atx[399]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "exts" ,128,17,0,1,0,0,0,0,NULL,&atx[27],&atx[399],0,&atx[400]} ,
+  {0, "exts" ,128,17,0,1,0,0,0,0,NULL,&atx[27],&atx[400],0,&atx[401]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[175],NULL,0,NULL} ,
-  {0, "support" ,128,18,0,1,0,0,0,0,NULL,&atx[401],NULL,0,NULL} ,
-  {428, "SeqFeatSupport" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[402],0,&atx[85]} ,
-  {0, "experiment" ,128,0,0,1,0,0,0,0,NULL,&atx[27],&atx[403],0,&atx[414]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[404],NULL,0,NULL} ,
-  {432, "ExperimentSupport" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[405],0,&atx[416]} ,
-  {0, "category" ,128,0,0,1,0,0,0,0,NULL,&atx[406],NULL,0,&atx[407]} ,
-  {434, "EvidenceCategory" ,1,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[406],0,&atx[425]} ,
-  {0, "explanation" ,128,1,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[408]} ,
-  {0, "pmids" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[409],0,&atx[411]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[410],NULL,0,NULL} ,
-  {420, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[385]} ,
-  {0, "dois" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[412],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[413],NULL,0,NULL} ,
-  {419, "DOI" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[410]} ,
-  {0, "inference" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[415],0,&atx[435]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[416],NULL,0,NULL} ,
-  {433, "InferenceSupport" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[417],0,&atx[406]} ,
-  {0, "category" ,128,0,0,1,0,0,0,0,NULL,&atx[406],NULL,0,&atx[418]} ,
-  {0, "type" ,128,1,0,0,1,0,0,0,&avnx[424],&atx[4],&avnx[410],0,&atx[419]} ,
-  {0, "other-type" ,128,2,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[420]} ,
-  {0, "same-species" ,128,3,0,0,1,0,0,0,&avnx[425],&atx[23],NULL,0,&atx[421]} ,
-  {0, "basis" ,128,4,0,0,0,0,0,0,NULL,&atx[422],NULL,0,&atx[431]} ,
-  {436, "EvidenceBasis" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[423],0,&atx[441]} ,
-  {0, "programs" ,128,0,0,1,0,0,0,0,NULL,&atx[27],&atx[424],0,&atx[428]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[425],NULL,0,NULL} ,
-  {435, "Program-id" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[426],0,&atx[422]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[427]} ,
+  {0, "support" ,128,18,0,1,0,0,0,0,NULL,&atx[402],NULL,0,NULL} ,
+  {428, "SeqFeatSupport" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[403],0,&atx[85]} ,
+  {0, "experiment" ,128,0,0,1,0,0,0,0,NULL,&atx[27],&atx[404],0,&atx[415]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[405],NULL,0,NULL} ,
+  {432, "ExperimentSupport" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[406],0,&atx[417]} ,
+  {0, "category" ,128,0,0,1,0,0,0,0,NULL,&atx[407],NULL,0,&atx[408]} ,
+  {434, "EvidenceCategory" ,1,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[417],0,&atx[426]} ,
+  {0, "explanation" ,128,1,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[409]} ,
+  {0, "pmids" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[410],0,&atx[412]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[411],NULL,0,NULL} ,
+  {420, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[386]} ,
+  {0, "dois" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[413],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[414],NULL,0,NULL} ,
+  {419, "DOI" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[411]} ,
+  {0, "inference" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[416],0,&atx[436]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[417],NULL,0,NULL} ,
+  {433, "InferenceSupport" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[418],0,&atx[407]} ,
+  {0, "category" ,128,0,0,1,0,0,0,0,NULL,&atx[407],NULL,0,&atx[419]} ,
+  {0, "type" ,128,1,0,0,1,0,0,0,&avnx[435],&atx[4],&avnx[421],0,&atx[420]} ,
+  {0, "other-type" ,128,2,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[421]} ,
+  {0, "same-species" ,128,3,0,0,1,0,0,0,&avnx[436],&atx[23],NULL,0,&atx[422]} ,
+  {0, "basis" ,128,4,0,0,0,0,0,0,NULL,&atx[423],NULL,0,&atx[432]} ,
+  {436, "EvidenceBasis" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[424],0,&atx[442]} ,
+  {0, "programs" ,128,0,0,1,0,0,0,0,NULL,&atx[27],&atx[425],0,&atx[429]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[426],NULL,0,NULL} ,
+  {435, "Program-id" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[427],0,&atx[423]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[428]} ,
   {0, "version" ,128,1,0,1,0,0,0,0,NULL,&atx[18],NULL,0,NULL} ,
-  {0, "accessions" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[429],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[430],NULL,0,NULL} ,
+  {0, "accessions" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[430],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[431],NULL,0,NULL} ,
   {411, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[107]} ,
-  {0, "pmids" ,128,5,0,1,0,0,0,0,NULL,&atx[27],&atx[432],0,&atx[433]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[410],NULL,0,NULL} ,
-  {0, "dois" ,128,6,0,1,0,0,0,0,NULL,&atx[27],&atx[434],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[413],NULL,0,NULL} ,
-  {0, "model-evidence" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[436],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[437],NULL,0,NULL} ,
-  {404, "ModelEvidenceSupport" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[438],0,&atx[15]} ,
-  {0, "method" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[439]} ,
-  {0, "mrna" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[440],0,&atx[447]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[441],NULL,0,NULL} ,
-  {437, "ModelEvidenceItem" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[442],0,&atx[105]} ,
-  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[430],NULL,0,&atx[443]} ,
-  {0, "exon-count" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[444]} ,
-  {0, "exon-length" ,128,2,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[445]} ,
-  {0, "full-length" ,128,3,0,0,1,0,0,0,&avnx[426],&atx[23],NULL,0,&atx[446]} ,
-  {0, "supports-all-exon-combo" ,128,4,0,0,1,0,0,0,&avnx[427],&atx[23],NULL,0,NULL} ,
-  {0, "est" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[448],0,&atx[449]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[441],NULL,0,NULL} ,
-  {0, "protein" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[450],0,&atx[451]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[441],NULL,0,NULL} ,
-  {0, "identification" ,128,4,0,1,0,0,0,0,NULL,&atx[430],NULL,0,&atx[452]} ,
-  {0, "dbxref" ,128,5,0,1,0,0,0,0,NULL,&atx[27],&atx[453],0,&atx[454]} ,
+  {0, "pmids" ,128,5,0,1,0,0,0,0,NULL,&atx[27],&atx[433],0,&atx[434]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[411],NULL,0,NULL} ,
+  {0, "dois" ,128,6,0,1,0,0,0,0,NULL,&atx[27],&atx[435],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[414],NULL,0,NULL} ,
+  {0, "model-evidence" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[437],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[438],NULL,0,NULL} ,
+  {404, "ModelEvidenceSupport" ,1,0,0,0,0,1,0,0,NULL,&atx[38],&atx[439],0,&atx[15]} ,
+  {0, "method" ,128,0,0,1,0,0,0,0,NULL,&atx[18],NULL,0,&atx[440]} ,
+  {0, "mrna" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[441],0,&atx[448]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[442],NULL,0,NULL} ,
+  {437, "ModelEvidenceItem" ,1,0,0,0,0,0,0,0,NULL,&atx[38],&atx[443],0,&atx[105]} ,
+  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[431],NULL,0,&atx[444]} ,
+  {0, "exon-count" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[445]} ,
+  {0, "exon-length" ,128,2,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[446]} ,
+  {0, "full-length" ,128,3,0,0,1,0,0,0,&avnx[437],&atx[23],NULL,0,&atx[447]} ,
+  {0, "supports-all-exon-combo" ,128,4,0,0,1,0,0,0,&avnx[438],&atx[23],NULL,0,NULL} ,
+  {0, "est" ,128,2,0,1,0,0,0,0,NULL,&atx[27],&atx[449],0,&atx[450]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[442],NULL,0,NULL} ,
+  {0, "protein" ,128,3,0,1,0,0,0,0,NULL,&atx[27],&atx[451],0,&atx[452]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[442],NULL,0,NULL} ,
+  {0, "identification" ,128,4,0,1,0,0,0,0,NULL,&atx[431],NULL,0,&atx[453]} ,
+  {0, "dbxref" ,128,5,0,1,0,0,0,0,NULL,&atx[27],&atx[454],0,&atx[455]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[10],NULL,0,NULL} ,
-  {0, "exon-count" ,128,6,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[455]} ,
-  {0, "exon-length" ,128,7,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[456]} ,
-  {0, "full-length" ,128,8,0,0,1,0,0,0,&avnx[428],&atx[23],NULL,0,&atx[457]} ,
-  {0, "supports-all-exon-combo" ,128,9,0,0,1,0,0,0,&avnx[429],&atx[23],NULL,0,NULL} ,
-  {439, "Genetic-code-table" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[459],0,&atx[246]} ,
+  {0, "exon-count" ,128,6,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[456]} ,
+  {0, "exon-length" ,128,7,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[457]} ,
+  {0, "full-length" ,128,8,0,0,1,0,0,0,&avnx[439],&atx[23],NULL,0,&atx[458]} ,
+  {0, "supports-all-exon-combo" ,128,9,0,0,1,0,0,0,&avnx[440],&atx[23],NULL,0,NULL} ,
+  {439, "Genetic-code-table" ,1,0,0,0,0,0,0,0,NULL,&atx[27],&atx[460],0,&atx[246]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[92],NULL,0,NULL} };
 
 static AsnModule ampx[9] = {
-  { "NCBI-Seqfeat" , "asnfeat.h47",&atx[0],NULL,&ampx[1],0,0} ,
-  { "NCBI-Variation" , NULL,&atx[256],NULL,&ampx[2],0,0} ,
+  { "NCBI-Seqfeat" , "asnfeat.h49",&atx[0],NULL,&ampx[1],0,0} ,
+  { "NCBI-Variation" , NULL,&atx[257],NULL,&ampx[2],0,0} ,
   { "NCBI-Rsite" , NULL,&atx[170],NULL,&ampx[3],0,0} ,
   { "NCBI-RNA" , NULL,&atx[129],NULL,&ampx[4],0,0} ,
   { "NCBI-Gene" , NULL,&atx[16],NULL,&ampx[5],0,0} ,
@@ -930,28 +942,28 @@ static AsnModulePtr amp = ampx;
 #define SEQ_FEAT &at[0]
 #define SEQ_FEAT_id &at[1]
 #define SEQ_FEAT_data &at[12]
-#define SEQ_FEAT_partial &at[372]
-#define SEQ_FEAT_except &at[373]
-#define SEQ_FEAT_comment &at[374]
-#define SEQ_FEAT_product &at[375]
-#define SEQ_FEAT_location &at[376]
-#define SEQ_FEAT_qual &at[377]
-#define SEQ_FEAT_qual_E &at[378]
-#define SEQ_FEAT_title &at[382]
-#define SEQ_FEAT_ext &at[383]
-#define SEQ_FEAT_cit &at[384]
-#define SEQ_FEAT_exp_ev &at[386]
-#define SEQ_FEAT_xref &at[387]
-#define SEQ_FEAT_xref_E &at[388]
-#define SEQ_FEAT_dbxref &at[392]
-#define SEQ_FEAT_dbxref_E &at[393]
-#define SEQ_FEAT_pseudo &at[394]
-#define SEQ_FEAT_except_text &at[395]
-#define SEQ_FEAT_ids &at[396]
-#define SEQ_FEAT_ids_E &at[397]
-#define SEQ_FEAT_exts &at[398]
-#define SEQ_FEAT_exts_E &at[399]
-#define SEQ_FEAT_support &at[400]
+#define SEQ_FEAT_partial &at[373]
+#define SEQ_FEAT_except &at[374]
+#define SEQ_FEAT_comment &at[375]
+#define SEQ_FEAT_product &at[376]
+#define SEQ_FEAT_location &at[377]
+#define SEQ_FEAT_qual &at[378]
+#define SEQ_FEAT_qual_E &at[379]
+#define SEQ_FEAT_title &at[383]
+#define SEQ_FEAT_ext &at[384]
+#define SEQ_FEAT_cit &at[385]
+#define SEQ_FEAT_exp_ev &at[387]
+#define SEQ_FEAT_xref &at[388]
+#define SEQ_FEAT_xref_E &at[389]
+#define SEQ_FEAT_dbxref &at[393]
+#define SEQ_FEAT_dbxref_E &at[394]
+#define SEQ_FEAT_pseudo &at[395]
+#define SEQ_FEAT_except_text &at[396]
+#define SEQ_FEAT_ids &at[397]
+#define SEQ_FEAT_ids_E &at[398]
+#define SEQ_FEAT_exts &at[399]
+#define SEQ_FEAT_exts_E &at[400]
+#define SEQ_FEAT_support &at[401]
 
 #define FEAT_ID &at[2]
 #define FEAT_ID_gibb &at[3]
@@ -970,21 +982,21 @@ static AsnModulePtr amp = ampx;
 #define GENETIC_CODE_E_sncbi8aa &at[101]
 #define GENETIC_CODE_E_sncbistdaa &at[102]
 
-#define MODELEVIDENCESUPPORT &at[437]
-#define MODELEVIDENCESUPPORT_method &at[438]
-#define MODELEVIDENCESUPPORT_mrna &at[439]
-#define MODELEVIDENCESUPPORT_mrna_E &at[440]
-#define MODELEVIDENCESUPPORT_est &at[447]
-#define MODELEVIDENCESUPPORT_est_E &at[448]
-#define MODELEVIDENCESUPPORT_protein &at[449]
-#define MODELEVIDENCESUPPORT_protein_E &at[450]
-#define MODELEVIDENCESUPPORT_identification &at[451]
-#define MODELEVIDENCESUPPORT_dbxref &at[452]
-#define MODELEVIDENCESUPPORT_dbxref_E &at[453]
-#define MODELEVIDENCESUPPORT_exon_count &at[454]
-#define MODELEVIDENCESUPPORT_exon_length &at[455]
-#define MODELEVIDENCESUPPORT_full_length &at[456]
-#define MODELEVIDENCESUPPORT_supports_all_exon_combo &at[457]
+#define MODELEVIDENCESUPPORT &at[438]
+#define MODELEVIDENCESUPPORT_method &at[439]
+#define MODELEVIDENCESUPPORT_mrna &at[440]
+#define MODELEVIDENCESUPPORT_mrna_E &at[441]
+#define MODELEVIDENCESUPPORT_est &at[448]
+#define MODELEVIDENCESUPPORT_est_E &at[449]
+#define MODELEVIDENCESUPPORT_protein &at[450]
+#define MODELEVIDENCESUPPORT_protein_E &at[451]
+#define MODELEVIDENCESUPPORT_identification &at[452]
+#define MODELEVIDENCESUPPORT_dbxref &at[453]
+#define MODELEVIDENCESUPPORT_dbxref_E &at[454]
+#define MODELEVIDENCESUPPORT_exon_count &at[455]
+#define MODELEVIDENCESUPPORT_exon_length &at[456]
+#define MODELEVIDENCESUPPORT_full_length &at[457]
+#define MODELEVIDENCESUPPORT_supports_all_exon_combo &at[458]
 
 #define SEQFEATDATA &at[13]
 #define SEQFEATDATA_gene &at[14]
@@ -1008,23 +1020,23 @@ static AsnModulePtr amp = ampx;
 #define SEQFEATDATA_het &at[209]
 #define SEQFEATDATA_biosrc &at[211]
 #define SEQFEATDATA_clone &at[238]
-#define SEQFEATDATA_variation &at[254]
+#define SEQFEATDATA_variation &at[255]
 
-#define GB_QUAL &at[379]
-#define GB_QUAL_qual &at[380]
-#define GB_QUAL_val &at[381]
+#define GB_QUAL &at[380]
+#define GB_QUAL_qual &at[381]
+#define GB_QUAL_val &at[382]
 
-#define SEQFEATXREF &at[389]
-#define SEQFEATXREF_id &at[390]
-#define SEQFEATXREF_data &at[391]
+#define SEQFEATXREF &at[390]
+#define SEQFEATXREF_id &at[391]
+#define SEQFEATXREF_data &at[392]
 
-#define SEQFEATSUPPORT &at[401]
-#define SEQFEATSUPPORT_experiment &at[402]
-#define SEQFEATSUPPORT_experiment_E &at[403]
-#define SEQFEATSUPPORT_inference &at[414]
-#define SEQFEATSUPPORT_inference_E &at[415]
-#define SEQFEATSUPPORT_model_evidence &at[435]
-#define SEQFEATSUPPORT_model_evidence_E &at[436]
+#define SEQFEATSUPPORT &at[402]
+#define SEQFEATSUPPORT_experiment &at[403]
+#define SEQFEATSUPPORT_experiment_E &at[404]
+#define SEQFEATSUPPORT_inference &at[415]
+#define SEQFEATSUPPORT_inference_E &at[416]
+#define SEQFEATSUPPORT_model_evidence &at[436]
+#define SEQFEATSUPPORT_model_evidence_E &at[437]
 
 #define CDREGION &at[85]
 #define CDREGION_orf &at[86]
@@ -1050,43 +1062,43 @@ static AsnModulePtr amp = ampx;
 #define CLONE_REF_placement_method &at[244]
 #define CLONE_REF_clone_seq &at[245]
 
-#define EXPERIMENTSUPPORT &at[404]
-#define EXPERIMENTSUPPORT_category &at[405]
-#define EXPERIMENTSUPPORT_explanation &at[407]
-#define EXPERIMENTSUPPORT_pmids &at[408]
-#define EXPERIMENTSUPPORT_pmids_E &at[409]
-#define EXPERIMENTSUPPORT_dois &at[411]
-#define EXPERIMENTSUPPORT_dois_E &at[412]
+#define EXPERIMENTSUPPORT &at[405]
+#define EXPERIMENTSUPPORT_category &at[406]
+#define EXPERIMENTSUPPORT_explanation &at[408]
+#define EXPERIMENTSUPPORT_pmids &at[409]
+#define EXPERIMENTSUPPORT_pmids_E &at[410]
+#define EXPERIMENTSUPPORT_dois &at[412]
+#define EXPERIMENTSUPPORT_dois_E &at[413]
 
-#define INFERENCESUPPORT &at[416]
-#define INFERENCESUPPORT_category &at[417]
-#define INFERENCESUPPORT_type &at[418]
-#define INFERENCESUPPORT_other_type &at[419]
-#define INFERENCESUPPORT_same_species &at[420]
-#define INFERENCESUPPORT_basis &at[421]
-#define INFERENCESUPPORT_pmids &at[431]
-#define INFERENCESUPPORT_pmids_E &at[432]
-#define INFERENCESUPPORT_dois &at[433]
-#define INFERENCESUPPORT_dois_E &at[434]
+#define INFERENCESUPPORT &at[417]
+#define INFERENCESUPPORT_category &at[418]
+#define INFERENCESUPPORT_type &at[419]
+#define INFERENCESUPPORT_other_type &at[420]
+#define INFERENCESUPPORT_same_species &at[421]
+#define INFERENCESUPPORT_basis &at[422]
+#define INFERENCESUPPORT_pmids &at[432]
+#define INFERENCESUPPORT_pmids_E &at[433]
+#define INFERENCESUPPORT_dois &at[434]
+#define INFERENCESUPPORT_dois_E &at[435]
 
-#define EVIDENCECATEGORY &at[406]
+#define EVIDENCECATEGORY &at[407]
 
-#define PROGRAM_ID &at[425]
-#define PROGRAM_ID_name &at[426]
-#define PROGRAM_ID_version &at[427]
+#define PROGRAM_ID &at[426]
+#define PROGRAM_ID_name &at[427]
+#define PROGRAM_ID_version &at[428]
 
-#define EVIDENCEBASIS &at[422]
-#define EVIDENCEBASIS_programs &at[423]
-#define EVIDENCEBASIS_programs_E &at[424]
-#define EVIDENCEBASIS_accessions &at[428]
-#define EVIDENCEBASIS_accessions_E &at[429]
+#define EVIDENCEBASIS &at[423]
+#define EVIDENCEBASIS_programs &at[424]
+#define EVIDENCEBASIS_programs_E &at[425]
+#define EVIDENCEBASIS_accessions &at[429]
+#define EVIDENCEBASIS_accessions_E &at[430]
 
-#define MODELEVIDENCEITEM &at[441]
-#define MODELEVIDENCEITEM_id &at[442]
-#define MODELEVIDENCEITEM_exon_count &at[443]
-#define MODELEVIDENCEITEM_exon_length &at[444]
-#define MODELEVIDENCEITEM_full_length &at[445]
-#define MODELEVIDENCEITEM_supports_all_exon_combo &at[446]
+#define MODELEVIDENCEITEM &at[442]
+#define MODELEVIDENCEITEM_id &at[443]
+#define MODELEVIDENCEITEM_exon_count &at[444]
+#define MODELEVIDENCEITEM_exon_length &at[445]
+#define MODELEVIDENCEITEM_full_length &at[446]
+#define MODELEVIDENCEITEM_supports_all_exon_combo &at[447]
 
 #define CODE_BREAK &at[105]
 #define CODE_BREAK_loc &at[106]
@@ -1095,8 +1107,8 @@ static AsnModulePtr amp = ampx;
 #define CODE_BREAK_aa_ncbi8aa &at[110]
 #define CODE_BREAK_aa_ncbistdaa &at[111]
 
-#define GENETIC_CODE_TABLE &at[458]
-#define GENETIC_CODE_TABLE_E &at[459]
+#define GENETIC_CODE_TABLE &at[459]
+#define GENETIC_CODE_TABLE_E &at[460]
 
 #define CLONE_SEQ_SET &at[246]
 #define CLONE_SEQ_SET_E &at[247]
@@ -1107,6 +1119,7 @@ static AsnModulePtr amp = ampx;
 #define CLONE_SEQ_location &at[251]
 #define CLONE_SEQ_seq &at[252]
 #define CLONE_SEQ_align_id &at[253]
+#define CLONE_SEQ_support &at[254]
 
 
 /**************************************************
@@ -1115,119 +1128,119 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define VARIATION_REF &at[256]
-#define VARIATION_REF_id &at[257]
-#define VARIATION_REF_parent_id &at[259]
-#define VARIATION_REF_sample_id &at[260]
-#define VARIATION_REF_other_ids &at[262]
-#define VARIATION_REF_other_ids_E &at[263]
-#define VARIATION_REF_name &at[264]
-#define VARIATION_REF_synonyms &at[265]
-#define VARIATION_REF_synonyms_E &at[266]
-#define VARIATION_REF_description &at[267]
-#define VARIATION_REF_phenotype &at[268]
-#define VARIATION_REF_phenotype_E &at[269]
-#define VARIATION_REF_method &at[276]
-#define VARIATION_REF_method_E &at[277]
-#define VARIATION_REF_population_data &at[278]
-#define VARIATION_REF_population_data_E &at[279]
-#define VARIATION_REF_variant_prop &at[289]
-#define VARIATION_REF_validated &at[308]
-#define VARIATION_REF_clinical_test &at[309]
-#define VARIATION_REF_clinical_test_E &at[310]
-#define VARIATION_REF_allele_origin &at[311]
-#define VARIATION_REF_allele_state &at[312]
-#define VARIATION_REF_allele_frequency &at[313]
-#define VARIATION_REF_is_ancestral_allele &at[314]
-#define VARIATION_REF_pub &at[315]
-#define VARIATION_REF_data &at[317]
-#define VARIATION_REF_data_unknown &at[318]
-#define VARIATION_REF_data_note &at[319]
-#define VARIATION_REF_data_uniparental_disomy &at[320]
-#define VARIATION_REF_data_instance &at[321]
-#define VARIATION_REF_data_set &at[338]
-#define VARIATION_REF_data_set_type &at[339]
-#define VARIATION_REF_data_set_variations &at[340]
-#define VARIATION_REF_data_set_variations_E &at[341]
-#define VARIATION_REF_data_set_name &at[342]
-#define VARIATION_REF_data_complex &at[343]
-#define VARIATION_REF_consequence &at[344]
-#define VARIATION_REF_consequence_E &at[345]
-#define VARIATION_REF_consequence_E_unknown &at[346]
-#define VARIATION_REF_consequence_E_splicing &at[347]
-#define VARIATION_REF_consequence_E_note &at[348]
-#define VARIATION_REF_consequence_E_variation &at[349]
-#define VARIATION_REF_consequence_E_frameshift &at[350]
-#define VARIATION_REF_consequence_E_frameshift_phase &at[351]
-#define VARIATION_REF_consequence_E_frameshift_x_length &at[352]
-#define VARIATION_REF_consequence_E_loss_of_heterozygosity &at[353]
-#define VARIATION_REF_consequence_E_loss_of_heterozygosity_reference &at[354]
-#define VARIATION_REF_consequence_E_loss_of_heterozygosity_test &at[355]
-#define VARIATION_REF_location &at[356]
-#define VARIATION_REF_ext_locs &at[357]
-#define VARIATION_REF_ext_locs_E &at[358]
-#define VARIATION_REF_ext &at[362]
-#define VARIATION_REF_somatic_origin &at[364]
-#define VARIATION_REF_somatic_origin_E &at[365]
-#define VARIATION_REF_somatic_origin_E_source &at[366]
-#define VARIATION_REF_somatic_origin_E_condition &at[368]
-#define VARIATION_REF_somatic_origin_E_condition_description &at[369]
-#define VARIATION_REF_somatic_origin_E_condition_object_id &at[370]
-#define VARIATION_REF_somatic_origin_E_condition_object_id_E &at[371]
+#define VARIATION_REF &at[257]
+#define VARIATION_REF_id &at[258]
+#define VARIATION_REF_parent_id &at[260]
+#define VARIATION_REF_sample_id &at[261]
+#define VARIATION_REF_other_ids &at[263]
+#define VARIATION_REF_other_ids_E &at[264]
+#define VARIATION_REF_name &at[265]
+#define VARIATION_REF_synonyms &at[266]
+#define VARIATION_REF_synonyms_E &at[267]
+#define VARIATION_REF_description &at[268]
+#define VARIATION_REF_phenotype &at[269]
+#define VARIATION_REF_phenotype_E &at[270]
+#define VARIATION_REF_method &at[277]
+#define VARIATION_REF_method_E &at[278]
+#define VARIATION_REF_population_data &at[279]
+#define VARIATION_REF_population_data_E &at[280]
+#define VARIATION_REF_variant_prop &at[290]
+#define VARIATION_REF_validated &at[309]
+#define VARIATION_REF_clinical_test &at[310]
+#define VARIATION_REF_clinical_test_E &at[311]
+#define VARIATION_REF_allele_origin &at[312]
+#define VARIATION_REF_allele_state &at[313]
+#define VARIATION_REF_allele_frequency &at[314]
+#define VARIATION_REF_is_ancestral_allele &at[315]
+#define VARIATION_REF_pub &at[316]
+#define VARIATION_REF_data &at[318]
+#define VARIATION_REF_data_unknown &at[319]
+#define VARIATION_REF_data_note &at[320]
+#define VARIATION_REF_data_uniparental_disomy &at[321]
+#define VARIATION_REF_data_instance &at[322]
+#define VARIATION_REF_data_set &at[339]
+#define VARIATION_REF_data_set_type &at[340]
+#define VARIATION_REF_data_set_variations &at[341]
+#define VARIATION_REF_data_set_variations_E &at[342]
+#define VARIATION_REF_data_set_name &at[343]
+#define VARIATION_REF_data_complex &at[344]
+#define VARIATION_REF_consequence &at[345]
+#define VARIATION_REF_consequence_E &at[346]
+#define VARIATION_REF_consequence_E_unknown &at[347]
+#define VARIATION_REF_consequence_E_splicing &at[348]
+#define VARIATION_REF_consequence_E_note &at[349]
+#define VARIATION_REF_consequence_E_variation &at[350]
+#define VARIATION_REF_consequence_E_frameshift &at[351]
+#define VARIATION_REF_consequence_E_frameshift_phase &at[352]
+#define VARIATION_REF_consequence_E_frameshift_x_length &at[353]
+#define VARIATION_REF_consequence_E_loss_of_heterozygosity &at[354]
+#define VARIATION_REF_consequence_E_loss_of_heterozygosity_reference &at[355]
+#define VARIATION_REF_consequence_E_loss_of_heterozygosity_test &at[356]
+#define VARIATION_REF_location &at[357]
+#define VARIATION_REF_ext_locs &at[358]
+#define VARIATION_REF_ext_locs_E &at[359]
+#define VARIATION_REF_ext &at[363]
+#define VARIATION_REF_somatic_origin &at[365]
+#define VARIATION_REF_somatic_origin_E &at[366]
+#define VARIATION_REF_somatic_origin_E_source &at[367]
+#define VARIATION_REF_somatic_origin_E_condition &at[369]
+#define VARIATION_REF_somatic_origin_E_condition_description &at[370]
+#define VARIATION_REF_somatic_origin_E_condition_object_id &at[371]
+#define VARIATION_REF_somatic_origin_E_condition_object_id_E &at[372]
 
-#define VARIATION_INST &at[322]
-#define VARIATION_INST_type &at[323]
-#define VARIATION_INST_delta &at[324]
-#define VARIATION_INST_delta_E &at[325]
-#define VARIATION_INST_observation &at[337]
+#define VARIATION_INST &at[323]
+#define VARIATION_INST_type &at[324]
+#define VARIATION_INST_delta &at[325]
+#define VARIATION_INST_delta_E &at[326]
+#define VARIATION_INST_observation &at[338]
 
-#define VARIANTPROPERTIES &at[290]
-#define VARIANTPROPERTIES_version &at[291]
-#define VARIANTPROPERTIES_resource_link &at[292]
-#define VARIANTPROPERTIES_gene_location &at[293]
-#define VARIANTPROPERTIES_effect &at[294]
-#define VARIANTPROPERTIES_mapping &at[295]
-#define VARIANTPROPERTIES_map_weight &at[296]
-#define VARIANTPROPERTIES_frequency_based_validation &at[297]
-#define VARIANTPROPERTIES_genotype &at[298]
-#define VARIANTPROPERTIES_project_data &at[299]
-#define VARIANTPROPERTIES_project_data_E &at[300]
-#define VARIANTPROPERTIES_quality_check &at[301]
-#define VARIANTPROPERTIES_confidence &at[302]
-#define VARIANTPROPERTIES_other_validation &at[303]
-#define VARIANTPROPERTIES_allele_origin &at[304]
-#define VARIANTPROPERTIES_allele_state &at[305]
-#define VARIANTPROPERTIES_allele_frequency &at[306]
-#define VARIANTPROPERTIES_is_ancestral_allele &at[307]
+#define VARIANTPROPERTIES &at[291]
+#define VARIANTPROPERTIES_version &at[292]
+#define VARIANTPROPERTIES_resource_link &at[293]
+#define VARIANTPROPERTIES_gene_location &at[294]
+#define VARIANTPROPERTIES_effect &at[295]
+#define VARIANTPROPERTIES_mapping &at[296]
+#define VARIANTPROPERTIES_map_weight &at[297]
+#define VARIANTPROPERTIES_frequency_based_validation &at[298]
+#define VARIANTPROPERTIES_genotype &at[299]
+#define VARIANTPROPERTIES_project_data &at[300]
+#define VARIANTPROPERTIES_project_data_E &at[301]
+#define VARIANTPROPERTIES_quality_check &at[302]
+#define VARIANTPROPERTIES_confidence &at[303]
+#define VARIANTPROPERTIES_other_validation &at[304]
+#define VARIANTPROPERTIES_allele_origin &at[305]
+#define VARIANTPROPERTIES_allele_state &at[306]
+#define VARIANTPROPERTIES_allele_frequency &at[307]
+#define VARIANTPROPERTIES_is_ancestral_allele &at[308]
 
-#define POPULATION_DATA &at[280]
-#define POPULATION_DATA_population &at[281]
-#define POPULATION_DATA_genotype_frequency &at[282]
-#define POPULATION_DATA_chromosomes_tested &at[284]
-#define POPULATION_DATA_sample_ids &at[285]
-#define POPULATION_DATA_sample_ids_E &at[286]
-#define POPULATION_DATA_allele_frequency &at[287]
-#define POPULATION_DATA_flags &at[288]
+#define POPULATION_DATA &at[281]
+#define POPULATION_DATA_population &at[282]
+#define POPULATION_DATA_genotype_frequency &at[283]
+#define POPULATION_DATA_chromosomes_tested &at[285]
+#define POPULATION_DATA_sample_ids &at[286]
+#define POPULATION_DATA_sample_ids_E &at[287]
+#define POPULATION_DATA_allele_frequency &at[288]
+#define POPULATION_DATA_flags &at[289]
 
-#define PHENOTYPE &at[270]
-#define PHENOTYPE_source &at[271]
-#define PHENOTYPE_term &at[272]
-#define PHENOTYPE_xref &at[273]
-#define PHENOTYPE_xref_E &at[274]
-#define PHENOTYPE_clinical_significance &at[275]
+#define PHENOTYPE &at[271]
+#define PHENOTYPE_source &at[272]
+#define PHENOTYPE_term &at[273]
+#define PHENOTYPE_xref &at[274]
+#define PHENOTYPE_xref_E &at[275]
+#define PHENOTYPE_clinical_significance &at[276]
 
-#define EXT_LOC &at[359]
-#define EXT_LOC_id &at[360]
-#define EXT_LOC_location &at[361]
+#define EXT_LOC &at[360]
+#define EXT_LOC_id &at[361]
+#define EXT_LOC_location &at[362]
 
-#define DELTA_ITEM &at[326]
-#define DELTA_ITEM_seq &at[327]
-#define DELTA_ITEM_seq_literal &at[328]
-#define DELTA_ITEM_seq_loc &at[330]
-#define DELTA_ITEM_seq_this &at[332]
-#define DELTA_ITEM_multiplier &at[333]
-#define DELTA_ITEM_multiplier_fuzz &at[334]
-#define DELTA_ITEM_action &at[336]
+#define DELTA_ITEM &at[327]
+#define DELTA_ITEM_seq &at[328]
+#define DELTA_ITEM_seq_literal &at[329]
+#define DELTA_ITEM_seq_loc &at[331]
+#define DELTA_ITEM_seq_this &at[333]
+#define DELTA_ITEM_multiplier &at[334]
+#define DELTA_ITEM_multiplier_fuzz &at[335]
+#define DELTA_ITEM_action &at[337]
 
 
 /**************************************************

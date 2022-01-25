@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -3787,7 +3787,7 @@ static void Ing_ReadInTabDelimited(IngGenomeViewerPtr igvp, BioseqPtr bsp, FILE 
 
 /*****************************************************************************
 
-Function: SqnGetBioseqGivenSeqLoc(), GetBioseqReferencedbyAnnot(), Ing_AttachSeqAnnotToSeqEntry()
+Function: SqnGetBioseqGivenSeqLoc(), Ing_GetBioseqReferencedbyAnnot(), Ing_AttachSeqAnnotToSeqEntry()
 
 Purpose:  attach a new feature (packaged in a seqannot) to a bioseq
 
@@ -3823,7 +3823,7 @@ static BioseqPtr SqnGetBioseqGivenSeqLoc (SeqLocPtr slp, Uint2 entityID)
 }
 
 
-static BioseqPtr GetBioseqReferencedByAnnot (SeqAnnotPtr sap, Uint2 entityID)
+static BioseqPtr Ing_GetBioseqReferencedByAnnot (SeqAnnotPtr sap, Uint2 entityID)
 
 {
   SeqAlignPtr   align;
@@ -3907,7 +3907,7 @@ extern Uint2 Ing_AttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap, Bios
 
   if (sap == NULL) return entityID;
   if (bsp==NULL)
-    bsp =GetBioseqReferencedByAnnot (sap, entityID);
+    bsp = Ing_GetBioseqReferencedByAnnot (sap, entityID);
 
   if (bsp == NULL) return entityID;
   

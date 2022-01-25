@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.158 2011/06/13 17:34:31 kazimird Exp $
+/* $Id: blast_setup.c,v 1.163 2012/05/21 13:29:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.158 2011/06/13 17:34:31 kazimird Exp $";
+    "$Id: blast_setup.c,v 1.163 2012/05/21 13:29:32 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -65,8 +65,6 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
                     scoring_options->gap_open, scoring_options->gap_extend, 
                     scoring_options->reward, scoring_options->penalty, 
                     sbp->kbp_std[index], &(sbp->round_down), error_return); */
-        if (sbp->gbp) sfree(sbp->gbp->p);
-        sfree(sbp->gbp);
     } else if (sbp->gbp) {
         retval = Blast_GumbelBlkCalc(sbp->gbp,
                     scoring_options->gap_open, scoring_options->gap_extend,
@@ -147,6 +145,7 @@ s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
    Blast_KarlinBlk* kbp;
    char buffer[1024];
    Int2 status = 0;
+   int index;
 
    sbp->read_in_matrix = TRUE;
    if ((status = Blast_ScoreBlkMatrixFill(sbp, get_path)) != 0)
@@ -318,9 +317,17 @@ s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
    if (status) 
        Blast_MessageWrite(blast_message, eBlastSevWarning, kBlastMessageNoContext, buffer);
    else {
-       /* Put a copy the Karlin block into the kbp_std array */
-       sbp->kbp_std[0] = (Blast_KarlinBlk*) 
+
+       /* fill in the rest of kbp_gap_std */
+       for(index=1;index<sbp->number_of_contexts;index++)
+       sbp->kbp_gap_std[index] = (Blast_KarlinBlk*)
            BlastMemDup(sbp->kbp_gap_std[0], sizeof(Blast_KarlinBlk));
+
+       /* copy kbp_gap_std to kbp_std */
+       for(index=0;index<sbp->number_of_contexts;index++)
+       sbp->kbp_std[index] = (Blast_KarlinBlk*)
+           BlastMemDup(sbp->kbp_gap_std[0], sizeof(Blast_KarlinBlk));
+
        sbp->kbp = sbp->kbp_std;
    }
 
@@ -408,10 +415,16 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     if (sbpp == NULL)
        return 1;
 
-    if (program_number == eBlastTypeBlastn)
+    if (program_number == eBlastTypeBlastn) {
        sbp = BlastScoreBlkNew(BLASTNA_SEQ_CODE, query_info->last_context + 1);
-    else
+       /* disable new FSC rules for nucleotide case for now */
+       if (sbp && sbp->gbp) {
+           sfree(sbp->gbp);
+           sbp->gbp = NULL;
+       }
+    } else {
        sbp = BlastScoreBlkNew(BLASTAA_SEQ_CODE, query_info->last_context + 1);
+    }
 
     if (!sbp) {
        Blast_PerrorWithLocation(blast_message, BLASTERR_MEMORY, -1);
@@ -445,6 +458,11 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
                                           query_info, blast_message);
        } else {
           ASSERT(sbp->kbp_gap == NULL);
+          /* for ungapped cases we do not have gbp filled */
+          if (sbp->gbp) {
+              sfree(sbp->gbp);
+              sbp->gbp=NULL;
+          }
        }
     }
 
@@ -736,13 +754,17 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
 
              /* if the database length was specified, do not
                 adjust it when calculating the search space;
-                it's counter-intuitive to specify a value and 
+                it's counter-intuitive to specify a value and
                 not have that value be used */
+        	 /* Changing this rule for now sicne cutoff score depends
+        	  * on the effective seach space length. SB-902
+        	  */
 
-             Int8 effective_db_length = db_length;
+        	 Int8 effective_db_length = db_length - ((Int8)db_num_seqs * length_adjustment);
 
-             if (eff_len_options->db_length == 0)
-                 effective_db_length -= (Int8)db_num_seqs * length_adjustment;
+        	 // Just in case effective_db_length < 0
+        	 if (effective_db_length <= 0)
+        		 effective_db_length = 1;
 
              effective_search_space = effective_db_length *
                              (query_length - length_adjustment);
@@ -806,6 +828,7 @@ BLAST_GapAlignSetUp(EBlastProgramType program_number,
 {
    Int2 status = 0;
    Uint4 max_subject_length;
+   Uint4 min_subject_length;
    Int8 total_length = -1;
    Int4 num_seqs = -1;
 
@@ -871,8 +894,17 @@ BLAST_GapAlignSetUp(EBlastProgramType program_number,
       return status;
    }
 
+   if (sbp->gbp) {
+       min_subject_length = BlastSeqSrcGetMinSeqLen(seq_src);
+       if (Blast_SubjectIsTranslated(program_number)) {
+           min_subject_length/=3;
+       }
+   } else {
+       min_subject_length = (Int4) (total_length/num_seqs);
+   }
+
    BlastHitSavingParametersNew(program_number, hit_options, sbp, query_info, 
-                               (Int4)(total_length/num_seqs), hit_params);
+                               min_subject_length, hit_params);
 
    /* To initialize the gapped alignment structure, we need to know the 
       maximal subject sequence length */

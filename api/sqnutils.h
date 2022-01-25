@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.559 $
+* $Revision: 6.639 $
 *
 * File Description: 
 *
@@ -111,6 +111,8 @@ NLM_EXTERN SeqLocPtr   CreateWholeInterval (SeqEntryPtr sep);
 NLM_EXTERN SeqFeatPtr  CreateNewFeature (SeqEntryPtr sep, SeqEntryPtr placeHere, Uint1 choice, SeqFeatPtr useThis);
 NLM_EXTERN ValNodePtr  CreateNewDescriptor (SeqEntryPtr sep, Uint1 choice);
 
+NLM_EXTERN SeqLocPtr WholeIntervalFromSeqId (SeqIdPtr sip);
+
 NLM_EXTERN Boolean IsPopPhyEtcSet (Uint1 _class);
 
 /* Variants that call SeqMgrGetSeqEntryForData. The feature version allows a location
@@ -147,7 +149,8 @@ NLM_EXTERN void        AddSeqEntryToSeqEntry (SeqEntryPtr target, SeqEntryPtr in
 NLM_EXTERN void        ReplaceSeqEntryWithSeqEntry (SeqEntryPtr target, SeqEntryPtr replaceWith, Boolean relink);
 
 NLM_EXTERN void        RemoveSeqEntryFromSeqEntry (SeqEntryPtr top, SeqEntryPtr del, Boolean relink);
-NLM_EXTERN void        RenormalizeNucProtSets (SeqEntryPtr sep, Boolean relink);
+NLM_EXTERN Int4        RenormalizeNucProtSets (SeqEntryPtr sep, Boolean relink);
+NLM_EXTERN Int4        RemoveSingleItemSet (SeqEntryPtr sep, Boolean relink);
 
 /* The following functions are called by the above when relink is TRUE.  Examine the
    code of ReplaceSeqEntryWithSeqEntry (in dlgutil2.c) to see how relink is treated. */
@@ -183,10 +186,18 @@ NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr fr
                                     Boolean single_interval, Boolean fuse_joints,
                                     Boolean merge_overlaps, Boolean add_null);
 
-NLM_EXTERN SeqLocPtr SeqLocMergeExEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
-                                      Boolean single_interval, Boolean fuse_joints,
-                                      Boolean merge_overlaps, Boolean add_null,
-                                      Boolean ignore_mixed, Boolean ignore_out_of_order);
+NLM_EXTERN SeqLocPtr SeqLocMergeExEx (
+  BioseqPtr target,
+  SeqLocPtr to,
+  SeqLocPtr from,
+  Boolean single_interval,
+  Boolean fuse_joints,
+  Boolean merge_overlaps,
+  Boolean add_null,
+  Boolean ignore_mixed,
+  Boolean ignore_out_of_order,
+  Boolean relaxed
+);
 
 NLM_EXTERN Boolean CheckSeqLocForPartial (SeqLocPtr location, BoolPtr p5ptr, BoolPtr p3ptr);
 NLM_EXTERN void SetSeqLocPartial (SeqLocPtr location, Boolean partial5, Boolean partial3);
@@ -219,7 +230,7 @@ NLM_EXTERN CharPtr GcIndextoCodon (Uint1 index);
 
 NLM_EXTERN SeqFeatPtr LIBCALL GetBestProteinFeatureUnindexed (SeqLocPtr product);
 
-/* resynchronizes coding regions with product protein bioseq and protein feature */
+/* resynchronizes coding regions with product protein bioseq molinfo and protein feature */
 
 NLM_EXTERN void ResynchCodingRegionPartials (SeqEntryPtr sep);
 NLM_EXTERN Boolean ResynchCodingRegionPartialsEx (SeqEntryPtr sep, FILE *log_fp);
@@ -247,6 +258,7 @@ NLM_EXTERN void ClearFeatureIDs (SeqEntryPtr sep);
 NLM_EXTERN Int4 FindHighestFeatureID (SeqEntryPtr sep);
 
 NLM_EXTERN void AssignFeatureIDs (SeqEntryPtr sep);
+NLM_EXTERN void AssignFeatureIDsWithOffset (SeqEntryPtr sep, Int4Ptr last_used_id, Int4Ptr last_used_ref);
 
 NLM_EXTERN void OffsetFeatureIDs (SeqEntryPtr sep, Int4 offset);
 NLM_EXTERN void OffsetFeatureIDXrefs (SeqEntryPtr sep, Int4 offset);
@@ -354,9 +366,32 @@ NLM_EXTERN UserObjectPtr ParseTitleIntoGenomeProjectsDB (
   UserObjectPtr uop
 );
 
+NLM_EXTERN void AddFieldStringToDbLinkUserObject (
+  CharPtr str,
+  CharPtr field_name,
+  UserObjectPtr uop
+);
+
+NLM_EXTERN UserObjectPtr ParseTitleIntoDBLinkBioProject (
+  SqnTagPtr stp,
+  UserObjectPtr uop
+);
+
+NLM_EXTERN UserObjectPtr ParseTitleIntoDBLinkBioSample (
+  SqnTagPtr stp,
+  UserObjectPtr uop
+);
+
+NLM_EXTERN UserObjectPtr ParseTitleIntoDBLinkSeqReadArch (
+  SqnTagPtr stp,
+  UserObjectPtr uop
+);
+
 NLM_EXTERN Boolean IsGenomeProjectIDDescriptor (SeqDescrPtr sdp); 
 NLM_EXTERN SeqDescrPtr GetGenomeProjectIDDescriptor (BioseqPtr bsp);
 NLM_EXTERN Int4 GetGenomeProjectID (BioseqPtr bsp);
+
+NLM_EXTERN CharPtr GetTSAIDDB (BioseqPtr bsp);
 
 
 NLM_EXTERN void AddPubsFromTitle (
@@ -398,6 +433,7 @@ NLM_EXTERN void DeleteMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 inde
 
 NLM_EXTERN Uint1 FindTrnaAA (CharPtr str);
 NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
+NLM_EXTERN CharPtr GetLongSymbolForAA (Char aa);
 NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr codon, Boolean noSingleLetter);
 NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
 NLM_EXTERN Char FindResidueByName (CharPtr res_name, SeqCodeTablePtr sctp);
@@ -423,8 +459,12 @@ NLM_EXTERN int LIBCALLBACK SortVnpByStringCS (VoidPtr ptr1, VoidPtr ptr2);
 NLM_EXTERN int LIBCALLBACK SortVnpByStringCI (VoidPtr ptr1, VoidPtr ptr2);
 NLM_EXTERN int LIBCALLBACK SortVnpByStringCIUCFirst (VoidPtr ptr1, VoidPtr ptr2);
 NLM_EXTERN int LIBCALLBACK SortVnpByStringCILCFirst (VoidPtr ptr1, VoidPtr ptr2);
+
 NLM_EXTERN ValNodePtr UniqueStringValNodeCS (ValNodePtr list);
 NLM_EXTERN ValNodePtr UniqueStringValNodeCI (ValNodePtr list);
+
+NLM_EXTERN int LIBCALLBACK SortVnpByNaturalCS (VoidPtr ptr1, VoidPtr ptr2);
+NLM_EXTERN int LIBCALLBACK SortVnpByNaturalCI (VoidPtr ptr1, VoidPtr ptr2);
 
 NLM_EXTERN int LIBCALLBACK SortVnpByString (VoidPtr ptr1, VoidPtr ptr2);
 NLM_EXTERN ValNodePtr UniqueValNode (ValNodePtr list);
@@ -433,6 +473,11 @@ NLM_EXTERN ValNodePtr UniqueValNode (ValNodePtr list);
 
 NLM_EXTERN int LIBCALLBACK SortByIntvalue (VoidPtr ptr1, VoidPtr ptr2);
 NLM_EXTERN ValNodePtr UniqueIntValNode (ValNodePtr list);
+
+/* for sorting and uniquing valnode list by data.ptrvalue */
+
+NLM_EXTERN int LIBCALLBACK SortByPtrvalue (VoidPtr ptr1, VoidPtr ptr2);
+NLM_EXTERN ValNodePtr UniquePtrValNode (ValNodePtr list);
 
 /* keytag sorts/uniques and then owns valnode character list */
 
@@ -545,7 +590,13 @@ NLM_EXTERN Pointer ReadFeatureTableFile (
   Uint2Ptr datatypeptr,
   Uint2Ptr entityIDptr,
   Int4Ptr lineP,
-  BoolPtr failP
+  BoolPtr failP,
+  Boolean ignore_web_comments
+);
+
+NLM_EXTERN BioseqPtr GetBioseqReferencedByAnnot (
+  SeqAnnotPtr sap,
+  Uint2 entityID
 );
 
 /* ReadDeltaFasta reads a FASTA file, combining raw sequence and >?unk100 lines into
@@ -653,6 +704,8 @@ NLM_EXTERN void CleanStructuredComment (UserObjectPtr uop);
 
 NLM_EXTERN void SortSeqEntryQualifiers (SeqEntryPtr sep);
 
+NLM_EXTERN void CleanUpProteinTitles (SeqEntryPtr sep);
+
 /* BasicSeqAnnotCleanup is for cleaning up contents of separate named Seq-annot objects */
 
 NLM_EXTERN void BasicSeqAnnotCleanup (SeqAnnotPtr sap);
@@ -669,6 +722,11 @@ NLM_EXTERN void CautiousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, S
 NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp);
 
 NLM_EXTERN void ConvertSegSetsToDeltaSequences (SeqEntryPtr sep);
+
+NLM_EXTERN Boolean IsDeltaSeqWithFarpointers (BioseqPtr bsp);
+
+/* UserFieldSort is similar to ValNodeSort but for user fields within a user object */
+NLM_EXTERN UserFieldPtr LIBCALL UserFieldSort (UserFieldPtr list, int (LIBCALLBACK *compar ) PROTO((VoidPtr, VoidPtr)));
 
 /* general purpose text finite state machine */
 /* based on Practical Algorithms for Programmers by Binstock and Rex */
@@ -921,6 +979,7 @@ extern void ConvertPseudoCDSToMiscFeatsForEntityID (Uint2 entityID);
 extern SeqAlignPtr FindAlignmentsForBioseq (BioseqPtr bsp);
 extern ValNodePtr FindAlignSeqAnnotsForBioseq (BioseqPtr bsp);
 extern Boolean IsSequenceFirstInPairwise (SeqEntryPtr sep, SeqIdPtr sip);
+extern SeqAlignPtr RemoveOneSequenceFromAlignment (SeqIdPtr sip, SeqAlignPtr salphead);
 extern Boolean RemoveSequenceFromAlignments (SeqEntryPtr sep, SeqIdPtr sip);
 extern BioseqPtr ReadFastaOnly (FILE *fp,
                               Boolean forceNuc, Boolean forceProt,
@@ -1002,6 +1061,9 @@ NLM_EXTERN void RemoveDuplicateItems (ValNodePtr PNTR item_list);
  *    be sure to list them together.
  */
 
+/* SHOW_TRANSL_EXCEPT added by J. Chen */
+/* SHOW_HYPOTHETICAL_CDS_HAVING_GENE_NAME added, J. Chen */
+/* TEST_DEFLINE_EXIST added, J. Chen */
 typedef enum {
   DISC_GENE_MISSING = 0,
   DISC_SUPERFLUOUS_GENE,
@@ -1158,14 +1220,41 @@ typedef enum {
   TEST_OVERLAPPING_RRNAS,
   TEST_MRNA_SEQUENCE_MINUS_STRAND_FEATURES,
   TEST_TAXNAME_NOT_IN_DEFLINE,
+  TEST_COUNT_UNVERIFIED,
+  SHOW_TRANSL_EXCEPT,
+  SHOW_HYPOTHETICAL_CDS_HAVING_GENE_NAME,
+  TEST_DEFLINE_PRESENT,
+  TEST_MRNA_OVERLAPPING_PSEUDO_GENE,
+  FIND_OVERLAPPED_GENES,
+  DISC_BIOMATERIAL_TAXNAME_MISMATCH,
+  DISC_CULTURE_TAXNAME_MISMATCH,
+  DISC_CHECK_AUTH_NAME,
+  NON_RETROVIRIDAE_PROVIRAL,
+  RNA_PROVIRAL,
+  SHORT_SEQUENCES_200,
+  DISC_10_PERCENTN,
+  N_RUNS_14,
+  MOLTYPE_NOT_MRNA,
+  TECHNIQUE_NOT_TSA,
+  MISSING_STRUCTURED_COMMENT,
+  MISSING_PROJECT,
+  MULTIPLE_CDS_ON_MRNA,
+  DUP_DISC_CBS_CULTURE_CONFLICT,
+  DIVISION_CODE_CONFLICTS,
+  RRNA_NAME_CONFLICTS,
+  EUKARYOTE_SHOULD_HAVE_MRNA,
+  MRNA_SHOULD_HAVE_PROTEIN_TRANSCRIPT_IDS,
+  ONCALLER_COUNTRY_COLON,
+  ONCALLER_BIOPROJECT_ID,
+  ONCALLER_STRAIN_TAXNAME_CONFLICT,
   MAX_DISC_TYPE
 } DiscrepancyType;
-
 
 typedef enum {
   eReportTypeDiscrepancy = 1,
   eReportTypeOnCaller,
-  eReportTypeMegaReport
+  eReportTypeMegaReport,
+  eReportTypeTSA
 } EDiscrepancyReportType;
 
 extern Boolean IsTestTypeAppropriateForReportType (Int4 test_type, EDiscrepancyReportType report_type);
@@ -1177,11 +1266,14 @@ extern void SetDiscrepancyLevels (ValNodePtr discrepancy_list, Int4 level);
 extern CharPtr GetDiscrepancyTestConfName (DiscrepancyType dtype);
 extern CharPtr GetDiscrepancyTestSettingName (DiscrepancyType dtype);
 extern DiscrepancyType GetDiscrepancyTypeFromSettingName (CharPtr setting_name);
+extern Boolean DiscrepancyTestHasAutofix (DiscrepancyType dtype);
 
 typedef struct discrepancyconfig
 {
   Boolean conf_list[MAX_DISC_TYPE];
   Boolean use_feature_table_format;
+  Boolean use_big_test_set;
+  Boolean run_tsa_checks;
 } DiscrepancyConfigData, PNTR DiscrepancyConfigPtr;
 
 extern DiscrepancyConfigPtr DiscrepancyConfigFree (DiscrepancyConfigPtr dcp);
@@ -1320,6 +1412,8 @@ typedef struct discreportoutputconfig {
   Boolean use_feature_table_format;
   Boolean expand_report_categories[MAX_DISC_TYPE];
   Boolean summary_report;
+  Boolean add_output_tag;
+  Boolean add_extra_output_tag;
 } DiscReportOutputConfigData, PNTR DiscReportOutputConfigPtr;
 
 
@@ -1365,6 +1459,7 @@ typedef enum {
   eBarcodeTest_OrderAssignment,
   eBarcodeTest_LowTrace,
   eBarcodeTest_FrameShift,
+  eBarcodeTest_StructuredSpecimenVoucher,
   eBarcodeTest_LAST
 } EBarcodeTest;
 
@@ -1474,10 +1569,11 @@ extern Boolean XrefsMatch (SeqFeatXrefPtr x1, SeqFeatXrefPtr x2);
 extern Boolean ProtRefMatch (ProtRefPtr prp1, ProtRefPtr prp2);
 NLM_EXTERN Boolean DoFeaturesMatch (SeqFeatPtr sfp1, SeqFeatPtr sfp2, Boolean allow_different_sequences, Boolean case_sensitive, Boolean ignore_partial);
 
-extern void IsCorrectLatLonFormat (CharPtr lat_lon, BoolPtr format_correct, BoolPtr lat_in_range, BoolPtr lon_in_range);
+extern void IsCorrectLatLonFormat (CharPtr lat_lon, BoolPtr format_correct, BoolPtr precision_correct, BoolPtr lat_in_range, BoolPtr lon_in_range);
 extern CharPtr FixLatLonFormat (CharPtr orig_lat_lon);
 extern Boolean ParseLatLon (CharPtr lat_lon, FloatHi PNTR latP, FloatHi PNTR lonP);
 extern void ApplyBarcodeDbxrefsToBioseq (BioseqPtr bsp, Pointer data);
+extern void ApplyFBOLDbxrefsToBioseq (BioseqPtr bsp, Pointer data);
 
 extern CharPtr GetCountryFix (CharPtr country, CharPtr PNTR country_list);
 
@@ -1608,7 +1704,6 @@ NLM_EXTERN ValNodePtr ReportConsensusMatchForBioseqSeqHist (BioseqPtr bsp);
 NLM_EXTERN ValNodePtr ReportGapsInSeqHistAlignmentForBioseq (BioseqPtr bsp);
 NLM_EXTERN ValNodePtr ReportGapsInSeqHistAlignmentsForIdsList (ValNodePtr list);
 
-NLM_EXTERN void ConvertLocalIdsToTSAIds (SeqEntryPtr sep, CharPtr suffix);
 NLM_EXTERN void ConvertLocalIdsToBarcodeIds (SeqEntryPtr sep);
 
 NLM_EXTERN ValNodePtr MakeTokensFromLine (CharPtr line);
@@ -1890,6 +1985,7 @@ NLM_EXTERN BioSourcePtr GetBiopForBsp (BioseqPtr bsp);
 NLM_EXTERN Boolean IsLocAInBonSameStrand (SeqLocPtr slp1, SeqLocPtr slp2);
 NLM_EXTERN void CleanUpTaxName (CharPtr taxName, Boolean keep_in_paren);
 NLM_EXTERN Boolean UseOrgModifier (OrgModPtr mod, CharPtr taxName, Boolean allow_at_end);
+NLM_EXTERN Boolean UseSubSrcModifier (SubSourcePtr ssp, CharPtr taxName, Boolean allow_at_end);
 NLM_EXTERN void AddModifierLabel 
 ( Boolean use_labels,
   Boolean is_orgmod,
@@ -1922,6 +2018,7 @@ NLM_EXTERN void ReparseTabTableSeparateColumnAtDelimiter (ValNodePtr row_list, C
 NLM_EXTERN void AddTextToTabTableColumn (ValNodePtr row_list, Int4 col, CharPtr text, Uint2 existing_text);
 NLM_EXTERN ValNodePtr ReadOneColumnList (CharPtr line);
 NLM_EXTERN ValNodePtr SortTableRowByAnyColumn (ValNodePtr table, Int4 column);
+NLM_EXTERN void AdjustInfluenzaSourceTable (ValNodePtr table);
 
 NLM_EXTERN void SpecialCharFindWithContext (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change);
 NLM_EXTERN ValNodePtr FreeContextList (ValNodePtr context_list);
@@ -1936,6 +2033,10 @@ NLM_EXTERN TwoStringHashPtr MakeTwoStringHashFromTabTable (ValNodePtr line_list,
 NLM_EXTERN CharPtr GetValueFromTwoStringHash (CharPtr key, TwoStringHashPtr tsh);
 
 NLM_EXTERN Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
+
+NLM_EXTERN void PromoteAllToBestID (SeqEntryPtr sep);
+NLM_EXTERN void PromoteAllToWorstID (SeqEntryPtr sep);
+NLM_EXTERN void RemoveAllVersionLocusGIFromID (SeqEntryPtr sep);
 
 /* functions for converting features */
 NLM_EXTERN Boolean IsBioseqSetInGPS (BioseqSetPtr bssp);
@@ -2044,7 +2145,7 @@ NLM_EXTERN Boolean RetranslateOneCDS
 NLM_EXTERN SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product);
 NLM_EXTERN void AddNonExtendableException (SeqFeatPtr sfp);
 NLM_EXTERN SeqLocPtr GetmRNALocationFromCDSLocation (SeqLocPtr slp, Uint2 entityID);
-NLM_EXTERN void AddmRNAForCDS (SeqFeatPtr sfp);
+NLM_EXTERN SeqFeatPtr AddmRNAForCDS (SeqFeatPtr sfp);
 NLM_EXTERN Boolean ProductsMatchForRefSeq (CharPtr cds_str, CharPtr mrna_str);
 NLM_EXTERN SeqSubmitPtr FindSeqSubmitForSeqEntry (SeqEntryPtr sep);
 NLM_EXTERN Boolean CreateMatPeptideFromCDS (SeqFeatPtr sfp);
@@ -2058,6 +2159,7 @@ NLM_EXTERN Int4 Extend5PartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp, B
 NLM_EXTERN Int4 Extend3PartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp, Boolean short_only);
 NLM_EXTERN Int4 ExtendSeqLocToEndOrGap (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
 NLM_EXTERN FloatLo PercentNInBioseq (BioseqPtr bsp, Boolean include_gaps);
+NLM_EXTERN FloatLo PercentNInBioseqInterval (BioseqPtr bsp, Int4 start, Int4 stop, Boolean include_gaps);
 
 NLM_EXTERN SeqEntryPtr GetBestSeqEntryForItem (ValNodePtr vnp);
 NLM_EXTERN void AddNewUniqueDescriptors (SeqDescrPtr PNTR new_set, SeqDescrPtr parent_set);
@@ -2078,7 +2180,13 @@ NLM_EXTERN Boolean GetsDocsumTitle(Uint1 set_class);
 NLM_EXTERN void PromoteCommonTitlesToSet (SeqEntryPtr sep);
 
 NLM_EXTERN void SetDescriptorPropagate (BioseqSetPtr bssp);
+
+typedef Boolean (*DescriptorTestFunc) PROTO ((SeqDescPtr, Pointer));
+NLM_EXTERN void PropagateSomeDescriptors (SeqEntryPtr sep, DescriptorTestFunc test_func, Pointer extradata);
+NLM_EXTERN void PropagateDblinkDescriptors (SeqEntryPtr sep);
+
 NLM_EXTERN Boolean RemoveDuplicateNestedSetsForEntityID (Uint2 entityID);
+NLM_EXTERN Boolean RemoveDuplicateNestedSetsForEntityIDNoUpdate (Uint2 entityID);
 
 NLM_EXTERN void AddStructuredCommentKeywords (Uint2 entityID);
 NLM_EXTERN CharPtr KeywordForStructuredCommentName (UserObjectPtr uop);
@@ -2091,6 +2199,7 @@ NLM_EXTERN ValNodePtr GetLocusTagPrefixList (SeqEntryPtr sep);
 
 NLM_EXTERN Boolean IsProductNameOk (CharPtr product_name);
 NLM_EXTERN Boolean ReportProductNameProblems (CharPtr product_name, FILE *output_file, CharPtr prefix);
+NLM_EXTERN Boolean FixProductNameProblems (CharPtr PNTR product_name);
 
 NLM_EXTERN SeqEntryPtr ReadFilteredAsn (FILE *fp, Boolean is_binary, CharPtr accn_list, Uint2Ptr entityIDptr);
 NLM_EXTERN void ReintegrateFilteredAsn (SeqEntryPtr sep, FILE *orig_file, FILE *output, Boolean is_binary);
@@ -2183,6 +2292,118 @@ NLM_EXTERN void FlipCodonRecognizedInSeqEntry (SeqEntryPtr sep, LogInfoPtr lip);
 NLM_EXTERN void RemoveBadCodonRecognizedInSeqEntry (SeqEntryPtr sep, LogInfoPtr lip);
 NLM_EXTERN Uint1 GetAaFromtRNA (tRNAPtr trp);
 NLM_EXTERN CharPtr GetCodesFortRNA (SeqFeatPtr sfp, Int2 *pCode);
+
+NLM_EXTERN void ReverseBioseqInAlignment (SeqAlignPtr salp, Pointer userdata);
+NLM_EXTERN void FlipAlignment (SeqAlignPtr salp);
+NLM_EXTERN void FlipEntireAlignmentIfAllSequencesFlipped (SeqAnnotPtr sap, Pointer userdata);
+NLM_EXTERN ValNodePtr ListSequencesWithAlignments (ValNodePtr bsp_list);
+typedef Boolean (LIBCALL *BioseqFunc) (BioseqPtr);
+NLM_EXTERN void RevCompBioseqList (ValNodePtr bsp_list, 
+                                   Uint2 entityID, 
+                                   BioseqFunc func,
+                                   Boolean revCompFeats,
+                                   Boolean check_for_aln);
+NLM_EXTERN Boolean IsBioseqInAnyAlignment (BioseqPtr bsp, Uint2 input_entityID);
+NLM_EXTERN void RemoveAlignmentsWithSequence (BioseqPtr bsp, Uint2 input_entityID);
+
+NLM_EXTERN void ReplaceComplexLocation (SeqLocPtr slp, SeqAlignPtr salp, Int4 new_len, Int4 begin, Int4 fin);
+NLM_EXTERN void ReplaceOneSequence (SeqAlignPtr salp, BioseqPtr oldbsp, BioseqPtr newbsp);
+NLM_EXTERN Boolean AreSequenceResiduesIdentical (BioseqPtr bsp1, BioseqPtr bsp2);
+NLM_EXTERN SeqAlignPtr AlignForSequenceUpdate (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, GlobalAlignFunc align_func);
+NLM_EXTERN void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID, CharPtr update_txt);
+NLM_EXTERN ValNodePtr CreateUpdateCitSubFromBestTemplate (SeqEntryPtr top_sep, SeqEntryPtr upd_sep, CharPtr update_txt);
+NLM_EXTERN void RemoveQualityScores (BioseqPtr bsp, FILE *log_fp, BoolPtr data_in_log);
+NLM_EXTERN void ReplaceFakeIDWithIDFromTitle (BioseqPtr bsp);
+NLM_EXTERN SeqEntryPtr 
+ImportNucleotideFASTASequencesFromFile
+(FILE           *fp, 
+ Boolean         parse_id,
+ CharPtr         supplied_id_txt,
+ ValNodePtr PNTR err_msg_list,
+ BoolPtr         chars_stripped,
+ Boolean         allow_char_stripping);
+NLM_EXTERN SeqEntryPtr ImportProteinFASTASequences 
+(FILE            *fp,
+ Boolean         parse_id,
+ CharPtr         supplied_id_txt,
+ ValNodePtr PNTR err_msg_list,
+ BoolPtr         chars_stripped);
+NLM_EXTERN void AddUniqueUpdateSequenceIDs (SeqEntryPtr sep);
+NLM_EXTERN void ListBioseqsInSeqEntry (SeqEntryPtr sep, Boolean is_na, Int4Ptr seq_num, ValNodePtr PNTR bioseq_list);
+NLM_EXTERN ValNodePtr ShuffleUpdateBioseqList (ValNodePtr PNTR update_bioseq_list, ValNodePtr orig_bioseq_list);
+NLM_EXTERN ValNodePtr GetNthValNode (ValNodePtr list, Int4 n);
+NLM_EXTERN ValNodePtr ExtractNthValNode (ValNodePtr PNTR list, Int4 nth);
+NLM_EXTERN BioseqPtr FindBioseqInList (ValNodePtr bioseq_list, SeqIdPtr sip, Int4Ptr position);
+NLM_EXTERN void ReplaceCollidingUpdateIDs (ValNodePtr update_bioseq_list, ValNodePtr orig_bioseq_list);
+NLM_EXTERN Boolean RelaxedSeqIdIn (SeqIdPtr sip, SeqIdPtr sip_list);
+NLM_EXTERN void RemoveSequencesWithoutUpdates (ValNodePtr PNTR orig_bioseq_list, ValNodePtr PNTR update_bioseq_list);
+extern CharPtr kSubmitterUpdateText;
+
+NLM_EXTERN SeqLocPtr MakeGeneLocForFeatureLoc (SeqLocPtr floc, Uint2 entityID, Boolean trans_spliced);
+
+typedef struct lclidlist {
+  BioseqPtr  firstbsp;
+  SeqIdPtr   firstsip;
+  CharPtr    key;
+  Int2       count;
+  struct lclidlist PNTR left;
+  struct lclidlist PNTR right;
+} LclIdList, PNTR LclIdListPtr;
+
+NLM_EXTERN void ResolveExistingIDsCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+NLM_EXTERN void FreeLclTree (LclIdListPtr PNTR head);
+NLM_EXTERN Boolean HasAlignmentsWithLocalIDs (SeqEntryPtr sep);
+NLM_EXTERN Boolean DoesStringContainPhrase (CharPtr str, CharPtr phrase, Boolean case_sensitive, Boolean whole_word);
+
+NLM_EXTERN Int4 UpdateReplacedECNumbers (SeqEntryPtr sep);
+NLM_EXTERN Int4 UpdateReplacedECNumbersEx (SeqEntryPtr sep, ValNodePtr PNTR head, ValNodePtr PNTR tail, Boolean only_unambig, Boolean justwarn);
+NLM_EXTERN Int4 DeleteBadECNumbers (SeqEntryPtr sep);
+NLM_EXTERN Int4 DeleteBadECNumbersEx (SeqEntryPtr sep, ValNodePtr PNTR head, ValNodePtr PNTR tail, Boolean justwarn);
+
+NLM_EXTERN void SegregateSetsByPlantGroup (SeqEntryPtr sep);
+NLM_EXTERN void SegregateSetsByFungusGroup (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByBioseqList (SeqEntryPtr sep, ValNodePtr bsp_list);
+NLM_EXTERN void SegregateSetsByBioseqList (SeqEntryPtr sep, ValNodePtr vnp);
+NLM_EXTERN Boolean SeqEntryHasPairwiseAlignments (SeqEntryPtr sep);
+NLM_EXTERN int LIBCALLBACK SortVnpByChoiceAndPtrvalue (VoidPtr ptr1, VoidPtr ptr2);
+NLM_EXTERN int CompareSequences (BioseqPtr bsp1, BioseqPtr bsp2, Boolean allow_Ndiff);
+
+NLM_EXTERN Int2 GetGenCodeForBsp (BioseqPtr bsp);
+
+/* for unverified user objects */
+typedef enum unverifiedtype {
+  eUnverifiedType_Organism  = 0,
+  eUnverifiedType_Features ,
+  eUnverifiedType_Max
+} UnverifiedMatchType;
+NLM_EXTERN CharPtr GetUnverifiedMatchName (Int4 unverified_type);
+
+NLM_EXTERN CharPtr GetRepliconChromosomeName (BioSourcePtr biop);
+NLM_EXTERN CharPtr GetRepliconType (BioSourcePtr biop);
+NLM_EXTERN CharPtr GetRepliconLocation (BioSourcePtr biop);
+
+NLM_EXTERN PubPtr ParsePubFromEndnote (FILE *fp);
+NLM_EXTERN CharPtr GetDefinitionLineFASTAModifiers (BioseqPtr bsp, Boolean include_subsource);
+
+/* for finding frameshifts */
+typedef enum {
+  eFrameShiftReport_NoReport = 0,
+  eFrameShiftReport_Intron = 1,
+  eFrameShiftReport_Exon = 2,
+  eFrameShiftReport_ExonMult3 = 3
+} EFrameShiftReport;
+
+typedef struct frameshiftreport {
+  CharPtr msg;
+  Int4    aln_pos;
+  Int4    first_related_seq;
+} FrameShiftReportData, PNTR FrameShiftReportPtr;
+
+NLM_EXTERN ValNodePtr FrameShiftReportListFree (ValNodePtr vnp);
+NLM_EXTERN void PrintFrameShiftReportList (ValNodePtr list, Boolean has_exons, LogInfoPtr lip);
+NLM_EXTERN ValNodePtr FindFrameShiftsInAlignment (SeqAlignPtr salp, BoolPtr has_exons);
+NLM_EXTERN Boolean PropagateMissingOldNames (ValNodePtr sep_list);
+NLM_EXTERN CharPtr DescribeBioSourceDifferences (BioSourcePtr biop1, BioSourcePtr biop2);
 
 
 #ifdef __cplusplus

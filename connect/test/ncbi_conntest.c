@@ -1,4 +1,4 @@
-/* $Id: ncbi_conntest.c,v 6.19 2011/06/10 03:49:32 kazimird Exp $
+/* $Id: ncbi_conntest.c,v 6.20 2012/05/08 15:09:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -330,10 +330,9 @@ static void s_SingleBounceCheck
 }
 
 
-/*ARGSUSED*/
-static void s_DummySetup(SMetaConnector* meta, CONNECTOR connector)
+static void s_DummySetup(CONNECTOR connector)
 {
-    meta->default_timeout = kInfiniteTimeout;
+    connector->meta->default_timeout = kInfiniteTimeout;
 }
 
 

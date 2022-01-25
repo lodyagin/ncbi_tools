@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.102 $
+* $Revision: 6.104 $
 *
 * File Description: 
 *
@@ -605,6 +605,7 @@ static void ReleaseIcon (DoC d, PoinT pt)
   Boolean            lat_in_range = FALSE;
   Boolean            lon_in_range = FALSE;
   Char               path [PATH_MAX];
+  Boolean            precision_ok = FALSE;
   Int2               row;
   SeqDescPtr         sdp;
   SeqEntryPtr        sep;
@@ -634,8 +635,11 @@ static void ReleaseIcon (DoC d, PoinT pt)
                   if (ssp->subtype != SUBSRC_lat_lon) continue;
                   lat_lon = ssp->name;
                   if (StringHasNoText (lat_lon)) continue;
-                  IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
+                  IsCorrectLatLonFormat (lat_lon, &format_ok, &precision_ok, &lat_in_range, &lon_in_range);
                   if (! format_ok) continue;
+                  /*
+                  if (! precision_ok) continue;
+                  */
                   if (! lat_in_range) continue;
                   if (! lon_in_range) continue;
                   if (! ParseLatLon (lat_lon, &lat, &lon)) continue;
@@ -1380,7 +1384,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   }
   if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
     if (GetValue (bvp->ffCustomBtn) == 2) {
-      flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE | FORCE_PRIMARY_BLOCK;
+      flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE | FORCE_PRIMARY_BLOCK | RELAXED_MAPPING;
     }
   }
   if (bvp->hasTargetControl && bvp->ffRifCtrl != NULL) {
@@ -2066,7 +2070,7 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
     }
     if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
       if (GetValue (bvp->ffCustomBtn) == 2) {
-        flags = REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE | FORCE_PRIMARY_BLOCK;
+        flags = REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE | FORCE_PRIMARY_BLOCK | RELAXED_MAPPING;
       }
     }
     if (bvp->hasTargetControl && bvp->ffRifCtrl != NULL) {

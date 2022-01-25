@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -284,12 +284,29 @@ NLM_EXTERN SeqHistPtr LIBCALL SeqHistFree PROTO((SeqHistPtr shp));
 
 /**************************************************
 *
+*    LinkageEvidence
+*
+**************************************************/
+typedef struct struct_Linkage_evidence {
+   struct struct_Linkage_evidence PNTR next;
+   Int4   type;
+} LinkageEvidence, PNTR LinkageEvidencePtr;
+
+
+NLM_EXTERN LinkageEvidencePtr LIBCALL LinkageEvidenceFree PROTO ((LinkageEvidencePtr ));
+NLM_EXTERN LinkageEvidencePtr LIBCALL LinkageEvidenceNew PROTO (( void ));
+NLM_EXTERN LinkageEvidencePtr LIBCALL LinkageEvidenceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL LinkageEvidenceAsnWrite PROTO (( LinkageEvidencePtr , AsnIoPtr, AsnTypePtr));
+
+/**************************************************
+*
 *    SeqGap
 *
 **************************************************/
 typedef struct struct_Seq_gap {
-   Int4   type;
-   Int4   linkage;
+   Int4        type;
+   Int4        linkage;
+   ValNodePtr  linkage_evidence;
 } SeqGap, PNTR SeqGapPtr;
 
 

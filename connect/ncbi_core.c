@@ -1,4 +1,4 @@
-/* $Id: ncbi_core.c,v 6.23 2011/04/01 16:19:31 kazimird Exp $
+/* $Id: ncbi_core.c,v 6.29 2012/05/04 18:30:53 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov
+ * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
  *   Types and code shared by all "ncbi_*.[ch]" modules.
@@ -31,9 +31,24 @@
  */
 
 #include "ncbi_ansi_ext.h"
-#include "ncbi_assert.h"
-#include <connect/ncbi_core.h>
+#include "ncbi_priv.h"
 #include <stdlib.h>
+
+#if defined(NCBI_CXX_TOOLKIT)  &&  defined(_MT)  &&  !defined(NCBI_WITHOUT_MT)
+#  if defined(NCBI_OS_MSWIN)
+#    define WIN32_LEAN_AND_MEAN
+#    include <windows.h>
+#    define NCBI_WIN32_THREADS
+#  elif defined(NCBI_OS_UNIX)
+#    include <pthread.h>
+#    define NCBI_POSIX_THREADS
+#  else
+#    define NCBI_NO_THREADS
+#  endif /*NCBI_OS*/
+#else
+#  define   NCBI_NO_THREADS
+#endif /*NCBI_CXX_TOOLKT && _MT && !NCBI_WITHOUT_MT*/
+
 
 
 /******************************************************************************
@@ -63,7 +78,7 @@ extern const char* IO_StatusStr(EIO_Status status)
  */
 
 /* Check the validity of the MT locker */
-#define MT_LOCK_VALID \
+#define MT_LOCK_VALID  \
     assert(lk->ref_count  &&  lk->magic_number == kMT_LOCK_magic_number)
 
 
@@ -75,7 +90,78 @@ struct MT_LOCK_tag {
   FMT_LOCK_Cleanup cleanup;      /* cleanup function */
   unsigned int     magic_number; /* used internally to make sure it's init'd */
 };
-static const unsigned int kMT_LOCK_magic_number = 0x7A96283F;
+#define kMT_LOCK_magic_number 0x7A96283F
+
+
+#ifndef NCBI_NO_THREADS
+/*ARGSUSED*/
+static int/*bool*/ s_CORE_MT_Lock_default_handler(void*    unused,
+                                                  EMT_Lock action)
+{
+#  if   defined(NCBI_POSIX_THREADS)  &&  \
+        defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP)
+
+    static pthread_mutex_t sx_Mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+
+    switch (action) {
+    case eMT_Lock:
+    case eMT_LockRead:
+        return pthread_mutex_lock(&sx_Mutex)    == 0 ? 1/*ok*/ : 0/*fail*/;
+    case eMT_Unlock:
+        return pthread_mutex_unlock(&sx_Mutex)  == 0 ? 1/*ok*/ : 0/*fail*/;
+    case eMT_TryLock:
+    case eMT_TryLockRead:
+        return pthread_mutex_trylock(&sx_Mutex) == 0 ? 1/*ok*/ : 0/*fail*/;
+    }
+    return 0/*failure*/;
+
+#  elif defined(NCBI_WIN32_THREADS)
+
+    static CRITICAL_SECTION sx_Crit;
+    static LONG             sx_Init   = 0;
+    static int/*bool*/      sx_Inited = 0/*false*/;
+
+    LONG init = InterlockedCompareExchange(&sx_Init, 1, 0);
+    if (!init) {
+        InitializeCriticalSection(&sx_Crit);
+        sx_Inited = 1; /*go*/
+    } else while (!sx_Inited)
+        Sleep(10/*ms*/); /*spin*/
+
+    switch (action) {
+    case eMT_Lock:
+    case eMT_LockRead:
+        EnterCriticalSection(&sx_Crit);
+        return 1/*success*/;
+    case eMT_Unlock:
+        LeaveCriticalSection(&sx_Crit);
+        return 1/*success*/;
+    case eMT_TryLock:
+    case eMT_TryLockRead:
+        return TryEnterCriticalSection(&sx_Crit) ? 1/*ok*/ : 0/*fail*/;
+    }
+    return 0/*failure*/;
+
+#  else
+
+    return -1/*not implemented*/;
+
+#  endif /*NCBI_..._THREADS*/
+}
+#endif /*!NCBI_NO_THREADS*/
+
+
+struct MT_LOCK_tag g_CORE_MT_Lock_default = {
+    1/* ref count */,
+    0/* user data */,
+#ifndef NCBI_NO_THREADS
+    s_CORE_MT_Lock_default_handler,
+#else
+    0/* noop handler */,
+#endif /*NCBI_NO_THREADS*/
+    0/* cleanup */,
+    kMT_LOCK_magic_number
+};
 
 
 extern MT_LOCK MT_LOCK_Create
@@ -99,14 +185,15 @@ extern MT_LOCK MT_LOCK_Create
 extern MT_LOCK MT_LOCK_AddRef(MT_LOCK lk)
 {
     MT_LOCK_VALID;
-    lk->ref_count++;
+    if (lk != &g_CORE_MT_Lock_default)
+        lk->ref_count++;
     return lk;
 }
 
 
 extern MT_LOCK MT_LOCK_Delete(MT_LOCK lk)
 {
-    if (lk) {
+    if (lk  &&  lk != &g_CORE_MT_Lock_default) {
         MT_LOCK_VALID;
 
         if (!--lk->ref_count) {
@@ -149,7 +236,7 @@ extern int/*bool*/ MT_LOCK_DoInternal(MT_LOCK lk, EMT_Lock how)
 
 
 /* Check the validity of the logger */
-#define LOG_VALID \
+#define LOG_VALID  \
     assert(lg->ref_count  &&  lg->magic_number == kLOG_magic_number)
 
 
@@ -162,7 +249,7 @@ struct LOG_tag {
     MT_LOCK      mt_lock;
     unsigned int magic_number;  /* used internally, to make sure it's init'd */
 };
-static const unsigned int kLOG_magic_number = 0x3FB97156;
+#define kLOG_magic_number 0x3FB97156
 
 
 extern const char* LOG_LevelStr(ELOG_Level level)
@@ -280,11 +367,11 @@ extern void LOG_WriteInternal
 
     /* unconditional exit/abort on fatal error */
     if (call_data->level == eLOG_Fatal) {
-#if defined(NDEBUG)
+#ifdef NDEBUG
         exit(1);
 #else
         abort();
-#endif
+#endif /*NDEBUG*/
     }
 }
 
@@ -331,7 +418,7 @@ extern void LOG_Write
 
 
 /* Check the validity of the registry */
-#define REG_VALID \
+#define REG_VALID  \
     assert(rg->ref_count  &&  rg->magic_number == kREG_magic_number)
 
 
@@ -345,7 +432,7 @@ struct REG_tag {
     MT_LOCK      mt_lock;
     unsigned int magic_number;  /* used internally, to make sure it's init'd */
 };
-static const unsigned int kREG_magic_number = 0xA921BC08;
+#define kREG_magic_number 0xA921BC08
 
 
 extern REG REG_Create

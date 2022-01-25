@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.32 $
+* $Revision: 1.43 $
 *
 * File Description:
 *
@@ -66,7 +66,7 @@
 #include <macroapi.h>
 
 
-#define ASNDISC_APP_VER "1.3"
+#define ASNDISC_APP_VER "2.0"
 
 CharPtr ASNDISC_APPLICATION = ASNDISC_APP_VER;
 
@@ -524,6 +524,7 @@ static void ReleaseDiscrepancyReportSeqEntries (DRFlagPtr drfp)
   drfp->bsplist = UnlockFarComponents (drfp->bsplist);
 }
 
+extern void AddListOutputTags(ValNodePtr discrepancy_list, DiscReportOutputConfigPtr oc);
 
 static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
 {
@@ -550,7 +551,7 @@ static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
     if (path[StringLen(path) - 1] != '/') {
       StringCat (path, "/");
     }
-#endif;
+#endif
     if (ptr == NULL) {
       StringNCat (path, filename, PATH_MAX - StringLen(path) - 1);
     } else {
@@ -572,6 +573,7 @@ static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
   ofp = FileOpen (path, "w");
 
   discrepancy_list = CollectDiscrepancies (drfp->global_report->test_config, drfp->sep_list, taxlookup);
+  AddListOutputTags(discrepancy_list, drfp->global_report->output_config);
   WriteAsnDiscReport (discrepancy_list, ofp, drfp->global_report->output_config, TRUE);
   discrepancy_list = FreeClickableList (discrepancy_list);
 
@@ -711,7 +713,7 @@ static void ProcessMultipleRecord (
   ValNodePtr      bsplist_next;
   Int2            maxcount = 0;
   CitSubPtr       csp = NULL;
-  FILE            *fp, *ofp = NULL;
+  FILE            *fp;
   Int4            numrecords = 0;
   SeqEntryPtr     sep;
   ObjValNode      ovn;
@@ -954,10 +956,12 @@ typedef enum {
   S_argSummaryReport,
   B_argBigSequenceReport,
   N_argProductNameFile,
+  F_argFixProductNameFile,
   P_argReportType,
   w_argSuspectProductRuleFile,
   L_argUseLineage,
-  C_argMaxCount
+  C_argMaxCount,
+  t_argBigTest,
 } DRFlagNum;
 
 Args myargs [] = {
@@ -1017,17 +1021,20 @@ Args myargs [] = {
    "\tTAX_LOOKUP_MISMATCH\n\tSHORT_SEQUENCES\n\tSUSPECT_PHRASES\n", "", NULL, NULL,
     TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
   {"Summary Report", "F", NULL, NULL,
-    TRUE, 'S', ARG_BOOLEAN, 0.0, 0, NULL},
+   TRUE, 'S', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Big Sequence Report", "F", NULL, NULL,
   TRUE, 'B', ARG_BOOLEAN, 0.0, 0, NULL},
   {"File with list of product names to check", "", NULL, NULL,
     TRUE, 'N', ARG_FILE_IN, 0.0, 0, NULL},
-  {"Report type (g - Genome, b - Big Sequence, m - MegaReport)", "", NULL, NULL, TRUE, 'P', ARG_STRING, 0.0, 0, NULL},
+  {"Fix product name list", "F", NULL, NULL,
+  TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Report type (g - Genome, b - Big Sequence, m - MegaReport, t - Include Tag, s - Tag for Superuser )", "", NULL, NULL, TRUE, 'P', ARG_STRING, 0.0, 0, NULL},
   {"Suspect product rule file name", "", NULL, NULL,
     TRUE, 'w', ARG_FILE_IN, 0.0, 0, NULL},
   {"Lineage to use", "", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
+  {"Big Test Set", "F", NULL, NULL, TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 
@@ -1135,6 +1142,67 @@ static Boolean ValidateNameList (CharPtr filename, CharPtr rule_file, FILE *outp
 }
 
 
+static Boolean FixProductNameList (CharPtr filename, CharPtr rule_file, FILE *outputfile)
+{
+  FILE *fp;
+  FileCache fc;
+  Int4      pos;
+  CharPtr   str;
+  Char      line [4096];
+  Boolean   is_entrezgene;
+  SuspectRuleSetPtr rule_list = NULL;
+  AsnIoPtr          aip;
+  Boolean           rval = FALSE;
+
+  if (!StringHasNoText (rule_file)) {
+    aip = AsnIoOpen (rule_file, "r");
+    if (aip == NULL) {
+      Message (MSG_FATAL, "Unable to open %s", rule_file);
+      return FALSE;
+    } else {
+      rule_list = SuspectRuleSetAsnRead (aip, NULL);
+      AsnIoClose (aip);
+      if (rule_list == NULL) {
+        Message (MSG_FATAL, "Unable to read rule list from %s.", rule_file);
+        return FALSE;
+      }
+    }
+  }
+
+  fp = FileOpen (filename, "r");
+  if (fp == NULL) {
+    Message (MSG_FATAL, "Cannot open %s", filename);
+  } else {
+    /* determine what kind of file it is - if not EntrezGene ASN.1, treat as simple list */
+    FileCacheSetup (&fc, fp);
+    pos = FileCacheTell (&fc);
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+
+    if (str == NULL) {
+      Message (MSG_FATAL, "File %s is empty", filename);
+    } else {
+      is_entrezgene = IsEntrezGene (str);
+      FileCacheFree (&fc, FALSE);
+      fseek (fp, pos, SEEK_SET);
+
+      if (is_entrezgene) {
+        if (FindSuspectProductNamesInEntrezGene(fp, rule_list, outputfile)) {
+          rval = TRUE;
+        } else {
+          Message (MSG_FATAL, "Unable to read EntrezGene from %s", filename);
+        }
+      } else {
+        FixSuspectProductNamesInNameList (fp, rule_list, outputfile);
+        rval = TRUE;
+      }
+    }
+    FileClose (fp);
+  }
+  rule_list = SuspectRuleSetFree (rule_list);
+  return rval;
+}
+
+
 static void SetReportLineage (CharPtr lineage)
 {
   if (StringHasNoText (lineage)) {
@@ -1159,12 +1227,13 @@ Int2 Main (void)
 {
   Char         app [64];
   CharPtr      asnidx, directory, infile, outfile, str, suffix, output_dir, product_name_file, product_rule_file;
+  Boolean      fix_product_name_file = FALSE;
   CharPtr      enabled_list, disabled_list, err_msg;
   Boolean      batch, binary, compressed, dorecurse,
                indexed, local, lock, remote, usethreads;
   Int2         type = 0;
   DRFlagData   dfd;
-  Boolean      big_sequence_report;
+  Boolean      big_sequence_report, big_test_set;
   CharPtr      report_type;
 
   /* standard setup */
@@ -1221,12 +1290,18 @@ Int2 Main (void)
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
   output_dir = (CharPtr) myargs [r_argOutputDir].strvalue;
   product_name_file = (CharPtr) myargs [N_argProductNameFile].strvalue;
+  fix_product_name_file = (Boolean) myargs [F_argFixProductNameFile].intvalue;
+
   product_rule_file = (CharPtr) myargs [w_argSuspectProductRuleFile].strvalue;
   report_type = (CharPtr) myargs [P_argReportType].strvalue;
 
   /* forced lineage */
   SetReportLineage(myargs[L_argUseLineage].strvalue);
 
+  if (fix_product_name_file && StringHasNoText (product_name_file)) {
+    Message (MSG_FATAL, "-F requires -N product_name_file: can't fix product names in file unless file is provided");
+    return 1;
+  }
   if (StringDoesHaveText (outfile) && StringDoesHaveText (output_dir)) {
     Message (MSG_FATAL, "-o and -q are incompatible: specify the output file name with the full path.");
     return 1;
@@ -1257,17 +1332,33 @@ Int2 Main (void)
   dfd.global_report->output_config->summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;
 
   big_sequence_report = (Boolean) myargs [B_argBigSequenceReport].intvalue;
+
+  dfd.global_report->output_config->add_output_tag = FALSE;
+  dfd.global_report->output_config->add_extra_output_tag = FALSE;
+
   if (StringHasNoText (report_type)) {
     /* default to big sequence report or genomes */
-  } else if (big_sequence_report && StringCmp (report_type, "b") != 0) {
+  } else if (big_sequence_report && StringStr(report_type, "g")
+                 && StringStr(report_type, "m") ) {
     Message (MSG_FATAL, "Cannot combine -B with another report type");
     return 1;
-  } else {
-    if (StringCmp (report_type, "b") != 0 && StringCmp (report_type, "g") != 0 && StringCmp (report_type, "m") != 0) {
+  } else if (!StringCmp (report_type, "t")) {
+         dfd.global_report->output_config->add_output_tag = TRUE;
+  } else if (!StringCmp (report_type, "s")) {
+         dfd.global_report->output_config->add_output_tag = TRUE;
+         dfd.global_report->output_config->add_extra_output_tag = TRUE;
+  }else {
+    if (StringStr(report_type, "b") == NULL 
+            && StringCmp (report_type, "g") != 0 && StringCmp (report_type, "m") != 0) {
       Message (MSG_FATAL, "Unknown report type");
     }
-    if (StringCmp (report_type, "b") == 0) {
-      big_sequence_report = TRUE;
+    if (StringStr(report_type, "b")) {
+         big_sequence_report = TRUE;
+         if (StringStr(report_type, "t")) dfd.global_report->output_config->add_output_tag = TRUE;
+         else if (StringStr(report_type, "s")) {
+                dfd.global_report->output_config->add_output_tag = TRUE;
+                dfd.global_report->output_config->add_extra_output_tag = TRUE; 
+         }
     }
   }
 
@@ -1280,6 +1371,8 @@ Int2 Main (void)
     }
 
     if (big_sequence_report) {
+      big_test_set = (Boolean) myargs [t_argBigTest].intvalue;
+      if (big_test_set) dfd.global_report->test_config->use_big_test_set = TRUE;
       ConfigureForBigSequence (dfd.global_report->test_config);
     } else if (StringCmp (report_type, "m") == 0) {
       ConfigureForReportType(dfd.global_report->test_config, eReportTypeMegaReport);
@@ -1378,7 +1471,11 @@ Int2 Main (void)
   }
 
   if (!StringHasNoText (product_name_file)) {
-    ValidateNameList (product_name_file, product_rule_file, dfd.outfp);
+    if (fix_product_name_file) {
+      FixProductNameList (product_name_file, product_rule_file, dfd.outfp);
+    } else {
+      ValidateNameList (product_name_file, product_rule_file, dfd.outfp);
+    }
     if (StringHasNoText (directory) && (StringHasNoText (infile) || StringCmp (infile, "stdin") == 0)) {
       if (dfd.outfp != NULL) {
         FileClose (dfd.outfp);

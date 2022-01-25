@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.76 $
+* $Revision: 6.80 $
 *
 * File Description: 
 *
@@ -1294,31 +1294,6 @@ static Int4 FindReportPositionForError (ErrItemPtr eip, ValNodePtr chosen)
 }
 
 
-static int LIBCALLBACK SortVnpByChoiceAndPtrvalue (VoidPtr ptr1, VoidPtr ptr2)
-
-{
-  ValNodePtr  vnp1;
-  ValNodePtr  vnp2;
-
-  if (ptr1 == NULL || ptr2 == NULL) return 0;
-  vnp1 = *((ValNodePtr PNTR) ptr1);
-  vnp2 = *((ValNodePtr PNTR) ptr2);
-  if (vnp1 == NULL || vnp2 == NULL) return 0;
-
-  if (vnp1->choice > vnp2->choice) {
-    return 1;
-  } else if (vnp1->choice < vnp2->choice) {
-    return -1;
-  } else if (vnp1->data.ptrvalue > vnp2->data.ptrvalue) {
-    return 1;
-  } else if (vnp1->data.ptrvalue < vnp2->data.ptrvalue) {
-    return -1;
-  } else {
-    return 0;
-  }
-}
-
-
 static ValNodePtr CollectBioseqsByValidatorReportTypes (ValidExtraPtr vep)
 {
   ErrFltrPtr  efp;
@@ -1648,7 +1623,7 @@ static Boolean MakeBadInstCodeReport (ValNodePtr item_list, FILE *fp)
 }
 
 
-static Boolean MakeBadECNumberReport (ValNodePtr ecnumber_list, FILE *fp)
+static Boolean MakeBadECNumberReport (ValNodePtr ecnumber_list, FILE *fp, CharPtr label)
 {
   Boolean found_any = FALSE;
   CharPtr cp;
@@ -1658,7 +1633,7 @@ static Boolean MakeBadECNumberReport (ValNodePtr ecnumber_list, FILE *fp)
     return FALSE;
   }
 
-  fprintf (fp, "EC Number Errors\n");
+  fprintf (fp, "%s\n", label);
   for (vnp = ecnumber_list; vnp != NULL; vnp = vnp->next) {
     cp = GetEcNumberReport (vnp->data.ptrvalue);
     if (cp != NULL) {
@@ -1672,18 +1647,73 @@ static Boolean MakeBadECNumberReport (ValNodePtr ecnumber_list, FILE *fp)
 }
 
 
+static Int2 GetDocPosForError (ValidExtraPtr vep, Int2 err_pos)
+{
+  ErrFltrPtr     efp;
+  ErrItemPtr     eip;
+  Int2           filt;
+  Int2           minlev;
+  Boolean        okay;
+  Int2           val;
+  ValNodePtr     vnp;
+  Int2           list_pos = 1, display_pos = 1;
+
+  minlev = GetValue (vep->minlevel);
+  filt = GetValue (vep->filter);
+  val = GetValue (vep->verbose);
+  efp = NULL;
+  if (vep->errorfilter != NULL && filt > 1) {
+    vnp = vep->errorfilter;
+    while (filt > 2 && vnp != NULL) {
+      vnp = vnp->next;
+      filt--;
+    }
+    if (vnp != NULL) {
+      efp = (ErrFltrPtr) vnp->data.ptrvalue;
+    }
+  }
+  for (vnp = vep->messages; vnp != NULL; vnp = vnp->next, list_pos++) {
+    eip = (ErrItemPtr) vnp->data.ptrvalue;
+    if (eip != NULL) {
+      if (eip->severity >= minlev || eip->severity == SEV_NONE) {
+        okay = FALSE;
+        if (efp != NULL) {
+          if (efp->errcode == eip->errcode) {
+            if (efp->subcode == INT_MIN || efp->subcode == eip->subcode) {
+              okay = TRUE;
+            }
+          }
+        } else {
+          okay = TRUE;
+        }
+        if (okay) {
+          if (list_pos == err_pos) {
+            return display_pos;
+          } else if (list_pos > err_pos) {
+            return -1;
+          } else {
+            display_pos++;
+          }
+        }
+      }
+    }
+  }
+  return -1;
+}
+
+
 static void MakeValidatorReport (ButtoN b)
 {
   ValidExtraPtr  vep;
   ErrItemPtr     eip;
-  Int2           item = 0;
+  Int2           item = 0, actual_pos;
   ValNodePtr     vnp;
   CharPtr        cp;
   Char           path [PATH_MAX];
   Boolean        found_any = FALSE;
   FILE           *fp;
   ValNodePtr     consensus_splice_list = NULL;
-  ValNodePtr     ecnumber_list = NULL;
+  ValNodePtr     ecnumber_format = NULL, ecnumber_value = NULL, ecnumber_problem = NULL;
   ValNodePtr     specific_host_list = NULL;
   ValNodePtr     bad_inst_code = NULL;
   SeqFeatPtr     sfp;
@@ -1729,29 +1759,46 @@ static void MakeValidatorReport (ButtoN b)
 
         if (eip->errcode == 5 && (eip->subcode == 16 || eip->subcode == 137 || eip->subcode == 138 || eip->subcode == 139)) {
           /* ERR_SEQ_FEAT_NotSpliceConsensus */
-          str = GetDocText (vep->doc, item, 0, 5);
-          if (str != NULL) {
-            tmp = str;
-            tmp++; /* skip past first newline */
-            ch = *tmp;
-            while (ch != '\0') {
-              if (ch < ' ') {
-                *tmp = ' ';
-              }
-              tmp++;
+          actual_pos = GetDocPosForError(vep, item);
+          if (actual_pos < 0) {
+            ValNodeAddPointer (&consensus_splice_list, 0, StringSave ("Unable to generate report for consensus splice error because filter does not include consensus splice errors"));
+          } else {            
+            str = GetDocText (vep->doc, actual_pos, 0, 5);
+            if (!StringHasNoText (str)) {
+              tmp = str;
+              tmp++; /* skip past first newline */
               ch = *tmp;
+              while (ch != '\0') {
+                if (ch < ' ') {
+                  *tmp = ' ';
+                }
+                tmp++;
+                ch = *tmp;
+              }
+            }
+            cp = FormatConsensusSpliceReport (str);
+            MemFree (str);
+            if (cp != NULL) {
+              ValNodeAddPointer (&consensus_splice_list, 0, cp);
             }
           }
-          cp = FormatConsensusSpliceReport (str);
-          MemFree (str);
-          if (cp != NULL) {
-            ValNodeAddPointer (&consensus_splice_list, 0, cp);
+        } else if (eip->errcode == 5 && eip->subcode == 124) {
+          /* ERR_SEQ_FEAT_BadEcNumberFormat */
+          sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+          if (sfp != NULL) {
+            ValNodeAddPointer (&ecnumber_format, OBJ_SEQFEAT, sfp);
           }
-        } else if (eip->errcode == 5 && (eip->subcode == 124 || eip->subcode == 125 || eip->subcode == 126)) {
+        } else if (eip->errcode == 5 && eip->subcode == 125) {
           /* ERR_SEQ_FEAT_BadEcNumberValue */
           sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
           if (sfp != NULL) {
-            ValNodeAddPointer (&ecnumber_list, OBJ_SEQFEAT, sfp);
+            ValNodeAddPointer (&ecnumber_value, OBJ_SEQFEAT, sfp);
+          }
+        } else if (eip->errcode == 5 && eip->subcode == 126) {
+          /* ERR_SEQ_FEAT_EcNumberProblem */
+          sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+          if (sfp != NULL) {
+            ValNodeAddPointer (&ecnumber_problem, OBJ_SEQFEAT, sfp);
           }
         } else if (eip->errcode == 2 && eip->subcode == 50) {
           if (eip->itemtype == OBJ_SEQDESC) {
@@ -1807,9 +1854,19 @@ static void MakeValidatorReport (ButtoN b)
     consensus_splice_list = ValNodeFreeData (consensus_splice_list);
   }
 
-  if (ecnumber_list != NULL) {
-    found_any |= MakeBadECNumberReport(ecnumber_list, fp);
-    ecnumber_list = ValNodeFree (ecnumber_list);
+  if (ecnumber_format != NULL) {
+    found_any |= MakeBadECNumberReport(ecnumber_format, fp, "EC Number Format");
+    ecnumber_format = ValNodeFree (ecnumber_format);
+  }
+ 
+  if (ecnumber_value != NULL) {
+    found_any |= MakeBadECNumberReport(ecnumber_value, fp, "EC Number Value");
+    ecnumber_value = ValNodeFree (ecnumber_value);
+  }
+ 
+  if (ecnumber_problem != NULL) {
+    found_any |= MakeBadECNumberReport(ecnumber_problem, fp, "EC Number Problem");
+    ecnumber_problem = ValNodeFree (ecnumber_problem);
   }
  
   if (specific_host_list != NULL) {

@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnseq.h22";
-static AsnValxNode avnx[164] = {
+static char * asnfilename = "asnseq.h24";
+static AsnValxNode avnx[175] = {
     {3,NULL,1,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,1,0.0,NULL } ,
@@ -163,27 +163,38 @@ static AsnValxNode avnx[164] = {
     {20,"telomere" ,6,0.0,&avnx[150] } ,
     {20,"repeat" ,7,0.0,&avnx[151] } ,
     {20,"contig" ,8,0.0,&avnx[152] } ,
+    {20,"scaffold" ,9,0.0,&avnx[153] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unlinked" ,0,0.0,&avnx[154] } ,
-    {20,"linked" ,1,0.0,&avnx[155] } ,
+    {20,"unlinked" ,0,0.0,&avnx[155] } ,
+    {20,"linked" ,1,0.0,&avnx[156] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"genbank" ,1,0.0,&avnx[157] } ,
-    {20,"embl" ,2,0.0,&avnx[158] } ,
-    {20,"ddbj" ,3,0.0,&avnx[159] } ,
-    {20,"pir" ,4,0.0,&avnx[160] } ,
-    {20,"sp" ,5,0.0,&avnx[161] } ,
-    {20,"bbone" ,6,0.0,&avnx[162] } ,
-    {20,"pdb" ,7,0.0,&avnx[163] } ,
+    {20,"paired-ends" ,0,0.0,&avnx[158] } ,
+    {20,"align-genus" ,1,0.0,&avnx[159] } ,
+    {20,"align-xgenus" ,2,0.0,&avnx[160] } ,
+    {20,"align-trnscpt" ,3,0.0,&avnx[161] } ,
+    {20,"within-clone" ,4,0.0,&avnx[162] } ,
+    {20,"clone-contig" ,5,0.0,&avnx[163] } ,
+    {20,"map" ,6,0.0,&avnx[164] } ,
+    {20,"strobe" ,7,0.0,&avnx[165] } ,
+    {20,"unspecified" ,8,0.0,&avnx[166] } ,
+    {20,"other" ,255,0.0,NULL } ,
+    {20,"genbank" ,1,0.0,&avnx[168] } ,
+    {20,"embl" ,2,0.0,&avnx[169] } ,
+    {20,"ddbj" ,3,0.0,&avnx[170] } ,
+    {20,"pir" ,4,0.0,&avnx[171] } ,
+    {20,"sp" ,5,0.0,&avnx[172] } ,
+    {20,"bbone" ,6,0.0,&avnx[173] } ,
+    {20,"pdb" ,7,0.0,&avnx[174] } ,
     {20,"other" ,255,0.0,NULL } };
 
-static AsnType atx[221] = {
+static AsnType atx[225] = {
   {401, "Annotdesc" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[1],0,&atx[63]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "title" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[4]} ,
   {0, "comment" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[5]} ,
   {0, "pub" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[48]} ,
-  {408, "Pubdesc" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[7],0,&atx[190]} ,
+  {408, "Pubdesc" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[7],0,&atx[194]} ,
   {0, "pub" ,128,0,0,0,0,0,0,0,NULL,&atx[8],NULL,0,&atx[9]} ,
   {428, "Pub-equiv" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[82]} ,
   {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[10]} ,
@@ -209,9 +220,9 @@ static AsnType atx[221] = {
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[3],0,&atx[31]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "aligns" ,128,1,0,1,0,0,0,0,NULL,&atx[32],NULL,0,NULL} ,
-  {424, "Seq-align" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[164]} ,
+  {424, "Seq-align" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[168]} ,
   {0, "real" ,128,3,0,0,0,0,0,0,NULL,&atx[34],NULL,0,NULL} ,
-  {445, "Num-real" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[35],0,&atx[157]} ,
+  {445, "Num-real" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[35],0,&atx[161]} ,
   {0, "a" ,128,0,0,0,0,0,0,0,NULL,&atx[36],NULL,0,&atx[37]} ,
   {309, "REAL" ,0,9,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "b" ,128,1,0,0,0,0,0,0,NULL,&atx[36],NULL,0,&atx[38]} ,
@@ -233,7 +244,7 @@ static AsnType atx[221] = {
   {0, "src" ,128,7,0,0,0,0,0,0,NULL,&atx[54],NULL,0,&atx[55]} ,
   {431, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
   {0, "align" ,128,8,0,0,0,0,0,0,NULL,&atx[56],NULL,0,&atx[61]} ,
-  {463, "Align-def" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[57],0,NULL} ,
+  {464, "Align-def" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[57],0,NULL} ,
   {0, "align-type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],&avnx[11],0,&atx[58]} ,
   {0, "ids" ,128,1,0,1,0,0,0,0,NULL,&atx[60],&atx[59],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
@@ -246,7 +257,7 @@ static AsnType atx[221] = {
   {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[60],&atx[67],0,&atx[68]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
   {0, "descr" ,128,1,0,1,0,0,0,0,NULL,&atx[69],NULL,0,&atx[118]} ,
-  {412, "Seq-descr" ,1,0,0,0,0,1,0,0,NULL,&atx[60],&atx[70],0,&atx[155]} ,
+  {412, "Seq-descr" ,1,0,0,0,0,1,0,0,NULL,&atx[60],&atx[70],0,&atx[159]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[71],NULL,0,NULL} ,
   {411, "Seqdesc" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[72],0,&atx[69]} ,
   {0, "mol-type" ,128,0,0,0,0,0,0,0,NULL,&atx[73],NULL,0,&atx[74]} ,
@@ -263,7 +274,7 @@ static AsnType atx[221] = {
   {0, "comment" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[84]} ,
   {0, "num" ,128,7,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[85]} ,
   {0, "maploc" ,128,8,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[87]} ,
-  {421, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[195]} ,
+  {421, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[199]} ,
   {0, "pir" ,128,9,0,0,0,0,0,0,NULL,&atx[88],NULL,0,&atx[89]} ,
   {434, "PIR-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[98]} ,
   {0, "genbank" ,128,10,0,0,0,0,0,0,NULL,&atx[90],NULL,0,&atx[91]} ,
@@ -281,7 +292,7 @@ static AsnType atx[221] = {
   {0, "prf" ,128,19,0,0,0,0,0,0,NULL,&atx[102],NULL,0,&atx[103]} ,
   {437, "PRF-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[104]} ,
   {0, "pdb" ,128,20,0,0,0,0,0,0,NULL,&atx[104],NULL,0,&atx[105]} ,
-  {438, "PDB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[220]} ,
+  {438, "PDB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[224]} ,
   {0, "het" ,128,21,0,0,0,0,0,0,NULL,&atx[106],NULL,0,&atx[107]} ,
   {405, "Heterogen" ,1,0,0,0,0,1,0,0,NULL,&atx[2],NULL,0,&atx[110]} ,
   {0, "source" ,128,22,0,0,0,0,0,0,NULL,&atx[108],NULL,0,&atx[109]} ,
@@ -294,9 +305,9 @@ static AsnType atx[221] = {
   {0, "completeness" ,128,3,0,0,1,0,0,0,&avnx[115],&atx[16],&avnx[106],0,&atx[115]} ,
   {0, "gbmoltype" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "modelev" ,128,24,0,0,0,0,0,0,NULL,&atx[117],NULL,0,NULL} ,
-  {426, "ModelEvidenceSupport" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[214]} ,
-  {0, "inst" ,128,2,0,0,0,0,0,0,NULL,&atx[119],NULL,0,&atx[188]} ,
-  {415, "Seq-inst" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[120],0,&atx[171]} ,
+  {426, "ModelEvidenceSupport" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[218]} ,
+  {0, "inst" ,128,2,0,0,0,0,0,0,NULL,&atx[119],NULL,0,&atx[192]} ,
+  {415, "Seq-inst" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[120],0,&atx[175]} ,
   {0, "repr" ,128,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[116],0,&atx[121]} ,
   {0, "mol" ,128,1,0,0,0,0,0,0,NULL,&atx[30],&avnx[126],0,&atx[122]} ,
   {0, "length" ,128,2,0,1,0,0,0,0,NULL,&atx[16],NULL,0,&atx[123]} ,
@@ -304,7 +315,7 @@ static AsnType atx[221] = {
   {420, "Int-fuzz" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[86]} ,
   {0, "topology" ,128,4,0,0,1,0,0,0,&avnx[137],&atx[30],&avnx[132],0,&atx[126]} ,
   {0, "strand" ,128,5,0,1,0,0,0,0,NULL,&atx[30],&avnx[138],0,&atx[127]} ,
-  {0, "seq-data" ,128,6,0,1,0,0,0,0,NULL,&atx[128],NULL,0,&atx[154]} ,
+  {0, "seq-data" ,128,6,0,1,0,0,0,0,NULL,&atx[128],NULL,0,&atx[158]} ,
   {410, "Seq-data" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[129],0,&atx[71]} ,
   {0, "iupacna" ,128,0,0,0,0,0,0,0,NULL,&atx[130],NULL,0,&atx[131]} ,
   {451, "IUPACna" ,1,0,0,0,0,0,0,0,NULL,&atx[44],NULL,0,&atx[132]} ,
@@ -326,81 +337,85 @@ static AsnType atx[221] = {
   {0, "ncbipaa" ,128,8,0,0,0,0,0,0,NULL,&atx[147],NULL,0,&atx[148]} ,
   {459, "NCBIpaa" ,1,0,0,0,0,0,0,0,NULL,&atx[135],NULL,0,&atx[149]} ,
   {0, "ncbistdaa" ,128,9,0,0,0,0,0,0,NULL,&atx[149],NULL,0,&atx[150]} ,
-  {460, "NCBIstdaa" ,1,0,0,0,0,0,0,0,NULL,&atx[135],NULL,0,&atx[199]} ,
+  {460, "NCBIstdaa" ,1,0,0,0,0,0,0,0,NULL,&atx[135],NULL,0,&atx[156]} ,
   {0, "gap" ,128,10,0,0,0,0,0,0,NULL,&atx[151],NULL,0,NULL} ,
   {418, "Seq-gap" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[152],0,&atx[51]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],&avnx[143],0,&atx[153]} ,
-  {0, "linkage" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[153],0,NULL} ,
-  {0, "ext" ,128,7,0,1,0,0,0,0,NULL,&atx[155],NULL,0,&atx[175]} ,
-  {413, "Seq-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[156],0,&atx[176]} ,
-  {0, "seg" ,128,0,0,0,0,0,0,0,NULL,&atx[157],NULL,0,&atx[159]} ,
-  {446, "Seg-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[158],0,&atx[160]} ,
+  {0, "linkage" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[154],0,&atx[154]} ,
+  {0, "linkage-evidence" ,128,2,0,1,0,0,0,0,NULL,&atx[60],&atx[155],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[156],NULL,0,NULL} ,
+  {461, "Linkage-evidence" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[157],0,&atx[203]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],&avnx[157],0,NULL} ,
+  {0, "ext" ,128,7,0,1,0,0,0,0,NULL,&atx[159],NULL,0,&atx[179]} ,
+  {413, "Seq-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[160],0,&atx[180]} ,
+  {0, "seg" ,128,0,0,0,0,0,0,0,NULL,&atx[161],NULL,0,&atx[163]} ,
+  {446, "Seg-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[162],0,&atx[164]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[62],NULL,0,NULL} ,
-  {0, "ref" ,128,1,0,0,0,0,0,0,NULL,&atx[160],NULL,0,&atx[161]} ,
-  {447, "Ref-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[162]} ,
-  {0, "map" ,128,2,0,0,0,0,0,0,NULL,&atx[162],NULL,0,&atx[165]} ,
-  {448, "Map-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[163],0,&atx[168]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[164],NULL,0,NULL} ,
-  {425, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[117]} ,
-  {0, "delta" ,128,3,0,0,0,0,0,0,NULL,&atx[166],NULL,0,NULL} ,
-  {417, "Delta-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[26],&atx[167],0,&atx[151]} ,
+  {0, "ref" ,128,1,0,0,0,0,0,0,NULL,&atx[164],NULL,0,&atx[165]} ,
+  {447, "Ref-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[166]} ,
+  {0, "map" ,128,2,0,0,0,0,0,0,NULL,&atx[166],NULL,0,&atx[169]} ,
+  {448, "Map-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[167],0,&atx[172]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[168],NULL,0,NULL} ,
-  {449, "Delta-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[169],0,&atx[180]} ,
-  {0, "loc" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[170]} ,
-  {0, "literal" ,128,1,0,0,0,0,0,0,NULL,&atx[171],NULL,0,NULL} ,
-  {416, "Seq-literal" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[172],0,&atx[166]} ,
-  {0, "length" ,128,0,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[173]} ,
-  {0, "fuzz" ,128,1,0,1,0,0,0,0,NULL,&atx[124],NULL,0,&atx[174]} ,
+  {425, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[117]} ,
+  {0, "delta" ,128,3,0,0,0,0,0,0,NULL,&atx[170],NULL,0,NULL} ,
+  {417, "Delta-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[26],&atx[171],0,&atx[151]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[172],NULL,0,NULL} ,
+  {449, "Delta-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[173],0,&atx[184]} ,
+  {0, "loc" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[174]} ,
+  {0, "literal" ,128,1,0,0,0,0,0,0,NULL,&atx[175],NULL,0,NULL} ,
+  {416, "Seq-literal" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[176],0,&atx[170]} ,
+  {0, "length" ,128,0,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[177]} ,
+  {0, "fuzz" ,128,1,0,1,0,0,0,0,NULL,&atx[124],NULL,0,&atx[178]} ,
   {0, "seq-data" ,128,2,0,1,0,0,0,0,NULL,&atx[128],NULL,0,NULL} ,
-  {0, "hist" ,128,8,0,1,0,0,0,0,NULL,&atx[176],NULL,0,NULL} ,
-  {414, "Seq-hist" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[177],0,&atx[119]} ,
-  {0, "assembly" ,128,0,0,1,0,0,0,0,NULL,&atx[60],&atx[178],0,&atx[179]} ,
+  {0, "hist" ,128,8,0,1,0,0,0,0,NULL,&atx[180],NULL,0,NULL} ,
+  {414, "Seq-hist" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[181],0,&atx[119]} ,
+  {0, "assembly" ,128,0,0,1,0,0,0,0,NULL,&atx[60],&atx[182],0,&atx[183]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[32],NULL,0,NULL} ,
-  {0, "replaces" ,128,1,0,1,0,0,0,0,NULL,&atx[180],NULL,0,&atx[184]} ,
-  {450, "Seq-hist-rec" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[181],0,&atx[130]} ,
-  {0, "date" ,128,0,0,1,0,0,0,0,NULL,&atx[51],NULL,0,&atx[182]} ,
-  {0, "ids" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[183],0,NULL} ,
+  {0, "replaces" ,128,1,0,1,0,0,0,0,NULL,&atx[184],NULL,0,&atx[188]} ,
+  {450, "Seq-hist-rec" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[185],0,&atx[130]} ,
+  {0, "date" ,128,0,0,1,0,0,0,0,NULL,&atx[51],NULL,0,&atx[186]} ,
+  {0, "ids" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[187],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
-  {0, "replaced-by" ,128,2,0,1,0,0,0,0,NULL,&atx[180],NULL,0,&atx[185]} ,
-  {0, "deleted" ,128,3,0,1,0,0,0,0,NULL,&atx[39],&atx[186],0,NULL} ,
-  {0, "bool" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[187]} ,
+  {0, "replaced-by" ,128,2,0,1,0,0,0,0,NULL,&atx[184],NULL,0,&atx[189]} ,
+  {0, "deleted" ,128,3,0,1,0,0,0,0,NULL,&atx[39],&atx[190],0,NULL} ,
+  {0, "bool" ,128,0,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[191]} ,
   {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[51],NULL,0,NULL} ,
-  {0, "annot" ,128,3,0,1,0,0,0,0,NULL,&atx[60],&atx[189],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[190],NULL,0,NULL} ,
-  {409, "Seq-annot" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[191],0,&atx[128]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[60],&atx[192],0,&atx[204]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[193],NULL,0,NULL} ,
-  {462, "Annot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[194],0,&atx[56]} ,
-  {0, "local" ,128,0,0,0,0,0,0,0,NULL,&atx[195],NULL,0,&atx[196]} ,
+  {0, "annot" ,128,3,0,1,0,0,0,0,NULL,&atx[60],&atx[193],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[194],NULL,0,NULL} ,
+  {409, "Seq-annot" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[195],0,&atx[128]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[60],&atx[196],0,&atx[208]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[197],NULL,0,NULL} ,
+  {463, "Annot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[198],0,&atx[56]} ,
+  {0, "local" ,128,0,0,0,0,0,0,0,NULL,&atx[199],NULL,0,&atx[200]} ,
   {422, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[49]} ,
-  {0, "ncbi" ,128,1,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[197]} ,
-  {0, "general" ,128,2,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[198]} ,
-  {0, "other" ,128,3,0,0,0,0,0,0,NULL,&atx[199],NULL,0,NULL} ,
-  {461, "Textannot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[200],0,&atx[193]} ,
-  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[201]} ,
-  {0, "accession" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[202]} ,
-  {0, "release" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[203]} ,
+  {0, "ncbi" ,128,1,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[201]} ,
+  {0, "general" ,128,2,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[202]} ,
+  {0, "other" ,128,3,0,0,0,0,0,0,NULL,&atx[203],NULL,0,NULL} ,
+  {462, "Textannot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[204],0,&atx[197]} ,
+  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[205]} ,
+  {0, "accession" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[206]} ,
+  {0, "release" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[207]} ,
   {0, "version" ,128,3,0,1,0,0,0,0,NULL,&atx[16],NULL,0,NULL} ,
-  {0, "db" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[156],0,&atx[205]} ,
-  {0, "name" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[206]} ,
-  {0, "desc" ,128,3,0,1,0,0,0,0,NULL,&atx[63],NULL,0,&atx[207]} ,
-  {0, "data" ,128,4,0,0,0,0,0,0,NULL,&atx[39],&atx[208],0,NULL} ,
-  {0, "ftable" ,128,0,0,0,0,0,0,0,NULL,&atx[60],&atx[209],0,&atx[210]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[164],NULL,0,NULL} ,
-  {0, "align" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[211],0,&atx[212]} ,
+  {0, "db" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[167],0,&atx[209]} ,
+  {0, "name" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[210]} ,
+  {0, "desc" ,128,3,0,1,0,0,0,0,NULL,&atx[63],NULL,0,&atx[211]} ,
+  {0, "data" ,128,4,0,0,0,0,0,0,NULL,&atx[39],&atx[212],0,NULL} ,
+  {0, "ftable" ,128,0,0,0,0,0,0,0,NULL,&atx[60],&atx[213],0,&atx[214]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[168],NULL,0,NULL} ,
+  {0, "align" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[215],0,&atx[216]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[32],NULL,0,NULL} ,
-  {0, "graph" ,128,2,0,0,0,0,0,0,NULL,&atx[60],&atx[213],0,&atx[215]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[214],NULL,0,NULL} ,
+  {0, "graph" ,128,2,0,0,0,0,0,0,NULL,&atx[60],&atx[217],0,&atx[219]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[218],NULL,0,NULL} ,
   {427, "Seq-graph" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
-  {0, "ids" ,128,3,0,0,0,0,0,0,NULL,&atx[60],&atx[216],0,&atx[217]} ,
+  {0, "ids" ,128,3,0,0,0,0,0,0,NULL,&atx[60],&atx[220],0,&atx[221]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
-  {0, "locs" ,128,4,0,0,0,0,0,0,NULL,&atx[60],&atx[218],0,&atx[219]} ,
+  {0, "locs" ,128,4,0,0,0,0,0,0,NULL,&atx[60],&atx[222],0,&atx[223]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[62],NULL,0,NULL} ,
-  {0, "seq-table" ,128,5,0,0,0,0,0,0,NULL,&atx[220],NULL,0,NULL} ,
+  {0, "seq-table" ,128,5,0,0,0,0,0,0,NULL,&atx[224],NULL,0,NULL} ,
   {439, "Seq-table" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[76]} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Sequence" , "asnseq.h22",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Sequence" , "asnseq.h24",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -434,8 +449,8 @@ static AsnModulePtr amp = ampx;
 #define BIOSEQ_id_E &at[67]
 #define BIOSEQ_descr &at[68]
 #define BIOSEQ_inst &at[118]
-#define BIOSEQ_annot &at[188]
-#define BIOSEQ_annot_E &at[189]
+#define BIOSEQ_annot &at[192]
+#define BIOSEQ_annot_E &at[193]
 
 #define GIBB_MOL &at[73]
 
@@ -467,24 +482,24 @@ static AsnModulePtr amp = ampx;
 #define PUBDESC_comment &at[46]
 #define PUBDESC_reftype &at[47]
 
-#define SEQ_ANNOT &at[190]
-#define SEQ_ANNOT_id &at[191]
-#define SEQ_ANNOT_id_E &at[192]
-#define SEQ_ANNOT_db &at[204]
-#define SEQ_ANNOT_name &at[205]
-#define SEQ_ANNOT_desc &at[206]
-#define SEQ_ANNOT_data &at[207]
-#define SEQ_ANNOT_data_ftable &at[208]
-#define SEQ_ANNOT_data_ftable_E &at[209]
-#define SEQ_ANNOT_data_align &at[210]
-#define SEQ_ANNOT_data_align_E &at[211]
-#define SEQ_ANNOT_data_graph &at[212]
-#define SEQ_ANNOT_data_graph_E &at[213]
-#define SEQ_ANNOT_data_ids &at[215]
-#define SEQ_ANNOT_data_ids_E &at[216]
-#define SEQ_ANNOT_data_locs &at[217]
-#define SEQ_ANNOT_data_locs_E &at[218]
-#define SEQ_ANNOT_data_seq_table &at[219]
+#define SEQ_ANNOT &at[194]
+#define SEQ_ANNOT_id &at[195]
+#define SEQ_ANNOT_id_E &at[196]
+#define SEQ_ANNOT_db &at[208]
+#define SEQ_ANNOT_name &at[209]
+#define SEQ_ANNOT_desc &at[210]
+#define SEQ_ANNOT_data &at[211]
+#define SEQ_ANNOT_data_ftable &at[212]
+#define SEQ_ANNOT_data_ftable_E &at[213]
+#define SEQ_ANNOT_data_align &at[214]
+#define SEQ_ANNOT_data_align_E &at[215]
+#define SEQ_ANNOT_data_graph &at[216]
+#define SEQ_ANNOT_data_graph_E &at[217]
+#define SEQ_ANNOT_data_ids &at[219]
+#define SEQ_ANNOT_data_ids_E &at[220]
+#define SEQ_ANNOT_data_locs &at[221]
+#define SEQ_ANNOT_data_locs_E &at[222]
+#define SEQ_ANNOT_data_seq_table &at[223]
 
 #define SEQ_DATA &at[128]
 #define SEQ_DATA_iupacna &at[129]
@@ -530,20 +545,20 @@ static AsnModulePtr amp = ampx;
 #define SEQ_DESCR &at[69]
 #define SEQ_DESCR_E &at[70]
 
-#define SEQ_EXT &at[155]
-#define SEQ_EXT_seg &at[156]
-#define SEQ_EXT_ref &at[159]
-#define SEQ_EXT_map &at[161]
-#define SEQ_EXT_delta &at[165]
+#define SEQ_EXT &at[159]
+#define SEQ_EXT_seg &at[160]
+#define SEQ_EXT_ref &at[163]
+#define SEQ_EXT_map &at[165]
+#define SEQ_EXT_delta &at[169]
 
-#define SEQ_HIST &at[176]
-#define SEQ_HIST_assembly &at[177]
-#define SEQ_HIST_assembly_E &at[178]
-#define SEQ_HIST_replaces &at[179]
-#define SEQ_HIST_replaced_by &at[184]
-#define SEQ_HIST_deleted &at[185]
-#define SEQ_HIST_deleted_bool &at[186]
-#define SEQ_HIST_deleted_date &at[187]
+#define SEQ_HIST &at[180]
+#define SEQ_HIST_assembly &at[181]
+#define SEQ_HIST_assembly_E &at[182]
+#define SEQ_HIST_replaces &at[183]
+#define SEQ_HIST_replaced_by &at[188]
+#define SEQ_HIST_deleted &at[189]
+#define SEQ_HIST_deleted_bool &at[190]
+#define SEQ_HIST_deleted_date &at[191]
 
 #define SEQ_INST &at[119]
 #define SEQ_INST_repr &at[120]
@@ -553,20 +568,22 @@ static AsnModulePtr amp = ampx;
 #define SEQ_INST_topology &at[125]
 #define SEQ_INST_strand &at[126]
 #define SEQ_INST_seq_data &at[127]
-#define SEQ_INST_ext &at[154]
-#define SEQ_INST_hist &at[175]
+#define SEQ_INST_ext &at[158]
+#define SEQ_INST_hist &at[179]
 
-#define SEQ_LITERAL &at[171]
-#define SEQ_LITERAL_length &at[172]
-#define SEQ_LITERAL_fuzz &at[173]
-#define SEQ_LITERAL_seq_data &at[174]
+#define SEQ_LITERAL &at[175]
+#define SEQ_LITERAL_length &at[176]
+#define SEQ_LITERAL_fuzz &at[177]
+#define SEQ_LITERAL_seq_data &at[178]
 
-#define DELTA_EXT &at[166]
-#define DELTA_EXT_E &at[167]
+#define DELTA_EXT &at[170]
+#define DELTA_EXT_E &at[171]
 
 #define SEQ_GAP &at[151]
 #define SEQ_GAP_type &at[152]
 #define SEQ_GAP_linkage &at[153]
+#define SEQ_GAP_linkage_evidence &at[154]
+#define SEQ_GAP_linkage_evidence_E &at[155]
 
 #define GIBB_MOD &at[76]
 
@@ -591,22 +608,22 @@ static AsnModulePtr amp = ampx;
 #define NUM_REAL_b &at[37]
 #define NUM_REAL_units &at[38]
 
-#define SEG_EXT &at[157]
-#define SEG_EXT_E &at[158]
+#define SEG_EXT &at[161]
+#define SEG_EXT_E &at[162]
 
-#define REF_EXT &at[160]
+#define REF_EXT &at[164]
 
-#define MAP_EXT &at[162]
-#define MAP_EXT_E &at[163]
+#define MAP_EXT &at[166]
+#define MAP_EXT_E &at[167]
 
-#define DELTA_SEQ &at[168]
-#define DELTA_SEQ_loc &at[169]
-#define DELTA_SEQ_literal &at[170]
+#define DELTA_SEQ &at[172]
+#define DELTA_SEQ_loc &at[173]
+#define DELTA_SEQ_literal &at[174]
 
-#define SEQ_HIST_REC &at[180]
-#define SEQ_HIST_REC_date &at[181]
-#define SEQ_HIST_REC_ids &at[182]
-#define SEQ_HIST_REC_ids_E &at[183]
+#define SEQ_HIST_REC &at[184]
+#define SEQ_HIST_REC_date &at[185]
+#define SEQ_HIST_REC_ids &at[186]
+#define SEQ_HIST_REC_ids_E &at[187]
 
 #define IUPACNA &at[130]
 
@@ -628,17 +645,20 @@ static AsnModulePtr amp = ampx;
 
 #define NCBISTDAA &at[149]
 
-#define TEXTANNOT_ID &at[199]
-#define TEXTANNOT_ID_name &at[200]
-#define TEXTANNOT_ID_accession &at[201]
-#define TEXTANNOT_ID_release &at[202]
-#define TEXTANNOT_ID_version &at[203]
+#define LINKAGE_EVIDENCE &at[156]
+#define LINKAGE_EVIDENCE_type &at[157]
 
-#define ANNOT_ID &at[193]
-#define ANNOT_ID_local &at[194]
-#define ANNOT_ID_ncbi &at[196]
-#define ANNOT_ID_general &at[197]
-#define ANNOT_ID_other &at[198]
+#define TEXTANNOT_ID &at[203]
+#define TEXTANNOT_ID_name &at[204]
+#define TEXTANNOT_ID_accession &at[205]
+#define TEXTANNOT_ID_release &at[206]
+#define TEXTANNOT_ID_version &at[207]
+
+#define ANNOT_ID &at[197]
+#define ANNOT_ID_local &at[198]
+#define ANNOT_ID_ncbi &at[200]
+#define ANNOT_ID_general &at[201]
+#define ANNOT_ID_other &at[202]
 
 #define ALIGN_DEF &at[56]
 #define ALIGN_DEF_align_type &at[57]

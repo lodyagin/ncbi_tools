@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -393,6 +393,8 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
     Boolean retval = FALSE;
     ValNodePtr anp;
     UserObjectPtr uop;
+    Boolean asn_no_newline;
+    Int2 linelength;
 
 	if (! loaded)
 	{
@@ -413,6 +415,11 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
 	atp = AsnLinkType(orig, SEQ_ALIGN);   /* link local tree */
     if (atp == NULL)
         return FALSE;
+
+    asn_no_newline = aip->asn_no_newline;
+    aip->asn_no_newline = TRUE;
+    linelength = aip->linelength;
+    aip->linelength = 500;
 
 	if (sap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
@@ -545,6 +552,8 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
     retval = TRUE;
 erret:
 	AsnUnlinkType(orig);       /* unlink local tree */
+    aip->asn_no_newline = asn_no_newline;
+    aip->linelength = linelength;
 	return retval;
 }
 

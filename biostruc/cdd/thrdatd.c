@@ -1,4 +1,4 @@
-/* $Id: thrdatd.c,v 1.22 2002/06/06 18:57:40 thiessen Exp $
+/* $Id: thrdatd.c,v 1.23 2011/12/19 18:42:15 gouriano Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.22 $
+* $Revision: 1.23 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.c,v $
+* Revision 1.23  2011/12/19 18:42:15  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 1.22  2002/06/06 18:57:40  thiessen
 * fix integer->double constant
 *
@@ -1801,7 +1804,7 @@ void PrintThdTbl(Thd_Tbl* ttb, FILE* pFile) {
   fprintf(pFile, "number of core segments:  %6d\n", ttb->nsc);
   fprintf(pFile, "index of lowest energy thread:  %6d\n", ttb->mn);
   fprintf(pFile, "index of highest energy thread: %6d\n", ttb->mx);
-  fprintf(pFile, "for each thread:\n", ttb->n);
+  fprintf(pFile, "for each thread:\n"/*, ttb->n*/);
   fprintf(pFile, "           tg           ps           ms           cs          lps          zsc\n");
   for (i=0; i<ttb->n; i++) {
     fprintf(pFile, " %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e\n",

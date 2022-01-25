@@ -1,4 +1,4 @@
-/* $Id: ncbi_service.c,v 6.119 2011/06/06 16:19:36 kazimird Exp $
+/* $Id: ncbi_service.c,v 6.128 2012/02/01 17:49:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,7 +44,15 @@
 #define CONN_SERVICE_NAME  DEF_CONN_REG_SECTION "_" REG_CONN_SERVICE_NAME
 
 
+/* Use a property that "&a" for an array is equivalent to just "a", but for
+ * pointers it will increase indirection, so SizeOf() will always be 1. */
+#define SizeOf(arr)  (sizeof(arr) / sizeof((arr)[0]))
+
+
 static ESwitch s_Fast = eOff;
+
+
+static TNCBI_BigCount s_FWPorts[1024 / sizeof(TNCBI_BigCount)] = { 0 };
 
 
 ESwitch SERV_DoFastOpens(ESwitch on)
@@ -56,7 +64,32 @@ ESwitch SERV_DoFastOpens(ESwitch on)
 }
 
 
-static char* s_ServiceName(const char* service, size_t depth)
+int/*bool*/ SERV_AddFirewallPort(unsigned short port)
+{
+    unsigned int n = port / (sizeof(s_FWPorts[0]) << 3);
+    unsigned int m = port % (sizeof(s_FWPorts[0]) << 3);
+    if ((size_t) n < SizeOf(s_FWPorts)) {
+        s_FWPorts[n] |= (TNCBI_BigCount) 1 << m;
+        return 1/*true*/;
+    }
+    return 0/*false*/;
+}
+
+
+int/*bool*/ SERV_IsFirewallPort(unsigned short port)
+{
+    unsigned int n = port / (sizeof(s_FWPorts[0]) << 3);
+    unsigned int m = port % (sizeof(s_FWPorts[0]) << 3);
+    if ((size_t) n < SizeOf(s_FWPorts)
+        &&  (s_FWPorts[n] & ((TNCBI_BigCount) 1 << m))) {
+        return 1/*true*/;
+    }
+    return 0/*false*/;
+}
+
+
+static char* s_ServiceName(const char* service,
+                           int/*bool*/ ismask, size_t depth)
 {
     char   buf[128];
     char   srv[128];
@@ -64,40 +97,47 @@ static char* s_ServiceName(const char* service, size_t depth)
     char*  s;
 
     if (depth > 7) {
+        assert(service  &&  *service);
         CORE_LOGF_X(7, eLOG_Error,
                     ("[%s]  Maximal service name recursion depth reached: %lu",
                      service, (unsigned long) depth));
         return 0/*failure*/;
     }
-    if (!service  ||  !*service  ||
-        (len = strlen(service)) + sizeof(CONN_SERVICE_NAME) >= sizeof(buf)) {
+    len = 0;
+    assert(sizeof(buf) > sizeof(CONN_SERVICE_NAME));
+    if (!service  ||  (!ismask  &&  (!*service  ||  strpbrk(service, "?*")))
+        ||  (len = strlen(service)) >= sizeof(buf)-sizeof(CONN_SERVICE_NAME)) {
         CORE_LOGF_X(8, eLOG_Error,
                     ("%s%s%s%s service name",
                      !service  ||  !*service ? "" : "[",
                      !service ? "" : service,
                      !service  ||  !*service ? "" : "]  ",
-                     !service ? "NULL" : !*service ? "Empty" : "Too long"));
+                     !service ? "NULL" : !*service ? "Empty" :
+                     len < sizeof(buf)-sizeof(CONN_SERVICE_NAME) ? "Invalid" :
+                     "Too long"));
         return 0/*failure*/;
     }
-    s = (char*) memcpy(buf, service, len) + len;
-    *s++ = '_';
-    memcpy(s, CONN_SERVICE_NAME, sizeof(CONN_SERVICE_NAME));
-    /* Looking for "service_CONN_SERVICE_NAME" in the environment */
-    if (!(s = getenv(strupr(buf)))  ||  !*s) {
-        /* Looking for "CONN_SERVICE_NAME" in registry's section [service] */
-        buf[len++] = '\0';
-        CORE_REG_GET(buf, buf + len, srv, sizeof(srv), 0);
-        s = srv;
+    if (!s_Fast  &&  !ismask) {
+        s = (char*) memcpy(buf, service, len) + len;
+        *s++ = '_';
+        memcpy(s, CONN_SERVICE_NAME, sizeof(CONN_SERVICE_NAME));
+        /* Looking for "service_CONN_SERVICE_NAME" in the environment */
+        if (!(s = getenv(strupr(buf)))  ||  !*s) {
+            /* Looking for "CONN_SERVICE_NAME" in registry section [service] */
+            buf[len++] = '\0';
+            CORE_REG_GET(buf, buf + len, srv, sizeof(srv), 0);
+            s = srv;
+        }
+        if (*s  &&  strcasecmp(s, service) != 0)
+            return s_ServiceName(s, ismask, ++depth);
     }
-    if (!*s  ||  strcasecmp(s, service) == 0)
-        return strdup(service);
-    return s_ServiceName(s, ++depth);
+    return strdup(service);
 }
 
 
 char* SERV_ServiceName(const char* service)
 {
-    return s_ServiceName(service, 0);
+    return s_ServiceName(service, 0, 0);
 }
 
 
@@ -107,14 +147,14 @@ static int/*bool*/ s_AddSkipInfo(SERV_ITER   iter,
 {
     size_t n;
     assert(name);
-    for (n = 0; n < iter->n_skip; n++) {
-        if (strcasecmp(name, SERV_NameOfInfo(iter->skip[n])) == 0  &&
-            (SERV_EqualInfo(info, iter->skip[n])  ||
-             (iter->skip[n]->type == fSERV_Firewall  &&
-              iter->skip[n]->u.firewall.type == info->u.firewall.type))) {
+    for (n = 0;  n < iter->n_skip;  n++) {
+        if (strcasecmp(name, SERV_NameOfInfo(iter->skip[n])) == 0
+            &&  (SERV_EqualInfo(info, iter->skip[n])  ||
+                 (iter->skip[n]->type == fSERV_Firewall  &&
+                  iter->skip[n]->u.firewall.type == info->u.firewall.type))) {
             /* Replace older version */
             if (iter->last == iter->skip[n])
-                iter->last =  info;
+                iter->last  = info;
             free(iter->skip[n]);
             iter->skip[n] = info;
             return 1;
@@ -169,15 +209,14 @@ static SERV_ITER s_Open(const char*          service,
     const SSERV_VTable* op;
     SERV_ITER iter;
     const char* s;
-    
-    if (!service || !*service)
+
+    if (!(s = s_ServiceName(service, ismask, 0)))
         return 0;
-    if (!(s = ismask || s_Fast ? strdup(service) : s_ServiceName(service, 0)))
-        return 0;
-    if (!*s || !(iter = (SERV_ITER) calloc(1, sizeof(*iter)))) {
+    if (!(iter = (SERV_ITER) calloc(1, sizeof(*iter)))) {
         free((void*) s);
         return 0;
     }
+    assert(ismask  ||  *s);
 
     iter->name              = s;
     iter->type              = types & fSERV_All;
@@ -213,7 +252,7 @@ static SERV_ITER s_Open(const char*          service,
 
     if (n_skip) {
         size_t i;
-        for (i = 0; i < n_skip; i++) {
+        for (i = 0;  i < n_skip;  i++) {
             const char* name = (iter->ismask  ||  skip[i]->type == fSERV_Dns
                                 ? SERV_NameOfInfo(skip[i]) : "");
             SSERV_Info* temp = SERV_CopyInfoEx(skip[i],
@@ -318,7 +357,8 @@ SERV_ITER SERV_OpenP(const char*          service,
                      const char*          arg,
                      const char*          val)
 {
-    return s_Open(service, strpbrk(service, "?*") != 0, types,
+    return s_Open(service,
+                  service  &&  (!*service  ||  strpbrk(service, "?*")), types,
                   preferred_host, preferred_port, preference,
                   net_info, skip, n_skip,
                   external, arg, val,
@@ -343,7 +383,7 @@ static void s_SkipSkip(SERV_ITER iter)
                         sizeof(*iter->skip)*(iter->n_skip - n));
             }
             if (iter->last == temp)
-                iter->last =  0;
+                iter->last  = 0;
             free(temp);
         } else
             n++;
@@ -490,11 +530,17 @@ const char* SERV_CurrentName(SERV_ITER iter)
 }
 
 
-int/*bool*/ SERV_Penalize(SERV_ITER iter, double fine)
+int/*bool*/ SERV_PenalizeEx(SERV_ITER iter, double fine, TNCBI_Time time)
 {
     if (!iter  ||  !iter->op  ||  !iter->op->Feedback  ||  !iter->last)
         return 0/*false*/;
-    return iter->op->Feedback(iter, fine, 1/*i.e.fine*/);
+    return iter->op->Feedback(iter, fine, time ? time : 1/*NB: always != 0*/);
+}
+
+
+int/*bool*/ SERV_Penalize(SERV_ITER iter, double fine)
+{
+    return SERV_PenalizeEx(iter, fine, 0);
 }
 
 
@@ -524,7 +570,7 @@ void SERV_Close(SERV_ITER iter)
     if (!iter)
         return;
     SERV_Reset(iter);
-    for (i = 0; i < iter->n_skip; i++)
+    for (i = 0;  i < iter->n_skip;  i++)
         free(iter->skip[i]);
     iter->n_skip = 0;
     if (iter->op) {
@@ -534,8 +580,7 @@ void SERV_Close(SERV_ITER iter)
     }
     if (iter->skip)
         free(iter->skip);
-    if (iter->name)
-        free((void*) iter->name);
+    free((void*) iter->name);
     free(iter);
 }
 
@@ -543,13 +588,12 @@ void SERV_Close(SERV_ITER iter)
 int/*bool*/ SERV_Update(SERV_ITER iter, const char* text, int code)
 {
     static const char used_server_info[] = "Used-Server-Info-";
-    static const char ncbi_sid[] = "NCBI-SID:";
     int retval = 0/*not updated yet*/;
 
     if (iter  &&  iter->op  &&  text) {
         const char *c, *b;
         iter->time = (TNCBI_Time) time(0);
-        for (b = text; (c = strchr(b, '\n')) != 0; b = c + 1) {
+        for (b = text;  (c = strchr(b, '\n')) != 0;  b = c + 1) {
             size_t len = (size_t)(c - b);
             SSERV_Info* info;
             unsigned int d1;
@@ -569,29 +613,57 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text, int code)
             if (!strncasecmp(p, used_server_info, sizeof(used_server_info) - 1)
                 &&  isdigit((unsigned char) p[sizeof(used_server_info) - 1])) {
                 p += sizeof(used_server_info) - 1;
-                if (sscanf(p, "%u: %n", &d1, &d2) >= 1  &&
-                    (info = SERV_ReadInfoEx(p + d2, "")) != 0) {
+                if (sscanf(p, "%u: %n", &d1, &d2) >= 1
+                    &&  (info = SERV_ReadInfoEx(p + d2, "")) != 0) {
                     if (!s_AddSkipInfo(iter, "", info))
                         free(info);
                     else
                         retval = 1/*updated*/;
                 }
-            } else if (strncasecmp(p, ncbi_sid, sizeof(ncbi_sid) - 1) == 0) {
-                size_t xlen;
-                if (iter->sid)
-                    free((void*) iter->sid);
-                p   += sizeof(ncbi_sid) - 1;
-                len -= sizeof(ncbi_sid) - 1;
-                xlen = strspn(p, " \t");
-                memmove(t, p + xlen, len - xlen);
-                iter->sid = t;
-                t = 0;
             }
-            if (t)
-                free(t);
+            free(t);
         }
     }
     return retval;
+}
+
+
+static void s_PrintFirewallPorts(char* buf, size_t bufsize,
+                                 const SConnNetInfo* net_info)
+{
+    EFWMode mode = net_info ? (EFWMode) net_info->firewall : eFWMode_Legacy;
+    size_t  len, n;
+    unsigned int m;
+
+    assert(buf  &&  bufsize > 1);
+    switch (mode) {
+    case eFWMode_Legacy:
+        *buf = '\0';
+        return;
+    case eFWMode_Firewall:
+        memcpy(buf, "0", 2);
+        return;
+    default:
+        break;
+    }
+    len = 0;
+    for (n = m = 0; n < SizeOf(s_FWPorts); n++, m += sizeof(s_FWPorts[0])<<3) {
+        unsigned short p;
+        TNCBI_BigCount mask = s_FWPorts[n];
+        for (p = m;  mask;  p++, mask >>= 1) {
+            if (mask & 1) {
+                char port[10];
+                int  k = sprintf(port, " %hu" + !len, p);
+                if (len + k < bufsize) {
+                    memcpy(buf + len, port, k);
+                    len += k;
+                }
+                if (!p)
+                    break;
+            }
+        }
+    }
+    buf[len] = '\0';
 }
 
 
@@ -636,6 +708,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
     static const char kClientRevision[] = "Client-Revision: %hu.%hu\r\n";
     static const char kAcceptedServerTypes[] = "Accepted-Server-Types:";
     static const char kUsedServerInfo[] = "Used-Server-Info: ";
+    static const char kNcbiFWPorts[] = "NCBI-Firewall-Ports: ";
     static const char kServerCount[] = "Server-Count: ";
     static const char kPreference[] = "Preference: ";
     static const char kSkipInfo[] = "Skip-Info-%u: ";
@@ -656,14 +729,14 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
     if (iter) {
         if (net_info && !net_info->http_referer && iter->op && iter->op->name)
             s_SetDefaultReferer(iter, net_info);
-        /* Form accepted server types */
+        /* Accepted server types */
         buflen = sizeof(kAcceptedServerTypes) - 1;
         memcpy(buffer, kAcceptedServerTypes, buflen);
-        for (t = 1; t; t <<= 1) {
+        for (t = 1;  t;  t <<= 1) {
             if (iter->type & t) {
                 const char* name = SERV_TypeStr((ESERV_Type) t);
                 size_t namelen = strlen(name);
-                if (!namelen || buflen + 1 + namelen + 2 >= sizeof(buffer))
+                if (!namelen  ||  buflen + 1 + namelen + 2 >= sizeof(buffer))
                     break;
                 buffer[buflen++] = ' ';
                 memcpy(buffer + buflen, name, namelen);
@@ -685,6 +758,17 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
                 !BUF_Write(&buf,
                            iter->ismask ? "10\r\n" : "ALL\r\n",
                            iter->ismask ?       4  :        5)) {
+                BUF_Destroy(buf);
+                return 0;
+            }
+        }
+        if (iter->type & fSERV_Firewall) {
+            /* Firewall */
+            s_PrintFirewallPorts(buffer, sizeof(buffer), net_info);
+            if (*buffer
+                &&  (!BUF_Write(&buf, kNcbiFWPorts, sizeof(kNcbiFWPorts)-1)  ||
+                     !BUF_Write(&buf, buffer, strlen(buffer))                ||
+                     !BUF_Write(&buf, "\r\n", 2))) {
                 BUF_Destroy(buf);
                 return 0;
             }
@@ -715,7 +799,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
         iter->time = (TNCBI_Time) time(0);
         s_SkipSkip(iter);
         /* Put all the rest into rejection list */
-        for (i = 0; i < iter->n_skip; i++) {
+        for (i = 0;  i < iter->n_skip;  i++) {
             /* NB: all skip infos are now kept with names (perhaps, empty) */
             const char* name    = SERV_NameOfInfo(iter->skip[i]);
             size_t      namelen = name  &&  *name ? strlen(name) : 0;
@@ -806,6 +890,7 @@ unsigned short SERV_ServerPort(const char*  name,
     assert(port);
     return port;
 }
+
 
 #if 0
 int/*bool*/ SERV_MatchesHost(const SSERV_Info* info, unsigned int host)

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFOP__H
 #define CONNECT___NCBI_HOST_INFOP__H
 
-/*  $Id: ncbi_host_infop.h,v 6.4 2008/09/03 20:55:44 kazimird Exp $
+/* $Id: ncbi_host_infop.h,v 6.5 2012/02/29 20:14:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,6 @@
  */
 
 #include <connect/ncbi_host_info.h>
-#include <stddef.h>
 
 
 #ifdef __cplusplus

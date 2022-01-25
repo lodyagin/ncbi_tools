@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.138 $
+* $Revision: 1.147 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -163,9 +163,11 @@ typedef struct int_asn2gb_job {
   StringItemPtr   pool;
   Boolean         www;
   Boolean         specialGapFormat;
+  Boolean         relaxedMapping;
   Boolean         hideGoTerms;
   Boolean         multiIntervalGenes;
   Boolean         segmentedBioseqs;
+  Boolean         smallGenomeSet;
   Boolean         reindex;
   Int4            seqGapCurrLen;
   ValNodePtr      gihead;
@@ -653,6 +655,7 @@ typedef enum {
   FTQUAL_figure,
   FTQUAL_frequency,
   FTQUAL_function,
+  FTQUAL_gap_type,
   FTQUAL_gene,
   FTQUAL_gene_desc,
   FTQUAL_gene_allele,
@@ -675,6 +678,7 @@ typedef enum {
   FTQUAL_inference_bad,
   FTQUAL_insertion_seq,
   FTQUAL_label,
+  FTQUAL_linkage_evidence,
   FTQUAL_locus_tag,
   FTQUAL_map,
   FTQUAL_maploc,
@@ -711,6 +715,7 @@ typedef enum {
   FTQUAL_prot_names,
   FTQUAL_protein_id,
   FTQUAL_pseudo,
+  FTQUAL_pseudogene,
   FTQUAL_pyrrolysine,
   FTQUAL_pyrrolysine_note,
   FTQUAL_region,
@@ -1081,6 +1086,36 @@ NLM_EXTERN CharPtr FFFlatLoc (
 
 NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc);
 
+NLM_EXTERN void FF_asn2gb_www_featkey (
+  StringItemPtr ffstring,
+  CharPtr key,
+  SeqFeatPtr sfp,
+  SeqLocPtr slp,
+  Int4 from,
+  Int4 to,
+  Uint1 strand,
+  Uint4 itemID
+);
+
+NLM_EXTERN CharPtr AddJsInterval (
+  IntAsn2gbSectPtr iasp,
+  CharPtr pfx,
+  BioseqPtr target,
+  Uint1 featdeftype,
+  SeqLocPtr location
+);
+
+NLM_EXTERN SeqFeatPtr GetGeneByXref (
+  BioseqPtr bsp,
+  GeneRefPtr grp
+);
+
+NLM_EXTERN GeneRefPtr GetGeneByFeat (
+  SeqFeatPtr sfp,
+  BoolPtr pseudoP,
+  BoolPtr suppressedP
+);
+
 NLM_EXTERN CharPtr GetMolTypeQual (
   BioseqPtr bsp
 );
@@ -1127,7 +1162,8 @@ NLM_EXTERN SeqLocPtr SeqLocReMapEx (
   SeqLocPtr location,
   Int4 offset,
   Boolean rev,
-  Boolean masterStyle
+  Boolean masterStyle,
+  Boolean relaxed
 );
 
 NLM_EXTERN CharPtr Get3LetterSymbol (
@@ -1189,6 +1225,7 @@ NLM_EXTERN void AddFeatureBlock (
 NLM_EXTERN void AddLocusBlock (
   Asn2gbWorkPtr awp,
   Boolean willshowwgs,
+  Boolean willshowtsa,
   Boolean willshowcage,
   Boolean willshowgenome,
   Boolean willshowcontig,
@@ -1239,6 +1276,9 @@ NLM_EXTERN void AddSourceFeatBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddWGSBlock (
+  Asn2gbWorkPtr awp
+);
+NLM_EXTERN void AddTSABlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddCAGEBlock (
@@ -1316,7 +1356,8 @@ NLM_EXTERN void PrintFtableIntervals (
   ValNodePtr PNTR head,
   BioseqPtr target,
   SeqLocPtr location,
-  CharPtr label
+  CharPtr label,
+  Boolean relaxed
 );
 NLM_EXTERN void PrintFtableLocAndQuals (
   IntAsn2gbJobPtr ajp,

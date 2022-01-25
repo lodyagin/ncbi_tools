@@ -44,4 +44,4 @@ asntool -m ..\asn\gbseq.asn -o asngbseq.h
 asntool -m ..\asn\insdseq.asn -o asninsdseq.h
 asntool -m ..\asn\tinyseq.asn -o asntseq.h
 asntool -m ..\asn\valid.asn -o asnvalid.h
-asntool -m ..\sequin\macro.asn -o asnmacro.h
+asntool -m ..\sequin\macro.asn -o asnmacro.h -w100

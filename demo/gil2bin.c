@@ -27,6 +27,9 @@
 /* $Revision 1.0$
  *
  * $Log: gil2bin.c,v $
+ * Revision 6.5  2011/12/19 18:40:17  gouriano
+ * Corrected printf formatting. NOJIRA
+ *
  * Revision 6.4  2003/04/22 14:20:26  camacho
  * Added missing include
  *
@@ -70,7 +73,7 @@ static void MakeGiFileText(CharPtr input_file, CharPtr output_file)
     gilist = GetGisFromFile(input_file, &ngis);
 
     for (i = 0; i < ngis; i++)
-        fprintf(outfp, "%ld\n", gilist[i].gi);
+        fprintf(outfp, "%d\n", gilist[i].gi);
     
     MemFree(gilist);
 

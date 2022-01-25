@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -53,6 +53,7 @@
 #include <vibrant.h>
 #include <salsa.h>
 #include <viewer.h>
+#include <util/creaders/alnread.h>
 
 typedef struct seqeditview {
 
@@ -233,6 +234,14 @@ NLM_EXTERN void    CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr se
 NLM_EXTERN Boolean CheckAlignmentSequenceLengths (SeqAlignPtr salp);
 
 NLM_EXTERN Boolean UpdateOneSeqAlignFarPointer (SeqAlignPtr salp, Int4 pos);
+
+extern const char *nucleotide_alphabet;
+extern const char *protein_alphabet;
+NLM_EXTERN DialoG AlnSettingsDlg (GrouP h, Boolean allow_sequence_type);
+NLM_EXTERN TSequenceInfoPtr GetAlignmentOptions (Uint1Ptr moltype, TSequenceInfoPtr sequence_info);
+NLM_EXTERN SeqAlignPtr ReadAlignmentForSeqEntry (SeqEntryPtr sep, Boolean is_nuc, Boolean allow_options, Boolean from_clipboard);
+NLM_EXTERN void ProduceAlignmentNotes (TAlignmentFilePtr afp, TErrorInfoPtr error_list);
+NLM_EXTERN Boolean CorrectAlignmentIDs (TAlignmentFilePtr afp, Uint1 moltype);
 
 
 #endif

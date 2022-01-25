@@ -1,4 +1,4 @@
-/* $Id: ncbi_local.c,v 1.16 2011/04/01 16:19:31 kazimird Exp $
+/* $Id: ncbi_local.c,v 1.19 2012/02/01 17:39:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -66,19 +66,26 @@ struct SLOCAL_Data {
 static int/*bool*/ s_AddService(const SSERV_Info* info,
                                 struct SLOCAL_Data* data)
 {
+    SLB_Candidate* temp;
+    size_t n;
+
     if (data->a_cand <= data->n_cand) {
-        size_t n = data->a_cand + 10;
-        SLB_Candidate* temp =
-            (SLB_Candidate*)(data->cand
-                             ? realloc(data->cand, n * sizeof(*data->cand))
-                             : malloc (            n * sizeof(*data->cand)));
+        n = data->a_cand + 10;
+        temp = (SLB_Candidate*)(data->cand
+                                ? realloc(data->cand,n * sizeof(*data->cand))
+                                : malloc (           n * sizeof(*data->cand)));
         if (!temp)
             return 0/*false*/;
         data->a_cand = n;
         data->cand   = temp;
     }
 
-    data->cand[data->n_cand++].info = info;
+    n = rand() % ++data->n_cand;
+    if (n < data->n_cand - 1) {
+        temp = data->cand + n++;
+        memmove(temp + 1, temp, (data->n_cand - n) * sizeof(*data->cand));
+    }
+    data->cand[n].info = info;
     return 1/*true*/;
 }
 
@@ -170,8 +177,10 @@ static int/*bool*/ s_LoadServices(SERV_ITER iter)
             s[len++] = '\0';
         if (!(c = SERV_ServiceName(s)))
             break;
-        if ((iter->reverse_dns  ||  UTIL_MatchesMask(c, iter->name))  &&
-            s_LoadSingleService(c, iter)) {
+        if ((iter->reverse_dns
+             ||  (iter->ismask
+                  &&  (!*iter->name  ||  UTIL_MatchesMask(c, iter->name))))
+            &&  s_LoadSingleService(c, iter)) {
             ok = 1/*succeeded*/;
         }
         free((void*) c);
@@ -361,9 +370,6 @@ const SSERV_VTable* SERV_LOCAL_Open(SERV_ITER iter,
                                     SSERV_Info** info, HOST_INFO* u/*unused*/)
 {
     struct SLOCAL_Data* data;
-
-    if (!iter->ismask  &&  strpbrk(iter->name, "?*"))
-        return 0/*failed to start unallowed wildcard search*/;
 
     if (!(data = (struct SLOCAL_Data*) calloc(1, sizeof(*data))))
         return 0;

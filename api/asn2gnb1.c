@@ -31,7 +31,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.217 $
+* $Revision: 1.239 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1492,7 +1492,7 @@ NLM_EXTERN Boolean FFExtractNextOpenLink(
 
           for (i=0; '>' != (next = FFCharAt( *p_line_sip, *p_line_pos )); ++(*p_line_pos)) {
 
-            if (next == '&') {
+            if (next == '&' && ! FFStartsWith(*p_line_sip, *p_line_pos, "&amp;", TRUE) ) {
 
               MemCopy( buf_open_link+i, "&amp;", strlen( "&amp;" ) );
 
@@ -2369,15 +2369,17 @@ NLM_EXTERN void DoOneSection (
   Int4                 numsegs = 0;
   SeqDescrPtr          sdp;
   SeqIdPtr             sip;
+  Boolean              tsamaster = FALSE;
   TextSeqIdPtr         tsip;
   ValNodePtr           vnp;
   Boolean              wgsmaster = FALSE;
   Boolean              wgstech = FALSE;
   Boolean              willshowcage = FALSE;
-  Boolean              willshowwgs = FALSE;
-  Boolean              willshowgenome = FALSE;
   Boolean              willshowcontig = FALSE;
+  Boolean              willshowgenome = FALSE;
   Boolean              willshowsequence = FALSE;
+  Boolean              willshowtsa = FALSE;
+  Boolean              willshowwgs = FALSE;
 
   if (target == NULL || parent == NULL || bsp == NULL || awp == NULL) return;
   ajp = awp->ajp;
@@ -2510,6 +2512,8 @@ NLM_EXTERN void DoOneSection (
       if (mip != NULL) {
         if (mip->tech == MI_TECH_wgs) {
           wgstech = TRUE;
+        } else if (mip->tech == MI_TECH_tsa && bsp->repr == Seq_repr_virtual) {
+          tsamaster = TRUE;
         } else if (mip->tech == MI_TECH_other && StringCmp (mip->techexp, "cage") == 0) {
           cagemaster = TRUE;
         }
@@ -2545,6 +2549,8 @@ NLM_EXTERN void DoOneSection (
 
     if (wgsmaster && wgstech) {
       willshowwgs = TRUE;
+    } else if (tsamaster) {
+      willshowtsa = TRUE;
     } else if (cagemaster) {
       willshowcage = TRUE;
     } else if (nsgenome) {
@@ -2569,7 +2575,7 @@ NLM_EXTERN void DoOneSection (
       }
     }
 
-    AddLocusBlock (awp, willshowwgs, willshowcage, willshowgenome, willshowcontig, willshowsequence);
+    AddLocusBlock (awp, willshowwgs, willshowtsa, willshowcage, willshowgenome, willshowcontig, willshowsequence);
 
     if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
 
@@ -2657,6 +2663,10 @@ NLM_EXTERN void DoOneSection (
     if (wgsmaster && wgstech) {
 
       AddWGSBlock (awp);
+
+    } else if (tsamaster) {
+
+      AddTSABlock (awp);
 
     } else if (cagemaster) {
 
@@ -3667,6 +3677,7 @@ typedef struct lookforids {
   Boolean  isGED;
   Boolean  isNTorNWorNG;
   Boolean  isNC;
+  Boolean  isNZ;
   Boolean  isRefSeq;
   Boolean  isGeneral;
   Boolean  isTPA;
@@ -3728,6 +3739,8 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
             lfip->isNTorNWorNG = TRUE;
           } else if (StringNCmp (tsip->accession, "NG_", 3) == 0) {
             lfip->isNTorNWorNG = TRUE;
+          } else if (StringNCmp (tsip->accession, "NZ_", 3) == 0) {
+            lfip->isNZ = TRUE;
           }
         }
         lfip->isNonLocal = TRUE;
@@ -3790,6 +3803,7 @@ static void LookForGEDetc (
   BoolPtr isGED,
   BoolPtr isNTorNWorNG,
   BoolPtr isNC,
+  BoolPtr isNZ,
   BoolPtr isRefSeq,
   BoolPtr isGeneral,
   BoolPtr isTPA,
@@ -3810,6 +3824,7 @@ static void LookForGEDetc (
   *isGED = lfi.isGED;
   *isNTorNWorNG = lfi.isNTorNWorNG;
   *isNC = lfi.isNC;
+  *isNZ = lfi.isNZ;
   *isRefSeq = lfi.isRefSeq;
   *isGeneral = lfi.isGeneral;
   *isTPA = lfi.isTPA;
@@ -3833,7 +3848,7 @@ static void MakeGapFeatsBase (
 )
 
 {
-  Char             buf [32];
+  Char             buf [128];
   Int4             currpos = 0;
   BioseqPtr        fakebsp = NULL;
   IntFuzzPtr       fuzz;
@@ -3845,6 +3860,11 @@ static void MakeGapFeatsBase (
   SeqIdPtr         sip;
   SeqLocPtr        slp;
   ValNodePtr       vnp;
+  SeqGapPtr        seq_gap = NULL;
+  Boolean          gap_is_linked = FALSE;
+  ValNodePtr       evidvnp = NULL;
+  Int4             linktype = 0;
+  Boolean          needs_evidence = FALSE;
 
   if (bsp == NULL || bsp->repr != Seq_repr_delta) return;
   gapvnp = (ValNodePtr PNTR) userdata;
@@ -3864,7 +3884,8 @@ static void MakeGapFeatsBase (
       litp = (SeqLitPtr) vnp->data.ptrvalue;
       if (litp == NULL) continue;
       if (litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) {
-        if (litp->length > 0) {
+          if (litp->length > 0 || (isSP && litp->length == 0) )  {
+          seq_gap = (SeqGapPtr)litp->seq_data; /* might be NULL */
           if (fakebsp == NULL) {
             /* to be freed with MemFree, not BioseqFree */
             fakebsp = MemNew (sizeof (Bioseq));
@@ -3877,7 +3898,7 @@ static void MakeGapFeatsBase (
           }
           ifp = ImpFeatNew ();
           if (ifp == NULL) continue;
-          ifp->key = StringSave ("gap");
+          ifp->key = StringSave ( "gap" );
           sfp = SeqFeatNew ();
           if (sfp == NULL) continue;
           sfp->data.choice = SEQFEAT_IMP;
@@ -3892,43 +3913,137 @@ static void MakeGapFeatsBase (
             AddQualifierToFeature (sfp, "estimated_length", buf);
           }
           if (rev_comp) {
-            sfp->location = AddIntervalToLocation (NULL, sip, currpos + litp->length - 1, currpos, FALSE, FALSE);
+            sfp->location = AddIntervalToLocation (
+                NULL, sip,
+                ( litp->length == 0 ? currpos : currpos + litp->length - 1 ),
+                ( litp->length == 0 ? currpos - 1 : currpos ),
+                FALSE, FALSE);
           } else {
-            sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
+            sfp->location = AddIntervalToLocation (
+                NULL, sip,
+                ( litp->length == 0 ? currpos - 1 : currpos ),
+                ( litp->length == 0 ? currpos : currpos + litp->length - 1 ),
+                FALSE, FALSE);
           }
-        } else if (isSP && litp->length == 0) {
-          if (fakebsp == NULL) {
-            /* to be freed with MemFree, not BioseqFree */
-            fakebsp = MemNew (sizeof (Bioseq));
-            if (fakebsp == NULL) return;
-            sap = SeqAnnotNew ();
-            if (sap == NULL) return;
-            sap->type = 1;
-            fakebsp->annot = sap;
-            ValNodeAddPointer (gapvnp, 0, (Pointer) fakebsp);
+          if( isSP && litp->length == 0 ) {
+              sfp->comment = StringSave ("Non-consecutive residues");
           }
-          ifp = ImpFeatNew ();
-          if (ifp == NULL) continue;
-          ifp->key = StringSave ("gap");
-          sfp = SeqFeatNew ();
-          if (sfp == NULL) continue;
-          sfp->data.choice = SEQFEAT_IMP;
-          sfp->data.value.ptrvalue = (Pointer) ifp;
-          sfp->next = (SeqFeatPtr) sap->data;
-          sap->data = (Pointer) sfp;
-          fuzz = litp->fuzz;
-          if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
-            AddQualifierToFeature (sfp, "estimated_length", "unknown");
-          } else {
-            sprintf (buf, "%ld", (long) litp->length);
-            AddQualifierToFeature (sfp, "estimated_length", buf);
+          if( seq_gap != NULL ) {
+              needs_evidence = FALSE;
+              /* I can't seem to find pound-defines for
+                 some of these magic numbers below */
+              gap_is_linked = ( seq_gap->linkage == 1 ); /* linked */
+              switch( seq_gap->type ) {
+              case 0:               /* unknown */
+                  /* no /gap_type label */
+                  break;
+              case 1:               /* fragment */
+                  AddQualifierToFeature(sfp, "gap_type", "within scaffold" );
+                  needs_evidence = TRUE;
+                  break;
+              case 2:               /* clone */
+                  AddQualifierToFeature(sfp, "gap_type",
+                                        ( gap_is_linked ?
+                                          "within scaffold" :
+                                          "between scaffolds" ) );
+                  needs_evidence = gap_is_linked;
+                  break;
+              case 3:               /* short-arm */
+                  AddQualifierToFeature(sfp, "gap_type", "short_arm" );
+                  break;
+              case 4:               /* heterochromatin */
+                  AddQualifierToFeature(sfp, "gap_type", "heterochromatin" );
+                  break;
+              case 5:               /* centromere */
+                  AddQualifierToFeature(sfp, "gap_type", "centromere" );
+                  break;
+              case 6:               /* telomere */
+                  AddQualifierToFeature(sfp, "gap_type", "telomere");
+                  break;
+              case 7:               /* repeat */
+                  AddQualifierToFeature(sfp, "gap_type",
+                                        ( gap_is_linked ? 
+                                          "repeat within scaffold" : 
+                                          "repeat between scaffolds" ) );
+                  needs_evidence = gap_is_linked;
+                  break;
+              case 8:               /* contig */
+                  AddQualifierToFeature(sfp, "gap_type", "between scaffolds" );
+                  break;
+              case 9:               /* scaffold */
+                  AddQualifierToFeature(sfp, "gap_type", "within scaffold" );
+                  needs_evidence = gap_is_linked;
+                  break;
+              case 255:             /* other */
+                  AddQualifierToFeature(sfp, "gap_type", "other" );
+                  break;
+              default:
+                  sprintf (buf, "(ERROR: UNRECOGNIZED_GAP_TYPE:%ld)", (long)seq_gap->type );
+                  AddQualifierToFeature(sfp, "gap_type", buf );
+                  break;
+              }
+  
+              /* Create the /linkage_evidence quals */
+              if( needs_evidence ) {
+                  for( evidvnp = seq_gap->linkage_evidence; evidvnp; evidvnp = evidvnp->next ) {
+                      linktype = ((LinkageEvidencePtr)evidvnp->data.ptrvalue)->type;
+                      switch( linktype ) {
+                      case 0: /* paired-ends */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "paired-ends" );
+                          break;
+                      case 1:         /* align-genus */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "align genus" );
+                          break;
+                      case 2:       /* align-xgenus */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "align xgenus" );
+                          break;
+                      case 3:     /* align-trnscpt */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "align trnscpt" );
+                          break;
+                      case 4:   /* within-clone */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "within clone" );
+                          break;
+                      case 5: /* clone-contig */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "clone contig" );
+                          break;
+                      case 6:         /* map */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "map" );
+                          break;
+                      case 7:       /* strobe */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "strobe" );
+                          break;
+                      case 8:     /* unspecified */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "unspecified" );
+                          break;
+                      case 255: /* other */
+                          AddQualifierToFeature(sfp, "linkage_evidence",
+                                                "other" );
+                          break;
+                      default:
+                          sprintf( buf, "(UNRECOGNIZED LINKAGE EVIDENCE:%ld)",
+                                   (long)linktype );
+                          AddQualifierToFeature(
+                              sfp, "linkage_evidence",
+                              buf );
+                          break;
+                      }
+                  }
+                  /* if no linkage-evidence and needs some, add "unspecified" */
+                  if( NULL == seq_gap->linkage_evidence ) {
+                      AddQualifierToFeature( sfp, "linkage_evidence",
+                                             "unspecified" );
+                  }
+              }
           }
-          if (rev_comp) {
-            sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos - 1, FALSE, FALSE);
-          } else {
-            sfp->location = AddIntervalToLocation (NULL, sip, currpos - 1, currpos, FALSE, FALSE);
-          }
-          sfp->comment = StringSave ("Non-consecutive residues");
         }
       }
       currpos += litp->length;
@@ -4113,6 +4228,20 @@ static void FindSegmentedBioseqs (
   *segmentedBioseqsP = TRUE;
 }
 
+static void FindSmallGenomeSets (
+  BioseqSetPtr bssp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  smallGenomeSetP;
+
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_small_genome_set) return;
+  smallGenomeSetP = (BoolPtr) userdata;
+  if (smallGenomeSetP == NULL) return;
+  *smallGenomeSetP = TRUE;
+}
+
 static CharPtr bad_html_strings [] = {
   "<script", "<object", "<applet", "<embed", "<form", "javascript:", "vbscript:", NULL
 };
@@ -4182,6 +4311,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          isNTorNWorNG;
   Boolean          isNC;
   Boolean          isNuc;
+  Boolean          isNZ;
   Boolean          isOnlyLocal;
   Boolean          isProt;
   Boolean          isRefSeq;
@@ -4225,6 +4355,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          segmentedBioseqs = FALSE;
   SeqEntryPtr      sep;
   Boolean          seqspans = FALSE;
+  Boolean          smallGenomeSet = FALSE;
   SeqIntPtr        sintp;
   SeqIdPtr         sip;
   Boolean          skipMrnas = FALSE;
@@ -4263,6 +4394,10 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     bkmask = extra->bkmask;
     reindex = extra->reindex;
     seqspans = extra->seqspans;
+  }
+
+  if ((custom & FORCE_SEQ_SPANS) != 0) {
+    seqspans = TRUE;
   }
 
   if (slp != NULL) {
@@ -4354,7 +4489,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   sep = GetTopSeqEntryForEntityID (entityID);
 
-  LookForGEDetc (sep, &isG, &isGED, &isNTorNWorNG, &isNC, &isRefSeq,
+  LookForGEDetc (sep, &isG, &isGED, &isNTorNWorNG, &isNC, &isNZ, &isRefSeq,
                  &isGeneral, &isTPA, &isTPG, &isSP, &isNuc, &isProt,
                  &isOnlyLocal, &sourcePubFuse);
 
@@ -4547,6 +4682,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   }
   ajp->seqGapCurrLen = 0;
 
+  ajp->relaxedMapping = (Boolean) ((flags & RELAXED_MAPPING) != 0);
+
   ajp->produceInsdSeq = (Boolean) (((flags & PRODUCE_OLD_GBSEQ) == 0) && ((custom & OLD_GBSEQ_XML) == 0));
   ajp->oldXmlPolicy = (Boolean) ((custom & NEW_XML_POLICY) == 0);
 
@@ -4564,6 +4701,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   ajp->multiIntervalGenes = multiIntervalGenes;
   VisitBioseqsInSep (sep, (Pointer) &segmentedBioseqs, FindSegmentedBioseqs);
   ajp->segmentedBioseqs = segmentedBioseqs;
+  VisitSetsInSep (sep, (Pointer) &smallGenomeSet, FindSmallGenomeSets);
+  ajp->smallGenomeSet = smallGenomeSet;
 
   ajp->relModeError = FALSE;
   ajp->skipProts = skipProts;
@@ -4646,6 +4785,10 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
 
   } else if (isNTorNWorNG || isTPA) {
+
+    aw.onlyNearFeats = TRUE;
+
+  } else if (isNZ) {
 
     aw.onlyNearFeats = TRUE;
 
@@ -4893,7 +5036,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   /* sort paragraphByIDs array by entityID/itemtype/itemID/paragraph */
 
-  HeapSort (paragraphByIDs, (size_t) numParagraphs, sizeof (BaseBlockPtr), SortParagraphByIDProc);
+  StableMergeSort (paragraphByIDs, (size_t) numParagraphs, sizeof (BaseBlockPtr), SortParagraphByIDProc);
 
   /* free sectionList, but leave data, now pointed to by sectionArray elements */
 
@@ -5023,11 +5166,13 @@ NLM_EXTERN void PrintFtableIntervals (
   ValNodePtr PNTR head,
   BioseqPtr target,
   SeqLocPtr location,
-  CharPtr label
+  CharPtr label,
+  Boolean relaxed
 )
 
 {
   IntFuzzPtr  ifp;
+  Boolean     is_circular;
   Boolean     partial5;
   Boolean     partial3;
   SeqLocPtr   slp;
@@ -5037,6 +5182,7 @@ NLM_EXTERN void PrintFtableIntervals (
   Char        str [64];
   Char        str1 [32];
   Char        str2 [32];
+  SeqLocPtr   tmp;
 
   if (head == NULL || target == NULL || location == NULL || label == NULL) return;
 
@@ -5056,9 +5202,17 @@ NLM_EXTERN void PrintFtableIntervals (
   slp = SeqLocFindNext (location, NULL);
   if (slp == NULL) return;
 
-  start = GetOffsetInBioseq (slp, target, SEQLOC_START) + 1;
-  stop = GetOffsetInBioseq (slp, target, SEQLOC_STOP) + 1;
+  is_circular = (Boolean) (target->topology == TOPOLOGY_CIRCULAR);
+
+  start = GetOffsetInBioseqEx (slp, target, SEQLOC_START, is_circular, relaxed) + 1;
+  stop = GetOffsetInBioseqEx (slp, target, SEQLOC_STOP, is_circular, relaxed) + 1;
   CheckSeqLocForPartial (slp, &partial5, &partial3);
+  if (start == 0 || stop == 0) {
+    tmp = TrimLocInSegment (target, slp, &partial5, &partial3);
+    start = GetOffsetInBioseqEx (tmp, target, SEQLOC_START, is_circular, relaxed) + 1;
+    stop = GetOffsetInBioseqEx (tmp, target, SEQLOC_STOP, is_circular, relaxed) + 1;
+    SeqLocFree (tmp);
+  }
   if (partial5) {
     sprintf (str1, "<%ld", (long) start);
   } else {
@@ -5073,9 +5227,15 @@ NLM_EXTERN void PrintFtableIntervals (
   ValNodeCopyStr (head, 0, str);
 
   while ((slp = SeqLocFindNext (location, slp)) != NULL) {
-    start = GetOffsetInBioseq (slp, target, SEQLOC_START) + 1;
-    stop = GetOffsetInBioseq (slp, target, SEQLOC_STOP) + 1;
+    start = GetOffsetInBioseqEx (slp, target, SEQLOC_START, is_circular, relaxed) + 1;
+    stop = GetOffsetInBioseqEx (slp, target, SEQLOC_STOP, is_circular, relaxed) + 1;
     CheckSeqLocForPartial (slp, &partial5, &partial3);
+    if (start == 0 || stop == 0) {
+      tmp = TrimLocInSegment (target, slp, &partial5, &partial3);
+      start = GetOffsetInBioseqEx (tmp, target, SEQLOC_START, is_circular, relaxed) + 1;
+      stop = GetOffsetInBioseqEx (tmp, target, SEQLOC_STOP, is_circular, relaxed) + 1;
+      SeqLocFree (tmp);
+    }
     if (partial5) {
       sprintf (str1, "<%ld", (long) start);
     } else {
@@ -5090,6 +5250,10 @@ NLM_EXTERN void PrintFtableIntervals (
       sprintf (str, "%s\t%s\n", str1, str2);
       ValNodeCopyStr (head, 0, str);
     }
+  }
+
+  if (LocationHasNullsBetween (location)) {
+    ValNodeCopyStr (head, 0, "\t\t\torder\n");
   }
 }
 
@@ -5315,20 +5479,25 @@ static void PrintFTUserObj (
   }
 }
 
-NLM_EXTERN void PrintFTCodeBreak (
+NLM_EXTERN void PrintFTCodeBreakEx (
   ValNodePtr PNTR head,
   CodeBreakPtr cbp,
-  BioseqPtr target
+  BioseqPtr target,
+  Boolean masterStyle,
+  Boolean relaxed,
+  SeqLocPtr subloc
 )
 
 {
   Char             buf [80];
   Choice           cbaa;
   IntAsn2gbJob     iaj;
+  SeqLocPtr        newloc;
   CharPtr          ptr;
   Uint1            residue;
   SeqCodeTablePtr  sctp;
   Uint1            seqcode;
+  SeqIdPtr         sip;
   SeqLocPtr        slp;
   CharPtr          str;
 
@@ -5356,9 +5525,22 @@ NLM_EXTERN void PrintFTCodeBreak (
   iaj.flags.iupacaaOnly = FALSE;
   iaj.relModeError = FALSE;
 
-  slp = SeqLocFindNext (cbp->loc, NULL);
-  while (slp != NULL) {
-    str = FFFlatLoc (&iaj, target, slp, FALSE, FALSE);
+  slp = cbp->loc;
+  if (slp != NULL) {
+	str = NULL;
+	if (subloc != NULL) {
+	  sip = SeqIdParse ("lcl|dummy");
+	  newloc = SeqLocReMapEx (sip, subloc, slp, 0, FALSE, masterStyle, relaxed);
+
+	  SeqIdFree (sip);
+	  if (newloc != NULL) {
+		A2GBSeqLocReplaceID (newloc, subloc);
+		str = FFFlatLoc (&iaj, target, newloc, masterStyle, FALSE);
+		SeqLocFree (newloc);
+	  }
+	} else {
+	  str = FFFlatLoc (&iaj, target, slp, masterStyle, FALSE);
+	}
     if (str != NULL) {
       residue = cbaa.value.intvalue;
       ptr = Get3LetterSymbol (&iaj, seqcode, sctp, residue);
@@ -5369,8 +5551,17 @@ NLM_EXTERN void PrintFTCodeBreak (
       ValNodeCopyStr (head, 0, buf);
       MemFree (str);
     }
-    slp = SeqLocFindNext (cbp->loc, slp);
   }
+}
+
+NLM_EXTERN void PrintFTCodeBreak (
+  ValNodePtr PNTR head,
+  CodeBreakPtr cbp,
+  BioseqPtr target
+)
+
+{
+  PrintFTCodeBreakEx (head, cbp, target, FALSE, FALSE, NULL);
 }
 
 static Boolean SeqIdWriteForTable (SeqIdPtr sip, CharPtr buf, size_t buflen, IntAsn2gbJobPtr ajp, Boolean giOK)
@@ -5794,6 +5985,33 @@ static void AddOneFtableQual (
   ValNodeAddStr (head, 0, tmp);
 }
 
+
+static Int4 GetGeneticCodeNumber (ValNodePtr gcp)
+{
+  Int4 gcode = 0;
+  ValNodePtr vnp, tmp;
+
+  if (gcp == NULL) {
+    return 0;
+  }
+  for (vnp = (ValNodePtr) gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 2) {
+      gcode = vnp->data.intvalue;
+    }
+  }
+  if (gcode == 0) {
+    for (vnp = (ValNodePtr) gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == 1) {
+        tmp = GeneticCodeFind (0, vnp->data.ptrvalue);
+        gcode = GetGeneticCodeNumber(tmp);
+      }
+    }
+  }
+  return gcode;
+}
+
+
+
 NLM_EXTERN void PrintFtableLocAndQuals (
   IntAsn2gbJobPtr ajp,
   ValNodePtr PNTR head,
@@ -5804,11 +6022,13 @@ NLM_EXTERN void PrintFtableLocAndQuals (
 
 {
   CharPtr            aa;
+  Char               anticodon [8];
   Int2               bondidx;
   BioseqSetPtr       bssp;
   CodeBreakPtr       cbp;
   BioseqPtr          cdna;
   SeqFeatPtr         cds;
+  Char               ch;
   CdRegionPtr        crp;
   SeqMgrDescContext  dcontext;
   DbtagPtr           dbt;
@@ -5827,6 +6047,8 @@ NLM_EXTERN void PrintFtableLocAndQuals (
   SeqFeatPtr         prot;
   ProtRefPtr         prp = NULL;
   Boolean            pseudo;
+  CharPtr            pseudogene = NULL;
+  CharPtr            ptr;
   RNAGenPtr          rgp;
   RNAQualPtr         rqp;
   RnaRefPtr          rrp;
@@ -5839,8 +6061,10 @@ NLM_EXTERN void PrintFtableLocAndQuals (
   Char               str [256];
   Char               tmp [512];
   CharPtr            tmpx;
+  CharPtr            tmpy;
   tRNAPtr            trp;
   ValNodePtr         vnp;
+  Int4               gcode;
 
   if (head == NULL || target == NULL || sfp == NULL || context == NULL) return;
   /* label = (CharPtr) FeatDefTypeLabel (sfp); */
@@ -5870,7 +6094,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
     }
   }
 
-  PrintFtableIntervals (head, target, sfp->location, label);
+  PrintFtableIntervals (head, target, sfp->location, label, ajp->relaxedMapping);
 
   geneorprotdb = NULL;
   pseudo = sfp->pseudo;
@@ -5967,7 +6191,12 @@ NLM_EXTERN void PrintFtableLocAndQuals (
           ValNodeCopyStr (head, 0, tmp);
         }
         for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
-          PrintFTCodeBreak (head, cbp, target);
+          PrintFTCodeBreakEx (head, cbp, target, ajp->masterStyle, ajp->relaxedMapping, ajp->ajp.slp);
+        }
+        gcode = GetGeneticCodeNumber(crp->genetic_code);
+        if (gcode > 0) {
+          sprintf (tmp, "\t\t\ttransl_table\t%d\n", gcode);
+          ValNodeCopyStr (head, 0, tmp);
         }
       }
       if (prod != NULL) {
@@ -6039,7 +6268,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
               newloc = NULL;
               if (slp != NULL && ajp->ajp.slp != NULL) {
                 sip = SeqIdParse ("lcl|dummy");
-                newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
+                newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle, ajp->relaxedMapping);
                 SeqIdFree (sip);
                 slp = newloc;
                 if (newloc != NULL) {
@@ -6051,9 +6280,35 @@ NLM_EXTERN void PrintFtableLocAndQuals (
                 aa += 5;
               }
               if (slp != NULL && StringDoesHaveText (aa)) {
+                anticodon [0] = '\0';
+                if (ajp->refseqConventions && SeqLocLen (slp) == 3) {
+                  tmpy = GetSequenceByLocation (slp);
+                  if (tmpy != NULL) {
+                    ptr = tmpy;
+                    ch = *ptr;
+                    while (ch != '\0') {
+                      ch = TO_UPPER (ch);
+                      if (ch == 'T') {
+                        ch = 'U';
+                      }
+                      *ptr = ch;
+                      ptr++;
+                      ch = *ptr;
+                    }
+                    if (! StringHasNoText (tmpy)) {
+                      StringNCpy_0 (anticodon, tmpy, sizeof (anticodon));
+                    }
+                    MemFree (tmpy);
+                  }
+                }
+
                 tmpx = FFFlatLoc (ajp, target, slp, ajp->masterStyle, FALSE);
                 if (tmpx != NULL) {
-                  sprintf (tmp, "\t\t\tanticodon\t(pos:%s,aa:%s)\n", tmpx, aa);
+                  if (StringDoesHaveText (anticodon)) {
+                    sprintf (tmp, "\t\t\tanticodon\t(pos:%s,aa:%s,seq:%s)\n", tmpx, aa, anticodon);
+                  } else {
+                    sprintf (tmp, "\t\t\tanticodon\t(pos:%s,aa:%s)\n", tmpx, aa);
+                  }
                   ValNodeCopyStr (head, 0, tmp);
                 }
                 MemFree (tmpx);
@@ -6230,6 +6485,17 @@ NLM_EXTERN void PrintFtableLocAndQuals (
     default :
       break;
   }
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "pseudogene") != 0) continue;
+    pseudogene = gbq->val;
+    if (StringICmp (pseudogene, "processed") == 0 ||
+        StringICmp (pseudogene, "unprocessed") == 0 ||
+        StringICmp (pseudogene, "unitary") == 0 ||
+        StringICmp (pseudogene, "allelic") == 0 ||
+        StringICmp (pseudogene, "unknown") == 0) {
+      pseudo = FALSE;
+    }
+  }
   if (pseudo) {
     ValNodeCopyStr (head, 0, "\t\t\tpseudo\n");
   }
@@ -6394,7 +6660,7 @@ NLM_EXTERN CharPtr FormatFtableSourceFeatBlock (
     biop = sfp->data.value.ptrvalue;
   }
   if (biop == NULL) return NULL;
-  PrintFtableIntervals (&head, target, isp->loc, "source");
+  PrintFtableIntervals (&head, target, isp->loc, "source", FALSE);
   PrintBioSourceFtableEntry (&head, biop);
 
   str = MergeFFValNodeStrs (head);

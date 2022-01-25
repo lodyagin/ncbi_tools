@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.64 $
+* $Revision: 6.66 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -184,22 +184,24 @@ typedef void (LIBCALLBACK *SeqPortStreamProc) (
 
 typedef unsigned long StreamFlgType;
 
-#define STREAM_EXPAND_GAPS      1
-#define GAP_TO_SINGLE_DASH      2
-#define EXPAND_GAPS_TO_DASHES   3
+#define STREAM_EXPAND_GAPS        1
+#define GAP_TO_SINGLE_DASH        2
+#define EXPAND_GAPS_TO_DASHES     3
 
-#define KNOWN_GAP_AS_PLUS       4
+#define KNOWN_GAP_AS_PLUS         4
 
-#define SUPPRESS_VIRT_SEQ       8
-#define STREAM_VIRT_AS_PLUS    16
+#define SUPPRESS_VIRT_SEQ         8
+#define STREAM_VIRT_AS_PLUS      16
 
-#define STREAM_CORRECT_INVAL   64
+#define STREAM_CORRECT_INVAL     64
 
-#define STREAM_ALLOW_NEG_GIS  128 /* for internal use only by NCBI ID group */
+#define STREAM_ALLOW_NEG_GIS    128 /* for internal use only by NCBI ID group */
 
-#define STREAM_HTML_SPANS     256 /* show span tags at begining of each line */
+#define STREAM_HTML_SPANS       256 /* show span tags at begining of each line */
 
-#define STREAM_ALL_FASTA_IDS  512 /* in FASTA streamer, show all Seq-ids */
+#define STREAM_ALL_FASTA_IDS    512 /* in FASTA streamer, show all Seq-ids */
+
+#define STREAM_TAGGED_DEFLINE  1024 /* in FASTA streamer, show [key=value] pairs */
 
 NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
@@ -797,6 +799,10 @@ NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (
 
 NLM_EXTERN CharPtr GetSequenceByFeature (
   SeqFeatPtr sfp
+);
+
+NLM_EXTERN CharPtr GetSequenceByLocation (
+  SeqLocPtr slp
 );
 
 NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (

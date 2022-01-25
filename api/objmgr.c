@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.87 $
+* $Revision: 6.89 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -2557,7 +2557,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
             }
         }
 
-        HeapSort (ditcharray, (size_t) tempcnt, sizeof (ObjMgrDataPtr), SortDitchArrayByTouchTime);
+        StableMergeSort (ditcharray, (size_t) tempcnt, sizeof (ObjMgrDataPtr), SortDitchArrayByTouchTime);
 
         for (i = 0, k = tempcnt; i < tempcnt && k > omp->maxtemp; i++, k--) {
             ditch = ditcharray [(int) i];
@@ -2924,11 +2924,11 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
     for (i = 0; i < omp->currobj; i++)
     {
         omdp = omp->datalist[i];
-        fprintf(fp, "[%d] [%d %d %ld] [%d %ld] %ld (%d) %uld\n", (int)i,
+        fprintf(fp, "[%d] [%d %d %ld] [%d %ld] %ld (%d) %ud\n", (int)i,
             (int)omdp->EntityID, (int)(omdp->datatype),
             (long)(omdp->dataptr), (int)(omdp->parenttype),
             (long)(omdp->parentptr), (long)(omdp->choice), (int)(omdp->lockcnt),
-            (unsigned long)(omdp->touch));
+            (omdp->touch));
         if ((omdp->datatype == OBJ_BIOSEQ) && (omdp->dataptr != NULL))
         {
             bsp = (BioseqPtr)(omdp->dataptr);

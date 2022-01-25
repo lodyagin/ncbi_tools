@@ -1,7 +1,7 @@
 #ifndef NI_LIB___H
 #define NI_LIB___H
 
-/*  $Id: ni_lib_.h,v 4.9 2004/11/18 15:18:36 lavr Exp $
+/*  $Id: ni_lib_.h,v 4.10 2012/02/19 03:45:25 lavr Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_lib_.h,v $
+* Revision 4.10  2012/02/19 03:45:25  lavr
+* Cleanup of obsolete features
+*
 * Revision 4.9  2004/11/18 15:18:36  lavr
 * Retire obsoleted g_NII_ vtables
 *
@@ -89,20 +92,6 @@ NLM_EXTERN Boolean NI_IsInterfaceSupported(ENIInterface ni_interface);
  *          use "interface" == NII_DEFAULT
  */
 NLM_EXTERN ENIInterface NI_SetInterface(ENIInterface ni_interface);
-
-
-/* Setup the client host address to be used in the next call to
- * NI_GenericGetService()
- * NOTE:  the address will be valid for this thread only and for
- *        the only one call to NI_GenericGetService()
- */
-NLM_EXTERN void NI_SetAddress(const Char *address);
-
-/* WWW/LB-specific;  set port of the NCBID to connect (for this thread only).
- * Return previously set port.
- * HINT:  call it with zero "port" to get current port, without changing it.
- */
-NLM_EXTERN Uint2 NI_WWW_SetNcbidPort(Uint2 port);
 
 
 /* The set of functions that are capable to work with different

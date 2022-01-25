@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.127 $
+* $Revision: 1.141 $
 *
 * File Description:
 *
@@ -55,14 +55,17 @@
 #include <explore.h>
 #include <lsqfetch.h>
 #include <valid.h>
+#include <validerr.h>
 #include <pmfapi.h>
 #include <ent2api.h>
 #include <gbftdef.h>
+#include <objtax3.h>
+#include <tax3api.h>
 #ifdef INTERNAL_NCBI_ASN2VAL
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "10.0"
+#define ASNVAL_APP_VER "11.7"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -88,6 +91,7 @@ typedef struct valflags {
   Boolean  strictLatLonCountry;
   Boolean  rubiscoTest;
   Boolean  disableSuppression;
+  Boolean  genomeSubmission;
   Boolean  indexerVersion;
   Boolean  automatic;
   Boolean  catenated;
@@ -98,6 +102,7 @@ typedef struct valflags {
   Boolean  useThreads;
   Boolean  usePUBSEQ;
   Boolean  validateBarcode;
+  Boolean  taxfetch;
   Int2     verbosity;
   Int2     type;
   Int4     skipcount;
@@ -799,6 +804,653 @@ static void LIBCALLBACK ValidCallback (
   vfp->has_errors = TRUE;
 }
 
+typedef struct tax3val {
+  Uint2       entityID;
+  Uint4       itemID;
+  Uint2       itemtype;
+  Uint1       organelle;
+  OrgRefPtr   orp;
+  BioseqPtr   bsp;
+  SeqFeatPtr  sfp;
+} TaxVal, PNTR TaxValPtr;
+
+typedef struct tax3lst {
+  ValNodePtr  head;
+  ValNodePtr  tail;
+} TaxLst, PNTR TaxLstPtr;
+
+static void RecordSrc (Uint2 entityID, Uint4 itemID, Uint2 itemtype, OrgRefPtr orp,
+                       Uint1 organelle, TaxLstPtr tlp, SeqDescrPtr sdp, SeqFeatPtr sfp)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  ObjValNodePtr  ovp;
+  SeqEntryPtr    sep;
+  TaxValPtr      tvp;
+  ValNodePtr     vnp;
+
+  if (orp == NULL || tlp == NULL) return;
+
+  tvp = (TaxValPtr) MemNew (sizeof (TaxVal));
+  if (tvp == NULL) return;
+
+  vnp = ValNodeNew (tlp->tail);
+  if (vnp == NULL) return;
+
+  if (tlp->head == NULL) {
+    tlp->head = vnp;
+  }
+  tlp->tail = vnp;
+
+  tvp->entityID = entityID;
+  tvp->itemID = itemID;
+  tvp->itemtype = itemtype;
+  tvp->organelle = organelle;
+  tvp->orp = orp;
+  if (sdp != NULL && sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    if (ovp->idx.parenttype == OBJ_BIOSEQ) {
+      bsp = (BioseqPtr) ovp->idx.parentptr;
+      if (bsp != NULL) {
+        tvp->bsp = bsp;
+      }
+    } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) ovp->idx.parentptr;
+      if (bssp != NULL) {
+        sep = bssp->seqentry;
+        if (sep != NULL) {
+          sep = FindNthBioseq (sep, 1);
+          if (sep != NULL) {
+            bsp = (BioseqPtr) sep->data.ptrvalue;
+            if (bsp != NULL) {
+              tvp->bsp = bsp;
+            }
+          }
+        }
+      }
+    }
+  } else if (sfp != NULL) {
+    tvp->sfp = sfp;
+  }
+
+  vnp->data.ptrvalue = tvp;
+}
+
+static void GetSrcDesc (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  BioSourcePtr   biop;
+  ObjValNodePtr  ovp;
+  TaxLstPtr      tlp;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_source) return;
+  tlp = (TaxLstPtr) userdata;
+
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return;
+
+  if (sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    RecordSrc (ovp->idx.entityID, ovp->idx.itemID, OBJ_SEQDESC, biop->org, biop->genome, tlp, sdp, NULL);
+  }
+}
+
+static void GetSrcFeat (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  BioSourcePtr  biop;
+  TaxLstPtr     tlp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return;
+  tlp = (TaxLstPtr) userdata;
+
+  biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+  if (biop == NULL) return;
+
+  RecordSrc (sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT, biop->org, biop->genome, tlp, NULL, sfp);
+}
+
+NLM_EXTERN void CDECL  ValidErr VPROTO((ValidStructPtr vsp, int severity, int code1, int code2, const char *fmt, ...));
+
+
+static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPtr msg_fmt)
+{
+  ObjValNodePtr ovp;
+  BioSourcePtr  biop;
+  OrgModPtr     mod;
+
+  if (vnp == NULL || vsp == NULL || StringHasNoText (msg_fmt)) return;
+
+  vsp->sfp = NULL;
+  vsp->descr = NULL;
+  vsp->bsp = NULL;
+  vsp->bssp = NULL;
+  biop = NULL;
+  mod = NULL;
+
+  if (vnp->choice == OBJ_SEQFEAT)
+  {
+    vsp->sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+    vsp->gcp->entityID = vsp->sfp->idx.entityID;
+    vsp->gcp->itemID = vsp->sfp->idx.itemID;
+    vsp->gcp->thistype = OBJ_SEQFEAT;
+    if (vsp->sfp->idx.parenttype == OBJ_BIOSEQ)
+    {
+      vsp->bsp = vsp->sfp->idx.parentptr;        
+    }
+    else if (vsp->sfp->idx.parenttype == OBJ_BIOSEQSET)
+    {
+      vsp->bssp = vsp->sfp->idx.parentptr;        
+    }
+    biop = (BioSourcePtr) vsp->sfp->data.value.ptrvalue;
+  } 
+  else if (vnp->choice == OBJ_SEQDESC)
+  {
+    vsp->descr = (SeqDescrPtr) vnp->data.ptrvalue;
+    if (vsp->descr != NULL && vsp->descr->extended != 0) 
+    {
+      ovp = (ObjValNodePtr) vsp->descr;
+      vsp->gcp->entityID = ovp->idx.entityID;
+      vsp->gcp->itemID = ovp->idx.itemID;
+      vsp->gcp->thistype = OBJ_SEQDESC;
+
+      if (ovp->idx.parenttype == OBJ_BIOSEQ)
+      {
+        vsp->bsp = ovp->idx.parentptr;        
+      }
+      else if (ovp->idx.parenttype == OBJ_BIOSEQSET)
+      {
+        vsp->bssp = ovp->idx.parentptr;        
+      }
+    }
+    biop = vsp->descr->data.ptrvalue;
+  }
+  
+  if (biop != NULL && biop->org != NULL && biop->org->orgname != NULL)
+  {
+    mod = biop->org->orgname->mod;
+    while (mod != NULL && mod->subtype != ORGMOD_nat_host)
+    {
+      mod = mod->next;
+    }
+    if (mod != NULL)
+    {      
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, msg_fmt, mod->subname);
+    }
+  }
+}
+
+
+static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
+{
+  ValNodePtr    misspelled = NULL, bad_caps = NULL, ambiguous = NULL, unrecognized = NULL, vnp;
+
+  Taxon3ValidateSpecificHostsInSeqEntry (sep, &misspelled, &bad_caps, &ambiguous, &unrecognized);
+
+  for (vnp = misspelled; vnp != NULL; vnp = vnp->next) {
+    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is misspelled: %s");
+  }
+  for (vnp = bad_caps; vnp != NULL; vnp = vnp->next) {
+    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is incorrectly capitalized: %s");
+  } 
+  for (vnp = ambiguous; vnp != NULL; vnp = vnp->next) {
+    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is ambiguous: %s");
+  } 
+  for (vnp = unrecognized; vnp != NULL; vnp = vnp->next) {
+    ReportOneBadSpecificHost (vnp, vsp, "Invalid value for specific host: %s");
+  } 
+
+  misspelled = ValNodeFree (misspelled);
+  bad_caps = ValNodeFree (bad_caps);
+  unrecognized = ValNodeFree (unrecognized);
+}
+
+static void ReportBadTaxID (ValidStructPtr vsp, OrgRefPtr orig, OrgRefPtr reply)
+{
+  ValNodePtr vnp_o, vnp_r;
+  DbtagPtr db_o = NULL, db_r = NULL;
+  CharPtr tag1, tag2;
+  Char    buf1[15];
+  Char    buf2[15];
+
+  if (vsp == NULL || orig == NULL || reply == NULL
+      || orig->db == NULL || reply->db == NULL) {
+    return;
+  }
+
+  for (vnp_o = orig->db; vnp_o != NULL && db_o == NULL; vnp_o = vnp_o->next) {
+    if ((db_o = (DbtagPtr) vnp_o->data.ptrvalue) != NULL) {
+      if (StringCmp (db_o->db, "taxon") != 0) {
+        db_o = NULL;
+      }
+    }
+  }
+
+  if (db_o == NULL) {
+    return;
+  }
+
+  for (vnp_r = reply->db; vnp_r != NULL && db_r == NULL; vnp_r = vnp_r->next) {
+    if ((db_r = (DbtagPtr) vnp_r->data.ptrvalue) != NULL) {
+      if (StringCmp (db_r->db, "taxon") != 0) {
+        db_r = NULL;
+      }
+    }
+  }
+
+  if (db_r == NULL) {
+    return;
+  }
+  if (db_o->tag->id > 0) {
+    sprintf (buf1, "%d", db_o->tag->id);
+    tag1 = buf1;
+  } else if (db_o->tag->str == NULL) {
+    sprintf (buf1, "");
+    tag1 = buf1;
+  } else {
+    tag1 = db_o->tag->str;
+  }
+  if (db_r->tag->id > 0) {
+    sprintf (buf2, "%d", db_r->tag->id);
+    tag2 = buf2;
+  } else if (db_r->tag->str == NULL) {
+    sprintf (buf2, "");
+    tag2 = buf2;
+  } else {
+    tag2 = db_r->tag->str;
+  }
+  if (!ObjectIdMatch (db_o->tag, db_r->tag)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, 
+      "Organism name is '%s', taxonomy ID should be '%s' but is '%s'", orig->taxname == NULL ? "" : orig->taxname,
+                                                                        tag2, tag1);
+  }
+}
+
+static void RecordTentativeName (Uint2 entityID, Uint4 itemID, Uint2 itemtype, UserObjectPtr uop,
+                                 TaxLstPtr tlp, SeqDescrPtr sdp, SeqFeatPtr sfp)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  UserFieldPtr   curr;
+  CharPtr        field;
+  ObjectIdPtr    oip;
+  OrgRefPtr      orp;
+  ObjValNodePtr  ovp;
+  SeqEntryPtr    sep;
+  CharPtr        str;
+  CharPtr        taxname = NULL;
+  TaxValPtr      tvp;
+  ValNodePtr     vnp;
+
+  if (uop == NULL || tlp == NULL) return;
+
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "StructuredComment") != 0) return;
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    if (curr->choice != 1) continue;
+    oip = curr->label;
+    if (oip == NULL) continue;
+    field = oip->str;
+    if (StringHasNoText (field)) continue;
+    if (StringCmp (field, "Tentative Name") != 0) continue;
+    str = (CharPtr) curr->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (StringCmp (str, "not provided") == 0) continue;
+    taxname = str;
+  }
+  if (StringHasNoText (taxname)) return;
+
+  tvp = (TaxValPtr) MemNew (sizeof (TaxVal));
+  if (tvp == NULL) return;
+
+  vnp = ValNodeNew (tlp->tail);
+  if (vnp == NULL) return;
+
+  if (tlp->head == NULL) {
+    tlp->head = vnp;
+  }
+  tlp->tail = vnp;
+
+  tvp->entityID = entityID;
+  tvp->itemID = itemID;
+  tvp->itemtype = itemtype;
+  tvp->organelle = 0;
+
+  orp = OrgRefNew ();
+  if (orp == NULL) return;
+  orp->taxname = StringSave (taxname);
+
+  tvp->orp = orp;
+  if (sdp != NULL && sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    if (ovp->idx.parenttype == OBJ_BIOSEQ) {
+      bsp = (BioseqPtr) ovp->idx.parentptr;
+      if (bsp != NULL) {
+        tvp->bsp = bsp;
+      }
+    } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) ovp->idx.parentptr;
+      if (bssp != NULL) {
+        sep = bssp->seqentry;
+        if (sep != NULL) {
+          sep = FindNthBioseq (sep, 1);
+          if (sep != NULL) {
+            bsp = (BioseqPtr) sep->data.ptrvalue;
+            if (bsp != NULL) {
+              tvp->bsp = bsp;
+            }
+          }
+        }
+      }
+    }
+  } else if (sfp != NULL) {
+    tvp->sfp = sfp;
+  }
+
+  vnp->data.ptrvalue = tvp;
+}
+
+static void GetTentativeNameDesc (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  ObjValNodePtr  ovp;
+  TaxLstPtr      tlp;
+  UserObjectPtr  uop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return;
+  tlp = (TaxLstPtr) userdata;
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+
+  if (sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    RecordTentativeName (ovp->idx.entityID, ovp->idx.itemID, OBJ_SEQDESC, uop, tlp, sdp, NULL);
+  }
+}
+
+static void GetTentativeNameFeat (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  TaxLstPtr      tlp;
+  UserObjectPtr  uop;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_USER) return;
+  tlp = (TaxLstPtr) userdata;
+
+  uop = (UserObjectPtr) sfp->data.value.ptrvalue;
+  if (uop == NULL) return;
+
+  RecordTentativeName (sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT, uop, tlp, NULL, sfp);
+}
+
+static void StructCommentTentativeNameValidate (SeqEntryPtr sep, ValidStructPtr vsp)
+
+{
+  GatherContext     gc;
+  ValNodePtr        last = NULL;
+  OrgNamePtr        onp;
+  OrgRefPtr         orp;
+  ErrSev            sev;
+  TaxLst            srclist;
+  CharPtr           str;
+  T3ErrorPtr        t3ep;
+  Taxon3RequestPtr  t3rq;
+  Taxon3ReplyPtr    t3ry;
+  T3ReplyPtr        trp;
+  TaxValPtr         tvp;
+  ValNodePtr        vnp;
+  ValNodePtr        vnp2;
+
+  if (sep == NULL || vsp == NULL) return;
+  MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
+  vsp->gcp = &gc;
+
+  srclist.head = NULL;
+  srclist.tail = NULL;
+  VisitDescriptorsInSep (sep, (Pointer) &srclist, GetTentativeNameDesc);
+  VisitFeaturesInSep (sep, (Pointer) &srclist, GetTentativeNameFeat);
+  if (srclist.head == NULL) return;
+
+  t3rq = Taxon3RequestNew ();
+  if (t3rq == NULL) return;
+
+  for (vnp = srclist.head; vnp != NULL; vnp = vnp->next) {
+    tvp = (TaxValPtr) vnp->data.ptrvalue;
+    if (tvp == NULL) continue;
+    orp = AsnIoMemCopy (tvp->orp,
+                        (AsnReadFunc) OrgRefAsnRead,
+                        (AsnWriteFunc) OrgRefAsnWrite);
+    vnp2 = ValNodeAddPointer (&last, 3, (Pointer) orp);
+    if (orp != NULL) {
+      onp = orp->orgname;
+      if (onp != NULL) {
+        onp->pgcode = 0;
+      }
+    }
+    if (t3rq->request == NULL) {
+      t3rq->request = vnp2;
+    }
+    last = vnp2;
+  }
+
+  sev = ErrSetMessageLevel (SEV_WARNING);
+  t3ry = Tax3SynchronousQuery (t3rq);
+  ErrSetMessageLevel (sev);
+  Taxon3RequestFree (t3rq);
+  if (t3ry == NULL) return;
+
+  for (trp = t3ry->reply, vnp = srclist.head;
+       trp != NULL && vnp != NULL;
+       trp = trp->next, vnp = vnp->next) {
+    tvp = (TaxValPtr) vnp->data.ptrvalue;
+    if (tvp == NULL) continue;
+    if (trp->choice == T3Reply_error) {
+      t3ep = (T3ErrorPtr) trp->data.ptrvalue;
+      if (t3ep != NULL) {
+        str = NULL;
+        orp = (OrgRefPtr) t3ep->org;
+        if (orp != NULL) {
+          str = orp->taxname;
+        }
+        if (str == NULL) {
+          str = "?";
+        }
+
+        vsp->bssp = NULL;
+        vsp->bsp = tvp->bsp;
+        vsp->sfp = tvp->sfp;
+        vsp->descr = NULL;
+
+        gc.entityID = tvp->entityID;
+        gc.itemID = tvp->itemID;
+        gc.thistype = tvp->itemtype;
+
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadTentativeName, "Taxonomy lookup failed for Tentative Name '%s'", str);
+      }
+    }
+  }
+
+  Taxon3ReplyFree (t3ry);
+  ValNodeFreeData (srclist.head);
+}
+
+static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
+
+{
+  GatherContext     gc;
+  Boolean           has_nucleomorphs;
+  Boolean           is_nucleomorph;
+  Boolean           is_species_level;
+  Boolean           force_tax_consult;
+  ValNodePtr        last = NULL;
+  OrgNamePtr        onp;
+  OrgRefPtr         orp;
+  ErrSev            sev;
+  TaxLst            srclist;
+  CharPtr           str;
+  T3ErrorPtr        t3ep;
+  Taxon3RequestPtr  t3rq;
+  Taxon3ReplyPtr    t3ry;
+  T3DataPtr         tdp;
+  T3StatusFlagsPtr  tfp;
+  T3ReplyPtr        trp;
+  TaxValPtr         tvp;
+  ValNodePtr        val;
+  ValNodePtr        vnp;
+  ValNodePtr        vnp2;
+
+  if (sep == NULL || vsp == NULL) return;
+  MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
+  vsp->gcp = &gc;
+
+  srclist.head = NULL;
+  srclist.tail = NULL;
+  VisitDescriptorsInSep (sep, (Pointer) &srclist, GetSrcDesc);
+  VisitFeaturesInSep (sep, (Pointer) &srclist, GetSrcFeat);
+  if (srclist.head == NULL) return;
+
+  t3rq = Taxon3RequestNew ();
+  if (t3rq == NULL) return;
+
+  for (vnp = srclist.head; vnp != NULL; vnp = vnp->next) {
+    tvp = (TaxValPtr) vnp->data.ptrvalue;
+    if (tvp == NULL) continue;
+    orp = AsnIoMemCopy (tvp->orp,
+                        (AsnReadFunc) OrgRefAsnRead,
+                        (AsnWriteFunc) OrgRefAsnWrite);
+    vnp2 = ValNodeAddPointer (&last, 3, (Pointer) orp);
+    if (orp != NULL) {
+      onp = orp->orgname;
+      if (onp != NULL) {
+        onp->pgcode = 0;
+      }
+    }
+    if (t3rq->request == NULL) {
+      t3rq->request = vnp2;
+    }
+    last = vnp2;
+  }
+
+  sev = ErrSetMessageLevel (SEV_WARNING);
+  t3ry = Tax3SynchronousQuery (t3rq);
+  ErrSetMessageLevel (sev);
+  Taxon3RequestFree (t3rq);
+  if (t3ry == NULL) return;
+
+  for (trp = t3ry->reply, vnp = srclist.head;
+       trp != NULL && vnp != NULL;
+       trp = trp->next, vnp = vnp->next) {
+    tvp = (TaxValPtr) vnp->data.ptrvalue;
+    if (tvp == NULL) continue;
+    if (trp->choice == T3Reply_error) {
+      t3ep = (T3ErrorPtr) trp->data.ptrvalue;
+      if (t3ep != NULL) {
+        str = t3ep->message;
+        if (str == NULL) {
+          str = "?";
+        }
+
+        vsp->bssp = NULL;
+        vsp->bsp = tvp->bsp;
+        vsp->sfp = tvp->sfp;
+        vsp->descr = NULL;
+
+        gc.entityID = tvp->entityID;
+        gc.itemID = tvp->itemID;
+        gc.thistype = tvp->itemtype;
+
+        if (StringCmp (str, "Organism not found") == 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_OrganismNotFound, "Organism not found in taxonomy database");
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "Taxonomy lookup failed with message '%s'", str);
+        }
+      }
+    }
+    if (trp->choice != T3Reply_data) continue;
+    tdp = (T3DataPtr) trp->data.ptrvalue;
+    if (tdp == NULL) continue;
+
+    vsp->bssp = NULL;
+    vsp->bsp = tvp->bsp;
+    vsp->sfp = tvp->sfp;
+    vsp->descr = NULL;
+
+    ReportBadTaxID (vsp, tvp->orp, (OrgRefPtr) tdp->org);
+
+    is_species_level = FALSE;
+    has_nucleomorphs = FALSE;
+    is_nucleomorph = FALSE;
+
+    for (tfp = tdp->status; tfp != NULL; tfp = tfp->next) {
+
+      /*
+      val = tfp->Value_value;
+      if (val != NULL && val->choice == Value_value_bool) {
+        str = tfp->property;
+        if (str == NULL) {
+          str = "?";
+        }
+        if (val->data.intvalue != 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "'%s' TRUE", str);
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "'%s' FALSE", str);
+        }
+      }
+      */
+
+      if (StringICmp (tfp->property, "is_species_level") == 0) {
+        val = tfp->Value_value;
+        if (val != NULL && val->choice == Value_value_bool) {
+          is_species_level = (Boolean) (val->data.intvalue != 0);
+          if (! is_species_level) {
+            gc.entityID = tvp->entityID;
+            gc.itemID = tvp->itemID;
+            gc.thistype = tvp->itemtype;
+
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyIsSpeciesProblem, "Taxonomy lookup reports is_species_level FALSE");
+          }
+        }
+      } else if (StringICmp (tfp->property, "force_consult") == 0) {
+        val = tfp->Value_value;
+        if (val != NULL && val->choice == Value_value_bool) {
+          force_tax_consult = (Boolean) (val->data.intvalue != 0);
+          if (force_tax_consult) {
+            gc.entityID = tvp->entityID;
+            gc.itemID = tvp->itemID;
+            gc.thistype = tvp->itemtype;
+
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyConsultRequired, "Taxonomy lookup reports taxonomy consultation needed");
+          }
+        }
+      } else if (StringICmp (tfp->property, "has_nucleomorphs") == 0) {
+        val = tfp->Value_value;
+        if (val != NULL && val->choice == Value_value_bool) {
+          has_nucleomorphs = (Boolean) (val->data.intvalue != 0);
+          if (has_nucleomorphs) {
+            is_nucleomorph = TRUE;
+          }
+        }
+      }
+    }
+    if (tvp->organelle == GENOME_nucleomorph && (! is_nucleomorph)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyNucleomorphProblem, "Taxonomy lookup does not have expected nucleomorph flag");
+    }
+
+  }
+
+  Taxon3ReplyFree (t3ry);
+  ValNodeFreeData (srclist.head);
+
+  /* also validate specific-host values */
+
+  ReportBadSpecificHostValues (sep, vsp);
+
+  StructCommentTentativeNameValidate (sep, vsp);
+}
+
 static void DoValidation (
   SeqEntryPtr sep,
   ValFlagPtr vfp,
@@ -839,6 +1491,7 @@ static void DoValidation (
   vsp->strictLatLonCountry = vfp->strictLatLonCountry;
   vsp->rubiscoTest = vfp->rubiscoTest;
   vsp->disableSuppression = vfp->disableSuppression;
+  vsp->genomeSubmission = vfp->genomeSubmission;
   vsp->indexerVersion = vfp->indexerVersion;
 
   if (ofp == NULL && vfp->outfp != NULL) {
@@ -857,6 +1510,10 @@ static void DoValidation (
   }
 
   ValidateSeqEntry (sep, vsp);
+
+  if (vfp->taxfetch) {
+    TaxonValidate (sep, vsp);
+  }
 
   for (i = 0; i <= 4; i++) {
     vfp->num_errors += vsp->errors [i];
@@ -884,6 +1541,31 @@ static void DoValidation (
   }
 }
 
+static void ValidateOneSep (
+  SeqEntryPtr sep,
+  FILE *ofp,
+  ValFlagPtr vfp
+)
+{
+  ValNodePtr bsplist = NULL;
+
+  if (! TooManyFarComponents (sep)) {
+    if (vfp->inferenceAccnCheck) {
+      if (! TooManyInferenceAccessions (sep, NULL, NULL)) {
+        LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+      }
+    }
+    if (vfp->lock) {
+      bsplist = DoLockFarComponents (sep, vfp);
+    }
+  }
+
+  DoValidation (sep, vfp, ofp);
+
+  bsplist = UnlockFarComponents (bsplist);
+}
+
+
 static void ProcessSingleRecord (
   CharPtr filename,
   ValFlagPtr vfp
@@ -892,16 +1574,16 @@ static void ProcessSingleRecord (
 {
   AsnIoPtr       aip;
   BioseqPtr      bsp;
-  ValNodePtr     bsplist;
   BioseqSetPtr   bssp;
   Char           buf [64], path [PATH_MAX];
   Pointer        dataptr = NULL;
   Uint2          datatype = 0, entityID = 0;
   FILE           *fp, *ofp = NULL;
-  SeqEntryPtr    fsep, sep;
+  SeqEntryPtr    fsep, sep, tmp_sep;
   ObjMgrPtr      omp;
   CharPtr        ptr;
   time_t         starttime, stoptime;
+  SeqSubmitPtr   ssp;
 
   if (StringHasNoText (filename)) return;
   if (vfp == NULL) return;
@@ -1022,22 +1704,18 @@ static void ProcessSingleRecord (
         ofp = FileOpen (path, "w");
       }
 
-      bsplist = NULL;
-
-      if (! TooManyFarComponents (sep)) {
-        if (vfp->inferenceAccnCheck) {
-          if (! TooManyInferenceAccessions (sep, NULL, NULL)) {
-            LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
-          }
-        }
-        if (vfp->lock) {
-          bsplist = DoLockFarComponents (sep, vfp);
-        }
-      }
-
-      DoValidation (sep, vfp, ofp);
-
-      bsplist = UnlockFarComponents (bsplist);
+      if (datatype == OBJ_SEQSUB && (ssp = (SeqSubmitPtr)dataptr) != NULL
+          && ssp->datatype == 1) {
+        for (sep = ssp->data; sep != NULL; sep = sep->next) {
+          tmp_sep = (SeqEntryPtr) AsnIoMemCopy (sep, (AsnReadFunc) SeqEntryAsnRead, (AsnWriteFunc) SeqEntryAsnWrite);
+          entityID = ObjMgrGetEntityIDForChoice (tmp_sep);
+          SeqMgrIndexFeatures (entityID, NULL);
+          ValidateOneSep (tmp_sep, ofp, vfp);
+          tmp_sep = SeqEntryFree (tmp_sep);
+        }                   
+      } else {
+        ValidateOneSep (sep, ofp, vfp);
+      } 
 
       if (ofp != NULL) {
         if (vfp->has_errors) {
@@ -1542,8 +2220,9 @@ static void ProcessOneRecord (
   Uint2        datatype;
   Uint2        entityID;
   FILE         *fp;
-  SeqEntryPtr  sep;
+  SeqEntryPtr  sep, tmp_sep;
   ValFlagPtr   vfp;
+  SeqSubmitPtr ssp;
 
   vfp = (ValFlagPtr) userdata;
   if (vfp == NULL) return;
@@ -1560,8 +2239,19 @@ static void ProcessOneRecord (
     fp = FileOpen (filename, "r");
     if (fp != NULL) {
       while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE)) != NULL) {
-        sep = GetTopSeqEntryForEntityID (entityID);
-        ValidWrapper (sep, vfp);
+        if (datatype == OBJ_SEQSUB && (ssp = (SeqSubmitPtr)dataptr) != NULL
+            && ssp->datatype == 1) {
+          for (sep = ssp->data; sep != NULL; sep = sep->next) {
+            tmp_sep = (SeqEntryPtr) AsnIoMemCopy (sep, (AsnReadFunc) SeqEntryAsnRead, (AsnWriteFunc) SeqEntryAsnWrite);
+            entityID = ObjMgrGetEntityIDForChoice (tmp_sep);
+            SeqMgrIndexFeatures (entityID, NULL);
+            ValidWrapper (tmp_sep, vfp);
+            tmp_sep = SeqEntryFree (tmp_sep);
+          }          
+        } else {
+          sep = GetTopSeqEntryForEntityID (entityID);
+          ValidWrapper (sep, vfp);
+        }
       }
       FileClose (fp);
     }
@@ -1617,12 +2307,14 @@ typedef enum {
   r_argRemote,
   k_argLocalFetch,
   d_argAsnIdx,
+  q_argTaxLookup,
   l_argLockFar,
   T_argThreads,
   F_argTestNetwork,
   L_argLogFile,
   K_argSummary,
   D_argDisableSuppress,
+  U_argGenomeSubmission,
   S_argSkipCount,
   B_argBarcodeVal,
   C_argMaxCount,
@@ -1675,7 +2367,12 @@ Args myargs [] = {
     TRUE, 'Y', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Ignore Transcription/Translation Exceptions", "F", NULL, NULL,
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Verbosity", "1", "0", "5",
+  {"Verbosity\n"
+   "      1 Standard Report\n"
+   "      2 Accession / Severity / Code (space delimited)\n"
+   "      3 Accession / Severity / Code (tab delimited\n"
+   "      4 XML Report\n"
+   "      5 Accession / GI / Severity / Code (tab delimited)\n", "1", "0", "5",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type\n"
    "      a Automatic\n"
@@ -1698,6 +2395,8 @@ Args myargs [] = {
     TRUE, 'k', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Path to Indexed Binary ASN.1 Data", NULL, NULL, NULL,
     TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
+  {"Taxonomy Lookup", "F", NULL, NULL,
+    TRUE, 'q', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Lock Components in Advance", "F", NULL, NULL,
     TRUE, 'l', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Use Threads", "F", NULL, NULL,
@@ -1710,6 +2409,8 @@ Args myargs [] = {
     TRUE, 'K', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Disable Message Suppression", "F", NULL, NULL,
     TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Genome Center Submission", "F", NULL, NULL,
+    TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Skip Count", "0", NULL, NULL,
     TRUE, 'S', ARG_INT, 0.0, 0, NULL},
   {"Barcode Validate", "F", NULL, NULL,
@@ -1861,8 +2562,9 @@ Int2 Main (void)
   vfd.validateExons = (Boolean) myargs [X_argExonSplice].intvalue;
   vfd.inferenceAccnCheck = (Boolean) myargs [G_argInfAccns].intvalue;
   vfd.disableSuppression = (Boolean) myargs [D_argDisableSuppress].intvalue;
+  vfd.genomeSubmission = (Boolean) myargs [U_argGenomeSubmission].intvalue;
   vfd.validateBarcode = (Boolean) myargs[B_argBarcodeVal].intvalue;
-
+  vfd.taxfetch = (Boolean) myargs [q_argTaxLookup].intvalue;
 
   val = (Int2) myargs [N_argLatLonStrict].intvalue;
   vfd.testLatLonSubregion = (Boolean) ((val & LAT_LON_STATE) != 0);

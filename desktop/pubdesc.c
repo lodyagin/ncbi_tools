@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.89 $
+* $Revision: 6.93 $
 *
 * File Description:
 *
@@ -62,8 +62,7 @@
 #define PUB_PROCCHPTR   5
 #define PUB_PROC        6
 #define PUB_PATENT      7
-#define PUB_ONLINE      8
-#define PUB_SUB         9
+#define PUB_SUB         8
 
 #define ART_JOURNAL     1
 #define ART_BOOK        2
@@ -662,7 +661,6 @@ static ValNodePtr TestPubdescDialog (DialoG d)
     switch (ppp->pub_choice)
     {
       case PUB_UNPUB:
-      case PUB_ONLINE:
         /* all fields are optional in a Cit-gen */
         break;
       case PUB_PATENT:
@@ -747,19 +745,12 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
       switch (ppp->pub_choice)
       {
       case PUB_UNPUB:
-      case PUB_ONLINE:
         cgp = CitGenNew ();
         if (cgp != NULL)
         {
           vnp->choice = PUB_Gen;
           vnp->data.ptrvalue = cgp;
-          if (ppp->pub_choice == PUB_UNPUB) {
-            cgp->cit = StringSave ("unpublished");
-          } else if (ppp->pub_choice == PUB_ONLINE) {
-            cgp->cit = StringSave ("Online Publication");
-          } else {
-            cgp->cit = StringSave ("unpublished");
-          }
+          cgp->cit = StringSave ("unpublished");
           alp = (AuthListPtr) DialogToPointer (ppp->author_list);
           alp = AddConsortiumToAuthList (alp, ppp->consortium);
           if (alp != NULL)
@@ -973,7 +964,7 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
         vnp = vnpt;
       }
 
-      if (ppp->pub_choice != PUB_UNPUB && ppp->pub_choice != PUB_ONLINE)
+      if (ppp->pub_choice != PUB_UNPUB)
       {
         vnpt = NewSerialFromText (ppp->serial);
         if (vnpt != NULL)
@@ -1223,9 +1214,12 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
   CitPatPtr         cpp;
   CitSubPtr         csp;
   CharPtr           doi;
-  ArticleIdPtr      ids;
   PubStatusDatePtr  history;
-  ImprintPtr        imp;
+  ArticleIdPtr      ids;
+  ImprintPtr        imp = NULL;
+  CharPtr           journal = NULL;
+  size_t            len;
+  CharPtr           pii = NULL;
   Uint1             pubstatus;
   Int2              title_new, title_old;
   Int2              title_rank[9];
@@ -1409,7 +1403,8 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                       if (title_new > title_old)
                       {
                         title_old = title_new;
-                        SetTitle (ppp->journal, (CharPtr) ttl->data.ptrvalue);
+                        journal = (CharPtr) ttl->data.ptrvalue;
+                        SetTitle (ppp->journal, journal);
                       }
                     }
                     ttl = ttl->next;
@@ -1461,10 +1456,13 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                   break;
               }
               for (ids = cap->ids; ids != NULL; ids = ids->next) {
-                if (ids->choice != ARTICLEID_DOI) continue;
-                doi = (CharPtr) ids->data.ptrvalue;
-                if (StringHasNoText (doi)) continue;
-                SetTitle (ppp->doi, doi);
+                if (ids->choice == ARTICLEID_DOI) {
+                  doi = (CharPtr) ids->data.ptrvalue;
+                  if (StringHasNoText (doi)) continue;
+                  SetTitle (ppp->doi, doi);
+                } else if (ids->choice == ARTICLEID_PII) {
+                  pii = (CharPtr) ids->data.ptrvalue;
+                }
               }
             }
             break;
@@ -1538,6 +1536,20 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
             break;
         }
         vnp = vnp->next;
+      }
+      if (imp == NULL || imp->pages == NULL) {
+        if (pii != NULL && journal != NULL) {
+          len = StringLen (journal);
+          if (len< StringLen (pii)) {
+            if (StringNICmp (journal, pii, len) == 0 && pii [len] == '.') {
+              if (StringDoesHaveText (pii + len + 1)) {
+                StringNCpy_0 (str, pii + len, sizeof (str));
+                str [0] = 'e';
+                SetTitle ((TexT) ppp->pages, str);
+              }
+            }
+          }
+        }
       }
       if (!ppp->flagPubDelta)
         SetTitle (ppp->comment, pdp->comment);
@@ -2751,7 +2763,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     AlignObjects (ALIGN_CENTER, (HANDLE) ppp->comment, (HANDLE) g24, NULL);
 
     g11 = HiddenGroup (g10, -6, 0, NULL);
-    if (pub_choice == PUB_UNPUB || pub_choice == PUB_ONLINE || pub_choice == PUB_SUB)
+    if (pub_choice == PUB_UNPUB || pub_choice == PUB_SUB)
     {
       StaticPrompt (g11, "Year", 0, dialogTextHeight, programFont, 'l');
       ppp->year = DialogText (g11, "", 6, NULL);
@@ -2822,6 +2834,7 @@ static void SetPubdescImportExportItems (PubdescFormPtr pfp)
 {
   IteM  exportItm;
   IteM  importItm;
+  PubdescPagePtr  ppp;
 
   if (pfp != NULL) {
     importItm = FindFormMenuItem ((BaseFormPtr) pfp, VIB_MSG_IMPORT);
@@ -2839,6 +2852,13 @@ static void SetPubdescImportExportItems (PubdescFormPtr pfp)
     } else if (pfp->is_feat && pfp->currentPage == pfp->Location_Page) {
       SafeSetTitle (importItm, "Import SeqLoc...");
       SafeSetTitle (exportItm, "Export SeqLoc...");
+      SafeEnable (importItm);
+      SafeEnable (exportItm);
+    } else if ((ppp = (PubdescPagePtr) GetObjectExtra (pfp->data)) != NULL
+               && ppp->pub_choice == PUB_JOURNAL
+               &&& pfp->currentPage == 1) {
+      SafeSetTitle (importItm, "Import Pubdesc...");
+      SafeSetTitle (exportItm, "Export Pubdesc...");
       SafeEnable (importItm);
       SafeEnable (exportItm);
     } else {
@@ -2929,10 +2949,12 @@ static Boolean ImportPubdescForm (ForM f, CharPtr filename)
 
 {
   AsnIoPtr        aip;
+  FILE           *fp;
   Char            path [PATH_MAX];
   PubdescPtr      pdp;
   PubdescPagePtr  ppp;
   PubdescFormPtr  pfp;
+  PubPtr          pub;
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
@@ -2944,6 +2966,17 @@ static Boolean ImportPubdescForm (ForM f, CharPtr filename)
         if (aip != NULL) {
           pdp = PubdescAsnRead (aip, NULL);
           AsnIoClose (aip);
+          if (pdp == NULL) {
+            /* try reading from endnote instead */
+            fp = FileOpen (path, "r");
+            pub = ParsePubFromEndnote(fp);
+            FileClose (fp);
+            if (pub != NULL) {
+              pdp = PubdescNew ();
+              pdp->pub = pub;
+            }
+          }
+
           if (pdp != NULL) {
             ppp = (PubdescPagePtr) GetObjectExtra (pfp->data);
             if (ppp != NULL) {
@@ -2954,7 +2987,9 @@ static Boolean ImportPubdescForm (ForM f, CharPtr filename)
             pdp = PubdescFree (pdp);
             Update ();
             return TRUE;
-          }
+          } 
+
+
         }
       }
     } else if (pfp->currentPage == pfp->Author_Page) {
@@ -3989,12 +4024,6 @@ static void PubdescInitPtrToPubdescInitForm (ForM w, Pointer d)
              {
                publication = PUB_UNPUB;    /* back to zero */
                forcetounpub = FALSE;
-             } else if (StringICmp (cgp->cit, "Online Publication") == 0 ||
-                        StringICmp (cgp->cit, "Published Only in DataBase") == 0) {
-               Enable (pifp->pub_choice);
-               SetValue (pifp->pub_status, 3);
-               SetValue (pifp->pub_choice, 8);
-               publication = PUB_ONLINE;
              }
             }
        } /* end if cgp */
@@ -4425,7 +4454,6 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (g5, "Proceedings Chapter");
     RadioButton (g5, "Proceedings");
     pifp->patent_btn = RadioButton (g5, "Patent");
-    RadioButton (g5, "Online Publication");
     if (pdp != NULL)
     {
       vnp = pdp->pub;
@@ -6368,7 +6396,6 @@ NLM_EXTERN Boolean EditPubdescInPlace (SeqDescPtr sdp)
   RadioButton (g5, "Proceedings Chapter");
   RadioButton (g5, "Proceedings");
   pifp->patent_btn = RadioButton (g5, "Patent");
-  RadioButton (g5, "Online Publication");
   vnp = pdp->pub;
   while (vnp != NULL)
   {

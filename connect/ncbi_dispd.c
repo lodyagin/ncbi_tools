@@ -1,4 +1,4 @@
-/* $Id: ncbi_dispd.c,v 6.95 2011/05/26 19:14:35 kazimird Exp $
+/* $Id: ncbi_dispd.c,v 6.99 2012/02/27 15:09:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,11 +36,9 @@
 #include "ncbi_dispd.h"
 #include "ncbi_lb.h"
 #include "ncbi_priv.h"
-#include <connect/ncbi_connection.h>
 #include <connect/ncbi_http_connector.h>
 #include <ctype.h>
 #include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #define NCBI_USE_ERRCODE_X   Connect_Dispd
@@ -180,7 +178,7 @@ static void s_Resolve(SERV_ITER iter)
                                        : !net_info->stateless
                                        ? "Client-Mode: STATEFUL_CAPABLE\r\n"
                                        : "Client-Mode: STATELESS_ONLY\r\n")) {
-        conn = HTTP_CreateConnectorEx(net_info, fHTTP_SureFlush, s_ParseHeader,
+        conn = HTTP_CreateConnectorEx(net_info, fHTTP_Flushable, s_ParseHeader,
                                       iter/*data*/, s_Adjust, 0/*cleanup*/);
     }
     if (s) {
@@ -193,8 +191,9 @@ static void s_Resolve(SERV_ITER iter)
         CONN_Close(c);
     } else {
         CORE_LOGF_X(1, eLOG_Error,
-                    ("[%s]  Unable to create auxiliary HTTP %s: %s",
-                     iter->name, conn ? "connection" : "connector",
+                    ("%s%s%sUnable to create auxiliary HTTP %s: %s",
+                     &"["[!*iter->name], iter->name, *iter->name ? "]  " : "",
+                     conn ? "connection" : "connector",
                      IO_StatusStr(conn ? status : eIO_Unknown)));
         assert(0);
     }
@@ -386,9 +385,6 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 {
     struct SDISPD_Data* data;
 
-    if (!iter->ismask  &&  strpbrk(iter->name, "?*"))
-        return 0/*failed to start unallowed wildcard search*/;
-
     if (!(data = (struct SDISPD_Data*) calloc(1, sizeof(*data))))
         return 0;
     iter->data = data;
@@ -407,15 +403,15 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 
     /* Reset request method to be GET ('cause no HTTP body is ever used) */
     data->net_info->req_method = eReqMethod_Get;
-    if (iter->stateless)
+    if ( iter->stateless)
         data->net_info->stateless = 1/*true*/;
-    if (iter->type & fSERV_Firewall)
-        data->net_info->firewall = 1/*true*/;
+    if ((iter->type & fSERV_Firewall)  &&  !data->net_info->firewall)
+        data->net_info->firewall = eFWMode_Adaptive;
     ConnNetInfo_ExtendUserHeader(data->net_info,
                                  "User-Agent: NCBIServiceDispatcher/"
                                  DISP_PROTOCOL_VERSION
 #ifdef NCBI_CXX_TOOLKIT
-                                 " (C++ Toolkit)"
+                                 " (CXX Toolkit)"
 #else
                                  " (C Toolkit)"
 #endif /*NCBI_CXX_TOOLKIT*/

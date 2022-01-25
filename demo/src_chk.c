@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.23 $
+* $Revision: 1.24 $
 *
 * File Description: 
 *
@@ -664,7 +664,7 @@ static ValNodePtr CollectFieldList(BioseqPtr bsp)
 }
 
 
-static void PrintHeader (FILE *fp, ValNodePtr field_list)
+static void PrintHeader (FILE *fp, ValNodePtr field_list, ValNodePtr struccomm_list)
 {
   CharPtr txt;
 
@@ -678,6 +678,12 @@ static void PrintHeader (FILE *fp, ValNodePtr field_list)
     fprintf (fp, "\t%s", txt);
     txt = MemFree (txt);
     field_list = field_list->next;
+  }
+  while (struccomm_list != NULL) {
+    txt = SummarizeFieldType (struccomm_list);
+    fprintf (fp, "\t%s", txt);
+    txt = MemFree (txt);
+    struccomm_list = struccomm_list->next;
   }
   fprintf (fp, "\n");
 }
@@ -723,17 +729,51 @@ static ValNodePtr CollectBioSourceValues (BioSourcePtr biop, ValNodePtr field_li
 }
 
 
-static ValNodePtr CollectBioseqLineValues (BioseqPtr bsp, ValNodePtr field_list, Boolean want_gi)
+static ValNodePtr CollectStruccommValues (BioseqPtr bsp, ValNodePtr field_list)
+{
+  ValNodePtr field_values = NULL;
+  CharPtr    txt;
+  SeqDescPtr sdp;
+  SeqMgrDescContext context;
+
+
+  if (field_list == NULL) {
+    return NULL;
+  }
+
+  while (field_list != NULL) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+    txt = NULL;
+    while (sdp != NULL && txt == NULL) {
+      txt = GetFieldValueForObject (OBJ_SEQDESC, sdp, field_list, NULL);
+      sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context);
+    }
+    ValNodeAddPointer (&field_values, 0, txt);
+    field_list = field_list->next;
+  }
+  return field_values;
+}
+
+
+
+static ValNodePtr CollectBioseqLineValues 
+(BioseqPtr  bsp,
+ ValNodePtr src_field_list,
+ ValNodePtr struccomm_field_list,
+ Boolean want_gi)
 {
   SeqDescrPtr       sdp;
   SeqMgrDescContext dcontext;
   Char              id_txt[255], id_txt2[255];
   SeqIdPtr          sip, sip_gi = NULL, sip_gb = NULL;
-  ValNodePtr        line_list = NULL, line_values;
+  ValNodeBlock      vblock;
+  ValNodePtr        line_values;
 
   if (bsp == NULL) {
     return NULL;
   }
+
+  InitValNodeBlock (&vblock, NULL);
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_GENBANK
@@ -771,10 +811,12 @@ static ValNodePtr CollectBioseqLineValues (BioseqPtr bsp, ValNodePtr field_list,
     if (want_gi) {
       ValNodeAddPointer (&line_values, 0, StringSave (id_txt2));
     }
-    ValNodeLink (&line_values, CollectBioSourceValues (sdp->data.ptrvalue, field_list));
-    ValNodeAddPointer (&line_list, 0, line_values);
+    ValNodeLink (&line_values, CollectBioSourceValues (sdp->data.ptrvalue, src_field_list));
+    ValNodeLink (&line_values, CollectStruccommValues (bsp, struccomm_field_list));
+    
+    ValNodeAddPointerToEnd (&vblock, 0, line_values);
   }
-  return line_list;
+  return vblock.head;
 }
 
 
@@ -782,6 +824,7 @@ static ValNodePtr CollectBioseqLineValues (BioseqPtr bsp, ValNodePtr field_list,
 
 typedef struct populate {
   ValNodePtr field_list;
+  ValNodePtr struccomm_list;
   Boolean    want_gi;
 } PopulateData, PNTR PopulatePtr;
 
@@ -822,13 +865,19 @@ static void PopulateFetchItemCallback (BioseqPtr bsp, Pointer data)
 
   if (fetch_item != NULL && fetch_item->index_pos < 0) {
     /* collect field values */
-    fetch_item->field_values = CollectBioseqLineValues (bsp, pp->field_list, pp->want_gi);
+    fetch_item->field_values = CollectBioseqLineValues (bsp, pp->field_list, 
+                                                        pp->struccomm_list, pp->want_gi);
     fetch_item->index_pos = 0;
   }
 }
 
 
-static void PopulateFetchItemCache (Uint2 entityID, ValNodePtr fetch_list, ValNodePtr field_list, Boolean want_gi)
+static void PopulateFetchItemCache 
+(Uint2 entityID,
+ ValNodePtr fetch_list,
+ ValNodePtr field_list,
+ ValNodePtr struccomm_list,
+ Boolean want_gi)
 {
   SeqEntryPtr sep;
   BioseqSetPtr bssp;
@@ -851,7 +900,8 @@ static void PopulateFetchItemCache (Uint2 entityID, ValNodePtr fetch_list, ValNo
           bsp = BioseqFindInSeqEntry (fetch_item->sip, sep);
           if (bsp != NULL) {
             /* collect field values */
-            fetch_item->field_values = CollectBioseqLineValues (bsp, field_list, want_gi);
+            fetch_item->field_values = CollectBioseqLineValues (bsp, field_list,
+                                                                struccomm_list, want_gi);
             fetch_item->index_pos = 0;
           }
         }
@@ -970,6 +1020,7 @@ static void PrintBioseqErrorLine (FILE *fp, SeqIdPtr sip)
 #define j_argJustAccessions    2
 #define f_argFieldList         3
 #define D_argDebugMode         4
+#define b_argBoLDMode          5
 
 Args myargs [] = {
   {"Input File", NULL, NULL, NULL,
@@ -981,7 +1032,9 @@ Args myargs [] = {
   {"Field List", NULL, NULL, NULL,
     TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"Debug Mode", "F", NULL, NULL,
-    TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL}
+    TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"BoLD Mode", "F", NULL, NULL,
+    TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 
@@ -1211,7 +1264,12 @@ static ValNodePtr CollectBioseqFieldsWithCaching (ValNodePtr fetch_list)
 }
 
 
-static Int2 ProcessBioseqsWithCaching (ValNodePtr fetch_list, ValNodePtr field_list, Boolean just_acc, FILE *out)
+static Int2 ProcessBioseqsWithCaching 
+(ValNodePtr fetch_list,
+ ValNodePtr field_list,
+ ValNodePtr struccomm_list,
+ Boolean    just_acc,
+ FILE *     out)
 {
   ValNodePtr vnp;
   BioseqPtr  bsp;
@@ -1228,7 +1286,7 @@ static Int2 ProcessBioseqsWithCaching (ValNodePtr fetch_list, ValNodePtr field_l
 #ifdef INTERNAL_NCBI_SRC_CHK
       bsp = FetchBioseqFromSmartNotId (fetch_item->id_txt, &entityID);
       if (bsp != NULL) {
-        PopulateFetchItemCache (entityID, vnp->next, field_list, !just_acc);
+        PopulateFetchItemCache (entityID, vnp->next, field_list, struccomm_list, !just_acc);
       } else {
         bsp = FetchOnlyBioseqFromID (fetch_item->id_txt);
         if (bsp == NULL) {
@@ -1238,7 +1296,7 @@ static Int2 ProcessBioseqsWithCaching (ValNodePtr fetch_list, ValNodePtr field_l
 #else
       bsp = FetchOnlyBioseqFromID (fetch_item->id_txt);
 #endif
-      fetch_item->field_values = CollectBioseqLineValues (bsp, field_list, !just_acc);
+      fetch_item->field_values = CollectBioseqLineValues (bsp, field_list, struccomm_list, !just_acc);
     }
     if (fetch_item->field_values == NULL) {
       fprintf (out, "%s\n", fetch_item->id_txt);
@@ -1262,6 +1320,36 @@ static Int2 ProcessBioseqsWithCaching (ValNodePtr fetch_list, ValNodePtr field_l
 }
 
 
+static ValNodePtr CreateNamedStructuredComment (CharPtr name)
+{
+  ValNodePtr vnp;
+
+  vnp = ValNodeNew (NULL);
+  vnp->choice = StructuredCommentField_named;
+  vnp->data.ptrvalue = StringSave (name);
+  return vnp;
+}
+
+
+static ValNodePtr CreateBOLDStructuredCommentFieldList (void)
+{
+  ValNodePtr list = NULL;
+
+  ValNodeAddPointer (&list, FieldType_struc_comment_field,
+                     CreateNamedStructuredComment ("Barcode Index Number"));
+  ValNodeAddPointer (&list, FieldType_struc_comment_field,
+                     CreateNamedStructuredComment ("Order Assignment"));
+  ValNodeAddPointer (&list, FieldType_struc_comment_field,
+                     CreateNamedStructuredComment ("iBOL Working Group"));
+  ValNodeAddPointer (&list, FieldType_struc_comment_field,
+                     CreateNamedStructuredComment ("Tentative Name"));
+  ValNodeAddPointer (&list, FieldType_struc_comment_field,
+                     CreateNamedStructuredComment ("iBOL Release Status"));
+
+  return list;
+}
+
+
 Int2 Main(void)
 {
   Char             app [64];
@@ -1270,11 +1358,13 @@ Int2 Main(void)
   ReadBufferData   rbd;
   ValNodePtr       fetch_list = NULL;
   ValNodePtr       field_list = NULL;
+  ValNodePtr       struccomm_list = NULL;
   SeqIdPtr         sip;
   ValNodePtr       bsp_list = NULL, vnp;
   BioseqPtr        bsp;
   FILE *fp;
   Boolean          just_acc = FALSE;
+  Boolean          bold_mode = FALSE;
   CharPtr          desired_fields;
 
   /* standard setup */
@@ -1330,6 +1420,7 @@ Int2 Main(void)
   desired_fields = (CharPtr) myargs [f_argFieldList].strvalue;
   id_file = (CharPtr) myargs [i_argInputFile].strvalue;
   debug_mode = (Boolean) myargs [D_argDebugMode].intvalue;
+  bold_mode = (Boolean) myargs [b_argBoLDMode].intvalue;
 
   fp = FileOpen (id_file, "r");
   if (fp == NULL) {
@@ -1352,6 +1443,9 @@ Int2 Main(void)
 
     SortFieldListForSrcChk (&field_list);
   }
+  if (bold_mode) {
+    struccomm_list = CreateBOLDStructuredCommentFieldList ();
+  }
 
   fp = FileOpen ((CharPtr) myargs [o_argOutputFile].strvalue, "w");
   if (fp == NULL) {
@@ -1359,13 +1453,14 @@ Int2 Main(void)
     rval = 1;
   } else {
     if (!just_acc) {
-      PrintHeader (fp, field_list);
+      PrintHeader (fp, field_list, struccomm_list);
     }
-    ProcessBioseqsWithCaching (fetch_list, field_list, just_acc, fp);
+    ProcessBioseqsWithCaching (fetch_list, field_list, struccomm_list, just_acc, fp);
   }
   FileClose (fp);
   bsp_list = ValNodeFree (bsp_list);
   field_list = FieldTypeListFree (field_list);
+  struccomm_list = FieldTypeListFree (struccomm_list);
   fetch_list = FetchItemListFree (fetch_list);
   MakeFetchItemIndex(NULL);
 

@@ -4,6 +4,7 @@ Macro-action-list ::= {
     action
       extend-3 NULL ,
     retranslate-cds FALSE ,
+    also-edit-gene FALSE ,
     constraint {
       location {
         strand any ,
@@ -23,6 +24,7 @@ Macro-action-list ::= {
     action
       extend-5 NULL ,
     retranslate-cds FALSE ,
+    also-edit-gene FALSE ,
     constraint {
       location {
         strand any ,
@@ -42,6 +44,7 @@ Macro-action-list ::= {
     action
       extend-3 NULL ,
     retranslate-cds FALSE ,
+    also-edit-gene FALSE ,
     constraint {
       location {
         strand any ,
@@ -72,6 +75,7 @@ Macro-action-list ::= {
     action
       extend-5 NULL ,
     retranslate-cds FALSE ,
+    also-edit-gene FALSE ,
     constraint {
       location {
         strand any ,
@@ -87,6 +91,192 @@ Macro-action-list ::= {
         constraint {
           match-text "Bacteria" ,
           match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual codon-start } ,
+        value "match" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual translation } ,
+        string-constraint {
+          match-text "*" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      remove {
+        field
+          molinfo-field
+            completedness complete } ,
+    also-change-mrna FALSE ,
+    constraint {
+      molinfo {
+        field
+          molecule mRNA ,
+        is-not FALSE } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual dbxref ,
+        constraint {
+          match-text "taxon:" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      molinfo {
+        field
+          completedness complete ,
+        is-not FALSE } } } ,
+  aecr {
+    action
+      remove {
+        field
+          molinfo-field
+            topology circular } ,
+    also-change-mrna FALSE ,
+    constraint {
+      molinfo {
+        field
+          molecule mRNA ,
+        is-not FALSE } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual dbxref ,
+        constraint {
+          match-text "taxon:" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      molinfo {
+        field
+          topology circular ,
+        is-not FALSE } } } ,
+  aecr {
+    action
+      remove {
+        field
+          molinfo-field
+            technique both } ,
+    also-change-mrna FALSE ,
+    constraint {
+      sequence {
+        seqtype
+          protein NULL ,
+        feature any ,
+        strandedness any } ,
+      molinfo {
+        field
+          technique both ,
+        is-not FALSE } } } ,
+  synchronize-cds-partials NULL ,
+  adjust-for-consensus-splice NULL ,
+  trim-stop-from-complete-cds NULL ,
+  trim-junk-from-primer-seq NULL ,
+  remove-seg-gaps NULL ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "Human immunodeficiency virus-1" ,
+          repl-txt "Human immunodeficiency virus 1" ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual taxname } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            textqual nat-host ,
+        value "Homo sapiens" ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "HIV" ,
+          match-location starts ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
           ignore-punct FALSE ,
@@ -148,53 +338,39 @@ Macro-action-list ::= {
     action
       apply {
         field
-          feature-field {
-            type cds ,
-            field
-              legal-qual codon-start } ,
-        value "match" ,
-        existing-text replace-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type cds ,
-            field
-              legal-qual translation } ,
-        string-constraint {
-          match-text "*" ,
-          match-location contains ,
-          case-sensitive TRUE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present TRUE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  synchronize-cds-partials NULL ,
-  adjust-for-consensus-splice NULL ,
-  trim-stop-from-complete-cds NULL ,
-  trim-junk-from-primer-seq NULL ,
-  remove-seg-gaps NULL ,
-  aecr {
-    action
-      apply {
-        field
           source-qual
-            textqual nat-host ,
-        value "Homo sapiens" ,
-        existing-text leave-old } ,
+            location proviral ,
+        value "TRUE" ,
+        existing-text replace-old } ,
     also-change-mrna FALSE ,
     constraint {
       source {
         field1
           textqual taxname ,
         constraint {
-          match-text "HIV" ,
+          match-text "Human immunodeficiency virus" ,
           match-location starts ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      sequence {
+        seqtype
+          dna NULL ,
+        feature any ,
+        strandedness any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Retroviridae" ,
+          match-location contains ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
           ignore-punct FALSE ,
@@ -224,6 +400,112 @@ Macro-action-list ::= {
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            textqual nat-host ,
+        value "Homo sapiens" ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual isolation-source ,
+        constraint {
+          match-text "human" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "human" ,
+              synonyms {
+                "Homo sapiens" ,
+                "Homo sapien" ,
+                "Homosapiens" ,
+                "Homo-sapiens" ,
+                "Homo spiens" ,
+                "Homo Sapience" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Homo sapiens" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            textqual isolation-source } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual isolation-source ,
+        constraint {
+          match-text "human" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "human" ,
+              synonyms {
+                "Homo sapiens" ,
+                "Homo sapien" ,
+                "Homo spiens" ,
+                "Homo-sapiens" ,
+                "Homosapiens" ,
+                "Homo Sapience" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual nat-host ,
+        constraint {
+          match-text "Homo sapiens" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
           whole-word FALSE ,
           not-present FALSE ,
           is-all-caps FALSE ,
@@ -615,6 +897,12 @@ Macro-action-list ::= {
           field authors ,
           constraint
             is-all-lower NULL } } } } ,
+  fix-caps
+    author {
+      last-name-only FALSE } ,
+  fix-caps
+    author {
+      last-name-only TRUE } ,
   fix-pub-caps {
     title FALSE ,
     authors FALSE ,
@@ -652,16 +940,19 @@ Macro-action-list ::= {
         field {
           field affil-sub ,
           constraint {
-            match-text "N/A" ,
-            match-location equals ,
+            match-text "Select A State" ,
+            match-location contains ,
             case-sensitive FALSE ,
-            ignore-space FALSE ,
-            ignore-punct FALSE ,
+            ignore-space TRUE ,
+            ignore-punct TRUE ,
             ignore-words {
               {
-                word "N/A" ,
+                word "Select A State" ,
                 synonyms {
-                  "none" } ,
+                  "none" ,
+                  "N/A" ,
+                  "Not Applicable" ,
+                  "NotApplicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -698,13 +989,15 @@ Macro-action-list ::= {
             match-text "N/A" ,
             match-location equals ,
             case-sensitive FALSE ,
-            ignore-space FALSE ,
-            ignore-punct FALSE ,
+            ignore-space TRUE ,
+            ignore-punct TRUE ,
             ignore-words {
               {
                 word "N/A" ,
                 synonyms {
-                  "none" } ,
+                  "none" ,
+                  "N.A." ,
+                  "Not Applicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -747,7 +1040,9 @@ Macro-action-list ::= {
               {
                 word "N/A" ,
                 synonyms {
-                  "none" } ,
+                  "none" ,
+                  "Not Applicable" ,
+                  "NotApplicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -790,7 +1085,9 @@ Macro-action-list ::= {
               {
                 word "N/A" ,
                 synonyms {
-                  "none" } ,
+                  "none" ,
+                  "Not Applicable" ,
+                  "NotApplicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -827,13 +1124,15 @@ Macro-action-list ::= {
             match-text "N/A" ,
             match-location equals ,
             case-sensitive FALSE ,
-            ignore-space FALSE ,
-            ignore-punct FALSE ,
+            ignore-space TRUE ,
+            ignore-punct TRUE ,
             ignore-words {
               {
                 word "N/A" ,
                 synonyms {
-                  "none" } ,
+                  "none" ,
+                  "Not Applicable" ,
+                  "NotApplicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -870,13 +1169,15 @@ Macro-action-list ::= {
             match-text "N/A" ,
             match-location equals ,
             case-sensitive FALSE ,
-            ignore-space FALSE ,
-            ignore-punct FALSE ,
+            ignore-space TRUE ,
+            ignore-punct TRUE ,
             ignore-words {
               {
                 word "N/A" ,
                 synonyms {
-                  "none" } ,
+                  "none" ,
+                  "Not Applicable" ,
+                  "NotApplicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -942,6 +1243,27 @@ Macro-action-list ::= {
         field
           pub title } ,
     also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "#" ,
+          repl-txt " " ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          pub title } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt " " ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          pub title } ,
+    also-change-mrna FALSE } ,
   remove-descriptor {
     type publication ,
     constraint {
@@ -962,8 +1284,8 @@ Macro-action-list ::= {
             match-text "none" ,
             match-location equals ,
             case-sensitive FALSE ,
-            ignore-space FALSE ,
-            ignore-punct FALSE ,
+            ignore-space TRUE ,
+            ignore-punct TRUE ,
             ignore-words {
               {
                 word "none" ,
@@ -975,7 +1297,22 @@ Macro-action-list ::= {
                   "unpublished" ,
                   "direct submission" ,
                   "direct submit" ,
-                  "submit" } ,
+                  "submit" ,
+                  "in preparation" ,
+                  "manuscript in preparation" ,
+                  "N.A." ,
+                  "null" ,
+                  "directed submission" ,
+                  "unpublished data" ,
+                  "No" ,
+                  "title" ,
+                  "no title" ,
+                  "GenBank" ,
+                  "NCBI" ,
+                  "in prep" ,
+                  "in preparation for publication" ,
+                  "NotApplicable" ,
+                  "Not Applicable" } ,
                 case-sensitive FALSE ,
                 whole-word FALSE } } ,
             whole-word FALSE ,
@@ -1016,7 +1353,13 @@ Macro-action-list ::= {
             {
               word "human" ,
               synonyms {
-                "humans" } ,
+                "humans" ,
+                "Homo sapiens" ,
+                "Homo sapien" ,
+                "Homosapiens" ,
+                "Homo-sapiens" ,
+                "Homo spiens" ,
+                "Homo Sapience" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -1140,6 +1483,50 @@ Macro-action-list ::= {
         is-all-lower FALSE ,
         is-all-punct FALSE ,
         ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "faeces" ,
+          repl-txt "feces" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolation-source } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "faecal" ,
+          repl-txt "fecal" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolation-source } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "faecal" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "faecal" ,
+            synonyms {
+              "faecal sample" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   fix-caps
     src-country NULL ,
   fix-caps
@@ -1154,6 +1541,8 @@ Macro-action-list ::= {
     src-qual tissue-type ,
   fix-caps
     src-qual lab-host ,
+  fix-caps
+    src-qual cell-type ,
   aecr {
     action
       convert {
@@ -1171,6 +1560,215 @@ Macro-action-list ::= {
     also-change-mrna FALSE } ,
   fix-format
     collection-date NULL ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "segment-" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual segment } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "segment_" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual segment } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "segment:" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual segment } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "segment" ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual segment } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "strain-" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "strain_" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "strain:" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "strain" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "strain" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "clone-" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual clone } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "clone_" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual clone } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "clone:" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual clone } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "clone" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual clone } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "clone" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual clone } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "isolate-" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "isolate_" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "isolate:" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "isolate" ,
+          location beginning ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "isolate" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE } ,
   aecr {
     action
       remove {
@@ -2038,11 +2636,6 @@ Macro-action-list ::= {
           rna mRNA ,
         feature any ,
         strandedness any } } } ,
-  remove-duplicate-features {
-    type any ,
-    ignore-partials FALSE ,
-    case-sensitive TRUE ,
-    remove-proteins FALSE } ,
   aecr {
     action
       remove {
@@ -2095,67 +2688,21 @@ Macro-action-list ::= {
             field
               legal-qual note } ,
         string-constraint {
-          match-text "UTR" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct FALSE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  aecr {
-    action
-      remove {
-        field
-          feature-field {
-            type n5UTR ,
-            field
-              legal-qual note } } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type n5UTR ,
-            field
-              legal-qual note } ,
-        string-constraint {
-          match-text "5' UTR" ,
+          match-text "5'UTR" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  aecr {
-    action
-      remove {
-        field
-          feature-field {
-            type n3UTR ,
-            field
-              legal-qual note } } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type n3UTR ,
-            field
-              legal-qual note } ,
-        string-constraint {
-          match-text "UTR" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space FALSE ,
-          ignore-punct FALSE ,
+          ignore-words {
+            {
+              word "5'UTR" ,
+              synonyms {
+                "5' UTR" ,
+                "UTR" ,
+                "5`UTR" ,
+                "5` UTR" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
           is-all-caps FALSE ,
@@ -2184,12 +2731,89 @@ Macro-action-list ::= {
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "3' UTR" ,
+              synonyms {
+                "3'UTR" ,
+                "UTR" ,
+                "3` UTR" ,
+                "3`UTR" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
           is-all-caps FALSE ,
           is-all-lower FALSE ,
           is-all-punct FALSE ,
           ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      parse {
+        portion {
+          left-marker
+            free-text "CBS" ,
+          include-left TRUE ,
+          include-right FALSE ,
+          inside TRUE ,
+          case-sensitive TRUE ,
+          whole-word FALSE } ,
+        fields
+          source-qual {
+            field-from strain ,
+            field-to culture-collection } ,
+        remove-from-parsed FALSE ,
+        remove-left FALSE ,
+        remove-right FALSE ,
+        transform {
+          edit {
+            find-txt "CBS" ,
+            repl-txt "CBS:" ,
+            location beginning ,
+            case-insensitive FALSE } ,
+          remove {
+            include-left FALSE ,
+            right-marker
+              free-text ";" ,
+            include-right TRUE ,
+            inside FALSE ,
+            case-sensitive TRUE ,
+            whole-word FALSE } } ,
+        existing-text append-semi } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual culture-collection-INST ,
+        constraint {
+          match-text "CBS" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
   aecr {
     action
       parse {
@@ -2407,6 +3031,18 @@ Macro-action-list ::= {
     action
       edit {
         edit {
+          find-txt "CBS:" ,
+          repl-txt "CBS " ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
           find-txt "ATCC" ,
           repl-txt "ATCC " ,
           location anywhere ,
@@ -2421,6 +3057,35 @@ Macro-action-list ::= {
           textqual strain ,
         constraint {
           match-text "ATCC " ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present TRUE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "CBS" ,
+          repl-txt "CBS " ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual strain } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual strain ,
+        constraint {
+          match-text "CBS " ,
           match-location contains ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
@@ -2459,7 +3124,8 @@ Macro-action-list ::= {
             {
               word "homo sapiens" ,
               synonyms {
-                "homo sapien" } ,
+                "homo sapien" ,
+                "homo sapiens (human)" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -2559,6 +3225,93 @@ Macro-action-list ::= {
     action
       edit {
         edit {
+          find-txt "GGEgelband" ,
+          repl-txt "GGE gel band" ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "GGEband" ,
+          repl-txt "GGE gel band" ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "gel" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "GGE-band" ,
+          repl-txt "GGE gel band" ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "gel" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "GGE-gel band" ,
+          repl-txt "GGE gel band" ,
+          location anywhere ,
+          case-insensitive FALSE } ,
+        field
+          source-qual
+            textqual isolate } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "gel" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
           find-txt "GGE_gel_" ,
           repl-txt "GGE gel band " ,
           location anywhere ,
@@ -2566,7 +3319,20 @@ Macro-action-list ::= {
         field
           source-qual
             textqual isolate } ,
-    also-change-mrna FALSE } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "band" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -2578,7 +3344,20 @@ Macro-action-list ::= {
         field
           source-qual
             textqual isolate } ,
-    also-change-mrna FALSE } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "band" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -2590,7 +3369,20 @@ Macro-action-list ::= {
         field
           source-qual
             textqual isolate } ,
-    also-change-mrna FALSE } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "gel" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -2602,7 +3394,20 @@ Macro-action-list ::= {
         field
           source-qual
             textqual isolate } ,
-    also-change-mrna FALSE } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "gel" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -2781,16 +3586,6 @@ Macro-action-list ::= {
     action
       edit {
         edit {
-          find-txt "#" ,
-          location anywhere ,
-          case-insensitive FALSE } ,
-        field
-          pub title } ,
-    also-change-mrna FALSE } ,
-  aecr {
-    action
-      edit {
-        edit {
           find-txt " sp" ,
           repl-txt " sp." ,
           location end ,
@@ -2926,6 +3721,17 @@ Macro-action-list ::= {
         field
           cds-gene-prot prot-name } ,
     also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "oxigenase" ,
+          repl-txt "oxygenase" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE } ,
   fix-format
     protein-name NULL ,
   aecr {
@@ -2963,7 +3769,9 @@ Macro-action-list ::= {
                 "cytb" ,
                 "cyt b" ,
                 "partial sequence" ,
-                "complete sequence" } ,
+                "complete sequence" ,
+                "(cytb)" ,
+                "(cyt b)" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
@@ -3011,7 +3819,9 @@ Macro-action-list ::= {
                 "matK" ,
                 "mat k" ,
                 "partial sequence" ,
-                "complete sequence" } ,
+                "complete sequence" ,
+                "(matK)" ,
+                "(mat K)" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
@@ -3073,6 +3883,88 @@ Macro-action-list ::= {
             {
               word "gene" ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome c oxidase subunit I gene" ,
+              synonyms {
+                "cytochrome c oxidase I" ,
+                "cytochrome c oxidase I gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "I" ,
+              synonyms {
+                "one" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "cytochrome c oxidase subunit II" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "cytochrome c oxidase subunit II gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "subunit" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "oxidase" ,
+              synonyms {
+                "oxydase" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "partial" ,
+                "complete" ,
+                "partial sequence" ,
+                "complete sequence" ,
+                "region" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome c oxidase subunit II gene" ,
+              synonyms {
+                "cytochrome c oxidase II gene" ,
+                "cytochrome c oxidase II" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "II" ,
+              synonyms {
+                "two" } ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -3128,6 +4020,170 @@ Macro-action-list ::= {
               whole-word FALSE } ,
             {
               word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome oxidase subunit I gene" ,
+              synonyms {
+                "cytochrome oxidase I gene" ,
+                "cytochrome oxidase I" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "I" ,
+              synonyms {
+                "one" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word " I" ,
+              synonyms {
+                " i" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "cytochrome oxidase subunit II" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "cytochrome oxidase subunit II gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "subunit" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "oxidase" ,
+              synonyms {
+                "oxydase" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "partial" ,
+                "complete" ,
+                "partial sequence" ,
+                "complete sequence" ,
+                "region" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome oxidase subunit II gene" ,
+              synonyms {
+                "cytochrome oxidase II gene" ,
+                "cytochrome oxidase II" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "II" ,
+              synonyms {
+                "two" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "II" ,
+              synonyms {
+                "ii" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "cytochrome oxidase subunit III" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "cytochrome oxidase subunit III gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "subunit" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "oxidase" ,
+              synonyms {
+                "oxydase" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "partial" ,
+                "complete" ,
+                "partial sequence" ,
+                "complete sequence" ,
+                "region" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome oxidase subunit III gene" ,
+              synonyms {
+                "cytochrome oxidase III gene" ,
+                "cytochrome oxidase III" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "III" ,
+              synonyms {
+                "three" ,
+                "iii" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -3185,6 +4241,19 @@ Macro-action-list ::= {
             {
               word "gene" ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome c oxidase subunit 1 gene" ,
+              synonyms {
+                "cytochrome c oxidase 1 gene" ,
+                "cytochrome c oxidase 1" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "1" ,
+              synonyms {
+                "one" } ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -3240,6 +4309,19 @@ Macro-action-list ::= {
               whole-word FALSE } ,
             {
               word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome oxidase subunit 1 gene" ,
+              synonyms {
+                "cytochrome oxidase 1" ,
+                "cytochrome oxidase 1 gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "1" ,
+              synonyms {
+                "one" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -3297,6 +4379,19 @@ Macro-action-list ::= {
             {
               word "gene" ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome c oxidase subunit 2 gene" ,
+              synonyms {
+                "cytochrome c oxidase 2 gene" ,
+                "cytochrome c oxidase 2" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "2" ,
+              synonyms {
+                "two" } ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -3352,6 +4447,88 @@ Macro-action-list ::= {
               whole-word FALSE } ,
             {
               word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome oxidase subunit 2 gene" ,
+              synonyms {
+                "cytochrome oxidase 2 gene" ,
+                "cytochrome oxidase 2" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "2" ,
+              synonyms {
+                "two" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "cytochrome oxidase subunit 3" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "cytochrome oxidase subunit 3 gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "subunit" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "oxidase" ,
+              synonyms {
+                "oxydase" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "partial" ,
+                "complete" ,
+                "sequence" ,
+                "region" ,
+                "partial sequence" ,
+                "complete sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "cytochrome oxidase subunit 3 gene" ,
+              synonyms {
+                "cytochrome oxidase 3 gene" ,
+                "cytochrome oxidase 3" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "3" ,
+              synonyms {
+                "three" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -3464,6 +4641,989 @@ Macro-action-list ::= {
           is-all-lower FALSE ,
           is-all-punct FALSE ,
           ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "MHC class I antigen" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "MHC CLASS I ANTIGEN gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot mrna-product ,
+        value "MHC class I antigen" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "MHC CLASS I ANTIGEN gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "MHC class II antigen" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "MHC CLASS II ANTIGEN gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot mrna-product ,
+        value "MHC class II antigen" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "MHC CLASS II ANTIGEN gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "NADH dehydrogenase subunit 1" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "NADH dehydrogenase subunit 1 gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" ,
+              "ND1" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 1 gene" ,
+            synonyms {
+              "NADH dehydrogenase subunit 1 (ND1) gene" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 1 gene" ,
+            synonyms {
+              "NADH dehydrogenase 1 gene" ,
+              "NADH dehydrogenase 1" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "1" ,
+            synonyms {
+              "one" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "NADH dehydrogenase subunit 2" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "NADH dehydrogenase subunit 2 gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" ,
+              "ND2" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 2 gene" ,
+            synonyms {
+              "NADH dehydrogenase subunit 2 (ND2) gene" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 2 gene" ,
+            synonyms {
+              "NADH dehydrogenase 2 gene" ,
+              "NADH dehydrogenase 2" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "2" ,
+            synonyms {
+              "two" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "NADH dehydrogenase subunit 3" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "NADH dehydrogenase subunit 3 gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" ,
+              "ND3" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 3 gene" ,
+            synonyms {
+              "NADH dehydrogenase subunit 3 (ND3) gene" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 3 gene" ,
+            synonyms {
+              "NADH dehydrogenase 3 gene" ,
+              "NADH dehydrogenase 3" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "3" ,
+            synonyms {
+              "three" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "NADH dehydrogenase subunit 4" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "NADH dehydrogenase subunit 4 gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" ,
+              "ND4" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 4 gene" ,
+            synonyms {
+              "NADH dehydrogenase subunit 4 (ND4) gene" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 4 gene" ,
+            synonyms {
+              "NADH dehydrogenase 4 gene" ,
+              "NADH dehydrogenase 4" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "4" ,
+            synonyms {
+              "four" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "NADH dehydrogenase subunit 5" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "NADH dehydrogenase subunit 5 gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" ,
+              "ND5" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 5 gene" ,
+            synonyms {
+              "NADH dehydrogenase subunit 5 (ND5) gene" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 5 gene" ,
+            synonyms {
+              "NADH dehydrogenase 5 gene" ,
+              "NADH dehydrogenase 5" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "5" ,
+            synonyms {
+              "five" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "NADH dehydrogenase subunit 6" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "NADH dehydrogenase subunit 6 gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" ,
+              "ND6" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 6 gene" ,
+            synonyms {
+              "NADH dehydrogenase subunit 6 (ND6) gene" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "NADH dehydrogenase subunit 6 gene" ,
+            synonyms {
+              "NADH dehydrogenase 6 gene" ,
+              "NADH dehydrogenase 6" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "6" ,
+            synonyms {
+              "six" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "actin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "Actin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "alpha-actin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "alpha Actin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot mrna-product ,
+        value "actin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "Actin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot mrna-product ,
+        value "alpha-actin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "alpha Actin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "hypothetical protein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "Hypothetical protein gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "Hypothetical protein gene" ,
+            synonyms {
+              "Hypothetical" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "Putative" ,
+          repl-txt "putative" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "putative" ,
+        existing-text prefix-space } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text ", putative" ,
+        match-location ends ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "putative" ,
+        match-location starts ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "putative" ,
+            synonyms {
+              "hypothetical" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt ", putative" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "putative" ,
+        match-location starts ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt " putative" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "putative" ,
+        match-location starts ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "Polymerase" ,
+          repl-txt "polymerase" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE ,
+    constraint {
+      cdsgeneprot-qual {
+        field1
+          field prot-name ,
+        constraint {
+          match-text "Polymerase sequence" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "Polymerase sequence" ,
+              synonyms {
+                "Polymerase" ,
+                "Polymerase gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "beta-tubulin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "beta-tubulin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "beta-tubulin" ,
+            synonyms {
+              "beta tubulin" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot mrna-product ,
+        value "beta-tubulin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "beta-tubulin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "beta-tubulin" ,
+            synonyms {
+              "beta tubulin" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "beta-actin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "beta-actin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "beta-actin" ,
+            synonyms {
+              "beta actin" ,
+              "beta_actin" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot mrna-product ,
+        value "beta-actin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "beta-actin gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "gene" ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "gene" ,
+            synonyms {
+              "sequence" ,
+              "partial sequence" ,
+              "complete sequence" ,
+              "partial" ,
+              "complete" ,
+              "gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } ,
+          {
+            word "beta-actin" ,
+            synonyms {
+              "beta actin" ,
+              "beta_actin" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   convert-feature {
     type-from gene ,
     type-to rRNA ,
@@ -3527,20 +5687,486 @@ Macro-action-list ::= {
             {
               word "16" ,
               synonyms {
-                "28" ,
                 "5.8" ,
+                "12" ,
                 "18" ,
                 "23" ,
                 "26" ,
-                "large subunit" ,
-                "small subunit" } ,
+                "28" ,
+                "small subunit" ,
+                "large subunit" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
               word " ribosomal RNA gene" ,
               synonyms {
                 "rDNA" ,
-                "rRNA" } ,
+                "rRNA" ,
+                "RNA" ,
+                "RNA gene" ,
+                "rRNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  convert-feature {
+    type-from gene ,
+    type-to rRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature gene ,
+        num-features
+          less-than 3 ,
+        length
+          less-than 1001 ,
+        strandedness any } ,
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "16S ribosomal RNA gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              synonyms {
+                "partial sequence" ,
+                "complete sequence" ,
+                "complete" ,
+                "partial" ,
+                "gene" ,
+                "sequence" ,
+                "region" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal RNA" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "RNA" ,
+              synonyms {
+                "DNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "r" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "RNA" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "16" ,
+              synonyms {
+                "5.8" ,
+                "12" ,
+                "18" ,
+                "23" ,
+                "26" ,
+                "28" ,
+                "small subunit" ,
+                "large subunit" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word " ribosomal RNA gene" ,
+              synonyms {
+                "rDNA" ,
+                "rRNA" ,
+                "RNA" ,
+                "RNA gene" ,
+                "rRNA gene" ,
+                "rRNA partial gene" ,
+                "rRNA partial sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "16S ribosomal RNA gene" ,
+              synonyms {
+                "gene 16S rRNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "S RIBOSOMAL RNA" ,
+          repl-txt "S ribosomal RNA" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "S ribosomal RNA" ,
+        match-location ends ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "ribosomal RNA gene" ,
+          repl-txt "ribosomal RNA" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "ribosomal RNA gene" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "ribosomal RNA gene" ,
+            synonyms {
+              "ribosomal RNA gene sequence" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "large subunit ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "LSU ribosomal RNA" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "LSU ribosomal RNA" ,
+            synonyms {
+              "large subunit (LSU) ribosomal RNA" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "rRNA gene" ,
+          repl-txt "ribosomal RNA" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt " S RIBOSOMAL RNA" ,
+          repl-txt "S ribosomal RNA" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "Subunit Ribosomal RNA" ,
+          repl-txt "subunit ribosomal RNA" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "subunit ribosomal RNA" ,
+        match-location ends ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "RDNA Gene sequence" ,
+          repl-txt "ribosomal RNA" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "small subunit ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "SSU ribosomal RNA" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "SSU ribosomal RNA" ,
+            synonyms {
+              "small subunit (SSU) ribosomal RNA" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "S SSU ribosomal RNA" ,
+          repl-txt "S small subunit ribosomal RNA" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "SSU" ,
+          repl-txt "small subunit ribosomal RNA" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "SSU" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "LSU" ,
+          repl-txt "large subunit ribosomal RNA" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "LSU" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "S LSU ribosomal RNA" ,
+          repl-txt "S large subunit ribosomal RNA" ,
+          location end ,
+          case-insensitive TRUE } ,
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "5.8S ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type rRNA ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "5.8S ribosomal RNA gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ribosomal RNA gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "RNA" ,
+              synonyms {
+                "DNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal RNA gene" ,
+              synonyms {
+                "ribosomal DNA" ,
+                "rDNA" ,
+                "RDNA" ,
+                "RDAN" ,
+                "RNA" ,
+                "DNA" ,
+                "ribosomal" ,
+                "RNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "region" ,
+                "gene sequence" ,
+                "sequence region" ,
+                "gene sequence region" ,
+                "partial sequence" ,
+                "partial gene sequence" ,
+                "partial" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "5.8S ribosomal RNA gene" ,
+              synonyms {
+                "5.8SrDNA" ,
+                "5.8SrRNA" ,
+                "5.8SrDNA gene" ,
+                "5.8SrRNA gene" ,
+                "5.8SrDNA gene sequence" ,
+                "5.8SrRNA gene sequence" ,
+                "5.8SrDNA gene sequence region" ,
+                "5.8SrRNA gene sequence region" ,
+                "5.8S rDNA gene" ,
+                "5.8S rRNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "5.8S ribosomal RNA gene" ,
+              synonyms {
+                "gene 5.8S rRNA" ,
+                "gene 5.8S ribosomal RNA" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -3593,7 +6219,8 @@ Macro-action-list ::= {
                 "RDAN" ,
                 "RNA" ,
                 "DNA" ,
-                "ribosomal" } ,
+                "ribosomal" ,
+                "RNA gene" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
@@ -3623,329 +6250,13 @@ Macro-action-list ::= {
                 "12S rDNA gene" ,
                 "12S rRNA gene" } ,
               case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  aecr {
-    action
-      apply {
-        field
-          rna-field {
-            type
-              rRNA NULL ,
-            field product } ,
-        value "18S ribosomal RNA" ,
-        existing-text replace-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type rRNA ,
-            field
-              legal-qual product } ,
-        string-constraint {
-          match-text "18S ribosomal RNA gene" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "ribosomal RNA gene" ,
-              case-sensitive FALSE ,
               whole-word FALSE } ,
             {
-              word "RNA" ,
+              word "12S ribosomal RNA gene" ,
               synonyms {
-                "DNA" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "ribosomal RNA gene" ,
-              synonyms {
-                "ribosomal DNA" ,
-                "rDNA" ,
-                "RDNA" ,
-                "RDAN" ,
-                "RNA" ,
-                "DNA" ,
-                "ribosomal" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "gene" ,
-              synonyms {
-                "sequence" ,
-                "region" ,
-                "gene sequence" ,
-                "sequence region" ,
-                "gene sequence region" ,
-                "partial sequence" ,
-                "partial gene sequence" ,
-                "partial" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "18S ribosomal RNA gene" ,
-              synonyms {
-                "18SrDNA" ,
-                "18SrRNA" ,
-                "18SrDNA gene" ,
-                "18SrRNA gene" ,
-                "18SrDNA gene sequence" ,
-                "18SrRNA gene sequence" ,
-                "18SrDNA gene sequence region" ,
-                "18SrRNA gene sequence region" ,
-                "18S rDNA gene" ,
-                "18S rRNA gene" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  aecr {
-    action
-      apply {
-        field
-          rna-field {
-            type
-              rRNA NULL ,
-            field product } ,
-        value "5.8S ribosomal RNA" ,
-        existing-text replace-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type rRNA ,
-            field
-              legal-qual product } ,
-        string-constraint {
-          match-text "5.8S ribosomal RNA gene" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "ribosomal RNA gene" ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "RNA" ,
-              synonyms {
-                "DNA" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "ribosomal RNA gene" ,
-              synonyms {
-                "ribosomal DNA" ,
-                "rDNA" ,
-                "RDNA" ,
-                "RDAN" ,
-                "RNA" ,
-                "DNA" ,
-                "ribosomal" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "gene" ,
-              synonyms {
-                "sequence" ,
-                "region" ,
-                "gene sequence" ,
-                "sequence region" ,
-                "gene sequence region" ,
-                "partial sequence" ,
-                "partial gene sequence" ,
-                "partial" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "5.8S ribosomal RNA gene" ,
-              synonyms {
-                "5.8SrDNA" ,
-                "5.8SrRNA" ,
-                "5.8SrDNA gene" ,
-                "5.8SrRNA gene" ,
-                "5.8SrDNA gene sequence" ,
-                "5.8SrRNA gene sequence" ,
-                "5.8SrDNA gene sequence region" ,
-                "5.8SrRNA gene sequence region" ,
-                "5.8S rDNA gene" ,
-                "5.8S rRNA gene" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  aecr {
-    action
-      apply {
-        field
-          rna-field {
-            type
-              rRNA NULL ,
-            field product } ,
-        value "28S ribosomal RNA" ,
-        existing-text replace-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type rRNA ,
-            field
-              legal-qual product } ,
-        string-constraint {
-          match-text "28S ribosomal RNA gene" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "ribosomal RNA gene" ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "RNA" ,
-              synonyms {
-                "DNA" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "ribosomal RNA gene" ,
-              synonyms {
-                "ribosomal DNA" ,
-                "rDNA" ,
-                "RDNA" ,
-                "RDAN" ,
-                "RNA" ,
-                "DNA" ,
-                "ribosomal" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "gene" ,
-              synonyms {
-                "sequence" ,
-                "region" ,
-                "gene sequence" ,
-                "sequence region" ,
-                "gene sequence region" ,
-                "partial sequence" ,
-                "partial gene sequence" ,
-                "partial" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "28S ribosomal RNA gene" ,
-              synonyms {
-                "28SrDNA" ,
-                "28SrRNA" ,
-                "28SrDNA gene" ,
-                "28SrRNA gene" ,
-                "28SrDNA gene sequence" ,
-                "28SrRNA gene sequence" ,
-                "28SrDNA gene sequence region" ,
-                "28SrRNA gene sequence region" ,
-                "28S rDNA gene" ,
-                "28S rRNA gene" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } } ,
-          whole-word FALSE ,
-          not-present FALSE ,
-          is-all-caps FALSE ,
-          is-all-lower FALSE ,
-          is-all-punct FALSE ,
-          ignore-weasel FALSE } } } } ,
-  aecr {
-    action
-      apply {
-        field
-          rna-field {
-            type
-              rRNA NULL ,
-            field product } ,
-        value "26S ribosomal RNA" ,
-        existing-text replace-old } ,
-    also-change-mrna FALSE ,
-    constraint {
-      field {
-        field
-          feature-field {
-            type rRNA ,
-            field
-              legal-qual product } ,
-        string-constraint {
-          match-text "26S ribosomal RNA gene" ,
-          match-location equals ,
-          case-sensitive FALSE ,
-          ignore-space TRUE ,
-          ignore-punct TRUE ,
-          ignore-words {
-            {
-              word "ribosomal RNA gene" ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "RNA" ,
-              synonyms {
-                "DNA" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "ribosomal RNA gene" ,
-              synonyms {
-                "ribosomal DNA" ,
-                "rDNA" ,
-                "RDNA" ,
-                "RDAN" ,
-                "RNA" ,
-                "DNA" ,
-                "ribosomal" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "gene" ,
-              synonyms {
-                "sequence" ,
-                "region" ,
-                "gene sequence" ,
-                "sequence region" ,
-                "gene sequence region" ,
-                "partial sequence" ,
-                "partial gene sequence" ,
-                "partial" } ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "26S ribosomal RNA gene" ,
-              synonyms {
-                "26SrDNA" ,
-                "26SrRNA" ,
-                "26SrDNA gene" ,
-                "26SrRNA gene" ,
-                "26SrDNA gene sequence" ,
-                "26SrRNA gene sequence" ,
-                "26SrDNA gene sequence region" ,
-                "26SrRNA gene sequence region" ,
-                "26S rDNA gene" ,
-                "26S rRNA gene" } ,
+                "gene 12S rRNA" ,
+                "gene 12S ribosomal RNA" ,
+                "12S gene" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -3998,7 +6309,8 @@ Macro-action-list ::= {
                 "RDAN" ,
                 "RNA" ,
                 "DNA" ,
-                "ribosomal" } ,
+                "ribosomal" ,
+                "RNA gene" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
@@ -4027,6 +6339,104 @@ Macro-action-list ::= {
                 "16SrRNA gene sequence region" ,
                 "16S rDNA gene" ,
                 "16S rRNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "16S ribosomal RNA gene" ,
+              synonyms {
+                "gene 16S rRNA" ,
+                "gene 16S ribosomal RNA" ,
+                "16S gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "18S ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type rRNA ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "18S ribosomal RNA gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ribosomal RNA gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "RNA" ,
+              synonyms {
+                "DNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal RNA gene" ,
+              synonyms {
+                "ribosomal DNA" ,
+                "rDNA" ,
+                "RDNA" ,
+                "RDAN" ,
+                "RNA" ,
+                "DNA" ,
+                "ribosomal" ,
+                "RNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "region" ,
+                "gene sequence" ,
+                "sequence region" ,
+                "gene sequence region" ,
+                "partial sequence" ,
+                "partial gene sequence" ,
+                "partial" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "18S ribosomal RNA gene" ,
+              synonyms {
+                "18SrDNA" ,
+                "18SrRNA" ,
+                "18SrDNA gene" ,
+                "18SrRNA gene" ,
+                "18SrDNA gene sequence" ,
+                "18SrRNA gene sequence" ,
+                "18SrDNA gene sequence region" ,
+                "18SrRNA gene sequence region" ,
+                "18S rDNA gene" ,
+                "18S rRNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "18S ribosomal RNA gene" ,
+              synonyms {
+                "gene 18S rRNA" ,
+                "gene 18S ribosomal RNA" ,
+                "18S gene" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4079,7 +6489,8 @@ Macro-action-list ::= {
                 "RDAN" ,
                 "RNA" ,
                 "DNA" ,
-                "ribosomal" } ,
+                "ribosomal" ,
+                "RNA gene" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
@@ -4109,6 +6520,13 @@ Macro-action-list ::= {
                 "23S rDNA gene" ,
                 "23S rRNA gene" } ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "23S ribosomal RNA gene" ,
+              synonyms {
+                "gene 23S rRNA" ,
+                "23S gene" } ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -4116,6 +6534,396 @@ Macro-action-list ::= {
           is-all-lower FALSE ,
           is-all-punct FALSE ,
           ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "26S ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type rRNA ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "26S ribosomal RNA gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ribosomal RNA gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "RNA" ,
+              synonyms {
+                "DNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal RNA gene" ,
+              synonyms {
+                "ribosomal DNA" ,
+                "rDNA" ,
+                "RDNA" ,
+                "RDAN" ,
+                "RNA" ,
+                "DNA" ,
+                "ribosomal" ,
+                "RNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "region" ,
+                "gene sequence" ,
+                "sequence region" ,
+                "gene sequence region" ,
+                "partial sequence" ,
+                "partial gene sequence" ,
+                "partial" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "26S ribosomal RNA gene" ,
+              synonyms {
+                "26SrDNA" ,
+                "26SrRNA" ,
+                "26SrDNA gene" ,
+                "26SrRNA gene" ,
+                "26SrDNA gene sequence" ,
+                "26SrRNA gene sequence" ,
+                "26SrDNA gene sequence region" ,
+                "26SrRNA gene sequence region" ,
+                "26S rDNA gene" ,
+                "26S rRNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "26S ribosomal RNA gene" ,
+              synonyms {
+                "gene 26S rRNA" ,
+                "gene 26S ribosomal RNA" ,
+                "26S gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "28S ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type rRNA ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "28S ribosomal RNA gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "ribosomal RNA gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "RNA" ,
+              synonyms {
+                "DNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal RNA gene" ,
+              synonyms {
+                "ribosomal DNA" ,
+                "rDNA" ,
+                "RDNA" ,
+                "RDAN" ,
+                "RNA" ,
+                "DNA" ,
+                "ribosomal" ,
+                "RNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" ,
+                "region" ,
+                "gene sequence" ,
+                "sequence region" ,
+                "gene sequence region" ,
+                "partial sequence" ,
+                "partial gene sequence" ,
+                "partial" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "28S ribosomal RNA gene" ,
+              synonyms {
+                "28SrDNA" ,
+                "28SrRNA" ,
+                "28SrDNA gene" ,
+                "28SrRNA gene" ,
+                "28SrDNA gene sequence" ,
+                "28SrRNA gene sequence" ,
+                "28SrDNA gene sequence region" ,
+                "28SrRNA gene sequence region" ,
+                "28S rDNA gene" ,
+                "28S rRNA gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "28S ribosomal RNA gene" ,
+              synonyms {
+                "gene 28S rRNA" ,
+                "gene 28S ribosomal RNA" ,
+                "28S gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "18S small subunit ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "18S SSU ribosomal RNA" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "18S SSU ribosomal RNA" ,
+            synonyms {
+              "18S small subunit SSU ribosomal RNA" ,
+              "18S small subunit (SSU) ribosomal RNA" ,
+              "small subunit (SSU) 18S ribosomal RNA" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              rRNA NULL ,
+            field product } ,
+        value "28S large subunit ribosomal RNA" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "28S LSU ribosomal RNA" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "28S LSU ribosomal RNA" ,
+            synonyms {
+              "28S large subunit LSU ribosomal RNA" ,
+              "28S large subunit (LSU) ribosomal RNA" ,
+              "large subunit (LSU) 28S ribosomal RNA" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  convert-feature {
+    type-from rRNA ,
+    type-to otherRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      string {
+        match-text "internal transcribed" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "ribosomal RNA" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "contains" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      convert {
+        fields
+          rna-field {
+            type
+              miscRNA NULL ,
+            field-from product ,
+            field-to comment } ,
+        strip-name FALSE ,
+        keep-original FALSE ,
+        capitalization none ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "internal transcribed" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "ribosomal" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "contains" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      convert {
+        fields
+          rna-field {
+            type
+              miscRNA NULL ,
+            field-from product ,
+            field-to comment } ,
+        strip-name FALSE ,
+        keep-original FALSE ,
+        capitalization none ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          rna-field {
+            type
+              miscRNA NULL ,
+            field product } ,
+        string-constraint {
+          match-text "18S ribosomal RNA gene, partial sequence; internal
+ transcribed spacer 1, 5.8S ribosomal RNA gene, and internal transcribed
+ spacer 2, complete sequence; and 28S ribosomal RNA gene, partial sequence" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "18S ribosomal RNA gene, partial sequence; internal
+ transcribed spacer 1, 5.8S ribosomal RNA gene, and internal transcribed
+ spacer 2, complete sequence; and 28S ribosomal RNA gene, partial sequence" ,
+          repl-txt "contains 18S ribosomal RNA, internal transcribed spacer 1,
+ 5.8S ribosomal RNA, internal transcribed spacer 2, and 28S ribosomal RNA" ,
+          location beginning ,
+          case-insensitive FALSE } ,
+        field
+          rna-field {
+            type
+              miscRNA NULL ,
+            field comment } } ,
+    also-change-mrna FALSE } ,
   aecr {
     action
       convert {
@@ -4132,25 +6940,98 @@ Macro-action-list ::= {
         existing-text append-semi } ,
     also-change-mrna FALSE ,
     constraint {
+      string {
+        match-text "internal transcribed spacer 1, ITS1 sequence" ,
+        match-location equals ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "internal transcribed spacer 1, ITS1 sequence" ,
+            synonyms {
+              "internal transcribed spacer 1, ITS1" ,
+              "internal transcribed spacer 1" ,
+              "internal transcribed spacer 1, ITS" ,
+              "internal transcribed spacer 1, ITS1 sequence" ,
+              "internal transcribed spacer 1, ITS1 region" ,
+              "ITS1" ,
+              "internal transcribed spacer 1, sequence" ,
+              "internal transcribed spacer 1, region" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      convert {
+        fields
+          feature-field {
+            type otherRNA ,
+            field-from
+              legal-qual note ,
+            field-to
+              legal-qual product } ,
+        strip-name FALSE ,
+        keep-original FALSE ,
+        capitalization none ,
+        existing-text append-semi } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "internal transcribed spacer 2, ITS2 sequence" ,
+        match-location equals ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "internal transcribed spacer 2, ITS2 sequence" ,
+            synonyms {
+              "internal transcribed spacer 2, ITS2" ,
+              "internal transcribed spacer 2" ,
+              "internal transcribed spacer 2, ITS" ,
+              "internal transcribed spacer 2, ITS2 sequence" ,
+              "internal transcribed spacer 2, ITS2 region" ,
+              "ITS2" ,
+              "internal transcribed spacer 2, sequence" ,
+              "internal transcribed spacer 2, region" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  convert-feature {
+    type-from rRNA ,
+    type-to otherRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
       field {
         field
           feature-field {
-            type otherRNA ,
+            type rRNA ,
             field
-              legal-qual note } ,
+              legal-qual product } ,
         string-constraint {
-          match-text "internal transcribed spacer 1, ITS1 sequence" ,
+          match-text "Internal transcribed spacer 1, ITS1 sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
-              word "internal transcribed spacer 1," ,
+              word "internal transcribed spacer 1" ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
-              word "internal transcribed spacer 2," ,
+              word "internal transcribed spacer 2" ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
@@ -4160,33 +7041,97 @@ Macro-action-list ::= {
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
+              word "ITS1" ,
+              synonyms {
+                "ITS" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
               word "sequence" ,
               synonyms {
                 "region" ,
                 "gene" ,
-                "complete" ,
-                "partial" } ,
+                "RNA" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
-              word "sequence" ,
-              case-sensitive FALSE ,
-              whole-word FALSE } ,
-            {
-              word "sequence" ,
+              word "Internal transcribed spacer 1, ITS1 sequence" ,
               synonyms {
-                "gene sequence" ,
-                "region" ,
-                "partial sequence" ,
-                "complete sequence" ,
-                "partial gene sequence" ,
-                "complete gene sequence" } ,
+                "ITS1" ,
+                "ITS2" ,
+                "internal transcribed spacer 1" ,
+                "internal transcribed spacer 2" ,
+                "internal transcribed spacer 1 (ITS)" ,
+                "internal transcribed spacer 2 (ITS)" ,
+                "internal transcribed spacer 1 (ITS1)" ,
+                "internal transcribed spacer 2 (ITS2)" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  convert-feature {
+    type-from rRNA ,
+    type-to otherRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      field {
+        field
+          feature-field {
+            type rRNA ,
+            field
+              legal-qual note } ,
+        string-constraint {
+          match-text "Internal transcribed spacer 1, ITS1 sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "internal transcribed spacer 1" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "internal transcribed spacer 2" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "1" ,
+              synonyms {
+                "2" } ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
               word "ITS1" ,
               synonyms {
                 "ITS" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "sequence" ,
+              synonyms {
+                "region" ,
+                "gene" ,
+                "RNA" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Internal transcribed spacer 1, ITS1 sequence" ,
+              synonyms {
+                "ITS1" ,
+                "ITS2" ,
+                "internal transcribed spacer 1" ,
+                "internal transcribed spacer 2" ,
+                "internal transcribed spacer 1 (ITS)" ,
+                "internal transcribed spacer 2 (ITS)" ,
+                "internal transcribed spacer 1 (ITS1)" ,
+                "internal transcribed spacer 2 (ITS2)" ,
+                "Internal transcribed spacer 1, ITS1" ,
+                "Internal transcribed spacer 2, ITS2" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4304,6 +7249,10 @@ Macro-action-list ::= {
                 "partial" ,
                 "complete" } ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word ", ITS1" ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -4360,6 +7309,10 @@ Macro-action-list ::= {
                 ", (ITS1)" ,
                 " (ITS1)" } ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word ", ITS1" ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -4367,6 +7320,141 @@ Macro-action-list ::= {
           is-all-lower FALSE ,
           is-all-punct FALSE ,
           ignore-weasel FALSE } } } } ,
+  convert-feature {
+    type-from misc-feature ,
+    type-to otherRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      field {
+        field
+          feature-field {
+            type misc-feature ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "Region: Internal transcribed spacer 1, ITS1" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "Region" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "internal transcribed spacer 1" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "internal transcribed spacer 2" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "1" ,
+              synonyms {
+                "2" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Region: Internal transcribed spacer 1, ITS1" ,
+              synonyms {
+                "Region: Internal transcribed spacer 1" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word ", ITS1" ,
+              synonyms {
+                ", (ITS)" ,
+                ", (ITS1)" ,
+                " (ITS1)" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word ", ITS1" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  convert-feature {
+    type-from misc-feature ,
+    type-to otherRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      field {
+        field
+          feature-field {
+            type misc-feature ,
+            field
+              legal-qual note } ,
+        string-constraint {
+          match-text "internal transcribed spacer" ,
+          match-location contains ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      string {
+        match-text "RNA" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      convert {
+        fields
+          feature-field {
+            type otherRNA ,
+            field-from
+              legal-qual product ,
+            field-to
+              legal-qual note } ,
+        strip-name FALSE ,
+        keep-original FALSE ,
+        capitalization none ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "internal transcribed spacer" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "RNA" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       apply {
@@ -4542,11 +7630,21 @@ Macro-action-list ::= {
             {
               word "5.8S" ,
               synonyms {
+                "12S" ,
                 "16S" ,
+                "18S" ,
                 "23S" ,
+                "26S" ,
                 "28S" ,
                 "small subunit" ,
                 "large subunit" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "small subunit ribosomal" ,
+                "large subunit ribosomal" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4586,11 +7684,21 @@ Macro-action-list ::= {
             {
               word "5.8S" ,
               synonyms {
+                "12S" ,
                 "16S" ,
                 "23S" ,
+                "26S" ,
                 "28S" ,
                 "small subunit" ,
-                "large subunit" } ,
+                "large subunit" ,
+                "18S" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "small subunit ribosomal" ,
+                "large subunit ribosomal" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4630,11 +7738,21 @@ Macro-action-list ::= {
             {
               word "5.8S" ,
               synonyms {
+                "12S" ,
                 "16S" ,
+                "18S" ,
                 "23S" ,
+                "26S" ,
                 "28S" ,
                 "small subunit" ,
                 "large subunit" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "small subunit ribosomal" ,
+                "large subunit ribosomal" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4771,45 +7889,112 @@ Macro-action-list ::= {
         field
           strand double ,
         is-not TRUE } } } ,
-  edit-location {
-    type rRNA ,
+  aecr {
     action
-      set-both-partial {
-        constraint all ,
-        extend FALSE } ,
-    retranslate-cds FALSE ,
+      apply {
+        field
+          molinfo-field
+            molecule genomic ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
     constraint {
-      location {
-        strand plus ,
-        seq-type nuc ,
-        partial5 complete ,
-        partial3 complete ,
-        location-type any ,
-        end5
-          dist-from-end 0 ,
-        end3
-          dist-from-end 0 } ,
-      string {
-        match-text "16S ribosomal RNA" ,
-        match-location equals ,
-        case-sensitive TRUE ,
-        ignore-space FALSE ,
-        ignore-punct FALSE ,
-        whole-word FALSE ,
-        not-present FALSE ,
-        is-all-caps FALSE ,
-        is-all-lower FALSE ,
-        is-all-punct FALSE ,
-        ignore-weasel FALSE } ,
       sequence {
         seqtype
-          nucleotide NULL ,
-        feature rRNA ,
-        num-features
-          equals 1 ,
-        length
-          less-than 1201 ,
-        strandedness any } } } ,
+          rna rRNA ,
+        feature any ,
+        strandedness any } ,
+      field {
+        field
+          rna-field {
+            type
+              miscRNA NULL ,
+            field comment } ,
+        string-constraint {
+          match-text "contains 18S ribosomal RNA, internal transcribed spacer
+ 1, 5.8S ribosomal RNA, internal transcribed spacer 2, and 28S ribosomal RNA" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          molinfo-field
+            mol-class dna ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      sequence {
+        seqtype
+          rna genomic ,
+        feature any ,
+        strandedness any } ,
+      field {
+        field
+          rna-field {
+            type
+              miscRNA NULL ,
+            field comment } ,
+        string-constraint {
+          match-text "contains 18S ribosomal RNA, internal transcribed spacer
+ 1, 5.8S ribosomal RNA, internal transcribed spacer 2, and 28S ribosomal RNA" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          molinfo-field
+            strand unknown ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      sequence {
+        seqtype
+          dna NULL ,
+        feature any ,
+        strandedness any } ,
+      field {
+        field
+          rna-field {
+            type
+              miscRNA NULL ,
+            field product } ,
+        string-constraint {
+          match-text "contains 18S ribosomal RNA, internal transcribed spacer
+ 1, 5.8S ribosomal RNA, internal transcribed spacer 2, and 28S ribosomal RNA" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      molinfo {
+        field
+          strand double ,
+        is-not TRUE } } } ,
   aecr {
     action
       remove {
@@ -4842,6 +8027,13 @@ Macro-action-list ::= {
                 "28S" ,
                 "small subunit" ,
                 "large subunit" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "small subunit ribosomal" ,
+                "large subunit ribosomal" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4882,6 +8074,13 @@ Macro-action-list ::= {
                 "28S" ,
                 "small subunit" ,
                 "large subunit" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "small subunit ribosomal" ,
+                "large subunit ribosomal" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -4934,6 +8133,13 @@ Macro-action-list ::= {
                 "small subunit" ,
                 "large subunit" } ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "ribosomal" ,
+              synonyms {
+                "small subunit ribosomal" ,
+                "large subunit ribosomal" } ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -4941,6 +8147,112 @@ Macro-action-list ::= {
           is-all-lower FALSE ,
           is-all-punct FALSE ,
           ignore-weasel FALSE } } } } ,
+  convert-feature {
+    type-from rRNA ,
+    type-to otherRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      string {
+        match-text "16S-23S ribosomal RNA intergenic spacer" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      convert {
+        fields
+          rna-field {
+            type
+              miscRNA NULL ,
+            field-from comment ,
+            field-to product } ,
+        strip-name FALSE ,
+        keep-original FALSE ,
+        capitalization none ,
+        existing-text leave-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "16S-23S ribosomal RNA intergenic spacer" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "16S-23S ribosomal RNA intergenic spacer" ,
+            synonyms {
+              "16S-23S intergenic spacer" ,
+              "16S-23S spacer" ,
+              "16S-23S rRNA intergenic spacer" ,
+              "16S-23S IGS" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      string {
+        match-text "may also" ,
+        match-location contains ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "may also" ,
+            synonyms {
+              "contains" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present TRUE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          rna-field {
+            type
+              miscRNA NULL ,
+            field product } ,
+        value "16S-23S ribosomal RNA intergenic spacer" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "16S-23S rRNA intergenic spacer" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "16S-23S rRNA intergenic spacer" ,
+            synonyms {
+              "16S-23S IGS" ,
+              "16S-23S intergenic spacer" ,
+              "16S-23S spacer" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -4951,27 +8263,542 @@ Macro-action-list ::= {
           case-insensitive TRUE } ,
         field
           cds-gene-prot prot-name } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "recombination-activating gene" ,
+          repl-txt "recombination activating protein" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "recombination-activating protein" ,
+          repl-txt "recombination activating protein" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          cds-gene-prot prot-name } ,
+    also-change-mrna FALSE } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "gag" ,
+        existing-text replace-old } ,
     also-change-mrna FALSE ,
     constraint {
-      string {
-        match-text "recombination activating gene" ,
-        match-location equals ,
-        case-sensitive FALSE ,
-        ignore-space TRUE ,
-        ignore-punct TRUE ,
-        ignore-words {
-          {
-            synonyms {
-              "1" ,
-              "2" } ,
-            case-sensitive FALSE ,
-            whole-word FALSE } } ,
-        whole-word FALSE ,
-        not-present FALSE ,
-        is-all-caps FALSE ,
-        is-all-lower FALSE ,
-        is-all-punct FALSE ,
-        ignore-weasel FALSE } } } ,
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "GAG gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "pol" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "POL gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "vif" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "VIF gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "vpr" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "VPR gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "tat" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "TAT gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "rev" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "REV gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "vpu" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "VPU gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "env" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "ENV gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        value "nef" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type gene ,
+            field
+              legal-qual gene } ,
+        string-constraint {
+          match-text "NEF gene" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "gene" ,
+              synonyms {
+                "sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gene" ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } ,
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
   aecr {
     action
       apply {
@@ -4991,16 +8818,29 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "gag" ,
+          match-text "gag sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gag" ,
+              synonyms {
+                "Gag protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "gag sequence" ,
+              synonyms {
+                "gag" ,
+                "Gag protein" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5013,8 +8853,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5044,16 +8884,29 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "pol" ,
+          match-text "pol sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "pol" ,
+              synonyms {
+                "Pol protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "pol sequence" ,
+              synonyms {
+                "pol" ,
+                "pol protein" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5066,8 +8919,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5108,6 +8961,12 @@ Macro-action-list ::= {
                 "sequence" ,
                 "gene" } ,
               case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "vif" ,
+              synonyms {
+                "Vif protein" } ,
+              case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
           not-present FALSE ,
@@ -5119,8 +8978,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5150,16 +9009,29 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "vpr" ,
+          match-text "vpr sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "vpr" ,
+              synonyms {
+                "Vpr protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "vpr sequence" ,
+              synonyms {
+                "vpr" ,
+                "Vpr protein" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5172,8 +9044,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5203,16 +9075,29 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "tat" ,
+          match-text "tat sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "tat" ,
+              synonyms {
+                "Tat protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "tat sequence" ,
+              synonyms {
+                "tat" ,
+                "Tat protein" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5225,8 +9110,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5256,16 +9141,29 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "rev" ,
+          match-text "rev sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "rev" ,
+              synonyms {
+                "Rev protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "rev sequence" ,
+              synonyms {
+                "rev" ,
+                "Rev protein" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5278,8 +9176,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5309,16 +9207,29 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "vpu" ,
+          match-text "vpu sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "vpu" ,
+              synonyms {
+                "Vpu protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "vpu sequence" ,
+              synonyms {
+                "vpu" ,
+                "Vpu protein" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5331,8 +9242,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5362,7 +9273,7 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "env" ,
+          match-text "env sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
@@ -5375,9 +9286,17 @@ Macro-action-list ::= {
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "env sequence" ,
+              synonyms {
+                "Env protein" ,
+                "Env glycoprotein" ,
+                "Env" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5390,8 +9309,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5421,16 +9340,23 @@ Macro-action-list ::= {
             field
               legal-qual product } ,
         string-constraint {
-          match-text "nef" ,
+          match-text "nef sequence" ,
           match-location equals ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
           ignore-words {
             {
+              word "sequence" ,
               synonyms {
-                "sequence" ,
                 "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "nef sequence" ,
+              synonyms {
+                "Nef protein" ,
+                "nef" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5443,8 +9369,8 @@ Macro-action-list ::= {
         field1
           textqual taxname ,
         constraint {
-          match-text "Human immunodeficiency virus-1" ,
-          match-location equals ,
+          match-text "Human immunodeficiency virus" ,
+          match-location starts ,
           case-sensitive FALSE ,
           ignore-space TRUE ,
           ignore-punct TRUE ,
@@ -5455,6 +9381,299 @@ Macro-action-list ::= {
           is-all-punct FALSE ,
           ignore-weasel FALSE } ,
         type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "envelope protein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "Envelope protein sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "sequence" ,
+              synonyms {
+                "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Envelope protein sequence" ,
+              synonyms {
+                "Envelope protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "polyprotein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "Polyprotein gene" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "Polyprotein gene" ,
+            synonyms {
+              "Polyprotein" ,
+              "polyprotein sequence" ,
+              "polyprotein cds" ,
+              "poliprotein" ,
+              "pollyprotein" ,
+              "polliprotein" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "glycoprotein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "Glycoprotein sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "sequence" ,
+              synonyms {
+                "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Glycoprotein sequence" ,
+              synonyms {
+                "Glycoprotein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "nucleoprotein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "Nucleoprotein sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "sequence" ,
+              synonyms {
+                "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Nucleoprotein sequence" ,
+              synonyms {
+                "Nucleoprotein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "coat protein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "Coat protein sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "sequence" ,
+              synonyms {
+                "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Coat protein sequence" ,
+              synonyms {
+                "Coat protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "capsid protein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "Capsid protein sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "sequence" ,
+              synonyms {
+                "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "Capsid protein sequence" ,
+              synonyms {
+                "Coat protein" ,
+                "capside protein" ,
+                "capside protein sequence" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        value "movement protein" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type cds ,
+            field
+              legal-qual product } ,
+        string-constraint {
+          match-text "movement protein sequence" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          ignore-space TRUE ,
+          ignore-punct TRUE ,
+          ignore-words {
+            {
+              word "sequence" ,
+              synonyms {
+                "gene" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } ,
+            {
+              word "movement protein sequence" ,
+              synonyms {
+                "Movement protein" } ,
+              case-sensitive FALSE ,
+              whole-word FALSE } } ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
   aecr {
     action
       remove {
@@ -5504,12 +9723,13 @@ Macro-action-list ::= {
           ignore-punct TRUE ,
           ignore-words {
             {
-              synonyms {
-                "gallus" } ,
+              word "(chicken)" ,
               case-sensitive FALSE ,
               whole-word FALSE } ,
             {
-              word "(chicken)" ,
+              word "Gallus domesticus (chicken)" ,
+              synonyms {
+                "Gallus gallus domesticus" } ,
               case-sensitive FALSE ,
               whole-word FALSE } } ,
           whole-word FALSE ,
@@ -5532,6 +9752,46 @@ Macro-action-list ::= {
           textqual lineage ,
         constraint {
           match-text "Bacteria" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual dbxref ,
+        constraint {
+          match-text "taxon:" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            location plastid } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Archaea" ,
           match-location contains ,
           case-sensitive TRUE ,
           ignore-space FALSE ,
@@ -5599,6 +9859,185 @@ Macro-action-list ::= {
           is-all-punct FALSE ,
           ignore-weasel FALSE } ,
         type-constraint any } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            location mitochondrion } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Archaea" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual dbxref ,
+        constraint {
+          match-text "taxon:" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            location extrachrom } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Viruses" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      source {
+        field1
+          textqual dbxref ,
+        constraint {
+          match-text "taxon:" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            textqual identified-by } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "unknown" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "unknown" ,
+            synonyms {
+              "N/A" ,
+              "none" ,
+              "not applicable" ,
+              "not aplicable" ,
+              "same laboratory" ,
+              "laboratory" ,
+              "our laboratory" ,
+              "n.a." } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            textqual collected-by } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "unknown" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "unknown" ,
+            synonyms {
+              "N/A" ,
+              "none" ,
+              "not applicable" ,
+              "not aplicable" ,
+              "same laboratory" ,
+              "laboratory" ,
+              "our laboratory" ,
+              "n.a." } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            textqual lat-lon } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "unknown" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "unknown" ,
+            synonyms {
+              "N/A" ,
+              "none" ,
+              "not applicable" ,
+              "not aplicable" ,
+              "n.a." } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -5673,30 +10112,6 @@ Macro-action-list ::= {
     also-change-mrna FALSE } ,
   fix-author {
     fix-type move-middle-to-first } ,
-  aecr {
-    action
-      edit {
-        edit {
-          find-txt "Polyprotein" ,
-          repl-txt "polyprotein" ,
-          location anywhere ,
-          case-insensitive TRUE } ,
-        field
-          cds-gene-prot prot-name } ,
-    also-change-mrna FALSE ,
-    constraint {
-      string {
-        match-text "Polyprotein" ,
-        match-location equals ,
-        case-sensitive FALSE ,
-        ignore-space FALSE ,
-        ignore-punct TRUE ,
-        whole-word FALSE ,
-        not-present FALSE ,
-        is-all-caps FALSE ,
-        is-all-lower FALSE ,
-        is-all-punct FALSE ,
-        ignore-weasel FALSE } } } ,
   aecr {
     action
       edit {
@@ -5827,4 +10242,372 @@ Macro-action-list ::= {
         is-all-caps FALSE ,
         is-all-lower FALSE ,
         is-all-punct FALSE ,
-        ignore-weasel FALSE } } } }
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          cds-gene-prot prot-name ,
+        value "hemagglutinin" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      cdsgeneprot-qual {
+        field1
+          field prot-name ,
+        constraint {
+          match-text "haemagglutinin" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          molinfo-field
+            molecule cRNA ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Influenza A virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature any ,
+        strandedness any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          molinfo-field
+            molecule cRNA ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "Influenza B virus" ,
+          match-location starts ,
+          case-sensitive FALSE ,
+          ignore-space FALSE ,
+          ignore-punct FALSE ,
+          whole-word FALSE ,
+          not-present FALSE ,
+          is-all-caps FALSE ,
+          is-all-lower FALSE ,
+          is-all-punct FALSE ,
+          ignore-weasel FALSE } ,
+        type-constraint any } ,
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature any ,
+        strandedness any } } } ,
+  aecr {
+    action
+      remove {
+        field
+          source-qual
+            textqual all-quals } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "PCR" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "PCR" ,
+            synonyms {
+              "microscope" ,
+              "cloning" ,
+              "clone" ,
+              "sequencing" ,
+              "direct sequencing" ,
+              "taxonomy" ,
+              "sequence" ,
+              "PCR cloning" ,
+              "sequence similarity" ,
+              "blast" ,
+              "blastn" ,
+              "blastp" ,
+              "blastx" ,
+              "tblastn" ,
+              "tblastx" ,
+              "RT-PCR" ,
+              "TAIL-PCR" ,
+              "TAIL PCR" ,
+              "polymerase chain reaction" ,
+              "BLAST search" ,
+              "PCR amplification and sequencing" ,
+              "pGEMT-Easy" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            textqual isolation-source ,
+        value "nasopharyngeal aspirate" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "Naso pharyngeal aspirate" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "Naso pharyngeal aspirate" ,
+            synonyms {
+              "Naso-pharyngeal aspirate" ,
+              "naso pharyngeal aspirate" ,
+              "naso-pharyngeal aspirate" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  fix-sets
+    remove-single-item-set NULL ,
+  propagate-sequence-technology NULL ,
+  aecr {
+    action
+      remove {
+        field
+          struc-comment-field
+            named "Coverage" } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "100%" ,
+        match-location equals ,
+        case-sensitive TRUE ,
+        ignore-space TRUE ,
+        ignore-punct FALSE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "uncultured fungus clone" ,
+          repl-txt "uncultured fungus" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual taxname } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "uncultured fungus clone" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "uncultured bacteria clone" ,
+          repl-txt "uncultured bacterium" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual taxname } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "uncultured bacteria clone" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  aecr {
+    action
+      edit {
+        edit {
+          find-txt "uncultured bacterium clone" ,
+          repl-txt "uncultured bacterium" ,
+          location anywhere ,
+          case-insensitive TRUE } ,
+        field
+          source-qual
+            textqual taxname } ,
+    also-change-mrna FALSE ,
+    constraint {
+      string {
+        match-text "uncultured bacterium clone" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } } } ,
+  remove-duplicate-features {
+    type any ,
+    ignore-partials FALSE ,
+    case-sensitive TRUE ,
+    remove-proteins TRUE } ,
+  edit-location {
+    type rRNA ,
+    action
+      set-both-partial {
+        constraint all ,
+        extend FALSE } ,
+    retranslate-cds FALSE ,
+    also-edit-gene FALSE ,
+    constraint {
+      location {
+        strand plus ,
+        seq-type nuc ,
+        partial5 complete ,
+        partial3 complete ,
+        location-type any ,
+        end5
+          dist-from-end 0 ,
+        end3
+          dist-from-end 0 } ,
+      string {
+        match-text "16S ribosomal RNA" ,
+        match-location equals ,
+        case-sensitive FALSE ,
+        ignore-space TRUE ,
+        ignore-punct TRUE ,
+        ignore-words {
+          {
+            word "16S ribosomal RNA" ,
+            synonyms {
+              "16S small subunit ribosomal RNA" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature rRNA ,
+        num-features
+          equals 1 ,
+        length
+          less-than 1201 ,
+        strandedness any } } } ,
+  edit-location {
+    type rRNA ,
+    action
+      set-both-partial {
+        constraint all ,
+        extend FALSE } ,
+    retranslate-cds FALSE ,
+    also-edit-gene FALSE ,
+    constraint {
+      location {
+        strand plus ,
+        seq-type nuc ,
+        partial5 complete ,
+        partial3 complete ,
+        location-type any ,
+        end5
+          dist-from-end 0 ,
+        end3
+          dist-from-end 0 } ,
+      string {
+        match-text "18S ribosomal RNA" ,
+        match-location equals ,
+        case-sensitive TRUE ,
+        ignore-space FALSE ,
+        ignore-punct FALSE ,
+        ignore-words {
+          {
+            word "18S ribosomal RNA" ,
+            synonyms {
+              "23S ribosomal RNA" ,
+              "28S ribosomal RNA" ,
+              "26S ribosomal RNA" ,
+              "18S small subunit ribosomal RNA" ,
+              "23S large subunit ribosomal RNA" ,
+              "26S large subunit ribosomal RNA" ,
+              "28S large subunit ribosomal RNA" } ,
+            case-sensitive FALSE ,
+            whole-word FALSE } } ,
+        whole-word FALSE ,
+        not-present FALSE ,
+        is-all-caps FALSE ,
+        is-all-lower FALSE ,
+        is-all-punct FALSE ,
+        ignore-weasel FALSE } ,
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature rRNA ,
+        num-features
+          equals 1 ,
+        length
+          less-than 1000 ,
+        strandedness any } } } }

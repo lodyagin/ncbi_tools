@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.c,v 1.6 2008/07/17 17:55:44 kazimird Exp $
+/* $Id: blast_query_info.c,v 1.7 2011/11/30 13:59:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_query_info.c,v 1.6 2008/07/17 17:55:44 kazimird Exp $";
+    "$Id: blast_query_info.c,v 1.7 2011/11/30 13:59:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -51,6 +51,14 @@ Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program)
    } else {
            return context / NUM_STRANDS;
    }
+}
+
+Int4
+Blast_GetQueryIndexFromQueryOffset(Int4 query_offset, EBlastProgramType program, const BlastQueryInfo* query_info)
+{
+   int context = BSearchContextInfo(query_offset, query_info);
+  
+   return Blast_GetQueryIndexFromContext(context, program);
 }
 
 BlastQueryInfo* BlastQueryInfoNew(EBlastProgramType program, int num_queries)

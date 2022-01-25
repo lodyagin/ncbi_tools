@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -2838,6 +2838,258 @@ extern DialoG CreateTextTabs (GrouP h, CharPtr PNTR titles, Int2 initPage,
   }
 
   return (DialoG) p;
+}
+
+
+/*
+Need folder tab graphic where the tabs act as buttons, i.e. the callback
+functions for buttonclicks get called even if the folder tab view is not 
+changing.
+*/
+extern void ReleaseFolderTabButtons (PaneL p, PoinT pt)
+{
+  FolderTabsPtr  ftp;
+  Int2           i;
+  RecT           r;
+
+  ftp = (FolderTabsPtr) GetObjectExtra (p);
+  if (ftp != NULL && newChoice) {
+    i = 0;
+    while (ftp->tabs [i] != NULL && ftp->tabs [i] != p) {
+      i++;
+    }
+    if (ftp->tabs [i] != NULL && ftp->tabs [i] == p) {
+      ObjectRect (p, &r);
+      InsetRect (&r, 1, 1);
+      if (PtInRect (pt, &r)) {
+        if (insideTab) {
+          if (ftp->flipProc != NULL) {
+            ftp->flipProc (p);
+          }
+          insideTab = TRUE;
+        }
+      } else {
+        if (insideTab) {
+          if (ftp->flipProc != NULL) {
+            ftp->flipProc (p);
+          }
+          insideTab = FALSE;
+        }
+      }
+      if (PtInRect (pt, &r)) {
+        ftp->oldPage = ftp->currentPage;
+        ftp->currentPage = i;
+        ResetClip ();
+        if (ftp->changeProc != NULL) {
+          ftp->changeProc (p);
+        }
+        Update ();
+        if (ftp->changeView != NULL) {
+          ftp->changeView (ftp->userdata, i, ftp->oldPage);
+        }
+      }
+    }
+  }
+  else {
+    if (ftp) {
+      i = 0;
+      while (ftp->tabs [i] != NULL && ftp->tabs [i] != p) {
+        i++;
+      }
+      if (ftp->tabs [i] != NULL && ftp->tabs [i] == p) {
+        ObjectRect (p, &r);
+        InsetRect (&r, 1, 1);
+        if (PtInRect (pt, &r)) {
+          if (ftp->changeView != NULL) {
+            ftp->changeView (ftp->userdata, i, ftp->oldPage);
+          }
+        }
+      }
+    }
+  }
+  insideTab = TRUE;
+  newChoice = TRUE;
+}
+
+
+extern void SetFolderTabButton (GraphiC a, Int2 value, Boolean savePort)
+{
+  FolderTabsPtr  ftp;
+  WindoW         tempPort;
+
+  ftp = (FolderTabsPtr) GetObjectExtra (a);
+  if (ftp != NULL) {
+    if (ftp->currentPage != value && value >= 0 && value < ftp->numPages) {
+      tempPort = Nlm_SavePortIfNeeded (a, savePort);
+      a = (GraphiC) ftp->tabs [value];
+      Select (a);
+      ftp->oldPage = ftp->currentPage;
+      ftp->currentPage = value;
+      ResetClip ();
+      if (ftp->changeProc != NULL) {
+        ftp->changeProc ((PaneL) a);
+      }
+      Update ();
+      if (ftp->changeView != NULL) {
+        ftp->changeView (ftp->userdata, value, ftp->oldPage);
+      }
+      RestorePort (tempPort);
+    }
+    else {
+      if (ftp->currentPage == value && value >= 0 && value < ftp->numPages) {
+        if (ftp->changeView != NULL) {
+          ftp->changeView (ftp->userdata, value, ftp->oldPage);
+        }      
+      }
+    }
+  }
+}
+
+
+extern DialoG CreateFolderTabButtons (GrouP h, CharPtr PNTR titles, Int2 initPage,
+                                   Int2 maxPerLine, Int2 indentNextLine,
+                                   FonT font, Int2 horizMargin, Int2 vertMargin,
+                                   Int2 spaceBtwn, Int2 cornerTaper, Int2 endExt,
+                                   TabActnProc changeView, Pointer userdata)
+{
+  FolderTabsPtr  ftp;
+  Int2           grpWid;
+  Int2           i;
+  Int2           indent;
+  Int2           j;
+  Int2           lineHeight;
+  GrouP          p;
+  RecT           r;
+  Handle         tabs [MAX_TABS * 2];
+  Int2           total;
+  Int2           wid;
+  GrouP          x;
+
+  p = HiddenGroup (h, 1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  ftp = (FolderTabsPtr) MemNew (sizeof (FolderTabs));
+  if (ftp != NULL) {
+
+    SetObjectExtra (p, ftp, CleanupFolderTabs);
+    ftp->dialog = (DialoG) p;
+    ftp->todialog = NULL;
+    ftp->fromdialog = NULL;
+    ftp->testdialog = NULL;
+
+    ftp->currentPage = initPage;
+    ftp->numPages = 0;
+    for (i = 0; i < MAX_TABS; i++) {
+      ftp->titles [i] = NULL;
+      ftp->tabs [i] = NULL;
+    }
+    for (i = 0; i < MAX_TABS && titles [i] != NULL; i++) {
+      ftp->titles [i] = StringSave (titles [i]);
+    }
+    for (j = 0; j < MAX_TABS * 2; j++) {
+      tabs [j] = NULL;
+    }
+
+    ftp->font = font;
+    ftp->horizMargin = horizMargin;
+    ftp->vertMargin = vertMargin;
+    ftp->spaceBtwn = spaceBtwn;
+    ftp->cornerTaper = cornerTaper;
+    ftp->endExt = endExt;
+    ftp->flipProc = FlipTabFrame;
+    ftp->changeProc = FolderTabChanging;
+
+    if (maxPerLine == 0) {
+      grpWid = 8;
+    } else {
+      grpWid = ABS (maxPerLine);
+      if (grpWid > 8) {
+        grpWid = 8;
+      }
+    }
+
+    if (maxPerLine < 0) {
+      x = HiddenGroup (p, -grpWid - 2, 0, NULL);
+    } else {
+      x = HiddenGroup (p, grpWid + 2, 0, NULL);
+    }
+    SetGroupSpacing (x, 0, 2);
+    SelectFont (font);
+    lineHeight = LineHeight ();
+    SelectFont (systemFont);
+    for (i = 0, j = 0; ftp->titles [i] != NULL && i < MAX_TABS && j < MAX_TABS * 2; i++) {
+      if ((i % grpWid) == 0) {
+        tabs [j] = SimplePanel (x, ftp->endExt, lineHeight * 1 + 2 * ftp->vertMargin, DrawBottomLineLeft);
+        SetObjectExtra (tabs [j], ftp, NULL);
+        j++;
+      }
+      SelectFont (font);
+      wid = StringWidth (ftp->titles [i]);
+      SelectFont (systemFont);
+      ftp->tabs [i] = SimplePanel (x, wid + 2 + 2 * ftp->horizMargin,
+                                   lineHeight * 1 + 2 * ftp->vertMargin,
+                                   DrawFolderTabs);
+      tabs [j] = ftp->tabs [i];
+      SetObjectExtra (ftp->tabs [i], ftp, NULL);
+      SetPanelClick (ftp->tabs [i], ClickFolderTabs, DragFolderTabs,
+                     NULL, ReleaseFolderTabButtons);
+      (ftp->numPages)++;
+      j++;
+      if ((i % grpWid) == (grpWid - 1) || ftp->titles [i + 1] == NULL || i + 1 >= MAX_TABS) {
+        tabs [j] = SimplePanel (x, ftp->endExt, lineHeight * 1 + 2 * ftp->vertMargin, DrawBottomLineRight);
+        SetObjectExtra (tabs [j], ftp, NULL);
+        j++;
+      }
+    }
+    ftp->changeView = changeView;
+    ftp->userdata = userdata;
+    if (indentNextLine > 0) {
+      total = j;
+      indent = 0;
+      grpWid += 2;
+      for (j = 0; j < total; j++) {
+        if (indent > 0) {
+          GetPosition (tabs [j], &r);
+          OffsetRect (&r, indent, 0);
+          SetPosition (tabs [j], &r);
+          AdjustPrnt (tabs [j], &r, FALSE);
+        }
+        if ((j % grpWid) == (grpWid - 1)) {
+          indent += indentNextLine;
+        }
+      }
+    }
+    Nlm_SetFolderTabSubclass ((GrouP) p);
+  }
+
+  return (DialoG) p;
+}
+
+
+extern void SetFolderTabTitle (DialoG dialog, Int2 iTab, CharPtr title)
+{
+    FolderTabsPtr  ftp;
+    RecT           r;
+    Nlm_WindoW     tempPort;
+
+    ftp = (FolderTabsPtr) GetObjectExtra (dialog);
+    if (ftp != NULL) {
+        /* update the title */
+        MemFree(ftp->titles[iTab]);
+        ftp->titles[iTab] = StringSave(title);
+
+        /* set the current window */
+        tempPort = SavePort(ftp->tabs[iTab]);
+        ObjectRect(ftp->tabs[iTab], &r);
+
+        /* force a repaint */
+        Select(ftp->tabs[iTab]);
+        InsetRect (&r, 5, 5);
+        InvalRect(&r);
+
+        /* reset the current window to the original value */
+        RestorePort(tempPort);
+    }
 }
 
 

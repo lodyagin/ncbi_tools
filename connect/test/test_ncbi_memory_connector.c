@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_memory_connector.c,v 6.7 2010/01/28 15:34:33 kazimird Exp $
+/* $Id: test_ncbi_memory_connector.c,v 6.8 2011/09/11 01:19:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,7 +54,7 @@ int main(void)
     connector = MEMORY_CreateConnector();
     CONN_TestConnector(connector, &timeout, data_file, fTC_SingleBounceCheck);
 
-    connector = MEMORY_CreateConnectorEx(0);
+    connector = MEMORY_CreateConnectorEx(0, 0);
     CONN_TestConnector(connector, &timeout, data_file, fTC_Everything);
 
     /* Cleanup and Exit */

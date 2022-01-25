@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_MEMORY_CONNECTOR__H
 #define CONNECT___NCBI_MEMORY_CONNECTOR__H
 
-/*  $Id: ncbi_memory_connector.h,v 6.6 2006/03/30 17:39:24 lavr Exp $
+/* $Id: ncbi_memory_connector.h,v 6.7 2011/09/11 01:19:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -52,13 +52,16 @@ extern "C" {
 
 
 /* Create new CONNECTOR structure to handle a data transfer in-memory.
- * Onwership of "buf" (if passed non-NULL) is not assumed by the connector.
  * Return NULL on error.
  */
 extern NCBI_XCONNECT_EXPORT CONNECTOR MEMORY_CreateConnector(void);
 
 
-extern NCBI_XCONNECT_EXPORT CONNECTOR MEMORY_CreateConnectorEx(BUF buf);
+/* Onwership of "buf" (if passed non-NULL) controlled by the 2nd parameter */
+extern NCBI_XCONNECT_EXPORT CONNECTOR MEMORY_CreateConnectorEx
+(BUF                  buf,    /* may be NULL;  see param-less ctor above */
+ unsigned int/*bool*/ own_buf /* non-zero if connector is to own "buf"   */
+ );
 
 
 #ifdef __cplusplus
@@ -67,30 +70,5 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR MEMORY_CreateConnectorEx(BUF buf);
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_memory_connector.h,v $
- * Revision 6.6  2006/03/30 17:39:24  lavr
- * MEMORY_Connector: Remove unnecessary lock
- *
- * Revision 6.5  2004/10/27 18:44:14  lavr
- * +MEMORY_CreateConnectorEx()
- *
- * Revision 6.4  2003/04/09 19:05:45  siyan
- * Added doxygen support
- *
- * Revision 6.3  2003/01/08 01:59:33  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.2  2002/09/19 18:01:14  lavr
- * Header file guard macro changed; log moved to the end
- *
- * Revision 6.1  2002/02/20 19:29:35  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_MEMORY_CONNECTOR__H */

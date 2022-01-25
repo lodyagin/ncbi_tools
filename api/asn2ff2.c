@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   7/15/95
  *
- * $Revision: 6.37 $
+ * $Revision: 6.38 $
  *
  * File Description: 
  *
@@ -39,6 +39,14 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: asn2ff2.c,v $
+ * Revision 6.38  2012/04/19 12:16:17  bollin
+ * JIRA:SQD-387 Fixed spelling error - "submitter" instead of "submittor"
+ *
+ *
+ * Committed on the Free edition of March Hare Software CVSNT Client.
+ * Upgrade to CVS Suite for more features and support:
+ * http://march-hare.com/cvsnt/
+ *
  * Revision 6.37  2004/06/04 18:39:14  bollin
  * removed unused variables, fixed compiler warning
  *
@@ -880,7 +888,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 						tmp = StringSave(
 						"* NOTE: This is a \"working draft\" sequence."); 
 						if (num_s > 0) {
-							sprintf(buffer, " It currently~* consists of %ld contigs. Gaps between the contigs~* are represented as runs of N. The order of the pieces~* is believed to be correct as given, however the sizes~* of the gaps between them are based on estimates that have~* provided by the submittor.", (long) (num_s-num_g));
+							sprintf(buffer, " It currently~* consists of %ld contigs. Gaps between the contigs~* are represented as runs of N. The order of the pieces~* is believed to be correct as given, however the sizes~* of the gaps between them are based on estimates that have~* provided by the submitter.", (long) (num_s-num_g));
 							p = Cat2Strings(tmp, buffer, "", 0);
 							MemFree(tmp);
 							tmp = p;

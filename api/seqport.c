@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.186 $
+* $Revision: 6.188 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -7958,7 +7958,7 @@ NLM_EXTERN ProtSearchPtr ProtSearchNew (
   return tbl;
 }
 
-/* table to expand ambiguity letter to all matching nucleotide letters */
+/* table to expand ambiguity letter to all matching protein letters */
 
 static CharPtr  protExpandList [26] = {
   "A",
@@ -8398,17 +8398,28 @@ NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
   return str;
 }
 
+NLM_EXTERN CharPtr GetSequenceByLocation (SeqLocPtr slp)
+
+{
+  Int4     len;
+  CharPtr  str = NULL;
+
+  if (slp == NULL) return NULL;
+  len = SeqLocLen (slp);
+  if (len > 0 && len < MAXALLOC) {
+    str = MemNew (sizeof (Char) * (len + 2));
+    if (str != NULL) {
+      SeqPortStreamLoc (slp, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+    }
+  }
+    
+  return str;
+}
+
 NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
 
 {
-  CharPtr     str = NULL;
-  /*
-  Int2        actual, cnt;
-  Uint1       code = Seq_code_iupacna;
-  Int4        len;
-  SeqPortPtr  spp;
-  CharPtr     str = NULL, txt;
-  */
+  CharPtr  str = NULL;
 
   if (bsp == NULL || bsp->length >= MAXALLOC) return NULL;
 
@@ -8416,42 +8427,6 @@ NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
   if (str == NULL) return NULL;
 
   SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
-
-#if 0
-  if (ISA_aa (bsp->mol)) {
-      code = Seq_code_iupacaa;
-  }
-  spp = SeqPortNew (bsp, 0, -1, 0, code);
-  if (spp == NULL) {
-    MemFree (str);
-    return NULL;
-  }
-
-  if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
-    SeqPortSet_do_virtual (spp, TRUE);
-  }
-
-  len = bsp->length;
-  cnt = (Int2) MIN (len, 32000L);
-  txt = str;
-  actual = 1;
-
-  while (cnt > 0 && len > 0 && actual > 0) {
-    actual = SeqPortRead (spp, (BytePtr) txt, cnt);
-    if (actual < 0) {
-      actual = -actual;
-      if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
-        actual = 1; /* ignore, keep going */
-      }
-    } else if (actual > 0) {
-      len -= actual;
-      txt += actual;
-      cnt = (Int2) MIN (len, 32000L);
-    }
-  }
-
-  SeqPortFree (spp);
-#endif
 
   return str;
 }

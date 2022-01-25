@@ -1,4 +1,4 @@
-/* $Id: mb_indexed_lookup.h,v 1.4 2007/03/29 20:55:30 kazimird Exp $
+/* $Id: mb_indexed_lookup.h,v 1.6 2012/05/21 15:56:03 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,9 +42,18 @@
 extern "C" {
 #endif
 
+enum EOidState {
+    eNoResults = 0,
+    eHasResults,
+    eNotIndexed
+};
+
 /** Function pointer type to retrieve hits from an indexed database */
-typedef unsigned long (*T_MB_IdbGetResults)(void * idb, Int4 oid, Int4 chunk,
+typedef unsigned long (*T_MB_IdbGetResults)(/* void * idb, */Int4 oid, Int4 chunk,
                                    BlastInitHitList * init_hitlist);
+
+/** Function pointer type to check index seeds availability for oid. */
+typedef int (*T_MB_IdbCheckOid)( Int4 oid );
 
 /** Finds all runs of a specified number of exact matches between 
  * two nucleotide sequences. Assumes the subject sequence is part

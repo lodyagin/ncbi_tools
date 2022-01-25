@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.134 2011/04/11 14:54:31 kazimird Exp $
+/* $Id: blast_util.c,v 1.135 2012/06/06 16:04:49 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.134 2011/04/11 14:54:31 kazimird Exp $";
+    "$Id: blast_util.c,v 1.135 2012/06/06 16:04:49 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -130,6 +130,7 @@ BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length,
     (*seq_blk)->nomask_allocated = FALSE;
     
     (*seq_blk)->length = length;
+    (*seq_blk)->bases_offset = 0;
    
     return 0;
 }

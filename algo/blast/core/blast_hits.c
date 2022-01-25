@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.243 2011/05/31 16:09:30 kazimird Exp $
+/* $Id: blast_hits.c,v 1.256 2012/06/13 16:04:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.243 2011/05/31 16:09:30 kazimird Exp $";
+    "$Id: blast_hits.c,v 1.256 2012/06/13 16:04:32 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -170,15 +170,22 @@ Int4 BlastHspNumMax(Boolean gapped_calculation, const BlastHitSavingOptions* opt
 {
    Int4 retval=0;
 
-   if (options->hsp_num_max <= 0)
+   /* per-subject HSP limits do not apply to gapped searches; JIRA SB-616 */
+   if (gapped_calculation)
    {
-      if (!gapped_calculation || options->program_number == eBlastTypeTblastx)
-         retval = kUngappedHSPNumMax;
-      else
-         retval = INT4_MAX;
+      retval = INT4_MAX;
    }
    else
-       retval = options->hsp_num_max;
+   {
+   if (options->hsp_num_max <= 0)
+      {
+         retval = kUngappedHSPNumMax;
+      }
+   else
+      {
+         retval = options->hsp_num_max;
+      }
+   }
 
    return retval;
 }
@@ -341,13 +348,15 @@ s_UpdateReevaluatedHSP(BlastHSP* hsp, Boolean gapped,
 }
                                
 Boolean Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp, 
-           const Uint1* query_start, const Uint1* subject_start, 
+           const Uint1* q, const Int4 qlen,
+           const Uint1* s, const Int4 slen,
            const BlastHitSavingParameters* hit_params, 
            const BlastScoringParameters* score_params, 
            BlastScoreBlk* sbp)
 {
    Int4 sum, score, gap_open, gap_extend;
    Int4 index; /* loop index */
+   Int4 qp, sp, ext;
 
    int best_start_esp_index = 0;
    int best_end_esp_index = 0;
@@ -387,8 +396,8 @@ Boolean Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp,
       gap_extend = score_params->gap_extend;
    }
 
-   query = query_start + hsp->query.offset; 
-   subject = subject_start + hsp->subject.offset;
+   query = q + hsp->query.offset; 
+   subject = s + hsp->subject.offset;
    score = 0;
    sum = 0;
 
@@ -471,11 +480,37 @@ Boolean Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp,
    } /* loop on edit scripts */
    
    score /= factor;
+
+   if (best_start_esp_index < esp->size && best_end_esp_index < esp->size) {
+      /* post processing: try to extend further */
+      ASSERT(esp->op_type[best_start_esp_index] == eGapAlignSub);
+      ASSERT(esp->op_type[best_end_esp_index] == eGapAlignSub);
+
+      qp = best_q_start - q;
+      sp = best_s_start - s;
+      ext = 0;
+      while(qp > 0 && sp > 0 && (q[--qp] == s[--sp]) && q[qp]<0xe) ext++;
+      best_q_start -= ext;
+      best_s_start -= ext;
+      esp->num[best_start_esp_index] += ext;
+      if (best_end_esp_index == best_start_esp_index) best_end_esp_num += ext;
+      score += ext * score_params->reward;
+
+      qp = best_q_end - q;
+      sp = best_s_end - s;
+      ext = 0;
+      while(qp < qlen && sp < slen && q[qp]<0xe && (q[qp++] == s[sp++])) ext++;
+      best_q_end += ext;
+      best_s_end += ext;
+      esp->num[best_end_esp_index] += ext;
+      best_end_esp_num += ext;
+      score += ext * score_params->reward;
+   }
    
    /* Update HSP data. */
    return
        s_UpdateReevaluatedHSP(hsp, TRUE, cutoff_score,
-                              score, query_start, subject_start, best_q_start, 
+                              score, q, s, best_q_start, 
                               best_q_end, best_s_start, best_s_end, 
                               best_start_esp_index, best_end_esp_index,
                               best_end_esp_num);
@@ -574,17 +609,22 @@ Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp, const Uint1* query_sta
  * @param hsp All information about the HSP [in]
  * @param num_ident_ptr Number of identities [out]
  * @param align_length_ptr The alignment length, including gaps [out]
+ * @param sbp Blast score blk [in]
+ * @param num_pos_ptr Number of Positives [out]
  * @return 0 on success, -1 on invalid parameters or error
  */
 static Int2
-s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject, 
-                            const BlastHSP* hsp, Int4* num_ident_ptr, 
-                            Int4* align_length_ptr)
+s_Blast_HSPGetNumIdentitiesAndPositives(const Uint1* query, const Uint1* subject,
+                            			const BlastHSP* hsp, Int4* num_ident_ptr,
+                            			Int4* align_length_ptr, const BlastScoreBlk* sbp,
+                            			Int4* num_pos_ptr)
 {
    Int4 i, num_ident, align_length, q_off, s_off;
    Uint1* q,* s;
    Int4 q_length = hsp->query.end - hsp->query.offset;
    Int4 s_length = hsp->subject.end - hsp->subject.offset;
+   Int4** matrix = NULL;
+   Int4 num_pos = 0;
 
    q_off = hsp->query.offset;
    s_off = hsp->subject.offset;
@@ -598,6 +638,11 @@ s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject,
    num_ident = 0;
    align_length = 0;
 
+   if(NULL != sbp)
+   {
+	   if(sbp->protein_alphabet)
+		   matrix = sbp->matrix->data;
+   }
 
    if (!hsp->gap_info) {
       /* Ungapped case. Check that lengths are the same in query and subject,
@@ -606,10 +651,17 @@ s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject,
          return -1;
       align_length = q_length; 
       for (i=0; i<align_length; i++) {
-         if (*q++ == *s++)
+         if (*q == *s)
             num_ident++;
+         else if (NULL != matrix) {
+        	 if (matrix[*q][*s] > 0)
+        		 num_pos ++;
+             }
+         q++;
+         s++;
       }
-   } else {
+   	}
+    else {
       Int4 index;
       GapEditScript* esp = hsp->gap_info;
       for (index=0; index<esp->size; index++)
@@ -618,8 +670,15 @@ s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject,
          switch (esp->op_type[index]) {
          case eGapAlignSub:
             for (i=0; i<esp->num[index]; i++) {
-               if (*q++ == *s++)
+               if (*q == *s) {
                   num_ident++;
+               }
+               else if (NULL != matrix) {
+            	   if (matrix[*q][*s] > 0)
+            		   num_pos ++;
+               }
+               q++;
+               s++;
             }
             break;
          case eGapAlignDel:
@@ -640,6 +699,10 @@ s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject,
        *align_length_ptr = align_length;
    }
    *num_ident_ptr = num_ident;
+
+   if(NULL != matrix)
+	   *num_pos_ptr = num_pos + num_ident;
+
    return 0;
 }
 
@@ -650,21 +713,32 @@ s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject,
  * @param program BLAST program (blastx or tblastn) [in]
  * @param num_ident_ptr Number of identities [out]
  * @param align_length_ptr The alignment length, including gaps [out]
+ * @param sbp Blast score blk [in]
+ * @param num_pos_ptr Number of Positives [out]
  * @return 0 on success, -1 on invalid parameters or error
  */
 static Int2
-s_Blast_HSPGetOOFNumIdentities(const Uint1* query, const Uint1* subject, 
-   const BlastHSP* hsp, EBlastProgramType program, 
-   Int4* num_ident_ptr, Int4* align_length_ptr)
+s_Blast_HSPGetOOFNumIdentitiesAndPositives(
+		const Uint1* query, const Uint1* subject,
+		const BlastHSP* hsp, EBlastProgramType program,
+		Int4* num_ident_ptr, Int4* align_length_ptr,
+		const BlastScoreBlk* sbp, Int4* num_pos_ptr)
 {
    Int4 num_ident, align_length;
    Int4 index;
    Uint1* q,* s;
    GapEditScript* esp;
+   Int4 ** matrix = NULL;
+   Int4 num_pos = 0;
 
    if (!hsp->gap_info || !subject || !query)
       return -1;
 
+   if(NULL != sbp)
+   {
+	   if(sbp->protein_alphabet)
+		   matrix = sbp->matrix->data;
+   }
 
    if (program == eBlastTypeTblastn ||
        program == eBlastTypeRpsTblastn) {
@@ -687,6 +761,10 @@ s_Blast_HSPGetOOFNumIdentities(const Uint1* query, const Uint1* subject,
          for (i=0; i<esp->num[index]; i++) {
             if (*q == *s)
                num_ident++;
+            else if (NULL != matrix) {
+              	 if (matrix[*q][*s] > 0)
+               		 num_pos ++;
+            }
             ++q;
             s += CODON_LENGTH;
          }
@@ -723,32 +801,74 @@ s_Blast_HSPGetOOFNumIdentities(const Uint1* query, const Uint1* subject,
    }
    *num_ident_ptr = num_ident;
 
+   if(NULL != matrix)
+	   *num_pos_ptr = num_pos + num_ident;
+
    return 0;
 }
 
 Int2
-Blast_HSPGetNumIdentities(const Uint1* query, 
-                          const Uint1* subject, 
-                          BlastHSP* hsp, 
+Blast_HSPGetNumIdentities(const Uint1* query,
+                          const Uint1* subject,
+                          BlastHSP* hsp,
                           const BlastScoringOptions* score_options,
                           Int4* align_length_ptr)
 {
     Int2 retval = 0;
 
-    /* Calculate alignment length and number of identical letters. 
+    /* Calculate alignment length and number of identical letters.
        Do not get the number of identities if the query is not available */
     if (score_options->is_ooframe) {
-        retval = s_Blast_HSPGetOOFNumIdentities(query, subject, hsp, 
-                                               score_options->program_number, 
-                                               &hsp->num_ident, 
-                                               align_length_ptr);
+        retval = s_Blast_HSPGetOOFNumIdentitiesAndPositives(query, subject, hsp,
+                                               	   	   	    score_options->program_number,
+                                               	   	   	    &hsp->num_ident,
+                                               	   	   	    align_length_ptr,
+                                               	   	   	    NULL, NULL);
     } else {
-        retval = s_Blast_HSPGetNumIdentities(query, subject, hsp, 
-                                            &hsp->num_ident, 
-                                            align_length_ptr);
+        retval = s_Blast_HSPGetNumIdentitiesAndPositives(query, subject, hsp,
+                                            		  	 &hsp->num_ident,
+                                            		  	 align_length_ptr,
+                                            		  	 NULL, NULL);
     }
 
     return retval;
+}
+Int2
+Blast_HSPGetNumIdentitiesAndPositives(const Uint1* query,
+        							  const Uint1* subject,
+        							  BlastHSP* hsp,
+        							  const BlastScoringOptions* score_options,
+        							  Int4* align_length_ptr,
+        							  const BlastScoreBlk * sbp)
+{
+    Int2 retval = 0;
+
+    /* Calculate alignment length and number of identical letters.
+       Do not get the number of identities if the query is not available */
+    if (score_options->is_ooframe) {
+        retval = s_Blast_HSPGetOOFNumIdentitiesAndPositives(query, subject, hsp,
+                                               	   	   	    score_options->program_number,
+                                               	   	   	    &hsp->num_ident,
+                                               	   	   	    align_length_ptr,
+                                               	   	   	    sbp, &hsp->num_positives);
+    } else {
+        retval = s_Blast_HSPGetNumIdentitiesAndPositives(query, subject, hsp,
+                                            		  	 &hsp->num_ident,
+                                            		  	 align_length_ptr,
+                                            		  	 sbp, &hsp->num_positives);
+    }
+
+    return retval;
+}
+
+static Boolean s_HSPTest(BlastHSP* hsp,
+                         const BlastHitSavingOptions* hit_options,
+                         Int4 align_length)
+{
+	   return ((hsp->num_ident * 100.0 <
+			   align_length * hit_options->percent_identity) ||
+			   align_length < hit_options->min_hit_length) ;
+
 }
 
 Boolean
@@ -766,16 +886,20 @@ Blast_HSPTestIdentityAndLength(EBlastProgramType program_number,
    status = Blast_HSPGetNumIdentities(query, subject, hsp, score_options,
                                       &align_length);
    ASSERT(status == 0);
+   (void)status;    /* to pacify compiler warning */
 
    /* Check whether this HSP passes the percent identity and minimal hit 
       length criteria, and delete it if it does not. */
-   if ((hsp->num_ident * 100.0 < 
-        align_length * hit_options->percent_identity) ||
-       align_length < hit_options->min_hit_length) {
-      delete_hsp = TRUE;
-   }
+   delete_hsp = s_HSPTest(hsp, hit_options, align_length);
 
    return delete_hsp;
+}
+
+Boolean Blast_HSPTest(BlastHSP* hsp,
+		 	 	 	  const BlastHitSavingOptions* hit_options,
+		 	 	 	  Int4 align_length)
+{
+	return s_HSPTest(hsp, hit_options, align_length);
 }
 
 void 
@@ -1219,6 +1343,9 @@ s_BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2, Boolean allow_gap)
    {  
        return FALSE;
    }
+
+   if(hsp1->subject.frame != hsp2->subject.frame)
+	   return FALSE;
 
    /* combine the boundaries of the two HSPs, 
       assuming they intersect at all */
@@ -1720,12 +1847,9 @@ Int2 Blast_HSPListReapByRawScore(BlastHSPList* hsp_list,
    BlastHSP** hsp_array;
    Int4 hsp_cnt = 0;
    Int4 index;
-   double cutoff;
 
    if (hsp_list == NULL)
       return 0;
-
-   cutoff = hit_options->expect_value;
 
    hsp_array = hsp_list->hsp_array;
    for (index = 0; index < hsp_list->hspcnt; index++) {
@@ -2029,15 +2153,82 @@ s_QueryEndCompareHSPs(const void* v1, const void* v2)
    return 0;
 }
 
+
+/* cut off the GapEditScript according to hsp offset and end */
+static void 
+s_CutOffGapEditScript(BlastHSP* hsp, Int4 q_cut, Int4 s_cut, Boolean cut_begin)
+{   
+   int index, opid, qid, sid;
+   Boolean found = FALSE;
+   GapEditScript *esp = hsp->gap_info;
+   qid = 0;
+   sid = 0;
+   opid = 0;
+   q_cut -= hsp->query.offset;
+   s_cut -= hsp->subject.offset;
+   for (index=0; index < esp->size; index++) {
+       for(opid=0; opid < esp->num[index];){  
+          if (esp->op_type[index] == eGapAlignSub) {
+             qid++;
+             sid++;
+             opid++;
+          } else if (esp->op_type[index] == eGapAlignDel) {
+             sid+=esp->num[index];
+             opid+=esp->num[index]; 
+          } else if (esp->op_type[index] == eGapAlignIns) {
+             qid+=esp->num[index];
+             opid+=esp->num[index];
+          }
+          if (qid >= q_cut && sid >= s_cut) found = TRUE;
+          if (found) break;
+       }
+       if (found) break;
+   }
+   
+   // RMH: Unless both cut sites where found the following
+   //      block would access memory outside the GapEditScript
+   //      array.
+   if ( found )
+   {
+     if (cut_begin) {
+         int new_index = 0;
+         if (opid < esp->num[index]) {
+            ASSERT(esp->op_type[index] == eGapAlignSub);
+            esp->op_type[0] = esp->op_type[index];
+            esp->num[0] = esp->num[index] - opid;
+            new_index++;
+         } 
+         ++index;
+         for (; index < esp->size; index++, new_index++) {
+            esp->op_type[new_index] = esp->op_type[index];
+            esp->num[new_index] = esp->num[index];
+         }
+         esp->size = new_index;
+         hsp->query.offset += qid;
+         hsp->subject.offset += sid;
+     } else {
+         if (opid < esp->num[index]) {
+            ASSERT(esp->op_type[index] == eGapAlignSub);
+            esp->num[index] = opid;
+         } 
+         esp->size = index+1;
+         hsp->query.end = hsp->query.offset + qid;
+         hsp->subject.end = hsp->subject.offset + sid;
+     }
+   }
+}
+
 Int4
 Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program, 
-                                          BlastHSPList* hsp_list)
+                                          BlastHSPList* hsp_list,
+                                          Boolean purge)
 
 {
    BlastHSP** hsp_array;  /* hsp_array to purge. */
-   Int4 i, j;
-   Int2 retval;
+   BlastHSP* hsp;
+   Int4 i, j, k;
    Int4 hsp_count;
+   purge |= (program != eBlastTypeBlastn);
    
    /* If HSP list is empty, return immediately. */
    if (hsp_list == NULL || hsp_list->hspcnt == 0)
@@ -2060,8 +2251,18 @@ Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program,
              hsp_array[i]->context == hsp_array[i+j]->context &&
              hsp_array[i]->query.offset == hsp_array[i+j]->query.offset &&
              hsp_array[i]->subject.offset == hsp_array[i+j]->subject.offset) {
-         hsp_array[i+j] = Blast_HSPFree(hsp_array[i+j]);
-         j++;
+         hsp_count--;
+         hsp = hsp_array[i+j];
+         if (!purge && (hsp->query.end > hsp_array[i]->query.end)) {
+             s_CutOffGapEditScript(hsp, hsp_array[i]->query.end,
+                                        hsp_array[i]->subject.end, TRUE);
+         } else {
+             hsp = Blast_HSPFree(hsp);
+         }
+         for (k=i+j; k<hsp_count; k++) {
+             hsp_array[k] = hsp_array[k+1];
+         }
+         hsp_array[hsp_count] = hsp;
       }
       i += j;
    }
@@ -2075,17 +2276,27 @@ Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program,
              hsp_array[i]->context == hsp_array[i+j]->context &&
              hsp_array[i]->query.end == hsp_array[i+j]->query.end &&
              hsp_array[i]->subject.end == hsp_array[i+j]->subject.end) {
-         hsp_array[i+j] = Blast_HSPFree(hsp_array[i+j]);
-         j++;
+         hsp_count--;
+         hsp = hsp_array[i+j];
+         if (!purge && (hsp->query.offset < hsp_array[i]->query.offset)) {
+             s_CutOffGapEditScript(hsp, hsp_array[i]->query.offset,
+                                        hsp_array[i]->subject.offset, FALSE);
+         } else {
+             hsp = Blast_HSPFree(hsp);
+         }
+         for (k=i+j; k<hsp_count; k++) {
+             hsp_array[k] = hsp_array[k+1];
+         }
+         hsp_array[hsp_count] = hsp;
       }
       i += j;
    }
 
-   retval = Blast_HSPListPurgeNullHSPs(hsp_list);
-   if (retval < 0)
-      return retval;
+   if (purge) {
+      Blast_HSPListPurgeNullHSPs(hsp_list);
+   }
 
-   return hsp_list->hspcnt;
+   return hsp_count;
 }
 
 Int2 
@@ -2183,11 +2394,15 @@ Blast_HSPListReevaluateUngapped(EBlastProgramType program,
       if (!delete_hsp) {
           const Uint1* query_nomask = query_blk->sequence_nomask +
               query_info->contexts[context].query_offset;
-          delete_hsp = 
-              Blast_HSPTestIdentityAndLength(program, hsp, query_nomask, 
-                                             subject_start, 
-                                             score_params->options, 
-                                             hit_params->options);
+          Int4 align_length = 0;
+          Blast_HSPGetNumIdentitiesAndPositives(query_nomask,
+                   							    subject_start,
+                               					hsp,
+                               					score_params->options,
+                               					&align_length,
+                               					sbp);
+
+           delete_hsp = Blast_HSPTest(hsp, hit_params->options, align_length);
       }
       if (delete_hsp) { /* This HSP is now below the cutoff */
          hsp_array[index] = Blast_HSPFree(hsp_array[index]);
@@ -3192,6 +3407,69 @@ s_TrimResultsByTotalHSPLimit(BlastHSPResults* results, Uint4 total_hsp_limit)
 
     return hsp_limit_exceeded;
 }
+/* extended version of the above function. Provides information about query number
+ * which exceeded number of HSP.
+ * The hsp_limit_exceeded is of results->num_queries size guarantied.
+ */
+static Boolean
+s_TrimResultsByTotalHSPLimitEx(BlastHSPResults* results,
+	                       Uint4 total_hsp_limit,
+			       Boolean *hsp_limit_exceeded)
+{
+    int query_index;
+    Boolean  any_hsp_limit_exceeded = FALSE;
+    
+    if (total_hsp_limit == 0) {
+        return any_hsp_limit_exceeded;
+    }
+
+    for (query_index = 0; query_index < results->num_queries; ++query_index) {
+        BlastHitList* hit_list = NULL;
+        BlastHSPList** hsplist_array = NULL;
+        Int4 hsplist_count = 0;
+        int subj_index;
+        if( hsp_limit_exceeded) hsp_limit_exceeded[query_index]  = FALSE;
+
+        if ( !(hit_list = results->hitlist_array[query_index]) )
+            continue;
+        /* The count of HSPs is separate for each query. */
+        hsplist_count = hit_list->hsplist_count;
+
+        hsplist_array = (BlastHSPList**) 
+            malloc(hsplist_count*sizeof(BlastHSPList*));
+        
+        for (subj_index = 0; subj_index < hsplist_count; ++subj_index) {
+            hsplist_array[subj_index] = hit_list->hsplist_array[subj_index];
+        }
+ 
+        qsort((void*)hsplist_array, hsplist_count,
+              sizeof(BlastHSPList*), s_CompareHsplistHspcnt);
+        
+        {
+            Int4 tot_hsps = 0;  /* total number of HSPs */
+            Uint4 hsp_per_seq = MAX(1, total_hsp_limit/hsplist_count);
+            for (subj_index = 0; subj_index < hsplist_count; ++subj_index) {
+                Int4 allowed_hsp_num = ((subj_index+1)*hsp_per_seq) - tot_hsps;
+                BlastHSPList* hsp_list = hsplist_array[subj_index];
+                if (hsp_list->hspcnt > allowed_hsp_num) {
+                    /* Free the extra HSPs */
+                    int hsp_index;
+                    for (hsp_index = allowed_hsp_num; 
+                         hsp_index < hsp_list->hspcnt; ++hsp_index) {
+                        Blast_HSPFree(hsp_list->hsp_array[hsp_index]);
+                    }
+                    hsp_list->hspcnt = allowed_hsp_num;
+                    any_hsp_limit_exceeded = TRUE;
+        	    if( hsp_limit_exceeded ) hsp_limit_exceeded[query_index]  = FALSE;
+                }
+                tot_hsps += hsp_list->hspcnt;
+            }
+        }
+        sfree(hsplist_array);
+    }
+
+    return any_hsp_limit_exceeded;
+}
 
 BlastHSPResults*
 Blast_HSPResultsFromHSPStreamWithLimit(BlastHSPStream* hsp_stream, 
@@ -3209,5 +3487,20 @@ Blast_HSPResultsFromHSPStreamWithLimit(BlastHSPStream* hsp_stream,
     if (removed_hsps) {
         *removed_hsps = rm_hsps;
     }
+    return retval;
+}
+BlastHSPResults*
+Blast_HSPResultsFromHSPStreamWithLimitEx(BlastHSPStream* hsp_stream, 
+                                   Uint4 num_queries, 
+                                   SBlastHitsParameters* hit_param,
+                                   Uint4 max_num_hsps,
+				   Boolean *removed_hsps)
+{
+    Boolean rm_hsps = FALSE;
+    BlastHSPResults* retval = Blast_HSPResultsFromHSPStream(hsp_stream,
+                                                            num_queries,
+                                                            hit_param);
+
+    rm_hsps = s_TrimResultsByTotalHSPLimitEx(retval, max_num_hsps,removed_hsps);
     return retval;
 }

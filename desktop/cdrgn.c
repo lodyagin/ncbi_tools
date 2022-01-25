@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.131 $
+* $Revision: 6.132 $
 *
 * File Description: 
 *
@@ -2251,7 +2251,6 @@ static void AddProteinToCDSDialog (
 static void DownloadProteinFromEntrez (ButtoN b)
 {
   SeqEntryPtr   sep = NULL;
-  Int4          uid;
   BioseqPtr     bsp;
   CdRgnFormPtr  cfp;
   Char          str [128];
@@ -2267,26 +2266,16 @@ static void DownloadProteinFromEntrez (ButtoN b)
     return;
   }
   WatchCursor ();
-  if (GetValue (pif->accntype) == 1) {
-    uid = AccessionToGi (str);
-  } else {
-    if (! StrToLong (str, &uid)) {
-     uid = 0;
-    }
+  sep = PubSeqSynchronousQueryString (str, 0, -1);
+  if (sep == NULL) {
+    Message (MSG_OK, "Unable to find this record in the database.");
+    return;
   }
-
-  if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
-    if (sep == NULL) {
-      Message (MSG_OK, "Unable to find this record in the database.");
-      return;
-    }
-    if (IS_Bioseq (sep)) {
-    } else if (IS_Bioseq_set (sep)) {
-    } else {
-      Message (MSG_OK, "Unable to find this record in the database.");
-      return;
-    }
+  if (IS_Bioseq (sep)) {
+  } else if (IS_Bioseq_set (sep)) {
+  } else {
+    Message (MSG_OK, "Unable to find this record in the database.");
+    return;
   }
   bsp = GetProteinFromSep (sep);
   if (bsp == NULL)

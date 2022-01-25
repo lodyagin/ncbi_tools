@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.27 $  $Date: 2010/10/16 21:43:10 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.28 $  $Date: 2012/02/19 03:45:25 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.28  2012/02/19 03:45:25  lavr
+ * Cleanup of obsolete features
+ *
  * Revision 6.27  2010/10/16 21:43:10  lavr
  * Adjust timeout set sequence
  *
@@ -118,6 +121,7 @@
 
 #include <ncbi.h>
 #include <ncbinet.h>
+#include <ctools/asn_connection.h>
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_service_connector.h>
 
@@ -148,22 +152,6 @@
 
 /* Static functions
  */
-
-static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buf, Uint2 len)
-{
-    size_t n_read;
-    CONN_Read((CONN) p, buf, len, &n_read, eIO_ReadPlain);
-    return (Int2) n_read;
-}
-
-
-static Int2 LIBCALLBACK s_AsnWrite(Pointer p, CharPtr buf, Uint2 len)
-{
-    size_t n_written;
-    CONN_Write((CONN) p, buf, len, &n_written, eIO_WritePersist);
-    return (Int2) n_written;
-}
-
 
 static void LIBCALLBACK s_AsnErrorFunc(Int2 type, CharPtr message)
 {
@@ -207,18 +195,17 @@ static NI_HandPtr s_GenericGetService
     Char          str[64];
     NI_HandPtr    result;
     double        valf;
-    CONN          conn;
     int           val;
     CONNECTOR     c;
 
     if (!(net_info = ConnNetInfo_Create(defService))) {
-        ErrPostEx(SEV_ERROR, 0, 1, "[Service NI Client] "
-                  " Cannot set parameters for service \"%s\"", defService);
+        ErrPostEx(SEV_ERROR, 0, 1, "[%s] "
+                  " Cannot create service parameters", defService);
         return 0;
     }
     if (!(def_info = ConnNetInfo_Clone(net_info))) {
-        ErrPostEx(SEV_ERROR, 0, 1, "[Service NI Client] "
-                  " Cannot create reserve copy of network info");
+        ErrPostEx(SEV_ERROR, 0, 1, "[%s] "
+                  " Cannot reserve a copy of service parameters", defService);
         ConnNetInfo_Destroy(net_info);
         return 0;
     }
@@ -308,8 +295,8 @@ static NI_HandPtr s_GenericGetService
 
     {{ /* alternate service name */
         static const Char ENV_PREFIX[] = "NI_SERVICE_NAME_";
-        CharPtr envName = (CharPtr)MemNew(sizeof(ENV_PREFIX) +
-                                          StringLen(configSection));
+        CharPtr envName = (CharPtr) MemNew(sizeof(ENV_PREFIX) +
+                                           StringLen(configSection));
         StringCpy(envName, ENV_PREFIX);
         StringCat(envName, configSection);
         StringUpper(envName);
@@ -320,34 +307,32 @@ static NI_HandPtr s_GenericGetService
 
     ConnNetInfo_Destroy(def_info);
 
-    /* establish connection to the server */
-    if (!(c = SERVICE_CreateConnectorEx(str, fSERV_Any, net_info, 0)) ||
-        CONN_Create(c, &conn) != eIO_Success) {
-        ErrPostEx(SEV_ERROR, 0, 1, "[Service NI Client] "
-                  " Service \"%s\" %s", str, c ? "unusable" : "not found");
-        ConnNetInfo_Destroy(net_info);
-        return 0;
-    }
-    CONN_SetTimeout(conn, eIO_Open,      net_info->timeout);
-    CONN_SetTimeout(conn, eIO_ReadWrite, net_info->timeout);
-    CONN_SetTimeout(conn, eIO_Close,     net_info->timeout);
-
-    /* open ASN i/o, etc. */
     if ((result = (NI_HandPtr) MemNew(sizeof(NI_Handle))) != 0) {
-        result->extra_proc_info = conn;
-        result->raip = AsnIoNew(ASNIO_BIN | ASNIO_IN,  (FILE*) 0,
-                                (void*) conn, s_AsnRead,  (IoFuncType) 0);
-        result->waip = AsnIoNew(ASNIO_BIN | ASNIO_OUT, (FILE*) 0,
-                                (void*) conn, (IoFuncType) 0, s_AsnWrite);
-        AsnIoSetErrorMsg(result->raip, s_AsnErrorFunc);
-        AsnIoSetErrorMsg(result->waip, s_AsnErrorFunc);
-        result->hostname = StringSave(net_info->client_host);
-        result->disp = disp;
-        disp->referenceCount++;
-    } else
-        CONN_Close(conn);
-    ConnNetInfo_Destroy(net_info);
+        /* establish connection to the server */
+        CONN conn;
+        if (!(conn = CreateAsnConn_ServiceEx(str,
+                                             eAsnConn_Binary, &result->raip,
+                                             eAsnConn_Binary, &result->waip,
+                                             fSERV_Any, net_info, 0))) {
+            ErrPostEx(SEV_ERROR, 0, 1, "[%s]  Cannot connect to service", str);
+            MemFree(result);
+            result = 0;
+        } else {
+            CONN_SetTimeout(conn, eIO_Open,      net_info->timeout);
+            CONN_SetTimeout(conn, eIO_ReadWrite, net_info->timeout);
+            CONN_SetTimeout(conn, eIO_Close,     net_info->timeout);
 
+            AsnIoSetErrorMsg(result->raip, s_AsnErrorFunc);
+            AsnIoSetErrorMsg(result->waip, s_AsnErrorFunc);
+
+            result->hostname = StringSave(net_info->client_host);
+            result->extra_proc_info = conn;
+            result->disp = disp;
+            disp->referenceCount++;
+        }
+    }
+
+    ConnNetInfo_Destroy(net_info);
     return result;
 }
 
@@ -367,9 +352,8 @@ static Int2 s_EndServices(NI_DispatcherPtr disp)
 static Int2 s_ServiceDisconnect(NI_HandPtr mhp)
 {
     s_EndServices(mhp->disp);
-    CONN_Close((CONN)mhp->extra_proc_info);
-    AsnIoClose(mhp->raip);
-    AsnIoClose(mhp->waip);
+    /* Close callback takes care of aip's */
+    CONN_Close((CONN) mhp->extra_proc_info);
     MemFree(mhp->hostname);
     MemFree(mhp);
     return 0;

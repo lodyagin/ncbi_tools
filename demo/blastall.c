@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.205 2009/05/28 18:37:11 kans Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.206 2011/12/19 18:40:17 gouriano Exp $";
 
-/* $Id: blastall.c,v 6.205 2009/05/28 18:37:11 kans Exp $
+/* $Id: blastall.c,v 6.206 2011/12/19 18:40:17 gouriano Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: blastall.c,v 6.205 2009/05/28 18:37:11 kans Ex
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.206  2011/12/19 18:40:17  gouriano
+ * Corrected printf formatting. NOJIRA
+ *
  * Revision 6.205  2009/05/28 18:37:11  kans
  * remove includd hspstream_queue.h
  *
@@ -1481,7 +1484,7 @@ Int2 Main_new (void)
 
    max_query_string = getenv("BLAST_MAXQUERY_SIZE");
    if (max_query_string)
-        sscanf (max_query_string, "%ld", &maxquery);
+        sscanf (max_query_string, "%d", &maxquery);
 
    BlastGetTypes(myargs[ARG_PROGRAM].strvalue, &query_is_na, &db_is_na);
 

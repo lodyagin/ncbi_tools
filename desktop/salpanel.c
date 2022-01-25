@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.100 $
+* $Revision: 6.102 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 #include <fstyle.h>
 #include <salmedia.h>
 #include <sequtil.h>
+#include <alignmgr.h>
 #include <alignmgr2.h>
 #include <edutil.h>
 #include <dlogutil.h>
@@ -4273,6 +4274,87 @@ GetNextFeatureOnSegOrMaster
 }
 
 
+static Boolean FeatureInAlignmentInterval (SeqFeatPtr sfp, BioseqPtr master_bsp, SeqAlignPtr salp_list)
+{
+  SeqAlignPtr s;
+  Boolean     rval = FALSE;
+  Int4        start, stop, tmp, i, aln_start, aln_stop;
+  SeqIdPtr    sip;
+
+  if (sfp == NULL) {
+    return FALSE;
+  }
+
+  start = SeqLocStart (sfp->location);
+  stop = SeqLocStop (sfp->location);
+  if (start > stop ) {
+    tmp = start;
+    start = stop;
+    stop = tmp;
+  }
+
+  for (s = salp_list; s != NULL && !rval; s = s->next) {
+    /* find position of master in alignment */
+    for (i = 0; i < s->dim; i++) {
+      sip = AlnMgrGetNthSeqIdPtr(s, i + 1);
+      if (SeqIdIn (sip, master_bsp->id)) {
+        AlnMgr2GetNthSeqRangeInSA(s, i + 1, &aln_start, &aln_stop);
+        if (aln_start > aln_stop) {
+          tmp = aln_start;
+          aln_start = aln_stop;
+          aln_stop = tmp;
+        }
+        if (stop < aln_start || start > aln_stop) {
+          /* outside */
+        } else {
+          rval = TRUE;
+        }
+        break;
+      }
+    }
+  }
+  return rval;
+}
+
+
+static Boolean AreAllFeaturesCoveredByAlignmentIntervals (SelStructPtr sel, BioseqPtr bsp)
+{
+  SelStructPtr ssp;
+  SeqAlignPtr  salp, salp_next;
+  Boolean      rval = TRUE;
+  SeqFeatPtr   sfp;
+  SeqMgrFeatContext  fcontext;
+
+  salp = FindAlignmentsForBioseq (bsp);
+  if (salp == NULL) {
+    return FALSE;
+  }
+
+  if (sel != NULL) {
+    for (ssp = sel; ssp != NULL && rval; ssp = ssp->next) {
+      sfp = SeqMgrGetDesiredFeature (ssp->entityID, NULL, ssp->itemID, 0, NULL, &fcontext);
+      if (sfp != NULL) {
+        rval = FeatureInAlignmentInterval (sfp, bsp, salp);
+      }
+    }    
+  } else {
+    sfp = GetNextFeatureOnSegOrMaster (bsp, NULL, 0, 0, &fcontext);
+    while (sfp != NULL && rval) {
+      rval = FeatureInAlignmentInterval (sfp, bsp, salp);
+      sfp = GetNextFeatureOnSegOrMaster (bsp, sfp, 0, 0, &fcontext);
+    }
+  }
+
+  while (salp != NULL) {
+    salp_next = salp->next;
+    salp->next = NULL;
+    salp = SeqAlignFree (salp);
+    salp = salp_next;
+  }
+  return rval;
+}
+
+
 static void AcceptFeatProp (
   ButtoN b
 )
@@ -4321,6 +4403,17 @@ static void AcceptFeatProp (
       return;
     }
   }
+
+  if (!AreAllFeaturesCoveredByAlignmentIntervals(sel, bsp)) {
+    if (sel == NULL) {
+      Message (MSG_ERROR, "Your alignment does not cover all features on the sequence.  Unable to propagate.");
+    } else {
+      Message (MSG_ERROR, "Your alignment does not cover all selected features.  Unable to propagate");
+    }
+    SafeShow (fdp->form);
+    return;
+  }
+
   if (GetValue (fdp->gapSplit) == 1) {
     gapSplit = FALSE;
   } else {

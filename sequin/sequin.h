@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.669 $
+* $Revision: 6.711 $
 *
 * File Description: 
 *
@@ -101,7 +101,8 @@ extern "C" {
 #define SEQ_PKG_MUTATION      6
 #define SEQ_PKG_ENVIRONMENT   7
 #define SEQ_PKG_GENBANK       8
-#define NUM_SEQ_PKG           8
+#define SEQ_PKG_TSA           9
+#define NUM_SEQ_PKG           9
 
 #define SEQ_FMT_FASTA         1
 #define SEQ_FMT_ALIGNMENT     2 
@@ -131,6 +132,7 @@ typedef struct sqnblk {
   CharPtr      citsubtitle;
   DatePtr      releasedate;
   Boolean      holduntilpublished;
+  SeqDescPtr   descriptors;
 } SequinBlock, PNTR SequinBlockPtr;
 
 extern CharPtr SEQUIN_APPLICATION;
@@ -167,8 +169,6 @@ extern void ExtendAllSequencesInSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
 extern void SplitSegmentedFeatsMenuItem (IteM i);
 extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
-extern SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,
-				       SeqIdPtr  new_sip);
 extern SequinBlockPtr SequinBlockFree (SequinBlockPtr sbp);
 
 extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
@@ -409,6 +409,7 @@ extern void MRnaFromCdsProc (Uint2 entityID);
 extern void BioseqViewFormToolBar (GrouP h);
 extern void BioseqViewFormWGSToolBar (GrouP h);
 extern void BioseqViewFormCustomToolBar (GrouP h);
+extern void MakeCustomToolBarData (GrouP h, Pointer data);
 extern Boolean DoBuildContig (void);
 extern void SetGenome (PopuP p);
 extern PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode);
@@ -618,8 +619,6 @@ extern void RemoveProteinsAndRenormalize (IteM i);
 extern void GlobalAddTranslExcept (IteM i);
 extern void AddTranslExceptWithComment (IteM i);
 
-extern const char *nucleotide_alphabet;
-extern const char *protein_alphabet;
 extern void ReadAlignment (IteM i);
 extern SeqEntryPtr SeqEntryFromAlignmentFile (FILE *fp, TSequenceInfoPtr sequence_info, Uint1 moltype,
                                               CharPtr no_org_err_msg);
@@ -628,13 +627,9 @@ extern SeqAlignPtr Sqn_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPt
 
 extern void SqnNewAlign (BioseqPtr bsp1, BioseqPtr bsp2, SeqAlignPtr PNTR salp);
 
-extern void ProduceAlignmentNotes (TAlignmentFilePtr afp, TErrorInfoPtr error_list);
-
-extern void RemoveAlignmentsWithSequence (BioseqPtr bsp, Uint2 input_entityID);
-extern void FlipEntireAlignmentIfAllSequencesFlipped (SeqAnnotPtr sap, Pointer userdata);
 
 #ifndef WIN_MAC
-extern void CreateSqnInitialFormMenus (WindoW w);
+NLM_EXTERN MenU CreateSqnInitialFormMenus (WindoW w);
 #endif
 
 #define NUM_PAGES  8
@@ -651,7 +646,10 @@ typedef struct sequencesform {
   Int2            currentPage;
   Int2            tagFromPage [NUM_PAGES];
   Int2            numPages;
-  DialoG          tbs;
+
+  DialoG          seq_tbs;
+  DialoG          annot_tbs;
+  Boolean         show_annot;
 
   Uint1           dnamolfrommolinfo;
   EnumFieldAssoc  PNTR moltypeAlist;
@@ -663,7 +661,6 @@ typedef struct sequencesform {
   Int2            numSeqs;
   Int2            submType;
 
-  ButtoN          protTechBoth;
   ButtoN          partialN;
   ButtoN          partialC;
   Boolean         makeMRNA;
@@ -683,6 +680,9 @@ typedef struct sequencesform {
   BtnActnProc     goToNext;
   BtnActnProc     goToPrev;
 
+  /* for sequencing method */
+  DialoG          sequencing_method_dlg;
+
   /* These are added to add modifiers on the source tab */  
   ButtoN          import_mod_btn;
   ButtoN          source_assist_btn;
@@ -698,6 +698,9 @@ typedef struct sequencesform {
   /* These allow the user to specify topology and molecule */
   ButtoN          topology_btn;
   ButtoN          molecule_btn;
+
+  /* for vector trimming */
+  ButtoN          vecscreen_btn;
   
   /* This list pairs the proteins and nucleotides. */
   /* It must be freed using FreeAssociationList. */
@@ -705,7 +708,23 @@ typedef struct sequencesform {
 
 } SequencesForm, PNTR SequencesFormPtr;
 
+
+typedef struct submissionfeatureinfo
+{
+  Uint2           feature_type;
+  Uint1           strand;
+  Boolean         partial5;
+  Boolean         partial3;
+  CharPtr         gene_name;
+  CharPtr         product;
+  CharPtr         prot_desc;
+  CharPtr         feat_comment;
+} SubmissionFeatureInfoData, PNTR SubmissionFeatureInfoPtr;
+NLM_EXTERN SubmissionFeatureInfoPtr SubmissionFeatureInfoFree (SubmissionFeatureInfoPtr info);
+
+
 NLM_EXTERN Boolean IsAnnotTabEmpty (SequencesFormPtr sqfp);
+NLM_EXTERN SubmissionFeatureInfoPtr GetSubmissionFeatureInfo (SequencesFormPtr sqfp);
 
 extern ValNodePtr InsertMostUsedFeatureValNodes (ValNodePtr old_list);
 
@@ -778,10 +797,7 @@ extern void SelectAllSequencesInListCtrl (LisT l);
 extern void UnSelectAllSequencesInListCtrl (LisT l);
 extern void OffsetLocation (SeqLocPtr loc, Int4 offset, SeqIdPtr sip);
 
-extern CharPtr kSubmitterUpdateText;
 extern CharPtr kIndexerUpdateVecScreenText;
-extern Boolean CreateUpdateCitSubFromBestTemplate (SeqEntryPtr top_sep, SeqEntryPtr upd_sep, CharPtr update_txt);
-extern void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID, CharPtr update_txt);
 
 extern Boolean AlistMessage (EnumFieldAssocPtr al, UIEnumPtr val, UIEnum dflt, CharPtr mssg);
 
@@ -1384,10 +1400,12 @@ ImportSequencesFromFile
  BoolPtr         chars_stripped);
 
 extern void TestUpdateSequenceIndexer (IteM i);
+extern void TestUpdateSequenceClipboardIndexer (IteM i);
 extern void TestUpdateSequenceSubmitter (IteM i);
 extern void TestExtendSequenceIndexer (IteM i);
 extern void TestExtendSequenceSubmitter (IteM i);
 extern void TestUpdateSequenceSetIndexer (IteM i);
+extern void TestUpdateSequenceSetClipboardIndexer (IteM i);
 extern void TestUpdateSequenceSetSubmitter (IteM i);
 extern void TestExtendSequenceSetIndexer (IteM i);
 extern void TestExtendSequenceSetSubmitter (IteM i);
@@ -1436,9 +1454,6 @@ ExpandSeqLoc
 
 extern void SetSeqLocStrand (SeqLocPtr location, Uint1 strand);
 extern void SetPrimerBindPairStrands (IteM i);
-extern Boolean IsBioseqInAnyAlignment (BioseqPtr bsp, Uint2 input_entityID);
-extern void RemoveAlignmentsWithSequence (BioseqPtr bsp, Uint2 input_entityID);
-extern void FlipEntireAlignmentIfAllSequencesFlipped (SeqAnnotPtr sap, Pointer userdata);
 
 extern void ConvertSelectedGapFeaturesToKnown (IteM i);
 extern void ConvertSelectedGapFeaturesToUnknown (IteM i);
@@ -1487,6 +1502,7 @@ typedef struct cdstomiscfeat {
 
 extern void ConvertCDSToMiscFeat (SeqFeatPtr sfp, Pointer userdata);
 extern void AdjustCodingRegionsEndingInGap (IteM i);
+extern void AdjustCodingRegionsWithTerminalNs (IteM i);
 
 extern void ConvertCodingRegionsWithInternalKnownGapToMiscFeat (IteM i);
 
@@ -1513,7 +1529,7 @@ extern void MapFeaturesToProteinSequence(IteM i);
 
 extern void FindContig (IteM i);
 extern ValNodePtr FreeSeqIdList (ValNodePtr id_list);
-extern void DownloadAndDisplay (Int4 uid);
+extern void DownloadAndDisplay (SeqIdPtr sip);
 extern void LaunchDisplay (Uint2 entityID);
 extern void SetBioseqViewTargetByBioseq (BaseFormPtr bfp, BioseqPtr bsp);
 
@@ -1534,8 +1550,6 @@ extern void RemoveIntronLocationsFromrRNA (IteM i);
 extern void RemoveIntronLocationsFromtRNA (IteM i);
 extern void RemoveIntronLocationsFrommRNA (IteM i);
 
-extern void ReverseBioseqInAlignment (SeqAlignPtr salp, Pointer userdata);
-
 extern Int2 AddSeqAlignForSeqEntry (SeqEntryPtr sep, Uint2 entityID, Boolean choose_master, Boolean use_new_blast);
 
 extern ValNodePtr ChooseFeaturesForConversion (ValNodePtr clickable_list, BaseFormPtr bfp, CharPtr label1, CharPtr label2);
@@ -1543,10 +1557,9 @@ extern void RemoveBadPubs (IteM i);
 extern void VecScreenTool (IteM i);
 extern void LogTrimmedLocation (LogInfoPtr lip, SeqLocPtr slp);
 extern void CalculateVectorDescription (ClickableItemPtr cip);
+NLM_EXTERN void CalculateVectorDescriptionEx (ClickableItemPtr cip, BioseqPtr bsp);
 
 extern void BarcodeTestTool (IteM i);
-
-extern Boolean RelaxedSeqIdIn (SeqIdPtr sip, SeqIdPtr sip_list);
 
 extern void NewSUC (ValNodePtr suc_list, Uint2 entityID, Boolean reverse, Boolean byblock, Boolean showsequence);
 extern ValNodePtr GetSUCCommonList (SeqEntryPtr sep, Boolean reverse, Boolean byblock, Boolean showsequence, Boolean byqual);
@@ -1669,9 +1682,7 @@ extern void MakeBadSpecificHostValueTable (IteM i);
 extern const char *nucleotide_alphabet;
 extern const char *protein_alphabet;
 
-extern DialoG AlnSettingsDlg (GrouP h, Boolean allow_sequence_type);
 extern TSequenceInfoPtr GetDefaultSequenceInfo (void);
-extern TSequenceInfoPtr GetAlignmentOptions (Uint1Ptr moltype, TSequenceInfoPtr sequence_info);
 
 
 extern void tRNAScanUpdate (IteM i);
@@ -1703,10 +1714,11 @@ NLM_EXTERN void RemoveDupGenBankSets (SeqEntryPtr sep);
 NLM_EXTERN BioseqSetPtr InsetNewSet (BioseqSetPtr bssp, Uint1 _class);
 
 extern void AbbreviateCitSubAffilStates (IteM i);
-extern void RemoveQualityScores (BioseqPtr bsp, FILE *log_fp, BoolPtr data_in_log);
 extern void NewLoadFeatureQualifierTable (IteM i);
+extern void NewLoadFeatureQualifierTableFromClipboard (IteM i);
 extern void NewLoadSourceQualifierTable (IteM i);
-extern void NewLoadFeatureQualifierTableToolBtn (ButtoN b);
+NLM_EXTERN void NewLoadFeatureQualifierTableToolBtn (ButtoN b);
+NLM_EXTERN void NewLoadFeatureQualifierTableClipToolBtn (ButtoN b);
 NLM_EXTERN void CreateTableReaderWindowWithStructuredComments (IteM i);
 extern void ListAllSequences (BioseqPtr bsp, Pointer userdata);
 extern void ChooseCategories (ValNodePtr value_list, Boolean do_choose);
@@ -1826,13 +1838,6 @@ NLM_EXTERN void SetDoReportAfterUnsequester (Int4 report_type);
 
 extern void ConvertRptUnitRangeToLocation (IteM i);
 extern void RetranscribemRNA (IteM i);
-extern void 
-ReplaceComplexLocation 
-(SeqLocPtr   slp,
- SeqAlignPtr salp,
- Int4        new_len,
- Int4        begin,
- Int4        fin);
 
 NLM_EXTERN void CleanupCDD (IteM i);
 
@@ -1879,6 +1884,8 @@ NLM_EXTERN void DisAllowFarFetchForTPAValidation (IteM i);
 
 NLM_EXTERN void TruncateByProtAlign (IteM i);
 NLM_EXTERN void FrameShiftFinder (IteM i);
+NLM_EXTERN void FrameShiftFinderClipboard (IteM i);
+NLM_EXTERN void FrameShiftFinderEntityID (Uint2 entityID, Boolean from_clipboard);
 
 NLM_EXTERN void ApplySetType (IteM i);
 NLM_EXTERN void ApplySetTypeToSeqEntry (SeqEntryPtr sep, Uint1 new_class, Boolean is_top);
@@ -1894,6 +1901,7 @@ NLM_EXTERN void WithdrawSequences (IteM i);
 
 NLM_EXTERN SeqEntryPtr GetSequencesFromFile (CharPtr path, SeqEntryPtr current_list);
 NLM_EXTERN CharPtr FindValueFromPairInDefline (CharPtr mod_name, CharPtr def_line);
+NLM_EXTERN BioseqPtr FindNthSequenceInSet (SeqEntryPtr seq_list, Int4 nth, BoolPtr is_seg, Boolean nuc_only);
 
 /* This structure holds a list of IDs and titles for a set of sequences.
  * It can be used to represent the new list of sequences being imported,
@@ -1904,6 +1912,7 @@ typedef struct idandtitleedit
 {
   CharPtr PNTR id_list;
   CharPtr PNTR title_list;
+  Int4Ptr      length_list;
   BoolPtr      is_seg;
   Int4         num_sequences;
   Boolean      nuc_only;
@@ -1990,6 +1999,76 @@ AddEditApplyDataToApplyValue
  EditApplyPtr edit_apply, 
  ApplyValuePtr avp);
 
+extern void TaxFixToolBaseForm (BaseFormPtr bfp);
+NLM_EXTERN void CreateStructuredCommentsBaseForm (BaseFormPtr bfp);
+extern void NewDescriptorMenuFuncEx (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype, CharPtr user_object_tag);
+NLM_EXTERN void BulkEditSourceBaseForm (BaseFormPtr bfp);
+
+/* for submission wizards */
+typedef enum {
+  eWizardType_UnculturedSamples = 1 ,
+  eWizardType_Viruses,
+  eWizardType_CulturedSamples,
+  eWizardType_TSA,
+  eWizardType_IGS,
+  eWizardType_Microsatellite,
+  eWizardType_DLoop
+} EWizardType;
+
+#define eNumWizardTypes 7
+
+
+NLM_EXTERN Int4 CountSequencesAndSegments (SeqEntryPtr list, Boolean nuc_only);
+NLM_EXTERN Boolean WantSequencingMethod (Int4 num_sequences);
+NLM_EXTERN ClickableItemPtr ClickableItemForBioseq (BioseqPtr bsp);
+
+typedef struct sequencingmethodinfo {
+  /* list of structured comment objects to add */
+  ValNodePtr structured_comments;
+  Int4 assembled_choice;
+  Boolean quit_now;
+} SequencingMethodInfoData, PNTR SequencingMethodInfoPtr;
+
+NLM_EXTERN SequencingMethodInfoPtr SequencingMethodInfoNew (void);
+NLM_EXTERN SequencingMethodInfoPtr SequencingMethodInfoFree (SequencingMethodInfoPtr info);
+NLM_EXTERN Boolean IsSequencingMethodInfoValid (SequencingMethodInfoPtr info, Int4 num_sequences, Boolean required, Int4 wizard_type);
+NLM_EXTERN DialoG SequencingMethodDialog (GrouP parent);
+NLM_EXTERN void QuitFromWizard (ForM form);
+NLM_EXTERN Boolean RemoveSequencesFromWizardList (ValNodePtr PNTR sequences, Int4 suggested_min);
+NLM_EXTERN Boolean SuggestJumpingToWizard (SeqEntryPtr sep);
+
+NLM_EXTERN void SubmitterRemoveSequencesFromRecordBaseForm (BaseFormPtr bfp);
+NLM_EXTERN void SetTsaCallback (BioseqPtr bsp, Pointer data);
+NLM_EXTERN void ExtendCodingRegionEnds (IteM i);
+NLM_EXTERN void VecScreenAll (Uint2 entityID);
+NLM_EXTERN void ExternalVecScreenTool (IteM i);
+NLM_EXTERN void RemoveGeneralIds (IteM i);
+
+NLM_EXTERN void WizardVectorTool (SeqEntryPtr PNTR psep);
+NLM_EXTERN Boolean VecScreenWizard (SeqEntryPtr sep);
+NLM_EXTERN void TrimAmbiguousBases (SeqEntryPtr PNTR sequences);
+NLM_EXTERN Boolean 
+ValidateModifierTableSequenceIDs 
+(ValNodePtr        header_line,
+ IDAndTitleEditPtr iatep,
+ Int4Ptr           sequence_numbers,
+ Int4Ptr           num_rows);
+NLM_EXTERN Boolean IsSequenceIdColumnHeader (CharPtr str);
+NLM_EXTERN ValNodePtr ReadRowListFromFile (void);
+NLM_EXTERN void ScreenBarcodePlant (IteM i);
+
+typedef struct fixproductcap {
+  Boolean keep_cap_before_punct;
+  Boolean keep_cap_before_cap;
+  Boolean keep_cap_before_digit;
+  CharPtr remove_list;
+} FixProductCapData, PNTR FixProductCapPtr;
+
+NLM_EXTERN void FixProductCapitalizationInString (CharPtr PNTR pStr, FixProductCapPtr fc);
+
+#define TESTRESULT_WARN 0
+#define TESTRESULT_MISSING 1
+#define TESTRESULT_INVALID 2
 
 #ifdef __cplusplus
 }

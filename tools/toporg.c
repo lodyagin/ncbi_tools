@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.183 2011/07/07 21:24:49 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.197 2012/05/10 21:20:48 kans Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -15,6 +15,7 @@ static char const rcsid[] = "$Id: toporg.c,v 6.183 2011/07/07 21:24:49 kans Exp 
 #include <subutil.h>
 #include <tofasta.h>
 #include <objfdef.h>
+#include <valid.h>
 
 static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr);
 
@@ -5032,162 +5033,46 @@ static void MarkBadProtTitlesInNucProts (SeqEntryPtr sep)
   VisitBioseqsInSep (sep, NULL, StripBadTitleFromProteinProducts);
 }
 
-/*
-  EC number replacement - copied from Sequin, with protection
-  multiple reads if no replacement file available
-*/
-
-typedef struct ecrepdata {
-  CharPtr  before;
-  CharPtr  after;
-} EcRepData, PNTR EcRepPtr;
-
-static ValNodePtr     ec_rep_list = NULL;
-static EcRepPtr PNTR  ec_rep_data = NULL;
-static Int4           ec_rep_len = 0;
-static Boolean        ec_rep_read = FALSE;
-
-static int LIBCALLBACK SortVnpByEcBefore (VoidPtr ptr1, VoidPtr ptr2)
+static void RemoveOrgFromEndOfProtein (SeqFeatPtr sfp, Pointer userdata)
 
 {
-  EcRepPtr    erp1, erp2;
-  CharPtr     str1, str2;
-  ValNodePtr  vnp1, vnp2;
+  BioSourcePtr  biop;
+  BioseqPtr     bsp;
+  CharPtr       cp;
+  size_t        len;
+  OrgRefPtr     orp;
+  ProtRefPtr    prp;
+  SeqDescrPtr   sdp;
+  CharPtr       str;
+  ValNodePtr    vnp;
 
-  if (ptr1 == NULL || ptr2 == NULL) return 0;
-  vnp1 = *((ValNodePtr PNTR) ptr1);
-  vnp2 = *((ValNodePtr PNTR) ptr2);
-  if (vnp1 == NULL || vnp2 == NULL) return 0;
-  erp1 = (EcRepPtr) vnp1->data.ptrvalue;
-  erp2 = (EcRepPtr) vnp2->data.ptrvalue;
-  if (erp1 == NULL || erp2 == NULL) return 0;
-  str1 = erp1->before;
-  str2 = erp2->before;
-  if (str1 == NULL || str2 == NULL) return 0;
-  return StringCmp (str1, str2);
-}
-
-static void SetupECReplacementTable (CharPtr file)
-
-{
-  EcRepPtr    erp;
-  FileCache   fc;
-  FILE        *fp = NULL;
-  Int4        i;
-  ValNodePtr  last = NULL;
-  Char        line [512];
-  Char        path [PATH_MAX];
-  CharPtr     ptr;
-  ErrSev      sev;
-  CharPtr     str;
-  ValNodePtr  vnp;
-
-  if (ec_rep_data != NULL) return;
-  if (ec_rep_read) return;
-
-  if (FindPath ("ncbi", "ncbi", "data", path, sizeof (path))) {
-    FileBuildPath (path, NULL, file);
-    sev = ErrSetMessageLevel (SEV_ERROR);
-    fp = FileOpen (path, "r");
-    ErrSetMessageLevel (sev);
-    if (fp != NULL) {
-      FileCacheSetup (&fc, fp);
-  
-      str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
-      while (str != NULL) {
-        if (StringDoesHaveText (str)) {
-          ptr = StringChr (str, '\t');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            ptr++;
-            /* only replace if a single destination number, not a split from one to many */
-            if (StringChr (ptr, '\t') == NULL) {
-              erp = (EcRepPtr) MemNew (sizeof (EcRepData));
-              if (erp != NULL) {
-                erp->before = StringSave (str);
-                erp->after = StringSave (ptr);
-                vnp = ValNodeAddPointer (&last, 0, (Pointer) erp);
-                if (ec_rep_list == NULL) {
-                  ec_rep_list = vnp;
-                }
-                last = vnp;
-              }
-            }
-          }
-        }
-        str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
-      }
-
-      FileClose (fp);
-      ec_rep_len = ValNodeLen (ec_rep_list);
-      if (ec_rep_len > 0) {
-        ec_rep_list = ValNodeSort (ec_rep_list, SortVnpByEcBefore);
-        ec_rep_data = (EcRepPtr PNTR) MemNew (sizeof (EcRepPtr) * (ec_rep_len + 1));
-        if (ec_rep_data != NULL) {
-          for (vnp = ec_rep_list, i = 0; vnp != NULL; vnp = vnp->next, i++) {
-            erp = (EcRepPtr) vnp->data.ptrvalue;
-            ec_rep_data [i] = erp;
-          }
-        }
-      }
-    }
-  }
-
-  ec_rep_read = TRUE;
-}
-
-static CharPtr GetECReplacement (CharPtr str)
-
-{
-  EcRepPtr  erp;
-  Int4      L, R, mid;
- 
-  if (StringHasNoText (str)) return NULL;
-
-  L = 0;
-  R = ec_rep_len - 1;
-  while (L < R) {
-    mid = (L + R) / 2;
-    erp = ec_rep_data [(int) mid];
-    if (erp != NULL && StringCmp (erp->before, str) < 0) {
-      L = mid + 1;
-    } else {
-      R = mid;
-    }
-  }
-  erp = ec_rep_data [(int) R];
-  if (erp != NULL && StringCmp (erp->before, str) == 0 && StringChr (erp->after, '\t') == NULL) return erp->after;
-
-  return NULL;
-}
-
-static void UpdateProtEC (SeqFeatPtr sfp, Pointer userdata)
-
-{
-  Int2        inf_loop_check;
-  CharPtr     nxt;
-  ProtRefPtr  prp;
-  CharPtr     rep;
-  CharPtr     str;
-  ValNodePtr  vnp;
- 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) return;
   prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-  if (prp == NULL || prp->ec == NULL) return;
-  for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+  if (prp == NULL) return;
+
+  for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
     str = (CharPtr) vnp->data.ptrvalue;
     if (StringHasNoText (str)) continue;
-    rep = GetECReplacement (str);
-    if (rep == NULL) continue;
-    nxt = rep;
-    inf_loop_check = 0;
-    while (nxt != NULL && inf_loop_check < 10) {
-      rep = nxt;
-      inf_loop_check++;
-      nxt = GetECReplacement (rep);
-    }
-    vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
-    vnp->data.ptrvalue = StringSave (rep);
+    len = StringLen (str);
+    if (len < 5) continue;
+    if (str [len - 1] != ']') continue;
+    cp = StringRChr (str, '[');
+    if (cp == NULL) continue;
+    if (StringNCmp (cp, "[NAD", 4) == 0) continue;
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    if (bsp == NULL) continue;
+    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
+    if (sdp == NULL) continue;
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop == NULL) continue;
+    orp = biop->org;
+    if (orp == NULL) continue;
+    if (StringHasNoText (orp->taxname)) continue;
+    len = StringLen (orp->taxname);
+    if (StringLen (cp) != len + 2) continue;
+    if (StringNICmp (cp + 1, orp->taxname, len - 1) != 0) continue;
+    *cp = '\0';
+    TrimSpacesAroundString (orp->taxname);
   }
 }
 
@@ -5214,6 +5099,8 @@ static void MakeNcbiCleanupObject (SeqEntryPtr sep, Boolean gpipeMode)
   AddIntegerToNcbiCleanupUserObject (uop, "month", dp->data [2]);
   AddIntegerToNcbiCleanupUserObject (uop, "day", dp->data [3]);
   AddIntegerToNcbiCleanupUserObject (uop, "year", dp->data [1] + 1900);
+
+  DateFree (dp);
 
   sdp = NewDescrOnSeqEntry (sep, Seq_descr_user);
   if (sdp == NULL) return;
@@ -5247,7 +5134,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   /* clear indexes, since CleanupEmptyFeatCallback removes genes, etc. */
   SeqMgrClearFeatureIndexes (entityID, NULL);
   RemoveAllNcbiCleanupUserObjects (sep);
-  RemoveDuplicateNestedSetsForEntityID (entityID);
+  RemoveDuplicateNestedSetsForEntityIDNoUpdate (entityID);
   SeqMgrClearFeatureIndexes (entityID, NULL);
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
@@ -5316,6 +5203,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   move_cds_ex (sep, doPseudo);
   SeqEntryExplore (sep, NULL, MolInfoUpdate);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+  VisitFeaturesInSep (sep, NULL, RemoveOrgFromEndOfProtein);
   /* do these again, since SE2A3 can create full length source feature */
   SeqEntryExplore (sep, NULL, CleanupGenbankCallback);
   ConvertFullLenSourceFeatToDesc (sep);
@@ -5323,10 +5211,16 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   SeqEntryExplore (sep, NULL, MergeAdjacentAnnotsCallback);
   /* VisitBioseqsInSep (sep, NULL, BarCodeTechToKeyword); */
-  SetupECReplacementTable ("ecnum_replaced.txt");
-  if (ec_rep_data != NULL && ec_rep_len > 0) {
-    VisitFeaturesInSep (sep, NULL, UpdateProtEC);
+
+  /* tbl2asn now calls processes EC numbers with reporting before SSEC */
+  UpdateReplacedECNumbersEx (sep, NULL, NULL, TRUE, FALSE);
+
+  /*
+   if (GetAppProperty ("NcbiTbl2Asn") != NULL) {
+    DeleteBadECNumbers (sep);
   }
+  */
+
   /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
   SeqMgrIndexFeatures (entityID, NULL);
   biop = NULL;
@@ -5364,6 +5258,9 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
       VisitBioseqsInSep (sep, (Pointer) &isEmblOrDdbj, RemoveUnneededGeneXrefs);
     }
   }
+  ResynchCodingRegionPartials (sep);
+  ResynchMessengerRNAPartials (sep);
+  ResynchProteinPartials (sep);
   InstantiateProteinTitles (entityID, NULL);
   SeqMgrClearFeatureIndexes (entityID, NULL);
   MakeNcbiCleanupObject (sep, gpipeMode);
@@ -5421,6 +5318,8 @@ extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap)
   AddIntegerToNcbiCleanupUserObject (uop, "month", dp->data [2]);
   AddIntegerToNcbiCleanupUserObject (uop, "day", dp->data [3]);
   AddIntegerToNcbiCleanupUserObject (uop, "year", dp->data [1] + 1900);
+
+  DateFree (dp);
 
   adp = AnnotDescrNew (NULL);
   if (adp == NULL) return;
@@ -6022,15 +5921,15 @@ static void MapSegFeatToMaster (
   hasNulls = LocationHasNullsBetween (sfp->location);
 
   if (sfp->data.choice == SEQFEAT_GENE) {
-    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE);
+    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE);
     hasNulls = FALSE;
     sfp->partial = FALSE;
   } else if (sfp->data.choice == SEQFEAT_CDREGION) {
-    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE);
+    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE);
   } else if (sfp->data.choice == SEQFEAT_RNA) {
-    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE);
+    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE);
   } else {
-    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE);
+    slp = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE, FALSE);
   }
   if (slp == NULL) {
     ValNodeFree (partiallist);

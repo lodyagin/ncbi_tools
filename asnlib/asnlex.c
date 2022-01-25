@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Routines for parsing ASN.1 value nototation (text) messages
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlex.c,v $
+* Revision 6.6  2011/09/06 18:03:03  kans
+* text ASN.1 support for UTF8String
+*
 * Revision 6.5  2000/12/12 15:56:12  ostell
 * added support BigInt
 *
@@ -308,6 +311,10 @@ NLM_EXTERN AsnTypePtr LIBCALL  AsnTxtReadId (AsnIoPtr aip, AsnModulePtr amp, Asn
 *   		just checks that value is of proper type
 *
 *****************************************************************************/
+
+static Pointer AsnLexReadStringUTF8 (AsnIoPtr aip, AsnTypePtr atp);
+static Boolean AsnLexSkipStringUTF8 (AsnIoPtr aip, AsnTypePtr atp);
+
 NLM_EXTERN Int2 LIBCALL  AsnTxtReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr valueptr)
 {
 	Int2 isa, token, retval;
@@ -354,7 +361,7 @@ NLM_EXTERN Int2 LIBCALL  AsnTxtReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 
 	terminalvalue = TRUE;    /* most values are terminal values */
 
-	if (ISA_STRINGTYPE(isa))
+	if (ISA_STRINGTYPE(isa) && isa != UTF8STRING_TYPE)
 		isa = GENERALSTRING_TYPE;
 
 	switch (isa)
@@ -435,6 +442,19 @@ NLM_EXTERN Int2 LIBCALL  AsnTxtReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 			else
 			{
 				if (! AsnLexSkipString(aip, atp))
+					return 0;
+			}
+			break;
+		case UTF8STRING_TYPE:
+			if (read_value)
+			{
+				valueptr->ptrvalue = AsnLexReadStringUTF8(aip, atp);
+				if (valueptr->ptrvalue == NULL)
+					return 0;
+			}
+			else
+			{
+				if (! AsnLexSkipStringUTF8(aip, atp))
 					return 0;
 			}
 			break;
@@ -645,14 +665,16 @@ NLM_EXTERN Boolean AsnLexReadBoolean (AsnIoPtr aip, AsnTypePtr atp)
 *       otherwise returns the stringstoreptr itself
 *
 *****************************************************************************/
-NLM_EXTERN Pointer AsnLexReadString (AsnIoPtr aip, AsnTypePtr atp)
+static Int2 AsnLexWordEx (AsnIoPtr aip, Uint1 fix_non_print);
+
+static Pointer AsnLexReadStringEx (AsnIoPtr aip, AsnTypePtr atp, Uint1 fix_non_print)
 {
 	Int2 token;
 	ByteStorePtr ssp;
 	CharPtr result=NULL;
 	Int4 bytes;
 
-	token = AsnLexWord(aip);      /* read the start */
+	token = AsnLexWordEx (aip, fix_non_print);      /* read the start */
 	if (token != START_STRING)
 	{
 		AsnIoErrorMsg(aip, 43, AsnErrGetTypeName(atp->name), aip->linenumber);
@@ -661,7 +683,7 @@ NLM_EXTERN Pointer AsnLexReadString (AsnIoPtr aip, AsnTypePtr atp)
 
 	ssp = BSNew(0);
 	if (ssp == NULL) return result;
-	token = AsnLexWord(aip);   /* read the string(s) */
+	token = AsnLexWordEx (aip, fix_non_print);   /* read the string(s) */
 	while (token == IN_STRING)
 	{
 		bytes = BSWrite(ssp, aip->word, (Int4)aip->wordlen);
@@ -689,6 +711,18 @@ NLM_EXTERN Pointer AsnLexReadString (AsnIoPtr aip, AsnTypePtr atp)
 	return result;
 }
 
+NLM_EXTERN Pointer AsnLexReadString (AsnIoPtr aip, AsnTypePtr atp)
+
+{
+  return AsnLexReadStringEx (aip, atp, aip->fix_non_print);
+}
+
+static Pointer AsnLexReadStringUTF8 (AsnIoPtr aip, AsnTypePtr atp)
+
+{
+  return AsnLexReadStringEx (aip, atp, 2);
+}
+
 /*****************************************************************************
 *
 *   void AsnLexSkipString(aip, atp)
@@ -699,18 +733,19 @@ NLM_EXTERN Pointer AsnLexReadString (AsnIoPtr aip, AsnTypePtr atp)
 *   	just reads past end of string
 *
 *****************************************************************************/
-NLM_EXTERN Boolean AsnLexSkipString (AsnIoPtr aip, AsnTypePtr atp)
+
+static Boolean AsnLexSkipStringEx (AsnIoPtr aip, AsnTypePtr atp, Uint1 fix_non_print)
 {
 	Int2 token;
 
-	token = AsnLexWord(aip);      /* read the start */
+	token = AsnLexWordEx(aip, fix_non_print);      /* read the start */
 	if (token != START_STRING)
 	{
 		AsnIoErrorMsg(aip, 43, AsnErrGetTypeName(atp->name), aip->linenumber);
 		return FALSE;
 	}
 
-	token = AsnLexWord(aip);   /* read the string(s) */
+	token = AsnLexWordEx(aip, fix_non_print);   /* read the string(s) */
 	while (token == IN_STRING)
 		token = AsnLexWord(aip);
 
@@ -720,6 +755,18 @@ NLM_EXTERN Boolean AsnLexSkipString (AsnIoPtr aip, AsnTypePtr atp)
 		AsnIoErrorMsg(aip, 44, AsnErrGetTypeName(atp->name), aip->linenumber);
 
 	return TRUE;
+}
+
+NLM_EXTERN Boolean AsnLexSkipString (AsnIoPtr aip, AsnTypePtr atp)
+
+{
+  return AsnLexSkipStringEx (aip, atp, aip->fix_non_print);
+}
+
+static Boolean AsnLexSkipStringUTF8 (AsnIoPtr aip, AsnTypePtr atp)
+
+{
+  return AsnLexSkipStringEx (aip, atp, 2);
 }
 
 /*****************************************************************************
@@ -1029,7 +1076,7 @@ NLM_EXTERN Int8 AsnLexBigInt (AsnIoPtr aip)
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 AsnLexWord (AsnIoPtr aip)
+static Int2 AsnLexWordEx (AsnIoPtr aip, Uint1 fix_non_print)
 {
 	register CharPtr pos;
 	Int1 state;
@@ -1073,11 +1120,11 @@ NLM_EXTERN Int2 AsnLexWord (AsnIoPtr aip)
 			token = IN_STRING;
 			while ((* pos != '\"') && (* pos != '\n') && (* pos != '\r'))
 			{
-				if ((aip->fix_non_print != 2) && ((*pos < ' ') || (*pos > '~')))
+				if ((fix_non_print != 2) && ((*pos < ' ') || (*pos > '~')))
 				{
 					done = (int)(*pos);
 					*pos = '\0';
-					if ((aip->fix_non_print == 0) || (aip->fix_non_print == 3))
+					if ((fix_non_print == 0) || (fix_non_print == 3))
 					{
 						AsnIoErrorMsg(aip, 106, done, aip->word);
 					}
@@ -1264,6 +1311,18 @@ NLM_EXTERN Int2 AsnLexWord (AsnIoPtr aip)
 	aip->wordlen = len;
 	aip->token = token;
 	return token;
+}
+
+NLM_EXTERN Int2 AsnLexWord (AsnIoPtr aip)
+
+{
+  return AsnLexWordEx (aip, aip->fix_non_print);
+}
+
+static Int2 AsnLexWordUTF8 (AsnIoPtr aip)
+
+{
+  return AsnLexWordEx (aip, 2);
 }
 
 /*****************************************************************************

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -38,55 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 2/11/91  Ostell      AsnBinReadVal - added check for unresolved base types
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++
-* 3/4/91   Kans        AsnDeBinReadBoolean returns Boolean
-* 04-20-93 Schuler     LIBCALL calling convention
-* 08-01-93 Gish        AsnDeBinReadString calls MemGet instead of MemNew
-*
-* $Log: asndebin.c,v $
-* Revision 6.7  2004/04/01 13:43:05  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.6  2003/12/10 15:41:19  sirotkin
-* As per toolkit RT request 15030485 and Jim Ostell, afety checks after ato2=AsnFindBaseIsa(atp) were added.
-*
-* Revision 6.5  2002/10/09 19:16:31  ivanov
-* Fixed buffer overrun in the AsnDeBinReadReal()
-*
-* Revision 6.4  2000/12/12 15:56:10  ostell
-* added support BigInt
-*
-* Revision 6.3  1999/12/23 14:18:06  beloslyu
-* fix the AsnBinReadVal function if the atp is NULL
-*
-* Revision 6.2  1998/01/22 20:46:24  volodya
-* fix endless loop
-*
-* Revision 6.1  1997/10/29 02:40:21  vakatov
-* Type castings to pass through the C++ compiler
-*
-* Revision 6.0  1997/08/25 18:09:46  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:43:48  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/02/18  16:45:36  ostell
- * changed fix_non_print behavior and added option 3
- *
- * Revision 4.1  1995/12/21  22:03:20  epstein
- * per Kevin Kendall, IBI; avoid infinite loop caused by uninformative return value in AsnDeBinDecr()
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.16  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -94,6 +45,24 @@
 #include "asnbuild.h"
 
 #define ASNDEBIN_EOF -2
+
+static void RelaxVisibleStringUTF8 (AsnIoPtr aip, AsnTypePtr atp) {
+
+  Int2  isa;
+
+  if (aip == NULL || atp == NULL || atp->type == NULL) return;
+  isa = atp->type->isa;
+  if (! ISA_STRINGTYPE (isa)) return;
+  if (aip->tagclass != atp->tagclass) return;
+  if (aip->tagnumber == atp->tagnumber) return;
+
+  /* allow UTF8/VisibleString flexibility */
+  if (aip->tagnumber == TAG_VISIBLESTRING && atp->tagnumber == TAG_UTF8STRING) {
+    aip->tagnumber = atp->tagnumber;
+  } else if (aip->tagnumber == TAG_UTF8STRING && atp->tagnumber == TAG_VISIBLESTRING) {
+    aip->tagnumber = atp->tagnumber;
+  }
+}
 
 /*****************************************************************************
 *
@@ -137,6 +106,9 @@ NLM_EXTERN AsnTypePtr LIBCALL  AsnBinReadId (AsnIoPtr aip, AsnTypePtr atp)
 		if (atp2->type->isa != CHOICE_TYPE)
 		{
 			atp2 = atp2->type;         /* will be primitive tag */
+
+            RelaxVisibleStringUTF8 (aip, atp2);
+
 			if ((aip->tagclass != atp2->tagclass) ||
 				(aip->tagnumber != atp2->tagnumber))
 				found = FALSE;
@@ -149,6 +121,8 @@ NLM_EXTERN AsnTypePtr LIBCALL  AsnBinReadId (AsnIoPtr aip, AsnTypePtr atp)
 			found = FALSE;
 			while ((atp2 != NULL) && (! found))
 			{
+                RelaxVisibleStringUTF8 (aip, atp2);
+
 				if ((aip->tagclass == atp2->tagclass) &&
 					(aip->tagnumber == atp2->tagnumber))
 					found = TRUE;
@@ -239,6 +213,9 @@ NLM_EXTERN AsnTypePtr LIBCALL  AsnBinReadId (AsnIoPtr aip, AsnTypePtr atp)
 			used = AsnDeBinScanTag(aip);   /* read the tag */
 			if (! AsnDeBinDecr(used, aip))
 				return NULL;
+
+            RelaxVisibleStringUTF8 (aip, atp2);
+
 			if ((aip->tagclass != atp2->tagclass) ||
 				(aip->tagnumber != atp2->tagnumber))
 			{     
@@ -547,6 +524,8 @@ NLM_EXTERN Int4 AsnDeBinScanTag (AsnIoPtr aip)
 *   		just checks that value is of proper type
 *
 *****************************************************************************/
+static CharPtr AsnDeBinReadStringUTF8 (AsnIoPtr aip, AsnTypePtr atp);
+
 NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr valueptr)
 {
 	Int4 used;
@@ -599,7 +578,7 @@ NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 	retval = 1;       /* normal return */
 	terminalvalue = TRUE;    /* most values are terminal values */
 
-	if (ISA_STRINGTYPE(isa))
+	if (ISA_STRINGTYPE(isa) && isa != UTF8STRING_TYPE)
 		isa = GENERALSTRING_TYPE;
 
 	switch (isa)
@@ -683,12 +662,16 @@ NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 			base_type = AsnFindBaseType(atp);   
 			base_type = base_type->type;        /* point at the type itself */
 
+            RelaxVisibleStringUTF8 (aip, base_type);
+
 			while ((aip->tagclass != base_type->tagclass) ||
 				(aip->tagnumber != base_type->tagnumber))/* read to element */
 			{
 				used = AsnDeBinScanTag(aip);
 				if (! AsnDeBinDecr(used, aip))
 					return 0;
+
+                RelaxVisibleStringUTF8 (aip, base_type);
 			}
 			
 			if ((aip->bytes - aip->offset) == 0)
@@ -715,6 +698,16 @@ NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 					if (read_value)
 					{
 						valueptr->ptrvalue = AsnDeBinReadString(aip, atp);
+						if (valueptr->ptrvalue == NULL)
+							return 0;
+					}
+					else
+						AsnDeBinSkipString(aip);
+					break;
+				case UTF8STRING_TYPE:
+					if (read_value)
+					{
+						valueptr->ptrvalue = AsnDeBinReadStringUTF8(aip, atp);
 						if (valueptr->ptrvalue == NULL)
 							return 0;
 					}
@@ -822,6 +815,8 @@ NLM_EXTERN AsnTypePtr AsnDeBinFindElement (AsnIoPtr aip, AsnTypePtr atp)
 {
 	while (atp != NULL)
 	{
+        RelaxVisibleStringUTF8 (aip, atp);
+
 		if ((aip->tagclass == atp->tagclass) &&
 			(aip->tagnumber == atp->tagnumber))
 			return atp;
@@ -1005,7 +1000,7 @@ NLM_EXTERN Boolean AsnDeBinReadBoolean (AsnIoPtr aip, AsnTypePtr atp)
 *   	packs String to single value, if segmented on input
 *
 *****************************************************************************/
-NLM_EXTERN CharPtr AsnDeBinReadString (AsnIoPtr aip, AsnTypePtr atp)
+static CharPtr AsnDeBinReadStringEx (AsnIoPtr aip, AsnTypePtr atp, Uint1 fix_non_print)
 {
 	Int4 len;
 	register int bytes, amount;
@@ -1038,10 +1033,10 @@ NLM_EXTERN CharPtr AsnDeBinReadString (AsnIoPtr aip, AsnTypePtr atp)
 		len -= (Int4)amount;
 		while (amount)
 		{
-			if ((aip->fix_non_print != 2) && ((* bp < ' ') || (*bp > '~')))
+			if ((fix_non_print != 2) && ((* bp < ' ') || (*bp > '~')))
 			{
 				*tmp = '\0';
-				if ((aip->fix_non_print == 0) || (aip->fix_non_print == 3))
+				if ((fix_non_print == 0) || (fix_non_print == 3))
 				{
 					AsnIoErrorMsg(aip, 106, (int)(*bp), result);
 				}
@@ -1060,6 +1055,18 @@ NLM_EXTERN CharPtr AsnDeBinReadString (AsnIoPtr aip, AsnTypePtr atp)
 	}
 	aip->offset = aip->bytes - (Int2) bytes;
 	return result;
+}
+
+NLM_EXTERN CharPtr AsnDeBinReadString (AsnIoPtr aip, AsnTypePtr atp)
+
+{
+  return AsnDeBinReadStringEx (aip, atp, aip->fix_non_print);
+}
+
+static CharPtr AsnDeBinReadStringUTF8 (AsnIoPtr aip, AsnTypePtr atp)
+
+{
+  return AsnDeBinReadStringEx (aip, atp, 2);
 }
 
 /*****************************************************************************

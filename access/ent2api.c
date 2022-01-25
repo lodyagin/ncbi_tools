@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.134 $
+* $Revision: 1.154 $
 *
 * File Description: 
 *
@@ -42,11 +42,1023 @@
 #include <ent2api.h>
 #include <urlquery.h>
 #include <ncbithr.h>
+#include <sqnutils.h>
 
 #ifdef OS_UNIX
 #include <sys/times.h>
 #include <limits.h>
 #endif
+
+/* EUtilities replacement functions */
+
+static CharPtr  eutils_host = "eutils.ncbi.nlm.nih.gov";
+
+static CharPtr  einfo_url = "/entrez/eutils/einfo.fcgi";
+static CharPtr  elink_url = "/entrez/eutils/elink.fcgi";
+static CharPtr  esearch_url = "/entrez/eutils/esearch.fcgi";
+static CharPtr  esummary_url = "/entrez/eutils/esummary.fcgi";
+
+static Char _ToKey[256] = {
+    0x00, 0x01, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+
+    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+
+    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+
+    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x1F,
+  /*  sp     !     "     #     $     %     &     ' */
+    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x27,
+  /*   (     )     *     +     ,     -     .     / */
+    0x20, 0x20, 0x20, 0x20, 0x2C, 0x20, 0x20, 0x2F,
+  /*   0     1     2     3     4     5     6     7 */
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+  /*   8     9     :     ;     <     =     >     ? */
+    0x38, 0x39, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+  /*   @     A     B     C     D     E     F     G */
+    0x40, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+  /*   H     I     J     K     L     M     N     O */
+    0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
+  /*   P     Q     R     S     T     U     V     W */
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+  /*   X     Y     Z     [     \     ]     ^     _ */
+    0x78, 0x79, 0x7A, 0x20, 0x20, 0x20, 0x20, 0x20,
+  /*   `     a     b     c     d     e     f     g */
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+  /*   h     i     j     k     l     m     n     o */
+    0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
+  /*   p     q     r     s     t     u     v     w */
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+  /*   x     y     z     {     |     }     ~   DEL */
+    0x78, 0x79, 0x7A, 0x20, 0x20, 0x20, 0x20, 0x20,
+
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+
+    0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+
+    0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,
+
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+
+    0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7,
+
+    0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
+
+    0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
+
+    0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7,
+
+    0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF,
+
+    0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7,
+
+    0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF,
+
+    0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7,
+
+    0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
+};
+
+NLM_EXTERN void ConvertToTermListForm (
+  CharPtr str
+)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  if (str == NULL) return;
+
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    *ptr = _ToKey [(int) ch];
+    ptr++;
+    ch = *ptr;
+  }
+
+  TrimSpacesAroundString (str);
+  CompressSpaces (str);
+}
+
+NLM_EXTERN Boolean LooksLikeISSN (
+  CharPtr str
+)
+
+{
+  Char  ch;
+  Int2  i;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  if (StringLen (str) != 9) return FALSE;
+  ch = str [4];
+  if (ch != '-' && ch != ' ' && ch != '+') return FALSE;
+
+  for (i = 0; i < 9; i++) {
+    ch = str [i];
+    if (IS_DIGIT (ch)) continue;
+    if (i == 4) {
+      if (ch == '-' || ch == '+' || ch == ' ') continue;
+    }
+    if (i == 8) {
+      if (ch == 'X' || ch == 'x') continue;
+    }
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+NLM_EXTERN CharPtr UrlEncodeString (
+  CharPtr str
+)
+
+{
+  size_t   arg_len, res_len, rd_len, wr_len;
+  CharPtr  res;
+
+  if (StringHasNoText (str)) return NULL;
+
+  arg_len = StringLen (str);
+  res_len = 3 * arg_len;
+
+  res = (CharPtr) MemNew ((res_len + 2) * sizeof (Char));
+  if (res == NULL) return NULL;
+
+  URL_Encode (str, arg_len, &rd_len, res, res_len, &wr_len);
+
+  if (arg_len != rd_len) {
+    res = MemFree (res);
+  }
+
+  return res;
+}
+
+NLM_EXTERN CharPtr DoEinfoQuery (
+  CharPtr database
+)
+
+{
+  CharPtr  db, ptr = NULL, str;
+  size_t   len;
+
+  if (StringDoesHaveText (database)) {
+    db = UrlEncodeString (database);
+
+    len = StringLen (db);
+    if (len < 1) return NULL;
+
+    ptr = (CharPtr) MemNew (len + 50);
+    if (ptr == NULL) return NULL;
+
+    StringCpy (ptr, "db=");
+    StringCat (ptr, db);
+
+    MemFree (db);
+  }
+
+  str = QUERY_UrlSynchronousQuery (eutils_host, 80, einfo_url, ptr, NULL, NULL, NULL);
+
+  MemFree (ptr);
+
+  return str;
+}
+
+NLM_EXTERN CharPtr DoEsearchQuery (
+  CharPtr database,
+  CharPtr query,
+  CharPtr suffix,
+  CharPtr webenv,
+  Int4 retstart,
+  Int4 retmax,
+  Boolean return_UIDs
+)
+
+{
+  Char     buf [64];
+  CharPtr  db, qu, sf, ptr, str;
+  size_t   len;
+
+  if (StringHasNoText (database) || StringHasNoText (query)) return NULL;
+
+  db = UrlEncodeString (database);
+  qu = UrlEncodeString (query);
+  sf = UrlEncodeString (suffix);
+
+  len = StringLen (db) + StringLen (qu) + StringLen (sf) + StringLen (webenv);
+  if (len < 1) return NULL;
+
+  ptr = (CharPtr) MemNew (len + 200);
+  if (ptr == NULL) return NULL;
+
+  StringCpy (ptr, "db=");
+  StringCat (ptr, db);
+  StringCat (ptr, "&term=");
+  StringCat (ptr, qu);
+  StringCat (ptr, sf);
+  if (! return_UIDs) {
+    StringCat (ptr, "&rettype=count");
+  }
+  StringCat (ptr, "&usehistory=y");
+  if (StringDoesHaveText (webenv)) {
+    StringCat (ptr, "&WebEnv=");
+    StringCat (ptr, webenv);
+  }
+  if (retstart > 1) {
+    sprintf (buf, "&retstart=%ld", (long) retstart);
+    StringCat (ptr, buf);
+  }
+  if (retmax > 1) {
+    sprintf (buf, "&retmax=%ld", (long) retmax);
+    StringCat (ptr, buf);
+  }
+
+  MemFree (db);
+  MemFree (qu);
+  MemFree (sf);
+
+  str = QUERY_UrlSynchronousQuery (eutils_host, 80, esearch_url, NULL, NULL, NULL, ptr);
+
+  MemFree (ptr);
+
+  return str;
+}
+
+NLM_EXTERN CharPtr DoElinkQuery (
+  CharPtr dbfrom,
+  CharPtr dbto,
+  CharPtr linkname,
+  CharPtr cmd,
+  CharPtr ids,
+  CharPtr querykey,
+  CharPtr webenv
+)
+
+{
+  CharPtr  cd, df, dt, id, lk, pfx, ptr, str;
+  size_t   len;
+
+  if (StringHasNoText (dbfrom) && StringHasNoText (dbto) && StringHasNoText (linkname)) return NULL;
+
+  df = UrlEncodeString (dbfrom);
+  dt = UrlEncodeString (dbto);
+  lk = UrlEncodeString (linkname);
+  cd = UrlEncodeString (cmd);
+  id = UrlEncodeString (ids);
+
+  len = StringLen (df) + StringLen (dt) + StringLen (lk) + StringLen (cd) + StringLen (id);
+  if (len < 1) return NULL;
+
+  ptr = (CharPtr) MemNew (len + 200);
+  if (ptr == NULL) return NULL;
+
+  pfx = NULL;
+  if (StringDoesHaveText (dt)) {
+    StringCat (ptr, "db=");
+    StringCat (ptr, dt);
+    pfx = "&";
+  }
+  if (StringDoesHaveText (df)) {
+    StringCat (ptr, pfx);
+    StringCat (ptr, "dbfrom=");
+    StringCat (ptr, df);
+    pfx = "&";
+  }
+  if (StringDoesHaveText (lk)) {
+    StringCat (ptr, pfx);
+    StringCat (ptr, "linkname=");
+    StringCat (ptr, lk);
+    pfx = "&";
+  }
+  if (StringDoesHaveText (cd)) {
+    StringCat (ptr, pfx);
+    StringCat (ptr, "cmd=");
+    StringCat (ptr, cd);
+    pfx = "&";
+  }
+  if (StringDoesHaveText (id)) {
+    StringCat (ptr, "&id=");
+    StringCat (ptr, id);
+  } else if (StringDoesHaveText (querykey) && StringDoesHaveText (webenv)) {
+    StringCat (ptr, "&query_key=");
+    StringCat (ptr, querykey);
+    StringCat (ptr, "&WebEnv=");
+    StringCat (ptr, webenv);
+  }
+
+  MemFree (df);
+  MemFree (dt);
+  MemFree (lk);
+  MemFree (cd);
+  MemFree (id);
+
+  str = QUERY_UrlSynchronousQuery (eutils_host, 80, elink_url, NULL, NULL, NULL, ptr);
+
+  MemFree (ptr);
+
+  return str;
+}
+
+NLM_EXTERN CharPtr DoEsummaryQuery (
+  CharPtr database,
+  CharPtr ids,
+  CharPtr querykey,
+  CharPtr webenv,
+  Int4 retstart,
+  Int4 retmax
+)
+
+{
+  Char     buf [64];
+  CharPtr  db, id, ptr, str;
+  size_t   len;
+
+  if (StringHasNoText (database)) return NULL;
+
+  db = UrlEncodeString (database);
+  id = UrlEncodeString (ids);
+
+  len = StringLen (db) + StringLen (id) + StringLen (querykey) + StringLen (webenv);
+  if (len < 1) return NULL;
+
+  ptr = (CharPtr) MemNew (len + 200);
+  if (ptr == NULL) return NULL;
+
+  StringCpy (ptr, "db=");
+  StringCat (ptr, db);
+  if (StringDoesHaveText (id)) {
+    StringCat (ptr, "&id=");
+    StringCat (ptr, id);
+  } else if (StringDoesHaveText (querykey) && StringDoesHaveText (webenv)) {
+    StringCat (ptr, "&query_key=");
+    StringCat (ptr, querykey);
+    StringCat (ptr, "&WebEnv=");
+    StringCat (ptr, webenv);
+  }
+  if (retstart > 1) {
+    sprintf (buf, "&retstart=%ld", (long) retstart);
+    StringCat (ptr, buf);
+  }
+  if (retmax > 1) {
+    sprintf (buf, "&retmax=%ld", (long) retmax);
+    StringCat (ptr, buf);
+  }
+
+  MemFree (db);
+  MemFree (id);
+
+  str = QUERY_UrlSynchronousQuery (eutils_host, 80, esummary_url, NULL, NULL, NULL, ptr);
+
+  MemFree (ptr);
+
+  return str;
+}
+
+static Int4 GetNumericValue (
+  CharPtr str
+)
+
+{
+  long int  val;
+
+  if (StringHasNoText (str)) return 0;
+  if (! StringIsAllDigits (str)) return 0;
+
+  if (sscanf (str, "%ld", &val) != 1) return 0;
+
+  return val;
+}
+
+static Boolean GetBooleanValue (
+  CharPtr str
+)
+
+{
+  Char  ch;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  ch = *str;
+  if (ch == 'Y' || ch == 'y') return TRUE;
+
+  return FALSE;
+}
+
+static Entrez2DbInfoPtr GetDbInfo (
+  CharPtr database
+)
+
+{
+  Entrez2DbInfoPtr     e2db = NULL;
+  Entrez2FieldInfoPtr  e2fp, lastfp = NULL;
+  Entrez2LinkInfoPtr   e2lp, lastlp = NULL;
+  XmlObjPtr            nxt, sub, tmp, xop;
+  CharPtr              str;
+
+  str = DoEinfoQuery (database);
+  if (str == NULL) return NULL;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return NULL;
+
+  e2db = Entrez2DbInfoNew ();
+  if (e2db == NULL) return NULL;
+
+  for (tmp = xop; tmp != NULL; tmp = nxt) {
+    nxt = tmp->successor;
+    if (XmlPathSuffixIs (tmp, "/DbInfo/DbName")) {
+      e2db->db_name = StringSaveNoNull (tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/DbInfo/MenuName")) {
+      e2db->db_menu = StringSaveNoNull (tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/DbInfo/Description")) {
+      e2db->db_descr = StringSaveNoNull (tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/DbInfo/Count")) {
+      e2db->doc_count = GetNumericValue (tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/FieldList/Field")) {
+      e2fp = Entrez2FieldInfoNew ();
+      if (e2fp != NULL) {
+        for (sub = tmp->successor; sub != NULL && sub->level > tmp->level; sub = sub->successor) {
+          if (XmlPathSuffixIs (sub, "/Field/Name")) {
+            e2fp->field_name = StringSaveNoNull (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/FullName")) {
+            e2fp->field_menu = StringSaveNoNull (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/Description")) {
+            e2fp->field_descr = StringSaveNoNull (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/TermCount")) {
+            e2fp->term_count = GetNumericValue (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/IsDate")) {
+            e2fp->is_date = GetBooleanValue (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/IsNumerical")) {
+            e2fp->is_numerical = GetBooleanValue (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/SingleToken")) {
+            e2fp->single_token = GetBooleanValue (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/Hierarchy")) {
+            e2fp->hierarchy_avail = GetBooleanValue (sub->contents);
+          }
+/* is_rangable and is_truncatable are not present in XML */
+        }
+        if (lastfp != NULL) {
+          lastfp->next = e2fp;
+        } else {
+          e2db->fields = e2fp;
+        }
+        lastfp = e2fp;
+        (e2db->field_count)++;
+        nxt = sub;
+      }
+    } else if (XmlPathSuffixIs (tmp, "/LinkList/Link")) {
+      e2lp = Entrez2LinkInfoNew ();
+      if (e2lp != NULL) {
+        e2lp->data_size = 4;
+        for (sub = tmp->successor; sub != NULL && sub->level > tmp->level; sub = sub->successor) {
+          if (XmlPathSuffixIs (sub, "/Link/Name")) {
+            e2lp->link_name = StringSaveNoNull (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Link/Menu")) {
+            e2lp->link_menu = StringSaveNoNull (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Link/Description")) {
+            e2lp->link_descr = StringSaveNoNull (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Link/DbTo")) {
+            e2lp->db_to = StringSaveNoNull (sub->contents);
+          }
+        }
+        if (lastlp != NULL) {
+          lastlp->next = e2lp;
+        } else {
+          e2db->links = e2lp;
+        }
+        lastlp = e2lp;
+        (e2db->link_count)++;
+        nxt = sub;
+      }
+    }
+/* docsum_fields is not present in XML */
+  }
+  FreeXmlObject (xop);
+
+  return e2db;
+}
+
+static Entrez2ReplyPtr GetE2info (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  Entrez2DbInfoPtr  e2db, last;
+  Entrez2ReplyPtr   e2ry;
+  Entrez2InfoPtr    eip;
+  ValNodePtr        head, tail, reply, vnp;
+  XmlObjPtr         nxt, tmp, xop;
+  CharPtr           str;
+
+  if (e2rq == NULL) return NULL;
+
+  vnp = e2rq->request;
+  if (vnp == NULL) return NULL;
+  if (vnp->choice != E2Request_get_info) return NULL;
+
+  str = DoEinfoQuery (NULL);
+  if (str == NULL) return NULL;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return NULL;
+
+  eip = Entrez2InfoNew ();
+  if (eip == NULL) return NULL;
+
+  head = NULL;
+  tail = NULL;
+  for (tmp = xop; tmp != NULL; tmp = nxt) {
+    nxt = tmp->successor;
+    if (XmlPathSuffixIs (tmp, "/DbList/DbName")) {
+      if (StringHasNoText (tmp->contents)) continue;
+      ValNodeCopyStrEx (&head, &tail, 0, tmp->contents);
+    }
+  }
+  FreeXmlObject (xop);
+  if (head == NULL) {
+    Entrez2InfoFree (eip);
+    return NULL;
+  }
+
+  head = ValNodeSort (head, SortVnpByString);
+
+  last = NULL;
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    e2db = GetDbInfo (str);
+    if (last != NULL) {
+      last->next = e2db;
+    } else {
+      eip->db_info = e2db;
+    }
+    last = e2db;
+    (eip->db_count)++;
+  }
+
+  ValNodeFreeData (head);
+
+  e2ry = Entrez2ReplyNew ();
+  if (e2ry == NULL) return NULL;
+  reply = ValNodeNew (NULL);
+  if (reply == NULL) return NULL;
+  e2ry->reply = reply;
+  reply->choice = E2Reply_get_info;
+  reply->data.ptrvalue = (Pointer) eip;
+
+  return e2ry;
+}
+
+static CharPtr ParseE2bool (
+  ValNodePtr exp
+)
+
+{
+  Entrez2BooleanTermPtr  e2bt;
+  ValNodePtr             head = NULL, tail = NULL;
+  CharPtr                str;
+
+  if (exp == NULL) return NULL;
+
+  while (exp != NULL) {
+    switch (exp->choice) {
+      case Entrez2BooleanElement_str :
+        str = (CharPtr) exp->data.ptrvalue;
+        if (StringHasNoText (str)) break;
+        ValNodeCopyStrEx (&head, &tail, 0, str);
+        break;
+      case Entrez2BooleanElement_op :
+        switch (exp->data.intvalue) {
+          case 1 :
+            ValNodeCopyStrEx (&head, &tail, 0, " AND ");
+            break;
+          case 2 :
+            ValNodeCopyStrEx (&head, &tail, 0, " OR ");
+            break;
+          case 3 :
+            ValNodeCopyStrEx (&head, &tail, 0, " NOT ");
+            break;
+          case 4 :
+            ValNodeCopyStrEx (&head, &tail, 0, ":");
+            break;
+          case 5 :
+            ValNodeCopyStrEx (&head, &tail, 0, "(");
+            break;
+          case 6 :
+            ValNodeCopyStrEx (&head, &tail, 0, ")");
+            break;
+          default :
+            break;
+        }
+        break;
+      case Entrez2BooleanElement_term :
+        e2bt = (Entrez2BooleanTermPtr) exp->data.ptrvalue;
+        if (e2bt == NULL) break;
+        if (StringHasNoText (e2bt->term)) break;
+        ValNodeCopyStrExEx (&head, &tail, 0, e2bt->term, "\"", "\"");
+        if (StringHasNoText (e2bt->field)) break;
+        ValNodeCopyStrExEx (&head, &tail, 0, e2bt->field, "[", "]");
+        break;
+      case Entrez2BooleanElement_ids :
+        break;
+      case Entrez2BooleanElement_key :
+        break;
+      default :
+        break;
+    }
+    exp = exp->next;
+  }
+
+  if (head == NULL) return NULL;
+
+  str = ValNodeMergeStrs (head);
+  ValNodeFreeData (head);
+
+  return str;
+}
+
+static Entrez2ReplyPtr GetE2bool (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  ByteStorePtr            bs;
+  CharPtr                 cookie, count, database, key, query, str;
+  Entrez2BooleanExpPtr    e2be;
+  Entrez2BooleanReplyPtr  e2br;
+  Entrez2EvalBooleanPtr   e2eb;
+  Entrez2IdListPtr        e2id;
+  Entrez2ReplyPtr         e2ry;
+  ValNodePtr              head, tail, reply, vnp;
+  Int4                    num, uid;
+  XmlObjPtr               tmp, xop;
+
+  if (e2rq == NULL) return NULL;
+
+  vnp = e2rq->request;
+  if (vnp == NULL) return NULL;
+  if (vnp->choice != E2Request_eval_boolean) return NULL;
+
+  e2eb = (Entrez2EvalBooleanPtr) vnp->data.ptrvalue;
+  if (e2eb == NULL) return NULL;
+
+  e2be = e2eb->query;
+  if (e2be == NULL) return NULL;
+  if (StringHasNoText (e2be->db)) return NULL;
+  database = e2be->db;
+  if (StringHasNoText (database)) return NULL;
+
+  query = ParseE2bool (e2be->exp);
+  if (query == NULL) return NULL;
+
+  if (StringHasNoText (query)) {
+    MemFree (query);
+    return NULL;
+  }
+
+  str = DoEsearchQuery (database, query, NULL, /* e2rq->cookie */ NULL, 0, 100000, (Boolean) e2eb->return_UIDs);
+
+  MemFree (query);
+  if (str == NULL) return NULL;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return NULL;
+
+  head = NULL;
+  tail = NULL;
+  count= NULL;
+  key = NULL;
+  cookie = NULL;
+  for (tmp = xop; tmp != NULL; tmp = tmp->successor) {
+    if (XmlPathSuffixIs (tmp, "/Id")) {
+      ValNodeCopyStrEx (&head, &tail, 0, tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/eSearchResult/Count")) {
+      count = StringSave (tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/eSearchResult/QueryKey")) {
+      key = StringSave (tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/eSearchResult/WebEnv")) {
+      cookie = StringSave (tmp->contents);
+    }
+  }
+
+  FreeXmlObject (xop);
+
+  num = GetNumericValue (count);
+  MemFree (count);
+
+  e2br = Entrez2BooleanReplyNew ();
+  if (e2br == NULL) {
+    ValNodeFreeData (head);
+    return NULL;
+  }
+
+  e2br->count = num;
+  if (num >= 0 && head != NULL) {
+    e2id = Entrez2IdListNew ();
+    if (e2id != NULL) {
+      e2br->uids = e2id;
+      e2id->db = StringSave (database);
+      e2id->num = num;
+      bs = BSNew (num * sizeof (Int4));
+      if (bs != NULL) {
+        e2id->uids = bs;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          uid = GetNumericValue (str);
+          BSWrite (bs, (Pointer) &uid, sizeof (Int4));
+        }
+      }
+    }
+  }
+
+  ValNodeFreeData (head);
+
+  e2ry = Entrez2ReplyNew ();
+  if (e2ry == NULL) return NULL;
+  reply = ValNodeNew (NULL);
+  if (reply == NULL) return NULL;
+  e2ry->reply = reply;
+  reply->choice = E2Reply_eval_boolean;
+  reply->data.ptrvalue = (Pointer) e2br;
+  e2ry-> key = key;
+  e2ry->cookie = cookie;
+
+  return e2ry;
+}
+
+static Entrez2ReplyPtr GetE2link (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  ByteStorePtr        bs;
+  Char                buf [32];
+  Entrez2GetLinksPtr  e2gl;
+  Entrez2IdListPtr    e2id;
+  Entrez2LinkSetPtr   e2ls;
+  Entrez2ReplyPtr     e2ry;
+  ValNodePtr          head, tail, reply, vnp;
+  CharPtr             ids, str, target;
+  Int4                j, num, uid;
+  XmlObjPtr           tmp, xop;
+
+  if (e2rq == NULL) return NULL;
+
+  vnp = e2rq->request;
+  if (vnp == NULL) return NULL;
+  if (vnp->choice != E2Request_get_links) return NULL;
+
+  e2gl = (Entrez2GetLinksPtr) vnp->data.ptrvalue;
+  if (e2gl == NULL) return NULL;
+
+  e2id = e2gl->uids;
+  if (e2id == NULL) return NULL;
+
+  num = e2id->num;
+  bs = e2id->uids;
+  if (bs == NULL) return NULL;
+
+  if (BSLen (bs) / sizeof (Int4) != num) {
+    return NULL;
+  }
+
+  head = NULL;
+  tail = NULL;
+  BSSeek (bs, 0L, 0);
+
+  for (j = 0; j < num; j++) {
+    BSRead (bs, &uid, sizeof (Int4));
+    sprintf (buf, "%ld", (long) uid);
+    ValNodeCopyStrEx (&head, &tail, 0, buf);
+  }
+
+  if (head == NULL) return NULL;
+
+  ids = ValNodeMergeStrsEx (head, ",");
+  ValNodeFreeData (head);
+
+  str = DoElinkQuery (e2id->db, NULL, e2gl->linktype, NULL, ids, NULL, NULL);
+
+  MemFree (ids);
+  if (str == NULL) return NULL;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return NULL;
+
+  head = NULL;
+  tail = NULL;
+  target = NULL;
+  for (tmp = xop; tmp != NULL; tmp = tmp->successor) {
+    if (XmlPathSuffixIs (tmp, "/Link/Id")) {
+      ValNodeCopyStrEx (&head, &tail, 0, tmp->contents);
+    } else if (XmlPathSuffixIs (tmp, "/LinkSetDb/DbTo")) {
+      target = StringSave (tmp->contents);
+    }
+  }
+
+  FreeXmlObject (xop);
+
+  if (head == NULL) return NULL;
+
+  e2ls = Entrez2LinkSetNew ();
+  if (e2ls == NULL) return NULL;
+
+  num = ValNodeLen (head);
+  if (num >= 0 && head != NULL) {
+    e2id = Entrez2IdListNew ();
+    if (e2id != NULL) {
+      e2ls->ids = e2id;
+      e2id->db = StringSave (target);
+      e2id->num = num;
+      bs = BSNew (num * sizeof (Int4));
+      if (bs != NULL) {
+        e2id->uids = bs;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          uid = GetNumericValue (str);
+          BSWrite (bs, (Pointer) &uid, sizeof (Int4));
+        }
+      }
+    }
+  }
+
+  MemFree (target);
+  ValNodeFreeData (head);
+
+  e2ry = Entrez2ReplyNew ();
+  if (e2ry == NULL) return NULL;
+  reply = ValNodeNew (NULL);
+  if (reply == NULL) return NULL;
+  e2ry->reply = reply;
+  reply->choice = E2Reply_get_links;
+  reply->data.ptrvalue = (Pointer) e2ls;
+
+  return e2ry;
+}
+
+static Entrez2ReplyPtr GetE2summary (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  XmlObjPtr             attr, lst, nxt, scc, sub, tmp, xop;
+  ByteStorePtr          bs;
+  Char                  buf [32];
+  Entrez2DocsumDataPtr  e2dd, laste2dd;
+  Entrez2DocsumListPtr  e2dl;
+  Entrez2DocsumPtr      e2ds, laste2ds;
+  Entrez2IdListPtr      e2id;
+  Entrez2ReplyPtr       e2ry;
+  ValNodePtr            head, tail, reply, vnp;
+  CharPtr               ids, name, sep, str, type;
+  Int4                  j, num, uid;
+
+  if (e2rq == NULL) return NULL;
+
+  vnp = e2rq->request;
+  if (vnp == NULL) return NULL;
+  if (vnp->choice != E2Request_get_docsum) return NULL;
+
+  e2id = (Entrez2IdListPtr) vnp->data.ptrvalue;
+  if (e2id == NULL) return NULL;
+
+  num = e2id->num;
+  bs = e2id->uids;
+  if (bs == NULL) return NULL;
+
+  if (BSLen (bs) / sizeof (Int4) != num) {
+    return NULL;
+  }
+
+  head = NULL;
+  tail = NULL;
+  BSSeek (bs, 0L, 0);
+
+  for (j = 0; j < num; j++) {
+    BSRead (bs, &uid, sizeof (Int4));
+    sprintf (buf, "%ld", (long) uid);
+    ValNodeCopyStrEx (&head, &tail, 0, buf);
+  }
+
+  if (head == NULL) return NULL;
+
+  ids = ValNodeMergeStrsEx (head, ",");
+  ValNodeFreeData (head);
+
+  str = DoEsummaryQuery (e2id->db, ids, NULL, NULL, 0, 100000);
+
+  MemFree (ids);
+  if (str == NULL) return NULL;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return NULL;
+
+  e2dl = Entrez2DocsumListNew ();
+  if (e2dl == NULL) return NULL;
+
+  laste2ds = NULL;
+  for (tmp = xop; tmp != NULL; tmp = nxt) {
+    nxt = tmp->successor;
+    if (XmlPathSuffixIs (tmp, "/DocSum")) {
+      e2ds = Entrez2DocsumNew ();
+      if (e2ds == NULL) continue;
+      laste2dd = NULL;
+      for (sub = tmp->successor; sub != NULL && sub->level > tmp->level; sub = scc) {
+        scc = sub->successor;
+        if (XmlPathSuffixIs (sub, "/DocSum/Id")) {
+          e2ds->uid = GetNumericValue (sub->contents);
+        } else if (XmlPathSuffixIs (sub, "/DocSum/Item")) {
+          name = NULL;
+          type = NULL;
+          e2dd = NULL;
+          for (attr = sub->attributes; attr != NULL; attr = attr->next) {
+            if (StringICmp (attr->name, "Name") == 0) {
+              name = attr->contents;
+            } else if (StringICmp (attr->name, "Type") == 0) {
+              type = attr->contents;
+            }
+          }
+          if (StringHasNoText (name) || StringHasNoText (type)) {
+            /* skip */
+          } else if (StringICmp (type, "List") == 0) {
+            head = NULL;
+            tail = NULL;
+            for (lst = sub->successor; lst != NULL && lst->level > sub->level; lst = lst->successor) {
+              ValNodeCopyStrEx (&head, &tail, 0, lst->contents);
+            }
+            scc = lst;
+            if (head != NULL) {
+              sep = ",";
+              if (StringICmp (name, "AuthorList") == 0) {
+                sep = ", ";
+                name = "Authors";
+              }
+              str = ValNodeMergeStrsEx (head, sep);
+              e2dd = Entrez2DocsumDataNew ();
+              if (e2dd != NULL) {
+                e2dd->field_name = StringSave (name);
+                e2dd->field_value = StringSave (str);
+              }
+              MemFree (str);
+            }
+            ValNodeFreeData (head);
+          } else if (StringHasNoText (sub->contents)) {
+            /* skip */
+          } else {
+            if (StringICmp (name, "HasAbstract") == 0) {
+              name = "Attributes";
+            }
+            e2dd = Entrez2DocsumDataNew ();
+            if (e2dd != NULL) {
+              e2dd->field_name = StringSave (name);
+              e2dd->field_value = StringSave (sub->contents);
+            }
+          }
+          if (e2dd != NULL) {
+            if (laste2dd != NULL) {
+              laste2dd->next = e2dd;
+            } else {
+              e2ds->docsum_data = e2dd;
+            }
+          laste2dd = e2dd;
+          }
+        }
+      }
+      if (laste2ds != NULL) {
+        laste2ds->next = e2ds;
+      } else {
+        e2dl->list = e2ds;
+      }
+      laste2ds = e2ds;
+      (e2dl->count)++;
+      nxt = sub;
+    }
+  }
+
+  FreeXmlObject (xop);
+
+  e2ry = Entrez2ReplyNew ();
+  if (e2ry == NULL) return NULL;
+  reply = ValNodeNew (NULL);
+  if (reply == NULL) return NULL;
+  e2ry->reply = reply;
+  reply->choice = E2Reply_get_docsum;
+  reply->data.ptrvalue = (Pointer) e2dl;
+
+  return e2ry;
+}
 
 #define ENTREZ_TOOL_PROPERTY "Entrez2Tool"
 #define ENTREZ_TOOL_VERSION 1
@@ -247,6 +1259,34 @@ static TNlmTls e2cookie_tls = NULL;
 
 /* high-level connection functions */
 
+static Entrez2ReplyPtr EntrezViaEUtils (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  ValNodePtr  vnp;
+
+  if (e2rq == NULL) return NULL;
+
+  vnp = e2rq->request;
+  if (vnp == NULL) return NULL;
+
+  switch (vnp->choice) {
+    case E2Request_get_info :
+      return GetE2info (e2rq);
+    case E2Request_eval_boolean :
+      return GetE2bool (e2rq);
+    case E2Request_get_docsum :
+      return GetE2summary (e2rq);
+    case E2Request_get_links :
+      return GetE2link (e2rq);
+    default :
+      return NULL;
+  }
+
+  return NULL;
+}
+
 NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
   Entrez2RequestPtr e2rq
 )
@@ -265,6 +1305,14 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
 #endif
 
   if (e2rq == NULL) return NULL;
+
+/* conditionally try EUtils replacement first */
+#ifdef OS_UNIX
+  if (getenv ("NCBI_EUTILS_REPLACES_ENTREZ2") != NULL) {
+    e2ry = EntrezViaEUtils (e2rq);
+    if (e2ry != NULL) return e2ry;
+  }
+#endif
 
 #ifdef OS_UNIX
   logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
@@ -955,7 +2003,7 @@ static int LIBCALLBACK SortVnpByStr (VoidPtr ptr1, VoidPtr ptr2)
       str1 = (const char*) vnp1->data.ptrvalue;
       str2 = (const char*) vnp2->data.ptrvalue;
       if (str1 != NULL && str2 != NULL) {
-        return StringICmp (str1, str2);
+        return StringCmp (str1, str2);
       }
     }
   }
@@ -1087,11 +2135,12 @@ static Boolean MixedCaseWords (CharPtr str)
   return rsult;
 }
 
-NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
   Entrez2InfoPtr e2ip,
   ValNodePtr PNTR head,
   Boolean checkMenuNameVariants,
-  Boolean checkMenuNameFormat
+  Boolean checkMenuNameFormat,
+  Boolean fullMenuVariantReport
 )
 
 {
@@ -1218,7 +2267,12 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
           StringICmp (db, "geo") != 0 &&
           StringICmp (db, "journals") != 0 &&
           StringICmp (db, "genomeprj") != 0 &&
-          StringICmp (db, "gtr") != 0) {
+          StringICmp (db, "gtr") != 0 &&
+          StringICmp (db, "gcassembly") != 0 &&
+          StringICmp (db, "clone") != 0 &&
+          StringICmp (db, "pubmedhealth") != 0 &&
+          StringICmp (db, "assembly") != 0 &&
+          StringICmp (db, "gapplus") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -1432,15 +2486,24 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
     if (StringHasNoText (str)) continue;
     if (last != NULL && lastvnp != NULL) {
       if (StringICmp (last, str) == 0 && StringCmp (last, str) != 0) {
-        sprintf (buf, "Menu names %s [%s] and %s [%s] differ in capitalization", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
-        ValNodeCopyStr (head, 0, buf);
-        rsult = FALSE;
+        if (StringICmp (last, "PmId") == 0 && StringICmp (str, "PMID") == 0) {
+        } else if (StringICmp (last, "Object Type") == 0 && StringICmp (str, "Object type") == 0) {
+          /* suppress for now */
+        } else {
+          sprintf (buf, "Menu names %s [%s] and %s [%s] differ in capitalization", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
+          ValNodeCopyStr (head, 0, buf);
+          rsult = FALSE;
+        }
       } else if (checkMenuNameVariants) {
         len1 = StringLen (last);
         len2 = StringLen (str);
         if (len1 < len2) {
           if (StringNICmp (last, str, len1) == 0) {
-            if (StringICmp (last, "Gene Map") == 0 && StringICmp (str, "Gene Map Disorder") == 0) {
+            if (fullMenuVariantReport) {
+              sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
+              ValNodeCopyStr (head, 0, buf);
+              rsult = FALSE;
+            } else if (StringICmp (last, "Gene Map") == 0 && StringICmp (str, "Gene Map Disorder") == 0) {
             } else if (StringICmp (last, "Organism") == 0 && StringICmp (str, "Organism unsynonymized") == 0) {
             } else if (StringICmp (last, "Reference") == 0 && StringICmp (str, "Reference Author") == 0) {
             } else if (StringICmp (last, "Reference") == 0 && StringICmp (str, "Reference SNP ID") == 0) {
@@ -1517,10 +2580,31 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
             } else if (StringICmp (last, "Subject") == 0 && StringICmp (str, "Subject Phenotype Status") == 0) {
             } else if (StringICmp (last, "Validation Result") == 0 && StringICmp (str, "Validation Result Weight") == 0) {
             } else if (StringICmp (last, "Alias") == 0 && StringICmp (str, "Alias for a variant") == 0) {
-            } else if (StringICmp (last, "CID") == 0 && StringICmp (str, "CIDCount") == 0) {
-            } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SIDCount") == 0) {
+            } else if (StringICmp (last, "CID") == 0 && StringICmp (str, "CID Count") == 0) {
+            } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SID Count") == 0) {
             } else if (StringICmp (last, "BioProject") == 0 && StringICmp (str, "BioProject ID") == 0) {
             } else if (StringICmp (last, "Project") == 0 && StringICmp (str, "Project Accession") == 0) {
+            } else if (StringICmp (last, "Last Update") == 0 && StringICmp (str, "Last Update Date") == 0) {
+            } else if (StringICmp (last, "Accession") == 0 && StringICmp (str, "Accession ID") == 0) {
+            } else if (StringICmp (last, "Book") == 0 && StringICmp (str, "Book Accession ID") == 0) {
+            } else if (StringICmp (last, "Author") == 0 && StringICmp (str, "Author - Corporate") == 0) {
+            } else if (StringICmp (last, "Investigator") == 0 && StringICmp (str, "Investigator - Full") == 0) {
+            } else if (StringICmp (last, "Submission") == 0 && StringICmp (str, "Submission Date") == 0) {
+            } else if (StringICmp (last, "Categorized Comment") == 0 && StringICmp (str, "Categorized Comment Title") == 0) {
+            } else if (StringICmp (last, "Journal Publication date") == 0 && StringICmp (str, "Journal Publication Date") == 0) {
+            } else if (StringICmp (last, "PharmAction") == 0 && StringICmp (str, "PharmActionID") == 0) {
+            } else if (StringICmp (last, "Synonym") == 0 && StringICmp (str, "Synonym Active") == 0) {
+            } else if (StringICmp (last, "Categorized Comment") == 0 && StringICmp (str, "Categorized Comment Title") == 0) {
+            } else if (StringICmp (last, "Journal") == 0 && StringICmp (str, "Journal Name") == 0) {
+            } else if (StringICmp (last, "Submitter") == 0 && StringICmp (str, "Submitter Affiliation") == 0) {
+            } else if (StringICmp (last, "Clone Name") == 0 && StringICmp (str, "Clone Name Alias") == 0) {
+            } else if (StringICmp (last, "Cultivar") == 0 && StringICmp (str, "Cultivar Accession") == 0) {
+            } else if (StringICmp (last, "Organ") == 0 && StringICmp (str, "Organism") == 0) {
+            } else if (StringICmp (last, "Placed") == 0 && StringICmp (str, "Placed Scaffolds Count") == 0) {
+            } else if (StringICmp (last, "Population") == 0 && StringICmp (str, "Population Class") == 0) {
+            } else if (StringICmp (last, "Vector") == 0 && StringICmp (str, "Vector Type") == 0) {
+            } else if (StringICmp (last, "Disease") == 0 && StringICmp (str, "Disease/Phenotype") == 0) {
+            } else if (StringICmp (last, "Variable") == 0 && StringICmp (str, "Variable Description") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
@@ -1564,6 +2648,16 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
   return rsult;
 }
 
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head,
+  Boolean checkMenuNameVariants,
+  Boolean checkMenuNameFormat
+)
+
+{
+  return ValidateEntrez2InfoPtrExExEx (e2ip, head, checkMenuNameVariants, checkMenuNameFormat, FALSE);
+}
 
 NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
   Entrez2InfoPtr e2ip,
@@ -1572,7 +2666,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
 )
 
 {
-  return ValidateEntrez2InfoPtrExEx (e2ip, head, checkMenuNameVariants, FALSE);
+  return ValidateEntrez2InfoPtrExExEx (e2ip, head, checkMenuNameVariants, FALSE, FALSE);
 }
 
 NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
@@ -1581,7 +2675,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
 )
 
 {
-  return ValidateEntrez2InfoPtrExEx (e2ip, head, FALSE, FALSE);
+  return ValidateEntrez2InfoPtrExExEx (e2ip, head, FALSE, FALSE, FALSE);
 }
 
 /* network connection test functions */

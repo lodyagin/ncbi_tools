@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/7/2009
 *
-* $Revision: 1.10 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -64,91 +64,9 @@
 #define NLM_GENERATED_CODE_PROTO
 #include <objvalid.h>
 #include <valapi.h>
+#include "validrules.inc"
 
 static CommentRulePtr CommentRules = NULL;
-
-
-#ifndef WIN16
-static CharPtr commentRulesStr = "Comment-set ::= {\n" \
-"  { \n" \
-"    prefix \"##Genome-Assembly-Data-START##\" ,\n" \
-"    fields { \n" \
-"      { \n" \
-"        field-name \"Finishing Goal\" ,\n" \
-"        match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\|Annotation Directed\\|Non-contiguous Finished\\|Finished\\)$\" ,\n" \
-"        required TRUE } ,\n" \
-"      { \n" \
-"        field-name \"Current Finishing Status\" ,\n" \
-"        match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\|Annotation Directed\\|Non-contiguous Finished\\|Finished\\)$\" , \n" \
-"        required TRUE } ,\n" \
-"      {\n" \
-"        field-name \"Assembly Method\" , \n" \
-"        match-expression \".* v\\. [0123456789][0123456789\\.]*$\" ,\n" \
-"        required TRUE } ,\n" \
-"      { \n" \
-"        field-name \"Assembly Name\" } ,\n" \
-"      { \n" \
-"        field-name \"Genome Coverage\" ,\n" \
-"        required TRUE} ,\n" \
-"      { \n" \
-"        field-name \"Sequencing Technology\" ,\n" \
-"        required TRUE} } ,\n" \
-"    dependent-rules {\n" \
-"      { \n" \
-"        match-name \"Finishing Goal\" , \n" \
-"        value-constraint \"^Standard Draft$\" , \n" \
-"        other-fields {\n" \
-"          { \n" \
-"            field-name \"Current Finishing Status\" ,\n" \
-"            match-expression \"^Standard Draft$\" } } } ,\n" \
-"      { \n" \
-"        match-name \"Finishing Goal\" , \n" \
-"        value-constraint \"^High Quality Draft$\" , \n" \
-"        other-fields {\n" \
-"          { \n" \
-"            field-name \"Current Finishing Status\" ,\n" \
-"            match-expression \"^\\(Standard Draft\\|High Quality Draft\\)$\" } } } ,\n" \
-"      { \n" \
-"        match-name \"Finishing Goal\" , \n" \
-"        value-constraint \"^Improved High Quality Draft$\" , \n" \
-"        other-fields {\n" \
-"          { \n" \
-"            field-name \"Current Finishing Status\" ,\n" \
-"            match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\)$\" } } } ,\n" \
-"      { \n" \
-"        match-name \"Finishing Goal\" , \n" \
-"        value-constraint \"^Annotation Directed$\" , \n" \
-"        other-fields {\n" \
-"          { \n" \
-"            field-name \"Current Finishing Status\" ,\n" \
-"            match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\|Annotation Directed\\)$\" } } } ,\n" \
-"      { \n" \
-"        match-name \"Finishing Goal\" , \n" \
-"        value-constraint \"^Non-contiguous Finished$\" , \n" \
-"        other-fields {\n" \
-"          { \n" \
-"            field-name \"Current Finishing Status\" ,\n" \
-"            match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\|Annotation Directed\\|Non-contiguous Finished\\)$\" } } } ,\n" \
-"      { \n" \
-"        match-name \"Finishing Goal\" , \n" \
-"        value-constraint \"^Finished$\" , \n" \
-"        other-fields {\n" \
-"          { \n" \
-"            field-name \"Current Finishing Status\" ,\n" \
-"            match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\|Annotation Directed\\|Non-contiguous Finished\\|Finished\\)$\" } } }\n" \
-"} } , \n" \
-"  { \n" \
-"    prefix \"##Assembly-Data-START##\" , \n" \
-"    fields {  \n" \
-"      { \n" \
-"        field-name \"Assembly Method\" ,  \n" \
-"        match-expression \".+ v\\. .+\" , \n" \
-"        required TRUE } , \n" \
-"      { \n" \
-"        field-name \"Sequencing Technology\" , \n" \
-"        required TRUE } } } \n" \
-"}\n";
-#endif
 
 
 static int CompareFieldRules (FieldRulePtr r1, FieldRulePtr r2)
@@ -227,13 +145,18 @@ static Boolean LoadCommentRulesFromLocalString (void)
 {
 #ifndef WIN16
   AsnIoMemPtr aimp;
+  CharPtr     ptr;
 
-  aimp = AsnIoMemOpen ("r", (BytePtr) commentRulesStr, (Int4) StringLen (commentRulesStr));
+  ptr = MergeStringArray ((CharPtr PNTR) s_Defaultvalidrules, sizeof (s_Defaultvalidrules) / sizeof (char*));
+  if (ptr == NULL) return FALSE;
+
+  aimp = AsnIoMemOpen ("r", (BytePtr) ptr, (Int4) StringLen (ptr));
   if (aimp == NULL || aimp->aip == NULL) return FALSE;
 
   CommentRules = CommentSetAsnRead (aimp->aip, NULL);
   SortCommentRuleFields(CommentRules);
   AsnIoMemClose (aimp);
+  MemFree (ptr);
 #endif
   return (Boolean) (CommentRules != NULL);
 }
@@ -679,7 +602,9 @@ IsStructuredCommentValidForRule
   /* now look at fields in context of other fields */
   for (depend_rule = comment_rule->dependent_rules; depend_rule != NULL; depend_rule = depend_rule->next) {
     depend_ufp = FindFieldForRuleName(uop->data, depend_rule->match_name);
-    if (depend_ufp != NULL && DoesFieldValueMatchExpression(depend_ufp, depend_rule->value_constraint)) {
+    if (depend_ufp != NULL && 
+        ((!depend_rule->invert_match && DoesFieldValueMatchExpression(depend_ufp, depend_rule->value_constraint)) 
+        || (depend_rule->invert_match && !DoesFieldValueMatchExpression(depend_ufp, depend_rule->value_constraint)))) {
       for (field_rule = depend_rule->other_fields; field_rule != NULL; field_rule = field_rule->next) {
         ufp = FindFieldForRuleName (uop->data, field_rule->field_name);
         if (ufp == NULL) {
@@ -751,4 +676,231 @@ NLM_EXTERN EFieldValid IsStructuredCommentValid (UserObjectPtr uop, StructuredCo
   return IsStructuredCommentValidForRule (uop, cr, s_callback, s_callback_data);
 }
 
+
+static Boolean IsStructuredCommentPrefix (UserFieldPtr ufp)
+{
+  if (ufp == NULL) {
+    return FALSE;
+  }
+  if (ufp->label != NULL 
+      && StringICmp (ufp->label->str, "StructuredCommentPrefix") == 0
+      && ufp->choice == 1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean IsStructuredCommentSuffix (UserFieldPtr ufp)
+{
+  if (ufp == NULL) {
+    return FALSE;
+  }
+  if (ufp->label != NULL 
+      && StringICmp (ufp->label->str, "StructuredCommentSuffix") == 0
+      && ufp->choice == 1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static CharPtr GetStructuredCommentPrefix (UserObjectPtr uop)
+{
+  UserFieldPtr ufp;
+  CharPtr prefix = NULL;
+
+  if (uop == NULL) {
+    return NULL;
+  }
+
+  for (ufp = uop->data; ufp != NULL && prefix == NULL; ufp = ufp->next) {
+    if (IsStructuredCommentPrefix(ufp)) {
+      prefix = ufp->data.ptrvalue;
+    }
+  }
+  return prefix;
+}
+
+
+static Boolean MovePrefixAndSuffixFieldsToFlank (UserObjectPtr uop)
+{
+  UserFieldPtr ufp, ufp_prev = NULL, ufp_next, ufp_last = NULL;
+  Boolean changed = FALSE;
+
+  if (uop == NULL) {
+    return FALSE;
+  }
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp_next) {
+    ufp_next = ufp->next;
+    if (IsStructuredCommentPrefix(ufp)) {
+      /* move prefix to first position */
+      if (ufp_prev != NULL) {
+        ufp_prev->next = ufp_next;
+        ufp->next = uop->data;
+        uop->data = ufp;
+        changed = TRUE;
+      } else  {
+        ufp_prev = ufp;
+      }
+    } else if (IsStructuredCommentSuffix(ufp) && ufp->next != NULL) {
+      changed = TRUE;
+      ufp_last = ufp;
+      if (ufp_prev == NULL) {
+        uop->data = ufp_next;
+      } else {
+        ufp_prev->next = ufp_next;
+      }
+      ufp->next = NULL;
+    } else {
+      ufp_prev = ufp;
+    }
+  }
+  if (ufp_last != NULL) {
+    if (ufp_prev == NULL) {
+      uop->data = ufp_last;
+    } else {
+      ufp_prev->next = ufp_last;
+    }
+  }
+  return changed;
+}
+
+
+NLM_EXTERN Boolean ReorderStructuredCommentFields (UserObjectPtr uop)
+{
+  CommentRulePtr cr;
+  FieldRulePtr rule;
+  UserFieldPtr ufp, ufp_prev = NULL, new_list = NULL, new_prev = NULL, ufp_next, ufp_last = NULL;
+  CharPtr prefix = NULL;
+  Boolean changed = FALSE;
+
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) return FALSE;
+
+  prefix = GetStructuredCommentPrefix (uop);
+  if (prefix != NULL
+      && (cr = GetCommentRuleFromRuleSet (prefix)) != NULL) {
+    ufp = uop->data;
+    for (rule = cr->fields; rule != NULL; rule = rule->next) {
+      ufp_prev = NULL;
+      for (ufp = uop->data; ufp != NULL && StringCmp (ufp->label->str, rule->field_name) != 0; ufp = ufp->next) {
+        ufp_prev = ufp;
+      }
+      if (ufp != NULL) {
+        if (ufp_prev == NULL) {
+          uop->data = ufp->next;
+        } else {
+          ufp_prev->next = ufp->next;
+        }
+        ufp->next = NULL;
+        if (new_prev == NULL) {
+          new_list = ufp;
+        } else {
+          new_prev->next = ufp;
+        }
+        new_prev = ufp;
+      }
+    }
+    if (new_prev != NULL) {
+      new_prev->next = uop->data;
+      uop->data = new_list;
+    }
+    changed = TRUE;
+  } 
+  changed |= MovePrefixAndSuffixFieldsToFlank (uop);
+
+  return changed;
+}
+
+
+static Boolean DoesStructuredCommentHaveAnyPrefixOrSuffix (UserObjectPtr uop)
+{
+  UserFieldPtr ufp;
+  Boolean      rval = FALSE;
+
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) {
+    return FALSE;
+  }
+
+  for (ufp = uop->data; ufp != NULL && !rval; ufp = ufp->next) {
+    if (ufp->label != NULL 
+        && (StringICmp (ufp->label->str, "StructuredCommentPrefix") == 0
+          || StringICmp (ufp->label->str, "StructuredCommentSuffix") == 0)) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+static Boolean IsRuleOkForStructuredComment (UserObjectPtr uop, CommentRulePtr cr)
+{
+  UserFieldPtr ufp, ufp_last = NULL;
+  FieldRulePtr field_rule;
+  Boolean  rval = FALSE;
+
+  if (uop == NULL || uop->data == NULL || cr == NULL) {
+    return FALSE;
+  }
+  ufp = uop->data;
+
+  /* all field names must be recognized */
+  while (ufp != NULL) {
+    field_rule = FindRuleForFieldName(ufp, cr->fields);
+    if (field_rule == NULL) {
+      return FALSE;
+    }
+    ufp_last = ufp;
+    ufp = ufp->next;
+  }
+
+  ufp = UserFieldNew ();
+  ufp->label = ObjectIdNew ();
+  ufp->label->str = StringSave ("StructuredCommentPrefix");
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (cr->prefix);
+  ufp_last->next = ufp;
+
+  if (IsStructuredCommentValidForRule (uop, cr, NULL, NULL) == eFieldValid_Valid) {
+    rval = TRUE;
+  }
+  ufp_last->next = UserFieldFree (ufp_last->next);
+  return rval;
+}
+
+
+NLM_EXTERN CharPtr AutoapplyStructuredCommentPrefix (UserObjectPtr uop)
+{
+  CommentRulePtr cr;
+  CharPtr        prefix = NULL;
+
+  if (uop == NULL || DoesStructuredCommentHaveAnyPrefixOrSuffix(uop)) {
+    return NULL;
+  }
+
+  if (CommentRules == NULL) {
+    cr = LoadCommentRuleSet ();
+  } else {
+    cr = CommentRules;
+  }
+
+  while (cr != NULL) {
+    if (IsRuleOkForStructuredComment(uop, cr)) {
+      if (prefix == NULL) {
+        prefix = cr->prefix;
+      } else {
+        return NULL;
+      }
+    }
+    cr = cr->next;
+  }
+
+  if (prefix != NULL) {
+    AddItemStructuredCommentUserObject (uop, "StructuredCommentPrefix", prefix);
+  }
+  return prefix;
+}
 

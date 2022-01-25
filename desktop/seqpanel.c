@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.229 2010/12/06 17:16:46 bollin Exp $
+/* $Id: seqpanel.c,v 6.230 2011/07/19 18:40:47 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -9068,65 +9068,6 @@ static void ReverseSequenceStrandsInAlignment (IteM i)
   }
 }
 
-
-/* need to reverse the order of the segments and flip the strands */
-extern void FlipAlignment (SeqAlignPtr salp)
-{
-  DenseSegPtr dsp;
-  Int4        row, seg, swap_start, swap_len, opp_seg;
-  Score    swap_score;
-  Uint1       swap_strand;
-  
-  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
-  {
-    return;
-  }
-  
-  dsp = (DenseSegPtr) salp->segs;
-  if (dsp->strands == NULL) {
-    dsp->strands = (Uint1Ptr) MemNew (dsp->numseg * dsp->dim * sizeof (Uint1));
-    MemSet (dsp->strands, Seq_strand_plus, dsp->numseg * dsp->dim * sizeof (Uint1));
-  }
-
-  for (seg = 0; seg < dsp->numseg / 2; seg++) {
-    /* swap segments to reverse order */
-    opp_seg = dsp->numseg - 1 - seg;
-    /* swap lens */
-    swap_len = dsp->lens[seg];
-    dsp->lens[seg] = dsp->lens[opp_seg];
-    dsp->lens[opp_seg] = swap_len;
-    /* swap scores */
-    if (dsp->scores != NULL) {
-      swap_score = dsp->scores[seg];
-      dsp->scores[seg] = dsp->scores[opp_seg];
-      dsp->scores[opp_seg] = swap_score;
-    }
-    for (row = 0; row < dsp->dim; row++) {
-      /* swap strands */
-      swap_strand = dsp->strands[dsp->dim * seg + row];
-      dsp->strands[dsp->dim * seg + row] = dsp->strands[dsp->dim * opp_seg + row];
-      dsp->strands[dsp->dim * opp_seg + row] = swap_strand;
-      
-      /* swap starts */
-      swap_start = dsp->starts[dsp->dim * seg + row];
-      dsp->starts[dsp->dim * seg + row] = dsp->starts[dsp->dim * opp_seg + row];
-      dsp->starts[dsp->dim * opp_seg + row] = swap_start;      
-    }
-  }
-  
-  /* reverse segments */
-  for (seg = 0; seg < dsp->numseg; seg++) {
-    for (row = 0; row < dsp->dim; row++) {
-      if (dsp->strands[dsp->dim * seg + row] == Seq_strand_minus) {
-        dsp->strands[dsp->dim * seg + row] = Seq_strand_plus;
-      } else {
-        dsp->strands[dsp->dim * seg + row] = Seq_strand_minus;
-      }
-    }
-  }
-  SAIndex2Free2(salp->saip);
-  salp->saip = NULL;
-}
 
 typedef struct setalntarget 
 {

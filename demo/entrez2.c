@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 
 #include <entrez2.h>
 
-#define ENTREZ_APP_VERSION "11.2"
+#define ENTREZ_APP_VERSION "12.1"
 
 #define MAX_QUERY_FORMS 256
 
@@ -522,6 +522,10 @@ static void RetrieveDocs_Callback (ButtoN buttonPressed)
   }
 
   e2UidList = e2BooleanPtr->uids;
+  if (e2UidList == NULL) {
+    ArrowCursor ();
+    return;
+  }
   uidList = (Int4Ptr) BSMerge (e2UidList->uids, NULL);
 
   /*---------------------------------*/

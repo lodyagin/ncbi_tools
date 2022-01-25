@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/* $Id: ncbi_util.h,v 6.44 2011/02/17 18:09:33 kazimird Exp $
+/* $Id: ncbi_util.h,v 6.47 2011/11/16 18:04:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov, Anton Lavrentiev
+ * Authors:  Denis Vakatov, Anton Lavrentiev
  *
  * @file
  * File Description:
@@ -46,6 +46,8 @@
  *                LOG_ToFILE[_Ex]()
  *
  * 2. Auxiliary API:
+ *       CORE_GetNcbiSid()
+ *       CORE_GetAppName()
  *       CORE_GetPlatform()
  *       CORE_GetUsername()
  *       CORE_GetVMPageSize()
@@ -58,6 +60,8 @@
  *       UTIL_MatchesMask[Ex]()
  *       UTIL_NcbiLocalHostName()
  *       UTIL_PrintableString[Size]()
+ *
+ * 5. Internal MSWIN support for Unicode (mostly in error messages)
  *
  */
 
@@ -100,13 +104,12 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK CORE_GetLOCK(void);
 
 
 /******************************************************************************
- *  ERROR HANDLING and LOGGING
+ *  Error handling and logging
  */
-
 
 /** Auxiliary plain macros to write message (maybe, with raw data) to the log.
  * @sa
- *   LOG_Write
+ *  LOG_Write
  */
 #define  LOG_WRITE(lg, code, subcode, level, message)                   \
     LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
@@ -176,7 +179,7 @@ extern NCBI_XCONNECT_EXPORT void CORE_SetLOGFILE_Ex
 /** Same as CORE_SetLOGFILE_Ex() with last parameter passed as 0
  * (all messages get posted).
  * @sa
- *   CORE_SetLOGFILE_Ex, CORE_SetLOG
+ *  CORE_SetLOGFILE_Ex, CORE_SetLOG
  */
 extern NCBI_XCONNECT_EXPORT void CORE_SetLOGFILE
 (FILE*       fp,
@@ -203,7 +206,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ CORE_SetLOGFILE_NAME_Ex
 /** Same as CORE_SetLOGFILE_NAME_Ex with last parameter passed as 0
  * (all messages pass).
  * @sa
- *   CORE_SetLOGFILE_NAME_Ex, CORE_SetLOG
+ *  CORE_SetLOGFILE_NAME_Ex, CORE_SetLOG
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ CORE_SetLOGFILE_NAME
 (const char* filename
@@ -214,7 +217,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ CORE_SetLOGFILE_NAME
  * @sa
  *   CORE_SetLOGFormatFlags
  */
-typedef enum {
+enum ELOG_FormatFlag {
     fLOG_Default       = 0x0,    /**< fLOG_Short if NDEBUG, else fLOG_Full   */
     fLOG_Level         = 0x1,
     fLOG_Module        = 0x2,
@@ -223,8 +226,8 @@ typedef enum {
     fLOG_FullOctal     = 0x2000, /**< do not do reduction in octal data bytes*/
     fLOG_OmitNoteLevel = 0x4000, /**< do not add NOTE if eLOG_Note is level  */
     fLOG_None          = 0x8000  /**< nothing but spec'd parts, msg and data */
-} ELOG_Format;
-typedef unsigned int TLOG_FormatFlags; /**< binary OR of "ELOG_FormatFlags"  */
+};
+typedef unsigned int TLOG_FormatFlags;  /**< bitwise OR of "ELOG_FormatFlag" */
 #define fLOG_Short   fLOG_Level
 #define fLOG_Full   (fLOG_Level | fLOG_Module | fLOG_FileLine)
 
@@ -277,7 +280,7 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE_Ex
 /** Same as LOG_ToFILEx with "cut_off" parameter passed as 0
  * (all messages pass).
  * @sa
- *   LOG_ToFILE_Ex
+ *  LOG_ToFILE_Ex
  */
 extern NCBI_XCONNECT_EXPORT void LOG_ToFILE
 (LOG         lg,
@@ -312,42 +315,9 @@ extern NCBI_XCONNECT_EXPORT const char* NcbiMessagePlusError
  );
 
 
-/* Several macros brought here from ncbidiag.hpp.  The names slightly
- * changed (added _C) because some sources can include this header and
- * ncbidiag.hpp simultaneously.
- */
-
-/** Defines global error code name with given value (err_code)
- */
-#define NCBI_C_DEFINE_ERRCODE_X(name, err_code, max_err_subcode)        \
-    enum enum##name {                                                   \
-        eErrCodeX_##name = err_code                                     \
-        /* automatic subcode checking is not implemented in C code */   \
-    }
-
-/** Makes one identifier from 2 parts
- */
-#define NCBI_C_CONCAT_IDENTIFIER(prefix, postfix) prefix##postfix
-
-/** Returns value of error code by its name defined by NCBI_DEFINE_ERRCODE_X
- *
- * @sa NCBI_C_DEFINE_ERRCODE_X
- */
-#define NCBI_C_ERRCODE_X_NAME(name)   \
-    NCBI_C_CONCAT_IDENTIFIER(eErrCodeX_, name)
-
-/** Returns currently set default error code. Default error code is set by
- *  definition of NCBI_USE_ERRCODE_X with name of error code as its value.
- *
- * @sa NCBI_DEFINE_ERRCODE_X
- */
-#define NCBI_C_ERRCODE_X   NCBI_C_ERRCODE_X_NAME(NCBI_USE_ERRCODE_X)
-
-
-
 
 /******************************************************************************
- *  REGISTRY
+ *  Registry
  */
 
 /** Set the registry (no registry if "rg" is passed zero) -- to be used by
@@ -377,22 +347,30 @@ extern NCBI_XCONNECT_EXPORT REG  CORE_GetREG(void);
  *  Auxiliary API
  */
 
-/**
+/** Obtain current NCBI SID (if known, per thread).
  * @return
- *  Return read-only textual but machine-readable platform description.
+ *  Return NULL when the SID cannot be determined;
+ *  otherwise, return a '\0'-terminated string.
  */
-extern NCBI_XCONNECT_EXPORT const char* CORE_GetPlatform(void);
+extern NCBI_XCONNECT_EXPORT const char* CORE_GetNcbiSid(void);
 
 
 /** Obtain current application name (toolkit dependent).
  * @return
- *  Return 0 when the application name cannot be determined;
- *  otherwise, return a NULL-terminated string
+ *  Return an empty string ("") when the application name cannot be determined;
+ *  otherwise, return a '\0'-terminated string
  *
  * NOTE that setting an application name concurrently with this
  * call can cause undefined behavior or a stale pointer returned.
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_GetAppName(void);
+
+
+/**
+ * @return
+ *  Return read-only textual but machine-readable platform description.
+ */
+extern NCBI_XCONNECT_EXPORT const char* CORE_GetPlatform(void);
 
 
 /** Obtain and store current user's name in the buffer provided.
@@ -464,6 +442,7 @@ extern NCBI_XCONNECT_EXPORT unsigned int UTIL_Adler32_Update
  const void*  ptr,
  size_t       len
  );
+
 
 
 /******************************************************************************
@@ -540,7 +519,8 @@ extern NCBI_XCONNECT_EXPORT size_t UTIL_PrintableStringSize
  * @full
  *  Whether to print full octal representation of non-printable characters
  * @return next position in the buffer past the last stored character.
- * @sa UTIL_PrintableStringSize
+ * @sa
+ *  UTIL_PrintableStringSize
  */
 extern NCBI_XCONNECT_EXPORT char* UTIL_PrintableString
 (const char* data,
@@ -550,20 +530,22 @@ extern NCBI_XCONNECT_EXPORT char* UTIL_PrintableString
  );
 
 
-/**
- *  Conversion from Unicode to UTF8, and back.
- *  Microsoft Windows - specific.
- *  NOTE:
- *    The caller should use UTIL_ReleaseBufferOnHeap function
- *    to free the buffer returned from UTIL_TcharToUtf8OnHeap;
- *    and ReleaseBuffer to free the one returned from UTIL_TcharToUtf8
+/** Conversion from Unicode to UTF8, and back.  MSWIN-specific and internal.
+ *
+ * NOTE:  UTIL_ReleaseBufferOnHeap() must be used to free the buffers returned
+ *        from UTIL_TcharToUtf8OnHeap(),  and UTIL_ReleaseBuffer() to free the
+ *        ones returned from UTIL_TcharToUtf8().
  */
 
 #if defined(NCBI_OS_MSWIN)  &&  defined(_UNICODE)
 extern const char*    UTIL_TcharToUtf8OnHeap(const wchar_t* buffer);
 extern const char*    UTIL_TcharToUtf8      (const wchar_t* buffer);
 extern const wchar_t* UTIL_Utf8ToTchar      (const    char* buffer);
-#  define             UTIL_ReleaseBuffer(x)  UTIL_ReleaseBufferOnHeap(x)
+/*
+ * NOTE:  If you change these macros (here and in #else) you need to make
+ *        similar changes in ncbi_strerror.c as well.
+ */
+#  define             UTIL_ReleaseBuffer(x)      UTIL_ReleaseBufferOnHeap(x)
 #else
 #  define             UTIL_TcharToUtf8OnHeap(x)  (x)
 #  define             UTIL_TcharToUtf8(x)        (x)

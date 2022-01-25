@@ -1,4 +1,4 @@
-/*  $RCSfile: salogif.c,v $  $Revision: 6.8 $  $Date: 2005/03/11 22:07:56 $
+/*  $RCSfile: salogif.c,v $  $Revision: 6.9 $  $Date: 2011/12/19 18:36:34 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -25,13 +25,16 @@
 *
 * Author:	Jinghui Zhang
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *	 The Blast Search result visualization utilities  
 *
 * --------------------------------------------------------------------------
 * $Log: salogif.c,v $
+* Revision 6.9  2011/12/19 18:36:34  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 6.8  2005/03/11 22:07:56  merezhuk
 * GIFTMP_BASE environment variable introduced to changed TmpGifs directory location.
 *
@@ -288,7 +291,7 @@ static Boolean PrintImageMapForGlobal
                 StringCpy(seq_buffer, arp->seq_name);
 
 	      if (gi_value != 0)
-                sprintf(buffer, "%ld", gi_value);
+                sprintf(buffer, "%d", gi_value);
               else
                 sprintf(buffer, "%s", arp->seq_name);
 

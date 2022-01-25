@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *   	portable string routines
@@ -542,6 +542,110 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower (char *string)
 }
 #endif
 
+static int Nlm_DigitRunLength (Nlm_CharPtr str)
+
+{
+  Nlm_Char  ch;
+  int   len = 0;
+
+  if (str == NULL) return 0;
+
+  ch = *str;
+  while (IS_DIGIT (ch)) {
+    len++;
+    str++;
+    ch = *str;
+  }
+
+  return len;
+}
+
+static int LIBCALL Nlm_NaturalStringCmpEx (Nlm_CharPtr str1, Nlm_CharPtr str2, Nlm_Boolean caseInsensitive)
+
+{
+  Nlm_Char  ch1, ch2;
+  int   len1, len2;
+
+  if (str1 == NULL) {
+    if (str2 == NULL) return 0;
+    return 1;
+  }
+  if (str2 == NULL) return -1;
+
+  ch1 = *str1;
+  ch2 = *str2;
+  if (caseInsensitive) {
+    ch1 = TO_LOWER (ch1);
+    ch2 = TO_LOWER (ch2);
+  }
+
+  while (ch1 != '\0' && ch2 != '\0') {
+    if (IS_DIGIT (ch1) && IS_DIGIT (ch2)) {
+      len1 = Nlm_DigitRunLength (str1);
+      len2 = Nlm_DigitRunLength (str2);
+      if (len1 > len2) {
+        return 1;
+      } else if (len1 < len2) {
+        return -1;
+      }
+      while (len1 > 0) {
+        if (ch1 > ch2) {
+          return 1;
+        } else if (ch1 < ch2) {
+          return -1;
+        }
+
+        str1++;
+        str2++;
+        ch1 = *str1;
+        ch2 = *str2;
+
+        if (caseInsensitive) {
+          ch1 = TO_LOWER (ch1);
+          ch2 = TO_LOWER (ch2);
+        }
+
+        len1--;
+      }
+    } else {
+      if (ch1 > ch2) {
+        return 1;
+      } else if (ch1 < ch2) {
+        return -1;
+      }
+
+      str1++;
+      str2++;
+      ch1 = *str1;
+      ch2 = *str2;
+
+      if (caseInsensitive) {
+        ch1 = TO_LOWER (ch1);
+        ch2 = TO_LOWER (ch2);
+      }
+    }
+  }
+
+  if (ch1 == '\0') {
+    if (ch2 == '\0') return 0;
+    return 1;
+  }
+  if (ch2 == '\0') return -1;
+
+  return 0;
+}
+
+NLM_EXTERN int LIBCALL Nlm_NaturalStringCmp (Nlm_CharPtr str1, Nlm_CharPtr str2)
+
+{
+  return Nlm_NaturalStringCmpEx (str1, str2, FALSE);
+}
+
+NLM_EXTERN int LIBCALL Nlm_NaturalStringICmp (Nlm_CharPtr str1, Nlm_CharPtr str2)
+
+{
+  return Nlm_NaturalStringCmpEx (str1, str2, TRUE);
+}
 
 /*  -------------------- MeshStringICmp() --------------------------------
  *  MeshStringICmp compares strings where / takes precedence to space.
@@ -899,6 +1003,83 @@ NLM_EXTERN char* LIBCALL Nlm_Int8ToString (Nlm_Int8  value, char* str, size_t st
         val = value;
 
     return s_Uint8ToString(val, str, str_size) ? save : 0;
+}
+
+
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllDigits (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_Char  ch;
+
+  if (Nlm_StringHasNoText (str)) return FALSE;
+
+  ch = *str;
+  while (ch != '\0') {
+    if (! IS_DIGIT (ch)) return FALSE;
+    str++;
+    ch = *str;
+  }
+
+  return TRUE;
+}
+
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllUpperCase (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_Char  ch;
+
+  if (Nlm_StringHasNoText (str)) return FALSE;
+
+  ch = *str;
+  while (ch != '\0') {
+    if (IS_ALPHA (ch) && IS_LOWER (ch)) return FALSE;
+    str++;
+    ch = *str;
+  }
+
+  return TRUE;
+}
+
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllLowerCase (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_Char  ch;
+
+  if (Nlm_StringHasNoText (str)) return FALSE;
+
+  ch = *str;
+  while (ch != '\0') {
+    if (IS_ALPHA (ch) && IS_UPPER (ch)) return FALSE;
+    str++;
+    ch = *str;
+  }
+
+  return TRUE;
+}
+
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllPunctuation (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_Char  ch;
+
+  if (Nlm_StringHasNoText (str)) return FALSE;
+
+  ch = *str;
+  while (ch != '\0') {
+    if (StringChr("!\"#%&'()*+,-./:;<=>?[\\]^_{|}~", ch) == NULL) return FALSE;
+    str++;
+    ch = *str;
+  }
+
+  return TRUE;
 }
 
 
@@ -1510,7 +1691,6 @@ NLM_EXTERN void LIBCALL DeleteChar(char FAR *theString,char Delete)
 
   *theString = NULLB;
 }
-
 
 
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringPrintable(const Nlm_Char PNTR str,

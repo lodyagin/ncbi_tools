@@ -1,4 +1,4 @@
-/* $Id: greedy_align.c,v 1.46 2007/07/05 20:25:30 kazimird Exp $
+/* $Id: greedy_align.c,v 1.47 2012/03/19 17:34:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: greedy_align.c,v 1.46 2007/07/05 20:25:30 kazimird Exp $";
+    "$Id: greedy_align.c,v 1.47 2012/03/19 17:34:33 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/greedy_align.h>
@@ -130,6 +130,7 @@ s_GetMBSpace(SMBSpace* pool, Int4 num_alloc)
     return out_ptr;
 }
 
+/** Signal that a diagonal is invalid */
 static const Int4 kInvalidOffset = -2;
 
 /** During the traceback for a greedy alignment with affine
@@ -298,11 +299,11 @@ s_GetNextNonAffineTback(Int4 **last_seq2_off, Int4 d,
 }
 
 
-/* Find the first mismatch in a pair of sequences
+/** Find the first mismatch in a pair of sequences
  * @param seq1 First sequence (always uncompressed) [in]
  * @param seq2 Second sequence (compressed or uncompressed) [in]
  * @param len1 Length of seq1 [in]
- * @param len1 Length of seq2 [in]
+ * @param len2 Length of seq2 [in]
  * @param seq1_index Starting offset in seq1 [in]
  * @param seq2_index Starting offset in seq2 [in]
  * @param fence_hit Set to TRUE if an end-of-initialized-data sentinel
@@ -314,7 +315,7 @@ s_GetNextNonAffineTback(Int4 **last_seq2_off, Int4 d,
  *            is uncompressed [in]
  * @return Number of exact matches found before a mismatch was encountered
  */
-static Int4 s_FindFirstMismatch(const Uint1 *seq1, const Uint1 *seq2,
+static NCBI_INLINE Int4 s_FindFirstMismatch(const Uint1 *seq1, const Uint1 *seq2,
                                 Int4 len1, Int4 len2, 
                                 Int4 seq1_index, Int4 seq2_index,
                                 Boolean *fence_hit,

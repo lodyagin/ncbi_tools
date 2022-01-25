@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   typedefs and prototypes for routines used internally by asntypes.c
@@ -38,30 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: asntypes.h,v $
-* Revision 6.2  2000/12/12 15:56:14  ostell
-* added support BigInt
-*
-* Revision 6.1  1997/12/16 14:51:54  kans
-* header needed for asntool/asncode merge
-*
-* Revision 6.0  1997/08/25 18:10:27  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:43:48  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.4  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -137,12 +113,12 @@
 #define TAG_EXTERNAL			8
 #define TAG_REAL				9
 #define TAG_ENUM				10
+#define TAG_UTF8STRING			12
 #define TAG_SEQ					16		/* SEQ and SEQOF */
 #define TAG_SET					17		/* SET and SETOF */
 #define TAG_NUMERICSTRING		18
 #define TAG_PRINTABLESTRING		19
 #define TAG_TELETEXSTRING		20
-#define TAG_VIDEOTEXSTRING		21
 #define TAG_IA5STRING			22
 #define TAG_UTCTIME				23
 #define TAG_GENERALIZEDTIME		24

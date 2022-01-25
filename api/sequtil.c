@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.328 $
+* $Revision: 6.350 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -4181,7 +4181,7 @@ NLM_EXTERN Boolean SeqIdForSameBioseq (SeqIdPtr a, SeqIdPtr b)
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr, Boolean is_MT_safe)
 {
-    Char buf[40];
+    Char buf[60];
     CharPtr tmp;
     Int2 ctr = 0;
     Int2 start = 1;
@@ -4220,7 +4220,7 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip
     }
     
     if (sip != NULL) {
-        SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 30);
+        SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 50);
         tmp = buf;
         while (*tmp != '\0')
             tmp++;
@@ -4231,7 +4231,7 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip
         *tmp = '\0';
     } else {
         len = StringLen (prefix);
-        if (len > 0 && len < 32) {
+        if (len > 0 && len < 52) {
             tmp = StringMove(buf, prefix);
         } else {
             tmp = StringMove(buf, "tmpseq_");
@@ -5132,13 +5132,98 @@ static SeqLocPtr SeqLocMixFromSeqBond (SeqBondPtr sbp)
   return slp;
 }
 
+static
+int LIBCALLBACK CreateSortedSeqLoc_comparator (VoidPtr ptr1, VoidPtr ptr2)
+{
+    SeqLocPtr loc_piece1 = *(SeqLocPtr PNTR)ptr1;
+    SeqLocPtr loc_piece2 = *(SeqLocPtr PNTR)ptr2;
+    SeqIdPtr sip1;
+    SeqIdPtr sip2;
+    Char sip_name1[50];
+    Char sip_name2[50];
+    Int4 sip_name_comp;
+    Int4 start1;
+    Int4 start2;
+    Int4 end1;
+    Int4 end2;
 
-static Int2 CompareMultiPartLocToMultiPartLoc (SeqLocPtr a, SeqLocPtr b, Boolean compare_strand)
+    sip1 = SeqLocId( loc_piece1 );
+    sip2 = SeqLocId( loc_piece2 );
+    if( NULL == sip1 && NULL != sip2 ) {
+        return -1;
+    } else if( NULL != sip1 && NULL == sip2 ) {
+        return 1;
+    } else if( NULL != sip1 && NULL != sip2 ) {
+        /* compare Seq-ids */
+        if( ! seqid_name( sip1, sip_name1, FALSE, FALSE ) ) {
+            sip_name1[0] = '\0';
+        }
+        if( ! seqid_name( sip2, sip_name2, FALSE, FALSE ) ) {
+            sip_name2[0] = '\0';
+        }
+        sip_name_comp = StrCmp( sip_name1, sip_name2 );
+        if( 0 != sip_name_comp ) {
+            return sip_name_comp;
+        }
+    }
+
+    start1 = SeqLocStart(loc_piece1);
+    start2 = SeqLocStart(loc_piece2);
+    if( start1 != start2 ) {
+        return (start1 - start2);
+    }
+
+    end1 = SeqLocStop(loc_piece1);
+    end2 = SeqLocStop(loc_piece2);
+    return (end2 - end1);
+}
+
+/* Note that this doesn't return a SeqLocPtr because it's not creating
+   a real usable SeqLoc.  Rather, it's returning an array of pointers
+   into the given loc which points to them in order. */
+static SeqLocPtr PNTR
+CreateSortedSeqLoc( SeqLocPtr loc, Uint4Ptr out_len )
+{
+    Int4 jj = 0;
+    SeqLocPtr loc_piece = NULL;
+    SeqLocPtr PNTR retval = NULL;
+
+    *out_len = 0;
+
+    /* First, see how big loc is */
+    loc_piece = (SeqLocPtr)loc->data.ptrvalue;
+    while( NULL != loc_piece ) {
+        ++(*out_len);
+        loc_piece = loc_piece->next;
+    }
+
+    /* allocate enough memory to fit everything, and copy
+       the (not-yet-sorted) pointers over */
+    loc_piece = (SeqLocPtr)loc->data.ptrvalue;
+    retval = (SeqLocPtr PNTR) MemNew( sizeof(SeqLocPtr) * (*out_len) );
+    for( jj = 0; jj < (*out_len); ++jj ) {
+        retval[jj] = loc_piece;
+        loc_piece = loc_piece->next;
+    }
+
+    /* now, sort what we have */
+    StableMergeSort( retval, (*out_len), sizeof(SeqLocPtr),
+                     CreateSortedSeqLoc_comparator );
+    return retval;
+}
+
+static Int2 CompareMultiPartLocToMultiPartLoc(SeqLocPtr a, SeqLocPtr b, Boolean compare_strand)
 {
   Boolean got_one = FALSE;   /* for any overlap */
-  SeqLocPtr slp, slp2;
   Int2 retval = SLC_NO_MATCH,
         retval2 = SLC_NO_MATCH;
+  /* Points to the pieces of a and b in sorted order */
+  SeqLocPtr PNTR a_sorted = NULL; 
+  Uint4          a_sorted_len = 0;
+  Uint4          a_idx = 0;     /* used to iterate through */
+  SeqLocPtr PNTR b_sorted = NULL;
+  Uint4           b_sorted_len = 0;
+  Uint4           b_idx = 0;     /* used to iterate through */
 
   if (a == NULL || b == NULL) {
     return SLC_NO_MATCH;
@@ -5149,83 +5234,103 @@ static Int2 CompareMultiPartLocToMultiPartLoc (SeqLocPtr a, SeqLocPtr b, Boolean
   if (b->choice != SEQLOC_MIX && b->choice != SEQLOC_EQUIV && b->choice != SEQLOC_PACKED_INT) {
     return SLC_NO_MATCH;
   }
+
+  /* create an array of pointers to the pieces of the seqloc, in order */
+  a_sorted = CreateSortedSeqLoc( a, &a_sorted_len );
+  b_sorted = CreateSortedSeqLoc( b, &b_sorted_len );
                 
-  slp = (SeqLocPtr)a->data.ptrvalue;  /* check for identity */
-  slp2 = (SeqLocPtr)b->data.ptrvalue;
-  retval = SeqLocCompareEx(slp, slp2, compare_strand);
-  slp = slp->next;
-  slp2 = slp2->next;
-  while ((slp != NULL) && (slp2 != NULL) && (retval == SLC_A_EQ_B))
+  /* check for identity */
+  retval = SeqLocCompareEx(a_sorted[0], b_sorted[0], compare_strand);
+  a_idx = 1;
+  b_idx = 1;
+  while ((a_idx < a_sorted_len) && (b_idx < b_sorted_len) && (retval == SLC_A_EQ_B))
   {
-      retval = SeqLocCompareEx(slp, slp2, compare_strand);
-      slp = slp->next;
-      slp2 = slp2->next;
+      retval = SeqLocCompareEx(a_sorted[a_idx], b_sorted[b_idx], compare_strand);
+      ++a_idx;
+      ++b_idx;
   }
-  if ((slp == NULL) && (slp2 == NULL) && (retval == SLC_A_EQ_B))
-      return retval;
+  if ((a_idx == a_sorted_len) && (b_idx == b_sorted_len) && (retval == SLC_A_EQ_B))
+      goto done;
 
-  slp = (SeqLocPtr)a->data.ptrvalue;    /* check for a in b */
-  slp2 = (SeqLocPtr)b->data.ptrvalue;
-  while ((slp != NULL) && (slp2 != NULL))
+  /* check for a in b */
+  a_idx = 0;
+  b_idx = 0;
+  while ((a_idx < a_sorted_len) && (b_idx < b_sorted_len))
   {
-      retval2 = SeqLocCompareEx(slp, slp2, compare_strand);
+      retval2 = SeqLocCompareEx(a_sorted[a_idx], b_sorted[b_idx], compare_strand);
       if (retval2 > SLC_NO_MATCH)
           got_one = TRUE;
       switch (retval2)
       {
           case SLC_NO_MATCH:
-              slp2 = slp2->next;
+              ++b_idx;
               break;
           case SLC_A_EQ_B:
-              slp2 = slp2->next;
-              slp = slp->next;
+              ++a_idx;
+              ++b_idx;
               break;
           case SLC_A_IN_B:
-              slp = slp->next;
+              ++a_idx;
               break;
           case SLC_B_IN_A:
           case SLC_A_OVERLAP_B:
-              slp2 = NULL;
+              b_idx = b_sorted_len;
               break;
       }
   }
-  if (slp == NULL)    /* a all in b */
-      return SLC_A_IN_B;
+  if (a_idx == a_sorted_len) {   /* a all in b */
+      retval = SLC_A_IN_B;
+      goto done;
+  }
 
-  slp2 = (SeqLocPtr)a->data.ptrvalue;    /* check for b in a */
-  slp = (SeqLocPtr)b->data.ptrvalue;
-  while ((slp != NULL) && (slp2 != NULL))
+  /* check for b in a */
+  a_idx = 0;
+  b_idx = 0;
+  while ((a_idx < a_sorted_len) && (b_idx < b_sorted_len))
   {
-      retval2 = SeqLocCompareEx(slp, slp2, compare_strand);
+      retval2 = SeqLocCompareEx(a_sorted[a_idx], b_sorted[b_idx], compare_strand);
       if (retval2 > SLC_NO_MATCH)
           got_one = TRUE;
       switch (retval2)
       {
           case SLC_NO_MATCH:
-              slp2 = slp2->next;
+              ++b_idx;
               break;
           case SLC_A_EQ_B:
-              slp2 = slp2->next;
-              slp = slp->next;
+              ++a_idx;
+              ++b_idx;
               break;
           case SLC_A_IN_B:
-              slp = slp->next;
+              ++a_idx;
               break;
           case SLC_B_IN_A:
           case SLC_A_OVERLAP_B:
-              slp2 = NULL;
+              b_idx = b_sorted_len;
               break;
       }
   }
-  if (slp == NULL)    /* a all in b */
-      return SLC_B_IN_A;
+  if (a_idx == a_sorted_len) {   /* a all in b */
+      retval = SLC_B_IN_A;
+      goto done;
+  }
 
-  if (got_one)
-      return SLC_A_OVERLAP_B;
+  if (got_one) {
+      retval = SLC_A_OVERLAP_B;
+      goto done;
+  }
+
+  /* goto here instead of just calling "return" so we can clean up */
+done:
+
+  if( NULL != a_sorted ) {
+      a_sorted = MemFree(a_sorted);
+  }
+  if( NULL != b_sorted ) {
+      b_sorted = MemFree(b_sorted);
+  }
 
   return retval;
 }
-
 
 /*****************************************************************************
 *
@@ -6769,7 +6874,7 @@ static Int4 SeqLocCoverage (SeqLocPtr slp)
   SeqLocPtr tmp;
   SeqIdPtr sip;
   SeqIdPtr PNTR id_list;
-  Int4     coverage = 0, i = 0, from, to, j, k;
+  Int4     coverage = 0, i = 0, from, to, j;
   Int4     i_from, i_to, j_from, j_to;
   Boolean  added_to_prev;
 
@@ -6806,15 +6911,22 @@ static Int4 SeqLocCoverage (SeqLocPtr slp)
           if ((i_from <= j_from && i_to >= j_from) 
               || (i_from <= j_to && i_to >= j_to)
               || (i_from >= j_from && i_to <= j_to)) {
+
+            /* merge i into j */
             ivals[2 * j] = MIN (i_from, j_from);
             ivals[2 * j + 1] = MAX (i_to, j_to);
-            /* delete position i by moving everything above down */
-            for (k = i + 1; k < numivals / 2; k++) {
-              ivals[2 * (k -1)] = ivals[2 * k];
-              ivals[2 * (k - 1) + 1] = ivals[2 * k + 1];
-              id_list[k - 1] = id_list[k];
+
+            /* copy last piece into where i was, and delete last piece */
+            /* This is okay since order doesn't matter, and this is
+               cheaper than moving everything down after deleting i */
+            if( i != (numivals - 1) ) {
+              ivals[2 * i] = ivals[2 * (numivals -1)];
+              ivals[2 * i + 1] = ivals[2 * (numivals -1) + 1];
             }
             numivals --;
+
+            /* restart checking against j since j changed */
+            i = j + 1;
             added_to_prev = TRUE;
           }
         }
@@ -6827,7 +6939,10 @@ static Int4 SeqLocCoverage (SeqLocPtr slp)
     }
     /* now add up lengths of intervals */
     for (j = 0; j < numivals; j++) {
-      coverage += ivals [2 * j + 1] - ivals [2 * j] + 1;
+      /* The "if" checks for NULLs, etc. which have a range like "-1 to -1" */
+      if( ivals [2 * j + 1] >= 0 ||  ivals [2 * j] >= 0 ) {
+        coverage += ivals [2 * j + 1] - ivals [2 * j] + 1;
+      }
     }
     ivals = MemFree (ivals);
     id_list = MemFree (id_list);
@@ -7394,7 +7509,7 @@ static Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_
 Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, Boolean is_circular);
 Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr right, Boolean is_circular);
 static Int4 CheckOffsetInLoc(SeqLocPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr the_id);
-NLM_EXTERN Int4 CheckPointInBioseq(SeqPntPtr sp, BioseqPtr in, BoolPtr flip_strand);
+NLM_EXTERN Int4 CheckPointInBioseq(SeqPntPtr sp, BioseqPtr in, BoolPtr flip_strand, Boolean relaxed);
 
 /*****************************************************************************
 *
@@ -7451,11 +7566,11 @@ NLM_EXTERN Int4 GetOffsetInBioseq (SeqLocPtr of, BioseqPtr in, Uint1 which_end)
     if (! GetThePointForOffset(of, &sp, which_end))
         return -1L;
 
-    return CheckPointInBioseq(&sp, in, NULL);
+    return CheckPointInBioseq(&sp, in, NULL, FALSE);
 }
 
 
-NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end, Boolean is_circular)
+NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end, Boolean is_circular, Boolean relaxed)
 {
     SeqPnt sp;
 
@@ -7465,11 +7580,11 @@ NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end
     if (! GetThePointForOffsetEx(of, &sp, which_end, is_circular))
         return -1L;
 
-    return CheckPointInBioseq(&sp, in, NULL);
+    return CheckPointInBioseq(&sp, in, NULL, relaxed);
 }
 
 
-NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular, BoolPtr left_flip, BoolPtr right_flip)
+NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular, Boolean relaxed, BoolPtr left_flip, BoolPtr right_flip)
 {
     SeqPnt l, r;
 
@@ -7486,10 +7601,10 @@ NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4
         return;
     }
     if (left != NULL) {
-        *left = CheckPointInBioseq (&l, in, left_flip);
+        *left = CheckPointInBioseq (&l, in, left_flip, relaxed);
     }
     if (right != NULL) {
-        *right = CheckPointInBioseq (&r, in, right_flip);
+        *right = CheckPointInBioseq (&r, in, right_flip, relaxed);
     }
 }
 
@@ -7498,7 +7613,7 @@ NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4
 *   CheckPointInBioseq(pnt, in)
 *
 *****************************************************************************/
-NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in, BoolPtr flip_strand)
+NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in, BoolPtr flip_strand, Boolean relaxed)
 {
     ValNode sl;
     BioseqPtr bsp;
@@ -7544,7 +7659,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in, BoolPtr flip_str
              locked = TRUE;
      }
     if (in->repr == Seq_repr_seg || in->repr == Seq_repr_delta) {
-        retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id, flip_strand);
+        retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id, flip_strand, relaxed);
     }
     if (retval == -1) {
         retval = CheckOffsetInLoc(slp, sp->point, bsp, sp->id);
@@ -7570,7 +7685,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in, BoolPtr flip_str
                 {
                     case Seq_repr_ref:   /* could have more levels */
                     case Seq_repr_seg:
-                        offset2 = CheckPointInBioseq(sp, bsp, flip_strand);
+                        offset2 = CheckPointInBioseq(sp, bsp, flip_strand, relaxed);
                         if (offset2 >= 0)   /* got it */
                         {
                             strt = SeqLocStart(curr);
@@ -7669,6 +7784,7 @@ Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, 
     SeqLocPtr pnt, first=NULL, last=NULL;
     Uint1 first_strand, last_strand;
     Boolean all_minus = TRUE;
+    Boolean all_non_minus = TRUE;
     Int4    lowest = -1, highest = 0, tmp;
     SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
     Boolean   id_same;
@@ -7684,8 +7800,9 @@ Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, 
       }
       last_strand = SeqLocStrand (pnt);
       last_sip = SeqLocId (pnt);
-      if (last_strand != Seq_strand_minus)
-      {
+      if (last_strand == Seq_strand_minus) {
+        all_non_minus = FALSE;
+      } else {
         all_minus = FALSE;
       }
         last = pnt;
@@ -7736,6 +7853,11 @@ Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, 
     }                   /* otherwise, get last */
     if (first == NULL)
         return FALSE;
+
+    /* ignore circularity if strandedness is mixed */
+    if( ! all_minus && ! all_non_minus ) {
+      is_circular = FALSE;
+    }
     
     switch (which_end)
     {
@@ -7836,6 +7958,7 @@ Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr 
     SeqLocPtr pnt, first=NULL, last=NULL;
     Uint1 first_strand, last_strand;
     Boolean all_minus = TRUE;
+    Boolean all_non_minus = TRUE;
     Int4    lowest = -1, highest = 0, tmp;
     SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
     Boolean   id_same;
@@ -7851,8 +7974,9 @@ Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr 
       }
       last_strand = SeqLocStrand (pnt);
       last_sip = SeqLocId (pnt);
-      if (last_strand != Seq_strand_minus)
-      {
+      if (last_strand == Seq_strand_minus) {
+        all_non_minus = FALSE;
+      } else {
         all_minus = FALSE;
       }
         last = pnt;
@@ -7903,7 +8027,11 @@ Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr 
     }                   /* otherwise, get last */
     if (first == NULL)
         return FALSE;
-    
+
+    /* ignore circularity if strandedness is mixed */
+    if( ! all_minus && ! all_non_minus ) {
+      is_circular = FALSE;
+    }
 
     /* left */
     if (is_circular) {
@@ -10461,6 +10589,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_TPA_PROT;
           } else  if ((StringICmp(temp,"IAA") >= 0) && (StringICmp(temp,"IZZ") <= 0)) { 
               retcode = ACCN_DDBJ_TPA_PROT;
+          } else  if ((StringICmp(temp,"JAA") >= 0) && (StringICmp(temp,"JZZ") <= 0)) { 
+              retcode = ACCN_NCBI_TPA_PROT;
           } else {
               retcode = ACCN_IS_PROTEIN;
               retval = TRUE;
@@ -10525,7 +10655,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"HO") == 0) || 
           (StringICmp(temp,"HS") == 0) || 
           (StringICmp(temp,"JG") == 0) || 
-          (StringICmp(temp,"JK") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"JK") == 0) || 
+          (StringICmp(temp,"JZ") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0) ||
                      (StringICmp(temp,"GF") == 0)) {      /* NCBI STS */
@@ -10592,7 +10723,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"HN") == 0) ||
                      (StringICmp(temp,"HR") == 0) ||
                      (StringICmp(temp,"JJ") == 0) ||
-                     (StringICmp(temp,"JM") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"JM") == 0) ||
+                     (StringICmp(temp,"JS") == 0) ||
+                     (StringICmp(temp,"JY") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
@@ -10614,7 +10747,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"BK") == 0) ||
                      (StringICmp(temp,"BL") == 0) ||
                      (StringICmp(temp,"GJ") == 0) ||
-                     (StringICmp(temp,"GK") == 0)) {      /* NCBI third-party annotation */
+                     (StringICmp(temp,"GK") == 0) ||
+                     (StringICmp(temp,"JP") == 0)) {      /* NCBI third-party annotation */
               retcode = ACCN_NCBI_TPA;
           } else if ((StringICmp(temp,"BN") == 0)) {      /* EMBL third-party annotation */
               retcode = ACCN_EMBL_TPA;
@@ -10627,14 +10761,26 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                     (StringICmp(temp,"HQ") == 0) ||
                     (StringICmp(temp,"JI") == 0) ||
                     (StringICmp(temp,"JL") == 0) ||
+                    (StringICmp(temp,"JN") == 0) ||
                     (StringICmp(temp,"JO") == 0) ||
-                    (StringICmp(temp,"JN") == 0)) {
+                    (StringICmp(temp,"JQ") == 0) ||
+                    (StringICmp(temp,"JR") == 0) ||
+                    (StringICmp(temp,"JT") == 0) ||
+                    (StringICmp(temp,"JU") == 0) ||
+                    (StringICmp(temp,"JV") == 0) ||
+                    (StringICmp(temp,"JW") == 0) ||
+                    (StringICmp(temp,"JX") == 0)) {
               retcode = ACCN_NCBI_TSA;
           } else if((StringICmp(temp,"FX") == 0)) {
               retcode = ACCN_DDBJ_TSA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0) ||
                      (StringICmp(temp,"FM") == 0) ||
+                     (StringICmp(temp,"FN") == 0) ||
+                     (StringICmp(temp,"FO") == 0) ||
+                     (StringICmp(temp,"FP") == 0) ||
+                     (StringICmp(temp,"FQ") == 0) ||
+                     (StringICmp(temp,"FR") == 0) ||
                      (StringICmp(temp,"HE") == 0) ||
                      (StringICmp(temp,"HF") == 0) ||
                      (StringICmp(temp,"HG") == 0) ||
@@ -10680,7 +10826,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DC") == 0) ||
                      (StringICmp(temp,"DK") == 0) ||
                      (StringICmp(temp,"FS") == 0) ||
-                     (StringICmp(temp,"FY") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"FY") == 0) ||
+                     (StringICmp(temp,"HX") == 0) ||
+                     (StringICmp(temp,"HY") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;

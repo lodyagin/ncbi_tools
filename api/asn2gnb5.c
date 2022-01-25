@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.185 $
+* $Revision: 1.196 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -135,9 +135,11 @@ static UrlData Nlm_url_base [] = {
   {"Axeldb",                "http://www.dkfz-heidelberg.de/tbi/services/axeldb/clone/xenopus?name="},
   {"BEEBASE",               "http://genomes.arc.georgetown.edu/cgi-bin/gbrowse/bee_genome4/?name="},
   {"BEETLEBASE",            "http://www.beetlebase.org/cgi-bin/report.cgi?name="},
+  {"BGD",                   "http://genomes.arc.georgetown.edu/bovine/genepages/genes/"},
   {"BOLD",                  "http://www.boldsystems.org/connectivity/specimenlookup.php?processid="},
   {"CCDS",                  "http://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="},
   {"CDD",                   "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="},
+  {"CGNC",                  "http://www.agnc.msstate.edu/GeneReport.aspx?a="},
   {"CK",                    "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="},
   {"COG",                   "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="},
   {"dbClone",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clone&cmd=Retrieve&list_uids="},
@@ -152,6 +154,7 @@ static UrlData Nlm_url_base [] = {
   {"ENSEMBL",               "http://www.ensembl.org/id/"},
   {"ERIC",                  "http://www.ericbrc.org/genbank/dbxref/"},
   {"FANTOM_DB",             "http://fantom.gsc.riken.jp/db/annotate/main.cgi?masterid="},
+  {"FBOL",                  "http://www.fungalbarcoding.org/BioloMICS.aspx?Table=Fungal%20barcodes&Fields=All&Rec="},
   {"FLYBASE",               "http://flybase.bio.indiana.edu/.bin/fbidq.html?"},
   {"GABI",                  "http://www.gabipd.org/database/cgi-bin/GreenCards.pl.cgi?Mode=ShowSequence&App=ncbi&SequenceId="},
   {"GeneDB",                "http://old.genedb.org/genedb/Search?organism=All%3A*&name="},
@@ -167,8 +170,8 @@ static UrlData Nlm_url_base [] = {
   {"HPRD",                  "http://www.hprd.org/protein/"},
   {"HSSP",                  "http://srs.ebi.ac.uk/srsbin/cgi-bin/wgetz?-newId+-e+hssp-ID:"},
   {"IKMC",                  "http://www.knockoutmouse.org/martsearch/project/"},
-  {"IMGT/GENE-DB",          "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"},
-  {"IMGT/LIGM",             "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"},
+  {"IMGT/GENE-DB",          "http://www.imgt.org/IMGT_GENE-DB/GENElect?species=Homo+sapiens&query=2+"},
+  {"IMGT/LIGM",             "http://www.imgt.org/cgi-bin/IMGTlect.jv?query=201+"},
   {"InterimID",             "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
   {"InterPro",              "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="},
   {"IRD",                   "http://www.fludb.org/brc/fluSegmentDetails.do?irdSubmissionId="},
@@ -178,8 +181,8 @@ static UrlData Nlm_url_base [] = {
   {"JGIDB",                 "http://genome.jgi-psf.org/cgi-bin/jgrs?id="},
   {"LocusID",               "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
   {"MaizeGDB",              "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?"},
-  {"MGI",                   "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"},
-  {"MIM",                   "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="},
+  {"MGI",                   "http://www.informatics.jax.org/marker/MGI:"},
+  {"MIM",                   "http://www.ncbi.nlm.nih.gov/omim/"},
   {"miRBase",               "http://www.mirbase.org/cgi-bin/mirna_entry.pl?acc="},
   {"MycoBank",              "http://www.mycobank.org/MycoTaxo.aspx?Link=T&Rec="},
   {"NASONIABASE",           "http://genomes.arc.georgetown.edu/cgi-bin/gbrowse/nasonia10_scaffold/?name="},
@@ -195,6 +198,7 @@ static UrlData Nlm_url_base [] = {
   {"PDB",                   "http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId="},
   {"PFAM",                  "http://pfam.sanger.ac.uk/family?acc="},
   {"PGN",                   "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="},
+  {"PomBase",               "http://www.pombase.org/spombe/result/"},
   {"PseudoCap",             "http://www.pseudomonas.com/getAnnotation.do?locusID="},
   {"RAP-DB",                "http://rapdb.dna.affrc.go.jp/cgi-bin/gbrowse_details/latest?name="},
   {"RATMAP",                "http://ratmap.gen.gu.se/ShowSingleLocus.htm?accno="},
@@ -218,6 +222,7 @@ static UrlData Nlm_url_base [] = {
   {"VBASE2",                "http://www.dnaplot.de/vbase2/vgene.php?id="},
   {"VBRC",                  "http://vbrc.org/query.asp?web_view=curation&web_id="},
   {"VectorBase",            "http://www.vectorbase.org/Genome/BRCGene/?feature="},
+  {"ViPR",                  "http://www.viprbrc.org/brc/viprStrainDetails.do?viprSubmissionId="},
   {"WorfDB",                "http://worfdb.dfci.harvard.edu/search.pl?form=1&search="},
   {"WormBase",              "http://www.wormbase.org/db/gene/gene?class=CDS;name="},
   {"Xenbase",               "http://www.xenbase.org/gene/showgene.do?method=display&geneId="},
@@ -299,6 +304,10 @@ static void FF_www_get_url (
   if (StringCmp (db, "IRD") == 0) {
 
     suffix = "&decorator=influenza";
+
+  } else if (StringCmp (db, "ViPR") == 0) {
+
+    suffix = "&decorator=vipr";
 
   } else if (StringCmp (db, "dbSTS") == 0) {
 
@@ -383,10 +392,10 @@ static void FF_www_get_url (
 
     if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
       if (StringCmp (taxname, "Homo sapiens") == 0) {
-        url = "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+";
+        url = "http://www.imgt.org/IMGT_GENE-DB/GENElect?species=Homo+sapiens&query=2+";
       }
       if (StringCmp (taxname, "Mus musculus") == 0) {
-        url = "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Mus+musculus&query=2+";
+        url = "http://www.imgt.org/IMGT_GENE-DB/GENElect?species=Mus+musculus&query=2+";
       }
     }
 
@@ -912,7 +921,9 @@ static void StrStripSpaces (
     if (*str == ' ' || *str == '\t' || *str == '(') {
       for (str++; *str == ' ' || *str == '\t'; str++) continue;
       if (*str == ')' || *str == ',') {
-        new_str--;
+        if( *(new_str - 1) != '(' ) { // this if handles the case "\([ \t]*\)"
+          --new_str;
+        }
       }
     } else {
       str++;
@@ -3233,7 +3244,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     if (irp->loc != NULL) {
       if (irp->rb.pmid != 0 || irp->rb.muid != 0) {
         head = NULL;
-        PrintFtableIntervals (&head, target, irp->loc, "REFERENCE");
+        PrintFtableIntervals (&head, target, irp->loc, "REFERENCE", FALSE);
         if (irp->rb.pmid != 0) {
           sprintf (buf, "\t\t\tpmid\t%ld\n", (long) irp->rb.pmid);
           ValNodeCopyStr (&head, 0, buf);

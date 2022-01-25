@@ -1,4 +1,4 @@
-/* $Id: blast_itree.c,v 1.16 2011/02/09 21:09:57 kazimird Exp $
+/* $Id: blast_itree.c,v 1.18 2012/04/03 14:51:02 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_itree.c,v 1.16 2011/02/09 21:09:57 kazimird Exp $";
+    "$Id: blast_itree.c,v 1.18 2012/04/03 14:51:02 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include "blast_itree.h"
@@ -1071,8 +1071,6 @@ s_HSPQueryRangeIsMasklevelContained(Int4 in_offset,
     Int4 overlapEnd;
     Int4 percOverlap;
 
-    tree_q_start = s_GetQueryStrandOffset(query_info, tree_hsp->context);
-
     /* check if alignments are from different query sequences 
        or query strands. Also check if tree_hsp has score strictly
        higher than in_hsp */
@@ -1082,6 +1080,8 @@ s_HSPQueryRangeIsMasklevelContained(Int4 in_offset,
     {
         return 0;
     }
+
+    tree_q_start = s_GetQueryStrandOffset(query_info, tree_hsp->context);
 
     if ( query_info->contexts[tree_hsp->context].frame == -1 )
     {
@@ -1118,14 +1118,12 @@ BlastIntervalTreeMasksHSP(const BlastIntervalTree *tree,
     Int4 region_start;
     Int4 region_end;
     Int4 in_query_start;
-    Int4 tmp_qstart;
     Int4 middle;
     Int4 tmp_index = 0;
 
     SIntervalNode *node = tree->nodes + subtree_index;
 
     in_query_start = s_GetQueryStrandOffset(query_info, hsp->context);
-    tmp_qstart = in_query_start;
 
     if ( query_info->contexts[hsp->context].frame == -1 )
     {

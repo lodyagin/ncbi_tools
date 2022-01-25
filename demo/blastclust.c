@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastclust.c,v 6.49 2007/12/21 14:00:47 madden Exp $";
+static char const rcsid[] = "$Id: blastclust.c,v 6.50 2011/12/19 18:40:17 gouriano Exp $";
 
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.49 $  $Date: 2007/12/21 14:00:47 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.50 $  $Date: 2011/12/19 18:40:17 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,9 @@ static char const rcsid[] = "$Id: blastclust.c,v 6.49 2007/12/21 14:00:47 madden
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.50  2011/12/19 18:40:17  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 6.49  2007/12/21 14:00:47  madden
 * Exit if query cannot be processed, JIRA SB-32
 *
@@ -427,7 +430,7 @@ BlastClusterNeighbours(Int4 num_queries, Int4Ptr seq_len,
     for (index=0; index<num_clusters; index++) {
         for (i=0; i<cluster[index]->size; i++) {
             if (numeric_id_type)
-                fprintf(global_fp, "%ld ", cluster[index]->elements[i]->gi); 
+                fprintf(global_fp, "%d ", cluster[index]->elements[i]->gi); 
             else 
                 fprintf(global_fp, "%s ", cluster[index]->elements[i]->id);
             MemFree(cluster[index]->elements[i]);
@@ -1227,7 +1230,7 @@ Int2 Main (void)
            for (i=0; i<num_queries; i++) {
                if (gi_list[i] > 0) {
                    id_list[i] = (CharPtr) MemNew(10);
-                   sprintf(id_list[i], "%ld", gi_list[i]);
+                   sprintf(id_list[i], "%d", gi_list[i]);
                }
                total_id_len += StringLen(id_list[i]) + 1;
            }
@@ -1264,10 +1267,10 @@ Int2 Main (void)
         DayTimeStr(timestr, TRUE, TRUE);
         if (finish_incomplete)
             fprintf(progressfp, 
-               "%s Finish clustering of %ld queries, starting from query %ld\n", 
+               "%s Finish clustering of %d queries, starting from query %d\n", 
                     timestr, num_queries, first_seq);
         else
-            fprintf(progressfp, "%s Start clustering of %ld queries\n", 
+            fprintf(progressfp, "%s Start clustering of %d queries\n", 
                     timestr, num_queries);
     }
 
@@ -1327,7 +1330,7 @@ Int2 Main (void)
           
           if (print_progress && (index + 1)%PROGRESS_INTERVAL == 0) {
              DayTimeStr(timestr, TRUE, TRUE);
-             fprintf(progressfp, "%s Finished processing of %ld queries\n", 
+             fprintf(progressfp, "%s Finished processing of %d queries\n", 
                      timestr, index+1);
           }
        } /* End of loop on queries */

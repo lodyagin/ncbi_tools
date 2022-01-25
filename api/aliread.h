@@ -116,4 +116,9 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
 			  ErrInfoPtr PNTR  errorListPtr,
 			  AliConfigInfoPtr configPtr,
 			  AlignFileDataPtr fileInfoPtr);
+
+NLM_EXTERN Boolean DoSequenceLengthsMatch (TAlignmentFilePtr afp);
+
+
+
 #endif

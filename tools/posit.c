@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit.c,v 6.87 2008/10/03 18:09:17 madden Exp $";
+static char const rcsid[] = "$Id: posit.c,v 6.88 2011/10/25 14:33:16 boratyng Exp $";
 
-/* $Id: posit.c,v 6.87 2008/10/03 18:09:17 madden Exp $
+/* $Id: posit.c,v 6.88 2011/10/25 14:33:16 boratyng Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,13 @@ static char const rcsid[] = "$Id: posit.c,v 6.87 2008/10/03 18:09:17 madden Exp 
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.87 $ 
+  $Revision: 6.88 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.88  2011/10/25 14:33:16  boratyng
+ * Fix for printing gapless column weights relative to pseudocounts in ascii pssm output JIRA SB-589
+ *
  * Revision 6.87  2008/10/03 18:09:17  madden
  * Change a few constants for pseudo counts (from A. Schaffer)
  *
@@ -473,6 +476,9 @@ void LIBCALL posAllocateMemory(posSearchItems * posSearch,
   posSearch->posGaplessColumnWeights = (Nlm_FloatHi *) MemNew((querySize + 1) * sizeof(Nlm_FloatHi));
   if (NULL == posSearch->posGaplessColumnWeights)
     exit(EXIT_FAILURE);
+  posSearch->pseudoWeights = (Nlm_FloatHi *) MemNew((querySize + 1) * sizeof(Nlm_FloatHi));
+  if (NULL == posSearch->pseudoWeights)
+    exit(EXIT_FAILURE);
   posSearch->posMatchWeights = (Nlm_FloatHi **) MemNew((querySize+1) * sizeof(Nlm_FloatHi *));
   if (NULL == posSearch->posMatchWeights)
     exit(EXIT_FAILURE);
@@ -603,6 +609,7 @@ static void posFreeMemory(posSearchItems *posSearch, Int4 querySize)
   MemFree(posSearch->posPrivateMatrix);
   MemFree(posSearch->posDescMatrix);
   MemFree(posSearch->posGaplessColumnWeights);
+  MemFree(posSearch->pseudoWeights);
   MemFree(posSearch->posMatchWeights);
   MemFree(posSearch->posA);
   MemFree(posSearch->posRowSigma);
@@ -1876,6 +1883,7 @@ Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactS
        else {
 	 pseudoWeight = columnCounts;
        }
+       posSearch->pseudoWeights[c] = pseudoWeight;
        for(a = 0; a < alphabetSize; a++) {
          if (compactSearch->standardProb[a] > posEpsilon) {
 	   pseudo = 0;
@@ -2291,7 +2299,7 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 	   fprintf(matrixfp," %.2f", countsFunction(posSearch->posSigma[i],
 		     posSearch->posIntervalSizes[i]) * 
                  posSearch->posGaplessColumnWeights[i]/
-                 compactSearch->pseudoCountConst);
+                 posSearch->pseudoWeights[i]);
 	 else
 	   fprintf(matrixfp,"    0.00");
        }

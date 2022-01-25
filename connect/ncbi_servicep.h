@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/* $Id: ncbi_servicep.h,v 6.47 2011/06/02 14:14:32 kazimird Exp $
+/* $Id: ncbi_servicep.h,v 6.52 2011/11/18 13:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -88,7 +88,6 @@ struct SSERV_IterTag {
     const char*          val; /* value to match; original pointer            */
     size_t            vallen; /* == 0 for NULL pointer above                 */
     TNCBI_Time          time; /* the time of call                            */
-    const char*          sid; /* session ID as received in response          */
 };
 
 
@@ -185,6 +184,15 @@ extern NCBI_XCONNECT_EXPORT char* SERV_Print
  );
 
 
+/* Same as SERV_Penalize() but can specify penalty hold time.
+ */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_PenalizeEx
+(SERV_ITER            iter,          /* handle obtained via 'SERV_Open*' call*/
+ double               fine,          /* fine from range [0=min..100=max] (%%)*/
+ TNCBI_Time           time           /* for how long to keep the penalty, sec*/
+ );
+
+
 /* Get name of underlying service mapper.
  */
 extern NCBI_XCONNECT_EXPORT const char* SERV_MapperName(SERV_ITER iter);
@@ -208,6 +216,16 @@ extern NCBI_XCONNECT_EXPORT double SERV_Preference
  double gap,
  size_t n
  );
+
+
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_AddFirewallPort
+(unsigned short port
+);
+
+
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_IsFirewallPort
+(unsigned short port
+);
 
 
 #ifdef __cplusplus

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.34 $
+* $Revision: 6.40 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -207,6 +207,7 @@ NLM_EXTERN ValNodePtr  LIBCALL ValNodeLink PROTO((ValNodePtr PNTR head, ValNodeP
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeCopyStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, const char* str));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeCopyStrEx PROTO((ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeCopyStrExEx PROTO((ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str, const char* pfx, const char* sfx));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddInt PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int4 value));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddBigInt (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int8 value);
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddBoolean PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Boolean value));
@@ -229,6 +230,8 @@ NLM_EXTERN int LIBCALL ValNodeCompare PROTO ((ValNodePtr vnp1, ValNodePtr vnp2, 
 NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs PROTO((ValNodePtr list));
 NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsEx PROTO((ValNodePtr list, Nlm_CharPtr separator));
 NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsExEx PROTO((ValNodePtr list, Nlm_CharPtr separator, Nlm_CharPtr pfx, Nlm_CharPtr sfx));
+
+NLM_EXTERN Nlm_CharPtr LIBCALL MergeStringArray PROTO((Nlm_CharPtr PNTR local, size_t numitems));
 
 /* convenience structure for holding head and tail of ValNode list for efficient tail insertion */
 typedef struct valnodeblock {
@@ -385,9 +388,12 @@ Uint4 Nlm_GetChecksum(CharPtr p);
 typedef struct xmlobj {
   Nlm_CharPtr    name;
   Nlm_CharPtr    contents;
+  Nlm_Int2       level;
   struct xmlobj  *attributes;
   struct xmlobj  *children;
   struct xmlobj  *next;
+  struct xmlobj  *parent;
+  struct xmlobj  *successor;        /* linearizes a recursive exploration */
 } Nlm_XmlObj, PNTR Nlm_XmlObjPtr;
 
 #define XmlObj Nlm_XmlObj
@@ -413,6 +419,14 @@ NLM_EXTERN Nlm_XmlObjPtr FreeXmlObject (
   Nlm_XmlObjPtr xop
 );
 
+NLM_EXTERN Nlm_CharPtr DecodeXml (
+  Nlm_CharPtr str
+);
+
+NLM_EXTERN Nlm_CharPtr EncodeXml (
+  Nlm_CharPtr str
+);
+
 typedef void (*VisitXmlNodeFunc) (Nlm_XmlObjPtr xop, Nlm_XmlObjPtr parent, Nlm_Int2 level, Nlm_VoidPtr userdata);
 
 /* VisitXmlNodes does a recursive exploration from the root node */
@@ -436,6 +450,13 @@ NLM_EXTERN Nlm_Int4 VisitXmlAttributes (
   VisitXmlNodeFunc callback,
   Nlm_CharPtr attrTagFilter,
   Nlm_CharPtr attrValFilter
+);
+
+/* XmlPathSuffixIs allows /parent/node path check to be done in the callback */
+
+NLM_EXTERN Nlm_Boolean XmlPathSuffixIs (
+  Nlm_XmlObjPtr xop,
+  Nlm_CharPtr suffix
 );
 
 /*

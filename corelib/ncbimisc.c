@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.54 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -593,16 +593,23 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStr (ValNodePtr PNTR head, Nlm_Int2 cho
 	return newnode;
 }
 
-NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStrEx (ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str)
+NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStrExEx (ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str, const char* pfx, const char* sfx)
 
 {
-	ValNodePtr newnode = NULL;
-    ValNodePtr vnp;
+    size_t       len, pfx_len, sfx_len, str_len;
+	ValNodePtr   newnode = NULL, vnp;
+    Nlm_CharPtr  ptr, tmp;
 
 	if (str == NULL) return NULL;
 
     newnode = ValNodeNew (NULL);
     if (newnode == NULL) return NULL;
+
+    str_len = StringLen (str);
+    pfx_len = StringLen (pfx);
+    sfx_len = StringLen (sfx);
+
+    len = str_len + pfx_len + sfx_len;
 
     if (head != NULL) {
         if (*head == NULL) {
@@ -621,12 +628,32 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStrEx (ValNodePtr PNTR head, ValNodePtr
         *tail = newnode;
     }
 
+    ptr = Nlm_MemNew (sizeof (Nlm_Char) * (len + 2));
+    if (ptr == NULL) return NULL;
+
+    tmp = ptr;
+    if (pfx_len > 0) {
+      tmp = Nlm_StringMove (tmp, pfx);
+    }
+    if (str_len > 0) {
+      tmp = Nlm_StringMove (tmp, str);
+    }
+    if (sfx_len > 0) {
+      tmp = Nlm_StringMove (tmp, sfx);
+    }
+
 	if (newnode != NULL) {
 		newnode->choice = (Nlm_Uint1)choice;
-		newnode->data.ptrvalue = StringSave(str);
+		newnode->data.ptrvalue = ptr;
 	}
 
 	return newnode;
+}
+
+NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStrEx (ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str)
+
+{
+  return ValNodeCopyStrExEx (head, tail, choice, str, NULL, NULL);
 }
 
 /*****************************************************************************
@@ -1217,6 +1244,39 @@ NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsEx (ValNodePtr list, Nlm_CharPtr 
 
 {
   return ValNodeMergeStrsExEx (list, separator, NULL, NULL);
+}
+
+NLM_EXTERN Nlm_CharPtr LIBCALL MergeStringArray (Nlm_CharPtr PNTR local, size_t numitems)
+
+{
+  size_t       len = 0;
+  Nlm_Int2     i;
+  Nlm_CharPtr  rsult;
+  Nlm_CharPtr  str;
+  Nlm_CharPtr  tmp;
+
+  if (local == NULL || numitems < 1) return NULL;
+
+  for (i = 0; /* local [i] != NULL */ i < numitems; i++) {
+    str = local [i];
+    if (StringHasNoText (str)) continue;
+    len += StringLen (str) + 2;
+  }
+
+  if (len < 1) return NULL;
+
+  rsult = (Nlm_CharPtr) MemNew (len + 3);
+  if (rsult == NULL) return;
+  tmp = rsult;
+
+  for (i = 0; /* local [i] != NULL */ i < numitems; i++) {
+    str = local [i];
+    if (StringHasNoText (str)) continue;
+    tmp = StringMove (tmp, str);
+    tmp = StringMove (tmp, "\n");
+  }
+
+  return rsult;
 }
 
 /*****************************************************************************
@@ -2383,7 +2443,7 @@ static Nlm_XmlTable xmlcodes [] = {
   { NULL,     0, '\0'}
 };
 
-static Nlm_CharPtr DecodeXml (
+NLM_EXTERN Nlm_CharPtr DecodeXml (
   Nlm_CharPtr str
 )
 
@@ -2428,7 +2488,7 @@ static Nlm_CharPtr DecodeXml (
   return str;
 }
 
-static Nlm_CharPtr EncodeXml (
+NLM_EXTERN Nlm_CharPtr EncodeXml (
   Nlm_CharPtr str
 )
 
@@ -2723,6 +2783,7 @@ static Nlm_XmlObjPtr ProcessAttribute (
 
 static Nlm_XmlObjPtr ProcessStartTag (
   ValNodePtr PNTR curr,
+  Nlm_XmlObjPtr parent,
   Nlm_CharPtr name
 )
 
@@ -2738,6 +2799,7 @@ static Nlm_XmlObjPtr ProcessStartTag (
   if (xop == NULL) return NULL;
 
   xop->name = StringSave (name);
+  xop->parent = parent;
 
   while (*curr != NULL) {
 
@@ -2755,7 +2817,7 @@ static Nlm_XmlObjPtr ProcessStartTag (
     } else if (choice == XML_START_TAG) {
 
       /* recursive call to process next level */
-      child = ProcessStartTag (curr, str);
+      child = ProcessStartTag (curr, xop, str);
       /* link into children list */
       if (child != NULL) {
         if (xop->children == NULL) {
@@ -2796,18 +2858,98 @@ static Nlm_XmlObjPtr ProcessStartTag (
   return xop;
 }
 
+static Nlm_XmlObjPtr SetSuccessors (
+  Nlm_XmlObjPtr xop,
+  Nlm_XmlObjPtr prev,
+  Nlm_Int2 level
+)
+
+{
+  Nlm_XmlObjPtr  tmp;
+
+  if (xop == NULL) return NULL;
+  xop->level = level;
+
+  if (prev != NULL) {
+    prev->successor = xop;
+  }
+
+  prev = xop;
+  for (tmp = xop->children; tmp != NULL; tmp = tmp->next) {
+    prev = SetSuccessors (tmp, prev, level + 1);
+  }
+
+  return prev;
+}
+
 static Nlm_XmlObjPtr ParseXmlTokens (
   ValNodePtr head
 )
 
 {
-  ValNodePtr  curr;
+  ValNodePtr     curr;
+  Nlm_XmlObjPtr  xop;
 
   if (head == NULL) return NULL;
 
   curr = head;
 
-  return ProcessStartTag (&curr, "root");
+  xop = ProcessStartTag (&curr, NULL, "root");
+  if (xop == NULL) return NULL;
+
+  SetSuccessors (xop, NULL, 1);
+
+  return xop;
+}
+
+NLM_EXTERN Nlm_Boolean XmlPathSuffixIs (
+  Nlm_XmlObjPtr xop,
+  Nlm_CharPtr suffix
+)
+
+{
+  Nlm_Char       buf [512];
+  Nlm_CharPtr    nodeFilter = NULL;
+  Nlm_XmlObjPtr  parent = NULL;
+  Nlm_CharPtr    parentFilter = NULL;
+  Nlm_CharPtr    ptr;
+
+  if (xop == NULL) return FALSE;
+  parent = xop->parent;
+
+  if (StringHasNoText (suffix)) return TRUE;
+  if (StringLen (suffix) >= sizeof (buf) - 2) return FALSE;
+
+  StringCpy (buf, suffix);
+
+  ptr = StringRChr (buf, '/');
+  if (ptr != NULL) {
+    *ptr = '\0';
+    ptr++;
+    nodeFilter = ptr;
+    /* now look for parent substring */
+    if (StringDoesHaveText (buf)) {
+      ptr = StringRChr (buf, '/');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+        parentFilter = ptr;
+      } else {
+        parentFilter = buf;
+      }
+    }
+  } else {
+    nodeFilter = buf;
+  }
+
+  /* check node and parent names */
+  if (StringHasNoText (nodeFilter) || (StringICmp (xop->name, nodeFilter) == 0)) {
+    if (StringHasNoText (parentFilter) || parent != NULL && StringICmp (parent->name, parentFilter) == 0) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 static Nlm_Int4 VisitXmlNodeProc (
@@ -3119,6 +3261,37 @@ static void PrintXmlObject (
     fprintf (fp, "\n");
   }
 }
+
+/*
+static void AltPrintXmlObject (
+  Nlm_XmlObjPtr master,
+  FILE *fp
+)
+
+{
+  Nlm_XmlObjPtr  xop;
+  Nlm_CharPtr    tmp;
+
+  if (master == NULL || fp == NULL) return;
+
+  for (xop = master; xop != NULL; xop = xop->successor) {
+    if (StringHasNoText (xop->name)) continue;
+    fprintf (fp, "<%s", xop->name);
+    if (xop->contents != NULL) {
+      tmp = EncodeXml (xop->contents);
+      if (tmp != NULL) {
+        fprintf (fp, ">%s", tmp);
+      }
+      MemFree (tmp);
+      fprintf (fp, "</%s>", xop->name);
+    } else {
+      fprintf (fp, ">", xop->name);
+    }
+    fprintf (fp, "\n");
+  }
+}
+*/
+
 
 NLM_EXTERN void WriteXmlObject (
   Nlm_XmlObjPtr xop,

@@ -246,6 +246,12 @@ This sequence contains a high percentage of Ns.
 $^   BadSegmentedSeq, 70
 Segmented sequences should have gap or virtual in between real components.
 
+$^   SeqLitGapFuzzNot100, 71
+Gap of unknown length should have standard length of 100.
+
+$^   SeqGapProblem, 72
+Inconsistent data in Seq-gap fields.
+
 
 $$ SEQ_DESCR, 2
 
@@ -529,6 +535,32 @@ The lat_lon coordinate is probably in a minor or unnamed body of water.
 $^   MissingPersonalCollectionName, 81
 The personal collection does not indicate the name of the collector.
 
+$^   LatLonPrecision, 82
+The precision of lat_lon should be dd.dd N|S ddd.dd E|W.
+
+$^   DBLinkProblem, 83
+Only one DBLink user object with approved databases should apply to each Bioseq.
+
+$^   FinishedStatusForWGS, 84
+WGS projects should not have the Genome-Assembly-Data structured comment current
+finishing status set to Finished.
+
+$^   BadTentativeName, 85
+A structured comment descriptor or feature has a tentative name value that may
+require a taxonomy consult.
+
+$^   OrganismNotFound, 86
+The indicated organism is not in the taxonomy database.
+
+$^   TaxonomyIsSpeciesProblem, 87
+Taxonomy lookup of the indicated organism reports an is_species_level problem.
+
+$^   TaxonomyConsultRequired, 88
+A taxonomy consult is required for the indicated organism.
+
+$^   TaxonomyNucleomorphProblem, 89
+Taxonomy lookup indicates that the nucleomorph flag should be set for this organism.
+
 
 $$ GENERIC, 3
 
@@ -585,6 +617,9 @@ or ahead-of-print article : Content-Of-Pubdesc.comment-String.
 $^ PastReleaseDate, 15
 The record has is marked as hold-until-published, but the release
 anyway date has already passed.
+
+$^   MissingISOJTA, 16
+The publication journal is missing an ISO journal title abbreviation.
 
 $$ SEQ_PKG, 4
 
@@ -1373,6 +1408,33 @@ $^ TooManyInferenceAccessions, 180
 There are too many inference qualifier accessions to have their versions verified by
 network access.
 
+$^ IntervalBeginsOrEndsInGap, 181
+An internal interval of the feature starts or stops within a sequence gap.
+
+$^ InconsistentRRNAstrands, 182
+rRNA and ITS features are not on the same strand.
+
+$^ CDSonMinusStrandMRNA, 183
+Coding regions should be on the plus strand of mRNA molecules.
+
+$^ tRNAmRNAmixup, 184
+An mRNA feature has annotation indicating that it is really a tRNA.
+
+$^ ProductLength, 185
+The protein sequence that was supplied is not the same length as the
+translation of the coding region.
+
+$^ InconsistentPseudogeneCounts, 186
+There are pseudo features with and without pseudogene qualifiers.
+
+$^ DeletedEcNumber, 187
+The EC_number has been deleted.
+
+$^ ReplacedEcNumber, 188
+The EC_number has been replaced.
+
+$^ SplitEcNumber, 189
+The EC_number has been split.
 
 $$ SEQ_ALIGN, 6
 

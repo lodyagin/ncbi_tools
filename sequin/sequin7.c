@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.410 $
+* $Revision: 6.426 $
 *
 * File Description: 
 *
@@ -72,12 +72,14 @@ static char *time_of_compilation = "now";
 #include <explore.h>
 #include <seqpanel.h>
 #include <alignmgr2.h>
+#include <alignval.h>
 #include <actutils.h>
 #include <tax3api.h>
 #include <algo/blast/api/blast_options_api.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/blast_api.h>
 #include <salstruc.h>
+#include <sqnutils.h>
 #include <valid.h> /* added for latloncountry conflict checking */
 #define NLM_GENERATED_CODE_PROTO
 #include <objmacro.h>
@@ -180,7 +182,7 @@ NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx
 static FonT  titleFont = NULL;
 
 #ifndef WIN_MAC
-void CreateSqnInitialFormMenus (WindoW w)
+NLM_EXTERN MenU CreateSqnInitialFormMenus (WindoW w)
 
 {
   BaseFormPtr   bfp;
@@ -205,8 +207,11 @@ void CreateSqnInitialFormMenus (WindoW w)
     FormCommandItem (m, COPY_MENU_ITEM, bfp, VIB_MSG_COPY);
     FormCommandItem (m, PASTE_MENU_ITEM, bfp, VIB_MSG_PASTE);
     FormCommandItem (m, CLEAR_MENU_ITEM, bfp, VIB_MSG_DELETE);
+    return m;
   }
+  return NULL;
 }
+
 #endif
 
 static void DefaultMessageProc (ForM f, Int2 mssg)
@@ -552,7 +557,7 @@ static void FormatBlockPtrToFormatForm (ForM f, Pointer data)
       } else {
         SafeSetValue (ffp->package, fbp->seqPackage);
       }
-      if (fbp->seqPackage <= SEQ_PKG_GENOMICCDNA || fbp->seqPackage == SEQ_PKG_GENBANK) {
+      if (fbp->seqPackage <= SEQ_PKG_GENOMICCDNA || fbp->seqPackage == SEQ_PKG_GENBANK || fbp->seqPackage == SEQ_PKG_TSA) {
         SafeDisable (ffp->alignmentButton);
       } else {
         SafeEnable (ffp->alignmentButton);
@@ -621,7 +626,7 @@ static void EnableOrDisableFormats (GrouP g)
   if ((! allowGenomicPlusCDNA) && val >= SEQ_PKG_GENOMICCDNA) {
     val++;
   }
-  if (val <= SEQ_PKG_GENOMICCDNA || val == SEQ_PKG_GENBANK) {
+  if (val <= SEQ_PKG_GENOMICCDNA || val == SEQ_PKG_GENBANK || val == SEQ_PKG_TSA) {
     if (Enabled (ffp->alignmentButton)) {
       ffp->restoreFormatTo = GetValue (ffp->format);
     }
@@ -857,6 +862,7 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (ffp->package, "Mutation Study");
     RadioButton (ffp->package, "Environmental Samples");
     RadioButton (ffp->package, "Batch Submission");
+    RadioButton (ffp->package, "Transcriptome Shotgun Assembly");
     SetValue (ffp->package, SEQ_PKG_SINGLE);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) ffp->package, NULL);
 
@@ -909,6 +915,7 @@ extern SequinBlockPtr SequinBlockFree (SequinBlockPtr sbp)
     AffilFree (sbp->citsubaffil);
     MemFree (sbp->citsubtitle);
     DateFree (sbp->releasedate);
+    SeqDescrFree (sbp->descriptors);
   }
   return NULL;
 }
@@ -8059,67 +8066,6 @@ static void DoOneReverse (ValNodePtr vnp, Boolean rev_feats, FILE *fp)
   }
 }
 
-static void RemoveAlignmentsWithSequenceCallback (SeqAnnotPtr sap, Pointer userdata)
-{
-  SeqAlignPtr salp;
-  SeqIdPtr    sip;
-
-  if (sap == NULL || sap->type != 2 || userdata == NULL) return;
-  salp = (SeqAlignPtr) sap->data;
-  if (salp == NULL || salp->idx.deleteme) return;
-  sip = (SeqIdPtr) userdata;
-  while (sip != NULL && !sap->idx.deleteme) {
-    if (FindSeqIdinSeqAlign (salp, sip)) {
-  	  sap->idx.deleteme = TRUE;
-  	}
-  	sip = sip->next;
-  }
-}
-
-extern void RemoveAlignmentsWithSequence (BioseqPtr bsp, Uint2 input_entityID)
-{
-  SeqEntryPtr           topsep;
-
-  if (bsp == NULL) return;
-  topsep = GetTopSeqEntryForEntityID (input_entityID);
-
-  VisitAnnotsInSep (topsep, bsp->id, RemoveAlignmentsWithSequenceCallback);
-}
-
-extern void FlipEntireAlignmentIfAllSequencesFlipped (SeqAnnotPtr sap, Pointer userdata)
-{
-  SeqAlignPtr salp;
-  ValNodePtr  vnp;
-  BioseqPtr   bsp;
-  SeqIdPtr    sip;
-  Boolean     found;
-  Int4 row, num_rows;
-
-  if (sap == NULL || sap->type != 2 || userdata == NULL) return;
-  salp = (SeqAlignPtr) sap->data;
-  if (salp == NULL || salp->idx.deleteme) return;
-  
-  
-  AlnMgr2IndexSingleChildSeqAlign(salp);
-  num_rows = AlnMgr2GetNumRows(salp);
-  for (row = 1; row <= num_rows; row++) {
-    sip = AlnMgr2GetNthSeqIdPtr(salp, row);
-    found = FALSE;
-    vnp = (ValNodePtr)userdata;
-    while (vnp != NULL && !found) {
-      bsp = (BioseqPtr) vnp->data.ptrvalue;
-      if (SeqIdOrderInBioseqIdList (sip, bsp->id) > 0) {
-        found = TRUE;
-      }
-      vnp = vnp->next;
-    }
-    if (!found) return;
-  }
-  
-  FlipAlignment(salp);      
-}
-
-
 static Boolean CheckForAlignmentsBeforeCorrection (RNAStrandPtr strand_info)
 {
   ValNodePtr vnp, seq_in_aln = NULL, aln_bsp = NULL;
@@ -8929,7 +8875,6 @@ typedef struct findcontig {
 static void ViewContigPiece (SeqIdPtr sip)
 {
   SeqEntryPtr    sep = NULL;
-  Int4           uid;  
   BioseqPtr      bsp;
   SeqEntryPtr    oldscope;
   Uint2          entityID = 0;
@@ -8946,8 +8891,7 @@ static void ViewContigPiece (SeqIdPtr sip)
   bsp = BioseqFind (sip);
   SeqEntrySetScope (oldscope);
   if (bsp == NULL) {
-    uid = GetGIForSeqId (sip);
-    DownloadAndDisplay (uid);
+    DownloadAndDisplay (sip);
   } else {
     if (bsp->idx.entityID == 0) {
       sep = SeqMgrGetSeqEntryForData (bsp);
@@ -10457,15 +10401,48 @@ typedef struct vecscreentool {
   
 } VecScreenToolData, PNTR VecScreenToolPtr;
 
+static Boolean IsVector (SeqFeatPtr sfp)
+{
+  Boolean          isvector;
+  GBQualPtr        gbq;
+
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_misc_feature) {
+    return FALSE;
+  }
+  for (isvector = FALSE, gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringCmp (gbq->qual, "standard_name") == 0) {
+      if (StringCmp (gbq->val, "Vector Contamination") == 0) {
+        isvector = TRUE;
+      }
+    }
+  }
+  return isvector;
+}
+
+
+static void DeleteVectorCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  if (IsVector(sfp)) {
+    sfp->idx.deleteme = TRUE;
+  }
+}
+
+
 static void CleanupVecScreenTool (GraphiC g, VoidPtr data)
 
 {
   VecScreenToolPtr drfp;
+  SeqEntryPtr      sep;
 
   drfp = (VecScreenToolPtr) data;
   if (drfp != NULL) {
     drfp->item_list = FreeClickableList (drfp->item_list);
     ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+    sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
+    VisitFeaturesInSep (sep, NULL, DeleteVectorCallback);
+    DeleteMarkedObjects (drfp->input_entityID, 0, NULL);
+    ObjMgrSetDirtyFlag (drfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, drfp->input_entityID, 0, 0);
   }
   StdCleanupFormProc (g, data);
 }
@@ -10572,19 +10549,31 @@ static CharPtr GetMatchType (SeqFeatPtr sfp)
 }
 
 
-static SeqLocPtr GetFeatureListLoc (ValNodePtr feat_list, VecScreenToolPtr vstp)
+static SeqLocPtr GetFeatureListLoc (ValNodePtr feat_list, VecScreenToolPtr vstp, BioseqPtr bsp)
 {
   ValNodePtr vnp;
-  BioseqPtr  bsp = NULL;
   SeqFeatPtr sfp;
   Int4       loc_left = -1, loc_right = -1, tmp, start, stop;
-    
+   
+  if (feat_list == NULL) {
+    return NULL;
+  }
+  if (bsp == NULL) {
+    bsp = BioseqFindFromSeqLoc (((SeqFeatPtr)(feat_list->data.ptrvalue))->location);
+  }
+  if (bsp == NULL) {
+    return NULL;
+  }
   vnp = feat_list;
   while (vnp != NULL) {
     if (vnp->choice == OBJ_SEQFEAT && vnp->data.ptrvalue != NULL) {
       sfp = (SeqFeatPtr) vnp->data.ptrvalue;
       start = SeqLocStart (sfp->location);
       stop = SeqLocStop (sfp->location);
+      if (!SeqIdIn (SeqLocId(sfp->location), bsp->id)) {
+        /* quit - this is bad */
+        return NULL;
+      }
       if (start > stop) {
         tmp = stop;
         stop = start;
@@ -10593,24 +10582,14 @@ static SeqLocPtr GetFeatureListLoc (ValNodePtr feat_list, VecScreenToolPtr vstp)
       if (loc_left < 0) {
         loc_left = start;
         loc_right = stop;
-        bsp = BioseqFindFromSeqLoc (sfp->location);
       } else {
         loc_left = MIN (loc_left, start);
         loc_right = MAX (loc_right, stop);
-        if (BioseqFindFromSeqLoc (sfp->location) != bsp) {
-          /* quit - this is bad */
-          return NULL;
-        }
       }
     }
     vnp = vnp->next;
   }
   
-  if (bsp == NULL) {
-    /* quit - this is bad */
-    return NULL;
-  }
-
   if (vstp != NULL) {          
     if (loc_left != 0 && loc_right != bsp->length - 1) {
       /* internal - fix location */
@@ -10635,26 +10614,38 @@ static SeqLocPtr GetFeatureListLoc (ValNodePtr feat_list, VecScreenToolPtr vstp)
 }
 
 
-extern void CalculateVectorDescription (ClickableItemPtr cip)
+NLM_EXTERN void CalculateVectorDescriptionEx (ClickableItemPtr cip, BioseqPtr bsp)
 {
   ValNodePtr vnp;
   Int4       len, loc_left, loc_right;
   SeqLocPtr  slp;
-  BioseqPtr  bsp;
   CharPtr    internal_fmt = "Internal: %d from 5' end, %d from 3' end", cp;
   Char       str[256];
+  SeqIdPtr   use_this_id;
   
   if (cip == NULL || cip->item_list == NULL) {
     return;
   }
   
-  slp = GetFeatureListLoc (cip->item_list, NULL);
+  slp = GetFeatureListLoc (cip->item_list, NULL, bsp);
   if (slp == NULL) return;
   loc_left = SeqLocStart (slp);
   loc_right = SeqLocStop (slp);
-  bsp = BioseqFindFromSeqLoc (slp);
+  use_this_id = SeqLocId (slp);
+  if (bsp == NULL) {
+    bsp = BioseqFind (use_this_id);
+    if (bsp == NULL) {
+      /* bad news */
+      return;
+    }
+  } else if (!SeqIdIn (use_this_id, bsp->id)) {
+    /* bad news */
+    return;
+  } else {
+    use_this_id = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+  }
 
-  SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), str, PRINTID_REPORT, sizeof (str));
+  SeqIdWrite (use_this_id, str, PRINTID_REPORT, sizeof (str));
   len = StringLen (str) + 2;
 
   if (loc_left == 0) {
@@ -10695,10 +10686,15 @@ extern void CalculateVectorDescription (ClickableItemPtr cip)
   slp = SeqLocFree (slp);
 }
 
+
+extern void CalculateVectorDescription (ClickableItemPtr cip)
+{
+  CalculateVectorDescriptionEx (cip, NULL);
+}
+
+
 static void GetVectorContaminationList (BioseqPtr bsp, Pointer userdata)
 {
-  Boolean          isvector;
-  GBQualPtr        gbq;
   ClickableItemPtr cip = NULL;
   SeqFeatPtr       sfp;
   SeqMgrFeatContext fcontext;
@@ -10709,15 +10705,8 @@ static void GetVectorContaminationList (BioseqPtr bsp, Pointer userdata)
   
   for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_IMP, FEATDEF_misc_feature, &fcontext);
        sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_IMP, FEATDEF_misc_feature, &fcontext)) {         
-    for (isvector = FALSE, gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-      if (StringCmp (gbq->qual, "standard_name") == 0) {
-        if (StringCmp (gbq->val, "Vector Contamination") == 0) {
-          isvector = TRUE;
-        }
-      }
-    }
-    if (isvector) {
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_IMP, FEATDEF_misc_feature, &fcontext)) {
+    if (IsVector (sfp)) {
       if (cip != NULL && last_right >= fcontext.left - 1) {
         ValNodeAddPointer (&(cip->item_list), OBJ_SEQFEAT, sfp);
         last_right = fcontext.right;
@@ -10891,6 +10880,28 @@ static void VecScreenToolSelectStrongAndModerateBtn (ButtoN b)
 }
 
 
+static void DeleteASequence (BioseqPtr bsp)
+{
+  SeqFeatPtr sfp;
+  SeqMgrFeatContext context;
+  BioseqPtr  product;
+
+  if (bsp == NULL) {
+    return;
+  }
+  bsp->idx.deleteme = TRUE;
+
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context)) {
+    product = BioseqFindFromSeqLoc (sfp->product);
+    if (product != NULL) {
+      product->idx.deleteme = TRUE;
+    }
+  }
+}
+
+
 static void TrimFeatureList (ValNodePtr feat_list, VecScreenToolPtr vstp)
 {
   BioseqPtr  bsp = NULL;
@@ -10898,13 +10909,13 @@ static void TrimFeatureList (ValNodePtr feat_list, VecScreenToolPtr vstp)
   Int4       len, loc_left = -1, loc_right = -1;
   
   /* create location to trim */
-  delete_loc = GetFeatureListLoc (feat_list, vstp);
+  delete_loc = GetFeatureListLoc (feat_list, vstp, NULL);
   if (delete_loc == NULL) return;
   bsp = BioseqFindFromSeqLoc (delete_loc);
   loc_left = SeqLocStart (delete_loc);
   loc_right = SeqLocStop (delete_loc);
   if (loc_left == 0 && loc_right >= bsp->length - 1) {
-    bsp->idx.deleteme = TRUE;
+    DeleteASequence(bsp);
   } else {
     len = SeqLocLen (delete_loc);
         
@@ -10958,7 +10969,7 @@ static void CollectFeatureList (ValNodePtr feat_list, VecScreenToolPtr vstp, Val
   SeqLocPtr  delete_loc;
   
   /* create location to trim */
-  delete_loc = GetFeatureListLoc (feat_list, vstp);
+  delete_loc = GetFeatureListLoc (feat_list, vstp, NULL);
   if (delete_loc == NULL) return;
   ValNodeAddPointer (loc_list, 0, delete_loc);
 }
@@ -11255,15 +11266,12 @@ static ValNodePtr SortVecScreenListByStrength (ValNodePtr item_list)
 }
 
 
-static void RearrangeVecScreenList (GrouP g)
+static void RearrangeVecScreenForm (VecScreenToolPtr vstp)
 {
-  VecScreenToolPtr vstp;
   Int2 val;
 
-  vstp = (VecScreenToolPtr) GetObjectExtra (g);
   if (vstp == NULL) return;
-  
-  val = GetValue (g);
+  val = GetValue (vstp->sort_grp);
   switch (val) {
     case 1:
       vstp->item_list = SortVecScreenList (vstp->item_list);
@@ -11280,6 +11288,17 @@ static void RearrangeVecScreenList (GrouP g)
       break;
   }
   PointerToDialog (vstp->clickable_list, vstp->item_list);
+
+}
+
+
+static void RearrangeVecScreenList (GrouP g)
+{
+  VecScreenToolPtr vstp;
+
+  vstp = (VecScreenToolPtr) GetObjectExtra (g);
+  
+  RearrangeVecScreenForm (vstp);
 }
 
 
@@ -11293,7 +11312,7 @@ static void RefreshVecScreenList (VecScreenToolPtr vstp)
   VisitBioseqsInSep (vstp->top_sep, &(vstp->item_list), GetVectorContaminationList);
   VecScreenToolSelectAll (vstp->item_list);
   VecScreenToolUnselectInternal (vstp->item_list);
-  RearrangeVecScreenList(vstp->sort_grp);
+  RearrangeVecScreenForm(vstp);
 }
 
 
@@ -11320,7 +11339,7 @@ static ValNodePtr FindCompleteDeletions (ValNodePtr item_list, Boolean do_all, V
         else
         {
           /* find location to trim */
-          delete_loc = GetFeatureListLoc (cip->item_list, vstp);
+          delete_loc = GetFeatureListLoc (cip->item_list, vstp, NULL);
           if (delete_loc != NULL) {
             bsp = BioseqFindFromSeqLoc (delete_loc);
             if (bsp != NULL) {
@@ -11345,6 +11364,45 @@ static ValNodePtr FindCompleteDeletions (ValNodePtr item_list, Boolean do_all, V
 }
 
 
+static ValNodePtr GetTrimmedCodingRegionList (VecScreenToolPtr vstp)
+{
+  ValNodePtr loc_list = NULL, vnp;
+  SeqLocPtr  slp;
+  BioseqPtr  bsp;
+  SeqFeatPtr sfp;
+  SeqMgrFeatContext context;
+  Int2       comp;
+  ValNodePtr cds_list = NULL;
+  SeqEntryPtr orig_scope, sep;
+  
+  if (vstp == NULL) return NULL;
+  
+  CollectSelected (vstp->item_list, FALSE, vstp, &loc_list);
+  loc_list = ValNodeSort (loc_list, SortVectorLoc);
+  sep = GetTopSeqEntryForEntityID (vstp->input_entityID);
+  orig_scope = SeqEntrySetScope (sep);
+  for (vnp = loc_list; vnp != NULL; vnp = vnp->next) {
+    slp = (SeqLocPtr) vnp->data.ptrvalue;
+
+    bsp = BioseqFindFromSeqLoc (slp);
+    for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &context);
+         sfp != NULL;
+         sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context)) {
+      comp = SeqLocCompare (sfp->location, slp);
+      if (comp == SLC_B_IN_A || comp == SLC_A_OVERLAP_B) {
+        ValNodeAddPointer (&cds_list, OBJ_SEQFEAT, sfp);
+      }
+    }
+    vnp->data.ptrvalue = SeqLocFree (vnp->data.ptrvalue);
+  }
+  loc_list = ValNodeFree (loc_list);
+  cds_list = ValNodeSort (cds_list, SortVnpByChoiceAndPtrvalue);
+  ValNodeUnique (&cds_list, SortVnpByChoiceAndPtrvalue, ValNodeFree);
+  SeqEntrySetScope (orig_scope);
+  return cds_list;
+}
+
+
 static void TrimSelectedBtn (ButtoN b)
 {
   VecScreenToolPtr vstp;
@@ -11353,22 +11411,48 @@ static void TrimSelectedBtn (ButtoN b)
   MsgAnswer        ans = ANS_OK;
   LogInfoPtr       lip;
   CharPtr          str;
+  ValNodeBlock     id_block;
+  Int4             msg_len = 0;
+  CharPtr          submitter_msg_fmt = "The following %d sequences are 100%% matches to vector and will be deleted from your submission: ";
+  CharPtr          submitter_msg;
+  SeqEntryPtr      sep;
+  ValNodePtr       cds_list;
 
   vstp = (VecScreenToolPtr) GetObjectExtra (b);
   if (vstp == NULL) return;
 
   complete_deletion = FindCompleteDeletions (vstp->item_list, FALSE, vstp);
   if (complete_deletion != NULL) {
-    lip = OpenLog ("Sequences to be deleted");
-    for (vnp = complete_deletion; vnp != NULL; vnp = vnp->next) {
-      str = GetDiscrepancyItemText (vnp);
-      fprintf (lip->fp, "%s", str);
-      lip->data_in_log = TRUE;
-    }
-    CloseLog (lip);
-    lip = FreeLog (lip);
-    ans = Message (MSG_OKC, "%d sequences will be completely deleted - do you want to continue?",
+    if (indexerVersion) {
+      lip = OpenLog ("Sequences to be deleted");
+      for (vnp = complete_deletion; vnp != NULL; vnp = vnp->next) {
+        str = GetDiscrepancyItemText (vnp);
+        fprintf (lip->fp, "%s", str);
+        lip->data_in_log = TRUE;
+      }
+      CloseLog (lip);
+      lip = FreeLog (lip);
+      ans = Message (MSG_OKC, "%d sequences will be completely deleted - do you want to continue?",
                    ValNodeLen (complete_deletion));
+    } else {
+      InitValNodeBlock (&id_block, NULL);
+      msg_len = StringLen (submitter_msg_fmt) + 15;
+      for (vnp = complete_deletion; vnp != NULL; vnp = vnp->next) {
+        str = GetDiscrepancyItemText (vnp);
+        ValNodeAddPointerToEnd (&id_block, 0, str);
+        msg_len += StringLen (str) + 2;
+      }
+      submitter_msg = (CharPtr) MemNew (sizeof (Char) * msg_len);
+      sprintf (submitter_msg, submitter_msg_fmt, ValNodeLen (complete_deletion));
+      for (vnp = id_block.head; vnp != NULL; vnp = vnp->next) {
+        StringCat (submitter_msg, vnp->data.ptrvalue);
+        if (vnp->next != NULL) {
+          StringCat (submitter_msg, ", ");
+        }
+      }
+      ans = Message (MSG_OKC, submitter_msg);
+      id_block.head = ValNodeFreeData (id_block.head);
+    }
     complete_deletion = ValNodeFree (complete_deletion);
   }
   if (ans == ANS_CANCEL) {
@@ -11377,6 +11461,9 @@ static void TrimSelectedBtn (ButtoN b)
 
   WatchCursor();
   Update();
+
+  /* get list of coding regions to retranslate */
+  cds_list = GetTrimmedCodingRegionList (vstp);
 
   vstp->trimmed_bsps = NULL;
   vstp->trim_option = GetValue (vstp->trim_options_grp);
@@ -11388,6 +11475,9 @@ static void TrimSelectedBtn (ButtoN b)
 
   /* add cit-subs */
   if (GetStatus (vstp->add_citsub_btn)) {
+    /* sort and unique first, to make sure we only create one per Bioseq */
+    vstp->trimmed_bsps = ValNodeSort (vstp->trimmed_bsps, SortVnpByChoiceAndPtrvalue);
+    ValNodeUnique (&(vstp->trimmed_bsps), SortVnpByChoiceAndPtrvalue, ValNodeFree); 
     for (vnp = vstp->trimmed_bsps; vnp != NULL; vnp = vnp->next) {
       if (vnp->choice == OBJ_BIOSEQ) {
         AddCitSubToUpdatedSequence (vnp->data.ptrvalue, vstp->input_entityID, kIndexerUpdateVecScreenText);
@@ -11395,10 +11485,17 @@ static void TrimSelectedBtn (ButtoN b)
     }
   }
   vstp->trimmed_bsps = ValNodeFree (vstp->trimmed_bsps);
-  
+  /* now retranslate coding regions */
+  for (vnp = cds_list; vnp != NULL; vnp = vnp->next) {
+    RetranslateOneCDS (vnp->data.ptrvalue, vstp->input_entityID, TRUE, TRUE);
+  }
+  cds_list = ValNodeFree (cds_list);
+
   PointerToDialog (vstp->clickable_list, NULL);
   vstp->item_list = FreeClickableList (vstp->item_list);
   DeleteMarkedObjects (vstp->input_entityID, 0, NULL);
+  sep = GetTopSeqEntryForEntityID (vstp->input_entityID);
+  RenormalizeNucProtSets (sep, TRUE);
   ObjMgrSetDirtyFlag (vstp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, vstp->input_entityID, 0, 0);
 
@@ -11631,6 +11728,515 @@ extern void VecScreenTool (IteM i)
   RealizeWindow (w);
   
   Show (w);
+}
+
+
+static void VecScreenSearchBtn (ButtoN b)
+{
+  VecScreenToolPtr  frm;
+
+  frm = (VecScreenToolPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  VecScreenAll (frm->input_entityID);
+  RefreshVecScreenList(frm);
+}
+
+
+static CharPtr GetVecScreenText (ValNodePtr vnp)
+{
+  SeqFeatPtr        sfp;
+  CharPtr           location;
+  
+  if (vnp == NULL || vnp->choice != OBJ_SEQFEAT || (sfp = (SeqFeatPtr) vnp->data.ptrvalue) == NULL || sfp->location == NULL)
+  {
+    return StringSave ("ERROR");
+  }
+
+  location = SeqLocPrintUseBestID (sfp->location);
+  if (location == NULL) {
+    location = StringSave ("Unknown location");
+  }
+  return location;
+}
+
+
+NLM_EXTERN void ExternalVecScreenTool (IteM i)
+{
+  BaseFormPtr              bfp;
+  VecScreenToolPtr         drfp;
+  SeqEntryPtr              sep;
+  GrouP                    h;
+  GrouP                    c, c2;
+  ButtoN                   b, b1;
+  WindoW                   w;
+  OMUserDataPtr            omudp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+      
+  drfp = (VecScreenToolPtr) MemNew (sizeof (VecScreenToolData));
+  if (drfp == NULL)
+  {
+    return;
+  }
+  
+  drfp->bfp = bfp;
+  drfp->input_entityID = bfp->input_entityID;
+  drfp->top_sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
+  w = FixedWindow (-50, -33, -10, -10, "VecScreen Contamination", StdCloseWindowProc);
+  SetObjectExtra (w, drfp, CleanupVecScreenTool);
+  drfp->form = (ForM) w;
+  drfp->formmessage = VecScreenToolMessage;
+    
+  /* register to receive update messages */
+  drfp->userkey = OMGetNextUserKey ();
+  drfp->procid = 0;
+  drfp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) drfp;
+    omudp->messagefunc = VecScreenToolMsgFunc;
+  }
+
+
+#ifndef WIN_MAC
+  CreateStdValidatorFormMenus (w);
+#endif
+  
+  drfp->item_list = NULL;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  drfp->clickable_list = CreateClickableListDialogExExEx (h, "Sequences with Vector Matches", "Location of Match", NULL, NULL,
+                                                      ScrollToDiscrepancyItem, EditDiscrepancyItem, bfp,
+                                                      GetVecScreenText, 1, 
+                                                      stdCharWidth * 30,
+                                                      stdCharWidth * 30 + 5,
+                                                      TRUE, FALSE, FALSE);
+  
+  RefreshVecScreenList(drfp);
+  
+  b1 = PushButton (h, "Search Univec", VecScreenSearchBtn);
+  SetObjectExtra (b1, drfp, NULL);
+
+  c2 = NormalGroup (h, 4, 0, "Select Sequences with Vector Matches to Trim", programFont, NULL);
+  SetGroupSpacing (c2, 10, 10);
+  b = PushButton (c2, "Select All", VecScreenToolSelectAllBtn);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c2, "Select Only Strong and Moderate", VecScreenToolSelectStrongAndModerateBtn);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c2, "Unselect All", VecScreenToolUnselectAllBtn);
+  SetObjectExtra (b, drfp, NULL);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  
+  b = PushButton (c, "Make Report", MakeVecScreenReport);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Trim Selected Sequences", TrimSelectedBtn);
+  SetObjectExtra (b, drfp, NULL);
+  PushButton (c, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list,
+                              (HANDLE) b1,
+                              (HANDLE) c2,
+                              (HANDLE) c,
+                              NULL);
+
+  RealizeWindow (w);
+  
+  Show (w);
+}
+
+
+static void DeleteMarkedFeaturesInSeqAnnot (SeqAnnotPtr sap)
+{
+  SeqFeatPtr sfp, prev = NULL, sfp_next;
+
+  if (sap == NULL || sap->type != 1) {
+    return;
+  }
+
+  sfp = sap->data;
+  while (sfp != NULL) {
+    sfp_next = sfp->next;
+    if (sfp->idx.deleteme) {
+      if (prev == NULL) {
+        sap->data = sfp_next;
+      } else {
+        prev->next = sfp_next;
+      }
+      sfp->next = NULL;
+      sfp = SeqFeatFree (sfp);
+    } else {
+      prev = sfp;
+    }
+    sfp = sfp_next;
+  }
+}
+
+
+static void DeleteMarkedObjectsInSeqEntries (SeqEntryPtr PNTR p_sep)
+{
+  SeqEntryPtr  sep, prev = NULL, sep_next;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  Boolean      remove;
+
+  if (p_sep == NULL) {
+    return;
+  }
+
+  sep = *p_sep;
+  while (sep != NULL) {
+    sep_next = sep->next;
+    remove = FALSE;
+    /* do something */
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (bsp->idx.deleteme) {
+        remove = TRUE;
+      } else {
+        DeleteMarkedFeaturesInSeqAnnot (bsp->annot);
+        if (bsp->annot != NULL && bsp->annot->data == NULL) {
+          bsp->annot = SeqAnnotFree (bsp->annot);
+        }
+      }
+    } else if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      DeleteMarkedObjectsInSeqEntries (&(bssp->seq_set));
+      if (bssp->seq_set == NULL) {
+        remove = TRUE;
+      }
+    }
+    if (remove) {
+      if (prev == NULL) {
+        *p_sep = sep_next;
+      } else {
+        prev->next = sep_next;
+      }
+      sep->next = NULL;
+      sep = SeqEntryFree (sep);
+    } else {
+      prev = sep;
+    }
+    sep = sep_next;
+  }
+}
+
+
+static Boolean IsVecScreenAnnot (SeqAnnotPtr sap)
+{
+  if (sap == NULL) {
+    return FALSE;
+  }
+  if (sap->type == 1 && sap->desc != NULL && sap->desc->choice == Annot_descr_name
+      && StringICmp (sap->desc->data.ptrvalue, "VecScreen") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static void WizardGetVectorContaminationListForOneBioseq (BioseqPtr bsp, ValNodePtr PNTR feat_list)
+{
+  ClickableItemPtr cip = NULL;
+  SeqFeatPtr       sfp;
+  Int4             last_right, new_left, new_right, tmp;
+  SeqAnnotPtr      sap;
+  
+  if (bsp == NULL || feat_list == NULL) return;
+
+  for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+    if (IsVecScreenAnnot(sap)) {
+      sfp = sap->data;
+      while (sfp != NULL) {
+        new_left = SeqLocStart (sfp->location);
+        new_right = SeqLocStop (sfp->location);
+        if (new_left > new_right) {
+          tmp = new_left;
+          new_left = new_right;
+          new_right = tmp;
+        }
+        if (cip != NULL && last_right >= new_left - 1) {
+          ValNodeAddPointer (&(cip->item_list), OBJ_SEQFEAT, sfp);
+          last_right = new_right;
+        } else {        
+          /* calculate description for previous list */
+          CalculateVectorDescriptionEx (cip, bsp);
+          cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+          if (cip != NULL) {
+            cip->clickable_item_type = 0;
+            cip->callback_func = NULL;
+            cip->datafree_func = NULL;
+            cip->callback_data = NULL;
+            cip->item_list = NULL;
+            cip->subcategories = NULL;
+            cip->expanded = FALSE;
+            cip->level = 0;
+            cip->description = NULL;
+    
+            ValNodeAddPointer (&(cip->item_list), OBJ_SEQFEAT, sfp);
+
+            ValNodeAddPointer (feat_list, 0, cip);
+            last_right = new_right;
+          }
+        }
+        sfp = sfp->next;
+      }
+    }
+  }
+  /* calculate description for last item */
+  CalculateVectorDescriptionEx (cip, bsp);
+}
+
+
+static ValNodePtr WizardGetVectorCominationList (SeqEntryPtr sep)
+{
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+  ValNodePtr   item_list = NULL;
+
+  while (sep != NULL) {
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      WizardGetVectorContaminationListForOneBioseq(bsp, &item_list);
+    } else if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      ValNodeLink (&item_list, WizardGetVectorCominationList(bssp->seq_set));
+    }
+    sep = sep->next;
+  }
+  return item_list;
+}
+
+
+static void RefreshWizardVecScreenList (VecScreenToolPtr vstp)
+{
+  if (vstp == NULL) return;
+  
+  PointerToDialog (vstp->clickable_list, NULL);
+  vstp->item_list = FreeClickableList (vstp->item_list);
+
+  vstp->item_list = WizardGetVectorCominationList(vstp->top_sep);
+  VecScreenToolSelectAll (vstp->item_list);
+  VecScreenToolUnselectInternal (vstp->item_list);
+  RearrangeVecScreenForm(vstp);
+}
+
+
+static void WizardRemoveVecScreenAnnots (SeqEntryPtr sep)
+{
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+  SeqAnnotPtr sap, prev = NULL, sap_next;
+
+  while (sep != NULL) {
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      for (sap = bsp->annot; sap != NULL; sap = sap_next) {
+        sap_next = sap->next;
+        if (IsVecScreenAnnot(sap)) {
+          if (prev == NULL) {
+            bsp->annot = sap_next;
+          } else {
+            prev->next = sap_next;
+          }
+          sap->next = NULL;
+          sap = SeqAnnotFree (sap);
+        }
+      }
+    } else if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      WizardRemoveVecScreenAnnots(bssp->seq_set);
+    }
+    sep = sep->next;
+  }
+}
+
+
+static void WizardVectorTrimSelected (VecScreenToolPtr vstp)
+{
+  ValNodePtr       vnp;
+  ValNodePtr       complete_deletion = NULL;
+  MsgAnswer        ans = ANS_OK;
+  LogInfoPtr       lip;
+  CharPtr          str;
+  ValNodeBlock     id_block;
+  Int4             msg_len = 0;
+  CharPtr          submitter_msg_fmt = "The following %d sequences are 100%% matches to vector and will be deleted from your submission: ";
+  CharPtr          submitter_msg;
+
+  if (vstp == NULL) return;
+
+  complete_deletion = FindCompleteDeletions (vstp->item_list, FALSE, vstp);
+  if (complete_deletion != NULL) {
+    if (indexerVersion) {
+      lip = OpenLog ("Sequences to be deleted");
+      for (vnp = complete_deletion; vnp != NULL; vnp = vnp->next) {
+        str = GetDiscrepancyItemText (vnp);
+        fprintf (lip->fp, "%s", str);
+        lip->data_in_log = TRUE;
+      }
+      CloseLog (lip);
+      lip = FreeLog (lip);
+      ans = Message (MSG_OKC, "%d sequences will be completely deleted - do you want to continue?",
+                   ValNodeLen (complete_deletion));
+    } else {
+      InitValNodeBlock (&id_block, NULL);
+      msg_len = StringLen (submitter_msg_fmt) + 15;
+      for (vnp = complete_deletion; vnp != NULL; vnp = vnp->next) {
+        str = GetDiscrepancyItemText (vnp);
+        ValNodeAddPointerToEnd (&id_block, 0, str);
+        msg_len += StringLen (str) + 2;
+      }
+      submitter_msg = (CharPtr) MemNew (sizeof (Char) * msg_len);
+      sprintf (submitter_msg, submitter_msg_fmt, ValNodeLen (complete_deletion));
+      for (vnp = id_block.head; vnp != NULL; vnp = vnp->next) {
+        StringCat (submitter_msg, vnp->data.ptrvalue);
+        if (vnp->next != NULL) {
+          StringCat (submitter_msg, ", ");
+        }
+      }
+      ans = Message (MSG_OKC, submitter_msg);
+      id_block.head = ValNodeFreeData (id_block.head);
+    }
+    complete_deletion = ValNodeFree (complete_deletion);
+  }
+  if (ans == ANS_CANCEL) {
+    return;
+  }
+
+  WatchCursor();
+  Update();
+
+  vstp->trimmed_bsps = NULL;
+  vstp->trim_option = GetValue (vstp->trim_options_grp);
+  vstp->lip = OpenLog ("Trimmed Locations");
+  LogSelected (vstp);
+  TrimSelected (vstp->item_list, FALSE, vstp);
+  CloseLog (vstp->lip);
+  vstp->lip = FreeLog (vstp->lip);
+
+  vstp->trimmed_bsps = ValNodeFree (vstp->trimmed_bsps);
+
+  PointerToDialog (vstp->clickable_list, NULL);
+  vstp->item_list = FreeClickableList (vstp->item_list);
+  DeleteMarkedObjectsInSeqEntries (&(vstp->top_sep));
+
+  RefreshWizardVecScreenList(vstp);
+  RedrawVecScreenTool (vstp);  
+}
+
+
+NLM_EXTERN void WizardVectorTool (SeqEntryPtr PNTR psep)
+{
+  SeqEntryPtr           sep;
+  VecScreenToolPtr      drfp;
+  GrouP                 h;
+  GrouP                 c, c2;
+  ButtoN                b;
+  WindoW                w;
+  ModalAcceptCancelData acd;
+  SeqEntryPtr           orig_scope;
+
+  if (psep == NULL || (sep = *psep) == NULL) return;
+ 
+  if (!VecScreenWizard (sep)) {
+    Message (MSG_ERROR, "No vector contamination found!");
+    return;
+  }
+
+  drfp = (VecScreenToolPtr) MemNew (sizeof (VecScreenToolData));
+  if (drfp == NULL)
+  {
+    return;
+  }
+  orig_scope = SeqEntrySetScope (NULL);
+  
+  drfp->top_sep = sep;
+  w = MovableModalWindow (-20, -13, -10, -10, "VecScreen Contamination", NULL);
+  SetObjectExtra (w, drfp, CleanupVecScreenTool);
+  drfp->form = (ForM) w;
+  
+  drfp->item_list = NULL;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  drfp->clickable_list = CreateClickableListDialogExExEx (h, "Sequences with Vector Matches", "Location of Match", NULL, NULL,
+                                                      NULL, NULL, NULL,
+                                                      GetVecScreenText, 1, 
+                                                      stdCharWidth * 30,
+                                                      stdCharWidth * 30 + 5,
+                                                      TRUE, FALSE, FALSE);
+  
+  RefreshWizardVecScreenList(drfp);
+
+  c2 = NormalGroup (h, 4, 0, "Select Sequences with Vector Matches to Trim", programFont, NULL);
+  SetGroupSpacing (c2, 10, 10);
+  b = PushButton (c2, "Select All", VecScreenToolSelectAllBtn);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c2, "Select Only Strong and Moderate", VecScreenToolSelectStrongAndModerateBtn);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c2, "Unselect All", VecScreenToolUnselectAllBtn);
+  SetObjectExtra (b, drfp, NULL);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  
+  b = PushButton (c, "Make Report", MakeVecScreenReport);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Trim Selected Sequences", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Dismiss", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list,
+                              (HANDLE) c2,
+                              (HANDLE) c,
+                              NULL);
+
+  RealizeWindow (w);
+  
+  Show (w);
+
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  acd.third_option = FALSE;
+  while (!acd.cancelled) {
+    while (!acd.accepted && ! acd.cancelled)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+  
+    if (acd.accepted)
+    {
+      WizardVectorTrimSelected (drfp);
+      acd.accepted = FALSE;
+      if (drfp->item_list == NULL) 
+      {
+        acd.cancelled = TRUE;
+      }
+    }
+  }
+  *psep = drfp->top_sep;
+  WizardRemoveVecScreenAnnots (*psep);
+  StdCancelButtonProc (b);
+  SeqEntrySetScope (orig_scope);
 }
 
 
@@ -12465,6 +13071,48 @@ static void BarcodeTestMissingPrimerAndCountryReport (ButtoN b)
 
   if (!lip->data_in_log) {
     Message (MSG_OK, "No sequences are missing primers or country");
+  }
+  CloseLog (lip);
+  lip = FreeLog (lip);
+  object_list = BarcodeTestResultsListFree (object_list);
+}
+
+
+static void BarcodeTestStructuredVoucherReport (ButtoN b)
+{
+  BarcodeToolPtr vstp;
+  ValNodePtr     object_list, vnp;
+  BarcodeTestResultsPtr res;
+  CharPtr               barcode_id, genbank_id, what;
+  LogInfoPtr     lip;
+
+  vstp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (vstp == NULL) return;
+
+  object_list = GetBarcodePassFail (vstp->top_sep, vstp->cfg);
+  lip = OpenLog ("BARCODE Compliance");
+  for (vnp = object_list; vnp != NULL; vnp = vnp->next)
+  {
+    res = (BarcodeTestResultsPtr) vnp->data.ptrvalue;
+    barcode_id = BarcodeTestBarcodeIdString (res->bsp);
+    genbank_id = BarcodeTestGenbankIdString (res->bsp);
+    if (res->failed_tests[eBarcodeTest_StructuredSpecimenVoucher]) {
+      what = "structured voucher";
+    } else {
+      what = NULL;
+    }
+
+    if (what != NULL) {
+      fprintf (lip->fp, "%s\t%s\t Missing %s\n", barcode_id, genbank_id, what);
+      lip->data_in_log = TRUE;
+    }
+
+    barcode_id = MemFree (barcode_id);
+    genbank_id = MemFree (genbank_id);
+  }
+
+  if (!lip->data_in_log) {
+    Message (MSG_OK, "No sequences have unstructured vouchers");
   }
   CloseLog (lip);
   lip = FreeLog (lip);
@@ -13356,7 +14004,7 @@ extern void BarcodeTestTool (IteM i)
   drfp->pass_fail_summary = StaticPrompt (h, "0 Pass, 0 Fail", 20 * stdCharWidth, dialogTextHeight, programFont, 'l');
   RefreshBarcodeList(drfp);
 
-  c4 = HiddenGroup (h, 6, 0, NULL);
+  c4 = HiddenGroup (h, 7, 0, NULL);
   SetGroupSpacing (c4, 10, 10);
 
   b = PushButton (c4, "Compliance Report", BarcodeTestIbolComplianceReport);
@@ -13370,6 +14018,8 @@ extern void BarcodeTestTool (IteM i)
   b = PushButton (c4, "Barcode Strip Report", MakeBarcodeStripReport);
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c4, "Missing Country and Primers Report", BarcodeTestMissingPrimerAndCountryReport);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c4, "Structured Voucher Report", BarcodeTestStructuredVoucherReport);
   SetObjectExtra (b, drfp, NULL);
 
   c5 = HiddenGroup (h, 5, 0, NULL);
@@ -15669,9 +16319,8 @@ static void CleanupTaxFixTool (GraphiC g, VoidPtr data)
 }
 
 
-extern void TaxFixTool (IteM i)
+extern void TaxFixToolBaseForm (BaseFormPtr bfp)
 {
-  BaseFormPtr       bfp;
   SeqEntryPtr       sep;
   ValNodePtr        biosources = NULL;
   BarcodeToolPtr    drfp;
@@ -15680,11 +16329,6 @@ extern void TaxFixTool (IteM i)
   ButtoN            b;
   OMUserDataPtr            omudp;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL || bfp->input_entityID == 0) return;
 
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
@@ -15767,6 +16411,20 @@ extern void TaxFixTool (IteM i)
   
   Show (w);
 
+}
+
+
+extern void TaxFixTool (IteM i)
+{
+  BaseFormPtr       bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  TaxFixToolBaseForm (bfp);
 }
 
 
@@ -16707,3 +17365,266 @@ NLM_EXTERN void ApplyArticles (IteM i)
   Update ();   
 }
 
+
+static SBlastOptions*
+BarcodeBlastOptionNew(void)
+
+{
+	SBlastOptions* options;
+	Int2           rval;
+	Blast_SummaryReturn *extra_returns;
+
+
+  extra_returns = Blast_SummaryReturnNew();
+  rval = SBlastOptionsNew("blastn", &options,
+                          extra_returns);
+
+	if (options == NULL)
+		return NULL;
+
+  /* This replaces:
+   * options->expect_value = 1; 
+   */
+  SBlastOptionsSetEvalue(options, 0.5);
+
+  /* This replaces:
+   * options->filter_string = StringSave("m L"); 
+   */
+  SBlastOptionsSetFilterString(options, "m L");
+  
+  /* This replaces the following:
+   * options->mb_template_length = 18;
+   * options->mb_disc_type = MB_WORD_CODING; 
+   * options->is_megablast_search = TRUE;
+   * options->discontinuous = TRUE;
+   */
+  SBlastOptionsSetDiscMbParams(options, 18, MB_WORD_CODING);
+
+  /* This replaces:
+   * options->wordsize = 11; \
+   */
+	SBlastOptionsSetWordSize (options, 11);
+	
+  /* This replaces:
+   * options->hitlist_size = 20; 
+   */
+  options->hit_options->hitlist_size = 20;
+  
+  /* This replaces the following:
+   * options->multiple_hits_only  = TRUE;
+   * options->window_size = 40; 
+   */
+  options->word_options->window_size = 40;
+  
+  /* This replaces the following:
+   * options->reward = 1;
+	 * options->penalty = -3;
+	 * options->gap_open = 5;
+	 * options->gap_extend = 2; 
+	 */
+  SBlastOptionsSetRewardPenaltyAndGapCosts(options, 2, -3, 5, 2, FALSE);
+	
+	extra_returns = Blast_SummaryReturnFree(extra_returns);
+	return options;
+}
+
+
+static Boolean DoesOneBioseqMatchBarcodeDatabase (BioseqPtr bsp, CharPtr database)
+{
+	SBlastOptions *blast_options;
+	Int2 retval=0;
+	SeqAlignPtr seqalign = NULL;
+	SeqLocPtr   slp;
+	SBlastSeqalignArray* seqalign_arr = NULL;
+	Blast_SummaryReturn *extra_returns;
+  Boolean found_match = FALSE;
+
+	if (bsp == NULL)
+		return FALSE;
+
+	blast_options = BarcodeBlastOptionNew();
+	if (blast_options == NULL)
+		return FALSE;
+	
+	slp = SeqLocWholeNew(bsp);
+	
+	extra_returns = Blast_SummaryReturnNew();
+
+  retval = Blast_DatabaseSearch(slp, NULL, database, NULL, blast_options, NULL, &seqalign_arr, NULL, extra_returns);
+	extra_returns = Blast_SummaryReturnFree(extra_returns);
+	blast_options = SBlastOptionsFree(blast_options);  
+	
+	if (retval == 0 && seqalign_arr != NULL && seqalign_arr->num_queries >0)
+	{
+	  /* for now, call any hit a match - later, find better criteria */
+    seqalign = seqalign_arr->array[0];
+    if (seqalign != NULL && SeqAlignLength (seqalign) >= 414) {
+      found_match = TRUE;
+    }
+	}
+	
+	seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
+	
+	return found_match;
+}
+
+
+static void MarkBioseqGenesInList (ValNodePtr list, CharPtr gene)
+{
+  ValNodePtr vnp;
+  BioseqPtr  bsp;
+  SeqFeatPtr sfp;
+  SeqMgrFeatContext context;
+  Boolean found;
+  GeneRefPtr grp;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    found = FALSE;
+    for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &context);
+         sfp != NULL && !found;
+         sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, 0, &context)) {
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp != NULL && StringCmp (grp->locus, gene) == 0) {
+        found = TRUE;
+      }
+    }
+    if (found) {
+      vnp->choice = 1;
+    }
+  }
+}
+
+
+static void SetListChoice (ValNodePtr list, Uint1 choice)
+{
+  ValNodePtr vnp;
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    vnp->choice = choice;
+  }
+}
+
+
+static void MarkBarcodeDataBaseBioseqMatchesInList (ValNodePtr list, CharPtr database)
+{
+  ValNodePtr vnp;
+  BioseqPtr  bsp;
+  Char       path [PATH_MAX];
+
+  path [0] = '\0';
+  GetAppParam ("NCBI", "NCBI", "DATA", "", path, sizeof (path));
+  FileBuildPath (path, NULL, database);
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (DoesOneBioseqMatchBarcodeDatabase (bsp, path)) {
+      vnp->choice = 1;
+    }
+  }
+
+}
+
+
+static void GetBioseqsForBarcodeScreenCallback (BioseqPtr bsp, Pointer userdata)
+{
+  if (bsp != NULL && !ISA_aa (bsp->mol) && userdata != NULL) {
+    ValNodeAddPointer ((ValNodePtr PNTR) userdata, 0, bsp);
+  }
+}
+
+
+NLM_EXTERN void ScreenBarcodePlant (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  ValNodePtr   list = NULL, rbcl, matk, matches, vnp;
+  FILE         *fp;
+  Char         path [PATH_MAX];
+  BioseqPtr    bsp;
+  Char         id[PATH_MAX];
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL || bfp->input_entityID == 0) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  WatchCursor ();
+  Update();
+  VisitBioseqsInSep (sep, &list, GetBioseqsForBarcodeScreenCallback);
+  if (list == NULL) {
+    Message (MSG_ERROR, "Found no nucleotide bioseqs!");
+    ArrowCursor();
+    Update();
+    return;
+  }
+  MarkBioseqGenesInList (list, "rbcL");
+  rbcl = ValNodeExtractList (&list, 1);
+  SetListChoice (rbcl, 0);
+  MarkBarcodeDataBaseBioseqMatchesInList (rbcl, "64-rbcL-FINAL-aligned-DNA.fas");
+  matches = ValNodeExtractList (&rbcl, 1);
+  matches = ValNodeFree (matches);
+
+  MarkBioseqGenesInList (list, "matK");
+  matk = ValNodeExtractList (&list, 1);
+  SetListChoice (matk, 0);
+  MarkBarcodeDataBaseBioseqMatchesInList (matk, "64-matK-FINAL-aligned-DNA.fas");
+  matches = ValNodeExtractList (&matk, 1);
+  matches = ValNodeFree (matches);
+
+  ArrowCursor();
+  Update();
+  if (list == NULL && rbcl == NULL && matk == NULL) {
+    Message (MSG_OK, "All sequences matched to BLAST database");
+  } else {
+    TmpNam (path);
+    fp = FileOpen (path, "w");
+    if (fp == NULL) {
+      Message (MSG_ERROR, "Unable to open temporary file %s for error report", path);
+    } else {
+      if (list != NULL) {
+        fprintf (fp, "Unable to detect gene for these sequences:\n");
+        for (vnp = list;
+             vnp != NULL; 
+             vnp = vnp->next)
+        {
+          bsp = (BioseqPtr) vnp->data.ptrvalue;
+          SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id, PRINTID_REPORT, sizeof (id) - 1);
+          fprintf (fp, "%s\n", id);
+        }
+      }
+      if (rbcl != NULL) {
+        fprintf (fp, "These sequences contain rbcL genes, but do not match to rbcL BLAST database:\n");
+        for (vnp = rbcl;
+             vnp != NULL; 
+             vnp = vnp->next)
+        {
+          bsp = (BioseqPtr) vnp->data.ptrvalue;
+          SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id, PRINTID_REPORT, sizeof (id) - 1);
+          fprintf (fp, "%s\n", id);
+        }
+      }
+      if (matk != NULL) {
+        fprintf (fp, "These sequences contain matK genes, but do not match to matK BLAST database:\n");
+        for (vnp = matk;
+             vnp != NULL; 
+             vnp = vnp->next)
+        {
+          bsp = (BioseqPtr) vnp->data.ptrvalue;
+          SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id, PRINTID_REPORT, sizeof (id) - 1);
+          fprintf (fp, "%s\n", id);
+        }
+      }
+      FileClose (fp);
+      LaunchGeneralTextViewer (path, "Unmatched Sequences");
+      FileRemove (path);  
+    }
+  }
+  list = ValNodeFree (list);
+  matk = ValNodeFree (matk);
+  rbcl = ValNodeFree (rbcl);
+
+}

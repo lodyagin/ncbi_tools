@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.31 $
+* $Revision: 1.34 $
 *
 * File Description: 
 *
@@ -58,6 +58,59 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+/* E-Utilities synchronous query functions - also to replace Entrez2 behind-the-scenes */
+
+NLM_EXTERN CharPtr DoEinfoQuery (
+  CharPtr database
+);
+
+NLM_EXTERN CharPtr DoEsearchQuery (
+  CharPtr database,
+  CharPtr query,
+  CharPtr suffix,
+  CharPtr webenv,
+  Int4 retstart,
+  Int4 retmax,
+  Boolean return_UIDs
+);
+
+NLM_EXTERN CharPtr DoElinkQuery (
+  CharPtr dbfrom,
+  CharPtr dbto,
+  CharPtr linkname,
+  CharPtr cmd,
+  CharPtr ids,
+  CharPtr querykey,
+  CharPtr webenv
+);
+
+NLM_EXTERN CharPtr DoEsummaryQuery (
+  CharPtr database,
+  CharPtr ids,
+  CharPtr querykey,
+  CharPtr webenv,
+  Int4 retstart,
+  Int4 retmax
+);
+
+/* Miscellaneous E-Utilities helper functions */
+
+/* helper function for URL_Encode, allocates returned string */
+NLM_EXTERN CharPtr UrlEncodeString (
+  CharPtr str
+);
+
+/* changes parentheses and some other punctuation characters to spaces */
+NLM_EXTERN void ConvertToTermListForm (
+  CharPtr str
+);
+
+/* string is compatible with ISSN format */
+NLM_EXTERN Boolean LooksLikeISSN (
+  CharPtr str
+);
 
 
 /* See network connection test functions at bottom of this header */
@@ -321,6 +374,14 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
   ValNodePtr PNTR head,
   Boolean checkMenuNameVariants,
   Boolean checkMenuNameFormat
+);
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head,
+  Boolean checkMenuNameVariants,
+  Boolean checkMenuNameFormat,
+  Boolean fullMenuVariantReport
 );
 
 /* sample synchronous query code:

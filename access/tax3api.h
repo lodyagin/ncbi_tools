@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.23 $
+* $Revision: 1.24 $
 *
 * File Description: 
 *
@@ -199,6 +199,7 @@ NLM_EXTERN ValNodePtr Taxon3GetTaxFixList (ValNodePtr biop_list);
 
 NLM_EXTERN OrgRefPtr GetCommonOrgRefForSeqEntry (SeqEntryPtr sep);
 
+NLM_EXTERN BioSourcePtr BioSourceFromBioSample (CharPtr number);
 
 #ifdef __cplusplus
 }

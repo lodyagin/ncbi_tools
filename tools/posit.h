@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.32 2008/03/31 13:36:10 madden Exp $
+/* $Id: posit.h,v 6.33 2011/10/25 14:33:16 boratyng Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,14 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.32 $
+$Revision: 6.33 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.33  2011/10/25 14:33:16  boratyng
+* Fix for printing gapless column weights relative to pseudocounts in ascii pssm output JIRA SB-589
+*
 * Revision 6.32  2008/03/31 13:36:10  madden
 * Implemented a new method to compute effective observations.
 * Implemented a new entropy-based method to compute column-specific pseudocounts.
@@ -288,6 +291,7 @@ typedef struct posSearchItems {
   BLAST_Score **posPrivateMatrix;
   Nlm_FloatHi **posFreqs;
   Nlm_FloatHi *posGaplessColumnWeights;
+  Nlm_FloatHi *pseudoWeights; /*pseudo count constant for each query position*/
   Int4 posNumSequences;
   Int4 posResultsCounter;
   Int4 *posResultSequences;

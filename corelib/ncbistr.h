@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -104,6 +104,9 @@ NLM_EXTERN size_t LIBCALL Nlm_StringCnt PROTO((const char FAR *str, const char F
 NLM_EXTERN char* LIBCALL Nlm_StringUpper PROTO((char *string));
 NLM_EXTERN char* LIBCALL Nlm_StringLower PROTO((char *string));
 
+NLM_EXTERN int LIBCALL Nlm_NaturalStringCmp PROTO((Nlm_CharPtr str1, Nlm_CharPtr str2));
+NLM_EXTERN int LIBCALL Nlm_NaturalStringICmp PROTO((Nlm_CharPtr str1, Nlm_CharPtr str2));
+
 NLM_EXTERN Nlm_Int2 LIBCALL Nlm_MeshStringICmp PROTO((const char FAR *str1, const char FAR *str2));
 
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSearch PROTO((const char FAR *str, const char FAR *sub));
@@ -136,6 +139,11 @@ NLM_EXTERN Nlm_Uint8 LIBCALL Nlm_StringToUint8(const char* str, const char** end
  */
 NLM_EXTERN char* LIBCALL Nlm_Int8ToString (Nlm_Int8  value, char* str, size_t str_size);
 NLM_EXTERN char* LIBCALL Nlm_Uint8ToString(Nlm_Uint8 value, char* str, size_t str_size);
+
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllDigits PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllUpperCase PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllLowerCase PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_Boolean Nlm_StringIsAllPunctuation PROTO((Nlm_CharPtr str));
 
 /*****************************************************************************
 *
@@ -345,6 +353,9 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 #define StringUpper Nlm_StringUpper
 #define StringLower Nlm_StringLower
 
+#define NaturalStringCmp Nlm_NaturalStringCmp
+#define NaturalStringICmp Nlm_NaturalStringICmp
+
 #define MeshStringICmp Nlm_MeshStringICmp
 
 #define StringSearch Nlm_StringSearch
@@ -362,6 +373,11 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 #define StringToUint8 Nlm_StringToUint8
 #define Int8ToString  Nlm_Int8ToString
 #define Uint8ToString Nlm_Uint8ToString
+
+#define StringIsAllDigits  Nlm_StringIsAllDigits
+#define StringIsAllUpperCase  Nlm_StringIsAllUpperCase
+#define StringIsAllLowerCase  Nlm_StringIsAllLowerCase
+#define StringIsAllPunctuation  Nlm_StringIsAllPunctuation
 
 /* Search with Boyer-Moore algorithm */
 

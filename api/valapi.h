@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/8/2009
 *
-* $Revision: 1.3 $
+* $Revision: 1.5 $
 *
 * File Description: 
 *
@@ -75,6 +75,8 @@ IsStructuredCommentValidForRule
 
 NLM_EXTERN EFieldValid IsStructuredCommentValid (UserObjectPtr uop, StructuredCommentCallback s_callback, Pointer s_callback_data);
 
+NLM_EXTERN Boolean ReorderStructuredCommentFields (UserObjectPtr uop);
+NLM_EXTERN CharPtr AutoapplyStructuredCommentPrefix (UserObjectPtr uop);
 
 
 #ifdef __cplusplus 

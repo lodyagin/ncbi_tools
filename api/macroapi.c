@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/2007
 *
-* $Revision: 1.405 $
+* $Revision: 1.498 $
 *
 * File Description: 
 *
@@ -62,6 +62,8 @@
 #include <parsegb.h>
 #include <salutil.h>
 #include <valid.h>
+#include <objvalid.h>
+#include <valapi.h>
 
 /* static void CollectNucBioseqCallback (BioseqPtr bsp, Pointer data); */
 static void AddCommentDescriptorDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest_list);
@@ -171,8 +173,6 @@ static Boolean IsAllPunctuation (CharPtr str)
 
 static Boolean DoesFeatureMatchRnaType (SeqFeatPtr sfp, RnaFeatTypePtr rt);
 static Int4 CompareRnaTypes (RnaFeatTypePtr rt1, RnaFeatTypePtr rt2);
-static int LIBCALLBACK SortVnpByChoiceAndIntvalue (VoidPtr ptr1, VoidPtr ptr2);
-static int LIBCALLBACK SortVnpByChoiceAndPtrvalue (VoidPtr ptr1, VoidPtr ptr2);
 
 /* NOTES */
 /* When adding a new field type, add implementation to the following functions:
@@ -711,6 +711,8 @@ static int CompareSourceQuals (VoidPtr ptr1, VoidPtr ptr2)
   return rval;
 }
 
+static int LIBCALLBACK SortVnpByChoiceAndIntvalue (VoidPtr ptr1, VoidPtr ptr2);
+
 
 static int CompareFieldTypesEx (FieldTypePtr vnp1, FieldTypePtr vnp2, Boolean use_source_qual_sort)
 {
@@ -1058,6 +1060,20 @@ static Boolean IsUserObjectDBLink (UserObjectPtr uop)
 {
   if (uop != NULL && uop->type != NULL && StringCmp (uop->type->str, "DBLink") == 0) {
     return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean IsEmptyDBLink (UserObjectPtr uop)
+{
+  if (uop != NULL && uop->type != NULL && StringCmp (uop->type->str, "DBLink") == 0) {
+    if (uop->data == NULL) {
+      return TRUE;
+    } else {
+      return FALSE;
+    }
   } else {
     return FALSE;
   }
@@ -1593,7 +1609,7 @@ static FeatQualGBQualData featqual_gbqual[] = {
  { Feat_qual_legal_plasmid , GBQUAL_plasmid , 0, "plasmid" } , 
  { Feat_qual_legal_product , GBQUAL_product , 0, "product" } , 
  { Feat_qual_legal_protein_id , GBQUAL_protein_id , 0, "protein-id" } , 
- { Feat_qual_legal_pseudo , GBQUAL_pseudo , 0, "pseudo" } , 
+ { Feat_qual_legal_pseudo , GBQUAL_pseudogene , 0, "pseudogene" } , 
  { Feat_qual_legal_rearranged , GBQUAL_rearranged , 0, "rearranged" } , 
  { Feat_qual_legal_replace , GBQUAL_replace , 0, "replace" } , 
  { Feat_qual_legal_rpt_family , GBQUAL_rpt_family , 0, "rpt-family" } , 
@@ -2265,6 +2281,7 @@ static StringAliasData src_qual_alias_list[] = {
   {"date", "collection-date"},
   {"voucher", "specimen-voucher"},
   {"specific-host", "host"},
+  {"note sub-source", "note-subsrc"},
   { NULL, NULL}
 };
 
@@ -2825,7 +2842,7 @@ static ValNodePtr SourceQualValsFromSynonyms (ValNodePtr syn)
 }
 
 
-static CharPtr GetDbtagString (DbtagPtr db_tag);
+NLM_EXTERN CharPtr GetDbtagString (DbtagPtr db_tag);
 
 static ValNodePtr SourceQualValsFromDbxrefs (ValNodePtr dbxref)
 {
@@ -3635,12 +3652,12 @@ NLM_EXTERN CharPtr TechNameFromTech (Int4 tech)
 }
 
 
-static Int4 TechFromTechName (CharPtr tech_name)
+NLM_EXTERN Int4 TechFromTechName (CharPtr tech_name)
 {
   Int4 i;
 
   for (i = 0; i < NUM_techniquetype_tech; i++) {
-    if (StringICmp (techniquetype_tech[i].name, tech_name) == 0) {
+    if (StringsAreEquivalent (techniquetype_tech[i].name, tech_name)) {
       return techniquetype_tech[i].tech;
     }
   }
@@ -4265,7 +4282,24 @@ NLM_EXTERN ValNodePtr GetSiteTypeList (void)
 
 
 /* Simple constraints */
-static Boolean IsWholeWordMatch (CharPtr start, CharPtr found, Int4 match_len)
+static Boolean DisallowCharacter (Char ch, Boolean disallow_slash)
+{
+  if (isalpha ((Int4) ch) || isdigit ((Int4) ch) || ch == '_') 
+  {
+    return TRUE; 
+  }
+  else if (disallow_slash && ch == '/')
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+
+static Boolean IsWholeWordMatchEx (CharPtr start, CharPtr found, Int4 match_len, Boolean disallow_slash)
 {
   Boolean rval = TRUE;
   Char    char_after;
@@ -4281,21 +4315,27 @@ static Boolean IsWholeWordMatch (CharPtr start, CharPtr found, Int4 match_len)
   }
   else
   {
-	  char_after = *(found + match_len);
+    char_after = *(found + match_len);
     if (found != start)
-	  {
-	    char_before = *(found - 1);
-	    if (isalpha ((Int4) char_before) || isdigit ((Int4) char_before) || char_before == '_')
-	    {
-	      rval = FALSE;
-	    }
-	  }
-	  if (char_after != 0 && (isalpha ((Int4) char_after) || isdigit ((Int4)char_after) || char_after == '_'))
-	  {
-	    rval = FALSE;
-	  }   
+    {
+      char_before = *(found - 1);
+      if (DisallowCharacter (char_before, disallow_slash))
+      {
+        rval = FALSE;
+      }
+    }
+    if (char_after != 0 && DisallowCharacter (char_after, disallow_slash))
+    {
+      rval = FALSE;
+    }   
   }
   return rval;
+}
+
+
+static Boolean IsWholeWordMatch (CharPtr start, CharPtr found, Int4 match_len)
+{
+  return IsWholeWordMatchEx (start, found, match_len, FALSE);
 }
 
 
@@ -4555,13 +4595,21 @@ static void TestAdvancedStringMatch (void)
 static const CharPtr kPutative = "putative";
 
 static CharPtr s_weasels[] = {
-  "hypothetical", 
+  "candidate",
+  "hypothetical",
+  "novel",
+  "possible",
+  "potential",
+  "predicted", 
   "probable", 
   "putative",
+  "candidate",  
+  "uncharacterized",  
+  "unique",
   NULL
 };
 
-static CharPtr SkipWeasel (CharPtr str)
+static CharPtr SkipOneWeasel (CharPtr str)
 {
   Int4 i, len;
   CharPtr cp = str;
@@ -4581,12 +4629,25 @@ static CharPtr SkipWeasel (CharPtr str)
 }
 
 
+static CharPtr SkipWeasel (CharPtr str)
+{
+  CharPtr cp = str;
+
+  cp = SkipOneWeasel (str);
+  while (cp != str) {
+    str = cp;
+    cp = SkipOneWeasel (str);
+  }
+  return cp;
+}
+
+
 NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstraintPtr scp)
 {
   CharPtr pFound;
   Boolean rval = FALSE;
   Char    char_after = 0;
-  CharPtr search, pattern;
+  CharPtr search, pattern, tmp_match;
   
   if (IsStringConstraintEmpty (scp)) return TRUE;
   if (StringHasNoText (str)) return FALSE;
@@ -4608,7 +4669,13 @@ NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstrain
     return TRUE;
   }
 
+  tmp_match = scp->match_text;
+  if (scp->ignore_weasel) {
+    scp->match_text = SkipWeasel (scp->match_text);
+  }
+
   if (scp->match_location != String_location_inlist && scp->ignore_words != NULL) {
+    scp->match_text = tmp_match;
     return AdvancedStringMatch(str, scp);
   }
 
@@ -4736,34 +4803,34 @@ NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstrain
       }
       break;
     case String_location_inlist:
-	    if (scp->case_sensitive)
-	    {
-	      pFound = StringSearch (pattern, search);
-	    }
-	    else
-	    {
-	      pFound = StringISearch (pattern, search);
-	    }
+      if (scp->case_sensitive)
+      {
+        pFound = StringSearch (pattern, search);
+      }
+      else
+      {
+        pFound = StringISearch (pattern, search);
+      }
       if (pFound == NULL) 
       {
         rval = FALSE;
       }
       else
       {
-        rval = IsWholeWordMatch (pattern, pFound, StringLen (search));
+        rval = IsWholeWordMatchEx (pattern, pFound, StringLen (search), TRUE);
         while (!rval && pFound != NULL) 
         {
-	        if (scp->case_sensitive)
-	        {
-	          pFound = StringSearch (pFound + 1, search);
-	        }
-	        else
-	        {
-	          pFound = StringISearch (pFound + 1, search);
-	        }
+          if (scp->case_sensitive)
+          {
+            pFound = StringSearch (pFound + 1, search);
+          }
+          else
+          {
+            pFound = StringISearch (pFound + 1, search);
+          }
           if (pFound != NULL)
           {
-            rval = IsWholeWordMatch (pattern, pFound, StringLen (str));
+            rval = IsWholeWordMatchEx (pattern, pFound, StringLen (str), TRUE);
           }
         }
       }
@@ -4772,7 +4839,7 @@ NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstrain
         rval = IsStringInSpanInList (search, pattern);
       }
       break;
-	}
+  }
 
   if (search != str) {
     search = MemFree (search);
@@ -4780,6 +4847,7 @@ NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstrain
   if (pattern != scp->match_text) {
     pattern = MemFree (pattern);
   }
+  scp->match_text = tmp_match;
 	return rval;
 }
 
@@ -5771,9 +5839,16 @@ NLM_EXTERN CharPtr GetTextPortionFromString (CharPtr str, TextPortionPtr text_po
     return NULL;
   }
   
-  if (!text_portion->include_left && !IsTextMarkerEmpty(text_portion->left_marker))
+  if (!IsTextMarkerEmpty(text_portion->left_marker)) 
   {
-    found_start += left_len;
+    if (text_portion->inside && !text_portion->include_left)
+    {
+      found_start += left_len;
+    } 
+    else if (!text_portion->inside && text_portion->include_left) 
+    {
+      found_start += left_len;
+    }
   }
 
   found_end = FindTextMarker (found_start, &right_len, text_portion->right_marker, text_portion->case_sensitive, text_portion->whole_word);
@@ -5781,7 +5856,11 @@ NLM_EXTERN CharPtr GetTextPortionFromString (CharPtr str, TextPortionPtr text_po
     return NULL;
   }
 
-  if (text_portion->include_right || IsTextMarkerEmpty(text_portion->right_marker)) {
+  
+  if ((text_portion->inside && text_portion->include_right) 
+      || (!text_portion->inside && !text_portion->include_right) 
+      || IsTextMarkerEmpty(text_portion->right_marker)) 
+  {
     found_end += right_len;
   }
 
@@ -5911,6 +5990,15 @@ NLM_EXTERN Boolean SetStringValue (CharPtr PNTR existing_val, CharPtr new_val, U
     *existing_val = StringSave (new_val);
     rval = TRUE;
   } else {
+    if (existing_text != ExistingTextOption_replace_old
+        && (new_val == NULL || *new_val == 0)) {
+      return FALSE;
+    }
+    if (existing_text == ExistingTextOption_replace_old
+        && StringCmp (*existing_val, new_val) == 0) {
+      return FALSE;
+    }
+
     switch (existing_text) {
       case ExistingTextOption_replace_old :
         *existing_val = MemFree (*existing_val);
@@ -6349,7 +6437,7 @@ SetStringsInValNodeStringList
 }
 
 
-static Boolean SetStringInGBQualList (GBQualPtr PNTR list, ValNodePtr field, StringConstraintPtr scp, CharPtr new_val, Uint2 existing_text)
+NLM_EXTERN Boolean SetStringInGBQualList (GBQualPtr PNTR list, ValNodePtr field, StringConstraintPtr scp, CharPtr new_val, Uint2 existing_text)
 {
   Boolean rval = FALSE, does_match, any_found = FALSE;
   Int4 gbqual, subfield;
@@ -6634,7 +6722,7 @@ static Int4 GetDbtagStringLen (DbtagPtr db_tag)
 }
 
 
-static CharPtr GetDbtagString (DbtagPtr db_tag)
+NLM_EXTERN CharPtr GetDbtagString (DbtagPtr db_tag)
 {
   Int4    len;
   CharPtr str;
@@ -6664,7 +6752,7 @@ static CharPtr GetDbtagString (DbtagPtr db_tag)
 }
 
 
-static Boolean SetDbtagString (DbtagPtr db_tag, CharPtr value, Uint2 existing_text)
+NLM_EXTERN Boolean SetDbtagString (DbtagPtr db_tag, CharPtr value, Uint2 existing_text)
 {
   Boolean rval = FALSE;
   CharPtr cp;
@@ -6793,7 +6881,7 @@ NLM_EXTERN Boolean RemoveValNodeStringMatch (ValNodePtr PNTR list, StringConstra
 }
 
 
-static CharPtr GetFirstGBQualMatch (GBQualPtr qual, CharPtr qual_name, Int4 subfield, StringConstraintPtr scp)
+NLM_EXTERN CharPtr GetFirstGBQualMatch (GBQualPtr qual, CharPtr qual_name, Int4 subfield, StringConstraintPtr scp)
 {
   CharPtr str = NULL;
   while (qual != NULL && str == NULL) {
@@ -6824,7 +6912,7 @@ static CharPtr GetFirstGBQualMatchConstraintName (GBQualPtr qual, StringConstrai
 }
 
 
-static Boolean RemoveGBQualMatch (GBQualPtr PNTR list, CharPtr qual_name, Int4 subfield, StringConstraintPtr scp)
+NLM_EXTERN Boolean RemoveGBQualMatch (GBQualPtr PNTR list, CharPtr qual_name, Int4 subfield, StringConstraintPtr scp)
 {
   GBQualPtr qual_prev = NULL, qual_next, qual;
   CharPtr   tmp;
@@ -8294,6 +8382,16 @@ static CharPtr GetQualFromFeatureAnyType (SeqFeatPtr sfp, ValNodePtr field, Stri
     str = SeqLocPrintUseBestID (sfp->location);
   }
 
+  /* pseudo */
+  if ((field->choice == FeatQualChoice_legal_qual && field->data.intvalue == Feat_qual_legal_pseudo)
+      || (field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("pseudogene", field->data.ptrvalue)))
+  {
+    str = GetFirstGBQualMatch (sfp->qual, "pseudogene", 0, scp);
+    if (str == NULL && sfp->pseudo) {
+      str = StringSave ("unqualified");
+    }
+  }
+
   /* fields common to some features */
   /* product */
   if (str == NULL
@@ -8655,18 +8753,20 @@ static Boolean RemoveQualFromFeatureAnyType (SeqFeatPtr sfp, ValNodePtr field, S
 
   /* pseudo */
   if ((field->choice == FeatQualChoice_legal_qual && field->data.intvalue == Feat_qual_legal_pseudo)
-      || (field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("pseudo", field->data.ptrvalue)))
+      || (field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("pseudogene", field->data.ptrvalue)))
   {
     if (gene != NULL) {
       if (gene->pseudo) {
         gene->pseudo = FALSE;
         rval = TRUE;
       }
+      rval |= RemoveGBQualMatch (&(gene->qual), "pseudogene", 0, NULL);
     } 
     if (sfp->pseudo) {
       sfp->pseudo = FALSE;
       rval = TRUE;
     }
+    rval |= RemoveGBQualMatch (&(sfp->qual), "pseudogene", 0, NULL);
     return rval;
   }
 
@@ -9258,19 +9358,21 @@ static Boolean SetQualOnFeatureAnyType (SeqFeatPtr sfp, ValNodePtr field, String
 
   /* pseudo */
   if ((field->choice == FeatQualChoice_legal_qual && field->data.intvalue == Feat_qual_legal_pseudo)
-      || (field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("pseudo", field->data.ptrvalue)))
+      || (field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("pseudogene", field->data.ptrvalue)))
   {
     if (gene != NULL) {
       if (!gene->pseudo) {
         gene->pseudo = TRUE;
         rval = TRUE;
       }
+      rval |= SetStringInGBQualList (&(gene->qual), field, scp, value, existing_text);
       return rval;
     } else {
       if (!sfp->pseudo) {
         sfp->pseudo = TRUE;
         rval = TRUE;
       }
+      rval |= SetStringInGBQualList (&(sfp->qual), field, scp, value, existing_text);
       return rval;
     }
   }
@@ -12702,6 +12804,53 @@ static Boolean SetGenomeProjectIdOnBioseq (BioseqPtr bsp, StringConstraintPtr sc
 }
 
 
+NLM_EXTERN CharPtr GetBioProjectIdFromBioseq (BioseqPtr bsp, StringConstraintPtr scp)
+{
+  SeqDescrPtr       sdp;
+  SeqMgrDescContext context;
+  CharPtr           val;
+  UserObjectPtr     uop;
+  UserFieldPtr      ufp;
+  CharPtr PNTR      cpp;
+  Int4              i;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+  while (sdp != NULL) 
+  {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL && uop->type != NULL && StringCmp (uop->type->str, "DBLink") == 0)
+    {
+      ufp = uop->data;
+      while (ufp != NULL) {
+		    if (ufp->label != NULL && StringCmp (ufp->label->str, "BioProject") == 0) 
+        {
+          if (ufp->choice == 1) 
+          {
+            val = ufp->data.ptrvalue;
+            if (IsStringConstraintEmpty (scp) || DoesStringMatchConstraint (val, scp)) 
+            {
+              return StringSave (val);
+            }
+			    } 
+          else if (ufp->choice == 7 && ufp->num > 0 && (cpp = (CharPtr PNTR) ufp->data.ptrvalue) != NULL) 
+          {
+	          for (i = 0; i < ufp->num; i++) 
+            {
+		          if (IsStringConstraintEmpty (scp) || DoesStringMatchConstraint (cpp[i], scp)) 
+              {
+		            return StringSave (cpp[i]);
+		          }
+            }
+          }
+        }
+        ufp = ufp->next;
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context);
+  }
+  return NULL;
+}
+
+
 static Boolean SetTextDescriptor (SeqDescrPtr sdp, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
 {
   Boolean rval = FALSE;
@@ -13041,9 +13190,10 @@ typedef struct dblinkname {
 
 static DBLinkNameData dblink_names[] = {
   { DBLink_field_type_trace_assembly , "Trace Assembly Archive" } ,
-  { DBLink_field_type_bio_sample , "Bio Sample" } ,
+  { DBLink_field_type_bio_sample , "BioSample" } ,
   { DBLink_field_type_probe_db , "ProbeDB" } ,
-  { DBLink_field_type_sequence_read_archve , "Sequence Read Archive" }
+  { DBLink_field_type_sequence_read_archve , "Sequence Read Archive" } ,
+  { DBLink_field_type_bio_project , "BioProject" }
 };
 
 #define NUM_dblinkname sizeof (dblink_names) / sizeof (DBLinkNameData)
@@ -13212,7 +13362,7 @@ static Boolean SetDBLinkFieldOnUserObject (UserObjectPtr uop, Int4 field, String
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     if (curr->label != NULL && StringCmp (curr->label->str, field_name) == 0) {
       if (curr->choice == 7) {
-        if (curr->num > 0 && (cpp = (CharPtr PNTR) curr->data.ptrvalue) != NULL) {
+        if (curr->num > 0 && (cpp = (CharPtr PNTR) curr->data.ptrvalue) != NULL && existing_text != ExistingTextOption_add_qual) {
           for (i = 0; i < curr->num; i++) {
             if (IsStringConstraintEmpty (scp) || DoesStringMatchConstraint (cpp[i], scp)) {
               newval = cpp[i];
@@ -13235,7 +13385,7 @@ static Boolean SetDBLinkFieldOnUserObject (UserObjectPtr uop, Int4 field, String
           rval = TRUE;
         }
       } else if (curr->choice == 8 && IsAllDigits (value)) {
-        if (curr->num > 0 && (ipp = (Int4Ptr) curr->data.ptrvalue) != NULL) {
+        if (curr->num > 0 && (ipp = (Int4Ptr) curr->data.ptrvalue) != NULL && existing_text != ExistingTextOption_add_qual) {
           for (i = 0; i < curr->num; i++) {
             sprintf (buf, "%d", ipp[i]);
             if (IsStringConstraintEmpty (scp) || DoesStringMatchConstraint (buf, scp)) {
@@ -15108,6 +15258,7 @@ NLM_EXTERN Uint1 FieldTypeFromAECRAction (AECRActionPtr action)
   SwapActionPtr s;
   RemoveActionPtr r;
   AECRParseActionPtr p;
+  RemoveOutsideActionPtr ro;
 
   if (action == NULL || action->action == NULL || action->action->data.ptrvalue == NULL) {
     return 0;
@@ -15123,6 +15274,12 @@ NLM_EXTERN Uint1 FieldTypeFromAECRAction (AECRActionPtr action)
       e = (EditActionPtr) action->action->data.ptrvalue;
       if (e->field != NULL) {
         field_type = e->field->choice;
+      }
+      break;
+    case ActionChoice_remove_outside:
+      ro = (RemoveOutsideActionPtr) action->action->data.ptrvalue;
+      if (ro != NULL && ro->field != NULL) {
+        field_type = ro->field->choice;
       }
       break;
     case ActionChoice_convert:
@@ -15808,7 +15965,12 @@ NLM_EXTERN Boolean SetFieldValueForObjectEx (Uint1 choice, Pointer data, FieldTy
       if (choice == OBJ_SEQDESC && data != NULL) {
         sdp = (SeqDescrPtr) data;
         if (sdp != NULL && sdp->choice == Seq_descr_user) {
+          was_empty = IsEmptyDBLink (sdp->data.ptrvalue);
           rval = SetDBLinkFieldOnUserObject (sdp->data.ptrvalue, field->data.intvalue, scp, value, existing_text);
+          if (was_empty && !IsEmptyDBLink (sdp->data.ptrvalue)) {
+            ovp = (ObjValNodePtr) sdp;
+            ovp->idx.deleteme = FALSE;
+          }
         }
       }
       break;
@@ -15905,6 +16067,7 @@ NLM_EXTERN ValNodePtr GetFieldTypeListFromAECRAction (AECRActionPtr action)
   SwapActionPtr    swap;
   RemoveActionPtr  remove;
   AECRParseActionPtr parse;
+  RemoveOutsideActionPtr ro;
 
   if (action == NULL) {
     return NULL;
@@ -15925,6 +16088,12 @@ NLM_EXTERN ValNodePtr GetFieldTypeListFromAECRAction (AECRActionPtr action)
         edit = (EditActionPtr) action->action->data.ptrvalue;
         if (edit != NULL) {
           ValNodeLink (&field_list, FieldTypeCopy (edit->field));
+        }
+        break;
+      case ActionChoice_remove_outside:
+        ro = (RemoveOutsideActionPtr) action->action->data.ptrvalue;
+        if (ro != NULL) {
+          ValNodeLink (&field_list, FieldTypeCopy (ro->field));
         }
         break;
       case ActionChoice_convert:
@@ -15976,6 +16145,7 @@ NLM_EXTERN Boolean AreAECRActionFieldsEqual (AECRActionPtr action1, AECRActionPt
   SwapActionPtr s1, s2;
   RemoveActionPtr r1, r2;
   AECRParseActionPtr p1, p2;
+  RemoveOutsideActionPtr ro1, ro2;
   FieldTypePtr       field1, field2;
   Boolean            rval = FALSE;
 
@@ -16004,6 +16174,11 @@ NLM_EXTERN Boolean AreAECRActionFieldsEqual (AECRActionPtr action1, AECRActionPt
         e1 = (EditActionPtr) action1->action->data.ptrvalue;
         e2 = (EditActionPtr) action2->action->data.ptrvalue;
         rval = DoFieldTypesMatch (e1->field, e2->field);
+        break;
+      case ActionChoice_remove_outside:
+        ro1 = (RemoveOutsideActionPtr) action1->action->data.ptrvalue;
+        ro2 = (RemoveOutsideActionPtr) action2->action->data.ptrvalue;
+        rval = DoFieldTypesMatch (ro1->field, ro2->field);
         break;
       case ActionChoice_convert:
         v1 = (ConvertActionPtr) action1->action->data.ptrvalue;
@@ -16916,6 +17091,96 @@ static void UnmarkFeatureList (ValNodePtr list)
 }
 
 
+static void FillOutCGPSetForGene (CGPSetPtr c, SeqFeatPtr gene)
+{
+  SeqFeatPtr cds, mrna, prot;
+  SeqMgrFeatContext fcontext;
+  BioseqPtr         bsp, protbsp;
+  Int4              left, right, tmp;
+
+  if (c == NULL || gene == NULL || (bsp = BioseqFindFromSeqLoc (gene->location)) == NULL) 
+  {
+    return;
+  }
+
+  left = SeqLocStart (gene->location);
+  right = SeqLocStop (gene->location);
+  if (left > right) {
+    tmp = left;
+    left = right;
+    right = tmp;
+  }
+
+  for (cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+       cds != NULL && fcontext.left <= right;
+       cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &fcontext)) 
+  {
+    if (gene == GetGeneForFeature (cds)) {
+      ValNodeAddPointer (&(c->cds_list), 0, cds);
+      mrna = GetmRNAforCDS (cds);
+      if (mrna != NULL)
+      {
+        ValNodeAddPointer (&(c->mrna_list), 0, mrna);
+      }
+
+      if (cds->product != NULL)
+      {
+        protbsp = BioseqFindFromSeqLoc (cds->product);
+        if (protbsp != NULL)
+        {
+          prot = SeqMgrGetNextFeature (protbsp, NULL, SEQFEAT_PROT, FEATDEF_PROT, &fcontext);
+          if (prot != NULL)
+          {
+            ValNodeAddPointer (&(c->prot_list), 0, prot);
+          }
+          
+          /* also add in mat_peptides from protein feature */
+          prot = SeqMgrGetNextFeature (protbsp, NULL, SEQFEAT_PROT, FEATDEF_mat_peptide_aa, &fcontext);
+          while (prot != NULL)
+          {
+            ValNodeAddPointer (&(c->prot_list), 0, prot);
+            prot = SeqMgrGetNextFeature (protbsp, prot, SEQFEAT_PROT, FEATDEF_mat_peptide_aa, &fcontext);
+          }
+        }
+      }
+    }
+  }
+
+  for (mrna = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_mRNA, &fcontext);
+       mrna != NULL && fcontext.left <= right;
+       mrna = SeqMgrGetNextFeature (bsp, mrna, 0, FEATDEF_mRNA, &fcontext)) 
+  {
+    if (gene == GetGeneForFeature (mrna)) {
+      ValNodeAddPointer (&(c->mrna_list), 0, mrna);
+    }
+  }
+}
+
+
+static void FillOutCGPSetForGeneList (CGPSetPtr c)
+{
+  ValNodePtr vnp;
+
+  if (c == NULL) {
+    return;
+  }
+
+  c->gene_list = ValNodeSort (c->gene_list, SortVnpByChoiceAndPtrvalue);
+  ValNodeUnique (&c->gene_list, SortVnpByChoiceAndPtrvalue, ValNodeFree);
+
+  for (vnp = c->gene_list; vnp != NULL; vnp = vnp->next) 
+  {
+    FillOutCGPSetForGene (c, vnp->data.ptrvalue);
+  }
+  c->cds_list = ValNodeSort (c->cds_list, SortVnpByChoiceAndPtrvalue);
+  ValNodeUnique (&c->cds_list, SortVnpByChoiceAndPtrvalue, ValNodeFree);
+  c->mrna_list = ValNodeSort (c->mrna_list, SortVnpByChoiceAndPtrvalue);
+  ValNodeUnique (&c->mrna_list, SortVnpByChoiceAndPtrvalue, ValNodeFree);
+  c->prot_list = ValNodeSort (c->prot_list, SortVnpByChoiceAndPtrvalue);
+  ValNodeUnique (&c->prot_list, SortVnpByChoiceAndPtrvalue, ValNodeFree);
+}
+
+
 static Boolean DoesFeatureMatchCGPQualConstraint (SeqFeatPtr sfp, CDSGeneProtQualConstraintPtr constraint)
 {
   CGPSetPtr c = NULL;
@@ -16939,8 +17204,12 @@ static Boolean DoesFeatureMatchCGPQualConstraint (SeqFeatPtr sfp, CDSGeneProtQua
     c = BuildCGPSetFromCodingRegion (cds, &b);
   } else if (sfp->data.choice == SEQFEAT_GENE) {
     c = BuildCGPSetFromGene (sfp);
+    FillOutCGPSetForGeneList (c);
   } else if (sfp->data.choice == SEQFEAT_RNA) {
     c = BuildCGPSetFrommRNA (sfp);
+  }
+  if (c == NULL) {
+    return FALSE;
   }
   UnmarkFeatureList (c->cds_list);
   UnmarkFeatureList (c->mrna_list);
@@ -16988,6 +17257,7 @@ NLM_EXTERN Boolean IsSequenceConstraintEmpty (SequenceConstraintPtr constraint)
   if (constraint == NULL) return TRUE;
   if (constraint->seqtype != NULL && constraint->seqtype->choice != SequenceConstraintMolTypeConstraint_any) return FALSE;
   if (constraint->feature != Macro_feature_type_any) return FALSE;
+  /* note - having a num_type_features not be null isn't enough to make the constraint non-empty */
   if (!IsStringConstraintEmpty (constraint->id)) return FALSE;
   if (constraint->num_features != NULL) return FALSE;
   if (constraint->length != NULL) return FALSE;
@@ -16996,11 +17266,48 @@ NLM_EXTERN Boolean IsSequenceConstraintEmpty (SequenceConstraintPtr constraint)
 }
 
 
+static CharPtr CopyListWithoutBankIt (CharPtr orig)
+{
+  CharPtr cpy, src, dst;
+
+  if (orig == NULL) 
+  {
+    return NULL;
+  }
+  cpy = StringSave (orig);
+
+  src = orig;
+  dst = cpy;
+  while (*src != 0) 
+  {
+    if ((*src == 'B' || *src == 'b') 
+        && (src == orig || isspace (*(src - 1)) || *(src - 1) == ',' || *(src - 1) == ';')
+        && StringNICmp (src, "BankIt", 6) == 0) 
+    {
+      src += 6;
+      while (*src == '/' || *src == ':' || *src == ' ') 
+      {
+        src++;
+      }
+    }
+    else
+    {
+      *dst = *src;
+      ++dst;
+      ++src;
+    }
+  }
+  *dst = 0;
+  return cpy;
+}
+
+
 static Boolean DoesTextMatchBankItId (SeqIdPtr sip, StringConstraintPtr scp)
 {
   Boolean rval = FALSE;
-  Int4    text_len, offset;
-  CharPtr text, tmp;
+  Int4    offset;
+  CharPtr text, tmp, cp, partial_match;
+  Char    ch_orig = 0;
   DbtagPtr dbtag;
 
   if (scp == NULL || (text = scp->match_text) == NULL || sip == NULL || sip->choice != SEQID_GENERAL 
@@ -17009,22 +17316,25 @@ static Boolean DoesTextMatchBankItId (SeqIdPtr sip, StringConstraintPtr scp)
       || dbtag->tag == NULL) {
     return FALSE;
   }
-  text_len = StringLen (scp->match_text);
-  if (text_len > 6 && StringNICmp (text, "BankIt", 6) == 0) {
-    text += 6;
-    text += StrSpn (text, ":/ ");
-  }
+  text = CopyListWithoutBankIt (scp->match_text);
 
-  text = StringSave (text);
   tmp = scp->match_text;
   scp->match_text = text;
   rval = DoesObjectIdMatchStringConstraint (dbtag->tag, scp);
   if (!rval) {
     offset = StringCSpn (text, "/ ");
     if (text[offset] != 0) {
+      ch_orig = text[offset];
       text[offset] = '_';
       rval = DoesObjectIdMatchStringConstraint (dbtag->tag, scp);
-    }
+      text[offset] = ch_orig;
+    }    
+  }
+  if (!rval && ch_orig != '/' && dbtag->tag->str != NULL && (cp = StringChr (dbtag->tag->str, '/')) != NULL) {
+    partial_match = StringSave (dbtag->tag->str);
+    partial_match[cp - dbtag->tag->str] = 0;
+    rval = DoesStringMatchConstraint (partial_match, scp);
+    partial_match = MemFree (partial_match);
   }
   text = MemFree (text);
   scp->match_text = tmp;
@@ -17300,14 +17610,55 @@ static Boolean DoesSequenceMatchStrandednessConstraint (BioseqPtr bsp, Uint2 str
 }
 
 
+static Boolean DoesFeatureCountMatchQuantityConstraint (BioseqPtr bsp, Uint2 featdef, ValNodePtr quantity)
+{
+  Int4              num_features = 0;
+  SeqFeatPtr        sfp;
+  SeqMgrFeatContext fcontext;
+
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, (Uint1)featdef, &fcontext);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, 0, (Uint1)featdef, &fcontext)) 
+  {
+    num_features++;
+    /* note - break out of loop or return as soon as we know constraint
+     * succeeds or passes - no need to iterate through all features
+     */
+    if (quantity == NULL) 
+    {
+      return TRUE;
+    } 
+    else if (quantity->choice == QuantityConstraint_equals 
+          && num_features > quantity->data.intvalue) 
+    {
+      return FALSE;
+    } 
+    else if (quantity->choice == QuantityConstraint_greater_than
+                 && num_features > quantity->data.intvalue) 
+    {
+      break;
+    } 
+    else if (quantity->choice == QuantityConstraint_less_than
+                 && num_features >= quantity->data.intvalue) 
+    {
+        return FALSE;
+    }
+  }
+  if (quantity == NULL) {
+    return FALSE;
+  } else if (!DoesValueMatchQuantityConstraint(num_features, quantity)) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
 NLM_EXTERN Boolean DoesSequenceMatchSequenceConstraint (BioseqPtr bsp, SequenceConstraintPtr constraint)
 {
-  SeqFeatPtr sfp;
-  SeqMgrFeatContext fcontext;
   SeqDescrPtr sdp;
   SeqMgrDescContext dcontext;
   MolInfoPtr mip;
-  Int4       num_features = 0;
   
   if (bsp == NULL) return FALSE;
   if (IsSequenceConstraintEmpty (constraint)) return TRUE;
@@ -17348,8 +17699,7 @@ NLM_EXTERN Boolean DoesSequenceMatchSequenceConstraint (BioseqPtr bsp, SequenceC
   }
 
   if (constraint->feature != Macro_feature_type_any) {
-    sfp = SeqMgrGetNextFeature (bsp, NULL, 0, GetFeatdefFromFeatureType (constraint->feature), &fcontext);
-    if (sfp == NULL) {
+    if (!DoesFeatureCountMatchQuantityConstraint (bsp, GetFeatdefFromFeatureType (constraint->feature), constraint->num_type_features)) {
       return FALSE;
     }
   }
@@ -17359,25 +17709,7 @@ NLM_EXTERN Boolean DoesSequenceMatchSequenceConstraint (BioseqPtr bsp, SequenceC
   }
 
   if (constraint->num_features != NULL) {
-    for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
-         sfp != NULL;
-         sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext)) {
-      num_features++;
-      /* note - break out of loop or return as soon as we know constraint
-       * succeeds or passes - no need to iterate through all features
-       */
-      if (constraint->num_features->choice == QuantityConstraint_equals 
-          && num_features > constraint->num_features->data.intvalue) {
-        return FALSE;
-      } else if (constraint->num_features->choice == QuantityConstraint_greater_than
-                 && num_features > constraint->num_features->data.intvalue) {
-        break;
-      } else if (constraint->num_features->choice == QuantityConstraint_less_than
-                 && num_features >= constraint->num_features->data.intvalue) {
-        return FALSE;
-      }
-    }
-    if (!DoesValueMatchQuantityConstraint(num_features, constraint->num_features)) {
+    if (!DoesFeatureCountMatchQuantityConstraint (bsp, 0, constraint->num_features)) {
       return FALSE;
     }
   }
@@ -18694,6 +19026,7 @@ static void AECRActionObjectCollectionItemCallback (Uint1 objecttype, Pointer ob
   SwapActionPtr s;
   RemoveActionPtr r;
   AECRParseActionPtr p;
+  RemoveOutsideActionPtr ro;
   CharPtr str, portion, field_name;
   StringConstraintPtr scp;
   FieldTypePtr field_from = NULL, field_to = NULL;
@@ -18721,6 +19054,14 @@ static void AECRActionObjectCollectionItemCallback (Uint1 objecttype, Pointer ob
           ValNodeAddPointerEx (&(o->object_list), &(o->object_tail), objecttype, objectdata);
         }
         str = MemFree (str);
+      }
+      break;
+    case ActionChoice_remove_outside :
+      ro = (RemoveOutsideActionPtr) o->action->action->data.ptrvalue;
+      if (ro != NULL
+          && IsObjectAppropriateForFieldValue (objecttype, objectdata, ro->field)
+          && DoesObjectMatchConstraintChoiceSet (objecttype, objectdata, o->action->constraint)) {
+        ValNodeAddPointerEx (&(o->object_list), &(o->object_tail), objecttype, objectdata);
       }
       break;
     case ActionChoice_convert :
@@ -19038,13 +19379,36 @@ static void BuildCGPSetCallback (SeqFeatPtr sfp, Pointer userdata)
 }
 
 
+static SeqFeatPtr AddProtFeatForCds (SeqFeatPtr cds, BioseqPtr protbsp)
+{
+  ProtRefPtr prp;
+  SeqFeatPtr prot;
+  Boolean    partial5, partial3;
+
+  if (cds == NULL || protbsp == NULL) 
+  {
+    return NULL;
+  }
+
+  prp = ProtRefNew ();
+  prot = CreateNewFeatureOnBioseq (protbsp, SEQFEAT_PROT, NULL);
+  if (prot != NULL)
+  {
+    prot->data.value.ptrvalue = prp;
+    CheckSeqLocForPartial (cds->location, &partial5, &partial3);
+    SetSeqLocPartial (prot->location, partial5, partial3);
+    prot->partial = partial5 || partial3;
+  }
+  return prot;
+}
+
+
 static CGPSetPtr BuildCGPSetFromCodingRegion (SeqFeatPtr cds, BoolPtr indexing_needed)
 {
   SeqMgrFeatContext fcontext;
   SeqFeatPtr        gene = NULL, mrna, prot;
   BioseqPtr         protbsp;
   CGPSetPtr         cdsp;
-  ProtRefPtr        prp;
 
   if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION) return NULL;
 
@@ -19076,11 +19440,10 @@ static CGPSetPtr BuildCGPSetFromCodingRegion (SeqFeatPtr cds, BoolPtr indexing_n
       /* if there is no full-length protein feature, make one */
       if (prot == NULL)
       {
-        prp = ProtRefNew ();
-        prot = CreateNewFeatureOnBioseq (protbsp, SEQFEAT_PROT, NULL);
+        prot = AddProtFeatForCds (cds, protbsp);
         if (prot != NULL)
         {
-          prot->data.value.ptrvalue = prp;
+          ResynchCDSPartials (cds, NULL);
           if (indexing_needed != NULL)
           {
             *indexing_needed = TRUE;
@@ -19264,6 +19627,7 @@ static ValNodePtr BuildCGPSetList (Uint2 entityID, AECRActionPtr act, BoolPtr cr
   SwapActionPtr       s;
   AECRParseActionPtr  pa;
   RemoveActionPtr     r;
+  RemoveOutsideActionPtr ro;
   FieldTypePtr        field_from, field_to;
   
   sep = GetTopSeqEntryForEntityID (entityID);
@@ -19367,7 +19731,11 @@ static ValNodePtr BuildCGPSetList (Uint2 entityID, AECRActionPtr act, BoolPtr cr
         e = (EditActionPtr) act->action->data.ptrvalue;
         AdjustCGPObjectListForMatPeptides (&cdset_list, e->field, NULL, act->constraint);
         break;
-       case ActionChoice_convert:
+      case ActionChoice_remove_outside:
+        ro = (RemoveOutsideActionPtr) act->action->data.ptrvalue;
+        AdjustCGPObjectListForMatPeptides (&cdset_list, ro->field, NULL, act->constraint);
+        break;
+      case ActionChoice_convert:
         c = (ConvertActionPtr) act->action->data.ptrvalue;
         field_from = GetFromFieldFromFieldPair (c->fields);
         field_to = GetToFieldFromFieldPair (c->fields);
@@ -19375,7 +19743,7 @@ static ValNodePtr BuildCGPSetList (Uint2 entityID, AECRActionPtr act, BoolPtr cr
         field_from = FieldTypeFree (field_from);
         field_to = FieldTypeFree (field_to);
         break;
-       case ActionChoice_copy:
+      case ActionChoice_copy:
         cp = (CopyActionPtr) act->action->data.ptrvalue;
         field_from = GetFromFieldFromFieldPair (cp->fields);
         field_to = GetToFieldFromFieldPair (cp->fields);
@@ -19510,7 +19878,74 @@ NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr objec
   return DoEditActionToObjectListEx (action, object_list, also_change_mrna, NULL);
 }
 
+
+static Boolean HasMarkers (CharPtr str, TextPortionPtr text_portion)
+{
+  Boolean rval = FALSE;
+  Int4    left_len = 0, right_len = 0;
+
+  if (IsTextMarkerEmpty(text_portion->left_marker)) {
+    if (IsTextMarkerEmpty(text_portion->right_marker)) {
+      /* both markers empty, badly formatted command */
+      rval = FALSE;
+    } else if (NULL != FindTextMarker(str, &right_len, text_portion->right_marker, text_portion->case_sensitive, text_portion->whole_word)) {
+      rval = TRUE;
+    }
+  } else if (NULL == FindTextMarker(str, &left_len, text_portion->left_marker, text_portion->case_sensitive, text_portion->whole_word)) {
+    rval = FALSE;
+  } else if (IsTextMarkerEmpty(text_portion->right_marker)
+             || NULL != FindTextMarker(str + left_len, &right_len, text_portion->right_marker, text_portion->case_sensitive, text_portion->whole_word)) {
+    rval = TRUE;
+  }
+
+  return rval;
+}
+
+
+NLM_EXTERN Int4 DoRemoveOutsideToObjectList (RemoveOutsideActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, BatchExtraPtr batch_extra)
+{
+  ValNodePtr vnp;
+  Int4       num_succeed = 0, num_fail = 0;
+  CharPtr    str, new_str;
+
+  if (action == NULL || object_list == NULL) return 0;
+
+  for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
+    str = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, action->field, NULL, batch_extra);
+    if (!action->remove_if_not_found && !HasMarkers (str, action->portion)) {
+      /* do nothing */
+    } else {
+      new_str = GetTextPortionFromString (str, action->portion);
+      if (StringCmp (str, new_str) != 0
+          && SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, action->field, NULL, new_str, ExistingTextOption_replace_old, batch_extra)) {
+        if (also_change_mrna) {
+          AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
+        }
+        num_succeed ++;
+      } else {
+        num_fail++;
+      }
+      new_str = MemFree (new_str);
+    }
+    str = MemFree (str);
+  }
+  return num_succeed;
+}
+
+
 static Boolean IsFieldTypeProteinDesc (FieldTypePtr ft);
+
+
+static Boolean NoFieldChange (CharPtr new_val, ValNodePtr vnp, FieldTypePtr field_from, StringConstraintPtr scp, BatchExtraPtr batch_extra)
+{
+  Boolean rval = FALSE;
+  CharPtr orig = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, batch_extra);
+  if (StringCmp (orig, new_val) == 0) {
+    rval = TRUE;
+  }
+  orig = MemFree (orig);
+  return rval;
+}
 
 
 NLM_EXTERN Int4 DoConvertActionToObjectListEx (ConvertActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp, BatchExtraPtr batch_extra)
@@ -19558,7 +19993,8 @@ NLM_EXTERN Int4 DoConvertActionToObjectListEx (ConvertActionPtr action, ValNodeP
         }
         FixCapitalizationInString(&str, action->capitalization, NULL);
     
-        if (SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, action->existing_text, batch_extra)
+        if ((SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, action->existing_text, batch_extra)
+              || (!action->keep_original && NoFieldChange(str, vnp, field_to, NULL, batch_extra)))
             && (action->keep_original || RemoveFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, &remove_constraint))) {
           if (also_change_mrna) {
             AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
@@ -19764,6 +20200,7 @@ static Int4 ApplyAECRActionToSeqEntry (AECRActionPtr act, SeqEntryPtr sep, BoolP
   ConvertActionPtr    c;
   RemoveActionPtr     r;
   EditActionPtr       e;
+  RemoveOutsideActionPtr ro;
   ValNodePtr          object_list = NULL;
   Uint1               field_type;
   Uint2               entityID;
@@ -19799,6 +20236,13 @@ static Int4 ApplyAECRActionToSeqEntry (AECRActionPtr act, SeqEntryPtr sep, BoolP
       e = (EditActionPtr) act->action->data.ptrvalue;
       num_succeed = DoEditActionToObjectListEx (e, object_list, act->also_change_mrna, batch_extra);
       if (e->field->choice == FieldType_misc) {
+        DeleteMarkedObjects (ObjMgrGetEntityIDForChoice(sep), 0, NULL);
+      }
+      break;
+    case ActionChoice_remove_outside:
+      ro = (RemoveOutsideActionPtr) act->action->data.ptrvalue;
+      num_succeed = DoRemoveOutsideToObjectList (ro, object_list, act->also_change_mrna, batch_extra);
+      if (ro->field->choice == FieldType_misc) {
         DeleteMarkedObjects (ObjMgrGetEntityIDForChoice(sep), 0, NULL);
       }
       break;
@@ -19954,6 +20398,7 @@ static void GetFieldsFromAECR (AECRActionPtr act, FieldTypePtr PNTR pField, ValN
   CopyActionPtr      cp;
   RemoveActionPtr    r;
   AECRParseActionPtr p;
+  RemoveOutsideActionPtr ro;
   
   if (pField != NULL) {
     *pField = NULL;
@@ -19976,6 +20421,12 @@ static void GetFieldsFromAECR (AECRActionPtr act, FieldTypePtr PNTR pField, ValN
       if (pField != NULL) {
         e = (EditActionPtr) act->action->data.ptrvalue;
         *pField = e->field;
+      }
+      break;
+    case ActionChoice_remove_outside:
+      if (pField != NULL) {
+        ro = (RemoveOutsideActionPtr) act->action->data.ptrvalue;
+        *pField = ro->field;
       }
       break;
     case ActionChoice_convert:
@@ -20114,12 +20565,21 @@ static int LIBCALLBACK SortVnpByFieldTypeAndSourceQualifier (VoidPtr ptr1, VoidP
 
 static void GetBioSourceFields (BioSourcePtr biop, Pointer userdata)
 {
+  ValNodePtr new_list = NULL;
 
   if (biop == NULL || userdata == NULL) {
     return;
   }
 
-  ValNodeLink ((ValNodePtr PNTR) userdata, GetSourceQualFieldListFromBioSource (biop));
+  /* although the following function doesn't preserve order because we
+     reverse the args, that's okay
+     because every function that uses GetBioSourceFields sorts the results
+     at the end anyway, and we want the shorter list as the first argument
+     since ValNodeLink is linear in the length of its first arg. */
+  new_list = GetSourceQualFieldListFromBioSource (biop);
+  *(ValNodePtr PNTR) userdata = 
+      ValNodeLink ( &new_list,
+                    *(ValNodePtr PNTR) userdata);
 }
 
 
@@ -20493,15 +20953,56 @@ static void CollectStructuredCommentsCallback (SeqDescrPtr sdp, Pointer data)
 }
 
 
-static void CollectDBLinksCallback (SeqDescrPtr sdp, Pointer data)
+static void AddDBLinkDescriptorDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest_list)
 {
+  SeqDescrPtr sdp;
   UserObjectPtr uop;
+  SeqMgrDescContext context;
+  Boolean found = FALSE;
+  ObjValNodePtr ovp;
 
-  if (sdp != NULL && data != NULL && sdp->choice == Seq_descr_user
-      && (uop = sdp->data.ptrvalue) != NULL
-      && IsUserObjectDBLink (uop)) {
-    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
+  if (bsp == NULL || dest_list == NULL) {
+    return;
   }
+
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+       sdp != NULL;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context)) {
+    if ((uop = sdp->data.ptrvalue) != NULL
+        && IsUserObjectDBLink (uop)) {
+      ValNodeAddPointer (dest_list, OBJ_SEQDESC, sdp);
+      found = TRUE;
+    }
+  }
+  if (!found) {
+    /* if no existing comment descriptor, create one, marked for delete.
+     * unmark it for deletion when it gets populated.
+     */
+    sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
+    sdp->data.ptrvalue = CreateDBLinkUserObject ();
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;
+    ValNodeAddPointer (dest_list, OBJ_SEQDESC, sdp);
+  }
+}
+
+
+static ValNodePtr CollectDBLinkDescriptors (SeqEntryPtr sep)
+{
+  ValNodePtr seq_list = NULL, vnp, desc_list = NULL;
+
+  if (sep == NULL) {
+    return NULL;
+  }
+
+  /* VisitBioseqsInSep (sep, &seq_list, CollectNucBioseqCallback); */
+  seq_list = CollectNucBioseqs (sep);
+
+  for (vnp = seq_list; vnp != NULL; vnp = vnp->next) {
+    AddDBLinkDescriptorDestinationsForBioseq (vnp->data.ptrvalue, &desc_list);
+  }
+  seq_list = ValNodeFree (seq_list);
+  return desc_list;
 }
 
 
@@ -21789,6 +22290,33 @@ static void SetToUpper (CharPtr cp)
 }
 
 
+static void CapitalizeWords (CharPtr string, Boolean punc)
+{
+  CharPtr cp;
+  Boolean send_upper = TRUE;
+
+  if (string == NULL) {
+    return;
+  }
+  cp = string;
+  while (*cp != 0) {
+    if (isspace (*cp) || (punc && ispunct (*cp))) {
+      send_upper = TRUE;
+    } else if (isalpha (*cp)) {
+      if (send_upper) {
+        *cp = toupper (*cp);
+      } else {
+        *cp = tolower (*cp);
+      }
+      send_upper = FALSE;
+    } else {
+      send_upper = FALSE;
+    }
+    cp++;
+  }
+}
+
+
 NLM_EXTERN void 
 FixCapitalizationInString 
 (CharPtr PNTR pTitle,
@@ -21817,6 +22345,21 @@ FixCapitalizationInString
       if (*pTitle != NULL && isalpha (**pTitle)) {
         **pTitle = toupper (**pTitle);
       }
+      break;
+    case Cap_change_firstlower_restnochange:
+      if (*pTitle != NULL && isalpha (**pTitle)) {
+        **pTitle = tolower (**pTitle);
+      }
+      break;
+    case Cap_change_cap_word_space:
+      CapitalizeWords (*pTitle, FALSE);
+      FixAbbreviationsInElement (pTitle);
+      FixOrgNamesInString (*pTitle, org_names);
+      break;
+    case Cap_change_cap_word_space_punc:
+      CapitalizeWords (*pTitle, TRUE);
+      FixAbbreviationsInElement (pTitle);
+      FixOrgNamesInString (*pTitle, org_names);
       break;
   }
 }
@@ -22484,6 +23027,59 @@ static void AddToSampleForDestList (AECRSamplePtr sample, ValNodePtr dest_list, 
 }
 
 
+static CharPtr GetParseBioSourceField (ValNodePtr field, BioSourcePtr biop)
+{
+  CharPtr str = NULL;
+
+  if (field == NULL || biop == NULL) {
+    return NULL;
+  }
+
+  if (field->choice == ParseSrcOrgChoice_source_qual) {
+    str = GetSourceQualFromBioSource (biop, field, NULL);
+  } else if (field->choice == ParseSrcOrgChoice_taxname_after_binomial) {
+    if (biop->org != NULL) {
+      str = StringSave (GetTextAfterNomial (biop->org->taxname));
+    }
+  }
+  return str;
+}
+
+
+static Boolean SetParseBioSourceField (ValNodePtr field, CharPtr str, BioSourcePtr biop)
+{
+  Boolean rval = FALSE;
+  CharPtr after, new_val;
+  Int4    len, new_len;
+
+  if (field == NULL || biop == NULL) {
+    return FALSE;
+  }
+
+  if (field->choice == ParseSrcOrgChoice_source_qual) {
+    rval = SetSourceQualInBioSource (biop, field, NULL, str, ExistingTextOption_replace_old);
+  } else if (field->choice == ParseSrcOrgChoice_taxname_after_binomial) {
+    if (biop->org != NULL) {
+      after = GetTextAfterNomial (biop->org->taxname);
+      len = after - biop->org->taxname;
+      new_len = len + StringLen (str) + 2;
+      /* note - do not need to free after, because after is a pointer to a position in biop->org->taxname */
+      new_val = (CharPtr) MemNew (sizeof (Char) * new_len);
+      StringNCpy (new_val, biop->org->taxname, len);
+      new_val[len] = 0;
+      if (!StringHasNoText (str)) {
+        StringCat (new_val, " ");
+        StringCat (new_val, str);
+      }
+      biop->org->taxname = MemFree (biop->org->taxname);
+      biop->org->taxname = new_val;
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
 static void StripFieldForSrcList (ParseSourceInfoPtr psip, ParseSrcPtr field, TextPortionPtr text_portion)
 {
   CharPtr     str;
@@ -22500,18 +23096,17 @@ static void StripFieldForSrcList (ParseSourceInfoPtr psip, ParseSrcPtr field, Te
       break;
     case ParseSrc_org :
       o = (ParseSrcOrgPtr) field->data.ptrvalue;
-      if (o != NULL) {
+      if (o != NULL && o->field != NULL) {
+        biop = NULL;
         if (psip->sdp != NULL && psip->sdp->choice == Seq_descr_source) {
-          biop = (BioSourcePtr) psip->sdp->data.ptrvalue;
-          str = GetSourceQualFromBioSource (biop, o->field, NULL);
-          ReplaceStringForParse (str, text_portion);
-          SetSourceQualInBioSource (biop, o->field, NULL, str, ExistingTextOption_replace_old);
-          str = MemFree (str);
+          biop = (BioSourcePtr) psip->sdp->data.ptrvalue; 
         } else if (psip->sfp != NULL && psip->sfp->data.choice == SEQFEAT_BIOSRC) {
           biop = (BioSourcePtr) psip->sfp->data.value.ptrvalue;
-          str = GetSourceQualFromBioSource (biop, o->field, NULL);
+        } 
+        if (biop != NULL) {
+          str = GetParseBioSourceField (o->field, biop);
           ReplaceStringForParse (str, text_portion);
-          SetSourceQualInBioSource (biop, o->field, NULL, str, ExistingTextOption_replace_old);
+          SetParseBioSourceField (o->field, str, biop);
           str = MemFree (str);
         }
       }
@@ -23405,7 +24000,7 @@ static Boolean ConvertGeneToMiscFeat (SeqFeatPtr sfp, Int4 featdef_to, ConvertFe
 }
 
 
-static Boolean ConvertRNAToImpFeat (SeqFeatPtr sfp, Int4 featdef_to, ConvertFeatureDstOptionsPtr dst_options)
+static Boolean ConvertRNAToImpFeatEx (SeqFeatPtr sfp, Int4 featdef_to, ConvertFeatureDstOptionsPtr dst_options)
 {
   CharPtr product = NULL;
   ImpFeatPtr ifp;
@@ -23434,6 +24029,12 @@ static Boolean ConvertRNAToImpFeat (SeqFeatPtr sfp, Int4 featdef_to, ConvertFeat
   SetStringValue (&(sfp->comment), product, ExistingTextOption_append_semi);
   product = MemFree (product);
   return TRUE;
+}
+
+
+NLM_EXTERN Boolean ConvertRNAToImpFeat (SeqFeatPtr sfp, Int4 featdef_to)
+{
+  return ConvertRNAToImpFeatEx (sfp, featdef_to, NULL);
 }
 
 
@@ -23810,7 +24411,7 @@ static ConvertFeatTableData conversion_functions[] = {
     ConvertGeneToMiscFeat, 
     "Creates a misc_feature with the gene description and locus prepended to the original comment, separated by semicolons." },
   { SEQFEAT_RNA,      FEATDEF_ANY,                SEQFEAT_IMP,    FEATDEF_ANY,
-    ConvertRNAToImpFeat,
+    ConvertRNAToImpFeatEx,
     "Creates an import feature of the specified subtype and adds the RNA product name to the comment." } ,
   { SEQFEAT_SITE,     FEATDEF_ANY,                SEQFEAT_IMP,    FEATDEF_ANY,
     ConvertSiteToImpFeat,
@@ -24599,6 +25200,256 @@ static Boolean ExtendSeqFeat3 (SeqFeatPtr sfp)
 }
 
 
+static Int4 ExtendSeqInt5ToPos (SeqIntPtr sint, Int4 pos)
+{
+  Int4      distance = 0;
+
+  if (sint == NULL) {
+    return FALSE;
+  }
+
+  if (sint->strand == Seq_strand_minus) {
+    distance = pos - sint->to;
+    sint->to = pos;
+  } else {
+    distance = sint->from - pos;
+    sint->from = pos;
+  }
+
+  return distance;
+}
+
+
+static Int4 ExtendSeqInt3ToPos (SeqIntPtr sint, Int4 pos)
+{
+  Int4      distance = 0;
+
+  if (sint == NULL) {
+    return FALSE;
+  }
+
+  if (sint->strand == Seq_strand_minus) {
+    distance = sint->from - pos;
+    sint->from = pos;
+  } else {
+    distance = pos - sint->to;
+    sint->to = pos;
+  }
+
+  return distance;
+}
+
+
+static Int4 ExtendSeqLocToPos (SeqLocPtr slp, Int4 pos, Boolean end5)
+{
+  Int4 diff = 0;
+  SeqLocPtr slp_index;
+
+  if (slp == NULL) return 0;
+
+  switch (slp->choice)
+  {
+    case SEQLOC_INT:
+      if (end5) {
+        diff = ExtendSeqInt5ToPos (slp->data.ptrvalue, pos);
+      } else {
+        diff = ExtendSeqInt3ToPos (slp->data.ptrvalue, pos);
+      }
+      break;
+    case SEQLOC_MIX:
+      case SEQLOC_PACKED_INT:
+      if (end5) {
+        /* take the first one */
+        diff = ExtendSeqLocToPos (slp->data.ptrvalue, pos, end5);
+      } else {
+        /* take the last one */
+        for (slp_index = slp->data.ptrvalue; slp_index != NULL && slp_index->next != NULL; slp_index = slp_index->next) {
+        }
+        if (slp_index != NULL) {
+          diff = ExtendSeqLocToPos (slp_index, pos, end5);
+        }
+      }
+      break;
+  }
+
+  return diff;
+}
+
+
+static Boolean s_StrandsMatch (Uint1 strand1, Uint1 strand2)
+{
+  Boolean rval = FALSE;
+
+  if (strand1 == Seq_strand_minus) {
+    if (strand2 == Seq_strand_minus) {
+      rval = TRUE;
+    }
+  } else {
+    if (strand2 != Seq_strand_minus) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+static Int4 FindPosBeforeFeat (SeqFeatPtr sfp, ExtendToFeaturePtr efp)
+{
+  BioseqPtr bsp;
+  Int4      featdef, start, stop, tmp, pos = -1;
+  SeqMgrFeatContext context;
+  SeqFeatPtr  regulator = NULL, candidate;
+  Uint1       strand;
+
+  if (sfp == NULL || efp == NULL || (bsp = BioseqFindFromSeqLoc (sfp->location)) == NULL)
+  {
+    return -1;
+  }
+
+  featdef = GetFeatdefFromFeatureType (efp->type);
+  start = SeqLocStart (sfp->location);
+  stop = SeqLocStop (sfp->location);
+  if (stop < start) {
+    tmp = stop;
+    stop = start;
+    start = tmp;
+  }
+  strand = SeqLocStrand (sfp->location);
+
+  candidate = SeqMgrGetNextFeature (bsp, NULL, 0, featdef, &context);
+  /* take last match before feature */
+  while (candidate != NULL && (context.right < start || (efp->include_feat && context.left < start)))
+  {
+    if (s_StrandsMatch(strand, context.strand) && DoesValueMatchQuantityConstraint (start - context.right, efp->distance)) {
+      regulator = candidate;
+      if (efp->include_feat) 
+      {
+        pos = context.left;
+      } 
+      else
+      {
+        pos = context.right + 1;
+      }
+    }
+    candidate = SeqMgrGetNextFeature (bsp, candidate, 0, featdef, &context);
+  }
+  return pos;
+}
+
+
+static Int4 FindPosAfterFeat (SeqFeatPtr sfp, ExtendToFeaturePtr efp)
+{
+  BioseqPtr bsp;
+  Int4      featdef, start, stop, tmp, pos = -1;
+  SeqMgrFeatContext context;
+  SeqFeatPtr  regulator = NULL, candidate;
+  Uint1       strand;
+
+  if (sfp == NULL || efp == NULL || (bsp = BioseqFindFromSeqLoc (sfp->location)) == NULL)
+  {
+    return -1;
+  }
+
+  featdef = GetFeatdefFromFeatureType (efp->type);
+  start = SeqLocStart (sfp->location);
+  stop = SeqLocStop (sfp->location);
+  if (stop < start) {
+    tmp = stop;
+    stop = start;
+    start = tmp;
+  }
+  strand = SeqLocStrand (sfp->location);
+
+  candidate = SeqMgrGetNextFeature (bsp, NULL, 0, featdef, &context);
+  /* take first match after feature */
+  while (candidate != NULL && (context.left < stop || (efp->include_feat && context.right < stop) || !s_StrandsMatch(strand, context.strand))) 
+  {
+    candidate = SeqMgrGetNextFeature (bsp, candidate, 0, featdef, &context);      
+  }
+
+  while (candidate != NULL && regulator == NULL) 
+  {
+    if (DoesValueMatchQuantityConstraint (context.left - stop, efp->distance) && s_StrandsMatch(strand, context.strand)) {
+      regulator = candidate;
+      if (efp->include_feat) 
+      {
+        pos = context.right;
+      }
+      else 
+      {
+        pos = context.left - 1;
+      }
+    } 
+    else 
+    {
+      candidate = SeqMgrGetNextFeature (bsp, candidate, 0, featdef, &context);
+    }
+  }
+
+  return pos;
+}
+
+
+static Boolean ExtendSeqFeatToFeat (SeqFeatPtr sfp, ExtendToFeaturePtr efp, Boolean end5)
+{
+  Int4        pos = -1;
+  Uint2       strand;
+  CdRegionPtr crp;
+  Int4        start_diff;
+  Boolean     partial5, partial3;
+
+  if (sfp == NULL)
+  {
+    return FALSE;
+  }
+
+  strand = SeqLocStrand (sfp->location);
+
+  if (end5)
+  {
+    if (strand == Seq_strand_minus)
+    {
+      pos = FindPosAfterFeat (sfp, efp);
+    }
+    else 
+    {
+      pos = FindPosBeforeFeat (sfp, efp);
+    }
+  }
+  else 
+  {
+    if (strand == Seq_strand_minus)
+    {
+      pos = FindPosBeforeFeat (sfp, efp);
+    }
+    else
+    {
+      pos = FindPosAfterFeat (sfp, efp);
+    }
+  }
+  if (pos > -1 && (start_diff = ExtendSeqLocToPos (sfp->location, pos, end5)) > 0)
+  {
+    if (end5 && sfp->data.choice == SEQFEAT_CDREGION) {
+      CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+        if (partial5) {
+        crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+        if (crp != NULL) {
+          if (crp->frame == 0) {
+              crp->frame = 1;
+          }
+          crp->frame = (crp->frame + start_diff - 1) % 3 + 1;
+        }
+      }
+    }
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+
 static Boolean ApplyLocationEditTypeToSeqFeat (ValNodePtr action, SeqFeatPtr sfp)
 {
   Boolean rval = FALSE;
@@ -24638,6 +25489,12 @@ static Boolean ApplyLocationEditTypeToSeqFeat (ValNodePtr action, SeqFeatPtr sfp
     case LocationEditType_extend_3:
       rval = ExtendSeqFeat3 (sfp);
       break;
+    case LocationEditType_extend_5_to_feat:
+      rval = ExtendSeqFeatToFeat (sfp, action->data.ptrvalue, TRUE);
+      break;
+    case LocationEditType_extend_3_to_feat:
+      rval = ExtendSeqFeatToFeat (sfp, action->data.ptrvalue, FALSE);
+      break;
   }
   return rval;
 }
@@ -24647,11 +25504,11 @@ static Int4 ApplyEditFeatureLocationActionToSeqEntry (EditFeatureLocationActionP
 {
   ConvertAndRemoveFeatureCollectionData d;
   ValNodePtr vnp;
-  SeqFeatPtr sfp;
+  SeqFeatPtr sfp, gene;
   Int4       num_affected = 0;
   /* variables for logging */
   CharPtr    old_loc = NULL, new_loc;
-  Boolean    retranslated;
+  Boolean    retranslated, adjusted_gene;
 
   if (action == NULL) return 0;
 
@@ -24666,7 +25523,16 @@ static Int4 ApplyEditFeatureLocationActionToSeqEntry (EditFeatureLocationActionP
       if (log_fp != NULL) {
         old_loc = SeqLocPrintUseBestID (sfp->location);
       }
+      if (sfp->data.choice != SEQFEAT_GENE && action->also_edit_gene) {
+        gene = GetGeneForFeature (sfp);
+      } else {
+        gene = NULL;
+      }
       if (ApplyLocationEditTypeToSeqFeat (action->action, sfp)) {
+        adjusted_gene = FALSE;
+        if (gene != NULL && ApplyLocationEditTypeToSeqFeat (action->action, gene)) {
+          adjusted_gene = TRUE;
+        }
         retranslated = FALSE;
         if (sfp->data.choice == SEQFEAT_CDREGION && action->retranslate_cds) {
           retranslated = RetranslateOneCDS (sfp, sfp->idx.entityID, TRUE, TRUE);
@@ -24674,7 +25540,9 @@ static Int4 ApplyEditFeatureLocationActionToSeqEntry (EditFeatureLocationActionP
         num_affected++;
         if (log_fp != NULL) {
           new_loc = SeqLocPrintUseBestID (sfp->location);
-          fprintf (log_fp, "Changed location %s to %s%s\n", old_loc, new_loc, retranslated ? " and retranslated protein" : "");
+          fprintf (log_fp, "Changed location %s to %s%s%s\n", old_loc, new_loc, 
+                           retranslated ? " and retranslated protein" : "",
+                           adjusted_gene ? " and adjusted gene location" : "");
           new_loc = MemFree (new_loc);
         }
       }
@@ -24786,6 +25654,7 @@ NLM_EXTERN void ApplyMolinfoBlockToSeqEntry (SeqEntryPtr sep, MolinfoBlockPtr mi
 
 
 static Boolean ApplyFixPubCapsToSeqEntry (FixPubCapsActionPtr action, SeqEntryPtr sep, FILE *log_fp);
+static Boolean FixAuthorNamesCaps (FixAuthorCapsPtr action, SeqEntryPtr sep, FILE *log_fp);
 
 static Boolean ApplyFixCapsToSeqEntry (SeqEntryPtr sep, FixCapsActionPtr action, FILE *log_fp)
 {
@@ -24807,6 +25676,9 @@ static Boolean ApplyFixCapsToSeqEntry (SeqEntryPtr sep, FixCapsActionPtr action,
       break;
     case FixCapsAction_src_qual:
       any_change = FixSrcQualCaps (sep, action->data.intvalue, log_fp);
+      break;
+    case FixCapsAction_author:
+      any_change = FixAuthorNamesCaps (action->data.ptrvalue, sep, log_fp);
       break;
   }
 
@@ -24849,7 +25721,7 @@ static void FixCollectionDatesCallback (BioSourcePtr biop, Pointer data)
 NLM_EXTERN SubSourcePtr FindBadLatLon (BioSourcePtr biop)
 {
   SubSourcePtr ssp, ssp_bad = NULL;
-  Boolean      format_ok, lat_in_range, lon_in_range;
+  Boolean      format_ok, lat_in_range, lon_in_range, precision_ok;
 
   if (biop == NULL)
   {
@@ -24860,7 +25732,7 @@ NLM_EXTERN SubSourcePtr FindBadLatLon (BioSourcePtr biop)
   {
     if (ssp->subtype == SUBSRC_lat_lon)
     {
-      IsCorrectLatLonFormat (ssp->name, &format_ok, &lat_in_range, &lon_in_range);
+      IsCorrectLatLonFormat (ssp->name, &format_ok, &precision_ok, &lat_in_range, &lon_in_range);
       if (!format_ok || !lat_in_range || !lon_in_range)
       {
         ssp_bad = ssp;
@@ -25170,6 +26042,9 @@ typedef struct replacepair {
 } ReplacePairData, PNTR ReplacePairPtr;
 
 static ReplacePairData macro_spell_fixes[] = {
+  {"Agricultrual", "Agricultural"},
+  {"Agricultureal", "Agricultural"},
+  {"Agricultrure", "Agriculture"},
   {"univeristy", "University" },
   {"univerisity", "University" },
   {"univercity", "University" },
@@ -25178,6 +26053,10 @@ static ReplacePairData macro_spell_fixes[] = {
   {"univesity", "University" },
   {"uviversity", "University" },
   {"universtiy", "University" },
+  {"unvierstity", "University" },
+  {"univiersity", "University" },
+  {"universtity", "University" },
+  {"Unversity", "University" },
   {"protien", "protein" },
   {"Insitiute", "Institute" },
   {"Instutite", "Institute" },
@@ -25185,6 +26064,31 @@ static ReplacePairData macro_spell_fixes[] = {
   {"institue", "Institute" },
   {"insitute", "Institute" },
   {"insititute","Institute" },
+  {"Instiute","Institute" },
+  {"hpothetical", "hypothetical" },
+  {"hyphotetical", "hypothetical" },
+  {"hyphotheical", "hypothetical" },
+  {"hypotehtical", "hypothetical" },
+  {"hypotethical", "hypothetical" },
+  {"hypotetical", "hypothetical" },
+  {"hypotheical", "hypothetical" },
+  {"hypotheitcal", "hypothetical" },
+  {"hypothetcial", "hypothetical" },
+  {"hypothetica", "hypothetical" },
+  {"hypothteical", "hypothetical" },
+  {"hypothtical", "hypothetical" },
+  {"hypthetical", "hypothetical" },
+  {"hyptothetical", "hypothetical" },
+  {"puatative", "putative" },
+  {"puative", "putative" },
+  {"puative", "putative" },
+  {"putaitive", "putative" },
+  {"putaitve", "putative" },
+  {"putaive", "putative" },
+  {"putataive", "putative" },
+  {"putatitve", "putative" },
+  {"putitive", "putative" },
+  {"reseach", "research"},
   {NULL, NULL}};
 
 
@@ -25401,6 +26305,9 @@ static DefLineType DefLineTypeFromAutodefListType(Uint2 list_type)
     case Autodef_list_type_complete_genome:
       deflinetype = DEFLINE_COMPLETE_GENOME;
       break;
+    case Autodef_list_type_sequence:
+      deflinetype = DEFLINE_SEQUENCE;
+      break;
   }
   return deflinetype;
 }
@@ -25452,6 +26359,10 @@ static void ApplyAutodefActionToSeqEntry (AutodefActionPtr action, SeqEntryPtr s
 
   InitFeatureRequests (&dfrl);
   dfrl.feature_list_type = DefLineTypeFromAutodefListType (action->clause_list_type);
+  if (action->misc_feat_parse_rule > 0) {
+    dfrl.keep_items[RemovableNoncodingProductFeat] = TRUE;
+    dfrl.misc_feat_parse_rule = action->misc_feat_parse_rule;
+  }
   
   AutoDefForSeqEntry (sep, SeqMgrGetEntityIDForSeqEntry (sep), &od, modList, modifier_indices, &dfrl,
                       DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE);
@@ -25537,7 +26448,7 @@ static void ApplyFixPubCapsCallback (PubdescPtr pdp, Pointer data)
 
   if (f->action->authors && !f->action->punct_only) {
     alp = GetAuthListPtr (pdp, NULL);
-    if (alp != NULL) {
+    if (alp != NULL && alp->choice == 1) {
       for (names = alp->names; names != NULL; names = names->next) { 
         ap = names->data.ptrvalue;
         ap_orig = AsnIoMemCopy (ap, (AsnReadFunc) AuthorAsnRead, (AsnWriteFunc) AuthorAsnWrite);
@@ -25688,6 +26599,153 @@ static Boolean ApplyFixPubCapsToSeqEntry (FixPubCapsActionPtr action, SeqEntryPt
   }
 
   return rval;
+}
+
+
+static void FixAuthorLastNamesAuthor (AuthorPtr author, ValNodeBlockPtr block)
+{
+  NameStdPtr pNameStandard;
+  CharPtr    newval;
+  CharPtr    str;
+  CharPtr    fmt = "%s to %s";
+
+  if (author == NULL || author->name == NULL || author->name->choice != 2) {
+    return;
+  }
+  pNameStandard = author->name->data;
+  if (pNameStandard != NULL && pNameStandard->names[0] != NULL)
+  {
+    if (IsAllCaps(pNameStandard->names[0])) {
+      newval = StringSave (pNameStandard->names[0]);
+      FixCapitalizationInElement (&newval, FALSE, FALSE, TRUE);
+      if (StringCmp (pNameStandard->names[0], newval) != 0) {
+        str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (pNameStandard->names[0]) + StringLen (newval)));
+        sprintf (str, fmt, pNameStandard->names[0], newval);
+        ValNodeAddPointerToEnd (block, 0, str);
+        pNameStandard->names[0] = MemFree (pNameStandard->names[0]);
+        pNameStandard->names[0] = newval;
+        newval = NULL;
+      } else {
+        newval = MemFree (newval);
+      }
+    }
+  }
+}
+
+
+static void FixAuthorNameAuthor (AuthorPtr author, ValNodeBlockPtr block)
+{
+  CharPtr oldval, newval;
+  CharPtr    str;
+  CharPtr    fmt = "%s to %s";
+  
+  oldval = GetAuthorStringEx (author, FALSE);
+  if (IsAllCaps (oldval)) {
+    FixCapitalizationInAuthor (author);
+    newval = GetAuthorStringEx (author, FALSE);
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (oldval) + StringLen (newval)));
+    sprintf (str, fmt, oldval, newval);
+    ValNodeAddPointerToEnd (block, 0, str);
+  }
+}
+
+
+typedef struct fixsingleauthor {
+  Boolean last_name_only;
+  ValNodeBlock block;
+} FixSingleAuthorData, PNTR FixSingleAuthorPtr;
+
+
+static void FixAuthorNamesPub (PubPtr pub, FixSingleAuthorPtr f)
+{
+  AuthListPtr alp;
+  ValNodePtr  names;
+  
+  if (f == NULL) {
+    return;
+  }
+  alp = GetAuthorListForPub (pub);
+  if (alp != NULL && alp->choice == 1) {
+    for (names = alp->names; names != NULL; names = names->next) { 
+      if (f->last_name_only) {
+        FixAuthorLastNamesAuthor(names->data.ptrvalue, &(f->block));
+      } else {
+        FixAuthorNameAuthor (names->data.ptrvalue, &(f->block));
+      }
+    }
+  }
+}
+
+
+static void FixAuthorNamesPubdesc (PubdescPtr pdp, FixSingleAuthorPtr f)
+{
+  ValNodePtr vnp;
+
+  if (pdp != NULL) {
+    for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+      FixAuthorNamesPub (vnp, f);
+    }
+  }
+}
+
+
+static void FixAuthorNamesCapsDescCallback (SeqDescPtr sdp, Pointer data)
+{
+  if (sdp != NULL && sdp->choice == Seq_descr_pub) {
+    FixAuthorNamesPubdesc(sdp->data.ptrvalue, data);
+  }
+}
+
+
+static void FixAuthorNamesCapsFeatCallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (sfp != NULL && sfp->data.choice == SEQFEAT_PUB) {
+    FixAuthorNamesPubdesc(sfp->data.value.ptrvalue, data);
+  }
+}
+
+
+static Boolean FixAuthorNamesCaps (FixAuthorCapsPtr action, SeqEntryPtr sep, FILE *log_fp)
+{
+  FixSingleAuthorData fix;
+  ValNodePtr   vnp;
+  CharPtr      fmt = "Fix Author Last Names Capitalization: Changed %s %d time%s\n";
+  Int4         count;
+  CharPtr      curr;
+
+  if (action == NULL) {
+    return FALSE;
+  }
+  fix.last_name_only = action->last_name_only;
+  InitValNodeBlock (&(fix.block), NULL);
+
+  /* collect pub objects that match constraint */
+  VisitDescriptorsInSep (sep, &fix, FixAuthorNamesCapsDescCallback);
+  VisitFeaturesInSep (sep, &fix, FixAuthorNamesCapsFeatCallback);
+
+  if (fix.block.head == NULL) {
+    /* nothing changed */
+    return FALSE;
+  } else {
+    /* report changes */
+    if (log_fp != NULL) {
+      fix.block.head = ValNodeSort (fix.block.head, SortVnpByString);
+      curr = fix.block.head->data.ptrvalue;
+      count = 1;
+      for (vnp = fix.block.head->next; vnp != NULL; vnp = vnp->next) {
+        if (StringCmp (curr, vnp->data.ptrvalue) == 0) {
+          count++;
+        } else {
+          fprintf (log_fp, fmt, curr, count, count > 1 ? "s" : "");
+          curr = vnp->data.ptrvalue;
+          count = 1;
+        }
+      }
+      fprintf (log_fp, fmt, curr, count, count > 1 ? "s" : "");
+    }
+    fix.block.head = ValNodeFreeData (fix.block.head);
+    return TRUE;
+  }
 }
 
 
@@ -25918,20 +26976,23 @@ static ValNodePtr WordListFromText (CharPtr txt)
 
 
 static CharPtr s_SpecialLineageWords[] = {
-  "Domain",
-  "Phylum",
-  "Kingdom",
-  "Family",
   "Class",
-  "Superfamily",
-  "Order",
+  "Classification",
+  "Domain",
+  "Family",
   "Genus",
-  "Species",
-  "Organism",
-  "Note",
-  "Taxonomic classification", 
+  "Kingdom",
   "Lineage",
+  "Note",
+  "Order",
+  "Organism",
+  "Phylum",
+  "Species",
+  "Superfamily",
   "Tax class/lineage",
+  "Taxonomic classification", 
+  "Taxonomic Classification is",
+  "Taxonomy",
   NULL
 };
 
@@ -26432,7 +27493,7 @@ static Boolean ApplyAuthorFixToSeqEntry (SeqEntryPtr sep, AuthorFixActionPtr act
     if (pdp != NULL) {
       for (pub = pdp->pub; pub != NULL; pub = pub->next) {
         alp = GetAuthorListForPub (pub);
-        if (alp != NULL) {
+        if (alp != NULL && alp->choice == 1) {
           for (names = alp->names; names != NULL; names = names->next) { 
             ap = names->data.ptrvalue;
             switch (action->fix_type) {
@@ -26470,7 +27531,2089 @@ static Boolean ApplyAuthorFixToSeqEntry (SeqEntryPtr sep, AuthorFixActionPtr act
 }
 
 
-NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FILE *log_fp)
+static Boolean UpdateSequencesInSeqEntry (SeqEntryPtr sep, UpdateSequencesActionPtr a, FILE *log_fp, GlobalAlignFunc align_func)
+{
+  FILE *fp;
+  SeqEntryPtr   update_sequences;
+  SeqEntryPtr   update_sep, orig_scope;
+  ValNodePtr    err_msg_list = NULL, vnp;
+  Boolean       chars_stripped = FALSE;
+  Int4          orig_seq_num = 0, update_seq_num = 0;
+  ValNodePtr    orig_list = NULL, update_list = NULL;
+  ValNodePtr    unmatched_updates;
+  BioseqSetPtr  top_bssp;
+  Uint2         update_entityID;
+  ValNodePtr    vnp_o, vnp_u;
+  SeqAlignPtr   salp = NULL;
+  Boolean       revcomp, data_in_log;
+  BioseqPtr     update_bsp, orig_bsp;
+  Boolean       rval = FALSE;
+  Char          id_buf[255];
+
+  if (sep == NULL || a == NULL || StringHasNoText (a->filename)) {
+    return FALSE;
+  }
+
+  fp = FileOpen (a->filename, "r");
+  if (fp == NULL)
+  {
+    if (log_fp != NULL) 
+    {
+      fprintf (log_fp, "Unable to open %s for update sequences\n", a->filename);
+    }
+    return FALSE;
+  }
+  update_sequences = ImportNucleotideFASTASequencesFromFile (fp, TRUE, NULL, &err_msg_list, 
+                                                             &chars_stripped, TRUE);
+  FileClose (fp);
+  ValNodeFreeData (err_msg_list);
+  AddUniqueUpdateSequenceIDs (update_sequences);
+  if (update_sequences == NULL) 
+  {
+    if (log_fp != NULL) 
+    {
+      fprintf (log_fp, "Unable to read FASTA update sequences from %s\n", a->filename);
+    }
+    return FALSE;
+  }
+
+  if (chars_stripped && log_fp != NULL) 
+  {
+    fprintf (log_fp, "Characters were stripped from FASTA update sequences in %s\n", a->filename);
+  }
+
+  top_bssp = BioseqSetNew ();
+  top_bssp->_class = BioseqseqSet_class_genbank;
+  top_bssp->seq_set = update_sequences;
+  update_sep = SeqEntryNew ();
+  update_sep->choice = 2;
+  update_sep->data.ptrvalue = top_bssp;
+  update_entityID = ObjMgrGetEntityIDForPointer (top_bssp);
+  AssignIDsInEntityEx (update_entityID, 0, NULL, NULL);
+
+  ListBioseqsInSeqEntry (sep, TRUE, &orig_seq_num, &orig_list);
+  ListBioseqsInSeqEntry (update_sep, TRUE, &update_seq_num, &update_list);
+  orig_scope = SeqEntrySetScope (sep);
+  unmatched_updates = ShuffleUpdateBioseqListWithIndex (&update_list, orig_list);
+  SeqEntrySetScope (orig_scope);
+  if (log_fp != NULL && unmatched_updates != NULL) 
+  {
+    for (vnp = unmatched_updates; vnp != NULL; vnp = vnp->next) 
+    {
+      /* TODO - log unmatched update sequences? */
+    }
+  }
+
+  RemoveSequencesWithoutUpdates (&orig_list, &update_list);
+
+  for (vnp_o = orig_list, vnp_u = update_list;
+       vnp_o != NULL && vnp_u != NULL;
+       vnp_o = vnp_o->next, vnp_u = vnp_u->next)
+  {
+    orig_bsp = vnp_o->data.ptrvalue;
+    update_bsp = vnp_u->data.ptrvalue;
+    revcomp = FALSE;
+    salp = AlignForSequenceUpdate (orig_bsp, update_bsp, &revcomp, align_func);
+    /* TODO - warn about no alignment? */
+
+    ReplaceOneSequence (salp, orig_bsp, update_bsp);
+    if (revcomp) 
+    {
+      BioseqRevComp (orig_bsp);
+      SeqEntryExplore (sep, (Pointer) orig_bsp, RevCompFeats);
+    }
+    if (! AreSequenceResiduesIdentical (orig_bsp, update_bsp)) 
+    {
+      if (a->add_cit_subs) 
+      {
+        AddCitSubToUpdatedSequence (orig_bsp, orig_bsp->idx.entityID, kSubmitterUpdateText);
+      }
+      RemoveQualityScores (orig_bsp, log_fp, &data_in_log);
+      if (log_fp != NULL)
+      {
+        SeqIdWrite (SeqIdFindWorst (orig_bsp->id), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
+        fprintf (log_fp, "Updated sequence %s.\n", id_buf);
+      }
+      rval = TRUE;
+    }
+    salp = SeqAlignFree (salp);
+  }
+
+  top_bssp->idx.deleteme = TRUE;
+  DeleteMarkedObjects (update_entityID, 0, NULL);
+  return rval;
+}
+
+static void AddTransSplicingToGene (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Int4Ptr    countP;
+  Int4       numivals = 0;
+  SeqLocPtr  slp = NULL;
+  CharPtr    str;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return;
+  countP = (Int4Ptr) userdata;
+
+  if (sfp->excpt) {
+    if (StringISearch (sfp->except_text, "trans-splicing") != NULL) return;
+  }
+
+  while ((slp = SeqLocFindNext (sfp->location, slp)) != NULL) {
+    numivals++;
+  }
+  if (numivals < 2) return;
+
+  sfp->excpt = TRUE;
+  if (sfp->except_text == NULL) {
+    sfp->except_text = StringSave ("trans-splicing");
+  } else {
+    str = (CharPtr) MemNew (sizeof (Char) * (sizeof (sfp->except_text) + 20));
+    if (str != NULL) {
+      sprintf (str, "%s,trans-splicing", sfp->except_text);
+      MemFree (sfp->except_text);
+      sfp->except_text = str;
+    }
+  }
+
+  if (countP != NULL) {
+    (*countP)++;
+  }
+}
+
+static void LookForBioseqSetFields (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  BoolPtr  bp;
+
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_small_genome_set) return;
+  bp = (BoolPtr) userdata;
+  if (bp == NULL) return;
+  *bp = TRUE;
+}
+
+static Boolean AddTransSplicingInSeqEntry (SeqEntryPtr sep, FILE *log_fp)
+{
+  Int4     count = 0;
+  Boolean  is_small_genome_set = FALSE;
+
+  if (sep == NULL) return FALSE;
+
+  VisitSetsInSep (sep, (Pointer) &is_small_genome_set, LookForBioseqSetFields);
+  if (! is_small_genome_set) return FALSE;
+
+  VisitFeaturesInSep (sep, (Pointer) &count, AddTransSplicingToGene);
+
+  return (Boolean) (count > 0);
+}
+
+static Boolean RemoveInvalidECnumbersInSeqEntry (SeqEntryPtr sep, FILE *log_fp)
+{
+  Int4  count = 0;
+
+  if (sep == NULL) return FALSE;
+
+  count += UpdateReplacedECNumbers (sep);
+  count += DeleteBadECNumbers (sep);
+
+  return (Boolean) (count > 0);
+}
+
+
+typedef struct tsaidfromdefline {
+  TextPortionPtr text_portion;
+  CharPtr suffix;
+  Int4    num_created;
+} TSAIdFromDeflineData, PNTR TSAIdFromDeflinePtr;
+
+
+static void CreateTSAIDsFromDeflineCallback (BioseqPtr bsp, Pointer data)
+{
+  TSAIdFromDeflinePtr t;
+  CharPtr      db;
+  SeqDescrPtr  sdp;
+  SeqMgrDescContext dcontext;
+  CharPtr      str;
+  SeqIdPtr     sip_new;
+  DbtagPtr     dbtag;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) 
+      || (t = (TSAIdFromDeflinePtr) data) == NULL
+      || (db = GetTSAIDDB(bsp)) == NULL) {
+    return;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
+  if (sdp == NULL 
+      || (str = GetTextPortionFromString ((CharPtr) sdp->data.ptrvalue, t->text_portion)) == NULL) {
+    db = MemFree (db);
+    return;
+  }
+
+  dbtag = DbtagNew ();
+  dbtag->db = db;
+  dbtag->tag = ObjectIdNew ();
+  if (t->suffix == NULL) {
+    dbtag->tag->str = str;
+    str = NULL;
+  } else {
+    dbtag->tag->str = (CharPtr) MemNew (sizeof (Char) * (StringLen (str) + StringLen (t->suffix) + 2));
+    sprintf (dbtag->tag->str, "%s.%s", str, t->suffix);
+    str = MemFree (str);
+  }
+  sip_new = ValNodeNew (NULL);
+  sip_new->choice = SEQID_GENERAL;
+  sip_new->data.ptrvalue = dbtag;
+  sip_new->next = bsp->id;
+  bsp->id = sip_new;
+  SeqMgrReplaceInBioseqIndex (bsp);
+  t->num_created ++;
+}
+
+
+NLM_EXTERN Int4 CreateTSAIDsFromDeflineInSep (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr t)
+{
+  TSAIdFromDeflineData td;
+
+  td.text_portion = t;
+  td.suffix = suffix;
+  td.num_created = 0;
+
+  VisitBioseqsInSep (sep, &td, CreateTSAIDsFromDeflineCallback);
+
+  return td.num_created;
+}
+
+
+typedef struct tsa_id_callback {
+  SeqEntryPtr top_sep;
+  CharPtr suffix;
+  TextPortionPtr text_portion;
+  Int4    num_created;
+} TSAIdCallbackData, PNTR TSAIdCallbackPtr;
+
+
+static void MakeTSAIdsCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqIdPtr        sip, sip_tsa = NULL, sip_local = NULL;
+  TSAIdCallbackPtr t;
+  SeqIdPtr        sip_new = NULL;
+  DbtagPtr        dbtag, dbtag_old = NULL;
+  CharPtr         db = NULL;
+  ObjectIdPtr     oip = NULL;
+  Int4            id_num = 0;
+  CharPtr         id_str = NULL, tmp_str = NULL;
+  CharPtr         cp;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || data == NULL || !IsTSA (bsp)) {
+    return;
+  }
+
+  t = (TSAIdCallbackPtr) data;
+
+  for (sip = bsp->id;
+       sip != NULL;
+       sip = sip->next) 
+  {
+    if (sip->choice == SEQID_LOCAL) 
+    {
+      sip_local = sip;
+    } 
+    else if (sip->choice == SEQID_GENERAL
+               && (dbtag_old = (DbtagPtr) sip->data.ptrvalue) != NULL
+               && (StringNCmp (dbtag_old->db, "gpid:", 5) == 0 || StringNCmp (dbtag_old->db, "bpid:", 5) == 0)) 
+    {
+      sip_tsa = sip;
+    }
+  }
+
+  if (sip_tsa == NULL && sip_local == NULL) {
+    return;
+  }
+  db = GetTSAIDDB (bsp);
+  if (db == NULL) {
+    return;
+  }
+
+  dbtag = DbtagNew ();
+  dbtag->db = db;
+  dbtag->tag = ObjectIdNew ();
+  
+  if (sip_tsa != NULL && (dbtag_old = (DbtagPtr) sip_tsa->data.ptrvalue) != NULL) {
+    oip = dbtag_old->tag;
+    sip = sip_tsa;
+  } else if (sip_local != NULL) {
+    oip = sip_local->data.ptrvalue;
+    sip = sip_local;
+  }
+
+  if (oip == NULL) {
+    return;
+  }
+
+  if (oip->str == NULL) {
+    if (t->text_portion != NULL) {
+      tmp_str = (CharPtr) MemNew (sizeof (Char) * 16);
+      sprintf (tmp_str, "%d", oip->id);
+      id_str = GetTextPortionFromString (tmp_str, t->text_portion);
+      tmp_str = MemFree (tmp_str);
+    } else {
+      id_num = oip->id;
+    }
+  } else {
+    if (t->text_portion == NULL) {
+      id_str = StringSave (oip->str);
+      if (sip == sip_tsa && (cp = StringRChr (id_str, '.')) != NULL) {
+        *cp = 0;
+      }
+    } else {
+      id_str = GetTextPortionFromString (oip->str, t->text_portion);
+    }
+  }
+
+  if (id_num == 0 && id_str == NULL && StringHasNoText (t->suffix)) {
+    return;
+  }
+
+  if (t->suffix == NULL) {
+    if (id_str == NULL) {
+      dbtag->tag->id = id_num;
+    } else {
+      dbtag->tag->str = StringSave (id_str);
+    }
+  } else {
+    if (id_str == NULL) {
+      dbtag->tag->str = (CharPtr) MemNew (sizeof (Char) * (16 + StringLen (t->suffix)));
+      sprintf (dbtag->tag->str, "%d.%s", id_num, t->suffix);
+    } else {
+      dbtag->tag->str = (CharPtr) MemNew (sizeof (Char) * (StringLen (id_str) + StringLen (t->suffix) + 2));
+      sprintf (dbtag->tag->str, "%s.%s", id_str, t->suffix);
+    }
+  }
+  id_str = MemFree (id_str);
+  sip_new = ValNodeNew (NULL);
+  sip_new->choice = SEQID_GENERAL;
+  sip_new->data.ptrvalue = dbtag;
+  sip = SeqIdDup (sip);
+  ReplaceSeqIdWithSeqId (sip, sip_new, t->top_sep);
+  sip = SeqIdFree (sip);
+  sip_new = SeqIdFree (sip_new);
+  t->num_created++;
+}     
+          
+  
+NLM_EXTERN Int4 ConvertLocalIdsToTSAIds (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr tp)
+{
+  TSAIdCallbackData t;
+
+  t.top_sep = sep;
+  t.suffix = suffix;
+  t.text_portion = tp;
+  t.num_created = 0;
+  VisitBioseqsInSep (sep, &t, MakeTSAIdsCallback);
+  return t.num_created;
+}
+
+
+static void EditTSAIdsCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqIdPtr        sip, sip_tsa = NULL;
+  TSAIdCallbackPtr t;
+  SeqIdPtr        sip_new = NULL;
+  DbtagPtr        dbtag, dbtag_old = NULL;
+  ObjectIdPtr     oip = NULL;
+  Int4            id_num = 0;
+  CharPtr         id_str = NULL, tmp_str = NULL;
+  CharPtr         cp;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || data == NULL || !IsTSA (bsp)) {
+    return;
+  }
+
+  t = (TSAIdCallbackPtr) data;
+
+  for (sip = bsp->id;
+       sip != NULL && sip_tsa == NULL;
+       sip = sip->next) 
+  {
+    if (sip->choice == SEQID_GENERAL
+               && (dbtag_old = (DbtagPtr) sip->data.ptrvalue) != NULL
+               && (StringNCmp (dbtag_old->db, "gpid:", 5) == 0 || StringNCmp (dbtag_old->db, "bpid:", 5) == 0)) 
+    {
+      sip_tsa = sip;
+    }
+  }
+
+  if (sip_tsa == NULL) {
+    return;
+  }
+
+  oip = dbtag_old->tag;
+
+  if (oip->str == NULL) {
+    if (t->text_portion != NULL) {
+      tmp_str = (CharPtr) MemNew (sizeof (Char) * 16);
+      sprintf (tmp_str, "%d", oip->id);
+      id_str = GetTextPortionFromString (tmp_str, t->text_portion);
+      tmp_str = MemFree (tmp_str);
+    } else {
+      id_num = oip->id;
+    }
+  } else {
+    if (t->text_portion == NULL) {
+      id_str = StringSave (oip->str);
+      if ((cp = StringRChr (id_str, '.')) != NULL) {
+        *cp = 0;
+      }
+    } else {
+      id_str = GetTextPortionFromString (oip->str, t->text_portion);
+    }
+  }
+
+  if (id_num == 0 && id_str == NULL && StringHasNoText (t->suffix)) {
+    return;
+  }
+
+  dbtag = DbtagNew ();
+  dbtag->db = StringSave (dbtag_old->db);
+  dbtag->tag = ObjectIdNew ();
+  
+  if (t->suffix == NULL) {
+    if (id_str == NULL) {
+      dbtag->tag->id = id_num;
+    } else {
+      dbtag->tag->str = StringSave (id_str);
+    }
+  } else {
+    if (id_str == NULL) {
+      dbtag->tag->str = (CharPtr) MemNew (sizeof (Char) * (16 + StringLen (t->suffix)));
+      sprintf (dbtag->tag->str, "%d.%s", id_num, t->suffix);
+    } else {
+      dbtag->tag->str = (CharPtr) MemNew (sizeof (Char) * (StringLen (oip->str) + StringLen (t->suffix) + 2));
+      sprintf (dbtag->tag->str, "%s.%s", id_str, t->suffix);
+    }
+  }
+  id_str = MemFree (id_str);
+  sip_tsa = SeqIdDup (sip_tsa);
+  sip_new = ValNodeNew (NULL);
+  sip_new->choice = SEQID_GENERAL;
+  sip_new->data.ptrvalue = dbtag;
+  ReplaceSeqIdWithSeqId (sip_tsa, sip_new, t->top_sep);
+  sip_new = SeqIdFree (sip_new);
+  sip_tsa = SeqIdFree (sip_tsa);
+  t->num_created++;
+}
+
+
+NLM_EXTERN Int4 EditTSAIds (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr tp)
+{
+  TSAIdCallbackData t;
+
+  t.top_sep = sep;
+  t.suffix = suffix;
+  t.text_portion = tp;
+  t.num_created = 0;
+  VisitBioseqsInSep (sep, &t, EditTSAIdsCallback);
+  return t.num_created;
+}
+
+
+static Boolean 
+CreateTsaIDsInSeqEntry 
+(SeqEntryPtr           sep,
+ CreateTSAIdsActionPtr action,
+ FILE *                log_fp)
+{
+  Int4 num_created = 0;
+
+  if (sep == NULL || action == NULL || action->src == NULL) {
+    return FALSE;
+  }
+
+  switch (action->src->choice) {
+    case CreateTSAIdsSrc_local_id:
+      num_created = ConvertLocalIdsToTSAIds (sep, action->suffix, action->id_text_portion);
+      break;
+    case CreateTSAIdsSrc_defline:
+      num_created = CreateTSAIDsFromDeflineInSep (sep, action->suffix, action->src->data.ptrvalue);
+      break;
+  }
+
+  if (num_created > 0) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "Created %d TSA IDs\n", num_created);
+    }
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean PerformAutofixInSeqEntry 
+(SeqEntryPtr      sep,
+ AutofixActionPtr action,
+ FILE *           log_fp)
+{
+  Int4 num_created = 0;
+  DiscrepancyType test_type;
+  DiscrepancyConfigPtr dcp;
+  LogInfoData          lid;
+  Int4                 i;
+  ValNodePtr           results;
+  ValNodePtr           sep_list = NULL;
+
+  if (sep == NULL || action == NULL || (test_type = GetDiscrepancyTypeFromSettingName (action->test_name)) == MAX_DISC_TYPE) {
+    return FALSE;
+  }
+
+  dcp = DiscrepancyConfigNew();
+  for (i = 0; i < MAX_DISC_TYPE; i++)
+  {
+    dcp->conf_list[i] = FALSE;
+  }
+  dcp->conf_list[test_type] = TRUE;
+
+  ValNodeAddPointer (&sep_list, 0, sep);
+  results = CollectDiscrepancies (dcp, sep_list, NULL);
+  sep_list = ValNodeFree (sep_list);
+  dcp = DiscrepancyConfigFree (dcp);
+
+  MemSet (&lid, 0, sizeof (LogInfoData));
+  lid.fp = log_fp;
+  AutofixDiscrepancies (results, TRUE, &lid);
+  results = FreeClickableList (results);
+  return lid.data_in_log;
+}
+
+
+typedef struct taxnameconsistencydata {
+  CharPtr taxname;
+  Boolean first;
+  Boolean consistent;
+} TaxnameConsistencyData, PNTR TaxnameConsistencyPtr;
+
+
+static void TaxnameConsistencyBiosourceCallback (BioSourcePtr biop, Pointer data)
+{
+  TaxnameConsistencyPtr tp;
+  if (biop == NULL || (tp = (TaxnameConsistencyPtr)data) == NULL) {
+    return;
+  }
+  if (biop->org == NULL || StringHasNoText (biop->org->taxname)) {
+    if (tp->first) {
+      tp->first = FALSE;
+    } else if (tp->taxname != NULL) {
+      tp->consistent = FALSE;
+    }
+  } else if (tp->first) {
+    tp->taxname = biop->org->taxname;
+    tp->first = FALSE;
+  } else if (StringCmp (tp->taxname, biop->org->taxname) != 0) {
+    tp->consistent = FALSE;
+  }
+}
+
+
+static Boolean AreTaxnamesConsistent (BioseqSetPtr bssp)
+{
+  TaxnameConsistencyData td;
+
+  td.taxname = NULL;
+  td.first = TRUE;
+  td.consistent = TRUE;
+
+  VisitBioSourcesInSet (bssp, &td, TaxnameConsistencyBiosourceCallback);
+  return td.consistent;
+}
+
+
+static Int4 FixPopToPhySets (SeqEntryPtr sep)
+{
+  BioseqSetPtr bssp;
+  Int4 rval = 0;
+
+  if (sep == NULL 
+      || !IS_Bioseq_set (sep) 
+      || (bssp = (BioseqSetPtr) sep->data.ptrvalue) == NULL) {
+    return 0;
+  }
+
+  if (bssp->_class == BioseqseqSet_class_pop_set && !AreTaxnamesConsistent(bssp)) {
+    bssp->_class = BioseqseqSet_class_phy_set;
+    rval++;
+  }
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    rval += FixPopToPhySets(sep);
+  }
+  return rval;
+}
+
+
+static Boolean PerformFixSetsInSeqEntry 
+(SeqEntryPtr      sep,
+ FixSetsActionPtr action,
+ FILE *           log_fp)
+{
+  Int4                 num_renormalized;
+  Boolean              rval = FALSE;
+
+  if (sep == NULL || action == NULL) {
+    return FALSE;
+  }
+
+  switch (action->choice) {
+    case FixSetsAction_remove_single_item_set:
+      num_renormalized = RemoveSingleItemSet (sep, TRUE);
+      if (num_renormalized > 0) {
+        if (log_fp != NULL) {
+          fprintf (log_fp, "Removed %d wrapper sets\n", num_renormalized);
+        }
+        rval = TRUE;
+      }
+      break;
+    case FixSetsAction_renormalize_nuc_prot_sets:
+      num_renormalized = RenormalizeNucProtSets (sep, TRUE);
+      if (num_renormalized > 0) {
+        if (log_fp != NULL) {
+          fprintf (log_fp, "Renormalized %d sets\n", num_renormalized);
+        }
+        rval = TRUE;
+      }
+      break;
+    case FixSetsAction_fix_pop_to_phy:
+      num_renormalized = FixPopToPhySets (sep);
+      if (num_renormalized > 0) {
+        if (log_fp != NULL) {
+          fprintf (log_fp, "Converted %d sets\n", num_renormalized);
+        }
+        rval = TRUE;
+      }
+      break;
+  }
+
+
+  return rval;
+}
+
+
+static Boolean PerformApplyTableInSeqEntry
+(SeqEntryPtr      sep,
+ ApplyTableActionPtr action,
+ FILE *           log_fp)
+{
+  Boolean            rval = FALSE;
+  ValNodePtr         table, data_table;
+  FILE              *fp;
+  ValNodePtr         err_list = NULL;
+  ValNodePtr         val, vnp, obj_table = NULL, dup_dest_errs;
+  ValNodePtr         columns = NULL, dup_col_list;
+  TabColumnConfigPtr t;
+
+  if (action == NULL) {
+    return FALSE;
+  }
+  if (action->in_memory_table != NULL && action->in_memory_table->data.ptrvalue == NULL) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "In memory table missing from apply table action.\n");
+    }
+    return FALSE;
+  }
+
+  if (action->in_memory_table == NULL) {
+    if (StringHasNoText (action->filename)) {
+      return FALSE;
+    }
+    fp = FileOpen (action->filename, "r");
+    if (fp == NULL)
+    {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Unable to open %s\n", action->filename);
+      }
+      return FALSE;
+    }
+    table = ReadTabTableFromFile (fp);
+    FileClose (fp);
+
+    if (table == NULL) {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Unable to read table from %s\n", action->filename);
+      }
+      return FALSE;
+    }
+  } else {
+    table = (ValNodePtr) action->in_memory_table->data.ptrvalue;
+  }
+
+  if (table->next == NULL) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "Table must have at least two rows, one header and one data, unable to apply table from %s\n", action->filename);
+    }
+    if (action->in_memory_table == NULL) {
+      table = FreeTabTable (table);
+    }
+    return FALSE;
+  } 
+
+  data_table = table;
+
+  t = TabColumnConfigNew ();
+  t->match_type = MatchTypeFromTableMatchType (action->match_type);
+
+  if (t->match_type == NULL) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "No match type for table, unable to apply table from %s\n", action->filename);
+    }
+    t = TabColumnConfigFree (t);
+    if (action->in_memory_table == NULL) {
+      table = FreeTabTable (table);
+    }
+    return FALSE;
+  } else if (t->match_type->choice == eTableMatchAny) {
+    if (table->next->next != NULL) {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Table must only have two rows for Match All Rows option, unable to apply table from %s\n", action->filename);
+      }
+      t = TabColumnConfigFree (t);
+      if (action->in_memory_table == NULL) {
+        table = FreeTabTable (table);
+      }
+      return FALSE;
+    } else {
+      data_table = table->next;
+    }
+  }
+  ValNodeAddPointer (&columns, 0, t);
+
+  rval = TRUE;
+  for (val = table->data.ptrvalue, vnp = columns;
+       val != NULL && rval;
+       val = val->next, vnp = vnp->next) {
+    if (vnp == NULL) {
+      vnp = ValNodeNew (columns);
+    }
+    t = vnp->data.ptrvalue;
+    if (t == NULL) {
+      t = TabColumnConfigNew ();
+      vnp->data.ptrvalue = t;
+    }
+    if (t->match_type == NULL && t->field == NULL) {
+      t->field = FieldTypeFromString (val->data.ptrvalue);
+      if (t->field == NULL) {
+        t = TabColumnConfigFree (t);
+        vnp->data.ptrvalue = NULL;
+        rval = FALSE;
+        if (log_fp != NULL) {
+          fprintf (log_fp, "%s not recognized as qualifier name, unable to apply table from %s\n", 
+                   (CharPtr) val->data.ptrvalue, action->filename);
+        }
+      }
+    }
+  }
+  if (rval) {
+    dup_col_list = CheckForDuplicateColumns (columns);
+    if (dup_col_list != NULL) {
+      FixDuplicateColumns (columns);
+      dup_col_list = ValNodeFreeData(dup_col_list);
+    }
+
+    if (log_fp != NULL) {
+      err_list = ValidateTabTableValues (data_table, columns);
+      for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+        fprintf (log_fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+      }
+      err_list = ValNodeFreeData (err_list);
+    }
+
+    obj_table = GetObjectTableForTabTable (sep, data_table, columns, &err_list);
+
+    dup_dest_errs = CheckObjTableForRowsThatApplyToTheSameDestination (obj_table);
+    if (dup_dest_errs != NULL) {
+      if (log_fp != NULL) {
+        for (vnp = dup_dest_errs; vnp != NULL; vnp = vnp->next) {
+          fprintf (log_fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+        }
+        fprintf (log_fp, "For one or more columns, two or more rows in the table apply to the same object.  Cannot apply table.");
+      }
+      dup_dest_errs = ValNodeFreeData (dup_dest_errs);
+      rval = FALSE;
+    } else {
+      ValNodeLink (&err_list, CheckObjTableForExistingText (sep, data_table, columns, obj_table));
+
+      /* look for errors with choice 1 */
+      for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+        if (vnp->choice == 1) {
+          if (log_fp != NULL) {
+            fprintf (log_fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+          } 
+        }
+      }
+      /* look for errors with choice 0 */
+       for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+        if (vnp->choice == 0) {
+          if (log_fp != NULL) {
+            fprintf (log_fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+          } 
+        }
+      }
+   
+      err_list = ValNodeFreeData (err_list);
+
+      if (!rval) {
+        DeleteMarkedObjects (SeqMgrGetEntityIDForSeqEntry (sep), 0, NULL);
+      } else {
+        err_list =  ApplyTableValuesToObjectTable (sep, data_table, columns, obj_table);
+        if (log_fp != NULL) {
+          for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+            fprintf (log_fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+          }
+        }
+      }
+    }
+    obj_table = FreeObjectTableForTabTable (obj_table);
+  }
+  err_list = ValNodeFreeData (err_list);
+  if (action->in_memory_table == NULL) {
+    table = FreeTabTable (table);
+  }
+  columns = TabColumnConfigListFree (columns);
+
+  return rval;
+}
+
+
+typedef struct addfiledescriptorsdata {
+  SeqDescPtr sdp_list;
+  ValNodePtr constraint;
+  Int4       num_affected;
+} AddFileDescriptorsData, PNTR AddFileDescriptorsPtr;
+
+
+static void AddFileDescriptorsCallback (BioseqPtr bsp, Pointer data)
+{
+  AddFileDescriptorsPtr a;
+  BioseqSetPtr bssp = NULL;
+
+
+  if (bsp == NULL || (a = (AddFileDescriptorsPtr) data) == NULL || ISA_aa (bsp->mol)) {
+    return;
+  }
+
+  if (!DoesObjectMatchConstraintChoiceSet (OBJ_BIOSEQ, bsp, a->constraint)) {
+    return;
+  }
+  if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) bsp->idx.parentptr;
+  }
+  if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
+    ValNodeLink (&(bssp->descr), AsnIoMemCopy (a->sdp_list, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite));
+  } else {
+    ValNodeLink (&(bsp->descr), AsnIoMemCopy (a->sdp_list, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite));
+  }
+  a->num_affected++;
+}
+
+
+static Boolean AddFileDescriptors
+(SeqEntryPtr      sep,
+ AddDescriptorListActionPtr action,
+ FILE *           log_fp)
+{
+  Boolean            rval = FALSE;
+  SeqDescPtr         sdp, sdp_next;
+  AsnIoPtr           aip;
+  AddFileDescriptorsData a;
+
+  if (action == NULL || action->descriptor_list == NULL) {
+    return FALSE;
+  }
+  if (action->descriptor_list->in_memory_table != NULL && action->descriptor_list->in_memory_table->data.ptrvalue == NULL) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "In memory table missing from add file descriptors action.\n");
+    }
+    return FALSE;
+  }
+  MemSet (&a, 0, sizeof (AddFileDescriptorsData));
+  a.constraint = action->constraint;
+
+  if (action->descriptor_list->in_memory_table == NULL) {
+    if (StringHasNoText (action->descriptor_list->filename)) {
+      return FALSE;
+    }
+    aip = AsnIoOpen (action->descriptor_list->filename, "r");
+    if (aip == NULL)
+    {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Unable to open %s\n", action->descriptor_list->filename);
+      }
+      return FALSE;
+    }
+      
+    while (sdp = SeqDescAsnRead (aip, NULL)) {
+      ValNodeLink (&(a.sdp_list), sdp);
+    }
+    AsnIoClose (aip);
+    
+    if (a.sdp_list == NULL) {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Unable to read table from %s\n", action->descriptor_list->filename);
+      }
+      return FALSE;
+    }
+  } else {
+    a.sdp_list = (ValNodePtr) action->descriptor_list->in_memory_table->data.ptrvalue;
+  }
+
+  VisitBioseqsInSep (sep, &a, AddFileDescriptorsCallback);
+  if (a.num_affected > 0) {
+    rval = TRUE;
+    if (log_fp != NULL) {
+      fprintf (log_fp, "Applied descriptors from %s to %d bioseqs\n", action->descriptor_list->filename, a.num_affected);
+    }
+  }  
+
+  if (action->descriptor_list->in_memory_table == NULL) {
+    for (sdp = a.sdp_list; sdp != NULL; sdp = sdp_next) {
+      sdp_next = sdp->next;
+      sdp->next = NULL;
+      sdp = SeqDescFree (sdp);
+    }
+  }
+
+  return rval;
+}
+
+
+static void AutoApplyStructuredCommentPrefixesCallback (SeqDescPtr sdp, Pointer data)
+{
+  UserObjectPtr uop;
+  CharPtr       prefix;
+
+  if (data != NULL && sdp != NULL && sdp->choice == Seq_descr_user 
+      && (uop = (UserObjectPtr) sdp->data.ptrvalue) != NULL
+      && uop->type != NULL
+      && StringICmp (uop->type->str, "StructuredComment") == 0
+      && (prefix = AutoapplyStructuredCommentPrefix (uop)) != NULL) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, 0, prefix);
+  }
+}
+
+
+static Boolean AutoApplyStructuredCommentPrefixes (SeqEntryPtr sep, FILE *log_fp)
+{
+  ValNodePtr added = NULL, vnp;
+  Int4 count = 0;
+  CharPtr curr_prefix = NULL;
+
+  VisitDescriptorsInSep (sep, &added, AutoApplyStructuredCommentPrefixesCallback);
+  if (added == NULL) {
+    return FALSE;
+  }
+  if (log_fp != NULL) {
+    added = ValNodeSort (added, SortVnpByString);
+    curr_prefix = added->data.ptrvalue;
+    count = 1;
+    for (vnp = added->next; vnp != NULL; vnp = vnp->next) {
+      if (StringCmp (curr_prefix, vnp->data.ptrvalue) == 0) {
+        count++;
+      } else {
+        fprintf (log_fp, "Added %d %s structured comment prefix%s\n", count, curr_prefix, count == 1 ? "" : "es");
+        curr_prefix = vnp->data.ptrvalue;
+        count = 1;
+      }
+    }
+    fprintf (log_fp, "Added %d %s structured comment prefix%s\n", count, curr_prefix, count == 1 ? "" : "es");
+  }
+  added = ValNodeFree (added);
+  return TRUE;
+}
+
+
+typedef struct performremovesequencesdata{
+  RemoveSequencesActionPtr action;
+  Boolean any;
+  FILE *log_fp;
+} PerformRemoveSequencesData, PNTR PerformRemoveSequencesPtr;
+
+static void PerformRemoveSequencesInSeqEntryCallback (BioseqPtr bsp, Pointer userdata)
+{
+  PerformRemoveSequencesPtr p;
+  Char id_buf[PATH_MAX];
+  SeqEntryPtr sep;
+  BioseqSetPtr bssp;
+
+  p = (PerformRemoveSequencesPtr) userdata;
+  if (p == NULL || p->action == NULL || p->action->constraint == NULL) {
+    return;
+  }
+  if (DoesObjectMatchConstraintChoiceSet (OBJ_BIOSEQ, bsp, p->action->constraint)) {
+    if (!ISA_aa (bsp->mol) 
+        && (sep = GetBestTopParentForData (bsp->idx.entityID, bsp)) != NULL
+        && IS_Bioseq_set (sep) 
+        && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL) {
+      bssp->idx.deleteme = TRUE;
+    } else {
+      bsp->idx.deleteme = TRUE;
+    }
+    p->any = TRUE;
+    if (p->log_fp != NULL) {
+      SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
+      fprintf (p->log_fp, "Removed %s\n", id_buf);
+    }
+  }
+}
+
+
+static Boolean PerformRemoveSequencesInSeqEntry
+(SeqEntryPtr      sep,
+ RemoveSequencesActionPtr action,
+ FILE *           log_fp)
+{
+  PerformRemoveSequencesData prd;
+
+  if (action == NULL || action->constraint == NULL) {
+    return FALSE;
+  }
+
+  prd.action = action;
+  prd.any = FALSE;
+  prd.log_fp = log_fp;
+
+  VisitBioseqsInSep (sep, &prd, PerformRemoveSequencesInSeqEntryCallback);
+  if (prd.any) {
+    DeleteMarkedObjects (SeqMgrGetEntityIDForSeqEntry(sep), 0, NULL);
+  }
+
+  return prd.any;
+}
+
+
+typedef struct propagateseqtech {
+  BioseqPtr bsp;
+  UserObjectPtr uop;
+  CharPtr filename;
+} PropagateSeqTechData, PNTR PropagateSeqTechPtr;
+
+
+static Boolean IsStructuredCommentWithPrefix (UserObjectPtr uop, CharPtr prefix)
+{
+  UserFieldPtr ufp;
+
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) {
+    return FALSE;
+  }
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    if (ufp->label != NULL && StringICmp (ufp->label->str, "StructuredCommentPrefix") == 0) {
+      if (ufp->choice != 1 || StringCmp (ufp->data.ptrvalue, prefix) != 0) {
+        return FALSE;
+      } else {
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
+    
+static void FindSeqTechBsp (BioseqPtr bsp, Pointer data)
+{
+  SeqIdPtr sip;
+  DbtagPtr dbtag;
+  PropagateSeqTechPtr p;
+  CharPtr cp;
+  SeqDescPtr sdp;
+  SeqMgrDescContext context;
+
+  if (bsp == NULL || ISA_aa(bsp->mol) || data == NULL) {
+    return;
+  }
+
+  p = (PropagateSeqTechPtr) MemNew (sizeof (PropagateSeqTechData));
+  p->bsp = bsp;
+  /* find NCBIFILE id */
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENERAL 
+        && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+        && (StringICmp (dbtag->db, "NCBIFILE") == 0)) {
+      p->filename = StringSave (dbtag->tag->str);
+      cp = StringRChr (p->filename, '/');
+      if (cp != NULL) {
+        *cp = 0;
+      }
+    }
+  }
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+       sdp != NULL && p->uop == NULL;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context)) {
+    if (IsStructuredCommentWithPrefix(sdp->data.ptrvalue, "##Assembly-Data-START##")) {
+      p->uop = sdp->data.ptrvalue;
+    }
+  }
+
+  ValNodeAddPointer ((ValNodePtr PNTR) data, 0, p);
+}
+
+
+static int LIBCALLBACK SortVnpByPropagateSeqTech (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  PropagateSeqTechPtr     str1;
+  PropagateSeqTechPtr     str2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  int comp = 0;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      str1 = (PropagateSeqTechPtr) vnp1->data.ptrvalue;
+      str2 = (PropagateSeqTechPtr) vnp2->data.ptrvalue;
+      if (str1 != NULL && str2 != NULL) {
+        comp = StringCmp (str1->filename, str2->filename);
+        if (comp == 0) {
+          if (str1->uop == NULL) {
+            comp = 1;
+          } else if (str2->uop == NULL) {
+            comp = -1;
+          }
+        }
+      }
+    }
+  }
+  return comp;
+}
+
+
+static Boolean PerformPropagateSequenceTechnology
+(SeqEntryPtr      sep,
+ Pointer          action,
+ FILE *           log_fp)
+{
+  ValNodePtr list = NULL, vnp;
+  PropagateSeqTechPtr p1, p2;
+  Boolean rval = FALSE;
+  SeqDescPtr   sdp;
+  Int4         num_added = 0;
+
+  VisitBioseqsInSep (sep, &list, FindSeqTechBsp);
+  list = ValNodeSort (list, SortVnpByPropagateSeqTech);
+
+  if (list == NULL) {
+    return FALSE;
+  }
+  p1 = list->data.ptrvalue;
+  for (vnp = list->next; vnp != NULL; vnp = vnp->next) {
+    p2 = vnp->data.ptrvalue;
+    if (p1->uop == NULL || StringCmp (p1->filename, p2->filename) != 0) {
+      p1 = p2;
+    } else if (p2->uop == NULL) {
+      sdp = CreateNewDescriptorOnBioseq (p2->bsp, Seq_descr_user);
+      sdp->data.ptrvalue = AsnIoMemCopy (p1->uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+      num_added ++;
+      rval = TRUE;
+    }
+  }
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    p1 = vnp->data.ptrvalue;
+    p1->filename = MemFree (p1->filename);
+    vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+  }
+  list = ValNodeFree (list);
+  if (num_added > 0 && log_fp != NULL) {
+    fprintf (log_fp, "Added %d Assembly Data descriptors.\n", num_added);
+  }
+
+  return rval;
+}
+
+
+NLM_EXTERN CharPtr SummarizePerformAutofixAction (AutofixActionPtr action)
+{
+  DiscrepancyType test_type;
+  CharPtr         fmt = "Perform Autofix for %s Discrepancy Report Test";
+  CharPtr         summ;
+
+  if (action == NULL || (test_type = GetDiscrepancyTypeFromSettingName (action->test_name)) == MAX_DISC_TYPE) {
+    return NULL;
+  }
+
+  summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (action->test_name)));
+  sprintf (summ, fmt, action->test_name);
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeFixSetsAction (FixSetsActionPtr action)
+{
+  CharPtr summ = NULL;
+
+  if (action == NULL) {
+    return NULL;
+  }
+
+  switch (action->choice) {
+    case FixSetsAction_remove_single_item_set:
+      summ = StringSave ("Remove single-sequence pop, phy, mut, or eco wrapper set without alignment");
+      break;
+    case FixSetsAction_renormalize_nuc_prot_sets:
+      summ = StringSave ("Renormalize nuc-prot sets");
+      break;
+    case FixSetsAction_fix_pop_to_phy:
+      summ = StringSave ("Convert pop sets to phy sets when taxnames are inconsistent");
+      break;
+  }
+
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeUpdateSequencesAction (UpdateSequencesActionPtr action)
+{
+  CharPtr summ, fmt = "Update sequences with FASTA from file %s";
+  CharPtr add_cit_subs = ", add Cit-subs to sequences changed";
+  Int4    len;
+
+  if (action == NULL || StringHasNoText (action->filename)) {
+    return NULL;
+  }
+
+  len = StringLen(fmt) + StringLen (action->filename);
+  if (action->add_cit_subs) {
+    len += StringLen (add_cit_subs);
+  }
+  summ = (CharPtr) MemNew (sizeof (Char) * len);
+  sprintf (summ, fmt, action->filename);
+  if (action->add_cit_subs) {
+    StringCat (summ, add_cit_subs);
+  }
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeCreateTSAIDsAction (CreateTSAIdsActionPtr action)
+{
+  CharPtr summ = NULL;
+  CharPtr suffix_fmt = ", use suffix %s";
+  CharPtr local_fmt = "Create TSA IDs from local IDs";
+  CharPtr defline_fmt = "Create TSA IDs from %s in defline";
+  CharPtr text_portion;
+  Int4    len;
+
+  if (action == NULL || action->src == NULL) {
+    return NULL;
+  }
+
+  switch (action->src->choice) {
+    case CreateTSAIdsSrc_local_id:
+      len = StringLen (local_fmt) + 1;
+      if (!StringHasNoText (action->suffix)) {
+        len += StringLen (suffix_fmt) + StringLen (action->suffix);
+      }
+      summ = (CharPtr) MemNew (sizeof (Char) * len);
+      sprintf (summ, "%s", local_fmt);
+      if (!StringHasNoText (action->suffix)) {
+        sprintf (summ + StringLen (summ), suffix_fmt, action->suffix);
+      }
+      break;
+    case CreateTSAIdsSrc_defline:
+      text_portion = SummarizeTextPortion (action->src->data.ptrvalue);
+      if (text_portion == NULL) {
+        text_portion = StringSave ("entire text");
+      }
+      len = StringLen (defline_fmt) + StringLen (text_portion);
+      if (!StringHasNoText (action->suffix)) {
+        len += StringLen (suffix_fmt) + StringLen (action->suffix);
+      }
+      summ = (CharPtr) MemNew (sizeof (Char) * len);
+      sprintf (summ, defline_fmt, text_portion);
+      text_portion = MemFree (text_portion);
+      if (!StringHasNoText (action->suffix)) {
+        sprintf (summ + StringLen (summ), suffix_fmt, action->suffix);
+      }
+      break;
+  }
+
+
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeApplyTableAction (ApplyTableActionPtr action)
+{
+  CharPtr summ, fmt = "Apply table from file %s";
+  Int4    len;
+
+  if (action == NULL || StringHasNoText (action->filename)) {
+    return NULL;
+  }
+
+  len = StringLen(fmt) + StringLen (action->filename);
+  summ = (CharPtr) MemNew (sizeof (Char) * len);
+  sprintf (summ, fmt, action->filename);
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeAddDescriptorListAction (AddDescriptorListActionPtr action)
+{
+  CharPtr summ, fmt = "Add descriptors from file %s to nucleotide sequences";
+  CharPtr constraint;
+  Int4    len;
+
+  if (action == NULL || action->descriptor_list == NULL || StringHasNoText (action->descriptor_list->filename)) {
+    return NULL;
+  }
+  constraint = SummarizeConstraintSet (action->constraint);
+
+  len = StringLen(fmt) + StringLen (action->descriptor_list->filename) + StringLen (constraint) + 1;
+  summ = (CharPtr) MemNew (sizeof (Char) * len);
+  sprintf (summ, fmt, action->descriptor_list->filename);
+  if (constraint != NULL) {
+    StringCat (summ, " ");
+    StringCat (summ, constraint);
+    constraint = MemFree (constraint);
+  }
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeRemoveSequencesAction (RemoveSequencesActionPtr action)
+{
+  CharPtr summ = NULL, constraint, fmt = "Remove sequences %s";
+
+  if (action == NULL || action->constraint == NULL) {
+    return NULL;
+  }
+  constraint = SummarizeConstraintSet (action->constraint);
+  if (constraint != NULL) {
+    summ = (CharPtr) MemNew (sizeof (CharPtr) * (StringLen (fmt) + StringLen (constraint)));
+    sprintf (summ, fmt, constraint);
+    constraint = MemFree (constraint);
+  }
+  return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizePropagateSequenceTechnology (Pointer action)
+{
+  return StringSave ("Propagate Assembly-Data structured comments to sequences with same filename");
+}
+
+
+/* Functions for summarizing macro actions for display */
+
+static CharPtr SummarizeApplyFeatureAction (ApplyFeatureActionPtr a)
+{
+  CharPtr    label = NULL;
+  CharPtr    str;
+  CharPtr    fmt = "Apply %s";
+
+  if (a == NULL) {
+    str = StringSave ("No action");
+  } else {
+    label = GetFeatureNameFromFeatureType (a->type);
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (label)));
+    sprintf (str, fmt, label);
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeRemoveFeatureAction (RemoveFeatureActionPtr a)
+{
+  CharPtr    label = NULL;
+  CharPtr    constraint, str;
+  CharPtr    fmt = "Remove %s";
+  CharPtr    constraint_fmt = "Remove %s %s";
+
+  if (a == NULL) {
+    str = StringSave ("No action");
+  } else {
+    label = GetFeatureNameFromFeatureType (a->type);
+    constraint = SummarizeConstraintSet (a->constraint);
+    if (constraint == NULL) {
+      str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (label)));
+      sprintf (str, fmt, label);
+    } else {
+      str = (CharPtr) MemNew (sizeof (Char) * (StringLen (constraint_fmt) + StringLen (label) + StringLen (constraint)));
+      sprintf (str, constraint_fmt, label, constraint);
+      constraint = MemFree (constraint);
+    }
+  }
+
+  return str;
+}
+
+
+static CharPtr SummarizeConvertSourceOptions (ValNodePtr vnp)
+{
+  ConvertFromCDSOptionsPtr options;
+  CharPtr fmt = "(%sremove overlapping mRNA, %sremove overlapping gene, %sremove transcript ID)";
+  CharPtr str;
+
+  if (vnp == NULL || vnp->choice != ConvertFeatureSrcOptions_cds || vnp->data.ptrvalue == NULL) {
+    return NULL;
+  }
+
+  options = (ConvertFromCDSOptionsPtr) vnp->data.ptrvalue;
+
+  str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 21));
+  sprintf (str, fmt, options->remove_mRNA ? "" : "do not ",
+                     options->remove_gene ? "" : "do not ",
+                     options->remove_transcript_id ? "" : "do not ");
+  return str;
+}
+
+
+static CharPtr SummarizeConvertDestOptions (ValNodePtr vnp)
+{
+  RegionTypePtr r;
+  CharPtr str = NULL;
+
+  if (vnp == NULL) return NULL;
+
+  switch (vnp->choice) {
+    case ConvertFeatureDstOptions_bond:
+      str = StringSave (GetMacroBondTypeName(vnp->data.intvalue));
+      break;
+    case ConvertFeatureDstOptions_site:
+      str = StringSave (GetMacroSiteTypeName(vnp->data.intvalue));
+      break;
+    case ConvertFeatureDstOptions_region:
+      r = (RegionTypePtr) vnp->data.ptrvalue;
+      if (r != NULL) {
+        if (r->create_nucleotide) {
+          str = StringSave ("on nucleotide sequence");
+        } else {
+          str = StringSave ("on protein sequence");
+        }
+      }
+      break;
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeConvertFeatureAction (ConvertFeatureActionPtr a)
+{
+  CharPtr str = NULL, from_label, to_label, constraint, src_options, dst_options;
+  CharPtr fmt = "Convert %s to %s";
+  CharPtr keep_orig = ", keep original feature";
+  CharPtr remove_orig = ", remove original feature";
+  Int4    len;
+
+  if (a == NULL) {
+    str = StringSave ("No action");
+  } else {
+    from_label = GetFeatureNameFromFeatureType (a->type_from);
+    to_label = GetFeatureNameFromFeatureType (a->type_to);
+    src_options = SummarizeConvertSourceOptions (a->src_options);
+    dst_options = SummarizeConvertDestOptions (a->dst_options);
+    constraint = SummarizeConstraintSet (a->src_feat_constraint);
+    len = StringLen (fmt) + StringLen (from_label) + StringLen (to_label);
+    if (src_options != NULL) {
+      len += StringLen (src_options) + 3;
+    }
+    if (dst_options != NULL) {
+      len += StringLen (dst_options) + 1;
+    }
+    if (constraint != NULL) {
+      len += StringLen (constraint) + 1;
+    }
+    if (a->leave_original) {
+      len += StringLen (keep_orig);
+    } else {
+      len += StringLen (remove_orig);
+    }
+    str = (CharPtr) MemNew (sizeof (Char) * len);
+    sprintf (str, fmt, from_label, to_label);
+    if (dst_options != NULL) {
+      StringCat (str, " ");
+      StringCat (str, dst_options);
+      dst_options = MemFree (dst_options);
+    }
+    if (src_options != NULL) {
+      StringCat (str, ", ");
+      StringCat (str, src_options);
+      src_options = MemFree (src_options);
+    }
+    if (constraint != NULL) {
+      StringCat (str, " ");
+      StringCat (str, constraint);
+      constraint = MemFree (constraint);
+    }
+    if (a->leave_original) {
+      StringCat (str, keep_orig);
+    } else {
+      StringCat (str, remove_orig);
+    }
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeEditLocationStrand (EditLocationStrandPtr strand)
+{
+  CharPtr from_label = NULL, to_label = NULL;
+  CharPtr fmt = "Convert %s strand to %s";
+  CharPtr str = NULL;
+
+  if (strand == NULL) return NULL;
+
+  switch (strand->strand_from) {
+    case Feature_location_strand_from_any:
+      from_label = "any";
+      break;
+    case Feature_location_strand_from_plus:
+      from_label = "plus";
+      break;
+    case Feature_location_strand_from_minus:
+      from_label = "minus";
+      break;
+    case Feature_location_strand_from_unknown:
+      from_label = "unknown";
+      break;
+    case Feature_location_strand_from_both:
+      from_label = "both";
+      break;
+  }
+
+  switch (strand->strand_to) {
+    case Feature_location_strand_to_plus:
+      to_label = "plus";
+      break;
+    case Feature_location_strand_to_minus:
+      to_label = "minus";
+      break;
+    case Feature_location_strand_to_unknown:
+      to_label = "unknown";
+      break;
+    case Feature_location_strand_to_both:
+      to_label = "both";
+      break;
+    case Feature_location_strand_to_reverse:
+      to_label = "reverse";
+      break;
+  }
+
+  if (from_label != NULL && to_label != NULL) {
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (from_label) + StringLen (to_label)));
+    sprintf (str, fmt, from_label, to_label);
+  }
+  return str;
+}
+
+
+static CharPtr SummarizePartial5SetAction (Partial5SetActionPtr a)
+{
+  CharPtr str = NULL;
+  CharPtr constraint = NULL, extend = NULL;
+  CharPtr fmt = "Set 5' partial%s%s";
+
+  if (a == NULL) return NULL;
+
+  switch (a->constraint) {
+    case Partial_5_set_constraint_all:
+      constraint = "";
+      break;
+    case Partial_5_set_constraint_at_end:
+      constraint = " when 5' end of location is at end of sequence";
+      break;
+    case Partial_5_set_constraint_bad_start:
+      constraint = " when coding region has no start codon";
+      break;
+    case Partial_5_set_constraint_frame_not_one:
+      constraint = " when coding region frame > 1";
+      break;
+  }
+  if (a->extend) {
+    extend = ", extend 5' end of feature to end of sequence";
+  } else {
+    extend = "";
+  }
+  if (constraint != NULL) {
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
+                                             + StringLen (constraint) 
+                                             + StringLen (extend)));
+    sprintf (str, fmt, constraint, extend);
+  }
+  return str;
+}
+
+
+static CharPtr SummarizePartial5ClearAction (Int4 a)
+{
+  CharPtr str = NULL;
+
+  switch (a) {
+    case Partial_5_clear_constraint_all:
+      str = StringSave ("Clear 5' partial");
+      break;
+    case Partial_5_clear_constraint_not_at_end:
+      str = StringSave ("Clear 5' partial when 5' end of feature is not at end of sequence");
+      break;
+    case Partial_5_clear_constraint_good_start:
+      str = StringSave ("Clear 5' partial when coding region has start codon");
+      break;
+  }
+  return str;
+}
+
+
+static CharPtr SummarizePartial3SetAction (Partial3SetActionPtr a)
+{
+  CharPtr str = NULL;
+  CharPtr constraint = NULL, extend = NULL;
+  CharPtr fmt = "Set 3' partial%s%s";
+
+  if (a == NULL) return NULL;
+
+  switch (a->constraint) {
+    case Partial_3_set_constraint_all:
+      constraint = "";
+      break;
+    case Partial_3_set_constraint_at_end:
+      constraint = " when 3' end of location is at end of sequence";
+      break;
+    case Partial_3_set_constraint_bad_end:
+      constraint = " when coding region has no stop codon";
+      break;
+  }
+  if (a->extend) {
+    extend = ", extend 3' end of feature to end of sequence";
+  } else {
+    extend = "";
+  }
+  if (constraint != NULL) {
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
+                                             + StringLen (constraint) 
+                                             + StringLen (extend)));
+    sprintf (str, fmt, constraint, extend);
+  }
+  return str;
+}
+
+
+static CharPtr SummarizePartial3ClearAction (Int4 a)
+{
+  CharPtr str = NULL;
+
+  switch (a) {
+    case Partial_3_clear_constraint_all:
+      str = StringSave ("Clear 3' partial");
+      break;
+    case Partial_3_clear_constraint_not_at_end:
+      str = StringSave ("Clear 3' partial when 3' end of feature is not at end of sequence");
+      break;
+    case Partial_3_clear_constraint_good_end:
+      str = StringSave ("Clear 3' partial when coding region has stop codon");
+      break;
+  }
+  return str;
+}
+
+
+static CharPtr SummarizePartialBothSetAction (PartialBothSetActionPtr a)
+{
+  CharPtr str = NULL;
+  CharPtr constraint = NULL, extend = NULL;
+  CharPtr fmt = "Set both ends partial%s%s";
+
+  if (a == NULL) return NULL;
+
+  switch (a->constraint) {
+    case Partial_5_set_constraint_all:
+      constraint = "";
+      break;
+    case Partial_5_set_constraint_at_end:
+      constraint = " when both ends of location are at end of sequence";
+      break;
+  }
+  if (a->extend) {
+    extend = ", extend both ends of feature to end of sequence";
+  } else {
+    extend = "";
+  }
+  if (constraint != NULL) {
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
+                                             + StringLen (constraint) 
+                                             + StringLen (extend)));
+    sprintf (str, fmt, constraint, extend);
+  }
+  return str;
+}
+
+
+static CharPtr SummarizePartialBothClearAction (Int4 a)
+{
+  CharPtr str = NULL;
+
+  switch (a) {
+    case Partial_both_clear_constraint_all:
+      str = StringSave ("Clear both ends partial");
+      break;
+    case Partial_3_clear_constraint_not_at_end:
+      str = StringSave ("Clear both ends partial when both ends of feature are not at end of sequence");
+      break;
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeConvertLoc (Int4 a)
+{
+  CharPtr str = NULL;
+
+  switch (a) {
+    case Convert_location_type_join:
+      str = StringSave ("Convert location to join");
+      break;
+    case Convert_location_type_order:
+      str = StringSave ("Convert location to order");
+      break;
+    case Convert_location_type_merge:
+      str = StringSave ("Convert location to single interval");
+      break;
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeFeatureDistance (ValNodePtr v, Int4 end)
+{
+  CharPtr fmt = " %s %d from %d' end of feature";
+  CharPtr summ = NULL;
+
+  if (v == NULL || v->choice < 1 || v->choice > k_NumQuantityWords) {
+    return NULL;
+  }
+  
+  summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
+                                            + StringLen (s_QuantityWords[v->choice - 1]) + 15));
+  sprintf (summ, fmt, s_QuantityWords[v->choice - 1], v->data.intvalue, end);
+  return summ;
+}
+
+
+static CharPtr SummarizeExtendToFeature (ExtendToFeaturePtr efp, Boolean end5)
+{
+  CharPtr fmt = "Extend %d' end of feature to nearest %s feature%s%s";
+  CharPtr include_fmt = " (include %s location)";
+  CharPtr feature, distance, include = NULL;
+  Int4    len;
+  CharPtr summ = NULL;
+
+  if (efp == NULL) {
+    return NULL;
+  }
+
+  feature = GetFeatureNameFromFeatureType (efp->type);
+  distance = SummarizeFeatureDistance (efp->distance, end5 ? 5 : 3);
+  len = StringLen (fmt) + StringLen (feature) + StringLen (distance);
+  if (efp->include_feat) {
+    include = (CharPtr) MemNew (sizeof (Char) * (StringLen (include_fmt) + StringLen (feature)));
+    sprintf (include, include_fmt, feature);
+    len += StringLen (include);
+  }
+
+  summ = (CharPtr) MemNew (sizeof (Char) * (len + 1));
+  sprintf (summ, fmt, end5 ? 5 : 3, feature, 
+           distance == NULL ? "" : distance,
+           include == NULL ? "" : include);
+  distance = MemFree (distance);
+  include = MemFree (include);
+
+  return summ;
+}
+
+
+static CharPtr SummarizeEditFeatureLocationAction (EditFeatureLocationActionPtr a)
+{
+  CharPtr str = NULL, action_label = NULL, constraint, feature;
+  CharPtr fmt = "%s for %s features";
+  CharPtr constraint_fmt = "%s for %s features %s";
+  CharPtr retranslate_cds = " and retranslated affected coding regions";
+  CharPtr also_edit_gene = " and adjust overlapping gene";
+  Int4    len;
+
+  if (a == NULL || a->action == NULL) {
+    str = StringSave ("No action");
+  } else {
+    
+    switch (a->action->choice) {
+      case LocationEditType_strand:
+        action_label = SummarizeEditLocationStrand (a->action->data.ptrvalue);
+        break;
+      case LocationEditType_set_5_partial:
+        action_label = SummarizePartial5SetAction (a->action->data.ptrvalue);
+        break;
+      case LocationEditType_clear_5_partial:
+        action_label = SummarizePartial5ClearAction (a->action->data.intvalue);
+        break;
+      case LocationEditType_set_3_partial:
+        action_label = SummarizePartial3SetAction (a->action->data.ptrvalue);
+        break;
+      case LocationEditType_clear_3_partial:
+        action_label = SummarizePartial3ClearAction (a->action->data.intvalue);
+        break;
+      case LocationEditType_set_both_partial:
+        action_label = SummarizePartialBothSetAction (a->action->data.ptrvalue);
+        break;
+      case LocationEditType_clear_both_partial:
+        action_label = SummarizePartialBothClearAction (a->action->data.intvalue);
+        break;
+      case LocationEditType_convert:
+        action_label = SummarizeConvertLoc (a->action->data.intvalue);
+        break;
+      case LocationEditType_extend_5:
+        action_label = StringSave ("Extend 5' end of feature to end of sequence");
+        break;
+      case LocationEditType_extend_3:
+        action_label = StringSave ("Extend 3' end of feature to end of sequence");
+        break;
+      case LocationEditType_extend_5_to_feat:
+        action_label = SummarizeExtendToFeature (a->action->data.ptrvalue, TRUE);
+        break;
+      case LocationEditType_extend_3_to_feat:
+        action_label = SummarizeExtendToFeature (a->action->data.ptrvalue, FALSE);
+        break;
+    }
+    if (action_label == NULL) {
+      str = StringSave ("Invalid action");
+    } else {
+      feature = GetFeatureNameFromFeatureType (a->type);
+      constraint = SummarizeConstraintSet (a->constraint);
+      len = 0;
+      if (a->retranslate_cds) {
+        len += StringLen (retranslate_cds);
+      }
+      if (a->also_edit_gene) {
+        len += StringLen (also_edit_gene);
+      }
+      if (constraint == NULL) {
+        len += StringLen (fmt) + StringLen (action_label) + StringLen (feature);
+        str = (CharPtr) MemNew (sizeof (Char) * len);
+        sprintf (str, fmt, action_label, feature);
+      } else {
+        len += StringLen (constraint_fmt) + StringLen (action_label) + StringLen (feature) + StringLen (constraint);
+        str = (CharPtr) MemNew (sizeof (Char) * len);
+        sprintf (str, constraint_fmt, action_label, feature, constraint);
+        constraint = MemFree (constraint);
+      }
+      if (a->retranslate_cds) {
+        StringCat (str, retranslate_cds);
+      }
+      if (a->also_edit_gene) {
+        StringCat (str, also_edit_gene);
+      }
+    }
+  } 
+  return str;
+}
+
+
+static CharPtr s_Suppression[] = { NULL, "suppressing", "non-suppressing" };
+static CharPtr s_Necessary[] = { NULL, "necessary", "unnecessary" };
+
+static CharPtr SummarizeRemoveXref (RemoveXrefsActionPtr a)
+{
+  CharPtr str = NULL, label, constraint;
+  GeneXrefTypePtr g;
+  CharPtr fmt = "Remove %s%s%s%sgene xrefs from %s features";
+  CharPtr suppression, necessary;
+  Int4 len;
+
+  if (a == NULL || a->xref_type == NULL) {
+    str = StringSave ("No action");
+  } else if (a->xref_type->choice != XrefType_gene
+    || (g = (GeneXrefTypePtr) a->xref_type->data.ptrvalue) == NULL) {
+    str = StringSave ("Invalid action");
+  } else {
+    label = GetFeatureNameFromFeatureType (g->feature);
+    if (g->suppression < sizeof (s_Suppression) / sizeof (CharPtr)) {
+      suppression = s_Suppression[g->suppression];
+    } else {
+      suppression = NULL;
+    }
+    if (g->necessary < sizeof (s_Necessary) / sizeof (CharPtr)) {
+      necessary = s_Necessary[g->necessary];
+    } else {
+      necessary = NULL;
+    }
+    constraint = SummarizeConstraintSet (a->constraint);
+    len = StringLen (label) + StringLen (fmt) + StringLen (suppression) + StringLen (necessary) + StringLen (constraint);
+    str = (CharPtr) MemNew (sizeof (Char) * len);
+    sprintf (str, fmt, 
+             suppression == NULL ? "" : suppression, suppression == NULL ? "" : " ",
+             necessary == NULL ? "" : necessary, necessary == NULL ? "" : " ",
+             label);
+    if (constraint != NULL) {
+      StringCat (str, constraint);
+      constraint = MemFree (constraint);
+    }
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeMakeGeneXrefs(MakeGeneXrefActionPtr a)
+{
+  CharPtr constraint, str, label;
+  CharPtr fmt = "Make gene xrefs from overlapping gene features for %s features%s";
+
+  if (a == NULL) {
+    str = StringSave ("No action");
+  } else {
+    label = GetFeatureNameFromFeatureType (a->feature);
+    constraint = SummarizeConstraintSet (a->constraint);
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (constraint) + StringLen (label)));
+    sprintf (str, fmt, label, constraint == NULL ? "" : constraint);
+    constraint = MemFree (constraint);
+  }
+  return str;
+}
+
+
+NLM_EXTERN CharPtr SummarizeMacroAction (ValNodePtr vnp)
+{
+  CharPtr str = NULL;
+
+  if (vnp == NULL) {
+    return StringSave ("No action");
+  }
+  switch (vnp->choice) {
+    case MacroActionChoice_aecr:
+      str = SummarizeAECRAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_parse:
+      str = SummarizeParseAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_add_feature:
+      str = SummarizeApplyFeatureAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_remove_feature:
+      str = SummarizeRemoveFeatureAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_edit_location:
+      str = SummarizeEditFeatureLocationAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_convert_feature:
+      str = SummarizeConvertFeatureAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_remove_descriptor:
+      str = SummarizeRemoveDescriptorAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_autodef:
+      str = SummarizeAutodefAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_removesets:
+      str = StringSave ("Remove duplicate nested sets");
+      break;
+    case MacroActionChoice_trim_junk_from_primer_seq:
+      str = StringSave ("Trim junk from primer seqs");
+      break;
+    case MacroActionChoice_fix_usa_and_states:
+      str = StringSave ("Fix USA and state abbreviations in publications");
+      break;
+    case MacroActionChoice_trim_stop_from_complete_cds:
+      str = StringSave ("Remove trailing * from complete coding regions");
+      break;
+    case MacroActionChoice_synchronize_cds_partials:
+      str = StringSave ("Synchronize coding region partials");
+      break;
+    case MacroActionChoice_adjust_for_consensus_splice:
+      str = StringSave ("Adjust coding regions for consensus splice sites");
+      break;
+    case MacroActionChoice_fix_pub_caps:
+      str = SummarizeFixPubCapsAction(vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_remove_seg_gaps:
+      str = StringSave ("Remove seg-gaps");
+      break;
+    case MacroActionChoice_sort_fields:
+      str = SummarizeSortFieldsAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_apply_molinfo_block:
+      str = SummarizeMolinfoBlockAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_fix_caps:
+      str = SummarizeFixCapsAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_fix_format:
+      str = SummarizeFixFormatAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_fix_spell:
+      str = StringSave ("Fix spelling");
+      break;
+    case MacroActionChoice_remove_duplicate_features:
+      str = SummarizeRemoveDuplicateFeaturesAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_remove_lineage_notes:
+      str = StringSave ("Remove lineage source notes");
+      break;
+    case MacroActionChoice_remove_xrefs:
+      str = SummarizeRemoveXref(vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_make_gene_xrefs:
+      str = SummarizeMakeGeneXrefs(vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_make_bold_xrefs:
+      str = StringSave ("Make Barcode Xrefs");
+      break;
+    case MacroActionChoice_fix_author:
+      str = SummarizeAuthorFixAction(vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_update_sequences:
+      str = SummarizeUpdateSequencesAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_add_trans_splicing:
+      str = StringSave ("Set trans-splicing exception in genes");
+      break;
+    case MacroActionChoice_remove_invalid_ecnumbers:
+      str = StringSave ("Remove invalid EC_numbers");
+      break;
+    case MacroActionChoice_create_tsa_ids:
+      str = SummarizeCreateTSAIDsAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_perform_autofix:
+      str = SummarizePerformAutofixAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_fix_sets:
+      str = SummarizeFixSetsAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_apply_table:
+      str = SummarizeApplyTableAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_remove_sequences:
+      str = SummarizeRemoveSequencesAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_propagate_sequence_technology:
+      str = SummarizePropagateSequenceTechnology(vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_add_file_descriptors:
+      str = SummarizeAddDescriptorListAction(vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_propagate_missing_old_name:
+      str = StringSave ("Propagate missing old-name qualifier");
+      break;
+    case MacroActionChoice_autoapply_structured_comments:
+      str = StringSave ("Autoapply structured comment prefixes");
+      break;
+    default:
+      str = StringSave ("Invalid action");
+      break;
+  }
+  return str;
+}
+
+
+
+
+NLM_EXTERN Boolean ApplyMacroToSeqEntryExEx (SeqEntryPtr sep, ValNodePtr macro, FILE *log_fp, GlobalAlignFunc align_func, Int4Ptr pNumNoOp)
 {
   Int4 num_AECR = 0, num_parse = 0, num;
   Uint2 entityID;
@@ -26478,8 +29621,12 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
   CharPtr summ;
   Boolean any_change = FALSE;
   Boolean created_protein_features = FALSE;
+  ValNodePtr list;
 
   entityID = SeqMgrGetEntityIDForSeqEntry(sep);
+  if (pNumNoOp != NULL) {
+    *pNumNoOp = 0;
+  }
 
   while (macro != NULL) {
     needs_update = TRUE;
@@ -26493,7 +29640,9 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             fprintf (log_fp, "Changed %d fields during %s\n", num, summ);
             summ = MemFree (summ);
           }
-          any_change = TRUE;
+          any_change = TRUE;        
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         if (created_protein_features) {
           if (log_fp != NULL) {
@@ -26512,6 +29661,8 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             summ = MemFree (summ);
           }
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_add_feature:
@@ -26521,6 +29672,8 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             fprintf (log_fp, "Added %d features\n", num);
           }
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         SeqMgrIndexFeatures (entityID, NULL);
         break;
@@ -26534,18 +29687,24 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
           ObjMgrSetDirtyFlag (entityID, TRUE);
           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
           needs_update = FALSE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_edit_location:
         num = ApplyEditFeatureLocationActionToSeqEntry ((EditFeatureLocationActionPtr) macro->data.ptrvalue, sep, log_fp);
         if (num > 0) {
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_convert_feature:
         num = ApplyConvertFeatureActionToSeqEntry ((ConvertFeatureActionPtr) macro->data.ptrvalue, sep, log_fp);
         if (num > 0) {
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         ObjMgrSetDirtyFlag (entityID, TRUE);
         ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
@@ -26560,6 +29719,8 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             summ = MemFree (summ);
           }
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_autodef:
@@ -26579,13 +29740,23 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             fprintf (log_fp, "Removed duplicate nested sets\n");
           }
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_trim_junk_from_primer_seq:
-        any_change |= TrimPrimerSeqJunkInSeqEntry (sep, log_fp);
+        if (TrimPrimerSeqJunkInSeqEntry (sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_fix_usa_and_states:
-        any_change |= FixUsaAndStateAbbreviations (entityID, log_fp);
+        if (FixUsaAndStateAbbreviations (entityID, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;   
       case MacroActionChoice_trim_stop_from_complete_cds:
         if (TrimStopsFromCompleteCodingRegions(sep, log_fp)) {
@@ -26593,6 +29764,8 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
           needs_update = FALSE;
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_synchronize_cds_partials:
@@ -26601,6 +29774,8 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
           needs_update = FALSE;
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_adjust_for_consensus_splice:
@@ -26609,10 +29784,16 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
           needs_update = FALSE;
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_fix_pub_caps:
-        any_change |= ApplyFixPubCapsToSeqEntry (macro->data.ptrvalue, sep, log_fp);
+        if (ApplyFixPubCapsToSeqEntry (macro->data.ptrvalue, sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_remove_seg_gaps:
         num = RemoveSegGapsInSeqEntry (sep);
@@ -26621,6 +29802,8 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             fprintf (log_fp, "Removed gaps in %d alignments\n", num);
           }
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_sort_fields:
@@ -26632,40 +29815,174 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
             summ = MemFree (summ);
           }
           any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
         }
         break;
       case MacroActionChoice_apply_molinfo_block:
-        any_change |= ApplyMolinfoBlockToSeqEntryEx (sep, macro->data.ptrvalue, log_fp);
+        if (ApplyMolinfoBlockToSeqEntryEx (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_fix_caps:
-        any_change |= ApplyFixCapsToSeqEntry (sep, macro->data.ptrvalue, log_fp);
+        if (ApplyFixCapsToSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_fix_format:
-        any_change |= ApplyFixFormatToSeqEntry (sep, macro->data.ptrvalue, log_fp);
+        if (ApplyFixFormatToSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_fix_spell:
-        any_change |= SpellFixSeqEntry (sep, macro->data.ptrvalue, log_fp);
+        if (SpellFixSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_remove_duplicate_features:
-        any_change |= RemoveDuplicateFeaturesInSeqEntry (sep, macro->data.ptrvalue, log_fp);
-        ObjMgrSetDirtyFlag (entityID, TRUE);
-        ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
-        needs_update = FALSE;
+        if (RemoveDuplicateFeaturesInSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+          ObjMgrSetDirtyFlag (entityID, TRUE);
+          ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+          needs_update = FALSE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_remove_lineage_notes:
-        any_change |= RemoveLineageNotesInSeqEntry (sep, log_fp);
+        if (RemoveLineageNotesInSeqEntry (sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_remove_xrefs:
-        any_change |= MacroRemoveXrefs (sep, macro->data.ptrvalue, log_fp);
+        if (MacroRemoveXrefs (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_make_gene_xrefs:
-        any_change |= MacroMakeGeneXrefs (sep, macro->data.ptrvalue, log_fp);
+        if (MacroMakeGeneXrefs (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_make_bold_xrefs:
-        any_change |= MacroMakeBoldXrefs (sep, log_fp);
+        if (MacroMakeBoldXrefs (sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
       case MacroActionChoice_fix_author:
-        any_change |= ApplyAuthorFixToSeqEntry (sep, macro->data.ptrvalue, log_fp);
+        if (ApplyAuthorFixToSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_update_sequences:
+        if (UpdateSequencesInSeqEntry (sep, macro->data.ptrvalue, log_fp, align_func)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_add_trans_splicing:
+        if (AddTransSplicingInSeqEntry (sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_remove_invalid_ecnumbers:
+        if (RemoveInvalidECnumbersInSeqEntry (sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_create_tsa_ids:
+        if (CreateTsaIDsInSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_perform_autofix:
+        if (PerformAutofixInSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_fix_sets:
+        if (PerformFixSetsInSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_apply_table:
+        if (PerformApplyTableInSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_remove_sequences:
+        if (PerformRemoveSequencesInSeqEntry (sep, macro->data.ptrvalue, log_fp)) {
+          ObjMgrSetDirtyFlag (entityID, TRUE);
+          ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+          needs_update = FALSE;
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_propagate_sequence_technology:
+        if (PerformPropagateSequenceTechnology(sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_add_file_descriptors:
+        if (AddFileDescriptors (sep, macro->data.ptrvalue, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_propagate_missing_old_name:
+        list = ValNodeNew (NULL);
+        list->data.ptrvalue = sep;
+        if (PropagateMissingOldNames (list)) {
+          any_change = TRUE;
+          if (log_fp != NULL) {
+            fprintf (log_fp, "Propagated missing old name qualifiers");
+          }
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
+        break;
+      case MacroActionChoice_autoapply_structured_comments:
+        if (AutoApplyStructuredCommentPrefixes (sep, log_fp)) {
+          any_change = TRUE;
+        } else if (pNumNoOp != NULL) {
+          (*pNumNoOp)++;
+        }
         break;
     }
     macro = macro->next;
@@ -26679,9 +29996,138 @@ NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FI
 }
 
 
+NLM_EXTERN Boolean ApplyMacroToSeqEntryEx (SeqEntryPtr sep, ValNodePtr macro, FILE *log_fp, GlobalAlignFunc align_func)
+{
+  return ApplyMacroToSeqEntryExEx (sep, macro, log_fp, align_func, NULL);
+}
+
+
 NLM_EXTERN void ApplyMacroToSeqEntry (SeqEntryPtr sep, ValNodePtr macro)
 {
-  ApplyMacroToSeqEntryEx (sep, macro, NULL);
+  ApplyMacroToSeqEntryEx (sep, macro, NULL, NULL);
+}
+
+
+static Boolean PreprocessApplyTableMacro (ApplyTableActionPtr apply_table, FILE *log_fp)
+{
+  Boolean rval = TRUE;
+  FILE *fp;
+
+  if (apply_table->in_memory_table == NULL) {
+    apply_table->in_memory_table = ValNodeNew (NULL);
+    apply_table->in_memory_table->choice = ApplyTableExtraData_table;
+    if (StringHasNoText (apply_table->filename)) {
+      rval = FALSE;
+      if (log_fp != NULL) {
+        fprintf (log_fp, "No filename supplied for apply table action\n");
+      }
+    } else {
+      fp = FileOpen (apply_table->filename, "r");
+      if (fp == NULL) {
+        if (log_fp != NULL) {
+          fprintf (log_fp, "Unable to open %s\n", apply_table->filename);
+        }
+        rval = FALSE;
+      } else {
+        apply_table->in_memory_table->data.ptrvalue = ReadTabTableFromFile (fp);
+        FileClose (fp);
+        if (apply_table->in_memory_table->data.ptrvalue == NULL) {
+          if (log_fp != NULL) {
+            fprintf (log_fp, "Unable to read table from %s\n", apply_table->filename);
+          }
+          rval = FALSE;
+        }
+      }
+    }
+  }
+  return rval;
+}
+
+
+static Boolean PreprocessAddDescriptorListMacro (AddDescriptorListActionPtr action, FILE *log_fp)
+{
+  Boolean  rval = TRUE;
+  AsnIoPtr aip;
+  SeqDescPtr sdp;
+  SeqDescrPtr sdp_list = NULL;
+
+  if (action->descriptor_list->in_memory_table == NULL) {
+    action->descriptor_list->in_memory_table = ValNodeNew (NULL);
+    action->descriptor_list->in_memory_table->choice = ApplyTableExtraData_table;
+    if (StringHasNoText (action->descriptor_list->filename)) {
+      return FALSE;
+    }
+    aip = AsnIoOpen (action->descriptor_list->filename, "r");
+    if (aip == NULL)
+    {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Unable to open %s\n", action->descriptor_list->filename);
+      }
+      return FALSE;
+    }
+      
+    while (sdp = SeqDescAsnRead (aip, NULL)) {
+      ValNodeLink (&sdp_list, sdp);
+    }
+    AsnIoClose (aip);
+    
+    if (sdp_list == NULL) {
+      if (log_fp != NULL) {
+        fprintf (log_fp, "Unable to read table from %s\n", action->descriptor_list->filename);
+      }
+      return FALSE;
+    }
+    action->descriptor_list->in_memory_table->data.ptrvalue = sdp_list;
+  }
+  return rval;
+}
+
+
+NLM_EXTERN Boolean PreprocessMacroForRepeatedUse (ValNodePtr macro, FILE *log_fp)
+{
+  ValNodePtr vnp;
+  Boolean rval = TRUE;
+
+  for (vnp = macro; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == MacroActionChoice_apply_table) {
+      rval &= PreprocessApplyTableMacro(vnp->data.ptrvalue, log_fp);
+    } else if (vnp->choice == MacroActionChoice_add_file_descriptors) {
+      rval &= PreprocessAddDescriptorListMacro (vnp->data.ptrvalue, log_fp);
+    }
+  }
+  return rval;
+}
+
+
+NLM_EXTERN void CleanupMacroAfterRepeatedUse (ValNodePtr macro)
+{
+  ValNodePtr vnp;
+  ApplyTableActionPtr apply_table;
+  AddDescriptorListActionPtr desc_list;
+  SeqDescPtr sdp, sdp_next;
+
+  for (vnp = macro; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == MacroActionChoice_apply_table) {
+      if ((apply_table = (ApplyTableActionPtr) vnp->data.ptrvalue) != NULL
+          && apply_table->in_memory_table != NULL) {
+        apply_table->in_memory_table->data.ptrvalue = FreeTabTable (apply_table->in_memory_table->data.ptrvalue);
+        apply_table->in_memory_table = ValNodeFree (apply_table->in_memory_table);
+      }
+    } else if (vnp->choice == MacroActionChoice_add_file_descriptors) {
+      if ((desc_list = (AddDescriptorListActionPtr) vnp->data.ptrvalue) != NULL
+          && desc_list->descriptor_list != NULL
+          && desc_list->descriptor_list->in_memory_table != NULL) {
+        for (sdp = desc_list->descriptor_list->in_memory_table->data.ptrvalue;
+             sdp != NULL; 
+             sdp = sdp_next) {
+          sdp_next = sdp->next;
+          sdp->next = NULL;
+          sdp = SeqDescFree (sdp);
+        }
+        desc_list->descriptor_list->in_memory_table->data.ptrvalue = NULL;
+      }
+    }
+  }
 }
 
 
@@ -26925,6 +30371,11 @@ NLM_EXTERN FieldTypePtr FieldTypeFromString (CharPtr str)
       }
       cpy = MemFree (cpy);
     }
+    if (ft == NULL && Matchnamestring (str, "comment-descriptor")) {
+      ft = ValNodeNew (NULL);
+      ft->choice = FieldType_misc;
+      ft->data.intvalue = Misc_field_comment_descriptor;
+    }
   }
   return ft;
 }
@@ -26933,7 +30384,6 @@ NLM_EXTERN FieldTypePtr FieldTypeFromString (CharPtr str)
 NLM_EXTERN Boolean IsFieldTypeNonText (ValNodePtr field_type)
 {
   ValNodePtr      vnp;
-  FeatureFieldPtr ffp;
   Boolean         rval = FALSE;
 
   if (field_type == NULL) {
@@ -26950,13 +30400,6 @@ NLM_EXTERN Boolean IsFieldTypeNonText (ValNodePtr field_type)
             rval = TRUE;
           }
         }
-      }
-      break;
-    case FieldType_feature_field :
-      ffp = (FeatureFieldPtr) field_type->data.ptrvalue;
-      if (ffp != NULL && ffp->field != NULL && ffp->field->choice == FeatQualChoice_legal_qual
-          && ffp->field->data.intvalue == Feat_qual_legal_pseudo) {
-        rval = TRUE;
       }
       break;
     case FieldType_molinfo_field :
@@ -27490,6 +30933,40 @@ static CharPtr SummarizeEditAction (EditActionPtr a)
 }
 
 
+static CharPtr SummarizeRemoveOutsideAction (RemoveOutsideActionPtr a)
+{
+  CharPtr str = NULL;
+  CharPtr fmt = "Remove %s in %s";
+  CharPtr case_insensitive = " (case insensitive)";
+  CharPtr if_not_found = ", remove entire text if search text not found";
+  CharPtr field, tmp;
+  Int4    len;
+
+  if (a == NULL) {
+    str = StringSave ("No action");
+  } else if (a->field == NULL || a->field == NULL || a->portion == NULL) {
+    str = StringSave ("Invalid action");
+  } else {
+    field = SummarizeFieldType (a->field);
+    tmp = SummarizeTextPortion (a->portion);
+
+    len = StringLen (fmt) + StringLen (field) + StringLen (tmp);
+    if (a->remove_if_not_found) {
+      len += StringLen (if_not_found);
+    }
+                       
+    str = (CharPtr) MemNew (sizeof (Char) * len);
+    sprintf (str, fmt, tmp, field);
+    if (a->remove_if_not_found) {
+      StringCat (str, if_not_found);
+    }
+    field = MemFree (field);
+    tmp = MemFree (tmp);
+  }
+  return str;
+}
+
+
 static CharPtr SummarizeConvertAction (ConvertActionPtr a)
 {
   CharPtr str = NULL;
@@ -27568,6 +31045,15 @@ static CharPtr SummarizeCapChange (Uint1 cap_change)
       break;
     case Cap_change_firstcaprestnochange:
       rval = StringSave ("capitalize first letter, do not change other characters");
+      break;
+    case Cap_change_firstlower_restnochange:
+      rval = StringSave ("lowercase first letter, do not change other characters");
+      break;
+    case Cap_change_cap_word_space:
+      rval = StringSave ("capitalize first letter and letters after spaces");
+      break;
+    case Cap_change_cap_word_space_punc:
+      rval = StringSave ("capitalize first letter and letters after spaces or punctuation");
       break;
   }
   return rval;
@@ -27701,6 +31187,9 @@ NLM_EXTERN CharPtr SummarizeAECRAction (AECRActionPtr a)
       case ActionChoice_edit:
         act = SummarizeEditAction (a->action->data.ptrvalue);
         break;
+      case ActionChoice_remove_outside:
+        act = SummarizeRemoveOutsideAction (a->action->data.ptrvalue);
+        break;
       case ActionChoice_convert:
         act = SummarizeConvertAction (a->action->data.ptrvalue);
         break;
@@ -27780,6 +31269,9 @@ static CharPtr SummarizeAutodefClauseListType (Uint2 clause_list_type)
     case Autodef_list_type_complete_genome:
       str = "complete genome";
       break;
+    case Autodef_list_type_sequence:
+      str = "sequence";
+      break;
   }
   return str;
 }
@@ -27791,6 +31283,7 @@ NLM_EXTERN CharPtr SummarizeAutodefAction (AutodefActionPtr autodef)
   CharPtr    str = NULL;
   CharPtr    fmt = "Autodef %s";
   CharPtr    modifiers_fmt = " with modifier";
+  CharPtr    misc_feat_rule = NULL;
   Int4       len;
   ValNodePtr mod_names = NULL, vnp;
 
@@ -27798,7 +31291,14 @@ NLM_EXTERN CharPtr SummarizeAutodefAction (AutodefActionPtr autodef)
     str = StringSave ("No action");
   } else {
     label = SummarizeAutodefClauseListType (autodef->clause_list_type);
-    len = StringLen (fmt) + StringLen (label);
+    if (autodef->clause_list_type == Autodef_list_type_feature_list) {
+      if (autodef->misc_feat_parse_rule == 1) {
+        misc_feat_rule = ", use misc-feat comment before first semicolon";
+      } else if (autodef->misc_feat_parse_rule == 2) {
+        misc_feat_rule = ", look for non-coding product in misc-feat comment";
+      }
+    }
+    len = StringLen (fmt) + StringLen (label) + StringLen (misc_feat_rule);
     if (autodef->modifiers != NULL) {
       len += StringLen (modifiers_fmt) + 2;
       for (vnp = autodef->modifiers; vnp != NULL; vnp = vnp->next) {
@@ -27826,6 +31326,10 @@ NLM_EXTERN CharPtr SummarizeAutodefAction (AutodefActionPtr autodef)
     }
 
     mod_names = ValNodeFree (mod_names);
+
+    if (misc_feat_rule != NULL) {
+      StringCat (str, misc_feat_rule);
+    }
   }
 
   return str;
@@ -27923,6 +31427,18 @@ NLM_EXTERN CharPtr SummarizeFixPubCapsAction (FixPubCapsActionPtr a)
 }
 
 
+static CharPtr SummarizeFixAuthorCaps (FixAuthorCapsPtr action)
+{
+  if (action == NULL) {
+    return StringSave ("Invalid action");
+  } else if (action->last_name_only) {
+    return StringSave ("Fix capitalization in author last names where last name is all caps");
+  } else {
+    return StringSave ("Fix capitalization in author name where name is all caps");
+  }
+}
+    
+
 NLM_EXTERN CharPtr SummarizeFixCapsAction (FixCapsActionPtr action)
 {
   CharPtr summ = NULL, tmp;
@@ -27945,6 +31461,9 @@ NLM_EXTERN CharPtr SummarizeFixCapsAction (FixCapsActionPtr action)
         tmp = GetSourceQualName (action->data.intvalue);
         summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (tmp) + StringLen (fmt)));
         sprintf (summ, fmt, tmp);
+        break;
+      case FixCapsAction_author:
+        summ = SummarizeFixAuthorCaps (action->data.ptrvalue);
         break;
       default:
         summ = StringSave ("Invalid action");
@@ -28270,7 +31789,7 @@ NLM_EXTERN CharPtr SummarizeWordSubstitution (WordSubstitutionPtr word)
 }
 
 
-NLM_EXTERN CharPtr SummarizeStringConstraint (StringConstraintPtr constraint)
+NLM_EXTERN CharPtr SummarizeStringConstraintEx (StringConstraintPtr constraint, Boolean short_version)
 {
   CharPtr location_word = NULL;
   CharPtr ignore_space = "ignore spaces";
@@ -28290,79 +31809,84 @@ NLM_EXTERN CharPtr SummarizeStringConstraint (StringConstraintPtr constraint)
     location_word = GetStringLocationPhrase (constraint->match_location, constraint->not_present);
     if (location_word == NULL) return NULL;
     len = StringLen (location_word) + StringLen (constraint->match_text) + StringLen (fmt);
-    if (constraint->case_sensitive) {
-      len += StringLen (kCaseSensitive) + 3;
-    }
-    if (constraint->whole_word) {
-      len += StringLen (kWholeWord) + 3;
-    }
-    if (constraint->ignore_space) {
-      len += StringLen (ignore_space) + 3;
-    }
-    if (constraint->ignore_punct) {
-      len += StringLen (ignore_punct) + 3;
-    }
-    if (constraint->ignore_weasel) {
-      len += StringLen (ignore_weasel) + 3;
-    }
 
-    /* allocate space for substitution phrases */
-    for (word = constraint->ignore_words; word != NULL; word = word->next) {
-      tmp = SummarizeWordSubstitution (word);
-      if (tmp != NULL) {
-        ValNodeAddPointer (&subst_words, 0, tmp);
-        len += StringLen (tmp) + 2;
+    if (!short_version) {
+      if (constraint->case_sensitive) {
+        len += StringLen (kCaseSensitive) + 3;
+      }
+      if (constraint->whole_word) {
+        len += StringLen (kWholeWord) + 3;
+      }
+      if (constraint->ignore_space) {
+        len += StringLen (ignore_space) + 3;
+      }
+      if (constraint->ignore_punct) {
+        len += StringLen (ignore_punct) + 3;
+      }
+      if (constraint->ignore_weasel) {
+        len += StringLen (ignore_weasel) + 3;
+      }
+
+      /* allocate space for substitution phrases */
+      for (word = constraint->ignore_words; word != NULL; word = word->next) {
+        tmp = SummarizeWordSubstitution (word);
+        if (tmp != NULL) {
+          ValNodeAddPointer (&subst_words, 0, tmp);
+          len += StringLen (tmp) + 2;
+        }
       }
     }
 
     str = (CharPtr) MemNew (sizeof (Char) * len);
     sprintf (str, fmt, location_word, constraint->match_text);
-    if (constraint->case_sensitive || constraint->whole_word || constraint->ignore_space || constraint->ignore_punct) {
-      StringCat (str, " (");
-    }
-    if (constraint->case_sensitive) {
-      StringCat (str, kCaseSensitive);
-      has_extra = TRUE;
-    }
-    if (constraint->whole_word) {
-      if (has_extra) {
-        StringCat (str, ", ");
-      }      
-      StringCat (str, kWholeWord);
-      has_extra = TRUE;
-    }
-    if (constraint->ignore_space) {
-      if (has_extra) {
-        StringCat (str, ", ");
-      }      
-      StringCat (str, ignore_space);
-      has_extra = TRUE;
-    }
-    if (constraint->ignore_punct) {
-      if (has_extra) {
-        StringCat (str, ", ");
-      }      
-      StringCat (str, ignore_punct);
-      has_extra = TRUE;
-    }
-    if (constraint->ignore_weasel) {
-      if (has_extra) {
-        StringCat (str, ", ");
-      }      
-      StringCat (str, ignore_weasel);
-      has_extra = TRUE;
-    }
+    if (!short_version) {
+      if (constraint->case_sensitive || constraint->whole_word || constraint->ignore_space || constraint->ignore_punct) {
+        StringCat (str, " (");
+      }
+      if (constraint->case_sensitive) {
+        StringCat (str, kCaseSensitive);
+        has_extra = TRUE;
+      }
+      if (constraint->whole_word) {
+        if (has_extra) {
+          StringCat (str, ", ");
+        }      
+        StringCat (str, kWholeWord);
+        has_extra = TRUE;
+      }
+      if (constraint->ignore_space) {
+        if (has_extra) {
+          StringCat (str, ", ");
+        }      
+        StringCat (str, ignore_space);
+        has_extra = TRUE;
+      }
+      if (constraint->ignore_punct) {
+        if (has_extra) {
+          StringCat (str, ", ");
+        }      
+        StringCat (str, ignore_punct);
+        has_extra = TRUE;
+      }
+      if (constraint->ignore_weasel) {
+        if (has_extra) {
+          StringCat (str, ", ");
+        }      
+        StringCat (str, ignore_weasel);
+        has_extra = TRUE;
+      }
 
-    if (constraint->case_sensitive || constraint->whole_word || constraint->ignore_space || constraint->ignore_punct) {
-      StringCat (str, ")");
-    }
+      if (constraint->case_sensitive || constraint->whole_word || constraint->ignore_space || constraint->ignore_punct) {
+        StringCat (str, ")");
+      }
 
-    for (vnp = subst_words; vnp != NULL; vnp = vnp->next) {
-      StringCat (str, ", ");
-      StringCat (str, vnp->data.ptrvalue);
-    }
+      for (vnp = subst_words; vnp != NULL; vnp = vnp->next) {
+        StringCat (str, ", ");
+        StringCat (str, vnp->data.ptrvalue);
+      }
 
-    subst_words = ValNodeFreeData (subst_words);
+      subst_words = ValNodeFreeData (subst_words);
+    }
   }
   if (constraint->is_all_caps) {
     SetStringValue(&str, "all letters are uppercase", ExistingTextOption_append_comma);
@@ -28375,6 +31899,12 @@ NLM_EXTERN CharPtr SummarizeStringConstraint (StringConstraintPtr constraint)
   }
 
   return str;
+}
+
+
+NLM_EXTERN CharPtr SummarizeStringConstraint (StringConstraintPtr constraint)
+{
+  return SummarizeStringConstraintEx (constraint, FALSE);
 }
 
 
@@ -28695,17 +32225,29 @@ static CharPtr SummarizeCDSGeneProtQualConstraint (CDSGeneProtQualConstraintPtr 
 const CharPtr s_QuantityWords [] = { "exactly", "more than", "less than" };
 const Int4 k_NumQuantityWords = sizeof (s_QuantityWords) / sizeof (CharPtr);
 
-static CharPtr SummarizeFeatureQuantity (ValNodePtr v)
+static CharPtr SummarizeFeatureQuantity (ValNodePtr v, CharPtr feature_name)
 {
-  CharPtr fmt = "sequence has %s %d feature%s";
+  CharPtr fmt = "sequence has %s %d %s%sfeature%s";
+  Int4    len;
   CharPtr summ = NULL;
 
   if (v == NULL || v->choice < 1 || v->choice > k_NumQuantityWords) {
     return NULL;
   }
   
-  summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (s_QuantityWords[v->choice - 1]) + 15));
-  sprintf (summ, fmt, s_QuantityWords[v->choice - 1], v->data.intvalue, v->data.intvalue == 1 ? "" : "s");
+  len = StringLen (fmt) + StringLen (s_QuantityWords[v->choice - 1]) + 15;
+  if (!StringHasNoText (feature_name)) {
+    len += StringLen (feature_name);
+  }
+
+  summ = (CharPtr) MemNew (sizeof (Char) * len);
+  if (StringHasNoText (feature_name)) {
+    sprintf (summ, fmt, s_QuantityWords[v->choice - 1], v->data.intvalue, 
+                        "", "", v->data.intvalue == 1 ? "" : "s");
+  } else {
+    sprintf (summ, fmt, s_QuantityWords[v->choice - 1], v->data.intvalue, 
+                        feature_name, " ", v->data.intvalue == 1 ? "" : "s");
+  }
   return summ;
 }
 
@@ -28754,6 +32296,7 @@ static CharPtr SummarizeSequenceConstraint (SequenceConstraintPtr constraint)
   CharPtr seq_word_intro = "where sequence type is ";
   CharPtr feat_after = " is present";
   CharPtr id_intro = "sequence ID ";
+  CharPtr feat_type_quantity = NULL;
   CharPtr feat_quantity = NULL;
   CharPtr length_quantity = NULL;
   CharPtr strandedness = NULL;
@@ -28784,6 +32327,10 @@ static CharPtr SummarizeSequenceConstraint (SequenceConstraintPtr constraint)
 
     if (constraint->feature != Macro_feature_type_any) {
       featpresent = GetFeatureNameFromFeatureType (constraint->feature);
+      if (constraint->num_type_features != NULL) {
+        feat_type_quantity = SummarizeFeatureQuantity (constraint->num_type_features, featpresent);
+        featpresent = NULL;
+      }
     }
 
     if (!IsStringConstraintEmpty (constraint->id)) {
@@ -28804,6 +32351,15 @@ static CharPtr SummarizeSequenceConstraint (SequenceConstraintPtr constraint)
       len += StringLen (feat_after);
     }
 
+    if (feat_type_quantity != NULL) {
+      if (len == 0) {
+        len += 6;
+      } else {
+        len += 5;
+      }
+      len += StringLen (feat_type_quantity);
+    }
+
     if (id != NULL) {
       if (len == 0) {
         len += 6;
@@ -28814,7 +32370,7 @@ static CharPtr SummarizeSequenceConstraint (SequenceConstraintPtr constraint)
       len += StringLen (id);
     }
 
-    feat_quantity = SummarizeFeatureQuantity (constraint->num_features);
+    feat_quantity = SummarizeFeatureQuantity (constraint->num_features, NULL);
     if (feat_quantity != NULL) {
       len += StringLen (feat_quantity) + 6;
     }
@@ -28847,6 +32403,14 @@ static CharPtr SummarizeSequenceConstraint (SequenceConstraintPtr constraint)
         }
         StringCat (summ, featpresent);
         StringCat (summ, feat_after);
+      }
+      if (feat_type_quantity != NULL) {
+        if (summ[0] == 0) {
+          StringCat (summ, "where ");
+        } else {
+          StringCat (summ, " and ");
+        }
+        StringCat (summ, feat_type_quantity);
       }
       if (id != NULL) {
         if (seq_word == NULL && featpresent == NULL) {
@@ -28883,6 +32447,7 @@ static CharPtr SummarizeSequenceConstraint (SequenceConstraintPtr constraint)
       }        
     }
     id = MemFree (id);
+    feat_type_quantity = MemFree (feat_type_quantity);
     feat_quantity = MemFree (feat_quantity);
     length_quantity = MemFree (length_quantity);
   }
@@ -29462,6 +33027,149 @@ NLM_EXTERN ValNodePtr TabColumnConfigListCopy (ValNodePtr orig)
 }
 
 
+NLM_EXTERN MatchTypePtr MatchTypeFromTableMatchType (TableMatchPtr t)
+{
+  MatchTypePtr m;
+
+  if (t == NULL) {
+    return NULL;
+  }
+  m = MatchTypeNew ();
+  m->match_location = t->match_location;
+  if (t->match_type != NULL) {
+    switch (t->match_type->choice) {
+      case TableMatchType_feature_id:
+        m->choice = eTableMatchFeatureID;
+        break;
+      case TableMatchType_gene_locus_tag:
+        m->choice = eTableMatchGeneLocusTag;
+        break;
+      case TableMatchType_protein_id:
+        m->choice = eTableMatchProteinID;
+        break;
+      case TableMatchType_dbxref:
+        m->choice = eTableMatchDbxref;
+        break;
+      case TableMatchType_nuc_id:
+        m->choice = eTableMatchNucID;
+        break;
+      case TableMatchType_src_qual:
+        m->choice = eTableMatchSourceQual;
+        m->data = AsnIoMemCopy (t->match_type->data.ptrvalue, 
+                                (AsnReadFunc)SourceQualChoiceAsnRead,
+                                (AsnWriteFunc)SourceQualChoiceAsnWrite);
+        break;
+      case TableMatchType_protein_name:
+        m->choice = eTableMatchProteinName;
+        break;
+      case TableMatchType_any:
+        m->choice = eTableMatchAny;
+        break;
+    }
+  }
+  return m;
+}
+
+
+NLM_EXTERN TableMatchPtr TableMatchTypeFromMatchType (MatchTypePtr m)
+{
+  TableMatchPtr t;
+  ValNodePtr    s;
+
+  if (m == NULL) {
+    return NULL;
+  }
+  t = TableMatchNew ();
+  t->match_location = m->match_location;
+  t->match_type = ValNodeNew (NULL);
+  switch (m->choice) {
+    case eTableMatchFeatureID:
+      t->match_type->choice = TableMatchType_feature_id;
+      break;
+    case eTableMatchGeneLocusTag:
+      t->match_type->choice = TableMatchType_gene_locus_tag;
+      break;
+    case eTableMatchProteinID:
+      t->match_type->choice = TableMatchType_protein_id;
+      break;
+    case eTableMatchDbxref:
+      t->match_type->choice = TableMatchType_dbxref;
+      break;
+    case eTableMatchNucID:
+      t->match_type->choice = TableMatchType_nuc_id;
+      break;
+    case eTableMatchSourceQual:
+      t->match_type->choice = TableMatchType_src_qual;
+      t->match_type->data.ptrvalue = AsnIoMemCopy (m->data, 
+                                (AsnReadFunc)SourceQualChoiceAsnRead,
+                                (AsnWriteFunc)SourceQualChoiceAsnWrite);
+      break;
+    case eTableMatchBioSource:
+      t->match_type->choice = TableMatchType_src_qual;
+      s = ValNodeNew (NULL);
+      s->choice = SourceQualChoice_textqual;
+      s->data.intvalue = Source_qual_taxname;
+      t->match_type->data.ptrvalue = s;
+      break;
+    case eTableMatchProteinName:
+      t->match_type->choice = TableMatchType_protein_name;
+      break;
+    case eTableMatchAny:
+      t->match_type->choice = TableMatchType_any;
+      break;
+  }
+  return t;
+}
+
+
+NLM_EXTERN ValNodePtr CheckForDuplicateColumns (ValNodePtr columns)
+{
+  ValNodePtr vnp, vnp2;
+  TabColumnConfigPtr t, t2;
+  ValNodePtr duplicate_column_list = NULL;
+  Boolean    this_dup;
+
+  for (vnp = columns; vnp != NULL; vnp = vnp->next) {
+    this_dup = FALSE;
+    t = (TabColumnConfigPtr) vnp->data.ptrvalue;
+    if (t != NULL && t->field != NULL) {
+      for (vnp2 = vnp->next; vnp2 != NULL && !this_dup; vnp2 = vnp2->next) {
+        t2 = (TabColumnConfigPtr) vnp2->data.ptrvalue;
+        if (t2 != NULL && CompareFieldTypes(t->field, t2->field) == 0 && t2->existing_text != ExistingTextOption_add_qual) {
+          ValNodeAddPointer (&duplicate_column_list, 0, SummarizeFieldType (t->field));
+          this_dup = TRUE;
+        }
+      }
+    }
+  }
+  duplicate_column_list = ValNodeSort (duplicate_column_list, SortVnpByString);
+  ValNodeUnique (&duplicate_column_list, SortVnpByString, ValNodeFreeData);
+  return duplicate_column_list;
+}
+
+  
+NLM_EXTERN void FixDuplicateColumns (ValNodePtr columns)
+{
+  ValNodePtr vnp, vnp2;
+  TabColumnConfigPtr t, t2;
+
+  if (columns == NULL || columns->next == NULL) {
+    return;
+  }
+
+  for (vnp = columns; vnp != NULL; vnp = vnp->next) {
+    t = (TabColumnConfigPtr) vnp->data.ptrvalue;
+    if (t->field != NULL) {
+      for (vnp2 = vnp->next; vnp2 != NULL; vnp2 = vnp2->next) {
+        t2 = (TabColumnConfigPtr) vnp2->data.ptrvalue;
+        if (CompareFieldTypes(t->field, t2->field) == 0 && t2->existing_text != ExistingTextOption_add_qual) {
+          t2->existing_text = ExistingTextOption_add_qual;
+        }
+      }
+    }
+  }
+}
+
 
 /* This checks the column names and returns a list of the feature fields */
 NLM_EXTERN ValNodePtr ValidateFeatureFieldColumnNames (ValNodePtr header_line, ValNodePtr PNTR perr_list)
@@ -29970,11 +33678,19 @@ static void BuildIdStringsListForIdList (SeqIdPtr sip_list, BioseqPtr bsp, ValNo
   DbtagPtr   dbtag;
   ObjectIdPtr oid;
   Int4        len;
+  TextSeqIdPtr tsip;
 
   for (sip = sip_list; sip != NULL; sip = sip->next) {
     sip_next = sip->next;
     sip->next = NULL;
     id = SeqIdWholeLabel (sip, PRINTID_FASTA_LONG);
+    tmp = SeqIdWholeLabel (sip, PRINTID_REPORT);
+    if (StringCmp (id, tmp) != 0) {
+      ValNodeAddPointerToEnd (block, 0, BioseqSearchItemNewStr (bsp, tmp, TRUE));
+      tmp = NULL;
+    } else {
+      tmp = MemFree (tmp);
+    }
     sip->next = sip_next;
     if (id != NULL) {
       /* remove terminating pipe character */
@@ -29994,23 +33710,19 @@ static void BuildIdStringsListForIdList (SeqIdPtr sip_list, BioseqPtr bsp, ValNo
         cp = id;
       }
 
-      if (sip->choice == SEQID_GENBANK
+      if ((sip->choice == SEQID_GENBANK
           || sip->choice == SEQID_EMBL
           || sip->choice == SEQID_DDBJ
           || sip->choice == SEQID_TPG
           || sip->choice == SEQID_TPE
           || sip->choice == SEQID_TPD
           || sip->choice == SEQID_PIR
-          || sip->choice == SEQID_SWISSPROT) {
-        /* if this is an ID that has a version, try text without version */
-        id = StringSave (cp);
-        cp = StringChr (id, '.');
-        if (cp != NULL && IsAllDigits (cp + 1)) 
-        {
-          *cp = 0;
-          ValNodeAddPointerToEnd (block, 0, BioseqSearchItemNewStr (bsp, id, TRUE));
-        } else {
-          id = MemFree (id);
+          || sip->choice == SEQID_SWISSPROT)\
+          && (tsip = (TextSeqIdPtr)sip->data.ptrvalue) != NULL) {
+        /* try just accession, if version and/or name and/or release supplied */
+        if (!StringHasNoText (tsip->accession)
+            && (tsip->version > 0 || !StringHasNoText (tsip->name) || !StringHasNoText (tsip->release))) {
+          ValNodeAddPointerToEnd (block, 0, BioseqSearchItemNewStr (bsp, tsip->accession, FALSE));
         }
       }
 
@@ -30053,6 +33765,11 @@ static void BuildIdStringsListForIdList (SeqIdPtr sip_list, BioseqPtr bsp, ValNo
             StringNCpy (id, dbtag->tag->str, cp - dbtag->tag->str - 1);
             ValNodeAddPointerToEnd (block, 0, BioseqSearchItemNewStr (bsp, id, TRUE));
           }
+        } else if (dbtag->tag != NULL) {
+          /* for all other types, also use just the string or int part */
+          if (dbtag->tag->str != NULL) {
+            ValNodeAddPointerToEnd (block, 0, BioseqSearchItemNewStr (bsp, dbtag->tag->str, FALSE));
+          }
         }
       }
     }
@@ -30081,7 +33798,7 @@ static void AddBankItSingletons (ValNodeBlockPtr list)
     item = (BioseqSearchItemPtr) vnp->data.ptrvalue;
     if (item != NULL && StringNICmp (item->str, "BankIt", 6) == 0 
         && item->str[6] != '|'
-        && StringChr (item->str, '_') != NULL) {
+        && StringChr (item->str, '/') != NULL) {
       ValNodeAddPointer (&other_list, 0, item);
     }
   }
@@ -30092,15 +33809,15 @@ static void AddBankItSingletons (ValNodeBlockPtr list)
     add_truncated = TRUE;
     if (vnp->next != NULL) {
       item2 = vnp->next->data.ptrvalue;
-      cp = StringRChr (item->str, '_');
+      cp = StringRChr (item->str, '/');
       len1 = cp - item->str;
-      cp = StringRChr (item2->str, '_');
+      cp = StringRChr (item2->str, '/');
       len2 = cp - item2->str;
       if (len1 == len2 && StringNICmp (item->str, item2->str, len1) == 0) {
         add_truncated = FALSE;
         forw = vnp->next->next;
         while (forw != NULL && (item2 = (BioseqSearchItemPtr) forw->data.ptrvalue) != NULL
-               && (cp = StringRChr (item2->str, '_')) != NULL
+               && (cp = StringRChr (item2->str, '/')) != NULL
                && (len2 = cp - item2->str) == len1
                && StringNICmp (item->str, item2->str, len1) == 0) {
           forw = forw->next;
@@ -30110,17 +33827,72 @@ static void AddBankItSingletons (ValNodeBlockPtr list)
     } 
     if (add_truncated) {
       bankit_str = StringSave (item->str);
-      cp = StringRChr (bankit_str, '_');
+      cp = StringRChr (bankit_str, '/');
       if (cp != NULL) {
         *cp = 0;
       }
       ValNodeAddPointerToEnd (list, 0, BioseqSearchItemNewStr (item->bsp, bankit_str, TRUE));
+      /* also add string without BankIt */
+      ValNodeAddPointerToEnd (list, 0, BioseqSearchItemNewStr (item->bsp, bankit_str + 6, FALSE));
       vnp = vnp->next;
     }
   }
   other_list = ValNodeFree (other_list);
 }
-     
+
+
+static void AddUnderscoreSingletons (ValNodeBlockPtr list)
+{
+  BioseqSearchItemPtr item, item2;
+  ValNodePtr vnp, forw;
+  CharPtr single_str = NULL, cp;
+  ValNodePtr other_list = NULL;
+  Int4       len1, len2;
+  Boolean    add_truncated;
+
+  for (vnp = list->head; vnp != NULL; vnp = vnp->next) {
+    item = (BioseqSearchItemPtr) vnp->data.ptrvalue;
+    if (item != NULL && StringNICmp (item->str, "lcl|", 4) == 0 
+        && StringSearch (item->str, "__") != NULL) {
+      ValNodeAddPointer (&other_list, 0, item);
+    }
+  }
+  other_list = ValNodeSort (other_list, SortVnpByBioseqSearchItem);
+  vnp = other_list;
+  while (vnp != NULL) {
+    item = (BioseqSearchItemPtr) vnp->data.ptrvalue;
+    add_truncated = TRUE;
+    if (vnp->next != NULL) {
+      item2 = vnp->next->data.ptrvalue;
+      cp = StringSearch (item->str, "__");
+      len1 = cp - item->str;
+      cp = StringSearch (item2->str, "__");
+      len2 = cp - item2->str;
+      if (len1 == len2 && StringNICmp (item->str, item2->str, len1) == 0) {
+        add_truncated = FALSE;
+        forw = vnp->next->next;
+        while (forw != NULL && (item2 = (BioseqSearchItemPtr) forw->data.ptrvalue) != NULL
+               && (cp = StringSearch (item2->str, "__")) != NULL
+               && (len2 = cp - item2->str) == len1
+               && StringNICmp (item->str, item2->str, len1) == 0) {
+          forw = forw->next;
+        }
+        vnp = forw;
+      }
+    } 
+    if (add_truncated) {
+      single_str = StringSave (item->str);
+      cp = StringSearch (single_str, "__");
+      if (cp != NULL) {
+        *cp = 0;
+      }
+      ValNodeAddPointerToEnd (list, 0, BioseqSearchItemNewStr (item->bsp, single_str, TRUE));
+      vnp = vnp->next;
+    }
+  }
+  other_list = ValNodeFree (other_list);
+}
+
 
 /* first are str, second are int */
 typedef struct bioseqsearchindex {
@@ -30158,6 +33930,7 @@ static BioseqSearchIndexPtr BuildIDStringsList (SeqEntryPtr sep)
 
   VisitBioseqsInSep (sep, &vnb, BuildIDStringsListCallback);
   AddBankItSingletons(&vnb);
+  AddUnderscoreSingletons(&vnb);
   list = vnb.head;
   list = ValNodeSort (list, SortVnpByBioseqSearchItem);
 
@@ -30180,6 +33953,43 @@ static BioseqSearchIndexPtr BuildIDStringsList (SeqEntryPtr sep)
   return index;
 }
 
+
+static BioseqSearchIndexPtr BuildIDStringsListForBioseqList (ValNodePtr bsp_list)
+{
+  ValNodeBlock vnb;
+  ValNodePtr list = NULL, vnp;
+  Int4       num_total, i;
+  BioseqSearchIndexPtr index;
+
+  vnb.head = NULL;
+  vnb.tail = NULL;
+
+  for (vnp = bsp_list; vnp != NULL; vnp = vnp->next) {
+    BuildIDStringsListCallback (vnp->data.ptrvalue, &vnb);
+  }
+  AddBankItSingletons(&vnb);
+  AddUnderscoreSingletons(&vnb);
+  list = vnb.head;
+  list = ValNodeSort (list, SortVnpByBioseqSearchItem);
+
+  num_total = ValNodeLen (list);
+
+  index = (BioseqSearchIndexPtr) MemNew (sizeof (BioseqSearchIndexData));
+  index->items = (BioseqSearchItemPtr PNTR) MemNew (sizeof (BioseqSearchItemPtr) * num_total);
+  for (vnp = list, i = 0; vnp != NULL && i < num_total; vnp = vnp->next, i++) {
+    index->items[i] = vnp->data.ptrvalue;
+    vnp->data.ptrvalue = NULL;
+    if (index->items[i]->num > 0) {
+      index->num_int++;
+    } else {
+      index->num_str++;
+    }
+  }
+  index->num_total = index->num_int + index->num_str;
+  list = ValNodeFree (list);
+
+  return index;
+}
 
 
 static BioseqPtr FindStringInIdListIndex (CharPtr str, BioseqSearchIndexPtr index)
@@ -30261,6 +34071,64 @@ static ValNodePtr FindListInIdListIndex (Uint1 match_location, CharPtr match_str
 }
 
 
+
+/* J. Chen */
+typedef struct bioseqbymatch {
+
+  BioseqPtr bsp;
+  CharPtr   match_str;
+} BioseqByMatch, PNTR BioseqByMatchPtr;
+
+
+
+/* J. Chen */
+static void GetBioseqByProteinName(SeqFeatPtr sfp, Pointer userdata)
+{
+  BioseqByMatchPtr bsp_m_p;
+  ProtRefPtr prp;
+  ValNodePtr    name;
+
+  bsp_m_p = (BioseqByMatchPtr) userdata;
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT 
+                  || (prp = (ProtRefPtr) sfp->data.value.ptrvalue) == NULL) 
+  {
+     bsp_m_p->bsp = NULL;
+     return;
+  }
+ 
+  for (name = prp->name;  name !=  NULL; name = name->next) 
+       if (strcmp(name->data.ptrvalue, bsp_m_p->match_str)) bsp_m_p->bsp =  NULL;
+
+}  /* GetBioseqByProteinName */
+
+
+
+/* J. Chen */
+static void FindBioseqByProteinName(SeqEntryPtr sep, BioseqByMatchPtr bsp_m, ValNodePtr *match_list)
+{
+   SeqEntryPtr tmp;
+
+   if (IS_Bioseq(sep)) {
+       bsp_m->bsp = (BioseqPtr) sep->data.ptrvalue;
+       VisitFeaturesInSep (sep, bsp_m, GetBioseqByProteinName);
+       if (bsp_m->bsp != NULL)  ValNodeAddPointer (match_list, OBJ_BIOSEQ, bsp_m->bsp);
+   }
+   else if (IS_Bioseq_set(sep)) {
+       for (tmp = ((BioseqSetPtr) sep->data.ptrvalue)->seq_set; tmp != NULL; tmp= tmp->next) {
+	    FindBioseqByProteinName(tmp, bsp_m, match_list);
+       }
+   }
+}   /* FindBioseqByProteinName  */
+
+
+static void GetAllBioseqsCallback (BioseqPtr bsp, Pointer data)
+{
+  if (bsp != NULL && !ISA_aa (bsp->mol)) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_BIOSEQ, bsp);
+  }
+}
+
+
 static ValNodePtr 
 FindMatchForRowEx 
 (MatchTypePtr match_type,
@@ -30275,10 +34143,15 @@ FindMatchForRowEx
   SeqFeatPtr           sfp;
   SeqMgrFeatContext    fcontext;
   BioseqPtr            bsp;
+  BioseqByMatch        bsp_m;
 
   if (match_type == NULL || sep == NULL) return NULL;
 
   switch (match_type->choice) {
+    case eTableMatchProteinName:   /* J. Chen */
+        bsp_m.match_str = match_str;
+        FindBioseqByProteinName(sep, &bsp_m, &match_list);
+      break;
     case eTableMatchFeatureID:
       sfp = SeqMgrGetFeatureByFeatID (entityID, NULL, match_str, NULL, &fcontext);
       if (sfp != NULL) {
@@ -30312,6 +34185,9 @@ FindMatchForRowEx
       break;
     case eTableMatchSourceQual:
       match_list = GetBioSourcesBySourceQual (sep, match_type->data, match_str, match_type->match_location);
+      break;
+    case eTableMatchAny:
+      VisitBioseqsInSep (sep, &match_list, GetAllBioseqsCallback);
       break;
   }
   return match_list;
@@ -30591,6 +34467,7 @@ static ValNodePtr GetFeatureListForRowAndColumn (MatchTypePtr match_type, ValNod
         ValNodeLink (&feature_list, GetFeatureListForGene (GetFeatdefFromFeatureType(field->type), vnp->data.ptrvalue));
       }
       break;
+    case eTableMatchProteinName:    /* J. Chen */
     case eTableMatchProteinID:
       for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
         ValNodeLink (&feature_list, GetFeatureListForProteinBioseq (GetFeatdefFromFeatureType(field->type), vnp->data.ptrvalue));
@@ -30600,6 +34477,7 @@ static ValNodePtr GetFeatureListForRowAndColumn (MatchTypePtr match_type, ValNod
       feature_list = ValNodeCopyPtr (match_list);
       break;
     case eTableMatchNucID:
+    case eTableMatchAny:
       for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
         ValNodeLink (&feature_list, GetFeatureListForNucleotideBioseq (GetFeatdefFromFeatureType(field->type), vnp->data.ptrvalue));
       }
@@ -30671,8 +34549,10 @@ static ValNodePtr GetBioSourceListForRowAndColumn (MatchTypePtr match_type, ValN
         }
       }
       break;
+    case eTableMatchProteinName:    /* J. Chen */
     case eTableMatchProteinID:
     case eTableMatchNucID:
+    case eTableMatchAny:
       for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
         if (vnp->choice == OBJ_BIOSEQ) {
           AddBioSourcesForBioseq (vnp->data.ptrvalue, &feature_list);
@@ -30800,8 +34680,10 @@ static ValNodePtr GetPubListForRowAndColumn (MatchTypePtr match_type, ValNodePtr
         }
       }
       break;
+    case eTableMatchProteinName:  /* J. Chen */
     case eTableMatchProteinID:
     case eTableMatchNucID:
+    case eTableMatchAny:
       for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
         if (vnp->choice == OBJ_BIOSEQ) {
           AddPubsForBioseq (vnp->data.ptrvalue, &feature_list);
@@ -30899,6 +34781,7 @@ static ValNodePtr GetSequenceListForRowAndColumn (MatchTypePtr match_type, ValNo
         }
       }
       break;
+    case eTableMatchProteinName:  /* J. Chen */
     case eTableMatchProteinID:
     case eTableMatchNucID:
       for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
@@ -30922,6 +34805,9 @@ static ValNodePtr GetSequenceListForRowAndColumn (MatchTypePtr match_type, ValNo
     case eTableMatchSourceQual:
       seq_list = GetSequenceListForBioSourceObjects (match_list);
       break;
+    case eTableMatchAny:
+      seq_list = ValNodeCopyPtr (match_list);
+      break;
   }
   return seq_list;
 }
@@ -30941,30 +34827,6 @@ static ValNodePtr GetStructuredCommentListForRowAndColumn (MatchTypePtr match_ty
            sdp != NULL;
            sdp = SeqMgrGetNextDescriptor (vnp->data.ptrvalue, sdp, Seq_descr_user, &context)) {
         if (IsUserObjectStructuredComment (sdp->data.ptrvalue)) {
-          ValNodeAddPointer (&target_list, OBJ_SEQDESC, sdp);
-        }
-      }
-    }
-  }    
-  seq_list = ValNodeFree (seq_list);
-  return target_list;
-}
-
-
-static ValNodePtr GetDBLinkListForRowAndColumn (MatchTypePtr match_type, ValNodePtr match_list)
-{
-  ValNodePtr seq_list, target_list = NULL, vnp;
-  SeqDescrPtr sdp;
-  SeqMgrDescContext context;
-
-  seq_list = GetSequenceListForRowAndColumn (match_type, match_list);
-
-  for (vnp = seq_list; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == OBJ_BIOSEQ) {
-      for (sdp = SeqMgrGetNextDescriptor (vnp->data.ptrvalue, NULL, Seq_descr_user, &context);
-           sdp != NULL;
-           sdp = SeqMgrGetNextDescriptor (vnp->data.ptrvalue, sdp, Seq_descr_user, &context)) {
-        if (IsUserObjectDBLink (sdp->data.ptrvalue)) {
           ValNodeAddPointer (&target_list, OBJ_SEQDESC, sdp);
         }
       }
@@ -31005,7 +34867,11 @@ static ValNodePtr GetTargetListForRowAndColumn (MatchTypePtr match_type, ValNode
       target_list = GetStructuredCommentListForRowAndColumn (match_type, match_list);
       break;
     case FieldType_dblink:
-      target_list = GetDBLinkListForRowAndColumn (match_type, match_list);
+      tmp_list = GetSequenceListForRowAndColumn (match_type, match_list);
+      for (vnp = tmp_list; vnp != NULL; vnp = vnp->next) {
+        AddDBLinkDescriptorDestinationsForBioseq (vnp->data.ptrvalue, &target_list);
+      }
+      tmp_list = ValNodeFree (tmp_list);
       break;
     case FieldType_misc:
       if (field->data.intvalue == Misc_field_genome_project_id) {
@@ -31069,7 +34935,6 @@ static void ReportMissingTargets (ValNodeBlockPtr err_list, FieldTypePtr ft, Cha
   CharPtr            no_src_fmt = "No biosource for %s (column %d, line %d)";
   CharPtr            no_seq_fmt = "No sequence for %s (column %d, line %d)";
   CharPtr            no_cmt_fmt = "No structured comment for %s (column %d, line %d)";
-  CharPtr            no_dblink_fmt = "No DBLink object for %s (column %d, line %d)";
   CharPtr            err_msg;
   RnaQualPtr         rq;
 
@@ -31125,11 +34990,6 @@ static void ReportMissingTargets (ValNodeBlockPtr err_list, FieldTypePtr ft, Cha
       sprintf (err_msg, no_cmt_fmt, match_val, col_num, line_num);
       ValNodeAddPointerToEnd (err_list, 0, err_msg);
       break;
-    case FieldType_dblink:
-      err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (no_dblink_fmt) + StringLen (match_val) + 30));
-      sprintf (err_msg, no_dblink_fmt, match_val, col_num, line_num);
-      ValNodeAddPointerToEnd (err_list, 0, err_msg);
-      break;      
     case FieldType_misc:
       err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (no_seq_fmt) 
                                                     + StringLen (match_val)
@@ -31305,9 +35165,25 @@ NLM_EXTERN ValNodePtr ValidateTabTableValues (ValNodePtr table, ValNodePtr colum
   CharPtr    inconsistent_fmt = "Locus tag prefix for %s is inconsistent";
   CharPtr    bad_molinfo_fmt = "'%s' is not a valid value for this field";
   CharPtr    err_msg;
+  MatchTypePtr match_type;
 
   if (table == NULL || columns == NULL) {
     return NULL;
+  }
+
+  match_type = FindMatchTypeInHeader (columns);
+  if (match_type == NULL) {
+    ValNodeAddPointer (&err_list, 0, StringSave ("No match type"));
+    return err_list;
+  }
+
+  if (match_type->choice == eTableMatchAny && table->next != NULL) {
+    if (table->next->next != NULL) {
+      ValNodeAddPointer (&err_list, 0, StringSave ("Too many rows for apply to all"));
+    } else {
+      /* skip header */
+      table = table->next;
+    }
   }
 
   for (line_vnp = table, line_num = 1;
@@ -31369,7 +35245,6 @@ NLM_EXTERN ValNodePtr GetSequenceListsForMatchTypeInTabTable (SeqEntryPtr sep, V
   CharPtr    msg;
   BioseqSearchIndexPtr  index = NULL;
 
-
   if (sep == NULL || table == NULL || match_type == NULL || col < 0) {
     return NULL;
   }
@@ -31377,6 +35252,10 @@ NLM_EXTERN ValNodePtr GetSequenceListsForMatchTypeInTabTable (SeqEntryPtr sep, V
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
 
   index = BuildIDStringsList(sep);
+  if (match_type->choice == eTableMatchAny && table->next != NULL) {
+    /* skip first row, must contain header */
+    table = table->next;
+  }
 
   for (vnp_row = table, line = 1; vnp_row != NULL; vnp_row = vnp_row->next, line++) {
     vnp = vnp_row->data.ptrvalue;
@@ -31507,6 +35386,19 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
   if (columns == NULL) {
     ValNodeAddPointerToEnd (&vnb, 0, StringSave ("No column information"));
   }
+
+  match_type = FindMatchTypeInHeader (columns);
+  if (match_type == NULL) {
+    ValNodeAddPointerToEnd (&vnb, 0, StringSave ("No Match Type"));
+  } else if (match_type->choice == eTableMatchAny && table->next != NULL) {
+    if (table->next->next != NULL) {
+      ValNodeAddPointerToEnd (&vnb, 0, StringSave ("Too many rows for apply to all"));
+    } else {
+      /* skip header */
+      table = table->next;
+    }
+  }
+
   if (vnb.head != NULL) {
     if (p_err_list == NULL) {
       vnb.head = ValNodeFreeData (vnb.head);
@@ -31518,8 +35410,6 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
 
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
 
-  match_type = FindMatchTypeInHeader (columns);
-  if (match_type == NULL) return NULL;
 
   index = BuildIDStringsList(sep);
 
@@ -31559,6 +35449,7 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
           }
         }
       }
+      match_list = ValNodeFree (match_list);
     }
     tmp = ValNodeAddPointer (&last_obj, 0, obj_row);
     if (obj_table == NULL) {
@@ -31735,7 +35626,7 @@ static ValNodePtr CountObjectsForColumnFields (SeqEntryPtr sep, ValNodePtr colum
           tmp_list = ValNodeFree (tmp_list);
           break;
         case FieldType_dblink:
-          VisitDescriptorsInSep (sep, &tmp_list, CollectDBLinksCallback);
+          tmp_list = CollectDBLinkDescriptors (sep);
           num = ValNodeLen (tmp_list);
           tmp_list = ValNodeFree (tmp_list);
           break;
@@ -31787,8 +35678,14 @@ NLM_EXTERN ValNodePtr ApplyTableValuesToObjectTable (SeqEntryPtr sep, ValNodePtr
   Int4 num_fields_affected = 0, col_num, line_num, num_this_column;
   Boolean success;
   ValNodePtr count_msg = NULL;
+  MatchTypePtr match_type;
 
   count_list = CountObjectsForColumnFields (sep, columns);
+  match_type = FindMatchTypeInHeader (columns);
+  if (match_type->choice == eTableMatchAny && table->next != NULL) {
+    /* skip first row, must contain header */
+    table = table->next;
+  }
 
   for (val_line_vnp = table, obj_line_vnp = obj_table, line_num = 1;
        val_line_vnp != NULL && obj_line_vnp != NULL;
@@ -31891,33 +35788,6 @@ NLM_EXTERN ValNodePtr ApplyTableValuesToObjectTable (SeqEntryPtr sep, ValNodePtr
 }
 
 
-static int LIBCALLBACK SortVnpByChoiceAndPtrvalue (VoidPtr ptr1, VoidPtr ptr2)
-
-{
-  ValNodePtr  vnp1;
-  ValNodePtr  vnp2;
-
-  if (ptr1 != NULL && ptr2 != NULL) {
-    vnp1 = *((ValNodePtr PNTR) ptr1);
-    vnp2 = *((ValNodePtr PNTR) ptr2);
-    if (vnp1 != NULL && vnp2 != NULL) {
-      if (vnp1->choice > vnp2->choice) {
-        return 1;
-      } else if (vnp1->choice < vnp2->choice) {
-        return -1;
-      } else if (vnp1->data.ptrvalue > vnp2->data.ptrvalue) {
-        return 1;
-      } else if (vnp1->data.ptrvalue < vnp2->data.ptrvalue) {
-        return -1;
-      } else {
-        return 0;
-      }
-    }
-  }
-  return 0;
-}
-
-
 static ValNodePtr FindRowsForObjectInObjectTable (ValNodePtr obj_table, Int4 column, Uint1 choice, Pointer data)
 {
   Int4 col_num, row_num;
@@ -31986,7 +35856,9 @@ NLM_EXTERN ValNodePtr CheckObjTableForRowsThatApplyToTheSameDestination (ValNode
 
   /* now, for each row, get pointer to first column */
   for (line_vnp = obj_table; line_vnp != NULL; line_vnp = line_vnp->next) {
-    ValNodeAddPointerToEnd (&vnb, 0, line_vnp->data.ptrvalue);
+    if (line_vnp->data.ptrvalue != NULL) {
+      ValNodeAddPointerToEnd (&vnb, 0, line_vnp->data.ptrvalue);
+    }
   }
 
   /* now for each column, make a list of all features in the column, then sort to see if there are duplicates */
@@ -32066,6 +35938,7 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
   Int4               num_with_mrna = 0, num_without_mrna = 0;
   CharPtr            match_txt;
   CharPtr            new_val;
+  MatchTypePtr       match_type;
 
   vnb.head = NULL;
   vnb.tail = NULL;
@@ -32079,6 +35952,20 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
   if (columns == NULL) {
     ValNodeAddPointerToEnd (&vnb, 1, StringSave ("No column information"));
   }
+
+  match_type = FindMatchTypeInHeader (columns);
+  if (match_type == NULL) {
+    ValNodeAddPointerToEnd (&vnb, 1, StringSave ("Must have match type"));
+  } else if (table != NULL && match_type->choice == eTableMatchAny && table->next != NULL) {
+    if (table->next->next != NULL) {
+      ValNodeAddPointerToEnd (&vnb, 1, StringSave ("Table has too many rows for apply to all"));
+    } else {
+      /* skip first row, must contain header */
+      table = table->next;
+    }
+  }
+
+
   if (vnb.head != NULL) {
     return vnb.head;
   }
@@ -32218,6 +36105,11 @@ NLM_EXTERN ValNodePtr ApplyTableToFeatures (SeqEntryPtr sep, ValNodePtr table, V
 
   match_type = FindMatchTypeInHeader (columns);
 
+  if (match_type->choice == eTableMatchAny && table->next != NULL) {
+    /* skip first row, must contain header */
+    table = table->next;
+  }
+
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
 
   for (line_vnp = table, line_num = 1; line_vnp != NULL; line_vnp = line_vnp->next, line_num++) {
@@ -32326,6 +36218,11 @@ NLM_EXTERN ValNodePtr CheckTableForExistingText (SeqEntryPtr sep, ValNodePtr tab
   if (match_type == NULL) return NULL;
 
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
+
+  if (match_type->choice == eTableMatchAny && table->next != NULL) {
+    /* skip first row, must contain header */
+    table = table->next;
+  }
 
   for (line_vnp = table, line_num = 1; line_vnp != NULL; line_vnp = line_vnp->next, line_num++) {
     match_choice = FindMatchChoiceInLine (line_vnp->data.ptrvalue, columns);
@@ -32736,20 +36633,21 @@ NLM_EXTERN Boolean IsSuspectRuleEmpty (SuspectRulePtr rule)
 
 
 /* summarization */
-NLM_EXTERN CharPtr SummarizeSearchFunc (SearchFuncPtr func)
+NLM_EXTERN CharPtr SummarizeSearchFunc (SearchFuncPtr func, Boolean short_version)
 {
   CharPtr summ = NULL;
   CharPtr bracket_fmt = "Contains %d or more brackets or parentheses";
-  CharPtr prefix_fmt = "Contains '%s' followed by numbers";
+  CharPtr prefix_fmt = "Is '%s' followed by numbers";
   CharPtr length_fmt = "Is longer than %d characters";
   CharPtr term_fmt = "Contains '%s' at start or separated from other letters by numbers, spaces, or punctuation, but does not also contain 'domain'";
+  CharPtr short_term_fmt = "Contains '%s'";
 
   if (func == NULL) {
     summ = StringSave ("No search function");
   } else {
     switch (func->choice) {
       case SearchFunc_string_constraint:
-        summ = SummarizeStringConstraint (func->data.ptrvalue);
+        summ = SummarizeStringConstraintEx (func->data.ptrvalue, short_version);
         break;
       case SearchFunc_contains_plural:
         summ = StringSave ("May contain plural");
@@ -32779,8 +36677,13 @@ NLM_EXTERN CharPtr SummarizeSearchFunc (SearchFuncPtr func)
         sprintf (summ, length_fmt, func->data.intvalue);
         break;
       case SearchFunc_has_term:
-        summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (term_fmt) + StringLen (func->data.ptrvalue)));
-        sprintf (summ, term_fmt, func->data.ptrvalue == NULL ? "" : func->data.ptrvalue);
+        if (short_version) {
+          summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (short_term_fmt) + StringLen (func->data.ptrvalue)));
+          sprintf (summ, short_term_fmt, func->data.ptrvalue == NULL ? "" : func->data.ptrvalue);
+        } else {      
+          summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (term_fmt) + StringLen (func->data.ptrvalue)));
+          sprintf (summ, term_fmt, func->data.ptrvalue == NULL ? "" : func->data.ptrvalue);
+        }
         break;
       default:
         summ = StringSave ("Unknown search function");
@@ -32791,13 +36694,14 @@ NLM_EXTERN CharPtr SummarizeSearchFunc (SearchFuncPtr func)
 }
 
 
-NLM_EXTERN CharPtr SummarizeReplaceFunc (ReplaceFuncPtr replace)
+NLM_EXTERN CharPtr SummarizeReplaceFunc (ReplaceFuncPtr replace, Boolean short_version)
 {
   CharPtr summ = NULL;
   SimpleReplacePtr simple;
   CharPtr replace_fmt = "Replace %swith '%s'";
   CharPtr whole = "entire name ";
   CharPtr weasel_to_putative = ", retain and normalize 'putative' synonym";
+  CharPtr haem_fmt = "Replace '%s' with 'heme' if whole word, 'hem' otherwise";
   Int4 len;
 
   if (replace == NULL) {
@@ -32810,19 +36714,20 @@ NLM_EXTERN CharPtr SummarizeReplaceFunc (ReplaceFuncPtr replace)
       if (simple->whole_string) {
         len += StringLen (whole);
       }
-      if (simple->weasel_to_putative) {
+      if (simple->weasel_to_putative && !short_version) {
         len += StringLen (weasel_to_putative);
       }
       summ = (CharPtr) MemNew (sizeof (Char) * len);
       sprintf (summ, replace_fmt, 
                simple->whole_string ? whole : "" , 
                simple->replace == NULL ? "" : simple->replace);
-      if (simple->weasel_to_putative) {
+      if (simple->weasel_to_putative && !short_version) {
         StringCat (summ, weasel_to_putative);
       }
       break;
     case ReplaceFunc_haem_replace:
-      summ = StringSave ("Replace with 'heme' if whole word, 'hem' otherwise");
+      summ = (CharPtr) MemNew (sizeof (Char) * (StringLen (haem_fmt) + StringLen (replace->data.ptrvalue)));
+      sprintf (summ, haem_fmt, replace->data.ptrvalue);
       break;
     default:
       summ = StringSave ("Unknown replacement function");
@@ -32834,15 +36739,16 @@ NLM_EXTERN CharPtr SummarizeReplaceFunc (ReplaceFuncPtr replace)
 static CharPtr fix_type_names[] = {
   "None",
   "Typo",
+  "Putative Typo",
   "Quick fix",
   "Organelles not appropriate in prokaryote",
-  "Suspicous phrase; should this be nonfunctional?",
-  "May contain database identifer more appropriate in note; remove from product name",
+  "Suspicious phrase; should this be nonfunctional?",
+  "May contain database identifier more appropriate in note; remove from product name",
   "Remove organism from product name",
   "Possible parsing error or incorrect formatting; remove inappropriate symbols",
   "Implies evolutionary relationship; change to -like protein",
-  "Use xxx protein or xxx-containing protein",
-  "Use hypothetical protein",
+  "Consider adding 'protein' to the end of the product name",
+  "Correct the name or use 'hypothetical protein'",
   "Use American spelling",
   "Use short product name instead of descriptive phrase",
   "use protein instead of gene as appropriate"
@@ -32858,7 +36764,7 @@ NLM_EXTERN CharPtr SummarizeFixType (Uint2 fix_type)
 }
 
 
-NLM_EXTERN CharPtr SummarizeReplaceRule (ReplaceRulePtr replace)
+NLM_EXTERN CharPtr SummarizeReplaceRule (ReplaceRulePtr replace, Boolean short_version)
 {
   CharPtr add_note = ", move original to note";
   CharPtr func;
@@ -32868,7 +36774,7 @@ NLM_EXTERN CharPtr SummarizeReplaceRule (ReplaceRulePtr replace)
   if (replace == NULL) {
     return NULL;
   }
-  func = SummarizeReplaceFunc (replace->replace_func);
+  func = SummarizeReplaceFunc (replace->replace_func, short_version);
   len = StringLen (func) + 1;
   if (replace->move_to_note) {
     len += StringLen (add_note);
@@ -32884,28 +36790,58 @@ NLM_EXTERN CharPtr SummarizeReplaceRule (ReplaceRulePtr replace)
 }
 
 
-NLM_EXTERN CharPtr SummarizeSuspectRule (SuspectRulePtr rule)
+NLM_EXTERN CharPtr SummarizeSuspectRuleEx (SuspectRulePtr rule, Boolean short_version)
 {
   CharPtr find = NULL, replace = NULL, fix_type = NULL, feat_constraint = NULL, except = NULL;
   CharPtr summ = NULL;
   CharPtr butnot = " but not ";
+  CharPtr desc = " Description: ";
   Int4 len;
 
   if (rule == NULL) {
     return NULL;
   }
 
-  find = SummarizeSearchFunc (rule->find);
-  if (!IsSearchFuncEmpty(rule->except)) {
-    except = SummarizeSearchFunc (rule->except);
-  }
-  feat_constraint = SummarizeConstraintSet (rule->feat_constraint);
-  replace = SummarizeReplaceRule (rule->replace);
-  if (rule->rule_type != Fix_type_none) {
+  if (!short_version && rule->rule_type != Fix_type_none) {
     fix_type = SummarizeFixType (rule->rule_type);
   }
 
-  len = StringLen (find) + StringLen (except) + StringLen (feat_constraint) + StringLen (replace) + StringLen (fix_type) + 6;
+  if (short_version && !StringHasNoText (rule->description)) {
+    if (fix_type == NULL) {
+      summ = StringSave (rule->description);
+    } else {
+      len = StringLen (fix_type) + StringLen (rule->description) + 4;
+      summ = (CharPtr) MemNew (sizeof (Char) * len);
+      StringCpy (summ, rule->description);
+      StringCat (summ, " (");
+      StringCat (summ, fix_type);
+      StringCat (summ, ")");
+    }
+    return summ;
+  }
+
+
+  find = SummarizeSearchFunc (rule->find, short_version);
+  if (!IsSearchFuncEmpty(rule->except)) {
+    except = SummarizeSearchFunc (rule->except, short_version);
+  }
+
+  if (!short_version) {
+    feat_constraint = SummarizeConstraintSet (rule->feat_constraint);
+  }
+
+  if (!short_version || rule->rule_type == Fix_type_typo) {
+    replace = SummarizeReplaceRule (rule->replace, short_version);
+  }
+
+  len = StringLen (find) + StringLen (except) + StringLen (feat_constraint) 
+             + StringLen (replace) + 3;
+  if (fix_type != NULL) {
+    len = len + StringLen (fix_type) + 3;
+  }
+  if (!StringHasNoText (rule->description)) {
+    len += StringLen (rule->description) + StringLen (desc);
+  }
   if (feat_constraint != NULL) {
     len += 2;
   }
@@ -32929,10 +36865,15 @@ NLM_EXTERN CharPtr SummarizeSuspectRule (SuspectRulePtr rule)
     StringCat (summ, replace);
   }
 
-  if (rule->rule_type != Fix_type_none) {
+  if (fix_type != NULL) {
     StringCat (summ, " (");
     StringCat (summ, fix_type);
     StringCat (summ, ")");
+  }
+
+  if (!StringHasNoText (rule->description)) {
+    StringCat (summ, desc);
+    StringCat (summ, rule->description);
   }
 
   find = MemFree (find);
@@ -32940,6 +36881,12 @@ NLM_EXTERN CharPtr SummarizeSuspectRule (SuspectRulePtr rule)
   feat_constraint = MemFree (feat_constraint);
   replace = MemFree (replace);
   return summ;
+}
+
+
+NLM_EXTERN CharPtr SummarizeSuspectRule (SuspectRulePtr rule)
+{
+  return SummarizeSuspectRuleEx (rule, FALSE);
 }
 
 
@@ -32961,7 +36908,7 @@ NLM_EXTERN Boolean StringMayContainPlural (CharPtr search)
         /* not plural */
         cp = cp + word_len;
         cp += StringSpn (cp, word_skip);
-      } else if (word_len > 2
+      } else if (word_len > 3
                  && (second_to_last_letter = *(cp + word_len - 2)) != 's'
                  && second_to_last_letter != 'i'
                  && second_to_last_letter != 'u'
@@ -33164,6 +37111,21 @@ static Boolean PrecededByPrefix (CharPtr search, CharPtr cp, CharPtr prefix)
 }
 
 
+static CharPtr OkNumberPrefix[] = {"DUF", "UPF", "IS", "TIGR", "UCP", "PUF", "CHP", NULL };
+static Boolean PrecededByOkPrefix (CharPtr search, CharPtr p)
+{
+  Int4 i;
+  Boolean rval = FALSE;
+
+  for (i = 0; OkNumberPrefix[i] != NULL && !rval; i++) {
+    if (PrecededByPrefix (search, p, OkNumberPrefix[i])) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
 NLM_EXTERN Boolean ContainsThreeOrMoreNumbersTogether (CharPtr search)
 {
   CharPtr p;
@@ -33176,10 +37138,7 @@ NLM_EXTERN Boolean ContainsThreeOrMoreNumbersTogether (CharPtr search)
   p = search;
   while (*p != 0) {
     if (isdigit (*p)) {
-      if (PrecededByPrefix(search, p, "DUF")
-          || PrecededByPrefix(search, p, "UPF")
-          || PrecededByPrefix(search, p, "IS")
-          || PrecededByPrefix(search, p, "TIGR")) {
+      if (PrecededByOkPrefix(search, p)) {
         p += StrSpn (p, "0123456789") - 1;
         num_digits = 0;
       } else if (InWordBeforeCytochromeOrCoenzyme (p, search)) {
@@ -33353,7 +37312,7 @@ static Boolean MatchesSearchFunc (CharPtr str, SearchFuncPtr search)
       break;
     case SearchFunc_too_long:
       if (StringISearch (str, "bifunctional") == NULL && StringISearch (str, "multifunctional") == NULL
-          && StringLen (str) > search->data.intvalue) {
+          && StringLen (str) > (Uint4) search->data.intvalue) {
         rval = TRUE;
       }
       break;
@@ -33399,6 +37358,7 @@ NLM_EXTERN Boolean DoesStringMatchSuspectRule (CharPtr str, SeqFeatPtr sfp, Susp
   if (rule == NULL) {
     return TRUE;
   }
+
   if (MatchesSuspectProductRule(str, rule)) {
     /* we want to list the coding region, rather than the protein feature, if we can */
     if (sfp != NULL && sfp->data.choice == SEQFEAT_PROT) {
@@ -33509,6 +37469,7 @@ NLM_EXTERN Boolean ApplySuspectProductNameFixToString (SuspectRulePtr rule, Char
   SimpleReplacePtr simple_replace;
   Boolean          rval = FALSE;
   Boolean          use_putative = FALSE;
+  CharPtr          orig;
 
   if (str == NULL || rule == NULL || rule->replace == NULL || rule->replace->replace_func == NULL) {
     return FALSE;
@@ -33541,8 +37502,13 @@ NLM_EXTERN Boolean ApplySuspectProductNameFixToString (SuspectRulePtr rule, Char
       }
       break;
     case ReplaceFunc_haem_replace:
+      orig = StringSave (*str);
       FindReplaceString (str, rule->replace->replace_func->data.ptrvalue, "heme", FALSE, TRUE);
       FindReplaceString (str, rule->replace->replace_func->data.ptrvalue, "hem", FALSE, FALSE);
+      if (StringCmp (orig, *str) != 0) {
+        rval = TRUE;
+      }
+      orig = MemFree (orig);
       break;
   }
   return rval;
@@ -34140,6 +38106,24 @@ static Boolean ReportRuleSetProblems (CharPtr product_name, SuspectRuleSetPtr ru
 }
 
 
+static Boolean FixRuleSetProblems (CharPtr PNTR product_name, SuspectRuleSetPtr rule_list)
+{
+  SuspectRulePtr rule;
+  Boolean any_found = FALSE;
+
+  if (product_name == NULL || *product_name == NULL) {
+    return FALSE;
+  }
+  /* report with rule set */
+  for (rule = rule_list; rule != NULL; rule = rule->next) {
+    if (rule->replace != NULL && MatchesSuspectProductRule (*product_name, rule)) {
+      any_found |= ApplySuspectProductNameFixToString (rule, product_name);
+    }
+  }
+  return any_found;
+}
+
+
 NLM_EXTERN Boolean FindSuspectProductNamesInEntrezGene (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file)
 {
   EntrezgenePtr  egp;
@@ -34184,6 +38168,55 @@ NLM_EXTERN Boolean FindSuspectProductNamesInEntrezGene (FILE *input_file, Suspec
 }
 
 
+NLM_EXTERN Boolean FixSuspectProductNamesInEntrezGene (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file)
+{
+  EntrezgenePtr  egp;
+  AsnIoPtr       aip;
+  ValNodePtr     vnp;
+  ProtRefPtr     prp;
+  GeneRefPtr     grp;
+  CharPtr        prefix = NULL;
+  Char           geneid_buf[20];
+  CharPtr        product_name;
+
+  aip = AsnIoNew (ASNIO_TEXT_IN, input_file, NULL, NULL, NULL);
+  egp = EntrezgeneAsnRead (aip, NULL);
+  if (egp == NULL) {
+    return FALSE;
+  }
+
+  /* scan */
+  if (egp->prot != NULL) {
+    if (egp->track_info != NULL && egp->track_info->geneid > 0) {
+      sprintf (geneid_buf, "%d", egp->track_info->geneid);
+      prefix = geneid_buf;
+    } else if (egp->gene != NULL) {
+      grp = (GeneRefPtr) egp->gene;
+      if (grp->locus_tag == NULL) {
+        prefix = grp->locus;
+      } else {
+        prefix = grp->locus_tag;
+      }
+    }
+    prp = (ProtRefPtr) egp->prot;
+    for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+      product_name = vnp->data.ptrvalue;
+      if (rule_list == NULL) {
+        FixProductNameProblems (&product_name);
+      } else {
+        FixRuleSetProblems (&product_name, rule_list);
+      }
+      fprintf (output_file, "%s\n", product_name);
+      vnp->data.ptrvalue = product_name;
+    }
+  }
+
+  egp = EntrezgeneFree (egp);
+  return TRUE;
+}
+
+
+
 NLM_EXTERN void FindSuspectProductNamesInNameList (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file)
 {
   ReadBufferData    rbd;
@@ -34200,6 +38233,30 @@ NLM_EXTERN void FindSuspectProductNamesInNameList (FILE *input_file, SuspectRule
     } else {
       ReportRuleSetProblems (line, rule_list, output_file, NULL);
     }
+    
+    line = MemFree (line);
+    line = AbstractReadFunction (&rbd);
+  }
+}
+
+
+NLM_EXTERN void FixSuspectProductNamesInNameList (FILE *input_file, SuspectRuleSetPtr rule_list, FILE *output_file)
+{
+  ReadBufferData    rbd;
+  CharPtr           line;
+  
+  rbd.fp = input_file;
+  rbd.current_data = NULL;
+
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL) 
+  {
+    if (rule_list == NULL) {
+      FixProductNameProblems (&line);
+    } else {
+      FixRuleSetProblems (&line, rule_list);
+    }
+    fprintf (output_file, "%s\n", line);
     
     line = MemFree (line);
     line = AbstractReadFunction (&rbd);
@@ -34608,3 +38665,93 @@ NLM_EXTERN void ExportProductUpdateTableWithPrecomputedSuggestions (FILE *fp, Se
 }
 
 
+static Int4 FindBioseqInValNodeList (BioseqPtr bsp, ValNodePtr list)
+{
+  Int4 pos = 0;
+  ValNodePtr vnp;
+
+  vnp = list;
+  while (vnp != NULL && bsp != vnp->data.ptrvalue) {
+    pos++;
+    vnp = vnp->next;
+  }
+  if (vnp == NULL) {
+    return -1;
+  } else {
+    return pos;
+  }
+}
+
+
+/* for update sequence matching */
+/* note - must set scope to original before calling */
+NLM_EXTERN ValNodePtr ShuffleUpdateBioseqListWithIndex (ValNodePtr PNTR update_bioseq_list, ValNodePtr orig_bioseq_list)
+{
+  ValNodePtr     unmatched_list = NULL;
+  Int4           update_pos;
+  BioseqPtr      orig_bsp, update_bsp;
+  BioseqSearchIndexPtr index;
+  ValNodePtr     unmatched_vnp, unmatched_next, unmatched_prev = NULL, update_prev = NULL;
+  SeqIdPtr       sip;
+  ObjectIdPtr    oip;
+  BioseqPtr PNTR update_vector;
+  Int4           len;
+  
+  if (update_bioseq_list == NULL || *update_bioseq_list == NULL)
+  {
+    return NULL;
+  }
+  else if (orig_bioseq_list == NULL)
+  {
+    unmatched_list = *update_bioseq_list;
+    *update_bioseq_list = NULL;
+    return unmatched_list;
+  }
+
+  len = ValNodeLen (orig_bioseq_list);
+  update_vector = (BioseqPtr PNTR) MemNew (sizeof (BioseqPtr) * len);
+  MemSet (update_vector, 0, sizeof (BioseqPtr) * len);
+
+  index = BuildIDStringsListForBioseqList (orig_bioseq_list);
+  /* for each update sequence, identifies original Bioseq and if found, removes from list */
+  for (unmatched_vnp = *update_bioseq_list; unmatched_vnp != NULL; unmatched_vnp = unmatched_next) {
+    unmatched_next = unmatched_vnp->next;
+    update_bsp = unmatched_vnp->data.ptrvalue;
+    orig_bsp = NULL;
+    if (update_bsp != NULL) {
+      for (sip = update_bsp->id; sip != NULL && orig_bsp == NULL; sip = sip->next) {
+        if (sip->choice == SEQID_LOCAL && (oip = (ObjectIdPtr)sip->data.ptrvalue) != NULL && oip->str != NULL) {
+          orig_bsp = FindStringInIdListIndex (oip->str, index);
+        } else {
+          orig_bsp = BioseqFind (sip);
+        }
+      }
+    }
+    if (orig_bsp != NULL && (update_pos = FindBioseqInValNodeList (orig_bsp, orig_bioseq_list)) > -1) {
+      update_vector[update_pos] = update_bsp;
+      if (unmatched_prev == NULL) {
+        *update_bioseq_list = unmatched_vnp->next;
+      } else {
+        unmatched_prev->next = unmatched_vnp->next;
+      }
+      unmatched_vnp->next = NULL;
+      unmatched_vnp = ValNodeFree (unmatched_vnp);
+    } else {
+      unmatched_prev = unmatched_vnp;
+    }         
+  }
+  index = BioseqSearchIndexFree (index);
+  
+  unmatched_list = *update_bioseq_list;
+  *update_bioseq_list = NULL;
+  *update_bioseq_list = ValNodeNew (NULL);
+  (*update_bioseq_list)->data.ptrvalue = update_vector[0];
+  update_prev = (*update_bioseq_list);
+  for (update_pos = 1; update_pos < len; update_pos++) {
+    update_prev = ValNodeNew (update_prev);
+    update_prev->data.ptrvalue = update_vector[update_pos];
+    update_prev->choice = update_pos;
+  }
+    
+  return unmatched_list;
+}

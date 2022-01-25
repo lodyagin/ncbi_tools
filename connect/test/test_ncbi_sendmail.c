@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_sendmail.c,v 6.25 2010/06/04 14:59:37 kazimird Exp $
+/* $Id: test_ncbi_sendmail.c,v 6.27 2012/06/20 18:09:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -152,14 +152,14 @@ int main(int argc, const char* argv[])
     info.mx_host = "localhost";
 
     CORE_LOG(eLOG_Note, "Testing bad port");
-    info.mx_port = 10;
+    info.mx_port = 10/*BAD*/;
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx", "Bad port", &info);
     if (!retval)
         CORE_LOG(eLOG_Fatal, "Test failed");
     CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
 
     CORE_LOG(eLOG_Note, "Testing bad protocol");
-    info.mx_port = 21;
+    info.mx_port = CONN_PORT_FTP;
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx", "Protocol", &info);
     if (!retval)
         CORE_LOG(eLOG_Fatal, "Test failed");
@@ -168,7 +168,7 @@ int main(int argc, const char* argv[])
     CORE_LOG(eLOG_Note, "Testing timeout");
     info.mx_host = "www.ncbi.nlm.nih.gov";
     info.mx_timeout.sec = 5;
-    info.mx_port = 80;
+    info.mx_port = CONN_PORT_HTTP;
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx", "Timeout", &info);
     if (!retval)
         CORE_LOG(eLOG_Error, "Test failed");
@@ -281,7 +281,7 @@ int main(int argc, const char* argv[])
         CORE_LOG(eLOG_Note, "Test passed");
 
     CORE_LOG(eLOG_Note, "Testing bad magic");
-    info.magic_number = 0;
+    info.magic_cookie = 0;
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx", "Bad Magic", &info);
     if (!retval)
         CORE_LOG(eLOG_Fatal, "Test failed");

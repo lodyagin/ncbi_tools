@@ -1,7 +1,7 @@
 #ifndef _TOPORG_
 #define _TOPORG_
 
-/*  $Id: toporg.h,v 6.10 2010/01/27 19:02:40 kans Exp $
+/*  $Id: toporg.h,v 6.14 2011/09/30 21:13:18 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -89,7 +89,6 @@ Boolean CmpOrgById(BioSourcePtr b1, BioSourcePtr b2);
 extern void NormalizeSegSeqMolInfo(SeqEntryPtr sep);
 extern void MoveFeatsFromPartsSet (SeqEntryPtr sep);
 extern Boolean IsPubContentBad (PubdescPtr pdp);
-
 
 #ifdef __cplusplus
 }

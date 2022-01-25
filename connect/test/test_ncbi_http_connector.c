@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_http_connector.c,v 6.20 2011/06/10 03:39:34 kazimird Exp $
+/* $Id: test_ncbi_http_connector.c,v 6.23 2011/11/11 17:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,7 @@
 #include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include "ncbi_conntest.h"
+#include <stdlib.h>
 /* This header must go last */
 #include "test_assert.h"
 
@@ -89,13 +90,13 @@ static void s_REG_Get
  *  MAIN
  */
 
-int main(void)
+int main(int argc, char* argv[])
 {
-    STimeout    timeout;
+    char*       user_header = 0;
     CONNECTOR   connector;
     FILE*       data_file;
-    const char* user_header = 0;
-    THCC_Flags  flags;
+    STimeout    timeout;
+    THTTP_Flags flags;
 
     /* Log and data-log streams */
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
@@ -111,6 +112,21 @@ int main(void)
     /* Connection timeout */
     timeout.sec  = 5;
     timeout.usec = 123456;
+
+    if (argc > 1) {
+        /* Generate user header and check graceful failure with
+         * bad request status if the header ends up too large. */
+        static const char kHttpHeader[] = "My-Header: ";
+        size_t n, header_size = (size_t) atoi(argv[1]);
+        user_header = (char*) malloc(sizeof(kHttpHeader) + header_size);
+        if (user_header) {
+            header_size += sizeof(kHttpHeader)-1;
+            memcpy(user_header, kHttpHeader, sizeof(kHttpHeader)-1);
+            for (n = sizeof(kHttpHeader)-1;  n < header_size;  n++)
+                user_header[n] = '.';
+            user_header[n] = '\0';
+        }
+    }
 
     /* Printout all socket traffic */
     /* SOCK_SetDataLoggingAPI(eOn); */
@@ -135,6 +151,9 @@ int main(void)
     /* Cleanup and Exit */
     CORE_SetREG(0);
     fclose(data_file);
+
+    if (user_header)
+        free(user_header);
 
     CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);

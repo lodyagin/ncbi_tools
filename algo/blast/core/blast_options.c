@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.215 2011/02/09 14:39:32 kazimird Exp $
+/* $Id: blast_options.c,v 1.217 2012/04/20 12:54:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.215 2011/02/09 14:39:32 kazimird Exp $";
+    "$Id: blast_options.c,v 1.217 2012/04/20 12:54:33 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -1616,9 +1616,11 @@ static Int2 s_BlastExtensionScoringOptionsValidate(EBlastProgramType program_num
     if (ext_options->compositionBasedStats != eNoCompositionBasedStats)
     {
             if (!Blast_QueryIsPssm(program_number) && program_number != eBlastTypeTblastn && 
-                 program_number != eBlastTypeBlastp) {
+                 program_number != eBlastTypeBlastp &&
+                 program_number != eBlastTypeBlastx &&
+                 program_number != eBlastTypePsiBlast) {
 			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
-                            "Compositional adjustments are only supported with blastp or tblastn");
+                            "Compositional adjustments are only supported with blastp, blastx, or tblastn");
 			return BLASTERR_OPTION_VALUE_INVALID;
             }
             if (!score_options->gapped_calculation) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ni_error.c,v $
+* Revision 6.4  2012/02/19 03:45:25  lavr
+* Cleanup of obsolete features
+*
 * Revision 6.3  2000/10/30 18:12:01  beloslyu
 * FreeBSD was added
 *
@@ -67,6 +70,7 @@
 */
 
 #include "ni_error.h"
+
     
 static Char *STATIC__ni_errlist[NIE_N_ERRORS] =
 {
@@ -182,20 +186,12 @@ static Char       **STATIC__ni_platform_ptr = &STATIC__ni_platform[0];
 NLM_EXTERN Char  ***x_ni_platform(void)   { return &STATIC__ni_platform_ptr; }
 
 
-/* number of errors */
-static Uint2            STATIC__ni_nerr = (Uint2)NIE_UNKNOWN;
-NLM_EXTERN Uint2       *x_ni_nerr(void)      { return &STATIC__ni_nerr; }
-
-/* error level - NOT SET on error */
-static NI_ErrLevel      STATIC__ni_errlev;
-NLM_EXTERN NI_ErrLevel *x_ni_errlev(void)  { return &STATIC__ni_errlev; }
-
 /* error number set by failing function */
 static NI_Error       STATIC__ni_errno;
 NLM_EXTERN NI_Error  *x_ni_errno(void)     { return &STATIC__ni_errno; }
+
 
 /* additional error text buffer */
 static Char        STATIC__ni_errtext[ERRTEXT_BUFSIZ];
 static Char       *STATIC__ni_errtext_ptr = &STATIC__ni_errtext[0];
 NLM_EXTERN Char  **x_ni_errtext(void)   { return &STATIC__ni_errtext_ptr; }
-

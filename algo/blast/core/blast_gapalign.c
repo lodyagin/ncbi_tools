@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.c,v 1.201 2010/10/20 16:14:38 kazimird Exp $
+/* $Id: blast_gapalign.c,v 1.205 2012/04/23 13:29:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_gapalign.c,v 1.201 2010/10/20 16:14:38 kazimird Exp $";
+    "$Id: blast_gapalign.c,v 1.205 2012/04/23 13:29:34 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -2544,6 +2544,78 @@ s_BlastGreedyGapAlignStructFill(BlastGapAlignStruct* gap_align,
    return 0;
 }
 
+static void s_ReduceGaps(GapEditScript* esp, const Uint1 *q, const Uint1 *s){
+   int i, j, nm1, nm2, d;
+   const Uint1 *q1, *s1;
+   for (i=0; i<esp->size; i++) {
+       if (esp->op_type[i] == eGapAlignSub) {
+           q += esp->num[i];
+           s += esp->num[i];
+           continue;
+       } 
+       if (i>1 && esp->op_type[i] != esp->op_type[i-2] 
+               && esp->num[i-2] > 0) {
+           d = esp->num[i] + esp->num[i-1] + esp->num[i-2];
+           if (d == 3) {
+               /* special case, no need to do further testing */
+               (esp->num[i-2]) = 0;
+               (esp->num[i-1]) = 2;
+               (esp->num[i]) = 0;
+               if (esp->op_type[i] == eGapAlignIns) {
+                   ++q;
+               } else {
+                   ++s;
+               }
+           } else if (d < 12) {
+               /* Try reducing this sub... */
+               nm1 = 0;
+               nm2 = 0;
+               d = MIN(esp->num[i], esp->num[i-2]);
+               q -= esp->num[i-1];
+               s -= esp->num[i-1];
+               q1 = q;
+               s1 = s;
+               if (esp->op_type[i] == eGapAlignIns) {
+                   s -= d;
+               } else {
+                   q -= d;
+               }
+               for (j=0; j<esp->num[i-1]; ++j, ++q1, ++s1, ++q, ++s) {
+                   if (*q1 == *s1) nm1++;
+                   if (*q == *s) nm2++;
+               }
+               for (j=0; j<d; ++j, ++q, ++s) {
+                   if (*q == *s) nm2++;
+               }
+               if (nm2 >= nm1 - d) {
+                   (esp->num[i-2]) -= d;
+                   (esp->num[i-1]) += d;
+                   (esp->num[i]) -= d;
+               } else {
+                   q = q1;
+                   s = s1;
+               }
+           }
+       }
+       if (esp->op_type[i] == eGapAlignIns) {
+           q += esp->num[i];
+       } else {
+           s += esp->num[i];
+       }
+   }
+   /* rebuild the esp */
+   for (i=0, j=0; i<esp->size; i++) {
+       if (esp->num[i] > 0) {
+           esp->num[j] = esp->num[i];
+           esp->op_type[j] = esp->op_type[i];
+           ++j;
+       } else if (++i < esp->size) {
+           esp->num[j-1] += esp->num[i];
+       }
+   }
+   esp->size = j;
+}
+
 Int2 
 BLAST_GreedyGappedAlignment(const Uint1* query, const Uint1* subject, 
    Int4 query_length, Int4 subject_length, BlastGapAlignStruct* gap_align,
@@ -2619,6 +2691,9 @@ BLAST_GreedyGappedAlignment(const Uint1* query, const Uint1* subject,
    if (do_traceback) {
       esp = Blast_PrelimEditBlockToGapEditScript(rev_prelim_tback, 
                                              fwd_prelim_tback);
+      //TODO check for possible gap elimination
+      ASSERT(!compressed_subject);
+      s_ReduceGaps(esp, query+q_off-q_ext_l, subject+s_off-s_ext_l);
    }
    else {
        /* estimate the best alignment start point. This is the middle
@@ -3133,6 +3208,7 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
    Int4 context;
    BlastIntervalTree *tree;
    Int4 score;
+   Int4* found_high_score = NULL;
    Int4 **rpsblast_pssms = NULL;   /* Pointer to concatenated PSSMs in
                                        RPS-BLAST database */
    const int kHspNumMax = BlastHspNumMax(TRUE, hit_options);
@@ -3183,8 +3259,6 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
    else 
       hsp_list = *hsp_list_ptr;
 
-   init_hsp_array = init_hitlist->init_hsp_array;
-
    /* Initialize the interval tree with the maximum possible
       query and subject offsets. For query sequences this is always
       query->length, and for subject sequences it is subject->length
@@ -3210,11 +3284,26 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
    if (!tree)
      return BLASTERR_MEMORY;
 
+   
+   init_hsp_array = init_hitlist->init_hsp_array;
+   found_high_score = (Int4*) calloc(query_info->num_queries, sizeof(Int4));
+   if (hit_params->low_score)
+   {
+   	for (index=0; index<init_hitlist->total; index++)
+   	{
+      	    int query_index = 
+       		  Blast_GetQueryIndexFromQueryOffset(init_hsp_array[index].offsets.qs_offsets.q_off, program_number, query_info);
+      	    if (init_hsp_array[index].ungapped_data->score > hit_params->low_score[query_index])
+        	found_high_score[query_index] = 1;
+        }
+   }
+
    for (index=0; index<init_hitlist->total; index++)
    {
       BlastHSP tmp_hsp;
       BlastInitHSP tmp_init_hsp;
       BlastUngappedData tmp_ungapped_data;
+      int query_index=0;
 
       /* make a local copy of the initial HSP */
 
@@ -3227,6 +3316,13 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
 
       s_AdjustHspOffsetsAndGetQueryData(query, query_info, init_hsp, 
                                         &query_tmp, &context);
+
+      if (hit_params->low_score)
+      {
+      	query_index = Blast_GetQueryIndexFromContext(context, program_number);
+      	if (!found_high_score[query_index])
+         continue;
+      }
 
       if (rpsblast_pssms)
          gap_align->sbp->psi_matrix->pssm->data = rpsblast_pssms + 
@@ -3400,6 +3496,8 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
          }
       }
    }   
+
+   sfree(found_high_score);
 
    tree = Blast_IntervalTreeFree(tree);
    if (rpsblast_pssms) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -45,90 +45,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* $Log: asncode.c,v $
-* Revision 6.17  2009/11/05 16:54:12  gouriano
-* Added option to use quoted syntax form to include headers. JIRA: CXX-1402
-*
-* Revision 6.16  2005/01/24 17:12:11  kans
-* added force_choice_struct (-V) to force struct plus object instead of ValNode for choices - for compatibility with old hand-coded object loaders
-*
-* Revision 6.15  2004/07/08 15:24:05  kans
-* needed a couple additional TESTNIL wrappers
-*
-* Revision 6.14  2002/03/07 21:36:27  beloslyu
-* typo fixed
-*
-* Revision 6.13  2001/11/05 20:25:34  madden
-* Fix (by Karl Sirotkin) for underscores (e.g., struct_BlastDefLine to struct_Blast_def_line)
-*
-* Revision 6.12  2001/06/28 02:14:40  juran
-* Fixed log message.
-* Testing how new MacCVS Pro handles multi-line comments.
-*
-* Revision 6.11  2001/06/28 01:53:32  juran
-* Mac compatibility:
-* Redefine NULL to 0L, which gets promoted to any pointer type.
-* Cast result of MemNew() to appropriate pointer type.
-*
-* Revision 6.10  2000/12/12 15:56:09  ostell
-* added support BigInt
-*
-* Revision 6.9  2000/05/05 19:28:31  kans
-* type for OCTET STRING really is ByteStorePtr, so this is now used instead of Pointer (KS)
-*
-* Revision 6.8  1999/08/02 14:18:55  sirotkin
-* some compiler nits.
-*
-* Revision 6.7  1999/07/30 17:23:30  sirotkin
-* removed.an.unused
-*
-* Revision 6.6  1999/03/08 15:20:22  kans
-* changed single ampersand to double ampersand
-*
-* Revision 6.5  1998/06/12 19:27:44  kans
-* fixed unix compiler warnings
-*
-* Revision 6.4  1998/05/02 18:54:27  kans
-* for Mac, use %LG instead of %lg, which is not legal C, and not supported by CodeWarrior
-*
-* Revision 6.3  1998/05/01 23:35:21  kans
-* use %lf on Mac, %lg elsewhere, sprintf bug reported
-*
-* Revision 6.2  1998/03/25 23:31:34  kans
-* params to register new object manager type, give optional non-default label
-*
-* Revision 6.1  1997/12/16 14:51:42  kans
-* header needed for asntool/asncode merge
-*
-* Revision 6.0  1997/08/25 18:09:41  madden
-* Revision changed to 6.0
-*
-* Revision 5.2  1997/01/02 17:57:47  epstein
-* add more NLM_EXTERN logic per D. Vakatov
-*
- * Revision 5.1  1996/12/05  19:51:40  epstein
- * add support for NLM_EXTERN
- *
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1995/11/07  20:07:29  epstein
- * change quotes on #includes to angle-brackets
- *
- * Revision 4.1  1995/08/24  16:57:10  epstein
- * remove stray backslashes per Peter Cartwright <Peter.Cartwright@genetics.utah.edu>
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 1.20  1995/06/26  20:32:02  kans
- * AsnCodeIsEnumType needed to be prototyped as static
- *
- * Revision 1.19  1995/05/15  18:38:28  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -147,7 +63,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.17 $";
+static char     RCS_Rev [] = "$Revision: 6.19 $";
 
 /*******************
  * Interator structure
@@ -2370,8 +2286,8 @@ userobj_SEQSET (AsnIterPtr iter, AsnTypePtr final_atp)
 				 iter->buf2, CLEAN_FOR_OBJ_NAME, iter -> acip -> maxDefineLength));
       AsnIterTakeBuf (iter);
       sprintf (iter->buf,
-	       "      if (aip -> io_failure) {\ngoto erret;\n}\n",
-	       iter->stack->slot_name);
+	       "      if (aip -> io_failure) {\ngoto erret;\n}\n"/*,
+	       iter->stack->slot_name*/);
       AsnIterTakeBuf (iter);
 
       if (AsnIterNeedsNullCheck(iter, final_atp)) {
@@ -2749,8 +2665,8 @@ userobj_and_basetype_SETOF (AsnIterPtr iter, AsnTypePtr final_atp, Int2 recur_le
 			iter->mode == ITER_FREE ?
 			"" : "retval = ",
 			iter->mode == ITER_FREE ?
-			"Free" : "AsnWrite",
-			right_outer->slot_name);
+			"Free" : "AsnWrite"/*,
+			right_outer->slot_name*/);
 	       AsnIterTakeBuf (iter);
 	    } else {
 
@@ -2764,8 +2680,8 @@ userobj_and_basetype_SETOF (AsnIterPtr iter, AsnTypePtr final_atp, Int2 recur_le
 	       AsnIterTakeBuf (iter);
 	       sprintf (iter->buf, "AsnGenericUserSeqOf%s((Pointer) pnt,",
 			iter->mode == ITER_FREE ?
-			"Free" : "AsnWrite",
-			right_outer->slot_name);
+			"Free" : "AsnWrite"/*,
+			right_outer->slot_name*/);
 	       AsnIterTakeBuf (iter);
 	    }
 	    if (iter->mode == ITER_FREE) {
@@ -3179,8 +3095,8 @@ AsnCodeLookupType (AsnTypePtr atp)
       	 case TELETEXSTRING_TYPE:
       	    retval = "CharLenPtr";
       	    break;
-      	 case VIDEOTEXSTRING_TYPE:
-      	    retval = "CharLenPtr";
+      	 case UTF8STRING_TYPE:
+      	    retval = "CharPtr";
       	    break;
       	 case IA5STRING_TYPE:
       	    retval = "CharLenPtr";
@@ -3248,7 +3164,7 @@ AsnCodeNeedFree (AsnTypePtr atp)
 	 case NUMERICSTRING_TYPE:
 	 case PRINTABLESTRING_TYPE:
 	 case TELETEXSTRING_TYPE:
-	 case VIDEOTEXSTRING_TYPE:
+	 case UTF8STRING_TYPE:
 	 case IA5STRING_TYPE:
 	 case GRAPHICSTRING_TYPE:
 	 case VISIBLESTRING_TYPE:
@@ -3472,7 +3388,7 @@ AsnCodeCheckFileDoneRoutines (AsnIterPtr iter)
 	 next_line = line->next;
 	 AsnCodeDumpLine (iter, line->line);
 	 if ((iter->acip->debug_level) > 2) {
-	    fprintf ((iter->acip -> bug_fp), "Dumping:%x<%s>\n", routine, TESTNIL (line->line));
+	    fprintf ((iter->acip -> bug_fp), "Dumping:%p<%s>\n", routine, TESTNIL (line->line));
 	 }
 	 if ((iter->acip->debug_level) > 0)
 	    fflush (iter->fp);
@@ -3509,7 +3425,7 @@ AsnIterTakeBufReal (struct struct_asniter PNTR iter, int lineno)
    }
    iter->cur_routine->tail_line = line;
    if ((iter->acip->debug_level) > 2) {
-      fprintf ((iter->acip -> bug_fp), "Buf (%d):%x<%s>\n", lineno, iter->cur_routine, TESTNIL (iter->buf));
+      fprintf ((iter->acip -> bug_fp), "Buf (%d):%p<%s>\n", lineno, iter->cur_routine, TESTNIL (iter->buf));
       fflush ((iter->acip -> bug_fp));
    }
    line->line = StringSave (iter->buf);
@@ -4041,7 +3957,7 @@ AsnCodeWhichValSlot (AsnTypePtr atp, CharPtr PNTR valdefine)
       case PRINTABLESTRING_TYPE:
          /*-------CharLenPtr, assume internally like CharPtr in C ---*/
       case TELETEXSTRING_TYPE:
-      case VIDEOTEXSTRING_TYPE:
+      case UTF8STRING_TYPE:
       case IA5STRING_TYPE:
       case GRAPHICSTRING_TYPE:
       case GENERALSTRING_TYPE:
@@ -4641,7 +4557,7 @@ AsnCode (AsnCodeInfoPtr acip)
      AsnIterTakeBuf (iter);
      sprintf (iter->buf, "static Pointer LIBCALLBACK %sAsnReadFunc (AsnIoPtr aip, AsnTypePtr atp)\n{\n", objnamemc);
      AsnIterTakeBuf (iter);
-     sprintf (iter->buf, "\treturn (Pointer) %sAsnRead (aip, atp);\n}\n\n", objnamemc, objnamemc);
+     sprintf (iter->buf, "\treturn (Pointer) %sAsnRead (aip, atp);\n}\n\n", objnamemc/*, objnamemc*/);
      AsnIterTakeBuf (iter);
      sprintf (iter->buf, "static Int2 LIBCALLBACK %sLabelFunc (Pointer data, CharPtr buffer, Int2 buflen, Uint1 content)\n{\n", objnamemc);
      AsnIterTakeBuf (iter);

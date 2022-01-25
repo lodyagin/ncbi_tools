@@ -1,4 +1,4 @@
-/* $Id: ncbi_memory_connector.c,v 6.13 2010/02/01 13:54:31 kazimird Exp $
+/* $Id: ncbi_memory_connector.c,v 6.15 2012/05/07 15:39:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,10 +45,10 @@
 /* All internal data necessary to perform the (re)connect and i/o
  */
 typedef struct {
-    BUF         buf;
-    int/*bool*/ own_buf;
-    EIO_Status  r_status;
-    EIO_Status  w_status;
+    BUF                  buf;
+    unsigned int/*bool*/ own_buf;
+    EIO_Status           r_status;
+    EIO_Status           w_status;
 } SMemoryConnector;
 
 
@@ -79,8 +79,7 @@ extern "C" {
                                      EIO_Event       dir);
     static EIO_Status  s_VT_Close   (CONNECTOR       connector,
                                      const STimeout* timeout);
-    static void        s_Setup      (SMetaConnector* meta,
-                                     CONNECTOR       connector);
+    static void        s_Setup      (CONNECTOR       connector);
     static void        s_Destroy    (CONNECTOR       connector);
 #ifdef __cplusplus
 } /* extern "C" */
@@ -203,9 +202,10 @@ static EIO_Status s_VT_Close
 
 
 static void s_Setup
-(SMetaConnector* meta,
- CONNECTOR       connector)
+(CONNECTOR connector)
 {
+    SMetaConnector* meta = connector->meta;
+
     /* initialize virtual table */
     CONN_SET_METHOD(meta, get_type, s_VT_GetType, connector);
     CONN_SET_METHOD(meta, open,     s_VT_Open,    connector);
@@ -240,18 +240,26 @@ static void s_Destroy
 
 extern CONNECTOR MEMORY_CreateConnector(void)
 {
-    return MEMORY_CreateConnectorEx(0);
+    return MEMORY_CreateConnectorEx(0, 0);
 }
 
 
-extern CONNECTOR MEMORY_CreateConnectorEx(BUF buf)
+extern CONNECTOR MEMORY_CreateConnectorEx(BUF                  buf,
+                                          unsigned int/*bool*/ own_buf)
 {
-    CONNECTOR         ccc = (SConnector*)       malloc(sizeof(SConnector));
-    SMemoryConnector* xxx = (SMemoryConnector*) malloc(sizeof(*xxx));
+    CONNECTOR         ccc;
+    SMemoryConnector* xxx;
+
+    if (!(ccc = (SConnector*) malloc(sizeof(SConnector))))
+        return 0;
+    if (!(xxx = (SMemoryConnector*) malloc(sizeof(*xxx)))) {
+        free(ccc);
+        return 0;
+    }
 
     /* initialize internal data structures */
     xxx->buf     = buf;
-    xxx->own_buf = buf ? 0/*false*/ : 1/*true*/;
+    xxx->own_buf = buf ? own_buf : 1/*true*/;
 
     /* initialize connector data */
     ccc->handle  = xxx;

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFO__H
 #define CONNECT___NCBI_HOST_INFO__H
 
-/* $Id: ncbi_host_info.h,v 6.11 2009/09/30 20:24:38 kazimird Exp $
+/* $Id: ncbi_host_info.h,v 6.13 2012/06/20 18:09:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,7 +39,6 @@
  *
  */
 
-#include <connect/connect_export.h>
 #include <connect/ncbi_types.h>
 
 
@@ -115,9 +114,9 @@ typedef struct {
     TNCBI_Time         bootup;  /* boot time, time_t-compatible              */
     TNCBI_Time         start;   /* LB start time, time_t-compatible          */
     struct {
-        short          major;
-        short          minor;
-        short          patch;
+        unsigned short major;
+        unsigned short minor;
+        unsigned short patch;
     } daemon;                   /* LBSMD version */
     unsigned short     pad;     /* MBZ */
 } SHINFO_Params;

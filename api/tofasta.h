@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.41 $
+* $Revision: 6.43 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -219,6 +219,19 @@ NLM_EXTERN Int4 CdRegionFastaStream (
   CharPtr idSuffix
 );
 
+NLM_EXTERN Int4 CdRegionFastaStreamEx (
+  SeqFeatPtr sfp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline,
+  CharPtr idSuffix,
+  SeqLocPtr mappedloc,
+  BioseqPtr parentbsp
+);
+
 NLM_EXTERN Int4 TranslationFastaStream (
   SeqFeatPtr sfp,
   FILE *fp,
@@ -230,6 +243,19 @@ NLM_EXTERN Int4 TranslationFastaStream (
   CharPtr idSuffix
 );
 
+NLM_EXTERN Int4 TranslationFastaStreamEx (
+  SeqFeatPtr sfp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline,
+  CharPtr idSuffix,
+  SeqLocPtr mappedloc,
+  BioseqPtr parentbsp
+);
+
 NLM_EXTERN Int4 GeneFastaStream (
   SeqFeatPtr sfp,
   FILE *fp,
@@ -239,6 +265,19 @@ NLM_EXTERN Int4 GeneFastaStream (
   Int2 grouplen,
   Boolean do_defline,
   CharPtr idSuffix
+);
+
+NLM_EXTERN Int4 GeneFastaStreamEx (
+  SeqFeatPtr sfp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline,
+  CharPtr idSuffix,
+  SeqLocPtr mappedloc,
+  BioseqPtr parentbsp
 );
 
 NLM_EXTERN Int4 SeqEntryFastaStream (

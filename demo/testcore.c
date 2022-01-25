@@ -1,4 +1,4 @@
-/*  $Id: testcore.c,v 6.2 1999/11/29 20:00:37 vakatov Exp $
+/*  $Id: testcore.c,v 6.3 2011/12/19 18:40:17 gouriano Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,6 +29,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: testcore.c,v $
+ * Revision 6.3  2011/12/19 18:40:17  gouriano
+ * Corrected printf formatting. NOJIRA
+ *
  * Revision 6.2  1999/11/29 20:00:37  vakatov
  * Added "TestParseArgs()" to test new public command-line parsing functions
  * Nlm_ParseCmdLineArguments(), Nlm_FreeCmdLineArguments()
@@ -323,7 +326,7 @@ static void BuildBS (ByteStorePtr bsp)
     StringCpy(lbuf, "....:....|");
     for (value = 0; value < 60000; value += 10)
         {
-            sprintf(tbuf, "%ld", value);
+            sprintf(tbuf, "%d", value);
             MemCopy(lbuf, tbuf, StringLen(tbuf));
             BSWrite(bsp, lbuf, 10);
         }

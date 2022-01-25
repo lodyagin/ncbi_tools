@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -126,6 +126,7 @@ extern Int2 LIBCALLBACK DateGenFunc (Pointer data);
 
 extern CharPtr GetMoleculeTypeName (Uint1 mol_val);
 extern CharPtr GetMoleculeClassName (Uint1 mol_val);
+extern CharPtr GetMoleculeTopologyName (Uint1 mol_val);
 
 
 #ifdef __cplusplus

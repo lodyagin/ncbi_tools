@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -131,6 +131,7 @@ typedef struct seqmgrfeatcontext {
   Int4Ptr       ivals;
   Pointer       userdata;
                           /* the following fields are for internal use only */
+  Boolean       ts_image;
   Pointer       omdp;
   Uint4         index;
 } SeqMgrFeatContext, PNTR SeqMgrFeatContextPtr;

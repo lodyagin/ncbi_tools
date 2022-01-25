@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SENDMAIL__H
 #define CONNECT___NCBI_SENDMAIL__H
 
-/* $Id: ncbi_sendmail.h,v 6.21 2010/04/05 13:59:32 kazimird Exp $
+/* $Id: ncbi_sendmail.h,v 6.23 2012/06/20 18:09:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,7 +48,7 @@ extern "C" {
 
 
 /* Options apply to various fields of SSendMailInfo structure, below */
-typedef enum {
+enum ESendMailOption {
     fSendMail_NoMxHeader       = (1 << 0), /* Don't add standard mail header,
                                             * just use what user provided    */
     fSendMail_StripNonFQDNHost = (1 << 8)  /* Strip host part in "from" field
@@ -56,14 +56,13 @@ typedef enum {
                                             * (i.e. doesn't have at least two
                                             * domain name labels separated by a
                                             * dot); leave only username part */
-} ESendMailOptions;
+};
 typedef unsigned int TSendMailOptions;     /* Bitwise OR of ESendMailOption  */
 
 
 /* Define optional parameters for communication with sendmail
  */
 typedef struct {
-    unsigned int     magic_number;  /* Filled in by SendMailInfo_Init        */
     const char*      cc;            /* Carbon copy recipient(s)              */
     const char*      bcc;           /* Blind carbon copy recipient(s)        */
     char             from[1024];    /* Originator address                    */
@@ -73,6 +72,7 @@ typedef struct {
     short            mx_port;       /* Port to contact an MTA at             */
     STimeout         mx_timeout;    /* Timeout for all network transactions  */
     TSendMailOptions mx_options;    /* From the above                        */
+    unsigned int     magic_cookie;  /* Filled in by SendMailInfo_Init        */
 } SSendMailInfo;
 
 
@@ -98,7 +98,6 @@ typedef struct {
  */
 
 /* Initialize SSendMailInfo structure, setting:
- *   'magic_number' to a proper value (verified by CORE_SendMailEx()!);
  *   'cc', 'bcc', 'header' to NULL (means no recipients/additional headers);
  *   'from' filled out using either the provided (non-empty) user name
  *          or the name of the current user if discovered, 'anonymous'
@@ -108,6 +107,12 @@ typedef struct {
  *   'mx_*' filled out in accordance with some hard-coded defaults, which are
  *          very NCBI-specific; an outside application is likely to choose and
  *          use different values (at least for mx_host).
+ *          The mx_... fields can be configured via the registry file at
+ *          [CONN]MX_HOST, [CONN]MX_PORT, and [CONN]MX_TIMEOUT, as well as
+ *          through their process environment equivalents (which have higher
+ *          precedence, and override the values found in the registry):
+ *          CONN_MX_HOST, CONN_MX_PORT, and CONN_MX_TIMEOUT, respectively;
+ *   'magic_cookie' to a proper value (verified by CORE_SendMailEx()!).
  * Return value equals the argument passed in.
  * Note: This call is the only valid way to properly init SSendMailInfo.
  */
@@ -117,6 +122,7 @@ extern NCBI_XCONNECT_EXPORT SSendMailInfo* SendMailInfo_InitEx
  );
 
 #define SendMailInfo_Init(info)  SendMailInfo_InitEx(info, 0)
+
 
 /* Send a simple message to recipient(s) defined in 'to',
  * and having subject 'subject', which may be empty (both NULL and "" treated

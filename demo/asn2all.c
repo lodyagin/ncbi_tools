@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.89 $
+* $Revision: 1.106 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "7.7"
+#define ASN2ALL_APP_VER "9.0"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -108,7 +108,9 @@ typedef struct appflags {
   Int2          linelen;
   Int2          nearpolicy;
   ModType       mode;
+  StlType       style;
   Boolean       extended;
+  Boolean       relaxed;
   Boolean       failed;
   Uint4         cdsID;
   Uint4         geneID;
@@ -140,6 +142,7 @@ typedef struct appflags {
   XtraBlock     xtran;
   XtraBlock     xtrap;
   TSeqSet       tss;
+  BioseqPtr     parent;
 } AppFlagData, PNTR AppFlagPtr;
 
 NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
@@ -155,7 +158,7 @@ static void DoProtFtables (
   if (bsp == NULL) return;
   if (! ISA_aa (bsp->mol)) return;
   afp = (AppFlagPtr) userdata;
-  BioseqToGnbk (bsp, NULL, FTABLE_FMT, afp->mode, NORMAL_STYLE, 0, 0, SHOW_PROT_FTABLE, NULL, afp->aa);
+  BioseqToGnbk (bsp, NULL, FTABLE_FMT, afp->mode, afp->style, 0, 0, SHOW_PROT_FTABLE, NULL, afp->aa);
 }
 
 static void SaveTinyNucStreams (
@@ -246,6 +249,104 @@ static void IsItFar (
   }
 }
 
+static SeqLocPtr MapLocationOntoDeltaParent (
+  SeqLocPtr location,
+  BioseqPtr parent,
+  SeqMgrSegmentContextPtr scontext
+)
+
+{
+  SeqIntPtr  sintp;
+  SeqLocPtr  loc, slp;
+  SeqPntPtr  spp;
+
+  if (location == NULL || parent == NULL || scontext == NULL) return NULL;
+
+  loc = (SeqLocPtr) AsnIoMemCopy (location, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+  if (loc == NULL) return NULL;
+
+  /* just offset locations, do not change Seq-id */
+
+  slp = SeqLocFindNext (loc, NULL);
+  while (slp != NULL) {
+    switch (slp->choice) {
+      case SEQLOC_PNT :
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL) {
+          if (scontext->strand == Seq_strand_minus) {
+            spp->point = scontext->cumOffset + scontext->to - spp->point;
+          } else {
+            spp->point = scontext->cumOffset - scontext->from + spp->point;
+          }
+        }
+        break;
+      case SEQLOC_INT :
+        sintp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sintp != NULL) {
+          if (scontext->strand == Seq_strand_minus) {
+            sintp->from = scontext->cumOffset + scontext->to - sintp->from;
+            sintp->to = scontext->cumOffset + scontext->to - sintp->to;
+          } else {
+            sintp->from = scontext->cumOffset - scontext->from + sintp->from;
+            sintp->to = scontext->cumOffset - scontext->from + sintp->to;
+          }
+        }
+        break;
+      default :
+        break;
+    }
+    slp = SeqLocFindNext (loc, slp);
+  }
+
+  return loc;
+}
+
+static Boolean LIBCALLBACK DoCDSSeg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr scontext
+)
+
+{
+  AppFlagPtr         afp;
+  BioseqPtr          bsp;
+  Char               buf [32];
+  Uint2              entityID;
+  SeqMgrFeatContext  fcontext;
+  SeqLocPtr          mappedloc;
+  SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
+
+  if (slp == NULL || scontext == NULL) return TRUE;
+  afp = (AppFlagPtr) scontext->userdata;
+  if (afp == NULL) return TRUE;
+
+  sip = SeqLocId (slp);
+  if (sip == NULL) return TRUE;
+  bsp = BioseqLockById (sip);
+  if (bsp == NULL) return TRUE;
+
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  SeqMgrIndexFeatures (entityID, NULL);
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+  while (sfp != NULL) {
+    afp->cdsID++;
+    sprintf (buf, "_cds_%ld", (long) afp->cdsID);
+
+    mappedloc = MapLocationOntoDeltaParent (sfp->location, afp->parent, scontext);
+    CdRegionFastaStreamEx (sfp, afp->nt,
+                           STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                           afp->linelen, 0, 0, TRUE, buf, mappedloc, afp->parent);
+    SeqLocFree (mappedloc);
+
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+  }
+
+  BioseqUnlock (bsp);
+
+  return TRUE;
+}
+
 static void DoCDSFasta (
   BioseqPtr bsp,
   Pointer userdata
@@ -261,6 +362,8 @@ static void DoCDSFasta (
   afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
+  afp->parent = bsp;
+
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
   while (sfp != NULL) {
     afp->cdsID++;
@@ -270,6 +373,56 @@ static void DoCDSFasta (
                          afp->linelen, 0, 0, TRUE, buf);
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
   }
+
+  if (afp->nearpolicy != 2 && bsp->repr == Seq_repr_delta) {
+    SeqMgrExploreSegments (bsp, (Pointer) afp, DoCDSSeg);
+  }
+}
+
+static Boolean LIBCALLBACK DoTransSeg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr scontext
+)
+
+{
+  AppFlagPtr         afp;
+  BioseqPtr          bsp;
+  Char               buf [32];
+  Uint2              entityID;
+  SeqMgrFeatContext  fcontext;
+  SeqLocPtr          mappedloc;
+  SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
+
+  if (slp == NULL || scontext == NULL) return TRUE;
+  afp = (AppFlagPtr) scontext->userdata;
+  if (afp == NULL) return TRUE;
+
+  sip = SeqLocId (slp);
+  if (sip == NULL) return TRUE;
+  bsp = BioseqLockById (sip);
+  if (bsp == NULL) return TRUE;
+
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  SeqMgrIndexFeatures (entityID, NULL);
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+  while (sfp != NULL) {
+    afp->cdsID++;
+    sprintf (buf, "_cds_%ld", (long) afp->cdsID);
+
+    mappedloc = MapLocationOntoDeltaParent (sfp->location, afp->parent, scontext);
+    TranslationFastaStreamEx (sfp, afp->aa,
+                              STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                              afp->linelen, 0, 0, TRUE, buf, mappedloc, afp->parent);
+    SeqLocFree (mappedloc);
+
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+  }
+
+  BioseqUnlock (bsp);
+
+  return TRUE;
 }
 
 static void DoTransFasta (
@@ -287,6 +440,8 @@ static void DoTransFasta (
   afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
+  afp->parent = bsp;
+
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
   while (sfp != NULL) {
     afp->cdsID++;
@@ -296,6 +451,56 @@ static void DoTransFasta (
                             afp->linelen, 0, 0, TRUE, buf);
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
   }
+
+  if (afp->nearpolicy != 2 && bsp->repr == Seq_repr_delta) {
+    SeqMgrExploreSegments (bsp, (Pointer) afp, DoTransSeg);
+  }
+}
+
+static Boolean LIBCALLBACK DoGeneSeg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr scontext
+)
+
+{
+  AppFlagPtr         afp;
+  BioseqPtr          bsp;
+  Char               buf [32];
+  Uint2              entityID;
+  SeqMgrFeatContext  fcontext;
+  SeqLocPtr          mappedloc;
+  SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
+
+  if (slp == NULL || scontext == NULL) return TRUE;
+  afp = (AppFlagPtr) scontext->userdata;
+  if (afp == NULL) return TRUE;
+
+  sip = SeqLocId (slp);
+  if (sip == NULL) return TRUE;
+  bsp = BioseqLockById (sip);
+  if (bsp == NULL) return TRUE;
+
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  SeqMgrIndexFeatures (entityID, NULL);
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &fcontext);
+  while (sfp != NULL) {
+    afp->cdsID++;
+    sprintf (buf, "_cds_%ld", (long) afp->cdsID);
+
+    mappedloc = MapLocationOntoDeltaParent (sfp->location, afp->parent, scontext);
+    GeneFastaStreamEx (sfp, afp->nt,
+                       STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                       afp->linelen, 0, 0, TRUE, buf, mappedloc, afp->parent);
+    SeqLocFree (mappedloc);
+
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, 0, &fcontext);
+  }
+
+  BioseqUnlock (bsp);
+
+  return TRUE;
 }
 
 static void DoGeneFasta (
@@ -313,6 +518,8 @@ static void DoGeneFasta (
   afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
+  afp->parent = bsp;
+
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &fcontext);
   while (sfp != NULL) {
     afp->geneID++;
@@ -322,11 +529,11 @@ static void DoGeneFasta (
                      afp->linelen, 0, 0, TRUE, buf);
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, 0, &fcontext);
   }
-}
 
-  Int4          filterLen;
-  ValNodePtr    filterList;
-  CharPtr PNTR  filterArray;
+  if (afp->nearpolicy != 2 && bsp->repr == Seq_repr_delta) {
+    SeqMgrExploreSegments (bsp, (Pointer) afp, DoGeneSeg);
+  }
+}
 
 static Boolean IdInFilter (
   CharPtr id,
@@ -466,15 +673,16 @@ static void FormatRecord (
 )
 
 {
-  BioseqPtr    bsp;
-  CstType      custom = 0;
-  Uint2        entityID;
-  FlgType      flags = 0;
-  Boolean      is_far = FALSE;
-  LckType      locks = 0;
-  SeqLocPtr    slp = NULL;
-  SeqEntryPtr  top;
-  ValNodePtr   vnp;
+  BioseqPtr      bsp;
+  CstType        custom = 0;
+  Uint2          entityID;
+  FlgType        flags = 0;
+  Boolean        is_far = FALSE;
+  LckType        locks = 0;
+  SeqLocPtr      slp = NULL;
+  StreamFlgType  streams = STREAM_EXPAND_GAPS;
+  SeqEntryPtr    top;
+  ValNodePtr     vnp;
 
   if (sep == NULL || afp == NULL) return;
 
@@ -496,6 +704,10 @@ static void FormatRecord (
   }
   if (afp->extended) {
     flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+    streams |= STREAM_TAGGED_DEFLINE;
+  }
+  if (afp->relaxed) {
+    flags |= RELAXED_MAPPING;
   }
 
   slp = AfpToSeqLoc (sep, afp);
@@ -503,11 +715,11 @@ static void FormatRecord (
   switch (afp->format) {
     case FLATFILE_FORMAT :
       if (afp->nt != NULL) {
-        SeqEntryToGnbk (sep, slp, GENBANK_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENBANK_FMT, afp->mode, afp->style,
                         flags, locks, custom, NULL, afp->nt);
       }
       if (afp->aa != NULL) {
-        SeqEntryToGnbk (sep, slp, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENPEPT_FMT, afp->mode, afp->style,
                         flags, 0, custom, NULL, afp->aa);
       }
       break;
@@ -517,18 +729,18 @@ static void FormatRecord (
             (afp->nearpolicy == 2 && (! is_far)) ||
             (afp->nearpolicy == 3 && is_far)) {
           if (slp != NULL) {
-            SeqLocFastaStream (slp, afp->nt, STREAM_EXPAND_GAPS, afp->linelen, 0, 0);
+            SeqLocFastaStream (slp, afp->nt, streams, afp->linelen, 0, 0);
           } else {
-            SeqEntryFastaStream (sep, afp->nt, STREAM_EXPAND_GAPS, afp->linelen,
+            SeqEntryFastaStream (sep, afp->nt, streams, afp->linelen,
                                  0, 0, TRUE, FALSE, FALSE);
           }
         }
       }
       if (afp->aa != NULL) {
         if (slp != NULL) {
-          SeqLocFastaStream (slp, afp->aa, STREAM_EXPAND_GAPS, afp->linelen, 0, 0);
+          SeqLocFastaStream (slp, afp->aa, streams, afp->linelen, 0, 0);
         } else {
-          SeqEntryFastaStream (sep, afp->aa, STREAM_EXPAND_GAPS, afp->linelen,
+          SeqEntryFastaStream (sep, afp->aa, streams, afp->linelen,
                                0, 0, FALSE, TRUE, FALSE);
         }
       }
@@ -566,7 +778,7 @@ static void FormatRecord (
       break;
     case TABLE_FORMAT :
       if (afp->nt != NULL) {
-        SeqEntryToGnbk (sep, slp, FTABLE_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, FTABLE_FMT, afp->mode, afp->style,
                         flags, locks, 0, NULL, afp->nt);
       }
       if (afp->aa != NULL) {
@@ -583,11 +795,11 @@ static void FormatRecord (
       break;
     case INSDSEQ_FORMAT :
       if (afp->an != NULL) {
-        SeqEntryToGnbk (sep, slp, GENBANK_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENBANK_FMT, afp->mode, afp->style,
                         flags, locks, custom, &(afp->xtran), NULL);
       }
       if (afp->ap != NULL) {
-        SeqEntryToGnbk (sep, slp, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENPEPT_FMT, afp->mode, afp->style,
                         flags, 0, custom, &(afp->xtrap), NULL);
       }
       break;
@@ -629,7 +841,13 @@ static void ProcessSingleRecord (
   Uint2         datatype = 0, entityID = 0;
   FILE          *fp;
   ObjMgrPtr     omp;
+  Uint2         parenttype;
+  Pointer       parentptr;
+  SeqAnnotPtr   sap;
   SeqEntryPtr   sep;
+  SeqFeatPtr    sfp;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
 
   if (afp == NULL) return;
 
@@ -726,6 +944,46 @@ static void ProcessSingleRecord (
       FormatRecord (sep, afp, bsplist);
 
       bsplist = UnlockFarComponents (bsplist);
+    }
+
+  } else if (datatype == OBJ_SEQANNOT && afp->format == TABLE_FORMAT) {
+
+    sap = (SeqAnnotPtr) dataptr;
+    if (sap != NULL && sap->type == 1) {
+      sip = NULL;
+      sfp = (SeqFeatPtr) sap->data;
+      while (sfp != NULL && sip == NULL) {
+        slp = SeqLocFindNext (sfp->location, NULL);
+        while (slp != NULL && sip == NULL) {
+          sip = SeqLocId (slp);
+          slp = SeqLocFindNext (sfp->location, slp);
+        }
+        sfp = sfp->next;
+      }
+      if (sip != NULL) {
+        sep = SeqEntryNew ();
+        if (sep != NULL) {
+          bsp = BioseqNew ();
+          if (bsp != NULL) {
+            sep->choice = 1;
+            sep->data.ptrvalue = (Pointer) bsp;
+            bsp->id = SeqIdDup (sip);
+            bsp->repr = Seq_repr_virtual;
+            bsp->mol = Seq_mol_dna;
+            bsp->length = INT4_MAX;
+            bsp->annot = sap;
+            GetSeqEntryParent (sep, &parentptr, &parenttype);
+            SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
+            entityID = ObjMgrGetEntityIDForPointer (bsp);
+            SeqMgrIndexFeatures (entityID, NULL);
+            if (afp->nt != NULL) {
+              BioseqToGnbk (bsp, NULL, FTABLE_FMT, afp->mode, afp->style, 0, 0, 0, NULL, afp->nt);
+            }
+            bsp->annot = NULL;
+          }
+        }
+        SeqEntryFree (sep);
+      }
     }
 
   } else {
@@ -1005,20 +1263,15 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
 {
   CharPtr      accn;
-  Boolean      alldigits;
   BioseqPtr    bsp;
   Char         buf [64];
-  Char         ch;
   Int4         flags = 0;
-  CharPtr      ptr;
   Int2         retcode = 0;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
   CharPtr      tmp1 = NULL;
   CharPtr      tmp2 = NULL;
-  Int4         uid = 0;
   long int     val;
-  ValNode      vn;
 
   if (StringHasNoText (str)) return NULL;
   StringNCpy_0 (buf, str, sizeof (buf));
@@ -1042,44 +1295,20 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
     }
   }
 
-  alldigits = TRUE;
-  ptr = accn;
-  ch = *ptr;
-  while (ch != '\0') {
-    if (! IS_DIGIT (ch)) {
-      alldigits = FALSE;
-    }
-    ptr++;
-    ch = *ptr;
-  }
+  sip = SeqIdFromPubSeqString (accn);
+  sep = PubSeqSynchronousQueryId (sip, retcode, flags);
 
-  if (alldigits) {
-    if (sscanf (accn, "%ld", &val) == 1) {
-      uid = (Int4) val;
-    }
-  } else {
-    sip = SeqIdFromAccessionDotVersion (accn);
-    if (sip != NULL) {
-      uid = GetGIForSeqId (sip);
-      SeqIdFree (sip);
-    }
-  }
-
-  if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, retcode, flags);
-    if (sep != NULL) {
-      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
-      vn.choice = SEQID_GI;
-      vn.data.intvalue = uid;
-      bsp = BioseqFind (&vn);
-      if (bsp != NULL) {
-        if (afp != NULL) {
-          if (afp->format == ASN_FORMAT || afp->format == XML_FORMAT) return sep;
-        }
-        sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
+  if (sep != NULL) {
+    bsp = BioseqFind (sip);
+    sip = SeqIdFree (sip);
+    if (bsp != NULL) {
+      if (afp != NULL) {
+        if (afp->format == ASN_FORMAT || afp->format == XML_FORMAT) return sep;
       }
+      sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
     }
   }
+  sip = SeqIdFree (sip);
 
   return sep;
 }
@@ -1251,6 +1480,7 @@ typedef enum {
   T_argThreads,
   n_argNear,
   X_argExtended,
+  G_argRelaxed,
   A_argAccession,
   F_argFilterFile,
   h_argHelp,
@@ -1273,6 +1503,7 @@ Args myargs [] = {
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
   {"Format\n"
    "      g GenBank/GenPept\n"
+   "      m GenBank Master Style\n"
    "      f FASTA\n"
    "      d CDS FASTA\n"
    "      e Gene FASTA\n"
@@ -1314,6 +1545,8 @@ Args myargs [] = {
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
   {"Extended Qualifier Output", "F", NULL, NULL,
     TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Relaxed Genome Mapping", "F", NULL, NULL,
+    TRUE, 'G', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Accession to Fetch (or Accession,retcode,flags where flags -1 fetches external features)", NULL, NULL, NULL,
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
   {"Accession Filter File", NULL, NULL, NULL,
@@ -1431,7 +1664,9 @@ Int2 Main (void)
   afd.linelen = 70;
   afd.nearpolicy = 1;
   afd.mode = ENTREZ_MODE;
+  afd.style = NORMAL_STYLE;
   afd.extended = (Boolean) myargs [X_argExtended].intvalue;
+  afd.relaxed = (Boolean) myargs [G_argRelaxed].intvalue;
   afd.failed = FALSE;
 
   str = myargs [f_argFormat].strvalue;
@@ -1447,6 +1682,10 @@ Int2 Main (void)
   switch (format) {
     case 'g' :
       afd.format = FLATFILE_FORMAT;
+      break;
+    case 'm' :
+      afd.format = FLATFILE_FORMAT;
+      afd.style = MASTER_STYLE;
       break;
     case 'f' :
       afd.format = FASTA_FORMAT;

@@ -72,6 +72,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -161,6 +162,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -250,6 +252,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -339,6 +342,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -427,6 +431,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -516,6 +521,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -603,6 +609,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -692,6 +699,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="$(OutDir)/test_ncbi_file_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

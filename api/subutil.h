@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.83 $
+* $Revision: 6.88 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -1577,6 +1577,20 @@ NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
   CharPtr PNTR values
 );
 
+NLM_EXTERN void AddSeqReadArchIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+);
+
+NLM_EXTERN void AddFieldsToDBLinkUserObject (
+  UserObjectPtr uop,
+  CharPtr field_name,
+  Int4 num,
+  CharPtr PNTR values
+);
+
+
 NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
@@ -1584,6 +1598,12 @@ NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
 );
 
 NLM_EXTERN void AddSeqReadArchiveIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+);
+
+NLM_EXTERN void AddBioProjectIDsToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
   CharPtr PNTR values
@@ -1649,12 +1669,22 @@ NLM_EXTERN UserObjectPtr FindUnverifiedUserObject (
   SeqEntryPtr sep
 );
 
-NLM_EXTERN void AddUnverifiedUserObject (
+NLM_EXTERN UserObjectPtr AddUnverifiedUserObject (
   SeqEntryPtr sep
 );
 
-NLM_EXTERN void AddUnverifiedUserObjectToBioseq (
+NLM_EXTERN UserObjectPtr AddUnverifiedUserObjectToBioseq (
   BioseqPtr bsp
+);
+
+NLM_EXTERN UserObjectPtr AddUnverifiedUserObjectToBioseqParent (
+  BioseqPtr bsp
+);
+
+NLM_EXTERN void AddStringToUnverifiedUserObject (
+  UserObjectPtr uop,
+  CharPtr field,
+  CharPtr str
 );
 
 NLM_EXTERN void RemoveUnverifiedUserObjects (

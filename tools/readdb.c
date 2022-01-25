@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.544 2009/12/22 12:54:28 madden Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.548 2012/03/14 20:09:35 camacho Exp $";
 
-/* $Id: readdb.c,v 6.544 2009/12/22 12:54:28 madden Exp $ */
+/* $Id: readdb.c,v 6.548 2012/03/14 20:09:35 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.544 $
+* $Revision: 6.548 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,18 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.548  2012/03/14 20:09:35  camacho
+* Fix buffer overrun JIRA BD-348
+*
+* Revision 6.547  2012/03/14 20:02:52  camacho
+* Fix buffer overrun JIRA BD-348
+*
+* Revision 6.546  2011/12/19 18:37:35  gouriano
+* Corrected printf formatting. NOJIRA
+*
+* Revision 6.545  2011/11/28 20:24:51  camacho
+* Add support for setting membership bits in the refseq_chromosome subset JIRA BD-333, BD-308
+*
 * Revision 6.544  2009/12/22 12:54:28  madden
 * Try stripped off path for microbial db, JIRA WB-313
 *
@@ -8097,7 +8109,7 @@ void FDBCleanUpInProgress(const FDB_options* options)
         FDB_options opts_tmp;
         memcpy((void*)&opts_tmp, (void*)options, sizeof(*options));
         opts_tmp.base_name = (char*)MemNew(FILENAME_MAX);
-        sprintf(opts_tmp.base_name, "%s.%02ld", base_name, volume);
+        sprintf(opts_tmp.base_name, "%s.%02d", base_name, volume);
         opts_tmp.clean_opt = eCleanAlways;
         FDBCleanUp(&opts_tmp);
         free(opts_tmp.base_name);
@@ -8270,7 +8282,9 @@ ValNodePtr FDBLoadMembershipsTable(void)
         } else if (!StringICmp("refseq_rna",buffer)) {
             mip->criteria = is_REFSEQ_RNA;
             fn_name = "is_REFSEQ_RNA";
-        } else if (!StringICmp("refseq_protein",buffer)) {
+        } else if (!StringICmp("refseq_protein",buffer) ||
+                   !StringICmp("refseq_chromosome", buffer)) { 
+            /* refseq_chromosome added per BD-308 */
             mip->criteria = is_REFSEQ;
             fn_name = "is_REFSEQ";
         }
@@ -11657,7 +11671,7 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
     }
     
     if (readstat != EOF) {
-        fprintf(out, "\nError occurred while parsing %s, line %d "
+        fprintf(out, "\nError occurred while parsing line %d, %s "
                 "(read %d fields instead of the expected %d)", total+1,
                 difilename, readstat, kNumFieldsDiFile);
         return FALSE;
@@ -12650,8 +12664,8 @@ CharPtr FD_ConstructMultivolumeDBList(CharPtr basename, Int4 nvols)
         return NULL;
 
     /* Allocate memory for return value */
-    len = ((StringLen(basename) + 1) * nvols) + 1;
-    len += (3*nvols); /* for the '.NN' extension */
+    len = ((StringLen(basename) + 1) * nvols) + nvols + 1;
+    len += (4*nvols); /* for the '.NN' extension */
     if ((retval = (CharPtr)MemNew(sizeof(Char)*len)) == NULL) {
         ErrPostEx(SEV_ERROR, 0, 0, 
                 "FD_ConstructMultivolumeDBList: out of memory");
@@ -12662,7 +12676,11 @@ CharPtr FD_ConstructMultivolumeDBList(CharPtr basename, Int4 nvols)
 
         /* convert nvols to a string */
         MemSet(numstr, 0, sizeof(numstr));
-        sprintf(numstr, ".%02ld ", (long) i);
+        if (i < 100) {
+            sprintf(numstr, ".%02ld ", (long) i);
+        } else {
+            sprintf(numstr, ".%03ld ", (long) i);
+        }
         retval = StringCat(retval, basename);
         retval = StringCat(retval, numstr);
     }

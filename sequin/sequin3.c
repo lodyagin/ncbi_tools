@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1142 $
+* $Revision: 6.1195 $
 *
 * File Description: 
 *
@@ -59,6 +59,7 @@
 #include <vsm.h>
 #include <bspview.h>
 #include <toasn3.h>
+#include <toporg.h>
 #include <salstruc.h>
 #include <explore.h>
 #include <utilpub.h>
@@ -80,6 +81,8 @@
 #include <macrodlg.h>
 #include <macroapi.h>
 #include <valdlg.h>
+#include <objvalid.h>
+#include <valapi.h>
 
 /* For converting primer names to primer seqs and vice versa */
 static void PrimerSeqToPrimerNameCallback (BioSourcePtr biop, Pointer userdata)
@@ -400,7 +403,7 @@ static void CreateTSAIDsFromLocalIDs (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  ConvertLocalIdsToTSAIds (sep, NULL);
+  ConvertLocalIdsToTSAIds (sep, NULL, NULL);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -418,6 +421,7 @@ static void DoCreateTSAIDsFromLocalIDsWithSuffix (ButtoN b)
   CreateTsaIDsWithSuffixFormPtr t;
   SeqEntryPtr                   sep;
   CharPtr                       suffix = NULL;
+  TextPortionPtr                tp;
 
   t = (CreateTsaIDsWithSuffixFormPtr) GetObjectExtra (b);
   if (b == NULL) {
@@ -430,8 +434,10 @@ static void DoCreateTSAIDsFromLocalIDsWithSuffix (ButtoN b)
   if (!TextHasNoText (t->suffix)) {
     suffix = SaveStringFromText (t->suffix);
   }
-  ConvertLocalIdsToTSAIds (sep, suffix);
+  tp = DialogToPointer (t->text_portion);
+  ConvertLocalIdsToTSAIds (sep, suffix, tp);
   suffix = MemFree (suffix);
+  tp = TextPortionFree (tp);
 
   ObjMgrSetDirtyFlag (t->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, t->input_entityID, 0, 0);
@@ -465,9 +471,87 @@ static void CreateTSAIDsFromLocalIDsWithSuffix (IteM i)
   g = HiddenGroup (h, 2, 0, NULL);
   StaticPrompt (g, "Suffix", 0, dialogTextHeight, programFont, 'c');
   t->suffix = DialogText (g, "", 14, NULL);
+  
+  t->text_portion = TextPortionDialog (h, TRUE, NULL, NULL);
 
   c = HiddenGroup (h, 2, 0, NULL);
   b = DefaultButton (c, "Accept", DoCreateTSAIDsFromLocalIDsWithSuffix);
+  SetObjectExtra (b, t, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) t->text_portion, (HANDLE) c, NULL);
+
+  Show (w);
+
+}
+
+
+static void DoEditTSAIDs (ButtoN b)
+{
+  CreateTsaIDsWithSuffixFormPtr t;
+  SeqEntryPtr                   sep;
+  CharPtr                       suffix = NULL;
+  TextPortionPtr                tp;
+
+
+  t = (CreateTsaIDsWithSuffixFormPtr) GetObjectExtra (b);
+  if (t == NULL) {
+    return;
+  }
+
+  t = (CreateTsaIDsWithSuffixFormPtr) GetObjectExtra (b);
+  if (b == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (t->input_entityID);
+  if (sep == NULL) return;
+
+  if (!TextHasNoText (t->suffix)) {
+    suffix = SaveStringFromText (t->suffix);
+  }
+  tp = DialogToPointer (t->text_portion);
+  ConvertLocalIdsToTSAIds (sep, suffix, tp);
+  suffix = MemFree (suffix);
+  tp = TextPortionFree (tp);
+
+  ObjMgrSetDirtyFlag (t->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, t->input_entityID, 0, 0);
+  Remove (t->form);
+  Update();
+}
+
+
+static void EditTSAIDs (IteM i)
+{
+  BaseFormPtr  bfp;
+  CreateTsaIDsWithSuffixFormPtr t;
+  WindoW       w;
+  GrouP        h, g, c;
+  ButtoN       b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  t = (CreateTsaIDsWithSuffixFormPtr) MemNew (sizeof (CreateTsaIDsWithSuffixFormData));
+
+  w = FixedWindow (-50, -33, -10, -10, "Edit TSA IDs", StdCloseWindowProc);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  t->form = (ForM) w;
+  t->input_entityID = bfp->input_entityID;
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (g, "Add Suffix", 0, dialogTextHeight, programFont, 'c');
+  t->suffix = DialogText (g, "", 14, NULL);
+  StaticPrompt (g, "Keep", 0, dialogTextHeight, programFont, 'c');
+  t->text_portion = TextPortionDialog (g, TRUE, NULL, NULL);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = DefaultButton (c, "Accept", DoEditTSAIDs);
   SetObjectExtra (b, t, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
   AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
@@ -475,7 +559,6 @@ static void CreateTSAIDsFromLocalIDsWithSuffix (IteM i)
   Show (w);
 
 }
-
 
 
 static void CreateTSAIDsFromTable (IteM i)
@@ -488,10 +571,9 @@ static void CreateTSAIDsFromTable (IteM i)
   MatchTypeData match;
   LogInfoPtr   lip;
   BioseqPtr    bsp;
-  Int4         gpid = 0;
   SeqIdPtr     sip_new;
   DbtagPtr     dbtag;
-  CharPtr      id_fmt = "gpid:%d";
+  CharPtr      db;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -546,11 +628,10 @@ static void CreateTSAIDsFromTable (IteM i)
     }
     while (vnp_s != NULL) {
       bsp = (BioseqPtr) vnp_s->data.ptrvalue;
-      gpid = GetGenomeProjectID (bsp);
-      if (gpid > 0) {
+      db = GetTSAIDDB(bsp);
+      if (db != NULL) {
         dbtag = DbtagNew ();
-        dbtag->db = MemNew (sizeof (Char) * (StringLen (id_fmt) + 15));
-        sprintf (dbtag->db, id_fmt, gpid);
+        dbtag->db = db;
         dbtag->tag = ObjectIdNew ();
         dbtag->tag->str = StringSave (vnp_t->data.ptrvalue);
         sip_new = ValNodeNew (NULL);
@@ -573,79 +654,31 @@ static void CreateTSAIDsFromTable (IteM i)
 }
 
 
-typedef struct tsaidfromdefline {
-  TextPortionPtr text_portion;
-  CharPtr suffix;
-} TSAIdFromDeflineData, PNTR TSAIdFromDeflinePtr;
-
-
-static void CreateTSAIDsFromDeflineCallback (BioseqPtr bsp, Pointer data)
-{
-  TSAIdFromDeflinePtr t;
-  Int4         gpid = 0;
-  SeqDescrPtr  sdp;
-  SeqMgrDescContext dcontext;
-  CharPtr      str;
-  SeqIdPtr     sip_new;
-  DbtagPtr     dbtag;
-  CharPtr      id_fmt = "gpid:%d";
-
-  if (bsp == NULL || ISA_aa (bsp->mol) 
-      || (t = (TSAIdFromDeflinePtr) data) == NULL
-      || (gpid = GetGenomeProjectID(bsp)) <= 0) {
-    return;
-  }
-
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
-  if (sdp == NULL 
-      || (str = GetTextPortionFromString ((CharPtr) sdp->data.ptrvalue, t->text_portion)) == NULL) {
-    return;
-  }
-
-  dbtag = DbtagNew ();
-  dbtag->db = MemNew (sizeof (Char) * (StringLen (id_fmt) + 15));
-  sprintf (dbtag->db, id_fmt, gpid);
-  dbtag->tag = ObjectIdNew ();
-  if (t->suffix == NULL) {
-    dbtag->tag->str = str;
-    str = NULL;
-  } else {
-    dbtag->tag->str = (CharPtr) MemNew (sizeof (Char) * (StringLen (str) + StringLen (t->suffix) + 2));
-    sprintf (dbtag->tag->str, "%s.%s", str, t->suffix);
-    str = MemFree (str);
-  }
-  sip_new = ValNodeNew (NULL);
-  sip_new->choice = SEQID_GENERAL;
-  sip_new->data.ptrvalue = dbtag;
-  sip_new->next = bsp->id;
-  bsp->id = sip_new;
-  SeqMgrReplaceInBioseqIndex (bsp);
-}
 
 
 static void DoCreateTSAIDsFromDefline (ButtoN b)
 {
   CreateTsaIDsWithSuffixFormPtr t;
   SeqEntryPtr                   sep;
-  TSAIdFromDeflineData          data;
+  CharPtr                       suffix = NULL;
+  TextPortionPtr                text_portion = NULL;
 
   t = (CreateTsaIDsWithSuffixFormPtr) GetObjectExtra (b);
   if (b == NULL) {
     return;
   }
 
-  MemSet (&data, 0, sizeof (TSAIdFromDeflineData));
-
   sep = GetTopSeqEntryForEntityID (t->input_entityID);
   if (sep == NULL) return;
 
   if (!TextHasNoText (t->suffix)) {
-    data.suffix = SaveStringFromText (t->suffix);
+    suffix = SaveStringFromText (t->suffix);
   }
-  data.text_portion = DialogToPointer (t->text_portion);
-  VisitBioseqsInSep (sep, &data, CreateTSAIDsFromDeflineCallback);
-  data.suffix = MemFree (data.suffix);
-  data.text_portion = TextPortionFree (data.text_portion);
+  text_portion = DialogToPointer (t->text_portion);
+  CreateTSAIDsFromDeflineInSep (sep, suffix, text_portion);
+
+  suffix = MemFree (suffix);
+  text_portion = TextPortionFree (text_portion);
 
   ObjMgrSetDirtyFlag (t->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, t->input_entityID, 0, 0);
@@ -944,11 +977,18 @@ static void FarDeltaToNear (IteM i)
   Message (MSG_OK, "Some manual desktop manipulations remain");
 }
 
-static CharPtr HIVDBStart = "##HIVDataBaseData-START##";
-static CharPtr HIVDBEnd = "##HIVDataBaseData-END##";
+static CharPtr HIVStarts[] = {
+ "##HIVDataBaseData-START##",
+ "##HIV-1DataBaseData-START##",
+ "##HIVData-START##",
+ NULL};
 
-static CharPtr HIVStart = "##HIVData-START##";
-static CharPtr HIVEnd = "##HIVData-END##";
+static CharPtr HIVEnds[] = {
+ "##HIVDataBaseData-END##",
+ "##HIV-1DataBaseData-END##",
+ "##HIVData-END##",
+ NULL};
+
 
 static CharPtr FluStart = "##FluData-START##";
 static CharPtr FluEnd = "##FluData-END##";
@@ -976,6 +1016,7 @@ static void FindStructComment (SeqDescrPtr sdp, Pointer userdata)
   UserObjectPtr  uop = NULL;
   UserObjectPtr  PNTR uopp;
   CharPtr        prefix = "", suffix = "";
+  Int4           i;
 
   if (sdp == NULL || sdp->choice != Seq_descr_comment) return;
   str = (CharPtr) sdp->data.ptrvalue;
@@ -983,13 +1024,14 @@ static void FindStructComment (SeqDescrPtr sdp, Pointer userdata)
   uopp = (UserObjectPtr PNTR) userdata;
   if (uopp == NULL) return;
 
-  if (StringStr (str, HIVDBStart) != NULL) {
-    prefix = HIVDBStart;
-    suffix = HIVDBEnd;
-  } else if (StringStr (str, HIVStart) != NULL) {
-    prefix = HIVStart;
-    suffix = HIVEnd;
-  } else if (StringStr (str, FluStart) != NULL) {
+  for (i = 0; HIVStarts[i] != NULL; i++) {
+    if (StringStr (str, HIVStarts[i]) != NULL) {
+      prefix = HIVStarts[i];
+      suffix = HIVEnds[i];
+      break;
+    }
+  }
+  if (StringHasNoText (prefix) && StringStr (str, FluStart) != NULL) {
     prefix = FluStart;
     prefix = FluEnd;
   }
@@ -1105,6 +1147,58 @@ static void AddStructuredCommentMIENSTag (IteM i)
 }
 
 
+static void AddStructuredCommentAssemblyDataTag (IteM i)
+
+{
+  AddStructuredCommentTag (i, "Assembly");
+}
+
+
+static void AddStructuredCommentGenomeAssemblyDataTag (IteM i)
+
+{
+  AddStructuredCommentTag (i, "Genome-Assembly");
+}
+
+
+static void AddStructuredCommentiBOLTag (IteM i)
+
+{
+  AddStructuredCommentTag (i, "International Barcode of Life (iBOL)Data");
+}
+
+
+static void DoReorderStructuredCommentFields (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  if (sdp->choice == Seq_descr_user) {
+    ReorderStructuredCommentFields ((UserObjectPtr) sdp->data.ptrvalue);
+  }
+}
+
+static void ReorderStructuredCommentFieldsItem (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitDescriptorsInSep (sep, NULL, DoReorderStructuredCommentFields);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();
+}
+
+
 static void ExportStructuredCommentTable (IteM i)
 
 {
@@ -1204,6 +1298,8 @@ static void ConvertBadInferenceToNote (IteM i)
 typedef struct {
   Int2    level;
   Boolean prevWasModified;
+  Boolean deltaNotified;
+  Boolean anyChange;
 } VecToNData, PNTR VecToNDataPtr;
 
 typedef struct {
@@ -1252,126 +1348,31 @@ static void AddCultivarToDefLines (IteM i)
   CommonAddOrgOrModsToDefLines (i, ORGMOD_cultivar, 0, NULL);
 }
 
-static Boolean FindBestCitSubCallback (GatherContextPtr gcp)
-
-{
-  CitSubPtr   best;
-  CitSubPtr   PNTR bestp;
-  CitSubPtr   csp;
-  PubdescPtr  pdp;
-  ValNodePtr  sdp;
-  ValNodePtr  vnp;
-
-  if (gcp == NULL) return TRUE;
-  bestp = (CitSubPtr PNTR) gcp->userdata;
-  if (bestp == NULL) return TRUE;
-  if (gcp->thistype != OBJ_SEQDESC) return TRUE;
-  sdp = (ValNodePtr) gcp->thisitem;
-  if (sdp == NULL || sdp->choice != Seq_descr_pub) return TRUE;
-  pdp = (PubdescPtr) sdp->data.ptrvalue;
-  if (pdp == NULL) return TRUE;
-  vnp = pdp->pub;
-  if (vnp == NULL || vnp->choice != PUB_Sub) return TRUE;
-  csp = (CitSubPtr) vnp->data.ptrvalue;
-  if (csp == NULL) return TRUE;
-  if (*bestp == NULL) {
-    *bestp = csp;
-    return TRUE;
-  }
-  best = *bestp;
-  if (DateMatch (best->date, csp->date, FALSE) == -1) {
-    *bestp = csp;
-    return TRUE;
-  }
-  return TRUE;
-}
-
-CharPtr kSubmitterUpdateText = "Sequence update by submitter";
 CharPtr kIndexerUpdateVecScreenText = "Sequence update by database staff to remove vector contamination";
-
-extern Boolean CreateUpdateCitSubFromBestTemplate (
-  SeqEntryPtr top_sep,
-  SeqEntryPtr upd_sep,
-  CharPtr     update_txt
-)
-{
-  CitSubPtr    best;
-  CitSubPtr    csp;
-  DatePtr      dp;
-  GatherScope  gs;
-  PubdescPtr   pdp;
-  ValNodePtr   sdp;
-  ValNodePtr   vnp;
-
-  best = NULL;
-  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  gs.seglevels = 1;
-  gs.get_feats_location = FALSE;
-  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-  gs.ignore[OBJ_BIOSEQ] = FALSE;
-  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-  gs.ignore[OBJ_SEQDESC] = FALSE;
-  gs.scope = top_sep;
-  GatherSeqEntry (top_sep, (Pointer) (&best), FindBestCitSubCallback, &gs);
-  if (best == NULL) {
-    Message (MSG_OK, "There is no earlier cit-sub template");
-    return FALSE;
-  }
-  dp = DateCurr ();
-  if (dp != NULL) {
-    if (DateMatch (best->date, dp, FALSE) == 0) {
-      DateFree (dp);
-	    dp = NULL;
-      if (upd_sep == top_sep
-          && StringICmp (best->descr, update_txt) == 0)
-      {
-        Message (MSG_OK, "There already exists an update on today's date");
-        Update ();
-        return FALSE;
-      } else if (best->descr == NULL) {
-        best->descr = StringSave (update_txt);
-        Message (MSG_OK, "Adding update indication to existing cit-sub");
-        return TRUE;
-      }
-    }
-    DateFree (dp);
-  }
-  sdp = CreateNewDescriptor (upd_sep, Seq_descr_pub);
-  if (sdp == NULL) return FALSE;
-  pdp = PubdescNew ();
-  if (pdp == NULL) return FALSE;
-  sdp->data.ptrvalue = (Pointer) pdp;
-  vnp = ValNodeNew (NULL);
-  csp = AsnIoMemCopy ((Pointer) best,
-                      (AsnReadFunc) CitSubAsnRead,
-                      (AsnWriteFunc) CitSubAsnWrite);
-  pdp->pub = vnp;
-  vnp->choice = PUB_Sub;
-  vnp->data.ptrvalue = csp;
-  csp->date = DateFree (csp->date);
-  csp->date = DateCurr ();
-  if (!StringHasNoText (update_txt)) {
-    csp->descr = MemFree (csp->descr);
-    csp->descr = StringSave (update_txt);
-  }
-
-  if (top_sep == upd_sep)
-  {
-    Message (MSG_OK, "The update Cit-sub has been placed on the top Seq-entry");
-  }
-  return TRUE;
-}                               
 
 static void AddCitSubForUpdateProc (BaseFormPtr bfp)
 
 {
   SeqEntryPtr  sep;
+  ValNodePtr   msg_list;
+  Boolean      successful = FALSE;
 
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  if ( CreateUpdateCitSubFromBestTemplate (sep, sep, kSubmitterUpdateText))
+  msg_list = CreateUpdateCitSubFromBestTemplate (sep, sep, kSubmitterUpdateText);
+  if (msg_list != NULL) {
+    if (msg_list->choice == 0) {
+      Message (MSG_ERROR, (CharPtr) msg_list->data.ptrvalue);
+    } else {
+      Message (MSG_OK, (CharPtr) msg_list->data.ptrvalue);
+      successful = TRUE;
+    }
+    msg_list = ValNodeFree (msg_list);
+  }
+
+  if (successful)
   {
     ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -2507,16 +2508,10 @@ static void RemoveDuplicateFeatsWithOptions (IteM i)
 }
 
 
-static void NewRemoveDuplicateFeats (IteM i, Uint2 featdef)
+static void NewRemoveDuplicateFeatsBaseForm (BaseFormPtr bfp, Uint2 featdef)
 {
-  BaseFormPtr  bfp;
   RemoveDuplicateFeatureAction h;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL) return;
 
   MemSet (&h, 0, sizeof (RemoveDuplicateFeatureAction));
@@ -2528,18 +2523,43 @@ static void NewRemoveDuplicateFeats (IteM i, Uint2 featdef)
   RemoveDuplicateFeatsAction (bfp->input_entityID, &h);
 }
 
+static void NewRemoveDuplicateFeatsMenuItem (IteM i, Uint2 featdef)
+
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  NewRemoveDuplicateFeatsBaseForm (bfp, featdef);
+}
+
 
 static void NewRemoveDuplicateFeatsAll (IteM i)
 {
-  NewRemoveDuplicateFeats (i, FEATDEF_ANY);
+  NewRemoveDuplicateFeatsMenuItem (i, FEATDEF_ANY);
 }
 
 
 static void NewRemoveDuplicateFeatsGenes (IteM i)
 {
-  NewRemoveDuplicateFeats (i, FEATDEF_GENE);
+  NewRemoveDuplicateFeatsMenuItem (i, FEATDEF_GENE);
 }
 
+static void NewRemoveDuplicateFeatsButton (ButtoN b)
+
+{
+  BaseFormPtr  bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  NewRemoveDuplicateFeatsBaseForm (bfp, FEATDEF_ANY);
+}
 
 
 /*
@@ -5700,6 +5720,8 @@ static Boolean XrefToGeneCallback (GatherContextPtr gcp)
   ValNodePtr PNTR      vnpp;
   XrefGenePtr          xgp;
   SeqFeatXrefPtr       xref;
+  BioseqPtr            bsp;
+  Boolean              partial5, partial3;
 
   if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
   vnpp = (ValNodePtr PNTR) gcp->userdata;
@@ -5727,8 +5749,15 @@ static Boolean XrefToGeneCallback (GatherContextPtr gcp)
   xgp = MemNew (sizeof (XrefGeneData));
   if (xgp == NULL) return TRUE;
   xgp->grp = grp;
-  xgp->slp = AsnIoMemCopy (sfp->location, (AsnReadFunc) SeqLocAsnRead,
-                           (AsnWriteFunc) SeqLocAsnWrite);
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  xgp->slp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+  if (xgp->slp == NULL) {
+    xgp->slp = AsnIoMemCopy (sfp->location, (AsnReadFunc) SeqLocAsnRead,
+                             (AsnWriteFunc) SeqLocAsnWrite);
+  } else {
+    CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+    SetSeqLocPartial (xgp->slp, partial5, partial3);
+  }
   /* if feature is pseudo, gene created from xref on feature should also be pseudo */
   xgp->pseudo = sfp->pseudo;
 
@@ -6652,6 +6681,7 @@ typedef struct featuretocdsform
   ButtoN  fuse_multiple_btn;
   ButtoN  include_utr_btn;
   DialoG  constraint_dlg;
+  GrouP   name_choice_grp;
   
   Int4       featdef_choice;
   ValNodePtr gene_field_list;
@@ -6671,6 +6701,8 @@ typedef struct featuretocdsform
 #define FEATURE_TO_CDS_GENE 1
 #define FEATURE_TO_CDS_MRNA 2
 #define FEATURE_TO_CDS_EXON 3
+#define FEATURE_TO_CDS_5UTR 4
+#define FEATURE_TO_CDS_3UTR 5
 
 static void EnableFeatureToCDSControls (Pointer data)
 {
@@ -6687,32 +6719,36 @@ static void EnableFeatureToCDSControls (Pointer data)
   }
   Enable (fp->accept_btn);
   feature_choice = GetValue (fp->feature_choice);
-  if (feature_choice == FEATURE_TO_CDS_GENE)
+  switch (feature_choice)
   {
-    missing = TestDialog (fp->gene_field);
-    if (missing != NULL)
-    {
-      need_name_string = TRUE;
+    case FEATURE_TO_CDS_GENE:
+      missing = TestDialog (fp->gene_field);
+      if (missing != NULL)
+      {
+        need_name_string = TRUE;
+        ValNodeFree (missing);
+      }
+      break;
+    case FEATURE_TO_CDS_EXON:
+      missing = DialogToPointer (fp->exon_field);
+      if (missing == NULL)
+      {
+        need_name_string = TRUE;
+      }
       ValNodeFree (missing);
-    }
-  }
-  else if (feature_choice == FEATURE_TO_CDS_EXON)
-  {
-    missing = DialogToPointer (fp->exon_field);
-    if (missing == NULL)
-    {
+      break;
+    case FEATURE_TO_CDS_MRNA:
+      missing = DialogToPointer (fp->mrna_field);
+      if (missing == NULL)
+      {
+        need_name_string = TRUE;
+      }
+      ValNodeFree (missing);
+      break;
+    case FEATURE_TO_CDS_5UTR:
+    case FEATURE_TO_CDS_3UTR:
       need_name_string = TRUE;
-    }
-    ValNodeFree (missing);
-  }
-  else if (feature_choice == FEATURE_TO_CDS_MRNA)
-  {
-    missing = DialogToPointer (fp->mrna_field);
-    if (missing == NULL)
-    {
-      need_name_string = TRUE;
-    }
-    ValNodeFree (missing);
+      break;
   }
   
   if (need_name_string)
@@ -6748,23 +6784,31 @@ static void ChangeFeatureToCDS (PopuP p)
   if (fp != NULL)
   {
     feature_choice = GetValue (fp->feature_choice);
-    if (feature_choice == FEATURE_TO_CDS_GENE)
+    switch (feature_choice)
     {
-      Show (fp->gene_field);
-      Hide (fp->mrna_field);
-      Hide (fp->exon_field);
-    }
-    else if (feature_choice == FEATURE_TO_CDS_MRNA)
-    {
-      Show (fp->mrna_field);
-      Hide (fp->gene_field);
-      Hide (fp->exon_field);
-    }
-    else
-    {
-      Show (fp->exon_field);
-      Hide (fp->mrna_field);
-      Hide (fp->gene_field);
+      case FEATURE_TO_CDS_GENE:
+        Show (fp->gene_field);
+        Hide (fp->mrna_field);
+        Hide (fp->exon_field);
+        Show (fp->name_choice_grp);
+        break;
+      case FEATURE_TO_CDS_MRNA:
+        Show (fp->mrna_field);
+        Hide (fp->gene_field);
+        Hide (fp->exon_field);
+        Show (fp->name_choice_grp);
+        break;
+      case FEATURE_TO_CDS_EXON:
+        Show (fp->exon_field);
+        Hide (fp->mrna_field);
+        Hide (fp->gene_field);
+        Show (fp->name_choice_grp);
+        break;
+      case FEATURE_TO_CDS_5UTR:
+      case FEATURE_TO_CDS_3UTR:
+      default:
+        Hide (fp->name_choice_grp);
+        break;
     }
   }
   EnableFeatureToCDSControls (fp);
@@ -7320,28 +7364,32 @@ static void FeatureToCDSAccept (ButtoN b)
   }
   
   feature_choice = GetValue (fp->feature_choice);
-  if (feature_choice == FEATURE_TO_CDS_GENE)
+  switch (feature_choice)
   {
-    fp->featdef_choice = FEATDEF_GENE;
-    fp->gene_field_list = DialogToPointer (fp->gene_field);
-  }
-  else if (feature_choice == FEATURE_TO_CDS_MRNA)
-  {
-    if (fp->makemRNA) {
-      fp->featdef_choice = FEATDEF_CDS;
-    } else {
-      fp->featdef_choice = FEATDEF_mRNA;
-    }
-    fp->mrna_field_list = DialogToPointer (fp->mrna_field);
-  }
-  else if (feature_choice == FEATURE_TO_CDS_EXON)
-  {
-    fp->featdef_choice = FEATDEF_exon;
-    fp->exon_field_list = DialogToPointer (fp->exon_field);
-  }
-  else
-  {
-    return;
+    case FEATURE_TO_CDS_GENE:
+      fp->featdef_choice = FEATDEF_GENE;
+      fp->gene_field_list = DialogToPointer (fp->gene_field);
+      break;
+    case FEATURE_TO_CDS_MRNA:
+      if (fp->makemRNA) {
+        fp->featdef_choice = FEATDEF_CDS;
+      } else {
+        fp->featdef_choice = FEATDEF_mRNA;
+      }
+      fp->mrna_field_list = DialogToPointer (fp->mrna_field);
+      break;
+    case FEATURE_TO_CDS_EXON:
+      fp->featdef_choice = FEATDEF_exon;
+      fp->exon_field_list = DialogToPointer (fp->exon_field);
+      break;
+    case FEATURE_TO_CDS_5UTR:
+      fp->featdef_choice = FEATDEF_5UTR;
+      break;
+    case FEATURE_TO_CDS_3UTR:
+      fp->featdef_choice = FEATDEF_3UTR;
+      break;
+    default:
+      return;
   }
 
   TmpNam (fp->lid.path);
@@ -7395,7 +7443,7 @@ static void FeatureToCDSormRNA (IteM i, Boolean makemRNA)
   BaseFormPtr            bfp;
   FeatureToCDSFormPtr    fp;
   WindoW                 w;
-  GrouP                  h, g, m, c;
+  GrouP                  h, m, g, c;
   CharPtr                title, grp_title;
 
 #ifdef WIN_MAC
@@ -7436,6 +7484,10 @@ static void FeatureToCDSormRNA (IteM i, Boolean makemRNA)
     PopupItem (fp->feature_choice, "mRNA");
   }
   PopupItem (fp->feature_choice, "exon");
+  if (makemRNA) {
+    PopupItem (fp->feature_choice, "5' UTR");
+    PopupItem (fp->feature_choice, "3' UTR");
+  }
   SetValue (fp->feature_choice, FEATURE_TO_CDS_GENE);
   SetObjectExtra (fp->feature_choice, fp, NULL);
 
@@ -7444,7 +7496,9 @@ static void FeatureToCDSormRNA (IteM i, Boolean makemRNA)
   } else {
     grp_title = "Source for new CDS protein name";
   }
-  g = NormalGroup (h, 0, 0, grp_title, NULL, NULL);
+  fp->name_choice_grp = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (fp->name_choice_grp, 10, 10);
+  g = NormalGroup (fp->name_choice_grp, 0, 0, grp_title, NULL, NULL);
   fp->gene_field = FeatureFieldChoiceDialog (g, GeneFieldSelectionDialog, TRUE, EnableFeatureToCDSControls, fp);
   fp->mrna_field = FeatureFieldChoiceDialog (g, MRNAFieldSelectionDialog, TRUE, EnableFeatureToCDSControls, fp);
   fp->exon_field = FeatureFieldChoiceDialog (g, ExonFieldSelectionDialog, TRUE, EnableFeatureToCDSControls, fp);
@@ -7455,12 +7509,13 @@ static void FeatureToCDSormRNA (IteM i, Boolean makemRNA)
                               (HANDLE) fp->exon_field, 
                               NULL);
   
-  fp->qual_caps_grp = NormalGroup (h, 3, 0,
+  fp->qual_caps_grp = NormalGroup (fp->name_choice_grp, 3, 0,
                      "Capitalization for field in name", NULL, NULL);
   RadioButton (fp->qual_caps_grp, "As is");
   RadioButton (fp->qual_caps_grp, "Capitalize first initial");
   RadioButton (fp->qual_caps_grp, "Capitalize all");
   SetValue (fp->qual_caps_grp, 1);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) fp->qual_caps_grp, NULL);
   
   m = HiddenGroup (h, 0, 2, NULL);
   StaticPrompt (m, "Append text to name", 0, 0, programFont, 'c');
@@ -7487,8 +7542,7 @@ static void FeatureToCDSormRNA (IteM i, Boolean makemRNA)
   fp->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) fp->feature_choice,
-                              (HANDLE) g,
-                              (HANDLE) fp->qual_caps_grp,
+                              (HANDLE) fp->name_choice_grp,
                               (HANDLE) m, 
                               (HANDLE) fp->fuse_multiple_btn, 
                               (HANDLE) fp->constraint_dlg,
@@ -8656,11 +8710,66 @@ static void SetupECReplacementTable (CharPtr file)
   }
 }
 
-static void UpdateProtEC (SeqFeatPtr sfp, Pointer userdata)
+static Boolean GetLocusTagFromProtRef (SeqFeatPtr sfp, CharPtr buf, size_t len)
 
 {
-  EcRepPtr    erp;
-  Int4        L, R, mid;
+  BioseqPtr          bsp;
+  SeqFeatPtr         cds;
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         gene;
+  GeneRefPtr         grp;
+
+  if (sfp == NULL || buf == NULL) return FALSE;
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) {
+    if (SeqMgrGeneIsSuppressed (grp)) return FALSE;
+    if (StringDoesHaveText (grp->locus_tag)) {
+      StringNCpy_0 (buf, grp->locus_tag, len);
+      return TRUE;
+    } else if (StringDoesHaveText (grp->locus)) {
+      StringNCpy_0 (buf, grp->locus, len);
+      return TRUE;
+    }
+  }
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return FALSE;
+  cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+  if (cds == NULL) return FALSE;
+  grp = SeqMgrGetGeneXref (cds);
+  if (grp != NULL) {
+    if (SeqMgrGeneIsSuppressed (grp)) return FALSE;
+    if (StringDoesHaveText (grp->locus_tag)) {
+      StringNCpy_0 (buf, grp->locus_tag, len);
+      return TRUE;
+    } else if (StringDoesHaveText (grp->locus)) {
+      StringNCpy_0 (buf, grp->locus, len);
+      return TRUE;
+    }
+  }
+  gene = SeqMgrGetOverlappingGene (cds->location, &fcontext);
+  if (gene == NULL || gene->data.choice != SEQFEAT_GENE) return FALSE;
+  grp = (GeneRefPtr) gene->data.value.ptrvalue;
+  if (grp != NULL) {
+    if (SeqMgrGeneIsSuppressed (grp)) return FALSE;
+    if (StringDoesHaveText (grp->locus_tag)) {
+      StringNCpy_0 (buf, grp->locus_tag, len);
+      return TRUE;
+    } else if (StringDoesHaveText (grp->locus)) {
+      StringNCpy_0 (buf, grp->locus, len);
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static Boolean do_ec_zap = FALSE;
+static Boolean ec_zap_asked = FALSE;
+
+static void ZapBadEC (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Char        buf [128];
+  LogInfoPtr  lip;
   ProtRefPtr  prp;
   CharPtr     str;
   ValNodePtr  vnp;
@@ -8668,9 +8777,58 @@ static void UpdateProtEC (SeqFeatPtr sfp, Pointer userdata)
   if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) return;
   prp = (ProtRefPtr) sfp->data.value.ptrvalue;
   if (prp == NULL || prp->ec == NULL) return;
+  lip = (LogInfoPtr) userdata;
+
   for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
     str = (CharPtr) vnp->data.ptrvalue;
     if (StringHasNoText (str)) continue;
+    if (ValidateECnumber (str)) continue;
+    if (! ec_zap_asked) {
+      if (Message (MSG_YN, "Do you want to delete improperly formatted EC numbers?") == ANS_YES) {
+        do_ec_zap = TRUE;
+      }
+      ec_zap_asked = TRUE;
+    }
+    buf [0] = '\0';
+    GetLocusTagFromProtRef (sfp, buf, sizeof (buf));
+    if (do_ec_zap) {
+      if (lip != NULL && lip->fp != NULL) {
+        fprintf (lip->fp, "%s\tremoved\t%s\n", buf, str);
+        lip->data_in_log = TRUE;
+      }
+      vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+    } else {
+      if (lip != NULL && lip->fp != NULL) {
+        fprintf (lip->fp, "%s\tbad format\t%s\n", buf, str);
+        lip->data_in_log = TRUE;
+      }
+    }
+  }
+}
+
+static Boolean do_ec_delete = FALSE;
+static Boolean ec_delete_asked = FALSE;
+
+static void UpdateProtEC (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Char        buf [128];
+  EcRepPtr    erp;
+  Int4        L, R, mid;
+  LogInfoPtr  lip;
+  ProtRefPtr  prp;
+  CharPtr     str;
+  ValNodePtr  vnp;
+ 
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) return;
+  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (prp == NULL || prp->ec == NULL) return;
+  lip = (LogInfoPtr) userdata;
+
+  for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (! ValidateECnumber (str)) continue;
     L = 0;
     R = ec_rep_len - 1;
     while (L < R) {
@@ -8683,26 +8841,109 @@ static void UpdateProtEC (SeqFeatPtr sfp, Pointer userdata)
       }
     }
     erp = ec_rep_data [(int) R];
-    if (erp != NULL && StringCmp (erp->before, str) == 0 && StringChr (erp->after, '\t') == NULL) {
+    if (erp != NULL && StringCmp (erp->before, str) == 0) {
+      buf [0] = '\0';
+      GetLocusTagFromProtRef (sfp, buf, sizeof (buf));
+      if (StringChr (erp->after, '\t') == NULL) {
+        if (lip != NULL && lip->fp != NULL) {
+          fprintf (lip->fp, "%s\treplaced\t%s\t%s\n", buf, erp->before, erp->after);
+          lip->data_in_log = TRUE;
+        }
+        vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+        vnp->data.ptrvalue = StringSave (erp->after);
+      } else {
+        if (! ec_delete_asked) {
+          if (Message (MSG_YN, "Do you want to delete EC numbers replaced by more than one number?") == ANS_YES) {
+            do_ec_delete = TRUE;
+          }
+          ec_delete_asked = TRUE;
+        }
+        if (do_ec_delete) {
+          if (lip != NULL && lip->fp != NULL) {
+            fprintf (lip->fp, "%s\tsplit\t%s\n", buf, erp->before);
+            lip->data_in_log = TRUE;
+          }
+          vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+        } else {
+          if (lip != NULL && lip->fp != NULL) {
+            fprintf (lip->fp, "%s\tambiguous\t%s\t%s\n", buf, erp->before, erp->after);
+            lip->data_in_log = TRUE;
+          }
+        }
+      }
+    }
+  }
+}
+
+static Boolean do_bad_delete = FALSE;
+static Boolean do_bad_asked = FALSE;
+
+static void DeleteBadProtEC (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Char        buf [128];
+  LogInfoPtr  lip;
+  ProtRefPtr  prp;
+  CharPtr     str;
+  ValNodePtr  vnp;
+ 
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) return;
+  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (prp == NULL || prp->ec == NULL) return;
+  lip = (LogInfoPtr) userdata;
+
+  for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (ValidateECnumber (str) && (! ECnumberNotInList (str))) continue;
+    if (! do_bad_asked) {
+      if (Message (MSG_YN, "Do you want to delete unrecognized EC numbers?") == ANS_YES) {
+        do_bad_delete = TRUE;
+      }
+      do_bad_asked = TRUE;
+    }
+    buf [0] = '\0';
+    GetLocusTagFromProtRef (sfp, buf, sizeof (buf));
+    if (do_bad_delete) {
+      if (lip != NULL && lip->fp != NULL) {
+        fprintf (lip->fp, "%s\tdeleted\t%s\n", buf, str);
+        lip->data_in_log = TRUE;
+      }
       vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
-      vnp->data.ptrvalue = StringSave (erp->after);
     }
   }
 }
 
 static void UpdateECNumbersBaseForm (BaseFormPtr bfp)
+
 {
+  LogInfoPtr   lip;
   SeqEntryPtr  sep;
 
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
   SetupECReplacementTable ("ecnum_replaced.txt");
+
+  lip = OpenLog ("EC_numbers Replaced");
+  do_ec_zap = FALSE;
+  ec_zap_asked = FALSE;
+  do_ec_delete = FALSE;
+  ec_delete_asked = FALSE;
+  do_bad_delete = FALSE;
+  do_bad_asked = FALSE;
+
+  VisitFeaturesInSep (sep, (Pointer) lip, ZapBadEC);
   if (ec_rep_data != NULL && ec_rep_len > 0) {
-    VisitFeaturesInSep (sep, NULL, UpdateProtEC);
+    VisitFeaturesInSep (sep, (Pointer) lip, UpdateProtEC);
   }
+  VisitFeaturesInSep (sep, (Pointer) lip, DeleteBadProtEC);
+
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+
+  CloseLog (lip);
+  lip = FreeLog (lip);
 }
 
 static void UpdateECnumbers (IteM i)
@@ -9378,7 +9619,8 @@ static void AddNonredundantCommentDescriptor (BioseqPtr bsp, CharPtr text)
 
 typedef struct addindexercomment {
   CharPtr comment_text;
-  Boolean add_unverified;
+  Boolean add_unverified_feat;
+  Boolean add_unverified_org;
   ValNodePtr constraint;
 } AddIndexerCommentData, PNTR AddIndexerCommentPtr;
 
@@ -9386,14 +9628,23 @@ typedef struct addindexercomment {
 static void AddIndexerCommentCallback (BioseqPtr bsp, Pointer data)
 {
   AddIndexerCommentPtr a;
+  UserObjectPtr uop;
 
   if (bsp == NULL || (a = (AddIndexerCommentPtr) data) == NULL
-      || (!a->add_unverified && StringHasNoText (a->comment_text))
+      || (!a->add_unverified_feat && !a->add_unverified_org && StringHasNoText (a->comment_text))
       || !DoesObjectMatchConstraintChoiceSet(OBJ_BIOSEQ, bsp, a->constraint)) {
     return;
   }
-  if (a->add_unverified) {
-    AddUnverifiedUserObjectToBioseq(bsp);
+  if (a->add_unverified_feat || a->add_unverified_org) {
+    uop = AddUnverifiedUserObjectToBioseq(bsp);
+    if (uop != NULL) {
+      if (a->add_unverified_feat) {
+        AddStringToUnverifiedUserObject (uop, "Type", "Features");
+      }
+      if (a->add_unverified_org) {
+        AddStringToUnverifiedUserObject (uop, "Type", "Organism");
+      }
+    }
   } else {
     AddNonredundantCommentDescriptor (bsp, a->comment_text);
   }
@@ -9406,20 +9657,39 @@ typedef struct addindexercommentform {
   PopuP comment_text_choice;
   TexT  comment_text;
   DialoG constraint;
+  ButtoN leave_dlg_up;
 } AddIndexerCommentFormData, PNTR AddIndexerCommentFormPtr;
 
 
 static const CharPtr kStaticIndexerComments[] = {
+  "Unverified Features",
+  "Unverified Organism",
+  "Unverified Features and Organism",
+  "Sequences were screened for chimeras by the submitter using",
+  "Annotation was added by the NCBI Prokaryotic Genomes Automatic Annotation Pipeline Group. Information about the Pipeline can be found here: http://www.ncbi.nlm.nih.gov/genomes/static/Pipeline.html. Please be aware that the annotation is done automatically with little or no manual curation.",
+  "Genome was manually curated based on annotation generated by the NCBI Prokaryotic Genomes Automatic Annotation Pipeline Group. Information about the Pipeline can be found here: http://www.ncbi.nlm.nih.gov/genomes/static/Pipeline.html.",
   kWaitingOnCodingRegion,
-  "GenBank staff are still waiting for submitters to provide appropriate feature information.",
-  "Unverified",
-  "Sequences were screened for chimeras by the submitter using"
+  "GenBank staff are still waiting for submitters to provide appropriate feature information."
 };
 
-static const Int4 kUnverifiedComment = 2;
+static const CharPtr kStaticIndexerCommentNames[] = {
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  "PGAAP unmodified",
+  "PGAAP modified",
+  NULL,
+  NULL
+};
+
+static const Int4 kUnverifiedComment = 0;
+static const Int4 kUnverifiedSource = 1;
+static const Int4 kUnverifiedSourceAndFeatures = 2;
 static const Int4 kChimeraComment = 3;
 
 static const Int4 kNumStaticIndexerComments = sizeof (kStaticIndexerComments) / sizeof (CharPtr);
+static const Int4 kNumStaticIndexerCommentNames = sizeof (kStaticIndexerCommentNames) / sizeof (CharPtr);
 
 static void ChangeIndexerCommentPopup (PopuP p)
 {
@@ -9453,7 +9723,12 @@ static void DoAddIndexerComments (ButtoN b)
   MemSet (&ad, 0, sizeof (AddIndexerCommentData));
   val = GetValue (frm->comment_text_choice);
   if (val - 1 == kUnverifiedComment) {
-    ad.add_unverified = TRUE;
+    ad.add_unverified_feat = TRUE;
+  } else if (val - 1 == kUnverifiedSource) {
+    ad.add_unverified_org = TRUE;
+  } else if (val - 1 == kUnverifiedSourceAndFeatures) {
+    ad.add_unverified_feat = TRUE;
+    ad.add_unverified_org = TRUE;
   } else if (val <= kNumStaticIndexerComments) {
     ad.comment_text = StringSave (kStaticIndexerComments[val - 1]);
     if (val == kChimeraComment + 1 && !TextHasNoText (frm->comment_text)) {
@@ -9473,7 +9748,9 @@ static void DoAddIndexerComments (ButtoN b)
 
   ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
-  Remove (frm->form);
+  if (!GetStatus(frm->leave_dlg_up)) {
+    Remove (frm->form);
+  }
   Update ();     
 }
 
@@ -9507,7 +9784,11 @@ static void AddIndexerCommentMenuItem (IteM i)
   frm->comment_text_choice = PopupList (h, TRUE, ChangeIndexerCommentPopup);
   SetObjectExtra (frm->comment_text_choice, frm, NULL);
   for (n = 0; n < kNumStaticIndexerComments; n++) {
-    PopupItem (frm->comment_text_choice, kStaticIndexerComments[n]);
+    if (n < kNumStaticIndexerCommentNames && kStaticIndexerCommentNames[n] != NULL) {
+      PopupItem (frm->comment_text_choice, kStaticIndexerCommentNames[n]);
+    } else {
+      PopupItem (frm->comment_text_choice, kStaticIndexerComments[n]);
+    }
   }
   PopupItem (frm->comment_text_choice, "Free Text");
   frm->comment_text = DialogText (h, "", 15, NULL);
@@ -9521,6 +9802,7 @@ static void AddIndexerCommentMenuItem (IteM i)
   b = DefaultButton (c, "Accept", DoAddIndexerComments);
   SetObjectExtra (b, frm, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  frm->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
   
   AlignObjects (ALIGN_CENTER, (HANDLE) frm->comment_text_choice,
                               (HANDLE) frm->comment_text,
@@ -10308,18 +10590,13 @@ static void DoCDSConversion (ButtoN b)
 }
 
 
-static void ConvertCDSMenuItem (IteM i)
+static void ConvertCDSBaseForm (BaseFormPtr bfp)
 {
-  BaseFormPtr  bfp;
   ConvertCDSFrmPtr frm;
   WindoW           w;
   GrouP            h, c;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
+  if (bfp == NULL) return;
     
   frm = (ConvertCDSFrmPtr) MemNew (sizeof (ConvertCDSFrmData));
   if (frm == NULL) return;
@@ -10350,6 +10627,29 @@ static void ConvertCDSMenuItem (IteM i)
   Update ();
 }
 
+static void ConvertCDSMenuItem (IteM i)
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  ConvertCDSBaseForm (bfp);
+}
+
+static void ConvertCDSButton (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  ConvertCDSBaseForm (bfp);
+}
 
 static void NewConvertCDSWithInternalStopsToMiscFeat (IteM i)
 {
@@ -12943,11 +13243,19 @@ static void GenePseudoOn (SeqFeatPtr sfp, Pointer userdata)
 
 {
   GeneRefPtr  grp;
+  ValNode     field;
 
   if (sfp->data.choice != SEQFEAT_GENE) return;
   grp = (GeneRefPtr) sfp->data.value.ptrvalue;
   if (grp == NULL) return;
   grp->pseudo = TRUE;
+  if (userdata != NULL) {
+    MemSet (&field, 0, sizeof (ValNode));
+    field.choice = FeatQualChoice_legal_qual;
+    field.data.intvalue = Feat_qual_legal_pseudo;
+    SetStringInGBQualList (&(sfp->qual), &field, NULL, (CharPtr)userdata, ExistingTextOption_replace_old);
+  }
+
 }
 
 static void GenePseudoOff (SeqFeatPtr sfp, Pointer userdata)
@@ -12960,6 +13268,7 @@ static void GenePseudoOff (SeqFeatPtr sfp, Pointer userdata)
   if (grp == NULL) return;
   grp->pseudo = FALSE;
   sfp->pseudo = FALSE;
+  RemoveGBQualMatch (&(sfp->qual), "pseudogene", 0, NULL);
 }
 
 typedef struct genepseudodata 
@@ -12969,6 +13278,7 @@ typedef struct genepseudodata
   TexT    search_text;  
   ButtoN  case_insensitive;
   ButtoN  when_string_not_present;
+  PopuP   pseudo_val;
 } GenePseudoData, PNTR GenePseudoPtr;
 
 static void DoGenePseudoConstraint (ButtoN b)
@@ -12998,6 +13308,7 @@ static void DoGenePseudoConstraint (ButtoN b)
   if (gsp->set_on)
   {
     fd.callback = GenePseudoOn;
+    fd.userdata = GetEnumPopupByName (gsp->pseudo_val, new_pseudogene_alist + 1);
   }
   else 
   {
@@ -13045,6 +13356,11 @@ static void GenePseudoConstraint (IteM i, Boolean set_on)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
+  if (gsp->set_on) {
+    gsp->pseudo_val = PopupList (h, TRUE, NULL);
+    InitEnumPopup (gsp->pseudo_val, new_pseudogene_alist + 1, NULL);
+  }
+
   g = HiddenGroup (h, 0, 4, NULL);
   StaticPrompt (g, "String Constraint", 0, 0, programFont, 'c');
   gsp->search_text = DialogText (g, "", 20, NULL);
@@ -13055,6 +13371,8 @@ static void GenePseudoConstraint (IteM i, Boolean set_on)
   b = DefaultButton (c, "Accept", DoGenePseudoConstraint);
   SetObjectExtra (b, gsp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) gsp->pseudo_val, NULL);
 
   RealizeWindow (w);
   Show (w);
@@ -13071,22 +13389,7 @@ static void ClearGenePseudoConstraint (IteM i)
 static void AddGenePseudo (IteM i)
 
 {
-  BaseFormPtr  bfp;
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-
-  VisitFeaturesInSep (sep, NULL, GenePseudoOn);
-
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  GenePseudoConstraint (i, TRUE);
 }
 
 static void ClearGenePseudo (IteM i)
@@ -15021,7 +15324,7 @@ static Boolean IsTSAId (SeqIdPtr sip)
 
   if (sip != NULL && sip->choice == SEQID_GENERAL
       && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
-      && StringNCmp (dbtag->db, "gpid:", 5) == 0) 
+      && (StringNCmp (dbtag->db, "gpid:", 5) == 0 || StringNCmp (dbtag->db, "bpid:", 5) == 0)) 
   {
     return TRUE;
   }
@@ -18336,6 +18639,7 @@ static Boolean LIBCALLBACK VecToN (SeqFeatPtr sfp, SeqMgrFeatContextPtr context)
   if (slp != sfp->location) {
     slp = SeqLocFree (slp);
   }
+  vDataPtr->anyChange = TRUE;
   return TRUE;
 }
 
@@ -18350,6 +18654,13 @@ static void VecScreenBioseqCallback (BioseqPtr bsp, Pointer userdata)
   }
 
   vDataPtr = (VecToNDataPtr) userdata;
+  if (bsp->repr == Seq_repr_delta) {
+    if (!vDataPtr->deltaNotified) {
+      Message (MSG_ERROR, "Unable to put Ns under VecScreen Hits for delta sequences");
+      vDataPtr->deltaNotified = TRUE;
+    }
+    return;
+  }
     
   for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_misc_feature, &fcontext);
        sfp != NULL;
@@ -18382,6 +18693,8 @@ static void VecScreenToNs (IteM i, Int2 level)
 
   vData.level = level;
   vData.prevWasModified = FALSE;
+  vData.deltaNotified = FALSE;
+  vData.anyChange = FALSE;
 
   bsp = GetBioseqGivenIDs (bfp->input_entityID,
 			   bfp->input_itemID,
@@ -18392,8 +18705,10 @@ static void VecScreenToNs (IteM i, Int2 level)
   {
     VecScreenBioseqCallback (bsp, &vData);
   }
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  if (vData.anyChange) {
+    ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  }
 
   ArrowCursor ();
   Update ();
@@ -19317,7 +19632,7 @@ static void WBSBtnLaunchMacroEditor (ButtoN b)
   BaseFormPtr  bfp;
   bfp = (BaseFormPtr) GetObjectExtra (b);
 
-  LaunchMacroEditorBaseForm (bfp);
+  LaunchMacroEditor (bfp->input_entityID, NULL, NULL, NULL);
 }
 
 
@@ -19785,6 +20100,45 @@ static void CustomSegregate (ButtoN b)
   SegregateBioseqSetEntityID (bfp->input_entityID);
 }
 
+
+static void SegregateByPlantGroupItem (IteM i)
+{
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  SegregateSetsByPlantGroup (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+static void SegregateByFungusGroupItem (IteM i)
+{
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  SegregateSetsByFungusGroup (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
 static void FixPubCapsAuthor (ButtoN b);
 static void FixPubCapsAffil (ButtoN b);
 
@@ -19827,6 +20181,189 @@ static void AddOtherFeatureBtn (ButtoN b)
 }
 
 
+static void ParseDeflineBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+  ForM         f;
+  ParseActionPtr parse;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  f = SingleParseAction (bfp->input_entityID);
+  if (f != NULL) {
+    /* create parse action with preselected fields */
+    parse = ParseActionNew ();
+    /* choose defline as source */
+    parse->src = ValNodeNew (NULL);
+    parse->src->choice = ParseSrc_defline;
+    /* choose source qualifiers as dest */
+    parse->dest = ValNodeNew (NULL);
+    parse->dest->choice = ParseDest_org;
+    PointerToForm (f, parse);
+    parse = ParseActionFree (parse);
+    Show (f);
+  }
+}
+
+
+static void TaxFixToolBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+  TaxFixToolBaseForm (bfp);
+}
+
+
+static void EditRnaQualBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  SingleAECRMacroAction (bfp->input_entityID, TRUE, ActionChoice_edit, FieldType_rna_field);
+}
+
+
+static void EditStructFieldBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  SingleAECRMacroAction (bfp->input_entityID, TRUE, ActionChoice_edit, FieldType_struc_comment_field);
+}
+
+
+static void LoadStructCommBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  CreateStructuredCommentsBaseForm (bfp);
+}
+
+
+static void AddGPIDBtn (ButtoN b)
+{
+  BaseFormPtr   bfp;
+  ObjMgrPtr     omp;
+  ObjMgrProcPtr ompp;
+  
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  omp = ObjMgrGet ();
+  if (omp == NULL) return;
+  ompp = ObjMgrProcFindNext (omp, OMPROC_EDIT, OBJ_SEQDESC, 0, NULL);
+  while (ompp != NULL 
+         && (ompp->subinputtype != Seq_descr_user 
+             || StringCmp (ompp->proclabel, "GenomeProjectsDB") != 0)) {
+    ompp = ObjMgrProcFindNext (omp, OMPROC_EDIT, OBJ_SEQDESC, 0, ompp);
+  }
+
+  if (ompp != NULL) {
+    NewDescriptorMenuFuncEx (ompp, bfp, Seq_descr_user, "GenomeProjectsDB");
+  }
+}
+
+
+static void BulkEditSrcBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  BulkEditSourceBaseForm (bfp);
+}
+
+
+static void RemoveStructCommCallback (SeqDescPtr sdp, Pointer data)
+{
+  UserObjectPtr uop;
+  ObjValNodePtr ovn;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user 
+      || (uop = (UserObjectPtr) sdp->data.ptrvalue) == NULL
+      || uop->type == NULL
+      || StringICmp (uop->type->str, "StructuredComment") != 0
+      || sdp->extended == 0)
+  {
+    return;
+  }
+  ovn = (ObjValNodePtr) sdp;
+  ovn->idx.deleteme = TRUE;
+}
+
+
+static void RemoveStructComm (Uint2 entityID)
+{
+  SeqEntryPtr sep;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  VisitDescriptorsInSep (sep, NULL, RemoveStructCommCallback);
+  DeleteMarkedObjects (entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+}
+
+
+static void RemoveStructCommMenuItem (IteM i)
+{
+  BaseFormPtr bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL) return;
+  RemoveStructComm (bfp->input_entityID);
+}
+
+
+static void RemoveStructCommBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  RemoveStructComm (bfp->input_entityID);
+}
+
+
+static void FindFrameShiftBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  FrameShiftFinderEntityID (bfp->input_entityID, FALSE);
+}
+
+
+static void FindFrameShiftClipBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  FrameShiftFinderEntityID (bfp->input_entityID, TRUE);
+}
+
+
+
 typedef struct namedbutton {
   CharPtr name;
   BtnActnProc proc;
@@ -19844,6 +20381,7 @@ static const NamedButtonData CustomButtons[] = {
   { "Add Isol Source", AddIsolSrcBtn } ,
   { "Add Other Feature", AddOtherFeatureBtn } ,
   { "Add RNA", AddRnaBtn } ,
+  { "Add GPID", AddGPIDBtn },
   { "Ad_ID", AutoDefStrainToolBtn } ,
   { "Ad_misc", AutoDefMiscFeatToolBtn } ,
   { "Append to Organism", WGSBtnAddModToOrg } ,
@@ -19851,9 +20389,11 @@ static const NamedButtonData CustomButtons[] = {
   { "Autofix", RunAutoFixScriptToolBtn } ,
   { "Auto_Def", AutoDefToolBtn } ,
   { "Auto_Def Options", AutoDefOptionsToolBtn } ,
+  { "Bulk Edit Source", BulkEditSrcBtn } ,
   { "CDS", ToolBtn5 } ,
   { "cit-sub-upd", ToolBtn16 } ,
   { "Clear", CustomClearBtn } ,
+  { "Convert CDS to MiscFeat", ConvertCDSButton } ,
   { "Correct Gene for CDS", CustomCorrectGene } ,
   { "cSUC", WGSBtnClickableSUC } ,
   { "Def_Org", ToolBtn4 } ,
@@ -19864,14 +20404,19 @@ static const NamedButtonData CustomButtons[] = {
   { "Edit Location", EditFeatureLocationBtn } ,
   { "Edit Mol Info", EditMolInfoFieldsBtn } ,
   { "Edit Pubs", ToolBtn13 } ,
+  { "Edit RNA Qual", EditRnaQualBtn } ,
+  { "Edit StructField", EditStructFieldBtn },
   { "Find ASN.1", FindStringProcToolBtn } ,
   { "Find FF", FindFlatfileProcToolBtn } ,
+  { "Find Frameshift", FindFrameShiftBtn } ,
+  { "Find Frameshift Clip", FindFrameShiftClipBtn } ,
   { "Fix Caps", FixCapitalizationToolBtn } ,
   { "Fix Caps Authors", FixPubCapsAuthor } ,
   { "Fix Caps Affil", FixPubCapsAffil } ,
   { "Fix Local IDs", ResolveExistingLocalIDsToolBtn } ,
   { "gene", ToolBtnGene } ,
   { "Group Explode", GroupExplodeToolBtn } ,
+  { "Load StructComm", LoadStructCommBtn } ,
   { "Load Tax Acc", LoadTaxConsultBtn } ,
   { "Load Tax Name", LoadTaxTableReaderBtn },
   { "LC Quals", LowercaseQualsBtn },
@@ -19886,9 +20431,12 @@ static const NamedButtonData CustomButtons[] = {
   { "On-Caller Tool", ToolBtnOncallerTool } ,
   { "ORF_Find", ToolBtn8 } ,
   { "Parse ATCC", WGSBtnAtccToCultureCollection } ,
+  { "Parse Defline", ParseDeflineBtn } ,
   { "PT_Cleanup", WGSBtnPT_Cleanup } ,
+  { "RemoveStructComm", RemoveStructCommBtn },
   { "Remove All Features", WGSBtnRemoveAllFeatures } ,
   { "Remove DefLines", RemoveDefLinesToolBtn } ,
+  { "Remove Dup Feats", NewRemoveDuplicateFeatsButton } ,
   { "Remove GPID", WGSBtnRemoveGenomeProjectIds } ,
   { "Remove Illegal Quals", CustomRemoveIllegalQuals },
   { "Remove Wrong Quals", CustomRemoveWrongQuals },
@@ -19915,9 +20463,11 @@ static const NamedButtonData CustomButtons[] = {
   { "sub_add", ToolBtn12 } ,
   { "SUC", ToolBtn10 } ,
   { "Table Reader", NewLoadFeatureQualifierTableToolBtn } ,
+  { "Table Reader Clip", NewLoadFeatureQualifierTableClipToolBtn },
   { "Toolbar", ToolbarBtn },
   { "Tax_Fix/Clean_Up", ToolBtn3 } ,
   { "Trim Ns", TrimNsFromNucsToolBtn } ,
+  { "Uncul TaxTool", TaxFixToolBtn } ,
   { "Validate", ToolBtn14 } ,
   { NULL, NULL} };
 
@@ -20042,7 +20592,7 @@ static void RunCustomMacroScript (BaseFormPtr bfp, CharPtr path)
     for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
       sep = vnp->data.ptrvalue;
       entityID = ObjMgrGetEntityIDForChoice(sep);
-      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, action_list, lip->fp);
+      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, action_list, lip->fp, Sequin_GlobalAlign2Seq);
       ObjMgrSetDirtyFlag (entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
     }
@@ -20052,6 +20602,7 @@ static void RunCustomMacroScript (BaseFormPtr bfp, CharPtr path)
     ArrowCursor ();
     Update ();  
   }
+  action_list = MacroActionListFree (action_list);
 }
 
 static void CustomMacroBtnFunc (ButtoN b)
@@ -22309,15 +22860,9 @@ static void ChangeAuthorNameToConsortiumWithConstraint (IteM i)
 }
 
 
-typedef struct fixproductcap {
-  Boolean keep_cap_before_punct;
-  Boolean keep_cap_before_cap;
-  Boolean keep_cap_before_digit;
-  CharPtr remove_list;
-} FixProductCapData, PNTR FixProductCapPtr;
 
 
-static void FixProductCapitalizationInString (CharPtr PNTR pStr, FixProductCapPtr fc)
+NLM_EXTERN void FixProductCapitalizationInString (CharPtr PNTR pStr, FixProductCapPtr fc)
 {
   CharPtr cp, cp2;
 
@@ -23211,6 +23756,29 @@ static void ApplyBarcodeDbxrefs (IteM i)
   Update();
 }
 
+
+static void ApplyFBOLDbxrefs (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitBioseqsInSep (sep, NULL, ApplyFBOLDbxrefsToBioseq);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update();
+}
+
+
 static void BarcodeHupDateProc (
   SeqDescrPtr sdp,
   Pointer userdata
@@ -23829,7 +24397,9 @@ static void WriteAccessionsCallback (BioseqPtr bsp, Pointer data)
 }
 
 
+#ifdef USE_SMARTNET
 static CharPtr labelfungalrnascmd = NULL;
+#endif
 
 static void LabelFungalRNAs (IteM i)
 {
@@ -23931,7 +24501,6 @@ static void RunAutoFixWindowScript (BaseFormPtr bfp)
   AsnIoPtr     aip;
   Char         buf [PATH_MAX];
   ValNodePtr   action_list;
-  Int4         num_fields = 0, num_features = 0;
 
   if (bfp == NULL) return;
 
@@ -24086,6 +24655,226 @@ static void RemoveBadCodonRecognized (IteM i)
 }
 
 
+static void PropagateDblinkDescriptorsMenuItem (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+
+  PropagateDblinkDescriptors (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update();
+}
+
+
+static void NewFeatureLocationEditor (IteM i)
+{
+  BaseFormPtr  bfp;
+  ValNodePtr action;
+  EditFeatureLocationActionPtr a;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  a = EditFeatureLocationActionNew ();
+  a->action = ValNodeNew (NULL);
+  a->action->choice = LocationEditType_extend_5;
+  action = ValNodeNew (NULL);
+  action->choice = MacroActionChoice_edit_location;
+  action->data.ptrvalue = a;
+  GenericMacroActionForm (bfp->input_entityID, action, TRUE);
+  action = MacroActionChoiceFree(action);
+}
+
+
+static void AddToBioseqSegregateList (BioseqPtr bsp, Pointer data)
+{
+  ValNodePtr PNTR list;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || (list = (ValNodePtr PNTR) data) == NULL
+    || ValNodeLen (*list) > 3) {
+    return;
+  } else {
+    ValNodeAddPointer (list, OBJ_BIOSEQ, bsp);
+  }
+}
+
+
+static void TestSegregateByList (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  ValNodePtr   list = NULL;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+  VisitBioseqsInSep (sep, &list, AddToBioseqSegregateList);
+  SegregateSetsByBioseqList (sep, list);
+  list = ValNodeFree (list);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update();
+}
+
+
+static void PropagateMissingOldNameQualsItem (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  ValNodePtr   list = NULL;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+  ValNodeAddPointer (&list, 0, sep);
+  if (PropagateMissingOldNames (list)) {
+    Message (MSG_OK, "Propagated old names");
+  } else {
+    Message (MSG_ERROR, "No old-names propagated.");
+  }
+  list = ValNodeFree (list);
+}
+
+
+static CharPtr GetBioSampleId (BioseqPtr bsp)
+{
+  SeqDescPtr   sdp;
+  SeqMgrDescContext context;
+  CharPtr           id = NULL;
+  UserObjectPtr     uop;
+  ObjectIdPtr       oip;
+  UserFieldPtr      ufp;
+  CharPtr PNTR      cpp;
+
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+       sdp != NULL && id == NULL;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context))
+  {
+    if ((uop = (UserObjectPtr) sdp->data.ptrvalue) != NULL
+        && (oip = uop->type) != NULL
+        && StringCmp (oip->str, "DBLink") == 0)
+    {
+      for (ufp = uop->data; ufp != NULL; ufp = ufp->next) 
+      {
+        oip = ufp->label;
+        if (oip == NULL) continue;
+        if (StringICmp (oip->str, "BioSample") == 0)
+        {
+          if (ufp->choice == 1) 
+          {
+            id = ufp->data.ptrvalue;
+          } 
+          else if (ufp->choice == 7)
+          {
+            cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+            if (ufp->num > 0 && cpp != NULL) 
+            {
+              id = cpp [0];
+            }
+          }
+        }
+      }
+    }
+  }
+  return id;
+}
+
+
+static void CompareWithBiosampleCallback (BioseqPtr bsp, Pointer data)
+{
+  LogInfoPtr   lip;
+  BioSourcePtr biop, sample;
+  CharPtr      id, desc;
+  SeqDescPtr   sdp;
+  SeqMgrDescContext context;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || (lip = (LogInfoPtr) data) == NULL || lip->fp == NULL) {
+    return;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+  if (sdp == NULL || (biop = (BioSourcePtr) sdp->data.ptrvalue) == NULL) {
+    return;
+  }
+
+  id = GetBioSampleId (bsp);
+  if (StringHasNoText (id)) {
+    return;
+  }
+
+  sample = BioSourceFromBioSample (id);
+  desc = DescribeBioSourceDifferences (biop, sample);
+  sample = BioSourceFree (sample);
+
+  if (!StringHasNoText (desc)) {
+    fprintf (lip->fp, "Conflicts for %s\n", id);
+    fprintf (lip->fp, "%s\n", desc);
+    lip->data_in_log = TRUE;
+  }
+  desc = MemFree (desc);
+}
+
+
+static void CompareWithBioSample (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  LogInfoPtr   lip;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+
+  lip = OpenLog ("Biosample Conflicts");
+  VisitBioseqsInSep (sep, lip, CompareWithBiosampleCallback);
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
 static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
 {
   IteM  i;
@@ -24215,6 +25004,12 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Merge Multiple BioSources On Sequence", MergeBiosources);
   SetObjectExtra (i, bfp, NULL);
 
+  if (indexerVersion) {
+    SeparatorItem (s);
+    i = CommandItem (s, "Compare with BioSample", CompareWithBioSample);
+    SetObjectExtra (i, bfp, NULL);
+  }
+
   SeparatorItem (s);
   i = CommandItem (s, "Split Structured Collections at Semicolon", SplitSemicolonedVouchers);
   SetObjectExtra (i, bfp, NULL);
@@ -24225,7 +25020,6 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Fix caps in mouse strains", FixMouseStrains);
   SetObjectExtra (i, bfp, NULL);
 }
-
 
 
 extern void MakeSpecialProjectsMenu (MenU s, BaseFormPtr bfp)
@@ -24239,33 +25033,36 @@ extern void MakeSpecialProjectsMenu (MenU s, BaseFormPtr bfp)
     i = CommandItem (s, "Create Seq-Hist for TPA - Detailed", 
                      CreateSeqHistTPADetailed);
     SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (s, "Load TPA Accession Numbers From File",
-                     LoadTPAAccessionNumbersFromFile);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (s, "Import TPA Alignment ASN.1 from File",
-                     ImportTpaAlignment);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (s, "Import Single Interval Alignment for TPA Seq-hist", ImportAlignmentForSeqHistInterval);
-    SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Advanced Assembly Alignment Editor", AdvancedAssemblyAlignmentEditor);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Assembly Alignment Interval Resolution", AssemblyAlignmentIntervalResolution);
     SetObjectExtra (i, bfp, NULL);
-    SeparatorItem (s);    
-    i = CommandItem (s, "Create TPA BLAST Database", CreateTPABlastDB);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (s, "Leave First TPA Assembly", LeaveFirstSeqHistAssembly);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (s, "Read Seq-Hist Assembly BLASTs", ReadSeqHistAssembly);
-    SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Remove Seq-Hist Assembly", RemoveSeqHistAssembly);
     SetObjectExtra (i, bfp, NULL);    
-    i = CommandItem (s, "Infer Seq-Hist from Delta", CreateSeqHistDelta);
-    SetObjectExtra (i, bfp, NULL);
 #ifdef USE_SMARTNET
     i = CommandItem (s, "Turn off far fetch from HUP and SMART for TPA validation", DisAllowFarFetchForTPAValidation);
     SetObjectExtra (i, bfp, NULL);
 #endif
+    x = SubMenu (s, "Other TPA");
+    i = CommandItem (x, "Create TPA BLAST Database", CreateTPABlastDB);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Leave First TPA Assembly", LeaveFirstSeqHistAssembly);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Read Seq-Hist Assembly BLASTs", ReadSeqHistAssembly);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Infer Seq-Hist from Delta", CreateSeqHistDelta);
+    SetObjectExtra (i, bfp, NULL);
+    x = SubMenu (s, "Load and Import");
+    i = CommandItem (x, "Load TPA Accession Numbers From File",
+                     LoadTPAAccessionNumbersFromFile);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Import TPA Alignment ASN.1 from File",
+                     ImportTpaAlignment);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Import Single Interval Alignment for TPA Seq-hist", ImportAlignmentForSeqHistInterval);
+    SetObjectExtra (i, bfp, NULL);
+
+
     SeparatorItem (s);
     i = CommandItem (s, "Add Genomes User Object", AddGenomesUserObject);
     SetObjectExtra (i, bfp, NULL);
@@ -24286,8 +25083,13 @@ extern void MakeSpecialProjectsMenu (MenU s, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Apply BARCODE Dbxrefs", ApplyBarcodeDbxrefs);
     SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Apply FBOL Dbxrefs", ApplyFBOLDbxrefs);
+    SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Parse BARCODE HUP Date in Titles", ParseBarcodeHupDate);
     SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Check for rbcL and matK matches", ScreenBarcodePlant);
+    SetObjectExtra (i, bfp, NULL);
+
     SeparatorItem (s);
     i = CommandItem (s, "Add Note to Coding Regions in Source Features", ApplyTagToCodingRegionsInSourceFeatures);
     SetObjectExtra (i, bfp, NULL);
@@ -24309,6 +25111,9 @@ extern void MakeSpecialProjectsMenu (MenU s, BaseFormPtr bfp)
     i = CommandItem (x, "From Defline", CreateTSAIDsFromDefline);
     SetObjectExtra (i, bfp, NULL);
 
+    i = CommandItem (s, "Edit TSA IDs", EditTSAIDs);
+    SetObjectExtra (i, bfp, NULL);
+
     i = CommandItem (s, "Edit TSA Assembly", EditTSAAssembly);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Add mRNA sequence to deflines", AddmRNASequenceToDeflines);
@@ -24327,6 +25132,10 @@ extern void MakeSpecialProjectsMenu (MenU s, BaseFormPtr bfp)
 
     SeparatorItem (s);
     i = CommandItem (s, "Apply Articles", ApplyArticles);
+    SetObjectExtra (i, bfp, NULL); 
+
+    SeparatorItem (s);
+    i = CommandItem (s, "Propagate Missing Old-name Quals", PropagateMissingOldNameQualsItem);
     SetObjectExtra (i, bfp, NULL); 
 
     /* remove after retro */
@@ -24421,7 +25230,7 @@ static void MakeSpecialApplyMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   x = SubMenu (s, "Add Gene Pseudo");
-  i = CommandItem (x, "To All", AddGenePseudo);
+  i = CommandItem (x, "With String Constraint", AddGenePseudo);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Where Feature is Pseudo", MarkGenesWithPseudoFeaturesPseudo);
   SetObjectExtra (i, bfp, NULL);
@@ -24472,11 +25281,17 @@ static void MakeSpecialApplyMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Table Reader", NewLoadFeatureQualifierTable);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Table Reader from Clipboard", NewLoadFeatureQualifierTableFromClipboard);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Export Table", ExportQualifiers);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Export Bankit Comments", ExportBankitComments);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Apply Indexer Comments", AddIndexerCommentMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+
+  SeparatorItem (s);
+  i = CommandItem (s, "Propagate DBLink Descriptors", PropagateDblinkDescriptorsMenuItem);
   SetObjectExtra (i, bfp, NULL);
 }
 
@@ -24694,6 +25509,8 @@ static void MakeSpecialRemoveMenu (MenU m, BaseFormPtr bfp)
 
     i = CommandItem (y, "TSA IDs", RemoveTSAIdsFromBioseqs);
     SetObjectExtra (i, bfp, NULL);    
+    i = CommandItem (y, "General IDs", RemoveGeneralIds);
+    SetObjectExtra (i, bfp, NULL);
 
     SeparatorItem (s);
   }
@@ -24882,8 +25699,6 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Edit RNA Qual", MacroEditRNAQual);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Edit Coding Region Frame", ApplyCDSFrame);
-  SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Edit Molecule Information", EditMolInfoFields);
   SetObjectExtra (i, bfp, NULL);
@@ -24913,6 +25728,10 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Update Features", UpdateFeatures);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Extend Coding Region Ends", ExtendCodingRegionEnds);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "New Feature Location Editor", NewFeatureLocationEditor);
+  SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
   x = SubMenu (s, "Bulk Edit");
@@ -24925,6 +25744,20 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (x, "Source", BulkEditSource);
   SetObjectExtra (i, bfp, NULL);
 
+  SeparatorItem (s);
+  x = SubMenu (s, "Macro");
+  i = CommandItem (x, "Macro Editor", LaunchMacroEditorMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Macro Template Editor", LaunchMacroTemplateEditor);
+  SetObjectExtra (i, bfp, NULL);
+#if 1
+  i = CommandItem (x, "Suspect Product Rule Editor", LaunchSuspectProductRuleEditor);
+  SetObjectExtra (i, bfp, NULL);
+#endif
+  i = CommandItem (x, "AutoFix", RunAutoFixScriptMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "AutoFix Window", RunAutoFixWindowMenuItem);
+  SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
   i = CommandItem (s, "Lowercase Qualifiers", ChangeQualifierCase);
@@ -25054,6 +25887,8 @@ static void MakeSpecialGapSequencesMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Trim CDS-mRNA for Known Gaps", AdjustCodingRegionsEndingInGap);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Trim CDS-mRNA for Terminal Ns", AdjustCodingRegionsWithTerminalNs);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Convert CDS with Internal Gaps to Misc_feat", ConvertCodingRegionsWithInternalKnownGapToMiscFeat);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
@@ -25157,6 +25992,10 @@ static void MakeSpecialDesktopMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Segregate Sets", NewSegregateBioseqSetMenuItem);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Segregate by Plant Groups", SegregateByPlantGroupItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Segregate by Fungus Groups", SegregateByFungusGroupItem);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Sequester Sets", SequesterSequencesMenuItem);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Get Rid of Seg Gaps", GetRidOfSegGapMenuItem);
@@ -25209,6 +26048,12 @@ static void MakeSpecialStructuredCommentsMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "MIENSData", AddStructuredCommentMIENSTag);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "AssemblyData", AddStructuredCommentAssemblyDataTag);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "GenomeAssemblyData", AddStructuredCommentGenomeAssemblyDataTag);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "iBOL", AddStructuredCommentiBOLTag);
+  SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
 
@@ -25244,6 +26089,13 @@ static void MakeSpecialStructuredCommentsMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Add Genome Assembly Structured Comment", ApplyGenomeAssemblyComment);
   SetObjectExtra (i, bfp, NULL); 
   i = CommandItem (s, "Add Assembly Structured Comment", ApplyAssemblyComment);
+  SetObjectExtra (i, bfp, NULL); 
+
+  SeparatorItem (s);
+  i = CommandItem (s, "Reorder Structured Comment Fields", ReorderStructuredCommentFieldsItem);
+  SetObjectExtra (i, bfp, NULL); 
+  SeparatorItem (s);
+  i = CommandItem (s, "Remove All Structured Comments", RemoveStructCommMenuItem);
   SetObjectExtra (i, bfp, NULL); 
 
 }
@@ -25351,6 +26203,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Update Proteins From CDS", UpdateProteinsFromCDS);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  i = CommandItem (s, "Edit Coding Region Frame", ApplyCDSFrame);
+  SetObjectExtra (i, bfp, NULL);
   x = SubMenu (s, "Adjust Features for Introns");
   i = CommandItem (x, "CDS", RemoveIntronLocationsFromCDS);
   SetObjectExtra (i, bfp, NULL);
@@ -25677,6 +26531,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Find Frame Shifts", FrameShiftFinder);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Find Frame Shifts Clipboard", FrameShiftFinderClipboard);
+  SetObjectExtra (i, bfp, NULL);
 
   MakeSpecialDesktopMenu (m, bfp);
 
@@ -25710,14 +26566,19 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
 
     SeparatorItem (m);
-    i = CommandItem (m, "Test New Parse", TestNewParse);
+    s = SubMenu (m, "Test");
+    i = CommandItem (s, "Test New Parse", TestNewParse);
     SetObjectExtra (i, bfp, NULL);
 
-    i = CommandItem (m, "Test Product Table Export", TestProductTableExport);
+    i = CommandItem (s, "Test Product Table Export", TestProductTableExport);
     SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (m, "Test Product Table Update", TestProductTableUpdate);
+    i = CommandItem (s, "Test Product Table Update", TestProductTableUpdate);
     SetObjectExtra (i, bfp, NULL);
 
+#if 0
+    i = CommandItem (s, "Test Segregate By List", TestSegregateByList);
+    SetObjectExtra (i, bfp, NULL);
+#endif
 #if 0        
     SeparatorItem (m);
     s = SubMenu (m, "Test Taxon3 Server");
@@ -25739,7 +26600,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (m, "Discrepancy Report", ShowDiscrepancyReport);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (m);
-  i = CommandItem (m, "Macro Editor", LaunchMacroEditor);
+  i = CommandItem (m, "Macro Editor", LaunchMacroEditorMenuItem);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (m, "Macro Template Editor", LaunchMacroTemplateEditor);
   SetObjectExtra (i, bfp, NULL);

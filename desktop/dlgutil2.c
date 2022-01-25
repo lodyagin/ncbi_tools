@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.225 $
+* $Revision: 6.231 $
 *
 * File Description: 
 *
@@ -56,6 +56,7 @@
 #include <explore.h>
 #include <findrepl.h>
 #include <valid.h>
+#include <salparam.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -1473,7 +1474,7 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
     while (gbq != NULL) {
       qual = GBQualNameValid (gbq->qual);
       if (qual > -1) {
-        if (seen [qual] == 0 && qual != GBQUAL_experiment && qual != GBQUAL_inference) {
+        if (seen [qual] == 0 && qual != GBQUAL_experiment && qual != GBQUAL_inference && qual != GBQUAL_pseudogene) {
           seen [qual] = ILLEGAL_FEATURE;
           hasillegal = TRUE;
         }
@@ -1668,7 +1669,6 @@ static CharPtr  commonNoCitFormTabs [] = {
 static DialoG NewCreateInferenceDialog (GrouP prnt);
 extern void Nlm_LaunchGeneFeatEd (ButtoN b);
 
-
 static CharPtr GetNameForFeature (SeqFeatPtr sfp)
 {
   FeatDefPtr curr;
@@ -1711,13 +1711,17 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
   GBQualPtr  gbq;
   Boolean    hasQuals;
   Boolean    indexerVersion;
+  Boolean    ispseudo = FALSE;
   Char       just;
   GrouP      k;
   GrouP      m;
   GrouP      p;
   Int2       page;
   PrompT     ppt1, ppt2;
+  /*
   ButtoN     pseudo = NULL;
+  */
+  CharPtr    pseudogene = NULL;
   GrouP      q;
   GrouP      r;
   GrouP      t;
@@ -1730,8 +1734,14 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
   if (ffp != NULL) {
     hasQuals = FALSE;
     cdsQuals = FALSE;
+    if (sfp != NULL && sfp->pseudo) {
+      ispseudo = TRUE;
+    }
     if (ffp->gbquals == NULL && sfp != NULL && sfp->qual != NULL) {
       for (gbq = sfp->qual; gbq != NULL && !hasQuals; gbq = gbq->next) {
+        if (StringCmp (gbq->qual, "pseudogene") == 0) {
+          pseudogene = gbq->val;
+        }
         if (!ShouldSuppressGBQual(sfp->idx.subtype, gbq->qual)) {
           hasQuals = TRUE;
         }
@@ -1776,10 +1786,16 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     if (! indexerVersion) {
       Disable (ffp->partial);
     }
+#if 0
     if (ffp->pseudo == NULL) {
       ffp->pseudo = CheckBox (r, "Pseudo", NULL);
       pseudo = ffp->pseudo; /* allows pseudo control on earlier feature-specific page */
     }
+#endif
+    StaticPrompt (r, "Pseudogene", 0, popupMenuHeight, programFont, 'l');
+    ffp->pseudogene = PopupList (r, TRUE, NULL);
+    SetObjectExtra (ffp->pseudogene, (Pointer) ffp, NULL);
+    InitPseudogenePopup (ffp, ffp->pseudogene, ispseudo, pseudogene, indexerVersion);
     if (indexerVersion) {
       StaticPrompt (r, "Evidence", 0, popupMenuHeight, programFont, 'l');
       ffp->evidence = PopupList (r, TRUE, NULL);
@@ -1787,8 +1803,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (ffp->evidence, "Experimental");
       PopupItem (ffp->evidence, "Non-Experimental");
     }
-    AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->partial,
-                  (HANDLE) pseudo, (HANDLE) ffp->evidence, NULL);
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->partial, /* (HANDLE) pseudo, */
+                  (HANDLE) ffp->pseudogene, (HANDLE) ffp->evidence, NULL);
     r = HiddenGroup (f, -3, 0, NULL);
     ffp->exception = CheckBox (r, "Exception", NULL);
     StaticPrompt (r, "Explanation", 0, dialogTextHeight, programFont, 'l');
@@ -3407,6 +3423,10 @@ typedef struct tabledisplay
   Pointer dbl_click_data;
   TableDisplayLeftInRed left_in_red;
   Pointer left_in_red_data;
+  Int4 select_x;
+  Int4 select_y;
+  Int4 select_cell_offset;
+  Boolean editable;
 } TableDisplayData, PNTR TableDisplayPtr;
 
 extern ValNodePtr FreeTableDisplayRowList (ValNodePtr row_list)
@@ -3728,6 +3748,69 @@ static void DrawTableDisplayLine (Int4 x, Int4 y,
   }
 }
 
+
+static void DrawTableDisplayCaret (Int4 x, Int4 y,  
+ ValNodePtr header_row,
+ ValNodePtr data_row,
+ CharPtr    buf,
+ Int4       row_length,
+ Int4       frozen_left,
+ Int4       start_col,
+ Int4       char_width,
+ Int4       select_x,
+ Int4       select_cell_offset)
+{
+
+  ValNodePtr header_vnp, data_vnp;
+  Int4       x_offset, chars_to_paint, col_num;
+  PoinT      pt1, pt2;
+  Boolean    found = FALSE;
+  
+  /* draw left margin */
+  
+  for (header_vnp = header_row, data_vnp = data_row, x_offset = 0, col_num = 0;
+       header_vnp != NULL && data_vnp != NULL && x_offset < row_length && col_num < frozen_left && !found;
+       header_vnp = header_vnp->next, data_vnp = data_vnp->next, col_num++)
+  {
+    /* no editing in frozen left, so no caret */
+    chars_to_paint = PrepareTableDisplayTextBuffer (buf, 
+                                   (row_length - x_offset) / char_width,
+                                   header_vnp->choice,
+                                   data_vnp->data.ptrvalue);
+    x_offset += (chars_to_paint + 2) * char_width;
+  }
+    
+  while (col_num < start_col && header_vnp != NULL && data_vnp != NULL)
+  {
+    col_num++;
+    header_vnp = header_vnp->next;
+    data_vnp = data_vnp->next;
+  }
+  
+  /* draw unfrozen columns */
+  while (header_vnp != NULL && data_vnp != NULL && x_offset < row_length && !found)
+  {
+    if ((col_num - start_col) + frozen_left == select_x) {
+      Black();
+      pt1.x = x + x_offset + (select_cell_offset * char_width) - 1;
+      pt1.y = y;
+      pt2.x = x + x_offset + (select_cell_offset * char_width);
+      pt2.y = y - 1;
+      DrawLine (pt1, pt2);
+      pt1.x = x + x_offset + (select_cell_offset * char_width) + 1;
+      DrawLine (pt1, pt2);
+      found = TRUE;
+    }
+
+    chars_to_paint = MIN (header_vnp->choice, (row_length - x_offset)/char_width);
+    x_offset += (chars_to_paint + 2) * char_width;
+    header_vnp = header_vnp->next;
+    data_vnp = data_vnp->next;
+    col_num++;
+  }
+}
+
+
 static void OnDrawTableDisplay (PaneL p)
 {
   TableDisplayPtr dlg;
@@ -3789,6 +3872,12 @@ static void OnDrawTableDisplay (PaneL p)
                           row_buffer, row_length, dlg->frozen_left, start_col,
                           dlg->char_width, dlg->descent, left_in_red);
     row_vnp = row_vnp->next;
+    if (row == dlg->select_y) {
+      DrawTableDisplayCaret (x, y, dlg->row_list->data.ptrvalue,
+                          row_vnp == NULL ? NULL : row_vnp->data.ptrvalue,
+                          row_buffer, row_length, dlg->frozen_left, start_col, 
+                          dlg->char_width, dlg->select_x, dlg->select_cell_offset);
+    }
     y += stdLineHeight;
     row++;
   }
@@ -3833,7 +3922,9 @@ static void OnHScrollTableDisplay (BaR sb, SlatE s, Int4 newval, Int4 oldval)
   Update ();
 }
 
-static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt)
+static CharPtr TableDisplayGetTextForCell (TableDisplayPtr dlg, PoinT pt);
+
+static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt, Int4Ptr char_offset)
 {
   BaR sb_horiz;
   BaR sb_vert;
@@ -3843,6 +3934,8 @@ static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt)
   Int4  x, y;
   ValNodePtr header_vnp;
   Int4  col_width;
+  CharPtr cell_text;
+  Int4    chars_skipped, cell_len;
   
   cell_coord.x = 0;
   cell_coord.y = 0;
@@ -3896,11 +3989,22 @@ static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt)
       col_width += (header_vnp->choice + 2) * dlg->char_width;
       header_vnp = header_vnp->next;
     }
+    if (char_offset != NULL) {
+      chars_skipped = ((col_width + (header_vnp->choice + 2) * dlg->char_width) - x) / dlg->char_width;
+      cell_text = TableDisplayGetTextForCell (dlg, cell_coord);
+      cell_len = StringLen (cell_text);
+      cell_text = MemFree (cell_text);
+      if (chars_skipped > cell_len) {
+        chars_skipped = cell_len;
+      }
+      *char_offset = chars_skipped;
+    }
   }
   return cell_coord;
 }
 
-extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column)
+
+static ValNodePtr GetRowListCell (ValNodePtr row_list, Int4 row, Int4 column)
 {
   ValNodePtr row_vnp, col_vnp;
   Int4       row_num, col_num;
@@ -3930,8 +4034,24 @@ extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column)
   }
   else
   {
+    return col_vnp;
+  }
+}
+
+
+extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column)
+{
+  ValNodePtr col_vnp;
+
+  col_vnp = GetRowListCell (row_list, row, column);
+  if (col_vnp != NULL)
+  {
     return StringSave (col_vnp->data.ptrvalue);
-  }  
+  } 
+  else
+  {
+    return NULL;
+  }
 }
 
 static CharPtr TableDisplayGetTextForCell (TableDisplayPtr dlg, PoinT pt)
@@ -3958,11 +4078,20 @@ static void TableDisplayOnClick (PaneL p, PoinT pt)
   {
     return;
   }
-  
+
+  cell_coord = GetTableDisplayCell (dlg, pt, &(dlg->select_cell_offset));
+  if (dlg->editable) {
+    dlg->select_x = cell_coord.x;
+    dlg->select_y = cell_coord.y;
+    if (dlg->select_x == 0) {
+      dlg->select_x = cell_coord.x;
+    }
+  }
+
   dbl_click = dblClick;
+
   if (dbl_click && dlg->dbl_click != NULL)
   {
-    cell_coord = GetTableDisplayCell (dlg, pt);
     cell_text = TableDisplayGetTextForCell (dlg, cell_coord);
     header_coord.x = cell_coord.x;
     header_coord.y = 0;
@@ -3970,6 +4099,8 @@ static void TableDisplayOnClick (PaneL p, PoinT pt)
     (dlg->dbl_click) (cell_coord, header_text, cell_text, dlg->dbl_click_data);
     MemFree (cell_text);
     MemFree (header_text);
+  } else if (dlg->editable) {
+    inval_panel (p, -1, -1);
   }
 }
 
@@ -4036,6 +4167,246 @@ extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
   
   return (DialoG) p;  
 }
+
+
+static void EdTableOnKey (SlatE s, Char ch)
+{
+  PaneL            pnl;
+  TableDisplayPtr  dlg;
+  ValNodePtr       col_vnp;
+  CharPtr          cell_text, new_cell_text;
+  Int4             orig_len;
+
+  pnl = (PaneL) s;
+  Select (pnl);
+  dlg = (TableDisplayPtr) GetObjectExtra (pnl);
+  if (dlg == NULL) return;
+
+  if ( (int) ch == 0 ) return;
+
+  CaptureSlateFocus ((SlatE) dlg->panel);
+  
+  col_vnp = GetRowListCell (dlg->row_list, dlg->select_y, dlg->select_x);
+  if (col_vnp != NULL) {
+    cell_text = col_vnp->data.ptrvalue;
+    orig_len = StringLen (cell_text);
+    new_cell_text = (CharPtr) MemNew (sizeof (Char) * (orig_len + 2));
+    new_cell_text[0] = 0;
+    if (dlg->select_cell_offset > 0) {
+      StringNCpy (new_cell_text, cell_text, dlg->select_cell_offset);
+    }
+    new_cell_text[dlg->select_cell_offset] = ch;
+    if (dlg->select_cell_offset < orig_len) {
+      StringCpy (new_cell_text + dlg->select_cell_offset + 1, cell_text + dlg->select_cell_offset);
+    }
+    new_cell_text[orig_len + 1] = 0;
+    cell_text = MemFree (cell_text);
+    col_vnp->data.ptrvalue = new_cell_text;
+    /* increment offset to be after what we have just inserted */
+    dlg->select_cell_offset++;
+    /* redraw */
+    inval_panel (pnl, -1, -1);
+  }
+
+#if 0
+  /* later, handle control key combos */
+#ifdef WIN_MSWIN
+  if (ch == 3)
+  {
+    SeqEdCopy (sefp);
+  }
+  else if (ch == 24)
+  {
+    SeqEdCut (sefp);
+  }
+  else if (ch == 22)
+  {
+    SeqEdPaste (sefp);
+  }
+#else
+  if (ctrlKey)
+  {
+    if (ch == 'c')
+    {
+      SeqEdCopy (sefp);	
+    }
+    else if (ch == 'x')
+    {
+      SeqEdCut (sefp);
+    }
+    else if (ch == 'v')
+    {
+      SeqEdPaste (sefp);
+    }
+  	return;
+  }
+#endif
+  else
+  {
+    /* look at key pressed - if it's a good sequence character, insert it */
+    if ( (str = char_to_insert (&ch, 1, sefp->bfp->bvd.bsp->mol)) != NULL) 
+    {
+      if (sefp->edit_pos_start != sefp->edit_pos_end)
+      {
+        SeqEdDelete (sefp, FALSE);
+      }
+      if (AddJournalEntry (eSeqEdInsert, sefp->edit_pos_start,
+   	                   StringLen (str), str, sefp))
+      {
+   	    sefp->edit_pos_start += StringLen (str);
+   	    sefp->edit_pos_end += StringLen (str);
+        ResizeSeqEdView (sefp);
+        Select (sefp->bfp->bvd.seqView);
+  	    inval_panel (pnl, -1, -1);
+      }
+    }
+    else
+    {
+      /* handle movements and deletions */
+      new_pos = sefp->edit_pos_start;
+      switch (ch)
+      {
+        case NLM_LEFT: 
+          new_pos--;
+          break;
+        case NLM_RIGHT:
+    	    new_pos++;
+    	    break;
+    	  case NLM_UP:
+    	    new_pos -= sefp->bfp->bvd.CharsAtLine;
+    	    break;
+    	  case NLM_DOWN:
+    	    new_pos += sefp->bfp->bvd.CharsAtLine;
+    	    if (new_pos > sefp->bfp->bvd.bsp->length
+    	        && new_pos - sefp->bfp->bvd.bsp->length < sefp->bfp->bvd.CharsAtLine)
+    	    {
+            new_pos = sefp->bfp->bvd.bsp->length;
+          }
+    	    break;
+        case NLM_DEL:
+          /* handle deletion */
+          if (sefp->edit_pos_end == sefp->edit_pos_start)
+          {
+            sefp->edit_pos_end = sefp->edit_pos_start + 1;
+            if (sefp->edit_pos_end > sefp->bfp->bvd.bsp->length)
+            {
+              sefp->edit_pos_end = sefp->edit_pos_start;
+              return;
+            }
+          }
+          RemapSeqEdIntervalForGap (sefp);
+          SeqEdDelete (sefp, FALSE);
+          ResizeSeqEdView (sefp);
+          Select (sefp->bfp->bvd.seqView);
+	        inval_panel (pnl, -1, -1);
+          break;
+        case NLM_BACK:
+    	    /* handle backspace */
+    	    if (sefp->edit_pos_start == sefp->edit_pos_end)
+    	    {
+    	      if (sefp->edit_pos_start == 0)
+    	      {
+    	        del_start = -1;
+            }
+    	      else
+    	      {
+              del_start = sefp->edit_pos_start - 1;
+              del_stop = sefp->edit_pos_start;
+  	        }
+          }
+    	    else
+    	    {
+            del_start = sefp->edit_pos_start;
+            del_stop = sefp->edit_pos_end;
+  	      }
+  	  	  
+          if (del_start >= 0)
+          {
+            sefp->edit_pos_start = del_start;
+            sefp->edit_pos_end = del_stop;
+            RemapSeqEdIntervalForGap (sefp);
+            new_pos = sefp->edit_pos_start;
+            SeqEdDelete (sefp, FALSE);
+            ResizeSeqEdView (sefp);
+            Select (sefp->bfp->bvd.seqView);
+            inval_panel (pnl, -1, -1);
+  	      }
+  	      break;
+      }
+      if (new_pos < 0 || new_pos > sefp->bfp->bvd.bsp->length)
+      {
+        Beep ();
+      }
+      else
+      {
+        sefp->edit_pos_start = new_pos;
+  	    sefp->edit_pos_end = new_pos;
+        sb = GetSlateVScrollBar (s);
+        if (sb != NULL)
+  	    {
+  	      scroll_pos = SeqEdGetScrollPosForSequencePos (sefp->edit_pos_start, &(sefp->bfp->bvd));
+          SetBarValue (sb, scroll_pos);
+  	    }
+        Select (sefp->bfp->bvd.seqView);
+  	    inval_panel (pnl, -1, -1);
+      }
+    }
+    SeqEdUpdateStatus (sefp);
+  }
+#endif
+}
+
+
+extern DialoG EditableTableDisplayDialog (GrouP parent, Int4 width, Int4 height,
+                                  Int4 frozen_header, Int4 frozen_left,
+                                  TableDisplayDblClick dbl_click,
+                                  Pointer dbl_click_data,
+                                  TableDisplayLeftInRed left_in_red,
+                                  Pointer left_in_red_data)
+{
+  TableDisplayPtr dlg;
+  GrouP           p;
+  
+  dlg = (TableDisplayPtr) MemNew (sizeof (TableDisplayData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupTableDisplayDialog);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = RowsToTableDisplayDialog;
+  dlg->fromdialog = TableDisplayDialogToRows;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+  dlg->editable = TRUE;
+  
+  dlg->row_list = NULL;
+  dlg->frozen_header = frozen_header;
+  dlg->frozen_left = frozen_left;
+  dlg->table_inset = 4;
+  dlg->dbl_click = dbl_click;
+  dlg->dbl_click_data = dbl_click_data;
+  dlg->left_in_red = left_in_red;
+  dlg->left_in_red_data = left_in_red_data;
+  
+  dlg->display_font = GetTableDisplayDefaultFont ();
+
+  SelectFont (dlg->display_font);
+  dlg->char_width  = CharWidth ('0');
+  dlg->descent = Descent ();
+  
+  dlg->panel = AutonomousPanel4 (p, width, height, OnDrawTableDisplay,
+                               OnVScrollTableDisplay, OnHScrollTableDisplay,
+                               sizeof (TableDisplayData), NULL, NULL); 
+  SetObjectExtra (dlg->panel, dlg, NULL);
+  SetPanelClick(dlg->panel, TableDisplayOnClick, NULL, NULL, NULL);
+  SetSlateChar ((SlatE) dlg->panel, EdTableOnKey);
+  
+  return (DialoG) p;  
+}
+
 
 typedef struct multiselectdialog
 {
@@ -8708,7 +9079,7 @@ typedef struct clickableitemlist
   DoC doc;
 
   Nlm_ParData par_fmt;
-  Nlm_ColData col_fmt [4];
+  Nlm_ColPtr col_fmt;
 
   ClickableCallback single_click_callback;
   ClickableCallback double_click_callback;
@@ -8723,8 +9094,9 @@ static void PointerToClickableItemListDlg (DialoG d, Pointer data)
   ClickableItemListDlgPtr dlg;
   ValNodePtr              vnp;
   CharPtr                 row_text;
-  Int2                 numItems;
-  RecT                 r;
+  Int2                    numItems;
+  RecT                    r;
+  Int4                    i, count;
 
   dlg = (ClickableItemListDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return;
@@ -8738,11 +9110,24 @@ static void PointerToClickableItemListDlg (DialoG d, Pointer data)
 
   ObjectRect (dlg->doc, &r);
   InsetRect (&r, 4, 4);
-  
-  dlg->col_fmt[0].pixWidth = 5 * stdCharWidth;
-  dlg->col_fmt[1].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
-  dlg->col_fmt[2].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
-  dlg->col_fmt[3].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
+
+  count = 1;
+  i = 0;
+  while (!dlg->col_fmt[i].last) {
+    i++; 
+    count++;
+  }
+
+  if (count > 1) {
+    dlg->col_fmt[0].pixWidth = 5 * stdCharWidth;
+    i = 0;
+    while (!dlg->col_fmt[i].last) {
+      i++; 
+      dlg->col_fmt[i].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / (count - 1);
+    }
+  } else {
+    dlg->col_fmt[0].pixWidth = r.right - r.left;
+  }
 
   dlg->item_list = ClickableItemObjectListFree (dlg->item_list);
   dlg->item_list = (ValNodePtr) data; 
@@ -8844,6 +9229,7 @@ static void CleanupClickableItemListDlg (GraphiC g, VoidPtr data)
   dlg = (ClickableItemListDlgPtr) data;
   if (dlg != NULL) {
     dlg->item_list = ClickableItemObjectListFree (dlg->item_list);
+    dlg->col_fmt = MemFree (dlg->col_fmt);
   } 
   StdCleanupExtraProc (g, data);
 }
@@ -8853,6 +9239,7 @@ ClickableItemListDialog
 (GrouP h,
  Int4 width,
  GetClickableItemText get_item_text,
+ Int4 num_item_text_columns,
  ClickableCallback single_click_callback,
  ClickableCallback double_click_callback,
  Pointer click_callback_data)
@@ -8880,8 +9267,9 @@ ClickableItemListDialog
   dlg->par_fmt.minLines = 0;
   dlg->par_fmt.minHeight = 0;
 
+  dlg->col_fmt = (Nlm_ColPtr) MemNew (sizeof (Nlm_ColData) * num_item_text_columns);
   /* initialize column format */
-  for (i = 0; i < 4; i++) {
+  for (i = 0; i < num_item_text_columns; i++) {
     dlg->col_fmt[i].pixWidth = 0;
     dlg->col_fmt[i].pixInset = 0;
     dlg->col_fmt[i].charWidth = 10;
@@ -8895,7 +9283,7 @@ ClickableItemListDialog
     dlg->col_fmt[i].last = FALSE;
   }
   dlg->col_fmt[0].pixInset = 5;
-  dlg->col_fmt[3].last = TRUE;
+  dlg->col_fmt[num_item_text_columns - 1].last = TRUE;
   
   dlg->doc = DocumentPanel (p, width, stdLineHeight * 20);
   SetObjectExtra (dlg->doc, dlg, NULL);
@@ -8928,6 +9316,7 @@ typedef struct clickablelist
   Int4            num_levels;
   ValNodePtr      list_list;
   Nlm_ColPtr PNTR col_fmt_array_array;
+  PrompT          chosen_count;
 
   Int2            text_select_item_start;
   Int2            text_select_row_start;
@@ -9247,6 +9636,27 @@ static ValNodePtr GetChosenItemsList (ValNodePtr clickable_list)
 }
 
 
+static void UpdateChosenCount (DialoG d)
+{
+  ClickableListPtr dlg;
+  ValNodePtr list;
+  Int4       num;
+  CharPtr    fmt = "%d items selected";
+  Char       val[255];
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  list = GetChosenItemsList (dlg->list_list);
+  num = ValNodeLen (list);
+  list = ClickableItemObjectListFree (list);
+  sprintf (val, fmt, num);
+  SetTitle (dlg->chosen_count, val);
+}
+
+
 static void ClickList (DoC d, PoinT pt)
 
 {
@@ -9285,6 +9695,7 @@ static void ClickList (DoC d, PoinT pt)
           if (dlg->display_chosen) 
           {
             PointerToDialog (dlg->clickable_item_list, GetChosenItemsList (dlg->list_list));
+            UpdateChosenCount (dlg->dialog);
           }
         }
         else if (col == cip->level + 2)
@@ -9498,6 +9909,7 @@ static void ReleaseClickableList (DoC d, PoinT pt)
         PopulateClickableItemList (dlg->clickable_item_list, 
                                   GetSelectedClickableList (dlg->list_list,
                                                             dlg->selected));
+        UpdateChosenCount (dlg->dialog);
       }
     }
   }
@@ -9712,6 +10124,7 @@ static void ClickableListToDialog (DialoG d, Pointer userdata)
     dlg->item_selected = 0;
     if (dlg->display_chosen)  {
       PointerToDialog (dlg->clickable_item_list, GetChosenItemsList (dlg->list_list));
+      UpdateChosenCount (dlg->dialog);
     } else {
       PopulateClickableItemList (dlg->clickable_item_list, 
                                 GetSelectedClickableList (dlg->list_list,
@@ -9849,7 +10262,7 @@ static void ClickableListOnKey (SlatE s, Char ch)
 
 
 extern DialoG 
-CreateClickableListDialogExEx 
+CreateClickableListDialogExExEx 
 (GrouP h, 
  CharPtr label1, 
  CharPtr label2,
@@ -9859,6 +10272,7 @@ CreateClickableListDialogExEx
  ClickableCallback item_double_click_callback,
  Pointer         item_click_callback_data,
  GetClickableItemText get_item_text,
+ Int4            num_item_text_columns,
  Int4            left_width,
  Int4            right_width,
  Boolean         horizontal,
@@ -9902,7 +10316,7 @@ CreateClickableListDialogExEx
     }
     dlg->doc = DocumentPanel (pnl_grp, left_width, stdLineHeight * 20);
     dlg->clickable_item_list = ClickableItemListDialog (pnl_grp, right_width, 
-                                                        get_item_text,
+                                                        get_item_text, num_item_text_columns,
                                                         item_single_click_callback,
                                                         item_double_click_callback, 
                                                         item_click_callback_data);
@@ -9919,7 +10333,7 @@ CreateClickableListDialogExEx
     }
     dlg->title2 = StaticPrompt (pnl_grp, label2, right_width, popupMenuHeight, programFont, 'c');
     dlg->clickable_item_list = ClickableItemListDialog (pnl_grp, right_width, 
-                                                        get_item_text,
+                                                        get_item_text, num_item_text_columns,
                                                         item_single_click_callback,
                                                         item_double_click_callback, 
                                                         item_click_callback_data);
@@ -9942,6 +10356,10 @@ CreateClickableListDialogExEx
   InsetRect (&r, 4, 4);
   clickableColFmt[1].pixWidth = r.right - r.left - clickableColFmt[0].pixWidth;
   
+  dlg->chosen_count = StaticPrompt (p, "0 items checked", 20 * stdCharWidth, dialogTextHeight, programFont, 'l');
+  if (!dlg->display_chosen) {
+    Hide (dlg->chosen_count);
+  }
   if (show_find) {
     find_grp = HiddenGroup (p, 4, 0, NULL);
     SetGroupSpacing (find_grp, 10, 10);
@@ -9953,8 +10371,38 @@ CreateClickableListDialogExEx
     SetObjectExtra (b, dlg, NULL);
   }
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) pnl_grp, (HANDLE) find_grp, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) pnl_grp, (HANDLE) dlg->chosen_count, (HANDLE) find_grp, NULL);
   return (DialoG) p;
+}
+
+
+extern DialoG 
+CreateClickableListDialogExEx 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ CharPtr help1,
+ CharPtr help2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text,
+ Int4            left_width,
+ Int4            right_width,
+ Boolean         horizontal,
+ Boolean         show_find,
+ Boolean         display_chosen)
+{
+  return CreateClickableListDialogExExEx (h, label1, label2, help1, help2,
+                                          item_single_click_callback,
+                                          item_double_click_callback,
+                                          item_click_callback_data,
+                                          get_item_text, 4,
+                                          left_width,
+                                          right_width,
+                                          horizontal,
+                                          show_find,
+                                          display_chosen);
 }
 
 
@@ -10014,10 +10462,13 @@ extern void SetClickableListDisplayChosen (DialoG d, Boolean set)
   dlg->display_chosen = set;
   if (dlg->display_chosen)  {
     PointerToDialog (dlg->clickable_item_list, GetChosenItemsList (dlg->list_list));
+    UpdateChosenCount (d);
+    Show (dlg->chosen_count);
   } else {
     PopulateClickableItemList (dlg->clickable_item_list, 
                               GetSelectedClickableList (dlg->list_list,
                                                         dlg->selected));
+    Hide (dlg->chosen_count);
   }
 }  
 
@@ -12549,8 +13000,10 @@ extern Boolean FixSpecialCharactersForStringsInList (ValNodePtr find_list, CharP
   SetGroupSpacing (c, 10, 10);
   sd.accept_btn = PushButton (c, "Replace Characters", ModalAcceptButton);
   SetObjectExtra (sd.accept_btn, &acd, NULL);
-  b = PushButton (c, "Cancel", ModalCancelButton);
-  SetObjectExtra (b, &acd, NULL);
+  if (!force_fix) {
+    b = PushButton (c, "Cancel", ModalCancelButton);
+    SetObjectExtra (b, &acd, NULL);
+  }
   AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) p2, (HANDLE) g, (HANDLE) g2, (HANDLE) c, NULL);
   
   Show(w); 

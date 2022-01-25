@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.60 $
+* $Revision: 1.62 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "5.2"
+#define ASN2FSA_APP_VER "5.3"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -1143,20 +1143,15 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
 {
   CharPtr      accn;
-  Boolean      alldigits;
   BioseqPtr    bsp;
   Char         buf [64];
-  Char         ch;
   Int4         flags = 0;
-  CharPtr      ptr;
   Int2         retcode = 0;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
   CharPtr      tmp1 = NULL;
   CharPtr      tmp2 = NULL;
-  Int4         uid = 0;
   long int     val;
-  ValNode      vn;
 
   if (StringHasNoText (str)) return NULL;
   StringNCpy_0 (buf, str, sizeof (buf));
@@ -1180,41 +1175,16 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
     }
   }
 
-  alldigits = TRUE;
-  ptr = accn;
-  ch = *ptr;
-  while (ch != '\0') {
-    if (! IS_DIGIT (ch)) {
-      alldigits = FALSE;
-    }
-    ptr++;
-    ch = *ptr;
-  }
+  sip = SeqIdFromPubSeqString (accn);
+  sep = PubSeqSynchronousQueryId (sip, retcode, flags);
 
-  if (alldigits) {
-    if (sscanf (accn, "%ld", &val) == 1) {
-      uid = (Int4) val;
-    }
-  } else {
-    sip = SeqIdFromAccessionDotVersion (accn);
-    if (sip != NULL) {
-      uid = GetGIForSeqId (sip);
-      SeqIdFree (sip);
+  if (sep != NULL) {
+    bsp = BioseqFind (sip);
+    if (bsp != NULL) {
+      sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
     }
   }
-
-  if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, retcode, flags);
-    if (sep != NULL) {
-      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
-      vn.choice = SEQID_GI;
-      vn.data.intvalue = uid;
-      bsp = BioseqFind (&vn);
-      if (bsp != NULL) {
-        sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
-      }
-    }
-  }
+  sip = SeqIdFree (sip);
 
   return sep;
 }

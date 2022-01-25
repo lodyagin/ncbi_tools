@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.91 2008/07/24 13:13:03 madden Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.93 2012/04/30 12:45:01 camacho Exp $";
 
-/* $Id: kappa.c,v 6.91 2008/07/24 13:13:03 madden Exp $ 
+/* $Id: kappa.c,v 6.93 2012/04/30 12:45:01 camacho Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@ functions in this file have a 'Kappa_' prefix.  Please adhere to this
 convention to avoid a name clash with functions in blast_kappa.c (the
 name clash can matter in debuggers and search engines.)
 
- $Revision: 6.91 $
+ $Revision: 6.93 $
 
  Revision 6.75  2005/11/07 15:28:56  coulouri
  From Mike Gertz:
@@ -1279,8 +1279,9 @@ static Boolean testNearIdentical(const BlastCompo_SequenceData *seqData,
  * @param range         the range, in amino acid coordinates, of data
  *                      to get; includes the translation frame [in]
  * @param seqData       the resulting data [out]
+ * @param q_range       the range, in amino acid coordinates, of data
+ *                      to get; includes the translation frame [in]
  * @param queryData     the query sequence [in]
- * @param queryOffset   offset for align if there are multiple queries
  * @param align          information about the alignment between query and subject
  * @param shouldTestIdentical did alignment pass a preliminary test in
  *                       redo_alignment.c that indicates the sequence
@@ -1290,8 +1291,8 @@ static void
 Kappa_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
                                  const BlastCompo_SequenceRange * range,
                                  BlastCompo_SequenceData * seqData,
+                                 const BlastCompo_SequenceRange * q_range,
 				 const BlastCompo_SequenceData * queryData,
-				 const int queryOffset,
 				 const BlastCompo_Alignment *align,
 				 const Boolean shouldTestIdentical)
 {
@@ -1357,7 +1358,7 @@ Kappa_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
       HackSeqLocId(seg_slp, local_data->bsp_db->id);
       if ((!shouldTestIdentical) || 
             (shouldTestIdentical && 
-	     (!testNearIdentical(seqData, queryData, queryOffset, align, range->begin))))
+	     (!testNearIdentical(seqData, queryData, q_range->begin, align, range->begin))))
 	 BlastMaskTheResidues(seqData->data, seqData->length,
                            BLASTP_MASK_RESIDUE, seg_slp, FALSE, 0);
       seg_slp = SeqLocSetFree(seg_slp);
@@ -1372,39 +1373,32 @@ Kappa_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
 
 
 /**
- * Obtain the sequence data that lies within the given range.
+ * Obtain a string of protein data
  *
- * @param self          sequence information [in]
+ * @param self          the sequence from which to obtain the data [in]
  * @param range         the range, in amino acid coordinates, of data
- *                      to get [in]
- * @param seqData       the sequence data obtained [out]
+ *                      to get; includes the translation frame [in]
+ * @param seqData       the resulting data [out]
+ * @param range         the range, in amino acid coordinates, of data
+ *                      to get; includes the translation frame [in]
  * @param queryData     the query sequence [in]
- * @param queryOffset   offset for align if there are multiple queries
  * @param align          information about the alignment between query and subject
  * @param shouldTestIdentical did alignment pass a preliminary test in
  *                       redo_alignment.c that indicates the sequence
  *                        pieces may be near identical
- * 
- * @returns   always 0 (posts a fatal error on failure rather than
- *            returning an error code.)
  */
-static int
-Kappa_SequenceGetRange(
-  const BlastCompo_MatchingSequence * self,
-  const BlastCompo_SequenceRange * range,
-  BlastCompo_SequenceData * seqData,
-  const BlastCompo_SequenceData * queryData,
-  const int queryOffset,
-  const BlastCompo_Alignment *align,
-  const Boolean shouldTestIdentical)
+static void
+Kappa_SequenceGetProteinRange(const BlastCompo_MatchingSequence * self,
+                                 const BlastCompo_SequenceRange * range,
+                                 BlastCompo_SequenceData * seqData,
+                                 const BlastCompo_SequenceRange * q_range,
+				 const BlastCompo_SequenceData * queryData,
+				 const BlastCompo_Alignment *align,
+				 const Boolean shouldTestIdentical)
 {
+  int i;
   Kappa_SequenceLocalData * local_data = self->local_data;
-  if(local_data->prog_number ==  blast_type_tblastn) {
-    /* The sequence must be translated. */
-    Kappa_SequenceGetTranslatedRange(self, range, seqData, queryData, 
-				     queryOffset,
-				     align, shouldTestIdentical);
-  } else {
+
     /* The sequence does not need to be translated. */
     /* Obtain the entire sequence (necessary for SEG filtering.) */
     if(local_data->rdfp != NULL) {
@@ -1474,7 +1468,7 @@ Kappa_SequenceGetRange(
       if (seg_slp) {
       if ((!shouldTestIdentical) || 
             (shouldTestIdentical && 
-	     (!testNearIdentical(seqData, queryData, queryOffset, align, 0))))
+	     (!testNearIdentical(seqData, queryData, q_range->begin, align, 0))))
 	    BlastMaskTheResidues(seqData->data, seqData->length,
 				 BLASTP_MASK_RESIDUE, seg_slp, FALSE, 0);
         seg_slp = SeqLocSetFree(seg_slp);
@@ -1485,9 +1479,64 @@ Kappa_SequenceGetRange(
     seqData ->data    = &seqData->data[range->begin - 1];
     *seqData->data++  = '\0';
     seqData ->length  = range->end - range->begin;
-  } /* end else the sequence does not need to be translated */
+}
+ 
+/**
+ * Obtain the sequence data that lies within the given range.
+ * Note: BLASTX search is not fully supported yet
+ *
+ * @param self          sequence information [in]
+ * @param s_range       the range, in amino acid coordinates, of data
+ *                      to get [in]
+ * @param seqData       the sequence data obtained [out]
+ * @param query         the query sequence [in]
+ * @param q_range       the range, in amino acid coordinates, of data
+ *                      to get [in]
+ * @param queryData     the query data obtained [out]
+ * @param align          information about the alignment between query and subject
+ * @param shouldTestIdentical did alignment pass a preliminary test in
+ *                       redo_alignment.c that indicates the sequence
+ *                        pieces may be near identical
+ * 
+ * @returns   always 0 (posts a fatal error on failure rather than
+ *            returning an error code.)
+ */
+static int
+Kappa_SequenceGetRange(
+  const BlastCompo_MatchingSequence * self,
+  const BlastCompo_SequenceRange * s_range,
+  BlastCompo_SequenceData * seqData,
+  const BlastCompo_SequenceData * query,
+  const BlastCompo_SequenceRange * q_range,
+  BlastCompo_SequenceData * queryData,
+  const BlastCompo_Alignment *align,
+  const Boolean shouldTestIdentical)
+{
+  Int4 idx;
+  Kappa_SequenceLocalData * local_data = self->local_data;
+  Uint1 *origData = query->data + q_range->begin;
+  /* Copy the query sequence (necessary for SEG filtering.) */
+  queryData->length = q_range->end - q_range->begin;
+  queryData->buffer = calloc((queryData->length + 2), sizeof(Uint1));
+  queryData->data   = queryData->buffer + 1;
+
+  for (idx = 0; idx < queryData->length; idx++) {
+      /* Copy the sequence data, replacing occurences of amino acid
+       * number 24 (Selenocysteine) with number 21 (Undetermined or
+       * atypical). */
+      queryData->data[idx] = (origData[idx] != 24) ? origData[idx] : 21;
+  }
+  if(local_data->prog_number ==  blast_type_tblastn) {
+    /* The sequence must be translated. */
+    Kappa_SequenceGetTranslatedRange(self, s_range, seqData, q_range, queryData, 
+				     align, shouldTestIdentical);
+  } else {
+    Kappa_SequenceGetProteinRange(self, s_range, seqData, q_range, queryData,
+                                     align, shouldTestIdentical);
+  }
   return 0;
 }
+
 
 
 /**
@@ -2150,8 +2199,11 @@ static void Kappa_FreeEditBlock(void * traceback)
  * Blast_RedoOneMatchSmithWaterman */
 static const Blast_RedoAlignCallbacks
 redo_align_callbacks = {
-    Kappa_CalcLambda, Kappa_SequenceGetRange, Kappa_RedoOneAlignment,
-    Kappa_NewAlignmentUsingXdrop, Kappa_FreeEditBlock
+    Kappa_CalcLambda,
+    Kappa_SequenceGetRange,
+    Kappa_RedoOneAlignment,
+    Kappa_NewAlignmentUsingXdrop,
+    Kappa_FreeEditBlock
     };
 
 
@@ -2174,6 +2226,7 @@ Kappa_GetAlignParams(BlastSearchBlkPtr search,
   BlastCompo_GappingParams * gapping_params = NULL;
   Blast_MatrixInfo * scaledMatrixInfo;
   Blast_RedoAlignParams * params;
+  int query_is_translated = search->prog_number == blast_type_blastx;
   int subject_is_translated = search->prog_number == blast_type_tblastn;
   int do_link_hsps = search->pbp->do_sum_stats;
 
@@ -2207,7 +2260,7 @@ Kappa_GetAlignParams(BlastSearchBlkPtr search,
   params =
     Blast_RedoAlignParamsNew(&scaledMatrixInfo, &gapping_params,
                              compo_adjust_mode, search->positionBased,
-                             subject_is_translated, ccat_query_length,
+                             query_is_translated, subject_is_translated, ccat_query_length,
                              cutoff_s, cutoff_e, do_link_hsps,
                              &redo_align_callbacks);
   if (params == NULL) {

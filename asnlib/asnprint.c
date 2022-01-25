@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.31 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -242,6 +242,7 @@ static void AsnXMLTermEmpty(AsnIoPtr aip, AsnTypePtr atp)
 }
 
 static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip);
+static Boolean AsnPrintStringUTF8 (CharPtr the_string, AsnIoPtr aip);
 
 /*****************************************************************************
 *
@@ -269,7 +270,7 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataVal
 
 	atp2 = AsnFindBaseType(atp);
 	isa = atp2->type->isa;
-	if (ISA_STRINGTYPE(isa))
+	if (ISA_STRINGTYPE(isa) && isa != UTF8STRING_TYPE)
 		isa = GENERALSTRING_TYPE;
 	
 	if (((isa == SEQ_TYPE) || (isa == SET_TYPE) ||
@@ -289,7 +290,7 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataVal
 	if (firstvalue)       /* first item, need ::= */
 	{
 		if(isXML) {
-			AsnPrintCharBlock("<?xml version=\"1.0\"?>", aip);
+			AsnPrintCharBlock("<?xml version=\"1.0\" encoding=\"UTF-8\"?>", aip);
 			AsnPrintNewLine(aip);
 		}
 
@@ -442,6 +443,18 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataVal
 					return FALSE;
 			} else {
 				if (! AsnPrintString((CharPtr) dvp->ptrvalue, aip))
+					return FALSE;
+			}
+			if(isXML) AsnXMLTerm(aip, atp);
+			else AsnPrintChar('\"', aip);
+			break;
+        case UTF8STRING_TYPE:
+			if(!(isXML)) AsnPrintChar('\"', aip);
+			if (stream != NULL) {
+				if (! AsnPrintStream (dvp->ptrvalue, aip, stream))
+					return FALSE;
+			} else {
+				if (! AsnPrintStringUTF8((CharPtr) dvp->ptrvalue, aip))
 					return FALSE;
 			}
 			if(isXML) AsnXMLTerm(aip, atp);
@@ -1482,7 +1495,7 @@ static const SXmlChar s_XmlChar[256] =
 *   Boolean AsnPrintString(str, aip)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
+static Boolean AsnPrintStringEx (CharPtr the_string, AsnIoPtr aip, Uint1 fix_non_print)
 {
 	register CharPtr current, previous, current_save = NULL, str, str_begin;
 	Boolean          isXML = FALSE;
@@ -1500,7 +1513,7 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
 
 	if (aip->type & ASNIO_CARRIER) {
         /* Post error if non-printing chars */
-        if ((aip->fix_non_print == 0) || (aip->fix_non_print == 3)) {
+        if ((fix_non_print == 0) || (fix_non_print == 3)) {
             for (str = the_string; *str != '\0'; str++) {
                 if ((*str < ' ') || (*str > '~')) {
                     bad_char_ctr++;
@@ -1524,7 +1537,7 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
         previous = current;
 
         /* Fix non print char if necessary */
-        if (aip->fix_non_print != 2  &&  (ch < ' '  ||  ch > '~')) {
+        if (fix_non_print != 2  &&  (ch < ' '  ||  ch > '~')) {
             if ( !bad_char_ctr ) {
                 bad_char = (int) ch;
             }
@@ -1534,11 +1547,15 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
         
         /*  XML and double quotes fixes */
         if ( isXML ) {
-            const SXmlChar* xml_char = &s_XmlChar[(unsigned int) ch];
-            if (xml_char->len == 1) {
+            if (fix_non_print == 2 && (unsigned int) ch > 127) {
                 *current++ = ch;
             } else {
-                current = StringMove(current, xml_char->str);
+                const SXmlChar* xml_char = &s_XmlChar[(unsigned int) ch];
+                if (xml_char->len == 1) {
+                    *current++ = ch;
+                } else {
+                    current = StringMove(current, xml_char->str);
+                }
             }
         } else {
             *current++ = ch;
@@ -1612,10 +1629,22 @@ ret:
 
     /* Check on error */
 	if ((bad_char_ctr) && 
-        ((aip->fix_non_print == 0) || (aip->fix_non_print == 3))) {
+        ((fix_non_print == 0) || (fix_non_print == 3))) {
         AsnIoErrorMsg(aip, 106, bad_char, the_string);
     }
 	return TRUE;
+}
+
+NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
+
+{
+  return AsnPrintStringEx (the_string, aip, aip->fix_non_print);
+}
+
+static Boolean AsnPrintStringUTF8 (CharPtr the_string, AsnIoPtr aip)
+
+{
+  return AsnPrintStringEx (the_string, aip, 2);
 }
 
 /*****************************************************************************
@@ -1646,14 +1675,14 @@ NLM_EXTERN void AsnPrintCharBlock (CharPtr str, AsnIoPtr aip)
 {
 	Uint4 stringlen;
 	Boolean indent_state;
-	Int1 templen;
+	Int2 templen;
 	CharPtr current;
 
 	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
 		return;
 
 	stringlen = StringLen(str);
-	templen = (Int1)(aip->linelength - aip->linepos);
+	templen = (Int2)(aip->linelength - aip->linepos);
 	indent_state = aip->first[aip->indent_level];
 
 	if (!(aip->type & ASNIO_XML) && (stringlen > (Uint4)templen)) 

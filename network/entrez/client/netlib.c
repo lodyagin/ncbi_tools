@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/05/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       miscellaneous library for network Entrez
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: netlib.c,v $
+* Revision 6.3  2012/02/19 03:45:24  lavr
+* Cleanup of obsolete features
+*
 * Revision 6.2  2005/07/25 18:06:48  lavr
 * Remove deprecated ni_ API references
 *
@@ -531,10 +534,6 @@ NLM_EXTERN void GetClientInfo (CharPtr buf)
             StrCat(buf, dispatcher->motd);
             StrCat(buf, "\n");
         }
-        if (dispatcher->useOutServ)
-        {
-            StrCat(buf, "\n  Using outgoing connection when communicating with server\n");
-        }
         if (dispatcher->adminInfo != NULL && dispatcher->adminInfo[0] != NULLB)
         {
             StrCat(buf, "\n  Your Network Entrez administrator is:\n    ");
@@ -546,17 +545,6 @@ NLM_EXTERN void GetClientInfo (CharPtr buf)
         StrCat(buf, "\n  Entrez service currently connected to ");
         StrCat(buf, lastEntrezServ->hostname);
         StrCat(buf, " server\n");
-	/*
-        if (NI_EncrAvailable())
-        {
-            if (lastEntrezServ->encryption != NULL)
-            {
-                StrCat (buf, "  Encrypted session\n");
-            } else {
-                StrCat (buf, "  Encryption available, but not in use\n");
-            }
-        }
-        */
         statsPtr = &buf[StringLen(buf)];
         DumpNetStats(SUBSYS_CLI_ENTREZ, appendStats);
     }

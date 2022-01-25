@@ -1,4 +1,4 @@
-/* $Id: ncbi_ansi_ext.c,v 6.23 2011/06/21 18:49:31 kazimird Exp $
+/* $Id: ncbi_ansi_ext.c,v 6.24 2011/11/16 18:09:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -139,20 +139,6 @@ char* strncpy0(char* s1, const char* s2, size_t n)
 {
     *s1 = '\0';
     return strncat(s1, s2, n);
-}
-
-
-char* strrncpy0(char* s1, const char* s2, size_t n)
-{
-    char* end = (char*) memchr(s2, '\0', n);
-    if (end)
-        n = (size_t)(end - s2);
-    s1 += n;
-    s2 += n;
-    *s1 = '\0';
-    while (n-- > 0)
-        *--s1 = *--s2;
-    return s1;
 }
 
 

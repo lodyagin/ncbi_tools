@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.257 $
+* $Revision: 1.281 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -56,6 +56,7 @@
 #include <edutil.h>
 #include <alignmgr2.h>
 #include <asn2gnbi.h>
+#include <findrepl.h>
 
 #ifdef WIN_MAC
 #if __profile__
@@ -73,7 +74,7 @@ static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
 
 static CharPtr link_lat_lon = "http://www.ncbi.nlm.nih.gov/projects/Sequin/latlonview.html?";
 
-static CharPtr link_gold_stamp_id = "http://genomesonline.org/GOLD_CARDS/";
+static CharPtr link_gold_stamp_id = "http://genomesonline.org/cgi-bin/GOLD/bin/GOLDCards.cgi?goldstamp=";
 
 
 /* ordering arrays for qualifiers and note components */
@@ -447,6 +448,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "BDGP_EST",
   "BDGP_INS",
   "BEETLEBASE",
+  "BGD",
   "BOLD",
   "CDD",
   "CK",
@@ -463,6 +465,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ERIC",
   "ESTLIB",
   "FANTOM_DB",
+  "FBOL",
   "FLYBASE",
   "GABI",
   "GDB",
@@ -492,6 +495,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "MaizeGDB",
   "MGI",
   "MIM",
+  "miRBase",
   "MycoBank",
   "NBRC",
   "NextDB",
@@ -505,6 +509,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "PFAM",
   "PGN",
   "PIR",
+  "PomBase",
   "PSEUDO",
   "PseudoCap",
   "RAP-DB",
@@ -529,6 +534,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "UNITE",
   "VBASE2",
   "VectorBase",
+  "ViPR",
   "WorfDB",
   "WormBase",
   "Xenbase",
@@ -544,6 +550,7 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "ATCC(in host)",
   "BOLD",
   "FANTOM_DB",
+  "FBOL",
   "FLYBASE",
   "Greengenes",
   "GRIN",
@@ -572,7 +579,6 @@ NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   "ECOCYC",
   "HPRD",
   "LRG",
-  "miRBase",
   "NASONIABASE",
   "PBR",
   "REBASE",
@@ -1570,7 +1576,7 @@ static CharPtr GetStrForStructuredComment (
         FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
         FF_Add_NCBI_Base_URL (ffstring, link_gold_stamp_id);
         FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-        FFAddOneString (ffstring, ".html", FALSE, FALSE, TILDE_EXPAND);
+        /* FFAddOneString (ffstring, ".html", FALSE, FALSE, TILDE_EXPAND); */
         FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -2666,7 +2672,7 @@ NLM_EXTERN CharPtr FFFlatLoc (
   SeqLocPtr   tmp;
   StringItemPtr ffstring = NULL;
 
-  if (bsp == NULL || location == NULL) return NULL;
+  if (ajp == NULL || bsp == NULL || location == NULL) return NULL;
 
   ffstring = FFGetString(ajp);
 
@@ -2693,7 +2699,9 @@ NLM_EXTERN CharPtr FFFlatLoc (
     order_initialized = TRUE;
   }
 
-  if (masterStyle) {
+  if (ajp->smallGenomeSet) {
+    FF_DoFlatLoc (ajp, ffstring, bsp, location, TRUE, isGap);
+  } else if (masterStyle) {
 
     /* map location from parts to segmented bioseq */
 
@@ -2707,10 +2715,10 @@ NLM_EXTERN CharPtr FFFlatLoc (
     partiallist = GetSeqLocPartialSet (location);
     CheckSeqLocForPartial (location, &noLeft, &noRight);
     hasNulls = LocationHasNullsBetween (location);
-    loc = SeqLocMergeExEx (bsp, location, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE);
+    loc = SeqLocMergeExEx (bsp, location, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE, ajp->relaxedMapping);
     if (loc == NULL) {
       tmp = TrimLocInSegment (bsp, location, &noLeft, &noRight);
-      loc = SeqLocMergeExEx (bsp, tmp, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE);
+      loc = SeqLocMergeExEx (bsp, tmp, NULL, FALSE, TRUE, FALSE, hasNulls, FALSE, FALSE, ajp->relaxedMapping);
       SeqLocFree (tmp);
     }
     if (loc == NULL) {
@@ -2782,7 +2790,8 @@ NLM_EXTERN SeqLocPtr SeqLocReMapEx (
   SeqLocPtr location,
   Int4 offset,
   Boolean rev,
-  Boolean masterStyle
+  Boolean masterStyle,
+  Boolean relaxed
 )
 
 {
@@ -2824,10 +2833,10 @@ NLM_EXTERN SeqLocPtr SeqLocReMapEx (
 
     CheckSeqLocForPartial (location, &noLeft, &noRight);
     hasNulls = LocationHasNullsBetween (location);
-    loc = SeqLocMergeExEx (bsp, location, NULL, FALSE, TRUE, TRUE, hasNulls, FALSE, FALSE);
+    loc = SeqLocMergeExEx (bsp, location, NULL, FALSE, TRUE, TRUE, hasNulls, FALSE, FALSE, relaxed);
     if (loc == NULL) {
       tmp = TrimLocInSegment (bsp, location, &noLeft, &noRight);
-      loc = SeqLocMergeExEx (bsp, tmp, NULL, FALSE, TRUE, TRUE, hasNulls, FALSE, FALSE);
+      loc = SeqLocMergeExEx (bsp, tmp, NULL, FALSE, TRUE, TRUE, hasNulls, FALSE, FALSE, relaxed);
       SeqLocFree (tmp);
     }
     if (loc == NULL) {
@@ -3708,20 +3717,20 @@ static CharPtr FullNameFromInstCode (CharPtr code)
 #define s_ccmp_base  "https://ccmp.bigelow.org/node/1/strain/CCMP"
 #define s_ccug_base  "http://www.ccug.se/default.cfm?page=search_record.cfm&db=mc&s_tests=1&ccugno="
 #define s_cori_base  "http://ccr.coriell.org/Sections/Search/Sample_Detail.aspx?Ref="
-#define s_dsmz_base  "http://www.dsmz.de/microorganisms/search_no.php?q="
+#define s_dsmz_base  "http://www.dsmz.de/catalogues/details/culture/DSM-"
 #define s_fsu_base   "http://www.prz.uni-jena.de/data.php?fsu="
-#define s_icmp_base  "http://nzfungi.landcareresearch.co.nz/icmp/results_cultures.asp?ID=&icmpVAR="
 #define s_kctc_base  "http://www.brc.re.kr/English/_SearchView.aspx?sn="
 #define s_ku_base    "http://collections.nhm.ku.edu/"
+#define s_lcr_base   "http://scd.landcareresearch.co.nz/Specimen/"
 #define s_pcc_base   "http://www.crbip.pasteur.fr/fiches/fichecata.jsp?crbip=PCC+"
 #define s_pcmb_base  "http://www2.bishopmuseum.org/HBS/PCMB/results3.asp?searchterm3="
-#define s_pdd_base   "http://nzfungi.landcareresearch.co.nz/html/data_collections_details.asp?CID="
 #define s_sag_base   "http://sagdb.uni-goettingen.de/detailedList.php?str_number="
 #define s_tgrc_base  "http://tgrc.ucdavis.edu/Data/Acc/AccDetail.aspx?AccessionNum="
 #define s_uam_base   "http://arctos.database.museum/guid/"
 #define s_ypm_base   "http://peabody.research.yale.edu/cgi-bin/Query.Ledger?"
 
 #define s_colon_pfx  ":"
+#define s_uscr_pfx   "_"
 
 #define s_kui_pfx    "KU_Fish/detail.jsp?record="
 #define s_kuit_pfx   "KU_Tissue/detail.jsp?record="
@@ -3751,6 +3760,7 @@ static VouchData Nlm_spec_vouchers [] = {
   {  "CCAP",              s_ccap_base,  FALSE,  NULL,          NULL        },
   {  "CCMP",              s_ccmp_base,  FALSE,  NULL,          NULL        },
   {  "CCUG",              s_ccug_base,  FALSE,  NULL,          NULL        },
+  {  "CHR",               s_lcr_base,   TRUE,   s_uscr_pfx,    NULL        },
   {  "Coriell",           s_cori_base,  FALSE,  NULL,          NULL        },
   {  "CRCM:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DGR:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
@@ -3762,11 +3772,14 @@ static VouchData Nlm_spec_vouchers [] = {
   {  "DMNS:Mamm",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DSM",               s_dsmz_base,  FALSE,  NULL,          NULL        },
   {  "FSU<DEU>",          s_fsu_base,   FALSE,  NULL,          NULL        },
-  {  "ICMP",              s_icmp_base,  FALSE,  NULL,          NULL        },
+  {  "ICMP",              s_lcr_base,   TRUE,   s_uscr_pfx,    NULL        },
   {  "KCTC",              s_kctc_base,  FALSE,  NULL,          NULL        },
+  {  "KNWR:Ento",         s_uam_base ,  TRUE,   s_colon_pfx,   NULL        },
   {  "KU:I",              s_ku_base,    FALSE,  s_kui_pfx,     NULL        },
   {  "KU:IT",             s_ku_base,    FALSE,  s_kuit_pfx,    NULL        },
   {  "KWP:Ento",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
+  {  "MLZ:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
+  {  "MLZ:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "MSB:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "MSB:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "MSB:Para",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
@@ -3779,9 +3792,10 @@ static VouchData Nlm_spec_vouchers [] = {
   {  "MVZ:Page",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "MVZObs:Herp",       s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "NBSB:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
+  {  "NZAC",              s_lcr_base,   TRUE,   s_uscr_pfx,    NULL        },
   {  "PCC",               s_pcc_base,   FALSE,  NULL,          NULL        },
   {  "PCMB",              s_pcmb_base,  FALSE,  NULL,          NULL        },
-  {  "PDD",               s_pdd_base,   FALSE,  NULL,          NULL        },
+  {  "PDD",               s_lcr_base,   TRUE ,  s_uscr_pfx,    NULL        },
   {  "PSU<USA-OR>:Mamm",  s_uam_base,   FALSE,  s_psu_pfx,     NULL        },
   {  "SAG",               s_sag_base,   FALSE,  NULL,          NULL        },
   {  "TGRC",              s_tgrc_base,  FALSE,  NULL,          NULL        },
@@ -4047,6 +4061,7 @@ static void FF_www_lat_lon (
   FloatHi  lon = 0.0;
   Boolean  lat_in_range = FALSE;
   Boolean  lon_in_range = FALSE;
+  Boolean  precision_ok = FALSE;
 
   if ( ffstring == NULL || lat_lon == NULL ) return;
   if (! GetWWW (ajp)) { /* not in www mode */
@@ -4054,7 +4069,7 @@ static void FF_www_lat_lon (
     return;
   }
   if (StringDoesHaveText (lat_lon)) {
-    IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
+    IsCorrectLatLonFormat (lat_lon, &format_ok, &precision_ok, &lat_in_range, &lon_in_range);
     if (format_ok && lat_in_range && lon_in_range) {
       if (ParseLatLon (lat_lon, &lat, &lon)) {
         Do_www_lat_lon (ffstring, lat_lon);
@@ -4100,6 +4115,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Boolean            is_sc;
   Int2               j;
   Uint1              jdx;
+  CharPtr            js = NULL;
   Uint1              lastomptype;
   Uint1              lastssptype;
   SeqLocPtr          location = NULL;
@@ -4119,7 +4135,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   PcrSetPtr          psp;
   SourceType PNTR    qualtbl = NULL;
   QualValPtr         qvp;
-  SeqDescrPtr        sdp;
+  SeqDescrPtr        sdp = NULL;
   SeqEntryPtr        sep;
   SeqFeatPtr         sfp = NULL;
   SeqIdPtr           sip;
@@ -4196,15 +4212,15 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   iasp = (IntAsn2gbSectPtr) asp;
 
-  if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
-      (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
-    if (! iasp->feat_js_prefix_added) {
-      sprintf (pfx, "<span id=\"feature_%ld_source_%ld\" class=\"feature\"><script>if (typeof(oData) == \"undefined\") oData = []; oData.push ({gi:%s,acc:\"%s\",features: {}});</script>",
-               (long) currGi, (long) isp->source_count, iasp->gi, iasp->acc);
-      iasp->feat_js_prefix_added = TRUE;
-    } else {
-      sprintf (pfx, "<span id=\"feature_%ld_source_%ld\" class=\"feature\">", (long) currGi, (long) isp->source_count);
+  if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE) {
+    if (iasp->feat_key [FEATDEF_BIOSRC] == NULL) {
+      iasp->feat_key [FEATDEF_BIOSRC] = StringSave ("source");
     }
+  }
+
+  if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans &&
+      (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+    sprintf (pfx, "<span id=\"feature_%ld_source_%ld\" class=\"feature\">", (long) currGi, (long) isp->source_count);
   }
 
   FFAddOneString (ffstring, "source", FALSE, FALSE, TILDE_IGNORE);
@@ -4220,6 +4236,15 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   location = isp->loc;
 
   str = FFFlatLoc (ajp, bsp, location, ajp->masterStyle, FALSE);
+
+  /* if multi-interval join remainders for focus after subtraction, switch to order */
+  if (sdp != NULL && biop != NULL && biop->is_focus && StringStr (str, "join") != NULL) {
+    FindReplaceString (&str, "join", "order", FALSE, FALSE);
+  }
+
+  if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans) {
+    js = AddJsInterval (iasp, pfx, bsp, FEATDEF_BIOSRC, location);
+  }
   if ( GetWWW(ajp) ) {
     FF_www_featloc (ffstring, str);
   } else {
@@ -4921,12 +4946,20 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   /* and then deal with the various note types separately (not in order table) */
 
-  if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+  if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE && ajp->seqspans &&
       (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
     sprintf (sfx, "</span>");
   }
 
-  str = FFEndPrintEx (ajp, ffstring, afp->format, 21, 21, 5, 21, "FT", pfx, sfx); 
+  str = NULL;
+
+  if (js != NULL) {
+    str = FFEndPrintEx (ajp, ffstring, afp->format, 21, 21, 5, 21, "FT", js, sfx); 
+  } else {
+    str = FFEndPrintEx (ajp, ffstring, afp->format, 21, 21, 5, 21, "FT", pfx, sfx); 
+  }
+
+  MemFree (js);
 
   /* optionally populate gbseq for XML-ized GenBank format */
 
@@ -5062,6 +5095,7 @@ static void PrintSeqLine (
   FmtType format,
   CharPtr buf,
   Int4 gi,
+  Int4 startwithoutgap,
   Int4 start,
   Int4 stop
 )
@@ -5082,12 +5116,12 @@ static void PrintSeqLine (
     sprintf (pos, "%9ld", (long) (start + 1));
     FFAddOneString(ffstring, pos, FALSE, FALSE, TILDE_TO_SPACES);
     FFAddOneChar(ffstring, ' ', FALSE);
-    if (ajp != NULL && GetWWW (ajp)) {
-      sprintf (tmp, "<span class=\"ff_line\" id=\"gi_%ld_%ld\">", (long) gi, (long) (start + 1));
+    if (ajp != NULL && GetWWW (ajp) && ajp->seqspans) {
+      sprintf (tmp, "<span class=\"ff_line\" id=\"gi_%ld_%ld\">", (long) gi, (long) (startwithoutgap + 1));
       FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_TO_SPACES);
     }
     FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
-    if (ajp != NULL && GetWWW (ajp)) {
+    if (ajp != NULL && GetWWW (ajp) && ajp->seqspans) {
       FFAddOneString(ffstring, "</span>", FALSE, FALSE, TILDE_TO_SPACES);
     }
     FFAddOneChar(ffstring, '\n', FALSE);
@@ -5990,7 +6024,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
       }
       if (StringDoesHaveText (buf)) {
         ExpandSeqLine (buf);
-        PrintSeqLine (ajp, ffstring, afp->format, buf, gi, start + startgapgap, start + lin);
+        PrintSeqLine (ajp, ffstring, afp->format, buf, gi, start, start + startgapgap, start + lin);
       }
       count = 0;
       blk = 0;
@@ -6007,7 +6041,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     }
     if (StringDoesHaveText (buf)) {
       ExpandSeqLine (buf);
-      PrintSeqLine (ajp, ffstring, afp->format, buf, gi, start + startgapgap, start + lin);
+      PrintSeqLine (ajp, ffstring, afp->format, buf, gi, start, start + startgapgap, start + lin);
     }
   }
 

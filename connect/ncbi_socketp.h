@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKETP__H
 #define CONNECT___NCBI_SOCKETP__H
 
-/* $Id: ncbi_socketp.h,v 1.23 2010/10/21 20:24:31 kazimird Exp $
+/* $Id: ncbi_socketp.h,v 1.26 2012/05/04 19:04:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,10 +58,14 @@
  */
 #include <errno.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif /*__cplusplus*/
+
 #ifdef NCBI_OS_MSWIN
 
-typedef SOCKET TSOCK_Handle;
-typedef HANDLE TRIGGER_Handle;
+typedef SOCKET TSOCK_Handle;    /* NB: same as HANDLE   */
+typedef HANDLE TRIGGER_Handle;  /* NB: same as WSAEVENT */
 
 #  ifdef _WIN64
 #    pragma pack(push, 4)
@@ -134,22 +138,20 @@ typedef int TRIGGER_Handle;
 #if 0/*defined(__GNUC__)*/
 typedef ESwitch    EBSwitch;
 typedef EIO_Status EBIO_Status;
-typedef ESOCK_Side EBSOCK_Side;
 #else
 typedef unsigned   EBSwitch;
 typedef unsigned   EBIO_Status;
-typedef unsigned   EBSOCK_Side;
 #endif
 
 
 typedef enum {
-    eInvalid   = 0,
+    eListening = 0,
     eTrigger   = 1,
     eSocket    = 2,
-    eDatagram  = 3/*2|1*/,
-    eListening = 4
+    eDatagram  = 3/*2|1*/
 } ESOCK_Type;
-typedef unsigned char TSOCK_Type;
+
+typedef unsigned TBSOCK_Type;
 
 
 /* Event trigger
@@ -164,23 +166,32 @@ typedef struct TRIGGER_tag {
     } isset;
 
     /* type, status, EOF, log, read-on-write etc bit-field indicators */
-    TSOCK_Type          type;   /* eTrigger                                  */
+    TBSOCK_Type         type:2; /* eTrigger                                  */
     EBSwitch             log:2; /* how to log events                         */
-    EBSOCK_Side         side:1; /* MBZ                                       */
-    unsigned/*bool*/    keep:1; /* MBZ                                       */
     EBSwitch          r_on_w:2; /* MBZ                                       */
     EBSwitch        i_on_sig:2; /* eDefault                                  */
+
     EBIO_Status     r_status:3; /* MBZ (NB: eIO_Success)                     */
     unsigned/*bool*/     eof:1; /* MBZ                                       */
     EBIO_Status     w_status:3; /* MBZ (NB: eIO_Success)                     */
     unsigned/*bool*/ pending:1; /* MBZ                                       */
 
-    unsigned        reserved:8; /* MBZ                                       */
+    unsigned        reserved:16;/* MBZ                                       */
 
 #ifdef NCBI_OS_UNIX
     int                out;     /* write end of the pipe                     */
 #endif /*NCBI_OS_UNIX*/
 } TRIGGER_struct;
+
+
+/* Sides of socket
+ */
+typedef enum {
+    eSOCK_Server = 0,
+    eSOCK_Client = 1
+} ESOCK_Side;
+
+typedef unsigned EBSOCK_Side;
 
 
 /* Listening socket [must be in one-2-one binary correspondene with TRIGGER]
@@ -194,25 +205,26 @@ typedef struct LSOCK_tag {
     unsigned short   port;      /* port on which listening (host byte order) */
 
     /* type, status, EOF, log, read-on-write etc bit-field indicators */
-    TSOCK_Type          type;   /* eListening                                */
+    TBSOCK_Type         type:2; /* eListening                                */
     EBSwitch             log:2; /* how to log events and data for this socket*/
-    EBSOCK_Side         side:1; /* MBZ                                       */
-    unsigned/*bool*/    keep:1; /* MBZ                                       */
     EBSwitch          r_on_w:2; /* MBZ                                       */
     EBSwitch        i_on_sig:2; /* eDefault                                  */
+
     EBIO_Status     r_status:3; /* MBZ (NB: eIO_Success)                     */
     unsigned/*bool*/     eof:1; /* MBZ                                       */
     EBIO_Status     w_status:3; /* MBZ (NB: eIO_Success)                     */
     unsigned/*bool*/ pending:1; /* MBZ                                       */
 
+    EBSOCK_Side         side:1; /* MBZ (NB: eSOCK_Server)                    */
+    unsigned/*bool*/    keep:1; /* whether to keep OS handle upon close      */
 #ifndef NCBI_OS_MSWIN
-    unsigned        reserved:8; /* MBZ                                       */
+    unsigned        reserved:14;/* MBZ                                       */
 #else
-    unsigned        reserved:5; /* MBZ                                       */
+    unsigned        reserved:11;/* MBZ                                       */
     unsigned        readable:1; /* =1 if known to have a pending accept      */
     unsigned          unused:2; /* MBZ                                       */
 
-	WSAEVENT         event;     /* event bound to I/O                        */
+    WSAEVENT         event;     /* event bound to I/O                        */
 #endif /*!NCBI_OS_MSWIN*/
 
     void*            context;   /* per-server credentials                    */
@@ -221,14 +233,6 @@ typedef struct LSOCK_tag {
     char             path[1];   /* must go last                              */
 #endif /*NCBI_OS_UNIX*/
 } LSOCK_struct;
-
-
-/* Sides of connecting socket
- */
-typedef enum {
-    eSOCK_Client = 0,
-    eSOCK_Server = 1
-} ESOCK_Side;
 
 
 /* Socket [it must be in 1-2-1 binary correspondence with LSOCK above]
@@ -243,10 +247,8 @@ typedef struct SOCK_tag {
     unsigned short   myport;    /* this socket's port number, host byte order*/
 
     /* type, status, EOF, log, read-on-write etc bit-field indicators */
-    TSOCK_Type          type;   /* |= eSocket ({ eSocket | eDatagram })      */
+    TBSOCK_Type         type:2; /* |= eSocket ({ eSocket | eDatagram })      */
     EBSwitch             log:2; /* how to log events and data for this socket*/
-    EBSOCK_Side         side:1; /* socket side: client- or server-side       */
-    unsigned/*bool*/    keep:1; /* whether to keep OS handle upon close      */
     EBSwitch          r_on_w:2; /* enable/disable automatic read-on-write    */
     EBSwitch        i_on_sig:2; /* enable/disable I/O restart on signals     */
 
@@ -256,31 +258,33 @@ typedef struct SOCK_tag {
     EBIO_Status     w_status:3; /* write status:  eIO_Closed if was shut down*/
     unsigned/*bool*/ pending:1; /* =1 if connection is still initing         */
 
+    EBSOCK_Side         side:1; /* socket side: client- or server-side       */
+    unsigned/*bool*/    keep:1; /* whether to keep OS handle upon close      */
     unsigned       crossexec:1; /* =1 if close-on-exec must NOT be set       */
     unsigned       connected:1; /* =1 if remote end-point is fully connected */
+    unsigned        r_tv_set:1; /* =1 if read  timeout is set (i.e. finite)  */
+    unsigned        w_tv_set:1; /* =1 if write timeout is set (i.e. finite)  */
+    unsigned        c_tv_set:1; /* =1 if close timeout is set (i.e. finite)  */
     unsigned       keepalive:1; /* =1 if needs to be kept alive (if OS supp.)*/
 #ifndef NCBI_OS_MSWIN
-    unsigned        reserved:5; /* MBZ                                       */
+    unsigned        reserved:8; /* MBZ                                       */
 #else
-    unsigned        reserved:2; /* MBZ                                       */
+    unsigned        reserved:5; /* MBZ                                       */
     unsigned        readable:1; /* =1 if known to be readable                */
     unsigned        writable:1; /* =1 if known to be writeable               */
     unsigned         closing:1; /* =1 if FD_CLOSE posted                     */
 
-	WSAEVENT         event;     /* event bound to I/O                        */
+    WSAEVENT         event;     /* event bound to I/O                        */
 #endif /*!NCBI_OS_MSWIN*/
 
     void*            session;   /* secure session id if secure, else 0       */
 
-	/* timeouts */
-    const struct timeval* r_timeout;/* NULL if infinite, or points to "r_tv" */
+    /* timeouts */
     struct timeval   r_tv;      /* finite read  timeout value                */
-    STimeout         r_to;      /* finite read  timeout value (aux., temp.)  */
-    const struct timeval* w_timeout;/* NULL if infinite, or points to "w_tv" */
     struct timeval   w_tv;      /* finite write timeout value                */
-    STimeout         w_to;      /* finite write timeout value (aux., temp.)  */
-    const struct timeval* c_timeout;/* NULL if infinite, or points to "c_tv" */
     struct timeval   c_tv;      /* finite close timeout value                */
+    STimeout         r_to;      /* finite read  timeout value (aux., temp.)  */
+    STimeout         w_to;      /* finite write timeout value (aux., temp.)  */
     STimeout         c_to;      /* finite close timeout value (aux., temp.)  */
 
     /* aux I/O data */
@@ -346,6 +350,14 @@ typedef struct SOCK_tag {
 #if defined(NCBI_OS_MSWIN)  &&  defined(_WIN64)
 #  pragma pack(pop)
 #endif /*NCBI_OS_MSWIN && _WIN64*/
+
+
+extern const char g_kNcbiSockNameAbbr[];
+
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif /*__cplusplus*/
 
 
 #endif /* CONNECT___NCBI_SOCKETP__H */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: 
 *
@@ -723,6 +723,7 @@ static EjourData mla2_ejour_list [] = {
  {"JOP",                                                           0 },
  {"Kinetoplastid Biol Dis",                                        0 },
  {"Malar. J.",                                                     0 },
+ {"MBio",                                                          0 },
  {"Microb. Cell Fact.",                                            0 },
  {"Mol. Syst. Biol.",                                              0 },
  {"Mol. Vis.",                                                     0 },

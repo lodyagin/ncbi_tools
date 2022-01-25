@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.173 $
+* $Revision: 6.181 $
 *
 * File Description: 
 *
@@ -229,6 +229,39 @@ extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static Int2 OneDescriptorPropagate (Pointer data)
+
+{
+  BioseqSetPtr      bssp = NULL;
+  OMProcControlPtr  ompcp;
+  ObjValNodePtr     ovp;
+  SeqDescrPtr       sdp;
+  SeqEntryPtr       sep;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->input_entityID == 0) {
+    Message (MSG_ERROR, "Please select a BioseqSet");
+    return OM_MSG_RET_ERROR;
+  }
+  /* propagate just this descriptor */
+  sdp = (SeqDescrPtr) ompcp->output_data;
+  if (sdp != NULL && sdp->extended > 0 && ompcp->input_itemtype == OBJ_BIOSEQSET) {
+    ovp = (ObjValNodePtr) sdp;
+    bssp = (BioseqSetPtr) ompcp->input_data;
+    if (bssp != NULL) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        CopyOneDescriptorToSeqEntry (sdp, sep);
+      }
+      ovp->idx.deleteme = TRUE;
+      DeleteMarkedObjects (ompcp->input_entityID, 0, NULL);
+      ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+      ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+      return OM_MSG_RET_DONE;
+    }
+  }
+  return OM_MSG_RET_ERROR;
+}
+
 extern Boolean DescFormReplaceWithoutUpdateProcEx (ForM f, Boolean feature_or_molinfo_change)
 
 {
@@ -244,6 +277,7 @@ extern Boolean DescFormReplaceWithoutUpdateProcEx (ForM f, Boolean feature_or_mo
   rsult = FALSE;
   dfp = (DescriptorFormPtr) GetObjectExtra (f);
   if (dfp != NULL) {
+    sep = GetTopSeqEntryForEntityID (dfp->input_entityID);
     MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
     ompc.input_entityID = dfp->input_entityID;
     ompc.input_itemID = dfp->input_itemID;
@@ -266,7 +300,6 @@ extern Boolean DescFormReplaceWithoutUpdateProcEx (ForM f, Boolean feature_or_mo
       }
       FixSpecialCharactersForObject (OBJ_SEQDESC, sdp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
       if (!feature_or_molinfo_change) {
-        sep = GetTopSeqEntryForEntityID (dfp->input_entityID);
         CleanupStringsForOneDescriptor (sdp, sep);
       }
 
@@ -296,13 +329,17 @@ extern Boolean DescFormReplaceWithoutUpdateProcEx (ForM f, Boolean feature_or_mo
       sep = (SeqEntryPtr) ompc.input_choice;
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       if (bssp->_class == BioseqseqSet_class_genbank) {
-    ans = Message (MSG_YN, "Do you wish to propagate the descriptor to "
-               "the set's Bioseqs?");
-    if (ANS_YES == ans)
-      DescriptorPropagate (&ompc);
+        ans = Message (MSG_YN, "Do you wish to propagate the descriptor to "
+                       "the set's Bioseqs?");
+        if (ANS_YES == ans) {
+          OneDescriptorPropagate (&ompc);
+        }
       }
     }
     
+    if (!feature_or_molinfo_change) {
+      CleanUpProteinTitles (sep);
+    }
   }
   return rsult;
 }
@@ -692,7 +729,7 @@ extern void UpdateGeneLocation
       }
       else
       {
-        slp = SeqLocMergeExEx (bsp, gene->location, new_feat_loc, TRUE, FALSE, TRUE, hasNulls, TRUE, TRUE);
+        slp = SeqLocMergeExEx (bsp, gene->location, new_feat_loc, TRUE, FALSE, TRUE, hasNulls, TRUE, TRUE, FALSE);
       }
 
       if (slp != NULL) {
@@ -1134,6 +1171,118 @@ NLM_EXTERN void TextToFeatXref (TexT t, SeqFeatPtr sfp)
   }
 }
 
+static void SafeSetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)
+
+{
+  if (StringDoesHaveText (name)) {
+    SetEnumPopupByName (lst, al, name);
+  } else {
+    SetEnumPopupByName (lst, al, " ");
+  }
+}
+
+ENUM_ALIST(new_pseudogene_alist)
+  { " ",              0 },
+  { "Processed",      1 },
+  { "Unprocessed",    2 },
+  { "Unitary",        3 },
+  { "Allelic",        4 },
+  { "Unknown",        5 },
+END_ENUM_ALIST
+
+ENUM_ALIST(legacy_pseudogene_alist)
+  { " ",              0 },
+  { "Processed",      1 },
+  { "Unprocessed",    2 },
+  { "Unitary",        3 },
+  { "Allelic",        4 },
+  { "Unknown",        5 },
+  { "Unqualified",  255 },
+END_ENUM_ALIST
+
+extern void InitPseudogenePopup (FeatureFormPtr ffp, PopuP p, Boolean ispseudo, CharPtr pseudogene, Boolean indexerVersion)
+
+{
+  if (ffp == NULL) return;
+  ffp->pseudoalist = new_pseudogene_alist;
+  if (indexerVersion) {
+    ffp->pseudoalist = legacy_pseudogene_alist;
+  } else if (ispseudo && pseudogene == NULL) {
+    ffp->pseudoalist = legacy_pseudogene_alist;
+  } else if (ispseudo) {
+    if ((StringICmp (pseudogene, "processed") != 0) &&
+        (StringICmp (pseudogene, "unprocessed") != 0) &&
+        (StringICmp (pseudogene, "unitary") != 0) &&
+        (StringICmp (pseudogene, "allelic") != 0) &&
+        (StringICmp (pseudogene, "unknown") != 0)) {
+      ffp->pseudoalist = legacy_pseudogene_alist;
+    }
+  }
+  InitEnumPopup (p, ffp->pseudoalist, NULL);
+}
+
+static void GbqualsToPseudogenePopup (SeqFeatPtr sfp, FeatureFormPtr ffp, PopuP p)
+
+{
+  GBQualPtr  gbq;
+  CharPtr    str = NULL;
+
+  if (sfp == NULL) {
+    SetValue (p, 0);
+    return;
+  }
+
+  if (ffp == NULL) return;
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "pseudogene") != 0) continue;
+    str = gbq->val;
+  }
+
+  if (StringHasNoText (str) && sfp->pseudo) {
+    str = "Unqualified";
+  }
+
+  SafeSetEnumPopupByName (p, ffp->pseudoalist, str);
+}
+
+static void PseudogenePopupToGbquals (SeqFeatPtr sfp, FeatureFormPtr ffp, PopuP p)
+
+{
+  Char       ch;
+  GBQualPtr  gbq, gbqlast = NULL;
+  CharPtr    str;
+
+  if (sfp == NULL) return;
+  if (ffp == NULL) return;
+
+  str = GetEnumPopupByName (p, ffp->pseudoalist);
+  if (StringHasNoText (str)) return;
+
+  if (StringICmp (str, "Unqualified") == 0) {
+    sfp->pseudo = TRUE;
+    MemFree (str);
+    return;
+  }
+
+  ch = str [0];
+  str [0] = TO_LOWER (ch);
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    gbqlast = gbq;
+  }
+
+  gbq = GBQualNew ();
+  if (gbq == NULL) return;
+  gbq->qual = StringSave ("pseudogene");
+  gbq->val = str;
+  if (gbqlast == NULL) {
+    sfp->qual = gbq;
+  } else {
+    gbqlast->next = gbq;
+  }
+}
+
 static void GbqualsToVisStringDialog (SeqFeatPtr sfp, DialoG d, CharPtr qual)
 
 {
@@ -1342,6 +1491,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->dbxrefs, sfp->dbxref);
       PointerToDialog (ffp->gbquals, sfp->qual);
       SeqFeatPtrToFieldPage (ffp->gbquals, sfp);
+      GbqualsToPseudogenePopup (sfp, ffp, ffp->pseudogene);
       GbqualsToVisStringDialog (sfp, ffp->experiment, "experiment");
       GBQualsToInferenceDialog (ffp->inference, sfp);
       PointerToDialog (ffp->usrobjext, sfp->ext);
@@ -1392,7 +1542,9 @@ extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq)
   while (gbq != NULL) {
     next = gbq->next;
     unlink = FALSE;
-    if (StringICmp (gbq->qual, "experiment") == 0 || StringICmp (gbq->qual, "inference") == 0) {
+    if (StringICmp (gbq->qual, "experiment") == 0 ||
+        StringICmp (gbq->qual, "inference") == 0 ||
+        StringICmp (gbq->qual, "pseudogene") == 0) {
       unlink = TRUE;
     }
     if (unlink) {
@@ -1449,6 +1601,7 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
         old->qual = NULL;
       }
       CleanupEvidenceGBQuals (&(sfp->qual));
+      PseudogenePopupToGbquals (sfp, ffp, ffp->pseudogene);
       VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
       InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
       if (ffp->usrobjext != NULL) {
@@ -1746,405 +1899,410 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
                                         * if we're going to do a gene update    
                                         */
   Boolean         fix_interval_order;
+  Boolean         trans_spliced = FALSE;
 
   rsult = FALSE;
-  ffp = (FeatureFormPtr) GetObjectExtra (f);
-  if (ffp != NULL) {
-    MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
-    ompc.input_entityID = ffp->input_entityID;
-    ompc.input_itemID = ffp->input_itemID;
-    ompc.input_itemtype = ffp->input_itemtype;
-    ompc.output_itemtype = ffp->input_itemtype;
-    sfp = SeqFeatNew ();
-    if (sfp != NULL) {
-      sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
-      oldscope = SeqEntrySetScope (sep);
-      sfp->data.choice = FindFeatFromFeatDefType (ffp->this_subtype);
-      switch (sfp->data.choice) {
-        case SEQFEAT_BOND :
-        case SEQFEAT_SITE :
-        case SEQFEAT_PSEC_STR :
-          intptr = (Int4Ptr) DialogToPointer (ffp->data);
-          if (intptr != NULL) {
-            sfp->data.value.intvalue = *intptr;
-          }
-          break;
-        case SEQFEAT_COMMENT:
-          sfp->data.value.ptrvalue = NULL;
-          break;
-        default :
-          sfp->data.value.ptrvalue = DialogToPointer (ffp->data);
-          break;
+  if ((ffp = (FeatureFormPtr) GetObjectExtra (f)) == NULL) {
+    return FALSE;
+  }
+  MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
+  ompc.input_entityID = ffp->input_entityID;
+  ompc.input_itemID = ffp->input_itemID;
+  ompc.input_itemtype = ffp->input_itemtype;
+  ompc.output_itemtype = ffp->input_itemtype;
+  sfp = SeqFeatNew ();
+  if (sfp == NULL) {
+    return FALSE;
+  }
+
+  sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+  oldscope = SeqEntrySetScope (sep);
+  sfp->data.choice = FindFeatFromFeatDefType (ffp->this_subtype);
+  switch (sfp->data.choice) {
+    case SEQFEAT_BOND :
+    case SEQFEAT_SITE :
+    case SEQFEAT_PSEC_STR :
+      intptr = (Int4Ptr) DialogToPointer (ffp->data);
+      if (intptr != NULL) {
+        sfp->data.value.intvalue = *intptr;
       }
-      sfp->comment = SaveStringFromText (ffp->comment);
-      NewlinesToTildes (sfp->comment);
-      expev = GetValue (ffp->evidence);
-      if (expev > 0 && expev <= 3) {
-        sfp->exp_ev = expev - 1;
+      break;
+    case SEQFEAT_COMMENT:
+      sfp->data.value.ptrvalue = NULL;
+      break;
+    default :
+      sfp->data.value.ptrvalue = DialogToPointer (ffp->data);
+      break;
+  }
+  sfp->comment = SaveStringFromText (ffp->comment);
+  NewlinesToTildes (sfp->comment);
+  expev = GetValue (ffp->evidence);
+  if (expev > 0 && expev <= 3) {
+    sfp->exp_ev = expev - 1;
+  } else {
+    sfp->exp_ev = 0;
+  }
+  sfp->partial = GetStatus (ffp->partial);
+  sfp->excpt = GetStatus (ffp->exception);
+  sfp->pseudo = GetStatus (ffp->pseudo);
+  sfp->except_text = SaveStringFromText (ffp->exceptText);
+  sfp->title = NULL;
+  sfp->product = DialogToPointer (ffp->product);
+  sfp->location = DialogToPointer (ffp->location);
+  if (sfp->location == NULL) {
+    SeqEntrySetScope (oldscope);
+    ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
+    err_list = TestDialog (ffp->location);
+    DisplayErrorMessages ("Location Errors", err_list);
+    err_list = ValNodeFree (err_list);    
+    return FALSE;
+  }
+  if ((! ffp->acceptBadInf) && (! TestInference (ffp, badInfQual, sizeof (badInfQual), badInfMssg))) {
+    (ffp->badInfAttempts)++;
+    if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+      attempts = 2;
+    }
+    if (ffp->badInfAttempts < attempts) {
+      if (ffp->badInfAttempts == 2) {
+        Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning2, badInfMssg, badInfQual);
       } else {
-        sfp->exp_ev = 0;
+        Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning1, badInfMssg, badInfQual);
       }
-      sfp->partial = GetStatus (ffp->partial);
-      sfp->excpt = GetStatus (ffp->exception);
-      sfp->pseudo = GetStatus (ffp->pseudo);
-      sfp->except_text = SaveStringFromText (ffp->exceptText);
-      sfp->title = NULL;
-      sfp->product = DialogToPointer (ffp->product);
-      sfp->location = DialogToPointer (ffp->location);
-      if (sfp->location == NULL) {
-        SeqEntrySetScope (oldscope);
-        ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
-        err_list = TestDialog (ffp->location);
-        DisplayErrorMessages ("Location Errors", err_list);
-        err_list = ValNodeFree (err_list);    
-        return FALSE;
-      }
-      if ((! ffp->acceptBadInf) && (! TestInference (ffp, badInfQual, sizeof (badInfQual), badInfMssg))) {
-        (ffp->badInfAttempts)++;
-        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-          attempts = 2;
-        }
-        if (ffp->badInfAttempts < attempts) {
-          if (ffp->badInfAttempts == 2) {
-            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning2, badInfMssg, badInfQual);
-          } else {
-            Message (MSG_OK, "%s - Please fix the %s error in\n%s", infWarning1, badInfMssg, badInfQual);
-          }
-          return FALSE;
-        } else {
-          if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return FALSE;
-          ffp->acceptBadInf = TRUE;
-        }
-      }
-      bsp = GetBioseqGivenSeqLoc (sfp->location, ffp->input_entityID);
-      if (bsp != NULL) {
-        if (SeqLocBadSortOrder (bsp, sfp->location)) {
-          fix_interval_order = FALSE;
-          if (StringICmp (sfp->except_text, "trans-splicing") == 0)
-          {
-            ans = Message (MSG_YN, "Your feature intervals are out of order, but this coding region has a trans-splicing exception. Continue without correcting interval order?");
-            if (ans == ANS_NO)
-            {
-              fix_interval_order = TRUE;
-            }
-          }
-          else
-          {
-            ans = Message (MSG_YN,
-            "Feature location intervals are out of order.  Do you want them repaired?");
-            if (ans == ANS_YES)
-            {
-              fix_interval_order = TRUE;
-            }
-          }
-          if (fix_interval_order) {
-            hasNulls = LocationHasNullsBetween (sfp->location);
-            gslp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, FALSE, hasNulls);
-            if (gslp != NULL) {
-              CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
-              sfp->location = SeqLocFree (sfp->location);
-              sfp->location = gslp;
-              if (bsp->repr == Seq_repr_seg) {
-                gslp = SegLocToParts (bsp, sfp->location);
-                sfp->location = SeqLocFree (sfp->location);
-                sfp->location = gslp;
-              }
-              FreeAllFuzz (sfp->location);
-              SetSeqLocPartial (sfp->location, noLeft, noRight);
-            }
-          }
-        }
-      }
-      if (/* CheckSeqLocForPartial (sfp->location, NULL, NULL) */ SeqLocPartialCheck (sfp->location) != SLP_COMPLETE) {
-        sfp->partial = TRUE;
-      }
-      sfp->cit = DialogToPointer (ffp->featcits);
-      sfp->dbxref = DialogToPointer (ffp->dbxrefs);
-      slp = AsnIoMemCopy (sfp->location, (AsnReadFunc) SeqLocAsnRead,
-                          (AsnWriteFunc) SeqLocAsnWrite);
-      usexref = GetValue (ffp->useGeneXref);
-      if (ffp->gene != NULL) {
-        val = GetValue (ffp->gene);
-        if (usexref == 3 || (val > 1 && usexref == 2)) {
-          grp = NULL;
-          if (usexref == 3) {
-            grp = GeneRefNew ();
-          } else if (val == 2) {
-            GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
-            GetTitle (ffp->geneAllele, allele, sizeof (allele));
-            GetTitle (ffp->geneDesc, desc, sizeof (desc));
-            GetTitle (ffp->locusTag, locustag, sizeof (locustag));
-            grp = CreateNewGeneRef (symbol, allele, desc, FALSE);
-            if (! StringHasNoText (locustag)) {
-              if (grp == NULL) {
-                grp = GeneRefNew ();
-              }
-              grp->locus_tag = StringSave (locustag);
-            }
-            if (!TextHasNoText (ffp->geneSynonym)) {
-              if (grp == NULL) {
-                grp = GeneRefNew ();
-              }
-              ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
-            }
-          } else {
-            vnp = ffp->geneNames;
-            i = val - 3;
-            while (i > 0 && vnp != NULL) {
-              vnp = vnp->next;
-              i--;
-            }
-            if (vnp != NULL) {
-              if (vnp->choice == 1) {
-                str = (CharPtr) vnp->data.ptrvalue;
-                if (StringDoesHaveText (str)) {
-                  grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
-                  gene = SeqMgrGetFeatureByLabel (bsp, str, SEQFEAT_GENE, 0, &fcontext);
-                  if (gene != NULL && gene->data.choice == SEQFEAT_GENE) {
-                    grpfeat = (GeneRefPtr) gene->data.value.ptrvalue;
-                    if (grpfeat != NULL) {
-                      grp->locus_tag = StringSaveNoNull (grpfeat->locus_tag);
-                    }
-                  }
-                }
-              } else if (vnp->choice == 2) {
-                 grp = GeneRefNew ();
-                if (grp != NULL) {
-                  grp->desc = StringSave ((CharPtr) vnp->data.ptrvalue);
-                }
-             } else if (vnp->choice == 3) {
-                grp = GeneRefNew ();
-                if (grp != NULL) {
-                  grp->locus_tag = StringSave ((CharPtr) vnp->data.ptrvalue);
-                }
-              }
-            }
-          }
-          if (grp != NULL) {
-            xref = SeqFeatXrefNew ();
-            sfp->xref = xref;
-            if (xref != NULL) {
-              xref->data.choice = SEQFEAT_GENE;
-              xref->data.value.ptrvalue = (Pointer) grp;
-            }
-          }
-        }
-      } else if (usexref == 3) {
-        /* protein feature can now suppress gene on GenBank view */
-        grp = GeneRefNew ();
-        if (grp != NULL) {
-          xref = SeqFeatXrefNew ();
-          sfp->xref = xref;
-          if (xref != NULL) {
-            xref->data.choice = SEQFEAT_GENE;
-            xref->data.value.ptrvalue = (Pointer) grp;
-          }
-        }
-      }
-
-      ompc.output_data = (Pointer) sfp;
-      if (ompc.input_entityID == 0) {
-        sfp->qual = DialogToPointer (ffp->gbquals);
-        VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
-        InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
-
-        sfp->ext = DialogToPointer (ffp->usrobjext);
-        if (ffp->goTermUserObj != NULL) {
-          sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
-        }
-        if (ffp->featid != NULL) {
-          TextToFeatID (ffp->featid, &(sfp->id));
-        }
-        if (HasExceptionGBQual (sfp)) {
-          sfp->excpt = TRUE;
-        }
-        if (ffp->fidxref != NULL) {
-          TextToFeatXref (ffp->fidxref, sfp);
-        }
-        AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
-        FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
-        if (! ObjMgrRegister (OBJ_SEQFEAT, (Pointer) sfp)) {
-          Message (MSG_ERROR, "ObjMgrRegister failed");
-        }
-        SeqLocFree (slp);
-        SeqEntrySetScope (oldscope);
-        return TRUE;
-      } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
-        sfp->qual = DialogToPointer (ffp->gbquals);
-        VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
-        InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
-
-        sfp->ext = DialogToPointer (ffp->usrobjext);
-        if (ffp->goTermUserObj != NULL) {
-          sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
-        }
-        if (ffp->featid != NULL) {
-          TextToFeatID (ffp->featid, &(sfp->id));
-        }
-        if (HasExceptionGBQual (sfp)) {
-          sfp->excpt = TRUE;
-        }
-        if (ffp->fidxref != NULL) {
-          TextToFeatXref (ffp->fidxref, sfp);
-        }
-        AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
-        FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
-
-        /* adjust mRNA location and product name here */
-        if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
-          UpdatemRNAAfterEditing (ffp->data, sfp->location, sfp->location);
-        }
-
-        ompc.output_itemtype = OBJ_SEQFEAT;
-        if (ompc.input_itemtype == OBJ_BIOSEQ) {
-          bsp = GetBioseqGivenIDs (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
-          if (bsp != NULL) {
-            sap = bsp->annot;
-            while (sap != NULL && (sap->name != NULL || sap->desc != NULL || sap->type != 1)) {
-              sap = sap->next;
-            }
-            if (sap == NULL) {
-              sap = SeqAnnotNew ();
-              if (sap != NULL) {
-                sap->type = 1;
-                sap->next = bsp->annot;
-                bsp->annot = sap;
-              }
-            }
-            if (sap != NULL) {
-              itemID = GetItemIDGivenPointer (ompc.input_entityID, OBJ_SEQANNOT, (Pointer) sap);
-              if (itemID > 0) {
-                ompc.input_itemID = itemID;
-                ompc.input_itemtype = OBJ_SEQANNOT;
-              }
-            }
-          }
-        }
-        if (! AttachDataForProc (&ompc, FALSE)) {
-          Message (MSG_ERROR, "AttachDataForProc failed");
-        }
-        rsult = TRUE;
-      } else {
-        GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
-                    (Pointer) &old_location, GetOldFeatureLocation);
-
-        /* adjust mRNA location and product name here, using old location */
-        if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
-          UpdatemRNAAfterEditing (ffp->data, old_location == NULL ? sfp->location : old_location, sfp->location);
-        }
-      
-        rd.ffp = ffp;
-        rd.sfp = sfp;
-        GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
-                    (Pointer) &rd, ReplaceFeatureExtras);
-        if (HasExceptionGBQual (sfp)) {
-          sfp->excpt = TRUE;
-        }
-        if (ffp->fidxref != NULL) {
-          TextToFeatXref (ffp->fidxref, sfp);
-        }
-        if (FeatIsPseudo (sfp))
-        {
-          RemoveProtXrefs (sfp);
-        }
-        else
-        {
-          AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
-        }
-        FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
-        if (! ReplaceDataForProc (&ompc, FALSE)) {
-          Message (MSG_ERROR, "ReplaceDataForProc failed");
-        }
-        rsult = TRUE;
-      }
-      if (ffp->gene != NULL && usexref == 1) {
-        val = GetValue (ffp->gene);
-        if (val == 2) {
-          sep = GetBestTopParentForItemID (ffp->input_entityID,
-                                           ffp->input_itemID,
-                                           ffp->input_itemtype);
-          /*
-          sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
-          */
-          if (sep != NULL) {
-            sep = FindNucSeqEntry (sep);
-          }
-          if (sep != NULL && sep->data.ptrvalue != NULL) {
-            GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
-            GetTitle (ffp->geneAllele, allele, sizeof (allele));
-            GetTitle (ffp->geneDesc, desc, sizeof (desc));
-            GetTitle (ffp->locusTag, locustag, sizeof (locustag));
-            grp = CreateNewGeneRef (symbol, allele, desc, FALSE);
-            if (! StringHasNoText (locustag)) {
-              if (grp == NULL) {
-                grp = GeneRefNew ();
-              }
-              grp->locus_tag = StringSave (locustag);
-            }
-            if (!TextHasNoText (ffp->geneSynonym)) {
-              if (grp == NULL) {
-                grp = GeneRefNew ();
-              }
-              ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
-            }
-            if (grp != NULL) {
-              new_gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
-              if (new_gene != NULL) {
-                new_gene->data.value.ptrvalue = (Pointer) grp;
-                FixSpecialCharactersForObject (OBJ_SEQFEAT, new_gene, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
-                new_gene->location = SeqLocFree (new_gene->location);
-                new_gene->location = DialogToPointer (ffp->location);
-                bsp = GetBioseqGivenSeqLoc (new_gene->location, ffp->input_entityID);
-                if (bsp != NULL) {
-                  hasNulls = LocationHasNullsBetween (new_gene->location);
-                  gslp = SeqLocMerge (bsp, new_gene->location, NULL, TRUE, FALSE, FALSE);
-                  if (gslp != NULL) {
-                    CheckSeqLocForPartial (new_gene->location, &noLeft, &noRight);
-                    new_gene->location = SeqLocFree (new_gene->location);
-                    new_gene->location = gslp;
-                    if (bsp->repr == Seq_repr_seg) {
-                      gslp = SegLocToPartsEx (bsp, new_gene->location, TRUE);
-                      new_gene->location = SeqLocFree (new_gene->location);
-                      new_gene->location = gslp;
-                      hasNulls = LocationHasNullsBetween (new_gene->location);
-                      new_gene->partial = (new_gene->partial || hasNulls);
-                    }
-                    FreeAllFuzz (new_gene->location);
-                    SetSeqLocPartial (new_gene->location, noLeft, noRight);
-                    new_gene->partial = (new_gene->partial || noLeft || noRight);
-                  }
-                }
-              }
-            }
-          }
-        } else if (val > 2) {
-          ggl.ffp = ffp;
-          ggl.omp = ObjMgrGet ();
-          ggl.slp = slp;
-          ggl.genexref = NULL;
-          ggl.xrefmatch = FALSE;
-          ggl.idx = 2;
-          ggl.val = val;
-          ggl.min = INT4_MAX;
-          ggl.old_feature_location = old_location;
-          MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-          gs.seglevels = 1;
-          gs.get_feats_location = TRUE;
-            MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-            gs.ignore[OBJ_BIOSEQ] = FALSE;
-            gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-            gs.ignore[OBJ_SEQFEAT] = FALSE;
-            gs.ignore[OBJ_SEQANNOT] = FALSE;
-          gs.scope = GetBestTopParentForItemID (ffp->input_entityID,
-                                                ffp->input_itemID,
-                                                ffp->input_itemtype);
-          GatherEntity (ffp->input_entityID, (Pointer) &ggl, GeneUpdateFunc, &gs);
-        }
-      }
-      SeqLocFree (slp);
-      SeqEntrySetScope (oldscope);
+      return FALSE;
+    } else {
+      if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return FALSE;
+      ffp->acceptBadInf = TRUE;
     }
   }
+
+  if (StringISearch (sfp->except_text, "trans-splicing") != NULL) 
+  {
+    trans_spliced = TRUE;
+  }
+
+  bsp = GetBioseqGivenSeqLoc (sfp->location, ffp->input_entityID);
+  if (bsp != NULL) {
+    if (SeqLocBadSortOrder (bsp, sfp->location)) {
+      fix_interval_order = FALSE;
+      if (!trans_spliced)
+      {
+        ans = Message (MSG_YN, "Your feature intervals are out of order, but this coding region has a trans-splicing exception. Continue without correcting interval order?");
+        if (ans == ANS_NO)
+        {
+          fix_interval_order = TRUE;
+        }
+      }
+      else
+      {
+        ans = Message (MSG_YN,
+        "Feature location intervals are out of order.  Do you want them repaired?");
+        if (ans == ANS_YES)
+        {
+          fix_interval_order = TRUE;
+        }
+      }
+      if (fix_interval_order) {
+        hasNulls = LocationHasNullsBetween (sfp->location);
+        gslp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, FALSE, hasNulls);
+        if (gslp != NULL) {
+          CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
+          sfp->location = SeqLocFree (sfp->location);
+          sfp->location = gslp;
+          if (bsp->repr == Seq_repr_seg) {
+            gslp = SegLocToParts (bsp, sfp->location);
+            sfp->location = SeqLocFree (sfp->location);
+            sfp->location = gslp;
+          }
+          FreeAllFuzz (sfp->location);
+          SetSeqLocPartial (sfp->location, noLeft, noRight);
+        }
+      }
+    }
+  }
+  if (/* CheckSeqLocForPartial (sfp->location, NULL, NULL) */ SeqLocPartialCheck (sfp->location) != SLP_COMPLETE) {
+    sfp->partial = TRUE;
+  }
+  sfp->cit = DialogToPointer (ffp->featcits);
+  sfp->dbxref = DialogToPointer (ffp->dbxrefs);
+  slp = AsnIoMemCopy (sfp->location, (AsnReadFunc) SeqLocAsnRead,
+                      (AsnWriteFunc) SeqLocAsnWrite);
+  usexref = GetValue (ffp->useGeneXref);
+  if (ffp->gene != NULL) {
+    val = GetValue (ffp->gene);
+/*
+    if (StringISearch (sfp->except_text, "trans-splicing") != NULL) {
+      val = 1;
+      usexref = 0;
+    }
+*/
+    if (usexref == 3 || (val > 1 && usexref == 2)) {
+      grp = NULL;
+      if (usexref == 3) {
+        grp = GeneRefNew ();
+      } else if (val == 2) {
+        GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
+        GetTitle (ffp->geneAllele, allele, sizeof (allele));
+        GetTitle (ffp->geneDesc, desc, sizeof (desc));
+        GetTitle (ffp->locusTag, locustag, sizeof (locustag));
+        grp = CreateNewGeneRef (symbol, allele, desc, FALSE);
+        if (! StringHasNoText (locustag)) {
+          if (grp == NULL) {
+            grp = GeneRefNew ();
+          }
+          grp->locus_tag = StringSave (locustag);
+        }
+        if (!TextHasNoText (ffp->geneSynonym)) {
+          if (grp == NULL) {
+            grp = GeneRefNew ();
+          }
+          ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
+        }
+      } else {
+        vnp = ffp->geneNames;
+        i = val - 3;
+        while (i > 0 && vnp != NULL) {
+          vnp = vnp->next;
+          i--;
+        }
+        if (vnp != NULL) {
+          if (vnp->choice == 1) {
+            str = (CharPtr) vnp->data.ptrvalue;
+            if (StringDoesHaveText (str)) {
+              grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
+              gene = SeqMgrGetFeatureByLabel (bsp, str, SEQFEAT_GENE, 0, &fcontext);
+              if (gene != NULL && gene->data.choice == SEQFEAT_GENE) {
+                grpfeat = (GeneRefPtr) gene->data.value.ptrvalue;
+                if (grpfeat != NULL) {
+                  grp->locus_tag = StringSaveNoNull (grpfeat->locus_tag);
+                }
+              }
+            }
+          } else if (vnp->choice == 2) {
+             grp = GeneRefNew ();
+            if (grp != NULL) {
+              grp->desc = StringSave ((CharPtr) vnp->data.ptrvalue);
+            }
+         } else if (vnp->choice == 3) {
+            grp = GeneRefNew ();
+            if (grp != NULL) {
+              grp->locus_tag = StringSave ((CharPtr) vnp->data.ptrvalue);
+            }
+          }
+        }
+      }
+      if (grp != NULL) {
+        xref = SeqFeatXrefNew ();
+        sfp->xref = xref;
+        if (xref != NULL) {
+          xref->data.choice = SEQFEAT_GENE;
+          xref->data.value.ptrvalue = (Pointer) grp;
+        }
+      }
+    }
+  } else if (usexref == 3) {
+    /* protein feature can now suppress gene on GenBank view */
+    grp = GeneRefNew ();
+    if (grp != NULL) {
+      xref = SeqFeatXrefNew ();
+      sfp->xref = xref;
+      if (xref != NULL) {
+        xref->data.choice = SEQFEAT_GENE;
+        xref->data.value.ptrvalue = (Pointer) grp;
+      }
+    }
+  }
+
+  ompc.output_data = (Pointer) sfp;
+  if (ompc.input_entityID == 0) {
+    sfp->qual = DialogToPointer (ffp->gbquals);
+    PseudogenePopupToGbquals (sfp, ffp, ffp->pseudogene);
+    VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
+    InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
+
+    sfp->ext = DialogToPointer (ffp->usrobjext);
+    if (ffp->goTermUserObj != NULL) {
+      sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
+    }
+    if (ffp->featid != NULL) {
+      TextToFeatID (ffp->featid, &(sfp->id));
+    }
+    if (HasExceptionGBQual (sfp)) {
+      sfp->excpt = TRUE;
+    }
+    if (ffp->fidxref != NULL) {
+      TextToFeatXref (ffp->fidxref, sfp);
+    }
+    AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
+    FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+    if (! ObjMgrRegister (OBJ_SEQFEAT, (Pointer) sfp)) {
+      Message (MSG_ERROR, "ObjMgrRegister failed");
+    }
+    SeqLocFree (slp);
+    SeqEntrySetScope (oldscope);
+    return TRUE;
+  } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
+    sfp->qual = DialogToPointer (ffp->gbquals);
+    PseudogenePopupToGbquals (sfp, ffp, ffp->pseudogene);
+    VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
+    InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
+
+    sfp->ext = DialogToPointer (ffp->usrobjext);
+    if (ffp->goTermUserObj != NULL) {
+      sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
+    }
+    if (ffp->featid != NULL) {
+      TextToFeatID (ffp->featid, &(sfp->id));
+    }
+    if (HasExceptionGBQual (sfp)) {
+      sfp->excpt = TRUE;
+    }
+    if (ffp->fidxref != NULL) {
+      TextToFeatXref (ffp->fidxref, sfp);
+    }
+    AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
+    FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+
+    /* adjust mRNA location and product name here */
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+      UpdatemRNAAfterEditing (ffp->data, sfp->location, sfp->location);
+    }
+
+    ompc.output_itemtype = OBJ_SEQFEAT;
+    if (ompc.input_itemtype == OBJ_BIOSEQ) {
+      bsp = GetBioseqGivenIDs (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
+      if (bsp != NULL) {
+        sap = bsp->annot;
+        while (sap != NULL && (sap->name != NULL || sap->desc != NULL || sap->type != 1)) {
+          sap = sap->next;
+        }
+        if (sap == NULL) {
+          sap = SeqAnnotNew ();
+          if (sap != NULL) {
+            sap->type = 1;
+            sap->next = bsp->annot;
+            bsp->annot = sap;
+          }
+        }
+        if (sap != NULL) {
+          itemID = GetItemIDGivenPointer (ompc.input_entityID, OBJ_SEQANNOT, (Pointer) sap);
+          if (itemID > 0) {
+            ompc.input_itemID = itemID;
+            ompc.input_itemtype = OBJ_SEQANNOT;
+          }
+        }
+      }
+    }
+    if (! AttachDataForProc (&ompc, FALSE)) {
+      Message (MSG_ERROR, "AttachDataForProc failed");
+    }
+    rsult = TRUE;
+  } else {
+    GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
+                (Pointer) &old_location, GetOldFeatureLocation);
+
+    /* adjust mRNA location and product name here, using old location */
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+      UpdatemRNAAfterEditing (ffp->data, old_location == NULL ? sfp->location : old_location, sfp->location);
+    }
+  
+    rd.ffp = ffp;
+    rd.sfp = sfp;
+    GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
+                (Pointer) &rd, ReplaceFeatureExtras);
+    if (HasExceptionGBQual (sfp)) {
+      sfp->excpt = TRUE;
+    }
+    if (ffp->fidxref != NULL) {
+      TextToFeatXref (ffp->fidxref, sfp);
+    }
+    if (FeatIsPseudo (sfp))
+    {
+      RemoveProtXrefs (sfp);
+    }
+    else
+    {
+      AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
+    }
+    FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+    if (! ReplaceDataForProc (&ompc, FALSE)) {
+      Message (MSG_ERROR, "ReplaceDataForProc failed");
+    }
+    rsult = TRUE;
+  }
+  if (ffp->gene != NULL && usexref == 1) {
+    val = GetValue (ffp->gene);
+    if (val == 2) {
+      sep = GetBestTopParentForItemID (ffp->input_entityID,
+                                       ffp->input_itemID,
+                                       ffp->input_itemtype);
+      /*
+      sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+      */
+      if (sep != NULL) {
+        sep = FindNucSeqEntry (sep);
+      }
+      if (sep != NULL && sep->data.ptrvalue != NULL) {
+        GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
+        GetTitle (ffp->geneAllele, allele, sizeof (allele));
+        GetTitle (ffp->geneDesc, desc, sizeof (desc));
+        GetTitle (ffp->locusTag, locustag, sizeof (locustag));
+        grp = CreateNewGeneRef (symbol, allele, desc, FALSE);
+        if (! StringHasNoText (locustag)) {
+          if (grp == NULL) {
+            grp = GeneRefNew ();
+          }
+          grp->locus_tag = StringSave (locustag);
+        }
+        if (!TextHasNoText (ffp->geneSynonym)) {
+          if (grp == NULL) {
+            grp = GeneRefNew ();
+          }
+          ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
+        }
+        if (grp != NULL) {
+          new_gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
+          if (new_gene != NULL) {
+            new_gene->data.value.ptrvalue = (Pointer) grp;
+            FixSpecialCharactersForObject (OBJ_SEQFEAT, new_gene, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+            new_gene->location = SeqLocFree (new_gene->location);
+            new_gene->location = DialogToPointer (ffp->location);
+            gslp = MakeGeneLocForFeatureLoc (new_gene->location, ffp->input_entityID, trans_spliced);
+            new_gene->location = SeqLocFree (new_gene->location);
+            new_gene->location = gslp;
+            hasNulls = LocationHasNullsBetween (new_gene->location);
+            CheckSeqLocForPartial (new_gene->location, &noLeft, &noRight);
+            new_gene->partial = (hasNulls || noLeft || noRight);
+          }
+        }
+      }
+    } else if (val > 2 && !trans_spliced) {
+      /* do not update gene location if trans-spliced */
+      ggl.ffp = ffp;
+      ggl.omp = ObjMgrGet ();
+      ggl.slp = slp;
+      ggl.genexref = NULL;
+      ggl.xrefmatch = FALSE;
+      ggl.idx = 2;
+      ggl.val = val;
+      ggl.min = INT4_MAX;
+      ggl.old_feature_location = old_location;
+      MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+      gs.seglevels = 1;
+      gs.get_feats_location = TRUE;
+        MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
+        gs.ignore[OBJ_BIOSEQ] = FALSE;
+        gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+        gs.ignore[OBJ_SEQFEAT] = FALSE;
+        gs.ignore[OBJ_SEQANNOT] = FALSE;
+      gs.scope = GetBestTopParentForItemID (ffp->input_entityID,
+                                            ffp->input_itemID,
+                                            ffp->input_itemtype);
+      GatherEntity (ffp->input_entityID, (Pointer) &ggl, GeneUpdateFunc, &gs);
+    }
+  }
+  SeqLocFree (slp);
+  SeqEntrySetScope (oldscope);
+
   old_location = SeqLocFree (old_location);
   return rsult;
 }
@@ -3167,6 +3325,74 @@ static void InsertFirstAuthor (ButtoN b)
 }
 
 
+static void RemoveTabAndCrFromContextList (ValNodePtr PNTR find_list)
+{
+  ValNodePtr vnp, prev = NULL, vnp_next;
+
+  if (find_list == NULL) {
+    return;
+  }
+  for (vnp = *find_list; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
+    if (vnp->choice == '\t' || vnp->choice == '\n') {
+      if (prev == NULL) {
+        *find_list = vnp_next;
+      } else{
+        prev->next = vnp_next;
+      }
+      vnp->next = NULL;
+      vnp = FreeContextList (vnp);
+    } else {
+      prev = vnp;
+    }
+  }
+}
+
+  
+static ValNodePtr TestAuthorDialog (DialoG d)
+{
+  AuthorDialogPtr  adp;
+  ValNodePtr       find_list = NULL, vnp;
+  TagListPtr       tlp;
+  CharPtr          cp;
+  Boolean          did_find = FALSE;
+  Boolean          did_change = FALSE;
+  CharPtr PNTR     vals;
+  Int4             i;
+  AuthListPtr      alp;
+
+  adp = (AuthorDialogPtr)GetObjectExtra (d);
+  if (adp == NULL) {
+    return NULL;
+  }
+  tlp = (TagListPtr) GetObjectExtra (adp->stdAuthor);
+  if (tlp == NULL || tlp->vnp == NULL) {
+    return NULL;
+  }
+  vals = (CharPtr PNTR) MemNew (sizeof (CharPtr) * ValNodeLen (tlp->vnp));
+  for (vnp = tlp->vnp, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+    vals[i] = (CharPtr) vnp->data.ptrvalue;
+    SpecialCharFindWithContext (vals + i, &find_list, &did_find, &did_change);
+  }
+
+  RemoveTabAndCrFromContextList (&find_list);
+  if (find_list != NULL && FixSpecialCharactersForStringsInList (find_list,
+              "The author names contain special characters. You must replace them.",
+              TRUE)) {
+    for (vnp = tlp->vnp, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+      vnp->data.ptrvalue = vals[i];
+    }
+    alp = DialogToPointer (adp->stdAuthor);
+    PointerToDialog (adp->stdAuthor, alp);
+    alp = AuthListFree (alp);
+  }
+  vals = MemFree (vals);
+
+  find_list = FreeContextList (find_list);
+  return NULL;
+}
+
+
 extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
 
 {
@@ -3186,7 +3412,7 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     adp->dialog = (DialoG) p;
     adp->todialog = AuthListPtrToAuthorDialog;
     adp->fromdialog = AuthorDialogToAuthListPtr;
-    adp->testdialog = NULL;
+    adp->testdialog = TestAuthorDialog;
     adp->importdialog = ReadAuthorDialog;
     adp->exportdialog = WriteAuthorDialog;
     adp->dialogmessage = AuthorDialogMessage;
@@ -3409,7 +3635,7 @@ static DialoG CreateAnAffilDialog (GrouP prnt, CharPtr title,
       StaticPrompt (g, "Institution", 0, dialogTextHeight, programFont, 'l');
       StaticPrompt (g, "Department", 0, dialogTextHeight, programFont, 'l');
     }
-    StaticPrompt (g, "Address", 0, dialogTextHeight, programFont, 'l');
+    StaticPrompt (g, "Street Address", 0, dialogTextHeight, programFont, 'l');
     StaticPrompt (g, "City", 0, dialogTextHeight, programFont, 'l');
     StaticPrompt (g, "State/Province", 0, dialogTextHeight, programFont, 'l');
     StaticPrompt (g, "Country", 0, dialogTextHeight, programFont, 'l');

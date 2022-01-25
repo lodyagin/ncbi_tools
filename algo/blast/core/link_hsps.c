@@ -1,5 +1,5 @@
 
-/* $Id: link_hsps.c,v 1.73 2011/06/13 17:34:31 kazimird Exp $
+/* $Id: link_hsps.c,v 1.74 2011/07/25 13:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: link_hsps.c,v 1.73 2011/06/13 17:34:31 kazimird Exp $";
+    "$Id: link_hsps.c,v 1.74 2011/07/25 13:54:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/link_hsps.h>
@@ -1245,7 +1245,7 @@ s_SumScoreCompareLinkedHSPSets(const void* v1, const void* v2)
  */
 static Int4 
 s_HSPOffsetBinarySearch(BlastLinkedHSPSet** hsp_array, Int4 size, 
-                        Int4 queryId, Int4 offset)
+                        Uint4 queryId, Int4 offset)
 {
    Int4 index, begin, end;
    
@@ -1283,7 +1283,7 @@ s_HSPOffsetBinarySearch(BlastLinkedHSPSet** hsp_array, Int4 size,
  */
 static Int4 
 s_HSPOffsetEndBinarySearch(BlastLinkedHSPSet** hsp_array, Int4 size, 
-                           Int4* qend_index_array, Int4 queryId, Int4 offset)
+                           Int4* qend_index_array, Uint4 queryId, Int4 offset)
 {
    Int4 begin, end;
    

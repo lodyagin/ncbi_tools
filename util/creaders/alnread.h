@@ -2,7 +2,7 @@
 #define UTIL_CREADERS___ALNREAD__H
 
 /*
- * $Id: alnread.h,v 1.7 2006/09/14 13:31:00 bollin Exp $
+ * $Id: alnread.h,v 1.8 2012/03/30 13:44:31 kazimird Exp $
  *
  * ===========================================================================
  *
@@ -63,6 +63,11 @@ extern "C" {
 #endif
 
 typedef char * (ALIGNMENT_CALLBACK *FReadLineFunction) (void * userdata);
+
+typedef enum {
+    eTrue = -1,
+    eFalse = 0
+} EBool;
 
 typedef enum {
     eAlnErr_Unknown = -1,
@@ -151,57 +156,67 @@ extern NCBI_CREADERS_EXPORT TAlignmentFilePtr ReadAlignmentFileEx (
   TSequenceInfoPtr     sequence_info, /* structure containing sequence
                                        * alphabet and special characters
                                        */
-  int                  use_nexus_file_info /* set to nonzero to replace data in 
-                                            * sequence_info with characters
-                                            * read from NEXUS comment in file,
-                                            * set to 0 otherwise.
-                                            */
+  EBool           use_nexus_file_info /* set to nonzero to replace data in 
+                                       * sequence_info with characters
+                                       * read from NEXUS comment in file,
+                                       * set to 0 otherwise.
+                                       */
+);
+
+/*
+ * The following are to accommodate creating of local IDs to replace the IDs
+ * found in the actual alignment file. We are retaining the original API for
+ * legacy code compatibility, hence the new functions with almost the same
+ * signature.
+ */
+
+extern NCBI_CREADERS_EXPORT TAlignmentFilePtr ReadAlignmentFile2 (
+  FReadLineFunction    readfunc,      /* function for reading lines of 
+                                       * alignment file
+                                       */
+  void *               fileuserdata,  /* data to be passed back each time
+                                       * readfunc is invoked
+                                       */
+  FReportErrorFunction errfunc,       /* function for reporting errors */
+  void *               erroruserdata, /* data to be passed back each time
+                                       * errfunc is invoked
+                                       */
+  TSequenceInfoPtr     sequence_info, /* structure containing sequence
+                                       * alphabet and special characters
+                                       */
+  EBool                gen_local_ids  /* flag indicating whether input IDs
+                                       * should be replaced with unique
+                                       * local IDs
+                                       */ 
+);
+
+extern NCBI_CREADERS_EXPORT TAlignmentFilePtr ReadAlignmentFileEx2 (
+  FReadLineFunction    readfunc,      /* function for reading lines of 
+                                       * alignment file
+                                       */
+  void *               fileuserdata,  /* data to be passed back each time
+                                       * readfunc is invoked
+                                       */
+  FReportErrorFunction errfunc,       /* function for reporting errors */
+  void *               erroruserdata, /* data to be passed back each time
+                                       * errfunc is invoked
+                                       */
+  TSequenceInfoPtr     sequence_info, /* structure containing sequence
+                                       * alphabet and special characters
+                                       */
+  EBool          use_nexus_file_info, /* set to nonzero to replace data in 
+                                       * sequence_info with characters
+                                       * read from NEXUS comment in file,
+                                       * set to 0 otherwise.
+                                       */
+  EBool                gen_local_ids  /* flag indicating whether input IDs
+                                       * should be replaced with unique
+                                       * local IDs
+                                       */ 
 );
 
 #ifdef __cplusplus
 }
 #endif
-
-/*
- * ==========================================================================
- *
- * $Log: alnread.h,v $
- * Revision 1.7  2006/09/14 13:31:00  bollin
- * make alphabet in SequenceInfo struct const
- *
- * Revision 1.6  2006/09/13 18:34:41  bollin
- * added flag to indicate whether alignment formatting clues were found
- *
- * Revision 1.5  2005/10/21 15:18:36  bollin
- * added function to allow the gap, missing, and match characters to be read
- * from NEXUS comments for an alignment
- *
- * Revision 1.4  2004/11/24 15:26:18  dicuccio
- * Swap extern and export specifier; white space changes
- *
- * Revision 1.3  2004/05/20 19:39:40  bollin
- * added num_segments member to SAlignmentFile structure to allow reading of
- * alignments of segmented sets.
- *
- * Revision 1.2  2004/02/05 15:43:32  bollin
- * fixed portability issue for windows function pointers
- *
- * Revision 1.1  2004/02/03 16:46:55  ucko
- * Add Colleen Bollin's Toolkit-independent alignment reader.
- *
- * Revision 1.10  2004/01/29 17:58:36  bollin
- * fixed member alignment in SErrorInfo
- *
- * Revision 1.9  2004/01/29 17:41:54  bollin
- * added comment block, id tags, log
- *
- * Revision 1.8  2004/01/29 17:30:14  bollin
- * fixed all struct names
- *
- * Revision 1.7  2004/01/29 15:15:13  bollin
- * added formatting bitts
- *
- * ==========================================================================
- */
 
 #endif /* UTIL_CREADERS___ALNREAD__H */

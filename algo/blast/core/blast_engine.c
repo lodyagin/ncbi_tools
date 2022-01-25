@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.279 2011/05/31 16:09:30 kazimird Exp $
+/* $Id: blast_engine.c,v 1.288 2012/06/18 18:44:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.279 2011/05/31 16:09:30 kazimird Exp $";
+    "$Id: blast_engine.c,v 1.288 2012/06/18 18:44:35 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -84,8 +84,8 @@ static char const rcsid[] =
 
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
 NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 25;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Feb-01-2011";
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 26;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Sep-21-2011";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -252,7 +252,7 @@ static Int2 s_GetNextSubjectChunk(BLAST_SequenceBlk* subject,
     (subject->chunk)++;
 
     /* if no chunking is performed */
-    if (backup->offset == 0 && backup->next == backup->full_range.right) {
+    if (backup->offset == 0 && residual == 0 && backup->next == backup->full_range.right) {
         subject->seq_ranges = backup->soft_ranges;
         subject->num_seq_ranges = backup->num_soft_ranges;
         return SUBJECT_SPLIT_OK;
@@ -500,7 +500,7 @@ s_BlastSearchEngineOneContext(EBlastProgramType program_number,
         if (status) break;
 
         /* Removes redundant HSPs. */
-        Blast_HSPListPurgeHSPsWithCommonEndpoints(program_number, hsp_list);
+        Blast_HSPListPurgeHSPsWithCommonEndpoints(program_number, hsp_list, TRUE);
 
         /* For nucleotide search, if match score is = 2, the odd scores
            are rounded down to the nearest even number. */
@@ -883,7 +883,8 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
     Boolean blastp = (lookup_wrap->lut_type == eAaLookupTable ||
                      lookup_wrap->lut_type == eCompressedAaLookupTable);
     Boolean rpsblast = (lookup_wrap->lut_type == eRPSLookupTable);
-    Boolean indexed_mb_lookup = (lookup_wrap->lut_type == eIndexedMBLookupTable);
+    // Boolean indexed_mb_lookup = (lookup_wrap->lut_type == eIndexedMBLookupTable);
+    Boolean indexed_mb_lookup = (lookup_wrap->read_indexed_db != 0);
     Boolean phi_lookup = (lookup_wrap->lut_type == ePhiLookupTable ||
                          lookup_wrap->lut_type == ePhiNaLookupTable);
     Boolean smith_waterman = 
@@ -901,8 +902,10 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
 
     if (smith_waterman) {
         aux_struct->WordFinder = NULL;
+    /*
     } else if (indexed_mb_lookup) {
         aux_struct->WordFinder = MB_IndexedWordFinder;
+    */
     } else if (phi_lookup) {
         aux_struct->WordFinder = PHIBlastWordFinder;
     } else if (blastp) {
@@ -911,9 +914,17 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
     } else if (rpsblast) {
         aux_struct->WordFinder = BlastRPSWordFinder;
     } else {
-        BlastChooseNucleotideScanSubject(lookup_wrap);
-        BlastChooseNaExtend(lookup_wrap);
-        aux_struct->WordFinder = BlastNaWordFinder;
+        if( lookup_wrap->lut_type != eIndexedMBLookupTable ) {
+            BlastChooseNucleotideScanSubject(lookup_wrap);
+            BlastChooseNaExtend(lookup_wrap);
+        }
+
+        if( indexed_mb_lookup ) {
+            aux_struct->WordFinder = MB_IndexedWordFinder;
+        }
+        else {
+            aux_struct->WordFinder = BlastNaWordFinder;
+        }
     }
     
     aux_struct->offset_pairs = 
@@ -1068,6 +1079,36 @@ s_RPSPreliminarySearchEngine(EBlastProgramType program_number,
     return status;
 }
 
+static void 
+s_AdjustSubjectForSraSearch(BlastHSPList* hsp_list, Uint1 offset )
+{
+	int i = 0;
+	BlastHSP ** hsp_array = hsp_list->hsp_array;
+	for(i=0; i < hsp_list->hspcnt; i++)
+	{
+		BlastHSP * hsp = hsp_array[i];
+		if(hsp->subject.offset <= offset)
+		{
+			hsp->subject.offset = 0;
+			hsp->query.offset += offset;
+
+			if(hsp->subject.gapped_start <= offset)
+			{
+				hsp->subject.gapped_start =  0;
+				hsp->query.gapped_start = hsp->query.offset;
+			}
+		}
+		else
+		{
+			hsp->subject.offset -= offset;
+		}
+
+		hsp->subject.end -= offset;
+
+		ASSERT(hsp->subject.offset < hsp->subject.end);
+		ASSERT(hsp->query.offset < hsp->query.end);
+	}
+}
 
 Int4 
 BLAST_PreliminarySearchEngine(EBlastProgramType program_number, 
@@ -1098,6 +1139,9 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
     BlastSeqSrcIterator* itr;
     const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
                                 program_number == eBlastTypePhiBlastn);
+
+    T_MB_IdbCheckOid check_index_oid = 
+        (T_MB_IdbCheckOid)lookup_wrap->check_index_oid;
 
     BlastInitialWordParametersNew(program_number, word_options, 
       hit_params, lookup_wrap, sbp, query_info, 
@@ -1144,8 +1188,14 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
        Int4 stat_length;
        if (seq_arg.oid == BLAST_SEQSRC_ERROR)
            break;
+
+       if( check_index_oid != 0 && check_index_oid( seq_arg.oid ) == 0 ) {
+           continue;
+       }
+
        if (BlastSeqSrcGetSequence(seq_src, &seq_arg) < 0)
            continue;
+
        if (db_length == 0) {
            /* This is not a database search, hence need to recalculate and save
             the effective search spaces and length adjustments for all 
@@ -1191,6 +1241,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
       }
 
       if (hsp_list && hsp_list->hspcnt > 0) {
+         int query_index=0; /* Used to loop over queries below. */
          if (!gapped_calculation) {
             /* The following must be performed for any ungapped 
                search with a nucleotide database. */
@@ -1237,10 +1288,25 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
             Blast_HSPListGetBitScores(hsp_list, gapped_calculation, sbp);
          } 
          
+         // This should only happen for sra searches
+         if(seq_arg.seq->bases_offset > 0)
+         {
+        	s_AdjustSubjectForSraSearch(hsp_list, seq_arg.seq->bases_offset);
+         }
+
          /* Save the results. */
          status = BlastHSPStreamWrite(hsp_stream, &hsp_list);
          if (status != 0)
             break;
+
+         if (hit_params->low_score)
+         {
+ 	    for (query_index=0; query_index<hsp_stream->results->num_queries; query_index++)
+              if (hsp_stream->results->hitlist_array[query_index] && hsp_stream->results->hitlist_array[query_index]->heapified)
+                   hit_params->low_score[query_index] = 
+			MAX(hit_params->low_score[query_index], 
+                           hit_params->options->low_score_perc*(hsp_stream->results->hitlist_array[query_index]->low_score));
+         }
       }
       
       BlastSeqSrcReleaseSequence(seq_src, &seq_arg);

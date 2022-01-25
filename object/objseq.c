@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -1000,7 +1000,8 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     if (atp == BIOSEQ_annot)
     {
         bsp->annot = SeqAnnotSetAsnRead(aip, atp, BIOSEQ_annot_E);
-        if (bsp->annot == NULL) goto erret;
+// 15dec2011: do not treat empty set as error
+//        if (bsp->annot == NULL) goto erret;
         atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
     }
 
@@ -1557,6 +1558,156 @@ erret:
 
 /**************************************************
 *
+*    LinkageEvidenceNew()
+*
+**************************************************/
+NLM_EXTERN 
+LinkageEvidencePtr LIBCALL
+LinkageEvidenceNew(void)
+{
+   LinkageEvidencePtr ptr = MemNew((size_t) sizeof(LinkageEvidence));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    LinkageEvidenceFree()
+*
+**************************************************/
+NLM_EXTERN 
+LinkageEvidencePtr LIBCALL
+LinkageEvidenceFree(LinkageEvidencePtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    LinkageEvidenceAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+LinkageEvidencePtr LIBCALL
+LinkageEvidenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   LinkageEvidencePtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* LinkageEvidence ::= (self contained) */
+      atp = AsnReadId(aip, amp, LINKAGE_EVIDENCE);
+   } else {
+      atp = AsnLinkType(orig, LINKAGE_EVIDENCE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = LinkageEvidenceNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == LINKAGE_EVIDENCE_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = LinkageEvidenceFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    LinkageEvidenceAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+LinkageEvidenceAsnWrite(LinkageEvidencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, LINKAGE_EVIDENCE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, LINKAGE_EVIDENCE_type,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
 *    SeqGapNew()
 *
 **************************************************/
@@ -1584,6 +1735,7 @@ SeqGapFree(SeqGapPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
+   AsnGenericValNodeSetFree(ptr -> linkage_evidence, (AsnOptFreeFunc) LinkageEvidenceFree);
    return MemFree(ptr);
 }
 
@@ -1599,6 +1751,7 @@ SeqGapAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    SeqGapPtr ptr;
 
@@ -1646,6 +1799,13 @@ SeqGapAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> linkage = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQ_GAP_linkage_evidence) {
+      ptr -> linkage_evidence = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) LinkageEvidenceAsnRead, (AsnOptFreeFunc) LinkageEvidenceFree);
+      if (isError && ptr -> linkage_evidence == NULL) {
+         goto erret;
+      }
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -1703,6 +1863,9 @@ SeqGapAsnWrite(SeqGapPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, SEQ_GAP_type,  &av);
    av.intvalue = ptr -> linkage;
    retval = AsnWrite(aip, SEQ_GAP_linkage,  &av);
+   if (ptr -> linkage_evidence != NULL) {
+      AsnGenericValNodeSetAsnWrite(ptr -> linkage_evidence, (AsnWriteFunc) LinkageEvidenceAsnWrite, aip, SEQ_GAP_linkage_evidence, SEQ_GAP_linkage_evidence_E);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

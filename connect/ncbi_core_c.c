@@ -1,4 +1,4 @@
-/* $Id: ncbi_core_c.c,v 6.25 2011/01/20 17:08:07 lavr Exp $
+/* $Id: ncbi_core_c.c,v 6.26 2011/11/16 18:25:40 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -225,14 +225,18 @@ extern MT_LOCK MT_LOCK_c2c(TNlmRWlock lock, int/*bool*/ pass_ownership)
 }
 
 
+static const char* s_GetAppName(void)
+{
+    return GetProgramName();
+}
+
+
 /***********************************************************************
  *                                 Init                                *
  ***********************************************************************/
 
 extern void CONNECT_Init(const char* conf_file)
 {
-    const char* appname;
-
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
@@ -240,8 +244,5 @@ extern void CONNECT_Init(const char* conf_file)
     CORE_SetLOG(LOG_c2c());
     CORE_SetREG(REG_c2c(conf_file));
 
-    /* replace app name now */
-    appname = GetProgramName();
-    if (Nlm_StringDoesHaveText(appname))
-        strrncpy0(g_CORE_AppName, appname, NCBI_CORE_APPNAME_MAXLEN);
+    g_CORE_GetAppName = s_GetAppName;
 }

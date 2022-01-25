@@ -95,12 +95,12 @@ Int2 Main(void)
 		title = BioseqGetTitle(seqlist[i]);
 		FilePuts((VoidPtr)title, fp);
 		FilePuts("\n", fp);
-		fprintf(fp, "len=%ld gaps=%ld segs=%ld\n", BioseqGetLen(seqlist[i]),
+		fprintf(fp, "len=%d gaps=%d segs=%d\n", BioseqGetLen(seqlist[i]),
 		BioseqGetGaps(seqlist[i]), numseg);
 		if ((numseg > 1) && (numseg <= 10)) {
 			BioseqGetSegLens (seqlist[i], lens);
 			for (j = 0; j < numseg; j++)
-				fprintf(fp, "  len = %ld\n", lens[j]);
+				fprintf(fp, "  len = %d\n", lens[j]);
 		}
 		FilePuts("\n", fp);
 	}

@@ -2,6 +2,9 @@
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "all", "all.vcxproj", "{9B517428-FC06-4F86-B23F-17F3C8269059}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A561305F-004C-48DC-A613-D76B10E5AA55} = {A561305F-004C-48DC-A613-D76B10E5AA55}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "all_demo", "all_demo.vcxproj", "{A8DB6CF6-7174-47BD-A7E6-D4D0F829CAB4}"
 EndProject
@@ -129,9 +132,15 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_netentcf", "demo\neten
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_raw2delt", "demo\raw2delt\demo_raw2delt.vcxproj", "{3048BF29-240A-432E-A024-84F876382B97}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_regexp", "regexp\demo\demo_regexp.vcxproj", "{2F4A7AE4-0769-47F9-BCE3-0A7476782AE6}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_regexp", "regexp\demo\demo_regexp\demo_regexp.vcxproj", "{2F4A7AE4-0769-47F9-BCE3-0A7476782AE6}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73740101-0842-4651-8CBD-504AD5452B9C} = {73740101-0842-4651-8CBD-504AD5452B9C}
+	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_regexp_grep", "regexp\demo\demo_regexp_grep.vcxproj", "{3FD11C8F-89CD-463F-A5EF-5EB97C170CC3}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_regexp_grep", "regexp\demo\demo_regexp_grep\demo_regexp_grep.vcxproj", "{3FD11C8F-89CD-463F-A5EF-5EB97C170CC3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73740101-0842-4651-8CBD-504AD5452B9C} = {73740101-0842-4651-8CBD-504AD5452B9C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "demo_rpsblast", "demo\rpsblast\demo_rpsblast.vcxproj", "{BFAA28A2-B0D3-414F-B1A4-3B64E79CD06A}"
 EndProject
@@ -182,6 +191,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "http_connector_hit", "connect\test\http_connector_hit\http_connector_hit.vcxproj", "{75DC2ACE-D9D8-4868-AEB0-9FB8BC42B180}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "medarch", "network\medarch\client\medarch.vcxproj", "{D5D660C7-C494-4948-ADC3-B224289A2DA5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73740101-0842-4651-8CBD-504AD5452B9C} = {73740101-0842-4651-8CBD-504AD5452B9C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ncbi", "corelib\ncbi\ncbi.vcxproj", "{43C8A0D1-A9A5-4D3C-AE87-51AFEA28B1B0}"
 EndProject
@@ -200,6 +212,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ncbiid1", "network\id1arch\ncbiid1.vcxproj", "{83267E13-55D9-4EE6-8E88-088721D01DE6}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ncbimain", "corelib\ncbimain\ncbimain.vcxproj", "{11D82583-A230-43ED-B9D7-35874F7677A2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73740101-0842-4651-8CBD-504AD5452B9C} = {73740101-0842-4651-8CBD-504AD5452B9C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ncbimmdb", "biostruc\ncbimmdb.vcxproj", "{49AF0FF3-5E15-41ED-8EED-9FE346B226DA}"
 EndProject
@@ -220,6 +235,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netentr", "network\entrez\client\netentr.vcxproj", "{FC4D800E-691F-4424-9645-83BB0C78301D}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "regexp", "regexp\regexp.vcxproj", "{FD3DC2D5-8E27-44F4-8923-14359F7359BE}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73740101-0842-4651-8CBD-504AD5452B9C} = {73740101-0842-4651-8CBD-504AD5452B9C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "smartnet", "internal\smart\smartnet\smartnet.vcxproj", "{007AA0E6-4246-407D-9F02-5FC809CFE81E}"
 EndProject
@@ -254,6 +272,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_ncbi_socket_connector", "connect\test\test_ncbi_socket_connector\test_ncbi_socket_connector.vcxproj", "{48702F26-A851-4776-8871-99358F92C881}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_regexp", "regexp\test\test_regexp.vcxproj", "{DE57DBAD-377C-4E81-A2F2-EB68969F7724}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73740101-0842-4651-8CBD-504AD5452B9C} = {73740101-0842-4651-8CBD-504AD5452B9C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vibgif", "gif\vibgif.vcxproj", "{FBFB66C6-E6D6-4851-A699-E998D8E0347B}"
 EndProject

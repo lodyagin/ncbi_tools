@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.122 2011/05/31 16:09:30 kazimird Exp $
+/* $Id: blast_hits.h,v 1.125 2012/04/03 13:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -122,6 +122,7 @@ typedef struct BlastHSP {
                                               only for blastp and tblastn */
    SPHIHspInfo* pat_info; /**< In PHI BLAST, information about this pattern
                                  match. */
+   Int4 num_positives;
 } BlastHSP;
 
 /** The structure to hold all HSPs for a given sequence after the gapped 
@@ -232,7 +233,9 @@ Blast_HSPInit(Int4 query_start, Int4 query_end,
  * Traceback is also adjusted in that case.
  * @param hsp The HSP structure [in] [out]
  * @param query_start Pointer to the start of the query sequence [in]
+ * @param query_length Length of the query sequence [in]
  * @param subject_start Pointer to the start of the subject sequence [in]
+ * @param subject_length Length of the subject sequence [in]
  * @param hit_params Hit saving parameters containing score cut-off [in]
  * @param score_params Scoring parameters [in]
  * @param sbp Score block with Karlin-Altschul parameters [in]
@@ -240,8 +243,10 @@ Blast_HSPInit(Int4 query_start, Int4 query_end,
  */
 NCBI_XBLAST_EXPORT
 Boolean 
-Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp, const Uint1* query_start, 
-   const Uint1* subject_start, const BlastHitSavingParameters* hit_params, 
+Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp, 
+   const Uint1* query_start, const Int4 query_length, 
+   const Uint1* subject_start, const Int4 subject_length,
+   const BlastHitSavingParameters* hit_params, 
    const BlastScoringParameters* score_params, BlastScoreBlk* sbp);
 
 /** Reevaluate the HSP's score and percent identity after taking into
@@ -279,6 +284,40 @@ Blast_HSPGetNumIdentities(const Uint1* query,
                           BlastHSP* hsp, 
                           const BlastScoringOptions* score_options,
                           Int4* align_length_ptr);
+
+/** Calculate number of identities and positives in an HSP and set the
+ *  BlastHSP::num_ident  and BlastHSP::num_positives fields
+ * @param query The query sequence [in]
+ * @param subject The uncompressed subject sequence [in]
+ * @param hsp All information about the HSP, the output of this function will
+ * be stored in its num_ident field [in|out]
+ * @param score_options Scoring options [in]
+ * @param align_length_ptr The alignment length, including gaps (optional) [out]
+ * @param sbp Score blk containing the matrix for counting positives [in]
+ * @return 0 on success, -1 on invalid parameters or error
+ */
+NCBI_XBLAST_EXPORT
+Int2
+Blast_HSPGetNumIdentitiesAndPositives(const Uint1* query,
+                          	  	  	  const Uint1* subject,
+                          			  BlastHSP* hsp,
+                          			  const BlastScoringOptions* score_options,
+                          			  Int4* align_length_ptr,
+                          			  const BlastScoreBlk* sbp);
+
+/** Determines whether this HSP should be kept or
+ * deleted.
+ * @param hsp An HSP structure [in] [out]
+ * @param hit_options Hit saving options containing percent identity and
+ *                    HSP length thresholds.
+ * @param align_length alignment length including gaps
+ * @return FALSE if HSP passes the test, TRUE if it should be deleted.
+ */
+NCBI_XBLAST_EXPORT
+Boolean
+Blast_HSPTest(BlastHSP* hsp,
+ 	 	 	  const BlastHitSavingOptions* hit_options,
+ 	 	 	  Int4 align_length);
 
 /** Calculates number of identities and alignment lengths of an HSP via
  * Blast_HSPGetNumIdentities and determines whether this HSP should be kept or
@@ -506,12 +545,14 @@ Blast_HSPListPurgeNullHSPs(BlastHSPList* hsp_list);
  * @param program Type of BLAST program. For some programs (PHI BLAST), the
  *                purge should not be performed. [in]
  * @param hsp_list Contains array of pointers to HSPs to purge [in]
+ * @param purge Should the hsp be purged? [in]
  * @return The number of valid alignments remaining. 
 */
 NCBI_XBLAST_EXPORT
 Int4
 Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program, 
-                                          BlastHSPList* hsp_list);
+                                          BlastHSPList* hsp_list,
+                                          Boolean purge);
 
 /** Reevaluate all ungapped HSPs in an HSP list.  
  * This is only done for an ungapped search, or if traceback is 
@@ -767,6 +808,15 @@ Blast_HSPResultsFromHSPStreamWithLimit(struct BlastHSPStream* hsp_stream,
                                    Uint4 max_num_hsps,
                                    Boolean* removed_hsps);
 
+BlastHSPResults*
+/** As Blast_HSPResultsFromHSPStreamWithLimit, except accept and return 
+ * array of Boolen flags specifying which query exceeded HSP limits.
+ */
+Blast_HSPResultsFromHSPStreamWithLimitEx(struct BlastHSPStream* hsp_stream, 
+                                   Uint4 num_queries, 
+                                   SBlastHitsParameters* hit_param,
+                                   Uint4 max_num_hsps,
+                                   Boolean* removed_hsps);
 /** Splits the BlastHSPResults structure for a PHI BLAST search into an array of
  * BlastHSPResults structures, corresponding to different pattern occurrences in
  * query. All HSPs are copied, so it is safe to free the returned 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.156 $
+* $Revision: 6.160 $
 *
 * File Description: 
 *
@@ -1135,10 +1135,17 @@ static void PopTargetAlistProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
   CharPtr            ptr;
   SeqIdPtr           sip;
   Char               str [128];
+  static BioseqViewFormPtr already_complained_about_sequences = NULL;
 
   bfp = (BioseqViewFormPtr) mydata;
   if (bfp != NULL && sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
-    if (bfp->workingCount > MAX_VIEWABLE_TARGET_SEQUENCES) return; /* don't want list to get too long */
+    if (bfp->workingCount > MAX_VIEWABLE_TARGET_SEQUENCES) {
+      if (already_complained_about_sequences != bfp) {
+          Message (MSG_ERROR, "Too many sequences to list in navigation controls!");
+          already_complained_about_sequences = bfp;
+      }
+      return; /* don't want list to get too long */    
+    }
     bsp = (BioseqPtr) sep->data.ptrvalue;
     sip = SeqIdFindWorst (bsp->id);
     SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
@@ -4200,6 +4207,75 @@ static Boolean AllSequencesHaveAccessionsButNoGis (SeqEntryPtr sep)
 }
 
 
+static Boolean IsAllDigits (CharPtr str)
+
+{
+  CharPtr cp;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  cp = str;
+  while (*cp != 0 && isdigit (*cp)) {
+    cp++;
+  }
+  if (*cp == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean IsFixableIDString (CharPtr str) 
+{
+  if (StringHasNoText (str)) {
+    return FALSE;
+  } else if (StringNICmp (str, "SeqID", 5) == 0 && IsAllDigits (str + 5)) {
+    return TRUE;
+  } else if (StringNICmp (str, "Seq", 3) == 0 && IsAllDigits (str + 3)) {
+    return TRUE;
+  } else if (StringNICmp (str, "Sequence", 8) == 0 && IsAllDigits (str + 8)) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static void HasConflictingFixableLocalIdsCallback (BioseqPtr bsp, Pointer data)
+{
+  BoolPtr p_rval;
+  SeqIdPtr sip1;
+  BioseqPtr bsp2;
+  ObjectIdPtr oip;
+
+  if (bsp == NULL || (p_rval = (BoolPtr) data) == NULL || *p_rval) {
+    return;
+  }
+
+  for (sip1 = bsp->id; sip1 != NULL; sip1 = sip1->next) {
+    if (sip1->choice == SEQID_LOCAL 
+        && (oip = (ObjectIdPtr) sip1->data.ptrvalue) != NULL
+        && IsFixableIDString(oip->str)) {
+      bsp2 = BioseqFindSpecial (sip1);
+      if (bsp2 != NULL && bsp2 != bsp) {
+        *p_rval = TRUE;
+      }
+    }
+  }
+}
+
+
+static Boolean HasConflictingFixableLocalIds (SeqEntryPtr sep)
+{
+  Boolean rval = FALSE;
+
+  VisitBioseqsInSep (sep, &rval, HasConflictingFixableLocalIdsCallback);
+  return rval;
+}
+
+
+
 static void HasConflictingIDsCallback (BioseqPtr bsp, Pointer data)
 {
   BoolPtr p_rval;
@@ -4242,6 +4318,7 @@ NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object)
   SeqEntryPtr  sep;
   Uint2        entityID;
   LogInfoPtr   lip;
+  LclIdListPtr head = NULL;
 
   if (bfp == NULL) return;
 
@@ -4249,9 +4326,26 @@ NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object)
   if (sep == NULL) {
     return;
   }
+
   if (add_object && !AllSequencesHaveAccessionsButNoGis(sep)) {
     return;
   }
+
+  /* need to fix colliding local IDs, if possible */
+  if (HasConflictingFixableLocalIds(sep)) {
+    if (HasAlignmentsWithLocalIDs (sep)) 
+    {
+      if (ANS_CANCEL == Message (MSG_OKC, "This record contains colliding local IDs, and has alignments with local IDs.  You will need to repair the alignments manually if you resolve colliding IDs.  Do you want to continue (and run Autofix)?"))
+      {
+        return;
+      }
+    }
+    SeqEntryExplore (sep, (Pointer) &head, ResolveExistingIDsCallback);
+    FreeLclTree (&head);
+    ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  }
+
   if (HasConflictingIds(sep)) {
     Message (MSG_ERROR, "Can't run autofix - there are colliding local IDs.");
     return;
@@ -4283,7 +4377,7 @@ NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object)
   Update();
   lip = OpenLog ("AutoFix Actions");
   entityID = ObjMgrGetEntityIDForChoice(sep);
-  lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, action_list, lip->fp);
+  lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, action_list, lip->fp, Sequin_GlobalAlign2Seq);
   if (add_object) {
     AddNcbiAutofixUserObject(sep);
   }

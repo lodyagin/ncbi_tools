@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.72 $
+* $Revision: 6.74 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -703,6 +703,7 @@ typedef struct smfeatitem {
   Boolean      farloc;       /* location has an accession not packaged in entity */
   Boolean      bad_order;    /* location is out of order - possibly trans-spliced */
   Boolean      mixed_strand; /* location has mixed strands - possibly trans-spliced */
+  Boolean      ts_image;     /* trans-spliced image on another small chromosome, ignore packaging error */
   Uint1        strand;       /* strand (mapped to segmented bioseq if segmented) */
   Uint1        subtype;      /* featdef subtype */
   Uint4        itemID;       /* storing itemID so no need to gather again */
@@ -845,7 +846,7 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetSfpProductList (BioseqPtr bsp);
 *
 *****************************************************************************/
 
-NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, BoolPtr flip_strand));
+NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, BoolPtr flip_strand, Boolean relaxed));
 
 /*****************************************************************************
 *

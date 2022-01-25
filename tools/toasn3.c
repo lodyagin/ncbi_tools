@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.127 2011/05/02 17:18:27 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.133 2012/06/04 20:04:10 kans Exp $";
 
 /*****************************************************************************
 *
@@ -1041,6 +1041,45 @@ static Int2 GetUpdateDatePos (SeqEntryPtr sep)
   return -1;
 }
 
+static void CleanMiscFeatFields (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  GeneRefPtr  grp;
+  ProtRefPtr  prp;
+  CharPtr     str;
+  ValNodePtr  vnp;
+
+  if (sfp == NULL) return;
+
+  switch (sfp->data.choice) {
+    case SEQFEAT_GENE:
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp == NULL) return;
+      if (grp->locus != NULL && sfp->comment != NULL && StringCmp (sfp->comment, grp->locus) == 0) {
+        sfp->comment = MemFree (sfp->comment);
+      }
+      if (grp->desc != NULL && sfp->comment != NULL && StringCmp (sfp->comment, grp->desc) == 0) {
+        sfp->comment = MemFree (sfp->comment);
+      }
+      break;
+    case SEQFEAT_PROT:
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+      if (prp == NULL) return;
+      if (prp->desc != NULL) {
+        for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          if (StringCmp (prp->desc, str) == 0) {
+            prp->desc = MemFree (prp->desc);
+          }
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 /*****************************************************************************
 *   SeqEntryToAsn3Ex(sep)
 *       Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
@@ -1101,6 +1140,8 @@ Boolean isEmblOrDdbj
     }
     toporg(sep);
     SeqEntryExplore(sep, (Pointer)(&ta), FindOrg);
+
+    VisitFeaturesInSep (sep, NULL, CleanMiscFeatFields);
 
     if (ta.had_biosource) {    
 /* entry is in asn.1 spec 3.0 already do the checks only */
@@ -4234,7 +4275,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp, Boolean also_adjust_mrna)
     SeqIdPtr protid, tmp;
     SeqIntPtr sip, msip = NULL;
     Int2 residue, residue2;
-    Char nuc[40];
+    Char nuc[PATH_MAX];
     CodeBreakPtr cbp;
     Int4 pos1, pos2, pos;
     SeqLocPtr tmpslp;
@@ -4297,7 +4338,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp, Boolean also_adjust_mrna)
     BioseqUnlock (protseq); /* unlock but do not cache out, easier than unlocking everywhere in code below */
     if (((protseq->length + 1) == aas) && (remainder == 0)) /* correct length with termination */
         return;
-    
+
     if (protseq->seq_data_type == Seq_code_gap) return;
 
     cbp = crp->code_break;
@@ -4323,6 +4364,27 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp, Boolean also_adjust_mrna)
         }
 
         cbp = cbp->next;
+    }
+
+    if (protseq->length == aas && remainder == 0) 
+    {
+      /* do we already have a stop codon, but the translated protein includes it? */
+      if (protseq->repr == Seq_repr_raw) {
+        newprot = (ByteStorePtr) protseq->seq_data;
+        if (newprot != NULL) {
+          protlen = BSLen(newprot);
+          BSSeek(newprot, (protlen - 1), SEEK_SET);
+          residue = BSGetByte(newprot);
+          while (residue == '*' && protlen == protseq->length && protlen > 0) {
+            BSSeek (newprot, -1, SEEK_END);
+            BSDelete (newprot, 1);
+            BSSeek (newprot, -1, SEEK_END);
+            protlen--;
+            protseq->length = protlen;
+            residue = BSGetByte (newprot);
+          }
+        }
+      }
     }
 
     sip = GetOriginalBeforeAdjustment (sfp->location, &oldfrom, &oldto);
@@ -4390,9 +4452,9 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp, Boolean also_adjust_mrna)
     }
 
     if (tmp == NULL)
-        SeqIdPrint(nucseq->id, nuc, PRINTID_FASTA_LONG);
+        SeqIdWrite(nucseq->id, nuc, PRINTID_FASTA_LONG, sizeof (nuc) - 1);
     else
-        SeqIdPrint(tmp, nuc, PRINTID_TEXTID_ACCESSION);
+        SeqIdWrite(tmp, nuc, PRINTID_TEXTID_ACCESSION, sizeof (nuc) - 1);
 
     if (fp != NULL)
         fprintf(fp, "%s %ld %d\n", nuc, (long)(oldnum+1), (int)remainder);
@@ -4610,6 +4672,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
     Boolean lfree = FALSE, partial5, partial3;
     CharPtr p, q;
     GBQualPtr qu, qunext;
+    GeneRefPtr grp1, grp2;
     
     for (tmp1 = sfa.pept; tmp1; tmp1 = tmp1->next) {
         lfree = FALSE;
@@ -4624,7 +4687,33 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
         for (tmp2=sfa.cds; tmp2; tmp2=tmp2->next) {
             f2 = tmp2->data.ptrvalue;
             diff_current = SeqLocAinB(loc, f2->location);
-            if (! diff_current)   /* perfect match */ {
+            if (diff_current < 0) continue;
+            /* if no best yet, take first candidate */
+            if (diff_lowest == -1) {
+              diff_lowest = diff_current;
+              best_cds = f2;
+              continue;
+            }
+            /* if newer candidate has tighter coverage, take it */
+            if (diff_current < diff_lowest) {
+              diff_lowest = diff_current;
+              best_cds = f2;
+              continue;
+            }
+            /* use gene xref as tie breaker for genes with same coverage */
+            grp1 = SeqMgrGetGeneXref (f1);
+            if (grp1 == NULL || SeqMgrGeneIsSuppressed (grp1)) continue;
+            grp2 = SeqMgrGetGeneXref (f2);
+            if (grp2 == NULL || SeqMgrGeneIsSuppressed (grp2)) continue;
+            if (StringDoesHaveText (grp1->locus_tag) && StringDoesHaveText (grp2->locus_tag)) {
+              if (StringICmp (grp1->locus_tag, grp2->locus_tag) != 0) continue;
+            } else if (StringDoesHaveText (grp1->locus) && StringDoesHaveText (grp2->locus)) {
+              if (StringICmp (grp1->locus, grp2->locus) != 0) continue;
+            }
+            diff_lowest = diff_current;
+            best_cds = f2;
+            /*
+            if (diff_current == 0) {
                 best_cds = f2;
                 break;
             } else if (diff_current > 0) {
@@ -4633,10 +4722,12 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
                     best_cds = f2;
                 }
             }
+            */
         }
-/*        if (lfree)
+        /*
+        if (lfree)
             SeqLocFree(loc);
-*/
+        */
         if (best_cds == NULL) { 
             p = SeqLocPrint(f1->location);
             ErrPostEx(SEV_WARNING, ERR_FEATURE_CDSNotFound, 
@@ -5701,25 +5792,6 @@ static Boolean OnlyPunctuation (CharPtr str)
   return TRUE;
 }
 
-static Boolean IsOnlinePub (PubdescPtr pdp)
-
-{
-  CitGenPtr   cgp;
-  ValNodePtr  vnp;
-
-  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == PUB_Gen) {
-      cgp = (CitGenPtr) vnp->data.ptrvalue;
-      if (cgp != NULL) {
-        if (StringNICmp (cgp->cit, "Online Publication", 18) == 0) {
-          return TRUE;
-        }
-      }
-    }
-  }
-  return FALSE;
-}
-
 static void CleanDescStrings (ValNodePtr sdp)
 
 {
@@ -5783,14 +5855,7 @@ static void CleanDescStrings (ValNodePtr sdp)
       break;
     case Seq_descr_pub :
       pdp = (PubdescPtr) sdp->data.ptrvalue;
-      if (IsOnlinePub (pdp)) {
-        TrimSpacesAroundString (pdp->comment);
-        if (StringHasNoText (pdp->comment)) {
-          pdp->comment = MemFree (pdp->comment);
-        }
-      } else {
-        CleanVisString (&(pdp->comment));
-      }
+      CleanVisString (&(pdp->comment));
       break;
     case Seq_descr_region :
       CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);

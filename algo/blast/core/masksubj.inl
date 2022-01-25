@@ -1,4 +1,4 @@
-/* $Id: masksubj.inl,v 1.2 2010/07/28 14:49:44 kazimird Exp $
+/* $Id: masksubj.inl,v 1.3 2011/07/25 13:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -49,7 +49,7 @@ s_DetermineScanningOffsets(const BLAST_SequenceBlk* subject,
     ASSERT(subject->num_seq_ranges >= 1);
     while (range[1] > range[2]) {
         range[0]++;
-        if (range[0] >= subject->num_seq_ranges) {
+        if (range[0] >= (Int4)subject->num_seq_ranges) {
             return FALSE;
         }
         range[1] = subject->seq_ranges[range[0]].left + word_length - lut_word_length;

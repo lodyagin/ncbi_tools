@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.c,v 1.14 2010/07/16 18:45:46 kazimird Exp $
+/*  $Id: blast_hspstream.c,v 1.15 2011/07/25 13:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hspstream.c,v 1.14 2010/07/16 18:45:46 kazimird Exp $";
+    "$Id: blast_hspstream.c,v 1.15 2011/07/25 13:54:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 
@@ -424,7 +424,7 @@ int BlastHSPStreamMerge(SSplitQueryBlk *squery_blk,
    fprintf(stderr, "\n");
 #elif defined(_DEBUG)
    for (num_queries = 0; query_list[num_queries] != UINT4_MAX; num_queries++) ;
-   for (num_ctx = 0, max_ctx = INT4_MIN; num_ctx < num_contexts; num_ctx++) 
+   for (num_ctx = 0, max_ctx = INT4_MIN; num_ctx < (Int4)num_contexts; num_ctx++) 
        max_ctx = MAX(max_ctx, context_list[num_ctx]);
    for (num_ctx_offsets = 0; offset_list[num_ctx_offsets] != UINT4_MAX;
         num_ctx_offsets++) ;

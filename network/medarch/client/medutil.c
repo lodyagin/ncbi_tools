@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.32 $
+* $Revision: 6.38 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -128,7 +128,7 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
   ptr = title;
   ch = *ptr;
   while (ch != '\0') {
-    if (ch == '(' || ch == ')') {
+    if (ch == '(' || ch == ')' || ch == '.') {
       *ptr = ' ';
     }
     ptr++;
@@ -154,7 +154,7 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
   if (str == NULL) return FALSE;
 
   xop = ParseXmlString (str);
-  MemFree (str);
+  str = MemFree (str);
   if (xop == NULL) return FALSE;
 
   blk.head = NULL;
@@ -162,19 +162,29 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
   VisitXmlNodes (xop, (Pointer) &blk, MUGetStringSetCallback, "Id", NULL, NULL, NULL, 0);
   VisitXmlNodes (xop, (Pointer) &count, MUGetStringCallback, "Count", "eSearchResult", NULL, NULL, 0);
 
-  FreeXmlObject (xop);
+  xop = FreeXmlObject (xop);
 
   if (StringCmp (count, "0") == 0 || blk.head == NULL) {
-    MemFree (count);
+    count = MemFree (count);
+
+    /*
+    if [multi] failed, try [jour]
+    Microbiology (Reading, Engl.)
+    is indexed in [multi] as
+    microbiology reading, england
+    and in [jour] as
+    microbiology reading, engl
+    microbiology reading, england
+    */
 
     str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
-                                     title, "%5Bmulti%5D+AND+ncbijournals%5Bsb%5D", NULL);
+                                     title, "%5Bjour%5D", NULL);
     if (str == NULL) return FALSE;
 
     xop = ParseXmlString (str);
-    MemFree (str);
+    str = MemFree (str);
     if (xop == NULL) return FALSE;
 
     blk.head = NULL;
@@ -182,10 +192,10 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
     VisitXmlNodes (xop, (Pointer) &blk, MUGetStringSetCallback, "Id", NULL, NULL, NULL, 0);
     VisitXmlNodes (xop, (Pointer) &count, MUGetStringCallback, "Count", "eSearchResult", NULL, NULL, 0);
 
-    FreeXmlObject (xop);
+    xop = FreeXmlObject (xop);
   }
 
-  MemFree (count);
+  count = MemFree (count);
 
   if (blk.head == NULL) return FALSE;
 
@@ -205,22 +215,22 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
                                    "/entrez/eutils/esummary.fcgi",
                                    "db=nlmcatalog&retmax=200&version=2.0&id=",
                                    jids, NULL, NULL);
-  MemFree (jids);
+  jids = MemFree (jids);
   if (str == NULL) return FALSE;
 
   xop = ParseXmlString (str);
-  MemFree (str);
+  str = MemFree (str);
   if (xop == NULL) return FALSE;
 
   VisitXmlNodes (xop, (Pointer) &status, MUGetStringCallback, "CurrentIndexingStatus", NULL, NULL, NULL, 0);
 
-  FreeXmlObject (xop);
+  xop = FreeXmlObject (xop);
 
   if (StringCmp (status, "Y") == 0) {
     rsult = TRUE;
   }
 
-  MemFree (status);
+  status = MemFree (status);
 
   return rsult;
 }
@@ -243,6 +253,7 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
     Int2       year = 0;
     ImprintPtr imp = NULL;
     DatePtr    dp;
+    Int2       yr;
 	
     if(pub == NULL || pub->data.ptrvalue == NULL)
     {
@@ -337,14 +348,18 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
     }
     if(imp != NULL && imp->prepub == 2) /* in-press */ 
     {
+        yr = 0;
         dp = DateCurr();
-        if(year && (Int2) (dp->data[1]) + 1900 - year > 2)
+        if (dp != NULL) {
+          yr = (Int2) dp->data[1];
+          DateFree(dp);
+        }
+        if(year && yr + 1900 - year > 2)
         {
             ErrPostEx(SEV_WARNING, ERR_REFERENCE_OldInPress, 
                       "encountered in-press article more than 2 years old: %s %s|%s|(%d)|%s|%s",
                       last, first, s_title, (int) year, vol, page);
         }
-        DateFree(dp);
     }
     else
     {

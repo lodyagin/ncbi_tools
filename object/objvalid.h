@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Structured-comment-validation
-*    Generated using ASNCODE Revision: 6.16 at Dec 11, 2009  7:16 AM
+*    Generated using ASNCODE Revision: 6.17 at Feb 22, 2012 10:57 AM
 *
 **************************************************/
 
@@ -83,6 +83,7 @@ typedef struct struct_Dependent_field_rule {
    struct struct_Dependent_field_rule PNTR next;
    CharPtr   match_name;
    CharPtr   value_constraint;
+   Uint1   invert_match;
    struct struct_Field_rule PNTR   other_fields;
    struct struct_Field_rule PNTR   disallowed_fields;
 } DependentFieldRule, PNTR DependentFieldRulePtr;

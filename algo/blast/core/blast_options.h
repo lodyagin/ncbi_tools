@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.158 2011/02/09 14:39:32 kazimird Exp $
+/* $Id: blast_options.h,v 1.161 2012/05/21 15:56:03 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -146,9 +146,10 @@ extern "C" {
                                      value exceeds this number are discarded */
 #define BLAST_HITLIST_SIZE 500 /**< Number of database sequences to save hits 
                                   for */
-/** Defaults for PSI-BLAST options */
+/** Defaults for PSI-BLAST and DELTA-BLAST options */
 #define PSI_INCLUSION_ETHRESH 0.002 /**< Inclusion threshold for PSI BLAST */
 #define PSI_PSEUDO_COUNT_CONST 0 /**< Pseudo-count constant for PSI-BLAST */
+#define DELTA_INCLUSION_ETHRESH 0.05 /**< Inclusion threshold for DELTA-BLAST */
 
 /** Default genetic code for query and/or database */
 #define BLAST_GENETIC_CODE 1  /**< Use the standard genetic code for converting
@@ -170,7 +171,9 @@ typedef enum {
     ePhiLookupTable,  /**< protein lookup table specialized for phi-blast */
     ePhiNaLookupTable,  /**< nucleotide lookup table for phi-blast */
     eRPSLookupTable, /**< RPS lookup table (rpsblast and rpstblastn) */
-    eIndexedMBLookupTable /**< use database index as a lookup structure */
+    eIndexedMBLookupTable, /**< use database index as a lookup structure */
+    eMixedMBLookupTable /**< use when some volumes are searched with index and 
+                             some are not */
 } ELookupTableType;
 
 /** Options needed to construct a lookup table 
@@ -368,6 +371,13 @@ typedef struct BlastHitSavingOptions {
     */
    BlastHSPFilteringOptions* hsp_filt_opt;
 
+   /** Low-score option.  Do not pass ungapped alignments on for later processing if
+    * the hitlist is already full of other alignments unless the ungapped aligment 
+    * is above the fraction X of the least significant database match.
+    * zero should turn this off.
+    */
+   double low_score_perc;
+
 } BlastHitSavingOptions;
 
 /** Scoring options block 
@@ -468,6 +478,7 @@ typedef struct PSIBlastOptions {
     Boolean ignore_unaligned_positions;
 
 } PSIBlastOptions;
+
 
 /** Options used to create the ReadDBFILE structure 
  *  Include database name and various information for restricting the database

@@ -40,8 +40,7 @@
 #include <asn2gnbk.h>
 #endif
 
-#include <ni_types.h>
-#include <ni_lib.h>
+#include <ncbinet.h>
 #include <ffprint.h>
 #include <ent2api.h>
 
@@ -115,7 +114,7 @@ static void MyBioseqToRevCompFasta(BioseqPtr bsp, Pointer userdata);
 static Boolean CreateMaxPlexParam(void);
 static Int4 GetIntervalAccession( const Char* pAccession, Char* pResult);
 
-Int4 giBuffer[1000];
+Int4 giBuffer[100];
 int giBufferPos = 0;
 
 DataVal Val;
@@ -624,11 +623,14 @@ void EntrezQuery(char *query)
 
     if(myargs[onlylistarg].intvalue)
       printf("%d\n", ids[i]);
-    else
-      IdFetch_func(ids[i],
-                   myargs[dbarg].strvalue,
-                   myargs[entarg].intvalue,
-		   maxplex_param);
+    else {
+        if (!IdFetch_func(ids[i], myargs[dbarg].strvalue,
+                          myargs[entarg].intvalue, maxplex_param)) {
+            ErrPostEx(SEV_ERROR, 0, 0,
+                      "Failed to retrieve data for gi %d", ids[i]);
+            exit(1);
+        }
+    }
   }
 }
 
@@ -759,7 +761,7 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
 static Entrez2ReplyPtr MyEntrezSynchronousQuery(Entrez2RequestPtr e2rq)
 {
   int i;
-  for(i = 0; i < 3; ++i)
+  for(i = 0; i < 10; ++i)
   {
     Entrez2ReplyPtr reply = EntrezSynchronousQuery(e2rq);
     if(reply != NULL)
@@ -805,10 +807,13 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
       } else if (StringICmp (e2ddp->field_name, "Extra") == 0) {
         extra = e2ddp->field_value;
       }
+      /* Once both Seq-id and title are found, there's no need to continue
+         parsing the docsum */
+      if (strlen(extra) > 0 && strlen(title) > 0) {
+          fprintf(fp,">%s %s\n", extra, title);
+          break;
+      }
     }
-
-    fprintf(fp,">%s %s\n", extra, title);
-
   }
 
   Entrez2DocsumListFree (e2dl);

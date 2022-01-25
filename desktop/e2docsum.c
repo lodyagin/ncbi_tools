@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
@@ -1017,7 +1017,7 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
     cpt = pdbacc;
   }
   if (StringHasNoText (cpt)) {
-    sprintf (uidbuf, "%ld", uid);
+    sprintf (uidbuf, "%ud", uid);
     cpt = uidbuf;
   }
   if (StringHasNoText (cpt)) {

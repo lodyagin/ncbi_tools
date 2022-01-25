@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -42,6 +42,9 @@
 *
 * ==========================================================================
 * $Log: ni_error.h,v $
+* Revision 6.5  2012/02/19 03:45:25  lavr
+* Cleanup of obsolete features
+*
 * Revision 6.4  2000/10/30 18:12:01  beloslyu
 * FreeBSD was added
 *
@@ -70,7 +73,7 @@
 #ifndef _NI_ERROR_
 #define _NI_ERROR_
 
-#include "ncbinet.h"
+#include <ncbinet.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -78,6 +81,8 @@
 #else
 #define NLM_EXTERN extern
 #endif
+
+#define ERRTEXT_BUFSIZ  512                     /* size of supplied error text buffer */
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,14 +123,6 @@ NI_Platform {
 
   NI_N_PLATFORMS
 #define NI_MAX_PLATFORMS (NI_N_PLATFORMS - 1)
-};
-
-#define NI_ErrLevel enum ni_errlevel
-NI_ErrLevel {
-  NIL_INFORMATION = 1,   /* informational */
-  NIL_WARNING,           /* small problem */
-  NIL_SEVERE,            /* recoverable */
-  NIL_FATAL              /* not recoverable */
 };
 
 #define NI_Error enum ni_error
@@ -203,14 +200,6 @@ NI_Error {
   NIE_UNKNOWN,        /* unknown error */
   NIE_N_ERRORS        /* do not enumerate after this line! */
 };
-
-/* number of errors */
-NLM_EXTERN Uint2 *x_ni_nerr PROTO((void));
-#define ni_nerr (*x_ni_nerr())
-
-/* error level - NOT SET on error */
-NLM_EXTERN NI_ErrLevel *x_ni_errlev PROTO((void));
-#define ni_errlev (*x_ni_errlev())
 
 /* error number set by failing function */
 NLM_EXTERN NI_Error *x_ni_errno PROTO((void));

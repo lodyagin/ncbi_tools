@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.c,v 1.42 2011/02/09 14:39:32 kazimird Exp $
+/* $Id: blast_parameters.c,v 1.44 2012/01/26 19:04:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_parameters.c,v 1.42 2011/02/09 14:39:32 kazimird Exp $";
+    "$Id: blast_parameters.c,v 1.44 2012/01/26 19:04:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_parameters.h>
@@ -807,6 +807,11 @@ BlastHitSavingParametersNew(EBlastProgramType program_number,
       }
    }
 
+   if (options->low_score_perc > 0.00001)
+       params->low_score = calloc((size_t) query_info->num_queries, sizeof(int));
+   else 
+       params->low_score = NULL;
+
    status = BlastHitSavingParametersUpdate(program_number, sbp, query_info, 
                                            avg_subj_length, params);
 
@@ -914,7 +919,13 @@ BlastHitSavingParametersUpdate(EBlastProgramType program_number,
             searchsp /= NUM_FRAMES;
    
          /* Get cutoff_score for specified evalue. */
-         BLAST_Cutoffs(&new_cutoff, &evalue, kbp, searchsp, FALSE, 0);
+         if (sbp->gbp && sbp->gbp->filled) {
+             new_cutoff = BLAST_SpougeEtoS(evalue, kbp, sbp->gbp, 
+                         query_info->contexts[context].query_length,
+                         avg_subject_length);
+         } else {
+             BLAST_Cutoffs(&new_cutoff, &evalue, kbp, searchsp, FALSE, 0);
+         }
          params->cutoffs[context].cutoff_score = new_cutoff;
          params->cutoffs[context].cutoff_score_max = new_cutoff;
       }
@@ -1113,7 +1124,7 @@ void printAllParameters ( BlastHitSavingParameters * hit_params,
  * ===========================================================================
  *
  * $Log: blast_parameters.c,v $
- * Revision 1.42  2011/02/09 14:39:32  kazimird
+ * Revision 1.44  2012/01/26 19:04:36  kazimird
  * Synchronized with the C++ Toolkit.
  *
  * Revision 1.36  2007/05/22 20:55:36  kazimird

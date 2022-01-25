@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
@@ -51,6 +51,8 @@
 #include <salparam.h>
 #include <edutil.h>
 #include <dlogutil.h>
+#include <aliread.h>
+#include <alignmgr2.h>
 
 #define SIDLAND          1
 #define SEQLAND          2
@@ -2515,3 +2517,1171 @@ ssp->regiontype, ssp->region);
      update_edititem (pnl);
   Update ();
 }
+
+
+const char *nucleotide_alphabet = "ABCDGHKMRSTUVWYabcdghkmrstuvwy";
+const char *protein_alphabet = "ABCDEFGHIKLMPQRSTUVWXYZabcdefghiklmpqrstuvwxyz";
+
+typedef struct alnsettingsdlg {
+  DIALOG_MESSAGE_BLOCK
+  TexT missing;
+  TexT match;
+  TexT beginning_gap;
+  TexT middle_gap;
+  TexT end_gap;
+
+  PopuP sequence_type;
+} AlnSettingsDlgData, PNTR AlnSettingsDlgPtr;
+
+static Pointer AlnSettingsDlgToData (DialoG d)
+{
+  AlnSettingsDlgPtr dlg;
+  TSequenceInfoPtr  sequence_info;
+
+  dlg = (AlnSettingsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  sequence_info = SequenceInfoNew ();
+  if (sequence_info == NULL) return NULL;
+
+  sequence_info->missing = MemFree (sequence_info->missing);
+  sequence_info->missing = SaveStringFromText (dlg->missing);
+
+  sequence_info->beginning_gap = MemFree (sequence_info->beginning_gap);
+  sequence_info->beginning_gap = SaveStringFromText (dlg->beginning_gap);
+
+  sequence_info->middle_gap = MemFree (sequence_info->middle_gap);
+  sequence_info->middle_gap = SaveStringFromText (dlg->middle_gap);
+
+  sequence_info->end_gap = MemFree (sequence_info->end_gap);
+  sequence_info->end_gap = SaveStringFromText (dlg->end_gap);
+
+  sequence_info->match = MemFree (sequence_info->match);
+  sequence_info->match = SaveStringFromText (dlg->match);
+
+  if (dlg->sequence_type != NULL) 
+  {
+    if (GetValue (dlg->sequence_type) == 1) {
+      sequence_info->alphabet = nucleotide_alphabet;
+    } else {
+      sequence_info->alphabet = protein_alphabet;
+    }
+  }
+  else
+  {
+    sequence_info->alphabet = nucleotide_alphabet;
+  }
+
+  return sequence_info;
+}
+
+
+static void DataToAlnSettingsDlg (DialoG d, Pointer data)
+{
+  AlnSettingsDlgPtr dlg;
+  TSequenceInfoPtr  sequence_info;
+
+  dlg = (AlnSettingsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  sequence_info = (TSequenceInfoPtr) data;
+
+  if (sequence_info == NULL)
+  {
+    SetTitle (dlg->missing, "?Nn");
+    SetTitle (dlg->beginning_gap, "-.Nn?");
+    SetTitle (dlg->middle_gap, "-.");
+    SetTitle (dlg->end_gap, "-.Nn?");
+    SetTitle (dlg->match, ":");
+    if (dlg->sequence_type != NULL)
+    {
+      SetValue (dlg->sequence_type, 1);
+    }
+  }
+  else
+  {
+    SetTitle (dlg->missing, sequence_info->missing);
+    SetTitle (dlg->beginning_gap, sequence_info->beginning_gap);
+    SetTitle (dlg->middle_gap, sequence_info->middle_gap);
+    SetTitle (dlg->end_gap, sequence_info->end_gap);
+    SetTitle (dlg->match, sequence_info->match);
+
+    if (dlg->sequence_type != NULL) 
+    {
+      if (StringCmp (sequence_info->alphabet, protein_alphabet) == 0) 
+      {
+        SetValue (dlg->sequence_type, 2);
+      }
+      else
+      {
+        SetValue (dlg->sequence_type, 1);
+      }
+    }
+  }
+}
+
+
+static ValNodePtr TestAlnSettingsDlg (DialoG d)
+{
+  ValNodePtr        err_list = NULL;
+  TSequenceInfoPtr  sequence_info;
+  CharPtr           cp;
+  CharPtr           fmt = "Character %c cannot appear in both %s and %s.";
+  CharPtr           err_str;
+  CharPtr           missing_name = "Ambiguous/Unknown";
+  CharPtr           middle_gap_name = "Middle Gap";
+  CharPtr           match_name = "Match";
+
+  sequence_info = DialogToPointer (d);
+  if (sequence_info == NULL) return NULL;
+
+  /* missing and match cannot appear in middle gap list */
+  cp = sequence_info->missing;
+  while (cp != NULL && *cp != 0)
+  {
+    if (StringChr (sequence_info->middle_gap, *cp)) 
+    {
+      err_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) 
+                                                   + StringLen (missing_name)
+                                                   + StringLen (middle_gap_name)));
+      sprintf (err_str, fmt, *cp, missing_name, middle_gap_name);
+      ValNodeAddPointer (&err_list, 0, err_str);
+    }
+    cp++;
+  }
+
+  cp = sequence_info->match;
+  while (cp != NULL && *cp != 0)
+  {
+    if (StringChr (sequence_info->middle_gap, *cp)) 
+    {
+      err_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) 
+                                                   + StringLen (match_name)
+                                                   + StringLen (middle_gap_name)));
+      sprintf (err_str, fmt, *cp, match_name, middle_gap_name);
+      ValNodeAddPointer (&err_list, 0, err_str);
+    }
+    cp++;
+  }
+
+  /* missing and match cannot share characters */
+  cp = sequence_info->missing;
+  while (cp != NULL && *cp != 0)
+  {
+    if (StringChr (sequence_info->match, *cp)) 
+    {
+      err_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) 
+                                                   + StringLen (missing_name)
+                                                   + StringLen (match_name)));
+      sprintf (err_str, fmt, *cp, missing_name, match_name);
+      ValNodeAddPointer (&err_list, 0, err_str);
+    }
+    cp++;
+  }
+
+  return err_list;
+}
+
+
+static CharPtr aln_settings_help = "\
+Beginning Gap: When some of the sequences in an \
+alignment are shorter or longer than others, beginning \
+gap characters are added to the beginning of the sequence \
+to maintain the correct spacing.  These will not appear \
+in your sequence file.\n\
+Middle Gap: These characters are used to maintain the spacing \
+inside an alignment.  These are not nucleotides and will \
+not appear as part of your sequence file.\n\
+End Gap: When some of the sequences in an alignment are shorter \
+or longer than others, end gap characters are added to the end \
+of the sequence to maintain the correct spacing.  These will \
+not appear in your sequence file.\n\
+Ambiguous/Unknown: These characters are used to represent \
+indeterminate/ambiguous nucleotides.  These will appear in your \
+sequence file as 'n'.\n\
+Match: These characters are used to indicate positions where \
+sequences are identical to the first sequence.  These will be \
+replaced by the actual characters from the first sequence.";
+
+
+NLM_EXTERN DialoG AlnSettingsDlg (GrouP h, Boolean allow_sequence_type)
+{
+  AlnSettingsDlgPtr dlg;
+  GrouP             p, g, p_msg;
+  
+  dlg = (AlnSettingsDlgPtr) MemNew (sizeof (AlnSettingsDlgData));
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = DataToAlnSettingsDlg;
+  dlg->fromdialog = AlnSettingsDlgToData;
+  dlg->testdialog = TestAlnSettingsDlg;
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  StaticPrompt (g, "Ambiguous/Unknown", 0, dialogTextHeight, programFont, 'c');
+  dlg->missing = DialogText (g, "?Nn", 5, NULL);
+  StaticPrompt (g, "Match", 0, dialogTextHeight, programFont, 'c');
+  dlg->match = DialogText (g, ".", 5, NULL);
+  StaticPrompt (g, "Beginning Gap", 0, dialogTextHeight, programFont, 'c');
+  dlg->beginning_gap = DialogText (g, "-.?nN", 5, NULL);
+  StaticPrompt (g, "Middle Gap", 0, dialogTextHeight, programFont, 'c');
+  dlg->middle_gap = DialogText (g, "-", 5, NULL);
+  StaticPrompt (g, "End Gap", 0, dialogTextHeight, programFont, 'c');
+  dlg->end_gap = DialogText (g, "-.?nN", 5, NULL);
+  if (allow_sequence_type) {
+    StaticPrompt (g, "Sequence Type", 0, dialogTextHeight, programFont, 'c');
+    dlg->sequence_type = PopupList (g, TRUE, NULL);
+    PopupItem (dlg->sequence_type, "Nucleotide");
+    PopupItem (dlg->sequence_type, "Protein");
+    SetValue (dlg->sequence_type, 1);
+  }
+  
+  p_msg = MultiLinePrompt (p, aln_settings_help, 750, systemFont);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) p_msg, NULL);
+  
+  return (DialoG) p;
+}
+
+
+typedef struct alignmentoptionsform
+{
+  Boolean accepted;
+  Boolean done;	
+} AlignmentOptionsFormData, PNTR AlignmentOptionsFormPtr;
+
+static void AcceptAlignmentOptions (ButtoN b)
+{
+  AlignmentOptionsFormPtr aofp;
+  
+  aofp = (AlignmentOptionsFormPtr) GetObjectExtra (b);
+  if (aofp == NULL) return;
+  aofp->accepted = TRUE;
+  aofp->done = TRUE;
+}
+
+static void CancelAlignmentOptions (ButtoN b)
+{
+  AlignmentOptionsFormPtr aofp;
+  
+  aofp = (AlignmentOptionsFormPtr) GetObjectExtra (b);
+  if (aofp == NULL) return;
+  aofp->accepted = FALSE;
+  aofp->done = TRUE;
+}
+
+
+NLM_EXTERN TSequenceInfoPtr GetAlignmentOptions (Uint1Ptr moltype, TSequenceInfoPtr sequence_info)
+{
+  ButtoN                   b;
+  GrouP                    c, h;
+  WindoW                   w;
+  AlignmentOptionsFormData aofd;
+  DialoG                   d;
+  ValNodePtr               err_list;
+
+  aofd.accepted = FALSE;
+  aofd.done = FALSE;
+  w = ModalWindow (-50, -33, -10, -10, NULL);
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  d = AlnSettingsDlg (h, moltype == NULL ? FALSE : TRUE);  
+  PointerToDialog (d, sequence_info);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = DefaultButton (c, "Accept", AcceptAlignmentOptions);
+  SetObjectExtra (b, &aofd, NULL);
+  b = PushButton (c, "Cancel", CancelAlignmentOptions);
+  SetObjectExtra (b, &aofd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) d, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+ 
+  while (!aofd.done) {
+    while (!aofd.done)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+    if (!aofd.accepted)
+    {
+      Remove (w);
+  	  return NULL;
+    }
+
+    err_list = TestDialog (d);
+    if (err_list != NULL) {
+      Message (MSG_ERROR, err_list->data.ptrvalue);
+      err_list = ValNodeFreeData (err_list);
+      aofd.done = FALSE;
+      aofd.accepted = FALSE;
+    }
+  }
+  sequence_info = DialogToPointer (d);
+  if (sequence_info == NULL) return NULL;
+  if (StringCmp (sequence_info->alphabet, protein_alphabet) == 0) {
+    if (moltype != NULL) {
+      *moltype = Seq_mol_aa;
+    }
+  } else {
+    if (moltype != NULL) {
+      *moltype = Seq_mol_na;
+    }
+  }
+
+  Remove (w);
+  return sequence_info;
+}
+
+
+static void RemoveSequenceFromAlignmentFile (TAlignmentFilePtr afp, CharPtr str)
+{
+  int pos, k;
+
+  if (afp == NULL) {
+    return;
+  }
+  for (pos = 0; pos < afp->num_sequences; pos++) {
+    if (StringCmp (str, afp->ids[pos]) == 0) {
+      free (afp->ids[pos]);
+      for (k = pos + 1; k < afp->num_sequences; k++) {
+        afp->ids[k - 1] = afp->ids[k];
+      }
+      free (afp->sequences[pos]);
+      for (k = pos + 1; k < afp->num_sequences; k++) {
+        afp->sequences[k - 1] = afp->sequences[k];
+      }
+      afp->num_sequences--;
+      if (pos < afp->num_organisms) {
+        free (afp->organisms[pos]);
+        for (k = pos + 1; k < afp->num_organisms; k++) {
+          afp->organisms[k - 1] = afp->organisms[k];
+        }
+        afp->num_organisms--;
+      }
+      if (pos < afp->num_deflines) {
+        free (afp->deflines[pos]);
+        for (k = pos + 1; k < afp->num_deflines; k++) {
+          afp->deflines[k - 1] = afp->deflines[k];
+        }
+        afp->num_deflines--;
+      }
+    }
+  }
+}
+
+
+static void FixToFarPointer (TAlignmentFilePtr afp, Int4 index)
+{
+  CharPtr tmp_id_str;
+
+  if (afp == NULL || index < -1 || index >= afp->num_sequences)
+  {
+    return;
+  }
+  tmp_id_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (afp->ids [index]) + 4));
+  if (tmp_id_str == NULL) 
+  {
+    return;
+  }
+  sprintf (tmp_id_str, "acc%s", afp->ids [index]);
+  MemFree (afp->ids [index]);
+  afp->ids[index] = tmp_id_str;
+}
+
+
+static void RemoveNthSequenceFromAlignment (TAlignmentFilePtr afp, Int4 n)
+{
+  Int4 i;
+  
+  if (afp == NULL || n < 0) {
+    return;
+  }
+  
+  if (afp->deflines != NULL && n < afp->num_deflines) {
+    afp->deflines[n] = MemFree (afp->deflines[n]);
+    for (i = n + 1; i < afp->num_deflines; i++) {
+      afp->deflines[i - 1] = afp->deflines[i];
+    }
+    afp->deflines[afp->num_deflines - 1] = NULL;
+    afp->num_deflines--;
+  }
+  
+  if (afp->organisms != NULL && n < afp->num_organisms) {
+    afp->organisms[n] = MemFree (afp->organisms[n]);
+    for (i = n + 1; i < afp->num_organisms; i++) {
+      afp->organisms[i - 1] = afp->organisms[i];
+    }
+    afp->organisms[afp->num_organisms - 1] = NULL;
+    afp->num_organisms--;
+  }
+  
+  if (afp->sequences != NULL && n < afp->num_sequences) {
+    afp->sequences[n] = MemFree (afp->sequences[n]);
+    afp->ids[n] = MemFree (afp->ids[n]);
+    for (i = n + 1; i < afp->num_sequences; i++) {
+      afp->sequences[i - 1] = afp->sequences[i];
+      afp->ids[i - 1] = afp->ids[i];
+    }
+    afp->sequences[afp->num_sequences - 1] = NULL;
+    afp->ids[afp->num_sequences - 1] = NULL;
+    afp->num_sequences--;
+  }
+}
+
+
+static void FixAlignmentIdsOkCancel (ButtoN b)
+{
+  BoolPtr bp;
+  
+  bp = (BoolPtr) GetObjectExtra (b);
+  if (bp != NULL)
+  {
+    *bp = TRUE;
+  }
+}
+
+static void EnableTextID (GrouP g)
+{
+  TexT id_text;
+  
+  id_text = (TexT) GetObjectExtra (g);
+  if (id_text != NULL)
+  {
+    if (GetValue (g) > 5)
+    {
+      Enable (id_text);
+    }
+    else
+    {
+      Disable (id_text);
+    }
+  }
+}
+
+
+static Boolean ReplaceAlignmentIDsFromFile (TAlignmentFilePtr afp, Int4 index)
+{
+  ReadBufferData    rbd;
+  Char              path [PATH_MAX];
+  CharPtr           line, cp, first_id, second_id;
+  Int4              k;
+  Boolean           found_id;
+  ValNodePtr        err_list = NULL;
+  CharPtr           err_msg = NULL;
+  CharPtr           err_msg_prefix = "Unable to find ";
+  CharPtr           err_msg_suffix = " from file in alignment";
+  Int4              err_msg_len = 0;
+  ValNodePtr        vnp;
+
+  if (afp == NULL || index < -1 || index >= afp->num_sequences)
+  {
+    return FALSE;
+  }
+  
+  rbd.fp = NULL;
+  while (rbd.fp == NULL)
+  {
+    if (!GetInputFileName (path, sizeof (path), NULL, NULL))
+    {
+      return FALSE;
+    }
+    rbd.fp = FileOpen (path, "r");
+    if (rbd.fp == NULL)
+    {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    }
+  }
+    
+  rbd.current_data = NULL;
+  
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL)
+  {
+    cp = line;
+    while (isspace ((Int4)(*cp)))
+    {
+      cp++;
+    }
+    if (*cp != 0)
+    {
+      first_id = cp;
+      while (!isspace ((Int4)(*cp)) && *cp != 0)
+      {
+        cp++;
+      }
+      while (isspace ((Int4)(*cp)))
+      {
+        *cp = 0;
+        cp++;
+      }
+      second_id = cp;
+      TrimSpacesAroundString (second_id); 
+      if (*second_id != 0)
+      {
+        found_id = FALSE;
+        for (k = index; k < afp->num_sequences && ! found_id; k++)
+        {
+          if (StringCmp (afp->ids[k], first_id) == 0)
+          {
+            found_id = TRUE;
+            MemFree (afp->ids[k]);
+            afp->ids[k] = StringSave (second_id);
+          }
+          else if (StringCmp (afp->ids[k], second_id) == 0)
+          {
+            found_id = TRUE;
+            MemFree (afp->ids[k]);
+            afp->ids[k] = StringSave (first_id);
+          }
+        }
+        if (!found_id)
+        {
+          ValNodeAddPointer (&err_list, 0, StringSave (first_id));
+          ValNodeAddPointer (&err_list, 0, StringSave (second_id));
+          err_msg_len += StringLen (first_id) + StringLen (second_id) + 8;
+        }
+      }
+    }
+    
+    line = AbstractReadFunction (&rbd);
+  }
+  FileClose (rbd.fp);
+  if (err_list != NULL)
+  {
+    err_msg_len += StringLen (err_msg_prefix) + StringLen (err_msg_suffix) + 6;
+    err_msg = (CharPtr) MemNew (err_msg_len * sizeof (Char));
+    if (err_msg != NULL)
+    {
+      sprintf (err_msg, "%s", err_msg_prefix);
+      vnp = err_list;
+      while (vnp != NULL && vnp->next != NULL)
+      {
+        StringCat (err_msg, (CharPtr) vnp->data.ptrvalue);
+        StringCat (err_msg, " or ");
+        StringCat (err_msg, (CharPtr) vnp->next->data.ptrvalue);
+        
+        if (vnp->next->next != NULL)
+        {
+          StringCat (err_msg, ", ");
+        }
+        if (vnp->next->next != NULL && vnp->next->next->next != NULL && vnp->next->next->next->next == NULL)
+        {
+          StringCat (err_msg, " and ");
+        }
+        vnp = vnp->next->next;
+      }
+      StringCat (err_msg, err_msg_suffix);
+      Message (MSG_ERROR, err_msg);
+      MemFree (err_msg);
+    }
+  }
+  return TRUE; 
+}
+
+
+static Boolean FixAlignmentIDs (TAlignmentFilePtr afp, Int4 index, BoolPtr all_far, BoolPtr all_skip, BoolPtr removed)
+{
+  WindoW  w;
+  GrouP   h, choice_grp, c;
+  ButtoN  b;
+  Boolean done = FALSE;
+  Boolean cancelled = FALSE;
+  PrompT  p;
+  CharPtr prompt_str;
+  CharPtr prompt_str_fmt = "Unable to find sequence %s from alignment in set.";
+  TexT    id_text;
+  CharPtr id_str;
+  Int2    fix_choice;
+  
+  if (afp == NULL || index < -1 || index >= afp->num_sequences)
+  {
+    return FALSE;
+  }
+  
+  id_str = afp->ids[index];
+  if (StringHasNoText (id_str))
+  {
+    return FALSE;
+  }
+  
+  w = MovableModalWindow (-20, -13, -10, -10, "Source Assistant", NULL);
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  prompt_str = (CharPtr) MemNew ((StringLen (prompt_str_fmt) + StringLen (id_str)) * sizeof (Char));
+  if (prompt_str != NULL)
+  {
+    sprintf (prompt_str, prompt_str_fmt, id_str);
+  }
+  p = StaticPrompt (h, prompt_str, 0, dialogTextHeight, systemFont, 'c');
+  choice_grp = HiddenGroup (h, 0, 7, EnableTextID);
+  RadioButton (choice_grp, "This is a far pointer");
+  RadioButton (choice_grp, "All unmatched sequences are far pointers");
+  RadioButton (choice_grp, "Read in a file that maps alignment IDs to sequence IDs");
+  RadioButton (choice_grp, "Remove this sequence from the alignment");
+  RadioButton (choice_grp, "Remove all unmatched sequences from the alignment");
+  RadioButton (choice_grp, "Use this ID for this sequence");
+  id_text = DialogText (choice_grp, "", 20, NULL);
+  Disable (id_text);
+  SetValue (choice_grp, 1);
+  SetObjectExtra (choice_grp, id_text, NULL);
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton(c, "OK", FixAlignmentIdsOkCancel);
+  SetObjectExtra (b, &done, NULL);
+  b = PushButton(c, "Cancel", FixAlignmentIdsOkCancel);
+  SetObjectExtra (b, &cancelled, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p,  (HANDLE) choice_grp, (HANDLE) c, NULL);
+  
+  Show(w); 
+  Select (w);
+  while (!done && !cancelled)
+  {
+    while (!done && !cancelled)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+    if (!cancelled)
+    {
+      fix_choice = GetValue (choice_grp);
+      switch (fix_choice)
+      {
+        case 1:
+          /* far pointer */
+          FixToFarPointer (afp, index);
+          break;
+        case 2:
+          /* all far pointers */
+          if (all_far != NULL)
+          {
+            *all_far = TRUE;
+          }
+          FixToFarPointer (afp, index);
+          break;
+        case 3:
+          /* read in file with replacements */
+          if (!ReplaceAlignmentIDsFromFile (afp, index))
+          {
+            done = FALSE;
+          }
+          break;
+        case 4:
+          /* skip */
+          RemoveNthSequenceFromAlignment (afp, index);
+          if (removed != NULL) {
+            *removed = TRUE;
+          }     
+          break;
+        case 5:
+          /* skip all */
+          RemoveNthSequenceFromAlignment (afp, index);          
+          if (all_skip != NULL)
+          {
+            *all_skip = TRUE;
+          }
+          if (removed != NULL) {
+            *removed = TRUE;
+          }     
+          break;
+        case 6:
+          /* use single replacement */
+          id_str = SaveStringFromText (id_text);
+          if (StringHasNoText (id_str))
+          {
+            MemFree (id_str);
+            Message (MSG_ERROR, "You did not specify text for the ID!");
+            done = FALSE;
+          }
+          else
+          {
+            MemFree (afp->ids [index]);
+            afp->ids [index] = id_str;
+          }
+          break;
+      }
+    }
+  }
+  Remove (w);
+  if (cancelled)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+
+NLM_EXTERN Boolean CorrectAlignmentIDs (TAlignmentFilePtr afp, Uint1 moltype)
+{
+  Int4      index;
+  CharPtr   seq_data;
+  SeqIdPtr  sip;
+  BioseqPtr bsp;
+  CharPtr   tmp_id_str;
+  Char      prot_str[200];
+  Boolean   all_far = FALSE;
+  Boolean   all_skip = FALSE;
+  Boolean   removed;
+  SeqEntryPtr nucprot_sep;
+  BioseqSetPtr nucprot_bssp;
+  
+  for (index = 0; index < afp->num_sequences; index++) {
+    seq_data = AlignmentStringToSequenceString (afp->sequences [index], moltype);
+    if (! StringHasNoText (seq_data))
+    {
+      sip = MakeSeqID (afp->ids [index]);
+      sip->next = SeqIdFree (sip->next);
+      if (StringNCmp (afp->ids[index], "acc", 3) != 0)
+      {
+        bsp = BioseqFind (sip);
+        if (bsp == NULL && StringChr (afp->ids[index], '|') == NULL)
+        {
+          sip = SeqIdFree (sip);
+          tmp_id_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (afp->ids [index]) + 4));
+          sprintf (tmp_id_str, "gb|%s", afp->ids [index]);
+          sip = MakeSeqID (tmp_id_str);
+          MemFree (tmp_id_str);
+          bsp = BioseqFind (sip);
+        }
+
+        if (bsp != NULL && moltype == Seq_mol_aa && !ISA_aa (bsp->mol)) 
+        {
+          /* IDs in alignment are for nucleotide sequences but this is 
+           * protein sequence - if single prot in nuc-prot set, replace
+           * with protein sequence ID.  Otherwise set to NULL - don't
+           * want this ID in our alignment */
+          nucprot_sep = GetBestTopParentForData (bsp->idx.entityID, bsp);
+          bsp = NULL;
+          if (nucprot_sep != NULL && IS_Bioseq_set (nucprot_sep) && nucprot_sep->data.ptrvalue != NULL) 
+          {
+            nucprot_bssp = nucprot_sep->data.ptrvalue;
+            if (nucprot_bssp->seq_set != NULL 
+                && nucprot_bssp->seq_set->next != NULL 
+                && nucprot_bssp->seq_set->next->next == NULL
+                && IS_Bioseq (nucprot_bssp->seq_set->next)) 
+            {
+              sip = SeqIdFree (sip);
+              bsp = (BioseqPtr) nucprot_bssp->seq_set->next->data.ptrvalue;
+              SeqIdWrite (SeqIdFindBest (bsp->id, 0), prot_str, PRINTID_FASTA_LONG, sizeof (prot_str) - 1);
+              afp->ids[index] = MemFree (afp->ids[index]);
+              afp->ids[index] = StringSave (prot_str);
+            }
+          }
+        }
+
+        if (bsp == NULL)
+        {
+          if (all_far)
+          {
+            FixToFarPointer (afp, index);
+          }
+          else if (all_skip) 
+          {
+            RemoveNthSequenceFromAlignment(afp, index);
+            index--;
+          }
+          else
+          {
+            removed = FALSE;
+            if (!FixAlignmentIDs (afp, index, &all_far, &all_skip, &removed))
+            {
+              /* bail - user does not want to fix IDs */
+              return FALSE;
+            }
+            if (removed) {
+              index--;
+            }
+          }
+        }
+
+      }
+      sip = SeqIdFree (sip);
+    }
+    MemFree (seq_data);
+  }
+  return TRUE;
+}
+
+
+NLM_EXTERN SeqAlignPtr ReadAlignmentForSeqEntry (SeqEntryPtr sep, Boolean is_nuc, Boolean allow_options, Boolean from_clipboard)
+{
+  Char              path [PATH_MAX];
+  FILE              *fp;
+  SeqAlignPtr       salp=NULL,
+                    salpnew, salp_return = NULL;
+  SeqEntryPtr       sepnew=NULL;
+  Boolean           ok = TRUE, 
+                    dirty = FALSE;
+  TSequenceInfoPtr  default_info, sequence_info;
+  ReadBufferData    rbd;
+  TErrorInfoPtr     error_list;
+  TAlignmentFilePtr afp;
+  Uint1             moltype;
+  ErrSev            sev;
+  SeqEntryPtr       scope;
+  CharPtr           str;
+
+  if (sep == NULL) return NULL;
+
+  if (from_clipboard) {
+    if (!Nlm_ClipboardHasString()) {
+      Message (MSG_ERROR, "Clipboard is empty!");
+      return NULL;
+    }
+    TmpNam (path);
+    fp = FileOpen (path, "w");
+    str = ClipboardToString();
+    fprintf (fp, "%s", str);
+    FileClose (fp);
+    str = MemFree (str);
+  } else if (! GetInputFileName (path, sizeof (path),"","TEXT")) {
+    return NULL;
+  }
+  fp = FileOpen (path, "r");
+  if (fp == NULL)
+  {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    if (from_clipboard) {
+      FileRemove (path);
+    }
+    return NULL;
+  }
+
+  default_info = SequenceInfoNew ();
+  if (is_nuc) {
+    default_info->alphabet = nucleotide_alphabet;
+  } else {
+    default_info->alphabet = protein_alphabet;
+  }
+  default_info->beginning_gap = MemFree (default_info->beginning_gap);
+  default_info->beginning_gap = StringSave ("-.Nn?");
+  default_info->middle_gap = MemFree (default_info->middle_gap);
+  default_info->middle_gap = StringSave ("-.#");
+  default_info->end_gap = MemFree (default_info->end_gap);
+  default_info->end_gap = StringSave ("-.Nn?");
+  default_info->match = MemFree (default_info->match);
+  default_info->match = StringSave (":");
+  default_info->missing = MemFree (default_info->missing);
+  default_info->missing = StringSave ("?Nn");
+
+  if (allow_options) {
+    sequence_info = GetAlignmentOptions (&moltype, default_info);
+    SequenceInfoFree (default_info);
+    if (sequence_info == NULL) return NULL;
+    default_info = sequence_info;
+  }
+
+  WatchCursor();
+  error_list = NULL;
+
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+  afp = ReadAlignmentFile ( AbstractReadFunction,
+                            (Pointer) &rbd,
+                            AbstractReportError,
+                            (Pointer) &error_list,
+                            default_info);
+  FileClose (fp);
+  if (from_clipboard) {
+    FileRemove (path);
+  }
+  SequenceInfoFree (default_info);
+  default_info = NULL;
+  if (afp != NULL) 
+  {
+    RemoveSequenceFromAlignmentFile (afp, "Consensus");
+    SeqEntrySetScope (sep);
+    if (CorrectAlignmentIDs (afp, moltype))
+    {
+      sepnew = MakeSequinDataFromAlignmentEx (afp, moltype, TRUE); 
+    }
+  }
+  if (sepnew == NULL) {
+    ProduceAlignmentNotes (afp, error_list);
+  }
+  ErrorInfoFree (error_list);
+  AlignmentFileFree (afp);
+  if (sepnew) 
+  {
+    salpnew = (SeqAlignPtr) FindSeqAlignInSeqEntry (sepnew, OBJ_SEQALIGN);
+    if (salpnew) {
+      sev = ErrSetMessageLevel (SEV_FATAL);
+
+      scope = SeqEntrySetScope (NULL);
+      /* adjust the start positions for the sequences read in from the alignments. */
+      CalculateAlignmentOffsets (sepnew, sep);
+      /* ValidateSeqAlignandACCInSeqEntry will readjust the start positions for
+       * the alignments for far pointer sequences.
+       */
+      SeqEntrySetScope (scope);
+      ok = ValidateSeqAlignandACCInSeqEntry (sepnew, TRUE, FALSE, TRUE, TRUE, FALSE, FALSE);
+      
+      ErrSetMessageLevel (sev);
+      
+      if (ok) {
+        AlnMgr2IndexSeqAlignEx(salpnew, FALSE);
+        ok = CheckAlignmentSequenceLengths (salpnew);
+      }
+      
+      if (ok) {
+        /* make copy, otherwise it will be removed when we delete sep_new */
+        salp_return = (SeqAlignPtr) AsnIoMemCopy (salpnew, (AsnReadFunc) SeqAlignAsnRead,
+                                                   (AsnWriteFunc) SeqAlignAsnWrite);
+      }
+    }
+    /* this statement will free salpnew as part of sepnew */
+    ObjMgrFree (OBJ_SEQENTRY, (Pointer)sepnew);
+    sepnew=NULL;
+  }
+  ArrowCursor();
+  Update ();
+  return salp_return;
+}
+
+
+static void ReportPotentialDupIDs (TAlignmentFilePtr afp, FILE *fp)
+{
+  int     seq_index, k;
+  int     curr_seg;
+  int     num_sequences;
+  Int4Ptr seq_len;
+  BoolPtr may_be_dup;
+  Int4    a, b;
+
+  if (afp == NULL || afp->sequences == NULL || afp->num_sequences == 0) {
+    return;
+  }
+
+  num_sequences = afp->num_sequences / afp->num_segments;
+
+  may_be_dup = (BoolPtr) MemNew (sizeof (Boolean) * num_sequences);
+  for (seq_index = 0; seq_index < num_sequences; seq_index++) {
+    may_be_dup[seq_index] = FALSE;
+  }
+
+  seq_len = (Int4Ptr) MemNew (sizeof (Int4) * afp->num_sequences);
+  for (seq_index = 0; seq_index < afp->num_sequences; seq_index++) {
+    seq_len[seq_index] = StringLen (afp->sequences[seq_index]);
+  }
+
+  for (curr_seg = 0; curr_seg < afp->num_segments; curr_seg++) {
+    for (seq_index = 0; seq_index < num_sequences - 1; seq_index++) {
+      for (k = seq_index + 1; k < num_sequences; k++) {
+        a = curr_seg * num_sequences + seq_index;
+        b = curr_seg * num_sequences + k;
+        if (seq_len[a] != seq_len[b]) {
+          if (seq_len[a] % seq_len [b] == 0) {
+            may_be_dup[seq_index] = TRUE;
+          } else if (seq_len[b] % seq_len[a] == 0) {
+            may_be_dup[k] = TRUE;
+          }
+        }
+      }
+    }
+  }
+  seq_len = MemFree (seq_len);
+
+  for (seq_index = 0; seq_index < num_sequences; seq_index ++)
+  {
+    if (may_be_dup[seq_index]) {
+      fprintf (fp, "Please check your file - %s may have been used as an ID for multiple sequences.\n", afp->ids[seq_index]);
+    }
+  }
+
+  may_be_dup = MemFree (may_be_dup);
+}
+
+
+static void PrintExtraErrorInstructions (FILE *fp, CharPtr message)
+{
+  CharPtr explanation, end;
+  Char    tmp = '\0';
+  if (fp == NULL || message == NULL) return;
+
+  if (StringStr (message, "bad characters") == NULL
+      && StringStr (message, " found at position ") == NULL) {
+    return;
+  }
+
+  explanation = StringRChr (message, '(');
+  if (explanation == NULL) return;
+  if (StringNCmp (explanation, "(expect only ", 13) == 0) {
+    end = StringStr (explanation + 13, " here)");
+    if (end != NULL) {
+      tmp = *end;
+      *end = 0;
+    }
+    fprintf (fp, 
+             "Try changing the sequence character specifications for %s.\n",
+             explanation + 13);
+    if (StringNCmp (explanation + 13, "beginning", 9) == 0) {
+      fprintf (fp, 
+"\nWhen some of the sequences in an alignment are shorter or "
+"longer than others, beginning gap characters are added to "
+"the beginning of the sequence to maintain the correct spacing."
+"  These will not appear in your sequence file.\n");
+    } else if (StringNCmp (explanation + 13, "end", 3) == 0) {
+      fprintf (fp,
+"\nWhen some of the sequences in an alignment are shorter or "
+"longer than others, end gap characters are added to "
+"the end of the sequence to maintain the correct spacing."
+"  These will not appear in your sequence file.\n");
+    } else {
+      fprintf (fp,
+"\nMiddle gap characters are used to maintain the spacing "
+"inside an alignment.  These are not nucleotides and will "
+"not appear as part of your sequence file.\n"
+"Ambiguous/unknown characters are used to represent indeterminate/ambiguous "
+"nucleotides.  These will appear in your sequence file as 'n'.\n"
+"Match characters are used to indicate positions where "
+"sequences are identical to the first sequence.  These will be "
+"replaced by the actual characters from the first sequence.\n");
+    }
+    if (end != NULL) {
+      *end = tmp;
+    }
+  } else if (StringCmp (explanation, 
+                        "(can't specify match chars in first sequence).") == 0) {
+    fprintf (fp, "Try changing the match character specification.\n");
+    fprintf (fp,
+"\nMatch characters are used to indicate positions where "
+"sequences are identical to the first sequence.  These will be "
+"replaced by the actual characters from the first sequence.\n");
+  }
+}
+
+
+static void PrintError (FILE *fp, TErrorInfoPtr eip)
+{
+  if (eip == NULL || fp == NULL) return;
+
+  fprintf (fp, "*****\nError category %d\n", eip->category);
+  if (eip->line_num > -1) {
+    fprintf (fp, "Line number %d\n", eip->line_num);
+  }
+  if (eip->id != NULL) {
+    fprintf (fp, "Sequence ID %s\n", eip->id);
+  }
+  if (eip->message != NULL) {
+    fprintf (fp, "%s\n", eip->message);
+    PrintExtraErrorInstructions (fp, eip->message);
+  }
+}
+  
+static Int4 CountNucleotides (CharPtr sequence)
+{
+  Int4    num = 0;
+  CharPtr cp;
+  
+  if (sequence == NULL) return 0;	
+  for (cp = sequence; *cp != 0; cp++)
+  {
+  	if (*cp != '-') 
+  	{
+  	  num++;
+  	}
+  }
+  return num;
+}
+
+static void WalkErrorList (TErrorInfoPtr list, FILE *fp)
+{
+  TErrorInfoPtr eip;
+  
+  if (list == NULL || fp == NULL) return;
+
+  for (eip = list; eip != NULL; eip = eip->next) {
+    PrintError (fp, eip);
+  }
+
+}
+
+
+static void PrintAlignmentSummary (TAlignmentFilePtr afp, FILE *fp)
+{
+  Int4 index;
+
+  if (fp == NULL) return;
+
+  if (afp == NULL) {
+    fprintf (fp, "Catastrophic failure during reading\n");
+  } else {
+    fprintf (fp, "Found %d sequences\n", afp->num_sequences);
+    fprintf (fp, "Found %d organisms\n", afp->num_organisms);
+    if (afp->num_sequences == afp->num_segments * afp->num_organisms)
+    {
+      for (index = 0; index < afp->num_sequences; index++)
+      {
+        fprintf (fp, "\t%s\t%d nucleotides\t", afp->ids [index],
+                 CountNucleotides (afp->sequences[index]));
+        if (index / afp->num_segments < afp->num_organisms) {
+          fprintf (fp, "%s\n", afp->organisms [index / afp->num_segments]);
+        } else {
+          fprintf (fp, "No organism information\n");
+        }
+      }    	
+    }
+    else
+    {
+      for (index = 0; index < afp->num_sequences; index++)
+      {
+        fprintf (fp, "\t%s\t%d nucleotides\t", afp->ids [index], 
+                 CountNucleotides (afp->sequences[index]));
+        if (index < afp->num_organisms) {
+          fprintf (fp, "%s\n", afp->organisms [index]);
+        } else {
+          fprintf (fp, "No organism information\n");
+        }
+      }
+      while (index < afp->num_organisms) {
+        fprintf (fp, "Unclaimed organism: %s\n", afp->organisms [index]);
+        index++;
+      }	
+    }
+  }
+}
+
+
+NLM_EXTERN void 
+ProduceAlignmentNotes 
+(TAlignmentFilePtr afp,
+ TErrorInfoPtr error_list)
+{
+  Char         path [PATH_MAX];
+  FILE         *fp;
+  Boolean      ok_to_import = FALSE;
+
+  TmpNam (path);
+  fp = FileOpen (path, "wb");
+  if (fp == NULL) return;
+
+
+  if (afp != NULL && DoSequenceLengthsMatch (afp)) {
+    ok_to_import = TRUE;
+  }
+
+  
+  if (ok_to_import && error_list != NULL) {
+    fprintf (fp, "Congratulations, you have successfully created a sequin file;\nhowever, I had trouble reading part of your file.\nPlease check your data carefully before submitting to be sure that all of your sequences\nwere included correctly.\nIf your file is incomplete, or contains incorrect sequences, please use the error report below\nto find the problem.\n");
+  }
+  ReportPotentialDupIDs (afp, fp);
+
+  WalkErrorList (error_list, fp);
+  PrintAlignmentSummary (afp, fp);
+
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "Alignment reading summary");
+  FileRemove (path);
+}
+

@@ -31,7 +31,7 @@ objvalidAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Structured-comment-validation
-*    Generated using ASNCODE Revision: 6.16 at Dec 11, 2009  7:16 AM
+*    Generated using ASNCODE Revision: 6.17 at Feb 22, 2012 10:57 AM
 *
 **************************************************/
 
@@ -348,6 +348,7 @@ DependentFieldRuleNew(void)
 {
    DependentFieldRulePtr ptr = MemNew((size_t) sizeof(DependentFieldRule));
 
+   ptr -> invert_match = 0;
    return ptr;
 
 }
@@ -435,6 +436,13 @@ DependentFieldRuleAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> value_constraint = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == FIELD_RULE_invert_match) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> invert_match = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == FIELD_RULE_other_fields) {
       ptr -> other_fields = FieldSetAsnRead(aip, atp);
       if (aip -> io_failure) {
@@ -508,6 +516,8 @@ DependentFieldRuleAsnWrite(DependentFieldRulePtr ptr, AsnIoPtr aip, AsnTypePtr o
       av.ptrvalue = ptr -> value_constraint;
       retval = AsnWrite(aip, FIELD_RULE_value_constraint,  &av);
    }
+   av.boolvalue = ptr -> invert_match;
+   retval = AsnWrite(aip, FIELD_RULE_invert_match,  &av);
    if (ptr -> other_fields != NULL) {
       if ( ! FieldSetAsnWrite(ptr -> other_fields, aip, FIELD_RULE_other_fields)) {
          goto erret;

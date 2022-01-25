@@ -61,7 +61,7 @@ Int2 Main(void)
 	first = TRUE;
 	while (! done)
 	{
-		retval = fscanf(fp, "%ld %ld", &uid, &seekptr);
+		retval = fscanf(fp, "%d %d", &uid, &seekptr);
 		if (retval == EOF)
 		{
 			Message(MSG_ERROR, "UID %ld not found", uid_to_find);

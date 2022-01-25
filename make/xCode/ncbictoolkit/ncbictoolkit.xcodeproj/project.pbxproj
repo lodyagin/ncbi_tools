@@ -363,7 +363,6 @@
 		3716AC320FF2A5C20081C789 /* ni_debug.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A8230FF2A5C10081C789 /* ni_debug.c */; };
 		3716AC340FF2A5C20081C789 /* ni_error.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A8250FF2A5C10081C789 /* ni_error.c */; };
 		3716AC370FF2A5C20081C789 /* ni_lib_.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A8280FF2A5C10081C789 /* ni_lib_.c */; };
-		3716AC390FF2A5C20081C789 /* ni_macdv.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A82A0FF2A5C10081C789 /* ni_macdv.c */; };
 		3716AC3B0FF2A5C20081C789 /* ni_service.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A82C0FF2A5C10081C789 /* ni_service.c */; };
 		3716AC3D0FF2A5C20081C789 /* objspell.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A8300FF2A5C10081C789 /* objspell.c */; };
 		3716AC3F0FF2A5C20081C789 /* spellapi.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A8320FF2A5C10081C789 /* spellapi.c */; };
@@ -511,6 +510,7 @@
 		3716AD570FF2A5C20081C789 /* vibwndws.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A9540FF2A5C10081C789 /* vibwndws.c */; };
 		3716AD580FF2A5C20081C789 /* viewer.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A9550FF2A5C10081C789 /* viewer.c */; };
 		3716AD5A0FF2A5C20081C789 /* viewer3d.c in Sources */ = {isa = PBXBuildFile; fileRef = 3716A9570FF2A5C10081C789 /* viewer3d.c */; };
+		37318E7F14D9A51C00FF91F7 /* erfc.h in Headers */ = {isa = PBXBuildFile; fileRef = 37318E7E14D9A51C00FF91F7 /* erfc.h */; };
 		3734FB940FF2AF7D004C8F4B /* cddapi.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F76D0FF2AF7C004C8F4B /* cddapi.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FB950FF2AF7D004C8F4B /* egkludge.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F76E0FF2AF7C004C8F4B /* egkludge.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FB970FF2AF7D004C8F4B /* ent2api.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F7700FF2AF7C004C8F4B /* ent2api.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -883,11 +883,8 @@
 		3734FE670FF2AF7D004C8F4B /* medutil.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA570FF2AF7C004C8F4B /* medutil.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE690FF2AF7D004C8F4B /* objmla.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA590FF2AF7C004C8F4B /* objmla.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE6A0FF2AF7D004C8F4B /* ncbinet.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA5B0FF2AF7C004C8F4B /* ncbinet.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		3734FE6C0FF2AF7D004C8F4B /* ni_defin.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA5D0FF2AF7C004C8F4B /* ni_defin.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE6E0FF2AF7D004C8F4B /* ni_error.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA5F0FF2AF7C004C8F4B /* ni_error.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		3734FE6F0FF2AF7D004C8F4B /* ni_lib.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA600FF2AF7C004C8F4B /* ni_lib.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE710FF2AF7D004C8F4B /* ni_lib_.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA620FF2AF7C004C8F4B /* ni_lib_.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		3734FE730FF2AF7D004C8F4B /* ni_net.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA640FF2AF7C004C8F4B /* ni_net.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE750FF2AF7D004C8F4B /* ni_types.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA660FF2AF7C004C8F4B /* ni_types.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE770FF2AF7D004C8F4B /* objspell.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA6A0FF2AF7C004C8F4B /* objspell.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FE790FF2AF7D004C8F4B /* spellapi.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FA6C0FF2AF7C004C8F4B /* spellapi.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -1163,6 +1160,8 @@
 		3797484D0FF3CAA000138501 /* alnread.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4A0FF2AF7C004C8F4B /* alnread.h */; };
 		3797484E0FF3CAA000138501 /* creaders_export.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4B0FF2AF7C004C8F4B /* creaders_export.h */; };
 		379748500FF3CAC000138501 /* raw_scoremat.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4E0FF2AF7C004C8F4B /* raw_scoremat.h */; };
+		7B8DDE99146197D000A98C1A /* ncbi_version.c in Sources */ = {isa = PBXBuildFile; fileRef = 7B8DDE98146197D000A98C1A /* ncbi_version.c */; };
+		7BCD235E1461985800AF265B /* ncbi_version.h in Headers */ = {isa = PBXBuildFile; fileRef = 7BCD235D1461985800AF265B /* ncbi_version.h */; };
 		8D07F2C00486CC7A007CD1D0 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C1666FE841158C02AAC07 /* InfoPlist.strings */; };
 		8D07F2C40486CC7A007CD1D0 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08FB77AAFE841565C02AAC07 /* Carbon.framework */; };
 /* End PBXBuildFile section */
@@ -1714,7 +1713,6 @@
 		3716A8230FF2A5C10081C789 /* ni_debug.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ni_debug.c; path = ../../../network/nsclilib/ni_debug.c; sourceTree = SOURCE_ROOT; };
 		3716A8250FF2A5C10081C789 /* ni_error.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ni_error.c; path = ../../../network/nsclilib/ni_error.c; sourceTree = SOURCE_ROOT; };
 		3716A8280FF2A5C10081C789 /* ni_lib_.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ni_lib_.c; path = ../../../network/nsclilib/ni_lib_.c; sourceTree = SOURCE_ROOT; };
-		3716A82A0FF2A5C10081C789 /* ni_macdv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ni_macdv.c; path = ../../../network/nsclilib/ni_macdv.c; sourceTree = SOURCE_ROOT; };
 		3716A82C0FF2A5C10081C789 /* ni_service.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ni_service.c; path = ../../../network/nsclilib/ni_service.c; sourceTree = SOURCE_ROOT; };
 		3716A8300FF2A5C10081C789 /* objspell.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = objspell.c; path = ../../../network/spell/client/objspell.c; sourceTree = SOURCE_ROOT; };
 		3716A8320FF2A5C10081C789 /* spellapi.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = spellapi.c; path = ../../../network/spell/client/spellapi.c; sourceTree = SOURCE_ROOT; };
@@ -1862,6 +1860,7 @@
 		3716A9540FF2A5C10081C789 /* vibwndws.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = vibwndws.c; path = ../../../vibrant/vibwndws.c; sourceTree = SOURCE_ROOT; };
 		3716A9550FF2A5C10081C789 /* viewer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = viewer.c; path = ../../../vibrant/viewer.c; sourceTree = SOURCE_ROOT; };
 		3716A9570FF2A5C10081C789 /* viewer3d.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = viewer3d.c; path = ../../../vibrant/viewer3d.c; sourceTree = SOURCE_ROOT; };
+		37318E7E14D9A51C00FF91F7 /* erfc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = erfc.h; path = ../../../algo/blast/core/erfc.h; sourceTree = SOURCE_ROOT; };
 		3734F76D0FF2AF7C004C8F4B /* cddapi.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = cddapi.h; path = ../../../access/cddapi.h; sourceTree = SOURCE_ROOT; };
 		3734F76E0FF2AF7C004C8F4B /* egkludge.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = egkludge.h; path = ../../../access/egkludge.h; sourceTree = SOURCE_ROOT; };
 		3734F7700FF2AF7C004C8F4B /* ent2api.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ent2api.h; path = ../../../access/ent2api.h; sourceTree = SOURCE_ROOT; };
@@ -2235,11 +2234,8 @@
 		3734FA570FF2AF7C004C8F4B /* medutil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = medutil.h; path = ../../../network/medarch/client/medutil.h; sourceTree = SOURCE_ROOT; };
 		3734FA590FF2AF7C004C8F4B /* objmla.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = objmla.h; path = ../../../network/medarch/client/objmla.h; sourceTree = SOURCE_ROOT; };
 		3734FA5B0FF2AF7C004C8F4B /* ncbinet.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbinet.h; path = ../../../network/nsclilib/ncbinet.h; sourceTree = SOURCE_ROOT; };
-		3734FA5D0FF2AF7C004C8F4B /* ni_defin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ni_defin.h; path = ../../../network/nsclilib/ni_defin.h; sourceTree = SOURCE_ROOT; };
 		3734FA5F0FF2AF7C004C8F4B /* ni_error.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ni_error.h; path = ../../../network/nsclilib/ni_error.h; sourceTree = SOURCE_ROOT; };
-		3734FA600FF2AF7C004C8F4B /* ni_lib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ni_lib.h; path = ../../../network/nsclilib/ni_lib.h; sourceTree = SOURCE_ROOT; };
 		3734FA620FF2AF7C004C8F4B /* ni_lib_.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ni_lib_.h; path = ../../../network/nsclilib/ni_lib_.h; sourceTree = SOURCE_ROOT; };
-		3734FA640FF2AF7C004C8F4B /* ni_net.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ni_net.h; path = ../../../network/nsclilib/ni_net.h; sourceTree = SOURCE_ROOT; };
 		3734FA660FF2AF7C004C8F4B /* ni_types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ni_types.h; path = ../../../network/nsclilib/ni_types.h; sourceTree = SOURCE_ROOT; };
 		3734FA6A0FF2AF7C004C8F4B /* objspell.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = objspell.h; path = ../../../network/spell/client/objspell.h; sourceTree = SOURCE_ROOT; };
 		3734FA6C0FF2AF7C004C8F4B /* spellapi.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = spellapi.h; path = ../../../network/spell/client/spellapi.h; sourceTree = SOURCE_ROOT; };
@@ -2385,6 +2381,9 @@
 		3734FB920FF2AF7C004C8F4B /* viewerp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = viewerp.h; path = ../../../vibrant/viewerp.h; sourceTree = SOURCE_ROOT; };
 		3747EF8B11BE9AA50064168E /* ncbi_base64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_base64.c; sourceTree = "<group>"; };
 		3747EF8F11BE9ABF0064168E /* ncbi_base64.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_base64.h; sourceTree = "<group>"; };
+		7B8DDE96146197B300A98C1A /* ncbi_strerror.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_strerror.c; sourceTree = "<group>"; };
+		7B8DDE98146197D000A98C1A /* ncbi_version.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_version.c; sourceTree = "<group>"; };
+		7BCD235D1461985800AF265B /* ncbi_version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_version.h; sourceTree = "<group>"; };
 		8D07F2C70486CC7A007CD1D0 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8D07F2C80486CC7A007CD1D0 /* ncbictoolkit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ncbictoolkit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -2833,6 +2832,7 @@
 				3716A72B0FF2A5C10081C789 /* ncbi_socket_connector.c */,
 				3716A72F0FF2A5C10081C789 /* ncbi_types.c */,
 				3716A7310FF2A5C10081C789 /* ncbi_util.c */,
+				7B8DDE98146197D000A98C1A /* ncbi_version.c */,
 				3716A7330FF2A5C10081C789 /* urlquery.c */,
 			);
 			name = connect;
@@ -3062,7 +3062,6 @@
 				3716A8230FF2A5C10081C789 /* ni_debug.c */,
 				3716A8250FF2A5C10081C789 /* ni_error.c */,
 				3716A8280FF2A5C10081C789 /* ni_lib_.c */,
-				3716A82A0FF2A5C10081C789 /* ni_macdv.c */,
 				3716A82C0FF2A5C10081C789 /* ni_service.c */,
 			);
 			name = nsclilib;
@@ -3448,6 +3447,7 @@
 				3734F80B0FF2AF7C004C8F4B /* blast_traceback.h */,
 				3734F80D0FF2AF7C004C8F4B /* blast_tune.h */,
 				3734F80F0FF2AF7C004C8F4B /* blast_util.h */,
+				37318E7E14D9A51C00FF91F7 /* erfc.h */,
 				3734F8110FF2AF7C004C8F4B /* gapinfo.h */,
 				3734F8130FF2AF7C004C8F4B /* gencode_singleton.h */,
 				3734F8150FF2AF7C004C8F4B /* greedy_align.h */,
@@ -3671,8 +3671,10 @@
 				3734F9650FF2AF7C004C8F4B /* ncbi_socket_connector.h */,
 				3734F9660FF2AF7C004C8F4B /* ncbi_socket_unix.h */,
 				3734F9670FF2AF7C004C8F4B /* ncbi_socketp.h */,
+				7B8DDE96146197B300A98C1A /* ncbi_strerror.c */,
 				3734F9690FF2AF7C004C8F4B /* ncbi_types.h */,
 				3734F96B0FF2AF7C004C8F4B /* ncbi_util.h */,
+				7BCD235D1461985800AF265B /* ncbi_version.h */,
 				3734F96D0FF2AF7C004C8F4B /* urlquery.h */,
 			);
 			name = connect;
@@ -3901,11 +3903,8 @@
 			isa = PBXGroup;
 			children = (
 				3734FA5B0FF2AF7C004C8F4B /* ncbinet.h */,
-				3734FA5D0FF2AF7C004C8F4B /* ni_defin.h */,
 				3734FA5F0FF2AF7C004C8F4B /* ni_error.h */,
-				3734FA600FF2AF7C004C8F4B /* ni_lib.h */,
 				3734FA620FF2AF7C004C8F4B /* ni_lib_.h */,
-				3734FA640FF2AF7C004C8F4B /* ni_net.h */,
 				3734FA660FF2AF7C004C8F4B /* ni_types.h */,
 			);
 			name = nsclilib;
@@ -4534,11 +4533,8 @@
 				3734FE670FF2AF7D004C8F4B /* medutil.h in Headers */,
 				3734FE690FF2AF7D004C8F4B /* objmla.h in Headers */,
 				3734FE6A0FF2AF7D004C8F4B /* ncbinet.h in Headers */,
-				3734FE6C0FF2AF7D004C8F4B /* ni_defin.h in Headers */,
 				3734FE6E0FF2AF7D004C8F4B /* ni_error.h in Headers */,
-				3734FE6F0FF2AF7D004C8F4B /* ni_lib.h in Headers */,
 				3734FE710FF2AF7D004C8F4B /* ni_lib_.h in Headers */,
-				3734FE730FF2AF7D004C8F4B /* ni_net.h in Headers */,
 				3734FE750FF2AF7D004C8F4B /* ni_types.h in Headers */,
 				3734FE770FF2AF7D004C8F4B /* objspell.h in Headers */,
 				3734FE790FF2AF7D004C8F4B /* spellapi.h in Headers */,
@@ -4684,6 +4680,8 @@
 				3734FF950FF2AF7D004C8F4B /* viewerp.h in Headers */,
 				3708F4940FF2B11800420775 /* ncbilcl.h in Headers */,
 				3747EF9011BE9ABF0064168E /* ncbi_base64.h in Headers */,
+				7BCD235E1461985800AF265B /* ncbi_version.h in Headers */,
+				37318E7F14D9A51C00FF91F7 /* erfc.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5139,7 +5137,6 @@
 				3716AC320FF2A5C20081C789 /* ni_debug.c in Sources */,
 				3716AC340FF2A5C20081C789 /* ni_error.c in Sources */,
 				3716AC370FF2A5C20081C789 /* ni_lib_.c in Sources */,
-				3716AC390FF2A5C20081C789 /* ni_macdv.c in Sources */,
 				3716AC3B0FF2A5C20081C789 /* ni_service.c in Sources */,
 				3716AC3D0FF2A5C20081C789 /* objspell.c in Sources */,
 				3716AC3F0FF2A5C20081C789 /* spellapi.c in Sources */,
@@ -5288,6 +5285,7 @@
 				3716AD580FF2A5C20081C789 /* viewer.c in Sources */,
 				3716AD5A0FF2A5C20081C789 /* viewer3d.c in Sources */,
 				3747EF8C11BE9AA50064168E /* ncbi_base64.c in Sources */,
+				7B8DDE99146197D000A98C1A /* ncbi_version.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5398,6 +5396,7 @@
 				);
 				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
+				SDKROOT = macosx10.6;
 			};
 			name = Debug;
 		};
@@ -5450,6 +5449,7 @@
 					"$(inherited)",
 				);
 				PREBINDING = NO;
+				SDKROOT = macosx10.6;
 			};
 			name = Release;
 		};

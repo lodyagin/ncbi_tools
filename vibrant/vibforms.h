@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
@@ -344,6 +344,15 @@ extern Nlm_DialoG Nlm_CreateFolderTabs (Nlm_GrouP h, Nlm_CharPtr PNTR titles, Nl
 #define PROGRAM_FOLDER_TAB programFont,10,5,2,4,5
 #endif
 
+extern void Nlm_ReleaseFolderTabButtons (Nlm_PaneL p, Nlm_PoinT pt);
+extern void Nlm_SetFolderTabButton (Nlm_GraphiC a, Nlm_Int2 value, Nlm_Boolean savePort);
+extern Nlm_DialoG Nlm_CreateFolderTabButtons (Nlm_GrouP h, Nlm_CharPtr PNTR titles, Nlm_Int2 initPage,
+					  Nlm_Int2 maxPerLine, Nlm_Int2 indentNextLine,
+					  Nlm_FonT font, Nlm_Int2 horizMargin, Nlm_Int2 vertMargin,
+					  Nlm_Int2 spaceBtwn, Nlm_Int2 cornerTaper, Nlm_Int2 endExt,
+					  Nlm_TabActnProc changeView, Pointer userdata);
+extern void Nlm_SetFolderTabTitle (Nlm_DialoG dialog, Nlm_Int2 iTab, Nlm_CharPtr title);
+
 extern Nlm_DialoG Nlm_CreateTextTabs (Nlm_GrouP h, Nlm_CharPtr PNTR titles, Nlm_Int2 initPage,
                                       Nlm_Int2 maxPerLine, Nlm_Int2 indentNextLine,
                                       Nlm_FonT font, Nlm_Int2 horizMargin, Nlm_Int2 vertMargin,
@@ -513,6 +522,10 @@ extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2
 #define SetFormMenuItem Nlm_SetFormMenuItem
 #define RegisterFormMenuItemName Nlm_RegisterFormMenuItemName
 #define CreateFolderTabs Nlm_CreateFolderTabs
+#define ReleaseFolderTabButtons Nlm_ReleaseFolderTabButtons
+#define SetFolderTabButton Nlm_SetFolderTabButton
+#define CreateFolderTabButtons Nlm_CreateFolderTabButtons
+#define SetFolderTabTitle Nlm_SetFolderTabTitle
 #define CreateTextTabs Nlm_CreateTextTabs
 #define TagList Nlm_TagList
 #define TagListPtr Nlm_TagListPtr

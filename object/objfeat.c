@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.70 $
+* $Revision: 6.74 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -3344,7 +3344,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"--------------------------------M--M---------------M------------\" } ,\n" \
 "{ name \"Pterobranchia Mitochondrial\" , id 24 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"---M---------------M---------------M----------------------------\" } };\n";
+"sncbieaa \"---M---------------M---------------M---------------M------------\" } };\n";
 #endif
 
 /*****************************************************************************
@@ -5341,11 +5341,11 @@ erret:
 
 /*****************************************************************************
 *
-*   ValNodeStringMatch(vnp1, vnp2)
+*   ValNodeStringListMatch(vnp1, vnp2)
 *
 *   This function is used by OrgRefMatch.
 *****************************************************************************/
-static Boolean ValNodeStringMatch (ValNodePtr vnp1, ValNodePtr vnp2)
+NLM_EXTERN Boolean ValNodeStringListMatch (ValNodePtr vnp1, ValNodePtr vnp2)
 {
   if (vnp1 == NULL && vnp2 == NULL)
   {
@@ -5365,7 +5365,7 @@ static Boolean ValNodeStringMatch (ValNodePtr vnp1, ValNodePtr vnp2)
   }
   else
   {
-    return ValNodeStringMatch (vnp1->next, vnp2->next);
+    return ValNodeStringListMatch (vnp1->next, vnp2->next);
   }
 }
 
@@ -5376,7 +5376,7 @@ static Boolean ValNodeStringMatch (ValNodePtr vnp1, ValNodePtr vnp2)
 *
 *   This function is used by OrgRefMatch.
 *****************************************************************************/
-static Boolean ValNodeDbtagMatch (ValNodePtr vnp1, ValNodePtr vnp2)
+NLM_EXTERN Boolean ValNodeDbtagMatch (ValNodePtr vnp1, ValNodePtr vnp2)
 {
   if (vnp1 == NULL && vnp2 == NULL)
   {
@@ -5420,7 +5420,7 @@ NLM_EXTERN Boolean LIBCALL OrgRefMatch (OrgRefPtr orp1, OrgRefPtr orp2)
   {
     return FALSE;
   }
-  else if (!ValNodeStringMatch (orp1->syn, orp2->syn)
+  else if (!ValNodeStringListMatch (orp1->syn, orp2->syn)
           || ! ValNodeDbtagMatch (orp1->db, orp2->db))
   {
     return FALSE;
@@ -9112,6 +9112,14 @@ CloneSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CLONE_SEQ_support) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> support = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -9182,6 +9190,9 @@ CloneSeqAsnWrite(CloneSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       if ( ! DbtagAsnWrite(ptr -> align_id, aip, CLONE_SEQ_align_id)) {
          goto erret;
       }
+   }
+   if (ptr -> support || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> support;
+      retval = AsnWrite(aip, CLONE_SEQ_support,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

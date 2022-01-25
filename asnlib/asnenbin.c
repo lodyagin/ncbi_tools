@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   Special binary (BER) encoder for ASN.1
@@ -42,6 +42,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnenbin.c,v $
+* Revision 6.7  2011/09/06 18:18:16  kans
+* support for UTF8String in binary ASN.1
+*
 * Revision 6.6  2003/11/07 20:57:02  beloslyu
 * fix the c++ style comments to a C ones
 *
@@ -89,6 +92,8 @@
 *   Boolean AsnBinWrite(aip, atp, valueptr)
 *
 *****************************************************************************/
+static Boolean AsnEnBinStringUTF8 (CharPtr str, AsnIoPtr aip, AsnTypePtr atp);
+
 NLM_EXTERN Boolean LIBCALL  AsnBinWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp)
 {
 	Int2 isa;
@@ -103,7 +108,7 @@ NLM_EXTERN Boolean LIBCALL  AsnBinWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 
 	atp2 = AsnFindBaseType(atp);
 	isa = atp2->type->isa;
-	if (ISA_STRINGTYPE(isa))
+	if (ISA_STRINGTYPE(isa) && isa != UTF8STRING_TYPE)
 		isa = GENERALSTRING_TYPE;
 	
 	if (((isa == SEQ_TYPE) || (isa == SET_TYPE) ||
@@ -152,6 +157,10 @@ NLM_EXTERN Boolean LIBCALL  AsnBinWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			break;
 		case GENERALSTRING_TYPE:
 			if (! AsnEnBinString((CharPtr) dvp->ptrvalue, aip, atp))
+				return FALSE;
+			break;
+		case UTF8STRING_TYPE:
+			if (! AsnEnBinStringUTF8((CharPtr) dvp->ptrvalue, aip, atp))
 				return FALSE;
 			break;
 		case NULL_TYPE:
@@ -470,7 +479,9 @@ NLM_EXTERN void AsnEnBinBoolean (Boolean value, AsnIoPtr aip, AsnTypePtr atp)
 *   Boolean AsnEnBinString(str, aip)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean AsnEnBinString (CharPtr str, AsnIoPtr aip, AsnTypePtr atp)
+static Boolean LIBCALL  AsnEnBinTheBytesEx (Pointer ptr, Uint4 len, AsnIoPtr aip, Boolean is_string, Uint1 fix_non_print);
+
+static Boolean AsnEnBinStringEx (CharPtr str, AsnIoPtr aip, AsnTypePtr atp, Uint1 fix_non_print)
 {
 	Uint4 stringlen;
 	AsnTypePtr atp2;
@@ -481,9 +492,19 @@ NLM_EXTERN Boolean AsnEnBinString (CharPtr str, AsnIoPtr aip, AsnTypePtr atp)
 
 	stringlen = StringLen(str);
 	AsnEnBinLen(stringlen, aip);
-	if (! AsnEnBinTheBytes(str, stringlen, aip, TRUE))
+	if (! AsnEnBinTheBytesEx(str, stringlen, aip, TRUE, fix_non_print))
 		return FALSE;
 	return TRUE;
+}
+
+NLM_EXTERN Boolean AsnEnBinString (CharPtr str, AsnIoPtr aip, AsnTypePtr atp)
+{
+	return AsnEnBinStringEx (str, aip, atp, aip->fix_non_print);
+}
+
+static Boolean AsnEnBinStringUTF8 (CharPtr str, AsnIoPtr aip, AsnTypePtr atp)
+{
+	return AsnEnBinStringEx (str, aip, atp, 2);
 }
 
 /*****************************************************************************
@@ -599,7 +620,7 @@ NLM_EXTERN void AsnEnBinEndIndef (AsnIoPtr aip)
 *   	write bytes to asnio output
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL  AsnEnBinTheBytes (Pointer ptr, Uint4 len, AsnIoPtr aip, Boolean is_string)
+static Boolean LIBCALL  AsnEnBinTheBytesEx (Pointer ptr, Uint4 len, AsnIoPtr aip, Boolean is_string, Uint1 fix_non_print)
 {
 	register BytePtr from, to;
 	register int bytes, amount, bad_char = 0, bad_char_ctr = 0;
@@ -626,7 +647,7 @@ NLM_EXTERN Boolean LIBCALL  AsnEnBinTheBytes (Pointer ptr, Uint4 len, AsnIoPtr a
 			*to = *from;
 			if (is_string)
 			{
-				if ((aip->fix_non_print != 2) && ((*from < ' ') || (*from > '~')))
+				if ((fix_non_print != 2) && ((*from < ' ') || (*from > '~')))
 				{
 					if (! bad_char_ctr)
 						bad_char = (int)(*from);
@@ -645,9 +666,15 @@ NLM_EXTERN Boolean LIBCALL  AsnEnBinTheBytes (Pointer ptr, Uint4 len, AsnIoPtr a
 		}
 	}
 	aip->offset = (Int2) (aip->bytes - (Int2) bytes);
-	if ((bad_char_ctr) && ((aip->fix_non_print == 0) || (aip->fix_non_print == 3)))
+	if ((bad_char_ctr) && ((fix_non_print == 0) || (fix_non_print == 3)))
 		AsnIoErrorMsg(aip, 106, bad_char, (CharPtr)ptr);
 	return TRUE;
+}
+
+NLM_EXTERN Boolean LIBCALL  AsnEnBinTheBytes (Pointer ptr, Uint4 len, AsnIoPtr aip, Boolean is_string)
+
+{
+  return AsnEnBinTheBytesEx (ptr, len, aip, is_string, aip->fix_non_print);
 }
 
 /*****************************************************************************

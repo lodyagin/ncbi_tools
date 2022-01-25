@@ -531,11 +531,11 @@
       <Project>{bf2b96b2-6f4e-4ec7-96ef-9466dc5a05d4}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
-    <ProjectReference Include="regexp\demo\demo_regexp.vcxproj">
+    <ProjectReference Include="regexp\demo\demo_regexp\demo_regexp.vcxproj">
       <Project>{2f4a7ae4-0769-47f9-bce3-0a7476782ae6}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
-    <ProjectReference Include="regexp\demo\demo_regexp_grep.vcxproj">
+    <ProjectReference Include="regexp\demo\demo_regexp_grep\demo_regexp_grep.vcxproj">
       <Project>{3fd11c8f-89cd-463f-a5ef-5eb97c170cc3}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>

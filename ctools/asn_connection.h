@@ -1,7 +1,7 @@
 #ifndef CTOOLS___ASN_CONNECTION__H
 #define CTOOLS___ASN_CONNECTION__H
 
-/*  $Id: asn_connection.h,v 1.10 2009/08/13 14:58:22 lavr Exp $
+/* $Id: asn_connection.h,v 1.12 2012/02/29 20:14:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,11 +29,10 @@
  * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
- *    Build C Toolkit ASN streams on top of CONN (connection).
+ *    Build C Toolkit ASN.1 streams on top of CONN (connection).
  *
  */
 
-#include <connect/ncbi_connection.h>
 #include <connect/ncbi_service_connector.h>
 #include <asn.h>
 
@@ -61,14 +60,13 @@ typedef enum {
 } EAsnConn_Format;
 
 
-/* Build ASN stream on top of CONN (connection) handle.
- * According to arguments, the stream is created for
- * either reading or writing, and is capable to handle
- * either binary or text ASN.
- * Return ASN stream pointer on success, or 0 on error.
- * NOTE: Returned stream is valid while the underlying conn exists. After call
+/* Build a ASN.1 stream on top of a CONN (connection) handle.
+ * According to arguments, the stream is created for either reading or writing,
+ * and is capable to handle either binary or text ASN.1.
+ * Return ASN.1 stream pointer on success, or 0 on error.
+ * NOTE: Returned stream is valid while the underlying conn exists.  After call
  *       to CONN_Close() the stream becomes invalid, and should not be used.
- *       Don't destroy the ASN stream explicitly using AsnIoFree!
+ *       Don't destroy the ASN.1 stream explicitly using AsnIoFree()!
  */
 AsnIoPtr CreateAsnConn
 (CONN               conn,
@@ -77,18 +75,17 @@ AsnIoPtr CreateAsnConn
  );
 
 
-/* Create service connection using the service name,
- * type and connection parameters, info (use default connection
- * parameters if info is passed NULL).
- * Create two ASN streams based on the connection -- one stream is for
- * input and one is for output. Return pointers to the streams 
- * via 'input' and 'output' arguments.
- * No corresponding stream is created if either pointer is passed NULL.
- * On success, return created CONN handle; otherwise, return 0.
- * NOTE: Returned ASN stream pointers are valid as long as connection
- *       handle exists, that is after the connection handle is passed to
- *       CONN_Close(), both pointers become invalid, and should not be used.
- *       Don't destroy the ASN streams explicitly using AsnIoFree!
+/* Create a service connection using the service name, type, and connection
+ * parameters (use default connection parameters if 'net_info' is passed NULL).
+ * Create two ASN.1 streams based on the connection:  one stream for input, and
+ * another one for output.  Return pointers to the streams via the 'input' and
+ * 'output' arguments.  No corresponding stream is created if either pointer is
+ * passed NULL.
+ * On success, return the created CONN handle; otherwise, return 0.
+ * NOTE: Both returned ASN.1 streams are valid as long as the connection handle
+ *       exists; that is, after the connection handle is passed to CONN_Close()
+ *       either pointer becomes invalid, and should not be used.
+ *       Don't destroy the ASN.1 streams explicitly using AsnIoFree()!
  */
 CONN CreateAsnConn_ServiceEx
 (const char*           service,
@@ -120,41 +117,5 @@ CONN CreateAsnConn_Service
 
 /* @} */
 
-
-/*
- * ===========================================================================
- * $Log: asn_connection.h,v $
- * Revision 1.10  2009/08/13 14:58:22  lavr
- * Inline doc fixed of duplicates
- *
- * Revision 1.9  2004/11/23 16:14:25  lavr
- * +<connect/ncbi_service_connector.h>
- *
- * Revision 1.8  2003/11/13 15:58:47  lavr
- * Guard macro changed
- *
- * Revision 1.7  2003/04/11 17:46:29  siyan
- * Added doxygen support
- *
- * Revision 1.6  2003/01/17 15:39:38  lavr
- * Slightly modify API description for clarity
- *
- * Revision 1.5  2002/03/14 22:45:45  vakatov
- * Warn against explicit destruction of ASN streams
- *
- * Revision 1.4  2001/12/02 21:17:28  lavr
- * Fix in comment
- *
- * Revision 1.3  2001/09/24 20:32:34  lavr
- * +SSERVICE_Extra* parameter in CreateAsnConn_ServiceEx()
- *
- * Revision 1.2  2001/06/28 23:01:53  vakatov
- * Typo fixed (self-#include)
- *
- * Revision 1.1  2001/06/28 21:59:24  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CTOOLS___ASN_CONNECTION__H */

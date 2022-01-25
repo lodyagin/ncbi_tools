@@ -1,4 +1,4 @@
---$Revision: 1.5 $
+--$Revision: 1.7 $
 --  ----------------------------------------------------------------------------
 --
 --                            PUBLIC DOMAIN NOTICE
@@ -112,7 +112,7 @@ SeqTable-column-info ::= SEQUENCE {
 
 CommonString-table ::= SEQUENCE {
     -- set of possible values
-    strings     SEQUENCE OF VisibleString,
+    strings     SEQUENCE OF UTF8String,
 
     -- indexes of values
     indexes     SEQUENCE OF INTEGER
@@ -136,7 +136,7 @@ SeqTable-multi-data ::= CHOICE {
     real        SEQUENCE OF REAL,
 
     -- a set of strings, one per row
-    string      SEQUENCE OF VisibleString,
+    string      SEQUENCE OF UTF8String,
 
     -- a set of byte arrays, one per row
     bytes       SEQUENCE OF OCTET STRING,
@@ -166,7 +166,7 @@ SeqTable-single-data ::= CHOICE {
     real        REAL,
 
     -- string
-    string      VisibleString,
+    string      UTF8String,
 
     -- byte array
     bytes       OCTET STRING,

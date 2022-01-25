@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/23/2007
 *
-* $Revision: 1.272 $
+* $Revision: 1.316 $
 *
 * File Description: 
 *
@@ -67,7 +67,43 @@ typedef struct macroeditorform {
   Boolean    unsaved;
   Boolean    indexer_version;
   FonT       summary_font;
+
+  MacroCloseCallback close_callback;
+  Pointer            callback_data;
 } MacroEditorFormData, PNTR MacroEditorFormPtr;
+
+static Boolean SaveMacroFile (ForM f, CharPtr filename);
+
+static Boolean BeforeCloseMacroEditor (MacroEditorFormPtr f)
+{
+  if (f != NULL) {
+    if (f->unsaved) {
+      if (Message (MSG_YN, "Do you want to save changes to the current file?") == ANS_YES) {
+        if (!SaveMacroFile(f->form, f->last_filename)) {
+          return FALSE;
+        }
+      }
+    }
+    if (f->close_callback != NULL) {
+      (f->close_callback)(f->last_filename, f->callback_data);
+    }
+  }
+  return TRUE;
+}
+
+
+extern void CloseMacroEditorWindowProc (WindoW w)
+
+{
+  MacroEditorFormPtr f;
+  Boolean do_remove = FALSE;
+
+  f = (MacroEditorFormPtr) GetObjectExtra (w);
+  if (BeforeCloseMacroEditor(f)) {
+    Remove (w);
+  }
+}
+
 
 static void CleanupMacroEditorForm (GraphiC g, VoidPtr data)
 
@@ -131,9 +167,6 @@ static Boolean SaveMacroFile (ForM f, CharPtr filename)
   return rval;
 }
 
-
-
-static CharPtr SummarizeMacroAction (ValNodePtr vnp);
 
 static const Int4 kNumberColumnWidth = 40;
 
@@ -224,7 +257,7 @@ static Boolean OpenMacroFile (ForM f, CharPtr filename)
           rval = TRUE;
           SetMacroEditorFileItems (mefp);
           SummarizeMacro (mefp->macro_summary, mefp->macro_list, mefp->summary_font);
-          Enable (mefp->run_btn);
+          SafeEnable (mefp->run_btn);
         }
         AsnIoClose (aip);
       }
@@ -263,7 +296,7 @@ static Boolean ImportMacroFile (ForM f, CharPtr filename)
         rval = TRUE;
         SetMacroEditorFileItems (mefp);
         SummarizeMacro (mefp->macro_summary, mefp->macro_list, mefp->summary_font);
-        Enable (mefp->run_btn);
+        SafeEnable (mefp->run_btn);
       }
       AsnIoClose (aip);
     }
@@ -354,14 +387,7 @@ static void MacroEditorFormMessage (ForM f, Int2 mssg)
         break;
       case VIB_MSG_CLOSE:
       case VIB_MSG_QUIT:
-        if (mefp->unsaved) {
-          if (Message (MSG_YN, "Do you want to save changes to the current file?") == ANS_YES) {
-            if (SaveMacroFile(f, mefp->last_filename)) {
-              Remove (mefp->form);
-            }
-          }
-        }
-        Remove (mefp->form);
+        CloseMacroEditorWindowProc ((WindoW)f);
         break;
       default :
         break;
@@ -377,6 +403,7 @@ static void RunMacro (ButtoN b)
   ValNodePtr          sep_list, vnp;
   Uint2               entityID;
   LogInfoPtr          lip;
+  Int4                num_no_op = 0, tmp;
 
   f = (MacroEditorFormPtr) GetObjectExtra (b);
   if (f == NULL) return;
@@ -397,14 +424,19 @@ static void RunMacro (ButtoN b)
       for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
         sep = vnp->data.ptrvalue;
         entityID = ObjMgrGetEntityIDForChoice(sep);
-        lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, f->macro_list, lip->fp);
+        lip->data_in_log |= ApplyMacroToSeqEntryExEx (sep, f->macro_list, lip->fp, Sequin_GlobalAlign2Seq, &tmp);
+        num_no_op += tmp;
         ObjMgrSetDirtyFlag (entityID, TRUE);
         ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
       }
       sep_list = ValNodeFree (sep_list);
       ArrowCursor ();
       Update ();   
-      if (!lip->data_in_log) {
+      if (lip->data_in_log) {
+        if (num_no_op > 0) {
+          fprintf (lip->fp, "%d actions had no effect.\n", num_no_op);
+        }
+      } else {
         fprintf (lip->fp, "Macro had no effect\n");
         lip->data_in_log = TRUE;
       }
@@ -440,6 +472,7 @@ static AECRActionPtr BuildDefaultAECRAction (Uint1 action_type, Uint1 qual_type)
   SwapActionPtr swap;
   AECRParseActionPtr parse;
   RemoveActionPtr remove;
+  RemoveOutsideActionPtr ro;
 
   switch (action_type) {
     case ActionChoice_apply:
@@ -457,6 +490,14 @@ static AECRActionPtr BuildDefaultAECRAction (Uint1 action_type, Uint1 qual_type)
       action->action = ValNodeNew (NULL);
       action->action->choice = action_type;
       action->action->data.ptrvalue = edit;
+      break;
+    case ActionChoice_remove_outside:
+      ro = RemoveOutsideActionNew ();
+      ro->field = ValNodeNew (NULL);
+      ro->field->choice = qual_type;
+      action->action = ValNodeNew (NULL);
+      action->action->choice = action_type;
+      action->action->data.ptrvalue = ro;
       break;
     case ActionChoice_convert:
       convert = ConvertActionNew();
@@ -537,6 +578,8 @@ static EditFeatureLocationActionPtr BuildDefaultEditFeatureLocationAction (Uint2
   strand = EditLocationStrandNew ();
   strand->strand_to = Feature_location_strand_to_reverse;
   a->action->data.ptrvalue = strand;
+  a->retranslate_cds = FALSE;
+  a->also_edit_gene = FALSE;
   return a;
 }
 
@@ -575,9 +618,9 @@ static void UpdateMacroSummary (MacroEditorFormPtr f, Int4 scroll_pos)
   SetMacroEditorFileItems (f);
   SummarizeMacro (f->macro_summary, f->macro_list, f->summary_font);
   if (f->macro_list == NULL) {
-    Disable (f->run_btn);
+    SafeDisable (f->run_btn);
   } else {
-    Enable (f->run_btn);
+    SafeEnable (f->run_btn);
   }
   if (scroll_pos > 0) {
     sb_vert = GetSlateVScrollBar ((SlatE) f->macro_summary);
@@ -821,25 +864,23 @@ static void DrawMacroDocControls (DoC d, RectPtr r, Int2 item, Int2 firstLine)
 }
 
 
-NLM_EXTERN void LaunchMacroEditorBaseForm (BaseFormPtr bfp)
+NLM_EXTERN void LaunchMacroEditor (Uint2 entityID, CharPtr filename, MacroCloseCallback close_callback, Pointer callback_data)
 {
   WindoW              w;
   MacroEditorFormPtr  f;
-  GrouP               h, c;
+  GrouP               h, c = NULL;
   MenU                m;
 #ifdef TEST_MACRO_TEMPLATE_EDITOR
   ButtoN              b;
 #endif
 
-  if (bfp == NULL) return;
-
   f = (MacroEditorFormPtr) MemNew (sizeof (MacroEditorFormData));
   if (f == NULL) return;
     
-  w = FixedWindow (-50, -33, -10, -10, "Macro Editor", StdCloseWindowProc);
+  w = FixedWindow (-50, -33, -10, -10, "Macro Editor", CloseMacroEditorWindowProc);
   SetObjectExtra (w, f, CleanupMacroEditorForm);
   f->form = (ForM) w;
-  f->input_entityID = bfp->input_entityID;
+  f->input_entityID = entityID;
 
   f->formmessage = MacroEditorFormMessage;
 
@@ -847,6 +888,8 @@ NLM_EXTERN void LaunchMacroEditorBaseForm (BaseFormPtr bfp)
   f->last_filename = NULL;
   f->unsaved = FALSE;
   f->indexer_version = TRUE;
+  f->close_callback = close_callback;
+  f->callback_data = callback_data;
 
   m = PulldownMenu (w, "File");
   FormCommandItem (m, "Open", (BaseFormPtr)f, VIB_MSG_OPEN);
@@ -869,18 +912,23 @@ NLM_EXTERN void LaunchMacroEditorBaseForm (BaseFormPtr bfp)
   SetDocProcs (f->macro_summary, ClickMacroDoc, NULL, NULL, NULL);
   SetDocShade (f->macro_summary, DrawMacroDocControls, NULL, NULL, NULL);
 
-  c = HiddenGroup (h, 3, 0, NULL);
-  f->run_btn = PushButton (c, "Run", RunMacro);
-  SetObjectExtra (f->run_btn, f, NULL);
-  Disable (f->run_btn);
+  if (f->input_entityID != 0) {
+    c = HiddenGroup (h, 3, 0, NULL);
+    f->run_btn = PushButton (c, "Run", RunMacro);
+    SetObjectExtra (f->run_btn, f, NULL);
+    Disable (f->run_btn);
+  }
 
   AlignObjects (ALIGN_CENTER, (HANDLE) f->macro_summary, (HANDLE) c, NULL);
   SummarizeMacro (f->macro_summary, f->macro_list, f->summary_font);
+  if (!StringHasNoText (filename)) {
+    OpenMacroFile (f->form, filename);
+  }
   Show (w);
 }
 
 
-NLM_EXTERN void LaunchMacroEditor (IteM i)
+NLM_EXTERN void LaunchMacroEditorMenuItem (IteM i)
 {
   BaseFormPtr         bfp;
 
@@ -889,7 +937,7 @@ NLM_EXTERN void LaunchMacroEditor (IteM i)
 #else
   bfp = GetObjectExtra (i);
 #endif
-  LaunchMacroEditorBaseForm (bfp);
+  LaunchMacroEditor (bfp->input_entityID, NULL, NULL, NULL);
 }
 
 
@@ -2779,15 +2827,9 @@ static ValNodePtr TestStringConstraintDialog (DialoG d)
 {
   ValNodePtr err_list = NULL;
   StringConstraintDialogPtr dlg;
-  StringConstraintPtr scp;
 
   dlg = (StringConstraintDialogPtr) GetObjectExtra (d);
   if (dlg != NULL) {
-    scp = DialogToPointer (d);
-    if (IsStringConstraintEmpty (scp)) {
-      ValNodeAddPointer (&err_list, 0, "empty string constraint");
-    }
-    scp = StringConstraintFree (scp);
   }
   return err_list;
 }
@@ -5463,6 +5505,100 @@ static DialoG MusMusculusActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyPr
 }
 
 
+#define MACRODIALOG_BLOCK         \
+  DIALOG_MESSAGE_BLOCK \
+  Nlm_ChangeNotifyProc change_notify; \
+  Pointer              change_userdata; 
+
+typedef struct macrodlg {
+  MACRODIALOG_BLOCK
+} MacroDialogData, PNTR MacroDialogPtr;
+
+
+static void ChangeMacroDialogBtn (ButtoN b)
+{
+  MacroDialogPtr dlg;
+
+  dlg = (MacroDialogPtr) GetObjectExtra (b);
+  if (dlg != NULL && dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+typedef struct authorcapsaction {
+  MACRODIALOG_BLOCK
+  ButtoN last_name_only;
+} AuthorCapsActionDlgData, PNTR AuthorCapsActionDlgPtr;
+
+
+static void AuthorCapsActionToDialog (DialoG d, Pointer data)
+{
+  AuthorCapsActionDlgPtr dlg;
+  FixCapsActionPtr fix;
+  FixAuthorCapsPtr fix_author;
+
+  dlg = (AuthorCapsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if ((fix = (FixCapsActionPtr) data) == NULL
+      || fix->choice != FixCapsAction_author
+      || (fix_author = (FixAuthorCapsPtr) fix->data.ptrvalue) == NULL) {
+    SetStatus (dlg->last_name_only, FALSE);
+  } else {
+    SetStatus (dlg->last_name_only, fix_author->last_name_only);
+  }
+}
+
+
+static Pointer AuthorCapsActionFromDialog (DialoG d)
+{
+  AuthorCapsActionDlgPtr dlg;
+  FixCapsActionPtr fix;
+  FixAuthorCapsPtr fix_author;
+
+  dlg = (AuthorCapsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  
+  fix_author = FixAuthorCapsNew ();
+  fix_author->last_name_only = GetStatus (dlg->last_name_only);
+  fix = ValNodeNew (NULL);
+  fix->choice = FixCapsAction_author;
+  fix->data.ptrvalue = fix_author;
+  return (Pointer) fix;
+}
+
+
+static DialoG AuthorCapsActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  AuthorCapsActionDlgPtr dlg;
+  GrouP              p;
+
+  dlg = (AuthorCapsActionDlgPtr) MemNew (sizeof (AuthorCapsActionDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = AuthorCapsActionToDialog;
+  dlg->fromdialog = AuthorCapsActionFromDialog;
+
+  dlg->last_name_only = CheckBox (p, "Last name only", ChangeMacroDialogBtn);
+  SetObjectExtra (dlg->last_name_only, dlg, NULL);
+
+  return (DialoG) p;
+}
+
+
 NLM_EXTERN DialoG FixCapsSourceCountryDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
 {
   return CapsActionDialog (h, edit, change_notify, change_userdata, FixCapsAction_src_country);
@@ -5537,6 +5673,7 @@ static DialoG FixSrcQualCapsActionDialog (GrouP h,  Boolean edit, Nlm_ChangeNoti
   dlg->todialog = SrcQualCapsActionToDialog;
   dlg->fromdialog = SrcQualCapsActionFromDialog;
 
+  ValNodeAddPointer (&list, Source_qual_cell_type, StringSave (GetSourceQualName(Source_qual_cell_type)));
   ValNodeAddPointer (&list, Source_qual_dev_stage, StringSave (GetSourceQualName(Source_qual_dev_stage)));
   ValNodeAddPointer (&list, Source_qual_nat_host, StringSave (GetSourceQualName(Source_qual_nat_host)));
   ValNodeAddPointer (&list, Source_qual_isolation_source, StringSave (GetSourceQualName(Source_qual_isolation_source)));
@@ -5922,6 +6059,588 @@ static DialoG AuthorFixActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc
   SetValue (dlg->fix_type, 1);
   dlg->constraint = ConstraintSetDialog (p, change_notify, change_userdata);
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->fix_type, (HANDLE) dlg->constraint, NULL);
+  return (DialoG) p;
+}
+
+
+typedef struct updatesequencesactiondialog {
+  DIALOG_MESSAGE_BLOCK
+  TexT filename;
+  ButtoN add_cit_subs;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer change_userdata;
+} UpdateSequencesActionDlgData, PNTR UpdateSequencesActionDlgPtr;
+
+
+static Pointer UpdateSequencesActionFromDialog (DialoG d)
+{
+  UpdateSequencesActionDlgPtr dlg;
+  UpdateSequencesActionPtr    action = NULL;
+
+  dlg = (UpdateSequencesActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = UpdateSequencesActionNew ();
+  action->filename = SaveStringFromText (dlg->filename);
+  action->add_cit_subs = GetStatus (dlg->add_cit_subs);
+  return action;
+}
+
+
+static void UpdateSequencesActionToDialog (DialoG d, Pointer data)
+{
+  UpdateSequencesActionDlgPtr dlg;
+  UpdateSequencesActionPtr    action;
+
+  dlg = (UpdateSequencesActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  
+  if ((action = (UpdateSequencesActionPtr) data) == NULL) {
+    SetTitle (dlg->filename, "");
+    SetStatus (dlg->add_cit_subs, FALSE);
+  } else {
+    SetTitle (dlg->filename, action->filename);
+    SetStatus (dlg->add_cit_subs, action->add_cit_subs);
+  }
+}
+
+
+static void ChangeUpdateSequencesActionText (TexT t)
+{
+  UpdateSequencesActionDlgPtr dlg;
+
+  dlg = (UpdateSequencesActionDlgPtr) GetObjectExtra (t);
+  if (dlg != NULL && dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static void ChangeUpdateSequencesActionButton (ButtoN b)
+{
+  UpdateSequencesActionDlgPtr dlg;
+
+  dlg = (UpdateSequencesActionDlgPtr) GetObjectExtra (b);
+  if (dlg != NULL && dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static ValNodePtr TestUpdateSequencesActionDialog (DialoG d)
+{
+  UpdateSequencesActionDlgPtr dlg;
+  ValNodePtr errs = NULL;
+
+  dlg = (UpdateSequencesActionDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (TextHasNoText (dlg->filename)) {
+      ValNodeAddPointer (&errs, 0, "Needs filename");
+    }
+  }
+  return errs;
+}
+
+
+static DialoG UpdateSequencesActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  UpdateSequencesActionDlgPtr dlg;
+  GrouP                    p, g;
+
+  dlg = (UpdateSequencesActionDlgPtr) MemNew (sizeof (UpdateSequencesActionDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = UpdateSequencesActionFromDialog;
+  dlg->todialog = UpdateSequencesActionToDialog;
+  dlg->testdialog = TestUpdateSequencesActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "File Name", 0, dialogTextHeight, programFont, 'r');
+  dlg->filename =  DialogText (g, "", 10, ChangeUpdateSequencesActionText);
+  SetObjectExtra (dlg->filename, dlg, NULL);
+
+  dlg->add_cit_subs = CheckBox (p, "Add CitSub", ChangeUpdateSequencesActionButton);
+  SetObjectExtra (dlg->add_cit_subs, dlg, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) dlg->add_cit_subs, NULL);
+  return (DialoG) p;
+}
+
+
+typedef struct applytableactiondialog {
+  DIALOG_MESSAGE_BLOCK
+  TexT filename;
+  DialoG id_config;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer change_userdata;
+} ApplyTableActionDlgData, PNTR ApplyTableActionDlgPtr;
+
+
+static Pointer ApplyTableActionFromDialog (DialoG d)
+{
+  ApplyTableActionDlgPtr dlg;
+  ApplyTableActionPtr    action = NULL;
+  MatchTypePtr           m;
+
+  dlg = (ApplyTableActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = ApplyTableActionNew ();
+  action->filename = SaveStringFromText (dlg->filename);
+  m = DialogToPointer (dlg->id_config);
+  action->match_type = TableMatchTypeFromMatchType(m);
+  m = MatchTypeFree (m);
+
+  return action;
+}
+
+
+static void ApplyTableActionToDialog (DialoG d, Pointer data)
+{
+  ApplyTableActionDlgPtr dlg;
+  ApplyTableActionPtr    action;
+  MatchTypePtr           m;
+
+  dlg = (ApplyTableActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  
+  if ((action = (ApplyTableActionPtr) data) == NULL) {
+    SetTitle (dlg->filename, "");
+    PointerToDialog (dlg->id_config, NULL);
+  } else {
+    SetTitle (dlg->filename, action->filename);
+    m = MatchTypeFromTableMatchType(action->match_type);
+    PointerToDialog (dlg->id_config, m);
+    m = MatchTypeFree (m);
+  }
+}
+
+
+static void ChangeApplyTableActionText (TexT t)
+{
+  ApplyTableActionDlgPtr dlg;
+
+  dlg = (ApplyTableActionDlgPtr) GetObjectExtra (t);
+  if (dlg != NULL && dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static ValNodePtr TestApplyTableActionDialog (DialoG d)
+{
+  ApplyTableActionDlgPtr dlg;
+  ValNodePtr errs = NULL;
+  MatchTypePtr m;
+
+  dlg = (ApplyTableActionDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (TextHasNoText (dlg->filename)) {
+      ValNodeAddPointer (&errs, 0, "Needs filename");
+    }
+    m = DialogToPointer (dlg->id_config);
+    if (m == NULL) {
+      ValNodeAddPointer (&errs, 0, "Needs match type");
+    }
+    m = MatchTypeFree (m);
+  }
+  return errs;
+}
+
+
+static DialoG ApplyTableActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  ApplyTableActionDlgPtr dlg;
+  GrouP                  p, g;
+
+  dlg = (ApplyTableActionDlgPtr) MemNew (sizeof (ApplyTableActionDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = ApplyTableActionFromDialog;
+  dlg->todialog = ApplyTableActionToDialog;
+  dlg->testdialog = TestApplyTableActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "File Name", 0, dialogTextHeight, programFont, 'r');
+  dlg->filename =  DialogText (g, "", 10, ChangeApplyTableActionText);
+  SetObjectExtra (dlg->filename, dlg, NULL);
+  dlg->id_config = MatchTypeDialog (p, dlg->change_notify, dlg->change_userdata);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) dlg->id_config, NULL);
+
+  return (DialoG) p;
+}
+
+
+typedef struct addfiledescriptorseactiondialog {
+  DIALOG_MESSAGE_BLOCK
+  TexT filename;
+  DialoG constraint;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer change_userdata;
+} AddFileDescriptorsActionDlgData, PNTR AddFileDescriptorsActionDlgPtr;
+
+
+static Pointer AddDescriptorListFromDialog (DialoG d)
+{
+  AddFileDescriptorsActionDlgPtr dlg;
+  AddDescriptorListActionPtr    action = NULL;
+
+  dlg = (AddFileDescriptorsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = AddDescriptorListActionNew();
+  action->descriptor_list = AddFileActionNew ();
+  action->descriptor_list->filename = SaveStringFromText (dlg->filename);
+  action->constraint = DialogToPointer (dlg->constraint);
+
+  return action;
+}
+
+
+static void AddDescriptorListToDialog (DialoG d, Pointer data)
+{
+  AddFileDescriptorsActionDlgPtr dlg;
+  AddDescriptorListActionPtr    action;
+
+  dlg = (AddFileDescriptorsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  
+  if ((action = (AddDescriptorListActionPtr) data) == NULL) {
+    SetTitle (dlg->filename, "");
+    PointerToDialog (dlg->constraint, NULL);
+  } else {
+    SetTitle (dlg->filename, action->descriptor_list->filename);
+    PointerToDialog (dlg->constraint, action->constraint);
+  }
+}
+
+
+static void ChangeAddFileDescriptorsActionText (TexT t)
+{
+  AddFileDescriptorsActionDlgPtr dlg;
+
+  dlg = (AddFileDescriptorsActionDlgPtr) GetObjectExtra (t);
+  if (dlg != NULL && dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static ValNodePtr TestAddFileDescriptorsActionDialog (DialoG d)
+{
+  AddFileDescriptorsActionDlgPtr dlg;
+  ValNodePtr errs = NULL;
+
+  dlg = (AddFileDescriptorsActionDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (TextHasNoText (dlg->filename)) {
+      ValNodeAddPointer (&errs, 0, "Needs filename");
+    }
+  }
+  return errs;
+}
+
+
+static DialoG AddFileDescriptorsActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  AddFileDescriptorsActionDlgPtr dlg;
+  GrouP                  p, g;
+
+  dlg = (AddFileDescriptorsActionDlgPtr) MemNew (sizeof (AddFileDescriptorsActionDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = AddDescriptorListFromDialog;
+  dlg->todialog = AddDescriptorListToDialog;
+  dlg->testdialog = TestAddFileDescriptorsActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "File Name", 0, dialogTextHeight, programFont, 'r');
+  dlg->filename =  DialogText (g, "", 10, ChangeAddFileDescriptorsActionText);
+  SetObjectExtra (dlg->filename, dlg, NULL);
+  dlg->constraint = ConstraintSetDialog (p, dlg->change_notify, dlg->change_userdata);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) dlg->constraint, NULL);
+
+  return (DialoG) p;
+}
+
+
+typedef struct removesequencesactiondialog {
+  DIALOG_MESSAGE_BLOCK
+  DialoG constraint;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer change_userdata;
+} RemoveSequencesActionDlgData, PNTR RemoveSequencesActionDlgPtr;
+
+
+static Pointer RemoveSequencesActionFromDialog (DialoG d)
+{
+  RemoveSequencesActionDlgPtr dlg;
+  RemoveSequencesActionPtr action;
+
+  dlg = (RemoveSequencesActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = RemoveSequencesActionNew ();
+  action->constraint = DialogToPointer (dlg->constraint);
+  if (action->constraint == NULL) {
+    action = RemoveSequencesActionFree (action);
+  }
+  return action;
+}
+
+
+static void RemoveSequencesActionToDialog (DialoG d, Pointer data)
+{
+  RemoveSequencesActionDlgPtr dlg;
+  RemoveSequencesActionPtr action;
+
+  dlg = (RemoveSequencesActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  action = (RemoveSequencesActionPtr) data;
+  if (action == NULL) {
+    PointerToDialog (dlg->constraint, NULL);
+  } else {
+    PointerToDialog (dlg->constraint, action->constraint);
+  }
+}
+
+
+static ValNodePtr TestRemoveSequencesActionDialog (DialoG d)
+{
+  RemoveSequencesActionPtr action;
+  ValNodePtr errs = NULL;
+
+  action = DialogToPointer (d);
+  if (action == NULL) {
+    ValNodeAddPointer (&errs, 0, "Needs constraint");
+  } else {
+    action = RemoveSequencesActionFree (action);
+  }
+  return errs;
+}
+
+
+static DialoG RemoveSequencesActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  RemoveSequencesActionDlgPtr dlg;
+  GrouP                  p;
+
+  dlg = (RemoveSequencesActionDlgPtr) MemNew (sizeof (RemoveSequencesActionDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = RemoveSequencesActionFromDialog;
+  dlg->todialog = RemoveSequencesActionToDialog;
+  dlg->testdialog = TestRemoveSequencesActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->constraint = ConstraintSetDialog (p, dlg->change_notify, dlg->change_userdata);
+
+  return (DialoG) p;
+}
+
+
+typedef struct createtsaidsactiondialog {
+  DIALOG_MESSAGE_BLOCK
+  GrouP  src_choice;
+  DialoG text_portion;
+  TexT   suffix;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer change_userdata;
+} CreateTSAIdsActionDlgData, PNTR CreateTSAIdsActionDlgPtr;
+
+static Pointer CreateTSAIdsActionFromDialog (DialoG d)
+{
+  CreateTSAIdsActionDlgPtr dlg;
+  CreateTSAIdsActionPtr action;
+  TextPortionPtr text_portion;
+
+  dlg = (CreateTSAIdsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = CreateTSAIdsActionNew ();
+  if (!TextHasNoText (dlg->suffix)) {
+    action->suffix = SaveStringFromText (dlg->suffix);
+  }
+
+  if (GetValue (dlg->src_choice) == 2) {
+    text_portion = DialogToPointer (dlg->text_portion);
+    action->src = ValNodeNew (NULL);
+    action->src->choice = CreateTSAIdsSrc_defline;
+    action->src->data.ptrvalue = text_portion;
+  } else {
+    action->src = ValNodeNew (NULL);
+    action->src->choice = CreateTSAIdsSrc_local_id;
+    action->id_text_portion = DialogToPointer (dlg->text_portion);
+  }
+  return (Pointer) action;
+}
+
+
+static void CreateTSAIdsActionToDialog (DialoG d, Pointer data)
+{
+  CreateTSAIdsActionDlgPtr dlg;
+  CreateTSAIdsActionPtr action;
+
+  dlg = (CreateTSAIdsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  action = (CreateTSAIdsActionPtr) data;
+
+  if (action == NULL) {
+    SetValue (dlg->src_choice, 1);
+    SetTitle (dlg->suffix, "");
+    PointerToDialog (dlg->text_portion, NULL);
+  } else {
+    if (action->src == NULL || action->src->choice != CreateTSAIdsSrc_defline) {
+      SetValue (dlg->src_choice, 1);
+      PointerToDialog (dlg->text_portion, action->id_text_portion);
+    } else {
+      SetValue (dlg->src_choice, 2);
+      PointerToDialog (dlg->text_portion, action->src->data.ptrvalue);
+    }
+    SetTitle (dlg->suffix, action->suffix);
+  }
+}
+
+
+static void ChangeCreateTSAIDsSrcChoice (GrouP g)
+{
+  CreateTSAIdsActionDlgPtr dlg;
+
+  dlg = (CreateTSAIdsActionDlgPtr) GetObjectExtra (g);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static void ChangeCreateTSAIdsActionText (TexT t)
+{
+  CreateTSAIdsActionDlgPtr dlg;
+
+  dlg = (CreateTSAIdsActionDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+static DialoG CreateTSAIdsActionDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  CreateTSAIdsActionDlgPtr dlg;
+  GrouP                    p, g;
+
+  dlg = (CreateTSAIdsActionDlgPtr) MemNew (sizeof (CreateTSAIdsActionDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = CreateTSAIdsActionFromDialog;
+  dlg->todialog = CreateTSAIdsActionToDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->src_choice = NormalGroup (p, 0, 2, "Create TSA IDs from", programFont, ChangeCreateTSAIDsSrcChoice);
+  SetGroupSpacing (dlg->src_choice, 10, 10);
+  SetObjectExtra (dlg->src_choice, dlg, NULL);
+  RadioButton (dlg->src_choice, "Local IDs");
+  RadioButton (dlg->src_choice, "Definition Lines");
+  SetValue (dlg->src_choice, 1);
+
+  dlg->text_portion = TextPortionDialog (p, TRUE, change_notify, change_userdata);
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "Optional Suffix", 0, dialogTextHeight, programFont, 'r');
+  dlg->suffix = DialogText (g, "", 10, ChangeCreateTSAIdsActionText);
+  SetObjectExtra (dlg->suffix, dlg, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->src_choice, (HANDLE) dlg->text_portion, (HANDLE) g, NULL);
   return (DialoG) p;
 }
 
@@ -6604,6 +7323,7 @@ typedef struct sequenceconstraintdlg {
   DialoG rna_subtype;
   ButtoN feat_present;
   DialoG feature_type;
+  DialoG num_type_features;
   DialoG num_features;
   DialoG length;
   DialoG id;
@@ -6680,6 +7400,7 @@ static void SequenceConstraintToDialog (DialoG d, Pointer data)
     Hide (dlg->rna_subtype_grp);
     SetStatus (dlg->feat_present, FALSE);
     PointerToDialog (dlg->feature_type, NULL);
+    PointerToDialog (dlg->num_type_features, NULL);
     PointerToDialog (dlg->id, NULL);
     PointerToDialog (dlg->num_features, NULL);
     PointerToDialog (dlg->length, NULL);
@@ -6732,6 +7453,7 @@ static void SequenceConstraintToDialog (DialoG d, Pointer data)
       vn.next = NULL;
       PointerToDialog (dlg->feature_type, &vn);
     }
+    PointerToDialog (dlg->num_type_features, constraint->num_type_features);
 
     PointerToDialog (dlg->id, constraint->id);
     PointerToDialog (dlg->num_features, constraint->num_features);
@@ -6813,6 +7535,7 @@ static Pointer SequenceConstraintFromDialog (DialoG d)
       constraint->feature = vnp->choice;
     }
     vnp = ValNodeFree (vnp);
+    constraint->num_type_features = DialogToPointer (dlg->num_type_features);
   } else {
     constraint->feature = Macro_feature_type_any;
   }
@@ -6958,14 +7681,16 @@ NLM_EXTERN DialoG SequenceConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change
 
   Hide (dlg->rna_subtype_grp);
 
-  g = HiddenGroup (grp1, 2, 0, NULL);
-  dlg->feat_present = CheckBox (g, "Where feature present", ChangeSequenceConstraintButton);
+  g = HiddenGroup (grp1, 3, 0, NULL);
+  dlg->feat_present = CheckBox (g, "Feature type", ChangeSequenceConstraintButton);
   SetObjectExtra (dlg->feat_present, dlg, NULL);
   dlg->feature_type = FeatureTypeDialog (g, change_notify, change_userdata);
+  dlg->num_type_features = QuantityConstraintDialog (g, "Number present", "1", change_notify, change_userdata);
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->seqtype, 
                               (HANDLE) dlg->rna_subtype_grp, 
                               (HANDLE) g, 
                                NULL);
+
   StaticPrompt (g, "Strandedness of features", 0, popupMenuHeight, programFont, 'r');
   dlg->strandedness = PopupList (g, TRUE, ChangeSequenceConstraintPopup);
   SetObjectExtra (dlg->strandedness, dlg, NULL);
@@ -7346,12 +8071,19 @@ static void EnableEditConstraintAccept (Pointer data)
   ValNodePtr err_list = NULL;
   Boolean ok_to_accept = TRUE;
   ValNodePtr tmp;
+  StringConstraintPtr scp;
 
   ecp = (EditConstraintPtr) data;
   if (ecp != NULL && ecp->accept_btn != NULL) {
     val = GetValue (ecp->constraint_type);
     switch (val) {
       case eConstraintPopup_String:
+        scp = DialogToPointer (ecp->dlgs[val - 1]);
+        if (IsStringConstraintEmpty (scp)) {
+          ValNodeAddPointer (&err_list, 0, "empty string constraint");
+        }
+        scp = StringConstraintFree (scp);
+        break;
       case eConstraintPopup_Location:
       case eConstraintPopup_Source:
       case eConstraintPopup_CDSGeneProt:
@@ -9503,6 +10235,65 @@ static DialoG MiscFieldConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_no
 }
 
 
+static EComplexConstraintType ComplexConstraintTypeFromFeatureFieldType (Uint2 qualtype)
+{
+  EComplexConstraintType rval = eComplexConstraintType_string;
+
+  switch (qualtype) {
+    case FieldType_source_qual:
+      rval = eComplexConstraintType_source;
+      break;
+    case FieldType_cds_gene_prot:
+      rval = eComplexConstraintType_cdsgeneprot;
+      break;
+    case FieldType_pub:
+      rval = eComplexConstraintType_pub;
+      break;
+    case FieldType_feature_field:
+      rval = eComplexConstraintType_feature_field;
+      break;
+    case FieldType_rna_field:
+      rval = eComplexConstraintType_rna_field;
+      break;
+    case FieldType_molinfo_field:
+      rval = eComplexConstraintType_molinfo_field;
+      break;
+    case FieldType_struc_comment_field:
+      rval = eComplexConstraintType_seqid;
+      break;
+  }
+  return rval;
+}
+
+
+static Uint2 FeatureFieldTypeFromComplexConstraintType (EComplexConstraintType constraint_type)
+{
+  Uint2 rval = 0;
+
+  switch (constraint_type) {
+    case eComplexConstraintType_source:
+      rval = FieldType_source_qual;
+      break;
+    case eComplexConstraintType_cdsgeneprot:
+      rval = FieldType_cds_gene_prot;
+      break;
+    case eComplexConstraintType_pub:
+      rval = FieldType_pub;
+      break;
+    case eComplexConstraintType_feature_field:
+      rval = FieldType_feature_field;
+      break;
+    case eComplexConstraintType_rna_field:
+      rval = FieldType_rna_field;
+      break;
+    case eComplexConstraintType_molinfo_field:
+      rval = FieldType_molinfo_field;
+      break;
+  }
+  return rval;
+}
+
+
 typedef struct complexconstraintdlg {
   DIALOG_MESSAGE_BLOCK
 
@@ -9514,12 +10305,14 @@ typedef struct complexconstraintdlg {
   DialoG pub_constraint;
   DialoG feat_field_constraint;
   DialoG seq_constraint;
+  DialoG string_constraint;
+  DialoG loc_constraint;
   DialoG constraint_set_dlg;
 
   ValNodePtr rna_type;
   Int2       feat_type;
 
-  Uint2                field_type;
+  EComplexConstraintType constraint_type;
   Nlm_ChangeNotifyProc change_notify;
   Pointer              change_userdata;
 } ComplexConstraintDlgData, PNTR ComplexConstraintDlgPtr;
@@ -9530,62 +10323,45 @@ static void ShowSimpleConstraint (ComplexConstraintDlgPtr dlg)
   if (dlg == NULL) {
     return;
   }
-  switch (dlg->field_type) {
-    case FieldType_source_qual:
+
+  Hide (dlg->src_constraint);
+  Hide (dlg->cgp_constraint);
+  Hide (dlg->pub_constraint);
+  Hide (dlg->feat_field_constraint);
+  Hide (dlg->rna_constraint);
+  Hide (dlg->seq_constraint);
+  Hide (dlg->string_constraint);
+  Hide (dlg->loc_constraint);
+
+  switch (dlg->constraint_type) {
+    case eComplexConstraintType_source:
       Show (dlg->src_constraint);
-      Hide (dlg->cgp_constraint);
-      Hide (dlg->pub_constraint);
-      Hide (dlg->feat_field_constraint);
-      Hide (dlg->rna_constraint);
-      Hide (dlg->seq_constraint);
       break;
-    case FieldType_cds_gene_prot:
+    case eComplexConstraintType_cdsgeneprot:
       Show (dlg->cgp_constraint);
-      Hide (dlg->src_constraint);
-      Hide (dlg->pub_constraint);
-      Hide (dlg->feat_field_constraint);
-      Hide (dlg->rna_constraint);
-      Hide (dlg->seq_constraint);
       break;
-    case FieldType_pub:
+    case eComplexConstraintType_pub:
       Show (dlg->pub_constraint);
-      Hide (dlg->src_constraint);
-      Hide (dlg->cgp_constraint);
-      Hide (dlg->feat_field_constraint);
-      Hide (dlg->rna_constraint);
-      Hide (dlg->seq_constraint);
       break;
-    case FieldType_feature_field:
+    case eComplexConstraintType_feature_field:
       Show (dlg->feat_field_constraint);
-      Hide (dlg->pub_constraint);
-      Hide (dlg->src_constraint);
-      Hide (dlg->cgp_constraint);
-      Hide (dlg->rna_constraint);
-      Hide (dlg->seq_constraint);
       break;
-    case FieldType_rna_field:
+    case eComplexConstraintType_rna_field:
       Show (dlg->rna_constraint);
-      Hide (dlg->src_constraint);
-      Hide (dlg->cgp_constraint);
-      Hide (dlg->pub_constraint);
-      Hide (dlg->feat_field_constraint);
-      Hide (dlg->seq_constraint);
       break;
-    case FieldType_molinfo_field:
+    case eComplexConstraintType_molinfo_field:
       Show (dlg->seq_constraint);
-      Hide (dlg->feat_field_constraint);
-      Hide (dlg->pub_constraint);
-      Hide (dlg->src_constraint);
-      Hide (dlg->cgp_constraint);
-      Hide (dlg->rna_constraint);
+      break;
+    case eComplexConstraintType_seqid:
+      Show (dlg->seq_constraint);
+      break;
+    case eComplexConstraintType_string:
+      Show (dlg->string_constraint);
+      break;
+    case eComplexConstraintType_loc:
+      Show (dlg->loc_constraint);
       break;
     default:
-      Hide (dlg->cgp_constraint);
-      Hide (dlg->src_constraint);
-      Hide (dlg->pub_constraint);
-      Hide (dlg->feat_field_constraint);
-      Hide (dlg->rna_constraint);
-      Hide (dlg->seq_constraint);
       break;
   }
 }
@@ -9641,13 +10417,13 @@ NLM_EXTERN void ChangeComplexConstraintFieldType (DialoG d, Uint2 qual_type, Val
 
   dlg = (ComplexConstraintDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return;
-  dlg->field_type = qual_type;
+  dlg->constraint_type = ComplexConstraintTypeFromFeatureFieldType (qual_type);
   dlg->feat_type = feat_type;
   dlg->rna_type = RnaFeatTypeFree (dlg->rna_type);
   dlg->rna_type = AsnIoMemCopy (rna_type, (AsnReadFunc) RnaFeatTypeAsnRead, (AsnWriteFunc) RnaFeatTypeAsnWrite);
 
   /* set default constraint type for advanced constraints */
-  switch (dlg->field_type) {
+  switch (qual_type) {
     case FieldType_source_qual:
       SetConstraintSetDefaultConstraintType (dlg->constraint_set_dlg, ConstraintChoice_source);
       break;
@@ -9671,13 +10447,37 @@ NLM_EXTERN void ChangeComplexConstraintFieldType (DialoG d, Uint2 qual_type, Val
       SetConstraintSetDefaultConstraintTypeEx (dlg->constraint_set_dlg, default_constraint);
       default_constraint = ConstraintChoiceFree (default_constraint);
       break;
+    case FieldType_struc_comment_field:
+      SetConstraintSetDefaultConstraintType (dlg->constraint_set_dlg, ConstraintChoice_sequence);
+      break;
   }    
   /* change which constraint dialog is visible, if using "simple" constraints */
   if (GetValue (dlg->constraint_choice) == 1) {
     ShowSimpleConstraint (dlg);
   }
 }
-  
+
+
+NLM_EXTERN void SetComplexConstraintType (DialoG d, EComplexConstraintType constraint_type)
+{
+  Uint2 ftype;
+  ComplexConstraintDlgPtr dlg;
+
+  ftype = FeatureFieldTypeFromComplexConstraintType (constraint_type);
+  if (ftype != 0) {
+    ChangeComplexConstraintFieldType (d, ftype, NULL, Macro_feature_type_any);
+  } else {
+    dlg = (ComplexConstraintDlgPtr) GetObjectExtra (d);
+    if (dlg != NULL) {
+      dlg->constraint_type = constraint_type;
+      /* change which constraint dialog is visible, if using "simple" constraints */
+      if (GetValue (dlg->constraint_choice) == 1) {
+        ShowSimpleConstraint (dlg);
+      }
+    }
+  }
+}
+
 
 static void ChangeComplexConstraintChoice (GrouP g)
 {
@@ -9715,41 +10515,50 @@ static void DataToComplexConstraintDlg (DialoG d, Pointer data)
     PointerToDialog (dlg->constraint_set_dlg, constraint);
     SetValue (dlg->constraint_choice, 2);
   } else if (constraint == NULL) {
-    switch (dlg->field_type) {
-      case FieldType_source_qual:
+    switch (dlg->constraint_type) {
+      case eComplexConstraintType_source:
         PointerToDialog (dlg->src_constraint, NULL);
         break;
-      case FieldType_cds_gene_prot:
+      case eComplexConstraintType_cdsgeneprot:
         PointerToDialog (dlg->cgp_constraint, NULL);
         break;
-      case FieldType_pub:
+      case eComplexConstraintType_pub:
         PointerToDialog (dlg->pub_constraint, NULL);
         break;
-      case FieldType_feature_field:
+      case eComplexConstraintType_feature_field:
         PointerToDialog (dlg->feat_field_constraint, NULL);
         break;
-      case FieldType_rna_field:
+      case eComplexConstraintType_rna_field:
         PointerToDialog (dlg->rna_constraint, NULL);
         break;
-      case FieldType_molinfo_field:
+      case eComplexConstraintType_molinfo_field:
         PointerToDialog (dlg->seq_constraint, NULL);
+        break;
+      case eComplexConstraintType_seqid:
+        PointerToDialog (dlg->seq_constraint, NULL);
+        break;
+      case eComplexConstraintType_string:
+        PointerToDialog (dlg->string_constraint, NULL);
+        break;
+      case eComplexConstraintType_loc:
+        PointerToDialog (dlg->loc_constraint, NULL);
         break;
     }
   } else {
     switch (constraint->choice) {
       case ConstraintChoice_field:
         fcp = constraint->data.ptrvalue;
-        if (fcp->field == NULL || fcp->field->choice != dlg->field_type) {
+        if (fcp->field == NULL || fcp->field->choice != FeatureFieldTypeFromComplexConstraintType(dlg->constraint_type)) {
           SetValue (dlg->constraint_choice, 2);
           PointerToDialog (dlg->constraint_set_dlg, constraint);
-        } else if (dlg->field_type == FieldType_feature_field) {
+        } else if (dlg->constraint_type == eComplexConstraintType_feature_field) {
           PointerToDialog (dlg->feat_field_constraint, constraint);
-        } else if (dlg->field_type == FieldType_rna_field) {
+        } else if (dlg->constraint_type == eComplexConstraintType_rna_field) {
           PointerToDialog (dlg->rna_constraint, constraint);
         }
         break;
       case ConstraintChoice_source:
-        if (dlg->field_type == FieldType_source_qual) {
+        if (dlg->constraint_type == eComplexConstraintType_source) {
           PointerToDialog (dlg->src_constraint, constraint);
         } else {
           SetValue (dlg->constraint_choice, 2);
@@ -9758,7 +10567,7 @@ static void DataToComplexConstraintDlg (DialoG d, Pointer data)
         break;
       case ConstraintChoice_cdsgeneprot_qual:
       case ConstraintChoice_cdsgeneprot_pseudo:
-        if (dlg->field_type == FieldType_cds_gene_prot) {
+        if (dlg->constraint_type == eComplexConstraintType_cdsgeneprot) {
           PointerToDialog (dlg->cgp_constraint, constraint);
         } else {
           SetValue (dlg->constraint_choice, 2);
@@ -9770,8 +10579,16 @@ static void DataToComplexConstraintDlg (DialoG d, Pointer data)
         PointerToDialog (dlg->constraint_set_dlg, constraint);
         break;
       case ConstraintChoice_pub:
-        if (dlg->field_type == FieldType_pub) {
+        if (dlg->constraint_type == eComplexConstraintType_pub) {
           PointerToDialog (dlg->pub_constraint, constraint->data.ptrvalue);
+        } else {
+          SetValue (dlg->constraint_choice, 2);
+          PointerToDialog (dlg->constraint_set_dlg, constraint);
+        }
+        break;
+      case eComplexConstraintType_loc:
+        if (dlg->constraint_type == eComplexConstraintType_loc) {
+          PointerToDialog (dlg->loc_constraint, constraint->data.ptrvalue);
         } else {
           SetValue (dlg->constraint_choice, 2);
           PointerToDialog (dlg->constraint_set_dlg, constraint);
@@ -9791,6 +10608,8 @@ static Pointer DataFromComplexConstraintDlg (DialoG d)
   FieldConstraintPtr       fc;
   RnaQualPtr               rq;
   PublicationConstraintPtr pub;
+  StringConstraintPtr      scp;
+  LocationConstraintPtr    lcp;
 
   dlg = (ComplexConstraintDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return NULL;
@@ -9798,14 +10617,14 @@ static Pointer DataFromComplexConstraintDlg (DialoG d)
   if (GetValue (dlg->constraint_choice) == 2) {
     constraint = DialogToPointer (dlg->constraint_set_dlg);
   } else {
-    switch (dlg->field_type) {
-      case FieldType_source_qual:
+    switch (dlg->constraint_type) {
+      case eComplexConstraintType_source:
         constraint = DialogToPointer (dlg->src_constraint);
         break;
-      case FieldType_cds_gene_prot:
+      case eComplexConstraintType_cdsgeneprot:
         constraint = DialogToPointer (dlg->cgp_constraint);
         break;
-      case FieldType_pub:
+      case eComplexConstraintType_pub:
         pub = DialogToPointer (dlg->pub_constraint);
         if (!IsPublicationConstraintEmpty (pub)) {
           ValNodeAddPointer (&constraint, ConstraintChoice_pub, pub);
@@ -9813,10 +10632,10 @@ static Pointer DataFromComplexConstraintDlg (DialoG d)
           pub = PublicationConstraintFree (pub);
         }
         break;
-      case FieldType_feature_field:
+      case eComplexConstraintType_feature_field:
         constraint = DialogToPointer (dlg->feat_field_constraint);
         break;
-      case FieldType_rna_field:
+      case eComplexConstraintType_rna_field:
         constraint = DialogToPointer (dlg->rna_constraint);
         if (constraint != NULL) {
           fc = (FieldConstraintPtr) constraint->data.ptrvalue;
@@ -9830,8 +10649,27 @@ static Pointer DataFromComplexConstraintDlg (DialoG d)
           }
         }
         break;
-      case FieldType_molinfo_field:
+      case eComplexConstraintType_molinfo_field:
         constraint = DialogToPointer (dlg->seq_constraint);
+        break;
+      case eComplexConstraintType_seqid:
+        constraint = DialogToPointer (dlg->seq_constraint);
+        break;
+      case eComplexConstraintType_string:
+        scp = DialogToPointer (dlg->string_constraint);
+        if (IsStringConstraintEmpty (scp)) {
+          scp = StringConstraintFree(scp);
+        } else {
+          ValNodeAddPointer (&constraint, ConstraintChoice_string, scp);
+        }
+        break;
+      case eComplexConstraintType_loc:
+        lcp = DialogToPointer (dlg->loc_constraint);
+        if (IsLocationConstraintEmpty (lcp)) {
+          lcp = LocationConstraintFree (lcp);
+        } else {
+          ValNodeAddPointer (&constraint, ConstraintChoice_location, lcp);
+        }
         break;
     }
   }
@@ -9852,6 +10690,7 @@ static void ClearComplexConstraintDialogText (DialoG d)
   ClearPublicationConstraintDialogText (dlg->pub_constraint);
   ClearFeatureFieldConstraintDialogText (dlg->feat_field_constraint);
   ClearSimpleSequenceConstraintDialogText (dlg->seq_constraint);
+  ClearStringConstraintDialogText (dlg->string_constraint);
 }
 
 
@@ -9867,28 +10706,37 @@ static ValNodePtr TestComplexConstraintDlg (DialoG d)
   if (GetValue (dlg->constraint_choice) == 2) {
     err_list = TestDialog (dlg->constraint_set_dlg);
   } else {
-    switch (dlg->field_type) {
-      case FieldType_source_qual:
+    switch (dlg->constraint_type) {
+      case eComplexConstraintType_source:
         err_list = TestDialog (dlg->src_constraint);
         break;
-      case FieldType_cds_gene_prot:
+      case eComplexConstraintType_cdsgeneprot:
         err_list = TestDialog (dlg->cgp_constraint);
         break;
-      case FieldType_pub:
+      case eComplexConstraintType_pub:
         pub = DialogToPointer (dlg->pub_constraint);
         if (!IsPublicationConstraintEmpty (pub)) {
           err_list = TestDialog (dlg->pub_constraint);
         }
         pub = PublicationConstraintFree (pub);
         break;
-      case FieldType_feature_field:
+      case eComplexConstraintType_feature_field:
         err_list = TestDialog (dlg->feat_field_constraint);
         break;
-      case FieldType_rna_field:
+      case eComplexConstraintType_rna_field:
         err_list = TestDialog (dlg->rna_constraint);
         break;
-      case FieldType_molinfo_field:
+      case eComplexConstraintType_molinfo_field:
         err_list = TestDialog (dlg->seq_constraint);
+        break;
+      case eComplexConstraintType_seqid:
+        err_list = TestDialog (dlg->seq_constraint);
+        break;
+      case eComplexConstraintType_string:
+        err_list = TestDialog (dlg->string_constraint);
+        break;
+      case eComplexConstraintType_loc:
+        err_list = TestDialog (dlg->loc_constraint);
         break;
     }
   }
@@ -9934,6 +10782,8 @@ NLM_EXTERN DialoG ComplexConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_
   dlg->feat_field_constraint = FeatureFieldConstraintDialog (dlg->old_constraint_grp, dlg->change_notify, dlg->change_userdata);
   dlg->rna_constraint = RNAFieldConstraintDialog (dlg->old_constraint_grp, NULL, dlg->change_notify, dlg->change_userdata);
   dlg->seq_constraint = SimpleSequenceConstraintDialog (dlg->old_constraint_grp, dlg->change_notify, dlg->change_userdata);
+  dlg->string_constraint = StringConstraintDialog (dlg->old_constraint_grp, "Where object text", TRUE, dlg->change_notify, dlg->change_userdata);
+  dlg->loc_constraint = LocationConstraintDialog (dlg->old_constraint_grp, dlg->change_notify, dlg->change_userdata);
   AlignObjects (ALIGN_CENTER,
                 (HANDLE) dlg->cgp_constraint,
                 (HANDLE) dlg->src_constraint, 
@@ -9941,6 +10791,8 @@ NLM_EXTERN DialoG ComplexConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_
                 (HANDLE) dlg->feat_field_constraint, 
                 (HANDLE) dlg->rna_constraint, 
                 (HANDLE) dlg->seq_constraint,
+                (HANDLE) dlg->string_constraint,
+                (HANDLE) dlg->loc_constraint,
                 NULL);
 
   dlg->constraint_set_dlg = ConstraintSetDialog (constraint_grp, dlg->change_notify, dlg->change_userdata);
@@ -12101,6 +12953,155 @@ EditActionDialog
 }
 
 
+typedef struct removeoutsideactiondlg {
+  AECR_DLG_BLOCK
+
+  DialoG portion;
+  GrouP  if_not_found;
+} RemoveOutsideActionDlgData, PNTR RemoveOutsideActionDlgPtr;
+
+
+static void PointerToRemoveOutsideActionDlg (DialoG d, Pointer data)
+{
+  RemoveOutsideActionDlgPtr dlg;
+  RemoveOutsideActionPtr ro;
+
+  dlg = (RemoveOutsideActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  ro = (RemoveOutsideActionPtr) data;
+
+  if (ro == NULL) {
+    SingleFieldToAECRActionDlg (d, NULL);
+    PointerToDialog (dlg->portion, NULL);
+    SetValue (dlg->if_not_found, 1);
+  } else {
+    SingleFieldToAECRActionDlg (d, ro->field);
+    PointerToDialog (dlg->portion, ro->portion);
+    if (ro->remove_if_not_found) {
+      SetValue (dlg->if_not_found, 2);
+    } else {
+      SetValue (dlg->if_not_found, 1);
+    }
+  }
+}
+
+
+static Pointer DialogToRemoveOutsideAction (DialoG d)
+{
+  RemoveOutsideActionDlgPtr dlg;
+  RemoveOutsideActionPtr    edit;
+
+  dlg = (RemoveOutsideActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  edit = RemoveOutsideActionNew ();
+  edit->field = DialogToPointer (dlg->field_dlg);
+  edit->portion = DialogToPointer (dlg->portion);
+  if (GetValue(dlg->if_not_found) == 2) {
+    edit->remove_if_not_found = TRUE;
+  } else {
+    edit->remove_if_not_found = FALSE;
+  }
+  return edit;
+}
+
+
+static ValNodePtr TestRemoveOutsideActionDialog (DialoG d)
+{
+  RemoveOutsideActionDlgPtr dlg;
+  Int2 field_type = 0;
+  ValNodePtr err_list = NULL;
+  ValNodePtr field, vnp;
+  Boolean    field_is_nontext = FALSE;
+
+  dlg = (RemoveOutsideActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  err_list = TestDialog (dlg->qual_type_dlg);
+  vnp = DialogToPointer (dlg->qual_type_dlg);
+  if (vnp != NULL) {
+    field_type = vnp->choice;
+    vnp = ValNodeFree (vnp);
+  }
+
+  ValNodeLink (&err_list, TestDialog (dlg->field_dlg));
+
+  field = DialogToPointer (dlg->field_dlg);
+  field_is_nontext = IsFieldTypeNonText (field);
+  field = FieldTypeFree (field);
+
+  if (field_is_nontext) {
+    ValNodeAddPointer (&err_list, 0, "invalid action for field type");
+  }
+  ValNodeLink (&err_list, TestDialog (dlg->portion));
+  return err_list;
+}
+
+
+static void RemoveOutsideActionDialogMessage (DialoG d, Int2 mssg)
+
+{
+  RemoveOutsideActionDlgPtr dlg;
+
+  dlg = (RemoveOutsideActionDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    switch (mssg) {
+      case NUM_VIB_MSG + 1 :
+        SendMessageToDialog (dlg->portion, VIB_MSG_INIT);
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+
+static DialoG 
+RemoveOutsideActionDialog 
+(GrouP h,
+ Boolean indexer_version,
+ Nlm_ChangeNotifyProc     autopopulate,
+ Pointer                  autopopulate_data,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Nlm_ChangeNotifyProc     redraw_notify,
+ Pointer                  redraw_userdata)
+{
+  RemoveOutsideActionDlgPtr dlg;
+  GrouP                 p;
+
+  dlg = (RemoveOutsideActionDlgPtr) MemNew (sizeof (RemoveOutsideActionDlgData));
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = PointerToRemoveOutsideActionDlg;
+  dlg->fromdialog = DialogToRemoveOutsideAction;
+  dlg->testdialog = TestRemoveOutsideActionDialog;
+  dlg->dialogmessage = RemoveOutsideActionDialogMessage;
+  dlg->autopopulate = autopopulate;
+  dlg->autopopulate_data = autopopulate_data;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->redraw_notify = redraw_notify;
+  dlg->redraw_userdata = redraw_userdata;
+
+  if (dlg->autopopulate != NULL) {
+    dlg->autopopulate_btn = CheckBox (p, "Autopopulate", ChangeAutopopulateStatus);
+    SetObjectExtra (dlg->autopopulate_btn, dlg, NULL);
+  }
+
+  dlg->portion = TextPortionDialog (p, FALSE, change_notify, change_userdata);
+  dlg->if_not_found = NormalGroup (p, 0, 2, "If field doesn't contain searched for text:", systemFont, NULL);
+  RadioButton (dlg->if_not_found, "     Do nothing to field");
+  RadioButton (dlg->if_not_found, "     Remove entire field text");
+  SetValue (dlg->if_not_found, 1);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->portion, (HANDLE) dlg->if_not_found, (HANDLE) dlg->autopopulate_btn, NULL);
+
+  return (DialoG) p;
+}
+
+
 typedef struct convertactiondlg {
   AECR_DLG_BLOCK
 
@@ -12723,7 +13724,7 @@ AECRParseActionDialog
 
 typedef struct editaecractiondlg {
   DIALOG_MESSAGE_BLOCK
-  DialoG action_dlgs[7];
+  DialoG action_dlgs[8];
   DialoG constraint_dlg;
   ButtoN accept_btn;
 
@@ -12773,6 +13774,9 @@ static Uint1 ActionTypeChoiceFromPopupValue (Int4 i)
     case 7:
       action_type_choice = ActionChoice_parse;
       break;
+    case 9:
+      action_type_choice = ActionChoice_remove_outside;
+      break;
   }
   return action_type_choice;
 }
@@ -12803,6 +13807,9 @@ static Uint1 EditAECRDlgNumFromAECRActionType (Uint1 action_type)
       break;
     case ActionChoice_remove:
       dlg_num = 6;
+      break;
+    case ActionChoice_remove_outside:
+      dlg_num = 7;
       break;
   }
   return dlg_num;
@@ -12863,7 +13870,7 @@ static void AECRActionToEditDialog (DialoG d, Pointer data)
   if (dlg == NULL) return;
   action = (AECRActionPtr) data;
   
-  for (dlg_num = 0; dlg_num < 7; dlg_num++) {
+  for (dlg_num = 0; dlg_num < 8; dlg_num++) {
     Hide (dlg->action_dlgs[dlg_num]);
   }
   if (action == NULL || action->action == NULL) {
@@ -12880,6 +13887,7 @@ static void AECRActionToEditDialog (DialoG d, Pointer data)
   switch (dlg->action_type) {
     case ActionChoice_apply:
     case ActionChoice_edit:
+    case ActionChoice_remove_outside:
       Show (dlg->single_field_grp);
       Hide (dlg->field_pair_grp);
       Show (dlg->single_field);
@@ -12925,6 +13933,7 @@ static void ChangeEditAECRActionQualType (Pointer data)
     switch (dlg->action_type) {
       case ActionChoice_apply:
       case ActionChoice_edit:
+      case ActionChoice_remove_outside:
         vnp = DialogToPointer (dlg->single_qual_type_dlg);
         vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
         PointerToDialog (dlg->single_field, vnp);
@@ -13071,6 +14080,9 @@ EditAECRActionDialog
   SetAECRActionDlgFieldTypeDialogs (dlg->action_dlgs[5], dlg->pair_qual_type_dlg, dlg->field_pair);
   dlg->action_dlgs[6] = RemoveActionDialog (g, indexer_version, change_notify, change_userdata, redraw_notify, redraw_userdata);
   SetAECRActionDlgFieldTypeDialogs (dlg->action_dlgs[6], dlg->single_qual_type_dlg, dlg->single_field_remove);
+  dlg->action_dlgs[7] = RemoveOutsideActionDialog (g, FALSE, NULL, NULL, change_notify, change_userdata, redraw_notify, redraw_userdata);
+  SetAECRActionDlgFieldTypeDialogs (dlg->action_dlgs[7], dlg->single_qual_type_dlg, dlg->single_field);
+
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->action_dlgs[0],
                               (HANDLE) dlg->action_dlgs[1],
                               (HANDLE) dlg->action_dlgs[2],
@@ -13078,6 +14090,7 @@ EditAECRActionDialog
                               (HANDLE) dlg->action_dlgs[4],
                               (HANDLE) dlg->action_dlgs[5],
                               (HANDLE) dlg->action_dlgs[6],
+                              (HANDLE) dlg->action_dlgs[7],
                               NULL);
   dlg->constraint_dlg = ConstraintSetDialog (p, change_notify, change_userdata);
 
@@ -14652,6 +15665,7 @@ typedef struct autodefactiondlg {
   DIALOG_MESSAGE_BLOCK
   DialoG                   modifiers_dlg;
   PopuP                    clause_list_type_popup;
+  PopuP                    misc_feat_parse_rule;
 
   Nlm_ChangeNotifyProc     change_notify;
   Pointer                  change_userdata;
@@ -14672,6 +15686,7 @@ static void AutodefActionToDialog(DialoG d, Pointer data)
   if (action == NULL) {
     PointerToDialog (dlg->modifiers_dlg, NULL);
     SetValue (dlg->clause_list_type_popup, 2);
+    SetValue (dlg->misc_feat_parse_rule, 2);
   } else {
     /* populate modifiers */
     for (vnp = action->modifiers; vnp != NULL; vnp = vnp->next) {
@@ -14690,10 +15705,15 @@ static void AutodefActionToDialog(DialoG d, Pointer data)
       case Autodef_list_type_complete_genome:
         SetValue (dlg->clause_list_type_popup, 3);
         break;
+      case Autodef_list_type_sequence:
+        SetValue (dlg->clause_list_type_popup, 4);
+        break;
       default:
         SetValue (dlg->clause_list_type_popup, 2);
         break;
     }
+
+    SetValue (dlg->misc_feat_parse_rule, action->misc_feat_parse_rule);
   }
 }
 
@@ -14722,6 +15742,9 @@ static Pointer DialogToAutodefAction (DialoG d)
     case 3:
       action->clause_list_type = Autodef_list_type_complete_genome;
       break;
+    case 4:
+      action->clause_list_type = Autodef_list_type_sequence;
+      break;
     default:
       action->clause_list_type = Autodef_list_type_feature_list;
       break;
@@ -14733,6 +15756,10 @@ static Pointer DialogToAutodefAction (DialoG d)
   }
   list = ValNodeFree (list);
 
+  action->misc_feat_parse_rule = GetValue (dlg->misc_feat_parse_rule);
+  if (action->misc_feat_parse_rule < 1) {
+    action->misc_feat_parse_rule = 2;
+  }
   return action;
 }
 
@@ -14759,7 +15786,7 @@ static DialoG AutodefActionDialog
 {
   AutodefActionDlgPtr dlg;
   GrouP               p;
-  PrompT              ppt1, ppt2;
+  PrompT              ppt1, ppt2, ppt3;
   ValNodePtr          src_quals = NULL;
   ValNode             vn;
 
@@ -14805,9 +15832,20 @@ static DialoG AutodefActionDialog
   PopupItem (dlg->clause_list_type_popup, "List Features");
   PopupItem (dlg->clause_list_type_popup, "Complete Sequence");
   PopupItem (dlg->clause_list_type_popup, "Complete Genome");
+  PopupItem (dlg->clause_list_type_popup, "Sequence");
   SetValue (dlg->clause_list_type_popup, 2);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt1, (HANDLE) dlg->modifiers_dlg, (HANDLE) ppt2, (HANDLE) dlg->clause_list_type_popup, NULL);
+  ppt3 = StaticPrompt (p, "Use misc-feat", 0, dialogTextHeight, systemFont, 'l');
+  dlg->misc_feat_parse_rule = PopupList (p, TRUE, ChangeAutodefPopup);
+  SetObjectExtra (dlg->misc_feat_parse_rule, dlg, NULL);
+  PopupItem (dlg->misc_feat_parse_rule, "Use comment before first semicolon");
+  PopupItem (dlg->misc_feat_parse_rule, "Look for Noncoding Products");
+  SetValue (dlg->misc_feat_parse_rule, 2);
+
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt1, (HANDLE) dlg->modifiers_dlg, 
+                (HANDLE) ppt2, (HANDLE) dlg->clause_list_type_popup,
+                (HANDLE) ppt3, (HANDLE) dlg->misc_feat_parse_rule, NULL);
 
   return (DialoG) p;
 }
@@ -15086,6 +16124,117 @@ static DialoG SortFieldsDialog
 }
 
 
+typedef struct extendtofeaturedlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG                   feature_type_dlg;
+  DialoG                   distance_dlg;
+  ButtoN                   include_feat;
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+} ExtendToFeatureDlgData, PNTR ExtendToFeatureDlgPtr;
+
+
+static Pointer DialogToExtendToFeature (DialoG d)
+{
+  ExtendToFeatureDlgPtr dlg;
+  ExtendToFeaturePtr    efp;
+  ValNodePtr            vnp;
+
+  dlg = (ExtendToFeatureDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  vnp = DialogToPointer (dlg->feature_type_dlg);
+  if (vnp == NULL) return NULL;
+
+  efp = ExtendToFeatureNew ();
+  efp->type = vnp->choice;
+  vnp = ValNodeFree (vnp);
+  efp->include_feat = GetStatus (dlg->include_feat);
+  efp->distance = DialogToPointer (dlg->distance_dlg);
+
+  return efp;
+}
+
+
+static void ExtendToFeatureToDialog (DialoG d, Pointer data)
+{
+  ExtendToFeatureDlgPtr dlg;
+  ExtendToFeaturePtr    efp;
+  ValNode               vn;
+
+  dlg = (ExtendToFeatureDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  efp = (ExtendToFeaturePtr) data;
+
+  if (efp == NULL) {
+    PointerToDialog (dlg->feature_type_dlg, NULL);
+    PointerToDialog (dlg->distance_dlg, NULL);
+    SetStatus (dlg->include_feat, FALSE);
+  } else {
+    vn.choice = (Uint1)efp->type;
+    vn.data.ptrvalue = NULL;
+    vn.next = NULL;
+    PointerToDialog (dlg->feature_type_dlg, &vn);
+    PointerToDialog (dlg->distance_dlg, efp->distance);
+    SetStatus (dlg->include_feat, efp->include_feat);
+  }
+}
+
+
+static ValNodePtr TestExtendToFeatureDialog (DialoG d)
+{
+  ExtendToFeatureDlgPtr dlg;
+  ValNodePtr err_list = NULL, vnp;
+
+  dlg = (ExtendToFeatureDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  vnp = DialogToPointer (dlg->feature_type_dlg);
+  if (vnp == NULL) {
+    ValNodeAddPointer (&err_list, 0, "missing feature type");
+  } else {
+    vnp = ValNodeFree (err_list);
+    err_list = TestDialog (dlg->distance_dlg);
+  }
+  return err_list;
+}
+
+
+static DialoG 
+ExtendToFeatureDialog 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  ExtendToFeatureDlgPtr dlg;
+  GrouP                     p;
+
+  dlg = (ExtendToFeatureDlgPtr) MemNew (sizeof (ExtendToFeatureDlgData));
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = ExtendToFeatureToDialog;
+  dlg->fromdialog = DialogToExtendToFeature;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = TestExtendToFeatureDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->feature_type_dlg = FeatureTypeDialog (p, change_notify, change_userdata);
+  dlg->distance_dlg = QuantityConstraintDialog (p, "feature distance", "50", change_notify, change_userdata);
+  dlg->include_feat = CheckBox (p, "Include feature location", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
+                              (HANDLE) dlg->distance_dlg,
+                              (HANDLE) dlg->include_feat,
+                              NULL);
+
+  return (DialoG) p;
+}
+
+
 typedef struct editfeaturelocationactiondlg {
   DIALOG_MESSAGE_BLOCK
   DialoG                   feature_type_dlg;
@@ -15105,8 +16254,10 @@ typedef struct editfeaturelocationactiondlg {
   PopuP                    set_both_type;
   ButtoN                   extendboth;
   PopuP                    clear_both_type;
+  DialoG                   extend_to_feat;
   PopuP                    convert_loc;
   ButtoN                   retranslate_cds;
+  ButtoN                   also_edit_gene;
   DialoG                   constraint_dlg;
   Nlm_ChangeNotifyProc     change_notify;
   Pointer                  change_userdata;
@@ -15129,6 +16280,7 @@ static void ChangeFeatureLocationEditType (PopuP p)
   Hide (dlg->set_both_partial_grp);
   Hide (dlg->clear_both_type);
   Hide (dlg->convert_loc);
+  Hide (dlg->extend_to_feat);
 
   val = GetValue (dlg->feature_edit_type);
   switch (val) {
@@ -15156,6 +16308,10 @@ static void ChangeFeatureLocationEditType (PopuP p)
     case 8:
       Show (dlg->convert_loc);
       break;
+    case 11:
+    case 12:
+      Show (dlg->extend_to_feat);
+      break;
   }
   if (dlg->change_notify != NULL) {
     (dlg->change_notify) (dlg->change_userdata);
@@ -15170,6 +16326,8 @@ static void ResetFeatureLocationActionEditType (EditFeatureLocationActionDlgPtr 
     SetValue (dlg->strand_from, 1);
     SetValue (dlg->strand_to, 1);
     SetValue (dlg->retranslate_cds, FALSE);
+    SetValue (dlg->also_edit_gene, FALSE);
+    PointerToDialog (dlg->extend_to_feat, NULL);
   }
 }
 
@@ -15193,6 +16351,7 @@ static void EditFeatureLocationActionToDialog (DialoG d, Pointer data)
     ResetFeatureLocationActionEditType (dlg);
     PointerToDialog (dlg->constraint_dlg, NULL);
     SetStatus (dlg->retranslate_cds, FALSE);
+    SetStatus (dlg->also_edit_gene, FALSE);
   } else {
     vn.choice = (Uint1)action->type;
     vn.data.ptrvalue = NULL;
@@ -15200,6 +16359,7 @@ static void EditFeatureLocationActionToDialog (DialoG d, Pointer data)
     PointerToDialog (dlg->feature_type_dlg, &vn);
     PointerToDialog (dlg->constraint_dlg, action->constraint);
     SetStatus (dlg->retranslate_cds, action->retranslate_cds);
+    SetStatus (dlg->also_edit_gene, action->also_edit_gene);
     if (action->action == NULL) {
       ResetFeatureLocationActionEditType (dlg);
     } else {
@@ -15396,6 +16556,14 @@ static void EditFeatureLocationActionToDialog (DialoG d, Pointer data)
         case LocationEditType_extend_3:
           SetValue (dlg->feature_edit_type, 10);
           break;
+        case LocationEditType_extend_5_to_feat:
+          SetValue (dlg->feature_edit_type, 11);
+          PointerToDialog (dlg->extend_to_feat, action->action->data.ptrvalue);
+          break;
+        case LocationEditType_extend_3_to_feat:
+          SetValue (dlg->feature_edit_type, 12);
+          PointerToDialog (dlg->extend_to_feat, action->action->data.ptrvalue);
+          break;
         default:
           ResetFeatureLocationActionEditType (dlg);
           break;
@@ -15427,6 +16595,7 @@ static Pointer DialogToEditFeatureLocationAction (DialoG d)
   action->type = vnp->choice;
   vnp = ValNodeFree (vnp);
   action->retranslate_cds = GetStatus (dlg->retranslate_cds);
+  action->also_edit_gene = GetStatus (dlg->also_edit_gene);
   action->constraint = DialogToPointer (dlg->constraint_dlg);
 
   val = GetValue (dlg->feature_edit_type);
@@ -15633,6 +16802,22 @@ static Pointer DialogToEditFeatureLocationAction (DialoG d)
       action->action = ValNodeNew (NULL);
       action->action->choice = LocationEditType_extend_3;
       break;
+    case 11:
+      action->action = ValNodeNew (NULL);
+      action->action->choice = LocationEditType_extend_5_to_feat;
+      action->action->data.ptrvalue = DialogToPointer (dlg->extend_to_feat);
+      if (action->action->data.ptrvalue == NULL) {
+        action = EditFeatureLocationActionFree (action);
+      }
+      break;
+    case 12:
+      action->action = ValNodeNew (NULL);
+      action->action->choice = LocationEditType_extend_3_to_feat;
+      action->action->data.ptrvalue = DialogToPointer (dlg->extend_to_feat);
+      if (action->action->data.ptrvalue == NULL) {
+        action = EditFeatureLocationActionFree (action);
+      }
+      break;
     default:
       action = EditFeatureLocationActionFree (action);
       break;
@@ -15721,6 +16906,8 @@ EditFeatureLocationActionDialog
   PopupItem (dlg->feature_edit_type, "Convert location");
   PopupItem (dlg->feature_edit_type, "Extend 5' end to end of sequence");
   PopupItem (dlg->feature_edit_type, "Extend 3' end to end of sequence");
+  PopupItem (dlg->feature_edit_type, "Extend 5' end to upstream feature");
+  PopupItem (dlg->feature_edit_type, "Extend 3' end to downstream feature");
   SetValue (dlg->feature_edit_type, 1);
 
   g = HiddenGroup (p, 0, 0, NULL);
@@ -15804,6 +16991,9 @@ EditFeatureLocationActionDialog
   PopupItem (dlg->convert_loc, "Single Interval");
   SetValue (dlg->convert_loc, 1);
 
+  /* extending to features */
+  dlg->extend_to_feat = ExtendToFeatureDialog (g, dlg->change_notify, dlg->change_userdata);
+
   AlignObjects (ALIGN_MIDDLE, (HANDLE) dlg->strand_edit_grp,
                               (HANDLE) dlg->set_5_partial_grp,
                               (HANDLE) dlg->clear_5_type,
@@ -15812,18 +17002,24 @@ EditFeatureLocationActionDialog
                               (HANDLE) dlg->set_both_partial_grp,
                               (HANDLE) dlg->clear_both_type,
                               (HANDLE) dlg->convert_loc,
+                              (HANDLE) dlg->extend_to_feat,
                               (HANDLE) NULL);
 
   /* retranslate option */
   dlg->retranslate_cds = CheckBox (p, "Retranslate coding region if location changes", ChangeEditFeatureLocationButton);
   SetObjectExtra (dlg->retranslate_cds, dlg, NULL);
+  dlg->also_edit_gene = CheckBox (p, "Also edit overlapping gene location", ChangeEditFeatureLocationButton);
+  SetObjectExtra (dlg->also_edit_gene, dlg, NULL);
 
-  dlg->constraint_dlg = ConstraintSetDialog (p, change_notify, change_userdata);
+//  dlg->constraint_dlg = ConstraintSetDialog (p, change_notify, change_userdata);
+  dlg->constraint_dlg = ComplexConstraintDialog (p, change_notify, change_userdata);
+  SetComplexConstraintType (dlg->constraint_dlg, eComplexConstraintType_loc);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
                               (HANDLE) dlg->feature_edit_type,
                               (HANDLE) g,
                               (HANDLE) dlg->retranslate_cds,
+                              (HANDLE) dlg->also_edit_gene,
                               (HANDLE) dlg->constraint_dlg,
                               NULL);
 
@@ -17102,9 +18298,90 @@ NLM_EXTERN DialoG ParseDstDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, P
 typedef struct capchangedlg {
  DIALOG_MESSAGE_BLOCK
  GrouP  cap_change;
+ Boolean allow_none;
  Nlm_ChangeNotifyProc change_notify;
  Pointer              change_userdata;
 } CapChangeDlgData, PNTR CapChangeDlgPtr;
+
+
+static Int4 GetCapChangeValForGroup (Int4 cap_change, Boolean allow_none)
+{
+  Int4 val = 0;
+
+  switch (cap_change) {
+    case Cap_change_none:
+      val = 1;
+      break;
+    case Cap_change_tolower:
+      val = 2;
+      break;
+    case Cap_change_toupper:
+      val = 3;
+      break;
+    case Cap_change_firstcap:
+      val = 4;
+      break;
+    case Cap_change_firstcaprestnochange:
+      val = 5;
+      break;
+    case Cap_change_firstlower_restnochange:
+      val = 6;
+      break;
+    case Cap_change_cap_word_space:
+      val = 7;
+      break;
+    case Cap_change_cap_word_space_punc:
+      val = 8;
+      break;
+    default:
+      val = 1;
+      break;
+  }
+  if (!allow_none) {
+    val -= 1;
+  }
+  return val;
+}
+
+
+static Int4 GetCapChangeValFromGroup (Int4 cap_change, Boolean allow_none)
+{
+  Int4 val = 0;
+
+  if (!allow_none) {
+    cap_change += 1;
+  }
+  switch (cap_change) {
+    case 1:
+      val = Cap_change_none;
+      break;
+    case 2:
+      val = Cap_change_tolower;
+      break;
+    case 3:
+      val = Cap_change_toupper;
+      break;
+    case 4:
+      val = Cap_change_firstcap;
+      break;
+    case 5:
+      val = Cap_change_firstcaprestnochange;
+      break;
+    case 6:
+      val = Cap_change_firstlower_restnochange;
+      break;
+    case 7:
+      val = Cap_change_cap_word_space;
+      break;
+    case 8:
+      val = Cap_change_cap_word_space_punc;
+      break;
+    default:
+      val = Cap_change_none;
+      break;
+  }
+  return val;
+}
 
 
 NLM_EXTERN void SetCapChangeDialogValue (DialoG d, Int4 cap_change)
@@ -17115,26 +18392,7 @@ NLM_EXTERN void SetCapChangeDialogValue (DialoG d, Int4 cap_change)
   if (dlg == NULL) {
     return;
   }
-  switch (cap_change) {
-    case Cap_change_none:
-      SetValue (dlg->cap_change, 1);
-      break;
-    case Cap_change_tolower:
-      SetValue (dlg->cap_change, 2);
-      break;
-    case Cap_change_toupper:
-      SetValue (dlg->cap_change, 3);
-      break;
-    case Cap_change_firstcap:
-      SetValue (dlg->cap_change, 4);
-      break;
-    case Cap_change_firstcaprestnochange:
-      SetValue (dlg->cap_change, 5);
-      break;
-    default:
-      SetValue (dlg->cap_change, 1);
-      break;
-  }
+  SetValue (dlg->cap_change, GetCapChangeValForGroup(cap_change, dlg->allow_none));
   if (dlg->change_notify != NULL) {
     (dlg->change_notify) (dlg->change_userdata);
   }
@@ -17149,26 +18407,7 @@ NLM_EXTERN Int2 GetCapChangeDialogValue (DialoG d)
   dlg = (CapChangeDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return cap_change;
 
-  switch (GetValue (dlg->cap_change)) {
-    case 1:
-      cap_change = Cap_change_none;
-      break;
-    case 2:
-      cap_change = Cap_change_tolower;
-      break;
-    case 3:
-      cap_change = Cap_change_toupper;
-      break;
-    case 4:
-      cap_change = Cap_change_firstcap;
-      break;
-    case 5:
-      cap_change = Cap_change_firstcaprestnochange;
-      break;
-    default:
-      cap_change = Cap_change_none;
-      break;
-  }
+  cap_change = GetCapChangeValFromGroup (GetValue (dlg->cap_change), dlg->allow_none);
   return cap_change;
 }
 
@@ -17194,10 +18433,51 @@ static ValNodePtr TestCapChangeDialog (DialoG d)
   if (dlg == NULL) return NULL;
 
   val = GetValue (dlg->cap_change);
-  if (val < 1 || val > 5) {
+  if (val < 1) {
     ValNodeAddPointer (&err_list, 0, "cap change");
   }
   return err_list;
+}
+
+
+NLM_EXTERN DialoG 
+CapChangeDialogEx
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_none)
+{
+  CapChangeDlgPtr dlg;
+  GrouP           p;
+
+  dlg = (CapChangeDlgPtr) MemNew (sizeof (CapChangeDlgData));
+  p = NormalGroup (h, 0, 2, "Capitalization", programFont, ChangeCapChangeGrp);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = TestCapChangeDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->allow_none = allow_none;
+
+  dlg->cap_change = p;
+  SetGroupSpacing (dlg->cap_change, 10, 10);
+
+  if (dlg->allow_none) {
+    RadioButton (dlg->cap_change, "No change");
+  }
+  RadioButton (dlg->cap_change, "To lower");
+  RadioButton (dlg->cap_change, "To upper");
+  RadioButton (dlg->cap_change, "First cap, rest lower");
+  RadioButton (dlg->cap_change, "First cap, rest no change");
+  RadioButton (dlg->cap_change, "First lower, rest no change");
+  RadioButton (dlg->cap_change, "Cap words, start at spaces");
+  RadioButton (dlg->cap_change, "Cap words, start at spaces or punctuation");
+  SetValue (dlg->cap_change, 1);
+
+  return (DialoG) p;  
 }
 
 
@@ -17207,34 +18487,8 @@ CapChangeDialog
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata)
 {
-  CapChangeDlgPtr dlg;
-  GrouP           p;
-
-  dlg = (CapChangeDlgPtr) MemNew (sizeof (CapChangeDlgData));
-  p = NormalGroup (h, 5, 0, "Capitalization", programFont, ChangeCapChangeGrp);
-  SetGroupSpacing (p, 10, 10);
-  SetObjectExtra (p, dlg, StdCleanupExtraProc);
-
-  dlg->dialog = (DialoG) p;
-  dlg->dialogmessage = NULL;
-  dlg->testdialog = TestCapChangeDialog;
-  dlg->change_notify = change_notify;
-  dlg->change_userdata = change_userdata;
-
-  dlg->cap_change = p;
-  SetGroupSpacing (dlg->cap_change, 10, 10);
-
-  RadioButton (dlg->cap_change, "No change");
-  RadioButton (dlg->cap_change, "To lower");
-  RadioButton (dlg->cap_change, "To upper");
-  RadioButton (dlg->cap_change, "First cap, rest lower");
-  RadioButton (dlg->cap_change, "First cap, rest no change");
-  SetValue (dlg->cap_change, 1);
-
-  return (DialoG) p;  
+  return CapChangeDialogEx (h, change_notify, change_userdata, TRUE);
 }
-
-
 
 
 typedef struct parseactiondlg {
@@ -17387,8 +18641,276 @@ ParseActionDialog
 }
 
 
+typedef struct autofixactiondlg {
+ DIALOG_MESSAGE_BLOCK
+ PopuP  test_popup;
+
+ CharPtr PNTR test_names;
+ Int4Ptr test_types;
+ Int4    num_tests;
+
+ Nlm_ChangeNotifyProc change_notify;
+ Pointer              change_userdata;
+} AutofixActionDlgData, PNTR AutofixActionDlgPtr;
+
+
+static void CleanupAutofixActionDialog (GraphiC g, VoidPtr data)
+
+{
+  AutofixActionDlgPtr dlg;
+
+  dlg = (AutofixActionDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->test_names = MemFree (dlg->test_names);
+    dlg->test_types = MemFree (dlg->test_types);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+
+static void AutofixActionToDialog (DialoG d, Pointer userdata)
+{
+  AutofixActionDlgPtr dlg;
+  AutofixActionPtr action;
+  DiscrepancyType test_type;
+  Boolean found = FALSE;
+  Int4 j;
+
+  dlg = (AutofixActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  action = (AutofixActionPtr)userdata;
+
+  if (action == NULL || (test_type = GetDiscrepancyTypeFromSettingName (action->test_name)) == MAX_DISC_TYPE) {
+    SetValue (dlg->test_popup, 0);
+  } else {
+    for (j = 0; j < dlg->num_tests && !found; j++) {
+      if (dlg->test_types[j] == test_type) {
+        SetValue (dlg->test_popup, j + 1);
+        found = TRUE;
+      }
+    }
+    if (!found) {
+      SetValue (dlg->test_popup, 0);
+    }
+  }
+}
+
+
+static Pointer DialogToAutofixAction (DialoG d)
+{
+  AutofixActionDlgPtr dlg;
+  AutofixActionPtr action;
+  Int2            j;
+
+  dlg = (AutofixActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  j = GetValue (dlg->test_popup);
+  if (j < 1 || j > dlg->num_tests) {
+    return NULL;
+  }
+  action = AutofixActionNew ();
+  action->test_name = StringSave (dlg->test_names[j - 1]);
+  return action;
+}
+
+
+static ValNodePtr TestAutofixActionDialog(DialoG d)
+{
+  AutofixActionDlgPtr dlg;
+  ValNodePtr err_list = NULL;
+
+  dlg = (AutofixActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (GetValue (dlg->test_popup) < 1) {
+    ValNodeAddPointer (&err_list, 0, "No test selected");
+  }
+  return err_list;
+}
+
+
+static void ChangeAutofixActionPopup (PopuP p)
+{
+  AutofixActionDlgPtr dlg;
+
+  dlg = (AutofixActionDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static DialoG
+CreateAutofixActionDialog
+(GrouP h,
+ Boolean indexer_version, 
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  AutofixActionDlgPtr dlg;
+  GrouP               p;
+  Int4                i, j;
+
+  dlg = (AutofixActionDlgPtr) MemNew (sizeof (AutofixActionDlgData));
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlg, CleanupAutofixActionDialog);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = AutofixActionToDialog;
+  dlg->fromdialog = DialogToAutofixAction;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = TestAutofixActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  StaticPrompt (p, "Perform Autofix for Discrepancy Test:", 0, dialogTextHeight, systemFont, 'l');
+  dlg->test_popup = PopupList (p, TRUE, ChangeAutofixActionPopup);
+  SetObjectExtra (dlg->test_popup, dlg, NULL);
+
+  dlg->num_tests = 0;
+  for (i = 0; i < MAX_DISC_TYPE; i++) {
+    if (DiscrepancyTestHasAutofix(i)) {
+      dlg->num_tests++;
+    }
+  }
+
+  dlg->test_names = (CharPtr PNTR) MemNew (sizeof (CharPtr) * dlg->num_tests);
+  dlg->test_types = (Int4Ptr) MemNew (sizeof (Int4) * dlg->num_tests);
+  j = 0;
+  for (i = 0; i < MAX_DISC_TYPE; i++) {
+    if (DiscrepancyTestHasAutofix(i)) {
+      dlg->test_names[j] = GetDiscrepancyTestSettingName(i);
+      dlg->test_types[j] = i;
+      PopupItem (dlg->test_popup, dlg->test_names[j]);
+      j++;
+    }
+  }
+  SetValue (dlg->test_popup, 0);
+
+  return (DialoG) p;  
+}
+
+
+typedef struct fixsetsactiondlg {
+ DIALOG_MESSAGE_BLOCK
+ PopuP  fix_popup;
+
+ Nlm_ChangeNotifyProc change_notify;
+ Pointer              change_userdata;
+} FixSetsActionDlgData, PNTR FixSetsActionDlgPtr;
+
+
+static void FixSetsActionToDialog (DialoG d, Pointer userdata)
+{
+  FixSetsActionDlgPtr dlg;
+  FixSetsActionPtr action;
+
+  dlg = (FixSetsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  action = (FixSetsActionPtr)userdata;
+
+  if (action == NULL) {
+    SetValue (dlg->fix_popup, 0);
+  } else {
+    SetValue (dlg->fix_popup, action->choice);
+  }
+}
+
+
+static Pointer DialogToFixSetsAction (DialoG d)
+{
+  FixSetsActionDlgPtr dlg;
+  FixSetsActionPtr action = NULL;
+  Int2            j;
+
+  dlg = (FixSetsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  j = GetValue (dlg->fix_popup);
+  if (j > 0) {
+    action = ValNodeNew (NULL);
+    action->choice = j;
+  }
+  return action;
+}
+
+
+static ValNodePtr TestFixSetsActionDialog(DialoG d)
+{
+  FixSetsActionDlgPtr dlg;
+  ValNodePtr err_list = NULL;
+
+  dlg = (FixSetsActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (GetValue (dlg->fix_popup) < 1) {
+    ValNodeAddPointer (&err_list, 0, "No action selected");
+  }
+  return err_list;
+}
+
+
+static void ChangeFixSetsActionPopup (PopuP p)
+{
+  FixSetsActionDlgPtr dlg;
+
+  dlg = (FixSetsActionDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static DialoG
+CreateFixSetsActionDialog
+(GrouP h,
+ Boolean indexer_version, 
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  FixSetsActionDlgPtr dlg;
+  GrouP               p;
+  FixSetsActionPtr    action;
+  CharPtr             summ;
+
+  dlg = (FixSetsActionDlgPtr) MemNew (sizeof (FixSetsActionDlgData));
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = FixSetsActionToDialog;
+  dlg->fromdialog = DialogToFixSetsAction;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = TestFixSetsActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->fix_popup = PopupList (p, TRUE, ChangeFixSetsActionPopup);
+  SetObjectExtra (dlg->fix_popup, dlg, NULL);
+  action = ValNodeNew (NULL);
+  for (action->choice = FixSetsAction_remove_single_item_set;
+       action->choice <= FixSetsAction_fix_pop_to_phy;
+       action->choice++) {
+    summ = SummarizeFixSetsAction(action);
+    PopupItem (dlg->fix_popup, summ);
+    summ = MemFree (summ);
+  }
+
+  return (DialoG) p;  
+}
+
+
 typedef struct editmacroaction {
-  PopuP action_type;
+  LisT   action_type;
 
   DialoG action_dlg;
 
@@ -17418,9 +18940,9 @@ static void ChangeMacroAction (Pointer data)
 }
 
 
-static void ChangeMacroActionPopup (PopuP p)
+static void ChangeMacroActionPopup (LisT t)
 {
-  ChangeMacroAction (GetObjectExtra (p));
+  ChangeMacroAction (GetObjectExtra (t));
 }
 
 
@@ -17461,6 +18983,7 @@ typedef enum {
   eMacroPopup_SwapQualifier,
   eMacroPopup_ParseQualifier,
   eMacroPopup_RemoveQualifier,
+  eMacroPopup_RemoveTextOutsideStringInQualifier,
   eMacroPopup_ParseText,
   eMacroPopup_RemoveFeature,
   eMacroPopup_EditFeatureLocation,
@@ -17487,8 +19010,17 @@ typedef enum {
   eMacroPopup_RemoveDuplicateFeatures,
   eMacroPopup_RemoveLineageSourceNotes,
   eMacroPopup_FixCapsInCommonMusMusculusStrains,
+  eMacroPopup_FixCapsInAuthor,
   eMacroPopup_RemoveXrefs,
-  eMacroPopup_MakeGeneXrefs
+  eMacroPopup_MakeGeneXrefs,
+  eMacroPopup_FixAuthorNames,
+  eMacroPopup_UpdateSequences,
+  eMacroPopup_PerformAutofix,
+  eMacroPopup_FixSets,
+  eMacroPopup_ApplyTable,
+  eMacroPopup_RemoveSequences,
+  eMacroPopup_AddDescriptorList,
+  eMacroPopup_PropagateOldName
 } EMacroPopup;
 
 static MacroPopupData s_MacroPopupList[] = {
@@ -17500,6 +19032,7 @@ static MacroPopupData s_MacroPopupList[] = {
   {"Swap Qualifier", MacroActionChoice_aecr, NULL},
   {"Parse Qualifier", MacroActionChoice_aecr, NULL},
   {"Remove Qualifier", MacroActionChoice_aecr, NULL},
+  {"Remove Text Outside String in Qualifier", MacroActionChoice_aecr, NULL},
   {"Parse Text", MacroActionChoice_parse, ParseActionDialog },
   {"Remove Feature", MacroActionChoice_remove_feature, RemoveFeatureActionDialog },
   {"Edit Feature Location", MacroActionChoice_edit_location, EditFeatureLocationActionDialog },
@@ -17526,10 +19059,23 @@ static MacroPopupData s_MacroPopupList[] = {
   {"Remove Duplicate Features", MacroActionChoice_remove_duplicate_features, RemoveDuplicateFeatActionDialog } ,
   {"Remove Lineage Source Notes", MacroActionChoice_remove_lineage_notes, NULL } ,
   {"Fix capitalization in common Mus musculus strains", MacroActionChoice_fix_caps, MusMusculusActionDialog } ,
+  {"Fix capitalization in author", MacroActionChoice_fix_caps, AuthorCapsActionDialog } ,
   {"Remove Xrefs", MacroActionChoice_remove_xrefs, RemoveXrefsDialog } ,
   {"Make gene xrefs from features", MacroActionChoice_make_gene_xrefs, MakeGeneXrefDialog } ,
   {"Make Barcode Xrefs", MacroActionChoice_make_bold_xrefs, NULL } ,
-  {"Fix Author Names", MacroActionChoice_fix_author, AuthorFixActionDialog }
+  {"Fix Author Names", MacroActionChoice_fix_author, AuthorFixActionDialog } ,
+  {"Update Sequences", MacroActionChoice_update_sequences, UpdateSequencesActionDialog } ,
+  {"Set trans-splicing exception in genes", MacroActionChoice_add_trans_splicing, NULL } ,
+  {"Remove invalid EC_numbers", MacroActionChoice_remove_invalid_ecnumbers, NULL } ,
+  {"Create TSA IDs", MacroActionChoice_create_tsa_ids, CreateTSAIdsActionDialog } ,
+  {"Perform Discrepancy Report Autofix", MacroActionChoice_perform_autofix, CreateAutofixActionDialog } ,
+  {"Fix Sets", MacroActionChoice_fix_sets, CreateFixSetsActionDialog } ,
+  {"Apply Table", MacroActionChoice_apply_table, ApplyTableActionDialog } ,
+  {"Remove Sequences", MacroActionChoice_remove_sequences, RemoveSequencesActionDialog } ,
+  {"Propagate Assembly-Data", MacroActionChoice_propagate_sequence_technology, NULL } ,
+  {"Add Descriptors From File", MacroActionChoice_add_file_descriptors, AddFileDescriptorsActionDialog } ,
+  {"Propagate Missing Old-name Qualifiers", MacroActionChoice_propagate_missing_old_name, NULL } ,
+  {"Autoapply structured comment prefixes", MacroActionChoice_autoapply_structured_comments, NULL }
 };
 
 #define NUM_MacroPopup sizeof (s_MacroPopupList) / sizeof (MacroPopupData)
@@ -17565,6 +19111,7 @@ static void RunMacroInEditor (ButtoN b)
   SeqEntryPtr sep;
   Uint2       entityID;
   LogInfoPtr  lip;
+  Int4        num_no_op = 0, tmp;
 
   e = (EditMacroActionPtr) GetObjectExtra (b);
   if (e == NULL) return;
@@ -17586,14 +19133,19 @@ static void RunMacroInEditor (ButtoN b)
     for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
       sep = vnp->data.ptrvalue;
       entityID = ObjMgrGetEntityIDForChoice(sep);
-      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, action, lip->fp);
+      lip->data_in_log |= ApplyMacroToSeqEntryExEx (sep, action, lip->fp, Sequin_GlobalAlign2Seq, &tmp);
+      num_no_op += tmp;
       ObjMgrSetDirtyFlag (entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
     }
     sep_list = ValNodeFree (sep_list);
     ArrowCursor ();
     Update ();  
-    if (!lip->data_in_log) {
+    if (lip->data_in_log) {
+      if (num_no_op > 0) {
+        fprintf (lip->fp, "%d actions had no effect.\n", num_no_op);
+      }
+    } else {
       fprintf (lip->fp, "Macro had no effect\n");
       lip->data_in_log = TRUE;
     }
@@ -17713,7 +19265,7 @@ BuildEditMacroActionWindow
   FixFormatActionPtr    fa;
   ApplyFeatureActionPtr apply_feat = NULL;
   WindoW                w;
-  GrouP                 h, c;
+  GrouP                 h, c, g;
   ButtoN                b;
   Int2                  action_type;
 
@@ -17725,10 +19277,13 @@ BuildEditMacroActionWindow
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  d->action_type = PopupList (h, TRUE, ChangeMacroActionPopup);
+  g = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "Choose Macro Action Type", 0, 0, programFont, 'r');
+  d->action_type = SingleList (g, 17, 8, ChangeMacroActionPopup);
   SetObjectExtra (d->action_type, d, NULL);
   for (action_type = 0; action_type < NUM_MacroPopup; action_type++) {
-    PopupItem (d->action_type, s_MacroPopupList[action_type].popup_label);
+    ListItem (d->action_type, s_MacroPopupList[action_type].popup_label);
   }
 
   if (d->action_copy == NULL) {
@@ -17766,6 +19321,9 @@ BuildEditMacroActionWindow
             case ActionChoice_remove:
               SetValue (d->action_type, eMacroPopup_RemoveQualifier);
               break;
+            case ActionChoice_remove_outside:
+              SetValue (d->action_type, eMacroPopup_RemoveTextOutsideStringInQualifier);
+              break;
             default:
               SetValue (d->action_type, eMacroPopup_ApplyQualifier);
               break;
@@ -17786,6 +19344,9 @@ BuildEditMacroActionWindow
               break;
             case FixCapsAction_mouse_strain:
               SetValue (d->action_type, eMacroPopup_FixCapsInCommonMusMusculusStrains);
+              break;
+            case FixCapsAction_author:
+              SetValue (d->action_type, eMacroPopup_FixCapsInAuthor);
               break;
             case FixCapsAction_src_qual:
               SetValue (d->action_type, eMacroPopup_FixSourceQualCapitalization);
@@ -17841,6 +19402,7 @@ BuildEditMacroActionWindow
     case eMacroPopup_SwapQualifier:
     case eMacroPopup_ParseQualifier:
     case eMacroPopup_RemoveQualifier:
+    case eMacroPopup_RemoveTextOutsideStringInQualifier:
       d->action_dlg = EditAECRActionDialog (h, d->indexer_version, TRUE, EnableEditMacroActionAccept, d, EnableEditMacroActionAccept, d);
       PointerToDialog (d->action_dlg, aecr);
       break;
@@ -17874,7 +19436,7 @@ BuildEditMacroActionWindow
     }
   }
   AlignObjects (ALIGN_CENTER, (HANDLE) c, 
-                              (HANDLE) d->action_type,
+                              (HANDLE) g,
                               (HANDLE) d->action_dlg,
                               (HANDLE) d->leave_dlg_up,
                               NULL);
@@ -17939,6 +19501,9 @@ static void AdjustMacroActionForRebuild (EditMacroActionPtr d)
       case eMacroPopup_FixCapsInCommonMusMusculusStrains:
         vnp->choice = FixCapsAction_mouse_strain;
         break;
+      case eMacroPopup_FixCapsInAuthor:
+        vnp->choice = FixCapsAction_author;
+        break;
       case eMacroPopup_FixSourceQualCapitalization:
         vnp->choice = FixCapsAction_src_qual;
         break;
@@ -17978,6 +19543,9 @@ static void AdjustMacroActionForRebuild (EditMacroActionPtr d)
             break;
           case eMacroPopup_FixCapsInCommonMusMusculusStrains:
             vnp->choice = FixCapsAction_mouse_strain;
+            break;
+          case eMacroPopup_FixCapsInAuthor:
+            vnp->choice = FixCapsAction_author;
             break;
           case eMacroPopup_FixSourceQualCapitalization:
             vnp->choice = FixCapsAction_src_qual;
@@ -18086,9 +19654,11 @@ static void AddMacroActions (MacroEditorFormPtr f, Int2 item)
   d.test_btn = NULL;
   d.leave_dlg_up = NULL;
   d.indexer_version = f->indexer_version;
-  TmpNam (d.undo_file);
-  if (!SaveBackupSeqEntryList (d.undo_file)) {
-    d.undo_file[0] = 0;
+  if (f->input_entityID != 0) {
+    TmpNam (d.undo_file);
+    if (!SaveBackupSeqEntryList (d.undo_file)) {
+      d.undo_file[0] = 0;
+    }
   }
   w = BuildEditMacroActionWindow (&d, &acd, TRUE);
   d.rebuild_window = FALSE;
@@ -18605,7 +20175,7 @@ typedef struct onemacroaction {
 
   DialoG sample_doc;
   PopuP  action_type;
-  DialoG action_dlgs[7];
+  DialoG action_dlgs[8];
   DialoG constraint_dlg;
 
   /* groups and dialogs for selecting field types */
@@ -18715,6 +20285,18 @@ static void TruncateStringAfterTwoLines (CharPtr str, Uint4 char_per_line)
 }
 
 
+static CharPtr action_names[] = {
+  "Apply Qualifier" ,
+  "Edit Qualifier" ,
+  "Convert Qualifier" ,
+  "Copy Qualifier" ,
+  "Swap Qualifier" ,
+  "Parse Qualifier" ,
+  "Remove Qualifier" ,
+  "Remove Text Outside String in Qualifier" };
+
+#define NUM_AECR_ACTIONS 8
+
 static void RefreshAECRSample (ButtoN b)
 {
   OneMacroActionPtr d;
@@ -18730,7 +20312,7 @@ static void RefreshAECRSample (ButtoN b)
 
   max_char_per_line = GetSampleDialogValueLen (d->sample_doc);
   val = GetValue (d->action_type);
-  if (val >= 1 && val <= 7) {
+  if (val >= 1 && val <= NUM_AECR_ACTIONS) {
     qual_type = FieldTypeChoiceFromAECRActionDlg (d->action_dlgs[val - 1]);
     sample_list = GetAECRSampleListForSeqEntry (qual_type, GetTopSeqEntryForEntityID (d->input_entityID));
   }
@@ -18760,7 +20342,7 @@ static void ExportAECRSample (ButtoN b)
 
   if (d == NULL || d->sample_doc == NULL) return;
   val = GetValue (d->action_type);
-  if (val >= 1 && val <= 7) {
+  if (val >= 1 && val <= NUM_AECR_ACTIONS) {
     if (GetOutputFileName (path, sizeof (path), NULL)) {
       fp = FileOpen (path, "w");
       if (fp == NULL) {
@@ -18847,12 +20429,12 @@ static void EnableSingleMacroActionAccept (Pointer data)
   e = (OneMacroActionPtr) data;
   if (e != NULL) {
     val = GetValue (e->action_type);
-    if (val >= 1 && val <= 7) {
+    if (val >= 1 && val <= NUM_AECR_ACTIONS) {
       err_list = TestDialog (e->action_dlgs[val - 1]);
       ValNodeLink (&err_list, TestDialog (e->constraint_dlg));
     }
     i = FindFormMenuItem ((BaseFormPtr) e, VIB_MSG_ACCEPT);
-    if (val < 1 || val > 7) {
+    if (val < 1 || val > NUM_AECR_ACTIONS) {
       Disable (e->accept_btn);
       SafeDisable (i);
     } else {
@@ -18868,15 +20450,6 @@ static void EnableSingleMacroActionAccept (Pointer data)
   }
 }  
 
-
-static CharPtr action_names[] = {
-  "Apply Qualifier" ,
-  "Edit Qualifier" ,
-  "Convert Qualifier" ,
-  "Copy Qualifier" ,
-  "Swap Qualifier" ,
-  "Parse Qualifier" ,
-  "Remove Qualifier" };
 
 static CharPtr GetQualTypeName (Uint1 qual_type)
 {
@@ -18930,7 +20503,7 @@ static void AdjustSingleMacroActionTitle (OneMacroActionPtr d)
   }
 
   val = GetValue (d->action_type);
-  if (val < 1 || val > 7) {
+  if (val < 1 || val > NUM_AECR_ACTIONS) {
     return;
   }
 
@@ -18952,7 +20525,7 @@ static void AdjustSingleMacroActionTitle (OneMacroActionPtr d)
 
 static Boolean IsSingleFieldActionVal (Int2 val)
 {
-  if (val == 1 || val == 2 || val == 7) {
+  if (val == 1 || val == 2 || val == 7 || val == 8) {
     return TRUE;
   } else {
     return FALSE;
@@ -18994,6 +20567,7 @@ static Boolean ActionAffectsCDSProduct (OneMacroActionPtr d)
   switch (action_val) {
     case 1:
     case 2:
+    case 8:
       ft = DialogToPointer (d->single_field);
       show = IsFieldTypeCDSProduct (ft);
       ft = FieldTypeFree (ft);
@@ -19057,6 +20631,7 @@ static ValNodePtr GetRNATypeFromSingleMacroActionForm (OneMacroActionPtr d, Int2
   switch (action_val) {
     case 1:
     case 2:
+    case 8:
       ft = DialogToPointer (d->single_field);
       if (ft != NULL && ft->choice == FieldType_rna_field) {
         rq = (RnaQualPtr) ft->data.ptrvalue;
@@ -19291,7 +20866,7 @@ static void ChangeSingleMacroActionPopup (PopuP p)
   if (d == NULL || d->no_callback) return;
   
   val = GetValue (d->action_type);
-  if (val < 1 || val > 7) {
+  if (val < 1 || val > NUM_AECR_ACTIONS) {
     return;
   }
 
@@ -19301,7 +20876,7 @@ static void ChangeSingleMacroActionPopup (PopuP p)
   CopyQualTypeFromPreviousAction (val, d->prev_action_type, !GetStatus (d->clear_on_change), d);
 
   /* change which dialog is displayed */
-  for (i = 0; i < 7; i++) {
+  for (i = 0; i < NUM_AECR_ACTIONS; i++) {
     Hide (d->action_dlgs[i]);
   }
   Show (d->action_dlgs[val - 1]);
@@ -19581,6 +21156,11 @@ static AECRActionPtr AECRActionFromSingleMacroDialog (OneMacroActionPtr d)
       ValNodeAddPointer (&(aecr->action), ActionChoice_remove, DialogToPointer (d->action_dlgs[val - 1]));
       aecr->constraint = DialogToPointer (d->constraint_dlg);
       break;
+    case 8:
+      aecr = AECRActionNew ();
+      ValNodeAddPointer (&(aecr->action), ActionChoice_remove_outside, DialogToPointer (d->action_dlgs[val - 1]));
+      aecr->constraint = DialogToPointer (d->constraint_dlg);
+      break;
   }
   if (aecr != NULL && ActionAffectsCDSProduct (d)) {      
       aecr->also_change_mrna = GetStatus (d->also_change_mrna);
@@ -19691,6 +21271,7 @@ static void SingleMacroAcceptButton (ButtoN b)
     case 2: /* edit */
     case 5: /* swap */
     case 7: /* remove */
+    case 8: /* remove text outside string */
       new_action->choice = MacroActionChoice_aecr;
       new_action->data.ptrvalue = AECRActionFromSingleMacroDialog (d);
       break;
@@ -19707,7 +21288,7 @@ static void SingleMacroAcceptButton (ButtoN b)
   sep = GetTopSeqEntryForEntityID (d->input_entityID);
   num_fields = 0;
   num_features = 0;
-  ApplyMacroToSeqEntry (sep, new_action);
+  ApplyMacroToSeqEntryEx (sep, new_action, NULL, Sequin_GlobalAlign2Seq);
   ObjMgrSetDirtyFlag (d->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, d->input_entityID, 0, 0);
 
@@ -19779,6 +21360,9 @@ static void ActionToSingleMacroActionForm (ForM f, Pointer data)
         case ActionChoice_remove:
           SetValue (frm->action_type, 7);
           break;
+        case ActionChoice_remove_outside:
+          SetValue (frm->action_type, 8);
+          break;
         default:
           SetValue (frm->action_type, 1);
           break;
@@ -19789,7 +21373,7 @@ static void ActionToSingleMacroActionForm (ForM f, Pointer data)
   }
 
   /* change which dialog is displayed */
-  for (i = 0; i < 7; i++) {
+  for (i = 0; i < NUM_AECR_ACTIONS; i++) {
     Hide (frm->action_dlgs[i]);
   }
   Show (frm->action_dlgs[val - 1]);
@@ -19837,7 +21421,7 @@ static void ClearSingleMacroAction (ButtoN b)
   qual_type = DialogToPointer (qual_dlg);
 
   /* clear action dialog */
-  if (val > 0 && val < 8) {
+  if (val > 0 && val < NUM_AECR_ACTIONS) {
     PointerToDialog (frm->action_dlgs[val - 1], NULL);
   }
 
@@ -19879,6 +21463,8 @@ static void ClearTextSingleMacroAction (ButtoN b)
     case 6:
       break;
     case 7:
+      break;
+    case 8:
       break;
   }
   /* also clear text in simple constraint if shown */
@@ -20003,7 +21589,7 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
 
   frm->action_type = PopupList (h, TRUE, ChangeSingleMacroActionPopup);
   SetObjectExtra (frm->action_type, frm, NULL);
-  for (i = 0; i < 7; i++) {
+  for (i = 0; i < NUM_AECR_ACTIONS; i++) {
     PopupItem (frm->action_type, action_names[i]);
   }
   SetValue (frm->action_type, 1);
@@ -20079,6 +21665,8 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
   SetAECRActionDlgFieldTypeDialogs (frm->action_dlgs[5], frm->pair_qual_type_dlg, frm->field_pair);
   frm->action_dlgs[6] = RemoveActionDialog (g5, frm->indexer_version, EnableSingleMacroActionAccept, frm, EnableSingleMacroActionAccept, frm);
   SetAECRActionDlgFieldTypeDialogs (frm->action_dlgs[6], frm->single_qual_type_dlg, frm->single_field_remove);
+  frm->action_dlgs[7] = RemoveOutsideActionDialog (g5, frm->indexer_version, (Nlm_ChangeNotifyProc) AutopopulateSingleMacroDialog, frm, EnableSingleMacroActionAccept, frm, EnableSingleMacroActionAccept, frm);
+  SetAECRActionDlgFieldTypeDialogs (frm->action_dlgs[7], frm->single_qual_type_dlg, frm->single_field);
   AlignObjects (ALIGN_CENTER, (HANDLE) frm->action_dlgs[0],
                               (HANDLE) frm->action_dlgs[1],
                               (HANDLE) frm->action_dlgs[2],
@@ -20086,6 +21674,7 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
                               (HANDLE) frm->action_dlgs[4],
                               (HANDLE) frm->action_dlgs[5],
                               (HANDLE) frm->action_dlgs[6],
+                              (HANDLE) frm->action_dlgs[7],
                               NULL);
 
   /* set default autopopulate value */
@@ -20158,6 +21747,100 @@ NLM_EXTERN void SingleAECRMacroAction (Uint2 entityID, Boolean indexer_version, 
   Show (f);
   Select (f);
   SendMessageToForm (f, VIB_MSG_ENTER);
+}
+
+
+typedef struct genericmacroaction {
+  FORM_MESSAGE_BLOCK
+
+  DialoG action_dlg;
+  Int4   action_type;
+
+  ButtoN accept_btn;
+  ButtoN leave_dlg_up;
+
+  Boolean indexer_version;
+} GenericMacroActionData, PNTR GenericMacroActionPtr;
+
+
+static void GenericMacroAcceptButton (ButtoN b)
+{
+  GenericMacroActionPtr frm;
+  ValNodePtr            macro;
+  SeqEntryPtr           sep;
+
+  frm = (GenericMacroActionPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  macro = ValNodeNew (NULL);
+  macro->choice = frm->action_type;
+  macro->data.ptrvalue = DialogToPointer (frm->action_dlg);
+
+  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+  ApplyMacroToSeqEntryEx (sep, macro, NULL, Sequin_GlobalAlign2Seq);
+  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
+  if (!GetStatus (frm->leave_dlg_up)) {
+    Remove (frm->form);
+  }
+  Update ();
+}
+
+
+NLM_EXTERN void GenericMacroActionForm (Uint2 entityID, ValNodePtr action, Boolean indexer_version)
+{
+  WindoW                w;
+  GrouP                 h, c;
+  ButtoN                b;
+  GenericMacroActionPtr frm;
+  Int4                  i;
+
+  if (action == NULL) {
+    return;
+  }
+  for (i = 0; i < NUM_MacroPopup; i++) {
+    if (s_MacroPopupList[i].action_choice == action->choice) {
+      break;
+    }
+  }
+
+  if (i >= NUM_MacroPopup || s_MacroPopupList[i].dialog_func == NULL) {
+    Message (MSG_ERROR, "Dialog not implemented yet");
+    return;
+  }
+
+  frm = (GenericMacroActionPtr) MemNew (sizeof (GenericMacroActionData));
+
+  w = FixedWindow(-20, -13, -10, -10, s_MacroPopupList[i].popup_label, StdCloseWindowProc);
+  SetObjectExtra (w, frm, NULL);
+
+  frm->form = (ForM) w;
+  frm->input_entityID = entityID;
+  frm->indexer_version = indexer_version;
+  frm->action_type = action->choice;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  frm->action_dlg = s_MacroPopupList[i].dialog_func (h, indexer_version, NULL, NULL);
+  PointerToDialog (frm->action_dlg, action->data.ptrvalue);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  frm->accept_btn = PushButton (c, "Accept", GenericMacroAcceptButton);
+  SetObjectExtra (frm->accept_btn, frm, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+  SetObjectExtra (b, frm, NULL);
+  frm->leave_dlg_up = CheckBox (c, "Leave dialog up", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->action_dlg,
+                              (HANDLE) c,
+                              NULL);
+    
+  Show (w);
+  Select (w);
 }
 
 
@@ -20324,7 +22007,7 @@ static void SingleParseAcceptButton (ButtoN b)
   vnp->choice = MacroActionChoice_parse;
   vnp->data.ptrvalue = parse;
 
-  ApplyMacroToSeqEntry (sep, vnp);
+  ApplyMacroToSeqEntryEx (sep, vnp, NULL, Sequin_GlobalAlign2Seq);
 
   vnp = MacroActionChoiceFree (vnp);
 
@@ -20384,605 +22067,6 @@ NLM_EXTERN ForM SingleParseAction (Uint2 entityID)
 
   return (ForM) w;
 
-}
-
-
-/* Functions for summarizing macro actions for display */
-
-static CharPtr SummarizeApplyFeatureAction (ApplyFeatureActionPtr a)
-{
-  CharPtr    label = NULL;
-  CharPtr    str;
-  CharPtr    fmt = "Apply %s";
-
-  if (a == NULL) {
-    str = StringSave ("No action");
-  } else {
-    label = GetFeatureNameFromFeatureType (a->type);
-    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (label)));
-    sprintf (str, fmt, label);
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeRemoveFeatureAction (RemoveFeatureActionPtr a)
-{
-  CharPtr    label = NULL;
-  CharPtr    constraint, str;
-  CharPtr    fmt = "Remove %s";
-  CharPtr    constraint_fmt = "Remove %s %s";
-
-  if (a == NULL) {
-    str = StringSave ("No action");
-  } else {
-    label = GetFeatureNameFromFeatureType (a->type);
-    constraint = SummarizeConstraintSet (a->constraint);
-    if (constraint == NULL) {
-      str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (label)));
-      sprintf (str, fmt, label);
-    } else {
-      str = (CharPtr) MemNew (sizeof (Char) * (StringLen (constraint_fmt) + StringLen (label) + StringLen (constraint)));
-      sprintf (str, constraint_fmt, label, constraint);
-      constraint = MemFree (constraint);
-    }
-  }
-
-  return str;
-}
-
-
-static CharPtr SummarizeConvertSourceOptions (ValNodePtr vnp)
-{
-  ConvertFromCDSOptionsPtr options;
-  CharPtr fmt = "(%sremove overlapping mRNA, %sremove overlapping gene, %sremove transcript ID)";
-  CharPtr str;
-
-  if (vnp == NULL || vnp->choice != ConvertFeatureSrcOptions_cds || vnp->data.ptrvalue == NULL) {
-    return NULL;
-  }
-
-  options = (ConvertFromCDSOptionsPtr) vnp->data.ptrvalue;
-
-  str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 21));
-  sprintf (str, fmt, options->remove_mRNA ? "" : "do not ",
-                     options->remove_gene ? "" : "do not ",
-                     options->remove_transcript_id ? "" : "do not ");
-  return str;
-}
-
-
-static CharPtr SummarizeConvertDestOptions (ValNodePtr vnp)
-{
-  RegionTypePtr r;
-  CharPtr str = NULL;
-
-  if (vnp == NULL) return NULL;
-
-  switch (vnp->choice) {
-    case ConvertFeatureDstOptions_bond:
-      str = StringSave (GetMacroBondTypeName(vnp->data.intvalue));
-      break;
-    case ConvertFeatureDstOptions_site:
-      str = StringSave (GetMacroSiteTypeName(vnp->data.intvalue));
-      break;
-    case ConvertFeatureDstOptions_region:
-      r = (RegionTypePtr) vnp->data.ptrvalue;
-      if (r != NULL) {
-        if (r->create_nucleotide) {
-          str = StringSave ("on nucleotide sequence");
-        } else {
-          str = StringSave ("on protein sequence");
-        }
-      }
-      break;
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeConvertFeatureAction (ConvertFeatureActionPtr a)
-{
-  CharPtr str = NULL, from_label, to_label, constraint, src_options, dst_options;
-  CharPtr fmt = "Convert %s to %s";
-  CharPtr keep_orig = ", keep original feature";
-  CharPtr remove_orig = ", remove original feature";
-  Int4    len;
-
-  if (a == NULL) {
-    str = StringSave ("No action");
-  } else {
-    from_label = GetFeatureNameFromFeatureType (a->type_from);
-    to_label = GetFeatureNameFromFeatureType (a->type_to);
-    src_options = SummarizeConvertSourceOptions (a->src_options);
-    dst_options = SummarizeConvertDestOptions (a->dst_options);
-    constraint = SummarizeConstraintSet (a->src_feat_constraint);
-    len = StringLen (fmt) + StringLen (from_label) + StringLen (to_label);
-    if (src_options != NULL) {
-      len += StringLen (src_options) + 3;
-    }
-    if (dst_options != NULL) {
-      len += StringLen (dst_options) + 1;
-    }
-    if (constraint != NULL) {
-      len += StringLen (constraint) + 1;
-    }
-    if (a->leave_original) {
-      len += StringLen (keep_orig);
-    } else {
-      len += StringLen (remove_orig);
-    }
-    str = (CharPtr) MemNew (sizeof (Char) * len);
-    sprintf (str, fmt, from_label, to_label);
-    if (dst_options != NULL) {
-      StringCat (str, " ");
-      StringCat (str, dst_options);
-      dst_options = MemFree (dst_options);
-    }
-    if (src_options != NULL) {
-      StringCat (str, ", ");
-      StringCat (str, src_options);
-      src_options = MemFree (src_options);
-    }
-    if (constraint != NULL) {
-      StringCat (str, " ");
-      StringCat (str, constraint);
-      constraint = MemFree (constraint);
-    }
-    if (a->leave_original) {
-      StringCat (str, keep_orig);
-    } else {
-      StringCat (str, remove_orig);
-    }
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeEditLocationStrand (EditLocationStrandPtr strand)
-{
-  CharPtr from_label = NULL, to_label = NULL;
-  CharPtr fmt = "Convert %s strand to %s";
-  CharPtr str = NULL;
-
-  if (strand == NULL) return NULL;
-
-  switch (strand->strand_from) {
-    case Feature_location_strand_from_any:
-      from_label = "any";
-      break;
-    case Feature_location_strand_from_plus:
-      from_label = "plus";
-      break;
-    case Feature_location_strand_from_minus:
-      from_label = "minus";
-      break;
-    case Feature_location_strand_from_unknown:
-      from_label = "unknown";
-      break;
-    case Feature_location_strand_from_both:
-      from_label = "both";
-      break;
-  }
-
-  switch (strand->strand_to) {
-    case Feature_location_strand_to_plus:
-      to_label = "plus";
-      break;
-    case Feature_location_strand_to_minus:
-      to_label = "minus";
-      break;
-    case Feature_location_strand_to_unknown:
-      to_label = "unknown";
-      break;
-    case Feature_location_strand_to_both:
-      to_label = "both";
-      break;
-    case Feature_location_strand_to_reverse:
-      to_label = "reverse";
-      break;
-  }
-
-  if (from_label != NULL && to_label != NULL) {
-    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (from_label) + StringLen (to_label)));
-    sprintf (str, fmt, from_label, to_label);
-  }
-  return str;
-}
-
-
-static CharPtr SummarizePartial5SetAction (Partial5SetActionPtr a)
-{
-  CharPtr str = NULL;
-  CharPtr constraint = NULL, extend = NULL;
-  CharPtr fmt = "Set 5' partial%s%s";
-
-  if (a == NULL) return NULL;
-
-  switch (a->constraint) {
-    case Partial_5_set_constraint_all:
-      constraint = "";
-      break;
-    case Partial_5_set_constraint_at_end:
-      constraint = " when 5' end of location is at end of sequence";
-      break;
-    case Partial_5_set_constraint_bad_start:
-      constraint = " when coding region has no start codon";
-      break;
-    case Partial_5_set_constraint_frame_not_one:
-      constraint = " when coding region frame > 1";
-      break;
-  }
-  if (a->extend) {
-    extend = ", extend 5' end of feature to end of sequence";
-  } else {
-    extend = "";
-  }
-  if (constraint != NULL) {
-    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
-                                             + StringLen (constraint) 
-                                             + StringLen (extend)));
-    sprintf (str, fmt, constraint, extend);
-  }
-  return str;
-}
-
-
-static CharPtr SummarizePartial5ClearAction (Int4 a)
-{
-  CharPtr str = NULL;
-
-  switch (a) {
-    case Partial_5_clear_constraint_all:
-      str = StringSave ("Clear 5' partial");
-      break;
-    case Partial_5_clear_constraint_not_at_end:
-      str = StringSave ("Clear 5' partial when 5' end of feature is not at end of sequence");
-      break;
-    case Partial_5_clear_constraint_good_start:
-      str = StringSave ("Clear 5' partial when coding region has start codon");
-      break;
-  }
-  return str;
-}
-
-
-static CharPtr SummarizePartial3SetAction (Partial3SetActionPtr a)
-{
-  CharPtr str = NULL;
-  CharPtr constraint = NULL, extend = NULL;
-  CharPtr fmt = "Set 3' partial%s%s";
-
-  if (a == NULL) return NULL;
-
-  switch (a->constraint) {
-    case Partial_3_set_constraint_all:
-      constraint = "";
-      break;
-    case Partial_3_set_constraint_at_end:
-      constraint = " when 3' end of location is at end of sequence";
-      break;
-    case Partial_3_set_constraint_bad_end:
-      constraint = " when coding region has no stop codon";
-      break;
-  }
-  if (a->extend) {
-    extend = ", extend 3' end of feature to end of sequence";
-  } else {
-    extend = "";
-  }
-  if (constraint != NULL) {
-    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
-                                             + StringLen (constraint) 
-                                             + StringLen (extend)));
-    sprintf (str, fmt, constraint, extend);
-  }
-  return str;
-}
-
-
-static CharPtr SummarizePartial3ClearAction (Int4 a)
-{
-  CharPtr str = NULL;
-
-  switch (a) {
-    case Partial_3_clear_constraint_all:
-      str = StringSave ("Clear 3' partial");
-      break;
-    case Partial_3_clear_constraint_not_at_end:
-      str = StringSave ("Clear 3' partial when 3' end of feature is not at end of sequence");
-      break;
-    case Partial_3_clear_constraint_good_end:
-      str = StringSave ("Clear 3' partial when coding region has stop codon");
-      break;
-  }
-  return str;
-}
-
-
-static CharPtr SummarizePartialBothSetAction (PartialBothSetActionPtr a)
-{
-  CharPtr str = NULL;
-  CharPtr constraint = NULL, extend = NULL;
-  CharPtr fmt = "Set both ends partial%s%s";
-
-  if (a == NULL) return NULL;
-
-  switch (a->constraint) {
-    case Partial_5_set_constraint_all:
-      constraint = "";
-      break;
-    case Partial_5_set_constraint_at_end:
-      constraint = " when both ends of location are at end of sequence";
-      break;
-  }
-  if (a->extend) {
-    extend = ", extend both ends of feature to end of sequence";
-  } else {
-    extend = "";
-  }
-  if (constraint != NULL) {
-    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt)
-                                             + StringLen (constraint) 
-                                             + StringLen (extend)));
-    sprintf (str, fmt, constraint, extend);
-  }
-  return str;
-}
-
-
-static CharPtr SummarizePartialBothClearAction (Int4 a)
-{
-  CharPtr str = NULL;
-
-  switch (a) {
-    case Partial_both_clear_constraint_all:
-      str = StringSave ("Clear both ends partial");
-      break;
-    case Partial_3_clear_constraint_not_at_end:
-      str = StringSave ("Clear both ends partial when both ends of feature are not at end of sequence");
-      break;
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeConvertLoc (Int4 a)
-{
-  CharPtr str = NULL;
-
-  switch (a) {
-    case Convert_location_type_join:
-      str = StringSave ("Convert location to join");
-      break;
-    case Convert_location_type_order:
-      str = StringSave ("Convert location to order");
-      break;
-    case Convert_location_type_merge:
-      str = StringSave ("Convert location to single interval");
-      break;
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeEditFeatureLocationAction (EditFeatureLocationActionPtr a)
-{
-  CharPtr str = NULL, action_label = NULL, constraint, feature;
-  CharPtr fmt = "%s for %s features";
-  CharPtr constraint_fmt = "%s for %s features %s";
-
-  if (a == NULL || a->action == NULL) {
-    str = StringSave ("No action");
-  } else {
-    
-    switch (a->action->choice) {
-      case LocationEditType_strand:
-        action_label = SummarizeEditLocationStrand (a->action->data.ptrvalue);
-        break;
-      case LocationEditType_set_5_partial:
-        action_label = SummarizePartial5SetAction (a->action->data.ptrvalue);
-        break;
-      case LocationEditType_clear_5_partial:
-        action_label = SummarizePartial5ClearAction (a->action->data.intvalue);
-        break;
-      case LocationEditType_set_3_partial:
-        action_label = SummarizePartial3SetAction (a->action->data.ptrvalue);
-        break;
-      case LocationEditType_clear_3_partial:
-        action_label = SummarizePartial3ClearAction (a->action->data.intvalue);
-        break;
-      case LocationEditType_set_both_partial:
-        action_label = SummarizePartialBothSetAction (a->action->data.ptrvalue);
-        break;
-      case LocationEditType_clear_both_partial:
-        action_label = SummarizePartialBothClearAction (a->action->data.intvalue);
-        break;
-      case LocationEditType_convert:
-        action_label = SummarizeConvertLoc (a->action->data.intvalue);
-        break;
-      case LocationEditType_extend_5:
-        action_label = StringSave ("Extend 5' end of feature to end of sequence");
-        break;
-      case LocationEditType_extend_3:
-        action_label = StringSave ("Extend 3' end of feature to end of sequence");
-        break;
-    }
-    if (action_label == NULL) {
-      str = StringSave ("Invalid action");
-    } else {
-      feature = GetFeatureNameFromFeatureType (a->type);
-      constraint = SummarizeConstraintSet (a->constraint);
-      if (constraint == NULL) {
-        str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (action_label) + StringLen (feature)));
-        sprintf (str, fmt, action_label, feature);
-      } else {
-        str = (CharPtr) MemNew (sizeof (Char) * (StringLen (constraint_fmt) + StringLen (action_label) + StringLen (feature) + StringLen (constraint)));
-        sprintf (str, constraint_fmt, action_label, feature, constraint);
-        constraint = MemFree (constraint);
-      }
-    }
-  } 
-  return str;
-}
-
-
-static CharPtr s_Suppression[] = { NULL, "suppressing", "non-suppressing" };
-static CharPtr s_Necessary[] = { NULL, "necessary", "unnecessary" };
-
-static CharPtr SummarizeRemoveXref (RemoveXrefsActionPtr a)
-{
-  CharPtr str = NULL, label, constraint;
-  GeneXrefTypePtr g;
-  CharPtr fmt = "Remove %s%s%s%sgene xrefs from %s features";
-  CharPtr suppression, necessary;
-  Int4 len;
-
-  if (a == NULL || a->xref_type == NULL) {
-    str = StringSave ("No action");
-  } else if (a->xref_type->choice != XrefType_gene
-    || (g = (GeneXrefTypePtr) a->xref_type->data.ptrvalue) == NULL) {
-    str = StringSave ("Invalid action");
-  } else {
-    label = GetFeatureNameFromFeatureType (g->feature);
-    if (g->suppression < sizeof (s_Suppression) / sizeof (CharPtr)) {
-      suppression = s_Suppression[g->suppression];
-    } else {
-      suppression = NULL;
-    }
-    if (g->necessary < sizeof (s_Necessary) / sizeof (CharPtr)) {
-      necessary = s_Necessary[g->necessary];
-    } else {
-      necessary = NULL;
-    }
-    constraint = SummarizeConstraintSet (a->constraint);
-    len = StringLen (label) + StringLen (fmt) + StringLen (suppression) + StringLen (necessary) + StringLen (constraint);
-    str = (CharPtr) MemNew (sizeof (Char) * len);
-    sprintf (str, fmt, 
-             suppression == NULL ? "" : suppression, suppression == NULL ? "" : " ",
-             necessary == NULL ? "" : necessary, necessary == NULL ? "" : " ",
-             label);
-    if (constraint != NULL) {
-      StringCat (str, constraint);
-      constraint = MemFree (constraint);
-    }
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeMakeGeneXrefs(MakeGeneXrefActionPtr a)
-{
-  CharPtr constraint, str, label;
-  CharPtr fmt = "Make gene xrefs from overlapping gene features for %s features%s";
-
-  if (a == NULL) {
-    str = StringSave ("No action");
-  } else {
-    label = GetFeatureNameFromFeatureType (a->feature);
-    constraint = SummarizeConstraintSet (a->constraint);
-    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (constraint) + StringLen (label)));
-    sprintf (str, fmt, label, constraint == NULL ? "" : constraint);
-    constraint = MemFree (constraint);
-  }
-  return str;
-}
-
-
-static CharPtr SummarizeMacroAction (ValNodePtr vnp)
-{
-  CharPtr str = NULL;
-
-  if (vnp == NULL) {
-    return StringSave ("No action");
-  }
-  switch (vnp->choice) {
-    case MacroActionChoice_aecr:
-      str = SummarizeAECRAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_parse:
-      str = SummarizeParseAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_add_feature:
-      str = SummarizeApplyFeatureAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_remove_feature:
-      str = SummarizeRemoveFeatureAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_edit_location:
-      str = SummarizeEditFeatureLocationAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_convert_feature:
-      str = SummarizeConvertFeatureAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_remove_descriptor:
-      str = SummarizeRemoveDescriptorAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_autodef:
-      str = SummarizeAutodefAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_removesets:
-      str = StringSave ("Remove duplicate nested sets");
-      break;
-    case MacroActionChoice_trim_junk_from_primer_seq:
-      str = StringSave ("Trim junk from primer seqs");
-      break;
-    case MacroActionChoice_fix_usa_and_states:
-      str = StringSave ("Fix USA and state abbreviations in publications");
-      break;
-    case MacroActionChoice_trim_stop_from_complete_cds:
-      str = StringSave ("Remove trailing * from complete coding regions");
-      break;
-    case MacroActionChoice_synchronize_cds_partials:
-      str = StringSave ("Synchronize coding region partials");
-      break;
-    case MacroActionChoice_adjust_for_consensus_splice:
-      str = StringSave ("Adjust coding regions for consensus splice sites");
-      break;
-    case MacroActionChoice_fix_pub_caps:
-      str = SummarizeFixPubCapsAction(vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_remove_seg_gaps:
-      str = StringSave ("Remove seg-gaps");
-      break;
-    case MacroActionChoice_sort_fields:
-      str = SummarizeSortFieldsAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_apply_molinfo_block:
-      str = SummarizeMolinfoBlockAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_fix_caps:
-      str = SummarizeFixCapsAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_fix_format:
-      str = SummarizeFixFormatAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_fix_spell:
-      str = StringSave ("Fix spelling");
-      break;
-    case MacroActionChoice_remove_duplicate_features:
-      str = SummarizeRemoveDuplicateFeaturesAction (vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_remove_lineage_notes:
-      str = StringSave ("Remove lineage source notes");
-      break;
-    case MacroActionChoice_remove_xrefs:
-      str = SummarizeRemoveXref(vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_make_gene_xrefs:
-      str = SummarizeMakeGeneXrefs(vnp->data.ptrvalue);
-      break;
-    case MacroActionChoice_make_bold_xrefs:
-      str = StringSave ("Make Barcode Xrefs");
-      break;
-    case MacroActionChoice_fix_author:
-      str = SummarizeAuthorFixAction(vnp->data.ptrvalue);
-      break;
-    default:
-      str = StringSave ("Invalid action");
-      break;
-  }
-  return str;
 }
 
 
@@ -21133,7 +22217,7 @@ static void RunSelectedMacro (ButtoN b)
     for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
       sep = vnp->data.ptrvalue;
       entityID = ObjMgrGetEntityIDForChoice(sep);
-      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, tmp_list, lip->fp);
+      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, tmp_list, lip->fp, Sequin_GlobalAlign2Seq);
       ObjMgrSetDirtyFlag (entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
     }
@@ -21668,7 +22752,7 @@ static void RunTemplateMacro (ButtoN b)
     for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
       sep = vnp->data.ptrvalue;
       entityID = ObjMgrGetEntityIDForChoice(sep);
-      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, actions, lip->fp);
+      lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, actions, lip->fp, Sequin_GlobalAlign2Seq);
       ObjMgrSetDirtyFlag (entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
     }
@@ -21959,6 +23043,7 @@ typedef struct tabcolumnconfigdlg {
   DialoG                   pub_field;
   DialoG                   molinfo_field;
   DialoG                   struccomm_field;
+  PopuP                    dblink_field;
 
   ButtoN                   change_mrna;
   GrouP                    apply_options;
@@ -21978,7 +23063,9 @@ typedef enum {
   eTabColumnConfig_Match_FeatureID,
   eTabColumnConfig_Match_GeneLocusTag,
   eTabColumnConfig_Match_ProteinID,
+  eTabColumnConfig_Match_ProteinName,  /* J. Chen */
   eTabColumnConfig_Match_Dbxref,
+  eTabColumnConfig_Match_Any,
   eTabColumnConfig_Blank,
   eTabColumnConfig_Apply_Taxname,
   eTabColumnConfig_Apply_SourceQual,
@@ -21990,7 +23077,8 @@ typedef enum {
   eTabColumnConfig_Apply_Defline,
   eTabColumnConfig_Apply_Keyword,
   eTabColumnConfig_Apply_Molinfo,
-  eTabColumnConfig_Apply_StructuredCommentField
+  eTabColumnConfig_Apply_StructuredCommentField,
+  eTabColumnConfig_Apply_Dblink,
 } ETabColumnConfig;
 
 static void TabColumnConfigFieldChange (Pointer data)
@@ -22044,40 +23132,39 @@ static Pointer TabColumnConfigDialogToChoice (DialoG d)
   if (val < 2 || val == eTabColumnConfig_Blank) {
     f = TabColumnConfigFree (f);
   } else if (val < eTabColumnConfig_Blank) {
+    f->match_type = MatchTypeNew ();
+    f->match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
     switch (val) {
+      case eTabColumnConfig_Match_ProteinName:   /* J. Chen */
+        f->match_type->choice = eTableMatchProteinName;
+        break;
       case eTabColumnConfig_Match_FeatureID:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchFeatureID;
         break;
       case eTabColumnConfig_Match_GeneLocusTag:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchGeneLocusTag;
         break;
       case eTabColumnConfig_Match_ProteinID:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchProteinID;
-        f->match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
         break;
       case eTabColumnConfig_Match_Dbxref:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchDbxref;
-        f->match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
         break;
       case eTabColumnConfig_Match_NucleotideID:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchNucID;
-        f->match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
         break;
       case eTabColumnConfig_Match_Taxname:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchBioSource;
-        f->match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
         break;
       case eTabColumnConfig_Match_SourceQual:
-        f->match_type = MatchTypeNew ();
         f->match_type->choice = eTableMatchSourceQual;
         f->match_type->data = DialogToPointer (dlg->src_qual_match);
-        f->match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
+        break;
+      case eTabColumnConfig_Match_Any:
+        f->match_type->choice = eTableMatchAny;
+        break;
+      default:
+        f->match_type = MatchTypeFree (f->match_type);
         break;
     }
     f->existing_text = ExistingTextOption_replace_old;
@@ -22143,6 +23230,10 @@ static Pointer TabColumnConfigDialogToChoice (DialoG d)
       f->field = ValNodeNew (NULL);
       f->field->choice = FieldType_struc_comment_field;
       f->field->data.ptrvalue = DialogToPointer (dlg->struccomm_field);
+    } else if (val == eTabColumnConfig_Apply_Dblink) {
+      f->field = ValNodeNew (NULL);
+      f->field->choice = FieldType_dblink;
+      f->field->data.intvalue = GetValue (dlg->dblink_field);
     }
 
 
@@ -22172,6 +23263,8 @@ static void TabColumnActionChange (PopuP p)
   dlg = (TabColumnConfigDlgPtr) GetObjectExtra (p);
   if (dlg == NULL) return;
 
+  Hide (dlg->dblink_field);
+
   val = GetValue (p);
 
   switch (val) {
@@ -22185,6 +23278,15 @@ static void TabColumnActionChange (PopuP p)
     case eTabColumnConfig_Match_Taxname:
       /* matching, hide apply controls */
       Show (dlg->match_grp);
+      Show (dlg->match_location);
+      Hide (dlg->src_qual_match);
+      Hide (dlg->qual_grp);
+      Disable (dlg->apply_options);
+      break;
+    case eTabColumnConfig_Match_Any:
+      /* matching, hide apply controls */
+      Show (dlg->match_grp);
+      Hide (dlg->match_location);
       Hide (dlg->src_qual_match);
       Hide (dlg->qual_grp);
       Disable (dlg->apply_options);
@@ -22327,6 +23429,21 @@ static void TabColumnActionChange (PopuP p)
       DisableMultiOptions (dlg->existing_text);
       EnableNonTextOptions (dlg->existing_text);
       break;
+    case eTabColumnConfig_Apply_Dblink:
+      Show (dlg->qual_grp);
+      Show (dlg->dblink_field);
+      Hide (dlg->src_qual);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->cdsgeneprot);
+      Hide (dlg->pub_field);
+      Hide (dlg->molinfo_field);
+      Hide (dlg->struccomm_field);
+      Enable (dlg->apply_options);
+      Hide (dlg->match_grp);
+      Disable (dlg->change_mrna);
+      EnableMultiOptions (dlg->existing_text);
+      DisableNonTextOptions (dlg->existing_text);
+      break;
   }
   if (dlg != NULL && dlg->change_notify != NULL) {
     (dlg->change_notify) (dlg->change_userdata);
@@ -22352,6 +23469,9 @@ static void TabColumnConfigToDialog (DialoG d, Pointer data)
     f = TabColumnConfigCopy (f);
     if (f->match_type != NULL) {
       switch (f->match_type->choice) {
+        case eTableMatchProteinName:    /* J. Chen */
+          SetValue (dlg->column_action, eTabColumnConfig_Match_ProteinName);
+          break;
         case eTableMatchFeatureID:
           SetValue (dlg->column_action, eTabColumnConfig_Match_FeatureID);
           break;
@@ -22376,6 +23496,9 @@ static void TabColumnConfigToDialog (DialoG d, Pointer data)
           SetValue (dlg->column_action, eTabColumnConfig_Match_SourceQual);
           PointerToDialog (dlg->src_qual_match, f->match_type->data);
           SetMatchLocationInIdMatchLocationDlg (dlg->match_location, f->match_type->match_location);
+          break;
+        case eTableMatchAny:
+          SetValue (dlg->column_action, eTabColumnConfig_Match_Any);
           break;
       }
       PointerToDialog (dlg->constraint, NULL);
@@ -22436,6 +23559,9 @@ static void TabColumnConfigToDialog (DialoG d, Pointer data)
       } else if (f->field->choice == FieldType_struc_comment_field) {
         SetValue (dlg->column_action, eTabColumnConfig_Apply_StructuredCommentField);
         PointerToDialog (dlg->struccomm_field, f->field->data.ptrvalue);
+      } else if (f->field->choice == FieldType_dblink) {
+        SetValue (dlg->column_action, eTabColumnConfig_Apply_Dblink);
+        SetValue (dlg->dblink_field, f->field->data.intvalue);
       }
         
       SafeSetStatus (dlg->change_mrna, f->match_mrna);
@@ -22454,6 +23580,17 @@ static void TabColumnConfigButtonChange (ButtoN b)
   TabColumnConfigDlgPtr dlg;
 
   dlg = (TabColumnConfigDlgPtr) GetObjectExtra (b);
+  if (dlg != NULL && dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void TabColumnConfigPopupChange (PopuP p)
+{
+  TabColumnConfigDlgPtr dlg;
+
+  dlg = (TabColumnConfigDlgPtr) GetObjectExtra (p);
   if (dlg != NULL && dlg->change_notify != NULL) {
     (dlg->change_notify) (dlg->change_userdata);
   }
@@ -22538,7 +23675,9 @@ NLM_EXTERN DialoG TabColumnConfigDialog
   PopupItem (dlg->column_action, "Match to Feature ID");
   PopupItem (dlg->column_action, "Match to Gene locus tag");
   PopupItem (dlg->column_action, "Match to Protein ID");
+  PopupItem (dlg->column_action, "Match to Protein Name");   /* J. Chen */
   PopupItem (dlg->column_action, "Match to Dbxref");
+  PopupItem (dlg->column_action, "Match to Any");
   PopupItem (dlg->column_action, " ");
   PopupItem (dlg->column_action, "Apply to Taxname");
   PopupItem (dlg->column_action, "Apply to Source Qual");
@@ -22551,6 +23690,7 @@ NLM_EXTERN DialoG TabColumnConfigDialog
   PopupItem (dlg->column_action, "Apply to Keyword");
   PopupItem (dlg->column_action, "Apply to Molinfo");
   PopupItem (dlg->column_action, "Apply to Structured Comment Field");
+  PopupItem (dlg->column_action, "Apply to Dblink");
   SetValue (dlg->column_action, 1);
   
   k = HiddenGroup (p, 0, 0, NULL);
@@ -22567,6 +23707,7 @@ NLM_EXTERN DialoG TabColumnConfigDialog
   dlg->pub_field = PubFieldDialog (dlg->qual_grp, TabColumnConfigFieldChange, dlg);
   dlg->molinfo_field = MolinfoFieldChoiceDialog  (dlg->qual_grp, TabColumnConfigFieldChange, dlg);
   dlg->struccomm_field = StructuredCommentFieldDialog (dlg->qual_grp, TabColumnConfigFieldChange, dlg);
+  dlg->dblink_field = MakeDbLinkFieldPopup (dlg->qual_grp, TabColumnConfigPopupChange, dlg);
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->match_grp, (HANDLE) dlg->qual_grp, NULL);
 
   dlg->change_mrna = CheckBox (p, "Also change mRNA product name", TabColumnConfigButtonChange);
@@ -22630,6 +23771,9 @@ static CharPtr SummarizeMatchType (MatchTypePtr match_type)
   }
 
   switch (match_type->choice) {
+    case eTableMatchProteinName:     /* J. Chen */
+      summ = StringSave ("Match to Protein Name");
+      break;
     case eTableMatchFeatureID:
       summ = StringSave ("Match to feature ID");
       break;
@@ -22663,6 +23807,9 @@ static CharPtr SummarizeMatchType (MatchTypePtr match_type)
         sprintf (summ, match_fmt, location_word, type_word);
         type_word = MemFree (type_word);
       }
+      break;
+    case eTableMatchAny:
+      summ = StringSave ("Match to any sequence");
       break;
   }
   return summ;
@@ -22709,20 +23856,6 @@ static CharPtr SummarizeTabColumnConfig (TabColumnConfigPtr t)
   }
   return summ;
 }
-
-
-typedef struct tabcolumnconfiglistdialog {
-  DIALOG_MESSAGE_BLOCK
-  DoC                  column_list_doc;
-  DialoG               edit_col_dlg;
-  Nlm_ChangeNotifyProc change_notify;
-  Pointer              change_userdata;
-  TabColumnConfigPtr PNTR column_list;
-  CharPtr PNTR            first_values;
-  Int4Ptr                 blank_list;
-  Int4                    num_columns;
-  Int4                    current_column;
-} TabColumnConfigListDlgData, PNTR TabColumnConfigListDlgPtr;
 
 
 static void CleanupTabColumnConfigListDialog (GraphiC g, VoidPtr data)
@@ -22797,7 +23930,7 @@ static ValNodePtr TestTabColumnConfigListDialog (DialoG d)
 }
 
 
-static void PopulateTabConfigListColumnListDoc (DialoG d)
+NLM_EXTERN void PopulateTabConfigListColumnListDoc (DialoG d)
 {
   TabColumnConfigListDlgPtr dlg;
   Int4 i, len;
@@ -23087,7 +24220,10 @@ typedef enum matchtypechoice {
   eMatchType_FeatureID,
   eMatchType_GeneLocusTag,
   eMatchType_ProteinID,
-  eMatchType_Dbxref
+  eMatchType_Dbxref,
+  eMatchType_ProteinName,
+  eMatchType_Any,
+  eMatchType_Filename
 } EMatchTypeChoice;
 
 
@@ -23113,6 +24249,7 @@ static void ChangeMatchTypeChoice (PopuP p)
       case eMatchType_FeatureID:
       case eMatchType_GeneLocusTag:
       case eMatchType_ProteinID:
+      case eMatchType_Any:
       default:
         Hide (dlg->match_location);
         Hide (dlg->src_qual_match);
@@ -23134,38 +24271,39 @@ static Pointer DialogToMatchType (DialoG d)
   dlg = (MatchTypeDlgPtr) GetObjectExtra (d);
   if (dlg != NULL) {
     val = GetValue (dlg->match_type);
+    match_type = MatchTypeNew ();
+    match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
     switch (val) {
+      case eMatchType_ProteinName:    /* J. Chen */
+        match_type->choice = eTableMatchProteinName;
+        break;
       case eMatchType_FeatureID:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchFeatureID;
         break;
       case eMatchType_GeneLocusTag:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchGeneLocusTag;
         break;
       case eMatchType_ProteinID:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchProteinID;
         break;
       case eMatchType_Dbxref:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchDbxref;
-        match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
         break;
       case eMatchType_NucleotideID:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchNucID;
         break;
       case eMatchType_Taxname:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchBioSource;
-        match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
         break;
       case eMatchType_SourceQual:
-        match_type = MatchTypeNew ();
         match_type->choice = eTableMatchSourceQual;
         match_type->data = DialogToPointer (dlg->src_qual_match);
-        match_type->match_location = GetMatchLocationFromIdMatchLocationDlg (dlg->match_location);
+        break;
+      case eMatchType_Any:
+        match_type->choice = eTableMatchAny;
+        break;
+      default:
+        match_type = MatchTypeFree (match_type);
         break;
     }
   }
@@ -23216,7 +24354,9 @@ NLM_EXTERN DialoG MatchTypeDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, 
   PopupItem (dlg->match_type, "Match to Feature ID");
   PopupItem (dlg->match_type, "Match to Gene locus tag");
   PopupItem (dlg->match_type, "Match to Protein ID");
+  PopupItem (dlg->match_type, "Match to Protein Name");   /* J. Chen */
   PopupItem (dlg->match_type, "Match to Dbxref");
+  PopupItem (dlg->match_type, "Match to All Rows");
   SetValue (dlg->match_type, 1);
   
   k = HiddenGroup (p, 2, 0, NULL);
@@ -24153,6 +25293,7 @@ typedef struct suspectruledlg {
   DialoG except;
   DialoG replace;
   DialoG feat_constraint;
+  TexT   description;
 
   Nlm_ChangeNotifyProc     change_notify;
   Pointer                  change_userdata;
@@ -24192,6 +25333,7 @@ static Pointer SuspectRuleFromDialog (DialoG d)
   }
   new_rule->replace = DialogToPointer (dlg->replace);
   new_rule->feat_constraint = DialogToPointer (dlg->feat_constraint);
+  new_rule->description = SaveStringFromText (dlg->description);
   return new_rule;
 }
 
@@ -24200,6 +25342,8 @@ static void SuspectRuleToDialog (DialoG d, Pointer data)
 {
   SuspectRuleDlgPtr dlg;
   SuspectRulePtr new_rule;
+  SearchFuncPtr func;
+  StringConstraintPtr scp;
 
   dlg = (SuspectRuleDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) {
@@ -24209,16 +25353,25 @@ static void SuspectRuleToDialog (DialoG d, Pointer data)
   new_rule = (SuspectRulePtr) data;
   if (new_rule == NULL) {
     SetValue (dlg->rule_type, 1);
-    PointerToDialog (dlg->find, NULL);
+    scp = StringConstraintNew();
+    scp->case_sensitive = FALSE;
+    scp->ignore_weasel = TRUE;
+    func = ValNodeNew (NULL);
+    func->choice = SearchFunc_string_constraint;
+    func->data.ptrvalue = scp;
+    PointerToDialog (dlg->find, func);
+    func = SearchFuncFree (func);
     PointerToDialog (dlg->except, NULL);
     PointerToDialog (dlg->replace, NULL);
     PointerToDialog (dlg->feat_constraint, NULL);
+    SetTitle (dlg->description, "");
   } else {
     SetValue (dlg->rule_type, new_rule->rule_type + 1);
     PointerToDialog (dlg->find, new_rule->find);
     PointerToDialog (dlg->except, new_rule->except);
     PointerToDialog (dlg->replace, new_rule->replace);
     PointerToDialog (dlg->feat_constraint, new_rule->feat_constraint);
+    SetTitle (dlg->description, new_rule->description);
   }
 }
 
@@ -24232,6 +25385,7 @@ NLM_EXTERN DialoG SuspectRuleDialog
   GrouP p;
   Int2 val;
   GrouP g1, g2;
+  PrompT ppt;
 
   dlg = (SuspectRuleDlgPtr) MemNew (sizeof (SuspectRuleDlgData));
 
@@ -24257,9 +25411,14 @@ NLM_EXTERN DialoG SuspectRuleDialog
   dlg->except = SearchFuncDialog (g2, change_notify, change_userdata);
   dlg->replace = ReplaceRuleDialog (p, change_notify, change_userdata);
   dlg->feat_constraint = ConstraintSetDialog (p, dlg->change_notify, dlg->change_userdata);
+  ppt = StaticPrompt (p, "Description", 0, popupMenuHeight, programFont, 'c');
+  dlg->description = ScrollText (p, 20, 3, programFont, TRUE, NULL);
 
-
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->rule_type, (HANDLE) g1, (HANDLE) g2, (HANDLE) dlg->replace, (HANDLE) dlg->feat_constraint, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->rule_type, (HANDLE) g1, (HANDLE) g2, (HANDLE) dlg->replace, 
+                              (HANDLE) dlg->feat_constraint, 
+                              (HANDLE) ppt,
+                              (HANDLE) dlg->description,
+                              NULL);
 
   return (DialoG) p;
 }
@@ -24378,6 +25537,10 @@ static void SetSuspectProductRuleEditorFileItems (SuspectProductRuleEditorFormPt
     SafeSetTitle (i, "Load Rule List");
     SafeEnable (i);
 
+    i = FindFormMenuItem ((BaseFormPtr) frm, VIB_MSG_IMPORT);
+    SafeSetTitle (i, "Add Rules from File to List");
+    SafeEnable (i);
+
     i = FindFormMenuItem ((BaseFormPtr) frm, VIB_MSG_SAVE);
     SafeSetTitle (i, "Save Rule List");
   }
@@ -24462,6 +25625,51 @@ static Boolean SaveSuspectProductRuleFile (ForM f, CharPtr filename)
 }
 
 
+static Boolean ImportSuspectProductRuleFile (ForM f, CharPtr filename)
+
+{
+  SuspectProductRuleEditorFormPtr mefp;
+  Boolean            rval = FALSE;
+  CharPtr            extension;
+  Char               path [PATH_MAX];
+  AsnIoPtr           aip;
+  SuspectRuleSetPtr  rule_list, last;
+
+  mefp = (SuspectProductRuleEditorFormPtr) GetObjectExtra (f);
+  if (mefp == NULL) return FALSE;
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  extension = NULL;
+  if (path [0] != '\0' || GetInputFileName (path, sizeof (path), extension, "TEXT")) {
+    aip = AsnIoOpen (path, "r");
+    if (aip == NULL) {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    } else {
+      rule_list = SuspectRuleSetAsnRead (aip, NULL);
+      if (rule_list == NULL) {
+        Message (MSG_ERROR, "Unable to read rule list from %s.", path);
+      } else {
+        if (mefp->rule_list == NULL) {
+          mefp->rule_list = rule_list;
+        } else {
+          last = mefp->rule_list;
+          while (last->next != NULL) {
+            last = last->next;
+          }
+          last->next = rule_list;
+        }
+        mefp->unsaved = TRUE;
+        rval = TRUE;
+        SetSuspectProductRuleEditorFileItems (mefp);
+        SummarizeSuspectProductRule (mefp->rule_summary, mefp->rule_list, mefp->summary_font);
+      }
+      AsnIoClose (aip);
+    }
+  }
+  return rval;
+}
+
+
 static void SuspectProductRuleEditorFormMessage (ForM f, Int2 mssg)
 
 {
@@ -24472,6 +25680,9 @@ static void SuspectProductRuleEditorFormMessage (ForM f, Int2 mssg)
     switch (mssg) {
       case VIB_MSG_OPEN :
         OpenSuspectProductRuleFile (f, NULL);
+        break;
+      case VIB_MSG_IMPORT :
+        ImportSuspectProductRuleFile (f, NULL);
         break;
       case VIB_MSG_SAVE :
         SaveSuspectProductRuleFile (f, mefp->last_filename);
@@ -24972,6 +26183,18 @@ static void DisplayRuleText (SuspectRuleSetPtr set, CharPtr title)
 }
 
 
+static void DisplaySuspectProductRuleDescriptions (ButtoN b)
+{
+  SuspectProductRuleEditorFormPtr frm;
+
+  frm = (SuspectProductRuleEditorFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+  DisplayRuleText (frm->rule_list, "Suspect Rule Descriptions");
+}
+
+
 static void ShowSuspectRuleDiffs (ButtoN b)
 {
   SuspectProductRuleEditorFormPtr  f;
@@ -25086,6 +26309,7 @@ NLM_EXTERN void LaunchSuspectProductRuleEditorBaseForm (BaseFormPtr bfp)
 
   m = PulldownMenu (w, "File");
   FormCommandItem (m, "Open", (BaseFormPtr)f, VIB_MSG_OPEN);
+  FormCommandItem (m, "Add Rules from File to List", (BaseFormPtr)f, VIB_MSG_IMPORT);
   FormCommandItem (m, "Save", (BaseFormPtr)f, VIB_MSG_SAVE);
   FormCommandItem (m, "Save As", (BaseFormPtr)f, VIB_MSG_SAVE_AS);
   SeparatorItem (m);
@@ -25106,7 +26330,7 @@ NLM_EXTERN void LaunchSuspectProductRuleEditorBaseForm (BaseFormPtr bfp)
   SetDocProcs (f->rule_summary, ClickSuspectProductRuleDoc, NULL, NULL, NULL);
   SetDocShade (f->rule_summary, DrawSuspectProductRuleDocControls, NULL, NULL, NULL); 
 
-  c = HiddenGroup (h, 5, 0, NULL);
+  c = HiddenGroup (h, 6, 0, NULL);
   b = PushButton (c, "List current matches", ListSuspectRuleMatches);
   SetObjectExtra (b, f, NULL);
   b = PushButton (c, "Apply fixes", ApplySuspectRuleFixes);
@@ -25116,6 +26340,8 @@ NLM_EXTERN void LaunchSuspectProductRuleEditorBaseForm (BaseFormPtr bfp)
   b = PushButton (c, "Apply Product Update Table", ApplyProductUpdateTableBtn);
   SetObjectExtra (b, f, NULL);
   b = PushButton (c, "Show diffs with other file", ShowSuspectRuleDiffs);
+  SetObjectExtra (b, f, NULL);
+  b = PushButton (c, "Display Rule Text", DisplaySuspectProductRuleDescriptions);
   SetObjectExtra (b, f, NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) f->rule_summary, (HANDLE) c, NULL);

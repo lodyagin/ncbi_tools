@@ -1,4 +1,4 @@
-/* $Id: ncbi_math.h,v 1.12 2006/11/21 16:50:15 papadopo Exp $
+/* $Id: ncbi_math.h,v 1.13 2012/02/01 16:24:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -137,6 +137,16 @@ long BLAST_Nint (double x);
 NCBI_XBLAST_EXPORT 
 double BLAST_Powi (double x, Int4 n);
 
+/** The error function of x: the integral from 0 to x of e(-t*t) dt,
+ *  scaled by 2/sqrt(pi) to fall within the range (-1,1). */
+NCBI_XBLAST_EXPORT
+double BLAST_Erf (double x);
+
+/** The complementary error function of x: 1 - erf(x), but calculated
+ *  more accurately for large x (where erf(x) approaches unity). */
+NCBI_XBLAST_EXPORT
+double BLAST_ErfC (double x);
+
 /** Number of derivatives of log(x) to carry in gamma-related 
     computations */
 #define LOGDERIV_ORDER_MAX	4  
@@ -156,58 +166,4 @@ double BLAST_Powi (double x, Int4 n);
 }
 #endif
 
-/*
- * ===========================================================================
- *
- * $Log: ncbi_math.h,v $
- * Revision 1.12  2006/11/21 16:50:15  papadopo
- * minor
- *
- * Revision 1.11  2005/03/10 16:12:59  papadopo
- * doxygen fixes
- *
- * Revision 1.10  2004/11/18 21:22:10  dondosha
- * Added BLAST_Gdb3, used in greedy alignment; removed extern and added NCBI_XBLAST_EXPORT to all prototypes
- *
- * Revision 1.9  2004/11/02 13:54:33  papadopo
- * small doxygen fixes
- *
- * Revision 1.8  2004/11/01 16:37:57  papadopo
- * Add doxygen tags, remove unused constants
- *
- * Revision 1.7  2004/05/19 14:52:01  camacho
- * 1. Added doxygen tags to enable doxygen processing of algo/blast/core
- * 2. Standardized copyright, CVS $Id string, $Log and rcsid formatting and i
- *    location
- * 3. Added use of @todo doxygen keyword
- *
- * Revision 1.6  2003/09/26 20:38:12  dondosha
- * Returned prototype for the factorial function (BLAST_Factorial)
- *
- * Revision 1.5  2003/09/26 19:02:31  madden
- * Prefix ncbimath functions with BLAST_
- *
- * Revision 1.4  2003/09/10 21:35:20  dondosha
- * Removed Nlm_ prefix from math functions
- *
- * Revision 1.3  2003/08/25 22:30:24  dondosha
- * Added LnGammaInt definition and Factorial prototype
- *
- * Revision 1.2  2003/08/11 14:57:16  dondosha
- * Added algo/blast/core path to all #included headers
- *
- * Revision 1.1  2003/08/02 16:32:11  camacho
- * Moved ncbimath.h -> ncbi_math.h
- *
- * Revision 1.2  2003/08/01 21:18:48  dondosha
- * Correction of a #include
- *
- * Revision 1.1  2003/08/01 21:03:40  madden
- * Cleaned up version of file for C++ toolkit
- *
- * ===========================================================================
- */
-
-
 #endif /* !ALGO_BLAST_CORE__NCBIMATH */
-

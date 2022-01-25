@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.h,v 1.5 2007/12/20 22:55:46 kazimird Exp $
+/* $Id: blast_query_info.h,v 1.6 2011/11/30 13:59:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -93,6 +93,18 @@ BlastQueryInfo* BlastQueryInfoDup(BlastQueryInfo* query_info);
  */
 NCBI_XBLAST_EXPORT
 Int4 Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program);
+
+
+/** Return the query index (zero based), given the query offset
+ *   in the initial HSP as the program.
+ * @param query_offset Offset of the query in the initial HSP [in]
+ * @param program EBlastProgramType [in]
+ * @param query_info information about all the queries [in]
+ * @return Query Index in a set of queries
+*/
+NCBI_XBLAST_EXPORT
+Int4 Blast_GetQueryIndexFromQueryOffset(Int4 query_offset, EBlastProgramType program, const BlastQueryInfo* query_info);
+
 
 /** Retrieve a query sequence's search space
  * @param qinfo BlastQueryInfo structure [in]

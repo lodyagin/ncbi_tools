@@ -29,52 +29,12 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: vsmutil.h,v $
-* Revision 6.16  2010/06/28 18:03:35  bollin
-* Added checkbox to Validator window to temporarily turn off tax validation.
-*
-* Revision 6.15  2010/02/03 16:56:11  bollin
-* Added Segregate button to Validator.
-*
-* Revision 6.14  2009/09/15 18:48:26  kans
-* pass shftKey to notify callback
-*
-* Revision 6.13  2009/05/01 18:10:51  kans
-* added featureID field to ValidErrorFunc callback type
-*
-* Revision 6.12  2009/03/09 15:58:49  bollin
-* Added Sequester button to validator window.
-*
-* Revision 6.11  2009/03/03 16:41:31  bollin
-* Changed "Done" button on Sequin main window to allow users to launch validator
-* window with new "Done" button that will continue the "Done" process.
-*
-* Revision 6.10  2008/09/17 14:18:09  kans
-* CreateValidateWindow variants return validator window handle
-*
-* Revision 6.9  2007/07/06 16:01:27  bollin
-* Added Bad Specific Host values to Validator Report.
-*
-* Revision 6.8  2007/03/30 19:09:00  kans
-* validate window verbose argument is Int2
-*
-* Revision 6.7  2007/03/23 20:10:42  kans
-* added ValidErrCallback, uses new ValidErrorFunc mechanism, will be used to switch verbosity without revalidating
-*
-* Revision 6.6  2006/07/13 17:13:19  bollin
-* use Uint4 instead of Uint2 for itemID values
-*
-* Revision 6.5  2004/10/04 18:01:54  kans
-* added ShouldSetJustShowAccession for communication with Sequin, implement Table verbosity level to just show accessions
-*
-* Revision 6.4  2000/07/08 20:44:02  vakatov
-* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
 * ==========================================================================
 */
@@ -136,6 +96,10 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
 extern int LIBCALLBACK ValidErrHook PROTO((const ErrDesc *err));
 extern Boolean ShouldSetSuppressContext (void);
 extern Boolean ShouldSetJustShowAccession (void);
+
+#ifndef WIN_MAC
+extern void CreateStdValidatorFormMenus (WindoW w);
+#endif
 
 extern void LIBCALLBACK ValidErrCallback (
   ErrSev severity,

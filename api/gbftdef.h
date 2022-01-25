@@ -122,13 +122,15 @@
 #define GBQUAL_non_functional       112
 #define GBQUAL_pseudogene           113
 #define GBQUAL_mobile_element_type  114
+#define GBQUAL_gap_type             115
+#define GBQUAL_linkage_evidence     116
 
-#define ParFlat_TOTAL_GBQUAL    115
+#define ParFlat_TOTAL_GBQUAL    117
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
 #define ParFlat_TOTAL_Rpt         7
-#define ParFlat_TOTAL_GBFEAT     70
+#define ParFlat_TOTAL_GBFEAT     73
 
 #define  Class_pos_aa             1
 #define  Class_text               2

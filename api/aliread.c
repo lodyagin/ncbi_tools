@@ -1315,3 +1315,35 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
 
   return rowList;
 }
+
+
+NLM_EXTERN Boolean DoSequenceLengthsMatch (TAlignmentFilePtr afp)
+{
+  int     seq_index;
+  int     curr_seg;
+  Int4Ptr seq_len;
+  Boolean rval;
+
+  if (afp == NULL || afp->sequences == NULL || afp->num_sequences == 0) {
+    return TRUE;
+  }
+
+  seq_len = (Int4Ptr) MemNew (sizeof (Int4) * afp->num_segments);
+  if (seq_len == NULL) return FALSE;
+  for (seq_index = 0; seq_index < afp->num_segments; seq_index ++)
+  {
+    seq_len [seq_index] = StringLen (afp->sequences[seq_index]);
+  }
+
+  curr_seg = 0;
+  rval = TRUE;
+  for (seq_index = afp->num_segments; seq_index < afp->num_sequences && rval; seq_index++) {
+    if (StringLen (afp->sequences[seq_index]) != seq_len[curr_seg]) {
+      rval = FALSE;
+    }
+	curr_seg ++;
+	if (curr_seg >= afp->num_segments) curr_seg = 0;
+  }
+  MemFree (seq_len);
+  return rval;
+}

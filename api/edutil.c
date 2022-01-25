@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.69 $
+* $Revision: 6.70 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,14 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.70  2011/07/27 12:50:38  bollin
+* Corrected bug in SeqLocDeleteEx - set correct flag based on strand of location.
+*
+*
+* Committed on the Free edition of March Hare Software CVSNT Client.
+* Upgrade to CVS Suite for more features and support:
+* http://march-hare.com/cvsnt/
+*
 * Revision 6.69  2010/07/12 14:32:38  kans
 * SeqEntryDelFeat calls SeqEntryDelFeatEx
 *
@@ -1695,7 +1703,11 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocDeleteEx (SeqLocPtr head, SeqIdPtr target, In
                 {
                     sip->to = from - 1;
                     *changed = TRUE;
-                    if (partial3 != NULL) {
+                    if (sip->strand == Seq_strand_minus) {
+                        if (partial5 != NULL) {
+                            *partial5 = TRUE;
+                        }
+                    } else if (partial3 != NULL) {
                         *partial3 = TRUE;
                     }
                 }
@@ -1706,7 +1718,11 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocDeleteEx (SeqLocPtr head, SeqIdPtr target, In
                     sip->from = to + 1;
                     if (merge)
                         sip->from -= diff;
-                    if (partial5 != NULL) {
+                    if (sip->strand == Seq_strand_minus) {
+                       if (partial3 != NULL) {
+                           *partial3 = TRUE;
+                       }
+                    } else if (partial5 != NULL) {
                         *partial5 = TRUE;
                     }
                 }

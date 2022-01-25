@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVER_INFO__H
 #define CONNECT___NCBI_SERVER_INFO__H
 
-/* $Id: ncbi_server_info.h,v 6.45 2011/06/10 03:49:32 kazimird Exp $
+/* $Id: ncbi_server_info.h,v 6.46 2012/02/27 15:09:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * Author:  Anton Lavrentiev, Denis Vakatov
+ * Authors:  Anton Lavrentiev, Denis Vakatov
  *
  * File Description:
  *   NCBI server meta-address info
@@ -47,11 +47,11 @@
  * @{
  */
 
-#define SERV_DEFAULT_FLAG       fSERV_Regular
-#define SERV_MINIMAL_RATE       0.001
-#define SERV_MAXIMAL_RATE       100000.0
-#define SERV_MINIMAL_BONUS      0.01
-#define SERV_MAXIMAL_BONUS      100.0
+#define SERV_DEFAULT_FLAG   fSERV_Regular
+#define SERV_MINIMAL_RATE   0.001
+#define SERV_MAXIMAL_RATE   100000.0
+#define SERV_MINIMAL_BONUS  0.01
+#define SERV_MAXIMAL_BONUS  100.0
 
 
 #ifdef __cplusplus
@@ -76,8 +76,8 @@ typedef enum {
  * server from the set of available servers
  */
 typedef enum {
-    fSERV_Regular = 0x0,
-    fSERV_Blast   = 0x1
+    fSERV_Regular = 0,
+    fSERV_Blast   = 1
 } ESERV_Flag;
 
 

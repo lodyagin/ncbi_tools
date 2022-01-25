@@ -13,10 +13,10 @@ on the submission can be addressed) and a submission citation (which lists
 the authors who get scientific credit for the sequencing).
 
 The template file can also contain one or more text ASN.1 Seq-descr objects
-(such as Title or BioSource) appended after the Submit-block.  These can
-also be generated in Sequin and saved to a file, and then appended to the
-template with a text editor.  They will become descriptors packaged at the
-top of each submission file.
+(such as Publication or BioSource) appended after the Submit-block.  These
+can also be generated in Sequin and saved to a file, and then appended to
+the template with a text editor.  They will become descriptors packaged at
+the top of each submission file.
 
 tbl2asn reads six other kinds of data files.  Nucleotide sequence data is
 expected in FASTA format, and these files are identified by having a .fsa
@@ -121,14 +121,17 @@ definition line.  A sample definition line is
 >Sc_16 [organism=Saccharomyces cerevisiae] [strain=S288C] [chromosome=XVI]
 
 Other elements include [topology=circular] and [location=mitochondrion].
-Rna viruses would be indicated by [molecule=rna] and [moltype=genomic]. The
+Rna viruses would be indicated by [molecule=rna] and [moltype=genomic].  The
 sequencing technique can be supplied as [tech=fli cDNA].  Many other source
-qualifiers, such as map, clone, isolate, cell-line, and cultivar, can be
-used.  For organisms that are not commonly submitted with tbl2asn, the
-nuclear and mitochondrial genetic codes can be indicated by [gcode=1] and
-[mgcode=3], respectively.  This will ensure proper translation of CDS
-features.  Primary accessions of TPA (third party annotation) records are
-given by [primary=xxx,xxx,...].  Finally, a general note can be added with
+qualifiers, such as map, clone, isolate, cell-line, and cultivar, can be used.
+
+For organisms that are not commonly submitted with tbl2asn, the nuclear,
+mitochondrial, and plastid genetic codes can be indicated by [gcode=1],
+[mgcode=3], and [pgcode=11], respectively.  This will ensure proper
+translation of CDS features.
+
+Primary accessions of TPA (third party annotation) records are given by
+[primary=xxx,xxx,...].  Finally, a general comment can be added with
 [note=xxx].
 
 Note that the definition line must be a single line, with no return or
@@ -157,12 +160,12 @@ http://www.ncbi.nlm.nih.gov/Sequin/table.html
 
 The feature table specifies the location and type of each feature, and
 tbl2asn processes the feature intervals and translates any CDSs into
-proteins. The first line of the table contains the following basic
+proteins.  The first line of the table contains the following basic
 information.
 
 >Feature SeqId table_name 
 
-The SeqId must be the same as that used on the sequence. The table name is
+The SeqId must be the same as that used on the sequence.  The table name is
 optional.  Subsequent lines of the table list the features.  Columns are
 separated by tabs.
 
@@ -215,8 +218,8 @@ The codon recognized and anticodon position of tRNAs can also be given.
 
 In addition to the standard qualifiers seen in GenBank format, several other
 tokens are used to direct values to specific fields in the ASN.1 data. 
-These include gene_syn, gene_desc, locus_tag, prot_desc, prot_note,
-region_name, bond_type, and site_type.
+These include gene_syn or gene_synonym, gene_desc, locus_tag, prot_desc,
+prot_note, region_name, bond_type, and site_type.
 
 Genomic product sets require protein_id and transcript_id qualifiers on each
 mRNA and CDS feature.  These are used to associate the correct pair of
@@ -326,7 +329,7 @@ QUALITY SCORES FORMAT
 
 Phrap/Consed quality scores can be supplied in .qvl files.  These generate
 Seq-graph data that will be attached to the nucleotide sequence from the
-.fsa file. Programs such as Sequin can display these in a graphical view.
+.fsa file.  Programs such as Sequin can display these in a graphical view.
 
 >chr1
  51 63 70 82 82 82 90 90 90 90 86 86 86 86 90 90 90 90 90 86

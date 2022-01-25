@@ -1,4 +1,4 @@
-/* $Id: ncbinet.h,v 6.7 2005/07/25 18:06:48 lavr Exp $      
+/* $Id: ncbinet.h,v 6.8 2012/02/19 03:45:24 lavr Exp $      
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbinet.h,v $
+* Revision 6.8  2012/02/19 03:45:24  lavr
+* Cleanup of obsolete features
+*
 * Revision 6.7  2005/07/25 18:06:48  lavr
 * Remove deprecated ni_ API references
 *
@@ -78,21 +81,9 @@
 #ifndef _NCBINET_
 #define _NCBINET_
 
-#include "ni_types.h"   /* include <ncbi.h> */
-#include "ni_defin.h"
-#include "ni_error.h"
+#include <ni_types.h>   /* include <ncbi.h> */
+#include <ni_error.h>
 #include <ni_lib_.h>
-
-#ifdef NETP_INET_MACTCP
-
-#include "sock_ext.h"
-extern void bzero PROTO((CharPtr target, long numbytes));
-
-#endif /* NETP_INET_MACTCP */
-
-
-/* GLOBAL VARIABLES */
-/* CLIENT FUNCTIONS */
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -105,68 +96,11 @@ extern void bzero PROTO((CharPtr target, long numbytes));
 extern "C" {
 #endif
 
-#ifdef NETP_INET_MACTCP
-#ifndef errno
-extern int      errno;
-#endif
-extern long     errno_long;
-#endif
-
-
-NLM_EXTERN Boolean NI_FqdnToIpaddr PROTO((CharPtr fqdn, CharPtr ipbuf, Int2 ipbuflen));
-
-NLM_EXTERN Int2             NI_InitServices PROTO((NI_DispatcherPtr disp, CharPtr user, CharPtr group, CharPtr password, NI_DispInfoPtr PNTR dip));
-
-NLM_EXTERN Int4             NI_SetDispConfig PROTO((NI_DispInfoPtr PNTR dip, CharPtr dispatcher, Int2 dispLen));
-
-NLM_EXTERN NICatalogPtr     NI_GetCatalog PROTO((NI_DispatcherPtr disp));
-
-NLM_EXTERN ReqPtr           NI_SVCRequestBuild PROTO((NI_DispatcherPtr disp));
-
-NLM_EXTERN void             NI_SVCRequestDestroy PROTO((ReqPtr reqp));
 
 NLM_EXTERN NI_HandPtr       NI_ServiceGet PROTO((NI_DispatcherPtr disp, CharPtr svc, Uint2 svcvermin, Uint2 svcvermax, CharPtr res, CharPtr restype, Uint2 resvermin, Uint2 resvermax));
 
-NLM_EXTERN NI_HandPtr       NI_ServiceRequest PROTO((ReqPtr req));
-
-NLM_EXTERN int              NI_ServiceGetReadFd PROTO((NI_HandPtr mhp));
-
-NLM_EXTERN int              NI_ServiceGetWriteFd PROTO((NI_HandPtr mhp));
-
-NLM_EXTERN Int2             NI_RequestSetService PROTO((ReqPtr req, CharPtr name, Uint2 vermin, Uint2 vermax));
-
-NLM_EXTERN Int2             NI_RequestAddResource PROTO((ReqPtr req, CharPtr name, CharPtr type, Uint2 vermin, Uint2 vermax));
-
 NLM_EXTERN Int2             NI_GetPlatform PROTO((void));
 
-
-/* SERVER FUNCTIONS */
-
-NLM_EXTERN int              NI_ServerACK PROTO((void));
-
-NLM_EXTERN int              NI_ServerNACK PROTO((CharPtr err_text));
-
-NLM_EXTERN NI_HandPtr       NI_OpenASNIO PROTO((void));
-
-NLM_EXTERN Int2             NI_CloseASNIO PROTO((NI_HandPtr hp));
-
-/* TIMER MANAGEMENT */
-
-NLM_EXTERN void             NI_ProcessTimers PROTO((void));
-NLM_EXTERN time_t           NI_GetNextWakeup PROTO((void));
-NLM_EXTERN NodePtr          NI_SetTimer PROTO((time_t timeout, NI_TimeoutHook hook, Pointer hookParam));
-NLM_EXTERN void             NI_CancelTimer PROTO((NodePtr timerId));
-
-/* MISC. FUNCTIONS */
-
-NLM_EXTERN void             NI_SetActivityHook PROTO((NI_NetServHook hook));
-
-/* for internal network services use only */
-NLM_EXTERN NI_NetServHook   NI_ActivityHook PROTO((void));
-NLM_EXTERN void             WriteConFile PROTO((Uint4 conid));
-
-NLM_EXTERN void             NI_LogSocket PROTO((int sok, Boolean opening, CharPtr filename, int lineno));
-NLM_EXTERN Int2             NI_SocketsOpen PROTO((void));
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT

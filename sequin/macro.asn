@@ -1,4 +1,4 @@
---$Revision: 1.118 $
+--$Revision: 1.143 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -680,7 +680,8 @@ DBLink-field-type ::= ENUMERATED {
   trace-assembly (1) ,
   bio-sample (2) ,
   probe-db (3) ,
-  sequence-read-archve (4) }
+  sequence-read-archve (4) ,
+  bio-project (5) }
 
 DBLink-field-pair ::= SEQUENCE {
   from DBLink-field-type ,
@@ -784,6 +785,7 @@ Sequence-constraint ::= SEQUENCE {
     seqtype Sequence-constraint-mol-type-constraint OPTIONAL ,
     id String-constraint OPTIONAL ,
     feature Macro-feature-type ,
+    num-type-features Quantity-constraint OPTIONAL ,
     num-features Quantity-constraint OPTIONAL ,
     length Quantity-constraint OPTIONAL ,
     strandedness Feature-strandedness-constraint DEFAULT any }
@@ -889,7 +891,11 @@ Cap-change ::= ENUMERATED {
     tolower (1) ,
     toupper (2) ,
     firstcap (3) ,
-    firstcaprestnochange (4) }
+    firstcaprestnochange (4) ,
+    firstlower-restnochange (5) ,
+    cap-word-space (6) ,
+    cap-word-space-punc (7)
+    }
 
 Text-transform ::= CHOICE {
   edit Field-edit ,
@@ -925,6 +931,11 @@ AECRParse-action ::= SEQUENCE {
 Remove-action ::= SEQUENCE {
     field Field-type }
 
+Remove-outside-action ::= SEQUENCE {
+    portion Text-portion ,
+    field Field-type ,
+    remove-if-not-found BOOLEAN DEFAULT FALSE }
+
 Action-choice ::= CHOICE {
     apply Apply-action ,
     edit Edit-action ,
@@ -932,7 +943,8 @@ Action-choice ::= CHOICE {
     copy Copy-action ,
     swap Swap-action ,
     remove Remove-action ,
-    parse AECRParse-action }
+    parse AECRParse-action ,
+    remove-outside Remove-outside-action }
 
 AECR-action ::= SEQUENCE {
     action Action-choice ,
@@ -1149,6 +1161,11 @@ Convert-location-type ::= ENUMERATED {
   order (2) ,
   merge (3) }
 
+Extend-to-feature ::= SEQUENCE {
+  type Macro-feature-type ,
+  include-feat BOOLEAN ,
+  distance Quantity-constraint OPTIONAL }
+  
 Location-edit-type ::= CHOICE {
   strand Edit-location-strand ,
   set-5-partial Partial-5-set-action ,
@@ -1159,12 +1176,15 @@ Location-edit-type ::= CHOICE {
   clear-both-partial Partial-both-clear-constraint ,
   convert Convert-location-type ,
   extend-5 NULL ,
-  extend-3 NULL }
+  extend-3 NULL ,
+  extend-5-to-feat Extend-to-feature ,
+  extend-3-to-feat Extend-to-feature }
 
 Edit-feature-location-action ::= SEQUENCE {
   type Macro-feature-type ,
   action Location-edit-type ,
   retranslate-cds BOOLEAN OPTIONAL ,
+  also-edit-gene BOOLEAN OPTIONAL ,
   constraint Constraint-choice-set OPTIONAL }
 
 Molinfo-block ::= SEQUENCE {
@@ -1193,11 +1213,17 @@ Remove-descriptor-action ::= SEQUENCE {
 Autodef-list-type ::= ENUMERATED {
   feature-list (1) ,
   complete-sequence (2) ,
-  complete-genome (3) }
+  complete-genome (3) ,
+  sequence (4) }
   
+Autodef-misc-feat-parse-rule ::= ENUMERATED {
+  use-comment-before-first-semicolon (1) ,
+  look-for-noncoding-products (2) }
+
 Autodef-action ::= SEQUENCE {
   modifiers SET OF Source-qual OPTIONAL ,
-  clause-list-type Autodef-list-type }
+  clause-list-type Autodef-list-type ,
+  misc-feat-parse-rule Autodef-misc-feat-parse-rule DEFAULT look-for-noncoding-products }
 
 Fix-pub-caps-action ::= SEQUENCE {
   title BOOLEAN OPTIONAL ,
@@ -1217,11 +1243,15 @@ Sort-fields-action ::= SEQUENCE {
   order Sort-order ,
   constraint Constraint-choice-set OPTIONAL }
   
+Fix-author-caps ::= SEQUENCE {
+  last-name-only BOOLEAN }
+
 Fix-caps-action ::= CHOICE {
   pub Fix-pub-caps-action ,
   src-country NULL ,
   mouse-strain NULL ,
-  src-qual Source-qual }
+  src-qual Source-qual ,
+  author Fix-author-caps }
 
 Fix-format-action ::= CHOICE {
   collection-date NULL ,
@@ -1271,6 +1301,69 @@ Author-fix-action ::= SEQUENCE {
   fix-type Author-fix-type ,
   constraint Constraint-choice-set OPTIONAL }  
 
+Update-sequences-action ::= SEQUENCE {
+  filename VisibleString ,
+  add-cit-subs BOOLEAN DEFAULT FALSE }
+
+Create-TSA-ids-src ::= CHOICE {
+  local-id NULL ,
+  defline Text-portion
+}
+
+Create-TSA-ids-action ::= SEQUENCE {
+  src Create-TSA-ids-src ,
+  suffix VisibleString OPTIONAL ,
+  id-text-portion Text-portion OPTIONAL }  
+
+Autofix-action ::= SEQUENCE {
+  test-name VisibleString }
+
+Fix-sets-action ::= CHOICE {
+  remove-single-item-set NULL ,
+  renormalize-nuc-prot-sets NULL ,
+  fix-pop-to-phy NULL
+}
+
+Table-match-type ::= CHOICE {
+  feature-id NULL ,
+  gene-locus-tag NULL ,
+  protein-id NULL,
+  dbxref NULL ,
+  nuc-id NULL ,
+  src-qual Source-qual-choice ,
+  protein-name NULL ,
+  any NULL
+}
+
+Table-match ::= SEQUENCE {
+  match-type Table-match-type ,
+  match-location String-location DEFAULT equals
+}
+
+
+Apply-table-extra-data ::= CHOICE {
+  table NULL }
+
+Apply-table-action ::= SEQUENCE {
+  filename VisibleString ,
+  match-type Table-match ,
+  in-memory-table Apply-table-extra-data OPTIONAL
+}
+
+Add-file-action ::= SEQUENCE {
+  filename VisibleString ,
+  in-memory-table Apply-table-extra-data OPTIONAL
+} 
+
+Add-descriptor-list-action ::= SEQUENCE {
+  descriptor-list Add-file-action ,
+  constraint Constraint-choice-set OPTIONAL
+}
+
+Remove-sequences-action ::= SEQUENCE {
+  constraint Constraint-choice-set
+}
+
 Macro-action-choice ::= CHOICE {
   aecr AECR-action ,
   parse Parse-action ,
@@ -1298,7 +1391,19 @@ Macro-action-choice ::= CHOICE {
   remove-xrefs Remove-xrefs-action ,
   make-gene-xrefs Make-gene-xref-action ,
   make-bold-xrefs NULL ,
-  fix-author Author-fix-action }
+  fix-author Author-fix-action ,
+  update-sequences Update-sequences-action ,
+  add-trans-splicing NULL ,
+  remove-invalid-ecnumbers NULL ,
+  create-tsa-ids Create-TSA-ids-action ,
+  perform-autofix Autofix-action ,
+  fix-sets Fix-sets-action ,
+  apply-table Apply-table-action ,
+  remove-sequences Remove-sequences-action ,
+  propagate-sequence-technology NULL ,
+  add-file-descriptors Add-descriptor-list-action ,
+  propagate-missing-old-name NULL ,
+  autoapply-structured-comments NULL }
 
 
 Macro-action-list ::= SET OF Macro-action-choice
@@ -1332,26 +1437,27 @@ Replace-rule ::= SEQUENCE {
 Fix-type ::= ENUMERATED {
   none (0) ,
   typo (1) ,
-  quickfix (2) ,
-  no-organelle-for-prokaryote (3),
-  might-be-nonfunctional (4),
-  database (5),
-  remove-organism-name (6),
-  inappropriate-symbol (7),
-  evolutionary-relationship (8),
-  use-protein (9),
-  hypothetical (10),
-  british (11),
-  description (12),
-  gene (13) }  
-  
+  putative-typo (2) ,
+  quickfix (3) ,
+  no-organelle-for-prokaryote (4),
+  might-be-nonfunctional (5),
+  database (6),
+  remove-organism-name (7),
+  inappropriate-symbol (8),
+  evolutionary-relationship (9),
+  use-protein (10),
+  hypothetical (11),
+  british (12),
+  description (13),
+  gene (14) }  
 
 Suspect-rule ::= SEQUENCE {
   find Search-func ,
   except Search-func OPTIONAL ,
   feat-constraint Constraint-choice-set OPTIONAL ,
   rule-type Fix-type DEFAULT none ,
-  replace Replace-rule OPTIONAL }  
+  replace Replace-rule OPTIONAL ,
+  description VisibleString OPTIONAL }  
 
 Suspect-rule-set ::= SET OF Suspect-rule
 

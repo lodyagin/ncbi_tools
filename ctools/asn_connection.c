@@ -1,4 +1,4 @@
-/* $Id: asn_connection.c,v 1.14 2011/04/13 18:19:32 kazimird Exp $
+/* $Id: asn_connection.c,v 1.15 2012/02/29 20:14:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,6 @@
  */
 
 #include <ctools/asn_connection.h>
-#include "../connect/ncbi_priv.h"
 #include "error_codes.h"
 
 

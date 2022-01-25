@@ -925,6 +925,33 @@ FeatDefGroupSet ::= {
     entrygroup 1 ,
     displaygroup 1 ,
     molgroup na
+  },
+  {                   -- Imp
+    typelabel "centromere" ,
+    menulabel "Centromere" ,
+    featdef-key 99 ,
+    seqfeat-key 8 ,
+    entrygroup 1 ,
+    displaygroup 1 ,
+    molgroup na
+  },
+  {                   -- Imp
+    typelabel "telomere" ,
+    menulabel "Telomere" ,
+    featdef-key 100 ,
+    seqfeat-key 8 ,
+    entrygroup 1 ,
+    displaygroup 1 ,
+    molgroup na
+  },
+  {                   -- assembly_gap
+    typelabel "assembly_gap" ,
+    menulabel "Assembly Gap" ,
+    featdef-key 101 ,
+    seqfeat-key 8 ,
+    entrygroup 0 ,
+    displaygroup 4 ,
+    molgroup na
   }
   }
 }

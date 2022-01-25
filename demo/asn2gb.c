@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.157 $
+* $Revision: 6.167 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -55,7 +55,7 @@
 /* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
 #include <asn2gnbi.h>
 
-#define ASN2GB_APP_VER "9.7"
+#define ASN2GB_APP_VER "10.5"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -1852,20 +1852,18 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
 {
   CharPtr      accn;
-  Boolean      alldigits;
   BioseqPtr    bsp;
   Char         buf [64];
-  Char         ch;
   Int4         flags = 0;
-  CharPtr      ptr;
   Int2         retcode = 0;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
   CharPtr      tmp1 = NULL;
   CharPtr      tmp2 = NULL;
-  Int4         uid = 0;
   long int     val;
-  ValNode      vn;
+#ifdef INTERNAL_NCBI_ASN2GB
+  Int4         uid;
+#endif
 
   if (StringHasNoText (str)) return NULL;
   StringNCpy_0 (buf, str, sizeof (buf));
@@ -1907,42 +1905,16 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
   }
 #endif
 
-  alldigits = TRUE;
-  ptr = accn;
-  ch = *ptr;
-  while (ch != '\0') {
-    if (! IS_DIGIT (ch)) {
-      alldigits = FALSE;
-    }
-    ptr++;
-    ch = *ptr;
-  }
+  sip = SeqIdFromPubSeqString (accn);
+  sep = PubSeqSynchronousQueryId (sip, retcode, flags);
 
-  if (alldigits) {
-    if (sscanf (accn, "%ld", &val) == 1) {
-      uid = (Int4) val;
-    }
-  } else {
-    sip = SeqIdFromAccessionDotVersion (accn);
-    if (sip != NULL) {
-      uid = GetGIForSeqId (sip);
-      SeqIdFree (sip);
+  if (sep != NULL) {
+    bsp = BioseqFind (sip);
+    if (bsp != NULL) {
+      sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
     }
   }
-
-  if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, retcode, flags);
-    if (sep != NULL) {
-      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
-      vn.choice = SEQID_GI;
-      vn.data.intvalue = uid;
-      bsp = BioseqFind (&vn);
-      if (bsp != NULL) {
-        sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
-      }
-    }
-  }
-
+  sip = SeqIdFree (sip);
   return sep;
 }
 
@@ -1968,31 +1940,22 @@ static ValNodePtr PubSeqRemoteLock (
   BioseqPtr    bsp;
   SeqAnnotPtr  sap = NULL;
   SeqEntryPtr  sep = NULL;
-  Int4         uid = 0;
   ValNodePtr   vnp = NULL;
 
   if (sip == NULL) return NULL;
+  sep = PubSeqSynchronousQueryId (sip, 1, -1);
 
-  if (sip->choice == SEQID_GI) {
-    uid = (Int4) sip->data.intvalue;
-  } else {
-    uid = GetGIForSeqId (sip);
-  }
-
-  if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 1, -1);
-    if (sep != NULL && IS_Bioseq (sep)) {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-      if (bsp != NULL) {
-        AssignIDsInEntity (0, OBJ_SEQENTRY, (Pointer) sep);
-        VisitAnnotsInSep (sep, NULL, MarkLocalAnnots);
-        DeleteMarkedObjects (0, OBJ_BIOSEQ, (Pointer) bsp);
-        sap = bsp->annot;
-        bsp->annot = NULL;
-      }
+  if (sep != NULL && IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp != NULL) {
+      AssignIDsInEntity (0, OBJ_SEQENTRY, (Pointer) sep);
+      VisitAnnotsInSep (sep, NULL, MarkLocalAnnots);
+      DeleteMarkedObjects (0, OBJ_BIOSEQ, (Pointer) bsp);
+      sap = bsp->annot;
+      bsp->annot = NULL;
     }
-    SeqEntryFree (sep);
   }
+  SeqEntryFree (sep);
 
   if (sap == NULL) return NULL;
 

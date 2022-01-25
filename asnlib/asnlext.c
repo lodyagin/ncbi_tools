@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Routines for parsing ASN.1 module definitions.  Extends asnlex.c
@@ -42,50 +42,6 @@
 *                         to other imported types.
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 * 04-20-93 Schuler     LIBCALL calling convention
-*
-* $Log: asnlext.c,v $
-* Revision 6.9  2009/02/04 16:12:12  gouriano
-* Added skipping 'AUTOMATIC TAGS' in ASN spec. JIRA: CXX-915
-*
-* Revision 6.8  2000/12/12 15:56:13  ostell
-* added support BigInt
-*
-* Revision 6.7  2000/06/29 20:15:16  ostell
-* minor typos fixed
-*
-* Revision 6.6  2000/05/15 20:23:30  ostell
-* more checks for COMMENT_TOKEN added
-*
-* Revision 6.5  2000/05/15 15:44:40  ostell
-* caught another COMMENT_TOKEN return
-*
-* Revision 6.4  2000/05/12 20:44:00  ostell
-* make changes to collect comments from spec and print in DTD
-*
-* Revision 6.3  2000/05/10 03:12:37  ostell
-* added support for XML DTD and XML data output
-*
-* Revision 6.2  1997/12/16 14:51:48  kans
-* header needed for asntool/asncode merge
-*
-* Revision 6.1  1997/10/29 02:41:50  vakatov
-* Type castings to pass through the C++ compiler
-*
-* Revision 6.0  1997/08/25 18:10:09  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:43:48  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.8  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -122,7 +78,7 @@ static CharPtr asnwords[NUMASNWORD] = {     /* primitives from asn.1 */
 	"NumericString",    	/* 17 */
 	"PrintableString",      /* 18 */
 	"TeletexString", 		/* 19 */
-	"VideotexString",		/* 20 */
+	"UTF8String",           /* 20 */
 	"IA5String",			/* 21 */
 	"GraphicString",		/* 22 */
 	"VisibleString",		/* 23 */
@@ -184,7 +140,7 @@ static AsnPrimType asnprimtypes[] = {
 	{NUMERICSTRING_TYPE, "NumericString", 0, 18 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
 	{PRINTABLESTRING_TYPE, "PrintableString", 0, 19 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
 	{TELETEXSTRING_TYPE, "TeletexString", 0, 20 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
-	{VIDEOTEXSTRING_TYPE, "VideotexString", 0, 21 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
+	{UTF8STRING_TYPE, "UTF8String", 0, 12 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
 	{IA5STRING_TYPE, "IA5String", 0, 22 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
 	{GRAPHICSTRING_TYPE, "GraphicString", 0, 25 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
 	{VISIBLESTRING_TYPE, "VisibleString", 0, 26 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},

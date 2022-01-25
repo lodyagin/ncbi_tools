@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_VERSION__H
 #define CONNECT___NCBI_VERSION__H
 
-/* $Id: ncbi_version.h,v 1.3 2010/06/02 18:39:41 kazimird Exp $
+/* $Id: ncbi_version.h,v 1.4 2012/06/07 04:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,7 +53,7 @@
 
 #  define   NETDAEMONS_MAJOR        2
 #  define   NETDAEMONS_MINOR        0
-#  define   NETDAEMONS_PATCH        2
+#  define   NETDAEMONS_PATCH        4
 
 #  ifdef NCBI_CXX_TOOLKIT
 #    define NETDAEMONS_VERSION_STR  NCBI_PACKAGE_VERSION_COMPOSE_STR    \

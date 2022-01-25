@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.307 2011/02/04 18:04:54 kans Exp $
+#	$Id: makeall.unx,v 6.310 2012/03/08 23:03:59 ucko Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -274,7 +274,7 @@ SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c \
 SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c \
 	pir_index.c prf_index.c xm_index.c
 
-SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ftamain.c gb_ascii.c \
+SRC37 = add.c asci_blk.c em_ascii.c ftamain.c gb_ascii.c \
 	genref.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c \
 	utilfeat.c utilref.c fta_qscore.c pir_ascii.c fta_clup.c fta_src.c \
 	prf_ascii.c xm_ascii.c
@@ -436,7 +436,7 @@ OBJ3000 = algorend.glo cn3dmsel.glo cn3dopen.glo cn3dsave.glo \
 OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o \
 	pir_index.o prf_index.o xm_index.o
 
-OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ftamain.o gb_ascii.o \
+OBJ37 = add.o asci_blk.o em_ascii.o ftamain.o gb_ascii.o \
 	genref.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o \
 	utilfeat.o utilref.o fta_qscore.o pir_ascii.o fta_clup.o fta_src.o \
 	prf_ascii.o xm_ascii.o
@@ -548,8 +548,6 @@ add.o: add.c
 asci_blk.o: asci_blk.c
 	$(CC) $(CFLAGS) $<
 em_ascii.o: em_ascii.c
-	$(CC) $(CFLAGS) $<
-em_unorg.o: em_unorg.c
 	$(CC) $(CFLAGS) $<
 ftamain.o: ftamain.c
 	$(CC) $(CFLAGS) $<

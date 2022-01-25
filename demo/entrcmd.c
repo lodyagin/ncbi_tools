@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/4/94
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *       non-interactive command line interface for Entrez
@@ -40,6 +40,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: entrcmd.c,v $
+* Revision 6.5  2011/12/19 18:40:17  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 6.4  1999/08/11 18:58:09  kans
 * changed FindNuc and FindProt to avoid collision with sequtil functions
 *
@@ -719,7 +722,7 @@ ProcessOutput(LocalLinkSetPtr lsp, DocType db, CharPtr outputSpec, long processi
 		  
                 for (i = 0; i < processingCount; i++)
                 {
-                    fprintf(exportFilePtr, "%ld\n", lsp->uids[i]);
+                    fprintf(exportFilePtr, "%d\n", lsp->uids[i]);
                 }
                 FileClose(exportFilePtr);
                 exportFilePtr = NULL;
@@ -727,7 +730,7 @@ ProcessOutput(LocalLinkSetPtr lsp, DocType db, CharPtr outputSpec, long processi
                 fprintf (master_fp, "\n");
                 for (i = 0; i < processingCount; i++)
                 {
-                    fprintf (master_fp, "%ld\n", lsp->uids[i]);
+                    fprintf (master_fp, "%d\n", lsp->uids[i]);
                 }
                 fprintf (master_fp, "\n");
                 fflush(master_fp);
@@ -770,7 +773,7 @@ ProcessOutput(LocalLinkSetPtr lsp, DocType db, CharPtr outputSpec, long processi
             if (wwwPrefix != NULL && processingCount < totalCount)
             {
                 fprintf (master_fp, "Warning: only %ld document summaries are being displayed\n", processingCount);
-                fprintf (master_fp, "out of %d total entries.<P>\n", totalCount);
+                fprintf (master_fp, "out of %ld total entries.<P>\n", totalCount);
             }
             EntrezDocSumListGet((Int2) processingCount, db, lsp->uids,
                                 wwwPrefix == NULL ? PrintDSP : PrintDSPMwww);
@@ -884,7 +887,7 @@ ProcessOutput(LocalLinkSetPtr lsp, DocType db, CharPtr outputSpec, long processi
 		
                 for (i = 0; i < processingCount; i++)
                 {
-                    fprintf(exportFilePtr, "%ld\n", lsp->uids[i]);
+                    fprintf(exportFilePtr, "%d\n", lsp->uids[i]);
                 }
                 FileClose(exportFilePtr);
                 exportFilePtr = NULL;
@@ -892,7 +895,7 @@ ProcessOutput(LocalLinkSetPtr lsp, DocType db, CharPtr outputSpec, long processi
                 fprintf (master_fp, "\n");
                 for (i = 0; i < processingCount; i++)
                 {
-                    fprintf (master_fp, "%ld\n", lsp->uids[i]);
+                    fprintf (master_fp, "%d\n", lsp->uids[i]);
                 }
                 fprintf (master_fp, "\n");
                 fflush(master_fp);
@@ -912,7 +915,7 @@ ProcessOutput(LocalLinkSetPtr lsp, DocType db, CharPtr outputSpec, long processi
             if (wwwPrefix != NULL && processingCount < totalCount)
             {
                 fprintf (master_fp, "Warning: only %ld document summaries are being displayed\n", processingCount);
-                fprintf (master_fp, "out of %d total entries.<P>\n", totalCount);
+                fprintf (master_fp, "out of %ld total entries.<P>\n", totalCount);
             }
             pubLsp = lsp;
             EntrezDocSumListGet((Int2) processingCount, db, lsp->uids,
@@ -1925,7 +1928,7 @@ Int2 Main(void)
     EntrezNeighborTextPtr entp; 
     Boolean useWWWEncoding;
 
-    if ( ! GetArgs("Entrez command-line $Revision: 6.4 $", Numarg, myargs))
+    if ( ! GetArgs("Entrez command-line $Revision: 6.5 $", Numarg, myargs))
         return 1;
 
     if (myargs[14].strvalue)

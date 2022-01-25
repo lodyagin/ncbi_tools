@@ -1,4 +1,4 @@
-/* $Id: ncbi_connutil.c,v 6.176 2011/06/22 20:29:35 kazimird Exp $
+/* $Id: ncbi_connutil.c,v 6.206 2012/06/07 00:59:48 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -179,12 +179,13 @@ extern const char* ConnNetInfo_GetValue(const char* service, const char* param,
 }
 
 
-int/*bool*/ ConnNetInfo_Boolean(const char* str)
+extern int/*bool*/ ConnNetInfo_Boolean(const char* str)
 {
     return str  &&  *str  &&  (strcmp    (str, "1")    == 0  ||
                                strcasecmp(str, "on")   == 0  ||
                                strcasecmp(str, "yes")  == 0  ||
-                               strcasecmp(str, "true") == 0);
+                               strcasecmp(str, "true") == 0)
+        ? 1/*true*/ : 0/*false*/;
 }
 
 
@@ -202,25 +203,30 @@ static EURLScheme x_ParseScheme(const char* str, size_t len)
 }
 
 
+static const char* x_Num(unsigned int num, char buf[])
+{
+    sprintf(buf, "(#%u)", num);
+    return buf;
+}
+
+
 static const char* x_Scheme(EURLScheme scheme, char buf[])
 {
     switch (scheme) {
     case eURL_Unspec:
         return 0;
     case eURL_Https:
-        return "https";
+        return "HTTPS";
     case eURL_Http:
-        return "http";
+        return "HTTP";
     case eURL_File:
-        return "file";
+        return "FILE";
     case eURL_Ftp:
-        return "ftp";
-        break;
+        return "FTP";
     default:
         break;
     }
-    sprintf(buf, "(%u)", (unsigned int) scheme);
-    return buf;
+    return x_Num(scheme, buf);
 }
 
 
@@ -244,6 +250,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
     len = service ? strlen(service) : 0;
 
+    /* NB: Not cleared up with all 0s */
     if (!(info = (SConnNetInfo*) malloc(sizeof(*info) + len)))
         return 0/*failure*/;
 
@@ -296,19 +303,23 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
         errno = 0;
         if (*str  &&  (val = strtoul(str, &e, 10)) > 0
             &&  !errno  &&  !*e  &&  val < (1 << 16)) {
-            info->http_proxy_port = val;
+            info->http_proxy_port =  val;
         } else
-            info->http_proxy_port = 0/*default*/;
+            info->http_proxy_port =  0/*none*/;
         /* HTTP proxy username */
         REG_VALUE(REG_CONN_HTTP_PROXY_USER, info->http_proxy_user,
                   DEF_CONN_HTTP_PROXY_USER);
         /* HTTP proxy password */
         REG_VALUE(REG_CONN_HTTP_PROXY_PASS, info->http_proxy_pass,
                   DEF_CONN_HTTP_PROXY_PASS);
+        /* HTTP proxy bypass */
+        REG_VALUE(REG_CONN_HTTP_PROXY_LEAK, str, DEF_CONN_HTTP_PROXY_LEAK);
+        info->http_proxy_leak    =   ConnNetInfo_Boolean(str);
     } else {
         info->http_proxy_port    =   0;
         info->http_proxy_user[0] = '\0';
         info->http_proxy_pass[0] = '\0';
+        info->http_proxy_leak    =   0;
     }
 
     /* non-transparent CERN-like firewall proxy server? */
@@ -320,20 +331,31 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     if (len < 3  ||  8 < len  ||  strncasecmp(str, "infinite", len) != 0) {
         if (!*str  ||  (dbl = atof(str)) < 0.0)
             dbl = DEF_CONN_TIMEOUT;
-        info->tmo.sec  = (unsigned int)  dbl;
-        info->tmo.usec = (unsigned int)((dbl - info->tmo.sec) * 1000000.0);
-        info->timeout  = &info->tmo;
+        info->tmo.sec      = (unsigned int)  dbl;
+        info->tmo.usec     = (unsigned int)((dbl - info->tmo.sec) * 1000000.0);
+        if (dbl  &&  !(info->tmo.sec | info->tmo.usec))
+            info->tmo.usec = 1/*protect underflow*/;
+        info->timeout      = &info->tmo;
     } else
-        info->timeout  = kInfiniteTimeout/*0*/;
+        info->timeout      = kInfiniteTimeout/*0*/;
 
     /* max. # of attempts to establish connection */
     REG_VALUE(REG_CONN_MAX_TRY, str, 0);
     val = atoi(str);
     info->max_try = (unsigned short)(val > 0 ? val : DEF_CONN_MAX_TRY);
 
-    /* firewall mode? */
+    /* firewall mode */
     REG_VALUE(REG_CONN_FIREWALL, str, DEF_CONN_FIREWALL);
-    info->firewall = ConnNetInfo_Boolean(str);
+    if (!*str) /*NB: not actually necessary but faster*/
+        info->firewall = eFWMode_Legacy;
+    else if (strcasecmp(str, "adaptive") == 0  ||  ConnNetInfo_Boolean(str))
+        info->firewall = eFWMode_Adaptive;
+    else if (strcasecmp(str, "firewall") == 0)
+        info->firewall = eFWMode_Firewall;
+    else if (strcasecmp(str, "fallback") == 0)
+        info->firewall = eFWMode_Fallback;
+    else
+        info->firewall = eFWMode_Legacy;
 
     /* stateless client? */
     REG_VALUE(REG_CONN_STATELESS, str, DEF_CONN_STATELESS);
@@ -396,13 +418,17 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         if (len >= sizeof(info->host))
             return 0/*failure*/;
         if (s) {
-            int n;
-            if (sscanf(++s, "%hu%n", &port, &n) < 1  ||  s[n]  ||  !port)
+            long i;
+            errno = 0;
+            i = strtol(++s, &p, 10);
+            if (errno  ||  s == p  ||  !i  ||  i ^ (i & 0xFFFF)  ||  *p)
                 return 0/*failure*/;
-            info->port = port;
+            info->port = (unsigned short) i;
         }
-        if (len)
-            memcpy(info->host, url, ++len);
+        if (len) {
+            memcpy(info->host, url, len);
+            info->host[len] = '\0';
+        }
         return 1/*success*/;
     }
 
@@ -417,49 +443,59 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         path    = host + hostlen;
 
         /* username:password */
-        if (!(s = (const char*) memrchr(host, '@', hostlen))) {
-            user    = pass    = "";
+        if (!hostlen) {
+            if (scheme != eURL_File)
+                return 0/*failure*/;
+            user = pass = host = "";
             userlen = passlen = 0;
+            port = 0/*none*/;
         } else {
-            user    = host;
-            userlen = (size_t)(s - user);
-            host    = ++s;
-            hostlen = (size_t)(path - s);
-            if (!(s = (const char*) memchr(user, ':', userlen))) {
-                pass    = "";
-                passlen = 0;
+            if (!(s = (const char*) memrchr(host, '@', hostlen))) {
+                user    = pass    = "";
+                userlen = passlen = 0;
             } else {
-                userlen = (size_t)(s++ - user);
-                pass    = s++;
-                passlen = (size_t)(host - s);
+                user    = host;
+                userlen = (size_t)(s - user);
+                host    = ++s;
+                hostlen = (size_t)(path - s);
+                if (!(s = (const char*) memchr(user, ':', userlen))) {
+                    pass    = "";
+                    passlen = 0;
+                } else {
+                    userlen = (size_t)(s++ - user);
+                    pass    = s++;
+                    passlen = (size_t)(host - s);
+                }
             }
-        }
 
-        /* port, if any */
-        if ((s = (const char*) memchr(host, ':', hostlen)) != 0) {
-            int n;
-            hostlen = (size_t)(s - host);
-            if (sscanf(++s, "%hu%n", &port, &n) < 1
-                ||  s + n != path  ||  !port) {
+            /* port, if any */
+            if ((s = (const char*) memchr(host, ':', hostlen)) != 0) {
+                long i;
+                hostlen = (size_t)(s - host);
+                errno = 0;
+                i = strtol(++s, &p, 10);
+                if (errno  ||  s == p  || !i || i ^ (i & 0xFFFF) ||  p != path)
+                    return 0/*failure*/;
+                port = (unsigned short) i;
+            } else
+                port = 0/*default*/;
+
+            if (userlen >= sizeof(info->user)  ||
+                passlen >= sizeof(info->pass)  ||
+                hostlen >= sizeof(info->host)) {
                 return 0/*failure*/;
             }
-        } else
-            port = 0/*default*/;
-
-        if (userlen >= sizeof(info->user)  ||
-            passlen >= sizeof(info->pass)  ||
-            hostlen >= sizeof(info->host)) {
-            return 0/*failure*/;
         }
     } else {
-        scheme  = info->scheme;
+        scheme  = (EURLScheme) info->scheme;
         user    = pass    = host    = 0;
         userlen = passlen = hostlen = 0;
         path    = url;
         port    = 0;
     }
 
-    pathlen = strcspn(path, "?#");
+    pathlen = (scheme == eURL_Https  ||  scheme == eURL_Http
+               ? strcspn(path, "?#") : strlen(path));
     args    = path + pathlen;
 
     if (path != url  ||  *path == '/') {
@@ -489,7 +525,7 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         argslen = strlen(args);
         if (*args == '#')
             frag = args;
-        else if (!(frag = strchr(++args/*NB: *args=='?'*/, '#')))
+        else if (!(frag = strchr(++args/*NB: args[0]=='?'*/, '#')))
             frag = args + --argslen;
         else
             argslen--;
@@ -497,17 +533,21 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
 
         if (*frag) {
             /* if there is a new fragment, the entire args get overridden */
-            len = 0;
             if (!frag[1])
                 argslen--; /* don't store the empty fragment # */
             if (argslen >= sizeof(info->args))
                 return 0/*failure*/;
+            len = 0;
         } else if ((s = strchr(info->args, '#')) != 0) {
             /* there is no new fragment, but there was the old one: keep it */
             len = strlen(s);
             if (argslen + len >= sizeof(info->args))
                 return 0/*failure*/;
             memmove(info->args + argslen, s, len);
+        } else {
+            if (argslen >= sizeof(info->args))
+                return 0/*failure*/;
+            len = 0;
         }
         memcpy(info->args, args, argslen);
         info->args[argslen + len] = '\0';
@@ -595,16 +635,16 @@ static int/*bool*/ x_TagValueMatches(const char* oldval, size_t oldvallen,
 }
 
 
-typedef enum {
+enum EUserHeaderOp {
     eUserHeaderOp_Delete,
     eUserHeaderOp_Extend,
     eUserHeaderOp_Override
-} EUserHeaderOp;
+};
 
 
-static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
-                                      const char*   user_header,
-                                      EUserHeaderOp op)
+static int/*bool*/ s_ModifyUserHeader(SConnNetInfo*      info,
+                                      const char*        user_header,
+                                      enum EUserHeaderOp op)
 {
     int/*bool*/ retval;
     size_t newlinelen;
@@ -632,7 +672,7 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
     memcpy(newhdr, user_header, newhdrlen + 1);
 
     retval = 1/*assume best: success*/;
-    for (newline = newhdr; *newline; newline += newlinelen) {
+    for (newline = newhdr;  *newline;  newline += newlinelen) {
         char*  eol = strchr(newline, '\n');
         char*  eot = strchr(newline,  ':');
         size_t newtaglen;
@@ -645,7 +685,7 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
         /* line & taglen */
         newlinelen = (size_t)
             (eol ? eol - newline + 1 : newhdr + newhdrlen - newline);
-        if (!eot || eot >= newline + newlinelen)
+        if (!eot  ||  eot >= newline + newlinelen)
             goto ignore;
         if (!(newtaglen = (size_t)(eot - newline)))
             goto ignore;
@@ -682,7 +722,7 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
             assert(newlen);
         }
 
-        for (line = hdr; *line; line += linelen) {
+        for (line = hdr;  *line;  line += linelen) {
             size_t taglen;
             char*  temp;
             size_t len;
@@ -691,7 +731,7 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
             eot = strchr(line,  ':');
 
             linelen = (size_t)(eol ? eol - line + 1 : hdr + hdrlen - line);
-            if (!eot || eot >= line + linelen)
+            if (!eot  ||  eot >= line + linelen)
                 continue;
 
             taglen = (size_t)(eot - line);
@@ -963,9 +1003,6 @@ static const char* x_ClientAddress(const char* client_host,
 }
 
 
-#define _STR(x)  #x
-#define  STR(x)  _STR(x)
-
 extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info,
                                                  const char*   service)
 {
@@ -979,11 +1016,12 @@ extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info,
         return 0/*failed*/;
 
     s = CORE_GetAppName();
-    if (s) {
-        char ua[16 + NCBI_CORE_APPNAME_MAXLEN];
-        sprintf(ua, "User-Agent: %." STR(NCBI_CORE_APPNAME_MAXLEN) "s\r\n", s);
+    if (s  &&  *s) {
+        char ua[16 + 80];
+        sprintf(ua, "User-Agent: %.80s", s);
         ConnNetInfo_ExtendUserHeader(info, ua);
     }
+
     /* Dispatcher CGI args (may sacrifice some if they don't fit altogether) */
     if (!(s = CORE_GetPlatform())  ||  !*s)
         ConnNetInfo_DeleteArg(info, kPlatform);
@@ -1000,7 +1038,7 @@ extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info,
         ConnNetInfo_PreOverrideArg(info, kAddress, s);
     if (s != info->client_host)
         free((void*) s);
-    if (service  &&  *service) {
+    if (service) {
         if (!ConnNetInfo_PreOverrideArg(info, kService, service)) {
             ConnNetInfo_DeleteArg(info, kPlatform);
             if (!ConnNetInfo_PreOverrideArg(info, kService, service)) {
@@ -1013,19 +1051,14 @@ extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info,
     return 1/*succeeded*/;
 }
 
-#undef  STR
-#undef _STR
-
 
 extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
 {
     SConnNetInfo* x_info;
-    const char* svc;
 
     if (!info)
         return 0;
 
-    svc = info->svc;
     if (!(x_info = (SConnNetInfo*) malloc(sizeof(*info) + strlen(info->svc))))
         return 0;
 
@@ -1052,20 +1085,36 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
 
 static const char* x_Port(unsigned short port, char buf[])
 {
-    if (port) {
-        sprintf(buf, "%hu", port);
-        return buf;
-    }
-    return "(default)";
+    assert(port);
+    sprintf(buf, "%hu", port);
+    return buf;
 }
+
+
+static const char* x_Firewall(unsigned int firewall)
+{
+    switch ((EFWMode) firewall) {
+    case eFWMode_Adaptive:
+        return "TRUE";
+    case eFWMode_Firewall:
+        return "FIREWALL";
+    case eFWMode_Fallback:
+        return "FALLBACK";
+    default:
+        assert(!firewall);
+        break;
+    }
+    return "NONE";
+}
+
 
 static void s_SaveStringQuot(char* s, const char* name,
                              const char* str, int/*bool*/ quote)
 {
     sprintf(s + strlen(s), "%-16.16s: %s%s%s\n", name,
-            str && quote ? "\"" : "",
-            str          ? str  : "NULL",
-            str && quote ? "\"" : "");
+            str  &&  quote ? "\"" : "",
+            str            ? str  : "NULL",
+            str  &&  quote ? "\"" : "");
 }
 
 static void s_SaveString(char* s, const char* name, const char* str)
@@ -1075,17 +1124,18 @@ static void s_SaveString(char* s, const char* name, const char* str)
 
 static void s_SaveKeyval(char* s, const char* name, const char* str)
 {
+    assert(str);
     s_SaveStringQuot(s, name, str, 0);
+}
+
+static void s_SaveBool(char* s, const char* name, unsigned int/*bool*/ bbb)
+{
+    s_SaveKeyval(s, name, bbb ? "TRUE" : "FALSE");
 }
 
 static void s_SaveULong(char* s, const char* name, unsigned long lll)
 {
     sprintf(s + strlen(s), "%-16.16s: %lu\n", name, lll);
-}
-
-static void s_SaveBool(char* s, const char* name, int/*bool*/ bbb)
-{
-    sprintf(s + strlen(s), "%-16.16s: %s\n", name, bbb ? "TRUE" : "FALSE");
 }
 
 static void s_SaveUserHeader(char* s, const char* name,
@@ -1143,7 +1193,6 @@ extern void ConnNetInfo_LogEx(const SConnNetInfo* info, ELOG_Level sev, LOG lg)
         s_SaveString(s, "client_host",     info->client_host);
     else
         s_SaveKeyval(s, "client_host",     "(default)");
-    s_SaveString    (s, "scheme",          x_Scheme(info->scheme, buf));
     s_SaveKeyval    (s, "req_method",     (info->req_method
                                            == eReqMethod_Connect
                                            ? "CONNECT"
@@ -1155,23 +1204,36 @@ extern void ConnNetInfo_LogEx(const SConnNetInfo* info, ELOG_Level sev, LOG lg)
                                                  ? "GET"
                                                  : (info->req_method
                                                     == eReqMethod_Any
-                                                    ? "ANY" : "(unknown)")))));
+                                                    ? "ANY"
+                                                    : x_Num(info->req_method,
+                                                            buf))))));
+    s_SaveKeyval    (s, "scheme",         (info->scheme
+                                           ? x_Scheme((EURLScheme)info->scheme,
+                                                      buf)
+                                           : "(unspec)"));
     s_SaveString    (s, "user",            info->user);
     if (*info->pass)
         s_SaveKeyval(s, "pass",           *info->user ? "(set)" : "(ignored)");
     else
         s_SaveString(s, "pass",            info->pass);
     s_SaveString    (s, "host",            info->host);
-    s_SaveKeyval    (s, "port",            x_Port(info->port, buf));
+    s_SaveKeyval    (s, "port",           (info->port
+                                           ? x_Port(info->port, buf)
+                                           : *info->host
+                                           ? "(default)"
+                                           : "(none"));
     s_SaveString    (s, "path",            info->path);
     s_SaveString    (s, "args",            info->args);
     s_SaveString    (s, "http_proxy_host", info->http_proxy_host);
-    s_SaveKeyval    (s, "http_proxy_port", x_Port(info->http_proxy_port, buf));
+    s_SaveKeyval    (s, "http_proxy_port",(info->http_proxy_port
+                                           ? x_Port(info->http_proxy_port, buf)
+                                           : "(none)"));
     s_SaveString    (s, "http_proxy_user", info->http_proxy_user);
     if (*info->http_proxy_pass)
         s_SaveKeyval(s, "http_proxy_pass", "(set)");
     else
         s_SaveString(s, "http_proxy_pass", info->http_proxy_pass);
+    s_SaveBool      (s, "http_proxy_leak", info->http_proxy_leak);
     s_SaveString    (s, "proxy_host",      info->proxy_host);
     if (info->timeout) {
         s_SaveULong (s, "timeout(sec)",    info->timeout->sec);
@@ -1179,7 +1241,7 @@ extern void ConnNetInfo_LogEx(const SConnNetInfo* info, ELOG_Level sev, LOG lg)
     } else
         s_SaveKeyval(s, "timeout",         "INFINITE");
     s_SaveULong     (s, "max_try",         info->max_try);
-    s_SaveBool      (s, "firewall",        info->firewall);
+    s_SaveKeyval    (s, "firewall",        x_Firewall(info->firewall));
     s_SaveBool      (s, "stateless",       info->stateless);
     s_SaveBool      (s, "lb_disable",      info->lb_disable);
     s_SaveKeyval    (s, "debug_printout", (info->debug_printout
@@ -1190,7 +1252,9 @@ extern void ConnNetInfo_LogEx(const SConnNetInfo* info, ELOG_Level sev, LOG lg)
                                               ? "SOME"
                                               : (info->debug_printout
                                                  == eDebugPrintout_Data
-                                                 ? "DATA" : "(unknown)"))));
+                                                 ? "DATA"
+                                                 : x_Num(info->debug_printout,
+                                                         buf)))));
     s_SaveUserHeader(s, "http_user_header",info->http_user_header, uhlen);
     s_SaveString    (s, "http_referer",    info->http_referer);
     strcat(s, "#################### [END] SConnNetInfo\n");
@@ -1204,6 +1268,7 @@ extern void ConnNetInfo_LogEx(const SConnNetInfo* info, ELOG_Level sev, LOG lg)
 extern char* ConnNetInfo_URL(const SConnNetInfo* info)
 {
     const char* scheme;
+    size_t      schlen;
     const char* path;
     const char* args;
     size_t      len;
@@ -1213,7 +1278,7 @@ extern char* ConnNetInfo_URL(const SConnNetInfo* info)
     if (!info)
         return 0/*failed*/;
 
-    scheme = x_Scheme(info->scheme, buf);
+    scheme = x_Scheme((EURLScheme) info->scheme, buf);
     if ((!scheme  &&  info->req_method != eReqMethod_Connect)  ||
         ( scheme  &&  !isalpha((unsigned char)(*scheme)))) {
         return 0/*failed*/;
@@ -1221,25 +1286,26 @@ extern char* ConnNetInfo_URL(const SConnNetInfo* info)
 
     if (info->req_method == eReqMethod_Connect) {
         scheme = "";
+        schlen = 0;
         path = 0;
         args = "";
         len = 0;
     } else {
         assert(scheme);
+        schlen = strlen(scheme);
         path = info->path;
         args = info->args;
-        len = strlen(scheme) + 3/*"://"*/
-            + strlen(path)
-            + (*args ? strlen(args) + 2 : 1);
+        len = schlen+3/*://*/ + strlen(path) + (*args ? strlen(args) + 2 : 1);
     }
     len += strlen(info->host) + 7/*:port\0*/;
 
     url = (char*) malloc(len);
     if (url) {
         assert(scheme  &&  args);
-        len = (size_t) sprintf(url, "%s%s%s", scheme,
-                               *scheme ? "://" : "", info->host);
-        if (info->port)
+        strlwr((char*) memcpy(url, scheme, schlen + 1));
+        len  = schlen;
+        len += sprintf(url + len, "://%s" + (schlen ? 0 : 3), info->host);
+        if (info->port  ||  !path/*info->req_method == eReqMethod_Connect*/)
             len += sprintf(url + len, ":%hu", info->port);
         sprintf(url + len, "%s%s%s%s",
                 &"/"[! path  ||  *path == '/'], path ? path : "",
@@ -1282,6 +1348,16 @@ extern void ConnNetInfo_Destroy(SConnNetInfo* info)
  */
 
 
+static EIO_Status x_URLConnectErrorReturn(SOCK sock, EIO_Status status)
+{
+    if (sock) {
+        SOCK_Abort(sock);
+        SOCK_Close(sock);
+    }
+    return status;
+}
+
+
 extern EIO_Status URL_ConnectEx
 (const char*     host,
  unsigned short  port,
@@ -1316,9 +1392,12 @@ extern EIO_Status URL_ConnectEx
     if (!sock  ||  !host  ||  !*host  ||  !path  ||  !*path
         ||  (user_hdr  &&  *user_hdr  &&  user_hdr[user_hdr_len - 1] != '\n')){
         CORE_LOG_X(2, eLOG_Error, "[URL_Connect]  Bad argument(s)");
-        if (sock)
+        if (sock) {
+            s = *sock;
             *sock = 0;
-        return eIO_InvalidArg;
+        } else
+            s = 0;
+        return x_URLConnectErrorReturn(s, eIO_InvalidArg);
     }
     s = *sock;
     *sock = 0;
@@ -1350,7 +1429,7 @@ extern EIO_Status URL_ConnectEx
                     ("[URL_Connect]  Unrecognized request method (#%u)",
                      (unsigned int) req_method));
         assert(0);
-        return eIO_InvalidArg;
+        return x_URLConnectErrorReturn(s, eIO_InvalidArg);
     }
 
     hdr_len = 0;
@@ -1368,7 +1447,7 @@ extern EIO_Status URL_ConnectEx
         if (port)
             hdr_len = (size_t)(add_hdr ? sprintf(hdr_buf, ":%hu", port) : 0);
         else
-            port = flags & fSOCK_Secure ? 443 : 80;
+            port = flags & fSOCK_Secure ? CONN_PORT_HTTPS : CONN_PORT_HTTP;
 
         if (args  &&  (args_len = strcspn(args, "#")) > 0) {
             /* URL-encode "args", if any specified */
@@ -1380,7 +1459,7 @@ extern EIO_Status URL_ConnectEx
                     CORE_LOGF_ERRNO_X(8, eLOG_Error, errno,
                                       ("[URL_Connect]  Out of memory (%lu)",
                                        (unsigned long) size));
-                    return eIO_Unknown;
+                    return x_URLConnectErrorReturn(s, eIO_Unknown);
                 }
                 URL_Encode(args, args_len, &rd_len, x_args, size, &wr_len);
                 assert(args_len == rd_len);
@@ -1413,9 +1492,9 @@ extern EIO_Status URL_ConnectEx
 
         /* Content-Length: <content_length>\r\n */
         (req_method == eReqMethod_Post
-         &&  ((add_hdr =
-               sprintf(hdr_buf, "Content-Length: %lu\r\n",
-                       (unsigned long) content_length)) <= 0    ||
+         &&  ((add_hdr
+               = sprintf(hdr_buf, "Content-Length: %lu\r\n",
+                         (unsigned long) content_length)) <= 0  ||
               !BUF_Write(&buf, hdr_buf,  (size_t) add_hdr)))    ||
 
         /* <user_header> */
@@ -1435,7 +1514,7 @@ extern EIO_Status URL_ConnectEx
         BUF_Destroy(buf);
         if (temp  &&  temp != args)
             free((void*) temp);
-        return eIO_Unknown;
+        return x_URLConnectErrorReturn(s, eIO_Unknown);
     }
     if (temp  &&  temp != args)
         free((void*) temp);
@@ -1444,27 +1523,22 @@ extern EIO_Status URL_ConnectEx
         ||  BUF_Read(buf, hdr, hdr_len) != hdr_len) {
         int x_errno = errno;
         CORE_LOGF_ERRNO_X(6, eLOG_Error, x_errno,
-                          ("[URL_Connect]  Cannot convert HTTP header to"
-                           " string for %s:%hu", host, port));
+                          ("[URL_Connect]  Cannot maintain HTTP header for"
+                           " %s:%hu", host, port));
         if (hdr)
             free(hdr);
         BUF_Destroy(buf);
-        return eIO_Unknown;
+        return x_URLConnectErrorReturn(s, eIO_Unknown);
     }
     BUF_Destroy(buf);
 
-    /* connect to HTTPD */
     if (s) {
-        size_t handle_size = SOCK_OSHandleSize();
-        char*  handle      = (char*) malloc(handle_size);
-        verify(SOCK_GetOSHandle(s, handle, handle_size) == eIO_Success);
-        status = SOCK_CreateOnTopEx(handle, handle_size, sock,
+        /* resuse connection */
+        status = SOCK_CreateOnTopEx(s, 0, sock,
                                     hdr, hdr_len, flags);
-        if (handle)
-            free(handle);
-        if (status == eIO_Success)
-            verify(SOCK_Close(s) == eIO_Success);
+        SOCK_Destroy(s);
     } else {
+        /* connect to HTTPD */
         status = SOCK_CreateEx(host, port, o_timeout, sock,
                                hdr, hdr_len, flags);
     }
@@ -1479,7 +1553,8 @@ extern EIO_Status URL_ConnectEx
         } else
             *hdr_buf = '\0';
         CORE_LOGF_X(7, eLOG_Error,
-                    ("[URL_Connect]  Failed to connect to %s:%hu: %s%s",
+                    ("[URL_Connect]  Failed to %s to %s:%hu: %s%s",
+                     s ? "use connection" : "connect",
                      host, port, IO_StatusStr(status), hdr_buf));
     } else
         verify(SOCK_SetTimeout(*sock, eIO_ReadWrite, rw_timeout)==eIO_Success);
@@ -1516,25 +1591,26 @@ extern SOCK URL_Connect
 
 
 typedef EIO_Status (*FDoIO)
-     (void*     stream,
-      void*     buf,
-      size_t    size,
-      size_t*   n_read,
-      EIO_Event what     /* eIO_Read | eIO_Write (to pushback) */
-      );
+(void*     stream,
+ void*     buf,
+ size_t    size,
+ size_t*   n_read,
+ EIO_Event what     /* eIO_Read | eIO_Write (to pushback) */
+ );
 
 static EIO_Status s_StripToPattern
 (void*       stream,
  FDoIO       io_func,
  const void* pattern,
  size_t      pattern_size,
- BUF*        buf,
+ BUF*        discard,
  size_t*     n_discarded)
 {
+    char*      buf;
     EIO_Status status;
-    char*      buffer;
-    size_t     buffer_size;
-    size_t     n_read = 0;
+    size_t     n_read;
+    size_t     buf_size;
+    char       x_buf[4096];
 
     /* check args */
     if ( n_discarded )
@@ -1543,28 +1619,30 @@ static EIO_Status s_StripToPattern
         return eIO_InvalidArg;
 
     /* allocate a temporary read buffer */
-    buffer_size = 2 * pattern_size;
-    if (buffer_size < 4096)
-        buffer_size = 4096;
-    if ( !(buffer = (char*) malloc(buffer_size)) )
+    buf_size = pattern_size << 1;
+    if (buf_size <= sizeof(x_buf)) {
+        buf_size  = sizeof(x_buf);
+        buf = x_buf;
+    } else if ( !(buf = (char*) malloc(buf_size)) )
         return eIO_Unknown;
 
     if ( !pattern ) {
         /* read/discard until EOF */
         do {
-            status = io_func(stream, buffer, buffer_size, &n_read, eIO_Read);
-            if ( buf )
-                BUF_Write(buf, buffer, n_read);
+            status = io_func(stream, buf, buf_size, &n_read, eIO_Read);
+            if ( discard )
+                BUF_Write(discard, buf, n_read);
             if ( n_discarded )
                 *n_discarded += n_read;
         } while (status == eIO_Success);
     } else {
+        n_read = 0;
         for (;;) {
             /* read; search for the pattern; store the discarded data */
             size_t x_read, n_stored;
 
             assert(n_read < pattern_size);
-            status = io_func(stream, buffer + n_read, buffer_size - n_read,
+            status = io_func(stream, buf + n_read, buf_size - n_read,
                              &x_read, eIO_Read);
             if ( !x_read ) {
                 assert(status != eIO_Success);
@@ -1576,7 +1654,7 @@ static EIO_Status s_StripToPattern
                 /* search for the pattern */
                 size_t n_check = n_stored - pattern_size + 1;
                 const char* b;
-                for (b = buffer;  n_check;  b++, n_check--) {
+                for (b = buf;  n_check;  b++, n_check--) {
                     if (*b != *((const char*) pattern))
                         continue;
                     if (memcmp(b, pattern, pattern_size) == 0)
@@ -1584,35 +1662,35 @@ static EIO_Status s_StripToPattern
                 }
                 /* pattern found */
                 if ( n_check ) {
-                    size_t x_discarded = (size_t)(b - buffer) + pattern_size;
-                    if ( buf )
-                        BUF_Write(buf, buffer + n_read, x_discarded - n_read);
+                    size_t x_discarded = (size_t)(b - buf) + pattern_size;
+                    if ( discard )
+                        BUF_Write(discard, buf + n_read, x_discarded - n_read);
                     if ( n_discarded )
-                        *n_discarded += x_discarded;
+                        *n_discarded += x_discarded - n_read;
                     /* return unused portion to the stream */
-                    status = io_func(stream, buffer + x_discarded,
+                    status = io_func(stream, buf + x_discarded,
                                      n_stored - x_discarded, 0, eIO_Write);
                     break; /*finished*/
                 }
             }
 
             /* pattern not found yet */
-            if ( buf )
-                BUF_Write(buf, buffer + n_read, x_read);
+            if ( discard )
+                BUF_Write(discard, buf + n_read, x_read);
             if ( n_discarded )
                 *n_discarded += x_read;
-            n_read = n_stored;
 
-            if (n_read > pattern_size) {
-                size_t n_cut = n_read - pattern_size + 1;
-                n_read = pattern_size - 1;
-                memmove(buffer, buffer + n_cut, n_read);
-            }
+            if (n_stored >= pattern_size) {
+                n_read    = pattern_size - 1;
+                memmove(buf, buf + n_stored - n_read, n_read);
+            } else
+                n_read    = n_stored;
         }
     }
 
     /* cleanup & exit */
-    free(buffer);
+    if (buf != x_buf)
+        free(buf);
     return status;
 }
 
@@ -1640,13 +1718,12 @@ extern EIO_Status CONN_StripToPattern
 (CONN        conn,
  const void* pattern,
  size_t      pattern_size,
- BUF*        buf,
+ BUF*        discard,
  size_t*     n_discarded)
 {
     return s_StripToPattern
-        (conn, s_CONN_IO, pattern, pattern_size, buf, n_discarded);
+        (conn, s_CONN_IO, pattern, pattern_size, discard, n_discarded);
 }
-
 
 static EIO_Status s_SOCK_IO
 (void*     stream,
@@ -1670,11 +1747,11 @@ extern EIO_Status SOCK_StripToPattern
 (SOCK        sock,
  const void* pattern,
  size_t      pattern_size,
- BUF*        buf,
+ BUF*        discard,
  size_t*     n_discarded)
 {
     return s_StripToPattern
-        (sock, s_SOCK_IO, pattern, pattern_size, buf, n_discarded);
+        (sock, s_SOCK_IO, pattern, pattern_size, discard, n_discarded);
 }
 
 
@@ -1704,13 +1781,12 @@ extern EIO_Status BUF_StripToPattern
 (BUF         buffer,
  const void* pattern,
  size_t      pattern_size,
- BUF*        buf,
+ BUF*        discard,
  size_t*     n_discarded)
 {
     return s_StripToPattern
-        (buffer, s_BUF_IO, pattern, pattern_size, buf, n_discarded);
+        (buffer, s_BUF_IO, pattern, pattern_size, discard, n_discarded);
 }
-
 
 
 

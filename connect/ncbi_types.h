@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/* $Id: ncbi_types.h,v 6.21 2010/11/07 18:49:30 kazimird Exp $
+/* $Id: ncbi_types.h,v 6.22 2012/05/02 19:19:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,7 +51,7 @@
 #ifndef _WIN32
 #  ifndef   __STDC_FORMAT_MACROS
 #    define __STDC_FORMAT_MACROS
-#  endif  /*__STDC_FORMAT_MACROS*/
+#  endif /*!__STDC_FORMAT_MACROS*/
 #  include <inttypes.h>
 #  include <stdint.h>
 #endif /*_WIN32*/
@@ -104,18 +104,42 @@ extern NCBI_XCONNECT_EXPORT STimeout*     NcbiMsToTimeout
  * type, please apply equivalent changes to both definitions.
  */
 
-/** Aux. enum to set/unset/default various features
+/** Aux. enum to set/unset/default various features.
  */
-typedef enum {
+typedef enum ENcbiSwitch {
     eOff = 0,
     eOn,
     eDefault
 } ESwitch;
 
-#endif  /* !defined(NCBI_ESWITCH_DEFINED) */
+#endif /*!NCBI_ESWITCH_DEFINED*/
 
 
-/** Fixed size analogs of size_t and time_t (mainly for IPC)
+#ifndef NCBI_EOWNERSHIP_DEFINED
+#define NCBI_EOWNERSHIP_DEFINED
+
+/*
+ * ATTENTION!   Do not change this enumeration!
+ *
+ * It must always be kept in sync with its C++ counterpart defined in
+ * "corelib/ncbimisc.hpp". If you absolutely(sic!) need to alter this
+ * type, please apply equivalent changes to both definitions.
+ */
+
+/** Ownership relations between objects.
+ *
+ * Can be used to define or transfer ownership of objects.
+ * For example, specify if a CSocket object owns its underlying SOCK object.
+ */
+typedef enum ENcbiOwnership {
+    eNoOwnership,       /** No ownership is assumed                 */
+    eTakeOwnership      /** An object can take ownership of another */
+} EOwnership;
+
+#endif /*!NCBI_EOWNERSHIP_DEFINED*/
+
+
+/** Fixed-size analogs of size_t and time_t (mainly for IPC)
  */
 typedef unsigned int TNCBI_Size;
 typedef unsigned int TNCBI_Time;

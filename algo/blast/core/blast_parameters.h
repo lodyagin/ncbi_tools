@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.h,v 1.21 2011/02/09 14:39:32 kazimird Exp $
+/* $Id: blast_parameters.h,v 1.22 2011/11/30 13:59:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -178,6 +178,9 @@ typedef struct BlastHitSavingParameters {
    Int4 mask_level; /**< Only keep the highest scoring HSP when more than
                           one HSP overlaps the same region of the query by
                           more than or equal to mask_level %. -RMH- */
+   Int4* low_score;             /**< lowest ungapped score that can trigger a
+				gapped alignment if the histlist is already full.
+                                One value for each query. */
 } BlastHitSavingParameters;
 
 /** Because approximate gapped alignment adds extra overhead,

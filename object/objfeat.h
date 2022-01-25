@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.39 $
+* $Revision: 6.42 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -747,6 +747,8 @@ NLM_EXTERN Boolean   LIBCALL OrgRefAsnWrite PROTO((OrgRefPtr orp, AsnIoPtr aip, 
 NLM_EXTERN OrgRefPtr LIBCALL OrgRefAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN OrgRefPtr LIBCALL OrgRefFree PROTO((OrgRefPtr orp));
 NLM_EXTERN Boolean LIBCALL OrgRefMatch (OrgRefPtr orp1, OrgRefPtr orp2);
+NLM_EXTERN Boolean ValNodeDbtagMatch (ValNodePtr vnp1, ValNodePtr vnp2);
+NLM_EXTERN Boolean ValNodeStringListMatch (ValNodePtr vnp1, ValNodePtr vnp2);
 
 /*****************************************************************************
 *
@@ -936,6 +938,9 @@ typedef struct clone_seq {
    ValNodePtr  location;
    ValNodePtr  seq;
    DbtagPtr    align_id;
+#define OB__Clone_seq_support 1
+
+   Int4   support;
 } CloneSeq, PNTR CloneSeqPtr;
 
 

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CORE__H
 #define CONNECT___NCBI_CORE__H
 
-/* $Id: ncbi_core.h,v 6.38 2011/04/17 02:39:31 kazimird Exp $
+/* $Id: ncbi_core.h,v 6.39 2012/05/16 17:09:55 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -86,14 +86,9 @@ extern "C" {
  *  EIO_WriteMethod
  */
 typedef enum {
-    eIO_ReadPlain,      /**< read readily available data only, wait if none  */
     eIO_ReadPeek,       /**< do eIO_ReadPlain but leave data in input queue  */
-    eIO_ReadPersist,    /**< read exactly as much as requested, w/waits      */
-    eIO_ReadSupplement  /**< do eIO_ReadPlain but return extended status     */
-    /* deprecated -- DO NOT USE! */
-    /*eIO_Plain   = eIO_ReadPlain,*/
-    /*eIO_Peek    = eIO_ReadPeek,*/
-    /*eIO_Persist = eIO_ReadPersist*/
+    eIO_ReadPlain,      /**< read readily available data only, wait if none  */
+    eIO_ReadPersist     /**< read exactly as much as requested, w/waits      */
 } EIO_ReadMethod;
 
 
@@ -102,10 +97,10 @@ typedef enum {
  *  EIO_ReadMethod
  */
 typedef enum {
+    eIO_WriteNone,      /**< invalid reserved opcode, not for use!           */
     eIO_WritePlain,     /**< write as much as possible, report back how much */
-    eIO_WritePersist,   /**< write exactly as much as specified              */
-    eIO_WriteOutOfBand, /**< write out-of-band chunk of urgent data          */
-    eIO_WriteSupplement /**< do eIO_WritePlain but return extended status    */
+    eIO_WritePersist,   /**< write exactly as much as specified, w/waits     */
+    eIO_WriteOutOfBand  /**< write out-of-band chunk of urgent data (if supp)*/
 } EIO_WriteMethod;
 
 
@@ -119,8 +114,8 @@ typedef enum {
  */
 typedef enum {
     eIO_Open      = 0x0, /**< also serves as no-event indicator in SOCK_Poll */
-    eIO_Read      = 0x1,
-    eIO_Write     = 0x2,
+    eIO_Read      = 0x1, /**< read                                           */
+    eIO_Write     = 0x2, /**< write                                          */
     eIO_ReadWrite = 0x3, /**< eIO_Read | eIO_Write                           */
     eIO_Close     = 0x4  /**< also serves as an error indicator in SOCK_Poll */
 } EIO_Event;
@@ -201,7 +196,7 @@ typedef enum {
  */
 typedef int/*bool*/ (*FMT_LOCK_Handler)
 (void*    user_data,
- EMT_Lock how       
+ EMT_Lock how
  );
 
 /** MT lock cleanup callback.
@@ -273,7 +268,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ MT_LOCK_DoInternal
 
 
 /******************************************************************************
- *  ERROR HANDLING and LOGGING
+ *  Error handling and logging
  */
 
 
@@ -496,7 +491,7 @@ extern NCBI_XCONNECT_EXPORT void LOG_Write
 
 
 /******************************************************************************
- *  REGISTRY
+ *  Registry
  */
 
 

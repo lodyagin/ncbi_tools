@@ -1,5 +1,5 @@
 /*
- * $Id: acerdapi.c,v 1.15 2008/12/02 17:13:14 bollin Exp $
+ * $Id: acerdapi.c,v 1.16 2012/05/23 17:42:54 bollin Exp $
  *
  * ===========================================================================
  *
@@ -262,7 +262,6 @@ static Int4 GetTraceIDFromIdList (SeqIdPtr sip)
 static SeqEntryPtr FetchRead (SeqIdPtr sip)
 {
   Uint4       tid = 0;
-  Int4        uid = 0;
   SeqEntryPtr sep = NULL;
 
   if (sip == NULL) return NULL;
@@ -271,10 +270,7 @@ static SeqEntryPtr FetchRead (SeqIdPtr sip)
   if (tid > 0) {
     sep = PubSeqSynchronousQueryTI (tid, 0, -1);
   } else {
-    uid = GetGIForSeqId (sip);
-    if (uid > 0) {
-      sep = PubSeqSynchronousQuery (uid, 0, -1);
-    }
+    sep = PubSeqSynchronousQueryId (sip, 0, -1);
   }
   
   return sep;

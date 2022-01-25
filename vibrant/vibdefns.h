@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,13 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.17  2011/09/20 18:38:55  choi
+* Added DialogTextWithFont and SpecialTextWithFont which are versions of
+* DialogText and SpecialText that take a font parameter.  It should be
+* straightforward to re-implement DialogText and SpecialText in terms of
+* DialogTextWithFont and SpecialTextWithFont by passing in Nlm_systemFont
+* as the parameter.
+*
 * Revision 6.16  2008/04/29 13:53:40  kans
 * fixes for warnings caught by mingw cross-compiler
 *
@@ -333,8 +340,10 @@ extern "C" {
 #define SetSwitchParams Nlm_SetSwitchParams
 
 #define DialogText Nlm_DialogText
+#define DialogTextWithFont Nlm_DialogTextWithFont
 #define HiddenText Nlm_HiddenText
 #define SpecialText Nlm_SpecialText
+#define SpecialTextWithFont Nlm_SpecialTextWithFont
 #define PasswordText Nlm_PasswordText
 #define ScrollText Nlm_ScrollText
 #define SetTextSelect Nlm_SetTextSelect

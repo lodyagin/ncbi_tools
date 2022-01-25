@@ -24,7 +24,7 @@ ncbimla.lib: network\medarch\client, medutil.c, sybmed.c; -I corelib object asn
 ncbiacc.lib: accentr.c;accutils.c; -I corelib object asn cdromlib
 ncbiNacc.lib: accentr.c;accutils.c; -I corelib object asn cdromlib
 ncbiCacc.lib: accentr.c;accutils.c; -I corelib object asn cdromlib
-netcli.lib: network\nsclilib, ni_encr.c ni_lib.c ni_list.c ni_macdv.c; -I corelib asn network\nsclilib
+netcli.lib: network\nsclilib; -I corelib asn network\nsclilib
 ncbitxc2.lib: network\taxon1\common, checkid.c; network\taxon1\taxon2, txcproc.c;taxblast.c; -I corelib object asn tools;-D TAXSERVICE
 smartnet.lib: smartnet_win32.c; -I corelib internal\smart\smartnet
 Ssequin.exe: sequin;-D INTERNAL_NCBI_SEQUIN USE_SMARTNET TAXSERVICE

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.115 $
+* $Revision: 6.119 $
 *
 * File Description: 
 *
@@ -72,6 +72,7 @@ extern Boolean SetupPrintOptions (void);
 extern void FreePrintOptions (void);
 
 extern EnumFieldAssoc  months_alist [];
+extern EnumFieldAssoc  new_pseudogene_alist [];
 
 extern void DatePtrToVibrant (DatePtr dp, PopuP dateMonth, TexT dateDay, TexT dateYear);
 extern DatePtr VibrantToDatePtr (PopuP dateMonth, TexT dateDay, TexT dateYear);
@@ -83,46 +84,48 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   DialoG          data;
 
 
-#define FEATURE_FORM_BLOCK          \
-  DESCRIPTOR_FORM_BLOCK             \
-  DialoG          commonRadio;      \
-  GrouP           commonSubGrp [8]; \
-  Int2            commonPage;       \
-  ButtoN          partial;          \
-  ButtoN          exception;        \
-  ButtoN          pseudo;           \
-  DialoG          experiment;       \
-  DialoG          inference;        \
-  TexT            comment;          \
-  TexT            title;            \
-  TexT            exceptText;       \
-  PopuP           evidence;         \
-  Handle          gene;             \
-  PopuP           genePopup;        \
-  LisT            geneList;         \
-  ValNodePtr      geneNames;        \
-  GrouP           useGeneXref;      \
-  GrouP           newGeneGrp;       \
-  TexT            geneSymbol;       \
-  TexT            geneAllele;       \
-  TexT            geneDesc;         \
-  TexT            locusTag;         \
-  TexT            geneSynonym;      \
-  ButtoN          editGeneBtn;      \
-  TexT            protXrefName;     \
-  TexT            protXrefDesc;     \
-  DialoG          location;         \
-  DialoG          product;          \
-  DialoG          featcits;         \
-  DialoG          dbxrefs;          \
-  DialoG          gbquals;          \
-  DialoG          usrobjext;        \
-  TexT            featid;           \
-  TexT            fidxref;          \
-  ButtoN          leave_dlg_up;     \
-  UserObjectPtr   goTermUserObj;    \
-  Int2            badInfAttempts;   \
-  Boolean         acceptBadInf;
+#define FEATURE_FORM_BLOCK            \
+  DESCRIPTOR_FORM_BLOCK               \
+  DialoG            commonRadio;      \
+  GrouP             commonSubGrp [8]; \
+  Int2              commonPage;       \
+  ButtoN            partial;          \
+  ButtoN            exception;        \
+  ButtoN            pseudo;           \
+  PopuP             pseudogene;       \
+  EnumFieldAssocPtr pseudoalist;      \
+  DialoG            experiment;       \
+  DialoG            inference;        \
+  TexT              comment;          \
+  TexT              title;            \
+  TexT              exceptText;       \
+  PopuP             evidence;         \
+  Handle            gene;             \
+  PopuP             genePopup;        \
+  LisT              geneList;         \
+  ValNodePtr        geneNames;        \
+  GrouP             useGeneXref;      \
+  GrouP             newGeneGrp;       \
+  TexT              geneSymbol;       \
+  TexT              geneAllele;       \
+  TexT              geneDesc;         \
+  TexT              locusTag;         \
+  TexT              geneSynonym;      \
+  ButtoN            editGeneBtn;      \
+  TexT              protXrefName;     \
+  TexT              protXrefDesc;     \
+  DialoG            location;         \
+  DialoG            product;          \
+  DialoG            featcits;         \
+  DialoG            dbxrefs;          \
+  DialoG            gbquals;          \
+  DialoG            usrobjext;        \
+  TexT              featid;           \
+  TexT              fidxref;          \
+  ButtoN            leave_dlg_up;     \
+  UserObjectPtr     goTermUserObj;    \
+  Int2              badInfAttempts;   \
+  Boolean           acceptBadInf;
 
 typedef struct descform {
   DESCRIPTOR_FORM_BLOCK
@@ -163,6 +166,8 @@ extern Boolean MakeViewerIndependent (Uint2 entityID, OMUserDataPtr omudp);
 extern Int2 LIBCALLBACK StdVibrantEditorMsgFunc (OMMsgStructPtr ommsp);
 
 extern Boolean TestInference (FeatureFormPtr ffp, CharPtr badInfQual, size_t len, CharPtr badInfMssg);
+
+extern void InitPseudogenePopup (FeatureFormPtr ffp, PopuP p, Boolean ispseudo, CharPtr pseudogene, Boolean indexerVersion);
 
 /*****************************************************************************
 *
@@ -384,6 +389,12 @@ extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
                                   Pointer dbl_click_data,
                                   TableDisplayLeftInRed,
                                   Pointer left_in_red_data);
+extern DialoG EditableTableDisplayDialog (GrouP parent, Int4 width, Int4 height,
+                                  Int4 frozen_header, Int4 frozen_left,
+                                  TableDisplayDblClick dbl_click,
+                                  Pointer dbl_click_data,
+                                  TableDisplayLeftInRed left_in_red,
+                                  Pointer left_in_red_data);
 extern ValNodePtr FreeTableDisplayRowList (ValNodePtr row_list);
 extern void PrintTableDisplayRowListToFile (ValNodePtr row_list, FILE *fp);
 extern ValNodePtr CopyTableDisplayRowList (ValNodePtr row_list);
@@ -580,6 +591,24 @@ CreateClickableListDialogExEx
  ClickableCallback item_double_click_callback,
  Pointer         item_click_callback_data,
  GetClickableItemText get_item_text,
+ Int4            left_width,
+ Int4            right_width,
+ Boolean         horizontal,
+ Boolean         show_find,
+ Boolean         display_chosen);
+
+extern DialoG 
+CreateClickableListDialogExExEx 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ CharPtr help1,
+ CharPtr help2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text,
+ Int4            num_item_text_columns,
  Int4            left_width,
  Int4            right_width,
  Boolean         horizontal,

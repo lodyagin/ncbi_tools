@@ -494,7 +494,7 @@ offsets = malloc(size_offsets_max * sizeof(int));
 if (offsets == NULL)
   {
   printf("** Failed to get %d bytes of memory for offsets vector\n",
-    size_offsets_max * sizeof(int));
+    (int)(size_offsets_max * sizeof(int)));
   return 1;
   }
 
@@ -776,7 +776,7 @@ while (!done)
 
       if (size != gotten_store) fprintf(outfile,
         "Size disagreement: pcre_fullinfo=%d call to malloc for %d\n",
-        size, gotten_store);
+        (int)size, (int)gotten_store);
 
       fprintf(outfile, "Capturing subpattern count = %d\n", count);
       if (backrefmax > 0)
@@ -1018,7 +1018,7 @@ while (!done)
           if (offsets == NULL)
             {
             printf("** Failed to get %d bytes of memory for offsets vector\n",
-              size_offsets_max * sizeof(int));
+              (int)(size_offsets_max * sizeof(int)));
             return 1;
             }
           }

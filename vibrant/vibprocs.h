@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -377,6 +377,9 @@ Nlm_TexT  Nlm_HiddenText PROTO((Nlm_GrouP prnt, Nlm_CharPtr dfault, Nlm_Int2 cha
 Nlm_TexT  Nlm_SpecialText PROTO((Nlm_GrouP prnt, Nlm_CharPtr dfault, Nlm_Int2 charWidth, Nlm_TxtActnProc actn, Nlm_TxtActnProc tabProc, Nlm_TxtActnProc rtnProc));
 Nlm_TexT  Nlm_PasswordText PROTO((Nlm_GrouP prnt, Nlm_CharPtr dfault, Nlm_Int2 charWidth, Nlm_TxtActnProc actn));
 Nlm_TexT  Nlm_ScrollText PROTO((Nlm_GrouP prnt, Nlm_Int2 width, Nlm_Int2 height, Nlm_FonT font, Nlm_Boolean wrap, Nlm_TxtActnProc actn));
+
+Nlm_TexT Nlm_DialogTextWithFont PROTO((Nlm_GrouP prnt, Nlm_CharPtr dfault, Nlm_Int2 charWidth, Nlm_TxtActnProc actn, Nlm_FonT font));
+Nlm_TexT Nlm_SpecialTextWithFont PROTO((Nlm_GrouP prnt, Nlm_CharPtr dfault, Nlm_Int2 charWidth, Nlm_TxtActnProc actn, Nlm_TxtActnProc tabProc, Nlm_TxtActnProc rtnProc, Nlm_FonT font));
 
 void      Nlm_SetTextSelect PROTO((Nlm_TexT t, Nlm_TxtActnProc slct, Nlm_TxtActnProc dslct));
 

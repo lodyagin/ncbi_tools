@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.19 $
+* $Revision: 1.30 $
 *
 * File Description:
 *
@@ -50,7 +50,7 @@
 #include <toasn3.h>
 #include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "2.3"
+#define NPS2GPSAPP_VER "2.9"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -64,6 +64,10 @@ typedef struct n2gdata {
   Boolean  useProtID;
   Boolean  refSeqTitles;
   Boolean  smarttitle;
+  Boolean  noncoding;
+  Boolean  removeunnecxref;
+  CharPtr  genDb;
+  CharPtr  genQual;
 } N2GData, PNTR N2GPtr;
 
 typedef struct npsseqs {
@@ -193,53 +197,41 @@ static void LclMakeNucProtCDS (
 
 /* copy gene from contig onto nuc-prot, single interval on cdna bioseq */
 
-static void LclCopyGene (
+static GeneRefPtr LclCopyGeneWork (
   SeqFeatPtr sfp,
-  Pointer userdata
+  BioseqPtr bsp
 )
 
 {
-  BioseqPtr          bsp;
-  SeqMgrFeatContext  gcontext;
-  SeqFeatPtr         gene, copy, temp;
-  GeneRefPtr         grp, xref;
-  Boolean            partial5, partial3;
+  SeqFeatPtr  gene, copy, temp;
+  GeneRefPtr  grp = NULL, xref;
+  Boolean     partial5, partial3;
 
-  /* input mrna features are multi-interval on contig */
+  if (sfp == NULL || bsp == NULL) return NULL;
+  if (sfp->data.choice != SEQFEAT_RNA) return NULL;
 
-  if (sfp->data.choice != SEQFEAT_RNA) return;
+  gene = GetGeneForFeature (sfp);
 
-  /* find cdna product of mrna */
-
-  bsp = BioseqFindFromSeqLoc (sfp->product);
-  if (bsp == NULL) return;
-
-  /* check for gene xref */
-
-  xref = SeqMgrGetGeneXref (sfp);
-  if (xref != NULL) {
-    if (SeqMgrGeneIsSuppressed (xref)) return;
+  if (gene == NULL) {
+    xref = SeqMgrGetGeneXref (sfp);
+    if (xref == NULL) return NULL;
+    if (SeqMgrGeneIsSuppressed (xref)) return NULL;
 
     /* copy gene xref for new gene feature */
 
     grp = AsnIoMemCopy (xref,
                         (AsnReadFunc) GeneRefAsnRead,
                         (AsnWriteFunc) GeneRefAsnWrite);
-    if (grp == NULL) return;
+    if (grp == NULL) return NULL;
 
     /* make new gene feature on full-length of cdna */
 
     copy = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, NULL);
-    if (copy == NULL) return;
+    if (copy == NULL) return NULL;
 
     copy->data.value.ptrvalue = grp;
-    return;
+    return grp;
   }
-
-  /* overlapping gene should be single interval on contig */
-
-  gene = SeqMgrGetOverlappingGene (sfp->location, &gcontext);
-  if (gene == NULL) return;
 
   CheckSeqLocForPartial (gene->location, &partial5, &partial3);
 
@@ -248,14 +240,14 @@ static void LclCopyGene (
   temp = AsnIoMemCopy (gene,
                        (AsnReadFunc) SeqFeatAsnRead,
                        (AsnWriteFunc) SeqFeatAsnWrite);
-  if (temp == NULL) return;
+  if (temp == NULL) return NULL;
 
   /* make new gene feature on full-length of cdna */
 
   copy = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, NULL);
   if (copy == NULL) {
     SeqFeatFree (temp);
-    return;
+    return NULL;
   }
 
   /* paste fields from temp copy of original gene */
@@ -278,6 +270,30 @@ static void LclCopyGene (
 
   SeqLocFree (temp->location);
   MemFree (temp); /* do not SeqFeatFree */
+
+  grp = (GeneRefPtr) copy->data.value.ptrvalue;
+
+  return grp;
+}
+
+static void LclCopyGene (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BioseqPtr  bsp;
+
+  /* input mrna features are multi-interval on contig */
+
+  if (sfp->data.choice != SEQFEAT_RNA) return;
+
+  /* find cdna product of mrna */
+
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return;
+
+  LclCopyGeneWork (sfp, bsp);
 }
 
 static void LclAddMrnaTitles (
@@ -629,7 +645,7 @@ static SeqIdPtr MakeIdFromProtein (
 )
 
 {
-  Char      buf [64], tmp [64];
+  Char      buf [128], tmp [128];
   SeqIdPtr  sip;
 
   if (pbsp == NULL) return NULL;
@@ -641,6 +657,46 @@ static SeqIdPtr MakeIdFromProtein (
   StringCat (tmp, buf);
   StringCat (tmp, "_mrna");
   return MakeSeqID (tmp);
+}
+
+static void AddGeneralIdFromQual (
+  BioseqPtr bsp,
+  SeqFeatPtr sfp,
+  CharPtr genDb,
+  CharPtr genQual,
+  CharPtr suffix
+)
+
+{
+  GBQualPtr  gbq;
+  SeqIdPtr   sip;
+  Char       tmp [128];
+  CharPtr    val = NULL;
+
+  if (bsp == NULL || sfp == NULL || StringHasNoText (genDb)) return;
+
+  if (StringHasNoText (genQual)) {
+    genQual = "standard_name";
+  }
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, genQual) != 0) continue;
+    val = gbq->val;
+  }
+  if (StringHasNoText (val)) return;
+
+  StringCpy (tmp, "gnl|");
+  StringCat (tmp, genDb);
+  StringCat (tmp, "|");
+  StringCat (tmp, val);
+  if (StringDoesHaveText (suffix)) {
+    StringCat (tmp, suffix);
+  }
+  sip = MakeSeqID (tmp);
+  if (sip == NULL) return;
+
+  sip->next = bsp->id;
+  bsp->id = sip;
 }
 
 static void InstantiateMrnaIntoProt (
@@ -694,6 +750,12 @@ static void InstantiateMrnaIntoProt (
     mbsp->id = MakeIdFromTscriptID (mrna);
   } else if (ngp->useProtID) {
     mbsp->id = MakeIdFromProtein (pbsp);
+  }
+  if (StringDoesHaveText (ngp->genDb)) {
+    AddGeneralIdFromQual (mbsp, mrna, ngp->genDb, ngp->genQual, NULL);
+    if (mbsp->id == NULL) {
+      AddGeneralIdFromQual (mbsp, cds, ngp->genDb, ngp->genQual, ".mrna");
+    }
   }
   if (mbsp->id == NULL) {
     mbsp->id = MakeNewProteinSeqIdEx (mrna->location, NULL, NULL, ctrp);
@@ -982,11 +1044,322 @@ static SeqFeatPtr GetmRNAByFeatureID (
           mRNA = SeqMgrGetFeatureByFeatID (cds->idx.entityID, NULL, buf, NULL, NULL);
         }
       }
-    }
+    } 
     xref = xref->next;
   }
 
   return mRNA;
+}
+
+static void InstantiateNCRNA (
+  SeqFeatPtr ncrna,
+  SeqEntryPtr top,
+  CharPtr organism,
+  Int2Ptr ctrp,
+  N2GPtr ngp
+)
+
+{
+  Uint1         biomol = 0;
+  ByteStorePtr  bs;
+  BioseqPtr     bsp;
+  SeqFeatPtr    copy, temp;
+  GeneRefPtr    grp;
+  Int4          len;
+  CharPtr       locus = NULL;
+  MolInfoPtr    mip;
+  Boolean       partial5, partial3;
+  CharPtr       prod = NULL;
+  RNAGenPtr     rgp;
+  CharPtr       rnaseq;
+  RnaRefPtr     rrp;
+  SeqDescrPtr   sdp;
+  SeqEntryPtr   sep;
+  CharPtr       ttl = NULL;
+  CharPtr       typ;
+
+  if (ncrna == NULL || top == NULL || ngp == NULL) return;
+  if (ncrna->product != NULL) return;
+
+  rrp = (RnaRefPtr) ncrna->data.value.ptrvalue;
+  if (rrp == NULL) return;
+
+  switch (rrp->type) {
+    case RNA_TYPE_premsg:
+     biomol = MOLECULE_TYPE_PRE_MRNA;
+     break;
+    case RNA_TYPE_rRNA:
+      biomol = MOLECULE_TYPE_RRNA;
+      break;
+    case RNA_TYPE_snRNA:
+      biomol = MOLECULE_TYPE_SNRNA;
+      break;
+    case RNA_TYPE_scRNA:
+      biomol = MOLECULE_TYPE_SCRNA;
+      break;
+    case RNA_TYPE_snoRNA:
+      biomol = MOLECULE_TYPE_SNORNA;
+      break;
+    case RNA_TYPE_ncRNA:
+      biomol = MOLECULE_TYPE_NCRNA;
+      break;
+    default:
+      return;
+  }
+
+  rnaseq = GetSequenceByFeature (ncrna);
+  if (rnaseq == NULL) return;
+  len = (Int4) StringLen (rnaseq);
+
+  bs = BSNew (len + 2);
+  if (bs == NULL) return;
+  BSWrite (bs, (VoidPtr) rnaseq, len);
+  MemFree (rnaseq);
+
+  bsp = BioseqNew ();
+  if (bsp == NULL) return;
+  bsp->repr = Seq_repr_raw;
+  bsp->mol = Seq_mol_rna;
+  bsp->seq_data_type = Seq_code_iupacna;
+  bsp->seq_data = (SeqDataPtr) bs;
+  bsp->length = BSLen (bs);
+  BioseqPack (bsp);
+
+  if (ngp->byTscriptID) {
+    bsp->id = MakeIdFromTscriptID (ncrna);
+  }
+  if (StringDoesHaveText (ngp->genDb)) {
+    AddGeneralIdFromQual (bsp, ncrna, ngp->genDb, ngp->genQual, NULL);
+  }
+  if (bsp->id == NULL) {
+    bsp->id = MakeNewProteinSeqIdEx (ncrna->location, NULL, NULL, ctrp);
+  }
+  CheckSeqLocForPartial (ncrna->location, &partial5, &partial3);
+  SeqMgrAddToBioseqIndex (bsp);
+
+  sep = SeqEntryNew ();
+  if (sep == NULL) return;
+  sep->choice = 1;
+  sep->data.ptrvalue = (Pointer) bsp;
+  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+
+  SetSeqFeatProduct (ncrna, bsp);
+
+  AddSeqEntryToSeqEntry (top, sep, FALSE);
+
+  mip = MolInfoNew ();
+  if (mip == NULL) return;
+  mip->biomol = biomol;
+
+  if (partial5 && partial3) {
+    mip->completeness = 5;
+  } else if (partial5) {
+    mip->completeness = 3;
+  } else if (partial3) {
+    mip->completeness = 4;
+  }
+  SeqDescrAddPointer (&(bsp->descr), Seq_descr_molinfo, (Pointer) mip);
+
+  grp = LclCopyGeneWork (ncrna, bsp);
+  if (grp != NULL) {
+    locus = grp->locus;
+    if (StringHasNoText (locus)) {
+      locus = grp->desc;
+    }
+  }
+
+  if (rrp->ext.choice == 1) {
+    prod = (CharPtr) rrp->ext.value.ptrvalue;
+  } else if (rrp->ext.choice == 3) {
+    rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
+    if (rgp != NULL) {
+      prod = rgp->product;
+    }
+  }
+  if (StringHasNoText (prod)) {
+    for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+      if (sdp->choice != Seq_descr_comment) continue;
+      prod = (CharPtr) sdp->data.ptrvalue;
+    }
+  }
+
+  len = StringLen (organism) + StringLen (prod) + StringLen (locus);
+  if (len < 1) return;
+  ttl = (CharPtr) MemNew (sizeof (Char) * (len + 100));
+  if (ttl == NULL) return;
+  *ttl = '\0';
+
+  if (StringDoesHaveText (organism)) {
+    StringCat (ttl, organism);
+  }
+  if (StringDoesHaveText (prod)) {
+    StringCat (ttl, " ");
+    StringCat (ttl, prod);
+  }
+  if (StringDoesHaveText (locus)) {
+    StringCat (ttl, " (");
+    StringCat (ttl, locus);
+    StringCat (ttl, ")");
+  }
+  typ = RnaTypeLabel (ncrna);
+  StringCat (ttl, ", ");
+  StringCat (ttl, typ);
+  StringCat (ttl, ".");
+
+  if (StringDoesHaveText (ttl)) {
+    SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) StringSave (ttl));
+  }
+
+  RemoveOrigIDs (ncrna);
+
+  CheckSeqLocForPartial (ncrna->location, &partial5, &partial3);
+
+  /* copy ncrna feature fields to paste into new ncrna feature */
+
+  temp = AsnIoMemCopy (ncrna,
+                       (AsnReadFunc) SeqFeatAsnRead,
+                       (AsnWriteFunc) SeqFeatAsnWrite);
+  if (temp == NULL) return;
+
+  /* make new ncrna feature on full-length of instantiated RNA */
+
+  copy = CreateNewFeatureOnBioseq (bsp, SEQFEAT_RNA, NULL);
+  if (copy == NULL) {
+    SeqFeatFree (temp);
+    return;
+  }
+
+  /* paste fields from temp copy of original ncrna */
+
+  copy->data.value.ptrvalue = temp->data.value.ptrvalue;
+  copy->partial = temp->partial;
+  copy->excpt = temp->excpt;
+  copy->comment = temp->comment;
+  copy->qual = temp->qual;
+  copy->title = temp->title;
+  copy->ext = temp->ext;
+  copy->cit = temp->cit;
+  copy->exp_ev = temp->exp_ev;
+  copy->xref = temp->xref;
+  copy->dbxref = temp->dbxref;
+  copy->pseudo = temp->pseudo;
+  copy->except_text = temp->except_text;
+
+  SetSeqLocPartial (copy->location, partial5, partial3);
+
+  SeqLocFree (temp->location);
+  SeqLocFree (temp->product);
+  MemFree (temp); /* do not SeqFeatFree */
+}
+
+static void PromoteNonCoding (
+  SeqEntryPtr sep,
+  Uint2 entityID,
+  CharPtr filename,
+  N2GPtr ngp,
+  SeqDescrPtr descr
+)
+
+{
+  BioSourcePtr       biop;
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  Int2               ctr = 1;
+  SeqMgrFeatContext  nccontext;
+  SeqFeatPtr         ncrna;
+  SeqEntryPtr        old, tmp, top;
+  ObjMgrDataPtr      omdptop;
+  ObjMgrData         omdata;
+  CharPtr            organism;
+  OrgRefPtr          orp;
+  Uint2              parenttype;
+  Pointer            parentptr;
+  SeqDescrPtr        sdp;
+
+  if (sep == NULL) return;
+
+  if (sep->choice == 2) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+
+    /* recursively visit components of genbank set */
+
+    if (bssp->_class == BioseqseqSet_class_genbank) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        PromoteNonCoding (sep, entityID, filename, ngp, descr);
+      }
+      return;
+    }
+  }
+
+  if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+    SeqMgrIndexFeatures (entityID, NULL);
+  }
+
+  top = sep;
+
+  if (StringHasNoText (filename)) {
+    filename = "?";
+  }
+
+  bsp = FindNucBioseq (top);
+  if (bsp == NULL) {
+    Message (MSG_OK, "Unable to find nucleotide Bioseq in %s", filename);
+    if (ngp != NULL) {
+      ngp->failure = TRUE;
+    }
+    return;
+  }
+
+  if (sep->choice == 1) {
+    SaveSeqEntryObjMgrData (top, &omdptop, &omdata);
+    GetSeqEntryParent (top, &parentptr, &parenttype);
+
+    bssp = BioseqSetNew ();
+    if (bssp == NULL) return;
+    bssp->_class = BioseqseqSet_class_gen_prod_set;
+
+    tmp = SeqEntryNew ();
+    if (tmp == NULL) return;
+    tmp->choice = 1;
+    tmp->data.ptrvalue = sep->data.ptrvalue;
+    bssp->seq_set = tmp;
+
+    sep->choice = 2;
+    sep->data.ptrvalue = bssp;
+
+    SeqMgrLinkSeqEntry (top, parenttype, parentptr);
+    RestoreSeqEntryObjMgrData (top, omdptop, &omdata);
+
+    SeqMgrClearFeatureIndexes (entityID, NULL);
+    SeqMgrIndexFeatures (entityID, NULL);
+  }
+
+  old = SeqEntrySetScope (top);
+
+  organism = NULL;
+  for (sdp = descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_source) continue;
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop == NULL) continue;
+    orp = biop->org;
+    if (orp == NULL) continue;
+    if (! StringHasNoText (orp->taxname)) {
+      organism = orp->taxname;
+    }
+  }
+
+  ctr = (Int2) VisitBioseqsInSep (top, NULL, NULL) + 1;
+
+  ncrna = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, 0, &nccontext);
+  while (ncrna != NULL) {
+    InstantiateNCRNA (ncrna, top, organism, &ctr, ngp);
+    ncrna = SeqMgrGetNextFeature (bsp, ncrna, SEQFEAT_RNA, 0, &nccontext);
+  }
+
+  SeqEntrySetScope (old);
+
+  SeqMgrClearFeatureIndexes (entityID, NULL);
 }
 
 static void NPStoGPS (
@@ -1101,8 +1474,6 @@ static void NPStoGPS (
       }
       mrna = SeqMgrGetNextFeature (bsp, mrna, 0, FEATDEF_mRNA, &fcontext);
     }
-
-    VisitFeaturesInSep (top, NULL, RemoveOrigPrefix);
 
   } else if (ngp->byFeatID) {
 
@@ -1314,6 +1685,20 @@ static void ProcessOneRecord (
 
       NPStoGPS (sep, entityID, file, ngp, descr1);
 
+      if (ngp->noncoding) {
+        PromoteNonCoding (sep, entityID, file, ngp, descr1);
+      }
+
+      if (ngp->byTscriptID) {
+        VisitFeaturesInSep (sep, NULL, RemoveOrigPrefix);
+      } 
+
+      if (ngp->removeunnecxref) {
+        SeqMgrClearFeatureIndexes (entityID, NULL);
+        SeqMgrIndexFeatures (entityID, NULL);
+        VisitFeaturesInSep (sep, NULL, RemoveUnnecessaryGeneXrefs);
+      }
+
       /* put pubs and biosources onto genomic-product set */
 
       ReplaceBioSourceAndPubs (sep, descr1);
@@ -1368,19 +1753,24 @@ static void ProcessOneRecord (
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath     0
-#define r_argOutputPath    1
-#define i_argInputFile     2
-#define o_argOutputFile    3
-#define f_argFilter        4
-#define x_argSuffix        5
-#define R_argRemote        6
-#define L_argLockFar       7
-#define T_argUseTscriptID  8
-#define F_argUseFeatID     9
-#define P_argUseProtID    10
-#define D_argRefSeqTitles 11
-#define Q_argSmartTitle   12
+typedef enum {
+  p_argInputPath = 0,
+  r_argOutputPath,
+  i_argInputFile,
+  o_argOutputFile,
+  f_argFilter,
+  x_argSuffix,
+  R_argRemote,
+  L_argLockFar,
+  T_argUseTscriptID,
+  F_argUseFeatID,
+  P_argUseProtID,
+  G_argGeneralID,
+  D_argRefSeqTitles,
+  Q_argSmartTitle,
+  N_argNonCoding,
+  U_argUnnecXref
+} Arguments;
 
 
 Args myargs [] = {
@@ -1406,17 +1796,23 @@ Args myargs [] = {
     TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
   {"mRNA ID from Protein", "F", NULL, NULL,
     TRUE, 'P', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"General ID Database", NULL, NULL, NULL,
+    TRUE, 'G', ARG_STRING, 0.0, 0, NULL},
   {"RefSeq mRNA Titles", "F", NULL, NULL,
     TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Special mRNA Titles", "F", NULL, NULL,
     TRUE, 'Q', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Promote Non-Coding RNAs", "F", NULL, NULL,
+    TRUE, 'N', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Remove Unnecessary Gene Xrefs", "F", NULL, NULL,
+    TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
-  Char     app [64];
-  CharPtr  directory, filter, infile, outfile, results, suffix;
+  Char     app [64], genDbAndQual [128];
+  CharPtr  directory, filter, infile, outfile, ptr, results, suffix;
   N2GData  ngd;
   Boolean  remote;
 
@@ -1464,6 +1860,17 @@ Int2 Main (void)
   ngd.useProtID = (Boolean) myargs [P_argUseProtID].intvalue;
   ngd.refSeqTitles = (Boolean) myargs [D_argRefSeqTitles].intvalue;
   ngd.smarttitle = (Boolean) myargs [Q_argSmartTitle].intvalue;
+  ngd.noncoding = (Boolean) myargs [N_argNonCoding].intvalue;
+  ngd.removeunnecxref = (Boolean) myargs [U_argUnnecXref].intvalue;
+  genDbAndQual [0] = '\0';
+  StringNCpy_0 (genDbAndQual, myargs [G_argGeneralID].strvalue, sizeof (genDbAndQual));
+  ngd.genDb = genDbAndQual;
+  ptr = StringChr (genDbAndQual, ':');
+  if (ptr != NULL) {
+    *ptr = '\0';
+    ptr++;
+    ngd.genQual = ptr;
+  }
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   results = (CharPtr) myargs [r_argOutputPath].strvalue;

@@ -57,7 +57,7 @@ Int2 Main(void)
 		{
 			AsnReadVal(aip, atp, &value);
 			uid = value.intvalue;
-			fprintf(fp, "%ld %ld\n", uid, seekptr);
+			fprintf(fp, "%d %d\n", uid, seekptr);
 		}
 		else
 			AsnReadVal(aip, atp, NULL);

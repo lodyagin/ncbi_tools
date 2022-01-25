@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.22 $
+ * $Revision: 6.25 $
  *
  * File Description: 
  *
@@ -71,7 +71,7 @@ extern "C" {
     "/cgi-bin/Sequin/testcgi.cgi",
     "request=seg&window=12&lowcut=2.3&hicut=2.6",
     "Sequin", 30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
-    fHTTP_SureFlush | fHTTP_UrlDecodeInput | fHTTP_UrlEncodeOutput
+    fHTTP_Flushable | fHTTP_UrlDecodeInput | fHTTP_UrlEncodeOutput
   );
 
   The returned CONN value is then passed data before being sent to the cgi.

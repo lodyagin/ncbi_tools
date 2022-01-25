@@ -1,4 +1,4 @@
-/* $Id: urlquery.c,v 6.60 2011/06/23 20:52:19 lavr Exp $
+/* $Id: urlquery.c,v 6.67 2012/02/13 22:27:46 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.60 $
+ * $Revision: 6.67 $
  *
  * File Description: 
  *
@@ -68,15 +68,14 @@ static void x_SetupUserHeader (
   char        user_header [MAX_CONTENT_TYPE_LEN + 80];
 
   /* content-type if specified */
-  if (type < eMIME_T_Unknown) {
-    VERIFY( MIME_ComposeContentTypeEx (type, subtype, encoding,
-                                       user_header, MAX_CONTENT_TYPE_LEN) );
+  if ( MIME_ComposeContentTypeEx (type, subtype, encoding,
+                                  user_header, MAX_CONTENT_TYPE_LEN) ) {
     ConnNetInfo_OverrideUserHeader (net_info, user_header);
   }
 
   /* allow the user to specify a prog. name, otherwise get it from elsewhere */
   if (StringHasNoText (appName)) {
-    const char* progName = GetProgramName();
+    const char* progName = GetProgramName ();
     if (StringHasNoText (progName)) {
       char path [PATH_MAX];
       Nlm_ProgramPath (path, sizeof (path));
@@ -116,7 +115,7 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
     return NULL;
 
   /* fill in connection info fields and create the connection */
-  net_info = ConnNetInfo_Create(0);
+  net_info = ConnNetInfo_Create (0);
   ASSERT ( net_info );
 
   x_SetupUserHeader (net_info, appName, type, subtype, encoding);
@@ -176,7 +175,7 @@ NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
 
   /* let the user agent be set with a program name */
   x_SetupUserHeader (net_info,
-                     NULL, eMIME_T_Unknown, eMIME_Unknown, eENCOD_None);
+                     NULL, eMIME_T_Undefined, eMIME_Undefined, eENCOD_None);
 
   if (timeoutsec == (Nlm_Uint4)(-1L)) {
     net_info->timeout  = kInfiniteTimeout;
@@ -556,7 +555,7 @@ static CONN QUERY_SendSimpleUrlQuery (
 
 {
   Char     ch;
-  CONN     conn;
+  CONN     conn = NULL;
   size_t   len;
   size_t   n_written;
   CharPtr  ptr;
@@ -581,14 +580,25 @@ static CONN QUERY_SendSimpleUrlQuery (
     }
   }
 
-  conn = QUERY_OpenUrlQuery (machine, port, path, query, NULL,
-                             30, eMIME_T_Text, eMIME_Xml, eENCOD_Url,
-                             fHTTP_SureFlush | /* fHTTP_UrlDecodeInput | */ fHTTP_UrlEncodeOutput);
+  if (StringHasNoText (post)) {
+    post = NULL;
+  }
+
+  if (post != NULL) {
+    conn = QUERY_OpenUrlQuery (machine, port, path, query, NULL, 30,
+                               eMIME_T_Application, eMIME_WwwForm, eENCOD_Url,
+                               fHTTP_Flushable);
+  } else {
+    conn = QUERY_OpenUrlQuery (machine, port, path, query, NULL, 30,
+                               eMIME_T_Undefined, eMIME_Undefined, eENCOD_None,
+                               fHTTP_Flushable);
+  }
 
   MemFree (query);
+
   if (conn == NULL) return NULL;
 
-  if (StringDoesHaveText (post)) {
+  if (post != NULL) {
     CONN_Write (conn, (const void *) post, StringLen (post), &n_written, eIO_WritePersist);
   }
 
@@ -626,9 +636,8 @@ NLM_EXTERN CharPtr QUERY_UrlSynchronousQuery (
   timeout.usec = 0;
 #endif
 
-
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
   }

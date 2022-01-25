@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.60 $
+* $Revision: 6.61 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -607,8 +607,8 @@ NLM_EXTERN Boolean SeqLocRevCmp(SeqLocPtr anp);
 
 NLM_EXTERN Int4 GetOffsetInLoc(SeqLocPtr of, SeqLocPtr in, Uint1 which_end);
 NLM_EXTERN Int4 GetOffsetInBioseq(SeqLocPtr of, BioseqPtr in, Uint1 which_end);
-NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end, Boolean is_circular);
-NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular, BoolPtr left_flip, BoolPtr right_flip );
+NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end, Boolean is_circular, Boolean relaxed);
+NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular, Boolean relaxed, BoolPtr left_flip, BoolPtr right_flip );
 NLM_EXTERN Int2 SeqLocOrder(SeqLocPtr a, SeqLocPtr b, BioseqPtr in);
 
 NLM_EXTERN Int2 SeqLocMol(SeqLocPtr seqloc);

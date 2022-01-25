@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.18  2011/12/19 18:36:34  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 6.17  2006/07/13 17:13:17  bollin
 * use Uint4 instead of Uint2 for itemID values
 *
@@ -2873,7 +2876,7 @@ static Boolean DOT_SVPopulateDiagViewer(DOTVibDataPtr vdp2)
     {
       for (index=1; index<MAXZOOMSCALEVAL; index++) 
         {
-          sprintf (str, "%d", (long) (zoomScaleVal [index]));
+          sprintf (str, "%d", (zoomScaleVal [index]));
           PopupItem (vdp2->sv->scale, str);
         }
       SetValue (vdp2->sv->scale, vdp2->sv->scaleIndex);
@@ -4962,9 +4965,9 @@ void DOT_SetupParamsWindow(DOTVibDataPtr vdp, Boolean is_startup, Boolean is_nuc
   sprintf(str1, "%d", mip->word_size);
   sprintf(str2, "%d", mip->tree_limit);
   if (is_nuc)
-    sprintf(str3, "(4 - 11):", NULL);
+    sprintf(str3, "(4 - 11):" /*, NULL*/);
   else
-    sprintf(str3, "(1, 2 or 3):", NULL);
+    sprintf(str3, "(1, 2 or 3):" /*, NULL*/);
 
   p1=HiddenGroup(g1, 3, 1, NULL);
   StaticPrompt(p1, "Word size ", 0, 0, systemFont, 'l');

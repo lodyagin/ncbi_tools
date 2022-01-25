@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.76 $
+* $Revision: 6.77 $
 *
 * File Description: 
 *
@@ -2439,6 +2439,17 @@ static ENUM_ALIST(topology_alist)
 {"Tandem",          TOPOLOGY_TANDEM},   /* 3 */
 {"Other",           255},               /* Other? */
 END_ENUM_ALIST
+
+extern CharPtr GetMoleculeTopologyName (Uint1 mol_val)
+{
+  Int4 i;
+  for (i = 0; i < sizeof (topology_alist) / sizeof (EnumFieldAssoc); i++) {
+    if (topology_alist[i].value == mol_val) {
+      return topology_alist[i].name;
+    }
+  }
+  return NULL;
+}
 
 static ENUM_ALIST(strand_alist)
 {" ",               Seq_strand_unknown},  /* 0 */

@@ -1,4 +1,4 @@
-/* $Id: wwwblast.c,v 1.15 2004/05/03 15:11:46 dondosha Exp $
+/* $Id: wwwblast.c,v 1.16 2011/12/19 18:41:34 gouriano Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description:
 *        Standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.c,v $
+* Revision 1.16  2011/12/19 18:41:34  gouriano
+* Corrected printf formatting. NOJIRA
+*
 * Revision 1.15  2004/05/03 15:11:46  dondosha
 * Added support for masking query in XML output
 *
@@ -1073,7 +1076,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                         
                         
                         /* Open HTML form */
-                        sprintf(form_name, "BLASTFORM%ld", query_number);
+                        sprintf(form_name, "BLASTFORM%d", query_number);
                         fprintf(stdout, "<FORM NAME=\"%s\">\n", form_name);
                         fflush(stdout);
                         
