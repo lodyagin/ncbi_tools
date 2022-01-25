@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.519 2006/09/27 18:51:01 camacho Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.529 2007/08/17 15:56:10 papadopo Exp $";
 
-/* $Id: readdb.c,v 6.519 2006/09/27 18:51:01 camacho Exp $ */
+/* $Id: readdb.c,v 6.529 2007/08/17 15:56:10 papadopo Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.519 $
+* $Revision: 6.529 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,39 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.529  2007/08/17 15:56:10  papadopo
+* 1. Make increment of reference count in readdb_attach atomic
+* 2. Never initialize the reference count to a fixed value when
+*    memory-mapping database files, only increment it (fixes RT 15280141)
+*
+* Revision 6.528  2007/07/12 20:44:07  papadopo
+* open .nsd as a binary file for writing
+*
+* Revision 6.527  2007/05/16 18:47:56  camacho
+* Fix RT#15284902
+*
+* Revision 6.526  2007/05/08 13:09:39  madden
+* Add ability to read STATS_NSEQ and STATS_TOTLEN from alias file with funciton readdb_get_stats_numbers
+*
+* Revision 6.525  2007/05/07 13:30:54  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.524  2007/05/03 15:51:53  madden
+* Do not require title to use alias file
+*
+* Revision 6.523  2007/04/12 20:19:06  camacho
+* Remove informational messages about membership/links bits
+*
+* Revision 6.522  2007/02/27 15:16:24  camacho
+* DBLIST field is mandatory
+*
+* Revision 6.521  2007/01/05 16:01:22  camacho
+* Force munmap of string ISAM files after exceeding kSISAM_MaxNumVolumes volumes
+* to avoid running out of memory on accession lookups. Fixes rt #15235977.
+*
+* Revision 6.520  2006/10/17 15:24:31  camacho
+* Fix memory leak when printing accession list in fastacmd
+*
 * Revision 6.519  2006/09/27 18:51:01  camacho
 * Bug fix in readdb_read_alias_file
 *
@@ -2170,11 +2203,12 @@ static Boolean ReadDBOpenMHdrAndSeqFiles(ReadDBFILEPtr rdfp)
       return TRUE;
    }
 
-   if (rdfp->shared_info->sequencefp == NULL && 
-       rdfp->shared_info->headerfp == NULL) 
-      rdfp->shared_info->nthreads = 1;
-   else /* Just attaching another thread, not opening a new memory map */
-      rdfp->shared_info->nthreads++;
+   /* the reference count can be incremented either here or
+      in readdb_attach, and may be nonzero even if the database
+      has not been memory-mapped. Hence, never initialize the
+      reference count, only increment it */
+
+   rdfp->shared_info->nthreads++;
 
    if (!((Boolean)(rdfp->parameters & READDB_NO_SEQ_FILE)) &&  
        rdfp->shared_info->sequencefp == NULL) {
@@ -2743,6 +2777,8 @@ typedef struct _readdb_alias_file {
         oidlist;       /* an ordinal id list to be used with this database. */
     Int8    len;       /* length of the database */
     Uint4   nseq;      /* number of seqs of the database */
+    Int8    len_stats;   /* length of the database for statistical purposes */
+    Uint4   nseq_stats;  /* number of seqs of the database for statistical purposes */
     Int4    first_oid; /* first ordinal id in a range */
     Int4    last_oid;  /* last ordinal id in a range */
     Int4    membership;/* membership bit */  
@@ -3061,6 +3097,40 @@ readdb_read_alias_file(CharPtr filename)
             
             continue;
         }
+        if (StringNCmp(buffer, "STATS_NSEQ", 10) == 0) {
+            ptr = buffer;
+            ptr += 10;
+            while (isspace((int)*ptr)) /* skip whitespace */
+                ptr++;
+            
+            newline_ptr = Nlm_StrChr(ptr, '\n');
+            if (newline_ptr != NULL) {
+                *newline_ptr = NULLB;
+            } else {
+                *ptr = NULLB;
+            }
+            if (*ptr != NULLB)
+                rdbap->nseq_stats = atol(ptr);
+            
+            continue;
+        }
+        if (StringNCmp(buffer, "STATS_TOTLEN", 12) == 0) {
+            ptr = buffer;
+            ptr += 12;
+            while (isspace((int)*ptr)) /* skip whitespace */
+                ptr++;
+            
+            newline_ptr = Nlm_StrChr(ptr, '\n');
+            if (newline_ptr != NULL) {
+                *newline_ptr = NULLB;
+            } else {
+                *ptr = NULLB;
+            }
+            if (*ptr != NULLB)
+                rdbap->len_stats = atol(ptr);
+            
+            continue;
+        }
         if (StringNCmp(buffer, "MAXLEN", 6) == 0) {
            ptr = buffer;
            ptr += 6;
@@ -3079,10 +3149,17 @@ readdb_read_alias_file(CharPtr filename)
            continue;
         }
     }
-    
+
     MemFree(file_path);
     MemFree(buffer);
     FILECLOSE(fp);
+
+    if (rdbap->dblist == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Alias file (%s) is missing DBLIST field\n",
+                  filename);
+        return ReadDBAliasFree(rdbap);
+    }
+    
     return rdbap;
 }
 
@@ -3163,11 +3240,19 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
             *rdfpp = rdfp;
             /* replace standard title with new one. */
             if (rdbap->title) {
+                ReadDBFILEPtr rdfp_var = NULL;
                 if (rdfp->title) {
                     MemFree(rdfp->title);
                 }
                 rdfp->title = rdbap->title;
                 rdbap->title = NULL;
+                /* Free all other titles since we use one from alias file. */
+                rdfp_var = rdfp->next;
+                while (rdfp_var) {
+                    rdfp_var->title = MemFree(rdfp_var->title);
+                    rdfp_var = rdfp_var->next;
+                }
+            }
         /* Length of the database is already calculated in alias file */
         if (rdbap->len) {
             rdfp->aliaslen = rdbap->len;
@@ -3178,18 +3263,17 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
         if (rdbap->maxlen) {
            rdfp->maxlen = rdbap->maxlen;
         }
+        if (rdbap->nseq_stats) {
+            rdfp->nseq_stats = rdbap->nseq_stats;
+        }
+        if (rdbap->len_stats) {
+           rdfp->totlen_stats = rdbap->len_stats;
+        }
 
         rdfp->membership_bit = rdbap->membership;
 
-                rdfp = rdfp->next;
-                while (rdfp) {
-                    rdfp->title = MemFree(rdfp->title);
-                    rdfp = rdfp->next;
-                }
-            }
-
-            rdbap = ReadDBAliasFree(rdbap);
-            return 1;
+        rdbap = ReadDBAliasFree(rdbap);
+        return 1;
     }
         rdbap = ReadDBAliasFree(rdbap);
         /* Try finding an index file */
@@ -3250,6 +3334,12 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
         }
         if (rdbap->maxlen) {
            rdfp->maxlen = rdbap->maxlen;
+        }
+        if (rdbap->nseq_stats) {
+            rdfp->nseq_stats = rdbap->nseq_stats;
+        }
+        if (rdbap->len_stats) {
+           rdfp->totlen_stats = rdbap->len_stats;
         }
         rdfp->membership_bit = rdbap->membership; 
         
@@ -4084,6 +4174,33 @@ readdb_get_totals_ex3 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len,
 
 }
 
+
+/* 
+	Gets the number to be used for statistical purposes.  Should be set in
+        alias file as STATS_NSEQ and STATS_TOTLEN.
+*/
+Boolean LIBCALL
+readdb_get_stats_numbers(ReadDBFILEPtr rdfp_list, Int4* num_seq_stats, Int8* tot_len_stats)
+{
+   Int4 num_seqs=0;
+   Int8 tot_len=0;
+
+   if (rdfp_list == NULL)
+     return FALSE;
+
+   while (rdfp_list)
+   {
+       num_seqs += rdfp_list->nseq_stats;
+       tot_len += rdfp_list->totlen_stats;
+       rdfp_list = rdfp_list->next;
+   }
+   *num_seq_stats = num_seqs;
+   *tot_len_stats = tot_len;
+   return TRUE;
+}
+
+
+
 /*
     Checks whether a ReadDBFILEPtr is the original, or just attaced.
     It does this by checking the rdfp->contents_allocated flag.
@@ -4338,8 +4455,14 @@ readdb_attach (ReadDBFILEPtr rdfp)
 
         /* Copy address of shared information */
         new_t->shared_info = rdfp->shared_info;
-        if(new_t->shared_info != NULL) 
+
+        /* increment the reference count atomically */
+
+        if(new_t->shared_info != NULL) {
+             NlmMutexLockEx(&hdrseq_mutex);
              rdfp->shared_info->nthreads++;
+             NlmMutexUnlock(hdrseq_mutex);
+        }
 
         /* Contents_allocated also does not apply to buffer, this is
         determined by allocated_length. */
@@ -4967,8 +5090,12 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
     return -1;
 }
 
+/** Maximum number of volumes in a ReadDBFILEPtr linked list after which we
+ * start munmap'ing the ISAM files to avoid running out of memory */
+static const size_t kSISAM_MaxNumVolumes = 10;
+
 /*
-  Returnes array of sequence numbers by accession using SISAM indexes:
+  Returns array of sequence numbers by accession using SISAM indexes:
 
   ReadDBFILEPtr rdfp: the main ReadDB reference,
   CharPtr string - input accession to find
@@ -4984,6 +5111,7 @@ readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string, Int4Ptr PNTR ids,
                    Int4Ptr count)
 {
     ISAMErrorCode error;
+    size_t vol_counter = 0;
     SeqIdPtr sip;
 
     if(rdfp->sisam_opt == NULL || string == NULL)
@@ -5005,7 +5133,7 @@ readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string, Int4Ptr PNTR ids,
         }
     }
                                   
-    while (rdfp) {
+    for (vol_counter = 0; rdfp; rdfp = rdfp->next, vol_counter++) {
         error =  SISAMFindAllData(rdfp->sisam_opt, string, ids, count);
         
         if(error != ISAMNotFound) {
@@ -5017,12 +5145,15 @@ readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string, Int4Ptr PNTR ids,
             }
             return 1;
         } 
-        rdfp = rdfp->next;
+        if (vol_counter >= kSISAM_MaxNumVolumes) {
+            ISAMUninitSearch(rdfp->sisam_opt);
+        }
     }
     return -1;
 }
 /*
-  Returnes Int4 sequence_number by accession/locus using SISAM indexes:
+  Returns the first (*) Int4 sequence_number found by accession/locus using 
+  SISAM indexes:
   
   ReadDBFILEPtr rdfp: the main ReadDB reference,
   CharPtr string - input accession to find
@@ -5030,6 +5161,10 @@ readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string, Int4Ptr PNTR ids,
   Returned 0 indicates, that gi was found
   Returned -1 indicates, that gi was not found
   Returned negative value mean fault of ISAM library
+
+  (*): This means that in multi-volume databases (which potentially join 
+  databases which might contain the same sequence), only the first match will be
+  returned.
 */
 
 Int4 LIBCALL
@@ -5041,6 +5176,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
     CharPtr key_out = NULL, data = NULL;
     Uint4 index;
     Char tmp_str[64];
+    size_t vol_counter = 0;
     SeqIdPtr sip;
 
     if(rdfp->sisam_opt == NULL || string == NULL)
@@ -5054,7 +5190,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
         return Value;
     }
 
-    while (rdfp)
+    for (vol_counter = 0; rdfp; rdfp = rdfp->next, vol_counter++)
     {
         if((error = ISAMGetIdxOption(rdfp->sisam_opt, &rdfp->sparse_idx)) < 0) {
             ErrPostEx(SEV_WARNING, 0, 0, "Failed to access string index "
@@ -5150,7 +5286,9 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
                     MemFree(data);
             }
         }
-        rdfp = rdfp->next;
+        if (vol_counter >= kSISAM_MaxNumVolumes) {
+            ISAMUninitSearch(rdfp->sisam_opt);
+        }
     }
     
     return -1;
@@ -5508,7 +5646,7 @@ readdb_get_bioseq_ex(ReadDBFILEPtr rdfp, Int4 sequence_number,
         bsp->mol = Seq_mol_na;
     }
     
-    bsp->seq_data = byte_store;
+    bsp->seq_data = (SeqDataPtr) byte_store;
     
     bsp->length = length;
     bsp->id = sip;
@@ -7626,7 +7764,7 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
     if (clean_opt >= 0 && clean_opt < eCleanOptMax)
         options->clean_opt = clean_opt;
     else
-        options->clean_opt = 0;
+        options->clean_opt = (EFDBCleanOpt) 0;
 
     /* The following options are for NCBI use only */
     options->dump_info = dump_info;
@@ -7916,8 +8054,6 @@ ValNodePtr FDBLoadMembershipsTable(void)
     /* Get the number of bits used according to the config file */
     nbits = GetAppParamInt2("formatdb","MembershipBitNumbers","TotalNum",0);
     if (nbits <= 0) {
-        ErrPostEx(SEV_INFO,0,0,"No number of membership bits used found in "
-                "config file. Ignoring");
         return NULL;
     }
 
@@ -7957,8 +8093,10 @@ ValNodePtr FDBLoadMembershipsTable(void)
         if (mip->criteria != NULL) {
             ValNodeAddPointer(&retval,0,mip);
             mip = NULL;
+            /*
             ErrLogPrintf("Membership bit %d: criteria for '%s' determined "
                          "by function '%s'\n", bit, buffer, fn_name);
+                         */
         }
     }
     if (mip && mip->criteria == NULL)
@@ -7978,8 +8116,6 @@ ValNodePtr FDBLoadLinksTable(void)
     /* Get the number of bits used according to the config file */
     nbits = GetAppParamInt2("formatdb","LinkBitNumbers","TotalNum",0);
     if (nbits <= 0) {
-        ErrPostEx(SEV_INFO,0,0,"No number of link bits used found in config "
-                " file. Ignoring");
         return NULL;
     }
 
@@ -8720,7 +8856,7 @@ static Boolean FormatdbCreateStringIndex(const CharPtr FileName,
     sprintf(DBName, "%s.%csd",
             FileName, ProteinType ? 'p' : 'n'); 
     
-    if((fd_out = FileOpen(DBName, "w")) == NULL)
+    if((fd_out = FileOpen(DBName, "wb")) == NULL)
     {
         return FALSE;
     }
@@ -9568,15 +9704,19 @@ Int2 FDBAddSequence2(FormatDBPtr fdbp,  /* target blast db */
                                               
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp)
 {
+    if (bsp == NULL || bsp->seq_data_type == Seq_code_gap) return 0;
+
     if ( !bdp ) {
         ASSERT(fdbp->options->version == FORMATDB_VER_TEXT);
         return FDBAddSequence (fdbp, NULL, &bsp->seq_data_type, 
-                               &bsp->seq_data, bsp->length, 0,
-                               BioseqGetTitle(bsp), 0, 0, 0, 0, 0);
+                               (ByteStorePtr PNTR) &bsp->seq_data,
+                               bsp->length, 0, BioseqGetTitle(bsp),
+                               0, 0, 0, 0, 0);
     } else {
         ASSERT(fdbp->options->version >= FORMATDB_VER);
         return FDBAddSequence (fdbp, bdp, &bsp->seq_data_type, 
-                               &bsp->seq_data, bsp->length, NULL, NULL,
+                               (ByteStorePtr PNTR) &bsp->seq_data,
+                               bsp->length, NULL, NULL,
                                0, 0, 0, 0, 0);
     }
 
@@ -9610,7 +9750,9 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
     else
         /* This is Bioseq-set.  Exit */
         return 0;
-    
+
+    if (bsp == NULL || bsp->seq_data_type == Seq_code_gap) return 0;
+
     /* Make a convertion to stadard form */
     
     if (fdbp->options->is_protein)
@@ -9701,7 +9843,7 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
             
         if (fdbp->options->version > FORMATDB_VER_TEXT)
         {
-                if((bsp->seq_data = BSCompressDNANew(bsp->seq_data, bsp->length, 
+                if((bsp->seq_data = (SeqDataPtr) BSCompressDNANew((ByteStorePtr) bsp->seq_data, bsp->length, 
                                               &(AmbCharPtr))) == NULL) {
                     ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
@@ -9710,7 +9852,7 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
          }
          else
          {
-                if((bsp->seq_data = BSCompressDNA(bsp->seq_data, bsp->length, 
+                if((bsp->seq_data = (SeqDataPtr) BSCompressDNA((ByteStorePtr) bsp->seq_data, bsp->length, 
                                               &(AmbCharPtr))) == NULL) {
                     ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
@@ -9723,21 +9865,21 @@ Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
             /* if sequence already in ncbi2na format we have to update last byte */
             
             if((remainder = (bsp->length%4)) == 0) {
-                BSSeek(bsp->seq_data, bsp->length/4+1, SEEK_SET);
-                BSPutByte(bsp->seq_data, NULLB);
+                BSSeek((ByteStorePtr) bsp->seq_data, bsp->length/4+1, SEEK_SET);
+                BSPutByte((ByteStorePtr) bsp->seq_data, NULLB);
             } else {
-                BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                ch = remainder + BSGetByte(bsp->seq_data);
-                BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                BSPutByte(bsp->seq_data, ch);
+                BSSeek((ByteStorePtr) bsp->seq_data, bsp->length/4, SEEK_SET);
+                ch = remainder + BSGetByte((ByteStorePtr) bsp->seq_data);
+                BSSeek((ByteStorePtr) bsp->seq_data, bsp->length/4, SEEK_SET);
+                BSPutByte((ByteStorePtr) bsp->seq_data, ch);
             }
         }
     }
     /* Now dumping sequence */
     
-    BSSeek(bsp->seq_data, 0, SEEK_SET);
+    BSSeek((ByteStorePtr) bsp->seq_data, 0, SEEK_SET);
     
-    while((len = BSRead(bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) {
+    while((len = BSRead((ByteStorePtr) bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) {
         if (FileWrite(tmpbuff, len, 1, fdbp->fd_seq) != (Uint4) 1)
             return 1;
     }
@@ -10279,7 +10421,7 @@ Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen,
             
         if (fdbp->options->version > FORMATDB_VER_TEXT)
         {
-                if((bsp->seq_data = BSCompressDNANew(bsp->seq_data, bsp->length, 
+                if((bsp->seq_data = (SeqDataPtr) BSCompressDNANew((ByteStorePtr) bsp->seq_data, bsp->length, 
                                               &(fdbp->AmbCharPtr))) == NULL) {
                     ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
@@ -10288,7 +10430,7 @@ Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen,
          }
          else
          {
-                if((bsp->seq_data = BSCompressDNA(bsp->seq_data, bsp->length, 
+                if((bsp->seq_data = (SeqDataPtr) BSCompressDNA((ByteStorePtr) bsp->seq_data, bsp->length, 
                                               &(fdbp->AmbCharPtr))) == NULL) {
                     ErrLogPrintf("Error converting ncbi4na to ncbi2na. " 
                              "Formating failed.\n");
@@ -10301,19 +10443,19 @@ Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen,
             Uint1 ch, remainder; 
             
             if((remainder = (bsp->length%4)) == 0) {
-                BSSeek(bsp->seq_data, bsp->length/4+1, SEEK_SET);
-                BSPutByte(bsp->seq_data, NULLB);
+                BSSeek((ByteStorePtr) bsp->seq_data, bsp->length/4+1, SEEK_SET);
+                BSPutByte((ByteStorePtr) bsp->seq_data, NULLB);
             } else {
-                BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                ch = remainder + BSGetByte(bsp->seq_data);
-                BSSeek(bsp->seq_data, bsp->length/4, SEEK_SET);
-                BSPutByte(bsp->seq_data, ch);
+                BSSeek((ByteStorePtr) bsp->seq_data, bsp->length/4, SEEK_SET);
+                ch = remainder + BSGetByte((ByteStorePtr) bsp->seq_data);
+                BSSeek((ByteStorePtr) bsp->seq_data, bsp->length/4, SEEK_SET);
+                BSPutByte((ByteStorePtr) bsp->seq_data, ch);
             }
         }
         /* Now dumping sequence */
         
-        BSSeek(bsp->seq_data, 0, SEEK_SET);
-        while((len = BSRead(bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) {
+        BSSeek((ByteStorePtr) bsp->seq_data, 0, SEEK_SET);
+        while((len = BSRead((ByteStorePtr) bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) {
             BLASTFileFunc(bsp, FASTA_SEQLINE, tmpbuff, len, data);
         }
         
@@ -10477,7 +10619,7 @@ static void FDBSeqEntry_callback (SeqEntryPtr sep, Pointer data,
         SeqEntryFasta(sep, fsedip->tfp, index, indent);
         
         FDBAddSequence(fsedip->fdbp, NULL, &bsp->seq_data_type, 
-                       &bsp->seq_data, bsp->length, 
+                       (ByteStorePtr PNTR) &bsp->seq_data, bsp->length, 
                        fsedip->seqid, fsedip->defline, 0, 0, 0, 0, 0);
         
         /* Reseting mfp structure */
@@ -12028,20 +12170,15 @@ Int2 DumpOneSequence(const ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen,
   case eGi:
   case eAccession:
     {
-      Int4 taxid = 0;
       Uint4 h = 0;     /* header marker for readdb_get_header_ex */
-      CharPtr title = NULL;
       SeqIdPtr sip = NULL;
-      while (readdb_get_header_ex(rdfp, i, &h, &sip, &title, 
-				  &taxid, NULL, NULL)) {
+      while (readdb_get_header(rdfp, i, &h, &sip, NULL)) {
 	if (dump_type == eGi) {
 	  SeqIdPtr gi = SeqIdFindBest(sip, SEQID_GI);
 	  if (gi) {
 	    fprintf(fp, "%d\n", gi->data.intvalue);
 	    retval=1;
 	  }
-	  sip = SeqIdFree(sip);
-	  title = MemFree(title);
 	}
 	if (dump_type == eAccession) {
 	  SeqIdPtr accn = SeqIdFindBestAccession(sip);
@@ -12058,10 +12195,10 @@ Int2 DumpOneSequence(const ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen,
 	    else
 	      ErrPostEx(SEV_WARNING, 0, 0, "No accession found for oid %d", i);
 	    
-	    accn = SeqIdFree(accn);
 	    id = MemFree(id);
 	  }
 	}
+	  sip = SeqIdFree(sip);
       }
     }
     break;

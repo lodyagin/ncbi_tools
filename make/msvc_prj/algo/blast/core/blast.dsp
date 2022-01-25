@@ -58,11 +58,15 @@ SOURCE=..\..\..\..\..\algo\blast\core\aa_ungapped.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\blast_diagnostics.c
+SOURCE=..\..\..\..\..\algo\blast\core\blast_aalookup.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\blast_dust.c
+SOURCE=..\..\..\..\..\algo\blast\core\blast_aascan.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_diagnostics.c
 # End Source File
 # Begin Source File
 
@@ -94,10 +98,6 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_hspstream.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\blast_inline.h
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\..\..\algo\blast\core\blast_itree.c
 # End Source File
 # Begin Source File
@@ -118,6 +118,14 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_message.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_nalookup.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_nascan.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_options.c
 # End Source File
 # Begin Source File
@@ -131,6 +139,14 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_psi_priv.c
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_psi_priv.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_dynarray.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_dynarray.h
 # End Source File
 # Begin Source File
 
@@ -166,11 +182,19 @@ SOURCE=..\..\..\..\..\algo\blast\core\gapinfo.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\gencode_singleton.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\greedy_align.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\hspstream_collector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\index_ungapped.c
 # End Source File
 # Begin Source File
 
@@ -190,7 +214,7 @@ SOURCE=..\..\..\..\..\algo\blast\core\matrix_freq_ratios.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\mb_lookup.c
+SOURCE=..\..\..\..\..\algo\blast\core\na_ungapped.c
 # End Source File
 # Begin Source File
 
@@ -240,6 +264,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_query_info.c
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_tune.c
 # End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\split_query.c
+# End Source File
 # End Group
 
 # Begin Group "Header Files"
@@ -251,15 +279,19 @@ SOURCE=..\..\..\..\..\algo\blast\core\aa_ungapped.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_aalookup.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_aascan.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_def.h
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_diagnostics.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\..\algo\blast\core\blast_dust.h
 # End Source File
 # Begin Source File
 
@@ -296,6 +328,14 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_lookup.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_message.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_nalookup.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_nascan.h
 # End Source File
 # Begin Source File
 
@@ -347,11 +387,19 @@ SOURCE=..\..\..\..\..\algo\blast\core\gapinfo.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\gencode_singleton.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\greedy_align.h
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\hspstream_collector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\index_ungapped.h
 # End Source File
 # Begin Source File
 
@@ -371,11 +419,11 @@ SOURCE=..\..\..\..\..\algo\blast\core\matrix_freq_ratios.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\mb_lookup.h
+SOURCE=..\..\..\..\..\algo\blast\core\mb_indexed_lookup.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\mb_indexed_lookup.h
+SOURCE=..\..\..\..\..\algo\blast\core\na_ungapped.h
 # End Source File
 # Begin Source File
 
@@ -416,6 +464,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_query_info.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_tune.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\split_query.h
 # End Source File
 # Begin Source File
 

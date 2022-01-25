@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: web_blast.pl,v 1.5 2006/04/27 13:09:23 coulouri Exp $
+# $Id: web_blast.pl,v 1.6 2007/06/06 17:41:09 coulouri Exp $
 #
 # ===========================================================================
 #
@@ -120,27 +120,27 @@ while (true)
     $req = new HTTP::Request GET => "http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid";
     $response = $ua->request($req);
 
-    if ($response->content =~ /\tStatus=WAITING/m)
+    if ($response->content =~ /\s+Status=WAITING/m)
         {
         # print STDERR "Searching...\n";
         next;
         }
 
-    if ($response->content =~ /\tStatus=FAILED/m)
+    if ($response->content =~ /\s+Status=FAILED/m)
         {
         print STDERR "Search $rid failed; please report to blast-help\@ncbi.nlm.nih.gov.\n";
         exit 4;
         }
 
-    if ($response->content =~ /\tStatus=UNKNOWN/m)
+    if ($response->content =~ /\s+Status=UNKNOWN/m)
         {
         print STDERR "Search $rid expired.\n";
         exit 3;
         }
 
-    if ($response->content =~ /\tStatus=READY/m) 
+    if ($response->content =~ /\s+Status=READY/m) 
         {
-        if ($response->content =~ /\tThereAreHits=yes/m)
+        if ($response->content =~ /\s+ThereAreHits=yes/m)
             {
             #  print STDERR "Search complete, retrieving results...\n";
             last;

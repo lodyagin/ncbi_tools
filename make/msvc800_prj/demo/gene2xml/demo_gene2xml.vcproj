@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_gene2xml"
-	ProjectGUID="{A0C56792-C183-4618-AE41-9E07E9BAE559}"
+	ProjectGUID="{A276E338-0D0C-4A5C-88C7-531574422EBA}"
 	>
 	<Platforms>
 		<Platform
@@ -869,7 +869,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -878,7 +878,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -887,7 +887,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -896,7 +896,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -905,7 +905,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -914,7 +914,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -923,7 +923,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -932,7 +932,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions=""
-						AdditionalIncludeDirectories="\iva.c\link\mswin"
+						AdditionalIncludeDirectories="\ivanov\ncbi\link\mswin"
 					/>
 				</FileConfiguration>
 			</File>

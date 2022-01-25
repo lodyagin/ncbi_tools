@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.46 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.46  2007/05/04 13:43:59  kans
+* GetOpSysString now checks for Windows VISTA
+*
+* Revision 6.45  2007/04/06 21:47:56  kans
+* Nlm_GetOpSysString checks gestaltSystemVersion and returns actual Mac OS X version
+*
+* Revision 6.44  2007/04/03 00:39:41  kans
+* GetOpSysString does run-time check for Rosetta
+*
 * Revision 6.43  2005/12/02 13:40:00  rsmith
 * In ProgramPath on Mac use case-insensitive compare to check the file extension.
 *
@@ -2396,9 +2405,22 @@ NLM_EXTERN Nlm_Boolean Nlm_FreeArgs(Nlm_Int2 numargs, Nlm_ArgPtr ap)
   return TRUE;
 }
 
+#ifdef OS_UNIX_DARWIN
+#include <sys/sysctl.h>
+#endif
+
 NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
 
 {
+#ifdef OS_UNIX_DARWIN
+#ifdef PROC_PPC
+  Nlm_Boolean  isRosetta = FALSE;
+  size_t       len;
+  int          mib [2];
+  Nlm_Char     model [32];
+#endif
+  long         sysVer;
+#endif
   Nlm_CharPtr  str = "unknown";
 
 #if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
@@ -2422,10 +2444,71 @@ NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
 
 #ifdef OS_UNIX_DARWIN
 #ifdef PROC_PPC
-  str = "MAC PPC on OS X";
+  mib [0] = CTL_HW;
+  mib [1] = HW_MODEL;
+  len = sizeof (model);
+  if (sysctl (mib, 2, &model, &len, NULL, 0) == 0) {
+    isRosetta = (Nlm_Boolean) (len == 9 && strcmp (model, "PowerMac") == 0);
+  }
+  if (isRosetta) {
+    str = "MAC Rosetta on OS X";
+    if ( Gestalt (gestaltSystemVersion, &sysVer) == noErr) {
+      if (sysVer >= 4192) {
+        str = "MAC Rosetta on OS 10.6";
+      } else if (sysVer >= 4176) {
+        str = "MAC Rosetta on OS 10.5";
+      } else if (sysVer >= 4160) {
+        str = "MAC Rosetta on OS 10.4";
+      } else if (sysVer >= 4144) {
+        str = "MAC Rosetta on OS 10.3";
+      } else if (sysVer >= 4128) {
+        str = "MAC Rosetta on OS 10.2";
+      } else if (sysVer >= 4112) {
+        str = "MAC Rosetta on OS 10.1";
+      } else {
+        str = "MAC Rosetta on OS X";
+      }
+    }
+  } else {
+    str = "MAC PPC on OS X";
+    if ( Gestalt (gestaltSystemVersion, &sysVer) == noErr) {
+      if (sysVer >= 4192) {
+        str = "MAC PPC on OS 10.6";
+      } else if (sysVer >= 4176) {
+        str = "MAC PPC on OS 10.5";
+      } else if (sysVer >= 4160) {
+        str = "MAC PPC on OS 10.4";
+      } else if (sysVer >= 4144) {
+        str = "MAC PPC on OS 10.3";
+      } else if (sysVer >= 4128) {
+        str = "MAC PPC on OS 10.2";
+      } else if (sysVer >= 4112) {
+        str = "MAC PPC on OS 10.1";
+      } else {
+        str = "MAC PPC on OS X";
+      }
+    }
+  }
 #else
 #ifdef PROC_I80X86
   str = "MAC 386 on OS X";
+  if ( Gestalt (gestaltSystemVersion, &sysVer) == noErr) {
+    if (sysVer >= 4192) {
+      str = "MAC 386 on OS 10.6";
+    } else if (sysVer >= 4176) {
+      str = "MAC 386 on OS 10.5";
+    } else if (sysVer >= 4160) {
+      str = "MAC 386 on OS 10.4";
+    } else if (sysVer >= 4144) {
+      str = "MAC 386 on OS 10.3";
+    } else if (sysVer >= 4128) {
+      str = "MAC 386 on OS 10.2";
+    } else if (sysVer >= 4112) {
+      str = "MAC 386 on OS 10.1";
+    } else {
+      str = "MAC 386 on OS X";
+    }
+  }
 #else
   str = "MAC UNIX on OS X";
 #endif
@@ -2461,7 +2544,9 @@ NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
   version = GetVersion ();
   lowbyte = (version & 0x0000FF);
   if ((version & 0x80000000) == 0) {
-    if (lowbyte == 5) {
+    if (lowbyte == 6) {
+      str = "MS WINDOWS VISTA";
+    } else if (lowbyte == 5) {
       str = "MS WINDOWS 2000/XP";
     } else if (lowbyte == 4) {
       str = "MS WINDOWS NT 4.0";

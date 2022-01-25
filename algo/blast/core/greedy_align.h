@@ -1,4 +1,4 @@
-/* $Id: greedy_align.h,v 1.23 2005/11/16 14:31:37 madden Exp $
+/* $Id: greedy_align.h,v 1.26 2007/04/17 16:55:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,10 +31,10 @@
  * Prototypes and structures for greedy gapped alignment
  */
 
-#ifndef _GREEDY_H_
-#define _GREEDY_H_
+#ifndef ALGO_BLAST_CORE__GREEDY_ALIGN__H
+#define ALGO_BLAST_CORE__GREEDY_ALIGN__H
 
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/gapinfo.h>
 
 #ifdef __cplusplus
@@ -94,6 +94,13 @@ typedef struct SGreedyAlignMem {
                                            SGreedyOffset structs */
 } SGreedyAlignMem;
 
+/** Structure for locating high-scoring seeds for greedy alignment */
+typedef struct SGreedySeed {
+    Int4 start_q;       /**< query offset of start of run of matches */
+    Int4 start_s;       /**< subject offset of start of run of matches */
+    Int4 match_length;  /**< length of run of matches */
+} SGreedySeed;
+
 /** Perform the greedy extension algorithm with non-affine gap penalties.
  * @param seq1 First sequence (always uncompressed) [in]
  * @param len1 Maximal extension length in first sequence [in]
@@ -110,6 +117,8 @@ typedef struct SGreedyAlignMem {
  *          Traceback is not saved if NULL is passed. [in] [out]
  * @param rem Offset within a byte of the compressed second sequence. 
  *          Set to 4 if sequence is uncompressed. [in]
+ * @param fence_hit True is returned here if overrun is detected. [in]
+ * @param seed Structure to remember longest run of exact matches [out]
  * @return The minimum distance between the two sequences, i.e.
  *          the number of mismatches plus gaps in the resulting alignment
  */
@@ -120,7 +129,8 @@ BLAST_GreedyAlign (const Uint1* seq1, Int4 len1,
                    Int4 match_cost, Int4 mismatch_cost,
                    Int4* seq1_align_len, Int4* seq2_align_len, 
                    SGreedyAlignMem* aux_data, 
-                   GapPrelimEditBlock *edit_block, Uint1 rem);
+                   GapPrelimEditBlock *edit_block, Uint1 rem,
+                   Boolean * fence_hit, SGreedySeed *seed);
 
 /** Perform the greedy extension algorithm with affine gap penalties.
  * @param seq1 First sequence (always uncompressed) [in]
@@ -140,6 +150,8 @@ BLAST_GreedyAlign (const Uint1* seq1, Int4 len1,
  *          Traceback is not saved if NULL is passed. [in] [out]
  * @param rem Offset within a byte of the compressed second sequence.
  *          Set to 4 if sequence is uncompressed. [in]
+ * @param fence_hit True is returned here if overrun is detected. [in]
+ * @param seed Structure to remember longest run of exact matches [out]
  * @return The score of the alignment
  */
 Int4 
@@ -150,9 +162,10 @@ BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
                          Int4 in_gap_open, Int4 in_gap_extend,
                          Int4* seq1_align_len, Int4* seq2_align_len, 
                          SGreedyAlignMem* aux_data, 
-                         GapPrelimEditBlock *edit_block, Uint1 rem);
+                         GapPrelimEditBlock *edit_block, Uint1 rem,
+                         Boolean * fence_hit, SGreedySeed *seed);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* _GREEDY_H_ */
+#endif /* !ALGO_BLAST_CORE__GREEDY_ALIGN__H */

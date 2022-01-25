@@ -51,7 +51,7 @@
 #include <string.h>
 
 #include "SocketsInternal.h"
-#include "netdb.h"
+#include "carbon_netdb.h"
 
 
 //  prototypes

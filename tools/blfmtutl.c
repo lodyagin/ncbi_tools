@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.23 2006/10/12 19:51:32 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.31 2007/08/23 19:45:47 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,30 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.31  2007/08/23 19:45:47  coulouri
+* bump date
+*
+* Revision 1.30  2007/08/17 12:42:52  coulouri
+* bump date
+*
+* Revision 1.29  2007/06/24 13:26:54  coulouri
+* bump version
+*
+* Revision 1.28  2007/06/14 17:58:15  papadopo
+* allow alignments in denseg form to contain leading or trailing gaps
+*
+* Revision 1.27  2007/06/04 20:26:18  papadopo
+* limit the number of subject sequences cached in the obje manager during tabular output
+*
+* Revision 1.26  2007/03/23 19:24:41  coulouri
+* bump release date
+*
+* Revision 1.25  2007/03/15 14:29:04  coulouri
+* bump release date
+*
+* Revision 1.24  2007/03/02 15:53:13  coulouri
+* prepare for March 11th C toolkit release
+*
 * Revision 1.23  2006/10/12 19:51:32  coulouri
 * bump release date
 *
@@ -120,8 +144,8 @@ Contents: Utilities for BLAST formatting
 #include <jzcoll.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.15"
-#define BLAST_RELEASE_DATE "Oct-15-2006"
+#define BLAST_ENGINE_VERSION "2.2.17"
+#define BLAST_RELEASE_DATE "Aug-26-2007"
 
 #define BUFFER_LENGTH 255
 
@@ -968,7 +992,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    SeqAlignPtr sap, sap_tmp = NULL;
    FloatHi perc_ident, bit_score, evalue;
    Int4 numseg, num_gap_opens, num_mismatches, num_ident, score;
-   Int4 number, align_length, index, i;
+   Int4 number, align_length, index, i, j;
    Int4 q_start, q_end, s_start, s_end;
    Char bit_score_buff[10];
    CharPtr eval_buff;
@@ -983,6 +1007,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    CharPtr defline, title;
    SeqLocPtr slp;
    Int4 alignments_count;
+   Int4 objmgr_count = 0;
 
    is_translated = (StringCmp(blast_program, "blastn") &&
                     StringCmp(blast_program, "blastp"));
@@ -1052,6 +1077,13 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
          if (--alignments_count < 0)
             continue;
          BioseqUnlock(subject_bsp);
+
+         /* object manager cache is limited in size */
+         if (++objmgr_count > 8000) {
+            objmgr_count = 0;
+            ObjMgrFreeCache(OBJ_MAX);
+         }
+
          subject_bsp = BioseqLockById(subject_id);
       
          if (!subject_bsp || !subject_bsp->id)
@@ -1126,17 +1158,44 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
             }
             perc_ident = perc_ident / align_length * 100;
 
-            if (dsp->strands[0] != dsp->strands[1]) {
-               q_start = dsp->starts[2*numseg-2] + 1;
-               q_end = dsp->starts[0] + dsp->lens[0];
-               s_end = dsp->starts[1] + 1;
-               s_start = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
-            } else {
-               q_start = dsp->starts[0] + 1;
-               q_end = dsp->starts[2*numseg-2] + dsp->lens[numseg-1];
-               s_start = dsp->starts[1] + 1;
-               s_end = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
+            /* compute half the sequence offsets (account for
+               leading gaps in the alignment) */
+            if (dsp->starts[0] == -1) {
+                i = 1; j = 0;
             }
+            else if (dsp->starts[1] == -1) {
+                i = 0; j = 1;
+            }
+            else {
+                i = j = 0;
+            }
+            if (dsp->strands[0] != dsp->strands[1]) {
+               q_end = dsp->starts[2*i] + dsp->lens[i];
+               s_end = dsp->starts[2*j+1] + 1;
+            } else {
+               q_start = dsp->starts[2*i] + 1;
+               s_start = dsp->starts[2*j+1] + 1;
+            }
+
+            /* compute half the sequence offsets (account for
+               trailing gaps in the alignment) */
+            if (dsp->starts[2*numseg-2] == -1) {
+                i = numseg-1; j = numseg;
+            }
+            else if (dsp->starts[2*numseg-1] == -1) {
+                i = numseg; j = numseg-1;
+            }
+            else {
+                i = j = numseg;
+            }
+            if (dsp->strands[0] != dsp->strands[1]) {
+               q_start = dsp->starts[2*i-2] + 1;
+               s_start = dsp->starts[2*j-1] + dsp->lens[j-1];
+            } else {
+               q_end = dsp->starts[2*i-2] + dsp->lens[i-1];
+               s_end = dsp->starts[2*j-1] + dsp->lens[j-1];
+            }
+
          } else if (sap->segtype == SAS_STD) {
             if (!ssp)
                ssp = (StdSegPtr) sap->segs;

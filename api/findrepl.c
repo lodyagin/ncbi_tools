@@ -44,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.25  2006/10/25 21:38:25  kans
+* adding source qualifier metagenomic
+*
 * Revision 6.24  2006/08/31 16:34:32  kans
 * FindReplAuthor handles consortium, properly replaces pid->data, not pNameStr, for string choices
 *
@@ -1048,7 +1051,8 @@ static void FindReplBioSource (
       if (ssp->subtype != SUBSRC_germline &&
           ssp->subtype != SUBSRC_rearranged &&
           ssp->subtype != SUBSRC_transgenic &&
-          ssp->subtype != SUBSRC_environmental_sample) {
+          ssp->subtype != SUBSRC_environmental_sample &&
+          ssp->subtype != SUBSRC_metagenomic) {
         FindReplString (&(ssp->name), fsp);
       }
       FindReplString (&(ssp->attrib), fsp);

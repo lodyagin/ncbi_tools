@@ -1,0 +1,72 @@
+.TH CLEANASN 1 2006-05-29 NCBI "NCBI Tools User's Manual"
+.SH NAME
+cleanasn \- clean up irregularities in NCBI ASN.1 Seq-entry objects
+.SH SYNOPSIS
+.B cleanasn
+[\|\fB\-\fP\|]
+[\|\fB\-R\fP\|]
+[\|\fB\-c\fP\ \fIstr\fP\|]
+[\|\fB\-f\fP\ \fIstr\fP\|]
+[\|\fB\-l\fP\ \fIstr\fP\|]
+\fB\-p\fP\ \fIpath\fP
+[\|\fB\-r\fP\ \fIpath\fP\|]
+[\|\fB\-t\fP\|]
+.SH DESCRIPTION
+\fBcleanasn\fP is a utility program to clean up irregularities in NCBI
+ASN.1 Seq-entry or Seq-submit objects.
+.SH OPTIONS
+A summary of options is included below.
+.TP
+\fB\-\fP
+Print usage message
+.TP
+\fB\-R\fP
+Enable remote fetching from NCBI's ID database
+.TP
+\fB\-c\fP\ \fIstr\fP
+Perform general clean-ups, per the flags in \fIstr\fP:
+.RS
+.PD 0
+.IP b
+BasicSeqEntryCleanup
+.IP s
+SeriousSeqEntryCleanup
+.PD
+.RE
+.TP
+\fB\-f\fP\ \fIstr\fP
+Remove extraneous features, per the flags in \fIstr\fP:
+.RS
+.PD 0
+.IP u
+Remove User objects
+.IP d
+Remove Database cross-references
+.IP r
+Remove Redundant gene cross-references
+.PD
+.RE
+.TP
+\fB\-l\fP\ \fIstr\fP
+Link related features, per the flags in \fIstr\fP:
+.RS
+.PD 0
+.IP o
+LinkCDSmRNAbyOverlap
+.IP p
+LinkCDSmRNAbyProduct
+.IP r
+ReassignFeatureIDs
+.PD
+.RE
+.TP
+\fB\-p\fP\ \fIpath\fP
+Path to input files
+.TP
+\fB\-r\fP\ \fIpath\fP
+Path for Results (changes are otherwise made in place)
+.TP
+\fB\-t\fP
+Enable Taxonomy lookup
+.SH AUTHOR
+The National Center for Biotechnology Information.

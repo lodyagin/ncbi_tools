@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.c,v 1.29 2006/10/05 20:18:49 papadopo Exp $
+/* $Id: blast_parameters.c,v 1.36 2007/05/22 20:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,14 +30,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_parameters.c,v 1.29 2006/10/05 20:18:49 papadopo Exp $";
+    "$Id: blast_parameters.c,v 1.36 2007/05/22 20:55:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_parameters.h>
-#include <algo/blast/core/blast_lookup.h>
-#include <algo/blast/core/mb_lookup.h>
-#include <algo/blast/core/phi_lookup.h>
-#include <algo/blast/core/blast_rps.h>
+#include <algo/blast/core/ncbi_math.h>
+#include <algo/blast/core/blast_nalookup.h>
 #include <algo/blast/core/blast_hits.h>
 
 /** Returns true if the Karlin-Altschul block doesn't have its lambda, K, and H
@@ -120,50 +118,6 @@ s_BlastFindSmallestLambda(Blast_KarlinBlk** kbp_in,
     return min_lambda;
 }
 
-/** Determines optimal extension method given 1.) the type of
- * search (e.g., program, whether rps, discontig. mb etc.).
- * 2.) whether a flag is set specifying the AG stride option
- * if 2.) is true then the lookup table has been set up for AG stride
- *
- * @param lookup_wrap pointer to lookup table [in]
- * @return suggested extension method.  eMaxSeedExtensionMethod means 
- *     the input lookup table was not found. 
- */
-static ESeedExtensionMethod
-s_GetBestExtensionMethod(const LookupTableWrap* lookup_wrap)
-{
-   ESeedExtensionMethod retval = eMaxSeedExtensionMethod;
-
-   ASSERT(lookup_wrap);
-
-   switch (lookup_wrap->lut_type) {
-     case AA_LOOKUP_TABLE:
-     case PHI_AA_LOOKUP:  
-     case PHI_NA_LOOKUP:
-     case RPS_LOOKUP_TABLE:
-         retval = eRight;
-         break;
-     case NA_LOOKUP_TABLE:
-         if (((BlastLookupTable*)lookup_wrap->lut)->ag_scanning_mode == TRUE)
-               retval = eRightAndLeft;
-         else
-               retval = eRight;
-         break;
-     case MB_LOOKUP_TABLE:
-         if (((BlastMBLookupTable*)lookup_wrap->lut)->template_length > 0)
-               retval = eUpdateDiag;   /* Used for discontiguous megablast. */
-         else
-               retval = eRightAndLeft;
-         break;
-     case INDEXED_MB_LOOKUP_TABLE:
-         retval = eRightAndLeft;
-         break;
-   }
-   ASSERT(retval != eMaxSeedExtensionMethod);
-
-   return retval;
-}
-
 BlastInitialWordParameters*
 BlastInitialWordParametersFree(BlastInitialWordParameters* parameters)
 
@@ -189,6 +143,7 @@ s_GetCutoffEvalue(EBlastProgramType program)
    case eBlastTypeBlastx: 
       return CUTOFF_E_BLASTX;
    case eBlastTypeTblastn:
+   case eBlastTypePsiTblastn:
    case eBlastTypeRpsTblastn:
       return CUTOFF_E_TBLASTN;
    case eBlastTypeTblastx:
@@ -211,7 +166,7 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
    BlastInitialWordParameters* *parameters)
 {
    BlastInitialWordParameters *p;
-   Blast_KarlinBlk* kbp_std;
+   Blast_KarlinBlk* kbp;
    Int2 status = 0;
    Int4 context;
    const int kQueryLenForHashTable = 8000; /* For blastn, use hash table rather 
@@ -225,7 +180,7 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
 
    ASSERT(word_options);
    ASSERT(sbp);
-   if (s_BlastFindValidKarlinBlk(sbp->kbp_std, query_info, &kbp_std) != 0)
+   if (s_BlastFindValidKarlinBlk(sbp->kbp, query_info, &kbp) != 0)
          return -1;
 
    p = *parameters = (BlastInitialWordParameters*)calloc(1, 
@@ -243,11 +198,11 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
 
       if (!(query_info->contexts[context].is_valid))
          continue;
-      kbp_std = sbp->kbp_std[context];
-      ASSERT(s_BlastKarlinBlkIsValid(kbp_std));
-      p->cutoffs[context].x_dropoff_init = (Int4)(sbp->scale_factor * 
-                                     ceil(word_options->x_dropoff * 
-                                          NCBIMATH_LN2 / kbp_std->Lambda));
+      kbp= sbp->kbp[context];
+      ASSERT(s_BlastKarlinBlkIsValid(kbp));
+      p->cutoffs[context].x_dropoff_init =
+          (Int4)(sbp->scale_factor *
+                 ceil(word_options->x_dropoff * NCBIMATH_LN2 / kbp->Lambda));
    }
 
    if (program_number == eBlastTypeBlastn &&
@@ -256,8 +211,6 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
        p->container_type = eDiagHash;
    else
        p->container_type = eDiagArray;
-
-   p->extension_method = s_GetBestExtensionMethod(lookup_wrap);
 
    status = BlastInitialWordParametersUpdate(program_number,
                hit_params, sbp, query_info, subject_length, p);
@@ -509,7 +462,6 @@ BlastScoringParametersNew(const BlastScoringOptions* score_options,
    params->penalty = score_options->penalty;
    params->gap_open = score_options->gap_open * (Int4)scale_factor;
    params->gap_extend = score_options->gap_extend * (Int4)scale_factor;
-   params->decline_align = score_options->decline_align * (Int4)scale_factor;
    params->shift_pen = score_options->shift_pen * (Int4)scale_factor;
    return 0;
 }
@@ -723,8 +675,9 @@ BlastHitSavingParametersNew(EBlastProgramType program_number,
       BlastLinkHSPParametersNew(program_number, gapped_calculation,
                                 &params->link_hsp_params);
 
-      if(program_number == eBlastTypeBlastx  ||
-         program_number == eBlastTypeTblastn) {
+      if((Blast_QueryIsTranslated(program_number) ||
+	  Blast_SubjectIsTranslated(program_number)) &&
+	 program_number != eBlastTypeTblastx) {
           /* The program may use Blast_UnevenGapLinkHSPs find significant
              collections of distinct alignments */
           Int4 max_protein_gap; /* the largest gap permitted in the
@@ -852,12 +805,12 @@ BlastHitSavingParametersUpdate(EBlastProgramType program_number,
 
       /* If using sum statistics, use a modified cutoff score 
          if that turns out smaller */
-      if (params->options->do_sum_stats && gapped_calculation) {
+      if (params->link_hsp_params && gapped_calculation) {
 
          double evalue_hsp = 1.0;
          Int4 concat_qlen =
              query_info->contexts[query_info->last_context].query_offset +
-             query_info->contexts[query_info->last_context].query_length - 1;
+             query_info->contexts[query_info->last_context].query_length;
          Int4 avg_qlen = concat_qlen / (query_info->last_context + 1);
          Int8 searchsp = (Int8)MIN(avg_qlen, avg_subject_length) * 
                          (Int8)avg_subject_length;
@@ -904,7 +857,7 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
    const BlastInitialWordParameters* word_params,
    Int8 db_length, Int4 subject_length)
 {
-    Blast_KarlinBlk* kbp;
+    Blast_KarlinBlk* kbp = NULL;
     double gap_prob, gap_decay_rate, x_variable, y_variable;
     Int4 expected_length, window_size, query_length;
     Int8 search_sp;
@@ -987,6 +940,27 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
  * ===========================================================================
  *
  * $Log: blast_parameters.c,v $
+ * Revision 1.36  2007/05/22 20:55:36  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
+ * Revision 1.35  2007/03/05 15:25:34  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
+ * Revision 1.34  2007/02/08 16:55:42  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
+ * Revision 1.33  2007/01/21 08:45:12  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
+ * Revision 1.32  2006/12/13 19:12:56  papadopo
+ * remove dynamic choice of seed extension method (no practical difference between the various methods now)
+ *
+ * Revision 1.31  2006/12/01 16:52:25  papadopo
+ * choose mini-extension type for improved blastn lookup tables
+ *
+ * Revision 1.30  2006/11/21 17:06:23  papadopo
+ * rearrange headers, use enum for lookup table types
+ *
  * Revision 1.29  2006/10/05 20:18:49  papadopo
  * set the alignment cutoff scores to infinity for invalid contexts (resolves RT#15205407)
  *

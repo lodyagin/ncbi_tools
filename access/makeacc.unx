@@ -23,3 +23,7 @@ asntool -m insdseq.asn -o asninsdseq.h
 mv asninsdseq.h ../asnstat/
 asntool -m insdseq.asn -G -B objinsdseq -K asninsdseq.h -Z
 
+asntool -m mla2.asn -o asnmla2.h
+mv asnmla2.h ../asnstat/
+asntool -m mla2.asn -M ../asn/pub.asn,../asn/biblio.asn,../asn/medline.asn,../asn/medlars.asn,../asn/pubmed.asn -G -B objmla2 -I mlkludge.h -K asnmla2.h -Z
+

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.25  2007/03/13 13:33:13  bollin
+* Initialize variables before they are used.
+*
 * Revision 6.24  2006/09/14 19:18:29  ivanov
 * Rollback last changes. All missed defines added to corelib/ncbiwin.h.
 *
@@ -4576,7 +4579,7 @@ static void Nlm_MultiAppendPopList (Nlm_ChoicE c, Nlm_CharPtr PNTR titles, Nlm_B
   Nlm_WindoW     tempPort;
   Nlm_Int4       wid;
 #ifdef WIN_MSWIN
-  Nlm_Int2       num;
+  Nlm_Int2       num = 0;
   Nlm_PopupTool  u;
 #endif
 #ifdef WIN_MOTIF
@@ -4584,7 +4587,7 @@ static void Nlm_MultiAppendPopList (Nlm_ChoicE c, Nlm_CharPtr PNTR titles, Nlm_B
   Nlm_ItemTool  *hdls;
   Nlm_ItemTool   itool;
   XmString       label;
-  Nlm_Int2       num;
+  Nlm_Int2       num = 0;
   Nlm_PopupTool  u;
 #endif
 

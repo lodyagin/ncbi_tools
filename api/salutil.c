@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -632,7 +632,7 @@ NLM_EXTERN SeqEntryPtr StringToSeqEntry (CharPtr str, SeqIdPtr sip, Int4 length_
   }
   bsp->length = 0;
   bs = BSNew (length_align);
-  bsp->seq_data = bs;
+  bsp->seq_data = (SeqDataPtr) bs;
   while ((ch = *str) != '\0' && ch != ';' && bsp->length < length_align) {   
          ch = TO_UPPER (ch); 
          if ( ISA_na (mol_type) ) {

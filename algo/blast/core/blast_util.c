@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.116 2006/09/12 20:53:45 camacho Exp $
+/* $Id: blast_util.c,v 1.121 2007/01/21 08:45:13 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,13 +34,20 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.116 2006/09/12 20:53:45 camacho Exp $";
+    "$Id: blast_util.c,v 1.121 2007/01/21 08:45:13 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_stat.h>
+
+void
+__sfree(void **x)
+{
+    free(*x);
+    *x = NULL;
+    return;
+}
 
 Int2
 BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length,
@@ -140,6 +147,8 @@ BLAST_SequenceBlk* BlastSequenceBlkFree(BLAST_SequenceBlk* seq_blk)
    BlastSequenceBlkClean(seq_blk);
    if (seq_blk->lcase_mask_allocated)
       BlastMaskLocFree(seq_blk->lcase_mask);
+   if (seq_blk->compressed_nuc_seq_start)
+      sfree(seq_blk->compressed_nuc_seq_start);
    sfree(seq_blk);
    return NULL;
 }
@@ -257,7 +266,21 @@ s_CodonToAA (Uint1* codon, const Uint1* codes)
                                2,     /* C */
                                1,     /* A */
                                4 };   /* G */
-
+   
+   /* Arithmetic should be faster than conditionals (i.e. with &&s.)
+      The OR cannot result in anything larger than 15 unless it is a
+      FENCE_SENTRY byte or an error, but I poll the individual bytes
+      just in case. */
+   
+   if ((codon[0] | codon[1] | codon[2]) > 15) {
+       if ((codon[0] == FENCE_SENTRY) ||
+           (codon[1] == FENCE_SENTRY) ||
+           (codon[2] == FENCE_SENTRY)) {
+           
+           return FENCE_SENTRY;
+       }
+   }
+   
    for (i = 0; i < 4; i++) {
       if (codon[0] & mapping[i]) {
          index0 = i * 16;
@@ -311,7 +334,7 @@ BLAST_GetTranslation(const Uint1* query_seq, const Uint1* query_seq_rev,
 		codon[1] = nucl_seq[index+1];
 		codon[2] = nucl_seq[index+2];
 		residue = s_CodonToAA(codon, genetic_code);
-		if (IS_residue(residue))
+		if (IS_residue(residue) || residue == FENCE_SENTRY)
 		{
 			prot_seq[index_prot] = residue;
 			index_prot++;
@@ -322,6 +345,51 @@ BLAST_GetTranslation(const Uint1* query_seq, const Uint1* query_seq_rev,
 	return index_prot - 1;
 }
 
+Int2
+BlastCompressBlastnaSequence(BLAST_SequenceBlk *seq_blk)
+{
+    Int4 i;
+    Int4 curr_letter;
+    Int4 max_start;
+    Int4 len = seq_blk->length;
+    Uint1* old_seq = seq_blk->sequence;
+    Uint1* new_seq;
+
+    seq_blk->compressed_nuc_seq_start = 
+                        (Uint1 *)malloc((len + 3) * sizeof(Uint1));
+    new_seq = seq_blk->compressed_nuc_seq = 
+                        seq_blk->compressed_nuc_seq_start + 3;
+
+    new_seq[-1] = new_seq[-2] = new_seq[-3] = 0;
+    new_seq[len-3] = new_seq[len-2] = new_seq[len-1] = 0;
+
+    /* the first 3 bytes behind new_seq contain right-justified
+       versions of the first 3 (or less) bases */
+    max_start = MIN(3, len);
+    curr_letter = 0;
+    for (i = 0; i < max_start; i++) {
+        curr_letter = curr_letter << 2 | (old_seq[i] & 3);
+        new_seq[i - max_start] = curr_letter;
+    }
+
+    /* offset i into new_seq points to bases i to i+3
+       packed together into one byte */
+
+    for (; i < len; i++) {
+        curr_letter = curr_letter << 2 | (old_seq[i] & 3);
+        new_seq[i - max_start] = curr_letter;
+    }
+
+    /* the last 3 bytes contain left-justified versions of 
+       the last 3 (or less) bases */
+    max_start = MIN(3, len);
+    for (i = 0; i < max_start; i++) {
+        curr_letter = curr_letter << 2;
+        new_seq[len - (max_start - i)] = curr_letter;
+    }
+
+    return 0;
+}
 
 /*
   Translate a compressed nucleotide sequence without ambiguity codes.
@@ -660,12 +728,9 @@ Int1 BLAST_ContextToFrame(EBlastProgramType prog_number, Uint4 context_number)
          frame = 1;
       else
          frame = -1;
-   } else if (prog_number == eBlastTypeBlastp   ||
-              prog_number == eBlastTypeRpsBlast ||
-              prog_number == eBlastTypeTblastn  ||
-              Blast_ProgramIsPsiBlast(prog_number) ||
-              Blast_ProgramIsPhiBlast(prog_number)) {
-      /* Query and subject are protein, no frame. */
+   } else if (Blast_QueryIsProtein(prog_number) ||
+	      prog_number == eBlastTypePhiBlastn) {
+      /* Query is an untranslated protein, a pattern, or a PSSM, no frame. */
       frame = 0;
    } else if (prog_number == eBlastTypeBlastx  ||
               prog_number == eBlastTypeTblastx ||
@@ -1145,32 +1210,17 @@ char* BLAST_StrToUpper(const char* string)
 unsigned int
 BLAST_GetNumberOfContexts(EBlastProgramType p)
 {
-    unsigned int retval = 0;
-
-    switch (p) {
-    case eBlastTypeBlastn:
-    case eBlastTypePhiBlastn:
-        retval = NUM_STRANDS;
-        break;
-    case eBlastTypeBlastp:
-    case eBlastTypeRpsBlast:
-    case eBlastTypeTblastn: 
-    case eBlastTypePsiBlast:
-    case eBlastTypePsiTblastn:
-    case eBlastTypePhiBlastp:
-        retval = 1;
-        break;
-    case eBlastTypeBlastx:
-    case eBlastTypeTblastx:
-    case eBlastTypeRpsTblastn: 
-        retval = NUM_FRAMES;
-        break;
-    default:
-        break;
+    if (Blast_QueryIsTranslated(p)) {
+        return NUM_FRAMES;
+    } else if (Blast_QueryIsNucleotide(p)) {
+        return NUM_STRANDS;
+    } else if (Blast_ProgramIsValid(p)){
+        return 1;
+    } else {
+	return 0;
     }
-
-    return retval;
 }
+
 
 SBlastProgress* SBlastProgressNew(void* user_data)
 {

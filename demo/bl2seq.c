@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.86 2006/08/28 14:11:37 coulouri Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.88 2007/05/07 13:29:11 kans Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,12 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.86 2006/08/28 14:11:37 coulouri E
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.88  2007/05/07 13:29:11  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.87  2007/03/20 14:56:58  camacho
+* Call GeneticCodeSingletonInit/GeneticCodeSingletonFini
+*
 * Revision 6.86  2006/08/28 14:11:37  coulouri
 * correct seqids in asn.1 output when input sequences are specified as accessions; fixes rt#15192840
 *
@@ -303,6 +309,7 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.86 2006/08/28 14:11:37 coulouri E
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/repeats_filter.h>
 #include <algo/blast/core/blast_util.h>
+#include <algo/blast/api/blast_api.h>
 
 #define LOCAL_BUFLEN 255
 static BioseqPtr
@@ -799,6 +806,7 @@ Int2 Main_new(void)
         Uint1 strand_option = 0; /* FIXME */
         SBlastOptions* search_options = NULL; /* Needed for formatting. */
         SBlastSeqalignArray* seqalign_arr = NULL;
+        GeneticCodeSingletonInit();
         
         strand_option = (Uint1) myargs[ARG_STRAND].intvalue;
 
@@ -948,6 +956,7 @@ Int2 Main_new(void)
         slp2 = SeqLocSetFree(slp2);
 
         fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
+        GeneticCodeSingletonFini();
 
         return 0;
 

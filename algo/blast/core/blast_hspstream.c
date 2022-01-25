@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.c,v 1.5 2005/02/10 17:06:03 dondosha Exp $
+/*  $Id: blast_hspstream.c,v 1.8 2007/07/27 18:25:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,11 +33,10 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hspstream.c,v 1.5 2005/02/10 17:06:03 dondosha Exp $";
+    "$Id: blast_hspstream.c,v 1.8 2007/07/27 18:25:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_hspstream.h>
-#include <algo/blast/core/blast_def.h>      /* needed for sfree */
 
 /** Complete type definition of Blast Hsp Stream ADT */
 struct BlastHSPStream {
@@ -48,6 +47,9 @@ struct BlastHSPStream {
    
    BlastHSPStreamMethod      WriteFnPtr;  /**< Write to BlastHSPStream */
    BlastHSPStreamMethod      ReadFnPtr;   /**< Read from BlastHSPStream */
+   BlastHSPStreamMergeFnType MergeFnPtr;  /**< Merge two BlastHSPStreams */
+   BlastHSPStreamBatchReadMethod  BatchReadFnPtr;  /**< Batch read from 
+                                                     BlastHSPStream */
    BlastHSPStreamCloseFnType CloseFnPtr;  /**< Close BlastHSPStream for
                                              writing */
    void* DataStructure;                   /**< ADT holding HSPStream */
@@ -96,6 +98,78 @@ BlastHSPStream* BlastHSPStreamFree(BlastHSPStream* hsp_stream)
     }
 
     return (BlastHSPStream*) (*destructor_fnptr)(hsp_stream);
+}
+
+int BlastHSPStreamMerge(SSplitQueryBlk *squery_blk,
+                        Uint4 chunk_num,
+                        BlastHSPStream* hsp_stream,
+                        BlastHSPStream* combined_hsp_stream)
+{
+    BlastHSPStreamMergeFnType merge_fnptr = NULL;
+
+    if (!hsp_stream || !combined_hsp_stream)
+       return kBlastHSPStream_Error;
+
+    /* Make sure the input streams are compatible */
+    if (hsp_stream->MergeFnPtr != hsp_stream->MergeFnPtr)
+       return kBlastHSPStream_Error;
+
+    /** Merge functionality is optional. If merge function is not provided,
+        just do nothing. */
+    if ( !(merge_fnptr = (*hsp_stream->MergeFnPtr))) {
+       return kBlastHSPStream_Success;
+    }
+
+    return (*merge_fnptr)(squery_blk, chunk_num, 
+                          hsp_stream, combined_hsp_stream);
+}
+
+
+BlastHSPStreamResultBatch * 
+Blast_HSPStreamResultBatchInit(Int4 num_hsplists)
+{
+    BlastHSPStreamResultBatch *retval = (BlastHSPStreamResultBatch *)
+                             calloc(1, sizeof(BlastHSPStreamResultBatch));
+
+    retval->hsplist_array = (BlastHSPList **)calloc((size_t)num_hsplists,
+                                               sizeof(BlastHSPList *));
+    return retval;
+}
+
+BlastHSPStreamResultBatch * 
+Blast_HSPStreamResultBatchFree(BlastHSPStreamResultBatch *batch)
+{
+    if (batch != NULL) {
+        sfree(batch->hsplist_array);
+        sfree(batch);
+    }
+    return NULL;
+}
+
+void Blast_HSPStreamResultBatchReset(BlastHSPStreamResultBatch *batch)
+{
+    Int4 i;
+    for (i = 0; i < batch->num_hsplists; i++) {
+        sfree(batch->hsplist_array[i]);
+    }
+    batch->num_hsplists = 0;
+}
+
+int BlastHSPStreamBatchRead(BlastHSPStream* hsp_stream,
+                            BlastHSPStreamResultBatch *batch)
+{
+    BlastHSPStreamBatchReadMethod batch_read = NULL;
+
+    if (!hsp_stream || !batch)
+       return kBlastHSPStream_Error;
+
+    /** Batch read functionality is optional. If batch read 
+        function is not provided, just do nothing. */
+    if ( !(batch_read = (*hsp_stream->BatchReadFnPtr))) {
+       return kBlastHSPStream_Success;
+    }
+
+    return (*batch_read)(hsp_stream, batch);
 }
 
 void BlastHSPStreamClose(BlastHSPStream* hsp_stream)
@@ -214,8 +288,16 @@ int SetMethod(BlastHSPStream* hsp_stream,
         hsp_stream->ReadFnPtr = fnptr_type.method;
         break;
 
+    case eBatchRead:
+        hsp_stream->BatchReadFnPtr = fnptr_type.batch_read;
+        break;
+
     case eWrite:
         hsp_stream->WriteFnPtr = fnptr_type.method;
+        break;
+
+    case eMerge:
+        hsp_stream->MergeFnPtr = fnptr_type.mergeFn;
         break;
 
     case eClose:

@@ -1,4 +1,4 @@
-/* $Id: pattern.c,v 1.21 2006/09/26 15:56:26 madden Exp $
+/* $Id: pattern.c,v 1.22 2006/11/21 17:13:25 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,10 +56,9 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: pattern.c,v 1.21 2006/09/26 15:56:26 madden Exp $";
+    "$Id: pattern.c,v 1.22 2006/11/21 17:13:25 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/pattern.h>
 #include "pattern_priv.h"
 

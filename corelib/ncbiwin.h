@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.12  2006/11/24 20:05:36  kans
+* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
+*
 * Revision 6.11  2006/09/14 19:51:37  ivanov
 * Added defines for missed *LongPtr on MSVC6
 *
@@ -132,6 +135,10 @@
 #undef FloatHiPtr
 
 #ifdef WIN_MAC
+#ifndef __MWERKS__
+#include <Carbon/Carbon.h>
+#endif
+#ifdef __MWERKS__
 #include <Controls.h>
 #if UNIVERSAL_INTERFACES_VERSION > 0x0320
 #include <ControlDefinitions.h>  /* pjc added 11/20/99 */
@@ -161,13 +168,16 @@
 #include <Sound.h>
 #include <Folders.h>
 #endif
+#endif
 
 	                   /* used in ncbifile.c *****/
 #ifdef OS_MAC
+#ifdef __MWERKS__
 #include <Errors.h>
 #include <Gestalt.h>
 #include <MacMemory.h>
 #include <Processes.h>
+#endif
 #endif
 
 #ifdef OS_UNIX_SUN

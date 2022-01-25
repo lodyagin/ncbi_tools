@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/31/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       API for Medline Archive service
@@ -53,6 +53,9 @@
 *
 * RCS Modification History:
 * $Log: medarch.c,v $
+* Revision 6.3  2007/01/29 15:36:18  kans
+* added commented-out calls to LaunchAsnTextViewer for future debugging
+*
 * Revision 6.2  2005/04/28 19:11:49  kans
 * s_MedArchCitMatchPmId uses DEBUG_MED_ARCH_CIT_MATCH_PMID environment variable to save Mla-request to origmlarequest.txt file
 *
@@ -869,6 +872,11 @@ static ValNodePtr
 /*+
 -*/
 /******************************************************************************/
+
+/*
+extern void LaunchAsnTextViewer (Pointer from, AsnWriteFunc writefunc, CharPtr title);
+*/
+
 static Int4
 /*FCN*/s_MedArchGetTitles (
   CharPtr PNTR titles_found,
@@ -892,12 +900,21 @@ static Int4
     tmsgp->title->data.ptrvalue = (Pointer) StringSave(title_to_lookup);
     mlarp->data.ptrvalue = (Pointer) tmsgp;
     MlaRequestAsnWrite (mlarp, asnout, NULL);
+
+/*
+LaunchAsnTextViewer ((Pointer) mlarp, (AsnWriteFunc) MlaRequestAsnWrite, "medarch request");
+*/
+
     AsnIoReset(asnout);
     MlaRequestFree (mlarp);
 
     if ( (mlabp = NetMedArchReadAsn()) == NULL ) {
         return 0;
     }
+
+/*
+LaunchAsnTextViewer ((Pointer) mlabp, (AsnWriteFunc) MlaBackAsnWrite, "medarch result");
+*/
 
     if ( mlabp->choice != MlaBack_gettitle ) {
         MlaBackFree (mlabp);

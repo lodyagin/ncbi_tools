@@ -1,4 +1,4 @@
-/* $Id: blast_seg.c,v 1.36 2005/06/06 14:55:50 camacho Exp $
+/* $Id: blast_seg.c,v 1.37 2006/11/21 17:08:06 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE                          
@@ -36,10 +36,11 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seg.c,v 1.36 2005/06/06 14:55:50 camacho Exp $";
+    "$Id: blast_seg.c,v 1.37 2006/11/21 17:08:06 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_seg.h>
+#include <algo/blast/core/ncbi_math.h>
 #include <algo/blast/core/blast_filter.h>
 
 

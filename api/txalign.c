@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.93 2006/07/13 12:58:15 bollin Exp $
+/* $Id: txalign.c,v 6.94 2007/05/07 13:28:35 kans Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.93 $
+* $Revision: 6.94 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.94  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
 * Revision 6.93  2006/07/13 12:58:15  bollin
 * removed unused variables
 *
@@ -1059,7 +1062,7 @@ NLM_EXTERN Boolean replace_bytestore_data (BioseqPtr bsp, ValNodePtr bs_list, Ui
 			if(b_store != NULL)
 			{
 				bsp->repr = Seq_repr_raw;
-				bsp->seq_data = b_store;
+				bsp->seq_data = (SeqDataPtr) b_store;
 				bsp->seq_data_type = code;
 				return TRUE;
 			}
@@ -1251,7 +1254,7 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FI
     Int1 frame;
     Uint1 code;
     Uint1 repr;
-    ByteStorePtr seq_data;
+    ByteStorePtr seq_data = NULL;
     
     
     annot = hannot;
@@ -1357,6 +1360,10 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FI
         FreeAlignNode(anp_node);
         return FALSE;
     }
+    if (m_bsp->seq_data_type == Seq_code_gap) {
+        BioseqUnlock(m_bsp);
+        return FALSE;
+    }
     
     if(mask_loc != NULL)
         bs_list = CreateMaskByteStore (mask_loc);
@@ -1364,7 +1371,7 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FI
         bs_list = NULL;
     
     repr = m_bsp->repr;
-    seq_data = m_bsp->seq_data;
+    seq_data = (ByteStorePtr) m_bsp->seq_data;
     code = m_bsp->seq_data_type;
     
     if(matrix == NULL && (option & TXALIGN_MATRIX_VAL || load_matrix)) {
@@ -1383,7 +1390,7 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3(SeqAnnotPtr hannot, Int4 line_len, FI
             
             if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame)) {
                 m_bsp->repr = repr;
-                m_bsp->seq_data = seq_data;
+                m_bsp->seq_data = (SeqDataPtr) seq_data;
                 m_bsp->seq_data_type = code;
             }
         }
@@ -1415,7 +1422,7 @@ SeqAlignPtr last_align=NULL;
                     if(frame != -1 && bs_list != NULL) {
                         if(!replace_bytestore_data (m_bsp, bs_list, (Uint1)frame)) {
                             m_bsp->repr = repr;
-                            m_bsp->seq_data = seq_data;
+                            m_bsp->seq_data = (SeqDataPtr) seq_data;
                             m_bsp->seq_data_type = code;
                         }
                     }
@@ -1438,7 +1445,7 @@ SeqAlignPtr last_align=NULL;
     }
     
     m_bsp->repr = repr;
-    m_bsp->seq_data = seq_data;
+    m_bsp->seq_data = (SeqDataPtr) seq_data;
     m_bsp->seq_data_type = code;
     
     if (matrix_loaded)

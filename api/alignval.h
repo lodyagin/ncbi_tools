@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.14 $
+* $Revision: 6.18 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: alignval.h,v $
+* Revision 6.18  2007/07/05 17:50:49  bollin
+* Added validation INFO when alignment stops before ends of sequences.
+* Added red vertical bar to columns in alignment assistant when weighted
+* percent identity for column is less than 50%.
+*
+* Revision 6.17  2007/02/28 21:07:13  bollin
+* Added function for weighted percent identity for alignments
+*
+* Revision 6.16  2006/10/23 15:11:42  bollin
+* Moved AlignmentPercentIdentity and supporting functions here from
+* tools/salptool.c to avoid library dependency problems.
+*
+* Revision 6.15  2006/10/20 13:30:22  bollin
+* Added Validator error for alignment percent identity.
+*
 * Revision 6.14  2003/11/14 18:06:42  kans
 * added do_hist_assembly parameter
 *
@@ -85,6 +100,17 @@ NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message,
                                  Boolean delete_bsp, Boolean delete_salp,
                                  Boolean do_hist_assembly);
 
+extern Uint2 AlignmentPercentIdentity (SeqAlignPtr salp, Boolean internal_gaps);
+extern Uint2 WeightedAlignmentPercentIdentity (SeqAlignPtr salp, Boolean internal_gaps);
+
+extern double *
+GetAlignmentColumnPercentIdentities 
+(SeqAlignPtr salp,
+ Int4    start,
+ Int4    stop,
+ Boolean internal_gaps,
+ Boolean internal_validation);
+
 
 #define Err_SeqId 1
 #define Err_Strand_Rev 2
@@ -104,6 +130,8 @@ NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message,
 #define Err_Segs_Dim_One 16
 #define Err_SeqAlign_Dim_One 17
 #define Err_Segtype 18
+#define Err_Pcnt_ID 20
+#define Err_Short_Aln 21
 
 #ifdef __cplusplus
 }

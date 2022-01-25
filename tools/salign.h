@@ -54,6 +54,4 @@ NLM_EXTERN SeqLocPtr AlignmRNA2genomic (BioseqPtr bsp1, BioseqPtr bsp2);
 
 NLM_EXTERN SeqAnnotPtr BlastBandAlignFromBlastSeqAlign (SeqAlignPtr salpblast, Boolean align_ends);
 
-NLM_EXTERN SeqAnnotPtr LIBCALL SeqEntryToSeqAlign (SeqEntryPtr sep, Uint1 bsp_mol);
-
 #endif

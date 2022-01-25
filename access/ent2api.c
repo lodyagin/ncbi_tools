@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.95 $
+* $Revision: 1.104 $
 *
 * File Description: 
 *
@@ -54,7 +54,7 @@
 /* utility functions */
 
 NLM_EXTERN void EntrezSetProgramName (
-  CharPtr progname
+  const char* progname
 )
 
 {
@@ -64,48 +64,49 @@ NLM_EXTERN void EntrezSetProgramName (
                                          : StringSave (progname)));
 }
 
-static CharPtr EntrezGetProgramName (
+static const char* EntrezGetProgramName (
   void
 )
 
 {
-  Char     path [PATH_MAX];
-  CharPtr  ptr;
+  char         path [PATH_MAX];
+  const char*  ptr;
 
-  ptr = (CharPtr) GetAppProperty (ENTREZ_TOOL_PROPERTY);
+  ptr = (const char*) GetAppProperty (ENTREZ_TOOL_PROPERTY);
   if (StringHasNoText (ptr)) {
     Nlm_ProgramPath (path, sizeof (path));
     ptr = StringRChr (path, DIRDELIMCHR);
     if (ptr != NULL) {
       ptr++;
       EntrezSetProgramName (ptr);
-      ptr = (CharPtr) GetAppProperty (ENTREZ_TOOL_PROPERTY);
+      ptr = (const char*) GetAppProperty (ENTREZ_TOOL_PROPERTY);
     }
   }
   return ptr;
 }
 
 /* override service name */
-static CharPtr  e2_service = NULL;
+static const char*  e2_service = NULL;
 
 /* use EntrezTest to override default Entrez ncbi named service */
 
 NLM_EXTERN void EntrezSetService (
-  CharPtr service
+  const char* service
 )
 
 {
-  MemFree (e2_service);
+  MemFree ((void*) e2_service);
   e2_service = StringSaveNoNull (service);
 }
 
 /* low-level connection functions */
 
-static CharPtr GetDbFromE2Request (Entrez2RequestPtr e2rq)
+static const char* GetDbFromE2Request (Entrez2RequestPtr e2rq)
 
 {
   Entrez2BooleanExpPtr   e2be;
   Entrez2EvalBooleanPtr  e2eb;
+  Entrez2GetLinksPtr     e2gl;
   Entrez2HierQueryPtr    e2hq;
   Entrez2IdPtr           e2id;
   Entrez2IdListPtr       e2il;
@@ -149,8 +150,18 @@ static CharPtr GetDbFromE2Request (Entrez2RequestPtr e2rq)
       if (StringDoesHaveText (e2hq->db)) return e2hq->db;
       break;
     case E2Request_get_links :
+      e2gl = (Entrez2GetLinksPtr) vnp->data.ptrvalue;
+      if (e2gl == NULL) return NULL;
+      e2il = (Entrez2IdListPtr) e2gl->uids;
+      if (e2il == NULL) return NULL;
+      if (StringDoesHaveText (e2il->db)) return e2il->db;
       break;
     case E2Request_get_linked :
+      e2gl = (Entrez2GetLinksPtr) vnp->data.ptrvalue;
+      if (e2gl == NULL) return NULL;
+      e2il = (Entrez2IdListPtr) e2gl->uids;
+      if (e2il == NULL) return NULL;
+      if (StringDoesHaveText (e2il->db)) return e2il->db;
       break;
     case E2Request_get_link_counts :
       e2id = (Entrez2IdPtr) vnp->data.ptrvalue;
@@ -169,8 +180,8 @@ NLM_EXTERN CONN EntrezOpenConnection (
 )
 
 {
-  Char     arg [128];
-  CharPtr  db;
+  char         arg [128];
+  const char*  db;
 
   db = GetDbFromE2Request (e2rq);
   if (StringDoesHaveText (db) && StringLen (db) < 100) {
@@ -243,9 +254,9 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
 {
   AsnIoConnPtr     aicp;
   CONN             conn;
-  CharPtr          e2cookie = NULL;
+  char*            e2cookie = NULL;
   Entrez2ReplyPtr  e2ry;
-  CharPtr          tempcookie = NULL;
+  char*            tempcookie = NULL;
 #ifdef OS_UNIX
   Boolean          logtimes;
   clock_t          starttime;
@@ -317,8 +328,8 @@ NLM_EXTERN Boolean EntrezAsynchronousQuery (
 {
   AsnIoConnPtr  aicp;
   CONN          conn;
-  CharPtr       e2cookie = NULL;
-  CharPtr       tempcookie = NULL;
+  char*         e2cookie = NULL;
+  char*         tempcookie = NULL;
 
   if (e2rq == NULL) return FALSE;
 
@@ -362,7 +373,7 @@ NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
 
 {
   AsnIoConnPtr     aicp;
-  CharPtr          e2cookie = NULL;
+  char*            e2cookie = NULL;
   Entrez2ReplyPtr  e2ry = NULL;
 
   if (conn != NULL && status == eIO_Success) {
@@ -389,7 +400,7 @@ static Entrez2RequestPtr CreateRequest (
 )
 
 {
-  CharPtr            e2cookie = NULL;
+  char*              e2cookie = NULL;
   Entrez2RequestPtr  e2rq;
   ValNodePtr         vnp;
 
@@ -426,10 +437,10 @@ NLM_EXTERN void EntrezSetUseHistoryFlag (
 }
 
 NLM_EXTERN Entrez2IdListPtr EntrezCreateEntrezIdList (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs
 )
 
@@ -469,7 +480,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetInfoRequest (
 NLM_EXTERN Entrez2LimitsPtr EntrezCreateEntrezLimits (
   Int4 begin_date,
   Int4 end_date,
-  CharPtr type_date,
+  const char* type_date,
   Int4 max_uids,
   Int4 offset_uids
 )
@@ -506,11 +517,11 @@ NLM_EXTERN Entrez2LimitsPtr EntrezCreateEntrezLimits (
 NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   Boolean return_uids,
   Boolean return_parsed,
-  CharPtr db,
-  CharPtr query_string,
+  const char* db,
+  const char* query_string,
   Int4 begin_date,
   Int4 end_date,
-  CharPtr type_date,
+  const char* type_date,
   Int4 max_uids,
   Int4 offset_uids
 )
@@ -547,14 +558,14 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
 
 NLM_EXTERN void EntrezAddToBooleanRequest (
   Entrez2RequestPtr e2rq,
-  CharPtr query_string,
+  const char* query_string,
   Int4 op,
-  CharPtr field,
-  CharPtr term,
-  CharPtr key,
+  const char* field,
+  const char* term,
+  const char* key,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs,
   Boolean do_not_explode,
   Boolean do_not_translate
@@ -607,10 +618,10 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateDocSumRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs
 )
 
@@ -624,9 +635,9 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateDocSumRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermPositionRequest (
-  CharPtr db,
-  CharPtr field,
-  CharPtr term
+  const char* db,
+  const char* field,
+  const char* term
 )
 
 {
@@ -642,8 +653,8 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermPositionRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermListRequest (
-  CharPtr db,
-  CharPtr field,
+  const char* db,
+  const char* field,
   Int4 first_term_pos,
   Int4 num_terms
 )
@@ -662,9 +673,9 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermListRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermHierarchyRequest (
-  CharPtr db,
-  CharPtr field,
-  CharPtr term,
+  const char* db,
+  const char* field,
+  const char* term,
   Int4 txid
 )
 
@@ -682,12 +693,12 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermHierarchyRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinksRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs,
-  CharPtr linktype,
+  const char* linktype,
   Int4 max_uids,
   Boolean count_only,
   Boolean parents_persist
@@ -713,12 +724,12 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinksRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkedRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs,
-  CharPtr linktype,
+  const char* linktype,
   Int4 max_uids,
   Boolean count_only,
   Boolean parents_persist
@@ -744,7 +755,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkedRequest (
 }
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid
 )
 
@@ -789,12 +800,12 @@ static Pointer GeneralEntrezExtractReply (
   return result;
 }
 
-NLM_EXTERN CharPtr EntrezExtractErrorReply (
+NLM_EXTERN char* EntrezExtractErrorReply (
   Entrez2ReplyPtr e2ry
 )
 
 {
-  return (CharPtr) GeneralEntrezExtractReply (e2ry, E2Reply_error, NULL);
+  return (char*) GeneralEntrezExtractReply (e2ry, E2Reply_error, NULL);
 }
 
 NLM_EXTERN Entrez2InfoPtr EntrezExtractInfoReply (
@@ -874,23 +885,23 @@ NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
 /* special SeqIdString to UID convenience function */
 
 NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
-  CharPtr db,
-  CharPtr seq_id_string
+  const char* db,
+  const char* seq_id_string
 )
 
 {
-  Char                    ch;
+  char                    ch;
   Entrez2BooleanReplyPtr  e2br;
   Entrez2IdListPtr        e2id;
   Entrez2RequestPtr       e2rq;
   Entrez2ReplyPtr         e2ry;
-  CharPtr                 ptr;
-  Char                    str [61];
+  char*                   ptr;
+  char                    str [61];
   Uint4                   uid = 0;
 
   if (StringHasNoText (db) || StringHasNoText (seq_id_string)) return 0;
 
-  StringNCpy_0 (str, seq_id_string, sizeof (str));
+  StringNCpy_0 (str, seq_id_string, sizeof (str) - 1);
   ptr = str;
   ch = *ptr;
   while (ch != '\0') {
@@ -932,17 +943,17 @@ NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
 static int LIBCALLBACK SortVnpByStr (VoidPtr ptr1, VoidPtr ptr2)
 
 {
-  CharPtr     str1;
-  CharPtr     str2;
-  ValNodePtr  vnp1;
-  ValNodePtr  vnp2;
+  const char*  str1;
+  const char*  str2;
+  ValNodePtr   vnp1;
+  ValNodePtr   vnp2;
 
   if (ptr1 != NULL && ptr2 != NULL) {
     vnp1 = *((ValNodePtr PNTR) ptr1);
     vnp2 = *((ValNodePtr PNTR) ptr2);
     if (vnp1 != NULL && vnp2 != NULL) {
-      str1 = (CharPtr) vnp1->data.ptrvalue;
-      str2 = (CharPtr) vnp2->data.ptrvalue;
+      str1 = (const char*) vnp1->data.ptrvalue;
+      str2 = (const char*) vnp2->data.ptrvalue;
       if (str1 != NULL && str2 != NULL) {
         return StringICmp (str1, str2);
       }
@@ -1059,9 +1070,12 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
     }
     if (e2db->link_count < 1 || e2db->links == NULL) {
       if (StringICmp (db, "books") != 0 &&
+          StringICmp (db, "gap") != 0 &&
           StringICmp (db, "gensat") != 0 &&
           StringICmp (db, "mesh") != 0 &&
+          StringICmp (db, "ncbisearch") != 0 &&
           StringICmp (db, "nlmcatalog") != 0 &&
+          StringICmp (db, "nucleotide") != 0 &&
           StringICmp (db, "nuccore") != 0 &&
           StringICmp (db, "nucgss") != 0 &&
           StringICmp (db, "nucest") != 0 &&
@@ -1227,7 +1241,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
       dsfcount++;
 
       dsf = e2dsp->field_name;
-      if (StringHasNoText (fld)) {
+      if (StringHasNoText (dsf)) {
         rsult = FALSE;
         if (StringHasNoText (e2dsp->field_description)) {
           sprintf (tmpdsf, "%d", (int) dsfcount);
@@ -1314,6 +1328,15 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "SubstanceID") == 0 && StringICmp (str, "SubstanceIDActive") == 0) {
             } else if (StringICmp (last, "Synonym") == 0 && StringICmp (str, "SynonymActive") == 0) {
             } else if (StringICmp (last, "Definition") == 0 && StringICmp (str, "Definition Type") == 0) {
+            } else if (StringICmp (last, "Reference") == 0 && StringICmp (str, "Reference Amino Acid") == 0) {
+            } else if (StringICmp (last, "Reference SNP") == 0 && StringICmp (str, "Reference SNP ID") == 0) {
+            } else if (StringICmp (last, "Analysis") == 0 && StringICmp (str, "Analysis ID") == 0) {
+            } else if (StringICmp (last, "Document") == 0 && StringICmp (str, "Document ID") == 0) {
+            } else if (StringICmp (last, "Study") == 0 && StringICmp (str, "Study ID") == 0) {
+            } else if (StringICmp (last, "Variable") == 0 && StringICmp (str, "Variable ID") == 0) {
+            } else if (StringICmp (last, "COG") == 0 && StringICmp (str, "COG group") == 0) {
+            } else if (StringICmp (last, "Locus Tag") == 0 && StringICmp (str, "Locus Tag Prefix") == 0) {
+            } else if (StringICmp (last, "Attribute") == 0 && StringICmp (str, "Attributes") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
@@ -1350,7 +1373,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
 static CONN NetTestOpenConnection (void)
 
 {
-  Char        buffer [64];
+  char        buffer [64];
   CONN        conn;
   size_t      n_written;
   EIO_Status  status;
@@ -1398,7 +1421,7 @@ NLM_EXTERN Boolean NetTestReadReply (
 )
 
 {
-  Char         buffer [64];
+  char         buffer [64];
   size_t       n_read;
   ErrSev       oldsev;
   Boolean      res = FALSE;

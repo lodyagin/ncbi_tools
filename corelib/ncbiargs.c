@@ -35,6 +35,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.10  2006/10/19 14:57:03  lavr
+* Fix repetitive arg error message to show no argument value since it's empty
+*
+* Revision 6.9  2006/10/18 19:15:43  lavr
+* Allow repetitive (boolean) flags to increment arg's intvalue [spec.cased]
+*
 * Revision 6.8  2004/04/01 13:43:06  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -125,10 +131,10 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           Nlm_FreeArgs(i, ap);
           return FALSE;
         }
-      curarg->intvalue = 0;
+      curarg->intvalue   = 0;
       curarg->floatvalue = 0.0;
-      curarg->strvalue = NULL;
-      if (curarg->defaultvalue != NULL)
+      curarg->strvalue   = NULL;
+      if (curarg->defaultvalue)
         {
           resolved[i] = TRUE;
           switch (curarg->type)
@@ -139,24 +145,18 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
               else
                 curarg->intvalue = 0;
               break;
-            case ARG_INT: {
-              long val;
-              sscanf(curarg->defaultvalue, "%ld", &val);
-              curarg->intvalue = val;
+            case ARG_INT:
+              curarg->intvalue = atol(curarg->defaultvalue);
               break;
-            }
-            case ARG_FLOAT: {
-              double val;
-              sscanf(curarg->defaultvalue, "%lf", &val);
-              curarg->floatvalue = val;
+            case ARG_FLOAT:
+              curarg->floatvalue = atof(curarg->defaultvalue);
               break;
-            }
             case ARG_STRING:
             case ARG_FILE_IN:
             case ARG_FILE_OUT:
             case ARG_DATA_IN:
             case ARG_DATA_OUT:
-              curarg->strvalue = StringSave (curarg->defaultvalue);
+              curarg->strvalue = StringSave(curarg->defaultvalue);
               break;
             }
         }
@@ -184,17 +184,21 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           if (curarg->optional)
             printf("  Optional");
           printf("\n");
-          if (curarg->defaultvalue != NULL)
+          if (curarg->defaultvalue)
             printf("    default = %s\n", curarg->defaultvalue);
-          if ((curarg->from != NULL) || (curarg->to != NULL))
+          if (curarg->from  ||  curarg->to)
             {
-              if ((curarg->type == ARG_DATA_IN) ||
-                  (curarg->type == ARG_DATA_OUT))
+              if (curarg->type == ARG_DATA_IN  ||
+                  curarg->type == ARG_DATA_OUT)
                 printf("    Data Type = %s\n", curarg->from);
-              else
-                printf("    range from %s to %s\n", 
-                       (curarg->from ? curarg->from: "<NULL>"),
-                       (curarg->to   ? curarg->to  : "<NULL>"));
+              else if (curarg->type == ARG_BOOLEAN  ||
+                       curarg->type == ARG_INT      ||
+                       curarg->type == ARG_FLOAT)
+                {
+                  printf("    range from %s to %s\n", 
+                         (curarg->from ? curarg->from: "?"),
+                         (curarg->to   ? curarg->to  : "?"));
+                }
             }
         }
 
@@ -260,7 +264,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           if (!ok  &&  curarg->type != ARG_BOOLEAN)
             {
               ErrPostEx(SEV_ERROR, 0, 0,
-                        "No argument given for %s", curarg->prompt);
+                        "No argument value given for %s", curarg->prompt);
               Nlm_MemFree( resolved );
               Nlm_FreeArgs(numargs, ap);
               return FALSE;
@@ -276,15 +280,38 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           else if (TO_UPPER(*arg) == 'F')
             curarg->intvalue = 0;
           else if (*arg == '\0')
-            curarg->intvalue = 1;
-          else {
-            ErrPostEx(SEV_ERROR, 0, 0,
-                      "%s [%s] must be one of {'T', 't', 'F', 'f'} or omitted",
-                      curarg->prompt, arg);
-            Nlm_MemFree( resolved );
-            Nlm_FreeArgs(numargs, ap);
-            return FALSE;
-          }
+            {
+              long idef, ifrom, ito;
+              if (curarg->from  &&  curarg->to  &&
+                  sscanf(curarg->defaultvalue, "%ld", &idef)  > 0  &&
+                  sscanf(curarg->from,         "%ld", &ifrom) > 0  &&
+                  sscanf(curarg->to,           "%ld", &ito)   > 0  &&
+                  idef == 0  &&  ifrom == 0  &&  ito > 1)
+                {
+                  if (curarg->intvalue >= ito)
+                    {
+                      ErrPostEx(SEV_ERROR, 0, 0,
+                                "%s allowed no more than %s times",
+                                curarg->prompt, curarg->to);
+                      Nlm_MemFree( resolved );
+                      Nlm_FreeArgs(numargs, ap);
+                      return FALSE;
+                    }
+                  else
+                    curarg->intvalue++;
+                }
+              else
+                curarg->intvalue = 1;
+            }
+          else
+            {
+              ErrPostEx(SEV_ERROR, 0, 0,
+                        "%s [%s] must be one of {'T', 't', 'F', 'f'}"
+                        " or omitted", curarg->prompt, arg);
+              Nlm_MemFree( resolved );
+              Nlm_FreeArgs(numargs, ap);
+              return FALSE;
+            }
           break;
 
         case ARG_INT: {
@@ -293,21 +320,14 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           if (sscanf(arg, "%ld", &val) <= 0)
             range = FALSE;
           curarg->intvalue = val;
-          if (range  &&  curarg->from)
+          if (range && curarg->from && curarg->intvalue < atol(curarg->from))
             {
-              long ifrom;
-              sscanf(curarg->from, "%ld", &ifrom);
-              if (curarg->intvalue < ifrom)
                 range = FALSE;
             }
-          if (range  &&  curarg->to)
+          if (range && curarg->to && curarg->intvalue > atol(curarg->to))
             {
-              long ito;
-              sscanf(curarg->to, "%ld", &ito);
-              if (curarg->intvalue > ito)
                 range = FALSE;
             }
-
           if ( !range )
             {
               ErrPostEx(SEV_ERROR, 0, 0,
@@ -328,18 +348,12 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
           if (sscanf(arg, "%lf", &val) <= 0)
             range = FALSE;
           curarg->floatvalue = val;
-          if (range  &&  curarg->from)
+          if (range && curarg->from && curarg->floatvalue < atof(curarg->from))
             {
-              double ffrom;
-              sscanf(curarg->from, "%lf", &ffrom);
-              if (curarg->floatvalue < ffrom)
                 range = FALSE;
             }
-          if (range  &&  curarg->to)
+          if (range && curarg->to && curarg->floatvalue > atof(curarg->to))
             {
-              double fto;
-              sscanf(curarg->to, "%lf", &fto);
-              if (curarg->floatvalue > fto)
                 range = FALSE;
             }
           if ( !range )
@@ -363,7 +377,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
         case ARG_DATA_OUT:
           if ( curarg->strvalue )
             MemFree(curarg->strvalue);
-          curarg->strvalue = StringSave (arg);
+          curarg->strvalue = StringSave(arg);
           break;
         }    /*** end switch ****/
     }

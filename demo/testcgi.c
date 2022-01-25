@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.32 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -104,20 +104,20 @@ typedef long Int4, * Int4Ptr;
 #endif
 
 #ifndef MIN
-#define MIN(a,b)	((a)>(b)?(b):(a))
+#define MIN(a,b) ((a)>(b)?(b):(a))
 #endif
 
 /* useful portable character macros from NCBI toolkit (assumes ASCII) */
 
-#define IS_DIGIT(c)	('0'<=(c) && (c)<='9')
-#define IS_UPPER(c)	('A'<=(c) && (c)<='Z')
-#define IS_LOWER(c)	('a'<=(c) && (c)<='z')
-#define IS_ALPHA(c)	(IS_UPPER(c) || IS_LOWER(c))
-#define TO_LOWER(c)	((Char)(IS_UPPER(c) ? (c)+' ' : (c)))
-#define TO_UPPER(c)	((Char)(IS_LOWER(c) ? (c)-' ' : (c)))
+#define IS_DIGIT(c) ('0'<=(c) && (c)<='9')
+#define IS_UPPER(c) ('A'<=(c) && (c)<='Z')
+#define IS_LOWER(c) ('a'<=(c) && (c)<='z')
+#define IS_ALPHA(c) (IS_UPPER(c) || IS_LOWER(c))
+#define TO_LOWER(c) ((Char)(IS_UPPER(c) ? (c)+' ' : (c)))
+#define TO_UPPER(c) ((Char)(IS_LOWER(c) ? (c)-' ' : (c)))
 #define IS_WHITESP(c) (((c) == ' ') || ((c) == '\n') || ((c) == '\r') || ((c) == '\t'))
 #define IS_ALPHANUM(c) (IS_ALPHA(c) || IS_DIGIT(c))
-#define IS_PRINT(c)	(' '<=(c) && (c)<='~')
+#define IS_PRINT(c) (' '<=(c) && (c)<='~')
 
 /* url decode/encode functions modified from NCBI toolkit */
 
@@ -173,13 +173,15 @@ static const char s_Encode[256][4] = {
 };
 #define VALID_URL_SYMBOL(ch)  (s_Encode[(unsigned char)ch][0] != '%')
 
-static Bool Url_Decode
-(const void* src_buf,
- size_t      src_size,
- size_t*     src_read,
- void*       dst_buf,
- size_t      dst_size,
- size_t*     dst_written)
+static Bool Url_Decode (
+  const void* src_buf,
+  size_t      src_size,
+  size_t*     src_read,
+  void*       dst_buf,
+  size_t      dst_size,
+  size_t*     dst_written
+)
+
 {
   unsigned char *src = (unsigned char*)src_buf;
   unsigned char *dst = (unsigned char*)dst_buf;
@@ -228,13 +230,15 @@ static Bool Url_Decode
   return TRUE;
 }
 
-static void Url_Encode
-(const void* src_buf,
- size_t      src_size,
- size_t*     src_read,
- void*       dst_buf,
- size_t      dst_size,
- size_t*     dst_written)
+static void Url_Encode (
+  const void* src_buf,
+  size_t      src_size,
+  size_t*     src_read,
+  void*       dst_buf,
+  size_t      dst_size,
+  size_t*     dst_written
+)
+
 {
   unsigned char *src = (unsigned char*)src_buf;
   unsigned char *dst = (unsigned char*)dst_buf;
@@ -340,11 +344,11 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
   size_t   len;
   CharPtr  ptr;
 
-/*
-*  given a query string enzyme=EcoRI&pattern=GAATTC
-*/
+  /*
+  *  given a query string enzyme=EcoRI&pattern=GAATTC
+  */
 
-/* The >Message prefix causes Sequin to display the message to the user */
+  /* The >Message prefix causes Sequin to display the message to the user */
 
   if (qstr == NULL) {
     printf ("Content-type: text/html\r\n\r\n");
@@ -353,7 +357,7 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
     return FALSE;
   }
 
-/* allocates a copy of query string that can be modified during parsing */
+  /* allocates a copy of query string that can be modified during parsing */
 
   len = strlen (qstr);
   query = malloc (len + 3);
@@ -368,7 +372,7 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
   memset (query, 0, len + 2);
   strcpy (query, qstr);
 
-/* parse tag=value&tag=value query into arrays for easier interpretation */
+  /* parse tag=value&tag=value query into arrays for easier interpretation */
 
   memset (tag, 0, sizeof (tag));
   memset (val, 0, sizeof (val));
@@ -383,17 +387,17 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
     }
   }
 
-/*
-*  given the above query example, the tag and val arrays are now:
-*
-*   tag [0] = "enzyme"    val [0] = "EcoRI"
-*   tag [1] = "pattern"   val [1] = "GAATTC"
-*   tag [2] = NULL        val [2] = NULL
-*
-*  and num_tags is 2
-*/
+  /*
+  *  given the above query example, the tag and val arrays are now:
+  *
+  *   tag [0] = "enzyme"    val [0] = "EcoRI"
+  *   tag [1] = "pattern"   val [1] = "GAATTC"
+  *   tag [2] = NULL        val [2] = NULL
+  *
+  *  and num_tags is 2
+  */
 
-/* verify that any required query string is present in the URL */
+  /* verify that any required query string is present in the URL */
 
   if (queryRequired && num_tags == 0) {
     printf ("Content-type: text/html\r\n\r\n");
@@ -411,7 +415,7 @@ static CharPtr FindByName (CharPtr find)
 {
   Int2  i;
 
-/* search the tag array for the desired name, returning the associated value */
+  /* search the tag array for the desired name, returning the associated value */
 
   if (find == NULL) return NULL;
   for (i = 0; i < num_tags; i++) {
@@ -428,7 +432,7 @@ static Int2 ListHasString (CharPtr list [], CharPtr str)
 {
   Int2  i;
 
-/* search a null-terminated array of strings, returning an integer index */
+  /* search a null-terminated array of strings, returning an integer index */
 
   if (str == NULL || list == NULL) return -1;
   for (i = 0; list [i] != NULL; i++) {
@@ -456,7 +460,7 @@ static void RunCustom (CharPtr tempfile)
   CharPtr   program;
   long int  val;
 
-/* protect against custom requests on public server */
+  /* protect against custom requests on public server */
 
   port = getenv ("SERVER_PORT");
   if (port != NULL) {
@@ -465,7 +469,7 @@ static void RunCustom (CharPtr tempfile)
     }
   }
 
-/* program argument would be actual path on cgi server machine */
+  /* program argument would be actual path on cgi server machine */
 
   program = FindByName ("program");
   if (program == NULL) {
@@ -474,7 +478,7 @@ static void RunCustom (CharPtr tempfile)
     return;
   }
 
-/* method defaults to sending data to program via stdin */
+  /* method defaults to sending data to program via stdin */
 
   method = FindByName ("method");
   if (method == NULL || strstr (method, "stdin") != NULL) {
@@ -487,14 +491,14 @@ static void RunCustom (CharPtr tempfile)
     meth = SEND_STDIN;
   }
 
-/* note that for arguments, %20 in a query string is converted to a space */
+  /* note that for arguments, %20 in a query string is converted to a space */
 
   arguments = FindByName ("arguments");
   if (arguments == NULL) {
     arguments = "";
   }
 
-/* launch program sending arguments and filename or data in appropriate order */
+  /* launch program sending arguments and filename or data in appropriate order */
 
   switch (meth) {
     case SEND_FILENAME_ARGS_BEFORE :
@@ -511,7 +515,7 @@ static void RunCustom (CharPtr tempfile)
   fp = popen (cmmd, "r");
   if (fp == NULL) return;
 
-/* assumes program sends output to stdout */
+  /* assumes program sends output to stdout */
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
     EncodeAndWrite (buf, ct, stdout);
@@ -529,9 +533,9 @@ static void RunEcho (CharPtr tempfile)
   FILE*   fp;
   Bool    headerSent = FALSE;
 
-/* reconstruct and print the query string */
+  /* reconstruct and print the query string */
 
-/*
+  /*
   for (i = 0; i < num_tags; i++) {
     if (i > 0) {
       sprintf (buf, "%");
@@ -545,9 +549,9 @@ static void RunEcho (CharPtr tempfile)
   sprintf (buf, "\n");
   EncodeAndWrite (buf, strlen (buf), stdout);
   fflush (stdout);
-*/
+  */
 
-/* now echo the data file */
+  /* now echo the data file */
 
   fp = fopen (tempfile, "r");
   if (fp == NULL) return;
@@ -556,7 +560,7 @@ static void RunEcho (CharPtr tempfile)
 
     if (! headerSent) {
 
-/* send required first header information to stdout */
+      /* send required first header information to stdout */
 
       printf ("Content-type: text/html\r\n\r\n");
       fflush (stdout);
@@ -566,6 +570,7 @@ static void RunEcho (CharPtr tempfile)
     EncodeAndWrite (buf, ct, stdout);
     fflush (stdout);
   }
+
   fclose (fp);
 
   if (! headerSent) {
@@ -589,7 +594,7 @@ static void RunSeg (CharPtr tempfile)
   Char     tmp [16];
   CharPtr  window;
 
-/* launch seg with -x parameter, arguments, and name of data file */
+  /* launch seg with -x parameter, arguments, and name of data file */
 
   window = FindByName ("window");
   if (window == NULL) {
@@ -614,13 +619,13 @@ static void RunSeg (CharPtr tempfile)
   fp = popen (cmmd, "r");
   if (fp == NULL) return;
 
-/* send processed FASTA data from seg directly to stdout and calling program */
+  /* send processed FASTA data from seg directly to stdout and calling program */
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
 
     if (! headerSent) {
 
-/* send required first header information to stdout */
+    /* send required first header information to stdout */
 
       printf ("Content-type: text/html\r\n\r\n");
       fflush (stdout);
@@ -639,16 +644,22 @@ static void RunSeg (CharPtr tempfile)
 }
 
 
+#if 0
 #define MAX_FIELDS  9
 
 static void RunTrnaScan (CharPtr tempfile)
 
 {
   CharPtr   aa;
+  CharPtr   anticodonSeq;
+  CharPtr   arg1 = "";
+  CharPtr   arg2 = "";
   CharPtr   beg;
   Char      buf [256];
   Char      cmmd [256];
+  CharPtr   domain;
   CharPtr   end;
+  CharPtr   extras;
   CharPtr   field [MAX_FIELDS];
   FILE*     fp;
   Bool      headerSent = FALSE;
@@ -666,25 +677,44 @@ static void RunTrnaScan (CharPtr tempfile)
   long int  stop;
   Char      str [80];
 
-/* launch tRNAscan-SE with -q parameter and name of data file */
+  /* launch tRNAscan-SE with -q parameter and name of data file */
 
   speed = FindByName ("speed");
-  if (speed != NULL && strcmp (speed, "slow") == 0) {
-    sprintf (cmmd, "./tRNAscan-SE -q -C %s", tempfile);
-  } else {
-    sprintf (cmmd, "./tRNAscan-SE -q %s", tempfile);
+  domain = FindByName ("domain");
+  extras = FindByName ("extras");
+
+  if (speed != NULL) {
+    if (strcmp (speed, "slow") == 0) {
+      arg1 = "-C ";
+    }
   }
+
+  if (domain != NULL) {
+    if (strcmp (domain, "eukaryote") == 0) {
+      arg2 = "";
+    } else if (strcmp (domain, "prokaryote") == 0) {
+      arg2 = "-P ";
+    } else if (strcmp (domain, "archaea") == 0) {
+      arg2 = "-A ";
+    } else if (strcmp (domain, "organelle") == 0) {
+      arg2 = "-O ";
+    } else if (strcmp (domain, "general") == 0) {
+      arg2 = "-G ";
+    }
+  }
+
+  sprintf (cmmd, "./tRNAscan-SE -q %s%s%s", arg1, arg2, tempfile);
 
   fp = popen (cmmd, "r");
   if (fp == NULL) return;
 
-/* line by line processing of tRNAscan-SE output table */
+  /* line by line processing of tRNAscan-SE output table */
 
   while (fgets (buf, sizeof (buf), fp) != NULL) {
 
     if (! headerSent) {
 
-/* send required first header information to stdout */
+      /* send required first header information to stdout */
 
       printf ("Content-type: text/html\r\n\r\n");
       fflush (stdout);
@@ -694,11 +724,11 @@ static void RunTrnaScan (CharPtr tempfile)
     if (inBody) {
       memset (field, 0, sizeof (field));
 
-/*
-*  parse tab-delimited output line into array of fields, avoiding use of
-*  strtok so that empty columns (adjacent tabs) are properly assigned to
-*  field array
-*/
+      /*
+      *  parse tab-delimited output line into array of fields, avoiding use of
+      *  strtok so that empty columns (adjacent tabs) are properly assigned to
+      *  field array
+      */
 
       ptr = buf;
       for (numFields = 0; numFields < MAX_FIELDS && ptr != NULL; numFields++) {
@@ -710,12 +740,13 @@ static void RunTrnaScan (CharPtr tempfile)
         }
       }
 
-/* interested in ID, start, stop, amino acid, and intron start and stop */
+      /* interested in ID, start, stop, amino acid, and intron start and stop */
 
       id = field [0];
       beg = field [2];
       end = field [3];
       aa = field [4];
+      anticodonSeq = field [5];
       intronBeg = field [6];
       intronEnd = field [7];
 
@@ -725,7 +756,7 @@ static void RunTrnaScan (CharPtr tempfile)
           sscanf (intronBeg, "%ld", &intronStart) == 1 &&
           sscanf (intronEnd, "%ld", &intronStop) == 1) {
 
-/* first line of output gives SeqId from FASTA definition line */
+        /* first line of output gives SeqId from FASTA definition line */
 
         if (idNotSent) {
           sprintf (str, ">Features %s tRNAscan-SE\n", id);
@@ -734,8 +765,8 @@ static void RunTrnaScan (CharPtr tempfile)
           idNotSent = FALSE;
         }
 
-/* first line of feature has start (tab) stop (tab) feature key */
-/* multiple intervals would have lines of start (tab) stop */
+        /* first line of feature has start (tab) stop (tab) feature key */
+        /* multiple intervals would have lines of start (tab) stop */
 
         if (intronStart == 0 && intronStop == 0) {
           sprintf (str, "%ld\t%ld\ttRNA\n", (long) start, (long) stop);
@@ -750,7 +781,7 @@ static void RunTrnaScan (CharPtr tempfile)
           fflush (stdout);
         }
 
-/* qualifier lines are (tab) (tab) (tab) qualifier key (tab) value */
+        /* qualifier lines are (tab) (tab) (tab) qualifier key (tab) value */
 
         if (strstr (aa, "Pseudo") != NULL) {
           sprintf (str, "\t\t\tnote\ttRNA-Pseudo\n");
@@ -762,7 +793,15 @@ static void RunTrnaScan (CharPtr tempfile)
           fflush (stdout);
         }
 
-/* dash (formerly empty) gene qualifier to suppress /gene (e.g., if tRNA is in an intron) */
+        /* introducing special qualifier to report anticodon sequence if requested */
+
+        if (extras != NULL && strcmp (extras, "anticodon") == 0) {
+          sprintf (str, "\t\t\tanti_codon_seq\t%s\n", anticodonSeq);
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
+        }
+
+        /* dash (formerly empty) gene qualifier to suppress /gene (e.g., if tRNA is in an intron) */
 
         sprintf (str, "\t\t\tgene\t-\n");
         EncodeAndWrite (str, strlen (str), stdout);
@@ -770,18 +809,287 @@ static void RunTrnaScan (CharPtr tempfile)
       }
     }
 
-/* detect last line of table header, ignoring everything before data section */
+    /* detect last line of table header, ignoring everything before data section */
 
     if (strstr (buf, "-----") != NULL) {
       inBody = TRUE;
     }
   }
+
   pclose (fp);
 
   if (! headerSent) {
     printf ("Content-type: text/html\r\n\r\n");
     fflush (stdout);
   }
+
+  if (idNotSent) {
+    sprintf (str, ">Message\ntRNAscan-SE found no tRNA genes in this sequence\n");
+    EncodeAndWrite (str, strlen (str), stdout);
+    fflush (stdout);
+  }
+}
+#endif
+
+static CharPtr IsolateString (CharPtr str, Char ch)
+
+{
+  CharPtr  ptr;
+
+  if (str == NULL || ch == '\0') return NULL;
+  ptr = strchr (str, ch);
+  if (ptr != NULL) {
+    *ptr = '\0';
+    ptr++;
+  }
+  return ptr;
+}
+
+static Bool ParseRange (CharPtr str, Int4Ptr startP, Int4Ptr stopP)
+
+{
+  CharPtr   nxt;
+  CharPtr   ptr;
+  long int  start = 0;
+  long int  stop = 0;
+
+  if (str == NULL || startP == NULL || stopP == NULL) return FALSE;
+  *startP = 0;
+  *stopP = 0;
+
+  nxt = IsolateString (str, '(');
+  if (nxt == NULL) return FALSE;
+
+  ptr = nxt;
+  nxt = IsolateString (ptr, '-');
+  if (nxt == NULL) return FALSE;
+
+  if (sscanf (ptr, "%ld", &start) != 1) return FALSE;
+
+  ptr = nxt;
+  nxt = IsolateString (ptr, ')');
+  if (nxt == NULL) return FALSE;
+
+  if (sscanf (ptr, "%ld", &stop) != 1) return FALSE;
+
+  *startP = start;
+  *stopP = stop;
+
+  return TRUE;
+}
+
+static void RunTrnaScan (CharPtr tempfile)
+
+{
+  Char      aa [32];
+  long int  anticodonStart;
+  long int  anticodonStop;
+  CharPtr   arg1 = "";
+  CharPtr   arg2 = "";
+  CharPtr   arg3 = "";
+  CharPtr   beg;
+  Char      buf [512];
+  Char      cmmd [256];
+  CharPtr   domain;
+  CharPtr   end;
+  FILE*     fp;
+  CharPtr   gencode;
+  Char      id [64];
+  Int2      idNotSent = TRUE;
+  CharPtr   intronBeg;
+  CharPtr   intronEnd;
+  long int  intronStart;
+  long int  intronStop;
+  CharPtr   nxt;
+  Bool      pseudo;
+  CharPtr   ptr;
+  CharPtr   speed;
+  long int  start;
+  long int  stop;
+  Char      str [256];
+
+  /* launch tRNAscan-SE with -q parameter and name of data file */
+
+  speed = FindByName ("speed");
+  domain = FindByName ("domain");
+  gencode = FindByName ("gencode");
+
+  if (speed != NULL) {
+    if (strcmp (speed, "slow") == 0) {
+      arg1 = "-C ";
+    }
+  }
+
+  if (domain != NULL) {
+    if (strcmp (domain, "eukaryote") == 0) {
+      arg2 = "";
+    } else if (strcmp (domain, "prokaryote") == 0) {
+      arg2 = "-P ";
+    } else if (strcmp (domain, "archaea") == 0) {
+      arg2 = "-A ";
+    } else if (strcmp (domain, "organelle") == 0) {
+      arg2 = "-O ";
+    } else if (strcmp (domain, "general") == 0) {
+      arg2 = "-G ";
+    }
+  }
+
+  if (gencode != NULL) {
+    if (strcmp (gencode, "standard") == 0) {
+      arg3 = "";
+    } else if (strcmp (gencode, "vertebrate") == 0) {
+      arg3 = "-g gcode.vertmito ";
+    } else if (strcmp (gencode, "yeast") == 0) {
+      arg3 = "-g gcode.ystmito ";
+    } else if (strcmp (gencode, "mold") == 0) {
+      arg3 = "-g gcode.othmito ";
+    } else if (strcmp (gencode, "invertebrate") == 0) {
+      arg3 = "-g gcode.invmito ";
+    } else if (strcmp (gencode, "echinoderm") == 0) {
+      arg3 = "-g gcode.echdmito ";
+    } else if (strcmp (gencode, "ciliate") == 0) {
+      arg3 = "-g gcode.cilnuc ";
+    }
+  }
+
+  sprintf (cmmd, "./tRNAscan-SE -q -f $ %s%s%s%s", arg1, arg2, arg3, tempfile);
+
+  fp = popen (cmmd, "r");
+  if (fp == NULL) return;
+
+  /* send required first header information to stdout */
+
+  printf ("Content-type: text/html\r\n\r\n");
+  fflush (stdout);
+
+  /* initialize variables */
+
+  start = 0;
+  stop = 0;
+  intronStart = 0;
+  intronStop = 0;
+  anticodonStart = 0;
+  anticodonStop = 0;
+  id [0] = '\0';
+  aa [0] = '\0';
+  pseudo = FALSE;
+
+  /* line by line processing of tRNAscan-SE output table */
+
+  while (fgets (buf, sizeof (buf), fp) != NULL) {
+
+    ptr = buf;
+    if (*ptr == '\0') {
+
+    } else if (strncmp (buf, "Str:", 4) == 0) {
+
+    } else if (strncmp (buf, "Seq:", 4) == 0) {
+
+      /* first line of output gives SeqId from FASTA definition line */
+
+      if (idNotSent) {
+        sprintf (str, ">Features %s tRNAscan-SE\n", id);
+        EncodeAndWrite (str, strlen (str), stdout);
+        fflush (stdout);
+        idNotSent = FALSE;
+      }
+
+      /* first line of feature has start (tab) stop (tab) feature key */
+      /* multiple intervals would have lines of start (tab) stop */
+
+      if (intronStart == 0 && intronStop == 0) {
+        sprintf (str, "%ld\t%ld\ttRNA\n", (long) start, (long) stop);
+        EncodeAndWrite (str, strlen (str), stdout);
+        fflush (stdout);
+      } else {
+        sprintf (str, "%ld\t%ld\ttRNA\n", (long) start, (long) (intronStart - 1));
+        EncodeAndWrite (str, strlen (str), stdout);
+        fflush (stdout);
+        sprintf (str, "%ld\t%ld\n", (long) (intronStop + 1), (long) stop);
+        EncodeAndWrite (str, strlen (str), stdout);
+        fflush (stdout);
+      }
+
+      /* qualifier lines are (tab) (tab) (tab) qualifier key (tab) value */
+
+      sprintf (str, "\t\t\tproduct\t%s\n", aa);
+      EncodeAndWrite (str, strlen (str), stdout);
+      fflush (stdout);
+
+      if (pseudo) {
+        sprintf (str, "\t\t\tpseudo\n");
+        EncodeAndWrite (str, strlen (str), stdout);
+        fflush (stdout);
+      } else if (anticodonStart != 0 && anticodonStop != 0) {
+        if (anticodonStart < anticodonStop) {
+          sprintf (str, "\t\t\tanticodon\t(pos:%ld..%ld,aa:%s)\n",
+                   (long) anticodonStart, (long) anticodonStop, aa);
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
+        } else {
+          sprintf (str, "\t\t\tanticodon\t(pos:complement(%ld..%ld),aa:%s)\n",
+                   (long) anticodonStop, (long) anticodonStart, aa);
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
+        }
+      }
+
+      /* dash (formerly empty) gene qualifier to suppress /gene (e.g., if tRNA is in an intron) */
+
+      sprintf (str, "\t\t\tgene\t-\n");
+      EncodeAndWrite (str, strlen (str), stdout);
+      fflush (stdout);
+
+      /* reset variables */
+
+      start = 0;
+      stop = 0;
+      intronStart = 0;
+      intronStop = 0;
+      anticodonStart = 0;
+      anticodonStop = 0;
+      id [0] = '\0';
+      aa [0] = '\0';
+      pseudo = FALSE;
+
+    } else if (strncmp (buf, "Type:", 5) == 0) {
+
+      nxt = IsolateString (buf, ' ');
+      if (nxt != NULL) {
+        ptr = nxt;
+        nxt = IsolateString (ptr, '\t');
+        if (nxt != NULL) {
+          strcpy (aa, ptr);
+          if (strcmp (aa, "Undet") == 0 || strcmp (aa, "Sup") == 0) {
+            strcpy (aa, "OTHER");
+          }
+          ptr = nxt;
+          ParseRange (ptr, &anticodonStart, &anticodonStop);
+        }
+      }
+
+    } else if (strncmp (buf, "Possible intron:", 16) == 0) {
+
+      ParseRange (ptr, &intronStart, &intronStop);
+
+    } else if (strncmp (buf, "Possible pseudogene:", 20) == 0) {
+
+      pseudo = TRUE;
+
+    } else if (strstr (buf, "Length:") != NULL) {
+
+      ptr = strstr (buf, ".trna");
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+        strcpy (id, buf);
+
+        ParseRange (ptr, &start, &stop);
+      }
+    }
+  }
+
+  pclose (fp);
 
   if (idNotSent) {
     sprintf (str, ">Message\ntRNAscan-SE found no tRNA genes in this sequence\n");
@@ -812,7 +1120,7 @@ main (int argc, char *argv[])
   Int2     service;
   Char     tempfile [1024];
 
-/* at startup, first verify environment */
+  /* at startup, first verify environment */
 
   method = getenv ("REQUEST_METHOD");
   if (method == NULL) {
@@ -822,7 +1130,7 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* ensure that the POST method is being sent from the HTTPD server */
+  /* ensure that the POST method is being sent from the HTTPD server */
 
   if (strcmp (method, "POST") != 0) {
     printf ("Content-type: text/html\r\n\r\n");
@@ -831,7 +1139,7 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* backward compatibility for query in URL after ? character */
+  /* backward compatibility for query in URL after ? character */
 
   ptr = getenv ("QUERY_STRING");
   if (ptr != NULL && strlen (ptr) > 0) {
@@ -846,11 +1154,11 @@ main (int argc, char *argv[])
     }
   }
 
-/*
-*  copy all of stdin to temporary file before sending anything to stdout,
-*  to get around an apparent limitation in the HTTPD implementation that
-*  can cause socket deadlock
-*/
+  /*
+  *  copy all of stdin to temporary file before sending anything to stdout,
+  *  to get around an apparent limitation in the HTTPD implementation that
+  *  can cause socket deadlock
+  */
 
   tmpnam (tempfile);
   fp = fopen (tempfile, "w");
@@ -865,14 +1173,14 @@ main (int argc, char *argv[])
 
     bf = buf;
 
-/* write data part of buffer to temporary file */
+    /* write data part of buffer to temporary file */
 
     fwrite (bf, 1, ct, fp);
   }
   fflush (fp);
   fclose (fp);
 
-/* expect request=custom, request=echo, request=seg, or request=trnascan */
+  /* expect request=custom, request=echo, request=seg, or request=trnascan */
 
   request = FindByName ("request");
   if (request == NULL) {
@@ -882,7 +1190,7 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* compare request value against list of available services */
+  /* compare request value against list of available services */
 
   service = ListHasString (services, request);
   if (service < 1) {
@@ -892,13 +1200,13 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* call appropriate external analysis program */
+  /* call appropriate external analysis program */
 
   switch (service) {
 
 #ifdef ALLOW_CUSTOM_PROGRAM
 
-/* for security, custom programs not allowed without symbol at compile time */
+    /* for security, custom programs not allowed without symbol at compile time */
 
     case 1 :
       RunCustom (tempfile);
@@ -917,14 +1225,14 @@ main (int argc, char *argv[])
       break;
     default :
 
-/* each function must send required first header information to stdout */
+      /* each function must send required first header information to stdout */
 
       printf ("Content-type: text/html\r\n\r\n");
       fflush (stdout);
       break;
   }
 
-/* flush buffer, cleanup temporary files and allocated memory, and exit */
+  /* flush buffer, cleanup temporary files and allocated memory, and exit */
 
   fflush (stdout);
   remove (tempfile);

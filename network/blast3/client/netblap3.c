@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.110  2007/05/07 13:30:08  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
 * Revision 1.109  2005/10/12 19:49:46  kans
 * EntrezSetServer was removed, so commented out here
 *
@@ -2355,7 +2358,7 @@ BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr 
 	    residue = SeqPortGetResidue(spp);
 	    BSPutByte(bp, residue);
 	}
-	bsp->seq_data = bp;
+	bsp->seq_data = (SeqDataPtr) bp;
 
 	SeqPortFree(spp);
 

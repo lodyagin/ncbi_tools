@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.93 $
+* $Revision: 6.102 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -50,7 +50,7 @@
 #include <explore.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "3.6"
+#define ASN2GB_APP_VER "4.3"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -302,6 +302,16 @@ static Int2 HandleSingleRecord (
             from = 1;
             to = bsp->length;
           }
+          if (from < 0) {
+            from = 1;
+          } else if (from > bsp->length) {
+            from = bsp->length;
+          }
+          if (to < 0) {
+            to = 1;
+          } else if (to > bsp->length) {
+            to = bsp->length;
+          }
           MemSet ((Pointer) &vn, 0, sizeof (ValNode));
           MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
           sint.from = from - 1;
@@ -343,8 +353,11 @@ static Int2 HandleSingleRecord (
 
   omp = ObjMgrGet ();
   ObjMgrReapOne (omp);
+  SeqMgrClearBioseqIndex ();
   ObjMgrFreeCache (0);
   FreeSeqIdGiCache ();
+
+  SeqEntrySetScope (NULL);
 
   ObjMgrFree (datatype, dataptr);
 
@@ -848,6 +861,7 @@ static Int2 HandleMultipleRecords (
   SeqEntryPtr     fsep;
   Boolean         hasgi;
   Boolean         hasRefSeq;
+  Boolean         io_failure = FALSE;
   Char            longest [41];
   Int4            numrecords = 0;
   FILE            *ofp = NULL;
@@ -956,7 +970,7 @@ static Int2 HandleMultipleRecords (
 
   aip = AsnIoNew (binary? ASNIO_BIN_IN : ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
   if (aip == NULL) {
-    Message (MSG_ERROR, "AsnIoNew failed for input file '%s'", inputFile);
+    Message (MSG_POSTERR, "AsnIoNew failed for input file '%s'", inputFile);
     return 1;
   }
 
@@ -989,14 +1003,18 @@ static Int2 HandleMultipleRecords (
   } else if (type == 5) {
     atp = atp_ssp;
   } else {
-    Message (MSG_ERROR, "Batch processing type not set properly");
+    Message (MSG_POSTERR, "Batch processing type not set properly");
     return 1;
   }
 
   longest [0] = '\0';
   worsttime = 0;
 
-  while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
+  while ((! io_failure) && (atp = AsnReadId (aip, amp, atp)) != NULL) {
+    if (aip->io_failure) {
+      io_failure = TRUE;
+      aip->io_failure = FALSE;
+    }
     if (atp == atp_se) {
       atp_se_seen = TRUE;
       sep = SeqEntryAsnRead (aip, atp);
@@ -1109,10 +1127,15 @@ static Int2 HandleMultipleRecords (
         }
       }
       SeqEntryFree (sep);
+
       omp = ObjMgrGet ();
       ObjMgrReapOne (omp);
+      SeqMgrClearBioseqIndex ();
       ObjMgrFreeCache (0);
       FreeSeqIdGiCache ();
+
+      SeqEntrySetScope (NULL);
+
     } else if (atp == atp_desc && (! atp_se_seen)) {
       descr = SeqDescrAsnRead (aip, atp);
     } else if (atp == atp_sbp) {
@@ -1137,6 +1160,19 @@ static Int2 HandleMultipleRecords (
     } else {
       AsnReadVal (aip, atp, NULL);
     }
+
+    if (aip->io_failure) {
+      io_failure = TRUE;
+      aip->io_failure = FALSE;
+    }
+  }
+
+  if (aip->io_failure) {
+    io_failure = TRUE;
+  }
+
+  if (io_failure) {
+    Message (MSG_POSTERR, "Asn io_failure for input file '%s'", inputFile);
   }
 
   if (ofp != NULL) {
@@ -1168,6 +1204,7 @@ static Int2 HandleMultipleRecords (
   sprintf (cmmd, "rm %s; rm %s; rm %s", path1, path2, path3);
   system (cmmd);
 
+  if (io_failure) return 1;
   return 0;
 }
 

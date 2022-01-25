@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.37 2006/09/18 15:30:24 camacho Exp $
+/* $Id: blast_filter.h,v 1.39 2007/07/25 12:55:50 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,13 @@
  * functions, combine with blast_dust.h?
  */
 
-#ifndef __BLAST_FILTER__
-#define __BLAST_FILTER__
+#ifndef ALGO_BLAST_CORE__BLAST_FILTER__H
+#define ALGO_BLAST_CORE__BLAST_FILTER__H
 
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_message.h>
 #include <algo/blast/core/blast_options.h>
 
@@ -51,6 +54,7 @@ extern const Uint1 kProtMask;
 /** Repeats filtering default options. */
 #define REPEATS_SEARCH_EVALUE 0.1       /**< Default e-value threshold */
 #define REPEATS_SEARCH_PENALTY -1       /**< Default mismatch penalty */
+#define REPEATS_SEARCH_REWARD 1       /**< Default match reward */
 #define REPEATS_SEARCH_GAP_OPEN 2       /**< Default gap opening cost */
 #define REPEATS_SEARCH_GAP_EXTEND 1     /**< Default gap extension cost */
 #define REPEATS_SEARCH_WORD_SIZE 11     /**< Default word size */
@@ -296,7 +300,19 @@ BlastFilteringOptionsFromString(EBlastProgramType program_number,
                                 SBlastFilterOptions* *filtering_options, 
                                 Blast_Message* *blast_message);
 
+/** Determines whether this is a nucleotide query and whether this a minus strand or not
+ *
+ * @param is_na the query is nucleotide
+ * @param context offset in the QueryInfo array
+ * @return TRUE if this is minus strand
+ */
+static NCBI_INLINE Boolean BlastIsReverseStrand(Boolean is_na, Int4 context)
+{
+     return (is_na && ((context & 1) != 0));
+
+}
+
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_FILTER__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_FILTER__H */

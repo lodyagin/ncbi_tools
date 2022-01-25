@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,12 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.32  2006/11/09 17:47:16  kans
+* added ValNodeMergeStrs
+*
+* Revision 6.31  2006/10/17 14:16:48  lavr
+* ValNodeCopyStr() to take "const char*"
+*
 * Revision 6.30  2005/11/16 16:36:11  kans
 * support for PowerPC and Intel chips for Macintosh
 *
@@ -619,7 +625,7 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeAddStr (ValNodePtr PNTR head, Nlm_Int2 choi
 *      if str == NULL, does not add a ValNode
 *
 *****************************************************************************/
-NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStr (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str)
+NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStr (ValNodePtr PNTR head, Nlm_Int2 choice, const char* str)
 {
 	ValNodePtr newnode;
 
@@ -930,6 +936,41 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeSort (ValNodePtr list, int (LIBCALLBACK *co
 	MemFree (head);
 
 	return list;
+}
+
+/*****************************************************************************
+*
+*   ValNodeMergeStrs(list)
+*   	Merges chain of val node strings into a single character array
+*
+*****************************************************************************/
+NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs (ValNodePtr list)
+
+{
+  size_t       len;
+  Nlm_CharPtr  ptr;
+  Nlm_CharPtr  str;
+  Nlm_CharPtr  tmp;
+  ValNodePtr   vnp;
+
+
+  if (list == NULL) return NULL;
+
+  for (vnp = list, len = 0; vnp != NULL; vnp = vnp->next) {
+    str = (Nlm_CharPtr) vnp->data.ptrvalue;
+    len += Nlm_StringLen (str);
+  }
+  if (len == 0) return NULL;
+
+  ptr = Nlm_MemNew (sizeof (Nlm_Char) * (len + 2));
+  if (ptr == NULL) return NULL;
+
+  for (vnp = list, tmp = ptr; vnp != NULL; vnp = vnp->next) {
+    str = (Nlm_CharPtr) vnp->data.ptrvalue;
+    tmp = Nlm_StringMove (tmp, str);
+  }
+
+  return ptr;
 }
 
 /*****************************************************************************

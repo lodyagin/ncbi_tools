@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.29 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -37,41 +37,8 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 05-13-93 Schuler     All public functions are now declared LIBCALL.
 *
 *
-* $Log: objseq.c,v 
- * Revision 4.2  1995/09/21  02:26:14  ostel
- * added ProgMon call
- *
- * Revision 4.1  1995/08/29  20:23:05  ostell
- * changed SeqIdPrint to SeqIdWrite
- *
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.14  1995/07/25  01:00:07  ostell
- * added checks to strip asn1 spec 4.0 objects on demand
- *
- * Revision 3.13  1995/07/22  21:59:13  ostell
- * added support for ASN.1 spec 4.0
- *
- * Revision 3.12  1995/07/11  21:10:12  kans
- * changed SEQDESC_neighbors to SEQDESC_dbxref
- *
- * Revision 3.11  1995/07/11  18:46:25  ostell
- * replaced Seqdesc neighbors with dbxref
- * added reftype to Pubdesc
- *
- * Revision 3.10  1995/05/27  01:51:28  ostell
- * changes mips to mipsptr to satisfy SGI compilers
- *
- * Revision 3.9  1995/05/26  02:28:33  ostell
- * added MolInfo content label function
- *
- * Revision 3.8  1995/05/15  21:22:00  ostell
- * added Log line
- *
 *
 *
 * ==========================================================================
@@ -784,7 +751,7 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqFree (BioseqPtr bsp)
 
     if (bsp == NULL)
         return bsp;
-
+        
 	if (bsp->idx.parentptr == NULL || bsp->idx.parenttype == OBJ_SEQSUB) {
 		if (bsp->seqentry != NULL) {
 			SeqMgrDeleteIndexesInRecord (bsp->seqentry);
@@ -825,7 +792,7 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqFreeComponents (BioseqPtr bsp)
         return bsp;
 
     bsp->descr = SeqDescrFree(bsp->descr);
-    bsp->seq_data = BSFree(bsp->seq_data);
+    bsp->seq_data = SeqDataFree(bsp->seq_data, bsp->seq_data_type);
     bsp->fuzz = IntFuzzFree(bsp->fuzz);
     switch (bsp->seq_ext_type)
     {
@@ -1041,7 +1008,7 @@ erret:
 }
 
 /**********************************************************/
-Boolean LIBCALL SeqDataAsnWriteXML(ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig, Int4 seqlen)
+Boolean LIBCALL SeqDataAsnWriteXML(SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig, Int4 seqlen)
 {
     AsnTypePtr atp;
     AsnTypePtr tmp;
@@ -1049,6 +1016,7 @@ Boolean LIBCALL SeqDataAsnWriteXML(ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip
     Boolean    tofree;
     Boolean    retval;
     Uint1      newseqtype;
+    ByteStorePtr  bsp;
 
     if((!loaded && !SeqAsnLoad()) || aip == NULL)
         return(FALSE);
@@ -1057,12 +1025,15 @@ Boolean LIBCALL SeqDataAsnWriteXML(ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip
     if(atp == NULL)
         return(FALSE);
 
-    if(bsp == NULL)
+    if(sdp == NULL)
     {
         AsnNullValueMsg(aip, atp);
         AsnUnlinkType(orig);            /* unlink local tree */
         return(FALSE);
     }
+
+    if (seqtype == Seq_code_gap) return FALSE;
+    bsp = (ByteStorePtr) sdp;
 
     tofree = FALSE;
     if(aip->type & ASNIO_XML)
@@ -1111,6 +1082,8 @@ Boolean LIBCALL SeqDataAsnWriteXML(ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip
         tmp = SEQ_DATA_ncbipaa;
     else if(seqtype == Seq_code_ncbistdaa)
         tmp = SEQ_DATA_ncbistdaa;
+    else if(seqtype == Seq_code_gap)
+        tmp = SEQ_DATA_gap;
     else
         tmp = NULL;
 
@@ -1189,7 +1162,7 @@ NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnT
 
     if (bsp->seq_data != NULL)
     {
-                if (aip->type & ASNIO_XML)
+        if (aip->type & ASNIO_XML)
 		{
 			if (! SeqDataAsnWriteXML(bsp->seq_data, bsp->seq_data_type, aip, SEQ_INST_seq_data, bsp->length))
 				goto erret;
@@ -1360,14 +1333,35 @@ erret:
 
 /*****************************************************************************
 *
+*   SeqDataFree(bsp, seqtype)
+*
+*****************************************************************************/
+NLM_EXTERN SeqDataPtr LIBCALL SeqDataFree (SeqDataPtr sdp, Uint1 seqtype)
+
+{
+    switch (seqtype)
+    {
+        case Seq_code_gap:
+            SeqGapFree ((SeqGapPtr) sdp);
+            break;
+        default:
+            BSFree ((ByteStorePtr) sdp);
+            break;
+    }
+    return NULL;
+}
+
+/*****************************************************************************
+*
 *   SeqDataAsnWrite(bsp, seqtype, aip, orig)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite (ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig)
+NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite (SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig)
 {
 	DataVal av;
 	AsnTypePtr atp, tmp;
 	Boolean retval = FALSE;
+	AsnWriteFunc func = NULL;
 
 	if (! loaded)
 	{
@@ -1381,9 +1375,9 @@ NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite (ByteStorePtr bsp, Uint1 seqtype, Asn
 	atp = AsnLinkType(orig, SEQ_DATA);   /* link local tree */
     if (atp == NULL) return FALSE;
 
-	if (bsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+	if (sdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
-    av.ptrvalue = bsp;
+    av.ptrvalue = sdp;
     if (! AsnWriteChoice(aip, atp, (Int2)seqtype, &av)) goto erret;   /* CHOICE */
     tmp = NULL;
     switch (seqtype)
@@ -1418,8 +1412,16 @@ NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite (ByteStorePtr bsp, Uint1 seqtype, Asn
         case Seq_code_ncbistdaa:
             tmp = SEQ_DATA_ncbistdaa;
             break;
+        case Seq_code_gap:
+            tmp = SEQ_DATA_gap;
+            func = (AsnWriteFunc) SeqGapAsnWrite;
+            break;
     }
-    if (! AsnWrite(aip, tmp, &av)) goto erret;
+    if (func != NULL) {
+      if (! (* func)((SeqGapPtr) sdp, aip, tmp))  goto erret;
+    } else {
+      if (! AsnWrite(aip, tmp, &av)) goto erret;
+    }
 
     retval = TRUE;
 erret:
@@ -1432,16 +1434,18 @@ erret:
 *   SeqDataAsnRead(aip, atp, typeptr, length)   
 *
 *****************************************************************************/
-NLM_EXTERN ByteStorePtr LIBCALL SeqDataAsnRead (AsnIoPtr aip, AsnTypePtr orig, Uint1Ptr typeptr, Int4 length)
+NLM_EXTERN SeqDataPtr LIBCALL SeqDataAsnRead (AsnIoPtr aip, AsnTypePtr orig, Uint1Ptr typeptr, Int4 length)
 {
 	DataVal av;
 	AsnTypePtr atp;
     Uint1 choice;
-	ByteStorePtr retval = NULL, tmpbs;
+	ByteStorePtr retval = NULL;
+	ByteStorePtr tmpbs;
 	Int2 residue;
 	Int4 ctr1, ctr2;
 	Char buf[100];
 	Boolean is_one_let = FALSE;  /* assume not a 1 letter upper case code */
+	AsnReadFunc func = NULL;
 
 	if (! loaded)
 	{
@@ -1490,13 +1494,19 @@ NLM_EXTERN ByteStorePtr LIBCALL SeqDataAsnRead (AsnIoPtr aip, AsnTypePtr orig, U
             choice = Seq_code_ncbipaa;
         else if (atp == SEQ_DATA_ncbistdaa)
             choice = Seq_code_ncbistdaa;
-        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
-        retval = (ByteStorePtr)av.ptrvalue;
-		*typeptr = choice;
-		ctr1 = BSLen(retval);
-		if ((is_one_let) && (ctr1 > length) &&
-			(aip->type == ASNIO_TEXT_IN))  /* could have spaces */
-		{
+        else if (atp == SEQ_DATA_gap) {
+            choice = Seq_code_gap;
+            func = (AsnReadFunc) SeqGapAsnRead;
+        }
+        if (func != NULL) {
+            retval = (* func)(aip, atp);
+        } else {
+          if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+          retval = (ByteStorePtr) av.ptrvalue;
+		  ctr1 = BSLen(retval);
+		  if ((is_one_let) && (ctr1 > length) &&
+		  	(aip->type == ASNIO_TEXT_IN))  /* could have spaces */
+		  {
 			tmpbs = retval;
 			retval = BSNew(length);
 			BSSeek(tmpbs, 0, SEEK_SET);
@@ -1519,15 +1529,179 @@ NLM_EXTERN ByteStorePtr LIBCALL SeqDataAsnRead (AsnIoPtr aip, AsnTypePtr orig, U
 			if (ctr2)
 				BSWrite(retval, buf, ctr2);
 			BSFree(tmpbs);
-		}
+		  }
+        }
+		*typeptr = choice;
 
 ret:
     AsnUnlinkType(orig);       /* unlink local tree */
-	return retval;
+	return (SeqDataPtr) retval;
 erret:
 	retval = BSFree(retval);
 	goto ret;
 }
+
+
+/**************************************************
+*
+*    SeqGapNew()
+*
+**************************************************/
+NLM_EXTERN 
+SeqGapPtr LIBCALL
+SeqGapNew(void)
+{
+   SeqGapPtr ptr = MemNew((size_t) sizeof(SeqGap));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SeqGapFree()
+*
+**************************************************/
+NLM_EXTERN 
+SeqGapPtr LIBCALL
+SeqGapFree(SeqGapPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SeqGapAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SeqGapPtr LIBCALL
+SeqGapAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SeqGapPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SeqGap ::= (self contained) */
+      atp = AsnReadId(aip, amp, SEQ_GAP);
+   } else {
+      atp = AsnLinkType(orig, SEQ_GAP);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SeqGapNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SEQ_GAP_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQ_GAP_linkage) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> linkage = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SeqGapFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SeqGapAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SeqGapAsnWrite(SeqGapPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SEQ_GAP);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, SEQ_GAP_type,  &av);
+   av.intvalue = ptr -> linkage;
+   retval = AsnWrite(aip, SEQ_GAP_linkage,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
 
 /*****************************************************************************
 *
@@ -3812,7 +3986,7 @@ NLM_EXTERN SeqLitPtr LIBCALL SeqLitFree (SeqLitPtr slp)
     if (slp == NULL)
         return slp;
 
-	BSFree(slp->seq_data);
+	SeqDataFree(slp->seq_data, slp->seq_data_type);
 	IntFuzzFree(slp->fuzz);
 	return (SeqLitPtr)MemFree(slp);
 }

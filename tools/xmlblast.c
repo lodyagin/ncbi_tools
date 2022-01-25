@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: xmlblast.c,v 6.39 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: xmlblast.c,v 6.41 2007/05/07 13:30:54 kans Exp $";
 
-/* $Id: xmlblast.c,v 6.39 2005/07/28 14:57:10 coulouri Exp $ */
+/* $Id: xmlblast.c,v 6.41 2007/05/07 13:30:54 kans Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,12 +32,18 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.39 2005/07/28 14:57:10 coulouri
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.39 $
+* $Revision: 6.41 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.41  2007/05/07 13:30:54  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.40  2007/03/23 14:38:31  madden
+* Fix RT 15264581 (ungapped use of std-seg) and add needed BioseqUnlock
+*
 * Revision 6.39  2005/07/28 14:57:10  coulouri
 * remove dead code
 *
@@ -653,6 +659,17 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
         bs_list = CreateMaskByteStore (mask_loc);
         if (ISA_na(bsp->mol) && sap->segtype == SAS_STD) {
             StdSegPtr ssp = (StdSegPtr) sap->segs;
+            int ssp_index = 1;
+            while (ssp_index < chain)
+            {
+                ssp = ssp->next;
+                ssp_index++;
+            }
+            if (ssp == NULL) 
+            {   /* No more to process. */
+                BioseqUnlock(bsp);
+                return NULL;
+            }
             frame = SeqLocStart(ssp->loc);
             if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
                 frame += SeqLocLen(ssp->loc);
@@ -663,13 +680,13 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
         } else
             frame = 0;
         repr = bsp->repr;
-        seq_data = bsp->seq_data;
+        seq_data = (ByteStorePtr) bsp->seq_data;
         code = bsp->seq_data_type;
         seq_data_replaced = 
                 replace_bytestore_data(bsp, bs_list, (Uint1)frame);
         if (!seq_data_replaced) {
             bsp->repr = repr;
-            bsp->seq_data = seq_data;
+            bsp->seq_data = (SeqDataPtr) seq_data;
             bsp->seq_data_type = code;
         }
     } else {
@@ -698,6 +715,7 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
         if(matrix_allocated)
             free_default_matrix(as.matrix);
         HspFree(hsp);
+        BioseqUnlock(bsp);
         return NULL;
     }
 
@@ -741,7 +759,7 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
 
     /* Restore the original query sequence data, if it was replaced. */
     if (seq_data_replaced) {
-        bsp->seq_data = seq_data;
+        bsp->seq_data = (SeqDataPtr) seq_data;
         bsp->repr = repr;
         bsp->seq_data_type = code;
     }

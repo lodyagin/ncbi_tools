@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.27 $
+* $Revision: 1.28 $
 *
 * File Description: 
 *
@@ -332,6 +332,12 @@ NLM_EXTERN void PubSeqFetchDisable (
 NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
   Int4 num,
   Int4Ptr uids
+);
+
+NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCacheEx (
+  Int4 num,
+  Int4Ptr uids,
+  Boolean filter
 );
 
 NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (

@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.54 2006/01/23 16:39:50 papadopo Exp $
+/* $Id: twoseq_api.c,v 1.59 2007/03/20 15:17:16 kans Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -36,9 +36,10 @@
 #include <algo/blast/core/blast_message.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_engine.h>
-#include <algo/blast/core/mb_lookup.h>
 #include <algo/blast/core/blast_filter.h>
+#include <algo/blast/core/blast_nalookup.h>
 #include <algo/blast/core/hspstream_collector.h>
+#include <algo/blast/core/gencode_singleton.h>
 #include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/blast_seq.h>
@@ -114,11 +115,11 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
     Int2 word_size = basic_options->word_size;
     char *matrix;
 
-    if (program_number == eBlastTypeTblastn || 
-        program_number == eBlastTypeTblastx) {
-        if ((status = BLAST_GeneticCodeFind(db_options->genetic_code,
-                                            &db_options->gen_code_string)))
-            return status;
+    if (Blast_SubjectIsTranslated(program_number)) {
+        Uint1* gc = NULL;
+        BLAST_GeneticCodeFind(db_options->genetic_code, &gc);
+        GenCodeSingletonAdd(db_options->genetic_code, gc);
+        free(gc);
     }
 
     if (program_number == eBlastTypeBlastn) {
@@ -137,7 +138,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
             query_length > MEGABLAST_CUTOFF) {
             do_megablast = TRUE;
             if (basic_options->gapped_calculation)
-                greedy_align = 1;       /* one-pass, no ungapped */
+                greedy_align = 1;
         }
 
 
@@ -184,7 +185,6 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
  
     BLAST_FillInitialWordOptions(word_options, 
                                  program_number, 
-                                 (Boolean)greedy_align, 
                                  0,      /* default window size. */
                                  0);     /* default ungapped X dropoff */
  

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.139 $
+* $Revision: 6.141 $
 *
 * File Description: 
 *
@@ -84,6 +84,7 @@
 extern ForM smartBioseqViewForm;
 ForM smartBioseqViewForm = NULL;
 
+#define MAX_VIEWABLE_TARGET_SEQUENCES 60000
 
 static void LookForGenomeTag (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
@@ -1130,7 +1131,7 @@ static void PopTargetAlistProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
 
   bfp = (BioseqViewFormPtr) mydata;
   if (bfp != NULL && sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
-    if (bfp->workingCount > 32000) return; /* alists use Int2 indexing, so protect here */
+    if (bfp->workingCount > MAX_VIEWABLE_TARGET_SEQUENCES) return; /* don't want list to get too long */
     bsp = (BioseqPtr) sep->data.ptrvalue;
     sip = SeqIdFindWorst (bsp->id);
     SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
@@ -1193,7 +1194,7 @@ static Int4 PopulateTarget (BioseqViewFormPtr bfp)
             PopupItem (bfp->targetControl, ap->name);
           }
         } else {
-          if (count < 32000) {
+          if (count < MAX_VIEWABLE_TARGET_SEQUENCES) {
             ListItem (bfp->targetControl, ap->name);
           }
         }
@@ -2039,6 +2040,31 @@ extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
       return;
     }
   }
+}
+
+extern BioseqPtr GetBioseqViewTarget (BaseFormPtr fp)
+
+{
+  BioseqViewFormPtr  bfp;
+  BioseqPtr          bsp = NULL;
+  Int2               val;
+  SeqEntryPtr        sep;
+
+  bfp = (BioseqViewFormPtr) fp;
+  if (bfp == NULL || bfp->targetControl == NULL) return NULL;
+
+  val = GetValue (bfp->targetControl);
+  if (val > 1) {
+    val--;
+    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+    if (sep != NULL) {
+      sep = FindNthSequinEntry (sep, val);
+      if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+      }
+    }
+  }
+  return bsp;
 }
 
 extern BioseqViewPtr GetBioseqViewPtrFromBaseFormPtr (BaseFormPtr fp)

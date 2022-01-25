@@ -63,7 +63,5 @@ CharPtr laststr PROTO((CharPtr str, CharPtr word));
 
 void DelFeatFromList PROTO((SeqFeatPtr PNTR gbqp, SeqFeatPtr curq, SeqFeatPtr preq));
 
-void DelNodeFromList PROTO((ValNodePtr PNTR gbqp, ValNodePtr curq, ValNodePtr preq));
-
 ValNodePtr GetOrfList PROTO((BioseqPtr bsp, Int2 limit));
 ValNodePtr GetAltList PROTO((ValNodePtr list));

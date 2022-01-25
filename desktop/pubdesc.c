@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.49 $
+* $Revision: 6.62 $
 *
 * File Description:
 *
@@ -37,379 +37,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* $Log: pubdesc.c,v $
-* Revision 6.49  2005/10/18 19:09:40  kans
-* shorten locale dialog box
-*
-* Revision 6.48  2005/08/18 14:41:30  kans
-* include toasn3.h for ExtendGeneFeatIfOnMRNA prototype
-*
-* Revision 6.47  2005/07/11 16:35:48  bollin
-* when creating temporary empty sets as containers for descriptors, set
-* the _class member to BioseqseqSet_class_empty_set to prevent the BioseqSet
-* from being removed by the DeleteMarkedSeqEntry function in api/gather.c
-*
-* Revision 6.46  2005/07/05 14:23:15  bollin
-* "Lookup Relaxed" button should only be available for internal Sequin,
-* per Linda Yankie's request.
-*
-* Revision 6.45  2005/06/03 13:24:36  bollin
-* unregister dialogs for ObjMgr messages when the form is being removed
-*
-* Revision 6.44  2005/05/23 15:58:33  bollin
-* improved appearance of publications listed in PublicationListDialog -
-* don't include the word "citation" at the front of the string, use semicolons
-* instead of carriage returns.
-*
-* Revision 6.43  2005/05/23 15:47:56  bollin
-* added external method for invoking the editor for a publication listed by the
-* PublicationListDialog
-*
-* Revision 6.42  2005/05/20 19:12:11  bollin
-* user can now edit publications from the publication list dialog
-*
-* Revision 6.41  2005/05/20 14:34:30  bollin
-* fixed bug in SeqDescrListCopy
-*
-* Revision 6.40  2005/05/19 20:24:37  bollin
-* created a new dialog for editing a list of publications.  Will be used by
-* the new Submission Template File Editor dialog.  Still needs some work.
-*
-* Revision 6.39  2005/04/20 19:46:02  kans
-* fixed ReplaceAllCallback
-*
-* Revision 6.38  2005/03/03 21:44:05  kans
-* PubEquivLookupProc takes extra BoolPtr parameter to signal success or failure
-*
-* Revision 6.37  2004/08/13 16:07:54  kans
-* warn if changing pub_reftype to sites or lost
-*
-* Revision 6.36  2004/08/13 15:32:37  kans
-* restored reftype gui controls on initial publication window
-*
-* Revision 6.35  2004/08/11 18:50:14  kans
-* PubdescPtrToPubdescPage looks at imp history, changes pubstatus from electronic to print if hard copy has been published
-*
-* Revision 6.34  2004/08/09 16:15:13  kans
-* more informative popup item values for pubstatus
-*
-* Revision 6.33  2004/07/20 16:04:05  kans
-* added pubstatus control
-*
-* Revision 6.32  2004/04/29 13:17:22  bollin
-* removed scope control (unused) from pub descriptor and pub feature dialogs.
-*
-* Revision 6.31  2004/04/26 18:48:39  bollin
-* prevent user from changing from submission to non-submission pub descriptor
-*
-* Revision 6.30  2004/04/26 18:25:28  kans
-* always allow Submission to be added, even by non-indexers
-*
-* Revision 6.29  2003/02/24 14:14:10  kans
-* removed unnecessary prototypes
-*
-* Revision 6.28  2002/11/03 21:10:12  kans
-* do not put standard remark popup in online pub dialog
-*
-* Revision 6.27  2002/11/03 20:53:11  kans
-* added support for online publication
-*
-* Revision 6.26  2002/10/30 18:21:33  kans
-* strAuthor does not take author_popups, and calls to CreateAuthorDialog now use spacing of 2 instead of -1 to make suffix popup look better
-*
-* Revision 6.25  2002/08/01 19:47:10  kans
-* AddConsortiumToAuthList in CitSub
-*
-* Revision 6.24  2002/07/23 21:31:19  kans
-* support for consortium
-*
-* Revision 6.23  2001/11/12 19:54:53  kans
-* do not allocate year, protect against buffer overflow by -1 value
-*
-* Revision 6.22  2001/11/08 14:26:38  kans
-* some protection in relaxed lookup, but server is not handling maxuid parameter in EntrezCreateBooleanRequest
-*
-* Revision 6.21  2001/10/23 18:57:38  kans
-* EntrezAddToBooleanRequest has new key parameter
-*
-* Revision 6.20  2001/09/28 15:55:17  kans
-* for docsum, extract first author, separate year from month
-*
-* Revision 6.19  2001/09/10 19:20:06  kans
-* fixed for new entrez2 spec
-*
-* Revision 6.18  2001/08/03 23:01:50  kans
-* import/export primary author dialog
-*
-* Revision 6.17  2001/05/30 15:10:53  kans
-* removed medarch and medutil includes
-*
-* Revision 6.16  2001/05/29 16:31:11  kans
-* added LaunchRelaxedQuery, written by Hanzhen Sun
-*
-* Revision 6.15  1999/05/10 23:13:26  kans
-* separate lookup by muid and pmid in case both are present
-*
-* Revision 6.14  1999/05/06 19:00:58  kans
-* enable lookup by pmid button
-*
-* Revision 6.13  1998/12/14 22:36:21  kans
-* trim spaces around muid string
-*
-* Revision 6.12  1998/11/30 17:31:13  kans
-* kludge to save authors if lookup by article
-*
-* Revision 6.11  1998/10/20 15:33:59  kans
-* citsub now allows affil phone, fax, e-mail to be set
-*
-* Revision 6.10  1998/06/12 00:24:52  kans
-* fixed problems detected by unix compiler
-*
-* Revision 6.9  1998/06/02 17:51:02  kans
-* StdVibrantEditorMsgFunc responds to OM_MSG_DEL
-*
-* Revision 6.8  1998/04/13 21:07:22  kans
-* PubdescAcceptFormButtonProc tries to copy ASN.1, on failure aborts attempted save
-*
-* Revision 6.7  1997/12/01 15:05:03  kuzio
-* continuing bug fixes for proceedings citation
-*
-* Revision 6.6  1997/11/26 20:40:11  kuzio
-* typo
-*
-* Revision 6.5  1997/11/26 15:49:25  kuzio
-* 1st fix of proceedings entry bugs
-*
-* Revision 6.4  1997/11/13 21:33:50  kans
-* implemented proceedings, proceedings chapter (Kuzio)
-*
-* Revision 6.3  1997/11/11 23:24:46  kans
-* Import clears ppp->flagPubDelta
-*
-* Revision 6.2  1997/10/21 23:02:12  kans
-* standard remark text popup for indexers
-*
-* Revision 6.1  1997/09/15 19:05:53  kans
-* editors call ObjMgrAddUserData to support ItemAlreadyHasEditor
-*
-* Revision 6.0  1997/08/25 18:22:59  madden
-* Revision changed to 6.0
-*
-* Revision 5.23  1997/08/01 15:07:20  kans
-* ExtendGeneFeatIfOnMRNA only called by indexer version
-*
-* Revision 5.22  1997/07/30 20:27:31  kans
-* use of ExtendGeneFeatIfOnMRNA
-*
-* Revision 5.21  1997/07/22 21:51:15  kans
-* citbookptr was not being objtained properly from citartptr
-*
-* Revision 5.20  1997/07/14 13:17:51  kans
-* CreateIntervalEditorDialogEx takes callback to synchronize feature partial checkbox to 5prime and 3prime partial boxes
-*
-* Revision 5.19  1997/05/05 15:51:35  kans
-* no replace authors on new pub
-*
- * Revision 5.18  1997/05/05  02:07:26  kans
- * replace authors button in initial form
- *
- * Revision 5.17  1997/05/02  21:27:32  kans
- * replace authors implemented
- *
- * Revision 5.16  1997/05/02  19:18:33  kans
- * calls SetClosestParentIfDuplicating
- *
- * Revision 5.15  1997/04/02  22:48:56  kans
- * changed title_rank to be iso-jta, ml-jta, jta, coden, issn, name, trans
- *
- * Revision 5.14  1997/04/02  21:19:43  kans
- * title_old set to 0 at beginning, so cit-art with lower ranked titles
- * coming after cit-gen with higher ranked titles don't override
- *
- * Revision 5.13  1997/01/29  19:33:43  kans
- * changed to StringNCpy_0
- *
- * Revision 5.12  1996/12/31  21:24:06  kans
- * calls GetRidOfEmptyFeatsDescStrings
- *
- * Revision 5.11  1996/12/12  21:20:19  kans
- * unpublished citations don't force current date if none set
- *
- * Revision 5.10  1996/12/04  18:17:05  kans
- * internal indexer version start up on journal page
- *
- * Revision 5.9  1996/11/01  20:56:00  kans
- * create dummy date in pub_sub
- *
- * Revision 5.8  1996/10/25  18:31:42  kans
- * one more place to make fake imp->date
- *
- * Revision 5.7  1996/09/12  13:25:43  kans
- * added cast to memset
- *
- * Revision 5.6  1996/09/05  16:23:50  kans
- * cit-sub date initialized to current date
- *
- * Revision 5.5  1996/07/18  19:46:11  kans
- * activate slot now in forms structure in vibforms.h
- *
- * Revision 5.4  1996/07/17  21:52:31  kans
- * SaveStringFromTextAndStripNewlines for saving from most scroll text boxes
- *
- * Revision 5.3  1996/07/17  20:53:58  kans
- * multiple citgen would miss "unpublished" indication
- *
- * Revision 5.2  1996/06/21  18:38:12  kans
- * allows switching of reftype in existing pub if descriptor
- *
- * Revision 5.1  1996/06/13  18:22:32  kans
- * GetATSub needed to check for csp->imp not NULL before double dereferencing
- *
- * Revision 5.0  1996/05/28  13:39:11  ostell
- * Set to revision 5.0
- *
- * Revision 1.47  1996/05/22  21:50:59  kans
- * changed OM_MSG_RET_OK to OM_MSG_RET_DONE
- *
- * Revision 1.46  1996/05/21  20:18:23  kans
- * don't read or write reftype on import/export
- *
- * Revision 1.45  1996/05/21  20:05:34  kans
- * implement import/export of pubdesc, seqloc
- *
- * Revision 1.44  1996/05/21  18:50:57  kans
- * put title page(s) before author page, preparation for import/export
- *
- * Revision 1.43  1996/04/24  19:23:27  kans
- * internal sequin always shows serial number control
- *
- * Revision 1.42  1996/04/09  21:37:10  kans
- * fixed thesis (Kuzio)
- *
- * Revision 1.41  1996/04/09  16:33:20  kans
- * added help scrolling, and new pub has accept button instead of replace
- *
- * Revision 1.40  1996/04/08  14:40:22  kans
- * added initial support for PubMed IDs (Kuzio)
- *
- * Revision 1.39  1996/03/21  16:06:18  kans
- * SetNewFeatureDefaultInterval now used
- *
- * Revision 1.38  1996/03/12  00:39:39  kans
- * added support for CitRetract in journal imprint
- *
- * Revision 1.37  1996/02/29  17:47:28  kans
- * internal sequin allows new submission citation to be added
- *
- * Revision 1.36  1996/02/15  23:03:43  kans
- * remove contact sub-dialog
- *
- * Revision 1.35  1996/02/14  18:15:48  kans
- * publication features don't have citations on feature requirement
- *
- * Revision 1.34  1996/02/07  16:15:20  kans
- * new pub disables buttons that would allow unimplemented feat/desc switch
- *
- * Revision 1.33  1996/01/24  22:11:46  kans
- * if no imp->date, it creates a dummy one to pass the object loader
- *
- * Revision 1.32  1996/01/24  21:46:30  kans
- * convert cap to cgp truncated and corrupted title
- *
- * Revision 1.31  1996/01/02  21:35:24  kans
- * changed Process to Proceed for initial form button title
- *
- * Revision 1.30  1996/01/02  19:48:35  kans
- * uses fallback message callback
- *
- * Revision 1.29  1996/01/02  17:15:31  kans
- * replaceThis is in the app property structure, newfeat reftype set properly
- *
- * Revision 1.28  1995/12/31  02:55:36  kans
- * REPLACE_THIS needed for separate replace all and replace this buttons
- *
- * Revision 1.27  1995/12/30  19:50:01  kans
- * message handler now uses switch statement
- *
- * Revision 1.26  1995/12/30  04:05:48  kans
- * editors handle cut/copy/paste/delete etc. messages from menu items
- *
- * Revision 1.25  1995/12/30  00:51:49  kans
- * init, enter, reset, redraw dialog/form uses message function
- *
- * Revision 1.24  1995/12/26  14:57:21  kans
- * added NULL clearProc parameter to CreateStdEditorFormMenus
- *
- * Revision 1.23  1995/12/25  21:48:12  kans
- * calls CreateStdEditorFormMenus
- *
- * Revision 1.22  1995/12/24  15:58:54  kans
- * SetSerialNumber was testing cgp->serial_number instead of serial_number
- *
- * Revision 1.21  1995/12/23  21:18:11  kans
- * moved MedArch pre- and post-processing into pubdesc
- *
- * Revision 1.20  1995/12/21  20:40:39  kans
- * accept buttons now update minimal cits on feats
- *
- * Revision 1.19  1995/12/20  22:22:37  kans
- * code center cleanup (Kuzio)
- *
- * Revision 1.18  1995/12/20  21:01:53  kans
- * support for remote MedArch services
- *
- * Revision 1.17  1995/12/20  20:22:08  kans
- * implements most of replace all function (except minimal cits on feats)
- *
- * Revision 1.16  1995/12/20  16:04:10  kans
- * Update called when switching folder tabs
- *
- * Revision 1.15  1995/12/19  22:16:57  kans
- * *** empty log message ***
- *
- * Revision 1.14  1995/12/15  00:51:53  kans
- * all author pages now use subfolders for names, affil, and contact
- *
- * Revision 1.13  1995/12/12  23:34:22  kans
- * uses extra folder tab appearance parameters
- *
- * Revision 1.12  1995/12/12  22:36:32  kans
- * cannot change feat/desc type of existing pubdesc (Kuzio)
- *
- * Revision 1.11  1995/12/09  01:55:16  kans
- * changes to cit-sub and cit-pat (the other JAK)
- *
- * Revision 1.10  1995/12/08  03:22:26  kans
- * second round of cosmetic changes
- *
- * Revision 1.9  1995/12/08  01:48:08  kans
- * first round of cosmetic changes
- *
- * Revision 1.8  1995/12/07  22:51:39  kans
- * maximum folder tab per line now set for all publication types
- *
- * Revision 1.7  1995/12/07  01:00:33  kans
- * new parameters to CreateFolderTabs
- *
- * Revision 1.6  1995/12/05  22:55:05  kans
- * major internal simplification (Kuzio)
- *
- * Revision 1.5  1995/12/02  23:36:38  kans
- * functional on existing features and descriptors
- *
- * Revision 1.4  1995/12/01  23:38:35  kans
- * *** empty log message ***
- *
- * Revision 1.3  1995/11/08  23:37:52  kans
- * edit block moved out of vibrant
- *
- * Revision 1.2  1995/09/25  21:13:26  kans
- * *** empty log message ***
- *
- * Revision 1.1  1995/07/28  18:01:31  kans
- * Initial revision
- *
 *
 * ==========================================================================
 */
@@ -456,6 +83,7 @@ typedef struct pubinitform {
   GrouP         pub_status;
   GrouP         pub_choice;
   GrouP         pub_reftype;
+  ButtoN        patent_btn;
   Int2          pub_ref_value;
   Int2          pub_choice_init;
   Uint1         reftype;
@@ -485,7 +113,8 @@ typedef struct pubdescpage {
   TexT          title_box;
   DialoG        author_list;
   DialoG        author_affil;
-  TexT          consortium;
+  DialoG        consortium;
+  ButtoN        cons_btn;
   AuthListPtr   originalAuthList;
 
   TexT          journal;
@@ -677,35 +306,56 @@ static ValNodePtr NewSerialFromText (TexT serialtext)
   return pubgennode;
 }
 
-static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, TexT consortium)
+static void ShowConsortium (ButtoN b)
+
+{
+  PubdescPagePtr  ppp;
+
+  ppp = (PubdescPagePtr) GetObjectExtra (b);
+  if (ppp == NULL) return;
+
+  SafeHide (ppp->cons_btn);
+  SafeShow (ppp->consortium);
+  Update ();
+}
+
+static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, DialoG consortium)
 
 {
   AuthorPtr    ap;
+  ValNodePtr   head, vnp;
   ValNodePtr   names;
   PersonIdPtr  pid;
+  CharPtr      str;
 
-  if (TextHasNoText (consortium)) return alp;
+  head = DialogToPointer (consortium);
+  if (head == NULL) return alp;
   if (alp == NULL) {
     alp = AuthListNew ();
     alp->choice = 1;
   }
-  pid = PersonIdNew ();
-  if (pid == NULL) return NULL;
-  pid->choice = 5;
-  pid->data = SaveStringFromText (consortium);
-  ap = AuthorNew ();
-  if (ap == NULL) return NULL;
-  ap->name = pid;
-  names = ValNodeAdd (&(alp->names));
-  names->choice = 1;
-  names->data.ptrvalue = ap;
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    pid = PersonIdNew ();
+    if (pid == NULL) continue;
+    pid->choice = 5;
+    pid->data = StringSave (str);
+    ap = AuthorNew ();
+    if (ap == NULL) continue;
+    ap->name = pid;
+    names = ValNodeAdd (&(alp->names));
+    names->choice = 1;
+    names->data.ptrvalue = ap;
+  }
   return alp;
 }
 
-static void AuthListToConsortium (AuthListPtr alp, TexT consortium)
+static void AuthListToConsortium (AuthListPtr alp, DialoG consortium, ButtoN cons_btn)
 
 {
   AuthorPtr    ap;
+  ValNodePtr   head = NULL;
   ValNodePtr   names;
   PersonIdPtr  pid;
   CharPtr      str;
@@ -718,8 +368,15 @@ static void AuthListToConsortium (AuthListPtr alp, TexT consortium)
     pid = ap->name;
     if (pid == NULL || pid->choice != 5) continue;
     str = (CharPtr) pid->data;
-    SafeSetTitle (consortium, str);
+    ValNodeCopyStr (&head, 0, str);
   }
+  PointerToDialog (consortium, head);
+  if (head != NULL) {
+    SafeHide (cons_btn);
+    SafeShow (consortium);
+    Update ();
+  }
+  ValNodeFreeData (head);
 }
 
 static CitPatPtr PutATPat (PubdescPagePtr ppp)
@@ -970,6 +627,72 @@ static CitArtPtr PutATArt (ValNodePtr vnp, PubdescPagePtr ppp)
   }
   return cap;
 }
+
+static void TestPubdescArt (ValNodePtr PNTR err_list, PubdescPagePtr ppp)
+{
+  if (err_list == NULL || ppp == NULL) return;
+  
+  if (TextHasNoText (ppp->title_box)) {
+    ValNodeAddPointer (err_list, 0, StringSave ("Missing required field Article Title"));
+  }
+}
+
+
+static ValNodePtr TestPubdescDialog (DialoG d)
+{
+  PubdescPagePtr        ppp;
+  ValNodePtr            err_list = NULL;
+  AuthListPtr           alp;
+
+  ppp = (PubdescPagePtr) GetObjectExtra (d);
+  if (ppp != NULL) {
+    switch (ppp->pub_choice)
+    {
+      case PUB_UNPUB:
+      case PUB_ONLINE:
+        /* all fields are optional in a Cit-gen */
+        break;
+      case PUB_PATENT:
+        if (TextHasNoText (ppp->pat_country)) {
+          ValNodeAddPointer (&err_list, 0, StringSave ("Missing required field Patent Country"));
+        }
+        if (TextHasNoText (ppp->pat_doc_type)) {
+          ValNodeAddPointer (&err_list, 0, StringSave ("Missing required field Patent Document Type"));
+        }
+        if (TextHasNoText (ppp->title_box)) {
+          ValNodeAddPointer (&err_list, 0, StringSave ("Missing required field Title"));
+        }
+          
+        alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+        alp = AddConsortiumToAuthList (alp, ppp->consortium);
+        if (alp == NULL) {
+          ValNodeAddPointer (&err_list, 0, StringSave ("Missing required Author names"));
+        } else {
+          alp = AuthListFree (alp);
+        }
+        break;
+      case PUB_JOURNAL:
+        if (TextHasNoText (ppp->journal)) {
+          ValNodeAddPointer (&err_list, 0, StringSave ("Missing required field Journal Title"));
+        }
+        TestPubdescArt (&err_list, ppp);
+        break;
+      case PUB_SUB:
+        alp = (AuthListPtr) DialogToPointer (ppp->author_list);
+        alp = AddConsortiumToAuthList (alp, ppp->consortium);
+        if (alp == NULL) {
+          ValNodeAddPointer (&err_list, 0, StringSave ("Missing required Author names"));
+        } else {
+          alp = AuthListFree (alp);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return err_list;
+}
+
 
 static Pointer PubdescPageToPubdescPtr (DialoG d)
 {
@@ -1253,7 +976,7 @@ static void GetATSub (CitSubPtr csp, PubdescPagePtr ppp)
     if (alp != NULL)
     {
       PointerToDialog (ppp->author_list, (Pointer) alp);
-      AuthListToConsortium (alp, ppp->consortium);
+      AuthListToConsortium (alp, ppp->consortium, ppp->cons_btn);
       ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
       ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -1284,7 +1007,7 @@ static void GetATPat (CitPatPtr cpp, PubdescPagePtr ppp)
     if (alp != NULL)
     {
       PointerToDialog (ppp->author_list, (Pointer) alp);
-      AuthListToConsortium (alp, ppp->consortium);
+      AuthListToConsortium (alp, ppp->consortium, ppp->cons_btn);
       ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
       ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -1330,7 +1053,7 @@ static void GetATBook (CitBookPtr cbp, PubdescPagePtr ppp)
       else
       {
         PointerToDialog (ppp->author_list, (Pointer) alp);
-        AuthListToConsortium (alp, ppp->consortium);
+        AuthListToConsortium (alp, ppp->consortium, ppp->cons_btn);
         ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
         ppp->originalAuthList = AsnIoMemCopy (alp,
                                               (AsnReadFunc) AuthListAsnRead,
@@ -1436,7 +1159,7 @@ static void GetATArt (CitArtPtr cap, PubdescPagePtr ppp)
     if (alp != NULL)
     {
       PointerToDialog (ppp->author_list, (Pointer) alp);
-      AuthListToConsortium (alp, ppp->consortium);
+      AuthListToConsortium (alp, ppp->consortium, ppp->cons_btn);
       ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
       ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -1522,7 +1245,7 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                 if (alp != NULL)
                 {
                   PointerToDialog (ppp->author_list, (Pointer) alp);
-                  AuthListToConsortium (alp, ppp->consortium);
+                  AuthListToConsortium (alp, ppp->consortium, ppp->cons_btn);
                   ppp->originalAuthList = AuthListFree (ppp->originalAuthList);
                   ppp->originalAuthList = AsnIoMemCopy (alp,
                                             (AsnReadFunc) AuthListAsnRead,
@@ -2190,10 +1913,81 @@ static void LookupRelaxedProc (ButtoN b)
   PubdescFree (pdp);
 }
 
+static Boolean ChooseFromMultipleJournals (CharPtr rsult, size_t max, ValNodePtr allTitles)
+{
+  WindoW                 w;
+  GrouP                  h, c, q;
+  ButtoN                 b;
+  PrompT                 p;
+  CharPtr                str;
+  Int2                   j;
+  ValNodePtr             vnp;
+  PopuP                  x;
+  ModalAcceptCancelData  acd;
+
+  if (allTitles == NULL) return FALSE;
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+
+  w = ModalWindow (-20, -13, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  p = StaticPrompt (h, "Select the desired journal from the following popup menu", 0, 0, programFont, 'c');
+
+  q = HiddenGroup (h, 3, 0, NULL);
+  StaticPrompt (q, "Journal", 0, popupMenuHeight, programFont, 'l');
+  x = PopupList (q, TRUE, NULL);
+  PopupItem (x, " ");
+  for (vnp = allTitles; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    PopupItem (x, str);
+  }
+  SetValue (x, 1);
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  b = PushButton (c, "Yes", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "No", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) q, (HANDLE) c, NULL);
+
+  Show (w); 
+  Select (w);
+  while (! acd.accepted && ! acd.cancelled) {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Remove (w);
+  if (acd.accepted) {
+    j = GetValue (x);
+    if (j > 1) {
+      j -= 2;
+      vnp = allTitles;
+      while (j > 0) {
+        vnp = vnp->next;
+        j--;
+      }
+      if (vnp != NULL) {
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          StringNCpy_0 (rsult, str, max);
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
 static void LookupISOJournalProc (ButtoN b)
 
 {
+  ValNodePtr      allTitles = NULL;
   Int1            jtaType;
+  Int4            len;
   PubdescPagePtr  ppp;
   Char            str [256];
 
@@ -2201,8 +1995,20 @@ static void LookupISOJournalProc (ButtoN b)
   if (ppp != NULL && ppp->lookupJournal != NULL) {
     GetTitle (ppp->journal, str, sizeof (str) - 1);
     if (! StringHasNoText (str)) {
-      if ((ppp->lookupJournal) (str, sizeof (str) - 1, &jtaType)) {
-        SetTitle (ppp->journal, str);
+      if ((ppp->lookupJournal) (str, sizeof (str) - 1, &jtaType, &allTitles)) {
+        len = ValNodeLen (allTitles);
+        if (len > 1) {
+          if (ChooseFromMultipleJournals (str, sizeof (str) - 1, allTitles)) {
+            SetTitle (ppp->journal, str);
+          } else {
+            Message (MSG_OK, "Unable to match journal");
+          }
+        } else if (len == 1 && StringDoesHaveText (allTitles->data.ptrvalue) &&
+                   allTitles->choice == Cit_title_iso_jta) {
+          SetTitle (ppp->journal, allTitles->data.ptrvalue);
+        } else {
+          Message (MSG_OK, "Unable to match journal");
+        }
         Update ();
       }
     }
@@ -2292,8 +2098,8 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
   ButtoN                lkp;
   GrouP                 m, m1, m2, m3, m4, m5, m6, m7, m8, m9;
   GrouP                 n1, n2, n3, n4;
-  GrouP                 p, q;
-  PrompT                p2, p3, p4, p5;
+  GrouP                 p, q, z;
+  PrompT                p2, p3, p4, p5, p6;
   PopuP                 pp;
   PubdescPagePtr        ppp;
   GrouP                 s;
@@ -2315,7 +2121,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     ppp->dialog = (DialoG) p;
     ppp->todialog = PubdescPtrToPubdescPage;
     ppp->fromdialog = PubdescPageToPubdescPtr;
-    ppp->testdialog = NULL;
+    ppp->testdialog = TestPubdescDialog;
 
 /* copy a bunch of flags and defaults got from the init form */
     ppp->reftype = reftype;
@@ -2426,9 +2232,19 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
       ppp->AuthGroup[0] = m2;
       ppp->author_list = CreateAuthorDialog (m2, 3, 2);
       pfp->Author_Page = thispage;
+      /*
       q = HiddenGroup (m2, 2, 0, NULL);
       StaticPrompt (q, "Consortium", 0, stdLineHeight, programFont, 'l');
       ppp->consortium = DialogText (q, "", 16, NULL);
+      */
+      q = HiddenGroup (m2, 0, 2, NULL);
+      p6 = StaticPrompt (q, "Consortium", 0, stdLineHeight, programFont, 'c');
+      z = HiddenGroup (q, 0, 0, NULL);
+      ppp->cons_btn = PushButton (z, "Press To Show Consortium Editor", ShowConsortium);
+      SetObjectExtra (ppp->cons_btn, ppp, NULL);
+      ppp->consortium = CreateVisibleStringDialog (z, 3, -1, 16);
+      Hide (ppp->consortium);
+      AlignObjects (ALIGN_CENTER, (HANDLE) p6, (HANDLE) ppp->cons_btn, (HANDLE) ppp->consortium, NULL);
       AlignObjects (ALIGN_CENTER, (HANDLE) ppp->author_list, (HANDLE) q, NULL);
     }
     else
@@ -2887,11 +2703,18 @@ static void PubdescAcceptFormButtonProc (ButtoN b)
   ErrSev          oldErrSev;
   PubdescPtr      pdp;
   PubdescFormPtr  pfp;
+  ValNodePtr      err_list;
 
   pfp = (PubdescFormPtr) GetObjectExtra (b);
   if (pfp == NULL) return;
   ErrClear ();
   oldErrSev = ErrSetMessageLevel (SEV_ERROR);
+  err_list = TestDialog (pfp->data);
+  if (err_list != NULL) {
+    DisplayErrorMessages ("Missing Required Fields", err_list);
+    err_list = ValNodeFreeData (err_list);
+    return;
+  }
   pdp = (PubdescPtr) DialogToPointer (pfp->data);
   copy = AsnIoMemCopy ((Pointer) pdp,
                        (AsnReadFunc) PubdescAsnRead,
@@ -3665,9 +3488,15 @@ static void ProcessCitProc (ButtoN b)
       }
       rf_value = pifp->reftype;
       st_value = (Uint1) GetValue (pifp->pub_status);
+      pb_value = GetValue (pifp->pub_choice);
+      if (st_value > 1 && pb_value == 0) {
+        Message (MSG_ERROR, "Must choose class");
+        ArrowCursor();
+        Update();
+        return;
+      }
       if (st_value > 2)
         st_value = 0;
-      pb_value = GetValue (pifp->pub_choice);
       if (descfeat != 2)
       {
         w = (WindoW) CreatePubdescDescForm (-50, -33, "Citation Information",
@@ -3746,6 +3575,14 @@ static void ChangePubStat (GrouP g)
       if (GetValue (pifp->pub_choice) == 0)
       {
         SetValue (pifp->pub_choice, 1);
+      }
+      if (pubstat == 2) {
+        if (GetStatus (pifp->patent_btn)) {
+          SetValue (pifp->pub_choice, 0);
+        }
+        Disable (pifp->patent_btn);        
+      } else {
+        Enable (pifp->patent_btn);
       }
     }
   }
@@ -4260,7 +4097,7 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (g5, "Thesis/Monograph");
     RadioButton (g5, "Proceedings Chapter");
     RadioButton (g5, "Proceedings");
-    RadioButton (g5, "Patent");
+    pifp->patent_btn = RadioButton (g5, "Patent");
     RadioButton (g5, "Online Publication");
     if (pdp != NULL)
     {
@@ -4692,7 +4529,7 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
   CharPtr count_str, sumStr = NULL;
 
   Entrez2DocsumPtr      dsp;
-  Entrez2DocsumListPtr  e2dl;
+  Entrez2DocsumListPtr  e2dl = NULL;
   Entrez2RequestPtr     e2rp;
   Entrez2ReplyPtr       e2ry;
   Entrez2DocsumDataPtr  e2ddp;
@@ -4704,7 +4541,7 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
           pages="No Page Available",
           year_str="No Year Available",
           tmp = NULL;
-  Int2 size = 0, year = -1;
+  Int2 size = 0;
 
   /* no citation hit returned */
   if  (uids_bs == NULL) {
@@ -4848,7 +4685,7 @@ static  void AddYear(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
   if (!is_1st) {
     EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "DP", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 static  void AddAll(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
@@ -4948,7 +4785,7 @@ static void SendQuery (ButtoN b)
   CitationUpdateFormPtr  cufp;
   CitArtInPressPtr caipp;        /* local caipp, make deref coding easier*/
 
-  Entrez2RequestPtr  e2rp;
+  Entrez2RequestPtr  e2rp = NULL;
 
 
   Char               f_auth [64];
@@ -5387,15 +5224,15 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
   CitJourPtr cjp;
   ImprintPtr ImpPtr;
   AuthListPtr alp;  
-  AuthorPtr f_author_p, l_author_p;  /* first and last authors*/
-  PersonIdPtr pid_p;
+  AuthorPtr f_author_p, l_author_p, ap;  /* first and last authors*/
+  PersonIdPtr pid_p, pid;
   NameStdPtr nsp;
 
   ValNodePtr title_vnp, auth_vnp, art_title_vnp;
 
   /*could get rid of full names*/
-  CharPtr f_first_name, f_last_name, l_first_name, l_last_name;
-  CharPtr jour_title, jour_volume, jour_page, art_title;
+  CharPtr f_first_name = NULL, f_last_name = NULL, l_first_name = NULL, l_last_name = NULL;
+  CharPtr jour_title = NULL, jour_volume, jour_page, art_title = NULL;
   
   Int2 year;
   Int1 rank;
@@ -5501,12 +5338,21 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
 		auth_vnp = (ValNodePtr) alp->names; /*get the first node */ 
 		
 		f_author_p = (AuthorPtr)auth_vnp->data.ptrvalue;
+		l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
 		
-		/* get the node for the last author*/
+		/* get the node for the last author, but ignore consortium */
 		while (auth_vnp->next) {
 		  auth_vnp = auth_vnp->next;
+		  ap = (AuthorPtr) auth_vnp->data.ptrvalue;
+		  if (ap != NULL) {
+		    pid = (PersonIdPtr) ap->name;
+		    if (pid != NULL) {
+		      if (pid->choice == 2) {
+		        l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
+		      }
+		    }
+		  }
 		}
-		l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
 		
 		/* should be analyzing the value of alp->choice,  not alp->names->choice*/
 		if (alp->choice == 1) {   

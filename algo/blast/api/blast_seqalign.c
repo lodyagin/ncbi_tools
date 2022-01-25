@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.60 2006/06/13 14:42:44 papadopo Exp $
+/* $Id: blast_seqalign.c,v 1.62 2007/02/26 14:52:50 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.60 2006/06/13 14:42:44 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.62 2007/02/26 14:52:50 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_seqalign.h>
@@ -82,10 +82,6 @@ SBlastSeqalignArrayFree(SBlastSeqalignArray* seqalign_vec)
    return NULL;
 }
 
-/** Creates a score set corresponding to one HSP.
- * @param hsp HSP structure [in]
- * @return Score set for this HSP.
- */
 ScorePtr 
 GetScoreSetFromBlastHsp(BlastHSP* hsp)
 {
@@ -743,10 +739,8 @@ BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
     
     start1 = hsp->query.offset;
     start2 = hsp->subject.offset;
-    translate1 = (program == eBlastTypeBlastx || program == eBlastTypeTblastx ||
-                  program == eBlastTypeRpsTblastn);
-    translate2 = (program == eBlastTypeTblastn || program == eBlastTypeTblastx);
-
+    translate1 = Blast_QueryIsTranslated(program);
+    translate2 = Blast_SubjectIsTranslated(program);
     
     /* If no eGapAlignDecline regions exists output seqalign will be
        regular Den-Seg or Std-seg */

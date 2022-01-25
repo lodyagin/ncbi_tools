@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.44 2006/10/04 15:07:00 ivanov Exp $
+# $Id: install.sh,v 1.45 2007/01/24 15:41:40 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -255,7 +255,7 @@ fi
 
 
 # CVS checkout info file
-cp -p "$builddir"/cvs_info "$target"
+cp -p "$builddir"/checkout_info "$target"
 
 
 exit 0

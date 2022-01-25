@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_core.c,v 6.12 2006/07/26 14:47:32 lavr Exp $
+/*  $Id: test_ncbi_core.c,v 6.13 2007/06/25 16:55:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -117,6 +117,12 @@ static int/*bool*/ TEST_CORE_LockHandler(void* user_data, EMT_Lock how)
   case eMT_Unlock:
     str = "eMT_Unlock";
     break;
+  case eMT_TryLock:
+    str = "eMT_TryLock";
+    break;
+  case eMT_TryLockRead:
+    str = "eMT_TryLockRead";
+    break;
   }
   assert(str);
   printf("TEST_CORE_LockHandler(%s)\n", str);
@@ -164,8 +170,19 @@ static void TEST_CORE_Lock(void)
                           TEST_CORE_LockHandler, TEST_CORE_LockCleanup);
   assert(x_lock);
 
+  /* NB: Write after read is not usually an allowed lock nesting */
   verify(MT_LOCK_Do(x_lock, eMT_LockRead));
   verify(MT_LOCK_Do(x_lock, eMT_Lock));
+  verify(MT_LOCK_Do(x_lock, eMT_Unlock));
+  verify(MT_LOCK_Do(x_lock, eMT_Unlock));
+  /* Read after write is usually okay */
+  verify(MT_LOCK_Do(x_lock, eMT_Lock));
+  verify(MT_LOCK_Do(x_lock, eMT_LockRead));
+  verify(MT_LOCK_Do(x_lock, eMT_Unlock));
+  verify(MT_LOCK_Do(x_lock, eMT_Unlock));
+  /* Try-locking sequence */
+  verify(MT_LOCK_Do(x_lock, eMT_TryLock));
+  verify(MT_LOCK_Do(x_lock, eMT_TryLockRead));
   verify(MT_LOCK_Do(x_lock, eMT_Unlock));
   verify(MT_LOCK_Do(x_lock, eMT_Unlock));
 
@@ -391,46 +408,3 @@ int main(void)
   TEST_UTIL();
   return 0;
 }
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: test_ncbi_core.c,v $
- * Revision 6.12  2006/07/26 14:47:32  lavr
- * +TEST_UTIL_MatchesMask, +TEST_CORE_GetVMPageSize
- *
- * Revision 6.11  2006/06/15 03:02:32  lavr
- * GetUsername test moved here
- *
- * Revision 6.10  2005/04/20 18:23:11  lavr
- * +"../ncbi_assert.h"
- *
- * Revision 6.9  2002/08/14 03:35:26  lavr
- * Fix ELOG_Level test; add eIO_Interrupt to EIO_Status test
- *
- * Revision 6.8  2002/03/22 19:46:57  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.7  2002/01/16 21:23:15  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.6  2001/08/09 16:25:28  lavr
- * Remove last (unneeded) parameter from LOG_Reset() and its test
- *
- * Revision 6.5  2001/05/17 17:59:03  vakatov
- * TEST_UTIL_Log::  Set "errno" to zero before testing LOG_WRITE_ERRNO()
- *
- * Revision 6.4  2000/06/23 19:35:51  vakatov
- * Test the logging of binary data
- *
- * Revision 6.3  2000/06/01 18:35:12  vakatov
- * Dont log with level "eLOG_Fatal" (it exits/coredumps now)
- *
- * Revision 6.2  2000/04/07 20:00:51  vakatov
- * + <errno.h>
- *
- * Revision 6.1  2000/02/23 22:37:37  vakatov
- * Initial revision
- *
- * ===========================================================================
- */

@@ -1,4 +1,4 @@
-/* $Id: phi_gapalign.h,v 1.1 2005/04/27 19:51:12 dondosha Exp $
+/* $Id: phi_gapalign.h,v 1.3 2006/11/29 17:25:50 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,9 +35,10 @@
 #ifndef ALGO_BLAST_CORE__PHI_GAPALIGN_H
 #define ALGO_BLAST_CORE__PHI_GAPALIGN_H
 
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_parameters.h>
-#include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_gapalign.h>
@@ -92,7 +93,8 @@ Int2 PHIGetGappedScore (EBlastProgramType program_number,
         const BlastExtensionParameters* ext_params,
         const BlastHitSavingParameters* hit_params,
         BlastInitHitList* init_hitlist,
-        BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats);
+        BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats,
+        Boolean * fence_hit);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.43 2006/05/31 18:59:47 camacho Exp $
+/*  $Id: blast_seqsrc.h,v 1.47 2007/05/08 13:25:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,15 +36,14 @@
  * - Provide possibility of retrieving an error from BlastSeqSrc (not just 
  *   initialization errors).                                               
  * - Constrain all use of the BlastSeqSrc to CORE BLAST                         
- * - Remove BlastSeqSrcCopier as MT-safe copying of BlastSeqSrc objects inside 
- *   CORE BLAST should not be needed (threading should be done outside CORE
- *   BLAST)
  */
 
-#ifndef BLAST_SEQSRC_H
-#define BLAST_SEQSRC_H
+#ifndef ALGO_BLAST_CORE__BLAST_SEQSRC__H
+#define ALGO_BLAST_CORE__BLAST_SEQSRC__H
 
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_export.h>
 #include <algo/blast/core/blast_message.h>
 #include <algo/blast/core/blast_encoding.h>
 
@@ -62,7 +61,10 @@ extern "C" {
  *    id (index into a set)
  *  - Retrieving the length of a given sequence in a set by ordinal id
  *  - Allow MT-safe iteration over sequences in a set through the
- *    BlastSeqSrcIterator abstraction
+ *    BlastSeqSrcIterator abstraction, as well as resetting of any applicable
+ *    implementation internal 'bookmarks' which keep track of the iteration
+ *    progress, as to allow multiple passes over the set of sequences (@sa
+ *    BlastSeqSrcResetChunkIterator).
  *  .
  *
  *  Currently available client implementations of the BlastSeqSrc API include:
@@ -132,6 +134,13 @@ NCBI_XBLAST_EXPORT
 Int4
 BlastSeqSrcGetNumSeqs(const BlastSeqSrc* seq_src);
 
+/** Get the number of sequences used for calculation of expect values etc.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int4
+BlastSeqSrcGetNumSeqsStats(const BlastSeqSrc* seq_src);
+
 /** Get the length of the longest sequence in the sequence source.
  * @param seq_src the BLAST sequence source [in]
  */
@@ -152,6 +161,13 @@ BlastSeqSrcGetAvgSeqLen(const BlastSeqSrc* seq_src);
 NCBI_XBLAST_EXPORT
 Int8
 BlastSeqSrcGetTotLen(const BlastSeqSrc* seq_src);
+
+/** Get the total length of all sequences for calculation of expect value etc.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+Int8
+BlastSeqSrcGetTotLenStats(const BlastSeqSrc* seq_src);
 
 /** Get the Blast Sequence source name (e.g.: BLAST database name).
  * @param seq_src the BLAST sequence source [in]
@@ -174,9 +190,15 @@ BlastSeqSrcGetIsProt(const BlastSeqSrc* seq_src);
 typedef struct BlastSeqSrcGetSeqArg {
     /** Oid in BLAST database, index in an array of sequences, etc [in] */
     Int4 oid;
+
     /** Encoding of sequence, i.e.: eBlastEncodingProtein,
      * eBlastEncodingNucleotide, etc [in] */
     EBlastEncoding encoding;
+
+    /** Specify true here to disable this OID's ranges before fetching.
+     * TRUE to disable ranges, FALSE to use them if they exist [in] */
+    Boolean enable_ranges;
+
     /** Sequence to return, if NULL, it should allocated by GetSeqBlkFnPtr, else
      * its contents are freed and the structure is reused [out]*/
     BLAST_SequenceBlk* seq;
@@ -314,10 +336,17 @@ NCBI_XBLAST_EXPORT
 Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* seq_src, 
                              BlastSeqSrcIterator* itr);
 
+/** Reset the internal "bookmark" of the last chunk for iteration provided by 
+ * this object.
+ * @param seq_src the BLAST sequence source [in]
+ */
+NCBI_XBLAST_EXPORT
+void BlastSeqSrcResetChunkIterator(BlastSeqSrc* seq_src);
+
 /*****************************************************************************/
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* BLAST_SEQSRC_H */
+#endif /* !ALGO_BLAST_CORE__BLAST_SEQSRC__H */

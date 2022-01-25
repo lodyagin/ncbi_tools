@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.78 2006/09/12 20:53:33 camacho Exp $
+/* $Id: blast_util.h,v 1.81 2007/01/05 16:10:21 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,9 +30,12 @@
  * Various auxiliary BLAST utility functions
  */
 
-#ifndef __BLAST_UTIL__
-#define __BLAST_UTIL__
+#ifndef ALGO_BLAST_CORE__BLAST_UTIL__H
+#define ALGO_BLAST_CORE__BLAST_UTIL__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_encoding.h>
@@ -115,6 +118,15 @@ Int2 BlastSeqBlkSetSequence(BLAST_SequenceBlk* seq_blk,
                             const Uint1* sequence,
                             Int4 seqlen);
 
+/** Adds a specialized representation of sequence data to a sequence
+ * block. In the specialized representation, the byte at offset i 
+ * packs together nucleotide bases i to i+3
+ * @param seq_blk structure containing sequence data. Data is assumed
+ *          to be in blastna format [in][out]
+ */
+NCBI_XBLAST_EXPORT
+Int2 BlastCompressBlastnaSequence(BLAST_SequenceBlk *seq_blk);
+
 /** Stores the compressed nucleotide sequence in the sequence block structure
  * for the subject sequence when BLASTing 2 sequences. This sequence should be
  * encoded in eBlastEncodingNcbi2na and NOT have sentinel bytes (as this 
@@ -138,7 +150,7 @@ Int2 BlastSeqBlkSetCompressedSequence(BLAST_SequenceBlk* seq_blk,
  * @param buffer Preallocated buffer for the translated sequence [in][out]
  * @param genetic_code Genetic code to use for translation, 
  *                     in ncbistdaa encoding [in]
- * @return Length of the traslated protein sequence.
+ * @return Length of the translated protein sequence.
 */
 NCBI_XBLAST_EXPORT
 Int4 BLAST_GetTranslation(const Uint1* query_seq, 
@@ -319,6 +331,14 @@ BLAST_StrToUpper(const char* string);
  */
 #define MAX_FULL_TRANSLATION 2100
 
+/** This sentry value is used as a 'fence' around the valid portions
+ * of partially decoded sequences.  If an alignment finds this value
+ * in a subject sequence, the fence_hit flag should be used to request
+ * a refetch of the whole sequence, and the alignment restarted.
+ */
+#define FENCE_SENTRY 201
+
+
 /** Translate the subject sequence into 6 frames, and create a mixed-frame 
  * sequence, if out-of-frame gapping will be used.
  * @param subject_blk Subject sequence structure [in]
@@ -349,4 +369,4 @@ unsigned int BLAST_GetNumberOfContexts(EBlastProgramType program);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_UTIL__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_UTIL__H */

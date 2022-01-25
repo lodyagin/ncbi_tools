@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.112 2006/10/06 12:22:28 madden Exp $
+/* $Id: blast_format.c,v 1.114 2007/01/19 14:32:31 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_format.c,v 1.112 2006/10/06 12:22:28 madden Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.114 2007/01/19 14:32:31 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_format.h>
@@ -483,7 +483,10 @@ Int2 BlastFormattingInfoNew(EAlignView align_view,
    if (align_view != eAlignViewXml && align_view < eAlignViewAsnText) {
       FILE* outfp;
       if ((outfp = FileOpen(outfile_name, "w")) == NULL)
-         return -1;
+      {
+          ErrPostEx(SEV_WARNING, 0, 0, "Unable to open output file %s:", outfile_name);
+          return -1;
+      }
       info->outfp = outfp;
    } else {
       char write_mode[3];
@@ -497,7 +500,10 @@ Int2 BlastFormattingInfoNew(EAlignView align_view,
           strcpy(write_mode, "wb"); 
       
       if ((info->aip = AsnIoOpen(filename_copy, write_mode)) == NULL)
-         return -1;
+      {
+          ErrPostEx(SEV_WARNING, 0, 0, "Unable to open output file %s:", filename_copy);
+          return -1;
+      }
       sfree(filename_copy);
    }
    info->is_seqalign_null = TRUE; /* will be updated in BLAST_FormatResults */
@@ -597,7 +603,7 @@ GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na)
         align_type = 3;
         *db_is_na = FALSE;
         break;
-    case eBlastTypeTblastn:
+    case eBlastTypePsiTblastn: case eBlastTypeTblastn:
         align_type = 4;
         *db_is_na = TRUE;
         break;

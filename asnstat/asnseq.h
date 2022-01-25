@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnseq.h15";
+static char * asnfilename = "asnseq.h16";
 static AsnValxNode avnx[161] = {
     {3,NULL,1,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
@@ -182,13 +182,13 @@ static AsnType atx[210] = {
   {0, "pub" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[48]} ,
   {408, "Pubdesc" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[7],0,&atx[187]} ,
   {0, "pub" ,128,0,0,0,0,0,0,0,NULL,&atx[8],NULL,0,&atx[9]} ,
-  {425, "Pub-equiv" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[82]} ,
+  {426, "Pub-equiv" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[82]} ,
   {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[10]} ,
   {0, "fig" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[11]} ,
   {0, "num" ,128,3,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[40]} ,
   {407, "Numbering" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[13],0,&atx[6]} ,
   {0, "cont" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[21]} ,
-  {438, "Num-cont" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[15],0,&atx[22]} ,
+  {439, "Num-cont" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[15],0,&atx[22]} ,
   {0, "refnum" ,128,0,0,0,1,0,0,0,&avnx[0],&atx[16],NULL,0,&atx[17]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "has-zero" ,128,1,0,0,1,0,0,0,&avnx[1],&atx[18],NULL,0,&atx[19]} ,
@@ -196,19 +196,19 @@ static AsnType atx[210] = {
   {0, "ascending" ,128,2,0,0,1,0,0,0,&avnx[2],&atx[18],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "enum" ,128,1,0,0,0,0,0,0,NULL,&atx[22],NULL,0,&atx[27]} ,
-  {439, "Num-enum" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[23],0,&atx[28]} ,
+  {440, "Num-enum" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[23],0,&atx[28]} ,
   {0, "num" ,128,0,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[24]} ,
   {0, "names" ,128,1,0,0,0,0,0,0,NULL,&atx[26],&atx[25],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {312, "SEQUENCE OF" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "ref" ,128,2,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[33]} ,
-  {440, "Num-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[29],0,&atx[34]} ,
+  {441, "Num-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[29],0,&atx[34]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[3],0,&atx[31]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "aligns" ,128,1,0,1,0,0,0,0,NULL,&atx[32],NULL,0,NULL} ,
-  {422, "Seq-align" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[161]} ,
+  {423, "Seq-align" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[161]} ,
   {0, "real" ,128,3,0,0,0,0,0,0,NULL,&atx[34],NULL,0,NULL} ,
-  {441, "Num-real" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[35],0,&atx[154]} ,
+  {442, "Num-real" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[35],0,&atx[154]} ,
   {0, "a" ,128,0,0,0,0,0,0,0,NULL,&atx[36],NULL,0,&atx[37]} ,
   {309, "REAL" ,0,9,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "b" ,128,1,0,0,0,0,0,0,NULL,&atx[36],NULL,0,&atx[38]} ,
@@ -223,12 +223,12 @@ static AsnType atx[210] = {
   {0, "comment" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[47]} ,
   {0, "reftype" ,128,10,0,0,1,0,0,0,&avnx[10],&atx[16],&avnx[6],0,NULL} ,
   {0, "user" ,128,4,0,0,0,0,0,0,NULL,&atx[49],NULL,0,&atx[50]} ,
-  {421, "User-object" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[32]} ,
+  {422, "User-object" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[32]} ,
   {0, "create-date" ,128,5,0,0,0,0,0,0,NULL,&atx[51],NULL,0,&atx[52]} ,
-  {417, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[121]} ,
+  {418, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[121]} ,
   {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[51],NULL,0,&atx[53]} ,
   {0, "src" ,128,7,0,0,0,0,0,0,NULL,&atx[54],NULL,0,&atx[55]} ,
-  {428, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
+  {429, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
   {0, "align" ,128,8,0,0,0,0,0,0,NULL,&atx[56],NULL,0,&atx[61]} ,
   {460, "Align-def" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[57],0,NULL} ,
   {0, "align-type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],&avnx[11],0,&atx[58]} ,
@@ -236,7 +236,7 @@ static AsnType atx[210] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "region" ,128,9,0,0,0,0,0,0,NULL,&atx[62],NULL,0,NULL} ,
-  {429, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[90]} ,
+  {430, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[90]} ,
   {402, "Annot-descr" ,1,0,0,0,0,1,0,0,NULL,&atx[60],&atx[64],0,&atx[65]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} ,
   {403, "Bioseq" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[66],0,&atx[73]} ,
@@ -250,39 +250,39 @@ static AsnType atx[210] = {
   {404, "GIBB-mol" ,1,0,0,0,0,1,0,0,NULL,&atx[30],&avnx[15],0,&atx[106]} ,
   {0, "modif" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[75],0,&atx[77]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[76],NULL,0,NULL} ,
-  {436, "GIBB-mod" ,1,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[27],0,&atx[78]} ,
+  {437, "GIBB-mod" ,1,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[27],0,&atx[78]} ,
   {0, "method" ,128,2,0,0,0,0,0,0,NULL,&atx[78],NULL,0,&atx[79]} ,
-  {437, "GIBB-method" ,1,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[55],0,&atx[14]} ,
+  {438, "GIBB-method" ,1,0,0,0,0,0,0,0,NULL,&atx[30],&avnx[55],0,&atx[14]} ,
   {0, "name" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[80]} ,
   {0, "title" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[81]} ,
   {0, "org" ,128,5,0,0,0,0,0,0,NULL,&atx[82],NULL,0,&atx[83]} ,
-  {426, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[108]} ,
+  {427, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[108]} ,
   {0, "comment" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[84]} ,
   {0, "num" ,128,7,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[85]} ,
   {0, "maploc" ,128,8,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[87]} ,
-  {419, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[192]} ,
+  {420, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[192]} ,
   {0, "pir" ,128,9,0,0,0,0,0,0,NULL,&atx[88],NULL,0,&atx[89]} ,
-  {431, "PIR-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[98]} ,
+  {432, "PIR-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[98]} ,
   {0, "genbank" ,128,10,0,0,0,0,0,0,NULL,&atx[90],NULL,0,&atx[91]} ,
-  {430, "GB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[88]} ,
+  {431, "GB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[88]} ,
   {0, "pub" ,128,11,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[92]} ,
   {0, "region" ,128,12,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[93]} ,
   {0, "user" ,128,13,0,0,0,0,0,0,NULL,&atx[49],NULL,0,&atx[94]} ,
   {0, "sp" ,128,14,0,0,0,0,0,0,NULL,&atx[95],NULL,0,&atx[96]} ,
-  {433, "SP-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[102]} ,
+  {434, "SP-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[102]} ,
   {0, "dbxref" ,128,15,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[97]} ,
   {0, "embl" ,128,16,0,0,0,0,0,0,NULL,&atx[98],NULL,0,&atx[99]} ,
-  {432, "EMBL-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[95]} ,
+  {433, "EMBL-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[95]} ,
   {0, "create-date" ,128,17,0,0,0,0,0,0,NULL,&atx[51],NULL,0,&atx[100]} ,
   {0, "update-date" ,128,18,0,0,0,0,0,0,NULL,&atx[51],NULL,0,&atx[101]} ,
   {0, "prf" ,128,19,0,0,0,0,0,0,NULL,&atx[102],NULL,0,&atx[103]} ,
-  {434, "PRF-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[104]} ,
+  {435, "PRF-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[104]} ,
   {0, "pdb" ,128,20,0,0,0,0,0,0,NULL,&atx[104],NULL,0,&atx[105]} ,
-  {435, "PDB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[76]} ,
+  {436, "PDB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[76]} ,
   {0, "het" ,128,21,0,0,0,0,0,0,NULL,&atx[106],NULL,0,&atx[107]} ,
   {405, "Heterogen" ,1,0,0,0,0,1,0,0,NULL,&atx[2],NULL,0,&atx[110]} ,
   {0, "source" ,128,22,0,0,0,0,0,0,NULL,&atx[108],NULL,0,&atx[109]} ,
-  {427, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[54]} ,
+  {428, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[54]} ,
   {0, "molinfo" ,128,23,0,0,0,0,0,0,NULL,&atx[110],NULL,0,NULL} ,
   {406, "MolInfo" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[111],0,&atx[12]} ,
   {0, "biomol" ,128,0,0,0,1,0,0,0,&avnx[77],&atx[16],&avnx[62],0,&atx[112]} ,
@@ -295,7 +295,7 @@ static AsnType atx[210] = {
   {0, "mol" ,128,1,0,0,0,0,0,0,NULL,&atx[30],&avnx[123],0,&atx[119]} ,
   {0, "length" ,128,2,0,1,0,0,0,0,NULL,&atx[16],NULL,0,&atx[120]} ,
   {0, "fuzz" ,128,3,0,1,0,0,0,0,NULL,&atx[121],NULL,0,&atx[122]} ,
-  {418, "Int-fuzz" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[86]} ,
+  {419, "Int-fuzz" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[86]} ,
   {0, "topology" ,128,4,0,0,1,0,0,0,&avnx[134],&atx[30],&avnx[129],0,&atx[123]} ,
   {0, "strand" ,128,5,0,1,0,0,0,0,NULL,&atx[30],&avnx[135],0,&atx[124]} ,
   {0, "seq-data" ,128,6,0,1,0,0,0,0,NULL,&atx[125],NULL,0,&atx[151]} ,
@@ -328,21 +328,21 @@ static AsnType atx[210] = {
   {0, "ext" ,128,7,0,1,0,0,0,0,NULL,&atx[152],NULL,0,&atx[172]} ,
   {413, "Seq-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[153],0,&atx[173]} ,
   {0, "seg" ,128,0,0,0,0,0,0,0,NULL,&atx[154],NULL,0,&atx[156]} ,
-  {442, "Seg-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[155],0,&atx[157]} ,
+  {443, "Seg-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[155],0,&atx[157]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[62],NULL,0,NULL} ,
   {0, "ref" ,128,1,0,0,0,0,0,0,NULL,&atx[157],NULL,0,&atx[158]} ,
-  {443, "Ref-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[159]} ,
+  {444, "Ref-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[159]} ,
   {0, "map" ,128,2,0,0,0,0,0,0,NULL,&atx[159],NULL,0,&atx[162]} ,
-  {444, "Map-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[160],0,&atx[163]} ,
+  {445, "Map-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[160],0,&atx[165]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[161],NULL,0,NULL} ,
-  {423, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[205]} ,
+  {424, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[205]} ,
   {0, "delta" ,128,3,0,0,0,0,0,0,NULL,&atx[163],NULL,0,NULL} ,
-  {445, "Delta-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[164],0,&atx[165]} ,
+  {417, "Delta-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[26],&atx[164],0,&atx[51]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[165],NULL,0,NULL} ,
   {446, "Delta-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[166],0,&atx[177]} ,
   {0, "loc" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[167]} ,
   {0, "literal" ,128,1,0,0,0,0,0,0,NULL,&atx[168],NULL,0,NULL} ,
-  {416, "Seq-literal" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[169],0,&atx[51]} ,
+  {416, "Seq-literal" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[169],0,&atx[163]} ,
   {0, "length" ,128,0,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[170]} ,
   {0, "fuzz" ,128,1,0,1,0,0,0,0,NULL,&atx[121],NULL,0,&atx[171]} ,
   {0, "seq-data" ,128,2,0,1,0,0,0,0,NULL,&atx[125],NULL,0,NULL} ,
@@ -366,7 +366,7 @@ static AsnType atx[210] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[190],NULL,0,NULL} ,
   {459, "Annot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[191],0,&atx[56]} ,
   {0, "local" ,128,0,0,0,0,0,0,0,NULL,&atx[192],NULL,0,&atx[193]} ,
-  {420, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[49]} ,
+  {421, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[49]} ,
   {0, "ncbi" ,128,1,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[194]} ,
   {0, "general" ,128,2,0,0,0,0,0,0,NULL,&atx[86],NULL,0,NULL} ,
   {0, "db" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[153],0,&atx[196]} ,
@@ -379,14 +379,14 @@ static AsnType atx[210] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[32],NULL,0,NULL} ,
   {0, "graph" ,128,2,0,0,0,0,0,0,NULL,&atx[60],&atx[204],0,&atx[206]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[205],NULL,0,NULL} ,
-  {424, "Seq-graph" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
+  {425, "Seq-graph" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
   {0, "ids" ,128,3,0,0,0,0,0,0,NULL,&atx[60],&atx[207],0,&atx[208]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
   {0, "locs" ,128,4,0,0,0,0,0,0,NULL,&atx[60],&atx[209],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[62],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Sequence" , "asnseq.h15",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Sequence" , "asnseq.h16",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -544,6 +544,9 @@ static AsnModulePtr amp = ampx;
 #define SEQ_LITERAL_fuzz &at[170]
 #define SEQ_LITERAL_seq_data &at[171]
 
+#define DELTA_EXT &at[163]
+#define DELTA_EXT_E &at[164]
+
 #define GIBB_MOD &at[76]
 
 #define GIBB_METHOD &at[78]
@@ -574,9 +577,6 @@ static AsnModulePtr amp = ampx;
 
 #define MAP_EXT &at[159]
 #define MAP_EXT_E &at[160]
-
-#define DELTA_EXT &at[163]
-#define DELTA_EXT_E &at[164]
 
 #define DELTA_SEQ &at[165]
 #define DELTA_SEQ_loc &at[166]

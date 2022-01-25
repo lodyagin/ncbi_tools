@@ -1,4 +1,4 @@
-/* $Id: blast_itree.h,v 1.5 2005/11/16 14:27:03 madden Exp $
+/* $Id: blast_itree.h,v 1.6 2006/11/21 17:03:23 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,15 +31,12 @@
  * Interface for an interval tree, used for fast HSP containment tests
  */
 
-#ifndef __BLAST_ITREE__
-#define __BLAST_ITREE__
+#ifndef ALGO_BLAST_CORE__BLAST_ITREE__H
+#define ALGO_BLAST_CORE__BLAST_ITREE__H
 
-#include <algo/blast/core/blast_options.h>
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_hits.h>
-#include <algo/blast/core/blast_gapalign.h>
-#include "blast_hits_priv.h"
-#include "blast_gapalign_priv.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -166,5 +163,4 @@ BlastIntervalTreeNumRedundant(const BlastIntervalTree *tree,
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_ITREE__ */
-
+#endif /* !ALGO_BLAST_CORE__BLAST_ITREE__H */

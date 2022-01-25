@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.34  2007/05/02 14:55:58  kans
+* preparation for supporting Quartz on Mac
+*
 * Revision 6.33  2006/09/27 18:30:00  kans
 * support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
 *
@@ -266,7 +269,12 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#define Nlm_TextTool TXNObject
+extern CGRect Nlm_RecTToCGRect(Nlm_RectPtr r);
+#else
 #define Nlm_TextTool TEHandle
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -567,13 +575,26 @@ static Nlm_Int2 Nlm_GetTextLines (Nlm_TexT t)
 {
   Nlm_TextTool  h;
   Nlm_Int2      lines;
-  TEPtr         tptr;
+#ifdef WIN_MAC_QUARTZ
+  {
+      ItemCount llines = 0;
+      OSStatus stat = TXNGetLineCount(h, &llines);
+      if (stat != noErr) {
+          llines = 0;
+      }
+      lines = lines;
+  }
+#else
+  {
+      TEPtr         tptr;
 
-  h = Nlm_GetTextHandle (t);
-  HLock ((Handle) h);
-  tptr = (TEPtr) *((Handle) h);
-  lines = tptr->nLines;
-  HUnlock ((Handle) h);
+      h = Nlm_GetTextHandle (t);
+      HLock ((Handle) h);
+      tptr = (TEPtr) *((Handle) h);
+      lines = tptr->nLines;
+      HUnlock ((Handle) h);      
+  }
+#endif
   return lines;
 }
 
@@ -582,16 +603,32 @@ static Nlm_Int2 Nlm_GetLineHeight (Nlm_TexT t)
 {
   Nlm_TextTool  h;
   Nlm_Int2      height;
-  TEPtr         tptr;
 
   h = Nlm_GetTextHandle (t);
-  HLock ((Handle) h);
-  tptr = (TEPtr) *((Handle) h);
-  height = tptr->lineHeight;
-  HUnlock ((Handle) h);
+#ifdef WIN_MAC_QUARTZ
+  {
+      Fixed lineWidth, lineHeight;
+      OSStatus stat = TXNGetLineMetrics(h, 0, &lineWidth, &lineHeight);
+      if (stat != noErr) {
+          height = 0;
+      } else {
+          float fHeight = FixedToFloat(lineHeight);
+          height = fHeight;
+      }
+  }
+#else
+  {
+      TEPtr         tptr;
+      HLock ((Handle) h);
+      tptr = (TEPtr) *((Handle) h);
+      height = tptr->lineHeight;
+      HUnlock ((Handle) h);      
+  }
+#endif
   return height;
 }
 
+#ifndef WIN_MAC_QUARTZ
 static Nlm_Int2 Nlm_GetInsertionStartLine (Nlm_TexT t)
 
 {
@@ -636,6 +673,7 @@ static void Nlm_ScrollToInsertionPoint (Nlm_TexT t)
     }
   }
 }
+#endif
 
 static void Nlm_UpdateScrollBar (Nlm_TexT t)
 
@@ -643,13 +681,11 @@ static void Nlm_UpdateScrollBar (Nlm_TexT t)
   Nlm_Int2  lines;
   Nlm_Int2  newval;
   Nlm_BaR   sb;
-  Nlm_Int2  start;
   Nlm_Int2  vis;
 
   sb = Nlm_GetTextVScrollBar (t);
   if (sb != NULL) {
     lines = Nlm_GetTextLines (t);
-    start = Nlm_GetInsertionStartLine (t);
     vis = Nlm_GetVisLines (t);
     newval = 0;
     if (lines > vis) {
@@ -741,15 +777,20 @@ static Nlm_Boolean Nlm_DoReturnCallback (Nlm_TexT t)
 static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int4 begin, Nlm_Int4 end)
 
 {
-#ifdef WIN_MAC
   Nlm_TextTool  h;
+#ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   TEPtr         hp;
   short         len;
   Nlm_Int4      selStart;
   Nlm_Int4      selEnd;
+#endif
 
   Nlm_DeactivateBoxesInList (t);
   h = Nlm_GetTextHandle (t);
+#ifdef WIN_MAC_QUARTZ
+  TXNSetSelection(h, begin, end);
+#else
   HLock ((Handle) h);
   hp = (TEPtr) *((Handle) h);
   len = hp->teLength;
@@ -766,9 +807,8 @@ static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int4 begin, Nlm_Int4 end)
   Nlm_DoActivate ((Nlm_GraphiC) t, FALSE);
   Nlm_DoTextSelect (t);
 #endif
+#endif
 #ifdef WIN_MSWIN
-  Nlm_TextTool  h;
-
   h = Nlm_GetTextHandle (t);
   Edit_SetSel (h, begin, end);
   Edit_ScrollCaret (h);
@@ -777,7 +817,6 @@ static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int4 begin, Nlm_Int4 end)
   Nlm_DoTextSelect (t);
 #endif
 #ifdef WIN_MOTIF
-  Nlm_TextTool    h;
   XmTextPosition  max;
 
   if (Nlm_WindowHasBeenShown (Nlm_ParentWindow (t))) {
@@ -811,6 +850,9 @@ extern Nlm_Boolean Nlm_TextSelectionRange(Nlm_TexT t,
 
   {{
 #if defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+    TXNGetSelection(h, (TXNOffset*) &x_begin, (TXNOffset*) &x_end);
+#else    
     TEPtr hp;
 
     HLock( (Handle)h );
@@ -818,7 +860,7 @@ extern Nlm_Boolean Nlm_TextSelectionRange(Nlm_TexT t,
     x_begin = hp->selStart;
     x_end   = hp->selEnd;
     HUnlock( (Handle)h );
-
+#endif
 #elif defined(WIN_MSWIN)
     DWORD dwBegin, dwEnd;
     SNDMSG(h, EM_GETSEL, (WPARAM)(&dwBegin), (LPARAM)(&dwEnd));
@@ -864,6 +906,7 @@ extern Nlm_Boolean Nlm_TextSelectionRange(Nlm_TexT t,
 }
 
 #ifdef WIN_MAC
+
 static Nlm_Boolean Nlm_DialogTextClick (Nlm_GraphiC t, Nlm_PoinT pt)
 
 {
@@ -875,6 +918,10 @@ static Nlm_Boolean Nlm_DialogTextClick (Nlm_GraphiC t, Nlm_PoinT pt)
 
   rsult = FALSE;
   if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
+#ifdef WIN_MAC_QUARTZ
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  TXNClick(h, &Nlm_currentEvent);
+#else
   Nlm_GetRect (t, &r);
   if (Nlm_PtInRect (pt, &r)) {
     Nlm_DeactivateBoxesInList ((Nlm_TexT) t);
@@ -890,9 +937,11 @@ static Nlm_Boolean Nlm_DialogTextClick (Nlm_GraphiC t, Nlm_PoinT pt)
     Nlm_DoTextSelect ((Nlm_TexT) t);
     rsult = TRUE;
   }
+#endif
   return rsult;
 }
 
+#ifndef WIN_MAC_QUARTZ
 static Nlm_Boolean Nlm_ScrollTextClick (Nlm_GraphiC t, Nlm_PoinT pt)
 
 {
@@ -938,112 +987,7 @@ static Nlm_Boolean Nlm_ScrollTextClick (Nlm_GraphiC t, Nlm_PoinT pt)
   }
   return rsult;
 }
-
-static Nlm_Boolean Nlm_TextKey (Nlm_GraphiC t, Nlm_Char ch)
-
-{
-  Nlm_Boolean   act;
-  Nlm_TextTool  h;
-  Nlm_Boolean   rsult;
-
-  rsult = FALSE;
-  if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
-  act = Nlm_GetActive ((Nlm_TexT) t);
-  if (act && ! Nlm_cmmdKey) {
-    if (ch != '\0') {
-      h = Nlm_GetTextHandle ((Nlm_TexT) t);
-      Nlm_ScrollToInsertionPoint ((Nlm_TexT) t);
-      TEKey (ch, h);
-      TECalText (h);
-      Nlm_UpdateScrollBar ((Nlm_TexT) t);
-      Nlm_ScrollToInsertionPoint ((Nlm_TexT) t);
-      Nlm_DoAction (t);
-      Nlm_SetChanged ((Nlm_TexT) t, TRUE);
-      rsult = TRUE;
-    }
-  }
-  return rsult;
-}
-
-static Nlm_Boolean Nlm_DialogKey (Nlm_GraphiC t, Nlm_Char ch)
-
-{
-  Nlm_Boolean  act;
-  Nlm_Boolean  rsult;
-
-  rsult = FALSE;
-  if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
-  act = Nlm_GetActive ((Nlm_TexT) t);
-  if (act && ! Nlm_cmmdKey) {
-    if (ch == '\t' && Nlm_IsHiddenOrSpecialText ((Nlm_TexT) t)) {
-      Nlm_DoTabCallback ((Nlm_TexT) t);
-      rsult = TRUE;
-    } else if (ch == '\t') {
-      Nlm_DoSendFocus (t, ch);
-      rsult = TRUE;
-    } else if (ch == '\n'  || ch == '\r' || ch == '\3') {
-      rsult = Nlm_DoReturnCallback ((Nlm_TexT) t);
-    } else if (ch != '\0') {
-      rsult = Nlm_TextKey (t, ch);
-    }
-  }
-  return rsult;
-}
-
-static Nlm_Boolean Nlm_PasswordKey (Nlm_GraphiC t, Nlm_Char ch)
-
-{
-  Nlm_Boolean   act;
-  Nlm_TextTool  h;
-  TEPtr         hp;
-  Nlm_Int2      len;
-  Nlm_Char      password [MAX_PASSWORD];
-  Nlm_RecT      r;
-  Nlm_RectTool  rtool;
-  Nlm_Boolean   rsult;
-  Nlm_Int4      selStart;
-  Nlm_Int4      selEnd;
-
-  rsult = FALSE;
-  if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
-  act = Nlm_GetActive ((Nlm_TexT) t);
-  if (act && ! Nlm_cmmdKey) {
-    if (ch == '\t') {
-      Nlm_DoSendFocus (t, ch);
-      rsult = TRUE;
-    } else if (ch == '\n'  || ch == '\r' || ch == '\3') {
-    } else if (ch == '\b') {
-      rsult = TRUE;
-      Nlm_SetPassword ((Nlm_TexT) t, "");
-      h = Nlm_GetTextHandle ((Nlm_TexT) t);
-      selStart = 0;
-      HLock ((Handle) h);
-      hp = (TEPtr) *((Handle) h);
-      selEnd = hp->teLength;
-      HUnlock ((Handle) h);
-      Nlm_GetRect (t, &r);
-      if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
-        TESetSelect (selStart, selEnd, h);
-        TEDelete (h);
-        Nlm_InsetRect (&r, 2, 2);
-        Nlm_EraseRect (&r);
-        Nlm_RecTToRectTool (&r, &rtool);
-        TEUpdate (&rtool, h);
-      }
-      Nlm_DoAction (t);
-    } else if (ch != '\0') {
-      Nlm_GetPassword ((Nlm_TexT) t, password, sizeof (password));
-      len = (Nlm_Int2) Nlm_StringLen (password);
-      if (len < sizeof (password) - 2) {
-        password [len] = ch;
-        password [len + 1] = '\0';
-      }
-      Nlm_SetPassword ((Nlm_TexT) t, password);
-      rsult = Nlm_TextKey (t, '*');
-    }
-  }
-  return rsult;
-}
+#endif
 
 static void Nlm_DrawDialogText (Nlm_GraphiC t)
 
@@ -1053,6 +997,10 @@ static void Nlm_DrawDialogText (Nlm_GraphiC t)
   Nlm_RectTool  ttool;
 
   if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
+#ifdef WIN_MAC_QUARTZ
+    h = Nlm_GetTextHandle ((Nlm_TexT) t);
+    TXNDrawObject(h, NULL, kTXNDrawItemAllMask );
+#else
     Nlm_GetRect (t, &r);
     if (Nlm_RectInRgn (&r, Nlm_updateRgn)) {
       Nlm_EraseRect (&r);
@@ -1086,6 +1034,7 @@ static void Nlm_DrawDialogText (Nlm_GraphiC t)
         Nlm_Solid ();
       }
     }
+#endif /* WIN_MAC_QUARTZ */
   }
 }
 
@@ -1097,6 +1046,10 @@ static void Nlm_DrawHiddenText (Nlm_GraphiC t)
   Nlm_RectTool  ttool;
 
   if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
+#ifdef WIN_MAC_QUARTZ
+    h = Nlm_GetTextHandle ((Nlm_TexT) t);
+    TXNDrawObject(h, NULL, kTXNDrawItemAllMask );
+#else
     Nlm_GetRect (t, &r);
     if (Nlm_RectInRgn (&r, Nlm_updateRgn)) {
       Nlm_EraseRect (&r);
@@ -1113,6 +1066,7 @@ static void Nlm_DrawHiddenText (Nlm_GraphiC t)
         TEUpdate (&ttool, h);
       }
     }
+#endif
   }
 }
 
@@ -1127,6 +1081,10 @@ static void Nlm_DrawScrollText (Nlm_GraphiC t)
   Nlm_Boolean   wrap;
 
   if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
+#ifdef WIN_MAC_QUARTZ
+    h = Nlm_GetTextHandle ((Nlm_TexT) t);
+    TXNDrawObject(h, NULL, kTXNDrawItemAllMask );
+#else    
     Nlm_GetRect (t, &r);
     r.right += Nlm_vScrollBarWidth;
     wrap = Nlm_GetTextWrap ((Nlm_TexT) t);
@@ -1176,8 +1134,122 @@ static void Nlm_DrawScrollText (Nlm_GraphiC t)
         Nlm_Solid ();
       }
     }
+#endif
   }
 }
+
+
+static Nlm_Boolean Nlm_TextKey (Nlm_GraphiC t, Nlm_Char ch)
+
+{
+    Nlm_Boolean   act;
+    Nlm_TextTool  h;
+    Nlm_Boolean   rsult;
+    
+    rsult = FALSE;
+    if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
+    act = Nlm_GetActive ((Nlm_TexT) t);
+    if (act && ! Nlm_cmmdKey) {
+        if (ch != '\0') {
+            h = Nlm_GetTextHandle ((Nlm_TexT) t);
+#ifdef WIN_MAC_QUARTZ
+            TXNKeyDown(h, &Nlm_currentEvent );
+#else
+            Nlm_ScrollToInsertionPoint ((Nlm_TexT) t);
+            TEKey (ch, h);
+            TECalText (h);
+            Nlm_UpdateScrollBar ((Nlm_TexT) t);
+            Nlm_ScrollToInsertionPoint ((Nlm_TexT) t);
+#endif
+            Nlm_DoAction (t);
+            Nlm_SetChanged ((Nlm_TexT) t, TRUE);
+            rsult = TRUE;
+        }
+    }
+    return rsult;
+}
+
+static Nlm_Boolean Nlm_DialogKey (Nlm_GraphiC t, Nlm_Char ch)
+
+{
+    Nlm_Boolean  rsult;
+    Nlm_Boolean  act;
+    
+    rsult = FALSE;
+    if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
+    act = Nlm_GetActive ((Nlm_TexT) t);
+    if (act && ! Nlm_cmmdKey) {
+        if (ch == '\t' && Nlm_IsHiddenOrSpecialText ((Nlm_TexT) t)) {
+            Nlm_DoTabCallback ((Nlm_TexT) t);
+            rsult = TRUE;
+        } else if (ch == '\t') {
+            Nlm_DoSendFocus (t, ch);
+            rsult = TRUE;
+        } else if (ch == '\n'  || ch == '\r' || ch == '\3') {
+            rsult = Nlm_DoReturnCallback ((Nlm_TexT) t);
+        } else if (ch != '\0') {
+            rsult = Nlm_TextKey (t, ch);
+        }
+    }
+    return rsult;
+}
+
+#ifndef WIN_MAC_QUARTZ
+static Nlm_Boolean Nlm_PasswordKey (Nlm_GraphiC t, Nlm_Char ch)
+
+{
+    Nlm_Boolean   act;
+    Nlm_TextTool  h;
+    TEPtr         hp;
+    Nlm_Int2      len;
+    Nlm_Char      password [MAX_PASSWORD];
+    Nlm_RecT      r;
+    Nlm_RectTool  rtool;
+    Nlm_Boolean   rsult;
+    Nlm_Int4      selStart;
+    Nlm_Int4      selEnd;
+    
+    rsult = FALSE;
+    if (! Nlm_GetTextEditable ((Nlm_TexT) t)) return FALSE;
+    act = Nlm_GetActive ((Nlm_TexT) t);
+    if (act && ! Nlm_cmmdKey) {
+        if (ch == '\t') {
+            Nlm_DoSendFocus (t, ch);
+            rsult = TRUE;
+        } else if (ch == '\n'  || ch == '\r' || ch == '\3') {
+        } else if (ch == '\b') {
+            rsult = TRUE;
+            Nlm_SetPassword ((Nlm_TexT) t, "");
+            h = Nlm_GetTextHandle ((Nlm_TexT) t);
+            selStart = 0;
+            HLock ((Handle) h);
+            hp = (TEPtr) *((Handle) h);
+            selEnd = hp->teLength;
+            HUnlock ((Handle) h);
+            Nlm_GetRect (t, &r);
+            if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
+                TESetSelect (selStart, selEnd, h);
+                TEDelete (h);
+                Nlm_InsetRect (&r, 2, 2);
+                Nlm_EraseRect (&r);
+                Nlm_RecTToRectTool (&r, &rtool);
+                TEUpdate (&rtool, h);
+            }
+            Nlm_DoAction (t);
+        } else if (ch != '\0') {
+            Nlm_GetPassword ((Nlm_TexT) t, password, sizeof (password));
+            len = (Nlm_Int2) Nlm_StringLen (password);
+            if (len < sizeof (password) - 2) {
+                password [len] = ch;
+                password [len + 1] = '\0';
+            }
+            Nlm_SetPassword ((Nlm_TexT) t, password);
+            rsult = Nlm_TextKey (t, '*');
+        }
+    }
+    return rsult;
+}
+#endif /* ! WIN_MAC_QUARTZ */
 
 static Nlm_Boolean Nlm_IdleText (Nlm_GraphiC t, Nlm_PoinT pt)
 
@@ -1185,7 +1257,11 @@ static Nlm_Boolean Nlm_IdleText (Nlm_GraphiC t, Nlm_PoinT pt)
 
   if (Nlm_GetVisible (t) && Nlm_GetEnabled (t) && Nlm_GetActive ((Nlm_TexT) t)) {
     h = Nlm_GetTextHandle ((Nlm_TexT) t);
+#ifdef WIN_MAC_QUARTZ
+    TXNIdle(h);
+#else
     TEIdle (h);
+#endif
   }
   return TRUE;
 }
@@ -1374,6 +1450,7 @@ static void Nlm_HideScrollText (Nlm_GraphiC t, Nlm_Boolean setFlag, Nlm_Boolean 
   Nlm_RestorePort (tempPort);
 }
 
+#ifndef WIN_MAC_QUARTZ
 static void Nlm_EnableText (Nlm_GraphiC t, Nlm_Boolean setFlag, Nlm_Boolean savePort)
 
 {
@@ -1443,6 +1520,7 @@ static void Nlm_DisableText (Nlm_GraphiC t, Nlm_Boolean setFlag, Nlm_Boolean sav
 #endif
   Nlm_RestorePort (tempPort);
 }
+
 
 static void Nlm_ActivateText (Nlm_GraphiC t, Nlm_Boolean savePort)
 
@@ -1591,6 +1669,7 @@ static void Nlm_DeactivateScrollText (Nlm_GraphiC t, Nlm_Boolean savePort)
   }
 #endif
 }
+#endif /* ! WIN_MAC_QUARTZ */
 
 static void Nlm_ResetText (Nlm_GraphiC t, Nlm_Boolean savePort)
 
@@ -1605,6 +1684,10 @@ static void Nlm_ResetText (Nlm_GraphiC t, Nlm_Boolean savePort)
 
   tempPort = Nlm_SavePortIfNeeded (t, savePort);
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
+#ifdef WIN_MAC_QUARTZ
+  TXNSetSelection(h, kTXNStartOffset, kTXNEndOffset);
+  TXNClear(h);
+#else
   TESetSelect (0, 32767, h);
   TEDelete (h);
   sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
@@ -1621,6 +1704,7 @@ static void Nlm_ResetText (Nlm_GraphiC t, Nlm_Boolean savePort)
     TEScroll (delta * width, 0, h);
     Nlm_DoReset ((Nlm_GraphiC) sb, FALSE);
   }
+#endif
   Nlm_RestorePort (tempPort);
 #endif
 #ifdef WIN_MSWIN
@@ -1656,6 +1740,9 @@ static void Nlm_RemoveText (Nlm_GraphiC t, Nlm_Boolean savePort)
   }
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  TXNDeleteObject(h);
+#else
   TEDispose (h);
   sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
   if (sb != NULL) {
@@ -1665,6 +1752,7 @@ static void Nlm_RemoveText (Nlm_GraphiC t, Nlm_Boolean savePort)
   if (sb != NULL) {
     Nlm_DoRemove ((Nlm_GraphiC) sb, FALSE);
   }
+#endif
 #endif
 #ifdef WIN_MSWIN
   RemoveProp (h, (LPSTR) "Nlm_VibrantProp");
@@ -1690,11 +1778,15 @@ static void Nlm_TextSelectProc (Nlm_GraphiC t, Nlm_Boolean savePort)
   if (t != NULL) {
     tempPort = Nlm_SavePortIfNeeded (t, savePort);
     h = Nlm_GetTextHandle ((Nlm_TexT) t);
+#ifdef WIN_MAC_QUARTZ
+    TXNSelectAll(h);
+#else
     HLock ((Handle) h);
     hp = (TEPtr) *((Handle) h);
     end = hp->teLength;
     HUnlock ((Handle) h);
     Nlm_SelectAText ((Nlm_TexT) t, 0, end);
+#endif
     Nlm_RestorePort (tempPort);
   }
 #endif
@@ -1727,7 +1819,7 @@ extern size_t Nlm_TextLength (Nlm_TexT t)
 {
   Nlm_TextTool  h;
   size_t        len;
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && ! defined(WIN_MAC_QUARTZ)
   TEPtr         hp;
 #endif
 #ifdef WIN_MOTIF
@@ -1738,10 +1830,14 @@ extern size_t Nlm_TextLength (Nlm_TexT t)
   if (t != NULL) {
     h = Nlm_GetTextHandle (t);
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+    len = TXNDataSize(h);
+#else
     HLock ((Handle) h);
     hp = (TEPtr) *((Handle) h);
     len = hp->teLength;
     HUnlock ((Handle) h);
+#endif
 #endif
 #ifdef WIN_MSWIN
     len = (size_t) GetWindowTextLength (h);
@@ -1793,6 +1889,9 @@ static void Nlm_SetDialogText (Nlm_GraphiC t, Nlm_Int2 item,
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
 #ifdef WIN_MAC
   len = Nlm_StringLen (title);
+#ifdef WIN_MAC_QUARTZ
+  TXNSetData(h, kTXNTextData, title, len, kTXNStartOffset, kTXNEndOffset);
+#else
   TESetText (title, len, h);
   TECalText (h);
   Nlm_GetRect (t, &r);
@@ -1801,6 +1900,7 @@ static void Nlm_SetDialogText (Nlm_GraphiC t, Nlm_Int2 item,
     Nlm_InvalRect (&r);
   }
   Nlm_UpdateScrollBar ((Nlm_TexT) t);
+#endif
 #endif
 #ifdef WIN_MSWIN
   allowTextCallback = FALSE;
@@ -1835,6 +1935,9 @@ static void Nlm_SetPasswordText (Nlm_GraphiC t, Nlm_Int2 item,
   Nlm_MemSet(actual_title, '*', len);
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  TXNSetData(h, kTXNTextData, title, len, kTXNStartOffset, kTXNEndOffset);
+#else
   TESetText (actual_title, len, h);
   TECalText (h);
   if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
@@ -1844,6 +1947,7 @@ static void Nlm_SetPasswordText (Nlm_GraphiC t, Nlm_Int2 item,
     Nlm_InvalRect (&r);
   }
   Nlm_UpdateScrollBar ((Nlm_TexT) t);
+#endif
 #endif
 #ifdef WIN_MSWIN
   allowTextCallback = FALSE;
@@ -1874,15 +1978,18 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   Nlm_RecT      r;
 #endif
 #ifdef WIN_MSWIN
-  Nlm_Uint4	count;
+  Nlm_Uint4    count;
   Nlm_Uint4     len;
-  Nlm_CharPtr	tmp, newTitle;
+  Nlm_CharPtr    tmp, newTitle;
 #endif
 
   tempPort = Nlm_SavePortIfNeeded (t, savePort);
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
 #ifdef WIN_MAC
   len = Nlm_StringLen (title);
+#ifdef WIN_MAC_QUARTZ
+  TXNSetData(h, kTXNTextData, title, len, kTXNStartOffset, kTXNEndOffset);
+#else
   TESetText (title, len, h);
   TECalText (h);
   Nlm_GetRect (t, &r);
@@ -1894,6 +2001,7 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   }
   Nlm_UpdateScrollBar ((Nlm_TexT) t);
 #endif
+#endif
 #ifdef WIN_MSWIN
   allowTextCallback = FALSE;
   
@@ -1902,7 +2010,7 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   count = 0;
   for (tmp = title; tmp != NULL && *tmp; ++tmp) {
       if (*tmp == '\n')
-	  ++count;
+      ++count;
   }
 
   if (count == 0)
@@ -1912,9 +2020,9 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
     newTitle = (Nlm_CharPtr) MemNew(len+count+1);
     tmp = newTitle;
     for (count=0; count < len; ++count) {
-	if (title[count] == '\n' && (count == 0 || title[count-1] != '\r'))
-	    *tmp++ = '\r';
-	*tmp++ = title[count];
+    if (title[count] == '\n' && (count == 0 || title[count-1] != '\r'))
+        *tmp++ = '\r';
+    *tmp++ = title[count];
     }
     *tmp = '\0';
     SetWindowText (h, newTitle);
@@ -1956,14 +2064,19 @@ static void Nlm_GetDialogText (Nlm_GraphiC t, Nlm_Int2 item,
     h = Nlm_GetTextHandle ((Nlm_TexT) t);
 #ifdef WIN_MAC
     i = 0;
+#ifdef WIN_MAC_QUARTZ
+    TXNGetDataEncoded(h, kTXNStartOffset, kTXNEndOffset, &chars, kTXNTextData);
+    length = Nlm_StrLen(*chars);
+#else
     HLock ((Handle) h);
     hp = (TEPtr) *((Handle) h);
     chars = hp->hText;
     length = hp->teLength;
+    HUnlock ((Handle) h);
+#endif
     if (length > maxsize - 1) {
       length = maxsize - 1;
     }
-    HUnlock ((Handle) h);
     if (chars != NULL) {
       HLock ((Handle) chars);
       ptr = (Nlm_Char *) *((Handle) chars);
@@ -2011,10 +2124,16 @@ static void Nlm_GetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
     h = Nlm_GetTextHandle ((Nlm_TexT) t);
 #ifdef WIN_MAC
     i = 0;
+#ifdef WIN_MAC_QUARTZ
+    TXNGetDataEncoded(h, kTXNStartOffset, kTXNEndOffset, &chars, kTXNTextData);
+    length = Nlm_StrLen(*chars);
+#else
     HLock ((Handle) h);
     hp = (TEPtr) *((Handle) h);
     chars = hp->hText;
     length = hp->teLength;
+    HUnlock ((Handle) h);
+#endif
     if (length > maxsize - 1) {
       length = maxsize - 1;
     }
@@ -2047,36 +2166,49 @@ extern Nlm_TexT Nlm_CurrentText (void)
 
 #ifdef WIN_MAC
 
+#ifndef WIN_MAC_QUARTZ
 static void Clipboard_TEToDeskScrap()
 {
-	OSErr err;
-	/* Copy the TE scrap to the desk scrap. */
-	err = TEToScrap();
+  OSErr err;
+  /* Copy the TE scrap to the desk scrap. */
+  err = TEToScrap();
+}
+#endif
+
+static void Clipboard_TECut(Nlm_TextTool inTE)
+{
+#ifdef WIN_MAC_QUARTZ
+  TXNCut(inTE);
+#else
+  /* Cut the text into the TE scrap. */
+  TECut(inTE);
+  /* Update the desk scrap. */
+  Clipboard_TEToDeskScrap();
+#endif
 }
 
-static void Clipboard_TECut(TEHandle inTE)
+static void Clipboard_TECopy(Nlm_TextTool inTE)
 {
-	/* Cut the text into the TE scrap. */
-	TECut(inTE);
-	/* Update the desk scrap. */
-	Clipboard_TEToDeskScrap();
+#ifdef WIN_MAC_QUARTZ
+  TXNCopy(inTE);
+#else
+  /* Copy the text into the TE scrap. */
+  TECopy(inTE);
+  /* Update the desk scrap. */
+  Clipboard_TEToDeskScrap();
+#endif
 }
 
-static void Clipboard_TECopy(TEHandle inTE)
+static void Clipboard_TEPaste(Nlm_TextTool inTE)
 {
-	/* Copy the text into the TE scrap. */
-	TECopy(inTE);
-	/* Update the desk scrap. */
-	Clipboard_TEToDeskScrap();
-}
-
-static void Clipboard_TEPaste(TEHandle inTE)
-{
-    /* #if TARGET_API_MAC_CARBON */
-	/* ScrapRef scrap; */
-	/* OSStatus status = GetCurrentScrap(&scrap); */
-	TEFromScrap();
-	TEPaste(inTE);
+#ifdef WIN_MAC_QUARTZ
+  if (TXNIsScrapPastable()) {
+    TXNPaste(inTE);    
+  }
+#else
+  TEFromScrap();
+  TEPaste(inTE);
+#endif
 }
 
 #endif  /* WIN_MAC */
@@ -2164,7 +2296,11 @@ extern void Nlm_ClearText (Nlm_TexT t)
     if (! Nlm_GetTextEditable (t)) return;
     h = Nlm_GetTextHandle (t);
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+    TXNClear(h);
+#else
     TEDelete (h);
+#endif
 #endif
 #ifdef WIN_MSWIN
     allowTextCallback = FALSE;
@@ -2251,16 +2387,16 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
     Nlm_DoReturnCallback (t);
   } else if ((ch == '\n' || ch == '\r') && iseditable) {
     if (GetWindowLongPtr(hwnd, GWL_STYLE) & ES_MULTILINE) {
-	/* multiline edit box */
-	if (Nlm_ctrlKey)
-	    /* Ctrl-Enter goes to dialog box buttons */
-    	    Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
-	else
-	    /* plain Enter goes as character to the edit field */
-	    handlechar = TRUE;
+    /* multiline edit box */
+    if (Nlm_ctrlKey)
+        /* Ctrl-Enter goes to dialog box buttons */
+            Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
+    else
+        /* plain Enter goes as character to the edit field */
+        handlechar = TRUE;
     }
     else
-	Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
+    Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
   } else if (!iseditable && ch == '\3') { /* pass Ctrl-C ("Copy") to default handler */
     handlechar = TRUE;
   } else if (iseditable) {
@@ -2325,8 +2461,8 @@ static LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
     case WM_KEYDOWN:
       if(!Nlm_GetTextEditable(t) && Nlm_KeydownToChar( wParam ) == NLM_DEL)
       {
-	  call_win_proc = FALSE;
-	  break;
+      call_win_proc = FALSE;
+      break;
       }
       call_win_proc = !(Nlm_GetVisLines(t) == 1  &&
                         Nlm_ProcessKeydown((Nlm_GraphiC)t,
@@ -2345,8 +2481,8 @@ static LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
     case WM_PASTE:
       if ( !Nlm_GetTextEditable(t) )
       {
-	  call_win_proc = FALSE;
-	  break;
+      call_win_proc = FALSE;
+      break;
       }
       if ( !(GetWindowLongPtr(hwnd, GWL_STYLE) & ES_MULTILINE) ) {
         LPSTR text = NULL, str;
@@ -2390,19 +2526,14 @@ static Nlm_GraphiC Nlm_TextGainFocus (Nlm_GraphiC t, Nlm_Char ch, Nlm_Boolean sa
 {
 #ifdef WIN_MAC
   Nlm_TextTool  h;
-  TEPtr         hp;
   Nlm_Int2      len;
   Nlm_GraphiC   rsult;
 
   rsult = NULL;
   if (ch == '\t' && Nlm_GetVisible (t) && Nlm_GetEnabled (t)) {
     h = Nlm_GetTextHandle ((Nlm_TexT) t);
-    HLock ((Handle) h);
-    hp = (TEPtr) *((Handle) h);
-    len = hp->teLength;
-    HUnlock ((Handle) h);
     Nlm_SetActive ((Nlm_TexT) t, TRUE);
-    Nlm_SelectAText ((Nlm_TexT) t, 0, len);
+    Nlm_TextSelectProc(t, savePort);
     rsult = t;
   }
   return rsult;
@@ -2415,17 +2546,17 @@ static Nlm_GraphiC Nlm_TextGainFocus (Nlm_GraphiC t, Nlm_Char ch, Nlm_Boolean sa
     Nlm_TextTool h = Nlm_GetTextHandle ((Nlm_TexT) t);
     Nlm_SetActive ((Nlm_TexT) t, TRUE);
     if (GetWindowLongPtr(h, GWL_STYLE) & ES_MULTILINE) {
-	/* multiline edit box */
-	Nlm_Int4 begin = 0, end = 0;
-	Nlm_TextSelectionRange((Nlm_TexT) t, &begin, &end);
-	Nlm_SelectAText ((Nlm_TexT) t, begin, end);
+    /* multiline edit box */
+    Nlm_Int4 begin = 0, end = 0;
+    Nlm_TextSelectionRange((Nlm_TexT) t, &begin, &end);
+    Nlm_SelectAText ((Nlm_TexT) t, begin, end);
     } else {
         /* singleline edit box - make it consistent with MOTIF by setting len = 0 
            which just sets the cursor pos to the beginning and does not highlight 
            the text
         */
         size_t len = 0;  /* Nlm_TextLength ((Nlm_TexT) t); */
-	Nlm_SelectAText ((Nlm_TexT) t, 0, len);
+    Nlm_SelectAText ((Nlm_TexT) t, 0, len);
     }
     rsult = t;
   }
@@ -2449,6 +2580,7 @@ static Nlm_GraphiC Nlm_TextGainFocus (Nlm_GraphiC t, Nlm_Char ch, Nlm_Boolean sa
 static void Nlm_TextLoseFocus (Nlm_GraphiC t, Nlm_GraphiC excpt, Nlm_Boolean savePort)
 
 {
+#ifndef WIN_MAC_QUARTZ
   Nlm_WindoW  tempPort;
 
   if (t != excpt) {
@@ -2460,6 +2592,7 @@ static void Nlm_TextLoseFocus (Nlm_GraphiC t, Nlm_GraphiC excpt, Nlm_Boolean sav
     Nlm_DeactivateText (t, FALSE);
     Nlm_RestorePort (tempPort);
   }
+#endif
 }
 
 #ifdef WIN_MAC
@@ -2494,7 +2627,7 @@ static void Nlm_InvalScrollText (Nlm_GraphiC t)
 
 
 static void Nlm_SetTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
-				 Nlm_Boolean savePort, Nlm_Boolean force)
+                                 Nlm_Boolean savePort, Nlm_Boolean force)
 {
   Nlm_TextTool  h;
   Nlm_RecT      oldRect;
@@ -2523,6 +2656,10 @@ static void Nlm_SetTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 #endif
   tr = *r;
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_RecTToRectTool (&tr, &rtool);
+  TXNSetFrameBounds(h, rtool.top, rtool.left, rtool.bottom, rtool.right, 0);
+#else
   Nlm_InsetRect (&tr, 2, 2);
   Nlm_RecTToRectTool (&tr, &rtool);
   HLock ((Handle) h);
@@ -2533,6 +2670,7 @@ static void Nlm_SetTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
   Nlm_SetRect (t, r);
   Nlm_InvalText (t);
 #endif
+#endif
 #ifdef WIN_MSWIN
   MoveWindow (h, tr.left, tr.top, tr.right - tr.left, tr.bottom - tr.top, TRUE);
   Nlm_SetRect (t, r);
@@ -2541,11 +2679,11 @@ static void Nlm_SetTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 #ifdef WIN_MOTIF
   allowTextCallback = FALSE;
   XtVaSetValues (h,
-		 XmNx, (Position) (tr.left + 1),
-		 XmNy, (Position) (tr.top  + 1),
-		 XmNwidth,  (Dimension) (tr.right - tr.left),
-		 XmNheight, (Dimension) (tr.bottom - tr.top), 
-		 NULL);
+       XmNx, (Position) (tr.left + 1),
+       XmNy, (Position) (tr.top  + 1),
+       XmNwidth,  (Dimension) (tr.right - tr.left),
+       XmNheight, (Dimension) (tr.bottom - tr.top), 
+       NULL);
   Nlm_SetRect (t, r);
   allowTextCallback = TRUE;
 #endif
@@ -2555,7 +2693,7 @@ static void Nlm_SetTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 
 
 static void Nlm_SetHiddenTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
-				       Nlm_Boolean savePort, Nlm_Boolean force)
+                    Nlm_Boolean savePort, Nlm_Boolean force)
 {
   Nlm_TextTool  h;
   Nlm_RecT      oldRect;
@@ -2601,11 +2739,11 @@ static void Nlm_SetHiddenTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 #ifdef WIN_MOTIF
   allowTextCallback = FALSE;
   XtVaSetValues (h,
-		 XmNx, (Position) tr.left + 1,
-		 XmNy, (Position) tr.top  + 1,
-		 XmNwidth,  (Dimension) (tr.right - tr.left),
-		 XmNheight, (Dimension) (tr.bottom - tr.top), 
-		 NULL);
+         XmNx, (Position) tr.left + 1,
+         XmNy, (Position) tr.top  + 1,
+         XmNwidth,  (Dimension) (tr.right - tr.left),
+         XmNheight, (Dimension) (tr.bottom - tr.top), 
+         NULL);
   Nlm_SetRect (t, r);
   allowTextCallback = TRUE;
 #endif
@@ -2631,51 +2769,6 @@ static void Nlm_ResetVisLines (Nlm_TexT t)
   Nlm_SetTextData (t, &tdata);
 }
 
-
-extern void Nlm_SetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4 horiz,
-                                     Nlm_Int4 vert, Nlm_Boolean savePort)
-
-{
-#ifdef WIN_MAC
-  Nlm_BaR  sb;
-
-  sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
-  if (sb != NULL) {
-    Nlm_DoSetValue ((Nlm_GraphiC) sb, vert, savePort);
-  }
-#endif
-#ifdef WIN_MSWIN
-  Nlm_TextTool  h;
-
-  h = Nlm_GetTextHandle ((Nlm_TexT) t);
-  PostMessage (h, WM_VSCROLL, MAKEWPARAM (SB_THUMBPOSITION, vert), 0L);
-  SetScrollPos (h, SB_VERT, vert, TRUE);
-
-#endif
-#ifdef WIN_MOTIF
-  Nlm_Int4 value, slider_size, increment, page_increment;
-  Nlm_TextTool  h;
-  Widget        scrolled_window;
-  Widget        vscroll;
-
-  h = Nlm_GetTextHandle ((Nlm_TexT) t);
-  value = 0;
-  slider_size = 0;
-  increment = 0;
-  page_increment = 0;
-  vscroll = NULL;
-
-  scrolled_window = XtParent (h);
-  if (scrolled_window == NULL) return;
-
-  XtVaGetValues (scrolled_window, XmNverticalScrollBar, &vscroll, NULL);
-  if (vscroll == NULL) return;
-
-  XmScrollBarGetValues (vscroll, &value, &slider_size, &increment, &page_increment);
-  XmScrollBarSetValues (vscroll, vert, slider_size, increment, page_increment, TRUE);
-
-#endif
-}
 
 static void Nlm_SetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2 horiz,
                                      Nlm_Int2 vert, Nlm_Boolean savePort)
@@ -2719,6 +2812,51 @@ static void Nlm_SetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2 horiz,
   XmScrollBarGetValues (vscroll, &value, &slider_size, &increment, &page_increment);
   XmScrollBarSetValues (vscroll, vert, slider_size, increment, page_increment, TRUE);
 
+#endif
+}
+
+extern void Nlm_SetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4 horiz,
+                                      Nlm_Int4 vert, Nlm_Boolean savePort)
+
+{
+#ifdef WIN_MAC
+  Nlm_BaR  sb;
+  
+  sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
+  if (sb != NULL) {
+    Nlm_DoSetValue ((Nlm_GraphiC) sb, vert, savePort);
+  }
+#endif
+#ifdef WIN_MSWIN
+  Nlm_TextTool  h;
+  
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  PostMessage (h, WM_VSCROLL, MAKEWPARAM (SB_THUMBPOSITION, vert), 0L);
+  SetScrollPos (h, SB_VERT, vert, TRUE);
+  
+#endif
+#ifdef WIN_MOTIF
+  Nlm_Int4 value, slider_size, increment, page_increment;
+  Nlm_TextTool  h;
+  Widget        scrolled_window;
+  Widget        vscroll;
+  
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  value = 0;
+  slider_size = 0;
+  increment = 0;
+  page_increment = 0;
+  vscroll = NULL;
+  
+  scrolled_window = XtParent (h);
+  if (scrolled_window == NULL) return;
+  
+  XtVaGetValues (scrolled_window, XmNverticalScrollBar, &vscroll, NULL);
+  if (vscroll == NULL) return;
+  
+  XmScrollBarGetValues (vscroll, &value, &slider_size, &increment, &page_increment);
+  XmScrollBarSetValues (vscroll, vert, slider_size, increment, page_increment, TRUE);
+  
 #endif
 }
 
@@ -2823,7 +2961,7 @@ extern void Nlm_GetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4Ptr horiz, Nlm_Int4
 }
 
 static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
-				       Nlm_Boolean savePort, Nlm_Boolean force)
+                Nlm_Boolean savePort, Nlm_Boolean force)
 {
   Nlm_TextTool  h;
   Nlm_RecT      oldRect;
@@ -2859,16 +2997,16 @@ static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 #endif
 #ifdef WIN_MSWIN
       MoveWindow (h,  tr.left,  tr.top,
-		  tr.right - tr.left,  tr.bottom - tr.top,  TRUE);
+          tr.right - tr.left,  tr.bottom - tr.top,  TRUE);
 #endif
 #ifdef WIN_MOTIF
       allowTextCallback = FALSE;
       XtVaSetValues (XtParent (h),
-		     XmNx, (Position) tr.left,
-		     XmNy, (Position) tr.top,
-		     XmNwidth,  (Dimension)(tr.right - tr.left),
-		     XmNheight, (Dimension)(tr.bottom - tr.top),
-		     NULL);
+             XmNx, (Position) tr.left,
+             XmNy, (Position) tr.top,
+             XmNwidth,  (Dimension)(tr.right - tr.left),
+             XmNheight, (Dimension)(tr.bottom - tr.top),
+             NULL);
 #endif
     }
 
@@ -2891,7 +3029,7 @@ static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
       Nlm_OffsetRect (&tr, deltax, deltay);
       Nlm_RecTToRectTool (&tr, &dtool);
       if (! wrap) {
-	dtool.right += HSCROLL_POSITIONS * Nlm_stdCharWidth;
+    dtool.right += HSCROLL_POSITIONS * Nlm_stdCharWidth;
       }
       hp->destRect = dtool;
       hp->viewRect = rtool;
@@ -2963,11 +3101,19 @@ static void Nlm_VScrollAction (Nlm_BaR sb, Nlm_GraphiC t,
   Nlm_RecT      r;
 
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
-  height = Nlm_GetLineHeight ((Nlm_TexT) t);
   delta = oldval - newval;
   if (oldval != newval) {
     Nlm_SelectFont (Nlm_systemFont);
+#ifdef WIN_MAC_QUARTZ
+    {
+      SInt32 vdelta = delta, hdelta = 0;
+      TXNScroll(h, kTXNScrollUnitsInLines, kTXNScrollUnitsInLines,
+              &vdelta, &hdelta);
+    }
+#else
+    height = Nlm_GetLineHeight ((Nlm_TexT) t);
     TEScroll (0, delta * height, h);
+#endif
   } else if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
     Nlm_GetRect (t, &r);
     Nlm_InsetRect (&r, 2, 1);
@@ -2986,11 +3132,19 @@ static void Nlm_HScrollAction (Nlm_BaR sb, Nlm_GraphiC t,
   Nlm_RecT      r;
 
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
-  width = Nlm_stdCharWidth;
   delta = oldval - newval;
   if (oldval != newval) {
     Nlm_SelectFont (Nlm_systemFont);
+#ifdef WIN_MAC_QUARTZ
+    {
+      SInt32 vdelta = 0, hdelta = delta;
+      TXNScroll(h, kTXNScrollUnitsInLines, kTXNScrollUnitsInLines,
+                &vdelta, &hdelta);
+    }
+#else
+    width = Nlm_stdCharWidth;
     TEScroll (delta * width, 0, h);
+#endif
   } else if (Nlm_GetVisible (t) && Nlm_GetAllParentsVisible (t)) {
     Nlm_GetRect (t, &r);
     Nlm_InsetRect (&r, 2, 1);
@@ -3186,6 +3340,9 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
   Nlm_WindowTool  wptr;
 #ifdef WIN_MAC
   Nlm_RectTool    rtool;
+#ifdef WIN_MAC_QUARTZ
+  CGRect          cgr;
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
@@ -3207,13 +3364,21 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
 #ifdef WIN_MAC
   Nlm_InsetRect (&r, 2, 2);
   Nlm_RecTToRectTool (&r, &rtool);
+#ifdef WIN_MAC_QUARTZ
+  cgr = Nlm_RecTToCGRect(&r);
+  TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
+  TXNAttachObjectToWindowRef(h, wptr);
+#else
   h = TENew (&rtool, &rtool);
+#endif
   Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
                     FALSE, FALSE, FALSE, 1, NULL, NULL, NULL, NULL, TRUE);
   Nlm_SetDialogText ((Nlm_GraphiC) t, 0, local, FALSE);
+#ifndef WIN_MAC_QUARTZ
   if (h != NULL) {
     TEAutoView (TRUE, h);
   }
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -3294,6 +3459,9 @@ static void Nlm_NewPasswordText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc
   Nlm_WindowTool  wptr;
 #ifdef WIN_MAC
   Nlm_RectTool    rtool;
+#ifdef WIN_MAC_QUARTZ
+  CGRect          cgr;
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
@@ -3314,7 +3482,13 @@ static void Nlm_NewPasswordText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc
 #ifdef WIN_MAC
   Nlm_InsetRect (&r, 2, 2);
   Nlm_RecTToRectTool (&r, &rtool);
+#ifdef WIN_MAC_QUARTZ
+  cgr = Nlm_RecTToCGRect(&r);
+  TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
+  TXNAttachObjectToWindowRef(h, wptr);
+#else
   h = TENew (&rtool, &rtool);
+#endif
   Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
                     FALSE, FALSE, FALSE, 1, NULL, NULL, NULL, NULL, TRUE);
   Nlm_SetPasswordText ((Nlm_GraphiC) t, 0, local, FALSE);
@@ -3396,6 +3570,9 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
   Nlm_WindowTool  wptr;
 #ifdef WIN_MAC
   Nlm_RectTool    rtool;
+#ifdef WIN_MAC_QUARTZ
+  CGRect          cgr;
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
@@ -3416,13 +3593,21 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
 
 #ifdef WIN_MAC
   Nlm_RecTToRectTool (&r, &rtool);
+#ifdef WIN_MAC_QUARTZ
+  cgr = Nlm_RecTToCGRect(&r);
+  TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
+  TXNAttachObjectToWindowRef(h, wptr);
+#else
   h = TENew (&rtool, &rtool);
+#endif
   Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
                     FALSE, TRUE, FALSE, 1, NULL, NULL, tabProc, rtnProc, TRUE);
   Nlm_SetDialogText ((Nlm_GraphiC) t, 0, local, FALSE);
+#ifndef WIN_MAC_QUARTZ
   if (h != NULL) {
     TEAutoView (TRUE, h);
   }
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -3505,6 +3690,9 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
   Nlm_WindowTool  wptr;
 #ifdef WIN_MAC
   Nlm_RectTool    rtool;
+#ifdef WIN_MAC_QUARTZ
+  CGRect          cgr;
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4       style;
@@ -3529,13 +3717,21 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
 #ifdef WIN_MAC
   Nlm_InsetRect (&r, 2, 2);
   Nlm_RecTToRectTool (&r, &rtool);
+#ifdef WIN_MAC_QUARTZ
+  cgr = Nlm_RecTToCGRect(&r);
+  TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
+  TXNAttachObjectToWindowRef(h, wptr);
+#else
   h = TENew (&rtool, &rtool);
+#endif
   Nlm_LoadTextData (t, h, NULL, NULL, FALSE, NULL, 0, FALSE,
                     FALSE, FALSE, TRUE, 1, NULL, NULL, tabProc, rtnProc, TRUE);
   Nlm_SetDialogText ((Nlm_GraphiC) t, 0, local, FALSE);
+#ifndef WIN_MAC_QUARTZ
   if (h != NULL) {
     TEAutoView (TRUE, h);
   }
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -3624,6 +3820,9 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
   Nlm_RectTool    dtool;
   Nlm_RectTool    rtool;
   Nlm_Int2        width;
+#ifdef WIN_MAC_QUARTZ
+  CGRect          cgr;
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_FntPtr      fntptr;
@@ -3669,7 +3868,13 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
     r.right += HSCROLL_POSITIONS * Nlm_stdCharWidth;
   }
   Nlm_RecTToRectTool (&r, &dtool);
-  h = TENew (&dtool, &rtool);
+#ifdef WIN_MAC_QUARTZ
+  cgr = Nlm_RecTToCGRect(&r);
+  TXNCreateObject( &cgr, 0, &h);
+  TXNAttachObjectToWindowRef(h, wptr);
+#else
+  h = TENew (&rtool, &rtool);
+#endif
   Nlm_LoadTextData (t, h, vsb, hsb, wrap, font, fnthgt, FALSE,
                     FALSE, FALSE, FALSE, height, NULL, NULL, NULL, NULL, TRUE);
 #endif
@@ -4186,9 +4391,11 @@ extern void Nlm_InitTexts (void)
 
   dialogTextProcs = &(gphprcsptr [0]);
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
+#endif
   dialogTextProcs->click = Nlm_DialogTextClick;
-  dialogTextProcs->key = Nlm_DialogKey;
   dialogTextProcs->draw = Nlm_DrawDialogText;
+  dialogTextProcs->key = Nlm_DialogKey;
   dialogTextProcs->idle = Nlm_IdleText;
 #endif
 #ifdef WIN_MSWIN
@@ -4198,10 +4405,12 @@ extern void Nlm_InitTexts (void)
 #endif
   dialogTextProcs->show = Nlm_ShowText;
   dialogTextProcs->hide = Nlm_HideText;
+#ifndef WIN_MAC_QUARTZ
   dialogTextProcs->enable = Nlm_EnableText;
   dialogTextProcs->disable = Nlm_DisableText;
   dialogTextProcs->activate = Nlm_ActivateText;
   dialogTextProcs->deactivate = Nlm_DeactivateText;
+#endif
   dialogTextProcs->remove = Nlm_RemoveText;
   dialogTextProcs->reset = Nlm_ResetText;
   dialogTextProcs->select = Nlm_TextSelectProc;
@@ -4214,9 +4423,11 @@ extern void Nlm_InitTexts (void)
 
   hiddenTextProcs = &(gphprcsptr [1]);
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   hiddenTextProcs->click = Nlm_DialogTextClick;
-  hiddenTextProcs->key = Nlm_DialogKey;
+#endif
   hiddenTextProcs->draw = Nlm_DrawHiddenText;
+  hiddenTextProcs->key = Nlm_DialogKey;
   hiddenTextProcs->idle = Nlm_IdleText;
 #endif
 #ifdef WIN_MSWIN
@@ -4226,10 +4437,12 @@ extern void Nlm_InitTexts (void)
 #endif
   hiddenTextProcs->show = Nlm_ShowText;
   hiddenTextProcs->hide = Nlm_HideText;
+#ifndef WIN_MAC_QUARTZ
   hiddenTextProcs->enable = Nlm_EnableText;
   hiddenTextProcs->disable = Nlm_DisableText;
   hiddenTextProcs->activate = Nlm_ActivateHiddenText;
   hiddenTextProcs->deactivate = Nlm_DeactivateText;
+#endif
   hiddenTextProcs->remove = Nlm_RemoveText;
   hiddenTextProcs->reset = Nlm_ResetText;
   hiddenTextProcs->select = Nlm_TextSelectProc;
@@ -4242,9 +4455,11 @@ extern void Nlm_InitTexts (void)
 
   specialTextProcs = &(gphprcsptr [2]);
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   specialTextProcs->click = Nlm_DialogTextClick;
-  specialTextProcs->key = Nlm_DialogKey;
+#endif
   specialTextProcs->draw = Nlm_DrawDialogText;
+  specialTextProcs->key = Nlm_DialogKey;
   specialTextProcs->idle = Nlm_IdleText;
 #endif
 #ifdef WIN_MSWIN
@@ -4254,10 +4469,12 @@ extern void Nlm_InitTexts (void)
 #endif
   specialTextProcs->show = Nlm_ShowText;
   specialTextProcs->hide = Nlm_HideText;
+#ifndef WIN_MAC_QUARTZ
   specialTextProcs->enable = Nlm_EnableText;
   specialTextProcs->disable = Nlm_DisableText;
   specialTextProcs->activate = Nlm_ActivateHiddenText;
   specialTextProcs->deactivate = Nlm_DeactivateText;
+#endif
   specialTextProcs->remove = Nlm_RemoveText;
   specialTextProcs->reset = Nlm_ResetText;
   specialTextProcs->select = Nlm_TextSelectProc;
@@ -4270,9 +4487,13 @@ extern void Nlm_InitTexts (void)
 
   passwordTextProcs = &(gphprcsptr [3]);
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  passwordTextProcs->key = Nlm_DialogKey;
+#else
   passwordTextProcs->click = Nlm_DialogTextClick;
-  passwordTextProcs->key = Nlm_PasswordKey;
   passwordTextProcs->draw = Nlm_DrawDialogText;
+  passwordTextProcs->key = Nlm_PasswordKey;
+#endif
   passwordTextProcs->idle = Nlm_IdleText;
 #endif
 #ifdef WIN_MSWIN
@@ -4282,10 +4503,12 @@ extern void Nlm_InitTexts (void)
 #endif
   passwordTextProcs->show = Nlm_ShowText;
   passwordTextProcs->hide = Nlm_HideText;
+#ifndef WIN_MAC_QUARTZ
   passwordTextProcs->enable = Nlm_EnableText;
   passwordTextProcs->disable = Nlm_DisableText;
   passwordTextProcs->activate = Nlm_ActivateText;
   passwordTextProcs->deactivate = Nlm_DeactivateText;
+#endif
   passwordTextProcs->remove = Nlm_RemoveText;
   passwordTextProcs->reset = Nlm_ResetText;
   passwordTextProcs->select = Nlm_TextSelectProc;
@@ -4298,9 +4521,11 @@ extern void Nlm_InitTexts (void)
 
   scrollTextProcs = &(gphprcsptr [4]);
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   scrollTextProcs->click = Nlm_ScrollTextClick;
-  scrollTextProcs->key = Nlm_TextKey;
+#endif
   scrollTextProcs->draw = Nlm_DrawScrollText;
+  scrollTextProcs->key = Nlm_TextKey;
   scrollTextProcs->idle = Nlm_IdleText;
 #endif
 #ifdef WIN_MSWIN
@@ -4310,10 +4535,12 @@ extern void Nlm_InitTexts (void)
 #endif
   scrollTextProcs->show = Nlm_ShowScrollText;
   scrollTextProcs->hide = Nlm_HideScrollText;
+#ifndef WIN_MAC_QUARTZ
   scrollTextProcs->enable = Nlm_EnableText;
   scrollTextProcs->disable = Nlm_DisableText;
   scrollTextProcs->activate = Nlm_ActivateScrollText;
   scrollTextProcs->deactivate = Nlm_DeactivateScrollText;
+#endif
   scrollTextProcs->remove = Nlm_RemoveText;
   scrollTextProcs->reset = Nlm_ResetText;
   scrollTextProcs->select = Nlm_TextSelectProc;

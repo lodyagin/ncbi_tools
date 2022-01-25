@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: motif.c,v 6.6 2006/07/13 17:16:20 bollin Exp $";
+static char const rcsid[] = "$Id: motif.c,v 6.7 2007/05/07 13:30:54 kans Exp $";
 
 /*   motif.c
 * ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: motif.c,v 6.6 2006/07/13 17:16:20 bollin Exp $
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  sequence motif search functions
 *
@@ -353,7 +353,7 @@ NLM_EXTERN MotifInfoPtr MOT_MotifSearch(CharPtr motif, BioseqPtr bsp, Boolean is
       return NULL;
    }
    bsp_mot = BioseqNew();
-   bsp_mot->seq_data = bs;
+   bsp_mot->seq_data = (SeqDataPtr) bs;
    bsp_mot->length = len;
    if (is_prot == FALSE)
    {

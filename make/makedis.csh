@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.115 2006/09/14 15:36:43 ucko Exp $
+# $Id: makedis.csh,v 1.116 2007/05/09 16:06:55 ucko Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -167,7 +167,15 @@ case GNU/Linux:
 		set platform=linux-x86
 		if ("$?LINUX_MODE" == 1) then
 			if ("$LINUX_MODE" == "icc") then
-				set platform=linux_icc
+				switch (`icc -dumpversion`)
+					case "9.*":
+					case "[1-9][0-9]*":
+						set platform=linux_icc9
+						breaksw
+					default:
+						set platform=linux_icc
+						breaksw
+				endsw
 			endif
 		endif
 		breaksw

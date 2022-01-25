@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *       Vibrant drawing port specification definitions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: ncbiport.h,v $
+* Revision 6.1  2007/05/01 22:01:30  kans
+* changes in preparation for supporing Quartz on Macintosh
+*
 * Revision 6.0  1997/08/25 18:56:09  madden
 * Revision changed to 6.0
 *
@@ -86,7 +89,11 @@ extern "C" {
 #define Nlm_PointTool Point
 #define Nlm_RectTool Rect
 #define Nlm_RgnTool RgnHandle
-#define Nlm_FontTool Nlm_Handle /* esl: not used */
+#ifdef WIN_MAC_ATSUI
+#define Nlm_FontTool ATSUStyle
+#else
+#define Nlm_FontTool Nlm_Handle
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -114,11 +121,11 @@ typedef  struct  Nlm_fontrec {
   Nlm_Int4      refcnt;  
   Nlm_FontSpec  fontspec;
 #ifndef WIN_GIF
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && ! defined(WIN_MAC_ATSUI)
   Nlm_Int2      number;
   Nlm_Int2      size;
   Nlm_Int2      style;
-#elif defined(WIN_MSWIN) || defined(WIN_X)
+#elif defined(WIN_MSWIN) || defined(WIN_X) || defined(WIN_MAC_ATSUI)
   Nlm_FontTool  handle;
 #endif
 #endif
@@ -153,6 +160,7 @@ extern  Nlm_Boolean  Nlm_hasColor;
 
 #ifdef WIN_MAC
 void  Nlm_SetPort PROTO((GrafPtr grafptr));
+void Nlm_SetPortWindowPort PROTO((WindowPtr wptr));
 #endif
 
 #ifdef WIN_MSWIN

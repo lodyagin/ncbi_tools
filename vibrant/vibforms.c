@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.23 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
@@ -40,6 +40,19 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.27  2007/07/17 13:09:33  bollin
+* If deleting a row from a TagList, and the row is the last visible row and the
+* offscreen row is empty, remove the last offscreen row and adjust the scrollbar.
+*
+* Revision 6.26  2007/06/28 15:57:14  bollin
+* Added buttons to delete interval row from location editor.
+*
+* Revision 6.25  2007/06/12 14:21:32  bollin
+* Made JustSaveStringFromText extern - do not strip spaces.
+*
+* Revision 6.24  2007/02/01 16:31:11  bollin
+* Use Int4 instead of Int2 in EnumAssoc functions to allow larger lists.
+*
 * Revision 6.23  2006/05/09 19:12:19  kans
 * CreateTagListDialogExEx protects against row or col being > maximum allowed
 *
@@ -298,7 +311,7 @@ CharPtr GetEnumName (UIEnum val, EnumFieldAssocPtr al)
 /* enum field <-> popup list UI */
 Boolean InitEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pdef) 
 {
-  Int2 i, ii;
+  Int4 i, ii;
   EnumFieldAssocPtr efap;
   CharPtr PNTR titles;
   if (al == NULL) {
@@ -339,7 +352,7 @@ Boolean InitEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pdef)
 
 Boolean GetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pval)
 {
-  Int2 i; Int2 is = GetValue (lst);
+  Int4 i; Int4 is = GetValue (lst);
   for (i = 1; al->name != NULL; i++, al++)
      if (i == is) { *pval = al->value; return TRUE; }
   return FALSE;
@@ -347,7 +360,7 @@ Boolean GetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pval)
 
 static void SetEnumPopupEx (PopuP lst, EnumFieldAssocPtr al, UIEnum val, Boolean zeroOkay) 
 {
-  Int2 i;
+  Int4 i;
   for (i = 1; al->name != NULL; i++, al++)
      if (al->value == val) { SafeSetValue (lst, i); return; }
   if (zeroOkay && val == 0) return;
@@ -362,7 +375,7 @@ void SetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnum val)
 
 CharPtr GetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al)
 {
-  Int2 i; Int2 is = GetValue (lst);
+  Int4 i; Int4 is = GetValue (lst);
   for (i = 1; al->name != NULL; i++, al++)
      if (i == is) { return StringSaveNoNull (al->name); }
   return NULL;
@@ -371,7 +384,7 @@ CharPtr GetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al)
 static void SetEnumPopupByNameEx (PopuP lst, EnumFieldAssocPtr al, CharPtr name, Boolean zeroOkay)
 
 {
-  Int2 i;
+  Int4 i;
   for (i = 1; al->name != NULL; i++, al++)
      if (StringICmp (al->name, name) == 0) { SafeSetValue (lst, i); return; }
   if (zeroOkay && StringHasNoText (name)) return;
@@ -460,7 +473,7 @@ EnumFieldAssocPtr DuplicateEnumFieldAlist (EnumFieldAssocPtr alist)
 EnumFieldAssocPtr FreeEnumFieldAlist (EnumFieldAssocPtr alist)
 
 {
-  Int2  j;
+  Int4  j;
 
   if (alist != NULL) {
     for (j = 0; alist [j].name != NULL; j++) {
@@ -621,8 +634,8 @@ LisT CreateEnumListDialog (GrouP prnt, Int2 width, Int2 height, LstActnProc actn
 {
   AlistDialogPtr     adp;
   EnumFieldAssocPtr  ap;
-  Int2               i;
-  Int2               len;
+  Int4               i;
+  Int4               len;
   LisT               p;
 
   if (prnt == NULL || al == NULL) return NULL;
@@ -1803,7 +1816,7 @@ static void ListTagProc (LisT l)
   }
 }
 
-static CharPtr JustSaveStringFromText (TexT t)
+extern Nlm_CharPtr Nlm_JustSaveStringFromText (Nlm_TexT t)
 
 {
   size_t   len;
@@ -2086,19 +2099,133 @@ static void TagListMessage (DialoG d, Int2 mssg)
   }
 }
 
+
+static Boolean RowHasValue (TagListPtr tlp, Int4 row)
+{
+  Int4    j;
+  UIEnum  num;
+  Boolean has_value = FALSE;
+
+  if (tlp == NULL || row < 0 || row > tlp->rows - 1) {
+    return FALSE;
+  }
+ 
+  for (j = 0; j < tlp->cols; j++) {
+    switch (tlp->types [j]) {
+      case TAGLIST_TEXT :
+      /*case TAGLIST_PROMPT :*/
+        if ( !TextHasNoText((TexT)GetTagListControl(tlp, row, j)) )
+          has_value = TRUE;
+        break;
+      case TAGLIST_POPUP :
+      case TAGLIST_LIST :
+        if (tlp->alists != NULL &&
+            GetEnumPopup ((PopuP)GetTagListControl (tlp, row - 1, j),
+                          tlp->alists [j], &num) &&
+            (Int2) num > 0) {
+          has_value = TRUE;
+        }
+        break;
+      default :
+        break;
+    }
+  }
+  return has_value;
+}
+
+
+static void ShortenTagListScrollBar (TagListPtr tlp)
+{
+  Int2    max, val;
+  ValNodePtr vnp, prev = NULL;
+
+  if (tlp == NULL || tlp->noExtend || tlp->rows < 2) return;
+
+  max = GetBarMax (tlp->bar);
+  if (max == 0) return;
+
+  val = GetValue (tlp->bar);
+
+  if (val == tlp->max - 1 && !RowHasValue(tlp, tlp->rows - 1)) {
+    (tlp->max)--;
+    CorrectBarMax (tlp->bar, tlp->max);
+    CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+    CorrectBarMax (tlp->left_bar, tlp->max);
+    CorrectBarPage (tlp->left_bar, tlp->rows - 1, tlp->rows - 1);
+
+    vnp = tlp->vnp;
+    while (vnp->next != NULL) {
+      prev = vnp;
+      vnp = vnp->next;
+    }
+    if (prev != NULL) {
+      prev->next = ValNodeFreeData (prev->next);
+    }
+  }
+}
+
+
+static void ClearTagListRow (ButtoN b)
+{
+  TagListPtr  tlp;
+  Int2        i, j;
+
+  tlp = (TagListPtr) GetObjectExtra (b);
+  if (tlp != NULL) {
+    if (tlp->ask_before_clear)
+    {
+      if (ANS_CANCEL == Message (MSG_OKC, "Are you sure you want to clear the row?"))
+      {
+        return;
+      }
+      tlp->ask_before_clear = FALSE;
+    }
+    for (i = 0; i < tlp->rows; i++) {
+      if (b == tlp->clear_btns[i])
+      {
+        for (j = 0; j < tlp->cols; j++) {
+          switch (tlp->types[j])
+          {
+            case TAGLIST_PROMPT:
+              /* do nothing */
+              break;
+            case TAGLIST_POPUP:
+              SetValue (GetTagListControl (tlp, i, j), 1);
+              PopupTagProc (GetTagListControl (tlp, i, j));
+              break;
+            case TAGLIST_LIST:
+              SetValue (GetTagListControl (tlp, i, j), 1);
+              ListTagProc (GetTagListControl (tlp, i, j));
+              break;
+            case TAGLIST_TEXT:
+              SetTitle (GetTagListControl (tlp, i, j), "");
+              TextTagProc (GetTagListControl (tlp, i, j));
+              break;
+          }
+        }
+        /* fix scroll bar max if we have just deleted the last row */
+        if (i == tlp->rows - 1 && !tlp->noExtend) {
+          ShortenTagListScrollBar (tlp);
+        }
+        break;
+      }
+    }
+  }
+}
+
 extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      Int2 spacing, Uint2Ptr types,
                                      Uint2Ptr textWidths, EnumFieldAssocPtr PNTR alists,
                                      Boolean useBar, Boolean noExtend,
                                      ToDialogFunc tofunc, FromDialogFunc fromfunc);
 
-extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
+extern DialoG CreateTagListDialogEx3 (GrouP h, Uint2 rows, Uint2 cols,
                                        Int2 spacing, Uint2Ptr types,
                                        Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
                                        Boolean useBar, Boolean noExtend,
                                        Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
                                        TaglistCallback PNTR callbacks, Pointer callback_data,
-                                       Boolean useLeftBar)
+                                       Boolean useLeftBar, Boolean useClearBtns)
 
 {
   EnumFieldAssocPtr  al;
@@ -2111,6 +2238,7 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
   LisT               lst;
   GrouP              p;
   GrouP              s;
+  GrouP              clr;
   TagListPtr         tlp;
   Int2               wid;
 
@@ -2161,9 +2289,21 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
     }
 
     col = (Int2) cols;
+    if (useClearBtns)
+    {
+      col++;
+    }
+    tlp->ask_before_clear = TRUE;
     g = HiddenGroup (s, -col, 0, NULL);
     SetGroupSpacing (g, spacing, spacing);
     for (i = 0; i < tlp->rows; i++) {
+      if (useClearBtns)
+      {
+        clr = HiddenGroup (g, 2, 0, NULL);
+        tlp->clear_btns[i] = PushButton (clr, "X", ClearTagListRow);
+        SetObjectExtra (tlp->clear_btns[i], tlp, NULL);
+        StaticPrompt (clr, "", 5, MAX (dialogTextHeight, popupMenuHeight), systemFont, 'l');
+      }
       for (j = 0; j < tlp->cols; j++) {
         switch (types [j]) {
           case TAGLIST_TEXT :
@@ -2249,6 +2389,20 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
 
   return (DialoG) p;
 }
+
+extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
+                                       Int2 spacing, Uint2Ptr types,
+                                       Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
+                                       Boolean useBar, Boolean noExtend,
+                                       Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
+                                       TaglistCallback PNTR callbacks, Pointer callback_data,
+                                       Boolean useLeftBar)
+{
+  return CreateTagListDialogEx3 (h, rows, cols, spacing, types, textWidths, alists,
+                                    useBar, noExtend, tofunc, fromfunc,
+                                    callbacks, callback_data, useLeftBar, FALSE);
+}
+
 
 extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      Int2 spacing, Uint2Ptr types,

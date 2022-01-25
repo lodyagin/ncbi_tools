@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsutil.c,v 6.74 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: rpsutil.c,v 6.76 2007/05/07 13:30:54 kans Exp $";
 
-/* $Id: rpsutil.c,v 6.74 2005/07/28 14:57:10 coulouri Exp $
+/* $Id: rpsutil.c,v 6.76 2007/05/07 13:30:54 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,18 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.74 2005/07/28 14:57:10 coulouri 
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.74 $
+* $Revision: 6.76 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.76  2007/05/07 13:30:54  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.75  2007/01/08 14:22:37  kans
+* AnnotateRegionsFromCDD calls SeqDescrNew for annot descrs
+*
 * Revision 6.74  2005/07/28 14:57:10  coulouri
 * remove dead code
 *
@@ -2284,8 +2290,8 @@ BioseqPtr createFakeProtein(void)
     bsp->repr = Seq_repr_raw;
     bsp->length = StringLen(sequence);
     
-    bsp->seq_data = BSNew(64);
-    BSWrite(bsp->seq_data, sequence, StringLen(sequence));
+    bsp->seq_data = (SeqDataPtr) BSNew(64);
+    BSWrite((ByteStorePtr) bsp->seq_data, sequence, StringLen(sequence));
     
     /* bsp->id = MakeNewProteinSeqIdEx(NULL, NULL, "ssh_seq", NULL); */
     
@@ -2715,7 +2721,7 @@ NLM_EXTERN void AnnotateRegionsFromCDD (
           sap->type = 1;
           dp = DateCurr ();
           if (dp != NULL) {
-            desc = ValNodeNew (NULL);
+            desc = SeqDescrNew (NULL);
             if (desc != NULL) {
               desc->choice = Annot_descr_create_date;
               desc->data.ptrvalue = DateCurr ();

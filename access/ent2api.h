@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.29 $
+* $Revision: 1.30 $
 *
 * File Description: 
 *
@@ -67,13 +67,13 @@ extern "C" {
 /* utility functions */
 
 NLM_EXTERN void EntrezSetProgramName (
-  CharPtr progname
+  const char* progname
 );
 
 /* use Entrez2Test to override default Entrez2 ncbi named service */
 
 NLM_EXTERN void EntrezSetService (
-  CharPtr service
+  const char* service
 );
 
 /* low-level connection functions */
@@ -135,17 +135,17 @@ NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
 /* request creation functions */
 
 NLM_EXTERN Entrez2IdListPtr EntrezCreateEntrezIdList (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs
 );
 
 NLM_EXTERN Entrez2LimitsPtr EntrezCreateEntrezLimits (
   Int4 begin_date,
   Int4 end_date,
-  CharPtr type_date,
+  const char* type_date,
   Int4 max_uids,
   Int4 offset_uids
 );
@@ -157,11 +157,11 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetInfoRequest (
 NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   Boolean return_uids,
   Boolean return_parsed,
-  CharPtr db,
-  CharPtr query_string,
+  const char* db,
+  const char* query_string,
   Int4 begin_date,
   Int4 end_date,
-  CharPtr type_date,
+  const char* type_date,
   Int4 max_uids,
   Int4 offset_uids
 );
@@ -176,14 +176,14 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
 
 NLM_EXTERN void EntrezAddToBooleanRequest (
   Entrez2RequestPtr e2rp,
-  CharPtr query_string,
+  const char* query_string,
   Int4 op,
-  CharPtr field,
-  CharPtr term,
-  CharPtr key,
+  const char* field,
+  const char* term,
+  const char* key,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs,
   Boolean do_not_explode,
   Boolean do_not_translate
@@ -191,60 +191,60 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
 
 #define EntrezCreateDocsumRequest EntrezCreateDocSumRequest
 NLM_EXTERN Entrez2RequestPtr EntrezCreateDocSumRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs
 );
 
 #define EntrezCreateGetTermPosRequest EntrezCreateGetTermPositionRequest
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermPositionRequest (
-  CharPtr db,
-  CharPtr field,
-  CharPtr term
+  const char* db,
+  const char* field,
+  const char* term
 );
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermListRequest (
-  CharPtr db,
-  CharPtr field,
+  const char* db,
+  const char* field,
   Int4 first_term_pos,
   Int4 num_terms
 );
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermHierarchyRequest (
-  CharPtr db,
-  CharPtr field,
-  CharPtr term,
+  const char* db,
+  const char* field,
+  const char* term,
   Int4 txid
 );
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinksRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs,
-  CharPtr linktype,
+  const char* linktype,
   Int4 max_uids,
   Boolean count_only,
   Boolean parents_persist
 );
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkedRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid,
   Int4 num,
-  Int4Ptr uids,
+  const Int4 uids[],
   ByteStorePtr bs,
-  CharPtr linktype,
+  const char* linktype,
   Int4 max_uids,
   Boolean count_only,
   Boolean parents_persist
 );
 
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
-  CharPtr db,
+  const char* db,
   Int4 uid
 );
 
@@ -256,7 +256,7 @@ NLM_EXTERN void EntrezSetUseHistoryFlag (
 
 /* reply extraction functions - these free the enclosing Entrez2ReplyPtr */
 
-NLM_EXTERN CharPtr EntrezExtractErrorReply (
+NLM_EXTERN char* EntrezExtractErrorReply (
   Entrez2ReplyPtr e2ry
 );
 
@@ -299,8 +299,8 @@ NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
 /* special SeqIdString to UID convenience function */
 
 NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
-  CharPtr db,
-  CharPtr seq_id_string
+  const char* db,
+  const char* seq_id_string
 );
 
 /* result validation function */

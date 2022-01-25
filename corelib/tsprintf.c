@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/10/96
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   	Memory- and MT-safe "sprintf()"
@@ -38,6 +38,12 @@
 * --------------------------------------------------------------------------
 *
 * $Log: tsprintf.c,v $
+* Revision 6.12  2007/08/02 17:59:11  kans
+* do_div needed to take Int8 n argument
+*
+* Revision 6.11  2007/08/02 16:14:31  ucko
+* Support "ll"-prefixed arguments (assumed to be [U]Int8).
+*
 * Revision 6.10  2003/12/12 23:28:25  dondosha
 * Correction for Opteron, at suggestion from Nicolas Joly
 *
@@ -144,7 +150,7 @@ static int skip_atoi(const char **s)
 #define LARGE	64		/* use 'ABCDEF' instead of 'abcdef' */
 
 
-static int do_div(long *n, int base)
+static int do_div(Nlm_Int8 *n, int base)
   {
     int res = ((unsigned long) *n) % (unsigned) base;
     *n =      ((unsigned long) *n) / (unsigned) base;
@@ -194,7 +200,8 @@ static int fp_count(double fp, char type, int size, int precision, int flags)
 }
 
 
-static int number_count(long num, int base, int size, int precision, int type)
+static int number_count(Nlm_Int8 num, int base, int size, int precision,
+                        int type)
 {
   int counter = 0;
   int i       = 0;
@@ -266,13 +273,13 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
   size_t counter = 0;
 
   const Char PNTR start_fmt = fmt;
-  unsigned long num;
+  Nlm_Uint8 num;
   int base;
   int flags;         /* flags to number() */
   int field_width;   /* width of output field */
   int precision;     /* min. # of digits for integers; max
 			number of chars for from string */
-  int qualifier;     /* 'h', 'l', or 'L' for integer fields */
+  int qualifier;     /* 'h', 'l', 'L', or 'q' ("ll") for integer fields */
 
   *cut_fmt = 0;
 
@@ -333,6 +340,10 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
       if (*fmt == 'h' || *fmt == 'l' || *fmt == 'L') {
         qualifier = *fmt;
         ++fmt;
+        if (qualifier == 'l' && *fmt == 'l') {
+          qualifier = 'q';
+          ++fmt;
+        }
       }
 
       /* default base */
@@ -386,6 +397,9 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
         if (qualifier == 'l') {
           long * ip = va_arg(args, long *);
           *ip = (long)counter;
+        } else if (qualifier == 'q') {
+          Nlm_Uint8 * ip = va_arg(args, Nlm_Uint8 *);
+          *ip = (Nlm_Uint8)counter;
         } else {
           int * ip = va_arg(args, int *);
           *ip = (int)counter;
@@ -430,13 +444,13 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
       }
 
       if (qualifier == 'l')
-        num = va_arg(args, unsigned long);
-      else if (qualifier == 'h')
         if (flags & SIGNED)
-          num = va_arg(args, int);  /* sic! -- not a "short"! */
+          num = va_arg(args, long);
         else
-          num = va_arg(args, unsigned int);
-      else if (flags & SIGNED)
+          num = va_arg(args, unsigned long);
+      else if (qualifier == 'q')
+        num = va_arg(args, Nlm_Uint8);
+      else if (flags & SIGNED) /* plain or 'h' -- short promotes to int */
         num = va_arg(args, int);
       else
         num = va_arg(args, unsigned int);

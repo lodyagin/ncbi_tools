@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.39 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.40  2007/08/16 17:09:22  kans
+* moved DirExplore from sqnutils
+*
 * Revision 6.39  2006/07/13 17:10:36  bollin
 * use Uint4 instead of Uint2 for itemID values
 *
@@ -1267,6 +1270,89 @@ NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname)
 #endif
   }
   return vnp;
+}
+
+/*****************************************************************************
+*
+*   general file recursion functio
+*
+*****************************************************************************/
+
+NLM_EXTERN Nlm_Int4 Nlm_DirExplore (
+  Nlm_CharPtr directory,
+  Nlm_CharPtr filter,
+  Nlm_CharPtr suffix,
+  Nlm_Boolean recurse,
+  Nlm_DirExpProc proc,
+  Nlm_VoidPtr userdata
+)
+
+{
+  Nlm_Int4     count = 0;
+  Nlm_Char     file [FILENAME_MAX], path [PATH_MAX];
+  Nlm_CharPtr  ptr, str;
+  ValNodePtr   head, vnp;
+
+  if (proc == NULL) return 0;
+  if (Nlm_StringHasNoText (directory) || Nlm_StringHasNoText (suffix)) return 0;
+
+  /* get list of all files in source directory */
+
+  head = Nlm_DirCatalog (directory);
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 0) {
+      str = (Nlm_CharPtr) vnp->data.ptrvalue;
+      if (! Nlm_StringHasNoText (str)) {
+
+        /* check filename for indicated suffix */
+
+        ptr = Nlm_StringStr (str, suffix);
+        if (ptr != NULL) {
+
+          /* make sure detected suffix is really at end of filename */
+
+          if (Nlm_StringCmp (ptr, suffix) == 0) {
+            *ptr = '\0';
+          } else {
+            ptr = NULL;
+          }
+        }
+
+        if (Nlm_StringHasNoText (suffix) || ptr != NULL) {
+
+          Nlm_StringNCpy_0 (path, directory, sizeof (path));
+          sprintf (file, "%s%s", str, suffix);
+          Nlm_FileBuildPath (path, NULL, file);
+
+          /* check full path/file name for desired filter */
+
+          if (Nlm_StringHasNoText (filter) || Nlm_StringStr (path, filter) != NULL) {
+
+            /* process file that satisfies optional filter and suffix constraints */
+
+            proc (path, userdata);
+            count++;
+          }
+        }
+      }
+    } else if (vnp->choice == 1 && recurse) {
+
+      /* recurse into subdirectory */
+
+      Nlm_StringNCpy_0 (path, directory, sizeof (path));
+      str = (Nlm_CharPtr) vnp->data.ptrvalue;
+      Nlm_FileBuildPath (path, str, NULL);
+
+      count += Nlm_DirExplore (path, filter, suffix, recurse, proc, userdata);
+    }
+  }
+
+  /* clean up file list */
+
+  ValNodeFreeData (head);
+
+  return count;
 }
 
 /*****************************************************************************

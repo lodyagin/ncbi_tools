@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.112 2006/10/11 15:14:48 bollin Exp $
+* $Id: asn2gnb1.c,v 1.135 2007/08/23 15:40:43 ludwigf Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.112 $
+* $Revision: 1.135 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -700,78 +700,93 @@ NLM_EXTERN void FFAddOneString (
 NLM_EXTERN void FFCatenateSubString (
   StringItemPtr dest,
   StringItemPtr start_sip, Int4 start_pos,
-  StringItemPtr end_sip, Int4 end_pos
+  StringItemPtr end_sip, Int4 end_pos,
+  Uint4 line_max
 )
 {
   Int4 max_i, min_i, i;
   StringItemPtr current;
   Boolean in_url = FALSE;
   IntAsn2gbJobPtr ajp = (IntAsn2gbJobPtr)dest->iajp;
+  Uint4 char_count = 0;
 
-  if ( GetWWW(ajp) ) {
-    for ( current = start_sip, i = start_pos;
-    current != NULL; 
-    current = current->next ) {
-      if ( current == start_sip ) {
-        min_i = start_pos;
-      } else {
-        min_i = 0;
-      }
+  for ( current = start_sip, i = start_pos;
+  current != NULL; 
+  current = current->next ) {
+    if ( current == start_sip ) {
+      min_i = start_pos;
+    } else {
+      min_i = 0;
+    }
       
-      if ( current == end_sip ) {
-        max_i = end_pos;
-      } else {
-        max_i = current->pos;
-      }
+    if ( current == end_sip ) {
+      max_i = end_pos;
+    } else {
+      max_i = current->pos;
+    }
       
-      for ( i = min_i; i < max_i; ++i ) {
-        if ( current->buf[i] == '<' ) {
-          if ( !FFIsStartOfLink(current, i) ) {
-            FFAddOneString(dest, "&lt;", FALSE, FALSE, TILDE_IGNORE);
-            continue;
-          } else {
-            in_url = TRUE;
+    for ( i = min_i; i < max_i; ++i ) {
+
+      /* -----------------------------------------------------------------------
+       * HTML specific processing:
+       * ---------------------------------------------------------------------*/
+      if ( GetWWW(ajp) ) {
+        if ( ! in_url ) {
+          if ( current->buf[i] == '<' ) {
+            /* Watch out! */
+            if ( !FFIsStartOfLink(current, i) ) {
+              FFAddOneString(dest, "&lt;", FALSE, FALSE, TILDE_IGNORE);
+              ++char_count;
+              continue;
+            } else {
+              FFAddOneChar(dest, '<', FALSE);
+              in_url = TRUE;
+              continue;
+            }
           }
-        }
-        if ( current->buf[i] == '>' ) {
-          if ( !in_url ) {
+          if (char_count == line_max) {
+            break;
+          } 
+          
+          if ( current->buf[i] == '>' ) {
+            /* Obviously *not* a tag terminator */
             FFAddOneString(dest, "&gt;", FALSE, FALSE, TILDE_IGNORE);
+            ++char_count;
             continue;
-          } else {
+          }  
+
+          /* Common garden variety of character */
+          FFAddOneChar(dest, current->buf[i], FALSE);
+          ++char_count;
+        }
+
+        else /* in_url */ {
+          if ( current->buf[i] == '>' ) {
+            FFAddOneChar(dest, '>', FALSE);
             in_url = FALSE;
+            continue;
           }
-        } 
 
-        FFAddOneChar(dest, current->buf[i], FALSE);
+          /* nothing inside a link needs any cooking. And neither does it
+             count against the page width limit. */
+          FFAddOneChar(dest, current->buf[i], FALSE);
+        }
       }
 
-      if ( current == end_sip ) break;
-    }
-  } else {
-    for ( current = start_sip, i = start_pos;
-    current != NULL; 
-    current = current->next ) {
-      if ( current == start_sip ) {
-        min_i = start_pos;
-      } else {
-        min_i = 0;
-      }
-      
-      if ( current == end_sip ) {
-        max_i = end_pos;
-      } else {
-        max_i = current->pos;
-      }
-      
-      for ( i = min_i; i < max_i; ++i ) {
+      /*  ---------------------------------------------------------------------
+       *  TEXT mode processing:
+       *  --------------------------------------------------------------------*/
+      else {
         FFAddOneChar(dest, current->buf[i], FALSE);
+        if (++char_count == line_max) {
+          break;
+        }
       }
       
-      if ( current == end_sip ) break;
     }
+    if ( current == end_sip || char_count == line_max ) break;
   }
 }
-
 
 NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
   Int4 size = 0;
@@ -799,6 +814,55 @@ NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
 
 /* word wrap functions */
 
+static CharPtr url_anchor_strings [] = {
+  "</A>",
+  "<A HREF=/",
+  "<A HREF=FTP://",
+  "<A HREF=MAILTO:",
+  "<A HREF=HTTP://",
+  "<A HREF=HTTPS://",
+  NULL
+};
+
+static TextFsaPtr GetUrlAnchorFSA (void)
+
+{
+  return (TextFsaPtr) GetAppProperty ("Asn2gbUrlAnchorFSA");
+}
+
+static TextFsaPtr InitUrlAnchorFSA (void)
+
+{
+  TextFsaPtr  fsa;
+  Int2        q;
+
+  fsa = GetUrlAnchorFSA ();
+  if (fsa != NULL) return fsa;
+
+  fsa = TextFsaNew ();
+  if (fsa == NULL) return NULL;
+
+  for (q = 0; url_anchor_strings [q] != NULL; q++) {
+    TextFsaAdd (fsa, url_anchor_strings [q]);
+  }
+
+  SetAppProperty ("Asn2gbUrlAnchorFSA", (Pointer) fsa);
+
+  return fsa;
+}
+
+static void FreeUrlAnchorFSA (void)
+
+{
+  TextFsaPtr  fsa;
+
+  fsa = GetUrlAnchorFSA ();
+  if (fsa == NULL) return;
+
+  SetAppProperty ("Asn2gbUrlAnchorFSA", NULL);
+  TextFsaFree (fsa);
+}
+
 NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip) {
   StringItemPtr iter = *iterp;
   Int4 i = *ip;
@@ -812,7 +876,7 @@ NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip) {
     }
   }
   ++i;
-  if ( i == iter->pos && iter->next != NULL ) {
+  if ( iter != NULL && i == iter->pos && iter->next != NULL ) {
     iter = iter->next;
     i = 0;
   }
@@ -821,8 +885,44 @@ NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip) {
   *ip = i;
 }
 
+NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)
+
+{
+  Char        ch;
+  TextFsaPtr  fsa;
+  Int2        i;
+  ValNodePtr  matches;
+  Int2        max_url_len;
+  Int2        state = 0;
+
+  if ( iter == NULL || pos >= iter->pos ) return FALSE;
+  if ( iter->buf [pos] != '<' ) return FALSE;
+
+  fsa = GetUrlAnchorFSA ();
+  if (fsa == NULL) return FALSE;
+
+  if (! TextFsaGetStats (fsa, NULL, NULL, &max_url_len)) return FALSE;
+
+  for (i = 0; i < max_url_len; i++) {
+    ch = iter->buf [pos];
+    ch = TO_UPPER (ch);
+    state = TextFsaNext (fsa, state, ch, &matches);
+    if (matches != NULL) return TRUE;
+
+    pos++;
+    if (pos >= iter->pos) {
+      iter = iter->next;
+      pos = 0;
+      if (iter == NULL) return FALSE;
+    }
+  }
+
+  return FALSE;
+}
+
+/*
 NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)  {
-  static CharPtr start_link = "<A HREF";
+  static CharPtr start_link = "<A HREF=";
   static CharPtr end_link = "</A>";
   Int4 start_len = StringLen(start_link);
   Int4 end_len = StringLen(end_link);
@@ -856,6 +956,7 @@ NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)  {
 
   return FALSE;
 }
+*/
 
 
 NLM_EXTERN void FFSavePosition(StringItemPtr ffstring, StringItemPtr PNTR bufptr, Int4 PNTR posptr) {
@@ -886,7 +987,8 @@ NLM_EXTERN void FFTrim (
   riter = ffstring->curr;
   while ( riter != NULL ) {
     for ( i = riter->pos - 1;
-          (i >= 0) && !(riter == line_start && i <= line_pos);
+          /* (i >= 0) && !(riter == line_start && i <= line_pos); */
+          (i >= 0) && ((riter != line_start) || (i >= line_pos));
           --i ) {
       if ( !IS_WHITESP(riter->buf[i]) || (riter->buf[i] == '\n') ) {
         break;
@@ -916,7 +1018,32 @@ NLM_EXTERN void FFTrim (
   }
 }
 
+NLM_EXTERN int FFNextChar(
+  StringItemPtr start_sip,
+  Int4 start_pos) {
+  if (start_pos < start_sip->pos-1) {
+    return start_sip->buf[start_pos+1];
+  }
+  else if (start_sip->next != NULL) {
+    return (start_sip->next->buf)[0];
+  }
+  else {
+    return 0;
+  }
+}
 
+NLM_EXTERN void FFAdvanceChar(
+  StringItemPtr* start_sip,
+  Int4* start_pos )
+{
+  if (*start_pos < (*start_sip)->pos-1) {
+    ++(*start_pos);
+  }
+  else {
+    (*start_sip) = (*start_sip)->next;
+    *start_pos = 0;
+  }
+}
 
 /* A line is wrapped when the visble text in th eline exceeds the line size. */
 /* Visible text is text that is not an HTML hyper-link.                      */
@@ -939,7 +1066,7 @@ NLM_EXTERN void FFCalculateLineBreak (
        copied = 0, 
        start = *break_pos;
   Char ch;
-  Boolean found_comma = FALSE, found_dash = FALSE;
+  Boolean found_comma = FALSE, found_dash = FALSE, found_lb = FALSE;
   /* each candidate is a pair of buffer and position withingh this buffer */
   StringItemPtr candidate_sip_space = NULL,
                 candidate_sip_comma = NULL,
@@ -951,6 +1078,8 @@ NLM_EXTERN void FFCalculateLineBreak (
 
   iter = *break_sip;
   prev = iter;
+
+  i = start;
 
   /* skip the first 'init_indent' characters of the line */
   while ( iter != NULL && !done ) {
@@ -996,6 +1125,7 @@ NLM_EXTERN void FFCalculateLineBreak (
       if ( ch == '\n' ) {
         candidate_sip_space = iter;
         candidate_int_space = i;
+        found_lb = TRUE;
         done = TRUE;
         break;
       } else if ( ch == ' ' ) {
@@ -1048,6 +1178,14 @@ NLM_EXTERN void FFCalculateLineBreak (
     } else if( candidate_sip_dash != NULL ) {
       *break_sip = candidate_sip_dash;
       *break_pos = candidate_int_dash;
+    }
+    if (! found_lb) {
+      while (FFNextChar(*break_sip, *break_pos) == ' ') {
+        FFAdvanceChar(break_sip, break_pos);
+      }
+      if (FFNextChar(*break_sip, *break_pos) == '\n') {
+        FFAdvanceChar(break_sip, break_pos);
+      }
     }
   }
 }
@@ -1237,10 +1375,9 @@ NLM_EXTERN Boolean FFLineBreakSplitsHtmlLink(
   Int4 start_pos, 
   StringItemPtr break_sip, 
   Int4 break_pos,
-  char* buf_link_open ) 
+  char* buf_link_open,
+  Int4* html_open_link_counter ) 
 {
-  int open_count = 0;
-
   StringItemPtr cur_iter=0;
   int cur_pos=0;
 
@@ -1251,20 +1388,20 @@ NLM_EXTERN Boolean FFLineBreakSplitsHtmlLink(
   cur_pos = start_pos;
 
   while ((cur_iter != break_sip) || (cur_pos < break_pos)) {
-    switch(open_count) {
+    switch(*html_open_link_counter) {
     case 0:
       if (FFExtractNextOpenLink(&cur_iter, &cur_pos, break_sip, break_pos, buf_link_open ))
-        ++open_count;
+        ++(*html_open_link_counter);
       break;
     case 1:
       if (FFExtractNextCloseLink(&cur_iter, &cur_pos, break_sip, break_pos ))
-        --open_count;
+        --(*html_open_link_counter);
       break;
     default:
       break;
     }
   }
-  return (open_count);
+  return (*html_open_link_counter);
 } /*FFLineBreakSplitsHtmlLink*/
 
 NLM_EXTERN void FFLineWrap (
@@ -1285,15 +1422,22 @@ NLM_EXTERN void FFLineWrap (
   StringItemPtr iter;
   Boolean       cont = FALSE;
 
+  /* Note:
+     The value of the next two variables needs to persist between consecutive 
+     invocations of FFLineBreakSplitsHtmlLink().
+  */
+  Int4          html_open_link_counter = 0;
+  char          buf_split_link_open[ 1024 ];
+
+  Boolean       linebreak_splits_link = FALSE;
+  const char*   buf_split_link_close = "</a>";
+
+  MemSet( (void*)buf_split_link_open, 0, sizeof(buf_split_link_open) );  
   FFSavePosition(dest, &line_start, &line_pos);
 
   for ( iter = src; iter != NULL; iter = iter->next ) {
     for ( i = 0; i < iter->pos; ) {
 
-      Boolean linebreak_splits_link = FALSE;
-      char buf_split_link_open[ 1024 ];
-      const char* buf_split_link_close = "</a>";
-      MemSet( (void*)buf_split_link_open, 0, sizeof(buf_split_link_open) );
 
       break_pos = i;
       break_sip = iter;
@@ -1302,9 +1446,14 @@ NLM_EXTERN void FFLineWrap (
         &break_sip, &break_pos, init_indent, line_max - line_prefix_len + 1);
       linebreak_splits_link = 
         FFLineBreakSplitsHtmlLink(iter, i, break_sip, break_pos, 
-          buf_split_link_open);
-      FFCatenateSubString(dest, iter, i, break_sip, break_pos);
-      FFTrim(dest, line_start, line_pos, cont_indent);
+          buf_split_link_open, &html_open_link_counter );
+      FFCatenateSubString(dest, iter, i, break_sip, break_pos, line_max);
+      if (0 && eb_line_prefix) {
+        /* don't quit at the indent width but trim all the way down to the EMBL line code */
+        FFTrim(dest, line_start, line_pos, strlen(eb_line_prefix));
+      } else {
+        FFTrim(dest, line_start, line_pos, cont_indent);
+      }
       if ( linebreak_splits_link ) {
         FFAddOneString( dest, 
           (char*)buf_split_link_close, FALSE, FALSE, TILDE_IGNORE );
@@ -2174,9 +2323,11 @@ NLM_EXTERN void DoOneSection (
     AddSourceBlock (awp);
     AddOrganismBlock (awp);
 
+    /*
     if (awp->showRefStats) {
       AddRefStatsBlock (awp);
     }
+    */
 
     if (! awp->hidePubs) {
 
@@ -2196,9 +2347,11 @@ NLM_EXTERN void DoOneSection (
     AddCommentBlock (awp);
     AddPrimaryBlock (awp);
 
+    /*
     if (awp->showFeatStats) {
       AddFeatStatsBlock (awp);
     }
+    */
 
     AddFeatHeaderBlock (awp);
     if (! awp->hideSources) {
@@ -3265,11 +3418,9 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
         break;
       case SEQID_GENERAL :
         dbt = (DbtagPtr) sip->data.ptrvalue;
-        if (dbt != NULL) {
-          if (StringICmp (dbt->db, "TMSMART") != 0 && StringICmp (dbt->db, "BankIt") != 0) {
-            lfip->isGeneral = TRUE;
-            lfip->isNonLocal = TRUE;
-          }
+        if (dbt != NULL && !IsSkippableDbtag(dbt)) {
+          lfip->isGeneral = TRUE;
+          lfip->isNonLocal = TRUE;
         }
         break;
       case SEQID_LOCAL :
@@ -3391,7 +3542,8 @@ static void MakeGapFeats (
     if (vnp->choice == 2) {
       litp = (SeqLitPtr) vnp->data.ptrvalue;
       if (litp == NULL) continue;
-      if (litp->seq_data == NULL && litp->length > 0) {
+      if ((litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) &&
+           litp->length > 0) {
         if (fakebsp == NULL) {
           /* to be freed with MemFree, not BioseqFree */
           fakebsp = MemNew (sizeof (Bioseq));
@@ -3459,7 +3611,7 @@ static void LookFarFeatFetchPolicy (
 }
 
 static CharPtr bad_html_strings [] = {
-  "<script", "<object", "<applet", "<embed", "<form", "javascript:", NULL
+  "<script", "<object", "<applet", "<embed", "<form", "javascript:", "vbscript:", NULL
 };
 
 static CharPtr defHead = "\
@@ -3510,6 +3662,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   BaseBlockPtr     PNTR blockArray;
   Uint2            eID = 0;
   Uint2            entityID = 0;
+  Uint2            item_type = 0;
+  Uint4            item_id = 0;
   CharPtr          ffhead = NULL;
   CharPtr          fftail = NULL;
   Asn2gbWriteFunc  ffwrite = NULL;
@@ -3605,7 +3759,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
       bsp = BioseqFindFromSeqLoc (slp);
     }
     if (bsp == NULL) return NULL;
-
+    
     /* if location is on part of segmented set, need to map to segmented bioseq */
 
     if (slp->choice == SEQLOC_WHOLE) {
@@ -3656,8 +3810,13 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   if (bsp != NULL) {
     bssp = NULL;
     entityID = ObjMgrGetEntityIDForPointer (bsp);
+    item_type = OBJ_BIOSEQ;
+    item_id = bsp->idx.itemID;    
   } else if (bssp != NULL) {
     entityID = ObjMgrGetEntityIDForPointer (bssp);
+    item_type = OBJ_BIOSEQSET;
+    item_id = bssp->idx.itemID;
+
     if (format == FTABLE_FMT) {
       skipProts = TRUE;
       skipMrnas = TRUE;
@@ -3742,6 +3901,28 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
                                  (AsnWriteFunc) SeqLocAsnWrite);
   } else {
     ajp->ajp.slp = NULL;
+  }
+
+  /* reality check on interval sublocation */
+
+  slp = ajp->ajp.slp;
+  if (slp != NULL && slp->choice == SEQLOC_INT) {
+    sintp = (SeqIntPtr) slp->data.ptrvalue;
+    if (sintp != NULL) {
+      bsp = BioseqFind (sintp->id);
+      if (bsp != NULL) {
+        if (sintp->from < 0) {
+          sintp->from = 0;
+        } else if (sintp->from > bsp->length - 1) {
+          sintp->from = bsp->length - 1;
+        }
+        if (sintp->to < 0) {
+          sintp->to = 0;
+        } else if (sintp->to > bsp->length - 1) {
+          sintp->to = bsp->length - 1;
+        }
+      }
+    }
   }
 
   /* if location specified, normal defaults to master style */
@@ -3942,6 +4123,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.hideCddFeats = (Boolean) ((custom & HIDE_CDD_FEATS) != 0);
   aw.hideCdsProdFeats = (Boolean) ((custom & HIDE_CDS_PROD_FEATS) != 0);
 
+  ajp->hideEvidence = (Boolean) ((custom & HIDE_EVIDENCE_QUALS) != 0);
+
   aw.hideGeneRIFs = (Boolean) ((custom & PUBLICATION_MASK) == HIDE_GENE_RIFS);
   aw.onlyGeneRIFs = (Boolean) ((custom & PUBLICATION_MASK) == ONLY_GENE_RIFS);
   aw.onlyReviewPubs = (Boolean) ((custom & PUBLICATION_MASK) == ONLY_REVIEW_PUBS);
@@ -4013,6 +4196,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     TextFsaAdd (ajp->bad_html_fsa, bad_html_strings [q]);
   }
 
+  InitUrlAnchorFSA ();
+
   oldscope = SeqEntrySetScope (sep);
 
   if (stream) {
@@ -4028,7 +4213,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
       }
     }
     if (ffwrite != NULL) {
-      ffwrite (ffhead, userdata, HEAD_BLOCK);
+      ffwrite (ffhead, userdata, HEAD_BLOCK, entityID, item_type, item_id);
     }
     if (is_html) {
       DoQuickLinkFormat (aw.afp, "<div class=\"sequence\">");
@@ -4079,7 +4264,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
       }
     }
     if (ffwrite != NULL) {
-      ffwrite (fftail, userdata, TAIL_BLOCK);
+      ffwrite (fftail, userdata, TAIL_BLOCK, entityID, item_type, item_id);
     }
   }
 
@@ -4357,17 +4542,18 @@ static void PrintFTUserFld (
 
 {
   UserFieldPtr     entry;
-  CharPtr          evidence = NULL;
+  CharPtr          evidence;
   Char             gid [32];
-  CharPtr          goid = NULL;
+  CharPtr          goid;
+  CharPtr          goref;
   ValNodePtr PNTR  head;
   Int2             i;
   Int2             j;
   size_t           len;
   ObjectIdPtr      oip;
-  Int4             pmid = 0;
+  Int4             pmid;
   CharPtr          str;
-  CharPtr          textstr = NULL;
+  CharPtr          textstr;
   Char             tmp [16];
 
   if (ufp == NULL || ufp->choice != 11) return;
@@ -4384,6 +4570,7 @@ static void PrintFTUserFld (
   
     pmid = 0;
     goid = NULL;
+    goref = NULL;
     evidence = NULL;
     textstr = NULL;
 
@@ -4415,6 +4602,11 @@ static void PrintFTUserFld (
           break;
         case 4 :
           if (ufp->choice == 1) {
+            goref = (CharPtr) ufp->data.ptrvalue;
+          }
+          break;
+        case 5 :
+          if (ufp->choice == 1) {
             evidence = (CharPtr) ufp->data.ptrvalue;
           }
           break;
@@ -4423,14 +4615,15 @@ static void PrintFTUserFld (
       }
     }
     /* if (StringHasNoText (textstr)) break; */
-  
-    str = (CharPtr) MemNew (StringLen (textstr) + StringLen (goid) + StringLen (evidence) + 40);
+
+    len = StringLen (textstr) + StringLen (goid) + StringLen (goref) + StringLen (evidence) + 40;
+    str = (CharPtr) MemNew (len);
     if (str == NULL) return;
     StringCpy (str, "\t\t\t");
     StringCat (str, goQualList [i]);
     StringCat (str, "\t");
     StringCat (str, textstr);
-    if (! StringHasNoText (goid)) {
+    if (StringDoesHaveText (goid)) {
       StringCat (str, "|");
       StringCat (str, goid);
     } else {
@@ -4439,10 +4632,13 @@ static void PrintFTUserFld (
     if (pmid != 0) {
       sprintf (tmp, "|%ld", (long) pmid);
       StringCat (str, tmp);
+    } else if (StringDoesHaveText (goref)) {
+      StringCat (str, "|");
+      StringCat (str, goref);
     } else {
       StringCat (str, "|");
     }
-    if (! StringHasNoText (evidence)) {
+    if (StringDoesHaveText (evidence)) {
       StringCat (str, "|");
       StringCat (str, evidence);
     }
@@ -4565,10 +4761,8 @@ static Boolean SeqIdWriteForTable (SeqIdPtr sip, CharPtr buf, size_t buflen, Int
         break;
       case SEQID_GENERAL :
         dbt = (DbtagPtr) sip->data.ptrvalue;
-        if (dbt != NULL) {
-          if (StringICmp (dbt->db, "TMSMART") != 0 && StringICmp (dbt->db, "BankIt") != 0) {
-            general = sip;
-          }
+        if (dbt != NULL && ! IsSkippableDbtag(dbt)) {
+          general = sip;
         }
         break;
       case SEQID_PDB :
@@ -4750,6 +4944,15 @@ static void PrintBioSourceFtableEntry (
         case ORGMOD_gb_anamorph :
           sprintf (str, "\t\t\tgb_anamorph\t");
           break;
+        case ORGMOD_culture_collection :
+          sprintf (str, "\t\t\tculture_collection\t");
+          break;
+        case ORGMOD_bio_material :
+          sprintf (str, "\t\t\tbio_material\t");
+          break;
+        case SCQUAL_metagenome_source :
+          sprintf (str, "\t\t\tmetagenome_source\t");
+          break;
         case ORGMOD_old_lineage :
           sprintf (str, "\t\t\told_lineage\t");
           break;
@@ -4882,6 +5085,9 @@ static void PrintBioSourceFtableEntry (
       case SUBSRC_rev_primer_name :
         sprintf (str, "\t\t\trev_pcr_primer_name\t");
         break;
+      case SUBSRC_metagenomic :
+        sprintf (str, "\t\t\tmetagenomic\t");
+        break;
       case SUBSRC_other :
           sprintf (str, "\t\t\tnote\t");
           break;
@@ -4897,6 +5103,33 @@ static void PrintBioSourceFtableEntry (
     StringCat (str, "\n");
     ValNodeCopyStr (head, 0, str);
   }  
+}
+
+static void AddOneFtableQual (
+  ValNodePtr PNTR head,
+  CharPtr qual,
+  CharPtr val
+)
+
+{
+  size_t   len;
+  CharPtr  tmp;
+
+  if (head == NULL) return;
+  if (StringHasNoText (qual)) return;
+  if (StringHasNoText (val)) return;
+
+  len = StringLen (qual) + StringLen (val) + 10;
+  tmp = (CharPtr) MemNew (sizeof (Char) * len);
+  if (tmp == NULL) return;
+
+  StringCpy (tmp, "\t\t\t");
+  StringCat (tmp, qual);
+  StringCat (tmp, "\t");
+  StringCat (tmp, val);
+  StringCat (tmp, "\n");
+
+  ValNodeAddStr (head, 0, tmp);
 }
 
 NLM_EXTERN void PrintFtableLocAndQuals (
@@ -5049,11 +5282,14 @@ NLM_EXTERN void PrintFtableLocAndQuals (
             }
           }
         }
+        AddOneFtableQual (head, "prot_note", prot->comment);
+        /*
         StringNCpy_0 (str, prot->comment, sizeof (str));
         if (! StringHasNoText (str)) {
           sprintf (tmp, "\t\t\tprot_note\t%s\n", str);
           ValNodeCopyStr (head, 0, tmp);
         }
+        */
       }
       crp = (CdRegionPtr) sfp->data.value.ptrvalue;
       if (crp != NULL) {
@@ -5106,8 +5342,15 @@ NLM_EXTERN void PrintFtableLocAndQuals (
           case 1 :
             StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
             if (! StringHasNoText (str)) {
-              sprintf (tmp, "\t\t\tproduct\t%s\n", str);
-              ValNodeCopyStr (head, 0, tmp);
+              if (rrp->type == 255 &&
+                  (StringICmp (str, "misc_RNA") == 0 ||
+                   StringICmp (str, "ncRNA") == 0 ||
+                   StringICmp (str, "tmRNA") == 0)) {
+                /* type other now uses name for type, product gbqual for product name */
+              } else {
+                sprintf (tmp, "\t\t\tproduct\t%s\n", str);
+                ValNodeCopyStr (head, 0, tmp);
+              }
             }
             break;
           case 2 :
@@ -5222,11 +5465,14 @@ NLM_EXTERN void PrintFtableLocAndQuals (
           }
         }
       }
+      AddOneFtableQual (head, "prot_note", sfp->comment);
+      /*
       StringNCpy_0 (str, sfp->comment, sizeof (str));
       if (! StringHasNoText (str)) {
         sprintf (tmp, "\t\t\tprot_note\t%s\n", str);
         ValNodeCopyStr (head, 0, tmp);
       }
+      */
       break;
     case SEQFEAT_REGION :
       StringNCpy_0 (str, (CharPtr) sfp->data.value.ptrvalue, sizeof (str));
@@ -5316,12 +5562,15 @@ NLM_EXTERN void PrintFtableLocAndQuals (
     ValNodeCopyStr (head, 0, "\t\t\texception\n");
   }
   for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    AddOneFtableQual (head, gbq->qual, gbq->val);
+    /*
     if (! StringHasNoText (gbq->qual)) {
       if (! StringHasNoText (gbq->val)) {
         sprintf (tmp, "\t\t\t%s\t%s\n", gbq->qual, gbq->val);
         ValNodeCopyStr (head, 0, tmp);
       }
     }
+    */
   }
   VisitUserObjectsInUop (sfp->ext, (Pointer) head, PrintFTUserObj);
   for (vnp = geneorprotdb; vnp != NULL; vnp = vnp->next) {
@@ -5461,6 +5710,8 @@ NLM_EXTERN void DoImmediateFormat (
   QualValPtr       qv = NULL;
   SeqEntryPtr      sep;
   CharPtr          str = NULL;
+  Uint2            itemtype;
+  Uint2            itemID;
 
   if (afp == NULL || bbp == NULL) return;
   ajp = afp->ajp;
@@ -5485,6 +5736,14 @@ NLM_EXTERN void DoImmediateFormat (
   str = fmt (afp, bbp);
   afp->qvp = NULL;
 
+  if (bbp->itemtype == 0 && ajp->ajp.bsp != NULL) {
+    itemtype = ajp->ajp.bsp->idx.itemtype;
+    itemID = ajp->ajp.bsp->idx.itemID;
+  } else {
+    itemtype = bbp->itemtype;
+    itemID = bbp->itemID;
+  }
+
   SeqEntrySetScope (oldscope);
   BioseqUnlock (bsp);
 
@@ -5493,14 +5752,14 @@ NLM_EXTERN void DoImmediateFormat (
       fprintf (afp->fp, "%s", str);
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite (str, afp->userdata, blocktype);
+      afp->ffwrite (str, afp->userdata, blocktype, bbp->entityID, itemtype, itemID);
     }
   } else {
     if (afp->fp != NULL) {
       fprintf (afp->fp, "?\n");
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite ("?\n", afp->userdata, blocktype);
+      afp->ffwrite ("?\n", afp->userdata, blocktype, bbp->entityID, itemtype, itemID);
     }
   }
 
@@ -5514,14 +5773,29 @@ NLM_EXTERN void DoQuickLinkFormat (
 )
 
 {
+  Uint2 entityID = 0, item_type = 0;
+  Uint4 itemID = 0;
+
   if (afp == NULL || StringHasNoText (str)) return;
+  
+  if (afp->ajp != NULL) {
+    if (afp->ajp->ajp.bsp != NULL) {
+      entityID = afp->ajp->ajp.bsp->idx.entityID;
+      item_type = OBJ_BIOSEQ;
+      itemID = afp->ajp->ajp.bsp->idx.itemID;
+    } else if (afp->ajp->ajp.bssp != NULL) {
+      entityID = afp->ajp->ajp.bssp->idx.entityID;
+      item_type = OBJ_BIOSEQSET;
+      itemID = afp->ajp->ajp.bssp->idx.itemID;
+    }
+  } 
 
   if (str != NULL) {
     if (afp->fp != NULL) {
       fprintf (afp->fp, "%s", str);
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite (str, afp->userdata, (BlockType) 0);
+      afp->ffwrite (str, afp->userdata, (BlockType) 0, entityID, item_type, itemID);
     }
   }
 }
@@ -5749,6 +6023,8 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
 
   TextFsaFree (iajp->bad_html_fsa);
 
+  FreeUrlAnchorFSA ();
+
   ValNodeFree (iajp->gihead);
 
   free_buff ();
@@ -5927,7 +6203,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
         }
       }
       if (ffwrite != NULL) {
-        ffwrite (ffhead, userdata, HEAD_BLOCK);
+        ffwrite (ffhead, userdata, HEAD_BLOCK, 0, 0, 0);
       }
 
       /* send each paragraph */
@@ -5949,14 +6225,14 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
             fprintf (fp, "%s", str);
           }
           if (ffwrite != NULL) {
-            ffwrite (str, userdata, block);
+            ffwrite (str, userdata, block, 0, 0, 0);
           }
         } else {
           if (fp != NULL) {
             fprintf (fp, "?\n");
           }
           if (ffwrite != NULL) {
-            ffwrite ("?\n", userdata, block);
+            ffwrite ("?\n", userdata, block, 0, 0, 0);
           }
         }
 
@@ -5974,7 +6250,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
         }
       }
       if (ffwrite != NULL) {
-        ffwrite (fftail, userdata, TAIL_BLOCK);
+        ffwrite (fftail, userdata, TAIL_BLOCK, 0, 0, 0);
       }
     }
 #endif

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.35 $
+* $Revision: 1.40 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "1.8"
+#define ASN2FSA_APP_VER "2.2"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -695,8 +695,11 @@ static void ProcessSingleRecord (
 
   omp = ObjMgrGet ();
   ObjMgrReapOne (omp);
+  SeqMgrClearBioseqIndex ();
   ObjMgrFreeCache (0);
   FreeSeqIdGiCache ();
+
+  SeqEntrySetScope (NULL);
 }
 
 static void ProcessMultipleRecord (
@@ -876,8 +879,11 @@ static void ProcessMultipleRecord (
       SeqEntryFree (sep);
       omp = ObjMgrGet ();
       ObjMgrReapOne (omp);
+      SeqMgrClearBioseqIndex ();
       ObjMgrFreeCache (0);
       FreeSeqIdGiCache ();
+
+      SeqEntrySetScope (NULL);
     } else {
       AsnReadVal (aip, atp, NULL);
     }

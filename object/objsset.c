@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -41,6 +41,17 @@
 *
 *
 * $Log: objsset.c,v $
+* Revision 6.12  2007/02/23 20:50:24  bollin
+* When SEQENTRY_OPTION_MAX_COMPLEX option is set, make sure to disconnect
+* BioseqSet from ObjectManager before assigning it to a new SeqEntry.
+*
+* Revision 6.11  2006/10/19 17:58:11  kans
+* reverted scope clearing in BioseqFree and BioseqSetFree - caused threading hang
+*
+* Revision 6.10  2006/10/17 17:33:53  bollin
+* When deleting a Bioseq or BioseqSet that is the current scope, set the scope
+* to NULL.
+*
 * Revision 6.9  2005/04/26 21:33:00  kans
 * added SEQID_GPIPE
 *
@@ -411,7 +422,7 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetFree (BioseqSetPtr bsp)
 
     if (bsp == NULL)
         return bsp;
-
+        
 	if (bsp->idx.parentptr == NULL || bsp->idx.parenttype == OBJ_SEQSUB) {
 		if (bsp->seqentry != NULL) {
 			SeqMgrDeleteIndexesInRecord (bsp->seqentry);
@@ -622,19 +633,20 @@ static void SeqDescrPack (ValNodePtr PNTR to, ValNodePtr PNTR from)
 *****************************************************************************/
 NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 {
-	DataVal av;
-	AsnTypePtr atp, oldatp;
-    BioseqSetPtr bsp=NULL, tmp;
-    SeqEntryPtr curr, next, hold = NULL;
-    SeqAnnotPtr sap;
-	AsnOptionPtr aop;
-	Op_objssetPtr oop = NULL;
-	Op_objseqPtr osp = NULL;
-	Boolean this_one = TRUE,
-		get_bioseq = FALSE,
-		check_set = FALSE,
-		got_it = FALSE,
-		old_in_right_set = FALSE;
+  DataVal av;
+  AsnTypePtr atp, oldatp;
+  BioseqSetPtr bsp=NULL, tmp;
+  SeqEntryPtr curr, next, hold = NULL;
+  SeqAnnotPtr sap;
+  AsnOptionPtr aop;
+  Op_objssetPtr oop = NULL;
+  Op_objseqPtr osp = NULL;
+  Boolean this_one = TRUE,
+          get_bioseq = FALSE,
+          check_set = FALSE,
+          got_it = FALSE,
+          old_in_right_set = FALSE;
+
 
 	if (! loaded)
 	{
@@ -799,65 +811,74 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end BioseqSet */
 
-	if (check_set)      /* check sets */
-	{
-		if (! got_it)
-		{
-			if (get_bioseq)   /* can't use anything at this level */
-				return BioseqSetFree(bsp);
+  if (check_set)      /* check sets */
+  {
+    if (! got_it)
+    {
+      if (get_bioseq)   /* can't use anything at this level */
+      {
+        return BioseqSetFree(bsp);
+      }
 
-			if (osp->found_it)    /* found the contained Bioseq */
-			{
-				if (! this_one)
-					oop->working_on_set = 1;
-				else
-					oop->working_on_set = 2;
-				oop->in_right_set = old_in_right_set;
-				return bsp;
-			}
-		}
+      if (osp->found_it)    /* found the contained Bioseq */
+      {
+        if (! this_one)
+          oop->working_on_set = 1;
+        else
+          oop->working_on_set = 2;
+        oop->in_right_set = old_in_right_set;
+        return bsp;
+      }
+    }
 
-		if (got_it)
-		{
-			if ((this_one) && (oop->working_on_set != 2))
-			{
-				oop->working_on_set = 2;
-				bsp->seq_set = hold;
-			}
-			/* copy the annot and descr if lower level is BioseqSet */
-			else if (IS_Bioseq_set(hold))
-			{                              /* make this smarter */
-				tmp = (BioseqSetPtr)hold->data.ptrvalue;
-				hold->data.ptrvalue = NULL;
-				SeqEntryFree(hold);
-				if (tmp->annot == NULL)
-					tmp->annot = bsp->annot;
-				else
-                {
-                    sap = tmp->annot;
-                    while (sap->next != NULL)
-                        sap = sap->next;
-                    sap->next = bsp->annot;
-                }
-				bsp->annot = NULL;
-                SeqDescrPack(&tmp->descr, &bsp->descr);
-				BioseqSetFree(bsp);
-				bsp = tmp;
-			}
-			else
-				bsp->seq_set = hold;
-		}
-	}
+    if (got_it)
+    {
+      if ((this_one) && (oop->working_on_set != 2))
+      {
+        oop->working_on_set = 2;
+        bsp->seq_set = hold;
+      }
+      /* copy the annot and descr if lower level is BioseqSet */
+      else if (IS_Bioseq_set(hold))
+      {                              /* make this smarter */
+        ObjMgrConnect (OBJ_BIOSEQSET, (Pointer) hold->data.ptrvalue, 0, NULL); /* disconnect */
+        tmp = (BioseqSetPtr)hold->data.ptrvalue;
+        hold->data.ptrvalue = NULL;
+        hold = SeqEntryFree (hold);
+        if (tmp->annot == NULL) 
+        {
+          tmp->annot = bsp->annot;
+        }
+        else
+        {
+          sap = tmp->annot;
+          while (sap->next != NULL)
+          {
+            sap = sap->next;
+          }
+          sap->next = bsp->annot;
+        }
+        bsp->annot = NULL;
+        SeqDescrPack(&tmp->descr, &bsp->descr);
+        BioseqSetFree(bsp);
+        bsp = tmp;
+      }
+      else
+      {
+        bsp->seq_set = hold;
+      }
+    }
+  }
 
-	if (check_set)
-		oop->in_right_set = old_in_right_set;
+  if (check_set)
+    oop->in_right_set = old_in_right_set;
 ret:
-    AsnUnlinkType(orig);     /*  unlink local tree */
-	return bsp;
+  AsnUnlinkType(orig);     /*  unlink local tree */
+  return bsp;
 erret:
-    aip->io_failure = TRUE;
-	bsp = BioseqSetFree(bsp);
-	goto ret;
+  aip->io_failure = TRUE;
+  bsp = BioseqSetFree(bsp);
+  goto ret;
 }
 
 /*****************************************************************************

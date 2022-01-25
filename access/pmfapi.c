@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.89 $
+* $Revision: 1.91 $
 *
 * File Description: 
 *
@@ -1700,7 +1700,7 @@ static Int2 LIBCALLBACK PubSeqSeqIdForGiFunc (Pointer data)
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
   CharPtr           ptr;
-  SeqIdPtr          sid;
+  SeqIdPtr          sid = NULL;
   SeqIdPtr          sip;
   CharPtr           str;
   Int4              uid;
@@ -2122,7 +2122,7 @@ static Int4 SortPreLoadList (
   return UniqPreLoadList (num, uids, filter);
 }
 
-static Int4 GiRevHistPreLoadSeqIdGiCacheInt (
+NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCacheEx (
   Int4 num,
   Int4Ptr uids,
   Boolean filter
@@ -2153,7 +2153,7 @@ NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
 )
 
 {
-  return GiRevHistPreLoadSeqIdGiCacheInt (num, uids, TRUE);
+  return GiRevHistPreLoadSeqIdGiCacheEx (num, uids, TRUE);
 }
 
 static Int4 SortPreLoadAccns (
@@ -2796,7 +2796,7 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
           if (gi < 1) continue;
           gis [i] = gi;
         }
-        total += GiRevHistPreLoadSeqIdGiCacheInt (num, gis, FALSE);
+        total += GiRevHistPreLoadSeqIdGiCacheEx (num, gis, FALSE);
         MemFree (gis);
       }
     }

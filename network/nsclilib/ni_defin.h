@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *
@@ -48,6 +48,9 @@
 *
 * RCS Modification History:
 * $Log: ni_defin.h,v $
+* Revision 6.4  2006/12/22 17:12:28  kans
+* ifndef protection for NI_Handle, NI_HandPtr, NI_Request and NI_ReqPtr, already defined in ni_types.h
+*
 * Revision 6.3  2003/05/05 12:24:26  rsmith
 * range of socket errors is from WSABASEERR to WSABASEERR + 2000, not + sys_nerr. Allows cross compilation by Codewarrior.
 *
@@ -96,10 +99,19 @@
 #define STDPIPE         STDERR + 2
 #endif
 
+/* the following are already defined in ni_types.h */
+#ifndef NI_Handle
 #define NI_Handle       MHandle                 /* for API use */
+#endif
+#ifndef NI_HandPtr
 #define NI_HandPtr      MHandPtr                /* for API use */
+#endif
+#ifndef NI_Request
 #define NI_Request      Request                 /* for API use */
+#endif
+#ifndef NI_ReqPtr
 #define NI_ReqPtr       ReqPtr                  /* for API use */
+#endif
 
 #define ERRTEXT_BUFSIZ  512                     /* size of supplied error text buffer */
 #define HOSTNAME_SIZ    64

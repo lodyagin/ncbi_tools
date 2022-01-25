@@ -52,6 +52,7 @@ NLM_EXTERN Boolean LIBCALL ID2SSeqAnnotInfoAsnWrite PROTO (( ID2SSeqAnnotInfoPtr
 typedef struct struct_ID2S_Split_Info {
    struct struct_ID2S_Bioseqs_Info PNTR   bioseqs_info;
    struct struct_ID2S_Chunk_Info PNTR   chunks;
+   ValNodePtr   skeleton;
 } ID2SSplitInfo, PNTR ID2SSplitInfoPtr;
 
 
@@ -156,6 +157,7 @@ typedef ValNode ID2SChunkContent;
 #define ID2SChunkContent_seq_data 5
 #define ID2SChunkContent_seq_annot_place 6
 #define ID2SChunkContent_bioseq_place 7
+#define ID2SChunkContent_feat_ids 8
 
 
 NLM_EXTERN ID2SChunkContentPtr LIBCALL ID2SChunkContentFree PROTO ((ID2SChunkContentPtr ));
@@ -261,6 +263,26 @@ NLM_EXTERN ID2SBioseqPlaceInfoPtr LIBCALL ID2SBioseqPlaceInfoFree PROTO ((ID2SBi
 NLM_EXTERN ID2SBioseqPlaceInfoPtr LIBCALL ID2SBioseqPlaceInfoNew PROTO (( void ));
 NLM_EXTERN ID2SBioseqPlaceInfoPtr LIBCALL ID2SBioseqPlaceInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ID2SBioseqPlaceInfoAsnWrite PROTO (( ID2SBioseqPlaceInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2SSeqFeatIdsInfo
+*
+**************************************************/
+typedef struct struct_ID2S_Seq_feat_Ids_Info {
+   struct struct_ID2S_Seq_feat_Ids_Info PNTR next;
+   struct struct_ID2S_Feat_type_Info PNTR   feat_types;
+   struct struct_ID2S_Feat_type_Info PNTR   xref_types;
+   ValNodePtr   local_ids;
+} ID2SSeqFeatIdsInfo, PNTR ID2SSeqFeatIdsInfoPtr;
+
+
+NLM_EXTERN ID2SSeqFeatIdsInfoPtr LIBCALL ID2SSeqFeatIdsInfoFree PROTO ((ID2SSeqFeatIdsInfoPtr ));
+NLM_EXTERN ID2SSeqFeatIdsInfoPtr LIBCALL ID2SSeqFeatIdsInfoNew PROTO (( void ));
+NLM_EXTERN ID2SSeqFeatIdsInfoPtr LIBCALL ID2SSeqFeatIdsInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2SSeqFeatIdsInfoAsnWrite PROTO (( ID2SSeqFeatIdsInfoPtr , AsnIoPtr, AsnTypePtr));
 
 
 

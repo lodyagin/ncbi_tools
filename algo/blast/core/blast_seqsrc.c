@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.31 2006/05/31 18:59:55 camacho Exp $
+/*  $Id: blast_seqsrc.c,v 1.34 2007/05/15 15:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seqsrc.c,v 1.31 2006/05/31 18:59:55 camacho Exp $";
+    "$Id: blast_seqsrc.c,v 1.34 2007/05/15 15:55:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 #endif
 
@@ -55,10 +55,12 @@ struct BlastSeqSrc {
 
    /* Functions to get information about database as a whole */
     GetInt4FnPtr      GetNumSeqs;     /**< Get number of sequences in set */
+    GetInt4FnPtr      GetNumSeqsStats; /**< Number of sequences for statistical purposes. */
     GetInt4FnPtr      GetMaxSeqLen;   /**< Get length of longest seq in set */
     GetInt4FnPtr      GetAvgSeqLen;   /**< Get average length of sequences in 
                                          the set */
     GetInt8FnPtr      GetTotLen;      /**< Get tot length of all seqs in set */
+    GetInt8FnPtr      GetTotLenStats; /**< Total length of all seqs for statistical purposes. */
     GetStrFnPtr       GetName;        /**< Get the name of the database */
     GetBoolFnPtr      GetIsProt;      /**< Find if database is a protein or 
                                          nucleotide */
@@ -71,6 +73,10 @@ struct BlastSeqSrc {
 
    /* Functions to iterate over sequences in the database */
     AdvanceIteratorFnPtr IterNext;    /**< Gets next oid from the iterator */
+
+    ResetChunkIteratorFnPtr ResetChunkIterator; /**< Reset the implementation's
+                                                  chunk "bookmark"
+                                                  */
    
     void*             DataStructure;  /**< ADT holding the sequence data */
 
@@ -105,6 +111,7 @@ BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info)
 BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* seq_src)
 {
     BlastSeqSrcDestructor destructor_fnptr = NULL;
+    BlastSeqSrc* retval;
 
     if (!seq_src) {
         return (BlastSeqSrc*) NULL;
@@ -121,7 +128,10 @@ BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* seq_src)
         return (BlastSeqSrc*) NULL;
     }
 
-    return (BlastSeqSrc*) (*destructor_fnptr)(seq_src);
+    retval = (BlastSeqSrc*) (*destructor_fnptr)(seq_src);
+    ASSERT(retval == NULL);
+    sfree(seq_src);
+    return retval;
 }
 
 BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* seq_src)
@@ -163,6 +173,14 @@ BlastSeqSrcGetNumSeqs(const BlastSeqSrc* seq_src)
 }
 
 Int4
+BlastSeqSrcGetNumSeqsStats(const BlastSeqSrc* seq_src)
+{
+    ASSERT(seq_src);
+    ASSERT(seq_src->GetNumSeqsStats);
+    return (*seq_src->GetNumSeqsStats)(seq_src->DataStructure, NULL);
+}
+
+Int4
 BlastSeqSrcGetMaxSeqLen(const BlastSeqSrc* seq_src)
 {
     ASSERT(seq_src);
@@ -184,6 +202,14 @@ BlastSeqSrcGetTotLen(const BlastSeqSrc* seq_src)
     ASSERT(seq_src);
     ASSERT(seq_src->GetTotLen);
     return (*seq_src->GetTotLen)(seq_src->DataStructure, NULL);
+}
+
+Int8
+BlastSeqSrcGetTotLenStats(const BlastSeqSrc* seq_src)
+{
+    ASSERT(seq_src);
+    ASSERT(seq_src->GetTotLenStats);
+    return (*seq_src->GetTotLenStats)(seq_src->DataStructure, NULL);
 }
 
 const char*
@@ -369,6 +395,14 @@ Int4 BlastSeqSrcIteratorNext(const BlastSeqSrc* seq_src,
     return (*seq_src->IterNext)(seq_src->DataStructure, itr);
 }
 
+void
+BlastSeqSrcResetChunkIterator(BlastSeqSrc* seq_src)
+{
+    ASSERT(seq_src);
+    ASSERT(seq_src->ResetChunkIterator);
+    (*seq_src->ResetChunkIterator)(seq_src->DataStructure);
+}
+
 /*****************************************************************************/
 
 /* The following macros implement the "member functions" of the BlastSeqSrc
@@ -406,9 +440,11 @@ DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(void*, DataStructure)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(char*, InitErrorStr)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs)
+DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqsStats)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetAvgSeqLen)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLen)
+DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLenStats)
 
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetStrFnPtr, GetName)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt)
@@ -421,3 +457,5 @@ DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(AdvanceIteratorFnPtr, IterNext)
 #ifdef KAPPA_PRINT_DIAGNOSTICS
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetGisFnPtr, GetGis)
 #endif /* KAPPA_PRINT_DIAGNOSTICS */
+DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(ResetChunkIteratorFnPtr, 
+                                      ResetChunkIterator)

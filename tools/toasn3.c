@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.92 2006/08/22 16:13:51 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.95 2007/05/07 13:30:54 kans Exp $";
 
 /*****************************************************************************
 *
@@ -737,171 +737,6 @@ Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
 	}
 	SeqEntryExplore(sep, NULL, ChangeCitSub);
 	return 0;		
-}
-/*****************************************************************************
-*
-*   StripAffil, StripAffilFromPep, and StripAffilFromPub
-*   	Removes phone and e-mail address from Affil in Pubs.
-*****************************************************************************/
-
-static void StripAffilFromPub (ValNodePtr vnp)
-
-{
-  AffilPtr     afp;
-  AuthListPtr  alp;
-  CitArtPtr    cap;
-  CitGenPtr    cgp;
-  CitPatPtr    cpp;
-  CitSubPtr    csp;
-  CharPtr      tmp;
-
-  if (vnp != NULL) {
-    afp = NULL;
-    alp = NULL;
-    switch (vnp->choice) {
-      case PUB_Gen :
-        cgp = (CitGenPtr) vnp->data.ptrvalue;
-        if (cgp != NULL) {
-          alp = cgp->authors;
-        }
-        break;
-      case PUB_Article :
-        cap = (CitArtPtr) vnp->data.ptrvalue;
-        if (cap != NULL) {
-          alp = cap->authors;
-        }
-        break;
-      case PUB_Sub :
-        csp = (CitSubPtr) vnp->data.ptrvalue;
-        if (csp != NULL) {
-          alp = csp->authors;
-        }
-        break;
-      case PUB_Patent :
-        cpp = (CitPatPtr) vnp->data.ptrvalue;
-        if (cpp != NULL) {
-          alp = cpp->authors;
-        }
-        break;
-      default :
-        break;
-    }
-    if (alp != NULL) {
-      afp = alp->affil;
-      if (afp != NULL && afp->choice == 2) {
-        afp->phone = MemFree (afp->phone);
-        if (afp->postal_code != NULL) {
-          tmp = MemNew (StringLen (afp->sub) + StringLen (afp->postal_code) + 4);
-          if (tmp != NULL) {
-            if (afp->sub != NULL) {
-              StringCpy (tmp, afp->sub);
-              StringCat (tmp, " ");
-            }
-            StringCat (tmp, afp->postal_code);
-            afp->sub = MemFree (afp->sub);
-            afp->sub = tmp;
-          }
-          afp->postal_code = MemFree (afp->postal_code);
-        }
-      }
-    }
-  }
-}
-
-static void StripAffilFromPep (ValNodePtr vnp)
-
-{
-  while (vnp != NULL) {
-    StripAffilFromPub (vnp);
-    vnp = vnp->next;
-  }
-}
-
-static void StripAffil (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-
-{
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  PubdescPtr    pdp;
-  ValNodePtr    pep;
-  ValNodePtr    ppr;
-  ValNodePtr    psp;
-  SeqAnnotPtr   sap;
-  ValNodePtr    sdp;
-  SeqFeatPtr    sfp;
-
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-    sdp = bsp->descr;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-    sdp = bssp->descr;
-  } else {
-    return;
-  }
-  while (sdp != NULL) {
-    if (sdp->choice == Seq_descr_pub) {
-      pdp = sdp->data.ptrvalue;
-      if (pdp != NULL) {
-        pep = pdp->pub;
-        StripAffilFromPep (pep);
-      }
-    }
-    sdp = sdp->next;
-  }
-  while (sap != NULL) {
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
-        if (sfp->data.choice == SEQFEAT_PUB) {
-          pdp = sfp->data.value.ptrvalue;
-          if (pdp != NULL) {
-            pep = pdp->pub;
-            StripAffilFromPep (pep);
-          }
-        }
-        psp = sfp->cit;
-        if (psp != NULL) {
-          ppr = psp->data.ptrvalue;
-          while (ppr != NULL) {
-            if (ppr->choice == PUB_Equiv) {
-              pep = ppr->data.ptrvalue;
-              StripAffilFromPep (pep);
-            } else {
-              StripAffilFromPub (ppr);
-            }
-            ppr = ppr->next;
-          }
-        }
-        sfp = sfp->next;
-      }
-    }
-    sap = sap->next;
-  }
-}
-
-/*****************************************************************************
-*
-*   SeqEntryPubsAsn3(sep)
-*   	Converts pubs back to asn1.spec 3.0 within SeqEntryPtr
-*		moves tax lineage from BioSource to GBblock
-*		removes gcode from BioSource
-*****************************************************************************/
-
-Int4 SeqEntryPubsAsn3 (SeqEntryPtr sep)
-{
-	CharPtr lineage = NULL;
-	
-	OldPubs(sep);
-	SeqEntryExplore (sep, NULL, StripAffil);
-	SeqEntryExplore(sep, (Pointer) (&lineage), FindNewLineage);
-	if (lineage) {
-		SeqEntryExplore(sep, (Pointer) (&lineage), OldLineage);
-	}
-	return 0;
 }
 
 /*****************************************************************************
@@ -4208,6 +4043,8 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 	BioseqUnlock (protseq); /* unlock but do not cache out, easier than unlocking everywhere in code below */
 	if (((protseq->length + 1) == aas) && (remainder == 0)) /* correct length with termination */
 		return;
+	
+	if (protseq->seq_data_type == Seq_code_gap) return;
 
 	cbp = crp->code_break;
 	while (cbp != NULL)
@@ -4315,12 +4152,12 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 	BSSeek(newprot, (protlen-1), SEEK_SET);
 	BSDelete(newprot, 1);   /* remove termination from protein */
 	BSSeek(newprot, 0, SEEK_SET);  /* check for internal termination */
-	BSSeek(protseq->seq_data, 0, SEEK_SET);
+	BSSeek((ByteStorePtr) protseq->seq_data, 0, SEEK_SET);
 	protlen = BSLen(newprot);
 	for (i = 0; i < protlen; i++)
 	{
 		residue = BSGetByte(newprot);
-		residue2 = BSGetByte(protseq->seq_data);
+		residue2 = BSGetByte((ByteStorePtr) protseq->seq_data);
 		if (residue != residue2)
 		{
 			goto erret;
@@ -4328,8 +4165,8 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 
 	}
 
-	BSFree(protseq->seq_data);
-	protseq->seq_data = newprot;
+	BSFree((ByteStorePtr) protseq->seq_data);
+	protseq->seq_data = (SeqDataPtr) newprot;
 	protseq->length = protlen;
 	/****** to avoid killing asn2gnbk ***
 	protseq->seq_data_type = Seq_code_ncbieaa;
@@ -5438,7 +5275,8 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
     if (ssp->subtype != SUBSRC_germline &&
         ssp->subtype != SUBSRC_rearranged &&
         ssp->subtype != SUBSRC_transgenic &&
-        ssp->subtype != SUBSRC_environmental_sample) {
+        ssp->subtype != SUBSRC_environmental_sample &&
+        ssp->subtype != SUBSRC_metagenomic) {
       CleanVisString (&(ssp->name));
     }
     CleanVisString (&(ssp->attrib));
@@ -5446,7 +5284,8 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
         ssp->subtype != SUBSRC_germline &&
         ssp->subtype != SUBSRC_rearranged &&
         ssp->subtype != SUBSRC_transgenic &&
-        ssp->subtype != SUBSRC_environmental_sample) {
+        ssp->subtype != SUBSRC_environmental_sample &&
+        ssp->subtype != SUBSRC_metagenomic) {
       *prev = ssp->next;
       ssp->next = NULL;
       SubSourceFree (ssp);

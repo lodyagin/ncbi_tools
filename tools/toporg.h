@@ -1,7 +1,7 @@
 #ifndef _TOPORG_
 #define _TOPORG_
 
-/*  $Id: toporg.h,v 6.4 2005/12/30 19:37:17 kans Exp $
+/*  $Id: toporg.h,v 6.6 2007/01/05 17:45:21 bollin Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -66,11 +66,8 @@ void StripProtXref(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void CheckMaps(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void StripMaps(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void MapsToGenref(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
-void FindNewLineage(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void FindOldLineage(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void NewLineage(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
-void OldLineage(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
-void OldPubs(SeqEntryPtr sep);
 void NewPubs(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void MoveSetPubs(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 void DeletePubs(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
@@ -88,6 +85,7 @@ void StripBSfromParts(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 Boolean CmpOrgById(BioSourcePtr b1, BioSourcePtr b2);
 extern void NormalizeSegSeqMolInfo(SeqEntryPtr sep);
 extern void MoveFeatsFromPartsSet (SeqEntryPtr sep);
+extern Boolean IsPubContentBad (PubdescPtr pdp);
 
 
 #ifdef __cplusplus

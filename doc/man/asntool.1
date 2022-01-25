@@ -1,4 +1,4 @@
-.TH ASNTOOL 1 2001-12-28 NCBI "NCBI Tools User's Manual"
+.TH ASNTOOL 1 2005-05-16 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asntool \- process ASN.1 module specifications
 .SH SYNOPSIS
@@ -15,6 +15,7 @@ asntool \- process ASN.1 module specifications
 [\|\fB\-P\fP\ \fIstr\fP\|]
 [\|\fB\-S\fP\ \fIfilename\fP\|]
 [\|\fB\-T\fP\ \fIfilename\fP\|]
+[\|\fB\-V\fP\|]
 [\|\fB\-X\fP\ \fIfilename\fP\|]
 [\|\fB\-Z\fP\|]
 [\|\fB\-b\fP\ \fIN\fP\|]
@@ -81,6 +82,10 @@ Send debugging output to \fIfilename\fP rather than stderr
 .TP
 \fB\-T\fP\ \fIfilename\fP
 Dump ASN.1 tree to \fIfilename\fP
+.TP
+\fB\-V\fP
+Force CHOICE objects to use custom structures rather than ValNodePtrs,
+for compatibility with some old hand-coded object loaders.
 .TP
 \fB\-X\fP\ \fIfilename\fP
 Write XML DTD to \fIfilename\fP.  If \fIfilename\fP is "m", print each

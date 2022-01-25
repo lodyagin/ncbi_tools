@@ -1,7 +1,4 @@
-#ifndef ALGO_BLAST_CORE___BLAST_PSI__H
-#define ALGO_BLAST_CORE___BLAST_PSI__H
-
-/* $Id: blast_psi.h,v 1.16 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_psi.h,v 1.18 2007/04/03 15:25:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +31,13 @@
  * High level definitions and declarations for the PSSM engine of PSI-BLAST.
  */
 
+#ifndef ALGO_BLAST_CORE___BLAST_PSI__H
+#define ALGO_BLAST_CORE___BLAST_PSI__H
+
 #include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 #include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_stat.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -101,6 +103,7 @@ typedef struct PSIMatrix {
  * @param alphabet_size number of rows allocated for the PSSM [in]
  * @return pointer to allocated PSIMatrix structure or NULL if out of memory
  */
+NCBI_XBLAST_EXPORT
 PSIMatrix*
 PSIMatrixNew(Uint4 query_length, Uint4 alphabet_size);
 
@@ -108,6 +111,7 @@ PSIMatrixNew(Uint4 query_length, Uint4 alphabet_size);
  * @param matrix structure to deallocate [in]
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 PSIMatrix*
 PSIMatrixFree(PSIMatrix* matrix);
 
@@ -151,6 +155,7 @@ typedef struct PSIDiagnosticsResponse {
  * @return newly allocated structure or NULL in case of memory allocation
  * failure 
  */
+NCBI_XBLAST_EXPORT
 PSIDiagnosticsRequest* 
 PSIDiagnosticsRequestNew(void);
 
@@ -158,6 +163,7 @@ PSIDiagnosticsRequestNew(void);
  * @param diags_request structure to deallocate [in]
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 PSIDiagnosticsRequest* 
 PSIDiagnosticsRequestFree(PSIDiagnosticsRequest* diags_request);
 
@@ -172,6 +178,7 @@ PSIDiagnosticsRequestFree(PSIDiagnosticsRequest* diags_request);
  * @return pointer to allocated PSIDiagnosticsResponse or NULL if dimensions or
  * request are NULL
  */
+NCBI_XBLAST_EXPORT
 PSIDiagnosticsResponse*
 PSIDiagnosticsResponseNew(Uint4 query_length, Uint4 alphabet_size, 
                           const PSIDiagnosticsRequest* request);
@@ -180,6 +187,7 @@ PSIDiagnosticsResponseNew(Uint4 query_length, Uint4 alphabet_size,
  * @param diags structure to deallocate [in]
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 PSIDiagnosticsResponse*
 PSIDiagnosticsResponseFree(PSIDiagnosticsResponse* diags);
 
@@ -193,6 +201,7 @@ PSIDiagnosticsResponseFree(PSIDiagnosticsResponse* diags);
  * in the sbp->kbp_gap_psi[0]) 
  * @return PSI_SUCCESS on success, otherwise one of the PSIERR_* constants
  */
+NCBI_XBLAST_EXPORT
 int
 PSICreatePssm(const PSIMsa* msap,
               const PSIBlastOptions* options,
@@ -212,6 +221,7 @@ PSICreatePssm(const PSIMsa* msap,
  * requests [in|out]
  * @return PSI_SUCCESS on success, otherwise one of the PSIERR_* constants
  */
+NCBI_XBLAST_EXPORT
 int
 PSICreatePssmWithDiagnostics(const PSIMsa* msap,
                              const PSIBlastOptions* options,
@@ -237,6 +247,7 @@ PSICreatePssmWithDiagnostics(const PSIMsa* msap,
  * @return PSI_SUCCESS on success, otherwise one of the PSIERR_* constants
  * @todo FIXME change scalePosMatrix (blast_kappa.c) to use this function
  */
+NCBI_XBLAST_EXPORT
 int
 PSICreatePssmFromFrequencyRatios(const Uint1* query,
                                  Uint4 query_length,

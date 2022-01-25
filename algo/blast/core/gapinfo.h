@@ -1,4 +1,4 @@
-/* $Id: gapinfo.h,v 1.23 2006/02/16 15:00:27 madden Exp $
+/* $Id: gapinfo.h,v 1.24 2006/11/21 16:47:42 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,10 +31,10 @@
  * Definitions of structures used for saving traceback information.
  */
 
-#ifndef __GAPINFO__
-#define __GAPINFO__
+#ifndef ALGO_BLAST_CORE__GAPINFO__H
+#define ALGO_BLAST_CORE__GAPINFO__H
 
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/ncbi_std.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -168,4 +168,4 @@ GapStateFree(GapStateArrayStruct* state_struct);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__GAPINFO__ */
+#endif /* !ALGO_BLAST_CORE__GAPINFO__H */

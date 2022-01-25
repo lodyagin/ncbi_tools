@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,12 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.dwn,v $
+* Revision 6.9  2007/04/06 21:10:32  kans
+* also check for 64-bit processor conditional symbols
+*
+* Revision 6.8  2007/04/02 16:06:12  kans
+* use __ppc__ and __i386__ to set proper PROC_ platform flags
+*
 * Revision 6.7  2005/11/16 16:22:32  kans
 * support for PowerPC and Intel chips in PROC_ and _ENDIAN flags
 *
@@ -87,10 +93,10 @@
 #define OS_UNIX_DARWIN
 
 /* Mac may be PowerPC or Intel chip */
-#ifdef PER_ARCH_CFLAGS_ppc
+#if defined(__ppc__) || defined(__ppc64__)
 #define PROC_PPC
 #endif
-#ifdef PER_ARCH_CFLAGS_i386
+#if defined(__i386__) || defined(__x86_64__)
 #define PROC_I80X86
 #define PROC_I80_386
 #endif

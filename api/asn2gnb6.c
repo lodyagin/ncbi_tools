@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.88 $
+* $Revision: 1.120 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -147,6 +147,8 @@ static SourceType source_desc_note_order [] = {
   SCQUAL_orgmod_note,
   SCQUAL_subsource_note,
 
+  SCQUAL_metagenomic,
+
   SCQUAL_type,
   SCQUAL_sub_type,
   SCQUAL_serogroup,
@@ -167,6 +169,11 @@ static SourceType source_desc_note_order [] = {
   SCQUAL_anamorph,
   SCQUAL_teleomorph,
   SCQUAL_breed,
+
+  SCQUAL_culture_collection,
+  SCQUAL_bio_material,
+  SCQUAL_metagenome_source,
+  SCQUAL_metagenome_note,
 
   SCQUAL_genotype,
   SCQUAL_plastid_name,
@@ -190,6 +197,8 @@ static SourceType source_desc_note_order [] = {
 static SourceType source_feat_note_order [] = {
   SCQUAL_unstructured,
 
+  SCQUAL_metagenomic,
+
   SCQUAL_type,
   SCQUAL_sub_type,
   SCQUAL_serogroup,
@@ -210,6 +219,11 @@ static SourceType source_feat_note_order [] = {
   SCQUAL_anamorph,
   SCQUAL_teleomorph,
   SCQUAL_breed,
+
+  SCQUAL_culture_collection,
+  SCQUAL_bio_material,
+  SCQUAL_metagenome_source,
+  SCQUAL_metagenome_note,
 
   SCQUAL_genotype,
   SCQUAL_plastid_name,
@@ -235,104 +249,109 @@ static SourceType source_feat_note_order [] = {
 };
 
 NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
-  { "",                     Qual_class_ignore    },
-  { "acronym",              Qual_class_orgmod    },
-  { "anamorph",             Qual_class_orgmod    },
-  { "authority",            Qual_class_orgmod    },
-  { "biotype",              Qual_class_orgmod    },
-  { "biovar",               Qual_class_orgmod    },
-  { "breed",                Qual_class_orgmod    },
-  { "cell_line",            Qual_class_subsource },
-  { "cell_type",            Qual_class_subsource },
-  { "chemovar",             Qual_class_orgmod    },
-  { "chromosome",           Qual_class_subsource },
-  { "citation",             Qual_class_pubset    },
-  { "clone",                Qual_class_subsource },
-  { "clone_lib",            Qual_class_subsource },
-  { "collected_by",         Qual_class_subsource },
-  { "collection_date",      Qual_class_subsource },
-  { "common",               Qual_class_orgmod    },
-  { "common",               Qual_class_string    },
-  { "country",              Qual_class_subsource },
-  { "cultivar",             Qual_class_orgmod    },
-  { "db_xref",              Qual_class_db_xref   },
-  { "db_xref",              Qual_class_db_xref   },
-  { "dev_stage",            Qual_class_subsource },
-  { "dosage",               Qual_class_orgmod    },
-  { "ecotype",              Qual_class_orgmod    },
-  { "endogenous_virus",     Qual_class_subsource },
-  { "environmental_sample", Qual_class_subsource },
-  { "extrachromosomal",     Qual_class_boolean   },
-  { "focus",                Qual_class_boolean   },
-  { "forma",                Qual_class_orgmod    },
-  { "forma_specialis",      Qual_class_orgmod    },
-  { "frequency",            Qual_class_subsource },
-  { "fwd_primer_name",      Qual_class_subsource },
-  { "fwd_primer_seq",       Qual_class_subsource },
-  { "gb_acronym",           Qual_class_orgmod    },
-  { "gb_anamorph",          Qual_class_orgmod    },
-  { "gb_synonym",           Qual_class_orgmod    },
-  { "genotype",             Qual_class_subsource },
-  { "germline",             Qual_class_subsource },
-  { "group",                Qual_class_orgmod    },
-  { "haplotype",            Qual_class_subsource },
-  { "identified_by",        Qual_class_subsource },
-  { "insertion_seq",        Qual_class_subsource },
-  { "isolate",              Qual_class_orgmod    },
-  { "isolation_source",     Qual_class_subsource },
-  { "lab_host",             Qual_class_subsource },
-  { "label",                Qual_class_label     },
-  { "lat_lon",              Qual_class_subsource },
-  { "macronuclear",         Qual_class_boolean   },
-  { "map",                  Qual_class_subsource },
-  { "mol_type",             Qual_class_string    },
-  { "note",                 Qual_class_note      },
-  { "old_lineage",          Qual_class_orgmod    },
-  { "old_name",             Qual_class_orgmod    },
-  { "organism",             Qual_class_string    },
-  { "organelle",            Qual_class_organelle },
-  { "orgmod_note",          Qual_class_orgmod    },
-  { "pathovar",             Qual_class_orgmod    },
-  { "PCR_primers",          Qual_class_pcr       },
-  { "PCR_primers",          Qual_class_pcr       },
-  { "plasmid",              Qual_class_subsource },
-  { "plastid",              Qual_class_subsource },
-  { "pop_variant",          Qual_class_subsource },
-  { "rearranged",           Qual_class_subsource },
-  { "rev_primer_name",      Qual_class_subsource },
-  { "rev_primer_seq",       Qual_class_subsource },
-  { "segment",              Qual_class_subsource },
-  { "seqfeat_note",         Qual_class_string    },
-  { "sequenced_mol",        Qual_class_quote     },
-  { "serogroup",            Qual_class_orgmod    },
-  { "serotype",             Qual_class_orgmod    },
-  { "serovar",              Qual_class_orgmod    },
-  { "sex",                  Qual_class_subsource },
-  { "specific_host",        Qual_class_orgmod    },
-  { "specimen_voucher",     Qual_class_voucher   },
-  { "strain",               Qual_class_orgmod    },
-  { "sub_clone",            Qual_class_subsource },
-  { "subgroup",             Qual_class_orgmod    },
-  { "sub_species",          Qual_class_orgmod    },
-  { "sub_strain",           Qual_class_orgmod    },
-  { "subtype",              Qual_class_orgmod    },
-  { "subsource_note",       Qual_class_subsource },
-  { "synonym",              Qual_class_orgmod    },
-  { "teleomorph",           Qual_class_orgmod    },
-  { "tissue_lib",           Qual_class_subsource },
-  { "tissue_type",          Qual_class_subsource },
-  { "transgenic",           Qual_class_subsource },
-  { "transposon",           Qual_class_subsource },
-  { "type",                 Qual_class_orgmod    },
-  { "unstructured",         Qual_class_valnode   },
-  { "usedin",               Qual_class_quote     },
-  { "variety",              Qual_class_orgmod    },
-  { "?",                    Qual_class_orgmod    },
-  { "?",                    Qual_class_orgmod    },
-  { "?",                    Qual_class_subsource },
+  { "",                         Qual_class_ignore     },
+  { "acronym",                  Qual_class_orgmod     },
+  { "anamorph",                 Qual_class_orgmod     },
+  { "authority",                Qual_class_orgmod     },
+  { "biotype",                  Qual_class_orgmod     },
+  { "biovar",                   Qual_class_orgmod     },
+  { "bio_material",             Qual_class_voucher    },
+  { "breed",                    Qual_class_orgmod     },
+  { "cell_line",                Qual_class_subsource  },
+  { "cell_type",                Qual_class_subsource  },
+  { "chemovar",                 Qual_class_orgmod     },
+  { "chromosome",               Qual_class_subsource  },
+  { "citation",                 Qual_class_pubset     },
+  { "clone",                    Qual_class_subsource  },
+  { "clone_lib",                Qual_class_subsource  },
+  { "collected_by",             Qual_class_subsource  },
+  { "collection_date",          Qual_class_subsource  },
+  { "common",                   Qual_class_orgmod     },
+  { "common",                   Qual_class_string     },
+  { "country",                  Qual_class_subsource  },
+  { "cultivar",                 Qual_class_orgmod     },
+  { "culture_collection",       Qual_class_voucher    },
+  { "db_xref",                  Qual_class_db_xref    },
+  { "db_xref",                  Qual_class_db_xref    },
+  { "dev_stage",                Qual_class_subsource  },
+  { "dosage",                   Qual_class_orgmod     },
+  { "ecotype",                  Qual_class_orgmod     },
+  { "endogenous_virus",         Qual_class_subsource  },
+  { "environmental_sample",     Qual_class_subsource  },
+  { "extrachromosomal",         Qual_class_boolean    },
+  { "focus",                    Qual_class_boolean    },
+  { "forma",                    Qual_class_orgmod     },
+  { "forma_specialis",          Qual_class_orgmod     },
+  { "frequency",                Qual_class_subsource  },
+  { "fwd_primer_name",          Qual_class_subsource  },
+  { "fwd_primer_seq",           Qual_class_subsource  },
+  { "gb_acronym",               Qual_class_orgmod     },
+  { "gb_anamorph",              Qual_class_orgmod     },
+  { "gb_synonym",               Qual_class_orgmod     },
+  { "genotype",                 Qual_class_subsource  },
+  { "germline",                 Qual_class_subsource  },
+  { "group",                    Qual_class_orgmod     },
+  { "haplotype",                Qual_class_subsource  },
+  { "identified_by",            Qual_class_subsource  },
+  { "insertion_seq",            Qual_class_subsource  },
+  { "isolate",                  Qual_class_orgmod     },
+  { "isolation_source",         Qual_class_subsource  },
+  { "lab_host",                 Qual_class_subsource  },
+  { "label",                    Qual_class_label      },
+  { "lat_lon",                  Qual_class_subsource  },
+  { "macronuclear",             Qual_class_boolean    },
+  { "map",                      Qual_class_subsource  },
+  { "derived from metagenome",  Qual_class_orgmod     },
+  { "metagenome_source",        Qual_class_orgmod     },
+  { "metagenomic",              Qual_class_subsource  },
+  { "mol_type",                 Qual_class_string     },
+  { "note",                     Qual_class_note       },
+  { "old_lineage",              Qual_class_orgmod     },
+  { "old_name",                 Qual_class_orgmod     },
+  { "organism",                 Qual_class_string     },
+  { "organelle",                Qual_class_organelle  },
+  { "orgmod_note",              Qual_class_orgmod     },
+  { "pathovar",                 Qual_class_orgmod     },
+  { "PCR_primers",              Qual_class_pcr        },
+  { "PCR_primers",              Qual_class_pcr        },
+  { "plasmid",                  Qual_class_subsource  },
+  { "plastid",                  Qual_class_subsource  },
+  { "pop_variant",              Qual_class_subsource  },
+  { "rearranged",               Qual_class_subsource  },
+  { "rev_primer_name",          Qual_class_subsource  },
+  { "rev_primer_seq",           Qual_class_subsource  },
+  { "segment",                  Qual_class_subsource  },
+  { "seqfeat_note",             Qual_class_string     },
+  { "sequenced_mol",            Qual_class_quote      },
+  { "serogroup",                Qual_class_orgmod     },
+  { "serotype",                 Qual_class_orgmod     },
+  { "serovar",                  Qual_class_orgmod     },
+  { "sex",                      Qual_class_subsource  },
+  { "specific_host",            Qual_class_orgmod     },
+  { "specimen_voucher",         Qual_class_voucher    },
+  { "strain",                   Qual_class_orgmod     },
+  { "sub_clone",                Qual_class_subsource  },
+  { "subgroup",                 Qual_class_orgmod     },
+  { "sub_species",              Qual_class_orgmod     },
+  { "sub_strain",               Qual_class_orgmod     },
+  { "subtype",                  Qual_class_orgmod     },
+  { "subsource_note",           Qual_class_subsource  },
+  { "synonym",                  Qual_class_orgmod     },
+  { "teleomorph",               Qual_class_orgmod     },
+  { "tissue_lib",               Qual_class_subsource  },
+  { "tissue_type",              Qual_class_subsource  },
+  { "transgenic",               Qual_class_subsource  },
+  { "transposon",               Qual_class_subsource  },
+  { "type",                     Qual_class_orgmod     },
+  { "unstructured",             Qual_class_valnode    },
+  { "usedin",                   Qual_class_quote      },
+  { "variety",                  Qual_class_orgmod     },
+  { "?",                        Qual_class_orgmod     },
+  { "?",                        Qual_class_orgmod     },
+  { "?",                        Qual_class_subsource  }
 };
 
-NLM_EXTERN SourceType subSourceToSourceIdx [38] = {
+NLM_EXTERN SourceType subSourceToSourceIdx [39] = {
   SCQUAL_zero_subsrc,
   SCQUAL_chromosome,
   SCQUAL_map,
@@ -370,6 +389,7 @@ NLM_EXTERN SourceType subSourceToSourceIdx [38] = {
   SCQUAL_rev_primer_seq,
   SCQUAL_fwd_primer_name,
   SCQUAL_rev_primer_name,
+  SCQUAL_metagenomic,
   SCQUAL_subsource_note
 };
 
@@ -384,6 +404,10 @@ NLM_EXTERN SourceType subSourceToSourceIdx [38] = {
 NLM_EXTERN CharPtr legalDbXrefs [] = {
   "PIDe", "PIDd", "PIDg", "PID",
   "AceView/WormGenes",
+  "ApiDB",
+  "ApiDB_CryptoDB",
+  "ApiDB_PlasmoDB",
+  "ApiDB_ToxoDB",
   "ASAP",
   "ATCC",
   "ATCC(in host)",
@@ -391,7 +415,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "axeldb",
   "BDGP_EST",
   "BDGP_INS",
-  "BoLD",
+  "BOLD",
   "CDD",
   "cdd",
   "CK",
@@ -403,7 +427,9 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "dbSNP",
   "dbSTS",
   "dictyBase",
+  "EcoGene",
   "ENSEMBL",
+  "ERIC",
   "ESTLIB",
   "FANTOM_DB",
   "FlyBase",
@@ -419,7 +445,6 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "H-InvDB",
   "HGNC",
   "HSSP",
-  "IFO",
   "IMGT/GENE-DB",
   "IMGT/HLA",
   "IMGT/LIGM",
@@ -433,8 +458,11 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "MGD",
   "MGI",
   "MIM",
+  "NBRC",
   "NextDB",
   "niaEST",
+  "NMPDR",
+  "Pathema",
   "PDB",
   "PGN",
   "PIR",
@@ -443,6 +471,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "RiceGenes",
   "RGD",
   "RZPD",
+  "SEED",
   "SGD",
   "SoyBase",
   "SubtiList",
@@ -464,8 +493,10 @@ NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   "CloneID",
   "ECOCYC",
   "HPRD",
-  "REBASE",
   "miRBase",
+  "PBR",
+  "REBASE",
+  "TAIR",
   NULL
 };
 
@@ -539,6 +570,7 @@ NLM_EXTERN CharPtr FormatSourceBlock (
   GBSeqPtr           gbseq;
   CharPtr            gbsyn = NULL;
   Uint1              genome;
+  CharPtr            met = NULL;
   ValNodePtr         mod = NULL;
   OrgModPtr          omp = NULL;
   OrgNamePtr         onp;
@@ -551,7 +583,6 @@ NLM_EXTERN CharPtr FormatSourceBlock (
   CharPtr            str;
   CharPtr            syn = NULL;
   CharPtr            taxname = NULL;
-  Boolean            using_anamorph = FALSE;
   StringItemPtr      ffstring, temp;
 
   if (afp == NULL || bbp == NULL) return NULL;
@@ -625,49 +656,46 @@ NLM_EXTERN CharPtr FormatSourceBlock (
               case ORGMOD_gb_synonym :
                 gbsyn = omp->subname;
                 break;
+              case ORGMOD_metagenome_source :
+                met =  omp->subname;
+                break;
               default :
                 break;
             }
           }
 
           if (StringHasNoText (second)) {
+            second = met;
+          }
+          if (StringHasNoText (second)) {
             second = syn;
-            using_anamorph = FALSE;
           }
            if (StringHasNoText (second)) {
              second = acr;
-             using_anamorph = FALSE;
           }
           if (StringHasNoText (second)) {
             second = ana;
-            using_anamorph = TRUE;
           }
           if (StringHasNoText (second)) {
             second = com;
-            using_anamorph = FALSE;
           }
 
           if (StringHasNoText (second)) {
             second = gbsyn;
-            using_anamorph = FALSE;
           }
           if (StringHasNoText (second)) {
             second = gbacr;
-            using_anamorph = FALSE;
           }
           if (StringHasNoText (second)) {
-            second = gbana;
-            using_anamorph = TRUE;
-          }
-
-          if (StringHasNoText (second)) {
-            second = common;
-            using_anamorph = FALSE;
-          }
-          if (using_anamorph) {
-            prefix = " (anamorph: ";
+            if (StringDoesHaveText (gbana)) {
+              second = gbana;
+              prefix = " (anamorph: ";
+            }
           }
         }
+      }
+      if (StringHasNoText (second)) {
+        second = common;
       }
     }
   }
@@ -1017,8 +1045,11 @@ static Boolean CommentHasSuspiciousHtml (
 
   while (ch != '\0') {
     matches = NULL;
+    ch = TO_LOWER (ch);
     state = TextFsaNext (ajp->bad_html_fsa, state, ch, &matches);
-    if (matches != NULL) return TRUE;
+    if (matches != NULL) {
+      return TRUE;
+    }
     ptr++;
     ch = *ptr;
   }
@@ -1225,6 +1256,11 @@ NLM_EXTERN CharPtr FormatCommentBlock (
         title = (CharPtr) sdp->data.ptrvalue;
         prefix = "Region: ";
 
+      } else if (dcontext.seqdesctype == Seq_descr_name) {
+
+        title = (CharPtr) sdp->data.ptrvalue;
+        prefix = "Name: ";
+
       }
     }
 
@@ -1344,7 +1380,7 @@ static Boolean FlatVirtLoc (
   return FALSE;
 }
 
-static Uint1    order [NUM_SEQID];
+static Uint1    id_order [NUM_SEQID];
 static Boolean  order_initialized = FALSE;
 
 static CharPtr lim_str [5] = { "", ">","<", ">", "<" };
@@ -1415,7 +1451,7 @@ static void FlatLocSeqId (
   buf [0] = '\0';
   bsp = BioseqFind (sip);
   if (bsp != NULL) {
-    use_id = SeqIdSelect (bsp->id, order, NUM_SEQID);
+    use_id = SeqIdSelect (bsp->id, id_order, NUM_SEQID);
   } else if (sip->choice == SEQID_GI) {
     if (GetAccnVerFromServer (sip->data.intvalue, buf)) {
       FFAddTextToString(ffstring, NULL, buf, ":", FALSE, FALSE, TILDE_IGNORE);
@@ -1428,7 +1464,7 @@ static void FlatLocSeqId (
     bsp = BioseqLockById (sip);
     was_lock = TRUE;
     if (bsp != NULL) {
-      use_id = SeqIdSelect (bsp->id, order, NUM_SEQID);
+      use_id = SeqIdSelect (bsp->id, id_order, NUM_SEQID);
     }
   }
   if (use_id != NULL) {
@@ -1915,25 +1951,25 @@ NLM_EXTERN CharPtr FFFlatLoc (
   ffstring = FFGetString(ajp);
 
   if (! order_initialized) {
-    order [SEQID_GENBANK] = num++;
-    order [SEQID_EMBL] = num++;
-    order [SEQID_DDBJ] = num++;
-    order [SEQID_OTHER] = num++;
-    order [SEQID_TPG] = num++;
-    order [SEQID_TPE] = num++;
-    order [SEQID_TPD] = num++;
-    order [SEQID_GPIPE] = num++;
-    order [SEQID_GIBBSQ] = num++;
-    order [SEQID_GIBBMT] = num++;
-    order [SEQID_PRF] = num++;
-    order [SEQID_PDB] = num++;
-    order [SEQID_PIR] = num++;
-    order [SEQID_SWISSPROT] = num++;
-    order [SEQID_PATENT] = num++;
-    order [SEQID_GI] = num++;;
-    order [SEQID_GENERAL] = num++;
-    order [SEQID_LOCAL] = num++;
-    order [SEQID_GIIM] = num++;
+    id_order [SEQID_GENBANK] = num++;
+    id_order [SEQID_EMBL] = num++;
+    id_order [SEQID_DDBJ] = num++;
+    id_order [SEQID_OTHER] = num++;
+    id_order [SEQID_TPG] = num++;
+    id_order [SEQID_TPE] = num++;
+    id_order [SEQID_TPD] = num++;
+    id_order [SEQID_GPIPE] = num++;
+    id_order [SEQID_GIBBSQ] = num++;
+    id_order [SEQID_GIBBMT] = num++;
+    id_order [SEQID_PRF] = num++;
+    id_order [SEQID_PDB] = num++;
+    id_order [SEQID_PIR] = num++;
+    id_order [SEQID_SWISSPROT] = num++;
+    id_order [SEQID_PATENT] = num++;
+    id_order [SEQID_GI] = num++;;
+    id_order [SEQID_GENERAL] = num++;
+    id_order [SEQID_LOCAL] = num++;
+    id_order [SEQID_GIIM] = num++;
     order_initialized = TRUE;
   }
 
@@ -2119,9 +2155,9 @@ static void SubSourceToQualArray (
   while (ssp != NULL) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 37;
+      subtype = 38;
     }
-    if (subtype < 38) {
+    if (subtype < 39) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].ssp == NULL) {
@@ -2133,7 +2169,7 @@ static void SubSourceToQualArray (
   }
 }
 
-NLM_EXTERN SourceType orgModToSourceIdx [38] = {
+NLM_EXTERN SourceType orgModToSourceIdx [42] = {
   SCQUAL_zero_orgmod,
   SCQUAL_one_orgmod,
   SCQUAL_strain,
@@ -2169,6 +2205,9 @@ NLM_EXTERN SourceType orgModToSourceIdx [38] = {
   SCQUAL_gb_acronym,
   SCQUAL_gb_anamorph,
   SCQUAL_gb_synonym,
+  SCQUAL_culture_collection,
+  SCQUAL_bio_material,
+  SCQUAL_metagenome_source,
   SCQUAL_old_lineage,
   SCQUAL_old_name,
   SCQUAL_orgmod_note
@@ -2188,13 +2227,13 @@ static void OrgModToQualArray (
   while (omp != NULL) {
     subtype = omp->subtype;
     if (subtype == 253) {
-      subtype = 35;
+      subtype = 38;
     } else if (subtype == 254) {
-      subtype = 36;
+      subtype = 39;
     } else if (subtype == 255) {
-      subtype = 37;
+      subtype = 40;
     }
-    if (subtype < 38) {
+    if (subtype < 41) {
       idx = orgModToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].omp == NULL) {
@@ -2478,99 +2517,42 @@ NLM_EXTERN CharPtr GetMolTypeQual (
   return NULL;
 }
 
-typedef struct pcrstrs {
-  ValNodePtr  fwd_name_list;
-  ValNodePtr  fwd_seq_list;
-  ValNodePtr  rev_name_list;
-  ValNodePtr  rev_seq_list;
-  ValNodePtr  curr_fwd_name;
-  ValNodePtr  curr_fwd_seq;
-  ValNodePtr  curr_rev_name;
-  ValNodePtr  curr_rev_seq;
-  CharPtr     fwd_name;
-  CharPtr     fwd_seq;
-  CharPtr     rev_name;
-  CharPtr     rev_seq;
-} PcrStrs, PNTR PcrStrsPtr;
-
-static ValNodePtr ParseParenString (
-  CharPtr strs
+static ValNodePtr ParsePCRPrimerString (
+  QualValPtr qvp
 )
 
 {
-  ValNodePtr  head = NULL;
-  size_t      len;
-  CharPtr     ptr, str, tmp;
-
-  if (StringHasNoText (strs)) return NULL;
-
-  tmp = StringSave (strs);
-  str = tmp;
-  len = StringLen (str);
-  if (len > 1 && *str == '(' && str [len - 1] == ')' && StringChr (str + 1, '(') == NULL) {
-    str++;
-    while (StringDoesHaveText (str)) {
-      ptr = StringChr (str, ',');
-      if (ptr == NULL) {
-        ptr = StringChr (str, ')');
-      }
-      if (ptr != NULL) {
-        *ptr = '\0';
-        ptr++;
-      }
-      TrimSpacesAroundString (str);
-      /*
-      if (StringDoesHaveText (str)) {
-        ValNodeCopyStr (&head, 0, str);
-      }
-      */
-      ValNodeCopyStr (&head, 0, str);
-      str = ptr;
-    }
-  } else {
-    ValNodeCopyStr (&head, 0, str);
-  }
-
-  MemFree (tmp);
-  return head;
-}
-
-static void ParsePCRPrimerString (
-  QualValPtr qvp,
-  PcrStrsPtr psp
-)
-
-{
+  CharPtr       fwd_primer_seq = NULL;
+  CharPtr       rev_primer_seq = NULL;
+  CharPtr       fwd_primer_name = NULL;
+  CharPtr       rev_primer_name = NULL;
   SubSourcePtr  ssp;
 
-  if (qvp == NULL || psp == NULL) return;
-  MemSet ((Pointer) psp, 0, sizeof (PcrStrs));
+  if (qvp == NULL) return NULL;
 
-  ssp = qvp [SCQUAL_fwd_primer_name].ssp;
-  if (ssp != NULL) {
-    psp->fwd_name_list = ParseParenString (ssp->name);
-  }
   ssp = qvp [SCQUAL_fwd_primer_seq].ssp;
   if (ssp != NULL) {
-    psp->fwd_seq_list = ParseParenString (ssp->name);
-  }
-  ssp = qvp [SCQUAL_rev_primer_name].ssp;
-  if (ssp != NULL) {
-    psp->rev_name_list = ParseParenString (ssp->name);
+    fwd_primer_seq = ssp->name;
   }
   ssp = qvp [SCQUAL_rev_primer_seq].ssp;
   if (ssp != NULL) {
-    psp->rev_seq_list = ParseParenString (ssp->name);
+    rev_primer_seq = ssp->name;
+  }
+  ssp = qvp [SCQUAL_fwd_primer_name].ssp;
+  if (ssp != NULL) {
+    fwd_primer_name = ssp->name;
+  }
+  ssp = qvp [SCQUAL_rev_primer_name].ssp;
+  if (ssp != NULL) {
+    rev_primer_name = ssp->name;
   }
 
-  psp->curr_fwd_name = psp->fwd_name_list;
-  psp->curr_fwd_seq = psp->fwd_seq_list;
-  psp->curr_rev_name = psp->rev_name_list;
-  psp->curr_rev_seq = psp->rev_seq_list;
+  return ParsePCRStrings (fwd_primer_seq, rev_primer_seq, fwd_primer_name, rev_primer_name);
 }
 
 static ValNodePtr ParseColonString (
-  CharPtr strs
+  CharPtr strs,
+  Boolean multiple
 )
 
 {
@@ -2583,7 +2565,7 @@ static ValNodePtr ParseColonString (
   tmp = StringSave (strs);
   str = tmp;
   len = StringLen (str);
-  if (len > 1 && StringChr (str, ':') != NULL) {
+  if (len > 1 && StringChr (str, ':') != NULL && multiple) {
     while (StringDoesHaveText (str)) {
       ptr = StringChr (str, ':');
       if (ptr != NULL) {
@@ -2608,20 +2590,43 @@ static void PrintHalfPrimer (
   CharPtr seq,
   CharPtr nm_label,
   CharPtr sq_label,
-  CharPtr prefix
+  CharPtr prefix,
+  Boolean name_only_ok,
+  Boolean multiple
 )
 
 {
   ValNodePtr  name_list, seq_list, name_vnp, seq_vnp;
   CharPtr     str;
 
-  name_list = ParseColonString (name);
-  seq_list = ParseColonString (seq);
+  name_list = ParseColonString (name, multiple);
+  seq_list = ParseColonString (seq, multiple);
 
   name_vnp = name_list;
   seq_vnp = seq_list;
-  while (seq_vnp != NULL) {
-    if (name_vnp != NULL) {
+  if (seq_vnp != NULL) {
+    while (seq_vnp != NULL) {
+      if (name_vnp != NULL) {
+        str = (CharPtr) name_vnp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          ValNodeCopyStr (headp, 0, prefix);
+          ValNodeCopyStr (headp, 0, nm_label);
+          ValNodeCopyStr (headp, 0, str);
+          prefix = ", ";
+        }
+        name_vnp = name_vnp->next;
+      }
+      str = (CharPtr) seq_vnp->data.ptrvalue;
+      if (StringDoesHaveText (str)) {
+        ValNodeCopyStr (headp, 0, prefix);
+        ValNodeCopyStr (headp, 0, sq_label);
+        ValNodeCopyStr (headp, 0, str);
+        prefix = ", ";
+      }
+      seq_vnp = seq_vnp->next;
+    }
+  } else if (name_only_ok) {
+    while (name_vnp != NULL) {
       str = (CharPtr) name_vnp->data.ptrvalue;
       if (StringDoesHaveText (str)) {
         ValNodeCopyStr (headp, 0, prefix);
@@ -2631,14 +2636,6 @@ static void PrintHalfPrimer (
       }
       name_vnp = name_vnp->next;
     }
-    str = (CharPtr) seq_vnp->data.ptrvalue;
-    if (StringDoesHaveText (str)) {
-      ValNodeCopyStr (headp, 0, prefix);
-      ValNodeCopyStr (headp, 0, sq_label);
-      ValNodeCopyStr (headp, 0, str);
-      prefix = ", ";
-    }
-    seq_vnp = seq_vnp->next;
   }
 
   ValNodeFreeData (name_list);
@@ -2646,55 +2643,21 @@ static void PrintHalfPrimer (
 }
 
 static CharPtr NextPCRPrimerString (
-  PcrStrsPtr psp,
-  Boolean isInNote
+  PcrSetPtr psp,
+  Boolean isInNote,
+  Boolean multiple
 )
 
 {
   ValNodePtr  head = NULL, vnp;
-  Boolean     okay = FALSE;
   CharPtr     prefix = NULL;
   CharPtr     str;
 
   if (psp == NULL) return NULL;
 
-  psp->fwd_name = NULL;
-  psp->fwd_seq = NULL;
-  psp->rev_name = NULL;
-  psp->rev_seq = NULL;
-
-  vnp = psp->curr_fwd_name;
-  if (vnp != NULL) {
-    psp->fwd_name = (CharPtr) vnp->data.ptrvalue;
-    psp->curr_fwd_name = vnp->next;
-    okay = TRUE;
-  }
-
-  vnp = psp->curr_fwd_seq;
-  if (vnp != NULL) {
-    psp->fwd_seq = (CharPtr) vnp->data.ptrvalue;
-    psp->curr_fwd_seq = vnp->next;
-    okay = TRUE;
-  }
-
-  vnp = psp->curr_rev_name;
-  if (vnp != NULL) {
-    psp->rev_name = (CharPtr) vnp->data.ptrvalue;
-    psp->curr_rev_name = vnp->next;
-    okay = TRUE;
-  }
-
-  vnp = psp->curr_rev_seq;
-  if (vnp != NULL) {
-    psp->rev_seq = (CharPtr) vnp->data.ptrvalue;
-    psp->curr_rev_seq = vnp->next;
-    okay = TRUE;
-  }
-
-  if (! okay) return NULL;
-
   if (StringHasNoText (psp->fwd_seq) || StringHasNoText (psp->rev_seq)) {
     if (isInNote) {
+      /*
       if (StringDoesHaveText (psp->fwd_name)) {
         ValNodeCopyStr (&head, 0, prefix);
         ValNodeCopyStr (&head, 0, "fwd_name: ");
@@ -2722,14 +2685,20 @@ static CharPtr NextPCRPrimerString (
         ValNodeCopyStr (&head, 0, psp->rev_seq);
         prefix = ", ";
       }
+      */
+      PrintHalfPrimer (&head, psp->fwd_name, psp->fwd_seq, "fwd_name: ", "fwd_seq: ", NULL, TRUE, multiple);
+      if (head != NULL) {
+        prefix = ", ";
+      }
+      PrintHalfPrimer (&head, psp->rev_name, psp->rev_seq, "rev_name: ", "rev_seq: ", prefix, TRUE, multiple);
     } else {
       return StringSave ("");
     }
   } else {
     if (isInNote) return StringSave ("");
 
-    PrintHalfPrimer (&head, psp->fwd_name, psp->fwd_seq, "fwd_name: ", "fwd_seq: ", NULL);
-    PrintHalfPrimer (&head, psp->rev_name, psp->rev_seq, "rev_name: ", "rev_seq: ", ", ");
+    PrintHalfPrimer (&head, psp->fwd_name, psp->fwd_seq, "fwd_name: ", "fwd_seq: ", NULL, FALSE, multiple);
+    PrintHalfPrimer (&head, psp->rev_name, psp->rev_seq, "rev_name: ", "rev_seq: ", ", ", FALSE, multiple);
   }
 
   if (head != NULL && isInNote) {
@@ -2745,29 +2714,65 @@ static CharPtr NextPCRPrimerString (
   return str;
 }
 
-static void ClearPCRPrimerString (
-  PcrStrsPtr psp
-)
+/* specimen_voucher, culture_collection, bio_material hyperlinks */
 
-{
-  if (psp == NULL) return;
+#define s_uam_base  "http://arctos.database.museum/SpecimenDetail.cfm?GUID="
+#define s_mvz_base  "http://mvzarctos.berkeley.edu/SpecimenDetail.cfm?guid="
 
-  ValNodeFreeData (psp->fwd_name_list);
-  ValNodeFreeData (psp->fwd_seq_list);
-  ValNodeFreeData (psp->rev_name_list);
-  ValNodeFreeData (psp->rev_seq_list);
+#define s_crcm_inst  "Charles R. Conner Museum, Washington State University"
+#define s_dgr_inst   "Division of Genomic Resources, University of New Mexico"
+#define s_kwp_inst   "Kenelm W. Philip Collection, University of Alaska Museum of the North"
+#define s_msb_inst   "Museum of Southwestern Biology, University of New Mexico"
+#define s_mvz_inst   "Museum of Vertebrate Zoology, University of California"
+#define s_nbsb_inst  "National Biomonitoring Specimen Bank, U.S. Geological Survey"
+#define s_psu_inst   "Portland State University"
+#define s_uam_inst   "University of Alaska Museum of the North"
+#define s_wmnu_inst  "Western New Mexico University Museum"
 
-  MemSet ((Pointer) psp, 0, sizeof (PcrStrs));
-}
+typedef struct vouch {
+  CharPtr  sites;
+  CharPtr  links;
+  Boolean  prepend_institute;
+  CharPtr  prefix;
+  CharPtr  suffix;
+  CharPtr  mouseover;
+} VouchData, PNTR VouchDataPtr;
 
-static CharPtr  Nlm_spec_voucher_sites [] = {
-  "MVZ",
-  NULL
-};
-
-static CharPtr  Nlm_spec_voucher_links [] = {
-  "http://elib.cs.berkeley.edu/cgi-bin/mvz_query?counts=all&where-mvz_dump.Cat_Num=", /* MVZ */
-  NULL
+static VouchData Nlm_spec_vouchers [] = {
+ { "CRCM:Bird",   s_uam_base, TRUE,  ":",  NULL,  s_crcm_inst },
+ { "DGR:Bird",    s_uam_base, TRUE,  ":",  NULL,  s_dgr_inst  },
+ { "DGR:Ento",    s_uam_base, TRUE,  ":",  NULL,  s_dgr_inst  },
+ { "DGR:Fish",    s_uam_base, TRUE,  ":",  NULL,  s_dgr_inst  },
+ { "DGR:Herp",    s_uam_base, TRUE,  ":",  NULL,  s_dgr_inst  },
+ { "DGR:Mamm",    s_uam_base, TRUE,  ":",  NULL,  s_dgr_inst  },
+ { "KWP:Ento",    s_uam_base, TRUE,  ":",  NULL,  s_kwp_inst  },
+ { "MSB:Bird",    s_uam_base, TRUE,  ":",  NULL,  s_msb_inst  },
+ { "MSB:Mamm",    s_uam_base, TRUE,  ":",  NULL,  s_msb_inst  },
+ { "MVZ:Bird",    s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZ:Egg",     s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZ:Herp",    s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZ:Hild",    s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZ:Img",     s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZ:Mamm",    s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZ:Page",    s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "MVZObs:Herp", s_mvz_base, TRUE,  ":",  NULL,  s_mvz_inst  },
+ { "NBSB:Bird",   s_uam_base, TRUE,  ":",  NULL,  s_nbsb_inst },
+ { "PSU:Mamm",    s_uam_base, TRUE,  ":",  NULL,  s_psu_inst  },
+ { "UAM:Bird",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Bryo",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Crus",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Ento",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Fish",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Herb",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Herp",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Mamm",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Moll",    s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAM:Paleo",   s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "UAMObs:Mamm", s_uam_base, TRUE,  ":",  NULL,  s_uam_inst  },
+ { "WNMU:Bird",   s_uam_base, TRUE,  ":",  NULL,  s_wmnu_inst },
+ { "WNMU:Fish",   s_uam_base, TRUE,  ":",  NULL,  s_wmnu_inst },
+ { "WNMU:Mamm",   s_uam_base, TRUE,  ":",  NULL,  s_wmnu_inst },
+ { NULL,          NULL,       FALSE, NULL, NULL,  NULL        }
 };
 
 static Int2 VoucherNameIsValid (
@@ -2787,18 +2792,20 @@ static Int2 VoucherNameIsValid (
   }
 
   L = 0;
-  R = sizeof (Nlm_spec_voucher_sites) / sizeof (Nlm_spec_voucher_sites[0]) - 1; /* -1 because now NULL terminated */
+  R = sizeof (Nlm_spec_vouchers) / sizeof (Nlm_spec_vouchers [0]) - 1; /* -1 because now NULL terminated */
 
   while (L < R) {
     mid = (L + R) / 2;
-    if (StringICmp (Nlm_spec_voucher_sites[mid], str) < 0) {
+    if (StringICmp (Nlm_spec_vouchers [mid].sites, str) < 0) {
       L = mid + 1;
     } else {
       R = mid;
     }
   }
 
-  if (StringICmp (Nlm_spec_voucher_sites[R], str) == 0) {
+  /* case sensitive comparison at end enforces strictness */
+
+  if (StringCmp (Nlm_spec_vouchers [R].sites, str) == 0) {
     return R;
   }
 
@@ -2810,31 +2817,34 @@ static Int2 VoucherNameIsValid (
 static Boolean ParseSecVoucher (
   CharPtr subname,
   CharPtr PNTR inst,
-  CharPtr PNTR id,
-  CharPtr PNTR rem
+  CharPtr PNTR id
 )
 
 {
   CharPtr  ptr;
+  CharPtr  tmp;
 
   if (StringHasNoText (subname)) return FALSE;
   if (StringLen (subname) < 5) return FALSE;
   TrimSpacesAroundString (subname);
 
-  if (*subname != '[') return FALSE;
-  *inst = subname + 1;
-  ptr = StringChr (subname + 1, ' ');
+  ptr = StringChr (subname, ':');
   if (ptr == NULL) return FALSE;
-  *ptr = '\0';
-  ptr++;
-  TrimSpacesAroundString (ptr);
-  *id = ptr;
-  ptr = StringChr (ptr, ']');
-  if (ptr == NULL) return FALSE;
-  *ptr = '\0';
-  ptr++;
-  TrimSpacesAroundString (ptr);
-  *rem = ptr;
+
+  *inst = subname;
+
+  tmp = StringChr (ptr + 1, ':');
+  if (tmp != NULL) {
+    *tmp = '\0';
+    tmp++;
+    TrimSpacesAroundString (tmp);
+    *id = tmp;
+  } else {
+    *ptr = '\0';
+    ptr++;
+    TrimSpacesAroundString (ptr);
+    *id = ptr;
+  }
 
   if (StringHasNoText (*inst) || StringHasNoText (*id)) return FALSE;
 
@@ -2845,23 +2855,31 @@ static void Do_www_specimen_voucher (
   StringItemPtr ffstring,
   CharPtr inst,
   CharPtr id,
-  CharPtr rem,
-  CharPtr link
+  VouchDataPtr vdp
 )
 
 {
-  if ( ffstring == NULL || inst == NULL || id == NULL || link == NULL ) return;
+  if ( ffstring == NULL || inst == NULL || id == NULL || vdp == NULL || vdp->links == NULL ) return;
 
-  FFAddOneString(ffstring, "[", FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, inst, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link, id, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, ">", id, "</a>", FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "]", FALSE, FALSE, TILDE_IGNORE);
-  if (StringDoesHaveText (rem)) {
-    FFAddOneString(ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, rem, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, inst, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, vdp->links, FALSE, FALSE, TILDE_IGNORE);
+  if (vdp->prepend_institute) {
+    FFAddOneString (ffstring, inst, FALSE, FALSE, TILDE_IGNORE);
   }
+  if (vdp->prefix != NULL) {
+    FFAddOneString (ffstring, vdp->prefix, FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddOneString (ffstring, id, FALSE, FALSE, TILDE_IGNORE);
+  if (vdp->suffix != NULL) {
+    FFAddOneString (ffstring, vdp->suffix, FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (vdp->mouseover != NULL) {
+    FFAddTextToString (ffstring, " title=\"", vdp->mouseover, "\"",
+                       FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddTextToString (ffstring, ">", id, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
 static void FF_www_specimen_voucher (
@@ -2871,9 +2889,10 @@ static void FF_www_specimen_voucher (
 )
 
 {
-  Char     buf [128];
-  CharPtr  inst = NULL, id = NULL, rem = NULL, link = NULL;
-  Int2     R;
+  Char          buf [512];
+  CharPtr       inst = NULL, id = NULL;
+  Int2          R;
+  VouchDataPtr  vdp;
 
   if ( ffstring == NULL || subname == NULL ) return;
   if (! GetWWW (ajp)) { /* not in www mode */
@@ -2881,21 +2900,21 @@ static void FF_www_specimen_voucher (
     return;
   }
   StringNCpy_0 (buf, subname, sizeof (buf));
-  if (! ParseSecVoucher (buf, &inst, &id, &rem)) {
-    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+  if (! ParseSecVoucher (buf, &inst, &id)) {
+    FFAddTextToString (ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
     return;
   }
   R = VoucherNameIsValid (inst);
   if (R < 0) {
-    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+    FFAddTextToString (ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
     return;
   }
-  link = Nlm_spec_voucher_links [R];
-  if (link == NULL) {
-    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+  vdp = &(Nlm_spec_vouchers [R]);
+  if (vdp == NULL || vdp->links == NULL) {
+    FFAddTextToString (ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
     return;
   }
-  Do_www_specimen_voucher (ffstring, inst, id, rem, link);
+  Do_www_specimen_voucher (ffstring, inst, id, vdp);
 }
 
 NLM_EXTERN CharPtr FormatSourceFeatBlock (
@@ -2920,6 +2939,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Uint1              idx;
   IntSrcBlockPtr     isp;
   Boolean            is_desc = TRUE;
+  Boolean            is_other = FALSE;
   Int2               j;
   Uint1              jdx;
   Uint1              lastomptype;
@@ -2935,11 +2955,13 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Boolean            partial5;
   Boolean            partial3;
   CharPtr            prefix;
-  PcrStrs            ps;
+  ValNodePtr         pset;
+  PcrSetPtr          psp;
   SourceType PNTR    qualtbl = NULL;
   QualValPtr         qvp;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp = NULL;
+  SeqIdPtr           sip;
   SubSourcePtr       ssp;
   CharPtr            str;
   BioseqPtr          target;
@@ -3065,6 +3087,18 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
     }
   }
 
+  if (bsp != NULL) {
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_OTHER) {
+        is_other = TRUE;
+      }
+    }
+  }
+ 
+  if (ajp->refseqConventions) {
+    is_other = TRUE;
+  }
+
   /* populate qualifier table from biosource fields */
 
   qvp [SCQUAL_organism].str = taxname;
@@ -3145,6 +3179,14 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
       qvp [SCQUAL_rev_primer_seq].ssp != NULL) {
     qvp [SCQUAL_PCR_primers].ble = TRUE;
     qvp [SCQUAL_PCR_primer_note].ble = TRUE;
+  }
+
+  if (is_other || (ajp->mode == SEQUIN_MODE || ajp->mode == DUMP_MODE)) {
+    /* leave metagenome_source as a separate qualifier */
+  } else {
+    /* move metagenome_source to note */
+    qvp [SCQUAL_metagenome_note].omp = qvp [SCQUAL_metagenome_source].omp;
+    qvp [SCQUAL_metagenome_source].omp = NULL;
   }
 
   /* now print qualifiers from table */
@@ -3239,7 +3281,8 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
           if (ssp->subtype == SUBSRC_germline ||
               ssp->subtype == SUBSRC_rearranged ||
               ssp->subtype == SUBSRC_transgenic ||
-              ssp->subtype == SUBSRC_environmental_sample) {
+              ssp->subtype == SUBSRC_environmental_sample ||
+              ssp->subtype == SUBSRC_metagenomic) {
             FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [idx].name, "\n",
                               FALSE, TRUE, TILDE_TO_SPACES);
           } else if (StringIsJustQuotes (ssp->name)) {
@@ -3258,9 +3301,12 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
       case Qual_class_pcr :
         if (qvp [idx].ble) {
           lastssptype = 0;
-          ParsePCRPrimerString (qvp, &ps);
-          str = NextPCRPrimerString (&ps, FALSE);
-          while (str != NULL) {
+          pset = ParsePCRPrimerString (qvp);
+          for (vnp = pset; vnp != NULL; vnp = vnp->next) {
+            psp = (PcrSetPtr) vnp->data.ptrvalue;
+            if (psp == NULL) continue;
+            str = NextPCRPrimerString (psp, FALSE, (Boolean) (pset->next != NULL));
+            if (str == NULL) continue;
             if (! StringHasNoText (str)) {
               FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [idx].name, "=",
                                 FALSE, TRUE, TILDE_IGNORE);
@@ -3268,9 +3314,8 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                                 FALSE, TRUE, TILDE_TO_SPACES);
             }
             MemFree (str);
-            str = NextPCRPrimerString (&ps, FALSE);
           }
-          ClearPCRPrimerString (&ps);
+          FreePCRSet (pset);
         }
         break;
 
@@ -3358,6 +3403,26 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                 }
                 break;
 
+              case Qual_class_voucher :
+                if (jdx == SCQUAL_orgmod_note) break;
+                omp = qvp [jdx].omp;
+                if (lastomptype == 0 && omp != NULL) {
+                  lastomptype = omp->subtype;
+                }
+                while (omp != NULL && omp->subtype == lastomptype) {
+                  if (StringIsJustQuotes (omp->subname)) {
+                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=\"\"\n",
+                              FALSE, TRUE, TILDE_IGNORE);
+                  } else if (! StringHasNoText (omp->subname)) {
+                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=\"",
+                                      FALSE, TRUE, TILDE_IGNORE);
+                    FF_www_specimen_voucher(ajp, ffstring, omp->subname);
+                    FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
+                  }
+                  omp = omp->next;
+                }
+                break;
+
               case Qual_class_subsource :
                 if (jdx == SCQUAL_subsource_note) break;
                 ssp = qvp [jdx].ssp;
@@ -3365,7 +3430,14 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                   lastssptype = ssp->subtype;
                 }
                 while (ssp != NULL && ssp->subtype == lastssptype) {
-                  if (StringIsJustQuotes (ssp->name)) {
+                  if (ssp->subtype == SUBSRC_germline ||
+                      ssp->subtype == SUBSRC_rearranged ||
+                      ssp->subtype == SUBSRC_transgenic ||
+                      ssp->subtype == SUBSRC_environmental_sample ||
+                      ssp->subtype == SUBSRC_metagenomic) {
+                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "\n",
+                                      FALSE, TRUE, TILDE_TO_SPACES);
+                  } else if (StringIsJustQuotes (ssp->name)) {
                     FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=\"\"\n",
                                       FALSE, TRUE, TILDE_IGNORE);
 
@@ -3409,6 +3481,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
               break;
 
             case Qual_class_orgmod :
+            case Qual_class_voucher :
               if ((! ajp->flags.srcQualsToNote) && jdx != SCQUAL_orgmod_note) break;
               omp = qvp [jdx].omp;
               if (lastomptype == 0 && omp != NULL) {
@@ -3452,7 +3525,14 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                 lastssptype = ssp->subtype;
               }
               while (ssp != NULL && ssp->subtype == lastssptype) {
-                if (! StringHasNoText (ssp->name)) {
+                if (ssp->subtype == SUBSRC_germline ||
+                    ssp->subtype == SUBSRC_rearranged ||
+                    ssp->subtype == SUBSRC_transgenic ||
+                    ssp->subtype == SUBSRC_environmental_sample ||
+                    ssp->subtype == SUBSRC_metagenomic) {
+                  FFAddTextToString (unique, prefix, asn2gnbk_source_quals [jdx].name, NULL, FALSE, FALSE, TILDE_IGNORE);
+                  prefix = "; ";
+                } else if (! StringHasNoText (ssp->name)) {
                   if (jdx == SCQUAL_subsource_note) {
                     sprintf (buf, "%s", prefix);
                   } else {
@@ -3485,18 +3565,20 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
             case Qual_class_pcr :
               if (qvp [jdx].ble) {
                 lastssptype = 0;
-                ParsePCRPrimerString (qvp, &ps);
-                str = NextPCRPrimerString (&ps, TRUE);
-                while (str != NULL) {
+                pset = ParsePCRPrimerString (qvp);
+                for (vnp = pset; vnp != NULL; vnp = vnp->next) {
+                  psp = (PcrSetPtr) vnp->data.ptrvalue;
+                  if (psp == NULL) continue;
+                  str = NextPCRPrimerString (psp, TRUE, (Boolean) (pset->next != NULL));
+                  if (str == NULL) continue;
                   if (! StringHasNoText (str)) {
                     FFAddString_NoRedund (unique, prefix, str, NULL);
                     add_period = FALSE;
                     prefix = "; ";
                   }
                   MemFree (str);
-                  str = NextPCRPrimerString (&ps, TRUE);
                 }
-                ClearPCRPrimerString (&ps);
+                FreePCRSet (pset);
               }
               break;
 
@@ -3944,7 +4026,7 @@ NLM_EXTERN CharPtr FormatContigBlock (
 
         litp = (SeqLitPtr) dsp->data.ptrvalue;
         if (litp != NULL) {
-          if (litp->seq_data != NULL) {
+          if (litp->seq_data != NULL && litp->seq_data_type != Seq_code_gap) {
             if (litp->length == 0) {
               sprintf (val, "gap(%ld)", (long) litp->length);
               FFAddOneString(ffstring, val, FALSE, FALSE, TILDE_IGNORE);
@@ -3955,7 +4037,6 @@ NLM_EXTERN CharPtr FormatContigBlock (
             unknown = FALSE;
             fuzz = litp->fuzz;
             if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
-              if (! ajp->flags.forGbRelease)
               unknown = TRUE;
             }
             if (unknown && litp->length > 0) {

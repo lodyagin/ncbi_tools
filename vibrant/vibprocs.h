@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.32  2007/05/01 22:01:30  kans
+* changes in preparation for supporing Quartz on Macintosh
+*
 * Revision 6.31  2006/09/27 18:30:00  kans
 * support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
 *
@@ -994,7 +997,7 @@ extern Nlm_Boolean Nlm_Execv PROTO((const Nlm_Char* path, Nlm_Char *const * argv
 
 /***  OBJECT ALIGNMENT PROCEDURE FOR USE WITHOUT GROUP REPOSITIONING  ***/
 
-#if defined(WIN_MAC)
+#if defined(WIN_MAC)  ||  defined(WIN_MAC_QUARTZ)
 #define Nlm_HANDLE Nlm_Handle
 #elif defined(WIN_MOTIF)
 #define Nlm_HANDLE Nlm_Handle

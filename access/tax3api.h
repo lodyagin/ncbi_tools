@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.7 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *
@@ -133,6 +133,27 @@ NLM_EXTERN Int4 Taxon3GetTaxIdByOrgRef (OrgRefPtr orp);
 NLM_EXTERN OrgRefPtr Taxon3GetOrgRefByName (CharPtr orgname);
 NLM_EXTERN Int4 Taxon3GetTaxIdByName (CharPtr orgname);
 NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn);
+
+NLM_EXTERN void Taxon3CheckOrgInSeqEntry (SeqEntryPtr sep, ValNodePtr PNTR not_found, ValNodePtr PNTR bad_match);
+NLM_EXTERN void CheckTaxNamesAgainstTaxDatabase (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list);
+
+NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_validator);
+NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean for_validator);
+NLM_EXTERN Boolean Taxon3FixSpecificHostInSeqEntry (SeqEntryPtr sep);
+
+typedef struct specifichostfix {
+  ValNodePtr feat_or_desc;
+  CharPtr    bad_specific_host;
+  CharPtr    old_taxname;
+  CharPtr    new_taxname;
+} SpecificHostFixData, PNTR SpecificHostFixPtr;
+
+extern ValNodePtr SpecificHostFixListFree (ValNodePtr vnp);
+extern Boolean ApplyOneSpecificHostFix (SpecificHostFixPtr s);
+/* returns ValNodePtr list of SpecificHostFixPtr */
+NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep);
+
+NLM_EXTERN ValNodePtr GetOrganismTaxLookupFailuresInSeqEntry (SeqEntryPtr sep);
 
 
 #ifdef __cplusplus

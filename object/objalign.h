@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager interface for module NCBI-Seqalign
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objalign.h,v $
+* Revision 6.10  2007/05/12 21:03:32  kans
+* Spliced-seg code recompiled with -Z so product_length 0 is not always written
+*
+* Revision 6.9  2007/04/09 20:25:47  kans
+* added support for sparse alignment type
+*
 * Revision 6.8  2006/07/28 16:07:48  kans
 * added new fields due to spec change
 *
@@ -198,6 +204,7 @@ NLM_EXTERN SeqAlignIndexPtr LIBCALL SeqAlignIndexFree (SeqAlignIndexPtr saip);
 #define SAS_PACKED 4
 #define SAS_DISC 5
 #define SAS_SPLICED 6
+#define SAS_SPARSE 7
 
 
 typedef struct seqalign {
@@ -325,9 +332,14 @@ NLM_EXTERN StdSegPtr LIBCALL StdSegFree PROTO((StdSegPtr ssp));
 *
 **************************************************/
 typedef struct struct_Spliced_seg {
+   Uint4 OBbits__;
    ValNodePtr   product_id;
    ValNodePtr   genomic_id;
+#define OB__Spliced_seg_product_strand 0
+
    Uint2   product_strand;
+#define OB__Spliced_seg_genomic_strand 1
+
    Uint2   genomic_strand;
    Uint2   product_type;
    /* following #defines are for enumerated type, not used by object loaders */
@@ -335,7 +347,11 @@ typedef struct struct_Spliced_seg {
 #define Spliced_seg_product_type_protein 1
 
    struct struct_Spliced_exon PNTR   exons;
+#define OB__Spliced_seg_poly_a 2
+
    Int4   poly_a;
+#define OB__Spliced_seg_product_length 3
+
    Int4   product_length;
    ValNodePtr   modifiers;
 } SplicedSeg, PNTR SplicedSegPtr;
@@ -345,6 +361,27 @@ NLM_EXTERN SplicedSegPtr LIBCALL SplicedSegFree PROTO ((SplicedSegPtr ));
 NLM_EXTERN SplicedSegPtr LIBCALL SplicedSegNew PROTO (( void ));
 NLM_EXTERN SplicedSegPtr LIBCALL SplicedSegAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL SplicedSegAsnWrite PROTO (( SplicedSegPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SparseSeg
+*
+**************************************************/
+typedef struct struct_Sparse_seg {
+   Uint4 OBbits__;
+   ValNodePtr   master_id;
+   struct struct_Sparse_align PNTR   rows;
+   ScorePtr    row_scores;
+   struct struct_Sparse_seg_ext PNTR   ext;
+} SparseSeg, PNTR SparseSegPtr;
+
+
+NLM_EXTERN SparseSegPtr LIBCALL SparseSegFree PROTO ((SparseSegPtr ));
+NLM_EXTERN SparseSegPtr LIBCALL SparseSegNew PROTO (( void ));
+NLM_EXTERN SparseSegPtr LIBCALL SparseSegAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SparseSegAsnWrite PROTO (( SparseSegPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -364,7 +401,7 @@ typedef struct struct_Spliced_exon {
    Uint2   product_strand;
    Uint2   genomic_strand;
    ValNodePtr   parts;
-   struct struct_Score PNTR   scores;
+   ScorePtr   scores;
    struct struct_Splice_site PNTR   splice_5_prime;
    struct struct_Splice_site PNTR   splice_3_prime;
    Uint1   partial;
@@ -444,6 +481,50 @@ NLM_EXTERN ProtPosPtr LIBCALL ProtPosFree PROTO ((ProtPosPtr ));
 NLM_EXTERN ProtPosPtr LIBCALL ProtPosNew PROTO (( void ));
 NLM_EXTERN ProtPosPtr LIBCALL ProtPosAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ProtPosAsnWrite PROTO (( ProtPosPtr , AsnIoPtr, AsnTypePtr));
+
+
+/**************************************************
+*
+*    SparseAlign
+*
+**************************************************/
+typedef struct struct_Sparse_align {
+   struct struct_Sparse_align PNTR next;
+   Uint4 OBbits__;
+   ValNodePtr   first_id;
+   ValNodePtr   second_id;
+   Int4   numseg;
+   ValNodePtr   first_starts;
+   ValNodePtr   second_starts;
+   ValNodePtr   lens;
+   ValNodePtr   second_strands;
+   ScorePtr   seg_scores;
+} SparseAlign, PNTR SparseAlignPtr;
+
+
+NLM_EXTERN SparseAlignPtr LIBCALL SparseAlignFree PROTO ((SparseAlignPtr ));
+NLM_EXTERN SparseAlignPtr LIBCALL SparseAlignNew PROTO (( void ));
+NLM_EXTERN SparseAlignPtr LIBCALL SparseAlignAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SparseAlignAsnWrite PROTO (( SparseAlignPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SparseSegExt
+*
+**************************************************/
+typedef struct struct_Sparse_seg_ext {
+   struct struct_Sparse_seg_ext PNTR next;
+   Uint4 OBbits__;
+   Int4   index;
+} SparseSegExt, PNTR SparseSegExtPtr;
+
+
+NLM_EXTERN SparseSegExtPtr LIBCALL SparseSegExtFree PROTO ((SparseSegExtPtr ));
+NLM_EXTERN SparseSegExtPtr LIBCALL SparseSegExtNew PROTO (( void ));
+NLM_EXTERN SparseSegExtPtr LIBCALL SparseSegExtAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SparseSegExtAsnWrite PROTO (( SparseSegExtPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.49 $
+* $Revision: 6.51 $
 *
 * File Description: 
 *
@@ -39,6 +39,13 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.51  2007/05/22 12:14:30  bollin
+* If SeqSubmit has been marked for deletion, delete it.
+*
+* Revision 6.50  2006/11/15 19:18:52  bollin
+* Changed Int2 variables to Uint4 variables, to accomodate larger values for
+* itemID.
+*
 * Revision 6.49  2006/07/18 20:20:40  bollin
 * must use Uint4 instead of Uint2 to hold itemID values
 *
@@ -360,7 +367,7 @@
 #include <explore.h>
 
 static Boolean NEAR GatherSeqEntryFunc PROTO((SeqEntryPtr sep, InternalGCCPtr igccp, Pointer parent, Uint2 parenttype, SeqEntryPtr prev, Boolean in_scope, Pointer PNTR prevlink));
-static Boolean NEAR GatherItemFunc PROTO((Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+static Boolean NEAR GatherItemFunc PROTO((Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                    Pointer userdata, GatherItemProc userfunc, Pointer dataptr,
 								   Boolean do_not_reload_from_cache));
 static Boolean NEAR GatherAddToStack PROTO((GatherContextPtr gcp));
@@ -1148,7 +1155,7 @@ static Boolean NEAR GatherPub(InternalGCCPtr gccp, ValNodePtr vnp,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	Boolean takeit;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -1204,7 +1211,7 @@ static Boolean NEAR GatherPubSet(InternalGCCPtr gccp, ValNodePtr vnp,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	Boolean takeit;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 	ValNodePtr vnp2;
@@ -1276,7 +1283,7 @@ static Boolean NEAR GatherSeqIds(InternalGCCPtr gccp, SeqIdPtr sip,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	Boolean takeit;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -1336,7 +1343,7 @@ static Boolean NEAR GatherSeqDescr(InternalGCCPtr gccp, ValNodePtr vnp,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	Boolean takeit;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -1731,7 +1738,7 @@ static Boolean NEAR GatherSeqFeat(InternalGCCPtr gccp, SeqFeatPtr sfp,
 	Boolean rev, revs[2];
 	Int2 ctr, max_interval, i, numcheck, j;
 	GatherRange trange;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 	Boolean is_packed_pnt = FALSE;	/*is the seq-loc a packed point?*/
@@ -2944,7 +2951,7 @@ static Boolean NEAR GatherSeqAlign(InternalGCCPtr gccp, SeqAlignPtr sap,
 {
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
         SeqLocPtr slp, target[2];
@@ -3067,7 +3074,7 @@ static Boolean NEAR GatherSeqGraph(InternalGCCPtr gccp, SeqGraphPtr sgp,
 {
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -3121,7 +3128,7 @@ static Boolean NEAR GatherAnnotDesc(InternalGCCPtr gccp, AnnotDescPtr desc,
 {
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -3180,7 +3187,7 @@ static Boolean NEAR GatherSeqAnnot(InternalGCCPtr gccp, SeqAnnotPtr sap,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	SeqAnnotPtr prevsap = NULL;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -3270,7 +3277,7 @@ static Boolean NEAR GatherSeqHist(InternalGCCPtr gccp, SeqHistPtr hist,
 {
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -3334,7 +3341,8 @@ static Boolean NEAR GatherBioseqFunc (InternalGCCPtr gccp, BioseqPtr bsp,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	Boolean takeit, in_range=TRUE, rev, free_seg, trunc_l, trunc_r;
-	Int2 LocateItem = 0, segctr, first_seg, last_seg;
+	Uint4 LocateItem = 0;
+	Int2 segctr, first_seg, last_seg;
 	Pointer LocateData = NULL;
 	ValNode vn;
 	SeqLocPtr head, slp, tslp, segloc;
@@ -3703,7 +3711,7 @@ static Boolean NEAR GatherBioseqSetFunc (InternalGCCPtr gccp, BioseqSetPtr bsp,
 	GatherScopePtr gsp;
 	Boolean takeit=TRUE, tscope, checkscope;
 	SeqEntryPtr sep, prevsep = NULL, scope = NULL;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 
@@ -3838,7 +3846,7 @@ static Boolean NEAR GatherSeqSubCit(InternalGCCPtr gccp, CitSubPtr csp,
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
 	Boolean doit = TRUE;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 
 	if (csp == NULL) return TRUE;
@@ -3887,7 +3895,7 @@ static Boolean NEAR GatherSeqSubContact(InternalGCCPtr gccp, ContactInfoPtr cip,
 {
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Boolean doit = TRUE;
 
@@ -3936,7 +3944,7 @@ static Boolean NEAR GatherSubBlock(InternalGCCPtr gccp, SubmitBlockPtr sbp,
 {
 	GatherContextPtr gcp;
 	GatherScopePtr gsp;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Boolean doit = TRUE;
 
@@ -4002,7 +4010,7 @@ static Boolean NEAR GatherSeqSubmit (InternalGCCPtr gccp, SeqSubmitPtr ssp, Bool
 	GatherScopePtr gsp;
 	Boolean takeit=TRUE, tscope, checkscope;
 	SeqEntryPtr sep, prevsep = NULL, scope = NULL;
-	Int2 LocateItem = 0;
+	Uint4 LocateItem = 0;
 	Pointer LocateData = NULL;
 	Uint1 thistype;
 	Pointer PNTR prevlink;
@@ -4751,7 +4759,7 @@ NLM_EXTERN Boolean LIBCALL GatherItem (Uint2 entityID, Uint4 itemID, Uint2 itemt
 *      Sets locatetype and locateID, which are checked in the traversal
 *
 *****************************************************************************/
-static Boolean NEAR GatherItemFunc (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+static Boolean NEAR GatherItemFunc (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                    Pointer userdata, GatherItemProc userfunc, Pointer dataptr,
 								   Boolean do_not_reload_from_cache)
 
@@ -7348,7 +7356,10 @@ NLM_EXTERN Boolean DeleteMarkedObjects (Uint2 entityID, Uint2 datatype, Pointer 
       break;
     case OBJ_SEQSUB :
       ssp = (SeqSubmitPtr) dataptr;
-      if (ssp->datatype == 1) {
+      if (ssp->idx.deleteme) {
+        ssp = SeqSubmitFree (ssp);
+        return TRUE;
+      } else if (ssp->datatype == 1) {
         sep = (SeqEntryPtr) ssp->data;
       }
       break;

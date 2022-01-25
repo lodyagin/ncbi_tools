@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.28 $
+* $Revision: 1.36 $
 *
 * File Description:
 *
@@ -53,290 +53,9 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "1.8"
+#define ASN2ALL_APP_VER "2.3"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
-
-static ValNodePtr  requested_uid_list = NULL;
-static TNlmMutex   requested_uid_mutex = NULL;
-
-static ValNodePtr  locked_bsp_list = NULL;
-static TNlmMutex   locked_bsp_mutex = NULL;
-
-static void AddUidToQueue (
-  SeqIdPtr sip
-)
-
-{
-  ValNodePtr  last = NULL, vnp;
-  Int4        ret;
-  Int4        uid;
-
-  if (sip == NULL || sip->choice != SEQID_GI) return;
-  uid = (Int4) sip->data.intvalue;
-  if (uid < 1) return;
-
-  ret = NlmMutexLockEx (&requested_uid_mutex);
-  if (ret) {
-    ErrPostEx (SEV_FATAL, 0, 0, "AddUidToQueue mutex failed [%ld]", (long) ret);
-    return;
-  }
-
-  /* check against uids already in queue */
-
-  last = NULL;
-  for (vnp = requested_uid_list; vnp != NULL; vnp = vnp->next) {
-    last = vnp;
-    if ((Int4) vnp->data.intvalue == uid) break;
-  }
-
-  /* add uid to queue */
-
-  if (vnp == NULL) {
-    if (last != NULL) {
-      vnp = ValNodeAddInt (&last, 0, uid);
-      last = vnp;
-    } else {
-      requested_uid_list = ValNodeAddInt (NULL, 0, uid);
-      last = requested_uid_list;
-    }
-  }
-
-  NlmMutexUnlock (requested_uid_mutex);
-}
-
-static Int4 RemoveUidFromQueue (
-  void
-)
-
-{
-  Int4        ret, uid = 0;
-  ValNodePtr  vnp;
-
-  ret = NlmMutexLockEx (&requested_uid_mutex);
-  if (ret) {
-    ErrPostEx (SEV_FATAL, 0, 0, "RemoveUidFromQueue mutex failed [%ld]", (long) ret);
-    return 0;
-  }
-
-  /* extract next requested uid from queue */
-
-  if (requested_uid_list != NULL) {
-    vnp = requested_uid_list;
-    requested_uid_list = vnp->next;
-    vnp->next = NULL;
-    uid = (Int4) vnp->data.intvalue;
-    ValNodeFree (vnp);
-  }
-
-  NlmMutexUnlock (requested_uid_mutex);
-
-  return uid;
-}
-
-static void QueueFarSegments (SeqLocPtr slp)
-
-{
-  BioseqPtr   bsp;
-  SeqLocPtr   loc;
-  SeqIdPtr    sip;
-  ValNodePtr  vnp;
-
-  if (slp == NULL) return;
-
-  sip = SeqLocId (slp);
-  if (sip == NULL) {
-    loc = SeqLocFindNext (slp, NULL);
-    if (loc != NULL) {
-      sip = SeqLocId (loc);
-    }
-  }
-  if (sip == NULL) return;
-
-  /* if packaged in record, no need to fetch it */
-
-  if (BioseqFindCore (sip) != NULL) return;
-
-  /* check against currently locked records */
-
-  for (vnp = locked_bsp_list; vnp != NULL; vnp = vnp->next) {
-    bsp = (BioseqPtr) vnp->data.ptrvalue;
-    if (bsp == NULL) continue;
-    if (SeqIdIn (sip, bsp->id)) return;
-  }
-
-  AddUidToQueue (sip);
-}
-
-static void QueueFarBioseqs (BioseqPtr bsp, Pointer userdata)
-
-{
-  DeltaSeqPtr  dsp;
-  SeqLocPtr    slp = NULL;
-  ValNode      vn;
-
-  if (bsp == NULL) return;
-
-  if (bsp->repr == Seq_repr_seg) {
-    vn.choice = SEQLOC_MIX;
-    vn.extended = 0;
-    vn.data.ptrvalue = bsp->seq_ext;
-    vn.next = NULL;
-    while ((slp = SeqLocFindNext (&vn, slp)) != NULL) {
-      if (slp != NULL && slp->choice != SEQLOC_NULL) {
-        QueueFarSegments (slp);
-      }
-    }
-  } else if (bsp->repr == Seq_repr_delta) {
-    for (dsp = (DeltaSeqPtr) (bsp->seq_ext); dsp != NULL; dsp = dsp->next) {
-      if (dsp->choice == 1) {
-        slp = (SeqLocPtr) dsp->data.ptrvalue;
-        if (slp != NULL && slp->choice != SEQLOC_NULL) {
-          QueueFarSegments (slp);
-        }
-      }
-    }
-  }
-}
-
-static void AddBspToList (
-  BioseqPtr bsp
-)
-
-{
-  Int4        ret;
-  ValNodePtr  vnp;
-
-  if (bsp == NULL) return;
-
-  ret = NlmMutexLockEx (&locked_bsp_mutex);
-  if (ret) {
-    ErrPostEx (SEV_FATAL, 0, 0, "AddBspToList mutex failed [%ld]", (long) ret);
-    return;
-  }
-
-  vnp = ValNodeAddPointer (&locked_bsp_list, 0, (Pointer) bsp);
-
-  NlmMutexUnlock (locked_bsp_mutex);
-}
-
-static ValNodePtr ExtractBspList (
-  void
-)
-
-{
-  Int4        ret;
-  ValNodePtr  vnp;
-
-  ret = NlmMutexLockEx (&locked_bsp_mutex);
-  if (ret) {
-    ErrPostEx (SEV_FATAL, 0, 0, "ExtractBspList mutex failed [%ld]", (long) ret);
-    return NULL;
-  }
-
-  vnp = locked_bsp_list;
-  locked_bsp_list = NULL;
-
-  NlmMutexUnlock (locked_bsp_mutex);
-
-  return vnp;
-}
-
-static VoidPtr DoAsyncLookup (
-  VoidPtr arg
-)
-
-{
-  BioseqPtr  bsp;
-  Int4       uid;
-  ValNode    vn;
-
-  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
-
-  uid = RemoveUidFromQueue ();
-  while (uid > 0) {
-
-    vn.choice = SEQID_GI;
-    vn.data.intvalue = uid;
-    vn.next = NULL;
-
-    bsp = BioseqLockById (&vn);
-    if (bsp != NULL) {
-      AddBspToList (bsp);
-    }
-
-    uid = RemoveUidFromQueue ();
-  }
-
-  return NULL;
-}
-
-#define NUM_ASYNC_LOOKUP_THREADS 5
-
-static void ProcessAsyncLookups (
-  void
-)
-
-{
-  Int2        i;
-  VoidPtr     status;
-  TNlmThread  thds [NUM_ASYNC_LOOKUP_THREADS];
-
-  /* spawn several threads for individual BioseqLockById requests */
-
-  for (i = 0; i < NUM_ASYNC_LOOKUP_THREADS; i++) {
-    thds [i] = NlmThreadCreate (DoAsyncLookup, NULL);
-  }
-
-  /* wait for all fetching threads to complete */
-
-  for (i = 0; i < NUM_ASYNC_LOOKUP_THREADS; i++) {
-    NlmThreadJoin (thds [i], &status);
-  }
-}
-
-static ValNodePtr AsyncLockFarComponents (
-  SeqEntryPtr sep
-)
-
-{
-  BioseqPtr    bsp;
-  ValNodePtr   bsplist = NULL, sublist, vnp;
-  SeqEntryPtr  oldsep;
-
-  if (sep == NULL) return NULL;
-  oldsep = SeqEntrySetScope (sep);
-
-  /* add far uids to queue */
-
-  VisitBioseqsInSep (sep, NULL, QueueFarBioseqs);
-
-  /* fetching from uid list using several threads */
-
-  ProcessAsyncLookups ();
-
-  sublist = ExtractBspList ();
-
-  /* take list, look for seg or delta, recurse */
-
-  while (sublist != NULL) {
-    for (vnp = sublist; vnp != NULL; vnp = vnp->next) {
-      bsp = (BioseqPtr) vnp->data.ptrvalue;
-      if (bsp == NULL) continue;
-      QueueFarBioseqs (bsp, NULL);
-    }
-
-    ValNodeLink (&bsplist, sublist);
-    sublist = NULL;
-
-    ProcessAsyncLookups ();
-
-    sublist = ExtractBspList ();
-  }
-
-  SeqEntrySetScope (oldsep);
-  return bsplist;
-}
 
 static ValNodePtr DoLockFarComponents (
   SeqEntryPtr sep,
@@ -350,12 +69,12 @@ static ValNodePtr DoLockFarComponents (
   start_time = GetSecs ();
 
   if (NlmThreadsAvailable () && useThreads) {
-    rsult = AsyncLockFarComponents (sep);
+    rsult = AdvcLockFarComponents (sep, TRUE, FALSE, FALSE, NULL, TRUE);
   } else if (useThreads) {
     Message (MSG_POST, "Threads not available in this executable");
-    rsult = LockFarComponents (sep);
+    rsult = AdvcLockFarComponents (sep, TRUE, FALSE, FALSE, NULL, FALSE);
   } else {
-    rsult = LockFarComponents (sep);
+    rsult = AdvcLockFarComponents (sep, TRUE, FALSE, FALSE, NULL, FALSE);
   }
 
   stop_time = GetSecs ();
@@ -737,8 +456,11 @@ static void ProcessSingleRecord (
 
   omp = ObjMgrGet ();
   ObjMgrReapOne (omp);
+  SeqMgrClearBioseqIndex ();
   ObjMgrFreeCache (0);
   FreeSeqIdGiCache ();
+
+  SeqEntrySetScope (NULL);
 }
 
 static void ProcessMultipleRecord (
@@ -751,12 +473,13 @@ static void ProcessMultipleRecord (
   AsnTypePtr     atp;
   BioseqPtr      bsp;
   ValNodePtr     bsplist;
-  Char           cmmd [256];
   DataVal        dv;
   FILE           *fp;
+  Boolean        io_failure = FALSE;
   ObjMgrPtr      omp;
   SeqEntryPtr    sep;
 #ifdef OS_UNIX
+  Char           cmmd [256];
   CharPtr        gzcatprog;
   int            ret;
   Boolean        usedPopen = FALSE;
@@ -813,7 +536,7 @@ static void ProcessMultipleRecord (
 
   aip = AsnIoNew (afp->binary? ASNIO_BIN_IN : ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
   if (aip == NULL) {
-    Message (MSG_ERROR, "AsnIoNew failed for input file '%s'", filename);
+    Message (MSG_POSTERR, "AsnIoNew failed for input file '%s'", filename);
     return;
   }
 
@@ -833,7 +556,11 @@ static void ProcessMultipleRecord (
   if (aop != NULL) {
 
     if (afp->format == XML_FORMAT) {
-      while ((atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+      while ((! io_failure) && (atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+        if (aip->io_failure) {
+          io_failure = TRUE;
+          aip->io_failure = FALSE;
+        }
         if (atp == afp->atp_inst) {
           /* converts compressed sequences to iupac like asn2xml */
           bsp = BioseqNew ();
@@ -845,18 +572,34 @@ static void ProcessMultipleRecord (
           AsnWrite (aop, atp, &dv);
           AsnKillValue (atp, &dv);
         }
+        if (aip->io_failure) {
+          io_failure = TRUE;
+          aip->io_failure = FALSE;
+        }
       }
     } else {
-      while ((atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+      while ((! io_failure) && (atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+        if (aip->io_failure) {
+          io_failure = TRUE;
+          aip->io_failure = FALSE;
+        }
         AsnReadVal (aip, atp, &dv);
         AsnWrite (aop, atp, &dv);
         AsnKillValue (atp, &dv);
+        if (aip->io_failure) {
+          io_failure = TRUE;
+          aip->io_failure = FALSE;
+        }
       }
     }
 
   } else {
 
-    while ((atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+    while ((! io_failure) && (atp = AsnReadId (aip, afp->amp, atp)) != NULL) {
+      if (aip->io_failure) {
+        io_failure = TRUE;
+        aip->io_failure = FALSE;
+      }
       if (atp == afp->atp_se) {
 
         sep = SeqEntryAsnRead (aip, atp);
@@ -875,14 +618,30 @@ static void ProcessMultipleRecord (
         SeqEntryFree (sep);
         omp = ObjMgrGet ();
         ObjMgrReapOne (omp);
+        SeqMgrClearBioseqIndex ();
         ObjMgrFreeCache (0);
         FreeSeqIdGiCache ();
+
+        SeqEntrySetScope (NULL);
 
       } else {
 
         AsnReadVal (aip, atp, NULL);
       }
+
+      if (aip->io_failure) {
+        io_failure = TRUE;
+        aip->io_failure = FALSE;
+      }
     }
+  }
+
+  if (aip->io_failure) {
+    io_failure = TRUE;
+  }
+
+  if (io_failure) {
+    Message (MSG_POSTERR, "Asn io_failure for input file '%s'", filename);
   }
 
   AsnIoFree (aip, FALSE);
@@ -1045,13 +804,14 @@ static void DisplayHelpText (
 #define b_argBinary       7
 #define c_argCompressed   8
 #define r_argRemote       9
-#define d_argAsnIdx      10
-#define l_argLockFar     11
-#define T_argThreads     12
-#define n_argNear        13
-#define X_argExtended    14
-#define A_argAccession   15
-#define h_argHelp        16
+#define k_argLocal       10
+#define d_argAsnIdx      11
+#define l_argLockFar     12
+#define T_argThreads     13
+#define n_argNear        14
+#define X_argExtended    15
+#define A_argAccession   16
+#define h_argHelp        17
 
 
 Args myargs [] = {
@@ -1075,6 +835,8 @@ Args myargs [] = {
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Remote Fetching", "F", NULL, NULL,
     TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Local Fetching", "F", NULL, NULL,
+    TRUE, 'k', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Path to Indexed Binary ASN.1 Data", NULL, NULL, NULL,
     TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
   {"Lock Components in Advance", "F", NULL, NULL,
@@ -1099,7 +861,7 @@ Int2 Main (void)
   Char         app [64], format, nearpolicy, type, xmlbuf [128];
   DataVal      av;
   ValNodePtr   bsplist;
-  Boolean      help, local, remote;
+  Boolean      help, indexed, local, remote;
   SeqEntryPtr  sep;
 
   /* standard setup */
@@ -1162,8 +924,9 @@ Int2 Main (void)
   MemSet ((Pointer) &afd, 0, sizeof (AppFlagData));
 
   remote = (Boolean ) myargs [r_argRemote].intvalue;
+  local = (Boolean) myargs [k_argLocal].intvalue;
   asnidx = (CharPtr) myargs [d_argAsnIdx].strvalue;
-  local = (Boolean) StringDoesHaveText (asnidx);
+  indexed = (Boolean) StringDoesHaveText (asnidx);
   accn = (CharPtr) myargs [A_argAccession].strvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
@@ -1386,6 +1149,10 @@ Int2 Main (void)
   }
 
   if (local) {
+    LocalSeqFetchInit (FALSE);
+  }
+
+  if (indexed) {
     AsnIndexedLibFetchEnable (asnidx, TRUE);
   }
 
@@ -1507,13 +1274,17 @@ Int2 Main (void)
   }
 
   if (afd.format == CACHE_COMPONENTS) {
-    CreateAsnIndex (ntout, TRUE);
+    CreateAsnIndex (ntout, NULL, TRUE);
   }
 
   /* close fetch functions */
 
-  if (local) {
+  if (indexed) {
     AsnIndexedLibFetchDisable ();
+  }
+
+  if (local) {
+    LocalSeqFetchDisable ();
   }
 
   if (remote) {

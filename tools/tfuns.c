@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: tfuns.c,v 6.12 2004/04/01 13:43:08 lavr Exp $";
+static char const rcsid[] = "$Id: tfuns.c,v 6.13 2006/11/07 20:01:24 bollin Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -829,20 +829,6 @@ void DelFeatFromList (SeqFeatPtr PNTR gbqp, SeqFeatPtr curq, SeqFeatPtr preq)
           temp = curq;
           temp->next = NULL;
           SeqFeatFree(temp);
-}
-
-void DelNodeFromList (ValNodePtr PNTR gbqp, ValNodePtr curq, ValNodePtr preq)
-{
-    ValNodePtr   temp;
-     
-          if (preq == NULL)
-             *gbqp = curq->next;  /* will change first_q in calling function */
-          else
-             preq->next = curq->next;  /* will cause next_q == preq -> next */
-
-          temp = curq;
-          temp->next = NULL;
-          ValNodeFree(temp);
 }
 
 /*****************************************************************************

@@ -32,8 +32,17 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.123 $ 
+/* $Revision: 6.125 $ 
 * $Log: blastpri.h,v $
+* Revision 6.125  2007/03/13 20:39:04  madden
+*   - In the prototype for blast_set_parameters, change the type of the
+*     function arguments dropoff_number_of_bits_1st_pass and
+*     dropoff_number_of_bits_2nd_pass to Nlm_FloatHi.
+*   [from Mike Gertz]
+*
+* Revision 6.124  2007/01/17 15:46:00  madden
+* remove FilterDNA
+*
 * Revision 6.123  2006/09/21 13:42:37  madden
 * BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
 *
@@ -796,8 +805,6 @@ void LIBCALL BlastExtendWordExit PROTO((BlastSearchBlkPtr search));
 
 
 
-Boolean LIBCALL FilterDNA PROTO((BioseqPtr bsp, Int4 filter));
-
 Boolean LIBCALL FilterWithSeg PROTO((Uint1Ptr sequence, Int4 length, Uint1 alphabet));
 
 BLASTResultHitlistPtr LIBCALL BLASTResultHitlistFree PROTO((BLASTResultHitlistPtr result));
@@ -1065,8 +1072,8 @@ Uint1 FrameToDefine PROTO((Int2 frame));
 Uint1Ptr
 GetPrivatTranslationTable PROTO((CharPtr genetic_code, 
                                  Boolean reverse_complement));
-Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4
-                                 dropoff_number_of_bits_1st_pass, Int4
+Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Nlm_FloatHi
+                                 dropoff_number_of_bits_1st_pass, Nlm_FloatHi
                                  dropoff_number_of_bits_2nd_pass, Nlm_FloatHi
                                  avglen, Nlm_FloatHi searchsp, Int4 window));
 Boolean 

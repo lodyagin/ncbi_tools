@@ -1,4 +1,4 @@
-/*  $Id: ncbi_priv.c,v 6.9 2005/10/25 18:53:10 lavr Exp $
+/*  $Id: ncbi_priv.c,v 6.10 2007/01/23 22:31:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,7 +56,7 @@ extern int g_NCBI_ConnectSrandAddend(void)
 #elif defined(NCBI_OS_MSWIN)
     return (int) GetCurrentProcessId();
 #else
-    return SOCK_gethostbyname(0);
+    return SOCK_GetLocalHostAddress(eDefault);
 #endif /*NCBI_OS_...*/ 
 }
 
@@ -94,6 +94,9 @@ extern char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.c,v $
+ * Revision 6.10  2007/01/23 22:31:29  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
  * Revision 6.9  2005/10/25 18:53:10  lavr
  * Fix ADDEND spelling (finally, hopefully)
  *

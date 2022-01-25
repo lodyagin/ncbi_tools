@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.197 2006/09/21 17:33:30 bollin Exp $
+/* $Id: seqpanel.c,v 6.212 2007/07/18 16:00:17 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -486,13 +486,34 @@ static void MakeFeatureLine(Int4Ptr lCount, Int4 para, Int4 row, Int4 idx, SeqPa
   }
 }
 
+
+static BioseqPtr LockNthBioseqInAlignment(SeqAlignPtr salp, Int4 seq_num)
+{
+  SeqIdPtr    tmp_sip;
+  SeqEntryPtr oldscope, aln_scope;
+  BioseqPtr   bsp;
+  
+  if (salp == NULL || seq_num < 1) return NULL;
+  tmp_sip = AlnMgr2GetNthSeqIdPtr(salp, seq_num);
+  aln_scope = GetTopSeqEntryForEntityID (salp->idx.entityID);
+  oldscope = SeqEntrySetScope (aln_scope);
+  bsp = BioseqLockById (tmp_sip);
+  if (bsp == NULL) {
+    SeqEntrySetScope (NULL);
+    bsp = BioseqLockById (tmp_sip);
+  }
+  SeqEntrySetScope (oldscope);
+  tmp_sip = SeqIdFree (tmp_sip);
+  return bsp;
+}
+
+
 static BioseqPtr PNTR PNTR GetAlignmentBioseqLists (SeqAlignPtr salp)
 {
   Int4                num_alignments = 0, aln_num, alnRows, seq_num;
   BioseqPtr PNTR PNTR bioseqs_for_each_aln = NULL;
   BioseqPtr PNTR      bioseqs_for_aln;
   SeqAlignPtr         tmp_salp;
-  SeqIdPtr            tmp_sip;
   
   if (salp == NULL)
   {
@@ -520,8 +541,7 @@ static BioseqPtr PNTR PNTR GetAlignmentBioseqLists (SeqAlignPtr salp)
       {
         for (seq_num = 1; seq_num < alnRows + 1; seq_num++)
         {
-          tmp_sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, seq_num);
-          bioseqs_for_aln[seq_num - 1] = BioseqLockById(tmp_sip);
+          bioseqs_for_aln[seq_num - 1] = LockNthBioseqInAlignment(tmp_salp, seq_num);
         }
       }
     }
@@ -1143,13 +1163,70 @@ DrawAlignSideLineNumbers
 
 
 
+static double *GetAlignmentColumnPercentIDsForAlignmentSection (BioseqViewPtr bvp, Int4 line, Int4 aln_idx)
+{
+  Int4        i, start, stop;
+  SeqAlignPtr tmp_salp;
+  double *    pct_ids;
+  Int4        aln_len;
+
+  if (bvp == NULL) return NULL;
+  
+  for (i=0, tmp_salp = bvp->salp; i < aln_idx && tmp_salp != NULL; i++, tmp_salp = tmp_salp->next)
+  {  	
+  }
+  if (tmp_salp == NULL) return NULL;
+
+  start   = line * bvp->CharsAtLine;
+  stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
+
+  aln_len = AlnMgr2GetAlnLength(tmp_salp, FALSE);
+
+  pct_ids = GetAlignmentColumnPercentIdentities (tmp_salp, start, stop, FALSE, TRUE);
+  for (i = aln_len; i <= stop; i++)
+  {
+    pct_ids[i - start] = 1.0;
+  }
+  return pct_ids;
+}
+
+static void DrawPercentIDColors (double * pct_ids, Int2 x, Int2 y, Int4 line, BioseqViewPtr bvp, double threshhold)
+{
+  RecT     rct;
+  Int4     i;
+  Int4     start   = line * bvp->CharsAtLine;
+  Int4     stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
+  Int4     x_pos;
+
+  if (pct_ids == NULL) return;
+
+  for (i = start; i < stop; i++)
+  {
+    if (pct_ids[i - start] < threshhold) 
+    {
+      Gray ();
+      InvertColors ();
+      Black ();
+      x_pos = x + SEQ_X_OFFSET + bvp->SeqStartPosX + (i - start) * bvp->CharWidth
+              + ((i - start) / SEQ_GROUP_SIZE) * bvp->CharWidth;
+      LoadRect (&rct, x_pos,
+                      y + Descent (),
+                      x_pos + bvp->CharWidth,
+                      y - bvp->LineHeight + Descent ());
+      EraseRect (&rct);
+      InvertColors();
+    }
+  }
+}
+
+
 static void DrawAlignment
 (Int2 x, Int2 y, Int4 line, Int4 row, Uint1Ptr buf, Uint1Ptr seqbuf,
- Uint1Ptr alnbuf, BioseqViewPtr bvp, Int4 aln_idx)
+ Uint1Ptr alnbuf, BioseqViewPtr bvp, Int4 aln_idx, double *pct_ids)
 {
   Int2        block;
-  Char        alnlabel[13];
-  SeqIdPtr    sip;
+  CharPtr     alnlabel;
+  Int4        alnlabel_len;
   BioseqPtr   bsp;
   Int4        start   = line * bvp->CharsAtLine;
   Int4        stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
@@ -1164,8 +1241,7 @@ static void DrawAlignment
   {  	
   }
   if (tmp_salp == NULL) return;
-  sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, row);
-  bsp = BioseqLockById(sip);
+  bsp = LockNthBioseqInAlignment(tmp_salp, row);
   if (bsp == NULL) return;
 
   AlignmentIntervalToString (tmp_salp, row, start, stop, bvp->TargetRow,
@@ -1174,7 +1250,10 @@ static void DrawAlignment
   
   /* finally draw everything */
   best_id = SeqIdFindBestAccession (bsp->id);
-  SeqIdWrite (best_id, alnlabel, PRINTID_TEXTID_ACCESSION, 12);        /* Get label           */
+  alnlabel_len = (bvp->SeqStartPosX / bvp->CharWidth) - 10;
+  alnlabel = (CharPtr) MemNew (sizeof (Char) * (alnlabel_len + 1)); 
+
+  SeqIdWrite (best_id, alnlabel, PRINTID_TEXTID_ACCESSION, alnlabel_len);        /* Get label           */
   if (row == bvp->TargetRow  &&  !bvp->viewWholeEntity) Red();         /* Highlight current   */
   else Black();
   
@@ -1184,7 +1263,8 @@ static void DrawAlignment
   SelectFont ((FonT)(bvp->displayFont));  
   PaintStringEx (alnlabel, x+10, y);                                   /* Draw sequence label */
 
-  
+  alnlabel = MemFree (alnlabel);
+
   if (isSelected (bsp->idx.entityID, bsp->idx.itemID, OBJ_BIOSEQ, bvp))
   {
     Gray ();
@@ -1199,7 +1279,8 @@ static void DrawAlignment
     invert = TRUE;
   }
   else
-  {
+  {    
+    DrawPercentIDColors (pct_ids, x, y, line, bvp, (double) 0.5);  
     Black ();
   }
 
@@ -1826,11 +1907,9 @@ static void DrawFeatureCodonLines
   /* need to find feature */
   if (bvp->seqAlignMode) 
   {
-    SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
-    BioseqPtr bsp_tmp = BioseqLockById(sip_tmp);
+    BioseqPtr bsp_tmp = LockNthBioseqInAlignment(bvp->salp, row);
     sfp = SeqMgrGetDesiredFeature (ObjMgrGetEntityIDForPointer(bsp_tmp), bsp_tmp, itemID, 0, NULL, &fcontext);
     BioseqUnlock (bsp_tmp);
-    SeqIdFree    (sip_tmp);
   }
   else
   {
@@ -2048,11 +2127,9 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Uint4 itemID,
   y -= Descent();
     
   if (bvp->seqAlignMode) {
-    SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
-    BioseqPtr bsp_tmp = BioseqLockById(sip_tmp);
+    BioseqPtr bsp_tmp = LockNthBioseqInAlignment(bvp->salp, row);
     sfp = SeqMgrGetDesiredFeature (ObjMgrGetEntityIDForPointer(bsp_tmp), bsp_tmp, itemID, 0, NULL, &fcontext);
     BioseqUnlock (bsp_tmp);
-    SeqIdFree    (sip_tmp);
     aln_row = row;
     aln_strand = AlnMgr2GetNthStrand (bvp->salp, row);
   }
@@ -2383,7 +2460,8 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
   Uint1Ptr         buf, seqbuf, alnbuf;
   BaR              sb;
   RecT             r;
-  Int4             line;
+  Int4             line, last_row = -1;
+  double *         pct_ids = NULL;
   Int2             x, y;
   Int4             aln_idx;
   Int4             start;
@@ -2443,12 +2521,19 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
           break;
         case eTypeAlignSequence:
           DrawAlignSideLineNumbers(x, y, splp->bioSeqLine, splp->row, bvp, aln_idx);
-          DrawAlignment(x, y, splp->bioSeqLine, splp->row, buf, seqbuf, alnbuf, bvp, aln_idx);                /* Draw the alignment   */
+          if (last_row == -1 || splp->row < last_row)
+          {
+            /* commented out per indexer request */
+/*            pct_ids = MemFree (pct_ids);
+            pct_ids = GetAlignmentColumnPercentIDsForAlignmentSection (bvp, splp->bioSeqLine, aln_idx); */
+          }
+          DrawAlignment(x, y, splp->bioSeqLine, splp->row, buf, seqbuf, alnbuf, bvp, aln_idx, pct_ids);                /* Draw the alignment   */
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           if (bvp->last_aln_row_clicked == splp->row)
           {
             DrawSequenceCaret (x, y, splp->bioSeqLine, bvp);
           }
+          last_row = splp->row;
           break;
       	case eTypeAlignDivider:
       	  DrawAlignmentDivider (x, y, bvp);
@@ -2506,6 +2591,7 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
   }
   MemFree (buf);
   SeqPortFree (spp);
+  pct_ids = MemFree (pct_ids);
 }
 
 static void onDrawSeqPanel (PaneL p)
@@ -3708,11 +3794,9 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Uint4 itemID
   Uint2             interval_strand;
     
   if (bvp->seqAlignMode) {
-    SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
-    BioseqPtr bsp_tmp = BioseqLockById(sip_tmp);
+    BioseqPtr bsp_tmp = LockNthBioseqInAlignment(bvp->salp, row);
     sfp = SeqMgrGetDesiredFeature (ObjMgrGetEntityIDForPointer(bsp_tmp), bsp_tmp, itemID, 0, NULL, &fcontext);
     BioseqUnlock (bsp_tmp);
-    SeqIdFree    (sip_tmp);
     aln_row = row;
   }
   else {
@@ -4019,7 +4103,6 @@ static void PrintAlignment
  Uint1Ptr alnbuf, BioseqViewPtr bvp, Int4 aln_idx)
 {
   Int2        block;
-  SeqIdPtr    sip;
   BioseqPtr   bsp;
   Int4        start   = line * bvp->CharsAtLine;
   Int4        stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
@@ -4040,8 +4123,7 @@ static void PrintAlignment
   {  	
   }
   if (tmp_salp == NULL) return;
-  sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, row);
-  bsp = BioseqLockById(sip);
+  bsp = LockNthBioseqInAlignment(tmp_salp, row);
 
   AlignmentIntervalToString (tmp_salp, row, start, stop, bvp->TargetRow,
                              bvp->viewWholeEntity, seqbuf, alnbuf, &alnbuf_len,
@@ -4747,7 +4829,8 @@ static Int4 FindBestNonGapPosition (Int4 seq_offset, BioseqPtr bsp, Boolean push
 		  seg_len = slip->length;
 		  if (seq_offset >= cum_offset && seq_offset < cum_offset + seg_len)
 		  {
-		    if (slip->seq_data == NULL && slip->fuzz != NULL && slip->fuzz->choice == 4)
+		    if ((slip->seq_data == NULL || slip->seq_data_type == Seq_code_gap) &&
+		        slip->fuzz != NULL && slip->fuzz->choice == 4)
 		    {
 		      if (push_left)
 		      {
@@ -6050,7 +6133,7 @@ static void SeqEdDeleteDeltaSeq (SeqEdFormPtr sefp, Boolean save_clip)
 		if (slip != NULL && curr_pos > sefp->edit_pos_start)
 		{
 		  is_unknown_gap = FALSE;
-		  if (slip->seq_data == NULL)
+		  if (slip->seq_data == NULL || slip->seq_data_type == Seq_code_gap)
 		  {
 		    action = eSeqEdDeleteGap;
 		    if (slip->fuzz != NULL && slip->fuzz->choice == 4)
@@ -6261,7 +6344,8 @@ static void MakeGapFeats (
     if (vnp->choice == 2) {
       litp = (SeqLitPtr) vnp->data.ptrvalue;
       if (litp == NULL) continue;
-      if (litp->seq_data == NULL && litp->length > 0) {
+      if ((litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) &&
+           litp->length > 0) {
         if (fakebsp == NULL) {
           /* to be freed with MemFree, not BioseqFree */
           fakebsp = MemNew (sizeof (Bioseq));
@@ -7191,7 +7275,7 @@ static ValNodePtr FindInCDSTranslation (SeqFeatPtr fake_cds, CharPtr pattern, Bo
   prot_bsp = BioseqNew();
   prot_bsp->mol = Seq_mol_aa;
   prot_bsp->repr = Seq_repr_raw;
-  prot_bsp->seq_data = bs;
+  prot_bsp->seq_data = (SeqDataPtr) bs;
   prot_bsp->seq_data_type = Seq_code_iupacaa;
   start = SeqLocStart (fake_cds->location);
   stop = SeqLocStop (fake_cds->location);
@@ -7481,6 +7565,7 @@ static void CleanupFindWindow (GraphiC g, Pointer data)
   }
 }
 
+
 static void SeqEdFindPatternDialog (IteM i)
 {
   WindoW             w;
@@ -7489,6 +7574,7 @@ static void SeqEdFindPatternDialog (IteM i)
   GrouP              h, g1, g2;
   ButtoN             b;
   PrompT             p1;
+  
 
   if (i == NULL) return;
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
@@ -7504,12 +7590,15 @@ static void SeqEdFindPatternDialog (IteM i)
   w = ParentWindow (i);
   
   sefp->find_window=FixedWindow (-50, -33, -10, -10, "Find", StdCloseWindowProc);
+
   fdp = (FindDlgPtr) MemNew (sizeof (FindDlgData));
   SetObjectExtra (sefp->find_window, (Pointer) fdp, CleanupFindWindow);
   fdp->w = w;
   fdp->find_window = &(sefp->find_window);
   fdp->search_choice_grp = NULL;
   
+  CreateStandardEditMenu (sefp->find_window);
+
   h = HiddenGroup (sefp->find_window, -1, 0, NULL);
 
   p1 = StaticPrompt (h, "Find pattern:", 0, popupMenuHeight, programFont, 'l');
@@ -8340,7 +8429,7 @@ static Int4 FindMaxLabelLen (SeqAlignPtr salp)
 {
   SeqIdPtr  sip;
   BioseqPtr bsp;
-  Char      tmpbuf[42];
+  Char      tmpbuf[256];
   Int4      i;
   Int4      max_len = 0;
   Int4      len;
@@ -8352,8 +8441,8 @@ static Int4 FindMaxLabelLen (SeqAlignPtr salp)
     if (bsp != NULL) {
       sip = SeqIdFindBestAccession (bsp->id);
     }
-    SeqIdWrite (sip, tmpbuf, PRINTID_TEXTID_ACCESSION, 41);
-    len = StringLen (tmpbuf) + 1;
+    SeqIdWrite (sip, tmpbuf, PRINTID_TEXTID_ACCESSION, sizeof(tmpbuf) - 1);
+    len = StringLen (tmpbuf) + 2;
     if (len > max_len) {
       max_len = len;
     }
@@ -8397,6 +8486,7 @@ static Int4 GetMaxCoordLen (SeqAlignPtr salp)
   SeqIdPtr  sip;
   Int4      i;
   Int4      max_len = 0;
+  SeqEntryPtr oldscope;
 
   if (salp == NULL) {
     return 0;
@@ -8405,6 +8495,11 @@ static Int4 GetMaxCoordLen (SeqAlignPtr salp)
   for (i = 0; i < salp->dim; i++) {
     sip = AlnMgr2GetNthSeqIdPtr(salp, i + 1);
     bsp = BioseqFind (sip);
+    if (bsp == NULL) {
+      oldscope = SeqEntrySetScope (NULL);
+      bsp = BioseqFind (sip);
+      SeqEntrySetScope (oldscope);
+    }
     if (bsp->length > max_len) max_len = bsp->length;
   }
   
@@ -8836,6 +8931,183 @@ static void RemoveSequencesFromAlignment (IteM i)
   }
 }
 
+/* nth is the sequence in the alignment to reverse (1 is first, 2 is second) */
+extern void ReverseAlignmentStrand (SeqAlignPtr salp, Int4 nth)
+{
+  DenseSegPtr dsp;
+  SeqIdPtr    sip;
+  BioseqPtr   bsp;
+  Int4        i, j;
+  
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
+  {
+    return;
+  }
+  
+  dsp = (DenseSegPtr) salp->segs;
+
+  if (dsp->strands == NULL) {
+    dsp->strands = (Uint1Ptr) MemNew (dsp->numseg * dsp->dim * sizeof (Uint1));
+    MemSet (dsp->strands, Seq_strand_plus, dsp->numseg * dsp->dim * sizeof (Uint1));
+  }
+  
+  sip = AlnMgr2GetNthSeqIdPtr (salp, nth);
+  bsp = BioseqFind (sip);
+  if (bsp == NULL)
+  {
+    return;
+  }
+  for (i = 0; i < dsp->numseg; i++)
+  {
+    j = (i * dsp->dim) + nth - 1;
+    
+    if (dsp->starts[j] > -1)
+    {
+      dsp->starts[j] = bsp->length - dsp->starts[j] - dsp->lens[i];
+    }
+    if (dsp->strands [j] == Seq_strand_minus)
+    {
+      dsp->strands [j] = Seq_strand_plus;
+    }
+    else
+    {
+      dsp->strands [j] = Seq_strand_minus;
+    }
+  }
+  
+}
+
+
+static void ReverseSequenceStrandsInAlignment (IteM i)
+{
+  SeqEdFormPtr  sefp;
+  Int4          n;
+  SeqIdPtr      sip;
+  BioseqPtr     bsp;
+  SeqEntryPtr   sep;
+  ValNodePtr    order_list = NULL, vnp;
+  Int4          num_to_reverse;
+  SeqEntryPtr   oldscope;
+  
+  sefp = (SeqEdFormPtr) GetObjectExtra (i);
+  
+  if (sefp != NULL && sefp->bfp != NULL && sefp->bfp->bvd.salp != NULL)
+  {
+    if (sefp->bfp->bvd.salp->segtype != SAS_DENSEG) 
+    {
+      Message (MSG_ERROR, "You cannot reverse sequence strands in a pairwise alignment.  You must convert it first.");
+      return;
+    }
+    sep = GetTopSeqEntryForEntityID (sefp->input_entityID);
+    /* first, check for pairwise alignments */
+    for (n = 1; n <= sefp->bfp->bvd.salp->dim; n++)
+    {
+      sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, n);
+      bsp = BioseqFind (sip);
+      if (bsp == NULL) {
+        oldscope = SeqEntrySetScope (NULL);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (oldscope);
+      }
+      if (bsp != NULL && isSelected (bsp->idx.entityID, bsp->idx.itemID, OBJ_BIOSEQ, &(sefp->bfp->bvd)))
+      {
+        ValNodeAddInt (&order_list, 0, n);
+      }
+    }
+    if (order_list == NULL)
+    {
+      Message (MSG_ERROR, "You must select a sequence for strand reversal!");
+      return;
+    }
+    
+    num_to_reverse = ValNodeLen (order_list);
+    if (ANS_CANCEL == Message (MSG_OKC, 
+                               "You are about to reverse %d sequence%s in the alignment.  Are you sure?",
+                               num_to_reverse,
+                               num_to_reverse == 1 ? "" : "s"))
+    {
+      order_list = ValNodeFree (order_list);
+      return;
+    }
+    
+    
+    for (vnp = order_list; vnp != NULL; vnp = vnp->next)
+    {
+      ReverseAlignmentStrand (sefp->bfp->bvd.salp, vnp->data.intvalue);
+    }
+    order_list = ValNodeFree (order_list);
+    ObjMgrSetDirtyFlag (sefp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, sefp->input_entityID, 0, 0);  
+    /* reindex alignment */
+    SAIndex2Free2(sefp->bfp->bvd.salp->saip);
+    sefp->bfp->bvd.salp->saip = NULL;
+    AlnMgr2IndexSeqAlign(sefp->bfp->bvd.salp);
+    
+    /* update alignment editor window */
+    ResizeSeqEditorWindow ((WindoW)sefp->form);
+  }
+}
+
+
+/* need to reverse the order of the segments and flip the strands */
+extern void FlipAlignment (SeqAlignPtr salp)
+{
+  DenseSegPtr dsp;
+  Int4        row, seg, swap_start, swap_len, opp_seg;
+  Score    swap_score;
+  Uint1       swap_strand;
+  
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
+  {
+    return;
+  }
+  
+  dsp = (DenseSegPtr) salp->segs;
+  if (dsp->strands == NULL) {
+    dsp->strands = (Uint1Ptr) MemNew (dsp->numseg * dsp->dim * sizeof (Uint1));
+    MemSet (dsp->strands, Seq_strand_plus, dsp->numseg * dsp->dim * sizeof (Uint1));
+  }
+
+  for (seg = 0; seg < dsp->numseg / 2; seg++) {
+    /* swap segments to reverse order */
+    opp_seg = dsp->numseg - 1 - seg;
+    /* swap lens */
+    swap_len = dsp->lens[seg];
+    dsp->lens[seg] = dsp->lens[opp_seg];
+    dsp->lens[opp_seg] = swap_len;
+    /* swap scores */
+    if (dsp->scores != NULL) {
+      swap_score = dsp->scores[seg];
+      dsp->scores[seg] = dsp->scores[opp_seg];
+      dsp->scores[opp_seg] = swap_score;
+    }
+    for (row = 0; row < dsp->dim; row++) {
+      /* swap strands */
+      swap_strand = dsp->strands[dsp->dim * seg + row];
+      dsp->strands[dsp->dim * seg + row] = dsp->strands[dsp->dim * opp_seg + row];
+      dsp->strands[dsp->dim * opp_seg + row] = swap_strand;
+      
+      /* swap starts */
+      swap_start = dsp->starts[dsp->dim * seg + row];
+      dsp->starts[dsp->dim * seg + row] = dsp->starts[dsp->dim * opp_seg + row];
+      dsp->starts[dsp->dim * opp_seg + row] = swap_start;      
+    }
+  }
+  
+  /* reverse segments */
+  for (seg = 0; seg < dsp->numseg; seg++) {
+    for (row = 0; row < dsp->dim; row++) {
+      if (dsp->strands[dsp->dim * seg + row] == Seq_strand_minus) {
+        dsp->strands[dsp->dim * seg + row] = Seq_strand_plus;
+      } else {
+        dsp->strands[dsp->dim * seg + row] = Seq_strand_minus;
+      }
+    }
+  }
+  SAIndex2Free2(salp->saip);
+  salp->saip = NULL;
+}
+
 typedef struct setalntarget 
 {
   SeqEdFormPtr sefp;
@@ -9113,11 +9385,14 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop, Boolean allow_fe
   IteM            localItem;
   MenU            sub;
   SeqEdFormPtr    sefp;
+  Boolean         indexerVersion;
   
   if (w == NULL) return;
   sefp = (SeqEdFormPtr) GetObjectExtra (w);
   if (sefp == NULL) return;
   
+  indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+
   /* File Menu */
   edit_menu = PulldownMenu (w, "File");
   sub = SubMenu (edit_menu, "Export");
@@ -9133,8 +9408,13 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop, Boolean allow_fe
   
   /* Edit Menu */
   edit_menu = PulldownMenu (w, "Edit");
-  localItem = CommandItem (edit_menu, "Remove Sequences From Alignment", 
-                           RemoveSequencesFromAlignment);
+  if (indexerVersion) {
+    localItem = CommandItem (edit_menu, "Remove Sequences From Alignment", 
+                            RemoveSequencesFromAlignment);
+    SetObjectExtra (localItem, sefp, NULL);
+  }
+  localItem = CommandItem (edit_menu, "Reverse Sequence Strands In Alignment", 
+                           ReverseSequenceStrandsInAlignment);
   SetObjectExtra (localItem, sefp, NULL);
   localItem = CommandItem (edit_menu, "Validate Alignment", SeqAlnValidateAlignment);
   SetObjectExtra (localItem, sefp, NULL);
@@ -9189,7 +9469,6 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   FonT               font;
   Int4               btns_across;
   OMUserDataPtr      omudp;
-  SeqIdPtr           sip;
   
   if (salp == NULL)
   {
@@ -9236,13 +9515,11 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   
   /* find first viewable target */
   sefp->bfp->bvd.TargetRow = 1;
-  sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
-  sefp->bfp->bvd.bsp = BioseqLockById (sip);
+  sefp->bfp->bvd.bsp = LockNthBioseqInAlignment(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
   while (sefp->bfp->bvd.bsp == NULL && sefp->bfp->bvd.TargetRow < sefp->bfp->bvd.salp->dim)
   {
     sefp->bfp->bvd.TargetRow ++;
-    sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
-    sefp->bfp->bvd.bsp = BioseqLockById (sip);
+    sefp->bfp->bvd.bsp = LockNthBioseqInAlignment(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
   }
   sefp->bfp->bvd.DrawGrid = FALSE;
   sefp->bfp->bvd.SeqStartPosX = (FindMaxLabelLen (sefp->bfp->bvd.salp) + 10) * charwidth; 
@@ -9574,6 +9851,7 @@ NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 e
   BioseqPtr     newbsp;
   ProtRefPtr    prp;
   SeqFeatPtr    prot_sfp;
+  SeqDataPtr    sdp;
   
   if (featbsp == NULL || sfp == NULL || sfp->location == NULL 
       || sfp->data.choice != SEQFEAT_CDREGION) 
@@ -9622,7 +9900,7 @@ NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 e
       newbsp->repr = Seq_repr_raw;
       newbsp->mol = Seq_mol_aa;
       newbsp->seq_data_type = Seq_code_ncbieaa;
-      newbsp->seq_data = bs;
+      newbsp->seq_data = (SeqDataPtr) bs;
       newbsp->length = BSLen (bs);
       
       if (old_prot == NULL)
@@ -9665,13 +9943,13 @@ NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 e
              	
       	/* then replace old protein with new */
       	seq_data_type = old_prot->seq_data_type;
-      	bs = old_prot->seq_data;
+      	sdp = old_prot->seq_data;
       	old_length = old_prot->length;
       	old_prot->seq_data_type = newbsp->seq_data_type;
       	old_prot->seq_data = newbsp->seq_data;
       	old_prot->length = newbsp->length;
       	newbsp->seq_data_type = seq_data_type;
-      	newbsp->seq_data = bs;
+      	newbsp->seq_data = sdp;
       	newbsp->length = old_length;
       	BioseqFree (newbsp);
       }

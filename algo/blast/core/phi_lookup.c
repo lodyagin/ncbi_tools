@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.c,v 1.38 2006/09/15 13:10:27 madden Exp $
+/* $Id: phi_lookup.c,v 1.39 2006/11/21 17:14:28 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,15 +34,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_lookup.c,v 1.38 2006/09/15 13:10:27 madden Exp $";
+    "$Id: phi_lookup.c,v 1.39 2006/11/21 17:14:28 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/pattern.h>
 #include <algo/blast/core/phi_lookup.h>
-#include <algo/blast/core/blast_message.h>
 #include <algo/blast/core/blast_encoding.h>
+#include <algo/blast/core/blast_util.h> /* for NCBI2NA_UNPACK_BASE */
 #include "pattern_priv.h"
 
 /* Mask for all 1 bits up to an alphabet size. Declared in pattern_priv.h */
@@ -740,10 +737,10 @@ Int4 PHIBlastScanSubject(const LookupTableWrap* lookup_wrap,
    SPHIPatternSearchBlk* pattern_blk;
    Int4 index, count = 0, twiceNumHits;
    Int4 hitArray[PHI_MAX_HIT];
-   const Boolean kIsDna = (lookup_wrap->lut_type == PHI_NA_LOOKUP);
+   const Boolean kIsDna = (lookup_wrap->lut_type == ePhiNaLookupTable);
 
-   ASSERT(lookup_wrap->lut_type == PHI_NA_LOOKUP ||
-          lookup_wrap->lut_type == PHI_AA_LOOKUP);
+   ASSERT(lookup_wrap->lut_type == ePhiNaLookupTable ||
+          lookup_wrap->lut_type == ePhiLookupTable);
 
    pattern_blk = (SPHIPatternSearchBlk*) lookup_wrap->lut;
 

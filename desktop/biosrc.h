@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -111,13 +111,17 @@ typedef struct modtextfix
   Boolean remove_all_transgenic;
   Boolean remove_all_environmental;
   Boolean remove_all_rearranged;
+  Boolean remove_all_metagenomic;
   Boolean move_all_germline;
   Boolean move_all_transgenic;
   Boolean move_all_environmental;
   Boolean move_all_rearranged;
+  Boolean move_all_metagenomic;
 } ModTextFixData, PNTR ModTextFixPtr;
 extern ModTextFixPtr ModTextFixNew (void);
 extern void RemoveTextFromTextFreeSubSourceModifiers (BioSourcePtr biop, Pointer userdata);
+extern EnumFieldAssocPtr GetSubSourceAndOrgModEnum (Boolean get_discouraged, Boolean get_discontinued);
+extern EnumFieldAssocPtr GetModifiersEnum (Boolean get_subsource, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued);
 
 #ifdef __cplusplus
 }

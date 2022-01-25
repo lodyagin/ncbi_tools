@@ -1,4 +1,4 @@
-/* $Id: blast_tune.c,v 1.1 2006/04/19 17:40:28 papadopo Exp $
+/* $Id: blast_tune.c,v 1.2 2006/11/21 17:08:51 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,10 +35,10 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_tune.c,v 1.1 2006/04/19 17:40:28 papadopo Exp $";
+    "$Id: blast_tune.c,v 1.2 2006/11/21 17:08:51 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_tune.h>
 
 /** structure containing intermediate data to be processed */

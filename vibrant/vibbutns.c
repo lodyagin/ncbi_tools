@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibbutns.c,v $
+* Revision 6.12  2007/05/01 22:01:30  kans
+* changes in preparation for supporing Quartz on Macintosh
+*
 * Revision 6.11  2006/09/14 19:18:28  ivanov
 * Rollback last changes. All missed defines added to corelib/ncbiwin.h.
 *
@@ -595,7 +598,7 @@ static void Nlm_EnableButton (Nlm_GraphiC b, Nlm_Boolean setFlag, Nlm_Boolean sa
     tempPort = Nlm_SavePortIfNeeded (b, savePort);
     c = Nlm_GetButtonHandle ((Nlm_ButtoN) b);
 #ifdef WIN_MAC
-    HiliteControl (c, 0);
+    ActivateControl (c);
 #endif
 #ifdef WIN_MSWIN
     EnableWindow (c, TRUE);
@@ -619,7 +622,7 @@ static void Nlm_DisableButton (Nlm_GraphiC b, Nlm_Boolean setFlag, Nlm_Boolean s
   tempPort = Nlm_SavePortIfNeeded (b, savePort);
   c = Nlm_GetButtonHandle ((Nlm_ButtoN) b);
 #ifdef WIN_MAC
-  HiliteControl (c, 255);
+  DeactivateControl (c);
 #endif
 #ifdef WIN_MSWIN
   EnableWindow (c, FALSE);
@@ -774,7 +777,7 @@ static void Nlm_SetButtonStatus (Nlm_GraphiC b, Nlm_Int2 item,
     val = 0;
   }
 #ifdef WIN_MAC
-  SetControlValue (c, val);
+  SetControl32BitValue (c, val);
 #endif
 #ifdef WIN_MSWIN
   Button_SetCheck (c, val);
@@ -792,7 +795,7 @@ static Nlm_Boolean Nlm_GetButtonStatus (Nlm_GraphiC b, Nlm_Int2 item)
 
   c = Nlm_GetButtonHandle ((Nlm_ButtoN) b);
 #ifdef WIN_MAC
-  return (GetControlValue (c) != 0);
+  return (GetControl32BitValue (c) != 0);
 #endif
 #ifdef WIN_MSWIN
   return (Nlm_Boolean) (Button_GetCheck (c) != 0);
@@ -1084,6 +1087,7 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
 #ifdef WIN_MAC
   Nlm_Int2         procID;
   Nlm_RectTool     rtool;
+  CFStringRef      cfTitle;
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4        style;
@@ -1109,33 +1113,31 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
   dflt = (Nlm_Boolean) (type == DEFAULT_STYLE);
 
 #ifdef WIN_MAC
-  Nlm_CtoPstr (temp);
+  cfTitle = CFStringCreateWithCString(NULL, temp, kCFStringEncodingMacRoman);
   switch (type) {
-    case PUSH_STYLE:
-      procID = 0;
-      r.right -= shrinkX;
-      r.bottom -= shrinkY;
-      break;
     case DEFAULT_STYLE:
-      procID = 0;
       if (! Nlm_HasAquaMenuLayout ()) {
         border = 5;
       }
+      /* fall through */
+    case PUSH_STYLE:
       r.right -= shrinkX;
       r.bottom -= shrinkY;
+      Nlm_RecTToRectTool (&r, &rtool);
+      CreatePushButtonControl(wptr, &rtool, cfTitle, &c);
       break;
     case CHECK_STYLE:
-      procID = 1;
+      Nlm_RecTToRectTool (&r, &rtool);
+      CreateCheckBoxControl(wptr, &rtool, cfTitle, 0, FALSE, &c);
       break;
     case RADIO_STYLE:
-      procID = 2;
+      Nlm_RecTToRectTool (&r, &rtool);
+      CreateRadioButtonControl(wptr, &rtool, cfTitle, 0, FALSE, &c);
       break;
     default:
       procID = 0;
       break;
   }
-  Nlm_RecTToRectTool (&r, &rtool);
-  c = NewControl (wptr, &rtool, (StringPtr) temp, FALSE, 0, 0, 1, procID, 0);
   Nlm_LoadButtonData (b, c, border, offset, shrinkX, shrinkY, dflt);
 #endif
 

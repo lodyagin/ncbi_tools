@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.94 2005/08/31 20:34:30 coulouri Exp $
+/* $Id: cddutil.c,v 1.96 2007/05/07 13:27:49 kans Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.94 $
+* $Revision: 1.96 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.96  2007/05/07 13:27:49  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 1.95  2007/01/22 20:16:38  kans
+* added new parameter to posPurgeMatches from posit.h
+*
 * Revision 1.94  2005/08/31 20:34:30  coulouri
 * From Mike Gertz:
 * cddutil.c in CddReadBlastOptions:
@@ -1284,6 +1290,9 @@ BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
 
   if (from < 0) return FALSE;
   if (oldbsp == NULL) return NULL;
+
+  if (oldbsp->seq_data_type == Seq_code_gap) return NULL;
+
   len = to - from + 1;
   if (len <= 0) return NULL;
   newbsp = BioseqNew();
@@ -1328,7 +1337,7 @@ BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
       seqtype = oldbsp->seq_data_type;
     }
     newbsp->seq_data_type = seqtype;
-    newbsp->seq_data = BSDup(oldbsp->seq_data);
+    newbsp->seq_data = (SeqDataPtr) BSDup((ByteStorePtr) oldbsp->seq_data);
     handled = TRUE;
   }
 
@@ -1836,7 +1845,6 @@ Nlm_FloatHi LIBCALL SeqAlignConservation(SeqAlignPtr salp, Nlm_FloatHi fract,
   Int4               i, c, a;
   Int4               qlength, nover = 0;
   Int4               alphabetSize = 26;
-  Int4               nColumns;
   Int4               *ntypes;
   Nlm_FloatHi        **typefreq, sumfreq;
   DenseDiagPtr       ddp;
@@ -2462,7 +2470,7 @@ void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bs
     sbp->kbp_gap = sbp->kbp_gap_psi;
     CddposInitializeInformation(posSearch,sbp,compactSearch);
     CddposDenseDiagDemographics(posSearch, compactSearch, listOfSeqAligns);
-    posPurgeMatches(posSearch, compactSearch);
+    posPurgeMatches(posSearch, compactSearch, NULL);
 /*---------------------------------------------------------------------------*/
 /* remove the consensus from the CposComputation if present in the CDD       */
 /*---------------------------------------------------------------------------*/
@@ -2662,7 +2670,7 @@ void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
     sbp->kbp_gap = sbp->kbp_gap_psi;
     CddposInitializeInformation(posSearch,sbp,compactSearch);
     CddposDemographics(posSearch, compactSearch, listOfSeqAligns);
-    posPurgeMatches(posSearch, compactSearch);
+    posPurgeMatches(posSearch, compactSearch, NULL);
     posComputeExtents(posSearch, compactSearch);
     posComputeSequenceWeights(posSearch, compactSearch, 1.0);
     posCheckWeights(posSearch, compactSearch);
@@ -4358,7 +4366,7 @@ static void CddCposCompPart1(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
     else {
       CddposDemographics(posSearch, compactSearch, listOfSeqAligns);
     }
-    posPurgeMatches(posSearch, compactSearch);
+    posPurgeMatches(posSearch, compactSearch, NULL);
     posComputeExtents(posSearch, compactSearch);
     posComputeSequenceWeights(posSearch, compactSearch, 1.0);
     posCheckWeights(posSearch, compactSearch);
@@ -4737,10 +4745,15 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
   ValNodePtr              ColumnHead, LetterHead, newRow, RowHead, newLetter;
   SeqCodeTablePtr         sctp;
   Int4                    numSeqs, numASeqs, alignLength, index, a, iNew, i;
-  Int4                    scale_factor, j, OutLen, jj;
+  /*
+  Int4                    scale_factor;
+  */
+  Int4                    j, OutLen, jj;
   Char                    ckptFileName[PATH_MAX];
   Char                    cseqFileName[PATH_MAX];
+  /*
   Char                    mtrxFileName[PATH_MAX];
+  */
   FILE                   *fp;
   Boolean                 bHasConsensus;
   Boolean                 bWriteOut = FALSE;
@@ -4804,7 +4817,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
                        compactSearch->qlength, numSeqs);
   CddposProcessAlignment(posSearch,compactSearch,salp,numSeqs,alignLength,bspFake);
   posSearch->posNumSequences = numSeqs;
-  posPurgeMatches(posSearch, compactSearch);
+  posPurgeMatches(posSearch, compactSearch, NULL);
   if (bHasConsensus) posCancel(posSearch,compactSearch,0,0,0,compactSearch->qlength);
   posComputeExtents(posSearch, compactSearch);
   posComputeSequenceWeights(posSearch, compactSearch, 1.0);

@@ -1,10 +1,10 @@
-.TH FASTACMD 1 2003-11-10 NCBI "NCBI Tools User's Manual"
+.TH FASTACMD 1 2005-11-04 NCBI "NCBI Tools User's Manual"
 .SH NAME
 fastacmd \- retrieve FASTA sequences from a BLAST database
 .SH SYNOPSIS
 .B fastacmd
 [\|\fB\-\fP\|]
-[\|\fB\-D\fP\|]
+[\|\fB\-D\fP\ \fIN\fP\fP\|]
 [\|\fB\-I\fP\|]
 [\|\fB\-L\fP\ \fIstart\fP,\fIstop\fP\|]
 [\|\fB\-P\fP\ \fIN\fP\|]
@@ -32,8 +32,18 @@ A summary of options is included below.
 \fB\-\fP
 Print usage message
 .TP
-\fB\-D\fP
-Dump the entire database in FASTA format
+\fB\-D\fP\ \fIN\fP
+Dump the entire database in some format:
+.RS
+.PD 0
+.IP 1
+fasta
+.IP 2
+GI list
+.IP 3
+Accession.version list
+.PD
+.RE
 .TP
 \fB\-I\fP
 Print database information only (overrides all other options)
@@ -69,7 +79,7 @@ Use ^A (\e001) as non-redundant defline separator
 Database (default is nr)
 .TP
 \fB\-i\fP\ \fIstr\fP
-Input file wilth GIs/accessions/locuses for batch retrieval
+Input file with GIs/accessions/loci for batch retrieval
 .TP
 \fB\-l\fP\ \fIN\fP
 Line length for sequence (default = 80)
@@ -91,8 +101,9 @@ nucleotide
 .RE
 .TP
 \fB\-s\fP\ \fIstr\fP
-Search string: GIs, accessions and locuses may be used delimited by
-commas
+Comma-delimited search string(s).
+GIs, accessions, loci, or fullSeq-id strings may be used,
+\fIe.g.\fP, \fB555\fP, \fBAC147927\fP, \fB'gnl|dbname|tag'\fP
 .TP
 \fB\-t\fP
 Definition line should contain target GI only
@@ -115,4 +126,4 @@ No taxonomy database was found.
 The National Center for Biotechnology Information.
 .SH SEE ALSO
 .BR blast (1),
-fastacmd.txt
+fastacmd.html.

@@ -1,3 +1,4 @@
+
 MODULE valid
 $$ SEQ_INST, 1
 $^   ExtNotAllowed, 1
@@ -370,6 +371,39 @@ The title ends with incorrect punctuation marks.
 $^   BadPCRPrimerName, 38
 The PCR primer name appears to be a sequence instead of an identifying label.
 
+$^   BioSourceOnProtein, 39
+A BioSource descriptor should not be placed on a protein that is in a nuc-prot set.
+
+$^   BioSourceDbTagConflict, 40
+Multiple db_xrefs with the same database should not appear on a single BioSource.
+
+$^   DuplicatePCRPrimerSequence, 41
+The PCR primer sequence has duplicate subsequences.
+
+$^   MultipleNames, 42
+There are multiple name descriptors in the same Bioseq or BioseqSet chain.
+
+$^   MultipleComments, 43
+There are multiple identical comment descriptors in the same Bioseq or BioseqSet chain.
+
+$^   LatLonProblem, 44
+There is a problem with the lat_lon qualifier in the BioSource.
+
+$^   LatLonFormat, 45
+The format of lat_lon should be dd.dd N|S ddd.dd E|W.
+
+$^   LatLonRange, 46
+Latitude or longitude is out of range.
+
+$^   LatLonValue, 47
+Latitude or longitude values appear to be in the wrong hemisphere or swapped.
+
+$^   LatLonCountry, 48
+The lat_lon coordinate does not map to the indicated country.
+
+$^   LatLonState, 49
+The lat_lon coordinate does not map to the indicated state or province.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -410,6 +444,10 @@ data.
 
 $^   EmbeddedScript, 11
 Script or other markup tags should not be used in sequence record fields.
+
+
+$^   PublicationInconsistency, 12
+Some fields in the publication should not be present with other fields.
 
 $$ SEQ_PKG, 4
 
@@ -987,6 +1025,61 @@ The UTR does not have the expected range.
 $^ CDShasTooManyXs, 132
 The CDS translation has greater than 50 percent ambiguous X residues.
 
+$^ SuspiciousFrame, 133
+The CDS has a frame greater than 1 that is not expected in this context.
+
+$^ TerminalXDiscrepancy, 134
+The CDS translation and protein product sequence have a different number of terminal Xs.
+
+$^ UnnecessaryTranslExcept, 135
+The CDS translates to the same amino acid as indicated by the transl_except code break.
+
+$^ SuspiciousQualifierValue, 136
+The value of this qualifier is constrained to a particular vocabulary of style.  This
+value appears not to conform to those constraints.  Please see the feature table documentation
+for more information.
+
+$^ NotSpliceConsensusDonor, 137
+Splice junctions typically have GT as the first two bases of the intron
+(splice donor) and AG as the last two bases of the intron (splice acceptor).
+This intron does not conform to that pattern.
+
+$^ NotSpliceConsensusAcceptor, 138
+Splice junctions typically have GT as the first two bases of the intron
+(splice donor) and AG as the last two bases of the intron (splice acceptor).
+This intron does not conform to that pattern.
+
+$^ RareSpliceConsensusDonor, 139
+Splice junctions typically have GT as the first two bases of the intron
+(splice donor) and AG as the last two bases of the intron (splice acceptor).
+This intron does not conform to that pattern.
+
+$^ SeqFeatXrefNotReciprocal, 140
+Feature xrefs between CDS and mRNA are not reciprocal.
+
+$^ SeqFeatXrefFeatureMissing, 141
+The feature referenced by a seqfeat xref cannot be found.
+
+$^ FeatureInsideGap, 142
+The feature is completely contained inside a sequence gap.
+
+$^ FeatureCrossesGap, 143
+The feature extends from actual sequence into a sequence gap.
+
+$^ BadAuthorSuffix, 144
+An author name has an unexpected suffix.
+
+$^   BadAnticodonAA, 145
+The tRNA encoded amino acid cannot be produced by any likely reverse complement
+and wobble expansion of the anticodon sequence.
+
+$^   BadAnticodonCodon, 146
+The tRNA indicated codon recognized cannot be produced by any likely reverse complement
+and wobble expansion of the anticodon sequence.
+
+$^   BadAnticodonStrand, 147
+The tRNA feature location and anticodon location are not on the same strand.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1
@@ -1046,6 +1139,9 @@ Please contact the sequence database for further help with this error.
 $^   BlastAligns, 19
 BLAST alignments are not desired in records submitted to the sequence database.
 
+$^   PercentIdentity, 20
+An acceptable percent identity score is 75 percent or higher.
+
 $$ SEQ_GRAPH, 7
 
 $^   GraphMin, 1
@@ -1098,4 +1194,15 @@ Gap positions should not have quality scores above 0.
 
 $^   GraphOverlap, 16
 Quality graphs overlap - may be due to an old fa2htgs bug.
+
+$^   GraphBioseqId, 17
+Quality graph does not map to Bioseq in record.
+
+$$ SEQ_ANNOT, 8
+
+$^   AnnotIDs, 1
+Seq-annot.data.ids should only be used for communication between programs.
+
+$^   AnnotLOCs, 2
+Seq-annot.data.locs should only be used for communication between programs.
 

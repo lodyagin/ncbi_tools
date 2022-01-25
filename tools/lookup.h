@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,9 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.36  2007/03/14 16:39:29  papadopo
+* force PV array to use 32-bit data types only, for compatibility with the new blast engine
+*
 * Revision 6.35  2005/07/28 14:57:10  coulouri
 * remove dead code
 *
@@ -236,7 +239,7 @@ typedef struct orig_lookup_position {
 } OrigLookupPosition, PNTR OrigLookupPositionPtr;
 
 /* some defines for the pv_array, as this changes from 32-bit to 64-bit systems. */
-#if LONG_BIT==64
+#if 0           /* 64-bit versions turned off for new engine compatibility */
 
 #define PV_ARRAY_TYPE Uint8	/* The pv_array 'native' type. */
 #define PV_ARRAY_BYTES 8	/* number of BYTES in 'native' type. */

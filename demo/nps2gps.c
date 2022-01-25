@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.8 $
+* $Revision: 1.11 $
 *
 * File Description:
 *
@@ -50,7 +50,7 @@
 #include <toasn3.h>
 #include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "1.6"
+#define NPS2GPSAPP_VER "1.9"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -59,6 +59,7 @@ typedef struct n2gdata {
   CharPtr  outfile;
   Boolean  failure;
   Boolean  lock;
+  Boolean  byFeatID;
 } N2GData, PNTR N2GPtr;
 
 typedef struct npsseqs {
@@ -152,7 +153,7 @@ static void LclMakeNucProtCDS (
   }
   SetSeqFeatProduct (sfp, ns.prot);
 
-  /* paste fields from temp copy of original cds */
+  /* paste fields from temp copy of original cds - but not feature ID */
   crp = (CdRegionPtr) temp->data.value.ptrvalue;
   sfp->data.value.ptrvalue = (Pointer) crp;
 
@@ -178,9 +179,12 @@ static void LclMakeNucProtCDS (
     stop = GetOffsetInLoc (cbp->loc, mrna->location, SEQLOC_STOP);
     if (start < 0 || start >= ns.nuc->length ||
         stop < 0 || stop >= ns.nuc->length) continue;
-	cbp->loc = SeqLocFree (cbp->loc);
-	cbp->loc = AddIntervalToLocation (NULL, sip, start, stop, partial5, partial3);;
+    cbp->loc = SeqLocFree (cbp->loc);
+    cbp->loc = AddIntervalToLocation (NULL, sip, start, stop, partial5, partial3);;
   }
+
+  /* remove feature ID cross-references of original cds */
+  ClearFeatIDXrefs (sfp);
 }
 
 /* copy gene from contig onto nuc-prot, single interval on cdna bioseq */
@@ -338,12 +342,15 @@ static void LclAddMrnaTitles (
   SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
 }
 
-static SeqIdPtr MakeIdFromLocusTag (SeqFeatPtr mrna)
+static SeqIdPtr MakeIdFromLocusTag (
+  SeqFeatPtr mrna
+)
 
 {
   Char        buf [64], suffix [8];
   SeqFeatPtr  gene;
   GeneRefPtr  grp;
+  Int4Ptr     iptr;
 
   if (mrna == NULL) return NULL;
   suffix [0] = '\0';
@@ -355,9 +362,10 @@ static SeqIdPtr MakeIdFromLocusTag (SeqFeatPtr mrna)
     gene = SeqMgrGetOverlappingGene (mrna->location, NULL);
     if (gene != NULL) {
       grp = (GeneRefPtr) gene->data.value.ptrvalue;
-      if (gene->id.choice == 1) {
-        (gene->id.value.intvalue)++;
-        sprintf (suffix, "_%ld", (long) gene->id.value.intvalue);
+      iptr = (Int4Ptr) gene->idx.scratch;
+      if (iptr != NULL) {
+        (*iptr)++;
+        sprintf (suffix, "_%ld", (long) (*iptr));
       }
     }
   }
@@ -373,7 +381,11 @@ static SeqIdPtr MakeIdFromLocusTag (SeqFeatPtr mrna)
   return NULL;
 }
 
-static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ctrp, Boolean ambig)
+static void InstantiateMrnaIntoProt (
+  SeqFeatPtr cds,
+  SeqFeatPtr mrna,
+  Int2Ptr ctrp
+)
 
 {
   ByteStorePtr  bs;
@@ -407,15 +419,10 @@ static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ct
   mbsp->repr = Seq_repr_raw;
   mbsp->mol = Seq_mol_rna;
   mbsp->seq_data_type = Seq_code_iupacna;
-  mbsp->seq_data = bs;
+  mbsp->seq_data = (SeqDataPtr) bs;
   mbsp->length = BSLen (bs);
   BioseqPack (mbsp);
 
-  /*
-  if (! ambig) {
-    mbsp->id = MakeIdFromLocusTag (mrna);
-  }
-  */
   /* now adds _# suffix to general Seq-id if ambiguous */
   mbsp->id = MakeIdFromLocusTag (mrna);
   if (mbsp->id == NULL) {
@@ -452,18 +459,18 @@ static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ct
   AddSeqEntryToSeqEntry (psep, msep, FALSE);
 }
 
-static void RemoveFeatIDs (SeqFeatPtr sfp, Pointer userdata)
+static void RemoveFeatScratch (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
 
 {
   if (sfp == NULL) return;
-  if (sfp->id.choice == 1) {
-    sfp->id.choice = 0;
-    sfp->id.value.intvalue = 0;
-  }
+  if (sfp->idx.scratch == NULL) return;
+  sfp->idx.scratch = MemFree (sfp->idx.scratch);
 }
 
 typedef struct loopdata {
-  Boolean     ambig;
   Int2        count;
   SeqFeatPtr  mrna;
 } LoopData, PNTR LoopDataPtr;
@@ -478,17 +485,17 @@ static Boolean LIBCALLBACK FindSingleMrnaProc (
 
   ldp = (LoopDataPtr) context->userdata;
 
-  if (sfp->id.choice == 0) {
+  if (sfp->idx.scratch == NULL) {
     (ldp->count)++;
     ldp->mrna = sfp;
-  } else {
-    ldp->ambig = TRUE;
   }
 
   return TRUE;
 }
 
-static Boolean CdsIsPseudo (SeqFeatPtr cds)
+static Boolean CdsIsPseudo (
+  SeqFeatPtr cds
+)
 
 {
   SeqMgrFeatContext  gcontext;
@@ -510,7 +517,11 @@ static Boolean CdsIsPseudo (SeqFeatPtr cds)
   return grp->pseudo;
 }
 
-static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
+static void LoopThroughCDSs (
+  BioseqPtr bsp,
+  Int2Ptr ctrp,
+  N2GPtr ngp
+)
 
 {
   Int2               count;
@@ -527,16 +538,15 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
     goOn = FALSE;
     sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
     while (sfp != NULL) {
-      if (sfp->id.choice == 0) {
-        ld.ambig = FALSE;
+      if (sfp->idx.scratch == NULL) {
         ld.count = 0;
         ld.mrna = NULL;
         count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_mRNA, NULL, 0,
                                                  CHECK_INTERVALS, (Pointer) &ld, FindSingleMrnaProc);
         if (ld.count == 1 && ld.mrna != NULL) {
-          InstantiateMrnaIntoProt (sfp, ld.mrna, ctrp, ld.ambig);
-          sfp->id.choice = 1;
-          ld.mrna->id.choice = 1;
+          InstantiateMrnaIntoProt (sfp, ld.mrna, ctrp);
+          sfp->idx.scratch = (Pointer) MemNew (sizeof (Int4));
+          ld.mrna->idx.scratch = (Pointer) MemNew (sizeof (Int4));
           goOn = TRUE;
         } else {
           str = fcontext.label;
@@ -546,6 +556,7 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
           Message (MSG_POSTERR, " CDS '%s' has %d overlapping mRNA", str, (int) ld.count);
         }
       }
+
       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
     }
   }
@@ -554,7 +565,7 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
   while (sfp != NULL) {
-    if (sfp->id.choice == 0) {
+    if (sfp->idx.scratch == NULL) {
       if (sfp->product == NULL && CdsIsPseudo (sfp)) {
         /* do not complain about pseudo CDS not having product or matching mRNA */
       } else {
@@ -572,16 +583,52 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
   }
 }
 
-static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp, SeqDescrPtr descr)
+static SeqFeatPtr GetmRNAByFeatureID (
+  SeqFeatPtr cds
+)
+
+{
+  SeqFeatPtr         mRNA = NULL;
+  SeqFeatXrefPtr     xref;
+  ObjectIdPtr        oip;
+  Char               buf [32];
+
+  if (cds == NULL) return NULL;
+  
+  xref = cds->xref;
+  while (xref != NULL && mRNA == NULL) {
+    if (xref->id.choice == 3) {
+      oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+      if (oip != NULL) {
+        if (StringDoesHaveText (oip->str)) {
+          mRNA = SeqMgrGetFeatureByFeatID (cds->idx.entityID, NULL, oip->str, NULL, NULL);
+        } else {
+          sprintf (buf, "%ld", (long) oip->id);
+          mRNA = SeqMgrGetFeatureByFeatID (cds->idx.entityID, NULL, buf, NULL, NULL);
+        }
+      }
+    }
+    xref = xref->next;
+  }
+  return mRNA;
+}
+
+static void NPStoGPS (
+  Uint2 entityID,
+  CharPtr filename,
+  N2GPtr ngp,
+  SeqDescrPtr descr
+)
 
 {
   BioSourcePtr       biop;
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
   Int2               ctr = 1;
-  SeqMgrFeatContext  gcontext, mcontext;
+  SeqMgrFeatContext  fcontext, gcontext, mcontext;
   SeqFeatPtr         gene, mrna, sfp, lastsfp;
   GeneRefPtr         grp;
+  Int4Ptr            iptr;
   SeqEntryPtr        old, top;
   CharPtr            organism;
   OrgRefPtr          orp;
@@ -619,6 +666,7 @@ static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp, SeqDescrPtr 
   annot = bsp->annot;
   if (annot == NULL) {
     bsp->annot = sap;
+  } else if (sap == NULL) {
   } else if (sap->next == NULL && annot->next == NULL &&
              sap->type == 1 && annot->type == 1 &&
              sap->data != NULL && annot->data != NULL) {
@@ -638,8 +686,6 @@ static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp, SeqDescrPtr 
     lastsap->next = sap;
   }
 
-  VisitFeaturesInSep (top, NULL, RemoveFeatIDs);
-
   old = SeqEntrySetScope (top);
 
   ctr = (Int2) VisitBioseqsInSep (top, NULL, NULL) + 1;
@@ -652,11 +698,13 @@ static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp, SeqDescrPtr 
     if (grp == NULL) {
       gene = SeqMgrGetOverlappingGene (mrna->location, NULL);
       if (gene != NULL) {
-        if (gene->id.choice == 0) {
-          gene->id.choice = 1;
-          gene->id.value.intvalue = 1;
-        } else if (gene->id.choice == 1) {
-          (gene->id.value.intvalue)++;
+        iptr = (Int4Ptr) gene->idx.scratch;
+        if (iptr == NULL) {
+          iptr = (Int4Ptr) MemNew (sizeof (Int4));
+          gene->idx.scratch = (Pointer) iptr;
+        }
+        if (iptr != NULL) {
+          (*iptr)++;
         }
       }
     }
@@ -667,42 +715,46 @@ static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp, SeqDescrPtr 
 
   gene = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &gcontext);
   while (gene != NULL) {
-    if (gene->id.choice == 1) {
-      if (gene->id.value.intvalue == 1) {
-        /* if count was 1, clear id */
-        gene->id.value.intvalue = 0;
-        gene->id.choice = 0;
+    iptr = (Int4Ptr) gene->idx.scratch;
+    if (iptr != NULL) {
+      if (*iptr == 1) {
+        /* if count was 1, clear scratch */
+        gene->idx.scratch = MemFree (gene->idx.scratch);
       } else {
-        /* if count was > 1, just reset count, do not clear id */
-        gene->id.value.intvalue = 0;
+        /* if count was > 1, just reset count, do not clear scratch */
+        *iptr = 0;
       }
     }
     gene = SeqMgrGetNextFeature (bsp, gene, SEQFEAT_GENE, 0, &gcontext);
   }
 
-  /*
-  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
-  while (sfp != NULL) {
-    mrna = SeqMgrGetOverlappingFeature (sfp->location, FEATDEF_mRNA, NULL, 0,
-                                        NULL, CHECK_INTERVALS, &mcontext);
-    if (mrna != NULL) {
-      InstantiateMrnaIntoProt (sfp, mrna, &ctr);
+  if (ngp->byFeatID) {
+
+    /* trust feature ID cross-references */
+
+    sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+    while (sfp != NULL) {
+      mrna = GetmRNAByFeatureID (sfp);
+      if (mrna != NULL) {
+        InstantiateMrnaIntoProt (sfp, mrna, &ctr);
+      }
+      sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
     }
-    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+
+  } else {
+
+    /* make cDNA bioseq from mRNA feature, package with protein product */
+
+    LoopThroughCDSs (bsp, &ctr, ngp);
   }
-  */
 
-  /* make cDNA bioseq from mRNA feature, package with protein product */
-
-  LoopThroughCDSs (bsp, &ctr, ngp);
+  VisitFeaturesInSep (top, NULL, RemoveFeatScratch);
 
   SeqMgrLinkSeqEntry (top, parenttype, parentptr);
 
   SeqEntrySetScope (old);
 
   SeqMgrClearFeatureIndexes (bssp->idx.entityID, NULL);
-
-  VisitFeaturesInSep (top, NULL, RemoveFeatIDs);
 
   /* need to reindex to get mRNA and CDS features from cDNA and protein */
   SeqMgrIndexFeatures (bssp->idx.entityID, NULL);
@@ -906,6 +958,7 @@ static void ProcessOneRecord (
 #define x_argSuffix      5
 #define R_argRemote      6
 #define L_argLockFar     7
+#define F_argUseFeatID   8
 
 
 Args myargs [] = {
@@ -925,6 +978,8 @@ Args myargs [] = {
     TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Lock Components in Advance", "F", NULL, NULL,
     TRUE, 'L', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Map by Feature ID", "F", NULL, NULL,
+    TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -976,6 +1031,7 @@ Int2 Main (void)
   ngp = &ngd;
   ngd.failure = FALSE;
   ngd.lock = (Boolean) myargs [L_argLockFar].intvalue;
+  ngd.byFeatID = (Boolean) myargs [F_argUseFeatID].intvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   results = (CharPtr) myargs [r_argOutputPath].strvalue;

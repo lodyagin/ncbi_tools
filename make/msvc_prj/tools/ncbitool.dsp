@@ -91,6 +91,10 @@ SOURCE=..\..\..\tools\blast.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\tools\blast_dust.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\tools\blastconcat.c
 # End Source File
 # Begin Source File
@@ -172,10 +176,6 @@ SOURCE=..\..\..\tools\ncbisam.c
 # Begin Source File
 
 SOURCE=..\..\..\tools\ncbisort.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\tools\objscoremat.c
 # End Source File
 # Begin Source File
 
@@ -351,6 +351,10 @@ SOURCE=..\..\..\tools\blast.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\tools\blast_dust.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\tools\blastconcat.h
 # End Source File
 # Begin Source File
@@ -448,10 +452,6 @@ SOURCE=..\..\..\tools\nlm_numerics.h
 # Begin Source File
 
 SOURCE=..\..\..\tools\NRdefs.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\tools\objscoremat.h
 # End Source File
 # Begin Source File
 

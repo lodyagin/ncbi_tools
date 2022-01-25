@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ncbiconfig"
-	ProjectGUID="{AA0E8072-95C9-4581-B427-274E1C2A3728}"
+	ProjectGUID="{CF596340-202E-4E79-B041-F4310A422C20}"
 	Keyword="MakeFileProj"
 	>
 	<Platforms>

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_COMM__H
 #define CONNECT___NCBI_COMM__H
 
-/*  $Id: ncbi_comm.h,v 6.14 2006/09/07 17:50:02 lavr Exp $
+/*  $Id: ncbi_comm.h,v 6.15 2006/12/13 21:15:51 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,8 +40,8 @@
 #define HTTP_DISP_FAILURES      "Dispatcher-Failures:"
 #define HTTP_DISP_MESSAGES      "Dispatcher-Messages:"
 #define HTTP_NCBI_MESSAGE       "NCBI-Message:"
-#define LBSM_DEFAULT_TIME       30    /* Exp.time for svc. to be used within */
-#define LBSM_DEFAULT_RATE       1000  /* For SLBSM_Service::info.rate below  */
+#define LBSM_DEFAULT_TIME       30    /* Default expiration time, in seconds */
+#define LBSM_DEFAULT_RATE       1000  /* For SLBSM_Service::info::rate       */
 #define DISPATCHER_CFGPATH      "/etc/lbsmd/"
 #define DISPATCHER_CFGFILE      "servrc.cfg"
 #define DISP_PROTOCOL_VERSION   "1.1"
@@ -64,6 +64,9 @@ typedef unsigned int ticket_t;
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_comm.h,v $
+ * Revision 6.15  2006/12/13 21:15:51  lavr
+ * Fix comments
+ *
  * Revision 6.14  2006/09/07 17:50:02  lavr
  * DISPATCHER_CFGPATH to define as "/etc/lbsmd"
  *

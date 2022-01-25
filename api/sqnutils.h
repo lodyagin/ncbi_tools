@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.143 $
+* $Revision: 6.186 $
 *
 * File Description: 
 *
@@ -248,6 +248,7 @@ NLM_EXTERN void LinkCDSmRNAbyProduct (SeqEntryPtr sep);
 NLM_EXTERN void LinkCDSmRNAbyLabel (SeqEntryPtr sep);
 
 NLM_EXTERN void StripFeatIDXrefAsnFilter (AsnIoPtr aip, AsnIoPtr aop);
+NLM_EXTERN void StripSeqDataGapAsnFilter (AsnIoPtr aip, AsnIoPtr aop);
 
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */
@@ -266,11 +267,17 @@ NLM_EXTERN SqnTagPtr SqnTagParse (CharPtr ttl);
 NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp);
 
 NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag);
+NLM_EXTERN CharPtr SqnTagFindUnused (SqnTagPtr stp, CharPtr tag);
 
 NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip);
 NLM_EXTERN void ReadCompletenessFromString (CharPtr str, MolInfoPtr mip);
 
 extern Boolean StringsAreEquivalent (CharPtr str1, CharPtr str2);
+NLM_EXTERN Uint1 EquivalentSubSource (CharPtr str);
+NLM_EXTERN Uint1 EquivalentOrgMod (CharPtr str);
+NLM_EXTERN Uint1 EquivalentSubSourceEx (CharPtr str, Boolean allow_discouraged_and_discontinued);
+NLM_EXTERN Uint1 EquivalentOrgModEx (CharPtr str, Boolean allow_discouraged_and_discontinued);
+
 
 /* functions to extract BioSource, MolInfo, and Bioseq information from parsed titles */
 
@@ -320,6 +327,16 @@ NLM_EXTERN UserObjectPtr ParseTitleIntoTpaAssembly (
   UserObjectPtr uop
 );
 
+NLM_EXTERN UserObjectPtr ParseTitleIntoGenomeProjectsDB (
+  SqnTagPtr stp,
+  UserObjectPtr uop
+);
+
+NLM_EXTERN void AddPubsFromTitle (
+  SqnTagPtr stp,
+  SeqDescrPtr PNTR desc_list
+);
+
 /* structured comment user object for flatfile presentation */
 
 NLM_EXTERN UserObjectPtr ParseStringIntoStructuredComment (
@@ -328,6 +345,7 @@ NLM_EXTERN UserObjectPtr ParseStringIntoStructuredComment (
   CharPtr prefix,
   CharPtr suffix
 );
+
 
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
   if they are packaged in the same directory as the executing program. */
@@ -469,6 +487,16 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                                            Boolean forceNuc, Boolean forceProt,
                                            Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq);
 
+/* ReadFeatureTableFile only handles >Feature tables */
+
+NLM_EXTERN Pointer ReadFeatureTableFile (
+  FILE *fp,
+  Uint2Ptr datatypeptr,
+  Uint2Ptr entityIDptr,
+  Int4Ptr lineP,
+  BoolPtr failP
+);
+
 /* ReadDeltaFasta reads a FASTA file, combining raw sequence and >?unk100 lines into
 a delta Bioseq.  The file pointer stops at the next FASTA with a real SeqID. */
 
@@ -550,6 +578,33 @@ NLM_EXTERN TextFsaPtr TextFsaNew (void);
 NLM_EXTERN void TextFsaAdd (TextFsaPtr tbl, CharPtr word);
 NLM_EXTERN Int2 TextFsaNext (TextFsaPtr tbl, Int2 currState, Char ch, ValNodePtr PNTR matches);
 NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl);
+NLM_EXTERN Boolean TextFsaGetStats (TextFsaPtr tbl, Int2Ptr highStateP, Int2Ptr numWordsP, Int2Ptr longestWordP);
+
+/* PCR_primer manipulation functions */
+
+typedef struct pcrset {
+  CharPtr  fwd_seq;
+  CharPtr  rev_seq;
+  CharPtr  fwd_name;
+  CharPtr  rev_name;
+  Int2     orig_order;
+} PcrSet, PNTR PcrSetPtr;
+
+NLM_EXTERN ValNodePtr ParsePCRSet (BioSourcePtr biop);
+NLM_EXTERN ValNodePtr ParsePCRStrings (
+  CharPtr fwd_primer_seq,
+  CharPtr rev_primer_seq,
+  CharPtr fwd_primer_name,
+  CharPtr rev_primer_name
+);
+NLM_EXTERN SubSourcePtr WritePCRSet (ValNodePtr pset);
+NLM_EXTERN ValNodePtr FreePCRSet (ValNodePtr pset);
+
+NLM_EXTERN int LIBCALLBACK SortVnpByPCRSetSeq (VoidPtr ptr1, VoidPtr ptr2);
+NLM_EXTERN int LIBCALLBACK SortVnpByPCRSetOrder (VoidPtr ptr1, VoidPtr ptr2);
+
+NLM_EXTERN ValNodePtr UniqueVnpByPCRSetSeq (ValNodePtr pset);
+
 
 /*
    very simple explore functions - VisitOn only does one chain, VisitIn goes into set components,
@@ -679,19 +734,6 @@ NLM_EXTERN Int4 ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean
 typedef void (*ScanEntrezgeneSetFunc) (EntrezgenePtr egp, Pointer userdata);
 NLM_EXTERN Int4 ScanEntrezgeneSetRelease (CharPtr inputFile, Boolean binary, Boolean compressed, Pointer userdata, ScanEntrezgeneSetFunc callback);
 
-/* general file recursion function - directory must not be empty, proc callback function must not be NULL */
-
-typedef void (*DirExpProc) (CharPtr filename, Pointer userdata);
-
-NLM_EXTERN Int4 DirExplore (
-  CharPtr directory,
-  CharPtr filter,
-  CharPtr suffix,
-  Boolean recurse,
-  DirExpProc proc,
-  Pointer userdata
-);
-
 /* PubMed registered fetch functionality */
 
 NLM_EXTERN PubmedEntryPtr LIBCALL GetPubMedForUid (Int4 uid);
@@ -726,6 +768,7 @@ extern SeqEntryPtr MakeSequinDataFromAlignment (TAlignmentFilePtr afp, Uint1 mol
 extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 moltype, Boolean check_ids);
 extern SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep);
 extern void ProcessPseudoMiscFeatsForEntityID (Uint2 entityID);
+extern Boolean ConvertOnePseudoCDSToMiscFeat (SeqFeatPtr sfp);
 extern void ConvertPseudoCDSToMiscFeatsForEntityID (Uint2 entityID);
 
 extern SeqAlignPtr FindAlignmentsForBioseq (BioseqPtr bsp);
@@ -734,9 +777,209 @@ extern Boolean IsSequenceFirstInPairwise (SeqEntryPtr sep, SeqIdPtr sip);
 extern Boolean RemoveSequenceFromAlignments (SeqEntryPtr sep, SeqIdPtr sip);
 extern BioseqPtr ReadFastaOnly (FILE *fp,
                               Boolean forceNuc, Boolean forceProt,
-                              BoolPtr chars_stripped);
+                              BoolPtr chars_stripped,
+                              CharPtr lastchar);
+extern void MergeFeatureIntervalsToParts (SeqFeatPtr sfp, Boolean ordered);
 
 extern void ExtendSingleGeneOnMRNA (BioseqPtr bsp, Pointer userdata);
+
+/* structures and functions for the Discrepancy Report */
+typedef void (*ClickableCallback) (ValNodePtr item_list, Pointer userdata);
+typedef void (*ClickableCallbackDataFree) (Pointer userdata);
+
+typedef struct clickableitem 
+{
+  Uint4                     clickable_item_type;
+  CharPtr                   description;
+  ValNodePtr                item_list;
+  ClickableCallback         callback_func; 
+  ClickableCallbackDataFree datafree_func; 
+  Pointer                   callback_data;
+  Boolean                   chosen;
+  ValNodePtr                subcategories;
+  Boolean                   expanded;
+  Int4                      level;
+} ClickableItemData, PNTR ClickableItemPtr;
+
+extern ClickableItemPtr 
+NewClickableItem 
+(Uint4           clickable_item_type,
+ CharPtr         description_fmt,
+ ValNodePtr      item_list);
+ 
+extern ValNodePtr FreeClickableList (ValNodePtr list);
+
+
+
+/* To add a new type of test, do ALL Of the following:
+ * 1. add an item to the DiscrepancyType enum (this will fill the clickable_item_type value)
+ * 2. add a collection function and declare it with the others
+ * 3. add an item to discrepancy_info_list that corresponds with the position of the
+ *    new enum value.  If you are combining multiple types in one collection function,
+ *    be sure to list them together.
+ */
+
+typedef enum {
+  DISC_GENE_MISSING = 0,
+  DISC_SUPERFLUOUS_GENE,
+  DISC_GENE_MISSING_LOCUS_TAG,
+  DISC_GENE_DUPLICATE_LOCUS_TAG,
+  DISC_GENE_LOCUS_TAG_BAD_FORMAT,
+  DISC_GENE_LOCUS_TAG_INCONSISTENT_PREFIX,
+  DISC_NON_GENE_LOCUS_TAG,
+  DISC_MISSING_PROTEIN_ID,
+  DISC_INCONSISTENT_PROTEIN_ID_PREFIX,
+  DISC_GENE_CDS_mRNA_LOCATION_CONFLICT,
+  DISC_GENE_PRODUCT_CONFLICT,
+  DISC_GENE_DUPLICATE_LOCUS,
+  DISC_EC_NUMBER_NOTE,
+  DISC_PSEUDO_MISMATCH,
+  DISC_JOINED_FEATURES,
+  DISC_OVERLAPPING_GENES,
+  DISC_OVERLAPPING_CDS,
+  DISC_CONTAINED_CDS,
+  DISC_RNA_CDS_OVERLAP,
+  DISC_SHORT_CONTIG,
+  DISC_INCONSISTENT_BIOSRC,
+  DISC_SUSPECT_PRODUCT_NAME,
+  DISC_INCONSISTENT_BIOSRC_DEFLINE,
+  DISC_PARTIAL_CDS_IN_COMPLETE_SEQUENCE,
+  DISC_EC_NUMBER_ON_HYPOTHETICAL_PROTEIN,
+  DISC_NO_TAXLOOKUP,
+  DISC_BAD_TAXLOOKUP,
+  DISC_SHORT_SEQUENCE,
+  DISC_SUSPECT_PHRASES,
+  DISC_COUNT_TRNA,
+  DISC_DUP_TRNA,
+  DISC_BADLEN_TRNA,
+  DISC_STRAND_TRNA,
+  DISC_COUNT_RRNA,
+  DISC_DUP_RRNA,
+  DISC_RNA_NO_PRODUCT,
+  DISC_TRANSL_NO_NOTE,
+  DISC_NOTE_NO_TRANSL,
+  DISC_TRANSL_TOO_LONG,
+  DISC_CDS_OVERLAP_TRNA,
+  DISC_COUNT_PROTEINS,
+  MAX_DISC_TYPE
+} DiscrepancyType;
+
+extern CharPtr GetDiscrepancyTestConfName (DiscrepancyType dtype);
+extern CharPtr GetDiscrepancyTestSettingName (DiscrepancyType dtype);
+extern DiscrepancyType GetDiscrepancyTypeFromSettingName (CharPtr setting_name);
+
+typedef struct discrepancyconfig
+{
+  Boolean conf_list[MAX_DISC_TYPE];
+  Boolean use_feature_table_format;
+} DiscrepancyConfigData, PNTR DiscrepancyConfigPtr;
+
+extern DiscrepancyConfigPtr DiscrepancyConfigFree (DiscrepancyConfigPtr dcp);
+extern DiscrepancyConfigPtr DiscrepancyConfigNew (void);
+extern DiscrepancyConfigPtr ReadDiscrepancyConfig (void);
+extern void SaveDiscrepancyConfig (DiscrepancyConfigPtr dcp);
+extern void DisableTRNATests (DiscrepancyConfigPtr dcp);
+
+typedef void (*PerformDiscrepancyTest) PROTO ((ValNodePtr PNTR, ValNodePtr));
+
+extern ValNodePtr CollectDiscrepancies (DiscrepancyConfigPtr dcp, ValNodePtr sep_list, PerformDiscrepancyTest taxlookup);
+extern CharPtr GetDiscrepancyItemText (ValNodePtr vnp);
+extern void WriteDiscrepancy (FILE *fp, ClickableItemPtr dip, Boolean use_feature_table_fmt);
+extern void WriteDiscrepancyEx (FILE *fp, ClickableItemPtr dip, Boolean use_feature_table_fmt, ValNodePtr filename_list, CharPtr descr_prefix);
+
+extern CharPtr GetBioseqSetLabel (BioseqSetPtr bssp);
+
+/* for the Barcode Discrepancy Test */
+typedef enum {
+  eBarcodeTest_Length = 0,
+  eBarcodeTest_Primers,
+  eBarcodeTest_Country,
+  eBarcodeTest_SpecimenVoucher,
+  eBarcodeTest_PercentN,
+  eBarcodeTest_LAST
+} EBarcodeTest;
+
+typedef struct barcodetestconfig
+{
+  Boolean conf_list[eBarcodeTest_LAST];
+  Int4    min_length;
+  FloatLo min_n_percent;
+} BarcodeTestConfigData, PNTR BarcodeTestConfigPtr;
+
+extern BarcodeTestConfigPtr BarcodeTestConfigNew();
+extern BarcodeTestConfigPtr BarcodeTestConfigFree (BarcodeTestConfigPtr cfg);
+
+extern CharPtr GetBarcodeTestName (Int4 i);
+
+extern Int4 GetBarcodeTestNumFromBarcodeTestName (CharPtr test_name);
+
+typedef struct barcodetestresults
+{
+  Boolean failed_tests[eBarcodeTest_LAST];
+  BioseqPtr bsp;
+  FloatLo   n_percent;
+} BarcodeTestResultsData, PNTR BarcodeTestResultsPtr;
+
+extern BarcodeTestResultsPtr BarcodeTestResultsNew ();
+extern BarcodeTestResultsPtr BarcodeTestResultsFree (BarcodeTestResultsPtr res);
+extern BarcodeTestResultsPtr BarcodeTestResultsCopy (BarcodeTestResultsPtr res);
+extern ValNodePtr            BarcodeTestResultsListFree (ValNodePtr res_list);
+
+extern Boolean IsBarcodeID (SeqIdPtr sip);
+
+extern CharPtr BarcodeTestBarcodeIdString (BioseqPtr bsp);
+extern CharPtr BarcodeTestGenbankIdString (BioseqPtr bsp);
+
+/* This one gets discrepancies by category */
+extern ValNodePtr GetBarcodeDiscrepancies (ValNodePtr sep_list, BarcodeTestConfigPtr cfg);
+/* This one lists accessions that fail */
+extern ValNodePtr GetBarcodeFailedAccessionList (SeqEntryPtr sep, BarcodeTestConfigPtr cfg);
+extern ValNodePtr GetBarcodePassFail (SeqEntryPtr sep, BarcodeTestConfigPtr cfg);
+extern void WriteBarcodeDiscrepancies (FILE *fp, ValNodePtr results_list);
+extern void WriteBarcodeTestCompliance (FILE *fp, ValNodePtr results_list);
+extern void WriteBarcodeTagTable (FILE *fp, ValNodePtr results_list);
+extern void RemoveBarcodeKeywords (FILE *fp, ValNodePtr results_list);
+extern void ApplyBarcodeKeywords (FILE *fp, ValNodePtr results_list);
+extern Boolean PassBarcodeTests (BarcodeTestResultsPtr res);
+
+
+/* These values are for the filename list in WriteDiscrepancyEx */
+#define FILENAME_LIST_ENTITY_ID_ITEM 1
+#define FILENAME_LIST_FILENAME_ITEM  2
+
+/* extern to allow access to subsource_subtype_alist */
+typedef struct Nlm_qual_name_assoc {
+   Nlm_CharPtr name; 
+   Uint1       value;
+} Nlm_QualNameAssoc, PNTR Nlm_QualNameAssocPtr, Nlm_QualNameAlist[];
+
+typedef struct Nlm_name_name_assoc {
+   Nlm_CharPtr name; 
+   Nlm_CharPtr alias; 
+   Uint1       value;
+} Nlm_NameNameAssoc, PNTR Nlm_NameNameAssocPtr, Nlm_NameNameAlist[];
+
+extern Nlm_QualNameAssoc current_orgmod_subtype_alist[];
+extern Nlm_QualNameAssoc discouraged_orgmod_subtype_alist[];
+extern Nlm_QualNameAssoc discontinued_orgmod_subtype_alist[];
+extern Nlm_NameNameAssoc orgmod_aliases[];
+extern CharPtr GetOrgModQualName (Uint1 subtype);
+extern void BioSourceHasOldOrgModQualifiers (BioSourcePtr biop, BoolPtr has_discouraged, BoolPtr has_discontinued);
+
+extern Nlm_QualNameAssoc  current_subsource_subtype_alist [];
+extern Nlm_QualNameAssoc  discouraged_subsource_subtype_alist[];
+extern Nlm_QualNameAssoc  discontinued_subsource_subtype_alist[];
+extern Nlm_NameNameAssoc  subsource_aliases [];
+extern CharPtr GetSubsourceQualName (Uint1 subtype);
+extern void BioSourceHasOldSubSourceQualifiers (BioSourcePtr biop, BoolPtr has_discouraged, BoolPtr has_discontinued);
+extern Boolean GeneRefMatch (GeneRefPtr grp1, GeneRefPtr grp2);
+
+extern void IsCorrectLatLonFormat (CharPtr lat_lon, BoolPtr format_correct, BoolPtr lat_in_range, BoolPtr lon_in_range);
+extern CharPtr FixLatLonFormat (CharPtr orig_lat_lon);
+extern void ApplyBarcodeDbxrefsToBioseq (BioseqPtr bsp, Pointer data);
+
+extern CharPtr GetCountryFix (CharPtr country, CharPtr PNTR country_list);
+
 
 #ifdef __cplusplus
 }

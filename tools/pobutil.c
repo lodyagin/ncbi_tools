@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: pobutil.c,v 6.9 2003/05/30 17:25:37 coulouri Exp $";
+static char const rcsid[] = "$Id: pobutil.c,v 6.10 2007/05/07 13:30:54 kans Exp $";
 
 #include <pobutil.h>
 #include <gather.h>
@@ -476,10 +476,12 @@ void load_dust_bsp(BioseqPtr dust_bsp, SeqLocPtr dustloc)
 	Uint1 res = 'N';
 	
 
+	if (dust_bsp->seq_data_type == Seq_code_gap) return;
+
 	if(dust_bsp->mol == Seq_mol_aa)
 		res = 'X';
 
-	bsp = dust_bsp->seq_data;
+	bsp = (ByteStorePtr) dust_bsp->seq_data;
 	while(dustloc)
 	{
 		slp = NULL;
@@ -591,7 +593,7 @@ BioseqPtr make_dust_bsp(BioseqPtr bsp, Int4 start, Int4 stop, SeqLocPtr dustloc)
 
 	dust_bsp = BioseqNew();
 	dust_bsp->id = local_id_make("dust_bsp");
-	dust_bsp->seq_data = b_store;
+	dust_bsp->seq_data = (SeqDataPtr) b_store;
 	dust_bsp->repr = Seq_repr_raw;
 	dust_bsp->mol = bsp->mol;
 	dust_bsp->length = stop - start +1;

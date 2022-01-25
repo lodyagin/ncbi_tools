@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.114 2006/09/05 17:16:58 papadopo Exp $
+/* $Id: blast_driver.c,v 1.128 2007/05/04 15:37:10 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.114 $
+ * $Revision: 1.128 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.114 2006/09/05 17:16:58 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.128 2007/05/04 15:37:10 papadopo Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -141,14 +141,14 @@ static Args myargs[] = {
    { "Type of a discontiguous word template (0 - coding, 1 - optimal, "
      "2 - two simultaneous", /* ARG_TEMPL_TYPE */
      "0", NULL, NULL, FALSE, 'T', ARG_INT, 0.0, 0, NULL},
-   {"Generate words for every base of the database (default is every 4th base; may only be used with discontiguous words)",
+   {"Generate words for every base of the database; this option is ignored",
         "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},    /* ARG_EVERYBASE */
    { "Pattern for PHI BLAST",
      NULL, NULL, NULL, TRUE, 'k', ARG_STRING, 0.0, 0, NULL}, /* ARG_PHI */
    { "Threshold for extending hits, default if zero\n" /* ARG_THRESHOLD */
      "      blastp 11, blastn 0, blastx 12, tblastn 13\n"
      "      tblastx 13, megablast 0",
-     "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
+     "0", NULL, NULL, FALSE, 'f', ARG_FLOAT, 0.0, 0, NULL},
    { "Window size (max. allowed distance between a pair of initial hits;\n"
      "      0 causes default behavior, -1 turns off multiple hits)", 
      "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL}, /* ARG_WINDOW */
@@ -157,9 +157,8 @@ static Args myargs[] = {
       "0", NULL, NULL, FALSE, 'y', ARG_INT, 0.0, 0, NULL},
    { "Do only ungapped alignment (always TRUE for tblastx)",/*ARG_UNGAPPED*/
      "F", NULL, NULL, FALSE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
-   { "Use greedy algorithm for gapped extensions:\n      0 no, 1 one-step, "
-     "2 two-step, 3 two-step with ungapped", /* ARG_GREEDY */
-     "0", NULL, NULL, FALSE, 'g', ARG_INT, 0.0, 0, NULL},
+   { "Use greedy algorithm for gapped extensions", /* ARG_GREEDY */
+     "F", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
    { "Gap open penalty (-1 means default: non-affine if greedy; 5 if dyn. prog.)", 
      "-1", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPOPEN */
    { "Gap extension penalty (-1 means default: non-affine if greedy; 2 otherwise)",
@@ -211,8 +210,8 @@ static Args myargs[] = {
      "F", NULL, NULL, FALSE, 'n', ARG_BOOLEAN, 0.0, 0, NULL}, /* ARG_SHOWGI */
    { "Show only accessions for sequence ids in tabular output",
      "F", NULL, NULL, FALSE, 'N', ARG_BOOLEAN, 0.0, 0, NULL},/* ARG_ACCESSION */
-   { "Use composition-based statistics for tblastn:\n"                /* ARG_COMP_BASED_STATS */
-     "      D or d: default (equivalent to F)\n"
+   { "Use composition-based statistics for blastp or tblastn:\n"                /* ARG_COMP_BASED_STATS */
+     "      D or d: default (equivalent to T)\n"
      "      0 or F or f: no composition-based statistics\n"
      "      1 or T or t: Composition-based statistics as in "
      "NAR 29:2994-3005, 2001\n"
@@ -261,7 +260,6 @@ s_FillOptions(SBlastOptions* options)
    Boolean mb_lookup = FALSE;
    Int4 greedy_extension = 0;
    Int4 diag_separation = 0;
-   Boolean greedy_with_ungapped = FALSE;
    Boolean is_gapped = FALSE;
    EBlastProgramType program_number = options->program;
 
@@ -273,29 +271,26 @@ s_FillOptions(SBlastOptions* options)
          /* Discontiguous words */
          mb_lookup = TRUE;
       }
-      greedy_extension = MIN(myargs[ARG_GREEDY].intvalue, 2);
-      greedy_with_ungapped = (myargs[ARG_GREEDY].intvalue == 3);
+      greedy_extension = myargs[ARG_GREEDY].intvalue;
    }
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
-      myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue);
+      myargs[ARG_THRESHOLD].floatvalue, (Int2)myargs[ARG_WORDSIZE].intvalue);
    /* Fill the rest of the lookup table options */
    lookup_options->mb_template_length = 
       (Uint1) myargs[ARG_TEMPL_LEN].intvalue;
    lookup_options->mb_template_type = 
       (Uint1) myargs[ARG_TEMPL_TYPE].intvalue;
-   if (myargs[ARG_EVERYBASE].intvalue)
-      lookup_options->full_byte_scan = FALSE;
 
    if (myargs[ARG_PHI].strvalue) {
       lookup_options->phi_pattern = strdup(myargs[ARG_PHI].strvalue);
       /* Set the lookup table type, and also change program type to 
          indicate a PHI BLAST search. */
       if (program_number == eBlastTypeBlastn) {
-          lookup_options->lut_type = PHI_NA_LOOKUP;
+          lookup_options->lut_type = ePhiNaLookupTable;
           options->program = eBlastTypePhiBlastn;
       } else {
-          lookup_options->lut_type = PHI_AA_LOOKUP;
+          lookup_options->lut_type = ePhiLookupTable;
           options->program = eBlastTypePhiBlastp;
       }
    }
@@ -309,8 +304,8 @@ s_FillOptions(SBlastOptions* options)
       query_setup_options->genetic_code = myargs[ARG_GENCODE].intvalue;
 
    BLAST_FillInitialWordOptions(word_options, program_number, 
-      (Boolean)(greedy_extension && !greedy_with_ungapped), 
-      myargs[ARG_WINDOW].intvalue, myargs[ARG_XDROP_UNGAPPED].intvalue);
+                            myargs[ARG_WINDOW].intvalue, 
+                            myargs[ARG_XDROP_UNGAPPED].intvalue);
 
    if (myargs[ARG_WINDOW].intvalue < 0) {
       word_options->window_size = 0;
@@ -320,8 +315,6 @@ s_FillOptions(SBlastOptions* options)
       word_options->window_size = 40;
    }
 
-   if (!greedy_extension)
-      word_options->ungapped_extension = TRUE;
    if (lookup_options->mb_template_length > 0) {
       if (word_options->window_size > 0)
           word_options->ungapped_extension = FALSE;
@@ -364,13 +357,13 @@ s_FillOptions(SBlastOptions* options)
    }
    if ((program_number == eBlastTypeTblastn ||
         program_number == eBlastTypeBlastp) && is_gapped) {
-       /* Set options specific to gapped tblastn */
+       /* Set options specific to gapped blastp and tblastn */
        switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
-       case 'D': case 'd':
        case '0': case 'F': case 'f':
            ext_options->compositionBasedStats = 0;
            break;
-        case '1': case 'T': case 't':
+       case 'D': case 'd':
+       case '1': case 'T': case 't':
             ext_options->compositionBasedStats = 1;
             break;
        case '2':
@@ -414,6 +407,18 @@ s_FillOptions(SBlastOptions* options)
        program_number == eBlastTypeRpsTblastn ||
        program_number == eBlastTypeTblastx) {
        SBlastOptionsSetDbGeneticCode(options, myargs[ARG_DBGENCODE].intvalue);
+   }
+
+   if (lookup_options->lut_type == eCompressedAaLookupTable) {
+       if (lookup_options->threshold < 16) {
+           ErrPostEx(SEV_WARNING, 1, 0,
+                     "Threshold is probably too small for protein "
+                     "searches with a compressed alphabet");
+       }
+       if (word_options->window_size > 0) {
+           ErrPostEx(SEV_WARNING, 1, 0,
+                     "Multiple hits may not work with compressed alphabets");
+       }
    }
 
    return 0;
@@ -477,6 +482,7 @@ Int2 Nlm_Main(void)
    Boolean phi_blast = FALSE;
    ValNode* phivnps = NULL;
    Blast_SummaryReturn* full_sum_returns = NULL;
+   GeneticCodeSingletonInit();
 
    if (! GetArgs (buf, NUMARG, myargs))
       return (1);
@@ -503,15 +509,8 @@ Int2 Nlm_Main(void)
 
    program_number = options->program;
 
-   db_is_na = (program_number == eBlastTypeBlastn || 
-               program_number == eBlastTypeTblastn || 
-               program_number == eBlastTypeTblastx ||
-               program_number == eBlastTypePhiBlastn);
-   query_is_na = (program_number == eBlastTypeBlastn || 
-                  program_number == eBlastTypeBlastx || 
-                  program_number == eBlastTypeRpsTblastn || 
-                  program_number == eBlastTypeTblastx ||
-                  program_number == eBlastTypePhiBlastn);
+   db_is_na = Blast_SubjectIsNucleotide(program_number); 
+   query_is_na = Blast_QueryIsNucleotide(program_number); 
 
    phi_blast = Blast_ProgramIsPhiBlast(program_number);
 
@@ -556,9 +555,16 @@ Int2 Nlm_Main(void)
                batch_size = 5000000;
            break;
        case eBlastTypeTblastn:
+       case eBlastTypePsiTblastn:
            batch_size = 20000;
            break;
        case eBlastTypeBlastp:
+           batch_size = 10000;
+           if (options->lookup_options->lut_type == 
+                       eCompressedAaLookupTable) {
+               batch_size = 20000;
+           }
+           break;
        case eBlastTypeBlastx:
        case eBlastTypeTblastx:
        default:
@@ -714,10 +720,11 @@ Int2 Nlm_Main(void)
            status = PHIBlastRunSearch(query_slp, dbname, lcase_mask, options, 
                                       &phivnps, &filter_loc, sum_returns);
        } else if (dbname) {
-           status = 
-               Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, 
-                                    tf_data, &seqalign_arr, &filter_loc, 
-                                    sum_returns);
+           status =
+               Blast_DatabaseSearch(query_slp, (Blast_PsiCheckpointLoc *) NULL,
+                                    dbname, lcase_mask, options,
+                                    tf_data, &seqalign_arr,
+                                    &filter_loc, sum_returns);
        } else {
            status = 
                Blast_TwoSeqLocSetsAdvanced(query_slp, subject_slp, lcase_mask, 
@@ -760,6 +767,7 @@ Int2 Nlm_Main(void)
        Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
        Blast_SummaryReturnClean(sum_returns);
        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
+       FreeSeqLocSetComponents(query_slp);
        query_slp = SeqLocSetFree(query_slp);
    } /* End loop on sets of queries */
    
@@ -782,6 +790,7 @@ Int2 Nlm_Main(void)
        format_info = BlastFormattingInfoFree(format_info);       
 
    options = SBlastOptionsFree(options);
+   GeneticCodeSingletonFini();
 
    return status;
 }

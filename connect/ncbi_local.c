@@ -1,4 +1,4 @@
-/*  $Id: ncbi_local.c,v 1.8 2006/05/20 00:55:26 lavr Exp $
+/*  $Id: ncbi_local.c,v 1.13 2007/04/20 01:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -69,9 +69,10 @@ static int/*bool*/ s_AddService(const SSERV_Info* info,
 {
     if (data->a_cand <= data->n_cand) {
         size_t n = data->a_cand + 10;
-        SLB_Candidate* temp = (data->cand
-                               ? realloc(data->cand, n * sizeof(*data->cand))
-                               : malloc (            n * sizeof(*data->cand)));
+        SLB_Candidate* temp =
+            (SLB_Candidate*)(data->cand
+                             ? realloc(data->cand, n * sizeof(*data->cand))
+                             : malloc (            n * sizeof(*data->cand)));
         if (!temp)
             return 0/*false*/;
         data->a_cand = n;
@@ -92,8 +93,10 @@ static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
     char* buf;
     int n;
 
-    if (!(buf = malloc(strlen(name) + sizeof(REG_CONN_LOCAL_SERVER) + 80)))
+    if (!(buf =
+          (char*) malloc(strlen(name) + sizeof(REG_CONN_LOCAL_SERVER) + 80))) {
         return 0/*failed*/;
+    }
 
     info = 0;
     for (n = 0;  n <= 100;  n++) {
@@ -127,12 +130,10 @@ static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
         if (iter->external  &&  info->locl)
             continue;  /* external mapping for local server not allowed */
         if (!info->host  ||  (info->locl & 0xF0)) {
-            static unsigned int s_LocalHost = 0;
-            if (!s_LocalHost)
-                s_LocalHost = SOCK_gethostbyname(0);
+            unsigned int localhost = SOCK_GetLocalHostAddress(eDefault);
             if (!info->host)
-                info->host = s_LocalHost;
-            if ((info->locl & 0xF0)  &&  info->host != s_LocalHost)
+                info->host = localhost;
+            if ((info->locl & 0xF0)  &&  info->host != localhost)
                 continue;  /* private server */
         }
         if (!iter->reverse_dns  &&  info->type != fSERV_Dns) {
@@ -247,7 +248,7 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
     while (i < data->n_cand) {
         /* NB all servers have been loaded in accordance with iter->external */
         info = (SSERV_Info*) data->cand[i].info;
-        if (info->rate > 0.0  ||  iter->promiscuous) {
+        if (info->rate > 0.0  ||  iter->ok_down) {
             const char* c = SERV_NameOfInfo(info);
             for (n = 0;  n < iter->n_skip;  n++) {
                 const SSERV_Info* skip = iter->skip[n];
@@ -289,7 +290,7 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
                 break;
             data->i_cand++;
             data->cand[i].status = info->rate < 0.0 ? 0.0 : info->rate;
-            if (iter->promiscuous)
+            if (iter->ok_down)
                 break;
             i++;
         }
@@ -311,7 +312,7 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
                 if (iter->external  &&  temp->locl)
                     continue; /* external mapping req'd; local server */
                 assert(!(temp->locl & 0xF0)); /* no private DNS */
-                if (temp->rate > 0.0  ||  iter->promiscuous) {
+                if (temp->rate > 0.0  ||  iter->ok_down) {
                     data->cand[i].status = data->cand[n].status;
                     info = temp;
                     n = i;
@@ -406,34 +407,3 @@ const SSERV_VTable* SERV_LOCAL_Open(SERV_ITER iter,
         *info = 0;
     return &s_op;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_local.c,v $
- * Revision 1.8  2006/05/20 00:55:26  lavr
- * Fix ChangeLog for last revision
- *
- * Revision 1.7  2006/05/20 00:54:41  lavr
- * Allow LOCAL_SERVER spec to enclose in [double]quotes (mostly for C tkit)
- *
- * Revision 1.6  2006/05/19 23:24:56  lavr
- * Speed-up s_LoadSingleService()
- *
- * Revision 1.5  2006/04/20 19:23:24  lavr
- * Remove a comment that referenced iter->external
- *
- * Revision 1.4  2006/04/20 13:59:30  lavr
- * Use standardized registry key to lookup services and servers
- *
- * Revision 1.3  2006/04/19 14:45:55  lavr
- * Unconditionally skip internal servers in external searches
- *
- * Revision 1.2  2006/04/05 15:06:55  lavr
- * Fully implemented and working
- *
- * Revision 1.1  2006/03/28 18:27:32  lavr
- * Initial revision (not yet working)
- *
- * ==========================================================================
- */

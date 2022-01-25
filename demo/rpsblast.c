@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.85 2006/08/29 18:12:09 papadopo Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.92 2007/08/21 20:07:01 kans Exp $";
 
-/* $Id: rpsblast.c,v 6.85 2006/08/29 18:12:09 papadopo Exp $
+/* $Id: rpsblast.c,v 6.92 2007/08/21 20:07:01 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,34 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.85 2006/08/29 18:12:09 papadopo
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.85 $
+* $Revision: 6.92 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.92  2007/08/21 20:07:01  kans
+* include gencode_singleton.h, cast first argument to BlastFormattingInfoNew to fix CodeWarrior complaint
+*
+* Revision 6.91  2007/03/20 14:56:58  camacho
+* Call GeneticCodeSingletonInit/GeneticCodeSingletonFini
+*
+* Revision 6.90  2007/03/15 14:24:35  coulouri
+* added call to FreeSeqLocSetComponents to free query sequences referenced by query_slp list
+*
+* Revision 6.89  2007/03/12 16:14:23  madden
+* Pass a NULL Blast_PsiCheckpointLoc* to Blast_DatabaseSearch [from Mike Gertz].
+*
+* Revision 6.88  2007/03/05 14:54:39  camacho
+* - Call Blast_FindRepeatFilterSeqLoc with a NULL pointer for a PSI-BLAST
+*   checkpoint file.
+*
+* Revision 6.87  2007/02/08 17:07:22  papadopo
+* change signature of FillInitialWordOptions; ungapped extensions are always turned on now by default
+*
+* Revision 6.86  2007/02/01 16:42:44  papadopo
+* remove legacy blast engine code
+*
 * Revision 6.85  2006/08/29 18:12:09  papadopo
 * reduce input sequence batch size
 *
@@ -300,23 +322,14 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.85 2006/08/29 18:12:09 papadopo
 * ==========================================================================
 */
 
-#include <ncbi.h>               /* Old engine includes */
-#include <lookup.h>
-#include <tofasta.h>
-#include <txalign.h>
-#include <ncbithr.h>
-#include <rpsutil.h>
-#include <xmlblast.h>
-#include <blfmtutl.h>
-#include <sqnutils.h>
-
-#include <readdb.h>             /* Updated engine includes */
+#include <readdb.h>
 #include <algo/blast/api/blast_input.h>
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/blast_message_api.h>
+#include <algo/blast/core/gencode_singleton.h>
 
 #ifdef PURIFY
 #include "/am/purew/solaris2/new/../purify/purify-4.5-solaris2/purify.h"
@@ -347,7 +360,6 @@ enum {
     OPT_LOGFILE,
     OPT_LCASE,
     OPT_RANGE,
-    OPT_FORCE_OLD_ENGINE,
     NUM_ARGS    /* must come last */
 };
     
@@ -435,13 +447,8 @@ static Args myargs[] = {
       "      0 in 'start' refers to the beginning of the sequence\n"
       "      0 in 'stop' refers to the end of the sequence",
       "0,0", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
-    /* OPT_FORCE_OLD_ENGINE */
-    { "Force use of the legacy BLAST engine",
-      "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
-
-/*------------------- RPS BLAST USING NEW ENGINE ------------------------*/
 
 /* This is very similar to the routine of the same name
    in blast_driver.c; unneeded setup is removed */
@@ -469,7 +476,7 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    BLAST_FillQuerySetUpOptions(query_setup_options, kProgram, 
                               myargs[OPT_FILTER].strvalue, 0);
 
-   BLAST_FillInitialWordOptions(word_options, kProgram, FALSE,
+   BLAST_FillInitialWordOptions(word_options, kProgram,
                                 0, myargs[OPT_XDROP_UNGAPPED].intvalue);
 
    /* set one-hit extensions if desired */
@@ -505,10 +512,10 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    }
 
    if (db_options && kProgram == eBlastTypeRpsTblastn) {
-      if ((status = BLAST_GeneticCodeFind(db_options->genetic_code, 
-                       &db_options->gen_code_string))) {
-         return status;
-      }
+       Uint1* gc = NULL;
+       BLAST_GeneticCodeFind(db_options->genetic_code, &gc);
+       GenCodeSingletonAdd(db_options->genetic_code, gc);
+       free(gc);
    }
 
    /* Validate the options. */
@@ -549,7 +556,7 @@ s_ParseIntervalLocationArgument(char* arg, Int4* from_ptr, Int4* to_ptr)
         - no two-sequences capability
         - on-the-fly tabular output not supported
 */
-Int2 Main_New(void)
+Int2 Main(void)
 {
    Int2 status;
    Boolean query_is_na;
@@ -567,6 +574,20 @@ Int2 Main_New(void)
    const int kMaxConcatLength = 10000;
    Blast_SummaryReturn* full_sum_returns = NULL;
    Boolean believe_query = (Boolean) myargs[OPT_BELIEVE_QUERY].intvalue;
+   Char buf[256] = { '\0' };
+   GeneticCodeSingletonInit();
+
+   StringCpy(buf, "rpsblast ");
+   StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
+   if (!GetArgs(buf, NUM_ARGS, myargs))
+       return 1;
+   
+   if (strcmp(myargs[OPT_LOGFILE].strvalue, "stderr") != 0) {
+      if ( !ErrSetLog (myargs[OPT_LOGFILE].strvalue) ) { /* Logfile */
+         ErrShow();
+         return 1;
+      }
+   }
 
    /* select protein or nucleotide query, and choose
       the appropriate program type */
@@ -621,7 +642,7 @@ Int2 Main_New(void)
       return -1;                   
    }
 
-   BlastFormattingInfoNew(myargs[OPT_FORMAT].intvalue, options, blast_program,
+   BlastFormattingInfoNew((EAlignView) myargs[OPT_FORMAT].intvalue, options, blast_program,
                           dbname, myargs[OPT_OUTPUT_FILE].strvalue,
                           &format_info);
 
@@ -666,11 +687,15 @@ Int2 Main_New(void)
 
        /* Call database search function. Pass NULL for tabular formatting 
         * structure pointer, because on-the-fly tabular formatting is not
-        * allowed for RPS BLAST.
+        * allowed for RPS BLAST.  Pass NULL for a PSIBLAST checkpoint file
+        * as well, since this parameter is not relevant to RPS BLAST.
         */
-       status = 
-           Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, NULL, 
-                                &seqalign_arr, &filter_loc, sum_returns);
+       status =
+           Blast_DatabaseSearch(query_slp, (Blast_PsiCheckpointLoc *) NULL,
+                                dbname, lcase_mask, options,
+                                (BlastTabularFormatData*) NULL,
+                                &seqalign_arr, &filter_loc,
+                                sum_returns);
 
        /* Free the lower case mask in SeqLoc form. */
        lcase_mask = Blast_ValNodeMaskListFree(lcase_mask);
@@ -719,6 +744,7 @@ Int2 Main_New(void)
        
        /* finish cleanup */
        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
+       FreeSeqLocSetComponents(query_slp);
        query_slp = SeqLocSetFree(query_slp);
        seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
        
@@ -739,530 +765,7 @@ Int2 Main_New(void)
 
    format_info = BlastFormattingInfoFree(format_info);
    options = SBlastOptionsFree(options);
+   GeneticCodeSingletonFini();
    
    return status;
-}
-
-/*------------------- RPS BLAST USING OLD ENGINE ------------------------*/
-
-static void 
-s_PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out, 
-                        Uint4Ptr print_options_out)
-{
-    Uint4 print_options, align_options;
-
-    print_options = 0;
-    if (gapped == FALSE)
-        print_options += TXALIGN_SHOW_NO_OF_SEGS;
-    
-    align_options = 0;
-    align_options += TXALIGN_COMPRESS;
-    align_options += TXALIGN_END_NUM;
-
-    if (myargs[OPT_SHOW_GI].intvalue) {
-        align_options += TXALIGN_SHOW_GI;
-        print_options += TXALIGN_SHOW_GI;
-    } 
-    
-    if (myargs[OPT_HTML].intvalue) {
-        align_options += TXALIGN_HTML;
-        print_options += TXALIGN_HTML;
-    }
-
-    if(!myargs[OPT_PROT_QUERY].intvalue)
-        align_options += TXALIGN_BLASTX_SPECIAL;
-    
-    if (myargs[OPT_FORMAT].intvalue != 0) {
-        align_options += TXALIGN_MASTER;
-        if (myargs[OPT_FORMAT].intvalue == 1 || 
-            myargs[OPT_FORMAT].intvalue == 3)
-            align_options += TXALIGN_MISMATCH;
-
-        if (myargs[OPT_FORMAT].intvalue == 3 || 
-            myargs[OPT_FORMAT].intvalue == 4 || 
-            myargs[OPT_FORMAT].intvalue == 6)
-            align_options += TXALIGN_FLAT_INS;
-
-        if (myargs[OPT_FORMAT].intvalue == 5 || 
-            myargs[OPT_FORMAT].intvalue == 6)
-            align_options += TXALIGN_BLUNT_END;
-    } else {
-        align_options += TXALIGN_MATRIX_VAL;
-        align_options += TXALIGN_SHOW_QS;
-    }
-
-    *align_options_out = align_options;
-    *print_options_out = print_options;
-
-    return;
-}
-
-static void 
-s_RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
-{
-
-    FileClose(rpsbop->outfp);
-    AsnIoClose(rpsbop->aip);
-    BLASTOptionDelete(rpsbop->options);
-    readdb_destruct(rpsbop->rdfp);
-
-    MemFree(rpsbop->rps_database);    
-    MemFree(rpsbop->out_filename);
-    MemFree(rpsbop);
-    
-    return;
-}
-
-static RPSBlastOptionsPtr 
-s_RPSReadBlastOptions(void)
-{
-    RPSBlastOptionsPtr rpsbop;
-    BLAST_OptionsBlkPtr options;
-    CharPtr location = NULL;
-    
-    rpsbop = MemNew(sizeof(RPSBlastOptions));
-    
-
-    if (myargs[OPT_OUTPUT_FILE].strvalue != NULL) 
-	rpsbop->out_filename = StringSave(myargs[OPT_OUTPUT_FILE].strvalue);
-
-    /* Note: these 2 parameters are necessary to intialize RPS Blast */
-    rpsbop->rps_database = StringSave(myargs[OPT_DB].strvalue);    
-    rpsbop->query_is_protein = myargs[OPT_PROT_QUERY].intvalue;
-    rpsbop->num_threads = myargs[OPT_NUMTHREADS].intvalue;
-
-    if((rpsbop->rdfp = readdb_new(myargs[OPT_DB].strvalue, TRUE)) == NULL)
-        return NULL;
-    
-    /* rpsbop->rpsinfo = RPSInfoAttach(rpsinfo_main); */
-
-    if (myargs[OPT_BELIEVE_QUERY].intvalue != 0)
-        rpsbop->believe_query = TRUE;
-    
-    options = BLASTOptionNew(rpsbop->query_is_protein ? "blastp" : "tblastn", 
-                             TRUE);
-    rpsbop->options = options;
-    
-    /* rpsbop->options->query_lcase_mask = slp; External filtering */
-    
-    if (myargs[OPT_DBLENGTH].floatvalue)
-        options->db_length = (Int8) myargs[OPT_DBLENGTH].floatvalue;
-    
-    if (myargs[OPT_SEARCHSP].floatvalue)
-        options->searchsp_eff = (Nlm_FloatHi) myargs[OPT_SEARCHSP].floatvalue;
-    
-    /* Necessary options for RPS Blast */
-    options->do_sum_stats = FALSE;
-    options->is_rps_blast = TRUE; 
-    
-    rpsbop->number_of_descriptions = myargs[OPT_NUM_DESC].intvalue;
-    rpsbop->number_of_alignments = myargs[OPT_NUM_RESULTS].intvalue;
-    
-    /* Set default gap params for matrix. */
-    BLASTOptionSetGapParams(options, "BLOSUM62", 0, 0);
-    
-    if(myargs[OPT_FORMAT].intvalue == 7) {
-       rpsbop->is_xml_output = TRUE;
-    }
-    else if (myargs[OPT_FORMAT].intvalue == 8)
-       rpsbop->is_tabular = TRUE;
-    else if (myargs[OPT_FORMAT].intvalue == 9)
-    {
-       rpsbop->is_tabular = TRUE;
-       rpsbop->is_tabular_comments = TRUE;
-    }
-    else if (myargs[OPT_FORMAT].intvalue == 10 || 
-             myargs[OPT_FORMAT].intvalue == 11)
-    {
-       rpsbop->is_asn1_output = TRUE;
-	if (myargs[OPT_FORMAT].intvalue == 10)
-		rpsbop->asn1_mode = StringSave("w");
-	else
-		rpsbop->asn1_mode = StringSave("wb");
-    }
-    else
-       s_PGPGetPrintOptions(options->gapped_calculation, 
-                            &rpsbop->align_options, &rpsbop->print_options);
-    
-
-    if (!rpsbop->is_xml_output && 
-        !rpsbop->is_asn1_output && 
-        (rpsbop->outfp = FileOpen(rpsbop->out_filename, "a")) == NULL) {
-            ErrPostEx(SEV_FATAL, 1, 0, "rpsblast: Unable to open output "
-                      "file %s\n", rpsbop->out_filename);
-            return NULL;
-    }
-
-    if (myargs[OPT_ASNOUT].strvalue != NULL) {
-        if (myargs[OPT_BELIEVE_QUERY].intvalue == 0) {
-            ErrPostEx(SEV_FATAL, 1, 0, 
-                      "-J option must be TRUE to use this option");
-            return NULL;
-        } else  {
-            if ((rpsbop->aip = AsnIoOpen (myargs[OPT_ASNOUT].strvalue,"w")) == NULL) {
-                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
-                          "file %s\n", myargs[OPT_ASNOUT].strvalue);
-                return NULL;
-            }
-    	}
-    }
-    else if (rpsbop->is_asn1_output)
-    {
-            if ((rpsbop->aip = AsnIoOpen (rpsbop->out_filename, rpsbop->asn1_mode)) == NULL) {
-                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
-                          "file %s\n", rpsbop->out_filename);
-                return NULL;
-            }
-    }
-
-    options->dropoff_2nd_pass  = (Int4) myargs[OPT_XDROP_UNGAPPED].floatvalue;
-    options->expect_value  = (Nlm_FloatHi) myargs[OPT_EVALUE].floatvalue;
-    options->hitlist_size = MAX(rpsbop->number_of_descriptions, 
-                                rpsbop->number_of_alignments);
-    
-    if (myargs[OPT_UNGAPPED_HITS].intvalue == 1) {
-        options->two_pass_method  = FALSE;
-        options->multiple_hits_only  = FALSE;
-    } else {
-        /* all other inputs, including the default 0 use 2-hit method */
-        options->two_pass_method  = FALSE;
-        options->multiple_hits_only  = TRUE;
-    }
-
-    options->gap_x_dropoff = myargs[OPT_XDROP_GAPPED].intvalue;
-    options->gap_x_dropoff_final = myargs[OPT_XDROP_GAPPED_FINAL].intvalue;
-    options->gap_trigger = myargs[OPT_GAP_TRIGGER].floatvalue;
-    
-    if (StringICmp(myargs[OPT_FILTER].strvalue, "T") == 0) {
-        options->filter_string = StringSave("S");
-    } else {
-        options->filter_string = StringSave(myargs[OPT_FILTER].strvalue);
-    }
-
-    options->number_of_cpus = (Int2) myargs[OPT_NUMTHREADS].intvalue;
-    
-    options->isPatternSearch = FALSE;
-
-    options = BLASTOptionValidate(options, rpsbop->query_is_protein ? 
-                                  "blastp" : "tblastn");
-    
-    /* Kludge: use required_{start,end} to store offsets that will restrict
-     * the query sequence. These values are later converted into a SeqLoc */
-    if ((location = myargs[OPT_RANGE].strvalue)) {
-        options->required_start = 
-           MAX(0, atol(StringTokMT(location, " ,;", &location)) - 1);
-        options->required_end = MAX(0, atol(location) - 1);
-        if (options->required_start < 0 || options->required_end < 0) {
-            ErrPostEx(SEV_ERROR,0,0, "Invalid range restriction: %ld to %ld",
-                    options->required_start, options->required_end);
-            return NULL;
-        }
-        /* Range restriction is only allowed for protein queries */
-        if (rpsbop->query_is_protein == FALSE && 
-            (options->required_start != 0 && options->required_end != 0)) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Range restriction supported only for "
-                    "protein queries");
-            options->required_start = options->required_end = 0;
-        }
-    }
-
-    if (options == NULL)
-        return NULL;
-    
-    return rpsbop;
-}
-
-static void 
-s_RPSViewSeqAlign(BioseqPtr query_bsp, SeqAlignPtr seqalign, 
-                  RPSBlastOptionsPtr rpsbop, ValNodePtr other_returns)
-{
-    SeqAnnotPtr seqannot;
-    BlastPruneSapStructPtr prune;
-    Uint1 align_type;
-    ValNodePtr vnp, mask;
-
-    seqannot = SeqAnnotNew();
-    seqannot->type = 2;
-    align_type = BlastGetProgramNumber(rpsbop->query_is_protein ?
-                                       "blastp" : "blastx");
-    AddAlignInfoToSeqAnnot(seqannot, align_type); /* blastp or tblastn */
-    
-    if (rpsbop->aip != NULL) {     
-        CharPtr title = readdb_get_title(rpsbop->rdfp); /* we don't own title */
-        BLASTAddBlastDBTitleToSeqAnnot(seqannot, title);
-    }
-
-    if (rpsbop->outfp == NULL) {
-        seqannot = SeqAnnotFree(seqannot);
-        return;
-    }
-
-    free_buff();    
-    init_buff_ex(128);
-    
-    /* BlastPrintReference(FALSE, 90, rpsbop->outfp); */
-    fprintf(rpsbop->outfp, "\n");
-
-    AcknowledgeBlastQuery(query_bsp, 70, rpsbop->outfp, 
-                          rpsbop->believe_query, rpsbop->html);
-    if(seqalign == NULL) {
-        fprintf(rpsbop->outfp, "\nNo hits found for the sequence...\n\n");
-        seqannot = SeqAnnotFree(seqannot);
-        return;
-    }
-    
-    prune = BlastPruneHitsFromSeqAlign(seqalign, 
-                                       rpsbop->number_of_descriptions, NULL);
-    PrintDefLinesFromSeqAlign(prune->sap, 80, rpsbop->outfp, 
-                              rpsbop->print_options, FIRST_PASS, NULL);
-
-    
-    /* --------------------------------------- */
-    
-    prune = BlastPruneHitsFromSeqAlign(seqalign, rpsbop->number_of_alignments, 
-                                       prune);
-    seqannot->data = prune->sap;
-
-    /* Write the ASN.1 Seq-annot */
-    if (rpsbop->aip != NULL) {     
-        SeqAnnotAsnWrite(seqannot, rpsbop->aip, NULL);
-        AsnIoReset(rpsbop->aip);
-    }
-
-    /* ------ Mask needed ----- */
-
-    mask = NULL;
-    for (vnp=other_returns; vnp; vnp = vnp->next) {
-        switch (vnp->choice) {
-        case SEQLOC_MASKING_NOTSET:
-        case SEQLOC_MASKING_PLUS1:
-        case SEQLOC_MASKING_PLUS2:
-        case SEQLOC_MASKING_PLUS3:
-        case SEQLOC_MASKING_MINUS1:
-        case SEQLOC_MASKING_MINUS2:
-        case SEQLOC_MASKING_MINUS3:
-            ValNodeAddPointer(&mask, vnp->choice, vnp->data.ptrvalue);
-            break;
-        default:
-            break;
-        }
-    }
-
-    if (myargs[OPT_FORMAT].intvalue != 0) {
-        ShowTextAlignFromAnnot(seqannot, 60, rpsbop->outfp, 
-                               NULL, NULL, rpsbop->align_options, NULL, 
-                               mask, NULL);
-    } else {
-        ShowTextAlignFromAnnot(seqannot, 60, rpsbop->outfp, 
-                               NULL, NULL, rpsbop->align_options, NULL, 
-                               mask, FormatScoreFunc);
-    }
-
-    prune = BlastPruneSapStructDestruct(prune);
-
-    seqannot->data = NULL;
-    seqannot = SeqAnnotFree(seqannot);
-    seqannot = SeqAnnotFree(seqannot);
-
-    free_buff();
-    return;
-}
-
-static Boolean 
-s_RPSFormatFooter(RPSBlastOptionsPtr rpsbop,  ValNodePtr other_returns)
-{
-    ValNodePtr  mask_loc, vnp;
-    BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
-    TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
-    CharPtr params_buffer=NULL;
-    BLAST_MatrixPtr blast_matrix;
-    
-    mask_loc = NULL;
-    for (vnp=other_returns; vnp; vnp = vnp->next) {
-        switch (vnp->choice) {
-        case TXDBINFO:
-            dbinfo = vnp->data.ptrvalue;
-            break;
-        case TXKABLK_NOGAP:
-            ka_params = vnp->data.ptrvalue;
-            break;
-        case TXKABLK_GAP:
-            ka_params_gap = vnp->data.ptrvalue;
-            break;
-        case TXPARAMETERS:
-            params_buffer = vnp->data.ptrvalue;
-            break;
-        case TXMATRIX:
-            blast_matrix = vnp->data.ptrvalue;
-            break;
-        case SEQLOC_MASKING_NOTSET:
-        case SEQLOC_MASKING_PLUS1:
-        case SEQLOC_MASKING_PLUS2:
-        case SEQLOC_MASKING_PLUS3:
-        case SEQLOC_MASKING_MINUS1:
-        case SEQLOC_MASKING_MINUS2:
-        case SEQLOC_MASKING_MINUS3:
-            ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
-            break;
-        default:
-            break;
-        }
-    }	
-    
-    free_buff();    
-    init_buff_ex(85);
-    dbinfo_head = dbinfo;
-    while (dbinfo) {
-        PrintDbReport(dbinfo, 70, rpsbop->outfp);
-        dbinfo = dbinfo->next;
-    }
-    
-    if (ka_params) {
-        PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 
-                          70, rpsbop->outfp, FALSE);
-    }
-    
-    if (ka_params_gap) {
-        PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K,
-                          ka_params_gap->H, 70, rpsbop->outfp, TRUE);
-    }
-    
-    PrintTildeSepLines(params_buffer, 70, rpsbop->outfp);
-    free_buff();
-
-    fflush(rpsbop->outfp);
-
-    return TRUE;
-}
-
-static SeqEntryPtr LIBCALLBACK 
-s_RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr data)
-{
-    SeqEntryPtr sep;
-    static TNlmMutex read_mutex;
-    static FILE *infp;
-    static Boolean end_of_data = FALSE;
-
-    NlmMutexInit(&read_mutex);
-    NlmMutexLock(read_mutex);
-    
-    if(end_of_data) {
-        NlmMutexUnlock(read_mutex);
-        return NULL;
-    }
-
-    /* Opening file with input sequences */
-    if(infp == NULL) {
-        if ((infp = FileOpen(myargs[OPT_QUERY_FILE].strvalue, "r")) == NULL) {
-            ErrPostEx(SEV_FATAL, 1, 0, 
-                      "rpsblast: Unable to open input file %s\n", 
-                      myargs[OPT_QUERY_FILE].strvalue);
-            end_of_data = TRUE;
-            NlmMutexUnlock(read_mutex);
-        }
-    }
-    
-    if(myargs[OPT_LCASE].intvalue) {
-        sep = FastaToSeqEntryForDb (infp, !myargs[OPT_PROT_QUERY].intvalue, 
-                                    NULL, myargs[OPT_BELIEVE_QUERY].intvalue, 
-                                    NULL, NULL, slp);
-    } else {
-        sep = FastaToSeqEntryEx (infp, !myargs[OPT_PROT_QUERY].intvalue, 
-                                 NULL, myargs[OPT_BELIEVE_QUERY].intvalue);
-    }
-    
-    if(sep == NULL) {            /* Probably last FASTA entry */
-        end_of_data = TRUE;
-        FileClose(infp);
-        NlmMutexUnlock(read_mutex);
-        return NULL;
-    }
-    
-    NlmMutexUnlock(read_mutex);
-    
-    return sep;
-}
-
-static Boolean LIBCALLBACK 
-s_RPSResultsCallback(BioseqPtr query_bsp, RPSBlastOptionsPtr rpsbop, 
-                     SeqAlignPtr seqalign, ValNodePtr other_returns, 
-                     ValNodePtr error_returns, VoidPtr data)
-{
-    if(rpsbop->is_xml_output == TRUE) {
-       AsnIoPtr aip = AsnIoOpen(rpsbop->out_filename, "wx");
-       BXMLPrintOutput(aip, seqalign, rpsbop->options, 
-                       rpsbop->query_is_protein ? 
-                       "blastp" : "tblastn", rpsbop->rps_database, 
-                       query_bsp, other_returns, 0, NULL, NULL);
-       AsnIoClose(aip);
-    } else if (rpsbop->is_tabular) {
-	if (rpsbop->is_tabular_comments)
-       		PrintTabularOutputHeader(rpsbop->rps_database, query_bsp, NULL, 
-                                "rps-blast", 0, rpsbop->believe_query,
-                                rpsbop->outfp);
-       BlastPrintTabulatedResults(seqalign, query_bsp, NULL, 
-                                  rpsbop->number_of_alignments,
-                                  rpsbop->query_is_protein ? 
-                                  "blastp" : "tblastn", FALSE,
-                                  rpsbop->believe_query, 0, 0, rpsbop->outfp,
-                                  FALSE);
-    } else {
-        s_RPSViewSeqAlign(query_bsp, seqalign, rpsbop, other_returns);
-        s_RPSFormatFooter(rpsbop, other_returns);
-    }
-    
-    return TRUE;
-}
-
-Int2 Main_Old(void)
-{
-    FILE *fd;
-    RPSBlastOptionsPtr rpsbop;
-
-    /* Truncate output file */
-    if((fd = FileOpen(myargs[OPT_OUTPUT_FILE].strvalue, "w")) != NULL)
-        FileClose(fd);
-    
-    if((rpsbop = s_RPSReadBlastOptions()) == NULL) {
-        ErrPostEx(SEV_FATAL, 1, 0, "Unable to create RPS Blast options");
-        return 1;
-    }
-
-    if (!rpsbop->is_xml_output && !rpsbop->is_tabular && !rpsbop->is_asn1_output)
-	    BlastPrintVersionInfo("RPS-BLAST", rpsbop->html, rpsbop->outfp);
-    
-    RPSBlastSearchMT(rpsbop, s_RPSGetNextSeqEntry, NULL, 
-                     s_RPSResultsCallback, NULL);
-    s_RPSBlastOptionsFree(rpsbop);
-
-    return 0;
-}
-
-/*-------------------------- TOP LEVEL DRIVER -------------------------*/
-
-Int2 Main(void)
-{
-    Char buf[256] = { '\0' };
-
-    StringCpy(buf, "rpsblast ");
-    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
-    if (!GetArgs(buf, NUM_ARGS, myargs))
-        return 1;
-    
-    if (strcmp(myargs[OPT_LOGFILE].strvalue, "stderr") != 0) {
-       if ( !ErrSetLog (myargs[OPT_LOGFILE].strvalue) ) { /* Logfile */
-          ErrShow();
-          return 1;
-       }
-    }
-    
-    UseLocalAsnloadDataAndErrMsg ();
-    
-    if (!SeqEntryLoad())
-        return 1;
-        
-    if (myargs[OPT_FORCE_OLD_ENGINE].intvalue == TRUE)
-        return Main_Old();
-    else
-        return Main_New();
 }

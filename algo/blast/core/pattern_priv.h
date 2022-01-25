@@ -1,4 +1,4 @@
-/* $Id: pattern_priv.h,v 1.4 2005/11/16 14:27:04 madden Exp $
+/* $Id: pattern_priv.h,v 1.5 2006/11/21 17:13:39 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,11 @@
  * are used in multiple source files.
  */
 
-#include <algo/blast/core/ncbi_std.h>
-#include <algo/blast/core/pattern.h>
-
 #ifndef ALGO_BLAST_CORE__PATTERN_PRIV_H
 #define ALGO_BLAST_CORE__PATTERN_PRIV_H
+
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/pattern.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -106,4 +106,4 @@ _PHIGetRightOneBits(Int4 s, Int4 mask, Int4* rightOne, Int4* rightMaskOnly);
 }
 #endif
 
-#endif /* ALGO_BLAST_CORE__PATTERN_PRIV_H */
+#endif /* !ALGO_BLAST_CORE__PATTERN_PRIV_H */

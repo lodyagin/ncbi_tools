@@ -37,6 +37,33 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.40  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.39  2006/11/17 20:06:36  kans
+* master index has numuid count in angle brackets, so it does not need to load all text lines into memory at once
+*
+* Revision 6.38  2006/11/17 17:45:48  kans
+* master index sorted numerically, stores arrays of numbers, frees temporary chunks immediately
+*
+* Revision 6.37  2006/11/13 16:00:43  kans
+* fixes for indexing in separate directory from asnrelease files
+*
+* Revision 6.36  2006/11/09 22:41:51  kans
+* allow AsnIndex files to be made in separate directory from data source files
+*
+* Revision 6.35  2006/11/09 17:49:38  kans
+* switch to newer AsnIndex method using master index file
+*
+* Revision 6.34  2006/11/08 21:25:41  kans
+* added new functions to handle master asn index file
+*
+* Revision 6.33  2006/11/07 22:35:54  kans
+* fixed valnodecopystr bug, bail if index file already exists
+*
+* Revision 6.32  2006/11/07 21:40:02  kans
+* added CreateMasterAsnIndex
+*
 * Revision 6.31  2006/07/13 17:06:38  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -218,7 +245,6 @@ static AsnIoPtr LIBCALL  LsqFetch_AsnIoOpen (CharPtr file_name, CharPtr mode)
   return aip;
 }
 
-
 /***********************************************************************
 ***
 *
@@ -265,7 +291,7 @@ static SeqEntryPtr Sep_from_ByteStore(ByteStorePtr bsp, Int4 length, Boolean is_
 
 	biosp = BioseqNew();
 	biosp->id = SeqIdDupList(sip);
-        biosp->seq_data = bsp;
+        biosp->seq_data = (SeqDataPtr) bsp;
         biosp->repr = Seq_repr_raw;
         biosp->mol = (is_dna) ? Seq_mol_dna : Seq_mol_aa;
         biosp->length = length;
@@ -1769,33 +1795,37 @@ NLM_EXTERN void CreateFastaIndex (
 static CharPtr asnlibfetchproc = "AsnIndexedLibBioseqFetch";
 
 typedef struct asnlibftch {
-  CharPtr     path;
-  ValNodePtr  fiplist;
-  IdFipPtr    index;
-  Int4        numids;
-  Boolean     binary;
+  CharPtr       datapath;
+  CharPtr       indexpath;
+  ValNodePtr    filelist;
+  CharPtr PNTR  filenames;
+  Int2          numfiles;
+  Int4 PNTR     seqids;
+  Int4 PNTR     offsets;
+  Int2 PNTR     filenums;
+  Int4          numids;
+  Boolean       binary;
 } AsnLibFetchData, PNTR AsnLibFetchPtr;
 
-static FastaIndexPtr SearchAsnIndex (
+static Boolean SearchMasterAsnIndex (
   AsnLibFetchPtr alfp,
-  CharPtr seqid
+  Int4 seqid,
+  Int4Ptr offsetP,
+  Int2Ptr filenumP
 )
 
 {
-  int       compare;
-  IdFipPtr  ifp;
   Int4      L, R, mid;
 
-  if (alfp == NULL || alfp->index == NULL) return NULL;
-  ifp = alfp->index;
-  if (StringHasNoText (seqid)) return NULL;
+  if (alfp == NULL || alfp->seqids == NULL ||
+      alfp->offsets == NULL || alfp->filenums == NULL) return FALSE;
+  if (seqid < 1) return FALSE;
 
   L = 0;
   R = alfp->numids - 1;
   while (L < R) {
     mid = (L + R) / 2;
-    compare = StringICmp (ifp [mid].seqid, seqid);
-    if (compare < 0) {
+    if (alfp->seqids [mid] < seqid) {
       L = mid + 1;
     } else {
       R = mid;
@@ -1803,12 +1833,232 @@ static FastaIndexPtr SearchAsnIndex (
   }
 
   if (R >= 0 && R < alfp->numids) {
-    if (StringICmp (ifp [R].seqid, seqid) == 0) {
-      return ifp [R].fip;
+    if (alfp->seqids [R] == seqid) {
+      *offsetP = (Int4) alfp->offsets [R];
+      *filenumP = (Int2) alfp->filenums [R];
+      return TRUE;
     }
   }
 
+  return FALSE;
+}
+
+static AsnLibFetchPtr FreeMasterAsnIndex (
+  AsnLibFetchPtr alfp
+)
+
+{
+  if (alfp == NULL) return NULL;
+
+  MemFree (alfp->datapath);
+  MemFree (alfp->indexpath);
+  MemFree (alfp->seqids);
+  MemFree (alfp->offsets);
+  MemFree (alfp->filenums);
+  MemFree (alfp->filenames);
+  ValNodeFreeData (alfp->filelist);
+  MemFree (alfp);
+
   return NULL;
+}
+
+static AsnLibFetchPtr ReadMasterAsnIndex (
+  CharPtr indexpath,
+  Boolean binary
+)
+
+{
+  AsnLibFetchPtr  alfp;
+  Char            ch;
+  Int2            col;
+  FileCache       fc;
+  Char            filename [PATH_MAX];
+  CharPtr         filenum;
+  Int4            idx;
+  FILE            *ifp;
+  ValNodePtr      lastfile = NULL;
+  Int4            lastseqid;
+  Char            line [128];
+  CharPtr         offset;
+  Boolean         outOfOrder;
+  CharPtr         ptr;
+  CharPtr         seqid;
+  CharPtr         str;
+  long int        val;
+  ValNodePtr      vnp;
+
+  if (StringHasNoText (indexpath)) return NULL;
+
+  StringNCpy_0 (filename, indexpath, sizeof (filename));
+  FileBuildPath (filename, NULL, "master.idx");
+
+  if (FileLength (filename) < 1) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Master index file %s does not exist", filename);
+    return NULL;
+  }
+
+  alfp = (AsnLibFetchPtr) MemNew (sizeof (AsnLibFetchData));
+  if (alfp == NULL) return NULL;
+
+  ifp = FileOpen (filename, "r");
+  if (ifp == NULL) {
+    MemFree (alfp);
+    return NULL;
+  }
+
+  alfp->indexpath = StringSave (indexpath);
+  alfp->datapath = StringSave (indexpath);
+  alfp->binary = binary;
+
+  FileCacheSetup (&fc, ifp);
+
+  str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+
+  if (str != NULL && *str == '[') {
+    
+    /* read data path line */
+    str++;
+    ptr = StringChr (str, ']');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      if (StringDoesHaveText (str)) {
+        alfp->datapath = MemFree (alfp->datapath);
+        alfp->datapath = StringSave (str);
+      }
+    }
+
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  }
+
+  while (str != NULL && *str == '(') {
+    
+    /* read index file name line */
+    str++;
+    ptr = StringChr (str, ')');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr = StringChr (str, '\t');
+      if (ptr != NULL) {
+        ptr++;
+        if (StringDoesHaveText (ptr)) {
+          vnp = ValNodeCopyStr (&(lastfile), 0, ptr);
+          if (alfp->filelist == NULL) {
+            alfp->filelist = vnp;
+          }
+          lastfile = vnp;
+          (alfp->numfiles)++;
+        }
+      }
+    }
+
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  }
+
+  if (str != NULL && *str == '<') {
+    
+    /* read number of seqids line */
+    str++;
+    ptr = StringChr (str, '>');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      if (sscanf (str, "%ld", &val) == 1) {
+        alfp->numids = (Int4) val;
+      }
+    }
+
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  }
+
+  /* create arrays */
+
+  alfp->filenames = MemNew (sizeof (CharPtr) * (size_t) (alfp->numfiles + 3));
+
+  alfp->seqids = MemNew (sizeof (Int4) * (size_t) (alfp->numids + 2));
+  alfp->offsets = MemNew (sizeof (Int4) * (size_t) (alfp->numids + 2));
+  alfp->filenums = MemNew (sizeof (Int2) * (size_t) (alfp->numids + 2));
+
+  if (alfp->numids < 1 || alfp->numfiles < 1 ||
+      alfp->filenames == NULL || alfp->seqids == NULL ||
+      alfp->offsets == NULL || alfp->filenums == NULL) {
+
+    FileClose (ifp);
+    return FreeMasterAsnIndex (alfp);
+  }
+
+  /* initialize filenames array */
+
+  idx = 1;
+  for (vnp = alfp->filelist; vnp != NULL; vnp = vnp->next) {
+    ptr = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (ptr)) continue;
+    alfp->filenames [idx] = StringSave (ptr);
+    idx++;
+  }
+
+  /* continue reading seqid-offset-filenum lines */
+
+  idx = 0;
+  seqid = NULL;
+  offset = NULL;
+  filenum = NULL;
+  while (str != NULL) {
+    if (StringDoesHaveText (str)) {
+
+      /* read line of seqid index data into seqids, offsets and filenums arrays */
+
+      col = 0;
+      ptr = str;
+      ch = *ptr;
+      seqid = ptr;
+      while (ch != '\0') {
+      if (ch == '\t') {
+          *ptr = '\0';
+          ptr++;
+          ch = *ptr;
+          col++;
+          if (col == 1) {
+            offset = ptr;
+         } else if (col == 2) {
+            filenum = ptr;
+          }
+        } else {
+          ptr++;
+          ch = *ptr;
+        }
+      }
+      if (sscanf (seqid, "%ld", &val) == 1) {
+        alfp->seqids [idx] = (Int4) val;
+      }
+      if (sscanf (offset, "%ld", &val) == 1) {
+        alfp->offsets [idx] = (Int4) val;
+      }
+      if (sscanf (filenum, "%ld", &val) == 1) {
+        alfp->filenums [idx] = (Int2) val;
+      }
+      idx++;
+    }
+
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  }
+
+  FileClose (ifp);
+
+  /* confirm sorted order and uniqueness */
+
+  outOfOrder = FALSE;
+  lastseqid = alfp->seqids [0];
+  for (idx = 1; idx < alfp->numids; idx++) {
+    if (lastseqid >= alfp->seqids [idx]) {
+      outOfOrder = TRUE;
+    }
+    lastseqid = alfp->seqids [idx];
+  }
+
+  if (outOfOrder) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Master index file out of order");
+  }
+
+  return alfp;
 }
 
 static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
@@ -1817,8 +2067,8 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
   AsnIoPtr          aip;
   AsnLibFetchPtr    alfp;
   BioseqPtr         bsp;
-  Char              file [FILENAME_MAX], path [PATH_MAX], id [41];
-  FastaIndexPtr     fip;
+  Char              file [FILENAME_MAX], path [PATH_MAX];
+  Int2              filenum;
   Int4              offset;
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
@@ -1834,19 +2084,17 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
   if (alfp == NULL) return OM_MSG_RET_ERROR;
   sip = (SeqIdPtr) ompcp->input_data;
   if (sip == NULL) return OM_MSG_RET_ERROR;
+  if (sip->choice != SEQID_GI) return OM_MSG_RET_ERROR;
 
-  SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
-  fip = SearchAsnIndex (alfp, id);
-  if (fip != NULL) {
-    offset = SearchFastaIndex (fip, id);
-    if (offset < 0) return OM_MSG_RET_ERROR;
-    StringCpy (file, fip->file);
+  if (SearchMasterAsnIndex (alfp, (Int4) sip->data.intvalue, &offset, &filenum)) {
+    if (offset < 0 || filenum < 1) return OM_MSG_RET_ERROR;
+    StringCpy (file, alfp->filenames [filenum]);
     tmp = StringStr (file, ".idx");
     if (tmp != NULL) {
       *tmp = '\0';
     }
     StringCat (file, ".aso");
-    StringNCpy_0 (path, fip->path, sizeof (path));
+    StringNCpy_0 (path, alfp->datapath, sizeof (path));
     FileBuildPath (path, NULL, file);
     aip = LsqFetch_AsnIoOpen (path, alfp->binary? "rb" : "r");
     if (aip == NULL) {
@@ -1854,7 +2102,7 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
       if (tmp != NULL) {
         *tmp = '\0';
         StringCat (file, ".asn");
-        StringNCpy_0 (path, fip->path, sizeof (path));
+        StringNCpy_0 (path, alfp->datapath, sizeof (path));
         FileBuildPath (path, NULL, file);
         aip = LsqFetch_AsnIoOpen (path, alfp->binary? "rb" : "r");
       }
@@ -1872,81 +2120,29 @@ static Int2 LIBCALLBACK AsnIndexedLibBioseqFetchFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-NLM_EXTERN Boolean AsnIndexedLibFetchEnable (CharPtr path, Boolean binary)
+NLM_EXTERN Boolean AsnIndexedLibFetchEnable (CharPtr indexpath, Boolean binary)
 
 {
   AsnLibFetchPtr  alfp = NULL;
-  Char            file [FILENAME_MAX];
-  FastaIndexPtr   fip;
-  ValNodePtr      head;
-  Int4            i;
-  IdFipPtr        ifp;
   Boolean         is_new = FALSE;
-  Int4            j;
-  Int4            numids = 0;
   ObjMgrPtr       omp;
   ObjMgrProcPtr   ompp;
   Char            str [PATH_MAX];
-  CharPtr         tmp;
-  ValNodePtr      vnp;
 
-  StringNCpy_0 (str, path, sizeof (str));
+  StringNCpy_0 (str, indexpath, sizeof (str));
   TrimSpacesAroundString (str);
   omp = ObjMgrGet ();
   ompp = ObjMgrProcFind (omp, 0, asnlibfetchproc, OMPROC_FETCH);
   if (ompp != NULL) {
     alfp = (AsnLibFetchPtr) ompp->procdata;
     if (alfp != NULL) {
-      alfp->path = MemFree (alfp->path);
-      for (vnp = alfp->fiplist; vnp != NULL; vnp = vnp->next) {
-        fip = (FastaIndexPtr) vnp->data.ptrvalue;
-        FreeFastaIndex (fip);
-      }
-      alfp->fiplist = ValNodeFree (alfp->fiplist);
-      alfp->index = MemFree (alfp->index);
+      FreeMasterAsnIndex (alfp);
+      alfp = ReadMasterAsnIndex (indexpath, binary);
+      ompp->procdata = (Pointer) alfp;
     }
   } else {
-    alfp = (AsnLibFetchPtr) MemNew (sizeof (AsnLibFetchData));
     is_new = TRUE;
-    if (alfp != NULL) {
-      alfp->binary = binary;
-    }
-  }
-  if (alfp != NULL) {
-    alfp->path = StringSave (str);
-    head = DirCatalog (str);
-    for (vnp = head; vnp != NULL; vnp = vnp->next) {
-      if (vnp->choice == 0) {
-        tmp = (CharPtr) vnp->data.ptrvalue;
-        if (StringStr (tmp, ".idx") != NULL) {
-          StringCpy (str, alfp->path);
-          sprintf (file, "%s", tmp);
-          FileBuildPath (str, NULL, file);
-          fip = ReadFastaIndex (str);
-          if (fip != NULL) {
-            ValNodeAddPointer (&(alfp->fiplist), 0, (Pointer) fip);
-            numids += fip->numlines;
-          }
-        }
-      }
-    }
-    ValNodeFreeData (head);
-    ifp = (IdFipPtr) MemNew (sizeof (IdFip) * (numids + 2));
-    alfp->index = ifp;
-    alfp->numids = numids;
-    if (ifp != NULL) {
-      i = 0;
-      for (vnp = alfp->fiplist; vnp != NULL; vnp = vnp->next) {
-        fip = (FastaIndexPtr) vnp->data.ptrvalue;
-        if (fip != NULL) {
-          for (j = 0; j < fip->numlines; j++, i++) {
-            ifp [i].seqid = fip->seqids [j];
-            ifp [i].fip = fip;
-          }
-        }
-      }
-      HeapSort (ifp, (size_t) numids, sizeof (IdFip), SortIfpByID);
-    }
+    alfp = ReadMasterAsnIndex (indexpath, binary);
   }
   if (is_new) {
     ObjMgrProcLoad (OMPROC_FETCH, asnlibfetchproc, asnlibfetchproc,
@@ -1960,10 +2156,8 @@ NLM_EXTERN void AsnIndexedLibFetchDisable (void)
 
 {
   AsnLibFetchPtr  alfp;
-  FastaIndexPtr   fip;
   ObjMgrPtr       omp;
   ObjMgrProcPtr   ompp;
-  ValNodePtr      vnp;
 
   omp = ObjMgrGet ();
   ompp = ObjMgrProcFind (omp, 0, asnlibfetchproc, OMPROC_FETCH);
@@ -1971,14 +2165,7 @@ NLM_EXTERN void AsnIndexedLibFetchDisable (void)
   ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
   alfp = (AsnLibFetchPtr) ompp->procdata;
   if (alfp == NULL) return;
-  alfp->path = MemFree (alfp->path);
-  for (vnp = alfp->fiplist; vnp != NULL; vnp = vnp->next) {
-    fip = (FastaIndexPtr) vnp->data.ptrvalue;
-    FreeFastaIndex (fip);
-  }
-  alfp->fiplist = ValNodeFree (alfp->fiplist);
-  alfp->index = MemFree (alfp->index);
-  MemFree (alfp);
+  FreeMasterAsnIndex (alfp);
 }
 
 /* common function for creating indexes of ASN.1 Bioseq-set ftp release files */
@@ -1996,9 +2183,10 @@ static void SaveAsnIdxOffset (
 )
 
 {
-  AsnIdxPtr  aip;
-  Char       id [41], tmp [64];
-  SeqIdPtr   sip;
+  AsnIdxPtr   aip;
+  Char        id [96], tmp [128];
+  SeqIdPtr    sip;
+  ValNodePtr  vnp;
 
   aip = (AsnIdxPtr) userdata;
   if (bsp == NULL || aip == NULL) return;
@@ -2014,18 +2202,17 @@ static void SaveAsnIdxOffset (
     /* save ID and offset separated by tab character */
 
     sprintf (tmp, "%s\t%ld", id, (long) aip->offset);
-    aip->last = ValNodeNew (aip->last);
+    vnp = ValNodeCopyStr (&(aip->last), 0, tmp);
     if (aip->head == NULL) {
-      aip->head = aip->last;
+      aip->head = vnp;
     }
-    if (aip->last != NULL) {
-      aip->last->data.ptrvalue = StringSave (tmp);
-    }
+    aip->last = vnp;
   }
 }
 
 static void CreateBinaryAsnIndex (
-  CharPtr file
+  CharPtr datafile,
+  CharPtr indexpath
 )
 
 {
@@ -2033,6 +2220,7 @@ static void CreateBinaryAsnIndex (
   AsnIoPtr      aip;
   AsnModulePtr  amp;
   AsnTypePtr    atp, atp_bss, atp_se;
+  Char          file [PATH_MAX];
   FILE          *ofp;
   ObjMgrPtr     omp;
   Char          path [PATH_MAX];
@@ -2040,18 +2228,39 @@ static void CreateBinaryAsnIndex (
   SeqEntryPtr   sep;
   ValNodePtr    vnp;
 
-  if (StringHasNoText (file)) return;
+  if (StringHasNoText (datafile)) return;
 
   /* replace extension by .idx for index file */
 
-  StringNCpy_0 (path, file, sizeof (path));
-  ptr = StringRChr (path, '.');
-  if (ptr != NULL) {
-    *ptr = '\0';
+  path [0] = '\0';
+  if (StringDoesHaveText (indexpath)) {
+    StringNCpy_0 (file, datafile, sizeof (file));
+    ptr = StringRChr (file, '.');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    ptr = StringRChr (file, DIRDELIMCHR);
+    if (ptr != NULL) {
+      ptr++;
+      StringNCpy_0 (path, indexpath, sizeof (path));
+      FileBuildPath (path, NULL, ptr);
+      StringCat (path, ".idx");
+    }
+  } else {
+    StringNCpy_0 (path, datafile, sizeof (path));
+    ptr = StringRChr (path, '.');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    StringCat (path, ".idx");
   }
-  StringCat (path, ".idx");
 
-  aip = LsqFetch_AsnIoOpen (file, "rb");
+  if (FileLength (path) > 0) {
+    Message (MSG_POST, "Index file %s already exists", path);
+    return;
+  }
+
+  aip = LsqFetch_AsnIoOpen (datafile, "rb");
   if (aip == NULL) return;
 
   ofp = LsqFetch_FileOpen (path, "w");
@@ -2116,31 +2325,54 @@ static void CreateBinaryAsnIndex (
 }
 
 static void CreateTextAsnIndex (
-  CharPtr file
+  CharPtr datafile,
+  CharPtr indexpath
 )
 
 {
   AsnIdxData   aid;
   Pointer      dataptr = NULL;
   Uint2        datatype, entityID = 0;
+  Char         file [PATH_MAX];
   FILE         *ifp, *ofp;
   Char         path [PATH_MAX];
   CharPtr      ptr;
   SeqEntryPtr  sep;
   ValNodePtr   vnp;
 
-  if (StringHasNoText (file)) return;
+  if (StringHasNoText (datafile)) return;
 
   /* replace extension by .idx for index file */
 
-  StringNCpy_0 (path, file, sizeof (path));
-  ptr = StringRChr (path, '.');
-  if (ptr != NULL) {
-    *ptr = '\0';
+  path [0] = '\0';
+  if (StringDoesHaveText (indexpath)) {
+    StringNCpy_0 (file, datafile, sizeof (file));
+    ptr = StringRChr (file, '.');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    ptr = StringRChr (file, DIRDELIMCHR);
+    if (ptr != NULL) {
+      ptr++;
+      StringNCpy_0 (path, indexpath, sizeof (path));
+      FileBuildPath (path, NULL, ptr);
+      StringCat (path, ".idx");
+    }
+  } else {
+    StringNCpy_0 (path, datafile, sizeof (path));
+    ptr = StringRChr (path, '.');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    StringCat (path, ".idx");
   }
-  StringCat (path, ".idx");
 
-  ifp = LsqFetch_FileOpen (file, "r");
+  if (FileLength (path) > 0) {
+    Message (MSG_POST, "Index file %s already exists", path);
+    return;
+  }
+
+  ifp = LsqFetch_FileOpen (datafile, "r");
   if (ifp == NULL) return;
 
   ofp = LsqFetch_FileOpen (path, "w");
@@ -2190,15 +2422,200 @@ static void CreateTextAsnIndex (
 }
 
 NLM_EXTERN void CreateAsnIndex (
-  CharPtr file,
+  CharPtr datafile,
+  CharPtr indexpath,
   Boolean binary
 )
 
 {
+  if (StringHasNoText (datafile)) return;
+
   if (binary) {
-    CreateBinaryAsnIndex (file);
+    CreateBinaryAsnIndex (datafile, indexpath);
   } else {
-    CreateTextAsnIndex (file);
+    CreateTextAsnIndex (datafile, indexpath);
   }
+}
+
+typedef struct idxdata {
+  Int4  seqid;
+  Int4  offset;
+  Int2  filenum;
+} IdxData, PNTR IdxDataPtr;
+
+typedef struct buildidx {
+  CharPtr     path;
+  Int2        filenum;
+  FILE        *ofp;
+  ValNodePtr  head;
+  ValNodePtr  last;
+} BuildIdx, PNTR BuildIdxPtr;
+
+static void AddOneIndex (
+  CharPtr filename,
+  Pointer userdata
+)
+
+{
+  BuildIdxPtr  bip;
+  FileCache    fc;
+  IdxDataPtr   idp;
+  FILE         *ifp;
+  Char         line [128];
+  CharPtr      ptr;
+  CharPtr      str;
+  long int     val;
+  ValNodePtr   vnp;
+
+  if (StringHasNoText (filename) || userdata == NULL) return;
+  bip = (BuildIdxPtr) userdata;
+
+  ptr = StringRChr (filename, DIRDELIMCHR);
+  if (ptr == NULL) return;
+  ptr++;
+  if (StringICmp (ptr, "master.idx") == 0) return;
+
+  (bip->filenum)++;
+  fprintf (bip->ofp, "(%d\t%s)\n", (int) bip->filenum, ptr);
+
+  ifp = FileOpen (filename, "r");
+  if (ifp == NULL) return;
+
+  if (FileCacheSetup (&fc, ifp)) {
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+    while (str != NULL) {
+      if (StringDoesHaveText (str)) {
+        ptr = StringChr (str, '\t');
+        if (ptr != NULL) {
+          *ptr = '\0';
+          ptr++;
+          if (sscanf (str, "%ld", &val) == 1) {
+            idp = (IdxDataPtr) MemNew (sizeof (IdxData));
+            if (idp != NULL) {
+              idp->seqid = (Int4) val;
+              if (sscanf (ptr, "%ld", &val) == 1) {
+                idp->offset = (Int4) val;
+              }
+              idp->filenum = (Int2) bip->filenum;
+              vnp = ValNodeAddPointer (&(bip->last), 0, (Pointer) idp);
+              if (bip->head == NULL) {
+                bip->head = vnp;
+              }
+              bip->last = vnp;
+            }
+          }
+        }
+      }
+      str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+    }
+  }
+
+  FileClose (ifp);
+}
+
+static int LIBCALLBACK SortVnpByBuildIdxSeqid (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  IdxDataPtr  idp1, idp2;
+  ValNodePtr  vnp1, vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      idp1 = (IdxDataPtr) vnp1->data.ptrvalue;
+      idp2 = (IdxDataPtr) vnp2->data.ptrvalue;
+      if (idp1 != NULL && idp2 != NULL) {
+        if (idp1->seqid > idp2->seqid) {
+          return 1;
+        } else if (idp1->seqid < idp2->seqid) {
+          return -1;
+        } else return 0;
+      }
+    }
+  }
+  return 0;
+}
+
+static ValNodePtr UniqueVnpByBuildIdx (ValNodePtr list)
+
+{
+  IdxDataPtr    curr;
+  IdxDataPtr    last;
+  ValNodePtr    next;
+  Pointer PNTR  prev;
+  ValNodePtr    vnp;
+
+  if (list == NULL) return NULL;
+  last = (IdxDataPtr) list->data.ptrvalue;
+  vnp = list->next;
+  prev = (Pointer PNTR) &(list->next);
+  while (vnp != NULL) {
+    next = vnp->next;
+    curr = (IdxDataPtr) vnp->data.ptrvalue;
+    if (last->seqid == curr->seqid) {
+      vnp->next = NULL;
+      *prev = next;
+      ValNodeFreeData (vnp);
+    } else {
+      last = (IdxDataPtr) vnp->data.ptrvalue;
+      prev = (Pointer PNTR) &(vnp->next);
+    }
+    vnp = next;
+  }
+
+  return list;
+}
+
+NLM_EXTERN void CreateMasterAsnIndex (
+  CharPtr datapath,
+  CharPtr indexpath
+)
+
+{
+  BuildIdx     bi;
+  IdxDataPtr   idp;
+  Int4         len;
+  Char         str [PATH_MAX];
+  ValNodePtr   vnp;
+
+  if (StringHasNoText (indexpath)) {
+    indexpath = datapath;
+  }
+  if (StringHasNoText (indexpath)) return;
+
+  MemSet ((Pointer) &bi, 0, sizeof (BuildIdx));
+  StringNCpy_0 (str, indexpath, sizeof (str));
+  FileBuildPath (str, NULL, "master.idx");
+
+  if (FileLength (str) > 0) {
+    Message (MSG_POST, "Master index file %s already exists", str);
+    return;
+  }
+
+  bi.ofp = FileOpen (str, "w");
+
+  if (StringDoesHaveText (datapath) && StringICmp (datapath, indexpath) != 0) {
+    StringNCpy_0 (str, datapath, sizeof (str));
+    FileBuildPath (str, NULL, NULL);
+    fprintf (bi.ofp, "[%s]\n", str);
+  }
+
+  DirExplore (indexpath, NULL, ".idx", FALSE, AddOneIndex, (Pointer) &bi);
+
+  bi.head = ValNodeSort (bi.head, SortVnpByBuildIdxSeqid);
+  bi.head = UniqueVnpByBuildIdx (bi.head);
+
+  len = ValNodeLen (bi.head);
+  fprintf (bi.ofp, "<%ld>\n", (long) len);
+
+  for (vnp = bi.head; vnp != NULL; vnp = vnp->next) {
+    idp = (IdxDataPtr) vnp->data.ptrvalue;
+    if (idp == NULL) continue;
+    fprintf (bi.ofp, "%ld\t%ld\t%d\n", (long) idp->seqid, (long) idp->offset, (int) idp->filenum);
+  }
+
+  ValNodeFreeData (bi.head);
+  FileClose (bi.ofp);
 }
 

@@ -1,4 +1,4 @@
-/* $Id: blast_seg.h,v 1.16 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_seg.h,v 1.17 2006/11/21 16:45:08 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,7 @@
 #ifndef __BLAST_SEG__
 #define __BLAST_SEG__
 
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_def.h>
 
 #ifdef __cplusplus

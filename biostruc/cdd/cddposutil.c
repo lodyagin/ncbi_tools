@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.21 2006/09/18 20:54:53 kans Exp $
+/* $Id: cddposutil.c,v 1.22 2007/03/13 20:38:05 madden Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.21 $
+* $Revision: 1.22 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,14 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.22  2007/03/13 20:38:05  madden
+*   - In CddSetUpSearchInternalByLoc, don't cast DROPOFF_NUMBER_OF_BITS
+*     to integer.
+*
+*   - In CddSetUpSearchWithReadDb, use integer division to compute dblen
+*     to avoid possible truncation of an Int8 value.
+*   [From Mike Gertz]
+*
 * Revision 1.21  2006/09/18 20:54:53  kans
 * removed PROTEIN_ALPHABET - collides with new version in posit.h
 *
@@ -1869,10 +1877,10 @@ available) this needs to be set higher up. */
 
 	/* Use DROPOFF_NUMBER_OF_BITS as the default if it's set to zero. */
 	if (options->dropoff_1st_pass == 0)
-		options->dropoff_1st_pass = (Int4) DROPOFF_NUMBER_OF_BITS;
+		options->dropoff_1st_pass = DROPOFF_NUMBER_OF_BITS;
 
 	if (options->dropoff_2nd_pass == 0)
-		options->dropoff_2nd_pass = (Int4) DROPOFF_NUMBER_OF_BITS;
+		options->dropoff_2nd_pass = DROPOFF_NUMBER_OF_BITS;
 
 	if (StringCmp(search->prog_name, "blastn") != 0)
 	{
@@ -2098,7 +2106,7 @@ BlastSearchBlkPtr LIBCALL CddSetUpSearchWithReadDb(SeqLocPtr query_slp,
 #endif
 		if (options->searchsp_eff > 0) searchsp_eff = options->searchsp_eff;
     if (StringCmp(prog_name, "tblastn") == 0 || StringCmp(prog_name, "tblastx") == 0) {
-      dblen /= 3.0;
+      dblen /= 3;
       searchsp_eff /= 3.0;
     }
 		search->dblen = dblen;

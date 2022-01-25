@@ -1,4 +1,4 @@
-/* $Id: mb_indexed_lookup.h,v 1.2 2006/10/05 15:02:57 papadopo Exp $
+/* $Id: mb_indexed_lookup.h,v 1.4 2007/03/29 20:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,7 +43,7 @@ extern "C" {
 #endif
 
 /** Function pointer type to retrieve hits from an indexed database */
-typedef void (*T_MB_IdbGetResults)(void * idb, Int4 oid, Int4 chunk,
+typedef unsigned long (*T_MB_IdbGetResults)(void * idb, Int4 oid, Int4 chunk,
                                    BlastInitHitList * init_hitlist);
 
 /** Finds all runs of a specified number of exact matches between 
@@ -52,7 +52,7 @@ typedef void (*T_MB_IdbGetResults)(void * idb, Int4 oid, Int4 chunk,
  * @param subject The subject sequence [in]
  * @param query Ignored
  * @param query_info Ignored
- * @param lookup Pointer to the (wrapper) lookup table structure [in]
+ * @param lookup_wrap Pointer to the (wrapper) lookup table structure [in]
  * @param matrix Ignored
  * @param word_params Ignored
  * @param ewp Ignored

@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.56 $
+* $Revision: 6.61 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,22 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.61  2007/07/17 14:46:42  kans
+* added support for metagenome_source orgmod
+*
+* Revision 6.60  2007/06/21 15:42:04  kans
+* added OrgMod.subtype culture-collection and bio-material
+*
+* Revision 6.59  2007/06/08 14:48:46  kans
+* AddToGeneOntologyUserObject adds goref argument
+*
+* Revision 6.58  2007/04/05 19:14:13  bollin
+* Added function for adding a Pnt location to another location without creating
+* an intermediate SeqFeat.
+*
+* Revision 6.57  2006/10/25 21:37:32  kans
+* adding source qualifier metagenomic
+*
 * Revision 6.56  2006/09/18 18:40:30  kans
 * special symbols for structured comment prefix, suffix, for parsing flatfile
 *
@@ -924,6 +940,7 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_rev_primer_seq 34
 #define SUBSRC_fwd_primer_name 35
 #define SUBSRC_rev_primer_name 36
+#define SUBSRC_metagenomic 37
 #define SUBSRC_other 255
 
 /*********************************************
@@ -997,6 +1014,9 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 #define ORGMOD_gb_acronym 32
 #define ORGMOD_gb_anamorph 33
 #define ORGMOD_gb_synonym 34
+#define ORGMOD_culture_collection 35
+#define ORGMOD_bio_material 36
+#define ORGMOD_metagenome_source 37
 #define ORGMOD_old_lineage 253
 #define ORGMOD_old_name 254
 #define ORGMOD_other 255 
@@ -1435,6 +1455,13 @@ NLM_EXTERN Boolean AddPointToFeature (
 	Boolean is_after_location ,
 	Boolean is_before_location );
 
+NLM_EXTERN Boolean AddPntToSeqLoc (
+	SeqLocPtr PNTR p_slp,
+	Int4 point,
+	BioseqPtr bsp,
+	Int2 fuzz,
+	Int2 strand);
+
 NLM_EXTERN Boolean AddPntToSeqFeat (
 	SeqFeatPtr sfp,
 	Int4 point,
@@ -1668,6 +1695,7 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   CharPtr text,
   CharPtr goid,
   Int4 pmid,
+  CharPtr goref,
   CharPtr evidence
 );
 

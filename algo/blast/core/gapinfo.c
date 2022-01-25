@@ -1,4 +1,4 @@
-/* $Id: gapinfo.c,v 1.18 2006/02/15 15:06:00 madden Exp $
+/* $Id: gapinfo.c,v 1.19 2006/11/21 17:09:45 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,10 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: gapinfo.c,v 1.18 2006/02/15 15:06:00 madden Exp $";
+    "$Id: gapinfo.c,v 1.19 2006/11/21 17:09:45 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
+#include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/gapinfo.h>
 
 GapStateArrayStruct* 

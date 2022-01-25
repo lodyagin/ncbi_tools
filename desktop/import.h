@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -123,6 +123,9 @@ extern ForM CreateDateForm (Int2 left, Int2 top, CharPtr title,
                             FormActnFunc actproc);
 
 extern Int2 LIBCALLBACK DateGenFunc (Pointer data);
+
+extern CharPtr GetMoleculeTypeName (Uint1 mol_val);
+extern CharPtr GetMoleculeClassName (Uint1 mol_val);
 
 
 #ifdef __cplusplus

@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.84 2006/08/03 20:40:45 papadopo Exp $
+/*  $Id: blast_stat.h,v 1.87 2007/05/22 20:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,12 @@
  * statistics. @todo FIXME: needs doxygen comments
  */
 
-#ifndef __BLAST_STAT__
-#define __BLAST_STAT__
+#ifndef ALGO_BLAST_CORE__BLAST_STAT__H
+#define ALGO_BLAST_CORE__BLAST_STAT__H
 
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_message.h>
 #include <util/tables/raw_scoremat.h>
@@ -170,6 +172,34 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
    Boolean  round_down; /**< Score must be rounded down to nearest even score if odd. */
 } BlastScoreBlk;
 
+/** Scoring matrix data used for compressed protein alphabets */
+typedef struct SCompressedAlphabet {
+    Int4  compressed_alphabet_size;  /**< letters in the compressed alphabet */
+    SBlastScoreMatrix* matrix;    /**< score matrix */
+    Uint1* compress_table;  /**< translation table (AA->compressed)*/
+} SCompressedAlphabet;
+
+/** Allocate a new compressed alphabet and score matrix
+ * @param sbp Current score matrix information [in]
+ * @param compressed_alphabet_size Desired size of compressed
+ *                  alphabet (current choices are limited to 10 or 15) [in]
+ * @param scale_factor Score matrix entries are scaled by this value [in]
+ * @return the new alphabet, or NULL on failure
+ */
+NCBI_XBLAST_EXPORT
+SCompressedAlphabet*
+SCompressedAlphabetNew(BlastScoreBlk *sbp,
+                       Int4 compressed_alphabet_size, 
+                       double scale_factor);
+
+/** Free a compressed alphabet and score matrix
+ * @param alphabet The compressed alphabet structure
+ * @return Always NULL
+ */
+NCBI_XBLAST_EXPORT
+SCompressedAlphabet*
+SCompressedAlphabetFree(SCompressedAlphabet *alphabet);
+
 /** 
 Stores the letter frequency of a sequence or database.
 */
@@ -264,15 +294,13 @@ Blast_KarlinBlk* Blast_KarlinBlkFree(Blast_KarlinBlk* kbp);
  * @param kbp object to be filled in [in|out]
  * @param gap_open cost of gap existence [in]
  * @param gap_extend cost to extend a gap one letter [in]
- * @param decline_align cost of declining to align a letter [in]
  * @param matrix_name name of the matrix to be used [in]
  * @param error_return filled in with error message if needed [out]
  * @return zero on success
  */
 NCBI_XBLAST_EXPORT
 Int2 Blast_KarlinBlkGappedCalc (Blast_KarlinBlk* kbp, Int4 gap_open, 
-        Int4 gap_extend, Int4 decline_align, const char* matrix_name, 
-        Blast_Message** error_return);
+     Int4 gap_extend, const char* matrix_name, Blast_Message** error_return);
 
 /** Retrieves Karlin-Altschul parameters from precomputed tables, given the
  * substitution and gap scores. Gap cost values greater than any of those 
@@ -314,14 +342,13 @@ Int2 Blast_ScoreBlkKbpIdealCalc(BlastScoreBlk* sbp);
  * @param kbp object to be filled in [in|out]
  * @param gap_open gap existence cost [in]
  * @param gap_extend gap extension cost [in]
- * @param decline_align cost to not align part of a sequence [in]
  * @param matrix_name name of the matrix used [in]
  * @return  -1 if matrix_name is NULL;
  *          1 if matrix not found
  *           2 if matrix found, but open, extend etc. values not supported.
 */
 NCBI_XBLAST_EXPORT
-Int2 Blast_KarlinBlkGappedLoadFromTables(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, const char* matrix_name);
+Int2 Blast_KarlinBlkGappedLoadFromTables(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, const char* matrix_name);
 
 /** Prints a messages about the allowed matrices, BlastKarlinBlkGappedFill should return 1 before this is called. 
  * @param matrix the matrix to print a message about [in]
@@ -335,11 +362,10 @@ char* BLAST_PrintMatrixMessage(const char *matrix);
  * @param matrix name of the matrix [in]
  * @param gap_open gap existence cost [in]
  * @param gap_extend cost to extend a gap by one [in]
- * @param decline_align cost of declining to align [in]
  * @return message
  */
 NCBI_XBLAST_EXPORT
-char* BLAST_PrintAllowedValues(const char *matrix, Int4 gap_open, Int4 gap_extend, Int4 decline_align);
+char* BLAST_PrintAllowedValues(const char *matrix, Int4 gap_open, Int4 gap_extend);
 
 /** Calculates the parameter Lambda given an initial guess for its value */
 NCBI_XBLAST_EXPORT
@@ -728,4 +754,4 @@ SNCBIPackedScoreMatrix* BlastScoreBlkGetCompiledInMatrix(const char* name);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_STAT__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_STAT__H */

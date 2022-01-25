@@ -1,4 +1,4 @@
-/*  $Id: ncbi_conntest.c,v 6.10 2005/08/03 20:15:25 lavr Exp $
+/*  $Id: ncbi_conntest.c,v 6.11 2007/04/17 11:25:54 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,31 +61,30 @@ static void s_SingleBouncePrint
  FILE* data_file)
 {
     static const char write_str[] = "This is a s_*BouncePrint test string.\n";
-    EIO_Status status;
     size_t     n_written, n_read;
     char       buf[8192];
+    EIO_Status status;
 
     TEST_LOG(eIO_Success, "[s_SingleBouncePrint]  Starting...");
 
     /* WRITE */
     status = CONN_Write(conn, write_str, strlen(write_str),
                         &n_written, eIO_WritePersist);
-    if (status != eIO_Success  ||  n_written != strlen(write_str)) {
+    if (status != eIO_Success  ||  n_written != strlen(write_str))
         TEST_LOG(status, "[s_SingleBouncePrint] Write failed!");
-    }
     assert(n_written == strlen(write_str));
     assert(status == eIO_Success);
-
 
     /* READ the "bounced" data from the connection */
     status = CONN_Read(conn, buf, sizeof(buf) - 1, &n_read, eIO_ReadPersist);
     TEST_LOG(status, "[s_SingleBouncePrint] after READ");
 
-    /* Printout to LOG file, if any */
+    /* Printout to data file, if any */
     if (data_file  &&  n_read) {
         fprintf(data_file, "\ns_SingleBouncePrint(BEGIN PRINT)\n");
         assert(fwrite(buf, n_read, 1, data_file) == 1);
         fprintf(data_file, "\ns_SingleBouncePrint(END PRINT)\n");
+        fflush(data_file);
     }
 
     /* Check-up */
@@ -102,16 +101,20 @@ static void s_MultiBouncePrint
     int i;
 
     TEST_LOG(eIO_Success, "[s_MultiBouncePrint]  Starting...");
-    if ( data_file )
+    if ( data_file ) {
         fprintf(data_file, "\ns_MultiBouncePrint(BEGIN)\n");
+        fflush(data_file);
+    }
 
     for (i = 0;  i < 5;  i++) {
         s_SingleBouncePrint(conn, data_file);
     }
 
     TEST_LOG(eIO_Success, "[s_MultiBouncePrint]  ...finished");
-    if ( data_file )
+    if ( data_file ) {
         fprintf(data_file, "\ns_MultiBouncePrint(END)\n");
+        fflush(data_file);
+    }
 }
 
 
@@ -272,19 +275,23 @@ static void s_SingleBounceCheck
         return;
 
     fprintf(data_file, "\ns_SingleBounceCheck(BEGIN EXTRA DATA)\n");
+    fflush(data_file);
     for (;;) {
         size_t n_read;
 
         status = CONN_Read(conn, buf, sizeof(buf), &n_read, eIO_ReadPersist);
         TEST_LOG(status, "s_SingleBounceCheck(The extra data READ...)");
-        if ( n_read )
+        if ( n_read ) {
             assert(fwrite(buf, n_read, 1, data_file) == 1);
+            fflush(data_file);
+        }
         if (status == eIO_Closed  ||  status == eIO_Timeout)
             break; /* okay */
 
-        assert(status == eIO_Success  ||  status == eIO_Timeout);
+        assert(status == eIO_Success);
     }
     fprintf(data_file, "\ns_SingleBounceCheck(END EXTRA DATA)\n\n");
+    fflush(data_file);
 }
 
 
@@ -347,40 +354,3 @@ extern void CONN_TestConnector
 
     TEST_LOG(status, "Test completed successfully");
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_conntest.c,v $
- * Revision 6.10  2005/08/03 20:15:25  lavr
- * Better asserts
- *
- * Revision 6.9  2004/02/23 15:23:42  lavr
- * New (last) parameter "how" added in CONN_Write() API call
- *
- * Revision 6.8  2003/02/10 15:57:35  lavr
- * Announce successful test completion
- *
- * Revision 6.7  2002/08/07 16:38:08  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to end
- *
- * Revision 6.6  2002/03/22 19:46:02  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.5  2002/01/16 21:23:14  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.4  2001/03/02 20:03:34  lavr
- * Typos fixed
- *
- * Revision 6.3  2000/12/29 18:25:06  lavr
- * CONN Reconnect replaced with ReInit.
- *
- * Revision 6.2  2000/04/21 19:53:11  vakatov
- * Minor cosmetic changes
- *
- * Revision 6.1  2000/04/07 20:03:01  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

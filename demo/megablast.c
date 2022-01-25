@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.193 2006/08/29 18:13:12 papadopo Exp $";
-/* $Id: megablast.c,v 6.193 2006/08/29 18:13:12 papadopo Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.199 2007/03/20 14:56:58 camacho Exp $";
+/* $Id: megablast.c,v 6.199 2007/03/20 14:56:58 camacho Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,25 @@ static char const rcsid[] = "$Id: megablast.c,v 6.193 2006/08/29 18:13:12 papado
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.199  2007/03/20 14:56:58  camacho
+ * Call GeneticCodeSingletonInit/GeneticCodeSingletonFini
+ *
+ * Revision 6.198  2007/03/15 14:24:35  coulouri
+ * added call to FreeSeqLocSetComponents to free query sequences referenced by query_slp list
+ *
+ * Revision 6.197  2007/03/12 16:14:23  madden
+ * Pass a NULL Blast_PsiCheckpointLoc* to Blast_DatabaseSearch [from Mike Gertz].
+ *
+ * Revision 6.196  2007/03/05 14:54:39  camacho
+ * - Call Blast_FindRepeatFilterSeqLoc with a NULL pointer for a PSI-BLAST
+ *   checkpoint file.
+ *
+ * Revision 6.195  2007/02/14 20:21:56  papadopo
+ * remove discontig. megablast with stride 4 from new engine
+ *
+ * Revision 6.194  2007/02/08 17:07:22  papadopo
+ * change signature of FillInitialWordOptions; ungapped extensions are always turned on now by default
+ *
  * Revision 6.193  2006/08/29 18:13:12  papadopo
  * make 2-hit extension the default for discontiguous megablast
  *
@@ -1208,7 +1227,7 @@ static Args myargs [] = {
 #ifdef DO_NOT_SUPPRESS_BLAST_OP
   { "Length of a discontiguous word template (contiguous word if 0)",
 	"0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL},       /* ARG_TEMPL_LEN */
-  {"Generate words for every base of the database (default is every base; may only be used with discontiguous words)",
+  {"Make discontiguous megablast generate words for every base of the database (mandatory with the current BLAST engine)",
         "T", NULL, NULL, TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},    /* ARG_EVERYBASE */
   {"Use non-greedy (dynamic programming) extension for affine gap scores",
         "F", NULL, NULL, TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},    /* ARG_DYNAMIC */
@@ -1259,7 +1278,6 @@ static Int2 Main_old (void)
    Boolean lcase_masking;
    MBXmlPtr mbxp = NULL;
    Boolean traditional_formatting;
-   
 
 	blast_program = "blastn";
         blast_database = myargs [ARG_DB].strvalue;
@@ -1912,14 +1930,11 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    lookup_options->mb_template_type = 
       (Uint1) myargs[ARG_TEMPL_TYPE].intvalue;
 
-   if (myargs[ARG_EVERYBASE].intvalue && myargs[ARG_TEMPL_LEN].intvalue != 0)
-      lookup_options->full_byte_scan = FALSE;
-   
    BLAST_FillQuerySetUpOptions(query_setup_options, kProgram, 
       myargs[ARG_FILTER].strvalue, myargs[ARG_STRAND].intvalue);
 
    BLAST_FillInitialWordOptions(word_options, kProgram, 
-      greedy, myargs[ARG_WINDOW].intvalue,
+      myargs[ARG_WINDOW].intvalue,
       lambda*myargs[ARG_XDROP_UNGAPPED].intvalue/NCBIMATH_LN2);
 
    if (lookup_options->mb_template_length > 0) {
@@ -1929,15 +1944,12 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
          word_options->window_size = 40;
    }
 
-   BLAST_FillExtensionOptions(ext_options, kProgram, (greedy ? 1 : 0), 
+   BLAST_FillExtensionOptions(ext_options, kProgram, greedy,
       lambda*myargs[ARG_XDROP].intvalue/NCBIMATH_LN2, 
       lambda*myargs[ARG_XDROP_FINAL].intvalue/NCBIMATH_LN2);
 
-   /* For discontiguous megablast we need to use a less drastic 
-      method of elimination redundant hits (at least to be compatiable 
-      with old code).  For two hits we do not perform an ungapped 
-      extension either. */
-   word_options->ungapped_extension = TRUE;
+   /* For discontiguous megablast we skip ungapped extensions
+      when using the 2-hit wordfinder */
    if (lookup_options->mb_template_length > 0)
    {
       if (word_options->window_size > 0)
@@ -1994,6 +2006,8 @@ static Int2 Main_new(void)
    Blast_SummaryReturn* sum_returns = NULL;
    Blast_SummaryReturn* full_sum_returns = NULL;
    EAlignView align_view = eAlignViewMax;
+
+   GeneticCodeSingletonInit();
 
    if (myargs[ARG_OUTTYPE].intvalue == 3 ||
        myargs[ARG_OUTTYPE].intvalue == 4 ||
@@ -2165,10 +2179,13 @@ static Int2 Main_new(void)
       /* Combine repeat mask with lower case mask */
       if (repeat_mask)
           lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
-      
+
        /* The main search is here. */
-      if((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, tf_data,
-                               &seqalign_arr, &filter_loc, sum_returns)) != 0)
+      if((status = Blast_DatabaseSearch(query_slp,
+                                        (Blast_PsiCheckpointLoc *) NULL,
+                                        dbname, lcase_mask, options,
+                                        tf_data, &seqalign_arr,
+                                        &filter_loc, sum_returns)) != 0)
       {
             /* Jump out if fatal error or unknown reason for exit. */
             if (sum_returns && sum_returns->error)
@@ -2230,6 +2247,7 @@ static Int2 Main_new(void)
       Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
       Blast_SummaryReturnClean(sum_returns);
       filter_loc = Blast_ValNodeMaskListFree(filter_loc);
+      FreeSeqLocSetComponents(query_slp);
       query_slp = SeqLocSetFree(query_slp);
    } /* End loop on sets of queries */
    
@@ -2259,6 +2277,7 @@ static Int2 Main_new(void)
           FileClose(outfp);
    }
 
+   GeneticCodeSingletonFini();
    options = SBlastOptionsFree(options);
 
    return status;

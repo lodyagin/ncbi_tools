@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.c,v 1.3 2006/04/25 19:06:15 camacho Exp $
+/* $Id: blast_query_info.c,v 1.5 2007/01/21 08:45:12 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,38 +34,23 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_query_info.c,v 1.3 2006/04/25 19:06:15 camacho Exp $";
+    "$Id: blast_query_info.c,v 1.5 2007/01/21 08:45:12 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_util.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/pattern.h>
 
 Int4 
 Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program)
 {
-   Int4 index = -1;     /* -1 is used to indicate error */
-   switch (program) {
-   case eBlastTypeBlastn:
-      index = context/NUM_STRANDS; 
-      break;
-   case eBlastTypeBlastp: 
-   case eBlastTypeTblastn: 
-   case eBlastTypeRpsBlast: 
-   case eBlastTypePsiBlast:
-   case eBlastTypeRpsTblastn:
-   case eBlastTypePhiBlastn:
-   case eBlastTypePhiBlastp:
-      index = context; 
-      break;
-   case eBlastTypeBlastx: 
-   case eBlastTypeTblastx:
-      index = context/NUM_FRAMES; 
-      break;
-   default:
-      break;
+   if (program == eBlastTypePsiTblastn || Blast_QueryIsProtein(program)) {
+           return context;
+   } else if (Blast_QueryIsTranslated(program)) {
+           return context / NUM_FRAMES;
+   } else {
+           return context / NUM_STRANDS;
    }
-   return index;
 }
 
 BlastQueryInfo* BlastQueryInfoNew(EBlastProgramType program, int num_queries)

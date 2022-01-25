@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.26 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -48,6 +48,7 @@
 #include <dlogutil.h>
 #include <bspview.h>
 #include <salpacc.h>
+#include <explore.h>
 
 static VSMWinPtr NEAR VSMWinNew PROTO((VSeqMgrPtr vsmp));
 
@@ -131,7 +132,7 @@ Boolean LIBCALL VSeqMgrInit (Boolean show)
 Boolean LIBCALL VSeqMgrShow(void)
 {
 	VSeqMgrPtr vsmp;
-	VSMWinPtr tmp, next=NULL;
+	VSMWinPtr tmp;
 
         /***
 	Message(MSG_OK, "In VSeqMgrShow");
@@ -496,7 +497,7 @@ Boolean LIBCALL VSMAddToMenu (MenU m, Int2 menutype)
 		"Save As"};
 	ValNodePtr submenulist = NULL, vnp;
 	SbstrucPtr sbp;
-	IteM i;
+	IteM i = NULL;
 
 	if (m == NULL) return FALSE;
 	
@@ -1252,7 +1253,6 @@ static void VSeqMgrReleaseProc (VieweR v, SegmenT s, PoinT p)
 	SegmenT sp, top, next, prev;
 	Uint2 segID, primID, primCt, entityID=0, itemtype = 0;
 	Uint4 itemID = 0;
-	Uint1 highlight = PLAIN_SEGMENT;
 	Int2 expand = 0;
 	Boolean do_drag = FALSE;
 	SeqViewProcsPtr  svpp;
@@ -1694,7 +1694,8 @@ static void NEAR VSeqMgrPopulateMain(VSMWinPtr vsmwp)
 	RecT rw, rv;
 	BoxInfo box;
 	SegmenT picture, seg;
-	Int2 i, currnum, lineheight,right_frame;
+	Int2 lineheight,right_frame;
+  Uint4 i, currnum;
 	Int4 x, y, top,width, bigtop, diffx, diffy;
 	ObjMgrDataPtr omdp, PNTR omdpp;
 	ObjMgrPtr omp;
@@ -1861,7 +1862,7 @@ static void NEAR VSMWinDelete(VSMWinPtr vsmwp, Uint2 entityID, Uint4 itemID, Uin
 	VieweR v;
 	ObjMgrDataPtr omdp, PNTR omdpp;
 	ObjMgrPtr omp;
-	Int2 i, currnum;
+	Uint4 i, currnum;
 
 	if (vsmwp == NULL) return;
 
@@ -2173,7 +2174,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 {
 	VSMGatherProcSTPtr vsmgp;
 	VSeqMgrPtr vsmp;
-	Char buf[81];
+	Char buf[101];
 	CharPtr tmp;
 	Int2 i, k, buflen;
 	Int4 top, lineheight, left, bottom, width, maxwidth;
@@ -2429,6 +2430,29 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			seg = CreateSegment(vsmgp->segs[gcp->indent], (Uint2)(gcp->thistype), 0);
 			vsmgp->segs[i] = seg;
 			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
+			/*
+			buf [0] = '\0';
+			sfp = (SeqFeatPtr)(gcp->thisitem);
+			str = FindKeyFromFeatDefType (sfp->idx.subtype, FALSE);
+			if (str != NULL) {
+			  StringNCpy_0 (buf, str, sizeof (buf));
+			  if (SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &fcontext) == sfp) {
+			    str = fcontext.label;
+			    if (str != NULL) {
+			      StringNCpy_0 (lbl, str, sizeof (lbl));
+			      StringCat (buf, ": ");
+			      StringCat (buf, lbl);
+            if (StringLen (buf) > buflen - 2) {
+              buf [buflen - 2] = '>';
+              buf [buflen - 1] = '\0';
+            }
+			    }
+			  }
+			}
+			if (buf [0] == '\0') {
+			  (*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
+			}
+			*/
 			width = StringWidth(buf) + (2 * vsmp->charw);
 			AddAttribute(seg, COLOR_ATT , BLUE_COLOR, 0, 0,0,0);
 			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
@@ -2460,7 +2484,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				if (vsmp != NULL && vsmp->extraLevel && sfp->data.choice == SEQFEAT_RNA && sfp->ext != NULL) {
 					/* uop = sfp->ext; */
 					uop = FindUopByTag (sfp->ext, "MrnaProteinLink");
-					if (uop->type != NULL && StringICmp (uop->type->str, "MrnaProteinLink") == 0) {
+					if (uop != NULL && uop->type != NULL && StringICmp (uop->type->str, "MrnaProteinLink") == 0) {
 						ufp = uop->data;
 						if (ufp != NULL && ufp->choice == 1) {
 							oip = ufp->label;

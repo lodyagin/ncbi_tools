@@ -111,7 +111,7 @@ tbl2asn can read nucleotide sequences of any size in FASTA format.  A FASTA
 record consists of a single definition line, beginning with a '>' and
 followed by optional text, and subsequent lines of sequence.  At minimum,
 all definition lines must contain an identifier for the sequence, called
-the SeqID.  The SeqID cannot begin with "contig", as this is reserved for
+the SeqID.  The SeqID cannot begin with "assembly", as this is reserved for
 entry of accession lists in Sequin.  Other optional information about the
 biological source of the organism can also be encoded in brackets on the
 definition line.  A sample definition line is

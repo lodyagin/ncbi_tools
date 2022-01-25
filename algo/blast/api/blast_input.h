@@ -1,4 +1,4 @@
-/* $Id: blast_input.h,v 1.18 2006/04/21 14:33:44 madden Exp $
+/* $Id: blast_input.h,v 1.20 2007/03/12 16:12:46 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,7 @@ extern "C" {
 
 #include <ncbi.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_message.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -76,6 +77,52 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
                      Int4* num_queries, Boolean believe_query,
                      Int4 genetic_code);
 
+
+/** The possible file formats of a PSI-BLAST checkpoint file. */
+typedef enum EPsiCheckpointType {
+    eStandardCheckpoint = 0,    /**< The useual PSI-BLAST binary format */
+    eAsnTextCheckpoint = 1,     /**< ASN.1 text format */
+    eAsnBinaryCheckpoint = 2    /**< ASN.1 binary format */
+} EPsiCheckpointType;
+
+/** The location and type of a PSI-BLAST checkpoint file  */
+typedef struct Blast_PsiCheckpointLoc {
+    EPsiCheckpointType checkpoint_type; /**< file format  */
+    char * filename;                    /**< name of the file */
+} Blast_PsiCheckpointLoc;
+
+/** Create a new locator for a PSI-BLAST checkpoint file.
+ * @param checkpoint_type    file format
+ * @param filename           name of the file */
+Blast_PsiCheckpointLoc *
+Blast_PsiCheckpointLocNew(EPsiCheckpointType checkpoint_type,
+                          char * filename);
+
+/** Free a PSI-BLAST checkpoint file locator */
+void
+Blast_PsiCheckpointLocFree(Blast_PsiCheckpointLoc ** psi_checkpoint);
+
+
+/**
+ * Read frequency ratios from a PSI-BLAST checkpoint file.
+ *
+ * @param freq_ratios     the frequency ratios
+ * @param query_length    the length of the query, and second dimension of
+ *                        freq_ratios
+ * @param query           query sequence data
+ * @param psi_checkpoint  location of the checkpoint data
+ * @param blast_msg       a pointer to hold BLAST warnings.
+ *
+ * @return 0 on success, nonzero otherwise
+ */
+int
+Blast_PosReadCheckpoint(double ** freq_ratios,
+                        int query_length,
+                        const Uint1 * query,
+                        Blast_PsiCheckpointLoc * psi_checkpoint,
+                        Blast_Message* *blast_msg);
+
+
 /* @} */
 
 #ifdef __cplusplus
@@ -86,6 +133,19 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
 * ===========================================================================
 *
 * $Log: blast_input.h,v $
+* Revision 1.20  2007/03/12 16:12:46  madden
+*    - Create an enum EPsiCheckpointType that specifies the file format
+*      of a PSI-BLAST checkpoint file.
+*    - Define a new datatype Blast_PsiCheckpointLoc to
+*      specify the location and type of a PSI-BLAST checkpoint file.
+*    - Declare Blast_PsiCheckpointLocNew and Blast_PsiCheckpointLocFree.
+*    [from Mike Gertz]
+*
+* Revision 1.19  2007/03/05 14:50:08  camacho
+* - Added a prototype for Blast_PosReadCheckpoint.
+* - Added core/blast_message.h to the includes because
+*   Blast_PosReadCheckpoint has a Blast_Message ** parameter.
+*
 * Revision 1.18  2006/04/21 14:33:44  madden
 * BLAST_GetQuerySeqLoc parameter ctr is now a pointer to Int4, fixes case of more than 32k queries
 *

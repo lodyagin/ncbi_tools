@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.29 $
+* $Revision: 6.32 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -37,31 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: objfdef.c,v 
- * Revision 4.4  1995/09/21  02:26:14  ostel
- * changed label for RNA to keep typelabel in most case
- *
- * Revision 4.3  1995/09/06  22:48:12  kans
- * improved tRNA label function (JO)
- *
- * Revision 4.2  1995/09/06  22:08:56  ostell
- * revision to tRNA label function
- *
- * Revision 4.1  1995/08/30  19:13:28  ostell
- * change LabelContent so Imp-feat get ifp->key even if ONLY_CONTENT
- *
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 1.11  1995/07/20  14:29:51  kans
- * FEATDEF_otherRNA corrected from 7 to 255
- *
- * Revision 1.10  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -882,7 +857,7 @@ static Uint1 FindImpFeatType (SeqFeatPtr sfp)
 	for (i = 0; i < numfdef; i++, fdpp++)
 	{
 		fdp = *fdpp;
-		if (fdp->seqfeat_key == SEQFEAT_IMP)
+		if (fdp != NULL && fdp->seqfeat_key == SEQFEAT_IMP)
 		{
 			if (! StringCmp(fdp->typelabel, tmp))
 				return fdp->featdef_key;
@@ -902,8 +877,9 @@ static Uint1 FindImpFeatType (SeqFeatPtr sfp)
 *****************************************************************************/
 NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
 {
-	RnaRefPtr rrp;
-	ProtRefPtr prp;
+	CharPtr     name;
+	ProtRefPtr  prp;
+	RnaRefPtr   rrp;
 
 	if (sfp == NULL) return FEATDEF_BAD;
 	switch (sfp->data.choice)
@@ -951,6 +927,12 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
 				case 7:
 					return FEATDEF_snoRNA;
 				case 255:
+				    if (rrp->ext.choice == 1) {
+				      name = (CharPtr) rrp->ext.value.ptrvalue;
+				      if (StringICmp (name, "misc_RNA") == 0) return FEATDEF_otherRNA;
+				      if (StringICmp (name, "ncRNA") == 0) return FEATDEF_otherRNA; /* FEATDEF_ncRNA */
+				      if (StringICmp (name, "tmRNA") == 0) return FEATDEF_otherRNA; /* FEATDEF_tmRNA */
+				    }
 					return FEATDEF_otherRNA;
 			}
 			return FEATDEF_BAD;
@@ -999,6 +981,7 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
 NLM_EXTERN const char * LIBCALL FeatDefTypeLabel(SeqFeatPtr sfp)
 {
 	Int2 i;
+	FeatDefPtr fdp;
 
 	if (sfp == NULL) return (const char *)NULL;
 	if (FeatDefSetLoad() == NULL) return (const char *)NULL;
@@ -1006,7 +989,9 @@ NLM_EXTERN const char * LIBCALL FeatDefTypeLabel(SeqFeatPtr sfp)
 	i = (Int2) FindFeatDefType(sfp);
 	if (i == FEATDEF_BAD) return NULL;
 
-	return (const char *)(featdeflookup[i]->typelabel);
+	fdp = featdeflookup[i];
+	if (fdp == NULL) return NULL;
+	return (const char *)(fdp->typelabel);
 }
 
 static Int2 NEAR FeatDefLabelContent (SeqFeatPtr sfp, CharPtr buf, Int2 buflen, Uint1 labeltype, CharPtr typelabel)
@@ -1433,6 +1418,7 @@ NLM_EXTERN Int2 LIBCALL FeatDefLabel (SeqFeatPtr sfp, CharPtr buf, Int2 buflen, 
 	Uint1 extras = 0;
 	Char tbuf[40];
 	ImpFeatPtr ifp;
+	FeatDefPtr fdp;
 	CharPtr suffix = NULL;
 
 	if ((sfp == NULL) || (buf == NULL) || (! buflen))
@@ -1447,7 +1433,9 @@ NLM_EXTERN Int2 LIBCALL FeatDefLabel (SeqFeatPtr sfp, CharPtr buf, Int2 buflen, 
 	i = (Int2) FindFeatDefType(sfp);
 	if (i != FEATDEF_BAD)
 	{
-		typelabel = featdeflookup[i]->typelabel;
+		fdp = featdeflookup[i];
+		if (fdp == NULL) return 0;
+		typelabel = fdp->typelabel;
 		if ((sfp->data.choice == SEQFEAT_IMP) &&
 			(! StringCmp("CDS", typelabel)))
 		{

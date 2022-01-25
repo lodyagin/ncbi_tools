@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.34 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
@@ -51,6 +51,9 @@
 #include <vsmutil.h>
 #include <dlogutil.h>
 #include <bspview.h>
+#include <explore.h>
+#include <valid.h>
+#include <subutil.h>
 
 typedef struct errfltrdata {
   ErrSev         sev;
@@ -60,6 +63,28 @@ typedef struct errfltrdata {
   CharPtr        text2;
   CharPtr        text3;
 } ErrFltrData, PNTR ErrFltrPtr;
+
+typedef struct effitemdata {
+  ErrSev   severity;
+  int      errcode;
+  int      subcode;
+  Uint2    entityID;
+  Uint2    itemtype;
+  Uint4    itemID;
+  CharPtr  sevlabel;
+  CharPtr  hidden;
+  CharPtr  catname;
+  CharPtr  errname;
+  CharPtr  accession;
+  CharPtr  message;
+  CharPtr  objtype;
+  CharPtr  label;
+  CharPtr  context;
+  CharPtr  location;
+  CharPtr  product;
+  CharPtr  expanded;
+  Pointer  userdata;
+} ErrItemData, PNTR ErrItemPtr;
 
 typedef struct validextra {
   FORM_MESSAGE_BLOCK
@@ -345,6 +370,32 @@ static void CloseValidButton (ButtoN b)
   FreeValidateWindow ();
 }
 
+static ValNodePtr FreeErrItemList (ValNodePtr head)
+
+{
+  ErrItemPtr  eip;
+  ValNodePtr  vnp;
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    eip = (ErrItemPtr) vnp->data.ptrvalue;
+    if (eip == NULL) continue;
+    MemFree (eip->sevlabel);
+    MemFree (eip->hidden);
+    MemFree (eip->catname);
+    MemFree (eip->errname);
+    MemFree (eip->accession);
+    MemFree (eip->message);
+    MemFree (eip->objtype);
+    MemFree (eip->label);
+    MemFree (eip->context);
+    MemFree (eip->location);
+    MemFree (eip->product);
+    MemFree (eip->expanded);
+    MemFree (eip);
+  }
+  return ValNodeFree (head);
+}
+
 extern void ClearValidateWindow (void)
 
 {
@@ -358,7 +409,7 @@ extern void ClearValidateWindow (void)
     if (vep != NULL) {
       Reset (vep->doc);
       vep->selected = 0;
-      vep->messages = ValNodeFreeData (vep->messages);
+      vep->messages = FreeErrItemList (vep->messages);
       vep->lastmessage = NULL;
       for (vnp = vep->errorfilter; vnp != NULL; vnp = vnp->next) {
         efp = (ErrFltrPtr) vnp->data.ptrvalue;
@@ -393,61 +444,140 @@ extern void ClearValidateWindow (void)
   }
 }
 
+static Boolean doSuppressContext = TRUE;
+
+extern Boolean ShouldSetSuppressContext (void)
+
+{
+  return doSuppressContext;
+}
+
+static Boolean doJustShowAccession = FALSE;
+
+extern Boolean ShouldSetJustShowAccession (void)
+
+{
+  return doJustShowAccession;
+}
+
+static CharPtr StringMoveConvertTabs (CharPtr dst, CharPtr src)
+
+{
+  Char  ch;
+
+  if (src == NULL || dst == NULL) return dst;
+  ch = *src;
+  while (ch != '\0') {
+    if (ch < ' ') {
+      ch = ' ';
+    }
+    *dst = ch;
+    dst++;
+    src++;
+    ch = *src;
+  }
+  *dst = '\0';
+  return dst;
+}
+
 static CharPtr CharPrtProc (DoC d, Int2 item, Pointer ptr)
 
 {
-  Char           ch;
-  CharPtr        str;
-  Int2           tabcount;
-  CharPtr        tmp;
+  Pointer        data;
+  ErrItemPtr     eip;
+  size_t         len;
+  CharPtr        msg_text;
   ValidExtraPtr  vep;
+  Int2           verbose;
 
   vep = GetObjectExtra (d);
-  if (vep != NULL) {
-    if (ptr != NULL) {
-      str = StringSave (ptr);
-      if (GetValue (vep->verbose) == 3) {
-        tabcount = 0;
-        tmp = str;
-        ch = *tmp;
-        while (ch != '\0') {
-          if (ch == '\t') {
-            tabcount++;
-            if (tabcount == 8) {
-              *tmp = '\0';
-              tmp--;
-              if (*tmp == '\n') {
-                *tmp = '\0';
-              }
-            } else {
-              tmp++;
-            }
-          } else {
-            tmp++;
-          }
-          ch = *tmp;
-        }
-      }
-      return str;
+  if (vep == NULL) return NULL;
+  GetItemParams4 (vep->doc, item, NULL, NULL, NULL, NULL, &data);
+  if (data == NULL) return NULL;
+  eip = (ErrItemPtr) data;
+  verbose = GetValue (vep->verbose);
+
+  len = StringLen (eip->sevlabel) +
+        StringLen (eip->hidden) +
+        StringLen (eip->catname) +
+        StringLen (eip->errname) +
+        StringLen (eip->accession) +
+        StringLen (eip->message) +
+        StringLen (eip->objtype) +
+        StringLen (eip->label) +
+        StringLen (eip->context) +
+        StringLen (eip->location) +
+        StringLen (eip->product) +
+        StringLen (eip->expanded);
+
+  msg_text = (CharPtr) MemNew (sizeof (Char) * (len + 50));
+  if (msg_text == NULL) return NULL;
+  ptr = msg_text;
+
+  if (verbose == 4) {
+    ptr = StringMoveConvertTabs (ptr, eip->accession);
+    ptr = StringMove (ptr, "\t");
+    ptr = StringMoveConvertTabs (ptr, eip->sevlabel);
+    ptr = StringMove (ptr, "\t");
+    ptr = StringMoveConvertTabs (ptr, eip->catname);
+    ptr = StringMove (ptr, "_");
+    ptr = StringMoveConvertTabs (ptr, eip->errname);
+    ptr = StringMove (ptr, "\t");
+    ptr = StringMoveConvertTabs (ptr, eip->hidden);
+    ptr = StringMove (ptr, "\n");
+  } else {
+    ptr = StringMoveConvertTabs (ptr, eip->sevlabel);
+    ptr = StringMove (ptr, "\t");
+    ptr = StringMoveConvertTabs (ptr, eip->catname);
+    ptr = StringMove (ptr, "\t");
+    ptr = StringMoveConvertTabs (ptr, eip->errname);
+    ptr = StringMove (ptr, "\t");
+    ptr = StringMoveConvertTabs (ptr, eip->hidden);
+    ptr = StringMove (ptr, "\n\t\t\t\t");
+    ptr = StringMoveConvertTabs (ptr, eip->message);
+    if (StringDoesHaveText (eip->objtype)) {
+      ptr = StringMove (ptr, " ");
+      ptr = StringMoveConvertTabs (ptr, eip->objtype);
     }
+    if (StringDoesHaveText (eip->label)) {
+      ptr = StringMove (ptr, ": ");
+      ptr = StringMoveConvertTabs (ptr, eip->label);
+    }
+    if (StringDoesHaveText (eip->location)) {
+      ptr = StringMove (ptr, " ");
+      ptr = StringMoveConvertTabs (ptr, eip->location);
+    }
+    if (StringDoesHaveText (eip->product)) {
+      ptr = StringMove (ptr, " -> ");
+      ptr = StringMoveConvertTabs (ptr, eip->product);
+    }
+    if (verbose < 2 && StringDoesHaveText (eip->context)) {
+      ptr = StringMove (ptr, " ");
+      ptr = StringMoveConvertTabs (ptr, eip->context);
+    } else if (verbose > 1 && StringDoesHaveText (eip->accession)) {
+      ptr = StringMove (ptr, " (CONTEXT ");
+      ptr = StringMoveConvertTabs (ptr, eip->accession);
+      ptr = StringMove (ptr, ")");
+    }
+    if (verbose < 3 && StringDoesHaveText (eip->expanded)) {
+      ptr = StringMove (ptr, "\n\n\t\t\t\t");
+      ptr = StringMoveConvertTabs (ptr, eip->expanded);
+    }
+    ptr = StringMove (ptr, "\n");
   }
-  return NULL;
+
+  return StringSave (msg_text);
 }
 
 static void RepopVal (PopuP p)
 
 {
   ErrFltrPtr     efp;
-  unsigned int   entityID;
-  int            errcode;
+  ErrItemPtr     eip;
   Int2           filt;
-  unsigned int   itemID;
-  unsigned int   itemtype;
+  size_t         len;
   Int2           minlev;
   Boolean        okay;
-  int            sev;
-  int            subcode;
-  CharPtr        str;
   Char           tmp [32];
   Int2           val;
   ValidExtraPtr  vep;
@@ -473,15 +603,13 @@ static void RepopVal (PopuP p)
       }
     }
     for (vnp = vep->messages; vnp != NULL; vnp = vnp->next) {
-      str = ExtractTagListColumn (vnp->data.ptrvalue, 3);
-      if (str != NULL &&
-          sscanf (str, "%d %d %d %u %u %u", &sev, &errcode,
-                  &subcode, &entityID, &itemID, &itemtype) == 6) {
-        if (sev >= minlev || sev == SEV_NONE) {
+      eip = (ErrItemPtr) vnp->data.ptrvalue;
+      if (eip != NULL) {
+        if (eip->severity >= minlev || eip->severity == SEV_NONE) {
           okay = FALSE;
           if (efp != NULL) {
-            if (efp->errcode == errcode) {
-              if (efp->subcode == INT_MIN || efp->subcode == subcode) {
+            if (efp->errcode == eip->errcode) {
+              if (efp->subcode == INT_MIN || efp->subcode == eip->subcode) {
                 okay = TRUE;
               }
             }
@@ -490,19 +618,23 @@ static void RepopVal (PopuP p)
           }
           if (okay) {
             (vep->addedcount)++;
+            len = StringLen (eip->accession) +
+                  StringLen (eip->message) +
+                  StringLen (eip->context) +
+                  StringLen (eip->location) +
+                  StringLen (eip->product);
             if (val == 4) {
-              AppendItem (vep->doc, CharPrtProc, vnp->data.ptrvalue, FALSE,
-                          (StringLen (vnp->data.ptrvalue) / 50) + 1,
+              AppendItem (vep->doc, CharPrtProc, (Pointer) eip, FALSE,
+                          (len / 50) + 1,
                           &justAccnParFmt, valColFmt, vep->font);
             } else {
-              AppendItem (vep->doc, CharPrtProc, vnp->data.ptrvalue, FALSE,
-                          (StringLen (vnp->data.ptrvalue) / 50) + 1,
+              AppendItem (vep->doc, CharPrtProc, (Pointer) eip, FALSE,
+                          (len / 50) + 1,
                           &valParFmt, valColFmt, vep->font);
             }
           }
         }
       }
-      MemFree (str);
     }
     if (vep->addedcount > 1) {
       sprintf (tmp, " %ld items shown", (long) vep->addedcount);
@@ -515,6 +647,445 @@ static void RepopVal (PopuP p)
     UpdateDocument (vep->doc, 0, 0);
   }
 }
+
+static CharPtr FormatConsensusSpliceReport (CharPtr doc_line)
+{
+  CharPtr cp, cp2;
+  CharPtr report_str = NULL;
+  CharPtr msg_abbrev = NULL;
+  Char    ch;
+  Int4    pos;
+
+  cp = StringChr (doc_line, '\n');
+  if (StringSearch (cp, "(AG) not found") != NULL) {
+    msg_abbrev = "AG";
+  } else if (StringSearch (cp, "(GT) not found") != NULL) {
+    msg_abbrev = "GT";
+  } else {
+    /* no report */
+    return NULL;
+  }
+
+  cp = StringSearch (cp, "position ");
+  cp2 = StringSearch (cp, "FEATURE:");
+  if (cp2 != NULL) {
+    ch = *cp2;
+    *cp2 = 0;
+    report_str = (CharPtr) MemNew (sizeof (Char) * StringLen (cp));
+    if (sscanf (cp, "position %ld of %s", &pos, report_str) == 2) {
+      sprintf (report_str + StringLen (report_str), "\t%s at %ld", msg_abbrev, pos);
+    } else {
+      report_str = MemFree (report_str);
+    }
+  }
+
+  return report_str;
+}
+
+static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
+{
+  SeqIdPtr  sip = NULL;
+  BioseqPtr bsp;
+  CharPtr   ec_number = NULL, tmp;
+  CharPtr   locus_tag = NULL;
+  GBQualPtr gbq;
+  ProtRefPtr prp;
+  ValNodePtr vnp;
+  CharPtr    str;
+  SeqFeatPtr bsp_feat = NULL, gene;
+  GeneRefPtr grp;
+  SeqMgrFeatContext fcontext;
+  CharPtr           report_str = NULL;
+  Int4              report_len;
+  Char              seqid [128];
+
+  if (sfp == NULL) return NULL;
+  /* want: accession number for sequence, ec number, locus tag */
+
+  /* find accession number */
+  if (sfp->idx.subtype == FEATDEF_PROT) {
+    /* if protein, want ID for coding region location */
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    if (bsp != NULL) {
+      bsp_feat = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    }
+  }
+  if (bsp_feat == NULL) {
+    bsp_feat = sfp;
+  }
+
+  bsp = BioseqFindFromSeqLoc (bsp_feat->location);
+  if (bsp == NULL) {
+    bsp = BioseqFindFromSeqLoc (SeqLocFindNext (bsp_feat->location, NULL));
+  }
+  sip = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+  if (sip == NULL) {
+    sprintf (seqid, "Unknown location");
+  } else {
+    SeqIdWrite (sip, seqid, PRINTID_REPORT, sizeof (seqid));
+  }
+
+  /* find EC number in quals */
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "EC_number") == 0) {
+      if (ec_number == NULL) {
+        ec_number = StringSave (gbq->val);
+      } else {
+        tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (ec_number) + StringLen (gbq->val) + 2));
+        sprintf (tmp, "%s;%s", ec_number, gbq->val);
+        ec_number = MemFree (ec_number);
+        ec_number = tmp;
+      }
+    }
+  }
+
+  /* find EC number in protref */
+  if (sfp->data.choice == SEQFEAT_PROT && sfp->data.value.ptrvalue != NULL) {
+    prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+    for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (ec_number == NULL) {
+        ec_number = StringSave (str);
+      } else {
+        tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (ec_number) + StringLen (str) + 2));
+        sprintf (tmp, "%s;%s", ec_number, gbq->val);
+        ec_number = MemFree (ec_number);
+        ec_number = tmp;
+      }
+    }
+  }
+
+  if (StringHasNoText (ec_number)) {
+    ec_number = MemFree (ec_number);
+  }
+
+  if (ec_number == NULL) {
+    ec_number = StringSave ("Blank EC number");
+  }
+
+  /* get locus tag */
+  grp = SeqMgrGetGeneXref (bsp_feat);
+  if (grp == NULL) {
+    gene = SeqMgrGetOverlappingGene (bsp_feat->location, &fcontext);
+    if (gene != NULL && gene->idx.subtype == FEATDEF_GENE) {
+      grp = gene->data.value.ptrvalue;
+    }
+  } else if (SeqMgrGeneIsSuppressed (grp)) {
+    grp = NULL;
+  }
+  
+  report_len = StringLen (seqid) + StringLen (ec_number) + 4;
+  if (grp != NULL) {
+    report_len += StringLen (grp->locus_tag);
+  }
+  report_str = (CharPtr) MemNew (sizeof (Char) * report_len);
+  sprintf (report_str, "%s\t%s\t%s\n", seqid, ec_number, (grp != NULL && grp->locus_tag != NULL) ? grp->locus_tag : "");
+  ec_number = MemFree (ec_number);
+  return report_str;
+}
+
+
+static Boolean WriteOneBadSpecificHostSeqEntry (FILE *fp, CharPtr spec_host, SeqEntryPtr sep);
+
+static Boolean WriteOneBadSpecificHostBioseq (FILE *fp, CharPtr spec_host, BioseqPtr bsp)
+{
+  Char         id_str[100];
+
+  if (fp == NULL || spec_host == NULL || bsp == NULL || ISA_aa (bsp->mol)) return FALSE;
+
+  SeqIdWrite (SeqIdFindBest (bsp->id, 0), id_str, PRINTID_REPORT, sizeof (id_str) - 1);
+  fprintf (fp, "%s\t%s\n", id_str, spec_host);
+  return TRUE;
+}
+
+static Boolean WriteOneBadSpecificHostBioseqSet (FILE *fp, CharPtr spec_host, BioseqSetPtr bssp)
+{
+  SeqEntryPtr sep;
+  Boolean     rval = FALSE;
+
+  if (fp == NULL || spec_host == NULL || bssp == NULL || bssp->seq_set == NULL) return FALSE;
+
+  if (bssp->_class == BioseqseqSet_class_nuc_prot
+      || bssp->_class == BioseqseqSet_class_segset)
+  {
+    rval = WriteOneBadSpecificHostSeqEntry (fp, spec_host, bssp->seq_set);
+  }
+  else
+  {
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+    {
+      rval |= WriteOneBadSpecificHostSeqEntry (fp, spec_host, sep);
+    }
+  }
+  return rval;
+}
+
+static Boolean WriteOneBadSpecificHostSeqEntry (FILE *fp, CharPtr spec_host, SeqEntryPtr sep)
+{
+  if (sep == NULL)
+  {
+    return FALSE;
+  }
+  else if (IS_Bioseq (sep))
+  {
+    return WriteOneBadSpecificHostBioseq (fp, spec_host, (BioseqPtr) sep->data.ptrvalue);
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    return WriteOneBadSpecificHostBioseqSet (fp, spec_host, (BioseqSetPtr) sep->data.ptrvalue);
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+
+static void GetParentForBioSource (Uint2 parenttype, Pointer parentptr, BioseqPtr PNTR bsp, BioseqSetPtr PNTR bssp)
+{
+  SeqAnnotPtr sap;
+  if (bsp == NULL || bssp == NULL) return;
+
+  *bsp = NULL;
+  *bssp = NULL;
+  if (parentptr == NULL) return;
+
+  if (parenttype == OBJ_BIOSEQ)
+  {
+    *bsp = parentptr;        
+  }
+  else if (parenttype == OBJ_BIOSEQSET)
+  {
+    *bssp = parentptr;        
+  }
+  else if (parenttype == OBJ_SEQANNOT)
+  {
+    sap = (SeqAnnotPtr) parentptr;
+    GetParentForBioSource (sap->idx.parenttype, sap->idx.parentptr, bsp, bssp);
+  }
+}
+
+
+extern Boolean WriteBadSpecificHostTable (ValNodePtr bad_biop_list, FILE *fp)
+{
+  ValNodePtr   vnp;
+  Boolean      any_in_list = FALSE;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  SeqFeatPtr   sfp;
+  SeqDescrPtr  sdp;
+  BioSourcePtr biop;
+  ObjValNodePtr ovp;
+  CharPtr       spec_host = NULL;
+  OrgModPtr     mod = NULL;
+
+  if (fp == NULL) return FALSE;
+
+  for (vnp = bad_biop_list; vnp != NULL; vnp = vnp->next)
+  {
+    bsp = NULL;
+    bssp = NULL;
+    if (vnp->choice == OBJ_SEQFEAT)
+    {
+      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+      biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+      GetParentForBioSource (sfp->idx.parenttype, sfp->idx.parentptr, &bsp, &bssp);
+    } 
+    else if (vnp->choice == OBJ_SEQDESC)
+    {
+      sdp = (SeqDescrPtr) vnp->data.ptrvalue;
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      if (sdp != NULL && sdp->extended != 0) 
+      {
+        ovp = (ObjValNodePtr) sdp;
+
+        GetParentForBioSource (ovp->idx.parenttype, ovp->idx.parentptr, &bsp, &bssp);
+      }
+    }
+    if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL) continue;
+
+    spec_host = NULL;
+    mod = biop->org->orgname->mod;
+    while (mod != NULL && mod->subtype != ORGMOD_nat_host)
+    {
+      mod = mod->next;
+    }
+    if (mod == NULL || StringHasNoText (mod->subname)) continue;
+    
+    spec_host = mod->subname;
+
+    if (bsp != NULL )
+    {
+      any_in_list = WriteOneBadSpecificHostBioseq (fp, spec_host, bsp);
+    }
+    else if (bssp != NULL)
+    {
+      any_in_list = WriteOneBadSpecificHostBioseqSet (fp, spec_host, bssp);
+    }    
+  }
+
+  return any_in_list;
+}
+
+static void MakeValidatorReport (ButtoN b)
+{
+  ValidExtraPtr  vep;
+  ErrItemPtr     eip;
+  Int2           item = 0;
+  ValNodePtr     vnp;
+  CharPtr        cp;
+  Char           path [PATH_MAX];
+  Boolean        found_any = FALSE;
+  FILE           *fp;
+  ValNodePtr     consensus_splice_list = NULL;
+  ValNodePtr     stop_codon_list = NULL;
+  ValNodePtr     ecnumber_list = NULL;
+  ValNodePtr     specific_host_list = NULL;
+  ValNodePtr     its_does_not_abut_list = NULL;
+  SeqFeatPtr     sfp;
+  SeqDescrPtr    sdp;
+  CharPtr        str;
+  Char           ch;
+  CharPtr        tmp;
+  SeqMgrFeatContext fcontext;
+  SeqMgrDescContext dcontext;
+
+  vep = (ValidExtraPtr) GetObjectExtra (b);
+  if (vep == NULL) return;
+
+  TmpNam (path); 
+#ifdef WIN_MAC
+  fp = FileOpen (path, "r");
+  if (fp != NULL) {
+    FileClose (fp);
+  } else {
+    FileCreate (path, "TEXT", "ttxt");
+  }
+#endif
+  fp = FileOpen (path, "w");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open temporary file for report");
+  } else {
+    for (vnp = vep->messages; vnp != NULL; vnp = vnp->next) {
+      item++;
+      eip = (ErrItemPtr) vnp->data.ptrvalue;
+      if (eip != NULL) {
+        if (eip->errcode == 5 && (eip->subcode == 16 || eip->subcode == 137 || eip->subcode == 138 || eip->subcode == 139)) {
+          /* ERR_SEQ_FEAT_NotSpliceConsensus */
+          str = GetDocText (vep->doc, item, 0, 5);
+          if (str != NULL) {
+            tmp = str;
+            tmp++; /* skip past first newline */
+            ch = *tmp;
+            while (ch != '\0') {
+              if (ch < ' ') {
+                *tmp = ' ';
+              }
+              tmp++;
+              ch = *tmp;
+            }
+          }
+          cp = FormatConsensusSpliceReport (str);
+          MemFree (str);
+          if (cp != NULL) {
+            ValNodeAddPointer (&consensus_splice_list, 0, cp);
+          }
+        } else if (eip->errcode == 5 && eip->subcode == 9) {
+          sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+          if (sfp != NULL) {
+            ValNodeAddPointer (&stop_codon_list, OBJ_SEQFEAT, sfp);
+          }
+        } else if (eip->errcode == 5 && (eip->subcode == 124 || eip->subcode == 125 || eip->subcode == 126)) {
+          /* ERR_SEQ_FEAT_BadEcNumberValue */
+          sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+          if (sfp != NULL) {
+            ValNodeAddPointer (&ecnumber_list, OBJ_SEQFEAT, sfp);
+          }
+        } else if (eip->errcode == 2 && eip->subcode == 29 && StringCmp (eip->message, "Invalid value for specific host") == 0) {
+          if (eip->itemtype == OBJ_SEQDESC) {
+            sdp = SeqMgrGetDesiredDescriptor (eip->entityID, NULL, eip->itemID, 0, NULL, &dcontext);
+            if (sdp != NULL) {
+              ValNodeAddPointer (&specific_host_list, OBJ_SEQDESC, sdp);
+            }
+          } else if (eip->itemtype == OBJ_SEQFEAT) {
+            sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+            if (sfp != NULL) {
+              ValNodeAddPointer (&specific_host_list, OBJ_SEQFEAT, sfp);
+            }
+          }
+        } else if (eip->errcode == 5 && eip->subcode == 116 && eip->itemtype == OBJ_SEQFEAT) {
+          sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+          if (sfp != NULL) {
+            ValNodeAddPointer (&its_does_not_abut_list, OBJ_SEQFEAT, sfp);
+          }
+        }
+      }
+    }
+  }
+
+  if (consensus_splice_list != NULL) {
+    fprintf (fp, "Not Splice Consensus\n");
+    for (vnp = consensus_splice_list; vnp != NULL; vnp = vnp->next) {
+      fprintf (fp, "%s\n", vnp->data.ptrvalue);
+    }
+    found_any = TRUE;
+    consensus_splice_list = ValNodeFreeData (consensus_splice_list);
+  }
+
+  if (stop_codon_list != NULL) {
+    fprintf (fp, "Internal Stop Codons\n");
+    for (vnp = stop_codon_list; vnp != NULL; vnp = vnp->next) {
+      cp = GetDiscrepancyItemText (vnp);
+      if (cp != NULL) {
+        fprintf (fp, "%s", cp);
+        found_any = TRUE;
+        cp = MemFree (cp);
+      }
+    }
+    stop_codon_list = ValNodeFree (stop_codon_list);
+  }
+
+  if (ecnumber_list != NULL) {
+    fprintf (fp, "EC Number Errors\n");
+    for (vnp = ecnumber_list; vnp != NULL; vnp = vnp->next) {
+      cp = GetEcNumberReport (vnp->data.ptrvalue);
+      if (cp != NULL) {
+        fprintf (fp, "%s", cp);
+        found_any = TRUE;
+        cp = MemFree (cp);
+      }
+    }
+    ecnumber_list = ValNodeFree (ecnumber_list);
+  }
+ 
+  if (specific_host_list != NULL) {
+    fprintf (fp, "Bad Specific-host Values\n");
+    WriteBadSpecificHostTable (specific_host_list, fp);
+    found_any = TRUE;
+  }
+
+  if (its_does_not_abut_list != NULL) {
+    fprintf (fp, "ITS Features that do not Abut rRNA\n");
+    for (vnp = its_does_not_abut_list; vnp != NULL; vnp = vnp->next) {
+      cp = GetDiscrepancyItemText (vnp);
+      if (cp != NULL) {
+        fprintf (fp, "%s", cp);
+        found_any = TRUE;
+        cp = MemFree (cp);
+      }
+    }
+    its_does_not_abut_list = ValNodeFree (its_does_not_abut_list);
+  }    
+
+  FileClose (fp);
+  if (found_any) {
+    LaunchGeneralTextViewer (path, "Validator Report");
+  } else {
+    Message (MSG_OK, "No reportable errors");
+  }
+  FileRemove (path);  
+}
+
 
 static Boolean ValExportProc (ForM f, CharPtr filename)
 
@@ -705,26 +1276,12 @@ static void RevalidateProc (ButtoN b)
   }
 }
 
-static Boolean doSuppressContext = TRUE;
-
-extern Boolean ShouldSetSuppressContext (void)
+static void SetVerbosityAndRepopulate (PopuP p)
 
 {
-  return doSuppressContext;
-}
-
-static Boolean doJustShowAccession = FALSE;
-
-extern Boolean ShouldSetJustShowAccession (void)
-
-{
-  return doJustShowAccession;
-}
-
-static void SetVerbosityAndRevalidate (PopuP p)
-
-{
+  /*
   BaseFormPtr    bfp;
+  */
   int            i;
   Int2           val;
   ValidExtraPtr  vep;
@@ -751,10 +1308,13 @@ static void SetVerbosityAndRevalidate (PopuP p)
     vep->clicked = 0;
     vep->selected = 0;
     vep->dblClick = FALSE;
+    RepopVal (p);
+    /*
     bfp = vep->bfp;
     if (bfp != NULL && vep->revalProc != NULL) {
       vep->revalProc (bfp->form);
     }
+    */
   }
 }
 
@@ -767,7 +1327,8 @@ static void CleanupValidProc (GraphiC g, VoidPtr data)
 
   vep = (ValidExtraPtr) data;
   if (vep != NULL) {
-    vep->messages = ValNodeFreeData (vep->messages);
+    vep->messages = ValNodeFree (vep->messages);
+    vep->messages = FreeErrItemList (vep->messages);
     vep->lastmessage = NULL;
     for (vnp = vep->errorfilter; vnp != NULL; vnp = vnp->next) {
       efp = (ErrFltrPtr) vnp->data.ptrvalue;
@@ -892,7 +1453,7 @@ static CharPtr howToClickText =
 
 /* CreateValidateWindowEx is hidden, allowing a revalidate button */
 extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
-                                    FonT font, ErrSev sev, Boolean verbose,
+                                    FonT font, ErrSev sev, Int2 verbose,
                                     BaseFormPtr bfp, FormActnFunc revalProc,
                                     Boolean okaytosetviewtarget)
 
@@ -907,8 +1468,10 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
   GrouP              q;
   StdEditorProcsPtr  sepp;
   GrouP              t;
+  GrouP              btn_grp;
   ValidExtraPtr      vep;
   WindoW             w;
+  Boolean indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
 
   if (validWindow == NULL) {
     vep = (ValidExtraPtr) MemNew (sizeof (ValidExtra));
@@ -947,17 +1510,20 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         Disable (vep->remove);
         */
         StaticPrompt (c, "Message", 0, popupMenuHeight, programFont, 'l');
-        vep->verbose = PopupList (c, FALSE, SetVerbosityAndRevalidate);
+        vep->verbose = PopupList (c, FALSE, SetVerbosityAndRepopulate);
         SetObjectExtra (vep->verbose, vep, NULL);
         PopupItem (vep->verbose, "Verbose");
         PopupItem (vep->verbose, "Normal");
         PopupItem (vep->verbose, "Terse");
         PopupItem (vep->verbose, "Table");
         if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-          SetValue (vep->verbose, 1);
+          if (verbose < 1 || verbose > 4) {
+            verbose = 1;
+          }
+          SetValue (vep->verbose, verbose);
           doSuppressContext = FALSE;
           doJustShowAccession = FALSE;
-        } else if (verbose) {
+        } else if (verbose > 0) {
           SetValue (vep->verbose, 2);
           doSuppressContext = TRUE;
           doJustShowAccession = FALSE;
@@ -1045,10 +1611,17 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
 
         vep->summary = StaticPrompt (w, "", stdCharWidth * 30, 0, systemFont, 'c');
 
-        b = PushButton (w, "Dismiss", CloseValidButton);
+        btn_grp = HiddenGroup (w, 2, 0, NULL);
+        SetGroupSpacing (btn_grp, 10, 10);
+        if (indexerVersion) {
+          b = PushButton (btn_grp, "Report", MakeValidatorReport);
+          SetObjectExtra (b, vep, NULL);
+        }
+
+        b = PushButton (btn_grp, "Dismiss", CloseValidButton);
 
         AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) vep->doc, (HANDLE) t,
-                      (HANDLE) vep->summary, (HANDLE) b, NULL);
+                      (HANDLE) vep->summary, (HANDLE) btn_grp, NULL);
 
         RealizeWindow (w);
         validWindow = w;
@@ -1073,7 +1646,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
 }
 
 extern void CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
-                                  FonT font, ErrSev sev, Boolean verbose)
+                                  FonT font, ErrSev sev, Int2 verbose)
 
 {
   CreateValidateWindowEx (notify, title, font, sev, verbose, NULL, NULL, FALSE);
@@ -1180,62 +1753,6 @@ static CharPtr StringMoveAndConvertTabs (CharPtr dst, CharPtr src, CharPtr suffi
 static CharPtr severityLabel [] = {
   "NONE", "INFO", "WARN", "ERROR", "REJECT", "FATAL", "MAX", NULL
 };
-
-static void FillValidBuffer (CharPtr buf, CharPtr text1, CharPtr text2,
-                             CharPtr text3, CharPtr hidden, CharPtr message,
-                             CharPtr expanded, ValNodePtr context,
-                             Boolean justShowAccession)
-{
-  CharPtr  ptr;
-  Char     temp [256];
-  /*
-  CharPtr     ctxstr;
-  Boolean     notfirst;
-  ValNodePtr  vnp;
-  */
-
-  if (buf != NULL) {
-    ptr = buf;
-    /*
-    if (context != NULL) {
-      vnp = context;
-      notfirst = FALSE;
-      ptr = StringMoveAndConvertTabs (ptr, NULL, "\t\t\t\t");
-      while (vnp != NULL) {
-        ctxstr = (CharPtr) vnp->data.ptrvalue;
-        if (ctxstr != NULL && ctxstr [0] != '\0') {
-          if (notfirst) {
-            ptr = StringMoveAndConvertTabs (ptr, NULL, "; ");
-          }
-          ptr = StringMoveAndConvertTabs (ptr, ctxstr, "");
-          notfirst = TRUE;
-        }
-        vnp = vnp->next;
-      }
-      ptr = StringMoveAndConvertTabs (ptr, NULL, "\n");
-    }
-    */
-    if (justShowAccession) {
-      ptr = StringMoveAndConvertTabs (ptr, message, "\t");
-      ptr = StringMoveAndConvertTabs (ptr, text1, "\t");
-      StringCpy (temp, text2);
-      StringCat (temp, "_");
-      StringCat (temp, text3);
-      ptr = StringMoveAndConvertTabs (ptr, temp, "\t");
-      ptr = StringMoveAndConvertTabs (ptr, hidden, "\n");
-    } else {
-      ptr = StringMoveAndConvertTabs (ptr, text1, "\t");
-      ptr = StringMoveAndConvertTabs (ptr, text2, "\t");
-      ptr = StringMoveAndConvertTabs (ptr, text3, "\t");
-      ptr = StringMoveAndConvertTabs (ptr, hidden, "\n\t\t\t\t");
-      ptr = StringMoveAndConvertTabs (ptr, message, "\n");
-      if (expanded != NULL && expanded [0] != '\0') {
-        ptr = StringMoveAndConvertTabs (ptr, NULL, "\n\t\t\t\t");
-        ptr = StringMoveAndConvertTabs (ptr, expanded, "\n");
-      }
-    }
-  }
-}
 
 extern void RepopulateValidateFilter (void)
 
@@ -1350,196 +1867,247 @@ static void AppendFilter (ValidExtraPtr vep, CharPtr text1, CharPtr text2,
   }
 }
 
-static void ProcessValidMessage (ValidExtraPtr vep, CharPtr text1, CharPtr text2,
-                                 CharPtr text3, ErrSev sev, int errcode, int subcode,
-                                 Uint2 entityID, Uint4 itemID, Uint2 itemtype,
-                                 CharPtr message, CharPtr expanded, ValNodePtr context,
-                                 size_t ctxlen, Int2 minlev)
-
-{
-  CharPtr     buf;
-  Boolean     justShowAccession = FALSE;
-  size_t      len;
-  /* Int2        numItems; */
-  Char        str [64];
-  Int2        val;
-  ValNodePtr  vnp;
-
-  if (vep != NULL) {
-    val = GetValue (vep->verbose);
-    if (val == 4) {
-      justShowAccession = TRUE;
-    }
-    len = StringLen (text1) + StringLen (text2) + StringLen (text3) +
-          StringLen (message) + StringLen (expanded) + 50 + ctxlen;
-    buf = MemGet (len, MGET_CLEAR);
-    if (buf != NULL) {
-      sprintf (str, "%d %d %d %u %u %u", (int) sev, (int) errcode,
-               (int) subcode, (unsigned int) entityID,
-               (unsigned int) itemID, (unsigned int) itemtype);
-      FillValidBuffer (buf, text1, text2, text3, str,
-                       message, expanded, context, justShowAccession);
-      AppendFilter (vep, text1, text2, NULL, sev, errcode, INT_MIN);
-      AppendFilter (vep, text1, text2, text3, sev, errcode, subcode);
-      vnp = ValNodeNew (vep->lastmessage);
-      if (vep->messages == NULL) {
-        vep->messages = vnp;
-      }
-      vep->lastmessage = vnp;
-      if (vnp != NULL) {
-        vnp->data.ptrvalue = buf;
-        if (sev >= minlev || sev == SEV_NONE) {
-          (vep->addedcount)++;
-          /*
-          AppendItem (vep->doc, CharPrtProc, vnp->data.ptrvalue, FALSE,
-                      (StringLen (vnp->data.ptrvalue) / 50) + 1,
-                      &valParFmt, valColFmt, vep->font);
-          GetDocParams (vep->doc, &numItems, NULL);
-          if (Visible (vep->doc) && AllParentsVisible (vep->doc)) {
-            UpdateDocument (vep->doc, numItems, numItems);
-          }
-          */
-        }
-      }
-    }
-  }
-}
-
-extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
-                                ErrSev sev, int errcode, int subcode,
-                                Uint2 entityID, Uint4 itemID, Uint2 itemtype,
-                                CharPtr message, CharPtr expanded, ValNodePtr context)
-
-{
-  size_t         ctxlen;
-  CharPtr        ctxstr;
-  Int2           minlev;
-  Char           str [64];
-  ValidExtraPtr  vep;
-  ValNodePtr     vnp;
-
-  ShowValidateWindow ();
-  if (validWindow != NULL) {
-    vep = GetObjectExtra (validWindow);
-    if (vep != NULL) {
-      if (sev < SEV_NONE || sev > SEV_MAX) {
-        sev = SEV_MAX;
-      }
-      (vep->counts [sev])++;
-      (vep->totalcount)++;
-      if (vep->remaining > 0) {
-        (vep->remaining)--;
-      }
-      if (vep->remaining < 1) {
-        sprintf (str, "INFO: %ld      WARNING: %ld      ERROR: %ld      REJECT: %ld",
-                 (long) vep->counts [SEV_INFO], (long) vep->counts [SEV_WARNING],
-                 (long) vep->counts [SEV_ERROR], (long) vep->counts [SEV_REJECT]);
-        if (vep->totalcount < 30) {
-          vep->remaining = 1;
-        } else if (vep->totalcount < 100) {
-          vep->remaining = 5;
-        } else if (vep->totalcount < 300) {
-          vep->remaining = 20;
-        } else if (vep->totalcount < 1000) {
-          vep->remaining = 50;
-        } else if (vep->totalcount < 3000) {
-          vep->remaining = 100;
-        } else if (vep->totalcount < 10000) {
-          vep->remaining = 200;
-        } else if (vep->totalcount < 30000) {
-          vep->remaining = 500;
-        } else {
-          vep->remaining = 1000;
-	    }
-        SetTitle (vep->summary, str);
-        Update ();
-      }
-      if (text1 == NULL) {
-        text1 = severityLabel [sev];
-      }
-      if (message == NULL) {
-        message = "";
-      }
-      minlev = GetValue (vep->minlevel);
-      ctxlen = 0;
-      vnp = context;
-      while (vnp != NULL) {
-        ctxstr = (CharPtr) vnp->data.ptrvalue;
-        if (ctxstr != NULL && ctxstr [0] != '\0') {
-          ctxlen += StringLen (ctxstr) + 4;
-        }
-        vnp = vnp->next;
-      }
-      /*
-      if (GetValue (vep->verbose) == 3) {
-        expanded = NULL;
-      }
-      */
-      if (ctxlen == 0) {
-        context = NULL;
-      }
-      ProcessValidMessage (vep, text1, text2, text3, sev, errcode,
-                           subcode, entityID, itemID, itemtype,
-                           message, expanded, context, ctxlen, minlev); 
-      /*
-      if (Visible (validWindow)) {
-        Select (validWindow);
-      }
-      */
-    }
-  }
-}
-
 extern int LIBCALLBACK ValidErrHook (const ErrDesc *err)
 
 {
-  CharPtr     expanded;
-  ErrSev      msg_level;
-  CharPtr     name1;
-  CharPtr     name2;
-  ErrMsgNode  *node1;
-  ErrMsgNode  *node2;
-  ErrMsgRoot  *root;
-  ErrSev      sev;
+  CharPtr        catname;
+  CharPtr        errname;
+  CharPtr        expanded;
+  ErrItemPtr     eip;
+  Int2           minlev;
+  ErrSev         msg_level;
+  ErrSev         severity;
+  Char           str [128];
+  ValidExtraPtr  vep;
+  ValNodePtr     vnp;
 
-  if (err != NULL) {
-    /* FileOpen report matches ERR_SEQ_DESCR_FileOpenCollision instead of ERR_SEQ_DESCR_Inconsistent */
-    if (err->errcode == E_File && err->subcode == E_FOpen) return 1;
-    /* suppress connector messages with 0, 0 as code and subcode - reverted after calling ErrSetLogLevel to suppress these */
-    /* if (StringCmp (err->errtext, "[CONN_Read]  Cannot read data (connector \"HTTP\", error \"Closed\")") == 0) return 1; */
-    msg_level = ErrGetMessageLevel ();
-    name1 = NULL;
-    name2 = NULL;
-    if (err->module [0] != '\0') {
-      root = (ErrMsgRoot*) ErrGetMsgRoot (err->module);
-      if (root != NULL) {
-        for (node1 = root->list; node1 != NULL; node1 = node1->next) {
-          if (node1->code == err->errcode) {
-            for (node2 = node1->list; node2 != NULL; node2 = node2->next) {
-              if (node2->code == err->subcode) {
-                name1 = (CharPtr) node1->name;
-                name2 = (CharPtr) node2->name;
-              }
-            }
-          }
-        }
-      }
-    }
-    sev = (ErrSev) err->severity;
-    if (sev < SEV_NONE || sev > SEV_MAX) {
-      sev = SEV_MAX;
-    }
-    /* suppress if severity is less than message level */
-    if (sev < msg_level) return 1;
-    expanded = (CharPtr) ErrGetExplanation (err->root, err->node);
-    AppendValidMessage (severityLabel [sev], name1, name2,
-                        (ErrSev) err->severity, err->errcode, err->subcode,
-                        err->entityID, err->itemID, err->itemtype,
-                        (CharPtr) err->errtext, expanded,
-                        ErrGetUserStrings(err));
+  if (err == NULL) return 1;
+
+  /* FileOpen report matches ERR_SEQ_DESCR_FileOpenCollision instead of ERR_SEQ_DESCR_Inconsistent */
+  if (err->errcode == E_File && err->subcode == E_FOpen) return 1;
+  /* suppress connector messages with 0, 0 as code and subcode - reverted after calling ErrSetLogLevel to suppress these */
+  /* if (StringCmp (err->errtext, "[CONN_Read]  Cannot read data (connector \"HTTP\", error \"Closed\")") == 0) return 1; */
+
+  severity = (ErrSev) err->severity;
+  if (severity < SEV_NONE || severity > SEV_MAX) {
+    severity = SEV_MAX;
   }
+
+  msg_level = ErrGetMessageLevel ();
+  if (severity < msg_level) return 1;
+
+  ShowValidateWindow ();
+  if (validWindow == NULL) return 1;
+  vep = GetObjectExtra (validWindow);
+  if (vep == NULL) return 1;
+
+  (vep->counts [severity])++;
+  (vep->totalcount)++;
+  if (vep->remaining > 0) {
+    (vep->remaining)--;
+  }
+  if (vep->remaining < 1) {
+    sprintf (str, "INFO: %ld      WARNING: %ld      ERROR: %ld      REJECT: %ld",
+             (long) vep->counts [SEV_INFO], (long) vep->counts [SEV_WARNING],
+             (long) vep->counts [SEV_ERROR], (long) vep->counts [SEV_REJECT]);
+    if (vep->totalcount < 30) {
+      vep->remaining = 1;
+    } else if (vep->totalcount < 100) {
+      vep->remaining = 5;
+    } else if (vep->totalcount < 300) {
+      vep->remaining = 20;
+    } else if (vep->totalcount < 1000) {
+      vep->remaining = 50;
+    } else if (vep->totalcount < 3000) {
+      vep->remaining = 100;
+    } else if (vep->totalcount < 10000) {
+      vep->remaining = 200;
+    } else if (vep->totalcount < 30000) {
+      vep->remaining = 500;
+    } else {
+      vep->remaining = 1000;
+    }
+    SetTitle (vep->summary, str);
+    Update ();
+  }
+
+  sprintf (str, "%d %d %d %u %u %u", (int) severity, (int) err->errcode, (int) err->subcode,
+           (unsigned int) err->entityID, (unsigned int) err->itemID, (unsigned int) err->itemtype);
+
+  catname = GetValidCategoryName (err->errcode);
+  errname = GetValidErrorName (err->errcode, err->subcode);
+  expanded = GetValidExplanation (err->errcode, err->subcode);
+
+  eip = (ErrItemPtr) MemNew (sizeof (ErrItemData));
+  if (eip == NULL) return 1;
+
+  eip->severity = severity;
+  eip->errcode = err->errcode;
+  eip->subcode = err->subcode;
+  eip->entityID = err->entityID;
+  eip->itemtype = err->itemtype;
+  eip->itemID = err->itemID;
+  eip->hidden = StringSaveNoNull (str);
+  eip->sevlabel = StringSaveNoNull (severityLabel [severity]);
+  eip->catname = StringSaveNoNull (catname);
+  eip->errname = StringSaveNoNull (errname);
+  eip->accession = NULL;
+  eip->message = NULL;
+  if (doJustShowAccession) {
+    eip->accession = StringSaveNoNull ((CharPtr) err->errtext);
+  } else {
+    eip->message = StringSaveNoNull ((CharPtr) err->errtext);
+  }
+  eip->objtype = NULL;
+  eip->label = NULL;
+  eip->context = NULL;
+  eip->location = NULL;
+  eip->product = NULL;
+  eip->expanded = StringSaveNoNull (expanded);
+  eip->userdata = NULL;
+
+    vnp = ValNodeNew (vep->lastmessage);
+    if (vep->messages == NULL) {
+      vep->messages = vnp;
+    }
+    vep->lastmessage = vnp;
+
+  if (vnp != NULL) {
+    vnp->data.ptrvalue = eip;
+
+    minlev = GetValue (vep->minlevel);
+    if (severity >= minlev || severity == SEV_NONE) {
+      (vep->addedcount)++;
+    }
+  }
+
+  AppendFilter (vep, severityLabel [severity], catname, NULL, severity, err->errcode, INT_MIN);
+  AppendFilter (vep, severityLabel [severity], catname, errname, severity, err->errcode, err->subcode);
+
   return 1;
 }
+
+
+
+extern void LIBCALLBACK ValidErrCallback (
+  ErrSev severity,
+  int errcode,
+  int subcode,
+  Uint2 entityID,
+  Uint2 itemtype,
+  Uint4 itemID,
+  CharPtr accession,
+  CharPtr message,
+  CharPtr objtype,
+  CharPtr label,
+  CharPtr context,
+  CharPtr location,
+  CharPtr product,
+  Pointer userdata
+)
+
+{
+  CharPtr        catname;
+  CharPtr        errname;
+  CharPtr        expanded;
+  ErrItemPtr     eip;
+  Int2           minlev;
+  ErrSev         msg_level;
+  Char           str [128];
+  ValidExtraPtr  vep;
+  ValNodePtr     vnp;
+
+  if (severity < SEV_NONE || severity > SEV_MAX) {
+    severity = SEV_MAX;
+  }
+
+  msg_level = ErrGetMessageLevel ();
+  if (severity < msg_level) return;
+
+  ShowValidateWindow ();
+  if (validWindow == NULL) return;
+  vep = GetObjectExtra (validWindow);
+  if (vep == NULL) return;
+
+  (vep->counts [severity])++;
+  (vep->totalcount)++;
+  if (vep->remaining > 0) {
+    (vep->remaining)--;
+  }
+  if (vep->remaining < 1) {
+    sprintf (str, "INFO: %ld      WARNING: %ld      ERROR: %ld      REJECT: %ld",
+             (long) vep->counts [SEV_INFO], (long) vep->counts [SEV_WARNING],
+             (long) vep->counts [SEV_ERROR], (long) vep->counts [SEV_REJECT]);
+    if (vep->totalcount < 30) {
+      vep->remaining = 1;
+    } else if (vep->totalcount < 100) {
+      vep->remaining = 5;
+    } else if (vep->totalcount < 300) {
+      vep->remaining = 20;
+    } else if (vep->totalcount < 1000) {
+      vep->remaining = 50;
+    } else if (vep->totalcount < 3000) {
+      vep->remaining = 100;
+    } else if (vep->totalcount < 10000) {
+      vep->remaining = 200;
+    } else if (vep->totalcount < 30000) {
+      vep->remaining = 500;
+    } else {
+      vep->remaining = 1000;
+    }
+    SetTitle (vep->summary, str);
+    Update ();
+  }
+
+  sprintf (str, "%d %d %d %u %u %u", (int) severity, (int) errcode, (int) subcode,
+           (unsigned int) entityID, (unsigned int) itemID, (unsigned int) itemtype);
+
+  catname = GetValidCategoryName (errcode);
+  errname = GetValidErrorName (errcode, subcode);
+  expanded = GetValidExplanation (errcode, subcode);
+
+  eip = (ErrItemPtr) MemNew (sizeof (ErrItemData));
+  if (eip == NULL) return;
+
+  eip->severity = severity;
+  eip->errcode = errcode;
+  eip->subcode = subcode;
+  eip->entityID = entityID;
+  eip->itemtype = itemtype;
+  eip->itemID = itemID;
+  eip->hidden = StringSaveNoNull (str);
+  eip->sevlabel = StringSaveNoNull (severityLabel [severity]);
+  eip->catname = StringSaveNoNull (catname);
+  eip->errname = StringSaveNoNull (errname);
+  eip->accession = StringSaveNoNull (accession);
+  eip->message = StringSaveNoNull (message);
+  eip->objtype = StringSaveNoNull (objtype);
+  eip->label = StringSaveNoNull (label);
+  eip->context = StringSaveNoNull (context);
+  eip->location = StringSaveNoNull (location);
+  eip->product = StringSaveNoNull (product);
+  eip->expanded = StringSaveNoNull (expanded);
+  eip->userdata = userdata;
+
+    vnp = ValNodeNew (vep->lastmessage);
+    if (vep->messages == NULL) {
+      vep->messages = vnp;
+    }
+    vep->lastmessage = vnp;
+
+  if (vnp != NULL) {
+    vnp->data.ptrvalue = eip;
+
+    minlev = GetValue (vep->minlevel);
+    if (severity >= minlev || severity == SEV_NONE) {
+      (vep->addedcount)++;
+    }
+  }
+
+  AppendFilter (vep, severityLabel [severity], catname, NULL, severity, errcode, INT_MIN);
+  AppendFilter (vep, severityLabel [severity], catname, errname, severity, errcode, subcode);
+}
+
 
 typedef struct searchextra {
   ButtoN            find;
@@ -1822,13 +2390,13 @@ static void SearchFindProc (ButtoN b)
     MemSet (&gs, 0, sizeof (GatherScope));
     gs.seglevels = 1;
     gs.get_feats_location = FALSE;
-	MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-	gs.ignore[OBJ_BIOSEQ] = FALSE;
-	gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-	gs.ignore[OBJ_SEQSUB] = FALSE;
-	gs.ignore[OBJ_SEQDESC] = FALSE;
-	gs.ignore[OBJ_SEQFEAT] = FALSE;
-	gs.ignore[OBJ_SEQANNOT] = FALSE;
+    MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
+    gs.ignore[OBJ_BIOSEQ] = FALSE;
+    gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+    gs.ignore[OBJ_SEQSUB] = FALSE;
+    gs.ignore[OBJ_SEQDESC] = FALSE;
+    gs.ignore[OBJ_SEQFEAT] = FALSE;
+    gs.ignore[OBJ_SEQANNOT] = FALSE;
     GatherEntity (sep->entityID, (Pointer) &sl, SearchGatherFunc, &gs);
     searchSpop = StdPrintOptionsFree (searchSpop);
     ArrowCursor ();

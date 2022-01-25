@@ -29,13 +29,68 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.207 $
+* $Revision: 6.225 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.225  2007/08/08 15:59:04  kans
+* added EW to WHICH_db_accession as NCBI EST
+*
+* Revision 6.224  2007/07/03 16:41:30  kans
+* use EV for NCBI EST
+*
+* Revision 6.223  2007/06/21 19:15:22  kans
+* EU is NCBI direct submission prefix
+*
+* Revision 6.222  2007/05/30 15:45:57  kans
+* WHICH_db_accession uses ET for NCBI GSS
+*
+* Revision 6.221  2007/05/08 19:01:43  kans
+* set uninitialized variables, changed tabs to spaces
+*
+* Revision 6.220  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.219  2007/04/05 13:43:36  kans
+* DDBJ uses DI for patents
+*
+* Revision 6.218  2007/03/20 19:18:04  kans
+* added ES to WHICH_db_accession
+*
+* Revision 6.217  2007/03/13 18:03:45  kans
+* added FreeSeqLocSetComponents to free sequence records referenced in a chain of SeqLocs
+*
+* Revision 6.216  2007/03/06 16:06:20  kans
+* added ER to WHICH_db_accession as ncbi gss
+*
+* Revision 6.215  2007/03/05 20:01:19  kans
+* added new wgs scaffold segmented parent prefixes to WHICH_db_accession
+*
+* Revision 6.214  2007/02/21 17:23:59  bollin
+* Added IsSkippableDbtag function, to use when TMSMART, BankIt, and NCBIFILE
+* IDs should be ignored (for displays, formatting, etc.)
+*
+* Revision 6.213  2007/02/01 17:19:19  kans
+* added EL to WHICH_db_accession as NCBI EST
+*
+* Revision 6.212  2007/01/04 16:43:56  kans
+* added EJ and EK to WHICH_db_accession as NCBI GSS
+*
+* Revision 6.211  2006/12/20 14:55:40  kans
+* added DH for DDBJ GSS
+*
+* Revision 6.210  2006/11/22 15:24:22  kans
+* WHICH_db_accession uses EI for NCBI GSS
+*
+* Revision 6.209  2006/11/15 18:01:22  kans
+* added SeqLocPartialCheckEx to control fetching of far location
+*
+* Revision 6.208  2006/11/03 19:06:03  kans
+* another accession prefix in WHICH_db_accession
+*
 * Revision 6.207  2006/09/28 20:19:26  bollin
 * fixed buffer overrun problem in SeqPointWriteEx, increased size of buffer used
 * by SeqLocPrintProc
@@ -993,32 +1048,32 @@ NLM_EXTERN void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 *****************************************************************************/
 NLM_EXTERN Boolean BioseqMatch (BioseqPtr bsp, SeqIdPtr seqid)
 {
-	if (bsp == NULL) return FALSE;
-	return SeqIdIn(seqid, bsp->id);
+    if (bsp == NULL) return FALSE;
+    return SeqIdIn(seqid, bsp->id);
 }
 
 
 typedef struct findse {
-	SeqIdPtr sip;
-	Boolean found;
-	BioseqPtr bsp;
-	Int4 indent;
+    SeqIdPtr sip;
+    Boolean found;
+    BioseqPtr bsp;
+    Int4 indent;
 } fse, PNTR fseptr;
 
 typedef struct {
-	SeqLocPtr slp;
-	Boolean findOnProtein;
+    SeqLocPtr slp;
+    Boolean findOnProtein;
 } SpliceInfo, *SpliceInfoPtr;
 
 typedef struct {
-	SeqIdPtr sip;
-	Boolean isProtein;
-	Boolean retval;
+    SeqIdPtr sip;
+    Boolean isProtein;
+    Boolean retval;
 } SeqIdChecker, *SeqIdCheckerPtr;
 
 typedef struct {
-	SeqIdPtr sip;
-	Int2 mtype;
+    SeqIdPtr sip;
+    Int2 mtype;
 } SeqIdMolType,  PNTR SeqIdMolTypePtr;
 
 /*****************************************************************************
@@ -1030,50 +1085,50 @@ typedef struct {
 NLM_EXTERN void FindSE (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 NLM_EXTERN void FindSE (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
-	fseptr fep;
-	BioseqPtr bsp;
+    fseptr fep;
+    BioseqPtr bsp;
 
-	fep = (fseptr)data;
-	if (fep->found)   /* already found it */
-		return;
+    fep = (fseptr)data;
+    if (fep->found)   /* already found it */
+        return;
 
     if (! IS_Bioseq(sep))
         return;
 
-	bsp = (BioseqPtr)(sep->data.ptrvalue);
-	if (BioseqMatch(bsp, fep->sip))
-	{
-		fep->found = TRUE;
-		fep->bsp = bsp;
-		fep->indent = indent;
-	}
+    bsp = (BioseqPtr)(sep->data.ptrvalue);
+    if (BioseqMatch(bsp, fep->sip))
+    {
+        fep->found = TRUE;
+        fep->bsp = bsp;
+        fep->indent = indent;
+    }
 
-	return;
+    return;
 }
 
 /*****************************************************************************
 *
 *   BioseqFindInSeqEntry(sip, sep)
-*   	Finds a Bioseq within a SeqEntry by SeqId
+*       Finds a Bioseq within a SeqEntry by SeqId
 *
 *****************************************************************************/
 NLM_EXTERN BioseqPtr BioseqFindInSeqEntry(SeqIdPtr sip, SeqEntryPtr sep)
 {
-	BioseqPtr bsp = NULL;
-	fse fe;
+    BioseqPtr bsp = NULL;
+    fse fe;
 
-	if (sip == NULL) return bsp;
-	if (sep == NULL) return bsp;
+    if (sip == NULL) return bsp;
+    if (sep == NULL) return bsp;
 
-	fe.found = FALSE;
-	fe.sip = sip;
-	fe.bsp = NULL;
+    fe.found = FALSE;
+    fe.sip = sip;
+    fe.bsp = NULL;
 
-	SeqEntryExplore(sep, (Pointer)(&fe), FindSE);
-	if (fe.found)
-		return fe.bsp;
-	else
-		return bsp;
+    SeqEntryExplore(sep, (Pointer)(&fe), FindSE);
+    if (fe.found)
+        return fe.bsp;
+    else
+        return bsp;
 }
 
 /*****************************************************************************
@@ -1088,8 +1143,8 @@ NLM_EXTERN BioseqPtr BioseqFindInSeqEntry(SeqIdPtr sip, SeqEntryPtr sep)
 NLM_EXTERN ValNodePtr BioseqGetSeqDescr (BioseqPtr bsp, Int2 type, ValNodePtr curr)    /* the last one you used */
 
 {
-	if (bsp == NULL) return NULL;
-	
+    if (bsp == NULL) return NULL;
+    
     if (curr == NULL)
             curr = bsp->descr;
     else
@@ -1126,38 +1181,38 @@ NLM_EXTERN CharPtr BioseqGetTitle (BioseqPtr bsp)
 /*****************************************************************************
 *
 *   BioseqGetNumbering(bsp)
-*   	Gets either user supplied, or default number for a Bioseq
-*   	looks first for num Seqdescr, then in Pubdesc, then returns
+*       Gets either user supplied, or default number for a Bioseq
+*       looks first for num Seqdescr, then in Pubdesc, then returns
 *         default numbering
 *
 *****************************************************************************/
 NLM_EXTERN NumberingPtr BioseqGetNumbering (BioseqPtr bsp)
 
 {
-	NumberingPtr np = NULL;
-	ValNodePtr anp;
-	PubdescPtr pdp;
+    NumberingPtr np = NULL;
+    ValNodePtr anp;
+    PubdescPtr pdp;
 
-	if (bsp == NULL)
-		return NULL;
+    if (bsp == NULL)
+        return NULL;
 
-	anp = BioseqGetSeqDescr(bsp, Seq_descr_num, NULL);
-	if (anp != NULL)    /* Numbering on this Bioseq */
-		np = (NumberingPtr)anp->data.ptrvalue;
-	else do				/* look for Pubdesc  */
-	{
-		anp = BioseqGetSeqDescr(bsp, Seq_descr_pub, anp);
-		if (anp != NULL)
-		{
-			pdp = (PubdescPtr)anp->data.ptrvalue;
-			np = pdp->num;
-		}
-	} while ((anp != NULL) && (np == NULL));
+    anp = BioseqGetSeqDescr(bsp, Seq_descr_num, NULL);
+    if (anp != NULL)    /* Numbering on this Bioseq */
+        np = (NumberingPtr)anp->data.ptrvalue;
+    else do                /* look for Pubdesc  */
+    {
+        anp = BioseqGetSeqDescr(bsp, Seq_descr_pub, anp);
+        if (anp != NULL)
+        {
+            pdp = (PubdescPtr)anp->data.ptrvalue;
+            np = pdp->num;
+        }
+    } while ((anp != NULL) && (np == NULL));
 
-	if (np == NULL)   /* no numbering found */
-		np = NumberingDefaultGet();   /* fallback position */
+    if (np == NULL)   /* no numbering found */
+        np = NumberingDefaultGet();   /* fallback position */
 
-	return np;
+    return np;
 }
 
 
@@ -1204,36 +1259,36 @@ NLM_EXTERN Int4 BioseqGetGaps (BioseqPtr bsp)
 {
     ValNodePtr anp;
     Int4 gaps = 0;
-	Uint1 repr;
+    Uint1 repr;
 
     if (bsp == NULL)
         return -1;
 
-	repr = Bioseq_repr(bsp);
+    repr = Bioseq_repr(bsp);
 
-	switch (repr)
-	{
-		case  Seq_repr_seg:
-		case Seq_repr_ref:
-			anp = (ValNodePtr)bsp->seq_ext;
-			 while (anp != NULL)    /* go through Seq-loc chain */
-			{
-				gaps = SeqLocGetSegLens((SeqLocPtr)anp, NULL, gaps, TRUE);
-				anp = anp->next;
-			}
-			break;
-		case Seq_repr_delta:
-			anp = (ValNodePtr)bsp->seq_ext;
-			 while (anp != NULL)    /* go through delta seq chain */
-			{
-				 if (anp->choice == 1)
-					gaps = SeqLocGetSegLens((SeqLocPtr)(anp->data.ptrvalue), NULL, gaps, TRUE);
-				anp = anp->next;
-			}
-			break;
-		default:
-			break;
-	}
+    switch (repr)
+    {
+        case  Seq_repr_seg:
+        case Seq_repr_ref:
+            anp = (ValNodePtr)bsp->seq_ext;
+             while (anp != NULL)    /* go through Seq-loc chain */
+            {
+                gaps = SeqLocGetSegLens((SeqLocPtr)anp, NULL, gaps, TRUE);
+                anp = anp->next;
+            }
+            break;
+        case Seq_repr_delta:
+            anp = (ValNodePtr)bsp->seq_ext;
+             while (anp != NULL)    /* go through delta seq chain */
+            {
+                 if (anp->choice == 1)
+                    gaps = SeqLocGetSegLens((SeqLocPtr)(anp->data.ptrvalue), NULL, gaps, TRUE);
+                anp = anp->next;
+            }
+            break;
+        default:
+            break;
+    }
 
     return gaps;
 }
@@ -1251,47 +1306,47 @@ NLM_EXTERN Int4 BioseqGetSegLens (BioseqPtr bsp, Int4Ptr lens)
 {
     ValNodePtr anp;
     Int4 segs = 0;
-	Uint1 repr;
-	SeqLitPtr slitp;
+    Uint1 repr;
+    SeqLitPtr slitp;
 
     if (bsp == NULL)
         return -1;
 
-	repr = Bioseq_repr(bsp);
+    repr = Bioseq_repr(bsp);
 
-	switch (repr)
-	{
-		case  Seq_repr_seg:
-		case Seq_repr_ref:
-			anp = (ValNodePtr)bsp->seq_ext;
-			 while (anp != NULL)    /* go through Seq-loc chain */
-			{
-				segs = SeqLocGetSegLens((SeqLocPtr)anp, lens, segs, FALSE);
-				anp = anp->next;
-			}
-			break;
-		case Seq_repr_delta:
-			anp = (ValNodePtr)bsp->seq_ext;
-			 while (anp != NULL)    /* go through delta seq chain */
-			{
-				 if (anp->choice == 1)
-					segs = SeqLocGetSegLens((SeqLocPtr)(anp->data.ptrvalue), lens, segs, FALSE);
-				 else
-				 {
-					 slitp = (SeqLitPtr)(anp->data.ptrvalue);
-					 if (lens != NULL)
-						 lens[segs] = slitp->length;
-					 segs++;
-				 }
-				 anp = anp->next;
-			}
-			break;
-		default:
-			if (lens != NULL)
-				lens[0] = BioseqGetLen(bsp);
-			segs = 1;
-			break;
-	}
+    switch (repr)
+    {
+        case  Seq_repr_seg:
+        case Seq_repr_ref:
+            anp = (ValNodePtr)bsp->seq_ext;
+             while (anp != NULL)    /* go through Seq-loc chain */
+            {
+                segs = SeqLocGetSegLens((SeqLocPtr)anp, lens, segs, FALSE);
+                anp = anp->next;
+            }
+            break;
+        case Seq_repr_delta:
+            anp = (ValNodePtr)bsp->seq_ext;
+             while (anp != NULL)    /* go through delta seq chain */
+            {
+                 if (anp->choice == 1)
+                    segs = SeqLocGetSegLens((SeqLocPtr)(anp->data.ptrvalue), lens, segs, FALSE);
+                 else
+                 {
+                     slitp = (SeqLitPtr)(anp->data.ptrvalue);
+                     if (lens != NULL)
+                         lens[segs] = slitp->length;
+                     segs++;
+                 }
+                 anp = anp->next;
+            }
+            break;
+        default:
+            if (lens != NULL)
+                lens[0] = BioseqGetLen(bsp);
+            segs = 1;
+            break;
+    }
     return segs;
 }
 
@@ -1310,10 +1365,10 @@ NLM_EXTERN Uint1 BioseqGetCode (BioseqPtr bsp)
         return 0;
 
     if ((Bioseq_repr(bsp) == Seq_repr_raw) ||
-		(Bioseq_repr(bsp) == Seq_repr_const))
-	    return bsp->seq_data_type;
-	else
-		return 0;
+        (Bioseq_repr(bsp) == Seq_repr_const))
+        return bsp->seq_data_type;
+    else
+        return 0;
 }
 
 /*****************************************************************************
@@ -1326,37 +1381,38 @@ NLM_EXTERN Boolean BioseqConvert (BioseqPtr bsp, Uint1 newcode)
 
 {
     ByteStorePtr to;
-	ValNodePtr vnp;
-	SeqLitPtr slp;
+    ValNodePtr vnp;
+    SeqLitPtr slp;
 
-	if (bsp == NULL) return FALSE;
-	
+    if (bsp == NULL) return FALSE;
+    
     if ((Bioseq_repr(bsp) == Seq_repr_raw) ||
-		(Bioseq_repr(bsp) == Seq_repr_const))
+        (Bioseq_repr(bsp) == Seq_repr_const))
         return BioseqRawConvert(bsp, newcode);
 
-	if (Bioseq_repr(bsp) != Seq_repr_delta)
-		return FALSE;
+    if (Bioseq_repr(bsp) != Seq_repr_delta)
+        return FALSE;
 
-								/* go through the delta chain */
-	for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next)
-	{
-	   if (vnp->choice == 2)   /* SeqLit */
-	   {
-		   slp = (SeqLitPtr)(vnp->data.ptrvalue);
-		   if ((slp->length > 0) && (slp->seq_data != NULL))
-		   {
-				to = BSConvertSeq(slp->seq_data, newcode, slp->seq_data_type, slp->length);
-			   if (to != NULL)
-			   {
-				   slp->seq_data = to;
-				   slp->seq_data_type = newcode;
-			   }
-		   }
-	   }
-	}
+                                /* go through the delta chain */
+    for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next)
+    {
+       if (vnp->choice == 2)   /* SeqLit */
+       {
+           slp = (SeqLitPtr)(vnp->data.ptrvalue);
+           if (slp->length > 0 && slp->seq_data != NULL
+               && slp->seq_data_type != Seq_code_gap)
+           {
+                to = BSConvertSeq((ByteStorePtr) slp->seq_data, newcode, slp->seq_data_type, slp->length);
+               if (to != NULL)
+               {
+                   slp->seq_data = (SeqDataPtr) to;
+                   slp->seq_data_type = newcode;
+               }
+           }
+       }
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -1381,14 +1437,14 @@ NLM_EXTERN Boolean BioseqRawPack (BioseqPtr bsp)
     if(!BioseqRawConvert (bsp, Seq_code_ncbieaa)) {
       return FALSE;
     }
-  } else {
-    if((to = BSPack(bsp->seq_data, 
+  } else if (bsp->seq_data_type != Seq_code_gap) {
+    if((to = BSPack((ByteStorePtr) bsp->seq_data, 
                     BioseqGetCode(bsp), 
                     BioseqGetLen(bsp), 
                     &newcode)) == NULL) {
       return FALSE;
     }
-    bsp->seq_data = to;
+    bsp->seq_data = (SeqDataPtr) to;
     bsp->seq_data_type = newcode;  
   }
   return TRUE;
@@ -1407,23 +1463,25 @@ NLM_EXTERN Boolean BioseqRawConvert (BioseqPtr bsp, Uint1 newcode)
     Int4 seqlen;
     Uint1 oldcode;
 
-	if (bsp == NULL) return FALSE;
-	
+    if (bsp == NULL) return FALSE;
+    
     if (! ((Bioseq_repr(bsp) == Seq_repr_raw) ||
-		(Bioseq_repr(bsp) == Seq_repr_const)))
+        (Bioseq_repr(bsp) == Seq_repr_const)))
         return FALSE;
 
     oldcode = BioseqGetCode(bsp);
     if (! oldcode)   /* not a coded sequence */
         return FALSE;
 
+    if (oldcode == Seq_code_gap || newcode == Seq_code_gap) return FALSE;
+
     seqlen = BioseqGetLen(bsp);
 
-    to = BSConvertSeq(bsp->seq_data, newcode, oldcode, seqlen);
+    to = BSConvertSeq((ByteStorePtr) bsp->seq_data, newcode, oldcode, seqlen);
     if (to == NULL)
         return FALSE;
 
-    bsp->seq_data = to;
+    bsp->seq_data = (SeqDataPtr) to;
     bsp->seq_data_type = newcode;
 
     return TRUE;
@@ -1466,23 +1524,25 @@ NLM_EXTERN Boolean BioseqPack (BioseqPtr bsp)
 *****************************************************************************/
 NLM_EXTERN Boolean SeqLitPack (SeqLitPtr slp)
 {
-	ByteStorePtr to = NULL;
-	Uint1 newcode = 0;
+    ByteStorePtr to = NULL;
+    Uint1 newcode = 0;
 
-	if (slp == NULL) return FALSE;
+    if (slp == NULL) return FALSE;
 
-	if ((slp->length == 0) || (slp->seq_data == NULL))
-		return FALSE;
+    if ((slp->length == 0) || (slp->seq_data == NULL))
+        return FALSE;
 
-	to = BSPack(slp->seq_data, slp->seq_data_type, slp->length, &newcode);
+    if (slp->seq_data_type == Seq_code_gap) return FALSE;
 
-	if (to != NULL)
-	{
-		slp->seq_data = to;
-		slp->seq_data_type = newcode;
-	}
+    to = BSPack((ByteStorePtr) slp->seq_data, slp->seq_data_type, slp->length, &newcode);
 
-	return TRUE;
+    if (to != NULL)
+    {
+        slp->seq_data = (SeqDataPtr) to;
+        slp->seq_data_type = newcode;
+    }
+
+    return TRUE;
 }
 
 /**************************************************************************
@@ -1516,6 +1576,8 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
   
   if (oldcode == Seq_code_ncbi2na)   /* already packed */
     return NULL;
+
+  if (oldcode == Seq_code_gap) return NULL;
 
   MemSet ((Pointer) tmp, 0, sizeof (tmp));
 
@@ -1652,7 +1714,9 @@ NLM_EXTERN ByteStorePtr BSConvertSeq (ByteStorePtr from, Uint1 newcode,
 
   if ((from == NULL) || (! oldcode) || (! newcode) || (len <= 0))
     return NULL;
-  
+
+  if (oldcode == Seq_code_gap || newcode == Seq_code_gap) return NULL;
+
   if (oldcode == newcode)
     return from;
   
@@ -1854,7 +1918,7 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA (ByteStorePtr from, Int4 len,
 /*****************************************************************************
 *
 *   RebuildDNA_4na(buffer, length, lbytes)
-	works with Uint1 buffer, not ByteStore.
+    works with Uint1 buffer, not ByteStore.
 *       restore ncbi4na sequence with abmiguity characters
 *       returns TRUE on success, FALSE on failure.
 *       lbytes is pointer to ambiguity storage
@@ -1863,9 +1927,9 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA (ByteStorePtr from, Int4 len,
 NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes)
      
 {
-    Boolean	new = FALSE;
+    Boolean    new = FALSE;
     Uint4        i;
-    Uint4 	amb_num;
+    Uint4     amb_num;
     Uint4Ptr  amb_buff;
     Uint1     char_l, char_r;
     Int4      row_len;
@@ -1884,24 +1948,24 @@ NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes
     /* Check if highest order bit set. */
     if (amb_num & 0x80000000)
     {
-	new = TRUE;
-	amb_num &= 0x7FFFFFFF;
+    new = TRUE;
+    amb_num &= 0x7FFFFFFF;
     }
     
     for(i = 0; i < amb_num; i++) {
 
-	if (new)
-	{
-       		char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
-       		row_len   = (Int4)(RES_LEN_NEW(amb_buff[i])); 
-        	position  =         amb_buff[i+1];
-	}
-	else
-	{
-       		char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
-       		row_len   = (Int4)(RES_LEN(amb_buff[i])); 
-        	position  =         RES_OFFSET(amb_buff[i]);
-	}
+    if (new)
+    {
+               char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
+               row_len   = (Int4)(RES_LEN_NEW(amb_buff[i])); 
+            position  =         amb_buff[i+1];
+    }
+    else
+    {
+               char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
+               row_len   = (Int4)(RES_LEN(amb_buff[i])); 
+            position  =         RES_OFFSET(amb_buff[i]);
+    }
         
         pos = position/2;
         rem = position%2;  /* 0 or 1 */
@@ -1909,14 +1973,14 @@ NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes
         
         for(index = pos, j =0; j <=row_len; j++) {
            
-           	buffer[index] = (buffer[index] & C_Mask[rem]) + (rem ? char_r : char_l);
-            	rem = !rem;
+               buffer[index] = (buffer[index] & C_Mask[rem]) + (rem ? char_r : char_l);
+                rem = !rem;
             
-            	if(!rem) index++;
-    	}
+                if(!rem) index++;
+        }
 
-	if (new) /* for new format we have 8 bytes for each element. */
-		i++;
+    if (new) /* for new format we have 8 bytes for each element. */
+        i++;
     }
     
     return TRUE;
@@ -1955,7 +2019,7 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA_4na (ByteStorePtr from, Uint4Ptr lbytes)
         return NULL;
     
     if (RebuildDNA_4na(buffer, bs_length, lbytes) == FALSE)
-	return NULL;
+    return NULL;
     
     BSSeek(from, 0, SEEK_SET);
     BSWrite(from, buffer, bs_length);
@@ -2040,9 +2104,9 @@ NLM_EXTERN ByteStorePtr BSCompressDNA(ByteStorePtr from, Int4 len,
 *       returns pointer to new one, or NULL on fail.
 *       len is residues
 *
-*	This function stores the ambiguity code in 8 bytes so
-*	that there is no cutoff for sequences greater than 16 million bps.
-*	as there is for BSCompressDNA.
+*    This function stores the ambiguity code in 8 bytes so
+*    that there is no cutoff for sequences greater than 16 million bps.
+*    as there is for BSCompressDNA.
 *
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr BSCompressDNANew(ByteStorePtr from, Int4 len, 
@@ -2091,7 +2155,7 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
                            CompressRWFunc write_func,
                            Uint4Ptr PNTR lbytes)
 {
-	return GenericCompressDNAEx(from, to, seq_len, read_func, write_func, lbytes, FALSE);
+    return GenericCompressDNAEx(from, to, seq_len, read_func, write_func, lbytes, FALSE);
 }
 
 NLM_EXTERN Boolean GenericCompressDNAEx(VoidPtr from, 
@@ -2178,62 +2242,62 @@ NLM_EXTERN Boolean GenericCompressDNAEx(VoidPtr from,
       
       if (x_new && seq_len >= 0xFFFFFF)
       {
-      	if(last_ambchar != residue_from || row_len == 0xFFF) {
-	 if ((*ambchar) == 0)
-       	 	(*ambchar)++;
-	 else
-	  	(*ambchar) += 2;
-       	 ambchar[*ambchar] = 0;
-       	 ambchar[*ambchar] += residue_from;
-       	 ambchar[*ambchar] <<= 28;
-	/* Put the seq_offset in the 2nd integer. */
-       	 ambchar[(*ambchar)+1] = seq_offset;
+          if(last_ambchar != residue_from || row_len == 0xFFF) {
+     if ((*ambchar) == 0)
+                (*ambchar)++;
+     else
+          (*ambchar) += 2;
+            ambchar[*ambchar] = 0;
+            ambchar[*ambchar] += residue_from;
+            ambchar[*ambchar] <<= 28;
+    /* Put the seq_offset in the 2nd integer. */
+            ambchar[(*ambchar)+1] = seq_offset;
 
-       	 last_ambchar = residue_from;
-       	 row_len = 0;
-       	 /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
+            last_ambchar = residue_from;
+            row_len = 0;
+            /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
             residue_from, row_len, total_len-len, 
             RES_VALUE(ambchar[*ambchar]),
             RES_LEN(ambchar[*ambchar]), 
             RES_OFFSET(ambchar[*ambchar])); */  
-      	} else {
-       	 (ambchar[*ambchar]) += LEN_STEP_MASK_NEW;
-       	 row_len++;         
+          } else {
+            (ambchar[*ambchar]) += LEN_STEP_MASK_NEW;
+            row_len++;         
         /* printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
            residue_from, row_len, total_len-len, 
            RES_VALUE(ambchar[*ambchar]),
            RES_LEN(ambchar[*ambchar]), 
            RES_OFFSET(ambchar[*ambchar]));  */  
-      	}
+          }
       }
       else
       {
-      	if(last_ambchar != residue_from || row_len == 15) {
-       	 (*ambchar)++;
-       	 ambchar[*ambchar] = 0;
-       	 ambchar[*ambchar] += residue_from;
-       	 ambchar[*ambchar] <<= 28;
-       	 ambchar[*ambchar] += seq_offset;
+          if(last_ambchar != residue_from || row_len == 15) {
+            (*ambchar)++;
+            ambchar[*ambchar] = 0;
+            ambchar[*ambchar] += residue_from;
+            ambchar[*ambchar] <<= 28;
+            ambchar[*ambchar] += seq_offset;
 
-       	 last_ambchar = residue_from;
-       	 row_len = 0;
-       	 /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
+            last_ambchar = residue_from;
+            row_len = 0;
+            /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
             residue_from, row_len, total_len-len, 
             RES_VALUE(ambchar[*ambchar]),
             RES_LEN(ambchar[*ambchar]), 
             RES_OFFSET(ambchar[*ambchar])); */  
-      	} else {
-       	 (ambchar[*ambchar]) += LEN_STEP_MASK;
-       	 row_len++;         
+          } else {
+            (ambchar[*ambchar]) += LEN_STEP_MASK;
+            row_len++;         
         /* printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
            residue_from, row_len, total_len-len, 
            RES_VALUE(ambchar[*ambchar]),
            RES_LEN(ambchar[*ambchar]), 
            RES_OFFSET(ambchar[*ambchar]));  */  
-      	}
+          }
        }
     } else {
-      	last_ambchar = INVALID_RESIDUE; /* reset of last residue */
+          last_ambchar = INVALID_RESIDUE; /* reset of last residue */
     }
     byte_tmp <<= lshift_to[bitctr_to];
     byte_to |= byte_tmp;
@@ -2274,8 +2338,8 @@ NLM_EXTERN Boolean GenericCompressDNAEx(VoidPtr from,
   } else {
     if (x_new && seq_len >= 0xFFFFFF) 
     {
-       	(*ambchar)++;
-	*ambchar += 0x80000000;
+           (*ambchar)++;
+    *ambchar += 0x80000000;
     }
     *lbytes = (Uint4Ptr)ambchar;
   }
@@ -2443,19 +2507,19 @@ NLM_EXTERN ByteStorePtr BSCompressDNAOld(ByteStorePtr from, Int4 len,
  *
  *   void CorrectGeneFeatLocation(sep, data, n, m)
  *
- *	Correct gene location for mRNA sequences, i.e.
+ *    Correct gene location for mRNA sequences, i.e.
  *   puts start = 0, end = total_length_of_sequence - 1.
  *
  *****************************************************************************/
 NLM_EXTERN void CorrectGeneFeatLocation(SeqEntryPtr sep, Pointer data, 
                              Int4 n, Int2 m)
 {
-    BioseqPtr	  bsp;
-    ValNodePtr	  vnp;
-    MolInfoPtr	  mip;
-    SeqAnnotPtr	  sap;
-    SeqFeatPtr	  sfp;
-    SeqIntPtr	  sip;
+    BioseqPtr      bsp;
+    ValNodePtr      vnp;
+    MolInfoPtr      mip;
+    SeqAnnotPtr      sap;
+    SeqFeatPtr      sfp;
+    SeqIntPtr      sip;
     SeqDescrPtr   sdp;
     BioSourcePtr  biop;
     OrgRefPtr     orp;
@@ -2483,7 +2547,7 @@ NLM_EXTERN void CorrectGeneFeatLocation(SeqEntryPtr sep, Pointer data,
         if(vnp->choice != Seq_descr_molinfo)
             continue;
         mip = vnp->data.ptrvalue;
-        if(mip == NULL || mip->biomol != 3)	/* not mRNA */
+        if(mip == NULL || mip->biomol != 3)    /* not mRNA */
             continue;
         break;
     }
@@ -2564,8 +2628,8 @@ NLM_EXTERN Int4 NumberingOffset (NumberingPtr np, DataValPtr vp)
     CharPtr name;
     FloatHi foffset;
 
-	if ((np == NULL) || (vp == NULL)) return -1;
-	
+    if ((np == NULL) || (vp == NULL)) return -1;
+    
     switch (np->choice)
     {
         case Numbering_cont:
@@ -2600,7 +2664,7 @@ NLM_EXTERN Int4 NumberingOffset (NumberingPtr np, DataValPtr vp)
             }
             break;
         case Numbering_ref_source:
-		case Numbering_ref_align:
+        case Numbering_ref_align:
             ErrPostEx(SEV_ERROR, 0,0, "Num-ref not supported yet");
             break;
         case Numbering_real:
@@ -2635,8 +2699,8 @@ NLM_EXTERN Int2 NumberingValue (NumberingPtr np, Int4 offset, DataValPtr vp)
     Int4 intval;
     FloatHi fval;
 
-	if ((np == NULL) || (vp == NULL)) return -1;
-	
+    if ((np == NULL) || (vp == NULL)) return -1;
+    
     switch (np->choice)
     {
         case Numbering_cont:
@@ -2667,7 +2731,7 @@ NLM_EXTERN Int2 NumberingValue (NumberingPtr np, Int4 offset, DataValPtr vp)
             }
             break;
         case Numbering_ref_source:
-		case Numbering_ref_align:
+        case Numbering_ref_align:
             ErrPostEx(SEV_ERROR, 0,0, "Num-ref not supported yet");
             break;
         case Numbering_real:
@@ -2689,18 +2753,18 @@ NLM_EXTERN Int2 NumberingValue (NumberingPtr np, Int4 offset, DataValPtr vp)
 NLM_EXTERN Int2 NumberingValueBySeqId (SeqIdPtr sip, Int4 offset, DataValPtr vp)
 
 {
-	BioseqPtr bsp;
-	NumberingPtr np = NULL;
+    BioseqPtr bsp;
+    NumberingPtr np = NULL;
 
-	if ((sip == NULL) || (vp == NULL)) return -1;
-	
-	bsp = BioseqFind(sip);
-	if (bsp == NULL)
-		np = NumberingDefaultGet();
-	else
-		np = BioseqGetNumbering(bsp);
+    if ((sip == NULL) || (vp == NULL)) return -1;
+    
+    bsp = BioseqFind(sip);
+    if (bsp == NULL)
+        np = NumberingDefaultGet();
+    else
+        np = BioseqGetNumbering(bsp);
 
-	return NumberingValue(np, offset, vp);
+    return NumberingValue(np, offset, vp);
 }
 
 /*****************************************************************************
@@ -2742,36 +2806,36 @@ NLM_EXTERN NumberingPtr NumberingDefaultGet (void)
 /*****************************************************************************
 *
 *   SeqCodeTablePtr SeqCodeTableFind(code)
-*   	Sequence codes defined in objseq.h
+*       Sequence codes defined in objseq.h
 *
 *****************************************************************************/
 NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableFind (Uint1 code)
 {
-	return SeqCodeTableFindObj (code);
+    return SeqCodeTableFindObj (code);
 }
 
 /*****************************************************************************
 *
 *   OneLetterCode(sctp)
-*   	returns TRUE if sequence code table sctp uses one letter symbols
+*       returns TRUE if sequence code table sctp uses one letter symbols
 *
 *****************************************************************************/
 NLM_EXTERN Boolean OneLetterCode (SeqCodeTablePtr sctp)
 {
-	if (sctp == NULL) return FALSE;
-	return sctp->one_letter;
+    if (sctp == NULL) return FALSE;
+    return sctp->one_letter;
 }
 
 /*****************************************************************************
 *
 *   FirstResidueInCode(sctp)
-*   	returns first valid residue code in sequence code table
+*       returns first valid residue code in sequence code table
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 FirstResidueInCode (SeqCodeTablePtr sctp)
 {
-	if (sctp == NULL) return INVALID_RESIDUE;
-	return sctp->start_at;
+    if (sctp == NULL) return INVALID_RESIDUE;
+    return sctp->start_at;
 }
 
 /*****************************************************************************
@@ -2784,51 +2848,51 @@ NLM_EXTERN Uint1 FirstResidueInCode (SeqCodeTablePtr sctp)
 *****************************************************************************/
 NLM_EXTERN Uint1 LastResidueInCode (SeqCodeTablePtr sctp)
 {
-	if (sctp == NULL) return INVALID_RESIDUE;
-	return (Uint1)((int)(sctp->start_at) + (int)(sctp->num) - 1);
+    if (sctp == NULL) return INVALID_RESIDUE;
+    return (Uint1)((int)(sctp->start_at) + (int)(sctp->num) - 1);
 }
 
 /*****************************************************************************
 *
 *   GetIndexForResidue(sctp, residue)
-*   	gets index into sctp structs for residue
-*   	returns INVALID_RESIDUE if no good
+*       gets index into sctp structs for residue
+*       returns INVALID_RESIDUE if no good
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 GetIndexForResidue(SeqCodeTablePtr sctp, Uint1 residue);
 NLM_EXTERN Uint1 GetIndexForResidue(SeqCodeTablePtr sctp, Uint1 residue)
 {
-	if (sctp == NULL) return INVALID_RESIDUE;
-	if (residue < sctp->start_at) return INVALID_RESIDUE;
-	residue -= sctp->start_at;
-	if (residue >= sctp->num) return INVALID_RESIDUE;
-	return residue;
+    if (sctp == NULL) return INVALID_RESIDUE;
+    if (residue < sctp->start_at) return INVALID_RESIDUE;
+    residue -= sctp->start_at;
+    if (residue >= sctp->num) return INVALID_RESIDUE;
+    return residue;
 }
 
 
 /*****************************************************************************
 *
 *   GetSymbolForResidue(sctp, residue)
-*   	returns the ONE LETTER symbol for residue if sequence code has one
+*       returns the ONE LETTER symbol for residue if sequence code has one
 *       letter symbols. returns INVALID_RESIDUE if not a valid residue or if
 *       sequence code uses multi-letter symbols
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 GetSymbolForResidue (SeqCodeTablePtr sctp, Uint1 residue)
 {
-	Uint1 offset;
+    Uint1 offset;
 
-	offset = GetIndexForResidue (sctp, residue);
-	if (offset == INVALID_RESIDUE) return offset;
-	if (! sctp->one_letter) return INVALID_RESIDUE;
-	if (sctp->letters[offset] == '\0') return INVALID_RESIDUE;
-	return (Uint1)(sctp->letters[offset]);
+    offset = GetIndexForResidue (sctp, residue);
+    if (offset == INVALID_RESIDUE) return offset;
+    if (! sctp->one_letter) return INVALID_RESIDUE;
+    if (sctp->letters[offset] == '\0') return INVALID_RESIDUE;
+    return (Uint1)(sctp->letters[offset]);
 }
 
 /*****************************************************************************
 *
 *   GetResidueForSymbol(sctp, residue)
-*   	returns the residue for a ONE LETTER if sequence code has one
+*       returns the residue for a ONE LETTER if sequence code has one
 *       letter symbols. returns INVALID_RESIDUE if not a valid symbol or if
 *       sequence code uses multi-letter symbols
 *       CASE matters
@@ -2836,45 +2900,45 @@ NLM_EXTERN Uint1 GetSymbolForResidue (SeqCodeTablePtr sctp, Uint1 residue)
 *****************************************************************************/
 NLM_EXTERN Uint1 GetResidueForSymbol (SeqCodeTablePtr sctp, Uint1 symbol)
 {
-	Int2 ctr;
-	CharPtr letters;
+    Int2 ctr;
+    CharPtr letters;
 
-	if (sctp == NULL) return INVALID_RESIDUE;
-	if (! sctp->one_letter) return INVALID_RESIDUE;
+    if (sctp == NULL) return INVALID_RESIDUE;
+    if (! sctp->one_letter) return INVALID_RESIDUE;
 
-	letters = sctp->letters;
-	for (ctr = 0; ctr < (Int2)sctp->num; ctr++, letters++)
-	{
-		if ((Char)symbol == *letters)
-			return ((Uint1)ctr + sctp->start_at);
-	}
-	return INVALID_RESIDUE;
+    letters = sctp->letters;
+    for (ctr = 0; ctr < (Int2)sctp->num; ctr++, letters++)
+    {
+        if ((Char)symbol == *letters)
+            return ((Uint1)ctr + sctp->start_at);
+    }
+    return INVALID_RESIDUE;
 }
 
 /*****************************************************************************
 *
 *   GetLongSymbolForResidue(sctp, symbol)
-*   	returns string symbol for residue if sequence code has string 
+*       returns string symbol for residue if sequence code has string 
 *       symbols. returns NULL if not a valid residue or if
 *       sequence code uses One letter symbols
 *
 *****************************************************************************/
 NLM_EXTERN const char * GetLongSymbolForResidue (SeqCodeTablePtr sctp, Uint1 residue)
 {
-	Uint1 offset;
+    Uint1 offset;
 
-	offset = GetIndexForResidue (sctp, residue);
-	if (offset == INVALID_RESIDUE) return NULL;
-	if (sctp->one_letter) return NULL;
-	
-	return (const char *)(sctp->symbols[offset]);
+    offset = GetIndexForResidue (sctp, residue);
+    if (offset == INVALID_RESIDUE) return NULL;
+    if (sctp->one_letter) return NULL;
+    
+    return (const char *)(sctp->symbols[offset]);
 
 }
 
 /*****************************************************************************
 *
 *   GetResidueForLongSymbol(sctp, symbol)
-*   	returns the residue for a STRING symbol if sequence code has string
+*       returns the residue for a STRING symbol if sequence code has string
 *       symbols. returns INVALID_RESIDUE if not a valid symbol or if
 *       sequence code uses one-letter symbols
 *       CASE matters
@@ -2882,19 +2946,19 @@ NLM_EXTERN const char * GetLongSymbolForResidue (SeqCodeTablePtr sctp, Uint1 res
 *****************************************************************************/
 NLM_EXTERN Uint1 GetResidueForLongSymbol (SeqCodeTablePtr sctp, CharPtr symbol)
 {
-	Int2 ctr;
-	CharPtr PNTR symbols;
+    Int2 ctr;
+    CharPtr PNTR symbols;
 
-	if ((sctp == NULL) || (symbol == NULL)) return INVALID_RESIDUE;
-	if (sctp->one_letter) return INVALID_RESIDUE;
+    if ((sctp == NULL) || (symbol == NULL)) return INVALID_RESIDUE;
+    if (sctp->one_letter) return INVALID_RESIDUE;
 
-	symbols = sctp->symbols;
-	for (ctr = 0; ctr < (Int2)sctp->num; ctr++, symbols++)
-	{
-		if (! StringCmp(*symbols, symbol))
-			return ((Uint1)ctr + sctp->start_at);
-	}
-	return INVALID_RESIDUE;
+    symbols = sctp->symbols;
+    for (ctr = 0; ctr < (Int2)sctp->num; ctr++, symbols++)
+    {
+        if (! StringCmp(*symbols, symbol))
+            return ((Uint1)ctr + sctp->start_at);
+    }
+    return INVALID_RESIDUE;
 }
 
 /*****************************************************************************
@@ -2909,12 +2973,12 @@ NLM_EXTERN Uint1 GetResidueForLongSymbol (SeqCodeTablePtr sctp, CharPtr symbol)
 *****************************************************************************/
 NLM_EXTERN const char * GetNameForResidue (SeqCodeTablePtr sctp, Uint1 residue)
 {
-	Uint1 offset;
+    Uint1 offset;
 
-	offset = GetIndexForResidue (sctp, residue);
-	if (offset == INVALID_RESIDUE) return NULL;
-	
-	return (const char *)(sctp->names[offset]);
+    offset = GetIndexForResidue (sctp, residue);
+    if (offset == INVALID_RESIDUE) return NULL;
+    
+    return (const char *)(sctp->names[offset]);
 
 }
 
@@ -3053,15 +3117,15 @@ NLM_EXTERN Uint1 SeqMapTableConvert (SeqMapTablePtr smtp, Uint1 from)
 NLM_EXTERN Uint1 SeqCodeTableComp (SeqCodeTablePtr sctp, Uint1 residue)
 
 {
-	Int2 index;
-	
+    Int2 index;
+    
     if ((sctp == NULL) || (sctp->comps == NULL))   /* no complement table */
         return INVALID_RESIDUE;
 
-	index = (Int2)residue - (Int2)(sctp->start_at);
-	if ((index < 0 ) || (index >= (Int2)(sctp->num)))
-		return INVALID_RESIDUE;
-	else
+    index = (Int2)residue - (Int2)(sctp->start_at);
+    if ((index < 0 ) || (index >= (Int2)(sctp->num)))
+        return INVALID_RESIDUE;
+    else
         return sctp->comps[index];
 }
 
@@ -3142,8 +3206,8 @@ NLM_EXTERN ValNodePtr SeqEntryGetSeqDescr (SeqEntryPtr sep, Int2 type, ValNodePt
 
 {
 
-	if (sep == NULL) return NULL;
-	
+    if (sep == NULL) return NULL;
+    
     if (curr == NULL)
     {
         if (IS_Bioseq(sep))
@@ -3191,8 +3255,8 @@ NLM_EXTERN CharPtr SeqEntryGetTitle (SeqEntryPtr sep)
 NLM_EXTERN Uint1 Bioseq_set_class (SeqEntryPtr sep)
 
 {
-	if (sep == NULL) return 0;
-	
+    if (sep == NULL) return 0;
+    
     if (IS_Bioseq_set(sep))
         return ((BioseqSetPtr)sep->data.ptrvalue)->_class;
     else
@@ -3213,16 +3277,16 @@ NLM_EXTERN void SeqEntryDoConvert (SeqEntryPtr sep, Pointer data, Int4 index, In
     if (! IS_Bioseq(sep))
         return;
 
-	if (((Uint1Ptr)data)[0] != 0)
-	{
-	    if (BioseqConvert((BioseqPtr)sep->data.ptrvalue, * ((Uint1Ptr)data)))
-    	    ((Uint1Ptr)data)[1]++;
-	}
-	else
-	{
-		if (BioseqPack((BioseqPtr)sep->data.ptrvalue))
-			((Uint1Ptr)data)[1]++;
-	}
+    if (((Uint1Ptr)data)[0] != 0)
+    {
+        if (BioseqConvert((BioseqPtr)sep->data.ptrvalue, * ((Uint1Ptr)data)))
+            ((Uint1Ptr)data)[1]++;
+    }
+    else
+    {
+        if (BioseqPack((BioseqPtr)sep->data.ptrvalue))
+            ((Uint1Ptr)data)[1]++;
+    }
     return;
 }
 
@@ -3230,8 +3294,8 @@ NLM_EXTERN void SeqEntryDoConvert (SeqEntryPtr sep, Pointer data, Int4 index, In
 *
 *   SeqEntryConvert(sep, newcode)
 *       converts any seqentry to newcode
-*   	if (newcode == 0)
-*   		calls BioseqRawPack instead of BioseqRawConvert
+*       if (newcode == 0)
+*           calls BioseqRawPack instead of BioseqRawConvert
 *
 *****************************************************************************/
 NLM_EXTERN Boolean SeqEntryConvert (SeqEntryPtr sep, Uint1 newcode)
@@ -3241,8 +3305,8 @@ NLM_EXTERN Boolean SeqEntryConvert (SeqEntryPtr sep, Uint1 newcode)
     tbuf[0] = newcode;
     tbuf[1] = 0;
 
-	if (sep == NULL) return FALSE;
-	
+    if (sep == NULL) return FALSE;
+    
     SeqEntryExplore(sep, (Pointer)tbuf, SeqEntryDoConvert);
     if (tbuf[1])
         return TRUE;    /* at least one success */
@@ -3253,46 +3317,46 @@ NLM_EXTERN Boolean SeqEntryConvert (SeqEntryPtr sep, Uint1 newcode)
 /*****************************************************************************
 *
 *   SeqIdBestRank(buf, num)
-*   	fill buf of length num with std ranks used by SeqIdFindBest
-*   	returns full length of list (useful if num is too small)
-*   	std ranks always between 50 and 100
-*   	rank < 50 guarantees SeqIdSelect() chooses over std rank
-*   	rank > 100 guarantees SeqIdSelect() never chooses over std rank
-*   	rank = 255 guarantees SeqIdSelect() never choses
-*   	if buf == NULL, just returns count of supported Seq-ids
+*       fill buf of length num with std ranks used by SeqIdFindBest
+*       returns full length of list (useful if num is too small)
+*       std ranks always between 50 and 100
+*       rank < 50 guarantees SeqIdSelect() chooses over std rank
+*       rank > 100 guarantees SeqIdSelect() never chooses over std rank
+*       rank = 255 guarantees SeqIdSelect() never choses
+*       if buf == NULL, just returns count of supported Seq-ids
 *
 *****************************************************************************/
 NLM_EXTERN Int2 SeqIdBestRank (Uint1Ptr buf, Int2 num)
 {
-	static Uint1 std_order[NUM_SEQID] = {
- 	83,  /* 0 = not set */
-	80,  /* 1 = local Object-id */
-	70,  /* 2 = gibbsq */
-	70,  /* 3 = gibbmt */
-	70,  /* 4 = giim Giimport-id */
-	60,  /* 5 = genbank */
-	60,  /* 6 = embl */
-	60,  /* 7 = pir */
-	60,  /* 8 = swissprot */
-	67,  /* 9 = patent */
-	65,  /* 10 = other TextSeqId */
-	80,  /* 11 = general Dbtag */
-	51,  /* 12 = gi */
-	60,  /* 13 = ddbj */
-	60,  /* 14 = prf */
-	60,  /* 15 = pdb */
-	60,  /* 16 = tpg */
-	60,  /* 17 = tpe */
-	62,  /* 18 = tpd */
-	68   /* 19 = gpp */
-	};
+    static Uint1 std_order[NUM_SEQID] = {
+     83,  /* 0 = not set */
+    80,  /* 1 = local Object-id */
+    70,  /* 2 = gibbsq */
+    70,  /* 3 = gibbmt */
+    70,  /* 4 = giim Giimport-id */
+    60,  /* 5 = genbank */
+    60,  /* 6 = embl */
+    60,  /* 7 = pir */
+    60,  /* 8 = swissprot */
+    67,  /* 9 = patent */
+    65,  /* 10 = other TextSeqId */
+    80,  /* 11 = general Dbtag */
+    51,  /* 12 = gi */
+    60,  /* 13 = ddbj */
+    60,  /* 14 = prf */
+    60,  /* 15 = pdb */
+    60,  /* 16 = tpg */
+    60,  /* 17 = tpe */
+    62,  /* 18 = tpd */
+    68   /* 19 = gpp */
+    };
 
-	if (buf == NULL) return NUM_SEQID;
+    if (buf == NULL) return NUM_SEQID;
 
-	if (num > NUM_SEQID)
-		num = NUM_SEQID;
-	MemCopy(buf, std_order, (size_t)(num * sizeof(Uint1)));
-	return NUM_SEQID;
+    if (num > NUM_SEQID)
+        num = NUM_SEQID;
+    MemCopy(buf, std_order, (size_t)(num * sizeof(Uint1)));
+    return NUM_SEQID;
 }
 
 /*****************************************************************************
@@ -3303,19 +3367,19 @@ NLM_EXTERN Int2 SeqIdBestRank (Uint1Ptr buf, Int2 num)
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr SeqIdFindBest (SeqIdPtr sip, Uint1 target)
 {
-	Uint1 order[NUM_SEQID];
+    Uint1 order[NUM_SEQID];
 
-	if (sip == NULL)
-		return NULL;
+    if (sip == NULL)
+        return NULL;
 
-	SeqIdBestRank(order, NUM_SEQID);
-	if ((target > 0) && (target < NUM_SEQID))
-		order[target] = 0;    /* select target */
-	else if (target >= NUM_SEQID)
-		ErrPostEx(SEV_ERROR, 0, 0, "SeqIdFindBest: target [%d] out of range [%d]",
-			(int)target, (int)NUM_SEQID);
+    SeqIdBestRank(order, NUM_SEQID);
+    if ((target > 0) && (target < NUM_SEQID))
+        order[target] = 0;    /* select target */
+    else if (target >= NUM_SEQID)
+        ErrPostEx(SEV_ERROR, 0, 0, "SeqIdFindBest: target [%d] out of range [%d]",
+            (int)target, (int)NUM_SEQID);
 
-	return SeqIdSelect (sip, order, NUM_SEQID);
+    return SeqIdSelect (sip, order, NUM_SEQID);
 }
 /*****************************************************************************
 *
@@ -3326,118 +3390,118 @@ NLM_EXTERN SeqIdPtr SeqIdFindBest (SeqIdPtr sip, Uint1 target)
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip)
 {
-	Uint1 order[NUM_SEQID];
+    Uint1 order[NUM_SEQID];
 
-	if (sip == NULL)
-		return NULL;
-	SeqIdBestRank(order, NUM_SEQID);
+    if (sip == NULL)
+        return NULL;
+    SeqIdBestRank(order, NUM_SEQID);
         order[SEQID_GI]=order[SEQID_LOCAL]+1;
-	return SeqIdSelect (sip, order, NUM_SEQID);
+    return SeqIdSelect (sip, order, NUM_SEQID);
 }
 
 /*****************************************************************************
 *
 *   SeqIdPtr SeqIdLocate (sip, order, num)
-*   	Given a SeqId (sip):
-*   		Locates the Bioseq in memory or cached
-*   		Then calls SeqIdSelect with the Bioseq.id chain to find the
+*       Given a SeqId (sip):
+*           Locates the Bioseq in memory or cached
+*           Then calls SeqIdSelect with the Bioseq.id chain to find the
 *             SeqId type you want.
 *
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr SeqIdLocate (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 {
-	BioseqPtr bsp;
-	SeqIdPtr res = NULL;
-	Boolean locked = FALSE;
+    BioseqPtr bsp;
+    SeqIdPtr res = NULL;
+    Boolean locked = FALSE;
 
-	bsp = BioseqFindCore(sip);
-	if (bsp == NULL)
-	{
-		bsp = BioseqLockById(sip);
-		if (bsp != NULL)
-			locked = TRUE;
-		else
-			return res;
-	}
-	res = SeqIdSelect(bsp->id, order, num);
-	if (locked)
-		BioseqUnlock(bsp);
-	return res;
+    bsp = BioseqFindCore(sip);
+    if (bsp == NULL)
+    {
+        bsp = BioseqLockById(sip);
+        if (bsp != NULL)
+            locked = TRUE;
+        else
+            return res;
+    }
+    res = SeqIdSelect(bsp->id, order, num);
+    if (locked)
+        BioseqUnlock(bsp);
+    return res;
 }
 
 /*****************************************************************************
 *
 *   SeqIdPtr SeqIdSelect (sip, order, num)
-*   	takes an array (order) num long.
-*   	goes down chain starting with sip.
+*       takes an array (order) num long.
+*       goes down chain starting with sip.
 *       finds lowest value of order[sip->choice] and returns it.
 *       if order[] == 255, it is skipped.
 *       if nothing is found < 255, NULL is returned
-*   	ErrorMessage if sip->choice >= num
+*       ErrorMessage if sip->choice >= num
 *
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 {
     SeqIdPtr bestid;
 
-	if ((sip == NULL) || (order == NULL))
-		return NULL;
+    if ((sip == NULL) || (order == NULL))
+        return NULL;
 
     for ( bestid = NULL; sip != NULL; sip = sip -> next) 
     {
-		if ((Int2)sip->choice < num)
-		{
-			if (order[sip->choice] < 255)
-			{
-				if (bestid == NULL)
-					bestid = sip;
-				else if (order[sip->choice] < order[bestid->choice])
-					bestid = sip;
-			}
-		} else {
-			ErrPostEx(SEV_ERROR, 0,0, "SeqIdSelect: choice [%d] out of range [%d]",
-				(int)(sip->choice), (int)num);
-			if(sip->choice > NUM_SEQID) /*** something is really wrong ***/
-				return NULL;
-		}
+        if ((Int2)sip->choice < num)
+        {
+            if (order[sip->choice] < 255)
+            {
+                if (bestid == NULL)
+                    bestid = sip;
+                else if (order[sip->choice] < order[bestid->choice])
+                    bestid = sip;
+            }
+        } else {
+            ErrPostEx(SEV_ERROR, 0,0, "SeqIdSelect: choice [%d] out of range [%d]",
+                (int)(sip->choice), (int)num);
+            if(sip->choice > NUM_SEQID) /*** something is really wrong ***/
+                return NULL;
+        }
     }
 
     return bestid;
 }
 
-	static char * delim = "|";
-	static char * txtid [NUM_SEQID] = {		  /* FASTA_LONG formats */
-		"???" ,		/* not-set = ??? */
-		"lcl",		/* local = lcl|integer or string */
-		"bbs",      /* gibbsq = bbs|integer */
-		"bbm",		/* gibbmt = bbm|integer */
-		"gim",		/* giim = gim|integer */
-		"gb",		/* genbank = gb|accession|locus */
-		"emb",		/* embl = emb|accession|locus */
-		"pir",		/* pir = pir|accession|name */
-		"sp",		/* swissprot = sp|accession|name */
-		"pat",		/* patent = pat|country|patent number (string)|seq number (integer) - use pgp for pre-grant pub */
-		"ref",		/* other = ref|accession|name|release - changed from oth to ref */
-		"gnl",		/* general = gnl|database(string)|id (string or number) */
-		"gi",		/* gi = gi|integer */
-		"dbj",		/* ddbj = dbj|accession|locus */
-		"prf",		/* prf = prf|accession|name */
-		"pdb",		/* pdb = pdb|entry name (string)|chain id (char) */
-		"tpg",      /* tpg = tpg|accession|name */
-		"tpe",      /* tpe = tpe|accession|name */
-		"tpd",      /* tpd = tpd|accession|name */
-		"gpp"};     /* gpp = gpp|accession|name */
+    static char * delim = "|";
+    static char * txtid [NUM_SEQID] = {          /* FASTA_LONG formats */
+        "???" ,        /* not-set = ??? */
+        "lcl",        /* local = lcl|integer or string */
+        "bbs",      /* gibbsq = bbs|integer */
+        "bbm",        /* gibbmt = bbm|integer */
+        "gim",        /* giim = gim|integer */
+        "gb",        /* genbank = gb|accession|locus */
+        "emb",        /* embl = emb|accession|locus */
+        "pir",        /* pir = pir|accession|name */
+        "sp",        /* swissprot = sp|accession|name */
+        "pat",        /* patent = pat|country|patent number (string)|seq number (integer) - use pgp for pre-grant pub */
+        "ref",        /* other = ref|accession|name|release - changed from oth to ref */
+        "gnl",        /* general = gnl|database(string)|id (string or number) */
+        "gi",        /* gi = gi|integer */
+        "dbj",        /* ddbj = dbj|accession|locus */
+        "prf",        /* prf = prf|accession|name */
+        "pdb",        /* pdb = pdb|entry name (string)|chain id (char) */
+        "tpg",      /* tpg = tpg|accession|name */
+        "tpe",      /* tpe = tpe|accession|name */
+        "tpd",      /* tpd = tpd|accession|name */
+        "gpp"};     /* gpp = gpp|accession|name */
 
 /*****************************************************************************
 *
 *   SeqIdPrint(sip, buf, format)
-*   	PRINTID_FASTA_LONG treats sip as a chain, printing gi|other id
-*   		other id is as given in the comments for txtid. Empty fields
-*   		do not eliminate | delimiters
-*   	PRINTID_FASTA_SHORT prints only the sip.
-*   		same format as FASTA_LONG (for other id)
+*       PRINTID_FASTA_LONG treats sip as a chain, printing gi|other id
+*           other id is as given in the comments for txtid. Empty fields
+*           do not eliminate | delimiters
+*       PRINTID_FASTA_SHORT prints only the sip.
+*           same format as FASTA_LONG (for other id)
 *
-*   	PRINTID_TEXTID_LOCUS or ACCESSION
+*       PRINTID_TEXTID_LOCUS or ACCESSION
 *  --------------------------------------------------------
 *  | OLDWAY:                                              |
 *  |      TextSeqId types- fills request or first char in |
@@ -3467,89 +3531,89 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
 
 {
-	return SeqIdWrite (isip, buf, format, 255); /* no knowledge of buffer size */
+    return SeqIdWrite (isip, buf, format, 255); /* no knowledge of buffer size */
 }
 
 /*****************************************************************************
 *
 *   SeqIdWrite (isip, buf, format, buflen)
-*   	Similar to SeqIdPrint, has additional argument buflen, 
-*   	checks the buflen, writes up to buflen chars, 
-*		makes the last character '>'
-*   	always puts one '\0' to terminate the string in buf
-*   	buf MUST be one character longer than buflen to leave room for the
-*   		last '\0' 
+*       Similar to SeqIdPrint, has additional argument buflen, 
+*       checks the buflen, writes up to buflen chars, 
+*        makes the last character '>'
+*       always puts one '\0' to terminate the string in buf
+*       buf MUST be one character longer than buflen to leave room for the
+*           last '\0' 
 *
 *****************************************************************************/
 NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 buflen)
 
 {
-	SeqIdPtr sip;
+    SeqIdPtr sip;
     char localbuf[32];    /* for MS Windows */
-	char *ldelim;
-	char d [2];
+    char *ldelim;
+    char d [2];
     CharPtr tmp;
-	static Uint1 fasta_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
- 	33, /* 0 = not set */
-	20, /* 1 = local Object-id */
-	15,  /* 2 = gibbsq */
-	16,  /* 3 = gibbmt */
-	30, /* 4 = giim Giimport-id */
-	10, /* 5 = genbank */
-	10, /* 6 = embl */
-	10, /* 7 = pir */
-	10, /* 8 = swissprot */
-	15,  /* 9 = patent */
-	12, /* 10 = other TextSeqId */
-	13, /* 11 = general Dbtag */
-	255,  /* 12 = gi */
-	10, /* 13 = ddbj */
-	10, /* 14 = prf */
-	12,  /* 15 = pdb */
+    static Uint1 fasta_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+     33, /* 0 = not set */
+    20, /* 1 = local Object-id */
+    15,  /* 2 = gibbsq */
+    16,  /* 3 = gibbmt */
+    30, /* 4 = giim Giimport-id */
+    10, /* 5 = genbank */
+    10, /* 6 = embl */
+    10, /* 7 = pir */
+    10, /* 8 = swissprot */
+    15,  /* 9 = patent */
+    12, /* 10 = other TextSeqId */
+    13, /* 11 = general Dbtag */
+    255,  /* 12 = gi */
+    10, /* 13 = ddbj */
+    10, /* 14 = prf */
+    12,  /* 15 = pdb */
     10,  /* 16 = tpg */
     10,  /* 17 = tpe */
     10,  /* 18 = tpd */
     15   /* 19 = gpp */
     };
-	static Uint1 tmsmart_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
- 	33, /* 0 = not set */
-	20, /* 1 = local Object-id */
-	15,  /* 2 = gibbsq */
-	16,  /* 3 = gibbmt */
-	30, /* 4 = giim Giimport-id */
-	10, /* 5 = genbank */
-	10, /* 6 = embl */
-	10, /* 7 = pir */
-	10, /* 8 = swissprot */
-	15,  /* 9 = patent */
-	12, /* 10 = other TextSeqId */
-	29, /* 11 = general Dbtag */
-	255,  /* 12 = gi */
-	10, /* 13 = ddbj */
-	10, /* 14 = prf */
-	12,  /* 15 = pdb */
+    static Uint1 tmsmart_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+     33, /* 0 = not set */
+    20, /* 1 = local Object-id */
+    15,  /* 2 = gibbsq */
+    16,  /* 3 = gibbmt */
+    30, /* 4 = giim Giimport-id */
+    10, /* 5 = genbank */
+    10, /* 6 = embl */
+    10, /* 7 = pir */
+    10, /* 8 = swissprot */
+    15,  /* 9 = patent */
+    12, /* 10 = other TextSeqId */
+    29, /* 11 = general Dbtag */
+    255,  /* 12 = gi */
+    10, /* 13 = ddbj */
+    10, /* 14 = prf */
+    12,  /* 15 = pdb */
     10,  /* 16 = tpg */
     10,  /* 17 = tpe */
     10,  /* 18 = tpd */
     15   /* 19 = gpp */
     };
-	static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
- 	33, /* 0 = not set */
-	20, /* 1 = local Object-id */
-	15,  /* 2 = gibbsq */
-	16,  /* 3 = gibbmt */
-	30, /* 4 = giim Giimport-id */
-	10, /* 5 = genbank */
-	10, /* 6 = embl */
-	10, /* 7 = pir */
-	10, /* 8 = swissprot */
-	15,  /* 9 = patent */
-	13, /* 10 = other TextSeqId */
-	12, /* 11 = general Dbtag */
-	255,  /* 12 = gi */
-	10, /* 13 = ddbj */
-	10, /* 14 = prf */
-	12,  /* 15 = pdb */
+    static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+     33, /* 0 = not set */
+    20, /* 1 = local Object-id */
+    15,  /* 2 = gibbsq */
+    16,  /* 3 = gibbmt */
+    30, /* 4 = giim Giimport-id */
+    10, /* 5 = genbank */
+    10, /* 6 = embl */
+    10, /* 7 = pir */
+    10, /* 8 = swissprot */
+    15,  /* 9 = patent */
+    13, /* 10 = other TextSeqId */
+    12, /* 11 = general Dbtag */
+    255,  /* 12 = gi */
+    10, /* 13 = ddbj */
+    10, /* 14 = prf */
+    12,  /* 15 = pdb */
     10,  /* 16 = tpg */
     10,  /* 17 = tpe */
     10,  /* 18 = tpd */
@@ -3557,220 +3621,220 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     };
     Boolean useGeneral = FALSE;
     TextSeqIdPtr tsip;
-	PDBSeqIdPtr psip;
-	ObjectIdPtr oip;
-	PatentSeqIdPtr patsip;
-	IdPatPtr ipp;
-	Boolean got_gi = FALSE;
-	Boolean got_tmsmart = FALSE;
-	Boolean is_us_pre_grant = FALSE;
-	DbtagPtr dbt;
-	Char chainbuf[3];
-	Char versionbuf[10];
-	Int2 version = 0;
+    PDBSeqIdPtr psip;
+    ObjectIdPtr oip;
+    PatentSeqIdPtr patsip;
+    IdPatPtr ipp;
+    Boolean got_gi = FALSE;
+    Boolean got_tmsmart = FALSE;
+    Boolean is_us_pre_grant = FALSE;
+    DbtagPtr dbt;
+    Char chainbuf[3];
+    Char versionbuf[10];
+    Int2 version = 0;
 
-	buf[0] = '\0';
-	buflen--;
-	tmp = buf;
-	if (isip == NULL)
-		return tmp;
+    buf[0] = '\0';
+    buflen--;
+    tmp = buf;
+    if (isip == NULL)
+        return tmp;
 
-	d [0] = *delim;
-	d [1] = '\0';
-	ldelim = &(d [0]);
-	if ((format >= ' ') && (format <= 127))  /* change delimiter */
-	{
-		if (format == 127)
-			d [0] = '\t';
-		else
-			d [0] = (char) format;
-		format = PRINTID_FASTA_SHORT;
-	}
+    d [0] = *delim;
+    d [1] = '\0';
+    ldelim = &(d [0]);
+    if ((format >= ' ') && (format <= 127))  /* change delimiter */
+    {
+        if (format == 127)
+            d [0] = '\t';
+        else
+            d [0] = (char) format;
+        format = PRINTID_FASTA_SHORT;
+    }
 
-	if (format == PRINTID_FASTA_GENERAL) {
-		useGeneral = TRUE;
-		format = PRINTID_FASTA_LONG;
-	}
+    if (format == PRINTID_FASTA_GENERAL) {
+        useGeneral = TRUE;
+        format = PRINTID_FASTA_LONG;
+    }
 
-	if (format == PRINTID_FASTA_ALL) {
-		Char allbuf [41];
-		ValNodePtr vnp, head = NULL;
-		size_t len = 0;
-		CharPtr str;
-		Boolean notfirst;
+    if (format == PRINTID_FASTA_ALL) {
+        Char allbuf [41];
+        ValNodePtr vnp, head = NULL;
+        size_t len = 0;
+        CharPtr str;
+        Boolean notfirst;
 
-		for (sip = isip; sip != NULL; sip = sip->next) {
-			SeqIdWrite (sip, allbuf, PRINTID_FASTA_SHORT, sizeof (allbuf) - 1);
-			ValNodeCopyStr (&head, 0, allbuf);
-		}
-		for (vnp = head; vnp != NULL; vnp = vnp->next) {
-		  str = (CharPtr) vnp->data.ptrvalue;
-		  if (! StringHasNoText (str)) {
-		    len += StringLen (str) + 1;
-		  }
-		}
-		if (len < 1) return buf;
-		tmp = MemNew (len + 2);
-		if (tmp == NULL) return buf;
-		notfirst = FALSE;
-		for (vnp = head; vnp != NULL; vnp = vnp->next) {
-		  str = (CharPtr) vnp->data.ptrvalue;
-		  if (! StringHasNoText (str)) {
-		    if (notfirst) {
-		      StringCat (tmp, "|");
-		    }
-		    StringCat (tmp, str);
-		    notfirst = TRUE;
-		  }
-		}
-		ValNodeFreeData (head);
-		StringNCpy_0 (buf, tmp, buflen + 1);
-		MemFree (tmp);
-		return buf;
-	}
-	
-	localbuf[0] = '\0';
-							/* error on input, return ??? */
-	if ( (! (isip -> choice)) || (format < PRINTID_FASTA_SHORT)
-		|| (format > PRINTID_REPORT))
-	{
-		Nlm_LabelCopyNext(&tmp, txtid[0], &buflen);
-		return tmp;
-	}
+        for (sip = isip; sip != NULL; sip = sip->next) {
+            SeqIdWrite (sip, allbuf, PRINTID_FASTA_SHORT, sizeof (allbuf) - 1);
+            ValNodeCopyStr (&head, 0, allbuf);
+        }
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (! StringHasNoText (str)) {
+            len += StringLen (str) + 1;
+          }
+        }
+        if (len < 1) return buf;
+        tmp = MemNew (len + 2);
+        if (tmp == NULL) return buf;
+        notfirst = FALSE;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (! StringHasNoText (str)) {
+            if (notfirst) {
+              StringCat (tmp, "|");
+            }
+            StringCat (tmp, str);
+            notfirst = TRUE;
+          }
+        }
+        ValNodeFreeData (head);
+        StringNCpy_0 (buf, tmp, buflen + 1);
+        MemFree (tmp);
+        return buf;
+    }
+    
+    localbuf[0] = '\0';
+                            /* error on input, return ??? */
+    if ( (! (isip -> choice)) || (format < PRINTID_FASTA_SHORT)
+        || (format > PRINTID_REPORT))
+    {
+        Nlm_LabelCopyNext(&tmp, txtid[0], &buflen);
+        return tmp;
+    }
 
-	if (format == PRINTID_FASTA_LONG)   /* find the ids in the chain */
-	{
-		for (sip = isip; sip != NULL; sip = sip->next)  /* GI present? */
-		{
-			if (sip->choice == SEQID_GI)
-			{
-				sprintf(localbuf, "%s%s%ld", txtid[SEQID_GI], ldelim,
-					(long)(sip->data.intvalue));
-				Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
-				got_gi = TRUE;
-			} else if (sip->choice == SEQID_GENERAL) {
-				dbt = (DbtagPtr) sip->data.ptrvalue;
-				if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0) {
-					got_tmsmart = TRUE;
-				}
-			} else if (sip->choice == SEQID_PATENT) {
-			    patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
-			    if (patsip != NULL) {
-			        ipp = patsip->cit;
-			        if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
-			            is_us_pre_grant = TRUE;
-			        }
-			    }
-			}
-		}
-		if (useGeneral) {
-			sip = SeqIdSelect(isip, general_order, NUM_SEQID);
-		} else if (got_tmsmart) {
-			sip = SeqIdSelect(isip, tmsmart_order, NUM_SEQID);
-		} else {
-			sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
-		}
-		if (sip == NULL)   /* only GI */
-			return tmp;
-		else if (got_gi)
-		{
-			if (sip->choice == SEQID_GIIM)   /* don't show GIIM with GI */
-				return tmp;
-
-			Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-		}
-		format = PRINTID_FASTA_SHORT; /* put on second (or only) SeqId in this format */
-	}
-	else {
-		sip = isip;          /* only one id processed */
-		if (sip != NULL && sip->choice == SEQID_PATENT) {
-		    patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
-		    if (patsip != NULL) {
-		        ipp = patsip->cit;
-		        if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
-		            is_us_pre_grant = TRUE;
-		        }
-		    }
-		}
-	}
-
-							 /* deal with LOCUS and ACCESSION */
-	if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS) ||
-		(format == PRINTID_TEXTID_ACC_VER) || (format == PRINTID_TEXTID_ACC_ONLY))
-	{
-		if (format == PRINTID_TEXTID_ACCESSION) {
-			format = PRINTID_TEXTID_ACC_ONLY;     /* current default */
-		}
-		switch (sip->choice)   /* get the real TextSeqId types */
-		{
-	        case SEQID_GENBANK:
-    	    case SEQID_EMBL:
-    	    case SEQID_DDBJ:
-			case SEQID_PIR:
-			case SEQID_SWISSPROT:
-			case SEQID_PRF:
-			case SEQID_OTHER:
-			case SEQID_TPG:
-			case SEQID_TPE:
-			case SEQID_TPD:
-		    case SEQID_GPIPE:
-    	        tsip = (TextSeqIdPtr)sip->data.ptrvalue;
-				if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
-					Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
-					return tmp;
-                } else if ((format == PRINTID_TEXTID_ACC_ONLY || format == PRINTID_TEXTID_LOCUS) 
-					&& (tsip->accession != NULL)) {
-					Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
-					return tmp;
-                } else if ((format == PRINTID_TEXTID_ACC_VER) 
-					&& (tsip->accession != NULL)) {
-					if (tsip->version > 0 && tsip->release == NULL) {
-						sprintf(localbuf, "%s.%d", tsip->accession,
-							(int)(tsip->version));
-					} else {
-						sprintf(localbuf, "%s", tsip->accession);
-					}
-					Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
-					return tmp;
+    if (format == PRINTID_FASTA_LONG)   /* find the ids in the chain */
+    {
+        for (sip = isip; sip != NULL; sip = sip->next)  /* GI present? */
+        {
+            if (sip->choice == SEQID_GI)
+            {
+                sprintf(localbuf, "%s%s%ld", txtid[SEQID_GI], ldelim,
+                    (long)(sip->data.intvalue));
+                Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+                got_gi = TRUE;
+            } else if (sip->choice == SEQID_GENERAL) {
+                dbt = (DbtagPtr) sip->data.ptrvalue;
+                if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0) {
+                    got_tmsmart = TRUE;
                 }
-				break;
-			default:
-				break;
-		}
-	}
+            } else if (sip->choice == SEQID_PATENT) {
+                patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
+                if (patsip != NULL) {
+                    ipp = patsip->cit;
+                    if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
+                        is_us_pre_grant = TRUE;
+                    }
+                }
+            }
+        }
+        if (useGeneral) {
+            sip = SeqIdSelect(isip, general_order, NUM_SEQID);
+        } else if (got_tmsmart) {
+            sip = SeqIdSelect(isip, tmsmart_order, NUM_SEQID);
+        } else {
+            sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
+        }
+        if (sip == NULL)   /* only GI */
+            return tmp;
+        else if (got_gi)
+        {
+            if (sip->choice == SEQID_GIIM)   /* don't show GIIM with GI */
+                return tmp;
 
-	if (format == PRINTID_FASTA_SHORT)
-	{
-	    if (sip->choice == SEQID_PATENT && is_us_pre_grant) {
-			Nlm_LabelCopyNext(&tmp, "pgp", &buflen);
-	    } else {
-			Nlm_LabelCopyNext(&tmp, txtid[sip->choice], &buflen);
-	    }
-		Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-	}
+            Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+        }
+        format = PRINTID_FASTA_SHORT; /* put on second (or only) SeqId in this format */
+    }
+    else {
+        sip = isip;          /* only one id processed */
+        if (sip != NULL && sip->choice == SEQID_PATENT) {
+            patsip = (PatentSeqIdPtr) sip->data.ptrvalue;
+            if (patsip != NULL) {
+                ipp = patsip->cit;
+                if (ipp != NULL && StringDoesHaveText (ipp->app_number)) {
+                    is_us_pre_grant = TRUE;
+                }
+            }
+        }
+    }
+
+                             /* deal with LOCUS and ACCESSION */
+    if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS) ||
+        (format == PRINTID_TEXTID_ACC_VER) || (format == PRINTID_TEXTID_ACC_ONLY))
+    {
+        if (format == PRINTID_TEXTID_ACCESSION) {
+            format = PRINTID_TEXTID_ACC_ONLY;     /* current default */
+        }
+        switch (sip->choice)   /* get the real TextSeqId types */
+        {
+            case SEQID_GENBANK:
+            case SEQID_EMBL:
+            case SEQID_DDBJ:
+            case SEQID_PIR:
+            case SEQID_SWISSPROT:
+            case SEQID_PRF:
+            case SEQID_OTHER:
+            case SEQID_TPG:
+            case SEQID_TPE:
+            case SEQID_TPD:
+            case SEQID_GPIPE:
+                tsip = (TextSeqIdPtr)sip->data.ptrvalue;
+                if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
+                    Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
+                    return tmp;
+                } else if ((format == PRINTID_TEXTID_ACC_ONLY || format == PRINTID_TEXTID_LOCUS) 
+                    && (tsip->accession != NULL)) {
+                    Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
+                    return tmp;
+                } else if ((format == PRINTID_TEXTID_ACC_VER) 
+                    && (tsip->accession != NULL)) {
+                    if (tsip->version > 0 && tsip->release == NULL) {
+                        sprintf(localbuf, "%s.%d", tsip->accession,
+                            (int)(tsip->version));
+                    } else {
+                        sprintf(localbuf, "%s", tsip->accession);
+                    }
+                    Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+                    return tmp;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (format == PRINTID_FASTA_SHORT)
+    {
+        if (sip->choice == SEQID_PATENT && is_us_pre_grant) {
+            Nlm_LabelCopyNext(&tmp, "pgp", &buflen);
+        } else {
+            Nlm_LabelCopyNext(&tmp, txtid[sip->choice], &buflen);
+        }
+        Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+    }
 
     switch (sip->choice) 
     {
         case SEQID_LOCAL:           /* object id */
             if ((((ObjectIdPtr)sip->data.ptrvalue)->str) == NULL)
-			{
+            {
                 sprintf(localbuf, "%ld", 
-							(long)((ObjectIdPtr)sip->data.ptrvalue)->id);
-				Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
-			}
+                            (long)((ObjectIdPtr)sip->data.ptrvalue)->id);
+                Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+            }
             else
-				Nlm_LabelCopyNext(&tmp, 
-						((ObjectIdPtr)sip->data.ptrvalue)->str, &buflen);
+                Nlm_LabelCopyNext(&tmp, 
+                        ((ObjectIdPtr)sip->data.ptrvalue)->str, &buflen);
             break;
         case SEQID_GIBBSQ:         
         case SEQID_GIBBMT:
-		case SEQID_GI:
-			sprintf(localbuf, "%ld", (long)sip->data.intvalue);
-			Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+        case SEQID_GI:
+            sprintf(localbuf, "%ld", (long)sip->data.intvalue);
+            Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
             break;
         case SEQID_GIIM:
             sprintf(localbuf, "%ld", (long)((GiimPtr)sip->data.ptrvalue)->id);
-			Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+            Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
             break;
         case SEQID_GENBANK:
         case SEQID_EMBL:
@@ -3781,96 +3845,96 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
         case SEQID_TPD:
         case SEQID_GPIPE:
            tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
-	   if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
-		version = tsip->version;  /* show versions */
-	   sprintf(versionbuf, ".%d", (int)version);
+       if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
+        version = tsip->version;  /* show versions */
+       sprintf(versionbuf, ".%d", (int)version);
         case SEQID_PIR:
         case SEQID_SWISSPROT:
         case SEQID_PRF:
             tsip = (TextSeqIdPtr)sip->data.ptrvalue;
             if (tsip->accession != NULL)
-			{
-			   Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
+            {
+               Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
                            if (version)
-				Nlm_LabelCopyNext(&tmp, versionbuf,&buflen);
-			   if (format != PRINTID_FASTA_SHORT)
-			 	break;
-			}
-			if (format == PRINTID_FASTA_SHORT)
-				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-			if (tsip->name != NULL)
-				Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
-			/*
-			if (sip->choice == SEQID_OTHER) {
-				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-				if (tsip->release != NULL)
-					Nlm_LabelCopyNext(&tmp, tsip->release, &buflen);
-			}
-			*/
+                Nlm_LabelCopyNext(&tmp, versionbuf,&buflen);
+               if (format != PRINTID_FASTA_SHORT)
+                 break;
+            }
+            if (format == PRINTID_FASTA_SHORT)
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+            if (tsip->name != NULL)
+                Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
+            /*
+            if (sip->choice == SEQID_OTHER) {
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+                if (tsip->release != NULL)
+                    Nlm_LabelCopyNext(&tmp, tsip->release, &buflen);
+            }
+            */
             break;
         case SEQID_PATENT:
-			patsip = (PatentSeqIdPtr)(sip->data.ptrvalue);
-			Nlm_LabelCopyNext(&tmp, patsip->cit->country, &buflen);
-			if (format == PRINTID_FASTA_SHORT)
-				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-			if (is_us_pre_grant) {
-				Nlm_LabelCopyNext(&tmp, patsip->cit->app_number, &buflen);
-			} else {
-				Nlm_LabelCopyNext(&tmp, patsip->cit->number, &buflen);
-			}
-			if (format == PRINTID_FASTA_SHORT)
-				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-			else
-				Nlm_LabelCopyNext(&tmp, "_", &buflen);
-			sprintf(localbuf, "%d", (int)patsip->seqid);
-			Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+            patsip = (PatentSeqIdPtr)(sip->data.ptrvalue);
+            Nlm_LabelCopyNext(&tmp, patsip->cit->country, &buflen);
+            if (format == PRINTID_FASTA_SHORT)
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+            if (is_us_pre_grant) {
+                Nlm_LabelCopyNext(&tmp, patsip->cit->app_number, &buflen);
+            } else {
+                Nlm_LabelCopyNext(&tmp, patsip->cit->number, &buflen);
+            }
+            if (format == PRINTID_FASTA_SHORT)
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+            else
+                Nlm_LabelCopyNext(&tmp, "_", &buflen);
+            sprintf(localbuf, "%d", (int)patsip->seqid);
+            Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
             break;
         case SEQID_GENERAL:
-			oip = ((DbtagPtr)sip->data.ptrvalue)->tag;
-			if((format == PRINTID_FASTA_SHORT) || (format == PRINTID_REPORT))
-				Nlm_LabelCopyNext(&tmp, 
-					((DbtagPtr)sip->data.ptrvalue)->db, &buflen);
-			if (format == PRINTID_FASTA_SHORT)
-				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-			else if (format == PRINTID_REPORT)
-				Nlm_LabelCopyNext(&tmp, ":", &buflen);
+            oip = ((DbtagPtr)sip->data.ptrvalue)->tag;
+            if((format == PRINTID_FASTA_SHORT) || (format == PRINTID_REPORT))
+                Nlm_LabelCopyNext(&tmp, 
+                    ((DbtagPtr)sip->data.ptrvalue)->db, &buflen);
+            if (format == PRINTID_FASTA_SHORT)
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+            else if (format == PRINTID_REPORT)
+                Nlm_LabelCopyNext(&tmp, ":", &buflen);
 
-			if (oip->str == NULL)
-			{
-				sprintf(localbuf, "%ld", (long) oip->id);
-				Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
-			}
-			else
-				Nlm_LabelCopyNext(&tmp, oip->str, &buflen);
+            if (oip->str == NULL)
+            {
+                sprintf(localbuf, "%ld", (long) oip->id);
+                Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+            }
+            else
+                Nlm_LabelCopyNext(&tmp, oip->str, &buflen);
             break;
         case SEQID_PDB:
-			psip = (PDBSeqIdPtr) sip->data.ptrvalue;
-			chainbuf[0] = TO_UPPER (psip->chain);
-			chainbuf[1] = '\0';
-			chainbuf[2] = '\0';
-			if (IS_LOWER (psip->chain)) {
-			  chainbuf[1] = chainbuf [0];
-			}
-			Nlm_LabelCopyNext(&tmp, psip->mol, &buflen);
-			if (format == PRINTID_FASTA_SHORT)
-			{
-				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
-				if (chainbuf[0] == '|') /* special */
-					Nlm_LabelCopyNext(&tmp, "VB",&buflen);
-				else if (chainbuf[0] != '\0')
-					Nlm_LabelCopyNext(&tmp,chainbuf, &buflen);
-				else
-					Nlm_LabelCopyNext(&tmp, " ", &buflen);
-			}
-			else if (psip->chain > ' ')
-			{
-				Nlm_LabelCopyNext(&tmp, "_", &buflen);
-				Nlm_LabelCopyNext(&tmp,chainbuf, &buflen);
-			}
+            psip = (PDBSeqIdPtr) sip->data.ptrvalue;
+            chainbuf[0] = TO_UPPER (psip->chain);
+            chainbuf[1] = '\0';
+            chainbuf[2] = '\0';
+            if (IS_LOWER (psip->chain)) {
+              chainbuf[1] = chainbuf [0];
+            }
+            Nlm_LabelCopyNext(&tmp, psip->mol, &buflen);
+            if (format == PRINTID_FASTA_SHORT)
+            {
+                Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+                if (chainbuf[0] == '|') /* special */
+                    Nlm_LabelCopyNext(&tmp, "VB",&buflen);
+                else if (chainbuf[0] != '\0')
+                    Nlm_LabelCopyNext(&tmp,chainbuf, &buflen);
+                else
+                    Nlm_LabelCopyNext(&tmp, " ", &buflen);
+            }
+            else if (psip->chain > ' ')
+            {
+                Nlm_LabelCopyNext(&tmp, "_", &buflen);
+                Nlm_LabelCopyNext(&tmp,chainbuf, &buflen);
+            }
             break;
-		default:
-			Nlm_LabelCopyNext(&tmp, txtid[0], &buflen);
-			break;
+        default:
+            Nlm_LabelCopyNext(&tmp, txtid[0], &buflen);
+            break;
 
     }
     return tmp;
@@ -3956,12 +4020,12 @@ Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
    case SEQID_GENERAL:
       dbtag = (DbtagPtr) sip->data.ptrvalue;
       if (dbtag->tag->str == NULL) {
-	 numeric_id_type = TRUE;
-	 *gi = dbtag->tag->id;
+     numeric_id_type = TRUE;
+     *gi = dbtag->tag->id;
       } else {
-	 id_len = StringLen(dbtag->tag->str);
-	 *id = (CharPtr) MemNew(id_len+1);
-	 sprintf(*id, "%s", dbtag->tag->str);
+     id_len = StringLen(dbtag->tag->str);
+     *id = (CharPtr) MemNew(id_len+1);
+     sprintf(*id, "%s", dbtag->tag->str);
       }
       break;
    case SEQID_PATENT:
@@ -3984,328 +4048,328 @@ Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
 /*****************************************************************************
 *
 *   SeqIdPtr SeqIdParse(buf)
-*   	parses a string containing SeqIds formated by SeqIdPrint using
-*   	FASTA_LONG or FASTA_SHORT, separated by |
-*   	returns a SeqId linked list for them
-*   	or NULL on failure for any SeqId
+*       parses a string containing SeqIds formated by SeqIdPrint using
+*       FASTA_LONG or FASTA_SHORT, separated by |
+*       returns a SeqId linked list for them
+*       or NULL on failure for any SeqId
 *
 *****************************************************************************/
 #define SEQID_PARSE_BUF_SIZE 200
 NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 {
-	char localbuf[SEQID_PARSE_BUF_SIZE + 2];
-	char * tmp, *strt, * tokens[6], *chain;
-	char d;
-	long num;
-	CharPtr tp;
-	Int2 numtoken, i, type = 0, j, ctr=0, numdigits; /* ctr is number of OK ids done */
-	SeqIdPtr sip = NULL, head = NULL, last = NULL, tmpsip;
-	ObjectIdPtr oip;
-	DbtagPtr dp;
-	TextSeqIdPtr tsip;
-	PatentSeqIdPtr patsip;
-	IdPatPtr ipp;
-	PDBSeqIdPtr psip;
-	GiimPtr gim;
-	Boolean done = FALSE, is_us_pre_grant = FALSE;
-	static Uint1 expect_tokens[NUM_SEQID] = {  /* number of tokens to expect */
- 	0, /* 0 = not set */
-	1, /* 1 = local Object-id */
-	1,  /* 2 = gibbsq */
-	1,  /* 3 = gibbmt */
-	1, /* 4 = giim Giimport-id */
-	2, /* 5 = genbank */
-	2, /* 6 = embl */
-	2, /* 7 = pir */
-	2, /* 8 = swissprot */
-	3,  /* 9 = patent */
-	3, /* 10 = other TextSeqId */
-	2, /* 11 = general Dbtag */
-	1,  /* 12 = gi */
-	2, /* 13 = ddbj */
-	2, /* 14 = prf */
-	2,  /* 15 = pdb */
+    char localbuf[SEQID_PARSE_BUF_SIZE + 2];
+    char * tmp, *strt, * tokens[6], *chain;
+    char d;
+    long num;
+    CharPtr tp;
+    Int2 numtoken, i, type = 0, j, ctr=0, numdigits; /* ctr is number of OK ids done */
+    SeqIdPtr sip = NULL, head = NULL, last = NULL, tmpsip;
+    ObjectIdPtr oip;
+    DbtagPtr dp;
+    TextSeqIdPtr tsip;
+    PatentSeqIdPtr patsip;
+    IdPatPtr ipp;
+    PDBSeqIdPtr psip;
+    GiimPtr gim;
+    Boolean done = FALSE, is_us_pre_grant = FALSE;
+    static Uint1 expect_tokens[NUM_SEQID] = {  /* number of tokens to expect */
+     0, /* 0 = not set */
+    1, /* 1 = local Object-id */
+    1,  /* 2 = gibbsq */
+    1,  /* 3 = gibbmt */
+    1, /* 4 = giim Giimport-id */
+    2, /* 5 = genbank */
+    2, /* 6 = embl */
+    2, /* 7 = pir */
+    2, /* 8 = swissprot */
+    3,  /* 9 = patent */
+    3, /* 10 = other TextSeqId */
+    2, /* 11 = general Dbtag */
+    1,  /* 12 = gi */
+    2, /* 13 = ddbj */
+    2, /* 14 = prf */
+    2,  /* 15 = pdb */
     2,  /* 16 = tpg */
     2,  /* 17 = tpe */
     2,  /* 18 = tpd */
     2   /* 19 = gpp */
-	};
+    };
 
-	if ((buf == NULL) || (*buf == '\0'))
-		return NULL;
+    if ((buf == NULL) || (*buf == '\0'))
+        return NULL;
 
-	d = *delim;   /* delimiter */
-	while (! done)
-	{
-						/* set all tokens pointing to \0 */
-		localbuf[SEQID_PARSE_BUF_SIZE + 1] = '\0';
-		for (i = 0; i < 6; i++)
-			tokens[i] = &localbuf[SEQID_PARSE_BUF_SIZE + 1];
-		tp = buf;		/* save start of string */
-						/* copy and tokenize - token\0token\0\n */
-		for (tmp=localbuf, i=0; ((*buf != d) && (*buf != '\0') && (i < SEQID_PARSE_BUF_SIZE));
-				i++,buf++,tmp++)
-			*tmp = *buf;
-		if (*buf != d) goto erret;  /* didn't get delimiter */
-		*tmp = '\0';
-		tmp++;
-		buf++;
-		for (j = 0, type = 0; j < NUM_SEQID; j++)
-		{
-			if (! StringCmp(localbuf, txtid[j]))
-			{
-				type = j;
-				break;
-			}
-		}
+    d = *delim;   /* delimiter */
+    while (! done)
+    {
+                        /* set all tokens pointing to \0 */
+        localbuf[SEQID_PARSE_BUF_SIZE + 1] = '\0';
+        for (i = 0; i < 6; i++)
+            tokens[i] = &localbuf[SEQID_PARSE_BUF_SIZE + 1];
+        tp = buf;        /* save start of string */
+                        /* copy and tokenize - token\0token\0\n */
+        for (tmp=localbuf, i=0; ((*buf != d) && (*buf != '\0') && (i < SEQID_PARSE_BUF_SIZE));
+                i++,buf++,tmp++)
+            *tmp = *buf;
+        if (*buf != d) goto erret;  /* didn't get delimiter */
+        *tmp = '\0';
+        tmp++;
+        buf++;
+        for (j = 0, type = 0; j < NUM_SEQID; j++)
+        {
+            if (! StringCmp(localbuf, txtid[j]))
+            {
+                type = j;
+                break;
+            }
+        }
 
-		/* oth now ref, but still want to parse old style */
-		if ((! type) && (! StringCmp(localbuf, "oth"))) {
-			type = SEQID_OTHER;
-		}
+        /* oth now ref, but still want to parse old style */
+        if ((! type) && (! StringCmp(localbuf, "oth"))) {
+            type = SEQID_OTHER;
+        }
 
-		/* pgp is for  pre-grant patent publications */
-		if ((! type) && (! StringCmp(localbuf, "pgp"))) {
-			type = SEQID_PATENT;
-		    is_us_pre_grant = TRUE;
-		}
+        /* pgp is for  pre-grant patent publications */
+        if ((! type) && (! StringCmp(localbuf, "pgp"))) {
+            type = SEQID_PATENT;
+            is_us_pre_grant = TRUE;
+        }
 
-		if (! type) goto erret;
+        if (! type) goto erret;
 
-						/* copy and tokenize - token\0token\0\n */
-		for (numtoken=0, strt=tmp;
-			((i < SEQID_PARSE_BUF_SIZE) && (numtoken < (Int2)(expect_tokens[type])) && (! done));
-			i++,buf++,tmp++)
-		{
-			if ((*buf == d) || (*buf == '\0'))
-			{
-				*tmp = '\0';
-				tokens[numtoken] = strt;
-				numtoken++;
-				if (*buf == '\0')
-				{
-					if (type == SEQID_OTHER && (numtoken == 2 || numtoken == 1))
-						done = TRUE;
-					else if ((type == SEQID_GENBANK || type == SEQID_EMBL ||
-							type == SEQID_DDBJ || type == SEQID_TPG ||
-							type == SEQID_TPE || type == SEQID_TPD ||
-							type == SEQID_GPIPE) && numtoken == 1)
-						done = TRUE;
-					else if (numtoken < (Int2)(expect_tokens[type]))
-						goto erret;
-					else
-						done = TRUE;
-				}
-				strt = tmp+1;
-			}
-			else
-				*tmp = *buf;
-		}
-		if (i == SEQID_PARSE_BUF_SIZE) goto erret;
+                        /* copy and tokenize - token\0token\0\n */
+        for (numtoken=0, strt=tmp;
+            ((i < SEQID_PARSE_BUF_SIZE) && (numtoken < (Int2)(expect_tokens[type])) && (! done));
+            i++,buf++,tmp++)
+        {
+            if ((*buf == d) || (*buf == '\0'))
+            {
+                *tmp = '\0';
+                tokens[numtoken] = strt;
+                numtoken++;
+                if (*buf == '\0')
+                {
+                    if (type == SEQID_OTHER && (numtoken == 2 || numtoken == 1))
+                        done = TRUE;
+                    else if ((type == SEQID_GENBANK || type == SEQID_EMBL ||
+                            type == SEQID_DDBJ || type == SEQID_TPG ||
+                            type == SEQID_TPE || type == SEQID_TPD ||
+                            type == SEQID_GPIPE) && numtoken == 1)
+                        done = TRUE;
+                    else if (numtoken < (Int2)(expect_tokens[type]))
+                        goto erret;
+                    else
+                        done = TRUE;
+                }
+                strt = tmp+1;
+            }
+            else
+                *tmp = *buf;
+        }
+        if (i == SEQID_PARSE_BUF_SIZE) goto erret;
 
-		sip = ValNodeNew(head);
-		if (head == NULL) head = sip;
-		sip->choice = (Uint1) type;
-		switch (type)
-    	{
-        	case SEQID_LOCAL:           /* object id */
-				if (*tokens[0] == '\0') goto erret;
-				oip = ObjectIdNew();
-				sip->data.ptrvalue = oip;
-				for (tmp = tokens[0], numdigits = 0; *tmp != '\0'; tmp++, numdigits++)
-				{
-					if (! IS_DIGIT(*tmp))   /* string type */
-					{
-						oip->str = StringSave(tokens[0]);
-						break;
-					}
-				}
-				if (oip->str == NULL)
-				{
-					sscanf(tokens[0], "%ld", &num);
-					oip->id = (Int4)num;
-					if (numdigits < 10 ||
-						(numdigits == 10 && StringCmp (tokens [0], "2147483647") <= 0)) {
-						sscanf(tokens[0], "%ld", &num);
-						oip->id = (Int4)num;
-					} else {
-						oip->str = StringSave(tokens[0]);
-					}
-				}
-				break;
-	        case SEQID_GIBBSQ:         
-    	    case SEQID_GIBBMT:
-			case SEQID_GI:
-				if (! IS_DIGIT(*tokens[0]))
-					goto erret;
-				sscanf(tokens[0], "%ld", &num);
-				sip->data.intvalue = (Int4)num;
-    	        break;
-        	case SEQID_GIIM:
-				if (! IS_DIGIT(*tokens[0])) goto erret;
-				gim = GiimNew();
-				sip->data.ptrvalue = gim;
-				sscanf(tokens[0], "%ld", &num);
-				gim->id = (Int4)num;
-	            break;
-    	    case SEQID_GENBANK:
-        	case SEQID_EMBL:
-	        case SEQID_PIR:
-    	    case SEQID_SWISSPROT:
-        	case SEQID_DDBJ:
-			case SEQID_PRF:
-    	    case SEQID_OTHER:
-    	    case SEQID_TPG:
-    	    case SEQID_TPE:
+        sip = ValNodeNew(head);
+        if (head == NULL) head = sip;
+        sip->choice = (Uint1) type;
+        switch (type)
+        {
+            case SEQID_LOCAL:           /* object id */
+                if (*tokens[0] == '\0') goto erret;
+                oip = ObjectIdNew();
+                sip->data.ptrvalue = oip;
+                for (tmp = tokens[0], numdigits = 0; *tmp != '\0'; tmp++, numdigits++)
+                {
+                    if (! IS_DIGIT(*tmp))   /* string type */
+                    {
+                        oip->str = StringSave(tokens[0]);
+                        break;
+                    }
+                }
+                if (oip->str == NULL)
+                {
+                    sscanf(tokens[0], "%ld", &num);
+                    oip->id = (Int4)num;
+                    if (numdigits < 10 ||
+                        (numdigits == 10 && StringCmp (tokens [0], "2147483647") <= 0)) {
+                        sscanf(tokens[0], "%ld", &num);
+                        oip->id = (Int4)num;
+                    } else {
+                        oip->str = StringSave(tokens[0]);
+                    }
+                }
+                break;
+            case SEQID_GIBBSQ:         
+            case SEQID_GIBBMT:
+            case SEQID_GI:
+                if (! IS_DIGIT(*tokens[0]))
+                    goto erret;
+                sscanf(tokens[0], "%ld", &num);
+                sip->data.intvalue = (Int4)num;
+                break;
+            case SEQID_GIIM:
+                if (! IS_DIGIT(*tokens[0])) goto erret;
+                gim = GiimNew();
+                sip->data.ptrvalue = gim;
+                sscanf(tokens[0], "%ld", &num);
+                gim->id = (Int4)num;
+                break;
+            case SEQID_GENBANK:
+            case SEQID_EMBL:
+            case SEQID_PIR:
+            case SEQID_SWISSPROT:
+            case SEQID_DDBJ:
+            case SEQID_PRF:
+            case SEQID_OTHER:
+            case SEQID_TPG:
+            case SEQID_TPE:
             case SEQID_TPD:
-    	    case SEQID_GPIPE:
-				if ((*tokens[0] == '\0') && (*tokens[1] == '\0'))
-					goto erret;
-	            tsip = TextSeqIdNew();
-				sip->data.ptrvalue = tsip;
-				if (*tokens[0] != '\0')
-				{
+            case SEQID_GPIPE:
+                if ((*tokens[0] == '\0') && (*tokens[1] == '\0'))
+                    goto erret;
+                tsip = TextSeqIdNew();
+                sip->data.ptrvalue = tsip;
+                if (*tokens[0] != '\0')
+                {
                                         tmp = tokens[0]; /* check for version */
                                         while (*tmp != '\0')
-					{
-						if (*tmp == '.')
-						{
+                    {
+                        if (*tmp == '.')
+                        {
                                                    if (IS_DIGIT(*(tmp+1)))
                                                    {
-							*tmp = '\0';
+                            *tmp = '\0';
                                                         sscanf((tmp+1),"%ld",&num);
                                                         tsip->version =(Int2)num;
-						   }
-						   else
-							tmp++;
-						}
-						else
-						  tmp++;
-					}
-					tsip->accession = StringSave(tokens[0]);
-					*(tsip->accession) = TO_UPPER(*(tsip->accession));
-				}
-				if (*tokens[1] != '\0')
-				{
-					tsip->name = StringSave(tokens[1]);
-					if (type != SEQID_OTHER) {
-						tmp = tsip->name;
-						while (*tmp != '\0')
-						{
-							*tmp = TO_UPPER(*tmp);
-							tmp++;
-						}
-					}
-				}
-        	    break;
-	        case SEQID_PATENT:
-				if ((*tokens[0] == '\0') || (*tokens[1] == '\0')) goto erret;
-				if (! IS_DIGIT(*tokens[2])) goto erret;
-				patsip = PatentSeqIdNew();
-				sip->data.ptrvalue = patsip;
-				ipp = IdPatNew();
-				patsip->cit = ipp;
-				ipp->country = StringSave(tokens[0]);
-				if (is_us_pre_grant) {
-				    ipp->app_number = StringSave(tokens[1]);
-				} else {
-				    ipp->number = StringSave(tokens[1]);
-				}
-				sscanf(tokens[2], "%ld", &num);
-				patsip->seqid = (Int2)num;
-            	break;
-	        case SEQID_GENERAL:
-				if ((*tokens[0] == '\0') || (*tokens[1] == '\0')) goto erret;
-				dp = DbtagNew();
-				sip->data.ptrvalue = dp;
-				oip = ObjectIdNew();
-				dp->tag = oip;
-				dp->db = StringSave(tokens[0]);
-				for (tmp = tokens[1], numdigits = 0; *tmp != '\0'; tmp++, numdigits++)
-				{
-					if (! IS_DIGIT(*tmp))   /* string type */
-					{
-						oip->str = StringSave(tokens[1]);
-						break;
-					}
-				}
-				if (oip->str == NULL)
-				{
-					if (numdigits < 10 ||
-						(numdigits == 10 && StringCmp (tokens [1], "2147483647") <= 0)) {
-						sscanf(tokens[1], "%ld", &num);
-						oip->id = (Int4)num;
-					} else {
-						oip->str = StringSave(tokens[1]);
-					}
-				}
-        	    break;
-	        case SEQID_PDB:
-				if (*tokens[0] == '\0') goto erret;
-				psip = PDBSeqIdNew();
-				sip->data.ptrvalue = psip;
-				psip->mol = StringSave(tokens[0]);
-				tmp = psip->mol;
-				while (*tmp != '\0')
-				{
-					*tmp = TO_UPPER(*tmp);
-					tmp++;
-				}
-				chain = tokens [1];
-				if ((! StringICmp(tokens[1], "VB")) ||
+                           }
+                           else
+                            tmp++;
+                        }
+                        else
+                          tmp++;
+                    }
+                    tsip->accession = StringSave(tokens[0]);
+                    *(tsip->accession) = TO_UPPER(*(tsip->accession));
+                }
+                if (*tokens[1] != '\0')
+                {
+                    tsip->name = StringSave(tokens[1]);
+                    if (type != SEQID_OTHER) {
+                        tmp = tsip->name;
+                        while (*tmp != '\0')
+                        {
+                            *tmp = TO_UPPER(*tmp);
+                            tmp++;
+                        }
+                    }
+                }
+                break;
+            case SEQID_PATENT:
+                if ((*tokens[0] == '\0') || (*tokens[1] == '\0')) goto erret;
+                if (! IS_DIGIT(*tokens[2])) goto erret;
+                patsip = PatentSeqIdNew();
+                sip->data.ptrvalue = patsip;
+                ipp = IdPatNew();
+                patsip->cit = ipp;
+                ipp->country = StringSave(tokens[0]);
+                if (is_us_pre_grant) {
+                    ipp->app_number = StringSave(tokens[1]);
+                } else {
+                    ipp->number = StringSave(tokens[1]);
+                }
+                sscanf(tokens[2], "%ld", &num);
+                patsip->seqid = (Int2)num;
+                break;
+            case SEQID_GENERAL:
+                if ((*tokens[0] == '\0') || (*tokens[1] == '\0')) goto erret;
+                dp = DbtagNew();
+                sip->data.ptrvalue = dp;
+                oip = ObjectIdNew();
+                dp->tag = oip;
+                dp->db = StringSave(tokens[0]);
+                for (tmp = tokens[1], numdigits = 0; *tmp != '\0'; tmp++, numdigits++)
+                {
+                    if (! IS_DIGIT(*tmp))   /* string type */
+                    {
+                        oip->str = StringSave(tokens[1]);
+                        break;
+                    }
+                }
+                if (oip->str == NULL)
+                {
+                    if (numdigits < 10 ||
+                        (numdigits == 10 && StringCmp (tokens [1], "2147483647") <= 0)) {
+                        sscanf(tokens[1], "%ld", &num);
+                        oip->id = (Int4)num;
+                    } else {
+                        oip->str = StringSave(tokens[1]);
+                    }
+                }
+                break;
+            case SEQID_PDB:
+                if (*tokens[0] == '\0') goto erret;
+                psip = PDBSeqIdNew();
+                sip->data.ptrvalue = psip;
+                psip->mol = StringSave(tokens[0]);
+                tmp = psip->mol;
+                while (*tmp != '\0')
+                {
+                    *tmp = TO_UPPER(*tmp);
+                    tmp++;
+                }
+                chain = tokens [1];
+                if ((! StringICmp(tokens[1], "VB")) ||
                                     *(buf-1) == d)
-					psip->chain = '|';
-				else if (! StringHasNoText (tokens[1]))
-					psip->chain = *tokens[1];
-				/* double letter for chain indicates lower case */
-				if (StringLen (chain) == 2 && TO_UPPER (chain [0]) == TO_UPPER (chain [1])) {
-					psip->chain = TO_LOWER(psip->chain);
-				} else {
-					psip->chain = TO_UPPER(psip->chain);
-				}
-        	    break;
-	    }
-		last = sip;
-		sip = NULL;
-		ctr++;
-	}
+                    psip->chain = '|';
+                else if (! StringHasNoText (tokens[1]))
+                    psip->chain = *tokens[1];
+                /* double letter for chain indicates lower case */
+                if (StringLen (chain) == 2 && TO_UPPER (chain [0]) == TO_UPPER (chain [1])) {
+                    psip->chain = TO_LOWER(psip->chain);
+                } else {
+                    psip->chain = TO_UPPER(psip->chain);
+                }
+                break;
+        }
+        last = sip;
+        sip = NULL;
+        ctr++;
+    }
 ret:
-	return head;
+    return head;
 erret:
-	StringNCpy(localbuf, tp, SEQID_PARSE_BUF_SIZE);
-	localbuf[SEQID_PARSE_BUF_SIZE] = '\0';
-	ErrPostEx(SEV_INFO, 0,0, "SeqIdParse Failure at %s", localbuf);
-	if (sip == head)
-		head = NULL;
-	else
-	{
-		if (last != NULL)
-			last->next = NULL;
-		if (! ctr)     /* no good SeqIds */
-			head = SeqIdSetFree(head);
-		else	       /* at least one good SeqId.. keep it */
-		{
-			tmpsip = head;
-			last = NULL;
-			for (i = 0; i < ctr; i++)
-			{
-				last = tmpsip;
-				tmpsip = tmpsip->next;
-			}
-			if (last != NULL)
-				last->next = NULL;
-			SeqIdSetFree(tmpsip);
-		}
-	}
-	ValNodeFree(sip);
-	goto ret;
+    StringNCpy(localbuf, tp, SEQID_PARSE_BUF_SIZE);
+    localbuf[SEQID_PARSE_BUF_SIZE] = '\0';
+    ErrPostEx(SEV_INFO, 0,0, "SeqIdParse Failure at %s", localbuf);
+    if (sip == head)
+        head = NULL;
+    else
+    {
+        if (last != NULL)
+            last->next = NULL;
+        if (! ctr)     /* no good SeqIds */
+            head = SeqIdSetFree(head);
+        else           /* at least one good SeqId.. keep it */
+        {
+            tmpsip = head;
+            last = NULL;
+            for (i = 0; i < ctr; i++)
+            {
+                last = tmpsip;
+                tmpsip = tmpsip->next;
+            }
+            if (last != NULL)
+                last->next = NULL;
+            SeqIdSetFree(tmpsip);
+        }
+    }
+    ValNodeFree(sip);
+    goto ret;
 }
 
 
 /*****************************************************************************
 *
 *   Boolean SeqIdMatch(a, b)
-*   	returns TRUE if SeqIds could be compared and are the same
+*       returns TRUE if SeqIds could be compared and are the same
 *       returns FALSE both if SeqIds could not be compared OR if they were
 *                        compared but are different
 *
@@ -4318,19 +4382,19 @@ erret:
 *****************************************************************************/
 NLM_EXTERN Boolean SeqIdMatch (SeqIdPtr a, SeqIdPtr b)
 {
-	Uint1 retval;
+    Uint1 retval;
 
-	retval = SeqIdComp(a, b);
-	if (retval == SIC_YES)
-		return TRUE;
-	else
-		return FALSE;
+    retval = SeqIdComp(a, b);
+    if (retval == SIC_YES)
+        return TRUE;
+    else
+        return FALSE;
 }
 
 /*****************************************************************************
 *
 *   SeqIdComp(a, b)
-*   	Compares a to b and returns
+*       Compares a to b and returns
 *
 *   SIC_DIFF   = different types, could not be compared
 *   SIC_NO     = types could be compared, and ids are different
@@ -4345,36 +4409,36 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
     if ((a == NULL) || (b == NULL))
         return SIC_DIFF;
 
-	choice = a->choice;
-	if (choice != b->choice)
-	{
-		switch (choice)
-		{
-			case SEQID_GENBANK:          /* these could be confused */
-			case SEQID_EMBL:
-			case SEQID_DDBJ:
-			case SEQID_TPG:
-			case SEQID_TPE:
-			case SEQID_TPD:
-		    case SEQID_GPIPE:
-				switch (b->choice)
-				{
-					case SEQID_GENBANK:   /* its ok */
-					case SEQID_EMBL:
-					case SEQID_DDBJ:
-					case SEQID_TPG:
-					case SEQID_TPE:
-					case SEQID_TPD:
-				    case SEQID_GPIPE:
-						break;  
-					default:
-						return SIC_DIFF;
-				}
-				break;
-			default:
-				return SIC_DIFF;
-		}
-	}
+    choice = a->choice;
+    if (choice != b->choice)
+    {
+        switch (choice)
+        {
+            case SEQID_GENBANK:          /* these could be confused */
+            case SEQID_EMBL:
+            case SEQID_DDBJ:
+            case SEQID_TPG:
+            case SEQID_TPE:
+            case SEQID_TPD:
+            case SEQID_GPIPE:
+                switch (b->choice)
+                {
+                    case SEQID_GENBANK:   /* its ok */
+                    case SEQID_EMBL:
+                    case SEQID_DDBJ:
+                    case SEQID_TPG:
+                    case SEQID_TPE:
+                    case SEQID_TPD:
+                    case SEQID_GPIPE:
+                        break;  
+                    default:
+                        return SIC_DIFF;
+                }
+                break;
+            default:
+                return SIC_DIFF;
+        }
+    }
 
     switch (choice)
     {
@@ -4382,31 +4446,31 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
             return SIC_DIFF;
         case SEQID_LOCAL:   
             if (ObjectIdMatch((ObjectIdPtr)a->data.ptrvalue, (ObjectIdPtr)b->data.ptrvalue))
-				return SIC_YES;
-			else
-				return SIC_NO;
+                return SIC_YES;
+            else
+                return SIC_NO;
         case SEQID_GIBBSQ:   /* gibbsq */
         case SEQID_GIBBMT:   /* gibbmt */
         case SEQID_GI:  /* gi */
             if (a->data.intvalue == b->data.intvalue)
-				return SIC_YES;
-			else
-				return SIC_NO;
+                return SIC_YES;
+            else
+                return SIC_NO;
         case SEQID_GIIM:   /* giim */
             if (((GiimPtr)a->data.ptrvalue)->id == ((GiimPtr)b->data.ptrvalue)->id)
-				return SIC_YES;
-			else
-				return SIC_NO;
+                return SIC_YES;
+            else
+                return SIC_NO;
         case SEQID_PATENT:   /* patent seq */
             if (((PatentSeqIdPtr)a->data.ptrvalue)->seqid !=
                 ((PatentSeqIdPtr)b->data.ptrvalue)->seqid)
                 return SIC_NO;
             if (IdPatMatch(((PatentSeqIdPtr)a->data.ptrvalue)->cit,
                 ((PatentSeqIdPtr)b->data.ptrvalue)->cit))
-				return SIC_YES;
-			else
-				return SIC_NO;
-		case SEQID_PDB:     /* pdb */
+                return SIC_YES;
+            else
+                return SIC_NO;
+        case SEQID_PDB:     /* pdb */
             if ( StringICmp(((PDBSeqIdPtr)a->data.ptrvalue)->mol,
                 ((PDBSeqIdPtr)b->data.ptrvalue)->mol))
                 return SIC_NO;
@@ -4414,31 +4478,31 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
             if (TO_UPPER(((PDBSeqIdPtr)a->data.ptrvalue)->chain) !=
                 TO_UPPER(((PDBSeqIdPtr)b->data.ptrvalue)->chain))
                 return SIC_NO;
-			*/
+            */
             if (((PDBSeqIdPtr)a->data.ptrvalue)->chain !=
                 ((PDBSeqIdPtr)b->data.ptrvalue)->chain)
                 return SIC_NO;
-			return SIC_YES;
-		case SEQID_GENERAL:  /* general */
-			if (DbtagMatch((DbtagPtr)a->data.ptrvalue,
-				(DbtagPtr)b->data.ptrvalue))
-				return SIC_YES;
-			else if (StringICmp(((DbtagPtr)a->data.ptrvalue)->db,
-				((DbtagPtr)b->data.ptrvalue)->db))
-				return SIC_DIFF; /* db strings do not match, okay */
-			else
-				return SIC_NO;
+            return SIC_YES;
+        case SEQID_GENERAL:  /* general */
+            if (DbtagMatch((DbtagPtr)a->data.ptrvalue,
+                (DbtagPtr)b->data.ptrvalue))
+                return SIC_YES;
+            else if (StringICmp(((DbtagPtr)a->data.ptrvalue)->db,
+                ((DbtagPtr)b->data.ptrvalue)->db))
+                return SIC_DIFF; /* db strings do not match, okay */
+            else
+                return SIC_NO;
 
         case SEQID_GENBANK:
-		case SEQID_EMBL:
-		case SEQID_DDBJ:
-		case SEQID_PIR:
-		case SEQID_SWISSPROT:
-		case SEQID_PRF:
-		case SEQID_OTHER:
-		case SEQID_TPG:
-		case SEQID_TPE:
-		case SEQID_TPD:
+        case SEQID_EMBL:
+        case SEQID_DDBJ:
+        case SEQID_PIR:
+        case SEQID_SWISSPROT:
+        case SEQID_PRF:
+        case SEQID_OTHER:
+        case SEQID_TPG:
+        case SEQID_TPE:
+        case SEQID_TPD:
         case SEQID_GPIPE:
 
             at = (TextSeqIdPtr)a->data.ptrvalue;
@@ -4471,10 +4535,10 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
             }
             else
                 return SIC_DIFF;
-		default:
-			ErrPostEx(SEV_ERROR, 0,0, "SeqIdComp: unsupported type [%d]",
-				(int)choice);
-			return SIC_DIFF;
+        default:
+            ErrPostEx(SEV_ERROR, 0,0, "SeqIdComp: unsupported type [%d]",
+                (int)choice);
+            return SIC_DIFF;
      }
 }
 
@@ -4487,22 +4551,22 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
 NLM_EXTERN Boolean SeqIdIn (SeqIdPtr a, SeqIdPtr b)
 
 {
-	SeqIdPtr now;
-	Uint1 retval;
+    SeqIdPtr now;
+    Uint1 retval;
 
-	if (a == NULL)
-	    return FALSE;
+    if (a == NULL)
+        return FALSE;
 
-	for (now =b; now != NULL; now = now -> next)
-	{
+    for (now =b; now != NULL; now = now -> next)
+    {
         retval = SeqIdComp(a, now);
-		switch (retval)
-		{
-			case SIC_YES:
-				return TRUE;
-			case SIC_NO:
-				return FALSE;
-		}
+        switch (retval)
+        {
+            case SIC_YES:
+                return TRUE;
+            case SIC_NO:
+                return FALSE;
+        }
     }
     return FALSE;
 }
@@ -4516,41 +4580,41 @@ NLM_EXTERN Boolean SeqIdForSameBioseq (SeqIdPtr a, SeqIdPtr b)
 
 {
     BioseqPtr bsp;
-	Uint1 retval;
-	Boolean res = FALSE;
-	/*
-	Boolean locked = FALSE;
-	*/
+    Uint1 retval;
+    Boolean res = FALSE;
+    /*
+    Boolean locked = FALSE;
+    */
 
-	if ((a == NULL) || (b == NULL)) return FALSE;
+    if ((a == NULL) || (b == NULL)) return FALSE;
 
     retval = SeqIdComp(a,b);   /* if match, all set */
-	switch (retval)
-	{
-		case SIC_YES:
-			return TRUE;
-		case SIC_NO:
-			return FALSE;
-	}
+    switch (retval)
+    {
+        case SIC_YES:
+            return TRUE;
+        case SIC_NO:
+            return FALSE;
+    }
 
     bsp = BioseqFindCore(a);
-	if (bsp == NULL)
-	{
-		return FALSE;
-		/*
-		bsp = BioseqLockById(a);
-		if (bsp != NULL)
-			locked = TRUE;
-		else
-			return res;
-		*/
-	}
+    if (bsp == NULL)
+    {
+        return FALSE;
+        /*
+        bsp = BioseqLockById(a);
+        if (bsp != NULL)
+            locked = TRUE;
+        else
+            return res;
+        */
+    }
 
     res = SeqIdIn(b, bsp->id);
     /*
     if (locked)
-		BioseqUnlock(bsp);
-	*/
+        BioseqUnlock(bsp);
+    */
 
     return res;
 }
@@ -4558,7 +4622,7 @@ NLM_EXTERN Boolean SeqIdForSameBioseq (SeqIdPtr a, SeqIdPtr b)
 /*****************************************************************************
 *
 *   MakeNewProteinSeqId(SeqLocPtr slp, SeqIdPtr sip)
-*   	Makes a new protein SeqId of attempting to keep it unique
+*       Makes a new protein SeqId of attempting to keep it unique
 *       Trys to match it to the input seqid type
 *       slp is the location on the DNA of the coding region making the protein
 *       sip is the SeqId of the DNA coding for the protein
@@ -4569,14 +4633,14 @@ NLM_EXTERN Boolean SeqIdForSameBioseq (SeqIdPtr a, SeqIdPtr b)
 *       id is then base_X where X is a number assigned as a serial number
 *       the returned id is guaranteed to be unique among all Bioseqs currently
 *       loaded in memory. 
-*   	
+*       
 *
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr, Boolean is_MT_safe)
 {
     Char buf[40];
     CharPtr tmp;
-    Int2 ctr;
+    Int2 ctr = 0;
     Int2 start = 1;
     SeqLocPtr tslp;
     ValNodePtr newid;
@@ -4648,17 +4712,17 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip
 
     /* Very dangerous way to create new id - don't use if you can */
 
-    if(is_MT_safe == FALSE) {
-	for (ctr = start; ctr < 32000; ctr++) {
-            sprintf(tmp, "%d", (int)ctr);
-            if ((BioseqFindCore(newid) == NULL) && (BioseqFindCore(altid) == NULL)) {
-                oid->str = StringSave(buf);
-                if (ctrptr != NULL) {
-                    *ctrptr = ctr + 1;
-                }
-                return newid;
-            }
-	}
+    if (is_MT_safe == FALSE) {
+      for (ctr = start; ctr < 32000; ctr++) {
+        sprintf(tmp, "%d", (int)ctr);
+        if ((BioseqFindCore(newid) == NULL) && (BioseqFindCore(altid) == NULL)) {
+          oid->str = StringSave(buf);
+          if (ctrptr != NULL) {
+            *ctrptr = ctr + 1;
+          }
+          return newid;
+        }
+      }
     }
     
     NlmMutexLock(lock);
@@ -4717,20 +4781,20 @@ static SeqLocPtr SeqLocNext (SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 e
 
 {
     SeqLocPtr currloc, retval;
-	Boolean equiv_is_one, foundit=FALSE;
+    Boolean equiv_is_one, foundit=FALSE;
 
-	switch (equiv_status)
-	{
-		case EQUIV_IS_ONE:
-			equiv_is_one = TRUE;
-			break;
-		case FIRST_EQUIV_IS_MANY:
-			equiv_status = EQUIV_IS_ONE;
-		case EQUIV_IS_MANY:
-		default:
-			equiv_is_one = FALSE;
-			break;
-	}
+    switch (equiv_status)
+    {
+        case EQUIV_IS_ONE:
+            equiv_is_one = TRUE;
+            break;
+        case FIRST_EQUIV_IS_MANY:
+            equiv_status = EQUIV_IS_ONE;
+        case EQUIV_IS_MANY:
+        default:
+            equiv_is_one = FALSE;
+            break;
+    }
 
     while (seqlochead != NULL)
     {
@@ -4739,20 +4803,20 @@ static SeqLocPtr SeqLocNext (SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 e
             if (currseqloc == NULL)
                 return seqlochead;
             else if (currseqloc == seqlochead)   /* found it */
-			{
-				*founditptr = TRUE;
-				if (seqlochead -> next != NULL)
-				{
-					if (IS_one_loc(seqlochead->next, equiv_is_one))
-						return seqlochead->next;
-					else
-						return SeqLocNext(seqlochead->next, NULL, equiv_status, &foundit);
-				}
-				else
-				{
-					return NULL;
-				}
-			}
+            {
+                *founditptr = TRUE;
+                if (seqlochead -> next != NULL)
+                {
+                    if (IS_one_loc(seqlochead->next, equiv_is_one))
+                        return seqlochead->next;
+                    else
+                        return SeqLocNext(seqlochead->next, NULL, equiv_status, &foundit);
+                }
+                else
+                {
+                    return NULL;
+                }
+            }
         }
         else
         {
@@ -4761,9 +4825,9 @@ static SeqLocPtr SeqLocNext (SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 e
             {
                 if ((retval = SeqLocNext(currloc, currseqloc, equiv_status, &foundit)) != NULL)
                     return retval;
-				else
-					if (foundit)
-						currseqloc = NULL;   /* no need to keep looking */
+                else
+                    if (foundit)
+                        currseqloc = NULL;   /* no need to keep looking */
             }
         }
 
@@ -4782,7 +4846,7 @@ static SeqLocPtr SeqLocNext (SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 e
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr SeqLocFindNext (SeqLocPtr seqlochead, SeqLocPtr currseqloc)
 {
-	return SeqLocFindPart(seqlochead, currseqloc, EQUIV_IS_MANY);
+    return SeqLocFindPart(seqlochead, currseqloc, EQUIV_IS_MANY);
 }
 
 /*****************************************************************************
@@ -4795,45 +4859,45 @@ NLM_EXTERN SeqLocPtr SeqLocFindNext (SeqLocPtr seqlochead, SeqLocPtr currseqloc)
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr SeqLocFindPart (SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 equiv_status)
 {
-	SeqLocPtr tmp, oldnext;
-	Boolean equiv_is_one, foundit=FALSE;
+    SeqLocPtr tmp, oldnext;
+    Boolean equiv_is_one, foundit=FALSE;
 
-	if (seqlochead == NULL) return NULL;
+    if (seqlochead == NULL) return NULL;
 
-	if (equiv_status == EQUIV_IS_ONE)
-		equiv_is_one = TRUE;
-	else
-		equiv_is_one = FALSE;
+    if (equiv_status == EQUIV_IS_ONE)
+        equiv_is_one = TRUE;
+    else
+        equiv_is_one = FALSE;
 
-	if (IS_one_loc(seqlochead, equiv_is_one))    /* not a chain */
-	{
-		if (currseqloc == NULL)	   /* first call */
-			return seqlochead;
-		else if (currseqloc == seqlochead)	 /* second call */
-			return NULL;
-		else						   /* oops */
-			goto erret;
-	}
+    if (IS_one_loc(seqlochead, equiv_is_one))    /* not a chain */
+    {
+        if (currseqloc == NULL)       /* first call */
+            return seqlochead;
+        else if (currseqloc == seqlochead)     /* second call */
+            return NULL;
+        else                           /* oops */
+            goto erret;
+    }
 
-	if (currseqloc != NULL)
-	{
-		if (! IS_one_loc(currseqloc, equiv_is_one)) /* oops */
-			goto erret;
-		tmp = currseqloc->next;
-		if (tmp != NULL)
-		{
-			if (IS_one_loc(tmp, equiv_is_one))
-				return tmp;
-		}
-	}
+    if (currseqloc != NULL)
+    {
+        if (! IS_one_loc(currseqloc, equiv_is_one)) /* oops */
+            goto erret;
+        tmp = currseqloc->next;
+        if (tmp != NULL)
+        {
+            if (IS_one_loc(tmp, equiv_is_one))
+                return tmp;
+        }
+    }
    
-	oldnext = seqlochead->next;	   /* protect from accidental chains */
-	seqlochead->next = NULL;
+    oldnext = seqlochead->next;       /* protect from accidental chains */
+    seqlochead->next = NULL;
 
     tmp = SeqLocNext(seqlochead, currseqloc, equiv_status, &foundit);
 
-	seqlochead->next = oldnext;
-	return tmp;
+    seqlochead->next = oldnext;
+    return tmp;
 
 erret:
     ErrPostEx(SEV_ERROR,0,0, "Invalid arguments to SeqLocFindNext");
@@ -4844,7 +4908,7 @@ erret:
 *
 *   IS_one_loc(anp, equiv_is_one)
 *       returns TRUE if is a sequence location which refers to one piece
-*   	of sequence
+*       of sequence
 *       used for moving through complicated Seq-locs
 *      if equiv_is_one == TRUE, then considers a SEQ_LOC_EQUIV a single
 *        location. If FALSE, does not.
@@ -4853,11 +4917,11 @@ erret:
 NLM_EXTERN Boolean IS_one_loc (SeqLocPtr anp, Boolean equiv_is_one)      /* a SeqLoc */
 
 {
-	Boolean retval = FALSE;
+    Boolean retval = FALSE;
 
-	if (anp == NULL) return FALSE;
-	
-	switch (anp->choice)
+    if (anp == NULL) return FALSE;
+    
+    switch (anp->choice)
     {
         case SEQLOC_NULL:      /* null - not a valid single region */
         case SEQLOC_EMPTY:      /* empty */
@@ -4866,26 +4930,26 @@ NLM_EXTERN Boolean IS_one_loc (SeqLocPtr anp, Boolean equiv_is_one)      /* a Se
         case SEQLOC_PNT:      /* pnt */
         case SEQLOC_PACKED_PNT:      /* packed-pnt   */
         case SEQLOC_BOND:      /* bond */
-			retval = TRUE;
-			break;
+            retval = TRUE;
+            break;
 
         case SEQLOC_EQUIV:     /* equiv */
-			retval = equiv_is_one;
-			break;
+            retval = equiv_is_one;
+            break;
 
         case SEQLOC_PACKED_INT:      /* packed seqint */
         case SEQLOC_MIX:      /* mix */
         case SEQLOC_FEAT:
-			retval = FALSE;
+            retval = FALSE;
             break;
 
-		default:
-			ErrPostEx(SEV_ERROR,0,0, "IS_one_seq: unsupported seqloc [%d]",
-				(int)(anp->choice));
-			retval = TRUE;
+        default:
+            ErrPostEx(SEV_ERROR,0,0, "IS_one_seq: unsupported seqloc [%d]",
+                (int)(anp->choice));
+            retval = TRUE;
             break;
-	}
-	return retval;
+    }
+    return retval;
 }
 /*****************************************************************************
 *
@@ -4896,50 +4960,50 @@ NLM_EXTERN SeqIdPtr SeqLocId (SeqLocPtr anp)
 
 {
     SeqIdPtr seqid = NULL, currseqid = NULL;
-	SeqLocPtr loc;
+    SeqLocPtr loc;
 
-	if (anp == NULL) return NULL;
-	
+    if (anp == NULL) return NULL;
+    
     switch (anp->choice)
     {
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_FEAT:   /* feat -- can't track yet */
-			break;
+            break;
         case SEQLOC_BOND:   /* bond -- 2 seqs */
-			if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
-				seqid = ((SeqBondPtr)(anp->data.ptrvalue))->a->id;
-			break;
+            if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
+                seqid = ((SeqBondPtr)(anp->data.ptrvalue))->a->id;
+            break;
         case SEQLOC_EMPTY:    /* empty */
         case SEQLOC_WHOLE:    /* whole */
             seqid = (SeqIdPtr)anp->data.ptrvalue;
             break;
         case SEQLOC_INT:    /* int */
             seqid = ((SeqIntPtr)anp->data.ptrvalue)->id;
-			break;
+            break;
         case SEQLOC_PACKED_INT:    /* packed int */
         case SEQLOC_MIX:    /* mix -- could be more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
-			loc = (SeqLocPtr)anp->data.ptrvalue;
-			while (loc != NULL)
-			{
-				if (loc->choice == SEQLOC_NULL) {
-					loc = loc->next;
-					continue;
-				}
-				currseqid =	SeqLocId(loc);
-				if (seqid == NULL)
-					seqid = currseqid;
-				else
-				{
-					if (! SeqIdMatch(seqid, currseqid))
-					{
-						seqid = NULL;
-						loc = NULL;
-						break;
-					}
-				}
-				loc = loc->next;
-			}
+            loc = (SeqLocPtr)anp->data.ptrvalue;
+            while (loc != NULL)
+            {
+                if (loc->choice == SEQLOC_NULL) {
+                    loc = loc->next;
+                    continue;
+                }
+                currseqid =    SeqLocId(loc);
+                if (seqid == NULL)
+                    seqid = currseqid;
+                else
+                {
+                    if (! SeqIdMatch(seqid, currseqid))
+                    {
+                        seqid = NULL;
+                        loc = NULL;
+                        break;
+                    }
+                }
+                loc = loc->next;
+            }
             break;
         case SEQLOC_PNT:    /* pnt */
             seqid = ((SeqPntPtr)anp->data.ptrvalue)->id;
@@ -4956,8 +5020,8 @@ NLM_EXTERN SeqIdPtr SeqLocId (SeqLocPtr anp)
 /*****************************************************************************
 *
 *   SeqLocStart(loc)
-*   	returns lowest number position for Seq-loc all on one bioseq
-*   	returns -1 if impossible to meet that condition
+*       returns lowest number position for Seq-loc all on one bioseq
+*       returns -1 if impossible to meet that condition
 *
 *****************************************************************************/
 NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
@@ -4974,33 +5038,33 @@ NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
     switch (anp->choice)
     {
         case SEQLOC_BOND:   /* bond -- 2 seqs */
-			if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
-				pos =  ((SeqBondPtr)(anp->data.ptrvalue))->a->point;
-			break;
+            if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
+                pos =  ((SeqBondPtr)(anp->data.ptrvalue))->a->point;
+            break;
         case SEQLOC_FEAT:   /* feat -- can't track yet */
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_EMPTY:    /* empty */
-			break;
+            break;
         case SEQLOC_WHOLE:    /* whole */
-			pos = 0L;
-			break;
+            pos = 0L;
+            break;
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			sip = SeqLocId(anp);
-			if (sip != NULL)      /* all on one Bioseq */
-			{
-				slp = (SeqLocPtr)anp->data.ptrvalue;
-				while (slp != NULL)
-				{
-					tpos = SeqLocStart(slp);
-					if (pos < 0)
-						pos = tpos;
-					else if (tpos < pos)
-						pos = tpos;
-					slp = slp->next;
-				}
-			}
+            sip = SeqLocId(anp);
+            if (sip != NULL)      /* all on one Bioseq */
+            {
+                slp = (SeqLocPtr)anp->data.ptrvalue;
+                while (slp != NULL)
+                {
+                    tpos = SeqLocStart(slp);
+                    if (pos < 0)
+                        pos = tpos;
+                    else if (tpos < pos)
+                        pos = tpos;
+                    slp = slp->next;
+                }
+            }
             break;
         case SEQLOC_INT:    /* int */
             sintp = (SeqIntPtr) anp->data.ptrvalue;
@@ -5010,16 +5074,16 @@ NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
             pos = ((SeqPntPtr)anp->data.ptrvalue)->point;
             break;
         case SEQLOC_PACKED_PNT:    /* packed pnt */
-			numpnt = PackSeqPntNum((PackSeqPntPtr)anp->data.ptrvalue);
-			while (numpnt)
-			{
-				numpnt--;
-				tpos = PackSeqPntGet((PackSeqPntPtr)anp->data.ptrvalue, numpnt);
-				if (pos < 0)
-					pos = tpos;
-				else if (tpos < pos)
-					pos = tpos;
-			}
+            numpnt = PackSeqPntNum((PackSeqPntPtr)anp->data.ptrvalue);
+            while (numpnt)
+            {
+                numpnt--;
+                tpos = PackSeqPntGet((PackSeqPntPtr)anp->data.ptrvalue, numpnt);
+                if (pos < 0)
+                    pos = tpos;
+                else if (tpos < pos)
+                    pos = tpos;
+            }
             break;
         default:
             break;
@@ -5030,8 +5094,8 @@ NLM_EXTERN Int4 SeqLocStart (SeqLocPtr anp)   /* seqloc */
 /*****************************************************************************
 *
 *   SeqLocStop(loc)
-*   	looks for highest position number on loc if on one Bioseq
-*   	if fails, returns -1
+*       looks for highest position number on loc if on one Bioseq
+*       if fails, returns -1
 *
 *****************************************************************************/
 NLM_EXTERN Int4 SeqLocStop (SeqLocPtr anp)   /* seqloc */
@@ -5039,9 +5103,9 @@ NLM_EXTERN Int4 SeqLocStop (SeqLocPtr anp)   /* seqloc */
 {
     BioseqPtr bsp;
     Int4 pos = -1L, tpos, numpnt;
-	SeqIdPtr sip;
-	SeqLocPtr slp;
-	Boolean locked = FALSE;
+    SeqIdPtr sip;
+    SeqLocPtr slp;
+    Boolean locked = FALSE;
 
 
     if (anp == NULL)
@@ -5050,44 +5114,44 @@ NLM_EXTERN Int4 SeqLocStop (SeqLocPtr anp)   /* seqloc */
     switch (anp->choice)
     {
         case SEQLOC_BOND:   /* bond -- 2 seqs */
-			if (((SeqBondPtr)(anp->data.ptrvalue))->b != NULL)
-				pos =  ((SeqBondPtr)(anp->data.ptrvalue))->b->point;
-			else if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
-				pos =  ((SeqBondPtr)(anp->data.ptrvalue))->a->point;
-			break;
+            if (((SeqBondPtr)(anp->data.ptrvalue))->b != NULL)
+                pos =  ((SeqBondPtr)(anp->data.ptrvalue))->b->point;
+            else if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
+                pos =  ((SeqBondPtr)(anp->data.ptrvalue))->a->point;
+            break;
         case SEQLOC_FEAT:   /* feat -- can't track yet */
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_EMPTY:    /* empty */
-			break;
+            break;
         case SEQLOC_WHOLE:    /* whole */
             bsp = BioseqFindCore((SeqIdPtr)anp->data.ptrvalue);
-				if (bsp == NULL)
-				{
-					bsp = BioseqLockById((SeqIdPtr)anp->data.ptrvalue);
-					if (bsp != NULL)
-						locked = TRUE;
-				}
+                if (bsp == NULL)
+                {
+                    bsp = BioseqLockById((SeqIdPtr)anp->data.ptrvalue);
+                    if (bsp != NULL)
+                        locked = TRUE;
+                }
             pos = BioseqGetLen(bsp) - 1;
-				if (locked)
-					BioseqUnlock(bsp);
-			break;
+                if (locked)
+                    BioseqUnlock(bsp);
+            break;
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			sip = SeqLocId(anp);
-			if (sip != NULL)      /* all on one Bioseq */
-			{
-				slp = (SeqLocPtr)anp->data.ptrvalue;
-				while (slp != NULL)
-				{
-					tpos = SeqLocStop(slp);
-					if (pos < 0)
-						pos = tpos;
-					else if (tpos > pos)
-						pos = tpos;
-					slp = slp->next;
-				}
-			}
+            sip = SeqLocId(anp);
+            if (sip != NULL)      /* all on one Bioseq */
+            {
+                slp = (SeqLocPtr)anp->data.ptrvalue;
+                while (slp != NULL)
+                {
+                    tpos = SeqLocStop(slp);
+                    if (pos < 0)
+                        pos = tpos;
+                    else if (tpos > pos)
+                        pos = tpos;
+                    slp = slp->next;
+                }
+            }
             break;
         case SEQLOC_INT:    /* int */
             pos = ((SeqIntPtr)anp->data.ptrvalue)->to;
@@ -5096,16 +5160,16 @@ NLM_EXTERN Int4 SeqLocStop (SeqLocPtr anp)   /* seqloc */
             pos = ((SeqPntPtr)anp->data.ptrvalue)->point;
             break;
         case SEQLOC_PACKED_PNT:    /* packed pnt */
-			numpnt = PackSeqPntNum((PackSeqPntPtr)anp->data.ptrvalue);
-			while (numpnt)
-			{
-				numpnt--;
-				tpos = PackSeqPntGet((PackSeqPntPtr)anp->data.ptrvalue, numpnt);
-				if (pos < 0)
-					pos = tpos;
-				else if (tpos > pos)
-					pos = tpos;
-			}
+            numpnt = PackSeqPntNum((PackSeqPntPtr)anp->data.ptrvalue);
+            while (numpnt)
+            {
+                numpnt--;
+                tpos = PackSeqPntGet((PackSeqPntPtr)anp->data.ptrvalue, numpnt);
+                if (pos < 0)
+                    pos = tpos;
+                else if (tpos > pos)
+                    pos = tpos;
+            }
             break;
         default:
             break;
@@ -5123,8 +5187,8 @@ NLM_EXTERN Int4 SeqLocStop (SeqLocPtr anp)   /* seqloc */
 NLM_EXTERN Uint1 SeqLocStrand (SeqLocPtr anp)   /* seqloc */
 
 {
-	SeqIdPtr sip;
-	SeqLocPtr slp;
+    SeqIdPtr sip;
+    SeqLocPtr slp;
     Uint1 strand = Seq_strand_unknown, tstrand;
 
     if (anp == NULL)
@@ -5133,41 +5197,41 @@ NLM_EXTERN Uint1 SeqLocStrand (SeqLocPtr anp)   /* seqloc */
     switch (anp->choice)
     {
         case SEQLOC_BOND:   /* bond -- 2 seqs */
-			if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
-				strand =  ((SeqBondPtr)(anp->data.ptrvalue))->a->strand;
-			break;
+            if (((SeqBondPtr)(anp->data.ptrvalue))->a != NULL)
+                strand =  ((SeqBondPtr)(anp->data.ptrvalue))->a->strand;
+            break;
         case SEQLOC_FEAT:   /* feat -- can't track yet */
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_EMPTY:    /* empty */
-			break;
+            break;
         case SEQLOC_WHOLE:    /* whole */
-			strand = Seq_strand_both;
-			break;
+            strand = Seq_strand_both;
+            break;
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			sip = SeqLocId(anp);
-			if (sip != NULL)      /* all on one Bioseq */
-			{
-				for (slp = (SeqLocPtr)anp->data.ptrvalue, 
-						strand = SeqLocStrand(slp), slp = slp -> next;
-						slp != NULL ; slp = slp->next)
-				{
-				    if (slp->choice == SEQLOC_NULL || slp->choice == SEQLOC_EMPTY) continue;
-					tstrand = SeqLocStrand(slp);
-					if (strand == Seq_strand_unknown && tstrand == Seq_strand_plus) {
-						strand = Seq_strand_plus;
-					}
-					if (strand == Seq_strand_plus && tstrand == Seq_strand_unknown) {
-						tstrand = Seq_strand_plus;
-					}
-					if (strand != tstrand)
-					{
-						strand = Seq_strand_other;
-						break;
-					}
-				}
-			}
+            sip = SeqLocId(anp);
+            if (sip != NULL)      /* all on one Bioseq */
+            {
+                for (slp = (SeqLocPtr)anp->data.ptrvalue, 
+                        strand = SeqLocStrand(slp), slp = slp -> next;
+                        slp != NULL ; slp = slp->next)
+                {
+                    if (slp->choice == SEQLOC_NULL || slp->choice == SEQLOC_EMPTY) continue;
+                    tstrand = SeqLocStrand(slp);
+                    if (strand == Seq_strand_unknown && tstrand == Seq_strand_plus) {
+                        strand = Seq_strand_plus;
+                    }
+                    if (strand == Seq_strand_plus && tstrand == Seq_strand_unknown) {
+                        tstrand = Seq_strand_plus;
+                    }
+                    if (strand != tstrand)
+                    {
+                        strand = Seq_strand_other;
+                        break;
+                    }
+                }
+            }
             break;
         case SEQLOC_INT:    /* int */
             strand = ((SeqIntPtr)anp->data.ptrvalue)->strand;
@@ -5176,7 +5240,7 @@ NLM_EXTERN Uint1 SeqLocStrand (SeqLocPtr anp)   /* seqloc */
             strand = ((SeqPntPtr)anp->data.ptrvalue)->strand;
             break;
         case SEQLOC_PACKED_PNT:    /* packed pnt */
-			strand = ((PackSeqPntPtr)anp->data.ptrvalue)->strand;
+            strand = ((PackSeqPntPtr)anp->data.ptrvalue)->strand;
             break;
         default:
             break;
@@ -5194,69 +5258,69 @@ NLM_EXTERN Uint1 SeqLocStrand (SeqLocPtr anp)   /* seqloc */
 *****************************************************************************/
 NLM_EXTERN Int4 SeqLocGetSegLens (SeqLocPtr slp, Int4Ptr lens, Int4 ctr, Boolean gaps)
 {
-	SeqLocPtr slp2;
-	BioseqPtr bsp;
-	Boolean locked = FALSE;
+    SeqLocPtr slp2;
+    BioseqPtr bsp;
+    Boolean locked = FALSE;
 
-	if (slp == NULL)
-		return -1;
+    if (slp == NULL)
+        return -1;
 
     switch (slp->choice)
     {
         case SEQLOC_BOND:   /* bond -- 2 seqs */
         case SEQLOC_FEAT:   /* feat -- can't track yet */
-			break;
+            break;
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_EMPTY:    /* empty */
-			if (lens != NULL)
-				lens[ctr] = 0;
-			ctr++;
-			break;
+            if (lens != NULL)
+                lens[ctr] = 0;
+            ctr++;
+            break;
         case SEQLOC_WHOLE:    /* whole */
-			if (gaps)
-				break;
-			if (lens != NULL)
-			{
-	            bsp = BioseqFindCore((SeqIdPtr)slp->data.ptrvalue);
-					if (bsp == NULL)
-					{
-						bsp = BioseqLockById((SeqIdPtr)slp->data.ptrvalue);
-						if (bsp != NULL)
-							locked = TRUE;
-					}
-    	        lens[ctr] = BioseqGetLen(bsp);
-				  if (locked)
-						BioseqUnlock(bsp);
-			}
-			ctr++;
-			break;
+            if (gaps)
+                break;
+            if (lens != NULL)
+            {
+                bsp = BioseqFindCore((SeqIdPtr)slp->data.ptrvalue);
+                    if (bsp == NULL)
+                    {
+                        bsp = BioseqLockById((SeqIdPtr)slp->data.ptrvalue);
+                        if (bsp != NULL)
+                            locked = TRUE;
+                    }
+                lens[ctr] = BioseqGetLen(bsp);
+                  if (locked)
+                        BioseqUnlock(bsp);
+            }
+            ctr++;
+            break;
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			slp2 = (SeqLocPtr)slp->data.ptrvalue;
-			while (slp2 != NULL)
-			{
-				ctr = SeqLocGetSegLens(slp2, lens, ctr, gaps);
-				slp2 = slp2->next;
-			}
+            slp2 = (SeqLocPtr)slp->data.ptrvalue;
+            while (slp2 != NULL)
+            {
+                ctr = SeqLocGetSegLens(slp2, lens, ctr, gaps);
+                slp2 = slp2->next;
+            }
             break;
         case SEQLOC_INT:    /* int */
-			if (gaps) break;
-			if (lens != NULL)
-            	lens[ctr] = ((SeqIntPtr)slp->data.ptrvalue)->to - ((SeqIntPtr)slp->data.ptrvalue)->from + 1;
-			ctr++;
+            if (gaps) break;
+            if (lens != NULL)
+                lens[ctr] = ((SeqIntPtr)slp->data.ptrvalue)->to - ((SeqIntPtr)slp->data.ptrvalue)->from + 1;
+            ctr++;
             break;
         case SEQLOC_PNT:    /* pnt */
-			if (gaps) break;
-			if (lens != NULL)
-	            lens[ctr] = 1;
-			ctr++;
+            if (gaps) break;
+            if (lens != NULL)
+                lens[ctr] = 1;
+            ctr++;
             break;
         case SEQLOC_PACKED_PNT:    /* packed pnt */
-			if (gaps) break;
-			if (lens != NULL)
-				lens[ctr] = SeqLocStop(slp) - SeqLocStart(slp) + 1;
-			ctr++;
+            if (gaps) break;
+            if (lens != NULL)
+                lens[ctr] = SeqLocStop(slp) - SeqLocStart(slp) + 1;
+            ctr++;
             break;
         default:
             break;
@@ -5267,8 +5331,8 @@ NLM_EXTERN Int4 SeqLocGetSegLens (SeqLocPtr slp, Int4Ptr lens, Int4 ctr, Boolean
 /*****************************************************************************
 *
 *   SeqLocLen(loc)
-*   	returns total length in residues of loc
-*   	if fails, returns -1
+*       returns total length in residues of loc
+*       if fails, returns -1
 *
 *****************************************************************************/
 NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
@@ -5276,9 +5340,9 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
 {
     BioseqPtr bsp;
     Int4 len = -1L, tmp;
-	SeqLocPtr slp;
-	Boolean locked = FALSE;
-	Boolean average = FALSE;
+    SeqLocPtr slp;
+    Boolean locked = FALSE;
+    Boolean average = FALSE;
     Int2 num;
     SeqIdPtr sip;
     Int4 gi;
@@ -5293,55 +5357,55 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
     {
         case SEQLOC_BOND:   /* bond -- 2 seqs */
         case SEQLOC_FEAT:   /* feat -- can't track yet */
-			break;
+            break;
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_EMPTY:    /* empty */
-			len = 0;
-			break;
+            len = 0;
+            break;
         case SEQLOC_WHOLE:    /* whole */
-			sip = (SeqIdPtr) anp->data.ptrvalue;
-			bsp = BioseqFindCore(sip);
-			if (bsp == NULL) {
-				if (sip != NULL && sip->choice == SEQID_GI) {
-					gi = (Int4) sip->data.intvalue;
-					/* try registered service for rapid length lookup */
-					smp = SeqMgrWriteLock ();
-					if (smp != NULL) {
-						func = smp->seq_len_lookup_func;
-						SeqMgrUnlock ();
-						if (func != NULL) {
-							len = (*func) (gi);
-							if (len > 0) break;
-						}
-					}
-				}
-				bsp = BioseqLockById(sip);
-				if (bsp != NULL)
-					locked = TRUE;
-			}
-			len = BioseqGetLen(bsp);
-			if (locked)
-				BioseqUnlock(bsp);
-			break;
+            sip = (SeqIdPtr) anp->data.ptrvalue;
+            bsp = BioseqFindCore(sip);
+            if (bsp == NULL) {
+                if (sip != NULL && sip->choice == SEQID_GI) {
+                    gi = (Int4) sip->data.intvalue;
+                    /* try registered service for rapid length lookup */
+                    smp = SeqMgrWriteLock ();
+                    if (smp != NULL) {
+                        func = smp->seq_len_lookup_func;
+                        SeqMgrUnlock ();
+                        if (func != NULL) {
+                            len = (*func) (gi);
+                            if (len > 0) break;
+                        }
+                    }
+                }
+                bsp = BioseqLockById(sip);
+                if (bsp != NULL)
+                    locked = TRUE;
+            }
+            len = BioseqGetLen(bsp);
+            if (locked)
+                BioseqUnlock(bsp);
+            break;
         case SEQLOC_EQUIV:    /* equiv -- ditto */
-        	average = TRUE;
+            average = TRUE;
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_PACKED_INT:    /* packed int */
-			slp = (SeqLocPtr)anp->data.ptrvalue;
-			len = 0;
-			num = 0;
-			while (slp != NULL)
-			{
-				tmp = SeqLocLen(slp);
-				if (tmp == -1)
-					return -1;
-				len += tmp;
-				num++;
-				slp = slp->next;
-			}
-			if (average) {
-				len /= num;
-			}
+            slp = (SeqLocPtr)anp->data.ptrvalue;
+            len = 0;
+            num = 0;
+            while (slp != NULL)
+            {
+                tmp = SeqLocLen(slp);
+                if (tmp == -1)
+                    return -1;
+                len += tmp;
+                num++;
+                slp = slp->next;
+            }
+            if (average) {
+                len /= num;
+            }
             break;
         case SEQLOC_INT:    /* int */
             len = ((SeqIntPtr)anp->data.ptrvalue)->to - ((SeqIntPtr)anp->data.ptrvalue)->from + 1;
@@ -5350,7 +5414,7 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
             len = 1;
             break;
         case SEQLOC_PACKED_PNT:    /* packed pnt */
-			len = SeqLocStop(anp) - SeqLocStart(anp) + 1;
+            len = SeqLocStop(anp) - SeqLocStart(anp) + 1;
             break;
         default:
             break;
@@ -5361,15 +5425,15 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
 /*****************************************************************************
 *
 *   SeqLocRevCmp(loc)
-*   	reverse complements a SeqLoc
-*   	NO Check to be sure its on a nucleic acid
+*       reverse complements a SeqLoc
+*       NO Check to be sure its on a nucleic acid
 *
 *****************************************************************************/
 NLM_EXTERN Boolean SeqLocRevCmp (SeqLocPtr anp)   /* seqloc */
 
 {
-	SeqLocPtr slp, first, curr, prev;
-	SeqPntPtr spp;
+    SeqLocPtr slp, first, curr, prev;
+    SeqPntPtr spp;
 
 
     if (anp == NULL)
@@ -5378,48 +5442,48 @@ NLM_EXTERN Boolean SeqLocRevCmp (SeqLocPtr anp)   /* seqloc */
     switch (anp->choice)
     {
         case SEQLOC_BOND:   /* bond -- 2 seqs */
-			spp = ((SeqBondPtr)anp->data.ptrvalue)->a;
-			spp->strand = StrandCmp(spp->strand);
-			spp = ((SeqBondPtr)anp->data.ptrvalue)->b;
-			if (spp != NULL)
-				spp->strand = StrandCmp(spp->strand);
-			break;
+            spp = ((SeqBondPtr)anp->data.ptrvalue)->a;
+            spp->strand = StrandCmp(spp->strand);
+            spp = ((SeqBondPtr)anp->data.ptrvalue)->b;
+            if (spp != NULL)
+                spp->strand = StrandCmp(spp->strand);
+            break;
         case SEQLOC_FEAT:   /* feat -- can't track yet */
         case SEQLOC_NULL:    /* NULL */
         case SEQLOC_EMPTY:    /* empty */
         case SEQLOC_WHOLE:    /* whole */
-			break;
+            break;
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			slp = (SeqLocPtr)anp->data.ptrvalue;
-			while (slp != NULL)
-			{
-				SeqLocRevCmp(slp);     /* RevCmp subparts */
-				slp = slp->next;
-			}
-			first = NULL;
-			curr = NULL;
-			prev = (SeqLocPtr)anp->data.ptrvalue;
-			while (prev != NULL)  /* reverse order of parts */
-			{					  /* no effect on meaning of SEQLOC_EQUIV */
-				slp = (SeqLocPtr)anp->data.ptrvalue;
-				prev = NULL;
-				while (slp->next != NULL)
-				{
-					prev = slp;
-					slp = slp->next;
-				}
-				if (prev != NULL) 
-		   			prev->next = NULL;
-				if (first == NULL)
-					first = slp;
-				else
-					curr->next = slp;
-				slp->next = NULL;
-				curr = slp;
-			}
-			anp->data.ptrvalue = first;
+            slp = (SeqLocPtr)anp->data.ptrvalue;
+            while (slp != NULL)
+            {
+                SeqLocRevCmp(slp);     /* RevCmp subparts */
+                slp = slp->next;
+            }
+            first = NULL;
+            curr = NULL;
+            prev = (SeqLocPtr)anp->data.ptrvalue;
+            while (prev != NULL)  /* reverse order of parts */
+            {                      /* no effect on meaning of SEQLOC_EQUIV */
+                slp = (SeqLocPtr)anp->data.ptrvalue;
+                prev = NULL;
+                while (slp->next != NULL)
+                {
+                    prev = slp;
+                    slp = slp->next;
+                }
+                if (prev != NULL) 
+                       prev->next = NULL;
+                if (first == NULL)
+                    first = slp;
+                else
+                    curr->next = slp;
+                slp->next = NULL;
+                curr = slp;
+            }
+            anp->data.ptrvalue = first;
             break;
         case SEQLOC_INT:    /* int */
             ((SeqIntPtr)anp->data.ptrvalue)->strand = StrandCmp(((SeqIntPtr)anp->data.ptrvalue)->strand);
@@ -5439,36 +5503,36 @@ NLM_EXTERN Boolean SeqLocRevCmp (SeqLocPtr anp)   /* seqloc */
 /*****************************************************************************
 *
 *   Uint1 StrandCmp(strand)
-*   	returns the complement of a Strand
+*       returns the complement of a Strand
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 StrandCmp (Uint1 strand)
 
 {
-	switch(strand)
-	{
-		case Seq_strand_unknown:     /* default to plus for this */
-		case Seq_strand_plus:
-			return (Uint1) Seq_strand_minus;
-		case Seq_strand_minus:
-			return (Uint1) Seq_strand_plus;
-		case Seq_strand_both:
-			return (Uint1) Seq_strand_both_rev;
-		case Seq_strand_both_rev:
-			return (Uint1) Seq_strand_both;
-	}
-	return strand;
+    switch(strand)
+    {
+        case Seq_strand_unknown:     /* default to plus for this */
+        case Seq_strand_plus:
+            return (Uint1) Seq_strand_minus;
+        case Seq_strand_minus:
+            return (Uint1) Seq_strand_plus;
+        case Seq_strand_both:
+            return (Uint1) Seq_strand_both_rev;
+        case Seq_strand_both_rev:
+            return (Uint1) Seq_strand_both;
+    }
+    return strand;
 }
 
 /*****************************************************************************
 *
 *   SeqLocCompare(a, b)
-*   	returns
-*   	0 = no overlap
-*   	1 = a is completely contained in b
-*   	2 = b is completely contained in a
-*   	3 = a == b
-*   	4 = a and b overlap, but neither completely contained in the other
+*       returns
+*       0 = no overlap
+*       1 = a is completely contained in b
+*       2 = b is completely contained in a
+*       3 = a == b
+*       4 = a and b overlap, but neither completely contained in the other
 *   
 *
 *****************************************************************************/
@@ -5477,27 +5541,27 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
 {
     BioseqPtr bsp;
     Int4 len = -1L, i, j, num, num2, point, hits;
-	SeqLocPtr slp, slp2;
-	ValNode tmp;
-	SeqBondPtr sbp;
-	SeqIntPtr sip, sip2;
-	SeqIdPtr sidp;
-	PackSeqPntPtr pspp, pspp2;
-	Boolean got_one, missed_one, locked = FALSE;
-	Int2 retval = SLC_NO_MATCH,
-		 retval2 = SLC_NO_MATCH;
-	static Uint1 rettable [5][5] = {      /* for developing return values */
-		{ 0,4,2,2,4 } ,					  /* when a is longer than b */
-		{ 4,1,4,1,4 } ,
-		{ 2,4,2,2,4 } ,
-		{ 2,1,2,3,4 } ,
-		{ 4,4,4,4,4 }};
-	static Uint1 rettable2 [5][5] = {	  /* for developing return values */
-		{ 0,1,4,1,4 } ,					  /* when b is longer than a */
-		{ 1,1,4,1,1 } ,
-		{ 4,4,2,2,4 } ,
-		{ 1,1,4,3,4 } ,
-		{ 4,1,4,4,4 }};
+    SeqLocPtr slp, slp2;
+    ValNode tmp;
+    SeqBondPtr sbp;
+    SeqIntPtr sip, sip2;
+    SeqIdPtr sidp;
+    PackSeqPntPtr pspp, pspp2;
+    Boolean got_one, missed_one, locked = FALSE;
+    Int2 retval = SLC_NO_MATCH,
+         retval2 = SLC_NO_MATCH;
+    static Uint1 rettable [5][5] = {      /* for developing return values */
+        { 0,4,2,2,4 } ,                      /* when a is longer than b */
+        { 4,1,4,1,4 } ,
+        { 2,4,2,2,4 } ,
+        { 2,1,2,3,4 } ,
+        { 4,4,4,4,4 }};
+    static Uint1 rettable2 [5][5] = {      /* for developing return values */
+        { 0,1,4,1,4 } ,                      /* when b is longer than a */
+        { 1,1,4,1,1 } ,
+        { 4,4,2,2,4 } ,
+        { 1,1,4,3,4 } ,
+        { 4,1,4,4,4 }};
 
     if ((a == NULL) || (b == NULL))
         return retval;
@@ -5507,491 +5571,491 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			if ((b->choice == SEQLOC_MIX) ||  /* check for identity */
-				(b->choice == SEQLOC_EQUIV) ||
-				(b->choice == SEQLOC_PACKED_INT))
-			{
-				got_one = FALSE;   /* for any overlap */
-				slp = (SeqLocPtr)a->data.ptrvalue;  /* check for identity */
-				slp2 = (SeqLocPtr)b->data.ptrvalue;
-				retval = SeqLocCompare(slp, slp2);
-				slp = slp->next;
-				slp2 = slp2->next;
-				while ((slp != NULL) && (slp2 != NULL) && (retval == SLC_A_EQ_B))
-				{
-					retval = SeqLocCompare(slp, slp2);
-					slp = slp->next;
-					slp2 = slp2->next;
-				}
-				if ((slp == NULL) && (slp2 == NULL) && (retval == SLC_A_EQ_B))
-					return retval;
+            if ((b->choice == SEQLOC_MIX) ||  /* check for identity */
+                (b->choice == SEQLOC_EQUIV) ||
+                (b->choice == SEQLOC_PACKED_INT))
+            {
+                got_one = FALSE;   /* for any overlap */
+                slp = (SeqLocPtr)a->data.ptrvalue;  /* check for identity */
+                slp2 = (SeqLocPtr)b->data.ptrvalue;
+                retval = SeqLocCompare(slp, slp2);
+                slp = slp->next;
+                slp2 = slp2->next;
+                while ((slp != NULL) && (slp2 != NULL) && (retval == SLC_A_EQ_B))
+                {
+                    retval = SeqLocCompare(slp, slp2);
+                    slp = slp->next;
+                    slp2 = slp2->next;
+                }
+                if ((slp == NULL) && (slp2 == NULL) && (retval == SLC_A_EQ_B))
+                    return retval;
 
-				slp = (SeqLocPtr)a->data.ptrvalue;	/* check for a in b */
-				slp2 = (SeqLocPtr)b->data.ptrvalue;
-				while ((slp != NULL) && (slp2 != NULL))
-				{
-					retval2 = SeqLocCompare(slp, slp2);
-					if (retval2 > SLC_NO_MATCH)
-						got_one = TRUE;
-					switch (retval2)
-					{
-						case SLC_NO_MATCH:
-							slp2 = slp2->next;
-							break;
-						case SLC_A_EQ_B:
-							slp2 = slp2->next;
-							slp = slp->next;
-							break;
-						case SLC_A_IN_B:
-							slp = slp->next;
-							break;
-						case SLC_B_IN_A:
-						case SLC_A_OVERLAP_B:
-							slp2 = NULL;
-							break;
-					}
-				}
-				if (slp == NULL)    /* a all in b */
-					return SLC_A_IN_B;
+                slp = (SeqLocPtr)a->data.ptrvalue;    /* check for a in b */
+                slp2 = (SeqLocPtr)b->data.ptrvalue;
+                while ((slp != NULL) && (slp2 != NULL))
+                {
+                    retval2 = SeqLocCompare(slp, slp2);
+                    if (retval2 > SLC_NO_MATCH)
+                        got_one = TRUE;
+                    switch (retval2)
+                    {
+                        case SLC_NO_MATCH:
+                            slp2 = slp2->next;
+                            break;
+                        case SLC_A_EQ_B:
+                            slp2 = slp2->next;
+                            slp = slp->next;
+                            break;
+                        case SLC_A_IN_B:
+                            slp = slp->next;
+                            break;
+                        case SLC_B_IN_A:
+                        case SLC_A_OVERLAP_B:
+                            slp2 = NULL;
+                            break;
+                    }
+                }
+                if (slp == NULL)    /* a all in b */
+                    return SLC_A_IN_B;
 
-				slp2 = (SeqLocPtr)a->data.ptrvalue;	/* check for b in a */
-				slp = (SeqLocPtr)b->data.ptrvalue;
-				while ((slp != NULL) && (slp2 != NULL))
-				{
-					retval2 = SeqLocCompare(slp, slp2);
-					if (retval2 > SLC_NO_MATCH)
-						got_one = TRUE;
-					switch (retval2)
-					{
-						case SLC_NO_MATCH:
-							slp2 = slp2->next;
-							break;
-						case SLC_A_EQ_B:
-							slp2 = slp2->next;
-							slp = slp->next;
-							break;
-						case SLC_A_IN_B:
-							slp = slp->next;
-							break;
-						case SLC_B_IN_A:
-						case SLC_A_OVERLAP_B:
-							slp2 = NULL;
-							break;
-					}
-				}
-				if (slp == NULL)    /* a all in b */
-					return SLC_B_IN_A;
+                slp2 = (SeqLocPtr)a->data.ptrvalue;    /* check for b in a */
+                slp = (SeqLocPtr)b->data.ptrvalue;
+                while ((slp != NULL) && (slp2 != NULL))
+                {
+                    retval2 = SeqLocCompare(slp, slp2);
+                    if (retval2 > SLC_NO_MATCH)
+                        got_one = TRUE;
+                    switch (retval2)
+                    {
+                        case SLC_NO_MATCH:
+                            slp2 = slp2->next;
+                            break;
+                        case SLC_A_EQ_B:
+                            slp2 = slp2->next;
+                            slp = slp->next;
+                            break;
+                        case SLC_A_IN_B:
+                            slp = slp->next;
+                            break;
+                        case SLC_B_IN_A:
+                        case SLC_A_OVERLAP_B:
+                            slp2 = NULL;
+                            break;
+                    }
+                }
+                if (slp == NULL)    /* a all in b */
+                    return SLC_B_IN_A;
 
-				if (got_one)
-					return SLC_A_OVERLAP_B;
-			}
+                if (got_one)
+                    return SLC_A_OVERLAP_B;
+            }
 
-			slp = (SeqLocPtr)a->data.ptrvalue; /* check for any overlap */
-			retval = SeqLocCompare(slp, b);
-			slp = slp->next;
-			while (slp != NULL)
-			{
-				retval2 = SeqLocCompare(slp, b);
-				retval = (Int2) rettable[retval][retval2];
-				slp = slp->next;
-			}
+            slp = (SeqLocPtr)a->data.ptrvalue; /* check for any overlap */
+            retval = SeqLocCompare(slp, b);
+            slp = slp->next;
+            while (slp != NULL)
+            {
+                retval2 = SeqLocCompare(slp, b);
+                retval = (Int2) rettable[retval][retval2];
+                slp = slp->next;
+            }
             return retval;
-		default:
-			break;
-	}
+        default:
+            break;
+    }
     switch (b->choice)
     {
         case SEQLOC_MIX:    /* mix -- more than one seq */
-		case SEQLOC_EQUIV:    /* equiv -- ditto */
+        case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
-			slp = (SeqLocPtr)b->data.ptrvalue;
-			retval = SeqLocCompare(a, slp);
-			slp = slp->next;
-			while (slp != NULL)
-			{
-				retval2 = SeqLocCompare(a, slp);
-				retval = (Int2)rettable2[retval][retval2];
-				slp = slp->next;
-			}
-		    return retval;
-		default:
-			break;
-	}
+            slp = (SeqLocPtr)b->data.ptrvalue;
+            retval = SeqLocCompare(a, slp);
+            slp = slp->next;
+            while (slp != NULL)
+            {
+                retval2 = SeqLocCompare(a, slp);
+                retval = (Int2)rettable2[retval][retval2];
+                slp = slp->next;
+            }
+            return retval;
+        default:
+            break;
+    }
 
-	tmp.next = NULL;
-	switch (a->choice)
-	{
+    tmp.next = NULL;
+    switch (a->choice)
+    {
         case SEQLOC_NULL:    /* NULL, can't match */
-			if (b->choice == SEQLOC_NULL)
-				retval = SLC_A_EQ_B;
-			break;
+            if (b->choice == SEQLOC_NULL)
+                retval = SLC_A_EQ_B;
+            break;
         case SEQLOC_FEAT:   /* feat -- can't track yet */
-			break;
+            break;
         case SEQLOC_EMPTY:    /* empty */
-			if (b->choice == SEQLOC_EMPTY)
-			{
-				if (SeqIdForSameBioseq((SeqIdPtr)a->data.ptrvalue, (SeqIdPtr)b->data.ptrvalue))
-					retval = SLC_A_EQ_B;
-			}
-			break;
+            if (b->choice == SEQLOC_EMPTY)
+            {
+                if (SeqIdForSameBioseq((SeqIdPtr)a->data.ptrvalue, (SeqIdPtr)b->data.ptrvalue))
+                    retval = SLC_A_EQ_B;
+            }
+            break;
         case SEQLOC_BOND:   /* bond -- 2 seqs */
-			sbp = (SeqBondPtr)a->data.ptrvalue;
-			tmp.choice = SEQLOC_PNT;    /* check the points */
-			tmp.data.ptrvalue = (Pointer)sbp->a;
-			retval = SeqLocCompare(&tmp, b);
-			if (sbp->b != NULL)
-			{
-				tmp.data.ptrvalue = (Pointer)sbp->b;
-				retval2 = SeqLocCompare(&tmp, b);
-				retval = (Int2) rettable[retval][retval2];
-			}
-			break;
+            sbp = (SeqBondPtr)a->data.ptrvalue;
+            tmp.choice = SEQLOC_PNT;    /* check the points */
+            tmp.data.ptrvalue = (Pointer)sbp->a;
+            retval = SeqLocCompare(&tmp, b);
+            if (sbp->b != NULL)
+            {
+                tmp.data.ptrvalue = (Pointer)sbp->b;
+                retval2 = SeqLocCompare(&tmp, b);
+                retval = (Int2) rettable[retval][retval2];
+            }
+            break;
         case SEQLOC_WHOLE:    /* whole */
-			sidp = (SeqIdPtr)a->data.ptrvalue;
-			switch (b->choice)
-			{
-		        case SEQLOC_BOND:   /* bond -- 2 seqs */
-					sbp = (SeqBondPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sbp->a->id, sidp))
-						retval = SLC_B_IN_A;
-					if (sbp->b != NULL)
-					{
-						if (SeqIdForSameBioseq(sbp->b->id, sidp))
-							retval2 = SLC_B_IN_A;
-						retval = (Int2) rettable[retval][retval2];
-					}
-					break;
-        		case SEQLOC_WHOLE:    /* whole */
-					if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
-						retval = SLC_A_EQ_B;
-					break;
-        		case SEQLOC_INT:    /* int */
-					sip = (SeqIntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, sip->id))
-					{
-						retval = SLC_B_IN_A;
-            		bsp = BioseqFindCore(sidp);
-						if (bsp == NULL)
-						{
-							bsp = BioseqLockById(sidp);
-							if (bsp != NULL)
-								locked = TRUE;
-						}
-						if (bsp != NULL)
-						{
-						    len = BioseqGetLen(bsp);
-							if ((sip->from == 0) && (sip->to == (len - 1)))
-								retval = SLC_A_EQ_B;
-						}
-						if (locked)
-							BioseqUnlock(bsp);
-					}
-		            break;
-        		case SEQLOC_PNT:    /* pnt */
-					if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
-						retval = SLC_B_IN_A;
-		            break;
-        		case SEQLOC_PACKED_PNT:    /* packed pnt */
-					if (SeqIdForSameBioseq(sidp, ((PackSeqPntPtr)b->data.ptrvalue)->id))
-						retval = SLC_B_IN_A;
-		            break;
-        		default:
-		            break;
-			}
-			break;
+            sidp = (SeqIdPtr)a->data.ptrvalue;
+            switch (b->choice)
+            {
+                case SEQLOC_BOND:   /* bond -- 2 seqs */
+                    sbp = (SeqBondPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sbp->a->id, sidp))
+                        retval = SLC_B_IN_A;
+                    if (sbp->b != NULL)
+                    {
+                        if (SeqIdForSameBioseq(sbp->b->id, sidp))
+                            retval2 = SLC_B_IN_A;
+                        retval = (Int2) rettable[retval][retval2];
+                    }
+                    break;
+                case SEQLOC_WHOLE:    /* whole */
+                    if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
+                        retval = SLC_A_EQ_B;
+                    break;
+                case SEQLOC_INT:    /* int */
+                    sip = (SeqIntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, sip->id))
+                    {
+                        retval = SLC_B_IN_A;
+                    bsp = BioseqFindCore(sidp);
+                        if (bsp == NULL)
+                        {
+                            bsp = BioseqLockById(sidp);
+                            if (bsp != NULL)
+                                locked = TRUE;
+                        }
+                        if (bsp != NULL)
+                        {
+                            len = BioseqGetLen(bsp);
+                            if ((sip->from == 0) && (sip->to == (len - 1)))
+                                retval = SLC_A_EQ_B;
+                        }
+                        if (locked)
+                            BioseqUnlock(bsp);
+                    }
+                    break;
+                case SEQLOC_PNT:    /* pnt */
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                        retval = SLC_B_IN_A;
+                    break;
+                case SEQLOC_PACKED_PNT:    /* packed pnt */
+                    if (SeqIdForSameBioseq(sidp, ((PackSeqPntPtr)b->data.ptrvalue)->id))
+                        retval = SLC_B_IN_A;
+                    break;
+                default:
+                    break;
+            }
+            break;
         case SEQLOC_INT:    /* int */
-			sip = (SeqIntPtr)a->data.ptrvalue;
-			sidp = sip->id;
-			switch (b->choice)
-			{
-		        case SEQLOC_BOND:   /* bond -- 2 seqs */
-					sbp = (SeqBondPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sbp->a->id, sidp))
-					{
-						if ((sip->from <= sbp->a->point) &&
-							(sip->to >= sbp->a->point))
-							retval = SLC_B_IN_A;
-					}
-					if (sbp->b != NULL)
-					{
-						if (SeqIdForSameBioseq(sbp->b->id, sidp))
-						{
-							if ((sip->from <= sbp->b->point) &&
-								(sip->to >= sbp->b->point))
-								retval = SLC_B_IN_A;
-						}
-						retval = (Int2) rettable[retval][retval2];
-					}
-					break;
-        		case SEQLOC_WHOLE:    /* whole */
-					if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
-					{
-						retval = SLC_A_IN_B;
-						bsp = BioseqFindCore((SeqIdPtr)b->data.ptrvalue);
-						if (bsp == NULL)
-						{
-							bsp = BioseqLockById((SeqIdPtr)b->data.ptrvalue);
-							if (bsp != NULL)
-								locked = TRUE;
-						}
-						if (bsp != NULL)
-						{
-							len = BioseqGetLen(bsp);
-							if ((sip->from == 0) && (sip->to == (len - 1)))
-								retval = SLC_A_EQ_B;
-						}
-						if (locked)
-							BioseqUnlock(bsp);
-					}
-					break;
-        		case SEQLOC_INT:    /* int */
-					sip2 = (SeqIntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, sip2->id))
-					{
-						if ((sip->from == sip2->from) && (sip->to == sip2->to))
-							retval = SLC_A_EQ_B;
-						else if ((sip->from <= sip2->from) && (sip->to >= sip2->to))
-							retval = SLC_B_IN_A;
-						else if ((sip->from >= sip2->from) && (sip->to <= sip2->to))
-							retval = SLC_A_IN_B;
-						else if ((sip->from >= sip2->from) && (sip->from <= sip2->to))
-							retval = SLC_A_OVERLAP_B;
-						else if ((sip->to >= sip2->from) && (sip->to <= sip2->to))
-							retval = SLC_A_OVERLAP_B;
-					}
-		            break;
-        		case SEQLOC_PNT:    /* pnt */
-					if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
-					{
-						point = ((SeqPntPtr)b->data.ptrvalue)->point;
-						if ((point >= sip->from) && (point <= sip->to))
-							retval = SLC_B_IN_A;
-					}
-		            break;
-        		case SEQLOC_PACKED_PNT:    /* packed pnt */
-					pspp = (PackSeqPntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, pspp->id))
-					{
-						got_one = FALSE;
-						missed_one = FALSE;
-						num = PackSeqPntNum(pspp);
-						for (i = 0; i < num; i++)
-						{
-							point = PackSeqPntGet(pspp, i);
-							if ((point < sip->from) || (point > sip->to))
-							{
-								missed_one = TRUE;
-								if (got_one)
-									i = num;
-							}
-							else
-							{
-								got_one = TRUE;
-								if (missed_one)
-									i = num;
-							}
-						}
-						if (got_one)
-						{
-							if (missed_one)
-								retval = SLC_A_OVERLAP_B;
-							else
-								retval = SLC_B_IN_A;
-						}
-					}
-		            break;
-        		default:
-		            break;
-			}
+            sip = (SeqIntPtr)a->data.ptrvalue;
+            sidp = sip->id;
+            switch (b->choice)
+            {
+                case SEQLOC_BOND:   /* bond -- 2 seqs */
+                    sbp = (SeqBondPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sbp->a->id, sidp))
+                    {
+                        if ((sip->from <= sbp->a->point) &&
+                            (sip->to >= sbp->a->point))
+                            retval = SLC_B_IN_A;
+                    }
+                    if (sbp->b != NULL)
+                    {
+                        if (SeqIdForSameBioseq(sbp->b->id, sidp))
+                        {
+                            if ((sip->from <= sbp->b->point) &&
+                                (sip->to >= sbp->b->point))
+                                retval = SLC_B_IN_A;
+                        }
+                        retval = (Int2) rettable[retval][retval2];
+                    }
+                    break;
+                case SEQLOC_WHOLE:    /* whole */
+                    if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
+                    {
+                        retval = SLC_A_IN_B;
+                        bsp = BioseqFindCore((SeqIdPtr)b->data.ptrvalue);
+                        if (bsp == NULL)
+                        {
+                            bsp = BioseqLockById((SeqIdPtr)b->data.ptrvalue);
+                            if (bsp != NULL)
+                                locked = TRUE;
+                        }
+                        if (bsp != NULL)
+                        {
+                            len = BioseqGetLen(bsp);
+                            if ((sip->from == 0) && (sip->to == (len - 1)))
+                                retval = SLC_A_EQ_B;
+                        }
+                        if (locked)
+                            BioseqUnlock(bsp);
+                    }
+                    break;
+                case SEQLOC_INT:    /* int */
+                    sip2 = (SeqIntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, sip2->id))
+                    {
+                        if ((sip->from == sip2->from) && (sip->to == sip2->to))
+                            retval = SLC_A_EQ_B;
+                        else if ((sip->from <= sip2->from) && (sip->to >= sip2->to))
+                            retval = SLC_B_IN_A;
+                        else if ((sip->from >= sip2->from) && (sip->to <= sip2->to))
+                            retval = SLC_A_IN_B;
+                        else if ((sip->from >= sip2->from) && (sip->from <= sip2->to))
+                            retval = SLC_A_OVERLAP_B;
+                        else if ((sip->to >= sip2->from) && (sip->to <= sip2->to))
+                            retval = SLC_A_OVERLAP_B;
+                    }
+                    break;
+                case SEQLOC_PNT:    /* pnt */
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                    {
+                        point = ((SeqPntPtr)b->data.ptrvalue)->point;
+                        if ((point >= sip->from) && (point <= sip->to))
+                            retval = SLC_B_IN_A;
+                    }
+                    break;
+                case SEQLOC_PACKED_PNT:    /* packed pnt */
+                    pspp = (PackSeqPntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, pspp->id))
+                    {
+                        got_one = FALSE;
+                        missed_one = FALSE;
+                        num = PackSeqPntNum(pspp);
+                        for (i = 0; i < num; i++)
+                        {
+                            point = PackSeqPntGet(pspp, i);
+                            if ((point < sip->from) || (point > sip->to))
+                            {
+                                missed_one = TRUE;
+                                if (got_one)
+                                    i = num;
+                            }
+                            else
+                            {
+                                got_one = TRUE;
+                                if (missed_one)
+                                    i = num;
+                            }
+                        }
+                        if (got_one)
+                        {
+                            if (missed_one)
+                                retval = SLC_A_OVERLAP_B;
+                            else
+                                retval = SLC_B_IN_A;
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
             break;
         case SEQLOC_PNT:    /* pnt */
-			sidp = ((SeqPntPtr)a->data.ptrvalue)->id;
-			point = ((SeqPntPtr)a->data.ptrvalue)->point;
-			switch (b->choice)
-			{
-		        case SEQLOC_BOND:   /* bond -- 2 seqs */
-					sbp = (SeqBondPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sbp->a->id, sidp))
-					{
-						if (point == sbp->a->point)
-							retval = SLC_A_EQ_B;
-					}
-					if (sbp->b != NULL)
-					{
-						if (SeqIdForSameBioseq(sbp->b->id, sidp))
-						{
-							if (point == sbp->b->point)
-								retval = SLC_A_EQ_B;
-						}
-						retval = (Int2) rettable[retval][retval2];
-					}
-					break;
-        		case SEQLOC_WHOLE:    /* whole */
-					if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
-						retval = SLC_A_IN_B;
-					break;
-        		case SEQLOC_INT:    /* int */
-					sip2 = (SeqIntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, sip2->id))
-					{
-						if ((point == sip2->from) && (point == sip2->to))
-							retval = SLC_A_EQ_B;
-						else if ((point >= sip2->from) && (point <= sip2->to))
-							retval = SLC_A_IN_B;
-					}
-		            break;
-        		case SEQLOC_PNT:    /* pnt */
-					if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
-					{
-						if (point == ((SeqPntPtr)b->data.ptrvalue)->point)
-							retval = SLC_A_EQ_B;
-					}
-		            break;
-        		case SEQLOC_PACKED_PNT:    /* packed pnt */
-					pspp = (PackSeqPntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, pspp->id))
-					{
-						num = PackSeqPntNum(pspp);
-						for (i = 0; i < num; i++)
-						{
-							if (point == PackSeqPntGet(pspp, i))
-							{
-								retval = SLC_A_IN_B;
-								i = num;     /* only check one */
-							}
-						}
-					}
-		            break;
-        		default:
-		            break;
-			}
+            sidp = ((SeqPntPtr)a->data.ptrvalue)->id;
+            point = ((SeqPntPtr)a->data.ptrvalue)->point;
+            switch (b->choice)
+            {
+                case SEQLOC_BOND:   /* bond -- 2 seqs */
+                    sbp = (SeqBondPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sbp->a->id, sidp))
+                    {
+                        if (point == sbp->a->point)
+                            retval = SLC_A_EQ_B;
+                    }
+                    if (sbp->b != NULL)
+                    {
+                        if (SeqIdForSameBioseq(sbp->b->id, sidp))
+                        {
+                            if (point == sbp->b->point)
+                                retval = SLC_A_EQ_B;
+                        }
+                        retval = (Int2) rettable[retval][retval2];
+                    }
+                    break;
+                case SEQLOC_WHOLE:    /* whole */
+                    if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
+                        retval = SLC_A_IN_B;
+                    break;
+                case SEQLOC_INT:    /* int */
+                    sip2 = (SeqIntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, sip2->id))
+                    {
+                        if ((point == sip2->from) && (point == sip2->to))
+                            retval = SLC_A_EQ_B;
+                        else if ((point >= sip2->from) && (point <= sip2->to))
+                            retval = SLC_A_IN_B;
+                    }
+                    break;
+                case SEQLOC_PNT:    /* pnt */
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                    {
+                        if (point == ((SeqPntPtr)b->data.ptrvalue)->point)
+                            retval = SLC_A_EQ_B;
+                    }
+                    break;
+                case SEQLOC_PACKED_PNT:    /* packed pnt */
+                    pspp = (PackSeqPntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, pspp->id))
+                    {
+                        num = PackSeqPntNum(pspp);
+                        for (i = 0; i < num; i++)
+                        {
+                            if (point == PackSeqPntGet(pspp, i))
+                            {
+                                retval = SLC_A_IN_B;
+                                i = num;     /* only check one */
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
             break;
         case SEQLOC_PACKED_PNT:    /* packed pnt */
-			pspp = (PackSeqPntPtr)a->data.ptrvalue;
-			num = PackSeqPntNum(pspp);
-			sidp = pspp->id;
-			switch (b->choice)
-			{
-		        case SEQLOC_BOND:   /* bond -- 2 seqs */
-					sbp = (SeqBondPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sbp->a->id, sidp))
-					{
-						point = sbp->a->point;
-						for (i = 0; i < num; i++)
-						{
-							if (point == PackSeqPntGet(pspp, i))
-							{
-								retval = SLC_B_IN_A;
-								i = num;
-							}
-						}
-					}
-					if (sbp->b != NULL)
-					{
-						if (SeqIdForSameBioseq(sbp->b->id, sidp))
-						{
-							point = sbp->b->point;
-							for (i = 0; i < num; i++)
-							{
-								if (point == PackSeqPntGet(pspp, i))
-								{
-									if (retval != SLC_B_IN_A)
-										retval = SLC_A_OVERLAP_B;
-									i = num + 1;
-								}
-							}
-							if ((i != num) && (retval == SLC_B_IN_A))
-								retval = SLC_A_OVERLAP_B;
-						}
-					}
-					break;
-        		case SEQLOC_WHOLE:    /* whole */
-					if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
-						retval = SLC_A_IN_B;
-					break;
-        		case SEQLOC_INT:    /* int */
-					sip = (SeqIntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, sip->id))
-					{
-						got_one = FALSE;
-						missed_one = FALSE;
-						for (i = 0; i < num; i++)
-						{
-							point = PackSeqPntGet(pspp, i);
-							if ((point < sip->from) || (point > sip->to))
-							{
-								missed_one = TRUE;
-								if (got_one)
-									i = num + 1;
-							}
-							else
-							{
-								got_one = TRUE;
-								if (missed_one)
-									i = num + 1;
-							}
-						}
-						if (got_one)
-						{
-							if (missed_one)
-								retval = SLC_A_OVERLAP_B;
-							else
-								retval = SLC_A_IN_B;
-						}
-					}
-		            break;
-        		case SEQLOC_PNT:    /* pnt */
-					if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
-					{
-						point = ((SeqPntPtr)b->data.ptrvalue)->point;
-						for (i = 0; i < num; i++)
-						{
-							if (point == PackSeqPntGet(pspp, i))
-							{
-								retval = SLC_B_IN_A;
-								i = num + 1;
-							}
-						}
-					}
-		            break;
-        		case SEQLOC_PACKED_PNT:    /* packed pnt */
-					pspp2 = (PackSeqPntPtr)b->data.ptrvalue;
-					if (SeqIdForSameBioseq(sidp, pspp->id))
-					{
-						num2 = PackSeqPntNum(pspp2);
-						if (num == num2)   /* check for identity */
-						{
-							for (i = 0; i < num; i++)
-							{
-								if ( PackSeqPntGet(pspp, i) !=
-									 PackSeqPntGet(pspp2, i))
-									i = num + 1;
-							}
-							if (i == num)
-								retval = SLC_A_EQ_B;
-						}
-						if (retval != SLC_A_EQ_B)
-						{
-							hits = 0;
-							for (i = 0; i < num; i++)
-							{
-								point = PackSeqPntGet(pspp, i);
-								for (j = 0; j < num2; j++)
-								{
-									if (point == PackSeqPntGet(pspp2, j))
-										hits++;
-								}
-							}
-							if (hits == num)
-								retval = SLC_A_IN_B;
-							else if (hits == num2)
-								retval = SLC_B_IN_A;
-						}
-					}
-		            break;
-        		default:
-		            break;
-			}
+            pspp = (PackSeqPntPtr)a->data.ptrvalue;
+            num = PackSeqPntNum(pspp);
+            sidp = pspp->id;
+            switch (b->choice)
+            {
+                case SEQLOC_BOND:   /* bond -- 2 seqs */
+                    sbp = (SeqBondPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sbp->a->id, sidp))
+                    {
+                        point = sbp->a->point;
+                        for (i = 0; i < num; i++)
+                        {
+                            if (point == PackSeqPntGet(pspp, i))
+                            {
+                                retval = SLC_B_IN_A;
+                                i = num;
+                            }
+                        }
+                    }
+                    if (sbp->b != NULL)
+                    {
+                        if (SeqIdForSameBioseq(sbp->b->id, sidp))
+                        {
+                            point = sbp->b->point;
+                            for (i = 0; i < num; i++)
+                            {
+                                if (point == PackSeqPntGet(pspp, i))
+                                {
+                                    if (retval != SLC_B_IN_A)
+                                        retval = SLC_A_OVERLAP_B;
+                                    i = num + 1;
+                                }
+                            }
+                            if ((i != num) && (retval == SLC_B_IN_A))
+                                retval = SLC_A_OVERLAP_B;
+                        }
+                    }
+                    break;
+                case SEQLOC_WHOLE:    /* whole */
+                    if (SeqIdForSameBioseq(sidp, (SeqIdPtr)b->data.ptrvalue))
+                        retval = SLC_A_IN_B;
+                    break;
+                case SEQLOC_INT:    /* int */
+                    sip = (SeqIntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, sip->id))
+                    {
+                        got_one = FALSE;
+                        missed_one = FALSE;
+                        for (i = 0; i < num; i++)
+                        {
+                            point = PackSeqPntGet(pspp, i);
+                            if ((point < sip->from) || (point > sip->to))
+                            {
+                                missed_one = TRUE;
+                                if (got_one)
+                                    i = num + 1;
+                            }
+                            else
+                            {
+                                got_one = TRUE;
+                                if (missed_one)
+                                    i = num + 1;
+                            }
+                        }
+                        if (got_one)
+                        {
+                            if (missed_one)
+                                retval = SLC_A_OVERLAP_B;
+                            else
+                                retval = SLC_A_IN_B;
+                        }
+                    }
+                    break;
+                case SEQLOC_PNT:    /* pnt */
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                    {
+                        point = ((SeqPntPtr)b->data.ptrvalue)->point;
+                        for (i = 0; i < num; i++)
+                        {
+                            if (point == PackSeqPntGet(pspp, i))
+                            {
+                                retval = SLC_B_IN_A;
+                                i = num + 1;
+                            }
+                        }
+                    }
+                    break;
+                case SEQLOC_PACKED_PNT:    /* packed pnt */
+                    pspp2 = (PackSeqPntPtr)b->data.ptrvalue;
+                    if (SeqIdForSameBioseq(sidp, pspp->id))
+                    {
+                        num2 = PackSeqPntNum(pspp2);
+                        if (num == num2)   /* check for identity */
+                        {
+                            for (i = 0; i < num; i++)
+                            {
+                                if ( PackSeqPntGet(pspp, i) !=
+                                     PackSeqPntGet(pspp2, i))
+                                    i = num + 1;
+                            }
+                            if (i == num)
+                                retval = SLC_A_EQ_B;
+                        }
+                        if (retval != SLC_A_EQ_B)
+                        {
+                            hits = 0;
+                            for (i = 0; i < num; i++)
+                            {
+                                point = PackSeqPntGet(pspp, i);
+                                for (j = 0; j < num2; j++)
+                                {
+                                    if (point == PackSeqPntGet(pspp2, j))
+                                        hits++;
+                                }
+                            }
+                            if (hits == num)
+                                retval = SLC_A_IN_B;
+                            else if (hits == num2)
+                                retval = SLC_B_IN_A;
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
             break;
         default:
             break;
@@ -6012,25 +6076,25 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
 *****************************************************************************/
 NLM_EXTERN Int4 SeqLocAinB (SeqLocPtr a, SeqLocPtr b)
 {
-	Int4 diff = -1;
-	Int2 res;
+    Int4 diff = -1;
+    Int2 res;
 
-	if ((a == NULL) || (b == NULL))
-		return diff;
+    if ((a == NULL) || (b == NULL))
+        return diff;
 
-	res = SeqLocCompare(a, b);
-	switch (res)
-	{
-		case SLC_A_EQ_B:
-			diff = 0;
-			break;
-		case SLC_A_IN_B:
-			diff = (SeqLocLen(b) - SeqLocLen(a));
-			break;
-		default:
-			break;
-	}
-	return diff;
+    res = SeqLocCompare(a, b);
+    switch (res)
+    {
+        case SLC_A_EQ_B:
+            diff = 0;
+            break;
+        case SLC_A_IN_B:
+            diff = (SeqLocLen(b) - SeqLocLen(a));
+            break;
+        default:
+            break;
+    }
+    return diff;
 }
 
 /*****************************************************************************
@@ -6044,22 +6108,22 @@ NLM_EXTERN Boolean SeqIntCheck (SeqIntPtr sip)
 {
     Int4 len = INT4_MAX;
     BioseqPtr bsp;
-	 Boolean locked = FALSE;
+     Boolean locked = FALSE;
 
-	if (sip == NULL) return TRUE;  /* makes it ok to pass a NULL */
-	
+    if (sip == NULL) return TRUE;  /* makes it ok to pass a NULL */
+    
     bsp = BioseqFindCore(sip->id);
-	 if (bsp == NULL)
-	 {
-	 	bsp = BioseqLockById(sip->id);
-	 	if (bsp != NULL)
-	 		locked = TRUE;
-	 }
+     if (bsp == NULL)
+     {
+         bsp = BioseqLockById(sip->id);
+         if (bsp != NULL)
+             locked = TRUE;
+     }
     if (bsp != NULL)
         len = BioseqGetLen(bsp);
 
     if (locked)
-		BioseqUnlock(bsp);
+        BioseqUnlock(bsp);
     if ((sip->from < 0) || (sip->from > sip->to) || (sip->to >= len))
     {
         return FALSE;
@@ -6079,22 +6143,22 @@ NLM_EXTERN Boolean SeqPntCheck (SeqPntPtr spp)
 {
     Int4 len = INT4_MAX;
     BioseqPtr bsp;
-	 Boolean locked = FALSE;
+     Boolean locked = FALSE;
 
-	if (spp == NULL) return TRUE;   /* cant compare */
-	
+    if (spp == NULL) return TRUE;   /* cant compare */
+    
     bsp = BioseqFindCore(spp->id);
-	 if (bsp == NULL)
-	 {
-	 	bsp = BioseqLockById(spp->id);
-	 	if (bsp != NULL)
-	 		locked = TRUE;
-	 }
+     if (bsp == NULL)
+     {
+         bsp = BioseqLockById(spp->id);
+         if (bsp != NULL)
+             locked = TRUE;
+     }
     if (bsp != NULL)
         len = BioseqGetLen(bsp);
 
-	 if (locked)
-		BioseqUnlock(bsp);
+     if (locked)
+        BioseqUnlock(bsp);
     if ((spp->point < 0) || (spp->point >= len))
     {
         return FALSE;
@@ -6110,33 +6174,33 @@ NLM_EXTERN Boolean SeqPntCheck (SeqPntPtr spp)
 *****************************************************************************/
 NLM_EXTERN Boolean PackSeqPntCheck (PackSeqPntPtr pspp)
 {
-	Int4 len = INT4_MAX;
-	BioseqPtr bsp;
-	Int4 num, index, point;
-	Boolean locked = FALSE;
+    Int4 len = INT4_MAX;
+    BioseqPtr bsp;
+    Int4 num, index, point;
+    Boolean locked = FALSE;
 
-	if (pspp == NULL) return TRUE;   /* cant compare */
-	
+    if (pspp == NULL) return TRUE;   /* cant compare */
+    
     bsp = BioseqFindCore(pspp->id);
-	 if (bsp == NULL)
-	 {
-	 	bsp = BioseqLockById(pspp->id);
-	 	if (bsp != NULL)
-	 		locked = TRUE;
-	 }
+     if (bsp == NULL)
+     {
+         bsp = BioseqLockById(pspp->id);
+         if (bsp != NULL)
+             locked = TRUE;
+     }
     if (bsp != NULL)
         len = BioseqGetLen(bsp);
 
-	 if (locked)
-		BioseqUnlock(bsp);
-	num = PackSeqPntNum(pspp);   /* total number of points */
+     if (locked)
+        BioseqUnlock(bsp);
+    num = PackSeqPntNum(pspp);   /* total number of points */
     for (index = 0; index < num; index++)
     {
         point = PackSeqPntGet(pspp, index);
 
-	    if ((point < 0) || (point >= len))
-        	return FALSE;
-	}
+        if ((point < 0) || (point >= len))
+            return FALSE;
+    }
 
     return TRUE;
 
@@ -6150,52 +6214,52 @@ NLM_EXTERN Boolean PackSeqPntCheck (PackSeqPntPtr pspp)
 *****************************************************************************/
 NLM_EXTERN Uint1 SeqLocCheck (SeqLocPtr slp)
 {
-	SeqLocPtr tmp;
-	Uint1 thisstrand, laststrand=0;
-	Boolean first = TRUE;
-	Uint1 retval = SEQLOCCHECK_OK;
+    SeqLocPtr tmp;
+    Uint1 thisstrand, laststrand=0;
+    Boolean first = TRUE;
+    Uint1 retval = SEQLOCCHECK_OK;
 
-	if (slp == NULL) return TRUE;
+    if (slp == NULL) return TRUE;
 
-	tmp = NULL;
-	while ((tmp = SeqLocFindNext(slp, tmp)) != NULL)
-	{
-	  if (tmp->choice == SEQLOC_NULL)
-	  {
-	    continue;
-	  }
-		thisstrand = SeqLocStrand(tmp);
-		if (! first)
-		{
-			if (thisstrand != laststrand)
-			{
-				ErrPostEx(SEV_WARNING,0,0,"Mixed strand location");
-				retval = SEQLOCCHECK_WARNING;
-			}
-		}
-		first = FALSE;
-		laststrand = thisstrand;
+    tmp = NULL;
+    while ((tmp = SeqLocFindNext(slp, tmp)) != NULL)
+    {
+      if (tmp->choice == SEQLOC_NULL)
+      {
+        continue;
+      }
+        thisstrand = SeqLocStrand(tmp);
+        if (! first)
+        {
+            if (thisstrand != laststrand)
+            {
+                ErrPostEx(SEV_WARNING,0,0,"Mixed strand location");
+                retval = SEQLOCCHECK_WARNING;
+            }
+        }
+        first = FALSE;
+        laststrand = thisstrand;
 
-		switch (tmp->choice)
-		{
-			case SEQLOC_INT:
-				if (! SeqIntCheck ((SeqIntPtr)(tmp->data.ptrvalue)))
-					return SEQLOCCHECK_ERROR;
-				break;
-			case SEQLOC_PNT:
-				if (! SeqPntCheck ((SeqPntPtr)(tmp->data.ptrvalue)))
-					return SEQLOCCHECK_ERROR;
-				break;
-			case SEQLOC_PACKED_PNT:
-				if (! PackSeqPntCheck ((PackSeqPntPtr)(tmp->data.ptrvalue)))
-					return SEQLOCCHECK_ERROR;
-				break;
-			default:
-				break;
-		}
-	}
+        switch (tmp->choice)
+        {
+            case SEQLOC_INT:
+                if (! SeqIntCheck ((SeqIntPtr)(tmp->data.ptrvalue)))
+                    return SEQLOCCHECK_ERROR;
+                break;
+            case SEQLOC_PNT:
+                if (! SeqPntCheck ((SeqPntPtr)(tmp->data.ptrvalue)))
+                    return SEQLOCCHECK_ERROR;
+                break;
+            case SEQLOC_PACKED_PNT:
+                if (! PackSeqPntCheck ((PackSeqPntPtr)(tmp->data.ptrvalue)))
+                    return SEQLOCCHECK_ERROR;
+                break;
+            default:
+                break;
+        }
+    }
 
-	return retval;
+    return retval;
 }
 
 
@@ -6209,322 +6273,328 @@ NLM_EXTERN Uint1 SeqLocCheck (SeqLocPtr slp)
 *   returns defined in header file
 *   
 *****************************************************************************/
-NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head)
+NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
 {
-	SeqLocPtr slp = NULL, first = NULL, last = NULL;
-	Uint2 retval = 0;
-	BioseqPtr bsp;
-	SeqIntPtr sip;
-	SeqPntPtr spp;
-	PackSeqPntPtr pspp;
-	IntFuzzPtr ifp;
-	Boolean miss_end;
-	BioseqContextPtr bcp;
-	ValNodePtr vnp, vnp2;
-	Boolean locked, found_molinfo;
-	MolInfoPtr mip;
+    SeqLocPtr slp = NULL, first = NULL, last = NULL;
+    Uint2 retval = 0;
+    BioseqPtr bsp;
+    SeqIntPtr sip;
+    SeqPntPtr spp;
+    PackSeqPntPtr pspp;
+    IntFuzzPtr ifp;
+    Boolean miss_end;
+    BioseqContextPtr bcp;
+    ValNodePtr vnp, vnp2;
+    Boolean locked, found_molinfo;
+    MolInfoPtr mip;
 
-	if (head == NULL) return retval;
+    if (head == NULL) return retval;
 
-	while ((slp = SeqLocFindNext(head, slp)) != NULL)
-	{
-		if (first == NULL)
-			first = slp;
-		last = slp;
-	}
+    while ((slp = SeqLocFindNext(head, slp)) != NULL)
+    {
+        if (first == NULL)
+            first = slp;
+        last = slp;
+    }
 
-	if (first == NULL) return retval;
+    if (first == NULL) return retval;
 
-	slp = NULL;
-	while ((slp = SeqLocFindNext(head, slp)) != NULL)
-	{
-		switch (slp->choice)
-		{
-			case SEQLOC_NULL:
-				if (slp == first)
-					retval |= SLP_START;
-				else if (slp == last)
-					retval |= SLP_STOP;
-				else
-					retval |= SLP_INTERNAL;
-				break;
-			case SEQLOC_INT:
-				sip = (SeqIntPtr)(slp->data.ptrvalue);
-				ifp = sip->if_from;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)  /* lim */
-					{
-						if (ifp->a == 1)       /* gt */
-							retval |= SLP_LIM_WRONG;
-						else if ((ifp->a == 2) || (ifp->a == 0)) /* lt,unk */
-						{
-							if (sip->strand == Seq_strand_minus) /* stop */
-							{
-								if (slp == last)
-									retval |= SLP_STOP;
-								else
-									retval |= SLP_INTERNAL;
-								if (sip->from != 0)
-								{
-									if (slp == last)
-										retval |= SLP_NOSTOP;
-									else
-										retval |= SLP_NOINTERNAL;
-								}
-							}
-							else                                /* start */
-							{
-								if (slp == first)
-									retval |= SLP_START;
-								else
-									retval |= SLP_INTERNAL;
-								if (sip->from != 0)
-								{
-									if (slp == first)
-										retval |= SLP_NOSTART;
-									else
-										retval |= SLP_NOINTERNAL;
-								}
-							}
-						}
-					}
+    slp = NULL;
+    while ((slp = SeqLocFindNext(head, slp)) != NULL)
+    {
+        switch (slp->choice)
+        {
+            case SEQLOC_NULL:
+                if (slp == first)
+                    retval |= SLP_START;
+                else if (slp == last)
+                    retval |= SLP_STOP;
+                else
+                    retval |= SLP_INTERNAL;
+                break;
+            case SEQLOC_INT:
+                sip = (SeqIntPtr)(slp->data.ptrvalue);
+                ifp = sip->if_from;
+                if (ifp != NULL)
+                {
+                    if (ifp->choice == 4)  /* lim */
+                    {
+                        if (ifp->a == 1)       /* gt */
+                            retval |= SLP_LIM_WRONG;
+                        else if ((ifp->a == 2) || (ifp->a == 0)) /* lt,unk */
+                        {
+                            if (sip->strand == Seq_strand_minus) /* stop */
+                            {
+                                if (slp == last)
+                                    retval |= SLP_STOP;
+                                else
+                                    retval |= SLP_INTERNAL;
+                                if (sip->from != 0)
+                                {
+                                    if (slp == last)
+                                        retval |= SLP_NOSTOP;
+                                    else
+                                        retval |= SLP_NOINTERNAL;
+                                }
+                            }
+                            else                                /* start */
+                            {
+                                if (slp == first)
+                                    retval |= SLP_START;
+                                else
+                                    retval |= SLP_INTERNAL;
+                                if (sip->from != 0)
+                                {
+                                    if (slp == first)
+                                        retval |= SLP_NOSTART;
+                                    else
+                                        retval |= SLP_NOINTERNAL;
+                                }
+                            }
+                        }
+                    }
 
-				}
-				ifp = sip->if_to;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)  /* lim */
-					{
-						if (ifp->a == 2)       /* lt */
-							retval |= SLP_LIM_WRONG;
-						else if ((ifp->a == 1) || (ifp->a == 0)) /* gt,unk */
-						{
-							locked = FALSE;
-							bsp = BioseqFindCore(sip->id);
-							 if (bsp == NULL)
-							 {
-							 	bsp = BioseqLockById(sip->id);
-							 	if (bsp != NULL)
-							 		locked = TRUE;
-							 }
-							miss_end = FALSE;
-							if (bsp != NULL)
-							{
-								if (sip->to != (bsp->length - 1))
-									miss_end = TRUE;
-							}
-							if (locked)
-								BioseqUnlock(bsp);
-							if (sip->strand == Seq_strand_minus) /* start */
-							{
-								if (slp == first)
-									retval |= SLP_START;
-								else
-									retval |= SLP_INTERNAL;
-								if (miss_end)
-								{
-									if (slp == first /* was last */)
-										retval |= SLP_NOSTART;
-									else
-										retval |= SLP_NOINTERNAL;
-								}
-							}
-							else                                /* stop */
-							{
-								if (slp == last)
-									retval |= SLP_STOP;
-								else
-									retval |= SLP_INTERNAL;
-								if (miss_end)
-								{
-									if (slp == last)
-										retval |= SLP_NOSTOP;
-									else
-										retval |= SLP_NOINTERNAL;
-								}
-							}
-						}
-					}
-				}
-				break;
-			case SEQLOC_PNT:
-				spp = (SeqPntPtr)(slp->data.ptrvalue);
-				ifp = spp->fuzz;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)  /* lim */
-					{
-						if ((ifp->a >= 0) && (ifp->a <= 2))  /* gt, lt,unk */
-						{
-							if (slp == first)
-								retval |= SLP_START;
-							if (slp == last)
-								retval |= SLP_STOP;
-							if ((slp != first) && (slp != last))
-								retval |= SLP_INTERNAL;
-						}
-					}
-				}
-				break;
-			case SEQLOC_PACKED_PNT:
-				pspp = (PackSeqPntPtr)(slp->data.ptrvalue);
-				ifp = pspp->fuzz;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)  /* lim */
-					{
-						if ((ifp->a >= 0) && (ifp->a <= 2)) /* gt, lt, unk */
-						{
-							if (slp == first)
-								retval |= SLP_START;
-							if (slp == last)
-								retval |= SLP_STOP;
-							if ((slp != first) && (slp != last))
-								retval |= SLP_INTERNAL;
-						}
-					}
-				}
-				break;
-			case SEQLOC_WHOLE:
-				found_molinfo = FALSE;
-				locked = FALSE;
-				bsp = BioseqFindCore((SeqIdPtr)(slp->data.ptrvalue));
-				if (bsp == NULL)
-				{
-					bsp = BioseqLockById((SeqIdPtr)(slp->data.ptrvalue));
-					if (bsp != NULL)
-						locked = TRUE;
-				}
-				if (bsp == NULL) break;
-				bcp = BioseqContextNew(bsp);
-				if (bcp != NULL) {
-					vnp = NULL;
-					while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_molinfo, vnp, NULL)) != NULL)
-					{
-						found_molinfo = TRUE;
-						mip = (MolInfoPtr)(vnp->data.ptrvalue);
-						switch (mip->completeness)
-						{
-							case 3:	/* no left */
-								if (slp == first)
-									retval |= SLP_START;
-								else
-									retval |= SLP_INTERNAL;
-								break;
-							case 4:    /* no right */
-								if (slp == last)
-									retval |= SLP_STOP;
-								else
-									retval |= SLP_INTERNAL;
-								break;
-							case 2:    /* partial */
-								retval |= SLP_OTHER;
-								break;
-							case 5:    /* no ends */
-								retval |= SLP_START;
-								retval |= SLP_STOP;
-								break;
-							default:
-								break;
-						}
-					}
-					if (! found_molinfo)
-					{
-						while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_modif, vnp, NULL)) != NULL)
-						{
-							for (vnp2 = (ValNodePtr)(vnp->data.ptrvalue); vnp2 != NULL; vnp2 = vnp2->next)
-							{
-								switch (vnp2->data.intvalue)
-								{
-						
-									case 16:	/* no left */
-							
-										if (slp == first)
-								
-											retval |= SLP_START;
-									
-										else
-											retval |= SLP_INTERNAL;
-										break;
-									case 17:    /* no right */
-										if (slp == last)
-											retval |= SLP_STOP;
-										else
-											retval |= SLP_INTERNAL;
-										break;
-									case 10:    /* partial */
-										retval |= SLP_OTHER;
-										break;
-								}
-							}
-						}
-					}
-					BioseqContextFree(bcp);
-				}
-				if (locked)
-					BioseqUnlock (bsp);
-				break;
-			default:
-				break;
-			
-		}
-	}
+                }
+                ifp = sip->if_to;
+                if (ifp != NULL)
+                {
+                    if (ifp->choice == 4)  /* lim */
+                    {
+                        if (ifp->a == 2)       /* lt */
+                            retval |= SLP_LIM_WRONG;
+                        else if ((ifp->a == 1) || (ifp->a == 0)) /* gt,unk */
+                        {
+                            locked = FALSE;
+                            bsp = BioseqFindCore(sip->id);
+                             if (bsp == NULL && farFetch)
+                             {
+                                 bsp = BioseqLockById(sip->id);
+                                 if (bsp != NULL)
+                                     locked = TRUE;
+                             }
+                            miss_end = FALSE;
+                            if (bsp != NULL)
+                            {
+                                if (sip->to != (bsp->length - 1))
+                                    miss_end = TRUE;
+                            }
+                            if (locked)
+                                BioseqUnlock(bsp);
+                            if (sip->strand == Seq_strand_minus) /* start */
+                            {
+                                if (slp == first)
+                                    retval |= SLP_START;
+                                else
+                                    retval |= SLP_INTERNAL;
+                                if (miss_end)
+                                {
+                                    if (slp == first /* was last */)
+                                        retval |= SLP_NOSTART;
+                                    else
+                                        retval |= SLP_NOINTERNAL;
+                                }
+                            }
+                            else                                /* stop */
+                            {
+                                if (slp == last)
+                                    retval |= SLP_STOP;
+                                else
+                                    retval |= SLP_INTERNAL;
+                                if (miss_end)
+                                {
+                                    if (slp == last)
+                                        retval |= SLP_NOSTOP;
+                                    else
+                                        retval |= SLP_NOINTERNAL;
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            case SEQLOC_PNT:
+                spp = (SeqPntPtr)(slp->data.ptrvalue);
+                ifp = spp->fuzz;
+                if (ifp != NULL)
+                {
+                    if (ifp->choice == 4)  /* lim */
+                    {
+                        if ((ifp->a >= 0) && (ifp->a <= 2))  /* gt, lt,unk */
+                        {
+                            if (slp == first)
+                                retval |= SLP_START;
+                            if (slp == last)
+                                retval |= SLP_STOP;
+                            if ((slp != first) && (slp != last))
+                                retval |= SLP_INTERNAL;
+                        }
+                    }
+                }
+                break;
+            case SEQLOC_PACKED_PNT:
+                pspp = (PackSeqPntPtr)(slp->data.ptrvalue);
+                ifp = pspp->fuzz;
+                if (ifp != NULL)
+                {
+                    if (ifp->choice == 4)  /* lim */
+                    {
+                        if ((ifp->a >= 0) && (ifp->a <= 2)) /* gt, lt, unk */
+                        {
+                            if (slp == first)
+                                retval |= SLP_START;
+                            if (slp == last)
+                                retval |= SLP_STOP;
+                            if ((slp != first) && (slp != last))
+                                retval |= SLP_INTERNAL;
+                        }
+                    }
+                }
+                break;
+            case SEQLOC_WHOLE:
+                found_molinfo = FALSE;
+                locked = FALSE;
+                bsp = BioseqFindCore((SeqIdPtr)(slp->data.ptrvalue));
+                if (bsp == NULL && farFetch)
+                {
+                    bsp = BioseqLockById((SeqIdPtr)(slp->data.ptrvalue));
+                    if (bsp != NULL)
+                        locked = TRUE;
+                }
+                if (bsp == NULL) break;
+                bcp = BioseqContextNew(bsp);
+                if (bcp != NULL) {
+                    vnp = NULL;
+                    while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_molinfo, vnp, NULL)) != NULL)
+                    {
+                        found_molinfo = TRUE;
+                        mip = (MolInfoPtr)(vnp->data.ptrvalue);
+                        switch (mip->completeness)
+                        {
+                            case 3:    /* no left */
+                                if (slp == first)
+                                    retval |= SLP_START;
+                                else
+                                    retval |= SLP_INTERNAL;
+                                break;
+                            case 4:    /* no right */
+                                if (slp == last)
+                                    retval |= SLP_STOP;
+                                else
+                                    retval |= SLP_INTERNAL;
+                                break;
+                            case 2:    /* partial */
+                                retval |= SLP_OTHER;
+                                break;
+                            case 5:    /* no ends */
+                                retval |= SLP_START;
+                                retval |= SLP_STOP;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    if (! found_molinfo)
+                    {
+                        while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_modif, vnp, NULL)) != NULL)
+                        {
+                            for (vnp2 = (ValNodePtr)(vnp->data.ptrvalue); vnp2 != NULL; vnp2 = vnp2->next)
+                            {
+                                switch (vnp2->data.intvalue)
+                                {
+                        
+                                    case 16:    /* no left */
+                            
+                                        if (slp == first)
+                                
+                                            retval |= SLP_START;
+                                    
+                                        else
+                                            retval |= SLP_INTERNAL;
+                                        break;
+                                    case 17:    /* no right */
+                                        if (slp == last)
+                                            retval |= SLP_STOP;
+                                        else
+                                            retval |= SLP_INTERNAL;
+                                        break;
+                                    case 10:    /* partial */
+                                        retval |= SLP_OTHER;
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    BioseqContextFree(bcp);
+                }
+                if (locked)
+                    BioseqUnlock (bsp);
+                break;
+            default:
+                break;
+            
+        }
+    }
 
-	return retval;
+    return retval;
+}
+
+NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head)
+
+{
+  return SeqLocPartialCheckEx (head, TRUE);
 }
 
 /*****************************************************************************
 *
 *   StringForSeqMethod(Int2 method)
-*   	returns a descriptive string for sequencing method.
+*       returns a descriptive string for sequencing method.
 *
 *****************************************************************************/
 NLM_EXTERN CharPtr StringForSeqMethod (Int2 method)
 {
 #define MAX_METHOD 6
-	static char * methods[MAX_METHOD] = {
-		"conceptual translation",
-		"direct peptide sequencing",
-		"conceptual translation with partial peptide sequencing",
-		"sequenced peptide, ordered by overlap",
-		"sequenced peptide, ordered by homology",
-		"conceptual translation supplied by author" };
+    static char * methods[MAX_METHOD] = {
+        "conceptual translation",
+        "direct peptide sequencing",
+        "conceptual translation with partial peptide sequencing",
+        "sequenced peptide, ordered by overlap",
+        "sequenced peptide, ordered by homology",
+        "conceptual translation supplied by author" };
 
-	if ((method < 1) || (method > MAX_METHOD))
-		return NULL;
+    if ((method < 1) || (method > MAX_METHOD))
+        return NULL;
 
-	return methods[method - 1];
+    return methods[method - 1];
 }
 
 /*****************************************************************************
 *
 *   StringForSeqTech(Int2 tech)
-*   	returns a descriptive string for sequencing method.
-*		uses MolInfo from asn spec 4.0
+*       returns a descriptive string for sequencing method.
+*        uses MolInfo from asn spec 4.0
 *****************************************************************************/
 NLM_EXTERN CharPtr StringForSeqTech (Int2 tech)
 {
 #define MAX_TECH 13
-	static char * techs[MAX_TECH] = {
-		NULL,    /*"standard sequencing", */
-		NULL,  /*"Expressed Sequence Tag", */
-		NULL, /*"Sequence Tagged Site", */
-		NULL, /*"one-pass genomic sequence", */
-		NULL, /*"from genetic mapping techniques", */
-		NULL, /*"from physical mapping techniques", */
-		NULL, /*"derived from other data, not a primary entity", */
-		"conceptual translation",
-		"direct peptide sequencing",
-		"conceptual translation with partial peptide sequencing",
-		"sequenced peptide, ordered by overlap",
-		"sequenced peptide, ordered by homology",
-		"conceptual translation supplied by author" };
+    static char * techs[MAX_TECH] = {
+        NULL,    /*"standard sequencing", */
+        NULL,  /*"Expressed Sequence Tag", */
+        NULL, /*"Sequence Tagged Site", */
+        NULL, /*"one-pass genomic sequence", */
+        NULL, /*"from genetic mapping techniques", */
+        NULL, /*"from physical mapping techniques", */
+        NULL, /*"derived from other data, not a primary entity", */
+        "conceptual translation",
+        "direct peptide sequencing",
+        "conceptual translation with partial peptide sequencing",
+        "sequenced peptide, ordered by overlap",
+        "sequenced peptide, ordered by homology",
+        "conceptual translation supplied by author" };
 
-	if ((tech < 1) || (tech > MAX_TECH))
-		return NULL;
+    if ((tech < 1) || (tech > MAX_TECH))
+        return NULL;
 
-	return techs[tech - 1];
+    return techs[tech - 1];
 }
 
 static Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end);
@@ -6539,34 +6609,34 @@ NLM_EXTERN Int4 CheckPointInBioseq(SeqPntPtr sp, BioseqPtr in);
 *****************************************************************************/
 NLM_EXTERN Int4 GetOffsetInLoc (SeqLocPtr of, SeqLocPtr in, Uint1 which_end)
 {
-	SeqPnt sp;
-	BioseqPtr bsp;
-	Boolean locked = FALSE;
-	Int4 result;
+    SeqPnt sp;
+    BioseqPtr bsp;
+    Boolean locked = FALSE;
+    Int4 result;
 
-	if ((in == NULL) || (of == NULL))
-		return -1L;
+    if ((in == NULL) || (of == NULL))
+        return -1L;
 
-	if (! GetThePointForOffset(of, &sp, which_end))
-		return -1L;
+    if (! GetThePointForOffset(of, &sp, which_end))
+        return -1L;
 
-	if (! IS_one_loc(in, FALSE))    /* optimize for multiple hits */
-	{
-		bsp = BioseqFindCore(sp.id);  /* only need SeqIds */
-		 if (bsp == NULL)
-		 {
-	 		bsp = BioseqLockById(sp.id);
-		 	if (bsp != NULL)
-		 		locked = TRUE;
-		 }
-	}
-	else
-		bsp = NULL;
+    if (! IS_one_loc(in, FALSE))    /* optimize for multiple hits */
+    {
+        bsp = BioseqFindCore(sp.id);  /* only need SeqIds */
+         if (bsp == NULL)
+         {
+             bsp = BioseqLockById(sp.id);
+             if (bsp != NULL)
+                 locked = TRUE;
+         }
+    }
+    else
+        bsp = NULL;
 
-	result = CheckOffsetInLoc(in, sp.point, bsp, sp.id);
-	if (locked)
-		BioseqUnlock(bsp);
-	return result;
+    result = CheckOffsetInLoc(in, sp.point, bsp, sp.id);
+    if (locked)
+        BioseqUnlock(bsp);
+    return result;
 }
 
 /*****************************************************************************
@@ -6577,15 +6647,15 @@ NLM_EXTERN Int4 GetOffsetInLoc (SeqLocPtr of, SeqLocPtr in, Uint1 which_end)
 *****************************************************************************/
 NLM_EXTERN Int4 GetOffsetInBioseq (SeqLocPtr of, BioseqPtr in, Uint1 which_end)
 {
-	SeqPnt sp;
+    SeqPnt sp;
 
-	if ((of == NULL) || (in == NULL))
-		return -1;
+    if ((of == NULL) || (in == NULL))
+        return -1;
 
-	if (! GetThePointForOffset(of, &sp, which_end))
-		return -1L;
+    if (! GetThePointForOffset(of, &sp, which_end))
+        return -1L;
 
-	return CheckPointInBioseq(&sp, in);
+    return CheckPointInBioseq(&sp, in);
 }
 
 /*****************************************************************************
@@ -6595,102 +6665,102 @@ NLM_EXTERN Int4 GetOffsetInBioseq (SeqLocPtr of, BioseqPtr in, Uint1 which_end)
 *****************************************************************************/
 NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
 {
-	ValNode sl;
-	BioseqPtr bsp;
-	Int4 retval = -1;
-	SeqLocPtr slp = NULL, curr;
-	Int4 offset, offset2, strt, stp;
-	SeqIdPtr sip;
-	Boolean locked = FALSE;
+    ValNode sl;
+    BioseqPtr bsp;
+    Int4 retval = -1;
+    SeqLocPtr slp = NULL, curr;
+    Int4 offset, offset2, strt, stp;
+    SeqIdPtr sip;
+    Boolean locked = FALSE;
 
-	if (SeqIdIn(sp->id, in->id))   /* in this one */
-		return sp->point;
+    if (SeqIdIn(sp->id, in->id))   /* in this one */
+        return sp->point;
 
-	switch (in->repr)
-	{
-		case Seq_repr_virtual:
-		case Seq_repr_raw:
-		case Seq_repr_const:
-		case Seq_repr_map:
-			return -1;    /* nothing more can be done */
+    switch (in->repr)
+    {
+        case Seq_repr_virtual:
+        case Seq_repr_raw:
+        case Seq_repr_const:
+        case Seq_repr_map:
+            return -1;    /* nothing more can be done */
 
-		case Seq_repr_ref:
-			slp = (ValNodePtr) in->seq_ext;
-			break;
+        case Seq_repr_ref:
+            slp = (ValNodePtr) in->seq_ext;
+            break;
 
-		case Seq_repr_seg:
-			sl.choice = SEQLOC_MIX;
-			sl.data.ptrvalue = in->seq_ext;
-			slp = &sl;
-			break;
+        case Seq_repr_seg:
+            sl.choice = SEQLOC_MIX;
+            sl.data.ptrvalue = in->seq_ext;
+            slp = &sl;
+            break;
 
-		case Seq_repr_delta:
-			break;
+        case Seq_repr_delta:
+            break;
 
-		default:
-			return -1;
-	}
+        default:
+            return -1;
+    }
 
-	bsp = BioseqFindCore(sp->id);   /* only need SeqIds */
-	 if (bsp == NULL)
-	 {
-	 	bsp = BioseqLockById(sp->id);
-	 	if (bsp != NULL)
-	 		locked = TRUE;
-	 }
-	if (in->repr == Seq_repr_seg || in->repr == Seq_repr_delta) {
-		retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id);
-	}
-	if (retval == -1) {
-		retval = CheckOffsetInLoc(slp, sp->point, bsp, sp->id);
-	}
+    bsp = BioseqFindCore(sp->id);   /* only need SeqIds */
+     if (bsp == NULL)
+     {
+         bsp = BioseqLockById(sp->id);
+         if (bsp != NULL)
+             locked = TRUE;
+     }
+    if (in->repr == Seq_repr_seg || in->repr == Seq_repr_delta) {
+        retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id);
+    }
+    if (retval == -1) {
+        retval = CheckOffsetInLoc(slp, sp->point, bsp, sp->id);
+    }
 
-	if (locked)
-		BioseqUnlock(bsp);
+    if (locked)
+        BioseqUnlock(bsp);
 
-	if (retval >= 0) return retval;     /* got it on segments */
+    if (retval >= 0) return retval;     /* got it on segments */
 
-	                                    /* look for segmented segments */
-	offset = 0;
-	curr = NULL;
-	while ((curr = SeqLocFindNext(slp, curr)) != NULL)
-	{
-		sip = SeqLocId(curr);
-		if (sip != NULL)
-		{
-			bsp = BioseqLockById(sip);
-			if (bsp != NULL)
-			{
-				switch (bsp->repr)
-				{
-					case Seq_repr_ref:   /* could have more levels */
-					case Seq_repr_seg:
-						offset2 = CheckPointInBioseq(sp, bsp);
-						if (offset2 >= 0)   /* got it */
-						{
-							strt = SeqLocStart(curr);
-							stp = SeqLocStop(curr);
-							if ((offset2 >= strt) && (offset2 <= stp))
-							{
-								if (SeqLocStrand(curr) == Seq_strand_minus)
-									offset2 = stp - offset2;
-								else
-									offset2 -= strt;
-								retval = offset2 + offset;
-								return retval;
-							}
-						}
-						break;
-					default:		   /* one level, already checked */
-						break;
-				}
-				BioseqUnlock(bsp);
-			}
-		}
-		offset += SeqLocLen(curr);
-	}
+                                        /* look for segmented segments */
+    offset = 0;
+    curr = NULL;
+    while ((curr = SeqLocFindNext(slp, curr)) != NULL)
+    {
+        sip = SeqLocId(curr);
+        if (sip != NULL)
+        {
+            bsp = BioseqLockById(sip);
+            if (bsp != NULL)
+            {
+                switch (bsp->repr)
+                {
+                    case Seq_repr_ref:   /* could have more levels */
+                    case Seq_repr_seg:
+                        offset2 = CheckPointInBioseq(sp, bsp);
+                        if (offset2 >= 0)   /* got it */
+                        {
+                            strt = SeqLocStart(curr);
+                            stp = SeqLocStop(curr);
+                            if ((offset2 >= strt) && (offset2 <= stp))
+                            {
+                                if (SeqLocStrand(curr) == Seq_strand_minus)
+                                    offset2 = stp - offset2;
+                                else
+                                    offset2 -= strt;
+                                retval = offset2 + offset;
+                                return retval;
+                            }
+                        }
+                        break;
+                    default:           /* one level, already checked */
+                        break;
+                }
+                BioseqUnlock(bsp);
+            }
+        }
+        offset += SeqLocLen(curr);
+    }
 
-	return retval;    /* all failed */
+    return retval;    /* all failed */
 }
 
 
@@ -6761,157 +6831,157 @@ static SeqIdPtr GetEarlierSeqIdPtr (SeqIdPtr sip1, SeqIdPtr sip2)
 *****************************************************************************/
 Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 {
-	SeqLocPtr pnt, first=NULL, last=NULL;
-	Uint1 first_strand, last_strand;
-	Boolean all_minus = TRUE;
-	Int4    lowest = -1, highest = 0, tmp;
-	SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
-	Boolean   id_same;
-	BioseqPtr bsp;
-	Boolean   is_circular = FALSE;
+    SeqLocPtr pnt, first=NULL, last=NULL;
+    Uint1 first_strand, last_strand;
+    Boolean all_minus = TRUE;
+    Int4    lowest = -1, highest = 0, tmp;
+    SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
+    Boolean   id_same;
+    BioseqPtr bsp;
+    Boolean   is_circular = FALSE;
 
-	pnt = NULL;    /* get first or last single span type in "of"*/
-	
-	bsp = BioseqFind (SeqLocId(of));
-	if (bsp != NULL && bsp->topology == TOPOLOGY_CIRCULAR) {
-	    is_circular = TRUE;
-	}
-	
-	while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
-	{
-	  last_strand = SeqLocStrand (pnt);
-	  last_sip = SeqLocId (pnt);
-	  if (last_strand != Seq_strand_minus)
-	  {
-	    all_minus = FALSE;
-	  }
-		last = pnt;
-		if (first == NULL)
-		{
-			first = pnt;
-			first_strand = last_strand;
-			first_sip = last_sip;
-			lowest = SeqLocStart(pnt);
-			highest = SeqLocStop (pnt);
-			low_sip = last_sip;
-			high_sip = last_sip;
-		}
-		else
-		{
-		  tmp = SeqLocStart (pnt);
-		  if (SeqIdComp (last_sip, low_sip))
-		  {
-		    id_same = TRUE;
-		  }
-		  else
-		  {
-		    id_same = FALSE;
-		  }
-		  if ((id_same && tmp < lowest)
-		      || (!id_same && last_sip == GetEarlierSeqIdPtr (last_sip, low_sip)))
-		  {
-		    lowest = tmp;
-		    low_sip = last_sip;
-		  }
-		  tmp = SeqLocStop (pnt);
-		  
-		  if (SeqIdComp (last_sip, high_sip))
-		  {
-		    id_same = TRUE;
-		  }
-		  else
-		  {
-		    id_same = FALSE;
-		  }
-		  if ((id_same && tmp > highest)
-		      || (!id_same && high_sip == GetEarlierSeqIdPtr (high_sip, last_sip)))
-		  {
-		    highest = tmp;
-		    high_sip = last_sip;
-		  }
-		}
-	}				   /* otherwise, get last */
-	if (first == NULL)
-		return FALSE;
-	
-	switch (which_end)
-	{
-		case SEQLOC_LEFT_END:
-		  if (is_circular) {
-		    if (all_minus) {
-		      target->point = SeqLocStart (last);
-		      target->id = last_sip;
-		    } else {
-		      target->point = SeqLocStart (first);
-		      target->id = first_sip;
-		    }
-		  } else {
-		    target->point = lowest;
-		    target->id = low_sip;
-		  }
-			break;
-		case SEQLOC_RIGHT_END:
-		  if (is_circular) {
-		    if (all_minus) {
-		      target->point = SeqLocStop (first);
-		      target->id = first_sip;
-		    } else {
-		      target->point = SeqLocStop (last);
-		      target->id = last_sip;
-		    }
-		  } else {  
-		    target->point = highest;
-		    target->id = high_sip;
-		  }
-			break;
-		case SEQLOC_START:
-		  if (all_minus)
-		  {
-		    target->point = SeqLocStop (first);
-		    target->id = first_sip;
-		  }
-		  else
-		  {
-  	    if (first_strand == Seq_strand_minus)
-	      {
-		      target->point = SeqLocStop (first);
-		    }
-		    else
-		    {
-		      target->point = SeqLocStart (first);
-		    }
-		    target->id = first_sip;
-		  }
-			break;
-		case SEQLOC_STOP:
-		  if (all_minus)
-		  {
-		    target->point = SeqLocStart (last);
-		    target->id = last_sip;
-		  }
-		  else
-		  {
-  	    if (last_strand == Seq_strand_minus)
-	      {
-		      target->point = SeqLocStart (last);
-		    }
-		    else
-		    {
-		      target->point = SeqLocStop (last);
-		    }
-		    target->id = last_sip;
-		  }
-			break;
-		default:
-			return FALSE;   /* error */
-	}
+    pnt = NULL;    /* get first or last single span type in "of"*/
+    
+    bsp = BioseqFind (SeqLocId(of));
+    if (bsp != NULL && bsp->topology == TOPOLOGY_CIRCULAR) {
+        is_circular = TRUE;
+    }
+    
+    while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
+    {
+      last_strand = SeqLocStrand (pnt);
+      last_sip = SeqLocId (pnt);
+      if (last_strand != Seq_strand_minus)
+      {
+        all_minus = FALSE;
+      }
+        last = pnt;
+        if (first == NULL)
+        {
+            first = pnt;
+            first_strand = last_strand;
+            first_sip = last_sip;
+            lowest = SeqLocStart(pnt);
+            highest = SeqLocStop (pnt);
+            low_sip = last_sip;
+            high_sip = last_sip;
+        }
+        else
+        {
+          tmp = SeqLocStart (pnt);
+          if (SeqIdComp (last_sip, low_sip))
+          {
+            id_same = TRUE;
+          }
+          else
+          {
+            id_same = FALSE;
+          }
+          if ((id_same && tmp < lowest)
+              || (!id_same && last_sip == GetEarlierSeqIdPtr (last_sip, low_sip)))
+          {
+            lowest = tmp;
+            low_sip = last_sip;
+          }
+          tmp = SeqLocStop (pnt);
+          
+          if (SeqIdComp (last_sip, high_sip))
+          {
+            id_same = TRUE;
+          }
+          else
+          {
+            id_same = FALSE;
+          }
+          if ((id_same && tmp > highest)
+              || (!id_same && high_sip == GetEarlierSeqIdPtr (high_sip, last_sip)))
+          {
+            highest = tmp;
+            high_sip = last_sip;
+          }
+        }
+    }                   /* otherwise, get last */
+    if (first == NULL)
+        return FALSE;
+    
+    switch (which_end)
+    {
+        case SEQLOC_LEFT_END:
+          if (is_circular) {
+            if (all_minus) {
+              target->point = SeqLocStart (last);
+              target->id = last_sip;
+            } else {
+              target->point = SeqLocStart (first);
+              target->id = first_sip;
+            }
+          } else {
+            target->point = lowest;
+            target->id = low_sip;
+          }
+            break;
+        case SEQLOC_RIGHT_END:
+          if (is_circular) {
+            if (all_minus) {
+              target->point = SeqLocStop (first);
+              target->id = first_sip;
+            } else {
+              target->point = SeqLocStop (last);
+              target->id = last_sip;
+            }
+          } else {  
+            target->point = highest;
+            target->id = high_sip;
+          }
+            break;
+        case SEQLOC_START:
+          if (all_minus)
+          {
+            target->point = SeqLocStop (first);
+            target->id = first_sip;
+          }
+          else
+          {
+          if (first_strand == Seq_strand_minus)
+          {
+              target->point = SeqLocStop (first);
+            }
+            else
+            {
+              target->point = SeqLocStart (first);
+            }
+            target->id = first_sip;
+          }
+            break;
+        case SEQLOC_STOP:
+          if (all_minus)
+          {
+            target->point = SeqLocStart (last);
+            target->id = last_sip;
+          }
+          else
+          {
+          if (last_strand == Seq_strand_minus)
+          {
+              target->point = SeqLocStart (last);
+            }
+            else
+            {
+              target->point = SeqLocStop (last);
+            }
+            target->id = last_sip;
+          }
+            break;
+        default:
+            return FALSE;   /* error */
+    }
 
-	/* SeqLocStart returns 'from', and SeqLocStop returns 'to', regardless of strand! */
+    /* SeqLocStart returns 'from', and SeqLocStop returns 'to', regardless of strand! */
 
-	if ((target->point < 0) || (target->id == NULL))
-		return FALSE;
+    if ((target->point < 0) || (target->id == NULL))
+        return FALSE;
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -6921,84 +6991,84 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 *****************************************************************************/
 static Int4 CheckOffsetInLoc(SeqLocPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr the_id)
 {
-	SeqIdPtr tsip, sip;
-	SeqLocPtr tmp;
-	SeqIntPtr sipp;
-	Boolean checkin, doit;
-	Int4 ctr = 0, len;
+    SeqIdPtr tsip, sip;
+    SeqLocPtr tmp;
+    SeqIntPtr sipp;
+    Boolean checkin, doit;
+    Int4 ctr = 0, len;
 
-	if (bsp != NULL)
-	{
-		tsip = bsp->id;
-		checkin = 1;
-	}
-	else
-	{
-		tsip = the_id;
-		checkin = 0;
-	}
+    if (bsp != NULL)
+    {
+        tsip = bsp->id;
+        checkin = 1;
+    }
+    else
+    {
+        tsip = the_id;
+        checkin = 0;
+    }
 
-	tmp = NULL;
-	while ((tmp = SeqLocFindNext(in, tmp)) != NULL)
-	{
-		sip = SeqLocId(tmp);
-		if (checkin)    /* optimizer */
-			doit = SeqIdIn(sip, tsip);
-		else
-			doit = SeqIdForSameBioseq(sip, tsip);
-		switch (tmp->choice)
-		{
-			case SEQLOC_PNT:
-				if (doit)
-				{
-					if (pos == ((SeqPntPtr)(tmp->data.ptrvalue))->point)
-						return ctr;
-				}
-				ctr++;
-				break;
-			case SEQLOC_INT:
-				sipp = (SeqIntPtr)(tmp->data.ptrvalue);
-				if (doit)
-				{
-					if ((pos >= sipp->from) && (pos <= sipp->to))
-					{
-						if (sipp->strand == Seq_strand_minus)
-							ctr += (sipp->to - pos);
-						else
-							ctr += (pos - sipp->from);
-						return ctr;
-					}
-				}
-				ctr += (sipp->to - sipp->from + 1);
-				break;
-			case SEQLOC_WHOLE:
-				if (doit)
-				{
-					ctr += pos;
-					return ctr;
-				}
-			default:
-				len = SeqLocLen(tmp);
-				if (len > 0) ctr += len;
-				break;
-		}
-	}
+    tmp = NULL;
+    while ((tmp = SeqLocFindNext(in, tmp)) != NULL)
+    {
+        sip = SeqLocId(tmp);
+        if (checkin)    /* optimizer */
+            doit = SeqIdIn(sip, tsip);
+        else
+            doit = SeqIdForSameBioseq(sip, tsip);
+        switch (tmp->choice)
+        {
+            case SEQLOC_PNT:
+                if (doit)
+                {
+                    if (pos == ((SeqPntPtr)(tmp->data.ptrvalue))->point)
+                        return ctr;
+                }
+                ctr++;
+                break;
+            case SEQLOC_INT:
+                sipp = (SeqIntPtr)(tmp->data.ptrvalue);
+                if (doit)
+                {
+                    if ((pos >= sipp->from) && (pos <= sipp->to))
+                    {
+                        if (sipp->strand == Seq_strand_minus)
+                            ctr += (sipp->to - pos);
+                        else
+                            ctr += (pos - sipp->from);
+                        return ctr;
+                    }
+                }
+                ctr += (sipp->to - sipp->from + 1);
+                break;
+            case SEQLOC_WHOLE:
+                if (doit)
+                {
+                    ctr += pos;
+                    return ctr;
+                }
+            default:
+                len = SeqLocLen(tmp);
+                if (len > 0) ctr += len;
+                break;
+        }
+    }
 
-	return -1;    /* failed */
+    return -1;    /* failed */
 }
 
 
 /*****************************************************************************
 *
 *   Int2 SeqLocOrder(SeqLocPtr a, SeqLocPtr b, BioseqPtr in);
-*   	This function is used to sort SeqLocs into ascending order by
+*       This function is used to sort SeqLocs into ascending order by
 *   location on a Bioseq (segmented or otherwise)
-*   	The first position is the point sorted on.
+*       The first position is the point sorted on.
 *   Returns
-*   	0   a and b start at same offset
-*   	1   a > b
-*   	-1  a < b
-*   	-2  a in bsp, b not
+*       0   a and b start at same offset
+*       1   a > b
+*       -1  a < b
+*       -2  a in bsp, b not
 *       2   b in bsp, a not
 *       3   neither a nor b in bsp
 *        This function will attempt to sort locs not in bsp to the end of
@@ -7007,79 +7077,79 @@ static Int4 CheckOffsetInLoc(SeqLocPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr the
 *****************************************************************************/
 NLM_EXTERN Int2 SeqLocOrder (SeqLocPtr a, SeqLocPtr b, BioseqPtr in)
 {
-	Int4 aoffset, boffset;
+    Int4 aoffset, boffset;
 
 
-	if ((a == NULL) || (b == NULL) || (in == NULL))
-		return 3;
+    if ((a == NULL) || (b == NULL) || (in == NULL))
+        return 3;
 
-	aoffset = GetOffsetInBioseq(a, in, SEQLOC_LEFT_END);
-	boffset = GetOffsetInBioseq(b, in, SEQLOC_LEFT_END);
+    aoffset = GetOffsetInBioseq(a, in, SEQLOC_LEFT_END);
+    boffset = GetOffsetInBioseq(b, in, SEQLOC_LEFT_END);
 
-	if ((aoffset == -1) && (boffset >= 0))
-		return 2;
-	else if ((aoffset >= 0) && (boffset == -1))
-		return -2;
-	else if ((aoffset == -1) && (boffset == -1))
-		return 3;
-	else if (aoffset == boffset)
-		return 0;
-	else if (aoffset < boffset)
-		return -1;
-	else
-		return 1;
+    if ((aoffset == -1) && (boffset >= 0))
+        return 2;
+    else if ((aoffset >= 0) && (boffset == -1))
+        return -2;
+    else if ((aoffset == -1) && (boffset == -1))
+        return 3;
+    else if (aoffset == boffset)
+        return 0;
+    else if (aoffset < boffset)
+        return -1;
+    else
+        return 1;
 }
 
 /*****************************************************************************
 *
 *   Int2 SeqLocMol(seqloc)
-*   	returns Seq-inst.mol for all Bioseqs this seqloc points to.
-*   	if all Seq-inst.mol the same, returns that.
-*   	if mixed dna,rna, returns na
-*   	if mixed na,aa or can't find any Bioseq, or bsp->mol = 0, or 255
-*   			returns 0
+*       returns Seq-inst.mol for all Bioseqs this seqloc points to.
+*       if all Seq-inst.mol the same, returns that.
+*       if mixed dna,rna, returns na
+*       if mixed na,aa or can't find any Bioseq, or bsp->mol = 0, or 255
+*               returns 0
 *
 *****************************************************************************/
 NLM_EXTERN Int2 SeqLocMol (SeqLocPtr seqloc)
 {
-	SeqLocPtr slp = NULL;
-	SeqIdPtr sip;
-	static Uint1 cases[5][4] = {
-		{ 1,2,3,4 } ,    /* was 0, not-set */
-		{ 1,4,0,4 } ,    /* was 1, dna */
-		{ 4,2,0,4 } ,    /* was 2, rna */
-		{ 0,0,3,0 } ,    /* was 3, aa */
-		{ 4,4,0,4 }};    /* was 4, na */
-	Int2 the_mol = 0, tmp;
-	BioseqPtr bsp;
-	Boolean locked = FALSE;
+    SeqLocPtr slp = NULL;
+    SeqIdPtr sip;
+    static Uint1 cases[5][4] = {
+        { 1,2,3,4 } ,    /* was 0, not-set */
+        { 1,4,0,4 } ,    /* was 1, dna */
+        { 4,2,0,4 } ,    /* was 2, rna */
+        { 0,0,3,0 } ,    /* was 3, aa */
+        { 4,4,0,4 }};    /* was 4, na */
+    Int2 the_mol = 0, tmp;
+    BioseqPtr bsp;
+    Boolean locked = FALSE;
 
-	while ((slp = SeqLocFindNext(seqloc, slp)) != NULL)
-	{
-		sip = SeqLocId(slp);
-		if (sip != NULL)
-		{
-			bsp = BioseqFindCore(sip);
-			 if (bsp == NULL)
-			 {
-			 	bsp = BioseqLockById(sip);
-	 			if (bsp != NULL)
-			 		locked = TRUE;
-			 }
-			if (bsp == NULL)
-				return 0;
-			
-			tmp = (Int2)bsp->mol;
-			if (locked)
-				BioseqUnlock(bsp);
-			if ((tmp == 0) || (tmp == Seq_mol_other))
-				return 0;
-			the_mol = (Int2)cases[the_mol][tmp-1];
-			if (! the_mol)
-				return 0;
-		}
-	}
-	return the_mol;
+    while ((slp = SeqLocFindNext(seqloc, slp)) != NULL)
+    {
+        sip = SeqLocId(slp);
+        if (sip != NULL)
+        {
+            bsp = BioseqFindCore(sip);
+             if (bsp == NULL)
+             {
+                 bsp = BioseqLockById(sip);
+                 if (bsp != NULL)
+                     locked = TRUE;
+             }
+            if (bsp == NULL)
+                return 0;
+            
+            tmp = (Int2)bsp->mol;
+            if (locked)
+                BioseqUnlock(bsp);
+            if ((tmp == 0) || (tmp == Seq_mol_other))
+                return 0;
+            the_mol = (Int2)cases[the_mol][tmp-1];
+            if (! the_mol)
+                return 0;
+        }
+    }
+    return the_mol;
 }
 
 static SeqIdPtr SeqLocPrintProc(SeqLocPtr slp, ByteStorePtr bsp, Boolean first, SeqIdPtr lastid, Boolean use_best_id);
@@ -7088,24 +7158,24 @@ static void BSstring(ByteStorePtr bsp, CharPtr str);
 
 static CharPtr SeqLocPrintEx (SeqLocPtr slp, Boolean use_best_id)
 {
-	ByteStorePtr bsp;
-	CharPtr str;
-	SeqLocPtr tmp;
+    ByteStorePtr bsp;
+    CharPtr str;
+    SeqLocPtr tmp;
 
-	if (slp == NULL) return NULL;
+    if (slp == NULL) return NULL;
 
-	bsp = BSNew(80);
+    bsp = BSNew(80);
 
-	tmp = slp->next;    /* save possible chain */
-	slp->next = NULL;   /* take out of possible chain */
+    tmp = slp->next;    /* save possible chain */
+    slp->next = NULL;   /* take out of possible chain */
 
-	SeqLocPrintProc(slp, bsp, TRUE, NULL, use_best_id);
+    SeqLocPrintProc(slp, bsp, TRUE, NULL, use_best_id);
 
-	slp->next = tmp;    /* replace possible chain */
-	str = (CharPtr)BSMerge(bsp, NULL);
-	BSFree(bsp);
+    slp->next = tmp;    /* replace possible chain */
+    str = (CharPtr)BSMerge(bsp, NULL);
+    BSFree(bsp);
 
-	return str;  
+    return str;  
 }
 
 /*****************************************************************************
@@ -7133,8 +7203,8 @@ static SeqIdPtr SeqPointWriteEx (SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, In
 /*****************************************************************************
 *
 *   SeqLocPrintProc(slp, bsp, first, lastid)
-*   	print traversal routine
-*   	goes down slp chain
+*       print traversal routine
+*       goes down slp chain
 *
 *****************************************************************************/
 static SeqIdPtr 
@@ -7145,140 +7215,140 @@ SeqLocPrintProc
  SeqIdPtr     lastid,
  Boolean      use_best_id)
 {
-	Char buf[128];
-	SeqBondPtr sbp;
-	PackSeqPntPtr pspp;
-	SeqIntPtr sip;
-	IntFuzzPtr ifp1, ifp2;
-	Int4 from, to;
-	Int2 delim, delim2;
-	BioseqPtr   seq;
-	SeqIdPtr    thisid;
+    Char buf[128];
+    SeqBondPtr sbp;
+    PackSeqPntPtr pspp;
+    SeqIntPtr sip;
+    IntFuzzPtr ifp1, ifp2;
+    Int4 from, to;
+    Int2 delim, delim2;
+    BioseqPtr   seq;
+    SeqIdPtr    thisid;
 
-	while (slp != NULL)
-	{
-		if (! first)
-		{
-			BSPutByte(bsp, ',');
-			BSPutByte(bsp, ' ');
-		}
-		first = FALSE;
+    while (slp != NULL)
+    {
+        if (! first)
+        {
+            BSPutByte(bsp, ',');
+            BSPutByte(bsp, ' ');
+        }
+        first = FALSE;
 
-		delim = 0;
-	    switch (slp->choice)
-    	{
-        	case SEQLOC_BOND:   /* bond -- 2 seqs */
-				sbp = (SeqBondPtr)(slp->data.ptrvalue);
-				if (sbp->a != NULL)
-				{
-					lastid = SeqPointWriteEx(sbp->a, buf, lastid, sizeof(buf) - 1, use_best_id);
-					BSstring(bsp, buf);
-				}
-				else
-					BSPutByte(bsp, '?');
+        delim = 0;
+        switch (slp->choice)
+        {
+            case SEQLOC_BOND:   /* bond -- 2 seqs */
+                sbp = (SeqBondPtr)(slp->data.ptrvalue);
+                if (sbp->a != NULL)
+                {
+                    lastid = SeqPointWriteEx(sbp->a, buf, lastid, sizeof(buf) - 1, use_best_id);
+                    BSstring(bsp, buf);
+                }
+                else
+                    BSPutByte(bsp, '?');
 
-				BSPutByte(bsp, '=');
+                BSPutByte(bsp, '=');
 
-				if (sbp->b != NULL)
-				{
-					lastid = SeqPointWriteEx(sbp->b, buf, lastid, sizeof(buf) - 1, use_best_id);
-					BSstring(bsp, buf);
-				}
-				else
-					BSPutByte(bsp, '?');
-				break;
-    	    case SEQLOC_FEAT:   /* feat -- can't track yet */
-				BSstring(bsp, "(feat)");
-				break;
-	        case SEQLOC_NULL:    /* NULL */
-				BSPutByte(bsp, '~');
-				break;
-	        case SEQLOC_EMPTY:    /* empty */
-				BSPutByte(bsp, '{');
-				SeqIdWrite((SeqIdPtr)(slp->data.ptrvalue), 
-							buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
-				BSstring(bsp, buf);
-				BSPutByte(bsp, '}');
-				break;
-	        case SEQLOC_WHOLE:    /* whole */
-				SeqIdWrite((SeqIdPtr)(slp->data.ptrvalue), 
-						buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
-				BSstring(bsp, buf);
-				break;
-	        case SEQLOC_MIX:    /* mix -- more than one seq */
-    	    case SEQLOC_PACKED_INT:    /* packed int */
-				delim = '(';
-				delim2 = ')';
-	        case SEQLOC_EQUIV:    /* equiv -- ditto */
-				if (! delim)
-				{
-					delim = '[';
-					delim2 = ']';
-				}
-				BSPutByte(bsp, delim);
-				lastid = SeqLocPrintProc((SeqLocPtr)(slp->data.ptrvalue), bsp, TRUE, lastid, use_best_id);
-				BSPutByte(bsp, delim2);
-	            break;
-    	    case SEQLOC_INT:    /* int */
-				sip = (SeqIntPtr)(slp->data.ptrvalue);
-				thisid = sip->id;
-				if (use_best_id)
-				{
-				  seq = BioseqFind (thisid);
-				  if (seq != NULL)
-				  {
-				    thisid = SeqIdFindBest (seq->id, SEQID_GENBANK);
-				  }
-				}
-				if (! SeqIdMatch(sip->id, lastid))
-				{
-					SeqIdWrite(thisid, buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
-					BSstring(bsp, buf);
-					BSPutByte(bsp, ':');
-				}
-				lastid = thisid;
-				if (strandsymbol[sip->strand])
-					BSPutByte(bsp, (Int2)strandsymbol[sip->strand]);
-				if ((sip->strand == Seq_strand_minus) ||
-					(sip->strand == Seq_strand_both_rev))
-				{
-					ifp1 = sip->if_to;
-					ifp2 = sip->if_from;
-					to = sip->from;
-					from = sip->to;
-				}
-				else
-				{
-					ifp1 = sip->if_from;
-					ifp2 = sip->if_to;
-					to = sip->to;
-					from = sip->from;
+                if (sbp->b != NULL)
+                {
+                    lastid = SeqPointWriteEx(sbp->b, buf, lastid, sizeof(buf) - 1, use_best_id);
+                    BSstring(bsp, buf);
+                }
+                else
+                    BSPutByte(bsp, '?');
+                break;
+            case SEQLOC_FEAT:   /* feat -- can't track yet */
+                BSstring(bsp, "(feat)");
+                break;
+            case SEQLOC_NULL:    /* NULL */
+                BSPutByte(bsp, '~');
+                break;
+            case SEQLOC_EMPTY:    /* empty */
+                BSPutByte(bsp, '{');
+                SeqIdWrite((SeqIdPtr)(slp->data.ptrvalue), 
+                            buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
+                BSstring(bsp, buf);
+                BSPutByte(bsp, '}');
+                break;
+            case SEQLOC_WHOLE:    /* whole */
+                SeqIdWrite((SeqIdPtr)(slp->data.ptrvalue), 
+                        buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
+                BSstring(bsp, buf);
+                break;
+            case SEQLOC_MIX:    /* mix -- more than one seq */
+            case SEQLOC_PACKED_INT:    /* packed int */
+                delim = '(';
+                delim2 = ')';
+            case SEQLOC_EQUIV:    /* equiv -- ditto */
+                if (! delim)
+                {
+                    delim = '[';
+                    delim2 = ']';
+                }
+                BSPutByte(bsp, delim);
+                lastid = SeqLocPrintProc((SeqLocPtr)(slp->data.ptrvalue), bsp, TRUE, lastid, use_best_id);
+                BSPutByte(bsp, delim2);
+                break;
+            case SEQLOC_INT:    /* int */
+                sip = (SeqIntPtr)(slp->data.ptrvalue);
+                thisid = sip->id;
+                if (use_best_id)
+                {
+                  seq = BioseqFind (thisid);
+                  if (seq != NULL)
+                  {
+                    thisid = SeqIdFindBest (seq->id, SEQID_GENBANK);
+                  }
+                }
+                if (! SeqIdMatch(sip->id, lastid))
+                {
+                    SeqIdWrite(thisid, buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
+                    BSstring(bsp, buf);
+                    BSPutByte(bsp, ':');
+                }
+                lastid = thisid;
+                if (strandsymbol[sip->strand])
+                    BSPutByte(bsp, (Int2)strandsymbol[sip->strand]);
+                if ((sip->strand == Seq_strand_minus) ||
+                    (sip->strand == Seq_strand_both_rev))
+                {
+                    ifp1 = sip->if_to;
+                    ifp2 = sip->if_from;
+                    to = sip->from;
+                    from = sip->to;
+                }
+                else
+                {
+                    ifp1 = sip->if_from;
+                    ifp2 = sip->if_to;
+                    to = sip->to;
+                    from = sip->from;
 
-				}
-				IntFuzzPrint(ifp1, from, buf, FALSE);
-				BSstring(bsp, buf);
-				BSPutByte(bsp, '-');
-				IntFuzzPrint(ifp2, to, buf, TRUE);
-				BSstring(bsp, buf);
+                }
+                IntFuzzPrint(ifp1, from, buf, FALSE);
+                BSstring(bsp, buf);
+                BSPutByte(bsp, '-');
+                IntFuzzPrint(ifp2, to, buf, TRUE);
+                BSstring(bsp, buf);
 
-        	    break;
-	        case SEQLOC_PNT:    /* pnt */
-				lastid = SeqPointWriteEx((SeqPntPtr)(slp->data.ptrvalue), 
-					                       buf, lastid, sizeof(buf) - 1, use_best_id);
-				BSstring(bsp, buf);
-	            break;
-    	    case SEQLOC_PACKED_PNT:    /* packed pnt */
-				pspp = (PackSeqPntPtr)(slp->data.ptrvalue);
-				if (pspp != NULL)
-					BSstring(bsp, "PackSeqPnt");
-	            break;
-    	    default:
-            	BSstring(bsp, "(\?\?)");
-				break;
-	    }
-		slp = slp->next;
-	}
-	return lastid;
+                break;
+            case SEQLOC_PNT:    /* pnt */
+                lastid = SeqPointWriteEx((SeqPntPtr)(slp->data.ptrvalue), 
+                                           buf, lastid, sizeof(buf) - 1, use_best_id);
+                BSstring(bsp, buf);
+                break;
+            case SEQLOC_PACKED_PNT:    /* packed pnt */
+                pspp = (PackSeqPntPtr)(slp->data.ptrvalue);
+                if (pspp != NULL)
+                    BSstring(bsp, "PackSeqPnt");
+                break;
+            default:
+                BSstring(bsp, "(\?\?)");
+                break;
+        }
+        slp = slp->next;
+    }
+    return lastid;
 }
 
 
@@ -7289,8 +7359,8 @@ SeqLocPrintProc
 *****************************************************************************/
 static void BSstring(ByteStorePtr bsp, CharPtr str)
 {
-	BSWrite(bsp, str, (Int4)(StringLen(str)));
-	return;
+    BSWrite(bsp, str, (Int4)(StringLen(str)));
+    return;
 }
 
 /*****************************************************************************
@@ -7300,27 +7370,27 @@ static void BSstring(ByteStorePtr bsp, CharPtr str)
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr SeqPointPrint(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid)
 {
-	CharPtr tmp;
+    CharPtr tmp;
 
-	if ((spp == NULL) || (buf == NULL)) return NULL;
-	
-	tmp = buf;
-	*tmp = '\0';
-	if (! SeqIdMatch(spp->id, lastid))
-	{
-		SeqIdPrint(spp->id, tmp, PRINTID_FASTA_SHORT);
-		while (*tmp != '\0') tmp++;
-		*tmp = ':';
-		tmp++; *tmp = '\0';
-	}
-	if (strandsymbol[spp->strand])
-	{
-		*tmp = strandsymbol[spp->strand];
-		tmp++; *tmp = '\0';
-	}
-	IntFuzzPrint(spp->fuzz, spp->point, tmp, TRUE);
-	
-	return spp->id;
+    if ((spp == NULL) || (buf == NULL)) return NULL;
+    
+    tmp = buf;
+    *tmp = '\0';
+    if (! SeqIdMatch(spp->id, lastid))
+    {
+        SeqIdPrint(spp->id, tmp, PRINTID_FASTA_SHORT);
+        while (*tmp != '\0') tmp++;
+        *tmp = ':';
+        tmp++; *tmp = '\0';
+    }
+    if (strandsymbol[spp->strand])
+    {
+        *tmp = strandsymbol[spp->strand];
+        tmp++; *tmp = '\0';
+    }
+    IntFuzzPrint(spp->fuzz, spp->point, tmp, TRUE);
+    
+    return spp->id;
 }
 
 static SeqIdPtr 
@@ -7331,55 +7401,55 @@ SeqPointWriteEx
  Int2 buflen, 
  Boolean use_best_id)
 {
-	CharPtr  tmp;
-	SeqIdPtr best_id, tmp_next;
-	BioseqPtr bsp;
-	Int4      fuzzlen, id_len;
-	Char      fuzzbuf[100];
+    CharPtr  tmp;
+    SeqIdPtr best_id, tmp_next;
+    BioseqPtr bsp;
+    Int4      fuzzlen, id_len;
+    Char      fuzzbuf[100];
 
-	if ((spp == NULL) || (buf == NULL)) return NULL;
-	
-	tmp = buf;
-	*tmp = '\0';
-	if (buflen < 2) return NULL;
-	
-	best_id = spp->id;
-	if (use_best_id)
-	{
-	  bsp = BioseqFind (spp->id);
-	  if (bsp != NULL)
-	  {
-	    best_id = SeqIdFindBest (bsp->id, SEQID_GENBANK);
-	  }
-	}
-	tmp_next = best_id->next;
-	best_id->next = NULL;
+    if ((spp == NULL) || (buf == NULL)) return NULL;
+    
+    tmp = buf;
+    *tmp = '\0';
+    if (buflen < 2) return NULL;
+    
+    best_id = spp->id;
+    if (use_best_id)
+    {
+      bsp = BioseqFind (spp->id);
+      if (bsp != NULL)
+      {
+        best_id = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+      }
+    }
+    tmp_next = best_id->next;
+    best_id->next = NULL;
 
-	IntFuzzPrint(spp->fuzz, spp->point, fuzzbuf, TRUE);
-	fuzzlen = StringLen (fuzzbuf);
+    IntFuzzPrint(spp->fuzz, spp->point, fuzzbuf, TRUE);
+    fuzzlen = StringLen (fuzzbuf);
 
-	if (! SeqIdMatch(best_id, lastid))
-	{
-		SeqIdWrite(best_id, tmp, PRINTID_FASTA_SHORT, buflen - 2);
-		while (*tmp != '\0') tmp++;
-		*tmp = ':';
-		tmp++; *tmp = '\0';
-	}
-	if (strandsymbol[spp->strand])
-	{
-		*tmp = strandsymbol[spp->strand];
-		tmp++; *tmp = '\0';
-	}
-	
-	id_len = StringLen (buf);
-	if (id_len < buflen - 1) {
-	  StringNCat (buf, fuzzbuf, buflen - id_len - 1);
-	  buf[buflen - 1] = 0;
-	}
-	
-	best_id->next = tmp_next;
-	
-	return best_id;
+    if (! SeqIdMatch(best_id, lastid))
+    {
+        SeqIdWrite(best_id, tmp, PRINTID_FASTA_SHORT, buflen - 2);
+        while (*tmp != '\0') tmp++;
+        *tmp = ':';
+        tmp++; *tmp = '\0';
+    }
+    if (strandsymbol[spp->strand])
+    {
+        *tmp = strandsymbol[spp->strand];
+        tmp++; *tmp = '\0';
+    }
+    
+    id_len = StringLen (buf);
+    if (id_len < buflen - 1) {
+      StringNCat (buf, fuzzbuf, buflen - id_len - 1);
+      buf[buflen - 1] = 0;
+    }
+    
+    best_id->next = tmp_next;
+    
+    return best_id;
 }
 
 /*****************************************************************************
@@ -7399,78 +7469,78 @@ NLM_EXTERN SeqIdPtr SeqPointWrite(SeqPntPtr spp, CharPtr buf, SeqIdPtr lastid, I
 *****************************************************************************/
 NLM_EXTERN void IntFuzzPrint(IntFuzzPtr ifp, Int4 pos, CharPtr buf, Boolean right)
 {
-	Char lim=0;
-	CharPtr tmp;
-	Char tbuf[40];
+    Char lim=0;
+    CharPtr tmp;
+    Char tbuf[40];
 
-	if (buf == NULL) return;
-	pos++;  /* number from 1 */
-	tmp = buf;
-	*tmp = '\0';
-	*tbuf = '\0';
-	if (ifp != NULL)
-	{
-		switch (ifp->choice)
-		{
-			case 1:     /* plus minus */
-				sprintf(tbuf, "<+-%ld>", (long)ifp->a);
-				break;
-			case 2:     /* range */
-				sprintf(tbuf, "<%ld.%ld>", (long)ifp->b, (long)ifp->a);
-				break;
-			case 3:     /* percent */
-				sprintf(tbuf, "<%ld%%>", (long)ifp->a);
-				break;
-			case 4:     /* limit */
-				switch (ifp->a)
-				{
-					case 0:    /* unknown */
-					case 255:  /* other */
-						sprintf(tbuf, "<?>");
-						break;
-					case 1:    /* gt */
-						lim = '>';
-						break;
-					case 2:    /* lt */
-						lim = '<';
-						break;
-					case 3:
-						lim = 'r';
-						break;
-					case 4:
-						lim = '^';
-						break;
-				}
-				break;
-		}
-	}
+    if (buf == NULL) return;
+    pos++;  /* number from 1 */
+    tmp = buf;
+    *tmp = '\0';
+    *tbuf = '\0';
+    if (ifp != NULL)
+    {
+        switch (ifp->choice)
+        {
+            case 1:     /* plus minus */
+                sprintf(tbuf, "<+-%ld>", (long)ifp->a);
+                break;
+            case 2:     /* range */
+                sprintf(tbuf, "<%ld.%ld>", (long)ifp->b, (long)ifp->a);
+                break;
+            case 3:     /* percent */
+                sprintf(tbuf, "<%ld%%>", (long)ifp->a);
+                break;
+            case 4:     /* limit */
+                switch (ifp->a)
+                {
+                    case 0:    /* unknown */
+                    case 255:  /* other */
+                        sprintf(tbuf, "<?>");
+                        break;
+                    case 1:    /* gt */
+                        lim = '>';
+                        break;
+                    case 2:    /* lt */
+                        lim = '<';
+                        break;
+                    case 3:
+                        lim = 'r';
+                        break;
+                    case 4:
+                        lim = '^';
+                        break;
+                }
+                break;
+        }
+    }
 
-	if ((lim) && (lim != 'r'))
-	{
-		*tmp = lim;
-		tmp++; *tmp = '\0';
-		lim = 0;
-	}
+    if ((lim) && (lim != 'r'))
+    {
+        *tmp = lim;
+        tmp++; *tmp = '\0';
+        lim = 0;
+    }
 
-	if (right)
-	{
-		sprintf(tmp, "%ld", (long)pos);
-		while (*tmp != '\0') tmp++;
-	}
-	if (lim == 'r')
-	{
-		*tmp = '^';
-		tmp++;
-		*tmp = '\0';
-	}
-	if (tbuf[0] != '\0')
-	{
-		tmp = StringMove(tmp, tbuf);
-	}
-	if (! right)
-		sprintf(tmp, "%ld", (long)pos);
+    if (right)
+    {
+        sprintf(tmp, "%ld", (long)pos);
+        while (*tmp != '\0') tmp++;
+    }
+    if (lim == 'r')
+    {
+        *tmp = '^';
+        tmp++;
+        *tmp = '\0';
+    }
+    if (tbuf[0] != '\0')
+    {
+        tmp = StringMove(tmp, tbuf);
+    }
+    if (! right)
+        sprintf(tmp, "%ld", (long)pos);
 
-	return;
+    return;
 
 }
 /*****************************************************************************
@@ -7479,83 +7549,83 @@ NLM_EXTERN void IntFuzzPrint(IntFuzzPtr ifp, Int4 pos, CharPtr buf, Boolean righ
 *
 *****************************************************************************/
 typedef struct sturct_Nlm_taxcommon {
-	char * common;
-	char * taxname;
+    char * common;
+    char * taxname;
 } Nlm_TaxCommon, PNTR Nlm_TaxCommonPtr;
 
 NLM_EXTERN CharPtr TaxNameFromCommon (CharPtr common)
 {
-	CharPtr taxname = NULL;
-	CharPtr query = (CharPtr)MemNew(StringLen(common) + 2);
-	int tax_try, dex;
+    CharPtr taxname = NULL;
+    CharPtr query = (CharPtr)MemNew(StringLen(common) + 2);
+    int tax_try, dex;
 
-	static Nlm_TaxCommon taxcommon[40] = {
-	"Chinese hamsters", "Cricetulus sp."
-	,"Syrian golden hamsters", "Mesocricetus auratus"
-	,"Syrian hamsters", "Mesocricetus sp."
-	,"barley", "Hordeum sp."
-	,"carrots", "Daucus sp."
-	,"cats", "Felis sp."
-	,"cattles", "Bos sp."
-	,"chickens", "Gallus sp."
-	,"chimpanzees", "Pan sp."
-	,"chimpanzes", "Pan sp."
-	,"corn", "Zea sp."
-	,"cucumber", "Cucumis sativus"
-	,"dogs", "Canis sp."
-	,"goats", "Capra sp."
-	,"gorillas", "Gorilla sp."
-	,"guinea pigs", "Cavia sp."
-	,"hamsters", "Cricetidae gen. sp."
-	,"horses", "Equus sp."
-	,"humans", "Homo sapiens"
-	,"maize", "Zea sp."
-	,"mice", "Mus sp."
-	,"mouse", "Mus sp."
-	,"peas", "Pisum sp."
-	,"potatoes", "Solanum sp."
-	,"potato", "Solanum sp."
-	,"quails", "Phasianidae gen. sp."
-	,"rabbits", "Oryctolagus sp."
-	,"rats", "Rattus sp."
-	,"rices", "Oryza sp."
-	,"sheeps", "Ovis sp."
-	,"sorghums", "Sorghum sp."
-	,"soybeans", "Glycine sp."
-	,"spinach", "Spinacia sp."
-	,"swine", "Sus sp."
-	,"tobacco", "Nicotiania sp."
-	,"tomatoes", "Lycopersicon sp."
-	,"tomato", "Lycopersicon sp."
-	,"turkeys", "Meleagris sp."
-	,"wheat", "Triticum sp."
-	,"zebrafish", "Brachydanio sp."
+    static Nlm_TaxCommon taxcommon[40] = {
+    "Chinese hamsters", "Cricetulus sp."
+    ,"Syrian golden hamsters", "Mesocricetus auratus"
+    ,"Syrian hamsters", "Mesocricetus sp."
+    ,"barley", "Hordeum sp."
+    ,"carrots", "Daucus sp."
+    ,"cats", "Felis sp."
+    ,"cattles", "Bos sp."
+    ,"chickens", "Gallus sp."
+    ,"chimpanzees", "Pan sp."
+    ,"chimpanzes", "Pan sp."
+    ,"corn", "Zea sp."
+    ,"cucumber", "Cucumis sativus"
+    ,"dogs", "Canis sp."
+    ,"goats", "Capra sp."
+    ,"gorillas", "Gorilla sp."
+    ,"guinea pigs", "Cavia sp."
+    ,"hamsters", "Cricetidae gen. sp."
+    ,"horses", "Equus sp."
+    ,"humans", "Homo sapiens"
+    ,"maize", "Zea sp."
+    ,"mice", "Mus sp."
+    ,"mouse", "Mus sp."
+    ,"peas", "Pisum sp."
+    ,"potatoes", "Solanum sp."
+    ,"potato", "Solanum sp."
+    ,"quails", "Phasianidae gen. sp."
+    ,"rabbits", "Oryctolagus sp."
+    ,"rats", "Rattus sp."
+    ,"rices", "Oryza sp."
+    ,"sheeps", "Ovis sp."
+    ,"sorghums", "Sorghum sp."
+    ,"soybeans", "Glycine sp."
+    ,"spinach", "Spinacia sp."
+    ,"swine", "Sus sp."
+    ,"tobacco", "Nicotiania sp."
+    ,"tomatoes", "Lycopersicon sp."
+    ,"tomato", "Lycopersicon sp."
+    ,"turkeys", "Meleagris sp."
+    ,"wheat", "Triticum sp."
+    ,"zebrafish", "Brachydanio sp."
 };
 
-	if (common == NULL) return NULL;
-	
-	StringCpy(query,common);  /* space for 's' is at end */
-	for (tax_try = 0; tax_try < 2; tax_try ++){
-		for (dex = 0; dex < 40; dex ++ ){
-			if (StringICmp(query,taxcommon[dex].common) == 0)
-				break;
-		}
-		if ( dex < 40)
-			break;
-		if (tax_try == 0)
-			StringCat(query,"s");
-	}
-	MemFree (query);
-	if (dex < 40)
-		taxname = StringSave (taxcommon[dex].taxname);
+    if (common == NULL) return NULL;
+    
+    StringCpy(query,common);  /* space for 's' is at end */
+    for (tax_try = 0; tax_try < 2; tax_try ++){
+        for (dex = 0; dex < 40; dex ++ ){
+            if (StringICmp(query,taxcommon[dex].common) == 0)
+                break;
+        }
+        if ( dex < 40)
+            break;
+        if (tax_try == 0)
+            StringCat(query,"s");
+    }
+    MemFree (query);
+    if (dex < 40)
+        taxname = StringSave (taxcommon[dex].taxname);
 
-	return taxname;
+    return taxname;
 }
 
 /*****************************************************************************
 *
 *   QualLocCreate(from, to)
-*   	creates a UserObject of _class NCBI, type 1
+*       creates a UserObject of _class NCBI, type 1
 *       adds a field of type "qual_loc"
 *       puts the from and to numbers in
 *       no range check, no strand, no seqid
@@ -7565,39 +7635,39 @@ NLM_EXTERN CharPtr TaxNameFromCommon (CharPtr common)
 *****************************************************************************/
 NLM_EXTERN UserObjectPtr QualLocCreate (Int4 from, Int4 to)
 {
-	UserObjectPtr usop;
-	UserFieldPtr ufp;
-	ObjectIdPtr oip;
-	Int4Ptr ints;
+    UserObjectPtr usop;
+    UserFieldPtr ufp;
+    ObjectIdPtr oip;
+    Int4Ptr ints;
 
-	usop = UserObjectNew();
-	usop->_class = StringSave("NCBI");
-	oip = ObjectIdNew();
-	oip->id = 1;
-	usop->type = oip;
+    usop = UserObjectNew();
+    usop->_class = StringSave("NCBI");
+    oip = ObjectIdNew();
+    oip->id = 1;
+    usop->type = oip;
 
-	ufp = UserFieldNew();
+    ufp = UserFieldNew();
         usop->data = ufp;
-	oip = ObjectIdNew();
-	oip->str = StringSave("qual_loc");
-	ufp->label = oip;
-	ufp->num = 2;
-	ufp->choice = 8;   /* ints */
+    oip = ObjectIdNew();
+    oip->str = StringSave("qual_loc");
+    ufp->label = oip;
+    ufp->num = 2;
+    ufp->choice = 8;   /* ints */
 
-	ints = (Int4Ptr) MemNew((size_t)(sizeof(Int4) * 2));
-	ints[0] = from;
-	ints[1] = to;
-	ufp->data.ptrvalue = (Pointer)ints;
+    ints = (Int4Ptr) MemNew((size_t)(sizeof(Int4) * 2));
+    ints[0] = from;
+    ints[1] = to;
+    ufp->data.ptrvalue = (Pointer)ints;
 
-	return usop;
+    return usop;
 
 }
 
 /*****************************************************************************
 *
 *   QualLocWrite(uop, buf)
-*   	Checks a SeqFeat.ext to see if it is
-*   		1) not null
+*       Checks a SeqFeat.ext to see if it is
+*           1) not null
 *           2) has a UserObject of _class NCBI, type 1
 *           3) has a field of label "qual_loc"
 *           4) if so, prints the two integers as a qualifier location
@@ -7607,40 +7677,40 @@ NLM_EXTERN UserObjectPtr QualLocCreate (Int4 from, Int4 to)
 *****************************************************************************/
 NLM_EXTERN CharPtr QualLocWrite(UserObjectPtr uop, CharPtr buf)
 {
-	CharPtr tmp=NULL;
-	UserFieldPtr ufp;
-	Int4Ptr ints;
+    CharPtr tmp=NULL;
+    UserFieldPtr ufp;
+    Int4Ptr ints;
 
-	if ((uop == NULL) || (buf == NULL))
-		return tmp;
+    if ((uop == NULL) || (buf == NULL))
+        return tmp;
 
-	if (StringCmp(uop->_class, "NCBI"))
-		return tmp;
+    if (StringCmp(uop->_class, "NCBI"))
+        return tmp;
 
-	if (uop->type->id != 1)
-		return tmp;
+    if (uop->type->id != 1)
+        return tmp;
 
-	for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
-	{
-		if (! StringCmp(ufp->label->str, "qual_loc"))
-		{
-			if (ufp->choice != 8)  /* not ints */
-				return NULL;
-			if (ufp->num < 2)	   /* not enough */
-				return NULL;
-			ints = (Int4Ptr)(ufp->data.ptrvalue);
-			if (ints == NULL)
-				return tmp;
-			tmp = buf;
-			sprintf(tmp, "%ld..%ld", (long)(ints[0]+1),
+    for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+    {
+        if (! StringCmp(ufp->label->str, "qual_loc"))
+        {
+            if (ufp->choice != 8)  /* not ints */
+                return NULL;
+            if (ufp->num < 2)       /* not enough */
+                return NULL;
+            ints = (Int4Ptr)(ufp->data.ptrvalue);
+            if (ints == NULL)
+                return tmp;
+            tmp = buf;
+            sprintf(tmp, "%ld..%ld", (long)(ints[0]+1),
                                                           (long)(ints[1]+1));
-			while (*tmp != '\0')
-				tmp++;
-			return tmp;
-		}
-	}
+            while (*tmp != '\0')
+                tmp++;
+            return tmp;
+        }
+    }
 
-	return tmp;
+    return tmp;
 }
 
 /*****************************************************************************
@@ -7693,21 +7763,21 @@ NLM_EXTERN Boolean EntrezASN1Detected (SeqEntryPtr sep)
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocIntNew (Int4 from, Int4 to, Uint1 strand, SeqIdPtr sip)
 {
-	SeqIntPtr sintp;
-	SeqLocPtr slp;
+    SeqIntPtr sintp;
+    SeqLocPtr slp;
 
-	if (sip == NULL) return NULL;
-	sintp = SeqIntNew();
-	sintp->id = SeqIdDup(sip);
-	sintp->from = from;
-	sintp->to = to;
-	sintp->strand = strand;
+    if (sip == NULL) return NULL;
+    sintp = SeqIntNew();
+    sintp->id = SeqIdDup(sip);
+    sintp->from = from;
+    sintp->to = to;
+    sintp->strand = strand;
 
-	slp = ValNodeNew(NULL);
-	slp->choice = SEQLOC_INT;
-	slp->data.ptrvalue = (Pointer)sintp;
+    slp = ValNodeNew(NULL);
+    slp->choice = SEQLOC_INT;
+    slp->data.ptrvalue = (Pointer)sintp;
 
-	return slp;
+    return slp;
 }
 
 /*****************************************************************************
@@ -7718,94 +7788,114 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocIntNew (Int4 from, Int4 to, Uint1 strand, Seq
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocPntNew(Int4 pos, Uint1 strand, SeqIdPtr sip, Boolean is_fuzz)
 {
-	SeqLocPtr slp;
-	SeqPntPtr spp;
-	IntFuzzPtr ifp;
+    SeqLocPtr slp;
+    SeqPntPtr spp;
+    IntFuzzPtr ifp;
 
-	slp = ValNodeNew(NULL);
-	slp->choice = SEQLOC_PNT;
-	spp = SeqPntNew();
-	spp->point = pos;
-	spp->strand = strand;
-	spp->id = SeqIdDup(sip);
-	if(is_fuzz)
-	{
-		ifp = IntFuzzNew();
-		ifp->choice = 4;
-		ifp->a = 0;	/*unknown value*/
-		spp->fuzz = ifp;
-	}
-	slp->data.ptrvalue = spp;
+    slp = ValNodeNew(NULL);
+    slp->choice = SEQLOC_PNT;
+    spp = SeqPntNew();
+    spp->point = pos;
+    spp->strand = strand;
+    spp->id = SeqIdDup(sip);
+    if(is_fuzz)
+    {
+        ifp = IntFuzzNew();
+        ifp->choice = 4;
+        ifp->a = 0;    /*unknown value*/
+        spp->fuzz = ifp;
+    }
+    slp->data.ptrvalue = spp;
 
-	return slp;
+    return slp;
 
 }
+
+NLM_EXTERN void FreeSeqLocSetComponents (SeqLocPtr list)
+
+{
+  BioseqPtr  bsp;
+  SeqIdPtr   sip;
+  SeqLocPtr  slp;
+  Uint2      entityID;
+
+  for (slp = list; slp != NULL; slp = slp->next) {
+    sip = SeqLocId (slp);
+    if (sip == NULL) continue;
+    bsp = BioseqFind (sip);
+    if (bsp == NULL) continue;
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+    if (entityID < 1) continue;
+    ObjMgrFreeByEntityID (entityID);
+  }
+}
+
 
 /* a "gather routine" which collects information about the coding region
    features */
 static Boolean gatherCodingRegions(GatherContextPtr gcp)
 {
-	SpliceInfoPtr sip;
-	SeqFeatPtr sfp;
-	SeqLocPtr slp, current, next, protSlp, chain;
-	Uint1 strand;
+    SpliceInfoPtr sip;
+    SeqFeatPtr sfp;
+    SeqLocPtr slp, current, next, protSlp, chain;
+    Uint1 strand;
 
-	if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
+    if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
 
-	/* although we had to include higher-level types in GatherScope's
-	   "ignore" parameter so that Gather could "see" features, we're
-	   really only interested in features */
-	if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
+    /* although we had to include higher-level types in GatherScope's
+       "ignore" parameter so that Gather could "see" features, we're
+       really only interested in features */
+    if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
 
-	sip = (SpliceInfoPtr) gcp->userdata;
+    sip = (SpliceInfoPtr) gcp->userdata;
 
-	if (sip == NULL || sip->slp == NULL) return TRUE;
+    if (sip == NULL || sip->slp == NULL) return TRUE;
 
-	sfp = (SeqFeatPtr) gcp->thisitem;
+    sfp = (SeqFeatPtr) gcp->thisitem;
 
-	/* we're only interested in coding regions */
-	if (sfp->data.choice != SEQFEAT_CDREGION || sfp->product == NULL) return TRUE;
+    /* we're only interested in coding regions */
+    if (sfp->data.choice != SEQFEAT_CDREGION || sfp->product == NULL) return TRUE;
 
-	/* traverse all (but the last) intervals of the coding region feature */
-	for (current = SeqLocFindNext(sfp->location, NULL);
-	     (next = SeqLocFindNext(sfp->location, current)) != NULL;
-	     current = next) {
-		/* consider the last DNA base on the interval */
-		strand = SeqLocStrand(current);
-		slp = SeqLocPntNew(strand == Seq_strand_minus ?
-			 SeqLocStart(current) : SeqLocStop(current), strand,
-			 SeqLocId(current), FALSE);
-		if (sip->findOnProtein)
-		{
-		    /* find the corresponding location on the protein */
-		    protSlp = dnaLoc_to_aaLoc(sfp, slp, TRUE, NULL, FALSE);
+    /* traverse all (but the last) intervals of the coding region feature */
+    for (current = SeqLocFindNext(sfp->location, NULL);
+         (next = SeqLocFindNext(sfp->location, current)) != NULL;
+         current = next) {
+        /* consider the last DNA base on the interval */
+        strand = SeqLocStrand(current);
+        slp = SeqLocPntNew(strand == Seq_strand_minus ?
+             SeqLocStart(current) : SeqLocStop(current), strand,
+             SeqLocId(current), FALSE);
+        if (sip->findOnProtein)
+        {
+            /* find the corresponding location on the protein */
+            protSlp = dnaLoc_to_aaLoc(sfp, slp, TRUE, NULL, FALSE);
 
-		    protSlp->next = NULL;
-		    SeqLocFree(slp);
+            protSlp->next = NULL;
+            SeqLocFree(slp);
 
-		    if (sip->slp->data.ptrvalue == NULL)
-		    {
-		        sip->slp->data.ptrvalue = protSlp;
-		    } else {
-		        for (chain = (SeqLocPtr) sip->slp->data.ptrvalue;
-			     chain->next != NULL; chain = chain->next) {
-		        }
-		        chain->next = protSlp;
-		    }
-		} else {
-		    if (sip->slp->data.ptrvalue == NULL)
-		    {
-		        sip->slp->data.ptrvalue = slp;
-		    } else {
-		        for (chain = (SeqLocPtr) sip->slp->data.ptrvalue;
-			     chain->next != NULL; chain = chain->next) {
-		        }
-		        chain->next = slp;
-		    }
-		}
-	}
+            if (sip->slp->data.ptrvalue == NULL)
+            {
+                sip->slp->data.ptrvalue = protSlp;
+            } else {
+                for (chain = (SeqLocPtr) sip->slp->data.ptrvalue;
+                 chain->next != NULL; chain = chain->next) {
+                }
+                chain->next = protSlp;
+            }
+        } else {
+            if (sip->slp->data.ptrvalue == NULL)
+            {
+                sip->slp->data.ptrvalue = slp;
+            } else {
+                for (chain = (SeqLocPtr) sip->slp->data.ptrvalue;
+                 chain->next != NULL; chain = chain->next) {
+                }
+                chain->next = slp;
+            }
+        }
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -7817,10 +7907,10 @@ static Boolean gatherCodingRegions(GatherContextPtr gcp)
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL FindSpliceSites(SeqEntryPtr sep, Boolean findOnProtein)
 {
-	SpliceInfo si;
-	GatherScope gs;
-	Int2 i;
-	SeqLocPtr slp;
+    SpliceInfo si;
+    GatherScope gs;
+    Int2 i;
+    SeqLocPtr slp;
 
             MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
             gs.get_feats_location = FALSE;
@@ -7828,19 +7918,19 @@ NLM_EXTERN SeqLocPtr LIBCALL FindSpliceSites(SeqEntryPtr sep, Boolean findOnProt
                 gs.ignore[i] = TRUE;
             gs.ignore[OBJ_SEQFEAT] = FALSE;
             gs.ignore[OBJ_SEQANNOT] = FALSE;
-	    slp = ValNodeNew(NULL);
-	    slp->choice = SEQLOC_EQUIV;
-	    slp->data.ptrvalue = NULL; /* to be filled in within Gather */
+        slp = ValNodeNew(NULL);
+        slp->choice = SEQLOC_EQUIV;
+        slp->data.ptrvalue = NULL; /* to be filled in within Gather */
             si.slp = slp;
             si.findOnProtein = findOnProtein;
             GatherSeqEntry(sep, &si, gatherCodingRegions, &gs);
-	    if (slp->data.ptrvalue == NULL)
-	    {
-		SeqLocFree(slp);
-		return NULL;
-	    }
+        if (slp->data.ptrvalue == NULL)
+        {
+        SeqLocFree(slp);
+        return NULL;
+        }
 
-	    return slp;
+        return slp;
 }
 
 
@@ -7848,28 +7938,28 @@ NLM_EXTERN SeqLocPtr LIBCALL FindSpliceSites(SeqEntryPtr sep, Boolean findOnProt
    feature (based upon the assumption that there is only one) */
 static Boolean gatherTheCodingRegion(GatherContextPtr gcp)
 {
-	SeqFeatPtr PNTR sffp;
-	SeqFeatPtr sfp;
+    SeqFeatPtr PNTR sffp;
+    SeqFeatPtr sfp;
 
-	if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
+    if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
 
-	/* although we had to include higher-level types in GatherScope's
-	   "ignore" parameter so that Gather could "see" features, we're
-	   really only interested in features */
-	if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
+    /* although we had to include higher-level types in GatherScope's
+       "ignore" parameter so that Gather could "see" features, we're
+       really only interested in features */
+    if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
 
-	sffp = (SeqFeatPtr PNTR) gcp->userdata;
+    sffp = (SeqFeatPtr PNTR) gcp->userdata;
 
-	if (sffp == NULL) return FALSE;
+    if (sffp == NULL) return FALSE;
 
-	sfp = (SeqFeatPtr) gcp->thisitem;
+    sfp = (SeqFeatPtr) gcp->thisitem;
 
-	/* we're only interested in coding regions */
-	if (sfp->data.choice != SEQFEAT_CDREGION || sfp->product == NULL) return TRUE;
+    /* we're only interested in coding regions */
+    if (sfp->data.choice != SEQFEAT_CDREGION || sfp->product == NULL) return TRUE;
 
-	*sffp = sfp;
+    *sffp = sfp;
 
-	return FALSE;
+    return FALSE;
 }
 
 /*****************************************************************************
@@ -7881,9 +7971,9 @@ static Boolean gatherTheCodingRegion(GatherContextPtr gcp)
 *****************************************************************************/
 NLM_EXTERN SeqFeatPtr LIBCALL FindCodingRegion(SeqEntryPtr sep)
 {
-	SeqFeatPtr sfp = NULL;
-	GatherScope gs;
-	Int2 i;
+    SeqFeatPtr sfp = NULL;
+    GatherScope gs;
+    Int2 i;
 
             MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
             gs.get_feats_location = FALSE;
@@ -7892,38 +7982,38 @@ NLM_EXTERN SeqFeatPtr LIBCALL FindCodingRegion(SeqEntryPtr sep)
             gs.ignore[OBJ_SEQFEAT] = FALSE;
             gs.ignore[OBJ_SEQANNOT] = FALSE;
             GatherSeqEntry(sep, &sfp, gatherTheCodingRegion, &gs);
-	    /* make a copy of it */
-	    if (sfp != NULL)
-	        sfp = (SeqFeatPtr)AsnIoMemCopy((Pointer)sfp, (AsnReadFunc)SeqFeatAsnRead, (AsnWriteFunc)SeqFeatAsnWrite);
-	    return sfp;
+        /* make a copy of it */
+        if (sfp != NULL)
+            sfp = (SeqFeatPtr)AsnIoMemCopy((Pointer)sfp, (AsnReadFunc)SeqFeatAsnRead, (AsnWriteFunc)SeqFeatAsnWrite);
+        return sfp;
 }
 
 static Boolean gatherMolTypeCheck(GatherContextPtr gcp)
 {
-	SeqIdCheckerPtr sicp;
-	BioseqPtr bsp;
+    SeqIdCheckerPtr sicp;
+    BioseqPtr bsp;
 
-	if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
+    if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
 
-	sicp = (SeqIdCheckerPtr) gcp->userdata;
-	bsp = (BioseqPtr) gcp->thisitem;
+    sicp = (SeqIdCheckerPtr) gcp->userdata;
+    bsp = (BioseqPtr) gcp->thisitem;
 
-	if (bsp == NULL) return TRUE;
-	if (sicp == NULL) return FALSE;
+    if (bsp == NULL) return TRUE;
+    if (sicp == NULL) return FALSE;
 
-	/* check for mol-type mismatch */
-	if (ISA_na(bsp->mol) == sicp->isProtein) return TRUE;
+    /* check for mol-type mismatch */
+    if (ISA_na(bsp->mol) == sicp->isProtein) return TRUE;
 
-	if (sicp->sip != NULL)
-	{
-	    if (SeqIdComp(bsp->id, sicp->sip) != SIC_YES)
-		return TRUE;
-	}
+    if (sicp->sip != NULL)
+    {
+        if (SeqIdComp(bsp->id, sicp->sip) != SIC_YES)
+        return TRUE;
+    }
 
-	sicp->retval = TRUE;
+    sicp->retval = TRUE;
 
-	/* no need to examine other Bioseqs */
-	return FALSE;
+    /* no need to examine other Bioseqs */
+    return FALSE;
 }
 
 /*****************************************************************************
@@ -7937,84 +8027,84 @@ static Boolean gatherMolTypeCheck(GatherContextPtr gcp)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqEntryContainsSeqIdOfMolType(SeqEntryPtr sep, SeqIdPtr sip, Boolean isProtein)
 {
-	SeqIdChecker sic;
-	GatherScope gs;
-	Int2 i;
+    SeqIdChecker sic;
+    GatherScope gs;
+    Int2 i;
 
-	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-	gs.get_feats_location = FALSE;
-	for (i = 0; i < OBJ_MAX; i++)
+    MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+    gs.get_feats_location = FALSE;
+    for (i = 0; i < OBJ_MAX; i++)
         gs.ignore[i] = TRUE;
-	gs.ignore[OBJ_BIOSEQ] = FALSE;
-	sic.sip = sip;
-	sic.isProtein = isProtein;
-	sic.retval = FALSE;
-	GatherSeqEntry(sep, &sic, gatherMolTypeCheck, &gs);
+    gs.ignore[OBJ_BIOSEQ] = FALSE;
+    sic.sip = sip;
+    sic.isProtein = isProtein;
+    sic.retval = FALSE;
+    GatherSeqEntry(sep, &sic, gatherMolTypeCheck, &gs);
 
-	return sic.retval;
+    return sic.retval;
 }
 
 static Boolean GIMolTypeCheck(GatherContextPtr gcp)
 {
-	SeqIdMolTypePtr sicp;
-	BioseqPtr bsp;
+    SeqIdMolTypePtr sicp;
+    BioseqPtr bsp;
 
-	if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
+    if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
 
-	sicp = (SeqIdMolTypePtr) gcp->userdata;
-	bsp = (BioseqPtr) gcp->thisitem;
+    sicp = (SeqIdMolTypePtr) gcp->userdata;
+    bsp = (BioseqPtr) gcp->thisitem;
 
-	if (bsp == NULL) return TRUE;
-	if (sicp == NULL) return FALSE;
+    if (bsp == NULL) return TRUE;
+    if (sicp == NULL) return FALSE;
 
-	if (sicp->sip != NULL) {
-	    if (SeqIdIn(sicp->sip, bsp->id) == FALSE)
-		return TRUE;
-	}
-	if (ISA_na(bsp->mol)) {
-		sicp->mtype = 2;
-	} else {
-		sicp->mtype = 1;
-	}
+    if (sicp->sip != NULL) {
+        if (SeqIdIn(sicp->sip, bsp->id) == FALSE)
+        return TRUE;
+    }
+    if (ISA_na(bsp->mol)) {
+        sicp->mtype = 2;
+    } else {
+        sicp->mtype = 1;
+    }
 
-	/* no need to examine other Bioseqs */
-	return FALSE;
+    /* no need to examine other Bioseqs */
+    return FALSE;
 }
 
 /*****************************************************************************
 *
 *      Tests to see if this SeqEntry contains a bioseq of the specified uid
 *      returns moltype of the bioseq where the SeqIds match
-*			  0     id not found in this SeqEntry 
-*		      1     Amino Acid sequence 
-*			  2     Nucleotide sequence 
-*	  
+*              0     id not found in this SeqEntry 
+*              1     Amino Acid sequence 
+*              2     Nucleotide sequence 
+*      
 *****************************************************************************/
 NLM_EXTERN Int2 LIBCALL MolTypeForGI(SeqEntryPtr sep, Int4 uid)
 {
-	SeqIdMolType sic;
-	SeqIdPtr sip;
-	GatherScope gs;
+    SeqIdMolType sic;
+    SeqIdPtr sip;
+    GatherScope gs;
 
-	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-	MemSet ((Pointer) (gs.ignore), (int)(TRUE), 
-			(size_t) (OBJ_MAX * sizeof(Boolean)));
-	gs.get_feats_location = FALSE;
-	gs.ignore[OBJ_BIOSEQ] = FALSE;
-	sip = ValNodeNew(NULL);
-	sip->choice = SEQID_GI;
-	sip->data.intvalue = uid;
-	sic.sip = sip;
-	sic.mtype = 0;
-	GatherSeqEntry(sep, &sic, GIMolTypeCheck, &gs);
-	ValNodeFree(sip);
-	
-	return sic.mtype;
+    MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+    MemSet ((Pointer) (gs.ignore), (int)(TRUE), 
+            (size_t) (OBJ_MAX * sizeof(Boolean)));
+    gs.get_feats_location = FALSE;
+    gs.ignore[OBJ_BIOSEQ] = FALSE;
+    sip = ValNodeNew(NULL);
+    sip->choice = SEQID_GI;
+    sip->data.intvalue = uid;
+    sic.sip = sip;
+    sic.mtype = 0;
+    GatherSeqEntry(sep, &sic, GIMolTypeCheck, &gs);
+    ValNodeFree(sip);
+    
+    return sic.mtype;
 }
 
 /******************************************************************
 ***
-*	local_id_make(): make SeqIdPtr with SEQID_LOCAL choice
+*    local_id_make(): make SeqIdPtr with SEQID_LOCAL choice
 *
 *******************************************************************
 ***/
@@ -8024,164 +8114,164 @@ NLM_EXTERN SeqIdPtr local_id_make(CharPtr name)
    ObjectIdPtr obj_id;
 
 
-	new_id=(SeqIdPtr)ValNodeNew(NULL);
-	new_id->choice = SEQID_LOCAL;
+    new_id=(SeqIdPtr)ValNodeNew(NULL);
+    new_id->choice = SEQID_LOCAL;
 
-	obj_id = ObjectIdNew();
-	obj_id->str = StringSave(name);
-	new_id->data.ptrvalue = obj_id;
+    obj_id = ObjectIdNew();
+    obj_id->str = StringSave(name);
+    new_id->data.ptrvalue = obj_id;
 
-	return new_id;
+    return new_id;
 }
 
 
 
 /*************************************************************
 *
-*	MuskSeqIdWrite (sip, buf, buflen, format, do_find, do_entrez_find)
-*	print Seq-id to the buffer with the chromoscope format
-*	sip, buf, buflen, format is similar to what is defined in 
-*	SeqIdWrite. 
-*	do_find, if TRUE, find the most printable id
-*	do_entrez_find. if TRUE, if the id is a gi, find the printable id
+*    MuskSeqIdWrite (sip, buf, buflen, format, do_find, do_entrez_find)
+*    print Seq-id to the buffer with the chromoscope format
+*    sip, buf, buflen, format is similar to what is defined in 
+*    SeqIdWrite. 
+*    do_find, if TRUE, find the most printable id
+*    do_entrez_find. if TRUE, if the id is a gi, find the printable id
 *
-***************************************************************/	
+***************************************************************/    
 
 /* a kludge function to make the special formatting for 
    TIGRs THC sequences
 */
 static Boolean format_tigr_thc (SeqIdPtr sip, CharPtr buf, Int2 buflen)
 {
-	DbtagPtr db_tag;
-	Char temp[101];
-	ObjectIdPtr oip;
+    DbtagPtr db_tag;
+    Char temp[101];
+    ObjectIdPtr oip;
 
-	while(sip)
-	{
-		if(sip->choice == SEQID_GENERAL)
-		{
-			db_tag = (DbtagPtr) sip->data.ptrvalue;
-			if(db_tag->db && StringCmp(db_tag->db, "THC") == 0)
-			{
-				oip = db_tag->tag;
-				if(oip->id != 0)
-				{
-					sprintf(temp, "THC%ld", (long) oip->id);
-					StringNCpy(buf, temp, buflen);
-					return TRUE;
-				}
-			}
-		}
+    while(sip)
+    {
+        if(sip->choice == SEQID_GENERAL)
+        {
+            db_tag = (DbtagPtr) sip->data.ptrvalue;
+            if(db_tag->db && StringCmp(db_tag->db, "THC") == 0)
+            {
+                oip = db_tag->tag;
+                if(oip->id != 0)
+                {
+                    sprintf(temp, "THC%ld", (long) oip->id);
+                    StringNCpy(buf, temp, buflen);
+                    return TRUE;
+                }
+            }
+        }
 
-		sip = sip->next;
-	}
+        sip = sip->next;
+    }
 
-	return FALSE;
+    return FALSE;
 }
 
-			
+            
 
 static Boolean format_human_map_id (SeqIdPtr sip, CharPtr buf, Int2 buflen)
 {
-	DbtagPtr db_tag;
-	Char temp[101];
-	ObjectIdPtr oip;
+    DbtagPtr db_tag;
+    Char temp[101];
+    ObjectIdPtr oip;
 
-	for (; sip; sip = sip->next) {
-		if(sip->choice == SEQID_GENERAL) {
-			break;
-		}
-	}
-	if (sip == NULL) {
-		return FALSE;
-	}
-	db_tag = (DbtagPtr) sip->data.ptrvalue;
-	if (db_tag->db == NULL) {
-		return FALSE;
-	}
-	if (StringCmp(db_tag->db, "MIT") == 0 || StringCmp(db_tag->db, "GENETHON") == 0 || StringCmp(db_tag->db, "CHLC") == 0 || StringCmp(db_tag->db, "GDB") == 0 || StringCmp(db_tag->db, "Stanford") == 0 || StringCmp(db_tag->db, "NCBI") == 0) {
-		oip = db_tag->tag;
-		if (oip->str != 0) {
-			sprintf(temp, "%s", oip->str);
-			StringNCpy(buf, temp, buflen);
-			return TRUE;
-		}
-	}
-	
-	return FALSE;
+    for (; sip; sip = sip->next) {
+        if(sip->choice == SEQID_GENERAL) {
+            break;
+        }
+    }
+    if (sip == NULL) {
+        return FALSE;
+    }
+    db_tag = (DbtagPtr) sip->data.ptrvalue;
+    if (db_tag->db == NULL) {
+        return FALSE;
+    }
+    if (StringCmp(db_tag->db, "MIT") == 0 || StringCmp(db_tag->db, "GENETHON") == 0 || StringCmp(db_tag->db, "CHLC") == 0 || StringCmp(db_tag->db, "GDB") == 0 || StringCmp(db_tag->db, "Stanford") == 0 || StringCmp(db_tag->db, "NCBI") == 0) {
+        oip = db_tag->tag;
+        if (oip->str != 0) {
+            sprintf(temp, "%s", oip->str);
+            StringNCpy(buf, temp, buflen);
+            return TRUE;
+        }
+    }
+    
+    return FALSE;
 }
 
 NLM_EXTERN Boolean MuskSeqIdWrite (SeqIdPtr sip, CharPtr buf, Int2 buflen, Uint1 format, Boolean do_find, Boolean do_entrez_find)
 {
-	SeqIdPtr entrez_id;
-	Boolean retval;
-	BioseqPtr bsp;
-	Boolean bsp_found = FALSE;
+    SeqIdPtr entrez_id;
+    Boolean retval;
+    BioseqPtr bsp;
+    Boolean bsp_found = FALSE;
 
-	if(sip == NULL || buf == NULL)
-		return FALSE;
-	
-	if(do_find)
-	{
-		if(sip->next == NULL)
-		{
-			bsp = BioseqFindCore(sip);
-			if(bsp !=NULL)
-			{
-				bsp_found = TRUE;
-				sip = bsp->id;
-			}
-		}
-		sip = SeqIdFindWorst(sip);
-	}
-	if(sip->choice == SEQID_GI && do_entrez_find && !bsp_found)
-	{
-		entrez_id = GetSeqIdForGI(sip->data.intvalue);
-		if(entrez_id !=NULL)
-		{
-			retval = MuskSeqIdWrite(entrez_id, buf, buflen, format, TRUE, FALSE);
-			SeqIdSetFree(entrez_id);
-			return retval;
-		}
-	}
+    if(sip == NULL || buf == NULL)
+        return FALSE;
+    
+    if(do_find)
+    {
+        if(sip->next == NULL)
+        {
+            bsp = BioseqFindCore(sip);
+            if(bsp !=NULL)
+            {
+                bsp_found = TRUE;
+                sip = bsp->id;
+            }
+        }
+        sip = SeqIdFindWorst(sip);
+    }
+    if(sip->choice == SEQID_GI && do_entrez_find && !bsp_found)
+    {
+        entrez_id = GetSeqIdForGI(sip->data.intvalue);
+        if(entrez_id !=NULL)
+        {
+            retval = MuskSeqIdWrite(entrez_id, buf, buflen, format, TRUE, FALSE);
+            SeqIdSetFree(entrez_id);
+            return retval;
+        }
+    }
 
-	if(format_tigr_thc (sip, buf, buflen))
-	{	/* give special format to the THC sequence*/
-		return TRUE;
-	}
-	if(format_human_map_id (sip, buf, buflen))
-	{	/* special format for human map ids */
-		return TRUE;
-	}
-	SeqIdWrite(sip, buf,format, buflen);	/*in case this function can not work*/
+    if(format_tigr_thc (sip, buf, buflen))
+    {    /* give special format to the THC sequence*/
+        return TRUE;
+    }
+    if(format_human_map_id (sip, buf, buflen))
+    {    /* special format for human map ids */
+        return TRUE;
+    }
+    SeqIdWrite(sip, buf,format, buflen);    /*in case this function can not work*/
 
-	if(buf[0] == '\0')
-		LabelCopy(buf, "Unidentified", buflen);
+    if(buf[0] == '\0')
+        LabelCopy(buf, "Unidentified", buflen);
 
-	return TRUE;
+    return TRUE;
 }
 
 
 /***********************************************************************
 ***
-*	seqid_name(): return the most informative name from a SeqIdPtr
+*    seqid_name(): return the most informative name from a SeqIdPtr
 *
 ************************************************************************
 ***/
 NLM_EXTERN Boolean seqid_name(SeqIdPtr hsip, CharPtr name, Boolean use_locus, Boolean check_chain)
 {
-	Uint1 format;
+    Uint1 format;
 
-	if(use_locus)
-		format = PRINTID_TEXTID_LOCUS;
-	else
-		format = PRINTID_TEXTID_ACCESSION;
-	return MuskSeqIdWrite (hsip, name, 20, format, check_chain, check_chain);
+    if(use_locus)
+        format = PRINTID_TEXTID_LOCUS;
+    else
+        format = PRINTID_TEXTID_ACCESSION;
+    return MuskSeqIdWrite (hsip, name, 20, format, check_chain, check_chain);
 }
 
 /***********************************************************************
 ***
-*	update_seq_loc(): update the start, stop, strand info in SeqLoc
+*    update_seq_loc(): update the start, stop, strand info in SeqLoc
 *
 ************************************************************************
 ***/
@@ -8190,33 +8280,33 @@ NLM_EXTERN SeqLocPtr update_seq_loc(Int4 start, Int4 stop, Uint1 strand, SeqLocP
    SeqIntPtr sint;
    SeqPntPtr spp;
 
-	if(loc->choice == SEQLOC_INT)
-	{
-		sint = (SeqIntPtr) loc->data.ptrvalue;
-		if(start != -1)
-			sint->from = start;
-		if(stop != -1)
-			sint->to = stop;
-		if(strand != 0)
-			sint->strand = strand;
-		loc->data.ptrvalue = sint;
-	}
-	else if(loc->choice == SEQLOC_PNT)
-	{
-		spp = (SeqPntPtr)(loc->data.ptrvalue);
-		spp->point = start;
-		spp->strand = strand;
-		loc->data.ptrvalue = spp;
-	}
+    if(loc->choice == SEQLOC_INT)
+    {
+        sint = (SeqIntPtr) loc->data.ptrvalue;
+        if(start != -1)
+            sint->from = start;
+        if(stop != -1)
+            sint->to = stop;
+        if(strand != 0)
+            sint->strand = strand;
+        loc->data.ptrvalue = sint;
+    }
+    else if(loc->choice == SEQLOC_PNT)
+    {
+        spp = (SeqPntPtr)(loc->data.ptrvalue);
+        spp->point = start;
+        spp->strand = strand;
+        loc->data.ptrvalue = spp;
+    }
 
-	return loc;
+    return loc;
 
 }
 
 
 /*
-	Gets the SeqIdPtr for the subject or query sequence from the first SeqAlign.
-	The SeqIdPtr is not saved  and should not be deleted.
+    Gets the SeqIdPtr for the subject or query sequence from the first SeqAlign.
+    The SeqIdPtr is not saved  and should not be deleted.
 */
 static SeqIdPtr LIBCALL
 TxGetIdFromSeqAlign(SeqAlignPtr seqalign, Boolean subject)
@@ -8228,7 +8318,7 @@ TxGetIdFromSeqAlign(SeqAlignPtr seqalign, Boolean subject)
     SeqIdPtr sip;
 
     if (seqalign == NULL)
-	return NULL;
+    return NULL;
     
     sip = NULL;
     switch (seqalign->segtype) {
@@ -8267,89 +8357,89 @@ TxGetIdFromSeqAlign(SeqAlignPtr seqalign, Boolean subject)
 }
 
 /* 
-	Obtains the query (i.e., the first) SeqIdPtr from
-	the first SeqAlignPtr.
+    Obtains the query (i.e., the first) SeqIdPtr from
+    the first SeqAlignPtr.
 */
 NLM_EXTERN SeqIdPtr LIBCALL
 TxGetQueryIdFromSeqAlign(SeqAlignPtr seqalign)
 
 {
-	return TxGetIdFromSeqAlign(seqalign, FALSE);
+    return TxGetIdFromSeqAlign(seqalign, FALSE);
 }
 
 /* 
-	Obtains the subject (i.e., the second) SeqIdPtr from
-	the first SeqAlignPtr.
+    Obtains the subject (i.e., the second) SeqIdPtr from
+    the first SeqAlignPtr.
 */
 NLM_EXTERN SeqIdPtr LIBCALL
 TxGetSubjectIdFromSeqAlign(SeqAlignPtr seqalign)
 
 {
-	return TxGetIdFromSeqAlign(seqalign, TRUE);
+    return TxGetIdFromSeqAlign(seqalign, TRUE);
 }
 
 static Boolean
 GetBestScoreAndEvalueFromScorePtr(ScorePtr sp, Int4 *score, Nlm_FloatHi *bit_score, Nlm_FloatHi *evalue, Int4 *number)
 
 {
-	Boolean score_set=FALSE, evalue_set=FALSE, sum_set=FALSE, bit_set=FALSE;
-	ObjectIdPtr obid;
-	ScorePtr scrp;
+    Boolean score_set=FALSE, evalue_set=FALSE, sum_set=FALSE, bit_set=FALSE;
+    ObjectIdPtr obid;
+    ScorePtr scrp;
 
-	for (scrp=sp; scrp; scrp = scrp->next)
-	{
-		obid = scrp->id;
-		if(obid && obid->str)
-		{
-			if (StringICmp(obid->str, "score") == 0)
-			{
-				if (*score < scrp->value.intvalue)
-				{
-					score_set = TRUE;
-					*score = scrp->value.intvalue;
-				}
-				continue;
-			}
-			else if (StringICmp(obid->str, "e_value") == 0 || StringICmp(obid->str, "sum_e") == 0)
-			{
-				if (*evalue > scrp->value.realvalue)
-				{
-					evalue_set = TRUE;
-					*evalue = scrp->value.realvalue;
-				}
-				continue;
-			}
-			else if (StringICmp(obid->str, "sum_n") == 0)
-			{
-				if (*number < scrp->value.intvalue)
-				{
-					sum_set = TRUE;
-					*number = scrp->value.intvalue;
-				}
-				continue;
-			}
-			else if (StringICmp(obid->str, "bit_score") == 0)
-			{
-				if (*bit_score < scrp->value.realvalue)
-				{
-					bit_set = TRUE;
-					*bit_score = scrp->value.realvalue;
-				}
-				continue;
-			}
-		}
-	}
+    for (scrp=sp; scrp; scrp = scrp->next)
+    {
+        obid = scrp->id;
+        if(obid && obid->str)
+        {
+            if (StringICmp(obid->str, "score") == 0)
+            {
+                if (*score < scrp->value.intvalue)
+                {
+                    score_set = TRUE;
+                    *score = scrp->value.intvalue;
+                }
+                continue;
+            }
+            else if (StringICmp(obid->str, "e_value") == 0 || StringICmp(obid->str, "sum_e") == 0)
+            {
+                if (*evalue > scrp->value.realvalue)
+                {
+                    evalue_set = TRUE;
+                    *evalue = scrp->value.realvalue;
+                }
+                continue;
+            }
+            else if (StringICmp(obid->str, "sum_n") == 0)
+            {
+                if (*number < scrp->value.intvalue)
+                {
+                    sum_set = TRUE;
+                    *number = scrp->value.intvalue;
+                }
+                continue;
+            }
+            else if (StringICmp(obid->str, "bit_score") == 0)
+            {
+                if (*bit_score < scrp->value.realvalue)
+                {
+                    bit_set = TRUE;
+                    *bit_score = scrp->value.realvalue;
+                }
+                continue;
+            }
+        }
+    }
 
-	/* Don't check for 'sum_set', as it's not always there. */
-	if (score_set && evalue_set && bit_set)
-		return TRUE;
-	else if(score_set && evalue_set)
-	{
-		*bit_score = (FloatHi)(*score);
-		return TRUE;
-	}
+    /* Don't check for 'sum_set', as it's not always there. */
+    if (score_set && evalue_set && bit_set)
+        return TRUE;
+    else if(score_set && evalue_set)
+    {
+        *bit_score = (FloatHi)(*score);
+        return TRUE;
+    }
 
-	return FALSE;
+    return FALSE;
 }
 
 
@@ -8357,32 +8447,32 @@ NLM_EXTERN Boolean LIBCALL
 GetScoreAndEvalue(SeqAlignPtr seqalign, Int4 *score, Nlm_FloatHi *bit_score, Nlm_FloatHi *evalue, Int4 *number)
 
 {
-	Boolean local_retval, retval=FALSE;
+    Boolean local_retval, retval=FALSE;
         ScorePtr        sp;
         DenseDiagPtr ddp;
         DenseSegPtr dsp;
         StdSegPtr ssp;
-	
-	*score = 0;
-	*bit_score = 0.0;
-	*number = 1;
-	*evalue = DBL_MAX;
+    
+    *score = 0;
+    *bit_score = 0.0;
+    *number = 1;
+    *evalue = DBL_MAX;
 
-	sp = seqalign->score;
-	if (sp == NULL)
-	{
-		switch (seqalign->segtype)
-		{
-			case 1: /*Dense-diag*/
+    sp = seqalign->score;
+    if (sp == NULL)
+    {
+        switch (seqalign->segtype)
+        {
+            case 1: /*Dense-diag*/
                         {
                                 Nlm_FloatHi best_evalue = *evalue;
-				ddp = seqalign->segs;
-				while (ddp)
-				{
+                ddp = seqalign->segs;
+                while (ddp)
+                {
                                    Int4 number_tmp = 1;
                                    local_retval =
                                       GetBestScoreAndEvalueFromScorePtr(ddp->scores, score, 
-                                         bit_score, evalue, &number_tmp);	
+                                         bit_score, evalue, &number_tmp);    
                                    /* Use number corresponding to best evalue. */
                                    if (*evalue < best_evalue)
                                    {
@@ -8392,42 +8482,42 @@ GetScoreAndEvalue(SeqAlignPtr seqalign, Int4 *score, Nlm_FloatHi *bit_score, Nlm
                                    if (local_retval == TRUE)
                                       retval = TRUE;
                                    ddp = ddp->next;
-				}
-				break;
+                }
+                break;
                         }
-			case 2:
-				dsp = seqalign->segs;
-				if (dsp)
-				{
-					retval = GetBestScoreAndEvalueFromScorePtr(dsp->scores, score, bit_score, evalue, number);	
-				}
-				break;
-			case 3:
-				ssp = seqalign->segs;
-				while (ssp)
-				{
-					local_retval = GetBestScoreAndEvalueFromScorePtr(ssp->scores, score, bit_score, evalue, number);	
-					if (local_retval == TRUE)
-						retval = TRUE;
-					ssp = ssp->next;
-				}
-				break;
-			default:
-				break;
-		}
-	}
-	else
-	{
-		retval = GetBestScoreAndEvalueFromScorePtr(sp, score, bit_score, evalue, number);
-	}
+            case 2:
+                dsp = seqalign->segs;
+                if (dsp)
+                {
+                    retval = GetBestScoreAndEvalueFromScorePtr(dsp->scores, score, bit_score, evalue, number);    
+                }
+                break;
+            case 3:
+                ssp = seqalign->segs;
+                while (ssp)
+                {
+                    local_retval = GetBestScoreAndEvalueFromScorePtr(ssp->scores, score, bit_score, evalue, number);    
+                    if (local_retval == TRUE)
+                        retval = TRUE;
+                    ssp = ssp->next;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    else
+    {
+        retval = GetBestScoreAndEvalueFromScorePtr(sp, score, bit_score, evalue, number);
+    }
 
-	return retval;
+    return retval;
 }
 
 /***********************************************************************
 *
-*	Adjust the Offset in the SeqAlign to correspond to the beginning
-*	of the sequence and not where BLAST started. 
+*    Adjust the Offset in the SeqAlign to correspond to the beginning
+*    of the sequence and not where BLAST started. 
 *
 **********************************************************************/
 
@@ -8435,168 +8525,168 @@ NLM_EXTERN void LIBCALL
 AdjustOffSetsInSeqAlign(SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp2)
 
 {
-	CharPtr err_string1, err_string2;
-	DenseDiagPtr ddp;
-	DenseSegPtr dsp;
-	Int4 offset1=0, offset2=0, index;
-	SeqIdPtr sip1=NULL, sip2=NULL;
-	SeqIntPtr seq_int;
-	SeqLocPtr seqloc, whole_slp;
-	StdSegPtr ssp;
-	
+    CharPtr err_string1, err_string2;
+    DenseDiagPtr ddp;
+    DenseSegPtr dsp;
+    Int4 offset1=0, offset2=0, index;
+    SeqIdPtr sip1=NULL, sip2=NULL;
+    SeqIntPtr seq_int;
+    SeqLocPtr seqloc, whole_slp;
+    StdSegPtr ssp;
+    
         while (salp)
         {
             if (salp->segtype == 1)
             {
                       ddp = salp->segs;
                       while (ddp)
-                      {	/* Get the offset on the first call. */
-			if (sip1 == NULL)
-			{
-			     sip1 = ddp->id;
-			     whole_slp = 
-				ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip1);
-			     if(SeqLocStrand(slp1) == Seq_strand_minus)
-			     	offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_STOP);
-			     else
-			     	offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_START);
-			     if (offset1 == -1)
-			     {
-				err_string1 = SeqLocPrint(slp1);
-				err_string2 = SeqLocPrint(whole_slp);
-        			ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
-			     }	
-			     whole_slp = ValNodeFree(whole_slp);
-			}
-			if (sip2 == NULL && slp2)
-			{
-			     sip2 = ddp->id->next;
-			     whole_slp = 
-				ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip2);
-			     if(SeqLocStrand(slp2) == Seq_strand_minus)
-			     	offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_STOP);
-			     else
-			     	offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_START);
-			     if (offset2 == -1)
-			     {
-				err_string1 = SeqLocPrint(slp2);
-				err_string2 = SeqLocPrint(whole_slp);
-        			ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
-			     }	
-			     whole_slp = ValNodeFree(whole_slp);
-			}
-			ddp->starts[0] += offset1;
-			ddp->starts[1] += offset2;
+                      {    /* Get the offset on the first call. */
+            if (sip1 == NULL)
+            {
+                 sip1 = ddp->id;
+                 whole_slp = 
+                ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip1);
+                 if(SeqLocStrand(slp1) == Seq_strand_minus)
+                     offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_STOP);
+                 else
+                     offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_START);
+                 if (offset1 == -1)
+                 {
+                err_string1 = SeqLocPrint(slp1);
+                err_string2 = SeqLocPrint(whole_slp);
+                    ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
+                 }    
+                 whole_slp = ValNodeFree(whole_slp);
+            }
+            if (sip2 == NULL && slp2)
+            {
+                 sip2 = ddp->id->next;
+                 whole_slp = 
+                ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip2);
+                 if(SeqLocStrand(slp2) == Seq_strand_minus)
+                     offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_STOP);
+                 else
+                     offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_START);
+                 if (offset2 == -1)
+                 {
+                err_string1 = SeqLocPrint(slp2);
+                err_string2 = SeqLocPrint(whole_slp);
+                    ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
+                 }    
+                 whole_slp = ValNodeFree(whole_slp);
+            }
+            ddp->starts[0] += offset1;
+            ddp->starts[1] += offset2;
                         ddp = ddp->next;
                       }
            }   
-	   else if (salp->segtype == 2)
-	   {
-		dsp = salp->segs;
-		if (sip1 == NULL)
-		{
-		     sip1 = dsp->ids;
-		     whole_slp = 
-			ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip1);
-		     if(SeqLocStrand(slp1) == Seq_strand_minus)
-		     	offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_STOP);
-		     else
-		     	offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_START);
-		     if (offset1 == -1)
-		     {
-			err_string1 = SeqLocPrint(slp1);
-			err_string2 = SeqLocPrint(whole_slp);
-        		ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
-		     }	
-		     whole_slp = ValNodeFree(whole_slp);
-		}
-		if (sip2 == NULL && slp2)
-		{
-		     sip2 = dsp->ids->next;
-		     whole_slp = 
-			ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip2);
-		     offset2 = 
-			GetOffsetInLoc(slp2, whole_slp, SEQLOC_START);
-		     if(SeqLocStrand(slp2) == Seq_strand_minus)
-		     	offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_STOP);
-		     else
-		     	offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_START);
-		     if (offset2 == -1)
-		     {
-			err_string1 = SeqLocPrint(slp2);
-			err_string2 = SeqLocPrint(whole_slp);
-        		ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
-		     }	
-		     whole_slp = ValNodeFree(whole_slp);
-		}
+       else if (salp->segtype == 2)
+       {
+        dsp = salp->segs;
+        if (sip1 == NULL)
+        {
+             sip1 = dsp->ids;
+             whole_slp = 
+            ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip1);
+             if(SeqLocStrand(slp1) == Seq_strand_minus)
+                 offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_STOP);
+             else
+                 offset1 = GetOffsetInLoc(slp1, whole_slp, SEQLOC_START);
+             if (offset1 == -1)
+             {
+            err_string1 = SeqLocPrint(slp1);
+            err_string2 = SeqLocPrint(whole_slp);
+                ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
+             }    
+             whole_slp = ValNodeFree(whole_slp);
+        }
+        if (sip2 == NULL && slp2)
+        {
+             sip2 = dsp->ids->next;
+             whole_slp = 
+            ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip2);
+             offset2 = 
+            GetOffsetInLoc(slp2, whole_slp, SEQLOC_START);
+             if(SeqLocStrand(slp2) == Seq_strand_minus)
+                 offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_STOP);
+             else
+                 offset2 = GetOffsetInLoc(slp2, whole_slp, SEQLOC_START);
+             if (offset2 == -1)
+             {
+            err_string1 = SeqLocPrint(slp2);
+            err_string2 = SeqLocPrint(whole_slp);
+                ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
+             }    
+             whole_slp = ValNodeFree(whole_slp);
+        }
 
-		for (index=0; index<dsp->numseg; index++)
-		{
-			if (dsp->starts[2*index] != -1)
-				dsp->starts[2*index] += offset1;
-			if (dsp->starts[2*index+1] != -1)
-				dsp->starts[2*index+1] += offset2;
-		}
+        for (index=0; index<dsp->numseg; index++)
+        {
+            if (dsp->starts[2*index] != -1)
+                dsp->starts[2*index] += offset1;
+            if (dsp->starts[2*index+1] != -1)
+                dsp->starts[2*index+1] += offset2;
+        }
            }   
-	   else if (salp->segtype == 3)
-	   {
-		ssp = salp->segs;
-		while (ssp)
-		{
-			if (sip1 == NULL)
-			{
-			     sip1 = ssp->ids;
-			     whole_slp = 
-				ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip1);
+       else if (salp->segtype == 3)
+       {
+        ssp = salp->segs;
+        while (ssp)
+        {
+            if (sip1 == NULL)
+            {
+                 sip1 = ssp->ids;
+                 whole_slp = 
+                ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip1);
                              if(SeqLocStrand(slp1) == Seq_strand_minus)
-			        offset1 = GetOffsetInLoc(slp1, whole_slp, 
+                    offset1 = GetOffsetInLoc(slp1, whole_slp, 
                                                          SEQLOC_STOP);
                              else
-			        offset1 = GetOffsetInLoc(slp1, whole_slp, 
+                    offset1 = GetOffsetInLoc(slp1, whole_slp, 
                                                          SEQLOC_START);
 
-			     if (offset1 == -1)
-			     {
-				err_string1 = SeqLocPrint(slp1);
-				err_string2 = SeqLocPrint(whole_slp);
-        			ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
-			     }	
-			     whole_slp = ValNodeFree(whole_slp);
-			}
-			if (sip2 == NULL && slp2)
-			{
-			     sip2 = ssp->ids->next;
-			     whole_slp = 
-				ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip2);
+                 if (offset1 == -1)
+                 {
+                err_string1 = SeqLocPrint(slp1);
+                err_string2 = SeqLocPrint(whole_slp);
+                    ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
+                 }    
+                 whole_slp = ValNodeFree(whole_slp);
+            }
+            if (sip2 == NULL && slp2)
+            {
+                 sip2 = ssp->ids->next;
+                 whole_slp = 
+                ValNodeAddPointer(NULL, SEQLOC_WHOLE, sip2);
                              if(SeqLocStrand(slp2) == Seq_strand_minus)
-			        offset2 = GetOffsetInLoc(slp2, whole_slp, 
+                    offset2 = GetOffsetInLoc(slp2, whole_slp, 
                                                          SEQLOC_STOP);
                              else
-			        offset2 = GetOffsetInLoc(slp2, whole_slp, 
+                    offset2 = GetOffsetInLoc(slp2, whole_slp, 
                                                          SEQLOC_START);
 
-			     if (offset2 == -1)
-			     {
-				err_string1 = SeqLocPrint(slp2);
-				err_string2 = SeqLocPrint(whole_slp);
-        			ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
-			     }	
-			     whole_slp = ValNodeFree(whole_slp);
-			}
-			seqloc = ssp->loc;
+                 if (offset2 == -1)
+                 {
+                err_string1 = SeqLocPrint(slp2);
+                err_string2 = SeqLocPrint(whole_slp);
+                    ErrPostEx(SEV_ERROR, 0, 0, "AdjustOffSetInSeqAnnot: %s not in %s", err_string1, err_string2);
+                 }    
+                 whole_slp = ValNodeFree(whole_slp);
+            }
+            seqloc = ssp->loc;
                         if (seqloc->choice == SEQLOC_INT) {
-			    seq_int = seqloc->data.ptrvalue;
-			    seq_int->from += offset1;
-			    seq_int->to += offset1;
+                seq_int = seqloc->data.ptrvalue;
+                seq_int->from += offset1;
+                seq_int->to += offset1;
                         }
-			seqloc = ssp->loc->next;
+            seqloc = ssp->loc->next;
                         if (seqloc->choice == SEQLOC_INT) {
-			    seq_int = seqloc->data.ptrvalue;
-			    seq_int->from += offset2;
-			    seq_int->to += offset2;
+                seq_int = seqloc->data.ptrvalue;
+                seq_int->from += offset2;
+                seq_int->to += offset2;
                         }
                         ssp = ssp->next;
-		 }
+         }
               }
               salp = salp->next;
          }   
@@ -8766,16 +8856,16 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
         Boolean formally_assigned;
         formally_assigned = !(ACCN_IS_UNASSIGNED(status));
         if(formally_assigned || Permissive) {
-        	/* new support for PDB */
-        	if (status == ACCN_PDB) {
-        		Char pdbstr [41];
-        		if (StringLen (accession) < 8) {
-        			sprintf (pdbstr, "pdb|%s", accession);
-        			sip = SeqIdParse (pdbstr);
-        			return sip;
-        		}
-        		return NULL;
-        	}
+            /* new support for PDB */
+            if (status == ACCN_PDB) {
+                Char pdbstr [41];
+                if (StringLen (accession) < 8) {
+                    sprintf (pdbstr, "pdb|%s", accession);
+                    sip = SeqIdParse (pdbstr);
+                    return sip;
+                }
+                return NULL;
+            }
             sip = ValNodeNew(NULL);
             tsp = TextSeqIdNew();
             tsp->accession = StringSave(accession);
@@ -8824,15 +8914,15 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
                     } else if (ACCN_IS_DDBJ(status)) {
                         sip->choice = SEQID_DDBJ;
                     } else if (ACCN_IS_TPA(status)) {
-                    	if (status == ACCN_NCBI_TPA || status == ACCN_NCBI_TPA_PROT) {
-                        	sip->choice = SEQID_TPG;
-                    	} else if (status == ACCN_EMBL_TPA || status == ACCN_EMBL_TPA_PROT) {
-                        	sip->choice = SEQID_TPE;
-                    	} else if (status == ACCN_DDBJ_TPA || status == ACCN_DDBJ_TPA_PROT) {
-                        	sip->choice = SEQID_TPD;
-                    	} else { /* default TPA */
-                        	sip->choice = SEQID_TPG;
-                    	}
+                        if (status == ACCN_NCBI_TPA || status == ACCN_NCBI_TPA_PROT) {
+                            sip->choice = SEQID_TPG;
+                        } else if (status == ACCN_EMBL_TPA || status == ACCN_EMBL_TPA_PROT) {
+                            sip->choice = SEQID_TPE;
+                        } else if (status == ACCN_DDBJ_TPA || status == ACCN_DDBJ_TPA_PROT) {
+                            sip->choice = SEQID_TPD;
+                        } else { /* default TPA */
+                            sip->choice = SEQID_TPG;
+                        }
                     } else /* default */
                         sip->choice = SEQID_GENBANK;
                 }
@@ -9305,7 +9395,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 /* Protein SWISS-PROT accessions */
         case 'O': case 'P': case 'Q':  
             if (AccnIsSWISSPROT(s)) {
-            	retcode = ACCN_SWISSPROT;
+                retcode = ACCN_SWISSPROT;
             }
             break;
 
@@ -9421,33 +9511,38 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           temp[2] = '\0';
           
           if ((StringICmp(temp,"AA") == 0) ||
-	      (StringICmp(temp,"AI") == 0) || 
-	      (StringICmp(temp,"AW") == 0) || 
-	      (StringICmp(temp,"BE") == 0) || 
-	      (StringICmp(temp,"BF") == 0) || 
-	      (StringICmp(temp,"BI") == 0) || 
-	      (StringICmp(temp,"BM") == 0) || 
-	      (StringICmp(temp,"BQ") == 0) || 
-	      (StringICmp(temp,"BU") == 0) || 
-	      (StringICmp(temp,"CA") == 0) || 
-	      (StringICmp(temp,"CB") == 0) || 
-	      (StringICmp(temp,"CD") == 0) || 
-	      (StringICmp(temp,"CF") == 0) || 
-	      (StringICmp(temp,"CK") == 0) || 
-	      (StringICmp(temp,"CN") == 0) || 
-	      (StringICmp(temp,"CO") == 0) || 
-	      (StringICmp(temp,"CV") == 0) || 
-	      (StringICmp(temp,"CX") == 0) || 
-	      (StringICmp(temp,"DN") == 0) || 
-	      (StringICmp(temp,"DR") == 0) || 
-	      (StringICmp(temp,"DT") == 0) || 
-	      (StringICmp(temp,"DV") == 0) || 
-	      (StringICmp(temp,"DW") == 0) || 
-	      (StringICmp(temp,"DY") == 0) || 
-	      (StringICmp(temp,"EB") == 0) || 
-	      (StringICmp(temp,"EC") == 0) || 
-	      (StringICmp(temp,"EE") == 0) || 
-	      (StringICmp(temp,"EG") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"AI") == 0) || 
+          (StringICmp(temp,"AW") == 0) || 
+          (StringICmp(temp,"BE") == 0) || 
+          (StringICmp(temp,"BF") == 0) || 
+          (StringICmp(temp,"BI") == 0) || 
+          (StringICmp(temp,"BM") == 0) || 
+          (StringICmp(temp,"BQ") == 0) || 
+          (StringICmp(temp,"BU") == 0) || 
+          (StringICmp(temp,"CA") == 0) || 
+          (StringICmp(temp,"CB") == 0) || 
+          (StringICmp(temp,"CD") == 0) || 
+          (StringICmp(temp,"CF") == 0) || 
+          (StringICmp(temp,"CK") == 0) || 
+          (StringICmp(temp,"CN") == 0) || 
+          (StringICmp(temp,"CO") == 0) || 
+          (StringICmp(temp,"CV") == 0) || 
+          (StringICmp(temp,"CX") == 0) || 
+          (StringICmp(temp,"DN") == 0) || 
+          (StringICmp(temp,"DR") == 0) || 
+          (StringICmp(temp,"DT") == 0) || 
+          (StringICmp(temp,"DV") == 0) || 
+          (StringICmp(temp,"DW") == 0) || 
+          (StringICmp(temp,"DY") == 0) || 
+          (StringICmp(temp,"EB") == 0) || 
+          (StringICmp(temp,"EC") == 0) || 
+          (StringICmp(temp,"EE") == 0) || 
+          (StringICmp(temp,"EG") == 0) || 
+          (StringICmp(temp,"EH") == 0) || 
+          (StringICmp(temp,"EL") == 0) || 
+          (StringICmp(temp,"ES") == 0) || 
+          (StringICmp(temp,"EV") == 0) || 
+          (StringICmp(temp,"EW") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -9457,7 +9552,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AF") == 0) ||
                      (StringICmp(temp,"AY") == 0) ||
                      (StringICmp(temp,"DQ") == 0) ||
-                     (StringICmp(temp,"EF") == 0)) {      /* NCBI direct submission */
+                     (StringICmp(temp,"EF") == 0) ||
+                     (StringICmp(temp,"EU") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0) ||
                      (StringICmp(temp,"CP") == 0) ||
@@ -9467,7 +9563,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented proteins are AH */
           } else if ((StringICmp(temp,"CH") == 0) ||
                      (StringICmp(temp,"CM") == 0) ||
-                     (StringICmp(temp,"DS") == 0)) {      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"DS") == 0) ||
+                     (StringICmp(temp,"EM") == 0) ||
+                     (StringICmp(temp,"EN") == 0) ||
+                     (StringICmp(temp,"EP") == 0) ||
+                     (StringICmp(temp,"EQ") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
               retcode = ACCN_NCBI_OTHER;
@@ -9485,7 +9585,12 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CZ") == 0) ||
                      (StringICmp(temp,"DU") == 0) ||
                      (StringICmp(temp,"DX") == 0) ||
-                     (StringICmp(temp,"ED") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"ED") == 0) ||
+                     (StringICmp(temp,"EI") == 0) ||
+                     (StringICmp(temp,"EJ") == 0) ||
+                     (StringICmp(temp,"EK") == 0) ||
+                     (StringICmp(temp,"ER") == 0) ||
+                     (StringICmp(temp,"ET") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
@@ -9544,9 +9649,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DG") == 0)) {      /* DDBJ CON division */
               retcode = ACCN_DDBJ_CON;
           } else if ((StringICmp(temp,"BD") == 0) ||
-                     (StringICmp(temp,"DD") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"DD") == 0) || 
+                     (StringICmp(temp,"DI") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
-          } else if ((StringICmp(temp,"DE") == 0)) {      /* DDBJ GSS */
+          } else if ((StringICmp(temp,"DE") == 0) ||
+                     (StringICmp(temp,"DH") == 0)) {      /* DDBJ GSS */
               retcode = ACCN_DDBJ_GSS;
           } else {
               retcode = ACCN_IS_NT;
@@ -9854,3 +9961,21 @@ NLM_EXTERN SeqIdPtr SeqIdListfromSeqLoc (ValNodePtr vnpslp)
   }
   return sip;
 }
+
+
+/* We frequently do not want to use TMSMART, BankIt, and NCBIFILE IDs
+ * in displays, formatting, etc.
+ */
+NLM_EXTERN Boolean IsSkippableDbtag (DbtagPtr dbt)
+{
+  if (dbt == NULL 
+      || StringICmp (dbt->db, "TMSMART") == 0 
+      || StringICmp (dbt->db, "BankIt") == 0
+      || StringICmp (dbt->db, "NCBIFILE") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+

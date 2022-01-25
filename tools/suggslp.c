@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: suggslp.c,v 6.2 2003/05/30 17:25:38 coulouri Exp $";
+static char const rcsid[] = "$Id: suggslp.c,v 6.3 2007/02/22 22:26:08 kans Exp $";
 
 /* suggslp.c
 * ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: suggslp.c,v 6.2 2003/05/30 17:25:38 coulouri E
 *
 * Version Creation Date:   11/22/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *	Implementation of Suggest standalone prediction function. Here it
@@ -216,23 +216,21 @@ GetDNA(SeqEntryPtr pSeqEntry, SeqRecPtr pSeqRec)
     Int4	i4Len;
     Uint1	u1Residue;
     BioseqPtr	pBSP;
-    SeqPortPtr	pSeqPort;
+    StreamCache  sc;
     Int2  j;
     Char  buf [BUFSIZE + 5];
 
     if (pSeqEntry == NULL || pSeqRec == NULL)
 	return;
 
-    /* Find out first Bioseq from SeqEntry.
-     * It's necessary to create SeqPort
-     */
+    /* Find out first Bioseq from SeqEntry. */
     pBSP = FindFirstBioseq(pSeqEntry);
     if (pBSP == NULL)
 	return;	/* There is no data to get, return; */
 
-    pSeqPort = SeqPortNew(pBSP, 0, -1, 0, Seq_code_iupacna);
-    if (pSeqPort == NULL)
-	return;
+    if (! StreamCacheSetup (pBSP, NULL, STREAM_EXPAND_GAPS, &sc)) {
+      return;
+    }
 
     /* Allocate memory for storing bioseq's data
      */
@@ -268,8 +266,8 @@ GetDNA(SeqEntryPtr pSeqEntry, SeqRecPtr pSeqRec)
      */
     j = 0;
     buf [0] = '\0';
-    while((u1Residue = SeqPortGetResidue(pSeqPort)) != SEQPORT_EOF) {
-	if (IS_residue(u1Residue)) {
+    while((u1Residue = StreamCacheGetResidue(&sc)) != '\0') {
+	  if (IS_residue(u1Residue)) {
 	    u1Residue = TO_UPPER(u1Residue);
 	    if (u1Residue == 'U')
 		u1Residue = 'T';
@@ -282,11 +280,9 @@ GetDNA(SeqEntryPtr pSeqEntry, SeqRecPtr pSeqRec)
 	      BSWrite (pSeqRec->rawSeq, buf, j * sizeof (Char));
 	      j = 0;
 	    }
-	}
+	  }
     }
 	
-    SeqPortFree(pSeqPort);
-    
     /*
     BSPutByte(pSeqRec->rawSeq, 'N');
     BSPutByte(pSeqRec->rawSeq, 'N');
@@ -342,7 +338,7 @@ GetProtein(SeqEntryPtr pSeqEntry, SeqRecPtr pSeqRec)
     Int4	i4TotalLen = 0;
     IdRecPtr	pIdRec;
     BioseqPtr PNTR	ppSeqList;
-    SeqPortPtr	pSeqPort;
+    StreamCache  sc;
     Int2  j;
     Char  buf [BUFSIZE + 5];
 
@@ -389,11 +385,10 @@ GetProtein(SeqEntryPtr pSeqEntry, SeqRecPtr pSeqRec)
 	/* Store data of each bioseq into internal suggest's data structure
 	 */
 	i4Len = 0;
-    pSeqPort = SeqPortNew(ppSeqList[i], 0, -1, 0, Seq_code_ncbieaa);
-    if (pSeqPort != NULL) {
-    j = 0;
-    buf [0] = '\0';
-	while ((iChar = SeqPortGetResidue(pSeqPort)) != SEQPORT_EOF) {
+    if (StreamCacheSetup (ppSeqList[i], NULL, STREAM_EXPAND_GAPS, &sc)) {
+      j = 0;
+      buf [0] = '\0';
+	  while ((iChar = StreamCacheGetResidue(&sc)) != '\0') {
 		if (IS_residue(iChar)) {
 	    iChar = TO_UPPER(iChar);
 	    if (((iChar >= 'A' && iChar <= 'Z') || iChar == '*' || iChar == '-')
@@ -415,8 +410,6 @@ GetProtein(SeqEntryPtr pSeqEntry, SeqRecPtr pSeqRec)
 	    }
 	}
 	
-    SeqPortFree(pSeqPort);
-    
 	if (i4Len > 0) {
 	    if (pSeqRec->lookForStop) {
 	    /*

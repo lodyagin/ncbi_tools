@@ -14,6 +14,9 @@
  *
  * RCS Modification History:
  * $Log: OTnetdb.c,v $
+ * Revision 1.4  2006/11/27 20:21:26  kans
+ * replaced netdb.h with carbon_netdb.h
+ *
  * Revision 1.3  2001/11/07 22:45:02  juran
  * Phil Churchill's 2001-05-07 changes.
  * Remove debugging.
@@ -68,7 +71,7 @@
 #include <OpenTransport.h>
 #include <OpenTptInternet.h>	// for TCP/IP
 
-#include <netdb.h>
+#include <carbon_netdb.h>
 #include <neterrno.h>
 #include "SocketsInternal.h"
 #include "a_inet.h"

@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.29 2006/09/14 13:32:29 bollin Exp $
+ * $Id: alnread.c,v 1.31 2007/01/10 18:20:14 ucko Exp $
  *
  * ===========================================================================
  *
@@ -1311,37 +1311,6 @@ s_AddLengthList
 }
 
 
-/* This function examines the last SLengthListData structure in list to
- * see if it matches llp.  If so, the function increments the value of
- * num_appearances for the last SLengthListData structure in list and
- * frees llp, otherwise the function appends llp to the end of list.
- * The function returns a pointer to the list of SLengthListData structures.
- */
-static SLengthListPtr
-s_AddPatternRepeat
-(SLengthListPtr list,
- SLengthListPtr llp)
-{
-    SLengthListPtr prev_llp;
-
-    if (list == NULL) {
-        list = llp;
-    } else {
-        prev_llp = list;
-        while ( prev_llp->next != NULL ) {
-             prev_llp = prev_llp->next;
-        }
-        if (s_DoLengthPatternsMatch (prev_llp, llp)) {
-            prev_llp->num_appearances ++;
-            s_LengthListFree (llp);
-        } else {
-            prev_llp->next = llp;
-        }
-    }
-    return list;
-}
-
-
 /* This set of functions is used for storing and analyzing individual lines
  * or tokens from an alignment file.
  */
@@ -1377,13 +1346,17 @@ s_LineInfoNew
  */
 static void s_LineInfoFree (TLineInfoPtr lip)
 {
+    TLineInfoPtr next_lip;
     if (lip == NULL) {
         return;
     }
-    s_LineInfoFree (lip->next);
-    lip->next = NULL;
-    free (lip->data);
-    free (lip);
+    while (lip != NULL) {
+        next_lip = lip->next;
+        lip->next = NULL;
+        free (lip->data);
+        free (lip);
+        lip = next_lip; 
+    }
 }
 
 
@@ -3553,7 +3526,7 @@ s_ReadAlignFileRaw
     EBool                    found_expected_nchar = eFalse;
     EBool                    found_char_comment = eFalse;
     SLengthListPtr           pattern_list = NULL;
-    SLengthListPtr           this_pattern;
+    SLengthListPtr           this_pattern, last_pattern = NULL;
     char *                   cp;
     int                      len;
     TIntLinkPtr              new_offset;
@@ -3561,7 +3534,7 @@ s_ReadAlignFileRaw
     EBool                    in_bracketed_comment = eFalse;
     TBracketedCommentListPtr comment_list = NULL, last_comment = NULL;
     EBool                    last_line_was_marked_id = eFalse;
-
+    TLineInfoPtr             last_line = NULL, next_line;
 
     if (readfunc == NULL  ||  sequence_info == NULL) {
         return NULL;
@@ -3624,7 +3597,6 @@ s_ReadAlignFileRaw
                                                            afrp->report_error_userdata);
               }
             }
-            
             if (in_taxa_comment) {
                 if (strncmp (tmp, "end;", 4) == 0) {
                     in_taxa_comment = eFalse;
@@ -3671,7 +3643,6 @@ s_ReadAlignFileRaw
             if (s_SkippableString (tmp)) {
                 tmp [0] = 0;
             }
-  
             if (tmp [0] == '>'  &&  ! found_stop) {
                 /* this could be a block of organism lines in a
                  * NEXUS file.  If there is no sequence data between
@@ -3703,20 +3674,33 @@ s_ReadAlignFileRaw
                         this_pattern = s_GetBlockPattern (tmp);
                     } else {
                         this_pattern = s_GetBlockPattern (cp);
-                    }
-                    pattern_list = s_AddPatternRepeat (pattern_list,
-                                                     this_pattern);
+                    }                    
                 } else {
                     this_pattern = s_GetBlockPattern (tmp);
-                    pattern_list = s_AddPatternRepeat (pattern_list,
-                                                     this_pattern);
+                }
+                
+                if (last_pattern == NULL) {
+                    pattern_list = this_pattern;
+                    last_pattern = this_pattern;
+                } else if (s_DoLengthPatternsMatch (last_pattern, this_pattern)) {
+                    last_pattern->num_appearances ++;
+                    s_LengthListFree (this_pattern);
+                } else {
+                    last_pattern->next = this_pattern;
+                    last_pattern = this_pattern;
                 }
             }
 
             len = strspn (linestring, " \t\r\n");
-            afrp->line_list = s_AddLineInfo (afrp->line_list,
-                                           linestring + len,
-                                           overall_line_count, len);
+
+            next_line = s_LineInfoNew (linestring + len, overall_line_count, len);
+
+            if (last_line == NULL) {
+                afrp->line_list = next_line;
+            } else {
+                last_line->next = next_line;
+            }
+            last_line = next_line;
         }
         free (linestring);
         free (tmp);
@@ -4351,7 +4335,7 @@ static void s_RemoveBasePairCountCommentsFromData (SAlignRawFilePtr afrp)
 static void s_ProcessAlignFileRawForMarkedIDs (SAlignRawFilePtr afrp)
 {
     SLengthListPtr * anchorpattern;
-
+    
     if (afrp == NULL) {
         return;
     }
@@ -6046,6 +6030,13 @@ ReadAlignmentFile
 /*
  * ===========================================================================
  * $Log: alnread.c,v $
+ * Revision 1.31  2007/01/10 18:20:14  ucko
+ * Drop s_AddPatternRepeat (obsolete as of R1.30, as s_ReadAlignFileRaw
+ * now contains an internal version reworked to be more efficient).
+ *
+ * Revision 1.30  2006/12/27 13:38:46  bollin
+ * Fixed bug in alignment reader and improved performance for large alignments.
+ *
  * Revision 1.29  2006/09/14 13:32:29  bollin
  * do not free alphabet in sequence info struct
  *

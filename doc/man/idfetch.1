@@ -1,9 +1,10 @@
-.TH IDFETCH 1 2001-10-05 NCBI "NCBI Tools User's Manual"
+.TH IDFETCH 1 2005-06-24 NCBI "NCBI Tools User's Manual"
 .SH NAME
 idfetch \- retrieve biological data from the NCBI ID1 server
 .SH SYNOPSIS
 .B idfetch
 [\|\fB\-\fP\|]
+[\|\fB\-F\fP\ \fIstr\fP\|]
 [\|\fB\-G\fP\ \fIfilename\fP\|]
 [\|\fB\-Q\fP\ \fIfilename\fP\|]
 [\|\fB\-c\fP\ \fIN\fP\|]
@@ -26,6 +27,10 @@ A summary of options is included below.
 .TP
 \fB\-\fP
 Print usage message
+.TP
+\fB\-F\fP\ \fIstr\fP
+Add the specified feature types (comma-delimited); allowed values are
+CDD, SNP, SNP_graph, MGC, HPRD, and STS.
 .TP
 \fB\-G\fP\ \fIfilename\fP
 File with list of GIs, (versioned) accessions, FASTA SeqID's to dump

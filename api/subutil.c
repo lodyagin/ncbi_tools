@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.67 $
+* $Revision: 6.71 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,19 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.71  2007/06/26 15:50:57  kans
+* cleanup GO: and GO_REF: prefixes on go id or go ref
+*
+* Revision 6.70  2007/06/08 14:48:46  kans
+* AddToGeneOntologyUserObject adds goref argument
+*
+* Revision 6.69  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.68  2007/04/05 19:14:13  bollin
+* Added function for adding a Pnt location to another location without creating
+* an intermediate SeqFeat.
+*
 * Revision 6.67  2006/09/22 15:00:56  kans
 * removed NCBI from StructuredCommentPrefix/Suffix
 *
@@ -2065,11 +2078,11 @@ NLM_EXTERN Boolean AddBasesToBioseq (
 
 	if (bsp->seq_data == NULL)
 	{
-		bsp->seq_data = BSNew(bsp->length);
+		bsp->seq_data = (SeqDataPtr) BSNew(bsp->length);
 		bsp->seq_data_type = Seq_code_iupacna;
 	}
 
-	return AddBasesToByteStore(bsp->seq_data, the_bases);
+	return AddBasesToByteStore((ByteStorePtr) bsp->seq_data, the_bases);
 }
 
 NLM_EXTERN Boolean AddAminoAcidsToBioseq (
@@ -2104,11 +2117,11 @@ NLM_EXTERN Boolean AddAminoAcidsToBioseq (
 
 	if (bsp->seq_data == NULL)
 	{
-		bsp->seq_data = BSNew(bsp->length);
+		bsp->seq_data = (SeqDataPtr) BSNew(bsp->length);
 		bsp->seq_data_type = Seq_code_ncbieaa;
 	}
 
-	return AddAAsToByteStore(bsp->seq_data, the_aas);
+	return AddAAsToByteStore((ByteStorePtr) bsp->seq_data, the_aas);
 }
 
 
@@ -2128,11 +2141,11 @@ NLM_EXTERN Boolean AddBasesToLiteral (
 
 	if (the_literal->seq_data == NULL)
 	{
-		the_literal->seq_data = BSNew(the_literal->length);
+		the_literal->seq_data = (SeqDataPtr) BSNew(the_literal->length);
 		the_literal->seq_data_type = Seq_code_iupacna;
 	}
 
-	return AddBasesToByteStore(the_literal->seq_data, the_bases);
+	return AddBasesToByteStore((ByteStorePtr) the_literal->seq_data, the_bases);
 }
 
 NLM_EXTERN Boolean AddAminoAcidsToLiteral (
@@ -2147,11 +2160,11 @@ NLM_EXTERN Boolean AddAminoAcidsToLiteral (
 
 	if (the_literal->seq_data == NULL)
 	{
-		the_literal->seq_data = BSNew(the_literal->length);
+		the_literal->seq_data = (SeqDataPtr) BSNew(the_literal->length);
 		the_literal->seq_data_type = Seq_code_ncbieaa;
 	}
 
-	return AddAAsToByteStore(the_literal->seq_data, the_aas);
+	return AddAAsToByteStore((ByteStorePtr) the_literal->seq_data, the_aas);
 }
 
 /*****************************************************************************
@@ -3456,11 +3469,13 @@ NLM_EXTERN Boolean AddIntToSeqFeat (SeqFeatPtr sfp, Int4 from, Int4 to, BioseqPt
 							fuzz_from, fuzz_to, strand);
 }
 
-NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, Int2 fuzz, Int2 strand)
+NLM_EXTERN Boolean AddPntToSeqLoc (SeqLocPtr PNTR p_slp, Int4 point, BioseqPtr bsp, Int2 fuzz, Int2 strand)
 {
 	SeqLocPtr slp, tmp, tmp2;
 	SeqPntPtr spp;
 	IntFuzzPtr ifp;
+
+  if (p_slp == NULL) return FALSE;
 
 	spp = SeqPntNew();
 	spp->point = point;
@@ -3478,13 +3493,13 @@ NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, I
 	slp->choice = SEQLOC_PNT;
 	slp->data.ptrvalue = (Pointer)spp;
 
-	if (sfp->location == NULL)
+	if (*p_slp == NULL)
 	{
-		sfp->location = slp;
+		*p_slp = slp;
 		return TRUE;
 	}
 
-	tmp = sfp->location;
+	tmp = *p_slp;
 	if (tmp->choice == SEQLOC_MIX)   /* second one already */
 	{
 		tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
@@ -3498,10 +3513,15 @@ NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, I
 		tmp2->choice = SEQLOC_MIX;
 		tmp2->data.ptrvalue = (Pointer)tmp;
 		tmp->next = slp;
-		sfp->location = tmp2;
+		*p_slp = tmp2;
 	}
 
 	return TRUE;
+}
+
+NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, Int2 fuzz, Int2 strand)
+{
+  return AddPntToSeqLoc (&(sfp->location), point, bsp, fuzz, strand);
 }
 
 static BioseqPtr GetBioseqFromChoice (NCBISubPtr nsp, SeqEntryPtr the_seq, CharPtr local_name, CharPtr the_routine)
@@ -3840,7 +3860,7 @@ NLM_EXTERN SeqEntryPtr TranslateCdRegion (
 
 	bsp = (BioseqPtr)(sep->data.ptrvalue);
 
-	bsp->seq_data = bp;
+	bsp->seq_data = (SeqDataPtr) bp;
 	bsp->seq_data_type = Seq_code_iupacaa;
 
 	vnp = ValNodeNew(NULL);
@@ -3891,7 +3911,7 @@ static SeqEntryPtr TranslateCdRegionNew (
 	AddCompleteness(submission, sep, cdregion_feature);
 	bsp = (BioseqPtr)(sep->data.ptrvalue);
 
-	bsp->seq_data = bp;
+	bsp->seq_data = (SeqDataPtr) bp;
 	bsp->seq_data_type = Seq_code_iupacaa;
 
 	vnp = ValNodeNew(NULL);
@@ -4912,6 +4932,7 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   CharPtr text,
   CharPtr goid,
   Int4 pmid,
+  CharPtr goref,
   CharPtr evidence
 )
 
@@ -4981,6 +5002,11 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   last = ufp;
 
   if (goid != NULL && *goid != '\0') {
+    if (StringNICmp (goid, "GO:", 3) == 0) {
+      goid += 3;
+    }
+  }
+  if (goid != NULL && *goid != '\0') {
     ufp = UserFieldNew ();
     oip = ObjectIdNew ();
     oip->str = StringSave ("go id");
@@ -4998,6 +5024,22 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
     ufp->label = oip;
     ufp->choice = 2; /* integer */
     ufp->data.intvalue = pmid;
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (goref != NULL && *goref != '\0') {
+    if (StringNICmp (goref, "GO_REF:", 7) == 0) {
+      goref += 7;
+    }
+  }
+  if (goref != NULL && *goref != '\0') {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("go ref");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string - need to keep leading zeroes */
+    ufp->data.ptrvalue = (Pointer) StringSave (goref);
     last->next = ufp;
     last = ufp;
   }

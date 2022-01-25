@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -53,6 +53,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <objseq.h>
 
 /*****************************************************************************
 *
@@ -82,6 +84,9 @@ Int2 LIBCALLBACK VSMExportNucFeatureTableSelectedFeatures (Pointer data);
 Int2 LIBCALLBACK VSMExportNucFeatureTableSelectedFeaturesSuppressProteinIDs (Pointer data);
 Int2 LIBCALLBACK VSMExportProteinFeatureTable (Pointer data);
 Int2 LIBCALLBACK VSMFastaSortedProtSave (Pointer data);
+NLM_EXTERN void ViewSortedProteins (SeqEntryPtr sep);
+
+extern void ExportSeqAnnotFeatureTable (FILE *fp, SeqAnnotPtr sap);
 
 
 #ifdef __cplusplus

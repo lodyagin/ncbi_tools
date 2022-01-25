@@ -38,6 +38,7 @@ asntool -m ../access/entrez2.asn -o asnent2.h
 asntool -m ../access/mim.asn -o asnmim.h
 asntool -m ../access/taxon3.asn -o asntax3.h
 asntool -m ../access/entrezgene.asn -o asnentgene.h
+asntool -m ../access/mla2.asn -o asnmla2.h
 asntool -m ../asn/gbseq.asn -o asngbseq.h
 asntool -m ../asn/insdseq.asn -o asninsdseq.h
 asntool -m ../asn/tinyseq.asn -o asntseq.h

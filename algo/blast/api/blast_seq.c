@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_seq.c,v 1.85 2006/07/05 15:52:35 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.88 2007/03/14 19:50:30 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /*
 * ===========================================================================
@@ -40,7 +40,6 @@ static char const rcsid[] = "$Id: blast_seq.c,v 1.85 2006/07/05 15:52:35 papadop
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/blast_setup.h> /* For BlastSeqLoc_RestrictToInterval */
-#include <algo/blast/core/blast_inline.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -70,7 +69,7 @@ BlastSeqlocsHaveDuplicateIDs(SeqLoc* query_seqlocs)
       return FALSE;
 
    /* allocate hashtable */
-   hashtable = (Uint4 *)calloc(1 << kLog2HashSize, sizeof(Uint4));
+   hashtable = (Uint4 *)calloc((size_t)1 << kLog2HashSize, sizeof(Uint4));
    id_entries = (SeqIdHash *)malloc((kNumSeqs + 1) * sizeof(SeqIdHash));
 
    for (slp = query_seqlocs, curr_id_num = 1; slp; slp = slp->next) {
@@ -81,7 +80,7 @@ BlastSeqlocsHaveDuplicateIDs(SeqLoc* query_seqlocs)
 
        /* hash the ID of the next query sequence */
        SeqIdLabel(id, buffer, sizeof(buffer), OM_LABEL_CONTENT);
-       hashval = readdb_sequence_hash(buffer, strlen(buffer));
+       hashval = readdb_sequence_hash(buffer, (int)strlen(buffer));
        hashval = hashval >> (32 - kLog2HashSize);
        if (hashtable[hashval] != 0) {
           Int4 offset = hashtable[hashval];
@@ -156,7 +155,7 @@ BlastMaskLocFromSeqLoc(SeqLoc* mask_seqlocs, SeqLoc* query_seqlocs,
     retval = BlastMaskLocNew(kNumSeqs*kNumContexts);
 
     /* create hashtable for query IDs */
-    hashtable = (Uint4 *)calloc(1 << kLog2HashSize, sizeof(Uint4));
+    hashtable = (Uint4 *)calloc((size_t)1 << kLog2HashSize, sizeof(Uint4));
     id_entries = (SeqIdHash *)malloc((kNumSeqs + 1) * sizeof(SeqIdHash));
  
     /* add the ID of each query sequence to the hashtable */
@@ -166,7 +165,7 @@ BlastMaskLocFromSeqLoc(SeqLoc* mask_seqlocs, SeqLoc* query_seqlocs,
         Char buffer[64];
  
         SeqIdLabel(seq_id, buffer, sizeof(buffer), OM_LABEL_CONTENT);
-        hashval = readdb_sequence_hash(buffer, strlen(buffer));
+        hashval = readdb_sequence_hash(buffer, (int)strlen(buffer));
         hashval = hashval >> (32 - kLog2HashSize);
  
         id_entries[curr_id_num].id = seq_id;
@@ -191,7 +190,7 @@ BlastMaskLocFromSeqLoc(SeqLoc* mask_seqlocs, SeqLoc* query_seqlocs,
 
        mask_id = SeqLocId(current_mask);
        SeqIdLabel(mask_id, buffer, sizeof(buffer), OM_LABEL_CONTENT);
-       hashval = readdb_sequence_hash(buffer, strlen(buffer));
+       hashval = readdb_sequence_hash(buffer, (int)strlen(buffer));
        hashval = hashval >> (32 - kLog2HashSize);
 
        /* examine only the query IDs that hash to the same value */
@@ -588,7 +587,7 @@ Int2 BLAST_GeneticCodeFind(Int4 gc, Uint1** genetic_code)
    if (!gen_code_eaa)
       return -1;
    smtp = SeqMapTableFind(Seq_code_ncbistdaa, Seq_code_ncbieaa);
-   gen_code_length = StrLen(gen_code_eaa);
+   gen_code_length = (Int4)StrLen(gen_code_eaa);
    *genetic_code = gen_code_stdaa = (Uint1*) calloc(gen_code_length+1, 1);
 
    if (!gen_code_stdaa)
@@ -740,10 +739,7 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
        program_number == eBlastTypePhiBlastn) {
       encoding = eBlastEncodingNucleotide;
       num_frames = 2;
-   } else if (program_number == eBlastTypeBlastp ||
-              program_number == eBlastTypeRpsBlast ||
-              program_number == eBlastTypeTblastn ||
-              program_number == eBlastTypePhiBlastp) {
+   } else if (Blast_QueryIsProtein(program_number)) {
       encoding = eBlastEncodingProtein;
       num_frames = 1;
    } else { /* blastx or rpstblastn, which is also essentially blastx */
@@ -785,8 +781,7 @@ Int2 BLAST_SetUpSubject(EBlastProgramType program_number,
    EBlastEncoding encoding;
    const Boolean kNucleotide = (program_number == eBlastTypeBlastn || 
                                 program_number == eBlastTypePhiBlastn);
-   const Boolean kTranslated = (program_number == eBlastTypeTblastn ||
-                                program_number == eBlastTypeTblastx);
+   const Boolean kTranslated = Blast_SubjectIsTranslated(program_number);
 
    if (kNucleotide)
       encoding = eBlastEncodingNucleotide;

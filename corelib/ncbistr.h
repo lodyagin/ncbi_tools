@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistr.h,v $
+* Revision 6.9  2006/10/16 21:06:27  lavr
+* String{HasNo|DoesHave}Text() to accept const pointer
+*
 * Revision 6.8  2003/09/15 16:21:32  kans
 * moved StringDoesHaveText from sqnutils3.c
 *
@@ -174,8 +177,8 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_MeshStringICmp PROTO((const char FAR *str1, cons
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSearch PROTO((const char FAR *str, const char FAR *sub));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringISearch PROTO((const char FAR *str, const char FAR *sub));
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText PROTO((Nlm_CharPtr str));
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText PROTO((const char FAR *str));
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText PROTO((const char FAR *str));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString PROTO((Nlm_CharPtr str));
 
 /* Printing 8-byte integer into platform-independent array of 8 bytes

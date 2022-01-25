@@ -1,9 +1,10 @@
-.TH ASN2GB 1 2003-11-10 NCBI "NCBI Tools User's Manual"
+.TH ASN2GB 1 2006-05-29 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2gb \- convert ASN.1 biological data to a GenBank-style flat format
 .SH SYNOPSIS
 .B asn2gb
 [\|\fB\-\fP\|]
+[\|\fB\-A\fP\ \fIaccession\fP\|]
 [\|\fB\-a\fP\ \fIasn-type\fP\|]
 [\|\fB\-b\fP\|]
 [\|\fB\-c\fP\|]
@@ -16,6 +17,7 @@ asn2gb \- convert ASN.1 biological data to a GenBank-style flat format
 [\|\fB\-k\fP\ \fIN\fP\|]
 [\|\fB\-l\fP\ \fIfilename\fP\|]
 [\|\fB\-m\fP\ \fImode\fP\|]
+[\|\fB\-n\fP\ \fIfilename\fP\|]
 [\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\|]
 [\|\fB\-q\fP\ \fIfilename\fP\|]
@@ -35,28 +37,35 @@ A summary of options is included below.
 \fB\-\fP
 Print usage message
 .TP
+\fB\-A\fP\ \fIaccession\fP
+Accession to fetch
+.TP
 \fB\-a\fP\ \fIasn-type\fP
 ASN.1 Type:
 .RS
 .PD 0
 .IP a
-Any (default)
+Any (autodetected; default)
 .IP e
-Seq-entry
+seq-Entry
 .IP b
 Bioseq
 .IP s
-Bioseq-set
+bioseq-Set
 .IP m
-Seq-submit
+seq-subMit
+.IP t
+baTch bioseq-set
+.IP u
+batch seq-sUbmit
 .PD
 .RE
 .TP
 \fB\-b\fP
-Bioseq-set is binary
+Input file is binary
 .TP
 \fB\-c\fP
-Bioseq-set is compressed
+Batch file is compressed
 .TP
 \fB\-d\fP
 Seq-loc minus strand
@@ -67,14 +76,26 @@ Format:
 .PD 0
 .IP b
 GenBank (default)
+.IP "bp or pb"
+GenBank and GenPept
 .IP e
 EMBL
 .IP p
 GenPept
+.IP q
+nucleotide GBSet (XML)
+.IP r
+protein GBSet (XML)
 .IP t
 Feature table only
 .IP x
-GBSet (XML)
+nucleotide INSDSet (XML)
+.IP y
+tiny seq (XML)
+.IP Y
+FASTA
+.IP z
+protein INSDSet (XML)
 .PD
 .RE
 .TP
@@ -135,6 +156,9 @@ Dump
 .PD
 .RE
 .TP
+\fB\-n\fP\ \fIfilename\fP
+Asn2Flat Executable (default = asn2flat)
+.TP
 \fB\-o\fP\ \fIfilename\fP
 Output file name (default = stdout)
 .TP
@@ -142,7 +166,7 @@ Output file name (default = stdout)
 Propagate top descriptors
 .TP
 \fB\-q\fP\ \fIfilename\fP
-Gbdjoin Executable (default = gbdjoin)
+Ffdiff Executable (default = /netopt/genbank/subtool/bin/ffdiff)
 .TP
 \fB\-r\fP
 Enable remote fetching
@@ -170,6 +194,12 @@ Batch:
 Report
 .IP 2
 Sequin/Release
+.IP 3
+asn2gb/asn2flat
+.IP 4
+asn2flat BSEC/nocleanup
+.IP 5
+oldasn2gb/newasn2gb
 .PD
 .RE
 \fB\-u\fP\ \fIN\fP
@@ -191,7 +221,10 @@ Feature itemID
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO
+.BR asn2all (1),
 .BR asn2asn (1),
 .BR asn2ff (1),
+.BR asn2fsa (1),
 .BR asn2xml (1),
-.BR asndhuff (1)
+.BR asndhuff (1),
+.BR insdseqget (1).

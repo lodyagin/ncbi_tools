@@ -15,7 +15,7 @@
 static void InitZoomPopUp (GraphViewFormPtr gvp)
 {
   Char            buf[16];
-  Int2            i, n, maxzoom;
+  Int2            i = 0, n, maxzoom;
   BaR             sb;
 
   if (gvp != NULL)
@@ -344,7 +344,7 @@ extern void GraphInfoPtrToGraphViewForm (ForM f, Pointer data)
   GraphViewFormPtr gvp;
   GraphInfoPtr     gip, giph;
   SeqGraphPtr      sgp;
-  GrouP            g1, h1;
+  GrouP            g1, h1 = NULL;
   ButtoN           b1;
 
   gvp = (GraphViewFormPtr) GetObjectExtra (f);

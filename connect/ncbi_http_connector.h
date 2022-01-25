@@ -1,7 +1,7 @@
 #ifndef CONNECT___HTTP_CONNECTOR__H
 #define CONNECT___HTTP_CONNECTOR__H
 
-/*  $Id: ncbi_http_connector.h,v 6.15 2006/01/17 20:17:15 lavr Exp $
+/*  $Id: ncbi_http_connector.h,v 6.16 2006/11/08 19:41:04 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -145,7 +145,7 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnector
  );
 
 
-/* An extended version of URL_CreateConnector() to change the URL of the
+/* An extended version of HTTP_CreateConnector() to change the URL of the
  * server CGI "on-the-fly":
  *  -- "parse_http_hdr()" is called each time the HTTP header received
  *      from HTTP server and only if fHCC_KeepHeader is NOT set; false return
@@ -208,6 +208,9 @@ extern NCBI_XCONNECT_EXPORT void HTTP_SetNcbiMessageHook
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_http_connector.h,v $
+ * Revision 6.16  2006/11/08 19:41:04  lavr
+ * Fix typo (left behind long ago) in comment URL_CreateConnector()->HTTP_...
+ *
  * Revision 6.15  2006/01/17 20:17:15  lavr
  * DISP_SetMessageHook() moved from ncbi_service_misc.h to
  * ncbi_http_connector.h and renamed to HTTP_SetNcbiMessageHook()

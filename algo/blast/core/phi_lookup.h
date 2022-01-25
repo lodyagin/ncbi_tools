@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.h,v 1.11 2006/02/01 14:58:45 ivanov Exp $
+/* $Id: phi_lookup.h,v 1.12 2006/11/21 16:52:16 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,13 +32,14 @@
  * PHI-BLAST
  */
 
-#include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_options.h>
-#include <algo/blast/core/pattern.h>
-#include <algo/blast/core/lookup_wrap.h>
-
 #ifndef ALGO_BLAST_CORE__PHI_LOOKUP_H
 #define ALGO_BLAST_CORE__PHI_LOOKUP_H
+
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_stat.h>
+#include <algo/blast/core/pattern.h>
+#include <algo/blast/core/lookup_wrap.h>
 
 #ifdef __cplusplus
 extern "C" {

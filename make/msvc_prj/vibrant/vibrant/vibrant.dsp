@@ -161,6 +161,10 @@ SOURCE=..\..\..\..\vibrant\viblists.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\vibrant\vibmain.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\vibrant\vibmenus.c
 # End Source File
 # Begin Source File
@@ -286,6 +290,10 @@ SOURCE=..\..\..\..\vibrant\vibforms.h
 # Begin Source File
 
 SOURCE=..\..\..\..\vibrant\vibincld.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\vibrant\vibmain.h
 # End Source File
 # Begin Source File
 

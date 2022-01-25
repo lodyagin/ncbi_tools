@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.54 2006/05/31 19:00:52 camacho Exp $
+/*  $Id: seqsrc_readdb.c,v 1.57 2007/05/15 15:29:56 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.54 2006/05/31 19:00:52 camacho Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.57 2007/05/15 15:29:56 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_readdb.h>
@@ -73,6 +73,22 @@ s_ReaddbGetNumSeqs(void* readdb_handle, void* ignoreme)
    return dbnseqs;
 }
 
+/** Retrieves a number of sequences in the BlastSeqSrc
+ * for use in calculating search space (and expect value).
+ * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
+ * @param ignoreme Unused by this implementation [in]
+ */
+static Int4
+s_ReaddbGetNumSeqsStats(void* readdb_handle, void* ignoreme)
+{
+   ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
+   Int4 dbnseqs = 0;
+   Int8 dblength = 0;
+
+   readdb_get_stats_numbers(rdfp, &dbnseqs, &dblength);
+   return dbnseqs;
+}
+
 /** Retrieves the total length of all sequences in the BlastSeqSrc.
  * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
  * @param ignoreme Unused by this implementation [in]
@@ -85,6 +101,22 @@ s_ReaddbGetTotLen(void* readdb_handle, void* ignoreme)
     Int8 dblength = 0;
 
     readdb_get_totals_ex(rdfp, &dblength, &dbnseqs, TRUE);
+    return dblength;
+}
+
+/** Retrieves the total length of all sequences in the BlastSeqSrc
+ * for use in calculating search space (and expect value).
+ * @param readdb_handle Pointer to initialized ReadDBFILEPtr structure [in]
+ * @param ignoreme Unused by this implementation [in]
+ */
+static Int8
+s_ReaddbGetTotLenStats(void* readdb_handle, void* ignoreme)
+{
+    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
+    Int4 dbnseqs = 0;
+    Int8 dblength = 0;
+
+    readdb_get_stats_numbers(rdfp, &dbnseqs, &dblength);
     return dblength;
 }
 
@@ -433,6 +465,18 @@ s_ReaddbIteratorNext(void* readdb_handle, BlastSeqSrcIterator* itr)
     return retval;
 }
 
+/** Reset the ReadDBFilePtr's internal chunk "bookmark"
+ * @param readdb_handle Pointer to the ReadDBFILE structure [in]
+ */
+static void
+s_ReaddbResetChunkIterator(void* readdb_handle)
+{
+    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
+    ASSERT(rdfp);
+    rdfp->shared_info->last_oid_assigned = 0;
+    return;
+}
+
 /** Readdb sequence source destructor: frees its internal data structure and the
  * BlastSeqSrc structure itself.
  * @param bssp BlastSeqSrc structure to free [in]
@@ -444,7 +488,6 @@ s_ReaddbSeqSrcFree(BlastSeqSrc* bssp)
     if (!bssp) 
         return NULL;
     readdb_destruct((ReadDBFILEPtr)_BlastSeqSrcImpl_GetDataStructure(bssp));
-    sfree(bssp);
     return NULL;
 }
 
@@ -484,14 +527,17 @@ s_InitNewReaddbSeqSrc(BlastSeqSrc* retval, ReadDBFILE* rdfp)
     _BlastSeqSrcImpl_SetCopyFnPtr(retval, &s_ReaddbSeqSrcCopy);
     _BlastSeqSrcImpl_SetDataStructure(retval, (void*) rdfp);
     _BlastSeqSrcImpl_SetGetNumSeqs(retval, &s_ReaddbGetNumSeqs);
+    _BlastSeqSrcImpl_SetGetNumSeqsStats(retval, &s_ReaddbGetNumSeqsStats);
     _BlastSeqSrcImpl_SetGetMaxSeqLen(retval, &s_ReaddbGetMaxLength);
     _BlastSeqSrcImpl_SetGetAvgSeqLen(retval, &s_ReaddbGetAvgLength);
     _BlastSeqSrcImpl_SetGetTotLen(retval, &s_ReaddbGetTotLen);
+    _BlastSeqSrcImpl_SetGetTotLenStats(retval, &s_ReaddbGetTotLenStats);
     _BlastSeqSrcImpl_SetGetName(retval, &s_ReaddbGetName);
     _BlastSeqSrcImpl_SetGetIsProt(retval, &s_ReaddbGetIsProt);
     _BlastSeqSrcImpl_SetGetSequence(retval, &s_ReaddbGetSequence);
     _BlastSeqSrcImpl_SetGetSeqLen(retval, &s_ReaddbGetSeqLen);
     _BlastSeqSrcImpl_SetIterNext(retval, &s_ReaddbIteratorNext);
+    _BlastSeqSrcImpl_SetResetChunkIterator(retval, &s_ReaddbResetChunkIterator);
     _BlastSeqSrcImpl_SetReleaseSequence(retval, &s_ReaddbReleaseSequence);
 #ifdef KAPPA_PRINT_DIAGNOSTICS
     _BlastSeqSrcImpl_SetGetGis(retval, &s_ReaddbGetGis);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  1/1/90
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   misc portable routines for
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbitime.c,v $
+* Revision 6.3  2006/10/19 16:58:26  lavr
+* Cache clock rate instead of requesting it each time on OS_UNIX
+*
 * Revision 6.2  2001/01/19 20:26:12  kans
 * support for OS_UNIX_DARWIN (contributed by William Van Etten)
 *
@@ -189,6 +192,7 @@ struct _StopWatch {
 #elif defined(OS_UNIX)
     clock_t	start;
     clock_t	stop;
+    clock_t	rate;
 #else
     int         dummy;
 #endif
@@ -198,7 +202,12 @@ typedef struct _StopWatch Nlm_StopWatch;
 NLM_EXTERN Nlm_StopWatchPtr Nlm_StopWatchNew(void)
 {
 #if defined(WIN32) || defined(OS_UNIX)
-    return (Nlm_StopWatchPtr) Nlm_MemNew(sizeof(Nlm_StopWatch));
+    Nlm_StopWatchPtr pSW = (Nlm_StopWatchPtr)Nlm_MemNew(sizeof(Nlm_StopWatch));
+#  if defined(OS_UNIX)
+    if (pSW != NULL)
+      pSW->rate = sysconf(_SC_CLK_TCK);
+#  endif
+    return pSW;
 #else
     ErrPostEx(SEV_WARNING, 0, 0,
 	"StopWatch is not implemented for this platform");
@@ -274,7 +283,7 @@ NLM_EXTERN Nlm_FloatHi Nlm_GetElapsedTime(Nlm_StopWatchPtr pSW)
     return res = (Nlm_FloatHi)ft.dwHighDateTime/5000000L*0x80000000L +
 	(Nlm_FloatHi)ft.dwLowDateTime/10000000L;
 #elif defined(OS_UNIX)
-    res = ((Nlm_FloatHi)pSW->stop - pSW->start) / sysconf(_SC_CLK_TCK);
+    res = ((Nlm_FloatHi)pSW->stop - pSW->start) / pSW->rate;
 #else
     ErrPostEx(SEV_WARNING, 0, 0,
 	"StopWatch is not implemented for this platform");
@@ -292,6 +301,7 @@ struct _CPUTime {
 	FILETIME	usrtime;
 #elif defined(OS_UNIX)
     struct tms	times;
+    clock_t    rate;
 #else
     int         dummy;
 #endif
@@ -315,6 +325,7 @@ NLM_EXTERN Nlm_CPUTimePtr Nlm_CPUTimeMeasure(void)
                     );
 #elif defined(OS_UNIX)
     times(&pTime->times);
+    pTime->rate = sysconf(_SC_CLK_TCK);
 #else
     ErrPostEx(SEV_WARNING, 0, 0,
               "CPU time measuring is not implemented for this platform");
@@ -345,7 +356,7 @@ NLM_EXTERN Nlm_FloatHi Nlm_CPUTimeGetSys(Nlm_CPUTimePtr pTime)
   return (Nlm_FloatHi)pTime->systime.dwHighDateTime * 0x80000000L/5000000L
 		+ (Nlm_FloatHi)pTime->systime.dwLowDateTime / 10000000L;
 #elif defined(OS_UNIX)
-  return (Nlm_FloatHi)pTime->times.tms_stime / sysconf(_SC_CLK_TCK);
+  return (Nlm_FloatHi)pTime->times.tms_stime / pTime->rate;
 #else
   ErrPostEx(SEV_WARNING, 0, 0,
             "CPU time measuring is not implemented for this platform");
@@ -359,7 +370,7 @@ NLM_EXTERN Nlm_FloatHi Nlm_CPUTimeGetUser(Nlm_CPUTimePtr pTime)
   return (Nlm_FloatHi)pTime->usrtime.dwHighDateTime * 0x80000000L/5000000L
     + (Nlm_FloatHi)pTime->usrtime.dwLowDateTime / 10000000L;
 #elif defined(OS_UNIX)
-  return (Nlm_FloatHi)pTime->times.tms_utime / sysconf(_SC_CLK_TCK);
+  return (Nlm_FloatHi)pTime->times.tms_utime / pTime->rate;
 #else
   ErrPostEx(SEV_WARNING, 0, 0,
             "CPU time measuring is not implemented for this platform");

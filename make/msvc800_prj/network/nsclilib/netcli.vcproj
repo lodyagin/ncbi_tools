@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="netcli"
-	ProjectGUID="{EEE05A44-82AF-4CB2-95EE-A79411F3FA53}"
+	ProjectGUID="{327A10DD-2251-4191-8425-17E535235D30}"
 	>
 	<Platforms>
 		<Platform

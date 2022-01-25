@@ -29,13 +29,22 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.78 $
+* $Revision: 6.81 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.81  2007/05/08 20:03:22  kans
+* quiet theoretically uninitialized variables detected by CodeWarrior
+*
+* Revision 6.80  2007/02/06 19:46:45  bollin
+* Maximum number of objects is Uint4, not Int2
+*
+* Revision 6.79  2006/11/02 22:38:58  kans
+* ObjMgrReap collects candidates, sorts by touch time, goes through list to remove N squared behavior
+*
 * Revision 6.78  2006/08/25 16:12:33  bollin
 * added ObjMgrReportProc back in
 *
@@ -1632,7 +1641,7 @@ static Boolean NEAR ObjMgrFreeUserDataFunc (ObjMgrPtr omp, Uint2 entityID,
 	OMUserDataPtr omudp=NULL, prev, next;
 	ObjMgrDataPtr omdp;
 	Boolean got_one = FALSE, view_left;
-	ObjMgrTypePtr omtp;
+	ObjMgrTypePtr omtp = NULL;
 	Uint2 type, options;
 	Pointer ptr;
 	Boolean is_write_locked;
@@ -1868,7 +1877,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDeleteAllInRecord (
 )
 
 {
-  Int4                i, j, k, num;
+  Int4               i, j, k, num;
   ObjMgrDataPtr       omdp;
   ObjMgrDataPtr PNTR  omdpp;
   ObjMgrPtr           omp;
@@ -2328,8 +2337,8 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
 {
 	ObjMgrPtr omp;
 	Boolean more_to_go = TRUE;
-	Uint2 rettype;
-	VoidPtr retval;
+	Uint2 rettype = 0;
+	VoidPtr retval = NULL;
 
 	while (more_to_go)
         {
@@ -2376,7 +2385,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
 *****************************************************************************/
 static Boolean NEAR ObjMgrFreeCacheFunc (ObjMgrPtr omp, Uint2 type, Uint2Ptr rettype, VoidPtr PNTR retval)
 {
-    Int4 i, num;
+  Int4 i, num;
 	ObjMgrDataPtr PNTR omdpp, omdp;
 
 	if (omp->hold)   /* things are being held */
@@ -2738,12 +2747,31 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad (ObjMgrPtr omp, Pointer ptr)
 *   	Checks to see if memory needs to be cleared, and does it
 *
 *****************************************************************************/
+static int LIBCALLBACK SortDitchArrayByTouchTime (
+  VoidPtr vp1,
+  VoidPtr vp2
+)
+
+{
+  ObjMgrDataPtr  omdpp1, omdpp2;
+
+  if (vp1 == NULL || vp2 == NULL) return 0;
+  omdpp1 = *((ObjMgrDataPtr PNTR) vp1);
+  omdpp2 = *((ObjMgrDataPtr PNTR) vp2);
+  if (omdpp1 == NULL || omdpp2 == NULL) return 0;
+
+  if (omdpp1->touch > omdpp2->touch) return 1;
+  if (omdpp1->touch < omdpp2->touch) return -1;
+
+  return 0;
+}
+
 NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 {
 	Uint4 lowest;
 	Int4 num, j;
-	Uint2 tempcnt;
-	ObjMgrDataPtr tmp, ditch, PNTR omdpp;
+	Uint2 tempcnt, i, k;
+	ObjMgrDataPtr tmp, ditch, PNTR omdpp, PNTR ditcharray;
 	Boolean is_write_locked, did_one = FALSE;
 
 	if (omp->hold)      /* keep all tempload records around while hold is on */
@@ -2763,6 +2791,88 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 			tempcnt++;
 		}
 	}
+
+    if (tempcnt <= omp->maxtemp) return TRUE;
+
+    /* faster version */
+
+    ditcharray = (ObjMgrDataPtr PNTR) MemNew (sizeof (ObjMgrDataPtr) * (tempcnt + 1));
+    if (ditcharray != NULL) {
+
+        tempcnt = 0;
+		num = omp->currobj;
+		omdpp = omp->datalist;
+		for (j = 0; j < num; j++, omdpp++) {
+			tmp = *omdpp;
+			if ((tmp->tempload == TL_LOADED) && (! tmp->lockcnt)) {
+			    ditcharray [(int) tempcnt] = tmp;
+			    tempcnt++;
+			}
+		}
+
+        HeapSort (ditcharray, (size_t) tempcnt, sizeof (ObjMgrDataPtr), SortDitchArrayByTouchTime);
+
+        for (i = 0, k = tempcnt; i < tempcnt && k > omp->maxtemp; i++, k--) {
+            ditch = ditcharray [(int) i];
+            if (ditch == NULL) continue;
+
+		    omp->reaping = TRUE;
+		    ditch->tempload = TL_CACHED;
+		    ObjMgrSendMsgFunc(omp, ditch, OM_MSG_CACHED, ditch->EntityID, 0, 0, 0, 0, 0, NULL);
+		    omp->tempcnt--;
+		    is_write_locked = omp->is_write_locked;
+
+		    /* null out feature pointers in seqmgr feature indices via reap function */
+
+		    if (ditch->extradata != NULL && ditch->reapextra != NULL) {
+		    	ditch->reapextra ((Pointer) ditch);
+		    }
+
+		    if (ditch->choice != NULL) {
+		    	switch (ditch->choicetype) {
+			    	case OBJ_SEQENTRY:
+				    	did_one = TRUE;
+				    	ObjMgrUnlock();
+				    	SeqEntryFreeComponents(ditch->choice);
+					    break;
+				    default:
+				    	ErrPostEx(SEV_ERROR,0,0,"ObjMgrReap: ditching unknown type");
+				    	break;
+			    }
+		    } else {
+		    	switch (ditch->datatype) {
+			    	case OBJ_BIOSEQ:
+				    	did_one = TRUE;
+					    ObjMgrUnlock();
+					    BioseqFreeComponents((BioseqPtr)(ditch->dataptr));
+					    break;
+				    case OBJ_BIOSEQSET:
+				    	did_one = TRUE;
+				      	ObjMgrUnlock();
+			    		BioseqSetFreeComponents((BioseqSetPtr)(ditch->dataptr), FALSE);
+				    	break;
+				    default:
+				    	ErrPostEx(SEV_ERROR,0,0,"ObjMgrReap: ditching unknown type");
+				    	break;
+			    }
+		    }
+
+		    if (did_one) {
+		    	if (is_write_locked) {
+			    	omp = ObjMgrWriteLock();
+		    	} else {
+			    	omp = ObjMgrReadLock();
+			    }
+		    }
+		
+		    omp->reaping = FALSE;
+        }
+
+        MemFree (ditcharray);
+        return TRUE;
+    }
+
+    /* otherwise fall through to old less efficient code */
 
 	while (/* omp-> */ tempcnt > omp->maxtemp)   /* time to reap */
 	{
@@ -3050,7 +3160,7 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
 {
 	ObjMgrPtr omp;
 	ObjMgrDataPtr omdp;
-	Int4 i;
+	Uint4 i;
 	Char buf[80];
 	BioseqPtr bsp;
 	Boolean close_it = FALSE;
@@ -3064,7 +3174,7 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
 	omp = ObjMgrGet();
 	fprintf(fp, "\n%s currobj=%d tempcnt=%d\n", title, (int)(omp->currobj),
 		(int)(omp->tempcnt));
-	for (i = 0; i < (Int4)(omp->currobj); i++)
+	for (i = 0; i < omp->currobj; i++)
 	{
 		omdp = omp->datalist[i];
 		fprintf(fp, "[%d] [%d %d %ld] [%d %ld] %ld (%d) %uld\n", (int)i,
@@ -3423,7 +3533,7 @@ erret:
 NLM_EXTERN Int2 LIBCALL ObjMgrProcOpen (ObjMgrPtr omp, Uint2 outputtype)
 {
 	ObjMgrProcPtr currp=NULL;
-	Int2 retval;
+	Int2 retval = OM_MSG_RET_ERROR;
 	Boolean did_one = FALSE;
 	OMProcControl ompc;
 
@@ -4268,10 +4378,10 @@ erret:
 
 static Boolean NEAR CheckRedondantSelect (ObjMgrPtr omp)
 {
-        SelStructPtr ssp1, 
-        		ssp2,
+        SelStructPtr ssp1 = NULL, 
+        		ssp2 = NULL,
         		next1,
-        		next2, pre2;
+        		next2 = NULL, pre2 = NULL;
         SeqLocPtr    tmp;
         Boolean      retval = FALSE;
         Int2         res=0;
@@ -4929,8 +5039,8 @@ static void ReportOnEntity (ObjMgrDataPtr omdp, ObjMgrPtr omp, Boolean selected,
 NLM_EXTERN void LIBCALL ObjMgrReportProc (FILE *fp)
 
 {
-  Int2           j;
-  Int2           num;
+  Uint4          j;
+  Uint4          num;
   ObjMgrPtr      omp;
   ObjMgrDataPtr  omdp;
   ObjMgrDataPtr  PNTR omdpp;
@@ -4968,8 +5078,8 @@ NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename)
 
 {
   FILE           *fp;
-  Int2           j;
-  Int2           num;
+  Uint4          j;
+  Uint4          num;
   ObjMgrPtr      omp;
   ObjMgrDataPtr  omdp;
   ObjMgrDataPtr  PNTR omdpp;

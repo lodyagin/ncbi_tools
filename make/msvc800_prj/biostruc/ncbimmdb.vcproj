@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ncbimmdb"
-	ProjectGUID="{C9A5BE8D-ADBC-4031-8DEF-D26EBD4982C4}"
+	ProjectGUID="{98C1A680-89B6-4911-8C36-42D14F43B868}"
 	>
 	<Platforms>
 		<Platform

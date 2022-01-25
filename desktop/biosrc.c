@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.76 $
+* $Revision: 6.85 $
 *
 * File Description: 
 *
@@ -47,87 +47,6 @@
 #include <gather.h>
 #include <subutil.h>
 #include <explore.h>
-
-extern EnumFieldAssoc  orgmod_subtype_alist [];
-ENUM_ALIST(orgmod_subtype_alist)
-  {" ",                 0},
-  {"Acronym",          19},
-  {"Anamorph",         29},
-  {"Authority",        24},
-  {"Biotype",          14},
-  {"Biovar",           13},
-  {"Breed",            31},
-  {"Chemovar",         12},
-  {"Common",           18},
-  {"Cultivar",         10},
-  {"Ecotype",          27},
-  {"Forma",            25},
-  {"Forma-specialis",  26},
-  {"Group",            15},
-  {"Isolate",          17},
-  {"Old Lineage",     253},
-  {"Old Name",        254},
-  {"Pathovar",         11},
-  {"Serogroup",         8},
-  {"Serotype",          7},
-  {"Serovar",           9},
-  {"Specific-host",    21},
-  {"Specimen-voucher", 23},
-  {"Strain",            2},
-  {"Subgroup",         16},
-  {"Sub-species",      22},
-  {"Substrain",         3},
-  {"Subtype",           5},
-  {"Synonym",          28},
-  {"Teleomorph",       30},
-  {"Type",              4},
-  {"Variety",           6},
-END_ENUM_ALIST
-
-extern EnumFieldAssoc  subsource_subtype_alist [];
-ENUM_ALIST(subsource_subtype_alist)
-  {" ",                      0},
-  {"Cell-line",              8},
-  {"Cell-type",              9},
-  {"Chromosome",             1},
-  {"Clone",                  3},
-  {"Clone-lib",             11},
-  {"Collected-by",          31},
-  {"Collection-date",       30},
-  {"Country",               23},
-  {"Dev-stage",             12},
-  {"Endogenous-virus-name", 25},
-  {"Environmental-sample",  27},
-  {"Frequency",             13},
-  {"Fwd-PCR-primer-name",   35},
-  {"Fwd-PCR-primer-seq",    33},
-  {"Genotype",               6},
-  {"Germline",              14},
-  {"Haplotype",              5},
-  {"Identified-by",         32},
-    /*
-  {"Ins-seq-name",          21},
-    */
-  {"Isolation-source",      28},
-  {"Lab-host",              16},
-  {"Lat-Lon",               29},
-  {"Map",                    2},
-  {"Plasmid-name",          19},
-  {"Plastid-name",          22},
-  {"Pop-variant",           17},
-  {"Rearranged",            15},
-  {"Rev-PCR-primer-name",   36},
-  {"Rev-PCR-primer-seq",    34},
-  {"Segment",               24},
-  {"Sex",                    7},
-  {"Subclone",               4},
-  {"Tissue-lib",            18},
-  {"Tissue-type",           10},
-  {"Transgenic",            26},
-    /*
-  {"Transposon-name",       20},
-    */
-END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_genome_alist)
   {" ",                    0},
@@ -227,11 +146,6 @@ typedef struct genbiopage {
   PopuP           simplecode;
   PopuP           gcode;
   PopuP           mgcode;
-  DialoG          orgmod;
-  TexT            orgcomment;
-  DialoG          subsource;
-  TexT            subcomment;
-  ButtoN          add_type_strain_to_orgcomment;
   TexT            lineage;
   TexT            gbDiv;
   DialoG          db;
@@ -243,11 +157,17 @@ typedef struct genbiopage {
   PrompT          gbacr;
   PrompT          gbana;
   PrompT          gbsyn;
+
+  DialoG          subsrc_val_dlg;
+  DialoG          orgmod_val_dlg;
+
   CharPtr         origTaxName;
   Boolean         stripOldName;
   EnumFieldAssoc  PNTR genomeAlist;
   Uint1           orgname_choice;
   Pointer         orgname_data;
+  EnumFieldAssocPtr orgmod_alists [2];
+  EnumFieldAssocPtr subsource_alists [2];
 } GenBioPage, PNTR GenBioPagePtr;
 
 typedef struct genbioform {
@@ -1029,76 +949,28 @@ static CharPtr MergeValNodeStrings (ValNodePtr list)
   return ptr;
 }
 
-static void AddTypeStrainButtonProc (ButtoN b)
-{
-  GenBioPagePtr  gbp;
-  CharPtr        old_orgcomment;
-  Int4           old_orgcomment_len;
-  CharPtr        org_name;
-  Int4           org_name_len;
-  const CharPtr  ts = "type strain of ";
-  const CharPtr  sep = "; ";
-  CharPtr        new_orgcomment;
-
-  gbp = GetObjectExtra(b);
-  if (gbp == NULL) return;
-  old_orgcomment_len = TextLength (gbp->orgcomment) + 1;
-  old_orgcomment = MemNew (old_orgcomment_len + 1);
-  if (old_orgcomment == NULL) return;
-  org_name_len = TextLength (gbp->taxName) + 1;
-  org_name = MemNew (org_name_len + 1);
-  if (org_name == NULL) 
-  {
-    MemFree (old_orgcomment);
-    return;
-  }
-  new_orgcomment = MemNew (old_orgcomment_len
-			+ StringLen (sep)
-			+ StringLen (ts)
-			+ org_name_len
-			+ 1);
-  if (new_orgcomment == NULL)
-  {
-    MemFree (old_orgcomment);
-    MemFree (org_name);
-  }
-
-  GetTitle (gbp->orgcomment, old_orgcomment, old_orgcomment_len);
-  TrimSpacesAroundString (old_orgcomment);
-  GetTitle (gbp->taxName, org_name, org_name_len);
-  TrimSpacesAroundString (org_name);
-  if (old_orgcomment[0] != 0)
-  {
-    StringCpy(new_orgcomment, old_orgcomment);
-    StringCat(new_orgcomment, sep);
-  }
-  else
-  {
-    new_orgcomment[0] = 0;
-  }
-    
-  StringCat (new_orgcomment, ts);
-  StringCat (new_orgcomment, org_name);
-  SetTitle (gbp->orgcomment, new_orgcomment);
-  MemFree (org_name);
-  MemFree (old_orgcomment);
-  MemFree (new_orgcomment);
-  Disable (b);
-}
 
 static Char useGenomicText [] = "\
 (Use 'Genomic' for a sequence encoded by a nuclear gene.)\n";
 
-static Pointer MakeOrgNameDataCopy (OrgNamePtr onp)
+static Pointer MakeOrgNameDataCopy (OrgNamePtr onp, Uint1Ptr orgname_choiceP)
 {
   OrgNamePtr onp_copy;
   Pointer    retval;
+
+  if (orgname_choiceP != NULL) {
+    *orgname_choiceP = 0;
+  }
 
   if (onp == NULL) return NULL;
 
   onp_copy = (OrgNamePtr) AsnIoMemCopy (onp, (AsnReadFunc) OrgNameAsnRead, (AsnWriteFunc) OrgNameAsnWrite);
   if (onp_copy == NULL) return NULL;
+
   retval = onp_copy->data;
+  if (orgname_choiceP != NULL) {
+    *orgname_choiceP = onp_copy->choice;
+  }
   onp_copy->data = NULL;
   onp_copy->choice = 0;
   OrgNameFree (onp_copy);
@@ -1123,18 +995,16 @@ static void FreeGenBioOrgNameData (GenBioPagePtr gbp)
   }
 }
 
+
 static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
 
 {
   BioSourcePtr   biop;
   GenBioPagePtr  gbp;
   UIEnum         genome;
-  ValNodePtr     head;
   OrgModPtr      mod;
   OrgNamePtr     onp;
   OrgRefPtr      orp;
-  SubSourcePtr   ssp;
-  CharPtr        str;
   WindoW         tempPort;
 
   gbp = (GenBioPagePtr) GetObjectExtra (d);
@@ -1159,17 +1029,15 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     SafeSetValue (gbp->gcode, 1);
     SafeSetValue (gbp->mgcode, 1);
     SafeSetValue (gbp->simplecode, 1);
-    SafeSetTitle (gbp->orgcomment, "");
     SafeSetTitle (gbp->gbacr, "");
     SafeSetTitle (gbp->gbana, "");
     SafeSetTitle (gbp->gbsyn, "");
-    SafeSetTitle (gbp->subcomment, "");
     SafeSetTitle (gbp->lineage, "");
     PointerToDialog (gbp->db, NULL);
     PointerToDialog (gbp->syn, NULL);
     PointerToDialog (gbp->mod, NULL);
-    PointerToDialog (gbp->orgmod, NULL);
-    PointerToDialog (gbp->subsource, NULL); 
+    PointerToDialog (gbp->subsrc_val_dlg, NULL);
+    PointerToDialog (gbp->orgmod_val_dlg, NULL);
     
     if (biop != NULL) {
       SetEnumPopup (gbp->genome, gbp->genomeAlist, (UIEnum) biop->genome);
@@ -1189,13 +1057,12 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
         onp = orp->orgname;
         if (onp != NULL) {
           /* store orgname data for unaltered retrieval later */
-          gbp->orgname_choice = onp->choice;
-          gbp->orgname_data = MakeOrgNameDataCopy(onp);
+          gbp->orgname_choice = 0;
+          gbp->orgname_data = MakeOrgNameDataCopy(onp, &gbp->orgname_choice);
 
           SafeSetTitle (gbp->lineage, onp->lineage);
-          PointerToDialog (gbp->orgmod, onp->mod);
+          PointerToDialog (gbp->orgmod_val_dlg, onp->mod);
           mod = onp->mod;
-          head = NULL;
           while (mod != NULL) {
             switch (mod->subtype) {
               case 32 :
@@ -1207,46 +1074,16 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
               case 34 :
                 SetTitle (gbp->gbsyn, mod->subname);
                 break;
-              case 255 :
-                ValNodeAddStr (&head, 0, mod->subname);
-                /*
-                SetTitle (gbp->orgcomment, mod->subname);
-                */
                 break;
               default :
                 break;
             }
             mod = mod->next;
           }
-          if (head != NULL) {
-            str = MergeValNodeStrings (head);
-            SetTitle (gbp->orgcomment, str);
-            if ( StringStr (str, "type strain of ")) {
-              Disable (gbp->add_type_strain_to_orgcomment);
-            }
-            MemFree (str);
-          }
-          ValNodeFree (head);
         }
       }
-      PointerToDialog (gbp->subsource, biop->subtype); 
-      ssp = biop->subtype;
-      head = NULL;
-      while (ssp != NULL) {
-        if (ssp->subtype == 255) {
-          ValNodeAddStr (&head, 0, ssp->name);
-          /*
-          SetTitle (gbp->subcomment, ssp->name);
-          */
-        }
-        ssp = ssp->next;
-      }
-      if (head != NULL) {
-        str = MergeValNodeStrings (head);
-        SetTitle (gbp->subcomment, str);
-        MemFree (str);
-      }
-      ValNodeFree (head);
+
+      PointerToDialog (gbp->subsrc_val_dlg, biop->subtype);
     }
     if (orp != NULL) {
       if (! TextHasNoText (gbp->taxName)) {
@@ -1314,7 +1151,6 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
   OrgRefPtr      orp;
   OrgModPtr      PNTR prevmod;
   CharPtr        ptr;
-  SubSourcePtr   ssp;
   Char           str [PATH_MAX];
   Int4           taxID;
   OrgModPtr      tmpmod;
@@ -1439,7 +1275,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           } else if (! TextHasNoText (gbp->lineage)) {
             onp->lineage = SaveStringFromTextAndStripNewlines (gbp->lineage);
           }
-          onp->mod = DialogToPointer (gbp->orgmod);
+          onp->mod = DialogToPointer (gbp->orgmod_val_dlg);
           GetTitle (gbp->gbacr, buf, sizeof (buf) - 1);
           if (! StringHasNoText (buf)) {
             mod = OrgModNew ();
@@ -1491,22 +1327,6 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
               mod->subname = StringSave (buf);
             }
           }
-          if (! TextHasNoText (gbp->orgcomment)) {
-            mod = OrgModNew ();
-            if (onp->mod == NULL) {
-              onp->mod = mod;
-            } else {
-              tmpmod = onp->mod;
-              while (tmpmod->next != NULL) {
-                tmpmod = tmpmod->next;
-              }
-              tmpmod->next = mod;
-            }
-            if (mod != NULL) {
-              mod->subtype = 255;
-              mod->subname = SaveStringFromTextAndStripNewlines (gbp->orgcomment);
-            }
-          }
           if (gbp->stripOldName && onp->mod != NULL) {
             prevmod = (OrgModPtr PNTR) &(onp->mod);
             tmpmod = onp->mod;
@@ -1528,23 +1348,9 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           }
         }
       }
-      biop->subtype = DialogToPointer (gbp->subsource); 
-      if (! TextHasNoText (gbp->subcomment)) {
-        ssp = SubSourceNew ();
-        if (biop->subtype == NULL) {
-          biop->subtype = ssp;
-        } else {
-          tmpssp = biop->subtype;
-          while (tmpssp->next != NULL) {
-            tmpssp = tmpssp->next;
-          }
-          tmpssp->next = ssp;
-        }
-        if (ssp != NULL) {
-          ssp->subtype = 255;
-          ssp->name = SaveStringFromTextAndStripNewlines (gbp->subcomment);
-        }
-      }
+
+      biop->subtype = DialogToPointer (gbp->subsrc_val_dlg);
+
       RemoveTextFromTextFreeSubSourceModifiers (biop, NULL);     
 
       /* if we find plasmid-name on a location that cannot have
@@ -2001,10 +1807,12 @@ extern ModTextFixPtr ModTextFixNew (void)
   tfp->remove_all_transgenic = FALSE;
   tfp->remove_all_environmental = FALSE;
   tfp->remove_all_rearranged = FALSE;
+  tfp->remove_all_metagenomic = FALSE;
   tfp->move_all_germline = FALSE;
   tfp->move_all_transgenic = FALSE;
   tfp->move_all_environmental = FALSE;
   tfp->move_all_rearranged = FALSE;
+  tfp->move_all_metagenomic = FALSE;
   return tfp;
 }
 
@@ -2076,6 +1884,22 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   	  	return;
   	  }
   	  break;
+  	case SUBSRC_metagenomic:
+  	  if (tfp->remove_all_metagenomic)
+  	  {
+  	  	tfp->remove_this = TRUE;
+  	  	tfp->move_this = FALSE;
+  	  	return;
+  	  }
+  	  else if (tfp->move_all_metagenomic)
+  	  {
+  	  	tfp->move_this = TRUE;
+  	  	tfp->remove_this = FALSE;
+  	  	return;
+  	  }
+  	  break;
+  	default:
+  	  break;
   }
 
   fd.w = ModalWindow(-20, -13, -10, -10, NULL);
@@ -2097,6 +1921,9 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   	  break;
   	case SUBSRC_environmental_sample:
   	  sprintf (prompt_str, prompt_fmt, txt, "an environmental sample");
+  	  break;
+  	case SUBSRC_metagenomic:
+  	  sprintf (prompt_str, prompt_fmt, txt, "a metagenomic");
   	  break;
   }
   
@@ -2149,6 +1976,10 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   	  	  tfp->remove_all_environmental = TRUE;
   	  	  tfp->move_all_environmental = FALSE;
   	  	  break;
+  	  	case SUBSRC_metagenomic:
+  	  	  tfp->remove_all_metagenomic = TRUE;
+  	  	  tfp->move_all_metagenomic = FALSE;
+  	  	  break;
   	  }
   	}
   }
@@ -2174,6 +2005,10 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   	  	case SUBSRC_environmental_sample:
   	  	  tfp->remove_all_environmental = FALSE;
   	  	  tfp->move_all_environmental = TRUE;
+  	  	  break;
+  	  	case SUBSRC_metagenomic:
+  	  	  tfp->remove_all_metagenomic = FALSE;
+  	  	  tfp->move_all_metagenomic = TRUE;
   	  	  break;
   	  }
   	}
@@ -2207,7 +2042,8 @@ extern void RemoveTextFromTextFreeSubSourceModifiers (BioSourcePtr biop, Pointer
   	if ((ssp->subtype == SUBSRC_germline
   	    || ssp->subtype == SUBSRC_transgenic
   	    || ssp->subtype == SUBSRC_rearranged
-  	    || ssp->subtype == SUBSRC_environmental_sample)
+  	    || ssp->subtype == SUBSRC_environmental_sample
+  	    || ssp->subtype == SUBSRC_metagenomic)
   	    && ! StringHasNoText (ssp->name))
   	{
  	  GetModifierTextFix (tfp, ssp->subtype, ssp->name);
@@ -2308,7 +2144,8 @@ static Pointer SubsourceDialogToSubSourcePtr (DialoG d)
           if ((val == SUBSRC_germline ||
                val == SUBSRC_rearranged ||
                val == SUBSRC_transgenic ||
-               val == SUBSRC_environmental_sample) &&
+               val == SUBSRC_environmental_sample ||
+               val == SUBSRC_metagenomic) &&
               StringHasNoText (tmp)) {
             MemFree (tmp);
             tmp = StringSave ("");
@@ -2317,7 +2154,8 @@ static Pointer SubsourceDialogToSubSourcePtr (DialoG d)
               val == SUBSRC_germline ||
               val == SUBSRC_rearranged ||
               val == SUBSRC_transgenic ||
-              val == SUBSRC_environmental_sample) {
+              val == SUBSRC_environmental_sample ||
+              val == SUBSRC_metagenomic) {
             ssp = SubSourceNew ();
             if (ssplast == NULL) {
               head = ssp;
@@ -2338,14 +2176,6 @@ static Pointer SubsourceDialogToSubSourcePtr (DialoG d)
   }
   return (Pointer) head;
 }
-
-EnumFieldAssocPtr orgmod_alists [] = {
-  orgmod_subtype_alist, NULL
-};
-
-EnumFieldAssocPtr subsource_alists [] = {
-  subsource_subtype_alist, NULL
-};
 
 Uint2 orgmod_widths [] = {
   0, 25
@@ -2383,7 +2213,11 @@ static CharPtr modTabsUns [] = {
   "Source", "Organism", "GenBank", "Unstructured", NULL
 };
 
-static CharPtr miscTabs [] = {
+static CharPtr miscTabs1 [] = {
+  "Cross-Refs", NULL
+};
+
+static CharPtr miscTabs2 [] = {
   "Synonyms", "Cross-Refs", NULL
 };
 
@@ -2453,6 +2287,26 @@ static void LookupTheTaxonomyProc (ButtoN b)
   }
 }
 
+static EnumFieldAssocPtr EnumListFromQualNameAssoc (Nlm_QualNameAssocPtr qp)
+{
+  EnumFieldAssocPtr eap;
+  /* start num_qual at one to count terminator */
+  Int4              i, num_qual = 1;
+
+  for (i = 0; qp[i].name != NULL; i++) {
+    num_qual++;
+  }
+
+  eap = (EnumFieldAssocPtr) MemNew (sizeof (EnumFieldAssoc) * num_qual);
+  for (i = 0; qp[i].name != NULL; i++) {
+    eap[i].name = qp[i].name;
+    eap[i].value = qp[i].value;
+  }
+  eap[i].name = NULL;
+  eap[i].value = 0;
+  return eap;
+}
+
 static void CleanupBioSourceDialog (GraphiC g, VoidPtr data)
 
 {
@@ -2461,10 +2315,13 @@ static void CleanupBioSourceDialog (GraphiC g, VoidPtr data)
   gbp = (GenBioPagePtr) data;
   if (gbp != NULL) {
     gbp->origTaxName = MemFree (gbp->origTaxName);
+    gbp->orgmod_alists[0] = MemFree (gbp->orgmod_alists[0]);
+    gbp->subsource_alists[0] = MemFree (gbp->subsource_alists[0]);
     FreeGenBioOrgNameData (gbp);
   }
   StdCleanupExtraProc (g, data);
 }
+
 
 static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
                                      BioSourcePtr biop, GenBioFormPtr gfp,
@@ -2473,14 +2330,14 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
 {
   ButtoN         b;
   GrouP          c;
-  GrouP          f, f1, f2, f3, f4;
+  GrouP          f, f1, f2, f3;
   GrouP          g;
   GenBioPagePtr  gbp;
+  Boolean        hasSynonyms;
   Int2           height;
   Char           just;
   GrouP          k;
   GrouP          m;
-  Int2           max;
   OrgRefPtr      orp;
   GrouP          p;
   PrompT         ppt;
@@ -2489,9 +2346,12 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
   GrouP          s;
   Boolean        showUnstructMods;
   GrouP          t;
+  CharPtr PNTR   tabs = NULL;
   DialoG         tbs;
-  GrouP          x;
   PrompT         y;
+  Int2           z;
+  Boolean        indexerVersion;
+  Boolean        has_discontinued, has_discouraged;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -2507,6 +2367,15 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     gbp->testdialog = TestGenBioDialog;
     gbp->orgname_choice = 0;
     gbp->orgname_data = NULL;
+
+    /* set up subsource and orgmod alists */
+    indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+    BioSourceHasOldOrgModQualifiers (biop, &has_discouraged, &has_discontinued);
+    gbp->orgmod_alists[0] = GetModifiersEnum (FALSE, TRUE, has_discouraged || indexerVersion, has_discontinued);
+    gbp->orgmod_alists[1] = NULL;
+    BioSourceHasOldSubSourceQualifiers (biop, &has_discouraged, &has_discontinued);
+    gbp->subsource_alists[0] = GetModifiersEnum (TRUE, FALSE, has_discouraged || indexerVersion, has_discontinued);
+    gbp->subsource_alists[1] = NULL;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -2638,10 +2507,14 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     SetGroupSpacing (pages [1], 10, 10);
 
     showUnstructMods = FALSE;
+    hasSynonyms = FALSE;
     if (biop != NULL) {
       orp = biop->org;
       if (orp != NULL && orp->mod != NULL) {
         showUnstructMods = TRUE;
+      }
+      if (orp != NULL && orp->syn != NULL) {
+        hasSynonyms = TRUE;
       }
     }
 
@@ -2661,37 +2534,15 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
 
     g = HiddenGroup (gbp->modGrp [0], -1, 0, NULL);
     SetGroupSpacing (g, 3, 10);
-    gbp->subsource = CreateTagListDialog (g, 3, 2, STD_TAG_SPACING, subsource_types,
-                                          subsource_widths, subsource_alists,
-                                          SubSourcePtrToSubsourceDialog,
-                                          SubsourceDialogToSubSourcePtr);
-    f2 = HiddenGroup (g, 2, 0, NULL);
-    SelectFont (programFont);
-    max = MaxStringWidths (subsource_extra_prompts) + 2;
-    x = MultiLinePrompt (f2, "Additional Source Information", max, programFont);
-    gbp->subcomment = ScrollText (f2, 20, 3, programFont, TRUE, NULL);
-    AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) gbp->subcomment, NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->subsource, (HANDLE) f2, NULL);
+    gbp->subsrc_val_dlg = CreateSubSourceDialog (g, gbp->subsource_alists[0]);
 
     gbp->modGrp [1] = HiddenGroup (k, -1, 0, NULL);
     SetGroupSpacing (gbp->modGrp [1], 10, 10);
 
     g = HiddenGroup (gbp->modGrp [1], -1, 0, NULL);
     SetGroupSpacing (g, 3, 10);
-    gbp->orgmod = CreateTagListDialog (g, 3, 2, STD_TAG_SPACING, orgmod_types,
-                                       orgmod_widths, orgmod_alists,
-                                       OrgModPtrToOrgmodDialog,
-                                       OrgmodDialogToOrgModPtr);
-    f1 = HiddenGroup (g, 2, 0, NULL);
-    SelectFont (programFont);
-    max = MaxStringWidths (orgmod_extra_prompts) + 2;
-    x = MultiLinePrompt (f1, "Additional Organism Information", max, programFont);
-    gbp->orgcomment = ScrollText (f1, 20, 3, programFont, TRUE, NULL);
-    AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) gbp->orgcomment, NULL);
-    f4 = HiddenGroup (g, 1, 0, NULL);
-    gbp->add_type_strain_to_orgcomment = PushButton (f4, "Add type strain to comment", AddTypeStrainButtonProc);
-    SetObjectExtra (gbp->add_type_strain_to_orgcomment, gbp, NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->orgmod, (HANDLE) f1, (HANDLE) f4, NULL);
+
+    gbp->orgmod_val_dlg = CreateOrgModDialog (g, gbp->orgmod_alists[0], gbp->taxName);
 
     Hide (gbp->modGrp [1]);
 
@@ -2732,22 +2583,35 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     pages [2] = HiddenGroup (m, -1, 0, NULL);
     SetGroupSpacing (pages [2], 10, 10);
 
-    tbs = CreateFolderTabs (pages [2], miscTabs, 0, 0, 0,
+    tabs = miscTabs1;
+    if (hasSynonyms) {
+      tabs = miscTabs2;
+    }
+    tbs = CreateFolderTabs (pages [2], tabs, 0, 0, 0,
                             PROGRAM_FOLDER_TAB,
                             ChangeMiscSubPage, (Pointer) gbp);
     k = HiddenGroup (pages [2], 0, 0, NULL);
 
-    gbp->miscGrp [0] = HiddenGroup (k, -1, 0, NULL);
-    SetGroupSpacing (gbp->miscGrp [0], 10, 10);
+    for (z = 0; z < 2; z++) {
+      gbp->miscGrp [z] = NULL;
+    }
+    z = 0;
 
-    f1 = HiddenGroup (gbp->miscGrp [0], 0, 2, NULL);
-    StaticPrompt (f1, "Synonyms", 0, 0, programFont, 'c');
-    gbp->syn = CreateVisibleStringDialog (f1, 3, -1, 15);
+    if (hasSynonyms) {
+      gbp->miscGrp [z] = HiddenGroup (k, -1, 0, NULL);
+      SetGroupSpacing (gbp->miscGrp [z], 10, 10);
 
-    gbp->miscGrp [1] = HiddenGroup (k, -1, 0, NULL);
-    SetGroupSpacing (gbp->miscGrp [1], 10, 10);
+      f1 = HiddenGroup (gbp->miscGrp [z], 0, 2, NULL);
+      StaticPrompt (f1, "Synonyms", 0, 0, programFont, 'c');
+      gbp->syn = CreateVisibleStringDialog (f1, 3, -1, 15);
 
-    f2 = HiddenGroup (gbp->miscGrp [1], -1, 0, NULL);
+      z++;
+    }
+
+    gbp->miscGrp [z] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (gbp->miscGrp [z], 10, 10);
+
+    f2 = HiddenGroup (gbp->miscGrp [z], -1, 0, NULL);
     SetGroupSpacing (f2, 10, 10);
     if (GetAppProperty ("ReadOnlyDbTags") == NULL) {
       just = 'c';
@@ -3004,12 +2868,24 @@ static Boolean OkayToAcceptBioSource (ButtoN b)
   GenBioFormPtr  gfp;
   OrgModPtr      mod;
   CharPtr        str;
+  ValNodePtr     err_list;
 
   gfp = (GenBioFormPtr) GetObjectExtra (b);
   if (gfp != NULL) {
     gbp = (GenBioPagePtr) GetObjectExtra (gfp->data);
     if (gbp != NULL) {
-      mod = DialogToPointer (gbp->orgmod);
+      err_list = TestDialog (gbp->orgmod_val_dlg);
+      ValNodeLink (&err_list, TestDialog (gbp->subsrc_val_dlg));
+      if (err_list != NULL)
+      {
+        if (ANS_CANCEL == Message (MSG_OKC, "You have selected values for modifiers, but not types - values without types will be discarded.  Continue?"))
+        {
+          err_list = ValNodeFreeData (err_list);
+          return FALSE;
+        }
+        err_list = ValNodeFreeData (err_list);
+      }
+      mod = DialogToPointer (gbp->orgmod_val_dlg);
       if (mod == NULL) return TRUE;
       abort = TRUE;
       for (curr = mod; curr != NULL; curr = curr->next) {
@@ -3592,3 +3468,123 @@ extern Int2 LIBCALLBACK BioSourceGenFunc (Pointer data)
   }
   return OM_MSG_RET_DONE;
 }
+
+
+static Int4 ChooseNext (Nlm_QualNameAssocPtr PNTR choice_list, Int4 num_in_list)
+{
+  Int4 best_choice = -1, i;
+
+  for (i = 0; i < num_in_list; i++) {
+    if (choice_list[i] == NULL || choice_list[i]->name == NULL) {
+      /* do nothing */
+    } else if (best_choice == -1) {
+      /* no previous choice */
+      best_choice = i;
+    } else if (StringCmp (choice_list[i]->name, choice_list[best_choice]->name) <= 0) {
+      best_choice = i;
+    }
+  }
+  return best_choice;
+}
+
+extern EnumFieldAssocPtr GetModifiersEnum (Boolean get_subsource, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued)
+{
+  Int4 best_choice, k;
+  EnumFieldAssocPtr eap;
+  CharPtr newname;
+  Uint2   newval;
+  Boolean inserted_note = FALSE;
+  Int4    num_eap = 2; /* count terminators */
+  Nlm_QualNameAssocPtr choice_list[6];
+  Int4                 num_choices = 0;
+  
+
+  /* initialize choice_list */
+  for (k = 0; k < 6; k++) {
+    choice_list[k] = NULL;
+  }
+
+  /* need size of both because despite the fact that we need only one blank and one terminator, we are adding in two notes */
+  if (get_orgmod) {
+    for (k = 0; current_orgmod_subtype_alist[k].name != NULL; k++) { 
+      num_eap++;
+    }
+    choice_list[num_choices ++] = current_orgmod_subtype_alist + 1;
+  }
+  if (get_subsource) {
+    for (k = 0; current_subsource_subtype_alist[k].name != NULL; k++) { 
+      num_eap++;
+    }
+    choice_list[num_choices ++] = current_subsource_subtype_alist + 1;
+  }
+
+
+  if (get_discouraged) {
+    if (get_orgmod) {
+      for (k = 0; discouraged_orgmod_subtype_alist[k].name != NULL; k++) {
+        num_eap++;
+      }
+      choice_list[num_choices++] = discouraged_orgmod_subtype_alist;
+    }
+
+    if (get_subsource) {
+      for (k = 0; discouraged_subsource_subtype_alist[k].name != NULL; k++) {
+        num_eap++;
+      }   
+      choice_list[num_choices++] = discouraged_subsource_subtype_alist;
+    }
+  }
+
+  if (get_discontinued) {
+    if (get_orgmod) {
+      for (k = 0; discontinued_orgmod_subtype_alist[k].name != NULL; k++) {
+        num_eap++;
+      }
+      choice_list[num_choices++] = discontinued_orgmod_subtype_alist;
+    }
+    if (get_subsource) {
+      for (k = 0; discontinued_subsource_subtype_alist[k].name != NULL; k++) {
+        num_eap++;
+      }
+      choice_list[num_choices++] = discontinued_subsource_subtype_alist;
+    }
+  }
+
+  eap = (EnumFieldAssocPtr) MemNew (sizeof (EnumFieldAssoc) * num_eap);
+
+  eap[0].name = " ";
+  eap[0].value = 0;
+  k = 1;
+  while ((best_choice = ChooseNext(choice_list, num_choices)) != -1) {
+    newname = choice_list[best_choice]->name;
+    newval = choice_list[best_choice]->value;
+    if (get_subsource && get_orgmod && (best_choice == 1 || best_choice == 3 || best_choice == 5)) {
+      /* add 1000 to let calling function distinguish between subsource and orgmod */
+      newval += 1000;
+    }
+    choice_list[best_choice]++;
+    /* only add in notes if we are getting both subsource and orgmod */
+    if (!inserted_note && get_subsource && get_orgmod && StringCmp (newname, "Note") > 0) {
+      eap[k].name = "Note -- OrgMod";
+      eap[k].value = ORGMOD_other;
+      k++;
+      eap[k].name = "Note -- SubSource";
+      eap[k].value = SUBSRC_other + 1000;
+      k++;
+      inserted_note = TRUE;
+    }
+    eap[k].name = newname;
+    eap[k].value = newval;
+    k++;
+  }
+  eap[k].name = NULL;
+  eap[k].value = 0;
+  return eap;
+}
+
+extern EnumFieldAssocPtr GetSubSourceAndOrgModEnum (Boolean get_discouraged, Boolean get_discontinued)
+{
+  return GetModifiersEnum (TRUE, TRUE, get_discouraged, get_discontinued);
+}
+
+

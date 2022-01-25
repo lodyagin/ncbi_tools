@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.27 $
+* $Revision: 6.36 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -37,112 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* $Log: valid.h,v $
-* Revision 6.27  2006/10/11 21:41:27  kans
-* added vsp->validateExons, exclude ends based on overlapping CDS
-*
-* Revision 6.26  2006/10/10 19:06:42  kans
-* validate modified base indicators in PCR_primers qualifier
-*
-* Revision 6.25  2006/06/15 18:28:18  kans
-* added far_fetch_failure field
-*
-* Revision 6.24  2006/06/07 19:56:34  kans
-* added ECnumberNotInList, persistent EC_number finite state machines stored by AppProperty
-*
-* Revision 6.23  2006/04/21 17:59:18  kans
-* added ignoreExceptions flag to vsp - for MrnaTransCheck and CdTransCheck
-*
-* Revision 6.22  2006/02/16 19:34:47  kans
-* use vsp->is_smupd_in_sep to suppress ERR_SEQ_FEAT_FeatureRefersToAccession
-*
-* Revision 6.21  2006/01/26 19:54:26  kans
-* added ERR_SEQ_FEAT_FeatureRefersToAccession to look for inconsistent use of gi and accession (with or without version) for sfp->location or sfp->product references in a single blob
-*
-* Revision 6.20  2005/06/08 15:26:06  kans
-* added is_htg_in_sep and is_refseq_in_sep flags to vsp to avoid repetitive checks
-*
-* Revision 6.19  2004/12/23 20:50:51  kans
-* added context field to new callback
-*
-* Revision 6.18  2004/12/22 21:56:40  kans
-* CustValErr supports ValidErrorFunc callback for finer error reporting
-*
-* Revision 6.17  2004/12/20 22:57:16  kans
-* added verbosityLevel argument - to be used for finer control over error reporting by asn2val
-*
-* Revision 6.16  2004/10/04 15:50:22  kans
-* added vsp->justShowAccession for extremely terse output
-*
-* Revision 6.15  2004/09/10 17:52:05  kans
-* changed ValidateLimit enum to Int2 defines
-*
-* Revision 6.14  2004/09/10 15:31:43  kans
-* added farFetchMRNAproducts, locusTagGeneralMatch, validationLimit flags to vsp
-*
-* Revision 6.13  2004/05/06 19:42:22  kans
-* new function GetValidCountryList for access to country code list, which is now NULL terminated
-*
-* Revision 6.12  2003/12/02 15:37:37  kans
-* added vsp->seqSubmitParent for use by tbl2asn, which usually has a Seq-submit wrapper that is added on-the-fly and not indexed
-*
-* Revision 6.11  2003/11/14 18:07:17  kans
-* alignment parameters to find remote bsp, do seqhist assembly
-*
-* Revision 6.10  2003/03/05 18:47:45  ford
-* Added prototype for IsNuclAcc().
-*
-* Revision 6.9  2003/02/18 20:19:29  kans
-* added vsp->validateIDSet, initial work on validating update against ID set in database
-*
-* Revision 6.8  2002/10/28 19:30:34  kans
-* added farFetchCDSproducts to vsp
-*
-* Revision 6.7  2002/07/16 17:13:09  kans
-* added sourceQualTags to vsp, ERR_SEQ_DESCR_StructuredSourceNote by finite state machine text search
-*
-* Revision 6.6  2002/03/12 22:27:00  kans
-* added alwaysRequireIsoJTA
-*
-* Revision 6.5  2000/02/14 15:00:19  kans
-* added vsp->farIDsInAlignments for use by alignment validator
-*
-* Revision 6.4  1999/12/24 01:21:06  kans
-* added validateAlignments flag controlling call to ValidateSeqAlignWithinValidator
-*
-* Revision 6.3  1999/07/22 22:04:36  kans
-* added suppressContext flag
-*
-* Revision 6.2  1999/05/03 20:06:36  kans
-* if no pubs or no biosource, report only once, not once per bioseq
-*
-* Revision 6.1  1998/07/02 17:53:47  kans
-* useSeqMgrIndexes field added to ValidStructPtr, validator can use either old (nested gathers) or new (SeqMgr indexing) method
-*
-* Revision 6.0  1997/08/25 18:08:29  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1997/06/19 18:39:54  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.0  1996/05/28 13:23:23  ostell
-* Set to revision 5.0
-*
- * Revision 4.1  1996/01/23  23:10:10  kans
- * added onlyspell and justwarnonspell to ValidStructPtr
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.4  1995/06/03  13:45:47  ostell
- * changes made in valid to use gather functions and ErrPostItem instead
- * of previous custom functions
- *
- * Revision 1.3  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -192,6 +86,9 @@ typedef void (LIBCALLBACK *ValidErrorFunc) (
   ErrSev severity,
   int errcode,
   int subcode,
+  Uint2 entityID,
+  Uint2 itemtype,
+  Uint4 itemID,
   CharPtr accession,
   CharPtr message,
   CharPtr objtype,
@@ -250,6 +147,9 @@ typedef struct validstruct {
 	Boolean justShowAccession;     /* extremely terse output with accession and error type */
 	Boolean ignoreExceptions;      /* report translation and transcription problems even if exception set */
 	Boolean validateExons;         /* check splice sites on exon features except at ends of overlapping CDS */
+	Boolean inferenceAccnCheck;    /* lookup inference qualifier accession.version reference */
+	Boolean testLatLonSubregion;   /* validate coordinates of states and provinces within a country */
+	Boolean strictLatLonCountry;   /* bodies of water do not relax country vs. lat_lon mismatch */
 	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
 								   /* this section used for finer error reporting callback */
 	ValidErrorFunc errfunc;
@@ -275,11 +175,21 @@ NLM_EXTERN Boolean IsNuclAcc (CharPtr name);
 
 NLM_EXTERN CharPtr GetValidCategoryName (int errcode);
 NLM_EXTERN CharPtr GetValidErrorName (int errcode, int subcode);
+NLM_EXTERN CharPtr GetValidExplanation (int errcode, int subcode);
 
 NLM_EXTERN CharPtr PNTR GetValidCountryList (void);
+NLM_EXTERN Boolean LookForECnumberPattern (CharPtr str);
+
+NLM_EXTERN Boolean IsCountryInLatLonList (CharPtr country);
+NLM_EXTERN Boolean TestLatLonForCountry (CharPtr country, FloatHi lat, FloatHi lon);
+NLM_EXTERN CharPtr GuessCountryForLatLon (FloatHi lat, FloatHi lon);
+
+NLM_EXTERN Boolean ParseLatLon (CharPtr lat_lon, FloatHi PNTR latP, FloatHi PNTR lonP);
 
 /* EC_number finite state machine persists to avoid expensive reload, should free on program exit */
 NLM_EXTERN void ECNumberFSAFreeAll (void);
+
+NLM_EXTERN Boolean HasTpaUserObject (BioseqPtr bsp);
 
 #ifdef __cplusplus
 }

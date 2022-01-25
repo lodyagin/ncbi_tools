@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: suggest.c,v 6.11 2003/05/30 17:25:38 coulouri Exp $";
+static char const rcsid[] = "$Id: suggest.c,v 6.12 2007/03/20 18:27:14 bollin Exp $";
 
 /*   suggest.c
 * ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: suggest.c,v 6.11 2003/05/30 17:25:38 coulouri 
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -68,6 +68,9 @@ static char const rcsid[] = "$Id: suggest.c,v 6.11 2003/05/30 17:25:38 coulouri 
 *     
 *     A detailed change log follows:
 *     $Log: suggest.c,v $
+*     Revision 6.12  2007/03/20 18:27:14  bollin
+*     Added sequence ID reporting to Suggest_Intervals messages.
+*
 *     Revision 6.11  2003/05/30 17:25:38  coulouri
 *     add rcsid
 *
@@ -500,7 +503,7 @@ Int4 Total_len;
 
 #define fatal(m)	{ErrPostEx(SEV_FATAL, 1, 0, "%s:  %s", module, m); goto Error;}
 
-static char * suggest_revision = "$Revision: 6.11 $";
+static char * suggest_revision = "$Revision: 6.12 $";
 
 static Int4	suggest_get_frames_init = 1;
 
@@ -1571,6 +1574,20 @@ Int4 tripdex, i;
 	}
 }
 
+static void ReportSuggestIntervalsError (SeqRecPtr srp, CharPtr gen_txt)
+{
+  Char       id_txt[100];
+  Char       err_msg[500];
+
+  if (srp == NULL || srp->ids == NULL || srp->ids->id.pSeqId == NULL) {
+    Message (MSG_ERROR, gen_txt);
+  } else {
+    SeqIdWrite (srp->ids->id.pSeqId, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+    sprintf (err_msg, "%s (%s)", gen_txt, id_txt);
+    Message (MSG_ERROR, err_msg);
+  }
+}
+
 /*****************************************************************************
 *
 *   Suggest_Intervals (sugrp, f, num_nuc)
@@ -1599,15 +1616,15 @@ static void Suggest_Intervals (SuggestRecPtr sugrp,
     geneticCode = sugrp->geneticCode;
     if (nucleotide != NULL && protein != NULL && geneticCode != NULL) {
       if ((nucleotide->length +1) / 3 < protein->length) {
-        Message (MSG_ERROR, "Nucleotide is too short to encode protein");
+        ReportSuggestIntervalsError (nucleotide, "Nucleotide is too short to encode protein");
         goOn = FALSE;
       }
       if (nucleotide->length < 18) {
-        Message (MSG_ERROR, "Nucleotide length is too short");
+        ReportSuggestIntervalsError (nucleotide, "Nucleotide length is too short");
         goOn = FALSE;
       }
       if (protein->length < 6) {
-        Message (MSG_ERROR, "Protein length is too short");
+        ReportSuggestIntervalsError (protein, "Protein length is too short");
         goOn = FALSE;
       }
 

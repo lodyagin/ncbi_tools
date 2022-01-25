@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.276 2006/09/14 14:20:19 ucko Exp $
+#	$Id: makeall.unx,v 6.286 2007/08/03 12:42:48 lavr Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -174,7 +174,7 @@ SRC1e =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c gifgen.c \
 	togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c matrix.c \
-	ncbi_socket.c ncbi_buffer.c ncbi_core.c ncbi_core_c.c ncbi_util.c \
+	ncbi_socket.c ncbi_buffer.c ncbi_types.c ncbi_core.c ncbi_core_c.c ncbi_util.c \
 	ncbi_priv.c ncbi_ansi_ext.c ncbi_connection.c ncbi_connector.c \
 	ncbi_connutil.c ncbi_file_connector.c ncbi_heapmgr.c \
 	ncbi_http_connector.c ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
@@ -187,11 +187,11 @@ SRC1 =	ncbimain.c $(SRC1e)
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
-	objres.c objseq.c objblock.c objcode.c objsset.c \
+	objres.c objscoremat.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objalignloc.c \
 	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c objinsdseq.c \
 	objent2.c ent2api.c pmfapi.c objtax3.c tax3api.c objegkludge.c objentgene.c \
-	qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
+	objmla2.c mla2api.c qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
 	subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
@@ -209,7 +209,7 @@ SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 SRC4 =	vibbutns.c vibextra.c vibfiles.c vibforms.c \
 	vibgroup.c viblists.c vibmenus.c vibprmpt.c \
 	vibsbars.c vibslate.c vibtexts.c \
-	vibutils.c vibwndws.c ncbidraw.c \
+	vibutils.c vibwndws.c vibmain.c ncbidraw.c \
 	drawing.c mapping.c picture.c viewer.c \
 	document.c table.c palette.c diagnost.c image.c \
 	pictur3d.c prim3d1.c prim3d2.c prim3d3.c \
@@ -246,7 +246,7 @@ SRC22 = corematx.c dvncode.c objmmdb1.c objmmdb2.c objmmdb3.c objcn3d.c \
 	thrdslor.c thrdslou.c thrdspci.c thrdspea.c thrdspel.c \
 	thrdspni.c thrdttb0.c thrdttbi.c thrdzsc.c
 
-SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
+SRC23 = csim.c db_slist.c dust.c blast_dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	simutil.c slist.c sec.c tfuns.c toasn3.c toporg.c \
 	pobutil.c stsutil.c suggadj.c suggest.c suggslp.c \
 	blast.c blastutl.c blastool.c blastconcat.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
@@ -255,7 +255,7 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c mbalign.c \
-	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c objscoremat.c \
+	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c \
 	dotseq.c spidey.c motif.c blfmtutl.c
 
 SRCCOMPADJ = matrix_frequency_data.c compo_mode_condition.c \
@@ -286,15 +286,17 @@ SRC39 = ideochrow.c humchrom_dat.c mschrom_dat.c ideochrom.c ideoorgs.c \
 
 SRC50 = chartables.c get.c maketables.c pcre.c pcreposix.c study.c
 
-SRC60 = aa_ungapped.c blast_diagnostics.c blast_dust.c blast_engine.c \
+SRC60 = aa_ungapped.c blast_diagnostics.c blast_engine.c \
     blast_extend.c blast_filter.c blast_gapalign.c blast_hits.c blast_itree.c \
     blast_lookup.c blast_message.c blast_options.c blast_seg.c blast_seqsrc.c \
     blast_setup.c blast_stat.c blast_traceback.c blast_util.c blast_sw.c \
     gapinfo.c greedy_align.c hspstream_collector.c link_hsps.c lookup_wrap.c \
-    mb_lookup.c ncbi_math.c ncbi_std.c pattern.c phi_extend.c phi_lookup.c \
+    na_ungapped.c ncbi_math.c ncbi_std.c pattern.c phi_extend.c phi_lookup.c \
     lookup_util.c blast_encoding.c blast_psi.c blast_psi_priv.c blast_kappa.c \
     matrix_freq_ratios.c blast_hspstream.c blast_parameters.c blast_posit.c \
-    phi_gapalign.c blast_program.c blast_query_info.c blast_tune.c
+    phi_gapalign.c blast_program.c blast_query_info.c blast_tune.c \
+    blast_aalookup.c blast_nalookup.c blast_aascan.c blast_nascan.c \
+    blast_dynarray.c split_query.c gencode_singleton.c index_ungapped.c
 
 SRC61 = blast_api.c blast_format.c blast_input.c blast_mtlock.c \
         blast_options_api.c blast_prelim.c blast_returns.c blast_seq.c \
@@ -313,7 +315,7 @@ OBJ1e =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o gifgen.o \
 	togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o matrix.o \
-	ncbi_socket.o ncbi_buffer.o ncbi_core.o ncbi_core_c.o ncbi_util.o \
+	ncbi_socket.o ncbi_buffer.o ncbi_types.o ncbi_core.o ncbi_core_c.o ncbi_util.o \
 	ncbi_priv.o ncbi_ansi_ext.o ncbi_connection.o ncbi_connector.o \
 	ncbi_connutil.o ncbi_file_connector.o ncbi_heapmgr.o \
 	ncbi_http_connector.o ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
@@ -326,11 +328,11 @@ OBJ1 =	ncbimain.o $(OBJ1e)
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
-	objres.o objseq.o objblock.o objcode.o objsset.o \
+	objres.o objscoremat.o objseq.o objblock.o objcode.o objsset.o \
 	objsub.o objprt.o objfdef.o objalignloc.o \
 	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o objinsdseq.o \
 	objent2.o ent2api.o pmfapi.o objtax3.o tax3api.o objegkludge.o objentgene.o \
-	qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
+	objmla2.o mla2api.o qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
 	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
 	subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
@@ -348,7 +350,7 @@ OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 OBJ4 =	vibbutns.o vibextra.o vibfiles.o vibforms.o \
 	vibgroup.o viblists.o vibmenus.o vibprmpt.o \
 	vibsbars.o vibslate.o vibtexts.o \
-	vibutils.o vibwndws.o ncbidraw.o \
+	vibutils.o vibwndws.o vibmain.o ncbidraw.o \
 	drawing.o mapping.o picture.o viewer.o \
 	document.o table.o palette.o diagnost.o image.o \
 	pictur3d.o prim3d1.o prim3d2.o prim3d3.o \
@@ -358,7 +360,7 @@ OBJ4 =	vibbutns.o vibextra.o vibfiles.o vibforms.o \
 OBJ400 =	vibbutns.glo vibextra.glo vibfiles.glo vibforms.glo \
 	vibgroup.glo viblists.glo vibmenus.glo vibprmpt.glo \
 	vibsbars.glo vibslate.glo vibtexts.glo \
-	vibutils.glo vibwndws.glo ncbidraw.glo \
+	vibutils.glo vibwndws.glo vibmain.glo ncbidraw.glo \
 	drawing.glo mapping.glo picture.glo viewer.glo \
 	document.glo table.glo palette.glo diagnost.glo image.glo \
 	pictur3d.glo prim3d1.glo prim3d2.glo prim3d3.glo \
@@ -396,7 +398,7 @@ OBJ22 = corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o objcn3d.o \
 	thrdspni.o thrdttb0.o thrdttbi.o thrdzsc.o
 
 
-OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
+OBJ23 = csim.o db_slist.o dust.o blast_dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	simutil.o slist.o sec.o tfuns.o toasn3.o toporg.o \
 	pobutil.o stsutil.o suggadj.o suggest.o suggslp.o \
 	blast.o blastutl.o blastool.o blastconcat.o splutil.o \
@@ -406,7 +408,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o mbalign.o \
-	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o objscoremat.o \
+	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o \
 	dotseq.o spidey.o motif.o blfmtutl.o
 
 OBJCOMPADJ = matrix_frequency_data.o compo_mode_condition.o \
@@ -442,15 +444,17 @@ OBJ39 = ideochrow.o humchrom_dat.o mschrom_dat.o ideochrom.o ideoorgs.o \
 
 OBJ50 = chartables.o get.o maketables.o pcre.o pcreposix.o study.o
 
-OBJ60 = aa_ungapped.o blast_diagnostics.o blast_dust.o blast_engine.o blast_extend.o \
+OBJ60 = aa_ungapped.o blast_diagnostics.o blast_engine.o blast_extend.o \
     blast_filter.o blast_gapalign.o blast_hits.o blast_itree.o blast_lookup.o \
     blast_message.o blast_options.o blast_seg.o blast_seqsrc.o blast_sw.o \
     blast_setup.o blast_stat.o blast_traceback.o blast_util.o \
     gapinfo.o greedy_align.o hspstream_collector.o link_hsps.o lookup_wrap.o \
-    mb_lookup.o ncbi_math.o ncbi_std.o pattern.o phi_extend.o phi_lookup.o \
+    na_ungapped.o ncbi_math.o ncbi_std.o pattern.o phi_extend.o phi_lookup.o \
     lookup_util.o blast_encoding.o blast_psi.o blast_psi_priv.o blast_kappa.o \
     matrix_freq_ratios.o blast_hspstream.o blast_parameters.o blast_posit.o \
-    phi_gapalign.o blast_program.o blast_query_info.o blast_tune.o
+    phi_gapalign.o blast_program.o blast_query_info.o blast_tune.o \
+    blast_aalookup.o blast_nalookup.o blast_aascan.o blast_nascan.o \
+    blast_dynarray.o split_query.o gencode_singleton.o index_ungapped.o
 
 OBJ61 = blast_api.o blast_input.o blast_format.o blast_mtlock.o \
         blast_options_api.o blast_prelim.o blast_returns.o blast_seq.o \

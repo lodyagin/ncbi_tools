@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.h,v 1.48 2006/03/21 21:00:25 camacho Exp $
+/* $Id: blast_traceback.h,v 1.50 2006/11/29 17:25:50 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,9 +30,18 @@
  * Functions to do gapped alignment with traceback
  */
 
-#ifndef __BLAST_TRACEBACK__
-#define __BLAST_TRACEBACK__
+#ifndef ALGO_BLAST_CORE__BLAST_TRACEBACK__H
+#define ALGO_BLAST_CORE__BLAST_TRACEBACK__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_parameters.h>
+#include <algo/blast/core/blast_gapalign.h>
+#include <algo/blast/core/blast_encoding.h>
+#include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_gapalign.h>
 #include <algo/blast/core/blast_hspstream.h>
@@ -59,6 +68,7 @@ extern "C" {
  * @param ext_options Gapped extension options [in]
  * @param hit_params Hit saving parameters [in]
  * @param gen_code_string specifies genetic code [in]
+ * @param fence_hit True is returned here if overrun is detected. [in]
  */
 NCBI_XBLAST_EXPORT
 Int2
@@ -69,7 +79,8 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    const BlastScoringParameters* score_params,
    const BlastExtensionOptions* ext_options,
    const BlastHitSavingParameters* hit_params,
-   const Uint1* gen_code_string);
+   const Uint1* gen_code_string,
+   Boolean * fence_hit);
 
 /** Get the subject sequence encoding type for the traceback,
  * given a program number.
@@ -166,4 +177,4 @@ Blast_RunTracebackSearch(EBlastProgramType program,
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_TRACEBACK__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_TRACEBACK__H */

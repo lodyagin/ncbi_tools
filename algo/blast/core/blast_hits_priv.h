@@ -1,7 +1,4 @@
-#ifndef ALGO_BLAST_CORE___BLAST_HITS_PRIV__H
-#define ALGO_BLAST_CORE___BLAST_HITS_PRIV__H
-
-/*  $Id: blast_hits_priv.h,v 1.2 2006/02/07 14:24:47 madden Exp $
+/*  $Id: blast_hits_priv.h,v 1.4 2007/03/12 17:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +31,12 @@
  *  Utilities for dealing with BLAST HSPs in the core of BLAST.
  */
 
+#ifndef ALGO_BLAST_CORE___BLAST_HITS_PRIV__H
+#define ALGO_BLAST_CORE___BLAST_HITS_PRIV__H
+
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_hits.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -59,17 +62,6 @@ Blast_CheckHSPsForCommonEndpoints(BlastHSP* *hsp_array, Int4 hsp_count);
 int
 ScoreCompareHSPs(const void* h1, const void* h2);
 
-/** Merges two HSPs if possible.  
- * Only the part of the alignments with substitution is considered and right now 
- * only if two segments on the same diagonal are found. 
- * @param hsp1 first HSP to be considered [in]
- * @param hsp2 second HSP to be considered [in]
- * @param start starting offset beyond which an attempt will be made
- *   to merge the HSPs [in]
- */
-Boolean
-BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2, Int4 start);
-
 /** TRUE if c is between a and b; f between d and e.  Determines if the
  * coordinates are already in an HSP that has been evaluated. 
 */
@@ -80,19 +72,4 @@ BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2, Int4 start);
 }
 #endif
 
-/*
- * ===========================================================================
- *
- * $Log: blast_hits_priv.h,v $
- * Revision 1.2  2006/02/07 14:24:47  madden
- * Add prototype for BlastMergeTwoHSPs
- *
- * Revision 1.1  2005/01/18 14:53:08  camacho
- * Initial revision
- *
- *
- * ===========================================================================
- */
-
 #endif /* !ALGO_BLAST_CORE__BLAST_HITS_PRIV__H */
-

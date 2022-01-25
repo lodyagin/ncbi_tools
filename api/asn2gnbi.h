@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.72 $
+* $Revision: 1.82 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -132,6 +132,7 @@ typedef struct int_asn2gb_job {
   Boolean         showTranscript;
   Boolean         showPeptide;
   Boolean         hideTranslation;
+  Boolean         hideEvidence;
   Boolean         masterStyle;
   Boolean         newSourceOrg;
   Boolean         produceInsdSeq;
@@ -463,7 +464,8 @@ typedef enum {
   Qual_class_nomenclature,
   Qual_class_pcr,
   Qual_class_mol_wt,
-  Qual_class_voucher
+  Qual_class_voucher,
+  Qual_class_mobile_element
 }  QualType;
 
 /* source 'feature' */
@@ -477,6 +479,7 @@ typedef enum {
   SCQUAL_authority,
   SCQUAL_biotype,
   SCQUAL_biovar,
+  SCQUAL_bio_material,
   SCQUAL_breed,
   SCQUAL_cell_line,
   SCQUAL_cell_type,
@@ -491,6 +494,7 @@ typedef enum {
   SCQUAL_common_name,
   SCQUAL_country,
   SCQUAL_cultivar,
+  SCQUAL_culture_collection,
   SCQUAL_db_xref,
   SCQUAL_org_xref,
   SCQUAL_dev_stage,
@@ -521,6 +525,9 @@ typedef enum {
   SCQUAL_lat_lon,
   SCQUAL_macronuclear,
   SCQUAL_map,
+  SCQUAL_metagenome_note,
+  SCQUAL_metagenome_source,
+  SCQUAL_metagenomic,
   SCQUAL_mol_type,
   SCQUAL_note,
   SCQUAL_old_lineage,
@@ -569,7 +576,7 @@ typedef enum {
   ASN2GNBK_TOTAL_SOURCE
 }  SourceType;
 
-NLM_EXTERN SourceType orgModToSourceIdx [38];
+NLM_EXTERN SourceType orgModToSourceIdx [42];
 
 typedef enum {
   FTQUAL_allele = 1,
@@ -627,6 +634,7 @@ typedef enum {
   FTQUAL_mod_base,
   FTQUAL_modelev,
   FTQUAL_mol_wt,
+  FTQUAL_ncRNA_class,
   FTQUAL_nomenclature,
   FTQUAL_note,
   FTQUAL_number,
@@ -671,6 +679,7 @@ typedef enum {
   FTQUAL_site,
   FTQUAL_site_type,
   FTQUAL_standard_name,
+  FTQUAL_tag_peptide,
   FTQUAL_transcription,
   FTQUAL_transcript_id,
   FTQUAL_transcript_id_note,
@@ -706,6 +715,7 @@ NLM_EXTERN Char link_muid [MAX_WWWBUF];
 NLM_EXTERN Char link_code [MAX_WWWBUF];
 NLM_EXTERN Char link_encode [MAX_WWWBUF];
 NLM_EXTERN Char link_go [MAX_WWWBUF];
+NLM_EXTERN Char link_go_ref [MAX_WWWBUF];
 NLM_EXTERN Char link_sp [MAX_WWWBUF];
 
 NLM_EXTERN void FF_www_db_xref(
@@ -728,7 +738,7 @@ typedef struct sourcequal {
 
 NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE];
 
-NLM_EXTERN SourceType subSourceToSourceIdx [38];
+NLM_EXTERN SourceType subSourceToSourceIdx [39];
 
 NLM_EXTERN void DoOneSection (
   BioseqPtr target,
@@ -797,7 +807,8 @@ NLM_EXTERN void FFAddOneString (
 NLM_EXTERN void FFCatenateSubString (
   StringItemPtr dest,
   StringItemPtr start_sip, Int4 start_pos,
-  StringItemPtr end_sip, Int4 end_pos
+  StringItemPtr end_sip, Int4 end_pos,
+  Uint4 line_max
 );
 NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip);
 NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip);
@@ -931,7 +942,8 @@ NLM_EXTERN Boolean FFLineBreakSplitsHtmlLink(
   Int4 start_pos, 
   StringItemPtr break_sip, 
   Int4 break_pos,
-  char* buf_link_open 
+  char* buf_link_open, 
+  Int4* html_open_link_counter
 ); 
 
 NLM_EXTERN Boolean IsWholeWordSubstr (

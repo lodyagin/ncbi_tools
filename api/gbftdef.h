@@ -2,128 +2,6 @@
 *   gbfeatdfn.h:
 *   -- GenBank Feature table define file
 *
-* $Log: gbftdef.h,v $
-* Revision 6.26  2006/09/06 21:47:55  kans
-* added slot for mobile_element qualifier
-*
-* Revision 6.25  2005/10/19 16:56:17  kans
-* added new source qualifiers, expanded array of optional qualifiers
-*
-* Revision 6.24  2005/09/22 20:50:07  kans
-* changed /experimental to /experiment - typo
-*
-* Revision 6.23  2005/09/19 17:17:31  kans
-* removed /hydrogenosome as a separate qualifier - it is really /organelle=hydrogenosome
-*
-* Revision 6.22  2005/09/16 19:56:37  kans
-* added hydrogenosome
-*
-* Revision 6.21  2005/06/15 13:47:21  kans
-* corrected optional qualifier numbers, added Validate_ParFlat_GBFeat function
-*
-* Revision 6.20  2005/06/14 16:06:44  kans
-* initial support for ribosomal_slippage, trans_splicing qualifiers derived from /exception
-*
-* Revision 6.19  2005/06/10 17:25:26  kans
-* added space for new qualifiers experimental, inference, rpt_unit_seq, rpt_unit_range
-*
-* Revision 6.18  2004/08/17 15:50:52  kans
-* added GBQUAL_old_locus_tag and GBQUAL_compare
-*
-* Revision 6.17  2003/10/07 13:50:36  kans
-* added gap, operon, oriT features and ecotype, estimated_length and operon qualifiers
-*
-* Revision 6.16  2003/08/19 15:18:37  kans
-* added GBQUAL_segment, increased ParFlat_TOTAL_GBQUAL and opt_qual array size
-*
-* Revision 6.15  2003/05/07 22:03:31  kans
-* added GBQUAL_mol_type, raised opt_qual array to 51 elements
-*
-* Revision 6.14  2003/02/22 21:20:05  kans
-* added GBQUAL_locus_tag, legal for now in gene features
-*
-* Revision 6.13  2002/04/17 14:41:08  kans
-* added GBQUAL_serovar to source feature
-*
-* Revision 6.12  2002/03/26 16:06:30  kans
-* added transgenic, environmental_sample, and isolation_source
-*
-* Revision 6.11  2002/02/13 18:45:52  kans
-* increased ParFlat_TOTAL_GBFEAT, added snoRNA
-*
-* Revision 6.10  2001/04/10 22:17:03  tatiana
-* GBQUAL_endogenous_virus backed off to /note
-*
-* Revision 6.9  2001/04/10 21:59:17  tatiana
-* GBQUAL_endogenous_virus added
-*
-* Revision 6.8  2000/11/29 20:34:29  tatiana
-* virion key removed, GBQUAL_transcript_id added
-*
-* Revision 6.7  2000/02/02 21:02:41  tatiana
-* new type for /number added
-*
-* Revision 6.6  2000/01/21 21:06:44  kans
-* reverted qualifiers, just added organelle, so parser can deal with old and new form during transition
-*
-* Revision 6.5  2000/01/21 20:48:19  kans
-* changes to merge several source qualifiers under new organelle qualifier
-*
-* Revision 6.4  1999/02/05 15:40:39  tatiana
-* GBQUAL_country added
-*
-* Revision 6.3  1999/01/29 16:18:58  tatiana
-* protein_id qualifier added to CDS
-*
-* Revision 6.2  1998/04/30 21:43:11  tatiana
-* *** empty log message ***
-*
-* Revision 6.1  1997/12/23 23:39:00  kans
-* raised ParFlat_TOTAL_GBQUAL, added GBQUAL_focus and GBQUAL_specimen_voucher
-*
-* Revision 6.0  1997/08/25 18:05:59  madden
-* Revision changed to 6.0
-*
-* Revision 5.7  1997/07/29 20:59:52  vakatov
-* Encapsulated 'ParFlat_GBQual_names' and 'ParFlat_GBFeat'(formerly
-* global) variables into access functions. Made other global variables
-* be "extern" instead of "NLM_EXTERN"(i.e. local within the PC DLL).
-*
-* Revision 5.6  1997/06/19 18:37:59  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.5  1996/09/17 14:50:43  tatiana
-* 'virion' added, number of quals increased to 50
-*
- * Revision 5.4  1996/08/02  16:50:30  tatiana
- * a typo fixed
- *
- * Revision 5.3  1996/07/30  17:28:07  kans
- * ParFlat_... arrays now external in header file
- *
- * Revision 5.2  1996/07/29  19:44:57  tatiana
- * GBQual_names changed to use a structure
- *
- * Revision 5.1  1996/07/25  14:18:15  tatiana
- * added qualifiers: allele, exception, replace
- *
- * Revision 4.4  1995/11/13  15:53:11  tatiana
- * serotype added
- *
- * Revision 4.3  1995/11/08  22:58:20  tatiana
- * serotype added
- *
- * Revision 4.2  1995/08/19  03:08:06  tatiana
- * *** empty log message ***
- *
- * Revision 4.1  1995/08/15  22:06:29  tatiana
- * db_xref added
- *
- * Revision 1.2  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
-*                                                                  10-14-93
 ******************************************************************************/
 #ifndef _GBFEATDFN_
 #define _GBFEATDFN_
@@ -230,13 +108,18 @@
 #define GBQUAL_lat_lon           98
 #define GBQUAL_PCR_primers       99
 #define GBQUAL_mobile_element   100
+#define GBQUAL_metagenomic      101
+#define GBQUAL_culture_collection 102
+#define GBQUAL_bio_material     103
+#define GBQUAL_ncRNA_class      104
+#define GBQUAL_tag_peptide      105
 
-#define ParFlat_TOTAL_GBQUAL    101
+#define ParFlat_TOTAL_GBQUAL    106
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
 #define ParFlat_TOTAL_Rpt         7
-#define ParFlat_TOTAL_GBFEAT     67
+#define ParFlat_TOTAL_GBFEAT     69
 
 #define  Class_pos_aa             1
 #define  Class_text               2

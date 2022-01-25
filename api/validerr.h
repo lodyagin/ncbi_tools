@@ -103,6 +103,17 @@
 #define ERR_SEQ_DESCR_BadPCRPrimerSequence  2,36
 #define ERR_SEQ_DESCR_BadPunctuation  2,37
 #define ERR_SEQ_DESCR_BadPCRPrimerName  2,38
+#define ERR_SEQ_DESCR_BioSourceOnProtein  2,39
+#define ERR_SEQ_DESCR_BioSourceDbTagConflict  2,40
+#define ERR_SEQ_DESCR_DuplicatePCRPrimerSequence  2,41
+#define ERR_SEQ_DESCR_MultipleNames  2,42
+#define ERR_SEQ_DESCR_MultipleComments  2,43
+#define ERR_SEQ_DESCR_LatLonProblem  2,44
+#define ERR_SEQ_DESCR_LatLonFormat  2,45
+#define ERR_SEQ_DESCR_LatLonRange  2,46
+#define ERR_SEQ_DESCR_LatLonValue  2,47
+#define ERR_SEQ_DESCR_LatLonCountry  2,48
+#define ERR_SEQ_DESCR_LatLonState  2,49
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -115,6 +126,7 @@
 #define ERR_GENERIC_StructuredCitGenCit  3,9
 #define ERR_GENERIC_CollidingSerialNumbers  3,10
 #define ERR_GENERIC_EmbeddedScript  3,11
+#define ERR_GENERIC_PublicationInconsistency  3,12
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -265,6 +277,21 @@
 #define ERR_SEQ_FEAT_GeneXrefWithoutLocus  5,130
 #define ERR_SEQ_FEAT_UTRdoesNotExtendToEnd  5,131
 #define ERR_SEQ_FEAT_CDShasTooManyXs  5,132
+#define ERR_SEQ_FEAT_SuspiciousFrame  5,133
+#define ERR_SEQ_FEAT_TerminalXDiscrepancy  5,134
+#define ERR_SEQ_FEAT_UnnecessaryTranslExcept  5,135
+#define ERR_SEQ_FEAT_SuspiciousQualifierValue  5,136
+#define ERR_SEQ_FEAT_NotSpliceConsensusDonor  5,137
+#define ERR_SEQ_FEAT_NotSpliceConsensusAcceptor  5,138
+#define ERR_SEQ_FEAT_RareSpliceConsensusDonor  5,139
+#define ERR_SEQ_FEAT_SeqFeatXrefNotReciprocal  5,140
+#define ERR_SEQ_FEAT_SeqFeatXrefFeatureMissing  5,141
+#define ERR_SEQ_FEAT_FeatureInsideGap  5,142
+#define ERR_SEQ_FEAT_FeatureCrossesGap  5,143
+#define ERR_SEQ_FEAT_BadAuthorSuffix  5,144
+#define ERR_SEQ_FEAT_BadAnticodonAA  5,145
+#define ERR_SEQ_FEAT_BadAnticodonCodon  5,146
+#define ERR_SEQ_FEAT_BadAnticodonStrand  5,147
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2
@@ -285,6 +312,7 @@
 #define ERR_SEQ_ALIGN_AlignDimOne  6,17
 #define ERR_SEQ_ALIGN_Segtype  6,18
 #define ERR_SEQ_ALIGN_BlastAligns  6,19
+#define ERR_SEQ_ALIGN_PercentIdentity  6,20
 #define ERR_SEQ_GRAPH  7,0
 #define ERR_SEQ_GRAPH_GraphMin  7,1
 #define ERR_SEQ_GRAPH_GraphMax  7,2
@@ -302,5 +330,9 @@
 #define ERR_SEQ_GRAPH_GraphNScore  7,14
 #define ERR_SEQ_GRAPH_GraphGapScore  7,15
 #define ERR_SEQ_GRAPH_GraphOverlap  7,16
+#define ERR_SEQ_GRAPH_GraphBioseqId  7,17
+#define ERR_SEQ_ANNOT  8,0
+#define ERR_SEQ_ANNOT_AnnotIDs  8,1
+#define ERR_SEQ_ANNOT_AnnotLOCs  8,2
 
 #endif

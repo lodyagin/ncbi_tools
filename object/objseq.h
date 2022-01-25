@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objseq.h,v $
+* Revision 6.9  2007/05/07 13:25:32  kans
+* added support for Seq-data.gap
+*
 * Revision 6.8  2005/01/07 17:30:52  yaschenk
 * fixing definition
 *
@@ -324,6 +327,24 @@ NLM_EXTERN Boolean    LIBCALL SeqHistAsnWrite PROTO((SeqHistPtr shp, AsnIoPtr ai
 NLM_EXTERN SeqHistPtr LIBCALL SeqHistAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN SeqHistPtr LIBCALL SeqHistFree PROTO((SeqHistPtr shp));
 
+
+/**************************************************
+*
+*    SeqGap
+*
+**************************************************/
+typedef struct struct_Seq_gap {
+   Int4   type;
+   Int4   linkage;
+} SeqGap, PNTR SeqGapPtr;
+
+
+NLM_EXTERN SeqGapPtr LIBCALL SeqGapFree PROTO ((SeqGapPtr ));
+NLM_EXTERN SeqGapPtr LIBCALL SeqGapNew PROTO (( void ));
+NLM_EXTERN SeqGapPtr LIBCALL SeqGapAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SeqGapAsnWrite PROTO (( SeqGapPtr , AsnIoPtr, AsnTypePtr));
+
+
 /*****************************************************************************
 *
 *   Delta-seq is just a ValNode where
@@ -345,6 +366,11 @@ NLM_EXTERN Boolean    LIBCALL DeltaSeqSetAsnWrite PROTO((DeltaSeqPtr dsp, AsnIoP
 NLM_EXTERN DeltaSeqPtr LIBCALL DeltaSeqSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN DeltaSeqPtr LIBCALL DeltaSeqSetFree PROTO((DeltaSeqPtr dsp));
 
+/*** SeqDataPtr is an opaque pointer that can hold a byte store or a SeqGap - need to cast pointer to actual type ***/
+
+struct SeqData;
+typedef struct SeqData PNTR SeqDataPtr;
+
 /*** here is the SeqLit ***********************************
 *	if seq_data is NULL and length != 0, represents a gap of known length.
 *   if seq_data is NULL and length = 0, represents a gap of unknown length
@@ -359,7 +385,7 @@ typedef struct seqlit {
 	Int4 length;
 	IntFuzzPtr fuzz;
 	Uint1 seq_data_type;    /* see Bioseq below */
-	ByteStorePtr seq_data;
+	SeqDataPtr seq_data;    /* was ByteStorePtr */ 
 } SeqLit, PNTR SeqLitPtr;
 
 NLM_EXTERN SeqLitPtr LIBCALL SeqLitNew PROTO((void));
@@ -383,6 +409,7 @@ NLM_EXTERN SeqLitPtr LIBCALL SeqLitFree PROTO((SeqLitPtr slp));
 *       8 = NCBIeaa
 *       9 = NCBIpaa
 *      11 = NCBIstdaa
+*      12 = Seq-gap
 *   seq_ext_type
 *       0 = none
 *       1 = seg-ext
@@ -402,6 +429,7 @@ NLM_EXTERN SeqLitPtr LIBCALL SeqLitFree PROTO((SeqLitPtr slp));
 #define Seq_code_ncbipaa 9
 #define Seq_code_iupacaa3 10
 #define Seq_code_ncbistdaa 11
+#define Seq_code_gap 12
 
 #define Seq_repr_virtual 1
 #define Seq_repr_raw    2
@@ -432,7 +460,7 @@ typedef struct bioseq {
         strand,
         seq_data_type,      /* as in Seq_code_type above */
         seq_ext_type;
-    ByteStorePtr seq_data;
+    SeqDataPtr seq_data;    /* was ByteStorePtr */ 
     Pointer seq_ext;
     SeqAnnotPtr annot;
 	SeqHistPtr hist;
@@ -462,9 +490,10 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqFreeComponents PROTO((BioseqPtr bsp));
 NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite PROTO((BioseqPtr bsp, AsnIoPtr aip, AsnTypePtr orig));
 NLM_EXTERN Boolean LIBCALL BioseqInstAsnRead PROTO((BioseqPtr bsp, AsnIoPtr aip, AsnTypePtr orig));
 
-NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite PROTO((ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig));
-NLM_EXTERN Boolean LIBCALL SeqDataAsnWriteXML PROTO((ByteStorePtr bsp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig,Int4 seqlen));
-NLM_EXTERN ByteStorePtr LIBCALL SeqDataAsnRead PROTO((AsnIoPtr aip, AsnTypePtr orig, Uint1Ptr typeptr, Int4 length));
+NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite PROTO((SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig));
+NLM_EXTERN Boolean LIBCALL SeqDataAsnWriteXML PROTO((SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, AsnTypePtr orig,Int4 seqlen));
+NLM_EXTERN SeqDataPtr LIBCALL SeqDataAsnRead PROTO((AsnIoPtr aip, AsnTypePtr orig, Uint1Ptr typeptr, Int4 length));
+NLM_EXTERN SeqDataPtr LIBCALL SeqDataFree PROTO((SeqDataPtr sd, Uint1 seqtype));
 
 /*****************************************************************************
 *

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: taxblast.c,v 6.27 2006/07/26 19:08:37 jianye Exp $";
+static char const rcsid[] = "$Id: taxblast.c,v 6.28 2007/05/01 14:45:15 jianye Exp $";
 
-/* $Id: taxblast.c,v 6.27 2006/07/26 19:08:37 jianye Exp $
+/* $Id: taxblast.c,v 6.28 2007/05/01 14:45:15 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.27 2006/07/26 19:08:37 jianye E
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.28  2007/05/01 14:45:15  jianye
+* restore redundant sequences in taxonomy report
+*
 * Revision 6.27  2006/07/26 19:08:37  jianye
 * fix entrez url
 *
@@ -159,6 +162,8 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.27 2006/07/26 19:08:37 jianye E
 #include <readdb.h>
 #include <blastdef.h>
 #include <taxblast.h>
+#include <salpedit.h>
+#include <salpacc.h>
 
 typedef struct hitobj {
     Boolean    query_is_na;
@@ -490,7 +495,66 @@ static Int4 TXBGetTargetGi(SeqAlignPtr sap, Int4Ptr tax_idp,
     return gi;
 }
 
-static HitObjPtr GetAlignData (SeqAlignPtr sap)
+static SeqAlignPtr GetNewRedundantAlign(SeqAlignPtr sap, CharPtr database, 
+                                        Boolean db_is_na) {
+    SeqAlignPtr salp_with_redundant_set = NULL;
+    Boolean has_redundant_id = FALSE;
+    ReadDBFILEPtr rdfp = readdb_new(database, !db_is_na);
+    
+    if(rdfp) {       
+        SeqAlignPtr salp_temp, new_salp = SeqAlignListDup(sap);
+        salp_temp = new_salp;
+        while (salp_temp) {
+            Int4 oid = -1;
+            Uint4 index = 0;
+            SeqIdPtr tmp_sip = NULL;
+            SeqIdPtr subject_sip = SeqIdPtrFromSeqAlign(salp_temp)->next;
+            SeqAlignPtr salp_next = salp_temp->next, dup_salp_list = NULL,
+                dup_temp = NULL;
+            oid = readdb_seqid2fasta(rdfp, subject_sip);
+
+            while (readdb_get_header(rdfp, oid, &index, &tmp_sip, NULL)) {
+                if (SeqIdComp(tmp_sip, subject_sip) != SIC_YES) {
+                    /*redundant id, duplicate seqalign using the redundant id*/
+                    SeqAlignPtr salp_dup = SeqAlignDup(salp_temp);
+                    SeqIdFree(SeqIdPtrFromSeqAlign(salp_dup)->next);
+                    SeqIdPtrFromSeqAlign(salp_dup)->next = tmp_sip;
+                    /*only take the first id*/
+                    SeqIdSetFree(tmp_sip->next);
+                    tmp_sip->next = NULL;
+                    /*save duplicated salp to dup list*/
+                    if (dup_salp_list) {
+                        dup_temp->next = salp_dup;
+                        dup_temp = salp_dup;
+                    } else {
+                        dup_salp_list = salp_dup;
+                        dup_temp = dup_salp_list;
+                    }
+                                    
+                    has_redundant_id = TRUE;
+                } else {
+                    SeqIdSetFree(tmp_sip);
+                }
+            }
+            if (dup_salp_list) {
+                salp_temp->next = dup_salp_list;
+                dup_temp->next = salp_next;
+                salp_temp = dup_temp;
+            }
+            salp_temp = salp_temp->next;
+        }
+        if (has_redundant_id) {
+            salp_with_redundant_set = new_salp;
+        } else {
+            SeqAlignSetFree(new_salp);
+        }
+        readdb_destruct(rdfp);
+    }
+    return salp_with_redundant_set;
+}
+
+static HitObjPtr GetAlignData (SeqAlignPtr sap, CharPtr database, 
+                               Boolean db_is_na)
 {
     Int4 count = 0;
     ScorePtr score;
@@ -499,6 +563,13 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
     FloatHiPtr e_values, bit_scores;
     HitObjPtr hitobj;
     CharPtr accession;
+    SeqAlignPtr salp_with_redundant_set = NULL;
+
+    salp_with_redundant_set = GetNewRedundantAlign(sap, database, db_is_na);
+    
+    if (salp_with_redundant_set) {
+        sap = salp_with_redundant_set;
+    }
 
     numhits = CountAligns (sap);
     
@@ -547,7 +618,7 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
         sap = sap->next;
         count++;
     }
-    
+    SeqAlignSetFree(salp_with_redundant_set);
     return(hitobj);
 }
 
@@ -1388,7 +1459,6 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
                 TXBGetDefLine(rdfp, seqno, &seqid, &title);
                 SeqIdSetFree(seqid);
             }
-
             if (StringLen(title) > 60) 
                 title[59] = '\0';
 
@@ -1467,11 +1537,25 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
                 title = StringSave("Title was not found");
                 sprintf(buffer, "SeqId not found");
             } else {
-                TXBGetDefLine(rdfp, seqno, &seqid, &title);
+                
+                Uint4 index = 0;
+                SeqIdPtr tmp_sip = NULL;
+                while (readdb_get_header(rdfp, seqno, &index, &tmp_sip, &title)) {
+                    CharPtr dummy = NULL;
+                    Int4 taxid_dummy = 0;
+                    Int4 temp_gi = TXBGetGiFromSeqId(tmp_sip, &taxid_dummy, &dummy);
+                    MemFree(dummy);
+                    if (temp_gi == gi) {
+                        break;
+                    }
+                    MemFree(title);
+                    SeqIdSetFree(tmp_sip);
+                }
+
                 if(title == NULL)
                     title = StringSave(hitobj->accs[hitoff]);
-                SeqIdWrite (seqid, buffer, PRINTID_FASTA_LONG, BUFFLEN);
-                SeqIdSetFree(seqid);
+                SeqIdWrite (tmp_sip, buffer, PRINTID_FASTA_LONG, BUFFLEN);
+                SeqIdSetFree(tmp_sip);
             }
 
             /* At this point we have seqid printed into buffer and
@@ -1613,8 +1697,8 @@ void TXBHtmlReport(SeqAlignPtr sap, FILE *outfile, Boolean query_is_na,
     HitObjPtr hitobj = NULL;
     OrgObjPtr orgobj = NULL;
     TreePtr tree = NULL;
-    
-    if((hitobj = GetAlignData (sap)) != NULL) {
+   
+    if((hitobj = GetAlignData (sap, database, db_is_na)) != NULL) {
         hitobj->query_is_na = query_is_na;
         hitobj->db_is_na = db_is_na;
         

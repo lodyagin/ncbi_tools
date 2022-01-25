@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.34 2006/06/09 17:44:50 papadopo Exp $
+/* $Id: blast_tabular.c,v 1.39 2007/03/20 15:17:16 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.34 2006/06/09 17:44:50 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.39 2007/03/20 15:17:16 kans Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_tabular.h>
@@ -40,6 +40,7 @@ static char const rcsid[] = "$Id: blast_tabular.c,v 1.34 2006/06/09 17:44:50 pap
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
+#include <algo/blast/core/gencode_singleton.h>
 
 #include <txalign.h>
 
@@ -82,14 +83,11 @@ Blast_TabularFormatDataSetUp(BlastTabularFormatData* tf_data,
 
     ASSERT(score_options && db_options);
 
-    tf_data->perform_traceback =
-        (score_options->gapped_calculation && 
-         ext_options->ePrelimGapExt != eGreedyWithTracebackExt);
-    
+    tf_data->perform_traceback = score_options->gapped_calculation;
     tf_data->program = program;
     tf_data->hsp_stream = hsp_stream;
     tf_data->query = query;
-    tf_data->gen_code_string = db_options->gen_code_string;
+    tf_data->gen_code_string = GenCodeSingletonFind(db_options->genetic_code);
     /* Sequence source must be copied, to guarantee multi-thread safety. */
     tf_data->seq_src = BlastSeqSrcCopy(seq_src);
     /* Effective lengths must be duplicated in query info structure, because
@@ -171,9 +169,8 @@ FillNuclSequenceBuffers(EBlastProgramType program, BlastHSP* hsp,
    Boolean reverse;
    Boolean translate1, translate2;
 
-   translate1 = (program == eBlastTypeBlastx || program == eBlastTypeTblastx ||
-                 program == eBlastTypeRpsTblastn);
-   translate2 = (program == eBlastTypeTblastn || program == eBlastTypeTblastx);
+   translate1 = Blast_QueryIsTranslated(program);
+   translate2 = Blast_SubjectIsTranslated(program);
 
    reverse = (hsp->query.frame != hsp->subject.frame);
 
@@ -364,7 +361,7 @@ void* Blast_TabularFormatThread(void* data)
 
          Blast_TracebackFromHSPList(program, hsp_list, query,
             seq_arg.seq, query_info, gap_align, gap_align->sbp, score_params,
-            ext_params->options, hit_params, gen_code_string);
+            ext_params->options, hit_params, gen_code_string, NULL);
          /* Return subject sequence unless it is needed for the sequence
             printout */
          if (tf_data->format_options != eBlastTabularAddSequences) {

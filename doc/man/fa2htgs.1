@@ -1,4 +1,4 @@
-.TH FA2HTGS 1 2002-04-28 NCBI "NCBI Tools User's Manual"
+.TH FA2HTGS 1 2006-05-29 NCBI "NCBI Tools User's Manual"
 .SH NAME
 fa2htgs \- formatter for high throughput genome sequencing project submissions
 .SH SYNOPSIS
@@ -27,6 +27,7 @@ fa2htgs \- formatter for high throughput genome sequencing project submissions
 \fB\-g\fP\ \fIstr\fP
 [\|\fB\-h\fP\ \fIstr\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
+[\|\fB\-k\fP\ \fIstr\fP\|]
 [\|\fB\-l\fP\ \fIN\fP\|]
 [\|\fB\-m\fP\|]
 [\|\fB\-n\fP\ \fIstr\fP\|]
@@ -170,6 +171,9 @@ Chromosome (will appear as \fB/chromosome\fP in the source feature)
 \fB\-i\fP\ \fIfilename\fP
 Filename for fasta input (default is stdin; mutually exclusive with
 \fB\-A\fP and \fB\-T\fP)
+.TP
+\fB\-k\fP\ \fIstr\fP
+Add the supplied string as a keyword.
 .TP
 \fB\-l\fP\ \fIN\fP
 Length of sequence in bp (default = 0). The length is checked against

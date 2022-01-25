@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.159 $
+* $Revision: 6.169 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,36 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.169  2007/05/30 18:10:06  kans
+* added KNOWN_GAP_AS_PLUS to distinguish known-length from unknown-length gaps, use for validation
+*
+* Revision 6.168  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.167  2006/12/26 17:40:27  kans
+* improvements to SeqPortStreamGap so it properly distinguishes virtual as plus symbol if requested
+*
+* Revision 6.166  2006/12/20 20:08:24  kans
+* added SUPPRESS_VIRT_SEQ and STREAM_VIRT_AS_PLUS, moved STREAM_CORRECT_INVAL
+*
+* Revision 6.165  2006/12/18 15:42:57  kans
+* made MakeCodeBreakList public so validator can check for unnecessary transl excepts
+*
+* Revision 6.164  2006/12/14 14:57:24  kans
+* improvements to gap loops in StreamCacheGetResidue
+*
+* Revision 6.163  2006/12/13 23:10:00  kans
+* StreamCacheGetResidue now handles all gap expansion flag choices
+*
+* Revision 6.162  2006/11/15 18:02:59  kans
+* ProteinFromCdRegionExEx and TransTableTranslateCdRegionEx take farProdFetchOK argument
+*
+* Revision 6.161  2006/11/13 20:35:55  kans
+* STREAM_ALLOW_NEG_GIS also allows gi zero, used for internal purposes
+*
+* Revision 6.160  2006/11/06 17:16:38  kans
+* added stream flag to allow negative gi numbers by NCBI ID group
+*
 * Revision 6.159  2006/09/20 17:54:19  kans
 * SeqPortStreamWork checks stack depth overflow indicating recursive sequence definition
 *
@@ -1590,7 +1620,7 @@ xto, tstrand, newcode);
 						SeqPortSetUpAlphabet(spps, 
 slitp->seq_data_type, newcode);
 						if (slitp->seq_data != NULL)
-							spps->bp = 
+							spps->bp = (ByteStorePtr)
 slitp->seq_data;
 						else
 						{
@@ -1681,7 +1711,7 @@ SeqLocFindNext((SeqLocPtr)(currchunk->data.ptrvalue), currseg);
         curr_code = BioseqGetCode(bsp);
 
 		SeqPortSetUpAlphabet(spp, curr_code, newcode);
-		spp->bp = bsp->seq_data;
+		spp->bp = (ByteStorePtr) bsp->seq_data;
 
 	 /* allocate fast lookup caches for 2na or 4na to iupacna or 4na conversion */
 
@@ -2634,16 +2664,32 @@ static Int4 SeqPortStreamWork (
 static Int4 SeqPortStreamGap (
   Int4 length,
   Boolean is_na,
-  StreamDataPtr sdp 
+  Boolean is_virt,
+  Boolean is_known,
+  StreamDataPtr sdp
 )
 
 {
   Char     buf [4004];
-  Char     ch;
-  Boolean  expand_gaps, many_dashes, single_dash;
+  Char     ch, gapchar = '-';
+  Boolean  expand_gaps, many_dashes, many_pluses, single_dash;
   Int4     len;
 
   if (sdp == NULL) return 0;
+
+  many_pluses = FALSE;
+  if (is_virt) {
+    if ((sdp->flags & SUPPRESS_VIRT_SEQ) != 0) return 0;
+    if ((sdp->flags & STREAM_VIRT_AS_PLUS) != 0) {
+      many_pluses = TRUE;
+      gapchar = '+';
+    }
+  } else if (is_known) {
+    if ((sdp->flags & KNOWN_GAP_AS_PLUS) != 0) {
+      many_pluses = TRUE;
+      gapchar = '+';
+    }
+  }
 
   expand_gaps = (Boolean) ((sdp->flags & STREAM_GAP_MASK) == STREAM_EXPAND_GAPS);
   single_dash = (Boolean) ((sdp->flags & STREAM_GAP_MASK) == GAP_TO_SINGLE_DASH);
@@ -2657,7 +2703,7 @@ static Int4 SeqPortStreamGap (
 
     /* if only indicating gap presence, send one gap character, return 0 count */
 
-    buf [0] = '-';
+    buf [0] = gapchar;
     buf [1] = '\0';
 
     sdp->proc (buf, sdp->userdata);
@@ -2669,8 +2715,8 @@ static Int4 SeqPortStreamGap (
 
   if (length < 1) return 0;
 
-  if (many_dashes) {
-    ch = '-';
+  if (many_dashes || many_pluses) {
+    ch = gapchar;
   } else if (is_na) {
     ch = 'N';
   } else {
@@ -2876,12 +2922,24 @@ static Int4 SeqPortStreamRaw (
 
   if (bsp == NULL || sdp == NULL) return 0;
   if (bsp->repr != Seq_repr_raw && bsp->repr != Seq_repr_const) return 0;
-  bs = bsp->seq_data;
+
+  is_na = (Boolean) ISA_na (bsp->mol);
+
+  if (bsp->seq_data_type == Seq_code_gap) {
+
+    /* support for new Seq-data.gap */
+
+    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, FALSE, sdp);
+
+    return count;
+  }
+
+  /* otherwise Seq-data is a byte store */
+
+  bs = (ByteStorePtr) bsp->seq_data;
   if (bs == NULL) return 0;
 
   alphabet = bsp->seq_data_type;
-
-  is_na = (Boolean) ISA_na (bsp->mol);
 
   if (strand == Seq_strand_minus && is_na) {
     revcomp = TRUE;
@@ -2947,8 +3005,9 @@ static Int4 SeqPortStreamLit (
 )
 
 {
-  Bioseq  bsq;
-  Int4    count = 0;
+  Bioseq   bsq;
+  Int4     count = 0;
+  Boolean  is_known = TRUE;
 
   if (slitp == NULL || sdp == NULL) return 0;
 
@@ -2956,11 +3015,15 @@ static Int4 SeqPortStreamLit (
 
   if (slitp->length < 1) return 0;
 
-  if (slitp->seq_data == NULL) {
+  if (slitp->seq_data == NULL || slitp->seq_data_type == Seq_code_gap) {
 
-    /* literal without sequence data is a virtual gap */
+    /* literal without sequence data is a virtual gap, also handle new gap type */
 
-    count += SeqPortStreamGap (stop - start + 1, is_na, sdp);
+    if (slitp->fuzz != NULL) {
+      is_known = FALSE;
+    }
+
+    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, is_known, sdp);
 
     return count;
   }
@@ -3018,9 +3081,11 @@ static Int4 SeqPortStreamSeqLoc (
   sip = SeqLocId (slp);
   if (sip == NULL) return 0;
 
-  if (sip->choice == SEQID_GI && sip->data.intvalue <= 0) {
-
-    /* gi 0 or negative is always a data error, just report and bail */
+  if (sip->choice == SEQID_GI && sip->data.intvalue <= 0 &&
+      (Boolean) ((sdp->flags & STREAM_ALLOW_NEG_GIS) == 0)) {
+    
+    /* gi 0 is always a data error, just report and bail */
+    /* negative gi sometimes used in-house, allow if flag set */
 
     SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
     if (parentID != NULL) {
@@ -3480,7 +3545,7 @@ static Int4 SeqPortStreamWork (
   switch (bsp->repr) {
 
     case Seq_repr_virtual :
-      count += SeqPortStreamGap (stop - start + 1, ISA_na (bsp->mol), sdp);
+      count += SeqPortStreamGap (stop - start + 1, ISA_na (bsp->mol), TRUE, FALSE, sdp);
       break;
 
     case Seq_repr_raw :
@@ -3691,33 +3756,45 @@ NLM_EXTERN Boolean StreamCacheSetup (
   return TRUE;
 }
 
-NLM_EXTERN Uint1 StreamCacheGetResidue (
+static Boolean StreamCacheRefreshBuffer (
   StreamCache PNTR scp
 )
 
 {
-  Bioseq     bsq;
-  SeqLocPtr  loc;
-  Uint1      residue = '\0';
-  SeqLoc     sl;
-  SeqLocPtr  slp;
-  Int4       stop;
+  Bioseq         bsq;
+  StreamFlgType  flags;
+  SeqLocPtr      loc;
+  SeqLoc         sl;
+  SeqLocPtr      slp;
+  Int4           stop;
 
-  if (scp == NULL) return residue;
+  if (scp == NULL) return FALSE;
 
   if (scp->ctr >= scp->total) {
     scp->offset += (Int4) scp->total;
     scp->ctr = 0;
     scp->total = 0;
 
-    if (scp->offset < 0 || scp->offset >= scp->length) return residue;
+    MemSet ((Pointer) &(scp->buf), 0, sizeof (scp->buf));
+
+    if (scp->offset < 0 || scp->offset >= scp->length) return FALSE;
 
     stop = MIN (scp->offset + 4000L, scp->length);
+
+    flags = scp->flags;
+    if ((flags & STREAM_GAP_MASK) == GAP_TO_SINGLE_DASH || (flags & STREAM_GAP_MASK) == 0) {
+      /* if expand_gaps_to_dashes not equal to gaps_to_single_dash + stream_gap_mask, need to clear other bits first */
+      flags |= EXPAND_GAPS_TO_DASHES;
+    }
+    if ((flags & SUPPRESS_VIRT_SEQ) != 0) {
+      flags ^= SUPPRESS_VIRT_SEQ;
+      flags |= STREAM_VIRT_AS_PLUS;
+    }
 
     if (scp->bsp != NULL) {
 
       SeqPortStreamInt (scp->bsp, scp->offset, stop - 1, Seq_strand_plus,
-                        scp->flags, (Pointer) &(scp->buf), NULL);
+                        flags, (Pointer) &(scp->buf), NULL);
 
     } else if (scp->slp != NULL) {
 
@@ -3741,16 +3818,80 @@ NLM_EXTERN Uint1 StreamCacheGetResidue (
         sl.data.ptrvalue = (Pointer) slp->data.ptrvalue;
         sl.next = NULL;
       }
+
       SeqPortStreamInt (&bsq, scp->offset, stop - 1, Seq_strand_plus,
-                        scp->flags, (Pointer) &(scp->buf), NULL);
+                        flags, (Pointer) &(scp->buf), NULL);
     }
 
     scp->total = StringLen (scp->buf);
   }
 
+  return TRUE;
+}
+
+NLM_EXTERN Uint1 StreamCacheGetResidue (
+  StreamCache PNTR scp
+)
+
+{
+  Uint1  residue = '\0';
+
+  if (scp == NULL) return '\0';
+
+  if (scp->ctr >= scp->total) {
+    if (! StreamCacheRefreshBuffer (scp)) return '\0';
+  }
+
   if (scp->ctr < scp->total) {
     residue = scp->buf [(int) scp->ctr];
     (scp->ctr)++;
+
+    if (residue == '-') {
+    
+      if ((scp->flags & STREAM_GAP_MASK) == 0) {
+        while (residue == '-') {
+          if (scp->ctr >= scp->total) {
+            if (! StreamCacheRefreshBuffer (scp)) return '\0';
+          }
+
+          while (scp->ctr < scp->total && residue == '-') {
+            residue = scp->buf [(int) scp->ctr];
+            (scp->ctr)++;
+          }
+        }
+        if (residue == '-') return '\0';
+
+      } else if ((scp->flags & STREAM_GAP_MASK) == GAP_TO_SINGLE_DASH) {
+
+        while (residue == '-') {
+          if (scp->ctr >= scp->total) {
+            if (! StreamCacheRefreshBuffer (scp)) return '-';
+          }
+
+          while (scp->ctr < scp->total && residue == '-') {
+            residue = scp->buf [(int) scp->ctr];
+            if (residue != '-') return '-';
+            (scp->ctr)++;
+          }
+        }
+      }
+
+    } else if (residue == '+') {
+
+      if ((scp->flags & SUPPRESS_VIRT_SEQ) != 0) {
+        while (residue == '+') {
+          if (scp->ctr >= scp->total) {
+            if (! StreamCacheRefreshBuffer (scp)) return '\0';
+          }
+
+          while (scp->ctr < scp->total && residue == '+') {
+            residue = scp->buf [(int) scp->ctr];
+            (scp->ctr)++;
+          }
+        }
+        if (residue == '+') return '\0';
+      }
+    }
   }
 
   return residue;
@@ -3788,7 +3929,7 @@ NLM_EXTERN Boolean StreamCacheSetPosition (
 *
 ********************************************************************************/
 
-NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, BoolPtr altStartP)
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, BoolPtr altStartP, Boolean farProdFetchOK)
 
 {
   ByteStorePtr   bs;
@@ -3833,7 +3974,7 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx (SeqFeatPtr sfp, Boolean include
   tableExists = (Boolean) (tbl != NULL);
 
   bs = TransTableTranslateCdRegionEx (&tbl, sfp, include_stop, remove_trailingX,
-                                      FALSE, altStartP);
+                                      FALSE, altStartP, farProdFetchOK);
 
   /* save FSA in genetic code-specific app property name */
 
@@ -3847,7 +3988,7 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx (SeqFeatPtr sfp, Boolean include
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
 
 {
-  return ProteinFromCdRegionExEx (sfp, include_stop, remove_trailingX, NULL);
+  return ProteinFromCdRegionExEx (sfp, include_stop, remove_trailingX, NULL, TRUE);
 }
 
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionExWithTrailingCodonHandling
@@ -5075,13 +5216,17 @@ NLM_EXTERN Boolean LIBCALL BioseqRevComp (BioseqPtr bsp)
 	return retval;
 }
 
-static Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, ByteStorePtr bysp)
+static Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
 {
 	SeqCodeTablePtr sctp;
-	long		        readbyte, bslen;
+	ByteStorePtr    bysp;
+	long		    readbyte, bslen;
 	Uint1           byte = 0, byte_to, newbyte = 0, residue;
 	Uint1           comp, bitctr, mask, lshift, rshift, bc;
 	
+	if (seqtype == Seq_code_gap) return FALSE;
+
+    bysp = (ByteStorePtr) sdp;
 	if (bysp == NULL)
 	{
 		ErrPostEx(SEV_ERROR,0,0, "Error:  no sequence data\n");
@@ -5248,15 +5393,19 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 } /* BioseqComplement */
 
 
-static Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, ByteStorePtr bysp1)
+static Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
 {
-	ByteStorePtr 	bysp2 = '\0';
+	ByteStorePtr 	bysp1, bysp2 = '\0';
 	long 		readbyte, bslen = 0;
 	Int4 		count = 0;
 	Uint1 	byte = 0, byte2, byte_to = 0, byte_to2, newbyte = 0;
 	Uint1		newbyte2, finalbyte, residue, residue2, bitctr, bc2 = 0;
 	Uint1 		bitctr2, mask, mask2, lshift, rshift, bc = 0, jagged;
 	
+	if (seqtype == Seq_code_gap) return FALSE;
+
+    bysp1 = (ByteStorePtr) sdp;
+
   if (bysp1 == NULL)
   {
     ErrPostEx(SEV_ERROR,0,0, "Error:  No sequence data\n");
@@ -6528,7 +6677,7 @@ NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 fr
   return bases;
 }
 
-static ValNodePtr MakeCodeBreakList (SeqLocPtr cdslocation, Int4 len, CodeBreakPtr cbp, Uint1 frame)
+NLM_EXTERN ValNodePtr MakeCodeBreakList (SeqLocPtr cdslocation, Int4 len, CodeBreakPtr cbp, Uint1 frame)
 
 {
   Int4        adjust = 0, pos, pos1, pos2;
@@ -6587,7 +6736,8 @@ static ByteStorePtr TransTableTranslateCommon (
   Boolean include_stop,
   Boolean remove_trailingX,
   Boolean no_stop_at_end_of_complete_cds,
-  BoolPtr altStartP
+  BoolPtr altStartP,
+  Boolean farProdFetchOK
 )
 
 {
@@ -6658,7 +6808,7 @@ static ByteStorePtr TransTableTranslateCommon (
 
   no_start = FALSE;
   part_loc = SeqLocPartialCheck (location);
-  part_prod = SeqLocPartialCheck (product);
+  part_prod = SeqLocPartialCheckEx (product, farProdFetchOK);
   if ((part_loc & SLP_START) /* || (part_prod & SLP_START) */) {
     no_start = TRUE;
   }
@@ -6845,7 +6995,7 @@ NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
 {
   return TransTableTranslateCommon (tblptr, location, NULL, FALSE, genCode,
                                     frame, NULL, include_stop,
-                                    remove_trailingX, FALSE, NULL);
+                                    remove_trailingX, FALSE, NULL, TRUE);
 }
 
 NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
@@ -6854,7 +7004,8 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
   Boolean include_stop,
   Boolean remove_trailingX,
   Boolean no_stop_at_end_of_complete_cds,
-  BoolPtr altStartP
+  BoolPtr altStartP,
+  Boolean farProdFetchOK
 )
 
 {
@@ -6883,7 +7034,7 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
   return TransTableTranslateCommon (tblptr, cds->location, cds->product, partial3,
                                     genCode, crp->frame, crp->code_break,
                                     include_stop, remove_trailingX,
-                                    no_stop_at_end_of_complete_cds, altStartP);
+                                    no_stop_at_end_of_complete_cds, altStartP, farProdFetchOK);
 }
 
 NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
@@ -6896,7 +7047,7 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
 
 {
   return TransTableTranslateCdRegionEx (tblptr, cds, include_stop, remove_trailingX,
-                                        no_stop_at_end_of_complete_cds, NULL);
+                                        no_stop_at_end_of_complete_cds, NULL, TRUE);
 }
 
 /* allow reuse of translation tables by saving as AppProperty */
@@ -8855,9 +9006,9 @@ static Int4 AddSeqLitData (CharPtr str, ValNodePtr PNTR seq_ext)
   if (slp != NULL) {
     slp->length = len;
     ValNodeAddPointer (seq_ext, (Int2) 2, (Pointer) slp);
-    slp->seq_data = BSNew (slp->length);
+    slp->seq_data = (SeqDataPtr) BSNew (slp->length);
     slp->seq_data_type = Seq_code_iupacna;
-    AddBasesToByteStore (slp->seq_data, str);
+    AddBasesToByteStore ((ByteStorePtr) slp->seq_data, str);
   }
   return len;
 }
@@ -9066,7 +9217,7 @@ NLM_EXTERN void ConvertNsToGaps (
     
   MemFree (bases);
 
-  bsp->seq_data = BSFree (bsp->seq_data);
+  bsp->seq_data = SeqDataFree (bsp->seq_data, bsp->seq_data_type);
   bsp->seq_data_type = 0;
   bsp->repr = Seq_repr_delta;
   bsp->seq_ext_type = 4;

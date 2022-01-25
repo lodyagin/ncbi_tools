@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.72 $
+* $Revision: 6.73 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -166,6 +166,8 @@ typedef unsigned long CstType;
 #define EXPANDED_GAP_DISPLAY   65536
 #define HIDE_GO_TERMS         131072
 #define HIDE_TRANSLATION      262144
+
+#define HIDE_EVIDENCE_QUALS   524288
 
 /* opaque pointer for special extensions */
 

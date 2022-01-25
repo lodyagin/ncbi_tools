@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,11 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.9  2007/04/11 20:06:33  bollin
+* When showing and hiding Lists, call XtManageChild and XtUnmanageChild respectivelly
+* for both the parent of the list control (XtParent(c)) as well as for the control itself.
+* This resolves a problem that I was seeing with the Linux build of Vibrant.
+*
 * Revision 6.8  2006/09/14 19:18:28  ivanov
 * Rollback last changes. All missed defines added to corelib/ncbiwin.h.
 *
@@ -457,6 +462,9 @@ static void Nlm_ShowList (Nlm_GraphiC l, Nlm_Boolean setFlag, Nlm_Boolean savePo
 #ifdef WIN_MAC
   Nlm_BaR       sb;
 #endif
+#ifdef WIN_MOTIF
+  Widget        parent;
+#endif
 
   if (setFlag) {
     Nlm_SetVisible (l, TRUE);
@@ -476,7 +484,11 @@ static void Nlm_ShowList (Nlm_GraphiC l, Nlm_Boolean setFlag, Nlm_Boolean savePo
     UpdateWindow (c);
 #endif
 #ifdef WIN_MOTIF
-    XtManageChild (XtParent (c));
+    parent = XtParent(c);
+    if (parent) {
+      XtManageChild (parent);
+    }
+    XtManageChild (c);
 #endif
     Nlm_RestorePort (tempPort);
   }
@@ -490,6 +502,9 @@ static void Nlm_HideList (Nlm_GraphiC l, Nlm_Boolean setFlag, Nlm_Boolean savePo
   Nlm_WindoW    tempPort;
 #ifdef WIN_MAC
   Nlm_RecT      r;
+#endif
+#ifdef WIN_MOTIF
+  Widget        parent;
 #endif
 
   if (setFlag) {
@@ -517,7 +532,11 @@ static void Nlm_HideList (Nlm_GraphiC l, Nlm_Boolean setFlag, Nlm_Boolean savePo
   UpdateWindow (c);
 #endif
 #ifdef WIN_MOTIF
-  XtUnmanageChild (XtParent (c));
+  parent = XtParent (c);
+  if (parent) {
+    XtUnmanageChild (parent);
+  }
+  XtUnmanageChild (c);
 #endif
   Nlm_RestorePort (tempPort);
 }

@@ -1,4 +1,4 @@
-/* $Id: pattern.h,v 1.14 2006/09/26 15:56:51 madden Exp $
+/* $Id: pattern.h,v 1.15 2006/11/21 16:51:18 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,11 +35,13 @@
  *             instead.
  */
 
-#include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_query_info.h>
-
 #ifndef ALGO_BLAST_CORE__PATTERN_H
 #define ALGO_BLAST_CORE__PATTERN_H
+
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_query_info.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -229,4 +231,4 @@ Int4 PHIGetPatternOccurrences(const SPHIPatternSearchBlk * pattern_blk,
 }
 #endif
 
-#endif /* ALGO_BLAST_CORE__PATTERN_H */
+#endif /* !ALGO_BLAST_CORE__PATTERN_H */

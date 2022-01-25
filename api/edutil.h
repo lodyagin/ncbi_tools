@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.20  2007/05/08 17:18:32  bollin
+* Added functions for identifying AGP gap DeltaSeqs
+*
+* Revision 6.19  2007/05/07 17:43:03  bollin
+* Made functions IsDeltaSeqGap and IsDeltaSeqUnknownGap extern.
+*
 * Revision 6.18  2006/07/13 17:06:38  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -744,6 +750,13 @@ AdjustFeatureForGapChange
  BioseqPtr  bsp, 
  Int4       offset, 
  Int4       len_diff);
+
+extern Boolean IsDeltaSeqGap (DeltaSeqPtr dsp);
+extern Boolean IsDeltaSeqUnknownGap (DeltaSeqPtr dsp);
+extern Boolean IsDeltaSeqKnownGap (DeltaSeqPtr dsp);
+extern Boolean DoesSeqLitHaveGapTypeOrLinkage (SeqLitPtr slip);
+extern Boolean DoesDeltaSeqHaveGapTypeOrLinkage (DeltaSeqPtr dsp);
+
 
 #ifdef __cplusplus
 }

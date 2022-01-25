@@ -1,4 +1,4 @@
-/* $Id: blast_engine.h,v 1.55 2006/09/01 14:42:34 papadopo Exp $
+/* $Id: blast_engine.h,v 1.57 2006/11/29 17:25:50 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,13 +31,18 @@
 * Function calls to actually perform a BLAST search (high level).
  */
 
-#ifndef __BLAST_ENGINE__
-#define __BLAST_ENGINE__
+#ifndef ALGO_BLAST_CORE__BLAST_ENGINE__H
+#define ALGO_BLAST_CORE__BLAST_ENGINE__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/blast_gapalign.h>
 #include <algo/blast/core/blast_hits.h>
+#include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_diagnostics.h>   
 #include <algo/blast/core/blast_hspstream.h>
@@ -169,7 +174,6 @@ Blast_RunPreliminarySearch(EBlastProgramType program,
    const PSIBlastOptions* psi_options, const BlastDatabaseOptions* db_options, 
    BlastHSPStream* hsp_stream, BlastDiagnostics* diagnostics);
 
-
 /** Gapped extension function pointer type */
 typedef Int2 (*BlastGetGappedScoreType) 
      (EBlastProgramType, /**< @todo comment function pointer types */
@@ -182,8 +186,9 @@ typedef Int2 (*BlastGetGappedScoreType)
       const BlastHitSavingParameters*,
       BlastInitHitList*, 
       BlastHSPList**, 
-      BlastGappedStats*);
-     
+      BlastGappedStats*,
+      Boolean * fence_hit);
+
 /** Word finder function pointer type */
 typedef Int2 (*BlastWordFinderType) 
      (BLAST_SequenceBlk*, /**< @todo comment function pointer types */
@@ -201,4 +206,4 @@ typedef Int2 (*BlastWordFinderType)
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_ENGINE__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_ENGINE__H */

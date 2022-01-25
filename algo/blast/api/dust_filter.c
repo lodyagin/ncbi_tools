@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: dust_filter.c,v 1.7 2006/05/24 21:17:50 camacho Exp $";
+static char const rcsid[] = "$Id: dust_filter.c,v 1.10 2007/01/24 14:31:16 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 /*
@@ -44,14 +44,91 @@ static char const rcsid[] = "$Id: dust_filter.c,v 1.7 2006/05/24 21:17:50 camach
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/blast_inline.h>
-#include <algo/blast/core/blast_dust.h>
+#include <blast_dust.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
  * @{
  */
 
+
+/** Look for dustable locations 
+ * @param loc returns locations [in|out]
+ * @param reg dust specific locations [in]
+ * @param nreg number of DREGION [in]
+ * @return 0 if no error
+ */
+static Int2 
+s_GetDustLocations (BlastSeqLoc** loc, DREGION* reg, Int4 nreg)
+{
+   BlastSeqLoc* tail = NULL;   /* pointer to tail of loc linked list */
+        
+   if (!loc)
+      return -1;
+   
+   *loc = NULL;
+
+   /* point to dusted locations */
+   if (nreg > 0) {
+      Int4 i;
+      for (i = 0; reg && i < nreg; i++) {
+         /* Cache the tail of the list to avoid the overhead of traversing the
+          * list when appending to it */
+         tail = BlastSeqLocNew(tail ? &tail : loc, reg->from, reg->to);
+         reg = reg->next;
+      }
+   }
+   return 0;
+}
+
+/** Dust provided sequence.
+ * @param sequence input sequence [in]
+ * @param length number of bases [in]
+ * @param offset where to start on input sequence [in]
+ * @param level dust parameter [in]
+ * @param window dust parameter [in]
+ * @param linker dust parameter [in]
+ * @param dust_loc returns locations [in|out]
+ * @return 0 if no error
+ */
+Int2 s_SeqBufferDust (Uint1* sequence, Int4 length, Int4 offset,
+                    Int2 level, Int2 window, Int2 linker,
+                    BlastSeqLoc** dust_loc)
+{
+	DREGION* reg,* regold;
+	Int4 nreg;
+        Int2 status = 0;
+
+        /* place for dusted regions */
+	regold = reg = (DREGION*) calloc(1, sizeof(DREGION));
+	if (!reg)
+           return -1;
+
+        nreg = DustSegs (sequence, length, offset, reg, (Int4)level, 
+                  (Int4)window, (Int4)linker);
+
+        status = s_GetDustLocations(dust_loc, reg, nreg);
+
+        /* clean up memory */
+	reg = regold;
+	while (reg)
+	{
+		regold = reg;
+		reg = reg->next;
+		sfree (regold);
+	}
+
+	return status;
+}
+
+/** Returns locations that should be masked according to dust.
+ * @param query_blk input sequence [in]
+ * @param query_info number of bases etc. [in]
+ * @param query_seqloc locations to be dusted [in]
+ * @param filter_options dust parameters provided here [in]
+ * @param filter_maskloc return value [in|out]
+ * @return 0 if no error
+ */
 static Int2
 s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info, SeqLoc* query_seqloc, const SBlastFilterOptions* filter_options, BlastMaskLoc** filter_maskloc)
 {
@@ -92,7 +169,7 @@ s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info
             if (BlastIsReverseStrand(kIsNucl, context) == TRUE)
             {  /* Reverse this as it's on minus strand. */
                   BlastSeqLoc* filter_slp_rev = NULL;
-                  SeqBufferDust(buffer, query_length, 0, dust_options->level, 
+                  s_SeqBufferDust(buffer, query_length, 0, dust_options->level, 
                        dust_options->window, dust_options->linker, &filter_slp);
 
                   /* Reverse this relative to the part of the query being searched, leave it up to 
@@ -104,7 +181,7 @@ s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info
             }
             else
             {
-                   SeqBufferDust(buffer, query_length, 0, dust_options->level, 
+                   s_SeqBufferDust(buffer, query_length, 0, dust_options->level, 
                        dust_options->window, dust_options->linker, &filter_slp);
             }
 

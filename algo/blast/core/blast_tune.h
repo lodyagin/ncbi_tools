@@ -1,7 +1,4 @@
-#ifndef ALGO_BLAST_CORE___BLAST_TUNE__H
-#define ALGO_BLAST_CORE___BLAST_TUNE__H
-
-/*  $Id: blast_tune.h,v 1.2 2006/07/06 19:22:12 papadopo Exp $
+/*  $Id: blast_tune.h,v 1.3 2006/11/21 16:47:16 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +33,11 @@
  * percent identity.
  */
 
+#ifndef ALGO_BLAST_CORE___BLAST_TUNE__H
+#define ALGO_BLAST_CORE___BLAST_TUNE__H
+
 #include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 
 /** @addtogroup AlgoBlast
  *

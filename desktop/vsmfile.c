@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.14 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -456,7 +456,7 @@ static Int2 LIBCALLBACK VSMGenericFastaSave (OMProcControlPtr ompcp, Boolean is_
 			/*
 			SeqEntryToFasta(sep, fp, is_na);
 			*/
-			SeqEntryFastaStream (sep, fp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, 70, 0, 0, is_na, !is_na, FALSE);
+			SeqEntryFastaStreamEx (sep, fp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, 70, 0, 0, is_na, !is_na, FALSE, !is_na, FALSE);
 		}
 		FileClose(fp);
 		ArrowCursor();
@@ -532,6 +532,41 @@ static int LIBCALLBACK SortProtByName (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
+static void WriteSortedProteinsToFile (FILE *fp, SeqEntryPtr sep)
+{
+	AlphaProtPtr app;
+  ValNodePtr   prot_list = NULL, vnp;
+  CharPtr      prev_name = NULL;
+
+  if (fp == NULL || sep == NULL) {
+    return;
+  }
+
+  VisitBioseqsInSep (sep, &prot_list, GetProtListCallback);
+  prot_list = ValNodeSort (prot_list, SortProtByName);
+	for (vnp = prot_list; vnp != NULL; vnp = vnp->next)
+  {
+	  app = (AlphaProtPtr) vnp->data.ptrvalue;
+	  if (app == NULL) continue;
+	  if (prev_name != NULL && StringCmp (prev_name, app->prot_name) != 0) {
+	    fprintf (fp, "\n");
+	  }
+
+    sep = SeqMgrGetSeqEntryForData (app->bsp);
+    SeqEntryFastaStreamEx (sep, fp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, 70, 0, 0, FALSE, TRUE, FALSE, TRUE, TRUE);
+
+    prev_name = app->prot_name;
+	}
+	for (vnp = prot_list; vnp != NULL; vnp = vnp->next)
+	{
+	  app = (AlphaProtPtr) vnp->data.ptrvalue;
+	  if (app == NULL) continue;
+	  app->prot_name = MemFree (app->prot_name);
+	  vnp->data.ptrvalue = MemFree (app);
+	}
+  prot_list = ValNodeFree (prot_list);		
+}
+
 Int2 LIBCALLBACK VSMFastaSortedProtSave (Pointer data)
 {
   OMProcControlPtr ompcp;
@@ -539,8 +574,6 @@ Int2 LIBCALLBACK VSMFastaSortedProtSave (Pointer data)
 	FILE * fp;
 	ValNode vn;
 	SeqEntryPtr sep = NULL;
-	ValNodePtr   prot_list = NULL, vnp;
-	AlphaProtPtr app;
 
   ompcp = (OMProcControlPtr)data;
   if (ompcp == NULL) return OM_MSG_RET_ERROR;
@@ -582,28 +615,37 @@ Int2 LIBCALLBACK VSMFastaSortedProtSave (Pointer data)
 #endif
 		fp = FileOpen(filename, "w");
 		
-    VisitBioseqsInSep (sep, &prot_list, GetProtListCallback);
-    prot_list = ValNodeSort (prot_list, SortProtByName);
-		for (vnp = prot_list; vnp != NULL; vnp = vnp->next)
-		{
-		  app = (AlphaProtPtr) vnp->data.ptrvalue;
-		  if (app == NULL) continue;
-		  BioseqToFasta (app->bsp, fp, FALSE);
-		}
-		for (vnp = prot_list; vnp != NULL; vnp = vnp->next)
-		{
-		  app = (AlphaProtPtr) vnp->data.ptrvalue;
-		  if (app == NULL) continue;
-		  app->prot_name = MemFree (app->prot_name);
-		  vnp->data.ptrvalue = MemFree (app);
-		}
-    prot_list = ValNodeFree (prot_list);		
-		FileClose(fp);
+    WriteSortedProteinsToFile (fp, sep);
+
+    FileClose(fp);
 		ArrowCursor();
 	}
 	
 	return OM_MSG_RET_DONE;  
 }
+
+
+NLM_EXTERN void ViewSortedProteins (SeqEntryPtr sep)
+{
+  Char         path [PATH_MAX];
+  FILE        *fp;
+
+  if (sep == NULL) return;
+  TmpNam (path);
+  fp = FileOpen(path, "w");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return;
+  }
+		
+  WriteSortedProteinsToFile (fp, sep);
+
+  FileClose(fp);
+
+  LaunchGeneralTextViewer (path, "Sorted Proteins");
+  FileRemove (path);
+}
+
 
 typedef struct featuretableexport
 {
@@ -765,6 +807,72 @@ static void VSMExportFeatureTableBioseqCallback (BioseqPtr bsp, Pointer userdata
   asn2gnbk_cleanup (ajp);
 }
 
+static Int4 FindNecessaryBioseqLength (SeqFeatPtr sfp)
+{
+  Int4 len = 0;
+  
+  while (sfp != NULL) {
+    len = MAX (SeqLocStop (sfp->location), len);
+    len = MAX (SeqLocStart (sfp->location), len);
+    sfp = sfp->next;
+  }
+  return len + 1;
+}
+
+extern void ExportSeqAnnotFeatureTable (FILE *fp, SeqAnnotPtr sap) 
+{
+  FeatureTableData ftd;
+  BioseqPtr fake_bsp;
+  SeqFeatPtr first_feat;
+  SeqEntryPtr sep;
+  
+  if (fp == NULL || sap == NULL) return;
+
+  /* create fake bioseq to hold annotation */
+  fake_bsp = BioseqNew();
+  fake_bsp->annot = sap;
+  
+  /* create SeqEntry for temporary bioseq to live in */
+  sep = SeqEntryNew ();
+  sep->choice = 1;
+  sep->data.ptrvalue = fake_bsp;
+  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) fake_bsp, sep);  
+
+  ftd.export_only_selected = FALSE;
+  ftd.fp = fp;
+  ftd.show_nucs = TRUE;
+  ftd.show_prots = TRUE;
+  ftd.suppress_protein_ids = FALSE;
+
+  /* show sources if there are any */
+  first_feat = (SeqFeatPtr) sap->data;
+  while (first_feat != NULL && first_feat->data.choice != SEQFEAT_BIOSRC) {
+    first_feat = first_feat->next;
+  }
+  if (first_feat != NULL) {
+    ftd.hide_sources = FALSE;
+  } else {
+    ftd.hide_sources = TRUE;
+  }
+      
+  first_feat = (SeqFeatPtr) sap->data;
+  fake_bsp->id = SeqIdDup (SeqLocId (first_feat->location));
+  if (first_feat->data.choice == SEQFEAT_PROT) {
+    fake_bsp->mol = Seq_mol_aa;
+  } else {
+    fake_bsp->mol = Seq_mol_dna;
+  }
+  fake_bsp->repr = Seq_repr_raw;
+  fake_bsp->length = FindNecessaryBioseqLength (first_feat);
+  
+  VisitBioseqsInSep (sep, &ftd, VSMExportFeatureTableBioseqCallback);
+
+  fake_bsp->annot = NULL;
+  fake_bsp->idx.deleteme = TRUE;
+  DeleteMarkedObjects (fake_bsp->idx.entityID, 0, NULL);
+ 
+}
+
 static Int2 
 VSMExportFeatureTable 
 (OMProcControlPtr ompcp, 
@@ -779,6 +887,9 @@ VSMExportFeatureTable
 	ValNode vn;
 	SeqEntryPtr sep = NULL;
 	FeatureTableData ftd;
+	SeqAnnotPtr sap = NULL;
+	BioseqPtr fake_bsp = NULL;
+	SeqFeatPtr first_feat = NULL;
 	
 	switch(ompcp->input_itemtype)
 	{
@@ -786,9 +897,22 @@ VSMExportFeatureTable
 		case OBJ_BIOSEQ:
 		case OBJ_BIOSEQSET:
 	  case OBJ_SEQFEAT:
-			break;
+	        break;
+	    case OBJ_SEQANNOT:
+	        sap = (SeqAnnotPtr) ompcp->input_data;
+	        if (sap== NULL) {
+			  ErrPostEx(SEV_ERROR, 0,0,"ToFasta: Can't write NULL Seq-annot");
+			  return OM_MSG_RET_ERROR;
+	        } else if (sap->type != 1) {
+  	          ErrPostEx(SEV_ERROR, 0,0,"ToFasta: Can only write Feature Table Seq-annot");
+			  return OM_MSG_RET_ERROR;
+	        } else if (sap->data == NULL) {
+  	          ErrPostEx(SEV_ERROR, 0,0,"ToFasta: Can't write empty Feature Table Seq-annot");
+			  return OM_MSG_RET_ERROR;
+			}
+	        break;
 		default:
-			ErrPostEx(SEV_ERROR, 0,0,"ToFasta: Can only write Seq-entry, Bioseq, or Bioseq-set");
+			ErrPostEx(SEV_ERROR, 0,0,"ToFasta: Can only write Seq-entry, Feature Table Seq-annot, Bioseq, or Bioseq-set");
 			return OM_MSG_RET_ERROR;
 	}
 	
@@ -805,6 +929,28 @@ VSMExportFeatureTable
   else if (ompcp->input_choicetype == OBJ_SEQENTRY)
   {
 		sep = (SeqEntryPtr)(ompcp->input_choice);
+  }
+  else if (ompcp->input_itemtype == OBJ_SEQANNOT) {
+    sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+    if (sep == NULL) {
+      fake_bsp = BioseqNew();
+      first_feat = (SeqFeatPtr) sap->data;
+      fake_bsp->id = SeqIdDup (SeqLocId (first_feat->location));
+      fake_bsp->annot = sap;
+      if (first_feat->data.choice == SEQFEAT_PROT) {
+        fake_bsp->mol = Seq_mol_aa;
+      } else {
+        fake_bsp->mol = Seq_mol_dna;
+      }
+      fake_bsp->repr = Seq_repr_raw;
+      fake_bsp->length = FindNecessaryBioseqLength (first_feat);
+
+      /* create SeqEntry for temporary bioseq to live in */
+      sep = SeqEntryNew ();
+      sep->choice = 1;
+      sep->data.ptrvalue = fake_bsp;
+      SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) fake_bsp, sep);      
+    }
   }
 	else
 	{
@@ -833,6 +979,12 @@ VSMExportFeatureTable
 		VisitBioseqsInSep (sep, &ftd, VSMExportFeatureTableBioseqCallback);
 		FileClose(ftd.fp);
 		ArrowCursor();
+	}
+	
+	if (fake_bsp != NULL) {
+	  fake_bsp->annot = NULL;
+	  fake_bsp->idx.deleteme = TRUE;
+	  DeleteMarkedObjects (fake_bsp->idx.entityID, 0, NULL);
 	}
 	
 	return OM_MSG_RET_DONE;  

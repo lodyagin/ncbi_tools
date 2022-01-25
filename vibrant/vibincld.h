@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Vibrant inclusion of underlying windowing system toolbox functions,
@@ -43,6 +43,12 @@
 *
 *
 * $Log: vibincld.h,v $
+* Revision 6.7  2007/05/01 22:01:30  kans
+* changes in preparation for supporing Quartz on Macintosh
+*
+* Revision 6.6  2006/11/24 20:06:31  kans
+* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
+*
 * Revision 6.5  2002/06/13 16:15:13  kans
 * fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
 *
@@ -282,7 +288,7 @@ typedef  struct  Nlm_boxrec {
 
 
 
-#ifdef WIN_MAC
+#if defined(WIN_MAC) || defined(WIN_MAC_QUARTZ)
 #define Nlm_WindowTool  WindowPtr
 #define Nlm_PortTool    GrafPtr
 #define Nlm_ShellTool   Nlm_Handle
@@ -520,6 +526,13 @@ void        Nlm_GlobalToLocal PROTO((Nlm_PointPtr pt));
 
 void        Nlm_VibrantSetGUI PROTO((void));
 
+#if defined(WIN_MAC) && defined(WIN_MAC_QUARTZ)
+CGRect      Nlm_RecTToCGRect(Nlm_RectPtr r);
+Nlm_RecT    Nlm_CGRectToRecT(CGRect cgr);
+CGPoint     Nlm_PoinTToCGPoint(Nlm_PoinT np);
+Nlm_PoinT   Nlm_CGPointToPoinT(CGPoint qp);
+#endif
+
 #ifdef WIN_MSWIN
 extern  Nlm_Boolean Nlm_VibrantDisabled PROTO((void));
 extern  HDC         Nlm_GetPicWinHDC    PROTO((void));
@@ -548,10 +561,12 @@ extern Nlm_Boolean Nlm_ProcessKeydown PROTO((Nlm_GraphiC g, WPARAM wParam,
    /** includes needed by vibwndws.c ***/
 
 #ifdef WIN_MAC
+#ifdef __MWERKS__
 #include <Resources.h>
 #include <Scrap.h>
 #include <AppleEvents.h>
 #include <Gestalt.h>
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -565,6 +580,7 @@ extern Nlm_Boolean Nlm_ProcessKeydown PROTO((Nlm_GraphiC g, WPARAM wParam,
   /** includes needed by vibutils.c ***/
 
 #ifdef WIN_MAC
+#ifdef __MWERKS__
 #ifndef OS_UNIX_DARWIN
 #include <Printing.h>
 #endif
@@ -573,6 +589,7 @@ extern Nlm_Boolean Nlm_ProcessKeydown PROTO((Nlm_GraphiC g, WPARAM wParam,
 #include <Scrap.h>
 #include <AppleEvents.h>
 #include <Palettes.h>
+#endif
 #endif
 
 #ifdef WIN_MSWIN

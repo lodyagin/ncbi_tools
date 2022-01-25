@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   04/03/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: viewer3d.c,v $
+* Revision 6.6  2007/05/01 22:01:30  kans
+* changes in preparation for supporing Quartz on Macintosh
+*
 * Revision 6.5  2000/01/11 01:16:45  lewisg
 * fix color selection in Cn3D, other misc. bugs
 *
@@ -1192,11 +1195,12 @@ static void NextLayerProc(ButtoN b)
   Nlm_PrevLayer3D( (Viewer3D)GetObjectExtra( b ) );
 }
 
+#ifndef WIN_MAC
 static void PlayLayerProc(ButtoN b)
 {
   Nlm_PlayLayer3D( (Viewer3D)GetObjectExtra( b ) );
 }
-
+#endif
 
 /* Navigation callbacks */
 
@@ -1366,12 +1370,13 @@ static void Nlm_LinkBasicControls3D(Controls3D controls, Viewer3D vvv)
   SetObjectExtra(controls->minusButton,   vvv, NULL);
 }
 
+#ifndef WIN_MAC
 static void Cleanup_V3D_bPLAY(GraphiC playButton, VoidPtr vvv)
 {
   if ((ButtoN)playButton == V3D_bPLAY)
     V3D_bPLAY = NULL;
 }
-
+#endif
 
 extern void Nlm_LinkControls3D(Controls3D controls, Viewer3D vvv)
 {

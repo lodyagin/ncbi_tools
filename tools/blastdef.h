@@ -30,8 +30,14 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.168 $ 
+/* $Revision: 6.169 $ 
 * $Log: blastdef.h,v $
+* Revision 6.169  2007/03/13 20:39:58  madden
+*  - Change the type of the dropoff_1st_pass, dropoff_2nd_pass,
+*    gap_x_dropoff, and gap_x_dropoff_final fields of the
+*    BLAST_OptionsBlk struct to Nlm_FloatHi.
+*  [from Mike Gertz]
+*
 * Revision 6.168  2006/05/03 14:41:50  madden
 * Added a Boolean field "unified_p" to the BLAST_OptionsBlk
 * structure.  The field indicates whether to use a combination of
@@ -1093,7 +1099,7 @@ typedef struct _blast_optionsblk {
 	Boolean	multiple_hits_only; /* Only the multiple hits alg. used. */
 	Int4	hitlist_size;	/* How many hits should be returned. */
 	Nlm_FloatHi number_of_bits; /* Number of bits to initiate 2nd pass (default is used if zero) */
-	Int4	dropoff_1st_pass, /* dropoff ("X") used for 1st pass. */
+	Nlm_FloatHi	dropoff_1st_pass, /* dropoff ("X") used for 1st pass. */
                 dropoff_2nd_pass; /* dropoff ("X") used for 2nd pass. */
 	Int2	number_of_cpus;	/* How many CPU's. */
 	CharPtr matrix;		/* name of matrix to use. */
@@ -1111,8 +1117,8 @@ typedef struct _blast_optionsblk {
 	Boolean		gapped_calculation; /* Is a gapped calc. being done? */
 	/* The next three are used ONLY for gapped alignments. */
 	Int4		gap_open,	/* Cost to open a gap (NO extension). */
-			gap_extend,	/* Cost to extend a gap one letter. */
-			gap_x_dropoff,	/* X-dropoff (in bits) used by Gapped align routine. */
+			gap_extend;	/* Cost to extend a gap one letter. */
+        Nlm_FloatHi     gap_x_dropoff,  /* X-dropoff (in bits) used by Gapped align routine. */
 			gap_x_dropoff_final;	/* X-dropoff (in bits) used by Gapped align routine for FINAL alignment. */
         Int4            decline_align;  /* Cost for declining alignment */
 	Nlm_FloatHi	gap_trigger; /* Score (in bits) to gap, if an HSP gaps well. */

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="netblast"
-	ProjectGUID="{17CDBD4F-CB4B-4C6B-95D8-90C8CC9B7D77}"
+	ProjectGUID="{45CF24A4-E238-4E5C-BACC-5F0D6556A8EC}"
 	>
 	<Platforms>
 		<Platform

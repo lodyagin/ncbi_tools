@@ -1,5 +1,5 @@
 
-/* $Id: link_hsps.c,v 1.61 2006/06/29 16:23:08 camacho Exp $
+/* $Id: link_hsps.c,v 1.65 2007/03/05 16:55:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,11 +34,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: link_hsps.c,v 1.61 2006/06/29 16:23:08 camacho Exp $";
+    "$Id: link_hsps.c,v 1.65 2007/03/05 16:55:33 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/link_hsps.h>
 #include <algo/blast/core/blast_util.h>
+#include "blast_hits_priv.h"
 
 /******************************************************************************
  * Structures and functions used only in even (small or large) gap linking    *
@@ -472,8 +473,7 @@ s_BlastEvenGapLinkHSPs(EBlastProgramType program_number, BlastHSPList* hsp_list,
 	gap_prob = link_hsp_params->gap_prob;
 	gap_decay_rate = link_hsp_params->gap_decay_rate;
 
-   if (program_number == eBlastTypeTblastn ||
-       program_number == eBlastTypeTblastx)
+   if (Blast_SubjectIsTranslated(program_number))
       num_subject_frames = NUM_STRANDS;
    else
       num_subject_frames = 1;
@@ -500,7 +500,7 @@ s_BlastEvenGapLinkHSPs(EBlastProgramType program_number, BlastHSPList* hsp_list,
    ignore_small_gaps = (cutoff[0] == 0);
    
    /* If query is nucleotide, it has 2 strands that should be separated. */
-   if (kTranslatedQuery || program_number == eBlastTypeBlastn)
+   if (Blast_QueryIsNucleotide(program_number))
       num_query_frames = NUM_STRANDS*query_info->num_queries;
    else
       num_query_frames = query_info->num_queries;
@@ -568,8 +568,7 @@ s_BlastEvenGapLinkHSPs(EBlastProgramType program_number, BlastHSPList* hsp_list,
       subject_length = subject_length_orig; /* in nucleotides even for tblast[nx] */
       /* If subject is translated, length adjustment is given in nucleotide
          scale. */
-      if (program_number == eBlastTypeTblastn || 
-          program_number == eBlastTypeTblastx)
+      if (Blast_SubjectIsTranslated(program_number))
       {
          length_adjustment /= CODON_LENGTH;
          subject_length /= CODON_LENGTH;
@@ -1138,9 +1137,18 @@ s_SumHSPEvalue(EBlastProgramType program_number,
    length_adjustment = query_info->contexts[context].length_adjustment;
 
    subject_eff_length = MAX((subject_length - length_adjustment), 1);
-   if (program_number == eBlastTypeTblastn ||
-       program_number == eBlastTypeBlastx) {
-      subject_eff_length /= 3;
+   if (Blast_QueryIsTranslated(program_number) ||
+       Blast_SubjectIsTranslated(program_number)) {
+
+       /* If either sequence is translated, divide the effective
+	  subject length by 3 -- if the query was translated, then the
+	  roles query and subject were swapped in
+	  s_LinkedHSPSetArraySetUp, which is called by
+	  s_BlastUnevenGapLinkHSPs. Note, tblastx does not use this
+	  routine, so both sequences cannot be translated. */
+
+       ASSERT(program_number != eBlastTypeTblastx);
+       subject_eff_length /= 3;
    }
    subject_eff_length = MAX(subject_eff_length, 1);
    
@@ -1231,7 +1239,7 @@ s_SumScoreCompareLinkedHSPSets(const void* v1, const void* v2)
     if (h1->sum_score > h2->sum_score)
         return -1;
 
-    return 0;
+    return ScoreCompareHSPs(&h1->hsp, &h2->hsp);
 }
 
 /** Find an HSP on the same context as the one given, with closest start offset
@@ -1797,7 +1805,7 @@ BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list,
     /* Remove any information on number of linked HSPs from previous
        linking. */
     for (index = 0; index < hsp_list->hspcnt; ++index)
-        hsp_list->hsp_array[index]->num = 0;
+        hsp_list->hsp_array[index]->num = 1;
     
     /* Link up the HSP's for this hsp_list. */
     if (link_hsp_params->longest_intron <= 0) {

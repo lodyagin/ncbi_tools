@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.22 2006/08/01 17:39:37 papadopo Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.25 2007/05/07 13:29:11 kans Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,15 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.22 2006/08/01 17:39:37 papad
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.25  2007/05/07 13:29:11  kans
+    added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+
+    Revision 1.24  2007/03/13 17:34:14  papadopo
+    make neighboring threshold a floating point value at all times
+
+    Revision 1.23  2006/11/21 17:25:25  papadopo
+    rearrange headers, change lookup table names and function names
+
     Revision 1.22  2006/08/01 17:39:37  papadopo
     1. Read in scoremats using 26- or 28-letter alphabets
     2. Always produce an rpsblast database using a 28-letter alphabet
@@ -128,7 +137,7 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.22 2006/08/01 17:39:37 papad
 #include <profiles.h>
 
 #include <algo/blast/core/blast_options.h>
-#include <algo/blast/core/blast_lookup.h>
+#include <algo/blast/core/blast_aalookup.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_rps.h>
@@ -136,7 +145,7 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.22 2006/08/01 17:39:37 papad
 
 /* compile-time check */
 
-#if (HITS_ON_BACKBONE != RPS_HITS_PER_CELL)
+#if (AA_HITS_PER_CELL != RPS_HITS_PER_CELL)
 #error "Blastp lookup table incompatible with RPS lookup table"
 #endif
 
@@ -169,7 +178,7 @@ typedef struct RPS_DbInfo {
     Int4 curr_seq_offset;
     QuerySetUpOptions *query_options;
     LookupTableOptions *lookup_options;
-    BlastLookupTable *lookup;
+    BlastAaLookupTable *lookup;
 } RPS_DbInfo;
 
 /* program's arguments */
@@ -302,8 +311,8 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
         return -1;
     }
 
-    BSSeek(bsp->seq_data, 0, SEEK_SET);
-    BSRead(bsp->seq_data, query, seq_size);
+    BSSeek((ByteStorePtr) bsp->seq_data, 0, SEEK_SET);
+    BSRead((ByteStorePtr) bsp->seq_data, query, seq_size);
     compactSearch->query = query;
     compactSearch->qlength = seq_size;
         
@@ -609,12 +618,9 @@ Int2 RPSUpdateLookup(RPS_DbInfo *info,
     /* add this sequence to the lookup table. NULL
        is passed in place of the query */
 
-    if (_BlastAaLookupIndexQuery(info->lookup, info->posMatrix,
+    BlastAaLookupIndexQuery(info->lookup, info->posMatrix,
                                   NULL, lookup_segment,
-                                  info->curr_seq_offset) != 0) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Cannot index BLAST query");
-        return 1;
-    }
+                                  info->curr_seq_offset);
 
     BlastSeqLocFree(lookup_segment);
     return 0;
@@ -639,7 +645,7 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
 {
     PssmPtr pssm = seq->pssm;
     PssmParametersPtr params = seq->params;
-    Int4 threshold;
+    double threshold;
 
     info->gap_open = params->rpsdbparams->gapOpen;
     info->gap_extend = params->rpsdbparams->gapExtend;
@@ -652,8 +658,7 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
 
     /* scale up the threshold value and convert to integer */
 
-    threshold = (Int4)((double)info->scale_factor *
-                       dump_args[threshold_arg].floatvalue);
+    threshold = info->scale_factor * dump_args[threshold_arg].floatvalue;
 
     /* create BLAST lookup table */
 
@@ -675,7 +680,7 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
         return 1;
     }
 
-    if (BlastAaLookupNew(info->lookup_options, &info->lookup) != 0) {
+    if (BlastAaLookupTableNew(info->lookup_options, &info->lookup) != 0) {
         ErrPostEx(SEV_ERROR, 0, 0, "Cannot allocate lookup table");
         return 1;
     }
@@ -908,7 +913,7 @@ void RPS_DbClose(RPS_DbInfo *info)
 
     /* Pack the lookup table into its compressed form */
 
-    if (_BlastAaLookupFinalize(info->lookup) != 0) {
+    if (BlastAaLookupFinalize(info->lookup) != 0) {
         ErrPostEx(SEV_WARNING, 0, 0, "Failed to compress lookup table");
     }
     else {
@@ -916,10 +921,10 @@ void RPS_DbClose(RPS_DbInfo *info)
            of the legacy BLAST lookup table */
 
         BlastRPSLookupFileHeader header;
-        BlastLookupTable *lut = info->lookup;
+        BlastAaLookupTable *lut = info->lookup;
         Int4 i, index; 
         Int4 cursor, old_cursor;
-        LookupBackboneCell *cell;
+        AaLookupBackboneCell *cell;
         RPSBackboneCell empty_cell;
 
         memset(&header, 0, sizeof(header));
@@ -989,7 +994,7 @@ void RPS_DbClose(RPS_DbInfo *info)
 
     /* Free data, close files */
 
-    info->lookup = LookupTableDestruct(info->lookup);
+    info->lookup = BlastAaLookupTableDestruct(info->lookup);
     BlastQuerySetUpOptionsFree(info->query_options);
     FileClose(info->lookup_fd);
     FileClose(info->pssm_fd);

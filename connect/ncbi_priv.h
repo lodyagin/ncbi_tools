@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/*  $Id: ncbi_priv.h,v 6.18 2006/02/21 14:56:10 lavr Exp $
+/*  $Id: ncbi_priv.h,v 6.20 2007/06/25 14:25:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,7 +40,7 @@
  *    macros:          CORE_LOCK_WRITE, CORE_LOCK_READ, CORE_UNLOCK
  * Tracing and logging:
  *    private global:  g_CORE_Log
- *    macros:          CORE_LOG[F](), CORE_DATA[F](), CORE_LOG[F]_ERRNO()
+ *    macros:          CORE_LOG[F](), CORE_DATA[F](), CORE_LOG[F]_ERRNO[_EX]()
  *
  */
 
@@ -93,7 +93,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 ;
 
 #define CORE_LOG(level, message)  do { \
-    if (g_CORE_Log  ||  level == eLOG_Fatal) { \
+    if (g_CORE_Log  ||  (level) == eLOG_Fatal) { \
         CORE_LOCK_READ; \
         LOG_WRITE(g_CORE_Log, level, message); \
         CORE_UNLOCK; \
@@ -101,7 +101,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 } while (0)
 
 #define CORE_LOGF(level, fmt_args)  do { \
-    if (g_CORE_Log  ||  level == eLOG_Fatal) { \
+    if (g_CORE_Log  ||  (level) == eLOG_Fatal) { \
         CORE_LOCK_READ; \
         LOG_WRITE(g_CORE_Log, level, g_CORE_Sprintf fmt_args); \
         CORE_UNLOCK; \
@@ -135,7 +135,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 } while (0)
 
 #define CORE_LOG_ERRNO(level, x_errno, message)  do { \
-    if (g_CORE_Log  ||  level == eLOG_Fatal) { \
+    if (g_CORE_Log  ||  (level) == eLOG_Fatal) { \
         CORE_LOCK_READ; \
         LOG_WRITE_ERRNO_EX(g_CORE_Log, level, message, x_errno, 0); \
         CORE_UNLOCK; \
@@ -143,7 +143,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 } while (0)
 
 #define CORE_LOGF_ERRNO(level, x_errno, fmt_args)  do { \
-    if (g_CORE_Log  ||  level == eLOG_Fatal) { \
+    if (g_CORE_Log  ||  (level) == eLOG_Fatal) { \
         CORE_LOCK_READ; \
         LOG_WRITE_ERRNO_EX(g_CORE_Log, level, g_CORE_Sprintf fmt_args, \
                            x_errno, 0); \
@@ -152,7 +152,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 } while (0)
 
 #define CORE_LOG_ERRNO_EX(level, x_errno, x_descr, message)  do { \
-    if (g_CORE_Log  ||  level == eLOG_Fatal) { \
+    if (g_CORE_Log  ||  (level) == eLOG_Fatal) { \
         CORE_LOCK_READ; \
         LOG_WRITE_ERRNO_EX(g_CORE_Log, level, message, x_errno, x_descr); \
         CORE_UNLOCK; \
@@ -160,7 +160,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 } while (0)
 
 #define CORE_LOGF_ERRNO_EX(level, x_errno, x_descr, fmt_args)  do { \
-    if (g_CORE_Log  ||  level == eLOG_Fatal) { \
+    if (g_CORE_Log  ||  (level) == eLOG_Fatal) { \
         CORE_LOCK_READ; \
         LOG_WRITE_ERRNO_EX(g_CORE_Log, level, g_CORE_Sprintf fmt_args, \
                            x_errno, x_descr); \
@@ -183,7 +183,7 @@ extern NCBI_XCONNECT_EXPORT REG g_CORE_Registry;
     g_CORE_RegistryGET(section, name, value, value_size, def_value)
 
 #define CORE_REG_SET(section, name, value, storage)  do { \
-    CORE_LOCK_WRITE; \
+    CORE_LOCK_READ; \
     REG_Set(g_CORE_Registry, section, name, value, storage); \
     CORE_UNLOCK; \
 } while (0)
@@ -201,68 +201,5 @@ extern NCBI_XCONNECT_EXPORT char* g_CORE_RegistryGET
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_priv.h,v $
- * Revision 6.18  2006/02/21 14:56:10  lavr
- * +CORE_DEBUG_ARG
- *
- * Revision 6.17  2006/02/14 18:26:00  ucko
- * Fix typo in non-_DEBUG definition of CORE_TRACEF.
- *
- * Revision 6.16  2006/02/14 15:49:42  lavr
- * Introduce and use CORE_TRACE macros (NOP in Release mode)
- *
- * Revision 6.15  2005/10/25 18:53:10  lavr
- * Fix ADDEND spelling (finally, hopefully)
- *
- * Revision 6.14  2005/07/11 18:14:14  lavr
- * Fix ADDEND spelling
- *
- * Revision 6.13  2005/05/03 11:50:19  ivanov
- * Added MS Win specific for NCBI_CONNECT_SRAND_ADDEND, removing dependency
- * from socket library.
- *
- * Revision 6.12  2005/05/02 16:04:17  lavr
- * Use global random seed
- *
- * Revision 6.11  2005/04/20 18:14:10  lavr
- * +"ncbi_assert.h"
- *
- * Revision 6.10  2004/03/12 23:25:37  gorelenk
- * Added export prefixes.
- *
- * Revision 6.9  2002/12/05 21:43:00  lavr
- * Swap level and errno in CORE_LOG[F]_ERRNO(); add CORE_LOG[F]_ERRNO_EX()
- *
- * Revision 6.8  2002/12/04 21:00:43  lavr
- * -CORE_LOG[F]_SYS_ERRNO()
- *
- * Revision 6.7  2002/12/04 19:51:40  lavr
- * Enable MessageWithErrno() to print error description
- *
- * Revision 6.6  2002/09/19 18:08:31  lavr
- * Header file guard macro changed; log moved to end
- *
- * Revision 6.5  2002/04/13 06:38:45  lavr
- * More *_LOGF_* macros added
- *
- * Revision 6.4  2001/05/17 18:07:15  vakatov
- * Logging::  always call the logger if severity is eLOG_Fatal
- *
- * Revision 6.3  2001/01/08 22:37:36  lavr
- * Added GNU attribute to g_CORE_sprintf for compiler to trace
- * format specifier/parameter correspondence
- *
- * Revision 6.2  2000/06/23 19:34:44  vakatov
- * Added means to log binary data
- *
- * Revision 6.1  2000/03/24 22:53:35  vakatov
- * Initial revision
- *
- * ===========================================================================
- */
 
 #endif /* CONNECT___NCBI_PRIV__H */

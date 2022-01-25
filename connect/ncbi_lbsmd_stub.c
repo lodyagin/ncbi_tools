@@ -1,4 +1,4 @@
-/*  $Id: ncbi_lbsmd_stub.c,v 6.10 2006/03/06 20:28:21 lavr Exp $
+/*  $Id: ncbi_lbsmd_stub.c,v 6.14 2006/11/22 18:05:00 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,6 @@
  */
 
 #include "ncbi_lbsmd.h"
-#include <connect/ncbi_service_misc.h>
 
 
 /*ARGSUSED*/
@@ -51,16 +50,10 @@ extern const char* LBSMD_GetConfig(void)
 
 
 /*ARGSUSED*/
-extern ESwitch LBSMD_KeepHeapAttached(ESwitch sw/*ignored*/)
+extern ESwitch LBSMD_FastHeapAccess(ESwitch sw/*ignored*/)
 {
-    /* ignore any new settings, always return Off */
-    return eOff;
-}
-
-/*ARGSUSED*/ /*DEPRECATED*/
-extern ESwitch LBSM_KeepHeapAttached(ESwitch sw/*ignored*/)
-{
-    return eOff;
+    /* ignore any new settings, always return "not implemented" */
+    return eDefault;
 }
 
 
@@ -102,6 +95,18 @@ int/*bool*/ LBSM_HINFO_Status(LBSM_HINFO hinfo, double status[2])
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_lbsmd_stub.c,v $
+ * Revision 6.14  2006/11/22 18:05:00  lavr
+ * -LBSMD_KeepHeapAttached()
+ *
+ * Revision 6.13  2006/11/08 19:16:05  lavr
+ * -<connect/ncbi_service_misc.h>
+ *
+ * Revision 6.12  2006/11/08 17:15:30  lavr
+ * +LBSMD_FastHeapAccess()
+ *
+ * Revision 6.11  2006/10/23 21:17:34  lavr
+ * -LBSM_KeepHeapAttached (has been deprecated a long ago)
+ *
  * Revision 6.10  2006/03/06 20:28:21  lavr
  * Comments;  use proper LBSM_HINFO in all getters
  *

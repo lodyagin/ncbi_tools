@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.62 $
+* $Revision: 6.67 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.67  2007/05/29 15:14:32  bollin
+* Made SeqMgrGetOmdpForBioseq extern.
+*
+* Revision 6.66  2007/04/25 14:18:37  kans
+* added BioseqFindSpecial to skip bioseq_cache - needed by validator to handle IDs in any order - ClearBioseqFindCache could be fooled by order
+*
+* Revision 6.65  2007/04/24 17:55:26  kans
+* ClearBioseqFindCache frees internal omdp and se caches which can thwart detection of colliding IDs
+*
+* Revision 6.64  2006/10/30 17:15:36  kans
+* added SeqMgrClearBioseqIndex
+*
+* Revision 6.63  2006/10/27 15:00:34  kans
+* added prototype for AdvcLockFarComponents
+*
 * Revision 6.62  2006/08/29 16:02:45  bollin
 * fixed bug in reloading cached Bioseqs without user fetch procs in the
 * ObjMgrData record.
@@ -437,6 +452,13 @@ NLM_EXTERN Boolean LIBCALL SeqMgrReplaceInBioseqIndex PROTO((BioseqPtr bsp));
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqMgrDeleteIndexesInRecord (SeqEntryPtr sep);
 
+/*****************************************************************************
+*
+*   SeqMgrClearBioseqIndex()
+*   	Clears entire SeqId index for all entities
+*
+*****************************************************************************/
+NLM_EXTERN void SeqMgrClearBioseqIndex (void);
 
 
 NLM_EXTERN Boolean LIBCALL SeqMgrSeqEntry PROTO((Uint1 type, Pointer data, SeqEntryPtr sep));
@@ -502,6 +524,14 @@ NLM_EXTERN Boolean MakeReversedSeqIdString (SeqIdPtr sid, CharPtr buf, size_t le
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqMgrLinkSeqEntry PROTO((SeqEntryPtr sep, Uint2 parenttype, Pointer parentptr));
+
+/*****************************************************************************
+*
+*   ClearBioseqFindCache()
+*   	frees internal omdp and se caches which can thwart detection of colliding IDs
+*
+*****************************************************************************/
+NLM_EXTERN void ClearBioseqFindCache (void);
 
 /*****************************************************************************
 *
@@ -678,6 +708,17 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqFind PROTO((SeqIdPtr sip));
 *
 *****************************************************************************/
 NLM_EXTERN BioseqPtr LIBCALL BioseqFindCore PROTO((SeqIdPtr sip));
+
+/*****************************************************************************
+*
+*   BioseqFindSpecial(sid)
+*   	Finds a Bioseq in memory based on SeqId when only "core" elements needed
+*   	Will NOT restore a Bioseq that has been cached out by SeqMgr
+*       This function does not use the bioseq_cache mechanism, and is for
+*         the validator to check for IdOnMultipleBioseqs.
+*
+*****************************************************************************/
+NLM_EXTERN BioseqPtr LIBCALL BioseqFindSpecial (SeqIdPtr sip);
 
 /*****************************************************************************
 *
@@ -1106,6 +1147,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uin
 *     or pointed to by feature products.  It turns a ValNode list of locked BioseqPtrs.
 *   UnlockFarComponents takes the ValNode list of locked BioseqPtrs, unlocks each
 *     Bioseq, frees the ValNode list, and returns NULL.
+*   AdvcLockFarComponents is redesigned for better efficiency, can be multithreaded.
 *
 *****************************************************************************/
 
@@ -1114,6 +1156,15 @@ NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep);
 NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, SeqLocPtr loc);
 
 NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
+
+NLM_EXTERN ValNodePtr AdvcLockFarComponents (
+  SeqEntryPtr sep,
+  Boolean components,
+  Boolean locations,
+  Boolean products,
+  SeqLocPtr loc,
+  Boolean usethreads
+);
 
 /*****************************************************************************
 *
@@ -1176,6 +1227,9 @@ NLM_EXTERN void LIBCALL SeqMgrSetSeqIdSetFunc (SeqIdSetLookupFunc func);
 ******************************************************************************/
 NLM_EXTERN Boolean SeqEntryAsnOut (SeqEntryPtr sep, SeqIdPtr sip,
                                     Int2 retcode, AsnIoPtr aipout);
+
+
+extern ObjMgrDataPtr SeqMgrGetOmdpForBioseq (BioseqPtr bsp);
 
 #ifdef __cplusplus
 }

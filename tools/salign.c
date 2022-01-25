@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salign.c,v 6.8 2005/07/21 13:53:26 bollin Exp $";
+static char const rcsid[] = "$Id: salign.c,v 6.10 2007/05/07 13:30:54 kans Exp $";
 
 /*   salign.c
 * ===========================================================================
@@ -646,7 +646,7 @@ static SeqLocPtr TranslateSeqLoc (SeqLocPtr slp, Int2 genCode, Uint1 *frame)
      bsp->repr = Seq_repr_raw;
      bsp->mol = Seq_mol_aa;
      bsp->seq_data_type = (Uint1)genCode;
-     bsp->seq_data = bs;
+     bsp->seq_data = (SeqDataPtr) bs;
      bsp->length = BSLen (bs);
      bsp->id = MakeNewProteinSeqId (slp, NULL);
      if (*frame==2)
@@ -1900,48 +1900,3 @@ NLM_EXTERN SeqAnnotPtr BlastBandAlignFromBlastSeqAlign (SeqAlignPtr salpblast, B
 }
 
 
-/*******************************************************
-*** SeqEntryAlignToMasterFunc
-***    aligns the bioseqs that are present in a SeqEntry (sep)
-***    returns a SeqAlign
-*** SeqEntryToSeqAlign
-***    calls SeqEntryAlignToMaster
-***    returns a SeqAnnot
-******************************************************/
-
-static SeqAlignPtr SeqEntryAlignToMasterFunc (SeqEntryPtr sep, SeqLocPtr master, Uint1 bsp_mol, Int2
- method)
-{
-  ValNodePtr         vnp = NULL,
-                     vnp2 = NULL;
-  SeqAlignPtr        salp = NULL;
-  Int2               nb;
-
-  vnp = SeqEntryToSeqLoc (sep, &nb, bsp_mol);
-  if (vnp != NULL) {
-     if (master != NULL)
-     {
-        ValNodeAddPointer (&vnp2, 0, master);
-        vnp2->next = vnp;
-        vnp = vnp2;
-     }
-     salp = SeqLocListToSeqAlign (vnp, method, NULL);
-  }
-  return salp;
-}
-
-NLM_EXTERN SeqAnnotPtr LIBCALL SeqEntryToSeqAlign (SeqEntryPtr sep, Uint1 bsp_mol)
-{
-  SeqAlignPtr salp;
-  SeqAnnotPtr sap;
-
-  salp = SeqEntryAlignToMasterFunc (sep, NULL, bsp_mol, PRG_ANYALIGN);
-  sap = SeqAnnotForSeqAlign (salp);
-/* this doesn't seem to produce a valid alignment and nobody knows what
-it's for anyway, so we'll comment it out and see who complains -- 8/8/01 SW
-  if (ISA_aa(bsp_mol)) {
-     sap = aaSeqAnnot_to_dnaSeqAnnotFunc (&sap, salp, NULL, NULL);
-  }
-*/
-  return sap;
-}

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.54 $
+* $Revision: 6.55 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -663,6 +663,15 @@ NLM_EXTERN Int4 LIBCALL SeqMgrExploreFeaturesRev (
   BoolPtr seqFeatFilter,
   BoolPtr featDefFilter
 );
+
+/* performs search using both featuresByLabel and genesByLocusTag */
+NLM_EXTERN SeqFeatPtr FindNthGeneOnBspByLabelOrLocusTag 
+(BioseqPtr              bsp,
+ CharPtr                label,
+ Int4                   n,
+ Int4 PNTR              last_found,
+ SeqMgrFeatContext PNTR context);
+
 
 
 #ifdef __cplusplus

@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.41 2006/09/15 13:12:43 madden Exp $
+/* $Id: blast_api.c,v 1.50 2007/07/27 18:02:26 papadopo Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -44,6 +44,7 @@
 #include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/hspstream_collector.h>
 #include <algo/blast/core/phi_lookup.h>
+#include <algo/blast/core/blast_psi.h>
 #include <algo/blast/api/hspstream_queue.h>
 #include <algo/blast/api/blast_mtlock.h>
 #include <algo/blast/api/blast_prelim.h>
@@ -53,6 +54,7 @@
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/dust_filter.h>
 #include <algo/blast/api/blast_message_api.h>
+#include <algo/blast/core/gencode_singleton.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -273,10 +275,6 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
 
     if (!tf_data) {
         const Int4 kNumResults = query_info->num_queries;
-        /* Results in the collector stream should be sorted only for a
-           database search. The latter is true if and only if the sequence
-           source has non-zero database length. */
-        const Boolean kSortOnRead = (BlastSeqSrcGetTotLen(seq_src) != 0);
         SBlastHitsParameters* blasthit_params=NULL;
         MT_LOCK lock = NULL;
         if (options->num_cpus > 1)
@@ -286,7 +284,7 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                                 options->score_options, &blasthit_params);
         *hsp_stream =
             Blast_HSPListCollectorInitMT(options->program, blasthit_params,
-                                         kNumResults, kSortOnRead, lock);
+                                         kNumResults, lock);
     } else {
         /* Initialize the queue HSP stream for tabular formatting. */
         *hsp_stream = Blast_HSPListQueueInit();
@@ -335,6 +333,8 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
     ASSERT(query && query_info && seq_src && lookup_wrap && sbp && 
            hsp_stream && extra_returns);
 
+    BlastSeqSrcResetChunkIterator((BlastSeqSrc*) seq_src);
+
     /* Start the formatting thread */
     if(tf_data && NlmThreadsAvailable() &&
        (format_thread =
@@ -374,7 +374,8 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
             SPHIPatternSearchBlk* pattern_blk = NULL;
             if (Blast_ProgramIsPhiBlast(kProgram)) {
                 pattern_blk = (SPHIPatternSearchBlk*) lookup_wrap->lut;
-                pattern_blk->num_patterns_db = diagnostics->ungapped_stat->lookup_hits;
+                pattern_blk->num_patterns_db = 
+                                (Int4)diagnostics->ungapped_stat->lookup_hits;
             }
 
             if ((status = Blast_RunTracebackSearch(kProgram, query, 
@@ -500,15 +501,79 @@ s_BlastFindMatrixPath(const char* matrix_name, Boolean is_prot)
      return NULL;
 }
 
-Int2 
-Blast_RunSearch(SeqLoc* query_seqloc, 
-                 const BlastSeqSrc* seq_src,
-                 SeqLoc* masking_locs,
-                 const SBlastOptions* options,
-                 BlastTabularFormatData* tf_data,
-                 BlastHSPResults **results,
-                 SeqLoc** filter_out,
-                 Blast_SummaryReturn* extra_returns)
+
+/**
+ * Read a checkpoint file and set the necessary structures in a
+ * BlastScoreBlk: the psi_matrix, kbp_psi[0], and kbp_gap_psi[0].
+ *
+ * @param sbp              a BlastScoreBlk to receive a PSSM [in/out]
+ * @param query            query sequence data
+ * @param psi_matrix_file  checkpoint file to read
+ * @pcore_msg              a pointer to receive error and warning messages
+ */
+static int
+s_SetupScoreBlkPssmFromChkpt(BlastScoreBlk * sbp,
+                             BLAST_SequenceBlk * query,
+                             Blast_PsiCheckpointLoc * psi_checkpoint,
+                             Blast_Message* *pcore_msg)
+{
+    int status = 0;
+    /* An intermediate representation of the PSSM data that is used
+       in PSIBlast routines */
+    PSIMatrix * pssm = NULL;
+    /* The actual PSSM that is saved in the BlastScoreBlk */
+    SPsiBlastScoreMatrix * psi_matrix = NULL;
+    size_t i, j;
+
+    psi_matrix = SPsiBlastScoreMatrixNew(query->length);
+    if (!psi_matrix) {
+        ErrPostEx(SEV_FATAL, 1, 0,
+            "Out-of-memory: cannot allocate a PSSM of length %d.\n",
+            query->length);
+        status = -1;
+        goto error_return;
+    }
+    status = Blast_PosReadCheckpoint(psi_matrix->freq_ratios,
+                                     query->length, query->sequence,
+                                     psi_checkpoint,
+                                     pcore_msg);
+    if (status != 0) {
+        goto error_return;
+    }
+    Blast_KarlinBlkCopy(psi_matrix->kbp, sbp->kbp_gap_std[0]);
+    status = PSICreatePssmFromFrequencyRatios(query->sequence,
+                                              query->length, sbp,
+                                              psi_matrix->freq_ratios,
+                                              kPSSM_NoImpalaScaling,
+                                              &pssm);
+    if (0 != status) {
+        goto error_return;
+    }
+    for (i = 0;  i < psi_matrix->pssm->ncols;  i++) {
+        for (j = 0;  j < psi_matrix->pssm->nrows;  j++) {
+            psi_matrix->pssm->data[i][j] = pssm->pssm[i][j];
+        }
+    }
+    PSIMatrixFree(pssm);
+    sbp->psi_matrix = psi_matrix;
+    return 0;
+error_return:
+    if (psi_matrix)
+        SPsiBlastScoreMatrixFree(psi_matrix);
+    return status;
+}
+
+
+Int2
+Blast_RunSearch(SeqLoc* query_seqloc,
+                Blast_PsiCheckpointLoc * psi_checkpoint,
+                const BlastSeqSrc* seq_src,
+                SeqLoc* masking_locs,
+                const SBlastOptions* options,
+                BlastTabularFormatData* tf_data,
+                BlastHSPResults **results,
+                SeqLoc** filter_out,
+                Blast_SummaryReturn* extra_returns)
 {
     Int2 status = 0;
     BLAST_SequenceBlk *query = NULL;
@@ -600,6 +665,20 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     if (status)
         return status;
 
+    if (psi_checkpoint) {
+        core_msg = NULL;
+        status = s_SetupScoreBlkPssmFromChkpt(sbp, query, psi_checkpoint,
+                                              &core_msg);
+        if (core_msg) {
+            extra_returns->error =
+                Blast_MessageToSBlastMessage(core_msg, query_seqloc,
+                                             query_info,
+                                             options->believe_query);
+            core_msg = Blast_MessageFree(core_msg);
+        }
+        if (status)
+            return status;
+    }
     if (filter_out) {
         *filter_out = 
             BlastMaskLocToSeqLoc(kProgram, mask_loc, query_seqloc);
@@ -687,8 +766,10 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     return status;
 }
 
-Int2 
-Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
+Int2
+Blast_DatabaseSearch(SeqLoc* query_seqloc,
+                     Blast_PsiCheckpointLoc * psi_checkpoint,
+                     char* db_name,
                      SeqLoc* masking_locs,
                      const SBlastOptions* options,
                      BlastTabularFormatData* tf_data,
@@ -733,9 +814,10 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
     if (extra_returns->error)
         return -1;
 
-    status = 
-        Blast_RunSearch(query_seqloc, seq_src, masking_locs, options, tf_data,
-                         &results, filter_out, extra_returns);
+    status =
+        Blast_RunSearch(query_seqloc, psi_checkpoint, seq_src,
+                        masking_locs, options, tf_data, &results,
+                        filter_out, extra_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the 
        initialising function used readdb_attach */
@@ -852,8 +934,10 @@ PHIBlastRunSearch(SeqLoc* query_seqloc, char* db_name, SeqLoc* masking_locs,
     /* Masking at hash and on-the-fly tabular output are not applicable for 
        PHI BLAST, so pass NULL in corresponding arguments. */
     status =
-        Blast_RunSearch(query_seqloc, seq_src, masking_locs, options, NULL,
-                        &results, filter_out, extra_returns);
+        Blast_RunSearch(query_seqloc, (Blast_PsiCheckpointLoc *) NULL,
+                        seq_src, masking_locs, options,
+                        (BlastTabularFormatData*) NULL, &results,
+                        filter_out, extra_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the
        initialising function used readdb_attach */
@@ -909,9 +993,10 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
     if (extra_returns->error)
         return -1;
 
-    status = 
-        Blast_RunSearch(query_seqloc, seq_src, masking_locs, options, tf_data, 
-                         &results, filter_out, extra_returns);
+    status =
+        Blast_RunSearch(query_seqloc, (Blast_PsiCheckpointLoc *) NULL,
+                        seq_src, masking_locs, options, tf_data,
+                        &results, filter_out, extra_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the 
        initialising function used readdb_attach */
@@ -930,6 +1015,20 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
         return status;
 
     return status;
+}
+
+void GeneticCodeSingletonInit()
+{
+    Uint1* gc = NULL;
+    GenCodeSingletonInit();
+    BLAST_GeneticCodeFind(BLAST_GENETIC_CODE, &gc);
+    GenCodeSingletonAdd(BLAST_GENETIC_CODE, gc);
+    free(gc);
+}
+
+void GeneticCodeSingletonFini()
+{
+    GenCodeSingletonFini();
 }
 
 /* @} */

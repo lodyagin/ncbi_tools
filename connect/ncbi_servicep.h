@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.40 2006/06/07 20:06:02 lavr Exp $
+/*  $Id: ncbi_servicep.h,v 6.43 2007/04/20 01:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,30 +57,36 @@ typedef struct {
 /* Iterator structure
  */
 struct SSERV_IterTag {
-    const char*       name;  /* requested service name, private storage      */
-    TSERV_Type        type;  /* requested server type(s), specials stripped  */
-    unsigned int      host;  /* preferred host to select, network b.o.       */
-    unsigned short    port;  /* preferred port to select, host b.o.          */
-    double            pref;  /* range [0..100] %%                            */
-    size_t          n_skip;  /* actual number of servers in the array        */
-    size_t          a_skip;  /* number of allocated slots in the array       */
-    SSERV_Info**      skip;  /* servers to skip (w/names)                    */
-    const SSERV_Info* last;  /* last server info taken out                   */
+    const char*         name; /* requested service name, private storage     */
+    TSERV_Type          type; /* requested server type(s), specials stripped */
+    unsigned int        host; /* preferred host to select, network b.o.      */
+    unsigned short      port; /* preferred port to select, host b.o.         */
+    double              pref; /* range [0..100] %%                           */
+    size_t            n_skip; /* actual number of servers in the array       */
+    size_t            a_skip; /* number of allocated slots in the array      */
+    SSERV_Info**        skip; /* servers to skip (w/names)                   */
+    const SSERV_Info*   last; /* last server info taken out                  */
+    const SSERV_VTable*   op; /* table of virtual functions                  */
 
-    const SSERV_VTable* op;  /* table of virtual functions                   */
-
-    void*             data;  /* private data field                           */
-    unsigned      ismask:1;  /* whether the name is to be treated as a mask  */
-    unsigned promiscuous:1;  /* as taken from..                              */
-    unsigned reverse_dns:1;  /*            ..types passed..                  */
-    unsigned   stateless:1;  /*                        .. in SERV_*() calls  */
-    unsigned    external:1;  /* whether this is an external request          */
-    const char*        arg;  /* argument to match; original pointer          */
-    size_t          arglen;  /* == 0 for NULL pointer above                  */
-    const char*        val;  /* value to match; original pointer             */
-    size_t          vallen;  /* == 0 for NULL pointer above                  */
-    TNCBI_Time        time;  /* the time of call                             */
+    void*               data; /* private data field                          */
+    unsigned        ismask:1; /* whether the name is to be treated as a mask */
+    unsigned       ok_down:1; /* as taken..                                  */
+    unsigned ok_suppressed:1; /*      ..from types..                         */
+    unsigned   reverse_dns:1; /*               ..as passed into..            */
+    unsigned     stateless:1; /*                            ..SERV_*() calls */
+    unsigned      external:1; /* whether this is an external request         */
+    const char*          arg; /* argument to match; original pointer         */
+    size_t            arglen; /* == 0 for NULL pointer above                 */
+    const char*          val; /* value to match; original pointer            */
+    size_t            vallen; /* == 0 for NULL pointer above                 */
+    TNCBI_Time          time; /* the time of call                            */
 };
+
+
+/* Control whether to skip using registry/environment when opening iterators,
+ * and doing fast track lookups.  Default is eOff.
+ */
+extern NCBI_XCONNECT_EXPORT ESwitch SERV_DoFastOpens(ESwitch on);
 
 
 /* Modified "fast track" routine for obtaining of a server info in one-shot.
@@ -105,7 +111,7 @@ struct SSERV_IterTag {
  *       only -- servers, which are down, don't get returned).
  */
 extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
-(const char*          service,       /* service name (may not be a mask)     */
+(const char*          service,       /* service name (may not be a mask here)*/
  TSERV_Type           types,         /* mask of type(s) of servers requested */
  unsigned int         preferred_host,/* preferred host to use service on, nbo*/
  unsigned short       preferred_port,/* preferred port to use service on, hbo*/
@@ -124,7 +130,7 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
  * service is that they _must_ be created having a name (perhaps, empty "")
  * attached, like if done by SERV_ReadInfoEx() or SERV_CopyInfoEx() */
 extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
-(const char*          service,       /* service name (can be a mask)         */
+(const char*          service,       /* service name (here: can be a mask!)  */
  TSERV_Type           types,
  unsigned int         preferred_host,
  unsigned short       preferred_port,
@@ -195,136 +201,5 @@ extern NCBI_XCONNECT_EXPORT double SERV_Preference
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_servicep.h,v $
- * Revision 6.40  2006/06/07 20:06:02  lavr
- * SERV_Print() to set referer (if absent) via its second argument
- *
- * Revision 6.39  2006/03/06 20:28:37  lavr
- * Comments
- *
- * Revision 6.38  2006/03/05 17:47:55  lavr
- * +SERV_ITER::time, new VT::Update proto, SERV_OpenP() to return HINFO
- *
- * Revision 6.37  2006/01/11 16:26:10  lavr
- * SERV_Update() and SERV_ITER's VT::Update() have got addt'l "code" argument
- *
- * Revision 6.36  2005/12/23 18:12:15  lavr
- * New bitfields in SERV_ITER (corresponding to special service flags)
- * SERV_OpenP() special requirements for "skip" entries documented
- *
- * Revision 6.35  2005/12/14 22:04:01  lavr
- * ESERV_SpecialType reinstated public
- *
- * Revision 6.34  2005/12/14 21:27:49  lavr
- * SERV_GetInfoP() and SERV_OpenP():  New signatures (changed parameteres)
- *
- * Revision 6.33  2005/07/11 18:49:11  lavr
- * Hashed preference generation algorithm retired (proven to fail often)
- *
- * Revision 6.32  2005/07/11 18:15:10  lavr
- * Revised to allow wildcard searches thru service iterator
- *
- * Revision 6.31  2005/05/04 16:14:57  lavr
- * -SERV_GetConfig()
- *
- * Revision 6.30  2005/05/02 16:04:52  lavr
- * Added export prefixes for most of internal API calls
- *
- * Revision 6.29  2005/04/25 18:47:29  lavr
- * Private API to accept SConnNetInfo* for network dispatching to work too
- *
- * Revision 6.28  2005/04/19 16:33:00  lavr
- * More comments on how things work (SERV_{GetInfo|Open}P)
- *
- * Revision 6.27  2005/03/05 21:05:07  lavr
- * +SERV_ITER::current;  +SERV_GetCurrentName()
- *
- * Revision 6.26  2005/01/31 17:09:34  lavr
- * Argument affinity moved into service iterator
- *
- * Revision 6.25  2004/08/19 15:48:04  lavr
- * SERV_ITER::type renamed into SERV_ITER::types to reflect its bitmask nature
- *
- * Revision 6.23  2003/06/26 15:19:56  lavr
- * Additional parameter "external" for SERV_{Open|GetInfo}P()
- *
- * Revision 6.22  2003/06/09 19:53:11  lavr
- * +SERV_OpenP()
- *
- * Revision 6.21  2003/03/07 22:21:55  lavr
- * Explain what is "preference" for SERV_GetInfoP()
- *
- * Revision 6.20  2003/02/28 14:49:09  lavr
- * SERV_Preference(): redeclare last argument 'unsigned'
- *
- * Revision 6.19  2003/02/13 21:37:28  lavr
- * Comment SERV_Preference(), change last argument
- *
- * Revision 6.18  2003/01/31 21:19:41  lavr
- * +SERV_Preference()
- *
- * Revision 6.17  2002/10/28 20:16:00  lavr
- * Take advantage of host info API
- *
- * Revision 6.16  2002/10/11 19:48:25  lavr
- * +SERV_GetConfig()
- * const dropped in return value of SERV_ServiceName()
- *
- * Revision 6.15  2002/09/19 18:08:43  lavr
- * Header file guard macro changed; log moved to end
- *
- * Revision 6.14  2002/05/06 19:17:04  lavr
- * +SERV_ServiceName() - translation of service name
- *
- * Revision 6.13  2001/09/28 20:50:41  lavr
- * Update VT method changed - now called on per-line basis
- *
- * Revision 6.12  2001/09/24 20:23:39  lavr
- * Reset() method added to VT
- *
- * Revision 6.11  2001/06/25 15:38:00  lavr
- * Heap of services is now not homogeneous, but can
- * contain entries of different types. As of now,
- * Service and Host entry types are introduced and defined
- *
- * Revision 6.10  2001/05/11 15:30:02  lavr
- * Correction in comment
- *
- * Revision 6.9  2001/04/26 14:18:45  lavr
- * SERV_MapperName moved to the private header
- *
- * Revision 6.8  2001/04/24 21:33:58  lavr
- * Added members of mapper V-table: penalize(method) and name(data).
- * Service iterator has got new field 'last' to keep the latest given info.
- *
- * Revision 6.7  2001/03/06 23:57:49  lavr
- * Minor beautifications
- *
- * Revision 6.6  2000/12/29 18:12:51  lavr
- * SERV_Print added to private interface
- *
- * Revision 6.5  2000/12/06 22:21:27  lavr
- * SERV_Print added to private interface
- *
- * Revision 6.4  2000/10/20 17:22:55  lavr
- * VTable changed to have 'Update' method
- * 'SERV_Update' added to private interface
- *
- * Revision 6.3  2000/10/05 21:37:51  lavr
- * Mapper-specific private data field added
- *
- * Revision 6.2  2000/05/22 16:53:12  lavr
- * Rename service_info -> server_info everywhere (including
- * file names) as the latter name is more relevant
- *
- * Revision 6.1  2000/05/12 18:38:16  lavr
- * First working revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_SERVICEP__H */

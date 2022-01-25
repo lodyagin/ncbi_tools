@@ -226,19 +226,19 @@ Example: [organism=Drosophila melanogaster]</li>
 [molecule=DNA]</li>
 
 <li><b>moltype</b> should use one of the following values. Example:
-[moltype=Genomic DNA]
+[moltype=genomic]
 <ul>
-<li>Genomic DNA</li>
-<li>Genomic RNA</li>
-<li>Precursor RNA</li>
-<li>mRNA [cDNA]</li>
-<li>Ribosomal RNA</li>
-<li>Transfer RNA</li>
-<li>Small nuclear RNA</li>
-<li>Small cytoplasmic RNA</li>
-<li>Other-Genetic</li>
+<li>genomic</li>
+<li>precursor RNA</li>
+<li>mRNA</li>
+<li>rRNA</li>
+<li>tRNA</li>
+<li>snRNA</li>
+<li>scRNA</li>
+<li>other-genetic</li>
 <li>cRNA</li>
-<li>Small nucleolar RNA</li>
+<li>snoRNA</li>
+<li>transcribed RNA</li>
 </ul>
 </li>
 
@@ -277,6 +277,7 @@ or DD-Mmm-YYYY. Example: [collection-date=2005] or
 <ul>
 <li><b>environmental-sample</b></li>
 <li><b>germline</b></li>
+<li><b>metagenomic</b></li>
 <li><b>rearranged</b></li>
 <li><b>transgenic</b></li>
 </ul>
@@ -292,6 +293,7 @@ include in your definition lines for nucleotide files:</p>
 <li>acronym</li>
 <li>anamorph</li>
 <li>authority</li>
+<li>bio-material</li>
 <li>biotype</li>
 <li>biovar</li>
 <li>breed</li>
@@ -305,14 +307,15 @@ include in your definition lines for nucleotide files:</p>
 <li>common</li>
 <li>country</li>
 <li>cultivar</li>
+<li>culture-collection</li>
 <li>dev-stage</li>
 <li>ecotype</li>
 <li>endogenous-virus-name</li>
-<li>forma</li>
 </ul>
 </td>
 <td valign="top">
 <ul>
+<li>forma</li>
 <li>forma-specialis</li>
 <li>fwd-pcr-primer-name</li>
 <li>fwd-pcr-primer-seq</li>
@@ -325,18 +328,20 @@ include in your definition lines for nucleotide files:</p>
 <li>lab-host</li>
 <li>lat-lon</li>
 <li>map</li>
+<li>metagenome-source</li>
+<li>metagenomic</li>
 <li>note</li>
 <li>pathovar</li>
 <li>plasmid-name</li>
 <li>plastid-name</li>
 <li>pop-variant</li>
 <li>rev-pcr-primer-name</li>
-<li>rev-pcr-primer-seq</li>
-<li>segment</li>
 </ul>
 </td>
 <td valign="top">
 <ul>
+<li>rev-pcr-primer-seq</li>
+<li>segment</li>
 <li>serogroup</li>
 <li>serotype</li>
 <li>serovar</li>
@@ -1687,7 +1692,7 @@ submitting large genomic records are available at<br />
 Write to the <a href="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk</a>
 <br />
 <br />
-Revised November 22, 2005<br />
+Revised August 21, 2007<br />
 </div>
 
 <!--  end of content  -->

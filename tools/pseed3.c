@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.50 2006/08/04 21:59:11 papadopo Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.51 2007/03/13 20:40:56 madden Exp $";
 
-/* $Id: pseed3.c,v 6.50 2006/08/04 21:59:11 papadopo Exp $ */
+/* $Id: pseed3.c,v 6.51 2007/03/13 20:40:56 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,14 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.50 $
+$Revision: 6.51 $
 
 $Log: pseed3.c,v $
+Revision 6.51  2007/03/13 20:40:56  madden
+  - In seedEngineCore, the searchSpEff parameter should be a
+    Nlm_FloatHi, not an Nlm_FloatLo
+  [from Mike Gertz]
+
 Revision 6.50  2006/08/04 21:59:11  papadopo
 refine stripping of newlines from patterns read from file
 
@@ -410,7 +415,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
                                   Boolean is_dna, Boolean reverseDb, 
                                   seedSearchItems *seedSearch, 
                                   Nlm_FloatHi posEThresh, 
-                                  Nlm_FloatLo searchSpEff,
+                                  Nlm_FloatHi searchSpEff,
                                   posSearchItems *posSearch, 
                                   SeqLocPtr *seed_seq_loc, 
                                   Boolean showDiagnostics,

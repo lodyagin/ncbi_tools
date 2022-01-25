@@ -1,4 +1,4 @@
-/* $Id: ncbiwww.h,v 6.7 2002/02/07 14:48:22 ivanov Exp $
+/* $Id: ncbiwww.h,v 6.8 2007/06/20 22:05:40 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   This file contains main definitions to read and process HTTP
@@ -37,6 +37,11 @@
 *   Currently it works for all ncbi supported platforms.
 *
 * $Log: ncbiwww.h,v $
+* Revision 6.8  2007/06/20 22:05:40  vakatov
+* MAX_WWW_ENTRIES -- increased from 4096 to 32768.
+* It is just a quick-fix to let this code live a little longer, requested
+* by Karl and Vasuki.
+*
 * Revision 6.7  2002/02/07 14:48:22  ivanov
 * Added WWWGetEntriesEx(), WWWGetEntriesFormDataEx(), WWWReadFileInMemoryEx(),
 * WWWGetValueSizeByIndex() -- support binary files in the multipart form-data.
@@ -113,7 +118,7 @@
 /* DEFINES */
 /****************************************************************************/
 
-#define MAX_WWW_ENTRIES  4096 /* maximum number of html tags in input */
+#define MAX_WWW_ENTRIES  32768 /* maximum number of html tags in input */
 #define WWW_MAX_NAME_LEN 512  /* Limit for Name in HTML tag */
 
 #define MISC_BROWSER     0    /* Any Browser Netscape Ver. 1 included */

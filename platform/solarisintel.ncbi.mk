@@ -1,11 +1,11 @@
 #
-# $Id: solarisintel.ncbi.mk,v 1.16 2003/05/07 17:40:12 beloslyu Exp $
+# $Id: solarisintel.ncbi.mk,v 1.17 2007/08/01 14:40:40 coulouri Exp $
 #
 NCBI_DEFAULT_LCL = sin
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_AR=ar
 NCBI_CC = cc
-NCBI_CFLAGS1 = -c
+NCBI_CFLAGS1 = -c -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 NCBI_LDFLAGS1 = -O
 NCBI_OPTFLAG = -O
 # following 2 lines are temporary; J. Epstein, 8/11/97

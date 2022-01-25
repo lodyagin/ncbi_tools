@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.114 2006/10/02 12:36:01 madden Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.115 2006/12/14 17:08:19 madden Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,11 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.114 $
+ * $Revision: 6.115 $
  * $Log: blastkar.c,v $
+ * Revision 6.115  2006/12/14 17:08:19  madden
+ * Fix BLAST_MatrixDestruct to not use hard-coded alphabet size of 26 (from Mike Gertz)
+ *
  * Revision 6.114  2006/10/02 12:36:01  madden
  * Comment out BLOSUM62_20
  *
@@ -1368,7 +1371,11 @@ BLAST_MatrixDestruct(BLAST_MatrixPtr blast_matrix)
     
     if(blast_matrix->original_matrix && 
        blast_matrix->original_matrix != blast_matrix->matrix) {
-        for (index=0; index < 26; index++) {
+	/* blast_matrix->original_matrix is a square matrix with the
+	   same number of columns as blast_matrix->matrix.  Therefore
+	   blast_matrix->original_matrix has blast_matrix->columns
+	   rows. */
+        for (index=0; index < blast_matrix->columns; index++) {
             MemFree(blast_matrix->original_matrix[index]);
         }
         MemFree(blast_matrix->original_matrix);

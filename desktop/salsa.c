@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.177 $
+* $Revision: 6.180 $
 *
 * File Description: 
 *
@@ -4195,9 +4195,11 @@ free targetfeats **********************/
 
               target_bsp = BioseqLockById (target_id);
               source_bsp = BioseqLockById (source_id);
-              if (target_bsp && source_bsp) {
-                 target_bsp->seq_data = BSFree (target_bsp->seq_data);
-                 target_bsp->seq_data = BSDup(source_bsp->seq_data);
+              if (target_bsp && source_bsp &&
+                  target_bsp->seq_data_type != Seq_code_gap &&
+                  source_bsp->seq_data_type != Seq_code_gap) {
+                 target_bsp->seq_data = SeqDataFree (target_bsp->seq_data, target_bsp->seq_data_type);
+                 target_bsp->seq_data = (SeqDataPtr) BSDup((ByteStorePtr) source_bsp->seq_data);
                  target_bsp->seq_data_type = source_bsp->seq_data_type;
                  target_bsp->length = source_bsp->length;
                  BioseqRawPack (target_bsp);
@@ -6402,9 +6404,9 @@ static void ExportFASTAForUnselectedUpdates (ButtoN b)
       return;
     }
     for (i = 0; i < fpwp->num_sequences; i++) {
-      if (fpwp->far_pointer_list[i].bsp_db != NULL 
+      if (fpwp->far_pointer_list[i].bsp_local != NULL 
           && !fpwp->selected[i]) {
-        EditBioseqToFasta (fpwp->far_pointer_list[i].bsp_db, fp, 0, fpwp->far_pointer_list[i].bsp_db->length - 1);	          
+        EditBioseqToFasta (fpwp->far_pointer_list[i].bsp_local, fp, 0, fpwp->far_pointer_list[i].bsp_local->length - 1);	          
       }
     }
   }
@@ -6723,9 +6725,12 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
         {
           offset = 0 - offset;
         }
-      } else
+      } else {
         strand=Seq_strand_plus;
-      SeqAlignStartUpdate (far_pointer_list[i].salp, far_pointer_list[i].sip_local, abs(offset), len, strand);
+        len = 0;
+      }
+      SeqAlignStartUpdate (salp, far_pointer_list[i].sip_local, abs(offset), len, strand);
+
       dsp->ids = SWSeqIdReplaceID(dsp->ids, far_pointer_list[i].sip_local, far_pointer_list[i].sip_db);
       /* set to NULL so that we don't free it later */
       far_pointer_list[i].sip_db = NULL;

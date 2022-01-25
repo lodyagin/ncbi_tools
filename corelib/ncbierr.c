@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.23 2006/07/13 17:10:35 bollin Exp $
+* $Id: ncbierr.c,v 6.24 2006/11/09 17:46:58 kans Exp $
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.24  2006/11/09 17:46:58  kans
+* added cast to quiet CodeWarrior complaint
+*
 * Revision 6.23  2006/07/13 17:10:35  bollin
 * use Uint4 instead of Uint2 for itemID values
 *
@@ -536,7 +539,7 @@ NLM_EXTERN int LIBCALL Nlm_ErrPostStr (ErrSev sev, int lev1, int lev2, const cha
     }
 
   if ( s_HookOnly ) {
-      die_if_necessary(severity, info);
+      die_if_necessary((ErrSev)severity, info);
       ErrClear();
       return ANS_NONE;
   }

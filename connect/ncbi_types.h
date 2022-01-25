@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/*  $Id: ncbi_types.h,v 6.13 2006/07/13 18:24:05 lavr Exp $
+/*  $Id: ncbi_types.h,v 6.14 2007/08/03 12:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -73,6 +73,17 @@ typedef struct {
 #define kInfiniteTimeout ((const STimeout*)( 0))
 
 
+extern NCBI_XCONNECT_EXPORT unsigned long NcbiTimeoutToMs
+(const STimeout* timeout
+);
+
+
+extern NCBI_XCONNECT_EXPORT STimeout*     NcbiMsToTimeout
+(STimeout*       timeout,
+ unsigned long   ms
+ );
+
+
 /** Aux. enum to set/unset/default various features
  */
 typedef enum {
@@ -96,54 +107,5 @@ typedef unsigned int TNCBI_Time;
 
 
 /* @} */
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_types.h,v $
- * Revision 6.13  2006/07/13 18:24:05  lavr
- * Fix per-member doxygenization
- *
- * Revision 6.12  2006/07/13 16:05:42  lavr
- * Doxygenized
- *
- * Revision 6.11  2006/03/04 17:01:14  lavr
- * Clean away dead #if 0 branch
- *
- * Revision 6.10  2005/11/22 20:52:38  lavr
- * Removed a note about ncbiconf.h -- irrelevant
- *
- * Revision 6.9  2003/08/28 19:28:47  ucko
- * Use macros for kXxxTimeout on all platforms (safer, inasmuch as the C
- * include directory may be first).
- *
- * Revision 6.8  2003/08/28 18:47:25  ucko
- * Go back to previous WorkShop hack, but include connect_export.h (for
- * ncbiconf.h) so that it actually works reliably this time around.
- *
- * Revision 6.7  2003/08/27 12:32:25  ucko
- * Yet another attempt to work around the WorkShop lossage with k*Timeout.
- *
- * Revision 6.6  2003/08/27 02:00:11  ucko
- * Sigh... WorkShop still mishandles kXxxTimeout in some cases, so fall
- * back to making them macros.
- *
- * Revision 6.5  2003/08/26 18:55:13  lavr
- * Added "static" to k...Timeout to make Sun WorkShop compiler happier
- *
- * Revision 6.4  2003/08/25 14:36:26  lavr
- * +kDefaultTimeout, +kInfiniteTimeout
- *
- * Revision 6.3  2003/04/09 19:05:58  siyan
- * Added doxygen support
- *
- * Revision 6.2  2002/09/19 18:05:41  lavr
- * Header file guard macro changed; log moved to end
- *
- * Revision 6.1  2001/06/19 20:15:58  lavr
- * Initial revision
- *
- * ===========================================================================
- */
 
 #endif /* CONNECT___NCBI_TYPES__H */

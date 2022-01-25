@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.100 2006/08/03 20:40:45 papadopo Exp $
+/* $Id: blast_hits.h,v 1.106 2007/07/27 18:25:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,10 +31,16 @@
  * Structures and API used for saving BLAST hits
  */
 
-#ifndef __BLAST_HITS__
-#define __BLAST_HITS__
+#ifndef ALGO_BLAST_CORE__BLAST_HITS__H
+#define ALGO_BLAST_CORE__BLAST_HITS__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/blast_query_info.h>
+#include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_parameters.h>
+#include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/pattern.h>
@@ -392,6 +398,12 @@ NCBI_XBLAST_EXPORT
 Boolean
 Blast_HSPList_IsEmpty(const BlastHSPList* hsp_list);
 
+/** Returns a duplicate (deep copy) of the given hsp list. */
+BlastHSPList* BlastHSPListDup(const BlastHSPList* hsp_list);
+
+/** Swaps the two HSP lists via structure assignment */
+void Blast_HSPListSwap(BlastHSPList* list1, BlastHSPList* list2);
+
 /** Saves HSP information into a BlastHSPList structure
  * @param hsp_list Structure holding all HSPs with full gapped alignment 
  *        information [in] [out]
@@ -481,7 +493,7 @@ Int4
 Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program, 
                                           BlastHSPList* hsp_list);
 
-/** Reevaluate all HSPs in an HSP list, using ambiguity information. 
+/** Reevaluate all ungapped HSPs in an HSP list, using ambiguity information. 
  * This is/can only done either for an ungapped search, or if traceback is 
  * already available.
  * Subject sequence is uncompressed and saved here. Number of identities is
@@ -503,7 +515,7 @@ Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program,
  */
 NCBI_XBLAST_EXPORT
 Int2 
-Blast_HSPListReevaluateWithAmbiguities(EBlastProgramType program, 
+Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program, 
    BlastHSPList* hsp_list, BLAST_SequenceBlk* query_blk, 
    BLAST_SequenceBlk* subject_blk, 
    const BlastInitialWordParameters* word_params,
@@ -528,15 +540,23 @@ Int2 Blast_HSPListAppend(BlastHSPList** old_hsp_list_ptr,
  * @param hsp_list Contains HSPs from the new chunk [in]
  * @param combined_hsp_list_ptr Contains HSPs from previous chunks [in] [out]
  * @param hsp_num_max Maximal allowed number of HSPs to save (unlimited if INT4_MAX) [in]
- * @param start Offset where the current subject chunk starts [in]
- * @param merge_hsps Should the overlapping HSPs be merged into one? [in]
+ * @param split_points Offset The sequence offset (query or subject) that is 
+ *             the boundary between HSPs in combined_hsp_list and hsp_list. [in]
+ * @param contexts_per_query If positive, the number of query contexts
+ *                    that hits can contain. If negative, the (one) split
+ *                    point occurs on the subject sequence [in]
+ * @param chunk_overlap_size The length of the overlap region between the
+ *                    sequence region containing hsp_list and that
+ *                    containing combined_hsp_list [in]
  * @return 0 if HSP lists have been merged successfully, -1 otherwise.
  */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list, 
                    BlastHSPList** combined_hsp_list_ptr, 
-                   Int4 hsp_num_max, Int4 start, Boolean merge_hsps);
-
+                   Int4 hsp_num_max, Int4* split_points, 
+                   Int4 contexts_per_query,
+                   Int4 chunk_overlap_size);
+                   
 /** Adjust subject offsets in an HSP list if only part of the subject sequence
  * was searched. Used when long subject sequence is split into more manageable
  * chunks.
@@ -616,6 +636,27 @@ Int2 Blast_HitListHSPListsFree(BlastHitList* hitlist);
 NCBI_XBLAST_EXPORT
 Int2 Blast_HitListUpdate(BlastHitList* hit_list, BlastHSPList* hsp_list);
 
+/** Combine two hitlists; both HitLists must contain HSPs that
+ * represent alignments to the same query sequence
+ * @param old_hit_list_ptr Pointer to original HitList, will be NULLed 
+ *                          out on return [in|out]
+ * @param combined_hsp_list_ptr Pointer to the combined list of HSPs [in|out]
+ * @param contexts_per_query The number of different contexts that can
+ *             occur in hits from old_hit_list and combined_hit_list [in]
+ * @param split_offsets the query offset that marks the boundary between
+ *             combined_hit_list and old_hit_list. HSPs in old_hit_list
+ *             that hit to context i are assumed to lie to the right 
+ *             of split_offsets[i] [in]
+ * @param chunk_overlap_size The length of the overlap region between the
+ *                    sequence region containing hit_list and that
+ *                    containing combined_hit_list [in]
+*/
+NCBI_XBLAST_EXPORT
+Int2 Blast_HitListMerge(BlastHitList** old_hit_list_ptr,
+                        BlastHitList** combined_hit_list_ptr,
+                        Int4 contexts_per_query, Int4 *split_offsets,
+                        Int4 chunk_overlap_size);
+
 /** Purges a BlastHitList of NULL HSP lists.
  * @param hit_list BLAST hit list to purge. [in] [out]
  */
@@ -640,10 +681,6 @@ BlastHSPResults* Blast_HSPResultsFree(BlastHSPResults* results);
 /** Sort each hit list in the BLAST results by best e-value */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPResultsSortByEvalue(BlastHSPResults* results);
-/** Sort each hit list in the BLAST results by best e-value, in reverse
-    order. */
-NCBI_XBLAST_EXPORT
-Int2 Blast_HSPResultsReverseSort(BlastHSPResults* results);
 
 /** Reverse order of HSP lists in each hit list in the BLAST results. 
  * This allows to return HSP lists from the end of the arrays when reading
@@ -791,5 +828,4 @@ PhiBlastGetEffectiveNumberOfPatterns(const BlastQueryInfo *query_info);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_HITS__ */
-
+#endif /* !ALGO_BLAST_CORE__BLAST_HITS__H */

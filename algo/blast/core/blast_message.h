@@ -1,4 +1,4 @@
-/* $Id: blast_message.h,v 1.15 2006/05/24 21:11:55 camacho Exp $
+/* $Id: blast_message.h,v 1.17 2007/02/08 15:25:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,10 +31,10 @@
  * Structures for BLAST messages
  */
 
-#ifndef __BLASTMESSAGES__
-#define __BLASTMESSAGES__
+#ifndef ALGO_BLAST_CORE__BLAST_MESSAGE__H
+#define ALGO_BLAST_CORE__BLAST_MESSAGE__H
 
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/ncbi_std.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -148,8 +148,14 @@ void Blast_PerrorEx(Blast_Message* *msg,
 /** BLAST search was interrupted via a user-provided callback */
 #define BLASTERR_INTERRUPTED                        103
 
+/** The option is not supported with the specified program. */
+#define BLASTERR_OPTION_PROGRAM_INVALID             201  
+
+  /** The value of the option is not supported (e.g., word size too small) */
+#define BLASTERR_OPTION_VALUE_INVALID               202
+
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLASTMESSAGES__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_MESSAGE__H */
 

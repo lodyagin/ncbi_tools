@@ -1958,6 +1958,13 @@ ID2SRequestGetChunksAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GET_CHUNKS_split_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> split_version = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -2015,6 +2022,8 @@ ID2SRequestGetChunksAsnWrite(ID2SRequestGetChunksPtr ptr, AsnIoPtr aip, AsnTypeP
       }
    }
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> chunks ,ASNCODE_INTVAL_SLOT, aip, ID2S_REQUEST_GET_CHUNKS_chunks, REQUEST_GET_CHUNKS_chunks_E);
+   av.intvalue = ptr -> split_version;
+   retval = AsnWrite(aip, GET_CHUNKS_split_version,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -3701,6 +3710,13 @@ ID2ReplyGetBlobIdAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> end_of_reply = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == REPLY_GET_BLOB_ID_blob_state) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> blob_state = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -3767,6 +3783,8 @@ ID2ReplyGetBlobIdAsnWrite(ID2ReplyGetBlobIdPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    AsnGenericUserSeqOfAsnWrite(ptr -> annot_info, (AsnWriteFunc) ID2SSeqAnnotInfoAsnWrite, aip, REPLY_GET_BLOB_ID_annot_info, REPLY_GET_BLOB_ID_annot_info_E);
    av.boolvalue = ptr -> end_of_reply;
    retval = AsnWrite(aip, REPLY_GET_BLOB_ID_end_of_reply,  &av);
+   av.intvalue = ptr -> blob_state;
+   retval = AsnWrite(aip, REPLY_GET_BLOB_ID_blob_state,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

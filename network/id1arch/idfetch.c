@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.40  2007/03/27 13:30:10  kans
+ moved sqnutils.h early to avoid collision with grp1 define
+
  Revision 1.39  2006/08/02 15:16:04  vysokolo
  Added features tRNA and microRNA
 
@@ -183,6 +186,9 @@
  */
 #include <ncbi.h>
 #include <objsset.h>
+#include <sequtil.h>
+#include <sqnutils.h>
+#include <tofasta.h>
 #include <accid1.h>
 
 #if 0
@@ -191,11 +197,8 @@
 #include <asn2gnbk.h>
 #endif
 
-#include <tofasta.h>
 #include <ni_types.h>
 #include <ni_lib.h>
-#include <sqnutils.h>
-#include <sequtil.h>
 #include <ffprint.h>
 #include <ent2api.h>
 

@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vsmutil.h,v $
+* Revision 6.9  2007/07/06 16:01:27  bollin
+* Added Bad Specific Host values to Validator Report.
+*
+* Revision 6.8  2007/03/30 19:09:00  kans
+* validate window verbose argument is Int2
+*
+* Revision 6.7  2007/03/23 20:10:42  kans
+* added ValidErrCallback, uses new ValidErrorFunc mechanism, will be used to switch verbosity without revalidating
+*
 * Revision 6.6  2006/07/13 17:13:19  bollin
 * use Uint4 instead of Uint2 for itemID values
 *
@@ -71,9 +80,9 @@ typedef void (LIBCALLBACK *ErrNotifyProc) PROTO((
               Boolean select, Boolean dblClick));
 
 extern void CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
-                                  FonT font, ErrSev sev, Boolean verbose);
+                                  FonT font, ErrSev sev, Int2 verbose);
 extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
-                                    FonT font, ErrSev sev, Boolean verbose,
+                                    FonT font, ErrSev sev, Int2 verbose,
                                     BaseFormPtr bfp, FormActnFunc revalProc,
                                     Boolean okaytosetviewtarget);
 extern void ShowValidateWindow (void);
@@ -89,6 +98,23 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
 extern int LIBCALLBACK ValidErrHook PROTO((const ErrDesc *err));
 extern Boolean ShouldSetSuppressContext (void);
 extern Boolean ShouldSetJustShowAccession (void);
+
+extern void LIBCALLBACK ValidErrCallback (
+  ErrSev severity,
+  int errcode,
+  int subcode,
+  Uint2 entityID,
+  Uint2 itemtype,
+  Uint4 itemID,
+  CharPtr accession,
+  CharPtr message,
+  CharPtr objtype,
+  CharPtr label,
+  CharPtr context,
+  CharPtr location,
+  CharPtr product,
+  Pointer userdata
+);
 
 /*****************************************************************************
 *
@@ -125,6 +151,8 @@ extern void LIBCALLBACK AppendReplaceMessage (CharPtr searchFor, CharPtr foundIn
 extern void LIBCALLBACK StdReplaceNotify (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                           Uint2 subtype, Boolean select, Boolean dblClick);
 
+
+extern Boolean WriteBadSpecificHostTable (ValNodePtr bad_biop_list, FILE *fp);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.45 2006/09/15 15:45:35 madden Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.47 2006/11/24 19:06:15 kans Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,13 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.47  2006/11/24 19:06:15  kans
+added include of blast_filter.h
+
+Revision 6.46  2006/11/21 17:24:20  papadopo
+1. rearrange headers
+2. change lookup table type
+
 Revision 6.45  2006/09/15 15:45:35  madden
 Change to LookupTableWrapInit
 
@@ -169,7 +176,10 @@ Changed a little format of RPS lookup tables file.
 #include <sequtil.h>
 #include <seqport.h>
 #include <tofasta.h>
+#include <algo/blast/core/blast_aalookup.h>
+#include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_encoding.h>
+#include <algo/blast/core/lookup_wrap.h>
 #include <algo/blast/core/blast_filter.h>
 
 #ifndef MAXLINELEN
@@ -429,7 +439,7 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles,
     return(totalLength);
 }
 
-static Boolean RPSUpdateOffsets(BlastLookupTable *lookup)
+static Boolean RPSUpdateOffsets(BlastAaLookupTable *lookup)
 {
     Uint4 len;
     Int4 index;
@@ -471,7 +481,7 @@ static Boolean RPSUpdateOffsets(BlastLookupTable *lookup)
    pointers relative to the start of "mod_lookup_table_memory" chunk 
    RPS Blast will calculate real pointers in run time using these values
 */
-Boolean RPSUpdatePointers(BlastLookupTable *lookup, Uint4 *new_overflow, Uint4 *new_overflow_size)
+Boolean RPSUpdatePointers(BlastAaLookupTable *lookup, Uint4 *new_overflow, Uint4 *new_overflow_size)
 {
     Uint4 len;
     Int4 index;
@@ -516,11 +526,11 @@ Boolean RPSUpdatePointers(BlastLookupTable *lookup, Uint4 *new_overflow, Uint4 *
    Write lookup table to the disk into file "*.loo", which will be
    used memory-mapped during RPS Blast search 
 */
-Boolean RPSDumpLookupTable(BlastLookupTable *lookup, FILE *fd)
+Boolean RPSDumpLookupTable(BlastAaLookupTable *lookup, FILE *fd)
 {
     Uint4 *new_overflow;
     Uint4 new_overflow_size;
-    LookupBackboneCell empty_cell;
+    AaLookupBackboneCell empty_cell;
     Int4 index;
 
     RPSUpdateOffsets(lookup);
@@ -528,7 +538,7 @@ Boolean RPSDumpLookupTable(BlastLookupTable *lookup, FILE *fd)
     new_overflow = malloc(lookup->overflow_size*sizeof(Uint4)); 
     RPSUpdatePointers(lookup, new_overflow, &new_overflow_size);
 
-    FileWrite(lookup->thick_backbone, sizeof(LookupBackboneCell), lookup->backbone_size, fd);
+    FileWrite(lookup->thick_backbone, sizeof(AaLookupBackboneCell), lookup->backbone_size, fd);
     
     /* write empty cells out to the thick backbone size that
        RPS blast expects */
@@ -593,7 +603,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     Int4Ptr offsets;
     Int4 num_lookups;
     BlastSeqLoc *lookup_segment=NULL;
-    BlastLookupTable *lookup;
+    BlastAaLookupTable *lookup;
     LookupTableWrap* lookup_wrap_ptr=NULL;
     LookupTableOptions* lookup_options;
    
@@ -634,7 +644,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     lookup_options = LookupTableOptionsFree(lookup_options);
     lookup_segment = BlastSeqLocFree(lookup_segment);
 
-    lookup = (BlastLookupTable*) lookup_wrap_ptr->lut;
+    lookup = (BlastAaLookupTable*) lookup_wrap_ptr->lut;
 
     /* Only Uint4 maximum length for lookup file allowed in current
        implementation */

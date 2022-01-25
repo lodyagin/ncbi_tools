@@ -1,4 +1,4 @@
-.TH GBSEQGET 1 2003-04-27 NCBI "NCBI Tools User's Manual"
+.TH GBSEQGET 1 2006-04-14 NCBI "NCBI Tools User's Manual"
 .SH NAME
 gbseqget \- format sequences from GenBank as an XML GBSet
 .SH SYNOPSIS
@@ -48,5 +48,11 @@ Output file name for the XML GBSet (default = stdout)
 .TP
 \fB\-v\fP
 Fetch SNP Variations
+.SH NOTES
+The GBSet format is deprecated in favor of INSDSet, which you can
+produce by running \fBinsdseqget\fP in place of \fBgbseqget\fP.
 .SH AUTHOR
 The National Center for Biotechnology Information.
+.SH SEE ALSO
+.BR asn2gb (1),
+.BR insdseqget (1).

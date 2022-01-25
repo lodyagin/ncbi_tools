@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -197,6 +197,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatNew (void)
 NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatFree (SeqFeatPtr sfp)
 {
 	ValNodePtr vnp, next=NULL;
+  UserObjectPtr uop, unp = NULL;
 
     if (sfp == NULL)
         return (SeqFeatPtr)NULL;
@@ -218,8 +219,23 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatFree (SeqFeatPtr sfp)
 		MemFree(vnp);
 	}
 	MemFree(sfp->except_text);
+	for (vnp = sfp->ids; vnp != NULL; vnp = next)
+	{
+		next = vnp->next;
+		SeqFeatIdFree((ChoicePtr)(vnp->data.ptrvalue));
+		MemFree(vnp);
+	}
+	/*
 	AsnGenericChoiceSeqOfFree (sfp->ids, (AsnOptFreeFunc) SeqFeatIdFree);
-	AsnGenericUserSeqOfFree (sfp->exts, (AsnOptFreeFunc) UserObjectFree);
+	*/
+	for (uop = sfp->exts; uop != NULL; uop = unp)
+	{
+		unp = uop->next;
+		UserObjectFree(uop);
+	}
+	/*
+  AsnGenericUserSeqOfFree (sfp->exts, (AsnOptFreeFunc) UserObjectFree);
+  */
 
 	ObjMgrDelete(OBJ_SEQFEAT, (Pointer)sfp);
 
@@ -241,6 +257,7 @@ NLM_EXTERN Boolean LIBCALL SeqFeatAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, AsnTyp
     Boolean retval = FALSE;
 	SeqFeatXrefPtr sfxp;
 	ValNodePtr vnp;
+  UserObjectPtr uop;
 
 	if (! loaded)
 	{
@@ -377,11 +394,37 @@ NLM_EXTERN Boolean LIBCALL SeqFeatAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, AsnTyp
     }
     if (sfp->ids != NULL)
     {
+        if (! AsnOpenStruct(aip, SEQ_FEAT_ids, (Pointer)sfp->ids))
+            goto erret;
+        vnp = sfp->ids;
+        while (vnp != NULL)
+        {
+            if (! SeqFeatIdAsnWrite((ChoicePtr)(vnp->data.ptrvalue), aip, SEQ_FEAT_ids_E))
+                goto erret;
+            vnp = vnp->next;
+        }
+		if (! AsnCloseStruct(aip, SEQ_FEAT_ids, (Pointer)sfp->ids))
+            goto erret;
+        /*
         AsnGenericChoiceSeqOfAsnWrite (sfp->ids, (AsnWriteFunc) SeqFeatIdAsnWrite, aip, SEQ_FEAT_ids, SEQ_FEAT_ids_E);
+        */
     }
     if (sfp->exts != NULL)
     {
+        if (! AsnOpenStruct(aip, SEQ_FEAT_exts, (Pointer)sfp->exts))
+            goto erret;
+        uop = sfp->exts;
+        while (uop != NULL)
+        {
+            if (! UserObjectAsnWrite(uop, aip, SEQ_FEAT_exts_E))
+                goto erret;
+            uop = uop->next;
+        }
+		if (! AsnCloseStruct(aip, SEQ_FEAT_exts, (Pointer)sfp->exts))
+            goto erret;
+        /*
         AsnGenericUserSeqOfAsnWrite (sfp->exts, (AsnWriteFunc) UserObjectAsnWrite, aip, SEQ_FEAT_exts, SEQ_FEAT_exts_E);
+        */
     }
     if (! AsnCloseStruct(aip, atp, (Pointer)sfp))
         goto erret;
@@ -409,7 +452,9 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	SeqFeatXrefPtr sfxp, sfxplast = NULL;
 	ValNodePtr vnp, vnplast = NULL;
 	DbtagPtr dbtp;
-	Boolean isError = FALSE;
+  Choice id;
+  ChoicePtr cp;
+	UserObjectPtr  uop, last = NULL;
 
 	if (! loaded)
 	{
@@ -501,17 +546,55 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 		}
 		else if (atp == SEQ_FEAT_ids)
 		{
+        atp = AsnLinkType (SEQ_FEAT_ids, FEAT_ID);
+        if (atp == NULL) goto erret;
+        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the SEQUENCE */
+		    while ((atp = AsnReadId(aip, amp, atp)) == SEQ_FEAT_ids_E) {
+                if (! SeqFeatIdAsnRead(aip, atp, &id))
+                    goto erret;
+                cp = (ChoicePtr) MemNew (sizeof (Choice));
+                if (cp == NULL) goto erret;
+                cp->choice = id.choice;
+                if (id.choice) {
+                    cp->value.intvalue = id.value.intvalue;
+                } else {
+                    cp->value.ptrvalue = id.value.ptrvalue;
+                }
+                ValNodeAddPointer (&(sfp->ids), 0, (Pointer) cp);
+		    }
+        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the END STRUCT */
+        AsnUnlinkType (SEQ_FEAT_ids);
+		    /*
 		    sfp->ids = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqFeatIdAsnRead, (AsnOptFreeFunc) SeqFeatIdFree);
             if (isError && sfp->ids == NULL) {
                 goto erret;
             }
-        }
-        else if (atp == SEQ_FEAT_exts)
-        {
+            */
+    }
+    else if (atp == SEQ_FEAT_exts)
+    {
+        atp = AsnLinkType (SEQ_FEAT_exts, FEAT_ID);
+        if (atp == NULL) goto erret;
+        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the SEQUENCE */
+		    while ((atp = AsnReadId(aip, amp, atp)) == SEQ_FEAT_exts_E) {
+            uop = UserObjectAsnRead (aip, atp);
+            if (uop == NULL) goto erret;
+            if (last != NULL) {
+              last->next = uop;
+            }
+            if (sfp->exts == NULL) {
+              sfp->exts = uop;
+            }
+            last = uop;
+		    }
+        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the END STRUCT */
+        AsnUnlinkType (SEQ_FEAT_exts);
+            /*
             sfp->exts = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UserObjectAsnRead, (AsnOptFreeFunc) UserObjectFree);
             if (isError && sfp->exts == NULL) {
                 goto erret;
             }
+            */
         }
         else
         {

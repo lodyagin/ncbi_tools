@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.h,v 1.65 2006/02/07 20:55:19 papadopo Exp $
+/* $Id: blast_gapalign.h,v 1.68 2007/04/17 16:55:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,15 +32,19 @@
  * @todo FIXME: elaborate on contents.
  */
 
-#ifndef __BLAST_GAPALIGN__
-#define __BLAST_GAPALIGN__
+#ifndef ALGO_BLAST_CORE__BLAST_GAPALIGN__H
+#define ALGO_BLAST_CORE__BLAST_GAPALIGN__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 #include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/blast_extend.h>
+#include <algo/blast/core/blast_query_info.h>
+#include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/greedy_align.h>
 #include <algo/blast/core/blast_hits.h>
+#include <algo/blast/core/blast_diagnostics.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,6 +80,10 @@ typedef struct BlastGapAlignStruct {
    Int4 query_stop; /**< query end offseet of current alignment */
    Int4 subject_start;  /**< subject start offset current alignment */
    Int4 subject_stop; /**< subject end offset of current alignment */
+   Int4 greedy_query_seed_start;  /**< for greedy alignments, the query 
+                                       offset of the gapped start point */
+   Int4 greedy_subject_seed_start;  /**< for greedy alignments, the subject
+                                         offset of the gapped start point */
    Int4 score;   /**< Return value: alignment score */
 } BlastGapAlignStruct;
 
@@ -117,6 +125,7 @@ BLAST_GapAlignStructFree(BlastGapAlignStruct* gap_align);
  *        information from the ungapped alignment performed earlier) [in]
  * @param hsp_list_ptr Structure containing all saved HSPs [out]
  * @param gapped_stats Return statistics (not filled if NULL) [out]
+ * @param fence_hit True is returned here if overrun is detected. [in]
  */
 Int2 BLAST_GetGappedScore (EBlastProgramType program_number, 
             BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
@@ -126,7 +135,8 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
               const BlastExtensionParameters* ext_params,
               const BlastHitSavingParameters* hit_params,
               BlastInitHitList* init_hitlist,
-              BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats);
+              BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats,
+              Boolean * fence_hit);
 
 /** Perform a gapped alignment with traceback
  * @param program Type of BLAST program [in]
@@ -138,12 +148,14 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
  * @param s_start Offset in subject where to start alignment [in]
  * @param query_length Maximal allowed extension in query [in]
  * @param subject_length Maximal allowed extension in subject [in]
+ * @param fence_hit True is returned here if overrun is detected. [in]
  */
 Int2 BLAST_GappedAlignmentWithTraceback(EBlastProgramType program, 
         Uint1* query, Uint1* subject, 
         BlastGapAlignStruct* gap_align, 
         const BlastScoringParameters* score_params,
-        Int4 q_start, Int4 s_start, Int4 query_length, Int4 subject_length);
+        Int4 q_start, Int4 s_start, Int4 query_length, Int4 subject_length,
+        Boolean * fence_hit);
 
 /** Greedy gapped alignment, with or without traceback.
  * Given two sequences, relevant options and an offset pair, fills the
@@ -160,12 +172,14 @@ Int2 BLAST_GappedAlignmentWithTraceback(EBlastProgramType program,
  * @param s_off Starting offset in subject [in]
  * @param compressed_subject Is subject sequence compressed? [in]
  * @param do_traceback Should traceback be saved? [in]
+ * @param fence_hit True is returned here if overrun is detected. [in]
  */
 Int2 
 BLAST_GreedyGappedAlignment(Uint1* query, Uint1* subject, 
    Int4 query_length, Int4 subject_length, BlastGapAlignStruct* gap_align,
    const BlastScoringParameters* score_params, 
-   Int4 q_off, Int4 s_off, Boolean compressed_subject, Boolean do_traceback);
+   Int4 q_off, Int4 s_off, Boolean compressed_subject, Boolean do_traceback,
+   Boolean * fence_hit);
 
 /** Convert initial HSP list to an HSP list: to be used in ungapped search.
  * Ungapped data must be available in the initial HSP list for this function 
@@ -217,4 +231,4 @@ BlastGetStartForGappedAlignment (Uint1* query, Uint1* subject,
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_GAPALIGN__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_GAPALIGN__H */

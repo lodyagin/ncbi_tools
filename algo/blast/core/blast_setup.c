@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.145 2006/09/18 16:48:43 madden Exp $
+/* $Id: blast_setup.c,v 1.151 2007/05/22 20:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,14 +34,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.145 2006/09/18 16:48:43 madden Exp $";
+    "$Id: blast_setup.c,v 1.151 2007/05/22 20:55:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_filter.h>
-#include <algo/blast/core/blast_encoding.h>
-#include <algo/blast/core/phi_lookup.h>
 
 /* See description in blast_setup.h */
 Int2
@@ -82,7 +80,7 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
             retval = 
                 Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[index],
                     scoring_options->gap_open, scoring_options->gap_extend,
-                    scoring_options->decline_align, sbp->name, error_return);
+                    sbp->name, error_return);
         }
         if (retval) {
             return retval;
@@ -98,7 +96,7 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
     }
 
     /* Set gapped Blast_KarlinBlk* alias */
-    sbp->kbp_gap = (program == eBlastTypePsiBlast) ? 
+    sbp->kbp_gap = Blast_QueryIsPssm(program) ? 
         sbp->kbp_gap_psi : sbp->kbp_gap_std;
 
     return 0;
@@ -395,12 +393,9 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     return status;
 }
 
-/** Validation function for the setup of queries for the BLAST search.
- * @return If no valid queries are found, 1 is returned, otherwise 0.
- */
-static Int2
-s_BlastSetup_Validate(const BlastQueryInfo* query_info,
-                      const BlastScoreBlk* score_blk) 
+Int2
+BlastSetup_Validate(const BlastQueryInfo* query_info, 
+                    const BlastScoreBlk* score_blk) 
 {
     int index;
     Boolean valid_context_found = FALSE;
@@ -411,7 +406,7 @@ s_BlastSetup_Validate(const BlastQueryInfo* query_info,
          index++) {
         if (query_info->contexts[index].is_valid) {
             valid_context_found = TRUE;
-        } else {
+        } else if (score_blk) {
             ASSERT(score_blk->kbp[index] == NULL);
             ASSERT(score_blk->sfp[index] == NULL);
             if (score_blk->kbp_gap) {
@@ -523,7 +518,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
         return status;
     }
 
-    if ( (status = s_BlastSetup_Validate(query_info, *sbpp) != 0)) {
+    if ( (status = BlastSetup_Validate(query_info, *sbpp) != 0)) {
         if (*blast_message == NULL) {
             Blast_Perror(blast_message, BLASTERR_INVALIDQUERIES, -1);
         }
@@ -598,9 +593,8 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
       return 0;
    }
 
-   if (program_number == eBlastTypeTblastn || 
-       program_number == eBlastTypeTblastx)
-      db_length = db_length/3;	
+   if (Blast_SubjectIsTranslated(program_number))
+      db_length = db_length/3;  
 
    if (eff_len_options->dbseq_num > 0)
       db_num_seqs = eff_len_options->dbseq_num;
@@ -666,9 +660,19 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
                                        db_num_seqs, &length_adjustment);
 
          if (effective_search_space == 0) {
-             effective_search_space =
-                        (query_length - length_adjustment) * 
-                        (db_length - db_num_seqs*length_adjustment);
+
+             /* if the database length was specified, do not
+                adjust it when calculating the search space;
+                it's counter-intuitive to specify a value and 
+                not have that value be used */
+
+             Int8 effective_db_length = db_length;
+
+             if (eff_len_options->db_length == 0)
+                 effective_db_length -= (Int8)db_num_seqs * length_adjustment;
+
+             effective_search_space = effective_db_length *
+                             (query_length - length_adjustment);
          }
       }
       query_info->contexts[index].eff_searchsp = effective_search_space;
@@ -691,10 +695,14 @@ BLAST_GetSubjectTotals(const BlastSeqSrc* seqsrc,
         return;
     }
 
-    *total_length = BlastSeqSrcGetTotLen(seqsrc);
+    *total_length = BlastSeqSrcGetTotLenStats(seqsrc);
+    if (*total_length <= 0)
+       *total_length = BlastSeqSrcGetTotLen(seqsrc);
 
     if (*total_length > 0) {
-        *num_seqs = BlastSeqSrcGetNumSeqs(seqsrc);
+        *num_seqs = BlastSeqSrcGetNumSeqsStats(seqsrc);
+        if (*num_seqs <= 0)
+           *num_seqs = BlastSeqSrcGetNumSeqs(seqsrc);
     } else {
         /* Not a database search; each subject sequence is considered
            individually */

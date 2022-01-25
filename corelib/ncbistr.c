@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.16  2006/10/17 02:02:31  lavr
+* Fix a typo
+*
+* Revision 6.15  2006/10/16 21:06:27  lavr
+* String{HasNo|DoesHave}Text() to accept const pointer
+*
 * Revision 6.14  2006/09/12 16:22:55  ludwigf
 * CHANGED: Internal logic on LabelCopy() to no longer touch memory outside
 *  the buffer it is given to operate on.
@@ -505,29 +511,20 @@ NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StrMove (char FAR *to, const char FAR *from)
 	return to;
 }
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText (Nlm_CharPtr str)
-
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText (const char FAR *str)
 {
-  Nlm_Uchar  ch;	/* to use 8bit characters in multibyte languages */
-
-  if (str != NULL) {
-    ch = *str;
-    while (ch != '\0') {
-      if (ch > ' ') {
+  if (str) {
+    while (*str) {
+      if ((unsigned char)(*str++) > ' ')
         return FALSE;
-      }
-      str++;
-      ch = *str;
     }
   }
   return TRUE;
 }
 
-NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText (Nlm_CharPtr str)
-
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText (const char FAR *str)
 {
-  if (Nlm_StringHasNoText (str)) return FALSE;
-  return TRUE;
+  return ! Nlm_StringHasNoText (str);
 }
 
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString (Nlm_CharPtr str)

@@ -1,4 +1,4 @@
-/*  $Id: hspstream_queue.c,v 1.8 2005/04/12 17:59:08 dondosha Exp $
+/*  $Id: hspstream_queue.c,v 1.9 2007/07/27 18:03:11 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspstream_queue.c,v 1.8 2005/04/12 17:59:08 dondosha Exp $";
+    "$Id: hspstream_queue.c,v 1.9 2007/07/27 18:03:11 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 
@@ -203,6 +203,10 @@ BlastHSPListQueueNew(BlastHSPStream* hsp_stream, void* args)
     SetMethod(hsp_stream, eWrite, fnptr);
     fnptr.closeFn = &BlastHSPListQueueClose;
     SetMethod(hsp_stream, eClose, fnptr);
+    fnptr.batch_read = NULL;
+    SetMethod(hsp_stream, eBatchRead, fnptr);
+    fnptr.mergeFn = NULL;
+    SetMethod(hsp_stream, eMerge, fnptr);
 
     SetData(hsp_stream, args);
     return hsp_stream;

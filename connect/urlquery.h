@@ -29,13 +29,16 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.15 $
+ * $Revision: 6.16 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: urlquery.h,v $
+ * Revision 6.16  2006/10/17 02:19:07  lavr
+ * Use "const char*" wherever appropriate
+ *
  * Revision 6.15  2006/04/15 01:59:01  lavr
  * +QUERY_OpenServiceQueryEx
  *
@@ -114,11 +117,11 @@ extern "C" {
   The returned CONN value is then passed data before being sent to the cgi.
 */
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
-  Nlm_CharPtr host_machine,
+  const char* host_machine,
   Nlm_Uint2 host_port,
-  Nlm_CharPtr host_path,
-  Nlm_CharPtr arguments,
-  Nlm_CharPtr appName,
+  const char* host_path,
+  const char* arguments,
+  const char* appName,
   Nlm_Uint4 timeoutsec,
   EMIME_Type type,
   EMIME_SubType subtype,
@@ -137,15 +140,19 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 */
 
 NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
-  Nlm_CharPtr service, Nlm_CharPtr parameters, Nlm_Uint4 timeoutsec,
-  Nlm_CharPtr arguments
+  const char* service,
+  const char* parameters,
+  Nlm_Uint4 timeoutsec,
+  const char* arguments
 );
 
 /*
   Same as QUERY_OpenServiceQueryEx(service, parameters, timeoutsec, 0);
 */
 NLM_EXTERN CONN QUERY_OpenServiceQuery (
-  Nlm_CharPtr service, Nlm_CharPtr parameters, Nlm_Uint4 timeoutsec
+  const char* service,
+  const char* parameters,
+  Nlm_Uint4 timeoutsec
 );
 
 /*
@@ -192,7 +199,7 @@ typedef struct asnioconn {    /* for AsnIo to and from a connection */
   to AsnRead and AsnWrite functions.
 */
 NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (
-  Nlm_CharPtr mode,
+  const char* mode,
   CONN conn
 );
 

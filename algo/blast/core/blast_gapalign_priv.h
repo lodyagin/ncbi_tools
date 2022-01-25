@@ -1,7 +1,4 @@
-#ifndef ALGO_BLAST_CORE___BLAST_GAPALIGN_PRI__H
-#define ALGO_BLAST_CORE___BLAST_GAPALIGN_PRI__H
-
-/*  $Id: blast_gapalign_priv.h,v 1.17 2006/08/22 19:26:20 papadopo Exp $
+/*  $Id: blast_gapalign_priv.h,v 1.20 2006/12/04 21:17:24 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +31,14 @@
  *  Private interface for blast_gapalign.c
  */
 
+#ifndef ALGO_BLAST_CORE___BLAST_GAPALIGN_PRIV__H
+#define ALGO_BLAST_CORE___BLAST_GAPALIGN_PRIV__H
+
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/gapinfo.h>
+#include <algo/blast/core/blast_gapalign.h>
+#include <algo/blast/core/blast_stat.h>
+#include <algo/blast/core/blast_parameters.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +59,9 @@ extern "C" {
  * @param query_offset The starting offset in query [in]
  * @param reversed Has the sequence been reversed? Used for psi-blast [in]
  * @param reverse_sequence Do reverse the sequence [in]
+ * @param hit_fence If NULL, set to TRUE if the extension encountered
+ *                  sequence letters that indicate finding a region
+ *                  of B that is uninitialized [out]
  * @return The best alignment score found.
 */
 Int4
@@ -61,7 +69,8 @@ ALIGN_EX(Uint1* A, Uint1* B, Int4 M, Int4 N, Int4* a_offset,
         Int4* b_offset, GapPrelimEditBlock *edit_block, 
         BlastGapAlignStruct* gap_align, 
         const BlastScoringParameters* scoringParams, Int4 query_offset,
-        Boolean reversed, Boolean reverse_sequence);
+        Boolean reversed, Boolean reverse_sequence,
+        Boolean * hit_fence);
 
 /** Low level function to perform gapped extension in one direction with 
  * or without traceback.
@@ -79,6 +88,9 @@ ALIGN_EX(Uint1* A, Uint1* B, Int4 M, Int4 N, Int4* a_offset,
  * @param query_offset The starting offset in query [in]
  * @param reversed Has the sequence been reversed? Used for psi-blast [in]
  * @param reverse_sequence Do reverse the sequence [in]
+ * @param fence_hit If NULL, set to TRUE if the extension encountered
+ *                  sequence letters that indicate finding a region
+ *                  of B that is uninitialized [out]
  * @return The best alignment score found.
  */
 Int4 
@@ -86,7 +98,8 @@ Blast_SemiGappedAlign(Uint1* A, Uint1* B, Int4 M, Int4 N,
                   Int4* a_offset, Int4* b_offset, Boolean score_only, 
                   GapPrelimEditBlock *edit_block, BlastGapAlignStruct* gap_align, 
                   const BlastScoringParameters* score_params, 
-                  Int4 query_offset, Boolean reversed, Boolean reverse_sequence);
+                  Int4 query_offset, Boolean reversed, Boolean reverse_sequence,
+                  Boolean * fence_hit);
 
 /** Convert the initial list of traceback actions from a non-OOF
  *  gapped alignment into a blast edit script. Note that this routine
@@ -153,6 +166,15 @@ void RPSPsiMatrixDetach(BlastScoreBlk* sbp);
  * ===========================================================================
  *
  * $Log: blast_gapalign_priv.h,v $
+ * Revision 1.20  2006/12/04 21:17:24  papadopo
+ * doxygen fixes
+ *
+ * Revision 1.19  2006/11/29 17:25:50  bealer
+ * - HSP range support.
+ *
+ * Revision 1.18  2006/11/21 17:02:11  papadopo
+ * rearrange headers
+ *
  * Revision 1.17  2006/08/22 19:26:20  papadopo
  * change order of macro parameters
  *
@@ -209,4 +231,4 @@ void RPSPsiMatrixDetach(BlastScoreBlk* sbp);
  * ===========================================================================
  */
 
-#endif /* !ALGO_BLAST_CORE__BLAST_GAPALIGN_PRI__H */
+#endif /* !ALGO_BLAST_CORE__BLAST_GAPALIGN_PRIV__H */

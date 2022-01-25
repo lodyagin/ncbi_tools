@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.h,v 1.12 2005/12/13 17:57:21 gertz Exp $
+/* $Id: blast_kappa.h,v 1.15 2007/05/08 20:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 
 /** @file blast_kappa.h
  * Header file for composition-based statistics
- * @todo FIXME needs doxygen comments
  */
 
-#ifndef __BLAST_KAPPA__
-#define __BLAST_KAPPA__
+#ifndef ALGO_BLAST_CORE__BLAST_KAPPA__H
+#define ALGO_BLAST_CORE__BLAST_KAPPA__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_hspstream.h>
@@ -57,7 +60,9 @@ extern "C" {
  * @param query_info query information [in]
  * @param sbp (Karlin-Altschul) information for search [in]
  * @param seqSrc used to fetch database/match sequences [in]
- * @param gen_code_string the genetic code for translated queries [in]
+ * @param db_genetic_code Genetic code to use if database sequences are
+ *                        translated, and there is no other guidance on
+ *                        which genetic code to use [in]
  * @param hsp_stream used to fetch hits for further processing [in]
  * @param scoringParams parameters used for scoring (matrix, gap costs etc.) [in]
  * @param extendParams parameters used for extension [in]
@@ -74,7 +79,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                   BlastScoreBlk* sbp,
                   BlastHSPStream* hsp_stream,
                   const BlastSeqSrc* seqSrc,
-                  const Uint1* gen_code_string,
+                  Int4 db_genetic_code,
                   BlastScoringParameters* scoringParams,
                   const BlastExtensionParameters* extendParams,
                   const BlastHitSavingParameters* hitParams,
@@ -86,49 +91,4 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
 }
 #endif
 
-/*
- * ===========================================================================
- *
- * $Log: blast_kappa.h,v $
- * Revision 1.12  2005/12/13 17:57:21  gertz
- * Revert accidental checkin of the previous revision (cvs commit was run in
- * the wrong directory.)
- *
- * Revision 1.10  2005/12/01 14:47:40  madden
- * Renamed Kappa_RedoAlignmentCore as Blast_RedoAlignmentCore
- *
- * Revision 1.9  2004/11/23 21:46:03  camacho
- * Brought up to date with current version of kappa.c [by Mike Gertz]
- *
- * Revision 1.8  2004/06/21 14:53:09  madden
- * Doxygen fixes
- *
- * Revision 1.7  2004/06/16 14:53:03  dondosha
- * Moved extern "C" after the #includes
- *
- * Revision 1.6  2004/06/08 15:09:33  dondosha
- * Use BlastHSPStream interface in the engine instead of saving hits directly
- *
- * Revision 1.5  2004/05/24 17:27:37  madden
- * Doxygen fix
- *
- * Revision 1.4  2004/05/20 15:20:57  madden
- * Doxygen compliance fixes
- *
- * Revision 1.3  2004/05/19 17:03:20  madden
- * Remove (to blast_kappa.c) #defines for Xchar and StarChar
- *
- * Revision 1.2  2004/05/19 14:52:01  camacho
- * 1. Added doxygen tags to enable doxygen processing of algo/blast/core
- * 2. Standardized copyright, CVS $Id string, $Log and rcsid formatting and i
- *    location
- * 3. Added use of @todo doxygen keyword
- *
- * Revision 1.1  2004/05/18 13:22:33  madden
- * SmithWaterman and composition-based stats code
- *
- * ===========================================================================
- */
-
-#endif /* __BLAST_KAPPA__ */
-
+#endif /* !ALGO_BLAST_CORE__BLAST_KAPPA__H */

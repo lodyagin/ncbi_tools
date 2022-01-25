@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.84 $
+* $Revision: 1.88 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -880,6 +880,11 @@ NLM_EXTERN void AddLocusBlock (
     }
   }
 
+  if (is_transgenic && tech == MI_TECH_survey) {
+    StringCpy (div, "GSS");
+    StringCpy (dataclass, "GSS");
+  }
+
   sip = SeqIdFindBest (bsp->id, SEQID_PATENT);
   if (sip != NULL && sip->choice == SEQID_PATENT) {
     StringCpy (div, "PAT");
@@ -1519,6 +1524,11 @@ NLM_EXTERN void AddDeflineBlock (
 
   FFRecycleString(ajp, ffstring);
 
+  if (bbp->itemtype == 0) {
+    bbp->entityID = bsp->idx.entityID;
+    bbp->itemtype = bsp->idx.itemtype;
+    bbp->itemID = bsp->idx.itemID;
+  }
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
   }
@@ -1945,6 +1955,12 @@ NLM_EXTERN void AddAccessionBlock (
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "AC");
   FFRecycleString(ajp, ffstring);
 
+  if (bbp->itemtype == 0) {
+    bbp->entityID = bsp->idx.entityID;
+    bbp->itemtype = bsp->idx.itemtype;
+    bbp->itemID = bsp->idx.itemID;
+  }
+  
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
   }
@@ -2132,6 +2148,11 @@ NLM_EXTERN void AddVersionBlock (
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "SV");
   FFRecycleString(ajp, ffstring);
 
+  if (bbp->itemtype == 0) {
+    bbp->itemtype = bsp->idx.itemtype;
+    bbp->itemID = bsp->idx.itemID;
+  }
+
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
   }
@@ -2167,7 +2188,7 @@ NLM_EXTERN void AddProjectBlock (
   GBSeqPtr           gbseq;
   UserObjectPtr      gpuop = NULL;
   ValNodePtr         head = NULL;
-  Uint4              itemID;
+  Uint4              itemID = 0;
   ObjectIdPtr        oip;
   Int4               parentID;
   CharPtr            prefix;
@@ -3603,6 +3624,12 @@ NLM_EXTERN void AddKeywordsBlock (
           }
           is_est = TRUE;
           ValNodeCopyStr (&head, 0, "EST");
+          if (is_env_sample) {
+            if (head != NULL) {
+              ValNodeCopyStr (&head, 0, "; ");
+            }
+            ValNodeCopyStr (&head, 0, "ENV");
+          }
           break;
         case MI_TECH_sts :
           if (head != NULL) {
@@ -3617,6 +3644,12 @@ NLM_EXTERN void AddKeywordsBlock (
           }
           is_gss = TRUE;
           ValNodeCopyStr (&head, 0, "GSS");
+          if (is_env_sample) {
+            if (head != NULL) {
+              ValNodeCopyStr (&head, 0, "; ");
+            }
+            ValNodeCopyStr (&head, 0, "ENV");
+          }
           break;
         case MI_TECH_fli_cdna :
           if (head != NULL) {
@@ -5402,6 +5435,9 @@ NLM_EXTERN void AddWGSBlock (
                 FFRecycleString(ajp, ffstring);
               }
 
+              bbp->entityID = dcontext.entityID;
+              bbp->itemtype = OBJ_SEQDESC;
+              bbp->itemID = dcontext.itemID;
               if (awp->afp != NULL) {
                 DoImmediateFormat (awp->afp, bbp);
               }
@@ -5520,6 +5556,8 @@ NLM_EXTERN void AddBasecountBlock (
   if (bbp == NULL) return;
 
   bbp->entityID = awp->entityID;
+  bbp->itemtype = bsp->idx.itemtype;
+  bbp->itemID = bsp->idx.itemID;
 
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.466 2006/08/10 17:34:38 merezhuk Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.471 2007/05/08 19:03:33 kans Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,35 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.466 $
+$Revision: 6.471 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.471  2007/05/08 19:03:33  kans
+* in FilterWithSeg added SeqDataPtr and ByteStorePtr casts for seq_data
+*
+* Revision 6.470  2007/03/13 20:40:24  madden
+*   - In s_ComputeAverageLength, compute the floating point value retval
+*     using floating point division.
+*
+*   - In BioseqBlastEngineCore, call blast_set_paramters for rounds > 1
+*     of PSI-BLAST.
+*
+*   - In GetDbSubjRatio, use floating point operations to compute the
+*     floating point value db_subj_ratio.
+*   [from Mike Gertz]
+*
+* Revision 6.469  2007/03/05 14:51:24  camacho
+* - Make s_ComputeAverageLength static.
+*
+* Revision 6.468  2007/01/23 15:25:44  madden
+* Use SeqLocDustEx rather than SeqLocDust
+*
+* Revision 6.467  2007/01/17 15:46:00  madden
+* remove FilterDNA
+*
 * Revision 6.466  2006/08/10 17:34:38  merezhuk
 * Fix for reading -z advanced option by StringToInt8; RT # 15187990
 *
@@ -1817,7 +1840,7 @@ $Revision: 6.466 $
 #include <seqport.h>
 #include <readdb.h>
 #include <ncbithr.h>
-#include <dust.h>
+#include <blast_dust.h>
 #include <urkpcc.h>
 #include <txalign.h>
 #include <seg.h>
@@ -4495,7 +4518,8 @@ static int LIBCALLBACK ResultHspWithIdIndexCmp(VoidPtr v1, VoidPtr v2)
 #define CLUSTER_OVERLAP_THRESH 0.9
 #define CLUSTER_SCORE_THRESH 1.6
 
-Nlm_FloatHi s_ComputeAverageLength(const BlastSearchBlk* search)
+static Nlm_FloatHi
+s_ComputeAverageLength(const BlastSearchBlk* search)
 {
     Nlm_FloatHi retval = 0.0;
 
@@ -4506,12 +4530,12 @@ Nlm_FloatHi s_ComputeAverageLength(const BlastSearchBlk* search)
 	}
 
     if (search->rdfp) {
-		Int4 total_number = 0;
-		Int8 total_length = 0;
+        Int4 total_number = 0;
+        Int8 total_length = 0;
 
-		readdb_get_totals(search->rdfp, &total_length, &total_number);
-		if (total_number > 0)
-			retval = total_length/total_number;
+        readdb_get_totals(search->rdfp, &total_length, &total_number);
+        if (total_number > 0)
+            retval = ((Nlm_FloatHi) total_length)/total_number;
     } else if (search->dblen > 0 && search->dbseq_num == 1) {
         retval = search->dblen;
     }
@@ -4568,28 +4592,35 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
 		}
 
 
-		/* Only find words once if thresholds are the same. */
-                 search->wfp = search->wfp_first;
-		 if (search->whole_query == TRUE)
-                 	BlastNewFindWords(search, 0, search->context[search->first_context].query->length, search->pbp->threshold_second, (Uint1) 0);
-		 else
-                 	BlastNewFindWords(search, search->required_start, search->required_end, search->pbp->threshold_second, (Uint1) 0);
-                 lookup_position_aux_destruct(search->wfp->lookup);
-                 search->wfp_second = search->wfp_first;
+        /* Only find words once if thresholds are the same. */
+        search->wfp = search->wfp_first;
+        if (search->whole_query == TRUE) {
+            BlastNewFindWords(search, 0, search->context[search->first_context].query->length, search->pbp->threshold_second, (Uint1) 0);
+        } else {
+            BlastNewFindWords(search, search->required_start, search->required_end, search->pbp->threshold_second, (Uint1) 0);
+        }
+        lookup_position_aux_destruct(search->wfp->lookup);
+        search->wfp_second = search->wfp_first;
 
-#if 0
-            /* recalculate the cutoff scores with the newly calculated
-               Karlin-Altschul parameters. */
-            blast_set_parameters(search, 
-                                 options->dropoff_1st_pass,
-                                 options->dropoff_2nd_pass,
-                                 s_ComputeAverageLength(search),
-                                 search->searchsp_eff,
-                                 options->window_size);
-              /* ... and make sure that the appropriate cutoff is used in the
-               * word finder */
-            search->pbp->cutoff_s2_set = TRUE;
-#endif
+        /* Unless search->pbp->cutoff_s[2]_set is set, we wish to calculate
+           cutoff_s[2] from cutoff_e[2], rather than the other way around.
+           Setting cutoff_s[2] to zero, as was the case in the first call to
+           blast_set_parameters, accomplishes this.
+        */
+        if (!search->pbp->cutoff_s_set) {
+            search->pbp->cutoff_s = 0;
+        }
+        if (!search->pbp->cutoff_s2_set) {
+            search->pbp->cutoff_s2 = 0;
+        }
+        /* recalculate the cutoff scores with the newly calculated
+           Karlin-Altschul parameters. */
+        blast_set_parameters(search, 
+                             options->dropoff_1st_pass,
+                             options->dropoff_2nd_pass,
+                             s_ComputeAverageLength(search),
+                             search->searchsp_eff,
+                             options->window_size);
 	}
 
 	/* Starting awake thread if multithreaded. */
@@ -5105,6 +5136,30 @@ BioseqBlastEngineByLocWithCallbackMult(SeqLocPtr slp, CharPtr progname, CharPtr 
                                           options->CheckpointFileName,
                                           NO_SCOREMAT_IO,
                                           &(search->error_return));
+          /* Reading the checkpoint changes the statistical parameters
+             kbp_psi and kbp_gap_psi.  Recalculate the cutoffs by calling
+             blast_set_parameters. */
+
+          /* Unless search->pbp->cutoff_s[2]_set is set, we wish to calculate
+             cutoff_s[2] from cutoff_e[2], rather than the other way around.
+             Setting cutoff_s[2] to zero, as was the case in the first call to
+             blast_set_parameters, accomplishes this.
+          */
+          if (!search->pbp->cutoff_s_set) {
+              search->pbp->cutoff_s = 0;
+          }
+          if (!search->pbp->cutoff_s2_set) {
+              search->pbp->cutoff_s2 = 0;
+          }
+          search->sbp->kbp = search->sbp->kbp_psi;
+          search->sbp->kbp_gap = search->sbp->kbp_gap_psi;
+          blast_set_parameters(search,
+                               options->dropoff_1st_pass,
+                               options->dropoff_2nd_pass,
+                               s_ComputeAverageLength(search),
+                               search->searchsp_eff,
+                               options->window_size);
+
           search->sbp->posMatrix = posSearch->posMatrix;
           if (NULL == search->sbp->posFreqs)
             search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength,
@@ -6604,53 +6659,6 @@ BlastMaskTheResidues(Uint1Ptr buffer, Int4 max_length, Uint1 mask_residue, SeqLo
 
 }
 
-Boolean LIBCALL FilterDNA(BioseqPtr bsp, Int4 filter)
-{
-  SeqLocPtr slp = NULL, dust_slp=NULL, dust_slp_start=NULL;
-  Uint1 mask_residue = 'N';
-  Int4 index, start, stop;
-  Uint1 oldcode;
-  CharPtr buffer;
-
-  switch(filter) {
-    
-  case FILTER_DUST:
-    oldcode = bsp->seq_data_type;
-    dust_slp = BioseqDust(bsp, 0, -1, -1, -1, -1, -1); 
-    dust_slp_start = dust_slp;
-    BioseqConvert(bsp, Seq_code_iupacna);
-    buffer = MemNew(bsp->length);
-    BSSeek(bsp->seq_data, 0, SEEK_SET);    
-    BSRead(bsp->seq_data, buffer, bsp->length);
-    while (dust_slp) {
-      slp=NULL;
-      while((slp = SeqLocFindNext(dust_slp, slp))!=NULL) {
-        start = SeqLocStart(slp);
-        stop = SeqLocStop(slp);
-        for (index=0; index < bsp->length; index++) {
-          if (index >= start) {
-            if (index <= stop)
-              buffer[index] = mask_residue;
-            else if (index > stop)
-              break;
-          }
-        }
-      }
-      dust_slp = dust_slp->next;
-    }
-    dust_slp_start = SeqLocSetFree(dust_slp_start);
-    BSSeek(bsp->seq_data, 0, SEEK_SET);
-    BSWrite(bsp->seq_data, buffer, bsp->length);
-    BioseqConvert(bsp, oldcode);
-    MemFree(buffer);
-    break;
-
-  default:
-    return FALSE;  /* wrong type of filter used */
-  }
-  return TRUE;
-}
-
 /*
 	COnverts a protein (translated) SeqLocPtr from the protein
 	coordinates to the nucl. coordinates.
@@ -7512,7 +7520,7 @@ BlastSeqLocFilterEx(SeqLocPtr slp, CharPtr instructions, BoolPtr mask_at_hash)
 	{
 		if (do_all || do_dust)
 		{
-			dust_slp = SeqLocDust(slp, level_dust, window_dust, minwin_dust, linker_dust);
+                        dust_slp = SeqLocDustEx(slp, level_dust, window_dust, linker_dust);
 			seqloc_num++;
 		}
 		if (do_repeats)
@@ -7647,7 +7655,7 @@ FilterWithSeg (Uint1Ptr sequence, Int4 length, Uint1 alphabet)
 	}
 
 	bsp = BioseqNew();
-	bsp->seq_data = byte_store;
+	bsp->seq_data = (SeqDataPtr) byte_store;
 	bsp->length = length;
 	bsp->seq_data_type = alphabet;
 	bsp->mol = Seq_mol_aa;
@@ -7689,8 +7697,8 @@ FilterWithSeg (Uint1Ptr sequence, Int4 length, Uint1 alphabet)
 	bsp = sep->data.ptrvalue;
 	BioseqRawConvert(bsp, Seq_code_ncbistdaa);
 
-	BSSeek(bsp->seq_data, 0, SEEK_SET);
-	Nlm_BSRead(bsp->seq_data, (VoidPtr) sequence, length);
+	BSSeek((ByteStorePtr) bsp->seq_data, 0, SEEK_SET);
+	Nlm_BSRead((ByteStorePtr) bsp->seq_data, (VoidPtr) sequence, length);
 
 	SeqEntryFree(sep);
 
@@ -8077,7 +8085,9 @@ GetDbSubjRatio(BlastSearchBlkPtr search, Int4 subject_length)
 {
 	Nlm_FloatHi db_subj_ratio;
 
-	db_subj_ratio = (search->context_factor)*(search->dblen)/(subject_length);
+        db_subj_ratio =
+            ((Nlm_FloatHi) search->context_factor * search->dblen) /
+            ((Nlm_FloatHi) subject_length);
         if (StringCmp(search->prog_name, "tblastn") == 0 ||
             StringCmp(search->prog_name, "tblastx") == 0 ||
             StringCmp(search->prog_name, "psitblastn") == 0)

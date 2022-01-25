@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.74 2006/10/04 19:27:09 papadopo Exp $
+/* $Id: blast_def.h,v 1.79 2007/03/20 14:55:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -27,13 +27,13 @@
  */
 
 /** @file blast_def.h
- * Definitions of major structures used throughout BLAST
+ * Definitions used throughout BLAST
  */
 
-#ifndef __BLAST_DEF__
-#define __BLAST_DEF__
+#ifndef ALGO_BLAST_CORE__BLAST_DEF__H
+#define ALGO_BLAST_CORE__BLAST_DEF__H
 
-#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_export.h>
 
 #ifdef __cplusplus
@@ -92,6 +92,11 @@ extern const int kUngappedHSPNumMax;
 #define NUM_STRANDS 2
 #endif
 
+/** Length of the genetic code string */
+#ifndef GENCODE_STRLEN
+#define GENCODE_STRLEN 64
+#endif
+
 /**
  * A macro expression that returns 1, 0, -1 if a is greater than,
  * equal to or less than b, respectively.  This macro evaluates its
@@ -103,10 +108,10 @@ extern const int kUngappedHSPNumMax;
 
 /** Safe free a pointer: belongs to a higher level header. */
 #ifndef sfree
-#define sfree(x) __sfree((void**)&(x))
+#define sfree(x) __sfree((void**)(void*)&(x))
 #endif
 
-/** Implemented in lookup_util.c. @sa sfree */
+/** Implemented in blast_util.c. @sa sfree */
 NCBI_XBLAST_EXPORT
 void __sfree(void** x);
 
@@ -118,6 +123,24 @@ void __sfree(void** x);
 #endif
 
 /********************* Structure definitions ********************************/
+
+/** Structure holding a pair of offsets. Used for storing offsets for the
+ * initial seeds. In most programs the offsets are query offset and subject 
+ * offset of an initial word match. For PHI BLAST, the offsets are start and 
+ * end of the pattern occurrence in subject, with no query information, 
+ * because all pattern occurrences in subjects are aligned to all pattern 
+ * occurrences in query.
+ */
+typedef union BlastOffsetPair {
+    struct {
+        Uint4 q_off;  /**< Query offset */
+        Uint4 s_off;  /**< Subject offset */
+    } qs_offsets;     /**< Query/subject offset pair */
+    struct {
+        Uint4 s_start;/**< Start offset of pattern in subject */
+        Uint4 s_end;  /**< End offset of pattern in subject */
+    } phi_offsets;    /**< Pattern offsets in subject (PHI BLAST only) */
+} BlastOffsetPair;
 
 /** A structure containing two integers, used e.g. for locations for the 
  * lookup table.
@@ -176,6 +199,8 @@ typedef struct BLAST_SequenceBlk {
                              nucleotide sequence for out-of-frame alignment */
    Boolean oof_sequence_allocated; /**< TRUE if memory has been allocated 
                                         for oof_sequence */
+   Uint1* compressed_nuc_seq; /**< 4-to-1 compressed version of sequence */
+   Uint1* compressed_nuc_seq_start; /**< start of compressed_nuc_seq */
    BlastMaskLoc* lcase_mask; /**< Locations to be masked from operations on 
                                 this sequence: lookup table for query; 
                                 scanning for subject. */
@@ -183,6 +208,13 @@ typedef struct BLAST_SequenceBlk {
                                     lcase_mask */
    Int4 chunk;  /**< Used for indexing only: the chunk number within the 
                      subject sequence. */
+   Uint1 *gen_code_string;  /**< for nucleotide subject sequences (tblast[nx]),
+                              the genetic code used to create a translated
+                              protein sequence (NULL if not applicable). This
+                              field is NOT owned by this data structure, it's
+                              owned by the genetic code singleton. 
+                              @sa gencode_singleton.h
+                              */
 } BLAST_SequenceBlk;
 
 /** Information about a single pattern occurence in the query. */
@@ -249,4 +281,4 @@ void SBlastProgressReset(SBlastProgress* progress_info);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLAST_DEF__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_DEF__H */

@@ -202,8 +202,8 @@ on SetProjectData()
 		mkFileDataExceptFiles("network:taxon1:common:", {"checkid.c"})}), "tax2.pfx"))
 	
 	AddSimpleProjectListFiles("ncbiconn", {"winprefix"}, "connect", Â
-		{"ncbi_buffer", "ncbi_socket", "ncbi_core", "ncbi_core_c", "ncbi_util", "ncbi_priv", Â
-			"ncbi_ansi_ext", "ncbi_connection", "ncbi_connector", "ncbi_connutil", Â
+		{"ncbi_buffer", "ncbi_socket", "ncbi_core", "ncbi_core_c", "ncbi_types", "ncbi_util", Â
+			"ncbi_priv", "ncbi_ansi_ext", "ncbi_connection", "ncbi_connector", "ncbi_connutil", Â
 			"ncbi_file_connector", "ncbi_host_info.c", "ncbi_http_connector", Â
 			"ncbi_memory_connector", "ncbi_server_info", "ncbi_service", Â
 			"ncbi_service_connector", "ncbi_dispd", "ncbi_lb", "ncbi_local", "ncbi_lbsmd_stub", Â

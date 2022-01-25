@@ -1,7 +1,7 @@
 #ifndef TEST_ASSERT_IMPL__H
 #define TEST_ASSERT_IMPL__H
 
-/*  $Id: test_assert_impl.h,v 1.1 2006/03/07 18:22:09 lavr Exp $
+/*  $Id: test_assert_impl.h,v 1.2 2007/01/30 21:13:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -139,11 +139,18 @@ static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
 #  undef _ASSERT
 #endif
 #define  _ASSERT assert
+#ifdef _DEBUG_ARG
+#  undef _DEBUG_ARG
+#endif
+#define _DEBUG_ARG(arg) arg
 
 
 /*
  * --------------------------------------------------------------------------
  * $Log: test_assert_impl.h,v $
+ * Revision 1.2  2007/01/30 21:13:40  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
  * Revision 1.1  2006/03/07 18:22:09  lavr
  * Initial revision
  *

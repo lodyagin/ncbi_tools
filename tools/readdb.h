@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.176 $
+* $Revision: 6.178 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,12 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.178  2007/08/21 20:06:07  kans
+* added prototype for FDBCleanUp
+*
+* Revision 6.177  2007/05/08 13:09:39  madden
+* Add ability to read STATS_NSEQ and STATS_TOTLEN from alias file with funciton readdb_get_stats_numbers
+*
 * Revision 6.176  2006/08/07 15:03:57  camacho
 * +is_REFSEQ_GENOMIC
 *
@@ -1120,9 +1126,11 @@ containing the headers, and the sequence file. */
 	Int4 	start,	/* 1st ordinal id in this file. */
 		stop;	/* last ordinal id in this file. */
 	Int8 totlen;	/* Total length of database. */
+	Int8 totlen_stats; /* Total length of database used for expect value and search space. */
 	Uint4 maxlen;	/* Length of longest sequence in database. */
 	Int8 aliaslen;	/* Length of the database as read from alias file */
 	Uint4 aliasnseq;/* Number of seqs of the database as read from alias file */
+	Uint4 nseq_stats; /* Number of seqs to be used for search space and expect value. */
 /* The "index" arrays specify the offsets (in files) of the header and 
 sequence information. */
 	Uint4Ptr header_index,	sequence_index, ambchar_index;	
@@ -1287,6 +1295,13 @@ Boolean LIBCALL
 readdb_get_totals_ex3 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr dblen, 
         Int4Ptr nseq, Boolean use_alias, Boolean use_virtual_oidlist,
         EAccountingMode acc_mode));
+
+/* 
+        Gets the number to be used for statistical purposes.  Should be set in
+        alias file as STATS_NSEQ and STATS_TOTLEN.
+*/
+Boolean LIBCALL
+readdb_get_stats_numbers(ReadDBFILEPtr rdfp_list, Int4* num_seqs_stats, Int8* tot_len_stats);
 
 /* 
 Get the sequence with sequence_number and put it in buffer.  No memory
@@ -1743,6 +1758,7 @@ FDB_optionsPtr FDBOptionsNew(
    Returns: NULL
    ---------------------------------------------------------------- */
 FDB_optionsPtr FDBOptionsFree(FDB_optionsPtr options);
+Boolean FDBCleanUp(FDB_optionsPtr options);
 
 /* The next 4 functions are for production database dump ({id,rs}dump_blast) */
 ValNodePtr FDBLoadLinksTable(void);

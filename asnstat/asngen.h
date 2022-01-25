@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asngen.h64";
+static char * asnfilename = "asngen.h65";
 static AsnValxNode avnx[7] = {
     {20,"unk" ,0,0.0,&avnx[1] } ,
     {20,"gt" ,1,0.0,&avnx[2] } ,
@@ -24,7 +24,7 @@ static AsnType atx[77] = {
   {0, "str" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "std" ,128,1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
-  {407, "Date-std" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[5],0,&atx[24]} ,
+  {408, "Date-std" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[5],0,&atx[24]} ,
   {0, "year" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[7]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "month" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[8]} ,
@@ -44,7 +44,7 @@ static AsnType atx[77] = {
   {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[22]} ,
   {0, "str" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "name" ,128,1,0,0,0,0,0,0,NULL,&atx[24],NULL,0,&atx[32]} ,
-  {408, "Name-std" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[25],0,&atx[51]} ,
+  {409, "Name-std" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[25],0,NULL} ,
   {0, "last" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[26]} ,
   {0, "first" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[27]} ,
   {0, "middle" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[28]} ,
@@ -66,12 +66,12 @@ static AsnType atx[77] = {
   {0, "alt" ,128,4,0,0,0,0,0,0,NULL,&atx[45],&atx[44],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {406, "User-object" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[47],0,&atx[4]} ,
+  {406, "User-object" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[47],0,&atx[51]} ,
   {0, "class" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[48]} ,
   {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[20],NULL,0,&atx[49]} ,
   {0, "data" ,128,2,0,0,0,0,0,0,NULL,&atx[66],&atx[50],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[51],NULL,0,NULL} ,
-  {409, "User-field" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[52],0,NULL} ,
+  {407, "User-field" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[52],0,&atx[4]} ,
   {0, "label" ,128,0,0,0,0,0,0,0,NULL,&atx[20],NULL,0,&atx[53]} ,
   {0, "num" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[54]} ,
   {0, "data" ,128,2,0,0,0,0,0,0,NULL,&atx[14],&atx[55],0,NULL} ,
@@ -99,7 +99,7 @@ static AsnType atx[77] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-General" , "asngen.h64",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-General" , "asngen.h65",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -148,24 +148,6 @@ static AsnModulePtr amp = ampx;
 #define USER_OBJECT_data &at[49]
 #define USER_OBJECT_data_E &at[50]
 
-#define DATE_STD &at[4]
-#define DATE_STD_year &at[5]
-#define DATE_STD_month &at[7]
-#define DATE_STD_day &at[8]
-#define DATE_STD_season &at[9]
-#define DATE_STD_hour &at[10]
-#define DATE_STD_minute &at[11]
-#define DATE_STD_second &at[12]
-
-#define NAME_STD &at[24]
-#define NAME_STD_last &at[25]
-#define NAME_STD_first &at[26]
-#define NAME_STD_middle &at[27]
-#define NAME_STD_full &at[28]
-#define NAME_STD_initials &at[29]
-#define NAME_STD_suffix &at[30]
-#define NAME_STD_title &at[31]
-
 #define USER_FIELD &at[51]
 #define USER_FIELD_label &at[52]
 #define USER_FIELD_num &at[53]
@@ -188,3 +170,21 @@ static AsnModulePtr amp = ampx;
 #define USER_FIELD_data_fields_E &at[74]
 #define USER_FIELD_data_objects &at[75]
 #define USER_FIELD_data_objects_E &at[76]
+
+#define DATE_STD &at[4]
+#define DATE_STD_year &at[5]
+#define DATE_STD_month &at[7]
+#define DATE_STD_day &at[8]
+#define DATE_STD_season &at[9]
+#define DATE_STD_hour &at[10]
+#define DATE_STD_minute &at[11]
+#define DATE_STD_second &at[12]
+
+#define NAME_STD &at[24]
+#define NAME_STD_last &at[25]
+#define NAME_STD_first &at[26]
+#define NAME_STD_middle &at[27]
+#define NAME_STD_full &at[28]
+#define NAME_STD_initials &at[29]
+#define NAME_STD_suffix &at[30]
+#define NAME_STD_title &at[31]

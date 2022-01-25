@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.291 2006/09/21 13:42:37 madden Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.292 2007/03/15 20:39:17 madden Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,11 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.291 $
+* $Revision: 6.292 $
 * $Log: blastool.c,v $
+* Revision 6.292  2007/03/15 20:39:17  madden
+* Fix incorrect setting of filter in BLAST_WizardOptionsMaskInit
+*
 * Revision 6.291  2006/09/21 13:42:37  madden
 * BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
 *
@@ -6482,8 +6485,6 @@ BLAST_Wizard(
             MemFree(out->filter_string);
         out->filter_string = StringSave(buf);
     }
-    if(out->filter_string)
-        out->filter = TRUE;
     if(out->hitlist_size != -1) {
         if(*descriptions == -1)
             *descriptions = MIN(100, out->hitlist_size);

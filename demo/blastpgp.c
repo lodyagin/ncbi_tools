@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.136 2006/07/17 17:32:54 coulouri Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.137 2007/03/14 17:55:27 madden Exp $";
 
-/* $Id: blastpgp.c,v 6.136 2006/07/17 17:32:54 coulouri Exp $ */
+/* $Id: blastpgp.c,v 6.137 2007/03/14 17:55:27 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,19 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.136 2006/07/17 17:32:54 coulour
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.136 $ 
+ * $Revision: 6.137 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.137  2007/03/14 17:55:27  madden
+ *   - #include string.h to get a prototype for strcasecmp In
+ *   - In tick_callback, suppress unused parameter warnings in tick_callback
+ *     by casting to void.
+ *   - In PGPFormatMainOutput, initialize local variables pruneSeed and
+ *     prune to NULL.
+ *   - In PGPReadBlastOptions, print a warning if a PSI-BLAST output
+ *     checkpoint filename is specified, but does not have a file
+ *     extension appropriate for its type.
+ *   [from Mike Gertz]
+ *
  * Revision 6.136  2006/07/17 17:32:54  coulouri
  * from mike gertz: fix a memory leak in PGPFormatFooter
  *
@@ -522,6 +533,8 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.136 2006/07/17 17:32:54 coulour
  * Initial revision
  *
 */
+#include <string.h>
+
 #include <ncbi.h>
 #include <objseq.h>
 #include <objsset.h>
@@ -552,7 +565,8 @@ FILE *global_fp=NULL;
 static int LIBCALLBACK
 tick_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 {
-    
+    (void) sequence_number;
+    (void) number_of_positive_hits;
 #ifdef OS_UNIX
     
     fprintf(global_fp, "%s", ".");
@@ -845,6 +859,36 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         myargs[ARG_SCOREMAT_OUTPUT].intvalue != BINARY_SCOREMAT) {
         ErrPostEx(SEV_FATAL, 1, 0,"Invalid choice for scoremat output\n");
         return NULL;
+    }
+    if (myargs[ARG_CHECKPOINT_OUTPUT].strvalue != NULL) {
+        const char * description = NULL;
+        const char * recommended_extension = NULL;
+        const char * actual_extension = NULL;
+
+        switch (myargs[ARG_SCOREMAT_OUTPUT].intvalue) {
+        case NO_SCOREMAT_IO:
+            description = "standard";
+            recommended_extension = ".chk";
+            break;
+        case ASCII_SCOREMAT:
+            description = "ascii ASN.1";
+            recommended_extension = ".asnt";
+            break;
+        case BINARY_SCOREMAT:
+            description = "binary ASN.1";
+            recommended_extension = ".asn";
+            break;
+        }
+        actual_extension =
+            strrchr(myargs[ARG_CHECKPOINT_OUTPUT].strvalue, '.');
+        if (NULL == actual_extension) { /* No extension */
+            actual_extension = "";
+        }
+        if (0 != strcasecmp(recommended_extension, actual_extension)) {
+            ErrPostEx(SEV_WARNING, 1, 0, "a %s checkpoint file "
+                      "should have extension \"%s\".\n", description, 
+                      recommended_extension);
+        }
     }
     if (myargs[ARG_SCOREMAT_OUTPUT].intvalue != NO_SCOREMAT_IO) {
         if (bop->believe_query == FALSE) {
@@ -1434,8 +1478,8 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
                          Int2Ptr posRepeatSequences)
 {
     SeqAnnotPtr seqannot;
-    ValNodePtr pruneSeed, seedReturn;  
-    BlastPruneSapStructPtr prune;
+    ValNodePtr pruneSeed = NULL, seedReturn;  
+    BlastPruneSapStructPtr prune = NULL;
     BLAST_MatrixPtr matrix;
     Int4Ptr PNTR txmatrix;
     BioseqPtr query_bsp;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -60,7 +60,7 @@ extern "C" {
  */
 
 typedef ValNodePtr (*PubEquivLookupProc) PROTO((ValNodePtr pep, BoolPtr success));
-typedef Boolean (*LookupJournalProc) PROTO((CharPtr title, size_t maxsize, Int1Ptr jtaType));
+typedef Boolean (*LookupJournalProc) PROTO((CharPtr title, size_t maxsize, Int1Ptr jtaType, ValNodePtr PNTR all_titlesP));
 
 typedef struct pubdesceditprocs {
   PubEquivLookupProc  lookupArticle;

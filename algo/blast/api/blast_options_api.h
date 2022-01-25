@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.h,v 1.13 2006/06/08 21:46:24 papadopo Exp $
+/* $Id: blast_options_api.h,v 1.14 2007/03/08 14:57:31 kans Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -139,7 +139,7 @@ Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options,
  * @return zero unless error (e.g., threshold is < zero)
  */
 Int2 SBlastOptionsSetThreshold(SBlastOptions* options, 
-                               Int4 threshold);
+                               double threshold);
 
 /** Set window size for two hit extension.
  * @param options options Options structure to update. [in] [out]

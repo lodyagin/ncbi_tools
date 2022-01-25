@@ -1,4 +1,4 @@
-/* $Id: blast_sw.c,v 1.2 2006/09/14 14:49:07 papadopo Exp $
+/* $Id: blast_sw.c,v 1.4 2006/11/29 17:25:50 bealer Exp $
  * ===========================================================================
  *
  *                     PUBLIC DOMAIN NOTICE
@@ -34,11 +34,11 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-   "$Id: blast_sw.c,v 1.2 2006/09/14 14:49:07 papadopo Exp $";
+   "$Id: blast_sw.c,v 1.4 2006/11/29 17:25:50 bealer Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_sw.h>
+#include <algo/blast/core/blast_util.h> /* for NCBI2NA_UNPACK_BASE */
 
 /** swap (pointers to) a pair of sequences */
 #define SWAP_SEQS(A, B) {Uint1 *tmp = (A); (A) = (B); (B) = tmp; }
@@ -639,7 +639,8 @@ Int2 BLAST_SmithWatermanGetGappedScore (EBlastProgramType program_number,
         const BlastExtensionParameters* ext_params,
         const BlastHitSavingParameters* hit_params,
         BlastInitHitList* init_hitlist,
-        BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats)
+        BlastHSPList** hsp_list_ptr, BlastGappedStats* gapped_stats,
+        Boolean * fence_hit)
 {
    Boolean is_prot;
    BlastHSPList* hsp_list = NULL;

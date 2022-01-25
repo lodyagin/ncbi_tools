@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -1767,7 +1767,7 @@ static CharPtr FetchLocalBioseq (DoC d, Int2 item, Pointer ptr)
   Char          path [PATH_MAX];
   SummFormPtr   sfp;
   SimpleSeqPtr  ssp;
-  CharPtr       str;
+  CharPtr       str = NULL;
 
   /*--------------------------*/
   /* Check initial conditions */

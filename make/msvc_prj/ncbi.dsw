@@ -54,7 +54,13 @@ Package=<4>
     Project_Dep_Name demo_asndhuff
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name demo_asnstrip
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name demo_asnval
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asndisc
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name demo_bl2seq
@@ -111,9 +117,6 @@ Package=<4>
     Project_Dep_Name demo_entrez2
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name demo_entrezcf
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name demo_epi
     End Project Dependency
     Begin Project Dependency
@@ -141,16 +144,10 @@ Package=<4>
     Project_Dep_Name demo_gene2xml
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name demo_getfeat
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name demo_getmesh
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name demo_getpub
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name demo_getseq
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name demo_gil2bin
@@ -693,6 +690,36 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_asnbarval"=.\demo\asnbarval\demo_asnbarval.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbimmdb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_asndhuff"=.\demo\asndhuff\demo_asndhuff.dsp - Package Owner=<4>
 
 Package=<5>
@@ -718,6 +745,66 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_asndisc"=.\demo\asndisc\demo_asndisc.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_asnstrip"=.\demo\asnstrip\demo_asnstrip.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
     End Project Dependency
 }}}
 
@@ -1419,33 +1506,6 @@ Package=<4>
 
 ###############################################################################
 
-Project: "demo_entrezcf"=.\demo\entrezcf\demo_entrezcf.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-    Begin Project Dependency
-    Project_Dep_Name vibrant
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbicdr
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbinacc
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbiobj
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbi
-    End Project Dependency
-}}}
-
-###############################################################################
-
 Project: "demo_epi"=.\demo\epi\demo_epi.dsp - Package Owner=<4>
 
 Package=<5>
@@ -1734,42 +1794,6 @@ Package=<4>
 
 ###############################################################################
 
-Project: "demo_getfeat"=.\demo\getfeat\demo_getfeat.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-    Begin Project Dependency
-    Project_Dep_Name ncbiacc
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name vibrant
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbicdr
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbinacc
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbiobj
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name netentr
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name netcli
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbi
-    End Project Dependency
-}}}
-
-###############################################################################
-
 Project: "demo_getmesh"=.\demo\getmesh\demo_getmesh.dsp - Package Owner=<4>
 
 Package=<5>
@@ -1798,42 +1822,6 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name vibrant
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbi
-    End Project Dependency
-}}}
-
-###############################################################################
-
-Project: "demo_getseq"=.\demo\getseq\demo_getseq.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-    Begin Project Dependency
-    Project_Dep_Name ncbiacc
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name vibrant
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbicdr
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbinacc
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbiobj
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name netcli
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name netentr
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi

@@ -1,4 +1,4 @@
-/*  $Id: hspstream_collector.h,v 1.7 2005/05/16 12:20:04 madden Exp $
+/*  $Id: hspstream_collector.h,v 1.9 2007/07/27 18:25:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,11 @@
  * a BLAST search, and subsequently return them in sorted order.
  */
 
-#ifndef HSPSTREAM_COLLECTOR_H
-#define HSPSTREAM_COLLECTOR_H
+#ifndef ALGO_BLAST_CORE__HSPSTREAM_COLLECTOR__H
+#define ALGO_BLAST_CORE__HSPSTREAM_COLLECTOR__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_hspstream.h>
@@ -49,13 +51,14 @@ typedef struct BlastHSPListCollectorData {
    EBlastProgramType program;           /**< BLAST program type */
    SBlastHitsParameters* blasthit_params; /**< specifies how many 
                                hits to save etc. */
+   Int4 num_hsplists;          /**< number of HSPlists saved */
+   Int4 num_hsplists_alloc;    /**< number of entries in sorted_hsplists */
+   BlastHSPList **sorted_hsplists; /**< list of all HSPlists from 'results'
+                                       combined, sorted in order of
+                                       decreasing subject OID */
    BlastHSPResults* results;/**< Structure for saving HSP lists */
    Boolean results_sorted;  /**< Have the results already been sorted? 
                                Set to true after the first read call. */
-   Boolean sort_on_read;    /**< Should the results be sorted on the first
-                               read call? */
-   Int4 first_query_index;  /**< Index of the first query to try getting 
-                               results from. */
    MT_LOCK x_lock;   /**< Mutex for writing and reading results. */
                                   
 } BlastHSPListCollectorData;
@@ -65,30 +68,27 @@ typedef struct BlastHSPListCollectorData {
  * @param program Type of BlAST program [in]
  * @param blasthit_params Specifies how many hits to save etc. [in]
  * @param num_queries Number of query sequences in this BLAST search [in]
- * @param sort_on_read Should results be sorted on the first read call? [in]
  * @param lock        Pointer to locking structure for writing by multiple
  *                    threads. Locking will not be performed if NULL. [in]
  */
 BlastHSPStream* 
 Blast_HSPListCollectorInitMT(EBlastProgramType program, 
                              SBlastHitsParameters* blasthit_params, 
-                             Int4 num_queries, Boolean sort_on_read, 
-                             MT_LOCK lock);
+                             Int4 num_queries, MT_LOCK lock);
 
 /** Initialize the collector HSP stream for a single-threaded search, i.e. 
  * no locking is done when reading/writing from/to the stream.
  * @param program Type of BlAST program [in]
  * @param blasthit_params Specifies how many hits to save etc. [in]
  * @param num_queries Number of query sequences in this BLAST search [in]
- * @param sort_on_read Should results be sorted on the first read call? [in]
  */
 BlastHSPStream* 
 Blast_HSPListCollectorInit(EBlastProgramType program, 
                            SBlastHitsParameters* blasthit_params, 
-                           Int4 num_queries, Boolean sort_on_read);
+                           Int4 num_queries);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* HSPSTREAM_COLLECTOR_H */
+#endif /* !ALGO_BLAST_CORE__HSPSTREAM_COLLECTOR__H */

@@ -1,14 +1,32 @@
-.TH TBL2ASN 1 2003-11-10 NCBI "NCBI Tools User's Manual"
+.TH TBL2ASN 1 2006-05-29 NCBI "NCBI Tools User's Manual"
 .SH NAME
 tbl2asn \- prepare a GenBank submission using an ASCII feature table
 .SH SYNOPSIS
 .B tbl2asn
 [\|\fB\-\fP\|]
+[\|\fB\-B\fP\ \fIstr\fP\|]
+[\|\fB\-C\fP\ \fIstr\fP\|]
+[\|\fB\-E\fP\ \fIstr\fP\|]
+[\|\fB\-F\fP\|]
+[\|\fB\-G\fP\ \fIstr\fP\|]
+[\|\fB\-H\fP\|]
+[\|\fB\-L\fP\|]
+[\|\fB\-M\fP\ \fIstr\fP\|]
+[\|\fB\-P\fP\|]
+[\|\fB\-Q\fP\|]
+[\|\fB\-R\fP\|]
+[\|\fB\-S\fP\|]
+[\|\fB\-T\fP\|]
+[\|\fB\-U\fP\|]
+[\|\fB\-X\fP\ \fIstr\fP\|]
+[\|\fB\-Y\fP\ \fIfilename\fP\|]
 [\|\fB\-a\fP\ \fIstr\fP\|]
 [\|\fB\-b\fP\|]
 [\|\fB\-c\fP\|]
 [\|\fB\-d\fP\|]
+[\|\fB\-e\fP\|]
 [\|\fB\-g\fP\|]
+[\|\fB\-h\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
 [\|\fB\-j\fP\ \fIstr\fP\|]
 [\|\fB\-k\fP\|]
@@ -21,9 +39,12 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-r\fP\ \fIstr\fP\|]
 [\|\fB\-s\fP\|]
 [\|\fB\-t\fP\ \fIfilename\fP\|]
+[\|\fB\-u\fP\|]
 [\|\fB\-v\fP\|]
+[\|\fB\-w\fP\ \fIN\fP\|]
 [\|\fB\-x\fP\ \fIstr\fP\|]
 [\|\fB\-y\fP\ \fIstr\fP\|]
+[\|\fB\-z\fP\|]
 .SH DESCRIPTION
 \fBtbl2asn\fP reads a template along with sequence and table files,
 and outputs ASN.1 for submission to GenBank. Thus, the submitter does
@@ -37,6 +58,54 @@ A summary of options is included below.
 \fB\-\fP
 Print usage message
 .TP
+\fB\-B\fP\ \fIstr\fP
+Alignment Beginning gap characters
+.TP
+\fB\-C\fP\ \fIstr\fP
+Genome Center tag
+.TP
+\fB\-E\fP\ \fIstr\fP
+Alignment End gap characters
+.TP
+\fB\-F\fP
+Feature ID links
+.TP
+\fB\-G\fP\ \fIstr\fP
+Alignment middle Gap characters
+.TP
+\fB\-H\fP
+Implicit gaps
+.TP
+\fB\-L\fP
+Force Local protein_id/transcript_id
+.TP
+\fB\-M\fP\ \fIstr\fP
+Alignment Match characters
+.TP
+\fB\-P\fP
+Alignment is Proteins
+.TP
+\fB\-Q\fP
+Special mRNA titles
+.TP
+\fB\-R\fP
+Remote fetching from ID
+.TP
+\fB\-S\fP
+Smart feature annotation
+.TP
+\fB\-T\fP
+Remote Taxonomy lookup
+.TP
+\fB\-U\fP
+Remove Unnecessary gene xref
+.TP
+\fB\-X\fP\ \fIstr\fP
+Alignment missing characters
+.TP
+\fB\-Y\fP\ \fIfilename\fP
+Read a comment string from \fIfilename\fP
+.TP
 \fB\-a\fP\ \fIstr\fP
 Accession
 .TP
@@ -49,8 +118,14 @@ Annotate longest ORF
 \fB\-d\fP
 Read FASTAs as Delta
 .TP
+\fB\-e\fP
+Read PHRAP/ACE format
+.TP
 \fB\-g\fP
 Input is a genomic product set
+.TP
+\fB\-h\fP
+Convert general ID to note
 .TP
 \fB\-i\fP\ \fIfilename\fP
 Single input file
@@ -88,16 +163,41 @@ Read FASTAs as Set
 \fB\-t\fP\ \fIfilename\fP
 Read template from \fIfilename\fP
 .TP
+\fB\-u\fP
+Convert GenProdSet to NucProtSet
+.TP
 \fB\-v\fP
 Validate
+.TP
+\fB\-w\fP \fIN\fP
+FASTA set class
+.RS
+.PD 0
+.IP 0
+unspecified (default)
+.IP 1
+population study
+.IP 2
+phylogenetic study
+.IP 3
+set of mutations
+.IP 4
+ecological sample study
+.PD
+.RE
 .TP
 \fB\-x\fP\ \fIstr\fP
 Suffix (default = \fB.fsa\fP)
 .TP
 \fB\-y\fP\ \fIstr\fP
 Comment
+.TP
+\fB\-z\fP
+Read FASTAs with gap lines
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO
 .BR Psequin (1),
-<http://www.ncbi.nlm.nih.gov/Sequin/table.html>
+.BR sbtedit (1),
+tbl2asn.txt,
+<http://www.ncbi.nlm.nih.gov/Sequin/table.html>.

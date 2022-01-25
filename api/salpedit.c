@@ -1,4 +1,4 @@
-/* $Id: salpedit.c,v 6.32 2005/04/13 14:56:08 kans Exp $ */
+/* $Id: salpedit.c,v 6.33 2007/05/07 13:32:02 kans Exp $ */
 #include <ncbi.h>
 #include <ncbimisc.h> /* ValNodeLen */
 #include <sequtil.h> /* for GetScoreAndEvalue, SeqIdDupList */
@@ -4002,7 +4002,7 @@ static BioseqPtr create_fake_bioseq(SeqLocPtr seq_loc, CharPtr fake_name)
 
 	bsp = BioseqNew();
 	bsp->id = local_id_make(fake_name);
-	bsp->seq_data = b_store;
+	bsp->seq_data = (SeqDataPtr) b_store;
 	bsp->repr = Seq_repr_raw;
 	bsp->mol = Seq_mol_dna;
 	bsp->length = length;

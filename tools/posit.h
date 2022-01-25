@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.30 2006/09/18 17:49:06 papadopo Exp $
+/* $Id: posit.h,v 6.31 2007/01/22 19:20:55 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,16 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.30 $
+$Revision: 6.31 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.31  2007/01/22 19:20:55  camacho
+* From Alejandro Schaffer:
+* In posPurgeMatches, when in command-line mode, added a warning for the
+* situation in which only the query is used to construct the PSSM.
+*
 * Revision 6.30  2006/09/18 17:49:06  papadopo
 * increase size of PROTEIN_ALPHABET
 *
@@ -330,7 +335,7 @@ void LIBCALL posConvergenceTest PROTO((posSearchItems *posSearch, BlastSearchBlk
 
 void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch, Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength);
 
-void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch);
+void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch, ValNodePtr * error_return);
 
 void LIBCALL posDemographics(posSearchItems *posSearch, 
                              compactSearchItems * compactSearch, 

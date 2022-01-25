@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.h,v 1.38 2006/03/08 16:26:49 ucko Exp $
+/* $Id: ncbi_std.h,v 1.39 2006/11/21 16:50:42 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -245,13 +245,5 @@ ListNode* ListNodeCopyStr (ListNode** head, Uint1 choice, const char* str);
 #ifdef __cplusplus
 }
 #endif
-
-/** The following header file needs some of the definitions from this header, 
- * so it #include's ncbi_std.h. The circular inclusion is avoided because of
- * the header-specific macros that are #define'd only once. On the other hand
- * it is convenient to include ncbi_math.h automatically whenever ncbi_std.h
- * is included in any other file.
- */
-#include <algo/blast/core/ncbi_math.h>
 
 #endif /* !ALGO_BLAST_CORE__NCBI_STD */

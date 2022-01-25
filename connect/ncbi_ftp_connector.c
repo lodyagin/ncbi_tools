@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ftp_connector.c,v 1.17 2006/01/27 17:01:19 lavr Exp $
+/*  $Id: ncbi_ftp_connector.c,v 1.20 2007/01/23 22:31:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -290,7 +290,9 @@ static EIO_Status s_FTPAbort(SFTPConnector*  xxx,
         return status == eIO_Success ? eIO_Unknown : status;
     }
     while (SOCK_Read(xxx->data, 0, 1024*1024/*drain up*/, 0, eIO_ReadPlain)
-           == eIO_Success);
+           == eIO_Success) {
+        continue;
+    }
     if (SOCK_Status(xxx->data, eIO_Read) == eIO_Closed) {
         SOCK_Close(xxx->data);
         xxx->data = 0;
@@ -532,11 +534,10 @@ static EIO_Status s_VT_Write
     EIO_Status status;
     const char* c;
 
-    xxx->w_status = eIO_Success;
-    if (!size)
-        return eIO_Success;
     if (!xxx->cntl)
         return eIO_Closed;
+    if (!size)
+        return eIO_Success;
 
     if ((c = (const char*) memchr((const char*) buf, '\n', size)) != 0  &&
         c < (const char*) buf + size - 1) {
@@ -561,7 +562,6 @@ static EIO_Status s_VT_Read
 {
     SFTPConnector* xxx = (SFTPConnector*) connector->handle;
     EIO_Status status = eIO_Closed;
-    xxx->r_status = eIO_Success;
     if (xxx->cntl  &&  xxx->data) {
         status = SOCK_SetTimeout(xxx->data, eIO_Read, timeout);
         if (status == eIO_Success) {
@@ -726,7 +726,7 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
     xxx->host    = strdup(host);
     xxx->port    = port ? port : 21;
     xxx->user    = strdup(user ? user : "ftp");
-    xxx->pass    = strdup(pass ? pass : "none");
+    xxx->pass    = strdup(pass ? pass : "-none");
     xxx->path    = path  &&  *path ? strdup(path) : 0;
     xxx->name    = 0;
     xxx->flag    = flag;
@@ -745,6 +745,15 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_ftp_connector.c,v $
+ * Revision 1.20  2007/01/23 22:31:29  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
+ * Revision 1.19  2006/12/07 16:21:02  lavr
+ * Use minus sign in default password to try to turn off human-readable msgs
+ *
+ * Revision 1.18  2006/10/23 21:19:07  lavr
+ * Empty while() extended with a dummy continue (to avoid misplaced ; warning)
+ *
  * Revision 1.17  2006/01/27 17:01:19  lavr
  * Replace obsolete call names with current ones
  *

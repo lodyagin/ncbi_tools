@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.40 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.43  2007/05/02 20:55:57  kans
+* Nlm_LoadFontData conditional arguments were incorrect WIN_GIF
+*
+* Revision 6.42  2007/05/02 14:55:58  kans
+* preparation for supporting Quartz on Mac
+*
+* Revision 6.41  2006/11/24 20:07:20  kans
+* if Xcode (not MWERKS) have local defines of GetPortAndCall, InvalRect, InvalRgn, ValidRect, ValidRgn
+*
 * Revision 6.40  2006/09/14 19:18:28  ivanov
 * Rollback last changes. All missed defines added to corelib/ncbiwin.h.
 *
@@ -346,13 +355,30 @@ typedef struct gdImageStruct { void* dummy; } gdImage;
 Nlm_Boolean  Nlm_nowPrinting = FALSE;
 
 #ifdef WIN_MAC
+#ifdef __MWERKS__
 #include "MoreCarbonAccessors.h"
+#else
+#define GetPortAndCall_(function, arg)           \
+    do {                                          \
+        GrafPtr port_;                            \
+        GetPort(&port_);                          \
+        function(GetWindowFromPort(port_), (arg));  \
+    } while (0)
+#define InvalRect(rect)  GetPortAndCall_(InvalWindowRect, (rect))
+#define InvalRgn(rgn)    GetPortAndCall_(InvalWindowRgn,  (rgn ))
+#define ValidRect(rect)  GetPortAndCall_(ValidWindowRect, (rect))
+#define ValidRgn(rgn)    GetPortAndCall_(ValidWindowRgn,  (rgn ))
+#endif
 #endif
 
 #ifdef WIN_MAC
 RGBColor     Nlm_RGBforeColor;
 RGBColor     Nlm_RGBbackColor;
+#ifdef WIN_MAC_QUARTZ
+Nlm_Boolean  Nlm_hasColorQD = TRUE;
+#else
 Nlm_Boolean  Nlm_hasColorQD = FALSE;
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -528,12 +554,54 @@ static Nlm_Uint1 dkGrayPat[]= {0x77, 0xDD, 0x77, 0xDD, 0x77, 0xDD, 0x77, 0xDD};
 static Nlm_Uint1 blackPat []= {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 #endif /* WIN_X | WIN_GIF */
 
+#ifdef WIN_MAC_QUARTZ
+CGContextRef Nlm_QContext = 0;
+#endif
 
 #ifdef WIN_MAC
 extern  void  Nlm_SetPort (GrafPtr grafptr)
 {
+#ifdef WIN_MAC_QUARTZ
+  CGrafPtr  oldPort;
+  Rect      pBounds;
+  int       pHeight;
+
+  GetPort(&oldPort);
+  if (Nlm_QContext != 0 ) {
+    CGContextSynchronize(Nlm_QContext);
+    QDEndCGContext(oldPort, &Nlm_QContext);
+    Nlm_QContext = 0;
+  }
+
   SetPort (grafptr);
+  if (grafptr != 0) {
+    CGAffineTransform textTransform;
+    
+    GetPortBounds(grafptr, &pBounds);
+    pHeight = pBounds.bottom - pBounds.top;
+    QDBeginCGContext(grafptr, &Nlm_QContext);
+    CGContextTranslateCTM(Nlm_QContext, 0, pHeight);
+    CGContextScaleCTM(Nlm_QContext, 1.0f, -1.0f);
+    
+    textTransform = CGAffineTransformMakeScale(1.0f, -1.0f);
+    CGContextSetTextMatrix(Nlm_QContext, textTransform);
+  } else {
+    Nlm_QContext = 0;
+  }
+#else
+  SetPort (grafptr);
+#endif
 }
+
+extern void Nlm_SetPortWindowPort(Nlm_WindowTool wptr)
+{
+#ifdef WIN_MAC_QUARTZ
+  Nlm_SetPort(GetWindowPort(wptr));
+#else
+    SetPortWindowPort(wptr);
+#endif
+}
+
 #endif
 
 #ifdef WIN_MSWIN
@@ -542,6 +610,7 @@ extern  void  Nlm_SetPort (HWND hwnd, HDC hdc)
   Nlm_currentHWnd = hwnd;
   Nlm_currentHDC = hdc;
 }
+
 #endif
 
 #ifdef WIN_X
@@ -722,6 +791,13 @@ extern void Nlm_SetPenDash(Nlm_Uint1 offset, Nlm_Uint1 dash, Nlm_Uint1 gap)
     DeleteObject( oldPen );
   }}
 
+#elif defined(WIN_MAC_QUARTZ)
+  {
+    float dashes[2];
+    dashes[0] = (float) dash;
+    dashes[1] = (float) gap;
+    CGContextSetLineDash(Nlm_QContext, (float) offset, dashes, 2);
+  }
 #else
   Nlm_Dashed();
 #endif
@@ -731,7 +807,11 @@ extern void Nlm_SetPenDash(Nlm_Uint1 offset, Nlm_Uint1 dash, Nlm_Uint1 gap)
 #ifdef WIN_MAC
 static void Nlm_ChooseColor (Nlm_Int4 color)
 {
+#ifdef WIN_MAC_QUARTZ
+  ASSERT(false);
+#else
   ForeColor (color);
+#endif
 }
 #endif
 
@@ -914,6 +994,12 @@ extern HBRUSH Nlm_hbrWindowBackground;
 extern void Nlm_ResetDrawingTools (void)
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetLineWidth(Nlm_QContext, 1.0);
+  CGContextSetLineDash(Nlm_QContext, 0, NULL, 0);
+  CGContextSetAlpha(Nlm_QContext, 1.0);
+  Nlm_SelectColor(Nlm_RGBforeColor.red, Nlm_RGBforeColor.green, Nlm_RGBforeColor.blue);
+#else
   PenNormal ();
   PenMode (patCopy);
   TextMode (srcOr);
@@ -925,14 +1011,15 @@ extern void Nlm_ResetDrawingTools (void)
     BackColor (whiteColor);
   }
 #endif
+#endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC != NULL) {
     SetROP2 (Nlm_currentHDC, R2_COPYPEN);
     SelectObject(Nlm_currentHDC, GetStockObject(SYSTEM_FONT));
     winTextColor = GetSysColor (COLOR_WINDOWTEXT);
     winBkColor = Nlm_hasBackColor ?
-		   Nlm_crBackColor :
-		   GetSysColor (COLOR_WINDOW);
+           Nlm_crBackColor :
+           GetSysColor (COLOR_WINDOW);
     SetTextColor (Nlm_currentHDC, winTextColor);
     SetBkColor (Nlm_currentHDC, winBkColor);
     SetBkMode (Nlm_currentHDC, TRANSPARENT);
@@ -1359,6 +1446,10 @@ typedef struct nlm_colorHashBucket {
 extern void Nlm_SelectColor (Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue)
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetRGBFillColor  (Nlm_QContext, red/255.0, green/255.0, blue/255.0, 1.0);
+  CGContextSetRGBStrokeColor(Nlm_QContext, red/255.0, green/255.0, blue/255.0, 1.0);
+#else
   RGBColor   color;
   Nlm_Uint2  bl;
   Nlm_Uint2  gn;
@@ -1377,6 +1468,7 @@ extern void Nlm_SelectColor (Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue)
   } else {
     Nlm_ChooseColor (whiteColor);
   }
+#endif
 #endif
 #ifdef WIN_MSWIN
   COLORREF   color;
@@ -1403,9 +1495,9 @@ extern void Nlm_SelectColor (Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue)
   if (ColorHashBuckets [hash] != NULL) {
     for (CHBP = ColorHashBuckets [hash]; CHBP != NULL; CHBP = CHBP->next) {
       if (CHBP->lrgb == lrgb) {
-	xcolor = CHBP->xcolor;
-	Nlm_ChooseColor (xcolor.pixel);
-	return;
+        xcolor = CHBP->xcolor;
+        Nlm_ChooseColor (xcolor.pixel);
+        return;
       }
       tail = CHBP;
     }
@@ -1503,7 +1595,7 @@ extern Nlm_Uint4 Nlm_GetColor (void)
     fgColor = *((Nlm_Int4Ptr) colors);
 #if !OPAQUE_TOOLBOX_STRUCTS
   } else {
-  	GrafPtr port;
+      GrafPtr port;
     GetPort (&port);
     if (port != NULL) {
       fgColor = port->fgColor;
@@ -1568,10 +1660,14 @@ extern void Nlm_SetColor (Nlm_Uint4 color)
     rd = (Nlm_Uint2) colors [1];
     gn = (Nlm_Uint2) colors [2];
     bl = (Nlm_Uint2) colors [3];
+#ifdef WIN_MAC_QUARTZ
+    Nlm_SelectColor(rd, gn, bl);
+#else
     foreColor.red = rd << 8 | rd;
     foreColor.green = gn << 8 | gn;
     foreColor.blue = bl << 8 | bl;
     RGBForeColor (&foreColor);
+#endif
   } else {
     GetPort (&port);
     if (port != NULL) {
@@ -1611,7 +1707,7 @@ extern void Nlm_InvertColors (void)
   } else {
     Nlm_Int4  bkColor;
     Nlm_Int4  fgColor;
-  	GrafPtr port;
+      GrafPtr port;
     GetPort (&port);
     if (port != NULL) {
       fgColor = port->fgColor;
@@ -1740,7 +1836,10 @@ extern void Nlm_DecodeColor (Nlm_Uint4 color, Nlm_Uint1Ptr red,
 
 extern void Nlm_Dark (void)
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetGrayFillColor  (Nlm_QContext, .25, 1.0);
+  CGContextSetGrayStrokeColor(Nlm_QContext, .25, 1.0);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) dkGrayPat);
 #endif
 #ifdef WIN_MSWIN
@@ -1756,7 +1855,10 @@ extern void Nlm_Dark (void)
 
 extern void Nlm_Medium (void)
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetGrayFillColor  (Nlm_QContext, .5, 1.0);
+  CGContextSetGrayStrokeColor(Nlm_QContext, .5, 1.0);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) grayPat);
 #endif
 #ifdef WIN_MSWIN
@@ -1772,7 +1874,10 @@ extern void Nlm_Medium (void)
 
 extern void Nlm_Light (void)
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetGrayFillColor  (Nlm_QContext, .75, 1.0);
+  CGContextSetGrayStrokeColor(Nlm_QContext, .75, 1.0);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) ltGrayPat);
 #endif
 #ifdef WIN_MSWIN
@@ -1788,6 +1893,10 @@ extern void Nlm_Light (void)
 
 extern void Nlm_Empty (void)
 {
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetGrayFillColor  (Nlm_QContext, 1.0, 1.0);
+  CGContextSetGrayStrokeColor(Nlm_QContext, 1.0, 1.0);
+#endif
 #ifdef WIN_MAC
   PenPat ((ConstPatternParam) whitePat);
 #endif
@@ -1806,7 +1915,11 @@ extern void Nlm_SetPenPattern (Nlm_VoidPtr pattern)
 {
 #ifdef WIN_MAC
   Nlm_Int2      i;
+#ifdef WIN_MAC_QUARTZ
+  float         pat[8];
+#else
   Nlm_Byte      pat [8];
+#endif
   Nlm_BytePtr   ptr;
 #endif
 #ifdef WIN_MSWIN
@@ -1829,7 +1942,11 @@ extern void Nlm_SetPenPattern (Nlm_VoidPtr pattern)
       pat [i] = *ptr;
       ptr++;
     }
+#ifdef WIN_MAC_QUARTZ
+    CGContextSetLineDash(Nlm_QContext, 0, pat, 8);
+#else
     PenPat ((ConstPatternParam) pat);
+#endif
 #endif
 #ifdef WIN_MSWIN
     ptr = (Nlm_Uint1Ptr) pattern;
@@ -1861,7 +1978,11 @@ extern void Nlm_SetPenPattern (Nlm_VoidPtr pattern)
 
 extern void Nlm_Solid (void)
 { /* Reset *both* line stile and drawing pattern to SOLID */
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetGrayFillColor  (Nlm_QContext, 0.0, 1.0);
+  CGContextSetGrayStrokeColor(Nlm_QContext, 0.0, 1.0);
+  CGContextSetLineDash(Nlm_QContext, 0, NULL, 0);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) blackPat);
 #endif
 #ifdef WIN_MSWIN
@@ -1883,7 +2004,10 @@ extern void Nlm_Solid (void)
 
 extern void Nlm_Dotted (void)
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  float dashes[] = { 1.0, 1.0 };
+  CGContextSetLineDash(Nlm_QContext, 0, dashes, 2);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) dotPat);
 #endif
 #ifdef WIN_MSWIN
@@ -1903,7 +2027,10 @@ extern void Nlm_Dotted (void)
 
 extern void Nlm_Dashed (void)
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  float dashes[] = { 3.0, 1.0 };
+  CGContextSetLineDash(Nlm_QContext, 0, dashes, 2);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) dashPat);
 #endif
 #ifdef WIN_MSWIN
@@ -1923,7 +2050,10 @@ extern void Nlm_Dashed (void)
 
 extern void Nlm_WidePen (Nlm_Int2 width)
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextSetLineDash(Nlm_QContext, 0, NULL, 0);
+  CGContextSetLineWidth(Nlm_QContext, (float) width);
+#elif defined(WIN_MAC)
   PenPat ((ConstPatternParam) blackPat);
   PenSize (width, width);
 #endif
@@ -1947,7 +2077,7 @@ static void Nlm_LoadFontData (Nlm_FonT font,
                               Nlm_FonT next,
                               Nlm_Int4 refcnt,
                               Nlm_FontSpecPtr fsp,
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && ! defined(WIN_MAC_ATSUI)
                               Nlm_Int2 num,
                               Nlm_Int2 size,
                               Nlm_Int2 styl,
@@ -1962,11 +2092,11 @@ static void Nlm_LoadFontData (Nlm_FonT font,
   fdata.refcnt = refcnt;
   if (fsp != NULL) fdata.fontspec = *fsp;
   else Nlm_MemSet (&fdata.fontspec, 0, sizeof (Nlm_FontSpec));
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && ! defined(WIN_MAC_ATSUI)
   fdata.number = num;
   fdata.size = size;
   fdata.style = styl;
-#elif defined(WIN_MSWIN) || defined(WIN_X)
+#elif defined(WIN_MSWIN) || defined(WIN_X) || defined(WIN_MAC_ATSUI)
   fdata.handle = hdl;
 #endif
   fdata.print = print;
@@ -2067,15 +2197,76 @@ extern XFontStruct *Nlm_XLoadStandardFont(void)
 }
 #endif
 
+#ifdef WIN_MAC_ATSUI
+
+static Nlm_FontTool Nlm_FontToATSUStyle(Nlm_FonT f)
+{
+  Nlm_FontData  fontData;
+  Nlm_GetFontData (f, &fontData);
+  return fontData.handle;
+}
+
+
+static Nlm_FontTool Nlm_NewATSUStyle(Nlm_FontSpecPtr fsp)
+{
+  OSErr err;
+  Nlm_FontTool style = NULL; /* type ATSUStyle */
+  
+  err = ATSUCreateStyle(&style);
+  if (err == noErr) {
+    ATSUFontID  fontID;
+    Fixed atsuSize;
+    Boolean boldTag = FALSE;
+    Boolean italicTag = FALSE;
+    
+    ATSUAttributeTag theTags[] = {kATSUFontTag, kATSUSizeTag, kATSUQDBoldfaceTag, kATSUQDItalicTag};
+    ByteCount theSizes[] = {sizeof(ATSUFontID), sizeof(Fixed), sizeof(Boolean), sizeof(Boolean)};
+    ATSUAttributeValuePtr theValues[] = {&fontID, &atsuSize, &boldTag, &italicTag};
+
+    /* Get Font id from the name. */
+    OSStatus err = ATSUFindFontFromName (
+       fsp->name, strlen(fsp->name), 
+       kFontFullName, // kFontFamilyName,  
+       kFontMacintoshPlatform, // kFontUnicodePlatform for Unicode support.
+       kFontNoScriptCode, kFontNoLanguageCode,
+       &fontID
+    );
+    if (err == kATSUInvalidFontErr)
+    {
+      /* or can we do something more intelligent here? */
+      return NULL;
+    }
+    
+    if ((fsp->style & STYLE_BOLD) != 0) boldTag = TRUE;
+    if ((fsp->style & STYLE_ITALIC) != 0) italicTag = TRUE;
+
+    /* get the size ready */
+    atsuSize = Long2Fix (fsp->size);
+    
+    /* put the attributes in to the style. */
+    err = ATSUSetAttributes (
+       style, 
+       sizeof(theTags)/sizeof(ATSUAttributeTag), 
+       theTags, 
+       theSizes, 
+       theValues
+    );
+  }
+    
+  return style;
+}
+
+
+#endif
 
 /* esl: main internal procedure to create fonts */
 static Nlm_FonT Nlm_AddNewFont (Nlm_FontSpecPtr fsp, Nlm_Boolean residentp)
 {
   Nlm_FonT rsult;
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && ! defined(WIN_MAC_ATSUI)
   Nlm_Int2 num = 0;
   Nlm_Int2 styl = 0;
-#else /* WIN_MSWIN | WIN_X */
+#else /* WIN_MSWIN | WIN_X | WIN_GIF | WIN_MAC_ATSUI */
   Nlm_FontTool hdl = NULL;
 #endif
 
@@ -2085,6 +2276,9 @@ static Nlm_FonT Nlm_AddNewFont (Nlm_FontSpecPtr fsp, Nlm_Boolean residentp)
     return NULL;
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_ATSUI
+  hdl = Nlm_NewATSUStyle(fsp);
+#else
   {{
     Nlm_Char temp[256];
     if (fsp->name[0] != '\0') {
@@ -2118,6 +2312,7 @@ static Nlm_FonT Nlm_AddNewFont (Nlm_FontSpecPtr fsp, Nlm_Boolean residentp)
     if ((fsp->style & 32) != 0)  styl += condense;
     if ((fsp->style & 64) != 0)  styl += extend;
   }}
+#endif /* WIN_MAC_ATSUI */
 #endif /* WIN_MAC */
 #ifdef WIN_MSWIN
   {{
@@ -2185,11 +2380,11 @@ static Nlm_FonT Nlm_AddNewFont (Nlm_FontSpecPtr fsp, Nlm_Boolean residentp)
                     Nlm_fontList,
                     residentp ? -1 : 1,
                     fsp,
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && ! defined(WIN_MAC_ATSUI)
                     num,
                     fsp->size,
                     styl,
-#else /* WIN_MSWIN | WIN_X */
+#else /* WIN_MSWIN | WIN_X | WIN_GIF | WIN_MAC_ATSUI */
                     hdl,
 #endif
                     NULL);
@@ -2485,7 +2680,7 @@ extern Nlm_FonT Nlm_ParseFont (Nlm_CharPtr spec)
 extern Nlm_FonT Nlm_GetFontEx (Nlm_CharPtr name, Nlm_Int2 size,
                              Nlm_Boolean bld, Nlm_Boolean itlc,
                              Nlm_Boolean undrln, Nlm_CharPtr fmly,
-							 Nlm_CharPtr chset, Nlm_Boolean fixed)
+                             Nlm_CharPtr chset, Nlm_Boolean fixed)
 {
   Nlm_Uint1 style, charset, pitch, family;
 
@@ -2553,8 +2748,8 @@ static Nlm_FonT Nlm_ParseFontSpecEx (Nlm_CharPtr spec)
     bold = FALSE;
     ital = FALSE;
     undr = FALSE;
-	fixd = FALSE;
-	chst [0] = '\0';
+    fixd = FALSE;
+    chst [0] = '\0';
     Nlm_StringNCpy_0 (name, spec, sizeof (name) - 1);
     p = Nlm_StringChr (name, ',');
     if (p != NULL) {
@@ -2620,19 +2815,19 @@ extern Nlm_FonT Nlm_ParseFontEx (Nlm_CharPtr scrSpec, Nlm_CharPtr prtSpec)
 
   rsult = NULL;
   if (scrSpec != NULL && scrSpec [0] != '\0') {
-  	q = scrSpec;
-  	while (*q == ' ') {
-  		q++;
-  	}
-  	rsult = Nlm_ParseFontSpecEx(q);
+      q = scrSpec;
+      while (*q == ' ') {
+          q++;
+      }
+      rsult = Nlm_ParseFontSpecEx(q);
   }
   prtr = NULL;
   if (prtSpec != NULL && prtSpec [0] != '\0') {
-  	p = prtSpec;
-  	while (*p == ' ') {
-  		p++;
-  	}
-  	prtr = Nlm_ParseFontSpecEx(p);
+      p = prtSpec;
+      while (*p == ' ') {
+          p++;
+      }
+      prtr = Nlm_ParseFontSpecEx(p);
     Nlm_AssignPrinterFont (rsult, prtr);
   }
   return rsult;
@@ -2644,7 +2839,11 @@ extern Nlm_FonT Nlm_ParseFontEx (Nlm_CharPtr scrSpec, Nlm_CharPtr prtSpec)
 static Nlm_FontSpec Nlm_commonFontSpec;
 extern Nlm_FontSpecPtr Nlm_Helvetica (Nlm_Int2 size, Nlm_Uint1 style)
 {
+#ifdef WIN_MAC_QUARTZ
+  strncpy(Nlm_commonFontSpec.name, "Helvetica", sizeof(Nlm_commonFontSpec.name));
+#else
   Nlm_commonFontSpec.name[0] = '\0';
+#endif
   Nlm_commonFontSpec.size = size;
   Nlm_commonFontSpec.style = style;
   Nlm_commonFontSpec.charset = CHARSET_ANSI;
@@ -2655,7 +2854,11 @@ extern Nlm_FontSpecPtr Nlm_Helvetica (Nlm_Int2 size, Nlm_Uint1 style)
 
 extern Nlm_FontSpecPtr Nlm_Times (Nlm_Int2 size, Nlm_Uint1 style)
 {
+#ifdef WIN_MAC_QUARTZ
+  strncpy(Nlm_commonFontSpec.name, "Times", sizeof(Nlm_commonFontSpec.name));
+#else
   Nlm_commonFontSpec.name[0] = '\0';
+#endif
   Nlm_commonFontSpec.size = size;
   Nlm_commonFontSpec.style = style;
   Nlm_commonFontSpec.charset = CHARSET_ANSI;
@@ -2666,7 +2869,11 @@ extern Nlm_FontSpecPtr Nlm_Times (Nlm_Int2 size, Nlm_Uint1 style)
 
 extern Nlm_FontSpecPtr Nlm_Courier (Nlm_Int2 size, Nlm_Uint1 style)
 {
+#ifdef WIN_MAC_QUARTZ
+  strncpy(Nlm_commonFontSpec.name, "Courier", sizeof(Nlm_commonFontSpec.name));
+#else
   Nlm_commonFontSpec.name[0] = '\0';
+#endif
   Nlm_commonFontSpec.size = size;
   Nlm_commonFontSpec.style = style;
   Nlm_commonFontSpec.charset = CHARSET_ANSI;
@@ -2677,7 +2884,11 @@ extern Nlm_FontSpecPtr Nlm_Courier (Nlm_Int2 size, Nlm_Uint1 style)
 
 extern Nlm_FontSpecPtr Nlm_Symbol (Nlm_Int2 size, Nlm_Uint1 style)
 {
+#ifdef WIN_MAC_QUARTZ
+  strncpy(Nlm_commonFontSpec.name, "Symbol", sizeof(Nlm_commonFontSpec.name));
+#else
   Nlm_commonFontSpec.name[0] = '\0';
+#endif
   Nlm_commonFontSpec.size = size;
   Nlm_commonFontSpec.style = style;
   Nlm_commonFontSpec.charset = CHARSET_SYMBOL; /* should be enough */
@@ -2857,9 +3068,13 @@ extern void Nlm_SelectFont (Nlm_FonT f)
       Nlm_GetFontData (f, &fdata);
     }
 #ifdef WIN_MAC
+#ifdef WIN_MAC_ATSUI
+/*    CGContextSelectFont(Nlm_QContext,fdata.fontspec.name, fdata.size, kCGEncodingMacRoman); */
+#else
     TextFont (fdata.number);
     TextSize (fdata.size);
     TextFace (fdata.style);
+#endif
 #endif
 #ifdef WIN_MSWIN
     if (Nlm_currentHDC != NULL) {
@@ -2933,10 +3148,57 @@ extern Nlm_Int2 Nlm_StringWidth(const Nlm_Char* text)
 
 extern Nlm_Int2 Nlm_TextWidth(const Nlm_Char* text, size_t len)
 {
-  if (text  &&  len) {{
+  if (text  &&  len) {
 #if defined(WIN_MAC)
-    return TextWidth(text, 0, (Nlm_Int2)len);
+#if defined(WIN_MAC_ATSUI)
+  OSErr err;
+  Nlm_PoinT  pt;
+  CFStringRef cfString;
+  CFIndex cfsLen;
+  const UniChar * unicodeString;
+  ATSUTextLayout layout;
+  Nlm_FontTool  curStyle;
+  Rect          tr;
+  
+  /* convert the string to Unicode */
+  cfString = CFStringCreateWithCString(kCFAllocatorDefault, text, kCFStringEncodingMacRoman);
+  if (cfString == NULL)
+    return;
+  cfsLen = CFStringGetLength(cfString);
+  unicodeString = CFStringGetCharactersPtr(cfString);
+  if (unicodeString == NULL) {
+      CFRange range;
+      static UniChar ucbuf[1024];
+      
+      range.location = 0;
+      range.length = MIN(cfsLen, 1024);
+      CFStringGetCharacters (cfString, range, ucbuf);
+      unicodeString = ucbuf;
+  }
 
+  /* get the current style */
+  curStyle = Nlm_FontToATSUStyle(Nlm_fontInUse);
+  
+  /* create the layout */
+  err = ATSUCreateTextLayoutWithTextPtr (
+     unicodeString,
+     0,
+     cfsLen,
+     cfsLen, 
+     1, 
+     (unsigned long *)&cfsLen, 
+     &curStyle, 
+     &layout
+  );
+  /* how big is the text. */
+  err = ATSUMeasureTextImage(layout, kATSUFromTextBeginning, kATSUToTextEnd, 
+       0,  0, &tr);
+
+  if (err == noErr)
+    return (tr.right - tr.left) + 3;
+#else
+    return TextWidth(text, 0, (Nlm_Int2)len);
+#endif
 #elif defined(WIN_MSWIN)
     SIZE tag;
     if ( Nlm_currentHDC )
@@ -2955,7 +3217,7 @@ extern Nlm_Int2 Nlm_TextWidth(const Nlm_Char* text, size_t len)
 #elif defined(WIN_GIF)
     return (Nlm_Int2)(Nlm_curGIFFont->w * len);
 #endif
-  }}
+  }
 
  return 0;
 }
@@ -3218,7 +3480,7 @@ size_t Nlm_FitStringWidth(const Nlm_Char PNTR str, Nlm_Int4 max_width)
 extern void Nlm_SetPen (Nlm_PoinT pt)
 {
 #ifdef WIN_MAC
-  MoveTo (pt.x, pt.y);
+  Nlm_MoveTo (pt.x, pt.y);
 #endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC != NULL) {
@@ -3236,7 +3498,15 @@ extern void Nlm_SetPen (Nlm_PoinT pt)
 extern void Nlm_GetPen (Nlm_PointPtr pt)
 
 {
-#ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGPoint cgp;
+  
+  if (pt != NULL) {
+    cgp = CGContextGetPathCurrentPoint(Nlm_QContext);
+  }
+  pt->x = cgp.x;
+  pt->y = cgp.y;
+#elif defined(WIN_MAC)
   Nlm_PointTool  ptool;
 
   if (pt != NULL) {
@@ -3267,7 +3537,13 @@ extern void Nlm_PaintChar (Nlm_Char ch)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_PoinT pt;
+  Nlm_GetPen (& pt);
+  CGContextShowTextAtPoint(Nlm_QContext, pt.x, pt.y, & ch, 1);
+#else
   DrawChar (ch);
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_PoinT  pt;
@@ -3322,9 +3598,58 @@ extern void Nlm_PaintStringEx(Nlm_CharPtr text, Nlm_Int2 x, Nlm_Int2 y)
   Nlm_PaintString( text );
 #endif
 }
+
+
 extern void Nlm_PaintString (Nlm_CharPtr text)
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_ATSUI
+  OSErr err;
+  Nlm_PoinT  pt;
+  CFStringRef cfString;
+  CFIndex cfsLen;
+  const UniChar * unicodeString;
+  ATSUTextLayout layout;
+  Nlm_FontTool  curStyle;
+  
+  /* convert the string to Unicode */
+  cfString = CFStringCreateWithCString(kCFAllocatorDefault, text, kCFStringEncodingMacRoman);
+  if (cfString == NULL)
+    return;
+  cfsLen = CFStringGetLength(cfString);
+  unicodeString = CFStringGetCharactersPtr(cfString);
+  if (unicodeString == NULL) {
+      CFRange range;
+      static UniChar ucbuf[1024];
+      
+      range.location = 0;
+      range.length = MIN(cfsLen, 1024);
+      CFStringGetCharacters (cfString, range, ucbuf);
+      unicodeString = ucbuf;
+  }
+
+  /* get the current style */
+  curStyle = Nlm_FontToATSUStyle(Nlm_fontInUse);
+  
+  /* create the layout */
+  err = ATSUCreateTextLayoutWithTextPtr (
+     unicodeString,
+     0,
+     cfsLen,
+     cfsLen, 
+     1, 
+     (unsigned long *)&cfsLen, 
+     &curStyle, 
+     &layout
+  );
+
+  /* draw where? */
+  Nlm_GetPen (&pt);
+  /* CGContextShowTextAtPoint(Nlm_QContext, pt.x, pt.y, text, Nlm_StringLen (text)); */
+  err = ATSUDrawText(layout, kATSUFromTextBeginning, kATSUToTextEnd, 
+       Long2Fix(pt.x),  Long2Fix(pt.y));
+  
+#else
   Nlm_PoinT  pt;
   Nlm_Char   str [256];
 
@@ -3338,6 +3663,7 @@ extern void Nlm_PaintString (Nlm_CharPtr text)
     pt.x += Nlm_StringWidth (text);
     Nlm_MoveTo (pt.x, pt.y);
   }
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_PoinT pt;
@@ -3370,6 +3696,7 @@ extern void Nlm_PaintString (Nlm_CharPtr text)
 #endif
 }
 
+
 #ifdef VAR_ARGS
 void CDECL Nlm_PaintText (format, va_alist)
   char *format;
@@ -3377,7 +3704,6 @@ void CDECL Nlm_PaintText (format, va_alist)
 #else
 void CDECL Nlm_PaintText (char *format, ...)
 #endif
-
 {
 #ifdef WIN_MAC
   va_list    args;
@@ -3393,12 +3719,16 @@ void CDECL Nlm_PaintText (char *format, ...)
     vsprintf(str, format, args);
     va_end(args);
     Nlm_GetPen (&pt);
+#ifdef WIN_MAC_QUARTZ
+    CGContextShowTextAtPoint(Nlm_QContext, pt.x, pt.y, str, Nlm_StringLen (str));
+#else
     if (Nlm_StringLen (str) > 0) {
       Nlm_CtoPstr (str);
       DrawString ((StringPtr) str);
     }
     pt.y += Nlm_LineHeight ();
     Nlm_MoveTo (pt.x, pt.y);
+#endif
   }
 #endif
 #ifdef WIN_MSWIN
@@ -3482,6 +3812,69 @@ extern void Nlm_DrawText (Nlm_RectPtr r, Nlm_CharPtr text,
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_ATSUI
+  CFStringRef cfString;
+  CFIndex cfsLen;
+  Nlm_RectTool  rtool;
+  OSStatus    err;
+  ATSUStyle   aStyle;
+  TXNTextBoxOptionsData boxOptions;
+      
+  if (r != NULL) {
+    Nlm_EraseRect (r);
+    if (text != NULL && len > 0) {
+      cfString = CFStringCreateWithBytes(kCFAllocatorDefault, text, len, kCFStringEncodingMacRoman, false);
+      if (cfString == NULL)
+        return;
+      cfsLen = CFStringGetLength(cfString);
+
+      Local__RecTToRectTool(r, &rtool);
+      
+      boxOptions.optionTags = kTXNSetFlushnessMask;
+      switch (jst) {
+        case 'r':
+          boxOptions.flushness = kATSUEndAlignment;
+          break;
+        case 'l':
+          boxOptions.flushness = kATSUStartAlignment;
+          break;
+        case 'c':
+          boxOptions.flushness = kATSUCenterAlignment;
+          break;
+        default:
+          boxOptions.flushness = kATSUStartAlignment;
+          break;
+      }
+      aStyle = Nlm_FontToATSUStyle(Nlm_fontInUse);  
+      
+#ifdef WIN_MAC_QUARTZ
+      boxOptions.optionTags |= kTXNUseCGContextRefMask;
+      boxOptions.options = Nlm_QContext;
+      CGContextSaveGState(Nlm_QContext);
+      /* need to undo the coordinate transforms, otherwise the text comes out upside down. */
+      CGContextScaleCTM(Nlm_QContext, 1.0f, -1.0f);
+      {  
+        Rect      pBounds;
+        int       pHeight;
+        GrafPtr   grafptr;
+
+        GetPort(&grafptr);
+        GetPortBounds(grafptr, &pBounds);
+        pHeight = pBounds.bottom - pBounds.top;
+        CGContextTranslateCTM(Nlm_QContext, 0, -pHeight);
+      }
+#endif
+
+      err = TXNDrawCFStringTextBox(cfString, &rtool, aStyle, &boxOptions);
+      CFRelease(cfString);
+      
+#ifdef WIN_MAC_QUARTZ
+      CGContextRestoreGState(Nlm_QContext);
+#endif
+    }
+  }
+
+#else
   Nlm_Int2      delta;
   Nlm_Int2      height;
   Nlm_Int2      just;
@@ -3524,6 +3917,7 @@ extern void Nlm_DrawText (Nlm_RectPtr r, Nlm_CharPtr text,
       }
     }
   }
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_Int2      format;
@@ -3705,7 +4099,11 @@ extern void Nlm_MoveTo (Nlm_Int2 x, Nlm_Int2 y)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextMoveToPoint(Nlm_QContext, x, y);
+#else
   MoveTo (x, y);
+#endif
 #endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC != NULL) {
@@ -3727,7 +4125,13 @@ extern void Nlm_LineTo (Nlm_Int2 x, Nlm_Int2 y)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextAddLineToPoint(Nlm_QContext, x, y);
+  CGContextStrokePath(Nlm_QContext);
+  CGContextMoveToPoint(Nlm_QContext, x, y);
+#else
   LineTo (x, y);
+#endif
 #endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC != NULL) {
@@ -3757,8 +4161,14 @@ extern void Nlm_LineTo (Nlm_Int2 x, Nlm_Int2 y)
 extern void Nlm_DrawLine (Nlm_PoinT pt1, Nlm_PoinT pt2)
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextMoveToPoint(Nlm_QContext, pt1.x, pt1.y);
+  CGContextAddLineToPoint(Nlm_QContext, pt2.x, pt2.y);
+  CGContextStrokePath(Nlm_QContext);
+#else
   MoveTo (pt1.x, pt1.y);
   LineTo (pt2.x, pt2.y);
+#endif
 #endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC != NULL) {
@@ -4107,7 +4517,16 @@ extern void Nlm_EraseRect (Nlm_RectPtr r)
   Local__RecTToRectTool(r, &rtool);
     
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  CGContextSaveGState(Nlm_QContext);
+  Nlm_White();
+  CGContextFillRect(Nlm_QContext, cgr);
+  CGContextRestoreGState(Nlm_QContext);
+#else
   EraseRect (&rtool);
+#endif
 #endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC  &&  Nlm_currentHWnd) {
@@ -4142,6 +4561,11 @@ extern void Nlm_FrameRect (Nlm_RectPtr r)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGRect rtool;
+  rtool = Nlm_RecTToCGRect(r);
+  CGContextStrokeRect(Nlm_QContext, rtool);
+#else
   Nlm_RectTool  rtool;
 
   if (r != NULL) {
@@ -4154,6 +4578,7 @@ extern void Nlm_FrameRect (Nlm_RectPtr r)
     }
     FrameRect (&rtool);
   }
+#endif
 #endif
 #ifdef WIN_MSWIN
   HBRUSH        oldBrush;
@@ -4210,12 +4635,18 @@ extern void Nlm_FrameRect (Nlm_RectPtr r)
 extern void Nlm_PaintRect(Nlm_RectPtr r)
 
 {
+#ifndef WIN_MAC_QUARTZ
   Nlm_RectTool rtool;
   if ( !r )
     return;
   Local__RecTToRectTool(r, &rtool);
-
-#if defined(WIN_MAC)
+#endif
+  
+#ifdef WIN_MAC_QUARTZ
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  CGContextFillRect(Nlm_QContext, cgr);
+#elif defined(WIN_MAC)
   if (rtool.right == rtool.left) {
     rtool.right = rtool.left + 1;
   }
@@ -4257,8 +4688,12 @@ extern void Nlm_InvertRect (Nlm_RectPtr r)
     return;
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  /* ASSERT(false); /* Can't invert rectangles in Quartz */
+#else
   Local__RecTToRectTool (r, &rtool);
   InvertRect (&rtool);
+#endif
 #endif
 #ifdef WIN_MSWIN
   if (Nlm_currentHDC == NULL)
@@ -4407,6 +4842,23 @@ extern void Nlm_ScrollRect (Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy)
 #endif
 }
 
+#ifdef WIN_MAC_QUARTZ
+
+static void Nlm_addOvalToPath(CGContextRef context, CGRect r) 
+{     
+  CGAffineTransform matrix;    
+  CGContextSaveGState(context);   
+  matrix = CGAffineTransformMake((r.size.width)/2, 0,                                     
+    0, (r.size.height)/2,                                    
+    r.origin.x + (r.size.width)/2,                                    
+    r.origin.y + (r.size.height)/2);
+  CGContextConcatCTM(context, matrix);  
+  CGContextBeginPath(context);
+  CGContextAddArc(context, 0, 0, 1, 0, 2*pi, true);
+  CGContextRestoreGState(context);
+}
+#endif
+
 extern void Nlm_EraseOval (Nlm_RectPtr r)
 {
   Nlm_RectTool rtool;
@@ -4415,8 +4867,19 @@ extern void Nlm_EraseOval (Nlm_RectPtr r)
   Local__RecTToRectTool(r, &rtool);
 
 #if   defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+  {
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  Nlm_addOvalToPath(Nlm_QContext, cgr);
+  }
+  CGContextSaveGState(Nlm_QContext);
+  Nlm_White();
+  CGContextFillPath(Nlm_QContext);
+  CGContextRestoreGState(Nlm_QContext);
+#else
   EraseOval(&rtool);
-
+#endif
 #elif defined(WIN_MSWIN)
   if (Nlm_currentHDC  &&  Nlm_currentHWnd) {
     HPEN   xPen   = SelectObject(Nlm_currentHDC, GetStockObject(NULL_PEN));
@@ -4459,8 +4922,16 @@ extern void Nlm_FrameOval(Nlm_RectPtr r)
   Local__RecTToRectTool(r, &rtool);
 
 #if   defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+  {
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  Nlm_addOvalToPath(Nlm_QContext, cgr);
+  }
+  CGContextStrokePath(Nlm_QContext);
+#else
   FrameOval(&rtool);
-
+#endif
 #elif defined(WIN_MSWIN)
   if ( Nlm_currentHDC ) {
     HBRUSH xBrush = SelectObject(Nlm_currentHDC, GetStockObject(NULL_BRUSH));
@@ -4492,8 +4963,17 @@ extern void Nlm_PaintOval(Nlm_RectPtr r)
   Local__RecTToRectTool(r, &rtool);
 
 #if   defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ) 
+  {
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  Nlm_addOvalToPath(Nlm_QContext, cgr);
+  }
+  CGContextFillPath(Nlm_QContext);
+#else
   PaintOval(&rtool);
 
+#endif
 #elif defined(WIN_MSWIN)
   if ( Nlm_currentHDC ) {
     HPEN xPen = SelectObject(Nlm_currentHDC, GetStockObject(NULL_PEN));
@@ -4573,6 +5053,31 @@ static void s_AdjustRoundRect(const Nlm_RecT* r, Nlm_Int2 *w, Nlm_Int2 *h)
 }
 
 
+#ifdef WIN_MAC_QUARTZ
+static void addRoundedRectToPath(CGContextRef context, CGRect rect, 
+  float ovalWidth,float ovalHeight) 
+{     
+  float fw, fh;    
+  if (ovalWidth == 0 || ovalHeight == 0) {          
+    CGContextAddRect(context, rect);         
+    return;     
+  }    
+  CGContextSaveGState(context);     
+  CGContextTranslateCTM (context, CGRectGetMinX(rect),                           
+  CGRectGetMinY(rect));    
+  CGContextScaleCTM (context, ovalWidth, ovalHeight);     
+  fw = CGRectGetWidth (rect) / ovalWidth;     
+  fh = CGRectGetHeight (rect) / ovalHeight;     
+  CGContextMoveToPoint(context, fw, fh/2);      
+  CGContextAddArcToPoint(context, fw, fh, fw/2, fh, 1);     
+  CGContextAddArcToPoint(context, 0, fh, 0, fh/2, 1);
+  CGContextAddArcToPoint(context, 0, 0, fw/2, 0, 1);    
+  CGContextAddArcToPoint(context, fw, 0, fw, fh/2, 1);      
+  CGContextClosePath(context);     
+  CGContextRestoreGState(context);  
+} 
+#endif
+
 extern void Nlm_EraseRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt)
 {
   Nlm_RectTool rtool;
@@ -4582,8 +5087,19 @@ extern void Nlm_EraseRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt)
   s_AdjustRoundRect(r, &ovlWid, &ovlHgt);
 
 #if defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+  {
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  addRoundedRectToPath(Nlm_QContext, cgr, ovlWid, ovlHgt);
+  }
+  CGContextSaveGState(Nlm_QContext);
+  Nlm_White();
+  CGContextFillPath(Nlm_QContext);
+  CGContextRestoreGState(Nlm_QContext);
+#else
   EraseRoundRect(&rtool, ovlWid, ovlHgt);
-
+#endif
 #elif defined(WIN_MSWIN)
   if (Nlm_currentHDC  &&  Nlm_currentHWnd) {
     HPEN   xPen   = SelectObject(Nlm_currentHDC, GetStockObject(NULL_PEN));
@@ -4630,8 +5146,16 @@ extern void Nlm_FrameRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt)
   s_AdjustRoundRect(r, &ovlWid, &ovlHgt);
 
 #if   defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+  {
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  addRoundedRectToPath(Nlm_QContext, cgr, ovlWid, ovlHgt);
+  }
+  CGContextStrokePath(Nlm_QContext);
+#else
   FrameRoundRect(&rtool, ovlWid, ovlHgt);
-
+#endif
 #elif defined(WIN_MSWIN)
   if ( Nlm_currentHDC ) {
     HBRUSH xBrush = SelectObject(Nlm_currentHDC, GetStockObject(NULL_BRUSH));
@@ -4668,8 +5192,16 @@ extern void Nlm_PaintRoundRect(Nlm_RectPtr r, Nlm_Int2 ovlWid, Nlm_Int2 ovlHgt)
   s_AdjustRoundRect(r, &ovlWid, &ovlHgt);
 
 #if   defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+  {
+  CGRect cgr;
+  cgr = Nlm_RecTToCGRect(r);
+  addRoundedRectToPath(Nlm_QContext, cgr, ovlWid, ovlHgt);
+  }
+  CGContextFillPath(Nlm_QContext);
+#else
   PaintRoundRect(&rtool, ovlWid, ovlHgt);
-
+#endif
 #elif defined(WIN_MSWIN)
   if ( Nlm_currentHDC ) {
     HPEN xPen = SelectObject(Nlm_currentHDC, GetStockObject(NULL_PEN));
@@ -4773,6 +5305,57 @@ static int Nlm_PtToAngle (Nlm_RectPtr r, Nlm_PoinT pt)
 #endif
 
 
+#ifdef WIN_MAC_QUARTZ
+/*
+static void pathForArc (CGContextRef context, CGRect r,                      
+                int startAngle, int arcAngle) 
+{
+  float start, end;     
+  CGAffineTransform matrix;
+  CGContextSaveGState(context);
+  matrix = CGAffineTransformMake(r.size.width/2, 0,                                     
+                                0, r.size.height/2,                                    
+                                r.origin.x + r.size.width/2,                                   
+                                r.origin.y + r.size.height/2);
+  CGContextConcatCTM(context, matrix);
+  if (arcAngle > 0) {          
+    start = (90 - startAngle - arcAngle) * M_PI / 180;         
+    end = (90 - startAngle) * M_PI / 180;     
+  } else {         
+    start = (90 - startAngle) * M_PI / 180;         
+    end = (90 - startAngle - arcAngle) * M_PI / 180;     
+  } 
+  CGContextAddArc (context, 0, 0, 1, start, end, false);   
+  CGContextRestoreGState(context);  
+}
+*/
+
+static void pathForArc (CGContextRef context, CGRect r,   
+CGPoint startPt, CGPoint endPt) 
+{
+  float start, end;     
+  CGAffineTransform matrix, invMatrix;
+  CGContextSaveGState(context);
+  matrix = CGAffineTransformMake(r.size.width/2, 0,                                     
+                                0, r.size.height/2,                                    
+                                r.origin.x + r.size.width/2,                                   
+                                r.origin.y + r.size.height/2);
+  CGContextConcatCTM(context, matrix);
+                                
+  invMatrix = CGAffineTransformInvert(matrix);
+  startPt = CGPointApplyAffineTransform(startPt, invMatrix);
+  endPt = CGPointApplyAffineTransform(endPt, invMatrix);
+  start = atan2(startPt.y, startPt.x);
+  end   = atan2(  endPt.y,   endPt.x);
+    
+  
+  CGContextAddArc (context, 0, 0, 1, start, end, 0);   
+  CGContextRestoreGState(context);  
+}
+
+#endif
+
+
 extern void Nlm_EraseArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
 {
   Nlm_RectTool rtool;
@@ -4782,6 +5365,22 @@ extern void Nlm_EraseArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
 
 #if   defined(WIN_MAC)
   {{
+#if   defined(WIN_MAC_QUARTZ)
+    CGRect  cgr;
+    CGPoint startPt;
+    CGPoint endPt;
+    
+    cgr = Nlm_RecTToCGRect(r);
+    startPt = Nlm_PoinTToCGPoint(start);
+    endPt = Nlm_PoinTToCGPoint(end);
+    Nlm_MoveTo((r->right + r->left)/2, (r->top + r->bottom)/2);
+    pathForArc (Nlm_QContext, cgr, startPt, endPt);
+    
+    CGContextSaveGState(Nlm_QContext);
+    Nlm_White();
+    CGContextFillPath(Nlm_QContext);
+    CGContextRestoreGState(Nlm_QContext);
+#else
     Nlm_Int2      angle1;
     Nlm_Int2      angle2;
     Nlm_Int2      arcAngle;
@@ -4800,6 +5399,7 @@ extern void Nlm_EraseArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
       arcAngle = 360 - angle1 + angle2;
 
     EraseArc(&rtool, angle1, arcAngle);
+#endif
   }}
 
 #elif defined(WIN_MSWIN)
@@ -4850,6 +5450,17 @@ extern void Nlm_FrameArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
 
 #if   defined(WIN_MAC)
   {{
+#if   defined(WIN_MAC_QUARTZ)
+    CGRect  cgr;
+    CGPoint startPt;
+    CGPoint endPt;
+    
+    cgr = Nlm_RecTToCGRect(r);
+    startPt = Nlm_PoinTToCGPoint(start);
+    endPt = Nlm_PoinTToCGPoint(end);
+    pathForArc (Nlm_QContext, cgr, startPt, endPt);
+    CGContextStrokePath(Nlm_QContext);
+#else
     Nlm_Int2      angle1;
     Nlm_Int2      angle2;
     Nlm_Int2      arcAngle;
@@ -4866,6 +5477,7 @@ extern void Nlm_FrameArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
       arcAngle = 360 - angle1 + angle2;
     }
     FrameArc (&rtool, angle1, arcAngle);
+#endif
   }}
 
 #elif defined(WIN_MSWIN)
@@ -4909,6 +5521,18 @@ extern void Nlm_PaintArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
 
 #if   defined(WIN_MAC)
   {{
+#if   defined(WIN_MAC_QUARTZ)
+    CGRect  cgr;
+    CGPoint startPt;
+    CGPoint endPt;
+    
+    cgr = Nlm_RecTToCGRect(r);
+    startPt = Nlm_PoinTToCGPoint(start);
+    endPt = Nlm_PoinTToCGPoint(end);
+    Nlm_MoveTo((r->right + r->left)/2, (r->top + r->bottom)/2);
+    pathForArc (Nlm_QContext, cgr, startPt, endPt);
+    CGContextFillPath(Nlm_QContext);
+#else
     Nlm_Int2       angle1;
     Nlm_Int2       angle2;
     Nlm_Int2       arcAngle;
@@ -4925,6 +5549,7 @@ extern void Nlm_PaintArc(Nlm_RectPtr r, Nlm_PoinT start, Nlm_PoinT end)
       arcAngle = 360 - angle1 + angle2;
 
     PaintArc(&rtool, angle1, arcAngle);
+#endif
   }}
 
 #elif defined(WIN_MSWIN)
@@ -5134,6 +5759,27 @@ void Nlm_InvertQuadrant(Nlm_RectPtr r, Nlm_EQuadrant quadrant) {
  */
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+static void Nlm_CreatePoly (Nlm_Int2 num, Nlm_PointPtr pts)
+{
+  Nlm_PoinT   firstPt;
+  Nlm_Int2    i;
+  Nlm_PoinT   pt;
+
+  if (pts != NULL && num > 0) {
+    firstPt = pts [0];
+    CGContextMoveToPoint(Nlm_QContext, (float) firstPt.x, (float) firstPt.y);
+    for (i = 1; i < num; i++) {
+      pt = pts [i];
+      CGContextAddLineToPoint(Nlm_QContext, (float) pt.x, (float) pt.y);
+    }
+    if (! Nlm_EqualPt (pt, firstPt)) {
+      CGContextClosePath(Nlm_QContext);
+    }
+  }  
+}
+
+#else
 static PolyHandle Nlm_CreatePoly (Nlm_Int2 num, Nlm_PointPtr pts)
 
 {
@@ -5166,6 +5812,7 @@ static void Nlm_DestroyPoly (PolyHandle ply)
     KillPoly (ply);
   }
 }
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -5253,6 +5900,13 @@ extern void Nlm_ErasePoly (Nlm_Int2 num, Nlm_PointPtr pts)
 {
   if (pts != NULL && num > 1) {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_CreatePoly (num, pts);
+  CGContextSaveGState(Nlm_QContext);
+  Nlm_White();
+  CGContextEOFillPath(Nlm_QContext);
+  CGContextRestoreGState(Nlm_QContext);
+#else
   PolyHandle   ply;
 
   ply = Nlm_CreatePoly (num, pts);
@@ -5260,6 +5914,7 @@ extern void Nlm_ErasePoly (Nlm_Int2 num, Nlm_PointPtr pts)
     ErasePoly (ply);
   }
   Nlm_DestroyPoly (ply);
+#endif
 #endif
 #ifdef WIN_MSWIN
 #endif
@@ -5275,6 +5930,10 @@ extern void Nlm_FramePoly(Nlm_Int2 num, Nlm_PointPtr pts)
 {
   if (pts != NULL && num > 1) {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_CreatePoly (num, pts);
+  CGContextStrokePath(Nlm_QContext);
+#else
   PolyHandle   ply;
 
   ply = Nlm_CreatePoly (num, pts);
@@ -5282,6 +5941,7 @@ extern void Nlm_FramePoly(Nlm_Int2 num, Nlm_PointPtr pts)
     FramePoly (ply);
   }
   Nlm_DestroyPoly (ply);
+#endif
 #endif
 #ifdef WIN_MSWIN
   LPPOINT  ply;
@@ -5331,6 +5991,10 @@ extern void Nlm_PaintPoly (Nlm_Int2 num, Nlm_PointPtr pts)
 {
   if (pts != NULL && num > 1) {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_CreatePoly (num, pts);
+  CGContextEOFillPath(Nlm_QContext);
+#else
   PolyHandle   ply;
 
   ply = Nlm_CreatePoly (num, pts);
@@ -5338,6 +6002,7 @@ extern void Nlm_PaintPoly (Nlm_Int2 num, Nlm_PointPtr pts)
     PaintPoly (ply);
   }
   Nlm_DestroyPoly (ply);
+#endif
 #endif
 #ifdef WIN_MSWIN
   LPPOINT  ply;
@@ -5402,6 +6067,8 @@ extern void Nlm_InvertPoly (Nlm_Int2 num, Nlm_PointPtr pts)
 {
   if (pts != NULL && num > 1) {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#else
   PolyHandle   ply;
 
   ply = Nlm_CreatePoly (num, pts);
@@ -5409,6 +6076,7 @@ extern void Nlm_InvertPoly (Nlm_Int2 num, Nlm_PointPtr pts)
     InvertPoly (ply);
   }
   Nlm_DestroyPoly (ply);
+#endif
 #endif
 #ifdef WIN_MSWIN
 #endif
@@ -6455,12 +7123,20 @@ extern void Nlm_SetUpDrawingTools (void)
   Nlm_StringNCpy_0 (fsp.name, tmpFontName, FONT_NAME_SIZE - 1);
   fsp.name[FONT_NAME_SIZE - 1] = 0;
   fsp.size = GetDefFontSize ();
+#ifdef WIN_MAC_ATSUI
+  Nlm_LoadFontData (Nlm_systemFont, NULL, -1, &fsp, Nlm_NewATSUStyle(&fsp), NULL);
+#else
   Nlm_LoadFontData (Nlm_systemFont, NULL, -1, &fsp, 0, fsp.size, 0, NULL);
+#endif
   Nlm_programFont = (Nlm_FonT) Nlm_HandNew (sizeof (Nlm_FontRec));
   /* esl: LoadFontData changed to work with new FontData format */
   Nlm_StrCpy (fsp.name, "Monaco");
   fsp.size = 9;
+#ifdef WIN_MAC_ATSUI
+  Nlm_LoadFontData (Nlm_programFont, NULL, -1, &fsp, Nlm_NewATSUStyle(&fsp), NULL);
+#else
   Nlm_LoadFontData (Nlm_programFont, NULL, -1, &fsp, 4, 9, 0, NULL);
+#endif
   Nlm_fontList = NULL;
   Nlm_fontInUse = Nlm_systemFont;
 

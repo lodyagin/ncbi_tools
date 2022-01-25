@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.15 2006/09/11 20:22:40 bollin Exp $
+/* $Id: seqpanel.h,v 6.17 2006/12/05 13:49:46 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -60,5 +60,7 @@ NLM_EXTERN Boolean SeqEdFixProteinFeatures (BioseqPtr oldbsp, BioseqPtr newbsp, 
 NLM_EXTERN SeqAlignPtr Sequin_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID);
 NLM_EXTERN CharPtr FeatureLocationAlignment (SeqFeatPtr sfp, SeqAlignPtr salp, Int4 begin, Int4 fin);
+extern void ReverseAlignmentStrand (SeqAlignPtr salp, Int4 nth);
+extern void FlipAlignment (SeqAlignPtr salp);
 
 #endif

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastconcat.c,v 1.12 2005/10/06 12:52:23 madden Exp $";
+static char const rcsid[] = "$Id: blastconcat.c,v 1.14 2007/05/07 13:30:54 kans Exp $";
 
 /* ===========================================================================
 *
@@ -33,8 +33,20 @@ Contents: implementation of functions needed for query multiplexing
           functionality.
 
 ******************************************************************************/
-/* $Revision: 1.12 $ 
+/* $Revision: 1.14 $ 
 *  $Log: blastconcat.c,v $
+*  Revision 1.14  2007/05/07 13:30:54  kans
+*  added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+*  Revision 1.13  2007/03/13 20:39:35  madden
+*   - In GetNumSpacers, change the type the local variables
+*     dropoff_1st_pass_bits, dropoff_2nd_pass_bits, gap_x_dropoff_bits,
+*     and gap_x_dropoff_final_bits to Nlm_FloatHi as all these values are
+*     properly floating point values and are floating point values in the
+*     options structure.
+*   - In GetNumSpacers, don't case DROPOFF_NUMBER_OF_BITS to integer.
+*   [from Mike Gertz]
+*
 *  Revision 1.12  2005/10/06 12:52:23  madden
 *  Changes to support correct gapped stats for blastn
 *
@@ -98,11 +110,11 @@ Contents: implementation of functions needed for query multiplexing
 Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options, Boolean believe_query,
                       BspArray fake_bsp_arr ))
 {
-  Int4               dropoff_1st_pass_bits,	/* Dropoff ("X") used for the first pass (bits) */
+  Nlm_FloatHi               dropoff_1st_pass_bits,	/* Dropoff ("X") used for the first pass (bits) */
                      dropoff_2nd_pass_bits,     /* Dropoff ("X") used for the second pass (bits ) */
                      gap_x_dropoff_bits,	/* Dropoff ("X") used for gapped alignments (bits) */
-                     gap_x_dropoff_final_bits,  /* Dropoff ("X") used for final gapped alignment (bits) */
-		     query_length,		/* The length of the first query in fake_bsp_arr. */
+                     gap_x_dropoff_final_bits;  /* Dropoff ("X") used for final gapped alignment (bits) */
+Int4		     query_length,		/* The length of the first query in fake_bsp_arr. */
 		     query_loc_start,           /* Index of the start of the query sequence */
 		     index,
 		     i;
@@ -278,10 +290,10 @@ Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options, Boolean believe
   gap_x_dropoff_final_bits = options->gap_x_dropoff_final;
 
   if( !dropoff_1st_pass_bits )
-    dropoff_1st_pass_bits = (Int4)DROPOFF_NUMBER_OF_BITS;
+    dropoff_1st_pass_bits = DROPOFF_NUMBER_OF_BITS;
 
   if( !dropoff_2nd_pass_bits )
-    dropoff_2nd_pass_bits = (Int4)DROPOFF_NUMBER_OF_BITS;
+    dropoff_2nd_pass_bits = DROPOFF_NUMBER_OF_BITS;
 
   gap_x_dropoff = (BLAST_Score)(gap_x_dropoff_bits*NCBIMATH_LN2/Lambda);
   gap_x_dropoff_final 
@@ -349,7 +361,7 @@ Uint4 GetQueryNum( QueriesPtr mult_queries, Int4 offset, Int4 end, Int2 frame )
 }
 
 /* AM: Comparison routine for SeqAlignPtr used by DivideSeqAligns. */
-int LIBCALL CompareSeqAlignPtr PROTO(( Nlm_VoidPtr afirst, Nlm_VoidPtr asecond ))
+static int LIBCALL CompareSeqAlignPtr PROTO(( Nlm_VoidPtr afirst, Nlm_VoidPtr asecond ))
 {
   Nlm_FloatHi bit_score1, evalue1, bit_score2, evalue2;
   Int4 number1, score1, number2, score2;
@@ -650,15 +662,16 @@ BlastMakeFakeBspConcat PROTO((BspArray bsp_arr, Uint4 num_bsps, Boolean is_na, U
 	  for( bsp_iter = 0; bsp_iter < num_bsps; ++bsp_iter ) 
 	  {
 	    oldcode = bsp_arr[bsp_iter]->seq_data_type;
-	    from = bsp_arr[bsp_iter]->seq_data;
+	    if (oldcode == Seq_code_gap) continue;
+	    from = (ByteStorePtr) bsp_arr[bsp_iter]->seq_data;
 
 	    if( !(to = BSConvertSeq( from, newcode, oldcode, 
 	                             bsp_arr[bsp_iter]->length )) )
               return NULL;
 
             bsp_arr[bsp_iter]->seq_data_type = newcode;
-            bsp_arr[bsp_iter]->seq_data = to;
-	  }
+            bsp_arr[bsp_iter]->seq_data = (SeqDataPtr) to;
+	     }
         }
 
         spacer_seq_nuc = (Uint1 PNTR)MemNew( sizeof( Uint1 )*(num_spacers + 1) );
@@ -777,7 +790,7 @@ BlastMakeFakeBspConcat PROTO((BspArray bsp_arr, Uint4 num_bsps, Boolean is_na, U
 	byte_store = BSNew(0);
 	BSWrite(byte_store, (VoidPtr) concat_seq, tot_compact_len);
 
-	tot->seq_data = byte_store;
+	tot->seq_data = (SeqDataPtr) byte_store;
 	tot->length = tot_len;	
 	
         MemFree(concat_seq);

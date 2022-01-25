@@ -1,4 +1,4 @@
-/* $Id: blast_api.h,v 1.7 2006/01/13 15:58:31 madden Exp $
+/* $Id: blast_api.h,v 1.10 2007/03/20 14:56:21 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -47,15 +47,27 @@ extern "C" {
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/api/blast_options_api.h>
 #include <algo/blast/api/blast_seqalign.h>
+#include <algo/blast/api/blast_input.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
  * @{
  */
 
+/** Initialize the genetic code singleton.
+ * This function must be called before running any BLAST search with the new
+ * engine */
+void GeneticCodeSingletonInit();
+
+/** Uinitialize the genetic code singleton.
+ * This function must be called after running any BLAST search with the new
+ * engine */
+void GeneticCodeSingletonFini();
+
 /** Compares a list of SeqLoc's against a BLAST database using the
  * BLAST algorithm.
  * @param query_seqloc List of query Seq-loc's [in]
+ * @param psi_matrix_file a checkpoint file for PSSM searches [in]
  * @param db_name Name of a BLAST database to search [in]
  * @param masking_locs Locations in the queries that should be masked [in]
  * @param options Search options [in]
@@ -64,8 +76,10 @@ extern "C" {
  * @param filter_out Filtering locations [out]
  * @param extra_returns Additional information about the search [out]
  */
-Int2 
-Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
+Int2
+Blast_DatabaseSearch(SeqLoc* query_seqloc,
+                     Blast_PsiCheckpointLoc * psi_checkpoint,
+                     char* db_name,
                      SeqLoc* masking_locs,
                      const SBlastOptions* options,
                      BlastTabularFormatData* tf_data,
@@ -96,6 +110,7 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
 
 /** Compare a list of query SeqLoc's against a source of subject sequences. 
  * @param query_seqloc List of query sequences locations [in]
+ * @param psi_matrix_file a checkpoint file for PSSM searches [in]
  * @param seq_src Source of subject sequences [in]
  * @param masking_locs Locations where query sequences should be masked. [in]
  * @param options Search options [in]
@@ -106,8 +121,9 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
  * @param extra_returns Additional search statistits [out]
  * @return 0 on success, -1 on failure.
  */
-Int2 
-Blast_RunSearch(SeqLoc* query_seqloc, 
+Int2
+Blast_RunSearch(SeqLoc* query_seqloc,
+                Blast_PsiCheckpointLoc * psi_checkpoint,
                 const BlastSeqSrc* seq_src,
                 SeqLoc* masking_locs,
                 const SBlastOptions* options,

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVER_INFO__H
 #define CONNECT___NCBI_SERVER_INFO__H
 
-/*  $Id: ncbi_server_info.h,v 6.40 2006/03/04 17:02:14 lavr Exp $
+/*  $Id: ncbi_server_info.h,v 6.41 2007/02/20 21:25:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -72,7 +72,7 @@ typedef enum {
 typedef enum {
     fSERV_Regular = 0x0,
     fSERV_Blast   = 0x1
-} ESERV_Flags;
+} ESERV_Flag;
 
 
 #define SERV_DEFAULT_FLAG           fSERV_Regular
@@ -148,7 +148,7 @@ typedef struct {
     EMIME_Type          mime_t; /* type,                                     */
     EMIME_SubType       mime_s; /*     subtype,                              */
     EMIME_Encoding      mime_e; /*         and encoding for content-type     */
-    ESERV_Flags           flag; /* algorithm flag for the server             */
+    ESERV_Flag            flag; /* algorithm flag for the server             */
     unsigned char reserved[14]; /* zeroed reserved area - do not use!        */
     unsigned short      quorum; /* quorum required to override this entry    */
     USERV_Info               u; /* server type-specific data/params          */
@@ -389,6 +389,9 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_EqualInfo
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.h,v $
+ * Revision 6.41  2007/02/20 21:25:44  kazimird
+ * Synchronized with the C++ Toolkit.
+ *
  * Revision 6.40  2006/03/04 17:02:14  lavr
  * NCBI_TIME_INFINITE moved to ncbi_types.h
  *

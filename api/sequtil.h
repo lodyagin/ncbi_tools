@@ -29,13 +29,23 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.49 $
+* $Revision: 6.52 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.52  2007/03/13 18:03:45  kans
+* added FreeSeqLocSetComponents to free sequence records referenced in a chain of SeqLocs
+*
+* Revision 6.51  2007/02/21 17:23:59  bollin
+* Added IsSkippableDbtag function, to use when TMSMART, BankIt, and NCBIFILE
+* IDs should be ignored (for displays, formatting, etc.)
+*
+* Revision 6.50  2006/11/15 18:01:22  kans
+* added SeqLocPartialCheckEx to control fetching of far location
+*
 * Revision 6.49  2006/01/05 14:11:56  bollin
 * added SeqLocPrintUseBestID function, which prints out the sequence location
 * but uses the "best" sequence ID instead of the one actually stored in the
@@ -924,6 +934,14 @@ NLM_EXTERN Uint1 SeqLocCheck(SeqLocPtr slp);
 #define SLP_HAD_ERROR   240
 
 NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head);
+NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch);
+
+/*
+    FreeSeqLocSetComponents loops through a chain of SeqLocs and frees
+    the referenced components.  Call SeqLocSetFree to the list itself.
+*/
+
+NLM_EXTERN void FreeSeqLocSetComponents (SeqLocPtr list);
 
 NLM_EXTERN CharPtr TaxNameFromCommon(CharPtr common);
 
@@ -1279,6 +1297,8 @@ NLM_EXTERN SeqIdPtr     AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip);
 NLM_EXTERN SeqIdPtr     SeqIdDupList (SeqIdPtr id_list);
 NLM_EXTERN SeqIdPtr     SeqIdDupBestList (SeqIdPtr id_list);
 NLM_EXTERN SeqIdPtr     SeqIdListfromSeqLoc (ValNodePtr vnpslp);
+
+NLM_EXTERN Boolean IsSkippableDbtag (DbtagPtr dbt);
 
 
 #ifdef __cplusplus

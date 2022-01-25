@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.53 $
+* $Revision: 6.58 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.58  2007/05/30 18:10:06  kans
+* added KNOWN_GAP_AS_PLUS to distinguish known-length from unknown-length gaps, use for validation
+*
+* Revision 6.57  2006/12/20 20:08:24  kans
+* added SUPPRESS_VIRT_SEQ and STREAM_VIRT_AS_PLUS, moved STREAM_CORRECT_INVAL
+*
+* Revision 6.56  2006/12/18 15:42:58  kans
+* made MakeCodeBreakList public so validator can check for unnecessary transl excepts
+*
+* Revision 6.55  2006/11/15 18:02:59  kans
+* ProteinFromCdRegionExEx and TransTableTranslateCdRegionEx take farProdFetchOK argument
+*
+* Revision 6.54  2006/11/06 17:16:38  kans
+* added stream flag to allow negative gi numbers by NCBI ID group
+*
 * Revision 6.53  2006/07/13 17:06:39  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -401,11 +416,18 @@ typedef void (LIBCALLBACK *SeqPortStreamProc) (
 
 typedef unsigned long StreamFlgType;
 
-#define STREAM_EXPAND_GAPS     1
-#define GAP_TO_SINGLE_DASH     2
-#define EXPAND_GAPS_TO_DASHES  3
+#define STREAM_EXPAND_GAPS      1
+#define GAP_TO_SINGLE_DASH      2
+#define EXPAND_GAPS_TO_DASHES   3
 
-#define STREAM_CORRECT_INVAL   4
+#define KNOWN_GAP_AS_PLUS       4
+
+#define SUPPRESS_VIRT_SEQ       8
+#define STREAM_VIRT_AS_PLUS    16
+
+#define STREAM_CORRECT_INVAL   64
+
+#define STREAM_ALLOW_NEG_GIS  128 /* for internal use only by NCBI ID group */
 
 NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
@@ -556,7 +578,7 @@ NLM_EXTERN Uint4 BioseqHash PROTO((BioseqPtr bsp));
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr ProteinFromCdRegion PROTO(( SeqFeatPtr sfp, Boolean include_stop));
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX));
-NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, BoolPtr altStartP));
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, BoolPtr altStartP, Boolean farProdFetchOK));
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionExWithTrailingCodonHandling PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, Boolean no_stop_at_end_of_complete_cds));
 
 /*****************************************************************************
@@ -810,7 +832,8 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
   Boolean include_stop,
   Boolean remove_trailingX,
   Boolean no_stop_at_end_of_complete_cds,
-  BoolPtr altStartP
+  BoolPtr altStartP,
+  Boolean farProdFetchOK
 );
 
 NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
@@ -839,6 +862,13 @@ NLM_EXTERN TransTablePtr PersistentTransTableByGenCode (
 
 NLM_EXTERN TransTablePtr PersistentTransTableByCdRegion (
   SeqFeatPtr cds
+);
+
+NLM_EXTERN ValNodePtr MakeCodeBreakList (
+  SeqLocPtr cdslocation,
+  Int4 len,
+  CodeBreakPtr cbp,
+  Uint1 frame
 );
 
 /*****************************************************************************

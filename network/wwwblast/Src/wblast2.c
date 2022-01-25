@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.39 2006/07/05 15:59:21 jianye Exp $
+/* $Id: wblast2.c,v 1.40 2007/03/30 14:53:07 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,15 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.39 $
+* $Revision: 1.40 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.40  2007/03/30 14:53:07  madden
+* Select top strand by default
+*
 * Revision 1.39  2006/07/05 15:59:21  jianye
 * limit the defline length to 512
 *
@@ -352,6 +355,7 @@ static void JavaScriptFun()
    printf("             document.bl2.strand.options[0] = new Option('Both strands');\n");
    printf("             document.bl2.strand.options[0].text='Both strands';\n");
    printf("             document.bl2.strand.options[0].value=3;\n");
+   printf("             document.bl2.strand.options[0].selected=true;\n");
    printf("             document.bl2.strand.options[1].text='Top strand';\n");
    printf("             document.bl2.strand.options[1].value=1;\n");
    printf("             document.bl2.strand.options[2].text='Reverse strand';\n");
@@ -773,7 +777,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
                    ">Mega BLAST</a>&nbsp;&nbsp;&nbsp;");
             printf("Strand option <select name=\"strand\">\n");
             printf("<option value=3 SELECTED> Both strands\n");
-            printf("<option value=1> Forward strand\n");
+            printf("<option value=1> Top strand\n");
             printf("<option value=2> Reverse strand\n");
             printf("</select>&nbsp;&nbsp;&nbsp;");
 #ifdef NCBI_INTERNAL_NEW_FORMATTER

@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.c,v 1.24 2006/05/24 21:17:50 camacho Exp $
+/*  $Id: seqsrc_multiseq.c,v 1.27 2007/05/16 18:11:11 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.24 2006/05/24 21:17:50 camacho Exp $";
+static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.27 2007/05/16 18:11:11 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_multiseq.h>
@@ -171,12 +171,32 @@ s_MultiSeqGetNumSeqs(void* multiseq_handle, void* ignoreme)
     return seq_info->num_seqs;
 }
 
+/** Returns zero in this implementation as not supported without an alias file.
+ * @param multiseq_handle Pointer to the structure containing sequences [in]
+ * @param ignoreme Unused by this implementation [in]
+ */
+static Int4 
+s_MultiSeqGetNumSeqsStats(void* multiseq_handle, void* ignoreme)
+{
+    return 0;
+}
+
 /** Returns 0 as total length, indicating that this is NOT a database!
  * @param multiseq_handle Pointer to the structure containing sequences [in]
  * @param ignoreme Unused by this implementation [in]
  */
 static Int8 
 s_MultiSeqGetTotLen(void* multiseq_handle, void* ignoreme)
+{
+    return 0;
+}
+
+/** Returns 0 for statistical total length as this is not supported without an alias file.
+ * @param multiseq_handle Pointer to the structure containing sequences [in]
+ * @param ignoreme Unused by this implementation [in]
+ */
+static Int8 
+s_MultiSeqGetTotLenStats(void* multiseq_handle, void* ignoreme)
 {
     return 0;
 }
@@ -311,6 +331,13 @@ s_MultiSeqIteratorNext(void* multiseq_handle, BlastSeqSrcIterator* itr)
     return retval;
 }
 
+/** Resets the internal bookmark iterator (N/A in this case) */
+static void
+s_MultiSeqResetChunkIter(void* multiseq_handle)
+{
+    return;
+}
+
 /** Multi sequence source destructor: frees its internal data structure and the
  * BlastSeqSrc structure itself.
  * @param seq_src BlastSeqSrc structure to free [in]
@@ -327,8 +354,6 @@ s_MultiSeqSrcFree(BlastSeqSrc* seq_src)
     seq_info = (MultiSeqInfo*)_BlastSeqSrcImpl_GetDataStructure(seq_src);
 
     seq_info = s_MultiSeqInfoFree(seq_info);
-    sfree(seq_src);
-
     return NULL;
 }
 
@@ -376,14 +401,17 @@ s_MultiSeqSrcNew(BlastSeqSrc* retval, void* args)
     _BlastSeqSrcImpl_SetCopyFnPtr(retval, &s_MultiSeqSrcCopy);
     _BlastSeqSrcImpl_SetDataStructure(retval, (void*) seq_info);
     _BlastSeqSrcImpl_SetGetNumSeqs(retval, &s_MultiSeqGetNumSeqs);
+    _BlastSeqSrcImpl_SetGetNumSeqsStats(retval, &s_MultiSeqGetNumSeqsStats);
     _BlastSeqSrcImpl_SetGetMaxSeqLen(retval, &s_MultiSeqGetMaxLength);
     _BlastSeqSrcImpl_SetGetAvgSeqLen(retval, &s_MultiSeqGetAvgLength);
     _BlastSeqSrcImpl_SetGetTotLen(retval, &s_MultiSeqGetTotLen);
+    _BlastSeqSrcImpl_SetGetTotLenStats(retval, &s_MultiSeqGetTotLenStats);
     _BlastSeqSrcImpl_SetGetName(retval, &s_MultiSeqGetName);
     _BlastSeqSrcImpl_SetGetIsProt(retval, &s_MultiSeqGetIsProt);
     _BlastSeqSrcImpl_SetGetSequence(retval, &s_MultiSeqGetSequence);
     _BlastSeqSrcImpl_SetGetSeqLen(retval, &s_MultiSeqGetSeqLen);
     _BlastSeqSrcImpl_SetIterNext(retval, &s_MultiSeqIteratorNext);
+    _BlastSeqSrcImpl_SetResetChunkIterator(retval, &s_MultiSeqResetChunkIter);
     _BlastSeqSrcImpl_SetReleaseSequence(retval, &s_MultiSeqReleaseSequence);
     
     return retval;

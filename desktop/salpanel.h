@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -50,6 +50,7 @@
 #include <vibrant.h>
 #include <txalign.h>
 #include <explore.h>
+#include <dlogutil.h>
 
 extern WindoW getwindow_frompanel (PaneL pnl);
 extern PaneL GetPanelFromWindow (WindoW w);
@@ -145,7 +146,8 @@ extern int LIBCALLBACK CompareFeatureValNodeStrings (VoidPtr ptr1, VoidPtr ptr2)
 extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc compar);
 
 extern DialoG 
-BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype);
+BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+extern Boolean OkToAcceptBatchApplyFeatureDetails (DialoG d);
 
 extern void 
 ApplyFeatureToAlignment 
@@ -156,5 +158,16 @@ ApplyFeatureToAlignment
 
 extern SeqAnnotPtr GetSeqAnnotForAlignment (SeqAlignPtr sap);
 extern void ConvertPairwiseToMultipleAlignment (SeqAlignPtr sap);
+
+extern void 
+PropagateOneFeat
+(SeqFeatPtr sfp,
+ Boolean    gapSplit,
+ Boolean    fuse_joints,
+ Boolean    stopCDS,
+ Boolean    transPast,
+ Boolean    cds3end,
+ ValNodePtr seq_for_prop, /* ValNode data.ptrvalue points to SeqId */
+ BoolPtr    warned_about_master);
 
 #endif

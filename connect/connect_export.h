@@ -1,7 +1,7 @@
 #ifndef CONNECT___CONNECT_EXPORT__H
 #define CONNECT___CONNECT_EXPORT__H
 
-/*  $Id: connect_export.h,v 6.2 2003/01/08 14:25:40 lavr Exp $
+/*  $Id: connect_export.h,v 6.4 2007/06/25 15:39:24 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * Author:  Anatoliy Kuznetsov, Mike DiCuccio
+ * Author:  Mike DiCuccio
  *
  * File Description:
  *    Defines to provide correct exporting from CONNECT DLL in Windows.
@@ -41,18 +41,5 @@
 
 #  define NCBI_XCONNECT_EXPORT
 
-
-
-/*
- * ==========================================================================
- * $Log: connect_export.h,v $
- * Revision 6.2  2003/01/08 14:25:40  lavr
- * Remove stray #endif directive
- *
- * Revision 6.1  2003/01/07 22:04:30  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif  /*  CONNECT___CONNECT_EXPORT__H  */

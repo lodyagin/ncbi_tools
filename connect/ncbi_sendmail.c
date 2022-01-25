@@ -1,4 +1,4 @@
-/*  $Id: ncbi_sendmail.c,v 6.30 2006/07/13 17:58:05 lavr Exp $
+/*  $Id: ncbi_sendmail.c,v 6.32 2007/07/18 19:55:28 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,6 +36,7 @@
 #include <connect/ncbi_socket.h>
 #include <connect/ncbi_util.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 #ifdef NCBI_CXX_TOOLKIT
 #define NCBI_SENDMAIL_TOOLKIT "C++"
@@ -46,68 +47,89 @@
 #define MX_MAGIC_NUMBER 0xBA8ADEDA
 #define MX_CRLF         "\r\n"
 
-#define SMTP_READERR    -1      /* Error reading from socket         */
-#define SMTP_REPLYERR   -2      /* Error reading reply prefix        */
-#define SMTP_BADCODE    -3      /* Reply code doesn't match in lines */
-#define SMTP_BADREPLY   -4      /* Malformed reply text              */
-#define SMTP_NOCODE     -5      /* No reply code detected (letters?) */
-#define SMTP_WRITERR    -6      /* Error writing to socket           */
+#define SMTP_READERR    -1      /* Error reading from socket            */
+#define SMTP_READTMO    -2      /* Read timed out                       */
+#define SMTP_RESPERR    -3      /* Error reading response prefix        */
+#define SMTP_NOCODE     -4      /* No response code detected (letters?) */
+#define SMTP_BADCODE    -5      /* Response code doesn't match in lines */
+#define SMTP_BADRESP    -6      /* Malformed response                   */
 
 
-/* Read SMTP reply from the socket.
- * Return reply in the buffer provided,
- * and reply code (positive value) as a return value.
- * Return a negative code in case of problem (protocol reply
+/* Read SMTP response from the socket.
+ * Return the response in the buffer provided,
+ * and the response code (positive value) as a return value.
+ * Return a negative code in case of problem (protocol response
  * read error or protocol violations).
- * Return 0 in case of call error.
+ * Return 0 in case of a call error.
  */
-static int s_SockRead(SOCK sock, char* reply, size_t reply_len)
+static int s_SockRead(SOCK sock, char* response, size_t max_response_len)
 {
     int/*bool*/ done = 0;
     size_t n = 0;
     int code = 0;
 
-    if (!reply  ||  !reply_len)
-        return 0;
-
+    assert(response  &&  max_response_len);
     do {
+        EIO_Status status;
         size_t m = 0;
         char buf[4];
 
-        if (SOCK_Read(sock, buf, 4, &m, eIO_ReadPersist) != eIO_Success)
-            return SMTP_READERR;
-        if (m != 4)
-            return SMTP_REPLYERR;
+        status = SOCK_Read(sock, buf, 4, &m, eIO_ReadPersist);
+        if (status != eIO_Success) {
+            if (m == 3  &&  status == eIO_Closed)
+                buf[m++] = ' ';
+            else if (status == eIO_Timeout)
+                return SMTP_READTMO;
+            else if (m)
+                return SMTP_RESPERR;
+            else
+                return SMTP_READERR;
+        }
+        assert(m == 4);
 
         if (buf[3] == '-'  ||  (done = isspace((unsigned char) buf[3]))) {
-            buf[3] = 0;
+            buf[3] = '\0';
             if (!code) {
-                if (!(code = atoi(buf)))
+                char* e;
+                errno = 0;
+                code = (int) strtol(buf, &e, 10);
+                if (errno  ||  code <= 0  ||  e != buf + 3)
                     return SMTP_NOCODE;
             } else if (code != atoi(buf))
                 return SMTP_BADCODE;
         } else
-            return SMTP_BADREPLY;
+            return SMTP_BADRESP;
 
-        do {
-            m = 0;
-            if (SOCK_Read(sock,buf,1,&m,eIO_ReadPlain) != eIO_Success  ||  !m)
-                return SMTP_READERR;
+        if (status == eIO_Success) {
+            do {
+                status = SOCK_Read(sock, buf, 1, &m, eIO_ReadPlain);
+                if (status == eIO_Closed) {
+                    if (n < max_response_len)
+                        response[n++] = '\n';
+                    done = 1;
+                    break;
+                }
+                if (!m)
+                    return status == eIO_Timeout ? SMTP_READTMO : SMTP_READERR;
+                if (*buf != '\r'  &&  n < max_response_len)
+                    response[n++] = *buf;
+                assert(status == eIO_Success);
+            } while (*buf != '\n');
 
-            if (buf[0] != '\r'  &&  n < reply_len)
-                reply[n++] = buf[0];
-        } while (buf[0] != '\n');
-
-        /* At least '\n' should sit in buffer */
-        assert(n);
-        if (done)
-            reply[n - 1] = 0;
-        else if (n < reply_len)
-            reply[n] = ' ';
-        
+            /* At least '\n' should sit in the buffer */
+            assert(n);
+            if (done)
+                response[n - 1] = '\0';
+            else if (n < max_response_len)
+                response[n] = ' ';
+        } else {
+            *response = '\0';
+            assert(done);
+            break;
+        }
     } while (!done);
 
-    assert(code);
+    assert(code > 0);
     return code;
 }
 
@@ -122,23 +144,24 @@ static int/*bool*/ s_SockReadResponse(SOCK sock, int code, int alt_code,
         case SMTP_READERR:
             message = "Read error";
             break;
-        case SMTP_REPLYERR:
-            message = "Error reading reply prefix";
+        case SMTP_READTMO:
+            message = "Read timed out";
             break;
-        case SMTP_BADCODE:
-            message = "Reply code doesn't match in lines";
-            break;
-        case SMTP_BADREPLY:
-            message = "Malformed reply text";
+        case SMTP_RESPERR:
+            message = "Error reading response prefix";
             break;
         case SMTP_NOCODE:
-            message = "No reply code detected";
+            message = "No response code detected";
             break;
-        case SMTP_WRITERR:
-            message = "Write error";
+        case SMTP_BADCODE:
+            message = "Response code doesn't match in lines";
+            break;
+        case SMTP_BADRESP:
+            message = "Malformed response";
             break;
         default:
             message = "Unknown error";
+            assert(0);
             break;
         }
         assert(message);
@@ -293,9 +316,12 @@ static size_t s_FromSize(const SSendMailInfo* info)
 
     if (!*info->from  ||  !(info->mx_options & fSendMail_StripNonFQDNHost))
         return len;
-    if (!(at = memchr(info->from, '@', len))  ||  at == info->from + len - 1)
+    if (!(at = (const char*) memchr(info->from, '@', len))
+        || at == info->from + len - 1) {
         return len - 1;
-    if (!(dot = memchr(at + 1, '.', len - (size_t)(at - info->from) - 1))
+    }
+    if (!(dot = (const char*) memchr(at + 1, '.',
+                                     len - (size_t)(at - info->from) - 1))
         ||  dot == at + 1  ||  dot == info->from + len - 1) {
         return (size_t)(at - info->from);
     }
@@ -508,100 +534,3 @@ const char* CORE_SendMailEx(const char*          to,
 #undef SENDMAIL_SENDRCPT
 #undef SENDMAIL_RETURN2
 #undef SENDMAIL_RETURN
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_sendmail.c,v $
- * Revision 6.30  2006/07/13 17:58:05  lavr
- * SendMailInfo_Init() to use direct values in initialization of mx_...
- *
- * Revision 6.29  2006/06/15 19:52:40  lavr
- * Compatibility support in SSendMailInfo::mx_options
- *
- * Revision 6.28  2006/06/15 02:46:43  lavr
- * Implement mx_options (and more sophisticated host name discovery)
- *
- * Revision 6.27  2006/01/27 17:09:12  lavr
- * Take advantage of new CONNUTIL_GetUsername()
- *
- * Revision 6.26  2005/12/14 21:26:39  lavr
- * CORE_SendMailEx(): Explicit init of static zero timeout
- *
- * Revision 6.25  2005/08/30 18:06:23  lavr
- * Do not treat single quotes specially
- *
- * Revision 6.24  2005/06/04 00:14:58  lavr
- * Do read probes when writing long data chunks
- *
- * Revision 6.23  2005/03/18 16:35:39  lavr
- * Fix \r\n parse bug in both header and body
- *
- * Revision 6.22  2004/01/07 19:51:36  lavr
- * Try to obtain user name from USERNAME env.var. on Windows, else fallback
- *
- * Revision 6.21  2003/12/09 15:38:39  lavr
- * Take advantage of SSendMailInfo::body_size;  few little makeup changes
- *
- * Revision 6.20  2003/12/04 14:55:09  lavr
- * Extend API with no-header and multiple recipient capabilities
- *
- * Revision 6.19  2003/04/18 20:59:51  lavr
- * Mixed up SMTP_BADCODE and SMTP_BADREPLY rearranged in order
- *
- * Revision 6.18  2003/03/24 19:46:17  lavr
- * Few minor changes; do not init SSendMailInfo passed as NULL
- *
- * Revision 6.17  2003/02/08 21:05:55  lavr
- * Unimportant change in comments
- *
- * Revision 6.16  2002/10/28 15:43:29  lavr
- * Use "ncbi_ansi_ext.h" privately and use strncpy0()
- *
- * Revision 6.15  2002/09/24 15:05:45  lavr
- * Log moved to end
- *
- * Revision 6.14  2002/08/14 18:55:39  lavr
- * Close socket on error return (was forgotten)
- *
- * Revision 6.13  2002/08/12 15:12:31  lavr
- * Use persistent SOCK_Write()
- *
- * Revision 6.12  2002/08/07 16:33:15  lavr
- * Changed EIO_ReadMethod enums accordingly; log moved to end
- *
- * Revision 6.11  2002/02/11 20:36:44  lavr
- * Use "ncbi_config.h"
- *
- * Revision 6.10  2001/07/13 20:15:12  lavr
- * Write lock then unlock when using not MT-safe s_MakeFrom()
- *
- * Revision 6.9  2001/05/18 20:41:43  lavr
- * Beautifying: change log corrected
- *
- * Revision 6.8  2001/05/18 19:52:24  lavr
- * Tricks in macros to keep Sun C compiler silent from warnings (details below)
- *
- * Revision 6.7  2001/03/26 18:39:24  lavr
- * Casting to (unsigned char) instead of (int) for ctype char.class macros
- *
- * Revision 6.6  2001/03/06 04:32:00  lavr
- * Better custom header processing
- *
- * Revision 6.5  2001/03/02 20:09:06  lavr
- * Typo fixed
- *
- * Revision 6.4  2001/03/01 00:30:23  lavr
- * Toolkit configuration moved to ncbi_sendmail_.c
- *
- * Revision 6.3  2001/02/28 21:11:47  lavr
- * Bugfix: buffer overrun
- *
- * Revision 6.2  2001/02/28 17:48:53  lavr
- * Some fixes; larger intermediate buffer for message body
- *
- * Revision 6.1  2001/02/28 00:52:26  lavr
- * Initial revision
- *
- * ===========================================================================
- */

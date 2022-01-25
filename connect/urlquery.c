@@ -1,4 +1,4 @@
-/* $Id: urlquery.c,v 6.39 2006/04/19 02:11:23 lavr Exp $
+/* $Id: urlquery.c,v 6.40 2006/10/17 02:19:07 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.39 $
+ * $Revision: 6.40 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: urlquery.c,v $
+ * Revision 6.40  2006/10/17 02:19:07  lavr
+ * Use "const char*" wherever appropriate
+ *
  * Revision 6.39  2006/04/19 02:11:23  lavr
  * QUERY_OpenServiceQuery: Use PostOverrideArg instead of AppendArg
  *
@@ -167,11 +170,11 @@ NLM_EXTERN void QUERY_WaitForNextMacEvent (void)
 
 
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
-  Nlm_CharPtr host_machine,
+  const char* host_machine,
   Nlm_Uint2 host_port,
-  Nlm_CharPtr host_path,
-  Nlm_CharPtr arguments,
-  Nlm_CharPtr appName,
+  const char* host_path,
+  const char* arguments,
+  const char* appName,
   Nlm_Uint4 timeoutsec,
   EMIME_Type type,
   EMIME_SubType subtype,
@@ -181,12 +184,12 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 {
   CONN           conn;
   CONNECTOR      connector;
-  Nlm_Char       contentType [MAX_CONTENT_TYPE_LEN];
+  char           contentType [MAX_CONTENT_TYPE_LEN];
   SConnNetInfo*  info;
-  Nlm_Char       path [PATH_MAX];
+  char           path [PATH_MAX];
   EIO_Status     status;
-  Nlm_CharPtr    userAgentName = NULL;
-  Nlm_Char       user_header [sizeof(contentType) + 256];
+  const char*    userAgentName = NULL;
+  char           user_header [sizeof(contentType) + 256];
 
   if (StringHasNoText (host_path))
     return NULL;
@@ -250,10 +253,10 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 
 
 NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
-  Nlm_CharPtr service,
-  Nlm_CharPtr parameters,
+  const char* service,
+  const char* parameters,
   Nlm_Uint4   timeoutsec,
-  Nlm_CharPtr arguments
+  const char* arguments
 )
 {
   CONN           conn;
@@ -299,8 +302,8 @@ NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
 
 
 NLM_EXTERN CONN QUERY_OpenServiceQuery (
-  Nlm_CharPtr service,
-  Nlm_CharPtr parameters,
+  const char* service,
+  const char* parameters,
   Nlm_Uint4   timeoutsec
 )
 {
@@ -331,14 +334,14 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
   FILE *fp
 )
 {
-  Nlm_CharPtr  buffer;
+  char*        buffer;
   size_t       ct;
   size_t       n_written;
   EIO_Status   status;
 
   if (conn == NULL || fp == NULL) return;
 
-  buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
+  buffer = (char*) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
     while ((ct = FileRead (buffer, 1, URL_QUERY_BUFLEN, fp)) > 0) {
       status = CONN_Write (conn, (const void *) buffer, ct,
@@ -356,13 +359,13 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
   FILE *fp
 )
 {
-  Nlm_CharPtr  buffer;
+  char*        buffer;
   size_t       n_read;
   EIO_Status   status;
 
   if (conn == NULL || fp == NULL) return;
 
-  buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
+  buffer = (char*) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
     do {
       status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read, eIO_ReadPlain);
@@ -376,7 +379,7 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
 
 static Nlm_Int2 LIBCALL AsnIoConnWrite (
   Pointer ptr,
-  Nlm_CharPtr buf,
+  CharPtr buf,
   Nlm_Uint2 count
 )
 {
@@ -407,20 +410,20 @@ static Nlm_Int2 LIBCALL AsnIoConnRead (
 
 
 NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (
-  Nlm_CharPtr mode,
+  const char* mode,
   CONN conn
 )
 {
   Int1          type;
   AsnIoConnPtr  aicp;
 
-  if (! StringCmp(mode, "r"))
+  if (strcmp(mode, "r") == 0)
     type = (ASNIO_IN | ASNIO_TEXT);
-  else if (! StringCmp(mode, "rb"))
+  else if (strcmp(mode, "rb") == 0)
     type = (ASNIO_IN | ASNIO_BIN);
-  else if (! StringCmp(mode, "w"))
+  else if (strcmp(mode, "w") == 0)
     type = (ASNIO_OUT | ASNIO_TEXT);
-  else if (! StringCmp(mode, "wb"))
+  else if (strcmp(mode, "wb") == 0)
     type = (ASNIO_OUT | ASNIO_BIN);
   else {
     AsnIoErrorMsg (NULL, 81, mode);

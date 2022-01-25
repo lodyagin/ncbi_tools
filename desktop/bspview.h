@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.62 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *
@@ -378,6 +378,7 @@ extern IteM CreateLegendItem (MenU m, BaseFormPtr bfp);
 
 extern ForM MakeToolFormForBioseqView (BaseFormPtr bfp, GrpActnProc createToolBar);
 extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId);
+extern BioseqPtr GetBioseqViewTarget (BaseFormPtr fp);
 
 extern BioseqViewPtr GetBioseqViewPtrFromBaseFormPtr (BaseFormPtr fp);
 NLM_EXTERN void Nlm_LaunchWebPage (Char *url);

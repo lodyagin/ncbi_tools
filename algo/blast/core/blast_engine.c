@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.227 2006/10/12 19:51:57 coulouri Exp $
+/* $Id: blast_engine.c,v 1.249 2007/08/23 20:25:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,29 +55,34 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.227 2006/10/12 19:51:57 coulouri Exp $";
+    "$Id: blast_engine.c,v 1.249 2007/08/23 20:25:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
-#include <algo/blast/core/lookup_wrap.h>
-#include <algo/blast/core/aa_ungapped.h>
 #include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/blast_setup.h>
-#include <algo/blast/core/blast_gapalign.h>
+#include <algo/blast/core/blast_aalookup.h>
+#include <algo/blast/core/blast_aascan.h>
+#include <algo/blast/core/blast_nalookup.h>
+#include <algo/blast/core/blast_nascan.h>
 #include <algo/blast/core/blast_sw.h>
-#include <algo/blast/core/blast_traceback.h>
+#include <algo/blast/core/aa_ungapped.h>
+#include <algo/blast/core/na_ungapped.h>
+#include <algo/blast/core/phi_lookup.h>
+#include <algo/blast/core/phi_gapalign.h>
 #include <algo/blast/core/phi_extend.h>
 #include <algo/blast/core/link_hsps.h>
-#include "blast_gapalign_priv.h"
-#include <algo/blast/core/phi_gapalign.h>
-#include <algo/blast/core/phi_lookup.h>
-
+#include <algo/blast/core/blast_gapalign.h>
+#include <algo/blast/core/blast_parameters.h>
+#include <algo/blast/core/blast_setup.h>
+#include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/mb_indexed_lookup.h>
+#include <algo/blast/core/gencode_singleton.h>
+#include "blast_gapalign_priv.h"
 
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
 NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 15;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Oct-15-2006";
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 17;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Aug-26-2007";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -246,8 +251,6 @@ s_BlastSearchEngineOneContext(EBlastProgramType program_number,
       BlastUngappedStats* ungapped_stats = NULL;
       BlastGappedStats* gapped_stats = NULL;
       Int4 **matrix;
-      const Boolean kPrelimTraceback = 
-         (ext_params->options->ePrelimGapExt == eGreedyWithTracebackExt);
       const Boolean kTranslatedSubject = 
         (Blast_SubjectIsTranslated(program_number) || program_number == eBlastTypeRpsTblastn);
       const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
@@ -317,9 +320,10 @@ s_BlastSearchEngineOneContext(EBlastProgramType program_number,
              * frames). Contexts should also be filled in HSPs when they 
              * are saved.
             */
+            /* fence_hit is null, since this is only for prelim stage. */
             aux_struct->GetGappedScore(program_number, query, query_info, 
                subject, gap_align, score_params, ext_params, hit_params, 
-               init_hitlist, &hsp_list, gapped_stats);
+               init_hitlist, &hsp_list, gapped_stats, NULL);
 
             /* Removes redundant HSPs. */
              Blast_HSPListPurgeHSPsWithCommonEndpoints(program_number, hsp_list);
@@ -352,10 +356,9 @@ s_BlastSearchEngineOneContext(EBlastProgramType program_number,
          }
 
          Blast_HSPListAdjustOffsets(hsp_list, offset);
-         /* Allow merging of HSPs either if traceback is already 
-            available, or if it is an ungapped search */
-         status = Blast_HSPListsMerge(&hsp_list, &combined_hsp_list,  kHspNumMax, offset,
-            (Boolean)(kPrelimTraceback || !score_options->gapped_calculation));
+         status = Blast_HSPListsMerge(&hsp_list, &combined_hsp_list,  
+                                      kHspNumMax, &offset, INT4_MIN,
+                                      DBSEQ_CHUNK_OVERLAP);
       } /* End loop on chunks of subject sequence */
 
       hsp_list = Blast_HSPListFree(hsp_list);  /* In case this was not freed in above loop. */
@@ -464,7 +467,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       last_context = 5;
       if (score_options->is_ooframe) {
          BLAST_GetAllTranslations(orig_sequence, eBlastEncodingNcbi2na,
-            orig_length, db_options->gen_code_string, &translation_buffer,
+            orig_length, subject->gen_code_string, &translation_buffer,
             &frame_offsets, &subject->oof_sequence);
          subject->oof_sequence_allocated = TRUE;
          frame_offsets_a = frame_offsets;
@@ -476,7 +479,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
               ContextOffsetsToOffsetArray(query_info_in);
       } else {
          BLAST_GetAllTranslations(orig_sequence, eBlastEncodingNcbi2na,
-            orig_length, db_options->gen_code_string, &translation_buffer,
+            orig_length, subject->gen_code_string, &translation_buffer,
             &frame_offsets, NULL);
          frame_offsets_a = frame_offsets;
       }
@@ -642,41 +645,39 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
 {
    Int2 status = 0;
    BlastCoreAuxStruct* aux_struct;
-   Boolean blastp = (lookup_wrap->lut_type == AA_LOOKUP_TABLE ||
-                     lookup_wrap->lut_type == RPS_LOOKUP_TABLE);
-   Boolean mb_lookup = (lookup_wrap->lut_type == MB_LOOKUP_TABLE);
-   Boolean indexed_mb_lookup = (lookup_wrap->lut_type == INDEXED_MB_LOOKUP_TABLE);
-   Boolean phi_lookup = (lookup_wrap->lut_type == PHI_AA_LOOKUP ||
-                         lookup_wrap->lut_type == PHI_NA_LOOKUP);
+   Boolean blastp = (lookup_wrap->lut_type == eAaLookupTable ||
+                     lookup_wrap->lut_type == eCompressedAaLookupTable);
+   Boolean rpsblast = (lookup_wrap->lut_type == eRPSLookupTable);
+   Boolean indexed_mb_lookup = (lookup_wrap->lut_type == eIndexedMBLookupTable);
+   Boolean phi_lookup = (lookup_wrap->lut_type == ePhiLookupTable ||
+                         lookup_wrap->lut_type == ePhiNaLookupTable);
    Boolean smith_waterman = 
                  (ext_options->ePrelimGapExt == eSmithWatermanScoreOnly);
    Int4 offset_array_size = GetOffsetArraySize(lookup_wrap);
-   Uint4 avg_subj_length;
 
    ASSERT(seq_src);
 
    *aux_struct_ptr = aux_struct = (BlastCoreAuxStruct*)
       calloc(1, sizeof(BlastCoreAuxStruct));
 
-   avg_subj_length = BlastSeqSrcGetAvgSeqLen(seq_src);
-     
-   if ((status = BlastExtendWordNew(lookup_wrap, query->length, word_params, 
-                                    avg_subj_length, &aux_struct->ewp)) != 0)
+   if ((status = BlastExtendWordNew(query->length, word_params, 
+                                    &aux_struct->ewp)) != 0)
       return status;
 
    if (smith_waterman) {
       aux_struct->WordFinder = NULL;
-   } else if (mb_lookup) {
-      aux_struct->WordFinder = MB_WordFinder;
    } else if (indexed_mb_lookup) {
       aux_struct->WordFinder = MB_IndexedWordFinder;
    } else if (phi_lookup) {
       aux_struct->WordFinder = PHIBlastWordFinder;
    } else if (blastp) {
+      BlastChooseProteinScanSubject(lookup_wrap);
       aux_struct->WordFinder = BlastAaWordFinder;
-   } else if (word_params->extension_method == eRightAndLeft) { /* Used AG word finding. */
-      aux_struct->WordFinder = BlastNaWordFinder_AG;
+   } else if (rpsblast) {
+      aux_struct->WordFinder = BlastRPSWordFinder;
    } else {
+      BlastChooseNucleotideScanSubject(lookup_wrap);
+      BlastChooseNaExtend(lookup_wrap);
       aux_struct->WordFinder = BlastNaWordFinder;
    }
    
@@ -736,7 +737,6 @@ s_RPSPreliminarySearchEngine(EBlastProgramType program_number,
    Int2 status = 0;
    Int8 dbsize;
    Int4 num_db_seqs;
-   Uint4 avg_subj_length = 0;
    BlastRPSLookupTable *lookup = (BlastRPSLookupTable *)lookup_wrap->lut;
    BLAST_SequenceBlk concat_db;
    BlastQueryInfo* one_query_info = NULL;
@@ -773,10 +773,8 @@ s_RPSPreliminarySearchEngine(EBlastProgramType program_number,
    /* Change the table of diagonals that will be used for the
       search; we need a diag table that can fit the entire
       concatenated DB */
-   avg_subj_length = (Uint4) (dbsize / num_db_seqs);
    BlastExtendWordFree(aux_struct->ewp);
-   BlastExtendWordNew(lookup_wrap, concat_db.length, word_params, 
-                      avg_subj_length, &aux_struct->ewp);
+   BlastExtendWordNew(concat_db.length, word_params, &aux_struct->ewp);
 
    /* Run the search; the input query is what gets scanned
       and the concatenated DB is the sequence associated with
@@ -855,7 +853,6 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
    BlastSeqSrcGetSeqArg seq_arg;
    Int2 status = 0;
    Int8 db_length = 0;
-   Boolean prelim_traceback;
    const BlastScoringOptions* score_options = score_params->options;
    const BlastHitSavingOptions* hit_options = hit_params->options;
    const BlastExtensionOptions* ext_options = ext_params->options;
@@ -863,6 +860,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
    Boolean gapped_calculation = score_options->gapped_calculation;
    BlastScoreBlk* sbp = gap_align->sbp;
    BlastSeqSrcIterator* itr;
+   Int4 default_db_genetic_code = db_options->genetic_code;
    const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
                                 program_number == eBlastTypePhiBlastn);
 
@@ -895,8 +893,6 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
    /* Update the parameters for linking HSPs, if necessary. */
    BlastLinkHSPParametersUpdate(word_params, hit_params, gapped_calculation);
    
-   prelim_traceback = (ext_options->ePrelimGapExt == eGreedyWithTracebackExt);
-
    memset((void*) &seq_arg, 0, sizeof(seq_arg));
 
    /* Encoding is set so there are no sentinel bytes, and protein/nucleotide
@@ -926,8 +922,9 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
             return status;
       }
 
-      /* Calculate cutoff scores for linking HSPs. Do this only for ungapped
-         protein searches. */
+      /* Calculate cutoff scores for linking HSPs. Do this only for
+         ungapped protein searches and ungapped translated
+         searches. */
       if (hit_params->link_hsp_params && !kNucleotide &&
           !gapped_calculation) {
          CalculateLinkHSPCutoffs(program_number, query_info, sbp, 
@@ -935,6 +932,16 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
             seq_arg.seq->length); 
       }
 
+
+      /* If the subject is translated and the BlastSeqSrc implementation
+       * doesn't provide a genetic code string, use the default genetic
+       * code for all subjects (as in the C toolkit) */
+      if (Blast_SubjectIsTranslated(program_number) && 
+          seq_arg.seq->gen_code_string == NULL) {
+          seq_arg.seq->gen_code_string = 
+              GenCodeSingletonFind(default_db_genetic_code);
+          ASSERT(seq_arg.seq->gen_code_string);
+      }
       status = 
          s_BlastSearchEngineCore(program_number, query, query_info,
             seq_arg.seq, lookup_wrap, gap_align, score_params, word_params, 
@@ -945,16 +952,16 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
       }
 
       if (hsp_list && hsp_list->hspcnt > 0) {
-         if (!gapped_calculation || prelim_traceback) {
-            /* The following must be performed for any ungapped search with a 
-               nucleotide database. */
-            if (kNucleotide || program_number == eBlastTypeTblastn ||
-                program_number == eBlastTypeTblastx) {
+         if (!gapped_calculation) {
+            /* The following must be performed for any ungapped 
+               search with a nucleotide database. */
+	     if (Blast_SubjectIsNucleotide(program_number)) {
                status = 
-                  Blast_HSPListReevaluateWithAmbiguities(program_number, 
-                     hsp_list, query, seq_arg.seq, word_params, hit_params, 
-                     query_info, sbp, score_params, seq_src, 
-                     (db_options ? db_options->gen_code_string : NULL));
+                  Blast_HSPListReevaluateWithAmbiguitiesUngapped(
+                            program_number, hsp_list, query, 
+                            seq_arg.seq, word_params, hit_params, 
+                            query_info, sbp, score_params, seq_src, 
+                            seq_arg.seq->gen_code_string);
                if (status) {
                   BlastSeqSrcReleaseSequence(seq_src, (void*) &seq_arg);
                   return status;
@@ -962,7 +969,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
                /* Relink HSPs if sum statistics is used, because scores might
                 * have changed after reevaluation with ambiguities, and there
                 * will be no traceback stage where relinking is done normally.
-                * If sum statistics is not used, just recalculate the e-values. 
+                * If sum statistics are not used, just recalculate e-values. 
                 */
                if (hit_params->link_hsp_params) {
                    status = 
@@ -972,10 +979,11 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
                                       gapped_calculation);
                } else {
                   Blast_HSPListGetEvalues(query_info, hsp_list, 
-                                          score_options->gapped_calculation, 
+                                          gapped_calculation, 
                                           sbp, 0, 1.0);
                }
-               status = Blast_HSPListReapByEvalue(hsp_list, hit_params->options);
+               status = Blast_HSPListReapByEvalue(hsp_list, 
+                                          hit_params->options);
             }
              
             /* Calculate and fill the bit scores, since there will be no
@@ -1144,7 +1152,8 @@ Blast_RunFullSearch(EBlastProgramType program_number,
 
    if (Blast_ProgramIsPhiBlast(program_number)) {
        pattern_blk = ((SPHIPatternSearchBlk*) lookup_wrap->lut);
-       pattern_blk->num_patterns_db = diagnostics->ungapped_stat->lookup_hits;
+       pattern_blk->num_patterns_db = 
+                        (Int4)diagnostics->ungapped_stat->lookup_hits;
    } 
 
    if ((status = 

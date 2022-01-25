@@ -1,4 +1,4 @@
-/* $Id: redo_alignment.h,v 1.9 2006/06/29 16:50:24 gertz Exp $
+/* $Id: redo_alignment.h,v 1.11 2007/05/23 15:55:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -159,7 +159,6 @@ static Int2 NEAR CommonSeqAlignLabelFunc (SeqAlignPtr sap, CharPtr buf, Int2 buf
 {
 	Int2 len, diff;
 	CharPtr curr, typelabel, tmp;
-	Uint1 extras = 0;
 	Char tbuf[40];
 	CharPtr suffix = NULL;
 
@@ -369,6 +368,9 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
         case 6:                   /* spliced */
             SplicedSegFree((SplicedSegPtr)sap->segs);
             break;
+        case 7:                   /* sparse */
+            SparseSegFree((SparseSegPtr)sap->segs);
+            break;
     }
     ScoreSetFree(sap->score);
     AsnGenericChoiceSeqOfFree(sap -> id, (AsnOptFreeFunc) ObjectIdFree);
@@ -482,6 +484,10 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
             break;
         case 6:                   /* spliced */
             if (! SplicedSegAsnWrite((SplicedSegPtr)sap->segs, aip, SEQ_ALIGN_segs_spliced))
+                goto erret;
+            break;
+        case 7:                   /* sparse */
+            if (! SparseSegAsnWrite((SparseSegPtr)sap->segs, aip, SEQ_ALIGN_segs_sparse))
                 goto erret;
             break;
     }
@@ -645,6 +651,13 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         {
             sap->segtype = 6;
             sap->segs = (Pointer) SplicedSegAsnRead(aip, atp);
+            if (sap->segs == NULL)
+                goto erret;
+        }
+        else if (atp == SEQ_ALIGN_segs_sparse)
+        {
+            sap->segtype = 7;
+            sap->segs = (Pointer) SparseSegAsnRead(aip, atp);
             if (sap->segs == NULL)
                 goto erret;
         }
@@ -2146,6 +2159,7 @@ SplicedSegAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> product_strand = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == SPLICED_SEG_genomic_strand) {
@@ -2153,6 +2167,7 @@ SplicedSegAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> genomic_strand = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == SPLICED_SEG_product_type) {
@@ -2174,6 +2189,7 @@ SplicedSegAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> poly_a = av.intvalue;
+      ptr -> OBbits__ |= 1<<2;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == SPLICED_SEG_product_length) {
@@ -2181,6 +2197,7 @@ SplicedSegAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> product_length = av.intvalue;
+      ptr -> OBbits__ |= 1<<3;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == SPLICED_SEG_modifiers) {
@@ -2251,24 +2268,208 @@ SplicedSegAsnWrite(SplicedSegPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr -> product_strand > 0) {
-      av.intvalue = ptr -> product_strand;
+   if (ptr -> product_strand || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> product_strand;
       retval = AsnWrite(aip, SPLICED_SEG_product_strand,  &av);
    }
-   if (ptr -> genomic_strand > 0) {
-      av.intvalue = ptr -> genomic_strand;
+   if (ptr -> genomic_strand || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> genomic_strand;
       retval = AsnWrite(aip, SPLICED_SEG_genomic_strand,  &av);
    }
    av.intvalue = ptr -> product_type;
    retval = AsnWrite(aip, SPLICED_SEG_product_type,  &av);
    AsnGenericUserSeqOfAsnWrite(ptr -> exons, (AsnWriteFunc) SplicedExonAsnWrite, aip, SPLICED_SEG_exons, SPLICED_SEG_exons_E);
-   if (ptr -> poly_a > 0) {
-      av.intvalue = ptr -> poly_a;
+   if (ptr -> poly_a || (ptr -> OBbits__ & (1<<2) )){   av.intvalue = ptr -> poly_a;
       retval = AsnWrite(aip, SPLICED_SEG_poly_a,  &av);
    }
-   av.intvalue = ptr -> product_length;
-   retval = AsnWrite(aip, SPLICED_SEG_product_length,  &av);
+   if (ptr -> product_length || (ptr -> OBbits__ & (1<<3) )){   av.intvalue = ptr -> product_length;
+      retval = AsnWrite(aip, SPLICED_SEG_product_length,  &av);
+   }
    AsnGenericChoiceSeqOfAsnWrite(ptr -> modifiers, (AsnWriteFunc) SplicedSegModifierAsnWrite, aip, SPLICED_SEG_modifiers, SPLICED_SEG_modifiers_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SparseSegNew()
+*
+**************************************************/
+NLM_EXTERN 
+SparseSegPtr LIBCALL
+SparseSegNew(void)
+{
+   SparseSegPtr ptr = MemNew((size_t) sizeof(SparseSeg));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SparseSegFree()
+*
+**************************************************/
+NLM_EXTERN 
+SparseSegPtr LIBCALL
+SparseSegFree(SparseSegPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqIdFree(ptr -> master_id);
+   AsnGenericUserSeqOfFree(ptr -> rows, (AsnOptFreeFunc) SparseAlignFree);
+   ScoreSetFree((ScorePtr) ptr -> row_scores);
+   AsnGenericUserSeqOfFree(ptr -> ext, (AsnOptFreeFunc) SparseSegExtFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SparseSegAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SparseSegPtr LIBCALL
+SparseSegAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SparseSegPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SparseSeg ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPARSE_SEG);
+   } else {
+      atp = AsnLinkType(orig, SPARSE_SEG);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SparseSegNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SPARSE_SEG_master_id) {
+      ptr -> master_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_SEG_rows) {
+      ptr -> rows = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SparseAlignAsnRead, (AsnOptFreeFunc) SparseAlignFree);
+      if (isError && ptr -> rows == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_SEG_row_scores) {
+      ptr -> row_scores = InternalScoreSetAsnRead(aip, SPARSE_SEG_row_scores, SPARSE_SEG_row_scores_E);
+      if (isError && ptr -> row_scores == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_SEG_ext) {
+      ptr -> ext = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SparseSegExtAsnRead, (AsnOptFreeFunc) SparseSegExtFree);
+      if (isError && ptr -> ext == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SparseSegFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SparseSegAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SparseSegAsnWrite(SparseSegPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SPARSE_SEG);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> master_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> master_id, aip, SPARSE_SEG_master_id)) {
+         goto erret;
+      }
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> rows, (AsnWriteFunc) SparseAlignAsnWrite, aip, SPARSE_SEG_rows, SPARSE_SEG_rows_E);
+   if (ptr->row_scores != NULL)
+   {
+      if (! InternalScoreSetAsnWrite(ptr->row_scores, aip, SPARSE_SEG_row_scores, SPARSE_SEG_row_scores_E))
+    	    goto erret;
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> ext, (AsnWriteFunc) SparseSegExtAsnWrite, aip, SPARSE_SEG_ext, SPARSE_SEG_ext_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -2434,7 +2635,7 @@ SplicedExonAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == SPLICED_EXON_scores) {
-      ptr -> scores = (struct struct_Score PNTR) ScoreSetAsnRead(aip, atp);
+      ptr -> scores = ScoreSetAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -2622,7 +2823,6 @@ SplicedSegModifierAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -2799,7 +2999,6 @@ ProductPosAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -2970,7 +3169,6 @@ SplicedExonChunkAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -3184,7 +3382,6 @@ SpliceSiteAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    SpliceSitePtr ptr;
 
@@ -3339,7 +3536,6 @@ ProtPosAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    ProtPosPtr ptr;
 
@@ -3444,6 +3640,385 @@ ProtPosAsnWrite(ProtPosPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, PROT_POS_amin,  &av);
    av.intvalue = ptr -> frame;
    retval = AsnWrite(aip, PROT_POS_frame,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+
+/**************************************************
+*
+*    SparseAlignNew()
+*
+**************************************************/
+NLM_EXTERN 
+SparseAlignPtr LIBCALL
+SparseAlignNew(void)
+{
+   SparseAlignPtr ptr = MemNew((size_t) sizeof(SparseAlign));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SparseAlignFree()
+*
+**************************************************/
+NLM_EXTERN 
+SparseAlignPtr LIBCALL
+SparseAlignFree(SparseAlignPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqIdFree(ptr -> first_id);
+   SeqIdFree(ptr -> second_id);
+   AsnGenericBaseSeqOfFree(ptr -> first_starts ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> second_starts ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> lens ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> second_strands ,ASNCODE_INTVAL_SLOT);
+   ScoreSetFree(ptr -> seg_scores);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SparseAlignAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SparseAlignPtr LIBCALL
+SparseAlignAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SparseAlignPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SparseAlign ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPARSE_ALIGN);
+   } else {
+      atp = AsnLinkType(orig, SPARSE_ALIGN);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SparseAlignNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SPARSE_ALIGN_first_id) {
+      ptr -> first_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_second_id) {
+      ptr -> second_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_numseg) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> numseg = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_first_starts) {
+      ptr -> first_starts = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> first_starts == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_second_starts) {
+      ptr -> second_starts = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> second_starts == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_lens) {
+      ptr -> lens = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> lens == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_second_strands) {
+      ptr -> second_strands = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> second_strands == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPARSE_ALIGN_seg_scores) {
+      ptr -> seg_scores = InternalScoreSetAsnRead(aip, SPARSE_ALIGN_seg_scores, SPARSE_ALIGN_seg_scores_E);
+      if (isError && ptr -> seg_scores == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SparseAlignFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SparseAlignAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SparseAlignAsnWrite(SparseAlignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SPARSE_ALIGN);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> first_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> first_id, aip, SPARSE_ALIGN_first_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> second_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> second_id, aip, SPARSE_ALIGN_second_id)) {
+         goto erret;
+      }
+   }
+   av.intvalue = ptr -> numseg;
+   retval = AsnWrite(aip, SPARSE_ALIGN_numseg,  &av);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> first_starts ,ASNCODE_INTVAL_SLOT, aip, SPARSE_ALIGN_first_starts, SPARSE_ALIGN_first_starts_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> second_starts ,ASNCODE_INTVAL_SLOT, aip, SPARSE_ALIGN_second_starts, SPARSE_ALIGN_second_starts_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> lens ,ASNCODE_INTVAL_SLOT, aip, SPARSE_ALIGN_lens, SPARSE_ALIGN_lens_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> second_strands ,ASNCODE_INTVAL_SLOT, aip, SPARSE_ALIGN_second_strands, SPARSE_ALIGN_second_strands_E);
+	 if (ptr->seg_scores != NULL)
+	 {
+	    if (! InternalScoreSetAsnWrite(ptr->seg_scores, aip, SPARSE_ALIGN_seg_scores, SPARSE_ALIGN_seg_scores_E))
+    	    goto erret;
+	 }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SparseSegExtNew()
+*
+**************************************************/
+NLM_EXTERN 
+SparseSegExtPtr LIBCALL
+SparseSegExtNew(void)
+{
+   SparseSegExtPtr ptr = MemNew((size_t) sizeof(SparseSegExt));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SparseSegExtFree()
+*
+**************************************************/
+NLM_EXTERN 
+SparseSegExtPtr LIBCALL
+SparseSegExtFree(SparseSegExtPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SparseSegExtAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SparseSegExtPtr LIBCALL
+SparseSegExtAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   SparseSegExtPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SparseSegExt ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPARSE_SEG_EXT);
+   } else {
+      atp = AsnLinkType(orig, SPARSE_SEG_EXT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SparseSegExtNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SPARSE_SEG_EXT_index) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> index = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SparseSegExtFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SparseSegExtAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SparseSegExtAsnWrite(SparseSegExtPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SPARSE_SEG_EXT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> index;
+   retval = AsnWrite(aip, SPARSE_SEG_EXT_index,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

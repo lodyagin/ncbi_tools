@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.40 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -382,7 +382,7 @@ NLM_EXTERN Boolean ShowASN (void)
 static void LogOrLaunch (CharPtr path, CharPtr title)
 
 {
-  Char    buf [256];
+  Char    buf [257];
   size_t  ct;
   FILE    *ifp;
   FILE    *ofp;
@@ -393,11 +393,11 @@ static void LogOrLaunch (CharPtr path, CharPtr title)
     ifp = FileOpen (path, "r");
     ofp = FileOpen ("entrez2.log", "a");
     if (ifp != NULL && ofp != NULL) {
-      while ((ct = FileRead (buf, 1, sizeof (buf), ifp)) > 0) {
+      while ((ct = FileRead (buf, 1, sizeof (buf) - 1, ifp)) > 0) {
         FileWrite (buf, 1, ct, ofp);
       }
+      fprintf (ofp, "\n");
     }
-    fprintf (ofp, "\n");
     FileClose (ofp);
     FileClose (ifp);
   } else {
@@ -2250,7 +2250,7 @@ static void ProcessMultipleTerms (FormInfoPtr pFormInfo, CharPtr strs)
 {
   Char     actual [256];
   Char     ch;
-  Int4     count;
+  Int4     count = 0;
   Boolean  found;
   Int2     i;
   Int2     j;
@@ -2977,7 +2977,7 @@ static Boolean RepopulateTaxonomy (FormInfoPtr pFormInfo, CharPtr taxterm)
   Entrez2RequestPtr    e2Request;
   Entrez2ReplyPtr      e2Reply;
   Entrez2HierNodePtr   e2TermNode;
-  Entrez2TermPtr       currentLineage;
+  Entrez2TermPtr       currentLineage = NULL;
   Entrez2FieldInfoPtr  fieldInfo;
 
   /*--------------------------*/
@@ -4658,7 +4658,7 @@ static Boolean ParseTermList (FormInfoPtr pFormInfo, Int2 db, Int2 fld, Int2 cur
   if (pFormInfo->advQueryNewGroup == TRUE) {
     newTermPtr->group = GROUP_FIRST;
     pFormInfo->advQueryNewGroup = FALSE;
-  } else {
+  } else if (newTermPtr->prev != NULL) {
     switch (newTermPtr->prev->group) {
       case GROUP_SINGLE:
         newTermPtr->group = GROUP_SINGLE;
@@ -6626,7 +6626,7 @@ static Boolean TermlistToRequestCloseGroup (FormInfoPtr pFormInfo, Entrez2Reques
   StateDataPtr         sdp;
   Boolean              isEmpty = TRUE;
   Boolean              doNotExplode;
-  Boolean              doNotTranslate;
+  Boolean              doNotTranslate = FALSE;
   CharPtr              rangeStr;
   CharPtr              fromTerm;
   CharPtr              toTerm;
@@ -7217,7 +7217,7 @@ static Boolean Query_TranslateAndAddBoolTerm (
   Int2                    fieldId;
   Entrez2FieldInfoPtr     fieldInfo;
   FormInfoPtr             pFormInfo;
-  Int2                    nextOperator;
+  Int2                    nextOperator = ENTREZ_OP_NONE;
   Int2                    nextGroup;
   Int2                    tmpOp;
   Boolean                 allowDuplicates;

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.97 2006/09/14 15:57:16 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.99 2007/01/05 17:45:21 bollin Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -2339,55 +2339,6 @@ void MoveSetPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	return;
 }
 
-static void AddFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-	BioseqPtr       bsp ;
-	PubdescPtr		pdp, tmp_pdp;
-	SeqAnnotPtr     ap;
-	ValNodePtr		pubset, tmp;
-	SeqFeatPtr		sfp;
-	ImpFeatPtr		ifp;
-	SeqIdPtr		sip;
-	
-	pdp = data;
-	if (!IS_Bioseq(sep)) {
-		return;
-	}
-	bsp = (BioseqPtr)(sep->data.ptrvalue);
-	if (bsp->mol == Seq_mol_aa) {
-		return;
-	}
-	for (ap = bsp->annot; ap != NULL; ap = ap->next) {
-		if (ap->type != 1) {
-			continue;
-		}
-		sfp = SeqFeatNew();
-		sfp->data.choice = SEQFEAT_IMP;
-	    ifp = ImpFeatNew();
-
-	    ifp->key = StringSave("Site-ref");
-	    ifp->loc = StringSave("sites");
-	    sfp->data.value.ptrvalue = ifp;
-
-	    sfp->location = ValNodeNew(NULL);
-	    sfp->location->choice = SEQLOC_WHOLE;
-		sip = SeqIdDup(bsp->id);
-	    sfp->location->data.ptrvalue = sip ;
-	    pubset = ValNodeNew(NULL);
-	    pubset->choice = 1;       
-		tmp = ValNodeNew(NULL);
-		tmp->choice = PUB_Equiv;
-		tmp_pdp = AsnIoMemCopy(pdp, 
-		(AsnReadFunc) PubdescAsnRead, (AsnWriteFunc) PubdescAsnWrite);
-		tmp->data.ptrvalue = tmp_pdp->pub;
-		pubset->data.ptrvalue = tmp;
-		sfp->cit = pubset;
-		ap->data = tie_feat(ap->data, sfp);
-		
-	}
-	return;
-}
-
 void FindOldLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
 	BioseqPtr       bsp;
@@ -2417,54 +2368,6 @@ void FindOldLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 				}
 				*linp = gb->taxonomy;
 				gb->taxonomy = NULL;
-			}
-			break;
-		}
-	}
-}
-
-void FindNewLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-	BioseqPtr       bsp;
-	BioseqSetPtr    bssp;
-	ValNodePtr		descr = NULL, vnp;
-	BioSourcePtr	biosp;
-	OrgNamePtr		onp;
-	OrgRefPtr		orp;
-	CharPtr	PNTR	linp;
-	CharPtr			lineage;
-	
-	linp = (CharPtr PNTR) data;
-	lineage = *linp;
-	if (lineage != NULL && *lineage != '\0') {
-		return;
-	}
-	
-	if (IS_Bioseq(sep)) {
-		bsp = (BioseqPtr)(sep->data.ptrvalue);
-		if ((bsp->repr != Seq_repr_raw) && (bsp->repr != Seq_repr_const))
-			return;
-		descr = bsp->descr;
-	}
-	else {
-		bssp = (BioseqSetPtr)(sep->data.ptrvalue);
-		descr = bssp->descr;
-	}
-	for (vnp = descr; vnp; vnp= vnp->next) {
-		if (vnp->choice == Seq_descr_source) {
-			biosp = vnp->data.ptrvalue;
-			orp = (OrgRefPtr) biosp->org;
-			if (orp && orp->orgname) {
-				onp = orp->orgname;
-				*linp = onp->lineage;
-				orp->orgname->lineage = NULL;
-				orp->orgname->gcode = 0;
-				orp->orgname->mgcode = 0;
-				if (onp->lineage == NULL && onp->mod == NULL &&
-					onp->gcode == 0 && onp->mgcode == 0 &&
-					onp->data == NULL && onp->attrib == NULL) {
-					orp->orgname = OrgNameFree (orp->orgname);
-				}
 			}
 			break;
 		}
@@ -2514,90 +2417,6 @@ void NewLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	}
 	
 }
-
-void OldLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-	BioseqPtr       bsp;
-	BioseqSetPtr    bssp;
-	ValNodePtr		descr = NULL, vnp;
-	GBBlockPtr		gb = NULL;
-	CharPtr	PNTR	linp;
-	CharPtr			lineage;
-
-	linp = (CharPtr PNTR) data;
-	lineage = *linp;
-	if (IS_Bioseq(sep)) {
-		bsp = (BioseqPtr)(sep->data.ptrvalue);
-		if ((bsp->repr != Seq_repr_raw) && (bsp->repr != Seq_repr_const))
-			return;
-		descr = bsp->descr;
-	}
-	else {
-		bssp = (BioseqSetPtr)(sep->data.ptrvalue);
-		descr = bssp->descr;
-	}
-	for (vnp = descr; vnp; vnp= vnp->next) {
-		if (vnp->choice == Seq_descr_genbank) {
-			gb = vnp->data.ptrvalue;
-			break;
-		}
-	}
-	if (gb && lineage) {
-			gb->taxonomy = StringSave(lineage);
-			MemFree(lineage);
-	}
-}
-
-void OldPubs (SeqEntryPtr sep)
-{
-	BioseqPtr       bsp = NULL;
-	BioseqSetPtr    bssp;
-	ValNodePtr		descr = NULL, cur, first, pre= NULL, next_f;
-	PubdescPtr		pdp;
-		
-	if (IS_Bioseq(sep)) {
-		bsp = (BioseqPtr)(sep->data.ptrvalue);
-		if ((bsp->repr != Seq_repr_raw) && (bsp->repr != Seq_repr_const))
-			return;
-		descr = bsp->descr;
-	}
-	else {
-		bssp = (BioseqSetPtr)(sep->data.ptrvalue);
-		descr = bssp->descr;
-	}
-	 for (first = cur = descr; cur; cur = next_f) {
-       	next_f = cur->next;
-		if (cur->choice != Seq_descr_pub) {
-			continue;
-		}
-		pdp = cur->data.ptrvalue;
-		if (pdp->reftype == 1 || pdp->reftype == 2) {
-/* create ImpFeat "Sites-ref" for every nuc bioseqs in the SeqEntry */
-			SeqEntryExplore(sep, pdp, AddFeat);
-					/* delete valnode from descr */
-			DelNodeFromList(&descr, cur, pre);
-		} 
-		if (pre) {
-			if (pre->next != next_f) {
-				pre = cur;
-			}
-		} else {
-			if (first == descr) {
-				pre = cur;
-			} else {
-				first = descr;
-			}
-		}
-		if (descr == NULL) {
-			break;
-		}
-	}
-	if (bsp) {
-		bsp->descr = descr;
-	} else {
-		bssp->descr = descr;
-	}
-}	
 
 /****************************************************************************
 *  delete_valnode:
@@ -4132,44 +3951,20 @@ static Boolean IsPatent (PubdescPtr pdp)
   return FALSE;
 }
 
-static Boolean IsPubBad (PubdescPtr pdp, Pointer userdata)
-
+extern Boolean IsPubContentBad (PubdescPtr pdp)
 {
   AuthListPtr  alp = NULL;
   AuthorPtr    ap;
   CitArtPtr    cap;
   CitJourPtr   cjp;
   ImprintPtr   imp;
-  Int4         muid;
-  Int4Ptr      muidp;
   ValNodePtr   names;
   NameStdPtr   nsp;
   PersonIdPtr  pid;
   CharPtr      title = NULL;
-  ValNodePtr   ttl;
-  ValNodePtr   vnp;
+  ValNodePtr   ttl, vnp;
 
   if (pdp == NULL) return FALSE;
-
-  /* single pmid not cleared here, left for CheckMinPub with RefSeq protein exception */
-
-  vnp = pdp->pub;
-  if (vnp != NULL && vnp->next == NULL && vnp->choice == PUB_PMid) return FALSE;
-
-  /* if single real muid, repair 0 muid backbone references */
-
-  muidp = (Int4Ptr) userdata;
-  if (muidp != NULL) {
-    muid = *muidp;
-    if (muid != 0 && muid != -1) {
-      RepairBadBackbonePub (pdp, muid);
-    }
-  }
-
-  /* remove remaining 0 muids */
-
-  RemoveZeroMuids (pdp->pub, &(pdp->pub));
-
   /* keep anything with a figure - backbone entry */
 
   if (! StringHasNoText (pdp->fig)) return FALSE;
@@ -4232,6 +4027,37 @@ static Boolean IsPubBad (PubdescPtr pdp, Pointer userdata)
   }
 
   return FALSE;
+}
+
+static Boolean IsPubBad (PubdescPtr pdp, Pointer userdata)
+
+{
+  Int4         muid;
+  Int4Ptr      muidp;
+  ValNodePtr   vnp;
+
+  if (pdp == NULL) return FALSE;
+
+  /* single pmid not cleared here, left for CheckMinPub with RefSeq protein exception */
+
+  vnp = pdp->pub;
+  if (vnp != NULL && vnp->next == NULL && vnp->choice == PUB_PMid) return FALSE;
+
+  /* if single real muid, repair 0 muid backbone references */
+
+  muidp = (Int4Ptr) userdata;
+  if (muidp != NULL) {
+    muid = *muidp;
+    if (muid != 0 && muid != -1) {
+      RepairBadBackbonePub (pdp, muid);
+    }
+  }
+
+  /* remove remaining 0 muids */
+
+  RemoveZeroMuids (pdp->pub, &(pdp->pub));
+
+  return IsPubContentBad (pdp);
 }
 
 static void RemoveBadPubFeat (SeqFeatPtr sfp, Pointer userdata)
@@ -4305,6 +4131,106 @@ static void LookForUniqueMuid (PubdescPtr pdp, Pointer userdata)
   }
 }
 
+static Boolean EmptyExceptSerialNumber (CitGenPtr cgp)
+{
+  if (cgp == NULL) return FALSE;
+  
+  if (!StringHasNoText (cgp->cit)
+      || cgp->authors != NULL
+      || cgp->muid != 0
+      || cgp->journal != NULL
+      || !StringHasNoText (cgp->volume)
+      || !StringHasNoText (cgp->issue)
+      || !StringHasNoText (cgp->pages)
+      || cgp->date != NULL
+      || !StringHasNoText (cgp->title)
+      || cgp->pmid != 0) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+static Boolean ArePubsMergeableForFig(PubdescPtr fig, PubdescPtr nofig)
+{
+  CitGenPtr cgp_fig, cgp_nofig;
+  if (fig == NULL || nofig == NULL) return FALSE;
+  
+  /* name */
+  if (!StringHasNoText (nofig->name) && !StringHasNoText (fig->name)
+      && !StringCmp (nofig->name, fig->name)) {
+    return FALSE;
+  }
+  /* fig */
+  if (!StringHasNoText (nofig->fig) && !StringHasNoText (fig->fig)
+      && !StringCmp (nofig->fig, fig->fig)) {
+    return FALSE;
+  }
+  /* num */
+  if (NumberingMatch(nofig->num, fig->num) != 0) {
+    return FALSE;
+  }
+
+  if ((nofig->numexc && !fig->numexc)
+      || (!nofig->numexc && fig->numexc)) {
+    return FALSE;
+  }
+  if ((nofig->poly_a && !fig->poly_a)
+      || (!nofig->poly_a && fig->poly_a)) {
+    return FALSE;
+  }
+  
+  /* maploc */
+  if (!StringHasNoText (nofig->maploc) && !StringHasNoText (fig->maploc)
+      && !StringCmp (nofig->maploc, fig->maploc)) {
+    return FALSE;
+  }
+  
+  /* seq-raw */
+  if (!StringHasNoText (nofig->seq_raw) && !StringHasNoText (fig->seq_raw)
+      && !StringCmp (nofig->seq_raw, fig->seq_raw)) {
+    return FALSE;
+  }
+  
+  /* align-group */
+  if (nofig->align_group > 0 && fig->align_group > 0
+      && nofig->align_group != fig->align_group) {
+    return FALSE;
+  }
+  
+  /* comment */
+  if (!StringHasNoText (nofig->comment) && !StringHasNoText (fig->comment)
+      && !StringCmp (nofig->comment, fig->comment)) {
+    return FALSE;
+  }
+
+  /* reftype */
+  if (nofig->reftype > 0 && fig->reftype > 0
+      && nofig->reftype != fig->reftype) {
+    return FALSE;
+  }
+  
+  if (nofig->pub != NULL && fig->pub != NULL) {
+    if (nofig->pub->next != NULL 
+        || fig->pub->next != NULL
+        || nofig->pub->choice != PUB_Gen
+        || fig->pub->choice != PUB_Gen
+        || nofig->pub->data.ptrvalue == NULL
+        || fig->pub->data.ptrvalue == NULL) {      
+      return FALSE;
+    } 
+    cgp_fig = fig->pub->data.ptrvalue;
+    cgp_nofig = nofig->pub->data.ptrvalue;
+    if (!EmptyExceptSerialNumber (cgp_fig)
+        || !EmptyExceptSerialNumber (cgp_nofig)
+        || !cgp_fig->serial_number != cgp_nofig->serial_number) {
+      return FALSE;
+    }
+  }
+  
+  return TRUE;
+}
+
 /* rescue pub with just fig that is in same chain as real pub by merging data */
 
 static void MergePubFigInChain (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
@@ -4318,7 +4244,7 @@ static void MergePubFigInChain (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
   PubdescPtr     nofig = NULL;
   ObjValNodePtr  ovp = NULL;
   PubdescPtr     pdp;
-  SeqDescrPtr    sdp;
+  SeqDescrPtr    sdp_fig, sdp_nofig;
 
   muidp = (Int4Ptr) mydata;
   if (*muidp == -1) return;
@@ -4333,59 +4259,76 @@ static void MergePubFigInChain (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
     descr = bssp->descr;
   } else return;
 
-  for (sdp = descr; sdp != NULL; sdp = sdp->next) {
-    if (sdp->choice != Seq_descr_pub) continue;
-    pdp = (PubdescPtr) sdp->data.ptrvalue;
+  /* attempt to combine any descriptor with a fig with
+   * a different publication without a fig, but only if
+   * they do not have conflicting data.
+   */
+  for (sdp_fig = descr; sdp_fig != NULL; sdp_fig = sdp_fig->next) {
+    if (sdp_fig->choice != Seq_descr_pub
+        || sdp_fig->extended == 0) continue;
+    pdp = (PubdescPtr) sdp_fig->data.ptrvalue;
     if (pdp == NULL) continue;
     if (! StringHasNoText (pdp->fig)) {
       hasfig = pdp;
-      if (sdp->extended != 0) {
-        ovp = (ObjValNodePtr) sdp;
+      ovp = (ObjValNodePtr) sdp_fig;
+      
+      for (sdp_nofig = descr; sdp_nofig != NULL; sdp_nofig = sdp_nofig->next) {
+        if (sdp_nofig->choice != Seq_descr_pub) continue;
+        pdp = (PubdescPtr) sdp_nofig->data.ptrvalue;
+        if (pdp != NULL && StringHasNoText (pdp->fig)
+            && ArePubsMergeableForFig(hasfig, pdp)) {
+          nofig = pdp;
+          if (StringHasNoText (nofig->name)) {
+            nofig->name = MemFree (nofig->name);
+            nofig->name = hasfig->name;
+            hasfig->name = NULL;
+          }
+          if (StringHasNoText (nofig->fig)) {
+            nofig->fig = MemFree (nofig->fig);
+            nofig->fig = hasfig->fig;
+            hasfig->fig = NULL;
+          }
+          if (nofig->num == NULL) {
+            nofig->num = hasfig->num;
+            hasfig->num = NULL;
+          }
+          if (hasfig->numexc) {
+            nofig->numexc = hasfig->numexc;
+          }
+          if (hasfig->poly_a) {
+            nofig->poly_a = hasfig->poly_a;
+          }
+          if (hasfig->align_group > 0) {
+            nofig->align_group = hasfig->align_group;
+          }
+          if (StringHasNoText (nofig->maploc)) {
+            nofig->maploc = MemFree (nofig->maploc);
+            nofig->maploc = hasfig->maploc;
+            hasfig->maploc = NULL;
+          }
+          if (StringHasNoText (nofig->seq_raw)) {
+            nofig->seq_raw = MemFree (nofig->seq_raw);
+            nofig->seq_raw = hasfig->seq_raw;
+            hasfig->seq_raw = NULL;
+          }
+          if (StringHasNoText (nofig->comment)) {
+            nofig->comment = MemFree (nofig->comment);
+            nofig->comment = hasfig->comment;
+            hasfig->comment = NULL;
+          }
+          if (hasfig->reftype > 0) {
+            nofig->reftype = hasfig->reftype;
+          }
+          
+          if (nofig->pub == NULL) {
+            nofig->pub = hasfig->pub;
+          }
+
+          ovp->idx.deleteme = TRUE;
+        }
       }
-    } else {
-      nofig = pdp;
     }
   }
-  if (nofig == NULL || ovp == NULL) return;
-
-  if (nofig->name == NULL) {
-    nofig->name = hasfig->name;
-    hasfig->name = NULL;
-  }
-  if (nofig->fig == NULL) {
-    nofig->fig = hasfig->fig;
-    hasfig->fig = NULL;
-  }
-  if (nofig->num == NULL) {
-    nofig->num = hasfig->num;
-    hasfig->num = NULL;
-  }
-  if (hasfig->numexc) {
-    nofig->numexc = hasfig->numexc;
-  }
-  if (hasfig->poly_a) {
-    nofig->poly_a = hasfig->poly_a;
-  }
-  if (hasfig->align_group > 0) {
-    nofig->align_group = hasfig->align_group;
-  }
-  if (nofig->maploc == NULL) {
-    nofig->maploc = hasfig->maploc;
-    hasfig->maploc = NULL;
-  }
-  if (nofig->seq_raw == NULL) {
-    nofig->seq_raw = hasfig->seq_raw;
-    hasfig->seq_raw = NULL;
-  }
-  if (nofig->comment == NULL) {
-    nofig->comment = hasfig->comment;
-    hasfig->comment = NULL;
-  }
-  if (hasfig->reftype > 0) {
-    nofig->reftype = hasfig->reftype;
-  }
-
-  ovp->idx.deleteme = TRUE;
 }
 
 static void CorrectSfpExceptText (SeqFeatPtr sfp, Pointer userdata)

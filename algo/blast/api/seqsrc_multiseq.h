@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.h,v 1.9 2005/04/06 23:27:53 dondosha Exp $
+/*  $Id: seqsrc_multiseq.h,v 1.10 2006/11/21 17:22:15 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 #define MULTISEQ_SRC_H
 
 #include <algo/blast/core/blast_seqsrc.h>
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_message.h>
 #include <objloc.h>
 

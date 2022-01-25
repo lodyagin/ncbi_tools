@@ -29,7 +29,7 @@
 #
 # Version Creation Date:   4/3/2003
 #
-# $Revision: 1.3 $
+# $Revision: 1.4 $
 #
 # File Description:
 #
@@ -43,16 +43,6 @@
 #
 # Modifications log:
 #
-#   $Log: setrsrc.sh,v $
-#   Revision 1.3  2004/11/19 14:42:56  kans
-#   restored setting of header/source/resource files to ttxt TEXT - CodeWarrior bug prevents setting debug flag on imported files with no type
-#
-#   Revision 1.2  2004/09/29 18:35:39  kans
-#   removed setting of header/source/resource files to ttxt TEXT - not needed by current CodeWarrior projects
-#
-#   Revision 1.1  2003/04/03 20:45:30  rsmith
-#   Script to set macintosh file & creation types. Duplicates setrsrc.c functionality.
-#
 #
 
 PATH=$PATH:/Developer/Tools
@@ -62,26 +52,18 @@ output=
 #output=-t
 
 # set the types of the source files.
-find ~/ncbi \( -name '*.h' -or -name '*.hpp' -or -name '*.c' -or -name '*.cpp' -o -name '*.r' \) | \
-    xargs $output SetFile -c 'ttxt' -t 'TEXT' 
-find ~/ncbi_cxx \( -name '*.h' -or -name '*.hpp' -or -name '*.c' -or -name '*.cpp' -o -name '*.r' \) | \
-    xargs $output SetFile -c 'ttxt' -t 'TEXT' 
+# find ~/ncbi \( -name '*.h' -or -name '*.hpp' -or -name '*.c' -or -name '*.cpp' -o -name '*.r' \) | \
+#     xargs $output SetFile -c 'ttxt' -t 'TEXT' 
 
 # Metrowerks project files.
 find ~/ncbi  -path '*/link/macmet/*.mcp'  | \
-    xargs $output SetFile -c 'CWIE' -t 'MMPr' 
-find ~/ncbi_cxx  -path '*/compilers/mac_prj/*.mcp'  | \
     xargs $output SetFile -c 'CWIE' -t 'MMPr' 
 
 # Our Applescripts that build Metrowerks projects.
 find ~/ncbi  -path '*/make/*.met'  | \
     xargs $output SetFile -c 'ToyS' -t 'TEXT' 
-find ~/ncbi_cxx -path '*/compilers/mac_prj/*.met'  | \
-    xargs $output SetFile -c 'ToyS' -t 'TEXT' 
 
 # Metrowerks property list compiler files.
 find ~/ncbi  -path '*/link/macmet/*.plc'  | \
-    xargs $output SetFile -c 'ttxt' -t 'TEXT' 
-find ~/ncbi_cxx  -path '*/compilers/mac_prj/*.plc' | \
     xargs $output SetFile -c 'ttxt' -t 'TEXT' 
 

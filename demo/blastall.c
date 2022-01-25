@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.185 2006/10/06 12:23:01 madden Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.198 2007/05/07 13:29:11 kans Exp $";
 
-/* $Id: blastall.c,v 6.185 2006/10/06 12:23:01 madden Exp $
+/* $Id: blastall.c,v 6.198 2007/05/07 13:29:11 kans Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,54 @@ static char const rcsid[] = "$Id: blastall.c,v 6.185 2006/10/06 12:23:01 madden 
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.198  2007/05/07 13:29:11  kans
+ * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+ *
+ * Revision 6.197  2007/05/04 15:37:39  papadopo
+ * 1. update usage
+ * 2. fix Smith-Waterman configuration
+ *
+ * Revision 6.196  2007/04/24 20:59:40  papadopo
+ * 1. Increase the query batch size for blastp with a compressed
+ *    lookup table
+ * 2. Make composition-based statistics the default for blastp and tblastn
+ *
+ * Revision 6.195  2007/03/23 14:37:20  madden
+ * Move SBlastOptionsFree after BlastFormattingInfoFree to prevent reading deallocated memory
+ *
+ * Revision 6.194  2007/03/20 14:56:58  camacho
+ * Call GeneticCodeSingletonInit/GeneticCodeSingletonFini
+ *
+ * Revision 6.193  2007/03/13 18:37:06  kans
+ * added call to FreeSeqLocSetComponents to free query sequences referenced by query_slp list
+ *
+ * Revision 6.192  2007/03/12 23:06:26  papadopo
+ * fix accidentally reverted change
+ *
+ * Revision 6.191  2007/03/12 23:00:50  papadopo
+ * fix acciednetally reverted change
+ *
+ * Revision 6.190  2007/03/12 16:14:51  madden
+ *    - #include string.h to get a declaration for the (nonstandard but
+ *      common) function strcasecmp
+ *    - In Main_new, use a Blast_PsiCheckpointLoc to specify the
+ *      location, if any, of a PSI-BLAST checkpoint file.
+ *    - In Main_new, use the file extension of the ARG_PSITCHKPNT file
+ *      to determine the file format if a PSI-BLAST checkpoint file.  Warn
+ *      if the extension is not .chk, .asn, or .txt, but read unknown
+ *      extension as standard PSI-BLAST checkpoints.
+ *    [from Mike Gertz]
+ *
+ * Revision 6.188  2007/03/05 14:54:39  camacho
+ * - Call Blast_FindRepeatFilterSeqLoc with a NULL pointer for a PSI-BLAST
+ *   checkpoint file.
+ *
+ * Revision 6.187  2007/02/08 17:07:22  papadopo
+ * change signature of FillInitialWordOptions; ungapped extensions are always turned on now by default
+ *
+ * Revision 6.186  2007/01/19 14:31:47  madden
+ * In Main_new, add a case label for psitblastn (from Mike Gertz).
+ *
  * Revision 6.185  2006/10/06 12:23:01  madden
  * Use head_on_every_query boolean on BlastFormattingInfo for backwards compatibilty in new engine
  *
@@ -639,6 +687,7 @@ static char const rcsid[] = "$Id: blastall.c,v 6.185 2006/10/06 12:23:01 madden 
  *
 */
 
+#include <string.h>
 
 #include <ncbi.h>
 #include <objseq.h>
@@ -913,7 +962,9 @@ ARG_FORCE_OLD,
 #endif
 ARG_COMP_BASED_STATS,
 ARG_SMITH_WATERMAN,
+#ifdef ALLOW_FULL_SMITH_WATERMAN
 ARG_SMITH_WATERMAN_ALL
+#endif
 } BlastArguments;
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
@@ -953,7 +1004,7 @@ static Args myargs[] = {
     { "Threshold for extending hits, default if zero\n" 
       "      blastp 11, blastn 0, blastx 12, tblastn 13\n"
       "      tblastx 13, megablast 0",
-      "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},           /* ARG_THRESHOLD */
+      "0", NULL, NULL, FALSE, 'f', ARG_FLOAT, 0.0, 0, NULL},           /* ARG_THRESHOLD */
     { "Perform gapped alignment (not available with tblastx)", 
         "T", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},     /* ARG_GAPPED */
     { "Query Genetic code to use", /* 17 */
@@ -1034,9 +1085,9 @@ static Args myargs[] = {
       "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},              /* ARG_FORCE_OLD */
 #endif  /* BLASTALL_TOOLS_ONLY */
 #endif
-    { "Use composition-based statistics for blastpgp or tblastn:\n"                /* ARG_COMP_BASED_STATS */
+    { "Use composition-based statistics for blastp or tblastn:\n"                /* ARG_COMP_BASED_STATS */
       "      As first character:\n"
-      "      D or d: default (equivalent to F)\n"
+      "      D or d: default (equivalent to T)\n"
       "      0 or F or f: no composition-based statistics\n"
       "      1 or T or t: Composition-based statistics as in "
       "NAR 29:2994-3005, 2001\n"
@@ -1147,7 +1198,7 @@ s_FillOptions(SBlastOptions* options)
    }
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
-      myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue);
+      myargs[ARG_THRESHOLD].floatvalue, (Int2)myargs[ARG_WORDSIZE].intvalue);
 
    BLAST_FillQuerySetUpOptions(query_setup_options, program_number, 
       myargs[ARG_FILTER].strvalue, (Uint1)myargs[ARG_STRAND].intvalue);
@@ -1158,7 +1209,8 @@ s_FillOptions(SBlastOptions* options)
       query_setup_options->genetic_code = myargs[ARG_QGENETIC_CODE].intvalue;
 
    BLAST_FillInitialWordOptions(word_options, program_number, 
-      greedy, myargs[ARG_WINDOW].intvalue, myargs[ARG_XDROP_UNGAPPED].intvalue);
+                    myargs[ARG_WINDOW].intvalue, 
+                    myargs[ARG_XDROP_UNGAPPED].intvalue);
 
    BLAST_FillExtensionOptions(ext_options, program_number, greedy, 
       myargs[ARG_XDROP].intvalue, myargs[ARG_XDROP_FINAL].intvalue);
@@ -1180,7 +1232,7 @@ s_FillOptions(SBlastOptions* options)
    else
        SBlastOptionsSetWindowSize(options, myargs[ARG_WINDOW].intvalue);
 
-   SBlastOptionsSetThreshold(options, myargs[ARG_THRESHOLD].intvalue);
+   SBlastOptionsSetThreshold(options, myargs[ARG_THRESHOLD].floatvalue);
 
    if (program_number != eBlastTypeTblastx)
       is_gapped = myargs[ARG_GAPPED].intvalue;
@@ -1219,10 +1271,10 @@ s_FillOptions(SBlastOptions* options)
         program_number == eBlastTypeBlastp) && is_gapped) {
        /* Set options specific to gapped tblastn  and blastp */
        switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
-       case 'D': case 'd':
        case '0': case 'F': case 'f':
            ext_options->compositionBasedStats = eNoCompositionBasedStats;
            break;
+       case 'D': case 'd':
        case '1': case 'T': case 't':
            ext_options->compositionBasedStats = eCompositionBasedStats;
            break;
@@ -1289,9 +1341,21 @@ s_FillOptions(SBlastOptions* options)
    if (myargs[ARG_SMITH_WATERMAN_ALL].intvalue) {
        ext_options->ePrelimGapExt = eSmithWatermanScoreOnly;
        ext_options->eTbackExt = eSmithWatermanTbckFull;
+       ext_options->compositionBasedStats = eNoCompositionBasedStats;
    }
 #endif
 
+   if (lookup_options->lut_type == eCompressedAaLookupTable) {
+       if (lookup_options->threshold < 16) {
+           ErrPostEx(SEV_WARNING, 1, 0,
+                     "Threshold is probably too small for protein "
+                     "searches with a compressed alphabet");
+       }
+       if (word_options->window_size > 0) {
+           ErrPostEx(SEV_WARNING, 1, 0,
+                     "Multiple hits may not work with compressed alphabets");
+       }
+   }
    return 0;
 }
 
@@ -1352,6 +1416,14 @@ Int2 Main_new (void)
    char* dbname = myargs[ARG_DB].strvalue;
    Int4 maxquery = 0; /* maximum number of bases/residues to concatenate per
                          database pass */
+   /* A file that contains a PSI-BLAST "checkpoint", the frequency
+      ratios computed from a prior run of PSI-BLAST.  These
+      frequencies may be used to compute a PSSM for PSI-BLAST or
+      PSI-TBLASTN. The name of the file is specified by the -R
+      option; the FILE * is NULL if no file is specified. */
+   Blast_PsiCheckpointLoc * psi_checkpoint = NULL;
+
+   GeneticCodeSingletonInit();
 
    status = SBlastOptionsNew(blast_program, &options, sum_returns);
 
@@ -1369,11 +1441,20 @@ Int2 Main_new (void)
    switch(program_number) {
        case eBlastTypeBlastn:
            maxquery = 40000;
+           if (myargs[ARG_USEMEGABLAST].intvalue)
+               maxquery = 5000000;
            break;
        case eBlastTypeTblastn:
+       case eBlastTypePsiTblastn:
            maxquery = 20000;
            break;
        case eBlastTypeBlastp:
+           maxquery = 10000;
+           if (options->lookup_options->lut_type == 
+                           eCompressedAaLookupTable) {
+               maxquery = 20000;
+           }
+           break;
        case eBlastTypeBlastx:
        case eBlastTypeTblastx:
        default:
@@ -1482,7 +1563,46 @@ Int2 Main_new (void)
                  "Duplicate IDs detected; please ensure that "
                  "all query sequence identifiers are unique");
       }
-
+#ifndef BLAST_CS_API
+      /* Now, if this is PSI-TBLASTN (and eventually PSI-BLAST) look for
+         a restart */
+      if (program_number == eBlastTypePsiTblastn &&
+          !myargs[ARG_PSITCHKPNT].strvalue) {
+          ErrPostEx(SEV_FATAL, 1, 0,
+                    "PSI-TBLASTN requires that a checkpoint file be "
+                    "specified (use the -R option).");
+      } else if (program_number == eBlastTypePsiTblastn &&
+                 myargs[ARG_PSITCHKPNT].strvalue) {
+          EPsiCheckpointType checkpoint_type;
+          char * checkpoint_file_extension =
+              strrchr(myargs[ARG_PSITCHKPNT].strvalue, '.');
+          if (NULL == checkpoint_file_extension) {
+              /* No extension */
+              checkpoint_file_extension = "";
+          }
+          if (0 == strcasecmp(checkpoint_file_extension, ".asn")) {
+              checkpoint_type = eAsnBinaryCheckpoint;
+          } else if (0 == strcasecmp(checkpoint_file_extension, ".asnt")) {
+              checkpoint_type = eAsnTextCheckpoint;
+          } else if (0 == strcasecmp(checkpoint_file_extension, ".chk")) {
+              checkpoint_type = eStandardCheckpoint;
+          } else {
+              checkpoint_type = eStandardCheckpoint;
+              ErrPostEx(SEV_WARNING, 1, 0, "The name of the PSI-BLAST "
+                        "checkpoint file does not end with .chk, .asnt, or "
+                        ".txt.  Trying to read the file using standard "
+                        "PSI-BLAST format.");
+          }
+          psi_checkpoint =
+              Blast_PsiCheckpointLocNew(checkpoint_type,
+                                        myargs[ARG_PSITCHKPNT].strvalue);
+          if (!psi_checkpoint) {
+              ErrPostEx(SEV_FATAL, 1, 0,
+                        "Cannot open the checkpoint file %s for reading.",
+                        myargs[ARG_PSITCHKPNT].strvalue);
+          }
+      }
+#endif
       if (tabular_output) {
            EBlastTabularFormatOptions tab_option = eBlastTabularDefault;
            if (tabular_output == 2) {
@@ -1523,11 +1643,11 @@ Int2 Main_new (void)
       if (repeat_mask)
           lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
 
-
-      if ((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, 
-                                    tf_data, &seqalign_arr, &filter_loc, 
-                                    sum_returns)) != 0)
-      {
+      status = Blast_DatabaseSearch(query_slp, psi_checkpoint,
+                                    dbname, lcase_mask, options,
+                                    tf_data, &seqalign_arr,
+                                    &filter_loc, sum_returns);
+      if (status != 0) {
             /* Jump out if fatal error or unknown reason for exit. */
             if (sum_returns && sum_returns->error)
             {
@@ -1580,14 +1700,17 @@ Int2 Main_new (void)
        Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
        Blast_SummaryReturnClean(sum_returns);
        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
+       FreeSeqLocSetComponents (query_slp);
        query_slp = SeqLocSetFree(query_slp);
+       if (psi_checkpoint)
+           Blast_PsiCheckpointLocFree(&psi_checkpoint);
    } /* End loop on sets of queries */
 
    Blast_PrintOutputFooter(format_info, full_sum_returns);
 
-   options = SBlastOptionsFree(options);
    sum_returns = Blast_SummaryReturnFree(sum_returns);
    full_sum_returns = Blast_SummaryReturnFree(full_sum_returns);
+   GeneticCodeSingletonFini();
 
    if (!tabular_output)
       format_info = BlastFormattingInfoFree(format_info);
@@ -1597,6 +1720,8 @@ Int2 Main_new (void)
       /* FetchEnable/Disable called in blast_format.c for non-tabular output. */
       ReadDBBioseqFetchDisable();
    }
+
+   options = SBlastOptionsFree(options); /* Must come after call to BlastFormattingInfoFree. */
 
    if (asn_format_info)
       asn_format_info = BlastFormattingInfoFree(asn_format_info);
@@ -1764,8 +1889,8 @@ Int2 Main_old (void)
            options->gap_extend *= options->reward;
         }
     } else {
-        if (myargs[ARG_THRESHOLD].intvalue != 0) {
-            options->threshold_second = myargs[ARG_THRESHOLD].intvalue;
+        if ((Int4)myargs[ARG_THRESHOLD].floatvalue != 0) {
+            options->threshold_second = (Int4)myargs[ARG_THRESHOLD].floatvalue;
         }
     }
     
@@ -2723,7 +2848,7 @@ Int2 Main_old (void)
         ValNodeFree(mask_loc_start);
         
         if(num_queries > 0) { /* AM: query concatenation */
-            BSFree(fake_bsp->seq_data);
+            SeqDataFree(fake_bsp->seq_data, fake_bsp->seq_data_type);
             fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
         } else if(!believe_query ) {
             fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
@@ -2840,7 +2965,6 @@ Int2 Nlm_Main(void)
 #else
 #ifndef BLASTALL_TOOLS_ONLY
     if (myargs[ARG_FORCE_OLD].intvalue == 0 &&
-                myargs[ARG_PSITCHKPNT].strvalue == NULL &&
                       myargs[ARG_GILIST].strvalue == NULL)
           use_new_engine = readdb_use_new_blast(myargs[ARG_DB].strvalue);
 

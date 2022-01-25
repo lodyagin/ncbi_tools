@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -152,13 +152,6 @@ typedef struct seqeditviewprocs {
   FormMessageFunc  handleMessages;
   Int2             minPixelWidth;
   Int2             minPixelHeight;
-
-  Uint1            col1r, col2r, col3r, col4r;
-  Uint1            col1g, col2g, col3g, col4g;
-  Uint1            col1b, col2b, col3b, col4b;
-  Uint1            col5r, col5g, col5b;
-  Uint1            col6r, col6g, col6b;
-  Uint1            col7r, col7g, col7b;
  
   Boolean          viewer_mode;
   Boolean          showfeat;

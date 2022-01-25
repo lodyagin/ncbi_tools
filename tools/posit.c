@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit.c,v 6.80 2006/09/28 12:45:39 madden Exp $";
+static char const rcsid[] = "$Id: posit.c,v 6.83 2007/05/07 13:30:54 kans Exp $";
 
-/* $Id: posit.c,v 6.80 2006/09/28 12:45:39 madden Exp $
+/* $Id: posit.c,v 6.83 2007/05/07 13:30:54 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,21 @@ static char const rcsid[] = "$Id: posit.c,v 6.80 2006/09/28 12:45:39 madden Exp 
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.80 $ 
+  $Revision: 6.83 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.83  2007/05/07 13:30:54  kans
+ * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+ *
+ * Revision 6.82  2007/03/12 16:21:35  papadopo
+ * From Kristoffer Osowski: fix a buffer overflow caused by incorrect computation of number of sequences for psiblast
+ *
+ * Revision 6.81  2007/01/22 19:20:55  camacho
+ * From Alejandro Schaffer:
+ * In posPurgeMatches, when in command-line mode, added a warning for the
+ * situation in which only the query is used to construct the PSSM.
+ *
  * Revision 6.80  2006/09/28 12:45:39  madden
  *        Use more accurrate, symmetric, frequency data for the PAM matrices.
  *        Make the frequency ratios for the X character in BLOSUM90 the
@@ -857,7 +868,7 @@ void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSe
   that are identical in two matching sequences
   Modified by Natsuhiko Futamura to change order in which
   pairs of sequences are compared*/
-void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch)
+void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch, ValNodePtr * error_return)
 {
   Int4 i, j; /*index over sequences*/
   Int4 k; /*difference between pair of sequence indices*/
@@ -867,6 +878,7 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
   Int4 intervalLength, matchStart; /*Length and start of a matching region*/
   Int4 matchNumber; /*number of characters matching*/
   Int4 Xcount; /*number of X's in interval*/
+  Int4 numSequencesInUse; /*number of sequences left in use*/
 
   posSearch->posUseSequences =  (Boolean *) MemNew((posSearch->posNumSequences + 1) * sizeof(Boolean));
    if (NULL == posSearch->posUseSequences)
@@ -984,6 +996,66 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
 	  posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength+Xcount);
     }
   }
+  if (error_return) {
+    numSequencesInUse = 0;
+    for(i = 0; i <= posSearch->posNumSequences; i++)
+      if(posSearch->posUseSequences[i])
+	numSequencesInUse++;
+    if (numSequencesInUse < 2)
+      BlastConstructErrorMessage("posPurgeMatches", "Due to purging near identical sequences, only the query is used to construct the position-specific score matrix\n", 1, error_return);
+  }
+}
+
+static void countNumSeq(posSearchItems *posSearch,
+                  compactSearchItems * compactSearch,
+                  SeqAlignPtr listOfSeqAligns, Int4 *prevNumSeq)
+{	
+   Uint1Ptr s; /* pointer into a matching string */
+   Int4  subjectLength;  /* length of subject */
+   Int4  retrievalOffset;   /* retrieval offset */
+   SeqAlignPtr curSeqAlign, prevSeqAlign; /* pointers into listOfSeqAligns */
+   DenseSegPtr curSegs, prevSegs;  /* used to extract alignments from curSeqAlign */
+   SeqIdPtr curId, prevId;  /* Used to compare sequences that come from different SeqAligns */
+   Nlm_FloatHi thisEvalue;  /* evalue of current partial alignment */
+   Int4 newNumSeq; /* numseq computed in another way */
+   Boolean is_new_id = FALSE;	
+
+   newNumSeq = 0;
+   /*use only those sequences below e-value threshold*/
+   curSeqAlign = listOfSeqAligns;
+   prevSeqAlign = NULL;
+   for (curSeqAlign = listOfSeqAligns; curSeqAlign != NULL;
+                            curSeqAlign = curSeqAlign->next) {
+      is_new_id = FALSE;
+      thisEvalue = getEvalueFromSeqAlign(curSeqAlign);
+      curSegs = (DenseSegPtr) curSeqAlign->segs;
+      if (NULL != prevSeqAlign) {
+         prevSegs = (DenseSegPtr) prevSeqAlign->segs;
+         if(curSegs->ids == NULL)
+            break;
+         curId = curSegs->ids->next;
+         prevId = prevSegs->ids->next;
+
+         if (!(SeqIdMatch(curId, prevId)))
+            is_new_id = TRUE;
+      }
+      if (!(compactSearch->use_best_align && is_new_id)) {
+         if (thisEvalue >= compactSearch->ethresh)
+            continue;
+      }
+      if (is_new_id == TRUE)
+         newNumSeq++;
+      s = GetSequenceWithDenseSeg(curSegs, FALSE, &retrievalOffset, &subjectLength);
+      SeqMgrFreeCache();
+      if (s == NULL)
+         continue;
+      s = MemFree(s);
+      prevSeqAlign = curSeqAlign;
+   }
+   newNumSeq++;
+   /* numseq gets the highest number computed by both methods */
+   if (newNumSeq > *prevNumSeq)
+      *prevNumSeq = newNumSeq;
 }
 
 /*Compute general information about the sequences that matched on the
@@ -1599,12 +1671,13 @@ Int4Ptr * LIBCALL CposComputation(posSearchItems *posSearch, BlastSearchBlkPtr s
         else {
     */
     numalign = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
+    countNumSeq(posSearch, compactSearch, listOfSeqAligns, &numseq);
     posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, numseq);
     
     if (!patternSearchStart)
         findThreshSequences(posSearch, search, listOfSeqAligns, numalign, numseq);
     posDemographics(posSearch, compactSearch, listOfSeqAligns);
-    posPurgeMatches(posSearch, compactSearch);
+    posPurgeMatches(posSearch, compactSearch, error_return);
     posComputeExtents(posSearch, compactSearch);
     posComputeSequenceWeights(posSearch, compactSearch, weightExponent);
     posCheckWeights(posSearch, compactSearch);
@@ -1641,10 +1714,11 @@ Int4Ptr * LIBCALL WposComputation(compactSearchItems * compactSearch, SeqAlignPt
 
     if (listOfSeqAligns != NULL) {
        numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
+       countNumSeq(posSearch, compactSearch, listOfSeqAligns, &numseq);
        posAllocateMemory(posSearch, alphabetSize, 
                          qlength, numseq);
        posDemographics(posSearch, compactSearch, listOfSeqAligns);
-       posPurgeMatches(posSearch, compactSearch);
+       posPurgeMatches(posSearch, compactSearch, NULL);
        posComputeExtents(posSearch, compactSearch);
        posComputeSequenceWeights(posSearch, compactSearch, 1.0);
        posCheckWeights(posSearch, compactSearch);
@@ -2337,7 +2411,7 @@ bail_out:
   return status;
 }
 
-Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, Int4 scorematInput, ValNodePtr * error_return)
+static Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, Int4 scorematInput, ValNodePtr * error_return)
 {
   AsnIoPtr infile = NULL;
   PssmWithParametersPtr scoremat = NULL;
@@ -2412,12 +2486,18 @@ Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearc
     PssmWithParametersFree(scoremat);
     return FALSE;
   }
-  BSSeek(bsp->seq_data, 0, SEEK_SET);
+  if (bsp->seq_data_type == Seq_code_gap) {
+    ErrPostEx(SEV_WARNING, 0, 0, 
+          "Seq_code_gap passed to posReadPosFreqsScoremat\n");
+    PssmWithParametersFree(scoremat);
+    return FALSE;
+  }
+  BSSeek((ByteStorePtr) bsp->seq_data, 0, SEEK_SET);
 
   /* Convert sequence data into Seq_code_ncbistdaa */
   if (bsp->seq_data_type != Seq_code_ncbistdaa) {
 
-      ByteStore* new_byte_store = BSConvertSeq(bsp->seq_data,
+      ByteStore* new_byte_store = BSConvertSeq((ByteStorePtr) bsp->seq_data,
                                                Seq_code_ncbistdaa,
                                                bsp->seq_data_type,
                                                bsp->length);
@@ -2427,9 +2507,9 @@ Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearc
                     "to Seq_code_ncbistdaa");
       }
 
-      bsp->seq_data = new_byte_store;
+      bsp->seq_data = (SeqDataPtr) new_byte_store;
       bsp->seq_data_type = Seq_code_ncbistdaa;
-      BSSeek(bsp->seq_data, 0, SEEK_SET);
+      BSSeek((ByteStorePtr) bsp->seq_data, 0, SEEK_SET);
 
   }
 
@@ -2437,7 +2517,7 @@ Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearc
      within the checkpoint file */
 
   for (i = 0; i < compactSearch->qlength; i++) {
-    c = BSGetByte(bsp->seq_data);
+    c = BSGetByte((ByteStorePtr) bsp->seq_data);
     if (c == EOF) {
       ErrPostEx(SEV_WARNING, 0, 0, "Premature end of sequence data\n");
       PssmWithParametersFree(scoremat);
@@ -3037,7 +3117,7 @@ Int4Ptr * LIBCALL BposComputation(posSearchItems *posSearch, BlastSearchBlkPtr
   posProcessAlignment(posSearch, compactSearch, ckptFileName, numSeqs,  numBlocks, alignLength, numCols, error_return);
   MemFree(numCols);
   posSearch->posNumSequences = numSeqs;
-  posPurgeMatches(posSearch, compactSearch);
+  posPurgeMatches(posSearch, compactSearch, error_return);
   posComputeExtents(posSearch, compactSearch);
   posComputeSequenceWeights(posSearch, compactSearch, 1.0);
   posCheckWeights(posSearch, compactSearch);

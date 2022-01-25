@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.73 $
+* $Revision: 6.79 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,24 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.79  2007/06/18 12:21:29  ivanov
+* Fixed EOLs
+*
+* Revision 6.78  2007/06/15 20:27:27  kans
+* CreateNewWindow does not set window title, so revert to old function for now
+*
+* Revision 6.77  2007/05/09 16:42:10  kans
+* use CreateNewWindow instead of NewWindow or NewCWindow (RS)
+*
+* Revision 6.76  2007/05/02 17:24:03  kans
+* preparation for supporting Quartz on Mac
+*
+* Revision 6.75  2006/12/13 17:27:24  kans
+* Nlm_VibMainPrelude and Nlm_VibMainFinale called by separate vibmain.c file containing main or WinMain
+*
+* Revision 6.74  2006/11/24 20:06:31  kans
+* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
+*
 * Revision 6.73  2006/09/14 19:18:29  ivanov
 * Rollback last changes. All missed defines added to corelib/ncbiwin.h.
 *
@@ -343,26 +361,26 @@
 *
 * Revision 5.54  1997/05/27 21:51:00  vakatov
 * Added Nlm_PopupParentWindow() to popup window w/o switching input focus
-*
-* Revision 5.53  1997/05/23 17:32:53  kans
-* added GetArgv, GetArgc for Mac
-*
-* Revision 5.52  1997/05/16 21:00:12  vakatov
-* [WIN_X11]  WindowStructFocusCallback() -- replaced XtFree() by XFree()
-*
-* Revision 5.51  1997/05/16 16:44:47  vakatov
-* [WIN_MSWIN,WIN32]  Addition to R5.49 -- do not abort() the failed
-* application; just popup an error message and then rely on the default
-* exception handler
-*
-* Revision 5.50  1997/05/15 15:14:17  vakatov
-* [WIN_MSWIN] Tune the StaticPrompt, etc. background color to match the
-* parent window background color
-*
-* Revision 5.49  1997/05/08 15:45:05  vakatov
-* [WIN_MSWIN,WIN32]  Abort() application in the case of unhandled
-* exception -- to prevent endless loop with the diagnostic dialog box
-*
+ *
+ * Revision 5.53  1997/05/23 17:32:53  kans
+ * added GetArgv, GetArgc for Mac
+ *
+ * Revision 5.52  1997/05/16 21:00:12  vakatov
+ * [WIN_X11]  WindowStructFocusCallback() -- replaced XtFree() by XFree()
+ *
+ * Revision 5.51  1997/05/16 16:44:47  vakatov
+ * [WIN_MSWIN,WIN32]  Addition to R5.49 -- do not abort() the failed
+ * application; just popup an error message and then rely on the default
+ * exception handler
+ *
+ * Revision 5.50  1997/05/15 15:14:17  vakatov
+ * [WIN_MSWIN] Tune the StaticPrompt, etc. background color to match the
+ * parent window background color
+ *
+ * Revision 5.49  1997/05/08 15:45:05  vakatov
+ * [WIN_MSWIN,WIN32]  Abort() application in the case of unhandled
+ * exception -- to prevent endless loop with the diagnostic dialog box
+ *
  * Revision 5.48  1997/05/06  19:00:16  epstein
  * don't modify window title if environment variable is 0; this is a workaround for subtool
  *
@@ -676,25 +694,28 @@
  * Revision 2.82  1995/05/31  18:00:58  kans
  * added SetColorMap and related code (AS)
  *
-* 08-24-94 Schuler     Change try and except to __try and _except for
-*                      compatibility with Visual C 2.0
-*
-* ==========================================================================
-*/
+ * 08-24-94 Schuler     Change try and except to __try and _except for
+ *                      compatibility with Visual C 2.0
+ *
+ * ==========================================================================
+ */
 
 #include <vibtypes.h>
 #include <vibprocs.h>
 #include <vibincld.h>
+#include <vibmain.h>
 
 #include <connect/ncbi_core_c.h>
 
 #ifdef WIN_MAC
+#ifdef __MWERKS__
 #include <Appearance.h>
 #include <Navigation.h>
 #if __profile__
 #include <Profiler.h>
 #endif
 #include "MoreCarbonAccessors.h"
+#endif
 #endif
 
 #if defined(WIN_MOTIF) && defined(_DEBUG) && !defined(__hpux)
@@ -809,7 +830,7 @@ typedef  struct  Nlm_windowdata {
 #ifdef WIN_MSWIN
   Nlm_Uint4        style;
   Nlm_Uint4        ex_style;
-  Nlm_Handle	   haccel;
+  Nlm_Handle       haccel;
 #endif
 } Nlm_WindowData;
 
@@ -2678,6 +2699,9 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   CCTabHandle     colorHandle;
   CCTabPtr        colorPtr;
   Nlm_RectTool    rtool;
+  WindowClass     winClass = 0;
+  WindowAttributes winAttrs = 0; /* kWindowStandardHandlerAttribute; */
+  OSStatus        osErr;
 #endif
 #ifdef WIN_MOTIF
   Atom            atom;
@@ -2730,6 +2754,36 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   vsb  = 0;
 
 #ifdef WIN_MAC
+    switch (type) {
+      case  DOCUMENT_STYLE:
+        winClass = kDocumentWindowClass;
+        winAttrs |= kWindowStandardDocumentAttributes;
+        break;
+      case  FIXED_STYLE:
+      case  ROUND_STYLE:
+        winClass = kDocumentWindowClass;
+        winAttrs |= kWindowCloseBoxAttribute | kWindowCollapseBoxAttribute;
+        break;
+      case  MODAL_STYLE:
+      case  ALERT_STYLE:
+        winClass = kMovableModalWindowClass;
+        winAttrs = kWindowNoAttributes;
+        break;
+      case  FROZEN_STYLE:
+        winClass = kMovableModalWindowClass;
+        winAttrs |= kWindowCloseBoxAttribute;
+        break;
+      case  FLOATING_STYLE:
+        winClass = kFloatingWindowClass;
+        winAttrs |= kWindowStandardFloatingAttributes;
+        break;
+      case  PLAIN_STYLE:
+      case  SHADOW_STYLE:
+        winClass = kPlainWindowClass;
+        winAttrs |= kWindowNoAttributes;
+        break;
+    }
+
   behindNone = (Nlm_WindowTool) (-1);
   TextFont (0);
   TextSize (0);
@@ -2737,6 +2791,7 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   if (close == NULL) {
     goAway = FALSE;
   }
+#if 1 /* CreateNewWindow does not set window title */
   if (hasColorQD) {
     wptr = (WindowPtr) NewCWindow (NULL, &rtool, (StringPtr) temp,
                                    FALSE, procID,(Nlm_WindowTool) behindNone,
@@ -2745,12 +2800,22 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
     wptr = NewWindow (NULL, &rtool, (StringPtr) temp, FALSE, procID,
                       (Nlm_WindowTool) behindNone, goAway, 0);
   }
-  SetPortWindowPort(wptr);
+#else
+  if (! goAway) {
+    winAttrs &= ~kWindowCloseBoxAttribute;
+  }
+  osErr = CreateNewWindow(winClass, winAttrs, &rtool, &wptr);
+  if (osErr != noErr) {
+    wptr = NULL;
+    return;
+  }
+#endif
+  Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   prt = (Nlm_PortTool) wptr;
   Nlm_SetUpdateRegion (wptr);
   PenNormal ();
-  MoveTo (2, 10);
+  Nlm_MoveTo (2, 10);
   if (hasColorQD) {
     colorHandle = (CCTabHandle) GetResource ('cctb', 0);
     if (colorHandle != NULL) {
@@ -3274,7 +3339,7 @@ static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
             rleft = (Nlm_Int4)r.left;
             leftpix = free * (-rleft) / 100;
             r.left = (Nlm_Int2)leftpix;
-	  } else if (screenMode == USE_LEFT_SCREEN) {
+      } else if (screenMode == USE_LEFT_SCREEN) {
             free = (screenBitBounds.right - screenBitBounds.left) / 2 - width;
             rleft = (Nlm_Int4)r.left;
             leftpix = free * (-rleft) / 100;
@@ -3756,7 +3821,7 @@ extern void Nlm_UseWindow (Nlm_WindoW w)
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
     if (wptr  &&  !Nlm_IsWindowDying( w )) {
 #ifdef WIN_MAC
-      SetPortWindowPort(wptr);
+      Nlm_SetPortWindowPort(wptr);
       Nlm_SetUpdateRegion (wptr);
       Nlm_ResetDrawingTools();
       Nlm_theWindow = w;
@@ -3861,7 +3926,7 @@ static void Nlm_SelectWindow(Nlm_GraphiC w, Nlm_Boolean savePort)
 
 #ifdef WIN_MAC
   SelectWindow (wptr);
-  SetPortWindowPort(wptr);
+  Nlm_SetPortWindowPort(wptr);
   Nlm_SetUpdateRegion(wptr);
   Nlm_ResetDrawingTools();
 #endif
@@ -3962,13 +4027,13 @@ extern void Nlm_EraseWindow (Nlm_WindoW w)
   if (w != NULL) {
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
     GetPort(&temp);
-    SetPortWindowPort(wptr);
+    Nlm_SetPortWindowPort(wptr);
     Nlm_ResetDrawingTools();
     Nlm_currentWindowTool = wptr;
     GetPortBounds(GetWindowPort(wptr), &bounds);
     Nlm_RectToolToRecT (&bounds, &r);
     Nlm_EraseRect(&r);
-    SetPort(temp);
+    Nlm_SetPort(temp);
     Nlm_currentWindowTool = GetWindowFromPort(temp);
     Nlm_Update();
   }
@@ -4109,8 +4174,8 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
   if (drawbar && Nlm_GetWindowMenuBar ((Nlm_WindoW) w) != NULL) {
     Nlm_RecTToRectTool (&r, &rtool);
     ClipRect (&rtool);
-    MoveTo (r.right - 16, 20);
-    LineTo (r.right, 20);
+    Nlm_MoveTo (r.right - 16, 20);
+    Nlm_LineTo (r.right, 20);
     r.top = r.top + 21;
   }
   if (drawgrow) {
@@ -4133,7 +4198,7 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
 #endif
   Nlm_RecTToRectTool (&r, &rtool);
   ClipRect (&rtool);
-  SetPort(temp);
+  Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
@@ -4318,7 +4383,7 @@ static Nlm_Boolean Nlm_CommonClick (Nlm_GraphiC w, Nlm_PoinT pt,
     wptr = Nlm_ParentWindowPtr (w);
     GetPort (&temp);
     GetPenState (&state);
-    SetPortWindowPort(wptr);
+    Nlm_SetPortWindowPort(wptr);
     Nlm_currentWindowTool = wptr;
     Nlm_SetUpdateRegion (wptr);
     Nlm_ResetDrawingTools ();
@@ -4330,7 +4395,7 @@ static Nlm_Boolean Nlm_CommonClick (Nlm_GraphiC w, Nlm_PoinT pt,
     } else {
       rsult = Nlm_ContentClick (w, pt);
     }
-    SetPort(temp);
+    Nlm_SetPort(temp);
     Nlm_currentWindowTool = GetWindowFromPort(temp);
     Nlm_SetUpdateRegion (GetWindowFromPort(temp));
     SetPenState (&state);
@@ -4384,12 +4449,12 @@ static Nlm_Boolean Nlm_ModalClick (Nlm_GraphiC w, Nlm_PoinT pt)
         wptr = Nlm_ParentWindowPtr (w);
         GetPort (&temp);
         GetPenState (&state);
-        SetPortWindowPort(wptr);
+        Nlm_SetPortWindowPort(wptr);
         Nlm_currentWindowTool = wptr;
         Nlm_SetUpdateRegion (wptr);
         Nlm_ResetDrawingTools ();
         cls ((Nlm_WindoW) w);
-        SetPort(temp);
+        Nlm_SetPort(temp);
         Nlm_currentWindowTool = GetWindowFromPort(temp);
         Nlm_SetUpdateRegion (GetWindowFromPort(temp));
         SetPenState (&state);
@@ -4421,12 +4486,12 @@ static Nlm_Boolean Nlm_MovableModalClick (Nlm_GraphiC w, Nlm_PoinT pt)
         wptr = Nlm_ParentWindowPtr (w);
         GetPort (&temp);
         GetPenState (&state);
-        SetPortWindowPort(wptr);
+        Nlm_SetPortWindowPort(wptr);
         Nlm_currentWindowTool = wptr;
         Nlm_SetUpdateRegion (wptr);
         Nlm_ResetDrawingTools ();
         cls ((Nlm_WindoW) w);
-        SetPort(temp);
+        Nlm_SetPort(temp);
         Nlm_currentWindowTool = GetWindowFromPort(temp);
         Nlm_SetUpdateRegion(GetWindowFromPort(temp));
         SetPenState (&state);
@@ -4526,7 +4591,7 @@ static void Nlm_FloatingSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPortWindowPort(wptr);
+  Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
@@ -4536,7 +4601,7 @@ static void Nlm_FloatingSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   } else {
     Nlm_ContentClick (w, Nlm_globalMouse);
   }
-  SetPort(temp);
+  Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
@@ -4562,7 +4627,7 @@ static void Nlm_DesktopSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   GetPenState (&state);
   PenNormal ();
   Nlm_DesktopClick (w, Nlm_globalMouse);
-  SetPort(temp);
+  Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
@@ -4599,7 +4664,7 @@ static Nlm_Boolean Nlm_NormalKey (Nlm_GraphiC w, Nlm_Char ch)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPortWindowPort(wptr);
+  Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
@@ -4626,7 +4691,7 @@ static Nlm_Boolean Nlm_NormalKey (Nlm_GraphiC w, Nlm_Char ch)
       Nlm_DesktopKey ((Nlm_GraphiC) Nlm_desktopWindow, ch);
     }
   }
-  SetPort(temp);
+  Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
@@ -4648,7 +4713,7 @@ static Nlm_Boolean Nlm_FloatingKey (Nlm_GraphiC w, Nlm_Char ch)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPortWindowPort(wptr);
+  Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
@@ -4676,7 +4741,7 @@ static Nlm_Boolean Nlm_FloatingKey (Nlm_GraphiC w, Nlm_Char ch)
       Nlm_DoKey ((Nlm_GraphiC) nw, ch);
     }
   }
-  SetPort(temp);
+  Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
@@ -4709,7 +4774,7 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
-  SetPortWindowPort(wptr);
+  Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
 
   Nlm_ResetDrawingTools ();
@@ -4744,7 +4809,7 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   EndUpdate (wptr);
   Nlm_ResetDrawingTools ();
   Nlm_ResetClip ();
-  SetPort(temp);
+  Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
@@ -6037,28 +6102,28 @@ static LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLOREDIT:
       {
-	      if(Nlm_hasBackColor)
-	      {
-		SetBkColor((HDC)wParam, Nlm_crBackColor);
-		mainwndrsult = (long)Nlm_hbrWindowBackground;
-	      }
-	      else
-	      {
-		SetBkColor((HDC)wParam, RGB(255, 255, 255));
-		mainwndrsult = (long)GetStockObject( WHITE_BRUSH );
-	      }
+          if(Nlm_hasBackColor)
+          {
+        SetBkColor((HDC)wParam, Nlm_crBackColor);
+        mainwndrsult = (long)Nlm_hbrWindowBackground;
+          }
+          else
+          {
+        SetBkColor((HDC)wParam, RGB(255, 255, 255));
+        mainwndrsult = (long)GetStockObject( WHITE_BRUSH );
+          }
               break;
       }
     case WM_CTLCOLORDLG:
     case WM_CTLCOLORBTN:
       {
-	      if(Nlm_hasBackColor)
-	      {
-		SetBkColor((HDC)wParam, Nlm_crBackColor);
-		mainwndrsult = (long)Nlm_hbrWindowBackground;
-	      }
-	      else
-		mainwndrsult = DefWindowProc (hwnd, message, wParam, lParam);
+          if(Nlm_hasBackColor)
+          {
+        SetBkColor((HDC)wParam, Nlm_crBackColor);
+        mainwndrsult = (long)Nlm_hbrWindowBackground;
+          }
+          else
+        mainwndrsult = DefWindowProc (hwnd, message, wParam, lParam);
               break;
       }
 #else
@@ -6146,7 +6211,7 @@ extern Nlm_Boolean Nlm_RegisterWindows (void)
   wc.hIcon = LoadIcon (NULL, IDI_APPLICATION);
   wc.hCursor = NULL;
   wc.hbrBackground = Nlm_hasBackColor ?
-	               CreateSolidBrush( Nlm_crBackColor ) :
+                   CreateSolidBrush( Nlm_crBackColor ) :
                        CreateSolidBrush( GetSysColor(COLOR_ACTIVEBORDER) );
   wc.lpszMenuName = NULL;
   sprintf (windowclass, "Nlm_WindowClass%ld", (long) (int) Nlm_currentHInst);
@@ -6184,12 +6249,12 @@ static void Nlm_ParseXArguments(int* argc, char** argv)
     if (StringCmp(argv[i], "-bg") == 0 && argv[i+1] != NULL) {
       Nlm_RGBName* p = Nlm_FindRGBName(argv[i+1]);
       if (p != NULL) {
-	/* Set user-defined background color */
-	Nlm_hasBackColor = TRUE;
-	Nlm_crBackColor = RGB(p->red, p->green, p->blue);
-	Nlm_hbrWindowBackground = CreateSolidBrush( Nlm_crBackColor );
-	i += 2;
-	continue;
+    /* Set user-defined background color */
+    Nlm_hasBackColor = TRUE;
+    Nlm_crBackColor = RGB(p->red, p->green, p->blue);
+    Nlm_hbrWindowBackground = CreateSolidBrush( Nlm_crBackColor );
+    i += 2;
+    continue;
       }
     }
     argv[j++] = argv[i++];
@@ -6717,18 +6782,55 @@ static void Nlm_CleanUpWindows (void)
 #endif
 }
 
+
+#ifdef WIN_MSWIN
+#ifdef WIN32
+static int Nlm_HandleException (DWORD code)
+
+{
+  Nlm_Message (MSG_OK, "WIN32 exception %ld", (long)code);
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
+#endif
+
+#ifdef WIN_MOTIF
+#if defined(OS_UNIX) && defined(COMP_SUNPRO)
+static char **tenvp = NULL;
+
+extern void Nlm_DisplayEnvironmentVariables (void);
+extern void Nlm_DisplayEnvironmentVariables (void)
+
+{
+  FILE  *f;
+  int   i;
+
+  if (tenvp == NULL) return;
+  f = Nlm_FileOpen ("EnvLogFile", "a");
+  if (f == NULL) return;
+  for (i = 0; tenvp [i] != NULL; i++) {
+    fprintf (f, "%s\n", tenvp [i]);
+  }
+  Nlm_FileClose (f);
+}
+#endif
+#endif
+
+
+
+
 #ifdef WIN_MAC
 #ifdef OS_UNIX_DARWIN
-int main (int argc, char *argv[]) 
+extern int Nlm_VibMainPrelude (int argc, char *argv[])
 {
-  long gval;
+  long   gval;
   OSErr  err;
 
   Nlm_SetupArguments (argc, argv);
 # else /* ! OS_UNIX_DARWIN */
-void main ()
+extern void Nlm_VibMainPrelude ()
 {
-  long gval;
+  long   gval;
   OSErr  err;
 # endif
 
@@ -6745,7 +6847,7 @@ void main ()
    CarbonDater report says to use MoreMasterPointers() instead of MoreMasters().
    Universal Interfaces 3.3.2 declares MoreMasters(void) under Carbon.
   */
-  MoreMasterPointers(1280);
+  /* MoreMasterPointers(1280); Don't need this under OSX. */
   FlushEvents (everyEvent, 0);
   /* the rest of the toolbox is done for us can't init them...
    */
@@ -6827,8 +6929,18 @@ void main ()
   /* There is no need to initialize the TE private scrap because
    * we never assume it's current.
    */
+}
 
-  Nlm_Main ();
+
+
+
+#ifdef OS_UNIX_DARWIN
+extern int Nlm_VibMainFinale (int argc, char *argv[])
+{
+# else /* ! OS_UNIX_DARWIN */
+extern void Nlm_VibMainFinale ()
+{
+# endif
 
   Nlm_CleanUpWindows ();
   Nlm_CleanUpDrawingTools ();
@@ -6853,26 +6965,21 @@ void main ()
   ProfilerDump ("\pvibrant.prof");
   ProfilerTerm ();
 #endif
-
-  ExitToShell ();
 }
 #endif
+
+
+
 
 #ifdef WIN_MSWIN
-#ifdef WIN32
-static int Nlm_HandleException (DWORD code)
-
-{
-  Nlm_Message (MSG_OK, "WIN32 exception %ld", (long)code);
-  return EXCEPTION_CONTINUE_SEARCH;
-}
-#endif
-
-int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                      LPSTR lpszCmdLine, int nCmdShow)
+extern int CALLBACK Nlm_VibMainPrelude (
+  HINSTANCE hInstance,
+  HINSTANCE hPrevInstance,
+  LPSTR lpszCmdLine,
+  int nCmdShow
+)
 {
   Nlm_Char  str [32];
-  WNDCLASS  wc;
 
 #ifdef WIN32
   __try {
@@ -6914,7 +7021,28 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
   /* Initialize connection library's logger, registry and lock */
   CONNECT_Init(0);
 
-  Nlm_Main ();
+#ifdef WIN32
+  }
+  __except ( Nlm_HandleException( GetExceptionCode() ) )  { }
+#endif
+
+  return TRUE;
+}
+
+
+extern int CALLBACK Nlm_VibMainFinale (
+  HINSTANCE hInstance,
+  HINSTANCE hPrevInstance,
+  LPSTR lpszCmdLine,
+  int nCmdShow
+)
+{
+  Nlm_Char  str [32];
+  WNDCLASS  wc;
+
+#ifdef WIN32
+  __try {
+#endif
 
   Nlm_CleanUpWindows ();
   Nlm_CleanUpDrawingTools ();
@@ -6951,33 +7079,13 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 }
 #endif
 
-#ifdef WIN_MOTIF
-#if defined(OS_UNIX) && defined(COMP_SUNPRO)
-static char **tenvp = NULL;
 
-extern void Nlm_DisplayEnvironmentVariables (void);
-extern void Nlm_DisplayEnvironmentVariables (void)
-
-{
-  FILE  *f;
-  int   i;
-
-  if (tenvp == NULL) return;
-  f = Nlm_FileOpen ("EnvLogFile", "a");
-  if (f == NULL) return;
-  for (i = 0; tenvp [i] != NULL; i++) {
-    fprintf (f, "%s\n", tenvp [i]);
-  }
-  Nlm_FileClose (f);
-}
-#endif
-#endif
 
 #ifdef WIN_MOTIF
 #if defined(OS_UNIX) && defined(COMP_SUNPRO)
-main (int argc, char *argv[], char *envp[])
+extern void Nlm_VibMainPrelude (int argc, char *argv[], char *envp[])
 #else
-main (int argc, char *argv[])
+extern void Nlm_VibMainPrelude (int argc, char *argv[])
 #endif
 {
   Nlm_Int2  retval;
@@ -7001,9 +7109,7 @@ main (int argc, char *argv[])
   Nlm_InitPrompt ();
   Nlm_InitSlate ();
   Nlm_InitTexts ();
-  if (! Nlm_SetupWindows ()) {
-    return FALSE;
-  }
+  if (! Nlm_SetupWindows ()) return;
   Nlm_RegisterWindows ();
   Nlm_RegisterTexts ();
   Nlm_RegisterSlates ();
@@ -7012,9 +7118,16 @@ main (int argc, char *argv[])
 
   /* Initialize connection library's logger, registry and lock */
   CONNECT_Init(0);
+}
 
-  retval = Nlm_Main ();
 
+
+#if defined(OS_UNIX) && defined(COMP_SUNPRO)
+extern void Nlm_VibMainFinale (int argc, char *argv[], char *envp[])
+#else
+extern void Nlm_VibMainFinale (int argc, char *argv[])
+#endif
+{
   Nlm_CleanUpWindows ();
   Nlm_CleanUpDrawingTools ();
   Nlm_FreeWindows ();
@@ -7048,9 +7161,11 @@ main (int argc, char *argv[])
     XCloseDisplay (Nlm_currentXDisplay);
   }
   Nlm_ErrSetLogfile (NULL,0);
-  exit (retval);
 }
 #endif
+
+
+
 
 #ifdef WIN_MOTIF 
 static Nlm_Boolean IsXParentOf(Window is_parent, Window w)
@@ -7106,7 +7221,7 @@ extern void Nlm_RemoveDyingWindows (void)
 #ifdef WIN_MAC
     GetPort (&tempPort);
     GetPenState (&state);
-    SetPortWindowPort(wptr);
+    Nlm_SetPortWindowPort(wptr);
     Nlm_currentWindowTool = wptr;
     Nlm_SetUpdateRegion (wptr);
 #endif
@@ -7152,7 +7267,7 @@ extern void Nlm_RemoveDyingWindows (void)
       DisposePalette ( wdata.cMap );
       wdata.cMap = NULL;
     }
-    SetPort(tempPort);
+    Nlm_SetPort(tempPort);
     Nlm_currentWindowTool = GetWindowFromPort(tempPort);
     Nlm_SetUpdateRegion (GetWindowFromPort(tempPort));
     SetPenState (&state);
@@ -7298,7 +7413,7 @@ static void Nlm_ProcessKeyPress (LPMSG lpMsg)
     sp_ch = Nlm_KeydownToChar (ch);
     if (sp_ch != 0)
     {
-	  keyAction (sp_ch);	
+      keyAction (sp_ch);    
     }
   }
 }
@@ -7330,21 +7445,21 @@ static UINT idWMVibrantCallback = 0;
 static void Nlm_InitVibrantCallback ()
 
 {
-    idWMVibrantCallback = RegisterWindowMessage("VibrantCallback");
+  idWMVibrantCallback = RegisterWindowMessage("VibrantCallback");
 }
 
 
 static Nlm_Boolean Nlm_ProcessVibrantCallback (LPMSG lpMsg)
 
 {
-    if(idWMVibrantCallback && idWMVibrantCallback == lpMsg->message)
-    {
-	CallbackProc proc = (CallbackProc)lpMsg->wParam;
-	proc((void*)(lpMsg->lParam));
-	return TRUE;
-    }
-    else
-	return FALSE;
+  if(idWMVibrantCallback && idWMVibrantCallback == lpMsg->message)
+  {
+    CallbackProc proc = (CallbackProc)lpMsg->wParam;
+    proc((void*)(lpMsg->lParam));
+    return TRUE;
+  }
+  else
+    return FALSE;
 }
 #endif
 
@@ -7383,31 +7498,31 @@ extern void Nlm_SetWindowHAccel (Nlm_WindoW w, Nlm_Handle h)
 static Nlm_Boolean Nlm_ProcessAccelerator (LPMSG lpMsg)
 
 {
-    if(lpMsg->hwnd != NULL &&
-       (lpMsg->message == WM_KEYDOWN ||
-        lpMsg->message == WM_KEYUP ||
-	lpMsg->message == WM_SYSKEYDOWN ||
-	lpMsg->message == WM_SYSKEYUP ||
-	lpMsg->message == WM_CHAR))
+  if(lpMsg->hwnd != NULL &&
+     (lpMsg->message == WM_KEYDOWN ||
+      lpMsg->message == WM_KEYUP ||
+      lpMsg->message == WM_SYSKEYDOWN ||
+      lpMsg->message == WM_SYSKEYUP ||
+      lpMsg->message == WM_CHAR))
+  {
+    Nlm_WindoW w = (Nlm_WindoW) GetProp (lpMsg->hwnd, (LPSTR) "Nlm_VibrantProp");
+    if(w != NULL)
     {
-        Nlm_WindoW w = (Nlm_WindoW) GetProp (lpMsg->hwnd, (LPSTR) "Nlm_VibrantProp");
-	if(w != NULL)
-	{
-	    Nlm_WindoW p = Nlm_GetParentWindow((Nlm_GraphiC)w);
-	    if(p != NULL)
-	    {
-		Nlm_WindowData wdata;
-		Nlm_GetWindowData(p, &wdata);
-		if(wdata.haccel != NULL)
-		{
-		    int ret = TranslateAccelerator(wdata.handle, wdata.haccel, lpMsg);
-		    return ret != 0;
-		}
-	    }
-	}
+      Nlm_WindoW p = Nlm_GetParentWindow((Nlm_GraphiC)w);
+      if(p != NULL)
+      {
+        Nlm_WindowData wdata;
+        Nlm_GetWindowData(p, &wdata);
+        if(wdata.haccel != NULL)
+        {
+          int ret = TranslateAccelerator(wdata.handle, wdata.haccel, lpMsg);
+          return ret != 0;
+        }
+      }
     }
-
-    return FALSE;
+  }
+  
+  return FALSE;
 }
 #endif
 
@@ -7589,11 +7704,11 @@ extern void Nlm_ProcessEvents (void)
       }
     }
     if (GetMessage (&Nlm_currentMssg, NULL, 0, 0)) {
-      if(!Nlm_ProcessAccelerator(&Nlm_currentMssg)) {
-	TranslateMessage (&Nlm_currentMssg);
-	Nlm_ProcessKeyPress (&Nlm_currentMssg);
-	Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
-	DispatchMessage (&Nlm_currentMssg);
+      if (!Nlm_ProcessAccelerator(&Nlm_currentMssg)) {
+        TranslateMessage (&Nlm_currentMssg);
+        Nlm_ProcessKeyPress (&Nlm_currentMssg);
+        Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
+        DispatchMessage (&Nlm_currentMssg);
       }
       Nlm_RemoveDyingWindows ();
     }

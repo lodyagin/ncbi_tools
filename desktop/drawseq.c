@@ -489,7 +489,7 @@ static void AddFeatNodeListGaps(SegmenT p_seg, ValNodePtr fnp_node)
 	FeatNodePtr fnp;
 	Boolean has_prev = FALSE;
 	Int2 pclass = -1;
-	Int4 style;
+	Int4 style = 0;
 	SegmenT seg = NULL;
 	Uint2 p_entityID = 0;
 	

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.82 $
+* $Revision: 6.88 $
 *
 * File Description: 
 *
@@ -3275,6 +3275,22 @@ NthAlignmentSequenceInSeqPropList
   return FALSE;
 }
 
+static void AddNullLocToLists (ValNodePtr loc_list)
+{
+  ValNodePtr vnp;
+  LocListPtr llp;
+
+  for (vnp = loc_list; vnp != NULL; vnp = vnp->next)
+  {
+    llp = (LocListPtr) vnp->data.ptrvalue;
+    if (llp != NULL)
+    {
+      ValNodeAddPointer (&(llp->slp), SEQLOC_NULL, NULL);
+    }
+  }
+}
+
+
 static ValNodePtr GetPropagatedSublocations 
 (SeqLocPtr master_location,
  Boolean gap_split,
@@ -3295,45 +3311,50 @@ static ValNodePtr GetPropagatedSublocations
   master_subloc = SeqLocFindNext (master_location, NULL);
   while (master_subloc != NULL) 
   {
-    master_subloc_id = SeqLocId (master_subloc);
-    master_subloc_bsp = BioseqFind (master_subloc_id);
-    master_subloc_id = master_subloc_bsp->id;
-    if (master_subloc_bsp != NULL)
-    {
-      if (master_subloc_bsp->repr == Seq_repr_seg)
+    if (master_subloc->choice == SEQLOC_NULL) {
+      /* don't need to propagate, just add nulls to each item in list */
+      AddNullLocToLists (prop_loc_list);
+    } else {
+      master_subloc_id = SeqLocId (master_subloc);
+      master_subloc_bsp = BioseqFind (master_subloc_id);
+      master_subloc_id = master_subloc_bsp->id;
+      if (master_subloc_bsp != NULL)
       {
-        if (warned_about_master != NULL && ! *warned_about_master)
+        if (master_subloc_bsp->repr == Seq_repr_seg)
         {
-          Message (MSG_OK, "Warning - you are propagating a feature that "
-                  "contains locations on the master sequence.  These locations"
-                  " will be mapped to the segments in the propagated features.");
-          *warned_about_master = TRUE;
-        }
-        /* this is a location on the master segment */
-        tmp_loc = SegLocToParts (master_subloc_bsp, master_subloc);
-        prop_loc_list = GetPropagatedSublocations (tmp_loc, gap_split, prop_loc_list, 
-                                                   seq_for_prop, warned_about_master);
-        tmp_loc = SeqLocFree (tmp_loc);
-      }
-      else
-      {
-        salp = FindAlignmentsForBioseq (master_subloc_bsp);
-        while (salp != NULL)
-        {
-          master_row = GetMasterRow (salp, master_subloc_id);
-          num_rows = AlnMgr2GetNumRows (salp);
-          for (prop_row = 1; prop_row <= num_rows; prop_row++)
+          if (warned_about_master != NULL && ! *warned_about_master)
           {
-            if (prop_row == master_row) continue;
-            if (! NthAlignmentSequenceInSeqPropList (salp, prop_row, seq_for_prop))
-            {
-              continue;
-            }
-
-            prop_loc = MapSubLoc (master_subloc, salp, master_row, prop_row, gap_split);
-            prop_loc_list = AssociatePropagatedSubloc (prop_loc_list, prop_loc, TRUE);           
+            Message (MSG_OK, "Warning - you are propagating a feature that "
+                    "contains locations on the master sequence.  These locations"
+                    " will be mapped to the segments in the propagated features.");
+            *warned_about_master = TRUE;
           }
-          salp = salp->next;
+          /* this is a location on the master segment */
+          tmp_loc = SegLocToParts (master_subloc_bsp, master_subloc);
+          prop_loc_list = GetPropagatedSublocations (tmp_loc, gap_split, prop_loc_list, 
+                                                     seq_for_prop, warned_about_master);
+          tmp_loc = SeqLocFree (tmp_loc);
+        }
+        else
+        {
+          salp = FindAlignmentsForBioseq (master_subloc_bsp);
+          while (salp != NULL)
+          {
+            master_row = GetMasterRow (salp, master_subloc_id);
+            num_rows = AlnMgr2GetNumRows (salp);
+            for (prop_row = 1; prop_row <= num_rows; prop_row++)
+            {
+              if (prop_row == master_row) continue;
+              if (! NthAlignmentSequenceInSeqPropList (salp, prop_row, seq_for_prop))
+              {
+                continue;
+              }
+
+              prop_loc = MapSubLoc (master_subloc, salp, master_row, prop_row, gap_split);
+              prop_loc_list = AssociatePropagatedSubloc (prop_loc_list, prop_loc, TRUE);           
+            }
+            salp = salp->next;
+          }
         }
       }
     }
@@ -3705,7 +3726,7 @@ static SeqAlignPtr CheckForProteinAlignment (ByteStorePtr bs, BioseqPtr match_pr
   newBsp->repr = Seq_repr_raw;
   newBsp->mol = Seq_mol_aa;
   newBsp->seq_data_type = Seq_code_ncbieaa;
-  newBsp->seq_data = bs;
+  newBsp->seq_data = (SeqDataPtr) bs;
   newBsp->length = BSLen (bs);
 
   /* create SeqEntry for temporary protein bioseq to live in */
@@ -3883,7 +3904,7 @@ static SeqIdPtr GetSegSetId (SeqLocPtr slp)
 /* for each feature, find all propagated locations and create features using
  * those locations.
  */
-static void 
+extern void 
 PropagateOneFeat
 (SeqFeatPtr sfp,
  Boolean    gapSplit,
@@ -3891,7 +3912,7 @@ PropagateOneFeat
  Boolean    stopCDS,
  Boolean    transPast,
  Boolean    cds3end,
- ValNodePtr seq_for_prop,
+ ValNodePtr seq_for_prop, /* ValNode data.ptrvalue points to SeqId */
  BoolPtr    warned_about_master)
 {
   ValNodePtr      feature_location_list, vnp;
@@ -4078,7 +4099,6 @@ PropagateOneFeat
   codebreak_choice_list = ValNodeFree (codebreak_choice_list);
   
 }
-
 
 static Boolean CDSgoesToEnd (
   BioseqPtr bsp,
@@ -4599,7 +4619,8 @@ typedef struct batchapplyfeaturedetailsdlg
   PopuP          rnaSubType;
   PopuP          reading_frame;
   Int4           feattype;
-  
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;  
 } BatchApplyFeatureDetailsDlgData, PNTR BatchApplyFeatureDetailsDlgPtr;
 
 extern BatchApplyFeatureDetailsPtr 
@@ -4754,7 +4775,11 @@ static void BatchApplyFeatureDetailsToDialog (DialoG d, Pointer data)
       PointerToDialog (dlg->featdef_choice_dlg, &vn);
     }
     SafeSetValue (dlg->rnaSubType, bafdp->rnaSubType);
-  }  
+  } 
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify)(dlg->change_userdata);
+  } 
 }
 
 static Pointer BatchApplyFeatureDetailsDialogToData (DialoG d)
@@ -5079,6 +5104,8 @@ static void AddTextToComment (ButtoN b, CharPtr text)
     }
   } 
   orig_comment = MemFree (orig_comment);
+
+  SetEnumPopup (dlg->rnaSubType, rnax_subtype_alist, (UIEnum) 255);
 }
 
 static void Add18SITS28SToComment (ButtoN b)
@@ -5091,8 +5118,30 @@ static void Add16SIGS23SToComment (ButtoN b)
   AddTextToComment (b, "contains 16S ribosomal RNA, 16S-23S ribosomal RNA intergenic spacer, and 23S ribosomal RNA");
 }
 
+
+extern Boolean OkToAcceptBatchApplyFeatureDetails (DialoG d)
+{
+  BatchApplyFeatureDetailsDlgPtr dlg;
+  ValNodePtr                     vnp;
+  Boolean                        rval = TRUE;
+
+  dlg = (BatchApplyFeatureDetailsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return FALSE;
+
+  if (dlg->feattype == ADD_IMP)
+  {
+    vnp = DialogToPointer (dlg->featdef_choice_dlg);
+    if (vnp == NULL)
+    {
+      rval = FALSE;
+    }
+    vnp = ValNodeFree (vnp);
+  }
+  return rval;
+}
+
 extern DialoG 
-BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
+BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
 {
   BatchApplyFeatureDetailsDlgPtr dlg;
   GrouP                          p, r = NULL, text_group = NULL, comment_btns_grp = NULL;
@@ -5123,6 +5172,9 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
   dlg->testdialog = NULL;
   
   dlg->feattype = feattype;
+
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
   
   /* codon start controls */
   if (dlg->feattype == ADD_CDS)
@@ -5185,7 +5237,7 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
       
       dlg->featdef_choice_dlg = EnumAssocSelectionDialog (text_group, ap, 
                                                   "feat_detail",
-                                                   FALSE, NULL, NULL);
+                                                   FALSE, dlg->change_notify, dlg->change_userdata);
       /* clean up enumassoc list - not needed any more */
       for (j = 0; ap [j].name != NULL; j++) {
         MemFree (ap [j].name);
@@ -5572,7 +5624,7 @@ AddProductForCDS
   bsp->repr = Seq_repr_raw;
   bsp->mol = Seq_mol_aa;
   bsp->seq_data_type = Seq_code_ncbieaa;
-  bsp->seq_data = bs;
+  bsp->seq_data = (SeqDataPtr) bs;
   bsp->length = BSLen (bs);
   bs = NULL;
   old = SeqEntrySetScope (NULL);
@@ -5859,6 +5911,8 @@ typedef struct applyalignmentfeature
   FORM_MESSAGE_BLOCK
   DialoG      location_dlg;
   DialoG      feature_details;
+  ButtoN      accept;
+  ButtoN      leave_dlg_up;
   SeqEntryPtr sep;
   SeqAlignPtr salp;
   Int4        feattype;
@@ -6155,8 +6209,30 @@ static void DoApplyFeatureToAlignment (ButtoN b)
   ObjMgrSetDirtyFlag (aafdp->entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, aafdp->entityID, 0, 0);
     
-  Remove (aafdp->form);
+  if (!GetStatus (aafdp->leave_dlg_up))
+  {
+    Remove (aafdp->form);
+  }
 }
+
+
+static void EnableApplyFeatureAccept (Pointer data)
+{
+  ApplyAlignmentFeatureDlgPtr aafdp;
+
+  aafdp = (ApplyAlignmentFeatureDlgPtr) data;
+  if (aafdp == NULL) return;
+
+  if (OkToAcceptBatchApplyFeatureDetails (aafdp->feature_details))
+  {
+    Enable (aafdp->accept);
+  } 
+  else
+  {
+    Disable (aafdp->accept);
+  }
+}
+
 
 extern void ApplyFeatureToAlignment (Uint2 entityID, SeqAlignPtr salp, SeqLocPtr slp, Int4 feattype)
 {
@@ -6197,18 +6273,20 @@ extern void ApplyFeatureToAlignment (Uint2 entityID, SeqAlignPtr salp, SeqLocPtr
                                                         TRUE);
   PointerToDialog (aafdp->location_dlg, slp);                                                      
   
-  aafdp->feature_details = BatchApplyFeatureDetailsDialog (h, feattype);
+  aafdp->feature_details = BatchApplyFeatureDetailsDialog (h, feattype, EnableApplyFeatureAccept, aafdp);
   
-  c = HiddenGroup (h, 2, 0, NULL);
-  b = PushButton (c, "Accept", DoApplyFeatureToAlignment);
-  SetObjectExtra (b, aafdp, NULL);
+  c = HiddenGroup (h, 3, 0, NULL);
+  aafdp->accept = PushButton (c, "Accept", DoApplyFeatureToAlignment);
+  SetObjectExtra (aafdp->accept, aafdp, NULL);
   b = PushButton (c, "Cancel", StdCancelButtonProc);
+  aafdp->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) aafdp->location_dlg,
                               (HANDLE) aafdp->feature_details,
                               (HANDLE) c,
                                NULL);
 
+  EnableApplyFeatureAccept (aafdp);
   Show (w);
 }
 

@@ -1,4 +1,4 @@
-/* $Id: blast_message.c,v 1.23 2006/04/20 19:27:22 madden Exp $
+/* $Id: blast_message.c,v 1.24 2006/11/21 17:05:28 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,10 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_message.c,v 1.23 2006/04/20 19:27:22 madden Exp $";
+    "$Id: blast_message.c,v 1.24 2006/11/21 17:05:28 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
+#include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_message.h>
 
 /** Declared in blast_message.h as extern const. */
@@ -240,6 +241,9 @@ Blast_PerrorEx(Blast_Message* *msg,
  * ===========================================================================
  *
  * $Log: blast_message.c,v $
+ * Revision 1.24  2006/11/21 17:05:28  papadopo
+ * rearrange headers
+ *
  * Revision 1.23  2006/04/20 19:27:22  madden
  * Implement linked list of Blast_Message, remove code and subcode
  *

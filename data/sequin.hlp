@@ -76,11 +76,11 @@ on the "Prev form" or "Next form" buttons on the first or last pages of
 a form, respectively.
 
 #There are numerous ways to enter information onto a page of a form,
-#including text fields, radio buttons, check boxes, scrolling boxes,
-#pop-up menus and spreadsheets.
+including text fields, radio buttons, check boxes, scrolling boxes,
+pop-up menus and spreadsheets.
 
 #You may also use tables to import annotation of source information. 
-#The formatting of these tables will be discussed below.
+The formatting of these tables will be discussed below.
 
 *Overview of Sequin
 
@@ -104,8 +104,7 @@ record, click on "Read Existing Record". If you would like to quit from
 Sequin, click on "Quit Program".
 
 #You can also "Read Existing Record" to read in a FASTA-formatted
-#sequence file
-for analysis purposes.  The sequence will be displayed in Sequin and
+sequence file for analysis purposes.  The sequence will be displayed in Sequin and
 can be analyzed with tools such as CDD Search, but it should not be
 submitted because it does not have the appropriate annotations.
 
@@ -148,7 +147,7 @@ sequences are presented in the documentation entitled
 </A> 
 and 
 <A HREF="#SequenceEditor">
-"Sequence Editor"
+Sequence Editor
 </A>
 
  respectively.  You will not see the Submitting Authors Form, the
@@ -247,7 +246,7 @@ Direct Submission.
 >Sequence Format Form
 
 #Use this form to indicate the type, format and category of sequence
-#you are submitting. 
+you are submitting. 
 
 #Sequin can process single nucleotide sequences, gapped sequences and
 sets of related sequences.  If the sequences are related in terms of
@@ -415,7 +414,11 @@ will be stripped from the sequence.  Use the IUPAC approved symbol "N"
 for ambiguous characters instead. 
 
 #A single file containing multiple FASTA sequences can be imported into
-Sequin.  Make sure that the FASTA definition line for each sequence is
+Sequin in order to create a 
+<A HREF="#SubmissionType">
+Batch Submission
+</A>
+.  Make sure that the FASTA definition line for each sequence is
 formatted as above.
 
 #If the FASTA definition line is not properly formatted a pop-up box
@@ -471,13 +474,14 @@ unknown length, the second is 234 nucleotides long.
 *FASTA+GAP Format for Aligned Nucleotide Sequences
 
 #A number of programs output sets of aligned sequences in FASTA format.
-Frequently, to align these sequences, gaps must be inserted.  Specify
-relevant gap and ambiguous characters in the appropriate box on the
-
+Frequently, to align these sequences, gaps must be inserted.  The
+default alignment settings should correctl interpret gap and ambiguous
+characters in most cases.  If Sequin can not read your alignment, you
+may need to change these settings using the Optional Alignment Settings
+button on the
 <A HREF="#NucleotidePage">
 Nucleotide Page
 </A>
-
 form.  Each sequence, including gaps, must be the same length.  The
 gaps will only show up in the alignment, not in the individual sequence
 in the database.
@@ -548,7 +552,10 @@ database, you must mark that sequence so that it does not receive a new
 Accession number.  To do this, use a SeqID in the format accU12345,
 where U12345 is the Accession number of the pre-existing sequence. 
 
-#Specify relevant gap and ambiguous characters in the appropriate box on the
+#The default alignment settings should correctly interpret gap and
+ambiguous characters in most cases.  If Sequin can not read your
+alignment, you may need to change these settings using the Optional
+Alignment Settings button on the
 <A HREF="#NucleotidePage">
 Nucleotide Page
 </A>
@@ -611,17 +618,31 @@ database, you must mark that sequence so that it does not receive a new
 Accession number.  To do this, use a SeqID in the format accU12345,
 where U12345 is the Accession number of the pre-existing sequence. 
 Also, Sequin will replace the "?" characters in the sequences with "N"s
-since they are defined as "missing" data in the header.  You should
-specify relevant gap and ambiguous characters in the appropriate box on
-the
-
+since they are defined as "missing" data in the header.  The default
+alignment settings should correctly interpret gap and ambiguous
+characters in most cases.  If Sequin can not read your alignment, you
+may need to change these settings using the Optional Alignment Settings
+button on the
 <A HREF="#NucleotidePage">
-
 Nucleotide Page
-
 </A>
+form.  
 
-form.
+#You can modify either NEXUS format so that Sequin can
+determine the correct organism and any other modifiers for each
+sequence.  An example of such modifications are below in the section on
+<A HREF="#SourceModifiersforPHYLIPandNEXUS">
+Source Modifiers for PHYLIP and NEXUS
+</A>
+.
+#Alternatively, you can leave your sequence alignment in
+standard NEXUS format and enter the organism, strain, chromosome, etc.
+information on the following
+
+<A HREF="#SourceModifiersForm">
+Source Modifers form
+</A>
+.
 #The following is an example of NEXUS Contiguous format.
 
 !#NEXUS
@@ -667,7 +688,7 @@ sequence.  An example of such modifications are below in the section on
 Source Modifiers for PHYLIP and NEXUS
 </A>
 .
-Alternatively, you can leave your sequence alignment in
+#Alternatively, you can leave your sequence alignment in
 standard NEXUS format and enter the organism, strain, chromosome, etc.
 information on the following
 
@@ -701,14 +722,25 @@ above.
 would follow immediately after the sequence in the PHYLIP and NEXUS
 examples, above.
 
+!;
+!END;
+!
+!begin ncbi;
+!sequin
 !>[organism=Gallus gallus] [clone=C]
 !>[organism=Drosophila melanogaster] [strain=D]
 !>[organism=Caenorhabditis elegans] [strain=E]
 !>[organism=Rattus norvegicus] [strain=F]
 !>[organism=Aspergillus nidulans] [strain=G]
+!;
+!end;
 
 #The number of lines of source information must exactly match the number
-of sequences provided.
+of sequences provided.  Complete examples can be found in the 
+<A HREF="http://www.ncbi.nlm.nih.gov/Sequin/QuickGuide/sequin.htm#AlignmentFormats">
+Alignment Formats
+</A>
+section of the Sequin Quick Guide.
 
 #Alternatively, you can leave your sequence alignment in
 standard NEXUS or PHYLIP format and enter the organism, strain, chromosome, etc.
@@ -1296,6 +1328,11 @@ Assembly Tracking form, the GenBank staff can map the coordinates for
 you.  You do not need to fill out the 'from' and 'to' columns.  Note
 that multiple accessions may be entered to provide full coverage of the
 assembled sequence.
+
+#If the accession entered is not recognized as a GenBank Accession
+number, a pop-up box is generated requesting that you edit the numbers
+listed.  Sequences from the trace archive can be used primary sequence
+data for TPA records but must be entered in the format "TI123456789".
 
 #You may also generate an Assembly Tracking form in the record viewer
 under the Annotate menu.  Select Descriptors and TPA Assembly from the
@@ -2058,7 +2095,8 @@ strand on which the feature is found.
 #-Other:  Do not select this item.
 
 #Use the pop-up menu to select the SeqID of the sequence you are
-describing by the location.
+describing by the location.  Clicking on the X button to the left will clear
+location spans, strand, and SeqID from that row. 
 
 #If you are working on a set of sequences which contain an alignment,
 you will see a toggle at the bottom of the Location Page where you can
@@ -2164,6 +2202,19 @@ partial, you must first indicate this manually on the Location Page.
 nucleotide sequence by clicking on Translate Product. However, you must
 first indicate the location and partialness of the coding region on the
 Location page in order to obtain the correct translation.
+
+#The Edit Protein Sequence button will launch an amino acid
+ <A HREF="#SequenceEditor">
+Sequence Editor
+</A>
+ as discussed below.
+
+#The Adjust for Stop Codon button will truncate a displayed translation
+at the first stop codon.   If no stop codon is present in the current
+translation, this function will extend the translation to the first stop
+codon or to the end of the sequence.  In both cases, the spans of the
+coding region will be automatically updated on the Location Page to
+reflect the new translation.
 
 ***Protein Subpage
 
@@ -2279,7 +2330,7 @@ feature key.
 #Site of any generalized, site-specific, or replicative recombination
 event where there is a breakage and reunion of duplex DNA that cannot be
 described by other recombination keys (iDNA and virion) or qualifiers of
-source key (/insertion_seq, /transposon, /proviral).
+source key (/proviral).
 
 *misc_RNA
 
@@ -2374,7 +2425,10 @@ transcription.
 
 *repeat_region
 
-#Region of genome containing repeating units.
+#Region of genome containing repeating units.  Some qualifiers such as
+rpt_type and mobile_element have controlled vocabularies.  These
+qualifiers have check boxes or pull-down menus to ensure that the
+correct format is used.
 
 *repeat_unit
 
@@ -2646,7 +2700,10 @@ and/or organism.  Entering information is optional.
 and type the appropriate name on the right side of the page.  If you do
 not find appropriate modifiers in the scroll down list, you can enter
 additional source information as text in the field at the bottom of the
-page.  You may select as many modifiers as you want.
+page.  You may add multiple modifiers to describe the source organism.
+
+#Clicking on the X button to the right of the text box will remove the
+text and clear the modifier from the pull-down in that line.
 
 #The following is a description of the available modifiers:
 
@@ -2676,8 +2733,8 @@ the chromosome of its host cell and can therefore exhibit vertical
 transmission.
 
 #-Environmental-sample: Identifies sequence derived by direct molecular
-isolation from an unidentified organism.  Do not include extra text when
-using this modifier. 
+isolation from an unidentified organism.  You cannot include extra text when
+using this modifier; the text box will change to TRUE upon selection of this modifier from the pull-down list 
 
 #-Frequency:  Frequency of occurrence of a feature.
 
@@ -2690,8 +2747,9 @@ amplification.
 
 #-Germline:  If the sequence shown is DNA and a member of the
 immunoglobulin family, this qualifier is used to denote that the sequence
-is from unrearranged DNA.  Do not include extra text when using this
-modifier. 
+is from unrearranged DNA.  You cannot include extra text when using this
+modifier; the text box will change to TRUE upon selection of this modifier
+from the pull-down list. 
 
 #-Haplotype:  Haplotype of the organism.
 
@@ -2705,9 +2763,16 @@ from which the sequence was derived
 the sequence was derived.
 
 #-Lat-Lon:  Latitude and longitude of location where sample was
-collected.  Preferred format is decimal degrees N/S E/W.
+collected.  Mandatory format is decimal degrees N/S E/W.  Selecting this
+modifier in the pull-down list will generate separate boxes for entering the
+information in the mandatory format.
 
 #-Map:  Map location of the gene.
+
+#-Metagenomic:  Identifies sequence from a culture-independent genomic
+#analysis of an environmental sample submitted as part of a whole genome
+#shotgun project.  You may not include extra text when using this modifier,
+#instead the text box will change to TRUE upon selection.
 
 #-Plasmid-name:  Name of plasmid from which the sequence was obtained.
 
@@ -2718,13 +2783,14 @@ obtained.
 
 #-Rearranged:  If the sequence shown is DNA and a member of the
 immunoglobulin family, this qualifier is used to denote that the sequence
-is from rearranged DNA.  Do not include extra text when using this
-modifier.
+is from rearranged DNA.  You cannot include extra text when using this
+modifier; the text box will change to TRUE upon selection of this modifier
+from the pull-down list. 
 
-#Rev-PCR-primer-name:  Name or description of reverse primer used for
+#-Rev-PCR-primer-name:  Name or description of reverse primer used for
 amplification.
 
-#Rev-PCR-primer-seq:  Sequence of reverse primer used for amplification.
+#-Rev-PCR-primer-seq:  Sequence of reverse primer used for amplification.
 
 #-Segment: Name of viral genome fragmented into two or more nucleic acid
 molecules.
@@ -2737,8 +2803,9 @@ molecules.
 
 #-Tissue-type:  Type of tissue from which sequence derives.
 
-#-Transgenic:  Identified organism that was the recipient of transgenic
-DNA.  Do not include extra text when using this modifier.
+#-Transgenic:  Identifies organism was the recipient of transgenic
+DNA.  You cannot include extra text when using this modifier; the text box
+will change to TRUE upon selection of this modifier from the pull-down list. 
 
 **Organism Subpage
 
@@ -2746,7 +2813,10 @@ DNA.  Do not include extra text when using this modifier.
 and type the appropriate name on the right side of the page.  If you do
 not find appropriate modifiers in the scroll down list, you can enter
 additional organism information as text in the field at the bottom of
-the page. You may select as many modifiers as you want.
+the page. You may add multiple modifiers to describe the source organism. 
+
+#Clicking on the X button to the right of the text box will remove the text
+#and clear the modifier from the pull-down in that line.
 
 #The following is a description of the available modifiers:
 
@@ -3346,7 +3416,7 @@ from the record before submission.
 *Vector Screen
 
 #This option allows you to run a BLAST search of your nucleotide
-#sequence(s) against NCBI's 
+sequence(s) against NCBI's 
 <A HREF="http://www.ncbi.nlm.nih.gov/VecScreen/UniVec.html">
 UniVec
 </A>
@@ -3368,29 +3438,47 @@ remove this feature before submission.
 
 *ORF Finder
 
-#The ORF Finder shows a graphical representation of all the open reading
+#The ORF Finder shows a graphical representation of all open reading
 frames (ORFs) in the nucleotide sequence.  This tool allows you to
 select ORFs and have them appear as coding sequence (CDS) features on
 the sequence record. 
 
-#The ORFs, indicated by colored boxes, are defined as the longest
-sequence containing a start codon and a stop codon.  If the
-entire nucleotide sequence is an open reading frame but does not
-contain an initial start or a terminal stop codon, it will be indicated
-as an ORF as well.  All six reading frames are shown; the top three
-boxes represent the plus strands, and the bottom three boxes the minus
-strands.  The nucleotide sequence intervals of the ORFs are displayed in
-descending length order on the right side of the window.  Intervals on
-the complementary (minus) strand are indicated by a 'c'.  ORFs can be
-selected by clicking either directly on them or on the sequence
-interval.  The ORF length button selects the length of ORFs that are
+#The ORFs, indicated by colored boxes, are defined as the longest sequence
+containing a start codon and stop codon.  All six reading frames are shown as
+separate lines in the graphical view.  The top three lines represent the plus
+strands, and the bottom three lines the minus strands.  In the default view,
+the nucleotide sequence intervals of the ORFs are displayed in descending
+length order on the right side of the window.  Intervals on the complementary
+(minus) strand are indicated by a 'c'.  Selecting 'Order by Start' will
+reorder the list based on the nucleotide location of the start codon.  
+
+#Clicking on the box labelled ORF changes the graphical display so that the
+#potential start codons are indicated in white, and stop codons in red.
+
+#The default settings display only those ORFs which contain an ATG start
+codon.  Selecting 'Alternative' in the 'Initiation Codon' box, will also
+include ORFs beginning with all valid alternative start codons as determined
+by the genetic code listed in the source feature.  If the genetic code for the
+source organism has not been specified, the default
+<A HREF="http://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?mode=c#SG1">
+standard genetic code 
+</A>
+will be used. 
+
+#The ORF length button sets the length of ORFs that are
 displayed.  For example, the default of 10 shows all ORFs that are
-greater than 10 nucleotides in length.  Clicking on the box labelled ORF
-changes the display; potential start codons are indicated in white, and
-stop codons in red.  ORFs can be selected in this display also.  The
-definition of start and stop codons is dependent on the genetic code
-that was selected. Be sure to choose the appropriate genetic code for
-translating the sequence before opening the ORF finder. 
+greater than 10 nucleotides in length.  
+
+#Checking the Show Partial ORFs box will display ORFs that extend to the
+#end(s) of the nucleotide sequence but are 5' or 3' partial.
+
+#ORFs can be selected by clicking on the graphical representation or on the
+sequence interval.  Once an ORF has been selected, its location and amino acid
+sequence will automatically be fielded in the
+<A HREF="#CDS">
+CDS feature editor
+</A>
+accessed under the Annotate menu. 
 
 *Select Target
 
@@ -3891,7 +3979,8 @@ side, or displayed on the top of the sequence.
 
 **Grid
 
-#Allows the display to show a grid separating each feature and sequence for easier viewing.
+#Allows the display to show a grid separating each feature and sequence for
+easier viewing.
 
 **Features Toggle
 
@@ -3995,7 +4084,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised December 2, 2005
+<P CLASS=medium1>Revised July 20, 2007
 
 </CENTER>
 

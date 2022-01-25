@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.68 $
+* $Revision: 6.69 $
 *
 * File Description:
 *
@@ -445,13 +445,13 @@ static SegmenT DrawCompressNoAlignment (SeqLocPtr m_loc, ValNodePtr PNTR anp_lis
 static void PopulateCompressedNoAlignment (BioseqViewPtr bvp)
 
 {
-  ValNodePtr  anp_list;
+  ValNodePtr  anp_list = NULL;
   BioseqPtr   bsp;
   Uint2       entityID;
   SeqLocPtr   m_loc;
   Int4        max_width;
   RecT        r;
-  Int4        scale;
+  Int4        scale = 0;
   Int4        X_VIEW;
 
   if (bvp == NULL) return;

@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.216 2006/05/03 03:37:42 kans Exp $
+#	$Id: makenet.unx,v 6.219 2007/04/18 15:52:34 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -386,7 +386,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -507,7 +507,6 @@ copy :
 	$(SRCCOPY) ../cdromlib/accutils.c .
 	-$(SRCCOPY) ../sequin/*.* .
 	$(SRCCOPY) ../demo/entrez.c .
-	$(SRCCOPY) ../demo/netentcf.c .
 	$(SRCCOPY) ../demo/seqget.c .
 	$(SRCCOPY) ../demo/entrcmd.c .
 	$(SRCCOPY) ../demo/batch.c .
@@ -525,6 +524,8 @@ copy :
 	$(SRCCOPY) ../demo/asn2all.c .
 	$(SRCCOPY) ../demo/gene2xml.c .
 	$(SRCCOPY) ../demo/asnval.c .
+	$(SRCCOPY) ../demo/asndisc.c .
+	$(SRCCOPY) ../demo/asnstrip.c .
 	$(SRCCOPY) ../demo/tbl2asn.c .
 	$(SRCCOPY) ../demo/flint.c .
 	$(SRCCOPY) ../demo/gbseqget.c .
@@ -903,11 +904,6 @@ idload_lib.o : idload_lib.c
 ##
 
 
-netentcf : netentcf.c $(ULIB31)
-	$(CC) -o netentcf $(LDFLAGS) netentcf.c $(LIB31) $(LIB22) $(LIB4) \
-		$(LIB23) $(LIBCOMPADJ) $(LIB3) $(LIB8) $(LIB7) $(NETCLILIB) \
-		$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
-
 ddv    : $(OBJDDV)
 	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) \
@@ -920,12 +916,12 @@ udv    : $(OBJUDV)
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) \
 	$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
-Nentrez : entrez.c $(ULIB31) netentcf
+Nentrez : entrez.c $(ULIB31)
 	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
     $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # left this in (Tentrez) for script backwards compatibility
-Tentrez : entrez.c $(ULIB31) netentcf
+Tentrez : entrez.c $(ULIB31)
 	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
     $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
@@ -1022,6 +1018,24 @@ asnval_dbx_psf :	asnval.c
 	$(CC) -DINTERNAL_NCBI_ASN2VAL -g -o asnval_dbx_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# asndisc program (asndisc)
+asndisc :	asndisc.c
+	$(CC) -g -o asndisc $(LDFLAGS) asndisc.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# asndisc_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
+# should be used only internally within NCBI.
+asndisc_psf :	asndisc.c
+	$(CC) -DINTERNAL_NCBI_ASNDISC -g -o asndisc_psf $(LDFLAGS) asndisc.c $(THREAD_OBJ) $(LIB_PS) \
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
+	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# asnstrip program (asnstrip)
+asnstrip : asnstrip.c 
+	$(CC) -o asnstrip $(LDFLAGS) asnstrip.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
 
 # flint program (flint)
 flint :	flint.c

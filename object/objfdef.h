@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -37,40 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: objfdef.h,v $
-* Revision 6.5  2003/10/07 13:51:04  kans
-* added gap, operon, oriT features and ecotype, estimated_length and operon qualifiers
-*
-* Revision 6.4  2003/02/12 14:15:03  rsmith
-* Undo last change adding FEATDEF_ALIGN
-*
-* Revision 6.3  2003/02/11 21:52:15  rsmith
-* Added FEATDEF_ALIGN so that alignments could have their own appearance styles.
-*
-* Revision 6.2  2001/05/29 22:46:03  kans
-* added FEATDEF_snoRNA, increased FEATDEF_MAX
-*
-* Revision 6.1  1998/06/29 20:31:28  kans
-* explicit defines for FEATDEF_MAX, SEQFEAT_MAX, and SEQDESCR_MAX Boolean array sizes
-*
-* Revision 6.0  1997/08/25 18:49:41  madden
-* Revision changed to 6.0
-*
-* Revision 4.2  1997/06/19 18:41:06  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.1  1996/07/17 15:00:12  ostell
-* added preprotein, mat_peptide_aa, sig_peptide_aa, tran sit_peptide_aa
-*
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 1.4  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -345,8 +311,10 @@ NLM_EXTERN FeatDefPtr LIBCALL FeatDefFindNext PROTO((FeatDefPtr curr, Uint1Ptr k
 #define FEATDEF_gap 91
 #define FEATDEF_operon 92
 #define FEATDEF_oriT 93
+#define FEATDEF_ncRNA 94
+#define FEATDEF_tmRNA 95
 
-#define FEATDEF_MAX 94 /* size of array needed for featdef filter parameters */
+#define FEATDEF_MAX 96 /* size of array needed for featdef filter parameters */
 
 
 #ifdef __cplusplus

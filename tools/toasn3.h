@@ -1,7 +1,7 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-/*  $Id: toasn3.h,v 6.10 2001/10/23 12:48:31 kans Exp $
+/*  $Id: toasn3.h,v 6.11 2006/11/07 20:01:24 bollin Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -111,7 +111,6 @@ typedef struct toasn3 {
 
 Int4 ToAsn4(SeqEntryPtr sep);
 Int4 SeqEntryPubsAsn4(SeqEntryPtr sep);
-Int4 SeqEntryPubsAsn3(SeqEntryPtr sep);
 Int4 SeqEntryToAsn3(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun);
 Int4 SeqEntryToAsn3Ex(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
 Int2 seq_loc_compare( SeqLocPtr a, SeqLocPtr b);

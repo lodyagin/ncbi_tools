@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 5/25/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:  Utilities for fetching local sequences
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: lsqfetch.h,v $
+* Revision 6.8  2006/11/09 22:41:51  kans
+* allow AsnIndex files to be made in separate directory from data source files
+*
+* Revision 6.7  2006/11/07 21:40:02  kans
+* added CreateMasterAsnIndex
+*
 * Revision 6.6  2004/08/03 17:51:49  kans
 * added AsnIndexedLibFetch enable and disable functions
 *
@@ -278,9 +284,11 @@ NLM_EXTERN Boolean AsnIndexedLibFetchEnable (CharPtr path, Boolean binary);
 NLM_EXTERN void AsnIndexedLibFetchDisable (void);
 
 
-/* common function for creating indexes of ASN.1 Bioseq-set ftp release files */
+/* common functions for creating indexes of ASN.1 Bioseq-set ftp release files */
 
-NLM_EXTERN void CreateAsnIndex (CharPtr file, Boolean binary);
+NLM_EXTERN void CreateAsnIndex (CharPtr datafile, CharPtr indexpath, Boolean binary);
+
+NLM_EXTERN void CreateMasterAsnIndex (CharPtr datapath, CharPtr indexpath);
 
 
 #ifdef __cplusplus

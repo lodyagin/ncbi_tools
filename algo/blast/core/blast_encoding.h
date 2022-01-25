@@ -1,7 +1,4 @@
-#ifndef ALGO_BLAST_CORE___BLAST_ENCODING__H
-#define ALGO_BLAST_CORE___BLAST_ENCODING__H
-
-/*  $Id: blast_encoding.h,v 1.11 2006/08/29 21:56:30 camacho Exp $
+/*  $Id: blast_encoding.h,v 1.12 2006/11/21 16:37:56 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +31,9 @@
  *  Declarations of static arrays used to define some NCBI encodings to be used
  *  in a toolkit independent manner by the BLAST engine.
  */
+
+#ifndef ALGO_BLAST_CORE___BLAST_ENCODING__H
+#define ALGO_BLAST_CORE___BLAST_ENCODING__H
 
 #include <algo/blast/core/ncbi_std.h>
 
@@ -106,6 +106,9 @@ extern const Uint1 kNuclSentinel;
 /*
  * ===========================================================================
  * $Log: blast_encoding.h,v $
+ * Revision 1.12  2006/11/21 16:37:56  papadopo
+ * minor
+ *
  * Revision 1.11  2006/08/29 21:56:30  camacho
  * +NCBISTDAA_TO_AMINOACID
  *

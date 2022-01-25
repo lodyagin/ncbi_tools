@@ -16,7 +16,7 @@ APP = wblast2_cs.REAL
 
 SRC = wblast2 showalignwrap
 
-LIB = xblastformat xblast xnetblast scoremat xalntool xalnmgr blastxml xobjread ncbi_xloader_blastdb xobjutil $(OBJMGR_LIBS:=-static) xhtml xcgi seqdb  blastdb 
+LIB = xblastformat xblast xnetblast scoremat xalntool xalnmgr blastxml xobjread ncbi_xloader_blastdb xobjutil $(OBJMGR_LIBS:=-static) xhtml xcgi xutil seqdb  blastdb 
 
 
 

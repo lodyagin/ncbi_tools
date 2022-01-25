@@ -1,7 +1,7 @@
 
-static char const rcsid[] = "$Id: blast.c,v 6.447 2006/09/21 13:42:36 madden Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.450 2007/05/07 13:30:54 kans Exp $";
 
-/* $Id: blast.c,v 6.447 2006/09/21 13:42:36 madden Exp $
+/* $Id: blast.c,v 6.450 2007/05/07 13:30:54 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,37 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.447 $
+ * $Revision: 6.450 $
  *
  * $Log: blast.c,v $
+ * Revision 6.450  2007/05/07 13:30:54  kans
+ * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+ *
+ * Revision 6.449  2007/03/13 20:38:39  madden
+ *   - In BLASTCalculateSearchSpace, use floating point multiplication to
+ *     compute the floating point value searchsp.
+ *
+ *   - In BLASTSetUpSearchInternalByLoc, don't cast
+ *     DROPOFF_NUMBER_OF_BITS to an integer when assigning the floating
+ *     point options dropoff_1st_pass and dropoff_2nd_pass.
+ *
+ *   - In BLASTSetUpSearchInternalByLoc, use floating point division to
+ *     compute the floating point value avglen.
+ *
+ *   - In blast_set_parameters, change the type of the function arguments
+ *     dropoff_number_of_bits_1st_pass and
+ *     dropoff_number_of_bits_2nd_pass to Nlm_FloatHi.
+ *
+ *   - In blast_set_parameters, cast a value in the computation of
+ *     cutoff_s_first to type BLAST_Score only after dividing by Lambda,
+ *     instead of before performing the division.
+ *   [from Mike Gertz]
+ *
+ * Revision 6.448  2007/03/05 14:51:22  camacho
+ * - In BLASTPerformFinalSearch, merge the hitlists for PSITBLASTN, and is
+ *   done for TBLASTN.
+ * - In xsum_compare_hsps, break ties by calling score_compare_hsps.
+ *
  * Revision 6.447  2006/09/21 13:42:36  madden
  * BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
  *
@@ -2780,7 +2808,7 @@ BlastMakeTempProteinBioseq (Uint1Ptr sequence, Int4 length, Uint1 alphabet)
     }
     
     bsp = BioseqNew();
-    bsp->seq_data = byte_store;
+    bsp->seq_data = (SeqDataPtr) byte_store;
     bsp->length = length;
     bsp->seq_data_type = alphabet;
     bsp->mol = Seq_mol_aa;
@@ -4139,7 +4167,7 @@ FloatHi LIBCALL BLASTCalculateSearchSpace(BLAST_OptionsBlkPtr options,
     
     qlen_eff   = qlen - length_adjustment;
     dblen_eff  = dblen - nseq*length_adjustment;
-    searchsp   = qlen_eff * dblen_eff;
+    searchsp   = ((Nlm_FloatHi) qlen_eff) * ((Nlm_FloatHi) dblen_eff);
     
     return searchsp;
 }
@@ -5356,10 +5384,10 @@ available) this needs to be set higher up. */
 
 	/* Use DROPOFF_NUMBER_OF_BITS as the default if it's set to zero. */
 	if (options->dropoff_1st_pass == 0)
-		options->dropoff_1st_pass = (Int4) DROPOFF_NUMBER_OF_BITS;
+		options->dropoff_1st_pass = DROPOFF_NUMBER_OF_BITS;
 
 	if (options->dropoff_2nd_pass == 0)
-		options->dropoff_2nd_pass = (Int4) DROPOFF_NUMBER_OF_BITS;
+		options->dropoff_2nd_pass = DROPOFF_NUMBER_OF_BITS;
 
 	if (StringCmp(search->prog_name, "blastn") != 0)
 	{
@@ -5379,7 +5407,7 @@ available) this needs to be set higher up. */
 
 		readdb_get_totals(search->rdfp, &total_length, &total_number);
 		if (total_number > 0)
-			avglen = total_length/total_number;
+			avglen = ((Nlm_FloatHi) total_length)/total_number;
 	}
         else if (search->dblen > 0 && search->dbseq_num == 1)
         {
@@ -6811,7 +6839,8 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
               search->current_hitlist->hspcnt = 
                  search->current_hitlist->hspcnt_max = 0;
            }
-           else if (search->prog_number == blast_type_tblastn)
+           else if (search->prog_number == blast_type_tblastn ||
+                    search->prog_number == blast_type_psitblastn)
            {
                  hitlist = BLASTMergeHitLists(search, hitlist, search->current_hitlist, 0, FALSE);
                  MemSet((VoidPtr) search->current_hitlist->hsp_array, 0,
@@ -10130,8 +10159,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	
 Int2
 blast_set_parameters(BlastSearchBlkPtr search, 
-	Int4 dropoff_number_of_bits_1st_pass,
-	Int4 dropoff_number_of_bits_2nd_pass,
+	Nlm_FloatHi dropoff_number_of_bits_1st_pass,
+	Nlm_FloatHi dropoff_number_of_bits_2nd_pass,
 	Nlm_FloatHi	avglen, /* Average length of a sequence. */
 	Nlm_FloatHi	searchsp, /* total search space. */
 	Int4 window) /* length where two hits must be found to count. */
@@ -10310,7 +10339,8 @@ Take the smaller of those two formulas.
 	{
 		pbp->cutoff_s_first = (BLAST_Score) MIN(log((Nlm_FloatHi)(25000*(kbp->K)*(search->context[search->first_context].query->length)))/kbp->Lambda, 21*NCBIMATH_LN2/kbp->Lambda);
 		/* Adjust the cutoff value for translating searches. */
-		pbp->cutoff_s_first += (BLAST_Score) log((Nlm_FloatHi)search->context_factor)/kbp->Lambda;
+		pbp->cutoff_s_first += (BLAST_Score) 
+                    (log((Nlm_FloatHi)search->context_factor)/kbp->Lambda);
 	}
 	else
 	{
@@ -10605,12 +10635,12 @@ xsum_compare_hsps(VoidPtr v1, VoidPtr v2)
       return -1;
     }
 
-	if (h1->xsum < h2->xsum) 
-		return 1;
-	if (h1->xsum > h2->xsum)
-		return -1;
+    if (h1->xsum < h2->xsum)
+        return 1;
+    if (h1->xsum > h2->xsum)
+        return -1;
 
-	return 0;
+    return score_compare_hsps(&h1, &h2);
 }
 
 

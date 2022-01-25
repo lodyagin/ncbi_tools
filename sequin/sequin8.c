@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.372 $
+* $Revision: 6.438 $
 *
 * File Description: 
 *
@@ -59,8 +59,10 @@
 #include <blast.h>
 #include <salpanel.h>
 #include <edutil.h>
+#include <tax3api.h>
 #include <asn2gnbp.h> /* included for discrepancy report */
-
+#include <algo/blast/api/twoseq_api.h>
+#include <algo/blast/api/blast_seqalign.h>
 
 #define DEFLINE_MAX_LEN          380
 #define TEXT_MAX_LEN             64
@@ -139,25 +141,26 @@ static void BreakIntoAGroup (BioseqSetPtr parent, Uint1 _class, SeqEntryPtr list
   }
 }
 
-extern void MakeGroupsOf200 (IteM i)
+
+extern Int2 LIBCALLBACK MakeGroupsOf200 (Pointer data)
 
 {
+  BioseqSetPtr      bssp;
+  ObjMgrDataPtr     omdptop;
+  ObjMgrData        omdata;
+  OMProcControlPtr  ompcp;
+  Uint2             parenttype;
+  Pointer           parentptr;
+  SeqEntryPtr       sep;
   AsnIoPtr       aip;
-  BaseFormPtr    bfp;
-  BioseqSetPtr   bssp;
   Uint1          _class;
   Int2           count;
   Char           file [FILENAME_MAX];
   SeqEntryPtr    list;
   SeqEntryPtr    next;
-  ObjMgrDataPtr  omdptop;
-  ObjMgrData     omdata;
   Char           output [PATH_MAX];
-  Uint2          parenttype;
-  Pointer        parentptr;
   Char           path [PATH_MAX];
   CharPtr        ptr;
-  SeqEntryPtr    sep;
   SeqSubmitPtr   ssp;
   Char           str [FILENAME_MAX];
   SeqEntryPtr    tmp;
@@ -165,20 +168,22 @@ extern void MakeGroupsOf200 (IteM i)
   FILE           *f;
 #endif
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  if (! IS_Bioseq_set (sep)) return;
-  bssp = (BioseqSetPtr) sep->data.ptrvalue;
-  if (bssp == NULL) return;
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  if (ompcp->input_itemtype != OBJ_BIOSEQSET) {
+    Message (MSG_ERROR, "Must select Bioseq-set!");
+    return OM_MSG_RET_ERROR;
+  }
+  bssp = (BioseqSetPtr) ompcp->input_data; 
+  if (bssp == NULL) return OM_MSG_RET_ERROR;
+  sep = SeqMgrGetSeqEntryForData (bssp);
+  
   _class = bssp->_class;
   if (_class != 7 && _class != 13 && _class != 14 &&
-      _class != 15 && _class != 16 && _class != 18) return;
+      _class != 15 && _class != 16 && _class != 18) { 
+    Message (MSG_ERROR, "Can only use this for GenBank, Mut, Pop, Phy, Eco, and WGS sets!");
+    return OM_MSG_RET_ERROR;
+  }
 
   SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
   GetSeqEntryParent (sep, &parentptr, &parenttype);
@@ -238,9 +243,10 @@ extern void MakeGroupsOf200 (IteM i)
     }
   }
 
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  Update ();
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  Update ();  
+  return OM_MSG_RET_DONE;
 }
 
 extern void ParseInNucUpdates (IteM i)
@@ -882,7 +888,7 @@ extern Boolean RetranslateOneCDS
       bsp->repr = Seq_repr_raw;
       bsp->seq_data_type = Seq_code_ncbieaa;
       bsp->length = 0;
-      bsp->seq_data = BSNew (0);
+      bsp->seq_data = (SeqDataPtr) BSNew (0);
       if (master != NULL) {
         old = SeqEntrySetScope (master);
       }
@@ -936,9 +942,9 @@ extern Boolean RetranslateOneCDS
       }
       bsp->repr = Seq_repr_raw;
       bsp->mol = Seq_mol_aa;
+      bsp->seq_data = SeqDataFree (bsp->seq_data, bsp->seq_data_type);
+      bsp->seq_data = (SeqDataPtr) bs;
       bsp->seq_data_type = Seq_code_ncbieaa;
-      bsp->seq_data = BSFree (bsp->seq_data);
-      bsp->seq_data = bs;
       bsp->length = BSLen (bs);
       sep = SeqMgrGetSeqEntryForData (bsp);
       if (sep == NULL) return TRUE;
@@ -1117,9 +1123,9 @@ static void DoReprocessPeptides (SeqFeatPtr sfp, Pointer userdata)
     }
     bsp->repr = Seq_repr_raw;
     bsp->mol = Seq_mol_aa;
+    bsp->seq_data = SeqDataFree (bsp->seq_data, bsp->seq_data_type);
+    bsp->seq_data = (SeqDataPtr) bs;
     bsp->seq_data_type = Seq_code_ncbieaa;
-    bsp->seq_data = BSFree (bsp->seq_data);
-    bsp->seq_data = bs;
     bsp->length = BSLen (bs);
     sep = SeqMgrGetSeqEntryForData (bsp);
     if (sep == NULL) return;
@@ -1225,9 +1231,9 @@ static void DoReprocessMrnas (SeqFeatPtr sfp, Pointer userdata)
     }
     bsp->repr = Seq_repr_raw;
     bsp->mol = Seq_mol_na;
+    bsp->seq_data = SeqDataFree (bsp->seq_data, bsp->seq_data_type);
+    bsp->seq_data = (SeqDataPtr) bs;
     bsp->seq_data_type = Seq_code_iupacna;
-    bsp->seq_data = BSFree (bsp->seq_data);
-    bsp->seq_data = bs;
     bsp->length = BSLen (bs);
     sep = SeqMgrGetSeqEntryForData (bsp);
     if (sep == NULL) return;
@@ -1863,43 +1869,153 @@ extern void ParseCodonQualToCodeBreak (IteM i)
   Update ();
 }
 
-static Boolean CorrectGenCodeCallback (GatherContextPtr gcp)
-
+static void CorrectGenCodeIndexedCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   CdRegionPtr     crp;
   GeneticCodePtr  gc;
-  Int2            genCode;
-  SeqEntryPtr     sep;
-  SeqFeatPtr      sfp;
+  Int2Ptr         pGenCode;
   ValNodePtr      vnp;
+  Boolean         need_replacement = FALSE;
 
-  if (gcp == NULL) return TRUE;
-  sep = (SeqEntryPtr) gcp->userdata;
-  if (sep == NULL ) return TRUE;
-  if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
-  sfp = (SeqFeatPtr) gcp->thisitem;
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return TRUE;
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION 
+      || sfp->data.value.ptrvalue == NULL
+      || userdata == NULL) return;
+ 
+  pGenCode = (Int2Ptr) userdata;
   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-  if (crp == NULL) return TRUE;
-  genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
-  gc = GeneticCodeNew ();
-  if (gc == NULL) return TRUE;
-  crp->genetic_code = GeneticCodeFree (crp->genetic_code);
-  vnp = ValNodeNew (NULL);
-  gc->data.ptrvalue = vnp;
-  if (vnp != NULL) {
-    vnp->choice = 2;
-    vnp->data.intvalue = (Int4) genCode;
+  if (crp->genetic_code != NULL
+      && crp->genetic_code->choice == 254) {
+    if (crp->genetic_code->data.ptrvalue == NULL) {
+      vnp = ValNodeNew (NULL);
+      vnp->choice = 2;
+      vnp->data.intvalue = (Int4) *pGenCode;
+    } else {
+      vnp = crp->genetic_code->data.ptrvalue;
+      if (vnp->next == NULL && vnp->choice == 2) {
+        vnp->data.intvalue = (Int4) *pGenCode;
+      } else {
+        need_replacement = TRUE;
+      }
+    }
+  } else {
+    need_replacement = TRUE;
   }
-  crp->genetic_code = gc;
-  return TRUE;
+  if (need_replacement) {
+    gc = GeneticCodeNew ();
+    if (gc == NULL) return;
+    crp->genetic_code = GeneticCodeFree (crp->genetic_code);
+    vnp = ValNodeNew (NULL);
+    gc->data.ptrvalue = vnp;
+    if (vnp != NULL) {
+      vnp->choice = 2;
+      vnp->data.intvalue = (Int4) *pGenCode;
+    }
+    crp->genetic_code = gc;
+  }
 }
+
+static void CorrectGenCodesBioseqCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqMgrFeatContext fcontext;
+  SeqFeatPtr        sfp;
+
+  if (bsp == NULL || userdata == NULL) return;
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext)) {
+    CorrectGenCodeIndexedCallback (sfp, userdata);
+  }
+
+}
+
+typedef struct gencodescan {
+  Boolean mito;
+  Boolean plastid;
+  Int2    nuclCode;
+  Int2    mitoCode;
+  Boolean already_found;
+} GenCodeScanData, PNTR GenCodeScanPtr;
+
+static void JustGetGenCodeFromOrgRef (OrgRefPtr orp, GenCodeScanPtr gp)
+{
+  if (orp == NULL || orp->orgname == NULL || gp == NULL || gp->already_found) return;
+
+  gp->nuclCode = orp->orgname->gcode;
+  gp->mitoCode = orp->orgname->mgcode;
+}
+
+static void JustGetGenCodeFromBiop (BioSourcePtr biop, GenCodeScanPtr gp)
+{
+  if (biop == NULL || gp == NULL) return;
+  if (gp->already_found && !biop->is_focus) return;
+
+  gp->mito = (Boolean) (biop->genome == GENOME_kinetoplast ||
+                        biop->genome == GENOME_mitochondrion ||
+                        biop->genome == GENOME_hydrogenosome);
+
+  gp->plastid = (Boolean) (biop->genome == GENOME_chloroplast ||
+                                biop->genome == GENOME_chromoplast ||
+                                biop->genome == GENOME_plastid ||
+                                biop->genome == GENOME_cyanelle ||
+                                biop->genome == GENOME_apicoplast ||
+                                biop->genome == GENOME_leucoplast ||
+                                biop->genome == GENOME_proplastid);
+
+  JustGetGenCodeFromOrgRef (biop->org, gp);
+  gp->already_found = TRUE;
+}
+
+
+static void JustGetGenCodeFromFeat (SeqFeatPtr sfp, Pointer userdata) 
+{
+  GenCodeScanPtr gp;
+
+  if (sfp == NULL || userdata == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return;
+
+  gp = (GenCodeScanPtr) userdata;
+
+  JustGetGenCodeFromBiop (sfp->data.value.ptrvalue, gp);
+}
+
+static void JustGetGenCodeFromDesc (SeqDescrPtr sdp, Pointer userdata)
+{
+  GenCodeScanPtr gp;
+
+  if (sdp == NULL || userdata == NULL || sdp->choice != Seq_descr_source) return;
+
+  gp = (GenCodeScanPtr) userdata;
+
+  JustGetGenCodeFromBiop (sdp->data.ptrvalue, gp);
+}
+
+static Int2 JustGetGenCodeForSeqEntry (SeqEntryPtr sep) 
+{
+  GenCodeScanData gd;
+
+  gd.already_found = FALSE;
+  gd.mito = FALSE;
+  gd.mitoCode = 0;
+  gd.nuclCode = 0;
+  gd.plastid = FALSE;
+
+  VisitDescriptorsInSep (sep, &gd, JustGetGenCodeFromDesc);
+  VisitFeaturesInSep (sep, &gd, JustGetGenCodeFromFeat);
+
+  if (gd.plastid) {
+    return 11;
+  } else if (gd.mito) {
+    return gd.mitoCode;
+  } else {
+    return gd.nuclCode;
+  }
+}
+
 
 extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID)
 
 {
   BioseqSetPtr  bssp;
-  GatherScope   gs;
+  Int2          genCode;
 
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
@@ -1912,16 +2028,10 @@ extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID)
       return;
     }
   }
-  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  gs.seglevels = 1;
-  gs.get_feats_location = FALSE;
-  MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-  gs.ignore[OBJ_BIOSEQ] = FALSE;
-  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-  gs.ignore[OBJ_SEQFEAT] = FALSE;
-  gs.ignore[OBJ_SEQANNOT] = FALSE;
-  gs.scope = sep;
-  GatherEntity (entityID, (Pointer) sep, CorrectGenCodeCallback, &gs);
+
+  genCode = JustGetGenCodeForSeqEntry(sep);
+  VisitFeaturesInSep (sep, &genCode, CorrectGenCodeIndexedCallback);
+  VisitBioseqsInSep (sep, &genCode, CorrectGenCodesBioseqCallback);
 }
 
 extern void CorrectCDSGenCodes (IteM i)
@@ -2405,7 +2515,7 @@ static void PromotePubs (SeqFeatPtr first, BioseqPtr bsp, Uint2 entityID)
   DeleteMarkedObjects (entityID, 0, NULL);
 }
 
-extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
+extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap, ValNodePtr PNTR err_list)
 
 {
   BioseqPtr      bsp;
@@ -2443,13 +2553,21 @@ extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
     ompc.output_itemtype = OBJ_SEQANNOT;
     ompc.output_data = (Pointer) sap;
     if (! AttachDataForProc (&ompc, FALSE)) {
-      Message (MSG_ERROR, "SmartAttachSeqAnnotToSeqEntry failed");
+      if (err_list == NULL) {
+        Message (MSG_ERROR, "SmartAttachSeqAnnotToSeqEntry failed");
+      } else {
+        ValNodeAddPointer  (err_list, 0, StringSave ("SmartAttachSeqAnnotToSeqEntry failed"));
+      }
     } else if (sfp != NULL) {
       PromoteXrefs (sfp, bsp, entityID);
       PromotePubs (sfp, bsp, entityID);
     }
   } else {
-    Message (MSG_ERROR, "Feature table identifiers do not match record");
+    if (err_list == NULL) {
+      Message (MSG_ERROR, "Feature table identifiers do not match record");
+    } else {
+      ValNodeAddPointer (err_list, 0, StringSave ("Feature table identifiers do not match record"));
+    }
   }
   return entityID;
 }
@@ -3731,8 +3849,8 @@ static void FuseTwoProducts (SeqFeatPtr sfp1, SeqFeatPtr sfp2, Uint2 entityID)
   {
     BSWrite (byte_store, pstr1, StringLen (pstr1));
     BSWrite (byte_store, pstr2, StringLen (pstr2));
-    pbsp1->seq_data = BSFree (pbsp1->seq_data);
-    pbsp1->seq_data = byte_store;
+    pbsp1->seq_data = SeqDataFree (pbsp1->seq_data, pbsp1->seq_data_type);
+    pbsp1->seq_data = (SeqDataPtr) byte_store;
     pbsp1->length += added_length;
       
     /* now copy features from the second protein to the first */
@@ -5435,7 +5553,7 @@ static Int4     CKA_blast_detailed_wordsize;
 static FloatHi  CKA_blast_detailed_expect_value;
 static Boolean  CKA_blast_detailed_allow_repeats;
 
-static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head);
+static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr lip);
 
 static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id)
 {
@@ -5606,7 +5724,7 @@ static SeqIdPtr SqnSeqIdFindBestAccession (SeqIdPtr sip)
 	return SeqIdSelect (sip, order, NUM_SEQID);
 }
 
-static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 bioseqlen)
+static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 bioseqlen, ValNodePtr PNTR errors)
 {
    CKA_AccPtr        acc;
    CKA_AccPtr        PNTR accarray;
@@ -5621,15 +5739,21 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    Int4              longest;
    Int4              max;
    Int4              n;
-   FILE              PNTR ofp;
    Int4              prev;
    Boolean           retval;
-   Char              string[300];
    CharPtr           textid;
    Char              textid2[42];
+   CharPtr           err_msg;
+   CharPtr           no_cover_fmt = "Primary accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but next aln is %s to %d-%d\n"; 
+   CharPtr           no_cover_ok_gap_fmt = "Primary accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but the next aln is %s to %d-%d;\n the gap is less than %d and is acceptable.\n";
+   CharPtr           bad_start_fmt = "Primary accessions do not completely cover the bioseq %s:\n %s (the first aln) starts at position %d\n";
+   CharPtr           bad_start_ok_gap_fmt = "Primary accessions do not completely cover the bioseq %s:\n %s (the first alignment) starts at position %d, but the gap is less than %d and is acceptable.\n";
+   CharPtr           bad_end_fmt = "Primary accessions do not completely cover the bioseq %s:\n %s (the last aln) goes to %d, bioseq length is %d\n";
+   CharPtr           bad_end_ok_gap_fmt = "Primary accessions do not completely cover the bioseq %s:\n %s (the last alignment) goes to %d, bioseq length is %d, but the gap is less than %d and is acceptable.\n";
 
-   if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
+   if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT || errors == NULL)
       return FALSE;
+
    amaip = (AMAlignIndex2Ptr)(sap->saip);
    for (i=0; i<amaip->numsaps; i++)
    {
@@ -5713,19 +5837,22 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
       {
          if (acc->start_seq > prev + CKA_GAPLEN)
          {
-            sprintf(string, "Primary accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but next aln is %s to %d-%d", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq);
-            ofp = FileOpen("cka_validate.txt", "a");
-            fprintf(ofp, "%s", string);
-            FileClose(ofp);
-            Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+            err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (no_cover_fmt) + StringLen (textid) + StringLen (accarray[j-1]->accession)
+                                                         + StringLen (acc->accession) + 60));
+            sprintf (err_msg, no_cover_fmt, 
+                     textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq);
+            ValNodeAddPointer (errors, 0, err_msg);
             retval = FALSE;
-         } else if (acc->start_seq > prev)
+         } 
+         else if (acc->start_seq > prev)
          {
-            sprintf(string, "Primary accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but the next aln is %s to %d-%d;\n the gap is less than %d and is acceptable.", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq, CKA_GAPLEN);
-            ofp = FileOpen("cka_validate.txt", "a");
-            fprintf(ofp, "%s", string);
-            FileClose(ofp);
-            Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+            err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (no_cover_ok_gap_fmt) + StringLen (textid)
+                                                         + StringLen (accarray[j-1]->accession)
+                                                         + StringLen (acc->accession)
+                                                         + 75));
+            sprintf (err_msg, no_cover_ok_gap_fmt,
+                     textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq, CKA_GAPLEN);
+            ValNodeAddPointer (errors, 0, err_msg);
             retval = FALSE;
          }
       }
@@ -5735,15 +5862,23 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    {
       if (first > CKA_GAPLEN)
       {
-         sprintf(string, "Primary accessions do not completely cover the bioseq %s:\n %s (the first aln) starts at position %d", textid, accarray[first_align]->accession, accarray[first_align]->start_seq);
-         ofp = FileOpen("cka_validate.txt", "a");
-         fprintf(ofp, "%s\n", string);
-         FileClose(ofp);
-         Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+         err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_start_fmt) + StringLen (textid)
+                                                      + StringLen (accarray[first_align]->accession)
+                                                     + 15));
+         sprintf (err_msg, bad_start_fmt,
+                          textid, accarray[first_align]->accession, accarray[first_align]->start_seq);
+         ValNodeAddPointer (errors, 0, err_msg);
          retval = FALSE;
-      } else if (first != 1)
+      } 
+      else if (first != 1)
       {
-         Message(MSG_OK, "Primary accessions do not completely cover the bioseq %s:\n %s (the first alignment) starts at position %d, but the gap is less than %d and is acceptable.", textid, accarray[first_align]->accession, accarray[first_align]->start_seq, CKA_GAPLEN);
+         err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_start_ok_gap_fmt) 
+                                                      + StringLen (textid)
+                                                      + StringLen (accarray[first_align]->accession)
+                                                      + 30));
+         sprintf (err_msg, bad_start_ok_gap_fmt, 
+                  textid, accarray[first_align]->accession, accarray[first_align]->start_seq, CKA_GAPLEN);
+         ValNodeAddPointer (errors, 0, err_msg);
       }
       max = 0;
       for (k=0; k<i; k++)
@@ -5756,15 +5891,24 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
       }
       if (accarray[longest]->stop_seq < bioseqlen-CKA_GAPLEN)
       {
-         sprintf (string, "Primary accessions do not completely cover the bioseq %s:\n %s (the last aln) goes to %d, bioseq length is %d", textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen);
-         ofp = FileOpen("cka_validate.txt", "a");
-         fprintf(ofp, "%s", string);
-         FileClose(ofp);
-         Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+         err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_end_fmt) 
+                                                      + StringLen (textid)
+                                                      + StringLen (accarray[longest]->accession)
+                                                      + 30));
+         sprintf (err_msg, bad_end_fmt,
+                          textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen);
+         ValNodeAddPointer (errors, 0, err_msg);
          retval = FALSE;
-      } else if (accarray[longest]->stop_seq < bioseqlen)
+      } 
+      else if (accarray[longest]->stop_seq < bioseqlen)
       {
-         Message(MSG_OK, "Primary accessions do not completely cover the bioseq %s:\n %s (the last alignment) goes to %d, bioseq length is %d, but the gap is less than %d and is acceptable", textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen, CKA_GAPLEN);
+         err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_end_ok_gap_fmt)
+                                                      + StringLen (textid)
+                                                      + StringLen (accarray[longest]->accession)
+                                                      + 45));
+         sprintf (err_msg, bad_end_ok_gap_fmt,
+                           textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen, CKA_GAPLEN);
+         ValNodeAddPointer (errors, 0, err_msg);
       }
       MemFree(accarray);
       accarray = NULL;
@@ -5867,6 +6011,22 @@ static void CKA_ShowAln(SeqAlignPtr sap, CKA_AccPtr acc_head)
    Show(w);
 }
 
+
+static void PrintTPAHistErrors (LogInfoPtr lip, ValNodePtr errors)
+{
+  ValNodePtr vnp;
+
+  if (lip == NULL || lip->fp == NULL || errors == NULL) return;
+
+  for (vnp = errors; vnp != NULL; vnp = vnp->next)
+  {
+    fprintf (lip->fp, vnp->data.ptrvalue);
+    lip->data_in_log = TRUE;
+  }
+  fprintf (lip->fp, "\n\n");
+}
+
+
 static void CKA_RunChecker(SeqEntryPtr sep)
 {
    CKA_AccPtr   acc;
@@ -5883,6 +6043,10 @@ static void CKA_RunChecker(SeqEntryPtr sep)
    SeqHistPtr   shp;
    CharPtr      textid;
    Char         textid2[42];
+   LogInfoPtr   lip;
+   ValNodePtr   err_list;
+   CharPtr      err_msg;
+   CharPtr      no_align_fmt = "Accession %s does not align to the bioseq %s.\n";
 
    if (sep == NULL)
    {
@@ -5897,6 +6061,9 @@ static void CKA_RunChecker(SeqEntryPtr sep)
       Message(MSG_ERROR, "No Tpa features found in SeqEntry.");
       return;
    }
+
+   lip = OpenLog ("TPA Alignment Assembly Problems");
+
    acc_head_real = acc_head;
    while (acc_head != NULL)
    {
@@ -5919,7 +6086,7 @@ static void CKA_RunChecker(SeqEntryPtr sep)
       bsp = BioseqLockById(acc_head->sip_whole);
       if (ISA_na(bsp->mol))
       {
-         sap = CKA_MakeAlign(bsp, acc_head);
+         sap = CKA_MakeAlign(bsp, acc_head, lip);
          acc = acc_head;
          while (acc != NULL && acc->sap == NULL)
          {
@@ -5932,52 +6099,74 @@ static void CKA_RunChecker(SeqEntryPtr sep)
             textid = textid2;
          }
 
+         err_list = NULL;
+
          /* report each accession that does not align to the bioseq */
          acc = acc_head;
-         while (acc != NULL) {
-           if (acc->sap == NULL) {
-             Message (MSG_OK, "Accession %s does not align to the bioseq %s.", acc->accession, textid);
+         while (acc != NULL) 
+         {
+           if (acc->sap == NULL) 
+           {
+             err_msg = (CharPtr) MemNew (sizeof(Char) * (StringLen (no_align_fmt) + StringLen (acc->accession) + StringLen (textid)));
+             sprintf (err_msg, no_align_fmt, acc->accession, textid);
+             ValNodeAddPointer (&err_list, 0, err_msg);
            }
            acc = acc->next;
          }
 
-	 if (CKA_ValidateSeqAlign(sap, acc_head, bsp->length))
-	    Message(MSG_OK, "Alignments were successfully created and are being added to %s.", textid);
-	 else if (sap != NULL)
-	    Message(MSG_OK, "Alignments were created but are not valid. They are being added to %s for review.", textid);
-         else if (sap == NULL) {
-            Message(MSG_ERROR, "No alignments could be created for %s.", textid);
-            acc_head = acc_head_next;
-            continue;
+	       if (CKA_ValidateSeqAlign(sap, acc_head, bsp->length, &err_list))
+         {
+            fprintf (lip->fp, "Alignments were successfully created and are being added to %s.\n", textid);
+            lip->data_in_log = TRUE;
+            PrintTPAHistErrors (lip, err_list);
+            err_list = ValNodeFreeData (err_list);
          }
+	       else if (sap != NULL)
+         {
+            fprintf (lip->fp, "Alignments were created but are not valid. They are being added to %s for review.\n", textid);
+            lip->data_in_log = TRUE;
+            PrintTPAHistErrors (lip, err_list);
+            err_list = ValNodeFreeData (err_list);
+         }
+         else if (sap == NULL) 
+         {
+            fprintf (lip->fp, "No alignments could be created for %s.\n", textid);
+            lip->data_in_log = TRUE;
+            PrintTPAHistErrors (lip, err_list);
+            err_list = ValNodeFreeData (err_list);
+            acc_head = acc_head_next;
+            BioseqUnlock (bsp);
+            continue;
+         } else {
+            PrintTPAHistErrors (lip, err_list);
+            err_list = ValNodeFreeData (err_list);
+         }
+
          AlnMgr2IndexLite(sap);
          AlnMgr2SortAlnSetByNthRowPos(sap, 1);
-	 /* make seq-hist and add it to record */
-	 if (bsp->hist != NULL)
-	 {
-	    shp = bsp->hist;
-	    if (shp->assembly != NULL)
-	       SeqAlignSetFree(shp->assembly);
-	    shp->assembly = (SeqAlignPtr)(sap->segs);
-	 } else
-	 {
-	    shp = SeqHistNew();
-	    shp->assembly = (SeqAlignPtr)(sap->segs);
-	    bsp->hist = shp;
-	 }
+	       /* make seq-hist and add it to record */
+	       if (bsp->hist != NULL)
+	       {
+	          shp = bsp->hist;
+	          if (shp->assembly != NULL)
+	            SeqAlignSetFree(shp->assembly);
+	          shp->assembly = (SeqAlignPtr)(sap->segs);
+	       }
+         else
+	       {
+	          shp = SeqHistNew();
+	          shp->assembly = (SeqAlignPtr)(sap->segs);
+	          bsp->hist = shp;
+	       }
          sap->segs = NULL;
          SeqAlignFree(sap);
-	     } else
-	 Message(MSG_ERROR, "%s is annotated on a non-nucleotide bioseq.", acc_head->accession);
-    /* while (acc_head != NULL)
+	     } 
+     else
      {
-        acc_head_tmp = acc_head->next;
-        acc_head->next = NULL;
-        MemFree(acc_head->accession);
-        SeqIdFree(acc_head->sip_whole);
-        MemFree(acc_head);
-        acc_head = acc_head_tmp;
-     }*/
+        fprintf (lip->fp, "%s is annotated on a non-nucleotide bioseq.\n", acc_head->accession);
+        lip->data_in_log = TRUE;
+     }
+     BioseqUnlock (bsp);
      acc_head = acc_head_next;
   }
   /*CKA_ShowAln(sap, acc_head_real);*/
@@ -5989,6 +6178,8 @@ static void CKA_RunChecker(SeqEntryPtr sep)
      MemFree(acc_head_real);
      acc_head_real = acc_head_tmp;
   }
+  CloseLog (lip);
+  lip = FreeLog (lip);
 }
 
 static void CKA_FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
@@ -6331,8 +6522,92 @@ static BioseqPtr ReadFromTraceDb (CharPtr number)
   return bsp;
 }
 
+static SeqAlignPtr GetNewBlastTPAHistAlignPiece (BioseqPtr bsp1, BioseqPtr bsp2)
+{
+   BLAST_SummaryOptions *options = NULL;
+   SeqAlignPtr          salp = NULL;
 
-static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
+   BLAST_SummaryOptionsInit(&options);
+   options->program = eBlastn;
+   options->use_megablast = TRUE;
+   options->word_size = CKA_blast_wordsize;
+   options->cutoff_evalue = CKA_blast_expect_value;
+   options->hint = eNone;
+   options->gap_x_dropoff = 30;
+   options->gap_open = -1;
+   options->gap_extend = -1;
+   options->filter_string = StringSave ("F");
+
+   BLAST_TwoSequencesSearch(options, bsp1, bsp2, &salp);
+   BLAST_SummaryOptionsFree(options);
+
+   return salp;
+}
+
+
+static SeqAlignPtr GetOldBlastTPAHistAlignPiece (BioseqPtr bsp1, BioseqPtr bsp2)
+{
+  BLAST_OptionsBlkPtr  options;
+  SeqAlignPtr          salp;
+
+  options = BLASTOptionNew("blastn", TRUE);
+  options->is_megablast_search = TRUE;
+  options->gap_open = options->gap_extend = 0;
+  options->wordsize = CKA_blast_wordsize;
+  options->expect_value = CKA_blast_expect_value;
+
+  salp = BlastTwoSequences(bsp1, bsp2, "blastn", options);
+  BLASTOptionDelete(options);
+
+  return salp;
+}
+
+
+static Boolean IsHUPIDAccession (BioseqPtr bsp)
+{
+  Int4 j, num;
+  ObjMgrDataPtr omdp;
+  OMUserDataPtr omudp;
+  ObjMgrProcPtr ompp = NULL;
+  ObjMgrPtr omp;
+  ObjMgrDataPtr PNTR omdpp;
+  Boolean           rval = FALSE;
+
+  ompp = NULL;
+  omp = ObjMgrReadLock();
+
+  omdpp = omp->datalist;
+  if (omdpp != NULL) {
+    num = omp->currobj;
+    for (j = 0; j < num && ompp == NULL; j++) {
+      if (omdpp[j] != NULL && omdpp[j]->datatype == OBJ_BIOSEQ 
+          && omdpp[j]->dataptr == bsp) {
+
+        omdp = ObjMgrFindTop (omp, omdpp[j]);
+        if (omdp != NULL) {
+          for (omudp = omdp->userdata; omudp != NULL && ompp == NULL; omudp = omudp->next)
+          {
+            if (omudp->proctype == OMPROC_FETCH)  /* caching function */
+            {
+              ompp = ObjMgrProcFind(omp, omudp->procid, NULL, 0);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (ompp != NULL && StringCmp (ompp->procname, "SmartBioseqFetch") == 0) 
+  {
+    rval = TRUE;
+  }
+
+  ObjMgrUnlock();
+  return rval;
+}
+
+
+static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr lip)
 {
    CKA_AccPtr           acc;
    CKA_AccPtr           acc_new;
@@ -6342,14 +6617,16 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
    SeqAlignPtr          allsap;
    SeqAlignPtr          allsap_prev;
    AMAlignIndex2Ptr     amaip;
-   BioseqPtr            bsp_tmp;
+   BioseqPtr            bsp_tmp = NULL;
    Int4                 i;
-   BLAST_OptionsBlkPtr  options;
+   BLAST_SummaryOptions *options = NULL;
+   SBlastSeqalignArray * seqalign_arr=NULL;
    SeqAlignPtr          sap_new;
    SeqAlignPtr          sap_tmp;
    SeqAlignPtr          sap_tmp_next;
    SeqIdPtr             sip;
    Uint1                strand;
+   Boolean              need_to_unlock = FALSE;
 
    if (bsp == NULL || acc_head == NULL)
       return NULL;
@@ -6357,26 +6634,43 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
    allsap = NULL;
    allsap_prev = NULL;
    acc_new_head_head = acc_new_prev = NULL;
+   BLAST_SummaryOptionsInit(&options);
+   options->program = eBlastn;
+   options->use_megablast = TRUE;
+   options->word_size = CKA_blast_wordsize;
+   options->cutoff_evalue = CKA_blast_expect_value;
+   options->hint = eNone;
+   options->gap_open = -1;
+   options->gap_extend = -1;
+   options->filter_string = StringSave ("F");
    while (acc != NULL)
    {
-      options = BLASTOptionNew("blastn", TRUE);
-      /*if (bsp->length > 10000)*/
+
+      if (need_to_unlock)
       {
-/*    faster with no filtering */
-         options->is_megablast_search = TRUE;
-         options->gap_open = options->gap_extend = 0;
-         options->wordsize = CKA_blast_wordsize;
-      }/* else
-         options->filter_string = StringSave("m L;R");*/
-      options->expect_value = CKA_blast_expect_value;
+        BioseqUnlock (bsp_tmp);
+        need_to_unlock = FALSE;
+      }
+
       bsp_tmp = NULL;
       if (StringNICmp (acc->accession, "ti", 2) == 0) {
         bsp_tmp = ReadFromTraceDb (acc->accession + 2);
       } else {
         sip = SeqIdFromAccessionDotVersion(acc->accession);
         bsp_tmp = BioseqLockById(sip);
+        if (bsp_tmp != NULL) {
+          need_to_unlock = TRUE;
+          if (lip != NULL && lip->fp != NULL && IsHUPIDAccession (bsp_tmp)) {
+            fprintf (lip->fp, "%s is unreleased accession in TPA Seq-Hist.\n", acc->accession);
+            lip->data_in_log = TRUE;
+          }
+        }
       }
-      if (bsp_tmp == NULL) break;
+      if (bsp_tmp == NULL) {
+        fprintf (lip->fp, "Unable to load %s", acc->accession);
+        lip->data_in_log = TRUE;
+        break;
+      }
       if (bsp_tmp->id->next) {
         /* find the best accession */
         SeqIdPtr sip = SeqIdDup(SqnSeqIdFindBestAccession(bsp_tmp->id));
@@ -6385,7 +6679,11 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
       }
       if (!ISA_na(bsp_tmp->mol))
       {
-         BioseqUnlock(bsp_tmp);
+         if (need_to_unlock)
+         {
+           BioseqUnlock(bsp_tmp);
+           need_to_unlock = FALSE;
+         }
          Message(MSG_ERROR, "%s is not a nucleotide bioseq.", acc->accession);
          break;
       }
@@ -6402,13 +6700,21 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
             (acc->stop_acc, acc->start_acc, Seq_strand_minus, bsp_tmp->id);
         }
         slp2 = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
-        acc->sap = BlastTwoSequencesByLoc(slp1, slp2, "blastn", options);
+        acc->sap = NULL;
+        seqalign_arr = NULL;
+        BLAST_TwoSeqLocSets (options, slp1, slp2, NULL, &seqalign_arr, NULL, NULL, NULL);
+        if (seqalign_arr != NULL)
+        {
+          acc->sap = seqalign_arr->array[0];
+          seqalign_arr->array[0] = NULL;
+          seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
+        }
         SeqLocFree(slp1);
         SeqLocFree(slp2);
       } else {
-        acc->sap = BlastTwoSequences(bsp_tmp, bsp, "blastn", options);
+        acc->sap = NULL;
+        BLAST_TwoSequencesSearch(options, bsp_tmp, bsp, &(acc->sap));
       }
-      BLASTOptionDelete(options);
       ArrowCursor();
       acc->start_acc = acc->stop_acc = 0; /* reset, for later usage */
       if (acc->sap != NULL)
@@ -6487,12 +6793,24 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
             allsap_prev = allsap_prev->next;
          }
       }  
-      BioseqUnlock(bsp_tmp);
+      if (need_to_unlock) 
+      {
+         BioseqUnlock(bsp_tmp);
+         need_to_unlock = FALSE;
+      }
       acc = acc->next;
       if (!acc_new_head_head) {
         acc_new_head_head = acc_new_head;
       }
    }
+
+   BLAST_SummaryOptionsFree(options);
+   if (need_to_unlock)
+   {
+      BioseqUnlock (bsp_tmp);
+      need_to_unlock = FALSE;
+   }
+
    acc = acc_head;
    while (acc->next != NULL)
    {
@@ -7043,6 +7361,113 @@ static void AssemblyUserFormMessage (ForM f, Int2 mssg)
   }
 }
 
+
+static Int4 CountNumberSequence (CharPtr str)
+{
+  if (StringHasNoText (str)) return 0;
+  else return StringSpn (str, "0123456789");
+}
+
+static Int4 CountCapitalLetterSequence (CharPtr str)
+{
+  if (StringHasNoText (str)) return 0;
+  else return StringSpn (str, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+}
+
+static Boolean LooksLikeTPAAccession (CharPtr str)
+{
+  Int4 len, num_len, letter_len;
+
+  if (StringHasNoText (str)) return TRUE;
+
+  len = StringLen (str);
+
+  if (StringNICmp (str, "ti", 2) == 0 && CountNumberSequence (str + 2) == len - 2)
+  {
+    return TRUE;
+  }
+  else if (StringChr (str, '_') != NULL)
+  {
+    return FALSE;
+  }
+  letter_len = CountCapitalLetterSequence (str);
+  num_len = CountNumberSequence(str + letter_len);
+
+  if ((letter_len == 1 && num_len == 5)
+      || (letter_len == 2 && num_len == 6)
+      || (letter_len == 4 && num_len == 8))
+  {
+    if (str[letter_len + num_len] == 0
+        || (str[letter_len + num_len] == '.' && letter_len + num_len + 1 + CountNumberSequence (str + letter_len + num_len + 1) == len))
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+
+static void TPAAssemblyFormAccept (ButtoN b)
+
+{
+  AssemblyUserFormPtr afp;
+  UserObjectPtr     uop;
+  UserFieldPtr      curr, ufp;
+  LogInfoPtr        lip;
+  CharPtr           str;
+  Boolean           some_bad = FALSE;
+  ObjectIdPtr       oip;
+
+  afp = (AssemblyUserFormPtr) GetObjectExtra (b);
+
+  uop = (UserObjectPtr) DialogToPointer (afp->data);
+  if (uop == NULL) 
+  {
+    StdAcceptFormButtonProc (b);
+    return;
+  }
+
+  lip = OpenLog ("Possible Problem Accessions");
+
+  /* put explanatory text here, but do not set data_in_log flag until
+   * suspect accession is actually found
+   */
+  fprintf (lip->fp, "The information you have input does not appear to be a GenBank accession number.\n");
+  fprintf (lip->fp, "Please confirm that you have identified the primary sequences used to assemble \n"
+                    "or derive your TPA sequences with GenBank accession numbers in the correct format.\n");
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    if (curr->choice != 11) continue;
+    str = NULL;
+    for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+      oip = ufp->label;
+      if (oip == NULL) continue;
+      if (StringICmp (oip->str, "accession") == 0 && ufp->choice == 1) {
+        str = (CharPtr) ufp->data.ptrvalue;
+        if (!LooksLikeTPAAccession (str))
+        {
+          fprintf (lip->fp, "%s\n", str);
+          lip->data_in_log = TRUE;
+          some_bad = TRUE;
+        }
+      }
+    }
+  }
+
+  CloseLog (lip);
+  lip = FreeLog (lip);
+  uop = UserObjectFree (uop);
+
+  if (some_bad && ANS_NO == Message (MSG_YN, "Some of your accession numbers may not be in the correct format - continue anyway?"))
+  {
+    Select (afp->form);    
+    return;
+  }
+
+  StdAcceptFormButtonProc (b);
+}
+
+
 static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
                                    Int2 height, CharPtr title, ValNodePtr sdp,
                                    SeqEntryPtr sep, FormActnFunc actproc)
@@ -7079,7 +7504,7 @@ static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
     afp->data = CreateAssemblyDialog (g);
 
     c = HiddenGroup (w, 2, 0, NULL);
-    b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
+    b = DefaultButton (c, "Accept", TPAAssemblyFormAccept);
     SetObjectExtra (b, afp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
@@ -7087,6 +7512,7 @@ static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
   }
   return (ForM) w;
 }
+
 
 extern Int2 LIBCALLBACK AssemblyUserGenFunc (Pointer data)
 
@@ -7742,9 +8168,6 @@ static Boolean GetCDStRNArRNAGatherFunc (GatherContextPtr gcp)
 }
 
 
-extern EnumFieldAssoc  orgmod_subtype_alist [];
-extern EnumFieldAssoc  subsource_subtype_alist [];
-
 extern void StringToLower (CharPtr str)
 
 {
@@ -7766,19 +8189,62 @@ static CharPtr molinfo_tech_list [] = {
   "fli cDNA", "htgs 0", "htc", "wgs", "barcode", "composite-wgs-htgs", NULL
 };
 
+
+static void AddSubSourceValuesToNucTitle (BioSourcePtr biop, CharPtr str)
+{
+  CharPtr       ssp_name;
+  SubSourcePtr  ssp;
+  Char          text [256];
+
+  if (biop == NULL || str == NULL) return;
+  ssp = biop->subtype;
+  while (ssp != NULL) {
+    StringCpy (text, "[");
+    ssp_name = GetSubsourceQualName (ssp->subtype);
+    if (StringHasNoText (ssp_name)) {
+      StringCat (text, "subsource");
+    } else {
+      StringCat (text, ssp_name);
+    }
+    StringToLower (text);
+    StringCat (text, "=");
+    StringCat (text, ssp->name);
+    StringCat (text, "] ");
+    StringCat (str, text);
+    ssp = ssp->next;
+  }
+}
+
+static void AddOrgModValuesToNucTitle (BioSourcePtr biop, CharPtr str)
+{
+  CharPtr    mod_name;
+  OrgModPtr  mod;
+  Char       text [256];
+
+  if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL || str == NULL) return;
+  mod = biop->org->orgname->mod;
+  while (mod != NULL) {
+    StringCpy (text, "[");
+    mod_name = GetOrgModQualName (mod->subtype);
+    StringCat (text, mod_name);
+    StringToLower (text);
+    StringCat (text, "=");
+    StringCat (text, mod->subname);
+    StringCat (text, "] ");
+    StringCat (str, text);
+    mod = mod->next;
+  }
+}
+
 static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
-  EnumFieldAssocPtr  ap;
   BioseqContextPtr   bcp;
   BioSourcePtr       biop;
   BioseqPtr          bsp;
   MolInfoPtr         mip;
-  OrgModPtr          mod;
-  OrgNamePtr         onp;
   OrgRefPtr          orp;
   SeqDescrPtr        sdp;
-  SubSourcePtr       ssp;
   CharPtr            str;
   Uint1              tech = 0;
   Char               text [256];
@@ -7834,50 +8300,9 @@ static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, 
     StringCat (str, text);
   }
 
-  ssp = biop->subtype;
-  while (ssp != NULL) {
-    for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-      if (ssp->subtype == ap->value) {
-        StringCpy (text, "[");
-        if (ap->value != 255) {
-          StringCat (text, ap->name);
-        } else {
-          StringCat (text, "subsource");
-        }
-        StringToLower (text);
-        StringCat (text, "=");
-        StringCat (text, ssp->name);
-        StringCat (text, "] ");
-        StringCat (str, text);
-      }
-    }
-    ssp = ssp->next;
-  }
-  orp = biop->org;
-  if (orp != NULL) {
-    onp = orp->orgname;
-    if (onp != NULL) {
-      mod = onp->mod;
-      while (mod != NULL) {
-        for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-          if (mod->subtype == ap->value) {
-            StringCpy (text, "[");
-            if (ap->value != 255) {
-              StringCat (text, ap->name);
-            } else {
-              StringCat (text, "note");
-            }
-            StringToLower (text);
-            StringCat (text, "=");
-            StringCat (text, mod->subname);
-            StringCat (text, "] ");
-            StringCat (str, text);
-          }
-        }
-        mod = mod->next;
-      }
-    }
-  }
+  AddSubSourceValuesToNucTitle (biop, str);
+
+  AddOrgModValuesToNucTitle (biop, str);
 
   if (tech > 0) {
     StringCpy (text, "[tech=");
@@ -7899,7 +8324,6 @@ static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, 
 extern Int2 LIBCALLBACK MakeSequinProteinTitles (Pointer data);
 extern Int2 LIBCALLBACK MakeSequinNucleotideTitles (Pointer data);
 extern Int2 LIBCALLBACK MakeSequinFeatureTable (Pointer data);
-extern Int2 LIBCALLBACK MakeContigBuildTable (Pointer data);
 
 extern Int2 LIBCALLBACK MakeSequinNucleotideTitles (Pointer data)
 
@@ -8144,116 +8568,6 @@ extern Int2 LIBCALLBACK MakeSequinFeatureTable (Pointer data)
   SeqMgrExploreBioseqs (ompcp->input_entityID, NULL, (Pointer) fp, SequinFTableBioseq, TRUE, FALSE, FALSE);
   FileClose (fp);
   LaunchGeneralTextViewer (path, "Gene - CDS Feature Table");
-  FileRemove (path);
-  return OM_MSG_RET_DONE;
-}
-
-/* the following two functions are modified from PrintGenome in wprint.c */
-
-static void SqLitPrintGenome(SeqLitPtr slp, FILE *fp)
-{
-	if (slp->seq_data != NULL)         /* not a gap */
-	{
-		if (slp->length == 0)  /* unknown length */
-		{
-			fprintf(fp, "gap\t0\t0\t0\n");
-		} else {
-/* don't know what to do here */
-		}
-	} else {                  /* gap length was set */
-			fprintf(fp, "gap\t0\t0\t%ld\n", (long) slp->length);
-	}
-}
-
-static void SqLocPrintGenome(SeqLocPtr slp_head, FILE *fp)
-{
-	SeqLocPtr	slp;
-	static Char		buf[11];
-	SeqIdPtr	sid, newid;
-	Int4 		start, stop;
-		
-	for (slp = slp_head; slp; slp = slp->next) {
-		sid = SeqLocId(slp);
-		if (slp->choice == SEQLOC_INT || slp->choice == SEQLOC_WHOLE) {
-			start = SeqLocStart(slp);
-			stop = SeqLocStop(slp);
-		} else if (slp->choice == SEQLOC_NULL){
-			fprintf(fp, "gap\t0\t0\t0\n");
-			continue;
-		} else {
-			continue;
-		}
-		if (sid->choice == SEQID_GI) {
-			newid = GetSeqIdForGI(sid->data.intvalue);
-		} else if (sid->choice == SEQID_GENERAL) {
-			newid = sid;
-		} else {
-			newid = sid;
-		}
-		SeqIdWrite(newid, buf, PRINTID_TEXTID_ACCESSION, 10);
-		fprintf(fp, "%s\t%ld\t%ld\n", buf, (long) start+1, (long) stop+1);
-	}
-}
-
-static Boolean DeltaLitOnly (BioseqPtr bsp)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
-extern Int2 LIBCALLBACK MakeContigBuildTable (Pointer data)
-
-{
-  BioseqPtr         bsp;
-  DeltaSeqPtr       dsp;
-  FILE              *fp;
-  SeqLitPtr 	    litp;
-  OMProcControlPtr  ompcp;
-  Char              path [PATH_MAX];
-  SeqEntryPtr       sep;
-
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
-  bsp = NULL;
-  switch (ompcp->input_itemtype) {
-    case OBJ_BIOSEQ :
-      bsp = (BioseqPtr) ompcp->input_data;
-      break;
-    default :
-      return OM_MSG_RET_ERROR;
-  }
-  if (bsp == NULL) return OM_MSG_RET_ERROR;
-  sep = GetBestTopParentForData (ompcp->input_entityID, bsp);
-  if (sep == NULL) return OM_MSG_RET_ERROR;
-  if (IsAGenomeRecord (sep) ||
-      IsSegmentedBioseqWithoutParts (sep)) {
-  } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
-  } else return OM_MSG_RET_ERROR;
-  TmpNam (path);
-  fp = FileOpen (path, "w");
-  if (fp == NULL) return OM_MSG_RET_ERROR;
-/* the following code is modified from PrintGenome in wprint.c */
-	if (bsp->seq_ext_type == 1) {
-		SqLocPrintGenome((SeqLocPtr) bsp->seq_ext, fp);
-	} else if (bsp->seq_ext_type == 4) {
-		for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp; dsp=dsp->next) {
-			if (dsp->choice == 1) {  /* SeqLoc */
-				SqLocPrintGenome((SeqLocPtr)(dsp->data.ptrvalue), fp);
-			} else {
-				litp = (SeqLitPtr)(dsp->data.ptrvalue);
-				if (litp == NULL) continue;
-				SqLitPrintGenome(litp, fp);
-			}
-		}
-	}
-  FileClose (fp);
-  LaunchGeneralTextViewer (path, "Contig Build Table");
   FileRemove (path);
   return OM_MSG_RET_DONE;
 }
@@ -8796,12 +9110,30 @@ static void FixDeltaFeatures (BioseqPtr bsp, Int4 offset, Int4 len_diff)
   }  
 }
 
+
+extern Int4 GetDeltaSeqLen (DeltaSeqPtr dsp)
+{
+  Int4 len = 0;
+  SeqLitPtr slp;
+
+  if (dsp == NULL || dsp->data.ptrvalue == NULL) {
+    /* do nothing, empty */
+  } else if (dsp->choice == 1) {
+    len = SeqLocLen ((SeqLocPtr)(dsp->data.ptrvalue));
+  } else if (dsp->choice == 2) {
+    slp = (SeqLitPtr) dsp->data.ptrvalue;
+    len = slp->length;
+  }
+  return len;
+}
+
+
+
 static void ConvertGapFeaturesToUnknownCallback (BioseqPtr bsp, Pointer userdata)
 {
   ConvertGapToUnknownPtr cgtup;
   DeltaSeqPtr            dsp;
   SeqLitPtr              slip;
-  SeqLocPtr              slp;
   Int4                   len_diff;
   Int4                   offset = 0, add_len;
   
@@ -8817,33 +9149,23 @@ static void ConvertGapFeaturesToUnknownCallback (BioseqPtr bsp, Pointer userdata
   dsp = (DeltaSeqPtr) bsp->seq_ext;
   while (dsp != NULL)
   {
-    add_len = 0;
-    if (dsp->choice == 1 && dsp->data.ptrvalue != NULL)
-    {
-      slp = (SeqLocPtr) dsp->data.ptrvalue;
-      add_len = SeqLocLen (slp);
-    }
-    else if (dsp->choice == 2 && dsp->data.ptrvalue != NULL)
+    add_len = GetDeltaSeqLen (dsp);
+    if (IsDeltaSeqGap (dsp) && !DoesDeltaSeqHaveGapTypeOrLinkage(dsp) && add_len >= cgtup->start_unknown)
     {
       slip = (SeqLitPtr) (dsp->data.ptrvalue);
-      add_len = slip->length;
-      if (slip->seq_data == NULL
-          && slip->length >= cgtup->start_unknown)
+      len_diff = slip->length - 100;
+      slip->length = 100;
+      if (slip->fuzz != NULL)
       {
-        len_diff = slip->length - 100;
-        slip->length = 100;
-        if (slip->fuzz != NULL)
-        {
-          slip->fuzz = IntFuzzFree (slip->fuzz);
-        }
-        slip->fuzz = IntFuzzNew();
-        slip->fuzz->choice = 4;
-        
-        if (len_diff > 0) {
-            FixDeltaFeatures (bsp, offset, len_diff);
-        }
-        add_len -= len_diff;      
+        slip->fuzz = IntFuzzFree (slip->fuzz);
       }
+      slip->fuzz = IntFuzzNew();
+      slip->fuzz->choice = 4;
+        
+      if (len_diff > 0) {
+        FixDeltaFeatures (bsp, offset, len_diff);
+      }
+      add_len -= len_diff;
     }
     offset += add_len;
     dsp = dsp->next;
@@ -8946,7 +9268,7 @@ static void ChangeOneGapLength (SeqFeatPtr sfp, Int4 new_length)
   DeltaSeqPtr dsp;
   SeqLitPtr              slip;
   SeqLocPtr              slp;
-  Int4                   len_diff;
+  Int4                   len_diff = 0;
   Int4                   offset = 0, gap_start;
   
   if (sfp == NULL || sfp->idx.subtype != FEATDEF_gap || new_length < 0
@@ -8983,7 +9305,7 @@ static void ChangeOneGapLength (SeqFeatPtr sfp, Int4 new_length)
   if (offset == gap_start && dsp != NULL && dsp->choice == 2 && dsp->data.ptrvalue != NULL)
   {
     slip = (SeqLitPtr) (dsp->data.ptrvalue);
-    if (slip->seq_data == NULL && slip->fuzz == NULL)
+    if (IsDeltaSeqKnownGap (dsp) && !DoesDeltaSeqHaveGapTypeOrLinkage(dsp))
     {
       len_diff = slip->length - new_length;
       slip->length = new_length;
@@ -9112,14 +9434,14 @@ static Int4 CountNsAtEndOfSeqLit (SeqLitPtr slip, Uint2 which_end)
   Int2         residue;
   Int4         change_len = 0;
   
-  if (slip == NULL || slip->seq_data == NULL)
+  if (slip == NULL || slip->seq_data == NULL || slip->seq_data_type == Seq_code_gap)
   {
     return 0;
   }
-  
+
   if (slip->seq_data_type != Seq_code_iupacna)
   {
-    slip->seq_data = BSConvertSeq(slip->seq_data, Seq_code_iupacna, 
+    slip->seq_data = (SeqDataPtr) BSConvertSeq((ByteStorePtr) slip->seq_data, Seq_code_iupacna, 
                           slip->seq_data_type, 
                           slip->length);
     slip->seq_data_type = Seq_code_iupacna;
@@ -9127,22 +9449,22 @@ static Int4 CountNsAtEndOfSeqLit (SeqLitPtr slip, Uint2 which_end)
   
   if (which_end == SEQLOC_LEFT_END)
   {
-    BSSeek(slip->seq_data, 0, SEEK_SET);
+    BSSeek((ByteStorePtr) slip->seq_data, 0, SEEK_SET);
   }
   else
   {
-    BSSeek(slip->seq_data, slip->length - 1, SEEK_SET);    
+    BSSeek((ByteStorePtr) slip->seq_data, slip->length - 1, SEEK_SET);    
   }
   
-  residue = BSGetByte(slip->seq_data);
+  residue = BSGetByte((ByteStorePtr) slip->seq_data);
   while (change_len < slip->length && residue == 'N')
   {
     change_len++;
     if (which_end != SEQLOC_LEFT_END)
     {
-      BSSeek (slip->seq_data, slip->length - change_len - 1, SEEK_SET);
+      BSSeek ((ByteStorePtr) slip->seq_data, slip->length - change_len - 1, SEEK_SET);
     }
-    residue = BSGetByte (slip->seq_data);
+    residue = BSGetByte ((ByteStorePtr) slip->seq_data);
   }
 
   return change_len;
@@ -9156,9 +9478,12 @@ static void RemoveSeqLitEnd (SeqLitPtr slip, Int4 change_len, Uint2 which_end)
   {
     return;
   }
+
+  if (slip->seq_data_type == Seq_code_gap) return;
+
   if (slip->seq_data_type != Seq_code_iupacna)
   {
-    slip->seq_data = BSConvertSeq(slip->seq_data, Seq_code_iupacna, 
+    slip->seq_data = (SeqDataPtr) BSConvertSeq((ByteStorePtr) slip->seq_data, Seq_code_iupacna, 
                                   slip->seq_data_type, 
                                   slip->length);
     slip->seq_data_type = Seq_code_iupacna;
@@ -9166,24 +9491,23 @@ static void RemoveSeqLitEnd (SeqLitPtr slip, Int4 change_len, Uint2 which_end)
   bs_new = BSNew (slip->length - change_len);
   if (which_end == SEQLOC_LEFT_END)
   {
-    BSSeek (slip->seq_data, change_len, SEEK_SET);
+    BSSeek ((ByteStorePtr) slip->seq_data, change_len, SEEK_SET);
   }
   else
   {
-    BSSeek(slip->seq_data, 0, SEEK_SET);
+    BSSeek((ByteStorePtr) slip->seq_data, 0, SEEK_SET);
   }
-  BSInsertFromBS (bs_new, slip->seq_data, slip->length - change_len);
-  slip->seq_data = BSFree (slip->seq_data);
-  slip->seq_data = bs_new;
+  BSInsertFromBS (bs_new, (ByteStorePtr) slip->seq_data, slip->length - change_len);
+  slip->seq_data = SeqDataFree (slip->seq_data, slip->seq_data_type);
+  slip->seq_data = (SeqDataPtr) bs_new;
   slip->length -= change_len;
 }
 
 static void ExpandGapsToIncludeFlankingNs (BioseqPtr bsp, Pointer userdata)
 {
-  DeltaSeqPtr  dsp;
-  Int4         offset = 0, last_length = 0, change_len, add_offset;
-  SeqLocPtr    slp;
-  SeqLitPtr    slip, prev_slip = NULL, next_slip;
+  DeltaSeqPtr  dsp, prev_dsp = NULL;
+  Int4         change_len;
+  SeqLitPtr    slip, prev_slip, next_slip;
   
   if (bsp == NULL || bsp->repr != Seq_repr_delta 
       || bsp->seq_ext_type != 4 || bsp->seq_ext == NULL)
@@ -9191,65 +9515,45 @@ static void ExpandGapsToIncludeFlankingNs (BioseqPtr bsp, Pointer userdata)
     return;
   }
   
-  for (dsp = bsp->seq_ext; dsp != NULL; dsp = dsp->next)
+  dsp = bsp->seq_ext;
+  while (dsp != NULL) 
   {
-    add_offset = 0;
-    if (dsp->choice == 1)
+    /* look for gap of known length */
+    if (IsDeltaSeqKnownGap(dsp) && !DoesDeltaSeqHaveGapTypeOrLinkage(dsp)) 
     {
-      slp = (SeqLocPtr) dsp->data.ptrvalue;
-      add_offset = SeqLocLen (slp);
-      last_length = 0;
-      prev_slip = NULL;
-    }
-    else if (dsp->choice == 2)
-    {
-      slip = (SeqLitPtr) dsp->data.ptrvalue;
-      add_offset = slip->length;
-      if (slip->seq_data == NULL)
+      /* check for Ns before gap of known length */
+      if (prev_dsp != NULL && prev_dsp->choice == 2 
+          && prev_dsp->data.ptrvalue != NULL
+          && !IsDeltaSeqGap (prev_dsp))
       {
-        if (slip->fuzz == NULL)
-        {
-          /* check for Ns before gap of known length */
-          if (prev_slip != NULL && last_length > 0)
-          {
-            change_len = CountNsAtEndOfSeqLit (prev_slip, SEQLOC_RIGHT_END);
-
-            if (change_len > 0)
-            {
-              RemoveSeqLitEnd (prev_slip, change_len, SEQLOC_RIGHT_END);
-              slip->length += change_len;
-            }
-          }
-          /* check for Ns after gap of known length */
-          if (dsp->next != NULL && dsp->next->choice == 2 && dsp->next->data.ptrvalue != NULL)
-          {
-            next_slip = (SeqLitPtr) dsp->next->data.ptrvalue;
-            change_len = CountNsAtEndOfSeqLit (next_slip, SEQLOC_LEFT_END);
+        slip = (SeqLitPtr) dsp->data.ptrvalue;
+        prev_slip = (SeqLitPtr) prev_dsp->data.ptrvalue;
             
-            if (change_len > 0)
-            {
-              RemoveSeqLitEnd (next_slip, change_len, SEQLOC_LEFT_END);
-              slip->length += change_len;
-              add_offset += change_len;
-            }
-          }
+        change_len = CountNsAtEndOfSeqLit (prev_slip, SEQLOC_RIGHT_END);
+        if (change_len > 0)
+        {
+          RemoveSeqLitEnd (prev_slip, change_len, SEQLOC_RIGHT_END);
+          slip->length += change_len;
         }
-        prev_slip = NULL;
-        last_length = 0;
       }
-      else
+      /* check for Ns after gap of known length */
+      if (dsp->next != NULL && dsp->next->choice == 2
+          && dsp->next->data.ptrvalue != NULL
+          && !IsDeltaSeqGap (dsp->next))
       {
-        prev_slip = slip;
-        last_length = slip->length;
+        slip = (SeqLitPtr) dsp->data.ptrvalue;
+        next_slip = (SeqLitPtr) dsp->next->data.ptrvalue;
+        change_len = CountNsAtEndOfSeqLit (next_slip, SEQLOC_LEFT_END);
+            
+        if (change_len > 0)
+        {
+          RemoveSeqLitEnd (next_slip, change_len, SEQLOC_LEFT_END);
+          slip->length += change_len;
+        }
       }
     }
-    else
-    {
-      prev_slip = NULL;
-      last_length = 0;
-    }
-    offset += add_offset;
-  }
+    dsp = dsp->next;
+  }    
   BioseqPack (bsp);
 }
 
@@ -9278,87 +9582,85 @@ extern void AddFlankingNsToKnownLengthGaps (IteM i)
 }
 
 
-static void CombineAdjacentGapsCallback (BioseqPtr bsp, Pointer userdata)
+static Boolean CanCombineDeltaSeq (DeltaSeqPtr dsp1, DeltaSeqPtr dsp2)
 {
-  ValNodePtr vnp, prev_vnp = NULL, next_vnp;
-  SeqLitPtr  litp, prev_litp = NULL;
-  SeqLocPtr  slp;
+
+  if (dsp1 == NULL || dsp2 == NULL || dsp1->choice != 2 || dsp2->choice != 2
+      || dsp1->data.ptrvalue == NULL || dsp2->data.ptrvalue == NULL
+      || DoesDeltaSeqHaveGapTypeOrLinkage(dsp1) || DoesDeltaSeqHaveGapTypeOrLinkage(dsp2)) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
+extern void CombineAdjacentGapsOnBioseq (BioseqPtr bsp, Pointer userdata)
+{
+  SeqLitPtr  litp, pitp;
+  Boolean    l_unknown, p_unknown;
   Int4       offset = 0;
   Int4       len_diff;
   SeqFeatPtr sfp;
   SeqMgrFeatContext fcontext;
+  DeltaSeqPtr prev, last;
   
   if (bsp == NULL || bsp->repr != Seq_repr_delta)
   {
     return;
   }
   
-  for (vnp = (ValNodePtr)(bsp->seq_ext); 
-       vnp != NULL; 
-       vnp = next_vnp) 
-  {
-    next_vnp = vnp->next;
-    if (vnp->choice == 1) 
-    {
-      prev_vnp = NULL;
-      prev_litp = NULL;
-      slp = (SeqLocPtr) vnp->data.ptrvalue;
-      offset += SeqLocLen (slp);
+  /* combine adjacent gaps */
+  prev = (DeltaSeqPtr) bsp->seq_ext;
+  if (prev == NULL) return;
+  last = prev->next;
+  while (last != NULL) {
+    if (IsDeltaSeqGap (prev) && IsDeltaSeqGap (last) && CanCombineDeltaSeq (prev, last)) {
+      pitp = (SeqLitPtr) prev->data.ptrvalue;
+      litp = (SeqLitPtr) last->data.ptrvalue;
+      p_unknown = IsDeltaSeqUnknownGap (prev);
+      l_unknown = IsDeltaSeqUnknownGap (last);
+      len_diff = 0;
+      if (p_unknown && l_unknown) {
+        /* combine two unknown length gaps to make one unknown length gap */
+        len_diff = litp->length;
+      } else if (!p_unknown && !l_unknown) {
+        /* combine two known length gaps into one known length gap */
+        pitp->length += litp->length;
+      } else {
+        if (l_unknown) {
+          /* swap gaps to put unknown length gap into prev */
+          prev->data.ptrvalue = litp;
+          last->data.ptrvalue = pitp;
+          pitp = (SeqLitPtr) prev->data.ptrvalue;
+          litp = (SeqLitPtr) last->data.ptrvalue;
+        }
+        /* remove length of known gap */
+        len_diff = litp->length;
+      } 
+      prev->next = last->next;
+      last->next = NULL;
+      SeqLitFree (litp);
+      MemFree (last);
+      last = prev;
+      
+      if (len_diff > 0) {
+        FixDeltaFeatures (bsp, offset, len_diff);
+        bsp->length -= len_diff;
+      }
+    } else {
+      offset += GetDeltaSeqLen (prev);
     }
-    else if (vnp->choice == 2) 
-    {
-      litp = (SeqLitPtr) vnp->data.ptrvalue;
-      if (litp == NULL || litp->seq_data != NULL)
-      {
-        prev_vnp = NULL;
-        prev_litp = NULL;
-        offset += litp->length;
-      }
-      else if (prev_vnp != NULL && prev_litp != NULL)
-      {
-        /* combine two adjacent gaps */
-        len_diff = 0;
-        offset = offset - prev_litp->length;
-        if (prev_litp->fuzz != NULL || litp->fuzz != NULL)
-        {
-          /* at least one is unknown length, so result will be unknown */
-          len_diff = prev_litp->length + litp->length - 100;
-          
-          prev_litp->length = 100;
-          if (prev_litp->fuzz == NULL)
-          {
-            prev_litp->fuzz = IntFuzzNew ();
-            prev_litp->fuzz->choice = 4;
-          }          
-        }
-        else
-        {
-          prev_litp->length += litp->length;
-        }
-        prev_vnp->next = vnp->next;
-        vnp->next = NULL;
-        litp = SeqLitFree (litp);
-        vnp = ValNodeFree (vnp);
-        if (len_diff != 0)
-        {
-          FixDeltaFeatures (bsp, offset, len_diff);
-        }
-        offset += prev_litp->length;
-      }
-      else
-      {
-        prev_vnp = vnp;
-        prev_litp = litp;
-        offset += litp->length;
-      }
-    }
+    prev = last;
+    last = last->next;
   }
-  bsp->length = offset;
+
+  /* adjust coding region locations for unknown gaps */
   for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
        sfp != NULL;
        sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext))
   {
-    AdjustCDSLocationsForGapsCallback (sfp, NULL);
+    AdjustCDSLocationsForUnknownGapsCallback (sfp, NULL);
   }
 }
 
@@ -9378,7 +9680,7 @@ extern void CombineAdjacentGaps (IteM i)
   
   WatchCursor ();
   Update ();
-  VisitBioseqsInSep (sep, NULL, CombineAdjacentGapsCallback);
+  VisitBioseqsInSep (sep, NULL, CombineAdjacentGapsOnBioseq);
   
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -9654,217 +9956,143 @@ extern void CopyLocusToLocusTag (IteM i)
 }
 
 
+/* data structure and functions for a generic form displaying a clickable list */
+
+#define CLICKABLE_LIST_FORM_BLOCK   \
+  FORM_MESSAGE_BLOCK                \
+  ValNodePtr      clickable_list_data; \
+  DialoG          clickable_list_dlg;  \
+  ButtoN          recheck_btn;         \
+  
+typedef struct clickablelistform {
+  CLICKABLE_LIST_FORM_BLOCK
+} ClickableListFormData, PNTR ClickableListFormPtr;
+
+static void CleanupClickableListForm (GraphiC g, VoidPtr data)
+
+{
+  ClickableListFormPtr clfp;
+
+  clfp = (ClickableListFormPtr) data;
+  if (clfp != NULL) {
+    clfp->clickable_list_data = FreeClickableList (clfp->clickable_list_data);
+    ObjMgrFreeUserData (clfp->input_entityID, clfp->procid, clfp->proctype, clfp->userkey);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+static Int2 LIBCALLBACK ClickableListFormMsgFunc (OMMsgStructPtr ommsp)
+{
+  WindoW                   currentport,
+                           temport;
+  OMUserDataPtr            omudp;
+  ClickableListFormPtr     clfp = NULL;
+  
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  clfp = (ClickableListFormPtr) omudp->userdata.ptrvalue;
+  if (clfp == NULL) return OM_MSG_RET_ERROR;
+
+  currentport = ParentWindow (clfp->form);
+  temport = SavePort (currentport);
+  UseWindow (currentport);
+  Select (clfp->form);
+  switch (ommsp->message) 
+  {
+      case OM_MSG_UPDATE:
+          break;
+      case OM_MSG_DESELECT:
+          break;
+
+      case OM_MSG_SELECT: 
+          break;
+      case OM_MSG_DEL:
+          Remove (clfp->form);
+          break;
+      case OM_MSG_HIDE:
+          break;
+      case OM_MSG_SHOW:
+          break;
+      case OM_MSG_FLUSH:
+          Remove (clfp->form);	
+          break;
+      default:
+          break;
+  }
+  RestorePort (temport);
+  UseWindow (temport);
+  return OM_MSG_RET_OK;
+}
+
+
+static void ClickableListFormMessage (ForM f, Int2 mssg)
+
+{
+  ClickableListFormPtr drfp;
+
+  drfp = (ClickableListFormPtr) GetObjectExtra (f);
+  if (drfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_EXPORT :
+        if (drfp->exportform != NULL) {
+          (drfp->exportform) (f, NULL);
+        }
+        break;
+      case VIB_MSG_PRINT :
+        break;
+      case VIB_MSG_CLOSE :
+        Remove (f);
+        break;
+      case VIB_MSG_CUT :
+      case VIB_MSG_COPY :
+        SendMessageToDialog (drfp->clickable_list_dlg, VIB_MSG_COPY);
+        break;
+      case VIB_MSG_PASTE :
+        break;
+      case VIB_MSG_DELETE :
+        drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
+        PointerToDialog (drfp->clickable_list_dlg, NULL);
+        break;
+      default :
+        if (drfp->appmessage != NULL) {
+          drfp->appmessage (f, mssg);
+        }
+        break;
+    }
+  }
+}
+
 /* Discrepancy Report */
+
+/* There will only be one Discrepancy Report window at a time */
+static WindoW discrepancyReportWindow = NULL;
 
 typedef void (*DiscrepancyCallback) (ValNodePtr item_list, Pointer userdata);
 typedef void (*DiscrepancyCallbackDataFree) (Pointer userdata);
 
-/* To add a new type of test, do ALL Of the following:
- * 1. add an item to the DiscrepancyType enum (this will fill the disc_type value)
- * 2. add a collection function and declare it with the others
- * 3. add an item to discrepancy_info_list that corresponds with the position of the
- *    new enum value.  If you are combining multiple types in one collection function,
- *    be sure to list them together.
- */
-
-typedef enum {
-  DISC_GENE_MISSING = 0,
-  DISC_SUPERFLUOUS_GENE,
-  DISC_GENE_MISSING_LOCUS_TAG,
-  DISC_GENE_DUPLICATE_LOCUS_TAG,
-  DISC_GENE_LOCUS_TAG_BAD_FORMAT,
-  DISC_GENE_LOCUS_TAG_INCONSISTENT_PREFIX,
-  DISC_NON_GENE_LOCUS_TAG,
-  DISC_MISSING_PROTEIN_ID,
-  DISC_INCONSISTENT_PROTEIN_ID_PREFIX,
-  DISC_GENE_CDS_mRNA_LOCATION_CONFLICT,
-  DISC_GENE_PRODUCT_CONFLICT,
-  DISC_GENE_DUPLICATE_LOCUS,
-  DISC_EC_NUMBER_NOTE,
-  DISC_PSEUDO_MISMATCH,
-  DISC_JOINED_FEATURES,
-  DISC_OVERLAPPING_GENES,
-  DISC_OVERLAPPING_CDS,
-  DISC_SHORT_CONTIG,
-  DISC_INCONSISTENT_BIOSRC,
-  DISC_SUSPECT_PRODUCT_NAME,
-  DISC_INCONSISTENT_BIOSRC_DEFLINE,
-  DISC_PARTIAL_CDS_IN_COMPLETE_SEQUENCE,
-  DISC_EC_NUMBER_ON_HYPOTHETICAL_PROTEIN,
-  MAX_DISC_TYPE
-} DiscrepancyType;
-
-typedef void (*PerformDiscrepancyTest) PROTO ((SeqEntryPtr, ValNodePtr PNTR));
-
-typedef struct discrepancyinfo 
-{
-  CharPtr                conf_name;
-  CharPtr                setting_name;
-  PerformDiscrepancyTest test_func;
-} DiscrepancyInfoData, PNTR DiscrepancyInfoPtr;
-
-/* declarations for discrepancy tests */
-static void AddMissingAndSuperfluousGeneDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void AddDiscrepanciesForNonGeneLocusTags (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindMissingProteinIDs (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindCDSmRNAGeneLocationDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindCDSGeneProductConflicts (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindDuplicateGeneLocus (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void AddECNumberNoteDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindPseudoDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void AddJoinedFeatureDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void AddOverlappingGeneDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void AddOverlappingCodingRegionDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindShortContigs (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindNonmatchingContigSources (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindSuspectProductNames (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindInconsistentSourceAndDefline (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindParticalCDSsInCompleteSequences (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-static void FindUnknownProteinsWithECNumbers (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list);
-
-const DiscrepancyInfoData discrepancy_info_list[] = 
-{
-  { "Missing Genes", "MISSING_GENES", AddMissingAndSuperfluousGeneDiscrepancies },
-  { "Extra Genes", "EXTRA_GENES", AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags },
-  { "Missing Locus Tags", "MISSING_LOCUS_TAGS", AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags },
-  { "Duplicate Locus Tags", "DUPLICATE_LOCUS_TAGS", AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags },
-  { "Bad Locus Tag Format", "BAD_LOCUS_TAG_FORMAT", AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags },
-  { "Inconsistent Locus Tag Prefix", "INCONSISTENT_LOCUS_TAG_PREFIX", AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags },
-  { "Nongene Locus Tag", "NON_GENE_LOCUS_TAG", AddDiscrepanciesForNonGeneLocusTags },
-  { "Missing Protein ID", "MISSING_PROTEIN_ID", FindMissingProteinIDs },
-  { "Inconsistent Protein ID", "INCONSISTENT_PROTEIN_ID", FindMissingProteinIDs },
-  { "Feature Location Conflict", "FEATURE_LOCATION_CONFLICT", FindCDSmRNAGeneLocationDiscrepancies },
-  { "Gene Product Conflict", "GENE_PRODUCT_CONFLICT", FindCDSGeneProductConflicts },
-  { "Duplicate Gene Locus", "DUPLICATE_GENE_LOCUS", FindDuplicateGeneLocus },
-  { "EC Number Note", "EC_NUMBER_NOTE", AddECNumberNoteDiscrepancies },
-  { "Pseudo Mismatch", "PSEUDO_MISMATCH", FindPseudoDiscrepancies },
-  { "Joined Features", "JOINED_FEATURES", AddJoinedFeatureDiscrepancies },
-  { "Overlapping Genes", "OVERLAPPING_GENES", AddOverlappingGeneDiscrepancies },
-  { "Overlapping CDS", "OVERLAPPING_CDS", AddOverlappingCodingRegionDiscrepancies },
-  { "Short Contig", "SHORT_CONTIG", FindShortContigs },
-  { "Inconsistent BioSource", "INCONSISTENT_BIOSOURCE", FindNonmatchingContigSources },
-  { "Suspect Product Name", "SUSPECT_PRODUCT_NAMES", FindSuspectProductNames },
-  { "Inconsistent Source And Definition Line", "INCONSISTENT_SOURCE_DEFLINE", FindInconsistentSourceAndDefline },
-  { "Partial CDSs in Complete Sequences", "PARTIAL_CDS_COMPLETE_SEQUENCE", FindParticalCDSsInCompleteSequences },
-  { "Hypothetical or Unknown Protein with EC Number", "EC_NUMBER_ON_UNKNOWN_PROTEIN", FindUnknownProteinsWithECNumbers }
-    
-};
 
 
-typedef struct discrepancyitem 
-{
-  DiscrepancyType             disc_type;
-  CharPtr                     description;
-  ValNodePtr                  item_list;
-  DiscrepancyCallback         callback_func; 
-  DiscrepancyCallbackDataFree datafree_func; 
-  Pointer                     callback_data;
-  Boolean                     chosen;
-  ValNodePtr                  subcategories;
-  Boolean                     expanded;
-  Int4                        level;
-} DiscrepancyItemData, PNTR DiscrepancyItemPtr;
-
-typedef struct discrepancyconfig
-{
-  Boolean conf_list[MAX_DISC_TYPE];
-  Boolean use_feature_table_format;
-} DiscrepancyConfigData, PNTR DiscrepancyConfigPtr;
 
 typedef struct discrepancyreportform 
 {
-  FORM_MESSAGE_BLOCK
-  SeqEntryPtr     sep;
-  ValNodePtr      discrepancy_list;
-  DoC             doc;
-  DoC             item_list;
-  ButtoN          recheck_btn;
-  Int2            selected;
-  Int2            item_selected;
-  Int2            clicked;
-  Boolean         dblClick;
-  BaseFormPtr     bfp;
-  
-  Int4            num_levels;
-  Nlm_ColPtr PNTR col_fmt_array_array;
+  CLICKABLE_LIST_FORM_BLOCK
+
   DiscrepancyConfigPtr dcp;
 } DiscrepancyReportFormData, PNTR DiscrepancyReportFormPtr;
 
+static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
 
-static DiscrepancyConfigPtr DiscrepancyConfigFree (DiscrepancyConfigPtr dcp)
 {
-  return MemFree (dcp);  
-}
+  DiscrepancyReportFormPtr drfp;
 
-static DiscrepancyConfigPtr DiscrepancyConfigNew (void)
-{
-  DiscrepancyConfigPtr dcp;
-  Int4                 i;
-  
-  dcp = (DiscrepancyConfigPtr) MemNew (sizeof (DiscrepancyConfigData));
-  for (i = 0; i < MAX_DISC_TYPE; i++)
-  {
-    dcp->conf_list[i] = TRUE;
+  drfp = (DiscrepancyReportFormPtr) data;
+  if (drfp != NULL) {
+    drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
+    drfp->dcp = DiscrepancyConfigFree (drfp->dcp);
+    ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+    discrepancyReportWindow = NULL;
   }
-  dcp->use_feature_table_format = FALSE;
-  return dcp;
-}
-
-static DiscrepancyConfigPtr ReadDiscrepancyConfig (void)
-{
-  DiscrepancyConfigPtr dcp;
-  Int4                 i;
-  Char                 str[20];
-  
-  dcp = DiscrepancyConfigNew();
-  if (dcp != NULL)
-  {
-    for (i = 0; i < MAX_DISC_TYPE; i++)
-    {
-      if (GetSequinAppParam ("DISCREPANCY_REPORT", discrepancy_info_list[i].setting_name, NULL, str, sizeof (str))) {
-        if (StringICmp (str, "FALSE") == 0) {
-          dcp->conf_list[i] = FALSE;
-        }
-      }
-    }
-    if (GetSequinAppParam ("DISCREPANCY_REPORT", "USE_FEATURE_TABLE_FORMAT", NULL, str, sizeof (str))) {
-      if (StringICmp (str, "TRUE") == 0) {
-        dcp->use_feature_table_format = TRUE;
-      }
-    }
-  }
-  return dcp;
-}
-
-static void SaveDiscrepancyConfig (DiscrepancyConfigPtr dcp)
-{
-  Int4 i;
-  
-  if (dcp == NULL)
-  {
-    return;
-  }
-  
-  for (i = 0; i < MAX_DISC_TYPE; i++)
-  {
-    if (dcp->conf_list[i])
-    {
-      SetAppParam ("SEQUINCUSTOM", "DISCREPANCY_REPORT", discrepancy_info_list[i].setting_name, "TRUE");
-    }
-    else
-    {
-      SetAppParam ("SEQUINCUSTOM", "DISCREPANCY_REPORT", discrepancy_info_list[i].setting_name, "FALSE");
-    }
-  }
-  if (dcp->use_feature_table_format)
-  {
-    SetAppParam ("SEQUINCUSTOM", "DISCREPANCY_REPORT", "USE_FEATURE_TABLE_FORMAT", "TRUE");
-  }
-  else
-  {
-    SetAppParam ("SEQUINCUSTOM", "DISCREPANCY_REPORT", "USE_FEATURE_TABLE_FORMAT", "FALSE");
-  }
+  StdCleanupFormProc (g, data);
 }
 
 
@@ -9927,7 +10155,7 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
   SetGroupSpacing (g, 10, 10);
   for (i = 0; i < MAX_DISC_TYPE; i++)
   {
-    test_options[i] = CheckBox (g, discrepancy_info_list[i].conf_name, NULL);
+    test_options[i] = CheckBox (g, GetDiscrepancyTestConfName (i), NULL);
     SetStatus (test_options[i], dcp->conf_list[i]);
   }
   
@@ -9970,2549 +10198,85 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
   return rval;
 }
 
+/* This gets a list of the open views */
+static ValNodePtr GetBaseFormList ()
 
-static WindoW discrepancyReportWindow = NULL;
-
-
-static ValNodePtr FreeDiscrepancyList (ValNodePtr list)
 {
-  DiscrepancyItemPtr dip;
-  
-  if (list == NULL)
-  {
-    return list;
-  }
-  FreeDiscrepancyList (list->next);
-  list->next = NULL;
-  dip = (DiscrepancyItemPtr) list->data.ptrvalue;
-  if (dip != NULL)
-  {
-    dip->description = MemFree (dip->description);
-    if (dip->datafree_func != NULL)
-    {
-      (dip->datafree_func) (dip->callback_data);
-    }
-    dip->item_list = ValNodeFree (dip->item_list);
-    
-    dip->subcategories = FreeDiscrepancyList (dip->subcategories);
-    dip = MemFree (dip);
-    list->data.ptrvalue = NULL;
-  }
-  list = ValNodeFree (list);
-  return list;
-}
+  Uint4          j;
+  Uint4          num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  omdp;
+  ObjMgrDataPtr  PNTR omdpp;
+  OMUserDataPtr  omudp;
+  BaseFormPtr    bfp;
+  ValNodePtr     base_form_list = NULL;
 
-
-static DiscrepancyItemPtr 
-NewDiscrepancyItem 
-(DiscrepancyType disc_type,
- CharPtr         description_fmt,
- ValNodePtr      item_list)
-{
-  DiscrepancyItemPtr dip;
-  
-  dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-  if (dip != NULL)
-  {
-    dip->disc_type = disc_type;
-    dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (description_fmt) + 15));
-    sprintf (dip->description, description_fmt, ValNodeLen (item_list));
-    dip->callback_func = NULL;
-    dip->datafree_func = NULL;
-    dip->callback_data = NULL;
-    dip->item_list = item_list;
-    dip->subcategories = NULL;
-    dip->expanded = FALSE;
-    dip->level = 0;
-  }
-  return dip;  
-}
-
-
-static void 
-RemoveUnwantedDiscrepancyItems 
-(ValNodePtr PNTR      discrepancy_list,
- DiscrepancyConfigPtr dcp)
-{
-  ValNodePtr         vnp, prev = NULL, vnp_next;
-  DiscrepancyItemPtr dip;
-  
-  if (dcp == NULL || discrepancy_list == NULL || *discrepancy_list == NULL)
-  {
-    return;
-  }
-  
-  for (vnp = *discrepancy_list; vnp != NULL; vnp = vnp_next)
-  {
-    vnp_next = vnp->next;
-    dip = (DiscrepancyItemPtr) vnp->data.ptrvalue;
-    if (dip == NULL || ! dcp->conf_list[dip->disc_type])
-    {
-      if (prev == NULL)
-      {
-        *discrepancy_list = vnp_next;
-      }
-      else
-      {
-        prev->next = vnp_next;
-      }
-      vnp->next = NULL;
-      vnp = FreeDiscrepancyList (vnp);
-    }
-    else
-    {
-      prev = vnp;
-    }
-  }
-  
-}
-
-
-static void ValNodeLinkCopy (ValNodePtr PNTR list1, ValNodePtr list2)
-{
-  if (list1 == NULL) return;
-  while (list2 != NULL)
-  {
-    ValNodeAddPointer (list1, list2->choice, list2->data.ptrvalue);
-    list2 = list2->next;
-  }
-}
-
-
-static Boolean ValNodeStringListMatch (ValNodePtr vnp1, ValNodePtr vnp2)
-{
-  if (vnp1 == NULL && vnp2 == NULL)
-  {
-    return TRUE;
-  }
-  else if (vnp1 == NULL || vnp2 == NULL)
-  {
-    return FALSE;
-  }
-  else if (StringCmp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) != 0)
-  {
-    return FALSE;
-  }
-  else
-  {
-    return ValNodeStringListMatch (vnp1->next, vnp2->next);
-  }
-}
-
-
-static Boolean GeneRefMatch (GeneRefPtr grp1, GeneRefPtr grp2)
-{
-  if (grp1 == NULL && grp2 == NULL)
-  {
-    return TRUE;
-  }
-  else if (grp1 == NULL || grp2 == NULL)
-  {
-    return FALSE;
-  }
-  else if (StringCmp (grp1->locus, grp2->locus) != 0
-           || StringCmp (grp1->allele, grp2->allele) != 0
-           || StringCmp (grp1->desc, grp2->desc) != 0
-           || StringCmp (grp1->maploc, grp2->maploc) != 0
-           || StringCmp (grp1->locus_tag, grp2->locus_tag) != 0
-           || (grp1->pseudo && !grp2->pseudo)
-           || (!grp1->pseudo && grp2->pseudo)
-           || !ValNodeStringListMatch (grp1->db, grp2->db)
-           || !ValNodeStringListMatch (grp1->syn, grp2->syn))
-  {
-    return FALSE;
-  }
-  else
-  {
-    return TRUE;
-  }
-}
-
-
-static void ExtractGeneFromListByGeneRef (ValNodePtr PNTR list, GeneRefPtr grp)
-{
-  ValNodePtr prev = NULL, this_vnp, next_vnp;
-  SeqFeatPtr gene_feat;
-  
-  if (list == NULL || grp == NULL)
-  {
-    return;
-  }
-  
-  this_vnp = *list;
-  while (this_vnp != NULL)
-  {
-    next_vnp = this_vnp->next;
-    gene_feat = (SeqFeatPtr) this_vnp->data.ptrvalue;
-    if (gene_feat != NULL && GeneRefMatch (gene_feat->data.value.ptrvalue, grp))
-    {
-      if (prev == NULL)
-      {
-        *list = next_vnp;
-      }
-      else
-      {
-        prev->next = next_vnp;
-      }
-      this_vnp->next = NULL;
-      ValNodeFree (this_vnp);
-    }
-    else
-    {
-      prev = this_vnp;
-    }
-    this_vnp = next_vnp;    
-  }
-}
-
-
-static void ExtractGeneFromListByGene (ValNodePtr PNTR list, SeqFeatPtr gene)
-{
-  ValNodePtr prev = NULL, this_vnp, next_vnp;
-  
-  if (list == NULL || gene == NULL)
-  {
-    return;
-  }
-  
-  this_vnp = *list;
-  while (this_vnp != NULL)
-  {
-    next_vnp = this_vnp->next;
-    if (this_vnp->data.ptrvalue == gene)
-    {
-      if (prev == NULL)
-      {
-        *list = next_vnp;
-      }
-      else
-      {
-        prev->next = next_vnp;
-      }
-      this_vnp->next = NULL;
-      ValNodeFree (this_vnp);
-    }
-    else
-    {
-      prev = this_vnp;
-    }
-    this_vnp = next_vnp;    
-  }
-}
-
-
-static void 
-CheckGenesForFeatureType 
-(ValNodePtr PNTR features_without_genes,
- ValNodePtr PNTR superfluous_genes,
- BioseqPtr  bsp,
- Uint1      feature_type,
- Uint1      feature_subtype,
- Boolean    makes_gene_not_superfluous)
-{
-  SeqFeatPtr         sfp, gene_sfp;
-  GeneRefPtr         grp;
-  SeqMgrFeatContext  context;
-  
-  if (features_without_genes == NULL
-      || superfluous_genes == NULL
-      || bsp == NULL)
-  {
-    return;
-  }
-  
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, feature_type, feature_subtype, &context);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, feature_type, feature_subtype, &context))
-  {
-    /* check for gene xref */
-    grp = SeqMgrGetGeneXref (sfp);
-    if (grp != NULL)
-    {
-      if (SeqMgrGeneIsSuppressed (grp))
-      {
-        ValNodeAddPointer (features_without_genes, OBJ_SEQFEAT, sfp);
-      }
-      else
-      {
-        ExtractGeneFromListByGeneRef (superfluous_genes, grp);
-      }
-    }
-    else
-    {
-      gene_sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
-      if (gene_sfp == NULL)
-      {
-        ValNodeAddPointer (features_without_genes, OBJ_SEQFEAT, sfp);
-      }
-      else if (makes_gene_not_superfluous)
-      {
-        ExtractGeneFromListByGene (superfluous_genes, gene_sfp);
-      }
-    }  
-  }  
-}
-
-typedef struct misssupergenes
-{
-  ValNodePtr missing_list;
-  ValNodePtr super_list;
-} MissSuperGenesData, PNTR MissSuperGenesPtr;
-
-
-static void FindMissingGenes (BioseqPtr bsp, Pointer userdata)
-{
-  SeqFeatPtr         sfp;
-  SeqMgrFeatContext  context;
-  ValNodePtr         features_without_genes = NULL;
-  ValNodePtr         superfluous_genes = NULL;
-  MissSuperGenesPtr  msgp;
-  
-  if (bsp == NULL || userdata == NULL)
-  {
-    return;
-  }
-  
-  msgp = (MissSuperGenesPtr) userdata;
-  
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, FEATDEF_GENE, &context);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, FEATDEF_GENE, &context))
-  {
-    ValNodeAddPointer (&superfluous_genes, OBJ_SEQFEAT, sfp);
-  }
-  
-  CheckGenesForFeatureType (&features_without_genes, &superfluous_genes, bsp, 
-                            SEQFEAT_CDREGION, 0, TRUE);
-  CheckGenesForFeatureType (&features_without_genes, &superfluous_genes, bsp, 
-                            SEQFEAT_RNA, 0, TRUE);
-  CheckGenesForFeatureType (&features_without_genes, &superfluous_genes, bsp, 
-                            SEQFEAT_IMP, FEATDEF_RBS, FALSE);
-
-  ValNodeLink (&(msgp->missing_list), features_without_genes);
-  ValNodeLink (&(msgp->super_list), superfluous_genes);
-}
-
-
-static void 
-GetPseudoAndNonPseudoGeneList 
-(ValNodePtr      super_list,
- ValNodePtr PNTR pseudo_list, 
- ValNodePtr PNTR non_pseudo_list)
-{
-  ValNodePtr vnp;
-  SeqFeatPtr gene;
-  GeneRefPtr grp;
-  
-  if (pseudo_list == NULL || non_pseudo_list == NULL)
-  {
-    return;
-  }
-  *pseudo_list = NULL;
-  *non_pseudo_list = NULL;
-  
-  for (vnp = super_list; vnp != NULL; vnp = vnp->next)
-  {
-    if (vnp->choice == OBJ_SEQFEAT)
-    {
-      gene = (SeqFeatPtr) vnp->data.ptrvalue;
-      if (gene != NULL && gene->data.choice == SEQFEAT_GENE)
-      {
-        grp = (GeneRefPtr) gene->data.value.ptrvalue;
-        if (gene->pseudo || (grp != NULL && grp->pseudo))
-        {
-          ValNodeAddPointer (pseudo_list, OBJ_SEQFEAT, gene);
-        }
-        else
-        {
-          ValNodeAddPointer (non_pseudo_list, OBJ_SEQFEAT, gene);
+  omp = ObjMgrGet ();
+  if (omp == NULL) return NULL;
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    omdp = *omdpp;
+    if (omdp->parentptr == NULL) {
+      for (omudp = omdp->userdata; omudp != NULL; omudp = omudp->next) {
+        if (omudp->proctype == OMPROC_VIEW) {
+          bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
+          ValNodeAddPointer (&base_form_list, 0, bfp);
         }
       }
     }
   }
+  return base_form_list;
 }
 
 
-static void AddMissingAndSuperfluousGeneDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
+static ValNodePtr GetViewedSeqEntryList (void)
 {
-  DiscrepancyItemPtr dip, pseudo_dip, non_pseudo_dip;
-  CharPtr            missing_genes_fmt = "%d features have no genes.";
-  CharPtr            extra_genes_fmt = "%d gene features are not associated with a CDS or RNA feature.";
-  CharPtr            pseudo_extra_genes_fmt = "%d pseudo gene features are not associated with a CDS or RNA feature.";
-  CharPtr            non_pseudo_extra_genes_fmt = "%d non-pseudo gene features are not associated with a CDS or RNA feature.";
-  MissSuperGenesData msgd;
-  ValNodePtr         non_pseudo_list = NULL, pseudo_list = NULL;
+  ValNodePtr  sep_list = NULL, base_form_list, vnp;
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+  
+  base_form_list = GetBaseFormList();
+  for (vnp = base_form_list; vnp != NULL; vnp = vnp->next) {
+    bfp = (BaseFormPtr) vnp->data.ptrvalue;
+    if (bfp != NULL && bfp->input_entityID != 0) {
+      sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+      ValNodeAddPointer (&sep_list, 0, sep);
+    }
+  }
+  base_form_list = ValNodeFree (base_form_list);
+  return sep_list;
+}
 
-  if (discrepancy_list == NULL)
-  {
-    return;
-  }
+static void VisitFeaturesInViewedBioseqs (Pointer userdata, VisitFeaturesFunc callback)
+{
+  ValNodePtr  base_form_list, vnp;
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+  SeqEntryPtr orig_scope;
   
-  msgd.missing_list = NULL;
-  msgd.super_list = NULL;
-  
-  VisitBioseqsInSep (sep, &msgd, FindMissingGenes);
-  
-  if (msgd.missing_list != NULL)
-  {
-    dip = NewDiscrepancyItem (DISC_GENE_MISSING, missing_genes_fmt, msgd.missing_list);
-    if (dip != NULL)
-    {
-      ValNodeAddPointer (discrepancy_list, 0, dip);
+  orig_scope = SeqEntryGetScope ();
+  base_form_list = GetBaseFormList();
+  for (vnp = base_form_list; vnp != NULL; vnp = vnp->next) {
+    bfp = (BaseFormPtr) vnp->data.ptrvalue;
+    if (bfp != NULL && bfp->input_entityID != 0) {
+      sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+      SeqEntrySetScope (sep);
+      VisitFeaturesInSep (sep, userdata, callback);
     }
   }
-  
-  if (msgd.super_list != NULL)
-  {
-    dip = NewDiscrepancyItem (DISC_SUPERFLUOUS_GENE, extra_genes_fmt, msgd.super_list);
-    if (dip != NULL)
-    {
-      ValNodeAddPointer (discrepancy_list, 0, dip);      
-      GetPseudoAndNonPseudoGeneList (msgd.super_list, &pseudo_list, &non_pseudo_list);
-      non_pseudo_dip = NewDiscrepancyItem (DISC_SUPERFLUOUS_GENE, non_pseudo_extra_genes_fmt, non_pseudo_list);
-      non_pseudo_dip->level = 1;
-      pseudo_dip = NewDiscrepancyItem (DISC_SUPERFLUOUS_GENE, pseudo_extra_genes_fmt, pseudo_list);
-      pseudo_dip->level = 1;
-      ValNodeAddPointer (&(dip->subcategories), 0, non_pseudo_dip);
-      ValNodeAddPointer (&(dip->subcategories), 0, pseudo_dip);
-    }
-  }  
+  base_form_list = ValNodeFree (base_form_list);
+  SeqEntrySetScope (orig_scope);
 }
 
 
-typedef struct prefixcheck 
-{
-  CharPtr prefix;
-  ValNodePtr feature_list;
-} PrefixCheckData, PNTR PrefixCheckPtr;
-
-
-static ValNodePtr FreePrefixCheckList (ValNodePtr prefix_list)
-{
-  PrefixCheckPtr pcp;
-  
-  if (prefix_list == NULL)
-  {
-    return NULL;
-  }
-  
-  prefix_list->next = FreePrefixCheckList (prefix_list->next);
-  
-  pcp = (PrefixCheckPtr) prefix_list->data.ptrvalue;
-  if (pcp != NULL)
-  {
-    pcp->prefix = MemFree (pcp->prefix);
-    pcp->feature_list = ValNodeFree (pcp->feature_list);
-    pcp = MemFree (pcp);
-  }
-  prefix_list = ValNodeFree (prefix_list);
-  return NULL;
-}
-
-
-static DiscrepancyItemPtr InconsistentPrefix (PrefixCheckPtr pcp, CharPtr bad_fmt, DiscrepancyType disc_type)
-{
-  DiscrepancyItemPtr dip = NULL;
-
-  if (pcp == NULL || StringHasNoText (pcp->prefix) || pcp->feature_list == NULL)
-  {
-    return NULL;
-  }
-  dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-  if (dip != NULL)
-  {
-    dip->disc_type = DISC_GENE_LOCUS_TAG_INCONSISTENT_PREFIX;
-    dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + StringLen (pcp->prefix)+ 15));
-    sprintf (dip->description, bad_fmt, ValNodeLen (pcp->feature_list), pcp->prefix);
-    dip->callback_func = NULL;
-    dip->datafree_func = NULL;
-    dip->callback_data = NULL;
-    dip->item_list = pcp->feature_list;
-    pcp->feature_list = NULL;
-  }      
-  return dip;
-}
-
-
-static DiscrepancyItemPtr InconsistentLocusTagPrefix (PrefixCheckPtr pcp)
-{
-  CharPtr            bad_fmt = "%d features have locus tag prefix %s."; 
-
-  return InconsistentPrefix (pcp, bad_fmt, DISC_GENE_LOCUS_TAG_INCONSISTENT_PREFIX);
-}
-
-
-static DiscrepancyItemPtr InconsistentProteinIDPrefix (PrefixCheckPtr pcp)
-{
-  CharPtr            bad_fmt = "%d sequences have protein ID prefix %s."; 
-
-  return InconsistentPrefix (pcp, bad_fmt, DISC_INCONSISTENT_PROTEIN_ID_PREFIX);
-}
-
-
-typedef struct missinconstprotids 
-{
-  ValNodePtr missing_list;
-  ValNodePtr inconsistent_list;
-} MissInconstProtIDsData, PNTR MissInconstProtIDsPtr;
-
-
-static void FindMissingAndInconsistentProteinIDsCallback (BioseqPtr bsp, Pointer userdata)
-{
-  SeqIdPtr              sip;
-  MissInconstProtIDsPtr mipip;
-  DbtagPtr              dbt = NULL;
-  PrefixCheckPtr        pcp;
-  ValNodePtr            vnp;
-  
-  if (bsp == NULL || ! ISA_aa (bsp->mol) || userdata == NULL)
-  {
-    return;
-  }
-  
-  mipip = (MissInconstProtIDsPtr) userdata;
-  
-  for (sip = bsp->id; sip != NULL && dbt == NULL; sip = sip->next)
-  {
-    if (sip->choice == SEQID_GENERAL)
-    {
-      dbt = (DbtagPtr) sip->data.ptrvalue;
-      if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0)
-      {
-        dbt = NULL;
-      }
-    }
-  }
-  if (dbt == NULL)
-  {
-    ValNodeAddPointer (&(mipip->missing_list), OBJ_BIOSEQ, bsp);
-  }
-  else
-  {  
-    /* look for inconsistent prefixes */
-    pcp = NULL;
-    for (vnp = mipip->inconsistent_list; vnp != NULL && pcp == NULL; vnp = vnp->next)
-    {
-      pcp = (PrefixCheckPtr) vnp->data.ptrvalue;
-      if (pcp != NULL && StringCmp (pcp->prefix, dbt->db) == 0)
-      {
-        ValNodeAddPointer (&pcp->feature_list, OBJ_BIOSEQ, bsp);
-      }
-      else
-      {
-        pcp = NULL;
-      }
-    }
-    if (pcp == NULL)
-    {
-      pcp = (PrefixCheckPtr) MemNew (sizeof (PrefixCheckData));
-      if (pcp != NULL)
-      {
-        pcp->prefix = StringSave (dbt->db);
-        pcp->feature_list = ValNodeNew (NULL);
-        pcp->feature_list->choice = OBJ_BIOSEQ;
-        pcp->feature_list->data.ptrvalue = bsp;
-        pcp->feature_list->next = NULL;
-        ValNodeAddPointer (&(mipip->inconsistent_list), 0, pcp);
-      }
-    }
-  }  
-}
-
-
-static void FindMissingProteinIDs (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  CharPtr                bad_fmt = "%d proteins have invalid IDs.";
-  DiscrepancyItemPtr     dip;
-  MissInconstProtIDsData mipid;
-  ValNodePtr             vnp;
-  
-  if (discrepancy_list == NULL) return;
-  
-  mipid.missing_list = NULL;
-  mipid.inconsistent_list = NULL;
-  
-  VisitBioseqsInSep (sep, &mipid, FindMissingAndInconsistentProteinIDsCallback);
-  
-  if (mipid.missing_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_MISSING_PROTEIN_ID;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (mipid.missing_list));
-      dip->callback_func = NULL;
-      dip->callback_data = NULL;
-      dip->datafree_func = NULL;
-      dip->item_list = mipid.missing_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-  
-
-  if (mipid.inconsistent_list != NULL)
-  {
-    if (mipid.inconsistent_list->next != NULL)
-    {
-      for (vnp = mipid.inconsistent_list; vnp != NULL; vnp = vnp->next)
-      {
-        dip = InconsistentProteinIDPrefix (vnp->data.ptrvalue);
-        if (dip != NULL)
-        {
-          ValNodeAddPointer (discrepancy_list, 0, dip);
-        }
-      }
-    }
-    mipid.inconsistent_list = FreePrefixCheckList (mipid.inconsistent_list);
-  }
-    
-}
-
-typedef struct locustagcheck
-{
-  ValNodePtr locus_tags_list;
-  ValNodePtr missing_list;
-  ValNodePtr duplicate_list;
-  ValNodePtr bad_format_list;
-  ValNodePtr inconsistent_prefix;
-} LocusTagCheckData, PNTR LocusTagCheckPtr;
-
-static void GeneLocusTagDiscrepancyCallback (ValNodePtr item_list, Pointer userdata)
-{
-  Message (MSG_OK, "I could launch the editor for the individual gene...");
-}
-
-static Boolean IsLocusTagFormatBad (CharPtr locus_tag)
-{
-  CharPtr cp;
-  Boolean after_underscore = FALSE;
-  
-  if (StringHasNoText (locus_tag))
-  {
-    return FALSE;
-  }
-  
-  cp = locus_tag;
-  if (!isalpha (*cp))
-  {
-    return TRUE;
-  }
-  cp++;
-  while (*cp != 0)
-  {
-    if (*cp == '_')
-    {
-      if (after_underscore)
-      {
-        return TRUE;
-      }
-      else
-      {
-        after_underscore = TRUE;
-        if (*(cp + 1) == 0)
-        {
-          return TRUE;
-        }
-      }
-    }
-    else if (!isalpha (*cp) && !isdigit (*cp))
-    {
-      return TRUE;
-    }
-    cp++;
-  }
-  if (after_underscore)
-  {
-    return FALSE;
-  }
-  else
-  {
-    return TRUE;
-  }
-}
-
-static CharPtr GetLocusTagPrefix (CharPtr locus_tag)
-{
-  Int4    prefix_len;
-  CharPtr prefix;
-  
-  if (StringHasNoText (locus_tag))
-  {
-    return NULL;
-  }
-  
-  prefix_len = StringCSpn (locus_tag, "_");
-  if (prefix_len == 0 || prefix_len == StringLen (locus_tag))
-  {
-    return NULL;
-  }
-  else
-  {
-    prefix = (CharPtr) MemNew ((prefix_len + 1) * sizeof (Char));
-    StringNCpy (prefix, locus_tag, prefix_len);
-    prefix [prefix_len] = 0;
-    return prefix;
-  }
-}
-
-static void CheckGeneLocusTag (SeqFeatPtr sfp, Pointer userdata)
-{
-  GeneRefPtr         grp;
-  LocusTagCheckPtr   ltcp;
-  ValNodePtr         vnp;
-  Boolean            found_duplicate;
-  SeqFeatPtr         dup_sfp = NULL;
-  CharPtr            prefix;
-  PrefixCheckPtr     pcp;
-  
-  if (sfp == NULL || userdata == NULL || sfp->data.choice != SEQFEAT_GENE || sfp->data.value.ptrvalue == NULL)
-  {
-    return;
-  }
-  
-  ltcp = (LocusTagCheckPtr) userdata;
-  
-  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-  if (StringHasNoText (grp->locus_tag))
-  {
-    ValNodeAddPointer (&(ltcp->missing_list), OBJ_SEQFEAT, sfp);
-  }
-  else
-  {
-    /* look for badly formatted locus tags */
-    if (IsLocusTagFormatBad (grp->locus_tag))
-    {
-      ValNodeAddPointer (&(ltcp->bad_format_list), OBJ_SEQFEAT, sfp);
-    }
-    
-    /* look for inconsistent locus tag prefixes */
-    prefix = GetLocusTagPrefix (grp->locus_tag);
-    if (prefix != NULL)
-    {
-      pcp = NULL;
-      for (vnp = ltcp->inconsistent_prefix; vnp != NULL && pcp == NULL; vnp = vnp->next)
-      {
-        pcp = (PrefixCheckPtr) vnp->data.ptrvalue;
-        if (pcp != NULL && StringCmp (pcp->prefix, prefix) == 0)
-        {
-          ValNodeAddPointer (&pcp->feature_list, OBJ_SEQFEAT, sfp);
-          prefix = MemFree (prefix);
-        }
-        else
-        {
-          pcp = NULL;
-        }
-      }
-      if (pcp == NULL)
-      {
-        pcp = (PrefixCheckPtr) MemNew (sizeof (PrefixCheckData));
-        if (pcp != NULL)
-        {
-          pcp->prefix = prefix;
-          pcp->feature_list = ValNodeNew (NULL);
-          pcp->feature_list->choice = OBJ_SEQFEAT;
-          pcp->feature_list->data.ptrvalue = sfp;
-          pcp->feature_list->next = NULL;
-          ValNodeAddPointer (&(ltcp->inconsistent_prefix), 0, pcp);
-        }
-      }
-    }
-    
-  
-    dup_sfp = NULL;
-    for (vnp = ltcp->locus_tags_list, found_duplicate = FALSE;
-         vnp != NULL && !found_duplicate;
-         vnp = vnp->next)
-    { 
-      dup_sfp = (SeqFeatPtr) vnp->data.ptrvalue;
-      if (dup_sfp != NULL && dup_sfp->data.choice == SEQFEAT_GENE)
-      {
-        grp = (GeneRefPtr) dup_sfp->data.value.ptrvalue;
-        if (grp != NULL && StringCmp (vnp->data.ptrvalue, grp->locus_tag) == 0)
-        {
-          found_duplicate = TRUE;
-          if (vnp->choice != 0)
-          {
-            dup_sfp = NULL;
-          }
-          else
-          {
-            vnp->choice = 1;
-          }
-        }
-        else
-        {
-          dup_sfp = NULL;
-        }
-      }
-      else
-      {
-        dup_sfp = NULL;
-      }
-    }
-    if (!found_duplicate)
-    {
-      ValNodeAddPointer (&(ltcp->locus_tags_list), 0, sfp);
-    }
-    else
-    {
-      if (dup_sfp != NULL)
-      {
-        ValNodeAddPointer (&(ltcp->duplicate_list), OBJ_SEQFEAT, dup_sfp);
-      }
-      ValNodeAddPointer (&(ltcp->duplicate_list), OBJ_SEQFEAT, sfp);
-    }
-  }
-}
-
-static void AddDiscrepanciesForMissingOrNonUniqueGeneLocusTags (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  LocusTagCheckData  ltcd;
-  DiscrepancyItemPtr dip = NULL;
-  CharPtr            missing_fmt = "%d genes have no locus tags.";
-  CharPtr            duplicate_fmt = "%d genes have duplicate locus tags.";
-  CharPtr            bad_fmt = "%d locus tags are incorrectly formatted.";
-  ValNodePtr         vnp;
-  
-  if (discrepancy_list == NULL) return;
-  ltcd.locus_tags_list = NULL;
-  ltcd.missing_list = NULL;
-  ltcd.duplicate_list = NULL;
-  ltcd.bad_format_list = NULL;
-  ltcd.inconsistent_prefix = NULL;
-  
-  VisitFeaturesInSep (sep, &ltcd, CheckGeneLocusTag);
-  ltcd.locus_tags_list = ValNodeFree (ltcd.locus_tags_list);
-  
-  if (ltcd.missing_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_GENE_MISSING_LOCUS_TAG;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (missing_fmt) + 15));
-      sprintf (dip->description, missing_fmt, ValNodeLen (ltcd.missing_list));
-      dip->callback_func = GeneLocusTagDiscrepancyCallback;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = ltcd.missing_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-  
-  if (ltcd.duplicate_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_GENE_DUPLICATE_LOCUS_TAG;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (duplicate_fmt) + 15));
-      sprintf (dip->description, duplicate_fmt, ValNodeLen (ltcd.duplicate_list));
-      dip->callback_func = GeneLocusTagDiscrepancyCallback;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = ltcd.duplicate_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  } 
-  
-  if (ltcd.bad_format_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_GENE_LOCUS_TAG_BAD_FORMAT;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (ltcd.bad_format_list));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = ltcd.bad_format_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-  
-  if (ltcd.inconsistent_prefix != NULL)
-  {
-    if (ltcd.inconsistent_prefix->next != NULL)
-    {
-      for (vnp = ltcd.inconsistent_prefix; vnp != NULL; vnp = vnp->next)
-      {
-        dip = InconsistentLocusTagPrefix (vnp->data.ptrvalue);
-        if (dip != NULL)
-        {
-          ValNodeAddPointer (discrepancy_list, 0, dip);
-        }
-      }
-    }
-    ltcd.inconsistent_prefix = FreePrefixCheckList (ltcd.inconsistent_prefix);
-  }
-}
-
-static void NonGeneLocusTagDiscrepancyCallback (ValNodePtr item_list, Pointer userdata)
-{
-  Message (MSG_OK, "I could launch the editor for the individual gene, or I could remove all non-gene locus tags, or I could convert all non-gene locus tags to notes...");
-}
-
-static void AddDiscrepancyForNonGeneLocusTag (SeqFeatPtr sfp, Pointer userdata)
-{
-  ValNodePtr PNTR    locus_tag_list;
-  GBQualPtr          qual;
-  
-  if (sfp == NULL || userdata == NULL || sfp->data.choice == SEQFEAT_GENE)
-  {
-    return;
-  }
-  
-  locus_tag_list = (ValNodePtr PNTR) userdata;
-  
-  for (qual = sfp->qual; qual != NULL; qual = qual->next)
-  {
-    if (StringICmp(qual->qual, "locus_tag") == 0) 
-    {
-      ValNodeAddPointer (locus_tag_list, OBJ_SEQFEAT, sfp);
-      return;
-    }
-  }
-}
-
-static void AddDiscrepanciesForNonGeneLocusTags (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr locus_tag_list = NULL;
-  CharPtr    bad_fmt = "%d non-gene features have locus tags.";
-  DiscrepancyItemPtr dip;
-  
-  VisitFeaturesInSep (sep, &locus_tag_list, AddDiscrepancyForNonGeneLocusTag);
-  if (locus_tag_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_NON_GENE_LOCUS_TAG;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (locus_tag_list));
-      dip->callback_func = NonGeneLocusTagDiscrepancyCallback;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = locus_tag_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }  
-}
-
-
-static Boolean 
-IsGeneLocationOk 
-(SeqMgrFeatContextPtr feat_context, 
- SeqMgrFeatContextPtr gene_context,
- BioseqPtr            bsp)
-{
-  SeqFeatPtr        rbs_sfp;
-  SeqMgrFeatContext rbs_context;
-  
-  if (feat_context == NULL || gene_context == NULL)
-  {
-    return FALSE;
-  }  
-  else if (feat_context->strand != gene_context->strand)
-  {
-    return FALSE;
-  }
-  else if (gene_context->left == feat_context->left && gene_context->right == feat_context->right)
-  {
-    return TRUE;
-  }
-  else if ((gene_context->strand == Seq_strand_minus && gene_context->left == feat_context->left)
-           || (gene_context->strand != Seq_strand_minus && gene_context->right == feat_context->right))
-  {
-    /* find RBS to extend gene on 5' end */
-    for (rbs_sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_RBS, &rbs_context);
-         rbs_sfp != NULL;
-         rbs_sfp = SeqMgrGetNextFeature (bsp, rbs_sfp, 0, FEATDEF_RBS, &rbs_context))
-    {
-      if (rbs_context.strand != gene_context->strand)
-      {
-        continue;
-      }
-      if (rbs_context.strand == Seq_strand_minus)
-      {
-        if (rbs_context.right == gene_context->right 
-            && rbs_context.left >= feat_context->right)
-        {
-          return TRUE;
-        }
-      }
-      else
-      {
-        if (rbs_context.left == gene_context->left
-            && rbs_context.right <= feat_context->left)
-        {
-          return  TRUE;
-        }
-      }
-    }
-  }
-  return FALSE;
-}
-
-static void
-CheckFeatureTypeForLocationDiscrepancies 
-(BioseqPtr       bsp, 
- Uint1           feature_type,
- ValNodePtr PNTR feature_list)
-{
-  SeqMgrFeatContext context, gene_context;
-  GeneRefPtr        grp;
-  SeqFeatPtr        sfp, gene_sfp;
-  ValNodePtr        found_genes = NULL;
-  Boolean           found_match;
-  
-  if (bsp == NULL || ISA_aa (bsp->mol) || feature_list == NULL)
-  {
-    return;
-  }
-
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, feature_type, 0, &context);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, feature_type, 0, &context))
-  {
-    grp = SeqMgrGetGeneXref (sfp);
-    if (grp == NULL)
-    {
-      gene_sfp = SeqMgrGetOverlappingGene (sfp->location, &gene_context);
-      if (gene_sfp != NULL && !IsGeneLocationOk (&context, &gene_context, bsp))
-      {
-        ValNodeAddPointer (feature_list, OBJ_SEQFEAT, sfp);
-        ValNodeAddPointer (feature_list, OBJ_SEQFEAT, gene_sfp);
-      }
-    }
-    else if (!SeqMgrGeneIsSuppressed (grp))
-    {
-      found_match = FALSE;
-      for (gene_sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, FEATDEF_GENE, &gene_context);
-           gene_sfp != NULL && ! found_match;
-           gene_sfp = SeqMgrGetNextFeature (bsp, gene_sfp, SEQFEAT_GENE, FEATDEF_GENE, &gene_context))
-      {
-        if (GeneRefMatch (gene_sfp->data.value.ptrvalue, grp) && gene_context.strand == context.strand)
-        {
-          if (IsGeneLocationOk (&context, &gene_context, bsp))
-          {
-            found_match = TRUE;
-          }
-          else
-          {
-            ValNodeAddPointer (&found_genes, OBJ_SEQFEAT, gene_sfp);
-          }
-        }
-      }
-      if (found_match || found_genes == NULL)
-      {
-        found_genes = ValNodeFree (found_genes);
-        continue;
-      }
-      ValNodeAddPointer (feature_list, OBJ_SEQFEAT, sfp);
-      ValNodeLink (feature_list, found_genes);
-      found_genes = NULL;
-    }
-  }
-  
-}
-
-static void CDSmRNAGeneLocationDiscrepanciesCallback (BioseqPtr bsp, Pointer userdata)
-{
-  ValNodePtr PNTR   feature_list;
-
-  if (bsp == NULL || ! ISA_na (bsp->mol) || userdata == NULL)
-  {
-    return;
-  }
-  
-  feature_list = (ValNodePtr PNTR) userdata;
-  
-  CheckFeatureTypeForLocationDiscrepancies (bsp, SEQFEAT_CDREGION, feature_list);
-  CheckFeatureTypeForLocationDiscrepancies (bsp, SEQFEAT_RNA, feature_list);
-}
-
-
-static void FindCDSmRNAGeneLocationDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr feature_list = NULL;
-  CharPtr            bad_fmt = "%d coding regions, mRNAs, and genes have inconsistent locations.";
-  DiscrepancyItemPtr dip;
-  
-  VisitBioseqsInSep (sep, &feature_list, CDSmRNAGeneLocationDiscrepanciesCallback);
-  
-  if (feature_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_GENE_CDS_mRNA_LOCATION_CONFLICT;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (feature_list));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = feature_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }  
-}
-
-
-typedef struct cdsgeneproduct 
-{
-  ValNodePtr cds_list;
-  CharPtr    gene_locus;
-  CharPtr    product_name;
-} CDSGeneProductData, PNTR CDSGeneProductPtr;
-
-
-static ValNodePtr CDSGeneProductListFree (ValNodePtr cds_list)
-{
-  CDSGeneProductPtr cgpp;
-  
-  if (cds_list == NULL) {
-    return cds_list;
-  }
-  
-  cds_list->next = CDSGeneProductListFree(cds_list->next);
-  
-  cgpp = (CDSGeneProductPtr) cds_list->data.ptrvalue;
-  if (cgpp != NULL) {
-    cgpp->cds_list = ValNodeFree (cgpp->cds_list);
-  }
-  ValNodeFreeData (cds_list);
-  return NULL;
-}
-
-
-static CharPtr GetGeneLabel (SeqFeatPtr sfp)
-{
-  GeneRefPtr grp;
-  SeqFeatPtr gene_sfp;
-  
-  grp = SeqMgrGetGeneXref (sfp);
-  if (grp == NULL)
-  {
-    gene_sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
-    if (gene_sfp != NULL)
-    {
-      grp = gene_sfp->data.value.ptrvalue;
-    }
-  }
-  if (grp != NULL)
-  {
-    if (!StringHasNoText (grp->locus))
-    {
-      return grp->locus;
-    }
-  }
-  return NULL;
-}
-
-static void FindCDSGeneProductConflictsCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  CDSGeneProductPtr cgpp, cgpp_compare;
-  SeqMgrFeatContext context;
-  ValNodePtr PNTR   cds_list;
-  ValNodePtr        prev = NULL, vnp;
-  Boolean           found_match = FALSE;
-  Uint1             new_choice = 0;
-  CharPtr           gene_label;
-  
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION || userdata == NULL)
-  {
-    return;
-  }
-  
-  sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &context);
-  if (sfp == NULL)
-  {
-    return;
-  }
-  
-  gene_label = GetGeneLabel (sfp);
-  if (StringHasNoText (gene_label)) return;
-
-  cds_list = (ValNodePtr PNTR) userdata;
-
-  if (*cds_list == NULL) {
-    cgpp = (CDSGeneProductPtr) MemNew (sizeof (CDSGeneProductData));
-    if (cgpp != NULL)
-    {
-      ValNodeAddPointer (&(cgpp->cds_list), OBJ_SEQFEAT, sfp);
-      cgpp->gene_locus = gene_label;
-      cgpp->product_name = StringSave (context.label);
-      ValNodeAddPointer (cds_list, 0, cgpp);
-    }
-  } else {
-    vnp = *cds_list;
-    while (vnp != NULL && !found_match)
-    {
-      cgpp_compare = (CDSGeneProductPtr) vnp->data.ptrvalue;
-      if (cgpp_compare != NULL 
-          && StringCmp (cgpp_compare->gene_locus, gene_label) == 0
-          && StringCmp (cgpp_compare->product_name, context.label) != 0)
-      {
-        found_match = TRUE;
-        vnp->choice = 1;
-        ValNodeAddPointer (&(cgpp_compare->cds_list), OBJ_SEQFEAT, sfp);
-      }
-      vnp = vnp->next;
-    }
-    if (!found_match) {
-      cgpp = (CDSGeneProductPtr) MemNew (sizeof (CDSGeneProductData));
-      if (cgpp != NULL)
-      {
-        ValNodeAddPointer (&(cgpp->cds_list), OBJ_SEQFEAT, sfp);
-        cgpp->gene_locus = gene_label;
-        cgpp->product_name = StringSave (context.label);
-        ValNodeAddPointer (cds_list, 0, cgpp);
-      }
-    }
-  }  
-}
-
-static void FindCDSGeneProductConflicts (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr         cds_list = NULL, non_conflict = NULL, vnp;
-  CDSGeneProductPtr  cgpp;
-  CharPtr            bad_fmt = "%d coding regions have the same gene name as another coding region but a different product.";
-  CharPtr            bad_cat_fmt = "%d coding regions have the same gene name(%s) as another coding region but a different product.";
-  DiscrepancyItemPtr dip;
-  ValNodePtr         subcategories = NULL;
-  ValNodePtr         item_list = NULL, cds_vnp;
-  
-  VisitFeaturesInSep (sep, &cds_list, FindCDSGeneProductConflictsCallback);
-
-  /* remove CDSs without conflicts */
-  non_conflict = ValNodeExtractList (&cds_list, 0);
-  non_conflict = CDSGeneProductListFree (non_conflict);
-  
-  /* for each item, replace structure used for search with just the feature */
-  for (vnp = cds_list; vnp != NULL; vnp = vnp->next)
-  {
-    cgpp = (CDSGeneProductPtr) vnp->data.ptrvalue;
-    if (cgpp != NULL)
-    {
-      for (cds_vnp = cgpp->cds_list; cds_vnp != NULL; cds_vnp = cds_vnp->next) {
-          ValNodeAddPointer (&item_list, OBJ_SEQFEAT, cds_vnp->data.ptrvalue);
-      }
-      
-      cgpp->product_name = MemFree (cgpp->product_name);
-      
-      dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-      if (dip != NULL)
-      {
-        dip->disc_type = DISC_GENE_PRODUCT_CONFLICT;
-        dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + StringLen (cgpp->gene_locus) + 15));
-        sprintf (dip->description, bad_cat_fmt, ValNodeLen (cgpp->cds_list), cgpp->gene_locus == NULL ? "" : cgpp->gene_locus);
-        dip->item_list = cgpp->cds_list;
-        cgpp->cds_list = NULL;
-
-        vnp->choice = 0;
-        vnp->data.ptrvalue = dip;      
-      } else {
-        cgpp->cds_list = ValNodeFree (cgpp->cds_list);
-        vnp->choice = 0;
-        vnp->data.ptrvalue = NULL;
-      }
-      /* note - we are not freeing gene_locus because we didn't make a copy */
-      cgpp = MemFree (cgpp);
-    }
-  }
-    
-  if (cds_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_GENE_PRODUCT_CONFLICT;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (item_list));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = item_list;
-      dip->subcategories = cds_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }  
-}
-
-
-static void DuplicateGeneLocusCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  ValNodePtr PNTR gene_list;
-  SeqFeatPtr      sfp_compare;
-  GeneRefPtr      grp, grp_compare;
-  ValNodePtr      prev = NULL, vnp;
-  Boolean         found_match = FALSE;
-  Uint1           new_choice = 0;
-  
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE || sfp->data.value.ptrvalue == NULL
-      || userdata == NULL)
-  {
-    return;
-  }
-  
-  gene_list = (ValNodePtr PNTR) userdata;
-  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-  if (StringHasNoText (grp->locus))
-  {
-    return;
-  }
-  
-  if (*gene_list == NULL)
-  {
-    ValNodeAddPointer (gene_list, 0, sfp);
-  }
-  else
-  {
-    vnp = *gene_list;
-    while (vnp != NULL && !found_match)
-    {
-      sfp_compare = (SeqFeatPtr) vnp->data.ptrvalue;
-      grp_compare = (GeneRefPtr) sfp_compare->data.value.ptrvalue;
-      if (StringCmp (grp_compare->locus, grp->locus) == 0)
-      {
-        found_match = TRUE;
-        vnp->choice = OBJ_SEQFEAT;
-        new_choice = OBJ_SEQFEAT;
-      }
-      prev = vnp;
-      vnp = vnp->next;
-    }
-    
-    if (found_match)
-    {
-      vnp = prev;
-      /* insert at end of matches */
-      while (found_match && vnp != NULL)
-      {
-        sfp_compare = (SeqFeatPtr) vnp->data.ptrvalue;
-        grp_compare = (GeneRefPtr) sfp_compare->data.value.ptrvalue;
-        if (StringCmp (grp_compare->locus, grp->locus) != 0)
-        {
-          found_match = FALSE;
-        }
-        else
-        {
-          prev = vnp;
-        }
-        vnp = vnp->next;
-      }
-    }
-
-    /* add to list */
-    vnp = ValNodeNew (NULL);
-    vnp->choice = new_choice;
-    vnp->data.ptrvalue = sfp;
-    vnp->next = prev->next;
-    prev->next = vnp;
-      
-  }
-  
-}
-
-
-static void FindDuplicateGeneLocus (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr         gene_list = NULL, non_conflict = NULL;
-  CharPtr            bad_fmt = "%d genes have the same locus as another gene.";
-  DiscrepancyItemPtr dip;
-  
-  VisitFeaturesInSep (sep, &gene_list, DuplicateGeneLocusCallback);
-
-  /* remove Genes without conflicts */
-  non_conflict = ValNodeExtractList (&gene_list, 0);
-  non_conflict = ValNodeFree (non_conflict);
-  
-  if (gene_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_GENE_DUPLICATE_LOCUS;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (gene_list));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = gene_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }  
-  
-}
-
-
-static void ECNumberNoteDiscrepancyCallback (ValNodePtr item_list, Pointer userdata)
-{
-  Message (MSG_OK, "I could launch the editor for the individual feature, or I could convert the note to an EC number qual");
-}
-
-
-static Boolean ECNumberInText (CharPtr text) 
-{
-  CharPtr cp_num, cp_dash, cp_start;
-  Int4    nums_found = 0;
-  
-  if (StringHasNoText (text)) {
-      return FALSE;
-  }
-  
-  cp_num = text + StrCSpn (text, "1234567890");
-  cp_dash = StringStr (text, "-");
-  if (cp_dash == NULL || cp_dash > cp_num) {
-    cp_start = cp_num;
-  } else {
-    cp_start = cp_dash;
-  }
-  
-  while (*cp_start != 0) {
-    nums_found++;
-    while (isdigit (*cp_start) || *cp_start == '-') {
-      cp_start++;
-    }
-    if (*cp_start != '.') {
-      if (nums_found == 4) {
-        return TRUE;
-      } else {
-        return ECNumberInText (cp_start);
-      }
-    } else {
-      cp_start ++;
-    }
-  }    
-  if (nums_found == 4) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
-static void FindECNumberNotes (SeqFeatPtr sfp, Pointer userdata)
-{
-  ValNodePtr PNTR    ec_number_features;
-  BioseqPtr          prot_bsp;
-  SeqMgrFeatContext  fcontext;
-  SeqFeatPtr         prot_sfp;
-  ProtRefPtr         prp;
-  ValNodePtr         vnp;
-  
-  if (sfp == NULL || userdata == NULL || StringHasNoText (sfp->comment))
-  {
-    return;
-  }
-  
-  ec_number_features = (ValNodePtr PNTR) userdata;
-  
-  if (ECNumberInText (sfp->comment))
-  {
-    ValNodeAddPointer (ec_number_features, OBJ_SEQFEAT, sfp);
-  }
-  else if (sfp->data.choice == SEQFEAT_CDREGION && sfp->product != NULL) 
-  {
-    prot_bsp = BioseqFindFromSeqLoc(sfp->product);
-    prot_sfp = SeqMgrGetNextFeature(prot_bsp, NULL, SEQFEAT_PROT, FEATDEF_PROT, &fcontext);
-    if (prot_sfp != NULL && prot_sfp->data.value.ptrvalue != NULL) {
-      prp = (ProtRefPtr) prot_sfp->data.value.ptrvalue;
-      for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-        if (ECNumberInText (vnp->data.ptrvalue)) {
-          ValNodeAddPointer (ec_number_features, OBJ_SEQFEAT, sfp);
-          return;
-        }
-      }
-      if (ECNumberInText (prp->desc)) {
-        ValNodeAddPointer (ec_number_features, OBJ_SEQFEAT, sfp);
-        return;
-      }
-    }
-  }  
-}
-
-static void AddECNumberNoteDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr ec_number_features = NULL;
-  DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d features have EC numbers in notes or products.";
-  
-  if (discrepancy_list == NULL) return;
-  
-  VisitFeaturesInSep (sep, &ec_number_features, FindECNumberNotes);
-  
-  if (ec_number_features != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_EC_NUMBER_NOTE;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (ec_number_features));
-      dip->callback_func = ECNumberNoteDiscrepancyCallback;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = ec_number_features;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-  
-}
-
-
-static void FindPseudoDiscrepanciesCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  ValNodePtr PNTR pseudo_features;
-  GeneRefPtr      grp;
-  SeqFeatPtr      gene_sfp = NULL;
-  Boolean         found_conflict = FALSE;
-  
-  if (sfp == NULL || (sfp->data.choice != SEQFEAT_CDREGION && sfp->data.choice != SEQFEAT_RNA)
-      || userdata == NULL)
-  {
-    return;
-  }
-  
-  grp = SeqMgrGetGeneXref (sfp);
-  if (grp != NULL)
-  {
-    return;
-  }
-  
-  gene_sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
-  if (gene_sfp == NULL)
-  {
-    return;
-  }
-  
-  if ((sfp->pseudo && ! gene_sfp->pseudo)
-      || (!sfp->pseudo && gene_sfp->pseudo))
-  {
-    pseudo_features = (ValNodePtr PNTR) userdata;
-    ValNodeAddPointer (pseudo_features, OBJ_SEQFEAT, sfp);
-    if (gene_sfp != NULL)
-    {
-      ValNodeAddPointer (pseudo_features, OBJ_SEQFEAT, gene_sfp);
-    }
-  }
-}
-
-
-static void FindPseudoDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr pseudo_features = NULL;
-  DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d CDSs, RNAs, and genes have mismatching pseudos.";
-  
-  if (discrepancy_list == NULL) return;
-  
-  VisitFeaturesInSep (sep, &pseudo_features, FindPseudoDiscrepanciesCallback);
-  
-  if (pseudo_features != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_PSEUDO_MISMATCH;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (pseudo_features));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = pseudo_features;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-  
-}
-
-
-static void FindJoinedLocations (SeqFeatPtr sfp, Pointer userdata)
-{
-  ValNodePtr PNTR joined_features;
-  
-  if (sfp == NULL || userdata == NULL || sfp->location == NULL)
-  {
-    return;
-  }
-  
-  joined_features = (ValNodePtr PNTR) userdata;
-  if (sfp->location->choice == SEQLOC_MIX)
-  {
-    ValNodeAddPointer (joined_features, OBJ_SEQFEAT, sfp);
-  }
-}
-
-static void AddJoinedFeatureDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr joined_features = NULL;
-  
-  DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d features have joined locations.";
-  
-  if (discrepancy_list == NULL) return;
-  
-  VisitFeaturesInSep (sep, &joined_features, FindJoinedLocations);
-  
-  if (joined_features != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_JOINED_FEATURES;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (joined_features));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = joined_features;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-}
-
-
-static void FindOverlappingGenes (BioseqPtr bsp, Pointer userdata)
-{
-  SeqFeatPtr         sfp, sfp_compare;
-  SeqMgrFeatContext  context;
-  ValNodePtr PNTR    overlapping_genes = NULL, non_overlap;
-  ValNodePtr         gene_list = NULL, vnp, vnp_next;
-  
-  if (bsp == NULL || userdata == NULL)
-  {
-    return;
-  }
-  
-  overlapping_genes = (ValNodePtr PNTR) userdata;
-  
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, FEATDEF_GENE, &context);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, FEATDEF_GENE, &context))
-  {
-    ValNodeAddPointer (&gene_list, 0, sfp);
-  }
-  
-  for (vnp = gene_list; vnp != NULL && vnp->next != NULL; vnp = vnp->next)
-  {
-    sfp = (SeqFeatPtr) vnp->data.ptrvalue;
-    for (vnp_next = vnp->next; vnp_next != NULL; vnp_next = vnp_next->next)
-    {
-      sfp_compare = (SeqFeatPtr) vnp_next->data.ptrvalue;
-      
-      if (SeqLocStrand (sfp->location) != SeqLocStrand (sfp_compare->location))
-      {
-        continue;
-      }
-      
-      if (SeqLocCompare (sfp->location, sfp_compare->location) != SLC_NO_MATCH)
-      {
-        vnp->choice = OBJ_SEQFEAT;
-        vnp_next->choice = OBJ_SEQFEAT;
-      }
-    }
-  }
-  
-  non_overlap = ValNodeExtractList (&gene_list, 0);
-  non_overlap = ValNodeFree (non_overlap);
-  ValNodeLink (overlapping_genes, gene_list);
-  
-}
-
-static void AddOverlappingGeneDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d genes overlap another gene on the same strand.";
-  ValNodePtr         overlapping_genes = NULL;
-
-  if (discrepancy_list == NULL)
-  {
-    return;
-  }
-  
-  VisitBioseqsInSep (sep, &overlapping_genes, FindOverlappingGenes);
-  
-  if (overlapping_genes != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_OVERLAPPING_GENES;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (overlapping_genes));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = overlapping_genes;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-}
-
-
-typedef struct cdsoverlap 
-{
-  CharPtr    product_name;
-  SeqFeatPtr sfp;  
-  Int4       left;
-  Int4       right;
-} CDSOverlapData, PNTR CDSOverlapPtr;
-
-
-static CDSOverlapPtr CDSOverlapNew (SeqFeatPtr sfp, CharPtr product_name, Int4 left, Int4 right)
-{
-  CDSOverlapPtr cop;
-  
-  cop = (CDSOverlapPtr) MemNew (sizeof (CDSOverlapData));
-  if (cop != NULL)
-  {
-    cop->product_name = StringSave (product_name);
-    cop->sfp = sfp;
-    cop->left = left;
-    cop->right = right;
-  }
-  return cop;
-}
-
-
-static ValNodePtr FreeCDSOverlapList (ValNodePtr vnp)
-{
-  CDSOverlapPtr cop;
-  
-  if (vnp != NULL)  
-  {
-    vnp->next = FreeCDSOverlapList (vnp->next);
-    cop = (CDSOverlapPtr) vnp->data.ptrvalue;
-    if (cop != NULL)
-    {
-      cop->product_name = MemFree (cop->product_name);
-      cop = MemFree (cop);
-      vnp->data.ptrvalue = NULL;
-    }
-    vnp = ValNodeFree (vnp);
-  }
-  return vnp;
-}
-
-
-static ValNodePtr FeatureListFromOverlapList (ValNodePtr vnp)
-{
-  ValNodePtr     feat_list = NULL;
-  CDSOverlapPtr cop;
-  
-  while (vnp != NULL)
-  {
-    if (vnp->choice != 0 && vnp->data.ptrvalue != NULL)
-    {
-      cop = (CDSOverlapPtr) vnp->data.ptrvalue;
-      ValNodeAddPointer (&feat_list, OBJ_SEQFEAT, cop->sfp);
-    }
-    vnp = vnp->next;
-  }
-  return feat_list;
-}
-
-
-static CharPtr similar_product_words[] = 
-{ "transposase",
-  "integrase"
-};
-
-const int num_similar_product_words = sizeof (similar_product_words) / sizeof (CharPtr);
-
-static CharPtr ignore_similar_product_words[] = 
-{ "hypothetical protein",
-  "phage"
-};
-
-const int num_ignore_similar_product_words = sizeof (ignore_similar_product_words) / sizeof (CharPtr);
-
-
-static Boolean OverlappingProductNameSimilar (CharPtr str1, CharPtr str2)
-{
-  Int4 i;
-  Boolean str1_has_similarity_word = FALSE, str2_has_similarity_word = FALSE;
-  
-  if (StringHasNoText (str1) && StringHasNoText (str2))
-  {
-    return TRUE;
-  }
-  else if (StringHasNoText (str1) || StringHasNoText (str2))
-  {
-    return FALSE;
-  }
-  
-  /* if both product names contain one of the special case similarity words,
-   * the product names are similar. */
-  for (i = 0; i < num_similar_product_words; i++)
-  {
-    if (StringISearch (str1, similar_product_words [i]) != NULL)
-    {
-      str1_has_similarity_word = TRUE;
-    }
-    if (StringISearch (str2, similar_product_words [i]) != NULL)
-    {
-      str2_has_similarity_word = TRUE;
-    }
-  }
-  if (str1_has_similarity_word && str2_has_similarity_word)
-  {
-    return TRUE;
-  }
-  
-  /* otherwise, if one of the product names contains one of special ignore similarity
-   * words, the product names are not similar.
-   */
-  for (i = 0; i < num_ignore_similar_product_words; i++)
-  {
-    if (StringISearch (str1, ignore_similar_product_words[i]) != NULL
-        || StringISearch (str2, ignore_similar_product_words[i]) != NULL)
-    {
-      return FALSE;
-    }
-  }
-  
-  if (StringICmp (str1, str2) == 0)
-  {
-    return TRUE;
-  }
-  else
-  {
-    return FALSE;
-  }
-}
-
-
-static void FindOverlappingCDSs (BioseqPtr bsp, Pointer userdata)
-{
-  SeqFeatPtr         sfp;
-  SeqMgrFeatContext  context;
-  ValNodePtr PNTR    overlapping_cds = NULL, cds_list;
-  ValNodePtr         overlap_list = NULL, vnp, vnp_next;
-  CDSOverlapPtr      cop, cop_compare;
-  
-  if (bsp == NULL || userdata == NULL)
-  {
-    return;
-  }
-  
-  overlapping_cds = (ValNodePtr PNTR) userdata;
-  
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &context);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &context))
-  {
-    ValNodeAddPointer (&overlap_list, 0, CDSOverlapNew (sfp, context.label, context.left, context.right));
-  }
-  
-  for (vnp = overlap_list; vnp != NULL && vnp->next != NULL; vnp = vnp->next)
-  {
-    cop = (CDSOverlapPtr) vnp->data.ptrvalue;
-    if (cop == NULL)
-    {
-      continue;
-    }
-    for (vnp_next = vnp->next; vnp_next != NULL; vnp_next = vnp_next->next)
-    {
-      cop_compare = (CDSOverlapPtr) vnp_next->data.ptrvalue;
-      if (cop_compare == NULL)
-      {
-        continue;
-      }
-      else if (cop_compare->left > cop->right)
-      {
-        break;
-      }
-      if (!OverlappingProductNameSimilar (cop->product_name, cop_compare->product_name))
-      {
-        continue;
-      }
-      if (SeqLocStrand (cop->sfp->location) != SeqLocStrand (cop_compare->sfp->location))
-      {
-        continue;
-      }
-      
-      if (SeqLocCompare (cop->sfp->location, cop_compare->sfp->location) != SLC_NO_MATCH)
-      {
-        vnp->choice = OBJ_SEQFEAT;
-        vnp_next->choice = OBJ_SEQFEAT;
-      }
-    }
-  }
-  
-  cds_list = FeatureListFromOverlapList(overlap_list);
-  if (cds_list != NULL)
-  {
-    ValNodeLink (overlapping_cds, cds_list);
-  }
-  overlap_list = FreeCDSOverlapList (overlap_list);
-}
-
-
-static void AddOverlappingCodingRegionDiscrepancies (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d coding regions overlap another coding region with a similar or identical name.";
-  ValNodePtr         overlapping_cds = NULL;
-
-  if (discrepancy_list == NULL)
-  {
-    return;
-  }
-  
-  VisitBioseqsInSep (sep, &overlapping_cds, FindOverlappingCDSs);
-  
-  if (overlapping_cds != NULL)
-  {
-    dip = NewDiscrepancyItem (DISC_OVERLAPPING_CDS, bad_fmt, overlapping_cds);
-
-    if (dip != NULL)
-    {
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-}
-
-
-static void FindShortContigsCallback (BioseqPtr bsp, Pointer userdata)
-{
-  ValNodePtr PNTR bioseq_list;
-  
-  if (bsp == NULL || !ISA_na (bsp->mol) || userdata == NULL || bsp->length >= 200)
-  {
-    return;
-  }
-  
-  bioseq_list = (ValNodePtr PNTR) userdata;
-  
-  ValNodeAddPointer (bioseq_list, OBJ_BIOSEQ, bsp);
-}
-
-static void FindShortContigs (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  DiscrepancyItemPtr dip;
-  CharPtr            bad_fmt = "%d contigs are shorter than 200 nt.";
-  ValNodePtr         bioseq_list = NULL;
-  
-  if (discrepancy_list == NULL) return;
-  
-  VisitBioseqsInSep (sep, &bioseq_list, FindShortContigsCallback);
-  
-  if (bioseq_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-    if (dip != NULL)
-    {
-      dip->disc_type = DISC_SHORT_CONTIG;
-      dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-      sprintf (dip->description, bad_fmt, ValNodeLen (bioseq_list));
-      dip->callback_func = NULL;
-      dip->datafree_func = NULL;
-      dip->callback_data = NULL;
-      dip->item_list = bioseq_list;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-}
-
-typedef struct biosrccheck 
-{
-  BioSourcePtr biop;
-  ValNodePtr   sdp_list;
-} BioSrcCheckData, PNTR BioSrcCheckPtr;
-
-static ValNodePtr FreeBioSrcCheckList (ValNodePtr biosrc_list)
-{
-  BioSrcCheckPtr  bscp;
-  
-  if (biosrc_list == NULL)
-  {
-    return NULL;
-  }
-  
-  biosrc_list->next = FreeBioSrcCheckList (biosrc_list->next);
-  
-  bscp = (BioSrcCheckPtr) biosrc_list->data.ptrvalue;
-  if (bscp != NULL)
-  {
-    bscp->sdp_list = ValNodeFree (bscp->sdp_list);
-    bscp = MemFree (bscp);
-  }
-  biosrc_list = ValNodeFree (biosrc_list);
-  return NULL;
-}
-
-
-static void FindInconsistentSourcesCallback (BioseqPtr bsp, Pointer userdata)
-{
-  ValNodePtr PNTR biosrc_list, vnp;
-  SeqDescrPtr     sdp;
-  BioSrcCheckPtr  bscp;
-  Boolean         found = FALSE;
-  SeqMgrDescContext context;
-  
-  if (bsp == NULL || !ISA_na (bsp->mol) || userdata == NULL)
-  {
-    return;
-  }
-  
-  biosrc_list = (ValNodePtr PNTR) userdata;
-  
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
-  if (sdp != NULL)
-  {
-    for (vnp = *biosrc_list; vnp != NULL && !found; vnp = vnp->next)
-    {
-      bscp = (BioSrcCheckPtr) vnp->data.ptrvalue;
-      if (bscp != NULL && BioSourceMatch (sdp->data.ptrvalue, bscp->biop))
-      {
-        ValNodeAddPointer (&(bscp->sdp_list), OBJ_SEQDESC, sdp);
-        found = TRUE;
-      }
-    }
-    if (!found)
-    {
-      bscp = (BioSrcCheckPtr) MemNew (sizeof (BioSrcCheckData));
-      if (bscp != NULL)
-      {
-        bscp->biop = sdp->data.ptrvalue;
-        ValNodeAddPointer (&(bscp->sdp_list), OBJ_SEQDESC, sdp);
-        ValNodeAddPointer (biosrc_list, 0, bscp);
-      }
-    }
-  }
-}
-
-
-static DiscrepancyItemPtr InconsistentBiosrc (BioSrcCheckPtr bscp)
-{
-  DiscrepancyItemPtr dip = NULL;
-  CharPtr            bad_fmt = "%d contigs have identical sources that do not match another contig source.";
-
-  if (bscp == NULL || bscp->sdp_list == NULL)
-  {
-    return NULL;
-  }
-  
-  dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-  if (dip != NULL)
-  {
-    dip->disc_type = DISC_INCONSISTENT_BIOSRC;
-    dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + 15));
-    sprintf (dip->description, bad_fmt, ValNodeLen (bscp->sdp_list));
-    dip->callback_func = NULL;
-    dip->datafree_func = NULL;
-    dip->callback_data = NULL;
-    dip->item_list = bscp->sdp_list;
-    bscp->sdp_list = NULL;
-  }      
-  return dip;
-}
-
-
-static void FindNonmatchingContigSources (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  DiscrepancyItemPtr dip;
-  ValNodePtr         biosrc_list = NULL, vnp;
-  
-  if (discrepancy_list == NULL) return;
-  
-  VisitBioseqsInSep (sep, &biosrc_list, FindInconsistentSourcesCallback);
-  
-  if (biosrc_list != NULL && biosrc_list->next != NULL)
-  {
-    for (vnp = biosrc_list; vnp != NULL; vnp = vnp->next)
-    {
-      dip = InconsistentBiosrc (vnp->data.ptrvalue);
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-  biosrc_list = FreeBioSrcCheckList (biosrc_list);
-}
-
-
-static CharPtr suspect_product_names[] = 
-{
-"Similar to",
-"Related to",
-"interrupt",
-"Homolog",
-"Homologue",
-"Fragment",
-"Frameshift",
-"Intein",
-"COG",
-"N-terminal",
-"N terminal",
-"C-terminal",
-"C terminal",
-"N-terminus",
-"C-terminus",
-"Chloroplast",
-"Mitochondrial",
-"Brackets or parenthesis [] ()",
-"ending with period or comma",
-"ortholog",
-"orthologue",
-"paralog",
-"paralogue",
-"bifunctional",
-"pseudogene",
-"frame shift",
-"protien",
-"partial",
-"B.subtilis",
-"E.coli",
-"Escherichia",
-"coli",
-"Bacillus",
-"Subtilis",
-"Staphlococcus",
-"aureus",
-"Salmonella",
-"Streptococcus",
-"Staphlococcal",
-"streptococcal",
-"Helicobacter",
-"pylori",
-"Campylobacter",
-"Jejuni",
-"Yersinia",
-"Pestis",
-"Rhodobacter",
-"sphaeroides",
-"or related",
-"pseudo",
-"N-term",
-"C-term",
-"N term",
-"C term"
-};
-
-const int num_suspect_product_names = sizeof (suspect_product_names) / sizeof (CharPtr);
-
-const int brackets_name = 17;
-const int end_with_punct_name = 18;
-
-
-static void FindSuspectProductNamesCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  ValNodePtr PNTR feature_list;
-  Int4            k, len;
-  ProtRefPtr      prp;
-  ValNodePtr      vnp;
-  CharPtr         str;
-  
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT || sfp->data.value.ptrvalue == NULL
-      || userdata == NULL)
-  {
-    return;
-  }
-  
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-  feature_list = (ValNodePtr PNTR) userdata;
-  
-  for (k = 0; k < num_suspect_product_names; k++)
-  {
-    if (k == brackets_name)
-    {
-      for (vnp = prp->name; vnp != NULL; vnp = vnp->next)
-      {
-        if (StringChr (vnp->data.ptrvalue, '[') != NULL
-            || StringChr (vnp->data.ptrvalue, ']') != NULL
-            || StringChr (vnp->data.ptrvalue, '(') != NULL
-            || StringChr (vnp->data.ptrvalue, ')') != NULL)
-        {
-          ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
-          break;
-        }
-      }
-    }
-    else if (k == end_with_punct_name)
-    {
-      for (vnp = prp->name; vnp != NULL; vnp = vnp->next)
-      {
-        len = StringLen (vnp->data.ptrvalue);
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (str[len - 1] == '.' || str[len - 1] == ',')
-        {
-          ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
-          break;
-        }
-      }
-    }
-    else
-    {
-      if (StringLen (suspect_product_names [k]) < 4)
-      {
-        for (vnp = prp->name; vnp != NULL; vnp = vnp->next)
-        {
-          if (StringSearch(vnp->data.ptrvalue, suspect_product_names[k]) != NULL)
-          {
-            ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
-            break;
-          }
-        }
-      }
-      else
-      {
-        for (vnp = prp->name; vnp != NULL; vnp = vnp->next)
-        {
-          if (StringISearch(vnp->data.ptrvalue, suspect_product_names[k]) != NULL)
-          {
-            ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
-            break;
-          }
-        }
-      }
-    }
-  }
-  
-}
-
-
-static DiscrepancyItemPtr SuspectProductName (CharPtr product_name, ValNodePtr feature_list)
-{
-  DiscrepancyItemPtr dip = NULL;
-  CharPtr            bad_fmt = "%d product names contain %s";
-
-  if (feature_list == NULL || StringHasNoText (product_name))
-  {
-    return NULL;
-  }
-  
-  dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-  if (dip != NULL)
-  {
-    dip->disc_type = DISC_SUSPECT_PRODUCT_NAME;
-    dip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_fmt) + StringLen (product_name) + 15));
-    sprintf (dip->description, bad_fmt, ValNodeLen (feature_list), product_name);
-    dip->callback_func = NULL;
-    dip->datafree_func = NULL;
-    dip->callback_data = NULL;
-    dip->item_list = feature_list;
-  }      
-  return dip;
-}
-
-
-static void FindSuspectProductNames (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr PNTR   feature_list = NULL;
-  ValNodePtr         master_list = NULL;
-  Int4               k;
-  DiscrepancyItemPtr dip;
-  ValNodePtr         subcategories = NULL;
-  
-  if (discrepancy_list == NULL) return;
-
-  feature_list = (ValNodePtr PNTR) MemNew (sizeof (ValNodePtr) * num_suspect_product_names);
-  if (feature_list == NULL) return;
-  
-  /* initialize array for suspicious product names */
-  for (k = 0; k < num_suspect_product_names; k++)
-  {
-    feature_list[k] = NULL;
-  }
-  
-  VisitFeaturesInSep (sep, feature_list, FindSuspectProductNamesCallback);
-  
-  for (k = 0; k < num_suspect_product_names; k++)
-  {
-    if (feature_list[k] != NULL)
-    {
-      dip = SuspectProductName (suspect_product_names[k], feature_list[k]);
-      if (dip != NULL)
-      {
-        ValNodeAddPointer (&subcategories, 0, dip);
-      }
-      ValNodeLinkCopy (&master_list, feature_list[k]);
-    }
-  }
-  
-  if (master_list != NULL)
-  {
-    dip = SuspectProductName ("suspect phrase or characters", master_list);
-    if (dip != NULL)
-    {
-      dip->subcategories = subcategories;
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-
-  MemFree (feature_list);
-}
-
-
-static void FindUnknownProteinsWithECNumbersCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  ProtRefPtr prp;
-  ValNodePtr PNTR feature_list;
-  
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT || sfp->data.value.ptrvalue == NULL || userdata == NULL) 
-  {
-    return;
-  }
-  
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-  if (prp->name == NULL || prp->ec == NULL) return;
-
-  if (StringISearch (prp->name->data.ptrvalue, "hypothetical protein") != NULL
-      || StringISearch (prp->name->data.ptrvalue, "unknown protein") != NULL) 
-  {
-    feature_list = (ValNodePtr PNTR) userdata;
-    ValNodeAddPointer (feature_list, OBJ_SEQFEAT, sfp);
-  }
-}
-
-
-static void FindUnknownProteinsWithECNumbers (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{
-  ValNodePtr         feature_list = NULL;
-  DiscrepancyItemPtr dip;
-  
-  if (discrepancy_list == NULL) return;
-  
-  VisitFeaturesInSep (sep, &feature_list, FindUnknownProteinsWithECNumbersCallback);
-  if (feature_list != NULL) {
-    dip = NewDiscrepancyItem (DISC_EC_NUMBER_ON_HYPOTHETICAL_PROTEIN, "%d protein features have an EC number and a protein name of 'unknown protein' or 'hypothetical protein'", feature_list);
-    ValNodeAddPointer (discrepancy_list, 0, dip);
-  }  
-}
-
-
-static DiscrepancyItemPtr InconsistentSourceDefline (SeqDescrPtr biop_sdp, SeqDescrPtr title_sdp)
-{
-  DiscrepancyItemPtr dip = NULL;
-  CharPtr            bad_fmt = "Organism description not found in definition line: %s.";
-  BioSourcePtr       biop;
-  CharPtr            desc = NULL;
-
-  if (biop_sdp == NULL || title_sdp == NULL)
-  {
-    return NULL;
-  }
-  
-  biop = (BioSourcePtr) biop_sdp->data.ptrvalue;
-  if (biop != NULL && biop->org != NULL && !StringHasNoText (biop->org->taxname))
-  {
-    desc = biop->org->taxname;
-  }
-  else
-  {
-    desc = title_sdp->data.ptrvalue;
-  }
-  if (StringHasNoText (desc)) {
-    return NULL;
-  }
-  
-  dip = (DiscrepancyItemPtr) MemNew (sizeof (DiscrepancyItemData));
-  if (dip != NULL)
-  {
-    dip->disc_type = DISC_INCONSISTENT_BIOSRC_DEFLINE;
-    dip->description = (CharPtr)MemNew (StringLen (bad_fmt) + StringLen (desc));
-    sprintf (dip->description, bad_fmt, desc);
-    dip->callback_func = NULL;
-    dip->datafree_func = NULL;
-    dip->callback_data = NULL;
-    dip->item_list = NULL;
-    ValNodeAddPointer (&(dip->item_list), OBJ_SEQDESC, biop_sdp);
-    ValNodeAddPointer (&(dip->item_list), OBJ_SEQDESC, title_sdp);
-  }      
-  return dip;
-}
-
-
-static void FindInconsistentSourceAndDeflineCallback (BioseqPtr bsp, Pointer userdata)
-{
-  DiscrepancyItemPtr dip;
-  ValNodePtr PNTR discrepancy_list;
-  SeqDescrPtr        biop_sdp, title_sdp;
-  SeqMgrDescContext  context;
-  BioSourcePtr       biop;
-  
-  discrepancy_list = (ValNodePtr PNTR) userdata;
-  if (bsp == NULL || discrepancy_list == NULL) return;
-  
-  biop_sdp = SeqMgrGetNextDescriptor(bsp, NULL, Seq_descr_source, &context);
-  if (biop_sdp == NULL || biop_sdp->data.ptrvalue == NULL)
-  {
-    return;
-  }
-  biop = (BioSourcePtr) biop_sdp->data.ptrvalue;
-  if (biop->org == NULL)
-  {
-    return;
-  }
-  if (StringHasNoText (biop->org->taxname)) 
-  {
-    return;
-  }
-  
-  title_sdp = SeqMgrGetNextDescriptor(bsp, NULL, Seq_descr_title, &context);
-  if (title_sdp == NULL) return;
-  
-  if (StringStr (title_sdp->data.ptrvalue, biop->org->taxname) == NULL)
-  {
-    dip = InconsistentSourceDefline (biop_sdp, title_sdp);
-    if (dip != NULL)
-    {
-      ValNodeAddPointer (discrepancy_list, 0, dip);
-    }
-  }
-}
-
-
-static void FindInconsistentSourceAndDefline (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{  
-  ValNodePtr disc_pairs = NULL;
-  CharPtr    bad_fmt = "%d sources do not match definition lines.";
-  DiscrepancyItemPtr dip;
-  
-  if (discrepancy_list == NULL) return;
-
-  VisitBioseqsInSep (sep, &disc_pairs, FindInconsistentSourceAndDeflineCallback);
-
-  if (disc_pairs == NULL) 
-  {
-    return;
-  }
-  else if (disc_pairs->next == NULL)
-  {
-    ValNodeLink (discrepancy_list, disc_pairs);
-  }
-  else
-  {
-    dip = NewDiscrepancyItem (DISC_INCONSISTENT_BIOSRC_DEFLINE, bad_fmt, disc_pairs);
-    dip->item_list = NULL;
-    dip->subcategories = disc_pairs;
-    
-    ValNodeAddPointer (discrepancy_list, 0, dip);
-  }
-}
-
-
-static void FindParticalCDSsInCompleteSequencesCallback (BioseqPtr bsp, Pointer userdata)
-{
-  ValNodePtr PNTR    cds_list;
-  SeqDescrPtr        molinfo_sdp;
-  SeqMgrDescContext  context;
-  SeqFeatPtr         cds;
-  SeqMgrFeatContext  fcontext;
-  MolInfoPtr         mip;
-  Boolean            partial5, partial3;
-  
-  cds_list = (ValNodePtr PNTR) userdata;
-  if (bsp == NULL || cds_list == NULL) return;
-  
-  molinfo_sdp = SeqMgrGetNextDescriptor(bsp, NULL, Seq_descr_molinfo, &context);
-  if (molinfo_sdp == NULL || molinfo_sdp->data.ptrvalue == NULL)
-  {
-    return;
-  }
-  mip = (MolInfoPtr) molinfo_sdp->data.ptrvalue;
-  if (mip->completeness != 1)
-  {
-    return;
-  }
-  
-  cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
-  while (cds != NULL) {
-      CheckSeqLocForPartial (cds->location, &partial5, &partial3);
-      if (cds->partial || partial5 || partial3) {
-          ValNodeAddPointer (cds_list, OBJ_SEQFEAT, cds);
-      }
-      cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
-  }
-}
-
-
-static void FindParticalCDSsInCompleteSequences (SeqEntryPtr sep, ValNodePtr PNTR discrepancy_list)
-{  
-  ValNodePtr cds_list = NULL;
-  CharPtr    bad_fmt = "%d partial CDSs in complete sequences.";
-  DiscrepancyItemPtr dip;
-  
-  if (discrepancy_list == NULL) return;
-
-  VisitBioseqsInSep (sep, &cds_list, FindParticalCDSsInCompleteSequencesCallback);
-
-  if (cds_list == NULL) 
-  {
-    return;
-  }
-  else
-  {
-    dip = NewDiscrepancyItem (DISC_PARTIAL_CDS_IN_COMPLETE_SEQUENCE, bad_fmt, cds_list);
-    dip->subcategories = NULL;
-    
-    ValNodeAddPointer (discrepancy_list, 0, dip);
-  }
-}
-
-
-static void SetDiscrepancyLevels (ValNodePtr discrepancy_list, Int4 level)
-{
-  DiscrepancyItemPtr dip;
-  
-  while (discrepancy_list != NULL)
-  {
-    dip = (DiscrepancyItemPtr) discrepancy_list->data.ptrvalue;
-    if (dip != NULL)
-    {
-      dip->level = level;
-      SetDiscrepancyLevels (dip->subcategories, level + 1);
-    }
-    discrepancy_list = discrepancy_list->next;
-  }
-}
-
-
-/* Note that this function contains a hack - it assumes that all of the
- * test types that use the same collection function are listed together.
- */
-static ValNodePtr CollectDiscrepancies (SeqEntryPtr sep, DiscrepancyConfigPtr dcp)
-{
-  ValNodePtr             discrepancy_list = NULL;
-  Int4                   i;
-  PerformDiscrepancyTest last_test_func = NULL;
-
-  for (i = 0; i < MAX_DISC_TYPE; i++)
-  {
-    if ((dcp == NULL || dcp->conf_list[i])
-        && discrepancy_info_list[i].test_func != NULL
-        && discrepancy_info_list[i].test_func != last_test_func)
-    {
-      discrepancy_info_list[i].test_func (sep, &discrepancy_list);
-      last_test_func = discrepancy_info_list[i].test_func;
-    }
-  }
-  
-  /* because some tests are run together, need to remove unwanted results */
-  RemoveUnwantedDiscrepancyItems (&discrepancy_list, dcp);
-
-  /* normalize the discrepancy levels so that they will be correctly displayed */
-  SetDiscrepancyLevels (discrepancy_list, 0);
-  return discrepancy_list;  
-}
-
-static Nlm_ParData discParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
-static Nlm_ColData discColFmt[2] = {{16, 0, 0, 0, NULL, 'l', 0,0,0,0, FALSE},
-                                    {1000, 0, 0, 0, NULL, 'l', 1,0,0,0, TRUE}};
-
-
-static Int4 CountChosenDiscrepancies (ValNodePtr discrepancy_list, Boolean count_all)
+extern Int4 CountChosenDiscrepancies (ValNodePtr discrepancy_list, Boolean count_all)
 {
   Int4               num_chosen = 0;
-  DiscrepancyItemPtr dip;
+  ClickableItemPtr dip;
   
   while (discrepancy_list != NULL)
   {
-    dip = (DiscrepancyItemPtr) discrepancy_list->data.ptrvalue;
+    dip = (ClickableItemPtr) discrepancy_list->data.ptrvalue;
     if (dip != NULL)
     {
       if (dip->chosen || count_all)
@@ -12536,519 +10300,9 @@ static Int4 CountChosenDiscrepancies (ValNodePtr discrepancy_list, Boolean count
   return num_chosen;
 }
 
-static Int4 CountLevels (ValNodePtr discrepancy_list)
+extern void EditDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
 {
-  Int4       num_levels = 1, num, num_sublevels = 0;
-  ValNodePtr vnp;
-  DiscrepancyItemPtr dip;
-  
-  if (discrepancy_list == NULL) 
-  {
-    return 0;
-  }
-  
-  for (vnp = discrepancy_list; vnp != NULL; vnp = vnp->next)
-  {
-    dip = (DiscrepancyItemPtr) vnp->data.ptrvalue;
-    if (dip == NULL || dip->subcategories == NULL || !dip->expanded)
-    {
-      continue;
-    }
-    num = CountLevels (dip->subcategories);
-    if (num > num_sublevels) num_sublevels = num;
-  }
-  
-  /* one level for the top plus levels for the subcategories */
-
-  return 1 + num_sublevels;
-}
-
-
-static Nlm_ColPtr PNTR GetColumnFormatArrays (Int4 num_levels, DoC doc)
-{
-  Int4               n, k;
-  Nlm_ColPtr PNTR    col_fmt_array_array = NULL;
-  RecT               r;
-  Int4               doc_width;
-    
-  if (num_levels == 0)
-  {
-    return NULL;
-  }
-  
-  ObjectRect (doc, &r);
-  InsetRect (&r, 4, 4);
-  doc_width = r.right - r.left;
-  
-  col_fmt_array_array = (Nlm_ColPtr PNTR) MemNew (sizeof (Nlm_ColPtr) * num_levels);
-  for (n = 0; n < num_levels; n++)
-  {
-    col_fmt_array_array[n] = (Nlm_ColPtr) MemNew (sizeof (Nlm_ColData) * (n + 3));
-    for (k = 0; k < n + 2; k++)
-    {
-      col_fmt_array_array[n][k].pixWidth = 16;
-      col_fmt_array_array[n][k].pixInset = 0;
-      col_fmt_array_array[n][k].charWidth = 0;
-      col_fmt_array_array[n][k].charInset = 0;
-      col_fmt_array_array[n][k].font = NULL;
-      col_fmt_array_array[n][k].just = 'l';
-      col_fmt_array_array[n][k].wrap = 0;
-      col_fmt_array_array[n][k].bar = 0;
-      col_fmt_array_array[n][k].underline = 0;
-      col_fmt_array_array[n][k].left = 0;
-      col_fmt_array_array[n][k].last = 0;
-    }
-    col_fmt_array_array[n][k].pixWidth = doc_width - ((n + 2) * 16);
-    col_fmt_array_array[n][k].pixInset = 0;
-    col_fmt_array_array[n][k].charWidth = 0;
-    col_fmt_array_array[n][k].charInset = 0;
-    col_fmt_array_array[n][k].font = NULL;
-    col_fmt_array_array[n][k].just = 'l';
-    col_fmt_array_array[n][k].wrap = 1;
-    col_fmt_array_array[n][k].bar = 0;
-    col_fmt_array_array[n][k].underline = 0;
-    col_fmt_array_array[n][k].left = 0;
-    col_fmt_array_array[n][k].last = 1;
-  }
-  return col_fmt_array_array;
-}
-
-
-static Nlm_ColPtr PNTR FreeColumnFormatArrays (Nlm_ColPtr PNTR col_fmt_array_array, Int4 num_levels)
-{
-  Int4 n;
-  
-  if (col_fmt_array_array == NULL || num_levels < 1)
-  {
-    return NULL;
-  }
-  for (n = 0; n < num_levels; n++)
-  {
-    col_fmt_array_array [n] = MemFree (col_fmt_array_array [n]);
-  }
-  col_fmt_array_array = MemFree (col_fmt_array_array);
-  return col_fmt_array_array;
-}
-
-static void AddDiscrepancyItem (DiscrepancyReportFormPtr drfp, DiscrepancyItemPtr dip, Int4 level)
-{
-  CharPtr            item_text;
-  ValNodePtr         vnp;
-  Int4               n;
-
-  if (dip == NULL)
-  {
-    return;
-  }
-  item_text = (CharPtr) MemNew (sizeof (Char) * (StringLen (dip->description) + 6 + level));
-  for (n = 0; n < level; n++)
-  {
-    StringCat (item_text, "\t");
-  }
-  StringCat (item_text, " \t \t");
-  StringCat (item_text, dip->description);
-  StringCat (item_text, "\n");
-  AppendText (drfp->doc, item_text, &discParFmt, drfp->col_fmt_array_array [level], programFont);
-  if (dip->expanded)
-  {
-    for (vnp = dip->subcategories; vnp != NULL; vnp = vnp->next)
-    {
-      AddDiscrepancyItem (drfp, vnp->data.ptrvalue, level + 1);
-    }
-  }
-}
-
-
-static void PopulateDiscrepancyList (DiscrepancyReportFormPtr drfp, ValNodePtr discrepancy_list)
-{
-  Int2               numItems;
-  Int4               num_levels;
-  
-  if (drfp == NULL || drfp->doc == NULL) 
-  {
-    return;
-  }
-  
-  Reset (drfp->doc);
-  
-  num_levels = CountLevels (drfp->discrepancy_list);
-  if (num_levels != drfp->num_levels)
-  {
-    drfp->col_fmt_array_array = FreeColumnFormatArrays (drfp->col_fmt_array_array, drfp->num_levels);
-    drfp->num_levels = num_levels;
-    drfp->col_fmt_array_array = GetColumnFormatArrays (drfp->num_levels, drfp->doc);
-  }
-  
-  while (discrepancy_list != NULL)
-  {
-    AddDiscrepancyItem (drfp, discrepancy_list->data.ptrvalue, 0);
-    discrepancy_list = discrepancy_list->next;
-  }
-  GetDocParams (drfp->doc, &numItems, NULL);
-  UpdateDocument (drfp->doc, 0, numItems);
-
-}
-
-static Nlm_ParData discItemParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
-static Nlm_ColData discItemColFmt [3] = {{0, 5, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
-                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
-                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, TRUE}};
-
-
-extern CharPtr GetDiscrepancyItemText (ValNodePtr vnp)
-{
-  CharPtr           row_text = NULL;
-  SeqFeatPtr        sfp;
-  BioseqPtr         bsp;
-  SeqMgrFeatContext context;
-  CharPtr           location;
-  CharPtr           label;
-  SeqDescrPtr       sdp;
-  
-  if (vnp == NULL)
-  {
-    return NULL;
-  }
-  if (vnp->choice == OBJ_SEQFEAT)
-  {
-    sfp = (SeqFeatPtr) vnp->data.ptrvalue;
-    if (sfp != NULL)
-    {
-      sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &context);
-      if (sfp != NULL)
-      {
-        location = SeqLocPrintUseBestID (sfp->location);
-        label = (CharPtr) FeatDefTypeLabel(sfp);
-        row_text = (CharPtr) MemNew (sizeof (Char) * 
-                                     (StringLen (label) 
-                                      + StringLen (context.label) 
-                                      + StringLen (location) 
-                                      + 4));
-        sprintf (row_text, "%s\t%s\t%s\n", label, context.label, location);
-        location = MemFree (location);
-      }
-    }
-  }
-  else if (vnp->choice == OBJ_BIOSEQ)
-  {
-    bsp = (BioseqPtr) vnp->data.ptrvalue;
-    if (bsp != NULL)
-    {
-      row_text = (CharPtr) MemNew (sizeof (Char) * 41);
-      SeqIdWrite (bsp->id, row_text, PRINTID_REPORT, 39);
-      StringCat (row_text, "\n");
-    }
-  }
-  else if (vnp->choice == OBJ_SEQDESC)
-  {
-    sdp = (SeqDescrPtr) vnp->data.ptrvalue;
-    if (sdp != NULL)
-    {
-      row_text = (CharPtr) MemNew (sizeof (Char) * 61);
-      SeqDescLabel (sdp, row_text, 59, TRUE);
-      StringCat (row_text, "\n");
-    }
-  }
-  
-    
-  return row_text;
-}
-
-static void PopulateDiscrepancyItemList (DoC doc, DiscrepancyItemPtr dip)
-{
-  ValNodePtr        vnp;
-  Int2              numItems;
-  CharPtr           row_text;
-  RecT              r;
-  
-  if (doc == NULL)
-  {
-    return;
-  }
-  Reset (doc);
-  
-  if (dip == NULL)
-  {
-    return;
-  }
-  
-  if (dip->item_list == NULL)
-  {
-    AppendText (doc, "No items listed", NULL, NULL, programFont);
-  }
-  
-  ObjectRect (doc, &r);
-  InsetRect (&r, 4, 4);
-  
-  discItemColFmt[0].pixWidth = 5 * stdCharWidth;
-  discItemColFmt[1].pixWidth = (r.right - r.left - discItemColFmt[0].pixWidth) / 2;
-  discItemColFmt[2].pixWidth = (r.right - r.left - discItemColFmt[0].pixWidth) / 2;
-  
-  vnp = dip->item_list;
-  
-  while (vnp != NULL)
-  {
-    row_text = GetDiscrepancyItemText (vnp);
-    if (row_text != NULL)
-    {
-      if (vnp->choice == OBJ_SEQFEAT)
-      {
-        AppendText (doc, row_text, &discItemParFmt, discItemColFmt, programFont);
-      }
-      else
-      {
-        AppendText (doc, row_text, &discItemParFmt, NULL, programFont);
-      }
-      row_text = MemFree (row_text);
-    }
-    vnp = vnp->next;
-  }
-  GetDocParams (doc, &numItems, NULL);
-  UpdateDocument (doc, 0, numItems);  
-}
-
-static DiscrepancyItemPtr GetSubDiscrepancy (ValNodePtr discrepancy_list, Int2Ptr pitem)
-{
-  DiscrepancyItemPtr dip = NULL;
-
-  if (discrepancy_list == NULL || pitem == NULL)
-  {
-    return NULL;
-  }
-  while (*pitem > 0 && discrepancy_list != NULL)
-  {
-    (*pitem)--;
-    dip = (DiscrepancyItemPtr) discrepancy_list->data.ptrvalue;
-    if (*pitem > 0)
-    {
-      if (dip != NULL && dip->expanded)
-      {
-        dip = GetSubDiscrepancy (dip->subcategories, pitem);
-      }
-    }
-    discrepancy_list = discrepancy_list->next;
-  }
-  if (*pitem > 0)
-  {
-    dip = NULL;
-  }
-  return dip;
-}
-
-static DiscrepancyItemPtr GetSelectedDiscrepancy (ValNodePtr discrepancy_list, Int2 item)
-{
-  DiscrepancyItemPtr dip = NULL;
-  
-  dip = GetSubDiscrepancy (discrepancy_list, &item);
-
-  return dip;
-}
-
-
-static void ClickDiscrepancy (DoC d, PoinT pt)
-
-{
-  Int2                      item, numItems;
-  Int2                      row;
-  Int2                      col;
-  DiscrepancyReportFormPtr  drfp;
-  DiscrepancyItemPtr        dip;
-
-  drfp = GetObjectExtra (d);
-  if (drfp != NULL) {
-    MapDocPoint (d, pt, &item, &row, &col, NULL);
-    if (item > 0 && row > 0 && drfp->clicked == item) {
-      drfp->dblClick = dblClick;
-    } else {
-      drfp->dblClick = FALSE;
-    }
-    drfp->clicked = 0;
-    if (item > 0 && row > 0) {
-      drfp->clicked = item;
-    }
-    if (item > 0 && row > 0 && !dblClick)
-    {
-      dip = GetSelectedDiscrepancy (drfp->discrepancy_list, item);
-      if (dip != NULL)
-      {
-        if (col == dip->level + 1)
-        {
-          dip->chosen = !dip->chosen;
-          GetDocParams (d, &numItems, NULL);
-          UpdateDocument (d, 0, numItems);
-        }
-        else if (col == dip->level + 2)
-        {
-          dip->expanded = !dip->expanded;
-          PopulateDiscrepancyList (drfp, drfp->discrepancy_list);
-        }
-      }
-    }
-  }
-}
-
-
-static void ActOnDiscrepancy (ValNodePtr discrepancy_list, Int2 item)
-{
-  DiscrepancyItemPtr dip;
-  
-  dip = GetSelectedDiscrepancy (discrepancy_list, item);
-  if (dip != NULL && dip->callback_func != NULL)
-  {
-    (dip->callback_func) (dip->item_list, dip->callback_data);
-  }
-}
-
-static void InvalBorder (DoC d, Int2 item)
-
-{
-  Int2  bottom;
-  RecT  r;
-  Int2  top;
-
-  ObjectRect (d, &r);
-  InsetRect (&r, 4, 4);
-  if (ItemIsVisible (d, item, &top, &bottom, NULL)) {
-    r.top = top;
-    r.bottom = bottom;
-    r.right = r.left + 4;
-    InsetRect (&r, -1, -1);
-    InvalRect (&r);
-  }
-}
-
-static void ReleaseDiscrepancy (DoC d, PoinT pt)
-
-{
-  Int2           item;
-  Int2           old;
-  Int2           row;
-  DiscrepancyReportFormPtr  drfp;
-
-  drfp = GetObjectExtra (d);
-  if (drfp != NULL) {
-    ResetClip ();
-    MapDocPoint (d, pt, &item, &row, NULL, NULL);
-    if (item > 0 && row > 0) {
-      if (item == drfp->clicked) {
-        old = drfp->selected;
-        drfp->selected = item;
-        if (old != item) {
-          if (old == 0) {
-            UpdateDocument (d, item, item);
-          } else {
-            UpdateDocument (d, old, old);
-            UpdateDocument (d, item, item);
-          }
-          Update ();
-        }
-      }
-    } else if (drfp->clicked == 0) {
-      if (drfp->selected != 0) {
-        old = drfp->selected;
-        drfp->selected = 0;
-        InvalBorder (d, old);
-      }
-      Update ();
-    }
-    if (drfp->selected > 0 && drfp->dblClick)
-    {
-      ActOnDiscrepancy (drfp->discrepancy_list, drfp->selected);
-    }
-    else if (drfp->selected > 0)
-    {
-      drfp->item_selected = 0;
-      PopulateDiscrepancyItemList (drfp->item_list, 
-                                   GetSelectedDiscrepancy (drfp->discrepancy_list,
-                                                           drfp->selected));
-      
-    }
-  }
-}
-
-
-static void DrawDiscrepancy (DoC d, RectPtr r, Int2 item, Int2 firstLine)
-
-{
-  DiscrepancyReportFormPtr drfp;
-  RecT                     rct;
-  DiscrepancyItemPtr       dip;
-  Int4                     level_offset;
-
-  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (d);
-  if (drfp != NULL && r != NULL && item > 0 && firstLine == 0) {
-    rct = *r;
-  
-    dip = GetSelectedDiscrepancy (drfp->discrepancy_list, item);
-    if (dip != NULL)
-    {
-      level_offset = dip->level * 16;
-      rct.left += level_offset;
-      rct.right += level_offset;
-    }
-  
-    /* draw selection */
-    if (item == drfp->selected) {
-      rct.right = rct.left + 4;
-      PaintRect (&rct);
-    }
-
-    /* draw chosen checkboxes */
-    rct.left += 5;
-    rct.right = rct.left + 10;
-    rct.bottom = rct.top + (rct.right - rct.left);
-    FrameRect (&rct);
-    
-    if (dip != NULL && dip->chosen) {
-      MoveTo (rct.left, rct.top);
-      LineTo (rct.right - 1, rct.bottom - 1);
-      MoveTo (rct.left, rct.bottom - 1);
-      LineTo (rct.right - 1, rct.top);
-    }
-    
-    /* draw open/closed checkboxes */
-    if (dip!= NULL && dip->subcategories != NULL)
-    {
-      rct.left += 10;
-      rct.right = rct.left + 10;
-      rct.bottom = rct.top + (rct.right - rct.left);
-      FrameRect (&rct);
-      MoveTo (rct.left, (rct.top + rct.bottom) / 2);
-      LineTo (rct.right - 1, (rct.top + rct.bottom) / 2);
-      if (!dip->expanded)
-      {
-        MoveTo ((rct.left + rct.right) / 2, rct.top);
-        LineTo ((rct.left + rct.right) / 2, rct.bottom - 1);
-      }
-    }
-  }
-}
-
-
-
-static void DrawDiscrepancyItem (DoC d, RectPtr r, Int2 item, Int2 firstLine)
-
-{
-  DiscrepancyReportFormPtr drfp;
-  RecT                     rct;
-
-  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (d);
-  if (drfp != NULL && r != NULL && item > 0 && firstLine == 0) {
-    rct = *r;
-  
-    /* draw selection */
-    if (item == drfp->item_selected) {
-      rct = *r;
-      rct.right = rct.left + 4;
-      PaintRect (&rct);
-    }
-  }
-}
-
-
-static void EditDiscrepancyItem (ValNodePtr vnp)
-{
-  SeqFeatPtr sfp;
+  SeqFeatPtr sfp, cds;
   BioseqPtr  bsp;
   SeqDescrPtr sdp;
   ObjValNodePtr ovp;
@@ -13062,6 +10316,15 @@ static void EditDiscrepancyItem (ValNodePtr vnp)
     sfp = (SeqFeatPtr) vnp->data.ptrvalue;
     if (sfp != NULL)
     {
+      if (sfp->idx.subtype == FEATDEF_PROT) {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        if (bsp != NULL) {
+          cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+          if (cds != NULL) {
+            sfp = cds;
+          }
+        }
+      }
       GatherProcLaunch (OMPROC_EDIT, FALSE, sfp->idx.entityID, sfp->idx.itemID,
                         OBJ_SEQFEAT, 0, 0, OBJ_SEQFEAT, 0);
     }
@@ -13086,6 +10349,86 @@ static void EditDiscrepancyItem (ValNodePtr vnp)
     }
   }
 
+}
+
+
+extern void BulkEditDiscrepancy (ValNodePtr vnp, Pointer userdata)
+{
+  SeqFeatPtr       sfp;
+  SeqDescrPtr      sdp;
+  ValNodePtr       feat_list, desc_list;
+  ValNodePtr       feat_list_list = NULL, desc_list_list = NULL, list_vnp;
+  Uint2            entityID = 0;
+  
+  if (vnp == NULL)
+  {
+    return;
+  }
+  while (vnp != NULL) 
+  {
+    if (vnp->choice == OBJ_SEQFEAT) 
+    {
+      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+      if (sfp != NULL)
+      {
+        for (list_vnp = feat_list_list;
+             list_vnp != NULL && list_vnp->choice != sfp->idx.entityID;
+             list_vnp = list_vnp->next) 
+        {
+        }
+        
+        if (list_vnp == NULL) {
+          list_vnp = ValNodeAddPointer (&feat_list_list, sfp->idx.entityID, NULL);
+        }
+        feat_list = (ValNodePtr) list_vnp->data.ptrvalue;
+        ValNodeAddPointer (&feat_list, OBJ_SEQFEAT, sfp);
+        list_vnp->data.ptrvalue = feat_list;
+        entityID = sfp->idx.entityID;
+      }
+    }
+    else if (vnp->choice == OBJ_SEQDESC) 
+    {
+      sdp = (SeqDescrPtr) vnp->data.ptrvalue;
+      if (sdp != NULL) 
+      {
+        for (list_vnp = desc_list_list;
+             list_vnp != NULL && list_vnp->choice != sdp->choice;
+             list_vnp = list_vnp->next) 
+        {
+        }
+        
+        if (list_vnp == NULL) {
+          list_vnp = ValNodeAddPointer (&desc_list_list, sdp->choice, NULL);
+        }
+        desc_list = (ValNodePtr) list_vnp->data.ptrvalue;
+        ValNodeAddPointer (&desc_list, OBJ_SEQDESC, sdp);
+        list_vnp->data.ptrvalue = desc_list;
+        if (sdp->extended > 0) {
+          entityID = ((ObjValNodePtr)sdp)->idx.entityID;
+        }
+      }
+    }
+    vnp = vnp->next;
+  }
+
+  for (list_vnp = feat_list_list; list_vnp != NULL; list_vnp = list_vnp->next) {
+    BulkEditorFeatList (entityID, list_vnp->data.ptrvalue);
+  }
+  feat_list_list = ValNodeFree (feat_list_list);
+
+  for (list_vnp = desc_list_list; list_vnp != NULL; list_vnp = list_vnp->next) {
+    BulkEditorDescrList (entityID, list_vnp->data.ptrvalue);
+  }
+  desc_list_list = ValNodeFree (desc_list_list);
+
+}
+
+
+static void EditCDStRNAOverlap (ValNodePtr item_list);
+
+static void EditCDStRNAOverlapCallback (ValNodePtr vnp, Pointer userdata)
+{
+  EditCDStRNAOverlap (vnp); 
 }
 
 
@@ -13148,14 +10491,34 @@ static BioseqPtr GetBioseqForDescriptor (ObjValNodePtr ovp)
   return bsp;
 }
 
-static void ScrollToDiscrepancyItem (ValNodePtr vnp, BaseFormPtr bfp)
+
+extern BaseFormPtr GetBaseFormForEntityID (Uint2 entityID)
 {
-  SeqFeatPtr    sfp;
+  ValNodePtr base_form_list, vnp;
+  BaseFormPtr bfp = NULL;
+  
+  base_form_list = GetBaseFormList();
+  vnp = base_form_list;
+  while (vnp != NULL && bfp == NULL) {
+    bfp = (BaseFormPtr) vnp->data.ptrvalue;
+    if (bfp != NULL && bfp->input_entityID != entityID) {
+      bfp = NULL;
+    }
+    vnp = vnp->next;
+  }
+  base_form_list = ValNodeFree (base_form_list);
+  return bfp;
+}
+
+extern void ScrollToDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
+{
+  SeqFeatPtr    sfp, cds;
   BioseqPtr     bsp;
   SeqDescrPtr   sdp;
   ObjValNodePtr ovp;
-  
-  if (vnp == NULL || bfp == NULL)
+  BaseFormPtr   bfp;
+    
+  if (vnp == NULL)
   {
     return;
   }
@@ -13164,16 +10527,34 @@ static void ScrollToDiscrepancyItem (ValNodePtr vnp, BaseFormPtr bfp)
     sfp = (SeqFeatPtr) vnp->data.ptrvalue;
     if (sfp != NULL)
     {
+      if (sfp->idx.subtype == FEATDEF_PROT) {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        if (bsp != NULL) {
+          cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+          if (cds != NULL) {
+            sfp = cds;
+          }
+        }
+      }
+    
       /* need to scroll to item */
-      bsp = BioseqFindFromSeqLoc (sfp->location);
-      SetBioseqViewTargetByBioseq (bfp, bsp);
-      ObjMgrSelect (sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT, 0, NULL);
+      bsp = BioseqFindFromSeqLoc (sfp->location);      
+      bfp = GetBaseFormForEntityID (sfp->idx.entityID);
+      if (bfp != NULL) {
+        Select (bfp->form);
+        SetBioseqViewTargetByBioseq (bfp, bsp);
+        ObjMgrSelect (sfp->idx.entityID, sfp->idx.itemID, OBJ_SEQFEAT, 0, NULL);
+      }
     }
   }
   else if (vnp->choice == OBJ_BIOSEQ)
   {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
-    SetBioseqViewTargetByBioseq (bfp, bsp);
+    bfp = GetBaseFormForEntityID (bsp->idx.entityID);
+    if (bfp != NULL) {
+      Select (bfp->form);
+      SetBioseqViewTargetByBioseq (bfp, bsp);
+    }
   }
   else if (vnp->choice == OBJ_SEQDESC)
   {
@@ -13182,216 +10563,72 @@ static void ScrollToDiscrepancyItem (ValNodePtr vnp, BaseFormPtr bfp)
     {
       ovp = (ObjValNodePtr) sdp;      
       bsp = GetBioseqForDescriptor (ovp);
-      SetBioseqViewTargetByBioseq (bfp, bsp);
-      ObjMgrSelect (ovp->idx.entityID, ovp->idx.itemID, OBJ_SEQDESC, 0, NULL);
-    }
-  }
-}
-
-static void ClickDiscrepancyItem (DoC d, PoinT pt)
-
-{
-  Int2                      item, last_selected, numItems;
-  Int2                      row;
-  DiscrepancyReportFormPtr  drfp;
-  DiscrepancyItemPtr        dip;
-  ValNodePtr                vnp;
-
-  drfp = GetObjectExtra (d);
-  if (drfp != NULL) {
-    MapDocPoint (d, pt, &item, &row, NULL, NULL);
-    if (item > 0 && row > 0) {  
-      dip = GetSelectedDiscrepancy (drfp->discrepancy_list, drfp->selected);
-      if (dip != NULL && dip->item_list != NULL)
-      {
-        vnp = dip->item_list;
-        
-        last_selected = drfp->item_selected;
-        drfp->item_selected = item;
-        
-        if (item != last_selected)
-        {
-          GetDocParams (d, &numItems, NULL);
-          UpdateDocument (d, 0, numItems);
-        }
-    
-        /* find item in list */
-        while (item > 1 && vnp != NULL)
-        {
-          vnp = vnp->next;
-          item--;
-        }
-        
-        if (dblClick)
-        {
-          EditDiscrepancyItem (vnp);
-        }
-        else
-        {
-          ScrollToDiscrepancyItem (vnp, drfp->bfp);
-        } 
-         
+      bfp = GetBaseFormForEntityID (bsp->idx.entityID);
+      if (bfp != NULL) {
+        Select (bfp->form);
+        SetBioseqViewTargetByBioseq (bfp, bsp);
+        ObjMgrSelect (ovp->idx.entityID, ovp->idx.itemID, OBJ_SEQDESC, 0, NULL);
       }
     }
   }
 }
 
-
-static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
-
+static void AddBulkEditing (ValNodePtr clickable_list)
 {
-  DiscrepancyReportFormPtr drfp;
+  ClickableItemPtr cip;
+  Uint1            subtype;
 
-  drfp = (DiscrepancyReportFormPtr) data;
-  if (drfp != NULL) {
-    drfp->discrepancy_list = FreeDiscrepancyList (drfp->discrepancy_list);
-    drfp->dcp = DiscrepancyConfigFree (drfp->dcp);
-    drfp->col_fmt_array_array = FreeColumnFormatArrays (drfp->col_fmt_array_array, drfp->num_levels);
-    ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
-    discrepancyReportWindow = NULL;
+  while (clickable_list != NULL) {
+    cip = (ClickableItemPtr) clickable_list->data.ptrvalue;
+    if (cip->callback_func == NULL && cip->item_list != NULL) {
+      if (cip->clickable_item_type == DISC_CDS_OVERLAP_TRNA) {
+        cip->callback_func = EditCDStRNAOverlapCallback;        
+      } else {
+        subtype = GetSubtypeForBulkEdit (cip->item_list);
+        /* Note - using FEATDEF_rRNA to represent all editable RNA features */
+        if (subtype == FEATDEF_CDS || subtype == FEATDEF_GENE || subtype == FEATDEF_rRNA) {
+          cip->callback_func = BulkEditDiscrepancy;
+        }
+      }
+    }
+    AddBulkEditing (cip->subcategories);
+    clickable_list = clickable_list->next;
   }
-  StdCleanupFormProc (g, data);
 }
 
 static void RecheckDiscrepancyProc (ButtoN b)
 {
   DiscrepancyReportFormPtr drfp;
+  ValNodePtr               sep_list;
 
   drfp = (DiscrepancyReportFormPtr) GetObjectExtra (b);
   if (drfp != NULL)
   {
-    drfp->discrepancy_list = FreeDiscrepancyList (drfp->discrepancy_list);
-    drfp->discrepancy_list = CollectDiscrepancies (drfp->sep, drfp->dcp);
-    PopulateDiscrepancyList (drfp, drfp->discrepancy_list);
-    if (drfp->discrepancy_list != NULL)
-    {
-      drfp->selected = 1;
-      drfp->item_selected = 0;
-      PopulateDiscrepancyItemList (drfp->item_list, 
-                                   GetSelectedDiscrepancy (drfp->discrepancy_list,
-                                                           drfp->selected));
-    }
-    else
-    {
-      Reset (drfp->item_list);
-    }
+    WatchCursor();
+    Update();
+    drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
+    
+    sep_list = GetViewedSeqEntryList ();
+    drfp->clickable_list_data = CollectDiscrepancies (drfp->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
+
+    /* add bulk editing where appropriate */
+    AddBulkEditing (drfp->clickable_list_data);
+    
+    PointerToDialog (drfp->clickable_list_dlg, drfp->clickable_list_data);
+    ArrowCursor();
+    Update();
   }
 }
 
 
-static ValNodePtr ValNodePointerDup (ValNodePtr vnp)
-{
-  ValNodePtr vnp_new = NULL;
-  
-  if (vnp != NULL)
-  {
-    vnp_new = ValNodeNew (NULL);
-    vnp_new->choice = vnp->choice;
-    vnp_new->data.ptrvalue = vnp->data.ptrvalue;
-    vnp_new->next = ValNodePointerDup (vnp->next);
-  }
-  return vnp_new;
-}
-
-static ValNodePtr ReplaceDiscrepancyItemWithFeatureTableStrings (ValNodePtr feat_list)
-{
-  BioseqPtr       bsp;
-  CstType         custom_flags = 0;
-  Asn2gbJobPtr    ajp;
-  BaseBlockPtr    bbp;
-  Int4            index;
-  SeqFeatPtr      sfp;
-  ValNodePtr      vnp, list_copy = NULL, list_vnp;
-  
-  if (feat_list == NULL) return NULL;
-  
-  list_copy = ValNodePointerDup (feat_list);
-  for (vnp = list_copy; vnp != NULL; vnp = vnp->next)
-  {
-    if (vnp->choice == OBJ_SEQFEAT)
-    {
-      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
-      bsp = BioseqFindFromSeqLoc (sfp->location);
-      ajp = asn2gnbk_setup (bsp, NULL, NULL, FTABLE_FMT, DUMP_MODE, NORMAL_STYLE,
-                             0, 0, custom_flags, NULL);
-      if (ajp != NULL)
-      {
-        for (index = 0; index < ajp->numParagraphs; index++) 
-        {
-          bbp = ajp->paragraphArray [index];
-          for (list_vnp = vnp; list_vnp != NULL; list_vnp = list_vnp->next)
-          {
-            if (list_vnp->choice == OBJ_SEQFEAT)
-            {
-              sfp = (SeqFeatPtr) list_vnp->data.ptrvalue;
-              if (sfp != NULL 
-                  && bbp->entityID == sfp->idx.entityID
-                  && bbp->itemtype == sfp->idx.itemtype
-                  && bbp->itemID == sfp->idx.itemID)
-              {
-                /* replace list feature with description, change choice */
-                list_vnp->choice = 0;
-                list_vnp->data.ptrvalue = asn2gnbk_format (ajp, (Int4) index);
-              }
-            }
-          }
-        }
-        asn2gnbk_cleanup (ajp);
-      }
-    }
-  }
-  return list_copy;
-}
-
-
-static void WriteDiscrepancy (FILE *fp, DiscrepancyItemPtr dip, Boolean use_feature_table_fmt)
-{
-  ValNodePtr vnp, list_copy = NULL;
-  CharPtr    row_text;
-  
-  if (fp == NULL || dip == NULL)
-  {
-    return;
-  }
-  
-  fprintf (fp, "%s\n", dip->description);
-  vnp = dip->item_list;
-  
-  if (use_feature_table_fmt)
-  {
-    list_copy = ReplaceDiscrepancyItemWithFeatureTableStrings (vnp);
-    vnp = list_copy;
-  }
-
-  while (vnp != NULL)
-  {
-    if (vnp->choice == 0 && use_feature_table_fmt)
-    {
-      row_text = vnp->data.ptrvalue;
-    }
-    else
-    {
-      row_text = GetDiscrepancyItemText (vnp);
-    }
-    if (row_text != NULL)
-    {
-      fprintf (fp, row_text);
-      row_text = MemFree (row_text);
-    }
-    vnp = vnp->next;
-  }
-  
-  fprintf (fp, "\n");
-}
-
-static void 
-WriteDiscrepancyReport 
+extern void 
+WriteClickableListReport 
 (FILE       *fp,
  ValNodePtr discrepancy_list, 
  Boolean    show_all,
  Boolean    use_feature_table_fmt)
 {
-  DiscrepancyItemPtr       dip;
+  ClickableItemPtr       dip;
   ValNodePtr               vnp;
   Int4                     num_chosen;
 
@@ -13401,7 +10638,7 @@ WriteDiscrepancyReport
   }
   for (vnp = discrepancy_list; vnp != NULL; vnp = vnp->next)
   {
-    dip = (DiscrepancyItemPtr) vnp->data.ptrvalue;
+    dip = (ClickableItemPtr) vnp->data.ptrvalue;
     if (dip != NULL)
     {
       if (dip->expanded)
@@ -13413,7 +10650,7 @@ WriteDiscrepancyReport
           {
             fprintf (fp, "%s\n", dip->description);
           }
-          WriteDiscrepancyReport (fp, dip->subcategories, show_all | dip->chosen, use_feature_table_fmt);          
+          WriteClickableListReport (fp, dip->subcategories, show_all | dip->chosen, use_feature_table_fmt);          
         }
       }
       else if (dip->chosen || show_all)
@@ -13439,7 +10676,7 @@ static Boolean DiscrepancyReportExportProc (ForM f, CharPtr filename)
     return FALSE;
   }
   
-  num_disc = CountChosenDiscrepancies (drfp->discrepancy_list, FALSE);
+  num_disc = CountChosenDiscrepancies (drfp->clickable_list_data, FALSE);
 
   if (num_disc == 0) 
   {
@@ -13466,7 +10703,7 @@ static Boolean DiscrepancyReportExportProc (ForM f, CharPtr filename)
 #endif
     fp = FileOpen (path, "w");
     if (fp != NULL) {
-      WriteDiscrepancyReport (fp, drfp->discrepancy_list, show_all, 
+      WriteClickableListReport (fp, drfp->clickable_list_data, show_all, 
                               (Boolean)(drfp->dcp != NULL && drfp->dcp->use_feature_table_format));
       FileClose (fp);
       return TRUE;
@@ -13496,71 +10733,13 @@ static void GenerateDiscrepancyReport (ButtoN b)
 }
 
 
-static void CopyDiscrepancyReportToClipboard (DiscrepancyReportFormPtr drfp)
-
-{
-  FILE         *fp;
-  Char         path [PATH_MAX];
-
-  if (drfp == NULL || drfp->discrepancy_list == NULL) return;
-  TmpNam (path);
-  fp = FileOpen (path, "w");
-  if (fp != NULL) {
-    WriteDiscrepancyReport (fp, drfp->discrepancy_list, TRUE, 
-                            (Boolean)(drfp->dcp != NULL && drfp->dcp->use_feature_table_format));
-    FileClose (fp);
-    FileToClipboard (path);
-  }
-  FileRemove (path);
-}
-
-
-static void DiscrepancyReportFormMessage (ForM f, Int2 mssg)
-
-{
-  DiscrepancyReportFormPtr drfp;
-
-  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (f);
-  if (drfp != NULL) {
-    switch (mssg) {
-      case VIB_MSG_EXPORT :
-        DiscrepancyReportExportProc (f, NULL);
-        break;
-      case VIB_MSG_PRINT :
-        break;
-      case VIB_MSG_CLOSE :
-        Remove (f);
-        break;
-      case VIB_MSG_CUT :
-        CopyDiscrepancyReportToClipboard (drfp);
-        break;
-      case VIB_MSG_COPY :
-        CopyDiscrepancyReportToClipboard (drfp);
-        break;
-      case VIB_MSG_PASTE :
-        break;
-      case VIB_MSG_DELETE :
-        drfp->discrepancy_list = ValNodeFree (drfp->discrepancy_list);
-        Reset (drfp->doc);
-        Reset (drfp->item_list);
-        break;
-      default :
-        if (drfp->appmessage != NULL) {
-          drfp->appmessage (f, mssg);
-        }
-        break;
-    }
-  }
-}
-
-
-static void ReactivateDiscrepancyReport (BaseFormPtr bfp)
+static void ReactivateDiscrepancyReport ()
 {
   DiscrepancyReportFormPtr drfp;
 
   if (discrepancyReportWindow == NULL) 
   {
-    CreateDiscrepancyReportWindow (bfp);
+    CreateDiscrepancyReportWindow ();
   }
   
   drfp = (DiscrepancyReportFormPtr) GetObjectExtra (discrepancyReportWindow);
@@ -13568,16 +10747,13 @@ static void ReactivateDiscrepancyReport (BaseFormPtr bfp)
   {
     Remove (discrepancyReportWindow);
     discrepancyReportWindow = NULL;
-    CreateDiscrepancyReportWindow (bfp);
+    CreateDiscrepancyReportWindow ();
   }
-  
-  drfp->bfp = bfp;
-  drfp->input_entityID = bfp->input_entityID;
-  drfp->sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
-  
+    
   /* populate discrepancy lists */
   RecheckDiscrepancyProc (drfp->recheck_btn);
   Show (discrepancyReportWindow);  
+  Select (discrepancyReportWindow);
 }
 
 
@@ -13600,65 +10776,18 @@ extern void CreateStdValidatorFormMenus (WindoW w);
 #endif
 
 
-static Int2 LIBCALLBACK DiscrepancyReportMsgFunc (OMMsgStructPtr ommsp)
-{
-  WindoW                   currentport,
-                           temport;
-  OMUserDataPtr            omudp;
-  DiscrepancyReportFormPtr drfp = NULL;
-  
-  omudp = (OMUserDataPtr)(ommsp->omuserdata);
-  if (omudp == NULL) return OM_MSG_RET_ERROR;
-  drfp = (DiscrepancyReportFormPtr) omudp->userdata.ptrvalue;
-  if (drfp == NULL) return OM_MSG_RET_ERROR;
-
-  currentport = ParentWindow (drfp->form);
-  temport = SavePort (currentport);
-  UseWindow (currentport);
-  Select (drfp->form);
-  switch (ommsp->message) 
-  {
-      case OM_MSG_UPDATE:
-          break;
-      case OM_MSG_DESELECT:
-          break;
-
-      case OM_MSG_SELECT: 
-          break;
-      case OM_MSG_DEL:
-          Remove (drfp->form);
-          break;
-      case OM_MSG_HIDE:
-          break;
-      case OM_MSG_SHOW:
-          break;
-      case OM_MSG_FLUSH:
-          Remove (drfp->form);	
-          break;
-      default:
-          break;
-  }
-  RestorePort (temport);
-  UseWindow (temport);
-  return OM_MSG_RET_OK;
-}
-
-
-extern void CreateDiscrepancyReportWindow (BaseFormPtr bfp)
+extern void CreateDiscrepancyReportWindow ()
 {
   DiscrepancyReportFormPtr drfp;
-  GrouP                    h, g;
+  GrouP                    h;
   ButtoN                   b;
   GrouP                    c;
-  RecT                     r;
   WindoW                   w;
   OMUserDataPtr            omudp;
 
-  if (bfp == NULL) return;
-  
   if (discrepancyReportWindow != NULL)
   {
-    ReactivateDiscrepancyReport (bfp);
+    ReactivateDiscrepancyReport ();
     return; 
   }
   
@@ -13668,13 +10797,10 @@ extern void CreateDiscrepancyReportWindow (BaseFormPtr bfp)
     return;
   }
   
-  drfp->bfp = bfp;
-  drfp->input_entityID = bfp->input_entityID;
-  drfp->sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
   w = FixedWindow (-50, -33, -10, -10, "Discrepancy Report", StdCloseWindowProc);
   SetObjectExtra (w, drfp, CleanupDiscrepancyReportForm);
   drfp->form = (ForM) w;
-  drfp->formmessage = DiscrepancyReportFormMessage;
+  drfp->formmessage = ClickableListFormMessage;
   drfp->exportform = DiscrepancyReportExportProc;
   
   /* read in config file */
@@ -13684,10 +10810,10 @@ extern void CreateDiscrepancyReportWindow (BaseFormPtr bfp)
   drfp->userkey = OMGetNextUserKey ();
   drfp->procid = 0;
   drfp->proctype = OMPROC_EDIT;
-  omudp = ObjMgrAddUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+  omudp = ObjMgrAddUserData (0, drfp->procid, drfp->proctype, drfp->userkey);
   if (omudp != NULL) {
     omudp->userdata.ptrvalue = (Pointer) drfp;
-    omudp->messagefunc = DiscrepancyReportMsgFunc;
+    omudp->messagefunc = ClickableListFormMsgFunc;
   }
 
 
@@ -13698,22 +10824,10 @@ extern void CreateDiscrepancyReportWindow (BaseFormPtr bfp)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
-  g = HiddenGroup (h, 2, 0, NULL);
-  StaticPrompt (g, "Discrepancies", 0, popupMenuHeight, programFont, 'c');
-  StaticPrompt (g, "Affected Items", 0, popupMenuHeight, programFont, 'c');
-  
-  drfp->doc = DocumentPanel (g, stdCharWidth * 30, stdLineHeight * 20);
-  SetObjectExtra (drfp->doc, drfp, NULL);
-  SetDocAutoAdjust (drfp->doc, FALSE);
-  SetDocProcs (drfp->doc, ClickDiscrepancy, NULL, ReleaseDiscrepancy, NULL);
-  SetDocShade (drfp->doc, DrawDiscrepancy, NULL, NULL, NULL);
-  
-  drfp->item_list = DocumentPanel (g, stdCharWidth * 30 + 5, stdLineHeight * 20);
-  SetObjectExtra (drfp->item_list, drfp, NULL);
-  SetDocAutoAdjust (drfp->item_list, FALSE);
-  SetDocProcs (drfp->item_list, ClickDiscrepancyItem, NULL, NULL, NULL);
-  SetDocShade (drfp->item_list, DrawDiscrepancyItem, NULL, NULL, NULL);
-
+  drfp->clickable_list_dlg = CreateClickableListDialog (h, "Discrepancies", "Affected Items",
+                                                    ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
+                                                    GetDiscrepancyItemText);
+                                                    
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   b = PushButton (c, "Generate Report", GenerateDiscrepancyReport);
@@ -13726,20 +10840,164 @@ extern void CreateDiscrepancyReportWindow (BaseFormPtr bfp)
   
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list_dlg, (HANDLE) c, NULL);
 
   RealizeWindow (w);
   
-  /* adjust column width for discrepancy list */
-  ObjectRect (drfp->doc, &r);
-  InsetRect (&r, 4, 4);
-  discColFmt[1].pixWidth = r.right - r.left - discColFmt[0].pixWidth;
-
   /* populate discrepancy lists */
   RecheckDiscrepancyProc (drfp->recheck_btn);
   Show (w);
   discrepancyReportWindow = w;
 }
+
+typedef struct sucform 
+{
+  CLICKABLE_LIST_FORM_BLOCK
+
+  Boolean reverse;
+  Boolean byblock;
+  Boolean showsequence;
+} SUCFormData, PNTR SUCFormPtr;
+
+static void ReSUCProc (ButtoN b)
+{
+  SUCFormPtr sfp;
+  SeqEntryPtr sep;
+  sfp = (SUCFormPtr) GetObjectExtra (b);
+  if (sfp != NULL)
+  {
+    sep = GetTopSeqEntryForEntityID (sfp->input_entityID);
+    WatchCursor();
+    Update();    
+    sfp->clickable_list_data = FreeClickableList (sfp->clickable_list_data);
+    sfp->clickable_list_data = GetSUCCommonList (sep, sfp->reverse, sfp->byblock, sfp->showsequence, TRUE);    
+    if (sfp->byblock) {
+      sfp->clickable_list_data = CategorizeSUCBlocks (sfp->clickable_list_data);
+    }
+    AddBulkEditing (sfp->clickable_list_data);  
+    PointerToDialog (sfp->clickable_list_dlg, sfp->clickable_list_data);
+    ArrowCursor();
+    Update();
+  }
+}
+
+static void SetClickableItemExpanded (ValNodePtr vnp, Boolean expand)
+{
+  ClickableItemPtr cip;
+
+  while (vnp != NULL) {
+    cip = vnp->data.ptrvalue;
+    if (cip != NULL) {
+      cip->expanded = expand;
+      SetClickableItemExpanded (cip->subcategories, expand);
+    }
+    vnp = vnp->next;
+  }
+}
+
+static void SUCExpand (ButtoN b, Boolean expand)
+{
+  SUCFormPtr       sfp;
+
+  sfp = (SUCFormPtr) GetObjectExtra (b);
+  if (sfp != NULL)
+  {
+    SetClickableItemExpanded (sfp->clickable_list_data, expand);
+    PointerToDialog (sfp->clickable_list_dlg, sfp->clickable_list_data);
+  }
+}
+
+static void SUCExpandAll (ButtoN b)
+{
+  SUCExpand (b, TRUE);
+}
+
+static void SUCCollapseAll (ButtoN b)
+{
+  SUCExpand (b, FALSE);
+}
+
+
+extern void NewSUC (ValNodePtr suc_list, Uint2 entityID, Boolean reverse, Boolean byblock, Boolean showsequence)
+{
+  SUCFormPtr    sfp;
+  GrouP         h;
+  GrouP         c;
+  WindoW        w;
+  ButtoN        b;
+  OMUserDataPtr omudp;
+
+  sfp = (SUCFormPtr) MemNew (sizeof (SUCFormData));
+  if (sfp == NULL)
+  {
+    return;
+  }
+  
+  w = FixedWindow (-50, -33, -10, -10, "SUC", StdCloseWindowProc);
+  SetObjectExtra (w, sfp, CleanupClickableListForm);
+  sfp->form = (ForM) w;
+  sfp->formmessage = ClickableListFormMessage;
+  sfp->exportform = DiscrepancyReportExportProc;
+    
+  /* register to receive update messages */
+  sfp->input_entityID = entityID;
+  sfp->userkey = OMGetNextUserKey ();
+  sfp->procid = 0;
+  sfp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (sfp->input_entityID, sfp->procid, sfp->proctype, sfp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) sfp;
+    omudp->messagefunc = ClickableListFormMsgFunc;
+  }
+
+
+#ifndef WIN_MAC
+  CreateStdValidatorFormMenus (w);
+#endif
+
+  /* set up parameters for re-SUC */
+  sfp->reverse = reverse;
+  sfp->byblock = byblock; 
+  sfp->showsequence = showsequence;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  sfp->clickable_list_dlg = CreateClickableListDialogEx (h, "Text", "Affected Items",
+                                                         ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
+                                                         GetDiscrepancyItemText,
+                                                         stdCharWidth * 55,
+                                                         stdCharWidth * 55,
+                                                         FALSE);
+  if (byblock) {
+    suc_list = CategorizeSUCBlocks (suc_list);
+    SetClickableItemExpanded (suc_list, FALSE);
+  }
+  AddBulkEditing (suc_list);  
+
+  sfp->clickable_list_data = suc_list;                                                  
+  PointerToDialog (sfp->clickable_list_dlg, sfp->clickable_list_data);
+                                                    
+                                                    
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  sfp->recheck_btn = PushButton (c, "Recheck", ReSUCProc);
+  SetObjectExtra (sfp->recheck_btn, sfp, NULL);
+
+  b = PushButton (c, "Expand All", SUCExpandAll);
+  SetObjectExtra (b, sfp, NULL);
+  b = PushButton (c, "Collapse All", SUCCollapseAll);
+  SetObjectExtra (b, sfp, NULL);
+    
+  PushButton (c, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) sfp->clickable_list_dlg, (HANDLE) c, NULL);
+
+  RealizeWindow (w);
+  
+  Show (w);
+}
+
 
 static void ConvertLocalToGeneralCallback (BioseqPtr bsp, Pointer userdata)
 {
@@ -13799,5 +11057,2771 @@ extern void ConvertLocalToGeneral(IteM i)
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+static void SetFeatureID (SeqFeatPtr sfp, Int4 id)
+{
+  SeqFeatXrefPtr    xref;
+  ObjectIdPtr       oip;
+
+  if (sfp == NULL) return;
+
+  for (xref = sfp->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+  if (xref != NULL) {
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str != NULL) {
+        oip->str = MemFree (oip->str);
+      }
+      oip->id = id;
+    }
+  } else {
+    xref = SeqFeatXrefNew ();
+    if (xref != NULL) {
+      oip = ObjectIdNew ();
+      if (oip != NULL) {
+        oip->id = id;
+        xref->id.choice = 3;
+        xref->id.value.ptrvalue = (Pointer) oip;
+        xref->next = sfp->xref;
+        sfp->xref = xref;
+      }
+    }
+  }
+}
+
+static void SetCDSProductName (SeqFeatPtr cds, CharPtr product_name)
+{
+  BioseqPtr         prot_bsp;
+  SeqFeatPtr        prot_feat;
+  SeqMgrFeatContext context;
+  Boolean           partial3, partial5;
+  SeqEntryPtr       prot_sep;
+  ProtRefPtr        prp;
+
+  if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION
+      || cds->product == NULL) return;
+
+  prot_bsp = BioseqFindFromSeqLoc (cds->product);
+  if (prot_bsp == NULL) return;
+
+  CheckSeqLocForPartial (cds->location, &partial5, &partial3);
+
+  prot_feat = SeqMgrGetNextFeature (prot_bsp, NULL, SEQFEAT_PROT, FEATDEF_PROT, &context);
+  if (prot_feat == NULL) {
+    prot_sep = SeqMgrGetSeqEntryForData (prot_bsp);
+    prot_feat = CreateNewFeature (prot_sep, NULL, SEQFEAT_PROT, NULL);
+    prp = ProtRefNew ();
+    ValNodeAddPointer (&(prp->name), 0, StringSave (product_name));
+    prot_feat->data.value.ptrvalue = prp;
+    prot_feat->location = SeqLocFree (prot_feat->location);
+    prot_feat->location = CreateWholeInterval (prot_sep);
+    SetSeqLocPartial (prot_feat->location, partial5, partial3);
+    prot_feat->partial = (partial5 || partial3);
+  } else {
+    prp = prot_feat->data.value.ptrvalue;
+    prp->name = ValNodeFreeData (prp->name);
+    ValNodeAddPointer (&(prp->name), 0, StringSave (product_name));
+  }
+}
+
+
+static CharPtr GetmRNAProductName (SeqFeatPtr sfp)
+{
+  RnaRefPtr rrp;
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return NULL;
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp != NULL && rrp->type == RNA_TYPE_mRNA && rrp->ext.choice == 1) {
+    return rrp->ext.value.ptrvalue;
+  } else {
+    return NULL;
+  }
+}
+
+
+static void MakeCDSmRNAPairsCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqMgrFeatContext context1, context2;
+  SeqFeatPtr        cds, mRNA, first_mRNA, new_cds;
+  Int2              loc_compare;
+  SeqEntryPtr       sep, top_sep;
+  ObjectIdPtr       oip_cds, oip_mrna;
+  ValNodePtr        pair_list = NULL, vnp;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (sep == NULL) return;
+
+  for (cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &context1);
+       cds != NULL;
+       cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, FEATDEF_CDS, &context1)) {
+    first_mRNA = NULL;
+
+    for (mRNA = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, FEATDEF_mRNA, &context2);
+         mRNA != NULL;
+         mRNA = SeqMgrGetNextFeature (bsp, mRNA, SEQFEAT_RNA, FEATDEF_mRNA, &context2)) {
+      if (context2.left > context1.right) {
+        /* out of range */
+        break;
+      }
+      if (StringNCmp (context2.label, context1.label, StringLen (context1.label)) != 0) {
+        /* need root product name to match */
+        continue;
+      }
+      loc_compare = SeqLocCompare (cds->location, mRNA->location);
+      if (loc_compare != SLC_A_IN_B && loc_compare != SLC_A_EQ_B) {
+        /* CDS must be equal to or inside mRNA */
+        continue;
+      }
+
+      if (first_mRNA == NULL) {
+        first_mRNA = mRNA;
+        new_cds = cds;
+      } else {
+        new_cds = (SeqFeatPtr) AsnIoMemCopy (cds, (AsnReadFunc) SeqFeatAsnRead, (AsnWriteFunc) SeqFeatAsnWrite);
+        new_cds->product = SeqLocFree (new_cds->product);
+        new_cds->xref = SeqFeatXrefFree (new_cds->xref);
+        SeqFeatIdFree(&new_cds->id);
+        CreateNewFeature (sep, NULL, SEQFEAT_CDREGION, new_cds);
+        RetranslateOneCDS (new_cds, cds->idx.entityID, FALSE, FALSE);
+      }
+      ValNodeAddPointer (&pair_list, SEQFEAT_RNA, mRNA);
+      ValNodeAddPointer (&pair_list, SEQFEAT_CDREGION, new_cds);
+    }
+  }
+  top_sep = GetTopSeqEntryForEntityID (bsp->idx.entityID);
+  SeqMgrIndexFeatures (bsp->idx.entityID, NULL);
+  AssignFeatureIDs (top_sep);
+  vnp = pair_list;
+  while (vnp != NULL) {
+    mRNA = vnp->data.ptrvalue;
+    vnp = vnp->next;
+    if (vnp != NULL) {
+      new_cds = vnp->data.ptrvalue;
+      SetCDSProductName (new_cds, GetmRNAProductName(mRNA));
+      oip_mrna = (ObjectIdPtr) mRNA->id.value.ptrvalue;
+      oip_cds = (ObjectIdPtr) new_cds->id.value.ptrvalue;
+      if (oip_mrna != NULL && oip_cds != NULL
+          && oip_mrna->id > 0 && oip_cds->id > 0) {
+        /* add xref to cds to point to mRNA */
+        SetFeatureID (new_cds, oip_mrna->id);
+        /* add xref to mrna to point to cds */
+        SetFeatureID (mRNA, oip_cds->id);
+      }
+      vnp = vnp->next;
+    }
+  }
+  pair_list = ValNodeFree (pair_list);
+}
+
+
+extern void MakeCDSmRNAPairs (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  WatchCursor ();
+  Update ();
+  VisitBioseqsInSep (sep, NULL, MakeCDSmRNAPairsCallback);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+static void ApplyNameRNACallback (BioseqPtr bsp, Pointer userdata)
+{
+  CharPtr    rnaName = (CharPtr) userdata;
+  RnaRefPtr  rrp;
+  SeqFeatPtr sfp;
+  SeqEntryPtr sep;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || StringHasNoText (rnaName)) {
+    return;
+  }
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (sep == NULL) return;
+
+  rrp = RnaRefNew ();
+  rrp->type = RNA_TYPE_rRNA;
+  rrp->ext.choice = 1;
+  rrp->ext.value.ptrvalue = StringSave (rnaName);
+  sfp = SeqFeatNew ();
+  sfp->data.choice = SEQFEAT_RNA;
+  sfp->data.value.ptrvalue = rrp;
+  sfp->location = CreateWholeInterval (sep);
+  SetSeqLocPartial (sfp->location, TRUE, TRUE);
+  sfp->partial = TRUE;
+  CreateNewFeature (sep, NULL, SEQFEAT_RNA, sfp);
+}
+
+
+static void ApplyNamedRNA (IteM i, CharPtr rnaName)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  WatchCursor ();
+  Update ();
+  VisitBioseqsInSep (sep, rnaName, ApplyNameRNACallback);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+extern void Apply16SRNA (IteM i)
+{
+  ApplyNamedRNA (i, "16S ribosomal RNA");
+}
+
+
+extern void Apply23SRNA (IteM i)
+{
+  ApplyNamedRNA (i, "23S ribosomal RNA");
+}
+
+
+extern void Apply18SRNA (IteM i)
+{
+  ApplyNamedRNA (i, "18S ribosomal RNA");
+}
+
+
+extern void Apply28SRNA (IteM i)
+{
+  ApplyNamedRNA (i, "28S ribosomal RNA");
+}
+
+
+extern void Apply26SRNA (IteM i)
+{
+  ApplyNamedRNA (i, "26S ribosomal RNA");
+}
+
+
+extern void Apply12SRNA (IteM i)
+{
+  ApplyNamedRNA (i, "12S ribosomal RNA");
+}
+
+
+extern void ApplySmallRNA (IteM i)
+{
+  ApplyNamedRNA (i, "small subunit ribosomal RNA");
+}
+
+
+extern void ApplyLargeRNA (IteM i)
+{
+  ApplyNamedRNA (i, "large subunit ribosomal RNA");
+}
+
+
+typedef struct rnaits {
+  FORM_MESSAGE_BLOCK
+  ButtoN       partial_5;
+  ButtoN       partial_3;
+  DialoG       rna_list;
+  ButtoN       leave_dlg_up;
+  ButtoN       accept;
+  /* for alignment coordinates */
+  ButtoN       use_aln;
+  PopuP        this_aln;
+
+  BaseFormPtr       bfp;
+  TaglistCallback   callbacks[3];
+  Uint2             interval_types[3]; 
+  Uint2             interval_widths[3];
+  EnumFieldAssocPtr alists[3];
+
+  ValNodePtr        prev_list;
+  /* for alignment coordinates */
+  SeqAlignPtr       salp_list;
+  SeqAlignPtr       chosen_salp;
+
+  /* for propagation */
+  ValNodePtr        feature_list;
+} RNAITSData, PNTR RNAITSPtr;
+
+typedef enum {
+  eRNA_ITS_INVALID = 0,
+  eRNA_ITS_18S,
+  eRNA_ITS_18S_SMALL,
+  eRNA_ITS_SMALL,
+  eRNA_ITS_ITS1,
+  eRNA_ITS_58S,
+  eRNA_ITS_ITS2,
+  eRNA_ITS_28S,
+  eRNA_ITS_28S_LARGE,
+  eRNA_ITS_LARGE,
+  eRNA_ITS_26S,
+  eRNA_ITS_26S_LARGE,
+  eRNA_ITS_25S,
+  eRNA_ITS_25S_LARGE
+} ERNA_ITS_type;
+
+static ENUM_ALIST(rna_its_alist)
+{" ",                                 eRNA_ITS_INVALID},
+{"18S ribosomal RNA",                 eRNA_ITS_18S},
+{"18S small subunit ribosomal RNA",   eRNA_ITS_18S_SMALL},
+{"small subunit ribosomal RNA",       eRNA_ITS_SMALL},
+
+{"internal transcribed spacer 1",     eRNA_ITS_ITS1},
+
+{"5.8S ribosomal RNA",                eRNA_ITS_58S},
+
+{"internal transcribed spacer 2",     eRNA_ITS_ITS2},
+
+{"28S ribosomal RNA",                 eRNA_ITS_28S},
+{"28S large subunit ribosomal RNA",   eRNA_ITS_28S_LARGE},
+{"large subunit ribosomal RNA",       eRNA_ITS_LARGE},
+{"26S ribosomal RNA",                 eRNA_ITS_26S},
+{"26S large subunit ribosomal RNA",   eRNA_ITS_26S_LARGE},
+{"25S ribosomal RNA",                 eRNA_ITS_25S},
+{"25S large subunit ribosomal RNA",   eRNA_ITS_25S_LARGE},
+END_ENUM_ALIST
+
+static ENUM_ALIST(rna_its_popup_alist)
+{" ",                                 eRNA_ITS_INVALID},
+{"18S rRNA",                          eRNA_ITS_18S},
+{"small subunit",                     eRNA_ITS_SMALL},
+{"ITS1",                              eRNA_ITS_ITS1},
+{"5.8S rRNA",                         eRNA_ITS_58S},
+{"ITS2",                              eRNA_ITS_ITS2},
+{"28S rRNA",                          eRNA_ITS_28S},
+{"26S rRNA",                          eRNA_ITS_26S},
+{"25S rRNA",                          eRNA_ITS_25S},
+{"large subunit rRNA",                eRNA_ITS_LARGE},
+{"18S small subunit rRNA",            eRNA_ITS_18S_SMALL},
+{"28S large subunit rRNA",            eRNA_ITS_28S_LARGE},
+{"26S large subunit rRNA",            eRNA_ITS_26S_LARGE},
+{"25S large subunit rRNA",            eRNA_ITS_25S_LARGE},
+END_ENUM_ALIST
+
+static CharPtr RNANameFromRNAType (ERNA_ITS_type rna_type)
+{
+  EnumFieldAssocPtr eap = rna_its_alist;
+  while (eap != NULL && eap->name != NULL && eap->value != rna_type) 
+  {
+    eap++;
+  }
+  return eap->name;
+}
+
+typedef struct rna_its_item {
+  ERNA_ITS_type rna_type;
+  Int4          left;
+  Int4          right;
+} RNA_ITS_ItemData, PNTR RNA_ITS_ItemPtr;
+
+static void MarkRNAITSDiffs (ValNodePtr vnp_new, ValNodePtr vnp_old)
+{
+  RNA_ITS_ItemPtr rip_new, rip_old;
+  while (vnp_new != NULL) {
+    if (vnp_old == NULL) {
+      vnp_new->choice = 1;
+    } else {
+      rip_new = vnp_new->data.ptrvalue;
+      rip_old = vnp_old->data.ptrvalue;
+      if (rip_old == NULL && rip_new == NULL) {
+        /* no change */
+      } else if (rip_old == NULL || rip_new == NULL) {
+        vnp_new->choice = 1;
+      } else if (rip_new->rna_type != rip_old->rna_type
+                 || rip_new->left != rip_old->left
+                 || rip_new->right != rip_old->right) {
+        vnp_new->choice = 1;
+      }
+      vnp_old = vnp_old->next;
+    }
+    vnp_new = vnp_new->next;
+  }
+}
+
+static RNA_ITS_ItemPtr TagListStringToRNAITSItem (CharPtr line)
+{
+  RNA_ITS_ItemPtr rip;
+  CharPtr         txt;
+  Int4            tmp;
+
+  rip = (RNA_ITS_ItemPtr) MemNew (sizeof (RNA_ITS_ItemData));
+
+  /* get interval values */
+  txt = ExtractTagListColumn (line, 1);
+  if (StringHasNoText (txt)) {
+    rip->left = -1;
+  } else {
+    StrToLong (txt, &rip->left);
+  }
+  txt = MemFree (txt);
+  txt = ExtractTagListColumn (line, 2);
+  if (StringHasNoText (txt)) {
+    rip->right = -1;
+  } else {
+    StrToLong (txt, &rip->right);
+  }
+  txt = MemFree (txt);
+
+  txt = ExtractTagListColumn (line, 0);
+  if (StringHasNoText (txt)) {
+    rip->rna_type = eRNA_ITS_INVALID;
+  } else {
+    StrToLong (txt, &tmp);
+    rip->rna_type = tmp;
+  }
+  txt = MemFree (txt);
+
+  return rip;
+}
+
+static CharPtr RNAITSItemToTagListString (RNA_ITS_ItemPtr rip)
+{
+  Char new_line[100];
+  Char left_str[15];
+  Char right_str[15];
+
+  if (rip == NULL) return NULL;
+  if (rip->left > -1) {
+    sprintf (left_str, "%d", rip->left);
+  } else {
+    sprintf (left_str, "");
+  }
+  if (rip->right > -1) {
+    sprintf (right_str, "%d", rip->right);
+  } else {
+    sprintf (right_str, "");
+  }
+  sprintf (new_line, "%d\t%s\t%s\n", rip->rna_type, left_str, right_str);
+  return StringSave (new_line);
+}
+
+static ERNA_ITS_type NextRNAITSChoice (ERNA_ITS_type rna_type)
+{
+  ERNA_ITS_type next_type = eRNA_ITS_INVALID;
+
+  switch (rna_type) {
+    case eRNA_ITS_INVALID:
+      next_type = eRNA_ITS_INVALID;
+      break;
+    case eRNA_ITS_18S:
+    case eRNA_ITS_18S_SMALL:
+    case eRNA_ITS_SMALL:
+      next_type = eRNA_ITS_ITS1;
+      break;
+    case eRNA_ITS_ITS1:
+      next_type = eRNA_ITS_58S;
+      break;
+    case eRNA_ITS_58S:
+      next_type = eRNA_ITS_ITS2;
+      break;
+    case eRNA_ITS_ITS2:
+      next_type = eRNA_ITS_28S;
+      break;
+    case eRNA_ITS_28S:
+    case eRNA_ITS_28S_LARGE:
+    case eRNA_ITS_LARGE:
+    case eRNA_ITS_26S:
+    case eRNA_ITS_26S_LARGE:
+    case eRNA_ITS_25S:
+    case eRNA_ITS_25S_LARGE:
+      next_type = eRNA_ITS_INVALID;
+      break;
+  }
+  return next_type;
+}
+
+static Boolean OkNextRNAITSChoice (ERNA_ITS_type rna_type, ERNA_ITS_type next_rna_type)
+{
+  Boolean is_ok = FALSE;
+
+  switch (rna_type) {
+    case eRNA_ITS_INVALID:
+      is_ok = (next_rna_type == eRNA_ITS_INVALID);
+      break;
+    case eRNA_ITS_18S:
+    case eRNA_ITS_18S_SMALL:
+    case eRNA_ITS_SMALL:
+      is_ok = (next_rna_type == eRNA_ITS_ITS1);
+      break;
+    case eRNA_ITS_ITS1:
+      is_ok = (next_rna_type == eRNA_ITS_58S);
+      break;
+    case eRNA_ITS_58S:
+      is_ok = (next_rna_type == eRNA_ITS_ITS2);
+      break;
+    case eRNA_ITS_ITS2:
+      if (next_rna_type == eRNA_ITS_28S
+          || next_rna_type == eRNA_ITS_28S_LARGE
+          || next_rna_type == eRNA_ITS_LARGE
+          || next_rna_type == eRNA_ITS_26S
+          || next_rna_type == eRNA_ITS_26S_LARGE
+          || next_rna_type == eRNA_ITS_25S
+          || next_rna_type == eRNA_ITS_25S_LARGE) {
+        is_ok = TRUE;
+      } else {
+        is_ok = FALSE;
+      }
+      break;
+    case eRNA_ITS_28S:
+    case eRNA_ITS_28S_LARGE:
+    case eRNA_ITS_LARGE:
+    case eRNA_ITS_26S:
+    case eRNA_ITS_26S_LARGE:
+    case eRNA_ITS_25S:
+    case eRNA_ITS_25S_LARGE:
+      is_ok = (next_rna_type == eRNA_ITS_INVALID);
+      break;
+  }
+  return is_ok;
+}
+
+static Pointer TagListToRNAITSList (DialoG d)
+{
+  TagListPtr  tlp;
+  ValNodePtr  rip_list = NULL, vnp;
+  RNA_ITS_ItemPtr rip;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL) return NULL;
+  vnp = tlp->vnp;
+  while (vnp != NULL) {
+    rip = TagListStringToRNAITSItem (vnp->data.ptrvalue);
+    if (rip != NULL) {
+      ValNodeAddPointer (&rip_list, 0, rip);
+    }
+    vnp = vnp->next;
+  }
+  return (Pointer) rip_list;
+}
+
+static void RNAITSListToTagList (DialoG d, Pointer data)
+{
+  TagListPtr  tlp;
+  ValNodePtr  rip_list, vnp;
+  RNA_ITS_ItemPtr rip;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL) return;
+  rip_list = (ValNodePtr) data;
+  tlp->vnp = ValNodeFreeData (tlp->vnp);
+  vnp = rip_list;
+  while (vnp != NULL) {
+    rip = (vnp->data.ptrvalue);
+    if (rip != NULL) {
+      ValNodeAddPointer (&tlp->vnp, 0, RNAITSItemToTagListString (rip));
+    }
+    vnp = vnp->next;
+  }
+  SendMessageToDialog (d, VIB_MSG_REDRAW);
+}
+
+static void RNA_ITS_ChoiceCallback (Pointer userdata)
+{
+  RNAITSPtr   rp;
+  TagListPtr  tlp;
+  ValNodePtr  vnp, prev_vnp;
+  RNA_ITS_ItemPtr rip, rip_prev = NULL;
+  Boolean         any_changes = FALSE, any_changes_this;
+
+  rp = (RNAITSPtr) userdata;
+  if (rp == NULL) return;
+
+  tlp = (TagListPtr) GetObjectExtra (rp->rna_list);
+  if (tlp == NULL) {
+    return;
+  }
+
+  for (vnp = tlp->vnp, prev_vnp = NULL;
+       vnp != NULL; 
+       prev_vnp = vnp, vnp = vnp->next) {
+    rip = TagListStringToRNAITSItem (vnp->data.ptrvalue);
+    if (rip_prev == NULL) {
+      if (rip->left == -1) {
+        any_changes = TRUE;
+        rip->left = 1;
+        vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+        vnp->data.ptrvalue = RNAITSItemToTagListString (rip);
+      }
+    } else {
+      any_changes_this = FALSE;
+      if (!OkNextRNAITSChoice(rip_prev->rna_type, rip->rna_type)) {
+        /* fix type for this line */
+        any_changes_this = TRUE;
+        rip->rna_type = NextRNAITSChoice (rip_prev->rna_type);
+      }
+      /* fix interval for this line */
+      if (rip->left == -1 && rip_prev->right != -1) {
+        any_changes_this = TRUE;
+        rip->left = rip_prev->right + 1;
+      }
+      if (any_changes_this) {
+        vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+        vnp->data.ptrvalue = RNAITSItemToTagListString (rip);
+        any_changes = TRUE;
+      }
+      /* fix interval for previous line */
+      if (rip_prev->right == -1 && rip->left > 0) {
+        any_changes = TRUE;
+        rip_prev->right = rip->left - 1;
+        prev_vnp->data.ptrvalue = MemFree (prev_vnp->data.ptrvalue);
+        prev_vnp->data.ptrvalue = RNAITSItemToTagListString (rip_prev);
+      }
+    }
+    rip_prev = MemFree (rip_prev);
+    rip_prev = rip;
+  }
+  /* fill out the chain */
+  while (rip_prev != NULL && NextRNAITSChoice(rip_prev->rna_type) != eRNA_ITS_INVALID) {
+    rip = (RNA_ITS_ItemPtr) MemNew (sizeof (RNA_ITS_ItemData));
+    rip->rna_type = NextRNAITSChoice(rip_prev->rna_type);
+    if (rip_prev->right > -1) {
+      rip->left = rip_prev->right + 1;
+    } else {
+      rip->left = -1;
+    }
+    rip->right = -1;
+    ValNodeAddPointer (&tlp->vnp, 0, RNAITSItemToTagListString (rip));
+    any_changes = TRUE;
+    rip_prev = MemFree (rip_prev);
+    rip_prev = rip;
+  }
+  rip_prev = MemFree (rip_prev);
+  if (any_changes) {
+    SendMessageToDialog (rp->rna_list, VIB_MSG_REDRAW);
+  }
+  rp->prev_list = ValNodeFreeData (rp->prev_list);
+  rp->prev_list = TagListToRNAITSList (rp->rna_list);
+}
+
+extern void RNA_ITS_IntervalCallback (Pointer data)
+{
+  RNAITSPtr   rp;
+  TagListPtr  tlp;
+  ValNodePtr  vnp, prev_vnp, new_list;
+  RNA_ITS_ItemPtr rip, rip_prev = NULL;
+  Boolean         any_changes = FALSE;
+
+  rp = (RNAITSPtr) data;
+  if (rp == NULL) return;
+
+  tlp = (TagListPtr) GetObjectExtra (rp->rna_list);
+  if (tlp == NULL) {
+    return;
+  }
+  new_list = TagListToRNAITSList (rp->rna_list);
+  MarkRNAITSDiffs (new_list, rp->prev_list);
+  for (vnp = new_list, prev_vnp = NULL;
+       vnp != NULL;
+       prev_vnp = vnp, vnp = vnp->next) {
+    rip = vnp->data.ptrvalue;
+    if (rip_prev == NULL) {
+      if (rip->left == -1) {
+        rip->left = 0;
+        any_changes = TRUE;
+      }
+    } else {
+      /* fix interval for this line */
+      if (rip->left == -1 && rip_prev->right != -1) {
+        any_changes = TRUE;
+        rip->left = rip_prev->right + 1;
+      }
+      /* fix interval for previous line */
+      if (rip_prev->right == -1 && rip->left > 0) {
+        any_changes = TRUE;
+        rip_prev->right = rip->left - 1;
+      }
+      if (vnp->choice == 1) {
+        if (rip->left != -1 && rip_prev->right != rip->left - 1) {
+          any_changes = TRUE;
+          rip_prev->right = rip->left - 1;
+        }
+      } else if (prev_vnp->choice == 1) {
+        if (rip_prev->right != -1 && rip->left != rip_prev->right + 1) {
+          any_changes = TRUE;
+          rip->left = rip_prev->right + 1;
+        }
+      }
+    }
+    rip_prev = rip;
+  }
+  if (any_changes) {
+    RNAITSListToTagList (rp->rna_list, new_list);
+    SendMessageToDialog (rp->rna_list, VIB_MSG_REDRAW);
+  }
+  new_list = ValNodeFreeData (new_list);
+  rp->prev_list = ValNodeFreeData (rp->prev_list);
+  rp->prev_list = TagListToRNAITSList (rp->rna_list);
+}
+
+static Int4 GetAlnRowForBsp (BioseqPtr bsp, SeqAlignPtr salp)
+{
+  Int4     aln_row;
+  SeqIdPtr sip;
+  
+  if (bsp == NULL || salp == NULL)
+  {
+    return 0;
+  }
+  
+  for (aln_row = 1; aln_row <= salp->dim; aln_row++) 
+  {
+    sip = AlnMgr2GetNthSeqIdPtr(salp, aln_row);
+    if (SeqIdIn (sip, bsp->id))
+    {
+      return aln_row;
+    }
+  }
+  return 0;
+}
+
+static Int4 ChooseEndpoint (Int4 bsp_len, Int4 pos, Boolean is_left, SeqAlignPtr salp, Int4 aln_row)
+{
+  Int4 tmp;
+  if (pos < 0) {
+    if (is_left) {
+      pos = 0;
+    } else {
+      pos = bsp_len - 1;
+    }
+  } else if (salp == NULL) { 
+    if (pos > bsp_len - 1) {
+      if (is_left) {
+        pos = -1;
+      } else {
+        pos = bsp_len - 1;
+      }
+    }
+  } else {
+    tmp = AlnMgr2MapSeqAlignToBioseq (salp, pos, aln_row);
+    if (is_left) {
+      while (tmp < 0 && pos < bsp_len) {
+        pos++;
+        tmp = AlnMgr2MapSeqAlignToBioseq (salp, pos, aln_row);
+      }
+      if (tmp < 0) {
+        pos = -1;
+      } else {
+        pos = tmp;
+      }
+    } else {
+      while (tmp < 0 && pos > -1) {
+        pos--;
+        tmp = AlnMgr2MapSeqAlignToBioseq (salp, pos, aln_row);
+      }
+      if (tmp < 0) {
+        pos = -1;
+      } else {
+        pos = tmp;
+      }
+    }
+  }
+  return pos;
+}
+
+
+static void MakeRNA_ITSChainForBioseq (BioseqPtr bsp, Pointer userdata)
+{
+  RNAITSPtr          rp;
+  ValNodePtr         vnp;
+  RNA_ITS_ItemPtr    rip;
+  Int4               last_untranslated_right = 0, this_left, this_right;
+  RnaRefPtr          rrp;
+  SeqFeatPtr         sfp;
+  SeqEntryPtr        sep;
+  Boolean            partial5, partial3 = FALSE;
+  Int4               aln_row = -1;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || userdata == NULL) return;
+  rp = (RNAITSPtr) userdata;
+
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (sep == NULL) return;
+
+  if (rp->chosen_salp != NULL) {
+    aln_row = GetAlnRowForBsp (bsp, rp->chosen_salp);
+    if (aln_row < 1) {
+      return;
+    }
+  }
+
+  partial5 = GetStatus (rp->partial_5);
+  last_untranslated_right = 0;
+  for (vnp = rp->prev_list; vnp != NULL; vnp = vnp->next) {
+    rip = vnp->data.ptrvalue;
+
+    /* stop if we are at the end of the chain */
+    if (rip->rna_type == eRNA_ITS_INVALID) {
+      break;
+    }
+
+    if (rip->left < 0) {      
+      this_left = last_untranslated_right + 1;
+    } else {
+      this_left = rip->left - 1;
+    } 
+
+    this_left = ChooseEndpoint (bsp->length, this_left, TRUE, rp->chosen_salp, aln_row);
+
+    if (rip->right < 0) {
+      if (rp->chosen_salp == NULL) {
+        this_right = bsp->length - 1;
+      } else {
+        this_right = AlnMgr2GetAlnLength (rp->chosen_salp, TRUE) - 1;
+      }    
+    } else {
+      this_right = rip->right - 1;
+    }
+    last_untranslated_right = this_right;
+    this_right = ChooseEndpoint (bsp->length, this_right, FALSE, rp->chosen_salp, aln_row);
+
+    /* if using alignment coordinates and left is not yet available, continue */
+    if (this_right < 0 && this_left > -1 && rp->chosen_salp != NULL) {
+      continue;
+    }
+
+    /* stop if the chain extends past the length of this Bioseq */
+    if (this_left > bsp->length - 1 || this_left < 0 || this_right < 0 || this_right <= this_left) {
+      break;
+    }
+
+    rrp = RnaRefNew ();
+    if (rip->rna_type == eRNA_ITS_ITS1 || rip->rna_type == eRNA_ITS_ITS2) {
+      rrp->type = RNA_TYPE_other;
+    } else {
+      rrp->type = RNA_TYPE_rRNA;
+    }
+    rrp->ext.choice = 1;
+
+    rrp->ext.value.ptrvalue = StringSave (RNANameFromRNAType(rip->rna_type));
+    sfp = SeqFeatNew ();
+    sfp->data.choice = SEQFEAT_RNA;
+    sfp->data.value.ptrvalue = rrp;
+    /* if last endpoint not set, use end of sequence.
+     * if last endpoint past end of sequence, use end of sequence.
+     */
+    sfp->location = SeqLocIntNew (this_left, this_right, Seq_strand_plus,
+                                  SeqIdDup (SeqIdFindBest (bsp->id, 0)));
+    if ((vnp->next == NULL || this_right == bsp->length - 1) && GetStatus (rp->partial_3)) {
+      partial3 = TRUE;
+    }
+    SetSeqLocPartial (sfp->location, partial5, partial3);
+    sfp->partial = partial5 || partial3;
+    CreateNewFeature (sep, NULL, SEQFEAT_RNA, sfp);
+    ValNodeAddPointer (&(rp->feature_list), OBJ_SEQFEAT, sfp);
+    partial5 = FALSE;
+  }
+}
+
+/* This function will propagate the RNA features pointed to by feature_list
+ * from aln_row in salp to the other rows in salp. 
+*/
+static void PropagateRNAList (ValNodePtr feature_list, Int4 aln_row, SeqAlignPtr salp)
+{
+  ValNodePtr seq_for_prop = NULL, vnp;
+  Int4       i;
+  SeqIdPtr   sip;
+  Boolean    warned_about_master = FALSE;
+
+  if (feature_list == NULL || aln_row < 1 || salp == NULL) return;
+
+  /* get list of sequences to propagate to */
+  for (i = 1; i <= salp->dim; i++) {
+    if (i != aln_row) {
+      ValNodeAddPointer (&seq_for_prop, 0, AlnMgr2GetNthSeqIdPtr(salp, i));
+    }
+  }
+
+  /* propagate each feature */
+  for (vnp = feature_list; vnp != NULL; vnp = vnp->next) {
+    PropagateOneFeat (vnp->data.ptrvalue, TRUE, FALSE, FALSE, FALSE, FALSE, seq_for_prop, &warned_about_master);
+  }
+
+  /* free sequence IDs in seq_for_prop */
+  for (vnp = seq_for_prop; vnp != NULL; vnp = vnp->next) {
+    sip = (SeqIdPtr) vnp->data.ptrvalue;
+    sip = SeqIdFree (sip);
+  }
+  seq_for_prop = ValNodeFree (seq_for_prop);
+
+}
+
+
+static void MakeRNA_ITSChain (ButtoN b)
+{
+  RNAITSPtr          rp;
+  SeqEntryPtr        sep;
+  BioseqPtr          bsp;
+  Boolean            apply_to_all = FALSE, propagate = FALSE;
+  SeqAlignPtr        next_salp, propagate_salp = NULL;
+  Int4               salp_index, aln_row = -1;
+
+  rp = (RNAITSPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (rp->input_entityID);
+  rp->prev_list = ValNodeFreeData (rp->prev_list);
+  rp->prev_list = DialogToPointer (rp->rna_list);
+
+  bsp = GetBioseqViewTarget (rp->bfp);
+  if (GetStatus (rp->use_aln)) {
+    apply_to_all = TRUE;    
+    if (bsp != NULL && Message (MSG_YN, "Apply to all Bioseqs?") == ANS_NO) {
+      apply_to_all = FALSE;
+    }
+  } else if (bsp == NULL) {
+    if (Message (MSG_OKC, "You are not viewing a single Bioseq.  Apply to all Bioseqs?") == ANS_CANCEL) {
+      return;
+    } else {
+      apply_to_all = TRUE;
+    }
+  } else {
+    propagate_salp = rp->salp_list;
+    while (aln_row < 0 && propagate_salp != NULL) {
+      aln_row = GetAlnRowForBsp (bsp, propagate_salp);
+      if (aln_row < 0) {
+        propagate_salp = propagate_salp->next;
+      }
+    }
+    if (aln_row > 0  && propagate_salp != NULL && Message (MSG_YN, "Propagate to other sequences?") == ANS_YES) {
+      propagate = TRUE;
+    }
+  }
+
+  rp->chosen_salp = NULL;
+  next_salp = NULL;
+  if (GetStatus (rp->use_aln)) {
+    rp->chosen_salp = rp->salp_list;
+    if (rp->this_aln != NULL) {
+      salp_index = GetValue (rp->this_aln);
+      while (salp_index > 1 && rp->chosen_salp != NULL) {
+        rp->chosen_salp = rp->chosen_salp->next;
+        salp_index--;
+      }
+      if (salp_index > 1) {
+        rp->chosen_salp = NULL;
+      }
+    }
+
+    /* if choosing only one sequence, make sure it's in alignment */
+    if (bsp != NULL && !apply_to_all && GetAlnRowForBsp (bsp, rp->chosen_salp) < 1) {
+      Message (MSG_ERROR, "This sequence is not in the alignment!");
+      return;
+    }
+
+    /* temporarily break alignment chain */
+    if (rp->chosen_salp != NULL) {
+      next_salp = rp->chosen_salp->next;
+      rp->chosen_salp->next = NULL;
+    }
+  }
+
+
+  WatchCursor ();
+  Update ();
+
+  /* rp->feature list will contain a list of all the features created */
+  rp->feature_list = NULL;
+  if (apply_to_all) {
+    VisitBioseqsInSep (sep, rp, MakeRNA_ITSChainForBioseq);
+  } else {
+    MakeRNA_ITSChainForBioseq (bsp, rp);
+    if (propagate) {
+      PropagateRNAList (rp->feature_list, aln_row, propagate_salp);
+    }
+  }
+  rp->feature_list = ValNodeFree (rp->feature_list);
+
+
+  /* restore alignment chain if it was broken */
+  if (rp->chosen_salp != NULL) {
+    rp->chosen_salp->next = next_salp;
+  }
+  
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (rp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, rp->input_entityID, 0, 0);
+  if (!GetStatus (rp->leave_dlg_up)) {
+    Remove (rp->form);
+  }
+}
+
+static WindoW RNAITSWindow = NULL;
+
+static void CleanupRNA_ITS (GraphiC g, VoidPtr data)
+
+{
+  RNAITSPtr          rp;
+  SeqAlignPtr        salp;
+
+  rp = (RNAITSPtr) data;
+  if (rp != NULL) {
+    ValNodeFree (rp->prev_list);
+    /* free the alignment list we created for alignment coordinates */
+    while (rp->salp_list != NULL) {
+      salp = rp->salp_list->next;
+      rp->salp_list->next = NULL;
+      rp->salp_list = SeqAlignFree (rp->salp_list);
+      rp->salp_list = salp;
+    }
+    ObjMgrFreeUserData (rp->input_entityID, rp->procid, rp->proctype, rp->userkey);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+static Int2 LIBCALLBACK RNAITSFormMsgFunc (OMMsgStructPtr ommsp)
+{
+  WindoW         currentport,
+                 temport;
+  OMUserDataPtr  omudp;
+  RNAITSPtr      rp = NULL;
+  
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  rp = (RNAITSPtr) omudp->userdata.ptrvalue;
+  if (rp == NULL) return OM_MSG_RET_ERROR;
+
+  currentport = ParentWindow (rp->form);
+  temport = SavePort (currentport);
+  UseWindow (currentport);
+  Select (rp->form);
+  switch (ommsp->message) 
+  {
+      case OM_MSG_UPDATE:
+          break;
+      case OM_MSG_DESELECT:
+          break;
+
+      case OM_MSG_SELECT: 
+          break;
+      case OM_MSG_DEL:
+          Remove (rp->form);
+          break;
+      case OM_MSG_HIDE:
+          break;
+      case OM_MSG_SHOW:
+          break;
+      case OM_MSG_FLUSH:
+          Remove (rp->form);	
+          break;
+      default:
+          break;
+  }
+  RestorePort (temport);
+  UseWindow (temport);
+  return OM_MSG_RET_OK;
+}
+
+static void UseAlnCallback (ButtoN b)
+{
+  RNAITSPtr      rp = NULL;
+
+  rp = (RNAITSPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  if (rp->use_aln != NULL && rp->this_aln != NULL) {
+    if (GetStatus (rp->use_aln)) {
+      Enable (rp->this_aln);
+    } else {
+      Disable (rp->this_aln);
+    }
+  }
+}
+
+extern void ApplyRNA_ITS (IteM i)
+{
+  GrouP              c;
+  RNAITSPtr          rp;
+  GrouP              h, g, aln_group = NULL;
+  WindoW             w;
+  BaseFormPtr        bfp;
+  OMUserDataPtr      omudp;
+  SeqEntryPtr        sep;
+  SeqAlignPtr        salp;
+  Char               str[31];
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  /* Create a new window, and a struct */
+  /* to pass around the data in.       */
+
+  rp = (RNAITSPtr) MemNew (sizeof (RNAITSData));
+  if (rp == NULL)
+    return;
+
+  w = FixedWindow (-50, -33, -10, -10, "Apply RNA-ITS",
+		   StdCloseWindowProc);
+  SetObjectExtra (w, rp, CleanupRNA_ITS);
+  rp->form = (ForM) w;
+  rp->input_entityID = bfp->input_entityID;
+  rp->bfp = bfp;
+
+  /* register to receive update messages */
+  rp->userkey = OMGetNextUserKey ();
+  rp->procid = 0;
+  rp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (rp->input_entityID, rp->procid, rp->proctype, rp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) rp;
+    omudp->messagefunc = RNAITSFormMsgFunc;
+  }
+
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  rp->partial_5 = CheckBox (g, "5' Partial", NULL);
+  rp->partial_3 = CheckBox (g, "3' Partial", NULL);
+  SetStatus (rp->partial_5, TRUE);
+  SetStatus (rp->partial_3, TRUE);
+
+  /* if there are alignments, allow the user to specify alignment coordinates */
+  sep = GetTopSeqEntryForEntityID (rp->input_entityID);
+  VisitAnnotsInSep (sep, &(rp->salp_list), GetAlignmentsInSeqEntryCallback);
+  if (rp->salp_list == NULL) {
+    rp->use_aln = NULL;
+    rp->this_aln = NULL;
+  } else {
+    aln_group = HiddenGroup (h, 2, 0, NULL);
+    rp->use_aln = CheckBox (aln_group, "Use alignment coordinates", UseAlnCallback);
+    SetObjectExtra (rp->use_aln, rp, NULL);
+    if (rp->salp_list->next != NULL) {
+      rp->this_aln = PopupList (aln_group, TRUE, NULL);
+      salp = rp->salp_list;
+      while (salp != NULL)
+      {
+        CreateSeqAlignLabel (salp, str, sizeof (str) - 1);
+        PopupItem (rp->this_aln, str);
+        salp = salp->next;
+      }
+      SetValue (rp->this_aln, 1); 
+      Disable (rp->this_aln);
+    } else {
+      rp->this_aln = NULL;
+    }
+  }
+
+
+  /* set up callbacks */
+  rp->callbacks[0] = RNA_ITS_ChoiceCallback;
+  rp->callbacks[1] = RNA_ITS_IntervalCallback;
+  rp->callbacks[2] = RNA_ITS_IntervalCallback;
+
+  /* set up inteval types */
+  rp->interval_types[0] = TAGLIST_POPUP;
+  rp->interval_types[1] = TAGLIST_TEXT;
+  rp->interval_types[2] = TAGLIST_TEXT;
+
+  /* set up interval widths */
+  rp->interval_widths[0] = 0;
+  rp->interval_widths[1] = 5;
+  rp->interval_widths[2] = 5;
+
+  /* set up alist for RNA type */
+  rp->alists[0] = rna_its_popup_alist;
+  rp->alists[1] = NULL;
+  rp->alists[2] = NULL;
+
+  rp->rna_list = CreateTagListDialogExEx (h, 4, 3, 2,
+                                          rp->interval_types, rp->interval_widths, rp->alists,
+                                          TRUE, FALSE, RNAITSListToTagList, TagListToRNAITSList,
+                                          rp->callbacks, rp, FALSE);
+
+  rp->prev_list = NULL;
+  /* Add Accept and Cancel buttons */
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  rp->accept = DefaultButton (c, "Accept", MakeRNA_ITSChain);
+  SetObjectExtra (rp->accept, rp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  rp->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
+
+  /* Line things up nicely */
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g,
+                              (HANDLE) rp->rna_list,
+                              (HANDLE) c, NULL);
+
+
+  /* Display the window now */
+
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Select (rp->accept);
+  Update ();
+}
+
+
+/* CDS-mRNA Link Tool */
+typedef struct cdsmrnalinktool {
+  FORM_MESSAGE_BLOCK
+  GrouP edit_grp;
+  GrouP report_grp;
+  DoC left_doc;
+  DoC right_doc;
+  DoC report_doc;
+  DoC report_title_doc;
+
+  BaseFormPtr       bfp;
+  SeqFeatPtr        selected_cds;
+  ValNodePtr        cds_list;
+  ValNodePtr        mrna_list;
+  Int2       lineheight;  
+
+  Nlm_ParData cdsParFmt;
+  Nlm_ParData mrnaParFmt;
+  Nlm_ParData reportParFmt;
+  Nlm_ColData cdsColFmt [2];
+  Nlm_ColData mrnaColFmt [3];
+  Nlm_ColData reportColFmt [4];
+} CDSmRNALinkToolData, PNTR CDSmRNALinkToolPtr;
+
+static void CleanupCDSmRNALinkTool (GraphiC g, VoidPtr data)
+
+{
+  CDSmRNALinkToolPtr          tp;
+
+  tp = (CDSmRNALinkToolPtr) data;
+  if (tp != NULL) {
+    ObjMgrFreeUserData (tp->input_entityID, tp->procid, tp->proctype, tp->userkey);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+static Int2 LIBCALLBACK CDSmRNALinkToolFormMsgFunc (OMMsgStructPtr ommsp)
+{
+  OMUserDataPtr  omudp;
+  CDSmRNALinkToolPtr      tp = NULL;
+  
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  tp = (CDSmRNALinkToolPtr) omudp->userdata.ptrvalue;
+  if (tp == NULL) return OM_MSG_RET_ERROR;
+
+  switch (ommsp->message) 
+  {
+      case OM_MSG_UPDATE:
+          break;
+      case OM_MSG_DESELECT:
+          break;
+
+      case OM_MSG_SELECT: 
+          break;
+      case OM_MSG_DEL:
+          Remove (tp->form);
+          break;
+      case OM_MSG_HIDE:
+          break;
+      case OM_MSG_SHOW:
+          break;
+      case OM_MSG_FLUSH:
+          Remove (tp->form);	
+          break;
+      default:
+          break;
+  }
+  return OM_MSG_RET_OK;
+}
+
+static ValNodePtr GetLinkedFeatureList (SeqFeatPtr sfp)
+{
+  Char            buf [32];
+  ObjectIdPtr     oip;
+  SeqFeatPtr      link_sfp;
+  CharPtr         str = NULL;
+  SeqFeatXrefPtr  xref;
+  ValNodePtr      link_list = NULL;
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->id.choice != 3) continue;
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (StringDoesHaveText (oip->str)) {
+        str = oip->str;
+      } else {
+        sprintf (buf, "%ld", (long) oip->id);
+        str = buf;
+      }
+      link_sfp = SeqMgrGetFeatureByFeatID (sfp->idx.entityID, NULL, str, NULL, NULL);
+      if (link_sfp != NULL) {
+        ValNodeAddPointer (&link_list, OBJ_SEQFEAT, link_sfp);
+      }
+    }
+  }
+
+  return link_list;
+}
+
+static int LIBCALLBACK SortVnpByLinkStatus (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  SeqFeatPtr  cds1, cds2;
+  ValNodePtr  link1, link2;
+  Int4        rval = 0;
+  SeqMgrFeatContext fcontext1, fcontext2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  if (vnp1->data.ptrvalue == NULL || vnp2->data.ptrvalue == NULL) return 0;
+  
+  cds1 = vnp1->data.ptrvalue;
+  cds2 = vnp2->data.ptrvalue;
+
+  link1 = GetLinkedFeatureList (cds1);
+  link2 = GetLinkedFeatureList (cds2);
+
+  if (link1 != NULL && link2 == NULL) {
+    rval = 1;
+  } else if (link1 == NULL && link2 != NULL) {
+    rval = -1;
+  } else {
+    SeqMgrGetDesiredFeature (cds1->idx.entityID, NULL, cds1->idx.itemID, 0, cds1, &fcontext1);
+    SeqMgrGetDesiredFeature (cds2->idx.entityID, NULL, cds2->idx.itemID, 0, cds2, &fcontext2);
+    if (fcontext1.left > fcontext2.left) {
+      rval = 1;
+    } else if (fcontext1.left < fcontext2.left) {
+      rval = -1;
+    } else if (fcontext1.itemID > fcontext2.itemID) {
+      rval = 1;
+    } else if (fcontext2.itemID < fcontext2.itemID) {
+      rval = -1;
+    } else {
+      rval = 0;
+    }
+  }
+  link1 = ValNodeFree (link1);
+  link2 = ValNodeFree (link2);
+
+  return rval;
+}
+
+static int LIBCALLBACK SortVnpBymRNAPos (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  SeqFeatPtr  mrna1, mrna2;
+  Int4        rval = 0;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  if (vnp1->data.ptrvalue == NULL || vnp2->data.ptrvalue == NULL) return 0;
+  
+  mrna1 = vnp1->data.ptrvalue;
+  mrna2 = vnp2->data.ptrvalue;
+
+  if (vnp1->choice > 0 && vnp2->choice == 0) {
+    rval = -1;
+  } else if (vnp1->choice == 0 && vnp2->choice > 0) {
+    rval = 1;
+  } else {
+    rval = SortVnpByLinkStatus (ptr1, ptr2);
+  }
+
+  return rval;
+}
+
+static CharPtr GetLinkLabel (SeqFeatPtr sfp)
+{
+  CharPtr location, label;
+  SeqMgrFeatContext context;
+
+  if (sfp == NULL) return NULL;
+
+  sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, sfp->idx.itemID, 0, sfp, &context);
+  location = SeqLocPrintUseBestID (sfp->location);
+
+  label = (CharPtr) MemNew (sizeof (Char) * (StringLen (context.label) + StringLen (location) + 3));
+  sprintf (label, "%s\t%s\n", context.label, location);
+  return label;
+}
+
+static void PopulateLinkReportDoc (CDSmRNALinkToolPtr tp)
+{
+  CharPtr cds_desc, mrna_desc, whole_line, tmp_desc;
+  ValNodePtr vnp, vnp_m, mrnas;
+  CharPtr    cp;
+  CharPtr    no_mrna = "\t\n";
+  Int4       col_width;
+  RecT       r;
+
+  if (tp == NULL) return;
+
+  Reset (tp->report_doc);
+  Reset (tp->report_title_doc);
+  ObjectRect (tp->report_doc, &r);
+  InsetRect (&r, 4, 4);
+
+  col_width = (r.right - r.left) / 4;
+  tp->reportColFmt[0].pixWidth = col_width;
+  tp->reportColFmt[1].pixWidth = col_width;
+  tp->reportColFmt[2].pixWidth = col_width;
+  tp->reportColFmt[3].pixWidth = col_width;
+
+  AppendText (tp->report_title_doc, "CDS product\tCDS location\tLinked mRNA product\tLinked mRNA Location\n",
+              &(tp->reportParFmt), tp->reportColFmt, programFont);
+
+  tp->cds_list = ValNodeSort (tp->cds_list, SortVnpByLinkStatus);
+
+  for (vnp = tp->cds_list; vnp != NULL; vnp = vnp->next) {
+    cds_desc = GetLinkLabel(vnp->data.ptrvalue);
+    /* replace carriage return with tab */
+    cp = StringChr (cds_desc, '\n');
+    if (cp != NULL) {
+      *cp = '\t';
+    }
+    mrnas = GetLinkedFeatureList (vnp->data.ptrvalue);
+    if (mrnas == NULL) {
+      whole_line = (CharPtr) MemNew (sizeof (Char) * (StringLen (cds_desc) + StringLen (no_mrna) + 1));
+      sprintf (whole_line, "%s%s", cds_desc, no_mrna);
+      AppendText (tp->report_doc, whole_line, &(tp->reportParFmt), tp->reportColFmt, programFont);
+      whole_line = MemFree (whole_line);
+    } else {
+      tmp_desc = cds_desc;
+      for (vnp_m = mrnas; vnp_m != NULL; vnp_m = vnp_m->next) {
+        mrna_desc = GetLinkLabel(vnp_m->data.ptrvalue);
+        whole_line = (CharPtr) MemNew (sizeof (Char) * (StringLen (cds_desc) + StringLen (mrna_desc) + 1));
+        sprintf (whole_line, "%s%s", tmp_desc, mrna_desc);
+        AppendText (tp->report_doc, whole_line, &(tp->reportParFmt), tp->reportColFmt, programFont);
+        whole_line = MemFree (whole_line);
+        mrna_desc = MemFree (mrna_desc);
+        tmp_desc = "\t\t";
+      }
+    }
+    cds_desc = MemFree (cds_desc);
+  }
+  InvalRect (&r);
+  ObjectRect (tp->report_title_doc, &r);
+  InvalRect (&r);
+}
+
+static void PopulateLinkLeftDoc (CDSmRNALinkToolPtr tp)
+{
+  RecT       r;
+  ValNodePtr vnp;
+  CharPtr    desc;
+  Int4       col_width;
+  Int2       i = 1, item_num;
+  Int4       startsAt;
+
+  if (tp == NULL) return;
+
+  /* first, reorder the coding regions so that coding regions with links
+   * appear last.
+   */
+  tp->cds_list = ValNodeSort (tp->cds_list, SortVnpByLinkStatus);
+
+  ObjectRect (tp->left_doc, &r);
+  InsetRect (&r, 4, 4);
+  
+  col_width = (r.right - r.left) / 2;
+  tp->cdsColFmt[0].pixWidth = col_width;
+  tp->cdsColFmt[1].pixWidth = col_width;
+
+  Reset (tp->left_doc);
+
+  for (vnp = tp->cds_list, i = 1; vnp != NULL; vnp = vnp->next, i++) {
+
+    desc = GetLinkLabel(vnp->data.ptrvalue);
+    AppendText (tp->left_doc, desc, &(tp->cdsParFmt), tp->cdsColFmt, programFont);
+    desc = MemFree (desc);
+    if (vnp->data.ptrvalue == tp->selected_cds) {
+      item_num = i;
+    }
+  }
+
+  GetItemParams4 (tp->left_doc, item_num, &startsAt, NULL, NULL, NULL, NULL);
+  SetScrlParams4 (tp->left_doc, startsAt);
+
+  InvalRect (&r);  
+}
+
+static void PopulateLinkRightDoc (CDSmRNALinkToolPtr tp)
+{
+  RecT       r;
+  ValNodePtr vnp;
+  CharPtr    desc, tmp_desc;
+  Uint1      old_choice;
+  Int4       col_width;
+
+  if (tp == NULL) return;
+
+  Reset (tp->right_doc);
+  ObjectRect (tp->right_doc, &r);
+  InsetRect (&r, 4, 4);
+  col_width = (r.right - r.left - tp->lineheight) / 2;
+  tp->mrnaColFmt[0].pixWidth = tp->lineheight;
+  tp->mrnaColFmt[1].pixWidth = col_width;
+  tp->mrnaColFmt[2].pixWidth = col_width;
+
+  for (vnp = tp->mrna_list; vnp != NULL; vnp = vnp->next) {
+    old_choice = vnp->choice;
+    vnp->choice = OBJ_SEQFEAT;
+    desc = GetLinkLabel(vnp->data.ptrvalue);
+    tmp_desc = (CharPtr) MemNew (sizeof (Char) * (StringLen (desc) + 2));
+    sprintf (tmp_desc, "\t%s", desc);
+    AppendText (tp->right_doc, tmp_desc, &(tp->mrnaParFmt), tp->mrnaColFmt, programFont);
+    desc = MemFree (desc);
+    tmp_desc = MemFree (tmp_desc);
+    vnp->choice = old_choice;
+  }
+  InvalRect (&r);  
+}
+
+
+static void PopulateLinkTool (CDSmRNALinkToolPtr tp)
+{
+  if (tp == NULL) return;
+
+  /* first, reorder the coding regions so that coding regions with links
+   * appear last.
+   */
+  tp->cds_list = ValNodeSort (tp->cds_list, SortVnpByLinkStatus);
+
+  ResetClip();
+  if (tp->selected_cds == NULL) {
+    PopulateLinkReportDoc (tp);
+    Show (tp->report_grp);
+    Hide (tp->edit_grp);
+  } else {
+    PopulateLinkLeftDoc (tp);
+    PopulateLinkRightDoc (tp);
+    Show (tp->edit_grp);
+    Hide (tp->report_grp);
+  }
+  Update ();
+}
+
+static void RefreshLinkBtn (ButtoN b)
+{
+  PopulateLinkTool ((CDSmRNALinkToolPtr)GetObjectExtra (b));
+}
+
+static Boolean HighlightSelectedCDS (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  CDSmRNALinkToolPtr tp;
+  ValNodePtr         vnp;
+  Int4               cds_num;
+  
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (doc);
+  if (tp == NULL) return FALSE;
+  
+  for (vnp = tp->cds_list, cds_num = 1; vnp != NULL && cds_num != item; vnp = vnp->next, cds_num++)
+  {
+  }
+  if (vnp != NULL && cds_num == item && vnp->data.ptrvalue == tp->selected_cds) 
+  {
+    return TRUE;
+  } 
+  else 
+  {
+    return FALSE;
+  }
+}
+
+static SeqFeatPtr CDSFromLinkDocItem (CDSmRNALinkToolPtr tp, Int2 item)
+{                           
+  ValNodePtr vnp, link_list;
+  Int4       cds_num = 1;
+  SeqFeatPtr cds = NULL;
+
+  if (item == 0 || tp == NULL) return NULL;
+
+  vnp = tp->cds_list;
+  while (vnp != NULL && cds_num < item) {
+    if (tp->selected_cds == NULL) {
+      /* we're showing the report view */
+      link_list = GetLinkedFeatureList (vnp->data.ptrvalue);
+      if (link_list != NULL && link_list->next != NULL) {
+        cds_num += ValNodeLen (link_list->next);
+      }
+      link_list = ValNodeFree (link_list);
+    }
+    if (cds_num < item) {
+      vnp = vnp->next;
+      cds_num++;
+    }
+  }
+  if (vnp != NULL) {
+    cds = vnp->data.ptrvalue;
+  }
+  return cds;
+}
+
+
+static Boolean GrayLinkedCDS (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  CDSmRNALinkToolPtr tp;
+  SeqFeatPtr         cds;
+  ValNodePtr         link_list;
+  Boolean            rval = FALSE;
+  
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (doc);
+  if (tp == NULL) return FALSE;
+  
+  cds = CDSFromLinkDocItem (tp, item);
+  if (cds != NULL && cds != tp->selected_cds) 
+  {
+    link_list = GetLinkedFeatureList (cds);
+    if (link_list != NULL) {
+      rval = TRUE;
+    }
+    link_list = ValNodeFree (link_list);
+  } 
+
+  return rval;
+}
+
+static Boolean GrayLinkedmRNA (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  CDSmRNALinkToolPtr tp;
+  ValNodePtr         vnp, link_list;
+  Int4               num;
+  Boolean            rval = FALSE, is_checked = FALSE;
+  
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (doc);
+  if (tp == NULL) return FALSE;
+  
+  for (vnp = tp->mrna_list, num = 1; vnp != NULL && num != item; vnp = vnp->next, num++)
+  {
+  }
+  if (vnp != NULL && num == item) 
+  {
+    if (vnp->choice > 0) {
+      is_checked = TRUE;
+    }
+    link_list = GetLinkedFeatureList (vnp->data.ptrvalue);
+    if (link_list != NULL) {
+      if (is_checked) {
+        if (tp->selected_cds != NULL) {
+          vnp = link_list;
+          while (vnp != NULL && !rval) {
+            if (vnp->data.ptrvalue != tp->selected_cds) {
+              rval = TRUE;
+            }
+            vnp = vnp->next;
+          }
+        }
+      } else {
+        rval = TRUE;
+      }
+    }
+    link_list = ValNodeFree (link_list);
+  } 
+
+  return rval;
+}
+
+static void DrawmRNA (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  CDSmRNALinkToolPtr tp;
+  RecT         rct;
+  RecT         doc_rect;
+  Int4         mrna_num;
+  ValNodePtr   vnp;
+
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (d);
+  
+  if (tp == NULL || tp->selected_cds == NULL || r == NULL 
+      || item < 1 
+      || firstLine != 0)
+  {
+    return;
+  }
+
+  for (vnp = tp->mrna_list, mrna_num = 1; vnp != NULL && mrna_num != item; vnp = vnp->next, mrna_num++) {};
+  if (vnp == NULL || mrna_num != item)
+  {
+    /* don't draw box for empty mRNA field */
+    return;
+  }
+  rct = *r;
+  rct.left ++;
+  rct.right = rct.left + tp->lineheight;
+  rct.bottom = rct.top + (rct.right - rct.left);
+  
+  /* make sure we don't draw a box where we aren't drawing text */
+  ObjectRect (tp->right_doc, &doc_rect);
+  InsetRect (&doc_rect, 4, 4);
+  if (rct.bottom > doc_rect.bottom)
+  {
+    return;
+  }
+  
+  FrameRect (&rct);
+  
+  if (vnp->choice > 0) {
+    MoveTo (rct.left, rct.top);
+    LineTo (rct.right - 1, rct.bottom - 1);
+    MoveTo (rct.left, rct.bottom - 1);
+    LineTo (rct.right - 1, rct.top);
+  }
+}
+
+static void DrawCDSDivide (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  CDSmRNALinkToolPtr tp;
+  SeqFeatPtr   this_cds, prev_cds;
+  ValNodePtr   this_link, prev_link;
+
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (d);
+  
+  if (tp == NULL || r == NULL 
+      || item < 2 
+      || firstLine != 0)
+  {
+    return;
+  }
+
+  this_cds = CDSFromLinkDocItem (tp, item);
+  prev_cds = CDSFromLinkDocItem (tp, item - 1);
+
+  this_link = GetLinkedFeatureList (this_cds);
+  if (this_link == NULL) return;
+  prev_link = GetLinkedFeatureList (prev_cds);
+  if (prev_link == NULL) {
+    /* draw line */
+    MoveTo (r->left, r->top);
+    LineTo (r->right, r->top);
+  }
+  this_link = ValNodeFree (this_link);
+  prev_link = ValNodeFree (prev_link);
+
+}
+
+static void ReleasemRNA (DoC d, PoinT pt)
+
+{
+  Int2            col;
+  CDSmRNALinkToolPtr tp;
+  Int2            item;
+  RecT            rct;
+  Int2            row;
+  Int4            mrna_num;
+  ValNodePtr      vnp, vnp_l;
+  SeqEntryPtr     sep;
+  SeqFeatPtr      mrna;
+  ValNodePtr      link_list;
+  SeqFeatPtr      linked_to_other = NULL, cds_link_to_other = NULL;
+  Boolean         linked_to_selected = FALSE;
+  SeqMgrFeatContext fcontext;
+
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (d);
+  if (tp == NULL || tp->selected_cds == NULL) return;
+
+  MapDocPoint (d, pt, &item, &row, &col, &rct);
+  rct.left += 1;
+  rct.right = rct.left + tp->lineheight;
+  rct.bottom = rct.top + (rct.right - rct.left);
+  if (row != 1 || col != 1 || !PtInRect (pt, &rct)) {
+    /* didn't click on a box */
+    return;
+  }
+
+  for (vnp = tp->mrna_list, mrna_num = 1;
+       vnp != NULL && mrna_num != item;
+       vnp = vnp->next, mrna_num++)
+  {
+  }
+  if (vnp == NULL || mrna_num != item) {
+    /* clicked beyond end of list */
+    return;
+  }
+
+  /* check to see if this mRNA is already linked to this CDS - 
+   * always want to let the user uncheck and break the link
+   */
+  mrna = vnp->data.ptrvalue;
+
+  link_list = GetLinkedFeatureList (tp->selected_cds);
+  for (vnp_l = link_list; 
+       vnp_l != NULL && !linked_to_selected; 
+       vnp_l = vnp_l->next) {
+    if (vnp_l->data.ptrvalue == mrna) {
+      linked_to_selected = TRUE;
+    } else {
+      cds_link_to_other = vnp_l->data.ptrvalue;
+    }
+  }
+  link_list = ValNodeFree (link_list);
+
+  if (!linked_to_selected) {
+    if (cds_link_to_other != NULL) {
+      Message (MSG_ERROR, "This CDS is already linked to an mRNA - you must unlink the other mRNA before you can link to this mRNA.");
+      return;
+    } else {
+      link_list = GetLinkedFeatureList (mrna);
+      for (vnp_l = link_list;
+           vnp_l != NULL && linked_to_other == NULL;
+           vnp_l = vnp_l->next) {
+        if (vnp_l->data.ptrvalue != tp->selected_cds) {
+          linked_to_other = vnp_l->data.ptrvalue;
+        }
+      }
+      link_list = ValNodeFree (link_list);
+      if (linked_to_other != NULL) {
+        linked_to_other = SeqMgrGetDesiredFeature (linked_to_other->idx.entityID, 
+                                                   NULL, 
+                                                   linked_to_other->idx.itemID, 
+                                                   0,
+                                                   linked_to_other, 
+                                                   &fcontext);
+        Message (MSG_ERROR, "This mRNA is linked to another CDS (%s).  You must unlink it before you can link it to this CDS.", fcontext.label);
+        return;
+      }
+    }
+  }
+
+  sep = GetTopSeqEntryForEntityID (tp->selected_cds->idx.entityID);
+  AssignFeatureIDs (sep);
+  if (vnp->choice > 0) {
+    vnp->choice = 0;
+    /* remove this link */
+    RemoveFeatureLink (tp->selected_cds, mrna);
+    RemoveFeatureLink (mrna, tp->selected_cds);
+  } else {
+    vnp->choice = OBJ_SEQFEAT;
+    /* add this link */
+    LinkTwoFeatures (tp->selected_cds, mrna);
+    LinkTwoFeatures (mrna, tp->selected_cds);
+  }
+  MapDocPoint (d, pt, &item, &row, &col, &rct);
+  InsetRect (&rct, -1, -1);
+  InvalRect (&rct);
+  ObjMgrSetDirtyFlag (tp->selected_cds->idx.entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, tp->selected_cds->idx.entityID, 0, 0);
+  Update ();
+}
+
+
+static void ReleaseCDS (DoC d, PoinT pt)
+
+{
+  Int2            col;
+  CDSmRNALinkToolPtr tp;
+  Int2            item;
+  RecT            rct;
+  Int2            row;
+  Int4            cds_num = 1;
+  ValNodePtr      vnp, vnp_m, linked_mrnas;
+  Boolean         found;
+  Boolean         was_selected = FALSE;
+  SeqFeatPtr      cds;
+
+  tp = (CDSmRNALinkToolPtr) GetObjectExtra (d);
+  if (tp == NULL) return;
+
+  if (tp->selected_cds != NULL) {
+    was_selected = TRUE;
+  }
+
+  MapDocPoint (d, pt, &item, &row, &col, &rct);
+  cds = CDSFromLinkDocItem (tp, item);
+
+  if (cds == NULL || cds == tp->selected_cds) {
+    tp->selected_cds = NULL;
+  } else {
+    tp->selected_cds = cds;
+  }
+
+  if (tp->selected_cds != NULL) {
+    /* need to label mRNAs - those already linked to CDS should be 
+     * listed at the end, those not linked should be unchecked.
+     */
+    linked_mrnas = GetLinkedFeatureList (tp->selected_cds);
+
+    for (vnp = tp->mrna_list; vnp != NULL; vnp = vnp->next) {
+      for (vnp_m = linked_mrnas, found = FALSE; vnp_m != NULL && !found; vnp_m = vnp_m->next) {
+        if (vnp_m->data.ptrvalue == vnp->data.ptrvalue) {
+          found = TRUE;
+        }
+      }
+      if (found) {
+        vnp->choice = OBJ_SEQFEAT;
+      } else {
+        vnp->choice = 0;
+      }
+    }
+    linked_mrnas = ValNodeFree (linked_mrnas);
+
+    tp->mrna_list = ValNodeSort (tp->mrna_list, SortVnpBymRNAPos);
+      
+  }
+
+  if (tp->selected_cds == NULL || !was_selected) {
+    PopulateLinkTool (tp);
+  } else {
+    ResetClip();
+    ObjectRect (tp->left_doc, &rct);
+    InvalRect (&rct);
+
+    PopulateLinkRightDoc (tp);
+    Show (tp->edit_grp);
+    Hide (tp->report_grp);
+    Update ();
+  }
+}
+
+static void CollectCDSCallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION || data == NULL) return;
+  ValNodeAddPointer (data, OBJ_SEQFEAT, sfp);
+}
+
+static void CollectmRNACallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_mRNA || data == NULL) return;
+  ValNodeAddPointer (data, OBJ_SEQFEAT, sfp);
+}
+
+static void FormatLinkColumn (Nlm_ColPtr col)
+{
+  if (col == NULL) return;
+
+  col->pixWidth    = 0;
+  col->pixInset    = 0;
+  col->charWidth   = 10;
+  col->charInset   = 0;
+  col->font        = NULL;
+  col->just        = 'l';
+  col->wrap        = TRUE;
+  col->bar         = FALSE;
+  col->underline   = FALSE;
+  col->left        = FALSE;
+  col->last        = FALSE;
+}
+
+extern void CDSmRNALinkTool (IteM i)
+{
+  CDSmRNALinkToolPtr tp;
+  GrouP              h, k, button_grp;
+  ButtoN             b;
+  WindoW             w;
+  BaseFormPtr        bfp;
+  OMUserDataPtr      omudp;
+  SeqEntryPtr        sep;
+  Int4               col_num;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  /* Create a new window, and a struct */
+  /* to pass around the data in.       */
+
+  tp = (CDSmRNALinkToolPtr) MemNew (sizeof (CDSmRNALinkToolData));
+  if (tp == NULL)
+    return;
+
+  w = FixedWindow (-50, -33, -10, -10, "CDS mRNA Link Tool",
+		   StdCloseWindowProc);
+  SetObjectExtra (w, tp, CleanupCDSmRNALinkTool);
+  tp->form = (ForM) w;
+  tp->input_entityID = bfp->input_entityID;
+  tp->bfp = bfp;
+
+  /* register to receive update messages */
+  tp->userkey = OMGetNextUserKey ();
+  tp->procid = 0;
+  tp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (tp->input_entityID, tp->procid, tp->proctype, tp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) tp;
+    omudp->messagefunc = CDSmRNALinkToolFormMsgFunc;
+  }
+
+  tp->cdsParFmt.openSpace    = FALSE;
+  tp->cdsParFmt.keepWithNext = FALSE;
+  tp->cdsParFmt.keepTogether = FALSE;
+  tp->cdsParFmt.newPage      = FALSE;
+  tp->cdsParFmt.tabStops     = FALSE;
+  tp->cdsParFmt.minLines     = 0;
+  tp->cdsParFmt.minHeight    = 0;
+
+  tp->mrnaParFmt.openSpace    = FALSE;
+  tp->mrnaParFmt.keepWithNext = FALSE;
+  tp->mrnaParFmt.keepTogether = FALSE;
+  tp->mrnaParFmt.newPage      = FALSE;
+  tp->mrnaParFmt.tabStops     = FALSE;
+  tp->mrnaParFmt.minLines     = 0;
+  tp->mrnaParFmt.minHeight    = 0;
+
+  tp->reportParFmt.openSpace    = FALSE;
+  tp->reportParFmt.keepWithNext = FALSE;
+  tp->reportParFmt.keepTogether = FALSE;
+  tp->reportParFmt.newPage      = FALSE;
+  tp->reportParFmt.tabStops     = FALSE;
+  tp->reportParFmt.minLines     = 0;
+  tp->reportParFmt.minHeight    = 0;
+
+  for (col_num = 0; col_num < 2; col_num++) {
+    FormatLinkColumn (tp->cdsColFmt + col_num);
+    FormatLinkColumn (tp->mrnaColFmt + col_num);
+    FormatLinkColumn (tp->reportColFmt + col_num);
+    FormatLinkColumn (tp->reportColFmt + col_num + 2);
+  }
+  FormatLinkColumn (tp->mrnaColFmt + 2);
+  tp->cdsColFmt[1].last       = TRUE;
+  tp->mrnaColFmt[2].last      = TRUE;
+  tp->reportColFmt[3].last    = TRUE;
+
+  SelectFont (programFont);
+  tp->lineheight = LineHeight ();
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  k = HiddenGroup (w, 0, 0, NULL);
+  tp->edit_grp = HiddenGroup (k, 2, 0, NULL);
+  StaticPrompt (tp->edit_grp, "CDS", 0, dialogTextHeight, programFont, 'c');
+  StaticPrompt (tp->edit_grp, "mRNA", 0, dialogTextHeight, programFont, 'c');
+  tp->left_doc = DocumentPanel (tp->edit_grp, stdCharWidth * 30 + 5, tp->lineheight * 40);
+  SetObjectExtra (tp->left_doc, tp, NULL);
+  SetDocProcs (tp->left_doc, NULL, NULL, ReleaseCDS, NULL); 
+  SetDocShade (tp->left_doc, NULL, GrayLinkedCDS, HighlightSelectedCDS, NULL);
+
+  tp->right_doc = DocumentPanel (tp->edit_grp, stdCharWidth * 30 + 5 + tp->lineheight, tp->lineheight * 40);
+  SetObjectExtra (tp->right_doc, tp, NULL);
+  SetDocProcs (tp->right_doc, NULL, NULL, ReleasemRNA, NULL); 
+  SetDocShade (tp->right_doc, DrawmRNA, GrayLinkedmRNA, NULL, NULL);
+
+  tp->report_grp = HiddenGroup (k, 0, 2, NULL);
+  tp->report_title_doc = DocumentPanel (tp->report_grp, stdCharWidth * 60 + 10, tp->lineheight);
+  tp->report_doc = DocumentPanel (tp->report_grp, stdCharWidth * 60 + 10, tp->lineheight * 40);
+  SetObjectExtra (tp->report_doc, tp, NULL);
+  SetDocProcs (tp->report_doc, NULL, NULL, ReleaseCDS, NULL); 
+  SetDocShade (tp->report_doc, DrawCDSDivide, GrayLinkedCDS, NULL, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) tp->edit_grp, (HANDLE) tp->report_grp, NULL);
+
+  button_grp = HiddenGroup (w, 2, 0, NULL);
+  b = PushButton (button_grp, "Refresh", RefreshLinkBtn);
+  SetObjectExtra (b, tp, NULL);
+  PushButton (button_grp, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) button_grp, NULL);
+
+  sep = GetTopSeqEntryForEntityID (tp->input_entityID);
+  /* collect CDSs */
+  VisitFeaturesInSep (sep, &(tp->cds_list), CollectCDSCallback);
+  /* collect mRNAs */
+  VisitFeaturesInSep (sep, &(tp->mrna_list), CollectmRNACallback);
+
+  PopulateLinkTool (tp);
+  /* Display the window now */
+
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Update ();
+}
+
+
+typedef struct setqual {
+  SourceQualDescPtr qual;
+  CharPtr           val;
+} SetQualData, PNTR SetQualPtr;
+
+static void SetQualOnSourceDescWhenSourceFeatPresentCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SetQualPtr        sqp;
+  SeqMgrDescContext dcontext;
+  SeqMgrFeatContext fcontext;
+  SeqFeatPtr        sfp;
+  SeqDescrPtr       sdp;
+  BioSourcePtr      biop;
+  OrgModPtr         mod;
+  SubSourcePtr      ssp;
+
+  if (bsp == NULL || userdata == NULL) return;
+  sqp = (SetQualPtr) userdata;
+  if (sqp->qual == NULL) return;
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp == NULL) return;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+  if (sfp == NULL) return;
+
+  if (sqp->qual->isOrgMod)
+  {
+    if (biop->org == NULL) 
+    {
+      biop->org = OrgRefNew();
+    }
+    if (biop->org->orgname == NULL) 
+    {
+      biop->org->orgname = OrgNameNew();
+    }
+    mod = biop->org->orgname->mod;
+    while (mod != NULL && mod->subtype != sqp->qual->subtype)
+    {
+      mod = mod->next;
+    }
+    if (mod == NULL)
+    {
+      mod = OrgModNew ();
+      mod->subtype = sqp->qual->subtype;
+      mod->next = biop->org->orgname->mod;
+      biop->org->orgname->mod = mod;
+    }
+    if (IsNonTextModifier (sqp->qual->name))
+    {
+      if (mod->subname == NULL)
+      {
+        mod->subname = StringSave ("");
+      }
+    }
+    else
+    {
+      mod->subname = MemFree (mod->subname);
+      mod->subname = StringSave (sqp->val);
+    }
+  }
+  else
+  {
+    ssp = biop->subtype;
+    while (ssp != NULL && ssp->subtype != sqp->qual->subtype)
+    {
+      ssp = ssp->next;
+    }
+    if (ssp == NULL)
+    {
+      ssp = SubSourceNew();
+      ssp->subtype = sqp->qual->subtype;
+      ssp->next = biop->subtype; 
+      biop->subtype = ssp;
+    }
+    if (IsNonTextModifier (sqp->qual->name))
+    {
+      if (ssp->name == NULL)
+      {
+        ssp->name = StringSave ("");
+      }
+    }
+    else
+    {
+      ssp->name = MemFree (ssp->name);
+      ssp->name = StringSave (sqp->val);
+    }
+  } 
+
+}
+
+extern void SetTransgenicOnSourceDescWhenSourceFeatPresent (IteM i)
+{
+  BaseFormPtr         bfp;
+  SeqEntryPtr         sep;
+  SetQualData         sqd;
+  SourceQualDescData  sqdd;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sqdd.isOrgMod = FALSE;
+  sqdd.name = "transgenic";
+  sqdd.subtype = SUBSRC_transgenic;
+
+  sqd.qual = &sqdd;
+  sqd.val = NULL;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  VisitBioseqsInSep (sep, &sqd, SetQualOnSourceDescWhenSourceFeatPresentCallback);
+  
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();  
+}
+
+
+static void SetFocusOnSourceDescWhenSourceFeatPresentCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqMgrDescContext dcontext;
+  SeqMgrFeatContext fcontext;
+  SeqFeatPtr        sfp;
+  SeqDescrPtr       sdp;
+  BioSourcePtr      biop;
+
+  if (bsp == NULL) return;
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp == NULL) return;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL) return;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+  if (sfp == NULL) return;
+
+  biop->is_focus = TRUE;
+}
+
+extern void SetFocusOnSourceDescWhenSourceFeatPresent (IteM i)
+{
+  BaseFormPtr         bfp;
+  SeqEntryPtr         sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  VisitBioseqsInSep (sep, NULL, SetFocusOnSourceDescWhenSourceFeatPresentCallback);
+  
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();  
+}
+
+
+typedef struct cdstrnaoverlap {
+  SeqFeatPtr cds;
+  ValNodePtr trna_list;
+  Int4       overlap_len;
+  CharPtr    end_str;
+} CDStRNAOverlapData, PNTR CDStRNAOverlapPtr;
+
+static void TrimCDSFortRNAOverlap (ValNodePtr item_list)
+{
+   
+}
+
+static Int4 GetOverlapLen (SeqLocPtr slp1, SeqLocPtr slp2)
+{
+  Int4  stop1, start2, len = 0;
+  Uint1 strand;
+
+  if (slp1 == NULL || slp2 == NULL) return 0;
+
+  strand = SeqLocStrand (slp1);
+  if (strand == Seq_strand_minus) {
+    stop1 = SeqLocStart (slp1);
+    start2 = SeqLocStop (slp2);
+    len = start2 - stop1 + 1;
+  } else {
+    stop1 = SeqLocStop (slp1);
+    start2 = SeqLocStart (slp2);
+    len = stop1 - start2 + 1;
+  }
+  return len; 
+}
+
+
+static CDStRNAOverlapPtr CDStRNAOverlapFree (CDStRNAOverlapPtr p)
+{
+  if (p != NULL) {
+    p->trna_list = ValNodeFree (p->trna_list);
+    p->end_str = MemFree (p->end_str);
+    p = MemFree (p);
+  }
+  return p;
+}
+
+
+static ValNodePtr FreeCDStRNAOverlapList (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->next = NULL;
+    vnp->data.ptrvalue = CDStRNAOverlapFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+static Boolean IsBadEndStr (CharPtr end_str)
+{
+  if (end_str == NULL) return TRUE;
+  if (end_str[0] != 'T') return TRUE;
+  if (end_str[1] == 0) return FALSE;
+  if (end_str[1] == 'A' && end_str[2] == 0) return FALSE;
+  return TRUE;
+}
+
+
+static ClickableItemPtr ClickableItemFromCDStRNAOverlapList (CDStRNAOverlapPtr p)
+{
+  ClickableItemPtr cip;
+  CharPtr          fmt1 = "CDS is overlapped by more than one tRNA, longest overlap is %d";
+  CharPtr          fmt2 = "Overlap is too long: %d";
+
+  if (p == NULL || p->cds == NULL || p->trna_list == NULL) return NULL;
+
+  cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+  ValNodeAddPointer (&(cip->item_list), OBJ_SEQFEAT, p->cds);
+
+  /* potential problems - too many tRNAs, too much overlap, wrong string */
+  /* only report wrong string if only one tRNA and overlap correct length */
+
+  if (p->overlap_len > 2) {
+    if (p->trna_list->next != NULL) {
+      cip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt1) + 15));
+      sprintf (cip->description, fmt1, p->overlap_len);
+    } else {
+      cip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt2) + 15));
+      sprintf (cip->description, fmt2, p->overlap_len);
+    }
+  } else if (p->trna_list->next != NULL) {
+    cip->description = StringSave ("CDS is overlapped by more than one tRNA!");
+  } else if (IsBadEndStr(p->end_str)) {
+    cip->description = StringSave ("Base pairs in partial codon before trim are neither 'T' nor 'TA'");
+  } else {
+    cip->description = StringSave ("Expected overlap");
+  }
+
+  return cip;
+}
+
+
+static CharPtr GetEndStrForOverlap (SeqLocPtr slp, Int4 overlap_len)
+{
+  Uint1 strand;
+  Int4  end, start, stop;
+  SeqPortPtr spp;
+  CharPtr    end_str;
+
+  if (slp == NULL || overlap_len < 0 || overlap_len > 2) {
+    return NULL;
+  }
+  strand = SeqLocStrand (slp);
+  if (strand == Seq_strand_minus) {
+    end = SeqLocStart (slp);
+    start = end + overlap_len;
+    stop = end + 2;
+  } else {
+    end = SeqLocStop (slp);
+    start = end - 2;
+    stop = end - overlap_len + 1;
+  }
+  spp = SeqPortNew (BioseqFindFromSeqLoc (slp), start, stop, strand, Seq_code_iupacna);
+  end_str = (CharPtr) MemNew (sizeof (Char) + (3 - overlap_len + 1));
+  SeqPortRead (spp, (Uint1Ptr)end_str, 3 - overlap_len);
+  spp = SeqPortFree (spp);
+  return end_str;
+}
+
+static ValNodePtr CDStRNAOverlapListFromItemList (ValNodePtr item_list)
+{
+  ValNodePtr new_item_list = NULL, vnp, vnp_trna;
+  ValNodePtr        good_list = NULL, bad_list = NULL;
+  ValNodePtr        clickable_list = NULL;
+  SeqFeatPtr        sfp, trna;
+  CDStRNAOverlapPtr p = NULL;
+  Int4              len;
+
+  if (item_list == NULL) return NULL;
+
+  /* collect overlap groups */
+  vnp = item_list;
+  while (vnp != NULL) {
+    if (vnp->choice == OBJ_SEQFEAT && vnp->data.ptrvalue != NULL) {
+      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+      if (sfp->idx.subtype == FEATDEF_CDS) {
+        p = (CDStRNAOverlapPtr) MemNew (sizeof (CDStRNAOverlapData));
+        p->cds = sfp;
+        ValNodeAddPointer (&new_item_list, 0, p);
+      } else if (sfp->idx.subtype == FEATDEF_tRNA && p != NULL) {
+        ValNodeAddPointer (&(p->trna_list), OBJ_SEQFEAT, sfp);
+      }
+    }
+    vnp = vnp->next;
+  }
+
+  for (vnp = new_item_list; vnp != NULL; vnp = vnp->next) {
+    p = (CDStRNAOverlapPtr) vnp->data.ptrvalue;
+    if (p->cds == NULL || p->trna_list == NULL) continue;
+    for (vnp_trna = p->trna_list; vnp_trna != NULL; vnp_trna = vnp_trna->next) {
+      if (vnp_trna->choice != OBJ_SEQFEAT || vnp_trna->data.ptrvalue == NULL) continue;
+      trna = vnp_trna->data.ptrvalue;
+      len = GetOverlapLen (p->cds->location, trna->location);
+      if (p->overlap_len < len) {
+        p->overlap_len = len;
+      }
+    }
+    if (p->overlap_len > 0) {
+      p->end_str = GetEndStrForOverlap (p->cds->location, p->overlap_len);
+    }
+
+    if (p->overlap_len == 0 || p->overlap_len > 2)
+    {
+      ValNodeAddPointer (&bad_list, 0, p);
+    }
+    else if (IsBadEndStr(p->end_str))
+    {
+      ValNodeAddPointer (&bad_list, 0, p);
+    }
+    else 
+    {
+      ValNodeAddPointer (&good_list, 0, p);
+    }
+    vnp->data.ptrvalue = NULL;
+  }
+  new_item_list = ValNodeFree (new_item_list);
+  new_item_list = bad_list;
+  ValNodeLink (&new_item_list, good_list);
+  return new_item_list;
+}
+
+
+static ValNodePtr ClickableListFromCDStRNAOverlapList (ValNodePtr overlap_list)
+{
+  ClickableItemPtr cip;
+  ValNodePtr       vnp, clickable_list = NULL;
+
+  /* create clickable list of coding regions to trim */
+  for (vnp = overlap_list; vnp != NULL; vnp = vnp->next)
+  {
+    cip = ClickableItemFromCDStRNAOverlapList (vnp->data.ptrvalue);
+    if (cip != NULL) {
+      ValNodeAddPointer (&clickable_list, 0, cip);
+    }
+  }
+  return clickable_list;
+}
+
+
+static void FixCDStRNAOverlaps (ValNodePtr overlap_list)
+{
+  CDStRNAOverlapPtr p;
+  ValNodePtr        vnp;
+  SeqFeatPtr        gene;
+
+  for (vnp = overlap_list; vnp != NULL; vnp = vnp->next)
+  {
+    p = (CDStRNAOverlapPtr) vnp->data.ptrvalue;
+    if (p == NULL || p->cds == NULL || p->overlap_len < 1)
+    {
+      continue;
+    }
+    p->cds->location = TruncateLocation (p->cds->location, SeqLocLen (p->cds->location) - p->overlap_len);
+    gene = GetGeneForFeature (p->cds);
+    if (gene != NULL) 
+    {
+      gene->location = TruncateLocation (gene->location, SeqLocLen (gene->location) - p->overlap_len);
+    }
+
+    AddTranslExcept (p->cds, "TAA stop codon is completed by the addition of 3' A residues to the mRNA", FALSE);
+  }
+}  
+
+
+static Uint2 GetEntityIDFromItem (ValNodePtr vnp)
+{
+  SeqFeatPtr sfp;
+  SeqDescrPtr sdp;
+  BioseqPtr   bsp;
+  BioseqSetPtr bssp;  
+  Uint2        entityID = 0;
+
+  if (vnp == NULL || vnp->data.ptrvalue == NULL) return 0;
+  switch (vnp->choice) {
+    case OBJ_SEQFEAT:
+      sfp = vnp->data.ptrvalue;
+      entityID = sfp->idx.entityID;
+      break;
+    case OBJ_SEQDESC:
+      sdp = vnp->data.ptrvalue;
+      entityID = ((ObjValNodePtr) sdp)->idx.entityID;
+      break;
+    case OBJ_BIOSEQ:
+      bsp = vnp->data.ptrvalue;
+      entityID = bsp->idx.entityID;
+      break;
+    case OBJ_BIOSEQSET:
+      bssp = vnp->data.ptrvalue;
+      entityID = bssp->idx.entityID;
+      break;
+  }
+  return entityID;
+}
+
+
+static Uint2 GetEntityIDFromClickableItem (ClickableItemPtr cip)
+{
+  ValNodePtr vnp;
+  Uint2      entityID = 0;
+
+  if (cip == NULL || cip->item_list == NULL) return 0;
+
+  for (vnp = cip->item_list; vnp != NULL && entityID == 0; vnp = vnp->next)
+  {
+    entityID = GetEntityIDFromItem (vnp);
+  }
+  return entityID;
+}
+  
+
+static void SendUpdatesForClickableList (ValNodePtr clickable_list)
+{
+  Uint2Ptr   entityIDtable;
+  Uint2      this_entityID;
+  ValNodePtr vnp;
+  Int4       num, i;
+
+  num = ValNodeLen (clickable_list);
+  if (num == 0) return;
+
+  entityIDtable = (Uint2Ptr) MemNew (sizeof (Uint2) * num);
+  MemSet (entityIDtable, 0, sizeof (Uint2) * num);
+  for (vnp = clickable_list; vnp != NULL; vnp = vnp->next) {
+    this_entityID = GetEntityIDFromClickableItem (vnp->data.ptrvalue);
+    for (i = 0; i < num && entityIDtable[i] != 0 && entityIDtable[i] != this_entityID; i++) {}
+    if (i < num && entityIDtable[i] == 0) {
+      entityIDtable[i] = this_entityID;
+    }
+  }
+  for (i = 0; i < num && entityIDtable[i] != 0; i++) {
+    ObjMgrSetDirtyFlag (entityIDtable[i], TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityIDtable[i], 0, 0);
+  }
+  Update();
+  entityIDtable = MemFree (entityIDtable);
+}
+
+
+static ValNodePtr DivideClickableItemListByEntityID (ValNodePtr clickable_list)
+{
+  ValNodePtr vnp, vnp2, list_list = NULL, this_list;
+  Uint2            entityID;
+
+  for (vnp = clickable_list; vnp != NULL; vnp = vnp->next)
+  {
+    entityID = GetEntityIDFromClickableItem (vnp->data.ptrvalue);
+    for (vnp2 = list_list; vnp2 != NULL && vnp2->choice != entityID; vnp2 = vnp2->next)
+    {};
+    if (vnp2 == NULL) 
+    {    
+      vnp2 = ValNodeAddPointer (&list_list, (Uint1) entityID, NULL);
+    }
+    this_list = vnp2->data.ptrvalue;
+    ValNodeAddPointer (&this_list, vnp->choice, vnp->data.ptrvalue);
+    vnp->data.ptrvalue = NULL;
+    vnp2->data.ptrvalue = this_list;
+  }
+  return list_list;
+}
+
+
+typedef struct cdstrnatool {
+  FORM_MESSAGE_BLOCK
+  DialoG clickable_list_dlg;
+  ValNodePtr clickable_list;
+  ValNodePtr overlap_list;
+} CDStRNAToolData, PNTR CDStRNAToolPtr;
+
+static void CleanupCDStRNAToolForm (GraphiC g, VoidPtr data)
+
+{
+  CDStRNAToolPtr dlg;
+
+  dlg = (CDStRNAToolPtr) data;
+  if (dlg != NULL) {
+    dlg->clickable_list = FreeClickableList (dlg->clickable_list);
+    dlg->overlap_list = FreeCDStRNAOverlapList (dlg->overlap_list);
+    ObjMgrFreeUserData (dlg->input_entityID, dlg->procid, dlg->proctype, dlg->userkey);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+static ValNodePtr GetSelectedClickableItems (ValNodePtr list)
+{
+  ValNodePtr       vnp, selected = NULL;
+  ClickableItemPtr cip;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (cip == NULL) continue;
+    if (cip->chosen) {
+      ValNodeAddPointer (&selected, 0, cip);
+    } else {
+      ValNodeLink (&selected, GetSelectedClickableItems (cip->subcategories));
+    }
+  }
+  return selected;
+}
+
+
+static void TrimSelectedCDS (ButtoN b)
+{
+  CDStRNAToolPtr    dlg;
+  ValNodePtr        tmp_list = NULL, overlap_list = NULL, vnp_o, vnp_c;
+  ValNodePtr        prev_o = NULL, next_o;
+  ClickableItemPtr  cip;
+  CDStRNAOverlapPtr p;
+  SeqFeatPtr        cds;
+
+  dlg = (CDStRNAToolPtr) GetObjectExtra (b);
+  if (dlg == NULL) return;
+
+  tmp_list = GetSelectedClickableItems (dlg->clickable_list);
+
+  if (tmp_list == NULL) {
+    if (ANS_CANCEL == Message (MSG_OKC, "No features selected!  Trim all?")) {
+      return;
+    } else {
+      tmp_list = dlg->clickable_list;
+    }
+  }
+
+  vnp_c = tmp_list;
+  vnp_o = dlg->overlap_list;
+  while (vnp_c != NULL && vnp_o != NULL) {
+    cip = (ClickableItemPtr) vnp_c->data.ptrvalue;
+    if (cip == NULL || cip->item_list == NULL || cip->item_list->choice != OBJ_SEQFEAT) {
+      vnp_c = vnp_c->next;
+    } else {
+      cds = cip->item_list->data.ptrvalue;
+      p = (CDStRNAOverlapPtr) vnp_o->data.ptrvalue;
+      if (p == NULL || p->cds != cds) {
+        prev_o = vnp_o;
+        vnp_o = vnp_o->next;
+      } else {
+        ValNodeAddPointer (&overlap_list, 0, p);
+        /* better not be repeats in overlap list */
+        next_o = vnp_o->next;
+        if (prev_o == NULL) {
+          dlg->overlap_list = next_o;
+        } else {
+          prev_o->next = next_o;
+        }
+        vnp_o->next = NULL;
+        vnp_o = ValNodeFree (vnp_o);
+        vnp_o = next_o;
+        /* move on to next item in clickable list */
+        vnp_c = vnp_c->next;
+      }
+    }
+  }
+  
+  FixCDStRNAOverlaps (overlap_list);
+  overlap_list = FreeCDStRNAOverlapList (overlap_list);
+  SendUpdatesForClickableList (tmp_list);
+
+  if (tmp_list != dlg->clickable_list) {
+    tmp_list = ValNodeFree (tmp_list);
+  }
+
+  /* close the window if we're done */
+  if (dlg->overlap_list == NULL) {
+    Remove (dlg->form);
+  } else {
+    /* update list of overlaps (remove the trimmed ones) */
+    PointerToDialog (dlg->clickable_list_dlg, NULL);
+    dlg->clickable_list = FreeClickableList (dlg->clickable_list);
+    dlg->clickable_list = ClickableListFromCDStRNAOverlapList (dlg->overlap_list);
+    PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list);
+  }
+}
+
+static void EditCDStRNAOverlap (ValNodePtr item_list)
+{
+  ValNodePtr overlap_list;
+  CDStRNAToolPtr dlg;
+  WindoW      w;
+  GrouP       h, c;
+  ButtoN      b;
+  OMUserDataPtr            omudp;
+
+  overlap_list = CDStRNAOverlapListFromItemList (item_list);
+  if (overlap_list == NULL) {
+    Message (MSG_ERROR, "No overlaps to correct!");
+    return;
+  }
+
+  /* create window to display and correct overlaps */
+  dlg = (CDStRNAToolPtr) MemNew (sizeof (CDStRNAToolData));
+  dlg->clickable_list = ClickableListFromCDStRNAOverlapList (overlap_list);
+  dlg->overlap_list = overlap_list;
+
+  w = FixedWindow (-50, -33, -10, -10, "CDS tRNA Overlaps", StdCloseWindowProc);
+  SetObjectExtra (w, dlg, CleanupCDStRNAToolForm);
+  dlg->form = (ForM) w;
+    
+  /* register to receive update messages */
+  dlg->userkey = OMGetNextUserKey ();
+  dlg->procid = 0;
+  dlg->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (0, dlg->procid, dlg->proctype, dlg->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) dlg;
+    omudp->messagefunc = ClickableListFormMsgFunc;
+  }
+
+
+#ifndef WIN_MAC
+  CreateStdValidatorFormMenus (w);
+#endif
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  dlg->clickable_list_dlg = CreateClickableListDialog (h, "CDS-tRNA Overlaps", "Features",
+                                                        ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
+                                                        GetDiscrepancyItemText);
+  PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+
+  b = PushButton (c, "Trim Selected", TrimSelectedCDS);
+  SetObjectExtra (b, dlg, NULL);
+  b = PushButton (c, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->clickable_list_dlg, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
 }
 

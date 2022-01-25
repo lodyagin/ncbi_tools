@@ -1,4 +1,4 @@
-/* $Id: phi_extend.c,v 1.14 2006/09/01 14:46:08 papadopo Exp $
+/* $Id: phi_extend.c,v 1.15 2006/11/21 17:13:51 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,10 +33,9 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_extend.c,v 1.14 2006/09/01 14:46:08 papadopo Exp $";
+    "$Id: phi_extend.c,v 1.15 2006/11/21 17:13:51 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/phi_extend.h>
 

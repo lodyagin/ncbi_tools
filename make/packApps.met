@@ -132,7 +132,7 @@ on MWRootDir()
 		gStartupDisk & "Applications (Mac OS 9):", gHomeDir, gHomeDir & "Applications:", Â
 		gHomeDir & "Applications:", gHomeDir & "AppsLocal (Mac OS 9):"}
 	repeat with mwVersion from 8 to 9
-		repeat with mwSubVersion from 0 to 5
+		repeat with mwSubVersion from 0 to 6
 			set dirName to "Metrowerks CodeWarrior " & mwVersion & "." & mwSubVersion
 			repeat with mwLoc in mwLocations
 				try

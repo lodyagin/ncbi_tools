@@ -1,4 +1,4 @@
-# $Id: readme.dos,v 6.13 2004/01/26 17:04:53 vakatov Exp $
+# $Id: readme.dos,v 6.14 2006/12/29 13:54:14 ivanov Exp $
 # By Denis Vakatov, NCBI
 
 
@@ -50,5 +50,5 @@ Building the NCBI C Toolkit
       c:\ncbi\make\msvc_prj\demo\Release\*.exe
 
 
-*****  Please send your remarks to:  <toolkit@ncbi.nlm.nih.gov>  *****
+*****  Please send your remarks to:  <toolbox@ncbi.nlm.nih.gov>  *****
 

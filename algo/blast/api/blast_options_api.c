@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.c,v 1.18 2006/04/26 12:45:28 madden Exp $
+/* $Id: blast_options_api.c,v 1.24 2007/03/20 15:17:16 kans Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,6 +35,7 @@
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/api/blast_seq.h>
+#include <algo/blast/core/gencode_singleton.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -83,11 +84,11 @@ Int2 SBlastOptionsNew(const char* program_name, SBlastOptions** options_out,
        return status;
    }
 
-   if (program == eBlastTypeTblastn || program == eBlastTypeRpsTblastn ||
-       program == eBlastTypeTblastx) {
-       if ((status = BLAST_GeneticCodeFind(db_options->genetic_code, 
-                                           &db_options->gen_code_string)))
-           return status;
+   if (Blast_SubjectIsTranslated(program) || program == eBlastTypeRpsTblastn) {
+        Uint1* gc = NULL;
+        BLAST_GeneticCodeFind(db_options->genetic_code, &gc);
+        GenCodeSingletonAdd(db_options->genetic_code, gc);
+        free(gc);
    }
    
    *options_out = options = (SBlastOptions*) calloc(1, sizeof(SBlastOptions));
@@ -145,7 +146,7 @@ Int2 SBlastOptionsSetWordSize(SBlastOptions* options, Int4 word_size)
         return -1;
 }
 
-Int2 SBlastOptionsSetThreshold(SBlastOptions* options, Int4 threshold)
+Int2 SBlastOptionsSetThreshold(SBlastOptions* options, double threshold)
 {
 
     if (!options || !options->lookup_options || !options->score_options)
@@ -189,6 +190,8 @@ Int2 SBlastOptionsSetWindowSize(SBlastOptions* options, Int4 window_size)
    }
 
    options->word_options->window_size = window_size;
+
+   return 0;
 }
 
 Int2 SBlastOptionsSetDiscMbParams(SBlastOptions* options, Int4 template_length,
@@ -197,7 +200,7 @@ Int2 SBlastOptionsSetDiscMbParams(SBlastOptions* options, Int4 template_length,
     if (!options || !options->lookup_options)
         return -1;
 
-    options->lookup_options->lut_type = MB_LOOKUP_TABLE;
+    options->lookup_options->lut_type = eMBLookupTable;
     options->lookup_options->mb_template_length = template_length;
     options->lookup_options->mb_template_type = template_type;
     
@@ -318,14 +321,7 @@ Int2 SBlastOptionsSetDbGeneticCode(SBlastOptions* options, Int4 gc)
     if (!options || !options->db_options)
         return -1;
 
-    /* If previously set genetic code is the same as the new one, there is no
-       need to do anything. */
-    if (options->db_options->genetic_code != gc) {
-        options->db_options->genetic_code = gc;
-        /* Free old genetic code string. */
-        sfree(options->db_options->gen_code_string);
-        status = BLAST_GeneticCodeFind(gc, &options->db_options->gen_code_string);
-    }
+    options->db_options->genetic_code = gc;
 
     return status;
     

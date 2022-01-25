@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.55 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *
@@ -196,6 +196,8 @@ extern void PopulateGenePopup (FeatureFormPtr ffp);
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp);
 extern void SetNewFeatureDefaultInterval (FeatureFormPtr ffp);
 extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean allowProductGBQual);
+extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean allowProductGBQual);
+
 
 extern DialoG CreateIntervalEditorDialog (GrouP h, CharPtr title, Uint2 rows,
                                           Int2 spacing, SeqEntryPtr sep,
@@ -465,6 +467,224 @@ extern DialoG SequenceSelectionDialog
  Boolean                  show_nucs,
  Boolean                  show_prots,
  Uint2                    entityID);
+
+extern DialoG SubSourceTypeDialog 
+(GrouP                    h,
+ Int2                     list_height,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  force_list,
+ Boolean                  include_note);
+
+extern DialoG OrgModTypeDialog 
+(GrouP                    h,
+ Int2                     list_height,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  force_list,
+ Boolean                  include_note);
+
+
+typedef CharPtr (*GetClickableItemText) (ValNodePtr item_list);
+
+extern DialoG 
+CreateClickableListDialog 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text);
+
+extern DialoG 
+CreateClickableListDialogEx 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text,
+ Int4            left_width,
+ Int4            right_width,
+ Boolean         horizontal);
+
+extern void ScrollToNextClickableTextDescription (CharPtr txt, DialoG d);
+extern void ScrollToPreviousClickableTextDescription (CharPtr txt, DialoG d);
+
+extern CharPtr GetSelectedClickableListText (DialoG d);
+
+extern CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first, BoolPtr month_ambiguous);
+
+extern void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata);
+extern void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size);
+
+
+typedef struct existingtext
+{
+  Int4    existing_text_choice;
+} ExistingTextData, PNTR ExistingTextPtr;
+
+typedef enum {
+  eExistingTextChoiceReplaceOld = 1,
+  eExistingTextChoiceAppendSemi,
+  eExistingTextChoiceAppendSpace,
+  eExistingTextChoiceAppendColon,
+  eExistingTextChoiceAppendNone,
+  eExistingTextChoicePrefixSemi,
+  eExistingTextChoicePrefixSpace,
+  eExistingTextChoicePrefixColon,
+  eExistingTextChoicePrefixNone,
+  eExistingTextChoiceLeaveOld,
+  eExistingTextChoiceCancel } EExistingTextChoice;
+
+extern CharPtr 
+HandleExistingText 
+(CharPtr existing_text,
+ CharPtr new_text, 
+ ExistingTextPtr etp);
+
+extern ExistingTextPtr GetExistingTextHandlerInfo (Int4 num_found, Boolean non_text);
+
+typedef enum {
+  EditApplyFindLocation_anywhere = 1,
+  EditApplyFindLocation_beginning,
+  EditApplyFindLocation_end
+} EditApplyFindLocation;
+
+typedef struct applyvalue 
+{
+  ValNodePtr        field_list;
+  ExistingTextPtr   etp;
+  CharPtr           new_text;
+  CharPtr           text_to_replace;
+  EditApplyFindLocation where_to_replace;
+
+} ApplyValueData, PNTR ApplyValuePtr;
+
+
+typedef struct editapply
+{
+  CharPtr               find_txt;
+  EditApplyFindLocation find_location;
+  CharPtr               repl_txt;
+  CharPtr               apply_txt;  
+} EditApplyData, PNTR EditApplyPtr;
+
+extern EditApplyPtr EditApplyFree (EditApplyPtr eap);
+
+typedef enum {
+  eEditApplyChoice_Apply = 0,
+  eEditApplyChoice_Edit } EEditApplyChoice;
+
+extern DialoG EditApplyDialog 
+(GrouP                    h,
+ Int4                     action_choice, 
+ CharPtr                  apply_label,
+ ValNodePtr               choice_list,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata);
+
+/* For the global inference editor */
+typedef struct inferenceparsedata
+{
+  CharPtr category;
+  Boolean same_species;
+  CharPtr first_field;
+  CharPtr second_field;
+} InferenceParseData, PNTR InferenceParsePtr;
+
+extern InferenceParsePtr ParseInferenceText (CharPtr inference);
+extern CharPtr InferenceTextFromStruct (InferenceParsePtr ipp);
+
+typedef struct inferencefieldedit
+{
+  CharPtr field_category;
+  Int4 field_choice;
+  EditApplyPtr edit_apply;
+} InferenceFieldEditData, PNTR InferenceFieldEditPtr;
+
+extern InferenceFieldEditPtr InferenceFieldEditFree (InferenceFieldEditPtr ifep);
+
+typedef enum {
+  eInferenceRemove = 0,
+  eInferenceEditCategory,
+  eInferenceApplyCategoryFields,
+  eInferenceEditCategoryFields,
+  eNumInferenceEditActions } EInferenceEditAction;
+
+
+typedef struct inferenceedit {
+  EInferenceEditAction action;
+  CharPtr category_from;
+  CharPtr category_to;
+
+  InferenceFieldEditPtr field_edit;
+} InferenceEditData, PNTR InferenceEditPtr;
+
+extern InferenceEditPtr InferenceEditFree (InferenceEditPtr iep);
+
+extern DialoG CreateInferenceEditDialog 
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata);
+
+typedef enum {
+ eValueEditSimpleText = 0,
+ eValueEditTrueFalse,
+ eValueEditLatLon,
+ eValueEditSpecimenVoucher,
+ eNumValueEditors
+} EValueEdit;
+
+/* In name_vnp, choice is type of editor, ptrvalue is string with choice name */
+typedef struct namevaluepair {
+  ValNodePtr name_vnp;
+  CharPtr    value;
+} NameValuePairData, PNTR NameValuePairPtr;
+
+extern NameValuePairPtr NameValuePairFree (NameValuePairPtr nvp);
+extern NameValuePairPtr NameValuePairCopy (NameValuePairPtr nvp);
+extern ValNodePtr NameValuePairListFree (ValNodePtr vnp);
+
+#define VALUE_LIST_PARENT_FIELDS \
+  DIALOG_MESSAGE_BLOCK \
+  TexT note;
+
+
+typedef struct valuelistparent {
+  VALUE_LIST_PARENT_FIELDS
+} ValueListParentData, PNTR ValueListParentPtr;
+
+
+extern DialoG 
+ValueListDialog 
+(GrouP           h,
+ Uint2           num_rows,
+ Int2            width,
+ ValNodePtr      choice_list,
+ ValueListParentPtr parent,
+ TaglistCallback change_notify,
+ Pointer         change_userdata);
+
+extern DialoG CreateSubSourceDialog (GrouP h, EnumFieldAssocPtr al);
+extern DialoG CreateOrgModDialog (GrouP h, EnumFieldAssocPtr al, TexT taxname);
+
+extern Boolean IsNonTextModifier (CharPtr mod_name);
+
+
+typedef Boolean (*ParseOK) PROTO ((CharPtr));
+
+extern Boolean ParseCollectionDateOk (CharPtr txt);
+extern DialoG CollectionDateDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                               TaglistCallback tlp_callback,
+                               Pointer callback_data);
+
+
+extern void CreateStandardEditMenu (WindoW w);
 
 
 #ifdef __cplusplus

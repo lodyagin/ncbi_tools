@@ -1,4 +1,4 @@
-/* $Id: blast_itree.c,v 1.12 2006/05/24 18:29:39 papadopo Exp $
+/* $Id: blast_itree.c,v 1.13 2006/11/21 17:03:13 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,10 +33,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_itree.c,v 1.12 2006/05/24 18:29:39 papadopo Exp $";
+    "$Id: blast_itree.c,v 1.13 2006/11/21 17:03:13 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include "blast_itree.h"
+#include "blast_gapalign_priv.h"
+#include "blast_hits_priv.h"
 
 /** When allocating a node for an interval tree, this
     specifies which half of the parent node will be described

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.58 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *
@@ -596,6 +596,8 @@ static void ImportFormActivate (WindoW w)
   }
 }
 
+extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean allowProductGBQual);
+
 extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
                               SeqFeatPtr sfp, SeqEntryPtr sep,
                               FormActnFunc actproc)
@@ -697,7 +699,8 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
       StaticPrompt (z, "Value", 10 * stdCharWidth, 0, programFont, 'c');
       ifp->gbquals = CreateQualsDialog (x, 5, -1, 7, 10);
     } else {
-      ifp->gbquals = CreateImportFields (x, importFormTabs [0], sfp, allowProductGBQual);
+      ifp->gbquals = NewCreateImportFields (x, importFormTabs [0], sfp, allowProductGBQual);
+/* old version: ifp->gbquals = CreateImportFields (x, importFormTabs [0], sfp, allowProductGBQual); */
     }
     AlignObjects (ALIGN_CENTER, (HANDLE) ifp->data, (HANDLE) x, NULL);
     ifp->pages [IMPORT_PAGE] = s;
@@ -2027,6 +2030,18 @@ static ENUM_ALIST(molinfo_biomol_alist)
   {"Other",                255},
 END_ENUM_ALIST
 
+extern CharPtr GetMoleculeTypeName (Uint1 mol_val)
+{
+  Int4 i;
+  for (i = 0; i < sizeof (molinfo_biomol_alist) / sizeof (EnumFieldAssoc); i++) {
+    if (molinfo_biomol_alist[i].value == mol_val) {
+      return molinfo_biomol_alist[i].name;
+    }
+  }
+  return NULL;
+}
+
+
 static ENUM_ALIST(molinfo_biomol_nuc_alist)
   {" ",                      0},
   {"Genomic DNA or RNA",     1},
@@ -2390,6 +2405,17 @@ static ENUM_ALIST(mol_alist)
 {"Nucleotide",      Seq_mol_na},    /* 4 */
 {"Other",           Seq_mol_other}, /* 255 */
 END_ENUM_ALIST
+
+extern CharPtr GetMoleculeClassName (Uint1 mol_val)
+{
+  Int4 i;
+  for (i = 0; i < sizeof (mol_alist) / sizeof (EnumFieldAssoc); i++) {
+    if (mol_alist[i].value == mol_val) {
+      return mol_alist[i].name;
+    }
+  }
+  return NULL;
+}
 
 static ENUM_ALIST(topology_alist)
 {" ",               0},                 /* Unknown? */

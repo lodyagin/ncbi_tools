@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.136 2006/10/04 19:28:05 papadopo Exp $
+/* $Id: blast_options.h,v 1.146 2007/05/22 20:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,9 +37,11 @@
 #ifndef __BLASTOPTIONS__
 #define __BLASTOPTIONS__
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_message.h>
-#include <algo/blast/core/blast_stat.h>
 
 
 #ifdef __cplusplus
@@ -143,16 +145,6 @@ extern "C" {
                                      value exceeds this number are discarded */
 #define BLAST_HITLIST_SIZE 500 /**< Number of database sequences to save hits 
                                   for */
-/** Types of the lookup table */
-#define MB_LOOKUP_TABLE 1  /**< megablast lookup table (includes both
-                                contiguous and discontiguous megablast) */
-#define NA_LOOKUP_TABLE 2  /**< blastn lookup table */
-#define AA_LOOKUP_TABLE 3  /**< standard protein (blastp) lookup table */
-#define PHI_AA_LOOKUP 4  /**< protein lookup table specialized for phi-blast */
-#define PHI_NA_LOOKUP 5  /**< nucleotide lookup table for phi-blast */
-#define RPS_LOOKUP_TABLE 6 /**< RPS lookup table (rpsblast and rpstblastn) */
-#define INDEXED_MB_LOOKUP_TABLE 7 /**< use database index as a lookup structure */
-
 /** Defaults for PSI-BLAST options */
 #define PSI_INCLUSION_ETHRESH 0.002 /**< Inclusion threshold for PSI BLAST */
 #define PSI_PSEUDO_COUNT_CONST 9 /**< Pseudo-count constant for PSI-BLAST */
@@ -166,20 +158,31 @@ extern "C" {
  * when scaling a PSSM */
 extern const double kPSSM_NoImpalaScaling;
 
+/** Types of the lookup table */
+typedef enum {
+    eMBLookupTable,  /**< megablast lookup table (includes both
+                                contiguous and discontiguous megablast) */
+    eSmallNaLookupTable,  /**< lookup table for blastn with small query*/
+    eNaLookupTable,  /**< blastn lookup table */
+    eAaLookupTable,  /**< standard protein (blastp) lookup table */
+    eCompressedAaLookupTable,  /**< compressed alphabet (blastp) lookup table */
+    ePhiLookupTable,  /**< protein lookup table specialized for phi-blast */
+    ePhiNaLookupTable,  /**< nucleotide lookup table for phi-blast */
+    eRPSLookupTable, /**< RPS lookup table (rpsblast and rpstblastn) */
+    eIndexedMBLookupTable /**< use database index as a lookup structure */
+} ELookupTableType;
+
 /** Options needed to construct a lookup table 
  * Also needed: query sequence and query length.
  */
 typedef struct LookupTableOptions {
-   Int4 threshold; /**< Score threshold for putting words in a lookup table */
-   Int4 lut_type; /**< What kind of lookup table to construct? E.g. blastn 
-                     allows for traditional and megablast style lookup table */
+   double threshold; /**< Score threshold for putting words in a lookup table
+                          (fractional values are allowed, and could be
+                          important if there is scaling involved) */
+   ELookupTableType lut_type; /**< What kind of lookup table to construct? */
    Int4 word_size; /**< Determines the size of the lookup table */
-   Uint1 mb_template_length; /**< Length of the discontiguous words */
-   Uint1 mb_template_type; /**< Type of a discontiguous word template */
-   Int4 max_positions; /**< Max number of positions per word (MegaBlast only);
-                         no restriction if 0 */
-   Boolean full_byte_scan; /**< subject sequence should be scanned a byte at a time 
-                           applies only to discontiguous megablast. */
+   Int4 mb_template_length; /**< Length of the discontiguous words */
+   Int4 mb_template_type; /**< Type of a discontiguous word template */
    char* phi_pattern;  /**< PHI-BLAST pattern */
    Int4 max_num_patterns; /**< Maximal number of patterns allowed for 
                              PHI-BLAST */
@@ -251,10 +254,8 @@ typedef struct BlastInitialWordOptions {
  *  gapped extensions
  */
 typedef enum EBlastPrelimGapExt {
-    eDynProgExt,                /**< standard affine gapping */
-    eGreedyExt,                 /**< Greedy extension (megaBlast) */
-    eGreedyWithTracebackExt,    /**< Greedy extension with Traceback
-                               calculated. */
+    eDynProgScoreOnly,          /**< standard affine gapping */
+    eGreedyScoreOnly,           /**< Greedy extension (megaBlast) */
     eSmithWatermanScoreOnly     /**< Score-only smith-waterman */
 } EBlastPrelimGapExt;
 
@@ -343,7 +344,6 @@ typedef struct BlastScoringOptions {
    Boolean gapped_calculation; /**< gap-free search if FALSE */
    Int4 gap_open;    /**< Extra penalty for starting a gap */
    Int4 gap_extend;  /**< Penalty for each gap residue */
-   Int4 decline_align; /**< Cost for declining alignment (PSI-BLAST) */
 
    /* only blastx and tblastn (When query & subj are diff) */
    Boolean is_ooframe; /**< Should out-of-frame gapping be used in a translated
@@ -428,11 +428,6 @@ typedef struct PSIBlastOptions {
 typedef struct BlastDatabaseOptions {
    Int4 genetic_code;  /**< Genetic code to use for translation, 
                              tblast[nx] only */
-   Uint1* gen_code_string;  /**< Genetic code string in ncbistdaa encoding,
-                                 tblast[nx] only
-                                 @todo why hasn't this been consolidated as the
-                                 query genetic code has?
-                             */
 } BlastDatabaseOptions;
 
 /********************************************************************************
@@ -490,6 +485,16 @@ Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions* *repeat_options);
  * @return NULL pointer
  */
 SBlastFilterOptions* SBlastFilterOptionsFree(SBlastFilterOptions* filter_options);
+
+/**  Merges two sets of options together, taking the non-default one as preferred.  if
+ * both are non-default then one or the other is taken.
+ * @param combined object that is returned [in|out]
+ * @param opt1 first set of options [in]
+ * @param opt2 second set of options [in]
+ * @return zero on success. 
+ */
+Int2 SBlastFilterOptionsMerge(SBlastFilterOptions** combined, const SBlastFilterOptions* opt1,
+       const SBlastFilterOptions* opt2);
 
 /** Types of filtering options. */
 typedef enum EFilterOptions {
@@ -579,7 +584,6 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
 /** Fill non-default values in the BlastInitialWordOptions structure.
  * @param options The options structure [in] [out] 
  * @param program Program number (blastn, blastp, etc.) [in]
- * @param greedy Settings should assume greedy alignments. [in]
  * @param window_size Size of a largest window between 2 words for the two-hit
  *                    version [in]
  * @param xdrop_ungapped The value of the X-dropoff for ungapped extensions [in]
@@ -587,8 +591,8 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
 NCBI_XBLAST_EXPORT
 Int2
 BLAST_FillInitialWordOptions(BlastInitialWordOptions* options, 
-   EBlastProgramType program, Boolean greedy, Int4 window_size, 
-   double xdrop_ungapped);
+                EBlastProgramType program, 
+                Int4 window_size, double xdrop_ungapped);
 
 /** Deallocate memory for BlastExtensionOptions.
  * @param options Structure to free [in]
@@ -742,13 +746,16 @@ Int2 LookupTableOptionsNew(EBlastProgramType program, LookupTableOptions* *optio
  * @param options The options [in] [out]
  * @param program Program number (blastn, blastp, etc.) [in]
  * @param is_megablast Megablast (instead of blastn) if TRUE [in]
- * @param threshold Threshold value for finding neighboring words [in]
+ * @param threshold Threshold value for finding neighboring words
+                    (fractional values are allowed, though unless
+                    the engine scales up alignment scores a fractional
+                    threshold will be rounded down) [in]
  * @param word_size Number of matched residues in an initial word [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 
 BLAST_FillLookupTableOptions(LookupTableOptions* options, 
-   EBlastProgramType program, Boolean is_megablast, Int4 threshold,
+   EBlastProgramType program, Boolean is_megablast, double threshold,
    Int4 word_size);
 
 
@@ -897,7 +904,7 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  */
 Int2 BLAST_GetSuggestedThreshold(EBlastProgramType program_number, 
                                  const char* matrixName, 
-                                 Int4* threshold);
+                                 double* threshold);
 
 /** Get window sizes for two hit algorithm suggested by Stephen Altschul.
  *

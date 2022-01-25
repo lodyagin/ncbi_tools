@@ -3,236 +3,6 @@
 *   -- all the globally variables for gbfeat.c
 *   -- all the defined variables in the gbfeat.h
 *
-* $Log: gbftglob.c,v $
-* Revision 6.57  2006/10/11 15:59:14  kans
-* added bound_moiety to enhances, oriT, promoter
-*
-* Revision 6.56  2006/09/27 20:28:57  kans
-* operon legal on rRNA
-*
-* Revision 6.55  2006/09/06 21:47:55  kans
-* added slot for mobile_element qualifier
-*
-* Revision 6.54  2006/08/31 15:25:55  kans
-* gene feature can have /product qualifier
-*
-* Revision 6.53  2005/10/31 18:24:43  kans
-* repeat_unit did not have rpt_unit family of qualifiers
-*
-* Revision 6.52  2005/10/25 20:11:55  kans
-* added ribosomal slippage to CDS, trans splicing to appropriate features
-*
-* Revision 6.51  2005/10/21 18:07:48  kans
-* ribosomal_slippage and trans_splicing are Class_none, not Class_text
-*
-* Revision 6.50  2005/10/19 16:56:17  kans
-* added new source qualifiers, expanded array of optional qualifiers
-*
-* Revision 6.49  2005/09/22 20:50:07  kans
-* changed /experimental to /experiment - typo
-*
-* Revision 6.48  2005/09/19 17:17:31  kans
-* removed /hydrogenosome as a separate qualifier - it is really /organelle=hydrogenosome
-*
-* Revision 6.47  2005/09/16 19:56:37  kans
-* added hydrogenosome
-*
-* Revision 6.46  2005/06/15 14:35:19  kans
-* final fixes, thanks to new Validate_ParFlat_GBFeat function
-*
-* Revision 6.45  2005/06/15 13:47:21  kans
-* corrected optional qualifier numbers, added Validate_ParFlat_GBFeat function
-*
-* Revision 6.44  2005/06/14 16:06:44  kans
-* initial support for ribosomal_slippage, trans_splicing qualifiers derived from /exception
-*
-* Revision 6.43  2005/06/10 20:56:04  kans
-* evidence legal on gap, pseudo legal on intron, misc_RNA, evidence adds experimental and inference, rpt_unit adds rpt_unit_seq and rpt_unit_range
-*
-* Revision 6.42  2005/06/10 17:25:26  kans
-* added space for new qualifiers experimental, inference, rpt_unit_seq, rpt_unit_range
-*
-* Revision 6.41  2004/10/21 14:37:35  kans
-* gap feature has note and map qualifiers
-*
-* Revision 6.40  2004/08/19 20:56:02  kans
-* changed opt_num (SB caught this oversight)
-*
-* Revision 6.39  2004/08/17 15:50:52  kans
-* added GBQUAL_old_locus_tag and GBQUAL_compare
-*
-* Revision 6.38  2004/03/02 17:15:44  kans
-* added GBQUAL_allele to -10_signal and -35_signal
-*
-* Revision 6.37  2003/10/07 17:05:58  kans
-* added allele and operon to many features
-*
-* Revision 6.36  2003/10/07 13:50:36  kans
-* added gap, operon, oriT features and ecotype, estimated_length and operon qualifiers
-*
-* Revision 6.35  2003/10/06 16:19:45  kans
-* rpt_unit went from Class_token to Class_text
-*
-* Revision 6.34  2003/10/03 15:16:14  bazhin
-* Numeric value "opt_num" in STATIC__ParFlat_GBFeat array changed
-* from 13 to 15 for feature "allele" to cover "usedin" and "locus_tag"
-* qualifiers.
-*
-* Revision 6.33  2003/10/03 12:44:27  bazhin
-* Numeric value "opt_num" in STATIC__ParFlat_GBFeat array changed
-* from 13 to 14 for feature "precursor_RNA" to cover "locus_tag"
-* qualifier.
-*
-* Revision 6.32  2003/08/19 15:19:04  kans
-* added GBQUAL_segment, increased ParFlat_TOTAL_GBQUAL and opt_qual array size
-*
-* Revision 6.31  2003/05/07 22:03:31  kans
-* added GBQUAL_mol_type, raised opt_qual array to 51 elements
-*
-* Revision 6.30  2003/03/06 16:23:13  kans
-* when gene qualifier was removed as required on gene feature, it was not put back as optional qualifier
-*
-* Revision 6.29  2003/02/26 19:30:19  kans
-* GBQUAL_gene is no longer required for gene features, since locus_tag will be able to suffice
-*
-* Revision 6.28  2003/02/24 20:09:04  kans
-* added GBQUAL_locus_tag to all remaining features
-*
-* Revision 6.27  2003/02/22 21:20:05  kans
-* added GBQUAL_locus_tag, GBQUAL_old_locus_tag, legal for now in gene features
-*
-* Revision 6.26  2002/04/17 19:11:48  kans
-* added serovar to GBQual_names
-*
-* Revision 6.25  2002/04/17 14:41:08  kans
-* added GBQUAL_serovar to source feature
-*
-* Revision 6.24  2002/04/02 21:10:24  kans
-* restored organelle and transcript_id, which accidentally got deleted
-*
-* Revision 6.23  2002/03/26 16:06:31  kans
-* added transgenic, environmental_sample, and isolation_source
-*
-* Revision 6.22  2002/02/13 18:45:52  kans
-* increased ParFlat_TOTAL_GBFEAT, added snoRNA
-*
-* Revision 6.21  2001/12/11 17:56:42  kans
-* allele and phenotype added to several features
-*
-* Revision 6.20  2001/11/28 15:34:38  kans
-* added /transposon and /insertion_seq to repeat_region
-*
-* Revision 6.19  2001/08/30 18:29:39  kans
-* added db_xref to prim_transcript, count already correct
-*
-* Revision 6.18  2001/08/20 13:55:58  kans
-* -35_signal has standard_name
-*
-* Revision 6.17  2001/04/10 22:17:11  tatiana
-* GBQUAL_endogenous_virus backed off to /note
-*
-* Revision 6.16  2001/04/10 21:59:28  tatiana
-* GBQUAL_endogenous_virus added
-*
-* Revision 6.15  2001/01/30 16:20:02  kans
-* precursor_RNA allows /product
-*
-* Revision 6.14  2000/11/29 20:37:00  tatiana
-* virion key removed, GBQUAL_transcript_id added
-*
-* Revision 6.13  2000/10/20 16:59:47  tatiana
-* evidence qualifier is legal on all features
-*
-* Revision 6.12  2000/05/17 16:21:10  kans
-* allele is legal on variation features
-*
-* Revision 6.11  2000/04/03 17:37:20  tatiana
-* evidence added to STS qualifiers
-*
-* Revision 6.10  2000/02/02 21:02:33  tatiana
-* new type for /number added
-*
-* Revision 6.8  2000/01/21 21:06:44  kans
-* reverted qualifiers, just added organelle, so parser can deal with old and new form during transition
-*
-* Revision 6.7  2000/01/21 20:48:19  kans
-* changes to merge several source qualifiers under new organelle qualifier
-*
-* Revision 6.6  1999/12/22 21:50:56  kans
-* when frequency was added to source qual legal list, the count number was not raised, bumping country off of the recognized list - my fault
-*
-* Revision 6.5  1999/12/15 23:28:37  kans
-* frequency is legal qualifier for source feature
-*
-* Revision 6.4  1999/02/05 15:40:47  tatiana
-* GBQUAL_country added
-*
-* Revision 6.3  1999/01/29 16:18:37  tatiana
-* protein_id qualifier added to CDS
-*
-* Revision 6.2  1998/01/15 20:28:08  tatiana
-* increased the size of optional quals array for source feature
-*
-* Revision 6.1  1997/12/23 22:01:07  tatiana
-* focus and specimen_voucher
-*
-* Revision 6.0  1997/08/25 18:06:02  madden
-* Revision changed to 6.0
-*
-* Revision 5.10  1997/07/29 20:59:54  vakatov
-* Encapsulated 'ParFlat_GBQual_names' and 'ParFlat_GBFeat'(formerly
-* global) variables into access functions. Made other global variables
-* be "extern" instead of "NLM_EXTERN"(i.e. local within the PC DLL).
-*
-* Revision 5.9  1997/07/11 17:00:58  tatiana
-* in misc_recomb GBQUAL_organism changed from mandatory ro optional
-*
- * Revision 5.8  1997/01/08  21:08:56  tatiana
- * /clone added to misc_difference
- *
- * Revision 5.7  1996/09/17  14:52:17  tatiana
- * 'virion' added
- *
- * Revision 5.6  1996/08/02  16:50:45  tatiana
- * a typo fixed
- *
- * Revision 5.5  1996/08/01  17:15:47  kans
- * fixed a typo
- *
- * Revision 5.4  1996/07/30  17:28:07  kans
- * ParFlat_... arrays now external in header file
- *
- * Revision 5.3  1996/07/29  19:45:34  tatiana
- * GBQual_names changed to use a structure
- *
- * Revision 5.2  1996/07/25  19:35:34  kans
- * ParFlat_GBQual_class array was missing an item at the cultivar position
- *
- * Revision 5.1  1996/07/25  14:17:34  tatiana
- * added qualifiers: allele, exception replace
- *
- * Revision 4.5  1995/11/15  18:03:32  tatiana
- * a bug fixed.
- *
- * Revision 4.4  1995/11/13  15:53:50  tatiana
- * serotype added
- *
- * Revision 4.3  1995/11/08  22:55:24  tatiana
- * /serotype added
- *
- * Revision 4.2  1995/08/16  22:02:08  tatiana
- * changes for db_xref
- *
- * Revision 4.1  1995/08/15  22:07:16  tatiana
- * db_xref added
- *
- * ..
- *
- * Revision 1.7  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
-*                                                                 10-14-93
 ***************************************************************************/
 
 #include <stdio.h>
@@ -289,7 +59,10 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"ribosomal_slippage", Class_none}, {"trans_splicing", Class_none},
  {"collected_by", Class_text}, {"collection_date", Class_text},
  {"identified_by", Class_text}, {"lat_lon", Class_text},
- {"PCR_primers", Class_text}, {"mobile_element", Class_text}
+ {"PCR_primers", Class_text}, {"mobile_element", Class_text},
+ {"metagenomic", Class_none}, { "culture_collection", Class_text},
+ { "bio_material", Class_text}, { "ncRNA_class", Class_text},
+ {"tag_peptide", Class_text}
 };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -539,6 +312,14 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+   {"ncRNA",  1, {GBQUAL_ncRNA_class, -1, -1, -1, -1}, 20,
+     {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function, 
+     GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, GBQUAL_product,
+      GBQUAL_pseudo, GBQUAL_standard_name, GBQUAL_usedin,
+      GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele, GBQUAL_operon,
+      GBQUAL_trans_splicing, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"old_sequence",   1, {GBQUAL_citation, -1, -1, -1, -1}, 14,
      {GBQUAL_db_xref, GBQUAL_gene, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_map, GBQUAL_note, 
      GBQUAL_partial, GBQUAL_replace, GBQUAL_usedin,
@@ -705,7 +486,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 58,
+   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 59,
      {GBQUAL_cell_line, GBQUAL_cell_type, GBQUAL_chloroplast, 
       GBQUAL_chromoplast, GBQUAL_chromosome,
       GBQUAL_citation, GBQUAL_clone, GBQUAL_clone_lib, GBQUAL_country, GBQUAL_cultivar,
@@ -722,7 +503,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_organelle, GBQUAL_transgenic, GBQUAL_environmental_sample,
       GBQUAL_isolation_source, GBQUAL_serovar, GBQUAL_mol_type, GBQUAL_segment,
       GBQUAL_ecotype, GBQUAL_collected_by, GBQUAL_collection_date, GBQUAL_identified_by,
-      GBQUAL_lat_lon, GBQUAL_PCR_primers, -1, -1, -1, -1, -1, -1, -1}},
+      GBQUAL_lat_lon, GBQUAL_PCR_primers, GBQUAL_metagenomic, -1, -1, -1, -1, -1, -1}},
    {"stem_loop",  0, {-1, -1, -1, -1, -1}, 17,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function,
       GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, 
@@ -754,6 +535,14 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+   {"tmRNA",  0, {-1, -1, -1, -1, -1}, 19,
+     {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function, 
+     GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, GBQUAL_product,
+      GBQUAL_pseudo, GBQUAL_standard_name, GBQUAL_usedin,
+      GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele, GBQUAL_operon,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"transit_peptide",  0, {-1, -1, -1, -1, -1}, 18,
      {GBQUAL_citation, GBQUAL_db_xref,
       GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function, GBQUAL_gene, GBQUAL_label, GBQUAL_map,
@@ -851,7 +640,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}}
-      };
+};
 
 NLM_EXTERN SematicFeatPtr x_ParFlat_GBFeat(void) {
   return STATIC__ParFlat_GBFeat;

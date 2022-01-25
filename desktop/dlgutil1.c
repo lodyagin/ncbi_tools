@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.103 $
+* $Revision: 6.126 $
 *
 * File Description: 
 *
@@ -54,6 +54,7 @@
 #include <sqnutils.h>
 #include <alignmgr2.h>
 #include <toasn3.h>
+#include <vibforms.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -312,8 +313,8 @@ extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint4 itemID, Uint2 i
 
 {
   BaseFormPtr    bfp;
-  Int2           j;
-  Int2           num;
+  Uint4          j;
+  Uint4          num;
   ObjMgrPtr      omp;
   ObjMgrDataPtr  PNTR omdpp;
   OMUserDataPtr  omudp;
@@ -353,8 +354,8 @@ extern OMUserDataPtr EntityAlreadyHasViewer (Uint2 entityID)
 
 {
   BaseFormPtr    bfp;
-  Int2           j;
-  Int2           num;
+  Uint4          j;
+  Uint4          num;
   ObjMgrPtr      omp;
   ObjMgrDataPtr  PNTR omdpp;
   OMUserDataPtr  omudp;
@@ -418,8 +419,8 @@ extern OMUserDataPtr EntityAlreadyHasViewer (Uint2 entityID)
 
 extern Boolean MakeViewerIndependent (Uint2 entityID, OMUserDataPtr omudp)
 {
-  Int2           j;
-  Int2           num;
+  Uint4          j;
+  Uint4          num;
   ObjMgrPtr      omp;
   ObjMgrDataPtr  PNTR omdpp;
   OMUserDataPtr  omudp_tmp;
@@ -631,12 +632,24 @@ extern void UpdateGeneLocation
   }
 }
 
+static Boolean DlgStrandsMatch (Uint1 featstrand, Uint1 locstrand)
+
+{
+  if (featstrand == locstrand) return TRUE;
+  if (locstrand == Seq_strand_unknown && featstrand != Seq_strand_minus) return TRUE;
+  if (featstrand == Seq_strand_unknown && locstrand != Seq_strand_minus) return TRUE;
+  if (featstrand == Seq_strand_both && locstrand != Seq_strand_minus) return TRUE;
+  if (locstrand == Seq_strand_both) return TRUE;
+  return FALSE;
+}
+
 static Boolean GeneUpdateFunc (GatherContextPtr gcp)
 
 {
   GeneGatherPtr  ggp;
   ObjMgrTypePtr  omtp;
   SeqFeatPtr     sfp;
+  Uint1          strand1, strand2;
   Char           thislabel [41];
 
   if (gcp == NULL) return TRUE;
@@ -659,8 +672,12 @@ static Boolean GeneUpdateFunc (GatherContextPtr gcp)
       if (thislabel [0] != '\0') {
         ggp->idx++;
         if (ggp->idx == ggp->val) {
-          UpdateGeneLocation (sfp, ggp->old_feature_location, ggp->slp, gcp->entityID);
-          return FALSE;
+          strand1 = SeqLocStrand (sfp->location);
+          strand2 = SeqLocStrand (ggp->slp);
+          if (DlgStrandsMatch (strand1, strand2)) {
+            UpdateGeneLocation (sfp, ggp->old_feature_location, ggp->slp, gcp->entityID);
+            return FALSE;
+          }
         }
       }
     }
@@ -793,6 +810,7 @@ static Boolean GeneMatchFunc (GatherContextPtr gcp)
   GeneRefPtr      grp;
   ObjMgrTypePtr   omtp;
   SeqFeatPtr      sfp;
+  Uint1           strand1, strand2;
   Char            thislabel [41];
 
   if (gcp == NULL) return TRUE;
@@ -847,9 +865,13 @@ static Boolean GeneMatchFunc (GatherContextPtr gcp)
         diff = SeqLocAinB (ggp->slp, sfp->location);
         if (diff >= 0) {
           if (diff < ggp->min) {
-            ggp->min = diff;
-            if (! ggp->xrefmatch) {
-              ggp->val = ggp->idx;
+            strand1 = SeqLocStrand (ggp->slp);
+            strand2 = SeqLocStrand (sfp->location);
+            if (DlgStrandsMatch (strand1, strand2)) {
+              ggp->min = diff;
+              if (! ggp->xrefmatch) {
+                ggp->val = ggp->idx;
+              }
             }
           }
         }
@@ -1283,6 +1305,20 @@ extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq)
   }
 }
 
+static UserObjectPtr CombineGOTermUserObjects (UserObjectPtr origuop, UserObjectPtr newuop)
+
+{
+  ObjectIdPtr  oip;
+
+  if (newuop == NULL) return origuop;
+  if (origuop == NULL) return newuop;
+
+  oip = origuop->type;
+  if (oip != NULL && StringCmp (oip->str, "GeneOntology") == 0) return origuop;
+
+  return CombineUserObjects (origuop, newuop);
+}
+
 typedef struct replacesdata {
   FeatureFormPtr  ffp;
   SeqFeatPtr      sfp;
@@ -1321,7 +1357,7 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
         old->ext = NULL;
       }
       if (ffp->goTermUserObj != NULL) {
-        sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
+        sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
       }
       if (ffp->featid != NULL) {
         TextToFeatID (ffp->featid, &(sfp->id));
@@ -1816,7 +1852,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
-          sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
+          sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
         }
         if (ffp->featid != NULL) {
           TextToFeatID (ffp->featid, &(sfp->id));
@@ -1840,7 +1876,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
-          sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
+          sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
         }
         if (ffp->featid != NULL) {
           TextToFeatID (ffp->featid, &(sfp->id));
@@ -3310,7 +3346,7 @@ extern DialoG CreateQualsDialog (GrouP h, Uint2 rows, Int2 spacing,
                               QualsDialogToGBQualPtr);
 }
 
-static void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size)
+extern void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size)
 {
   Int4     remaining_len, aln_pos, id_len;
   SeqIdPtr sip;
@@ -3336,7 +3372,7 @@ static void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size)
   }
   buf_ptr += 4;
   
-  for (aln_pos = 1; aln_pos <= salp->dim && remaining_len > 0; aln_pos++)
+  for (aln_pos = 1; aln_pos <= salp->dim && remaining_len > 2; aln_pos++)
   {
     sip = AlnMgr2GetNthSeqIdPtr(salp, aln_pos);
     SeqIdWrite (sip, buf_ptr, PRINTID_REPORT, remaining_len);
@@ -3344,7 +3380,7 @@ static void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size)
     remaining_len -= id_len;
     buf_ptr += id_len;
     /* put comma between IDs in list */
-    if (aln_pos < salp->dim && remaining_len > 0)
+    if (aln_pos < salp->dim && remaining_len > 2)
     {
       StringCat (buf_ptr, ",");
       remaining_len -= 1;
@@ -3392,7 +3428,7 @@ static Boolean HasDisqualifyingUserObjects(SeqAnnotPtr sap)
 }
 
 
-static void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata)
+extern void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata)
 {
   SeqAlignPtr PNTR salp_list;
   SeqAlignPtr salp, last_salp;
@@ -3534,8 +3570,8 @@ static void FillInProducts (SeqEntryPtr sep, Pointer mydata,
               bsp = BioseqLockById (sip);
               if (bsp != NULL) {
                 AddToSipList (ipp, bsp);
+                BioseqUnlock (bsp);
               }
-              BioseqUnlockById (sip);
             }
           }
           slp = SeqLocFindNext (&vn, slp);
@@ -3647,7 +3683,7 @@ static void CorrectIntervalEditorSeqIdEnum (IntervalPagePtr ipp, SeqLocPtr slp)
 {
   SeqLocPtr           tmp_slp;
   SeqIdPtr            sip;
-  Int4                j;
+  Int4                j = 0;
   Boolean             found;
   ValNodePtr          missing_list = NULL, missing_vnp;
   Int4                new_count;
@@ -3687,7 +3723,7 @@ static void CorrectIntervalEditorSeqIdEnum (IntervalPagePtr ipp, SeqLocPtr slp)
           bsp = BioseqFindCore (ipp->sip_list [j]);
           if (bsp == NULL) {
             bsp = BioseqLockById (ipp->sip_list [j]);
-            BioseqUnlockById (ipp->sip_list [j]);
+            BioseqUnlock (bsp);
           }
           if (bsp != NULL && SeqIdIn (sip, bsp->id))
           {
@@ -3710,15 +3746,17 @@ static void CorrectIntervalEditorSeqIdEnum (IntervalPagePtr ipp, SeqLocPtr slp)
     new_sip_list = MemNew (sizeof (SeqIdPtr) * (size_t) new_count);
     new_alist = MemNew (sizeof (EnumFieldAssoc) * (size_t) new_count);
     new_lengths = MemNew (sizeof (Int4) * (size_t) new_count);
-    /* first one is blank, remainder are actual data */
-    for (j = 0; j < ipp->count + 1; j++)
-    {
-      new_sip_list [j] = ipp->sip_list [j];
-      ipp->sip_list [j] = NULL;
-      new_alist [j].name = ipp->alist [j].name;
-      ipp->alist [j].name = NULL;
-      new_alist [j].value = ipp->alist [j].value;
-      new_lengths [j] = ipp->lengths [j];
+    if (ipp->sip_list != NULL) {
+      /* first one is blank, remainder are actual data */
+      for (j = 0; j < ipp->count + 1; j++)
+      {
+        new_sip_list [j] = ipp->sip_list [j];
+        ipp->sip_list [j] = NULL;
+        new_alist [j].name = ipp->alist [j].name;
+        ipp->alist [j].name = NULL;
+        new_alist [j].value = ipp->alist [j].value;
+        new_lengths [j] = ipp->lengths [j];
+      }
     }
     
     missing_vnp = missing_list;
@@ -3731,7 +3769,7 @@ static void CorrectIntervalEditorSeqIdEnum (IntervalPagePtr ipp, SeqLocPtr slp)
       bsp = BioseqFindCore (sip);
       if (bsp == NULL) {
         bsp = BioseqLockById (sip);
-        BioseqUnlockById (sip);
+        BioseqUnlock (bsp);
       }
       if (bsp != NULL)
       {
@@ -5095,7 +5133,7 @@ ReadAlignedSeqLocList
  Boolean         partial3, 
  Boolean         nullsBetween)
 {
-  Int4             from, to, aln_from, aln_to, aln_row, aln_len;
+  Int4             from, to, aln_from, aln_to, aln_row, aln_len = 0;
   Boolean          fuzz_after;
   Boolean          fuzz_before;
   Int2             fuzz_from;
@@ -5498,19 +5536,34 @@ static void IntervalEditorMessage (DialoG d, Int2 mssg)
 
   ipp = (IntervalPagePtr) GetObjectExtra (d);
   if (ipp != NULL) {
-    if (mssg == VIB_MSG_INIT) {
-      SeqLocPtrToIntervalPage (d, NULL);
-    } else if (mssg == VIB_MSG_ENTER) {
-      SendMessageToDialog (ipp->ivals, VIB_MSG_ENTER);
-    } else if (mssg == VIB_MSG_RESET) {
-    }
-    else if (mssg == NUM_VIB_MSG + 1)
-    {
-      SetOnlySequenceAndStrand (ipp);
-    }
-    else if (mssg == NUM_VIB_MSG + 2)
-    {
-      ClearLocationPartialCheckboxes (ipp);
+    switch (mssg) {
+      case VIB_MSG_INIT:
+        SeqLocPtrToIntervalPage (d, NULL);
+        break;
+      case VIB_MSG_ENTER:
+        SendMessageToDialog (ipp->ivals, VIB_MSG_ENTER);
+        break;
+      case VIB_MSG_RESET:
+        /* do nothing */
+        break;
+      case NUM_VIB_MSG + 1:
+        SetOnlySequenceAndStrand (ipp);
+        break;
+      case NUM_VIB_MSG + 2:
+        ClearLocationPartialCheckboxes (ipp);
+        break;
+      case VIB_MSG_CUT :
+        StdCutTextProc (NULL);
+        break;
+      case VIB_MSG_COPY :
+        StdCopyTextProc (NULL);
+        break;
+      case VIB_MSG_PASTE :
+        StdPasteTextProc (NULL);
+        break;
+      case VIB_MSG_DELETE :
+        StdDeleteTextProc (NULL);
+        break;
     }
   }
 }
@@ -5564,6 +5617,7 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
   PrompT           p1;
   PrompT           p2;
   PrompT           p3;
+  PrompT           p_from, p_to;
   CharPtr          ptr;
   GrouP            q;
   GrouP            s;
@@ -5741,7 +5795,7 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
             bsp = BioseqFindCore (sip);
             if (bsp == NULL) {
               bsp = BioseqLockById (sip);
-              BioseqUnlockById (sip);
+              BioseqUnlock (bsp);
             }
             if (bsp != NULL)
             {
@@ -5834,8 +5888,8 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
     }
 
     f = HiddenGroup (m, 5, 0, NULL);
-    StaticPrompt (f, "From", 5 * stdCharWidth, 0, programFont, 'c');
-    StaticPrompt (f, "To", 5 * stdCharWidth, 0, programFont, 'c');
+    p_from = StaticPrompt (f, "From", 5 * stdCharWidth, 0, programFont, 'c');
+    p_to = StaticPrompt (f, "To", 5 * stdCharWidth, 0, programFont, 'c');
     p1 = NULL;
     p2 = NULL;
     p3 = NULL;
@@ -5869,10 +5923,10 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
       num_cols ++;
     }
     
-    ipp->ivals = CreateTagListDialogExEx (f, rows, num_cols, spacing,
+    ipp->ivals = CreateTagListDialogEx3 (f, rows, num_cols, spacing,
                                         interval_types, interval_widths, ipp->alists,
                                         useBar, FALSE, NULL, NULL,
-                                        ipp->callbacks, callback_data, FALSE);
+                                        ipp->callbacks, callback_data, FALSE, TRUE);
 
     /* put back static interval_types values that may have been changed */
     interval_types [2] = TAGLIST_POPUP;
@@ -5885,6 +5939,8 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
                   (HANDLE) q, (HANDLE) ipp->nullsBetween, NULL);
     tlp = (TagListPtr) GetObjectExtra (ipp->ivals);
     if (tlp != NULL) {
+      AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [0], (HANDLE) p_from, NULL);
+      AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p_to, NULL);
       if (ipp->strand_col > -1)
       {
         AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [ipp->strand_col], (HANDLE) p1, NULL);
@@ -6608,5 +6664,1843 @@ extern DialoG CreateDbtagDialog (GrouP h, Uint2 rows, Int2 spacing,
     }
     return d;
   }
+}
+
+/* ValueList Editor */
+static CharPtr combine_strings (CharPtr s, CharPtr add)
+{
+  CharPtr total;
+  if (StringHasNoText (add))
+  {
+    return s;
+  }
+  if (StringHasNoText (s))
+  {
+    s = MemFree (s);
+    s = StringSave (add);
+  }
+  else
+  {
+    total = (CharPtr) MemNew (sizeof (Char) * (StringLen (s) + StringLen (add) + 2));
+    sprintf (total, "%s;%s", s, add);
+    s = MemFree (s);
+    s = total;
+  }
+  return s;
+}
+
+
+
+typedef struct simpletextvalueedit {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback change_notify;
+  Pointer         change_userdata;
+  TexT text;
+} SimpleTextValueEditData, PNTR SimpleTextValueEditPtr;
+
+static void SimpleTextValueEditChange (TexT t)
+{
+  SimpleTextValueEditPtr dlg;
+  dlg = (SimpleTextValueEditPtr) GetObjectExtra (t);
+  if (dlg != NULL && dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+static void StringToSimpleTextValueEditDialog (DialoG d, Pointer data)
+{
+  SimpleTextValueEditPtr dlg;
+  dlg = (SimpleTextValueEditPtr) GetObjectExtra (d);
+ 
+  if (dlg != NULL)
+  {
+    SetTitle (dlg->text, (CharPtr) data);
+    if (dlg->change_notify != NULL)
+    {
+      (dlg->change_notify) (dlg->change_userdata);
+    }
+  }
+}
+
+
+static Pointer SimpleTextValueEditDialogToString (DialoG d)
+{
+  SimpleTextValueEditPtr dlg;
+  dlg = (SimpleTextValueEditPtr) GetObjectExtra (d);
+ 
+  if (dlg != NULL)
+  {
+    return SaveStringFromText (dlg->text);
+  }
+  else
+  {
+    return NULL;
+  }
+}
+
+static DialoG SimpleTextValueEditDialog (GrouP h, Int2 width, ValueListParentPtr parent, TaglistCallback change_notify, Pointer change_userdata)
+{
+  SimpleTextValueEditPtr dlg;
+  GrouP           p;
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (SimpleTextValueEditPtr) MemNew (sizeof(SimpleTextValueEditData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToSimpleTextValueEditDialog;
+  dlg->fromdialog = SimpleTextValueEditDialogToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->text = DialogText (p, "", width, SimpleTextValueEditChange);
+  SetObjectExtra (dlg->text, dlg, NULL);
+  return (DialoG) p;
+}
+
+#define STRUCTURED_VALUE_EDIT_FIELDS \
+  DIALOG_MESSAGE_BLOCK \
+  TaglistCallback     change_notify; \
+  Pointer             change_userdata; \
+  GrouP               unparsable; \
+  TexT                text; \
+  ValueListParentPtr  parent; \
+  DialoG              dlg; \
+  ParseOK             parse_func;
+
+typedef struct structuredvalueeditdlg {
+  STRUCTURED_VALUE_EDIT_FIELDS
+} StructuredValueEditDlgData, PNTR StructuredValueEditDlgPtr;
+
+
+static void CopyUnparsableToNote (ButtoN b)
+{
+  StructuredValueEditDlgPtr dlg;
+  CharPtr                   old_note, new_note;
+
+  dlg = (StructuredValueEditDlgPtr) GetObjectExtra (b);
+ 
+  if (dlg != NULL && dlg->parent != NULL && dlg->parent->note != NULL)
+  {
+    old_note = SaveStringFromText (dlg->parent->note);
+    new_note = SaveStringFromText (dlg->text);
+    old_note = combine_strings (old_note, new_note);
+    SetTitle (dlg->parent->note, old_note); 
+    new_note = MemFree (new_note);
+    old_note = MemFree (old_note);
+    SetTitle (dlg->text, "");
+    Hide (dlg->unparsable);
+    if (dlg != NULL && dlg->change_notify != NULL)
+    {
+      (dlg->change_notify) (dlg->change_userdata);
+    }
+  }
+}
+
+
+static void EraseUnparsable (ButtoN b)
+{
+  StructuredValueEditDlgPtr dlg;
+
+  dlg = (StructuredValueEditDlgPtr) GetObjectExtra (b);
+
+  if (dlg != NULL)
+  {
+    SetTitle (dlg->text, "");
+    Hide (dlg->unparsable);
+    if (dlg != NULL && dlg->change_notify != NULL)
+    {
+      (dlg->change_notify) (dlg->change_userdata);
+    }
+  }
+}
+
+
+static void StringToStructuredValueEditDialog (DialoG d, Pointer data)
+{
+  StructuredValueEditDlgPtr dlg;
+  CharPtr                   txt;
+
+  dlg = (StructuredValueEditDlgPtr) GetObjectExtra (d);
+
+  txt = (CharPtr) data;
+ 
+  if (dlg != NULL)
+  {
+    if (StringHasNoText (txt) || (dlg->parse_func != NULL && (dlg->parse_func) (txt)))
+    {
+      PointerToDialog (dlg->dlg, txt);
+      SetTitle (dlg->text, "");
+      Hide (dlg->unparsable);
+    }
+    else
+    {
+      SetTitle (dlg->text, (CharPtr) data);
+      Show (dlg->unparsable);
+    }
+    if (dlg->change_notify != NULL)
+    {
+      (dlg->change_notify) (dlg->change_userdata);
+    }
+  }
+}
+
+
+static Pointer StructuredValueEditDialogToString (DialoG d)
+{
+  StructuredValueEditDlgPtr dlg;
+  CharPtr                   txt = NULL, tmp;
+
+  dlg = (StructuredValueEditDlgPtr) GetObjectExtra (d);
+
+  if (dlg != NULL)
+  {
+    if (dlg->dlg == NULL)
+    {
+      txt = StringSave ("");
+    }
+    else
+    {
+      txt = DialogToPointer (dlg->dlg);
+    }
+    
+    if (!TextHasNoText (dlg->text))
+    {
+      tmp = SaveStringFromText (dlg->text);
+      txt = combine_strings (txt, tmp);
+      tmp = MemFree (tmp);
+    }
+  }
+  return txt;
+
+}
+
+
+static void StructuredValueEditChange (TexT t)
+{
+  StructuredValueEditDlgPtr dlg;
+  CharPtr                    txt, tmp;
+
+  dlg = (StructuredValueEditDlgPtr) GetObjectExtra (t);
+
+  if (TextHasNoText (dlg->text))
+  {
+    Hide (dlg->unparsable);
+  }
+  else if (dlg->dlg != NULL)
+  {
+    txt = SaveStringFromText(dlg->text);
+    tmp = DialogToPointer (dlg->dlg);
+    if (StringHasNoText (tmp) && dlg->parse_func != NULL && (dlg->parse_func)(txt))
+    {
+      PointerToDialog (dlg->dlg, txt);
+      SetTitle (dlg->text, "");
+      Hide (dlg->unparsable);
+    }
+    txt = MemFree (txt);
+    tmp = MemFree (tmp);
+  }
+
+  if (dlg != NULL && dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+
+typedef struct truefalsevalueedit {
+  STRUCTURED_VALUE_EDIT_FIELDS
+} TrueFalseValueEditData, PNTR TrueFalseValueEditPtr;
+
+static DialoG TrueFalseValueEditDialog (GrouP h, Int2 width, ValueListParentPtr parent, TaglistCallback change_notify, Pointer change_userdata)
+{
+  TrueFalseValueEditPtr dlg;
+  GrouP           p;
+  ButtoN          b;
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (TrueFalseValueEditPtr) MemNew (sizeof(TrueFalseValueEditData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToStructuredValueEditDialog;
+  dlg->fromdialog = StructuredValueEditDialogToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->parent = parent;
+
+  StaticPrompt (p, "TRUE", 0, 0, programFont, 'c');
+
+  dlg->unparsable = HiddenGroup (p, 3, 0, NULL);
+  SetGroupSpacing (dlg->unparsable, 10, 10);
+  dlg->text = DialogText (dlg->unparsable, "", width - 15, StructuredValueEditChange);
+  SetObjectExtra (dlg->text, dlg, NULL);
+ 
+  b = PushButton (dlg->unparsable, "Copy to Note", CopyUnparsableToNote);
+  SetObjectExtra (b, dlg, NULL);
+
+  b = PushButton (dlg->unparsable, "Erase", EraseUnparsable);
+  SetObjectExtra (b, dlg, NULL);
+
+  Hide (dlg->unparsable);
+
+  return (DialoG) p;
+}
+
+
+typedef struct latlondlg {
+  DIALOG_MESSAGE_BLOCK
+
+  PopuP dir_ns;
+  PopuP dir_ew;
+  TexT  deg_ns;
+  TexT  deg_ew;
+
+  TaglistCallback change_notify;
+  Pointer change_userdata;
+
+} LatLonDlgData, PNTR LatLonDlgPtr;
+
+
+static void ResetLatLonDlg (LatLonDlgPtr dlg)
+{
+  if (dlg == NULL) return;
+
+  SetTitle (dlg->deg_ns, "");
+  SetValue (dlg->dir_ns, 1);
+  SetTitle (dlg->deg_ew, "");
+  SetValue (dlg->dir_ew, 1);
+}
+
+
+static void StringToLatLonDlg (DialoG d, Pointer data)
+{
+  LatLonDlgPtr dlg;
+  CharPtr      str, ns, ew, tmp;
+  Int4         len;
+
+  dlg = (LatLonDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  
+  str = (CharPtr) data;
+  if (str == NULL)
+  {
+    ResetLatLonDlg (dlg);
+    return;
+  }
+
+  ew = str + StringLen (str) - 1;
+  if (*ew != 'E' && *ew != 'W')
+  {
+    ResetLatLonDlg (dlg);
+    return;
+  }
+  
+  ns = StringChr (str, 'N');
+  if (ns == NULL)
+  {
+    ns = StringChr (str, 'S');
+  }
+  if (ns == NULL)
+  {
+    ResetLatLonDlg (dlg);
+    return;
+  }
+
+  len = ns - str + 1;
+  tmp = (CharPtr) MemNew (sizeof (Char) * len);
+  StringNCpy (tmp, str, len - 1);
+  tmp [len - 1] = 0;
+  SetTitle (dlg->deg_ns, tmp);
+  tmp = MemFree (tmp);
+  SetValue (dlg->dir_ns, *ns == 'N' ? 1 : 2);
+  
+  len = ew - ns;
+  tmp = (CharPtr) MemNew (sizeof (Char) * len);
+  StringNCpy (tmp, ns + 1, len - 1);
+  tmp [len - 1] = 0;
+  SetTitle (dlg->deg_ew, tmp);
+  tmp = MemFree (tmp);
+  SetValue (dlg->dir_ew, *ew == 'E' ? 1 : 2);
+  
+}
+
+
+static Pointer LatLonDlgToString (DialoG d)
+{
+  LatLonDlgPtr dlg;
+  CharPtr      str, ns, ew;
+  Int4         len;
+
+  dlg = (LatLonDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (TextHasNoText (dlg->deg_ns) && TextHasNoText (dlg->deg_ew))
+  {
+    return NULL;
+  }  
+
+  ns = SaveStringFromText (dlg->deg_ns);
+  ew = SaveStringFromText (dlg->deg_ew);
+  len = StringLen (ns) + StringLen (ew) + 6;
+  str = (CharPtr) MemNew (sizeof(Char) * len);
+  sprintf (str, "%s %c %s %c", 
+           ns == NULL ? "" : ns,
+           GetValue (dlg->dir_ns) == 1 ? 'N' : 'S',
+           ew == NULL ? "" : ew,
+           GetValue (dlg->dir_ew) == 1 ? 'E' : 'W');
+  ns = MemFree (ns);
+  ew = MemFree (ew);
+  return str;
+}
+
+static void LatLonTextChange (TexT t)
+{
+  LatLonDlgPtr dlg;
+
+  dlg = (LatLonDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) return;
+
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void LatLonPopupChange (PopuP p)
+{
+  LatLonDlgPtr dlg;
+
+  dlg = (LatLonDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static DialoG LatLonDialog (GrouP h, TaglistCallback change_notify, Pointer change_userdata)
+{
+  LatLonDlgPtr dlg;
+  GrouP        p;
+
+  p = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (LatLonDlgPtr) MemNew (sizeof(LatLonDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToLatLonDlg;
+  dlg->fromdialog = LatLonDlgToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->deg_ns = DialogText (p, "", 3, LatLonTextChange);
+  SetObjectExtra (dlg->deg_ns, dlg, NULL);
+  dlg->dir_ns = PopupList (p, TRUE, LatLonPopupChange);
+  SetObjectExtra (dlg->dir_ns, dlg, NULL);
+  PopupItem (dlg->dir_ns, "N");
+  PopupItem (dlg->dir_ns, "S");
+  SetValue (dlg->dir_ns, 1);
+
+  dlg->deg_ew = DialogText (p, "", 3, LatLonTextChange);
+  SetObjectExtra (dlg->deg_ew, dlg, NULL);
+  dlg->dir_ew = PopupList (p, TRUE, LatLonPopupChange);
+  SetObjectExtra (dlg->dir_ew, dlg, NULL);
+  PopupItem (dlg->dir_ew, "E");
+  PopupItem (dlg->dir_ew, "W");
+
+  SetValue (dlg->dir_ew, 1);
+  
+  return (DialoG) p;
+}
+
+
+static Boolean ParseLatLonOk (CharPtr str)
+{
+  Boolean rval = FALSE;
+  CharPtr ns, ew, cp;
+
+  if (StringHasNoText (str))
+  {
+    return TRUE;
+  }
+  ew = str + StringLen (str) - 1;
+  if (*ew != 'E' && *ew != 'W')
+  {
+    return FALSE;
+  }
+  ns = str;
+  while (ns < ew && !isalpha (*ns))
+  {
+    ns++;
+  }
+  if (*ns != 'N' && *ns != 'S')
+  {
+    return FALSE;
+  }
+
+  cp = ns + 1;
+  while (cp < ew)
+  {
+    if (isalpha (*cp))
+    {
+      return FALSE;
+    }
+    cp++;
+  }
+  return TRUE;
+}
+
+
+static DialoG ValueListLatLonDialog (GrouP h, Int2 width, ValueListParentPtr parent, TaglistCallback change_notify, Pointer change_userdata)
+{
+  StructuredValueEditDlgPtr dlg;
+  GrouP           p;
+  ButtoN          b;
+
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (StructuredValueEditDlgPtr) MemNew (sizeof(StructuredValueEditDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToStructuredValueEditDialog;
+  dlg->fromdialog = StructuredValueEditDialogToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->parent = parent;
+ 
+  dlg->dlg = LatLonDialog (p, change_notify, change_userdata);
+  dlg->parse_func = ParseLatLonOk;
+  
+  dlg->unparsable = HiddenGroup (p, 3, 0, NULL);
+  SetGroupSpacing (dlg->unparsable, 10, 10);
+  dlg->text = DialogText (dlg->unparsable, "", width - 15, StructuredValueEditChange);
+  SetObjectExtra (dlg->text, dlg, NULL);
+ 
+  b = PushButton (dlg->unparsable, "Copy to Note", CopyUnparsableToNote);
+  SetObjectExtra (b, dlg, NULL);
+
+  b = PushButton (dlg->unparsable, "Erase", EraseUnparsable);
+  SetObjectExtra (b, dlg, NULL);
+
+  Hide (dlg->unparsable);
+
+  return (DialoG) p;
+}
+
+
+typedef struct specimenvoucherdlg {
+  DIALOG_MESSAGE_BLOCK
+
+  TexT  institution_code;
+  TexT  collection_code;
+  TexT  free_text;
+
+  TaglistCallback change_notify;
+  Pointer change_userdata;
+
+} SpecimenVoucherDlgData, PNTR SpecimenVoucherDlgPtr;
+
+
+static void ResetSpecimenVoucherDlg (SpecimenVoucherDlgPtr dlg)
+{
+  if (dlg == NULL) return;
+
+  SetTitle (dlg->institution_code, "");
+  SetTitle (dlg->collection_code, "");
+  SetTitle (dlg->free_text, "");
+}
+
+
+static void StringToSpecimenVoucherDlg (DialoG d, Pointer data)
+{
+  SpecimenVoucherDlgPtr dlg;
+  CharPtr      str, ptr, cp;
+
+  dlg = (SpecimenVoucherDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  
+  str = (CharPtr) data;
+  if (str == NULL)
+  {
+    ResetSpecimenVoucherDlg (dlg);
+    return;
+  }
+
+  /* make copy so we don't worry about changing data */
+  str = StringSave (str);
+
+  cp = StringChr (str, ':');
+  if (cp == NULL)
+  {
+    SetTitle (dlg->free_text, str);
+  }
+  else 
+  {
+    *cp = 0;
+    SetTitle (dlg->institution_code, str);
+    ptr = cp + 1;
+    cp = StringChr (ptr, ':');
+    if (cp == NULL) 
+    {
+      SetTitle (dlg->free_text, ptr);
+    }
+    else 
+    {
+      *cp = 0;
+      SetTitle (dlg->collection_code, ptr);
+      SetTitle (dlg->free_text, cp + 1);
+    }
+  }
+  str = MemFree (str);
+}
+
+
+static Pointer SpecimenVoucherDlgToString (DialoG d)
+{
+  SpecimenVoucherDlgPtr dlg;
+  CharPtr      str;
+  Int4         len;
+  CharPtr      inst, coll, free_text;
+
+  dlg = (SpecimenVoucherDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (TextHasNoText (dlg->institution_code) && TextHasNoText (dlg->collection_code) && TextHasNoText (dlg->free_text))
+  {
+    return NULL;
+  }  
+
+  inst = SaveStringFromText (dlg->institution_code);
+  coll = SaveStringFromText (dlg->collection_code);
+  free_text = SaveStringFromText (dlg->free_text);
+
+  len = StringLen (inst) + StringLen (coll) + StringLen (free_text) + 3;
+  str = (CharPtr) MemNew (sizeof(Char) * len);
+  if (StringHasNoText (inst) && StringHasNoText (coll))
+  {
+    sprintf (str, "%s", free_text);
+  }
+  else if (StringHasNoText (coll))
+  {
+    sprintf (str, "%s:%s", inst, free_text == NULL ? "" : free_text);
+  }
+  else
+  {
+    sprintf (str, "%s:%s:%s", inst == NULL ? "" : inst,
+                              coll == NULL ? "" : coll,
+                              free_text == NULL ? "" : free_text);
+  }
+  inst = MemFree (inst);
+  coll = MemFree (coll);
+  free_text = MemFree (free_text);
+  return str;
+}
+
+static void SpecimenVoucherTextChange (TexT t)
+{
+  SpecimenVoucherDlgPtr dlg;
+
+  dlg = (SpecimenVoucherDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) return;
+
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static DialoG SpecimenVoucherDialog (GrouP h, Int2 width, ValueListParentPtr parent, TaglistCallback change_notify, Pointer change_userdata)
+{
+  SpecimenVoucherDlgPtr dlg;
+  GrouP        p;
+
+  p = HiddenGroup (h, 6, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (SpecimenVoucherDlgPtr) MemNew (sizeof(SpecimenVoucherDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToSpecimenVoucherDlg;
+  dlg->fromdialog = SpecimenVoucherDlgToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  StaticPrompt (p, "Inst", 0, 0, programFont, 'r');
+  dlg->institution_code = DialogText (p, "", 4, SpecimenVoucherTextChange);
+  SetObjectExtra (dlg->institution_code, dlg, NULL);
+  StaticPrompt (p, "Coll", 0, 0, programFont, 'r');
+  dlg->collection_code = DialogText (p, "", 4, SpecimenVoucherTextChange);
+  SetObjectExtra (dlg->collection_code, dlg, NULL);
+
+  StaticPrompt (p, "SpecID/Text", 0, 0, programFont, 'r');
+  dlg->free_text = DialogText (p, "", width - 8, SpecimenVoucherTextChange);
+  SetObjectExtra (dlg->free_text, dlg, NULL);
+  
+  return (DialoG) p;
+}
+
+
+static Boolean ParseSpecimenVoucherOk (CharPtr str)
+{
+  return TRUE;
+}
+
+
+typedef DialoG (*MakeValueEditDialogFunc) PROTO ((GrouP, Int2, ValueListParentPtr, TaglistCallback, Pointer));
+
+static MakeValueEditDialogFunc value_edit_dialog_list[] = {
+  SimpleTextValueEditDialog,
+  TrueFalseValueEditDialog,
+  ValueListLatLonDialog,
+  SpecimenVoucherDialog
+};
+
+
+extern NameValuePairPtr NameValuePairFree (NameValuePairPtr nvp)
+{
+  if (nvp != NULL)
+  {
+    nvp->name_vnp = ValNodeFreeData (nvp->name_vnp);
+    nvp->value = MemFree (nvp->value);
+    nvp = MemFree (nvp);
+  }
+  return nvp;
+}
+
+
+extern NameValuePairPtr NameValuePairCopy (NameValuePairPtr nvp)
+{
+  NameValuePairPtr cpy = NULL;
+
+  if (nvp != NULL)
+  {
+    cpy = (NameValuePairPtr) MemNew (sizeof (NameValuePairData));
+    if (nvp->name_vnp != NULL)
+    {
+      cpy->name_vnp = ValNodeNew (NULL);
+      cpy->name_vnp->choice = nvp->name_vnp->choice;
+      cpy->name_vnp->data.ptrvalue = StringSave (nvp->name_vnp->data.ptrvalue);
+    }
+    cpy->value = StringSave (nvp->value);
+  }
+  return cpy;
+}
+
+
+extern ValNodePtr NameValuePairListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL)
+  {
+    vnp->data.ptrvalue = NameValuePairFree (vnp->data.ptrvalue);
+    vnp_next = vnp->next;
+    vnp->next= NULL;
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+typedef struct valuelistrowdialog {
+  DIALOG_MESSAGE_BLOCK
+
+  TaglistCallback change_notify;
+  Pointer         change_userdata;
+  DialoG          parent_dlg;
+  DialoG          name_dlg;
+  DialoG          editors[eNumValueEditors];
+  Int4            current_editor;
+} ValueListRowDialogData, PNTR ValueListRowDialogPtr;
+
+
+static void ChangeValueListRowName (Pointer data)
+{
+  ValueListRowDialogPtr dlg;
+  ValNodePtr            vnp;
+  Int4                  i;
+  CharPtr               value = NULL;
+
+  dlg = (ValueListRowDialogPtr) data;
+  if (dlg == NULL) return;
+
+  if (dlg->current_editor > -1)
+  {
+    value = (CharPtr) DialogToPointer (dlg->editors[dlg->current_editor]);
+  }
+  for (i = 0; i < eNumValueEditors; i++)
+  {
+    Hide (dlg->editors[i]);
+  }
+  vnp = (ValNodePtr) DialogToPointer (dlg->name_dlg);
+  if (vnp != NULL && vnp->choice > 0)
+  {
+    dlg->current_editor = vnp->choice - 1;
+    Show (dlg->editors[dlg->current_editor]);
+    PointerToDialog (dlg->editors[dlg->current_editor], value);
+    vnp = ValNodeFree (vnp);
+  } else {
+    dlg->current_editor = -1;
+  }
+  value = MemFree (value);
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void NameValuePairToDialog (DialoG d, Pointer data)
+{
+  ValueListRowDialogPtr dlg;
+  NameValuePairPtr      nvp;
+  ValNode               vn;
+  Int4                  i;
+
+  dlg = (ValueListRowDialogPtr) GetObjectExtra (d);
+  nvp = (NameValuePairPtr) data;
+
+  if (dlg == NULL) return;
+  if (nvp == NULL)
+  {
+    vn.next = NULL;
+    vn.choice = 0;
+    vn.data.ptrvalue = " ";
+    PointerToDialog (dlg->name_dlg, &vn);
+    for (i = 0; i < eNumValueEditors; i++)
+    {
+      PointerToDialog (dlg->editors[i], NULL);
+    }
+    ChangeValueListRowName (dlg);
+  }
+  else
+  {
+    PointerToDialog (dlg->name_dlg, nvp->name_vnp);
+    ChangeValueListRowName (dlg);
+    if (dlg->current_editor > -1)
+    {
+      PointerToDialog (dlg->editors[dlg->current_editor], nvp->value);
+      if (dlg->change_notify != NULL)
+      {
+        (dlg->change_notify) (dlg->change_userdata);
+      }
+    }
+  }    
+}
+
+
+static Pointer DialogToNameValuePair (DialoG d)
+{
+  ValueListRowDialogPtr dlg;
+  NameValuePairPtr      nvp;
+  ValNodePtr            name_vnp;
+
+  dlg = (ValueListRowDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->current_editor < 0) return NULL;
+
+  name_vnp = DialogToPointer (dlg->name_dlg);
+  if (name_vnp == NULL) return NULL;
+
+  nvp = (NameValuePairPtr) MemNew (sizeof (NameValuePairData));
+  nvp->name_vnp = name_vnp;
+  nvp->value = DialogToPointer (dlg->editors[dlg->current_editor]);
+  return nvp;
+}
+
+
+static ValNodePtr CopyChoiceList (ValNodePtr orig)
+{
+  ValNodePtr vnp, cpy = NULL, prev = NULL;
+
+  while (orig != NULL)
+  {
+    vnp = ValNodeNew (NULL);
+    vnp->choice = orig->choice;
+    vnp->data.ptrvalue = StringSave (orig->data.ptrvalue);
+    if (prev == NULL)
+    {
+      cpy = vnp;
+    }
+    else
+    {
+      prev->next = vnp;
+    }
+    prev = vnp;
+    orig = orig->next;
+  }
+  return cpy;
+}
+
+static ValNodePtr TestValueListRowDialog (DialoG d)
+{
+  ValueListRowDialogPtr dlg;
+  ValNodePtr            name_vnp, err_list = NULL;
+  CharPtr               val, err_str;
+  CharPtr               err_fmt = "No modifier type selected for data %s";
+
+  dlg = (ValueListRowDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->current_editor < 0) return NULL;
+
+  val = DialogToPointer (dlg->editors[dlg->current_editor]);
+  if (!StringHasNoText (val))
+  {
+    name_vnp = DialogToPointer (dlg->name_dlg);
+    if (name_vnp == NULL || name_vnp->choice == 0)
+    {
+      err_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (err_fmt) + StringLen (val)));
+      sprintf (err_str, err_fmt, val);
+      err_list = ValNodeNew(NULL);
+      err_list->choice = 0;     
+      err_list->data.ptrvalue = err_str;
+    }
+    name_vnp = ValNodeFree (name_vnp);
+  }
+  val = MemFree (val);
+  return err_list;
+}
+
+
+static void ClearValueListRow (ButtoN b)
+{
+  ValueListRowDialogPtr dlg;
+
+  dlg = (ValueListRowDialogPtr) GetObjectExtra (b);
+
+  if (dlg != NULL)
+  {  
+    PointerToDialog (dlg->dialog, NULL);
+    if (dlg->change_notify != NULL) 
+    {
+      (dlg->change_notify) (dlg->change_userdata);
+    }
+    SendMessageToDialog (dlg->parent_dlg, VIB_MSG_REDRAW);
+  }
+}
+ 
+ 
+static DialoG ValueListRowDialog (GrouP h, Int2 width, ValNodePtr choice_list, ValueListParentPtr parent,
+                                  TaglistCallback change_notify, Pointer change_userdata, DialoG parent_dlg)
+{
+  ValueListRowDialogPtr dlg;
+  GrouP           p, g;
+  Int4            i;
+  ValNode         vn;
+  ButtoN          b;
+
+  p = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (p, 2, 2);
+  dlg = (ValueListRowDialogPtr) MemNew (sizeof(ValueListRowDialogData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NameValuePairToDialog;
+  dlg->fromdialog = DialogToNameValuePair;
+  dlg->testdialog = TestValueListRowDialog;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->parent_dlg = parent_dlg;
+  
+  dlg->name_dlg = ValNodeSelectionDialog (p, CopyChoiceList(choice_list), 1, 
+                                     ValNodeStringName,
+                                     ValNodeSimpleDataFree, ValNodeStringCopy,
+                                     ValNodeStringMatch, NULL,
+                                     ChangeValueListRowName, dlg, FALSE);
+  vn.next = NULL;
+  vn.choice = 0;
+  vn.data.ptrvalue = " ";
+  PointerToDialog (dlg->name_dlg, &vn);
+
+  g = HiddenGroup (p, 0, 0, NULL);
+  for (i = 0; i < eNumValueEditors; i++)
+  {
+    dlg->editors[i] = (value_edit_dialog_list[i]) (g, width, parent, change_notify, change_userdata);
+  }
+
+  b = PushButton (p, "X", ClearValueListRow);
+  SetObjectExtra (b, dlg, NULL);
+
+  ChangeValueListRowName (dlg);
+    
+  return (DialoG) p;
+}
+
+typedef struct valuelistdialog {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback change_notify;
+  Pointer         change_userdata;
+  Int4            num_rows;
+  DialoG *        rows;
+  BaR             left_bar;
+  BaR             right_bar;
+  ValNodePtr      choice_list;
+  ValNodePtr      value_list;
+  Int4            scroll_pos;
+  Boolean         suppress_notify;
+} ValueListDialogData, PNTR ValueListDialogPtr;
+
+
+static void CleanupValueListDialog (GraphiC g, VoidPtr data)
+
+{
+  ValueListDialogPtr dlg;
+  
+  dlg = (ValueListDialogPtr) data;
+  if (dlg != NULL)
+  {
+    dlg->rows = MemFree (dlg->rows);
+  }
+
+  StdCleanupExtraProc (g, data);
+}
+
+
+static NameValuePairPtr GetNthNameValuePair (Int4 n, ValNodePtr list)
+{
+  while (n > 0 && list != NULL)
+  {
+    n--;
+    list = list->next;
+  }
+  if (list == NULL)
+  {
+    return NULL;
+  }
+  else 
+  {
+    return (NameValuePairPtr) list->data.ptrvalue;
+  }
+}
+
+static void PopulateValueListRows (ValueListDialogPtr dlg)
+{
+  Int4 n;
+  ValNodePtr vnp;
+
+  n = dlg->scroll_pos;
+  vnp = dlg->value_list;
+
+  dlg->suppress_notify = TRUE;
+
+  while (n > 0 && vnp != NULL)
+  {
+    n--;
+    vnp = vnp->next;
+  }
+  for (n = 0; n < dlg->num_rows; n++)
+  {
+    if (vnp == NULL)
+    {  
+      PointerToDialog (dlg->rows[n], NULL);
+    }
+    else 
+    {
+      PointerToDialog (dlg->rows[n], vnp->data.ptrvalue);
+      vnp = vnp->next;
+    }
+  }
+  dlg->suppress_notify = FALSE;
+}
+
+
+static Boolean IsNameValuePairEmpty (NameValuePairPtr nvp)
+{
+  if (nvp == NULL) 
+  {
+    return TRUE;
+  }
+  else if ((nvp->name_vnp == NULL || nvp->name_vnp->choice == 0 || StringHasNoText (nvp->name_vnp->data.ptrvalue)) /* no choice */
+            && StringHasNoText (nvp->value)) /* no value */
+  {
+    return TRUE;
+  }
+  else 
+  {
+    return FALSE;
+  }
+}
+
+/* Only trim blanks from the end of the list */
+static void RemoveBlanks (ValNodePtr PNTR pvnp)
+{
+  ValNodePtr vnp, last_non_blank = NULL;
+
+  if (pvnp == NULL) return;
+
+  vnp = *pvnp;
+  while (vnp != NULL) 
+  {
+    if (!IsNameValuePairEmpty ((NameValuePairPtr) vnp->data.ptrvalue)) 
+    {
+      last_non_blank = vnp;
+    }
+    vnp = vnp->next;
+  }
+  if (last_non_blank != NULL) {
+    last_non_blank->next = NameValuePairListFree (last_non_blank->next);
+  }
+}
+
+static void ValueListPairToDialog (DialoG d, Pointer data)
+{
+  ValueListDialogPtr dlg;
+  Int4               num_vals;
+
+  dlg = (ValueListDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  dlg->value_list = NameValuePairListFree (dlg->value_list);
+  dlg->value_list = (ValNodePtr) data;
+  RemoveBlanks (&(dlg->value_list));
+
+  num_vals = ValNodeLen (dlg->value_list);
+  if (num_vals >= dlg->num_rows)
+  {
+    SetBarMax (dlg->left_bar, num_vals + 1 - dlg->num_rows);
+    SetBarMax (dlg->right_bar, num_vals + 1 - dlg->num_rows);
+  }
+  else
+  {
+    SetBarMax (dlg->left_bar, 0);
+    SetBarMax (dlg->right_bar, 0);
+  }
+  if (GetValue (dlg->left_bar) > GetBarMax (dlg->left_bar))
+  {
+    CorrectBarValue (dlg->left_bar, 0);
+    CorrectBarValue (dlg->right_bar, 0);
+  }
+  PopulateValueListRows (dlg);
+}
+
+
+static void ScrollValueListProc (BaR b, GraphiC g, Int2 _new, Int2 _old)
+{
+  ValueListDialogPtr dlg;
+
+  dlg = (ValueListDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL) return;
+
+  /* synchronize left and right scroll bars */
+  if (b == dlg->right_bar && dlg->left_bar != NULL)
+  {
+    CorrectBarValue (dlg->left_bar, GetBarValue (dlg->right_bar));
+  }
+  else if (b == dlg->left_bar && dlg->right_bar != NULL)
+  {
+    CorrectBarValue (dlg->right_bar, GetBarValue (dlg->left_bar));      
+  }
+
+  dlg->scroll_pos = _new;
+  PopulateValueListRows (dlg);
+}
+
+
+static void ValueListDialogMessage (DialoG d, Int2 mssg)
+
+{
+  ValNodePtr         new_value_list;
+
+  switch (mssg) {
+    case VIB_MSG_REDRAW :
+      new_value_list = DialogToPointer (d);
+      PointerToDialog (d, new_value_list);
+      break;
+    default :
+      break;
+  }
+}
+
+
+static void ChangeValueRow (Pointer data)
+{
+  ValueListDialogPtr dlg;
+  NameValuePairPtr   nvp;
+  Int4               max, i;
+  ValNodePtr         vnp;
+
+  dlg = (ValueListDialogPtr) data;
+
+  if (dlg == NULL) return;
+
+  if (dlg->suppress_notify) return;
+
+  /* copy values into list */
+  /* first, skip over rows scrolled past */
+  vnp = dlg->value_list;
+  i = 0;
+  while (i < dlg->scroll_pos)
+  {
+    if (vnp == NULL)
+    {
+      vnp = ValNodeAddPointer (&dlg->value_list, 0, NULL);
+    }
+    vnp = vnp->next;
+    i++;
+  }
+  
+  /* now copy in rows we can see */    
+  for (i = 0; i < dlg->num_rows; i++)
+  {
+    if (vnp == NULL)
+    {
+      vnp = ValNodeAddPointer (&dlg->value_list, 0, DialogToPointer (dlg->rows[i]));
+    }
+    else
+    {
+      vnp->data.ptrvalue = NameValuePairFree (vnp->data.ptrvalue);
+      vnp->data.ptrvalue = DialogToPointer (dlg->rows[i]);
+    }
+    vnp = vnp->next;
+  }
+  
+
+  /* if editing last row, extend scrollbar for new row */
+  max = GetBarMax (dlg->left_bar);
+  if (dlg->scroll_pos == max)
+  {
+    nvp = DialogToPointer (dlg->rows[dlg->num_rows - 1]);
+    if (!IsNameValuePairEmpty (nvp))
+    {
+      SetBarMax (dlg->left_bar, max + 1);
+      SetBarMax (dlg->right_bar, max + 1); 
+    }
+    nvp = NameValuePairFree(nvp);    
+  }   
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static Pointer DialogToNameValuePairList (DialoG d)
+{
+  ValueListDialogPtr dlg;
+  ValNodePtr         value_list = NULL, vnp;
+
+  dlg = (ValueListDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  for (vnp = dlg->value_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->data.ptrvalue != NULL) 
+    {
+      ValNodeAddPointer (&value_list, 0, NameValuePairCopy (vnp->data.ptrvalue));
+    }
+  }
+  return (Pointer) value_list;
+}
+
+
+static ValNodePtr TestValueListDialog (DialoG d)
+{
+  ValNodePtr       err_list = NULL, value_list = NULL, vnp;
+  NameValuePairPtr nvp;
+  CharPtr          err_fmt = "No modifier type selected for data %s";
+  CharPtr          err_str;
+
+  value_list = DialogToPointer (d);
+
+  for (vnp = value_list; vnp != NULL; vnp = vnp->next)
+  {
+    nvp = (NameValuePairPtr) vnp->data.ptrvalue;
+    if (nvp != NULL 
+        && !StringHasNoText (nvp->value) 
+        && (nvp->name_vnp == NULL || StringHasNoText (nvp->name_vnp->data.ptrvalue)))
+    {
+      err_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (err_fmt) + StringLen (nvp->value)));
+      sprintf (err_str, err_fmt, nvp->value);
+      ValNodeAddPointer (&err_list, 0, err_str);
+    }
+  }
+  value_list = NameValuePairListFree (value_list);
+  return err_list;
+}
+
+extern DialoG ValueListDialog (GrouP h, Uint2 num_rows, Int2 width, ValNodePtr choice_list, ValueListParentPtr parent, TaglistCallback change_notify, Pointer change_userdata)
+{
+  ValueListDialogPtr dlg;
+  GrouP           p, g;
+  Int4            i;
+
+  p = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (p, 2, 2);
+  dlg = (ValueListDialogPtr) MemNew (sizeof(ValueListDialogData));
+
+  SetObjectExtra (p, dlg, CleanupValueListDialog);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = ValueListPairToDialog;
+  dlg->fromdialog = DialogToNameValuePairList;
+  dlg->testdialog = TestValueListDialog;
+  dlg->dialogmessage = ValueListDialogMessage;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  
+  dlg->num_rows = num_rows;
+
+  /* navigation bar on left */
+  dlg->left_bar = ScrollBar (p, 0, dlg->num_rows, ScrollValueListProc);
+  SetObjectExtra (dlg->left_bar, dlg, NULL);
+  CorrectBarPage (dlg->left_bar, dlg->num_rows - 1, dlg->num_rows - 1);
+
+  g = HiddenGroup (p, 1, 0, NULL);
+  dlg->rows = (DialoG *) MemNew (num_rows * sizeof (DialoG));
+  for (i = 0; i < dlg->num_rows; i++)
+  {
+    dlg->rows[i] = ValueListRowDialog (g, width, choice_list, parent, ChangeValueRow, dlg, (DialoG) p);
+
+  }
+
+  /* navigation bar on right */
+  dlg->right_bar = ScrollBar (p, 0, dlg->num_rows, ScrollValueListProc);
+  SetObjectExtra (dlg->right_bar, dlg, NULL);
+  CorrectBarPage (dlg->right_bar, dlg->num_rows - 1, dlg->num_rows - 1);
+
+  AlignObjects (ALIGN_LOWER, (HANDLE) g, (HANDLE) dlg->left_bar, (HANDLE) dlg->right_bar, NULL);
+
+
+  return (DialoG) p;
+}
+
+
+typedef struct modifierlistdlg {
+  VALUE_LIST_PARENT_FIELDS
+
+  DialoG dlg;
+  ButtoN type_strain;
+  TexT   taxname;
+
+  EnumFieldAssocPtr al;
+} ModifierListDlgData, PNTR ModifierListDlgPtr;
+
+
+static ValNodePtr TestModifierListDlg (DialoG d)
+{
+  ModifierListDlgPtr dlg = (ModifierListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  return TestDialog (dlg->dlg);
+}
+
+
+
+static ValNodePtr SubSourceListToNameValueList (SubSourcePtr ssp)
+{
+  ValNodePtr val_list = NULL;
+  NameValuePairPtr nvp;
+
+  while (ssp != NULL)
+  {
+    if (ssp->subtype != SUBSRC_other)
+    {
+      nvp = (NameValuePairPtr) MemNew (sizeof (NameValuePairData));
+      nvp->name_vnp = ValNodeNew(NULL);
+      nvp->name_vnp->choice = 1;
+      nvp->name_vnp->data.ptrvalue = StringSave (GetSubsourceQualName (ssp->subtype));
+      nvp->value = StringSave (ssp->name);
+      ValNodeAddPointer (&val_list, 0, nvp);
+    }
+    ssp = ssp->next;
+  }
+  return val_list;
+
+}
+
+
+static void SubSourceListToDialog (DialoG d, Pointer data)
+{
+  ModifierListDlgPtr dlg;
+  SubSourcePtr ssp;
+  ValNodePtr   vnp;
+  CharPtr      note_txt = NULL;
+
+  dlg = (ModifierListDlgPtr) GetObjectExtra (d);
+
+  if (dlg == NULL) return;
+
+  ssp = (SubSourcePtr) data;
+
+  vnp = SubSourceListToNameValueList (ssp);
+  PointerToDialog (dlg->dlg, vnp);
+
+  while (ssp != NULL) 
+  {
+    if (ssp->subtype == SUBSRC_other)
+    {
+      note_txt = combine_strings (note_txt, ssp->name);
+    }
+    ssp = ssp->next;
+  }
+  SetTitle (dlg->note, note_txt);
+
+}
+
+
+static Pointer DialogToSubSourceList (DialoG d)
+{
+  ModifierListDlgPtr dlg;
+  ValNodePtr   val_list, vnp;
+  NameValuePairPtr nvp;
+  SubSourcePtr     ssp_list = NULL, ssp_prev = NULL, ssp_new;
+  Uint1            subtype;
+  CharPtr          comment_str;
+
+  dlg = (ModifierListDlgPtr) GetObjectExtra (d);
+
+  if (dlg == NULL) return NULL;
+
+  val_list = (ValNodePtr) DialogToPointer (dlg->dlg);
+  for (vnp = val_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->data.ptrvalue != NULL) 
+    {
+      nvp = (NameValuePairPtr) vnp->data.ptrvalue;
+      if (nvp != NULL && nvp->name_vnp != NULL)
+      {        
+        subtype = EquivalentSubSourceEx (nvp->name_vnp->data.ptrvalue, TRUE);
+        if (subtype != 0)
+        {
+          ssp_new = SubSourceNew ();
+          ssp_new->subtype = subtype;
+          ssp_new->name = StringSave (nvp->value == NULL ? "" : nvp->value);
+          if (ssp_prev == NULL)
+          {
+            ssp_list = ssp_new;
+          }
+          else
+          {
+            ssp_prev->next = ssp_new;
+          }
+          ssp_prev = ssp_new;
+        }
+      }
+    }
+  }
+  val_list = NameValuePairListFree (val_list);
+
+  /* add comment */
+  comment_str = SaveStringFromText (dlg->note);
+  if (!StringHasNoText (comment_str))
+  {
+    ssp_new = SubSourceNew();
+    ssp_new->subtype = SUBSRC_other;
+    ssp_new->name = StringSave (comment_str);
+    if (ssp_prev == NULL)
+    {
+      ssp_list = ssp_new;
+    }
+    else
+    {
+      ssp_prev->next = ssp_new;
+    }
+    ssp_prev = ssp_new;
+  }
+
+  return ssp_list;
+}
+
+
+static ValNodePtr GetSubSourceChoicesForValueList (EnumFieldAssocPtr al)
+{
+  ValNodePtr choice_list = NULL;
+  EnumFieldAssocPtr efap;
+
+  efap = al;
+  while (efap->name != NULL)
+  {
+    if (StringHasNoText (efap->name))
+    {
+      ValNodeAddStr (&choice_list, eValueEditSimpleText + 1, StringSave (efap->name));
+    }
+    else if (efap->value == SUBSRC_lat_lon)
+    {
+      ValNodeAddStr (&choice_list, eValueEditLatLon + 1, StringSave (efap->name));
+    }
+    else if (IsNonTextModifier (efap->name))
+    {
+      ValNodeAddStr (&choice_list, eValueEditTrueFalse + 1, StringSave (efap->name));
+    }
+    else
+    {
+      ValNodeAddStr (&choice_list, eValueEditSimpleText + 1, StringSave (efap->name));
+    }
+    efap ++;
+  }
+  return choice_list;
+}
+
+
+static CharPtr subsource_extra_prompts [] = {
+  "Additional", "Source", "Information", NULL
+};
+
+extern DialoG CreateSubSourceDialog (GrouP h, EnumFieldAssocPtr al)
+{
+  ModifierListDlgPtr dlg;
+  GrouP        p, g, x;
+  ValNodePtr   choice_list;
+  Int2         max;
+  
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (ModifierListDlgPtr) MemNew (sizeof(ModifierListDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SubSourceListToDialog;
+  dlg->fromdialog = DialogToSubSourceList;
+  dlg->testdialog = TestModifierListDlg;
+  dlg->dialogmessage = NULL;
+
+  choice_list = GetSubSourceChoicesForValueList (al);
+  dlg->dlg = ValueListDialog (p, 3, 23, choice_list, (ValueListParentPtr) dlg, NULL, NULL);  
+  choice_list = ValNodeFreeData (choice_list);
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  SelectFont (programFont);
+  max = MaxStringWidths (subsource_extra_prompts) + 2;
+  x = MultiLinePrompt (g, "Additional Source Information", max, programFont);
+  dlg->note = ScrollText (g, 20, 3, programFont, TRUE, NULL);
+  AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) dlg->note, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->dlg, (HANDLE) g, NULL);
+
+  return (DialoG) p;
+}
+
+
+static ValNodePtr OrgModListToNameValueList (OrgModPtr mod)
+{
+  ValNodePtr val_list = NULL;
+  NameValuePairPtr nvp;
+
+  while (mod != NULL)
+  {
+    if (mod->subtype != ORGMOD_gb_acronym
+        && mod->subtype != ORGMOD_gb_anamorph
+        && mod->subtype != ORGMOD_gb_synonym
+        && mod->subtype != ORGMOD_other)
+    {
+      nvp = (NameValuePairPtr) MemNew (sizeof (NameValuePairData));
+      nvp->name_vnp = ValNodeNew(NULL);
+      nvp->name_vnp->choice = 1;
+      nvp->name_vnp->data.ptrvalue = StringSave (GetOrgModQualName (mod->subtype));
+      nvp->value = StringSave (mod->subname);
+      ValNodeAddPointer (&val_list, 0, nvp);
+    }
+    mod = mod->next;
+  }
+  return val_list;
+
+}
+
+
+static void OrgModListToDialog (DialoG d, Pointer data)
+{
+  ModifierListDlgPtr dlg;
+  OrgModPtr          mod;
+  ValNodePtr         vnp;
+  CharPtr            note_txt = NULL;
+
+  dlg = (ModifierListDlgPtr) GetObjectExtra (d);
+
+  if (dlg == NULL) return;
+
+  mod = (OrgModPtr) data;
+
+  vnp = OrgModListToNameValueList (mod);
+  PointerToDialog (dlg->dlg, vnp);
+
+  while (mod != NULL) 
+  {
+    if (mod->subtype == ORGMOD_other)
+    {
+      note_txt = combine_strings (note_txt, mod->subname);
+    }
+    mod = mod->next;
+  }
+  SetTitle (dlg->note, note_txt);
+
+}
+
+
+static Pointer DialogToOrgModList (DialoG d)
+{
+  ModifierListDlgPtr dlg;
+  ValNodePtr   val_list, vnp;
+  NameValuePairPtr nvp;
+  OrgModPtr        mod_list = NULL, mod_prev = NULL, mod_new;
+  Uint1            subtype;
+  CharPtr          comment_str;
+
+  dlg = (ModifierListDlgPtr) GetObjectExtra (d);
+
+  if (dlg == NULL) return NULL;
+
+  val_list = (ValNodePtr) DialogToPointer (dlg->dlg);
+  for (vnp = val_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->data.ptrvalue != NULL) 
+    {
+      nvp = (NameValuePairPtr) vnp->data.ptrvalue;
+      if (nvp != NULL && nvp->name_vnp != NULL)
+      {        
+        subtype = EquivalentOrgModEx (nvp->name_vnp->data.ptrvalue, TRUE);
+        if (subtype != 0)
+        {
+          mod_new = OrgModNew ();
+          mod_new->subtype = subtype;
+          mod_new->subname = StringSave (nvp->value == NULL ? "" : nvp->value);
+          if (mod_prev == NULL)
+          {
+            mod_list = mod_new;
+          }
+          else
+          {
+            mod_prev->next = mod_new;
+          }
+          mod_prev = mod_new;
+        }
+      }
+    }
+  }
+  val_list = NameValuePairListFree (val_list);
+
+  /* add comment */
+  comment_str = SaveStringFromText (dlg->note);
+  if (!StringHasNoText (comment_str))
+  {
+    mod_new = OrgModNew();
+    mod_new->subtype = ORGMOD_other;
+    mod_new->subname = StringSave (comment_str);
+    if (mod_prev == NULL)
+    {
+      mod_list = mod_new;
+    }
+    else
+    {
+      mod_prev->next = mod_new;
+    }
+    mod_prev = mod_new;
+  }
+
+  return mod_list;
+}
+
+
+extern Boolean IsNonTextModifier (CharPtr mod_name)
+{
+  if (StringICmp (mod_name, "transgenic") == 0
+      || StringICmp (mod_name, "germline") == 0
+      || StringICmp (mod_name, "metagenomic") == 0
+      || StringICmp (mod_name, "environmental-sample") ==0
+      || StringICmp (mod_name, "rearranged") == 0)
+  {
+    return TRUE;  
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+
+static ValNodePtr GetOrgModChoicesForValueList (EnumFieldAssocPtr al)
+{
+  ValNodePtr choice_list = NULL;
+  EnumFieldAssocPtr efap;
+
+  efap = al;
+  while (efap->name != NULL)
+  {
+    if (StringHasNoText (efap->name))
+    {
+      ValNodeAddStr (&choice_list, eValueEditSimpleText + 1, StringSave (efap->name));
+    }
+    else if (IsNonTextModifier (efap->name))
+    {
+      ValNodeAddStr (&choice_list, eValueEditTrueFalse + 1, StringSave (efap->name));
+    }
+    else if (efap->value == ORGMOD_specimen_voucher || efap->value == ORGMOD_culture_collection || efap->value == ORGMOD_bio_material)
+    {
+      ValNodeAddStr (&choice_list, eValueEditSpecimenVoucher + 1, StringSave (efap->name));
+    }
+    else
+    {
+      ValNodeAddStr (&choice_list, eValueEditSimpleText + 1, StringSave (efap->name));
+    }
+    efap ++;
+  }
+  return choice_list;
+}
+
+
+static CharPtr orgmod_extra_prompts [] = {
+  "Additional", "Organism", "Information", NULL
+};
+
+static void ChangeOrgmodComment (TexT t)
+{
+  ModifierListDlgPtr dlg;
+  CharPtr str;
+
+  dlg = (ModifierListDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) return;
+
+  str = SaveStringFromText (t);
+  if ( StringStr (str, "type strain of ")) {
+    Disable (dlg->type_strain);
+  }
+
+}  
+
+
+static void AddTypeStrainProc (ButtoN b)
+{
+  ModifierListDlgPtr dlg;
+  CharPtr        old_orgcomment;
+  Int4           old_orgcomment_len;
+  CharPtr        org_name;
+  Int4           org_name_len;
+  const CharPtr  ts = "type strain of ";
+  const CharPtr  sep = "; ";
+  CharPtr        new_orgcomment;
+
+  dlg = (ModifierListDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL) return;
+
+  old_orgcomment_len = TextLength (dlg->note) + 1;
+  old_orgcomment = MemNew (old_orgcomment_len + 1);
+  if (old_orgcomment == NULL) return;
+  org_name_len = TextLength (dlg->taxname) + 1;
+  org_name = MemNew (org_name_len + 1);
+  if (org_name == NULL) 
+  {
+    MemFree (old_orgcomment);
+    return;
+  }
+  new_orgcomment = MemNew (old_orgcomment_len
+			+ StringLen (sep)
+			+ StringLen (ts)
+			+ org_name_len
+			+ 1);
+  if (new_orgcomment == NULL)
+  {
+    MemFree (old_orgcomment);
+    MemFree (org_name);
+  }
+
+  GetTitle (dlg->note, old_orgcomment, old_orgcomment_len);
+  TrimSpacesAroundString (old_orgcomment);
+  GetTitle (dlg->taxname, org_name, org_name_len);
+  TrimSpacesAroundString (org_name);
+  if (old_orgcomment[0] != 0)
+  {
+    StringCpy(new_orgcomment, old_orgcomment);
+    StringCat(new_orgcomment, sep);
+  }
+  else
+  {
+    new_orgcomment[0] = 0;
+  }
+    
+  StringCat (new_orgcomment, ts);
+  StringCat (new_orgcomment, org_name);
+  SetTitle (dlg->note, new_orgcomment);
+  MemFree (org_name);
+  MemFree (old_orgcomment);
+  MemFree (new_orgcomment);
+  Disable (b);
+}
+
+
+extern DialoG CreateOrgModDialog (GrouP h, EnumFieldAssocPtr al, TexT taxname)
+{
+  ModifierListDlgPtr dlg;
+  GrouP        p, g, x;
+  ValNodePtr   choice_list;
+  Int2         max;
+  
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (ModifierListDlgPtr) MemNew (sizeof(ModifierListDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = OrgModListToDialog;
+  dlg->fromdialog = DialogToOrgModList;
+  dlg->testdialog = TestModifierListDlg;
+  dlg->dialogmessage = NULL;
+
+  choice_list = GetOrgModChoicesForValueList (al);
+  dlg->dlg = ValueListDialog (p, 3, 23, choice_list, (ValueListParentPtr) dlg, NULL, NULL);  
+  choice_list = ValNodeFreeData (choice_list);
+
+  g = HiddenGroup (p, 2, 0, NULL);
+  SelectFont (programFont);
+  max = MaxStringWidths (orgmod_extra_prompts) + 2;
+  x = MultiLinePrompt (g, "Additional Organism Information", max, programFont);
+  dlg->note = ScrollText (g, 20, 3, programFont, TRUE, ChangeOrgmodComment);
+  SetObjectExtra (dlg->note, dlg, NULL);
+  AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) dlg->note, NULL);
+
+  dlg->taxname = taxname;
+  if (dlg->taxname != NULL)
+  {
+    dlg->type_strain = PushButton (p, "Add type strain to comment", AddTypeStrainProc);
+    SetObjectExtra (dlg->type_strain, dlg, NULL);
+  }
+  else
+  {
+    dlg->type_strain = NULL;
+  }
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->dlg, (HANDLE) g, (HANDLE) dlg->type_strain, NULL);
+
+  return (DialoG) p;
+}
+
+
+extern void CreateStandardEditMenu (WindoW w)
+{
+  MenU m;
+  IteM i;
+
+  /* Edit Menu */
+  m = PulldownMenu (w, "Edit");
+  i = CommandItem (m, "Cut", StdCutTextProc);
+  i = CommandItem (m, "Copy", StdCopyTextProc);
+  i = CommandItem (m, "Paste", StdPasteTextProc);
+  i = CommandItem (m, "Clear", StdDeleteTextProc);
+
 }
 

@@ -219,6 +219,10 @@ SOURCE=..\..\..\access\mimapi.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\mla2api.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\needleman.c
 # End Source File
 # Begin Source File
@@ -303,6 +307,10 @@ SOURCE=..\..\..\access\objmim.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\objmla2.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objproj.c
 # End Source File
 # Begin Source File
@@ -320,6 +328,10 @@ SOURCE=..\..\..\object\objpubme.c
 # Begin Source File
 
 SOURCE=..\..\..\object\objres.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objscoremat.c
 # End Source File
 # Begin Source File
 
@@ -775,6 +787,14 @@ SOURCE=..\..\..\access\mimapi.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\mla2api.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\mlkludge.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\asnstat\mmdb1.h
 # End Source File
 # Begin Source File
@@ -871,6 +891,10 @@ SOURCE=..\..\..\access\objmim.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\objmla2.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objproj.h
 # End Source File
 # Begin Source File
@@ -892,6 +916,10 @@ SOURCE=..\..\..\object\objpubme.h
 # Begin Source File
 
 SOURCE=..\..\..\object\objres.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objscoremat.h
 # End Source File
 # Begin Source File
 
@@ -960,6 +988,10 @@ SOURCE=..\..\..\api\samutil.h
 # Begin Source File
 
 SOURCE=..\..\..\api\satutil.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\scoremat.h
 # End Source File
 # Begin Source File
 

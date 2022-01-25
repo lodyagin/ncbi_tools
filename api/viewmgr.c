@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.37 2006/07/13 17:06:39 bollin Exp $
+/*   $Id: viewmgr.c,v 1.38 2007/03/15 14:03:07 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.37 2006/07/13 17:06:39 bollin Exp $
+* File Name:  $Id: viewmgr.c,v 1.38 2007/03/15 14:03:07 bollin Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.37 $
+* $Revision: 1.38 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.38  2007/03/15 14:03:07  bollin
+* Function needs to return a value.
+*
 * Revision 1.37  2006/07/13 17:06:39  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -983,7 +986,7 @@ NLM_EXTERN Int4 ViewMgr_SetHidden(SeqAlign *salp, Boolean Hidden, Int4 Row)
 
 
 NLM_EXTERN Int4 ViewMgr_Update(SeqAlign *salp) {
-  ViewMgr_Update2(salp, FALSE);
+  return ViewMgr_Update2(salp, FALSE);
 }
 
 

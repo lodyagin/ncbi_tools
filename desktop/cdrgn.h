@@ -29,13 +29,17 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cdrgn.h,v $
+* Revision 6.6  2007/07/25 13:53:12  bollin
+* Removed local copy of TruncateLocation from sequin3.c, made TruncateLocation
+* function in desktop/cdrgn.c extern and added prototype to cdrgn.h
+*
 * Revision 6.5  2003/10/23 16:43:56  kans
 * changed operon to import feature
 *
@@ -89,6 +93,8 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
                            SeqFeatPtr sfp, SeqEntryPtr sep,
                            Uint2 subtype, FormActnFunc actproc);
 extern Int2 LIBCALLBACK RnaGenFunc (Pointer data);
+
+extern SeqLocPtr TruncateLocation (SeqLocPtr head, Int4 len);
 
 
 #ifdef __cplusplus

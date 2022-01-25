@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.78 2006/09/01 14:48:36 papadopo Exp $
+/* $Id: blast_kappa.c,v 1.86 2007/05/22 20:55:36 kazimird Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,23 +34,22 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.78 2006/09/01 14:48:36 papadopo Exp $";
+"$Id: blast_kappa.c,v 1.86 2007/05/22 20:55:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
-#include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/ncbi_math.h>
 #include <algo/blast/core/blast_hits.h>
-#include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_kappa.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_gapalign.h>
-#include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/link_hsps.h>
+#include <algo/blast/core/gencode_singleton.h>
 #include "blast_psi_priv.h"
 #include "blast_gapalign_priv.h"
-#include "blast_posit.h"
 #include "blast_hits_priv.h"
+#include "blast_posit.h"
 
 #include <algo/blast/composition_adjustment/nlm_linear_algebra.h>
 #include <algo/blast/composition_adjustment/compo_heap.h>
@@ -295,7 +294,7 @@ s_HSPListFromDistinctAlignments(BlastCompo_Alignment ** alignments,
                                 int oid,
                                 BlastQueryInfo* queryInfo)
 {
-    int status;                    /* return code for any routine called */
+    int status = 0;                    /* return code for any routine called */
     const int unknown_value = 0;   /* dummy constant to use when a
                                       parameter value is not known */
     BlastCompo_Alignment * align;  /* an alignment in the list */
@@ -754,7 +753,8 @@ s_SWFindFinalEndsUsingXdrop(BlastCompo_SequenceData * query,
                      queryEnd - queryStart + 1, matchEnd - matchStart + 1,
                      queryAlignmentExtent,
                      matchAlignmentExtent, gap_align->fwd_prelim_tback,
-                     gap_align, scoringParams, queryStart - 1, FALSE, FALSE);
+                     gap_align, scoringParams, queryStart - 1, FALSE, FALSE,
+                     NULL);
 
         gap_align->gap_x_dropoff *= 2;
         doublingCount++;
@@ -778,7 +778,6 @@ BlastKappa_SequenceInfo {
                                         search being performed. The type
                                         of search determines how sequence
                                         data should be obtained. */
-    const Uint1*   genetic_code;   /**< genetic code for translated searches */
     const BlastSeqSrc* seq_src;    /**< BLAST sequence data source */
     BlastSeqSrcGetSeqArg seq_arg;  /**< argument to GetSequence method
                                      of the BlastSeqSrc (@todo this
@@ -812,14 +811,16 @@ s_MatchingSequenceRelease(BlastCompo_MatchingSequence * self)
  *                          may be obtained
  * @param program_number    identifies the type of blast search being
  *                          performed.
- * @param gen_code_string   genetic code for translated queries
+ * @param default_db_genetic_code   default genetic code to use when
+ *                          subject sequences are translated and there is
+ *                          no other guidance on what code to use
  * @param subject_index     index of the matching sequence in the database
  */
 static int
 s_MatchingSequenceInitialize(BlastCompo_MatchingSequence * self,
                              EBlastProgramType program_number,
                              const BlastSeqSrc* seqSrc,
-                             const Uint1* gen_code_string,
+                             Int4 default_db_genetic_code,
                              Int4 subject_index)
 {
     BlastKappa_SequenceInfo * seq_info;  /* BLAST-specific sequence
@@ -833,7 +834,6 @@ s_MatchingSequenceInitialize(BlastCompo_MatchingSequence * self,
 
         seq_info->seq_src      = seqSrc;
         seq_info->prog_number  = program_number;
-        seq_info->genetic_code = gen_code_string;
 
         memset((void*) &seq_info->seq_arg, 0, sizeof(seq_info->seq_arg));
         seq_info->seq_arg.oid = self->index = subject_index;
@@ -846,6 +846,16 @@ s_MatchingSequenceInitialize(BlastCompo_MatchingSequence * self,
         if (BlastSeqSrcGetSequence(seqSrc, (void*) &seq_info->seq_arg) >= 0) {
             self->length =
                 BlastSeqSrcGetSeqLen(seqSrc, (void*) &seq_info->seq_arg);
+
+            /* If the subject is translated and the BlastSeqSrc implementation
+             * doesn't provide a genetic code string, use the default genetic
+             * code for all subjects (as in the C toolkit) */
+            if (Blast_SubjectIsTranslated(program_number) &&
+                seq_info->seq_arg.seq->gen_code_string == NULL) {
+                seq_info->seq_arg.seq->gen_code_string =
+                             GenCodeSingletonFind(default_db_genetic_code);
+                ASSERT(seq_info->seq_arg.seq->gen_code_string);
+            }
         } else {
             self->length = 0;
         }
@@ -950,7 +960,7 @@ s_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
     status = Blast_GetPartialTranslation(na_sequence + translation_start,
                                          num_nucleotides,
                                          (Int2) translation_frame,
-                                         local_data->genetic_code,
+                                         local_data->seq_arg.seq->gen_code_string,
                                          &translation_buffer,
                                          &translated_length,
                                          NULL);
@@ -1313,7 +1323,8 @@ s_RedoOneAlignment(BlastCompo_Alignment * in_align,
                                            context->scoringParams,
                                            q_start, s_start,
                                            query_data->length,
-                                           subject_data->length);
+                                           subject_data->length,
+                                           NULL);
     if (status == 0) {
         return s_NewAlignmentFromGapAlign(gapAlign, &gapAlign->edit_script,
                                           query_range, subject_range,
@@ -1333,8 +1344,6 @@ typedef struct BlastKappa_SavedParameters {
     Int4          gap_open;    /**< a penalty for the existence of a gap */
     Int4          gapExtend;   /**< a penalty for each residue in the
                                     gap */
-    Int4          gapDecline;  /**< a penalty for declining to align a pair
-                                    of residues */
     double        scale_factor;     /**< the original scale factor */
     Int4 **origMatrix;              /**< The original matrix values */
     double original_expect_value;   /**< expect value on entry */
@@ -1444,7 +1453,6 @@ s_RecordInitialSearch(BlastKappa_SavedParameters * searchParams,
 
     searchParams->gap_open     = scoring->gap_open;
     searchParams->gapExtend    = scoring->gap_extend;
-    searchParams->gapDecline   = scoring->decline_align;
     searchParams->scale_factor = scoring->scale_factor;
 
     for (i = 0;  i < searchParams->num_queries;  i++) { 
@@ -1507,9 +1515,6 @@ s_RescaleSearch(BlastScoreBlk* sbp,
     sp->gap_open = BLAST_Nint(sp->gap_open  * scale_factor);
     sp->gap_extend = BLAST_Nint(sp->gap_extend * scale_factor);
     sp->scale_factor = scale_factor;
-    if (sp->decline_align != INT2_MAX) {
-        sp->decline_align = BLAST_Nint(sp->decline_align * scale_factor);
-    }
 }
 
 
@@ -1535,7 +1540,6 @@ s_RestoreSearch(BlastScoreBlk* sbp,
 
     scoring->gap_open = searchParams->gap_open;
     scoring->gap_extend = searchParams->gapExtend;
-    scoring->decline_align = searchParams->gapDecline;
     scoring->scale_factor = searchParams->scale_factor;
 
     for (i = 0;  i < searchParams->num_queries;  i++) {
@@ -1685,7 +1689,6 @@ s_GappingParamsNew(BlastKappa_GappingParamsContext * context,
     if (gapping_params != NULL) {
         gapping_params->gap_open = scoring->gap_open;
         gapping_params->gap_extend = scoring->gap_extend;
-        gapping_params->decline_align = scoring->decline_align;
         gapping_params->context = context;
     }
     
@@ -1829,7 +1832,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                         BlastScoreBlk* sbp,
                         BlastHSPStream* hsp_stream,
                         const BlastSeqSrc* seqSrc,
-                        const Uint1* gen_code_string,
+                        Int4 default_db_genetic_code,
                         BlastScoringParameters* scoringParams,
                         const BlastExtensionParameters* extendParams,
                         const BlastHitSavingParameters* hitParams,
@@ -1856,7 +1859,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
     /* loop index */
     int query_index;
     /* number of queries in the concatenated query */
-    int numQueries;
+    int numQueries = queryInfo->num_queries;
     /* keeps track of gapped alignment params */
     BlastGapAlignStruct* gapAlign = NULL;
     /* All alignments above this value will be reported, no matter how
@@ -1885,6 +1888,10 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
     /* which test function do we use to see if a composition-adjusted
        p-value is desired; value needs to be passed in eventually*/
     int compositionTestIndex = extendParams->options->unifiedP;
+
+    ASSERT(program_number == eBlastTypeBlastp ||
+           program_number == eBlastTypeTblastn ||
+           program_number == eBlastTypePsiBlast);
 
     if (positionBased) {
         matrix = sbp->psi_matrix->pssm->data;
@@ -1963,7 +1970,6 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
         status_code = -1;
         goto function_cleanup;
     }
-    numQueries = queryInfo->num_queries;
     query_info = s_GetQueryInfo(queryBlk->sequence, queryInfo);
     if (query_info == NULL) {
         status_code = -1;
@@ -2020,7 +2026,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
         /* Get the sequence for this match */
         status_code =
             s_MatchingSequenceInitialize(&matchingSeq, program_number,
-                                         seqSrc, gen_code_string,
+                                         seqSrc, default_db_genetic_code,
                                          thisMatch->oid);
         if (status_code != 0) {
             goto match_loop_cleanup;

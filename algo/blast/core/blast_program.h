@@ -1,7 +1,4 @@
-#ifndef ALGO_BLAST_CORE___BLAST_PROGRAM__H
-#define ALGO_BLAST_CORE___BLAST_PROGRAM__H
-
-/* $Id: blast_program.h,v 1.3 2006/03/22 18:46:18 papadopo Exp $
+/* $Id: blast_program.h,v 1.7 2007/05/04 19:25:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +31,11 @@
  * Definitions for various programs supported by core BLAST
  */
 
+#ifndef ALGO_BLAST_CORE___BLAST_PROGRAM__H
+#define ALGO_BLAST_CORE___BLAST_PROGRAM__H
+
 #include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,16 +91,19 @@ typedef enum {
 /** Returns true if the query is protein 
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_QueryIsProtein(EBlastProgramType p);
 
 /** Returns true if the query is nucleotide
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_QueryIsNucleotide(EBlastProgramType p);
 
 /** Returns true if the query is PSSM
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_QueryIsPssm(EBlastProgramType p);
 
 /************* Functions to classify programs by subject **********************/
@@ -107,16 +111,19 @@ Boolean Blast_QueryIsPssm(EBlastProgramType p);
 /** Returns true if the subject is protein 
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_SubjectIsProtein(EBlastProgramType p);
 
 /** Returns true if the subject is nucleotide
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_SubjectIsNucleotide(EBlastProgramType p);
 
 /** Returns true if the subject is PSSM
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_SubjectIsPssm(EBlastProgramType p);
 
 /************* Functions to classify programs by translation *****************/
@@ -124,11 +131,13 @@ Boolean Blast_SubjectIsPssm(EBlastProgramType p);
 /** Returns true if the query is translated
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_QueryIsTranslated(EBlastProgramType p);
 
 /** Returns true if the subject is translated
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_SubjectIsTranslated(EBlastProgramType p);
 
 /************* Functions to classify special BLAST programs *****************/
@@ -136,17 +145,26 @@ Boolean Blast_SubjectIsTranslated(EBlastProgramType p);
 /** Returns true if program is PSI-BLAST (i.e.: involves a PSSM as query)
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_ProgramIsPsiBlast(EBlastProgramType p);
 
 /** Returns true if program is PHI-BLAST (i.e.: involves a pattern)
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_ProgramIsPhiBlast(EBlastProgramType p);
 
 /** Returns true if program is RPS-BLAST (i.e.: involves a PSSM as subject)
  * @param p program type [in]
  */
+NCBI_XBLAST_EXPORT 
 Boolean Blast_ProgramIsRpsBlast(EBlastProgramType p);
+
+/** Returns true if program is not undefined
+ * @param p program type [in]
+ */
+NCBI_XBLAST_EXPORT 
+Boolean Blast_ProgramIsValid(EBlastProgramType p);
 
 #ifdef __cplusplus
 }

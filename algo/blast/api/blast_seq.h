@@ -1,4 +1,4 @@
-/* $Id: blast_seq.h,v 1.28 2006/04/20 15:33:33 papadopo Exp $
+/* $Id: blast_seq.h,v 1.29 2006/11/21 17:21:20 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -41,6 +41,7 @@ extern "C" {
 
 #include <objseq.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_options.h>
 
 /** @addtogroup CToolkitAlgoBlast

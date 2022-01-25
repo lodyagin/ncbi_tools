@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.15  2007/06/28 15:57:14  bollin
+* Added buttons to delete interval row from location editor.
+*
+* Revision 6.14  2007/06/12 14:21:32  bollin
+* Made JustSaveStringFromText extern - do not strip spaces.
+*
 * Revision 6.13  2005/06/29 13:55:14  bollin
 * added flag for left scroll bar to CreateTagListDialogExEx
 *
@@ -219,6 +225,7 @@ extern void Nlm_SafeSetStatus (Nlm_Handle a, Nlm_Boolean status);
 extern void Nlm_SafeSetTitle (Nlm_Handle a, Nlm_CharPtr title);
 
 extern Nlm_CharPtr Nlm_SaveStringFromText (Nlm_TexT t);
+extern Nlm_CharPtr Nlm_JustSaveStringFromText (Nlm_TexT t);
 extern ValNodePtr Nlm_SetTextFromVnp (Nlm_TexT t, ValNodePtr vnp);
 extern ValNodePtr Nlm_GetVnpFromText (Nlm_TexT t, ValNodePtr vnp, Nlm_Boolean last);
 extern Nlm_Int2 Nlm_MaxStringWidths (Nlm_CharPtr PNTR strs);
@@ -495,6 +502,8 @@ typedef struct Nlm_taglist {
   ValNodePtr             vnp;
   TaglistCallback        PNTR callbacks;
   Pointer                callback_data;
+  ButtoN                 clear_btns [MAX_TAGLIST_ROWS];
+  Boolean                ask_before_clear;
 } Nlm_TagList, PNTR Nlm_TagListPtr;
 
 extern Nlm_DialoG Nlm_CreateTagListDialog (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint2 cols,
@@ -510,6 +519,14 @@ extern Nlm_DialoG CreateTagListDialogExEx (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint
                                        Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
                                        TaglistCallback PNTR callbacks, Pointer callback_data,
                                        Boolean useLeftBar);
+
+extern Nlm_DialoG CreateTagListDialogEx3 (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint2 cols,
+                                       Nlm_Int2 spacing, Nlm_Uint2Ptr types,
+                                       Nlm_Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
+                                       Nlm_Boolean useBar, Nlm_Boolean noExtend,
+                                       Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
+                                       TaglistCallback PNTR callbacks, Pointer callback_data,
+                                       Boolean useLeftBar, Boolean useClearBtns);
 
 extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2 col);
@@ -548,6 +565,7 @@ extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2
 #define SafeSetTitle Nlm_SafeSetTitle
 #define TrimSpacesAroundString Nlm_TrimSpacesAroundString
 #define SaveStringFromText Nlm_SaveStringFromText
+#define JustSaveStringFromText Nlm_JustSaveStringFromText
 #define SetTextFromVnp Nlm_SetTextFromVnp
 #define GetVnpFromText Nlm_GetVnpFromText
 #define MaxStringWidths Nlm_MaxStringWidths

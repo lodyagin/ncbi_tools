@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.40 $
+* $Revision: 6.41 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -258,7 +258,14 @@ typedef struct asn2gb_job {
 
 /* callback types and structure for special extensions */
 
-typedef void (*Asn2gbWriteFunc) (CharPtr str, Pointer userdata, BlockType blocktype);
+typedef void (*Asn2gbWriteFunc) (
+  CharPtr str,
+  Pointer userdata,
+  BlockType blocktype,
+  Uint2 entityID,
+  Uint2 itemtype,
+  Uint4 itemID
+);
 
 typedef ValNodePtr (*Asn2gbLockFunc) (SeqIdPtr sip, Pointer remotedata);
 typedef void (*Asn2gbFreeFunc) (ValNodePtr vnp, Pointer remotedata);

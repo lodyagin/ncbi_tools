@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: netcnfg.c,v 6.15 2003/09/11 05:28:02 kans Exp $
+ * RCS $Id: netcnfg.c,v 6.16 2007/07/13 18:29:18 kans Exp $
  *
  * Author:  Kans, Epstein
  *
@@ -115,12 +115,12 @@ static void ConfigFormActivate (WindoW w)
   }
 }
 
-static Boolean NoEntryExists (CharPtr type)
+static Boolean NoEntryExists (CharPtr sect, CharPtr type)
 
 {
   Char  str [256];
 
-  if (GetAppParam ("NCBI", "NET_SERV", type, NULL, str, sizeof (str))) {
+  if (GetAppParam ("NCBI", sect, type, NULL, str, sizeof (str))) {
     if (! StringHasNoText (str)) return FALSE;
   }
   return TRUE;
@@ -148,59 +148,58 @@ static void AcceptNetConfigForm (ButtoN b)
     Update ();
     return;
   } else if (val == 3) {
-    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "SERVICE");
-    SetAppParam ("NCBI", "NET_SERV", "FIREWALL", "TRUE");
+    SetAppParam ("NCBI", "CONN", "FIREWALL", "TRUE");
     GetTitle (ncp->proxyHost, str, sizeof (str));
     if (! StringHasNoText (str)) {
-      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", str);
+      SetAppParam ("NCBI", "CONN", "HTTP_PROXY_HOST", str);
       GetTitle (ncp->proxyPort, str, sizeof (str));
       if (StringICmp (str, "80") == 0) {
         str [0] = '\0';
       }
       if (! StringHasNoText (str)) {
-        SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", str);
+        SetAppParam ("NCBI", "CONN", "HTTP_PROXY_PORT", str);
       } else {
-        SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
+        SetAppParam ("NCBI", "CONN", "HTTP_PROXY_PORT", NULL);
       }
     } else {
-      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
-      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
+      SetAppParam ("NCBI", "CONN", "HTTP_PROXY_HOST", NULL);
+      SetAppParam ("NCBI", "CONN", "HTTP_PROXY_PORT", NULL);
     }
     GetTitle (ncp->firewallProxy, str, sizeof (str));
     if (! StringHasNoText (str)) {
-      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", str);
+      SetAppParam ("NCBI", "CONN", "PROXY_HOST", str);
     } else {
-      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
+      SetAppParam ("NCBI", "CONN", "PROXY_HOST", NULL);
     }
   } else {
-    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", NULL);
-    SetAppParam ("NCBI", "NET_SERV", "FIREWALL", NULL);
-    SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
-    SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
-    SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
+    SetAppParam ("NCBI", "CONN", "FIREWALL", NULL);
+    SetAppParam ("NCBI", "CONN", "HTTP_PROXY_HOST", NULL);
+    SetAppParam ("NCBI", "CONN", "HTTP_PROXY_PORT", NULL);
+    SetAppParam ("NCBI", "CONN", "PROXY_HOST", NULL);
   }
 
   if (GetStatus (ncp->dnsAvailable)) {
-    SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", NULL);
+    SetAppParam ("NCBI", "CONN", "HOST", NULL);
   } else {
-    SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", "130.14.22.106");
+    SetAppParam ("NCBI", "CONN", "HOST", "130.14.29.110");
   }
 
   switch (GetValue (ncp->timeOut)) {
     case 1 :
-      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "10");
+      SetAppParam ("NCBI", "CONN", "TIMEOUT", "10");
       break;
     case 3 :
-      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "60");
+      SetAppParam ("NCBI", "CONN", "TIMEOUT", "60");
       break;
     case 4 :
-      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "300");
+      SetAppParam ("NCBI", "CONN", "TIMEOUT", "300");
       break;
     default :
-      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", NULL);
+      SetAppParam ("NCBI", "CONN", "TIMEOUT", NULL);
       break;
   }
 
+  /*
   if (GetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_PORT", NULL, str, sizeof (str))) {
     if (StringICmp (str, "80") == 0) {
       SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_PORT", NULL);
@@ -212,17 +211,15 @@ static void AcceptNetConfigForm (ButtoN b)
       SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_URL", NULL);
     }
   }
+  */
 
-  if (NoEntryExists ("SRV_CONN_MODE") &&
-      NoEntryExists ("FIREWALL") &&
-      NoEntryExists ("SRV_CONN_TIMEOUT") &&
-      NoEntryExists ("SRV_ENGINE_HOST") &&
-      NoEntryExists ("SRV_ENGINE_PORT") &&
-      NoEntryExists ("SRV_ENGINE_URL") &&
-      NoEntryExists ("SRV_HTTP_PROXY_HOST") &&
-      NoEntryExists ("SRV_HTTP_PROXY_PORT") &&
-      NoEntryExists ("SRV_PROXY_HOST")) {
-    SetAppParam ("NCBI", "NET_SERV", NULL, NULL);
+  if (NoEntryExists ("CONN", "FIREWALL") &&
+      NoEntryExists ("CONN", "TIMEOUT") &&
+      NoEntryExists ("CONN", "PROXY_HOST") &&
+      NoEntryExists ("CONN", "HOST") &&
+      NoEntryExists ("CONN", "HTTP_PROXY_HOST") &&
+      NoEntryExists ("CONN", "HTTP_PROXY_PORT")) {
+    SetAppParam ("NCBI", "CONN", NULL, NULL);
   }
 
   accepted = ncp->accepted;
@@ -420,18 +417,12 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
     if (! netCurrentlyOn) {
       SafeSetValue (ncp->srvConnMode, 1);
       Hide (ncp->netGroup);
-    } else if (GetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "WWW", str, sizeof (str))) {
-      if (StringICmp (str, "FIREWALL") == 0) {
+    } else if (GetAppParam ("NCBI", "CONN", "FIREWALL", NULL, str, sizeof (str))) {
+      if (StringICmp (str, "TRUE") == 0) {
         SafeSetValue (ncp->srvConnMode, 3);
-      } else if (StringICmp (str, "SERVICE") == 0) {
-        if (GetAppParam ("NCBI", "NET_SERV", "FIREWALL", "WWW", str, sizeof (str))) {
-          if (StringICmp (str, "TRUE") == 0) {
-            SafeSetValue (ncp->srvConnMode, 3);
-          }
-        }
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL, str, sizeof (str))) {
+    if (GetAppParam ("NCBI", "CONN", "HTTP_PROXY_HOST", NULL, str, sizeof (str))) {
       if (! StringHasNoText (str)) {
         SafeSetTitle (ncp->proxyHost, str);
         if (GetValue (ncp->srvConnMode) == 2) {
@@ -439,22 +430,22 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
         }
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL, str, sizeof (str))) {
+    if (GetAppParam ("NCBI", "CONN", "HTTP_PROXY_PORT", NULL, str, sizeof (str))) {
       if (! StringHasNoText (str)) {
         SafeSetTitle (ncp->proxyPort, str);
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL, str, sizeof (str))) {
+    if (GetAppParam ("NCBI", "CONN", "PROXY_HOST", NULL, str, sizeof (str))) {
       if (! StringHasNoText (str)) {
         SafeSetTitle (ncp->firewallProxy, str);
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", NULL, str, sizeof (str))) {
-      if (StringICmp (str, "130.14.22.106") == 0 || StringICmp (str, "130.14.22.107") == 0 ) {
+    if (GetAppParam ("NCBI", "CONN", "HOST", NULL, str, sizeof (str))) {
+      if (StringICmp (str, "130.14.29.110") == 0) {
         SafeSetStatus (ncp->dnsAvailable, FALSE);
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "30", str, sizeof (str))) {
+    if (GetAppParam ("NCBI", "CONN", "TIMEOUT", "30", str, sizeof (str))) {
       if (StringICmp (str, "10") == 0) {
         SafeSetValue (ncp->timeOut, 1);
       } else if (StringICmp (str, "60") == 0) {

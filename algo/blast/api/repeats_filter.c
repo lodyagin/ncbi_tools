@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: repeats_filter.c,v 1.15 2006/05/24 21:17:50 camacho Exp $";
+static char const rcsid[] = "$Id: repeats_filter.c,v 1.18 2007/03/12 16:13:36 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 /*
@@ -70,7 +70,7 @@ s_SetRepeatsSearchOptions(SBlastOptions* options)
          SBlastOptionsSetFilterString(options, REPEATS_SEARCH_FILTER_STRING)))
         return status;
 
-    options->lookup_options->lut_type = NA_LOOKUP_TABLE;
+    options->lookup_options->lut_type = eNaLookupTable;
     options->score_options->penalty = REPEATS_SEARCH_PENALTY;
     options->score_options->gap_open = REPEATS_SEARCH_GAP_OPEN;
     options->score_options->gap_extend = REPEATS_SEARCH_GAP_EXTEND;
@@ -227,8 +227,10 @@ Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc,
 
     s_SetRepeatsSearchOptions(options);
 
-    status = 
-        Blast_RunSearch(query_seqloc, seq_src, NULL, options, NULL,
+    status =
+        Blast_RunSearch(query_seqloc, (Blast_PsiCheckpointLoc *) NULL,
+                        seq_src, (SeqLoc*) NULL, options,
+                        (BlastTabularFormatData*) NULL,
                         &results, &filter_loc, sum_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the 

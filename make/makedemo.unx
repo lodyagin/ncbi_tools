@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.85 2005/10/19 20:45:14 ucko Exp $
+#	$Id: makedemo.unx,v 6.87 2006/11/16 15:36:19 coulouri Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -95,7 +95,7 @@ ENTREZLIBS = $(LIB5) $(LIB3)
 
 EXE1 = testcore makeset \
     getmesh indexpub getpub testobj seqtest \
-	dosimple asn2ff getseq getfeat checksub asndhuff \
+	dosimple asn2ff checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb formatrpsdb blast \
 	blastall .WAIT blastall_old blastpgp testval seedtop \
@@ -106,7 +106,7 @@ EXE1 = testcore makeset \
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
-    getseq.c getfeat.c checksub.c asndhuff.c \
+    checksub.c asndhuff.c \
     entrcmd.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c formatrpsdb.c \
     blast_driver.c blastall.c blastpgp.c testval.c seedtop.c \
@@ -217,11 +217,6 @@ asn2ff : asn2ff.c
 fa2htgs : fa2htgs.c
 	$(CC) -o fa2htgs $(LDFLAGS) fa2htgs.c $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
-# getseq
-
-getseq : getseq.c
-	$(CC) -o getseq $(LDFLAGS) getseq.c $(LIB4) $(ENTREZLIBS) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
-
 # cdscan
 
 cdscan : cdscan.c
@@ -231,11 +226,6 @@ cdscan : cdscan.c
 
 findspl : findspl.c
 	$(CC) -o findspl $(LDFLAGS) findspl.c $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
-
-# getfeat
-
-getfeat : getfeat.c
-	$(CC) -o getfeat $(LDFLAGS) getfeat.c $(LIB4) $(ENTREZLIBS) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # errhdr
 

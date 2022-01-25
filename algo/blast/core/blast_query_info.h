@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.h,v 1.3 2006/04/25 19:06:21 camacho Exp $
+/* $Id: blast_query_info.h,v 1.4 2006/11/21 16:44:39 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,10 +31,12 @@
  * Definitions and functions associated with the BlastQueryInfo structure
  */
 
-#ifndef __BLAST_QUERY_INFO__
-#define __BLAST_QUERY_INFO__
+#ifndef ALGO_BLAST_CORE__BLAST_QUERY_INFO__H
+#define ALGO_BLAST_CORE__BLAST_QUERY_INFO__H
 
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_program.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -191,4 +193,4 @@ void OffsetArrayToContextOffsets(BlastQueryInfo    * info,
 }
 #endif
 
-#endif /* !__BLAST_QUERY_INFO__ */
+#endif /* !ALGO_BLAST_CORE__BLAST_QUERY_INFO__H */

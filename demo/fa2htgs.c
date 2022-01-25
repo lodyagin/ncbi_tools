@@ -650,7 +650,7 @@ Int2 Main(void)
    int frg;
    ResqSeqgphPtr rsp;
    ResqContigPtr rcp;
-   CharPtr tool_ver = "fa2htgs 2.2";
+   CharPtr tool_ver = "fa2htgs 2.3";
    CharPtr keywords [6], arbitraryKeyword = NULL;
    Int2 currkeyword = 0;
 
@@ -1022,7 +1022,7 @@ Int2 Main(void)
          the_bsp = (BioseqPtr)(the_entry->data.ptrvalue);
          bsp = (BioseqPtr)(sep->data.ptrvalue);
          if (the_bsp->repr == Seq_repr_raw) {
-            the_bsp->seq_data = BSFree (the_bsp->seq_data);
+            the_bsp->seq_data = SeqDataFree (the_bsp->seq_data, the_bsp->seq_data_type);
             the_bsp->repr = bsp->repr;
             the_bsp->seq_data = bsp->seq_data;
             bsp->seq_data = NULL;

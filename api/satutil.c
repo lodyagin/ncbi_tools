@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 4/25/96
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Copy Seq-feat based on sequence alignment
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: satutil.c,v $
+* Revision 6.3  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
 * Revision 6.2  1999/02/22 23:07:05  chappey
 * fix in SeqAlignReplaceId
 *
@@ -688,7 +691,7 @@ NLM_EXTERN Boolean LoadProteinForCdRegion(SeqFeatPtr sfp, SeqIdPtr new_prot_id)
 	new_prot->repr = Seq_repr_raw;
         new_prot->mol = Seq_mol_aa;
         new_prot->seq_data_type = Seq_code_ncbieaa;
-        new_prot->seq_data = bsp;
+        new_prot->seq_data = (SeqDataPtr) bsp;
         BSSeek(bsp, 0, SEEK_SET);
         new_prot->length = BSLen(bsp);
 	new_prot->id = prot_id;

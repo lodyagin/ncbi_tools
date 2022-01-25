@@ -1,4 +1,4 @@
-/*  $Id: ncbi_http_connector.c,v 6.73 2006/06/07 20:05:00 lavr Exp $
+/*  $Id: ncbi_http_connector.c,v 6.84 2007/06/15 20:25:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,6 +38,7 @@
 #include "ncbi_priv.h"
 #include <connect/ncbi_http_connector.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 
 
@@ -93,6 +94,9 @@ typedef struct {
     BUF                  r_buf;        /* storage to accumulate input data   */
     BUF                  w_buf;        /* storage to accumulate output data  */
     size_t               w_len;        /* pending message body size          */
+
+    size_t               expected;     /* expected to receive until EOF      */
+    size_t               received;     /* actually received so far           */
 } SHttpConnector;
 
 
@@ -122,11 +126,20 @@ static int/*bool*/ s_Adjust(SHttpConnector* uuu,
     }
     /* adjust info before yet another connection attempt */
     if (*redirect) {
-        int status = ConnNetInfo_ParseURL(uuu->net_info, *redirect);
+        int status;
+        assert(**redirect);
+        if (**redirect != '?') {
+            *uuu->net_info->args = '\0'; /*arguments are not inherited*/
+            status = ConnNetInfo_ParseURL(uuu->net_info, *redirect);
+        } else
+            status = 0/*failed*/;
+        if (!status) {
+            CORE_LOGF(eLOG_Error,
+                      ("[HTTP]  Unable to redirect to \"%s\"", *redirect));
+        }
         free(*redirect);
         *redirect = 0;
         if (!status) {
-            CORE_LOG(eLOG_Error, "[HTTP]  Unable to parse redirect");
             uuu->can_connect = eCC_None;
             return 0/*failure*/;
         }
@@ -246,6 +259,8 @@ static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,int/*bool*/ drop_unread)
             assert(uuu->sock);
             uuu->read_header = 1/*true*/;
             uuu->shut_down = 0/*false*/;
+            uuu->expected = 0;
+            uuu->received = 0;
         } else
             status = eIO_Success;
 
@@ -275,7 +290,7 @@ static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,int/*bool*/ drop_unread)
                 /* 10/28/03: CISCO's beta patch for their LB shows that the
                  * problem has been fixed; no more 2'30" drops in connections
                  * that shut down for write.  We still leave this commented
-                 * out to allow unpatched clients work seamlessly... */ 
+                 * out to allow unpatched clients to work seamlessly... */ 
                 /*SOCK_Shutdown(uuu->sock, eIO_Write);*/
                 uuu->shut_down = 1;
             }
@@ -336,11 +351,23 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
 
         status = SOCK_StripToPattern(uuu->sock, "\r\n", 2, &uuu->http, 0);
         if (status != eIO_Success) {
-            const STimeout* tmo = SOCK_GetTimeout(uuu->sock, eIO_Read);
-            if (tmo && (tmo->sec || tmo->usec)) {
-                CORE_LOGF(eLOG_Error, ("[HTTP]  Error reading header (%s)",
-                                       IO_StatusStr(status)));
-            }
+            ELOG_Level level;
+            if (status == eIO_Timeout) {
+                const STimeout* tmo = SOCK_GetTimeout(uuu->sock, eIO_Read);
+                if (!tmo)
+                    level = eLOG_Error;
+                else if (tmo->sec | tmo->usec)
+                    level = eLOG_Warning;
+                else
+#if defined(NCBI_CXX_TOOLKIT)  ||  defined(_DEBUG)
+                    level = eLOG_Trace;
+#else
+                    return status;
+#endif
+            } else
+                level = eLOG_Error;
+            CORE_LOGF(level, ("[HTTP]  Error reading header (%s)",
+                              IO_StatusStr(status)));
             return status;
         }
     }
@@ -385,37 +412,34 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
 
     {{
         /* parsing "NCBI-Message" tag */
-        const char k_NcbiMessageTag[] = "\n" HTTP_NCBI_MESSAGE " ";
-        char*      message            = strstr(header, k_NcbiMessageTag);
-
-        if (message) {
-            char* s;
-            char  c;
-
-            message += sizeof(k_NcbiMessageTag) - 1;
-            while (*message && isspace((unsigned char)(*message)))
-                message++;
-            if (!(s = strchr(message, '\r')))
-                s = strchr(message, '\n');
-            assert(s);
-            do {
-                if (!isspace((unsigned char) s[-1]))
-                    break;
-            } while (--s > message);
-            c  = *s;
-            *s = '\0';
-            if (*message) {
-                if (s_MessageHook) {
-                    if (s_MessageIssued <= 0) {
-                        s_MessageIssued = 1;
-                        s_MessageHook(message);
+        static const char kNcbiMessageTag[] = "\n" HTTP_NCBI_MESSAGE " ";
+        const char* s;
+        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
+            if (strncasecmp(s, kNcbiMessageTag, sizeof(kNcbiMessageTag)-1)==0){
+                const char* message = s + sizeof(kNcbiMessageTag) - 1;
+                while (*message  &&  isspace((unsigned char)(*message)))
+                    message++;
+                if (!(s = strchr(message, '\r')))
+                    s = strchr(message, '\n');
+                assert(s);
+                do {
+                    if (!isspace((unsigned char) s[-1]))
+                        break;
+                } while (--s > message);
+                if (message != s) {
+                    if (s_MessageHook) {
+                        if (s_MessageIssued <= 0) {
+                            s_MessageIssued = 1;
+                            s_MessageHook(message);
+                        }
+                    } else {
+                        s_MessageIssued = -1;
+                        CORE_LOGF(eLOG_Warning, ("[NCBI-MESSAGE]  %.*s",
+                                                 (int)(s - message), message));
                     }
-                } else {
-                    s_MessageIssued = -1;
-                    CORE_LOGF(eLOG_Warning, ("[NCBI-MESSAGE]  %s", message));
                 }
+                break;
             }
-            *s = c;
         }
     }}
 
@@ -435,27 +459,54 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
 
     if (moved) {
         /* parsing "Location" pointer */
-        const char k_LocationTag[] = "\nLocation: ";
-        char*      location        = strstr(header, k_LocationTag);
-
-        if (location) {
-            char* s;
-
-            location += sizeof(k_LocationTag) - 1;
-            if (!(s = strchr(location, '\r')))
-                *strchr(location, '\n') = 0;
-            else
-                *s = 0;
-            while (*location && isspace((unsigned char)(*location)))
-                location++;
-            for (s = location; *s; s++) {
-                if (isspace((unsigned char)(*s)))
-                    break;
+        static const char kLocationTag[] = "\nLocation: ";
+        char* s;
+        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
+            if (strncasecmp(s, kLocationTag, sizeof(kLocationTag) - 1) == 0) {
+                char* location = s + sizeof(kLocationTag) - 1;
+                while (*location  &&  isspace((unsigned char)(*location)))
+                    location++;
+                if (!(s = strchr(location, '\r')))
+                    s = strchr(location, '\n');
+                assert(s);
+                do {
+                    if (!isspace((unsigned char) s[-1]))
+                        break;
+                } while (--s > location);
+                if (s != location) {
+                    size_t len = (size_t)(s - location);
+                    memmove(header, location, len);
+                    header[len] = '\0';
+                    *redirect = header;
+                }
+                break;
             }
-            *s = 0;
-            if ((size = strlen(location)) != 0) {
-                memmove(header, location, size + 1);
-                *redirect = header;
+        }
+    } else if (!server_error) {
+        static const char kContentLengthTag[] = "\nContent-Length: ";
+        const char* s;
+        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
+            if (!strncasecmp(s,kContentLengthTag,sizeof(kContentLengthTag)-1)){
+                const char* expected = s + sizeof(kContentLengthTag) - 1;
+                while (*expected  &&  isspace((unsigned char)(*expected)))
+                    expected++;
+                if (!(s = strchr(expected, '\r')))
+                    s = strchr(expected, '\n');
+                assert(s);
+                do {
+                    if (!isspace((unsigned char) s[-1]))
+                        break;
+                } while (--s > expected);
+                if (s != expected) {
+                    char* e;
+                    errno = 0;
+                    uuu->expected = (size_t) strtol(expected, &e, 10);
+                    if (errno  ||  e != s)
+                        uuu->expected = 0;
+                    else if (!uuu->expected)
+                        uuu->expected = (size_t)(-1L);
+                }
+                break;
             }
         }
     }
@@ -558,14 +609,11 @@ static EIO_Status s_PreRead(SHttpConnector* uuu,
 static EIO_Status s_Read(SHttpConnector* uuu, void* buf,
                          size_t size, size_t* n_read)
 {
-    assert(uuu->sock);
-    /* just read, with no URL-decoding */
-    if (!(uuu->flags & fHCC_UrlDecodeInput))
-        return SOCK_Read(uuu->sock, buf, size, n_read, eIO_ReadPlain);
+    EIO_Status status;
 
-    /* read and URL-decode */
-    {{
-        EIO_Status status;
+    assert(uuu->sock);
+    if (uuu->flags & fHCC_UrlDecodeInput) {
+        /* read and URL-decode */
         size_t     n_peeked, n_decoded;
         size_t     peek_size = 3 * size;
         void*      peek_buf  = malloc(peek_size);
@@ -573,30 +621,43 @@ static EIO_Status s_Read(SHttpConnector* uuu, void* buf,
         /* peek the data */
         status= SOCK_Read(uuu->sock,peek_buf,peek_size,&n_peeked,eIO_ReadPeek);
         if (status != eIO_Success) {
+            assert(!n_peeked);
             *n_read = 0;
-            free(peek_buf);
-            return status;
-        }
-
-        /* decode, then discard the successfully decoded data from the input */
-        if (URL_Decode(peek_buf, n_peeked, &n_decoded, buf, size, n_read)) {
-            if (n_decoded) {
-                SOCK_Read(uuu->sock, 0, n_decoded, &n_peeked, eIO_ReadPersist);
-                assert(n_peeked == n_decoded);
-                status = eIO_Success;
-            } else if (SOCK_Status(uuu->sock, eIO_Read) == eIO_Closed) {
-                /* we are at EOF, and the remaining data cannot be decoded */
+        } else {
+            if (URL_Decode(peek_buf,n_peeked,&n_decoded,buf,size,n_read)) {
+                /* decode, then discard successfully decoded data from input */
+                if (n_decoded) {
+                    SOCK_Read(uuu->sock,0,n_decoded,&n_peeked,eIO_ReadPersist);
+                    assert(n_peeked == n_decoded);
+                    uuu->received += n_decoded;
+                    status = eIO_Success;
+                } else if (SOCK_Status(uuu->sock, eIO_Read) == eIO_Closed) {
+                    /* we are at EOF, and remaining data cannot be decoded */
+                    status = eIO_Unknown;
+                }
+            } else
                 status = eIO_Unknown;
-            }
-        } else
-            status = eIO_Unknown;
 
-        if (status != eIO_Success)
-            CORE_LOG(eLOG_Error, "[HTTP]  Cannot URL-decode data");
-
+            if (status != eIO_Success)
+                CORE_LOG(eLOG_Error, "[HTTP]  Cannot URL-decode data");
+        }
         free(peek_buf);
-        return status;
-    }}
+    } else {
+        /* just read, with no URL-decoding */
+        status = SOCK_Read(uuu->sock, buf, size, n_read, eIO_ReadPlain);
+        uuu->received += *n_read;
+    }
+
+    if (uuu->expected) {
+        if (uuu->received > uuu->expected)
+            return eIO_Unknown/*received too much*/;
+        if (uuu->expected != (size_t)(-1L)) {
+            if (status == eIO_Closed  &&  uuu->expected > uuu->received)
+                return eIO_Unknown/*received too little*/;
+        } else if (uuu->received)
+            return eIO_Unknown/*received too much*/;
+    }
+    return status;
 }
 
 
@@ -850,23 +911,26 @@ static EIO_Status s_VT_Flush
 (CONNECTOR       connector,
  const STimeout* timeout)
 {
-    const STimeout zero = {0, 0};
     SHttpConnector* uuu = (SHttpConnector*) connector->handle;
 
-    /* The real flush will be performed on the first "READ" (or "CLOSE"),
-     * or on "WAIT". Here, we just store the write timeout, that's all...
-     * ADDENDUM: fHCC_Flushable connectors are able to actually flush data.
-     */
-    if (timeout) {
-        uuu->ww_timeout = *timeout;
-        uuu->w_timeout  = &uuu->ww_timeout;
-    } else
-        uuu->w_timeout  = timeout;
-
     assert(connector->meta);
-    return !(uuu->flags & fHCC_Flushable) || !connector->meta->wait
-        ? eIO_Success
-        : connector->meta->wait(connector->meta->c_wait, eIO_Read, &zero);
+    if (!(uuu->flags & fHCC_Flushable)  ||  uuu->sock) {
+        /* The real flush will be performed on the first "READ" (or "CLOSE"),
+         * or on "WAIT". Here, we just store the write timeout, that's all...
+         * ADDENDUM: fHCC_Flushable connectors are able to actually flush data.
+         */
+        if (timeout) {
+            uuu->ww_timeout = *timeout;
+            uuu->w_timeout  = &uuu->ww_timeout;
+        } else
+            uuu->w_timeout  = timeout;
+        
+        return eIO_Success;
+    }
+    if (!connector->meta->wait)
+        return eIO_NotSupported;
+
+    return connector->meta->wait(connector->meta->c_wait, eIO_Read, timeout);
 }
 
 
@@ -978,7 +1042,7 @@ static void s_AddReferer(SConnNetInfo* net_info)
                 break;
         }
     }
-    if (!(referer = malloc(strlen(net_info->http_referer) + 12)))
+    if (!(referer = (char*) malloc(strlen(net_info->http_referer) + 12)))
         return;
     sprintf(referer, "Referer: %s\r\n", net_info->http_referer);
     ConnNetInfo_ExtendUserHeader(net_info, referer);
@@ -1061,233 +1125,3 @@ extern void HTTP_SetNcbiMessageHook(FHTTP_NcbiMessageHook hook)
         s_MessageIssued = 0;
     s_MessageHook = hook;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_http_connector.c,v $
- * Revision 6.73  2006/06/07 20:05:00  lavr
- * Take advantage of newly added SConnNetInfo::http_referer
- *
- * Revision 6.72  2006/02/14 15:49:42  lavr
- * Introduce and use CORE_TRACE macros (NOP in Release mode)
- *
- * Revision 6.71  2006/01/17 20:24:35  lavr
- * Handle NCBI messages, and properly handle fHCC_KeepHeader
- *
- * Revision 6.70  2006/01/11 16:29:58  lavr
- * Treat unparsable HTTP/x.y header line as a server error
- *
- * Revision 6.69  2005/12/08 03:53:23  lavr
- * Log connection parameters right before use
- *
- * Revision 6.68  2005/11/21 21:09:31  lavr
- * Fix compilation error
- *
- * Revision 6.67  2005/11/21 21:04:05  lavr
- * Fix double flush error at Close
- *
- * Revision 6.66  2005/08/12 16:11:21  lavr
- * Implement fHCC_Flushable
- *
- * Revision 6.65  2005/03/08 16:23:13  lavr
- * Replace an assert() with verify() to remove release-mode unused var
- *
- * Revision 6.64  2005/02/28 17:59:07  lavr
- * HTTP_CreateConnector() to "override" addtl. user header instead of "set"
- *
- * Revision 6.63  2004/02/12 16:50:02  lavr
- * Heed warning about uninited variable use
- *
- * Revision 6.62  2003/11/26 12:57:11  lavr
- * s_ReadHeader(): check header size first before looking for end-of-header
- *
- * Revision 6.61  2003/11/03 17:37:42  lavr
- * Fix previous accidental commit and provide corrent change log info:
- * 1. Added more notes about SOCK_Shutdown() being left commented out;
- * 2. Do not print HTTP error body if data trace mode set to "DATA".
- *
- * Revision 6.59  2003/10/29 14:09:08  lavr
- * Log levels and messages changed in some error reports
- *
- * Revision 6.58  2003/10/23 12:27:38  lavr
- * Do not double HTTP header when full data logging is explicitly on
- *
- * Revision 6.57  2003/10/07 20:00:10  lavr
- * Remove SOCK_Shutdown() after sending the HTTP header and request body
- *
- * Revision 6.56  2003/09/30 19:44:08  lavr
- * Fix typos in error messages
- *
- * Revision 6.55  2003/08/25 14:40:29  lavr
- * Employ new k..Timeout constants
- *
- * Revision 6.54  2003/06/09 19:52:42  lavr
- * New env.var. HTTP_ERROR_HEADER_ONLY to control header output on SOME tracing
- *
- * Revision 6.53  2003/06/04 20:58:13  lavr
- * s_Adjust() to return failure if no adjustment callback specified
- * s_VT_Status() to return eIO_Closed if connector failed/closed
- *
- * Revision 6.52  2003/05/31 05:15:15  lavr
- * Add ARGSUSED where args are meant to be unused
- *
- * Revision 6.51  2003/05/21 17:54:16  lavr
- * s_VT_Read() to return eIO_Success if some data have been read
- *
- * Revision 6.50  2003/05/20 23:54:00  lavr
- * Reinstate ConnNetInfo_Destroy() accidently deleted from s_Destroy()
- *
- * Revision 6.49  2003/05/20 21:26:40  lavr
- * Restructure SHttpConnector; add SHttpConnector::shut_down; enable to
- * call SOCK_Shutdown() again (after doing a dummy write of 0 bytes)
- *
- * Revision 6.48  2003/05/19 21:03:50  lavr
- * Remove SOCK_Shutdown() temporarily
- *
- * Revision 6.47  2003/05/19 16:48:39  lavr
- * Pending HTTP body write implemented ({0,0}-timeout tolerant)
- *
- * Revision 6.46  2003/05/14 03:57:48  lavr
- * Better logging; implementation of CONN_Description(); support of
- * {0,0} connect timeouts; bug workaround of MSVC's lame shutdown() is
- * now in ncbi_socket.c and moved away from this module
- *
- * Revision 6.45  2003/04/30 17:01:42  lavr
- * One (unnecessary) variable removed from s_ReadHeader()
- *
- * Revision 6.44  2003/02/04 22:04:11  lavr
- * Minor fix in comment
- *
- * Revision 6.43  2003/01/31 21:18:49  lavr
- * Fullfil max tries even in the absence of connection adjustment routine
- *
- * Revision 6.42  2003/01/17 19:44:46  lavr
- * Reduce dependencies
- *
- * Revision 6.41  2003/01/15 20:27:29  lavr
- * Fix breeding of NCBIHttpConnector token in User-Agent: header tag
- *
- * Revision 6.40  2003/01/10 14:51:29  lavr
- * Revert to R6.37 but properly handle drop of w_buf in s_FlushAndDisconnect()
- *
- * Revision 6.37  2002/12/13 21:19:40  lavr
- * Extend User-Agent: header tag
- *
- * Revision 6.36  2002/11/19 19:20:37  lavr
- * Server error parsing slightly changed
- *
- * Revision 6.35  2002/10/28 15:46:20  lavr
- * Use "ncbi_ansi_ext.h" privately
- *
- * Revision 6.34  2002/10/22 15:11:24  lavr
- * Zero connector's handle to crash if revisited
- *
- * Revision 6.33  2002/09/06 15:46:45  lavr
- * Few bug fixes about corner cases of I/O waiting, flushing and logging
- *
- * Revision 6.32  2002/08/12 15:12:23  lavr
- * Use persistent SOCK_Write()
- *
- * Revision 6.31  2002/08/07 16:33:04  lavr
- * Changed EIO_ReadMethod enums accordingly; log moved to end
- *
- * Revision 6.30  2002/07/25 20:20:43  lavr
- * Do not report header read error on {0, 0} timeout
- *
- * Revision 6.29  2002/07/25 13:59:35  lavr
- * More diagnostic messages added
- *
- * Revision 6.28  2002/06/19 18:08:02  lavr
- * Fixed some wrong assumptions on use of s_PreRead(); more comments added
- *
- * Revision 6.27  2002/06/10 19:51:20  lavr
- * Small prettifying
- *
- * Revision 6.26  2002/05/06 19:13:48  lavr
- * Output to stderr replaced with calls to logger
- *
- * Revision 6.25  2002/04/26 16:36:56  lavr
- * Added setting of default timeout in meta-connector's setup routine
- * Remove all checks for kDefaultTimeout: now supplied good from CONN
- *
- * Revision 6.24  2002/04/22 19:31:33  lavr
- * Reading/waiting redesigned to be more robust in case of network errors
- *
- * Revision 6.23  2002/03/22 19:52:16  lavr
- * Do not include <stdio.h>: included from ncbi_util.h or ncbi_priv.h
- *
- * Revision 6.22  2002/02/11 20:36:44  lavr
- * Use "ncbi_config.h"
- *
- * Revision 6.21  2002/02/05 22:04:12  lavr
- * Included header files rearranged
- *
- * Revision 6.20  2001/12/31 14:53:46  lavr
- * #include <connect/ncbi_ansi_ext.h> for Mac to be happy (noted by J.Kans)
- *
- * Revision 6.19  2001/12/30 20:00:00  lavr
- * Redirect on non-empty location only
- *
- * Revision 6.18  2001/12/30 19:41:07  lavr
- * Process error codes 301 and 302 (document moved) and reissue HTTP request
- *
- * Revision 6.17  2001/09/28 20:48:23  lavr
- * Comments revised; parameter (and SHttpConnector's) names adjusted
- * Retry logic moved entirely into s_Adjust()
- *
- * Revision 6.16  2001/09/10 21:15:56  lavr
- * Readability issue: FParseHTTPHdr -> FParseHTTPHeader
- *
- * Revision 6.15  2001/05/23 21:52:44  lavr
- * +fHCC_NoUpread
- *
- * Revision 6.14  2001/05/17 15:02:51  lavr
- * Typos corrected
- *
- * Revision 6.13  2001/05/08 20:26:27  lavr
- * Patches in re-try code
- *
- * Revision 6.12  2001/04/26 20:21:34  lavr
- * Reorganized and and made slightly more effective
- *
- * Revision 6.11  2001/04/24 21:41:47  lavr
- * Reorganized code to allow reconnects in case of broken connections at
- * stage of connection, sending data and receiving HTTP header. Added
- * code to pull incoming data from connection while sending - stall protection.
- *
- * Revision 6.10  2001/03/02 20:08:47  lavr
- * Typo fixed
- *
- * Revision 6.9  2001/01/25 16:53:24  lavr
- * New flag for HTTP_CreateConnectorEx: fHCC_DropUnread
- *
- * Revision 6.8  2001/01/23 23:11:20  lavr
- * Status virtual method implemented
- *
- * Revision 6.7  2001/01/11 16:38:17  lavr
- * free(connector) removed from s_Destroy function
- * (now always called from outside, in METACONN_Remove)
- *
- * Revision 6.6  2001/01/03 22:32:43  lavr
- * Redundant calls to 'adjust_info' removed
- *
- * Revision 6.5  2000/12/29 17:57:16  lavr
- * Adapted for use of new connector structure;
- * parse header callback added; some internal functions renamed.
- *
- * Revision 6.4  2000/11/15 18:52:02  vakatov
- * Call SOCK_Shutdown() after the HTTP request is sent.
- * Use SOCK_Status() instead of SOCK_Eof().
- *
- * Revision 6.3  2000/10/12 21:43:14  vakatov
- * Minor cosmetic fix...
- *
- * Revision 6.2  2000/09/26 22:02:57  lavr
- * HTTP request method added
- *
- * Revision 6.1  2000/04/21 19:41:01  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

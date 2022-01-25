@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.57 $
+* $Revision: 6.63 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.63  2007/07/02 19:17:26  bollin
+* Corrected functions for inserting and deleting from locations to handle
+* locations on segmented sets, corrected functions for inserting and deleting
+* from sequences to adjust the length of the master sequence when adjusting the
+* length of a segment.
+*
+* Revision 6.62  2007/05/08 17:18:32  bollin
+* Added functions for identifying AGP gap DeltaSeqs
+*
+* Revision 6.61  2007/05/07 17:43:03  bollin
+* Made functions IsDeltaSeqGap and IsDeltaSeqUnknownGap extern.
+*
+* Revision 6.60  2007/05/07 17:35:02  kans
+* can handle Seq-lit.seq-data.gap
+*
+* Revision 6.59  2007/05/07 13:28:35  kans
+* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
+*
+* Revision 6.58  2007/01/19 14:55:07  bollin
+* Do not set partial when deleting location from feature.
+*
 * Revision 6.57  2006/07/13 17:06:38  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -817,6 +838,10 @@ NLM_EXTERN DeltaSeqPtr LIBCALL SeqLocsToDeltaSeqs (DeltaSeqPtr dsp, SeqLocPtr sl
 					case Seq_code_ncbi4na:
 						newcode = Seq_code_iupacna;
 						break;
+					case Seq_code_gap:
+						ErrPostEx(SEV_WARNING,0,0,"Seq_code_gap residue code in SeqLocsToDeltaSeqs");
+						return DeltaSeqFree(dhead);
+						break;
 					default:
 						ErrPostEx(SEV_FATAL,0,0,"Unrecognized residue code [%d] in SeqLocsToDeltaSeqs",
 							(int)(slitp->seq_data_type));
@@ -825,13 +850,13 @@ NLM_EXTERN DeltaSeqPtr LIBCALL SeqLocsToDeltaSeqs (DeltaSeqPtr dsp, SeqLocPtr sl
 	 			spps = MemNew(sizeof(SeqPort));
 				SeqPortSetUpFields (spps, strt, stp, strand, newcode);
 				SeqPortSetUpAlphabet(spps, slitp->seq_data_type, newcode);
-				spps->bp = slitp->seq_data;
+				spps->bp = (ByteStorePtr) slitp->seq_data;
 				slitp_new = SeqLitNew();
 				dcurr->data.ptrvalue = slitp_new;
 				slitp_new->seq_data_type = newcode;
 				slitp_new->length = (stp - strt + 1);
 				bsp = BSNew(slitp_new->length);
-				slitp_new->seq_data = bsp;
+				slitp_new->seq_data = (SeqDataPtr) bsp;
 				SeqPortSeek(spps, 0, SEEK_SET);
 				BSSeek(bsp, 0, SEEK_SET);
 			    while (stp >= strt)
@@ -893,7 +918,7 @@ NLM_EXTERN Boolean LIBCALL BioseqDelete (SeqIdPtr target, Int4 from, Int4 to, Bo
 	len = to - from + 1;
 	           /* if actual sequence present */
 
-	if ((bsp->repr == Seq_repr_raw) || (bsp->repr == Seq_repr_const))
+	if (((bsp->repr == Seq_repr_raw) || (bsp->repr == Seq_repr_const)) && bsp->seq_data_type != Seq_code_gap)
 	{
 		if (ISA_na(bsp->mol))
 		{
@@ -906,8 +931,8 @@ NLM_EXTERN Boolean LIBCALL BioseqDelete (SeqIdPtr target, Int4 from, Int4 to, Bo
 				BioseqRawConvert(bsp, Seq_code_ncbieaa);
 		}
 
-		BSSeek(bsp->seq_data, from, SEEK_SET);
-		deleted = BSDelete(bsp->seq_data, len);
+		BSSeek((ByteStorePtr) bsp->seq_data, from, SEEK_SET);
+		deleted = BSDelete((ByteStorePtr) bsp->seq_data, len);
 		if (deleted != len)  /* error */
 			ErrPost(CTX_NCBIOBJ, 1, "Delete of %ld residues failed", len);
 		else
@@ -1086,6 +1111,8 @@ NLM_EXTERN Boolean LIBCALL BioseqOverwrite (SeqIdPtr target, Int4 pos, Uint1 res
 	if ((pos < 0) || (pos >= bsp->length)) return retval;
 	if (bsp->repr != Seq_repr_raw) return retval;
 
+	if (bsp->seq_data_type == Seq_code_gap) return FALSE;
+
 	if (ISA_na(bsp->mol))
 	{
 		if (bsp->seq_data_type != Seq_code_iupacna)  /* need 1 byte/base */
@@ -1097,8 +1124,8 @@ NLM_EXTERN Boolean LIBCALL BioseqOverwrite (SeqIdPtr target, Int4 pos, Uint1 res
 			BioseqRawConvert(bsp, Seq_code_ncbieaa);
 	}
 
-	BSSeek(bsp->seq_data, pos, SEEK_SET);
-	BSPutByte(bsp->seq_data, (Int2)(TO_UPPER(residue)));
+	BSSeek((ByteStorePtr) bsp->seq_data, pos, SEEK_SET);
+	BSPutByte((ByteStorePtr) bsp->seq_data, (Int2)(TO_UPPER(residue)));
 	retval = TRUE;
 
 	return retval;
@@ -1355,7 +1382,6 @@ NLM_EXTERN Int2 LIBCALL SeqFeatDelete (SeqFeatPtr sfp, SeqIdPtr target, Int4 fro
 			
 	if (changed)
 	{
-		sfp->partial = TRUE;
 		return 1;
 	}
 	else
@@ -1965,8 +1991,8 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopyEx (SeqIdPtr newid, BioseqPtr oldbsp, Int
 	if (newbsp->repr == Seq_repr_virtual)
 		handled = TRUE;               /* no more to do */
 
-	if ((newbsp->repr == Seq_repr_raw) ||
-		(newbsp->repr == Seq_repr_const))
+	if (((newbsp->repr == Seq_repr_raw) ||
+		(newbsp->repr == Seq_repr_const)) && newbsp->seq_data_type != Seq_code_gap)
 	{
 		if (ISA_aa(newbsp->mol))
 		{
@@ -1980,7 +2006,7 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopyEx (SeqIdPtr newid, BioseqPtr oldbsp, Int
 		bsp = BSNew(len);
 		if (bsp == NULL) goto erret;
 
-		newbsp->seq_data = bsp;
+		newbsp->seq_data = (SeqDataPtr) bsp;
 		spp = SeqPortNew(oldbsp, from, to, strand, seqtype);
 		if (spp == NULL) goto erret;
 
@@ -3180,7 +3206,7 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 		handled = TRUE;                    /* just length and features */
 	}
 
- 	if ((tobsp->repr == Seq_repr_raw) || (tobsp->repr == Seq_repr_const))
+ 	if (((tobsp->repr == Seq_repr_raw) || (tobsp->repr == Seq_repr_const)) && tobsp->seq_data_type != Seq_code_gap)
 	{
 		if (ISA_na(tobsp->mol))
 		{
@@ -3193,9 +3219,9 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 
 		if (tobsp->seq_data_type != seqtype)
 			BioseqRawConvert(tobsp, seqtype);
-		BSSeek(tobsp->seq_data, pos, SEEK_SET);
+		BSSeek((ByteStorePtr) tobsp->seq_data, pos, SEEK_SET);
 		if (do_bsadd) {
-			Nlm_BSAdd(tobsp->seq_data, len, FALSE);
+			Nlm_BSAdd((ByteStorePtr) tobsp->seq_data, len, FALSE);
 		}
 
 		i = 0;
@@ -3210,7 +3236,7 @@ NLM_EXTERN Boolean LIBCALL BioseqInsert (SeqIdPtr from_id, Int4 from, Int4 to, U
 			}
 			else
 			{
-				BSPutByte(tobsp->seq_data, residue);
+				BSPutByte((ByteStorePtr) tobsp->seq_data, residue);
 				i++;
 			}
 		}
@@ -4129,6 +4155,182 @@ NLM_EXTERN void SeqEdInsertAdjustRNA
   }
 }
 
+
+static BioseqPtr 
+GetParentForSegment
+(BioseqPtr bsp, Int4Ptr p_start, Int4Ptr p_stop)
+{
+  BioseqSetPtr parts_bssp, seg_bssp;
+  BioseqPtr    master_bsp, other_part;
+  SeqEntryPtr  sep;
+  Int4         offset = 0;
+
+  if (bsp == NULL || bsp->idx.parentptr == NULL || bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+
+  parts_bssp = (BioseqSetPtr) bsp->idx.parentptr;
+  if (parts_bssp->_class != BioseqseqSet_class_parts
+      || parts_bssp->idx.parentptr == NULL
+      || parts_bssp->idx.parenttype != OBJ_BIOSEQSET)
+  {
+    return NULL;
+  }
+
+  seg_bssp = (BioseqSetPtr) parts_bssp->idx.parentptr;
+  if (seg_bssp->_class != BioseqseqSet_class_segset
+      || seg_bssp->seq_set == NULL 
+      || !IS_Bioseq (seg_bssp->seq_set)) 
+  {
+    return NULL;
+  }
+
+  master_bsp = (BioseqPtr) seg_bssp->seq_set->data.ptrvalue;
+
+  if (p_start != NULL || p_stop != NULL)
+  {
+    sep = parts_bssp->seq_set;
+    while (sep != NULL && sep->data.ptrvalue != bsp)
+    {
+      if (IS_Bioseq (sep) && sep->data.ptrvalue != NULL)
+      {
+        other_part = sep->data.ptrvalue;
+        offset += other_part->length;
+      }
+      sep = sep->next;
+    }
+    if (p_start != NULL)
+    {
+      *p_start = offset;
+    }
+    if (p_stop != NULL)
+    {
+      *p_stop = offset + bsp->length - 1;
+    }
+  }
+
+  return master_bsp;
+}
+
+
+static Boolean AdjustOffsetsForSegment (SeqIdPtr del_id, SeqIdPtr target_id, Int4Ptr from, Int4Ptr to)
+{
+  BioseqPtr bsp_del, bsp_target, bsp_master;
+  Int4      seg_offset = 0, seg_end = 0;
+  Boolean   rval = FALSE;
+
+  if (del_id == NULL || target_id == NULL || from == NULL || to == NULL)
+  {
+    return FALSE;
+  }
+
+  bsp_del = BioseqFind (del_id);
+  bsp_target = BioseqFind (target_id);
+  if (bsp_del == NULL || bsp_target == NULL) return FALSE;
+
+  bsp_master = GetParentForSegment (bsp_del, &seg_offset, &seg_end);
+  if (bsp_master != NULL)
+  {
+    if (bsp_master == bsp_target && seg_offset < *to)
+    {
+      /* loc to delete is in parent coordinates */
+      if (*from > seg_end || *to < seg_offset)
+      {
+        /* loc to delete is entirely past this segment */
+      }
+      else
+      {
+        *from = MAX (0, *from - seg_offset);
+        *to = MIN (bsp_target->length, *to - seg_offset);
+        rval = TRUE;
+      }
+    }
+  }
+  return rval;
+}
+
+
+static void SeqEdInsertSeqPnt (SeqPntPtr spp, SeqIdPtr target_id, Int4 pos, Int4 len, SeqIdPtr newid)
+{
+  Int4 to = pos + len;
+  Boolean id_in_list;
+
+  if (spp == NULL) return;
+
+  if ((id_in_list = SeqIdIn(spp->id, target_id))
+      || AdjustOffsetsForSegment (spp->id, target_id, &pos, &to))
+  {
+    if (id_in_list && newid != NULL)   /* change id? */
+    {
+      SeqIdFree(spp->id);
+      spp->id = SeqIdDup(newid);
+    }
+
+    if (spp->point >= pos)
+    {
+      spp->point += len;
+    }
+  }
+}
+
+
+static void 
+SeqEdInsertSeqInt 
+(SeqIntPtr      sip,
+ SeqIdPtr       target_id,
+ Int4           pos,
+ Int4           len,
+ Boolean        split,
+ SeqIdPtr       newid,
+ SeqIntPtr PNTR split_end)
+{
+  Int4 to = pos + len;
+  Boolean id_in_list;
+  SeqIntPtr sip2;
+  SeqLocPtr slp;
+
+  if (sip == NULL || split_end == NULL) return;
+  
+  if (!(id_in_list = SeqIdIn(sip->id, target_id))
+      && ! AdjustOffsetsForSegment(sip->id, target_id, &pos, &to))
+  {
+    return;
+  }
+
+  if (newid != NULL && id_in_list)   /* change id? */
+  {
+    SeqIdFree(sip->id);
+    sip->id = SeqIdDup(newid);
+  }
+
+  if (sip->to < pos)  /* completely before insertion */
+  {
+    return;
+  }
+
+  if ((! split) || (sip->from >= pos))  /* interval unbroken */
+  {
+    if (sip->from >= pos)
+      sip->from += len;
+    sip->to += len;
+    return;
+  }
+                                    /* split interval */
+  sip2 = SeqIntNew();
+  slp = ValNodeNew(NULL);
+  slp->choice = SEQLOC_INT;
+  slp->data.ptrvalue = (Pointer)sip2;
+  sip2->strand = sip->strand;
+  sip2->id = SeqIdDup(sip->id);
+
+  sip2->to = sip->to + len;
+  sip2->from = pos + len;
+  sip2->if_to = sip->if_to;
+  sip->if_to = NULL;
+  sip->to = pos - 1;
+
+  *split_end = sip2;
+}
+
+
 /*****************************************************************************
 *
 *   SeqEdSeqLocInsert()
@@ -4163,259 +4365,214 @@ NLM_EXTERN void SeqEdInsertAdjustRNA
 NLM_EXTERN SeqLocPtr LIBCALL SeqEdSeqLocInsert (SeqLocPtr head, BioseqPtr target, Int4 pos, Int4 len,
                                                Boolean split, SeqIdPtr newid)
 {
-	SeqIntPtr sip, sip2;
-	SeqPntPtr spp;
-	PackSeqPntPtr pspp, pspp2;
-	SeqBondPtr sbp;
-	SeqLocPtr slp, tmp, prev, next, thead, tmp2;
-	Int4 diff, numpnt, i, tpos;
-	Uint1 oldchoice;
-	ValNode vn;
-	SeqIdPtr sidp;
+  SeqIntPtr sip, sip2;
+  SeqPntPtr spp;
+  PackSeqPntPtr pspp, pspp2;
+  SeqBondPtr sbp;
+  SeqLocPtr slp, tmp, prev, next, thead, tmp2;
+  Int4 diff, numpnt, i, tpos;
+  Uint1 oldchoice;
+  SeqIdPtr sidp;
+  Boolean id_in_list;
 
-	if ((head == NULL) || (target == NULL))
-		return head;
+  if ((head == NULL) || (target == NULL))
+    return head;
 
-	head->next = NULL;   /* caller maintains chains */
+  head->next = NULL;   /* caller maintains chains */
 
-	diff = len;
+  diff = len;
 
-    switch (head->choice)
-    {
-        case SEQLOC_BOND:   /* bond -- 2 seqs */
-			vn.next = NULL;
-			vn.choice = SEQLOC_PNT;
+  switch (head->choice)
+  {
+    case SEQLOC_BOND:   /* bond -- 2 seqs */
+      sbp = (SeqBondPtr)(head->data.ptrvalue);
+      SeqEdInsertSeqPnt (sbp->a, target->id, pos, len, newid);
+      SeqEdInsertSeqPnt (sbp->b, target->id, pos, len, newid);
+      break;
+    case SEQLOC_FEAT:   /* feat -- can't track yet */
+    case SEQLOC_NULL:    /* NULL */
+      break;
+    case SEQLOC_EMPTY:    /* empty */
+    case SEQLOC_WHOLE:    /* whole */
+      if (newid != NULL)
+      {
+        sidp = (SeqIdPtr)(head->data.ptrvalue);
+        if ( SeqIdIn(sidp, target->id))
+        {
+          SeqIdFree(sidp);
+          sidp = SeqIdDup(newid);
+          head->data.ptrvalue = (Pointer)sidp;
+        }
+      }
+      break;
+    case SEQLOC_MIX:    /* mix -- more than one seq */
+    case SEQLOC_EQUIV:    /* equiv -- ditto */
+    case SEQLOC_PACKED_INT:    /* packed int */
+      prev = NULL;
+      thead = NULL;
+      for (slp = (SeqLocPtr)(head->data.ptrvalue); slp != NULL; slp = next)
+      {
+        next = slp->next;
+        oldchoice = slp->choice;
+        tmp = SeqEdSeqLocInsert(slp, target, pos, len, split, newid);
+        if (tmp != NULL)
+        {
+          if ((head->choice != SEQLOC_EQUIV) &&
+            (oldchoice != tmp->choice))  /* split interval? */
+          {
+            if ((oldchoice == SEQLOC_INT) &&
+              (tmp->choice == SEQLOC_PACKED_INT))
+            {
+              tmp2 = tmp;
+              tmp = (SeqLocPtr)(tmp2->data.ptrvalue);
+              MemFree(tmp2);
+              while (tmp->next != NULL)
+              {
+                if (prev != NULL)
+                  prev->next = tmp;
+                else
+                  thead = tmp;
+                prev = tmp;
+                tmp = tmp->next;
+              }
+            }
+          }
+          if (prev != NULL)
+            prev->next = tmp;
+          else
+            thead = tmp;
+          prev = tmp;
+        }
+      }
+      head->data.ptrvalue = thead;
+      if (thead == NULL)
+        head = SeqLocFree(head);
+      break;
+    case SEQLOC_INT:    /* int */
+      sip = (SeqIntPtr)(head->data.ptrvalue);
+      sip2 = NULL;
+      SeqEdInsertSeqInt (sip, target->id, pos, len, split, newid, &sip2);
+      if (sip2 != NULL)
+      {
+        thead = head;   /* make split interval into PACKED_INT */
+        head = ValNodeNew (NULL);
+        head->choice = SEQLOC_PACKED_INT;
 
-			sbp = (SeqBondPtr)(head->data.ptrvalue);
-			vn.data.ptrvalue = (Pointer)(sbp->a);
-			SeqEdSeqLocInsert(&vn, target, pos, len, split, newid);
-			sbp->a = (SeqPntPtr)(vn.data.ptrvalue);
-			if (sbp->b != NULL)
-			{
-				vn.data.ptrvalue = (Pointer)(sbp->b);
-				SeqEdSeqLocInsert(&vn, target, pos, len, split, newid);
-				sbp->b = (SeqPntPtr)(vn.data.ptrvalue);
-			}
-			break;
-        case SEQLOC_FEAT:   /* feat -- can't track yet */
-        case SEQLOC_NULL:    /* NULL */
-			break;
-        case SEQLOC_EMPTY:    /* empty */
-        case SEQLOC_WHOLE:    /* whole */
-			if (newid != NULL)
-			{
-				sidp = (SeqIdPtr)(head->data.ptrvalue);
-				if ( SeqIdIn(sidp, target->id))
-				{
-					SeqIdFree(sidp);
-					sidp = SeqIdDup(newid);
-					head->data.ptrvalue = (Pointer)sidp;
-				}
-			}
-			break;
-        case SEQLOC_MIX:    /* mix -- more than one seq */
-        case SEQLOC_EQUIV:    /* equiv -- ditto */
-        case SEQLOC_PACKED_INT:    /* packed int */
-			prev = NULL;
-			thead = NULL;
-			for (slp = (SeqLocPtr)(head->data.ptrvalue); slp != NULL; slp = next)
-			{
-				next = slp->next;
-				oldchoice = slp->choice;
-				tmp = SeqEdSeqLocInsert(slp, target, pos, len, split, newid);
-				if (tmp != NULL)
-				{
-					if ((head->choice != SEQLOC_EQUIV) &&
-						(oldchoice != tmp->choice))  /* split interval? */
-					{
-						if ((oldchoice == SEQLOC_INT) &&
-							(tmp->choice == SEQLOC_PACKED_INT))
-						{
-							tmp2 = tmp;
-							tmp = (SeqLocPtr)(tmp2->data.ptrvalue);
-							MemFree(tmp2);
-							while (tmp->next != NULL)
-							{
-								if (prev != NULL)
-									prev->next = tmp;
-								else
-									thead = tmp;
-								prev = tmp;
-								tmp = tmp->next;
-							}
-						}
-					}
-					if (prev != NULL)
-						prev->next = tmp;
-					else
-						thead = tmp;
-					prev = tmp;
-				}
-			}
-			head->data.ptrvalue = thead;
-			if (thead == NULL)
-				head = SeqLocFree(head);
-            break;
-        case SEQLOC_INT:    /* int */
-			sip = (SeqIntPtr)(head->data.ptrvalue);
-			if (SeqIdIn(sip->id, target->id))
-			{
-				if (newid != NULL)   /* change id? */
-				{
-					SeqIdFree(sip->id);
-					sip->id = SeqIdDup(newid);
-				}
+        slp = ValNodeNew (NULL);
+        slp->choice = SEQLOC_INT;
+        slp->data.ptrvalue = sip2;
+        
+        if (sip->strand == Seq_strand_minus)  /* reverse order */
+        {
+          head->data.ptrvalue = slp;
+          slp->next = thead;
+        }
+        else
+        {
+          head->data.ptrvalue = thead;
+          thead->next = slp;
+        }
+      }
+      break;
+    case SEQLOC_PNT:    /* pnt */
+      spp = (SeqPntPtr)(head->data.ptrvalue);
+      SeqEdInsertSeqPnt (spp, target->id, pos, len, newid);
+      break;
+    case SEQLOC_PACKED_PNT:    /* packed pnt */
+      pspp = (PackSeqPntPtr)(head->data.ptrvalue);
+      if ((id_in_list = SeqIdIn(pspp->id, target->id))
+          || AdjustOffsetsForSegment(pspp->id, target->id, &pos, NULL))
+      {
+        if (id_in_list && newid != NULL)   /* change id? */
+        {
+          SeqIdFree(pspp->id);
+          pspp->id = SeqIdDup(newid);
+        }
 
-				if (sip->to < pos)  /* completely before insertion */
-				{
-					break;
-				}
-
-				if ((! split) || (sip->from >= pos))  /* interval unbroken */
-				{
-					if (sip->from >= pos)
-						sip->from += len;
-					sip->to += len;
-					break;
-				}
-
-						                          /* split interval */
-				sip2 = SeqIntNew();
-				slp = ValNodeNew(NULL);
-				slp->choice = SEQLOC_INT;
-				slp->data.ptrvalue = (Pointer)sip2;
-				sip2->strand = sip->strand;
-				sip2->id = SeqIdDup(sip->id);
-
-				sip2->to = sip->to + len;
-				sip2->from = pos + len;
-				sip2->if_to = sip->if_to;
-				sip->if_to = NULL;
-				sip->to = pos - 1;
-				head->next = slp;
-
-				if (sip->strand == Seq_strand_minus)  /* reverse order */
-				{
-					head->data.ptrvalue = (Pointer)sip2;
-					slp->data.ptrvalue = (Pointer)sip;
-				}
-
-				thead = head;   /* make split interval into PACKED_INT */
-				head = ValNodeNew(NULL);
-				head->choice = SEQLOC_PACKED_INT;
-				head->data.ptrvalue = thead;
-
-			}
-            break;
-        case SEQLOC_PNT:    /* pnt */
-			spp = (SeqPntPtr)(head->data.ptrvalue);
-			if (SeqIdIn(spp->id, target->id))
-			{
-				if (newid != NULL)   /* change id? */
-				{
-					SeqIdFree(spp->id);
-					spp->id = SeqIdDup(newid);
-				}
-
-				if (spp->point >= pos)
-					spp->point += len;
-			}
-            break;
-        case SEQLOC_PACKED_PNT:    /* packed pnt */
-			pspp = (PackSeqPntPtr)(head->data.ptrvalue);
-			if (SeqIdIn(pspp->id, target->id))
-			{
-				if (newid != NULL)   /* change id? */
-				{
-					SeqIdFree(pspp->id);
-					pspp->id = SeqIdDup(newid);
-				}
-
-				numpnt = PackSeqPntNum(pspp);
-				pspp2 = PackSeqPntNew();
-				head->data.ptrvalue = pspp2;
-				for (i = 0; i < numpnt; i++)
-				{
-					tpos = PackSeqPntGet(pspp, i);
-					if (tpos >= pos)
-						tpos += len;
-					PackSeqPntPut(pspp2, tpos);
-				}
-				pspp2->id = pspp->id;
-				pspp->id = NULL;
-				pspp2->fuzz = pspp->fuzz;
+        numpnt = PackSeqPntNum(pspp);
+        pspp2 = PackSeqPntNew();
+        head->data.ptrvalue = pspp2;
+        for (i = 0; i < numpnt; i++)
+        {
+          tpos = PackSeqPntGet(pspp, i);
+          if (tpos >= pos)
+            tpos += len;
+          PackSeqPntPut(pspp2, tpos);
+        }
+        pspp2->id = pspp->id;
+        pspp->id = NULL;
+        pspp2->fuzz = pspp->fuzz;
 				pspp->fuzz = NULL;
 				pspp2->strand = pspp->strand;
 				PackSeqPntFree(pspp);
 			}
-            break;
-        default:
-            break;
-    }
+      break;
+    default:
+      break;
+  }
 
-	if (head == NULL)
-		ErrPost(CTX_NCBIOBJ, 1, "SeqEdSeqLocInsert: lost a SeqLoc");
+  if (head == NULL)
+    ErrPost(CTX_NCBIOBJ, 1, "SeqEdSeqLocInsert: lost a SeqLoc");
 
-	return head;
+  return head;
 }
+
+
+/* return TRUE if spp should be deleted */
+static Boolean SeqEdDeleteFromSeqPnt (SeqPntPtr spp, SeqIdPtr target_id, Int4 from, Int4 to)
+{
+  Boolean rval = FALSE;
+  Int4    diff = to - from + 1;
+
+  if (spp == NULL) return FALSE;
+
+	if (SeqIdIn (spp->id, target_id)
+      || AdjustOffsetsForSegment (spp->id, target_id, &from, &to))
+  {
+    if ((spp->point >= from) && (spp->point <= to))
+    {
+      rval = TRUE;
+    }
+    else if (spp->point > to)
+    {
+      spp->point -= diff;
+    }
+  }
+  return rval;
+}
+
 
 static SeqLocPtr 
 SeqEdDeleteFromSeqLocBond (SeqLocPtr head, SeqIdPtr target, Int4 from, Int4 to, Boolean merge, BoolPtr changed)
 {
   SeqBondPtr sbp;
-  SeqPntPtr  spp;
-  Int4       diff;
 
   if (head == NULL || target == NULL || head->choice != SEQLOC_BOND) return NULL;
   sbp = (SeqBondPtr)(head->data.ptrvalue);
-  spp = sbp->a;
-  diff = to - from + 1;
 
-  if (SeqIdForSameBioseq(spp->id, target))
+  if (SeqEdDeleteFromSeqPnt (sbp->a, target, from, to))
   {
-	if (spp->point >= from)
-	{
-	  if (spp->point <= to)   /* delete it */
-	  {
-	    *changed = TRUE;
-		sbp->a = SeqPntFree(spp);
-	  }
-      else if (merge)
-	  {
-		spp->point -= diff;
-	  }
-	}
+    *changed = TRUE;
+    sbp->a = SeqPntFree(sbp->a);
   }
-  spp = sbp->b;
-  if (spp != NULL)
+
+  if (SeqEdDeleteFromSeqPnt (sbp->b, target, from, to))
   {
-	if (SeqIdForSameBioseq(spp->id, target))
-	{
-	  if (spp->point >= from)
-	  {
-		if (spp->point <= to)   /* delete it */
-		{
-		  *changed = TRUE;
-		  sbp->b = SeqPntFree(spp);
-		}
-		else if (merge)
-		{
-		  spp->point -= diff;
-		}
-      }
-	}
+    *changed = TRUE;
+    sbp->b = SeqPntFree(sbp->b);
   }
+
   if (sbp->a == NULL)
   {
-	if (sbp->b != NULL)   /* only a required */
-	{
+    if (sbp->b != NULL)   /* only a required */
+    {
       sbp->a = sbp->b;
       sbp->b = NULL;
-	}
-	else
-	{
-	  head = SeqLocFree(head);
-	}
+    }
+    else
+    {
+      head = SeqLocFree(head);
+    }
   }
   return head;
 }
@@ -4598,6 +4755,7 @@ static SeqLocPtr SeqEdDeleteFromSeqLocPackedInt
   return head;
 }
 
+
 static SeqLocPtr SeqEdDeleteFromSeqLocInt (SeqLocPtr head, BioseqPtr target, Int4 from, Int4 to, Boolean merge, BoolPtr changed, BoolPtr partial5, BoolPtr partial3)
 {
   Int4      diff;
@@ -4607,7 +4765,11 @@ static SeqLocPtr SeqEdDeleteFromSeqLocInt (SeqLocPtr head, BioseqPtr target, Int
   if (head == NULL || target == NULL || head->choice != SEQLOC_INT) return NULL;
 
   sip = (SeqIntPtr)(head->data.ptrvalue);
-  if ( !SeqIdIn(sip->id, target->id)) return head;
+  if ( !SeqIdIn(sip->id, target->id)
+      && ! AdjustOffsetsForSegment (sip->id, target->id, &from, &to))
+  {
+    return head;
+  }
 
   diff = to - from + 1;
 
@@ -4795,18 +4957,11 @@ NLM_EXTERN SeqLocPtr SeqEdSeqLocDelete (SeqLocPtr head, BioseqPtr target, Int4 f
       break;
     case SEQLOC_PNT:    /* pnt */
 			spp = (SeqPntPtr)(head->data.ptrvalue);
-			if (SeqIdIn (spp->id, target->id)) 
-			{
-				if ((spp->point >= from) && (spp->point <= to))
-				{
-					head = SeqLocFree(head);
-					*changed = TRUE;
-				}
-				else if (spp->point > to)
-				{
-						spp->point -= diff;
-				}
-			}
+      if (SeqEdDeleteFromSeqPnt (spp, target->id, from, to))
+      {
+        head = SeqLocFree(head);
+        *changed = TRUE;
+      }
       break;
     case SEQLOC_PACKED_PNT:    /* packed pnt */
       head = SeqEdDeleteFromSeqLocPackedPnt (head, target, from, to, merge, changed);
@@ -4817,6 +4972,7 @@ NLM_EXTERN SeqLocPtr SeqEdSeqLocDelete (SeqLocPtr head, BioseqPtr target, Int4 f
 
 	return head;
 }
+
 
 NLM_EXTERN SeqFeatPtr 
 SeqEdGetNextFeature 
@@ -4832,7 +4988,7 @@ SeqEdGetNextFeature
 {
   SMFeatItemPtr PNTR  array = NULL;
   BioseqExtraPtr      bspextra;
-  Int4               i;
+  Int4                i;
   SMFeatItemPtr       item;
   Int4                num = 0;
   ObjMgrDataPtr       omdp;
@@ -4842,7 +4998,6 @@ SeqEdGetNextFeature
   if (context == NULL) return NULL;
 
   /* if curr is NULL, initialize context fields (in user's stack) */
-
 
   if (curr == NULL) {
     if (bsp == NULL) return NULL;
@@ -4968,12 +5123,24 @@ static void SeqEdInsertAdjustFeat (SeqFeatPtr sfp, SeqEdJournalPtr sejp, Int4 in
   AffectedFeatPtr afp = NULL;
   SeqLocPtr       tmp_loc;
   Boolean         split_mode;
+  BioseqPtr       bsp;
+  Int4            insert_offset;
   
   if (sfp == NULL || sejp == NULL)
   {
     return;
   }
-  
+
+  bsp = GetParentForSegment (sejp->bsp, &insert_offset, NULL);
+  if (bsp == NULL)
+  {
+    bsp = sejp->bsp;
+  }
+  else
+  {
+    insert_point += insert_offset;
+  }  
+
   for (vnp = sejp->affected_feats; vnp != NULL && afp == NULL; vnp = vnp->next)
   {
     afp = (AffectedFeatPtr) vnp->data.ptrvalue;
@@ -5004,17 +5171,17 @@ static void SeqEdInsertAdjustFeat (SeqFeatPtr sfp, SeqEdJournalPtr sejp, Int4 in
   }
   else
   {
-    sfp->location = SeqEdSeqLocInsert (sfp->location, sejp->bsp, insert_point,
+    sfp->location = SeqEdSeqLocInsert (sfp->location, bsp, insert_point,
                                        sejp->num_chars, split_mode, NULL);
   }
 	switch (sfp->data.choice)
 	{
     case SEQFEAT_CDREGION:   /* cdregion */
-      SeqEdInsertAdjustCdRgn (sfp, sejp->bsp, insert_point, sejp->num_chars,
+      SeqEdInsertAdjustCdRgn (sfp, bsp, insert_point, sejp->num_chars,
                               split_mode);
       break;
     case SEQFEAT_RNA:
-      SeqEdInsertAdjustRNA (sfp, sejp->bsp, insert_point, sejp->num_chars,
+      SeqEdInsertAdjustRNA (sfp, bsp, insert_point, sejp->num_chars,
                             split_mode);
       break;
     default:
@@ -5022,7 +5189,7 @@ static void SeqEdInsertAdjustFeat (SeqFeatPtr sfp, SeqEdJournalPtr sejp, Int4 in
   }
 }
 
-static Boolean IsDeltaSeqGap (DeltaSeqPtr dsp)
+extern Boolean IsDeltaSeqGap (DeltaSeqPtr dsp)
 {
   SeqLitPtr   slip;
   if (dsp == NULL || dsp->choice != 2 || dsp->data.ptrvalue == NULL)
@@ -5030,7 +5197,7 @@ static Boolean IsDeltaSeqGap (DeltaSeqPtr dsp)
     return FALSE;
   }
   slip = (SeqLitPtr) (dsp->data.ptrvalue);
-  if (slip->seq_data == NULL)
+  if (slip->seq_data == NULL || slip->seq_data_type == Seq_code_gap)
   {
     return TRUE;
   }
@@ -5040,7 +5207,7 @@ static Boolean IsDeltaSeqGap (DeltaSeqPtr dsp)
   }
 }
 
-static Boolean IsDeltaSeqUnknownGap (DeltaSeqPtr dsp)
+extern Boolean IsDeltaSeqUnknownGap (DeltaSeqPtr dsp)
 {
   SeqLitPtr   slip;
   if (dsp == NULL || dsp->choice != 2 || dsp->data.ptrvalue == NULL)
@@ -5048,12 +5215,52 @@ static Boolean IsDeltaSeqUnknownGap (DeltaSeqPtr dsp)
     return FALSE;
   }
   slip = (SeqLitPtr) (dsp->data.ptrvalue);
-  if (slip->seq_data == NULL && slip->fuzz != NULL && slip->fuzz->choice == 4)
+  if ((slip->seq_data == NULL || slip->seq_data_type == Seq_code_gap) &&
+      slip->fuzz != NULL && slip->fuzz->choice == 4)
   {
     return TRUE;
   }
   else
   {
+    return FALSE;
+  }
+}
+
+
+extern Boolean IsDeltaSeqKnownGap (DeltaSeqPtr dsp)
+{
+  SeqLitPtr   slip;
+  if (dsp == NULL || dsp->choice != 2 || dsp->data.ptrvalue == NULL)
+  {
+    return FALSE;
+  }
+  slip = (SeqLitPtr) (dsp->data.ptrvalue);
+  if ((slip->seq_data == NULL || slip->seq_data_type == Seq_code_gap) &&
+      slip->fuzz == NULL)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+
+extern Boolean DoesSeqLitHaveGapTypeOrLinkage (SeqLitPtr slip)
+{
+  if (slip != NULL && slip->seq_data_type == Seq_code_gap) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+extern Boolean DoesDeltaSeqHaveGapTypeOrLinkage (DeltaSeqPtr dsp)
+{
+  if (dsp != NULL && dsp->choice == 2) {
+    return DoesSeqLitHaveGapTypeOrLinkage ((SeqLitPtr) dsp->data.ptrvalue);
+  } else {
     return FALSE;
   }
 }
@@ -5151,19 +5358,26 @@ SeqEdInsertByteStore
 static Boolean SeqEdInsertRaw (SeqEdJournalPtr sejp, Int4 insert_point)
 {
   Boolean      rval;
+  BioseqPtr    bsp;
 
   if (sejp == NULL || sejp->bsp == NULL || sejp->bsp->repr != Seq_repr_raw 
       || sejp->char_data == NULL || sejp->num_chars == 0 || insert_point < 0) 
   {
     return FALSE;    
   }
+  if (sejp->bsp->seq_data_type == Seq_code_gap) return FALSE;
 
-  rval = SeqEdInsertByteStore (sejp->bsp->seq_data, insert_point, 
+  rval = SeqEdInsertByteStore ((ByteStorePtr) sejp->bsp->seq_data, insert_point, 
                                sejp->char_data, sejp->num_chars, sejp->moltype);
 
   if (rval)
   {
     sejp->bsp->length += sejp->num_chars;
+    bsp = GetParentForSegment (sejp->bsp, NULL, NULL);
+    if (bsp != NULL)
+    {
+      bsp->length += sejp->num_chars;
+    }
   }
   return rval;
 }
@@ -5184,7 +5398,7 @@ SeqEdInsertIntoDeltaGap
     return rval;
   }
   slip = (SeqLitPtr) dsp->data.ptrvalue;
-  if (slip->seq_data != NULL)
+  if (slip->seq_data != NULL && slip->seq_data_type != Seq_code_gap)
   {
     return rval;
   }
@@ -5198,8 +5412,8 @@ SeqEdInsertIntoDeltaGap
   /* split the gap in two and create a new DeltaSeqPtr in the middle */
   slip_data = SeqLitNew ();
   slip_data->seq_data_type = Seq_code_iupacna;
-  slip_data->seq_data = BSNew (sejp->num_chars);
-  rval = SeqEdInsertByteStore (slip_data->seq_data, 0, 
+  slip_data->seq_data = (SeqDataPtr) BSNew (sejp->num_chars);
+  rval = SeqEdInsertByteStore ((ByteStorePtr) slip_data->seq_data, 0, 
                                sejp->char_data, sejp->num_chars, sejp->moltype);
   if (rval)
   {
@@ -5282,16 +5496,16 @@ static Boolean SeqEdInsertDelta (SeqEdJournalPtr sejp, Int4 insert_point)
   }
   else
   {
-    if (slip->seq_data_type != Seq_code_iupacna)
+    if (slip->seq_data_type != Seq_code_iupacna && slip->seq_data_type != Seq_code_gap)
     {
-      bs_new = BSConvertSeq(slip->seq_data, Seq_code_iupacna, 
+      bs_new = BSConvertSeq((ByteStorePtr) slip->seq_data, Seq_code_iupacna, 
                             slip->seq_data_type, 
                             slip->length);
       slip->seq_data_type = Seq_code_iupacna;
-      slip->seq_data = bs_new;
+      slip->seq_data = (SeqDataPtr) bs_new;
     }
 
-    rval = SeqEdInsertByteStore (slip->seq_data, insert_point, 
+    rval = SeqEdInsertByteStore ((ByteStorePtr) slip->seq_data, insert_point, 
                                  sejp->char_data, sejp->num_chars,
                                  sejp->moltype);
     if (rval)
@@ -5385,22 +5599,22 @@ SeqEdInsertGap (SeqEdJournalPtr sejp, Int4 insert_point)
     slip_after->seq_data_type = Seq_code_iupacna;
     slip_after->length = slip->length - insert_point;
     
-    if (slip->seq_data != NULL)
+    if (slip->seq_data != NULL && slip->seq_data_type != Seq_code_gap)
     {
-      if (slip->seq_data_type != Seq_code_iupacna)
+      if (slip->seq_data_type != Seq_code_iupacna && slip->seq_data_type != Seq_code_gap)
       {
-        bs_new = BSConvertSeq(slip->seq_data, Seq_code_iupacna, 
+        bs_new = BSConvertSeq((ByteStorePtr) slip->seq_data, Seq_code_iupacna, 
                               slip->seq_data_type, 
                               slip->length);
         slip->seq_data_type = Seq_code_iupacna;
-        slip->seq_data = bs_new;
+        slip->seq_data = (SeqDataPtr) bs_new;
       }
-      slip_before->seq_data = BSNew (slip_before->length);
-      slip_after->seq_data = BSNew (slip_after->length);
+      slip_before->seq_data = (SeqDataPtr) BSNew (slip_before->length);
+      slip_after->seq_data = (SeqDataPtr) BSNew (slip_after->length);
       
-      BSSeek(slip->seq_data, 0, SEEK_SET);
-      BSInsertFromBS (slip_before->seq_data, slip->seq_data, slip_before->length);
-      BSInsertFromBS (slip_after->seq_data, slip->seq_data, slip_after->length);
+      BSSeek((ByteStorePtr) slip->seq_data, 0, SEEK_SET);
+      BSInsertFromBS ((ByteStorePtr) slip_before->seq_data, (ByteStorePtr) slip->seq_data, slip_before->length);
+      BSInsertFromBS ((ByteStorePtr) slip_after->seq_data, (ByteStorePtr) slip->seq_data, slip_after->length);
     }
    
     dsp_after = ValNodeNew (NULL);
@@ -5434,6 +5648,8 @@ SeqEdInsert (SeqEdJournalPtr sejp)
   Int4              insert_point;
   Boolean           recreated_feats = FALSE;
   Boolean           rval = FALSE;
+  BioseqPtr         bsp;
+  Int4              insert_offset = 0;
   
   if (sejp == NULL || sejp->bsp == NULL 
       || sejp->char_data == NULL || sejp->num_chars == 0) 
@@ -5477,10 +5693,21 @@ SeqEdInsert (SeqEdJournalPtr sejp)
   if (sejp->entityID > 0 && SeqMgrFeaturesAreIndexed (sejp->entityID)) 
   {
     sfp = NULL;
-    while ((sfp = SeqEdGetNextFeature (sejp->bsp, sfp, 0, 0, &fcontext, FALSE, FALSE, sejp->entityID)) != NULL)
+    bsp = GetParentForSegment (sejp->bsp, &insert_offset, NULL);
+    if (bsp == NULL)
+    {
+      bsp = sejp->bsp;
+    }
+    
+    while ((sfp = SeqEdGetNextFeature (bsp, sfp, 0, 0, &fcontext, FALSE, FALSE, sejp->entityID)) != NULL)
     {
       SeqEdInsertAdjustFeat (sfp, sejp, insert_point);
 	  }
+
+    if (bsp != sejp->bsp)
+    {
+      insert_point += insert_offset;
+    }
 
 	  /* adjust features pointing by product */
 	  prods = SeqMgrGetSfpProductList (sejp->bsp);
@@ -5488,7 +5715,7 @@ SeqEdInsert (SeqEdJournalPtr sejp)
 	  {
       sfp = (SeqFeatPtr) vnp->data.ptrvalue;
       if (sfp == NULL) continue;
-      sfp->product = SeqEdSeqLocInsert (sfp->product, sejp->bsp, insert_point, sejp->num_chars, sejp->spliteditmode, NULL);
+      sfp->product = SeqEdSeqLocInsert (sfp->product, bsp, insert_point, sejp->num_chars, sejp->spliteditmode, NULL);
 	  }
   } else {
     bcp = BioseqContextNew(sejp->bsp);
@@ -5672,18 +5899,18 @@ static void DeleteFromSeqLit (SeqLitPtr slip, Int4 from, Int4 to)
     to = slip->length - 1;
   }
   
-  if (slip->seq_data != NULL)
+  if (slip->seq_data != NULL && slip->seq_data_type != Seq_code_gap)
   {
-    if (slip->seq_data_type != Seq_code_iupacna)
+    if (slip->seq_data_type != Seq_code_iupacna && slip->seq_data_type != Seq_code_gap)
     {
-      bs_new = BSConvertSeq(slip->seq_data, Seq_code_iupacna, 
+      bs_new = BSConvertSeq((ByteStorePtr) slip->seq_data, Seq_code_iupacna, 
                             slip->seq_data_type, 
                             slip->length);
       slip->seq_data_type = Seq_code_iupacna;
-      slip->seq_data = bs_new;
+      slip->seq_data = (SeqDataPtr) bs_new;
     }
-    BSSeek(slip->seq_data, from, SEEK_SET);
-    Nlm_BSDelete (slip->seq_data, to - from + 1);    
+    BSSeek((ByteStorePtr) slip->seq_data, from, SEEK_SET);
+    Nlm_BSDelete ((ByteStorePtr) slip->seq_data, to - from + 1);    
   }
   slip->length -= (to - from + 1);
 }
@@ -6069,7 +6296,9 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   SeqFeatPtr        tmp_sfp;
   AffectedFeatPtr   afp;
   Boolean           merge_mode;
-  Boolean           location_restitched = FALSE;
+  Boolean           location_restitched = FALSE, adjusted_master = FALSE;
+  BioseqPtr         bsp;
+  Int4              cut_offset = 0, offset = 0;
 
   if (sejp == NULL || sejp->bsp == NULL || sejp->offset < 0 || sejp->offset >= sejp->bsp->length
 	  || sejp->offset + sejp->num_chars + 1 < 0 || sejp->offset + sejp->num_chars > sejp->bsp->length
@@ -6082,15 +6311,27 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   {
     sejp->affected_feats = SeqEdJournalAffectedFeatsFree (sejp->affected_feats);
   }
+
+  bsp = GetParentForSegment (sejp->bsp, &offset, NULL);
+  if (bsp == NULL)
+  {
+    bsp = sejp->bsp;
+    cut_offset = sejp->offset;
+  }
+  else
+  {
+    cut_offset = sejp->offset + offset;
+  }
   
   /* fix features */
   if (sejp->entityID > 0 && SeqMgrFeaturesAreIndexed (sejp->entityID)) {
+
     sfp = NULL;
-    while ((sfp = SeqEdGetNextFeature (sejp->bsp, sfp, 0, 0, &fcontext, FALSE, FALSE, sejp->entityID)) != NULL)
+    while ((sfp = SeqEdGetNextFeature (bsp, sfp, 0, 0, &fcontext, FALSE, FALSE, sejp->entityID)) != NULL)
     {
-      if ((sejp->offset <= fcontext.left && sejp->offset + sejp->num_chars >= fcontext.left)
-          || (sejp->offset >= fcontext.left && sejp->offset + sejp->num_chars <= fcontext.right)
-          || (sejp->offset <= fcontext.right && sejp->offset + sejp->num_chars >= fcontext.right))
+      if ((cut_offset <= fcontext.left && cut_offset + sejp->num_chars >= fcontext.left)
+          || (cut_offset >= fcontext.left && cut_offset + sejp->num_chars <= fcontext.right)
+          || (cut_offset <= fcontext.right && cut_offset + sejp->num_chars >= fcontext.right))
       {
         tmp_sfp = (SeqFeatPtr)AsnIoMemCopy((Pointer)sfp, (AsnReadFunc)SeqFeatAsnRead, (AsnWriteFunc)SeqFeatAsnWrite);        
       }
@@ -6107,13 +6348,13 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
         merge_mode = TRUE;
       }
 
-      feat_change = SeqEdSeqFeatDelete (sfp, sejp->bsp, sejp->offset, 
-                                        sejp->offset + sejp->num_chars - 1,
+      feat_change = SeqEdSeqFeatDelete (sfp, bsp, cut_offset, 
+                                        cut_offset + sejp->num_chars - 1,
                                         sejp->spliteditmode);
                                         
       if (feat_change == 0 || feat_change == 1)
       {
-        if (ReStitchLocation (sejp->offset, sfp))
+        if (ReStitchLocation (cut_offset, sfp))
         {
           feat_change = 1;
           location_restitched = TRUE;
@@ -6149,8 +6390,11 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
 	    {
 	      SeqFeatFree (tmp_sfp);
 	    }
+      if (bsp != sejp->bsp)
+      {
+        adjusted_master = TRUE;
+      }
 	  }
-
   } else {
     bcp = BioseqContextNew(sejp->bsp);
     sfp = NULL;
@@ -6166,13 +6410,13 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
       {
         merge_mode = TRUE;
       }      
-      feat_change = SeqEdSeqFeatDelete (sfp, sejp->bsp, sejp->offset, 
-                                        sejp->offset + sejp->num_chars - 1, 
+      feat_change = SeqEdSeqFeatDelete (sfp, bsp, cut_offset, 
+                                        cut_offset + sejp->num_chars - 1, 
                                         sejp->spliteditmode);
 
       if (feat_change == 0 || feat_change == 1)
       {
-        if (ReStitchLocation (sejp->offset, sfp))
+        if (ReStitchLocation (cut_offset, sfp))
         {
           feat_change = 1;
           location_restitched = TRUE;
@@ -6209,24 +6453,26 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   {
     case Seq_repr_raw:
     case Seq_repr_const:
-      /* if actual sequence present */
-      if (ISA_na(sejp->bsp->mol))
-      {
-        if (sejp->bsp->seq_data_type != Seq_code_iupacna)  /* need 1 byte/base */
-          BioseqRawConvert(sejp->bsp, Seq_code_iupacna);
-	    }
-      else
-      {
-        if (sejp->bsp->seq_data_type != Seq_code_ncbieaa)
-          BioseqRawConvert(sejp->bsp, Seq_code_ncbieaa);
-      }
+      if (sejp->bsp->seq_data_type != Seq_code_gap) {
+        /* if actual sequence present */
+        if (ISA_na(sejp->bsp->mol))
+        {
+          if (sejp->bsp->seq_data_type != Seq_code_iupacna)  /* need 1 byte/base */
+            BioseqRawConvert(sejp->bsp, Seq_code_iupacna);
+	      }
+        else
+        {
+          if (sejp->bsp->seq_data_type != Seq_code_ncbieaa)
+            BioseqRawConvert(sejp->bsp, Seq_code_ncbieaa);
+        }
 
-      BSSeek(sejp->bsp->seq_data, sejp->offset, SEEK_SET);
-      deleted = BSDelete(sejp->bsp->seq_data, sejp->num_chars);
-      if (deleted != sejp->num_chars)  /* error */
-        ErrPost(CTX_NCBIOBJ, 1, "Delete of %ld residues failed", sejp->num_chars);
-      else
-        retval = TRUE;
+        BSSeek((ByteStorePtr) sejp->bsp->seq_data, sejp->offset, SEEK_SET);
+        deleted = BSDelete((ByteStorePtr) sejp->bsp->seq_data, sejp->num_chars);
+        if (deleted != sejp->num_chars)  /* error */
+          ErrPost(CTX_NCBIOBJ, 1, "Delete of %ld residues failed", sejp->num_chars);
+        else
+          retval = TRUE;
+      }
       break;
     case Seq_repr_seg:
       /* update segmented sequence */
@@ -6246,14 +6492,20 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   }
 
   if (retval)
+  {
     sejp->bsp->length -= sejp->num_chars;
+    if (bsp != sejp->bsp)
+    {
+      bsp->length -= sejp->num_chars;
+    }
+  }
   
   if (feats_deleted)
   {
     DeleteMarkedObjects (sejp->entityID, 0, NULL);
     SeqMgrIndexFeatures (sejp->entityID, NULL);
   }
-  else if (location_restitched)
+  else if (location_restitched || adjusted_master)
   {
     SeqMgrIndexFeatures (sejp->entityID, NULL);
   }

@@ -1,0 +1,790 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 42;
+	objects = {
+
+/* Begin PBXAggregateTarget section */
+		377EE67B0BCD83E3004AFEB5 /* Build Apps */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 377EE6820BCD8445004AFEB5 /* Build configuration list for PBXAggregateTarget "Build Apps" */;
+			buildPhases = (
+			);
+			dependencies = (
+				377EE6810BCD8411004AFEB5 /* PBXTargetDependency */,
+				377EE67D0BCD83FF004AFEB5 /* PBXTargetDependency */,
+				37DD356C0BD951910050A860 /* PBXTargetDependency */,
+			);
+			name = "Build Apps";
+			productName = "Build All Applications";
+		};
+/* End PBXAggregateTarget section */
+
+/* Begin PBXBuildFile section */
+		37127DA30BC594D3007722ED /* ncbi.icns in Resources */ = {isa = PBXBuildFile; fileRef = 37127DA20BC594D3007722ED /* ncbi.icns */; };
+		3723463C0BD94CE000770224 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0867D6AAFE840B52C02AAC07 /* InfoPlist.strings */; };
+		3723463D0BD94CE000770224 /* ncbi.icns in Resources */ = {isa = PBXBuildFile; fileRef = 37127DA20BC594D3007722ED /* ncbi.icns */; };
+		372346400BD94CE000770224 /* vibmain.c in Sources */ = {isa = PBXBuildFile; fileRef = 374BECE20B41C31E0033BECA /* vibmain.c */; };
+		3723464E0BD94CE000770224 /* ncbictoolkit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 374BECEE0B41C34D0033BECA /* ncbictoolkit.framework */; };
+		3723464F0BD94CE000770224 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20286C33FDCF999611CA2CEA /* Carbon.framework */; };
+		372346510BD94CE000770224 /* ncbictoolkit.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 374BECEE0B41C34D0033BECA /* ncbictoolkit.framework */; };
+		372346580BD94D3000770224 /* Entrez-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 378124A60BCD5A460013EA0B /* Entrez-Info.plist */; };
+		3723465A0BD94D7F00770224 /* entrez2.c in Sources */ = {isa = PBXBuildFile; fileRef = 3781249C0BCD59D00013EA0B /* entrez2.c */; };
+		37297AA50BCD6073006A3D4C /* Sequin-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 37297AA40BCD6073006A3D4C /* Sequin-Info.plist */; };
+		374BECE30B41C31E0033BECA /* vibmain.c in Sources */ = {isa = PBXBuildFile; fileRef = 374BECE20B41C31E0033BECA /* vibmain.c */; };
+		374BECEF0B41C3610033BECA /* ncbictoolkit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 374BECEE0B41C34D0033BECA /* ncbictoolkit.framework */; };
+		374BECF20B41C3770033BECA /* ncbictoolkit.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 374BECEE0B41C34D0033BECA /* ncbictoolkit.framework */; };
+		378462860B4D8CE600C59CFD /* sequin1.c in Sources */ = {isa = PBXBuildFile; fileRef = 378462760B4D8CE600C59CFD /* sequin1.c */; };
+		378462870B4D8CE600C59CFD /* sequin10.c in Sources */ = {isa = PBXBuildFile; fileRef = 378462770B4D8CE600C59CFD /* sequin10.c */; };
+		378462880B4D8CE600C59CFD /* sequin2.c in Sources */ = {isa = PBXBuildFile; fileRef = 378462780B4D8CE600C59CFD /* sequin2.c */; };
+		378462890B4D8CE600C59CFD /* sequin3.c in Sources */ = {isa = PBXBuildFile; fileRef = 378462790B4D8CE600C59CFD /* sequin3.c */; };
+		3784628A0B4D8CE600C59CFD /* sequin4.c in Sources */ = {isa = PBXBuildFile; fileRef = 3784627A0B4D8CE600C59CFD /* sequin4.c */; };
+		3784628B0B4D8CE600C59CFD /* sequin5.c in Sources */ = {isa = PBXBuildFile; fileRef = 3784627B0B4D8CE600C59CFD /* sequin5.c */; };
+		3784628C0B4D8CE600C59CFD /* sequin6.c in Sources */ = {isa = PBXBuildFile; fileRef = 3784627C0B4D8CE600C59CFD /* sequin6.c */; };
+		3784628D0B4D8CE600C59CFD /* sequin7.c in Sources */ = {isa = PBXBuildFile; fileRef = 3784627D0B4D8CE600C59CFD /* sequin7.c */; };
+		3784628E0B4D8CE600C59CFD /* sequin8.c in Sources */ = {isa = PBXBuildFile; fileRef = 3784627E0B4D8CE600C59CFD /* sequin8.c */; };
+		3784628F0B4D8CE600C59CFD /* sequin9.c in Sources */ = {isa = PBXBuildFile; fileRef = 3784627F0B4D8CE600C59CFD /* sequin9.c */; };
+		378462900B4D8CE600C59CFD /* sequinx.c in Sources */ = {isa = PBXBuildFile; fileRef = 378462800B4D8CE600C59CFD /* sequinx.c */; };
+		378462910B4D8CE600C59CFD /* sequiny.c in Sources */ = {isa = PBXBuildFile; fileRef = 378462810B4D8CE600C59CFD /* sequiny.c */; };
+		8D0C4E8D0486CD37000505A6 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0867D6AAFE840B52C02AAC07 /* InfoPlist.strings */; };
+		8D0C4E920486CD37000505A6 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20286C33FDCF999611CA2CEA /* Carbon.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3723463A0BD94CE000770224 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = 8D07F2BC0486CC7A007CD1D0;
+			remoteInfo = ncbictoolkit;
+		};
+		374BECED0B41C34D0033BECA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 8D07F2C80486CC7A007CD1D0;
+			remoteInfo = ncbictoolkit;
+		};
+		374BECF30B41C38B0033BECA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = 8D07F2BC0486CC7A007CD1D0;
+			remoteInfo = ncbictoolkit;
+		};
+		377EE67C0BCD83FF004AFEB5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 20286C28FDCF999611CA2CEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8D0C4E890486CD37000505A6;
+			remoteInfo = Sequin;
+		};
+		377EE6800BCD8411004AFEB5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = 8D07F2BC0486CC7A007CD1D0;
+			remoteInfo = ncbictoolkit;
+		};
+		37DD356B0BD951910050A860 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 20286C28FDCF999611CA2CEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 372346380BD94CE000770224;
+			remoteInfo = Entrez;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		372346500BD94CE000770224 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				372346510BD94CE000770224 /* ncbictoolkit.framework in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		374BECF00B41C36A0033BECA /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				374BECF20B41C3770033BECA /* ncbictoolkit.framework in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0867D6ABFE840B52C02AAC07 /* English */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		20286C33FDCF999611CA2CEA /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = /System/Library/Frameworks/Carbon.framework; sourceTree = "<absolute>"; };
+		37127DA20BC594D3007722ED /* ncbi.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = ncbi.icns; sourceTree = SOURCE_ROOT; };
+		372346550BD94CE000770224 /* Entrez.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Entrez.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		37297AA40BCD6073006A3D4C /* Sequin-Info.plist */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = "Sequin-Info.plist"; sourceTree = SOURCE_ROOT; };
+		374BECE20B41C31E0033BECA /* vibmain.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = vibmain.c; path = ../../../vibrant/vibmain.c; sourceTree = SOURCE_ROOT; };
+		374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = ncbictoolkit.xcodeproj; path = ../ncbictoolkit/ncbictoolkit.xcodeproj; sourceTree = SOURCE_ROOT; };
+		3781249C0BCD59D00013EA0B /* entrez2.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = entrez2.c; path = ../../../demo/entrez2.c; sourceTree = SOURCE_ROOT; };
+		378124A60BCD5A460013EA0B /* Entrez-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "Entrez-Info.plist"; sourceTree = "<group>"; };
+		378462750B4D8CE600C59CFD /* sequin.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = sequin.h; path = ../../../sequin/sequin.h; sourceTree = SOURCE_ROOT; };
+		378462760B4D8CE600C59CFD /* sequin1.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin1.c; path = ../../../sequin/sequin1.c; sourceTree = SOURCE_ROOT; };
+		378462770B4D8CE600C59CFD /* sequin10.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin10.c; path = ../../../sequin/sequin10.c; sourceTree = SOURCE_ROOT; };
+		378462780B4D8CE600C59CFD /* sequin2.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin2.c; path = ../../../sequin/sequin2.c; sourceTree = SOURCE_ROOT; };
+		378462790B4D8CE600C59CFD /* sequin3.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin3.c; path = ../../../sequin/sequin3.c; sourceTree = SOURCE_ROOT; };
+		3784627A0B4D8CE600C59CFD /* sequin4.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin4.c; path = ../../../sequin/sequin4.c; sourceTree = SOURCE_ROOT; };
+		3784627B0B4D8CE600C59CFD /* sequin5.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin5.c; path = ../../../sequin/sequin5.c; sourceTree = SOURCE_ROOT; };
+		3784627C0B4D8CE600C59CFD /* sequin6.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin6.c; path = ../../../sequin/sequin6.c; sourceTree = SOURCE_ROOT; };
+		3784627D0B4D8CE600C59CFD /* sequin7.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin7.c; path = ../../../sequin/sequin7.c; sourceTree = SOURCE_ROOT; };
+		3784627E0B4D8CE600C59CFD /* sequin8.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin8.c; path = ../../../sequin/sequin8.c; sourceTree = SOURCE_ROOT; };
+		3784627F0B4D8CE600C59CFD /* sequin9.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequin9.c; path = ../../../sequin/sequin9.c; sourceTree = SOURCE_ROOT; };
+		378462800B4D8CE600C59CFD /* sequinx.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequinx.c; path = ../../../sequin/sequinx.c; sourceTree = SOURCE_ROOT; };
+		378462810B4D8CE600C59CFD /* sequiny.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sequiny.c; path = ../../../sequin/sequiny.c; sourceTree = SOURCE_ROOT; };
+		378462820B4D8CE600C59CFD /* sequiny.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = sequiny.h; path = ../../../sequin/sequiny.h; sourceTree = SOURCE_ROOT; };
+		4A9504C8FFE6A3BC11CA0CBA /* ApplicationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ApplicationServices.framework; path = /System/Library/Frameworks/ApplicationServices.framework; sourceTree = "<absolute>"; };
+		4A9504CAFFE6A41611CA0CBA /* CoreServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreServices.framework; path = /System/Library/Frameworks/CoreServices.framework; sourceTree = "<absolute>"; };
+		8D0C4E970486CD37000505A6 /* Sequin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sequin.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3723464D0BD94CE000770224 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3723464E0BD94CE000770224 /* ncbictoolkit.framework in Frameworks */,
+				3723464F0BD94CE000770224 /* Carbon.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8D0C4E910486CD37000505A6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				374BECEF0B41C3610033BECA /* ncbictoolkit.framework in Frameworks */,
+				8D0C4E920486CD37000505A6 /* Carbon.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		195DF8CFFE9D517E11CA2CBB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8D0C4E970486CD37000505A6 /* Sequin.app */,
+				372346550BD94CE000770224 /* Entrez.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		20286C29FDCF999611CA2CEA /* ncbicguiapp */ = {
+			isa = PBXGroup;
+			children = (
+				374BECDE0B41C1F60033BECA /* Headers */,
+				20286C2AFDCF999611CA2CEA /* Sources */,
+				20286C2CFDCF999611CA2CEA /* Resources */,
+				20286C32FDCF999611CA2CEA /* External Frameworks and Libraries */,
+				195DF8CFFE9D517E11CA2CBB /* Products */,
+			);
+			name = ncbicguiapp;
+			sourceTree = "<group>";
+		};
+		20286C2AFDCF999611CA2CEA /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				378462720B4D8CE600C59CFD /* sequin */,
+				378124920BCD59980013EA0B /* entrez */,
+				374BECE20B41C31E0033BECA /* vibmain.c */,
+			);
+			name = Sources;
+			sourceTree = "<group>";
+		};
+		20286C2CFDCF999611CA2CEA /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				37127DA20BC594D3007722ED /* ncbi.icns */,
+				37297AA40BCD6073006A3D4C /* Sequin-Info.plist */,
+				378124A60BCD5A460013EA0B /* Entrez-Info.plist */,
+				0867D6AAFE840B52C02AAC07 /* InfoPlist.strings */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+		20286C32FDCF999611CA2CEA /* External Frameworks and Libraries */ = {
+			isa = PBXGroup;
+			children = (
+				374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */,
+				20286C33FDCF999611CA2CEA /* Carbon.framework */,
+				4A9504CAFFE6A41611CA0CBA /* CoreServices.framework */,
+				4A9504C8FFE6A3BC11CA0CBA /* ApplicationServices.framework */,
+			);
+			name = "External Frameworks and Libraries";
+			sourceTree = "<group>";
+		};
+		374BECDE0B41C1F60033BECA /* Headers */ = {
+			isa = PBXGroup;
+			children = (
+				378462750B4D8CE600C59CFD /* sequin.h */,
+				378462820B4D8CE600C59CFD /* sequiny.h */,
+			);
+			name = Headers;
+			sourceTree = "<group>";
+		};
+		374BECE50B41C34D0033BECA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				374BECEE0B41C34D0033BECA /* ncbictoolkit.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		378124920BCD59980013EA0B /* entrez */ = {
+			isa = PBXGroup;
+			children = (
+				3781249C0BCD59D00013EA0B /* entrez2.c */,
+			);
+			name = entrez;
+			sourceTree = "<group>";
+		};
+		378462720B4D8CE600C59CFD /* sequin */ = {
+			isa = PBXGroup;
+			children = (
+				378462760B4D8CE600C59CFD /* sequin1.c */,
+				378462770B4D8CE600C59CFD /* sequin10.c */,
+				378462780B4D8CE600C59CFD /* sequin2.c */,
+				378462790B4D8CE600C59CFD /* sequin3.c */,
+				3784627A0B4D8CE600C59CFD /* sequin4.c */,
+				3784627B0B4D8CE600C59CFD /* sequin5.c */,
+				3784627C0B4D8CE600C59CFD /* sequin6.c */,
+				3784627D0B4D8CE600C59CFD /* sequin7.c */,
+				3784627E0B4D8CE600C59CFD /* sequin8.c */,
+				3784627F0B4D8CE600C59CFD /* sequin9.c */,
+				378462800B4D8CE600C59CFD /* sequinx.c */,
+				378462810B4D8CE600C59CFD /* sequiny.c */,
+			);
+			name = sequin;
+			path = ../../../sequin;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		372346380BD94CE000770224 /* Entrez */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 372346520BD94CE000770224 /* Build configuration list for PBXNativeTarget "Entrez" */;
+			buildPhases = (
+				3723463B0BD94CE000770224 /* Resources */,
+				3723463F0BD94CE000770224 /* Sources */,
+				3723464D0BD94CE000770224 /* Frameworks */,
+				372346500BD94CE000770224 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				372346390BD94CE000770224 /* PBXTargetDependency */,
+			);
+			name = Entrez;
+			productInstallPath = "$(HOME)/Applications";
+			productName = ncbicguiapp;
+			productReference = 372346550BD94CE000770224 /* Entrez.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8D0C4E890486CD37000505A6 /* Sequin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0E91AC508A95435008D54AB /* Build configuration list for PBXNativeTarget "Sequin" */;
+			buildPhases = (
+				8D0C4E8C0486CD37000505A6 /* Resources */,
+				8D0C4E8F0486CD37000505A6 /* Sources */,
+				8D0C4E910486CD37000505A6 /* Frameworks */,
+				374BECF00B41C36A0033BECA /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				374BECF40B41C38B0033BECA /* PBXTargetDependency */,
+			);
+			name = Sequin;
+			productInstallPath = "$(HOME)/Applications";
+			productName = ncbicguiapp;
+			productReference = 8D0C4E970486CD37000505A6 /* Sequin.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		20286C28FDCF999611CA2CEA /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = C0E91AC908A95435008D54AB /* Build configuration list for PBXProject "ncbicguiapp" */;
+			hasScannedForEncodings = 1;
+			mainGroup = 20286C29FDCF999611CA2CEA /* ncbicguiapp */;
+			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 374BECE50B41C34D0033BECA /* Products */;
+					ProjectRef = 374BECE40B41C34D0033BECA /* ncbictoolkit.xcodeproj */;
+				},
+			);
+			targets = (
+				377EE67B0BCD83E3004AFEB5 /* Build Apps */,
+				8D0C4E890486CD37000505A6 /* Sequin */,
+				372346380BD94CE000770224 /* Entrez */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXReferenceProxy section */
+		374BECEE0B41C34D0033BECA /* ncbictoolkit.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = ncbictoolkit.framework;
+			remoteRef = 374BECED0B41C34D0033BECA /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+/* End PBXReferenceProxy section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3723463B0BD94CE000770224 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3723463C0BD94CE000770224 /* InfoPlist.strings in Resources */,
+				3723463D0BD94CE000770224 /* ncbi.icns in Resources */,
+				372346580BD94D3000770224 /* Entrez-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8D0C4E8C0486CD37000505A6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D0C4E8D0486CD37000505A6 /* InfoPlist.strings in Resources */,
+				37127DA30BC594D3007722ED /* ncbi.icns in Resources */,
+				37297AA50BCD6073006A3D4C /* Sequin-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3723463F0BD94CE000770224 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3723465A0BD94D7F00770224 /* entrez2.c in Sources */,
+				372346400BD94CE000770224 /* vibmain.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8D0C4E8F0486CD37000505A6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				374BECE30B41C31E0033BECA /* vibmain.c in Sources */,
+				378462860B4D8CE600C59CFD /* sequin1.c in Sources */,
+				378462870B4D8CE600C59CFD /* sequin10.c in Sources */,
+				378462880B4D8CE600C59CFD /* sequin2.c in Sources */,
+				378462890B4D8CE600C59CFD /* sequin3.c in Sources */,
+				3784628A0B4D8CE600C59CFD /* sequin4.c in Sources */,
+				3784628B0B4D8CE600C59CFD /* sequin5.c in Sources */,
+				3784628C0B4D8CE600C59CFD /* sequin6.c in Sources */,
+				3784628D0B4D8CE600C59CFD /* sequin7.c in Sources */,
+				3784628E0B4D8CE600C59CFD /* sequin8.c in Sources */,
+				3784628F0B4D8CE600C59CFD /* sequin9.c in Sources */,
+				378462900B4D8CE600C59CFD /* sequinx.c in Sources */,
+				378462910B4D8CE600C59CFD /* sequiny.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		372346390BD94CE000770224 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ncbictoolkit;
+			targetProxy = 3723463A0BD94CE000770224 /* PBXContainerItemProxy */;
+		};
+		374BECF40B41C38B0033BECA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ncbictoolkit;
+			targetProxy = 374BECF30B41C38B0033BECA /* PBXContainerItemProxy */;
+		};
+		377EE67D0BCD83FF004AFEB5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8D0C4E890486CD37000505A6 /* Sequin */;
+			targetProxy = 377EE67C0BCD83FF004AFEB5 /* PBXContainerItemProxy */;
+		};
+		377EE6810BCD8411004AFEB5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ncbictoolkit;
+			targetProxy = 377EE6800BCD8411004AFEB5 /* PBXContainerItemProxy */;
+		};
+		37DD356C0BD951910050A860 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 372346380BD94CE000770224 /* Entrez */;
+			targetProxy = 37DD356B0BD951910050A860 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		0867D6AAFE840B52C02AAC07 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				0867D6ABFE840B52C02AAC07 /* English */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		37144F650BEF88F00039E13F /* Strict */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "";
+				INFOPLIST_FILE = "Sequin-Info.plist";
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = Sequin;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Strict;
+		};
+		37144F660BEF88F00039E13F /* Strict */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "";
+				INFOPLIST_FILE = "Entrez-Info.plist";
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = Entrez;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Strict;
+		};
+		37144F670BEF88F00039E13F /* Strict */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				PRODUCT_NAME = "Build All Applications";
+				ZERO_LINK = NO;
+			};
+			name = Strict;
+		};
+		37144F680BEF88F00039E13F /* Strict */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					WIN_MAC,
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = NO;
+				HEADER_SEARCH_PATHS = (
+					../../../,
+					../../../include,
+					../../../asnstat,
+					../../../access,
+					../../../algo,
+					../../../api,
+					../../../asnlib,
+					../../../biostruc,
+					../../../connect,
+					../../../corelib,
+					../../../ctools,
+					../../../desktop,
+					../../../gif,
+					../../../network,
+					../../../network/blast3/client,
+					../../../network/id1arch,
+					../../../network/id2arch,
+					../../../network/medarch/client,
+					../../../network/nsclilib,
+					../../../network/spell/client,
+					../../../network/taxon1/common,
+					../../../network/taxon1/taxon2,
+					../../../object,
+					../../../tools,
+					../../../util/creaders,
+					../../../util/tables,
+					../../../vibrant,
+					../../../cdromlib,
+					../../../cn3d,
+					../../../ddv,
+					../../../network/vibnet,
+					"$(inherited)",
+				);
+				PREBINDING = NO;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
+			};
+			name = Strict;
+		};
+		372346530BD94CE000770224 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_FIX_AND_CONTINUE = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "";
+				INFOPLIST_FILE = "Entrez-Info.plist";
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = Entrez;
+				WRAPPER_EXTENSION = app;
+				ZERO_LINK = YES;
+			};
+			name = Debug;
+		};
+		372346540BD94CE000770224 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "";
+				INFOPLIST_FILE = "Entrez-Info.plist";
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = Entrez;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Release;
+		};
+		377EE6830BCD8445004AFEB5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				PRODUCT_NAME = "Build All Applications";
+			};
+			name = Debug;
+		};
+		377EE6840BCD8445004AFEB5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				PRODUCT_NAME = "Build All Applications";
+				ZERO_LINK = NO;
+			};
+			name = Release;
+		};
+		C0E91AC608A95435008D54AB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_FIX_AND_CONTINUE = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "";
+				INFOPLIST_FILE = "Sequin-Info.plist";
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = Sequin;
+				WRAPPER_EXTENSION = app;
+				ZERO_LINK = YES;
+			};
+			name = Debug;
+		};
+		C0E91AC708A95435008D54AB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "";
+				INFOPLIST_FILE = "Sequin-Info.plist";
+				INSTALL_PATH = "$(HOME)/Applications";
+				PRODUCT_NAME = Sequin;
+				WRAPPER_EXTENSION = app;
+			};
+			name = Release;
+		};
+		C0E91ACA08A95435008D54AB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					WIN_MAC,
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					../../../,
+					../../../include,
+					../../../asnstat,
+					../../../access,
+					../../../algo,
+					../../../api,
+					../../../asnlib,
+					../../../biostruc,
+					../../../connect,
+					../../../corelib,
+					../../../ctools,
+					../../../desktop,
+					../../../gif,
+					../../../network,
+					../../../network/blast3/client,
+					../../../network/id1arch,
+					../../../network/id2arch,
+					../../../network/medarch/client,
+					../../../network/nsclilib,
+					../../../network/spell/client,
+					../../../network/taxon1/common,
+					../../../network/taxon1/taxon2,
+					../../../object,
+					../../../tools,
+					../../../util/creaders,
+					../../../util/tables,
+					../../../vibrant,
+					../../../cdromlib,
+					../../../cn3d,
+					../../../ddv,
+					../../../network/vibnet,
+					"$(inherited)",
+				);
+				PREBINDING = NO;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
+			};
+			name = Debug;
+		};
+		C0E91ACB08A95435008D54AB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					WIN_MAC,
+					"$(inherited)",
+				);
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					../../../,
+					../../../include,
+					../../../asnstat,
+					../../../access,
+					../../../algo,
+					../../../api,
+					../../../asnlib,
+					../../../biostruc,
+					../../../connect,
+					../../../corelib,
+					../../../ctools,
+					../../../desktop,
+					../../../gif,
+					../../../network,
+					../../../network/blast3/client,
+					../../../network/id1arch,
+					../../../network/id2arch,
+					../../../network/medarch/client,
+					../../../network/nsclilib,
+					../../../network/spell/client,
+					../../../network/taxon1/common,
+					../../../network/taxon1/taxon2,
+					../../../object,
+					../../../tools,
+					../../../util/creaders,
+					../../../util/tables,
+					../../../vibrant,
+					../../../cdromlib,
+					../../../cn3d,
+					../../../ddv,
+					../../../network/vibnet,
+					"$(inherited)",
+				);
+				PREBINDING = NO;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		372346520BD94CE000770224 /* Build configuration list for PBXNativeTarget "Entrez" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				372346530BD94CE000770224 /* Debug */,
+				372346540BD94CE000770224 /* Release */,
+				37144F660BEF88F00039E13F /* Strict */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		377EE6820BCD8445004AFEB5 /* Build configuration list for PBXAggregateTarget "Build Apps" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				377EE6830BCD8445004AFEB5 /* Debug */,
+				377EE6840BCD8445004AFEB5 /* Release */,
+				37144F670BEF88F00039E13F /* Strict */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C0E91AC508A95435008D54AB /* Build configuration list for PBXNativeTarget "Sequin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0E91AC608A95435008D54AB /* Debug */,
+				C0E91AC708A95435008D54AB /* Release */,
+				37144F650BEF88F00039E13F /* Strict */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C0E91AC908A95435008D54AB /* Build configuration list for PBXProject "ncbicguiapp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0E91ACA08A95435008D54AB /* Debug */,
+				C0E91ACB08A95435008D54AB /* Release */,
+				37144F680BEF88F00039E13F /* Strict */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 20286C28FDCF999611CA2CEA /* Project object */;
+}

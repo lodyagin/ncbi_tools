@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,12 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.12  2006/12/07 14:13:56  lavr
+* #include <stdio.h> just in case for *_FILENO macros
+*
+* Revision 6.11  2006/12/07 14:13:02  lavr
+* Add checks for whether the message device is a terminal (UNIX)
+*
 * Revision 6.10  2002/06/17 15:07:01  ivanov
 * Added fix for BeOS platform in GetOneChar
 *
@@ -151,6 +157,10 @@ static char *_filename = __FILE__;
 
 #include "corepriv.h"
 #include <tsprintf.h>
+#if defined(OS_UNIX)
+#  include <stdio.h>
+#  include <unistd.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -407,7 +417,10 @@ MsgAnswer PASCAL _DefMessageHook (MsgKey key, ErrSev sev,
     fprintf(stderr,"[%s] %s\n",
             caption ? caption : "NULL_Caption",
             message ? message : "NULL_Message");
-	
+
+#if defined(OS_UNIX)
+  if (isatty(STDIN_FILENO))
+#endif
     if (key>KEY_NONE && key<KEY_other)
       {
         int ch;
@@ -558,7 +571,10 @@ void LIBCALLBACK _DefBeepHook (void)
 #endif
 
 #elif defined(OS_UNIX) || defined(OS_VMS)
-  putc(7, stderr);
+#  if defined(OS_UNIX)
+  if (isatty(STDERR_FILENO))
+#  endif
+    putc(7, stderr);
 #endif
 }
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.112 $
+* $Revision: 6.164 $
 *
 * File Description: 
 *
@@ -53,6 +53,7 @@
 #include <objfeat.h>
 #include <objseq.h>
 #include <toasn3.h>
+#include <explore.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -999,7 +1000,7 @@ typedef struct fieldpage {
   ButtoN             PNTR boxes;
 } FieldPage, PNTR FieldPagePtr;
 
-static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductGBQual)
+static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGBQual)
 
 {
   if (qual < 0) return FALSE;
@@ -1009,6 +1010,7 @@ static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductG
       qual == GBQUAL_evidence ||
       qual == GBQUAL_exception ||
       qual == GBQUAL_gene ||
+      qual == GBQUAL_insertion_seq ||
       qual == GBQUAL_label ||
       qual == GBQUAL_locus_tag ||
       qual == GBQUAL_note ||
@@ -1016,13 +1018,13 @@ static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductG
       qual == GBQUAL_product ||
       qual == GBQUAL_pseudo ||
       qual == GBQUAL_rpt_unit ||
+      qual == GBQUAL_transposon ||
       qual == GBQUAL_experiment ||
       qual == GBQUAL_inference) {
     return FALSE;
   }
-  if (qual == GBQUAL_map && (sfp == NULL ||
-      (sfp->idx.subtype != FEATDEF_repeat_region && sfp->idx.subtype != FEATDEF_gap))) return FALSE;
-  if (qual == GBQUAL_operon && (sfp == NULL || sfp->idx.subtype != FEATDEF_operon)) return FALSE;
+  if (qual == GBQUAL_map && subtype != FEATDEF_ANY && subtype != FEATDEF_repeat_region && subtype != FEATDEF_gap) return FALSE;
+  if (qual == GBQUAL_operon && subtype != FEATDEF_ANY && subtype != FEATDEF_operon) return FALSE;
   if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) {
     if (qual == GBQUAL_usedin) {
       return FALSE;
@@ -1308,7 +1310,7 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
 
         for (i = 0; i < sefp->mand_num; i++) {
           qual = sefp->mand_qual [i];
-          if (qual > -1 && ShouldBeAGBQual (sfp, qual, allowProductGBQual)) {
+          if (qual > -1 && ShouldBeAGBQual (sfp == NULL ? FEATDEF_ANY : sfp->idx.subtype, qual, allowProductGBQual)) {
             seen [qual] = LEGAL_FEATURE;
           }
         }
@@ -1320,7 +1322,7 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
         }
         for (i = 0; i < sefp->opt_num; i++) {
           qual = sefp->opt_qual [i];
-          if (qual > -1 && ShouldBeAGBQual (sfp, qual, allowProductGBQual)) {
+          if (qual > -1 && ShouldBeAGBQual (sfp == NULL ? FEATDEF_ANY : sfp->idx.subtype, qual, allowProductGBQual)) {
             seen [qual] = LEGAL_FEATURE;
           }
         }
@@ -1580,6 +1582,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     }
     commonRadioFormTabs [6] = NULL;
     commonNoCitFormTabs [5] = NULL;
+
     p = HiddenGroup (m, 0, 0, NULL);
 
     c = HiddenGroup (p, -1, 0, NULL);
@@ -1596,13 +1599,15 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       ffp->pseudo = CheckBox (r, "Pseudo", NULL);
       pseudo = ffp->pseudo; /* allows pseudo control on earlier feature-specific page */
     }
-    StaticPrompt (r, "Evidence", 0, popupMenuHeight, programFont, 'l');
-    ffp->evidence = PopupList (r, TRUE, NULL);
-    PopupItem (ffp->evidence, " ");
-    PopupItem (ffp->evidence, "Experimental");
-    PopupItem (ffp->evidence, "Non-Experimental");
+    if (indexerVersion) {
+      StaticPrompt (r, "Evidence", 0, popupMenuHeight, programFont, 'l');
+      ffp->evidence = PopupList (r, TRUE, NULL);
+      PopupItem (ffp->evidence, " ");
+      PopupItem (ffp->evidence, "Experimental");
+      PopupItem (ffp->evidence, "Non-Experimental");
+    }
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->partial,
-                  (HANDLE) ffp->evidence, (HANDLE) pseudo, NULL);
+                  (HANDLE) pseudo, (HANDLE) ffp->evidence, NULL);
     r = HiddenGroup (f, -3, 0, NULL);
     ffp->exception = CheckBox (r, "Exception", NULL);
     StaticPrompt (r, "Explanation", 0, dialogTextHeight, programFont, 'l');
@@ -1801,30 +1806,24 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     Hide (ffp->commonSubGrp [page]);
     page++;
 
+
     c = HiddenGroup (p, -1, 0, NULL);
     SetGroupSpacing (c, 10, 10);
     x = NULL;
-    /* z = NULL; */
     if (hasQuals && ffp->gbquals == NULL) {
       x = HiddenGroup (c, -1, 0, NULL);
-      /*
-      z = HiddenGroup (x, -4, 0, NULL);
-      SetGroupSpacing (z, -1, 0);
-      StaticPrompt (z, "Qualifier", 7 * stdCharWidth, 0, programFont, 'c');
-      StaticPrompt (z, "Value", 10 * stdCharWidth, 0, programFont, 'c');
-      ffp->gbquals = CreateQualsDialog (x, 5, -1, 7, 10);
-      */
       ffp->gbquals = CreateImportFields (x, NULL, sfp, FALSE);
     }
     ffp->commonSubGrp [page] = c;
     Hide (ffp->commonSubGrp [page]);
     page++;
 
+
     AlignObjects (ALIGN_CENTER, (HANDLE) ffp->commonRadio, (HANDLE) ffp->commonSubGrp [0],
                   (HANDLE) ffp->commonSubGrp [1], (HANDLE) ffp->commonSubGrp [2],
                   (HANDLE) ffp->commonSubGrp [3], (HANDLE) ffp->commonSubGrp [4],
                   (HANDLE) ffp->commonSubGrp [5], (HANDLE) ffp->commonSubGrp [6],
-                  (HANDLE) ffp->gbquals, NULL);
+                  (HANDLE) ffp->commonSubGrp [7], NULL);
   }
   return c;
 }
@@ -2218,7 +2217,7 @@ static void FindInGeneralText (ButtoN b)
   Int2             first;
   FILE             *fp;
   Char             lastch;
-  Int4             line;
+  Int4             line = 0;
   ValNodePtr       matches;
   Int2             next;
   Int2             offset = 0;
@@ -4406,7 +4405,7 @@ extern DialoG SelectionDialogEx
   }
   else
   {
-    if (num_choices < 20 && ! force_list)
+    if ((num_choices < 20 && ! force_list) || list_height == 1)
     {
       dlg->popup_ctrl = PopupList (p, TRUE, SelectionDialogPopupChanged);
       SetObjectExtra (dlg->popup_ctrl, dlg, NULL);
@@ -5011,6 +5010,62 @@ extern DialoG SequenceSelectionDialog
   ValNodeFreeData (choice_name_list); 
   return (DialoG) p;
 }
+
+extern DialoG SubSourceTypeDialog 
+(GrouP                    h,
+ Int2                     list_height,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  force_list,
+ Boolean                  include_note)
+{
+  ValNodePtr subsource_list = NULL;
+  Int4       i;
+
+  for (i = 0; current_subsource_subtype_alist[i].name != NULL; i++) {
+    ValNodeAddPointer (&subsource_list, current_subsource_subtype_alist[i].value, StringSave (current_subsource_subtype_alist[i].name));
+  }
+  if (include_note) {
+    ValNodeAddPointer (&subsource_list, SUBSRC_other, StringSave ("Note"));
+  }
+  
+  return ValNodeSelectionDialogEx (h, subsource_list, list_height, 
+                                   ValNodeStringName,
+                                   ValNodeSimpleDataFree, 
+                                   ValNodeStringCopy,
+                                   ValNodeChoiceMatch, "subsource list", 
+                                   change_notify, change_userdata, allow_multi, force_list, NULL);
+}
+
+
+extern DialoG OrgModTypeDialog 
+(GrouP                    h,
+ Int2                     list_height,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  force_list,
+ Boolean                  include_note)
+{
+  ValNodePtr orgmod_list = NULL;
+  Int4       i;
+
+  for (i = 0; current_orgmod_subtype_alist[i].name != NULL; i++) {
+    ValNodeAddPointer (&orgmod_list, current_orgmod_subtype_alist[i].value, StringSave (current_orgmod_subtype_alist[i].name));
+  }
+  if (include_note) {
+    ValNodeAddPointer (&orgmod_list, ORGMOD_other, StringSave ("Note"));
+  }
+  
+  return ValNodeSelectionDialogEx (h, orgmod_list, list_height, 
+                                   ValNodeStringName,
+                                   ValNodeSimpleDataFree, 
+                                   ValNodeStringCopy,
+                                   ValNodeChoiceMatch, "orgmod list", 
+                                   change_notify, change_userdata, allow_multi, force_list, NULL);
+}
+
 
 /*
 static CharPtr inferencePrefix [] = {
@@ -6378,4 +6433,4851 @@ static DialoG NewCreateInferenceDialog (
 
   return (DialoG) p;
 }
+
+
+/* ExistingText handling dialog and structures */
+typedef struct existingtextdlg 
+{
+  GrouP pre_app_grp;
+  GrouP delim_grp;
+} ExistingTextDlgData, PNTR ExistingTextDlgPtr;
+
+static void ChangePreAppIgnoreChoice (GrouP g)
+{
+  ExistingTextDlgPtr etdp;
+  Int4               handle_choice;
+  
+  etdp = (ExistingTextDlgPtr) GetObjectExtra (g);
+  if (etdp == NULL)
+  {
+    return;
+  }
+  
+  handle_choice = GetValue (etdp->pre_app_grp);
+  if (handle_choice == 1 || handle_choice == 2)
+  {
+    Enable (etdp->delim_grp);
+  }
+  else
+  {
+    Disable (etdp->delim_grp);
+  }
+}
+
+extern ExistingTextPtr GetExistingTextHandlerInfo (Int4 num_found, Boolean non_text)
+{
+  WindoW                w;
+  GrouP                 h, c;
+  ExistingTextDlgData   etdd;
+  ButtoN                b;
+  ModalAcceptCancelData acd;
+  ExistingTextPtr       etp;
+  Char                  txt [128];
+  MsgAnswer             ans;
+  PrompT                ppt;
+  Int4                  handle_choice;
+
+  if (num_found <= 0)
+  {
+    return NULL;
+  }
+  
+  sprintf (txt, "%d affected fields already contain a value.  Do you wish to overwrite existing text?",
+           num_found);
+  ans = Message (MSG_YNC, txt, 0, dialogTextHeight, systemFont, 'l');
+  if (ans == ANS_CANCEL)
+  {
+    etp = (ExistingTextPtr) MemNew (sizeof (ExistingTextData));
+    etp->existing_text_choice = eExistingTextChoiceCancel;
+    return etp;
+  }
+  else if (ans == ANS_YES)
+  {
+    etp = (ExistingTextPtr) MemNew (sizeof (ExistingTextData));
+    etp->existing_text_choice = eExistingTextChoiceReplaceOld;
+    return etp;
+  }
+    
+  w = MovableModalWindow(-20, -13, -10, -10, "How to Add New Text", NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  etdd.pre_app_grp = HiddenGroup (h, 0, 3, ChangePreAppIgnoreChoice);
+  SetGroupSpacing (etdd.pre_app_grp, 10, 10);
+  RadioButton (etdd.pre_app_grp, "Append");
+  RadioButton (etdd.pre_app_grp, "Prefix");
+  RadioButton (etdd.pre_app_grp, "Ignore new text");
+  SetValue (etdd.pre_app_grp, 1);
+  SetObjectExtra (etdd.pre_app_grp, &etdd, NULL);
+  
+  ppt = StaticPrompt (h, "Separate new text and old text with", 
+                      0, dialogTextHeight, programFont, 'c');
+  etdd.delim_grp = HiddenGroup (h, 0, 4, NULL);
+  SetGroupSpacing (etdd.delim_grp, 10, 10);
+  RadioButton (etdd.delim_grp, "Semicolon");
+  RadioButton (etdd.delim_grp, "Space");
+  RadioButton (etdd.delim_grp, "Colon");
+  RadioButton (etdd.delim_grp, "Do not separate");
+  SetValue (etdd.delim_grp, 1);
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) etdd.pre_app_grp,
+                              (HANDLE) ppt, 
+                              (HANDLE) etdd.delim_grp, 
+                              (HANDLE) c, 
+                              NULL);
+  Show (w);
+  Select (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  etp = (ExistingTextPtr) MemNew (sizeof (ExistingTextData));
+  if (acd.cancelled)
+  {
+    etp->existing_text_choice = eExistingTextChoiceCancel;
+  }
+  else
+  {
+    handle_choice = GetValue (etdd.pre_app_grp);
+    if (handle_choice == 1)
+    {
+      switch (GetValue (etdd.delim_grp))
+      {
+        case 1:
+          etp->existing_text_choice = eExistingTextChoiceAppendSemi;
+          break;
+        case 2:
+          etp->existing_text_choice = eExistingTextChoiceAppendSpace;
+          break;
+        case 3:
+          etp->existing_text_choice = eExistingTextChoiceAppendColon;
+          break;
+        case 4:
+          etp->existing_text_choice = eExistingTextChoiceAppendNone;
+          break;
+      }
+    }
+    else if (handle_choice == 2)
+    {
+      switch (GetValue (etdd.delim_grp))
+      {
+        case 1:
+          etp->existing_text_choice = eExistingTextChoicePrefixSemi;
+          break;
+        case 2:
+          etp->existing_text_choice = eExistingTextChoicePrefixSpace;
+          break;
+        case 3:
+          etp->existing_text_choice = eExistingTextChoicePrefixColon;
+          break;
+        case 4:
+          etp->existing_text_choice = eExistingTextChoicePrefixNone;
+          break;
+      }
+    }
+    else
+    {
+      etp->existing_text_choice = eExistingTextChoiceLeaveOld;
+    }
+  }
+  Remove (w);
+  return etp;
+}
+
+extern CharPtr HandleExistingText (CharPtr existing_text, CharPtr new_text, ExistingTextPtr etp)
+{
+  CharPtr rstring = NULL;
+  Int4    len;
+  
+  if (StringHasNoText (existing_text) || etp == NULL)
+  {
+    MemFree (existing_text);
+    return new_text;
+  }
+  switch (etp->existing_text_choice)
+  {
+    case eExistingTextChoiceReplaceOld:
+      /* replace current text with new text */
+      MemFree (existing_text);
+      rstring = new_text;
+      break;
+    case eExistingTextChoiceLeaveOld:
+      /* do not change current text */
+      MemFree (new_text);
+      rstring = existing_text;
+      break;
+    case eExistingTextChoiceAppendSemi:
+      /* Append new text to current text, separated by semicolon */
+      len = StringLen (new_text) + StringLen (existing_text) + 4;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, existing_text);
+        StringCat (rstring, "; ");
+        StringCat (rstring, new_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoiceAppendSpace:
+      /* Append new text to current text, separated by space */
+      len = StringLen (new_text) + StringLen (existing_text) + 3;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, existing_text);
+        StringCat (rstring, " ");
+        StringCat (rstring, new_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoiceAppendColon:
+      /* Append new text to current text, separated by colon */
+      len = StringLen (new_text) + StringLen (existing_text) + 4;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, existing_text);
+        StringCat (rstring, ": ");
+        StringCat (rstring, new_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoiceAppendNone:
+      /* Append new text to current text, no delimiter */
+      len = StringLen (new_text) + StringLen (existing_text) + 1;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, existing_text);
+        StringCat (rstring, new_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoicePrefixSemi:
+      /* Prepend new text to current text, separated by semicolon */
+      len = StringLen (new_text) + StringLen (existing_text) + 4;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, new_text);
+        StringCat (rstring, "; ");
+        StringCat (rstring, existing_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoicePrefixSpace:
+      /* Prepend new text to current text, separated by space */
+      len = StringLen (new_text) + StringLen (existing_text) + 3;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, new_text);
+        StringCat (rstring, " ");
+        StringCat (rstring, existing_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoicePrefixColon:
+      /* Prepend new text to current text, separated by colon */
+      len = StringLen (new_text) + StringLen (existing_text) + 4;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, new_text);
+        StringCat (rstring, ": ");
+        StringCat (rstring, existing_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;
+    case eExistingTextChoicePrefixNone:
+      /* prefix current text with new text */
+      len = StringLen (new_text) + StringLen (existing_text) + 1;
+      rstring = MemNew (len);
+      if (rstring != NULL) {
+        StringCpy (rstring, new_text);
+        StringCat (rstring, existing_text);
+        MemFree (new_text);
+        MemFree (existing_text);
+      }
+      break;    
+  }
+  return rstring;
+}
+
+
+/* Move EditApply data and dialog here */
+extern EditApplyPtr EditApplyFree (EditApplyPtr eap)
+{
+  if (eap != NULL)
+  {
+    eap->find_txt = MemFree (eap->find_txt);
+    eap->repl_txt = MemFree (eap->repl_txt);
+    eap->apply_txt = MemFree (eap->apply_txt);
+    eap = MemFree (eap);
+  }
+  return eap;
+}
+
+typedef struct EditApplydlg
+{
+  DIALOG_MESSAGE_BLOCK
+  TexT           find_txt;
+  TexT           repl_txt;
+  TexT           apply_txt;
+
+  DialoG         find_dlg;
+  DialoG         repl_dlg;
+  DialoG         apply_dlg;
+
+  Int4           action_choice;
+  GrouP          location_choice;
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+} EditApplyDlgData, PNTR EditApplyDlgPtr;
+
+static void ResetEditApplyDlg (EditApplyDlgPtr dlg)
+{
+  if (dlg != NULL)
+  {
+    if (dlg->find_txt != NULL)
+    {
+      SetTitle (dlg->find_txt, "");
+    }
+    if (dlg->repl_txt != NULL)
+    {
+      SetTitle (dlg->repl_txt, "");
+    }
+    if (dlg->apply_txt != NULL)
+    {
+      SetTitle (dlg->apply_txt, "");
+    }
+    if (dlg->location_choice != NULL) {
+      SetValue (dlg->location_choice, EditApplyFindLocation_anywhere);
+    }
+
+    PointerToDialog (dlg->find_dlg, NULL);
+    PointerToDialog (dlg->repl_dlg, NULL);
+    PointerToDialog (dlg->apply_dlg, NULL);
+
+  }
+}
+
+static void EditApplyDialogChangeText (TexT t)
+{
+  EditApplyDlgPtr dlg;
+
+  dlg = (EditApplyDlgPtr) GetObjectExtra (t);
+  if (dlg != NULL && dlg->change_notify != NULL)
+  {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+static void EditApplyToDialog (DialoG d, Pointer userdata)
+{
+  EditApplyDlgPtr dlg;
+  EditApplyPtr    data;
+  ValNode         vn;
+  
+  dlg = (EditApplyDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ResetEditApplyDlg (dlg);
+  data = (EditApplyPtr) userdata;
+
+  vn.next = NULL;
+  vn.choice = 0;
+
+  if (data != NULL)
+  {
+    if (!StringHasNoText (data->find_txt))
+    {
+      if (dlg->find_txt != NULL)
+      {
+        SetTitle (dlg->find_txt, data->find_txt);
+      }
+      else if (dlg->find_dlg != NULL)
+      {
+        vn.data.ptrvalue = data->find_txt;
+        PointerToDialog (dlg->find_dlg, &vn);
+      }
+    }
+
+    if (!StringHasNoText (data->repl_txt))
+    {
+      if (dlg->repl_txt != NULL) 
+      {
+        SetTitle (dlg->repl_txt, data->repl_txt);
+      }
+      else if (dlg->repl_dlg != NULL)
+      {
+        vn.data.ptrvalue = data->repl_txt;
+        PointerToDialog (dlg->repl_dlg, &vn);
+      }
+    }
+
+    if (!StringHasNoText (data->apply_txt))
+    {
+      if (dlg->apply_txt != NULL)
+      {
+        SetTitle (dlg->apply_txt, data->apply_txt);
+      }
+      else if (dlg->apply_dlg != NULL)
+      {
+        vn.data.ptrvalue = data->apply_txt;
+        PointerToDialog (dlg->apply_dlg, &vn);
+      }
+    }
+
+    if (dlg->location_choice != NULL) {
+      SetValue (dlg->location_choice, data->find_location);
+    }
+  }
+}
+
+static Pointer DialogToEditApply (DialoG d)
+{
+  EditApplyDlgPtr dlg;
+  EditApplyPtr    data;
+  ValNodePtr      vnp;
+  
+  dlg = (EditApplyDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  data = (EditApplyPtr) MemNew (sizeof (EditApplyData));
+  if (data != NULL)
+  {
+    if (dlg->find_txt != NULL)
+    {
+      data->find_txt = JustSaveStringFromText (dlg->find_txt);
+    }
+    else if (dlg->find_dlg != NULL)
+    {
+      vnp = (ValNodePtr) DialogToPointer (dlg->find_dlg);
+      if (vnp != NULL)
+      {
+        data->find_txt = StringSave (vnp->data.ptrvalue);
+      }
+      vnp = ValNodeFreeData (vnp);
+    }
+
+    if (dlg->repl_txt != NULL)
+    {
+      data->repl_txt = JustSaveStringFromText (dlg->repl_txt);
+    }
+    else if (dlg->repl_dlg != NULL)
+    {
+      vnp = (ValNodePtr) DialogToPointer (dlg->repl_dlg);
+      if (vnp != NULL)
+      {
+        data->repl_txt = StringSave (vnp->data.ptrvalue);
+      }
+      vnp = ValNodeFreeData (vnp);
+    }
+
+    if (dlg->apply_txt != NULL)
+    {
+      data->apply_txt = JustSaveStringFromText (dlg->apply_txt);
+    }
+    else if (dlg->apply_dlg != NULL)
+    {
+      vnp = (ValNodePtr) DialogToPointer (dlg->apply_dlg);
+      if (vnp != NULL)
+      {
+        data->apply_txt = StringSave (vnp->data.ptrvalue);
+      }
+      vnp = ValNodeFreeData (vnp);
+    }
+
+    if (dlg->location_choice != NULL) {
+      data->find_location = GetValue (dlg->location_choice);
+    } else {
+      data->find_location = EditApplyFindLocation_anywhere;
+    }
+  }
+  return data;
+}
+
+
+static void EditApplyMessage (DialoG d, Int2 mssg)
+
+{
+  EditApplyDlgPtr  dlg;
+
+  dlg = (EditApplyDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    switch (mssg) 
+    {
+      case VIB_MSG_INIT :
+        /* reset list */
+        ResetEditApplyDlg (dlg);
+        break;
+      case VIB_MSG_ENTER :
+        if (dlg->find_txt != NULL)
+        {
+          Select (dlg->find_txt);
+        }
+        else if (dlg->apply_txt != NULL)
+        {
+          Select (dlg->apply_txt);
+        }
+        else if (dlg->find_dlg != NULL)
+        {
+          Select (dlg->find_dlg);
+        }
+        else if (dlg->apply_dlg != NULL)
+        {
+          Select (dlg->apply_dlg);
+        }
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static ValNodePtr TestEditApply (DialoG d)
+{
+  EditApplyDlgPtr dlg;
+  ValNodePtr      total_err_list = NULL, err_list;
+  
+  dlg = (EditApplyDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return FALSE;
+  }
+
+  if (dlg->action_choice == eEditApplyChoice_Apply)
+  {
+    if (dlg->apply_dlg == NULL) 
+    {
+      if (TextHasNoText (dlg->apply_txt))
+      {
+        ValNodeAddPointer (&total_err_list, 0, "apply text");
+      }
+    }
+    else
+    {
+      total_err_list = TestDialog (dlg->apply_dlg);
+    }
+  }
+  else if (dlg->action_choice == eEditApplyChoice_Edit)
+  {
+    if (dlg->find_dlg == NULL)
+    {
+      if (TextHasNoText (dlg->find_txt))
+      {
+        ValNodeAddPointer (&total_err_list, 0, "find text");
+      }
+    }
+    else 
+    {
+      total_err_list = TestDialog (dlg->find_dlg);
+      err_list = TestDialog (dlg->repl_dlg);
+      ValNodeLink (&total_err_list, err_list);
+    }
+  }
+  return total_err_list;
+}
+
+static void EditApplyDialogCopy (ButtoN b)
+{
+  EditApplyDlgPtr dlg;
+  CharPtr         str = NULL;
+
+  dlg = (EditApplyDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  str = JustSaveStringFromText (dlg->find_txt);
+  SetTitle (dlg->repl_txt, str);
+  str = MemFree (str);
+}
+
+static ValNodePtr ValNodeDupStringList (ValNodePtr vnp)
+{
+  ValNodePtr cpy = NULL, last = NULL, tmp;
+
+  while (vnp != NULL)
+  {
+    tmp = ValNodeNew (NULL);
+    tmp->choice = vnp->choice;
+    tmp->data.ptrvalue = StringSave (vnp->data.ptrvalue);
+    if (last == NULL)
+    {
+      cpy = tmp;
+    }
+    else
+    {
+      last->next = tmp;
+    }
+    last = tmp;
+    vnp = vnp->next;
+  }
+  return cpy;
+}
+      
+
+extern DialoG EditApplyDialog 
+(GrouP                    h,
+ Int4                     action_choice, 
+ CharPtr                  apply_label,
+ ValNodePtr               choice_list,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  EditApplyDlgPtr dlg;
+  GrouP           p, p1;
+  ButtoN          b;
+  ValNodePtr      cpy;
+  
+  dlg = (EditApplyDlgPtr) MemNew (sizeof (EditApplyDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = EditApplyToDialog;
+  dlg->fromdialog = DialogToEditApply;
+  dlg->dialogmessage = EditApplyMessage;
+  dlg->testdialog = TestEditApply;
+  dlg->action_choice = action_choice;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  if (choice_list == NULL)
+  {
+    p1 = HiddenGroup (p, 3, 0, NULL);
+    SetGroupSpacing (p1, 10, 10);
+
+    if (action_choice == eEditApplyChoice_Apply)
+    {
+      StaticPrompt (p1, apply_label, 0, dialogTextHeight, systemFont, 'r');
+      dlg->apply_txt = DialogText (p1, "", 20, EditApplyDialogChangeText);
+      SetObjectExtra (dlg->apply_txt, dlg, NULL);
+      dlg->location_choice = NULL;
+    }
+    else if (action_choice == eEditApplyChoice_Edit)
+    {
+      StaticPrompt (p1, "Find", 0, dialogTextHeight, systemFont, 'r');
+      dlg->find_txt = DialogText (p1, "", 18, EditApplyDialogChangeText);
+      SetObjectExtra (dlg->find_txt, dlg, NULL);
+      b = PushButton (p1, "Copy", EditApplyDialogCopy);
+      SetObjectExtra (b, dlg, NULL);
+      Hide (b);
+      StaticPrompt (p1, "Replace", 0, dialogTextHeight, systemFont, 'r');
+      dlg->repl_txt = DialogText (p1, "", 18, EditApplyDialogChangeText);
+      SetObjectExtra (dlg->repl_txt, dlg, NULL);
+      b = PushButton (p1, "Copy", EditApplyDialogCopy);
+      SetObjectExtra (b, dlg, NULL);
+
+      dlg->location_choice = HiddenGroup (p, 3, 0, NULL);
+      RadioButton (dlg->location_choice, "Anywhere in field");
+      RadioButton (dlg->location_choice, "At the beginning of the field");
+      RadioButton (dlg->location_choice, "At the end of the field");
+      SetValue (dlg->location_choice, EditApplyFindLocation_anywhere);
+    }
+  }
+  else
+  {
+    if (action_choice == eEditApplyChoice_Apply)
+    {
+      p1 = HiddenGroup (p, 1, 0, NULL);
+      SetGroupSpacing (p1, 10, 10);
+      if (!StringHasNoText (apply_label))
+      {
+        StaticPrompt (p1, apply_label, 0, dialogTextHeight, systemFont, 'r');
+      }
+      cpy = ValNodeDupStringList (choice_list);
+      dlg->apply_dlg = ValNodeSelectionDialog (p1, cpy, 6,
+                                               ValNodeStringName,
+                                               ValNodeSimpleDataFree,
+                                               ValNodeStringCopy,
+                                               ValNodeStringMatch,
+                                               apply_label,
+                                               dlg->change_notify, dlg->change_userdata, FALSE);
+    }
+    else if (action_choice == eEditApplyChoice_Edit)
+    {
+      p1 = HiddenGroup (p, 2, 0, NULL);
+      SetGroupSpacing (p1, 10, 10);
+      StaticPrompt (p1, "From", 0, dialogTextHeight, systemFont, 'r');
+      StaticPrompt (p1, "To", 0, dialogTextHeight, systemFont, 'r');
+
+      cpy = ValNodeDupStringList (choice_list);
+      dlg->find_dlg = ValNodeSelectionDialog (p1, cpy, 6,
+                                               ValNodeStringName,
+                                               ValNodeSimpleDataFree,
+                                               ValNodeStringCopy,
+                                               ValNodeStringMatch,
+                                               "Original",
+                                               dlg->change_notify, dlg->change_userdata, FALSE);
+      cpy = ValNodeDupStringList (choice_list);
+      dlg->repl_dlg = ValNodeSelectionDialog (p1, cpy, 6,
+                                               ValNodeStringName,
+                                               ValNodeSimpleDataFree,
+                                               ValNodeStringCopy,
+                                               ValNodeStringMatch,
+                                               "New",
+                                               dlg->change_notify, dlg->change_userdata, FALSE);
+
+    }
+    dlg->location_choice = NULL;
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) dlg->location_choice, NULL);
+
+  return (DialoG) p;
+}
+
+
+/* Global Inference Editor Dialog */
+
+extern InferenceParsePtr ParseInferenceText (CharPtr inference)
+{
+  CharPtr cp1, cp2;
+  Int4    len;
+  InferenceParsePtr ipp;
+
+  if (StringHasNoText (inference))
+  {
+    return NULL;
+  }
+
+  cp1 = StringChr (inference, ':');
+  if (cp1 == NULL)  
+  {
+    return NULL;
+  }
+  cp2 = StringChr (cp1 + 1, ':');
+  if (cp2 == NULL)
+  {
+    return NULL;
+  }
+
+  ipp = (InferenceParsePtr) MemNew (sizeof (InferenceParseData));
+  ipp->second_field = StringSave (cp2 + 1);
+
+  len = cp2 - cp1;
+  ipp->first_field = (CharPtr) MemNew (sizeof (Char) * len);
+  StringNCpy (ipp->first_field, cp1 + 1, len - 1);
+  ipp->first_field[len - 1] = 0;
+
+  /* look for same species */
+  cp2 = StringISearch (inference, "(same species)");
+  if (cp2 != NULL && cp2 < cp1)
+  {
+    ipp->same_species = TRUE;
+    cp1 = cp2;
+  } 
+  else
+  {
+    ipp->same_species = FALSE;
+  }
+  len = cp1 - inference + 1;
+  ipp->category = (CharPtr) MemNew (sizeof (Char) * len);
+  StringNCpy (ipp->category, inference, len - 1);
+  ipp->category[len - 1] = 0;
+  TrimSpacesAroundString (ipp->category);
+  TrimSpacesAroundString (ipp->first_field);
+  TrimSpacesAroundString (ipp->second_field);
+
+  return ipp;  
+}
+
+
+extern CharPtr InferenceTextFromStruct (InferenceParsePtr ipp)
+{
+  Int4 len;
+  CharPtr inference = NULL;
+  CharPtr same_sp = " (same species)";
+
+  if (ipp == NULL) return NULL;
+
+  len = StringLen (ipp->category) + StringLen (ipp->first_field) + StringLen (ipp->second_field)
+        + 3;
+  if (ipp->same_species)
+  {
+    len += StringLen (same_sp);
+  }
+
+  inference = (CharPtr) MemNew (sizeof (Char) * len);
+  sprintf (inference, "%s%s:%s:%s", ipp->category == NULL ? "" : ipp->category,
+                                    ipp->same_species ? same_sp : "",
+                                    ipp->first_field == NULL ? "" : ipp->first_field,
+                                    ipp->second_field == NULL ? "" : ipp->second_field);
+  return inference;
+}
+
+
+typedef enum {
+  eInferenceCategorySimilarTo = 0,
+  eInferenceCategoryProgram,
+  eInferenceCategoryAbInitio,
+  eNumInferenceCategories } EInferenceCategoryType;
+
+
+static Int4 GetCategoryTypeFromNum (Int4 num)
+{
+  if (num > 0 && num < 8) 
+  {
+    return eInferenceCategorySimilarTo;
+  }
+  else if (num > 7 && num < 11)
+  {
+    return eInferenceCategoryProgram;
+  }
+  else if (num == 11)
+  {
+    return eInferenceCategoryAbInitio;
+  }
+  else
+  {
+    return -1;
+  }
+}
+
+
+static Int4 GetCategoryNumFromName (CharPtr category)
+{
+  Int4 i;
+
+  if (StringHasNoText (category)) 
+  {
+    return -1;
+  }
+
+  for (i = 0; inference_alist[i].name != NULL; i++)
+  {
+    if (StringICmp (inference_alist[i].name, category) == 0)
+    {
+      return i;
+    }
+  }
+  return -1;
+}
+
+
+extern InferenceFieldEditPtr InferenceFieldEditFree (InferenceFieldEditPtr ifep)
+{
+  if (ifep != NULL)
+  {
+    ifep->edit_apply = EditApplyFree (ifep->edit_apply);
+    ifep = MemFree (ifep);
+  }
+  return ifep;
+}
+
+extern InferenceEditPtr InferenceEditFree (InferenceEditPtr iep)
+{
+  if (iep != NULL)
+  {
+    iep->field_edit = InferenceFieldEditFree (iep->field_edit);
+    iep = MemFree (iep);
+  }
+  return iep;
+}
+
+typedef struct inferencefieldeditdialog
+{
+  DIALOG_MESSAGE_BLOCK
+
+  PopuP  field_category;
+  PopuP  field_list[eNumInferenceCategories];
+  DialoG field_editors[eNumInferenceCategories * 2];
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+
+} InferenceFieldEditDialogData, PNTR InferenceFieldEditDialogPtr;
+
+
+static Pointer InferenceFieldEditDataFromDialog (DialoG d)
+{
+  InferenceFieldEditDialogPtr dlg;
+  UIEnum                      val;
+  Int4                        i, j;
+  InferenceFieldEditPtr       data = NULL;
+
+  dlg = (InferenceFieldEditDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (GetEnumPopup (dlg->field_category, inference_alist, &val)
+      && val > 0
+      && (i = GetCategoryTypeFromNum (val)) > -1
+      && (j = GetValue (dlg->field_list[i])) > 0
+      && j < 3)
+  {
+    data = (InferenceFieldEditPtr) MemNew (sizeof (InferenceFieldEditData));
+    data->field_category = inferencePrefix[val];
+    data->field_choice = j - 1;
+    data->edit_apply = DialogToPointer (dlg->field_editors[2 * i + j - 1]);
+  }
+  return data;
+}
+
+
+static void ChangeInferenceFieldChoice (PopuP p)
+{
+  InferenceFieldEditDialogPtr dlg;
+  UIEnum                      val;
+  Int4                        i, j;
+
+  dlg = (InferenceFieldEditDialogPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  for (i = eInferenceCategorySimilarTo;
+       i <= eInferenceCategoryAbInitio;
+       i++)
+  {
+    Hide (dlg->field_list[i]);
+    Hide (dlg->field_editors[2 * i]);
+    Hide (dlg->field_editors[2 * i + 1]);
+  }
+
+  if (GetEnumPopup (dlg->field_category, inference_alist, &val)
+      && val > 0
+      && (i = GetCategoryTypeFromNum (val)) > -1)
+  {
+    Show (dlg->field_list[i]);
+    j = GetValue (dlg->field_list[i]);
+    if (j > 0 && j < 3)
+    {
+      Show (dlg->field_editors[2 * i + j - 1]);
+    }
+  }
+
+  if (dlg->change_notify != NULL) 
+  {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+static ValNodePtr MakeValNodeListFromEnum ( EnumFieldAssocPtr al)
+{
+  EnumFieldAssocPtr efap;
+  ValNodePtr        list;
+
+  efap = al;
+  list = NULL;
+  while (efap->name != NULL)
+  {
+    ValNodeAddStr (&list, efap->value, StringSave (efap->name));
+    efap ++;
+  }
+  return list;
+}
+
+
+static DialoG 
+CreateInferenceFieldEditApplyDialog 
+(GrouP                h,
+ Int4                 action_choice,
+ Nlm_ChangeNotifyProc change_notify,
+ Pointer              change_userdata)
+{
+  InferenceFieldEditDialogPtr dlg;
+  GrouP                       p, k;
+  Int4                        i;
+  ValNodePtr                  choice_list;
+
+  dlg = (InferenceFieldEditDialogPtr) MemNew (sizeof (InferenceFieldEditDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  p = HiddenGroup (h, 3, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = InferenceFieldEditDataFromDialog;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+  
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  StaticPrompt (p, "Category", 0, popupMenuHeight, programFont, 'c');
+  StaticPrompt (p, "Field", 0, popupMenuHeight, programFont, 'c');
+  if (action_choice == eEditApplyChoice_Apply) 
+  {
+    StaticPrompt (p, "New Value", 0, popupMenuHeight, programFont, 'c');
+  }
+  else
+  {
+    StaticPrompt (p, "Convert", 0, popupMenuHeight, programFont, 'c');
+  }
+
+  dlg->field_category = PopupList (p, TRUE, ChangeInferenceFieldChoice);
+  SetObjectExtra (dlg->field_category, dlg, NULL);
+  InitEnumPopup (dlg->field_category, inference_alist, NULL);
+
+
+  k = HiddenGroup (p, 0, 0, NULL);
+  dlg->field_list[eInferenceCategorySimilarTo] = PopupList (k, TRUE, ChangeInferenceFieldChoice);
+  SetObjectExtra (dlg->field_list[eInferenceCategorySimilarTo], dlg, NULL);
+  PopupItem (dlg->field_list[eInferenceCategorySimilarTo], "Database");
+  PopupItem (dlg->field_list[eInferenceCategorySimilarTo], "Accession");
+  
+  dlg->field_list[eInferenceCategoryProgram] = PopupList (k, TRUE, ChangeInferenceFieldChoice);
+  SetObjectExtra (dlg->field_list[eInferenceCategoryProgram], dlg, NULL);
+  PopupItem (dlg->field_list[eInferenceCategoryProgram], "Program or Database");
+  PopupItem (dlg->field_list[eInferenceCategoryProgram], "Version or Accession");
+  
+  dlg->field_list[eInferenceCategoryAbInitio] = PopupList (k, TRUE, ChangeInferenceFieldChoice);
+  SetObjectExtra (dlg->field_list[eInferenceCategoryAbInitio], dlg, NULL);
+  PopupItem (dlg->field_list[eInferenceCategoryAbInitio], "Program");
+  PopupItem (dlg->field_list[eInferenceCategoryAbInitio], "Program Version");
+
+  k = HiddenGroup (p, 0, 0, NULL);
+  i = 0;
+  choice_list = MakeValNodeListFromEnum (accn_type_alist);
+  dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", choice_list, change_notify, change_userdata);
+  dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", NULL, change_notify, change_userdata);
+  dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", NULL, change_notify, change_userdata);
+  dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", NULL, change_notify, change_userdata);
+  choice_list = MakeValNodeListFromEnum (program_alist);
+  dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", choice_list, change_notify, change_userdata);
+  dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", NULL, change_notify, change_userdata);
+
+  ChangeInferenceFieldChoice (dlg->field_category);
+  return (DialoG) p;
+}
+
+
+typedef struct inferenceeditdialog {
+  DIALOG_MESSAGE_BLOCK
+  PopuP action;
+  GrouP action_pages[eNumInferenceEditActions];
+  PopuP category_from;
+  PopuP category_to;
+  
+  DialoG apply_field;
+  DialoG edit_field;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+
+} InferenceEditDialogData, PNTR InferenceEditDialogPtr;
+
+
+static Pointer InferenceEditDataFromDialog (DialoG d)
+{
+  InferenceEditDialogPtr dlg;
+  InferenceEditPtr       data;
+  Int4                   i;
+
+  dlg = (InferenceEditDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  data = (InferenceEditPtr) MemNew (sizeof (InferenceEditData));
+  if (data == NULL) return NULL;
+
+  data->action = (EInferenceEditAction) (GetValue (dlg->action) - 1);
+
+  switch (data->action)
+  {
+    case eInferenceRemove:
+      /* no other data needed */
+      break;
+    case eInferenceEditCategory:
+      i = GetValue (dlg->category_from);
+      if (i <= 1) 
+      {
+        data->category_from = NULL;
+      }
+      else
+      {
+        data->category_from = inferencePrefix[i - 2];
+      }
+      i = GetValue (dlg->category_to);
+      if (i < 1)
+      {
+        data->category_to = NULL;
+      }
+      else
+      {
+        data->category_to = inferencePrefix[i - 1];
+      }
+      break;
+    case eInferenceApplyCategoryFields:
+     data->field_edit = DialogToPointer (dlg->apply_field);
+     break;
+    case eInferenceEditCategoryFields:
+     data->field_edit = DialogToPointer (dlg->edit_field);
+      break;
+    default:
+      break;
+  }
+
+  return data;
+}
+
+
+static void ChangeInferenceEditAction (PopuP p)
+{
+  InferenceEditDialogPtr dlg;
+  Int4                   i;
+
+  dlg = (InferenceEditDialogPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  ResetClip();
+  for (i = 0; i < eNumInferenceEditActions; i++)
+  {
+    Hide (dlg->action_pages[i]);
+  }
+
+  i = GetValue (dlg->action);
+  if (i > 0 && i <= eNumInferenceEditActions)
+  {
+    Show (dlg->action_pages[i - 1]);
+  }
+
+  if (dlg->change_notify != NULL) 
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void ChangeInferenceCategoryChoice (PopuP p)
+{
+  InferenceEditDialogPtr dlg;
+
+  dlg = (InferenceEditDialogPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (dlg->change_notify != NULL) 
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static ValNodePtr TestInferenceEditDialog (DialoG d)
+{
+  ValNodePtr             err_list = NULL;
+  InferenceEditPtr       iep;
+
+  iep = DialogToPointer (d);
+  if (iep == NULL)
+  {
+    ValNodeAddPointer (&err_list, 0, "no values");
+  }
+  else
+  {
+    switch (iep->action)
+    {
+      case eInferenceRemove:
+        /* nothing to check */
+        break;
+      case eInferenceEditCategory:
+        if (StringHasNoText (iep->category_from))
+        {
+          ValNodeAddPointer (&err_list, 0, "missing category from");
+        }
+        if (StringHasNoText (iep->category_to))
+        {
+          ValNodeAddPointer (&err_list, 0, "missing category to");
+        }
+        break;
+      case eInferenceApplyCategoryFields:
+      case eInferenceEditCategoryFields:
+        if (iep->field_edit == NULL)
+        {
+          ValNodeAddPointer (&err_list, 0, "missing edit data");
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  iep = InferenceEditFree (iep);
+
+  return err_list;
+}
+
+
+extern DialoG CreateInferenceEditDialog 
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  InferenceEditDialogPtr dlg;
+  GrouP                  p, g;
+  Int4                   i;
+  Nlm_EnumFieldAssocPtr  eap;
+
+  dlg = (InferenceEditDialogPtr) MemNew (sizeof (InferenceEditDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = NULL;
+  dlg->fromdialog = InferenceEditDataFromDialog;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = TestInferenceEditDialog;
+
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->action = PopupList (p, TRUE, ChangeInferenceEditAction);
+  SetObjectExtra (dlg->action, dlg, NULL);
+  PopupItem (dlg->action, "Remove");
+  PopupItem (dlg->action, "Change Category");
+  PopupItem (dlg->action, "Apply Category Fields");
+  PopupItem (dlg->action, "Edit Category Fields");
+  SetValue (dlg->action, eInferenceRemove + 1);
+
+  g = HiddenGroup (p, 0, 0, NULL);
+  i = 0;
+
+  /* remove group */
+  dlg->action_pages[i] = HiddenGroup (g, -1, 0, NULL);
+  StaticPrompt (dlg->action_pages[i], "Hit Accept to Remove Inferences", 0, popupMenuHeight, programFont, 'c');
+  i++;
+
+  /* edit category group */
+  dlg->action_pages[i] = HiddenGroup (g, 2, 0, NULL);
+  StaticPrompt (dlg->action_pages[i], "Original Category", 0, popupMenuHeight, programFont, 'c');
+  dlg->category_from = PopupList (dlg->action_pages[i], TRUE, ChangeInferenceCategoryChoice);
+  SetObjectExtra (dlg->category_from, dlg, NULL);
+  PopupItem (dlg->category_from, "Any");
+  eap = inference_alist;
+  while (eap->name != NULL) {
+    PopupItem (dlg->category_from, eap->name);
+    eap++;
+  }
+  
+  StaticPrompt (dlg->action_pages[i], "New Category", 0, popupMenuHeight, programFont, 'c');
+  dlg->category_to = PopupList (dlg->action_pages[i], TRUE, ChangeInferenceCategoryChoice);
+  SetObjectExtra (dlg->category_to, dlg, NULL);
+  InitEnumPopup (dlg->category_to, inference_alist, NULL);
+  i++;
+
+  dlg->action_pages[i] = HiddenGroup (g, 0, 0, NULL);
+  dlg->apply_field = CreateInferenceFieldEditApplyDialog (dlg->action_pages[i], eEditApplyChoice_Apply, change_notify, change_userdata);
+  i++;
+  
+  dlg->action_pages[i] = HiddenGroup (g, 0, 0, NULL);
+  dlg->edit_field = CreateInferenceFieldEditApplyDialog (dlg->action_pages[i], eEditApplyChoice_Edit, change_notify, change_userdata);
+  i++;
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->action_pages[0],
+                              (HANDLE) dlg->action_pages[1],
+                              (HANDLE) dlg->action_pages[2],
+                              (HANDLE) dlg->action_pages[3],
+                              NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->action, (HANDLE) g, NULL);
+
+  ChangeInferenceEditAction (dlg->action);
+
+  return (DialoG) p;
+}
+
+
+/* This section of code is for handling ClickableLists */
+
+typedef struct clickablelist
+{
+  DIALOG_MESSAGE_BLOCK
+  DoC  doc;
+  DoC  clickable_item_list;  
+  TexT find_txt;
+
+  ClickableCallback item_single_click_callback;
+  ClickableCallback item_double_click_callback;
+  Pointer         item_click_callback_data;
+  GetClickableItemText get_item_text;
+  Boolean         dblClick;  
+  Int2            clicked;
+  Int2            selected;
+  Int2            item_selected;  
+  Int4            num_levels;
+  ValNodePtr      list_list;
+  Nlm_ColPtr PNTR col_fmt_array_array;
+
+  Int2            text_select_item_start;
+  Int2            text_select_row_start;
+  Int2            text_select_char_start;
+  Int2            text_select_item_stop;
+  Int2            text_select_row_stop;
+  Int2            text_select_char_stop;
+  Int2            text_select_item_anchor;
+  Int2            text_select_row_anchor;
+  Int2            text_select_char_anchor;
+
+} ClickableListData, PNTR ClickableListPtr;
+
+
+static Nlm_ParData clickableParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
+static Nlm_ColData clickableColFmt[2] = {{16, 0, 0, 0, NULL, 'l', 0,0,0,0, FALSE},
+                                    {1000, 0, 0, 0, NULL, 'l', 1,0,0,0, TRUE}};
+
+static Nlm_ParData clickableItemParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
+static Nlm_ColData clickableItemColFmt [4] = {{0, 5, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
+                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
+                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
+                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, TRUE}};
+
+
+
+static Nlm_ColPtr PNTR FreeColumnFormatArrays (Nlm_ColPtr PNTR col_fmt_array_array, Int4 num_levels)
+{
+  Int4 n;
+  
+  if (col_fmt_array_array == NULL || num_levels < 1)
+  {
+    return NULL;
+  }
+  for (n = 0; n < num_levels; n++)
+  {
+    col_fmt_array_array [n] = MemFree (col_fmt_array_array [n]);
+  }
+  col_fmt_array_array = MemFree (col_fmt_array_array);
+  return col_fmt_array_array;
+}
+
+static void CleanupClickableListDialog (GraphiC g, VoidPtr data)
+
+{
+  ClickableListPtr dlg;
+
+  dlg = (ClickableListPtr) data;
+  if (dlg != NULL) {
+     dlg->col_fmt_array_array = FreeColumnFormatArrays (dlg->col_fmt_array_array, dlg->num_levels);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+
+static ClickableItemPtr GetSubItem (ValNodePtr item_list, Int2Ptr pitem)
+{
+  ClickableItemPtr cip = NULL;
+
+  if (item_list == NULL || pitem == NULL)
+  {
+    return NULL;
+  }
+  while (*pitem > 0 && item_list != NULL)
+  {
+    (*pitem)--;
+    cip = (ClickableItemPtr) item_list->data.ptrvalue;
+    if (*pitem > 0)
+    {
+      if (cip != NULL && cip->expanded)
+      {
+        cip = GetSubItem (cip->subcategories, pitem);
+      }
+    }
+    item_list = item_list->next;
+  }
+  if (*pitem > 0)
+  {
+    cip = NULL;
+  }
+  return cip;
+}
+
+static Int4 CountLevels (ValNodePtr item_list)
+{
+  Int4       num_levels = 1, num, num_sublevels = 0;
+  ValNodePtr vnp;
+  ClickableItemPtr cip;
+  
+  if (item_list == NULL) 
+  {
+    return 0;
+  }
+  
+  for (vnp = item_list; vnp != NULL; vnp = vnp->next)
+  {
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (cip == NULL || cip->subcategories == NULL || !cip->expanded)
+    {
+      continue;
+    }
+    num = CountLevels (cip->subcategories);
+    if (num > num_sublevels) num_sublevels = num;
+  }
+  
+  /* one level for the top plus levels for the subcategories */
+
+  return 1 + num_sublevels;
+}
+
+
+static ClickableItemPtr GetSelectedClickableList (ValNodePtr item_list, Int2 item)
+{
+  ClickableItemPtr cip = NULL;
+  
+  cip = GetSubItem (item_list, &item);
+
+  return cip;
+}
+
+
+static Nlm_ColPtr PNTR GetColumnFormatArrays (Int4 num_levels, DoC doc)
+{
+  Int4               n, k;
+  Nlm_ColPtr PNTR    col_fmt_array_array = NULL;
+  RecT               r;
+  Int4               doc_width;
+    
+  if (num_levels == 0)
+  {
+    return NULL;
+  }
+  
+  ObjectRect (doc, &r);
+  InsetRect (&r, 4, 4);
+  doc_width = r.right - r.left;
+  
+  col_fmt_array_array = (Nlm_ColPtr PNTR) MemNew (sizeof (Nlm_ColPtr) * num_levels);
+  for (n = 0; n < num_levels; n++)
+  {
+    col_fmt_array_array[n] = (Nlm_ColPtr) MemNew (sizeof (Nlm_ColData) * (n + 3));
+    for (k = 0; k < n + 2; k++)
+    {
+      col_fmt_array_array[n][k].pixWidth = 16;
+      col_fmt_array_array[n][k].pixInset = 0;
+      col_fmt_array_array[n][k].charWidth = 0;
+      col_fmt_array_array[n][k].charInset = 0;
+      col_fmt_array_array[n][k].font = programFont;
+      col_fmt_array_array[n][k].just = 'l';
+      col_fmt_array_array[n][k].wrap = 0;
+      col_fmt_array_array[n][k].bar = 0;
+      col_fmt_array_array[n][k].underline = 0;
+      col_fmt_array_array[n][k].left = 0;
+      col_fmt_array_array[n][k].last = 0;
+    }
+    col_fmt_array_array[n][k].pixWidth = doc_width - ((n + 2) * 16);
+    col_fmt_array_array[n][k].pixInset = 0;
+    col_fmt_array_array[n][k].charWidth = 0;
+    col_fmt_array_array[n][k].charInset = 0;
+    col_fmt_array_array[n][k].font = programFont;
+    col_fmt_array_array[n][k].just = 'l';
+    col_fmt_array_array[n][k].wrap = 1;
+    col_fmt_array_array[n][k].bar = 0;
+    col_fmt_array_array[n][k].underline = 0;
+    col_fmt_array_array[n][k].left = 0;
+    col_fmt_array_array[n][k].last = 1;
+  }
+  return col_fmt_array_array;
+}
+
+
+static void AddClickableItem (ClickableListPtr dlg, ClickableItemPtr cip, Int4 level)
+{
+  CharPtr            item_text;
+  ValNodePtr         vnp;
+  Int4               n;
+
+  if (cip == NULL)
+  {
+    return;
+  }
+  item_text = (CharPtr) MemNew (sizeof (Char) * (StringLen (cip->description) + 6 + level));
+  for (n = 0; n < level; n++)
+  {
+    StringCat (item_text, "\t");
+  }
+  StringCat (item_text, " \t \t");
+  StringCat (item_text, cip->description);
+  StringCat (item_text, "\n");
+  AppendText (dlg->doc, item_text, &clickableParFmt, dlg->col_fmt_array_array [level], programFont);
+  if (cip->expanded)
+  {
+    for (vnp = cip->subcategories; vnp != NULL; vnp = vnp->next)
+    {
+      AddClickableItem (dlg, vnp->data.ptrvalue, level + 1);
+    }
+  }
+}
+
+static void PopulateClickableList (ClickableListPtr dlg, ValNodePtr list_list)
+{
+  Int2               numItems;
+  Int4               num_levels;
+  
+  if (dlg == NULL || dlg->doc == NULL) 
+  {
+    return;
+  }
+  
+  Reset (dlg->doc);
+  
+  num_levels = CountLevels (dlg->list_list);
+  if (num_levels != dlg->num_levels)
+  {
+    dlg->col_fmt_array_array = FreeColumnFormatArrays (dlg->col_fmt_array_array, dlg->num_levels);
+    dlg->num_levels = num_levels;
+    dlg->col_fmt_array_array = GetColumnFormatArrays (dlg->num_levels, dlg->doc);
+  }
+  
+  while (list_list != NULL)
+  {
+    AddClickableItem (dlg, list_list->data.ptrvalue, 0);
+    list_list = list_list->next;
+  }
+  GetDocParams (dlg->doc, &numItems, NULL);
+  UpdateDocument (dlg->doc, 0, numItems);
+
+}
+
+static Int2 PanelOffsetFromCharOffset (ClickableListPtr dlg, Int2 item, Int2 char_offset)
+{
+  Int2 numRows, numCols, lineHeight;
+  Int2 left_start, width, inset, char_width;
+  if (dlg == NULL) return 0;
+
+  GetItemParams4 (dlg->doc, item, NULL, &numRows, &numCols, &lineHeight, NULL);
+  GetColParams (dlg->doc, item, numCols, &left_start, &width, &inset, NULL);
+
+  /* need to set font so that Nlm_CharWidth works properly */
+  SelectFont (dlg->col_fmt_array_array[0][0].font);
+  char_width = Nlm_CharWidth ('A');
+  return left_start + inset + char_offset * char_width;
+}
+
+static Int2 GetTextSelectCharOffset (PoinT pt, ClickableListPtr dlg, Int2 item, Int2 row, Int2 col)
+{
+  Int2 pixPos, pixInset;
+  Int2 one_char_width;
+  CharPtr txt;
+  Int4    len;
+  Int2    char_offset;
+
+  if (dlg == NULL) return 0;
+
+  GetColParams (dlg->doc, item, col, &pixPos,
+                NULL, &pixInset, NULL);
+
+  SelectFont (dlg->col_fmt_array_array[0][0].font);
+  one_char_width = Nlm_CharWidth ('A');
+  if (one_char_width == 0) return 0;
+
+  char_offset = (pt.x - pixPos - pixInset) / one_char_width;
+  if (char_offset > 0) {
+    txt = GetDocText (dlg->doc, item, row, col);
+    len = StringLen (txt);
+    if (char_offset >= len) {
+      char_offset = - 1;
+    }
+  }
+
+  return char_offset; 
+}
+
+
+static void ClickList (DoC d, PoinT pt)
+
+{
+  Int2             item, numItems;
+  Int2             row;
+  Int2             col;
+  ClickableListPtr dlg;
+  ClickableItemPtr cip;
+  Int4             offset;
+  Int2             first_shown;
+  Boolean          rsult;
+  RecT             r;
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    MapDocPoint (d, pt, &item, &row, &col, NULL);
+    if (item > 0 && row > 0 && dlg->clicked == item) {
+      dlg->dblClick = dblClick;
+    } else {
+      dlg->dblClick = FALSE;
+    }
+    dlg->clicked = 0;
+    if (item > 0 && row > 0) {
+      dlg->clicked = item;
+    }
+    if (item > 0 && row > 0 && !dblClick)
+    {
+      cip = GetSelectedClickableList (dlg->list_list, item);
+      if (cip != NULL)
+      {
+        if (col == cip->level + 1)
+        {
+          cip->chosen = !cip->chosen;
+          GetDocParams (d, &numItems, NULL);
+          UpdateDocument (d, 0, numItems);
+        }
+        else if (col == cip->level + 2)
+        {
+          cip->expanded = !cip->expanded;
+          rsult = GetScrlParams4 (dlg->doc, &offset, &first_shown, NULL);
+          PopulateClickableList (dlg, dlg->list_list);
+          if (rsult) {
+            GetItemParams4 (dlg->doc, first_shown, &offset, NULL, NULL, NULL, NULL);
+            SetScrlParams4 (dlg->doc, offset);
+          }
+          ObjectRect (dlg->doc, &r);
+          InsetRect (&r, -1, -1);
+          InvalRect (&r);
+        } else {
+          dlg->text_select_item_anchor = item;
+          dlg->text_select_row_anchor = row;
+          dlg->text_select_char_anchor = GetTextSelectCharOffset (pt, dlg, item, row, col);
+
+          dlg->text_select_char_start = dlg->text_select_char_anchor;
+          dlg->text_select_char_stop = dlg->text_select_char_start;
+          if (dlg->text_select_char_start < 0) {
+            dlg->text_select_item_start = -1;
+            dlg->text_select_row_start = -1;
+            dlg->text_select_item_stop = -1;
+            dlg->text_select_row_stop = -1;
+          } else {
+            dlg->text_select_item_start = item;
+            dlg->text_select_row_start = row;
+            dlg->text_select_item_stop = item;
+            dlg->text_select_row_stop = row;
+          }
+          GetDocParams (dlg->doc, &numItems, NULL);
+          UpdateDocument (dlg->doc, 0, numItems);
+        }
+      }
+    }
+  }
+}
+
+static void UpdateClickableListTextSelection (ClickableListPtr dlg, Int2 item, Int2 row, Int2 col, PoinT pt)
+{
+  Int2 char_start, numCols;
+
+  if (dlg == NULL || item < 1 || row < 1) return;
+
+  /* only update for positions in the text area */
+  GetItemParams4 (dlg->doc, item, NULL, NULL, &numCols, NULL, NULL);
+  if (col != numCols) {
+    return;
+  }
+
+  char_start = GetTextSelectCharOffset (pt, dlg, item, row, col);
+  if (char_start < 0) {
+    /* no updates unless mouse is in text area */
+    return;
+  }
+    
+  if (item < dlg->text_select_item_anchor) {
+    /* mouse is before anchor */
+    dlg->text_select_item_start = item;
+    dlg->text_select_row_start = row;
+    dlg->text_select_char_start = char_start;
+    dlg->text_select_item_stop = dlg->text_select_item_anchor;
+    dlg->text_select_row_stop = dlg->text_select_row_anchor;
+    dlg->text_select_char_stop = dlg->text_select_char_anchor;
+  } else if (item == dlg->text_select_item_anchor) {
+    /* start and stop in the anchor item */
+    dlg->text_select_item_start = item;
+    dlg->text_select_item_stop = item;
+    if (row < dlg->text_select_row_anchor) {
+      /* mouse is before anchor */
+      dlg->text_select_row_start = row;
+      dlg->text_select_char_start = char_start;
+      dlg->text_select_row_stop = dlg->text_select_row_anchor;
+      dlg->text_select_char_stop = dlg->text_select_char_anchor;
+    } else if (row == dlg->text_select_row_anchor) {
+      /* start and stop in the anchor row */
+      dlg->text_select_row_start = row;
+      dlg->text_select_row_stop = row;
+      if (char_start <= dlg->text_select_char_anchor) {
+        /* mouse is before anchor */
+        dlg->text_select_char_start = char_start;
+        dlg->text_select_char_stop = dlg->text_select_char_anchor;
+      } else {
+        dlg->text_select_char_start = dlg->text_select_char_anchor;
+        dlg->text_select_char_stop = char_start;
+      }
+    }
+  } else {
+    /* mouse is after anchor */
+    dlg->text_select_item_start = dlg->text_select_item_anchor;
+    dlg->text_select_row_start = dlg->text_select_row_anchor;
+    dlg->text_select_char_start = dlg->text_select_char_anchor;
+    dlg->text_select_item_stop = item;
+    dlg->text_select_row_stop = row;
+    dlg->text_select_char_stop = char_start;
+  }
+  InvalDocRows (dlg->doc, 0, 0, 0);
+}
+
+static void DragClickableList (DoC d, PoinT pt)
+{
+  Int2            item, row, col, numCols;
+
+  ClickableListPtr dlg;
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    MapDocPoint (d, pt, &item, &row, &col, NULL);
+    GetItemParams4 (d, item, NULL, NULL, &numCols, NULL, NULL);
+    if (col == numCols) {
+      UpdateClickableListTextSelection (dlg, item, row, col, pt);
+    }
+  }
+}
+
+
+static void InvalBorder (DoC d, Int2 item)
+
+{
+  Int2  bottom;
+  RecT  r;
+  Int2  top;
+
+  ObjectRect (d, &r);
+  InsetRect (&r, 4, 4);
+  if (ItemIsVisible (d, item, &top, &bottom, NULL)) {
+    r.top = top;
+    r.bottom = bottom;
+    r.right = r.left + 4;
+    InsetRect (&r, -1, -1);
+    InvalRect (&r);
+  }
+}
+
+static void ActOnClickableList (ValNodePtr list_list, Int2 item)
+{
+  ClickableItemPtr cip;
+  
+  cip = GetSelectedClickableList (list_list, item);
+  if (cip != NULL && cip->callback_func != NULL)
+  {
+    (cip->callback_func) (cip->item_list, cip->callback_data);
+  }
+}
+
+
+static void PopulateClickableItemList (DoC doc, ClickableItemPtr cip, GetClickableItemText get_item_text)
+{
+  ValNodePtr        vnp;
+  Int2              numItems;
+  CharPtr           row_text;
+  RecT              r;
+  
+  if (doc == NULL || get_item_text == NULL)
+  {
+    return;
+  }
+  Reset (doc);
+  
+  if (cip == NULL)
+  {
+    return;
+  }
+  
+  if (cip->item_list == NULL)
+  {
+    AppendText (doc, "No items listed", NULL, NULL, programFont);
+  }
+  
+  ObjectRect (doc, &r);
+  InsetRect (&r, 4, 4);
+  
+  clickableItemColFmt[0].pixWidth = 5 * stdCharWidth;
+  clickableItemColFmt[1].pixWidth = (r.right - r.left - clickableItemColFmt[0].pixWidth) / 3;
+  clickableItemColFmt[2].pixWidth = (r.right - r.left - clickableItemColFmt[0].pixWidth) / 3;
+  clickableItemColFmt[3].pixWidth = (r.right - r.left - clickableItemColFmt[0].pixWidth) / 3;
+  
+  vnp = cip->item_list;
+  
+  while (vnp != NULL)
+  {
+    row_text = get_item_text (vnp);
+    if (row_text != NULL)
+    {
+      if (vnp->choice == OBJ_SEQFEAT)
+      {
+        AppendText (doc, row_text, &clickableItemParFmt, clickableItemColFmt, programFont);
+      }
+      else
+      {
+        AppendText (doc, row_text, &clickableItemParFmt, NULL, programFont);
+      }
+      row_text = MemFree (row_text);
+    }
+    vnp = vnp->next;
+  }
+  GetDocParams (doc, &numItems, NULL);
+  UpdateDocument (doc, 0, numItems);  
+}
+
+static void ReleaseClickableList (DoC d, PoinT pt)
+
+{
+  Int2           item;
+  Int2           old;
+  Int2           row, col;
+  ClickableListPtr dlg;
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    ResetClip ();
+    MapDocPoint (d, pt, &item, &row, &col, NULL);
+    /* update text selection */
+    UpdateClickableListTextSelection (dlg, item, row, col, pt);
+
+    if (item > 0 && row > 0) {
+
+      if (item == dlg->clicked) {
+        old = dlg->selected;
+        dlg->selected = item;
+        if (old != item) {
+          if (old == 0) {
+            UpdateDocument (d, item, item);
+          } else {
+            UpdateDocument (d, old, old);
+            UpdateDocument (d, item, item);
+          }
+          Update ();
+        }
+      }
+    } else if (dlg->clicked == 0) {
+      if (dlg->selected != 0) {
+        old = dlg->selected;
+        dlg->selected = 0;
+        InvalBorder (d, old);
+      }
+      Update ();
+    }
+    if (dlg->selected > 0 && dlg->dblClick)
+    {
+      ActOnClickableList (dlg->list_list, dlg->selected);
+    }
+    else if (dlg->selected > 0)
+    {
+      dlg->item_selected = 0;
+      PopulateClickableItemList (dlg->clickable_item_list, 
+                                 GetSelectedClickableList (dlg->list_list,
+                                                           dlg->selected),
+                                 dlg->get_item_text);
+      
+    }
+  }
+}
+
+
+static void DrawTextSelection (ClickableListPtr dlg, Int2 item, RectPtr r)
+{
+  Int2 lineHeight, numRows, numCols;
+  Int2 last_right;
+  Int2 left_start;
+  Int4 top, line_y;
+  CharPtr txt;
+
+  if (dlg == NULL || r == NULL
+      || item < dlg->text_select_item_start
+      || item > dlg->text_select_item_stop) {
+    return;
+  }
+
+  if (dlg->text_select_item_start == dlg->text_select_item_stop
+      && dlg->text_select_row_start == dlg->text_select_row_stop
+      && dlg->text_select_char_start == dlg->text_select_char_stop) {
+    /* if we've only selected one char, and it's blank, don't draw it. */
+    txt = GetSelectedClickableListText (dlg->dialog);
+    if (StringHasNoText (txt)) {
+      MemFree (txt);
+      return;
+    }
+    MemFree (txt);
+  }
+
+  GetItemParams4 (dlg->doc, item, &top, &numRows, &numCols, &lineHeight, NULL);
+
+  /* calculate missing rows from end first */
+  if (dlg->text_select_item_stop == item) {
+    numRows = dlg->text_select_row_stop;
+    last_right = PanelOffsetFromCharOffset (dlg, item, dlg->text_select_char_stop + 1);
+  } else {
+    last_right = r->right;
+  }
+
+  if (dlg->text_select_item_start == item) {
+    left_start = PanelOffsetFromCharOffset (dlg, item, dlg->text_select_char_start);
+    line_y = r->top + (dlg->text_select_row_start) * lineHeight - 1;
+    numRows -= dlg->text_select_row_start - 1;
+  } else {
+    left_start = PanelOffsetFromCharOffset (dlg, item, 0);
+    line_y = r->top + lineHeight - 1;
+  }
+
+  while (numRows > 1) {
+    MoveTo (left_start, line_y);
+    left_start = PanelOffsetFromCharOffset (dlg, item, 0);
+    LineTo (r->right, line_y);
+    line_y += lineHeight;
+    numRows--;
+  }
+  MoveTo (left_start, line_y);
+  LineTo (last_right, line_y);
+
+}
+
+static void DrawClickableList (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  ClickableListPtr dlg;
+  RecT             rct;
+  ClickableItemPtr cip;
+  Int4             level_offset;
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg != NULL && r != NULL && item > 0 && firstLine == 0) {
+    rct = *r;
+  
+    cip = GetSelectedClickableList (dlg->list_list, item);
+    if (cip != NULL)
+    {
+      level_offset = cip->level * 16;
+      rct.left += level_offset;
+      rct.right += level_offset;
+    }
+
+    /* draw text selection */
+    DrawTextSelection (dlg, item, &rct);
+
+    /* draw selection */
+    if (item == dlg->selected) {
+      rct.right = rct.left + 4;
+      PaintRect (&rct);
+    }
+
+    /* draw chosen checkboxes */
+    rct.left += 5;
+    rct.right = rct.left + 10;
+    rct.bottom = rct.top + (rct.right - rct.left);
+    FrameRect (&rct);
+    
+    if (cip != NULL && cip->chosen) {
+      MoveTo (rct.left, rct.top);
+      LineTo (rct.right - 1, rct.bottom - 1);
+      MoveTo (rct.left, rct.bottom - 1);
+      LineTo (rct.right - 1, rct.top);
+    }
+    
+    /* draw open/closed checkboxes */
+    if (cip!= NULL && cip->subcategories != NULL)
+    {
+      rct.left += 10;
+      rct.right = rct.left + 10;
+      rct.bottom = rct.top + (rct.right - rct.left);
+      FrameRect (&rct);
+      MoveTo (rct.left, (rct.top + rct.bottom) / 2);
+      LineTo (rct.right - 1, (rct.top + rct.bottom) / 2);
+      if (!cip->expanded)
+      {
+        MoveTo ((rct.left + rct.right) / 2, rct.top);
+        LineTo ((rct.left + rct.right) / 2, rct.bottom - 1);
+      }
+    }
+
+  }
+}
+
+
+
+static void DrawClickableListItem (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  ClickableListPtr dlg;
+  RecT             rct;
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg != NULL && r != NULL && item > 0 && firstLine == 0) {
+    rct = *r;
+  
+    /* draw selection */
+    if (item == dlg->item_selected) {
+      rct = *r;
+      rct.right = rct.left + 4;
+      PaintRect (&rct);
+    }
+  }
+}
+
+
+static void ClickClickableListItem (DoC d, PoinT pt)
+
+{
+  Int2             item, last_selected, numItems;
+  Int2             row;
+  ClickableListPtr dlg;
+  ClickableItemPtr cip;
+  ValNodePtr       vnp;
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    MapDocPoint (d, pt, &item, &row, NULL, NULL);
+    if (item > 0 && row > 0) {  
+      cip = GetSelectedClickableList (dlg->list_list, dlg->selected);
+      if (cip != NULL && cip->item_list != NULL)
+      {
+        vnp = cip->item_list;
+        
+        last_selected = dlg->item_selected;
+        dlg->item_selected = item;
+        
+        if (item != last_selected)
+        {
+          GetDocParams (d, &numItems, NULL);
+          UpdateDocument (d, 0, numItems);
+        }
+    
+        /* find item in list */
+        while (item > 1 && vnp != NULL)
+        {
+          vnp = vnp->next;
+          item--;
+        }
+        
+        if (dblClick)
+        {
+          if (dlg->item_double_click_callback != NULL) {
+            (dlg->item_double_click_callback) (vnp, dlg->item_click_callback_data);
+          }
+        } else {
+          if (dlg->item_single_click_callback != NULL) {
+            (dlg->item_single_click_callback) (vnp, dlg->item_click_callback_data);
+          }
+        }          
+      }
+    }
+  }
+}
+
+
+static void ClickableListToDialog (DialoG d, Pointer userdata)
+{
+  ClickableListPtr dlg;
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  dlg->list_list = (ValNodePtr) userdata;
+
+  PopulateClickableList (dlg, dlg->list_list);
+  if (dlg->list_list != NULL) {
+    dlg->selected = 1;
+    dlg->item_selected = 0;
+    PopulateClickableItemList (dlg->clickable_item_list, 
+                               GetSelectedClickableList (dlg->list_list,
+                                                         dlg->selected),
+                               dlg->get_item_text);
+  } else {
+    Reset (dlg->clickable_item_list);
+  }
+}
+
+static void FindClickableText (ButtoN b) 
+{
+  ClickableListPtr dlg;
+  CharPtr          find_txt;
+
+  dlg = (ClickableListPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  find_txt = SaveStringFromText (dlg->find_txt);
+  ScrollToNextClickableTextDescription (find_txt, dlg->dialog);
+  find_txt = MemFree (find_txt);
+}
+
+
+static void FindPreviousClickableText (ButtoN b)
+{
+  ClickableListPtr dlg;
+  CharPtr          find_txt;
+
+  dlg = (ClickableListPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  find_txt = SaveStringFromText (dlg->find_txt);
+  ScrollToPreviousClickableTextDescription (find_txt, dlg->dialog);
+  find_txt = MemFree (find_txt);
+}
+
+
+static void ClickableListCopyToClipboard (DialoG d)
+{
+  ClickableListPtr dlg;
+  CharPtr          txt;
+  
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+
+  if (dlg == NULL) return;
+
+  txt = GetSelectedClickableListText (d);
+  Nlm_StringToClipboard (txt);
+  txt = MemFree (txt);
+}
+
+static void ClickableListMessage (DialoG d, Int2 mssg)
+
+{
+  ClickableListPtr dlg;
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (mssg == VIB_MSG_COPY) {
+      ClickableListCopyToClipboard(d);
+    }
+  }
+}
+
+static void ClickableListOnKey (SlatE s, Char ch)
+{
+  DoC              d;
+  ClickableListPtr clp;
+#ifdef WIN_MSWIN
+  Int2             first_shown;
+  Int4             offset;
+  BaR              sb;
+#endif
+
+  if ( (int) ch == 0 ) return;
+
+  d = (DoC) s;
+  clp = (ClickableListPtr) GetObjectExtra (d);
+
+  CaptureSlateFocus (s);
+  /* later, handle control key combos */
+#ifdef WIN_MSWIN
+  if (ch == 3)
+  {
+    ClickableListCopyToClipboard (clp->dialog);
+  }
+  else if (ch == 11) 
+  {
+    /* PageUp key pressed */
+    if (GetScrlParams4 (d, &offset, &first_shown, NULL) && first_shown > 0) 
+    {
+      sb = GetSlateVScrollBar (s);
+      Nlm_Scroll (sb, SCROLL_PAGEUP);
+    }
+  }
+  else if (ch == 12)
+  {
+    /* PageDown key pressed */
+    if (GetScrlParams4 (d, &offset, &first_shown, NULL)) 
+    {
+      sb = GetSlateVScrollBar (s);
+      Nlm_Scroll (sb, SCROLL_PAGEDN);
+    }
+  }
+  else if (ch == 30)
+  {
+    /* Up Arrow key pressed */
+    if (GetScrlParams4 (d, &offset, &first_shown, NULL) && first_shown > 0) 
+    {
+      GetItemParams4 (d, first_shown - 1, &offset, NULL, NULL, NULL, NULL);
+      SetScrlParams4 (d, offset);
+    }
+  }
+  else if (ch == 31)
+  {
+    /* Down Arrow key pressed */
+    if (GetScrlParams4 (d, &offset, &first_shown, NULL)) {
+      sb = GetSlateVScrollBar (s);
+      if (offset < GetBarMax (sb)) 
+      {
+        GetItemParams4 (d, first_shown + 1, &offset, NULL, NULL, NULL, NULL);
+        SetScrlParams4 (d, offset);
+      }
+    }
+  }
+#endif
+}
+
+
+extern DialoG 
+CreateClickableListDialogEx 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text,
+ Int4            left_width,
+ Int4            right_width,
+ Boolean         horizontal)
+{
+  GrouP p, pnl_grp, find_grp;
+  ClickableListPtr dlg;
+  RecT             r;
+  ButtoN           b;
+  PrompT           p1, p2;
+
+  dlg = (ClickableListPtr) MemNew (sizeof (ClickableListData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupClickableListDialog);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = ClickableListToDialog;
+  dlg->fromdialog = NULL;
+  dlg->dialogmessage = ClickableListMessage;
+  dlg->testdialog = NULL;
+  
+  dlg->item_single_click_callback = item_single_click_callback;
+  dlg->item_double_click_callback = item_double_click_callback;
+  dlg->item_click_callback_data = item_click_callback_data;
+  
+  dlg->get_item_text = get_item_text;
+  
+  if (horizontal) {
+    pnl_grp = HiddenGroup (p, 2, 0, NULL);
+    
+    StaticPrompt (pnl_grp, label1, 0, popupMenuHeight, programFont, 'c');
+    StaticPrompt (pnl_grp, label2, 0, popupMenuHeight, programFont, 'c');
+  
+    dlg->doc = DocumentPanel (pnl_grp, left_width, stdLineHeight * 20);
+    dlg->clickable_item_list = DocumentPanel (pnl_grp, right_width, stdLineHeight * 20);
+  } else {
+    pnl_grp = HiddenGroup (p, -1, 0, NULL);
+    p1 = StaticPrompt (pnl_grp, label1, 0, popupMenuHeight, programFont, 'c');
+    dlg->doc = DocumentPanel (pnl_grp, left_width, stdLineHeight * 20);
+    p2 = StaticPrompt (pnl_grp, label2, 0, popupMenuHeight, programFont, 'c');
+    dlg->clickable_item_list = DocumentPanel (pnl_grp, right_width, stdLineHeight * 20);
+    AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) dlg->doc, (HANDLE) p2, (HANDLE) dlg->clickable_item_list, NULL);
+  }
+
+  SetObjectExtra (dlg->doc, dlg, NULL);
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  SetDocProcs (dlg->doc, ClickList, DragClickableList, ReleaseClickableList, NULL);
+  SetDocShade (dlg->doc, DrawClickableList, NULL, NULL, NULL);
+  
+  SetSlateChar ((SlatE) dlg->doc, ClickableListOnKey);
+
+  SetObjectExtra (dlg->clickable_item_list, dlg, NULL);
+  SetDocAutoAdjust (dlg->clickable_item_list, FALSE);
+  SetDocProcs (dlg->clickable_item_list, ClickClickableListItem, NULL, NULL, NULL);
+  SetDocShade (dlg->clickable_item_list, DrawClickableListItem, NULL, NULL, NULL);
+  
+  /* adjust column width for discrepancy list */
+  ObjectRect (dlg->doc, &r);
+  InsetRect (&r, 4, 4);
+  clickableColFmt[1].pixWidth = r.right - r.left - clickableColFmt[0].pixWidth;
+  
+  find_grp = HiddenGroup (p, 4, 0, NULL);
+  SetGroupSpacing (find_grp, 10, 10);
+  StaticPrompt (find_grp, "Find Text", 0, popupMenuHeight, programFont, 'l');
+  dlg->find_txt = DialogText (find_grp, "", 20, NULL);
+  b = PushButton (find_grp, "<<", FindPreviousClickableText);
+  SetObjectExtra (b, dlg, NULL);
+  b = PushButton (find_grp, ">>", FindClickableText);
+  SetObjectExtra (b, dlg, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) pnl_grp, (HANDLE) find_grp, NULL);
+  return (DialoG) p;
+}
+
+extern DialoG 
+CreateClickableListDialog 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text)
+{
+  return CreateClickableListDialogEx (h, label1, label2,
+                                      item_single_click_callback,
+                                      item_double_click_callback,
+                                      item_click_callback_data,
+                                      get_item_text, 
+                                      stdCharWidth * 30,
+                                      stdCharWidth * 30 + 5,
+                                      TRUE);
+}
+
+
+static Int4 CountExpandedSublevels (ValNodePtr subcategories)
+{
+  ValNodePtr vnp;
+  Int4       num = 0;
+  ClickableItemPtr cip;
+
+  for (vnp = subcategories; vnp != NULL; vnp = vnp->next) {
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (cip != NULL) {
+      num++;
+      if (cip->expanded && cip->subcategories != NULL) {
+        num += CountExpandedSublevels(cip->subcategories);
+      }
+    }
+  }
+  return num;
+}
+
+
+/* First, need to locate items that have description that contains txt.
+ * Then need to make sure that they are visible.
+ * Then need to figure out how to scroll to them.
+ */
+static Boolean FindInClickableItemDescriptions (CharPtr txt, ValNodePtr clickable_item_list, ValNodePtr PNTR row_list, Int4Ptr row_offset)
+{
+  ValNodePtr       vnp;
+  ClickableItemPtr cip;
+  Boolean          found = FALSE;
+  Int4             lower_levels;
+  
+  if (StringHasNoText (txt) || clickable_item_list == NULL || row_list == NULL || row_offset == NULL) return FALSE;
+  
+  vnp = clickable_item_list;
+  while (vnp != NULL) {
+    (*row_offset)++;
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (StringStr (cip->description, txt) != NULL) {
+      ValNodeAddInt (row_list, 0, *row_offset);
+      found = TRUE;
+    }
+    lower_levels = *row_offset;
+    if (cip->subcategories != NULL) {
+      if (FindInClickableItemDescriptions (txt, cip->subcategories, row_list, &lower_levels)) {
+        cip->expanded = TRUE;
+        found = TRUE;
+      }
+      if (cip->expanded) {
+        (*row_offset) += CountExpandedSublevels (cip->subcategories);
+      }
+    }
+    vnp = vnp->next;
+  }
+  
+  return found;
+}
+
+
+extern void ScrollToNextClickableTextDescription (CharPtr txt, DialoG d)
+{
+  ClickableListPtr dlg;
+  ValNodePtr       found_list = NULL, vnp;
+  Int4             row_offset = 0, startsAt;
+  Int2             numRows, numCols, lineHeight;
+  
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+
+  if (!FindInClickableItemDescriptions (txt, dlg->list_list, &found_list, &row_offset)
+      || found_list == NULL) {
+    Message (MSG_OK, "Text not found!");
+    return;
+  }
+ 
+  /* find first found txt after current selection */
+  vnp = found_list;
+  while (vnp != NULL && vnp->data.intvalue <= dlg->selected) {
+    vnp = vnp->next;
+  }
+  if (vnp == NULL) {
+   row_offset = found_list->data.intvalue;
+  } else {
+    row_offset = vnp->data.intvalue;
+  }
+
+  dlg->selected = row_offset; 
+  PopulateClickableList (dlg, dlg->list_list);
+  SetDocAutoAdjust (dlg->doc, TRUE);   
+  UpdateDocument (dlg->doc, 0, 0);
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  dlg->item_selected = 0;
+  PopulateClickableItemList (dlg->clickable_item_list, 
+                             GetSelectedClickableList (dlg->list_list,
+                                                       dlg->selected),
+                                                       dlg->get_item_text);
+ 
+  GetItemParams4 (dlg->doc, row_offset, &startsAt, &numRows,
+                  &numCols, &lineHeight, NULL);
+  SetScrlParams4 (dlg->doc, startsAt);
+}
+
+
+extern void ScrollToPreviousClickableTextDescription (CharPtr txt, DialoG d)
+{
+  ClickableListPtr dlg;
+  ValNodePtr       found_list = NULL, vnp, vnp_prev = NULL;
+  Int4             row_offset = 0, startsAt;
+  Int2             numRows, numCols, lineHeight;
+  
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+
+  if (!FindInClickableItemDescriptions (txt, dlg->list_list, &found_list, &row_offset)
+      || found_list == NULL) {
+    Message (MSG_OK, "Text not found!");
+    return;
+  }
+ 
+  /* find first found txt before current selection */
+  vnp = found_list;
+  while (vnp != NULL && vnp->data.intvalue < dlg->selected) {
+    vnp_prev = vnp;
+    vnp = vnp->next;
+  }
+  if (vnp_prev == NULL) {
+    /* use last item in list */
+    vnp = found_list;
+    while (vnp != NULL && vnp->next != NULL) {
+      vnp = vnp->next;
+    }
+    row_offset = vnp->data.intvalue;
+  } else {
+    row_offset = vnp_prev->data.intvalue;
+  }
+
+  dlg->selected = row_offset; 
+  PopulateClickableList (dlg, dlg->list_list);
+  SetDocAutoAdjust (dlg->doc, TRUE);   
+  UpdateDocument (dlg->doc, 0, 0);
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  dlg->item_selected = 0;
+  PopulateClickableItemList (dlg->clickable_item_list, 
+                             GetSelectedClickableList (dlg->list_list,
+                                                       dlg->selected),
+                                                       dlg->get_item_text);
+ 
+  GetItemParams4 (dlg->doc, row_offset, &startsAt, &numRows,
+                  &numCols, &lineHeight, NULL);
+  SetScrlParams4 (dlg->doc, startsAt);
+}
+
+
+static CharPtr GetClickableTextFromItemList (ValNodePtr item_list, CharPtr separator) 
+{
+  Int4 text_len = 1;
+  ValNodePtr vnp;
+  CharPtr    txt;
+
+  for (vnp = item_list; vnp != NULL; vnp = vnp->next) {
+    text_len += StringLen (vnp->data.ptrvalue) + StringLen (separator);
+  }
+
+  txt = (CharPtr) MemNew (sizeof(Char) * text_len);
+  for (vnp = item_list; vnp != NULL; vnp = vnp->next) {
+    StringCat (txt, vnp->data.ptrvalue);
+    if (vnp->next != NULL) {
+      StringCat (txt, separator);
+    }
+  }
+  return txt;
+}
+
+extern CharPtr GetSelectedClickableListText (DialoG d)
+{
+  ClickableListPtr dlg;
+  Int2             numRows;
+  Int2             item, row, col, char_offset;
+  Int4             text_len = 0, len = 0;
+  CharPtr          txt, cp_txt;
+  ValNodePtr       fragment_list = NULL, item_list = NULL;
+  
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->text_select_item_start < 1)
+  {
+    return NULL;
+  }
+
+  item = dlg->text_select_item_start;
+  row = dlg->text_select_row_start;
+  char_offset = dlg->text_select_char_start;
+
+  while (item <= dlg->text_select_item_stop) {
+    if (item == dlg->text_select_item_start) {
+      if (item == dlg->text_select_item_stop) {
+        /* all text from one item */
+        /* all text will be from last column in item */
+        GetItemParams4 (dlg->doc, item, NULL, NULL, &col, NULL, NULL);
+        if (row == dlg->text_select_row_stop) {
+          /* all text from one row */
+          txt = GetDocText (dlg->doc, item, row, col);
+          len = StringLen (txt);
+          if (dlg->text_select_char_stop >= len) {
+            /* selection was drawn beyond length of text */
+            dlg->text_select_char_stop = len - 1;
+          }
+          if (dlg->text_select_char_start >= len) {
+            /* do nothing - selection is not within text */
+          } else {
+            cp_txt = (CharPtr) MemNew (sizeof (Char) * (2 + dlg->text_select_char_stop - dlg->text_select_char_start));
+            StringNCpy (cp_txt, txt + dlg->text_select_char_start, 1 + dlg->text_select_char_stop - dlg->text_select_char_start);
+            cp_txt[1 + dlg->text_select_char_stop - dlg->text_select_char_start] = 0;
+            ValNodeAddPointer (&fragment_list, 0, cp_txt);
+          }
+          /* free txt read from Doc */
+          txt = MemFree (txt);
+        } else {
+          /* take text from several rows */
+          item_list = NULL;
+          while (row < dlg->text_select_row_stop) {
+            txt = GetDocText (dlg->doc, item, row, col);
+            len = StringLen (txt);
+            if (row == dlg->text_select_row_start && dlg->text_select_char_start >= len) {
+              /* do nothing - selection is not within text */
+              txt = MemFree (txt);
+            } else {
+              if (row == dlg->text_select_row_start && dlg->text_select_char_start > 0) {
+                cp_txt = (CharPtr) MemNew (sizeof (Char) * (1 + StringLen (txt) - dlg->text_select_char_start));
+                StringCpy (cp_txt, txt + dlg->text_select_char_start);
+                txt = MemFree (txt);
+                txt = cp_txt;
+              }
+              ValNodeAddPointer (&item_list, 0, txt);
+            }
+            row++;
+          }
+          txt = GetDocText (dlg->doc, item, row, col);
+          if (dlg->text_select_char_stop < len) {
+            txt[dlg->text_select_char_stop] = 0;
+          }
+          ValNodeAddPointer (&item_list, 0, txt);
+          txt = GetClickableTextFromItemList (item_list, " ");
+          ValNodeAddPointer (&fragment_list, 0, txt);
+          item_list = ValNodeFreeData (item_list);
+        }
+      } else {
+        /* take all text after first row and char offset */
+        item_list = NULL;
+        GetItemParams4 (dlg->doc, item, NULL, &numRows, &col, NULL, NULL);
+        while (row <= numRows) {
+          txt = GetDocText (dlg->doc, item, row, col);
+          len = StringLen (txt);
+          if (row == dlg->text_select_row_start && dlg->text_select_char_start >= len) {
+            /* do nothing = selection is outside text */
+            txt = MemFree (txt);
+          } else {
+            if (row == dlg->text_select_row_start && dlg->text_select_char_start > 0) {
+              cp_txt = (CharPtr) MemNew (sizeof (Char) * (1 + StringLen (txt) - dlg->text_select_char_start));
+              StringCpy (cp_txt, txt + dlg->text_select_char_start);
+              txt = MemFree (txt);
+              txt = cp_txt;
+            }
+            ValNodeAddPointer (&item_list, 0, txt);
+          }
+          row++;
+        }
+        txt = GetClickableTextFromItemList (item_list, " ");
+        ValNodeAddPointer (&fragment_list, 0, txt);
+        item_list = ValNodeFreeData (item_list);
+      }
+    } else if (item == dlg->text_select_item_stop) {
+      /* take all text until last row and char offset */
+      row = 1;
+      item_list = NULL;
+      GetItemParams4 (dlg->doc, item, NULL, NULL, &col, NULL, NULL);
+      while (row < dlg->text_select_row_stop) {
+        txt = GetDocText (dlg->doc, item, row, col);
+        ValNodeAddPointer (&item_list, 0, txt);
+      }
+      txt = GetDocText (dlg->doc, item, row, col);
+      if (dlg->text_select_char_stop + 1 < StringLen (txt)) {
+        txt[dlg->text_select_char_stop + 1] = 0;
+      }
+      ValNodeAddPointer (&item_list, 0, txt);
+      txt = GetClickableTextFromItemList (item_list, " ");
+      ValNodeAddPointer (&fragment_list, 0, txt);
+      item_list = ValNodeFreeData (item_list);
+    } else {
+      GetItemParams4 (dlg->doc, item, NULL, NULL, &col, NULL, NULL);
+      txt = GetDocText (dlg->doc, item, 0, col);
+      if (txt != NULL && txt[StringLen(txt) - 1] == '\n') {
+        /* remove terminal carriage return */
+        txt[StringLen(txt) - 1] = 0;
+      }
+      ValNodeAddPointer (&fragment_list, 0, txt);
+      text_len += StringLen (txt) + 1;
+    }
+    item++;
+  }
+  txt = GetClickableTextFromItemList (fragment_list, "\r\n");
+  fragment_list = ValNodeFreeData (fragment_list);
+  return txt;
+}
+
+typedef struct basegbqualeditor {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer         callback_data;
+} BaseGBQualEditor, PNTR BaseGBQualEditorPtr;
+
+static void ChangeGBQualEditorPopup (PopuP p)
+{
+  BaseGBQualEditorPtr dlg;
+
+  dlg = (BaseGBQualEditorPtr) GetObjectExtra (p);
+  if (dlg != NULL && dlg->tlp_callback != NULL) {
+    (dlg->tlp_callback)(dlg->callback_data);
+  }
+}
+
+static void ChangeGBQualEditorButton (ButtoN b)
+{
+  BaseGBQualEditorPtr dlg;
+
+  dlg = (BaseGBQualEditorPtr) GetObjectExtra (b);
+  if (dlg != NULL && dlg->tlp_callback != NULL) {
+    (dlg->tlp_callback)(dlg->callback_data);
+  }
+}
+
+static void ChangeGBQualEditorText (TexT t)
+{
+  BaseGBQualEditorPtr dlg;
+
+  dlg = (BaseGBQualEditorPtr) GetObjectExtra (t);
+  if (dlg != NULL && dlg->tlp_callback != NULL) {
+    (dlg->tlp_callback)(dlg->callback_data);
+  }
+}
+
+
+/* collection_date has a controlled format.  
+ * It is YYYY or Mmm-YYYY or DD-Mmm-YYYY where Mmm = Jan, Feb, Mar, Apr, May, 
+ *                                                   Jun, Jul, Aug, Sep, Oct, 
+ *                                                   Nov, Dec
+ * This function will convert other formats  to this format.
+ * For instance, September 12, 2004 should be converted to 12-Sep-2004
+ * 12/15/2003 should be converted to 15-Dec-2003.  
+ * 
+ * If the date supplied is ambiguous (01/03/05), can you allow the indexer to choose which field goes in Mmm and which in DD.
+ */
+
+static Int4 ReadNumberFromToken (CharPtr token, Int4 token_len)
+{
+  Int4 val = 0;
+  
+  if (token == NULL || !isdigit (*token))
+  {
+    return val;
+  }
+  while (token_len > 0)
+  {
+    val *= 10;
+    val += *token - '0';
+    token++;
+    token_len--;
+  }
+  
+  return val;
+}
+
+static Int4 GetYearFromNumber(Int4 year)
+{
+	Nlm_DayTime dt;
+
+  if (year < 1000)
+  {
+    GetDayTime (&dt);
+    if (year + 2000 > dt.tm_year + 1901)
+    {
+      year += 1900;
+    }
+    else
+    {
+      year += 2000;
+    }
+  }
+  return year;
+}
+
+static Int4 GetYearFromToken (CharPtr token, Int4 token_len)
+{
+  Int4        year = 0;
+  
+  if (token == NULL || token_len == 0 || token_len > 4)
+  {
+    return 0;
+  }
+  
+  year = GetYearFromNumber(ReadNumberFromToken (token, token_len));
+  
+  return year;
+}
+
+static CharPtr months [12] = 
+{ 
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+};
+
+static CharPtr month_abbrevs [12] =
+{
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+static Int4 days_in_month [12] =
+{
+  31, 29, 31, 30, 31, 30,
+  31, 31, 30, 31, 30, 31
+};
+
+static Int4 GetMonthNumFromAbbrev (CharPtr month_abbrev) 
+{
+  Int4 i;
+
+  for (i = 0; i < 12; i++) {
+    if (StringICmp (month_abbrev, month_abbrevs[i]) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static Int4 GetDaysInMonth (CharPtr month)
+{
+  Int4 month_num;
+  
+  for (month_num = 0; month_num < 12; month_num++)
+  {
+    if (StringCmp (month, month_abbrevs [month_num]) == 0)
+    {
+      return days_in_month [month_num];
+    }
+  }
+  return 0;
+}
+
+static CharPtr GetMonthFromToken (CharPtr token, Int4 token_len)
+{
+  Int4    month_num;
+  
+  if (token == NULL || token_len == 0)
+  {
+    return NULL;
+  }
+  
+  if (isdigit (*token)) 
+  {
+    if (token_len > 2)
+    {
+      return NULL;
+    }
+    else
+    {
+      month_num = ReadNumberFromToken (token, token_len);
+      if (month_num == 0 || month_num > 12)
+      {
+        return NULL;
+      }
+      else
+      {
+        return month_abbrevs [month_num - 1];
+      }
+    }
+  }
+  else
+  {
+    for (month_num = 0; month_num < 12; month_num++)
+    {
+      if (StringNICmp (token, month_abbrevs[month_num], 3) == 0)
+      {
+        return month_abbrevs[month_num];
+      }
+    }
+    return NULL;
+  }
+}
+
+static Boolean
+ChooseDayAndYear 
+(Int4    num_1,
+ Int4    num_2,
+ CharPtr month,
+ Boolean year_first,
+ Int4Ptr day,
+ Int4Ptr year)
+{  
+  if (day == NULL || year == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (num_1 == 0 && num_2 == 0)
+  {
+    return FALSE;
+  }
+  else if (num_1 == 0)
+  {
+    *year = 2000;
+    *day = num_2;
+  }
+  else if (num_2 == 0)
+  {
+    *year = 2000;
+    *day = num_1;
+  }
+  else if (num_1 > GetDaysInMonth (month))
+  {
+    *year = num_1;
+    *day = num_2;
+  }
+  else if (num_2 > GetDaysInMonth (month))
+  {
+    *year = num_2;
+    *day = num_1;
+  }
+  else if (year_first)
+  {
+    *year = num_1;
+    *day = num_2;
+  }
+  else
+  {
+    *year = num_2;
+    *day = num_1;
+  }
+  
+  return TRUE;
+}
+
+static Boolean 
+ChooseMonthAndYear
+(Int4    num_1,
+ Int4    num_2,
+ Boolean month_first,
+ CharPtr PNTR month,
+ Int4Ptr year,
+ BoolPtr month_ambiguous)
+{
+  if (year == NULL || month == NULL 
+      || (num_1 == 0 && num_2 == 0)
+      || (num_1 > 12 && num_2 > 12)
+      || (num_1 == 0 && num_2 > 12)
+      || (num_2 == 0 && num_1 > 12))
+  {
+    return FALSE;
+  }
+  
+  if (num_1 == 0)
+  {
+    *year = 2000;
+    *month = month_abbrevs[num_2 - 1];
+  }
+  else if (num_2 == 0)
+  {
+    *year = 2000;
+    *month = month_abbrevs[num_1 - 1];
+  }
+  else if (num_1 > 12)
+  {
+    *year = GetYearFromNumber(num_1);
+    *month = month_abbrevs [num_2 - 1];
+  }
+  else if (num_2 > 12)
+  {
+    *year = GetYearFromNumber(num_2);
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else if (month_first)
+  {
+    if (month_ambiguous != NULL) 
+    {
+      *month_ambiguous = TRUE;
+    }
+    *year = GetYearFromNumber(num_2);
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else
+  {
+    if (month_ambiguous != NULL) 
+    {
+      *month_ambiguous = TRUE;
+    }
+    *year = GetYearFromNumber(num_1);
+    *month = month_abbrevs [num_2 - 1];
+  }
+  return TRUE;
+}
+
+
+static Boolean ChooseMonthAndDay 
+(Int4    num_1,
+ Int4    num_2,
+ Boolean month_first,
+ CharPtr PNTR month,
+ Int4Ptr day,
+ BoolPtr month_ambiguous)
+{
+  if (day == NULL || month == NULL || num_1 == 0 || num_2 == 0
+      || (num_1 > 12 && num_2 > 12))
+  {
+    return FALSE;
+  }
+  
+  if (num_1 > 12)
+  {
+    *day = num_1;
+    *month = month_abbrevs [num_2 - 1];
+  }
+  else if (num_2 > 12)
+  {
+    *day = num_2;
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else if (month_first)
+  {
+    if (month_ambiguous != NULL) 
+    {
+      *month_ambiguous = TRUE;
+    }
+    *day = num_2;
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else
+  {
+    if (month_ambiguous != NULL) 
+    {
+      *month_ambiguous = TRUE;
+    }
+    *day = num_1;
+    *month = month_abbrevs [num_2 - 1];
+  }
+  return TRUE;
+}
+
+extern CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first, BoolPtr month_ambiguous)
+{
+  CharPtr reformatted_date = NULL, cp;
+  Int4    year = 0, day = 0;
+  CharPtr month = NULL;
+  CharPtr token_list[3];
+  Int4    token_lens[3];
+  CharPtr delimiters = " \t,-/";
+  CharPtr numbers = "0123456789";
+  CharPtr letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  Int4    num_tokens = 0;
+  Int4    token_len;
+  Int4    month_token = -1;
+  Boolean is_num;
+  Int4    num_1, num_2, num_3;
+  
+  if (StringHasNoText (orig_date))
+  {
+    return NULL;
+  }
+  
+  /* divide our original date into tokens */
+  /* skip over any leading spaces */
+  cp = orig_date;
+  while (*cp != 0 && num_tokens < 3)
+  {
+    is_num = FALSE;
+    token_len = StringSpn (cp, numbers);  
+    if (token_len == 0)
+    {
+      token_len = StringSpn (cp, letters);
+    }
+    else
+    {
+      is_num = TRUE;
+    }
+    if (token_len == 0)
+    {
+      cp++;
+    }
+    else
+    {
+      if (!is_num)
+      {
+        if (month_token == -1)
+        {
+          month_token = num_tokens;
+        }
+        else
+        {
+          /* already found a month string */
+          return NULL;
+        }
+      }
+      token_list [num_tokens] = cp;
+      token_lens [num_tokens] = token_len;
+      num_tokens ++;
+      cp += token_len;
+    }
+  }
+ 
+  if (num_tokens == 0 || *cp != 0)
+  {
+    return NULL;
+  }
+
+  if (num_tokens == 1)
+  {
+    if (month_token == 0)
+    {
+      return NULL;
+    }
+    year = GetYearFromToken (token_list [0], token_lens [0]);
+  }
+  else if (num_tokens == 2)
+  {
+    if (month_token == 0)
+    {
+      month = GetMonthFromToken (token_list [0], token_lens [0]);
+      year = GetYearFromToken (token_list [1], token_lens [1]);
+    }
+    else if (month_token == 1)
+    {
+      month = GetMonthFromToken (token_list [1], token_lens [1]);
+      year = GetYearFromToken (token_list [0], token_lens [0]);
+    }
+    else
+    {
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      if (! ChooseMonthAndYear (num_1, num_2, month_first, &month, &year, month_ambiguous))
+      {
+        return NULL;
+      }
+    }
+  }
+  else if (num_tokens == 3)
+  {
+    if (month_token == 0)
+    {
+      month = GetMonthFromToken (token_list [0], token_lens [0]);
+      num_1 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
+      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      {
+        return NULL;
+      }
+    }
+    else if (month_token == 1)
+    {
+      month = GetMonthFromToken (token_list [1], token_lens [1]);
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
+      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      {
+        return NULL;
+      }
+    }
+    else if (month_token == 2)
+    {
+      month = GetMonthFromToken (token_list [2], token_lens [2]);
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      {
+        return NULL;
+      }
+    }
+    else
+    {
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      num_3 = ReadNumberFromToken (token_list [2], token_lens [2]);
+      
+      if (num_1 > 31 || num_1 == 0)
+      {
+        year = num_1;
+        if (! ChooseMonthAndDay (num_2, num_3, month_first, &month, &day, month_ambiguous))
+        {
+          return NULL;
+        }
+      }
+      else if (num_2 > 31 || num_2 == 0)
+      {
+        year = num_2;
+        if (! ChooseMonthAndDay (num_1, num_3, month_first, &month, &day, month_ambiguous))
+        {
+          return NULL;
+        }
+      }
+      else if (num_3 > 31 || num_3 == 0)
+      {
+        year = num_3;
+        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day, month_ambiguous))
+        {
+          return NULL;
+        }
+      }
+      else if (num_1 > 0 && num_1 < 13 && num_2 > days_in_month [num_1] && num_3 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_1 - 1];
+        year = num_2;
+        day = num_3;
+      }
+      else if (num_1 > 0 && num_1 < 13 && num_3 > days_in_month [num_1] && num_2 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_1 - 1];
+        year = num_3;
+        day = num_2;
+      }
+      else if (num_2 > 0 && num_2 < 13 && num_1 > days_in_month [num_2] && num_3 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_2 - 1];
+        year = num_1;
+        day = num_3;
+      }
+      else if (num_2 > 0 && num_2 < 13 && num_3 > days_in_month [num_2] && num_1 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_2 - 1];
+        year = num_3;
+        day = num_1;
+      }
+      else if (num_3 > 0 && num_3 < 13 && num_1 > days_in_month [num_3] && num_2 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_3 - 1];
+        year = num_1;
+        day = num_2;
+      }
+      else if (num_3 > 0 && num_3 < 13 && num_2 > days_in_month [num_3] && num_1 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_3 - 1];
+        year = num_2;
+        day = num_1;
+      }
+      else
+      {
+        year = num_3;
+        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day, month_ambiguous))
+        {
+          year = num_1;
+          if (!ChooseMonthAndDay (num_2, num_3, month_first, &month, &day, month_ambiguous))
+          {
+            return NULL;
+          }
+        }
+      }
+                
+    }
+    year = GetYearFromNumber(year);
+  }
+  
+  if (month == NULL && day > 0)
+  {
+    return NULL;
+  }
+  
+  reformatted_date = (CharPtr) MemNew (sizeof (Char) * 12);
+  if (reformatted_date == NULL)
+  {
+    return NULL;
+  }
+   
+  if (month == NULL)
+  {
+    sprintf (reformatted_date, "%d", year);
+  }
+  else if (day == 0)
+  {
+    sprintf (reformatted_date, "%s-%d", month, year);
+  }
+  else
+  {
+    sprintf (reformatted_date, "%02d-%s-%d", day, month, year);
+  }
+  return reformatted_date;
+}
+
+typedef struct collectiondatedlg {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer callback_data;
+  PopuP month;
+  PopuP day;
+  PopuP year;
+  Int4  start_year;
+} CollectionDateDlgData, PNTR CollectionDateDlgPtr;
+
+static void PopulateDayPopup (PopuP p, Int4 month);
+
+static void PointerToCollectionDateDialog (DialoG d, Pointer data)
+{
+  CollectionDateDlgPtr dlg;
+  CharPtr              val, reformatted;
+  Boolean              ambiguous = FALSE;
+  CharPtr              cp, cp2, month_abbrev;
+  Int4                 year = 1, month = 1, day = 1;
+
+  dlg = (CollectionDateDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  SetValue (dlg->year, 1);
+  SetValue (dlg->month, 1);
+  SetValue (dlg->day, 1);
+  Disable (dlg->month);
+  Disable (dlg->day);
+
+  val = (CharPtr) data;
+
+  reformatted = ReformatDateStringEx (val, TRUE, &ambiguous);
+  if (StringHasNoText (reformatted) || ambiguous) {
+    /* do nothing */
+  } else {
+    cp = StringChr (reformatted, '-');
+    if (cp == NULL) {
+      year = GetYearFromToken (reformatted, StringLen (reformatted));
+      year = year - dlg->start_year + 2;
+    } else {
+      if (isdigit (*reformatted)) {
+        day = ReadNumberFromToken (reformatted, cp - reformatted);
+        day += 1;
+        cp++;
+        cp2 = StringChr (cp, '-');
+        month_abbrev = GetMonthFromToken (cp, cp2 - cp);
+        month = GetMonthNumFromAbbrev (month_abbrev);
+        if (month > -1) {
+          month += 2;
+        } else {
+          month = 1;
+        }
+        year = GetYearFromToken (cp2 + 1, StringLen (cp2 + 1));
+        year = year - dlg->start_year + 2;
+      }
+      else
+      {
+        month_abbrev = GetMonthFromToken (reformatted, cp - reformatted);
+        month = GetMonthNumFromAbbrev (month_abbrev);
+        if (month > -1) {
+          month += 2;
+        } else {
+          month = 1;
+        }
+        year = GetYearFromToken (cp + 1, StringLen (cp + 1));
+        year = year - dlg->start_year + 2;
+      }
+    }
+    SetValue (dlg->year, year);
+    Enable (dlg->month);
+    SetValue (dlg->month, month);
+    if (month > 1) {
+      PopulateDayPopup (dlg->day, month);
+      Enable (dlg->day);
+    }
+    SetValue (dlg->day, day);
+  }  
+}
+
+static Pointer CollectionDateDialogToPointer (DialoG d)
+{
+  CollectionDateDlgPtr dlg;
+  Int4                 year, month = -1, day = 0;
+  CharPtr              year_fmt = "%d";
+  CharPtr              mon_year_fmt = "%s-%d";
+  CharPtr              day_mon_year_fmt = "%d-%s-%d";
+  Char                 date_str[100];
+
+  dlg = (CollectionDateDlgPtr) GetObjectExtra (d);
+  date_str[0] = 0;
+  if (dlg != NULL) {
+    year = GetValue (dlg->year);
+    if (year < 2) {
+      return NULL;
+    } else {
+      year = year + dlg->start_year - 2;
+      month = GetValue (dlg->month);
+      if (month < 2) {
+        sprintf (date_str, year_fmt, year);
+      } else {
+        day = GetValue (dlg->day);
+        if (day < 2) {
+          sprintf (date_str, mon_year_fmt, month_abbrevs[month - 2], year);
+        } else {
+          sprintf (date_str, day_mon_year_fmt, day - 1, month_abbrevs[month - 2], year);
+        }
+      }
+    }
+  }
+
+  return StringSave (date_str);
+}
+
+static void PopulateDayPopup (PopuP p, Int4 month)
+{
+  Int4 i;
+  Char day[10];
+
+  Reset (p);
+  PopupItem (p, "");
+
+  if (month > 1) {
+    for (i = 1; i <= days_in_month [month - 2]; i++) {
+      sprintf (day, "%d", i);
+      PopupItem (p, day);
+    }
+  }
+}
+
+static void PopulateMonthPopup (PopuP p)
+{
+  Int4 i;
+
+  PopupItem (p, "");
+  for (i = 0; i < 12; i++) {
+    PopupItem (p, month_abbrevs[i]);
+  }
+}
+
+static void ChangeCollectionDateMonth (PopuP p)
+{
+  CollectionDateDlgPtr dlg;
+  Int4                 month;
+
+  dlg = (CollectionDateDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  month = GetValue (p);
+  if (month < 2) {
+    Disable (dlg->day);
+  } else {
+    PopulateDayPopup (dlg->day, month);
+    Enable (dlg->day);
+  }
+  if (dlg->tlp_callback != NULL) {
+    (dlg->tlp_callback) (dlg->callback_data);
+  }
+}
+
+static Int4 PopulateYearPopup (PopuP p)
+{
+	Nlm_DayTime dt;
+  Char        year_str[20];
+  Int4        start_year, i, end_year;
+
+  GetDayTime (&dt);
+  start_year = dt.tm_year + 1901 - 10;
+  end_year = start_year + 20;
+  PopupItem (p, " ");
+  for (i=start_year; i <= end_year; i++) {
+    sprintf (year_str, "%d", i);
+    PopupItem (p, year_str);
+  }
+  return start_year;
+}
+
+static void ChangeCollectionDateYear (PopuP p)
+{
+  CollectionDateDlgPtr dlg;
+
+  dlg = (CollectionDateDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (GetValue (p) < 2) {
+    Disable (dlg->month);
+    Disable (dlg->day);
+  } else {
+    Enable (dlg->month);
+    ChangeCollectionDateMonth (dlg->month);
+  }
+  if (dlg->tlp_callback != NULL) {
+    (dlg->tlp_callback) (dlg->callback_data);
+  }
+}
+
+extern DialoG CollectionDateDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                               TaglistCallback tlp_callback,
+                               Pointer callback_data)
+{
+  CollectionDateDlgPtr dlg;
+  GrouP           p;
+
+  p = HiddenGroup (h, 4, 0, NULL);
+  dlg = (CollectionDateDlgPtr) MemNew (sizeof(CollectionDateDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = PointerToCollectionDateDialog;
+  dlg->fromdialog = CollectionDateDialogToPointer;
+  dlg->testdialog = NULL;
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+
+  dlg->year = PopupList (p, TRUE, ChangeCollectionDateYear);
+  SetObjectExtra (dlg->year, dlg, NULL);
+  dlg->start_year = PopulateYearPopup (dlg->year);
+  SetValue (dlg->year, 1);
+
+  dlg->month = PopupList (p, TRUE, ChangeCollectionDateMonth);
+  SetObjectExtra (dlg->month, dlg, NULL);
+  PopulateMonthPopup (dlg->month);
+  SetValue (dlg->month, 1);
+
+  dlg->day = PopupList (p, TRUE, ChangeGBQualEditorPopup);
+  SetObjectExtra (dlg->day, dlg, NULL);
+
+  return (DialoG) p;
+}
+
+extern Boolean ParseCollectionDateOk (CharPtr txt)
+{
+  CharPtr date_str;
+  Boolean ambiguous = FALSE;
+  Boolean rval = FALSE;
+
+  if (StringHasNoText (txt)) {
+    rval = TRUE;
+  } else {
+    date_str = ReformatDateStringEx (txt, TRUE, &ambiguous);
+    if (date_str != NULL && !ambiguous) {
+      rval = TRUE;
+    } 
+    date_str = MemFree (date_str);
+  }
+  return rval;
+}
+
+typedef struct rptunitrangedlg {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer callback_data;
+  TexT  range_start;
+  TexT  range_stop;
+} RptUnitRangeDlgData, PNTR RptUnitRangeDlgPtr;
+
+Boolean ParseRptUnitRangeOkEx (CharPtr txt, Int4Ptr pstart, Int4Ptr pstop)
+{
+  CharPtr cp;
+  Int4    start = -1, stop = -1;
+  Char    ch;
+  Boolean rval = FALSE;
+
+  if (StringHasNoText (txt)) {
+    return TRUE;
+  }
+  
+  cp = txt;
+  while (*cp != 0 && isdigit (*cp)) {
+    cp++;
+  }
+  if (cp != txt) {
+    ch = *cp;
+    *cp = 0;
+    start = atoi (txt);
+    *cp = ch;
+    cp++;
+    while (*cp == ch) {
+      cp++;
+    }
+    txt = cp;
+    while (isdigit (*cp)) {
+      cp++;
+    }
+    if (cp != txt) {
+      stop = atoi (txt);
+    }
+  }
+
+  if (start > -1 && stop > -1) {
+    if (pstart != NULL) {
+      *pstart = start;
+    }
+    if (pstop != NULL) {
+      *pstop = stop;
+    }
+    rval = TRUE;
+  }
+  return rval;
+}
+
+static void StringToRptUnitRangeDialog (DialoG d, Pointer data)
+{
+  RptUnitRangeDlgPtr dlg;
+  CharPtr            val;
+  Int4               start = -1, stop = -1;
+  Char               num_str[100];
+
+  dlg = (RptUnitRangeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  val = (CharPtr) data;
+  
+  ParseRptUnitRangeOkEx (val, &start, &stop);
+  if (start > -1 && stop > -1) {
+    sprintf (num_str, "%d", start);
+    SetTitle (dlg->range_start, num_str);
+    sprintf (num_str, "%d", stop);
+    SetTitle (dlg->range_stop, num_str);
+  } else {
+    SetTitle (dlg->range_start, "");
+    SetTitle (dlg->range_stop, "");
+  }
+}
+
+static Pointer RptUnitRangeDialogToString (DialoG d)
+{
+  RptUnitRangeDlgPtr dlg;
+  CharPtr            val = NULL;
+  CharPtr            start, stop;
+
+  dlg = (RptUnitRangeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  start = SaveStringFromText (dlg->range_start);
+  stop = SaveStringFromText (dlg->range_stop);
+
+  if (StringHasNoText (start) && StringHasNoText (stop)) {
+    return StringSave ("");
+  } else {
+    val = (CharPtr) MemNew (sizeof (Char) * (StringLen (start) + StringLen (stop) + 3));
+    sprintf (val, "%s..%s", start == NULL ? "" : start, stop == NULL ? "" : stop);
+  }
+  start = MemFree (start);
+  stop = MemFree (stop);
+  return val;
+}
+
+
+extern DialoG CreateRptUnitRangeDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                         TaglistCallback tlp_callback,
+                                         Pointer callback_data)
+{
+  RptUnitRangeDlgPtr dlg;
+  GrouP           p;
+
+  p = HiddenGroup (h, 6, 0, NULL);
+  dlg = (RptUnitRangeDlgPtr) MemNew (sizeof(RptUnitRangeDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToRptUnitRangeDialog;
+  dlg->fromdialog = RptUnitRangeDialogToString;
+  dlg->testdialog = NULL;
+
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+
+  StaticPrompt (p, "Start", 0, dialogTextHeight, programFont, 'l');
+  dlg->range_start = DialogText (p, "", 5, ChangeGBQualEditorText);
+  SetObjectExtra (dlg->range_start, dlg, NULL);
+  StaticPrompt (p, "Stop", 0, dialogTextHeight, programFont, 'l');
+  dlg->range_stop = DialogText (p, "", 5, ChangeGBQualEditorText);
+  SetObjectExtra (dlg->range_stop, dlg, NULL);
+
+
+  return (DialoG) p;
+}
+
+Boolean ParseRptUnitRangeOk (CharPtr txt)
+{
+  return ParseRptUnitRangeOkEx (txt, NULL, NULL);
+}
+
+
+typedef struct mobileelementdlg {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer callback_data;
+  PopuP element_type;
+  TexT  description;
+} MobileElementDlgData, PNTR MobileElementDlgPtr;
+
+CharPtr mobile_element_keywords[] = 
+{ " ",
+  "transposon",
+  "retrotransposon",
+  "integron",
+  "insertion sequence", 
+  "non-LTR retrotransposon",              
+  "SINE", 
+  "MITE", 
+  "LINE", 
+  "other",
+  NULL};
+
+static Int2 GetMobileElementNum (CharPtr txt, CharPtr PNTR desc_start)
+{
+  CharPtr cp;
+  Int2    i;
+  Int4    keyword_len;
+
+  if (desc_start != NULL) {
+    *desc_start = NULL;
+  }
+  if (StringHasNoText (txt)) {
+    return 0;
+  }
+  /* skip over any leading spaces */
+  while (isspace (*txt)) {
+    txt++;
+  }
+  cp = StringChr (txt, ':');
+  if (cp == NULL) {
+    for (i = 1; mobile_element_keywords[i] != NULL; i++) {
+      if (StringICmp (txt, mobile_element_keywords[i]) == 0) {
+        return i;
+      }
+    }
+    return -1;
+  } else {
+    keyword_len = cp - txt;
+    while (keyword_len > 0 && isspace (txt[keyword_len - 1])) {
+      keyword_len--;
+    }
+    if (keyword_len == 0) {
+      return 0;
+    }
+    for (i = 1; mobile_element_keywords[i] != NULL; i++) {
+      if (StringNICmp (txt, mobile_element_keywords[i], keyword_len) == 0) {
+        if (desc_start != NULL && !StringHasNoText (cp + 1)) {
+          *desc_start = cp + 1;
+          while (isspace(**desc_start)) {
+            (*desc_start)++;
+          }
+        }
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+static Boolean ParseMobileElementOk (CharPtr txt)
+{
+
+  if (GetMobileElementNum(txt, NULL) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+static void ChangeMobileElementType (PopuP p)
+{
+  MobileElementDlgPtr dlg;
+
+  dlg = (MobileElementDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (GetValue (dlg->element_type) <= 1) {
+    Disable (dlg->description);
+  } else {
+    Enable (dlg->description);
+  }
+  ChangeGBQualEditorPopup (p);
+}
+
+static void StringToMobileElementDialog (DialoG d, Pointer data)
+{
+  MobileElementDlgPtr dlg;
+  CharPtr             val;
+  CharPtr             desc_start = NULL;
+  Int2                num;
+
+  dlg = (MobileElementDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  val = (CharPtr) data;
+
+  num = GetMobileElementNum (val, &desc_start);
+
+  if (num >= 0) {
+    SetValue (dlg->element_type, num + 1);
+    SetTitle (dlg->description, desc_start == NULL ? "" : desc_start);
+  }
+}
+
+static Pointer MobileElementDialogToString (DialoG d)
+{
+  MobileElementDlgPtr dlg;
+  CharPtr             val = NULL;
+  CharPtr             desc_start = NULL;
+  Int2                num;
+
+  dlg = (MobileElementDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  num = GetValue (dlg->element_type);
+
+  if (num >= 1) {
+    desc_start = SaveStringFromText (dlg->description);
+    if (StringHasNoText (desc_start)) {
+      val = StringSave (mobile_element_keywords[num - 1]);
+    } else {
+      val = (CharPtr) MemNew (sizeof (Char) * (StringLen (mobile_element_keywords[num - 1]) + StringLen (desc_start) + 2));
+      sprintf (val, "%s:%s", mobile_element_keywords[num - 1], desc_start);
+    }
+  }
+  return (Pointer) val;
+}
+
+
+extern DialoG CreateMobileElementDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                         TaglistCallback tlp_callback,
+                                         Pointer callback_data)
+{
+  MobileElementDlgPtr dlg;
+  GrouP           p;
+  Int2            i;
+
+  p = HiddenGroup (h, 3, 0, NULL);
+  dlg = (MobileElementDlgPtr) MemNew (sizeof(MobileElementDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToMobileElementDialog;
+  dlg->fromdialog = MobileElementDialogToString;
+  dlg->testdialog = NULL;
+
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+
+  dlg->element_type = PopupList (p, TRUE, ChangeMobileElementType);
+  for (i = 0; mobile_element_keywords[i] != NULL; i++) {
+    PopupItem (dlg->element_type, mobile_element_keywords[i]);
+  }
+  SetValue (dlg->element_type, 1);
+  SetObjectExtra (dlg->element_type, dlg, NULL);
+
+  dlg->description = DialogText (p, "", 15, ChangeGBQualEditorText);
+  SetObjectExtra (dlg->description, dlg, NULL);
+
+  return (DialoG) p;
+}
+
+static void CopyTextToMobileElementDialog (DialoG d, CharPtr txt)
+{
+  MobileElementDlgPtr dlg;
+
+  dlg = (MobileElementDlgPtr) GetObjectExtra (d);
+
+  if (dlg == NULL || StringHasNoText (txt)) return;
+
+  SetTitle (dlg->description, txt);
+}
+
+
+typedef struct truefalsedlg {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer callback_data;
+  ButtoN is_true;
+} TrueFalseDlgData, PNTR TrueFalseDlgPtr;
+
+static void PointerToTrueFalseDialog (DialoG d, Pointer data)
+{
+  TrueFalseDlgPtr dlg;
+  CharPtr         val;
+
+  dlg = (TrueFalseDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  val = (CharPtr) data;
+
+  if (StringICmp (val, "TRUE") == 0) {
+    SetStatus (dlg->is_true, TRUE);
+  } else {
+    SetStatus (dlg->is_true, FALSE);
+  }
+}
+
+static Pointer TrueFalseDialogToPointer (DialoG d)
+{
+  TrueFalseDlgPtr dlg;
+
+  dlg = (TrueFalseDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return StringSave ("FALSE");
+
+  if (GetStatus (dlg->is_true)) {
+    return StringSave ("TRUE");
+  } else {
+    return StringSave ("FALSE");
+  }
+}
+
+extern DialoG TrueFalseDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                               TaglistCallback tlp_callback,
+                               Pointer callback_data)
+{
+  TrueFalseDlgPtr dlg;
+  GrouP           p;
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  dlg = (TrueFalseDlgPtr) MemNew (sizeof(TrueFalseDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = PointerToTrueFalseDialog;
+  dlg->fromdialog = TrueFalseDialogToPointer;
+  dlg->testdialog = NULL;
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+
+  dlg->is_true = CheckBox (p, "", ChangeGBQualEditorButton);
+  SetObjectExtra (dlg->is_true, dlg, NULL);
+
+  return (DialoG) p;
+}
+
+Boolean ParseTrueFalseOk (CharPtr txt)
+{
+  if (StringHasNoText (txt) || StringICmp (txt, "TRUE") == 0 || StringICmp (txt, "FALSE") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+typedef struct simplelistqualdlg {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer callback_data;
+  PopuP list;
+  CharPtr PNTR val_list;
+} SimpleListQualDlgData, PNTR SimpleListQualDlgPtr;
+
+static Int2 GetListNum (CharPtr val, CharPtr PNTR val_list)
+{
+  Int2 i;
+  if (StringHasNoText (val)) return 0;
+  for (i = 1; val_list[i] != NULL; i++) {
+    if (StringICmp (val, val_list[i]) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void StringToSimpleListQualDialog (DialoG d, Pointer data)
+{
+  SimpleListQualDlgPtr dlg;
+  CharPtr              val;
+  Int2                 num;
+
+  dlg = (SimpleListQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  val = (CharPtr) data;
+  num = GetListNum (val, dlg->val_list);
+  if (num > -1) {
+    SetValue (dlg->list, num + 1);
+  } else {
+    SetValue (dlg->list, 1);
+  }
+}
+
+static Pointer SimpleListQualDialogToString (DialoG d)
+{
+  SimpleListQualDlgPtr dlg;
+  CharPtr              val = NULL;
+  Int2                 num;
+
+  dlg = (SimpleListQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  num = GetValue (dlg->list);
+  if (num > 1) {
+    val = StringSave (dlg->val_list[num - 1]);
+  }
+  return (Pointer) val;
+}
+
+static DialoG SimpleListQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name, CharPtr PNTR list,
+                                    TaglistCallback tlp_callback,
+                                    Pointer callback_data)
+{
+  SimpleListQualDlgPtr dlg;
+  GrouP           p;
+  Int2            i;
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  dlg = (SimpleListQualDlgPtr) MemNew (sizeof(SimpleListQualDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToSimpleListQualDialog;
+  dlg->fromdialog = SimpleListQualDialogToString;
+  dlg->testdialog = NULL;
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+
+  dlg->list = PopupList (p, TRUE, ChangeGBQualEditorPopup);
+  SetObjectExtra (dlg->list, dlg, NULL);
+  dlg->val_list = list;
+  if (dlg->val_list != NULL) {
+    for (i = 0; dlg->val_list[i] != NULL; i++) {
+      PopupItem (dlg->list, dlg->val_list[i]);
+    }
+    SetValue (dlg->list, 1);
+  }
+  return (DialoG) p;
+}
+
+typedef struct multilistqualdlg {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback; 
+  Pointer callback_data;
+  ButtoN  *button_list;
+  TexT    last_txt;
+
+  CharPtr PNTR val_list;
+} MultiListQualDlgData, PNTR MultiListQualDlgPtr;
+
+static void CleanupMultiListQualDlg (GraphiC g, VoidPtr data)
+
+{
+  MultiListQualDlgPtr  dlg;
+
+  dlg = (MultiListQualDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->button_list = MemFree (dlg->button_list);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+static void CheckMultiListLast (ButtoN b)
+{
+  MultiListQualDlgPtr dlg;
+
+  dlg = (MultiListQualDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL) return;
+
+  if (GetStatus (b)) {
+    Enable (dlg->last_txt);
+  } else {
+    Disable (dlg->last_txt);
+  }
+  if (dlg->tlp_callback) {
+    (dlg->tlp_callback) (dlg->callback_data);
+  }
+}
+
+static void ApplyOneValToMultiListQualDialog (MultiListQualDlgPtr dlg, CharPtr val, CharPtr PNTR other_text)
+{
+  Int2    i;
+  CharPtr tmp;
+
+  if (dlg == NULL || StringHasNoText (val) || other_text == NULL) return;
+
+  i = GetListNum (val, dlg->val_list);
+  if (i > 0) {
+    SetStatus (dlg->button_list[i - 1], TRUE);
+  } else {
+    if (*other_text == NULL) {
+      *other_text = StringSave (val);
+    } else {
+      tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (*other_text) + StringLen (val) + 2));
+      sprintf (tmp, "%s,%s", *other_text, val);
+      *other_text = MemFree (*other_text);
+      *other_text = tmp;
+    }
+  }
+}
+
+static void StringToMultiListQualDialog (DialoG d, Pointer data)
+{
+  MultiListQualDlgPtr dlg;
+  CharPtr             val, cp, other_text = NULL;
+  Int2                i;
+
+  dlg = (MultiListQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  for (i = 1; dlg->val_list[i] != NULL; i++) {
+    SetStatus (dlg->button_list[i - 1], FALSE);
+  }
+  SetStatus (dlg->button_list[i - 1], FALSE);
+  SetTitle (dlg->last_txt, "");
+
+  val = (CharPtr) data;
+  if (StringHasNoText (val)) {
+    return;
+  }
+  
+  if (*val == '(' && val[StringLen(val) - 1] == ')') {
+    /* parentheses list */
+    val++;
+    cp = StringChr (val, ',');
+    while (cp != NULL) {
+      *cp = 0;
+      ApplyOneValToMultiListQualDialog (dlg, val, &other_text);
+      *cp = ',';
+      val = cp + 1;
+      while (isspace(*val)) {
+        val++;
+      }
+      cp = StringChr (val, ',');
+    }
+    val[StringLen(val) - 1] = 0;
+    ApplyOneValToMultiListQualDialog (dlg, val, &other_text);
+    val[StringLen(val) - 1] = ')';
+  } else {
+    ApplyOneValToMultiListQualDialog (dlg, val, &other_text);
+  }
+  if (dlg->last_txt != NULL)
+  {
+    if (!StringHasNoText (other_text)) {
+      SetTitle (dlg->last_txt, other_text);
+      SetStatus (dlg->button_list[i - 1], TRUE);
+      Enable (dlg->last_txt);
+    } else {
+      Disable (dlg->last_txt);
+    }
+  }
+  other_text = MemFree (other_text);
+}
+
+static Pointer MultiListQualDialogToString (DialoG d)
+{
+  MultiListQualDlgPtr dlg;
+  CharPtr             val = NULL, tmp;
+  Int2                i;
+
+  dlg = (MultiListQualDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  for (i = 1; dlg->val_list[i] != NULL; i++) {
+    if (GetStatus (dlg->button_list[i - 1])) {
+      if (val == NULL) {
+        val = StringSave (dlg->val_list[i]);
+      } else {
+        tmp = StringSave (dlg->val_list[i]);
+        val = CombineSplitGBQual (val, tmp);
+      }
+    }
+  }
+  if (dlg->last_txt != NULL
+      && GetStatus (dlg->button_list[i - 1]) 
+      && !TextHasNoText (dlg->last_txt)) {
+    if (val == NULL) {
+      val = SaveStringFromText (dlg->last_txt);
+    } else {
+      tmp = SaveStringFromText (dlg->last_txt);
+      val = CombineSplitGBQual (val, tmp);
+      tmp = MemFree (tmp);
+    }
+  }
+  return val;
+}
+
+static DialoG MultiListQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name, CharPtr PNTR list,
+                                   Boolean allow_not_in_list,
+                                   TaglistCallback tlp_callback,
+                                   Pointer callback_data)
+{
+  MultiListQualDlgPtr dlg;
+  GrouP           p, g, last_button = NULL;
+  Int2            i, num_buttons = 1; /* start with one, for the type-in wildcard value */
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  dlg = (MultiListQualDlgPtr) MemNew (sizeof(MultiListQualDlgData));
+
+  SetObjectExtra (p, dlg, CleanupMultiListQualDlg);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToMultiListQualDialog;
+  dlg->fromdialog = MultiListQualDialogToString;
+  dlg->testdialog = NULL;
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+  dlg->val_list = list;
+
+  /* start with 1, skip blank at start of list */
+  for (i = 1; dlg->val_list[i] != NULL; i++) {
+    num_buttons ++;
+  }
+
+  dlg->button_list = (ButtoN *) MemNew (num_buttons * sizeof (ButtoN));
+
+  g = HiddenGroup (p, 4, 0, NULL);
+  for (i = 1; dlg->val_list [i] != NULL; i++) {
+    dlg->button_list[i - 1] = CheckBox (g, dlg->val_list[i], ChangeGBQualEditorButton);
+    SetObjectExtra (dlg->button_list[i - 1], dlg, NULL);
+  }
+  if (allow_not_in_list)
+  {
+    last_button = HiddenGroup (p, 2, 0, NULL);
+    dlg->button_list[i - 1] = CheckBox (last_button, "", CheckMultiListLast);
+    SetObjectExtra (dlg->button_list[i - 1], dlg, NULL);
+    dlg->last_txt = DialogText (last_button, "", 20, ChangeGBQualEditorText);
+    SetObjectExtra (dlg->last_txt, dlg, NULL);
+    Disable (dlg->last_txt);
+  }
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) last_button, NULL);
+    
+  return (DialoG) p;
+}
+
+static Boolean ParseMultiListQualOk (CharPtr val)
+{
+  return TRUE;
+}
+
+CharPtr codon_start_values[] = {" ", "1", "2", "3", NULL};
+static DialoG CodonStartQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                    TaglistCallback tlp_callback,
+                                    Pointer callback_data)
+
+{
+  return SimpleListQualDialog (h, sep, name, codon_start_values, tlp_callback, callback_data);
+}
+static Boolean ParseCodonStartOk (CharPtr val)
+{
+  if (GetListNum (val, codon_start_values) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+CharPtr mol_type_values[] = {" ", "genomic DNA", "genomic RNA", "mRNA", "tRNA", "rRNA",
+                "snoRNA", "snRNA", "scRNA", "pre-RNA", "other RNA",
+                "other DNA", "viral cRNA", "unassigned DNA", "unassigned RNA", NULL};
+static DialoG MolTypeQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                 TaglistCallback tlp_callback,
+                                 Pointer callback_data)
+{
+  return SimpleListQualDialog (h, sep, name, mol_type_values, tlp_callback, callback_data);
+}
+static Boolean ParseMolTypeOk (CharPtr val)
+{
+  if (GetListNum (val, mol_type_values) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+CharPtr organelle_values[] = {" ", "mitochondrion", "nucleomorph", "plastid",
+                              "mitochondrion:kinetoplast",
+                              "plastid:chloroplast", "plastid:apicoplast", 
+                              "plastid:chromoplast", "plastid:cyanelle", 
+                              "plastid:leucoplast", "plastid:proplastid", NULL};
+static DialoG OrganelleQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                   TaglistCallback tlp_callback,
+                                   Pointer callback_data)
+{
+  return SimpleListQualDialog (h, sep, name, organelle_values, tlp_callback, callback_data);
+}
+static Boolean ParseOrganelleOk (CharPtr val)
+{
+  if (GetListNum (val, organelle_values) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+CharPtr rpt_type_values[] = {" ", "tandem", "inverted", "flanking", "terminal", 
+                             "direct", "dispersed", "other", NULL};
+static DialoG RptTypeQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                 TaglistCallback tlp_callback,
+                                 Pointer callback_data)
+{
+
+
+  return MultiListQualDialog (h, sep, name, rpt_type_values, FALSE, tlp_callback, callback_data);
+}
+
+static Boolean ParseRptTypeOk (CharPtr val)
+{
+  CharPtr cpy, cp, check;
+  Boolean rval = TRUE;
+
+  if (StringHasNoText (val))
+  {
+    return TRUE;
+  }
+  else if (val[0] == '(' && val[StringLen(val) - 1] == ')')
+  {
+    cpy = StringSave (val + 1);
+    cpy [StringLen (cpy) - 1] = 0;
+    check = cpy;
+    cp = StringChr (cpy, ',');
+    while (cp != NULL && rval)
+    {
+      *cp = 0;
+      TrimSpacesAroundString (check);
+      if (GetListNum (check, rpt_type_values) < 0)
+      {
+        rval = FALSE;
+      }
+      check = cp + 1;
+      cp = StringChr (check, ',');
+    }
+    if (rval)
+    {
+      TrimSpacesAroundString (check);
+      if (GetListNum (check, rpt_type_values) < 0)
+      {
+        rval = FALSE;
+      }
+    }
+    cpy = MemFree (cpy);
+  }
+  else if (GetListNum (val, rpt_type_values) < 0)
+  {
+    rval = FALSE;
+  }
+  return rval;
+}
+
+CharPtr direction_values[] = {" ", "LEFT", "RIGHT", "BOTH", NULL};
+static DialoG DirectionQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                 TaglistCallback tlp_callback,
+                                 Pointer callback_data)
+{
+  return SimpleListQualDialog (h, sep, name, direction_values, tlp_callback, callback_data);
+}
+static Boolean ParseDirectionOk (CharPtr val)
+{
+  if (GetListNum (val, direction_values) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+typedef DialoG (*BuildQualEditorDialog) PROTO ((GrouP, SeqEntryPtr, CharPtr, 
+                                                TaglistCallback, Pointer));
+typedef void (*CopyTextToEditor) PROTO ((DialoG, CharPtr));
+
+typedef struct gbqualeditlist {
+  CharPtr               name;
+  BuildQualEditorDialog build_dlg;
+  ParseOK               parse_ok;
+  CopyTextToEditor      copy_txt;
+} GBQualEditListData, PNTR GBQualEditListPtr;
+
+GBQualEditListData gbqual_edit_list[] = {
+  {"chloroplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"chromoplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"codon_start",          CodonStartQualDialog,      ParseCodonStartOk,     NULL },
+  {"collection_date",      CollectionDateDialog,      ParseCollectionDateOk, NULL },
+  {"cyanelle",             TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"direction",            DirectionQualDialog,       ParseDirectionOk,      NULL },
+  {"germline",             TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"kinetoplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"macronuclear",         TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"mitochondrion",        TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"mobile_element",       CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToMobileElementDialog },
+  {"mol_type",             MolTypeQualDialog,         ParseMolTypeOk,        NULL },
+  {"organelle",            OrganelleQualDialog,       ParseOrganelleOk,      NULL },
+  {"partial",              TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"proviral",             TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"pseudo",               TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"rearranged",           TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"rpt_type",             RptTypeQualDialog,         ParseRptTypeOk,        NULL },
+  {"rpt_unit_range",       CreateRptUnitRangeDialog,  ParseRptUnitRangeOk,   NULL } ,
+  {"virion",               TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"focus",                TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"transgenic",           TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"environmental_sample", TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"ribosomal_slippage",   TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"trans_splicing",       TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"metagenomic",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {NULL, NULL, NULL}};
+
+
+typedef struct singlegbqualedit {
+  DIALOG_MESSAGE_BLOCK
+  TaglistCallback tlp_callback;
+  Pointer callback_data;
+  DialoG editor;
+  TexT   txt;
+  GrouP  choice_grp;
+  ButtoN            use_editor;
+  ButtoN            use_text;
+  ButtoN            copy_text;
+  GBQualEditListPtr edit_list;
+  CharPtr           name;
+  Boolean           force_string;
+} SingleGBQualEditData, PNTR SingleGBQualEditPtr;
+
+static void ChangeSingleQualEdit (GrouP g)
+{
+  SingleGBQualEditPtr dlg;
+
+  dlg = (SingleGBQualEditPtr) GetObjectExtra (g);
+  if (dlg != NULL) {
+    if (GetValue (dlg->choice_grp) == 1) {
+      SafeEnable (dlg->editor);
+      Disable (dlg->txt);
+    } else {
+      SetValue (dlg->choice_grp, 2);
+      SafeDisable (dlg->editor);
+      Enable (dlg->txt);
+    }
+    if (dlg->tlp_callback != NULL) {
+      (dlg->tlp_callback) (dlg->callback_data);
+    }
+  }
+}
+
+static void StringToSingleGBQualEditDialog (DialoG d, Pointer data)
+{
+  SingleGBQualEditPtr dlg;
+  CharPtr             val;
+
+  dlg = (SingleGBQualEditPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  val = (CharPtr) data;
+
+  if (StringHasNoText (val) || (!dlg->force_string && dlg->edit_list != NULL && (dlg->edit_list->parse_ok(val)))) {
+    SetTitle (dlg->txt, "");
+    if (dlg->choice_grp != NULL) {
+      SetValue (dlg->choice_grp, 1);
+      Hide (dlg->use_editor);
+      Hide (dlg->use_text);
+      Hide (dlg->txt);
+      Hide (dlg->copy_text);
+      PointerToDialog (dlg->editor, val);
+      Enable (dlg->editor);
+      Disable (dlg->txt);
+    }
+  } else {
+    SetTitle (dlg->txt, val);
+    if (dlg->choice_grp != NULL) {
+      SetValue (dlg->choice_grp, 2);
+      Show (dlg->use_editor);
+      Show (dlg->use_text);
+      Show (dlg->txt);
+      Show (dlg->copy_text);
+      PointerToDialog (dlg->editor, NULL);
+      Enable (dlg->txt);
+      Disable (dlg->editor);
+    }
+  }
+}
+
+static Pointer SingleGBQualEditDialogToString (DialoG d)
+{
+  SingleGBQualEditPtr dlg;
+  CharPtr             val;
+
+  dlg = (SingleGBQualEditPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  if (dlg->choice_grp == NULL || GetValue (dlg->choice_grp) == 2) {
+    val = SaveStringFromText (dlg->txt);
+  } else {
+    val = DialogToPointer (dlg->editor);
+  }
+  
+  return val;
+}
+
+static void GBQualEditDialogMessage (DialoG d, Int2 mssg)
+
+{
+  SingleGBQualEditPtr dlg;
+
+  dlg = (SingleGBQualEditPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (mssg == VIB_MSG_INIT 
+        || mssg == VIB_MSG_ENTER) {
+      if (dlg->choice_grp == NULL || GetValue (dlg->choice_grp) == 2) {
+        Select (dlg->txt);
+      } else {
+        Select (dlg->editor);
+      }
+    }
+  }
+}
+
+static void GBQualEditDialogCopyText (ButtoN b)
+{
+  SingleGBQualEditPtr dlg;
+  CharPtr             txt;
+
+  dlg = (SingleGBQualEditPtr) GetObjectExtra (b);
+  if (dlg != NULL && dlg->edit_list != NULL && dlg->edit_list->copy_txt != NULL) {
+    txt = SaveStringFromText (dlg->txt);
+    (dlg->edit_list->copy_txt)(dlg->editor, txt);
+    txt = MemFree (txt);
+  }
+}
+
+extern DialoG CreateSingleGBQualEditDialog (GrouP h, SeqEntryPtr sep, CharPtr name, 
+                                            Boolean force_string,
+                                            TaglistCallback tlp_callback, 
+                                            Pointer callback_data)
+{
+  SingleGBQualEditPtr dlg;
+  GrouP           p;
+  Int4            i;
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (SingleGBQualEditPtr) MemNew (sizeof(SingleGBQualEditData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToSingleGBQualEditDialog;
+  dlg->fromdialog = SingleGBQualEditDialogToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = GBQualEditDialogMessage;
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+  dlg->force_string = force_string;
+
+  dlg->name = name;
+  dlg->edit_list = NULL;
+  for (i = 0; gbqual_edit_list[i].name != NULL && dlg->edit_list == NULL; i++) {
+    if (StringICmp (gbqual_edit_list[i].name, name) == 0) {
+      dlg->edit_list = gbqual_edit_list + i;
+    }
+  }
+
+  dlg->copy_text = NULL;
+
+  if (dlg->edit_list == NULL || dlg->edit_list->build_dlg == NULL || force_string) {
+    dlg->txt = DialogText (p, "", 20, ChangeGBQualEditorText);
+    SetObjectExtra (dlg->txt, dlg, NULL);
+    dlg->editor = NULL;
+    dlg->choice_grp = NULL;
+  } else {
+    dlg->choice_grp = HiddenGroup (p, 0, 2, ChangeSingleQualEdit);
+    SetObjectExtra (dlg->choice_grp, dlg, NULL);
+    dlg->use_editor = RadioButton (dlg->choice_grp, "");
+    dlg->use_text = RadioButton (dlg->choice_grp, "");
+    dlg->editor = (dlg->edit_list->build_dlg) (dlg->choice_grp, sep, name, tlp_callback, callback_data);
+    dlg->txt = DialogText (dlg->choice_grp, "", 20, ChangeGBQualEditorText);
+    SetObjectExtra (dlg->txt, dlg, NULL);
+    SetValue (dlg->choice_grp, 1);
+    if (dlg->edit_list->copy_txt != NULL) {
+      dlg->copy_text = PushButton (dlg->choice_grp, "Copy Text", GBQualEditDialogCopyText);
+      SetObjectExtra (dlg->copy_text, dlg, NULL);
+    }
+//    AlignObjects (ALIGN_LOWER, (HANDLE) dlg->use_text, (HANDLE) dlg->txt, NULL);
+    AlignObjects (ALIGN_LOWER, (HANDLE) dlg->txt, (HANDLE) dlg->use_text, NULL);
+    ChangeSingleQualEdit (dlg->choice_grp);
+  }
+
+  return (DialoG) p;
+}
+
+typedef struct newfieldpage {
+  DIALOG_MESSAGE_BLOCK
+  Int2               numfields;
+  DialoG             PNTR editors;
+
+  GBQualPtr          new_gbq;
+  Uint1              subtype;
+  Boolean            allowProductGBQual;
+  Int2               last_viewed;
+} NewFieldPage, PNTR NewFieldPagePtr;
+
+static void CleanupNewFieldsPage (GraphiC g, VoidPtr data)
+
+{
+  NewFieldPagePtr  fpf;
+
+  fpf = (NewFieldPagePtr) data;
+  if (fpf != NULL) {
+    MemFree (fpf->editors);
+    fpf->new_gbq = GBQualFree (fpf->new_gbq);
+  }
+  MemFree (data);
+}
+
+static CharPtr GetDisplayQualName (CharPtr qual_name, Boolean is_legal)
+{
+  CharPtr display_name;
+
+  if (is_legal) {
+    display_name = StringSave (qual_name);
+  } else {
+    display_name = (CharPtr) MemNew (sizeof (Char) * (StringLen (qual_name) + 2));
+    sprintf (display_name, "*%s", qual_name);
+  }
+  return display_name;
+}
+
+static Boolean QualNamesMatch (CharPtr qual_name1, CharPtr qual_name2)
+{
+  if (StringICmp (qual_name1, qual_name2) == 0) {
+    return TRUE;
+  } else if (qual_name1 != NULL 
+             && *(qual_name1) == '*' 
+             && StringICmp (qual_name1 + 1, qual_name2) == 0) {
+    return TRUE;
+  } else if (qual_name2 != NULL
+             && *qual_name2 == '*'
+             && StringICmp (qual_name1, qual_name2 + 1) == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+static Boolean IsCombinableQual (Int2 qual)
+{
+  Boolean   combine_qual = FALSE;
+
+  if (qual == GBQUAL_rpt_type 
+      || qual == GBQUAL_rpt_unit 
+      || qual == GBQUAL_rpt_unit_range
+      || qual == GBQUAL_rpt_unit_seq 
+      || qual == GBQUAL_replace 
+      || qual == GBQUAL_compare
+      || qual == GBQUAL_old_locus_tag
+      || qual == GBQUAL_usedin) {
+    combine_qual = TRUE;
+  }
+  return combine_qual;
+}
+
+static void AddTemporaryGBQual (GBQualPtr PNTR gbq_list, CharPtr qual_name, GBQualPtr gbq_feat, Boolean is_legal)
+{
+  Int2 qual;
+  GBQualPtr gbq_last = NULL;
+  GBQualPtr gbq_new = NULL;
+  Boolean   found = FALSE;
+  Boolean   combine_qual = FALSE;
+  CharPtr   blank_val = "\"\"";
+
+  if (gbq_list == NULL) return;
+
+  gbq_last = *gbq_list;
+  while (gbq_last != NULL && gbq_last->next != NULL) {
+    if (QualNamesMatch (gbq_last->qual, qual_name)) {
+      /* already added */
+      return;
+    }
+    gbq_last = gbq_last->next;
+  }
+  if (gbq_last != NULL && QualNamesMatch (gbq_last->qual, qual_name)) {
+    /* already added */
+    return;
+  }
+
+  /* add value.  If none in feature, if true/false, add TRUE or FALSE, else use blank. */
+  qual = GBQualNameValid (qual_name);
+
+  combine_qual = IsCombinableQual (qual);
+
+  while (gbq_feat != NULL) {
+    if (StringICmp (qual_name, gbq_feat->qual) == 0) {
+      if (StringHasNoText (gbq_feat->val)) {
+        if (qual > -1 && ParFlat_GBQual_names [qual].gbclass == Class_none && !found) {
+          /* if this is a true-false, only add one qualifier */
+          gbq_new = GBQualNew ();
+          gbq_new->qual = GetDisplayQualName (qual_name, is_legal);
+          gbq_new->val = StringSave ("TRUE");
+          if (gbq_last == NULL) {
+            *gbq_list = gbq_new;
+          } else {
+            gbq_last->next = gbq_new;
+          }
+          gbq_last = gbq_new;
+          found = TRUE;
+        } else if (qual == GBQUAL_replace) {
+          /* save blank values */
+          gbq_new = NULL;
+          if (found && combine_qual) {
+            gbq_new = *gbq_list;
+            while (gbq_new != NULL && !QualNamesMatch (gbq_feat->qual, gbq_new->qual)) {
+              gbq_new = gbq_new->next;
+            }
+          }
+          if (gbq_new == NULL) {
+            /* make new qualifier */
+            gbq_new = GBQualNew ();
+            gbq_new->qual = GetDisplayQualName (qual_name, is_legal);
+            gbq_new->val = StringSave (blank_val);
+            /* add to list */
+            if (gbq_last == NULL) {
+              *gbq_list = gbq_new;
+            } else {
+              gbq_last->next = gbq_new;
+            }
+            gbq_last = gbq_new;
+          } else {
+            /* combine with previous value */
+            gbq_new->val = CombineSplitGBQual (gbq_new->val, blank_val);
+          }
+          found = TRUE;
+        } else {
+          /* if not true-false or already have true-false, we'll just be adding a blank value later */    
+          /* so do nothing here */
+        }
+      } else {
+        gbq_new = NULL;
+        if (found && combine_qual) {
+          gbq_new = *gbq_list;
+          while (gbq_new != NULL && !QualNamesMatch (gbq_feat->qual, gbq_new->qual)) {
+            gbq_new = gbq_new->next;
+          }
+        }
+        if (gbq_new == NULL) {
+          /* make new qualifier */
+          gbq_new = GBQualNew ();
+          gbq_new->qual = GetDisplayQualName (qual_name, is_legal);
+          gbq_new->val = StringSave (gbq_feat->val);
+          /* add to list */
+          if (gbq_last == NULL) {
+            *gbq_list = gbq_new;
+          } else {
+            gbq_last->next = gbq_new;
+          }
+          gbq_last = gbq_new;
+        } else {
+          /* combine with previous value */
+          gbq_new->val = CombineSplitGBQual (gbq_new->val, gbq_feat->val);
+        }
+        found = TRUE;
+      }
+    }
+    gbq_feat = gbq_feat->next;
+  }
+   
+  if (!found) {
+    gbq_new = GBQualNew ();
+    gbq_new->qual = GetDisplayQualName (qual_name, is_legal);
+    if (qual > -1 && ParFlat_GBQual_names [qual].gbclass == Class_none) {
+      gbq_new->val = StringSave ("FALSE");
+    } else {
+      gbq_new->val = StringSave ("");
+    }
+    if (gbq_last == NULL) {
+      *gbq_list = gbq_new;
+    } else {
+      gbq_last->next = gbq_new;
+    }
+  }
+}
+
+static Boolean IsRarelyUsed (Int2 qual)
+{
+  if (qual == GBQUAL_allele
+      || qual == GBQUAL_function
+      || qual == GBQUAL_map
+      || qual == GBQUAL_standard_name
+      || qual == GBQUAL_old_locus_tag) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+static Pointer NewDialogToImportFields (DialoG d)
+{
+  NewFieldPagePtr fpf;
+  GBQualPtr       gbq_list = NULL, gbq_last = NULL, gbq_new, gbq_it;
+  Int2            qual, i;
+  CharPtr         val, qual_name;
+
+  fpf = (NewFieldPagePtr) GetObjectExtra (d);
+  if (fpf == NULL) return NULL;
+
+  for (gbq_it = fpf->new_gbq, i = 0; gbq_it != NULL; gbq_it = gbq_it->next, i++) {
+    gbq_it->val = MemFree (gbq_it->val);
+    gbq_it->val = DialogToPointer (fpf->editors[i]);
+  }
+
+  for (gbq_it = fpf->new_gbq; gbq_it != NULL; gbq_it = gbq_it->next) {
+    if (StringHasNoText (gbq_it->val)) {
+      continue;
+    }
+    qual_name = gbq_it->qual;
+    if (qual_name != NULL && *qual_name == '*') {
+      qual_name++;
+    }
+    qual = GBQualNameValid (qual_name);
+
+    val = gbq_it->val;
+    if (qual > -1 && ParFlat_GBQual_names [qual].gbclass == Class_none) {
+      if (StringICmp (val, "TRUE") == 0) {
+        /* don't put "true" in qual, just use empty string */
+        val = "";
+      } else if (StringICmp (val, "FALSE") == 0) {
+        /* don't add FALSE qual */
+        continue;
+      }
+      /* any other values, add as they are */
+    } 
+
+    gbq_new = GBQualNew();
+    gbq_new->qual = StringSave (qual_name);
+    gbq_new->val = StringSave (val);
+    if (gbq_last == NULL) {
+      gbq_list = gbq_new;
+    } else {
+      gbq_last->next = gbq_new;
+    }
+    gbq_last = gbq_new;
+  }
+  return (Pointer) gbq_list;
+}
+
+static void AddMandatoryAndOptionalQuals (CharPtr name, NewFieldPagePtr fpf, GBQualPtr gbq, Boolean use_rarely_used)
+{
+  Int2 index, i, qual;
+  SematicFeatPtr  sefp;
+
+  if (name == NULL) return;
+
+  index = GBFeatKeyNameValid (&name, FALSE);
+  if (index < 0) return;
+
+  sefp = &(ParFlat_GBFeat [index]);
+  /* add mandatory quals first */
+  for (i = 0; i < sefp->mand_num; i++) {
+    qual = sefp->mand_qual [i];
+    if (qual > -1 
+        && ShouldBeAGBQual (fpf->subtype, qual, fpf->allowProductGBQual)
+        && ((use_rarely_used && IsRarelyUsed (qual))
+            || (!use_rarely_used && ! IsRarelyUsed (qual)))) {
+      AddTemporaryGBQual (&(fpf->new_gbq), ParFlat_GBQual_names [qual].name, gbq, TRUE);
+    }
+  }
+  /* add optional quals next */
+  for (i = 0; i < sefp->opt_num; i++) {
+    qual = sefp->opt_qual [i];
+    if (qual > -1 
+        && ShouldBeAGBQual (fpf->subtype, qual, fpf->allowProductGBQual)
+        && ((use_rarely_used && IsRarelyUsed (qual))
+            || (!use_rarely_used && ! IsRarelyUsed (qual)))) {
+      AddTemporaryGBQual (&(fpf->new_gbq), ParFlat_GBQual_names [qual].name, gbq, TRUE);
+    }
+  }
+}
+
+
+extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean allowProductGBQual)
+{
+  NewFieldPagePtr fpf;
+  GrouP           g, g1, g2 = NULL;
+  GBQualPtr       gbq = NULL, gbq_it;
+  Int2            j;
+  Int2            max;
+  Int2            num = 0, num_legal = 0;
+  GrouP           p;
+  Int2            qual;
+  Int2            wid;
+  PrompT          ill_q = NULL;
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  fpf = (NewFieldPagePtr) MemNew (sizeof (NewFieldPage));
+  if (fpf != NULL) {
+
+    SetObjectExtra (p, fpf, CleanupNewFieldsPage);
+    fpf->dialog = (DialoG) p;
+    fpf->todialog = NULL;
+    fpf->fromdialog = NewDialogToImportFields;
+    fpf->testdialog = NULL;
+
+    fpf->allowProductGBQual = allowProductGBQual;
+    if (sfp == NULL) {
+      fpf->subtype = FEATDEF_ANY;
+    } else {
+      fpf->subtype = sfp->idx.subtype;
+      gbq = sfp->qual;
+    }
+
+    fpf->last_viewed = -1;
+
+    /* create list of temporary GBQuals */
+    /* list mandatory/optional quals that are not rarely used first */
+    AddMandatoryAndOptionalQuals (name, fpf, gbq, FALSE);
+
+    /* add rarely used quals here */
+    AddMandatoryAndOptionalQuals (name, fpf, gbq, TRUE);
+
+    /* count legal values - all others to be listed as simple strings */
+    for (gbq_it = fpf->new_gbq; gbq_it != NULL; gbq_it = gbq_it->next) {
+      num_legal++;
+    }
+
+    /* add legal added qualifiers next */
+    gbq_it = gbq;
+    while (gbq_it != NULL) {
+      qual = GBQualNameValid (gbq_it->qual);
+      if (qual > -1 && ShouldBeAGBQual (fpf->subtype, qual, fpf->allowProductGBQual)) {
+        AddTemporaryGBQual (&(fpf->new_gbq), ParFlat_GBQual_names [qual].name, gbq, FALSE);
+      } 
+      gbq_it = gbq_it->next;
+    }
+
+    /* add remaining qualifiers last */
+    gbq_it = gbq;
+    while (gbq_it != NULL) {
+      AddTemporaryGBQual (&(fpf->new_gbq), gbq_it->qual, gbq, FALSE);
+      gbq_it = gbq_it->next;
+    }
+
+    /* calculate maximum name width */
+    SelectFont (systemFont);
+    max = 0;
+    for (gbq_it = fpf->new_gbq; gbq_it != NULL; gbq_it = gbq_it->next) {
+      num++;
+      wid = StringWidth (gbq_it->qual) + 2;
+      if (wid > max) {
+        max = wid;
+      }
+    }
+    SelectFont (systemFont);
+
+    fpf->numfields = num;
+
+    if (num > 0) {
+      g1 = HiddenGroup (p, 2, 0, NULL);     
+      g = g1;
+      fpf->editors = MemNew (sizeof (DialoG) * (num + 1));
+      for (gbq_it = fpf->new_gbq, j = 0; gbq_it != NULL; gbq_it = gbq_it->next) {
+        if (j == num_legal) {
+          ill_q = StaticPrompt (p, "*** Illegal Qualifiers ***", 0, dialogTextHeight, programFont, 'l');
+          g2 = HiddenGroup (p, 2, 0, NULL);
+          g = g2;
+        }
+        StaticPrompt (g, gbq_it->qual, 0, dialogTextHeight, programFont, 'l');
+        fpf->editors[j] = CreateSingleGBQualEditDialog (g, NULL, gbq_it->qual,
+                                                        j < num_legal ? FALSE : TRUE,
+                                                        NULL, NULL);
+        PointerToDialog (fpf->editors[j], gbq_it->val);
+        j++;
+      }   
+      AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) ill_q, (HANDLE) g2, NULL);  
+    } else {
+      fpf->editors = NULL;
+      StaticPrompt (p, "See Attributes page to set legal qualifiers for this feature.",
+                    0, 0, programFont, 'c');
+    }
+  }
+  return (DialoG) p;
+}
+
 

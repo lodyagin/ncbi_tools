@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,10 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.29  2007/01/29 17:20:46  bollin
+* Added Ex methods to allow substitution of nucleotide sequence ID when exporting
+* protein FASTA.
+*
 * Revision 6.28  2006/07/13 17:06:39  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -284,6 +288,18 @@ NLM_EXTERN Int4 BioseqFastaStream (
   Boolean do_defline
 );
 
+NLM_EXTERN Int4 BioseqFastaStreamEx (
+  BioseqPtr bsp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline,
+  Boolean substitute_ids,
+  Boolean sorted_protein
+);
+
 NLM_EXTERN Int4 BioseqFastaMemStream (
   BioseqPtr bsp,
   ByteStorePtr bs,
@@ -313,6 +329,20 @@ NLM_EXTERN Int4 SeqEntryFastaStream (
   Boolean do_na,
   Boolean do_aa,
   Boolean master_style
+);
+
+NLM_EXTERN Int4 SeqEntryFastaStreamEx (
+  SeqEntryPtr sep,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_na,
+  Boolean do_aa,
+  Boolean master_style,
+  Boolean substitute_ids,
+  Boolean sorted_prot
 );
 
 /*****************************************************************************

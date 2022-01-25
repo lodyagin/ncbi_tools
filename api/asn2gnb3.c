@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.65 $
+* $Revision: 1.75 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -968,7 +968,7 @@ static Boolean IsTpa (
 
   if (has_genbank) return FALSE;
   if (has_tpa) return TRUE;
-  if (has_refseq) return FALSE;
+  if (has_refseq) return TRUE;
   if (has_bankit && has_tpa_assembly) return TRUE;
   if (has_smart && has_tpa_assembly) return TRUE;
   if (has_gi) return FALSE;
@@ -1096,6 +1096,12 @@ static CharPtr GetStrForTpaOrRefSeqHist (
   CharPtr      str;
   Char         tmp [80];
 
+  if (bsp == NULL) return NULL;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      isRefSeq = TRUE;
+    }
+  }
   hist = bsp->hist;
   if (hist != NULL && hist->assembly != NULL) {
     salp = SeqAlignListDup (hist->assembly);
@@ -1678,7 +1684,9 @@ NLM_EXTERN void AddCommentBlock (
   SeqMgrDescContext  dcontext;
   DeltaSeqPtr        dsp;
   Boolean            estEv = FALSE;
+  /*
   SeqMgrFeatContext  fcontext;
+  */
   Boolean            first = TRUE;
   GBBlockPtr         gbp;
   CharPtr            geneName = NULL;
@@ -1705,17 +1713,19 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            okay;
   BioseqPtr          parent;
   SeqDescrPtr        sdp;
+  /*
   SeqFeatPtr         sfp;
+  */
   Boolean            showGBBSource = FALSE;
   SeqIdPtr           sip;
   CharPtr            str;
   Char               taxID [32];
   TextSeqIdPtr       tsip;
   UserFieldPtr       ufp;
-  UserObjectPtr      uop;
+  UserObjectPtr      uop = NULL;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
-  StringItemPtr      ffstring = NULL, temp = NULL;
+  StringItemPtr      ffstring = NULL;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -2327,7 +2337,8 @@ NLM_EXTERN void AddCommentBlock (
       if (dsp->choice == 2) {
         litp = (SeqLitPtr) dsp->data.ptrvalue;
         if (litp != NULL) {
-          if (litp->seq_data == NULL && litp->length > 0) {
+          if ((litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) &&
+              litp->length > 0) {
             has_gaps = TRUE;
           }
         }
@@ -2394,7 +2405,7 @@ NLM_EXTERN void AddCommentBlock (
             FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
           }
 
-          AddHistCommentString (ajp, ffstring, "[WARNING] On", "this sequence was replaced by a newer version",
+          AddHistCommentString (ajp, ffstring, "[WARNING] On", "this sequence was replaced by",
                                 hist->replaced_by_date, hist->replaced_by_ids);
 
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
@@ -2507,9 +2518,13 @@ NLM_EXTERN void AddCommentBlock (
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
 
-            if (awp->afp != NULL) {
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            if (awp->afp != NULL) {              
               DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
             }
+            cbp->itemID = 0;
+            cbp->itemtype = 0;
           }
         }
       }
@@ -2607,6 +2622,26 @@ NLM_EXTERN void AddCommentBlock (
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_region, &dcontext);
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_name, &dcontext);
+  while (sdp != NULL) {
+    if (sdp->data.ptrvalue != NULL) {
+      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+      if (cbp != NULL) {
+
+        cbp->entityID = dcontext.entityID;
+        cbp->itemID = dcontext.itemID;
+        cbp->itemtype = OBJ_SEQDESC;
+        cbp->first = first;
+        first = FALSE;
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_name, &dcontext);
   }
 
   /* StructuredComment user object */
@@ -2762,11 +2797,12 @@ NLM_EXTERN void AddCommentBlock (
     }
   }
 
-  /* add comment features that are full length on appropriate segment */
-
   parent = awp->parent;
   if (parent == NULL) return;
 
+  /* no longer adding comment features that are full length on appropriate segment */
+
+  /*
   sfp = SeqMgrGetNextFeature (parent, NULL, SEQFEAT_COMMENT, 0, &fcontext);
   while (sfp != NULL) {
     if (fcontext.left == awp->from && fcontext.right == awp->to) {
@@ -2786,6 +2822,7 @@ NLM_EXTERN void AddCommentBlock (
     }
     sfp = SeqMgrGetNextFeature (parent, sfp, SEQFEAT_COMMENT, 0, &fcontext);
   }
+  */
 
   /* look for Seq-annot.desc.comment on annots packaged on current bioseq */
 
@@ -2967,6 +3004,10 @@ static BaseBlockPtr AddSource (
   orp = biop->org;
   if (orp == NULL) return bbp;
 
+  if (StringICmp (orp->taxname, "synthetic construct") == 0) {
+    isp->is_synthetic = TRUE;
+  }
+
   isp->orghash = ComputeSourceHash (orp->taxname, 0);
   isp->taxname = orp->taxname;
 
@@ -3006,9 +3047,9 @@ static BaseBlockPtr AddSource (
   for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 29;
+      subtype = 38;
     }
-    if (subtype < 30) {
+    if (subtype < 39) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         str = asn2gnbk_source_quals [idx].name;
@@ -4350,10 +4391,12 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
 
   if (fcontext->seqfeattype == SEQFEAT_GENE && awp->hideGeneFeats) return TRUE;
 
-  /* suppress comment features that are full length */
+  /* no longer suppressing comment features that are full length */
 
+  /*
   if (fcontext->seqfeattype == SEQFEAT_COMMENT &&
       fcontext->left == awp->from && fcontext->right == awp->to) return TRUE;
+  */
 
   ivals = fcontext->ivals;
   numivals = fcontext->numivals;
@@ -4650,6 +4693,18 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       gbq = sfp->qual;
       while (gbq != NULL) {
         if (StringICmp (gbq->qual, "estimated_length") == 0 && (! StringHasNoText (gbq->val))) {
+          okay = TRUE;
+          break;
+        }
+        gbq = gbq->next;
+      }
+      break;
+
+    case FEATDEF_ncRNA:
+      /* ncRNA requires FTQUAL_ncRNA_class */
+      gbq = sfp->qual;
+      while (gbq != NULL) {
+        if (StringICmp (gbq->qual, "ncRNA_class") == 0 && (! StringHasNoText (gbq->val))) {
           okay = TRUE;
           break;
         }

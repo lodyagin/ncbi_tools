@@ -28,13 +28,21 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.60 $
+* $Revision: 6.62 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.62  2007/03/09 20:37:06  bollin
+* Fixed insidious double-increment bug in AlnMgr2MergeTwoAlignments - if the
+* second alignment to be merged had more than one segment, the seg index was
+* incremented past the number of segments (and some segments were not initialized).
+*
+* Revision 6.61  2007/01/09 14:13:52  bollin
+* Fixed bug in AlnMgr2ExtendToCoords - prior version was not extending on 5' end.
+*
 * Revision 6.60  2006/09/06 15:48:33  bollin
 * removed compiler warnings
 *
@@ -8889,7 +8897,6 @@ NLM_EXTERN SeqAlignPtr AlnMgr2MergeTwoAlignments(SeqAlignPtr sap1_orig, SeqAlign
          dsp_new->strands[c*n1 + j] = dsp2->strands[i*n1 + j];
       }
       dsp_new->lens[c] = dsp2->lens[i];
-      c++;
    }
    dsp_new->ids = SeqIdDupList(dsp1->ids);
    sap_new = SeqAlignNew();
@@ -8943,7 +8950,7 @@ NLM_EXTERN void AlnMgr2ExtendToCoords(SeqAlignPtr sap, Int4 from, Int4 to, Int4 
       from = start;
    else
       numseg++;
-   diff1 = from - start;
+   diff1 = start - from;
    sip = AlnMgr2GetNthSeqIdPtr(sap, row);
    bsp = BioseqLockById(sip);
    if (to == -1)

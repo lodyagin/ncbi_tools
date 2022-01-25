@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_disp.c,v 6.23 2006/04/05 15:07:09 lavr Exp $
+/*  $Id: test_ncbi_disp.c,v 6.31 2007/04/20 01:55:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,12 @@
  *
  */
 
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_lbsmd.h"
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include "../ncbi_servicep.h"
+#include <connect/ncbi_heapmgr.h>
 #include <stdlib.h>
-#include <string.h>
 /* This header must go last */
 #include "test_assert.h"
 
@@ -52,6 +54,27 @@ int main(int argc, const char* argv[])
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
+    if (argc > 2) {
+        if (strcasecmp(argv[2],"heap") == 0 || strcasecmp(argv[2],"all") == 0){
+            HEAP_Options(eOff, eDefault);
+            CORE_LOG(eLOG_Note, "Using slow heap access (w/checks)");
+        }
+        if (strcasecmp(argv[2],"lbsm") == 0 || strcasecmp(argv[2],"all") == 0){
+#ifdef NCBI_OS_MSWIN
+            if (strcasecmp(argv[2],"lbsm") == 0) {
+                CORE_LOG(eLOG_Warning,
+                         "Option \"lbsm\" has no useful effect on MS-Windows");
+            }
+#else
+            LBSMD_FastHeapAccess(eOn);
+            CORE_LOG(eLOG_Note, "Using live (faster) LBSM heap access");
+#endif /*NCBI_OS_MSWIN*/
+        }
+        if (strcasecmp(argv[2],"lbsm") != 0  &&
+            strcasecmp(argv[2],"heap") != 0  &&
+            strcasecmp(argv[2],"all")  != 0)
+            CORE_LOGF(eLOG_Fatal, ("Unknown option `%s'", argv[2]));
+    }
 
     CORE_LOGF(eLOG_Note, ("Looking for service `%s'", service));
     net_info = ConnNetInfo_Create(service);
@@ -68,7 +91,7 @@ int main(int argc, const char* argv[])
                               SERV_MapperName(iter)));
         while ((info = SERV_GetNextInfoEx(iter, &hinfo)) != 0) {
             char* info_str = SERV_WriteInfo(info);
-            CORE_LOGF(eLOG_Note, ("Service `%s' = %s",
+            CORE_LOGF(eLOG_Note, ("Server #%d `%s' = %s", ++n_found,
                                   SERV_CurrentName(iter), info_str));
             if (hinfo) {
                 double array[2];
@@ -97,7 +120,6 @@ int main(int argc, const char* argv[])
                 free(hinfo);
             }
             free(info_str);
-            n_found++;
         }
         CORE_LOG(eLOG_Trace, "Resetting service mapper");
         SERV_Reset(iter);
@@ -135,80 +157,3 @@ int main(int argc, const char* argv[])
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_disp.c,v $
- * Revision 6.23  2006/04/05 15:07:09  lavr
- * Print mapper name first
- *
- * Revision 6.22  2006/03/05 17:43:01  lavr
- * Log service mapper name; extract affinities (if any)
- *
- * Revision 6.21  2006/01/11 16:35:59  lavr
- * Open service iterator for everything (but FIREWALL)
- *
- * Revision 6.20  2005/12/23 18:20:33  lavr
- * Use new SERV_OpenP() for iterator opening (and thus allow service wildcards)
- *
- * Revision 6.19  2005/12/14 21:45:39  lavr
- * Adjust to use new SERV_OpenP() prototype
- *
- * Revision 6.18  2005/07/11 18:49:15  lavr
- * Hashed preference generation algorithm retired (proven to fail often)
- *
- * Revision 6.17  2005/07/11 18:26:05  lavr
- * Allow wildcard in local name searches
- *
- * Revision 6.16  2004/06/21 18:02:45  lavr
- * Test on service "bounce" by default ("io_bounce" is retired now)
- *
- * Revision 6.15  2003/05/14 03:58:43  lavr
- * Match changes in respective APIs of the tests
- *
- * Revision 6.14  2002/10/29 22:15:52  lavr
- * Host info output slightly modified
- *
- * Revision 6.13  2002/10/29 00:35:47  lavr
- * Added tests for host info API
- *
- * Revision 6.12  2002/04/15 19:21:44  lavr
- * +#include "../test/test_assert.h"
- *
- * Revision 6.11  2002/03/22 19:48:57  lavr
- * Removed <stdio.h>: included from ncbi_util.h or ncbi_priv.h
- *
- * Revision 6.10  2002/02/20 20:56:49  lavr
- * Added missing calls to free(server_info)
- *
- * Revision 6.9  2001/11/29 22:20:52  lavr
- * Flow control trace messages added
- *
- * Revision 6.8  2001/09/24 20:35:34  lavr
- * +Test for SERV_Reset()
- *
- * Revision 6.7  2001/07/18 17:44:18  lavr
- * Added parameter to switch to local test
- *
- * Revision 6.6  2001/03/20 22:14:08  lavr
- * Second test added to list service by server type (yet #if 0'ed out)
- *
- * Revision 6.5  2001/03/09 04:58:26  lavr
- * Typo (made of pretty styling by vakatov) corrected in comparison
- *
- * Revision 6.4  2001/03/08 17:56:25  lavr
- * Redesigned to show that SERV_Open can return SERV_ITER, that
- * in turn returns 0 even if used for the very first time.
- *
- * Revision 6.3  2001/03/05 23:21:11  lavr
- * SERV_WriteInfo take only one argument now
- *
- * Revision 6.2  2001/03/02 20:01:38  lavr
- * SERV_Close() shown; "../ncbi_priv.h" explained
- *
- * Revision 6.1  2001/03/01 00:33:59  lavr
- * Initial revision
- *
- * ==========================================================================
- */

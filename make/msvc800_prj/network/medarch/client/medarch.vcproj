@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="medarch"
-	ProjectGUID="{CE3297C1-979F-48F6-A61B-2BAEFD67DEA3}"
+	ProjectGUID="{4502FEB5-256A-4E4E-A8EF-34F7C7FC09DB}"
 	>
 	<Platforms>
 		<Platform

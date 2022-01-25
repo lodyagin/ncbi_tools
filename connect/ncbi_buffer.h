@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_BUFFER__H
 #define CONNECT___NCBI_BUFFER__H
 
-/*  $Id: ncbi_buffer.h,v 6.11 2004/10/27 18:43:45 lavr Exp $
+/*  $Id: ncbi_buffer.h,v 6.12 2007/05/22 11:25:57 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,7 +42,9 @@
  *   BUF_PushBack
  *   BUF_Peek
  *   BUF_PeekAt
+ *   BUF_PeekAtCB
  *   BUF_Read
+ *   BUF_Erase
  *   BUF_Destroy
  *
  */
@@ -168,6 +170,22 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAt
 
 
 /*!
+ * Call "callback" on up to "size" bytes stored in "buf" (starting at position
+ * "pos"), each chunk separately. Pass data as opaque parameter to callback.
+ * Return the # of processed bytes (can be less than "size").
+ * Return zero and do nothing if "buf" is NULL or "pos" >= BUF_Size(buf).
+ * Do nothing and return min(BUF_Size(buf)-pos, size) if "callback" is NULL.
+ */
+extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAtCB
+(BUF         buf,
+ size_t      pos,
+ void       (*callback)(void*, void*, size_t),
+ void*       data,
+ size_t      size
+ );
+
+
+/*!
  * Copy up to "size" bytes stored in "buf" to "data" and remove
  * copied data from the "buf".
  * Return the # of copied-and/or-removed bytes(can be less than "size")
@@ -200,48 +218,5 @@ extern NCBI_XCONNECT_EXPORT void BUF_Destroy(BUF buf);
 
 
 /* @} */
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_buffer.h,v $
- * Revision 6.11  2004/10/27 18:43:45  lavr
- * +BUF_Erase()
- *
- * Revision 6.10  2004/10/27 18:09:57  lavr
- * +BUF_Prepend(), +BUF_Append()
- *
- * Revision 6.9  2003/04/10 12:52:15  siyan
- * Changed group name for doxygen
- *
- * Revision 6.8  2003/04/09 17:58:40  siyan
- * Added doxygen support
- *
- * Revision 6.7  2003/01/08 01:59:32  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.6  2002/09/19 17:59:53  lavr
- * Header file guard macro changed; log moved to the end
- *
- * Revision 6.5  2001/04/23 22:20:26  vakatov
- * BUF_PeekAt() -- special case for "data" == NULL
- *
- * Revision 6.4  2001/04/23 18:07:19  vakatov
- * + BUF_PeekAt()
- *
- * Revision 6.3  2000/02/23 22:33:37  vakatov
- * Can work both "standalone" and as a part of NCBI C++ or C toolkits
- *
- * Revision 6.2  1999/10/12 16:30:10  vakatov
- * include <string.h> to define "size_t"
- *
- * Revision 6.1  1999/08/17 19:45:22  vakatov
- * Moved all real code from NCBIBUF to NCBI_BUFFER;  the code has been cleaned
- * from the NCBI C toolkit specific types and API calls.
- * NCBIBUF module still exists for the backward compatibility -- it
- * provides old NCBI-wise interface.
- *
- * ===========================================================================
- */
 
 #endif /* CONNECT___NCBI_BUFFER__H */

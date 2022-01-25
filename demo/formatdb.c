@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatdb.c,v 6.102 2006/09/25 19:56:05 camacho Exp $";
+static char const rcsid[] = "$Id: formatdb.c,v 6.104 2007/08/21 20:07:49 kans Exp $";
 
 /*****************************************************************************
 
@@ -32,11 +32,17 @@ static char const rcsid[] = "$Id: formatdb.c,v 6.102 2006/09/25 19:56:05 camacho
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.102 $
+   $Revision: 6.104 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.104  2007/08/21 20:07:49  kans
+   made static functions static, added cast of EFDBCleanOpt to fix CodeWarrior complaints
+
+   Revision 6.103  2007/04/13 13:21:11  madden
+   Add call to ErrSetLogLevel
+
    Revision 6.102  2006/09/25 19:56:05  camacho
    Added s_SetDBListNameMultiVolDereference to fix bug when creating alias files over est
 
@@ -500,7 +506,7 @@ enum {
 /* Fasta file delimiters */
 #define DELIM " "
 
-Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
+static Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
         bases_per_vol, Int4Ptr num_inputs)
 {
     Int8 predicted_dblength = 0;
@@ -532,7 +538,7 @@ Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
     return TRUE;
 }
 
-void SeqEntryGetLength(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+static void SeqEntryGetLength(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
     Int8* length = (Int8*) data;
 
@@ -618,6 +624,7 @@ Int2 Main(void)
         ErrSetOpts(ERR_CONTINUE, ERR_LOG_ON);
     UseLocalAsnloadDataAndErrMsg();
     ErrSetMessageLevel(SEV_WARNING);
+    ErrSetLogLevel(SEV_WARNING);
 
     /* Ensure that volume size is within acceptable limits */
     if (dump_args[dbsize_arg].intvalue > 16000) {
@@ -661,7 +668,7 @@ Int2 Main(void)
                             dump_args[basename_arg].strvalue,
                             dump_args[alias_fn_arg].strvalue,
                             ((Int8)dump_args[dbsize_arg].intvalue)*1000000, 0,
-                            FORMATDB_VER, FALSE, 0);
+                            FORMATDB_VER, FALSE, (EFDBCleanOpt) 0);
     if (options == NULL)
         return 1;
 

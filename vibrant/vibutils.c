@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.69 $
+* $Revision: 6.73 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,20 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.73  2007/05/01 22:01:30  kans
+* changes in preparation for supporing Quartz on Macintosh
+*
+* Revision 6.72  2006/12/18 17:28:01  kans
+* include FullPath only if OS_UNIX_DARWIN not defined, i.e.,  CodeWarrior build for Mac OS 9
+*
+* Revision 6.71  2006/11/24 20:06:31  kans
+* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
+*
+* Revision 6.70  2006/11/06 17:06:37  bollin
+* Turn off tooltips for Open File Dialog for Windows version - this prevents
+* a crash that was occurring when selecting files for opening or saving that
+* were located in the Desktop for Windows 2000.
+*
 * Revision 6.69  2005/11/08 19:38:55  bollin
 * don't translate the keypress for a backspace key into the NLM_BACK character -
 * windows will also send a WM_CHAR message with the NLM_BACK character in it.
@@ -444,16 +458,20 @@ either.
 #include <ncbilcl.h>
 
 #ifdef WIN_MAC
+#ifdef __MWERKS__
 # if TARGET_API_MAC_CARBON
 /* Use non-session APIs of the Carbon Printing Manager, for easy porting */
 #  include <PMApplication.h>
+# ifndef OS_UNIX_DARWIN
 #  include <FullPath.h>
+#endif
 # endif
 # ifdef OS_UNIX_DARWIN
 #  include <LaunchServices.h>
 #  include <Files.h>
 # endif
 # include <Navigation.h>
+#endif
 #endif
 
 #include <vibtypes.h>
@@ -471,6 +489,7 @@ either.
 Nlm_Int2     Nlm_nextIdNumber = 2;
 #endif
 #ifdef WIN_MSWIN
+#include <CommCtrl.h>
 Nlm_Int2     Nlm_nextIdNumber = 102;
 #endif
 #ifdef WIN_MOTIF
@@ -3497,6 +3516,47 @@ extern void Nlm_RecTToRectTool (Nlm_RectPtr src, Nlm_RectTool PNTR dst)
   }
 }
 
+#ifdef WIN_MAC_QUARTZ
+extern CGRect Nlm_RecTToCGRect(Nlm_RectPtr r)
+{
+    CGRect cgr;
+    
+    cgr.origin.x = r->left + 0.5f;
+    cgr.origin.y = r->top + 0.5;
+    cgr.size.width = r->right - r->left - 1.0f;
+    cgr.size.height = r->bottom - r->top - 1.0f;
+    
+    return cgr;
+}
+
+extern Nlm_RecT Nlm_CGRectToRecT(CGRect cgr)
+{
+    Nlm_RecT r;
+    r.left   = cgr.origin.x - 0.5f;
+    r.top    = cgr.origin.y - 0.5f;
+    r.right  = cgr.size.width  + cgr.origin.x + 1.0f;
+    r.bottom = cgr.size.height + cgr.origin.y + 1.0f; 
+    return r;
+}
+
+extern CGPoint Nlm_PoinTToCGPoint(Nlm_PoinT np)
+{
+    CGPoint qp;
+    qp.x = (float) np.x;
+    qp.y = (float) np.y;
+    return qp;
+}
+
+extern Nlm_PoinT Nlm_CGPointToPoinT(CGPoint qp)
+{
+    Nlm_PoinT np;
+    np.x = (float) qp.x;
+    np.y = (float) qp.y;
+    return np;
+}
+#endif
+
+
 extern void Nlm_LocalToGlobal (Nlm_PointPtr pt)
 
 {
@@ -4925,6 +4985,42 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
 #endif
 #endif
 
+#ifdef WIN_MSWIN
+LRESULT CALLBACK StopToolTips(int nCode,
+    WPARAM wParam,
+    LPARAM lParam
+)
+{
+	PCWPSTRUCT msg;
+
+	msg = (PCWPSTRUCT) lParam;
+
+	if (nCode < 0) {
+		return CallNextHookEx (NULL, nCode, wParam, lParam);
+	}
+	if (msg != NULL) {
+
+		if (msg->message > TTM_ACTIVATE
+#ifdef TTM_GETTITLE
+			&& msg->message <= TTM_GETTITLE
+#elif defined(TTM_SETTITLEW)
+			&& msg->message <= TTM_SETTITLEW
+#elif defined(TTM_UPDATE)
+			&& msg->message <= TTM_UPDATE
+#else 
+			&& msg->message <= TTM_POP
+#endif
+			&& msg->message != TTM_RELAYEVENT
+			&& msg->message != TTM_GETTEXTA) {
+			SendMessage (msg->hwnd, TTM_ACTIVATE, 0, 0);
+			return 1;
+		}
+	}
+    return 0;
+}
+
+#endif
+
 extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                          Nlm_CharPtr extType, Nlm_CharPtr macType)
 
@@ -5009,11 +5105,15 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   UINT  cbString;
   char  chReplace;
   char  szFilter [256];
+  Nlm_Boolean rval;
+  HHOOK   hook;
+  DWORD thread_id;
 
   /* Get the current working directory: */
   szDirName[0] = '\0';
   _getcwd(szDirName, sizeof (szDirName));
   szFile [0] = '\0';
+  memset (szFilter, 0, sizeof(szFilter));
   if (extType != NULL && extType [0] != '\0') {
     Nlm_StringCpy (szFilter, "Filtered Files (*");
     if (extType [0] != '.') {
@@ -5036,8 +5136,8 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
       szFilter [i] = '\0';
     }
   }
-  memset (&ofn, 0, sizeof (OPENFILENAME));
-  ofn.lStructSize = sizeof (OPENFILENAME);
+  memset (&ofn, 0, sizeof(OPENFILENAME));
+  ofn.lStructSize = sizeof(OPENFILENAME);
   ofn.hwndOwner = Nlm_currentHWnd;
   ofn.lpstrFilter = szFilter;
   ofn.nFilterIndex = 1;
@@ -5048,13 +5148,19 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   ofn.lpstrInitialDir = szDirName;
   ofn.Flags =
     OFN_SHOWHELP | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+  /* turn off tooltips, because they were causing Windows 2000 to crash when opening desktop files */
+  thread_id = GetCurrentThreadId();
+  hook = SetWindowsHookEx (WH_CALLWNDPROC, StopToolTips, NULL, thread_id);
   if (GetOpenFileName (&ofn) && fileName != NULL  &&  maxsize > 0) {
     Nlm_StringNCpy_0(fileName, ofn.lpstrFile, maxsize);
     AnsiToOemBuff (fileName, fileName, maxsize);
-    return TRUE;
+ 
+    rval = TRUE;
   } else {
-    return FALSE;
+    rval = FALSE;
   }
+  UnhookWindowsHookEx (hook);
+  return rval;
 #endif
 
 #ifdef WIN_MOTIF
@@ -5334,6 +5440,9 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   UINT  cbString;
   char  chReplace;
   char  szFilter [256];
+  Nlm_Boolean rval;
+  HHOOK   hook;
+  DWORD thread_id;
 
   /* Get the current working directory: */
   szDirName[0] = '\0';
@@ -5362,18 +5471,29 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   */
   /* OFN_OVERWRITEPROMPT causes crashes for some unknown reason */
   ofn.Flags = OFN_SHOWHELP | OFN_NOCHANGEDIR;
+
+  /* turn off tooltips, because they were causing Windows 2000 to crash when opening desktop files */
+  thread_id = GetCurrentThreadId();
+  hook = SetWindowsHookEx (WH_CALLWNDPROC, StopToolTips, NULL, thread_id);
+
   if (GetSaveFileName (&ofn) && fileName != NULL) {
     Nlm_StringNCpy_0(fileName, ofn.lpstrFile, maxsize);
     AnsiToOemBuff (fileName, fileName, maxsize);
     if (Nlm_FileLengthEx(fileName) != -1) {
       if (Nlm_Message (MSG_YN, "Replace existing file?") == ANS_NO) {
-        return FALSE;
-      }      
-    }
-    return TRUE;
+        rval = FALSE;
+	  } else {
+	    rval = TRUE;
+	  }
+	} else {
+      rval = TRUE;
+	}
   } else {
-    return FALSE;
+    rval = FALSE;
   }
+  UnhookWindowsHookEx (hook);
+  return rval;
+
 #endif
 
 #ifdef WIN_MOTIF

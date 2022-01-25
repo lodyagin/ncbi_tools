@@ -32,7 +32,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   	prototypes for portable file routines
@@ -40,6 +40,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbifile.h,v $
+* Revision 6.7  2007/08/16 17:09:22  kans
+* moved DirExplore from sqnutils
+*
 * Revision 6.6  2004/05/07 15:57:14  kans
 * added FileCache functions for buffered read, graceful handing of Unix, Mac, and DOS line endings
 *
@@ -118,7 +121,18 @@ NLM_EXTERN void Nlm_FileCacheSeek (Nlm_FileCache PNTR fcp, Nlm_Int4 pos);
 NLM_EXTERN Nlm_Int4 Nlm_FileCacheTell (Nlm_FileCache PNTR fcp);
 NLM_EXTERN Nlm_Boolean Nlm_FileCacheFree (Nlm_FileCache PNTR fcp, Nlm_Boolean restoreFilePos);
 
+/* general file recursion function - directory must not be empty, proc callback function must not be NULL */
 
+typedef void (*Nlm_DirExpProc) (Nlm_CharPtr filename, Nlm_VoidPtr userdata);
+
+NLM_EXTERN Nlm_Int4 Nlm_DirExplore (
+  Nlm_CharPtr directory,
+  Nlm_CharPtr filter,
+  Nlm_CharPtr suffix,
+  Nlm_Boolean recurse,
+  Nlm_DirExpProc proc,
+  Nlm_VoidPtr userdata
+);
 
 #define FileOpen Nlm_FileOpen
 #define FileClose Nlm_FileClose
@@ -148,6 +162,9 @@ NLM_EXTERN Nlm_Boolean Nlm_FileCacheFree (Nlm_FileCache PNTR fcp, Nlm_Boolean re
 #define FileCacheSeek Nlm_FileCacheSeek
 #define FileCacheTell Nlm_FileCacheTell
 #define FileCacheFree Nlm_FileCacheFree
+
+#define DirExpProc Nlm_DirExpProc
+#define DirExplore Nlm_DirExplore
 
 #define EjectCd(sVolume, deviceName, rawDeviceName, mountPoint, mountCmd)  FALSE
 #define MountCd(sVolume, deviceName, mountPoint, mountCmd)                 FALSE

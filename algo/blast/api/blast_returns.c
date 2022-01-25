@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.34 2006/10/13 18:44:29 papadopo Exp $
+/* $Id: blast_returns.c,v 1.38 2007/07/10 15:28:07 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_returns.c,v 1.34 2006/10/13 18:44:29 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.38 2007/07/10 15:28:07 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_returns.h>
@@ -194,8 +194,12 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
        add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    if (search_params->threshold) {
-       sprintf(buffer, "Neighboring words threshold: %ld", 
-               (long) search_params->threshold);
+       if (search_params->threshold == floor(search_params->threshold))
+           sprintf(buffer, "Neighboring words threshold: %ld", 
+                   (long)search_params->threshold);
+       else
+           sprintf(buffer, "Neighboring words threshold: %.2f", 
+                   search_params->threshold);
        add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    if (search_params->window_size) {
@@ -366,10 +370,9 @@ s_SummaryDBStatsFill(EBlastProgramType program_number,
          itr = BlastSeqSrcIteratorFree(itr);
       }
    }
-      
-   if (program_number == eBlastTypeTblastn || 
-       program_number == eBlastTypeRpsTblastn ||
-       program_number == eBlastTypeTblastx)
+
+   if (Blast_SubjectIsTranslated(program_number) ||
+       program_number == eBlastTypeRpsTblastn)
       total_length /= 3;
 
    (*db_stats)->dblength = total_length;
@@ -400,8 +403,11 @@ s_SummaryDBStatsFill(EBlastProgramType program_number,
       /** FIXME: Should this be different for RPS BLAST? */
       (*db_stats)->qlen = qlen;
       (*db_stats)->eff_qlen = qlen - ((*db_stats)->hsp_length);
-      (*db_stats)->eff_dblength = 
-          total_length - num_entries*((*db_stats)->hsp_length);
+      (*db_stats)->eff_dblength = total_length;
+      if (eff_len_options->db_length == 0) {
+         (*db_stats)->eff_dblength -= (Int8)num_entries *
+                                        ((*db_stats)->hsp_length);
+      }
       (*db_stats)->eff_searchsp = 
           query_info->contexts[query_info->first_context].eff_searchsp;
       if (eff_len_options && 

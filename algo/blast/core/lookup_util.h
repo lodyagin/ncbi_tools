@@ -1,4 +1,4 @@
-/* $Id: lookup_util.h,v 1.13 2005/12/22 14:32:21 papadopo Exp $
+/* $Id: lookup_util.h,v 1.15 2006/12/01 16:48:07 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,9 +28,11 @@
  *  Utility functions for lookup table generation.
  */
 
+#ifndef ALGO_BLAST_CORE__LOOKUP_UTIL__H
+#define ALGO_BLAST_CORE__LOOKUP_UTIL__H
+
+#include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/core/blast_def.h>
-#ifndef UTIL__H
-#define UTIL__H
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,14 +57,6 @@ Int4 iexp(Int4 x, Int4 n);
 
 Int4 ilog2(Int4 x);
 
-/** Make a bit mask with the low-order x bits set
- *
- * @param x x
- * @return the mask
- */
-
-Int4 makemask(Int4 x);
-
 /**
  * generates a de Bruijn sequence containing all substrings
  * of length n over an alphabet of size k.
@@ -84,12 +78,14 @@ void debruijn(Int4 n, Int4 k, Uint1* output, Uint1* alphabet);
  * currently intended for nucleotide locations, and ignores ambiguities
  * and the actual width of a lookup table word
  * @param location A linked list of locations to index [in]
- * @return The apprixomate number of lookup table entries
+ * @param max_off upper bound on the largest query offset
+ *               to be indexed [out]
+ * @return The approximate number of lookup table entries
  */
-Int4 EstimateNumTableEntries(BlastSeqLoc* location);
+Int4 EstimateNumTableEntries(BlastSeqLoc* location, Int4 *max_off);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* UTIL__H */
+#endif /* !ALGO_BLAST_CORE__LOOKUP_UTIL__H */

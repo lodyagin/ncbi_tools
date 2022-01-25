@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.26 2006/10/04 19:17:12 papadopo Exp $
+/* $Id: lookup_wrap.c,v 1.30 2007/03/07 19:25:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,17 +37,17 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.26 2006/10/04 19:17:12 papadopo Exp $";
+    "$Id: lookup_wrap.c,v 1.30 2007/03/07 19:25:34 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
-#include <algo/blast/core/lookup_util.h>
-#include <algo/blast/core/blast_lookup.h>
-#include <algo/blast/core/mb_lookup.h>
+#include <algo/blast/core/blast_aalookup.h>
+#include <algo/blast/core/blast_nalookup.h>
 #include <algo/blast/core/phi_lookup.h>
+#include <algo/blast/core/blast_filter.h>
+#include <algo/blast/core/lookup_util.h>
 #include <algo/blast/core/blast_rps.h>
 #include <algo/blast/core/blast_encoding.h>
-#include <algo/blast/core/blast_filter.h>
 
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
@@ -56,9 +56,7 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
         Blast_Message* *error_msg)
 {
    Int2 status = 0;
-   Int4 num_table_entries;
    LookupTableWrap* lookup_wrap;
-   const Int4 kNucEntriesCutoff = 8500;  /* probably machine dependent */
 
    if (error_msg)
       *error_msg = NULL;
@@ -69,7 +67,7 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
    lookup_wrap->lut_type = lookup_options->lut_type;
 
    switch ( lookup_options->lut_type ) {
-   case AA_LOOKUP_TABLE:
+   case eAaLookupTable:
        {
        Int4** matrix = NULL;
        Boolean has_pssm = FALSE;
@@ -79,63 +77,76 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
        } else {
            matrix = sbp->matrix->data;
        }
-       BlastAaLookupNew(lookup_options, (BlastLookupTable* *)
-                        &lookup_wrap->lut);
-       ((BlastLookupTable*)lookup_wrap->lut)->use_pssm = has_pssm;
-       BlastAaLookupIndexQuery( (BlastLookupTable*) lookup_wrap->lut, matrix, 
-                                 query, lookup_segments);
-       _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
+       BlastAaLookupTableNew(lookup_options, (BlastAaLookupTable* *)
+                             &lookup_wrap->lut);
+       ((BlastAaLookupTable*)lookup_wrap->lut)->use_pssm = has_pssm;
+       BlastAaLookupIndexQuery( (BlastAaLookupTable*) lookup_wrap->lut, matrix, 
+                                 query, lookup_segments, 0);
+       BlastAaLookupFinalize((BlastAaLookupTable*) lookup_wrap->lut);
        }
       break;
-   case INDEXED_MB_LOOKUP_TABLE:
+
+   case eCompressedAaLookupTable:
+      BlastCompressedAaLookupTableNew(query, lookup_segments,
+                         (BlastCompressedAaLookupTable* *) &(lookup_wrap->lut), 
+                         lookup_options, sbp);
+      break;
+
+   case eIndexedMBLookupTable:
       /* for indexed megablast, lookup table data is initialized
          in the API layer, not here */
       lookup_wrap->lut = NULL;
       break;
-   case NA_LOOKUP_TABLE:
-   case MB_LOOKUP_TABLE:
-      /* choose either a standard or a megablast lookup table,
-         depending on the query size and word size. Megablast
-         tables are used for large queries and word sizes, and
-         standard tables are used otherwise. For word size 11 
-         the standard lookup table is especially efficient, 
-         so the cutoff is larger in that case. Discontiguous
-         megablast must always use a megablast table */
 
-      num_table_entries = EstimateNumTableEntries(lookup_segments);
-
-      if (lookup_options->mb_template_length > 0 ||
-          (lookup_options->word_size == 11 && 
-           num_table_entries > 2*kNucEntriesCutoff) ||
-          (lookup_options->word_size >= 10 && 
-           lookup_options->word_size != 11 &&
-           num_table_entries > kNucEntriesCutoff) ) {
-
-         lookup_wrap->lut_type = MB_LOOKUP_TABLE;
-         MB_LookupTableNew(query, lookup_segments, 
-                           (BlastMBLookupTable* *) &(lookup_wrap->lut), 
-                           lookup_options, num_table_entries);
-      }
-      else {
-         lookup_wrap->lut_type = NA_LOOKUP_TABLE;
-         LookupTableNew(lookup_options, 
-                        (BlastLookupTable* *) &(lookup_wrap->lut), 
-                        num_table_entries, FALSE);
-	    
-         BlastNaLookupIndexQuery((BlastLookupTable*) lookup_wrap->lut, query,
-                                 lookup_segments);
-         _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
+   case eSmallNaLookupTable:
+   case eNaLookupTable:
+   case eMBLookupTable:
+      {
+          Int4 lut_width;
+          Int4 max_q_off;
+          Int4 num_table_entries;
+              
+          num_table_entries = EstimateNumTableEntries(lookup_segments,
+                                                      &max_q_off);
+          lookup_wrap->lut_type = BlastChooseNaLookupTable(
+                                     lookup_options, num_table_entries,
+                                     max_q_off, &lut_width);
+    
+          if (lookup_wrap->lut_type == eMBLookupTable) {
+             BlastMBLookupTableNew(query, lookup_segments, 
+                               (BlastMBLookupTable* *) &(lookup_wrap->lut), 
+                               lookup_options, num_table_entries, lut_width);
+          }
+          else if (lookup_wrap->lut_type == eSmallNaLookupTable) {
+             status = BlastSmallNaLookupTableNew(query, lookup_segments,
+                            (BlastSmallNaLookupTable* *) &(lookup_wrap->lut), 
+                             lookup_options, lut_width);
+             if (status != 0) {
+                lookup_wrap->lut_type = eNaLookupTable;
+                status = BlastNaLookupTableNew(query, lookup_segments,
+                            (BlastNaLookupTable* *) &(lookup_wrap->lut), 
+                             lookup_options, lut_width);
+             }
+          }
+          else {
+             BlastNaLookupTableNew(query, lookup_segments,
+                            (BlastNaLookupTable* *) &(lookup_wrap->lut), 
+                             lookup_options, lut_width);
+          }
       }
       break;
-   case PHI_AA_LOOKUP: case PHI_NA_LOOKUP:
+
+   case ePhiLookupTable: case ePhiNaLookupTable:
        {
-           const Boolean kIsDna = (lookup_options->lut_type == PHI_NA_LOOKUP);
+           const Boolean kIsDna = 
+                          (lookup_options->lut_type == ePhiNaLookupTable);
            status = SPHIPatternSearchBlkNew(lookup_options->phi_pattern, kIsDna, sbp,
                              (SPHIPatternSearchBlk* *) &(lookup_wrap->lut),
                              error_msg);
            break;
        }
-   case RPS_LOOKUP_TABLE:
+
+   case eRPSLookupTable:
        {
            BlastRPSLookupTable *lookup;
            Int4 alphabet_size;
@@ -150,10 +161,6 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
                Blast_MaskUnsupportedAA(query, alphabet_size);
            break;
        }
-   default:
-      {
-         /* FIXME - emit error condition here */
-      }
    } /* end switch */
 
    return status;
@@ -164,22 +171,49 @@ LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup)
    if (!lookup)
        return NULL;
 
-   if (lookup->lut_type == MB_LOOKUP_TABLE) {
+   switch(lookup->lut_type) {
+   case eMBLookupTable:
       lookup->lut = (void*) 
-         MBLookupTableDestruct((BlastMBLookupTable*)lookup->lut);
-   } else if( lookup->lut_type == INDEXED_MB_LOOKUP_TABLE ) {
-       lookup->lut = NULL;
-   } else if (lookup->lut_type == PHI_AA_LOOKUP || 
-              lookup->lut_type == PHI_NA_LOOKUP) {
-       lookup->lut = (void*)
+         BlastMBLookupTableDestruct((BlastMBLookupTable*)lookup->lut);
+      break;
+
+   case eIndexedMBLookupTable:
+      lookup->lut = NULL;
+      break;
+
+   case ePhiLookupTable:
+   case ePhiNaLookupTable:
+      lookup->lut = (void*)
            SPHIPatternSearchBlkFree((SPHIPatternSearchBlk*)lookup->lut);
-   } else if (lookup->lut_type == RPS_LOOKUP_TABLE) {
+      break;
+
+   case eRPSLookupTable:
       lookup->lut = (void*) 
          RPSLookupTableDestruct((BlastRPSLookupTable*)lookup->lut);
-   } else {
+      break;
+
+   case eSmallNaLookupTable:
       lookup->lut = (void*) 
-         LookupTableDestruct((BlastLookupTable*)lookup->lut);
+         BlastSmallNaLookupTableDestruct((BlastSmallNaLookupTable*)lookup->lut);
+      break;
+
+   case eNaLookupTable:
+      lookup->lut = (void*) 
+         BlastNaLookupTableDestruct((BlastNaLookupTable*)lookup->lut);
+      break;
+
+   case eAaLookupTable:
+      lookup->lut = (void*) 
+         BlastAaLookupTableDestruct((BlastAaLookupTable*)lookup->lut);
+      break;
+
+   case eCompressedAaLookupTable:
+      lookup->lut = (void*) 
+         BlastCompressedAaLookupTableDestruct(
+                       (BlastCompressedAaLookupTable*)lookup->lut);
+      break;
    }
+
    sfree(lookup);
    return NULL;
 }
@@ -189,13 +223,25 @@ Int4 GetOffsetArraySize(LookupTableWrap* lookup)
    Int4 offset_array_size;
 
    switch (lookup->lut_type) {
-   case MB_LOOKUP_TABLE:
+   case eMBLookupTable:
       offset_array_size = OFFSET_ARRAY_SIZE + 
          ((BlastMBLookupTable*)lookup->lut)->longest_chain;
       break;
-   case AA_LOOKUP_TABLE: case NA_LOOKUP_TABLE:
+   case eAaLookupTable: 
       offset_array_size = OFFSET_ARRAY_SIZE + 
-         ((BlastLookupTable*)lookup->lut)->longest_chain;
+         ((BlastAaLookupTable*)lookup->lut)->longest_chain;
+      break;
+   case eCompressedAaLookupTable: 
+      offset_array_size = OFFSET_ARRAY_SIZE + 
+         ((BlastCompressedAaLookupTable*)lookup->lut)->longest_chain;
+      break;
+   case eSmallNaLookupTable:
+      offset_array_size = OFFSET_ARRAY_SIZE + 
+         ((BlastSmallNaLookupTable*)lookup->lut)->longest_chain;
+      break;
+   case eNaLookupTable:
+      offset_array_size = OFFSET_ARRAY_SIZE + 
+         ((BlastNaLookupTable*)lookup->lut)->longest_chain;
       break;
    default:
       offset_array_size = OFFSET_ARRAY_SIZE;

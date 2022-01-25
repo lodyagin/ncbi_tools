@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_ftp_connector.c,v 1.11 2005/07/22 16:09:15 lavr Exp $
+/*  $Id: test_ncbi_ftp_connector.c,v 1.13 2007/06/27 14:25:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,17 +40,17 @@
 #include "test_assert.h"
 
 
-#define TEST_HOST            "ftp.ncbi.nlm.nih.gov"
-#define TEST_PORT            0
-#define TEST_USER            "ftp"
-#define TEST_PASS            "none"
-#define TEST_PATH            ((char*) 0)
+#define TEST_HOST "ftp.ncbi.nlm.nih.gov"
+#define TEST_PORT 0
+#define TEST_USER "ftp"
+#define TEST_PASS "none"
+#define TEST_PATH ((char*) 0)
 
 
 int main(int argc, char* argv[])
 {
-    static const char k_chdir[] = "CWD /toolbox/ncbi_tools\n";
-    static const char k_file[] = "RETR CURRENT/ncbi.tar.gz";
+    static const char kChdir[] = "CWD /toolbox/ncbi_tools\n";
+    static const char kFile[] = "RETR CURRENT/ncbi.tar.gz";
     const char* env = getenv("CONN_DEBUG_PRINTOUT");
     int/*bool*/ aborting = 0, first;
     TFCDC_Flags flags = 0;
@@ -72,13 +72,13 @@ int main(int argc, char* argv[])
     data_file = fopen("test_ncbi_ftp_connector.out", "wb");
     assert(data_file);
 
-    timeout.sec  = 3;
+    timeout.sec  = 5;
     timeout.usec = 0;
 
     if (env) {
-        if (    strcasecmp(env, "1")    == 0  ||
-                strcasecmp(env, "TRUE") == 0  ||
-                strcasecmp(env, "SOME") == 0)
+        if (     strcasecmp(env, "1")    == 0  ||
+                 strcasecmp(env, "TRUE") == 0  ||
+                 strcasecmp(env, "SOME") == 0)
             flags |= eFCDC_LogControl;
         else if (strcasecmp(env, "DATA") == 0)
             flags |= eFCDC_LogData;
@@ -156,15 +156,15 @@ int main(int argc, char* argv[])
         printf("<EOF>\n");
     }
 
-    if (CONN_Write(conn, k_chdir, sizeof(k_chdir) - 1, &n, eIO_WritePlain)
+    if (CONN_Write(conn, kChdir, sizeof(kChdir) - 1, &n, eIO_WritePlain)
         != eIO_Success) {
         CORE_LOGF(eLOG_Fatal, ("Cannot execute %.*s",
-                               (int)sizeof(k_chdir) - 2, k_chdir));
+                               (int) sizeof(kChdir) - 2, kChdir));
     }
 
-    if (CONN_Write(conn, k_file, sizeof(k_file) - 1, &n, eIO_WritePersist)
+    if (CONN_Write(conn, kFile, sizeof(kFile) - 1, &n, eIO_WritePersist)
         != eIO_Success) {
-        CORE_LOGF(eLOG_Fatal, ("Cannot write %s", k_file));
+        CORE_LOGF(eLOG_Fatal, ("Cannot write %s", kFile));
     }
 
     size = 0;
@@ -183,10 +183,10 @@ int main(int argc, char* argv[])
     if (!aborting  ||  (rand() & 1) == 0) {
         if (CONN_Write(conn, "NLST blah*", 10, &n, eIO_WritePlain)
             != eIO_Success) {
-            CORE_LOG(eLOG_Fatal, "Cannot write gobbled NLST command");
+            CORE_LOG(eLOG_Fatal, "Cannot write garbled NLST command");
         }
 
-        CORE_LOG(eLOG_Note, "Gobbled NLST command output (should be empty):");
+        CORE_LOG(eLOG_Note, "Garbled NLST command output (should be empty):");
         first = 1/*true*/;
         do {
             status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
@@ -217,43 +217,3 @@ int main(int argc, char* argv[])
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_ftp_connector.c,v $
- * Revision 1.11  2005/07/22 16:09:15  lavr
- * Implement data xfer timeout
- *
- * Revision 1.10  2005/07/21 17:38:58  lavr
- * Proper URL printout when connecting
- *
- * Revision 1.9  2005/07/11 18:24:41  lavr
- * Spell ADDEND
- *
- * Revision 1.8  2005/05/20 12:56:35  lavr
- * Added test for multiple commands and '[\r]\n'-terminated input
- *
- * Revision 1.7  2005/05/20 12:11:29  lavr
- * Test ABOR with command and connection closure (both should now work)
- *
- * Revision 1.6  2005/05/20 11:41:47  lavr
- * Separate control and data FTP connection debugging setting
- *
- * Revision 1.5  2005/05/11 20:00:25  lavr
- * Empty NLST result list bug fixed
- *
- * Revision 1.4  2005/05/02 16:13:05  lavr
- * Use global random seed; show NLST use example; add more logging
- *
- * Revision 1.3  2004/12/27 15:32:10  lavr
- * Randomly test ABORTs (if there is an argument for main())
- *
- * Revision 1.2  2004/12/06 22:02:51  ucko
- * +<stdlib.h> for getenv()
- *
- * Revision 1.1  2004/12/06 17:49:00  lavr
- * Initial revision
- *
- * ==========================================================================
- */

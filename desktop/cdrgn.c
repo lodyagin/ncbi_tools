@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.92 $
+* $Revision: 6.99 $
 *
 * File Description: 
 *
@@ -99,6 +99,7 @@ typedef struct cdrgnform {
   Boolean       locvisited;
   ButtoN        convertToMiscFeat;
   Boolean       saveAsMiscFeat;
+  ButtoN        makemRNAMatch;
 } CdRgnForm, PNTR CdRgnFormPtr;
 
 typedef struct cdrgnpage {
@@ -193,8 +194,9 @@ static void BioseqPtrToRawBioseqPage (DialoG d, Pointer data)
     rbpp->bs = BSFree (rbpp->bs);
     Reset (rbpp->doc);
     if (bsp != NULL) {
-      if (bsp->repr == Seq_repr_raw || bsp->repr == Seq_repr_const) {
-        rbpp->bs = BSDup (bsp->seq_data);
+      if ((bsp->repr == Seq_repr_raw || bsp->repr == Seq_repr_const) &&
+          bsp->seq_data_type != Seq_code_gap) {
+        rbpp->bs = BSDup ((ByteStorePtr) bsp->seq_data);
         rbpp->seq_data_type = bsp->seq_data_type;
         rbpp->mol = bsp->mol;
         rbpp->repr = bsp->repr;
@@ -287,7 +289,7 @@ static Pointer RawBioseqPageToBioseqPtr (DialoG d)
         bsp = BioseqFree (bsp);
         return NULL;
       }
-      bsp->seq_data = BSNew (bsp->length);
+      bsp->seq_data = (SeqDataPtr) BSNew (bsp->length);
       if (bsp->seq_data != NULL) {
         BSSeek (rbpp->bs, 0, SEEK_SET);
         cntr = BSLen (rbpp->bs);
@@ -308,7 +310,7 @@ static Pointer RawBioseqPageToBioseqPtr (DialoG d)
               }
             }
           }
-          BSWrite (bsp->seq_data, str, cnt * sizeof (Char));
+          BSWrite ((ByteStorePtr) bsp->seq_data, str, cnt * sizeof (Char));
           cnt = nxt;
         }
       }
@@ -436,6 +438,9 @@ static void CdRegionPtrToCdRgnPage (DialoG d, Pointer data)
   CodeBreakPtr    last;
   Char            name [256];
   ValNodePtr      tmp;
+  SeqFeatPtr      mrna;
+  SeqLocPtr       slp;
+  SeqMgrFeatContext fcontext;
 
   cpp = (CdRgnPagePtr) GetObjectExtra (d);
   crp = (CdRegionPtr) data;
@@ -508,12 +513,23 @@ static void CdRegionPtrToCdRgnPage (DialoG d, Pointer data)
       ConvertToAACodeBreak (cpp->cfp, crp, cbhead);
       PointerToDialog (cpp->cdBrk, cbhead);
       CodeBreakFree (cbhead);
+
     } else {
       SafeSetStatus (cpp->orf, FALSE);
       SafeSetStatus (cpp->conflict, FALSE);
       SafeSetValue (cpp->frame, 1);
       SafeSetValue (cpp->geneticCode, 1);
     }
+    /* look for overlapping mRNA */
+    slp = DialogToPointer (cpp->cfp->location);
+    mrna = SeqMgrGetOverlappingmRNA (slp, &fcontext);
+    slp = SeqLocFree (slp);
+    if (mrna == NULL) {
+      Hide (cpp->cfp->makemRNAMatch);
+    } else {
+      Show (cpp->cfp->makemRNAMatch);
+    }
+
   }
 }
 
@@ -1658,7 +1674,7 @@ static void DoTranslateProtein (CdRgnFormPtr cfp)
             bsp->repr = Seq_repr_raw;
             bsp->mol = Seq_mol_aa;
             bsp->seq_data_type = Seq_code_ncbieaa;
-            bsp->seq_data = bs;
+            bsp->seq_data = (SeqDataPtr) bs;
             bsp->length = BSLen (bs);
             PointerToDialog (cfp->protseq, bsp);
             SetProteinLengthDisplay (cfp->protlen, bsp->length - star_at_end);
@@ -2243,6 +2259,304 @@ static void SwitchToProtFeatEd (ButtoN b)
 }
 
 
+static CharPtr GetProteinString (CdRgnFormPtr cfp, SeqLocPtr location)
+{
+  SeqFeatPtr   sfp;
+  ByteStorePtr bs;
+  CharPtr      prot = NULL;
+
+  if (cfp == NULL || location == NULL) return NULL;
+  sfp = SeqFeatNew ();
+  if (sfp == NULL) return NULL;
+
+  sfp->data.choice = SEQFEAT_CDREGION;
+  sfp->data.value.ptrvalue = DialogToPointer (cfp->data);
+  sfp->location = location;
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  if (bs != NULL) {
+    prot = BSMerge (bs, NULL);
+    bs = BSFree (bs);
+  }
+  /* IMPORTANT - do not free the location that was passed in */
+  sfp->location = NULL;
+  SeqFeatFree (sfp);
+  return prot;
+}
+
+
+extern SeqLocPtr TruncateLocation (SeqLocPtr head, Int4 len)
+{
+	SeqLocPtr slp = NULL;
+	SeqIdPtr sip;
+	Int4 from = 0, to = 0;
+	Boolean changed = FALSE;
+	Int4       loc_len = 0;
+	Int4       cum_len = 0;
+	SeqLocPtr  del_slp;
+	ValNodePtr del_slp_list = NULL, vnp;
+	Uint1      strand;
+
+	if (head == NULL || len < 1)
+		return head;
+
+  slp = SeqLocFindNext (head, slp);
+  while (slp != NULL)
+  {
+    if (cum_len >= len)
+    {
+      del_slp = AsnIoMemCopy(slp,
+					(AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+      ValNodeAddPointer (&del_slp_list, 0, del_slp);
+    }
+    else
+    {
+		  sip = SeqLocId(slp);
+		  from = SeqLocStart(slp);
+		  to = SeqLocStop(slp);
+		  loc_len = (to - from + 1);
+      cum_len += loc_len;
+      if (cum_len > len)
+      {
+        strand = SeqLocStrand (slp);
+        /* remove part of this location */
+        if (strand == Seq_strand_minus)
+        {
+          to = cum_len - len + from - 1;
+        }
+        else
+        {
+          from = to - (cum_len - len) + 1;
+        }
+        del_slp = SeqLocIntNew (from, to, strand, sip);
+        ValNodeAddPointer (&del_slp_list, 0, del_slp);
+      }
+    }
+		slp = SeqLocFindNext (head, slp);
+  }
+  
+  for (vnp = del_slp_list; vnp != NULL; vnp = vnp->next)
+  {
+    slp = (SeqLocPtr) vnp->data.ptrvalue;
+    if (slp == NULL) continue;
+		sip = SeqLocId(slp);
+		from = SeqLocStart(slp);
+		to = SeqLocStop(slp);
+		head = SeqLocDelete(head, sip, from, to, FALSE, &changed);    
+  }
+  
+	return head;
+}
+
+
+static Boolean LengthenLocation (SeqLocPtr head, Int4 len)
+{
+	SeqLocPtr slp = NULL, last_slp = NULL;
+  SeqIntPtr sintp;
+  SeqPntPtr spp;
+  Int4        orig_len, len_diff;
+  Boolean     rval = FALSE;
+  BioseqPtr   bsp;
+
+	if (head == NULL || len < 1)
+		return FALSE;
+
+  orig_len = SeqLocLen (head);
+  len_diff = len - orig_len;
+  if (len_diff <= 0) return FALSE;
+
+  slp = SeqLocFindNext (head, slp);
+  while (slp != NULL)
+  {
+    last_slp = slp;
+    slp = SeqLocFindNext (head, slp);
+  }
+
+  if (last_slp->choice == SEQLOC_INT) {
+    sintp = (SeqIntPtr) last_slp->data.ptrvalue;
+    if (sintp->strand == Seq_strand_minus) {
+      if (sintp->from - len_diff >= 0) {
+        sintp->from -= len_diff;
+        rval = TRUE;
+      }
+    } else {
+      bsp = BioseqFind (sintp->id);
+      if (bsp != NULL && sintp->to + len_diff < bsp->length) {
+        sintp->to += len_diff;
+        rval = TRUE;
+      }
+    }      
+  } else if (last_slp->choice == SEQLOC_PNT) {
+    spp = (SeqPntPtr) last_slp->data.ptrvalue;
+    rval = TRUE;
+    if (spp->strand == Seq_strand_minus) {
+      if (spp->point - len_diff < 0) {
+        rval = FALSE;
+      }
+    } else {
+      bsp = BioseqFind (spp->id);
+      if (bsp == NULL || spp->point + len_diff >= bsp->length) {
+        rval = FALSE;
+      }
+    }
+    if (rval) {
+      sintp = SeqIntNew ();
+      sintp->id = SeqIdDup (spp->id);
+      sintp->strand = spp->strand;
+      sintp->if_from = AsnIoMemCopy (spp->fuzz, (AsnReadFunc) IntFuzzAsnRead, (AsnWriteFunc) IntFuzzAsnWrite);
+      sintp->if_from = AsnIoMemCopy (spp->fuzz, (AsnReadFunc) IntFuzzAsnRead, (AsnWriteFunc) IntFuzzAsnWrite);
+      if (sintp->strand == Seq_strand_minus) {
+        sintp->from = spp->point - len_diff;
+        sintp->to = spp->point;
+      } else {
+        sintp->from = spp->point;
+        sintp->to = spp->point + len_diff;
+      }
+      spp = SeqPntFree (spp);
+      last_slp->data.ptrvalue = sintp;
+      last_slp->choice = SEQLOC_INT;
+    }
+  }
+  
+	return rval;
+}
+
+
+static void AdjustForStopCodon (ButtoN b)
+
+{
+  CdRgnFormPtr  cfp;
+  SeqLocPtr     orig_slp;
+  BioseqPtr     nucBsp;
+  Boolean       partial5, partial3;
+  Uint1         strand;
+  CharPtr       prot, cp;
+  Int4          desired_cds_len, loc_len, max_len;
+  CdRegionPtr   crp;
+  Uint1         frame = 0;
+
+  cfp = (CdRgnFormPtr) GetObjectExtra (b);
+  if (cfp == NULL) {
+    return;
+  }
+
+  orig_slp = DialogToPointer (cfp->location);
+  if (orig_slp == NULL) {
+    Message (MSG_ERROR, "No location to adjust!");
+    return;
+  }
+
+  CheckSeqLocForPartial (orig_slp, &partial5, &partial3);
+
+  nucBsp = GetBioseqGivenSeqLoc (orig_slp, cfp->input_entityID);
+  if (nucBsp == NULL) {
+    Message (MSG_ERROR, "Unable to find Bioseq for coding region location");
+    orig_slp = SeqLocFree (orig_slp);
+    return;
+  }
+
+  crp = DialogToPointer (cfp->data);
+  if (crp != NULL) {
+    frame = crp->frame;
+    if (frame > 0) {
+      frame--;
+    }
+    crp = CdRegionFree (crp);
+  }
+
+  prot = GetProteinString (cfp, orig_slp);
+  if (StringHasNoText (prot)) {
+    Message (MSG_ERROR, "Translation failed");
+    prot = MemFree (prot);
+    orig_slp = SeqLocFree (orig_slp);
+    return;
+  } 
+
+  cp = StringChr (prot, '*');
+
+  if (cp == NULL) {
+    /* lengthen coding region, look for stop codon */
+    strand = SeqLocStrand (orig_slp);
+    loc_len = SeqLocLen (orig_slp);
+    if (strand == Seq_strand_minus) {
+      max_len = loc_len + SeqLocStart (orig_slp);
+    } else {
+      max_len = loc_len + nucBsp->length - SeqLocStop (orig_slp) - 1;
+    }
+    
+    if (LengthenLocation (orig_slp, max_len)) {
+      prot = MemFree (prot);
+      prot = GetProteinString (cfp, orig_slp);
+      cp = StringChr (prot, '*');
+      if (cp == NULL) {
+        if (ANS_YES == Message (MSG_YN, "No stop codon found - extend to full length of sequence (and make partial)?")) {
+          SetSeqLocPartial (orig_slp, partial5, TRUE);
+          PointerToDialog (cfp->location, orig_slp);
+          DoTranslateProtein (cfp);
+        }
+        prot = MemFree (prot);
+        orig_slp = SeqLocFree (orig_slp);
+        return;
+      }
+    } else {
+      Message (MSG_ERROR, "Unable to lengthen location!");
+      prot = MemFree (prot);
+      orig_slp = SeqLocFree (orig_slp);
+      return;
+    }
+  }
+
+  desired_cds_len = ((cp - prot) + 1) * 3;
+  if (frame > 0) {
+    desired_cds_len += frame;
+  }
+    
+  loc_len = SeqLocLen (orig_slp);
+  if (desired_cds_len < loc_len) {
+    /* truncate to correct length */
+    orig_slp = TruncateLocation (orig_slp, desired_cds_len);
+    PointerToDialog (cfp->location, orig_slp);
+    DoTranslateProtein (cfp);
+  }
+  prot = MemFree (prot);
+  orig_slp = SeqLocFree (orig_slp);
+}
+
+
+static SeqEntryPtr GetSeqEntryForLocation (SeqLocPtr slp, Uint2 entityID)
+{
+  BioseqPtr bsp;
+
+  if (slp == NULL) 
+  {
+    return GetTopSeqEntryForEntityID (entityID);
+  }
+
+  bsp = BioseqFindFromSeqLoc (slp);
+  if (bsp == NULL)
+  {
+    return GetTopSeqEntryForEntityID (entityID);
+  }
+
+  return GetBestTopParentForData (entityID, bsp);   
+}
+
+
+static void SetCdRegionPageGeneticCode (DialoG d)
+{
+  CdRgnPagePtr  cpp;
+  SeqLocPtr     slp;
+  Int2          genCode;
+
+  cpp = (CdRgnPagePtr) GetObjectExtra (d);
+  if (cpp != NULL) {
+    slp = DialogToPointer (cpp->cfp->location);
+    genCode = SeqEntryToGeneticCode (GetSeqEntryForLocation (slp, cpp->cfp->input_entityID), NULL, NULL, 0);
+    slp = SeqLocFree (slp);
+    SetValue (cpp->geneticCode, gcIdToIndex [genCode]);
+  }
+}
+
+
 static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
                                  SeqFeatPtr sfp, CdRgnFormPtr cfp)
 
@@ -2329,7 +2643,7 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     cfp->protseq = CreateBioseqRawDialog (x, NULL, Seq_mol_aa, cfp);
     cfp->usethisbioseq = NULL;
 
-    c = HiddenGroup (g, 4, 0, NULL);
+    c = HiddenGroup (g, 3, 0, NULL);
     b = PushButton (c, "Predict Interval", PredictCdRegion);
     SetObjectExtra (b, cfp, NULL);
     b = PushButton (c, "Translate Product", TranslateProtein);
@@ -2343,10 +2657,12 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     /* add switch to protein button only if indexer version */
     if (GetAppProperty ("InternalNcbiSequin") != NULL)
     {
-      cfp->edProtBtn2 = PushButton (g, "Switch to Protein Feature Editor", SwitchToProtFeatEd);
+      cfp->edProtBtn2 = PushButton (c, "Switch to Protein Feature Editor", SwitchToProtFeatEd);
       SetObjectExtra (cfp->edProtBtn2, cfp, NULL);
       Disable (cfp->edProtBtn2);      
     }
+    b = PushButton (c, "Adjust for Stop Codon", AdjustForStopCodon);
+    SetObjectExtra (b, cfp, NULL);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) c, (HANDLE) y, NULL);
 
@@ -2364,6 +2680,11 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
                   "Press Edit Protein Feature to change protein name",
                   0, 0, programFont, 'l');
     Hide (cfp->protPromptGrp);
+
+    cfp->makemRNAMatch = CheckBox (cfp->protTextGrp, "Make overlapping mRNA product match protein name", NULL);
+    Hide (cfp->makemRNAMatch);
+    AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) cfp->makemRNAMatch, NULL);
+
     z = HiddenGroup (cpp->cdRgnGrp [1], 3, 0, NULL);
     cfp->edProtBtn = PushButton (z, "Edit Protein Feature", LaunchProtFeatEd);
     SetObjectExtra (cfp->edProtBtn, cfp, NULL);
@@ -2924,6 +3245,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
       
       if (pseudo)
       {
+        Hide (w);
         /* remove old product, if there is one */
         prod_slp = DialogToPointer (cfp->product);
         if (prod_slp != NULL)
@@ -3202,6 +3524,7 @@ static Boolean UpdateProteinName (GatherContextPtr gcp)
       vnp->data.ptrvalue = SaveStringFromText (cfp->protNameText);
     }
   }
+      
   prp->desc = MemFree (prp->desc);
   prp->desc = SaveStringFromText (cfp->protDescText);
   return TRUE;
@@ -3324,12 +3647,14 @@ extern void CdRgnFeatFormActnProc (ForM f)
   GBQualPtr     quals;
   SeqEntryPtr   sep;
   Uint1         seq_data_type;
-  SeqFeatPtr    sfp;
+  SeqFeatPtr    sfp, mrna;
   SeqIdPtr      sip;
   SeqLocPtr     slp;
   BioseqPtr     target = NULL;
   PartialTrio   trio;
   ValNodePtr    vnp, err_list;
+  SeqMgrFeatContext fcontext;
+  RnaRefPtr         rrp;
 
   cfp = (CdRgnFormPtr) GetObjectExtra (f);
   sep = NULL;
@@ -3368,6 +3693,27 @@ extern void CdRgnFeatFormActnProc (ForM f)
       DoTranslateProtein (cfp);
     }
     */
+
+    /* adjust mRNA product name */
+    if (GetStatus (cfp->makemRNAMatch)) {
+      mrna = SeqMgrGetOverlappingmRNA (slp, &fcontext);
+      if (mrna != NULL && mrna->idx.subtype == FEATDEF_mRNA) {
+        rrp = (RnaRefPtr) mrna->data.value.ptrvalue;
+        if (rrp == NULL) {
+          rrp = RnaRefNew();
+          mrna->data.value.ptrvalue = rrp;
+        }
+        rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+        if (TextHasNoText (cfp->protNameText)) {
+          rrp->ext.choice = 0;
+        } else {
+          rrp->ext.choice = 1;
+          rrp->ext.value.ptrvalue = SaveStringFromText (cfp->protNameText);
+        }
+      }
+    }
+
+
     CheckSeqLocForPartial (slp, &partial5, &partial3);
     SeqLocFree (slp);
     partial = GetStatus (cfp->partial);
@@ -3402,7 +3748,7 @@ extern void CdRgnFeatFormActnProc (ForM f)
             if (bsp != NULL) {
               seq_data_type = target->seq_data_type;
               target->length = bsp->length;
-              target->seq_data = BSFree (target->seq_data);
+              target->seq_data = SeqDataFree (target->seq_data, target->seq_data_type);
               target->seq_data = bsp->seq_data;
               target->seq_data_type = bsp->seq_data_type;
               bsp->seq_data = NULL;
@@ -3435,7 +3781,7 @@ extern void CdRgnFeatFormActnProc (ForM f)
           if (bsp != NULL) {
             seq_data_type = target->seq_data_type;
             target->length = bsp->length;
-            target->seq_data = BSFree (target->seq_data);
+            target->seq_data = SeqDataFree (target->seq_data, target->seq_data_type);
             target->seq_data = bsp->seq_data;
             target->seq_data_type = bsp->seq_data_type;
             bsp->seq_data = NULL;
@@ -3587,6 +3933,38 @@ extern void CdRgnFeatFormActnProc (ForM f)
   }
 }
 
+
+static Int4 GuessFrameFromLocation (SeqLocPtr slp, BioseqPtr bsp)
+{
+  Int4 loc_len, loc_start;
+  Int4 frame = 0;
+  Uint1 strand;
+  Boolean partial5, partial3;
+
+  if (slp == NULL || bsp == NULL) return 0;
+
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  if (!partial5 || partial3) return 0;
+
+  strand = SeqLocStrand (slp);
+  if (strand == Seq_strand_minus)
+  {
+    loc_start = SeqLocStop (slp);
+  } 
+  else
+  {
+    loc_start = SeqLocStart (slp);
+  }
+  if ((strand == Seq_strand_minus && loc_start == bsp->length -1)
+      || (strand != Seq_strand_minus && loc_start == 0))
+  {
+    loc_len = SeqLocLen (slp);
+    frame = 1 + loc_len %3;
+  } 
+  return frame;
+}
+
+
 extern Int2 LIBCALLBACK CdRgnGenFunc (Pointer data)
 
 {
@@ -3599,6 +3977,8 @@ extern Int2 LIBCALLBACK CdRgnGenFunc (Pointer data)
   SeqEntryPtr       sep;
   SeqFeatPtr        sfp;
   WindoW            w;
+  CdRgnPagePtr      cpp;
+  Int4              frame = 0;
 
   ompcp = (OMProcControlPtr) data;
   sfp = NULL;
@@ -3660,12 +4040,18 @@ extern Int2 LIBCALLBACK CdRgnGenFunc (Pointer data)
     } else {
       /* restored, but locvisited flag protects against accidental CDS */
       SetNewFeatureDefaultInterval ((FeatureFormPtr) cfp);
+      SetCdRegionPageGeneticCode (cfp->data);
       sel = ObjMgrGetSelected ();
       if (sel != NULL && sel->next == NULL && sel->entityID == cfp->input_entityID &&
           sel->itemID == cfp->input_itemID && sel->itemtype == cfp->input_itemtype) {
         if (sel->regiontype == 1 && sel->region != NULL) {
           bsp = GetBioseqGivenIDs (cfp->input_entityID, cfp->input_itemID, cfp->input_itemtype);
           if (bsp != NULL && GetBioseqGivenSeqLoc ((SeqLocPtr) sel->region, cfp->input_entityID) == bsp) {
+            cpp = (CdRgnPagePtr) GetObjectExtra (cfp->data);
+            if (cpp != NULL) {
+              frame = GuessFrameFromLocation (sel->region, bsp);
+              SetValue (cpp->frame, frame + 1);
+            }
             DoTranslateProtein (cfp);
           }
         }
@@ -4581,6 +4967,7 @@ typedef struct protform {
   GrouP         pages [NUM_PAGES];
   DialoG        foldertabs;
   Int2          currentPage;
+  ButtoN        makemRNAMatch;
 } ProtForm, PNTR ProtFormPtr;
 
 static void ProtRefPtrToProtPage (DialoG d, Pointer data)
@@ -4819,6 +5206,8 @@ static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp, SeqFeatP
     StaticPrompt (g, "Protein Names", 0, 0, programFont, 'c');
     ppp->name = CreateVisibleStringDialog (g, 3, -1, 25);
 
+    pfp->makemRNAMatch = CheckBox (ppp->protGrp [0], "Make overlapping mRNA product match protein name", NULL);
+    Hide (pfp->makemRNAMatch);
     f = HiddenGroup (ppp->protGrp [0], 0, 4, NULL);
     StaticPrompt (f, "Description", 0, dialogTextHeight, programFont, 'c');
     ppp->desc = DialogText (f, "", 25, NULL);
@@ -5048,6 +5437,33 @@ static void ProtFormActivate (WindoW w)
   }
 }
 
+static void ShowHideMakemRNAMatch (ProtFormPtr pfp, SeqFeatPtr sfp)
+{
+  BioseqPtr  bsp;
+  SeqFeatPtr cds, mrna;
+  SeqMgrFeatContext fcontext;
+  if (pfp == NULL) return;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) {
+    Hide (pfp->makemRNAMatch);
+  } else {
+    /* look for overlapping mRNA */
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+    if (cds == NULL) {
+      Hide (pfp->makemRNAMatch);
+    } else {
+      mrna = SeqMgrGetOverlappingmRNA (cds->location, &fcontext);
+      if (mrna == NULL) {
+        Hide (pfp->makemRNAMatch);
+      } else {
+        Show (pfp->makemRNAMatch);
+      }
+    }
+  }
+}
+
+
 static void ProtRefPtrToForm (ForM f, Pointer data)
 
 {
@@ -5080,6 +5496,7 @@ static void ProtRefPtrToForm (ForM f, Pointer data)
       PointerToDialog (pfp->location, sfp->location);
       PointerToDialog (pfp->product, sfp->product);
     }
+    ShowHideMakemRNAMatch (pfp, sfp);
     SeqEntrySetScope (oldsep);
   }
 }
@@ -5179,25 +5596,72 @@ extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
   return (ForM) w;
 }
 
+
+static void MakemRNAProductMatchProteinName (SeqFeatPtr prot)
+{
+  BioseqPtr    bsp;
+  ProtRefPtr   prp;
+  SeqFeatPtr   cds, mrna;
+  RnaRefPtr    rrp;
+  SeqMgrFeatContext fcontext;
+
+  if (prot == NULL || prot->data.choice != SEQFEAT_PROT) return;
+  bsp = BioseqFindFromSeqLoc (prot->location);
+  if (bsp == NULL) return;
+
+  cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+  if (cds != NULL) {
+    mrna = SeqMgrGetOverlappingmRNA (cds->location, &fcontext);      
+    if (mrna != NULL && mrna->idx.subtype == FEATDEF_mRNA) {
+      rrp = (RnaRefPtr) mrna->data.value.ptrvalue;
+      if (rrp == NULL) {
+        rrp = RnaRefNew();
+        mrna->data.value.ptrvalue = rrp;
+      }
+      rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+      prp = (ProtRefPtr) prot->data.value.ptrvalue;
+      if (prp == NULL || prp->name == NULL || StringHasNoText (prp->name->data.ptrvalue)) {
+        rrp->ext.choice = 0;
+      } else {
+        rrp->ext.choice = 1;
+        rrp->ext.value.ptrvalue = StringSave (prp->name->data.ptrvalue);
+      }
+    }
+  }
+}
+
+
 static void ProtFeatFormActnProc (ForM f)
 
 {
   BioseqPtr    bsp;
   ProtFormPtr  pfp;
   SeqFeatPtr   sfp;
+  Boolean      need_update = FALSE;
 
   StdFeatFormActnProc (f);
   pfp = (ProtFormPtr) GetObjectExtra (f);
   if (pfp == NULL) return;
+  
   sfp = SeqMgrGetDesiredFeature (pfp->input_entityID, NULL,
                                  pfp->input_itemID, 0, NULL, NULL);
   if (sfp == NULL) return;
+
   bsp = BioseqFindFromSeqLoc (sfp->location);
   if (bsp == NULL) return;
+
+  if (GetStatus (pfp->makemRNAMatch)) {    
+    MakemRNAProductMatchProteinName (sfp);
+    need_update = TRUE;
+  }
+
   if (SeeIfProtTitleNeedsFixing (bsp, pfp->input_entityID)) {
+    need_update = TRUE;
+  }
+  if (need_update) {
     ObjMgrSendMsg (OM_MSG_UPDATE, pfp->input_entityID,
                    pfp->input_itemID, pfp->input_itemtype);
-  }
+  }  
 }
 
 extern Int2 LIBCALLBACK ProtGenFunc (Pointer data)

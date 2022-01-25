@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,12 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.16  2006/11/09 17:47:16  kans
+* added ValNodeMergeStrs
+*
+* Revision 6.15  2006/10/17 14:16:48  lavr
+* ValNodeCopyStr() to take "const char*"
+*
 * Revision 6.14  2002/12/17 16:45:09  kans
 * CtoPstr and PtoCstr if OS_MAC or OS_UNIX_DARWIN
 *
@@ -269,25 +275,29 @@ typedef struct valnode {
 *   	Copied from SortValNode in jzcoll, renamed, for more general access
 *   	Makes array from ValNode list, calls HeapSort, reconnects ValNode list
 *
+*   ValNodeMergeStrs(list)
+*   	Merges chain of val node strings into a single character array
+*
 *****************************************************************************/
-NLM_EXTERN ValNodePtr LIBCALL ValNodeNew PROTO((ValNodePtr vnp));
-NLM_EXTERN Nlm_Int4   LIBCALL ValNodeLen PROTO((ValNodePtr vnp));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAdd PROTO((ValNodePtr PNTR head));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeLink PROTO((ValNodePtr PNTR head, ValNodePtr newnode));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddInt PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int4 value));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddBigInt (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int8 value);
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddBoolean PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Boolean value));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddFloat PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FloatHi value));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddPointer PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_VoidPtr value));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeAddFunction PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FnPtr value));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeFree PROTO((ValNodePtr vnp));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeFreeData PROTO((ValNodePtr vnp));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeExtract PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeExtractList PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeFindNext PROTO((ValNodePtr head, ValNodePtr curr, Nlm_Int2 choice));
-NLM_EXTERN ValNodePtr LIBCALL ValNodeSort PROTO((ValNodePtr list, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeNew PROTO((ValNodePtr vnp));
+NLM_EXTERN Nlm_Int4    LIBCALL ValNodeLen PROTO((ValNodePtr vnp));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAdd PROTO((ValNodePtr PNTR head));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeLink PROTO((ValNodePtr PNTR head, ValNodePtr newnode));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeCopyStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, const char* str));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddInt PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int4 value));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddBigInt (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int8 value);
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddBoolean PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Boolean value));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddFloat PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FloatHi value));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddPointer PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_VoidPtr value));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddFunction PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FnPtr value));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeFree PROTO((ValNodePtr vnp));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeFreeData PROTO((ValNodePtr vnp));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeExtract PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeExtractList PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeFindNext PROTO((ValNodePtr head, ValNodePtr curr, Nlm_Int2 choice));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeSort PROTO((ValNodePtr list, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
+NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs PROTO((ValNodePtr list));
 
 /*** old prototypes ******
 NLM_EXTERN ValNodePtr LIBCALL ValNodeLink PROTO((ValNodePtr vnp, ValNodePtr newnode));

@@ -324,6 +324,10 @@ The CDS /translation can also be suppressed, even with near products.
 
 #define HIDE_TRANSLATION      262144
 
+Evidence qualifiers, including experiment and inference, can be suppressed.
+
+#define HIDE_EVIDENCE_QUALS   524288
+
 
 EXTRA is an opaque pointer used for preparing internal NCBI indices.  Most
 programs will pass NULL for this parameter.

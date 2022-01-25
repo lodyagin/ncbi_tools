@@ -1,4 +1,4 @@
-/* $Id: blast_returns.h,v 1.14 2006/04/26 12:46:00 madden Exp $
+/* $Id: blast_returns.h,v 1.15 2007/07/10 15:28:07 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -88,7 +88,7 @@ typedef struct Blast_SearchParams {
    char* pattern;           /**< phi-blast pattern used. */
    char* entrez_query;      /**< query to entrez */
    double ethresh;          /**< PSI-BLAST threshold to keep HSPs in profile. */
-   Int4 threshold;          /**< threshold to start extension of hits. */
+   double threshold;        /**< threshold to start extension of hits. */
    Int4 window_size;        /**< max allowed distance between hits to init extension in 2-hit mode. */
 } Blast_SearchParams;
 

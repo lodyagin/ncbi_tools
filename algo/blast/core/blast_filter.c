@@ -1,4 +1,4 @@
-/* $Id: blast_filter.c,v 1.86 2006/09/18 15:30:44 camacho Exp $
+/* $Id: blast_filter.c,v 1.89 2007/07/05 14:25:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,15 +30,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_filter.c,v 1.86 2006/09/18 15:30:44 camacho Exp $";
+    "$Id: blast_filter.c,v 1.89 2007/07/05 14:25:35 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
-#include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_filter.h>
-#include <algo/blast/core/blast_dust.h>
 #include <algo/blast/core/blast_seg.h>
-#include "blast_inline.h"
 
 /****************************************************************************/
 /* Constants */
@@ -292,8 +289,8 @@ BlastFilteringOptionsFromString(EBlastProgramType program_number, const char* in
 			ptr = s_LoadOptionsToBuffer(ptr+1, buffer);
 			if (buffer[0] != NULLB)
 			{
-                                int window;
-                                double locut, hicut; 
+                                int window = 0;
+                                double locut = .0, hicut = .0;
 				status = s_ParseSegOptions(buffer, &window, &locut, &hicut);
                                 if (status)
                                 {
@@ -598,7 +595,8 @@ Int2 BlastMaskLocDNAToProtein(BlastMaskLoc* mask_loc,
                 Int4 from, to;
                 SSeqRange* seq_range = itr->ssr;
                 /* masks should be 0-offset */
-                ASSERT(dna_length > seq_range->right);
+                ASSERT(seq_range->right < dna_length);
+                ASSERT(seq_range->left  >= 0);
                 if (frame < 0) {
                     from = (dna_length + frame - seq_range->right)/CODON_LENGTH;
                     to = (dna_length + frame - seq_range->left)/CODON_LENGTH;
@@ -606,6 +604,21 @@ Int2 BlastMaskLocDNAToProtein(BlastMaskLoc* mask_loc,
                     from = (seq_range->left - frame + 1)/CODON_LENGTH;
                     to = (seq_range->right - frame + 1)/CODON_LENGTH;
                 }
+
+                if (from < 0)
+                    from = 0;
+                if (to   < 0)
+                    to   = 0;
+                if (from >= query_info->contexts[ctx_idx+context].query_length)
+                    from = query_info->contexts[ctx_idx+context].query_length - 1;
+                if (to >= query_info->contexts[ctx_idx+context].query_length)
+                    to = query_info->contexts[ctx_idx+context].query_length - 1;
+
+                ASSERT(from >= 0);
+                ASSERT(to   >= 0);
+                ASSERT(from < query_info->contexts[ctx_idx+context].query_length);
+                ASSERT(to   < query_info->contexts[ctx_idx+context].query_length);
+
                 /* Cache the tail of the list to avoid the overhead of
                  * traversing the list when appending to it */
                 prot_tail = BlastSeqLocNew((prot_tail 
@@ -663,6 +676,21 @@ Int2 BlastMaskLocProteinToDNA(BlastMaskLoc* mask_loc,
                    from = CODON_LENGTH*seq_range->left + frame - 1;
                    to = CODON_LENGTH*seq_range->right + frame - 1;
                }
+
+               if (from < 0)
+                   from = 0;
+               if (to   < 0)
+                   to   = 0;
+               if (from >= dna_length)
+                   from = dna_length - 1;
+               if (to   >= dna_length)
+                   to   = dna_length - 1;
+                   
+               ASSERT(from >= 0);
+               ASSERT(to   >= 0);
+               ASSERT(from < dna_length);
+               ASSERT(to   < dna_length);
+
                seq_range->left = from;
                seq_range->right = to;
            }

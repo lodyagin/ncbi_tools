@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_program.c,v 1.4 2006/03/22 18:45:33 papadopo Exp $";
+    "$Id: blast_program.c,v 1.5 2007/01/21 08:45:12 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -76,3 +76,25 @@ Boolean Blast_ProgramIsPhiBlast(EBlastProgramType p)
 
 Boolean Blast_ProgramIsRpsBlast(EBlastProgramType p)
 { return SAFE_CAST_INT_TO_BOOLEAN(p & PSSM_SUBJECT_MASK); }
+
+Boolean Blast_ProgramIsValid(EBlastProgramType p)
+{
+    switch (p) {
+    case eBlastTypeBlastp:
+    case eBlastTypeBlastn:
+    case eBlastTypeBlastx:
+    case eBlastTypeTblastn:
+    case eBlastTypeTblastx:
+    case eBlastTypePsiBlast:
+    case eBlastTypePsiTblastn:
+    case eBlastTypeRpsBlast:
+    case eBlastTypeRpsTblastn:
+    case eBlastTypePhiBlastp:
+    case eBlastTypePhiBlastn:
+        return TRUE;
+        break;
+    default:
+        return FALSE;
+        break;
+    }
+}

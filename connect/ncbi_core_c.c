@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.17 2006/03/07 17:24:54 lavr Exp $
+/*  $Id: ncbi_core_c.c,v 6.18 2007/06/25 15:33:04 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -137,7 +137,7 @@ static void s_LOG_Handler(void* user_data/*unused*/, SLOG_Handler* call_data)
         sev = SEV_REJECT;
         break;
     case eLOG_Fatal:
-        /*fallthru*/
+        /*FALLTHRU*/
     default:
         sev = SEV_FATAL;
         break;
@@ -194,6 +194,12 @@ static int/*bool*/ s_LOCK_Handler(void* user_data, EMT_Lock how)
     case eMT_Unlock:
         result = NlmRWunlock(lock) == 0;
         break;
+    case eMT_TryLock:
+        result = NlmRWtrywrlock(lock) == 0;
+        break;
+    case eMT_TryLockRead:
+        result = NlmRWtryrdlock(lock) == 0;
+        break;
     default:
         assert(0);
         result = 0/*false*/;
@@ -234,6 +240,9 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.18  2007/06/25 15:33:04  lavr
+ * +eMT_TryLock[Read]
+ *
  * Revision 6.17  2006/03/07 17:24:54  lavr
  * Remove g_NCBI_ConnectSrandAddent for good
  *

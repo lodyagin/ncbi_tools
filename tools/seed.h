@@ -1,4 +1,4 @@
-/* $Id: seed.h,v 6.20 2005/07/28 14:57:10 coulouri Exp $
+/* $Id: seed.h,v 6.21 2007/03/13 20:41:20 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,14 @@ Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
 
-$Revision: 6.20 $
+$Revision: 6.21 $
 
 $Log: seed.h,v $
+Revision 6.21  2007/03/13 20:41:20  madden
+  - In the prototype for seedEngineCore, the searchSpEff parameter
+    should be a Nlm_FloatHi, not an Nlm_FloatLo
+  [from Mike Gertz]
+
 Revision 6.20  2005/07/28 14:57:10  coulouri
 remove dead code
 
@@ -262,7 +267,7 @@ ValNodePtr LIBCALL  seedEngineCore PROTO((BlastSearchBlkPtr search,
   BLAST_OptionsBlkPtr options, Uint1Ptr query, Uint1Ptr unfilter_query,
   CharPtr database, CharPtr patfile, Int4 program_flag,  FILE * patfp, 
   Boolean is_dna, Boolean reverseDb, seedSearchItems *seedSearch,
-   Nlm_FloatHi posEThresh, Nlm_FloatLo searchSpEff,
+   Nlm_FloatHi posEThresh, Nlm_FloatHi searchSpEff,
    posSearchItems * posSearch, SeqLocPtr *seed_seq_loc, Boolean showDiagnostics, ValNodePtr PNTR info_vnp));
 void LIBCALL init_order PROTO((Int4 **matrix, Int4 program_flag, Boolean is_dna,
    seedSearchItems *seedSearch));

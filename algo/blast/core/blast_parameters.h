@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.h,v 1.15 2006/09/14 14:51:10 papadopo Exp $
+/* $Id: blast_parameters.h,v 1.18 2007/05/22 20:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,9 +45,13 @@
  * </pre>
  */
 
-#ifndef __BLASTPARAMETERS__
-#define __BLASTPARAMETERS__
+#ifndef ALGO_BLAST_CORE__BLASTPARAMETERS__H
+#define ALGO_BLAST_CORE__BLASTPARAMETERS__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
+#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_message.h>
 #include <algo/blast/core/blast_stat.h>
@@ -85,17 +89,6 @@ typedef enum ESeedContainerType {
     eMaxContainerType   /**< maximum value for this enumeration */
 } ESeedContainerType;
 
-/** when performing mini-extensions on hits from the
- *  blastn or megablast lookup table, this determines
- *  the direction in which the mini-extension is attempted 
- */
-typedef enum ESeedExtensionMethod {
-    eRight,             /**< extend only to the right */
-    eRightAndLeft,      /**< extend to left and right (used with AG method) */
-    eUpdateDiag,        /**< update match info on corresponding diagonal record*/
-    eMaxSeedExtensionMethod   /**< maximum value for this enumeration */
-} ESeedExtensionMethod;
-
 /** All the ungapped cutoff values that can change 
  *  from context to context
  */
@@ -120,8 +113,6 @@ typedef struct BlastInitialWordParameters {
    BlastUngappedCutoffs *cutoffs;   /**< cutoff values (one per context) */
    ESeedContainerType container_type; /**< How to store offset pairs for initial
                                         seeds? */
-   ESeedExtensionMethod extension_method; /**< How should exact matches be 
-                                            extended? */
    Int4 nucl_score_table[256]; /**< the combined score of all match/mismatch
                                     combinations for aligning four bases */
 } BlastInitialWordParameters;
@@ -196,7 +187,6 @@ typedef struct BlastScoringParameters {
    Int2 penalty;     /**< Penalty for a mismatch */
    Int4 gap_open;    /**< Extra penalty for starting a gap (scaled version) */
    Int4 gap_extend;  /**< Penalty for each gap residue  (scaled version) */
-   Int4 decline_align; /**< Cost for declining alignment  (scaled version) */
    Int4 shift_pen;   /**< Penalty for shifting a frame in out-of-frame 
                         gapping (scaled version) */
    double scale_factor; /**< multiplier for all cutoff scores */
@@ -430,5 +420,5 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__BLASTPARAMETERS__ */
+#endif /* !ALGO_BLAST_CORE__BLASTPARAMETERS__H */
 

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.52 2006/09/07 17:44:36 bollin Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.54 2006/10/23 15:10:58 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -1983,7 +1983,7 @@ static void SetSequenceIntervalBuf
     *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
     *seqstop  = AlnMgr2MapSeqAlignToBioseq(salp, stop, row);
   }
-
+  
   if (strand == Seq_strand_minus) {
     i = stop;
     while ((*seqstart == ALNMGR_GAP || *seqstart == ALNMGR_ROW_UNDEFINED) && i > 0) { /* count backward if we are in the gap */
@@ -1997,8 +1997,14 @@ static void SetSequenceIntervalBuf
       *seqstart = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
     }
   }
-  if (*seqstop == -1 || *seqstop>=bsp->length) *seqstop = bsp->length - 1;  /* -1 means exeed sequence length */
   
+  if (*seqstop < 0 || *seqstop>=bsp->length) *seqstop = bsp->length - 1;  /* -1 means exeed sequence length */
+  
+  if (*seqstop > -1 && *seqstart > -1 && *seqstop - *seqstart > stop - start) {
+    *seqstop = *seqstart + stop - start;
+  }
+
+
   if (strand == Seq_strand_minus) {
     i = start;
     while (*seqstop == ALNMGR_GAP && i > 0) { /* count backward if we are in the gap */
@@ -2018,6 +2024,9 @@ static void SetSequenceIntervalBuf
   }
   if (*seqstop  < 0) *seqstop  = bsp->length - 1;
   if (*seqstart < 0) *seqstart = *seqstop;
+  if (*seqstop < *seqstart) {
+    *seqstop = *seqstart = 0;
+  }
   if (strand == Seq_strand_minus) {
     if (*seqstop - *seqstart > buf_len) 
       *seqstart = *seqstop - buf_len;
@@ -2123,15 +2132,33 @@ AlignmentIntervalToString
       i--;
       seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
     }
+    if (i == 0) {
+      /* gap goes to beginning of sequence, count forward until we are no longer in the gap */
+      while (seqstop < 0 && i < start) {
+        i++;
+        seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+      }
+    }
   } else {
     i = stop;
-    while (seqstop == ALNMGR_GAP && i < aln_len) { /* count forward if we are in the gap */
+    while (seqstop < 0 && i < aln_len) { /* count forward if we are in the gap */
       i++;
       seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+    }
+    if (i == aln_len) {
+      /* gap goes to end of sequence, count backwards until we are no longer in the gap */
+      i = stop;
+      while (seqstop < 0 && i > start) {
+        i--;
+        seqstop = AlnMgr2MapSeqAlignToBioseq(salp, i, row);
+      }
     }
   }
   
   if (seqstart == ALNMGR_GAP  &&  seqstop == ALNMGR_GAP) seqstart = seqstop = 0;  /* whole line are gaps */
+  if (seqstop < seqstart) {
+    seqstart = seqstop = 0; /* treat whole line as gap */
+  }
   if (seqstop  < 0) seqstop  = bsp->length - 1;
   if (seqstart < 0) seqstart = seqstop;
   if (strand == Seq_strand_minus) {
@@ -2163,10 +2190,8 @@ AlignmentIntervalToString
 
     target_buf = (Uint1Ptr) MemNew (stop - start + 1);
     MemSet (target_buf, 0, stop - start + 1);
-    if (target_buf != NULL) {
-      SetSequenceIntervalBuf (salp, bsp_target, target_row, start, stop, 
+    SetSequenceIntervalBuf (salp, bsp_target, target_row, start, stop, 
                               &target_start, &target_stop, aln_len, target_buf);
-    }
   } else {
     sip_target = NULL;
     bsp_target = NULL;
@@ -2217,3 +2242,5 @@ AlignmentIntervalToString
     MemFree (target_buf);
   }
 }
+
+

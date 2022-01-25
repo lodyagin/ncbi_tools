@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.59 2006/08/14 19:08:41 lavr Exp $
+/*  $Id: ncbi_connutil.h,v 6.61 2007/01/24 04:23:08 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -123,10 +123,10 @@ typedef enum {
  * ATTENTION:  Do NOT fill out this structure (SConnNetInfo) "from scratch"!
  *             Instead, use ConnNetInfo_Create() described below to create
  *             it, and then fix (hard-code) some fields, if really necessary.
- * NOTE:       "scheme", "user" and "pass" are reserved (unused) fields.
+ * NOTE:       "scheme", "user", and "pass" are reserved (unused) fields.
  */
 typedef struct {
-    char           client_host[256]; /* effective client hostname            */
+    char           client_host[256]; /* effective client hostname ('\0'=def) */
     EURLScheme     scheme;           /* only pre-defined types (limited)     */
     char           user[128];        /* username (if specified)              */
     char           pass[128];        /* password (if any, clear text!!!)     */
@@ -208,7 +208,7 @@ typedef struct {
 
 /* Environment/registry keys that are not kept in SConnNetInfo */
 #define REG_CONN_SERVICE_NAME     "SERVICE_NAME"
-#define REG_CONN_LOCAL_DISABLE    "LOCAL_DISABLE"
+#define REG_CONN_LOCAL_ENABLE     "LOCAL_ENABLE"
 #define REG_CONN_LBSMD_DISABLE    "LBSMD_DISABLE"
 #define REG_CONN_DISPD_DISABLE    "DISPD_DISABLE"
 
@@ -401,7 +401,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_ParseURL
 /* Setup standard arguments:  service, address, and platform.
  * Return non-zero on success; zero on error.
  */
-extern int/*bool*/ ConnNetInfo_SetupStandardArgs
+extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_SetupStandardArgs
 (SConnNetInfo* info
  );
 
@@ -735,6 +735,12 @@ size_t HostPortToString
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.61  2007/01/24 04:23:08  lavr
+ * Synchronized with the C++ Toolkit.
+ *
+ * Revision 6.60  2006/10/26 18:54:12  jcherry
+ * Added export specifier
+ *
  * Revision 6.59  2006/08/14 19:08:41  lavr
  * HTTP_REFERER documented as may have added automatically
  *

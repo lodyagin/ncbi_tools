@@ -215,6 +215,18 @@ on SetProjectData()
 			{name:myName, features:myFeatures, settings:mySettings, rsrcs:myRsrcs, projLibs:Â
 				myLibs, fileData:myFiles}
 		
+		-- asnval
+		set myName to "asnval"
+		set myFeatures to {"sockets"}
+		set mySettings to {prefixFile:"", ppcProject:{}}
+		set myRsrcs to {"ncbilogo.r", "Info.plc"}
+		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbiid1"}
+		set myFiles to Â
+			{{projPath:"demo:", fileList:{"asnval.c"}}}
+		set asnvalData to Â
+			{name:myName, features:myFeatures, settings:mySettings, rsrcs:myRsrcs, projLibs:Â
+				myLibs, fileData:myFiles}
+		
 		-- Spidey
 		set myName to "spidey"
 		set myFeatures to {"sockets"}
@@ -237,6 +249,7 @@ on SetProjectData()
 	AddSimpleProject("asn2gb", {"sockets"})
 	AddProject(asn2fsaData)
 	AddProject(asn2allData)
+	AddProject(asnvalData)
 	AddProject(spideyData)
 	
 	-- AddProject(entrezData)

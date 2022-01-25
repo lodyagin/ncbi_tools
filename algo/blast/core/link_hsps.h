@@ -1,4 +1,4 @@
-/* $Id: link_hsps.h,v 1.16 2006/06/28 16:02:47 camacho Exp $
+/* $Id: link_hsps.h,v 1.17 2006/11/21 16:48:22 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,14 @@
  * Functions to link HSPs using sum statistics
  */
 
-#ifndef __LINK_HSPS__
-#define __LINK_HSPS__
+#ifndef ALGO_BLAST_CORE__LINK_HSPS__H
+#define ALGO_BLAST_CORE__LINK_HSPS__H
 
+#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_program.h>
+#include <algo/blast/core/blast_query_info.h>
+#include <algo/blast/core/blast_parameters.h>
+#include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_hits.h>
 
 #ifdef __cplusplus
@@ -58,5 +63,5 @@ BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list,
 #ifdef __cplusplus
 }
 #endif
-#endif /* !__LINK_HSPS__ */
+#endif /* !ALGO_BLAST_CORE__LINK_HSPS__H */
 

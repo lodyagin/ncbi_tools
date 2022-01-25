@@ -5,6 +5,72 @@
 	};
 	objectVersion = 39;
 	objects = {
+		372EDDFE0B6674F50074B4FF = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_dust.c;
+			path = ../../tools/blast_dust.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		372EDE070B6677370074B4FF = {
+			fileRef = 372EDDFE0B6674F50074B4FF;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		3748B8010BBD6731003651C0 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = index_ungapped.c;
+			path = ../../algo/blast/core/index_ungapped.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		3748B80B0BBD6871003651C0 = {
+			fileRef = 3748B8010BBD6731003651C0;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		3771F8460B70005F003E34D3 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = objmla2.c;
+			path = ../../access/objmla2.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		3771F8490B700078003E34D3 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = mla2api.c;
+			path = ../../access/mla2api.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		37776D520B9E142F00480E77 = {
+			fileRef = 3771F8460B70005F003E34D3;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		37776D530B9E145F00480E77 = {
+			fileRef = 3771F8490B700078003E34D3;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		37776D540B9E147B00480E77 = {
+			fileRef = 37E8E74E0B9E04AB008ADFD9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		377AE378089571390098A494 = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -26,6 +92,60 @@
 			lastKnownFileType = sourcecode.c.c;
 			name = blast_program.c;
 			path = ../../algo/blast/core/blast_program.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		379AAEBE0BA7313000EE6EFF = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = gencode_singleton.c;
+			path = ../../algo/blast/core/gencode_singleton.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		379AAEBF0BA7315300EE6EFF = {
+			fileRef = 379AAEBE0BA7313000EE6EFF;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		37AC162A0BA5F0CF00323EB4 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = split_query.c;
+			path = ../../algo/blast/core/split_query.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		37AC162B0BA5F10200323EB4 = {
+			fileRef = 37AC162A0BA5F0CF00323EB4;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		37B9005B0B307CFF00E53065 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = vibmain.c;
+			path = ../../vibrant/vibmain.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		37B9005C0B307D1600E53065 = {
+			fileRef = 37B9005B0B307CFF00E53065;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		37E8E74E0B9E04AB008ADFD9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = objscoremat.c;
+			path = ../../object/objscoremat.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -1337,6 +1457,15 @@
 			fileEncoding = 30;
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.c;
+			name = ncbi_types.c;
+			path = ../../connect/ncbi_types.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F012D93106A5568500741D48 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
 			name = ncbi_util.c;
 			path = ../../connect/ncbi_util.c;
 			refType = 2;
@@ -1872,11 +2001,13 @@
 				F094645106AC0A1400DF5D77,
 				F094645206AC0A1400DF5D77,
 				F094645306AC0A1400DF5D77,
+				3771F8490B700078003E34D3,
 				F094645406AC0A1400DF5D77,
 				F094645506AC0A1400DF5D77,
 				F094645606AC0A1400DF5D77,
 				F094645706AC0A1400DF5D77,
 				F094645806AC0A1400DF5D77,
+				3771F8460B70005F003E34D3,
 				F012D9DF06A565A600741D48,
 				F012D9E006A565A600741D48,
 				F012D9E106A565A600741D48,
@@ -1902,6 +2033,7 @@
 				F012D9F506A565A600741D48,
 				F012D9F606A565A600741D48,
 				F012D9F706A565A600741D48,
+				37E8E74E0B9E04AB008ADFD9,
 			);
 			isa = PBXGroup;
 			name = "NCBI Objects";
@@ -1918,6 +2050,9 @@
 		F012D9DC06A562C900741D48 = {
 			buildActionMask = 2147483647;
 			files = (
+				37776D540B9E147B00480E77,
+				37776D530B9E145F00480E77,
+				37776D520B9E142F00480E77,
 				F012D9F806A565A600741D48,
 				F012D9F906A565A600741D48,
 				F012D9FA06A565A600741D48,
@@ -3541,8 +3676,23 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
+		F067051E0783170B001506C2 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_dynarray.c;
+			path = ../../algo/blast/core/blast_dynarray.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
 		F067051F0783170B001506C1 = {
 			fileRef = F067051E0783170B001506C1;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F067051F0783170B001506C2 = {
+			fileRef = F067051E0783170B001506C2;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -6303,13 +6453,19 @@
 		};
 		F095C4FC06AE8E5F00C0C74D = {
 			children = (
+				F099874A0B137D570006741F,
+				F099874C0B137D620006741F,
 				F0DECDBB0AB97B9E008B27CE,
+				F09987550B137DE50006741F,
 				F03CED7409F7AFA000EB5378,
 				F052068E09EC294C005AF35A,
 				5EDE874E0823E6AF008F2E80,
+				F09987580B137DEF0006741F,
 				F06B098D07E74226004F1D7D,
 				F06B098607E741DD004F1D7D,
+				F099875B0B137E020006741F,
 				F067051E0783170B001506C1,
+				F067051E0783170B001506C2,
 				F095C50706AE8ECB00C0C74D,
 				F095C50806AE8ECB00C0C74D,
 				F095C50906AE8ECB00C0C74D,
@@ -6318,6 +6474,7 @@
 				F095C50C06AE8ECB00C0C74D,
 				F095C50D06AE8ECB00C0C74D,
 				377F4A730857823700C1EACC,
+				379AAEBE0BA7313000EE6EFF,
 				F095C50E06AE8ECB00C0C74D,
 				F095C50F06AE8ECB00C0C74D,
 				F095C51006AE8ECB00C0C74D,
@@ -6328,7 +6485,6 @@
 				F095C51506AE8ECB00C0C74D,
 				F095C51606AE8ECB00C0C74D,
 				F095C51706AE8ECB00C0C74D,
-				F095C51806AE8ECB00C0C74D,
 				F095C51906AE8ECB00C0C74D,
 				F095C51A06AE8ECB00C0C74D,
 				F095C51B06AE8ECB00C0C74D,
@@ -6339,13 +6495,14 @@
 				F095C52006AE8ECB00C0C74D,
 				F095C52106AE8ECB00C0C74D,
 				F095C52206AE8ECB00C0C74D,
-				F095C52306AE8ECB00C0C74D,
 				F095C52406AE8ECB00C0C74D,
 				F095C52506AE8ECB00C0C74D,
 				F095C52606AE8ECB00C0C74D,
 				F095C52706AE8ECB00C0C74D,
 				F095C52806AE8ECB00C0C74D,
 				F095C52906AE8ECB00C0C74D,
+				37AC162A0BA5F0CF00323EB4,
+				3748B8010BBD6731003651C0,
 			);
 			isa = PBXGroup;
 			name = "NCBI Blast Core";
@@ -6370,6 +6527,7 @@
 				F095C52E06AE8ECB00C0C74D,
 				F095C52F06AE8ECB00C0C74D,
 				F095C53006AE8ECB00C0C74D,
+				379AAEBF0BA7315300EE6EFF,
 				F095C53106AE8ECB00C0C74D,
 				F095C53206AE8ECB00C0C74D,
 				F095C53306AE8ECB00C0C74D,
@@ -6380,7 +6538,6 @@
 				F095C53806AE8ECB00C0C74D,
 				F095C53906AE8ECB00C0C74D,
 				F095C53A06AE8ECB00C0C74D,
-				F095C53B06AE8ECB00C0C74D,
 				F095C53C06AE8ECB00C0C74D,
 				F095C53D06AE8ECB00C0C74D,
 				F095C53E06AE8ECB00C0C74D,
@@ -6391,7 +6548,6 @@
 				F095C54306AE8ECB00C0C74D,
 				F095C54406AE8ECB00C0C74D,
 				F095C54506AE8ECB00C0C74D,
-				F095C54606AE8ECB00C0C74D,
 				F095C54706AE8ECB00C0C74D,
 				F095C54806AE8ECB00C0C74D,
 				F095C54906AE8ECB00C0C74D,
@@ -6399,12 +6555,20 @@
 				F095C54B06AE8ECB00C0C74D,
 				F095C54C06AE8ECB00C0C74D,
 				F067051F0783170B001506C1,
+				F067051F0783170B001506C2,
 				F06B098707E741DD004F1D7D,
 				F06B098E07E74226004F1D7D,
 				5EDE87650823F29F008F2E80,
 				F052068F09EC294C005AF35A,
 				F03CED7509F7AFA100EB5378,
 				F0DECDBC0AB97B9E008B27CE,
+				F099874B0B137D570006741F,
+				F099874D0B137D620006741F,
+				F09987560B137DE50006741F,
+				F09987590B137DEF0006741F,
+				F099875C0B137E020006741F,
+				37AC162B0BA5F10200323EB4,
+				3748B80B0BBD6871003651C0,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -6597,15 +6761,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		F095C51806AE8ECB00C0C74D = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = mb_lookup.c;
-			path = ../../algo/blast/core/mb_lookup.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
 		F095C51906AE8ECB00C0C74D = {
 			fileEncoding = 30;
 			isa = PBXFileReference;
@@ -6693,15 +6848,6 @@
 			lastKnownFileType = sourcecode.c.c;
 			name = hspstream_collector.c;
 			path = ../../algo/blast/core/hspstream_collector.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F095C52306AE8ECB00C0C74D = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = blast_dust.c;
-			path = ../../algo/blast/core/blast_dust.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -6861,12 +7007,6 @@
 			settings = {
 			};
 		};
-		F095C53B06AE8ECB00C0C74D = {
-			fileRef = F095C51806AE8ECB00C0C74D;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F095C53C06AE8ECB00C0C74D = {
 			fileRef = F095C51906AE8ECB00C0C74D;
 			isa = PBXBuildFile;
@@ -6923,12 +7063,6 @@
 		};
 		F095C54506AE8ECB00C0C74D = {
 			fileRef = F095C52206AE8ECB00C0C74D;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F095C54606AE8ECB00C0C74D = {
-			fileRef = F095C52306AE8ECB00C0C74D;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -7005,7 +7139,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F095C5A206AE8FFE00C0C74D,
-				F095C5A306AE8FFE00C0C74D,
 				F095C5A406AE8FFE00C0C74D,
 				F095C5A506AE8FFE00C0C74D,
 				F095C5A606AE8FFE00C0C74D,
@@ -7021,6 +7154,7 @@
 				F097944707B2466E00F7660A,
 				F06B099607E742FC004F1D7D,
 				F047B94009FFB54C00E76B3C,
+				F09987600B1382C30006741F,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -7170,12 +7304,6 @@
 		};
 		F095C5A206AE8FFE00C0C74D = {
 			fileRef = F095C59606AE8FFE00C0C74D;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		F095C5A306AE8FFE00C0C74D = {
-			fileRef = F095C59706AE8FFE00C0C74D;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -7684,6 +7812,87 @@
 		};
 		F097944707B2466E00F7660A = {
 			fileRef = F097944607B2466E00F7660A;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F099874A0B137D570006741F = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_aalookup.c;
+			path = ../../algo/blast/core/blast_aalookup.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F099874B0B137D570006741F = {
+			fileRef = F099874A0B137D570006741F;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F099874C0B137D620006741F = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_nalookup.c;
+			path = ../../algo/blast/core/blast_nalookup.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F099874D0B137D620006741F = {
+			fileRef = F099874C0B137D620006741F;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F09987550B137DE50006741F = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_aascan.c;
+			path = ../../algo/blast/core/blast_aascan.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F09987560B137DE50006741F = {
+			fileRef = F09987550B137DE50006741F;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F09987580B137DEF0006741F = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_nascan.c;
+			path = ../../algo/blast/core/blast_nascan.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F09987590B137DEF0006741F = {
+			fileRef = F09987580B137DEF0006741F;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F099875B0B137E020006741F = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = na_ungapped.c;
+			path = ../../algo/blast/core/na_ungapped.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F099875C0B137E020006741F = {
+			fileRef = F099875B0B137E020006741F;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F09987600B1382C30006741F = {
+			fileRef = F095C59706AE8FFE00C0C74D;
 			isa = PBXBuildFile;
 			settings = {
 			};
@@ -9074,7 +9283,6 @@
 				F0B2E51506AC25650054E175,
 				F0B2E51606AC25650054E175,
 				F0B2E51706AC25650054E175,
-				F0B2E51806AC25650054E175,
 				F0B2E51906AC25650054E175,
 				F0B2E51A06AC25650054E175,
 				F0B2E51B06AC25650054E175,
@@ -9129,6 +9337,7 @@
 				F0B2E54C06AC25650054E175,
 				F0B2E54D06AC25650054E175,
 				F0B2E54E06AC25650054E175,
+				372EDDFE0B6674F50074B4FF,
 				F0B2E54F06AC25650054E175,
 				F0B2E55006AC25650054E175,
 				F0B2E55106AC25650054E175,
@@ -9160,7 +9369,6 @@
 				F0B2E55B06AC25650054E175,
 				F0B2E55C06AC25650054E175,
 				F0B2E55D06AC25650054E175,
-				F0B2E55E06AC25650054E175,
 				F0B2E55F06AC25650054E175,
 				F0B2E56006AC25650054E175,
 				F0B2E56106AC25650054E175,
@@ -9215,6 +9423,7 @@
 				F0B2E59206AC25650054E175,
 				F0B2E59306AC25650054E175,
 				F0B2E59406AC25650054E175,
+				372EDE070B6677370074B4FF,
 				F0B2E59506AC25650054E175,
 				F0B2E59606AC25650054E175,
 				F0B2E59706AC25650054E175,
@@ -9346,15 +9555,6 @@
 			lastKnownFileType = sourcecode.c.c;
 			name = mbalign.c;
 			path = ../../tools/mbalign.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		F0B2E51806AC25650054E175 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = objscoremat.c;
-			path = ../../tools/objscoremat.c;
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -9949,12 +10149,6 @@
 			settings = {
 			};
 		};
-		F0B2E55E06AC25650054E175 = {
-			fileRef = F0B2E51806AC25650054E175;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 		F0B2E55F06AC25650054E175 = {
 			fileRef = F0B2E51906AC25650054E175;
 			isa = PBXBuildFile;
@@ -10395,7 +10589,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd ../../asn\ndt=$BUILD_ROOT/$CONFIGURATION/$EXECUTABLE_NAME\necho Using asntool: $dt\necho Checking ASN files...\n\nif test ! -d ../asnstat ; then mkdir ../asnstat ; fi\n\nFILES=\"\\\nhead.all general.asn biblio.asn medline.asn pubmed.asn medlars.asn pub.asn \\\nseqloc.asn seq.asn seqset.asn seqcode.asn seqblock.asn \\\nseqfeat.asn seqalign.asn seqres.asn submit.asn ../biostruc/cn3d/cn3d.asn \\\nproj.asn access.asn featdef.asn ncbimime.asn objprt.asn gbseq.asn insdseq.asn \\\ntinyseq.asn \"\n\nif ! test -e asn.all ; then cat $FILES > asn.all ; fi\n\n\n\nif ! test -e ../asnstat/asngen.h ; then $dt -m ../asn/general.asn -o ../asnstat/asngen.h ; fi\nif ! test -e ../asnstat/asnsset.h ; then $dt -m ../asn/seqset.asn -o ../asnstat/asnsset.h ; fi\nif ! test -e ../asnstat/asnfeat.h ; then $dt -m ../asn/seqfeat.asn -o ../asnstat/asnfeat.h ; fi\nif ! test -e ../asnstat/asnalign.h ; then $dt -m ../asn/seqalign.asn -o ../asnstat/asnalign.h ; fi\nif ! test -e ../asnstat/asnloc.h ; then $dt -m ../asn/seqloc.asn -o ../asnstat/asnloc.h ; fi\nif ! test -e ../asnstat/asnres.h ; then $dt -m ../asn/seqres.asn -o ../asnstat/asnres.h ; fi\nif ! test -e ../asnstat/asnmedli.h ; then $dt -m ../asn/medline.asn -o ../asnstat/asnmedli.h ; fi\nif ! test -e ../asnstat/asnbibli.h ; then $dt -m ../asn/biblio.asn -o ../asnstat/asnbibli.h ; fi\nif ! test -e ../asnstat/asnseq.h ; then $dt -m ../asn/seq.asn -o ../asnstat/asnseq.h ; fi\nif ! test -e ../asnstat/asnpub.h ; then $dt -m ../asn/pub.asn -o ../asnstat/asnpub.h ; fi\nif ! test -e ../asnstat/asnacces.h ; then $dt -m ../asn/access.asn -o ../asnstat/asnacces.h ; fi\n#if ! test -e ../asnstat/allpub.h ; then $dt -m ../asn/asnpub.all -o ../asnstat/allpub.h ; fi\nif ! test -e ../asnstat/all.h ; then $dt -m ../asn/asn.all -o ../asnstat/all.h ; fi\nif ! test -e ../asnstat/cdrom.h ; then $dt -m ../cdromlib/cdrom.asn -o ../asnstat/cdrom.h ; fi\nif ! test -e ../asnstat/asnsubmt.h ; then $dt -m ../asn/submit.asn -o ../asnstat/asnsubmt.h ; fi\nif ! test -e ../asnstat/asncode.h ; then $dt -m ../asn/seqcode.asn -o ../asnstat/asncode.h ; fi\nif ! test -e ../asnstat/asnblock.h ; then $dt -m ../asn/seqblock.asn -o ../asnstat/asnblock.h ; fi\nif ! test -e ../asnstat/asnfdef.h ; then $dt -m ../asn/featdef.asn -o ../asnstat/asnfdef.h ; fi\nif ! test -e ../asnstat/asnneten.h ; then $dt -m ../network/entrez/client/netentr.asn -o ../asnstat/asnneten.h ; fi\nif ! test -e ../asnstat/asnmla.h ; then $dt -m ../network/medarch/client/mla.asn -o ../asnstat/asnmla.h ; fi\nif ! test -e ../asnstat/asntaxon.h ; then $dt -m ../network/taxonomy/client/taxon.asn -o ../asnstat/asntaxon.h ; fi\nif ! test -e ../asnstat/asnid0.h ; then $dt -m ../network/id0arch/client/id0.asn -o ../asnstat/asnid0.h ; fi\nif ! test -e ../asnstat/spell.h ; then $dt -m ../network/spell/client/spell.asn -o ../asnstat/spell.h ; fi\nif ! test -e ../asnstat/ni_asn.h ; then $dt -m ../network/nsclilib/ni_msg.asn -o ../asnstat/ni_asn.h ; fi\nif ! test -e ../asnstat/asnprt.h ; then $dt -m ../asn/objprt.asn -o ../asnstat/asnprt.h ; fi\nif ! test -e ../asnstat/mmdb1.h ; then $dt -m ../biostruc/mmdb1.asn -o ../asnstat/mmdb1.h -w100 ; fi\nif ! test -e ../asnstat/mmdb2.h ; then $dt -m ../biostruc/mmdb2.asn -o ../asnstat/mmdb2.h -w100 ; fi\nif ! test -e ../asnstat/mmdb3.h ; then $dt -m ../biostruc/mmdb3.asn -o ../asnstat/mmdb3.h -w100 ; fi\nif ! test -e ../asnstat/cn3d.h ; then $dt -m ../biostruc/cn3d/cn3d.asn -o ../asnstat/cn3d.h -w100 ; fi\n#if ! test -e ../asnstat/asnbl18.h ; then $dt -m ../network/blast2/client/blast18.asn -o ../asnstat/asnbl18.h ; fi\nif ! test -e ../asnstat/blstspc.h ; then $dt -m ../network/blast3/client/blstspc.asn -o ../asnstat/blstspc.h -w100 ; fi\nif ! test -e ../asnstat/sugmap.h ; then $dt -m ../network/suggest/client/suggest.asn -o ../asnstat/sugmap.h ; fi\nif ! test -e ../asnstat/taxon1.h ; then $dt -m ../network/taxon1/common/taxon1.asn -o ../asnstat/taxon1.h ; fi\nif ! test -e ../asnstat/asnmime.h ; then $dt -m ../asn/ncbimime.asn -o ../asnstat/asnmime.h ; fi\nif ! test -e ../asnstat/asnpubme.h ; then $dt -m ../asn/pubmed.asn -o ../asnstat/asnpubme.h ; fi\nif ! test -e ../asnstat/asnmdrs.h ; then $dt -m ../asn/medlars.asn -o ../asnstat/asnmdrs.h ; fi\nif ! test -e ../asnstat/asnproj.h ; then $dt -m ../asn/proj.asn -o ../asnstat/asnproj.h ; fi\nif ! test -e ../asnstat/asnent2.h ; then $dt -m ../access/entrez2.asn -o ../asnstat/asnent2.h ; fi\nif ! test -e ../asnstat/asnmim.h ; then $dt -m ../access/mim.asn -o ../asnstat/asnmim.h ; fi\nif ! test -e ../asnstat/asntax3.h ; then $dt -m ../access/taxon3.asn -o ../asnstat/asntax3.h ; fi\nif ! test -e ../asnstat/asnentgene.h ; then $dt -m ../access/entrezgene.asn -o ../asnstat/asnentgene.h ; fi\n#if ! test -e ../asnstat/asnegkludge.h ; then $dt -m ../access/egkludge.asn -o ../asnstat/asnegkludge.h ; fi\n\nif ! test -e ../asnstat/asngbseq.h ; then $dt -m ../asn/gbseq.asn -o ../asnstat/asngbseq.h ; fi\nif ! test -e ../asnstat/asninsdseq.h ; then $dt -m ../asn/insdseq.asn -o ../asnstat/asninsdseq.h ; fi\nif ! test -e ../asnstat/asntseq.h ; then $dt -m ../asn/tinyseq.asn -o ../asnstat/asntseq.h ; fi\n\n#if ! test -e *.h ; then mv *.h ../asnstat ; fi\n\necho Done...";
+			shellScript = "cd ../../asn\ndt=$BUILD_ROOT/$CONFIGURATION/$EXECUTABLE_NAME\necho Using asntool: $dt\necho Checking ASN files...\n\nif test ! -d ../asnstat ; then mkdir ../asnstat ; fi\n\nFILES=\"\\\nhead.all general.asn biblio.asn medline.asn pubmed.asn medlars.asn pub.asn \\\nseqloc.asn seq.asn seqset.asn seqcode.asn seqblock.asn \\\nseqfeat.asn seqalign.asn seqres.asn submit.asn ../biostruc/cn3d/cn3d.asn \\\nproj.asn access.asn featdef.asn ncbimime.asn objprt.asn gbseq.asn insdseq.asn \\\ntinyseq.asn \"\n\nif ! test -e asn.all ; then cat $FILES > asn.all ; fi\n\n\n\nif ! test -e ../asnstat/asngen.h ; then $dt -m ../asn/general.asn -o ../asnstat/asngen.h ; fi\nif ! test -e ../asnstat/asnsset.h ; then $dt -m ../asn/seqset.asn -o ../asnstat/asnsset.h ; fi\nif ! test -e ../asnstat/asnfeat.h ; then $dt -m ../asn/seqfeat.asn -o ../asnstat/asnfeat.h ; fi\nif ! test -e ../asnstat/asnalign.h ; then $dt -m ../asn/seqalign.asn -o ../asnstat/asnalign.h ; fi\nif ! test -e ../asnstat/asnloc.h ; then $dt -m ../asn/seqloc.asn -o ../asnstat/asnloc.h ; fi\nif ! test -e ../asnstat/asnres.h ; then $dt -m ../asn/seqres.asn -o ../asnstat/asnres.h ; fi\nif ! test -e ../asnstat/asnmedli.h ; then $dt -m ../asn/medline.asn -o ../asnstat/asnmedli.h ; fi\nif ! test -e ../asnstat/asnbibli.h ; then $dt -m ../asn/biblio.asn -o ../asnstat/asnbibli.h ; fi\nif ! test -e ../asnstat/asnseq.h ; then $dt -m ../asn/seq.asn -o ../asnstat/asnseq.h ; fi\nif ! test -e ../asnstat/asnpub.h ; then $dt -m ../asn/pub.asn -o ../asnstat/asnpub.h ; fi\nif ! test -e ../asnstat/asnacces.h ; then $dt -m ../asn/access.asn -o ../asnstat/asnacces.h ; fi\n#if ! test -e ../asnstat/allpub.h ; then $dt -m ../asn/asnpub.all -o ../asnstat/allpub.h ; fi\nif ! test -e ../asnstat/all.h ; then $dt -m ../asn/asn.all -o ../asnstat/all.h ; fi\nif ! test -e ../asnstat/cdrom.h ; then $dt -m ../cdromlib/cdrom.asn -o ../asnstat/cdrom.h ; fi\nif ! test -e ../asnstat/asnsubmt.h ; then $dt -m ../asn/submit.asn -o ../asnstat/asnsubmt.h ; fi\nif ! test -e ../asnstat/asncode.h ; then $dt -m ../asn/seqcode.asn -o ../asnstat/asncode.h ; fi\nif ! test -e ../asnstat/asnblock.h ; then $dt -m ../asn/seqblock.asn -o ../asnstat/asnblock.h ; fi\nif ! test -e ../asnstat/asnfdef.h ; then $dt -m ../asn/featdef.asn -o ../asnstat/asnfdef.h ; fi\nif ! test -e ../asnstat/asnneten.h ; then $dt -m ../network/entrez/client/netentr.asn -o ../asnstat/asnneten.h ; fi\nif ! test -e ../asnstat/asnmla.h ; then $dt -m ../network/medarch/client/mla.asn -o ../asnstat/asnmla.h ; fi\nif ! test -e ../asnstat/asntaxon.h ; then $dt -m ../network/taxonomy/client/taxon.asn -o ../asnstat/asntaxon.h ; fi\nif ! test -e ../asnstat/asnid0.h ; then $dt -m ../network/id0arch/client/id0.asn -o ../asnstat/asnid0.h ; fi\nif ! test -e ../asnstat/spell.h ; then $dt -m ../network/spell/client/spell.asn -o ../asnstat/spell.h ; fi\nif ! test -e ../asnstat/ni_asn.h ; then $dt -m ../network/nsclilib/ni_msg.asn -o ../asnstat/ni_asn.h ; fi\nif ! test -e ../asnstat/asnprt.h ; then $dt -m ../asn/objprt.asn -o ../asnstat/asnprt.h ; fi\nif ! test -e ../asnstat/mmdb1.h ; then $dt -m ../biostruc/mmdb1.asn -o ../asnstat/mmdb1.h -w100 ; fi\nif ! test -e ../asnstat/mmdb2.h ; then $dt -m ../biostruc/mmdb2.asn -o ../asnstat/mmdb2.h -w100 ; fi\nif ! test -e ../asnstat/mmdb3.h ; then $dt -m ../biostruc/mmdb3.asn -o ../asnstat/mmdb3.h -w100 ; fi\nif ! test -e ../asnstat/cn3d.h ; then $dt -m ../biostruc/cn3d/cn3d.asn -o ../asnstat/cn3d.h -w100 ; fi\n#if ! test -e ../asnstat/asnbl18.h ; then $dt -m ../network/blast2/client/blast18.asn -o ../asnstat/asnbl18.h ; fi\nif ! test -e ../asnstat/blstspc.h ; then $dt -m ../network/blast3/client/blstspc.asn -o ../asnstat/blstspc.h -w100 ; fi\nif ! test -e ../asnstat/sugmap.h ; then $dt -m ../network/suggest/client/suggest.asn -o ../asnstat/sugmap.h ; fi\nif ! test -e ../asnstat/taxon1.h ; then $dt -m ../network/taxon1/common/taxon1.asn -o ../asnstat/taxon1.h ; fi\nif ! test -e ../asnstat/asnmime.h ; then $dt -m ../asn/ncbimime.asn -o ../asnstat/asnmime.h ; fi\nif ! test -e ../asnstat/asnpubme.h ; then $dt -m ../asn/pubmed.asn -o ../asnstat/asnpubme.h ; fi\nif ! test -e ../asnstat/asnmdrs.h ; then $dt -m ../asn/medlars.asn -o ../asnstat/asnmdrs.h ; fi\nif ! test -e ../asnstat/asnproj.h ; then $dt -m ../asn/proj.asn -o ../asnstat/asnproj.h ; fi\nif ! test -e ../asnstat/asnent2.h ; then $dt -m ../access/entrez2.asn -o ../asnstat/asnent2.h ; fi\nif ! test -e ../asnstat/asnmla2.h ; then $dt -m ../access/mla2.asn -o ../asnstat/asnmla2.h ; fi\nif ! test -e ../asnstat/asnmim.h ; then $dt -m ../access/mim.asn -o ../asnstat/asnmim.h ; fi\nif ! test -e ../asnstat/asntax3.h ; then $dt -m ../access/taxon3.asn -o ../asnstat/asntax3.h ; fi\nif ! test -e ../asnstat/asnentgene.h ; then $dt -m ../access/entrezgene.asn -o ../asnstat/asnentgene.h ; fi\n#if ! test -e ../asnstat/asnegkludge.h ; then $dt -m ../access/egkludge.asn -o ../asnstat/asnegkludge.h ; fi\n\nif ! test -e ../asnstat/asngbseq.h ; then $dt -m ../asn/gbseq.asn -o ../asnstat/asngbseq.h ; fi\nif ! test -e ../asnstat/asninsdseq.h ; then $dt -m ../asn/insdseq.asn -o ../asnstat/asninsdseq.h ; fi\nif ! test -e ../asnstat/asntseq.h ; then $dt -m ../asn/tinyseq.asn -o ../asnstat/asntseq.h ; fi\n\n#if ! test -e *.h ; then mv *.h ../asnstat ; fi\n\necho Done...";
 		};
 		F0B6D58F06AEBC1C002EF6DC = {
 			fileRef = F012D8B806A552CB00741D48;
@@ -11360,6 +11554,7 @@
 				F0BC2DA306AC2DFD00EC2330,
 				F0BC2DA406AC2DFD00EC2330,
 				F0BC2DA506AC2DFD00EC2330,
+				37B9005B0B307CFF00E53065,
 				F0BC2DA606AC2DFD00EC2330,
 				F0BC2DA706AC2DFD00EC2330,
 				F0BC2DA806AC2DFD00EC2330,
@@ -11412,6 +11607,7 @@
 				F0BC2DC706AC2DFD00EC2330,
 				F0BC2DC806AC2DFD00EC2330,
 				F0BC2DC906AC2DFD00EC2330,
+				37B9005C0B307D1600E53065,
 				F0BC2DCA06AC2DFD00EC2330,
 				F0BC2DCB06AC2DFD00EC2330,
 				F0BC2DCC06AC2DFD00EC2330,
@@ -12192,6 +12388,7 @@
 				GCC_PREFIX_HEADER = "";
 				GCC_PREPROCESSOR_DEFINITIONS = WIN_MAC;
 				HEADER_SEARCH_PATHS = "/Developer/Headers/FlatCarbon ../../ ../../include ../../link/macmet ../../corelib ../../corelib/morefile ../../access ../../cn3d ../../tools ../../object ../../asnstat ../../asnlib ../../biostruc ../../biostruc/cn3d ../../biostruc/cdd ../../connect ../../ddv  ../../api ../../network/id1arch ../../network/blast3/client ../../network/nsclilib ../../network/taxon1/common ../../network/taxon1/taxon2 ../../vibrant ../../cdromlib ../../gif ../../desktop ../../network/vibnet ../../network/medarch/client";
+				SYMROOT = ../../build/;
 				ZERO_LINK = NO;
 			};
 			isa = PBXBuildStyle;
@@ -12207,7 +12404,8 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/Carbon.framework/Headers/Carbon.h";
 				GCC_PREPROCESSOR_DEFINITIONS = WIN_MAC;
-				HEADER_SEARCH_PATHS = "/Developer/Headers/FlatCarbon ../../ ../../link/macmet ../../corelib ../../corelib/morefile ../../access ../../cn3d ../../tools ../../object ../../asn ../../asnlib ../../biostruc ../../biostruc/cn3d ../../biostruc/cdd ../../connect ../../ddv ../../asnstat ../../api ../../network/id1arch ../../network/blast3/client ../../network/nsclilib ../../network/taxon1/common ../../network/taxon1/taxon2 ../../vibrant ../../cdromlib ../../gif ../../desktop ../../network/vibnet ../../network/medarch/client";
+				HEADER_SEARCH_PATHS = "/Developer/Headers/FlatCarbon ../../ ../../include ../../link/macmet ../../corelib ../../corelib/morefile ../../access ../../cn3d ../../tools ../../object ../../asnstat ../../asnlib ../../biostruc ../../biostruc/cn3d ../../biostruc/cdd ../../connect ../../ddv  ../../api ../../network/id1arch ../../network/blast3/client ../../network/nsclilib ../../network/taxon1/common ../../network/taxon1/taxon2 ../../vibrant ../../cdromlib ../../gif ../../desktop ../../network/vibnet ../../network/medarch/client";
+				SYMROOT = ../../build/;
 			};
 			isa = PBXBuildStyle;
 			name = Deployment;

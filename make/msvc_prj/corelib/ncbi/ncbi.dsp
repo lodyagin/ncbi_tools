@@ -243,6 +243,10 @@ SOURCE=..\..\..\..\connect\ncbi_socket_connector.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_types.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\connect\ncbi_util.c
 # End Source File
 # Begin Source File

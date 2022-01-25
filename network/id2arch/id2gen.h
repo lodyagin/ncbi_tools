@@ -252,6 +252,7 @@ NLM_EXTERN Boolean LIBCALL ID2RequestReGetBlobAsnWrite PROTO (( ID2RequestReGetB
 typedef struct struct_ID2S_Request_Get_Chunks {
    struct struct_ID2_Blob_Id PNTR   blob_id;
    ValNodePtr   chunks;
+   Int4   split_version;
 } ID2SRequestGetChunks, PNTR ID2SRequestGetChunksPtr;
 
 
@@ -453,6 +454,7 @@ typedef struct struct_ID2_Reply_Get_Blob_Id {
    Int4   split_version;
    struct struct_ID2S_Seq_annot_Info PNTR   annot_info;
    Uint1   end_of_reply;
+   Uint2   blob_state;
 } ID2ReplyGetBlobId, PNTR ID2ReplyGetBlobIdPtr;
 
 
