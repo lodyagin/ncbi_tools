@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.31 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -916,17 +916,25 @@ typedef struct fieldpage {
   ButtoN             PNTR boxes;
 } FieldPage, PNTR FieldPagePtr;
 
-static Boolean ShouldBeAGBQual (Int2 qual, Boolean allowProductGBQual)
+static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductGBQual)
 
 {
   if (qual < 0) return FALSE;
   if (allowProductGBQual && qual == GBQUAL_product) return TRUE;
-  if (qual == GBQUAL_citation || qual == GBQUAL_db_xref || qual == GBQUAL_evidence ||
-      qual == GBQUAL_exception || qual == GBQUAL_gene || qual == GBQUAL_label ||
-      qual == GBQUAL_map || qual == GBQUAL_note || qual == GBQUAL_partial ||
-      qual == GBQUAL_product || qual == GBQUAL_pseudo) {
+  if (qual == GBQUAL_citation ||
+      qual == GBQUAL_db_xref ||
+      qual == GBQUAL_evidence ||
+      qual == GBQUAL_exception ||
+      qual == GBQUAL_gene ||
+      qual == GBQUAL_label ||
+      qual == GBQUAL_locus_tag ||
+      qual == GBQUAL_note ||
+      qual == GBQUAL_partial ||
+      qual == GBQUAL_product ||
+      qual == GBQUAL_pseudo) {
     return FALSE;
   }
+  if (qual == GBQUAL_map && (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region)) return FALSE;
   if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) {
     if (qual == GBQUAL_usedin) {
       return FALSE;
@@ -1115,13 +1123,13 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
 
         for (i = 0; i < sefp->mand_num; i++) {
           qual = sefp->mand_qual [i];
-          if (qual > -1 && ShouldBeAGBQual (qual, allowProductGBQual)) {
+          if (qual > -1 && ShouldBeAGBQual (sfp, qual, allowProductGBQual)) {
             seen [qual] = LEGAL_FEATURE;
           }
         }
         for (i = 0; i < sefp->opt_num; i++) {
           qual = sefp->opt_qual [i];
-          if (qual > -1 && ShouldBeAGBQual (qual, allowProductGBQual)) {
+          if (qual > -1 && ShouldBeAGBQual (sfp, qual, allowProductGBQual)) {
             seen [qual] = LEGAL_FEATURE;
           }
         }
@@ -1434,6 +1442,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     ffp->newGeneGrp = NULL;
     ffp->geneSymbol = NULL;
     ffp->geneDesc = NULL;
+    ffp->locusTag = NULL;
     for (page = 0; page < 5; page++) {
       ffp->commonSubGrp [page] = NULL;
     }
@@ -1469,6 +1478,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       ffp->geneSymbol = DialogText (ffp->newGeneGrp, "", 20, NULL);
       StaticPrompt (ffp->newGeneGrp, "Description", 0, dialogTextHeight, programFont, 'l');
       ffp->geneDesc = DialogText (ffp->newGeneGrp, "", 20, NULL);
+      StaticPrompt (ffp->newGeneGrp, "Locus Tag", 0, dialogTextHeight, programFont, 'l');
+      ffp->locusTag = DialogText (ffp->newGeneGrp, "", 20, NULL);
       Hide (ffp->newGeneGrp);
       ffp->editGeneBtn = PushButton (y, "Edit Gene Feature", Nlm_LaunchGeneFeatEd);
       SetObjectExtra (ffp->editGeneBtn, ffp, NULL);
@@ -1931,7 +1942,7 @@ static void TextViewFormMessage (ForM f, Int2 mssg)
   }
 }
 
-extern void LaunchGeneralTextViewer (CharPtr path, CharPtr title)
+static void LaunchGeneralTextViewerEx (CharPtr path, CharPtr title, Boolean useScrollText)
 
 {
   FonT               fnt;
@@ -1946,71 +1957,87 @@ extern void LaunchGeneralTextViewer (CharPtr path, CharPtr title)
 #endif
 
   tfp = (TextViewFormPtr) MemNew (sizeof (TextViewForm));
-  if (tfp != NULL) {
-    w = DocumentWindow (-50, -33, -10, -10, title, StdCloseWindowProc, ResizeTextViewer);
-    SetObjectExtra (w, tfp, StdCleanupFormProc);
-    tfp->form = (ForM) w;
-    tfp->exportform = ExportTextViewForm;
-    tfp->formmessage = TextViewFormMessage;
+  if (tfp == NULL) return;
 
-    sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
-    if (sepp != NULL) {
-      SetActivate (w, sepp->activateForm);
-      tfp->appmessage = sepp->handleMessages;
+  w = DocumentWindow (-50, -33, -10, -10, title, StdCloseWindowProc, ResizeTextViewer);
+  SetObjectExtra (w, tfp, StdCleanupFormProc);
+  tfp->form = (ForM) w;
+  tfp->exportform = ExportTextViewForm;
+  tfp->formmessage = TextViewFormMessage;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    tfp->appmessage = sepp->handleMessages;
+  }
+
+  fnt = programFont;
+  pixwidth = 35 * stdCharWidth + 17;
+  pixheight = 20 * stdLineHeight;
+
+  tvpp = (TextViewProcsPtr) GetAppProperty ("TextDisplayForm");
+  if (tvpp != NULL) {
+    pixwidth = MAX (pixwidth, tvpp->minPixelWidth);
+    pixheight = MAX (pixheight, tvpp->minPixelHeight);
+    if (tvpp->displayFont != NULL) {
+      fnt = tvpp->displayFont;
     }
-
-    fnt = programFont;
-    pixwidth = 35 * stdCharWidth + 17;
-    pixheight = 20 * stdLineHeight;
-
-    tvpp = (TextViewProcsPtr) GetAppProperty ("TextDisplayForm");
-    if (tvpp != NULL) {
-      pixwidth = MAX (pixwidth, tvpp->minPixelWidth);
-      pixheight = MAX (pixheight, tvpp->minPixelHeight);
-      if (tvpp->displayFont != NULL) {
-        fnt = tvpp->displayFont;
-      }
-      if (tvpp->activateForm != NULL) {
-        SetActivate (w, tvpp->activateForm);
-      }
+    if (tvpp->activateForm != NULL) {
+      SetActivate (w, tvpp->activateForm);
     }
+  }
 
 #ifndef WIN_MAC
-    m = PulldownMenu (w, "File");
-    FormCommandItem (m, "Export...", (BaseFormPtr) tfp, VIB_MSG_EXPORT);
-    SeparatorItem (m);
-    FormCommandItem (m, "Close", (BaseFormPtr) tfp, VIB_MSG_CLOSE);
-    if (tvpp != NULL && tvpp->useScrollText) {
-      m = PulldownMenu (w, "Edit");
-      FormCommandItem (m, CUT_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_CUT);
-      FormCommandItem (m, COPY_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_COPY);
-      FormCommandItem (m, PASTE_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_PASTE);
-      FormCommandItem (m, CLEAR_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_DELETE);
-    }
+  m = PulldownMenu (w, "File");
+  FormCommandItem (m, "Export...", (BaseFormPtr) tfp, VIB_MSG_EXPORT);
+  SeparatorItem (m);
+  FormCommandItem (m, "Close", (BaseFormPtr) tfp, VIB_MSG_CLOSE);
+  if (tvpp != NULL && tvpp->useScrollText) {
+    m = PulldownMenu (w, "Edit");
+    FormCommandItem (m, CUT_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_CUT);
+    FormCommandItem (m, COPY_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_COPY);
+    FormCommandItem (m, PASTE_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_PASTE);
+    FormCommandItem (m, CLEAR_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_DELETE);
+  }
 #endif
 
-    if (tvpp != NULL && tvpp->useScrollText) {
-      tfp->text = ScrollText (w, (pixwidth + stdCharWidth - 1) / stdCharWidth,
-                              (pixheight + stdLineHeight - 1) / stdLineHeight,
-                              fnt, FALSE, NULL);
-      SetObjectExtra (tfp->text, tfp, NULL);
-      RealizeWindow (w);
-      if (! FileToScrollText (tfp->text, path)) {
-        SetTitle (tfp->text, "(Text is too large to be displayed in this control.)");
-      }
-    } else {
-      tfp->doc = DocumentPanel (w, pixwidth, pixheight);
-      SetObjectExtra (tfp->doc, tfp, NULL);
-      RealizeWindow (w);
-      txtColFmt.pixWidth = screenRect.right - screenRect.left;
-      txtColFmt.pixInset = 8;
-      DisplayFancy (tfp->doc, path, &txtParFmt, &txtColFmt, fnt, 0);
-      /* document.c: SaveTableItem does not strip preceeding tabs if tabCount is 0 */
+  if (useScrollText) {
+    tfp->text = ScrollText (w, (pixwidth + stdCharWidth - 1) / stdCharWidth,
+                            (pixheight + stdLineHeight - 1) / stdLineHeight,
+                            fnt, FALSE, NULL);
+    SetObjectExtra (tfp->text, tfp, NULL);
+    RealizeWindow (w);
+    if (! FileToScrollText (tfp->text, path)) {
+      /* SetTitle (tfp->text, "(Text is too large to be displayed in this control.)"); */
+      Remove (w);
+      LaunchGeneralTextViewerEx (path, title, FALSE);
+      return;
     }
-    Show (w);
-    Select (w);
-    Update ();
-  } 
+  } else {
+    tfp->doc = DocumentPanel (w, pixwidth, pixheight);
+    SetObjectExtra (tfp->doc, tfp, NULL);
+    RealizeWindow (w);
+    txtColFmt.pixWidth = screenRect.right - screenRect.left;
+    txtColFmt.pixInset = 8;
+    DisplayFancy (tfp->doc, path, &txtParFmt, &txtColFmt, fnt, 0);
+    /* document.c: SaveTableItem does not strip preceeding tabs if tabCount is 0 */
+  }
+  Show (w);
+  Select (w);
+  Update ();
+}
+
+extern void LaunchGeneralTextViewer (CharPtr path, CharPtr title)
+
+{
+  TextViewProcsPtr tvpp;
+
+  tvpp = (TextViewProcsPtr) GetAppProperty ("TextDisplayForm");
+  if (tvpp != NULL && tvpp->useScrollText) {
+    LaunchGeneralTextViewerEx (path, title, TRUE);
+  } else {
+    LaunchGeneralTextViewerEx (path, title, FALSE);
+  }
 }
 
 #ifndef WIN_MAC

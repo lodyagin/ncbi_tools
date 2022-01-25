@@ -1,4 +1,4 @@
-/*  $Id: ncbi_dispd.c,v 6.51 2002/12/10 22:11:50 lavr Exp $
+/*  $Id: ncbi_dispd.c,v 6.55 2003/02/13 21:38:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -74,6 +74,7 @@ typedef struct {
 
 
 typedef struct {
+    int/*bool*/   disp_fail;
     SConnNetInfo* net_info;
     SDISPD_Node*  s_node;
     size_t        n_node;
@@ -122,11 +123,27 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
-static int/*bool*/ s_ParseHeader(const char* header, void *data,
+static int/*bool*/ s_ParseHeader(const char* header, void *iter,
                                  int/*ignored*/ server_error)
 {
-    SERV_Update((SERV_ITER) data, header);
+    SERV_Update((SERV_ITER) iter, header);
     return 1/*header parsed okay*/;
+}
+
+
+#ifdef __cplusplus
+extern "C" {
+    static int s_Adjust(SConnNetInfo*, void*, unsigned int);
+}
+#endif /* __cplusplus */
+
+/* This callback is only for services called via direct HTTP */
+static int/*bool*/ s_Adjust(SConnNetInfo* net_info,
+                            void*         iter,
+                            unsigned int  n)
+{
+    SDISPD_Data* data = (SDISPD_Data*)((SERV_ITER) iter)->data;
+    return data->disp_fail ? 0/*failed*/ : 1/*try again*/;
 }
 
 
@@ -135,7 +152,8 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     static const char service[]  = "service";
     static const char address[]  = "address";
     static const char platform[] = "platform";
-    SConnNetInfo *net_info = ((SDISPD_Data*) iter->data)->net_info;
+    SDISPD_Data* data = (SDISPD_Data*) iter->data;
+    SConnNetInfo *net_info = data->net_info;
     CONNECTOR conn = 0;
     const char *arch;
     char* s;
@@ -172,9 +190,10 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
              " (C Toolkit)"
 #endif
              "\r\n");
+        data->disp_fail = 0;
         /* All the rest in the net_info structure is fine with us */
         conn = HTTP_CreateConnectorEx(net_info, fHCC_SureFlush, s_ParseHeader,
-                                      0/*adjust*/, iter/*data*/, 0/*cleanup*/);
+                                      s_Adjust, iter/*data*/, 0/*cleanup*/);
     }
     if (s) {
         ConnNetInfo_DeleteUserHeader(net_info, s);
@@ -222,6 +241,7 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
         if (data->net_info->debug_printout)
             CORE_LOGF(eLOG_Warning, ("[DISPATCHER]  %s", p));
 #endif
+        data->disp_fail = 1;
         return 1/*updated*/;
     }
 
@@ -258,7 +278,7 @@ static int/*bool*/ s_IsUpdateNeeded(SDISPD_Data *data)
 
 static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
 {
-    double total = 0.0, point = -1.0, access = 0.0, p = 0.0, status;
+    double total = 0.0, point = 0.0, access = 0.0, p = 0.0, status;
     SDISPD_Data* data = (SDISPD_Data*) iter->data;
     SSERV_Info* info;
     size_t i;
@@ -276,12 +296,14 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
         assert(status != 0.0);
 
         if (info->host == iter->preferred_host) {
-            if (info->coef <= 0.0) {
+            if (info->coef <= 0.0 || iter->preference) {
                 status *= SERV_DISPD_LOCAL_SVC_BONUS;
-                if (info->coef < 0.0 && access < status) {
+                if (access < status &&
+                    (iter->preference || info->coef < 0.0)) {
                     access =  status;
                     point  =  total + status; /* Latch this local server */
                     p      = -info->coef;
+                    assert(point > 0.0);
                 }
             } else
                 status *= info->coef;
@@ -290,10 +312,23 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
         data->s_node[i].status = total;
     }
 
+    if (point > 0.0 && iter->preference) {
+        if (total != access) {
+            p = SERV_Preference(iter->preference, access/total, data->n_node);
+            status = total*p;
+            p = total*(1.0 - p)/(total - access);
+            for (i = 0; i < data->n_node; i++) {
+                data->s_node[i].status *= p;
+                if (p*point <= data->s_node[i].status)
+                    data->s_node[i].status += status - p*access;
+            }
+        }
+        point = -1.0;
+    }
     /* We take pre-chosen local server only if its status is not less than
        p% of the average remaining status; otherwise, we ignore the server,
        and apply the generic procedure by seeding a random point. */
-    if (point < 0.0 || access*(data->n_node - 1) < p*0.01*(total - access))
+    if (point <= 0.0 || access*(data->n_node - 1) < p*0.01*(total - access))
         point = (total * rand()) / (double) RAND_MAX;
     for (i = 0; i < data->n_node; i++) {
         if (point <= data->s_node[i].status)
@@ -349,7 +384,7 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 {
     SDISPD_Data* data;
 
-    if (!(data = (SDISPD_Data*) malloc(sizeof(*data))))
+    if (!(data = (SDISPD_Data*) calloc(1, sizeof(*data))))
         return 0;
     if (!s_RandomSeed) {
         s_RandomSeed = (int) time(0) + (int) SOCK_gethostbyname(0);
@@ -360,8 +395,6 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
         data->net_info->stateless = 1/*true*/;
     if (iter->type & fSERV_Firewall)
         data->net_info->firewall = 1/*true*/;
-    data->n_node = data->n_max_node = 0;
-    data->s_node = 0;
     iter->data = data;
 
     iter->op = &s_op; /* SERV_Update() - from HTTP callback - expects this */
@@ -382,6 +415,18 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_dispd.c,v $
+ * Revision 6.55  2003/02/13 21:38:22  lavr
+ * Comply with new SERV_Preference() prototype
+ *
+ * Revision 6.54  2003/02/06 17:35:36  lavr
+ * Move reset of disp_fail to correct place in s_Resolve()
+ *
+ * Revision 6.53  2003/02/04 22:02:44  lavr
+ * Introduce adjustment routine and disp_fail member to avoid MAX_TRY retrying
+ *
+ * Revision 6.52  2003/01/31 21:17:37  lavr
+ * Implementation of perference for preferred host
+ *
  * Revision 6.51  2002/12/10 22:11:50  lavr
  * Stamp HTTP packets with "User-Agent:" header tag and DISP_PROTOCOL_VERSION
  *

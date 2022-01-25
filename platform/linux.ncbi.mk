@@ -1,5 +1,5 @@
 #
-# $Id: linux.ncbi.mk,v 1.25 2002/10/29 01:20:13 lavr Exp $
+# $Id: linux.ncbi.mk,v 1.28 2003/04/16 15:29:48 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
@@ -8,7 +8,7 @@ NCBI_MAKE_SHELL = /bin/sh
 #NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
 #it appears the flags above do not working anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
-NCBI_CC = gcc -static -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
+NCBI_CC = gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2
 NCBI_OPTFLAG = -O2
@@ -21,10 +21,10 @@ NCBI_LIBDIR = /home/coremake/ncbi/lib
 NCBI_ALTLIB = /home/coremake/ncbi/altlib
 #will work only when you have Motif installed!
 NCBI_VIBFLAG = -I/usr/X11R6/include -L/usr/X11R6/lib -DWIN_MOTIF
-NCBI_VIBLIBS = -lXm -lXmu -lXt -lSM -lICE -lXext -lXp -lX11 -ldl
+NCBI_VIBLIBS = -lXmu -lXm -lXt -lSM -lICE -lXext -lXp -lX11 -ldl
 #warning! If you have only dynamic version of Motif or Lesstif
 #you should delete -Wl,-Bstatic sentence from the next line:
-NCBI_DISTVIBLIBS = -L/usr/X11R6/lib -lXm -lXmu -lXt -lSM -lICE -lXext -lXp -lX11 -ldl
+NCBI_DISTVIBLIBS = -L/usr/X11R6/lib -lXmu -lXm -lXt -lSM -lICE -lXext -lXp -lX11 -ldl
 NCBI_OTHERLIBS = -lm
 NCBI_RANLIB = ranlib
 # Used by makedis.csh

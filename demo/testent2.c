@@ -338,6 +338,21 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
     printf ("Boolean request failed\n");
   }
 
+  e2rq = EntrezCreateBooleanRequest (TRUE, TRUE, "Nucleotide", "recA [BAD", 0, 0, NULL, 10, 0);
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    SaveEntrezReply (e2ry);
+    if (showuids) {
+      SaveBooleanIdList (e2ry); /* also frees e2ry */
+    } else {
+      Entrez2ReplyFree (e2ry);
+    }
+  } else {
+    printf ("Boolean request failed\n");
+  }
+
   e2rq = EntrezCreateGetTermPositionRequest ("nucleotide", "ORGN", "Zea");
   SaveEntrezRequest (e2rq);
   e2ry = EntrezSynchronousQuery (e2rq);

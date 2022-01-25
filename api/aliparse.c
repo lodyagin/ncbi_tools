@@ -8,7 +8,6 @@
 
 #include <aliparse.h>
 #include <aliread.h>
-#include <alignmgr2.h>
 
 /* Defined constants */
 
@@ -115,7 +114,7 @@ AliConfigInfoPtr Ali_GetConfig (void)
       s_configInfo.declaredInfo.seqLength     = 0;
 
       s_configInfo.gapChar = (CharPtr) MemNew (32);
-      sprintf (s_configInfo.gapChar    , "%c", ALI_GAP_CHAR);
+      sprintf (s_configInfo.gapChar    , "%c%c", ALI_GAP_CHAR, '.');
       s_configInfo.missingChar = (CharPtr) MemNew (32);
       sprintf (s_configInfo.missingChar, "%c", ALI_MISSING_CHAR);
 
@@ -265,7 +264,7 @@ Boolean Ali_SetConfig (AliConfigInfoPtr configPtr,
       s_configInfo.declaredInfo.idCount       = 0;
       s_configInfo.declaredInfo.seqLength     = 0;
       s_configInfo.gapChar = (CharPtr) MemNew (32);
-      sprintf (s_configInfo.gapChar    , "%c", ALI_GAP_CHAR);
+      sprintf (s_configInfo.gapChar    , "%c%c", ALI_GAP_CHAR, '.');
       s_configInfo.missingChar = (CharPtr) MemNew (32);
       sprintf (s_configInfo.missingChar, "%c", ALI_MISSING_CHAR);
     }
@@ -546,6 +545,9 @@ static CharPtr s_GetRowIdString (ValNodePtr row)
   DefLineInfoPtr   defLinePtr;
   OtherLineInfoPtr otherLinePtr;
 
+  if (row == NULL)
+    return NULL;
+
   if (row->choice == ALI_SEQLINE)
     {
       seqLinePtr = (SeqLineInfoPtr) row->data.ptrvalue;
@@ -589,6 +591,9 @@ static CharPtr s_GetRowSeqString (ValNodePtr row)
 {
   CharPtr          newSeqStr;
   SeqLineInfoPtr   seqLinePtr;
+
+  if (row == NULL)
+    return NULL;
 
   if (row->choice == ALI_SEQLINE)
     {
@@ -1826,6 +1831,7 @@ ErrInfoPtr Ali_AddError (ErrInfoPtr PNTR errorListPtr,
   Int4       declaredLen;
   Int4       sequenceCount;
   Int4       errorCount;
+  Int4       invalidChar;
 
   static Int4 count = 0;
 
@@ -1933,9 +1939,10 @@ ErrInfoPtr Ali_AddError (ErrInfoPtr PNTR errorListPtr,
       break;
     case ERR_INVALID_DEFLINE :
       defLineStr = va_arg (argPtr, CharPtr);
+      invalidChar = va_arg (argPtr, Int4);
       newError->info = (CharPtr) MemNew (strlen (defLineStr) + 100);
-      sprintf (newError->info, "Invalid definitions line :\n%s",
-	       defLineStr);
+      sprintf (newError->info, "Invalid definitions line (illegal char '%c'):\n%s",
+	       (Char) invalidChar, defLineStr);
       break;
     case ERR_DEFLINE_NODEFS :
       defLineStr = va_arg (argPtr, CharPtr);
@@ -2357,6 +2364,39 @@ static void s_SortErrors (AlignFileDataPtr fileInfoPtr)
 
 /*=========================================================================*/
 /*                                                                         */
+/* s_ReplaceUWithT () -- Replace all the Us in a nucleotide sequence with  */
+/*                       Ns.                                               */
+/*                                                                         */
+/*=========================================================================*/
+
+static void s_ReplaceUWithT (AlignFileDataPtr fileInfoPtr)
+{
+  IdInfoPtr  seqPtr = NULL;
+  SeqPartPtr seqPart = NULL;
+  CharPtr    seqString;
+  Int4       i;
+
+  seqPtr = fileInfoPtr->sequences;
+  while (seqPtr != NULL)
+    {
+      seqPart = seqPtr->sequence;
+      while (seqPart != NULL)
+	{
+	  seqString = seqPart->sequence;
+	  for (i = 0; seqString[i] != '\0'; i++)
+	    if (seqString[i] == 'U')
+	      seqString[i] = 'T';
+	    else if (seqString[i] == 'u')
+	      seqString[i] = 't';
+	  seqPart = seqPart->next;
+	}
+      seqPtr = seqPtr->next;
+    }
+
+}
+
+/*=========================================================================*/
+/*                                                                         */
 /* s_AnalyzeErrors () -- Look for patterns in the errors that can be used  */
 /*                       to create more general, higher-level errors       */
 /*                       instead.                                          */
@@ -2542,14 +2582,19 @@ AlignFileDataPtr Ali_Read (FILE PNTR alignFilePtr)
 
   /* Return the missing, gap, and unaligned chars used */
 
-  fileInfoPtr->info->missingChar = (CharPtr) MemNew(2);
+  fileInfoPtr->info->missingChar = (CharPtr) MemNew(16);
   StringCpy (fileInfoPtr->info->missingChar, s_configInfo.missingChar);
 
-  fileInfoPtr->info->gapChar = (CharPtr) MemNew(2);
+  fileInfoPtr->info->gapChar = (CharPtr) MemNew(16);
   StringCpy (fileInfoPtr->info->gapChar, s_configInfo.gapChar);
 
-  fileInfoPtr->info->unalignedChar = (CharPtr) MemNew(2);
+  fileInfoPtr->info->unalignedChar = (CharPtr) MemNew(16);
   StringCpy (fileInfoPtr->info->unalignedChar, s_configInfo.unalignedChar);
+
+  /* If these are nucleotide sequences, then */
+  /* replace all 'U's with 'T's.             */
+
+  s_ReplaceUWithT (fileInfoPtr);
 
   /* Clean up and return successfully */
   
@@ -2569,9 +2614,9 @@ typedef struct tinyinfo {
 } ALI_TinyInfo, PNTR ALI_TinyInfoPtr;
 
 
-static Boolean is_thiskind_char(Char c, CharPtr thisChar)
+static Boolean is_gap_char(Char c, CharPtr gapChar)
 {
-   if (StrChr(thisChar, c) != NULL)
+   if (StrChr(gapChar, c) != NULL)
       return TRUE;
    return FALSE;
 }
@@ -2590,101 +2635,13 @@ static int LIBCALLBACK ALI_SortTips(VoidPtr ptr1, VoidPtr ptr2)
    return 0;
 }
 
-static SeqAlignPtr ALI_ChopUpSap(SeqAlignPtr sap, ALI_TinyInfoPtr unal)
-{
-   Int4         ctr;
-   Int4         dim;
-   DenseSegPtr  dsp;
-   Int4         i;
-   Int4         last;
-   Int4         len;
-   SeqAlignPtr  salp;
-   SeqAlignPtr  salp_head;
-   SeqAlignPtr  salp_prev;
-
-   if (sap == NULL || unal == NULL)
-      return NULL;
-   last = 0;
-   salp_head = salp_prev = NULL;
-   AlnMgr2IndexSingleChildSeqAlign(sap);
-   ctr = 0;
-   dsp = (DenseSegPtr)(sap->segs);
-   dim = dsp->dim;
-   while (unal != NULL)
-   {
-      salp = AlnMgr2GetSubAlign(sap, last, unal->n-1, 0, TRUE);
-      if (ctr > 0)
-      {
-         dsp = (DenseSegPtr)(salp->segs);
-         for (i=0; i<dsp->dim*dsp->numseg; i++)
-         {
-            if (dsp->starts[i] != -1)
-               dsp->starts[i] -= ctr;
-         }
-      }
-      if (salp_head != NULL && salp != NULL)
-      {
-         salp_prev->next = salp;
-         salp_prev = salp;
-      } else if (salp_head == NULL && salp != NULL)
-         salp_head = salp_prev = salp;
-      ctr++;
-      while (unal->next != NULL && unal->n == unal->next->n-1)
-      {
-         ctr++;
-         last = unal->n+1;
-         unal = unal->next;
-      }
-      unal = unal->next;
-   }
-   len = AlnMgr2GetAlnLength(sap, FALSE);
-   salp = AlnMgr2GetSubAlign(sap, last+1, len-1, 0, TRUE);
-   if (ctr > 0)
-   {
-      /* adjust all seqs by offset to get real bsp coords */
-      dsp = (DenseSegPtr)(salp->segs);
-      for (i=0; i<dsp->dim*dsp->numseg; i++)
-      {
-         if (dsp->starts[i] != -1)
-            dsp->starts[i] -= ctr;
-      }
-   }
-   if (salp_head != NULL && salp != NULL)
-   {
-      salp_prev->next = salp;
-      salp_prev = salp;
-   } else if (salp_head == NULL && salp != NULL)
-      salp_head = salp_prev = salp;
-   DenseSegFree((DenseSegPtr)(sap->segs));
-   sap->dim = dim;
-   sap->segs = (Pointer)(salp_head);
-   sap->segtype = SAS_DISC;
-   sap->type = SAT_GLOBAL;
-   return sap;
-}
-
-static ALI_TinyInfoPtr ali_free_tiplist(ALI_TinyInfoPtr tip)
-{
-   ALI_TinyInfoPtr tmp;
-
-   while (tip != NULL)
-   {
-      tmp = tip->next;
-      MemFree(tip);
-      tip = tmp;
-   }
-   return NULL;
-}
-
-static Boolean is_valid_seq(Char c, CharPtr missingChar, CharPtr gapChar, CharPtr unalignedChar)
+static Boolean is_valid_seq(Char c, CharPtr missingChar, CharPtr gapChar)
 {
   if (StrChr("\0", c))
     return FALSE;
   if (StrChr(missingChar, c) != NULL)
     return TRUE;
   if (StrChr(gapChar, c) != NULL)
-    return TRUE;
-  if (StrChr(unalignedChar, c) != NULL)
     return TRUE;
   if (IS_ALPHA(c))
     return TRUE;
@@ -2693,6 +2650,14 @@ static Boolean is_valid_seq(Char c, CharPtr missingChar, CharPtr gapChar, CharPt
   if (c == '?')
     return TRUE;
   return FALSE;
+}
+
+static Boolean is_missing(Char c, CharPtr missingChar)
+{
+   if (StrChr(missingChar, c) != NULL)
+      return TRUE;
+   else
+      return FALSE;
 }
 
 static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stringsptr, Int4Ptr numseq, CharPtr PNTR PNTR deflineptr)
@@ -2723,9 +2688,6 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
    ALI_TinyInfoPtr  tip;
    ALI_TinyInfoPtr  tip_head;
    ALI_TinyInfoPtr  tip_prev;
-   ALI_TinyInfoPtr  tip_unal;
-   ALI_TinyInfoPtr  tip_unal_head;
-   ALI_TinyInfoPtr  tip_unal_prev;
    ALI_TinyInfoPtr  PNTR tiparray;
 
    if (afp->info == NULL)
@@ -2762,7 +2724,6 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
    numtips = 0;
    alnlen = 0;
    i = 1;
-   tip_unal_head = tip_unal_prev = NULL;
    while (iip != NULL)
    {
       len = 0;
@@ -2775,7 +2736,7 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
          return NULL;
       }
       c = seq->sequence;
-      if (is_thiskind_char(*c, afp->info->gapChar))
+      if (is_gap_char(*c, afp->info->gapChar))
          ingap = TRUE;
       else
          ingap = FALSE;
@@ -2788,9 +2749,9 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
             ErrPostEx(SEV_ERROR, 0, 0, text);
             return NULL;
          }
-         while (is_valid_seq(*c, afp->info->missingChar, afp->info->gapChar, afp->info->unalignedChar))
+         while (is_valid_seq(*c, afp->info->missingChar, afp->info->gapChar))
          {
-            if (is_thiskind_char(*c, afp->info->gapChar) && !ingap)
+            if (is_gap_char(*c, afp->info->gapChar) && !ingap)
             {
                tip = (ALI_TinyInfoPtr)MemNew(sizeof(ALI_TinyInfo));
                tip->n = ctr;
@@ -2802,7 +2763,7 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
                   tip_head = tip_prev = tip;
                ingap = TRUE;
                numtips++;
-            } else if (!is_thiskind_char(*c, afp->info->gapChar) && ingap)
+            } else if (!is_gap_char(*c, afp->info->gapChar) && ingap)
             {
                tip = (ALI_TinyInfoPtr)MemNew(sizeof(ALI_TinyInfo));
                tip->n = ctr;
@@ -2815,30 +2776,8 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
                ingap = FALSE;
                numtips++;
             }
-            if (!is_thiskind_char(*c, afp->info->gapChar))
+            if (!is_gap_char(*c, afp->info->gapChar))
                len++;
-            if (is_thiskind_char(*c, afp->info->unalignedChar))
-            {
-               if (i == 1)
-               {
-                  tip = (ALI_TinyInfoPtr)MemNew(sizeof(ALI_TinyInfo));
-                  tip->n = ctr;
-                  if (tip_unal_head != NULL)
-                  {
-                     tip_unal_prev->next = tip;
-                     tip_unal_prev = tip;
-                  } else
-                     tip_unal_head = tip_unal_prev = tip;
-               } else
-               {
-                  if (tip_unal == NULL || ctr != tip_unal->n)
-                  {
-                     Message(MSG_OKC, "Sequence %d does not have the same unaligned regions as the first sequence. No alignment will be created.", i);
-                     return NULL;
-                  } else
-                     tip_unal = tip_unal->next;
-               }
-            }
             ctr++;
             c++;
          }
@@ -2850,7 +2789,6 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
          maxlen = len;
       iip = iip->next;
       i++;
-      tip_unal = tip_unal_head;
    }
    if (tip_head == NULL) /* this is a gapless alignment */
    {
@@ -2887,17 +2825,13 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
          while (seq != NULL)
          {
             c = seq->sequence;
-            while (is_valid_seq(*c, afp->info->missingChar, afp->info->gapChar, afp->info->unalignedChar))
+            while (is_valid_seq(*c, afp->info->missingChar, afp->info->gapChar))
             {
-               if (is_thiskind_char(*c, afp->info->missingChar))
-               {
+               if (is_missing(*c, afp->info->missingChar))
                   buf[ctr] = 'N';
-                  ctr++;
-               } else if (!is_thiskind_char(*c, afp->info->unalignedChar))
-               {
+               else
                   buf[ctr] = *c;
-                  ctr++;
-               }
+               ctr++;
                c++;
             }
             seq = seq->next;
@@ -2911,9 +2845,6 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
       *numseq = dsp->dim;
       *stringsptr = strings;
       *deflineptr = deflines;
-      if (tip_unal_head != NULL)
-         sap = ALI_ChopUpSap(sap, tip_unal_head);
-      tip_unal_head = ali_free_tiplist(tip_unal_head);
       return sap;
    }
    /* now all the segment boundaries have been collected, so sort them */
@@ -2984,20 +2915,16 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
       while (seq != NULL)
       {
          c = seq->sequence;
-         while (is_valid_seq(*c, afp->info->missingChar, afp->info->gapChar, afp->info->unalignedChar))
+         while (is_valid_seq(*c, afp->info->missingChar, afp->info->gapChar))
          {
-            isgap = is_thiskind_char(*c, afp->info->gapChar);
+            isgap = is_gap_char(*c, afp->info->gapChar);
             if (!isgap)
             {
-               if (is_thiskind_char(*c, afp->info->missingChar))
-               {
+               if (is_missing(*c, afp->info->missingChar))
                   buf[ctr] = 'N';
-                  ctr++;
-               } else if (!is_thiskind_char(*c, afp->info->unalignedChar))
-               {
+               else
                   buf[ctr] = *c;
-                  ctr++;
-               }
+               ctr++;
             }
             len++;
             if (len == dsp->lens[j])
@@ -3037,9 +2964,6 @@ static SeqAlignPtr ALI_MakeSeqAlign(AlignFileDataPtr afp, CharPtr PNTR PNTR stri
    *numseq = dsp->dim;
    *stringsptr = strings;
    *deflineptr = deflines;
-   if (tip_unal_head != NULL)
-      sap = ALI_ChopUpSap(sap, tip_unal_head);
-   tip_unal_head = ali_free_tiplist(tip_unal_head);
    return sap;
 }
 
@@ -3292,31 +3216,21 @@ static void PrintOutSegs(SeqAlignPtr sap)
 
 NLM_EXTERN SeqEntryPtr ALI_ConvertToNCBIData(AlignFileDataPtr afp)
 {
-   ByteStorePtr  bs;
-   BioseqPtr     bsp;
-   CharPtr       PNTR deflines;
-   DeltaSeqPtr   dsp;
-   DeltaSeqPtr   dsp_head;
-   DeltaSeqPtr   dsp_prev;
-   Int4          i;
-   Int4          len;
-   Uint1         moltype;
-   Int4          numseq;
-   SeqAlignPtr   salp;
-   SeqAnnotPtr   sanp;
-   SeqAlignPtr   sap;
-   SeqDescrPtr   sdp;
-   SeqEntryPtr   sep;
-   SeqEntryPtr   sep_head;
-   SeqEntryPtr   sep_prev;
-   CharPtr       seqstr;
-   SeqIdPtr      sip;
-   SeqLitPtr     slip;
-   Int4          start;
-   Int4          start_seq;
-   Int4          stop_seq;
-   CharPtr       str;
-   CharPtr       PNTR strings;
+   BioseqPtr    bsp;
+   CharPtr      PNTR deflines;
+   Int4         i;
+   Int4         len;
+   Uint1        moltype;
+   Int4         numseq;
+   SeqAnnotPtr  sanp;
+   SeqAlignPtr  sap;
+   SeqDescrPtr  sdp;
+   SeqEntryPtr  sep;
+   SeqEntryPtr  sep_head;
+   SeqEntryPtr  sep_prev;
+   SeqIdPtr     sip;
+   CharPtr      str;
+   CharPtr      PNTR strings;
 
    if (afp == NULL || afp->sequences == NULL)
    {
@@ -3333,95 +3247,31 @@ NLM_EXTERN SeqEntryPtr ALI_ConvertToNCBIData(AlignFileDataPtr afp)
    sanp->type = 2;
    sanp->data = (Pointer)sap;
    moltype = ALI_GuessMoltype(strings[0]);
-   if (sap->segtype == SAS_DISC)
-      sip = ((DenseSegPtr)((SeqAlignPtr)(sap->segs))->segs)->ids;
-   else
-      sip = ((DenseSegPtr)(sap->segs))->ids;
+   sip = ((DenseSegPtr)(sap->segs))->ids;
    sep_head = sep_prev = NULL;
    for (i=0; i<numseq; i++)
    {
-      if (sap->segtype != SAS_DISC)
-      {
-         len = StringLen(strings[i]);
-         sep = StringToSeqEntry (strings[i], sip, len, moltype);
-         bsp = (BioseqPtr)(sep->data.ptrvalue);
-         if (!StringHasNoText (deflines[i]))
-         {
-           str = deflines[i];
-           sdp = SeqDescrAddPointer(&(bsp->descr), Seq_descr_title, str);
-         }
-      } else
-      {
-         salp = (SeqAlignPtr)(sap->segs);
-         start = 0;
-         seqstr = strings[i];
-         dsp_head = dsp_prev = NULL;
-         while (salp != NULL)
-         {
-            if (salp->saip == NULL)
-               AlnMgr2IndexSingleChildSeqAlign(salp);
-            dsp = ValNodeNew(NULL);
-            slip = SeqLitNew();
-            AlnMgr2GetNthSeqRangeInSA(salp, i+1, &start_seq, &stop_seq);
-            slip->length = stop_seq-start_seq+1;
-            if (moltype == Seq_mol_na)
-               slip->seq_data_type = Seq_code_iupacna;
-            else
-               slip->seq_data_type = Seq_code_iupacaa;
-            bs = BSNew(slip->length);
-            BSWrite(bs, (VoidPtr)(seqstr), slip->length);
-            slip->seq_data = bs;
-            if (salp->next != NULL)
-               seqstr += slip->length;
-            start += slip->length;
-            dsp->choice = 2;
-            dsp->data.ptrvalue = slip;
-            if (dsp_head != NULL)
-            {
-               dsp_prev->next = dsp;
-               dsp_prev = dsp;
-            } else
-               dsp_head = dsp_prev = dsp;
-            salp = salp->next;
-         }
-         bsp = BioseqNew();
-         bsp->id = SeqIdDup(sip);
-         bsp->length = start;
-         bsp->repr = Seq_repr_delta;
-         bsp->seq_ext_type = 4;
-         bsp->seq_ext = (Pointer)dsp_head;
-         bsp->mol = moltype;
-         if (!StringHasNoText (deflines[i]))
-         {
-           str = deflines[i];
-           sdp = SeqDescrAddPointer(&(bsp->descr), Seq_descr_title, str);
-         }
-         sep = SeqEntryNew();
-         sep->choice = 1;
-         sep->data.ptrvalue = (Pointer)bsp;
-      }
-      if (sep != NULL)
-      {
-         if (sep_head != NULL)
-         {
-            sep_prev->next = sep;
-            sep_prev = sep;
-         } else
-            sep_head = sep_prev = sep;
-      }
-      sip = sip->next;
-      MemFree(strings[i]);
-   }
-   if (sap->segtype == SAS_DISC)
-   {
-      salp = (SeqAlignPtr)(sap->segs);
-      while (salp != NULL)
-      {
-         AMAlignIndexFreeEitherIndex(salp);
-         salp = salp->next;
+      len = StringLen(strings[i]);
+      sep = StringToSeqEntry (strings[i], sip, len, moltype);
+      if (sep != NULL) {
+	bsp = (BioseqPtr)(sep->data.ptrvalue);
+	if (! StringHasNoText (deflines[i])) {
+	  str = deflines[i];
+	  sdp = SeqDescrAddPointer(&(bsp->descr), Seq_descr_title, str);
+	}
+	if (sep != NULL)
+	  {
+	    if (sep_head != NULL)
+	      {
+		sep_prev->next = sep;
+		sep_prev = sep;
+	      } else
+		sep_head = sep_prev = sep;
+	  }
+	sip = sip->next;
+	MemFree(strings[i]);
       }
    }
-   AMAlignIndexFreeEitherIndex(sap);
    sep_head = ALI_make_seqentry_for_seqentry (sep_head);
    SeqAlignAddInSeqEntry (sep_head, sanp);
    MemFree(strings);

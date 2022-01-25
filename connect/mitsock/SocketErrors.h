@@ -36,7 +36,7 @@
  * $
  */
 
-/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/SocketErrors.h,v 1.1 2001/04/03 20:35:40 juran Exp $ */
+/* $Header: /src/NCBI/vault.ncbi/distrib/connect/mitsock/SocketErrors.h,v 1.1 2001/04/03 20:35:40 juran Exp $ */
 
 /* 
  *

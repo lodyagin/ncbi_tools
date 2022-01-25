@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.24 2002/12/04 21:00:53 lavr Exp $
+/*  $Id: ncbi_util.c,v 6.26 2003/01/17 15:55:13 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -152,14 +152,18 @@ extern char* LOG_ComposeMessage
     size_t total_len;
 
     /* Adjust formatting flags */
-    if (call_data->level == eLOG_Trace  &&  format_flags != fLOG_None) {
-        format_flags |= fLOG_Full;
-    } else if (format_flags == fLOG_Default) {
-#ifdef NDEBUG
+    if (call_data->level == eLOG_Trace) {
+#if defined(NDEBUG)  &&  !defined(_DEBUG)
+        if (!(format_flags & fLOG_None))
+#endif /*NDEBUG && !_DEBUG*/
+            format_flags |= fLOG_Full;
+    }
+    if (format_flags == fLOG_Default) {
+#if defined(NDEBUG)  &&  !defined(_DEBUG)
         format_flags = fLOG_Short;
 #else
         format_flags = fLOG_Full;
-#endif
+#endif /*NDEBUG && !_DEBUG*/
     }
 
     /* Pre-calculate total message length */
@@ -360,7 +364,6 @@ extern char* MessagePlusErrno
  char*        buf,
  size_t       buf_size)
 {
-    int/*bool*/ has_errno = (x_errno != 0);
     char* beg;
     char* end;
 
@@ -401,7 +404,7 @@ extern char* MessagePlusErrno
         return buf;
 
     /* <x_errno> */
-    {{
+    if ( x_errno ) {
         int/*bool*/ neg;
         /* calculate length */
         size_t len;
@@ -421,7 +424,7 @@ extern char* MessagePlusErrno
 
         /* ? not enough space */
         if (beg + len >= end) {
-            s_SafeCopy("....", &beg, end);
+            s_SafeCopy("...", &beg, end);
             return buf;
         }
 
@@ -437,11 +440,12 @@ extern char* MessagePlusErrno
             *beg++ = s_Num[x_errno / mod];
             x_errno %= mod;
         }
-    }}
+        /* "," before "<descr>" */
+        if (descr  &&  *descr  &&  beg != end)
+            *beg++ = ',';
+    }
 
-    /* ",<descr>" */
-    if (has_errno  &&  descr  &&  *descr  &&  beg != end)
-        *beg++ = ',';
+    /* "<descr>" */
     if ( s_SafeCopy(descr, &beg, end) )
         return buf;
 
@@ -495,6 +499,12 @@ extern const char* CORE_GetPlatform(void)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.26  2003/01/17 15:55:13  lavr
+ * Fix errno reporting (comma was missing if errno == 0)
+ *
+ * Revision 6.25  2003/01/17 01:23:07  lavr
+ * Always print full message for TRACE log in Debug mode
+ *
  * Revision 6.24  2002/12/04 21:00:53  lavr
  * -CORE_LOG[F]_SYS_ERRNO()
  *

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNECTOR__H
 #define CONNECT___NCBI_CONNECTOR__H
 
-/*  $Id: ncbi_connector.h,v 6.11 2002/09/19 18:00:11 lavr Exp $
+/*  $Id: ncbi_connector.h,v 6.13 2003/04/09 17:58:45 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,13 @@
  */
 
 #include <connect/ncbi_core.h>
+
+
+/** @addtogroup Connectors
+ *
+ * @{
+ */
+
 
 #define CONN_DEFAULT_TIMEOUT  ((STimeout*) (-1))
 #define CONN_INFINITE_TIMEOUT ((STimeout*) 0)
@@ -197,7 +204,7 @@ typedef struct {
 
 /* Insert a connector in the beginning of the connection's list of connectors.
  */
-extern EIO_Status METACONN_Add
+extern NCBI_XCONNECT_EXPORT EIO_Status METACONN_Add
 (SMetaConnector* meta,
  CONNECTOR       connector
  );
@@ -207,7 +214,7 @@ extern EIO_Status METACONN_Add
  * is 0) from the connections's list of connectors. FConnectorDestroy is
  * called for each removed connector.
  */
-extern EIO_Status METACONN_Remove
+extern NCBI_XCONNECT_EXPORT EIO_Status METACONN_Remove
 (SMetaConnector* meta,
  CONNECTOR       connector
  );
@@ -269,9 +276,18 @@ typedef EIO_Status (*FConnectorWaitAsync)
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connector.h,v $
+ * Revision 6.13  2003/04/09 17:58:45  siyan
+ * Added doxygen support
+ *
+ * Revision 6.12  2003/01/08 01:59:32  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.11  2002/09/19 18:00:11  lavr
  * Header file guard macro changed
  *

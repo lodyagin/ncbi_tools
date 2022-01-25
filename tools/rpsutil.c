@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.57 2002/11/27 22:23:09 camacho Exp $
+/* $Id: rpsutil.c,v 6.61 2003/01/24 22:26:03 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,24 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.57 $
+* $Revision: 6.61 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.61  2003/01/24 22:26:03  camacho
+* RPSInit is deprecated, use RPSInitEx instead
+*
+* Revision 6.60  2003/01/22 17:09:33  camacho
+* Bug fix in RPSInitEx
+*
+* Revision 6.59  2003/01/21 14:18:45  merezhuk
+* add RPSBlastSearchLight  function to bypass RPS search and use passed results structure.
+*
+* Revision 6.58  2003/01/07 19:45:41  merezhuk
+* add RPSBlastSearchEx to support RPS searches with Net-result-struct type of results
+*
 * Revision 6.57  2002/11/27 22:23:09  camacho
 * Fix to allow multiple sequences to be searched
 *
@@ -249,6 +261,13 @@ typedef struct _RPS_MTDataStruct {
 static Boolean search_is_done;
 static Int4 glb_sequence_count=0;
 
+
+
+int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
+	       Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr subject_bsp);
+
+
+
 void RPSFreeLookup(RPSLookupPtr lookup)
 {
     Nlm_MemMapFini(lookup->mmLookup);
@@ -358,6 +377,7 @@ static Boolean getAuxInformation(CharPtr auxFile, Nlm_FloatHiPtr scalingFactor,
     return TRUE; 
 }
 
+/*** This function is DEPRECATED. Please use RPSInitEx instead (01/24/03) ***/
 RPSInfoPtr RPSInit(CharPtr dbname, Int4 query_is_prot)
 {
 	return RPSInitEx(dbname, query_is_prot, NULL);
@@ -422,21 +442,22 @@ RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr bla
 
     if (blast_options && scalingFactor != 0.0)
     {
-	blast_options->scalingFactor = scalingFactor;
-	blast_options->gap_open = gap_open;
-	blast_options->gap_extend = gap_extend;
-	if (matrix_name[0] != NULLB)
-	{
-		blast_options->matrix = MemFree(blast_options->matrix);
-		blast_options->matrix = StringSave(matrix_name);
-	}
+        blast_options->scalingFactor = scalingFactor;
+        blast_options->gap_open = gap_open;
+        blast_options->gap_extend = gap_extend;
+        if (matrix_name[0] != NULLB)
+        {
+            blast_options->matrix = MemFree(blast_options->matrix);
+            blast_options->matrix = StringSave(matrix_name);
+        }
     }
-
-    rpsinfo->start = blast_options->required_start;
-    rpsinfo->stop  = blast_options->required_end;
-    /* reset kludge */
-    blast_options->required_start = 0;
-    blast_options->required_end = 0; 
+    if (blast_options) {
+        rpsinfo->start = blast_options->required_start;
+        rpsinfo->stop  = blast_options->required_end;
+        /* reset kludge */
+        blast_options->required_start = 0;
+        blast_options->required_end = 0; 
+    }
     
     return rpsinfo;
 }
@@ -1043,6 +1064,7 @@ static Nlm_FloatHi getEvalueFromSeqAlign(SeqAlignPtr thisSeqAlign)
         return((Nlm_FloatHi) (thisScorePtr->value.realvalue));
 }
 
+
 Boolean RPSUpdateResult(BlastSearchBlkPtr search, ReadDBFILEPtr rdfp)
 {
     BLASTResultsStructPtr result_struct, result_struct_new;
@@ -1166,6 +1188,161 @@ RPSimpalaStatCorrections(RPSequencePtr rpseq, Nlm_FloatHiPtr LambdaRatio, Nlm_Fl
 
 /* Multiplier used by Impala, should use Method of Altshul, Bundschuh, etc.? */
 #define PRO_K_MULTIPLIER 1.2
+/*
+ * modify BlastResults structure.
+ *
+ */
+int RPSSearchPartialPrepare( BlastSearchBlkPtr search, 
+			 RPSInfoPtr rpsinfo, 
+			 Uint1Ptr subject_seq,  
+			 SeqLocPtr slp,
+			 BioseqPtr subject_bsp){
+  RPSapSortPtr rpssp;
+  Int4 subject_length = 0;
+
+  if(search->result_struct->hitlist_count == 0 || 
+     search->result_struct->results[0]->hspcnt == 0) /* No brain no pain */
+    return 0;
+  
+  if(search->result_struct->hitlist_count != 1) {
+    ErrPostEx(SEV_ERROR, 0,0, "RPSSearchPartialPrepare: This function works only for hitlist_count == 1 (%d)", 
+	      search->result_struct->hitlist_count);
+    return 0;
+  }
+
+  HeapSort(search->result_struct->results[0]->hsp_array, 
+	   search->result_struct->results[0]->hspcnt, 
+	   sizeof(BLASTResultHsp), 
+	   RPSResultHspScoreCmp);
+    
+  subject_length = SeqLocLen(slp);
+
+
+  search->subject_info = BLASTSubjectInfoNew(
+					     SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), 
+					     StringSave(BioseqGetTitle(subject_bsp)), subject_length);    
+
+  RPSCalcEValue( search, rpsinfo,subject_seq, slp, subject_bsp );
+
+
+  return 0;
+}
+
+/*
+ *  modified version, everything moved out of loop
+ */
+int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
+	       Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr subject_bsp)
+{
+  /*   BLASTResultHspPtr hsp_array, hsp; */
+  /* BLASTResultHsp *hsp_array; */
+  BLASTResultHsp *hsp;
+  Int4 hspcnt, index, index1;
+  BLAST_KarlinBlkPtr PNTR kbp;
+  Nlm_FloatHi searchsp_eff;
+  RPSequencePtr rpseq;  
+  Nlm_FloatHi e_value, lambda_ratio;
+  Int4 subject_length, subject_id;
+  Int4Ptr PNTR posMatrix;
+  Char tmp[128];  
+  
+  /*   hsp_array     = search->result_struct->results[0]->hsp_array; */
+  hspcnt  = search->result_struct->results[0]->hspcnt;
+
+  
+  kbp = search->sbp->kbp_gap;
+  searchsp_eff = search->searchsp_eff;
+
+
+
+  subject_length = SeqLocLen(slp);
+  subject_id = search->result_struct->results[0]->subject_id;
+
+  /* #0.2 */
+  search->result_struct->results[0]->subject_info=
+    BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), 
+			StringSave(BioseqGetTitle(subject_bsp)), subject_length);    
+  /* #0.3 */
+  rpseq = RPSGetSequence(rpsinfo, subject_id);
+
+  /* #0.4 */
+  /* (!!!!!) It looks like this function is called second time 
+  RPSubstituteQueryLookup(search, rpseq, FALSE);
+  */
+
+  /* #0.5 */
+  if (rpsinfo->query_is_prot == TRUE)  {
+    if(!RPSimpalaStatCorrections(rpseq, &lambda_ratio, search->pbp->scalingFactor, 
+				 subject_length, subject_seq)) {
+
+      SeqIdWrite(rpseq->seqid, tmp, PRINTID_FASTA_LONG, sizeof(tmp));	
+      ErrPostEx(SEV_WARNING, 0, rpseq->number, 
+		"BAD matrix for the sequence %s %s",
+		tmp, rpseq->description);
+      RPSequenceFree(rpseq);      
+      return 1; 
+    }
+    /* #0.5.1 */
+    if (rpsinfo->karlinK) {
+      search->sbp->kbp_gap[0]->K = PRO_K_MULTIPLIER*rpsinfo->karlinK[ subject_id ];
+      search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
+      /* scalingFactor should only be different than one (or zero) if
+	 the aux file was read and rpsinfo->karlinK was filled in. */
+    }
+    /* #ifdef DEALLOC_MATRIX *
+    /* #0.5.2 */
+    if (rpseq->copyMatrix) {
+      posMatrix = search->sbp->posMatrix;
+      search->sbp->posMatrix = rpseq->copyMatrix;
+    }
+    /* #endif */
+  }
+
+
+  if (search->pbp->scalingFactor != 0) search->sbp->kbp_gap[0]->Lambda /= search->pbp->scalingFactor;
+  kbp = search->sbp->kbp_gap;
+
+  for (index=0; index<hspcnt; index++) {
+    /* #1 */
+    hsp = &(search->result_struct->results[0]->hsp_array[ index] ); /* sp_array[index]; */
+
+    /*\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ */
+    /* CALCULATE E-VALUE HERE */    
+    e_value = BlastKarlinStoE_simple(hsp->score, kbp[0],   searchsp_eff);
+    hsp->e_value = e_value;
+    /*     fprintf(stderr,"score: %d e-value: %g\n",hsp->score,hsp->e_value); */
+    /*\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ */
+    
+  } /* end of for cycle */
+  
+  /* RESTORE DATA */
+  if (rpsinfo->query_is_prot == TRUE)  {
+    /* #ifdef DEALLOC_MATRIX */
+    /* Deallocate copyMatrix to prevent a leak. */
+    if (rpseq->copyMatrix) {
+/*       for (index1=0; index1<(1+rpseq->seqlen); index1++) */
+/* 	MemFree(rpseq->copyMatrix[index1]); */
+
+      rpseq->copyMatrix = MemFree(rpseq->copyMatrix);
+      search->sbp->posMatrix = posMatrix;
+    }
+    /* #endif */
+    if (rpsinfo->karlinK) {
+      /* Restore K */
+      search->sbp->kbp_gap[0]->K /= PRO_K_MULTIPLIER;
+      search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
+    }    
+  }
+
+  if (search->pbp->scalingFactor != 0) search->sbp->kbp_gap[0]->Lambda *= search->pbp->scalingFactor;  
+
+
+  RPSequenceFree(rpseq);      
+
+  return 0;
+}
+
+
 
 SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
                               Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr
@@ -1415,6 +1592,514 @@ void RRRPrintStatistics(RPSequencePtr rpseq)
     return;
 }
 #endif
+
+/* \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ */
+#ifdef USE_REMOVED
+SeqAlignPtr 
+RPS_FIX(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
+	Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr
+	subject_bsp)
+{ /* ^^^A */
+    SeqAlignPtr seqalign;
+    /* BLASTResultsStructPtr result_struct; */
+    BLASTResultsStructPtr result_struct_new;
+    Int4 index, index1, subject_length, rev_subject_length;
+    Int4Ptr PNTR posMatrix;
+    BLASTResultHitlistPtr new_result;
+    RPSapSortPtr rpssp;
+    RPSequencePtr rpseq;
+    Nlm_FloatHi e_value, lambda_ratio;
+    Uint1Ptr subject = NULL, rev_subject = NULL;
+    SeqPortPtr spp;
+
+
+    fprintf(stderr,"[^^^] RPS_FIX -- START\n");
+
+    /*     result_struct = search->result_struct; */
+
+    if(search->result_struct->hitlist_count == 0 || search-> result_struct->results[0]->hspcnt == 0) /* No brain no pain */
+      return NULL;
+
+    
+    result_struct_new = BLASTResultsStructNew( search->result_struct->results[0]->hspcnt, search->pbp->max_pieces, search->pbp->hsp_range_max);
+    /* ?moved up ? */
+    if(search->result_struct->hitlist_count != 1) {
+        ErrPostEx(SEV_ERROR, 0,0, "RPSUpdateResult: This function works only for hitlist_count == 1 (%d)", search->result_struct->hitlist_count);
+        return NULL;
+    }
+
+    HeapSort(search->result_struct->results[0]->hsp_array, 
+             search->result_struct->results[0]->hspcnt, 
+             sizeof(BLASTResultHsp), RPSResultHspScoreCmp);
+    
+    subject_length = SeqLocLen(slp);
+
+    search->result_struct = result_struct_new;
+
+    search->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), StringSave(BioseqGetTitle(subject_bsp)), subject_length);    
+
+
+
+    rpssp =  RPSapSortInit();
+    
+    /* First we have to update coordinates */
+    RPSUpdateCoordinates(rpsinfo->rdfp, search->result_struct->results[0], FALSE);
+    
+    /* Now we will extract correct "results" one by one 
+       and make alignment then */
+
+    result_struct_new->hitlist_count = 1; /* Always will be 1 */
+    
+    /* We have to create 4na buffer for our query, that is subject */
+    if(!rpsinfo->query_is_prot) {
+        spp = SeqPortNew(subject_bsp, 0, -1, Seq_strand_plus, 
+                         Seq_code_ncbi4na);
+        /* make one longer to "protect" ALIGN. */
+        subject = MemNew((1+subject_bsp->length)*sizeof(Uint1));
+        for (index1 = 0; index1 < subject_bsp->length; index1++) {
+            subject[index1] = SeqPortGetResidue(spp);
+        }
+        
+        /* Gap character in last space. */
+        subject[subject_bsp->length] = NULLB;
+        subject_length = subject_bsp->length;
+        spp = SeqPortFree(spp);
+        
+        spp = SeqPortNew(subject_bsp, 0, -1, Seq_strand_minus, Seq_code_ncbi4na);
+        /* make one longer to "protect" ALIGN. */
+        rev_subject = MemNew((1+subject_bsp->length)*sizeof(Uint1));
+        for (index1=0; index1<subject_bsp->length; index1++) {
+            rev_subject[index1] = SeqPortGetResidue(spp);
+        }
+        /* Gap character in last space. */
+        rev_subject[subject_bsp->length] = NULLB;
+        rev_subject_length = subject_bsp->length;
+        spp = SeqPortFree(spp);
+    }
+
+    /* ---------------------- */
+
+    for(index = 0; index < result_struct_new->hitlist_max; index++) {
+        
+        new_result = RPSExtractNewResult(search->result_struct->results[0]);
+
+        if(new_result == NULL)    break;
+
+        new_result->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), 
+						       StringSave(BioseqGetTitle(subject_bsp)), subject_length);        
+        result_struct_new->results[0] = new_result;
+        
+        /* subject_id == query_id in rdfp database */
+        rpseq = RPSGetSequence(rpsinfo, new_result->subject_id);
+        
+        RPSubstituteQueryLookup(search, rpseq, FALSE);
+	/* Correct statistics for proteins, should also be doen for nucleotides. */
+	if (rpsinfo->query_is_prot == TRUE) {
+            if(!RPSimpalaStatCorrections(rpseq, &lambda_ratio, search->pbp->scalingFactor, 
+                                         subject_length, subject_seq)) {
+                Char tmp[64];
+
+                /* If this function failed - and returned FALSE - matrix
+                   used for this sequence is incorrect and results may not
+                   be trusted. We will post WARNING message and skip this
+                   profile completatly */
+
+                SeqIdWrite(rpseq->seqid, tmp, PRINTID_FASTA_LONG, sizeof(tmp));
+
+                ErrPostEx(SEV_WARNING, 0, rpseq->number, 
+                          "BAD matrix for the sequence %s %s",
+                          tmp, rpseq->description);
+                
+                seqalign = NULL; 
+                RPSequenceFree(rpseq);
+                BLASTResultHitlistFree(new_result);
+                result_struct_new->results[0] = NULL;
+                continue;
+            }
+
+	    if (rpsinfo->karlinK)
+	    {
+		search->sbp->kbp_gap[0]->K = PRO_K_MULTIPLIER*rpsinfo->karlinK[new_result->subject_id];
+		search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
+		/* scalingFactor should only be different than one (or zero) if
+			the aux file was read and rpsinfo->karlinK was filled in. */
+	    }
+
+            if (rpseq->copyMatrix) {
+                posMatrix = search->sbp->posMatrix;
+                search->sbp->posMatrix = rpseq->copyMatrix;
+            }
+	}
+
+	if (search->pbp->scalingFactor != 0) 
+		search->sbp->kbp_gap[0]->Lambda /= search->pbp->scalingFactor;
+
+        if(rpsinfo->query_is_prot) {
+
+            if(search->pbp->gapped_calculation == TRUE) {
+                seqalign = BlastGetGapAlgnTbck(search, 0, TRUE, FALSE, 
+                                               subject_seq, 
+                                               subject_length, NULL, 0);
+                
+            } else {
+                seqalign = GetSeqAlignForResultHitList(search, TRUE, FALSE, 
+                                                       search->pbp->discontinuous, 
+                                                       TRUE, FALSE);
+            }
+        } else { /* tblastn */
+            
+            seqalign = BlastGetGapAlgnTbck (search, 0, TRUE, FALSE, 
+                                            subject, subject_length, 
+                                            rev_subject, rev_subject_length);
+        }
+
+	/* Deallocate copyMatrix to prevent a leak. */
+	if (rpseq->copyMatrix)
+	{
+		for (index1=0; index1<(1+rpseq->seqlen); index1++)
+			MemFree(rpseq->copyMatrix[index1]);
+		rpseq->copyMatrix = MemFree(rpseq->copyMatrix);
+        search->sbp->posMatrix = posMatrix;
+        if (rpsinfo->karlinK) {
+            /* Restore K */
+            search->sbp->kbp_gap[0]->K /= PRO_K_MULTIPLIER;
+            search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
+        }
+	}
+        
+        if(seqalign != NULL && (e_value = getEvalueFromSeqAlign(seqalign)) < 
+           search->pbp->cutoff_e) {
+            AdjustOffSetsInSeqAlign(seqalign, slp, search->query_slp);
+            RPSAddSap(rpssp, seqalign);
+        } else {
+            SeqAlignSetFree(seqalign);
+        }
+        
+        seqalign = NULL; 
+        
+        RPSequenceFree(rpseq);
+        BLASTResultHitlistFree(new_result);
+       
+        result_struct_new->results[0] = NULL;
+    }
+
+    result_struct_new->hitlist_count = 0;
+    
+    /* ??? -- BLASTResultsStructDelete(result_struct); */
+
+    seqalign = RPSReadSapSort(rpssp); 
+    
+    MemFree(rev_subject);
+    MemFree(subject);
+
+    RPSapSortFree(rpssp);
+
+  fprintf(stderr,"[^^^] RPS_FIX -- END\n");
+    return seqalign;
+
+
+
+
+}
+#endif
+
+/* \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ */
+/*
+ *
+ */
+SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
+                            BioseqPtr query_bsp, RPSInfoPtr rpsinfo, Boolean partial)
+{
+    Int2 status;
+    Int4 index;
+    SeqAlignPtr seqalign=NULL, head = NULL, seqalign_var = NULL;
+    SeqPortPtr spp;
+    Uint1Ptr subject_seq, subject_seq_start;
+    Uint1 residue;
+    Int4 subject_length;
+    SeqLocPtr slp = NULL;
+    BioseqPtr subject_bsp;
+    RPSequencePtr rpseq;
+    BioseqPtr bsp = NULL;
+    SPCompressPtr spc = NULL;
+    ValNodePtr vnp;
+    SeqLocPtr filter_slp;
+
+    /* call normal RPS search if this is not SPLITDB */
+    if( !partial ) return  RPSBlastSearch(search,query_bsp,rpsinfo);
+
+
+    
+    if (search == NULL || search->query_invalid)
+        return NULL;
+    
+
+    subject_bsp = query_bsp;    /* Reversed ... */
+    
+    if (rpsinfo->query_slp == NULL || 
+        SeqLocLen(rpsinfo->query_slp) == subject_bsp->length ||
+        ISA_na(subject_bsp->mol)) {
+        ValNodeAddPointer(&slp, SEQLOC_WHOLE, SeqIdDup(subject_bsp->id));
+    } else {
+        slp = SeqLocIntNew(SeqLocStart(rpsinfo->query_slp),
+                SeqLocStop(rpsinfo->query_slp),
+                SeqLocStrand(rpsinfo->query_slp),
+                SeqIdDup(subject_bsp->id));
+    }
+    subject_length = SeqLocLen(slp);
+    
+    search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
+
+    /* Extracting sequence from the Bioseq */
+    
+    if(rpsinfo->query_is_prot) {         /* For blastp search */
+        subject_seq_start = subject_seq = NULL;
+        
+        subject_seq_start = (Uint1Ptr) MemNew(((subject_bsp->length)+2)*sizeof(Uint1));
+        /* The first residue is the sentinel. */
+        subject_seq_start[0] = NULLB;
+        subject_seq = subject_seq_start+1;
+        index = 0;
+        spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
+        while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+            if (IS_residue(residue)) {
+                subject_seq[index++] = residue;
+            }
+        }
+        subject_seq[index] = NULLB;
+        spp = SeqPortFree(spp);
+    } else { /* tblastn */
+        spp = SeqPortNewByLoc(slp, Seq_code_ncbi4na);
+        subject_bsp = BioseqFindCore(SeqLocId(slp));
+        if (subject_bsp != NULL && subject_bsp->repr == Seq_repr_delta)
+            SeqPortSet_do_virtual(spp, TRUE);
+        spc = SPCompressDNA(spp);
+        if (spc == NULL)
+            return NULL;
+        subject_seq_start = subject_seq = spc->buffer;
+        spp = SeqPortFree(spp);
+
+        /* Adjusting translation buffer */
+	spc->lbytes = MemFree(spc->lbytes);
+        MemFree(spc);
+        MemFree(search->translation_buffer);
+        search->translation_buffer = MemNew((3+(subject_length/3))*sizeof(Uint1));
+        search->translation_buffer_size = 1 + (subject_length/3);
+    }
+    
+    if(search->context[0].query->sequence_start != NULL) {
+        MemFree(search->context[0].query->sequence_start);
+        search->context[0].query->sequence_start = NULL;
+    }
+
+    /* Cleaning up word finder */
+
+/*
+    RPSLookupCleanUp(search->wfp->lookup);
+*/
+    
+
+    search->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), StringSave(BioseqGetTitle(subject_bsp)), subject_length);        
+    rpseq = RPSGetBIGSequence(rpsinfo, &bsp);
+
+    /*    RRRPrintStatistics(rpseq); */
+  
+    RPSubstituteQueryLookup(search, rpseq, TRUE);
+
+    /* Filter the subject sequence, that is actually query */    
+    if(rpsinfo->query_is_prot && search->mask != NULL) {
+        BlastMaskTheResidues(subject_seq, subject_length, 21, 
+                             search->mask->data.ptrvalue, FALSE, 0);
+    }
+
+    /* Performing real search here */    
+    status = BLASTPerformSearch(search, subject_length, subject_seq);
+
+    if (status) {
+       /* This is a fatal error, must exit now */
+       search = BlastSearchBlkDestruct(search);
+       return NULL;
+    }
+
+    if(!rpsinfo->query_is_prot) {
+        /* status = BlastLinkHsps(search); */
+    } else if (search->pbp->gapped_calculation == FALSE) {
+        if (search->pbp->do_sum_stats == TRUE)
+            status = BlastLinkHsps(search);
+        else
+            status = BlastGetNonSumStatsEvalue(search);
+    } 
+    
+    status = BlastReapHitlistByEvalue(search);
+    
+    BlastSaveCurrentHitlist(search);
+
+    /* experimental. call this function to re-arrange results to be more
+       compatible with BLASTResultHitlistToNetResultHitlist
+     */
+    search->rdfp = rpsinfo->rdfp;
+    RPSSearchPartialPrepare( search, rpsinfo, subject_seq,    slp, subject_bsp);   
+
+
+    return seqalign;
+
+}
+
+/*^^^ EXPERIMENTAL.START  */
+SeqAlignPtr RPSBlastSearchLight (BlastSearchBlkPtr search,
+                            BioseqPtr query_bsp, RPSInfoPtr rpsinfo, 
+				 BLASTResultsStructPtr   ready_result_struct){
+    Int2 status;
+    Int4 index;
+    SeqAlignPtr seqalign=NULL, head = NULL, seqalign_var = NULL;
+    SeqPortPtr spp;
+    Uint1Ptr subject_seq, subject_seq_start;
+    Uint1 residue;
+    Int4 subject_length;
+    SeqLocPtr slp = NULL;
+    BioseqPtr subject_bsp;
+    RPSequencePtr rpseq;
+    BioseqPtr bsp = NULL;
+    SPCompressPtr spc = NULL;
+    ValNodePtr vnp;
+    SeqLocPtr filter_slp;
+    
+    if (search == NULL || search->query_invalid)
+        return NULL;
+    
+
+    subject_bsp = query_bsp;    /* Reversed ... */
+    
+    if (rpsinfo->query_slp == NULL || 
+        SeqLocLen(rpsinfo->query_slp) == subject_bsp->length ||
+        ISA_na(subject_bsp->mol)) {
+        ValNodeAddPointer(&slp, SEQLOC_WHOLE, SeqIdDup(subject_bsp->id));
+    } else {
+        slp = SeqLocIntNew(SeqLocStart(rpsinfo->query_slp),
+                SeqLocStop(rpsinfo->query_slp),
+                SeqLocStrand(rpsinfo->query_slp),
+                SeqIdDup(subject_bsp->id));
+    }
+    subject_length = SeqLocLen(slp);
+    
+    search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
+
+    /* Extracting sequence from the Bioseq */
+    
+    if(rpsinfo->query_is_prot) {         /* For blastp search */
+        subject_seq_start = subject_seq = NULL;
+        
+        subject_seq_start = (Uint1Ptr) MemNew(((subject_bsp->length)+2)*sizeof(Uint1));
+        /* The first residue is the sentinel. */
+        subject_seq_start[0] = NULLB;
+        subject_seq = subject_seq_start+1;
+        index = 0;
+        spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
+        while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+            if (IS_residue(residue)) {
+                subject_seq[index++] = residue;
+            }
+        }
+        subject_seq[index] = NULLB;
+        spp = SeqPortFree(spp);
+    } else { /* tblastn */
+        spp = SeqPortNewByLoc(slp, Seq_code_ncbi4na);
+        subject_bsp = BioseqFindCore(SeqLocId(slp));
+        if (subject_bsp != NULL && subject_bsp->repr == Seq_repr_delta)
+            SeqPortSet_do_virtual(spp, TRUE);
+        spc = SPCompressDNA(spp);
+        if (spc == NULL)
+            return NULL;
+        subject_seq_start = subject_seq = spc->buffer;
+        spp = SeqPortFree(spp);
+
+        /* Adjusting translation buffer */
+	spc->lbytes = MemFree(spc->lbytes);
+        MemFree(spc);
+        MemFree(search->translation_buffer);
+        search->translation_buffer = MemNew((3+(subject_length/3))*sizeof(Uint1));
+        search->translation_buffer_size = 1 + (subject_length/3);
+    }
+    
+    if(search->context[0].query->sequence_start != NULL) {
+        MemFree(search->context[0].query->sequence_start);
+        search->context[0].query->sequence_start = NULL;
+    }
+
+    /* Cleaning up word finder */
+
+/*
+    RPSLookupCleanUp(search->wfp->lookup);
+*/
+    
+    search->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), StringSave(BioseqGetTitle(subject_bsp)), subject_length);        
+    rpseq = RPSGetBIGSequence(rpsinfo, &bsp);
+
+    /*    RRRPrintStatistics(rpseq); */
+  
+    RPSubstituteQueryLookup(search, rpseq, TRUE);
+
+    /* Filter the subject sequence, that is actually query */    
+    if(rpsinfo->query_is_prot && search->mask != NULL) {
+        BlastMaskTheResidues(subject_seq, subject_length, 21, 
+                             search->mask->data.ptrvalue, FALSE, 0);
+    }
+
+    /* NOT Performing real search here, but assigning ready results  */    
+    search->result_struct = ready_result_struct ;
+#ifdef USE_REMOVED
+    status = BLASTPerformSearch(search, subject_length, subject_seq) ; 
+    
+    if ( status ) {
+       /* This is a fatal error, must exit now */
+       search = BlastSearchBlkDestruct(search);
+       return NULL;
+    }
+#endif
+
+    if(!rpsinfo->query_is_prot) {
+        /* status = BlastLinkHsps(search); */
+    } else if (search->pbp->gapped_calculation == FALSE) {
+        if (search->pbp->do_sum_stats == TRUE)
+            status = BlastLinkHsps(search);
+        else
+            status = BlastGetNonSumStatsEvalue(search);
+    }
+    
+    status = BlastReapHitlistByEvalue(search);
+    
+    BlastSaveCurrentHitlist(search);
+
+    seqalign = RPSAlignTraceBack(search, rpsinfo, subject_seq, 
+                                 slp, subject_bsp); 
+    
+    /* Now converting protein filter SeqLoc-s into DNA seqlocs */
+    if(!rpsinfo->query_is_prot) {  
+        for(vnp = search->mask; vnp != NULL; vnp = vnp->next) {
+            filter_slp = (SeqLocPtr) vnp->data.ptrvalue;
+            BlastConvertProteinSeqLoc(filter_slp, DefineToFrame(vnp->choice), 
+                                      subject_bsp->length);
+        }
+    }
+
+    search->context[0].query->sequence_start = NULL;
+    search->context[0].query->sequence = NULL;
+
+    slp = SeqLocFree(slp);
+
+    MemFree(subject_seq_start);
+    RPSequenceFree(rpseq);
+    BioseqFree(bsp);
+
+    search->sbp->posMatrix = NULL;
+    search->wfp->lookup->mod_lt = NULL;
+    search->wfp->lookup->mod_lookup_table_memory = NULL;
+
+    return seqalign;  
+}
+
+/*^^^ EXPERIMENTAL.END    */
+
 SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
                             BioseqPtr query_bsp, RPSInfoPtr rpsinfo)
 {
@@ -1535,7 +2220,7 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
     status = BlastReapHitlistByEvalue(search);
     
     BlastSaveCurrentHitlist(search);
-    
+
     seqalign = RPSAlignTraceBack(search, rpsinfo, subject_seq, 
                                  slp, subject_bsp); 
     
@@ -1876,7 +2561,7 @@ static VoidPtr RPSEngineThread(VoidPtr data)
         
         NlmMutexLock(print_mutex);
         
-        other_returns = BlastOtherReturnsPrepare(search);
+        other_returns = BlastOtherReturnsPrepare(search); /* ,0); */
 
         mtdata->print_callback(fake_bsp, rpsbop, seqalign, 
                                other_returns, NULL, 
@@ -2413,3 +3098,5 @@ NLM_EXTERN void FreeCDDRegions (
   DeleteMarkedObjects (0, OBJ_SEQENTRY, topsep);
 }
 
+ 
+ 

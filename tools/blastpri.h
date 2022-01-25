@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.105 $ 
+/* $Revision: 6.106 $ 
 * $Log: blastpri.h,v $
+* Revision 6.106  2003/03/24 19:42:14  madden
+* Changes to support query concatenation for blastn and tblastn
+*
 * Revision 6.105  2002/11/04 22:47:02  dondosha
 * Added prototype for BlastHSPGetNumIdentical
 *
@@ -731,6 +734,9 @@ BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search));
 
 BlastSearchBlkPtr BLASTSetUpSearchWithReadDbInternal PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp));
+
+BlastSearchBlkPtr BLASTSetUpSearchWithReadDbInternalMult PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp, QueriesPtr mult_queries));
+/* --KM added mult_queries param */
 
 BlastSearchBlkPtr LIBCALL
 BLASTSetUpSearchWithReadDbInternalEx PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp,

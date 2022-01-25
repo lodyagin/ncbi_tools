@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.h,v $
+* Revision 6.18  2003/04/04 19:42:56  kskatz
+* Added a new command line option (-R) to allow external users to point spidey to a repeat database that it can pass on to blast for filtering repeats
+*
 * Revision 6.17  2002/10/02 16:12:54  kskatz
 * Added a new option to SPI_Options (bigintron_size) that holds a user-supplied maximum size (default = 220000) for introns and requires the option (bool) bigintron to be set to 'TRUE'; The functions affected are SPI_mRNAPtr SPI_AdjustForSplice(), SPI_is_consistent(), and SPI_FindPiece(); note that the default for bigintron_size is not set in SPI_OptionsNew() (yet)
 *
@@ -404,36 +407,37 @@ typedef struct spi_spliceinfo {
 } SPI_SpliceInfo, PNTR SPI_SpliceInfoPtr;
 
 typedef struct spi_options {
-   FloatHi               firstpasseval;
-   FloatHi               secpasseval;
-   FloatHi               thirdpasseval;
-   Int4                  organism;
-   Int4                  numreturns;
-   Int4                  idcutoff;
-   Int4                  lencutoff;
-   Int4                  printaln;
-   Boolean               interspecies;
-   Boolean               printasn;
-   SeqAlignPtr           PNTR sap_head;
-   CharPtr               draftfile;
-   SeqLocPtr             lcaseloc;
-   Boolean               fetchcds;
-   Boolean               printheader;
-   Boolean               ace;
-   SPI_ProgressCallback  callback;
-   Int4                  from; /* to restrict genomic interval */
-   Int4                  to;   /* " */
-   Boolean               makemult; /* make a multiple alignment from numerous returns? */
+    FloatHi               firstpasseval;
+    FloatHi               secpasseval;
+    FloatHi               thirdpasseval;
+    Int4                  organism;
+    Int4                  numreturns;
+    Int4                  idcutoff;
+    Int4                  lencutoff;
+    Int4                  printaln;
+    Boolean               interspecies;
+    Boolean               printasn;
+    SeqAlignPtr           PNTR sap_head;
+    CharPtr               draftfile;
+    CharPtr               repeat_db_file; /* path to repeat db to use */
+    SeqLocPtr             lcaseloc;
+    Boolean               fetchcds;
+    Boolean               printheader;
+    Boolean               ace;
+    SPI_ProgressCallback  callback;
+    Int4                  from; /* to restrict genomic interval */
+    Int4                  to;   /* " */
+    Boolean               makemult; /* make a multiple alignment from numerous returns? */
     Boolean               bigintron; 
     Int4                  bigintron_size; /*added by KSK */
-   Uint1                 strand; /* to restrict the search to one genomic strand */
-   Boolean               revcomp;
-   Int4                  dsplicejunc;
-   SPI_SpliceInfoPtr     dssp_head;
-   Int4                  asplicejunc;
-   SPI_SpliceInfoPtr     assp_head;
+    Uint1                 strand; /* to restrict the search to one genomic strand */
+    Boolean               revcomp;
+    Int4                  dsplicejunc;
+    SPI_SpliceInfoPtr     dssp_head;
+    Int4                  asplicejunc;
+    SPI_SpliceInfoPtr     assp_head;
 } SPI_Options, PNTR SPI_OptionsPtr;
-
+    
 typedef struct spi_n {
    Int4  n1;
    Int4  n2;

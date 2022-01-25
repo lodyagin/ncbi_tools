@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.71 2002/12/11 16:24:34 jianye Exp $
+/* $Id: txalign.c,v 6.72 2003/01/23 23:31:58 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.71 $
+* $Revision: 6.72 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.72  2003/01/23 23:31:58  dondosha
+* Added a global variable for the query number, needed in make_dumpgnl_links
+*
 * Revision 6.71  2002/12/11 16:24:34  jianye
 * added structure linkout
 *
@@ -501,7 +504,10 @@
 /* Used in make_dumpgnl_links, set in getreq.cpp or getreqcmd.cpp */
 const char *RID_glb;
 const char *CDD_RID_glb;
+/* Used in make_dumpgnl_links, set in format.cpp */
 const char *Entrez_Query_Term ;
+int query_number_glb;
+
 /*Indicate if db contains sequence with gi*/
 Boolean DbHasGi=FALSE;
 
@@ -4418,6 +4424,9 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
     	fprintf(fp, "RID=%s&", RID_glb);
     }
 
+    if (query_number_glb > 0)
+       fprintf(fp, "QUERY_NUMBER=%ld&", query_number_glb);
+
     fprintf(fp,
             "segs=%s&seal=%02X%02X%02X%02X"
             "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
@@ -4542,7 +4551,6 @@ NLM_EXTERN Boolean LIBCALL
 PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
 		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions,
 		CharPtr db_name, CharPtr blast_type)
-
 {
     BioseqPtr bsp;
     Boolean found_next_one, found_gnl_id, same_id, found_score=FALSE, make_link=FALSE;

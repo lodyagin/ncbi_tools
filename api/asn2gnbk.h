@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.43 $
+* $Revision: 6.52 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -96,14 +96,15 @@ typedef unsigned long FlgType;
 
 #define ONLY_NEAR_FEATURES      128
 #define FAR_FEATURES_SUPPRESS   256
+#define NEAR_FEATURES_SUPPRESS  384
 
 #define COPY_GPS_CDS_UP         512
 #define COPY_GPS_GENE_DOWN     1024
-#define HIDE_IMP_FEATS         2048
-#define HIDE_SNP_FEATS         4096
 
-#define DDBJ_VARIANT_FORMAT    8192
-#define USE_OLD_SOURCE_ORG    16384
+#define SHOW_CONTIG_AND_SEQ    2048
+
+#define DDBJ_VARIANT_FORMAT    4096
+#define USE_OLD_SOURCE_ORG     8192
 
 /* locking behavior for system performance */
 
@@ -117,6 +118,29 @@ typedef unsigned long LckType;
 #define LOOKUP_FAR_LOCATIONS     32
 #define LOOKUP_FAR_PRODUCTS      64
 #define LOOKUP_FAR_HISTORY      128
+#define STREAM_SEQ_PORT_FIRST   256
+
+/* bit flags for unusual customized reports */
+
+typedef unsigned long CstType;
+
+#define HIDE_IMP_FEATS            1
+#define HIDE_REM_IMP_FEATS        2
+
+#define HIDE_SNP_FEATS            4
+#define HIDE_EXON_FEATS           8
+#define HIDE_INTRON_FEATS        16
+#define HIDE_MISC_FEATS          32
+
+#define HIDE_CDD_FEATS           64
+#define HIDE_CDS_PROD_FEATS     128
+
+#define SHOW_TRANCRIPTION       256
+#define SHOW_PEPTIDE            512
+
+#define HIDE_GENE_RIFS         1024
+#define ONLY_GENE_RIFS         2048
+#define LATEST_GENE_RIFS       3072
 
 /* opaque pointer for special extensions */
 
@@ -133,6 +157,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
   StlType style,
   FlgType flags,
   LckType locks,
+  CstType custom,
   XtraPtr extra,
   FILE *fp
 );
@@ -145,6 +170,7 @@ NLM_EXTERN Boolean BioseqToGnbk (
   StlType style,
   FlgType flags,
   LckType locks,
+  CstType custom,
   XtraPtr extra,
   FILE *fp
 );

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -45,6 +45,9 @@
 *
 * RCS Modification History:
 * $Log: medutil.h,v $
+* Revision 6.2  2003/03/25 19:14:50  bazhin
+* Function "ten_authors()" became public (from static).
+*
 * Revision 6.1  2000/08/18 17:01:02  kans
 * added FetchPubPmId, enhanced FixPubEquiv to handle records with pmid but no muid
 *
@@ -127,6 +130,7 @@ ValNodePtr MedlineToISO PROTO((ValNodePtr tmp));
 ValNodePtr get_std_auth PROTO((CharPtr token, Uint1 format));
 
 Boolean in_press PROTO ((CitArtPtr cit));
+Boolean ten_authors PROTO((CitArtPtr art, CitArtPtr art_tmp));
 
 #ifdef __cplusplus
 }

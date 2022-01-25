@@ -30,8 +30,26 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.143 $ 
+/* $Revision: 6.148 $ 
 * $Log: blastdef.h,v $
+* Revision 6.148  2003/04/09 14:18:34  madden
+* Update version and release-date
+*
+* Revision 6.147  2003/03/26 15:45:48  boemker
+* Documented relationships among BLAST_OptionsBlk, BLAST_WizardOptionsBlk,
+* and BLAST_WizardOptionsMask.
+*
+* Revision 6.146  2003/03/25 22:23:06  boemker
+* Replaced cutoff_s2, which isn't used, with cutoff_s, which is.
+* Added query_lcase_mask.
+*
+* Revision 6.145  2003/03/25 19:58:18  boemker
+* Moved code to initialize search options from blastcgicmd.cpp to here, as
+* BLAST_Wizard et al.
+*
+* Revision 6.144  2003/03/24 19:42:14  madden
+* Changes to support query concatenation for blastn and tblastn
+*
 * Revision 6.143  2002/11/22 23:28:43  dondosha
 * Use array of structures instead of array of pointers for initial offset pairs
 *
@@ -835,8 +853,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.5"
-#define BLAST_RELEASE_DATE "Nov-16-2002"
+#define BLAST_ENGINE_VERSION "2.2.6"
+#define BLAST_RELEASE_DATE "Apr-09-2003"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -861,6 +879,11 @@ extern "C" {
 
 /* Specifies minimum search space size for an awak thread. */
 #define AWAKE_THR_MIN_SIZE 2000000000000.0
+
+#ifndef _BLASTCONCAT_
+#include "blastconcat.h"
+#endif
+/* --KM concat */
 
 /* Some default values (used when creating blast options block and for
  * command-line program defaults. When changing these defaults, please
@@ -992,6 +1015,9 @@ typedef enum {
 	Structure for the blast options (available to user/programmer).
 	This should be filled in by the "Main" program before blast
 	is called.
+
+    If changes are made to this structure, corresponding changes should
+    likely be made to BLAST_WizardOptionsBlk and BLAST_WizardOptionsMask.
 ***********************************************************************/
 
 typedef struct _blast_optionsblk {
@@ -1102,7 +1128,116 @@ typedef struct _blast_optionsblk {
         Boolean mb_use_dyn_prog;  /* Use dynamic programming gapped extension in
                                      megablast with affine gap scores */ 
         MBDiscWordType mb_disc_type;
+	Int4 NumQueries;		/*--KM for query concatenation in [t]blastn */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
+
+
+/*  --------------------------------------------------------------------
+ *
+ *  BLAST_WizardOptionsBlk contains those fields of BLAST_OptionsBlk
+ *  that a user can set.
+ *
+ *  BLAST_WizardOptionsMask contains a Boolean for each field defined in
+ *  BLAST_WizardOptionsBlk, except those holding pointers.  TRUE means
+ *  that the corresponding field in BLAST_WizardOptionsBlk is set.
+ *
+ *  These structures are used only in conjunction with BLAST_Wizard.
+ *
+ *  --------------------------------------------------------------------
+ */
+
+struct _blast_wizardoptionsblk {
+    Int4            block_width;
+    Int4            cutoff_s;
+    Int4            db_genetic_code;
+    CharPtr         entrez_query;
+    Nlm_FloatHi     ethresh;
+    Nlm_FloatHi     expect_value;
+    CharPtr         filter_string;
+    Int4            first_db_seq;
+    Int4            final_db_seq;
+    Int4            gap_extend;
+    Int4            gap_open;
+    Boolean         gapped_calculation;
+    Int4            genetic_code;
+    ValNodePtr      gilist;
+    Int4            hitlist_size;
+    Int4            hsp_range_max;
+    Boolean         is_ooframe;
+    CharPtr         matrix;
+    MBDiscWordType  mb_disc_type;
+    Int2            mb_template_length;
+    Boolean         no_traceback;
+    Int2            penalty;
+    FloatLo         perc_identity;
+    Boolean         perform_culling;
+    CharPtr         phi_pattern;
+    Int4            pseudoCountConst;
+    SeqLocPtr       query_lcase_mask;
+    Int4            required_end;
+    Int4            required_start;
+    Int2            reward;
+    Nlm_FloatHi     searchsp_eff;
+    Boolean         smith_waterman;
+    Uint1           strand_option;
+    Int4            threshold_first;
+    Int4            threshold_second;
+    Boolean         tweak_parameters;
+    Boolean         use_best_align;
+    Boolean         use_real_db_size;
+    Int4            window_size;
+    Int2            wordsize;
+
+    Boolean         two_hits;
+    CharPtr         string_options;
+};
+
+typedef struct _blast_wizardoptionsblk
+            BLAST_WizardOptionsBlk,
+    PNTR    BLAST_WizardOptionsBlkPtr;
+
+struct _blast_wizardoptionsmask {
+    Boolean         block_width;
+    Boolean         cutoff_s;
+    Boolean         db_genetic_code;
+    Boolean         ethresh;
+    Boolean         expect_value;
+    Boolean         first_db_seq;
+    Boolean         final_db_seq;
+    Boolean         gap_extend;
+    Boolean         gap_open;
+    Boolean         gapped_calculation;
+    Boolean         genetic_code;
+    Boolean         hitlist_size;
+    Boolean         hsp_range_max;
+    Boolean         is_ooframe;
+    Boolean         mb_disc_type;
+    Boolean         mb_template_length;
+    Boolean         no_traceback;
+    Boolean         penalty;
+    Boolean         perc_identity;
+    Boolean         perform_culling;
+    Boolean         pseudoCountConst;
+    Boolean         required_end;
+    Boolean         required_start;
+    Boolean         reward;
+    Boolean         searchsp_eff;
+    Boolean         smith_waterman;
+    Boolean         strand_option;
+    Boolean         threshold_first;
+    Boolean         threshold_second;
+    Boolean         tweak_parameters;
+    Boolean         use_best_align;
+    Boolean         use_real_db_size;
+    Boolean         window_size;
+    Boolean         wordsize;
+
+    Boolean         two_hits;
+};
+
+typedef struct _blast_wizardoptionsmask
+            BLAST_WizardOptionsMask,
+    PNTR    BLAST_WizardOptionsMaskPtr;
 
 typedef enum {
    TEMPL_11_16 = 0,
@@ -1773,6 +1908,12 @@ a field is allocated, then it's bit is non-zero.
     CharPtr original_seq;	/* Original (i.e.,  untransl.) sequence. */
     BlastSequenceBlkPtr	subject;/* subject sequence. */
     
+
+    /* KM-- info about individual queries from a concatenated query in
+       blastn or tblastn */
+    struct queries PNTR mult_queries;	/* struct defined in blastconcat.h */ 
+
+
     /*
       SeqLocPtr for the query, owned by the called and not by BLAST.
       */

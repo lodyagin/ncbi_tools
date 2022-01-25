@@ -1,7 +1,7 @@
 #ifndef NCBI_ASN_CONNECTION__H
 #define NCBI_ASN_CONNECTION__H
 
-/*  $Id: asn_connection.h,v 1.5 2002/03/14 22:45:45 vakatov Exp $
+/*  $Id: asn_connection.h,v 1.7 2003/04/11 17:46:29 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,12 @@
 #include <asn.h>
 
 
+/** @addtogroup CToolsASNConn
+ *
+ * @{
+ */
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,8 +61,8 @@ typedef enum {
 
 
 /* Build ASN stream on top of CONN (connection) handle.
- * According to arguments, the stream is created
- * either for reading or writing, and is capable to handle
+ * According to arguments, the stream is created for
+ * either reading or writing, and is capable to handle
  * either binary or text ASN.
  * Return ASN stream pointer on success, or 0 on error.
  * NOTE: Returned stream is valid while the underlying conn exists. After call
@@ -70,13 +76,13 @@ AsnIoPtr CreateAsnConn
  );
 
 
-/* Create service connection using provided service name,
+/* Create service connection using the service name,
  * type and connection parameters, info (use default connection
  * parameters if info is passed NULL).
  * Create two ASN streams based on the connection -- one stream is for
  * input and one is for output. Return pointers to the streams 
  * via 'input' and 'output' arguments.
- * No corresponding stream is created if pointer is passed NULL.
+ * No corresponding stream is created if either pointer is passed NULL.
  * On success, return created CONN handle; otherwise, return 0.
  * NOTE: Returned ASN stream pointers are valid as long as connection
  *       handle exists, that is after the connection handle is passed to
@@ -111,10 +117,18 @@ CONN CreateAsnConn_Service
 #endif
 
 
+/* @} */
+
 
 /*
  * ===========================================================================
  * $Log: asn_connection.h,v $
+ * Revision 1.7  2003/04/11 17:46:29  siyan
+ * Added doxygen support
+ *
+ * Revision 1.6  2003/01/17 15:39:38  lavr
+ * Slightly modify API description for clarity
+ *
  * Revision 1.5  2002/03/14 22:45:45  vakatov
  * Warn against explicit destruction of ASN streams
  *

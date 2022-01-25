@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.57 2002/11/08 21:06:52 vakatov Exp $
+# $Id: makeallchives,v 1.61 2003/04/21 15:33:12 beloslyu Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -71,7 +71,7 @@ EOF
 		(cd ncbi/build; test -f Nentrez && ln Nentrez entrez)
 		;;
 	sequin)
-		f="sequin tbl2asn"
+		f="sequin tbl2asn asn2gb"
 		(cd ncbi/build; test -f Psequin && ln -f Psequin sequin)
 		mkdir -p archive/sequin/config archive/sequin/errmsg archive/sequin/images
 		test -d $errmsgdir && ln $errmsgdir/* archive/sequin/errmsg/
@@ -92,9 +92,10 @@ EOF
 		;;
 	blast)
 		f="blastall blastpgp seedtop formatdb fastacmd copymat makemat \
-impala bl2seq megablast blastclust rpsblast ../doc/README.imp \
+impala megablast blastclust rpsblast ../doc/README.imp \
 ../doc/README.bls ../doc/README.mbl ../doc/README.bcl ../doc/README.rps \
-../doc/README.formatdb"
+../doc/README.formatdb ../doc/README.fastacmd ../doc/README-qm"
+		rm -f archive/blast/data/sequin.hlp
 		;;
 	netblast)
 		f="blastcl3 ../doc/firewall.html ../doc/README.nbl"

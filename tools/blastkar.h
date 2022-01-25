@@ -32,8 +32,14 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.29 $ 
+/* $Revision: 6.31 $ 
 * $Log: blastkar.h,v $
+* Revision 6.31  2003/02/27 19:07:56  madden
+* Add functions PrintMatrixMessage and PrintAllowedValuesMessage
+*
+* Revision 6.30  2003/02/26 18:23:50  madden
+* Add functions BlastKarlinkGapBlkFill and BlastKarlinReportAllowedValues, call from BlastKarlinBlkGappedCalcEx
+*
 * Revision 6.29  2002/12/04 13:28:37  madden
 * Add effective length parameters
 *
@@ -469,6 +475,26 @@ Int2 LIBCALL BlastKarlinBlkCalc PROTO((BLAST_KarlinBlkPtr kbp, BLAST_ScoreFreqPt
 Int2 LIBCALL BlastKarlinBlkGappedCalc PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, CharPtr matrix_name, ValNodePtr PNTR error_return));
 
 Int2 LIBCALL BlastKarlinBlkGappedCalcEx PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, CharPtr matrix_name, ValNodePtr PNTR error_return));
+
+
+/*
+        Attempts to fill KarlinBlk for given gap opening, extensions etc.
+        Will return non-zero status if that fails.
+
+        return values:  -1 if matrix_name is NULL;
+                        1 if matrix not found
+                        2 if matrix found, but open, extend etc. values not supported.
+*/
+Int2 LIBCALL BlastKarlinkGapBlkFill(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, CharPtr matrix_name);
+
+/* Prints a messages about the allowed matrices, BlastKarlinkGapBlkFill should return 1 before this is called. */
+CharPtr PrintMatrixMessage(const Char *matrix);
+
+/* Prints a messages about the allowed open etc values for the given matrix, 
+BlastKarlinkGapBlkFill should return 2 before this is called. */
+CharPtr PrintAllowedValuesMessage(const Char *matrix, Int4 gap_open, Int4 gap_extend, Int4 decline_align);
+
+Int2 LIBCALL BlastKarlinReportAllowedValues(const Char *matrix_name, ValNodePtr PNTR error_return);
 
 
 Nlm_FloatHi BlastKarlinLHtoK PROTO((BLAST_ScoreFreqPtr sfp, Nlm_FloatHi lambda, Nlm_FloatHi H));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.36 $
+* $Revision: 6.41 $
 *
 * File Description: 
 *
@@ -349,6 +349,34 @@ static Uint1  unigeneicon [] = {
   0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
 };
 
+static Uint1  pmcicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
+static Uint1  ncbisearchicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
 static Uint1  genericon [] = {
   0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
   0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
@@ -386,6 +414,8 @@ static CharPtr  cddRadios [] = { "Summary", "Fields", "Conserved Domain ID", NUL
 static CharPtr  snpRadios [] = { "Summary", "Fields", "SNP ID", NULL };
 static CharPtr  journalsRadios [] = { "Summary", "Fields", "Journals ID", NULL };
 static CharPtr  unigeneRadios [] = { "Summary", "Fields", "UniGene ID", NULL };
+static CharPtr  pmcRadios [] = { "Summary", "Fields", "PMC ID", NULL };
+static CharPtr  ncbisearchRadios [] = { "Summary", "Fields", "Unique ID", NULL };
 static CharPtr  localBioseqRadios [] = { "FASTA", NULL };
 
 static CharPtr  defaultLaunch [] = { "Web Entrez", NULL };
@@ -405,6 +435,8 @@ static CharPtr  cddLaunch [] = { "Web Entrez", NULL };
 static CharPtr  snpLaunch [] = { "Web Entrez", NULL };
 static CharPtr  journalsLaunch [] = { "Web Entrez", NULL };
 static CharPtr  unigeneLaunch [] = { "Web Entrez", NULL };
+static CharPtr  pmcLaunch [] = { "Web Entrez", NULL };
+static CharPtr  ncbisearchLaunch [] = { "Web Entrez", NULL };
 
 /*-----------------------------------*/
 /* Data structures used to keep info */
@@ -702,6 +734,10 @@ static void DrawIcon (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst)
     icon = journalsicon;
   else if (StringICmp (dbName, "unigene") == 0)
     icon = unigeneicon;
+  else if (StringICmp (dbName, "PMC") == 0)
+    icon = pmcicon;
+  else if (StringICmp (dbName, "ncbisearch") == 0)
+    icon = ncbisearchicon;
   else
     icon = genericon;
 
@@ -788,6 +824,7 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   CharPtr               comname;
   CharPtr               cpt;
   CharPtr               dcsum;
+  CharPtr               description;
   CharPtr               etal;
   CharPtr               extra;
   size_t                len;
@@ -833,6 +870,7 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   dcsum = NULL;
   title = NULL;
   title1 = NULL;
+  description = NULL;
 
   for (e2DocsumDataPtr = e2DocsumPtr->docsum_data; e2DocsumDataPtr != NULL; e2DocsumDataPtr = e2DocsumDataPtr->next) {
     if (StringHasNoText (e2DocsumDataPtr->field_value)) continue;
@@ -876,10 +914,14 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
       snpid = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "DOCSUM") == 0) {
       dcsum = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "Description") == 0) {
+      description = e2DocsumDataPtr->field_value;
     }
   }
 
   cpt = caption;
+
+  ttl = title;
 
   if (StringHasNoText (cpt)) {
     cpt = accession1;
@@ -905,6 +947,10 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   if (StringHasNoText (cpt)) {
     cpt = snpid;
   }
+  if (StringHasNoText (cpt) && (! StringHasNoText (title)) && (! StringHasNoText (description))) {
+    cpt = title;
+    ttl = description;
+  }
   if (StringHasNoText (cpt)) {
     sprintf (uidbuf, "%ld", uid);
     cpt = uidbuf;
@@ -912,8 +958,6 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   if (StringHasNoText (cpt)) {
     cpt = "?";
   }
-
-  ttl = title;
 
   if (StringHasNoText (ttl)) {
     ttl = sciname;
@@ -1443,7 +1487,7 @@ static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format,
   BioseqPtr    bsp;
   CharPtr      failed;
   FILE         *fp;
-  Int4         flags = 0;
+  Int4         flags = -1;
   Uint1        group_segs = 0;
   ErrSev       level;
   Boolean      okay = FALSE;
@@ -1504,7 +1548,7 @@ static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format,
       okay = SeqEntryToGnbk (sep, NULL, format, RELEASE_MODE, NORMAL_STYLE, 0,
                              LOOKUP_FAR_COMPONENTS | LOOKUP_FAR_LOCATIONS |
                              LOOKUP_FAR_PRODUCTS | LOOKUP_FAR_HISTORY,
-                             NULL, fp);
+                             0, NULL, fp);
     }
     if (okay) {
       FileClose (fp);
@@ -1719,6 +1763,10 @@ static void SetDocSumImportExportItems (SummFormPtr sfp)
       labels = journalsRadios;
     else if (StringICmp (dbName, "unigene") == 0)
       labels = unigeneRadios;
+    else if (StringICmp (dbName, "PMC") == 0)
+      labels = pmcRadios;
+    else if (StringICmp (dbName, "ncbisearch") == 0)
+      labels = ncbisearchRadios;
     else
       labels = defaultRadios;
 
@@ -2003,6 +2051,8 @@ static DocPrntProc cddDocProcs [] = { Query_FetchDocSum, Query_FetchFields, Fetc
 static DocPrntProc snpDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc journalsDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc unigeneDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc pmcDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc ncbisearchDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 
 static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
 
@@ -2120,6 +2170,10 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
         retrieveProc = journalsDocProcs [val - 1];
       else if (StringICmp (dbName, "unigene") == 0)
         retrieveProc = unigeneDocProcs [val - 1];
+      else if (StringICmp (dbName, "PMC") == 0)
+        retrieveProc = pmcDocProcs [val - 1];
+      else if (StringICmp (dbName, "ncbisearch") == 0)
+        retrieveProc = ncbisearchDocProcs [val - 1];
       else
         retrieveProc = defaultDocProcs [val - 1];
 
@@ -2518,7 +2572,7 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Ch
   BioseqPtr          bsp;
   Entrez2GlobalsPtr  egp;
   Uint2              entityID;
-  Int4               flags = 0;
+  Int4               flags = -1;
   Int2               handled;
   Uint2              itemID;
   Int2               retcode;
@@ -2554,7 +2608,9 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Ch
     return;
   }
 
+  /*
   LookupFarSeqIDs (seqEntryPtr, TRUE, TRUE, TRUE, TRUE, TRUE);
+  */
 
   egp = (Entrez2GlobalsPtr) GetAppProperty ("Entrez2Globals");
   if (egp != NULL) {
@@ -2589,7 +2645,7 @@ static void LaunchSequin (Int4 uid, Int2 numAlign, Int4Ptr alignuids, CharPtr db
   BioseqPtr          bsp;
   Entrez2GlobalsPtr  egp;
   Uint2              entityID;
-  Int4               flags = 0;
+  Int4               flags = -1;
   Uint2              itemID;
   Char               path [PATH_MAX];
   Int2               retcode;
@@ -2845,7 +2901,7 @@ static void LaunchSequenceASN (Int4 uid)
 
 {
   AsnIoPtr     aip;
-  Int4         flags = 0;
+  Int4         flags = -1;
   Char         path [PATH_MAX];
   Int2         retcode;
   SeqEntryPtr  seqEntryPtr;
@@ -3047,6 +3103,14 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
     } else if (StringICmp (dbName, "unigene") == 0) {
       if (launchType == 1) {
         LaunchEntrezURL ("unigene", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "PMC") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("PMC", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "ncbiserach") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("ncbisearch", uid, "DocSum");
       }
     }
   }
@@ -3617,6 +3681,10 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
       labels = journalsRadios;
     else if (StringICmp (dbName, "unigene") == 0)
       labels = unigeneRadios;
+    else if (StringICmp (dbName, "PMC") == 0)
+      labels = pmcRadios;
+    else if (StringICmp (dbName, "ncbisearch") == 0)
+      labels = ncbisearchRadios;
     else
       labels = defaultRadios;
 
@@ -3680,6 +3748,12 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
         break;
       case 15:
         fprintf (fp, ">UniGene\n");
+        break;
+      case 16:
+        fprintf (fp, ">PMC\n");
+        break;
+      case 17:
+        fprintf (fp, ">NCBISearch\n");
         break;
       default:
         fprintf (fp, ">?\n");
@@ -4820,6 +4894,10 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = journalsRadios;
     else if (StringICmp (e2db->db_name, "unigene") == 0)
       labels = unigeneRadios;
+    else if (StringICmp (e2db->db_name, "PMC") == 0)
+      labels = pmcRadios;
+    else if (StringICmp (e2db->db_name, "ncbisearch") == 0)
+      labels = ncbisearchRadios;
     else
       labels = defaultRadios;
 
@@ -4870,6 +4948,10 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = journalsLaunch;
     else if (StringICmp (e2db->db_name, "unigene") == 0)
       labels = unigeneLaunch;
+    else if (StringICmp (e2db->db_name, "PMC") == 0)
+      labels = pmcLaunch;
+    else if (StringICmp (e2db->db_name, "ncbisearch") == 0)
+      labels = ncbisearchLaunch;
     else
       labels = defaultLaunch;
 

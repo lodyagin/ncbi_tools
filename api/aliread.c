@@ -5,6 +5,12 @@
 
 #include <aliparse.h>
 
+#ifdef OS_UNIX_DARWIN
+#define NLM_GETC fgetc
+#else
+#define NLM_GETC getc
+#endif
+
 /* Defined constants */
 
 #define ALI_DATA_NUCLEOTIDE  1      /* Values for dataType   */
@@ -23,7 +29,8 @@ Int2        IsValidIdChar (Char idChar);
 Boolean     IsValidId (CharPtr idStr);
 CharPtr     ReadAlignFileLine (FILE PNTR        alignFilePtr,
 			       ErrInfoPtr PNTR  errorListPtr,
-			       AliConfigInfoPtr configPtr);
+			       AliConfigInfoPtr configPtr,
+			       Boolean    PNTR  isEOF);
 
 
 static Boolean          s_MightBeCorruptSequence (Int4             seqCharCount,
@@ -48,7 +55,7 @@ static OtherLineInfoPtr s_ParseOtherLine (CharPtr lineStr);
 
 Boolean IsNucleotideChar (Char ch)
 {
-  if (StringChr("abcdghkmnrstvwxyABCDGHKMNRSTVWXY",ch) != NULL)
+  if (StringChr("abcdghkmnrstuvwxyABCDGHKMNRSTUVWXY",ch) != NULL)
     return TRUE;
   else
     return FALSE;
@@ -101,8 +108,10 @@ Int2 Ali_SeqLineGetType(CharPtr seqLine,
       (StringChr (seqLine, 'p')) ||
       (StringChr (seqLine, 'Q')) ||
       (StringChr (seqLine, 'q')) ||
+      /*
       (StringChr (seqLine, 'U')) ||
       (StringChr (seqLine, 'u')) ||
+      */
       (StringChr (seqLine, 'Z')) ||
       (StringChr (seqLine, 'z')) ||
       (StringChr (seqLine, '*')))
@@ -364,7 +373,8 @@ void Ali_ChangeRowToOther (ValNodePtr rowPtr)
 
 CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
 			   ErrInfoPtr PNTR  errorListPtr,
-			   AliConfigInfoPtr configPtr)
+			   AliConfigInfoPtr configPtr,
+			   Boolean    PNTR  isEOF)
      
 {
   CharPtr lineStr = NULL;
@@ -387,17 +397,17 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
 
   /* Read in the characters one at a time */
 
-  while (!done && !feof(alignFilePtr))
+  while (!done && !(ch == EOF))
     {
 
       /* Process the current character */
 
-      ch = (Char) getc(alignFilePtr);
+      ch = (Char) NLM_GETC (alignFilePtr);
 
       if (ch == '\n')
 	{
 	  done = TRUE;
-	  ch = (Char) getc(alignFilePtr);
+	  ch = (Char) NLM_GETC (alignFilePtr);
 	  if (ch != '\r')
 	    ungetc (ch, alignFilePtr);
 	}
@@ -435,6 +445,9 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
     }
 
   /* Return successfully */
+
+  if (EOF == ch)
+    *isEOF = TRUE;
 
   lineStr[totalLen] = '\0';
   return lineStr;
@@ -517,7 +530,8 @@ static DefLineInfoPtr s_ParseDefLine (CharPtr lineStr,
 	    }
 	  else
 	    {
-	      errPtr = Ali_AddError (errorListPtr, ERR_INVALID_DEFLINE, lineStr);
+	      errPtr = Ali_AddError (errorListPtr, ERR_INVALID_DEFLINE,
+				     lineStr, (Int4) ch);
 	      errPtr->rowNum = rowNum;
 	      MemFree(defStr);
 	      MemFree(idStr);
@@ -1125,6 +1139,7 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
   ValNodePtr       newRow;
   Boolean          first = TRUE;
   SeqLineInfoPtr   seqLine;
+  SeqLineInfoPtr   reEvalSeqPtr;
   DefLineInfoPtr   defLine;
   OtherLineInfoPtr otherLine;
   Boolean          nextRowMustBeSeq;
@@ -1132,16 +1147,19 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
   Boolean          lastRowWasOther = FALSE;
   Int4             rowNum;
   ErrInfoPtr       errPtr;
+  Boolean          isEOF;
 
   nextRowMustBeSeq = FALSE;
   rowNum = 0;
+  isEOF = FALSE;
 
-  while (!feof(alignFilePtr))
+  while (FALSE == isEOF)
     {
 
       /* Process the line according to its content ... */
 
-      lineStr = ReadAlignFileLine(alignFilePtr, errorListPtr, configPtr);
+      lineStr = ReadAlignFileLine(alignFilePtr, errorListPtr,
+				  configPtr, &isEOF);
       if (lineStr == NULL)
 	return NULL;
 
@@ -1220,8 +1238,13 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
 	      /* an ID, or another sequence.              */
 	      
 	      if (lastRowWasOther == TRUE)
-		Ali_ChangeRowToOther(newRow);
-	      
+		{
+		  reEvalSeqPtr = SeqLineReEval (seqLine);
+		  if (NULL == reEvalSeqPtr)
+		    Ali_ChangeRowToOther(newRow);
+		  else
+		    newRow->data.ptrvalue = reEvalSeqPtr;
+		}
 	    }
 	  else  /* A 'maybe' sequence that we're not using */
 	    {

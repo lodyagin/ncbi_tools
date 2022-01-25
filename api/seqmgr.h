@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.48 $
+* $Revision: 6.50 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.50  2003/02/12 14:20:47  kans
+* added IsNonGappedLiteral, used to allow compressed deltas as (previously always raw) parts of segsets
+*
+* Revision 6.49  2003/01/21 20:15:01  kans
+* support for SeqMgrSetSeqIdSetFunc and GetSeqIdSetForGI needed for validator
+*
 * Revision 6.48  2002/06/10 13:50:43  kans
 * added SeqMgrSetLenFunc, SeqMgrSetAccnVerFunc
 *
@@ -286,6 +292,7 @@ typedef BioseqPtr (LIBCALLBACK * BSFetch) PROTO((SeqIdPtr sip, Pointer data));
 typedef Int4 (LIBCALLBACK * SIDPreCacheFunc) (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, Boolean alignments, Boolean history);
 typedef Int4 (LIBCALLBACK * SeqLenLookupFunc) (Int4 gi);
 typedef CharPtr (LIBCALLBACK * AccnVerLookupFunc) (Int4 gi);
+typedef SeqIdPtr (LIBCALLBACK * SeqIdSetLookupFunc) (Int4 gi);
 
 typedef struct seqidindexelement {
 	CharPtr str;               /* PRINTID_FASTA_SHORT string */
@@ -321,6 +328,7 @@ typedef struct seqmng {        /* functions for sequence data management */
 	SIDPreCacheFunc seq_id_precache_func;
 	SeqLenLookupFunc seq_len_lookup_func;
 	AccnVerLookupFunc accn_ver_lookup_func;
+	SeqIdSetLookupFunc seq_id_set_lookup_func;
 } SeqMgr, PNTR SeqMgrPtr;
 
 /**** All replaced in Object Manager ************/
@@ -415,6 +423,16 @@ NLM_EXTERN SeqEntryPtr LIBCALL SeqMgrGetSeqEntryForEntityID PROTO((Int2 id));
 *
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI PROTO((Int4 gi));
+
+/*****************************************************************************
+*
+*   GetSeqIdSetForGI(Int4)
+*     returns the chain of all SeqIds for a GI
+*     returns NULL if can't find it
+*     The returned SeqId chain is allocated. Caller must free it with SeqIdSetFree.
+*
+*****************************************************************************/
+NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdSetForGI PROTO((Int4 gi));
 
 
 /*****************************************************************************
@@ -792,6 +810,16 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq PROTO((BioseqPtr bsp, Int4Ptr num
 
 /*****************************************************************************
 *
+*   IsNonGappedLiteral(BioseqPtr bsp)
+*      Returns TRUE if bsp is a delta seq is composed only of Seq-lits with
+*      actual sequence data.  These are now made to allow optimal compression
+*      of otherwise raw sequences with runs of ambiguous bases.
+*
+*****************************************************************************/
+NLM_EXTERN Boolean IsNonGappedLiteral (BioseqPtr bsp);
+
+/*****************************************************************************
+*
 *   GetUniGeneIDForSeqId(SeqIdPtr)
 *     returns the UniGene ID for a SeqId
 *     returns 0 if can't find it, or not a legal unigene id
@@ -1046,12 +1074,15 @@ NLM_EXTERN Int4 LookupFarSeqIDs (
 *
 *   SeqMgrSetLenFunc registers the GiToSeqLen lookup function
 *   SeqMgrSetAccnVerFunc registers the GiToAccnVer lookup function
+*   SeqMgrSetSeqIdSetFunc registers the GiToSeqIdSet lookup function
 *
 *****************************************************************************/
 
 NLM_EXTERN void LIBCALL SeqMgrSetLenFunc (SeqLenLookupFunc func);
 
 NLM_EXTERN void LIBCALL SeqMgrSetAccnVerFunc (AccnVerLookupFunc func);
+
+NLM_EXTERN void LIBCALL SeqMgrSetSeqIdSetFunc (SeqIdSetLookupFunc func);
 
 /*****************************************************************************
 *

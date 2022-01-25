@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   ByteStore typedefs, prototypes, and defines
@@ -42,6 +42,9 @@
 *
 *
 * $Log: ncbibs.h,v $
+* Revision 6.4  2003/01/21 17:56:24  kans
+* minor fix in BSAdd, comment that BSAdd does not change totlen
+*
 * Revision 6.3  2000/05/26 23:34:58  kans
 * added BSDupAndSwapUint4 for copying and swapping of UID lists passed over network to BIG_ENDIAN server
 *
@@ -125,6 +128,10 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup PROTO((Nlm_ByteStorePtr source));
 *       bsp->seekptr returned pointing at first added byte
 *   	returns bytes added
 *       if (use_min_size) then does not add anything smaller than MIN_BSALLOC
+*
+*       BSAdd does not change the length of the byte store.  When inserting in
+*       the middle of the chain, it is up to the calling function to adjust the
+*       length after writing the bytes.
 *
 *****************************************************************************/
 NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSAdd PROTO((Nlm_ByteStorePtr bsp, Nlm_Int4 len, Nlm_Boolean use_min_size));

@@ -1,4 +1,4 @@
-/* $Id: kappa.c,v 6.27 2002/12/10 22:58:42 bealer Exp $ 
+/* $Id: kappa.c,v 6.28 2002/12/19 14:40:35 kans Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,12 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.27 $
+ $Revision: 6.28 $
 
  $Log: kappa.c,v $
+ Revision 6.28  2002/12/19 14:40:35  kans
+ changed C++-style comment to C-style
+
  Revision 6.27  2002/12/10 22:58:42  bealer
  Keep mappings to sequences from readdb so that "num_ident" code does not
  segfault with multiple databases.
@@ -1703,7 +1706,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        break;
      }
      if (search->rdfp) {
-       // Sequence will be used later to compute num_ident
+       /* Sequence will be used later to compute num_ident */
        search->rdfp->parameters |= READDB_KEEP_HDR_AND_SEQ;
        
        matchingSequenceLength = readdb_get_sequence(search->rdfp, thisMatch->subject_id, (Uint1Ptr PNTR) &matchingSequence);

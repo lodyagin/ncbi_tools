@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objfdef.h,v $
+* Revision 6.4  2003/02/12 14:15:03  rsmith
+* Undo last change adding FEATDEF_ALIGN
+*
+* Revision 6.3  2003/02/11 21:52:15  rsmith
+* Added FEATDEF_ALIGN so that alignments could have their own appearance styles.
+*
 * Revision 6.2  2001/05/29 22:46:03  kans
 * added FEATDEF_snoRNA, increased FEATDEF_MAX
 *

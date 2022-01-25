@@ -1,4 +1,4 @@
-/* $Id: megablast.c,v 6.100 2002/08/09 19:41:25 camacho Exp $
+/* $Id: megablast.c,v 6.103 2003/03/20 13:44:24 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,16 @@
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.103  2003/03/20 13:44:24  madden
+ * Fix -m 10/11 output to make them SeqAnnots
+ *
+ * Revision 6.102  2003/03/13 15:26:15  dondosha
+ * Close output file; call ReadDBBioseqFetchEnable only when non-empty seqalign is found
+ *
+ * Revision 6.101  2002/12/31 22:47:16  boemker
+ * Added support for printing output as ASN (text, with -m 10, or binary, with
+ * -m 11).
+ *
  * Revision 6.100  2002/08/09 19:41:25  camacho
  * 1) Added blast version number to command-line options
  * 2) Added explanations for some default parameters
@@ -773,7 +783,7 @@ static Args myargs [] = {
 	NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},/* 1 */
   { "Expectation value", 
 	"1000000.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},/* 2 */
-  { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines", 
+  { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines,\n10 ASN, text\n11 ASN, binary", 
         "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},       /* 3 */
   { "BLAST report Output File", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},/* 4 */
@@ -795,7 +805,7 @@ static Args myargs [] = {
         "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},       /* 12 */
   { "Number of processors to use",
         "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},       /* 13 */
-  { "ASN.1 SeqAlign file", 
+  { "ASN.1 SeqAlign file; must be used in conjunction with -D2 option", 
 	NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},  /* 14 */
   { "Believe the query defline",
         NULL, NULL, NULL, TRUE, 'J', ARG_STRING, 0.0, 0, NULL},    /* 15 */
@@ -857,39 +867,39 @@ static Args myargs [] = {
 Int2 Main (void)
  
 {
-	AsnIoPtr aip, xml_aip;
-	BioseqPtr query_bsp, PNTR query_bsp_array;
-	BioSourcePtr source;
-	BLAST_MatrixPtr matrix;
-	BLAST_OptionsBlkPtr options;
-	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
-	BlastPruneSapStructPtr prune;
-	Boolean db_is_na, query_is_na, show_gi, believe_query=FALSE;
-	Boolean html=FALSE;
-	CharPtr params_buffer=NULL;
-	Int4 number_of_descriptions, number_of_alignments;
-	SeqAlignPtr  seqalign, PNTR seqalign_array;
-        SeqAnnotPtr seqannot;
-	SeqEntryPtr PNTR sepp;
-	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
-	Uint1 align_type, align_view;
-	Uint4 align_options, print_options;
-	ValNodePtr mask_loc, mask_loc_start, next_mask_loc;
-        ValNodePtr vnp, other_returns, error_returns;
-
-	CharPtr blast_program, blast_database, blast_inputfile, blast_outputfile;
-	FILE *infp, *outfp, *mqfp;
-	Int4 index, num_bsps, total_length, total_processed = 0;
-	Int2 ctr = 1;
-	Char prefix[2];
-    Char buf[256] = { '\0' };
-	SeqLocPtr last_mask, mask_slp;
-	Boolean done, first_seq = TRUE, hits_found;
-	CharPtr masked_query_file;
-        Boolean lcase_masking;
-        BlastOutputPtr boutp = NULL;
-        MBXmlPtr mbxp = NULL;
-  
+   AsnIoPtr aip, xml_aip;
+   BioseqPtr query_bsp, PNTR query_bsp_array;
+   BioSourcePtr source;
+   BLAST_MatrixPtr matrix;
+   BLAST_OptionsBlkPtr options;
+   BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
+   BlastPruneSapStructPtr prune;
+   Boolean db_is_na, query_is_na, show_gi, believe_query=FALSE;
+   Boolean html=FALSE;
+   CharPtr params_buffer=NULL;
+   Int4 number_of_descriptions, number_of_alignments;
+   SeqAlignPtr  seqalign, PNTR seqalign_array;
+   SeqAnnotPtr seqannot;
+   SeqEntryPtr PNTR sepp;
+   TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
+   Uint1 align_type, align_view;
+   Uint4 align_options, print_options;
+   ValNodePtr mask_loc, mask_loc_start, next_mask_loc;
+   ValNodePtr vnp, other_returns, error_returns;
+   
+   CharPtr blast_program, blast_database, blast_inputfile, blast_outputfile;
+   FILE *infp, *outfp, *mqfp;
+   Int4 index, num_bsps, total_length, total_processed = 0;
+   Int2 ctr = 1;
+   Char prefix[2];
+   Char buf[256] = { '\0' };
+   SeqLocPtr last_mask, mask_slp;
+   Boolean done, first_seq = TRUE, hits_found;
+   CharPtr masked_query_file;
+   Boolean lcase_masking;
+   BlastOutputPtr boutp = NULL;
+   MBXmlPtr mbxp = NULL;
+   
     StringCpy(buf, "megablast ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
     if (! GetArgs (buf, NUMARG, myargs))
@@ -914,15 +924,14 @@ Int2 Main (void)
 	   return (1);
 	}
 
+	align_view = (Int1) myargs[3].intvalue;
 	outfp = NULL;
-	if (blast_outputfile != NULL) {
+	if (align_view != 7 && align_view != 10 && align_view != 11 && blast_outputfile != NULL) {
 	   if ((outfp = FileOpen(blast_outputfile, "w")) == NULL) {
 	      ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", blast_outputfile);
 	      return (1);
 	   }
 	}
-
-	align_view = (Int1) myargs[3].intvalue;
 
 	align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
  
@@ -939,7 +948,7 @@ Int2 Main (void)
            believe_query = TRUE;
         
         
-	if (believe_query == FALSE && myargs[14].strvalue) 
+	if (believe_query == FALSE && (myargs[14].strvalue || align_view == 10 || align_view == 11)) 
 	   ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to produce a SeqAlign file");
 
 	options = BLASTOptionNewEx(blast_program, TRUE, TRUE);
@@ -986,7 +995,7 @@ Int2 Main (void)
         else 
            options->cutoff_s2 = myargs[25].intvalue;
 
-	options->cutoff_s = (options->wordsize + 4)*options->reward;
+        options->cutoff_s = (options->wordsize + 4)*options->reward;
 
         options->db_length = (Int8) myargs[18].floatvalue;
 
@@ -1092,9 +1101,19 @@ Int2 Main (void)
               return 1;
            }
         }
+    	else if (align_view == 10 || align_view == 11)
+    	{
+        	const char* mode = (align_view == 10) ? "w" : "wb";
+        	if ((aip = AsnIoOpen (blast_outputfile, (char*) mode)) == NULL) {
+                	ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                	return 1;
+        	}
+    	}
 
-        if (align_view == 7)
+
+        if (align_view == 7) {
            xml_aip = AsnIoOpen(blast_outputfile, "wx");
+        }
 
         if (myargs[31].strvalue) {       
             CharPtr delimiters = " ,;";
@@ -1158,7 +1177,6 @@ Int2 Main (void)
 	   other_returns = NULL;
 	   error_returns = NULL;
 	   
-	   ReadDBBioseqFetchEnable ("megablast", blast_database, db_is_na, TRUE);
 #if 0
 	   fprintf(stderr, "Process %d queries with total length %ld\n", 
 		   num_bsps, total_length);
@@ -1260,6 +1278,7 @@ Int2 Main (void)
               }
 
               if (seqalign_array) {
+	         ReadDBBioseqFetchEnable ("megablast", blast_database, db_is_na, TRUE);
                  for (index=0; index<num_bsps; index++) {
                     seqalign = seqalign_array[index];
                     if (next_mask_loc && 
@@ -1355,6 +1374,7 @@ Int2 Main (void)
                     seqannot = SeqAnnotFree(seqannot);
                     mask_loc = MemFree(mask_loc);
                  } /* End loop on seqaligns for different queries */
+                 ReadDBBioseqFetchDisable();
               } 
 
               if (mbxp != NULL) {
@@ -1401,8 +1421,6 @@ Int2 Main (void)
                  mask_loc = mask_loc->next;
               }
               ValNodeFree(mask_loc_start);
-              
-              ReadDBBioseqFetchDisable();
 	   } else {
 	      /* Just destruct all other_returns parts */
 	      for (vnp=other_returns; vnp; vnp = vnp->next) {
@@ -1462,6 +1480,7 @@ Int2 Main (void)
 	MemFree(sepp);
 	options = BLASTOptionDelete(options);
 	FileClose(infp);
+        FileClose(outfp);
 	
 	return 0;
 }

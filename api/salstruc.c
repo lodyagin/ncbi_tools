@@ -29,6 +29,9 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.12  2003/03/24 19:44:13  kans
+* showfastagap_fromalign does not put space between > and Seq-id
+*
 * Revision 6.11  2002/07/31 17:01:07  kans
 * do not call get_tot_line if not showing features (VL)
 *
@@ -2608,7 +2611,7 @@ NLM_EXTERN void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f)
         is_prot = (Boolean) (ISA_aa (bsp->mol));
         SeqIdWrite (bsp->id, strLog, PRINTID_FASTA_LONG, 120);
         BioseqUnlock (bsp);
-        fprintf(f, "> %s\n", strLog);
+        fprintf(f, ">%s\n", strLog);
         str = load_seq_data (sip, -1, -1, is_prot, &len);
         strp = str;
         al_len = SeqAlignLength (salp);

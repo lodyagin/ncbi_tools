@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.31  2003/01/10 21:45:06  bealer
+* - Modify to return errors from BLASTGetUidsFromQuery instead of logging them.
+*
 * Revision 1.30  2002/05/23 22:57:03  dondosha
 * Made GetResponsePtr external
 *
@@ -249,8 +252,11 @@ NLM_EXTERN BLAST_OptionsBlkPtr parametersToOptions (BlastParametersPtr parameter
 
 NLM_EXTERN BlastDbinfoPtr LIBCALL Blast3GetDbinfo(BlastNet3Hptr bl3hptr);
 
-NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids, 
-                                      Boolean is_na, Boolean count_only);
+NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr       query, 
+				      Int4Ptr PNTR  uids, 
+                                      Boolean       is_na, 
+				      Boolean       count_only,
+				      BlastError ** err_ret);
 
 NLM_EXTERN Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish));
 

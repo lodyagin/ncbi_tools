@@ -1,4 +1,4 @@
-/* $Id: xmlblast.h,v 6.11 2002/11/14 15:37:18 dondosha Exp $ */
+/* $Id: xmlblast.h,v 6.12 2003/01/06 23:01:40 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,15 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.h,v $
+* Revision 6.12  2003/01/06 23:01:40  dondosha
+* Added function to create a multi-query XML output for web megablast
+*
 * Revision 6.11  2002/11/14 15:37:18  dondosha
 * Added functions to extract all hit information from seqalign that can be extracted without loading sequences
 *
@@ -111,6 +114,11 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
                         CharPtr database, BioseqPtr query, 
                         ValNodePtr other_returns, Int4 option, 
                         CharPtr message);
+
+Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign, 
+           BLAST_OptionsBlkPtr options, CharPtr program, CharPtr database, 
+           BioseqSetPtr query_set, ValNodePtr other_returns, Int4 flags,
+           CharPtr message);
 
 StatisticsPtr BXMLBuildStatistics(ValNodePtr other_returns, Boolean ungapped);
 BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database, 

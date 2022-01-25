@@ -1,5 +1,5 @@
 /*
-* $Id: mmdbgraph.c,v 1.1.1.1 2002/12/04 21:12:08 chenj Exp $
+* $Id: mmdbgraph.c,v 1.2 2003/01/15 16:09:59 chenj Exp $
 *
 *
 * ===========================================================================
@@ -31,6 +31,9 @@
 *
 *
 * $Log: mmdbgraph.c,v $
+* Revision 1.2  2003/01/15 16:09:59  chenj
+* add uid as argument in ChainScaleMapOrImg()
+*
 * Revision 1.1.1.1  2002/12/04 21:12:08  chenj
 * Imported sources
 *
@@ -144,7 +147,7 @@ Int4 ModelMapOrImg(Boolean ismap, gdImagePtr im, Int4 uid, PMSD pmsd,
 		    if (colidx==3 || colidx==4 || colidx==5 || colidx==7
 		        || colidx==8 || colidx==9)
 		        labelcol = black;
-		    ChainScaleMapOrImg(ismap, im, x, y, pmmd, 0, 
+		    ChainScaleMapOrImg(ismap, im, x, y, pmmd, 0, 0, 
 		      gdImageColorAllocate(im, r, g, b), labelcol, File);
 		}
 		

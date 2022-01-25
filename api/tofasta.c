@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.112 $
+* $Revision: 6.114 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.114  2003/03/25 17:00:53  kans
+* CreateDefLine htgs suffix only shows if delta seq with more than 0 gaps
+*
+* Revision 6.113  2003/01/17 21:26:28  kans
+* because getc fails in OS_UNIX_DARWIN, NLM_GETC used to choose between fgetc or getc
+*
 * Revision 6.112  2002/11/27 18:58:46  kans
 * FindProtDefLine, called from CreateDefLineEx, adds unnamed protein product as last resort
 *
@@ -600,6 +606,12 @@
 #include <explore.h>
 #include <objloc.h>
 #include <objfdef.h>
+
+#ifdef OS_UNIX_DARWIN
+#define NLM_GETC fgetc
+#else
+#define NLM_GETC getc
+#endif
 
 #define SeqLocNew(_a) ValNodeNew((_a))
 
@@ -1564,7 +1576,7 @@ static Int4 FastaReadSequenceChunk
     
     if(type == FASTA_FILE_IO) {
 	fd = (FILE *) input;
-	ch = getc(fd);
+	ch = NLM_GETC(fd);
 	if (ch == EOF || ch == '\n' || ch == '\r')
 		return 0;
         if(ch == '>' || ch == '&' || ch == '{' || ch == '}' || ch == '[' || ch == ']') 
@@ -2019,10 +2031,10 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
     
     if(type == FASTA_FILE_IO) {
         do {
-            ch = getc(fd);
+            ch = NLM_GETC(fd);
             if (ch == '!' || ch == '#') { /* comment symbol - ignore rest of line */
             	do {
-            		ch = getc(fd);
+            		ch = NLM_GETC(fd);
             	} while (ch != '\n' && ch != '\r' && ch != '\0' && ch != EOF);
             }
         } while (IS_WHITESP(ch));
@@ -3765,7 +3777,9 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					if (num_gaps > 0) {
 						sprintf(tbuf, ", %ld %s pieces", (long)(num_gaps + 1), htgs[phase - 1]);
 					} else {
+						/*
 						sprintf(tbuf, ", %ld %s piece", (long)(num_gaps + 1), htgs[phase - 1]);
+						*/
 					}
 					diff = LabelCopy(buf, tbuf, buflen);
 					buflen -= diff;
@@ -3773,10 +3787,12 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 				}
 			}
 			else if (phase != 0) {
+				/*
 				sprintf(tbuf, ", in %s pieces", htgs[phase-1]);
 				diff = LabelCopy(buf, tbuf, buflen);
 				buflen -= diff;
 				buf += diff;
+				*/
 			}
 		}
 

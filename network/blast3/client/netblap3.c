@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.104  2003/01/13 18:08:26  bealer
+* - Replace nonstandard snprintf() function with strcpy/strcat/strlen.
+*
+* Revision 1.103  2003/01/10 21:45:06  bealer
+* - Modify to return errors from BLASTGetUidsFromQuery instead of logging them.
+*
 * Revision 1.102  2002/10/30 18:54:58  madden
 * NULL out SeqLoc for lower-case masking
 *
@@ -2787,8 +2793,11 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
    to get list of gis corresponding to the Entrez Boolean string or
    just number of such hits in the Entrez database */
 
-NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids, 
-                                      Boolean is_na, Boolean count_only)
+NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr       query,
+				      Int4Ptr PNTR  uids,
+                                      Boolean       is_na,
+				      Boolean       count_only,
+				      BlastError ** blast_err)
 {
     Entrez2ReplyPtr e2ry;
     Entrez2RequestPtr  e2rq;
@@ -2811,20 +2820,55 @@ NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids,
     e2ry = EntrezSynchronousQuery (e2rq);
     
     if (e2ry == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, 
-                  "NULL returned from EntrezSynchronousQuery()");
+	if ( blast_err ) {
+	    *blast_err = BlastErrorNew();
+	    
+	    (*blast_err)->level = Blast_error_level_error;
+	    (*blast_err)->msg   = StrSave("NULL returned from EntrezSynchronousQuery()");
+	} else {
+	    ErrPostEx(SEV_ERROR, 0, 0, 
+		      "NULL returned from EntrezSynchronousQuery()");
+	}
+	
         return -1;
     }
-
+    
     if((e2rp = e2ry->reply) == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Invalid ASN.1: E2ReplyPtr==NULL");
+	if ( blast_err ) {
+	    *blast_err = BlastErrorNew();
+	    
+	    (*blast_err)->level = Blast_error_level_error;
+	    (*blast_err)->msg   = StrSave("Invalid ASN.1: E2ReplyPtr==NULL");
+	} else {
+	    ErrPostEx(SEV_ERROR, 0, 0, "Invalid ASN.1: E2ReplyPtr==NULL");
+	}
         return -1;
     }
     
     switch(e2rp->choice) {
-        
     case E2Reply_error:
-        ErrPostEx(SEV_ERROR, 0, 0, (CharPtr) e2rp->data.ptrvalue);
+	if ( blast_err ) {
+	    const char * msg1 = "Error in request: ";
+	    const char * msg2 = (CharPtr) e2rp->data.ptrvalue;
+	    char       * msg3 = 0;
+	    
+	    int msglen1 = strlen(msg1);
+	    int msglen2 = strlen(msg2);
+	    
+	    msg3 = MemNew(msglen1 + msglen2 + 1);
+	    
+	    if ( msg3 ) {
+		strcpy(msg3, msg1);	
+		strcat(msg3, msg2);
+		
+		*blast_err = BlastErrorNew();
+		
+		(*blast_err)->level = Blast_error_level_error;
+		(*blast_err)->msg   = msg3;
+	    }
+	} else {
+	    ErrPostEx(SEV_ERROR, 0, 0, "Error in request: %s", (CharPtr) e2rp->data.ptrvalue);
+	}
         count = -1;
         break;
     case E2Reply_eval_boolean:
@@ -2840,15 +2884,36 @@ NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids,
         }
         break;
     default:
-        ErrPostEx(SEV_ERROR, 0, 0, "Invalid reply type from the server: %d", e2rp->choice);
+	if ( blast_err ) {
+	    const char * msg1 = "Invalid reply type from the server: ";
+	    const char * msg2 = (CharPtr) e2rp->data.ptrvalue;
+	    char       * msg3 = 0;
+	    
+	    int msglen1 = strlen(msg1);
+	    int msglen2 = strlen(msg2);
+	    
+	    msg3 = MemNew(msglen1 + msglen2 + 1);
+	    
+	    if ( msg3 ) {
+		strcpy(msg3, msg1);	
+		strcat(msg3, msg2);
+		
+		*blast_err = BlastErrorNew();
+		
+		(*blast_err)->level = Blast_error_level_error;
+		(*blast_err)->msg   = msg3;
+	    }
+	} else {
+	    ErrPostEx(SEV_ERROR, 0, 0, "Invalid reply type from the server: %d", e2rp->choice);
+	}
         count = -1;
         break;
-        
     }
     
     Entrez2ReplyFree(e2ry);
     Entrez2RequestFree(e2rq);
-
+    
     return count;
 }
 #endif
+

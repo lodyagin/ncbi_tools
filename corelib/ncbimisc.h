@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,9 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.14  2002/12/17 16:45:09  kans
+* CtoPstr and PtoCstr if OS_MAC or OS_UNIX_DARWIN
+*
 * Revision 6.13  1999/09/22 23:08:26  kans
 * added extended flag to valnode for SeqDesc, maybe later SeqId and SeqLoc
 *
@@ -352,7 +355,7 @@ typedef struct _Choice_ {
 #define Ultostr	Nlm_Ultostr
 #define HeapSort	Nlm_HeapSort
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
 NLM_EXTERN void Nlm_CtoPstr PROTO((Nlm_CharPtr str));
 NLM_EXTERN void Nlm_PtoCstr PROTO((Nlm_CharPtr str));
 #endif

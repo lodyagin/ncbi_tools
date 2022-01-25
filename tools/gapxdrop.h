@@ -31,8 +31,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.18 $
+/* $Revision: 6.19 $
 * $Log: gapxdrop.h,v $
+* Revision 6.19  2003/02/28 22:57:24  dondosha
+* Added prototype for OOFTracebackToGapXEditBlock
+*
 * Revision 6.18  2002/05/09 17:01:23  dondosha
 * Renamed typedefs dp_ptr and dp_node to GapXDPPtr and GapXDP
 *
@@ -284,6 +287,8 @@ Boolean LIBCALL PerformGappedAlignment PROTO((GapAlignBlkPtr));
 Boolean LIBCALL PerformGappedAlignmentWithTraceback PROTO((GapAlignBlkPtr));
 
 GapXEditBlockPtr LIBCALL TracebackToGapXEditBlock PROTO((Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4 start1, Int4 start2));
+GapXEditBlockPtr LIBCALL
+OOFTracebackToGapXEditBlock PROTO((Int4 M, Int4 N, Int4Ptr S, Int4 start1, Int4 start2));
 
 /* 
         Allocates GapAlignBlkPtr and "state", if state_column_length and 

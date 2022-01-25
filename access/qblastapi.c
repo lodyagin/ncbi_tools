@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.21 $
+* $Revision: 1.24 $
 *
 * File Description: 
 *
@@ -37,6 +37,19 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.24  2003/01/17 20:40:29  madden
+* Put QUERY_NUMBER back in URL for fetching Seqannot
+*
+* Revision 1.23  2003/01/15 22:04:49  madden
+* Moved BLASTGetSeqAnnotByRIDEx from internal
+*
+* Revision 1.22  2003/01/02 15:06:48  boemker
+* Wrote BLASTGetQueryBioseqByRIDEx that extends behavior of
+* BLASTGetQueryBioseqByRID by returning the Bioseq for a particular query
+* (rather than always returning the Bioseq for the first query.  Modified
+* BLASTGetQueryBioseqByRID to use BLASTGetQueryBioseqByRIDEx.  Wrote
+* BLASTGetQuerySummary to return information about a query.
+*
 * Revision 1.21  2002/11/08 22:36:17  kans
 * in synchronous query, loop on == eIO_Timeout instead of != eIO_Success
 *
@@ -781,6 +794,23 @@ static Boolean QblastTestRID(CharPtr RID)
 
 NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
 {
+    return BLASTGetSeqAnnotByRIDEx(RID, NULL, 0, NULL, 0);
+}
+
+/*
+	Returns a SeqAnnot for a given RID.  
+	If host_machine and host_path are set to NULL and host_port to zero
+	Default servers will be used.
+
+	if query_number is set to zero all will be returned, otherwise the
+	one-based offset query will be returned.
+ */
+NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRIDEx(CharPtr RID,
+					       Nlm_CharPtr host_machine, 
+					       Nlm_Uint2 host_port, 
+					       Nlm_CharPtr host_path,
+					       Int4 query_number)
+{
     Char         query_string[256];
     CONN         conn;
     SeqAnnotPtr  annot;
@@ -789,18 +819,14 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
     AsnIoConnPtr aicp;
     EIO_Status   status;
 
-    /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
-    
-    if (QblastTestRID(RID) == FALSE)
-    	sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&FORMAT_OBJECT=Alignment", RID);
-    else
-    	sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&FORMAT_OBJECT=Alignment&CLIENT=DirSub", RID);
-    
-    /*    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
-    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
-                               "/blast/Blast.cgi", NULL,  
-                               "BLASTGetSeqAnnotByRID()", 
-                               30, eMIME_T_Application, 
+    sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&QUERY_NUMBER=%ld&FORMAT_OBJECT=Alignment", 
+	RID, (long) query_number);
+
+    conn = QUERY_OpenUrlQuery ((host_machine == NULL) ? "www.ncbi.nlm.nih.gov" : host_machine, 
+				(host_port <= 0) ? 80 : host_port, 
+                               	(host_path == NULL) ? "/blast/Blast.cgi" : host_path, 
+				NULL, "BLASTGetSeqAnnotByRIDEx()", 
+                               240, eMIME_T_Application, 
                                eMIME_WwwForm, eENCOD_Url, 0);
     
     length = StringLen(query_string)+1;
@@ -816,10 +842,16 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
     CONN_Close(conn);
     return annot;
 }
-/* Function to get SeqAnnot for RID. We suupose, that search already
+
+/* Function to get Bioseq for RID. We suupose, that search already
    finished and results are exists on the Qblast repository */
 
 NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
+{
+	return BLASTGetQueryBioseqByRIDEx(RID, 0);
+}
+
+NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRIDEx(CharPtr RID, int query_num)
 {
     Char         query_string[256];
     CONN         conn;
@@ -832,9 +864,9 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
     /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
     
     if (QblastTestRID(RID) == FALSE)
-    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1", RID);
+    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1&QUERY_NUMBER=%d", RID, query_num);
     else
-    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1&CLIENT=DirSub", RID);
+    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1&QUERY_NUMBER=%d&CLIENT=DirSub", RID, query_num);
     
     /* conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
     
@@ -857,6 +889,19 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
     CONN_Close(conn);
     return bsp;
 }
+
+NLM_EXTERN Nlm_Boolean BLASTGetQuerySummary(CharPtr RID, Int4 query_number,
+    CharPtr *defline, Int4Ptr query_length)
+{
+    BioseqPtr bsp = BLASTGetQueryBioseqByRIDEx(RID, query_number);
+    if(!bsp)
+	return FALSE;
+    *defline = StringSave(BioseqGetTitle(bsp));
+    *query_length = BioseqGetLen(bsp);
+    BioseqFree(bsp);
+    return TRUE;
+}
+
 
 /* Function to get BlastObject for RID. We suupose, that search already
    finished and results are exists on the Qblast repository. Blast Object

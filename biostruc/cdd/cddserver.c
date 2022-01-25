@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.38 2002/11/25 19:01:20 bauer Exp $
+/* $Id: cddserver.c,v 1.40 2003/01/10 14:47:46 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.38 $
+* $Revision: 1.40 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.40  2003/01/10 14:47:46  bauer
+* fixed problem with CDART connectivity
+*
+* Revision 1.39  2002/12/24 18:21:41  bauer
+* changes for v1.60
+*
 * Revision 1.38  2002/11/25 19:01:20  bauer
 * retrieve query sequence from BLAST queue in alignment formatting
 *
@@ -183,7 +189,12 @@
 #undef DEBUG
 #undef NOCN3D4
 
-#undef USE_CDTRK
+#define USE_CDTRK
+#define DARTSIZELIMIT 1500
+#define DARTFAMILYNUM 5000
+
+unsigned iDartFam[DARTFAMILYNUM];
+Int4     iDartFamNum = 0;
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -708,17 +719,17 @@ Cn3dStyleDictionaryPtr CddSrvGetStyle(Boolean bFeature)
 /* return a list of CD accessions which are "related" to the current CD      */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-static ValNodePtr CddGetRelatedCDs(CddPtr pcdd, CharPtr thisacc)
+static ValNodePtr CddGetRelatedCDs(CddPtr pcdd, CharPtr thisacc, Int4 iPSSMid, Boolean *bIsArch)
 {
   ValNodePtr    vnpHead = NULL;
   ValNodePtr    vnp, thisid;
   GlobalIdPtr   pGid;
   Dart_Connect *Connection;
   int           Size, i;
-  unsigned      Gilist[500];
-  char          Accession[500][30];
+  unsigned      Gilist[DARTSIZELIMIT];
+  char          Accession[DARTSIZELIMIT][30];
   Boolean       unique;
-  Char          cOutString[PATH_MAX];
+  CharPtr       cOutString;
   
   thisid = pcdd->siblings;
   while (thisid) {
@@ -729,19 +740,39 @@ static ValNodePtr CddGetRelatedCDs(CddPtr pcdd, CharPtr thisacc)
     thisid = thisid->next;
   }
 
+  cOutString = MemNew(PATH_MAX*sizeof(Char));
   sprintf(cOutString,"ODBCINI=%s",ODBCINI);
   putenv(cOutString);
   putenv("LD_LIBRARY_PATH=/opt/machine/merant/lib");
   Connection = Dart_Init2("CDart", DARTUSER, DARTPASS); 
   if (Connection) {
-    if (Dart_Related(Connection,thisacc,Gilist,500,&Size,NULL)) {
-      for (i=0;i<Size;i++) {
-        if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
-	  Accession[i][0] = '\0';
-	}
+    Dart_CdFamily(Connection, iDartFam, DARTFAMILYNUM, &iDartFamNum);
+    for (i=0;i<iDartFamNum;i++) {
+      if (iDartFam[i] == iPSSMid) {
+        *bIsArch = TRUE;
+        break;      
+      }    
+    }
+  }
+  if (Connection) {
+    if (iPSSMid > 0) {
+      if (Dart_SameSim(Connection,iPSSMid,Gilist,DARTSIZELIMIT,&Size)) {
+        for (i=0;i<Size;i++) {
+          if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	    Accession[i][0] = '\0';
+	  }
+        }
+      }
+    } else {
+      if (Dart_Related(Connection,thisacc,Gilist,DARTSIZELIMIT,&Size,NULL)) {
+        for (i=0;i<Size;i++) {
+          if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	    Accession[i][0] = '\0';
+	  }
+        }
       }
     }
-  } else return(NULL);
+  } else return(vnpHead);
   for (i=0;i<Size;i++) {
     if (Nlm_StrCmp(Accession[i],thisacc)!= 0) {
       vnp = vnpHead; unique = TRUE; while (vnp) {
@@ -1247,6 +1278,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
   Char              source[PATH_MAX];
   Char              source_id[PATH_MAX];
   Boolean           bRefOpen   = FALSE;
+  Boolean           bIsArch    = FALSE;
 
 
   iPssmId = CddGetPssmId(pcdd);
@@ -1325,9 +1357,9 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
     MedArchFini();
     bRefOpen = FALSE;
   }
-  vnp = CddGetRelatedCDs(pcdd,cCDDid);
+  vnp = CddGetRelatedCDs(pcdd,cCDDid,iPssmId, &bIsArch);
   orp = CddGetOrgRef(pcdd);
-  if (iNCit || vnp || orp) {
+  if (iNCit || vnp || orp || bIsArch) {
     fprintf(table,"      <tr valign=\"TOP\">\n");
     if (orp) {
       dbtp = orp->db->data.ptrvalue;
@@ -1335,7 +1367,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
       iParent = oidp->id;
       cParentTaxName = orp->taxname;
       fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>Taxa:</strong></td>\n");
-      if (iNCit || vnp) {
+      if (iNCit || (vnp || bIsArch)) {
         fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" NOWRAP>");
       } else {
         fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" NOWRAP COLSPAN=\"5\">");
@@ -1344,7 +1376,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
     }
     if (iNCit) {
       fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>References:</strong></td>\n");
-      if (vnp) {
+      if ((vnp || bIsArch)) {
         fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" NOWRAP><A HREF=\"%s",PUBcgi);
       } else if (orp) {
         fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" NOWRAP COLSPAN=\"3\"><A HREF=\"%s",PUBcgi);
@@ -1357,7 +1389,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
       } else fprintf(table,"\">%d Pubmed Link",iNCit);
       fprintf(table,"</A></td>\n");
     }
-    if (vnp) {
+    if (vnp || bIsArch) {
       fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>Related:</strong></td>\n");
       if (iNCit && orp) {
         fprintf(table,"        <td align=\"LEFT\" class=\"medium1\">");
@@ -1371,6 +1403,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
         if (vnp->next) fprintf(table,", ");
         vnp = vnp->next;
       }
+      if (bIsArch) fprintf(table,"may span multiple domains");
       fprintf(table,"</td>\n");
     }
     fprintf(table,"      </tr>\n");
@@ -1963,7 +1996,7 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
 	  printf("<INPUT TYPE=\"HIDDEN\" NAME=\"ato\" VALUE=\"1\">\n");         
           printf("<INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n", cCDDid);
           printf("<INPUT TYPE=\"HIDDEN\" NAME=\"version\" VALUE=\"%s\">\n",dbversion);
-          printf("<INPUT TYPE=\"SUBMIT\" VALUE=\"View Structure Evidence\">&nbsp; with Cn3D 4.0\n");
+          printf("<INPUT TYPE=\"SUBMIT\" VALUE=\"View Structure Evidence\">&nbsp; with Cn3D 4.1\n");
           printf("</FORM></TD></TR>\n");
           break;
         default:
@@ -2565,6 +2598,12 @@ Int2 Main()
     sipQuery->data.ptrvalue = oidp;
     sipQuery->next = NULL;
   } else if ((indx = WWWFindName(www_info, "queryrid")) >= 0) {
+/*---------------------------------------------------------------------------*/
+/* set the BLASTDB environment variable                                      */
+/*---------------------------------------------------------------------------*/
+    if (putenv("BLASTDB=/blast/db/blast")) {
+      CddHtmlError("Error setting environment variable BLASTDB");
+    }
     www_arg = WWWGetValueByIndex(www_info,indx);
     Qstatus = (Int2) QBlastGetResults(www_arg,&salpTemp,&bspQuery,&blast_program,&blast_database,&other_returns, &error_returns);
     if (Qstatus != 0) CddHtmlError("Could not retrieve query sequence from BLAST queue!");

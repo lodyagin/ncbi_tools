@@ -1,5 +1,5 @@
 /*
-* $Id: PrintBanner.c,v 1.1.1.1 2002/12/06 20:17:21 chenj Exp $
+* $Id: PrintBanner.c,v 1.2 2003/01/22 17:12:50 chenj Exp $
 *
 *
 * ===========================================================================
@@ -31,6 +31,9 @@
 *
 *
 * $Log: PrintBanner.c,v $
+* Revision 1.2  2003/01/22 17:12:50  chenj
+* Get Cn3D 4.1
+*
 * Revision 1.1.1.1  2002/12/06 20:17:21  chenj
 * Imported Scouces
 *
@@ -222,7 +225,7 @@ PrintAlignViewBanner(FILE *table, Int4 iFSID, VastPageDataPtr vpp,
 
 
     fprintf(table, "<img src=\"/Structure/new.gif\" alt=\"New\">\n");
-    fprintf(table, "<a href=\"/Structure/CN3D/cn3d.shtml\"><B><I>Get Cn3D 4.0!</I></B></a>");
+    fprintf(table, "<a href=\"/Structure/CN3D/cn3d.shtml\"><B><I>Get Cn3D 4.1!</I></B></a>");
 
     fprintf(table, "</td>\n</tr>\n</table>\n\n");
     fprintf(table, "</TD>\n</TR>\n\n");

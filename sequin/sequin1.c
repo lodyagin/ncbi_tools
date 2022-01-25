@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.372 $
+* $Revision: 6.389 $
 *
 * File Description: 
 *
@@ -125,7 +125,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "4.25"
+#define SEQ_APP_VER "4.50"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -162,7 +162,8 @@ Char            globalPath [PATH_MAX];
 
 static SequinBlockPtr  globalsbp = NULL;
 
-static Boolean useNewGraphicView = TRUE;
+static Boolean useOldGraphicView = FALSE;
+static Boolean useOldSequenceView = FALSE;
 /* static Boolean useUdv = FALSE; */
 
 ForM  startupForm = NULL;
@@ -294,7 +295,7 @@ static SeqAlignPtr Sequin_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2);
 static void SQN_ExtendAlnRight(SeqAlignPtr sap, Int4 which_row, Int4 start, Int4 stop);
 
 
-static FormatBlock globalFormatBlock = {SEQ_PKG_SINGLE, SEQ_FMT_FASTA, 0};
+static FormatBlock globalFormatBlock = {SEQ_PKG_SINGLE, SEQ_FMT_FASTA, 0, SEQ_ORIG_SUBMISSION};
 
 ForM  helpForm = NULL;
 
@@ -1577,6 +1578,7 @@ extern void ValSeqEntryForm (ForM f)
   ErrHookProc     oldErrHook;
   ErrSev          oldErrSev;
   SeqEntryPtr     sep;
+  Char            str [32];
   ValidStructPtr  vsp;
 
   bfp = (BaseFormPtr) GetObjectExtra (f);
@@ -1607,6 +1609,11 @@ extern void ValSeqEntryForm (ForM f)
         vsp->suppressContext = ShouldSetSuppressContext ();
         vsp->validateAlignments = TRUE;
         vsp->farIDsInAlignments = (Boolean) (subtoolMode || smartnetMode || dirsubMode);
+        if (GetSequinAppParam ("SETTINGS", "VALIDATEFARALIGNIDS", NULL, str, sizeof (str))) {
+          if (StringICmp (str, "TRUE") == 0) {
+            vsp->farIDsInAlignments = TRUE;
+          }
+        }
         oldErrHook = ErrSetHandler (ValidErrHook);
         oldErrSev = ErrSetMessageLevel (SEV_NONE);
         ValidateSeqEntry (sep, vsp);
@@ -4635,6 +4642,7 @@ static SeqAlignPtr Sequin_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1,
    Sequin_GetNthSeqRangeInSASet(sap, 2, &nstart2, &nstop2);
    strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    sap_head = NULL;
+   sap_prev = NULL;
    if (strand != Seq_strand_minus)
    {
       if (nstart1 > start1+20 && nstart2 > start2+20)
@@ -4656,6 +4664,7 @@ static SeqAlignPtr Sequin_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1,
          SeqLocFree(slp2);
       }
    }
+   sap_prev = sap_head;
    for (i=0; i<amaip->numsaps-1; i++)
    {
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &nstart1);
@@ -4676,13 +4685,16 @@ static SeqAlignPtr Sequin_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1,
          sap_new = Sequin_FindBestAlnByDotPlot(slp1, slp2);
          SeqLocFree(slp1);
          SeqLocFree(slp2);
-         if (sap_head)
+         if (sap_new != NULL)
          {
-            sap_prev->next = sap_new;
-            if (sap_new != NULL)
-               sap_prev = sap_new;
-         } else
-            sap_head = sap_prev = sap_new;
+            if (sap_prev != NULL)
+            {
+               sap_prev->next = sap_new;
+               if (sap_new != NULL)
+                  sap_prev = sap_new;
+            } else
+               sap_head = sap_prev = sap_new;
+         }
       }
    }
    Sequin_GetNthSeqRangeInSASet(sap, 1, &nstart1, &nstop1);
@@ -4698,12 +4710,12 @@ static SeqAlignPtr Sequin_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1,
          SeqLocFree(slp2);
          if (sap_new != NULL)
          {
-            if (sap_head != NULL)
+            if (sap_prev != NULL)
             {
                sap_prev->next = sap_new;
                sap_prev = sap_new;
             } else
-              sap_head = sap_new;
+              sap_head = sap_prev = sap_new;
          }
       }
    } else
@@ -4717,12 +4729,12 @@ static SeqAlignPtr Sequin_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1,
          SeqLocFree(slp2);
          if (sap_new != NULL)
          {
-            if (sap_head != NULL)
+            if (sap_prev != NULL)
             {
                sap_prev->next = sap_new;
                sap_prev = sap_new;
             } else
-               sap_head = sap_new;
+               sap_head = sap_prev = sap_new;
          }
       }
    }
@@ -5122,7 +5134,7 @@ static Int4 Sequin_FixEnds(SeqAlignPtr sap, Int4 len1, Int4 len2, Int4 overhang)
       }
    } else
    {
-      if (len2 - stop2 > 1 & len2 - stop2 < overhang)
+      if (len2 - stop2 > 1 && len2 - stop2 < overhang)
       {
          dsp_new->starts[seg*dsp_new->dim+1] = stop2+1;
          dsp_new->starts[seg*dsp_new->dim] = -1;
@@ -5365,6 +5377,7 @@ static SeqAlignPtr Sequin_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2)
    MemFree(mip->qname);
    MemFree(mip->sname);
    i = 0;
+   ddp = mip->hitlist[i];
    while (ddp != NULL && i < mip->index)
    {
       ddp = mip->hitlist[i];
@@ -6439,11 +6452,7 @@ static void BioseqViewFormMenus (WindoW w)
     CommandItem (m, "Net Configure...", NetConfigureProc);
     if (useEntrez) {
       SeparatorItem (m);
-      CommandItem (m, "Entrez Query...", EntrezQueryProc);
-      if (indexerVersion) {
-        SeparatorItem (m);
-        CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
-      }
+      CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
 /*
 #ifndef WIN16
       if (BiostrucAvail ()) {
@@ -6479,11 +6488,9 @@ static void BioseqViewFormMenus (WindoW w)
       SetObjectExtra (i, bfp, NULL);
       SeparatorItem (m);
       CreateLegendItem (m, bfp);
-      if (useNewGraphicView) {
-        SeparatorItem (m);
-        sub = SubMenu (m, "Layout Override");
-        CreateNewLayoutMenu (sub, bfp);
-      }
+      SeparatorItem (m);
+      sub = SubMenu (m, "Layout Override");
+      CreateNewLayoutMenu (sub, bfp);
     }
   }
 }
@@ -7696,7 +7703,7 @@ void EntrezQueryProc (IteM i)
   Update ();
 }
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
 extern Boolean Nlm_LaunchAppEx (CharPtr fileName, VoidPtr serialNumPtr, CharPtr sig);
 #endif
 
@@ -7706,14 +7713,16 @@ void Entrez2QueryProc (IteM i)
   WatchCursor ();
   Update ();
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
   Nlm_LaunchAppEx (NULL, NULL, "ENTZ");
-#endif
+#else
+#if defined (OS_UNIX) || defined(WIN_MOTIF)
+  system ("entrez2 &");
+#else
 #ifdef OS_MSWIN
   Nlm_MSWin_OpenApplication ("entrez2.exe", NULL);
 #endif
-#if defined (OS_UNIX) || defined(WIN_MOTIF)
-  system ("entrez2 &");
+#endif
 #endif
 
   ArrowCursor ();
@@ -8015,10 +8024,10 @@ extern void SetupBioseqPageList (void)
   seqviewprocs.pageSpecs = BioseqPageListFree (seqviewprocs.pageSpecs);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &mapPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData);
-  if (useNewGraphicView) {
-    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asn2gphGphPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asn2gphGphPageData);
+  if (useOldGraphicView) {
+    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData);
   }
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData);
   /*
   if (useUdv) {
@@ -8029,7 +8038,10 @@ extern void SetupBioseqPageList (void)
   }
   */
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqpnlPageData);
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqAlnPnlPageData);
+  if (useOldSequenceView) {
+    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
+  }
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbgnPageData);
   if (Nlm_GetAppProperty ("SequinUseEMBLStyle") != NULL) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &emblPageData);
@@ -8065,6 +8077,52 @@ extern void SetupBioseqPageList (void)
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
   }
 }
+
+static Boolean DeltaLitOnly (BioseqPtr bsp)
+
+{
+  ValNodePtr  vnp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
+  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) return FALSE;
+  }
+  return TRUE;
+}
+
+static Int2 LIBCALLBACK DeltaToRawConvertFunc (Pointer data)
+
+{
+  BioseqPtr         bsp = NULL;
+  OMProcControlPtr  ompcp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) 
+     return OM_MSG_RET_ERROR;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      bsp = (BioseqPtr) ompcp->input_data;
+      break;
+   case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (bsp == NULL) {
+     return OM_MSG_RET_ERROR;
+  }
+  if (! DeltaLitOnly (bsp)) {
+    return OM_MSG_RET_OK;
+  }
+  if (Message (MSG_YN, "Convert near delta Bioseq to raw Bioseq?") == ANS_NO) {
+    return OM_MSG_RET_DONE;
+  }
+  SegOrDeltaBioseqToRaw (bsp);
+  Message (MSG_OK, "Converted to raw, now launch editor again");
+  return OM_MSG_RET_DONE;
+}
+
+#define REGISTER_DELTA_BIOSEQ_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Delta Bioseq Convert","DeltaBioseqConverter",OBJ_BIOSEQ,Seq_repr_delta,OBJ_BIOSEQ,Seq_repr_raw,NULL,DeltaToRawConvertFunc,PROC_PRIORITY_DEFAULT)
 
 static void SetupDesktop (void)
 
@@ -8248,10 +8306,8 @@ static void SetupDesktop (void)
     SetAppProperty ("ReadOnlyDbTags", (void *) 1024);
   }
 
-  if (useNewGraphicView) {
-    SetAppProperty ("NewSequinGraphicalViewer", (void *) 1024);
-    SetAppProperty ("NewSequinLayoutOverride", (void *) 1024);
-  }
+  SetAppProperty ("NewSequinGraphicalViewer", (void *) 1024);
+  SetAppProperty ("NewSequinLayoutOverride", (void *) 1024);
 
   if (GetSequinAppParam ("SETTINGS", "BROWSER", NULL, str, sizeof (str))) {
     SetAppProperty ("MedviewBrowserPath", (void *) StringSave (str));
@@ -8693,12 +8749,14 @@ static void SetupDesktop (void)
     REGISTER_INGENUE;
   }
   REGISTER_NEW_BIOSEQ_EDIT;
+  REGISTER_DELTA_BIOSEQ_EDIT;
   REGISTER_NEW_SEQALIGN_EDIT;
   REGISTER_NEW_SEQANNOT_EDIT;
   REGISTER_NEW_SEQALIGN_VIEW; 
   REGISTER_BIOSEQ_SEG_EDIT;
   REGISTER_BIOSEQ_SET_EDIT;
   REGISTER_SUBMITBLOCK_EDIT;
+  REGISTER_SEQSUBCIT_EDIT;
 
   SetupSequinFilters ();
 }
@@ -9064,11 +9122,7 @@ static void SetupMacMenus (void)
   CommandItem (m, "Net Configure...", NetConfigureProc);
   if (useEntrez) {
     SeparatorItem (m);
-    CommandItem (m, "Entrez Query...", EntrezQueryProc);
-    if (indexerVersion) {
-      SeparatorItem (m);
-      CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
-    }
+    CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
 /*
 #ifndef WIN16
     if (BiostrucAvail ()) {
@@ -9114,6 +9168,30 @@ static CharPtr canfeatpropagate =
 "equivalent features on the other records. This is much faster " \
 "than annotating everything manually.";
 
+extern Int2 LIBCALLBACK AssemblyUserGenFunc (Pointer data);
+static void s_GetTpaInfo (SequencesFormPtr sqfp)
+{
+
+  ObjMgrPtr      omp;
+  OMProcControl  ompc;
+  ObjMgrProcPtr  ompp;
+  Int2           retval;
+  
+  omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, "Edit Assembly User Desc", 0);
+  MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
+  ompc.input_entityID = 1;
+  ompc.input_itemID = 1;
+  ompc.input_itemtype = OBJ_BIOSEQ;
+  ompc.proc = ompp;
+  
+  retval = AssemblyUserGenFunc (&ompc);
+  if (retval == OM_MSG_RET_ERROR) {
+    ErrShow ();
+  }
+  Update ();
+}
+
 static void FinishPuttingTogether (ForM f)
 
 {
@@ -9122,6 +9200,7 @@ static void FinishPuttingTogether (ForM f)
   Uint2         entityID = 0;
   Int2          handled;
   SeqEntryPtr   sep = NULL;
+  SequencesFormPtr  sqfp;
 
   bfp = (BaseFormPtr) GetObjectExtra (f);
   if (bfp != NULL) {
@@ -9149,6 +9228,10 @@ static void FinishPuttingTogether (ForM f)
       ObjMgrSetDirtyFlag (entityID, TRUE);
     } else if (allowUnableToProcessMessage) {
       Message (MSG_FATAL, "Unable to process Seq-entry.");
+    }
+    sqfp = (SequencesFormPtr) bfp;
+    if (SEQ_TPA_SUBMISSION == sqfp->submType) {
+      s_GetTpaInfo (sqfp);
     }
     /*SetChecklistValue (checklistForm, 5);*/
     Remove (bfp->form);
@@ -9253,6 +9336,7 @@ static void GetOrgAndSeq (ButtoN b)
     globalFormatBlock.seqPackage = fbp->seqPackage;
     globalFormatBlock.seqFormat = fbp->seqFormat;
     globalFormatBlock.numSeqs = fbp->numSeqs;
+    globalFormatBlock.submType = fbp->submType;
   }
   MemFree (fbp);
   WatchCursor ();
@@ -9320,6 +9404,7 @@ static void BackToSubmitter (ButtoN b)
   globalFormatBlock.seqPackage = SEQ_PKG_SINGLE;
   globalFormatBlock.seqFormat = SEQ_FMT_FASTA;
   globalFormatBlock.numSeqs = 0;
+  globalFormatBlock.submType = SEQ_ORIG_SUBMISSION;
 }
 
 static void BackToStartup (ButtoN b)
@@ -9654,12 +9739,15 @@ static void ReadSettings (void)
     }
   }
 
-#ifdef NEW_GRAPHICAL_VIEWER
-  useNewGraphicView = TRUE;
-#endif
-  if (GetSequinAppParam ("SETTINGS", "USENEWGRAPHICAL", NULL, str, sizeof (str))) {
+  if (GetSequinAppParam ("SETTINGS", "USEOLDGRAPHICAL", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
-      useNewGraphicView = TRUE;
+      useOldGraphicView = TRUE;
+    }
+  }
+
+  if (GetSequinAppParam ("SETTINGS", "USEOLDSEQVIEW", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useOldSequenceView = TRUE;
     }
   }
 
@@ -10341,6 +10429,8 @@ Int2 Main (void)
   WindoW         w;
 #if defined(OS_UNIX) || defined(WIN_MOTIF)
   Int2           i;
+#endif
+#ifdef WIN_MOTIF
   RecT           r;
 #endif
 
@@ -10425,8 +10515,10 @@ Int2 Main (void)
         else if (StringCmp (argv[i], "-udv") == 0)
           useUdv = TRUE;
         */
-        else if (StringCmp (argv[i], "-gph") == 0)
-          useNewGraphicView = TRUE;
+        else if (StringCmp (argv[i], "-oldgph") == 0)
+          useOldGraphicView = TRUE;
+        else if (StringCmp (argv[i], "-oldseq") == 0)
+          useOldSequenceView = TRUE;
         else if (StringCmp (argv[i], "-gc") == 0) {
             indexerVersion = FALSE;
             extraServices = TRUE;
@@ -10525,17 +10617,18 @@ Int2 Main (void)
   }
 
   SetTitle (w, "Loading print templates");
+  /* objprt.prt still needed for Edit Citations button */
   if (! PrintTemplateSetLoad ("objprt.prt")) {
     ArrowCursor ();
     Message (MSG_FATAL, "PrintTemplateSetLoad objprt.prt failed");
     return 0;
   }
+  /*
   if (! PrintTemplateSetLoad ("asn2ff.prt")) {
     ArrowCursor ();
     Message (MSG_FATAL, "PrintTemplateSetLoad asn2ff.prt failed");
     return 0;
   }
-  /*
   if (! PrintTemplateSetLoad ("makerpt.prt")) {
     ArrowCursor ();
     Message (MSG_FATAL, "PrintTemplateSetLoad makerpt.prt failed");
@@ -10875,6 +10968,7 @@ Int2 Main (void)
     globalFormatBlock.seqPackage = SEQ_PKG_SINGLE;
     globalFormatBlock.seqFormat = SEQ_FMT_FASTA;
     globalFormatBlock.numSeqs = 0;
+    globalFormatBlock.submType = SEQ_ORIG_SUBMISSION;
     Remove (w);
     ArrowCursor ();
   }

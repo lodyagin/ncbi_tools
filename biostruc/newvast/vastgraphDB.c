@@ -1,47 +1,44 @@
-/*
-* $Id: vastgraphDB.c,v 1.1.1.1 2002/12/06 20:17:21 chenj Exp $
-*
-*
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================
-*
-*
-* Author:  Jie Chen
-*
-*
-* $Log: vastgraphDB.c,v $
-* Revision 1.1.1.1  2002/12/06 20:17:21  chenj
-* Imported Scouces
-*
-*
-*
-*
-* This file creates graphical display. 
-*
-* ==========================================================================
+/* 
+ * $Id: vastgraphDB.c,v 1.3 2003/01/14 20:49:20 chenj Exp $
+ *
+ *
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *            National Center for Biotechnology Information (NCBI)
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government do not place any restriction on its use or reproduction.
+ *  We would, however, appreciate having the NCBI and the author cited in
+ *  any work or product based on this material
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ * ===========================================================================
+ *
+ *
+ * Author: Jie Chen
+ *
+ * $Log: vastgraphDB.c,v $
+ * Revision 1.3  2003/01/14 20:49:20  chenj
+ * Imported sources
+ *
+ *
+ * This is to show the "red-cloud" graph. 
+ * The footprint alignment is broken at the position of insert.
+ *
+ * ===========================================================================
 */
-
 
 #include <ncbi.h>
 #include <ncbistr.h>
@@ -773,7 +770,7 @@ static void QueryMapOrImg(Boolean ismap, Int4 x, Int4 y, CharPtr pcPDB,
 
   if (Dart_Gi2Sap(dartcon, gi, &sap, NULL)  && (sap != NULL)) {
 
-    unsigned	Gilist[100], *PssmId;
+    unsigned	*Pssmlist, *PssmId, count;
     Int2	*iColor, CdNum, thisColor=0, *iClus;
     Int4	NumRows;
 
@@ -781,6 +778,11 @@ static void QueryMapOrImg(Boolean ismap, Int4 x, Int4 y, CharPtr pcPDB,
     Dart_Version(dartcon, CDDdb, 100, Version, 1024);
     if (StrLen(CDDdb))
     	StrCut(Version, Version, StrLen(CDDdb)+2, StrLen(Version));
+
+    if (!Dart_CdNum(dartcon, &count))
+            PrtMes("chenj@ncbi.nlm.nih.gov",
+                        "MmdbSrv", "Can't do Dart_CdNum()", NULL, FALSE);
+    Pssmlist = (unsigned *) MemNew (count * sizeof (unsigned));
 
     end = head = NewOverLoc(seqlen);
     head->y = y0 = y+7+FontBH;
@@ -820,13 +822,17 @@ static void QueryMapOrImg(Boolean ismap, Int4 x, Int4 y, CharPtr pcPDB,
 	if (ismap == FALSE) iColor[i] = (thisColor++) % iNcolors;
 	iClus[i] = i;
 
-	if (Dart_Related(dartcon, CddName[i], Gilist, 100, &NumRows, NULL)) {
+	if (Dart_Related(dartcon, CddName[i],Pssmlist,count,&NumRows, NULL)) {
 
           Int2 k;
 
+	  if (NumRows > count)
+             PrtMes("chenj@ncbi.nlm.nih.gov", "VASTSRV",
+                "Dart_Related(): NumRows>MaxPssm", NULL, FALSE);
+
 	  for (j=0; j< NumRows; j++) {
 	    for (k=i+1; k< CdNum; k++) 
-	      if (PssmId[k] == Gilist[j]) {
+	      if (PssmId[k] == Pssmlist[j]) {
 		    if (ismap == FALSE) iColor[k] = iColor[i];
 		    iClus[k] = i;
 	 	}
@@ -963,6 +969,7 @@ static void QueryMapOrImg(Boolean ismap, Int4 x, Int4 y, CharPtr pcPDB,
     for (i=0; i< CdNum; i++) MemFree(CddName[i]);
     MemFree(CddName);
     MemFree(iClus);
+    MemFree(Pssmlist);
   }
 
 } /* end of QueryMapOrImg */

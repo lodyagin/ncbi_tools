@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.7  2002/12/17 23:00:48  kans
+* support for OS_UNIX_DARWIN for Mach-O executables (RGS)
+*
 * Revision 6.6  2002/06/13 16:14:07  kans
 * fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
 *
@@ -141,16 +144,16 @@
 #include <ToolUtils.h>
 #include <Types.h>
 #include <Windows.h>
+#include <Sound.h>
+#include <Folders.h>
 #endif
 
 	                   /* used in ncbifile.c *****/
 #ifdef OS_MAC
 #include <Errors.h>
 #include <Gestalt.h>
-#include <Folders.h>
 #include <MacMemory.h>
 #include <Processes.h>
-#include <Sound.h>
 #endif
 
 #ifdef OS_UNIX_SUN

@@ -1,4 +1,4 @@
-/* $Id: mbalign.c,v 6.37 2002/08/01 21:02:12 dondosha Exp $
+/* $Id: mbalign.c,v 6.38 2003/01/30 19:40:13 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.38  2003/01/30 19:40:13  dondosha
+* No need to add gap extension penalty to gap open in greedy alignment functions
+*
 * Revision 6.37  2002/08/01 21:02:12  dondosha
 * Added a sanity check in GreedyAlignMemFree
 *
@@ -508,8 +511,6 @@ BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
 
    if (gap_open == 0 && gap_extend == 0)
       gap_extend = reward / 2 + penalty;
-   else
-      gap_open += gap_extend;
 
    if (search->rdfp) {
       ReadDBFILEPtr rdfp;
@@ -876,8 +877,6 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
                                    xdrop_threshold, match_score, 
                                    mismatch_score, e1, e2, abmp, S, rem);
     }
-    
-    gap_open += gap_extend;
     
     Mis_cost = mismatch_score + match_score;
     GO_cost = gap_open;

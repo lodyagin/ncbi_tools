@@ -1,4 +1,4 @@
-/*  $Id: ncbi_http_connector.c,v 6.36 2002/11/19 19:20:37 lavr Exp $
+/*  $Id: ncbi_http_connector.c,v 6.44 2003/02/04 22:04:11 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,8 +36,6 @@
 #include "ncbi_ansi_ext.h"
 #include "ncbi_priv.h"
 #include <connect/ncbi_http_connector.h>
-#include <connect/ncbi_socket.h>
-#include <connect/ncbi_buffer.h>
 #include <ctype.h>
 #include <stdlib.h>
 
@@ -114,10 +112,10 @@ static int/*bool*/ s_Adjust(SHttpConnector* uuu,
             uuu->can_connect = eCC_None;
             return 0/*failure*/;
         }
-    } else if (!uuu->adjust_net_info ||
-               !uuu->adjust_net_info(uuu->net_info,
-                                     uuu->adjust_data,
-                                     uuu->failure_count)) {
+    } else if (uuu->adjust_net_info &&
+               uuu->adjust_net_info(uuu->net_info,
+                                    uuu->adjust_data,
+                                    uuu->failure_count) == 0) {
         if (!drop_unread)
             CORE_LOG(eLOG_Error,"[HTTP]  Retry attempts exhausted, giving up");
         uuu->can_connect = eCC_None;
@@ -162,8 +160,23 @@ static EIO_Status s_Connect(SHttpConnector* uuu, int/*bool*/ drop_unread)
 
     /* the re-try loop... */
     for (;;) {
-        char* null = 0;
+        int/*bool*/ reset_user_header = 0;
+        char*       http_user_header = 0;
+        char*       null = 0;
 
+        if (uuu->net_info->http_user_header)
+            http_user_header = strdup(uuu->net_info->http_user_header);
+        if (!uuu->net_info->http_user_header == !http_user_header) {
+            ConnNetInfo_ExtendUserHeader
+                (uuu->net_info, "User-Agent: NCBIHttpConnector"
+#ifdef NCBI_CXX_TOOLKIT
+                 " (C++ Toolkit)"
+#else
+                 " (C Toolkit)"
+#endif
+                 "\r\n");
+            reset_user_header = 1;
+        }
         /* connect & send HTTP header */
         uuu->sock = URL_Connect
             (uuu->net_info->host, uuu->net_info->port,
@@ -175,6 +188,10 @@ static EIO_Status s_Connect(SHttpConnector* uuu, int/*bool*/ drop_unread)
              uuu->net_info->debug_printout == eDebugPrintout_Data ? eOn :
              uuu->net_info->debug_printout == eDebugPrintout_None ? eOff :
              eDefault);
+        if (reset_user_header) {
+            ConnNetInfo_SetUserHeader(uuu->net_info, 0);
+            uuu->net_info->http_user_header = http_user_header;
+        }
 
         if (uuu->sock) {
             if (!(uuu->flags & fHCC_NoUpread))
@@ -461,7 +478,7 @@ static EIO_Status s_Read(SHttpConnector* uuu, void* buf,
                 status = eIO_Unknown;
         } else
             status = eIO_Unknown;
-        
+
         if (status != eIO_Success)
             CORE_LOG(eLOG_Error, "[HTTP]  Cannot URL-decode data");
 
@@ -513,7 +530,7 @@ static void s_FlushAndDisconnect(SHttpConnector* uuu,
                                  const STimeout* timeout,
                                  int/*bool*/     close)
 {
-    size_t obuf_size = BUF_Size(uuu->obuf);
+    size_t obuf_size;
 
     /* store timeouts for later use */
     if (timeout) {
@@ -529,14 +546,15 @@ static void s_FlushAndDisconnect(SHttpConnector* uuu,
     if (close && !uuu->sock && uuu->can_connect != eCC_None &&
         ((uuu->flags & fHCC_SureFlush) || BUF_Size(uuu->obuf))) {
         /* "WRITE" mode and data (or just flag) pending */
-        s_PreRead(uuu, timeout, 1/*drop*/);
+        s_PreRead(uuu, timeout, 1/*drop_unread*/);
     }
     s_Disconnect(uuu, 1/*drop_unread*/, timeout);
     assert(!uuu->sock);
 
     /* clear pending output data, if any */
+    obuf_size = BUF_Size(uuu->obuf);
     if (BUF_Read(uuu->obuf, 0, obuf_size) != obuf_size) {
-        CORE_LOG(eLOG_Error, "[HTTP]  Cannot drop output buffer");
+        CORE_LOG(eLOG_Error, "[HTTP]  Cannot discard output buffer");
         assert(0);
     }
 }
@@ -875,6 +893,24 @@ extern CONNECTOR HTTP_CreateConnectorEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_http_connector.c,v $
+ * Revision 6.44  2003/02/04 22:04:11  lavr
+ * Minor fix in comment
+ *
+ * Revision 6.43  2003/01/31 21:18:49  lavr
+ * Fullfil max tries even in the absence of connection adjustment routine
+ *
+ * Revision 6.42  2003/01/17 19:44:46  lavr
+ * Reduce dependencies
+ *
+ * Revision 6.41  2003/01/15 20:27:29  lavr
+ * Fix breeding of NCBIHttpConnector token in User-Agent: header tag
+ *
+ * Revision 6.40  2003/01/10 14:51:29  lavr
+ * Revert to R6.37 but properly handle drop of "obuf" in s_FlushAndDisconnect()
+ *
+ * Revision 6.37  2002/12/13 21:19:40  lavr
+ * Extend User-Agent: header tag
+ *
  * Revision 6.36  2002/11/19 19:20:37  lavr
  * Server error parsing slightly changed
  *

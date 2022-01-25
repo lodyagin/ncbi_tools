@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,15 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.31  2003/03/11 14:26:42  rsmith
+* previous change to Nlm_DirCatalog made for only OS_UNIX_DARWIN, not all OS_UNIX
+*
+* Revision 6.30  2003/03/10 15:55:49  rsmith
+* for OS_UNIX change implementation of DirCatalog from using popen with a ls command to using the opendir and readdir library calls.
+*
+* Revision 6.29  2003/02/25 15:31:03  rsmith
+* OS_UNIX_DARWIN (Mach on Macs) uses tempnam for temporary files, not tmpnam.
+*
 * Revision 6.28  2002/11/06 21:23:04  ucko
 * Don't assume MIPS is IRIX; allow Linux too.
 *
@@ -1096,6 +1105,10 @@ NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_CreateDir (Nlm_CharPtr pathname)
 *
 *****************************************************************************/
 
+#ifdef OS_UNIX_DARWIN
+#include <dirent.h>
+#endif
+
 NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname)
 
 {
@@ -1110,12 +1123,17 @@ NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname)
   short           vRefNum;
 #endif
 #ifdef OS_UNIX
+  Nlm_Uint1       choice;
+#ifdef OS_UNIX_DARWIN
+  DIR             *dirp;
+  struct dirent   *dep;
+#else
   Nlm_Char        buf [256];
   Nlm_Char        ch;
-  Nlm_Uint1       choice;
   Nlm_Char        cmmd [PATH_MAX + 20];
   FILE            *fp;
   Nlm_CharPtr     ptr;
+#endif
 #endif
   ValNodePtr      vnp = NULL;
 
@@ -1179,6 +1197,21 @@ NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname)
     }}
 #endif
 #ifdef OS_UNIX
+#ifdef OS_UNIX_DARWIN
+    dirp = opendir(pathname);
+    if (dirp == NULL) return NULL;
+    while ((dep = readdir(dirp)) != NULL) {
+      /* ignore 'invisible' files. */
+      if (dep->d_namlen < 1 || dep->d_name[0] == '.')
+        continue;
+      if (dep->d_type == DT_DIR) /* directory */
+        choice = 1;
+      else          /* all other file types. */
+        choice = 0;
+      ValNodeCopyStr (&vnp, choice, dep->d_name);
+    }
+    closedir(dirp);
+#else
     sprintf (cmmd, "ls -1p %s 2>/dev/null", pathname);
     fp = popen (cmmd, "r");
     if (fp == NULL) return NULL;
@@ -1199,6 +1232,7 @@ NLM_EXTERN ValNodePtr LIBCALL Nlm_DirCatalog (Nlm_CharPtr pathname)
       ValNodeCopyStr (&vnp, choice, buf);
     }
     pclose (fp);
+#endif
 #endif
 #ifdef OS_VMS
 #endif
@@ -1221,9 +1255,11 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam (Nlm_CharPtr s)
     /* emulate tmpnam(), except get the benefits of tempnam()'s ability to */
     /* place the files in another directory specified by the environment   */
     /* variable TMPDIR                                                     */
-
+#ifdef OS_UNIX_DARWIN
+    filename = tempnam("/tmp", "ncbi.");
+#else
     filename = tempnam(NULL, NULL);
-
+#endif
     if (s == NULL)
     { /* return pointer to static string */
         if (filename != NULL) {

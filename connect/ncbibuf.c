@@ -1,4 +1,4 @@
-/*  $Id: ncbibuf.c,v 6.7 2000/02/25 16:45:54 vakatov Exp $
+/*  $Id: ncbibuf.c,v 6.8 2003/01/08 15:09:07 lavr Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbibuf.c,v $
+ * Revision 6.8  2003/01/08 15:09:07  lavr
+ * Fix Nlm_BUF_Destroy() to use BUF_Destroy() w/o return value
+ *
  * Revision 6.7  2000/02/25 16:45:54  vakatov
  * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
  * the C++ toolkits, and even to use them in a "standalone" fashion
@@ -120,5 +123,6 @@ NLM_EXTERN Nlm_Uint4 Nlm_BUF_Read
 NLM_EXTERN BUF Nlm_BUF_Destroy
 (BUF buf)
 {
-  return BUF_Destroy(buf);
+  BUF_Destroy(buf);
+  return 0;
 }

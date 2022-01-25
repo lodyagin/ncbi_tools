@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.10  2003/03/05 18:47:45  ford
+* Added prototype for IsNuclAcc().
+*
+* Revision 6.9  2003/02/18 20:19:29  kans
+* added vsp->validateIDSet, initial work on validating update against ID set in database
+*
 * Revision 6.8  2002/10/28 19:30:34  kans
 * added farFetchCDSproducts to vsp
 *
@@ -160,6 +166,7 @@ typedef struct validstruct {
 	Boolean farIDsInAlignments;    /* fetch to get far IDs in alignments */
 	Boolean alwaysRequireIsoJTA;   /* force check for iso_jta */
 	Boolean farFetchCDSproducts;   /* lock CDS->products for CdTransCheck, if necessary */
+	Boolean validateIDSet;         /* look for gain or loss of general IDs on sequence update */
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 } ValidStruct, PNTR ValidStructPtr;
 
@@ -169,6 +176,7 @@ NLM_EXTERN ValidStructPtr ValidStructNew (void);
 NLM_EXTERN ValidStructPtr ValidStructFree (ValidStructPtr vsp);
 NLM_EXTERN void ReportNonAscii PROTO((ValidStructPtr vsp, SeqEntryPtr sep));
 NLM_EXTERN void SpellCallBack (char * str);
+NLM_EXTERN Boolean IsNuclAcc (CharPtr name);
 
 #ifdef __cplusplus
 }

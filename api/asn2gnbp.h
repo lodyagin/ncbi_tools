@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.24 $
+* $Revision: 6.27 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -134,8 +134,9 @@ typedef struct feat_block {
 
 typedef struct seq_block {
   ASN2GB_BASE_BLOCK
-  Int4  start;
-  Int4  stop;
+  Int4     start;
+  Int4     stop;
+  CharPtr  bases;
 } SeqBlock, PNTR SeqBlockPtr;
 
 typedef struct IndxData {
@@ -254,6 +255,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   StlType style,
   FlgType flags,
   LckType locks,
+  CstType custom,
   XtraPtr extra
 );
 
@@ -264,6 +266,12 @@ NLM_EXTERN CharPtr asn2gnbk_format (
 
 NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
   Asn2gbJobPtr ajp
+);
+
+/* public function to get URLs for collaboration-approved db_xrefs */
+
+NLM_EXTERN CharPtr asn2gnbk_dbxref (
+  DbtagPtr dbt
 );
 
 

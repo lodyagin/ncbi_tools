@@ -2523,7 +2523,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                       dbsip = NULL,
                       lclsip,
                       presip, 
-                      next;
+                      next,
+                      tmpsip;
   SeqAlignPtr         seqalign = NULL;
   SeqAlignPtr         bestsalp;
   CharPtr             TmpBuff, tmp;
@@ -2614,6 +2615,16 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  hip = (BestHitPtr)MemNew(sizeof(BestHit));
                  hip->sap = bestsalp;
                  hip->sip1 = lclsip;
+                 if (dbsip->choice != SEQID_GI && bsp2->id != NULL) {
+                   /* recreate sip to get correct version number */
+                   for (tmpsip = bsp2->id; tmpsip != NULL; tmpsip = tmpsip->next) {
+                     if (tmpsip->choice == dbsip->choice) break;
+                   }
+                   if (tmpsip != NULL) {
+                     dbsip = SeqIdFree (dbsip);
+                     dbsip = SeqIdStripLocus (SeqIdDup (tmpsip));
+                   }
+                 }
                  hip->sip2 = dbsip;
                  hip->errstr = StringSave(errstr);
                  hip->nonly = nonly;

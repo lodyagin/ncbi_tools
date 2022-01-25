@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.48 $
+* $Revision: 6.51 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -73,7 +73,8 @@ static void SaveAsn2gnbk (
   ModType mode,
   StlType style,
   FlgType flags,
-  LckType locks
+  LckType locks,
+  CstType custom
 )
 
 {
@@ -82,7 +83,7 @@ static void SaveAsn2gnbk (
   if (sep == NULL) return;
   fp = FileOpen (filename, "w");
   if (fp != NULL) {
-    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, NULL, fp);
+    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, custom, NULL, fp);
   }
   FileClose (fp);
 }
@@ -132,6 +133,7 @@ static Int2 HandleSingleRecord (
   StlType style,
   FlgType flags,
   LckType locks,
+  CstType custom,
   XtraPtr extra,
   Int2 type,
   Int4 from,
@@ -297,7 +299,7 @@ static Int2 HandleSingleRecord (
         VisitBioseqsInSep (sep, (Pointer) aip, SaveTinySeqs);
         AsnIoFree (aip, FALSE);
       } else {
-        SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, extra, ofp);
+        SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, custom, extra, ofp);
       }
       if (ofp != NULL) {
         FileClose (ofp);
@@ -448,6 +450,7 @@ static void CompareFlatFiles (
   StlType style,
   FlgType flags,
   LckType locks,
+  CstType custom,
   XtraPtr extra,
   Int2 batch,
   CharPtr gbdjoin,
@@ -469,7 +472,7 @@ static void CompareFlatFiles (
 
   if (batch == 1) {
 
-    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, extra, fp);
+    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, custom, extra, fp);
     return; /* just make report, nothing to diff */
 
   } else if (batch == 2) {
@@ -478,8 +481,8 @@ static void CompareFlatFiles (
     VisitPubdescsInSep (sep, NULL, FreeUnpubAffil);
 #endif
 
-    SaveAsn2gnbk (sep, path1, format, SEQUIN_MODE, style, flags, locks);
-    SaveAsn2gnbk (sep, path2, format, RELEASE_MODE, style, flags, locks);
+    SaveAsn2gnbk (sep, path1, format, SEQUIN_MODE, style, flags, locks, custom);
+    SaveAsn2gnbk (sep, path2, format, RELEASE_MODE, style, flags, locks, custom);
 
     if (useGbdjoin) {
       sprintf (cmmd, "%s -o %s -n %s -d reports", gbdjoin, path1, path2);
@@ -564,7 +567,7 @@ static void CompareFlatFiles (
 
 #else
 
-  SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, extra, fp);
+  SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, custom, extra, fp);
 #endif
 }
 
@@ -626,6 +629,7 @@ static Int2 HandleMultipleRecords (
   StlType style,
   FlgType flags,
   LckType locks,
+  CstType custom,
   XtraPtr extra,
   Int2 batch,
   Boolean binary,
@@ -816,7 +820,7 @@ static Int2 HandleMultipleRecords (
         sprintf (buf, "%s.before", accn);
         SaveSeqEntry (sep, buf);
         sprintf (buf, "%s.gbff.before", accn);
-        SaveAsn2gnbk (sep, buf, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0);
+        SaveAsn2gnbk (sep, buf, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0);
         if (ofp != NULL) {
           FileClose (ofp);
         }
@@ -848,7 +852,7 @@ static Int2 HandleMultipleRecords (
           starttime = GetSecs ();
           useGbdjoin = (Boolean) (format == GENBANK_FMT && (! hasRefSeq));
           CompareFlatFiles (path1, path2, path3, sep, ofp,
-                            format, mode, style, flags, locks,
+                            format, mode, style, flags, locks, custom,
                             extra, batch, gbdjoin, useGbdjoin);
           stoptime = GetSecs ();
           if (stoptime - starttime > worsttime) {
@@ -902,28 +906,29 @@ static Int2 HandleMultipleRecords (
 
 /* Args structure contains command-line arguments */
 
-#define i_argInputFile   0
-#define o_argOutputFile  1
-#define f_argFormat      2
-#define m_argMode        3
-#define s_argStyle       4
-#define g_argFlags       5
-#define h_argLock        6
-#define a_argType        7
-#define t_argBatch       8
-#define b_argBinary      9
-#define c_argCompressed 10
-#define p_argPropagate  11
-#define l_argLogFile    12
-#define r_argRemote     13
+#define i_argInputFile    0
+#define o_argOutputFile   1
+#define f_argFormat       2
+#define m_argMode         3
+#define s_argStyle        4
+#define g_argFlags        5
+#define h_argLock         6
+#define u_argCustom       7
+#define a_argType         8
+#define t_argBatch        9
+#define b_argBinary      10
+#define c_argCompressed  11
+#define p_argPropagate   12
+#define l_argLogFile     13
+#define r_argRemote      14
 #ifdef OS_UNIX
-#define q_argGbdJoin    14
-#define j_argFrom       15
-#define k_argTo         16
-#define d_argStrand     17
-#define y_argItemID     18
+#define q_argGbdJoin     15
+#define j_argFrom        16
+#define k_argTo          17
+#define d_argStrand      18
+#define y_argItemID      19
 #ifdef ENABLE_ARG_X
-#define x_argAccnToSave 19
+#define x_argAccnToSave  20
 #endif
 #endif
 
@@ -942,6 +947,8 @@ Args myargs [] = {
     FALSE, 'g', ARG_INT, 0.0, 0, NULL},
   {"Lock/Lookup Flags (8 LockProd, 16 LookupComp, 64 LookupProd)", "0", NULL, NULL,
     FALSE, 'h', ARG_INT, 0.0, 0, NULL},
+  {"Custom Flags (2 HideMostImpFeats, 4 HideSnpFeats)", "0", NULL, NULL,
+    FALSE, 'u', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Batch (1 Report, 2 Sequin/Release)", "0", NULL, NULL,
@@ -998,6 +1005,7 @@ Int2 Main (
   Int2        batch = 0;
   Boolean     binary = FALSE;
   Boolean     compressed = FALSE;
+  CstType     custom;
   Boolean     do_gbseq = FALSE;
   Boolean     do_tiny_seq = FALSE;
   XtraPtr     extra = NULL;
@@ -1081,6 +1089,11 @@ Int2 Main (
     compressed = FALSE;
   }
 
+  if ((binary || compressed) && batch == 0) {
+    Message (MSG_FATAL, "-b or -c cannot be used without -t");
+    return 1;
+  }
+
   if (myargs [p_argPropagate].intvalue) {
     propOK = TRUE;
   } else {
@@ -1138,6 +1151,8 @@ Int2 Main (
   flags = (FlgType) myargs [g_argFlags].intvalue;
 
   locks = (LckType) myargs [h_argLock].intvalue;
+
+  custom = (CstType) myargs [u_argCustom].intvalue;
 
   str = myargs [a_argType].strvalue;
   if (StringICmp (str, "a") == 0) {
@@ -1229,13 +1244,13 @@ Int2 Main (
     rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
                                    myargs [o_argOutputFile].strvalue,
                                    format, mode, style, flags, locks,
-                                   extra, batch, binary, compressed,
+                                   custom, extra, batch, binary, compressed,
                                    propOK, gbdjoin, accn, logfp);
   } else {
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
                                 myargs [o_argOutputFile].strvalue,
                                 format, mode, style, flags, locks,
-                                extra, type, from, to, strand,
+                                custom, extra, type, from, to, strand,
                                 itemID, do_tiny_seq);
   }
 

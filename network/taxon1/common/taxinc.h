@@ -187,6 +187,14 @@ Int4 tax1_getTaxId4GI(Int4 gi);
  */
 CharPtr tax1m_getBlastName(Int4 tax_id);
 
+/*---------------------------------------------
+ * Find out is taxonomy lookup system inited or not
+ * Returns: TRUE - alive
+ *          FALSE - dead
+ */
+
+Boolean tax1_inited(void);
+
 
 #ifdef __cplusplus
 /* { */ }

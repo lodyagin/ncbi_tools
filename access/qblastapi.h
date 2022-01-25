@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.8 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
@@ -37,6 +37,16 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.h,v $
+* Revision 1.10  2003/01/15 22:04:50  madden
+* Moved BLASTGetSeqAnnotByRIDEx from internal
+*
+* Revision 1.9  2003/01/02 15:06:48  boemker
+* Wrote BLASTGetQueryBioseqByRIDEx that extends behavior of
+* BLASTGetQueryBioseqByRID by returning the Bioseq for a particular query
+* (rather than always returning the Bioseq for the first query.  Modified
+* BLASTGetQueryBioseqByRID to use BLASTGetQueryBioseqByRIDEx.  Wrote
+* BLASTGetQuerySummary to return information about a query.
+*
 * Revision 1.8  2001/02/21 22:07:34  lavr
 * Changes for use new CONN interface
 *
@@ -164,17 +174,38 @@ NLM_EXTERN Int4 PrintQBlastQueue (
 
 /* produce fasta for qblast queries. */
 Boolean QBBioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na);
+
 /* 
    Function to get SeqAnnot for RID. We suppose, that search already
    finished and results are exists on the Qblast repository 
 */
 NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID);
 
+/*
+        Returns a SeqAnnot for a given RID.
+
+        If host_machine and host_path are set to NULL and host_port to zero
+        default server will be used.
+
+        if query_number is set to zero all will be returned, otherwise the
+        one-based offset query will be returned.
+ */
+NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRIDEx(CharPtr RID,
+                                               Nlm_CharPtr host_machine,
+                                               Nlm_Uint2 host_port,
+                                               Nlm_CharPtr host_path,
+                                               Int4 query_number);
+
+
 /* 
    Function to get Query Bioseq for RID. We suppose, that search already
    finished and results are exists on the Qblast repository 
 */
 NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID);
+NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRIDEx(CharPtr RID, int query_num);
+
+NLM_EXTERN Nlm_Boolean BLASTGetQuerySummary(CharPtr RID, Int4 query_number,
+    CharPtr *defline, Int4Ptr query_length);
 
 /* Function to get BlastObject for RID. We suppose, that search already
    finished and results are exists on the Qblast repository. Blast Object

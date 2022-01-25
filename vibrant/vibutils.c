@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.49 $
+* $Revision: 6.54 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.54  2003/03/06 21:55:14  rsmith
+* for OS_UNIX_DARWIN update Nlm_LaunchAppEx and Nlm_SendURLAppleEvent to use new LaunchServices calls.
+*
+* Revision 6.53  2003/02/24 14:25:22  kans
+* undef PM_USE_SESSION_APIS if already defined, before redefining it
+*
+* Revision 6.52  2003/02/10 22:16:41  kans
+* MyNavTextFilterProc allows fdType of 0 for Darwin as well as TEXT
+*
+* Revision 6.51  2003/02/09 18:13:35  kans
+* Nlm_NavServGetInputFileName uses MyNavFilterProc for darwin even if TEXT requested, since not all desired files will have type set
+*
+* Revision 6.50  2003/01/24 20:55:43  rsmith
+* ConvertFilename now extern not static, renamed Nlm_* and only defined in vibutils.c
+*
 * Revision 6.49  2002/11/14 21:27:05  johnson
 * VibMonCreate no longer assigns focus to new window (on WIN_MOTIF)
 *
@@ -382,9 +397,15 @@ either.
 # include <Navigation.h>
 # if TARGET_API_MAC_CARBON
 // Use non-session APIs of the Carbon Printing Manager, for easy porting
+#ifdef PM_USE_SESSION_APIS
+#undef PM_USE_SESSION_APIS
+#endif
 #  define PM_USE_SESSION_APIS 0
 #  include <PMApplication.h>
 #  include <FullPath.h>
+# endif
+# ifdef OS_UNIX_DARWIN
+#  include <LaunchServices.h>
 # endif
 #endif
 
@@ -4585,10 +4606,12 @@ static void Nlm_FileMapCallback (Widget fs, XtPointer client_data, XtPointer cal
 #endif
 
 #ifdef WIN_MAC
+extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename );
+
 #if TARGET_API_MAC_CARBON
 
 /* new code calling MoreFiles */
-static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
+extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 
 
 {
@@ -4642,7 +4665,7 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 #else
 
 /* AppleEvent handlers modified from Roger Sayle's RasMol code */
-static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
+extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 
 {
   register char *src;
@@ -4696,12 +4719,23 @@ static pascal Boolean MyNavTextFilterProc (AEDesc* theItem, void* info,
     OSErr theErr = noErr;
     Boolean display = true;
     NavFileOrFolderInfo* theInfo = (NavFileOrFolderInfo*)info;
+    OSType fdType;
 
-    if (theItem->descriptorType == typeFSS)
-        if (!theInfo->isFolder)
-            if (theInfo->fileAndFolder.fileInfo.finderInfo.fdType
-                != 'TEXT')
+    if (theItem->descriptorType == typeFSS) {
+        if (!theInfo->isFolder) {
+            fdType = theInfo->fileAndFolder.fileInfo.finderInfo.fdType;
+#ifdef OS_UNIX_DARWIN
+            /* on Darwin, desired files may not have type set, so also allow type 0 */
+            if (fdType != 'TEXT' && fdType != 0) {
                 display = false;
+            }
+#else
+            if (fdType != 'TEXT') {
+                display = false;
+            }
+#endif
+        }
+    }
     return display;
 }
 
@@ -4787,7 +4821,7 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
                                             &actualSize);
                         if (anErr == noErr)
                         {
-                            ConvertFilename (&documentFSSpec, filename);
+                            Nlm_ConvertFilename (&documentFSSpec, filename);
                             Nlm_StringNCpy_0 (fileName, filename, maxsize);
                             rsult = TRUE;
                         }
@@ -5120,13 +5154,13 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
                         // so you can check for problems before replacing
                         // an existing file. Once the save is confirmed,
                         // swap the files and delete the original.
-                        ConvertFilename (&documentFSSpec, filename);
+                        Nlm_ConvertFilename (&documentFSSpec, filename);
                         Nlm_StringNCpy_0 (fileName, filename, maxsize);
                         rsult = TRUE;
                     }
                     else
                     {
-                        ConvertFilename (&documentFSSpec, filename);
+                        Nlm_ConvertFilename (&documentFSSpec, filename);
                         Nlm_StringNCpy_0 (fileName, filename, maxsize);
                         rsult = TRUE;
                     }
@@ -5339,7 +5373,32 @@ extern Nlm_Boolean Nlm_LaunchAppEx (Nlm_CharPtr fileName, Nlm_VoidPtr serialNumP
 
 {
 #ifdef WIN_MAC
+#ifdef OS_UNIX_DARWIN
   OSErr                   err;
+  Nlm_Boolean             rsult = FALSE;
+  OSType                  appCreator = 0;
+  CFStringRef             appName = NULL;
+  FSRef                   appRef;
+  
+  if (fileName != NULL && fileName [0] != '\0') {
+    appName = CFStringCreateWithCString(NULL, fileName, kCFStringEncodingMacRoman);
+  }
+  if (sig != NULL && sig [0] != '\0') {
+    appCreator = *(OSType*) sig;
+  }
+  if (appCreator == 0 && appName == NULL)
+    return rsult;
+    
+  err = LSFindApplicationForInfo( appCreator, NULL, appName, &appRef, NULL);
+  if (err == noErr) {
+    err = LSOpenFSRef(&appRef, NULL); 
+    rsult = (err == noErr);
+  }
+  return rsult;
+  
+#else
+  OSErr                   err;
+  Nlm_Boolean             rsult = FALSE;
   FSSpec                  fsspec;
   long                    gval;
   LaunchParamBlockRec     myLaunchParams;
@@ -5347,7 +5406,6 @@ extern Nlm_Boolean Nlm_LaunchAppEx (Nlm_CharPtr fileName, Nlm_VoidPtr serialNumP
   unsigned char           pathname [256];
   ProcessSerialNumberPtr  psnp;
   Nlm_CharPtr             ptr;
-  Nlm_Boolean             rsult;
   OSType                  theSignature;
   ProcessSerialNumber     psn;
   ProcessInfoRec          pir;
@@ -5357,8 +5415,7 @@ extern Nlm_Boolean Nlm_LaunchAppEx (Nlm_CharPtr fileName, Nlm_VoidPtr serialNumP
   long                    dirID;
   short                   vRefNum;
   long                    ioAPPLParID;
-
-  rsult = FALSE;
+  
   if (Gestalt (gestaltSystemVersion, &gval) == noErr && (short) gval >= 7 * 256) {
     if (fileName != NULL && fileName [0] != '\0') {
       if (Nlm_StringChr (fileName, DIRDELIMCHR) != NULL) {
@@ -5434,7 +5491,8 @@ extern Nlm_Boolean Nlm_LaunchAppEx (Nlm_CharPtr fileName, Nlm_VoidPtr serialNumP
     }
   }
   return rsult;
-#endif
+#endif /* OS_UNIX_DARWIN */
+#endif /* WIN_MAC */
 #ifdef WIN_MSWIN
   Nlm_Char     ch;
   Nlm_Int2     i;
@@ -5560,7 +5618,7 @@ extern Nlm_Boolean Nlm_Execv(const Nlm_Char* path, Nlm_Char *const *argv)
      */
     int x_argc;
     char **x_argv;
-    for (x_argc = 0;  argv[x_argc];  x_argc++);
+    for (x_argc = 0;  argv[x_argc];  x_argc++) continue;
     x_argv = (char**)Nlm_MemNew((1 + x_argc + 1) * sizeof(char*));
     x_argv[0] = (char *)path;
     Nlm_MemCpy(&x_argv[1], &argv[0], (x_argc + 1) * sizeof(char*));
@@ -5701,6 +5759,15 @@ extern void Nlm_SendOpenDocAppleEvent (Nlm_CharPtr datafile, Nlm_CharPtr sig)
 extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_CharPtr prog)
 
 {
+#ifdef OS_UNIX_DARWIN
+  OSStatus    err;
+  CFURLRef      urlRef;
+  
+  /* on OS X ignore the sig and prog and open the url with the default browser */
+  urlRef = CFURLCreateWithBytes (NULL, (const UInt8 *) urlString, Nlm_StrLen( urlString),  kCFStringEncodingMacRoman, NULL);
+  err = LSOpenCFURLRef(urlRef, NULL);
+
+#else
   long gval;
   OSErr theErr = noErr;
   AEAddressDesc theAddress;
@@ -5748,6 +5815,7 @@ extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_C
       AEDisposeDesc(&theAddress);
     }
   }
+#endif
 }
 
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator);

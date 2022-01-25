@@ -65,6 +65,10 @@ SOURCE=..\..\..\..\cdromlib\accentr.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\cdromlib\accmmdbs.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\cdromlib\accutils.c
 # End Source File
 # End Group

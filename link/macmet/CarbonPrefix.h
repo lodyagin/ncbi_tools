@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2001-03-21
 *
-* $Revision: 1.1 $
+* $Revision: 1.3 $
 *
 * File Description:
 *		header for controlling the level of enforcement of Carbon-compliance

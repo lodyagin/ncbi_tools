@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.47 2002/12/03 14:36:31 bauer Exp $
+/* $Id: cddutil.h,v 1.48 2003/02/06 21:04:27 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.47 $
+* $Revision: 1.48 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.48  2003/02/06 21:04:27  bauer
+* fixed bug in reindexing to consensus
+*
 * Revision 1.47  2002/12/03 14:36:31  bauer
 * added CddMSLMixedToMSLDenDiag
 *
@@ -619,6 +622,7 @@ SeqAnnotPtr LIBCALL CddSeqAnnotForSeqAlign (SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddSeqAlignDup (SeqAlignPtr salp);
 SeqAlignPtr LIBCALL SeqAlignSetDup(SeqAlignPtr salp);
 void        LIBCALL CddDegapSeqAlign(SeqAlignPtr salp);
+SeqIdPtr    LIBCALL CddSeqIdDupPDBGI(SeqIdPtr sipold);
 SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp, SeqEntryPtr sep, BioseqPtr bsp, SeqIntPtr range, BioseqPtr *bspCons, SeqAlignPtr *salpCons);
 Boolean     LIBCALL CddRemoveConsensus(CddPtr pcdd);
 

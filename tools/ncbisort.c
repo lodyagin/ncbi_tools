@@ -1,4 +1,4 @@
-/* $Id: ncbisort.c,v 6.4 1998/06/01 14:52:37 madden Exp $
+/* $Id: ncbisort.c,v 6.5 2003/02/26 17:48:09 kimelman Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *         Main file for SORTing library
 *
 * $Log: ncbisort.c,v $
+* Revision 6.5  2003/02/26 17:48:09  kimelman
+* bugfix: format/argument mismatch in error message
+*
 * Revision 6.4  1998/06/01 14:52:37  madden
 * Change to using TmpNam
 *
@@ -504,7 +507,7 @@ static Int4 SORTFillBuf(SORTBufferPtr buf, FILE *fp)
 
     if((cc = FileRead(buf->buf + buf->used, 
                       1, buf->alloc - buf->used, fp)) == 0 && ferror(fp)) {
-      ErrLogPrintf("sort: read error (%s)\n", errno);
+      ErrLogPrintf("sort: read error (%s)\n",  strerror(errno));
       return (Int4) SORTReadError;
     }
 

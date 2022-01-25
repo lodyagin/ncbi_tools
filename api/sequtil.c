@@ -29,13 +29,28 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.126 $
+* $Revision: 6.131 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.131  2003/03/25 13:32:22  kans
+* added CC as ncbi gss accession prefix
+*
+* Revision 6.130  2003/03/24 19:41:56  kans
+* added tmsmart_order, use in SeqIdWrite to prevent TMSMART temporary ID from being used
+*
+* Revision 6.129  2003/02/20 19:05:31  ford
+* Modified MakeNewProteinSeqIdExMT() to create an ID of maximum length 30 instead of 20.
+*
+* Revision 6.128  2003/01/21 17:06:57  kans
+* implement PRINTID_FASTA_ALL SeqIdWrite
+*
+* Revision 6.127  2003/01/13 18:15:35  kans
+* added CB as NCBI EST prefix
+*
 * Revision 6.126  2002/11/05 18:50:31  kans
 * fixed bug in SeqLocPartialCheck
 *
@@ -3161,6 +3176,27 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
         10,  /* 17 = tpe */
         10   /* 18 = tpd */
     };
+	static Uint1 tmsmart_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+ 	33, /* 0 = not set */
+	20, /* 1 = local Object-id */
+	15,  /* 2 = gibbsq */
+	16,  /* 3 = gibbmt */
+	30, /* 4 = giim Giimport-id */
+	10, /* 5 = genbank */
+	10, /* 6 = embl */
+	10, /* 7 = pir */
+	10, /* 8 = swissprot */
+	15,  /* 9 = patent */
+	12, /* 10 = other TextSeqId */
+	29, /* 11 = general Dbtag */
+	255,  /* 12 = gi */
+	10, /* 13 = ddbj */
+	10, /* 14 = prf */
+	12,  /* 15 = pdb */
+        10,  /* 16 = tpg */
+        10,  /* 17 = tpe */
+        10   /* 18 = tpd */
+    };
 	static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
  	33, /* 0 = not set */
 	20, /* 1 = local Object-id */
@@ -3188,6 +3224,8 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 	ObjectIdPtr oip;
 	PatentSeqIdPtr patsip;
 	Boolean got_gi = FALSE;
+	Boolean got_tmsmart = FALSE;
+	DbtagPtr dbt;
 	Char chainbuf[3];
 	Char versionbuf[10];
 	Int2 version = 0;
@@ -3214,6 +3252,43 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 		useGeneral = TRUE;
 		format = PRINTID_FASTA_LONG;
 	}
+
+	if (format == PRINTID_FASTA_ALL) {
+		Char allbuf [41];
+		ValNodePtr vnp, head = NULL;
+		size_t len = 0;
+		CharPtr str;
+		Boolean notfirst;
+
+		for (sip = isip; sip != NULL; sip = sip->next) {
+			SeqIdWrite (sip, allbuf, PRINTID_FASTA_SHORT, sizeof (allbuf) - 1);
+			ValNodeCopyStr (&head, 0, allbuf);
+		}
+		for (vnp = head; vnp != NULL; vnp = vnp->next) {
+		  str = (CharPtr) vnp->data.ptrvalue;
+		  if (! StringHasNoText (str)) {
+		    len += StringLen (str) + 1;
+		  }
+		}
+		if (len < 1) return buf;
+		tmp = MemNew (len + 2);
+		if (tmp == NULL) return buf;
+		notfirst = FALSE;
+		for (vnp = head; vnp != NULL; vnp = vnp->next) {
+		  str = (CharPtr) vnp->data.ptrvalue;
+		  if (! StringHasNoText (str)) {
+		    if (notfirst) {
+		      StringCat (tmp, "|");
+		    }
+		    StringCat (tmp, str);
+		    notfirst = TRUE;
+		  }
+		}
+		ValNodeFreeData (head);
+		StringNCpy_0 (buf, tmp, buflen + 1);
+		MemFree (tmp);
+		return buf;
+	}
 	
 	localbuf[0] = '\0';
 							/* error on input, return ??? */
@@ -3234,11 +3309,17 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
 					(long)(sip->data.intvalue));
 				Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
 				got_gi = TRUE;
-				break;
+			} else if (sip->choice == SEQID_GENERAL) {
+				dbt = (DbtagPtr) sip->data.ptrvalue;
+				if (dbt != NULL && StringICmp (dbt->db, "TMSMART") == 0) {
+					got_tmsmart = TRUE;
+				}
 			}
 		}
 		if (useGeneral) {
 			sip = SeqIdSelect(isip, general_order, NUM_SEQID);
+		} else if (got_tmsmart) {
+			sip = SeqIdSelect(isip, tmsmart_order, NUM_SEQID);
 		} else {
 			sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 		}
@@ -4125,7 +4206,7 @@ NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip
     }
     
     if (sip != NULL) {
-        SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 20);
+        SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 30);
         tmp = buf;
         while (*tmp != '\0')
             tmp++;
@@ -8641,7 +8722,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"BM") == 0) || 
 	      (StringICmp(temp,"BQ") == 0) || 
 	      (StringICmp(temp,"BU") == 0) || 
-	      (StringICmp(temp,"CA") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"CA") == 0) || 
+	      (StringICmp(temp,"CB") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -8662,7 +8744,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AQ") == 0) ||
                      (StringICmp(temp,"AZ") == 0) ||
                      (StringICmp(temp,"BH") == 0) ||
-                     (StringICmp(temp,"BZ") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"BZ") == 0) ||
+                     (StringICmp(temp,"CC") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;

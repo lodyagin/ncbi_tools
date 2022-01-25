@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.19 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
@@ -226,8 +226,9 @@ static void SetupAppProperties (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData);
   /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData); */
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asn2gphGphPageData);
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData);
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
+  /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData); */
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqpnlPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqAlnPnlPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbgnPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gnbkPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &emblPageData);

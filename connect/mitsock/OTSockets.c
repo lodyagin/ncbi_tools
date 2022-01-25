@@ -36,7 +36,7 @@
  * $
  */
 
-/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/OTSockets.c,v 1.5 2001/11/21 22:51:40 juran Exp $ */
+/* $Header: /src/NCBI/vault.ncbi/distrib/connect/mitsock/OTSockets.c,v 1.5 2001/11/21 22:51:40 juran Exp $ */
 
 /* 
  *

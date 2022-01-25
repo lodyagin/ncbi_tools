@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: 
 *
@@ -84,6 +84,11 @@ NLM_EXTERN CONN AccnRevHistOpenConnection (
   CharPtr accn
 );
 
+NLM_EXTERN CONN GiSeqIdSetOpenConnection (
+  Int4 gi
+);
+
+
 NLM_EXTERN PubmedEntryPtr PubMedWaitForReply (
   CONN conn
 );
@@ -97,6 +102,10 @@ NLM_EXTERN CharPtr GiRevHistWaitForReply (
 );
 
 NLM_EXTERN Int4 AccnRevHistWaitForReply (
+  CONN conn
+);
+
+NLM_EXTERN SeqIdPtr GiSeqIdSetWaitForReply (
   CONN conn
 );
 
@@ -123,6 +132,10 @@ NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
 
 NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
   CharPtr accn
+);
+
+NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
+  Int4 gi
 );
 
 /*
@@ -209,7 +222,23 @@ NLM_EXTERN Int4 AccnRevHistReadReply (
   EIO_Status status
 );
 
-/* SeqId fetch function */
+NLM_EXTERN Boolean GiSeqIdSetAsynchronousQuery (
+  Int4 gi,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Int4 GiSeqIdSetCheckQueue (
+  QUEUE* queue
+);
+
+NLM_EXTERN SeqIdPtr GiSeqIdSetReadReply (
+  CONN conn,
+  EIO_Status status
+);
+
+/* SeqId fetch registration function */
 
 NLM_EXTERN Boolean PubSeqFetchEnable (
   void
@@ -232,6 +261,12 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   Boolean products,
   Boolean alignments,
   Boolean history
+);
+
+/* SeqId chain fetch function */
+
+NLM_EXTERN SeqIdPtr LIBCALLBACK GiRevHistLookupSeqIdSet (
+  Int4 gi
 );
 
 

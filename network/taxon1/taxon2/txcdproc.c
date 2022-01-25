@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.12 $
+* $Revision: 1.14 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,12 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.14  2003/03/06 16:30:32  kans
+* tdp->org needed a cast to (OrgRefPtr) due to Mac compiler complaint
+*
+* Revision 1.13  2003/03/05 21:32:00  soussov
+* new lookup procedure
+*
 * Revision 1.12  2001/09/28 15:53:15  soussov
 * tax1e_maxTaxId() added
 *
@@ -1453,3 +1459,81 @@ Int4 tax1e_maxTaxId()
 
     return tax_id;
 }
+
+static OrgRefPtr s_findbyorg(OrgRefPtr orgRef)
+{
+    Taxon1ReqPtr taxrp;
+    Taxon1RespPtr taxbp;
+    Taxon1DataPtr tdp;
+
+    if((taxrp= ValNodeNew(NULL)) == NULL) return 0;
+    taxrp->choice= Taxon1Req_lookup;
+    taxrp->data.ptrvalue= orgRef;
+    Taxon1ReqAsnWrite(taxrp, asnout, NULL);
+    AsnIoReset(asnout);
+    taxrp->data.ptrvalue= NULL;
+    Taxon1ReqFree(taxrp);
+
+    if((taxbp= NetTaxArchReadAsn()) == NULL) return 0;
+    
+    if(taxbp->choice != Taxon1Resp_lookup) {
+        report_service_error("txc_getTaxIdByOrgRef", taxbp);
+        Taxon1RespFree(taxbp);
+        return NULL;
+    }
+    
+    tdp= taxbp->data.ptrvalue;
+    orgRef= (OrgRefPtr) tdp->org;
+    tdp->org= NULL;
+    Taxon1RespFree(taxbp);
+    
+    return orgRef;
+}
+
+Int4 txc_findByOrg(OrgRefPtr inp_orgRef, OrgModPtr* hitName)
+{
+    Int4 i;
+    short erract;
+    ErrDesc err;
+    OrgRefPtr orp= NULL;
+    Int4 tax_id= 0;
+
+    if(tax_track) tax_time1= clock();
+    for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
+        ErrGetOpts(&erract, NULL);
+        ErrSetOpts(ERR_IGNORE, 0);
+        ErrFetch(&err);
+
+        orp = s_findbyorg(inp_orgRef);
+
+        ErrSetOpts(erract, 0);
+        if (!ErrFetch(&err))  break; /* success */
+        
+        if(!ReestablishNetTaxArch()) break;
+    }
+    
+    if(tax_track) {
+        double diff= (double)(clock() - tax_time1)/CLOCKS_PER_SEC;
+        printf("tax1_getTaxIdByOrgRef() %f\n", diff);
+    }
+    
+    if(orp && orp->db) {
+        ValNodePtr vnp= orp->db;
+        DbtagPtr dbtag= vnp->data.ptrvalue;
+        ObjectIdPtr object_id= dbtag->tag;
+        tax_id= object_id->id;
+        
+        if(hitName) {
+            if(orp->orgname) {
+                *hitName= orp->orgname->mod;
+                orp->orgname->mod= NULL;
+            }
+            else *hitName= NULL;
+        }
+    }
+
+    if(orp) OrgRefFree(orp);
+
+    return tax_id;
+}
+

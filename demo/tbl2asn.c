@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.40 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
@@ -59,6 +59,10 @@
 #include <explore.h>
 #include <tofasta.h>
 #include <simple.h>
+
+#define TBL2ASN_APP_VER "2.2"
+
+CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
 static FILE* OpenOneFile (
   CharPtr directory,
@@ -170,7 +174,7 @@ static void FlatfileOneFile (
   if (fp == NULL) return;
 
   oldErrSev = ErrSetMessageLevel (SEV_MAX);
-  SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, NORMAL_STYLE, 0, 0, NULL, fp);
+  SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, NORMAL_STYLE, 0, 0, 0, NULL, fp);
   ErrSetMessageLevel (oldErrSev);
 
   FileClose (fp);
@@ -670,7 +674,7 @@ static Int2 GetGenCodeForBsp (BioseqPtr bsp)
   return onp->gcode;
 }
 
-static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap)
+static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap, Boolean genprodset)
 
 {
   SeqAnnotPtr  anp;
@@ -707,7 +711,7 @@ static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap)
       anp->next = sap;
     }
     if (sfp != NULL) {
-      PromoteXrefs (sfp, bsp, entityID);
+      PromoteXrefsEx (sfp, bsp, entityID, TRUE, FALSE, genprodset);
     }
   } else {
     Message (MSG_POSTERR, "Feature table identifiers do not match record");
@@ -787,6 +791,34 @@ static CharPtr TrimBracketsFromString (CharPtr str)
   return str;
 }
 
+static Boolean HasTpaAccession (
+  UserObjectPtr uop
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  CharPtr       str;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL) return FALSE;
+  if ((oip = uop->type) == NULL) return FALSE;
+  if (StringCmp (oip->str, "TpaAssembly") != 0) return FALSE;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    if (curr->choice != 11) continue;
+    for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+      if (ufp->choice != 1) continue;
+      oip = ufp->label;
+      if (oip == NULL || StringICmp (oip->str, "accession") != 0) continue;
+      str = (CharPtr) ufp->data.ptrvalue;
+      if (! StringHasNoText (str)) return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
 static void ProcessOneNuc (
   Uint2 entityID,
   BioseqPtr bsp,
@@ -797,19 +829,20 @@ static void ProcessOneNuc (
 )
 
 {
-  BioSourcePtr  biop = NULL;
-  SeqFeatPtr    cds;
-  GBBlockPtr    gbp;
-  Int2          genCode;
-  MolInfoPtr    mip;
-  Boolean       mito;
-  OrgNamePtr    onp;
-  OrgRefPtr     orp;
-  SeqHistPtr    shp;
-  SqnTagPtr     stp = NULL;
-  CharPtr       str;
-  CharPtr       ttl = NULL;
-  ValNodePtr    vnp;
+  BioSourcePtr   biop = NULL;
+  SeqFeatPtr     cds;
+  GBBlockPtr     gbp;
+  Int2           genCode;
+  MolInfoPtr     mip;
+  Boolean        mito;
+  OrgNamePtr     onp;
+  OrgRefPtr      orp;
+  SeqHistPtr     shp;
+  SqnTagPtr      stp = NULL;
+  CharPtr        str;
+  CharPtr        ttl = NULL;
+  UserObjectPtr  uop;
+  ValNodePtr     vnp;
 
   if (bsp == NULL) return;
 
@@ -890,6 +923,15 @@ static void ProcessOneNuc (
     }
   }
 
+  if (stp != NULL) {
+    uop = ParseTitleIntoTpaAssembly (stp, NULL);
+    if (uop != NULL && HasTpaAccession (uop)) {
+      SeqDescrAddPointer (&(bsp->descr), Seq_descr_user, (Pointer) uop);
+    } else {
+      uop = UserObjectFree (uop);
+    }
+  }
+
   if (findorf) {
     cds = AnnotateBestOrf (bsp, genCode, altstart, stp);
     if (cds != NULL) {
@@ -913,6 +955,7 @@ static void ProcessOneNuc (
 static void ProcessOneAnnot (
   SeqAnnotPtr sap,
   Uint2 entityID,
+  Boolean genprodset,
   CharPtr accn
 )
 
@@ -925,7 +968,7 @@ static void ProcessOneAnnot (
 
   if (sap == NULL) return;
 
-  bsp = AttachSeqAnnotEntity (entityID, sap);
+  bsp = AttachSeqAnnotEntity (entityID, sap, genprodset);
   if (bsp == NULL) return;
 
   /* correct all idx parent pointers */
@@ -956,7 +999,7 @@ static void ProcessOneAnnot (
     if (sap->type == 1) {
       SetEmptyGeneticCodes (sap, genCode);
       sfp = (SeqFeatPtr) sap->data;
-      PromoteXrefs (sfp, bsp, entityID);
+      PromoteXrefsEx (sfp, bsp, entityID, TRUE, FALSE, genprodset);
     }
   }
 }
@@ -1043,18 +1086,48 @@ static Uint2 ProcessOneAsn (
   BioSourcePtr src,
   CharPtr organism,
   Boolean findorf,
-  Boolean altstart
+  Boolean altstart,
+  CharPtr localname,
+  SeqEntryPtr gsep
 )
 
 {
-  BioseqPtr    bsp = NULL;
-  Pointer      dataptr;
-  Uint2        datatype, entityID;
-  SeqEntryPtr  sep;
+  BioseqPtr      bsp = NULL;
+  BioseqSetPtr   bssp;
+  Pointer        dataptr;
+  Uint2          datatype, entityID;
+  ObjMgrDataPtr  omdptop;
+  ObjMgrData     omdata;
+  Uint2          parenttype;
+  Pointer        parentptr;
+  SeqEntryPtr    sep;
+  SeqIdPtr       sip;
 
   if (fp == NULL) return 0;
 
-  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, TRUE, FALSE, TRUE, FALSE);
+  if (gsep != NULL) {
+    bssp = (BioseqSetPtr) gsep->data.ptrvalue;
+    if (bssp == NULL) return 0;
+
+    SaveSeqEntryObjMgrData (gsep, &omdptop, &omdata);
+    GetSeqEntryParent (gsep, &parentptr, &parenttype);
+
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, TRUE, FALSE, TRUE, FALSE);
+    if (datatype == OBJ_BIOSEQ) {
+      bssp->seq_set = SeqMgrGetSeqEntryForData (dataptr);
+      SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) dataptr, gsep);
+    } else if (datatype == OBJ_BIOSEQSET) {
+      bssp->seq_set = SeqMgrGetSeqEntryForData (dataptr);
+      SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) dataptr, gsep);
+    } else return 0;
+
+    SeqMgrLinkSeqEntry (gsep, parenttype, parentptr);
+    RestoreSeqEntryObjMgrData (gsep, omdptop, &omdata);
+
+    entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
+  } else {
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, TRUE, FALSE, TRUE, FALSE);
+  }
   if (dataptr == NULL) return 0;
 
   sep = GetTopSeqEntryForEntityID (entityID);
@@ -1062,6 +1135,16 @@ static Uint2 ProcessOneAsn (
   if (bsp == NULL) {
     ObjMgrFreeByEntityID (entityID);
     return 0;
+  }
+
+  if (! StringHasNoText (localname)) {
+    sip = MakeSeqID (localname);
+    if (sip != NULL) {
+      bsp->id = SeqIdSetFree (bsp->id);
+      bsp->id = sip;
+      SeqMgrReplaceInBioseqIndex (bsp);
+      VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
+    }
   }
 
   ProcessOneNuc (entityID, bsp, src, organism, findorf, altstart);
@@ -1083,6 +1166,8 @@ static Uint2 ProcessBulkSet (
   Pointer       dataptr;
   Uint2         datatype, entityID;
   SeqEntryPtr   lastsep, sep, topsep;
+
+  if (fp == NULL) return 0;
 
   bssp = BioseqSetNew ();
   if (bssp == NULL) return 0;
@@ -1128,18 +1213,27 @@ static Uint2 ProcessDeltaSet (
   BioSourcePtr src,
   CharPtr organism,
   Boolean findorf,
-  Boolean altstart
+  Boolean altstart,
+  CharPtr localname,
+  SeqEntryPtr gsep
 )
 
 {
-  BioseqPtr    bsp, deltabsp;
-  Uint2        entityID;
-  SeqEntryPtr  firstsep, lastsep, nextsep, sep, topsep;
-  IntFuzzPtr   ifp;
-  CharPtr      seqbuf;
-  SeqIdPtr     sip;
-  SeqLitPtr    slp;
-  ValNodePtr   vnp;
+  BioseqPtr      bsp, deltabsp;
+  BioseqSetPtr   bssp;
+  Uint2          entityID;
+  SeqEntryPtr    firstsep, lastsep, nextsep, sep, topsep;
+  IntFuzzPtr     ifp;
+  ObjMgrDataPtr  omdptop;
+  ObjMgrData     omdata;
+  Uint2          parenttype;
+  Pointer        parentptr;
+  CharPtr        seqbuf;
+  SeqIdPtr       sip;
+  SeqLitPtr      slp;
+  ValNodePtr     vnp;
+
+  if (fp == NULL) return 0;
 
   firstsep = NULL;
   lastsep = NULL;
@@ -1166,7 +1260,24 @@ static Uint2 ProcessDeltaSet (
     bsp = FindNucBioseq (firstsep);
     if (bsp == NULL) return 0;
 
-    entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
+    if (gsep != NULL) {
+      bssp = (BioseqSetPtr) gsep->data.ptrvalue;
+      if (bssp == NULL) return 0;
+
+      SaveSeqEntryObjMgrData (gsep, &omdptop, &omdata);
+      GetSeqEntryParent (gsep, &parentptr, &parenttype);
+
+      bssp->seq_set = SeqMgrGetSeqEntryForData (bsp);
+      SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, gsep);
+
+      SeqMgrLinkSeqEntry (gsep, parenttype, parentptr);
+      RestoreSeqEntryObjMgrData (gsep, omdptop, &omdata);
+
+      entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
+    } else {
+      entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
+    }
+
     ProcessOneNuc (entityID, bsp, src, organism, findorf, altstart);
     return entityID;
   }
@@ -1191,7 +1302,23 @@ static Uint2 ProcessDeltaSet (
   topsep->choice = 1;
   topsep->data.ptrvalue = (Pointer) deltabsp;
 
-  entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) deltabsp);
+  if (gsep != NULL) {
+    bssp = (BioseqSetPtr) gsep->data.ptrvalue;
+    if (bssp == NULL) return 0;
+
+    SaveSeqEntryObjMgrData (gsep, &omdptop, &omdata);
+    GetSeqEntryParent (gsep, &parentptr, &parenttype);
+
+    bssp->seq_set = topsep;
+    SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) deltabsp, gsep);
+
+    SeqMgrLinkSeqEntry (gsep, parenttype, parentptr);
+    RestoreSeqEntryObjMgrData (gsep, omdptop, &omdata);
+
+    entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
+  } else {
+    entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) deltabsp);
+  }
 
   for (sep = firstsep; sep != NULL; sep = nextsep) {
     nextsep = sep->next;
@@ -1239,7 +1366,19 @@ static Uint2 ProcessDeltaSet (
   ValNodeLink (&(deltabsp->descr), vnp);
   deltabsp->id = sip;
 
-  SeqMgrLinkSeqEntry (topsep, 0, NULL);
+  if (gsep == NULL) {
+    SeqMgrLinkSeqEntry (topsep, 0, NULL);
+  }
+
+  if (! StringHasNoText (localname)) {
+    sip = MakeSeqID (localname);
+    if (sip != NULL) {
+      bsp->id = SeqIdSetFree (bsp->id);
+      bsp->id = sip;
+      SeqMgrReplaceInBioseqIndex (bsp);
+      VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
+    }
+  }
 
   ProcessOneNuc (entityID, deltabsp, src, organism, findorf, altstart);
 
@@ -1286,6 +1425,331 @@ static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
   return rsult;
 }
 
+typedef struct npsseqs {
+  BioseqPtr  nuc;
+  BioseqPtr  prot;
+} NpsSeqs, PNTR NpsSeqsPtr;
+
+static void FindNucProtSeqs (BioseqPtr bsp, Pointer userdata)
+
+{
+  NpsSeqsPtr  nsp;
+
+  if (bsp == NULL) return;
+  nsp = (NpsSeqsPtr) userdata;
+  if (nsp == NULL) return;
+
+  if (ISA_na (bsp->mol)) {
+    nsp->nuc = bsp;
+  } else if (ISA_aa (bsp->mol)) {
+    nsp->prot = bsp;
+  }
+}
+
+static Boolean InRightNps (CharPtr gbqval, SeqIdPtr protids)
+
+{
+  Char      id [64];
+  SeqIdPtr  sip;
+  CharPtr   ptr;
+  Boolean   rsult;
+  long int  val;
+  Uint4     version = 0;
+
+  StringNCpy_0 (id, gbqval, sizeof (id));
+  if (! StringHasNoText (id)) {
+    if (StringChr (id, '|') != NULL) {
+      sip = SeqIdParse (id);
+    } else {
+      ptr = StringChr (id, '.');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+        if (sscanf (ptr, "%ld", &val) == 1) {
+          version = (Uint4) val;
+        }
+      }
+      sip = SeqIdFromAccession (id, version, NULL);
+    }
+  }
+  if (sip == NULL) return FALSE;
+  rsult = SeqIdIn (sip, protids);
+  SeqIdFree (sip);
+  return rsult;
+}
+
+static void MakeNucProtCDS (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  CodeBreakPtr    cbp;
+  SeqFeatPtr      cds;
+  CdRegionPtr     crp;
+  GBQualPtr       gbq;
+  Char            id [64];
+  SeqFeatPtr      mrna;
+  GBQualPtr       nextqual;
+  NpsSeqs         ns;
+  Boolean         partial5, partial3;
+  GBQualPtr PNTR  prevqual;
+  SeqFeatPtr      sfp;
+  SeqIdPtr        sip;
+  Int4            start, stop;
+  SeqFeatPtr      temp;
+
+  ns.nuc = NULL;
+  ns.prot = NULL;
+  if (VisitBioseqsInSet (bssp, (Pointer) &ns, FindNucProtSeqs) != 2) return;
+  if (ns.nuc == NULL || ns.prot == NULL) return;
+
+  cds = SeqMgrGetCDSgivenProduct (ns.prot, NULL);
+  mrna = SeqMgrGetRNAgivenProduct (ns.nuc, NULL);
+  if (cds == NULL || mrna == NULL) return;
+
+  CheckSeqLocForPartial (mrna->location, &partial5, &partial3);
+
+  start = GetOffsetInLoc (cds->location, mrna->location, SEQLOC_START);
+  stop = GetOffsetInLoc (cds->location, mrna->location, SEQLOC_STOP);
+
+  if (start < 0 || start >= ns.nuc->length ||
+      stop < 0 || stop >= ns.nuc->length) return;
+
+  sip = SeqIdFindBest (ns.nuc->id, 0);
+  if (sip == NULL) return;
+
+  /* copy cds feature fields to paste into new cds feature */
+  temp = AsnIoMemCopy (cds,
+                       (AsnReadFunc) SeqFeatAsnRead,
+                       (AsnWriteFunc) SeqFeatAsnWrite);
+  if (temp == NULL) return;
+
+  sfp = CreateNewFeatureOnBioseq (ns.nuc, SEQFEAT_CDREGION, NULL);
+  if (sfp == NULL) return;
+
+  sfp->location = SeqLocFree (sfp->location);
+  sfp->location = AddIntervalToLocation (NULL, sip, start, stop, partial5, partial3);
+  SetSeqFeatProduct (sfp, ns.prot);
+
+  /* paste fields from temp copy of original cds */
+  crp = (CdRegionPtr) temp->data.value.ptrvalue;
+  sfp->data.value.ptrvalue = (Pointer) crp;
+
+  sfp->partial = temp->partial;
+  sfp->excpt = temp->excpt;
+  sfp->comment = temp->comment;
+  sfp->qual = temp->qual;
+  sfp->title = temp->title;
+  sfp->ext = temp->ext;
+  sfp->cit = temp->cit;
+  sfp->exp_ev = temp->exp_ev;
+  sfp->xref = temp->xref;
+  sfp->dbxref = temp->dbxref;
+  sfp->pseudo = temp->pseudo;
+  sfp->except_text = temp->except_text;
+
+  MemFree (temp); /* do not SeqFeatFree */
+
+  /* update code break locations */
+  for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+    CheckSeqLocForPartial (cbp->loc, &partial5, &partial3);
+    start = GetOffsetInLoc (cbp->loc, mrna->location, SEQLOC_START);
+    stop = GetOffsetInLoc (cbp->loc, mrna->location, SEQLOC_STOP);
+    if (start < 0 || start >= ns.nuc->length ||
+        stop < 0 || stop >= ns.nuc->length) continue;
+	cbp->loc = SeqLocFree (cbp->loc);
+	cbp->loc = AddIntervalToLocation (NULL, sip, start, stop, partial5, partial3);;
+  }
+
+  /* get rid of protein_id in mRNA if it matches protein Seq-id */
+  gbq = mrna->qual;
+  prevqual = (GBQualPtr PNTR) &(mrna->qual);
+  id [0] = '\0';
+  sip = NULL;
+  while (gbq != NULL) {
+    nextqual = gbq->next;
+    if (StringICmp (gbq->qual, "protein_id") == 0 && InRightNps (gbq->val, ns.prot->id)) {
+      *(prevqual) = gbq->next;
+      gbq->next = NULL;
+      StringNCpy_0 (id, gbq->val, sizeof (id));
+      GBQualFree (gbq);
+    } else {
+      prevqual = (GBQualPtr PNTR) &(gbq->next);
+    }
+    gbq = nextqual;
+  }
+}
+
+/* copy gene from contig onto nuc-prot, single interval on cdna bioseq */
+
+static void CopyGene (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  gcontext;
+  SeqFeatPtr         gene, copy, temp;
+
+  /* input mrna features are multi-interval on contig */
+
+  if (sfp->data.choice != SEQFEAT_RNA) return;
+
+  /* overlapping gene should be single interval on contig */
+
+  gene = SeqMgrGetOverlappingGene (sfp->location, &gcontext);
+  if (gene == NULL) return;
+
+  /* find cdna product of mrna */
+
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return;
+
+  /* copy gene feature fields to paste into new gene feature */
+
+  temp = AsnIoMemCopy (gene,
+                       (AsnReadFunc) SeqFeatAsnRead,
+                       (AsnWriteFunc) SeqFeatAsnWrite);
+  if (temp == NULL) return;
+
+  /* make new gene feature on full-length of cdna */
+
+  copy = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, NULL);
+  if (copy == NULL) return;
+
+  /* paste fields from temp copy of original gene */
+
+  copy->data.value.ptrvalue = temp->data.value.ptrvalue;
+  copy->partial = temp->partial;
+  copy->excpt = temp->excpt;
+  copy->comment = temp->comment;
+  copy->qual = temp->qual;
+  copy->title = temp->title;
+  copy->ext = temp->ext;
+  copy->cit = temp->cit;
+  copy->exp_ev = temp->exp_ev;
+  copy->xref = temp->xref;
+  copy->dbxref = temp->dbxref;
+  copy->pseudo = temp->pseudo;
+  copy->except_text = temp->except_text;
+
+  MemFree (temp); /* do not SeqFeatFree */
+}
+
+static void ClearRnaProducts (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  if (sfp->data.choice != SEQFEAT_RNA) return;
+  sfp->product = SeqLocFree (sfp->product);
+}
+
+static void AddMrnaTitles (SeqLocPtr slp, Pointer userdata)
+
+{
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  ccontext;
+  CharPtr            cdslabel = NULL;
+  SeqMgrFeatContext  gcontext;
+  CharPtr            genelabel = NULL;
+  size_t             len;
+  CharPtr            organism;
+  SeqFeatPtr         sfp;
+  CharPtr            str;
+
+  if (slp == NULL) return;
+  bsp = BioseqFindFromSeqLoc (slp);
+  if (bsp == NULL) return;
+  if (! ISA_na (bsp->mol)) return;
+  organism = (CharPtr) userdata;
+  if (BioseqGetTitle (bsp) != NULL) return;
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &gcontext);
+  if (sfp != NULL) {
+    genelabel = gcontext.label;
+    if (StringHasNoText (genelabel)) {
+      genelabel = NULL;
+    }
+  }
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &ccontext);
+  if (sfp != NULL) {
+    cdslabel = ccontext.label;
+    if (StringHasNoText (cdslabel)) {
+      cdslabel = NULL;
+    }
+  }
+  len = StringLen (organism) + StringLen (genelabel) + StringLen (cdslabel) +
+        StringLen (" mRNA, complete cds.") + 10;
+  str = (CharPtr) MemNew (len * sizeof (Char));
+  if (str == NULL) return;
+  str [0] = '\0';
+
+  if (! StringHasNoText (organism)) {
+    StringCat (str, organism);
+  }
+  if (cdslabel != NULL) {
+    StringCat (str, " ");
+    StringCat (str, cdslabel);
+  }
+  if (genelabel != NULL) {
+      StringCat (str, " (");
+      StringCat (str, genelabel);
+      StringCat (str, ")");
+  }
+  if (cdslabel != NULL && genelabel != NULL) {
+    if (ccontext.partialL || ccontext.partialR) {
+      StringCat (str, " mRNA, partial cds.");
+    } else {
+      StringCat (str, " mRNA, complete cds.");
+    }
+  } else if (genelabel != NULL) {
+    StringCat (str, " mRNA.");
+  }
+  SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+}
+
+typedef struct gosearch {
+  TextFsaPtr  gotags;
+  Boolean     isbad;
+} GoSearch, PNTR GoSearchPtr;
+
+static void LookForGo (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  Char         ch;
+  GoSearchPtr  gsp;
+  CharPtr      ptr;
+  Int2         state;
+  ValNodePtr   matches;
+
+  if (sfp == NULL || StringHasNoText (sfp->comment)) return;
+  gsp = (GoSearchPtr) userdata;
+
+  state = 0;
+  ptr = sfp->comment;
+  ch = *ptr;
+  while (ch != '\0') {
+    matches = NULL;
+    state = TextFsaNext (gsp->gotags, state, ch, &matches);
+    if (matches != NULL) {
+      gsp->isbad = TRUE;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+}
+
+static Boolean HasGoTermsInNote (
+  SeqEntryPtr sep,
+  TextFsaPtr gotags
+)
+
+{
+  GoSearch  gs;
+
+  gs.gotags = gotags;
+  gs.isbad = FALSE;
+  VisitFeaturesInSep (sep, (Pointer) &gs, LookForGo);
+  return gs.isbad;
+}
+
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
   PubdescPtr pdp,
@@ -1296,6 +1760,7 @@ static void ProcessOneRecord (
   CharPtr suffix,
   Boolean fastaset,
   Boolean deltaset,
+  Boolean genprodset,
   CharPtr accn,
   CharPtr organism,
   SeqDescrPtr sdphead,
@@ -1303,44 +1768,88 @@ static void ProcessOneRecord (
   Boolean altstart,
   Boolean conflict,
   Boolean validate,
-  Boolean flatfile
+  Boolean flatfile,
+  Boolean seqidfromfile,
+  TextFsaPtr gotags
 )
 
 {
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  Char          buf [256];
-  Pointer       dataptr;
-  Uint2         datatype, entityID;
-  DatePtr       dp;
-  FILE          *fp;
-  Boolean       goOn;
-  SeqGraphPtr   lastsgp;
-  ErrSev        msev;
-  CharPtr       ptr;
-  SeqAnnotPtr   sap;
-  SeqDescrPtr   sdp;
-  SeqEntryPtr   sep;
-  SeqGraphPtr   sgp;
-  SeqIdPtr      sip;
-  SimpleSeqPtr  ssp;
-  CharPtr       str;
+  BioSourcePtr       biop;
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  Char               buf [256];
+  SeqMgrFeatContext  context;
+  Pointer            dataptr;
+  Uint2              datatype, entityID;
+  SeqDescrPtr        descr;
+  DatePtr            dp;
+  BioseqSetPtr       dssp;
+  FILE               *fp;
+  Boolean            goOn;
+  SeqEntryPtr        gsep = NULL;
+  SeqGraphPtr        lastsgp;
+  CharPtr            localname = NULL;
+  ErrSev             msev;
+  OrgRefPtr          orp;
+  CharPtr            ptr;
+  SeqAnnotPtr        sap;
+  SeqDescrPtr        sdp;
+  SeqEntryPtr        sep;
+  SeqFeatPtr         sfp;
+  SeqGraphPtr        sgp;
+  SeqIdPtr           sip;
+  SimpleSeqPtr       ssp;
+  CharPtr            str;
 
   fp = OpenOneFile (directory, base, suffix);
   if (fp == NULL) return;
+
+  /* if genomic product set, make parent set */
+
+  if (genprodset) {
+    bssp = BioseqSetNew ();
+    if (bssp == NULL) return;
+    bssp->_class = BioseqseqSet_class_gen_prod_set;
+
+    gsep = SeqEntryNew ();
+    if (gsep == NULL) return;
+    gsep->choice = 2;
+    gsep->data.ptrvalue = (Pointer) bssp;
+    SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, gsep);
+  }
+
+  if (seqidfromfile) {
+    localname = base;
+  }
 
   /* read one or more ASN.1 or FASTA sequence files */
 
   if (fastaset) {
     entityID = ProcessBulkSet (fp, src, organism, findorf, altstart);
   } else if (deltaset) {
-    entityID = ProcessDeltaSet (fp, src, organism, findorf, altstart);
+    entityID = ProcessDeltaSet (fp, src, organism, findorf, altstart, localname, gsep);
   } else {
-    entityID = ProcessOneAsn (fp, src, organism, findorf, altstart);
+    entityID = ProcessOneAsn (fp, src, organism, findorf, altstart, localname, gsep);
   }
   FileClose (fp);
 
   if (entityID == 0) return;
+
+  organism = NULL;
+  if (genprodset) {
+    descr = ExtractBioSourceAndPubs (bssp->seq_set);
+    for (sdp = descr; sdp != NULL; sdp = sdp->next) {
+      if (sdp->choice != Seq_descr_source) continue;
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      if (biop == NULL) continue;
+      orp = biop->org;
+      if (orp == NULL) continue;
+      if (! StringHasNoText (orp->taxname)) {
+        organism = orp->taxname;
+      }
+    }
+    ReplaceBioSourceAndPubs (gsep, descr);
+  }
 
   /* read one or more feature tables from .tbl file */
 
@@ -1355,13 +1864,21 @@ static void ProcessOneRecord (
       if (datatype == OBJ_SEQANNOT) {
 
         sap = (SeqAnnotPtr) dataptr;
-        ProcessOneAnnot (sap, entityID, accn);
+        ProcessOneAnnot (sap, entityID, genprodset, accn);
 
       } else {
         ObjMgrFree (datatype, dataptr);
       }
     }
     FileClose (fp);
+  }
+
+  /* if genomic product set, copy CDS into nucprot sets */
+
+  if (genprodset) {
+    /* need to reindex to get mRNA and CDS features from cDNA and protein */
+    SeqMgrIndexFeatures (entityID, NULL);
+    VisitSetsInSet (bssp, NULL, MakeNucProtCDS);
   }
 
   /* read one or more feature tables from .pep file */
@@ -1448,8 +1965,8 @@ static void ProcessOneRecord (
                                    (AsnReadFunc) SeqDescrAsnRead,
                                    (AsnWriteFunc) SeqDescrAsnWrite));
       } else if (IS_Bioseq_set (sep)) {
-        bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        ValNodeLink (&(bssp->descr),
+        dssp = (BioseqSetPtr) sep->data.ptrvalue;
+        ValNodeLink (&(dssp->descr),
                      AsnIoMemCopy ((Pointer) sdphead,
                                    (AsnReadFunc) SeqDescrAsnRead,
                                    (AsnWriteFunc) SeqDescrAsnWrite));
@@ -1464,10 +1981,28 @@ static void ProcessOneRecord (
     }
     msev = ErrSetMessageLevel (SEV_MAX);
     move_cds (sep);
-    CdCheck (sep, NULL);
-    /* need to reindex before instantiating protein titles */
+    /* need to reindex before extending CDS to stop codon */
     SeqMgrIndexFeatures (entityID, NULL);
+    CdCheck (sep, NULL);
+    /* need to reindex before copying genes, instantiating protein titles */
+    SeqMgrIndexFeatures (entityID, NULL);
+    if (genprodset) {
+      VisitFeaturesInSep (sep, NULL, CopyGene);
+    }
+    if (! genprodset) {
+      VisitFeaturesInSep (sep, NULL, ClearRnaProducts);
+    }
     InstantiateProteinTitles (entityID, NULL);
+    if (genprodset) {
+      /* need to reindex before instantiating mRNA titles */
+      SeqMgrIndexFeatures (entityID, NULL);
+      bsp = FindNucBioseq (sep);
+      sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_mRNA, &context);
+      while (sfp != NULL) {
+        AddMrnaTitles (sfp->product, organism);
+        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_mRNA, &context);
+      }
+    }
     SeqMgrClearFeatureIndexes (entityID, NULL);
     BasicSeqEntryCleanup (sep);
     ErrSetMessageLevel (msev);
@@ -1475,6 +2010,10 @@ static void ProcessOneRecord (
     SeriousSeqEntryCleanup (sep, NULL, NULL);
     */
     WriteOneFile (results, base, ".sqn", sep, sbp);
+
+    if (HasGoTermsInNote (sep, gotags)) {
+      Message (MSG_OK, "Illegal GO term format detected in note - contact database for instructions");
+    }
 
     if (validate || flatfile) {
       if (pdp != NULL) {
@@ -1566,13 +2105,15 @@ static Boolean TemplateOverwriteRisk (
 #define t_argTemplate   4
 #define s_argFastaSet   5
 #define d_argDeltaSet   6
-#define a_argAccession  7
-#define n_argOrgName    8
-#define c_argFindOrf    9
-#define m_argAltStart  10
-#define k_argConflict  11
-#define v_argValidate  12
-#define b_argGenBank   13
+#define g_argGenProdSet 7
+#define a_argAccession  8
+#define n_argOrgName    9
+#define c_argFindOrf   10
+#define m_argAltStart  11
+#define k_argConflict  12
+#define v_argValidate  13
+#define b_argGenBank   14
+#define q_argFileID    15
 
 Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
@@ -1589,6 +2130,8 @@ Args myargs [] = {
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Read FASTAs as Delta", "F", NULL, NULL,
     TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Genomic Product Set", "F", NULL, NULL,
+    TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Accession", NULL, NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Organism name", NULL, NULL, NULL,
@@ -1603,18 +2146,25 @@ Args myargs [] = {
     TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Generate GenBank file", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Seq ID from file name", "F", NULL, NULL,
+    TRUE, 'q', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
-  Boolean         altstart, conflict, fastaset, deltaset, findorf, flatfile, validate;
-  CharPtr         base, directory, results, suffix, accn, organism, ptr, tmplate;
+  Boolean         altstart, conflict, fastaset, deltaset,
+                  genprodset, findorf, flatfile, validate,
+                  seqidfromfile;
+  CharPtr         base, directory, results, suffix, accn,
+                  organism, ptr, tmplate;
   Pointer         dataptr;
   Uint2           datatype;
   CitSubPtr       csp;
   FILE            *fp;
+  TextFsaPtr      gotags;
   ValNodePtr      head, vnp;
+  CharPtr         os;
   Pubdesc         pd;
   PubdescPtr      pdp = NULL;
   ValNode         pb;
@@ -1624,6 +2174,7 @@ Int2 Main (void)
   Char            sfx [32];
   BioSourcePtr    src = NULL;
   SeqSubmitPtr    ssp = NULL;
+  Char            str [64];
 
   /* standard setup */
 
@@ -1671,6 +2222,7 @@ Int2 Main (void)
   tmplate = (CharPtr) myargs [t_argTemplate].strvalue;
   fastaset = (Boolean) myargs [s_argFastaSet].intvalue;
   deltaset = (Boolean) myargs [d_argDeltaSet].intvalue;
+  genprodset = (Boolean) myargs [g_argGenProdSet].intvalue;
   accn = (CharPtr) myargs [a_argAccession].strvalue;
   organism = (CharPtr) myargs [n_argOrgName].strvalue;
   findorf = (Boolean) myargs [c_argFindOrf].intvalue;
@@ -1678,6 +2230,12 @@ Int2 Main (void)
   conflict = (Boolean) myargs [k_argConflict].intvalue;
   validate = (Boolean) myargs [v_argValidate].intvalue;
   flatfile = (Boolean) myargs [b_argGenBank].intvalue;
+  seqidfromfile = (Boolean) myargs [q_argFileID].intvalue;
+
+  if (fastaset && (deltaset || genprodset)) {
+    Message (MSG_FATAL, "-s cannot be used with -d or -g");
+    return 1;
+  }
 
   if (StringHasNoText (base) && (! StringHasNoText (accn))) {
     Message (MSG_FATAL, "Accession can be entered only for a single record");
@@ -1724,7 +2282,14 @@ Int2 Main (void)
                             (AsnWriteFunc) SubmitBlockAsnWrite);
       }
       sbp->tool = MemFree (sbp->tool);
-      sbp->tool = StringSave ("tbl2asn");
+      os = GetOpSysString ();
+      if (os != NULL) {
+        sprintf (str, "tbl2asn %s - %s", TBL2ASN_APPLICATION, os);
+      } else {
+        sprintf (str, "tbl2asn %s", TBL2ASN_APPLICATION);
+      }
+      sbp->tool = StringSave (str);
+      MemFree (os);
       sbp->hup = FALSE;
       sbp->reldate = DateFree (sbp->reldate);
       csp = sbp->cit;
@@ -1759,6 +2324,11 @@ Int2 Main (void)
     }
   }
 
+  gotags = TextFsaNew ();
+  TextFsaAdd (gotags, "go_component");
+  TextFsaAdd (gotags, "go_function");
+  TextFsaAdd (gotags, "go_process");
+
   /* process one or more records */
 
   if (! StringHasNoText (base)) {
@@ -1767,8 +2337,10 @@ Int2 Main (void)
       StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';
     }
-    ProcessOneRecord (sbp, pdp, src, directory, results, base, sfx, fastaset, deltaset, accn,
-                      organism, sdphead, findorf, altstart, conflict, validate, flatfile);
+    ProcessOneRecord (sbp, pdp, src, directory, results, base, sfx,
+                      fastaset, deltaset, genprodset, accn, organism,
+                      sdphead, findorf, altstart, conflict, validate,
+                      flatfile, seqidfromfile, gotags);
   } else {
 
     /* get list of all files in source directory */
@@ -1783,8 +2355,10 @@ Int2 Main (void)
           if (ptr != NULL) {
             *ptr = '\0';
             Message (MSG_POST, "Processing %s\n", base);
-            ProcessOneRecord (sbp, pdp, src, directory, results, base, suffix, fastaset, deltaset, NULL,
-                              organism, sdphead, findorf, altstart, conflict, validate, flatfile);
+            ProcessOneRecord (sbp, pdp, src, directory, results, base, suffix,
+                              fastaset, deltaset, genprodset, NULL, organism,
+                              sdphead, findorf, altstart, conflict, validate,
+                              flatfile, seqidfromfile, gotags);
           }
         }
       }
@@ -1805,6 +2379,8 @@ Int2 Main (void)
   SeqDescrFree (sdphead);
 
   TransTableFreeAll ();
+
+  TextFsaFree (gotags);
 
   return 0;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.139 $
+* $Revision: 6.144 $
 *
 * File Description: 
 *
@@ -1606,6 +1606,11 @@ NLM_EXTERN GeneRefPtr ParseTitleIntoGeneRef (
     ValNodeCopyStr (&(grp->syn), 0, str);
   }
 
+  str = SqnTagFind (stp, "locus_tag");
+  if (str != NULL) {
+    grp->locus_tag = StringSave (str);
+  }
+
   return grp;
 }
 
@@ -1780,6 +1785,59 @@ NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
   }
 
   return shp;
+}
+
+NLM_EXTERN UserObjectPtr ParseTitleIntoTpaAssembly (
+  SqnTagPtr stp,
+  UserObjectPtr uop
+)
+
+{
+  Char     ch;
+  CharPtr  last;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (stp == NULL) return uop;
+
+  if (uop == NULL) {
+    uop = CreateTpaAssemblyUserObject ();
+    if (uop == NULL) return uop;
+  }
+
+  str = SqnTagFind (stp, "primary");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "primary_accessions");
+  }
+  if (str != NULL) {
+    tmp = StringSave (str);
+    last = tmp;
+    ptr = last;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == ',') {
+        *ptr = '\0';
+        if (! StringHasNoText (last)) {
+          TrimSpacesAroundString (last);
+          AddAccessionToTpaAssemblyUserObject (uop, last, 0, 0);
+        }
+        ptr++;
+        last = ptr;
+        ch = *ptr;
+      } else {
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    if (! StringHasNoText (last)) {
+      TrimSpacesAroundString (last);
+      AddAccessionToTpaAssemblyUserObject (uop, last, 0, 0);
+    }
+    MemFree (tmp);
+  }
+
+  return uop;
 }
 
 /* PHRAP file reading functions */
@@ -4097,7 +4155,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       sfp->comment = str;
     }
     return;
-  } else if (qnum == GBQUAL_gene && sfp->data.choice != SEQFEAT_GENE) {
+  } else if ((qnum == GBQUAL_gene || qnum == GBQUAL_locus_tag) && sfp->data.choice != SEQFEAT_GENE) {
     if (StringCmp (val, "-") == 0) {
       val = NULL;
     }
@@ -4122,7 +4180,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
         ValNodeCopyStr (&(grp->syn), 0, val);
       } else if (isGeneDesc) {
         grp->desc = StringSave (val);
-      } else if (isLocusTag) {
+      } else if (isLocusTag || qnum == GBQUAL_locus_tag) {
         grp->locus_tag = StringSave (val);
       } else if (grp->locus == NULL) {
         grp->locus = StringSave (val);
@@ -4209,6 +4267,11 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       grp = (GeneRefPtr) sfp->data.value.ptrvalue;
       if (grp != NULL) {
         grp->maploc = StringSave (val);
+      }
+    } else if (qnum == GBQUAL_locus_tag) {
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp != NULL) {
+        grp->locus_tag = StringSave (val);
       }
     }
     return;
@@ -5239,6 +5302,9 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   pos = ftell (fp);
   begin = pos;
   str = ReadALine (line, sizeof (line), fp);
+
+  if (str == NULL) return NULL; /* already at end of file */
+
   while (str != NULL) {
 
     if (! HasNoText (line)) {
@@ -6120,7 +6186,9 @@ NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl)
 
   if (tbl == NULL) return NULL;
   statePtr = tbl->statePtr;
-  if (statePtr == NULL) return NULL;
+  if (statePtr == NULL) {
+    return MemFree (tbl);
+  }
   maxState = tbl->maxState;
 
   for (state = 0; state < maxState; state++) {

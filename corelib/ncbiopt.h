@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $Id: ncbiopt.h,v 6.9 2001/08/09 19:21:29 juran Exp $
+/*  $Id: ncbiopt.h,v 6.11 2002/12/18 22:11:27 kans Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,12 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.11  2002/12/18 22:11:27  kans
+* a couple more C++ comments slipped by, changed to C style
+*
+* Revision 6.10  2002/12/17 23:00:48  kans
+* support for OS_UNIX_DARWIN for Mach-O executables (RGS)
+*
 * Revision 6.9  2001/08/09 19:21:29  juran
 * Wrap the inclusion of <stdint.h> in #ifdef __MWERKS__.
 *
@@ -102,10 +108,10 @@
  */
 
 /*
-// Avoid errors when stdint.h tries to 'redefine' standard macros that we've corrupted,
-// by including it first.
+Avoid errors when stdint.h tries to 'redefine' standard macros that we've corrupted,
+by including it first.
 */
-#ifdef __MWERKS__
+#if defined(__MWERKS__)
 #include <stdint.h>
 #endif
 
@@ -161,6 +167,20 @@
 
 
 
+/* Have to undefine Int8 limits if already defined, as on some platforms
+ * INT8_MAX, etc. exist but refer to 8-bit(not 8-byte!) integers
+ RGS no need to worry about partially Defined stuff if we do them individually
+*/
+#	if defined(INT8_MIN)
+#		undef INT8_MIN
+#	endif
+#	if defined(INT8_MAX)
+#		undef INT8_MAX
+#	endif
+#	if defined(UINT8_MAX)
+#		undef UINT8_MAX
+#	endif
+
 #  if  defined(Int8)  ||  defined(Uint8)
 
 #    if !defined(Int8)  ||  !defined(Uint8)
@@ -172,9 +192,8 @@
      typedef Uint8  Nlm_Uint8;
      typedef Uint8* Nlm_Uint8Ptr;
 
-/* Have to undefine Int8 limits if already defined, as on some platforms
- * INT8_MAX, etc. exist but refer to 8-bit(not 8-byte!) integers
- */
+
+/*	RGS 
 #    if defined(INT8_MIN) || defined(INT8_MAX) || defined(UINT8_MAX)
 #      if !defined(INT8_MIN) || !defined(INT8_MAX) || !defined(UINT8_MAX)
          ;;;!!!PARTIALLY DEFINED 8-BYTE INTEGER LIMITS!!!;;;
@@ -183,6 +202,7 @@
 #      undef INT8_MAX
 #      undef UINT8_MAX
 #    endif
+*/
 
 #    if LONG_BIT==64
 #      define INT8_MIN  LONG_MIN

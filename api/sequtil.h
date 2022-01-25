@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.42  2003/01/21 16:51:53  kans
+* added PRINTID_FASTA_ALL
+*
 * Revision 6.41  2002/10/29 21:17:31  kans
 * ValidateAccn and ValidateSeqID are public - implemented in asn2gnbk.c but prototyped in sequtil.h
 *
@@ -631,6 +634,7 @@ NLM_EXTERN Boolean SeqEntryConvert(SeqEntryPtr sep, Uint1 newcode);
 #define PRINTID_TEXTID_ACC_ONLY ( (Uint1)6)
 #define PRINTID_REPORT ( (Uint1)7)
 #define PRINTID_FASTA_GENERAL ( (Uint1)8)
+#define PRINTID_FASTA_ALL ( (Uint1)9)
 
 
 /*****************************************************************************

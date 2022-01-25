@@ -32,8 +32,21 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.63 $ 
+/* $Revision: 6.67 $ 
 * $Log: blast.h,v $
+* Revision 6.67  2003/03/25 22:21:53  boemker
+* Clarified behavior of BLAST_Wizard.
+*
+* Revision 6.66  2003/03/25 19:58:18  boemker
+* Moved code to initialize search options from blastcgicmd.cpp to here, as
+* BLAST_Wizard et al.
+*
+* Revision 6.65  2003/03/24 19:42:14  madden
+* Changes to support query concatenation for blastn and tblastn
+*
+* Revision 6.64  2003/01/14 20:28:54  madden
+* New function BLASTAddBlastDBTitleToSeqAnnotEx
+*
 * Revision 6.63  2002/10/22 17:57:48  camacho
 * Changes to B2SPssmMultipleQueries
 *
@@ -416,6 +429,9 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 #include <ncbi.h>
 #include <blastdef.h>
 
+/* AM: Support for query multiplexing. */
+#include "blastconcatdef.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -459,7 +475,8 @@ BlastSearchBlkPtr LIBCALL BLASTSetUpSearchWithReadDbEx PROTO((BioseqPtr query_bs
 
 BlastSearchBlkPtr LIBCALL BLASTSetUpSearchByLocWithReadDb PROTO((SeqLocPtr slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives))));
 
-BlastSearchBlkPtr LIBCALL BLASTSetUpSearchByLocWithReadDbEx PROTO((SeqLocPtr slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
+BlastSearchBlkPtr LIBCALL BLASTSetUpSearchByLocWithReadDbEx PROTO((SeqLocPtr slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, QueriesPtr mult_queries)); 
+/* --KM added mult_queries param: struct holding info about individual queries that got concatenated when -B option used */
 
 BlastSearchBlkPtr LIBCALL BLASTSetUpSearch PROTO((BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, Int8 dblen, BlastAllWordPtr all_words, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives))));
 
@@ -583,13 +600,17 @@ SeqAlignPtr LIBCALL BioseqBlastEngine PROTO((BioseqPtr bsp, CharPtr progname, Ch
 
 SeqAlignPtr LIBCALL BioseqBlastEngineWithCallback PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
 
+SeqAlignPtr LIBCALL BioseqBlastEngineWithCallbackMult PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)), QueriesPtr mult_queries)); /* AM: Added mult_queries param. */
+
 SeqAlignPtr LIBCALL BioseqBlastEngineEx PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
 
 SeqAlignPtr LIBCALL BioseqBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives))));
 
 SeqAlignPtr LIBCALL BioseqBlastEngineByLocEx PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
 
-SeqAlignPtr LIBCALL BioseqBlastEngineByLocWithCallback PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
+SeqAlignPtr LIBCALL BioseqBlastEngineByLocWithCallback PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)))); 
+
+SeqAlignPtr LIBCALL BioseqBlastEngineByLocWithCallbackMult PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)), QueriesPtr mult_queries));  /* --KM added mult_queries param */
 /*
 	Prints error messages. 
 */
@@ -650,8 +671,8 @@ Boolean MegaBlastBuildLookupTable PROTO((BlastSearchBlkPtr search));
 Int2 DefineToFrame PROTO((Uint1 define));
 
 CharPtr BLASTGetDatabaseTitleFromSeqAnnot PROTO((SeqAnnotPtr seqannot));
-void BLASTAddBlastDBTitleToSeqAnnot PROTO((SeqAnnotPtr seqannot, 
-                                           CharPtr title));
+void BLASTAddBlastDBTitleToSeqAnnot PROTO((SeqAnnotPtr seqannot, CharPtr title));
+void BLASTAddBlastDBTitleToSeqAnnotEx PROTO((SeqAnnotPtr seqannot, CharPtr title, Boolean is_na));
 
 Int4 reverse_seq (Uint1 *seq, Uint1 *pos, Uint1 *target);
 
@@ -684,6 +705,55 @@ BioseqPtr BlastMakeTempProteinBioseq PROTO((Uint1Ptr sequence, Int4 length,
 
 void HackSeqLocId PROTO((SeqLocPtr slp, SeqIdPtr id));
 
+/*  --------------------------------------------------------------------
+ *
+ *  BLAST_Wizard & related functions.
+ *
+ *  Use BLAST_WizardOptionsBlkInit to initialize a
+ *  BLAST_WizardOptionsBlk by setting every field to zero or FALSE.
+ *
+ *  Use BLAST_WizardOptionsBlkDone to free any memory owned by a
+ *  BLAST_WizardOptionsBlk, excluding the memory for the
+ *  BLAST_WizardOptionsBlk itself, which should be allocated on the
+ *  stack.
+ *
+ *  Use BLAST_WizardOptionsMaskInit to initialize a
+ *  BLAST_WizardOptionsMask by setting every field to FALSE, indicating
+ *  that the corresponding fields of some BLAST_WizardOptionsBlk aren't
+ *  set.
+ *
+ *  Use BLAST_Wizard to initialize a BLAST_WizardOptionsBlk according
+ *  to program, service, options, and mask.  Alignments, descriptions,
+ *  and errors are output parameters.  Alignments and descriptions are
+ *	optional; error is required.  BLAST_Wizard returns a null pointer
+ *	if and only if *error != 0 on exit.  The returned object must be
+ *  freed with BLASTOptionDelete; if *error != 0, then *error must be
+ *  freed with MemFree.
+ *
+ *  --------------------------------------------------------------------
+ */
+
+void
+BLAST_WizardOptionsBlkInit(
+    BLAST_WizardOptionsBlkPtr   options);
+
+void
+BLAST_WizardOptionsBlkDone(
+    BLAST_WizardOptionsBlkPtr   options);
+
+void
+BLAST_WizardOptionsMaskInit(
+    BLAST_WizardOptionsMaskPtr  mask);
+
+BLAST_OptionsBlkPtr
+BLAST_Wizard(
+    const char*                 program,
+    const char*                 service,
+    BLAST_WizardOptionsBlkPtr   options,
+    BLAST_WizardOptionsMaskPtr  mask,
+    int*                        alignments,
+    int*                        descriptions,
+    char**                      error);
 
 /* ----------------------------------------------------------- */
 

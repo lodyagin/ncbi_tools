@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.16 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *
@@ -1159,7 +1159,7 @@ static CharPtr featurekeys [] = {
   "NonStdRes" ,
   "Het" ,
   "Src" ,
-  "Protein" ,
+  "pro_peptide" ,
   "mat_peptide" ,
   "sig_peptide" ,
   "transit_peptide",
@@ -1342,5 +1342,188 @@ NLM_EXTERN CharPtr GcIndextoCodon (Uint1 index)
   ptr = gcCodonStrings + offset;
 
   return ptr;
+}
+
+static FloatHi GetCddBitScore (SeqFeatPtr sfp)
+
+{
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (sfp == NULL) return 0.0;
+  uop = sfp->ext;
+  if (uop == NULL) return 0.0;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "cddScoreData") != 0) return 0.0;
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip != NULL && StringICmp (oip->str, "bit_score") == 0) {
+      if (ufp->choice == 3) {
+        return ufp->data.realvalue;
+      }
+    }
+  }
+  return 0.0;
+}
+
+static Boolean FeatIsCDD (
+  SeqFeatPtr sfp,
+  FloatHi PNTR scoreP
+)
+
+{
+  DbtagPtr    dbt;
+  ValNodePtr  vnp;
+
+  if (scoreP != NULL) {
+    *scoreP = 0.0;
+  }
+  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt != NULL && StringCmp (dbt->db, "CDD") == 0) {
+      if (scoreP != NULL) {
+        *scoreP = GetCddBitScore (sfp);
+      }
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+static void BestCDDperBioseq (BioseqPtr bsp, Pointer userdata)
+
+{
+  SeqFeatPtr         best;
+  SeqMgrFeatContext  context;
+  FloatHi            currscore;
+  Int4               right;
+  SeqFeatPtr         sfp;
+  FloatHi            topscore;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
+  while (sfp != NULL) {
+    if (context.featdeftype == FEATDEF_REGION && FeatIsCDD (sfp, &currscore)) {
+      best = sfp;
+      right = context.right;
+      topscore = currscore;
+      sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+      while (sfp != NULL && context.featdeftype == FEATDEF_REGION &&
+             FeatIsCDD (sfp, &currscore) && context.left < right) {
+        right = MAX (context.right, right);
+        if (currscore <= topscore) {
+          sfp->idx.deleteme = TRUE;
+        } else {
+          best->idx.deleteme = TRUE;
+          best = sfp;
+          topscore = currscore;
+        }
+        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+      }
+    } else {
+      sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+    }
+  }
+}
+
+NLM_EXTERN void LeaveBestCDD (SeqEntryPtr sep)
+
+{
+  Uint2  entityID;
+
+  if (sep == NULL) return;
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (entityID < 1) return;
+
+  if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+    SeqMgrIndexFeatures (entityID, NULL);
+  }
+
+  VisitBioseqsInSep (sep, NULL, BestCDDperBioseq);
+  DeleteMarkedObjects (entityID, 0, NULL);
+
+  SeqMgrClearFeatureIndexes (entityID, NULL);
+}
+
+static CharPtr CompressNonBases (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  dst;
+  CharPtr  ptr;
+
+  if (str == NULL || str [0] == '\0') return NULL;
+
+  dst = str;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (IS_ALPHA (ch)) {
+      *dst = ch;
+      dst++;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+  *dst = '\0';
+
+  return str;
+}
+
+static void LIBCALLBACK SPStreamToRaw (
+  CharPtr sequence,
+  Pointer userdata
+)
+
+{
+  ByteStorePtr  bs;
+  Char          ch;
+  size_t        len;
+  CharPtr       tmp;
+
+  bs = (ByteStorePtr) userdata;
+  tmp = sequence;
+  ch = *tmp;
+  while (ch != '\0') {
+    if (ch == '\n' || ch == '\r' || ch == '\t') {
+      *tmp = ' ';
+    } else {
+      *tmp = TO_UPPER (ch);
+    }
+    tmp++;
+    ch = *tmp;
+  }
+  TrimSpacesAroundString (sequence);
+  CompressNonBases (sequence);
+
+  len = StringLen (sequence);
+  if (len < 1) return;
+  BSWrite (bs, sequence, len * sizeof (Char));
+}
+
+NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp)
+
+{
+  ByteStorePtr  bs;
+
+  if (bsp == NULL || (bsp->repr != Seq_repr_seg && bsp->repr != Seq_repr_delta)) return;
+  if (! ISA_na (bsp->mol)) return;
+  bs = BSNew (bsp->length);
+  if (bs == NULL) return;
+
+  SeqPortStream (bsp, TRUE, (Pointer) bs, SPStreamToRaw);
+
+  if (bsp->repr == Seq_repr_seg && bsp->seq_ext_type == 1) {
+    bsp->seq_ext = SeqLocSetFree ((ValNodePtr) bsp->seq_ext);
+    bsp->seq_ext_type = 0;
+  } else if (bsp->repr == Seq_repr_delta && bsp->seq_ext_type == 4) {
+    bsp->seq_ext = NULL; /* for now just NULL out */
+    bsp->seq_ext_type = 0;
+  }
+  bsp->seq_data = BSFree (bsp->seq_data);
+  bsp->seq_data = bs;
+  bsp->length = BSLen (bs);
+  bsp->repr = Seq_repr_raw;
+  bsp->seq_data_type = Seq_code_iupacna;
 }
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.4  2003/02/10 22:57:45  kans
+* added BioseqCopyEx, which takes a BioseqPtr instead of a SeqIdPtr for the source
+*
 * Revision 6.3  2002/07/02 13:23:43  kans
 * added SeqLocDeleteEx
 *
@@ -158,10 +161,16 @@ NLM_EXTERN Boolean LIBCALL BioseqDelete (SeqIdPtr target, Int4 from, Int4 to, Bo
 *      If do_feat == TRUE copies appropriate region of feature table from
 *        sourceid to new copy using SeqFeatsCopy().
 *
+*
+*   BioseqCopyEx(newid, oldbsp, from, to, strand, do_feat)
+*      Internal function called by BioseqCopy that takes BioseqPtr
+*
 *****************************************************************************/
 NLM_EXTERN BioseqPtr LIBCALL BioseqCopy (SeqIdPtr newid, SeqIdPtr sourceid, Int4 from, Int4 to,
                                Uint1 strand, Boolean do_feat);
 
+NLM_EXTERN BioseqPtr LIBCALL BioseqCopyEx (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from, Int4 to,
+                               Uint1 strand, Boolean do_feat);
 
 /*****************************************************************************
 *

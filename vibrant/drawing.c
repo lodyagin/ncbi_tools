@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   11/13/92
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: drawing.c,v $
+* Revision 6.16  2003/03/18 17:00:10  kans
+* Nlm_AddSilentSegRect does not absorb clicks, SegRect reverted to absorb clicks, so desktop click responsiveness is maintained
+*
+* Revision 6.15  2003/02/19 17:36:19  rsmith
+* SegRect (borders around a SegmenT) can not longer absorb clicks.
+*
 * Revision 6.14  2001/12/13 14:51:31  kans
 * DrawSegment calls SetPrimAttribute only if it will be drawing
 *
@@ -1474,6 +1480,8 @@ static Boolean SegRecHitTestProc ( SegRecPDataPtr pdata, PrimHitContext phc)
   register ScalePtr dInfoPtr;
   BoxInfo tmpBox;
  
+
+  
   dInfoPtr = (ScalePtr)phc;
   tmpBox = *(pdata->parentBox);
   if ( (tmpBox.left < dInfoPtr->worldWindow.right) && 
@@ -1512,6 +1520,31 @@ Nlm_PrimitivE Nlm_AddSegRect ( SegmenT parent, Boolean fill,
   data.parentBox = &(((SegPPtr)parent)->seg.box);
   data.fill  = fill;
   return AddPrimitive (&segrecPrimDef, parent, primID, (VoidPtr)&data,
+                       sizeof(SegRecPData));
+}
+
+static Boolean SilentSegRecHitTestProc ( SegRecPDataPtr pdata, PrimHitContext phc)
+{
+/* SilentSegRect's should never absorb clicks */
+  return FALSE;
+}
+
+static PrimDef silentSegrecPrimDef = {
+  (PrimDrawProc) SegRecDrawProc,
+  (PrimHitTestProc) SilentSegRecHitTestProc,
+  (PrimOffsetProc) SegRecOffsetProc,
+  (PrimCleanupProc) NULL,
+  (PrimGetLimitsProc) SegRecGetLimitsProc
+};
+
+Nlm_PrimitivE Nlm_AddSilentSegRect ( SegmenT parent, Boolean fill, 
+                              Uint2 primID )
+{
+  SegRecPData data;
+
+  data.parentBox = &(((SegPPtr)parent)->seg.box);
+  data.fill  = fill;
+  return AddPrimitive (&silentSegrecPrimDef, parent, primID, (VoidPtr)&data,
                        sizeof(SegRecPData));
 }
 

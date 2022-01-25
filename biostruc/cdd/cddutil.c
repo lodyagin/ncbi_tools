@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.80 2002/12/03 14:36:31 bauer Exp $
+/* $Id: cddutil.c,v 1.81 2003/02/06 21:04:27 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.80 $
+* $Revision: 1.81 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.81  2003/02/06 21:04:27  bauer
+* fixed bug in reindexing to consensus
+*
 * Revision 1.80  2002/12/03 14:36:31  bauer
 * added CddMSLMixedToMSLDenDiag
 *
@@ -3584,6 +3587,26 @@ void LIBCALL CddDegapSeqAlign(SeqAlignPtr salp)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* Duplicate a SeqId, pick the GI if encountering a linked list of several   */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SeqIdPtr LIBCALL CddSeqIdDupPDBGI(SeqIdPtr sipold)
+{
+  SeqIdPtr   sip, sipgi = NULL, sippdb = NULL;
+  
+  sip = sipold;
+  while (sip) {
+    if (sip->choice == SEQID_GI)   sipgi = sip;    
+    if (sip->choice == SEQID_PDB) sippdb = sip;
+    sip = sip->next;
+  }
+  if (sippdb) return(SeqIdDup(sippdb));
+  if (sipgi) return(SeqIdDup(sipgi));
+  return (SeqIdDup(sipold));
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* Calculate a weighted 50/50 consensus sequence and make it new master      */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -3925,7 +3948,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
   bspThis = pCAW[0].bsp;
   pCDea = CddExpAlignNew();
   CddExpAlignAlloc(pCDea,bspThis->length);
-  pCDea->ids = SeqIdDup(bspThis->id);
+  pCDea->ids = CddSeqIdDupPDBGI(bspThis->id);
   pCDea->ids->next = SeqIdDup((*bspCons)->id);
   pCDea->bIdAlloc = TRUE;
   for (k=0;k<maxextlen;k++) {

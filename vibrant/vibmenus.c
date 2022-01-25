@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.16  2003/03/27 19:35:43  kans
+* Nlm_PrepareTitle removes non-Mac accelerator from Mac menu item
+*
 * Revision 6.15  2002/03/28 13:30:27  kans
 * check for OS_UNIX_DARWIN before including MoreCarbonAccessors.h, Profiler.h (EN)
 *
@@ -3925,8 +3928,13 @@ static void Nlm_PrepareTitle(Nlm_CharPtr temp, Nlm_CharPtr title,
 
 #ifdef WIN_MAC
   {{
-    if ( isMenu  )
+    if ( isMenu  ) {
       Nlm_StripTitleAccel( temp );
+    } else {
+      Nlm_Uint4 pos;
+      if ( Nlm_StrngPos(temp, "/ ", 0, FALSE, &pos) )
+        temp[pos] = '\0';
+    }
   }}
 #endif
 

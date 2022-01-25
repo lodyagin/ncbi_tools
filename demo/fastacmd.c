@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.27 2002/11/21 21:35:54 camacho Exp $
+/* $Id: fastacmd.c,v 6.28 2003/04/15 19:09:41 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.28  2003/04/15 19:09:41  camacho
+* Added option to retrieve sequences by PIG
+*
 * Revision 6.27  2002/11/21 21:35:54  camacho
 * Make sure the proper exit code is returned
 *
@@ -141,8 +144,6 @@
 #include <readdb.h>
 #include <blast.h>
 
-#define NUMARG sizeof(myargs)/sizeof(myargs[0])
-
 static Args myargs [] = {
     { "Database",                                               /* 0 */
       "nr", NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
@@ -172,19 +173,21 @@ static Args myargs [] = {
     { "Range of sequence to extract (Format: start,stop)\n"
       "      0 in 'start' refers to the beginning of the sequence\n"
       "      0 in 'stop' refers to the end of the sequence",
-      "0,0", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL}, /* 10 */
+      "0,0", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},  /* 10 */
     { "Strand on subsequence (nucleotide only): 1 is top, 2 is bottom",
-      "1", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},    /* 11 */
+      "1", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},      /* 11 */
     { "Print taxonomic information for requested sequence(s)",
-      "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},/* 12 */
+      "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},  /* 12 */
     { "Print database information only (overrides all other options)",
-      "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},/* 13 */
+      "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},  /* 13 */
+    { "Retrieve sequences with this PIG",
+      NULL, NULL, NULL, TRUE, 'P', ARG_INT, 0.0, 0, NULL},     /* 14 */
 };
 
 Int2 Main (void)
 {
     CharPtr	database, searchstr, batchfile;
-    Int4	linelen;
+    Int4	linelen, pig;
     Boolean	dupl, target, use_ctrlAs, dump_all, taxonomy_info, dbinfo_only;
     Uint1 is_prot;
     FILE *outfp = NULL;
@@ -195,7 +198,7 @@ Int2 Main (void)
 
     StringCpy(buf, "fastacmd ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
-    if (! GetArgs (buf, NUMARG, myargs)) {
+    if (! GetArgs (buf, DIM(myargs), myargs)) {
 	     return (1);
     }
 
@@ -222,6 +225,7 @@ Int2 Main (void)
     strand        = myargs[11].intvalue;
     taxonomy_info = myargs[12].intvalue;
     dbinfo_only   = myargs[13].intvalue;
+    pig           = myargs[14].intvalue == 0 ? PIG_NONE : myargs[14].intvalue;
 
     if ((outfp = FileOpen(myargs[7].strvalue, "w")) == NULL) {
         ErrPostEx(SEV_ERROR, 0, 0,"Could not open %s", myargs[7].strvalue);
@@ -230,7 +234,7 @@ Int2 Main (void)
 
     rv = Fastacmd_Search_ex (searchstr, database, is_prot, batchfile, dupl,
             linelen, outfp, target, use_ctrlAs, dump_all, seqlocstr, strand,
-            taxonomy_info, dbinfo_only);
+            taxonomy_info, dbinfo_only, pig);
 
     FileClose(outfp);
 

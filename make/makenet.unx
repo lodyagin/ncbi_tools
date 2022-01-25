@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.151 2002/12/02 20:51:45 dondosha Exp $
+#	$Id: makenet.unx,v 6.153 2003/01/16 22:39:47 dondosha Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -505,7 +505,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf gbseqget testent2 entrez2 spidey dotmatrix ingenue condense
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf gbseqget testent2 entrez2 spidey dotmatrix ingenue condense
 
 .WAIT:
 	echo Waiting...go
@@ -1212,8 +1212,13 @@ idfetch: idfetch.c $(BNETCLILIB) $(BLIB41)
 # gapped BLAST client
 # blastcl3 now has the same source code as blastall but should be compiled
 # with -DBLAST_CS_API flag
-blastcl3: blastcl3.c $(BNETCLILIB) $(BLIB36)
+blastcl3: blastall.c $(BNETCLILIB) $(BLIB36)
 	$(CC) -g -o blastcl3 $(LDFLAGS) -DBLAST_CS_API blastall.c $(LIB36) $(LIB23) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# BLAST 2 sequences
+# Uses network libraries to access Entrez for retrieving sequences by gi/accession
+bl2seq : bl2seq.c
+	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB23) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # test client for the suggest network service
 suggcli: suggcli.c $(BNETCLILIB) $(BLIB24)
@@ -1380,6 +1385,11 @@ bxmlobj.o:	bxmlobj.c
 
 test_ncbi_socket : test_ncbi_socket.c
 	$(CC) -o test_ncbi_socket $(LDFLAGS) test_ncbi_socket.c -DNCBI_C $(LIB1) $(OTHERLIBS)
+
+# test_ncbi_dsock
+
+test_ncbi_dsock : test_ncbi_dsock.c
+	$(CC) -o test_ncbi_dsock $(LDFLAGS) test_ncbi_dsock.c -DNCBI_C $(LIB1) $(OTHERLIBS)
 
 # test_ncbisock
 

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_sendmail.c,v 6.16 2002/10/28 15:43:29 lavr Exp $
+/*  $Id: ncbi_sendmail.c,v 6.19 2003/04/18 20:59:51 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,8 +51,8 @@
 
 #define SMTP_READERR    -1      /* Error reading from socket         */
 #define SMTP_REPLYERR   -2      /* Error reading reply prefix        */
-#define SMTP_BADREPLY   -4      /* Malformed reply text              */
 #define SMTP_BADCODE    -3      /* Reply code doesn't match in lines */
+#define SMTP_BADREPLY   -4      /* Malformed reply text              */
 #define SMTP_NOCODE     -5      /* No reply code detected (letters?) */
 #define SMTP_WRITERR    -6      /* Error writing to socket           */
 
@@ -128,11 +128,11 @@ static int/*bool*/ s_SockReadResponse(SOCK sock, int code, int alt_code,
         case SMTP_REPLYERR:
             message = "Error reading reply prefix";
             break;
-        case SMTP_BADREPLY:
-            message = "Malformed reply text";
-            break;
         case SMTP_BADCODE:
             message = "Reply code doesn't match in lines";
+            break;
+        case SMTP_BADREPLY:
+            message = "Malformed reply text";
             break;
         case SMTP_NOCODE:
             message = "No reply code detected";
@@ -203,16 +203,18 @@ static char* s_ComposeFrom(char* buf, size_t buf_size)
 
 SSendMailInfo* SendMailInfo_Init(SSendMailInfo* info)
 {
-    info->magic_number = MX_MAGIC_NUMBER;
-    info->cc = 0;
-    info->bcc = 0;
-    if (!s_ComposeFrom(info->from, sizeof(info->from)))
-        info->from[0] = 0;
-    info->header = 0;
-    info->mx_host = MX_HOST;
-    info->mx_port = MX_PORT;
-    info->mx_timeout.sec = MX_TIMEOUT;
-    info->mx_timeout.usec = 0;
+    if (info) {
+        info->magic_number = MX_MAGIC_NUMBER;
+        info->cc = 0;
+        info->bcc = 0;
+        if (!s_ComposeFrom(info->from, sizeof(info->from)))
+            info->from[0] = 0;
+        info->header = 0;
+        info->mx_host = MX_HOST;
+        info->mx_port = MX_PORT;
+        info->mx_timeout.sec = MX_TIMEOUT;
+        info->mx_timeout.usec = 0;
+    }
     return info;
 }
 
@@ -227,7 +229,7 @@ extern const char* CORE_SendMail(const char* to,
 
 /* In two macros below the smartest (or, weak-minded?) Sun
  * C compiler warned about unreachable end-of-loop condition
- * (well, it thinks the "condition" is there, dumb!), if we
+ * (well, it thinks "a condition" is there, dumb!), if we
  * used 'return' right before the end of 'while' statement.
  * So we now added "check" and "conditional" exit, which makes
  * the Sun compiler much happier, and less wordy :-)
@@ -354,9 +356,8 @@ const char* CORE_SendMailEx(const char*          to,
             SENDMAIL_RETURN("Write error in sending Cc");
     }
 
-    if (!s_SockWrite(sock,
-                     "X-Mailer: CORE_SendMail (NCBI "
-                     NCBI_SENDMAIL_TOOLKIT " Toolkit)" MX_CRLF))
+    if (!s_SockWrite(sock, "X-Mailer: CORE_SendMail (NCBI "
+                           NCBI_SENDMAIL_TOOLKIT " Toolkit)" MX_CRLF))
         SENDMAIL_RETURN("Write error in sending mailer information");
 
     assert(sizeof(buffer) > sizeof(MX_CRLF) && sizeof(MX_CRLF) >= 3);
@@ -389,12 +390,10 @@ const char* CORE_SendMailEx(const char*          to,
     if (body && *body) {
         int/*bool*/ newline = 0/*false*/;
         size_t n = 0, m = strlen(body);
-        
         if (!s_SockWrite(sock, MX_CRLF))
             SENDMAIL_RETURN("Write error in sending text body delimiter");
         while (n < m) {
             size_t k = 0;
-            
             while (k < sizeof(buffer) - sizeof(MX_CRLF)) {
                 if (body[n] == '\n') {
                     memcpy(&buffer[k], MX_CRLF, sizeof(MX_CRLF) - 1);
@@ -405,7 +404,7 @@ const char* CORE_SendMailEx(const char*          to,
                         buffer[k++] = '.';
                         buffer[k++] = '.';
                     } else
-                        buffer[k++]   = body[n];
+                        buffer[k++] = body[n];
                     newline = 0/*false*/;
                 }
                 if (++n >= m)
@@ -440,6 +439,15 @@ const char* CORE_SendMailEx(const char*          to,
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_sendmail.c,v $
+ * Revision 6.19  2003/04/18 20:59:51  lavr
+ * Mixed up SMTP_BADCODE and SMTP_BADREPLY rearranged in order
+ *
+ * Revision 6.18  2003/03/24 19:46:17  lavr
+ * Few minor changes; do not init SSendMailInfo passed as NULL
+ *
+ * Revision 6.17  2003/02/08 21:05:55  lavr
+ * Unimportant change in comments
+ *
  * Revision 6.16  2002/10/28 15:43:29  lavr
  * Use "ncbi_ansi_ext.h" privately and use strncpy0()
  *

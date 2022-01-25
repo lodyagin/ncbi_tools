@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,12 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.11  2003/03/27 18:23:54  kans
+* increased 16000 character buffer to 24000 to handle long PubMed abstracts (e.g., pmid 12209194 technical report on toxicity studies)
+*
+* Revision 6.10  2003/02/28 19:14:58  kans
+* DrawDocument bails if pixels == 0 to avoid getting stuck in almost infinite loop
+*
 * Revision 6.9  2000/05/22 16:38:24  kans
 * added UpdateColFmt per Serge Bazhin request
 *
@@ -1586,7 +1592,7 @@ static void DrawDocument (PaneL d)
           item++;
           firstLine = 0;
           itemPtr = GetItemPtr (&ddata, item);
-        } while (r.top < r.bottom && item < ddata.numItems);
+        } while (r.top < r.bottom && item < ddata.numItems && pixels > 0);
         if (lowest < INT2_MAX) {
           ddata.numLines = UpdateLineStarts (&ddata, lowest);
           SetPanelExtra (d, &ddata);
@@ -2597,11 +2603,11 @@ static Int2 SkipPastNewLine (CharPtr text, Int2 cnt)
   Char  ch;
 
   ch = *(text + cnt);
-  while (ch != '\0' && ch != '\n' && cnt < 16380) {
+  while (ch != '\0' && ch != '\n' && cnt < 24380) {
     cnt++;
     ch = *(text + cnt);
   }
-  while ((ch == '\n' || ch == '\r') && cnt < 16380) {
+  while ((ch == '\n' || ch == '\r') && cnt < 24380) {
     cnt++;
     ch = *(text + cnt);
   }
@@ -2628,7 +2634,7 @@ extern void AppendText (DoC d, CharPtr text, ParPtr parFmt,
     if (text != NULL && *text != '\0') {
       start = 0;
       cntr = StringLen (text);
-      cnt = MIN (cntr, 16000);
+      cnt = MIN (cntr, 24000);
       cnt = SkipPastNewLine (text + start, cnt);
       while (cnt > 0) {
         txt = MemNew (cnt + 1);
@@ -2638,7 +2644,7 @@ extern void AppendText (DoC d, CharPtr text, ParPtr parFmt,
                     parFmt, colFmt, font);
         start += cnt;
         cntr -= cnt;
-        cnt = MIN (cntr, 16000);
+        cnt = MIN (cntr, 24000);
         cnt = SkipPastNewLine (text + start, cnt);
       }
     } else {
@@ -2669,7 +2675,7 @@ extern void ReplaceText (DoC d, Int2 item, CharPtr text,
     if (text != NULL && *text != '\0') {
       start = 0;
       cntr = StringLen (text);
-      cnt = MIN (cntr, 16000);
+      cnt = MIN (cntr, 24000);
       cnt = SkipPastNewLine (text + start, cnt);
       while (cnt > 0) {
         txt = MemNew (cnt + 1);
@@ -2678,7 +2684,7 @@ extern void ReplaceText (DoC d, Int2 item, CharPtr text,
                      parFmt, colFmt, font);
         start += cnt;
         cntr -= cnt;
-        cnt = MIN (cntr, 16000);
+        cnt = MIN (cntr, 24000);
         cnt = SkipPastNewLine (text + start, cnt);
         item++;
       }
@@ -2709,7 +2715,7 @@ extern void InsertText (DoC d, Int2 item, CharPtr text,
     if (text != NULL && *text != '\0') {
       start = 0;
       cntr = StringLen (text);
-      cnt = MIN (cntr, 16000);
+      cnt = MIN (cntr, 24000);
       cnt = SkipPastNewLine (text + start, cnt);
       while (cnt > 0) {
         txt = MemNew (cnt + 1);
@@ -2718,7 +2724,7 @@ extern void InsertText (DoC d, Int2 item, CharPtr text,
                     parFmt, colFmt, font);
         start += cnt;
         cntr -= cnt;
-        cnt = MIN (cntr, 16000);
+        cnt = MIN (cntr, 24000);
         cnt = SkipPastNewLine (text + start, cnt);
         item++;
       }
@@ -4650,7 +4656,7 @@ extern void DisplayFancy (DoC d, CharPtr file, ParPtr parFmt,
     if (font == NULL) {
       font = systemFont;
     }
-    text = (CharPtr) MemNew (16000);
+    text = (CharPtr) MemNew (24000);
     if (text != NULL) {
       fp = FileOpen (file, "r");
       if (fp != NULL) {

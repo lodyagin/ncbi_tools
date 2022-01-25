@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.56 $
+* $Revision: 6.59 $
 *
 * File Description:
 *
@@ -3460,7 +3460,7 @@ BioseqPageData gphPageData = {
 };
 
 BioseqPageData alnPageData = {
-  "Alignment", TRUE, TRUE, TRUE, TRUE, -1,
+  "OldAlignment", TRUE, TRUE, TRUE, TRUE, -1,
   PopulateAlignment, ShowAlignment, SelectGraphical,
   CopyGraphicalToClipboard, PrintGraphical,
   NULL, NULL, ResizeGraphical, NULL
@@ -3910,7 +3910,7 @@ static void PopulateAsn2GphGraphic (
   if (svpp != NULL && svpp->lockFarComponents) {
     entityID = ObjMgrGetEntityIDForPointer (bsp);
     sep = GetTopSeqEntryForEntityID (entityID);
-    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, TRUE, FALSE);
+    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, FALSE, FALSE);
   }
 
   if (bvp->scaleNotCalculated) {
@@ -4075,7 +4075,7 @@ static void ResizeAsn2GphGraphic (BioseqViewPtr bvp)
   }
 }
 
-extern BioseqPageData  asn2gphGphPageData = {
+BioseqPageData  asn2gphGphPageData = {
   "Graphic", TRUE, TRUE, TRUE, FALSE, -1,
   PopulateAsn2GphGraphic, ShowAsn2GphGraphic, SelectAsn2GphView,
   CopyAsn2GphGraphicToClipboard, PrintAsn2GphGraphic, NULL, NULL,

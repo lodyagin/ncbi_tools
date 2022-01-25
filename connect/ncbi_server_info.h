@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVER_INFO__H
 #define CONNECT___NCBI_SERVER_INFO__H
 
-/*  $Id: ncbi_server_info.h,v 6.35 2002/11/01 20:10:40 lavr Exp $
+/*  $Id: ncbi_server_info.h,v 6.37 2003/04/09 19:05:48 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,6 +42,12 @@
 #include <connect/ncbi_connutil.h>
 
 
+/** @addtogroup ServiceSupport
+ *
+ * @{
+ */
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -80,7 +86,9 @@ typedef enum {
 
 /* Verbal representation of a server type (no internal spaces allowed)
  */
-const char* SERV_TypeStr(ESERV_Type type);
+extern NCBI_XCONNECT_EXPORT const char* SERV_TypeStr
+(ESERV_Type type
+ );
 
 
 /* Read server info type.
@@ -88,7 +96,10 @@ const char* SERV_TypeStr(ESERV_Type type);
  * in the "str" immediately following the type tag.
  * On error, return NULL.
  */
-const char* SERV_ReadType(const char* str, ESERV_Type* type);
+extern NCBI_XCONNECT_EXPORT const char* SERV_ReadType
+(const char* str,
+ ESERV_Type* type
+ );
 
 
 /* Meta-addresses for various types of NCBI servers
@@ -149,18 +160,18 @@ typedef struct {
 
 /* Constructors for the various types of NCBI server meta-addresses
  */
-SSERV_Info* SERV_CreateNcbidInfo
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_CreateNcbidInfo
 (unsigned int   host,           /* network byte order                        */
  unsigned short port,           /* host byte order                           */
  const char*    args
  );
 
-SSERV_Info* SERV_CreateStandaloneInfo
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_CreateStandaloneInfo
 (unsigned int   host,           /* network byte order                        */
  unsigned short port            /* host byte order                           */
  );
 
-SSERV_Info* SERV_CreateHttpInfo
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_CreateHttpInfo
 (ESERV_Type     type,           /* verified, must be one of fSERV_Http*      */
  unsigned int   host,           /* network byte order                        */
  unsigned short port,           /* host byte order                           */
@@ -168,13 +179,13 @@ SSERV_Info* SERV_CreateHttpInfo
  const char*    args
  );
 
-SSERV_Info* SERV_CreateFirewallInfo
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_CreateFirewallInfo
 (unsigned int   host,           /* original server's host in net byte order  */
  unsigned short port,           /* original server's port in host byte order */
  ESERV_Type     type            /* type of original server, wrapped into     */
  );
 
-SSERV_Info* SERV_CreateDnsInfo
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_CreateDnsInfo
 (unsigned int   host            /* the only parameter                        */
  );
 
@@ -183,7 +194,9 @@ SSERV_Info* SERV_CreateDnsInfo
  * The server type goes first, and it is followed by a single space.
  * The returned string is '\0'-terminated, and must be deallocated by 'free()'.
  */
-char* SERV_WriteInfo(const SSERV_Info* info);
+extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
+(const SSERV_Info* info
+ );
 
 
 /* Server specification consists of the following:
@@ -338,18 +351,25 @@ char* SERV_WriteInfo(const SSERV_Info* info);
  * If host is not found in the server specification, info->host is
  * set to 0; if port is not found, type-specific default value is used.
  */
-SSERV_Info* SERV_ReadInfo(const char* info_str);
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_ReadInfo
+(const char* info_str
+ );
 
 
 /* Return an actual size (in bytes) the server info occupies
  * (to be used for copying info structures in whole).
  */
-size_t SERV_SizeOfInfo(const SSERV_Info* info);
+extern NCBI_XCONNECT_EXPORT size_t SERV_SizeOfInfo
+(const SSERV_Info* info
+ );
 
 
 /* Return 'true' if two server infos are equal.
  */
-int/*bool*/ SERV_EqualInfo(const SSERV_Info* info1, const SSERV_Info* info2);
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_EqualInfo
+(const SSERV_Info* info1,
+ const SSERV_Info* info2
+ );
 
 
 #ifdef __cplusplus
@@ -357,9 +377,18 @@ int/*bool*/ SERV_EqualInfo(const SSERV_Info* info1, const SSERV_Info* info2);
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.h,v $
+ * Revision 6.37  2003/04/09 19:05:48  siyan
+ * Added doxygen support
+ *
+ * Revision 6.36  2003/01/08 01:59:33  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.35  2002/11/01 20:10:40  lavr
  * Note that FIREWALL server specs cannot have Q flag set
  *

@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   10/15/01
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: fdlKludge.h,v $
+* Revision 6.9  2003/04/21 21:49:37  jianye
+* changed some url
+*
+* Revision 6.8  2003/04/14 20:43:22  jianye
+* Adde geo url and modified structure linkout url
+*
 * Revision 6.7  2002/12/11 16:24:58  jianye
 * added structure linkout
 *
@@ -60,17 +66,20 @@
 
 #include <objloc.h>
 
-#define total_linkout 3
+
 #define linkout_locuslink (1<<0)
 #define linkout_unigene   (1<<1)
 #define linkout_structure (1<<2)
+#define linkout_geo        (1<<3)
 
 /* url for linkout*/
 #define URL_LocusLink "<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>"
 #define URL_Unigene "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"
 
-#define URL_Structure "<a href=\"http://ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s\"><img border=0 height=16 width=16 src=\"http://ncbi.nlm.nih.gov/Structure/cblast/str_link.gif\" alt=\"Related structures\"></a>"
+#define URL_Structure "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\"><img border=0 height=16 width=16 src=\"http://ncbi.nlm.nih.gov/Structure/cblast/str_link.gif\" alt=\"Related structures\"></a>"
 
-#define URL_Structure_Overview "<a href=\"http://ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s\">Related Structures</a>"
+#define URL_Structure_Overview "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\">Related Structures</a>"
 
+/*#define URL_Geo "<a href=\"http://boris.ncbi.nlm.nih.gov:2441/entrez/testers/edgar/query.fcgi?term=%d[gi]&db=geo\"><img border=0 height=16 width=16 src=\"/blast/images/G.gif\" alt=\"Geo\"></a>"
+ */
 #endif

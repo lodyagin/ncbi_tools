@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.379 2002/12/10 23:13:22 bealer Exp $
+/* $Id: blast.c,v 6.384 2003/03/24 19:42:13 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +47,24 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.379 $
+ * $Revision: 6.384 $
  *
  * $Log: blast.c,v $
+ * Revision 6.384  2003/03/24 19:42:13  madden
+ * Changes to support query concatenation for blastn and tblastn
+ *
+ * Revision 6.383  2003/03/14 22:33:44  dondosha
+ * Do not increase preliminary hitlist size for ungapped search
+ *
+ * Revision 6.382  2003/03/06 19:10:42  madden
+ * Allow search->pbp->process_num to be > 1 if MT enabled
+ *
+ * Revision 6.381  2003/03/05 21:30:24  dondosha
+ * Fix in BlastMakeCopyQueryDNAP for single-strand OOF search
+ *
+ * Revision 6.380  2002/12/24 14:12:03  dondosha
+ * Removed accidental duplicate lines
+ *
  * Revision 6.379  2002/12/10 23:13:22  bealer
  * Fix do_the_blast_run and BlastGetDbChunk to calculate beginning and ending
  * sequence numbers correctly.
@@ -3067,7 +3082,8 @@ do_gapped_blast_search(VoidPtr ptr)
     Int2 status=0;
     Int4 index, index1, start=0, stop=0, id_list_length;
     Int4Ptr id_list=NULL;
-    
+    Uint4 i; /* AM: Support for query concatenation. */
+
     search = (BlastSearchBlkPtr) ptr;
     if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
     {
@@ -3111,16 +3127,53 @@ do_gapped_blast_search(VoidPtr ptr)
                 if ((status = BLASTPerformSearchWithReadDb(search, index)) != 0)
                     break;
 
-                if (search->prog_number == blast_type_blastx 
-                    || search->prog_number == blast_type_tblastn 
-                    || search->prog_number == blast_type_psitblastn)
-                   status = BlastLinkHsps(search);
+                /* AM: Support for query concatenation. */
+		if( !search->mult_queries )
+		{
+                  if (search->prog_number == blast_type_blastx 
+                      || search->prog_number == blast_type_tblastn 
+                      || search->prog_number == blast_type_psitblastn)
+                     status = BlastLinkHsps(search);
 
-                status = BlastReapHitlistByEvalue(search);
-                if (search->handle_results)
-                    search->handle_results((VoidPtr) search);
-                else
-                    BlastSaveCurrentHitlist(search);
+                  status = BlastReapHitlistByEvalue(search);
+                  if (search->handle_results)
+                      search->handle_results((VoidPtr) search);
+                  else
+                      BlastSaveCurrentHitlist(search);
+                }
+		else /* AM: Support for query concatenation. */
+		{
+		  InitHitLists( search );
+		  search->mult_queries->use_mq = TRUE;
+		  search->mult_queries->delete_current_hitlist = FALSE;
+
+                  for( i = 0; i < search->mult_queries->NumQueries; ++i )
+		  {
+		    search->mult_queries->current_query = i;
+
+                    if( search->prog_number == blast_type_blastx 
+                        || search->prog_number == blast_type_tblastn 
+                        || search->prog_number == blast_type_psitblastn )
+                      status = BlastLinkHsps( search );
+
+                    status = BlastReapHitlistByEvalue( search );
+
+                    if( search->handle_results )
+                      search->handle_results( (VoidPtr)search );
+                    else
+                      BlastSaveCurrentHitlist( search );
+                  }
+
+		  if( search->mult_queries->delete_current_hitlist )
+		  {
+		    search->current_hitlist
+		      = BlastHitListDestruct( search->current_hitlist );
+		  }
+
+		  search->mult_queries->use_mq = FALSE;
+                  BlastHitListPurge( search->current_hitlist );
+		}
+
                 /* Emit a tick if needed and we're not MT. */
                 if (search->thr_info->db_mutex == NULL)
                     BlastTickProc(index, search->thr_info);
@@ -3150,6 +3203,7 @@ do_blast_search(VoidPtr ptr)
     Int2 status = 0;
     Int4 index, index1, start=0, stop=0, id_list_length;
     Int4Ptr id_list=NULL;
+    Uint4 i; /* AM: Query multiplexing. */
 
     search = (BlastSearchBlkPtr) ptr;
 	if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
@@ -3216,7 +3270,31 @@ do_blast_search(VoidPtr ptr)
                 if (search->handle_results)
                    search->handle_results((VoidPtr) search);
 		else if (!search->pbp->mb_params)
-		   BlastSaveCurrentHitlist(search);
+		{ /* AM: Query multiplexing. */
+		  if( !search->mult_queries )
+		    BlastSaveCurrentHitlist(search);
+                  else
+		  {
+		    InitHitLists( search );
+		    search->mult_queries->use_mq = TRUE;
+		    search->mult_queries->delete_current_hitlist = FALSE;
+
+		    for( i = 0; i < search->mult_queries->NumQueries; ++i )
+		    {
+		      search->mult_queries->current_query = i;
+		      BlastSaveCurrentHitlist(search);
+		    }
+		    
+		    if( search->mult_queries->delete_current_hitlist )
+		    {
+		      search->current_hitlist
+		        = BlastHitListDestruct( search->current_hitlist );
+		    }
+
+		    search->mult_queries->use_mq = FALSE;
+		    BlastHitListPurge( search->current_hitlist );
+		  }
+                }
                 else
 		   MegaBlastSaveCurrentHitlist(search);
 
@@ -3774,20 +3852,21 @@ BlastMakeCopyQueryDNAP(BlastSequenceBlkPtr PNTR bsbpp_in)
 
     bsbpp = MemNew(sizeof(BlastSequenceBlkPtr)*2);
     for(m = 0; m < 2; m++) {
+       if (bsbpp_in[m]) {
+          bsbpp[m] = (BlastSequenceBlkPtr) MemNew(sizeof(BlastSequenceBlk));
         
-        bsbpp[m] = (BlastSequenceBlkPtr) MemNew(sizeof(BlastSequenceBlk));
-        
-        buff_size = bsbpp_in[m]->length+3*CODON_LENGTH;
-        bsbpp[m]->sequence_start = MemNew(buff_size);
+          buff_size = bsbpp_in[m]->length+3*CODON_LENGTH;
+          bsbpp[m]->sequence_start = MemNew(buff_size);
 
-        MemCpy(bsbpp[m]->sequence_start, 
-               bsbpp_in[m]->sequence_start, buff_size);
+          MemCpy(bsbpp[m]->sequence_start, 
+                 bsbpp_in[m]->sequence_start, buff_size);
 
-        bsbpp[m]->sequence = bsbpp_in[m]->sequence;
-        
-        bsbpp[m]->length = bsbpp_in[m]->length;
-        bsbpp[m]->original_length = bsbpp_in[m]->original_length;
-        bsbpp[m]->effective_length = bsbpp_in[m]->effective_length;
+          bsbpp[m]->sequence = bsbpp_in[m]->sequence;
+          
+          bsbpp[m]->length = bsbpp_in[m]->length;
+          bsbpp[m]->original_length = bsbpp_in[m]->original_length;
+          bsbpp[m]->effective_length = bsbpp_in[m]->effective_length;
+       }
     }
 
     return bsbpp;
@@ -3972,6 +4051,17 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	ValNodePtr vnp;
         Int4 query_loc_start;
 
+	/* AM: Temporaries to compute effective lengths of individual queries. */
+	IntArray lengths_eff; 
+	IntArray length_adj_tmp;
+	Int4 le_iter, length_tmp;
+	Int4 i, j;
+
+	/* AM: To support individual masking in the case of query multiplexing. */
+	SeqLocPtr * indiv_filter_slp, *indiv_private_slp, *indiv_private_slp_rev;
+	Boolean * indiv_mask_at_hash;
+	QueriesPtr mult_queries = NULL;
+
 	if (options == NULL)
 	{
 	  	ErrPostEx(SEV_FATAL, 0, 0, "BLAST_OptionsBlkPtr is NULL\n");
@@ -3982,6 +4072,21 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	{
 	  	ErrPostEx(SEV_FATAL, 0, 0, "Query is NULL\n");
 		return 1;
+	}
+
+        /* AM: Support for query multiplexing. */
+	mult_queries = search->mult_queries;
+
+        if( mult_queries )
+	{
+	  indiv_filter_slp 
+	    = (SeqLocPtr *)MemNew( mult_queries->NumQueries*sizeof( SeqLocPtr ) );
+	  indiv_private_slp 
+	    = (SeqLocPtr *)MemNew( mult_queries->NumQueries*sizeof( SeqLocPtr ) );
+	  indiv_private_slp_rev 
+	    = (SeqLocPtr *)MemNew( mult_queries->NumQueries*sizeof( SeqLocPtr ) );
+          indiv_mask_at_hash
+	    = (Boolean *)MemNew( mult_queries->NumQueries*sizeof( Boolean ) );
 	}
 
 	query_seq = NULL;	/* Gets rid of warning. */
@@ -4010,10 +4115,28 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 		if (strand == Seq_strand_unknown || strand == Seq_strand_plus || strand == Seq_strand_both)
 		{
 			private_slp = SeqLocIntNew(query_loc_start, SeqLocStop(query_slp), Seq_strand_plus, SeqLocId(query_slp));
+
+                  /* AM: Support for query multiplexing. */
+		  if( mult_queries )
+		    for( i = 0; i < mult_queries->NumQueries; ++i )
+		      indiv_private_slp[i] 
+		        = SeqLocIntNew( mult_queries->QueryStarts[i],
+		                        mult_queries->QueryEnds[i],
+					Seq_strand_plus,
+					SeqLocId( query_slp ) );
 		}
 		if (strand == Seq_strand_minus || strand == Seq_strand_both)
 		{
 			private_slp_rev = SeqLocIntNew(query_loc_start, SeqLocStop(query_slp), Seq_strand_minus, SeqLocId(query_slp));
+
+                  /* AM: Support for query multiplexing. */
+		  if( mult_queries )
+		    for( i = 0; i < mult_queries->NumQueries; ++i )
+		      indiv_private_slp_rev[i] 
+		        = SeqLocIntNew( mult_queries->QueryStarts[i],
+			                mult_queries->QueryEnds[i],
+					Seq_strand_minus,
+					SeqLocId( query_slp ) );
 		}
 		private_slp_delete = TRUE;
 	   	if (search->prog_number==blast_type_blastn)
@@ -4153,6 +4276,20 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
                 else if (private_slp_rev)
                     filter_slp = BlastSeqLocFilterEx(private_slp_rev, options->filter_string, &mask_at_hash);
                 
+		/* AM: Query multiplexing. */
+		if( mult_queries )
+		  for( i = 0; i < mult_queries->NumQueries; ++i )
+		    if( indiv_private_slp[i] )
+		      indiv_filter_slp[i]
+		        = BlastSeqLocFilterEx( indiv_private_slp[i], 
+			                       options->filter_string, 
+					       indiv_mask_at_hash + i );
+		    else if( indiv_private_slp_rev[i] )
+		      indiv_filter_slp[i] 
+		        = BlastSeqLocFilterEx( indiv_private_slp_rev[i],
+			                       options->filter_string,
+					       indiv_mask_at_hash + i );
+
                 /* If lower case characters were detected in the input
                    their locations will be masked out */
                 
@@ -4167,10 +4304,18 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
         */
 
         if(StringCmp(prog_name, "blastn") == 0) {
+	  /* AM: Changed to support query multiplexing. */
+	  if( !mult_queries )
 		if (filter_slp && !mask_at_hash)
 			ValNodeAddPointer(&(search->mask), SEQLOC_MASKING_NOTSET, filter_slp);
 		else
 			ValNodeAddPointer(&(search->mask1), SEQLOC_MASKING_NOTSET, filter_slp);
+          else
+	    for( i = 0; i < mult_queries->NumQueries; ++i )
+	      if( indiv_filter_slp[i] && !indiv_mask_at_hash[i] )
+	        ValNodeAddPointer( &(search->mask), SEQLOC_MASKING_NOTSET, indiv_filter_slp[i] );
+              else
+	        ValNodeAddPointer( &(search->mask1), SEQLOC_MASKING_NOTSET, indiv_filter_slp[i] );
         }
 
 
@@ -4180,10 +4325,19 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	{
 		spp = SeqPortNewByLoc(private_slp, Seq_code_ncbistdaa);
                 SeqPortSet_do_virtual(spp, TRUE);
-		if (filter_slp && !mask_at_hash)
+
+		/* AM: Changed to support query multiplexing. */
+		if( !mult_queries )
+		  if (filter_slp && !mask_at_hash)
 			ValNodeAddPointer(&(search->mask), SEQLOC_MASKING_NOTSET, filter_slp);
-		else
+		  else
 			ValNodeAddPointer(&(search->mask1), SEQLOC_MASKING_NOTSET, filter_slp);
+                else
+		  for( i = 0; i < mult_queries->NumQueries; ++i )
+		    if( indiv_filter_slp[i] && !indiv_mask_at_hash[i] )
+		      ValNodeAddPointer( &(search->mask), SEQLOC_MASKING_NOTSET, indiv_filter_slp[i] );
+                    else
+		      ValNodeAddPointer( &(search->mask1), SEQLOC_MASKING_NOTSET, indiv_filter_slp[i] );
 	}
 	else if (StringCmp(prog_name, "blastx") == 0 || StringCmp(prog_name, "tblastx") == 0 || StringCmp(prog_name, "blastn") == 0)
 	{
@@ -4237,8 +4391,19 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
                 			search->context[0].location =
                         			BlastSeqLocFillDoubleIntEx(filter_slp, full_query_length, query_length, FALSE, SeqLocStart(private_slp));
 				else
+				  /* AM: query multiplexing. */
+				  if( !mult_queries )
 					BlastMaskTheResidues(query_seq, full_query_length, 15, filter_slp, FALSE, SeqLocStart(private_slp));
+                                  else
+				    for( i = 0; i < mult_queries->NumQueries; ++i )
+				      if( indiv_filter_slp[i] )
+				        BlastMaskTheResidues( 
+				          query_seq, 
+					  full_query_length,
+					  15, indiv_filter_slp[i], FALSE, 
+					  SeqLocStart( private_slp ) );
 			}
+
 			for (index=0; index<=query_length+1; index++)
 				query_seq_start[index] = ncbi4na_to_blastna[query_seq_start[index]];
 		}
@@ -4275,7 +4440,19 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 			     search->context[0].location =
 				BlastSeqLocFillDoubleIntRev(search->context[0].location, filter_slp, query_length, full_query_length, full_query_length - SeqLocStop(private_slp_rev) - 1);
 			   else
+			     /* AM: query multiplexing. */
+			     if( !mult_queries )
 			      BlastMaskTheResidues(query_seq_rev, full_query_length, 15, filter_slp, TRUE, full_query_length - SeqLocStop(private_slp_rev) - 1);
+                             else
+			       for( i = 0; i < mult_queries->NumQueries; ++i )
+			         if( indiv_filter_slp[i] )
+			           BlastMaskTheResidues( 
+				     query_seq_rev, 
+				     full_query_length,
+                                     15, indiv_filter_slp[i], TRUE, 
+				     full_query_length 
+				       - SeqLocStop( private_slp_rev ) );
+				   
 			}
 			for (index=0; index<=query_length+1; index++)
 				query_seq_start_rev[index] =
@@ -4343,7 +4520,17 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
                 		search->context[0].location =
                         		BlastSeqLocFillDoubleInt(filter_slp, query_length, FALSE);
 			else
+			  /* AM: query multiplexing. */
+			  if( !mult_queries )
 				BlastMaskTheResidues(query_seq, full_query_length, 21, filter_slp, FALSE, SeqLocStart(private_slp));
+                          else
+			    for( i = 0; i < mult_queries->NumQueries; ++i )
+			      if( indiv_filter_slp[i] )
+			        BlastMaskTheResidues(
+			          query_seq, 
+				  full_query_length,
+                                  21, indiv_filter_slp[i], FALSE, 
+				  SeqLocStart( private_slp ) );
 		}
 		BlastSequenceAddSequence(search->context[0].query, NULL, query_seq_start, query_length, query_length, 0);
 	}
@@ -4484,16 +4671,78 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	retval = 0;
 	for (index=search->first_context; index<=search->last_context; index++)
 	{
+	   /* AM: Changed to support query multiplexing. */
 	   if (search->prog_number != blast_type_blastn || 
 	       index>search->first_context || 
 	       search->last_context==search->first_context)
-	      status = BlastScoreBlkFill(search->sbp, (CharPtr)
-					   search->context[index].query->sequence,search->context[index].query->length, index);
+           {
+	     if( search->prog_number == blast_type_tblastn
+	         && search->mult_queries )
+             {
+	       for( i = 0; i < search->mult_queries->NumQueries; ++i )
+	       {
+	         status = BlastScoreBlkFill( 
+		   search->sbp, 
+		   ((CharPtr)search->context[index].query->sequence)
+		     + search->mult_queries->QueryStarts[i],
+                   search->mult_queries->QueryEnds[i]
+		     - search->mult_queries->QueryStarts[i] + 1,
+                   index );
+
+                 if( status ) break;
+
+                 search->mult_queries->lambda_array[i]
+		   = search->sbp->kbp_std[search->first_context]->Lambda;
+
+		 if( i )
+		 {
+		   if( search->mult_queries->LambdaMin
+		       > search->sbp->kbp_std[search->first_context]->Lambda )
+                     search->mult_queries->LambdaMin
+		       = search->sbp->kbp_std[search->first_context]->Lambda;
+
+		   if( search->mult_queries->LambdaMax
+		       < search->sbp->kbp_std[search->first_context]->Lambda )
+                     search->mult_queries->LambdaMax
+		       = search->sbp->kbp_std[search->first_context]->Lambda;
+
+		   if( search->mult_queries->LogKMin
+		       > search->sbp->kbp_std[search->first_context]->logK )
+                     search->mult_queries->LogKMin
+		       = search->sbp->kbp_std[search->first_context]->logK;
+
+		   if( search->mult_queries->LogKMax
+		       < search->sbp->kbp_std[search->first_context]->logK )
+                     search->mult_queries->LogKMax
+		       = search->sbp->kbp_std[search->first_context]->logK;
+		 }
+		 else
+		 {
+		   search->mult_queries->LambdaMin
+		     = search->mult_queries->LambdaMax
+		     = search->sbp->kbp_std[search->first_context]->Lambda;
+                   search->mult_queries->LogKMin 
+		     = search->mult_queries->LogKMax
+		     = search->sbp->kbp_std[search->first_context]->logK;
+		 }
+	       }
+             }
+
+	     status 
+	       = BlastScoreBlkFill(search->sbp, (CharPtr)
+				   search->context[index].query->sequence,
+				   search->context[index].query->length, 
+				   index);
+           }
 	   else
-	      status = BlastScoreBlkFill(search->sbp, (CharPtr)
-					 search->context[index].query->sequence, 
-					 search->context[index+1].query->length, 
-					 index);
+	   {
+	     status 
+	       = BlastScoreBlkFill(search->sbp, (CharPtr)
+			    	   search->context[index].query->sequence, 
+				   search->context[index+1].query->length, 
+				   index);
+           }
+
 		if (status != 0)
 		{
 			sprintf(buffer, "Unable to calculate Karlin-Altschul params, check query sequence");
@@ -4566,13 +4815,77 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
            goto BlastSetUpReturn;
 
 	if (options->gapped_calculation && StringCmp(options->program_name, "blastn") != 0)
+	{
 		BlastCalculateEffectiveLengths(options, search->dbseq_num, search->dblen, 
 			length, search->sbp->kbp_gap_std[search->first_context],
 			&effective_query_length, &length_adjustment);
+
+                /* AM: If concatenating queries, then compute effective lengths of 
+		       individual queries. */
+                if( search->mult_queries )
+		{
+		  search->mult_queries->TotalLength = length;
+		  lengths_eff = (IntArray)MemNew( sizeof( Int4 )*search->mult_queries->NumQueries );
+		  length_adj_tmp = (IntArray)MemNew( sizeof( Int4 )*search->mult_queries->NumQueries );
+
+                  for( le_iter = 0; le_iter < search->mult_queries->NumQueries; ++le_iter )
+		  {
+		    length_tmp = search->mult_queries->QueryEnds[le_iter]
+		               - search->mult_queries->QueryStarts[le_iter] 
+			       + 1;
+                    length_adj_tmp[le_iter] = 0;
+                    BlastCalculateEffectiveLengths( options, search->dbseq_num,
+		                                    search->dblen, length_tmp,
+						    search->sbp->kbp_gap_std[search->first_context],
+						    &(lengths_eff[le_iter]), 
+						    &(length_adj_tmp[le_iter]) );
+                    search->mult_queries->EffLengths[le_iter] = lengths_eff[le_iter];
+		    search->mult_queries->Adjustments[le_iter] = length_adj_tmp[le_iter];
+                    
+		    if( search->mult_queries->MinLen > length_tmp )
+		      search->mult_queries->MinLen = length_tmp;
+
+                    if( search->mult_queries->MinLenEff > lengths_eff[le_iter] )
+		      search->mult_queries->MinLenEff = lengths_eff[le_iter];
+		  }
+		}
+        }
 	else
+	{
 		BlastCalculateEffectiveLengths(options, search->dbseq_num, search->dblen, 
 			length, search->sbp->kbp[search->first_context],
 			&effective_query_length, &length_adjustment);
+
+                /* AM: If concatenating queries, then compute effective lengths of 
+		       individual queries. */
+                if( search->mult_queries )
+		{
+		  search->mult_queries->TotalLength = length;
+		  lengths_eff = (IntArray)MemNew( sizeof( Int4 )*search->mult_queries->NumQueries );
+		  length_adj_tmp = (IntArray)MemNew( sizeof( Int4 )*search->mult_queries->NumQueries );
+
+                  for( le_iter = 0; le_iter < search->mult_queries->NumQueries; ++le_iter )
+		  {
+		    length_tmp = search->mult_queries->QueryEnds[le_iter]
+		               - search->mult_queries->QueryStarts[le_iter] 
+			       + 1;
+                    length_adj_tmp[le_iter] = 0;
+                    BlastCalculateEffectiveLengths( options, search->dbseq_num,
+		                                    search->dblen, length_tmp,
+						    search->sbp->kbp[search->first_context],
+						    &(lengths_eff[le_iter]), 
+						    &(length_adj_tmp[le_iter]) );
+                    search->mult_queries->EffLengths[le_iter] = lengths_eff[le_iter];
+		    search->mult_queries->Adjustments[le_iter] = length_adj_tmp[le_iter];
+                    
+		    if( search->mult_queries->MinLen > length_tmp )
+		      search->mult_queries->MinLen = length_tmp;
+
+                    if( search->mult_queries->MinLenEff > lengths_eff[le_iter] )
+		      search->mult_queries->MinLenEff = lengths_eff[le_iter];
+		  }
+		}
+        }
 
 	search->length_adjustment = MAX(length_adjustment, 0);
 
@@ -4581,6 +4894,24 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
               search->dblen_eff = MAX(search->dbseq_num, search->dblen - search->dbseq_num*search->length_adjustment); 
            else
               search->dblen_eff = MAX(1, search->dblen - search->dbseq_num*search->length_adjustment);
+
+           /* AM: If concatenating queries find effective db lengths for each query. */
+	   if( search->mult_queries )
+	   {
+	     for( le_iter = 0; le_iter < search->mult_queries->NumQueries; 
+	          ++le_iter )
+	     {
+	       if( search->prog_number == blast_type_blastn )
+	         search->mult_queries->DbLenEff[le_iter]
+	           = MAX( 1, search->dblen 
+		             - search->dbseq_num*length_adj_tmp[le_iter] );
+               else
+	         search->mult_queries->DbLenEff[le_iter]
+		   = MAX( search->dbseq_num, 
+		          search->dblen 
+			  - search->dbseq_num*length_adj_tmp[le_iter] );
+	     }
+	   }
         }
 	
 	for (index=search->first_context; index<=search->last_context; index++)
@@ -4588,8 +4919,26 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 		search->context[index].query->effective_length = effective_query_length;
 	}
 
+        /* AM: Setting up effective search spaces for individual queries. */
 	if (search->searchsp_eff == 0)
+	{
 		search->searchsp_eff = ((Nlm_FloatHi) search->dblen_eff)*((Nlm_FloatHi) effective_query_length);
+
+		if( search->mult_queries )
+		  for( le_iter = 0; le_iter < search->mult_queries->NumQueries; ++le_iter )
+		  {
+		    search->mult_queries->SearchSpEff[le_iter]
+		      = ((Nlm_FloatHi)search->mult_queries->DbLenEff[le_iter])
+		      * ((Nlm_FloatHi)lengths_eff[le_iter]);
+
+                    if( lengths_eff[le_iter] == search->mult_queries->MinLenEff )
+		      search->mult_queries->MinSearchSpEff
+		        = search->mult_queries->SearchSpEff[le_iter];
+                  }
+        }
+	else if( search->mult_queries )
+	  for( le_iter = 0; le_iter < search->mult_queries->NumQueries; ++le_iter )
+	    search->mult_queries->SearchSpEff[le_iter] = search->searchsp_eff;
 
 	/* The default is that cutoff_s was not set and is zero. */
 	if (options->cutoff_s == 0)
@@ -4633,7 +4982,11 @@ available) this needs to be set higher up. */
 	search->pbp->maxNumPasses = options->maxNumPasses;
 	search->pbp->pseudoCountConst = options->pseudoCountConst;
 
-	search->pbp->process_num = options->number_of_cpus;
+	if (NlmThreadsAvailable()) /* ONly allow more than one cpu if MT compiled. */
+		search->pbp->process_num = options->number_of_cpus;
+	else
+		search->pbp->process_num = 1;
+
 	search->pbp->cpu_limit = options->cpu_limit;
 	search->pbp->gap_decay_rate = options->gap_decay_rate;
 	search->pbp->gap_size = options->gap_size;
@@ -4659,6 +5012,17 @@ available) this needs to be set higher up. */
 		{
 			search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
 			search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
+
+                  /* AM: Change to support query multiplexing. */
+		  if( StringCmp( search->prog_name, "tblastn" ) == 0
+		      && search->mult_queries )
+                  {
+		    search->pbp->gap_trigger 
+		      = (BLAST_Score)( ( options->gap_trigger*NCBIMATH_LN2
+		                           + search->mult_queries->LogKMin )
+                                       /search->mult_queries->LambdaMax );
+		  }
+		  else
 			search->pbp->gap_trigger = (BLAST_Score) ((options->gap_trigger*NCBIMATH_LN2+search->sbp->kbp[search->first_context]->logK)/ search->sbp->kbp[search->first_context]->Lambda);
 		}
 		else
@@ -5074,9 +5438,17 @@ BLASTSetUpSearchWithReadDbInternalEx (SeqLocPtr query_slp, BioseqPtr query_bsp,
 }
 
 
-
 BlastSearchBlkPtr
 BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp)
+{
+	return BLASTSetUpSearchWithReadDbInternalMult(query_slp, query_bsp, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total, rdfp, NULL);
+}
+
+
+
+BlastSearchBlkPtr
+BLASTSetUpSearchWithReadDbInternalMult (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp, QueriesPtr mult_queries)
+/* --KM added mult_queries param */
 
 {
 
@@ -5087,6 +5459,7 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
     Int4	query_length;
     Nlm_FloatHi	searchsp_eff=0;
     Int4        hitlist_size;
+    Int4 i; /* AM: Query multiplexing. */
 
     /* Allocate default options if none are allocated yet. */
     if (options == NULL) {
@@ -5108,7 +5481,24 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
     else
         query_length = query_bsp->length;
     
-    hitlist_size = MIN(2*options->hitlist_size, options->hitlist_size + 50);
+    /* Increase the hitlist size for the preliminary gapped alignment */
+    if (options->gapped_calculation)
+       hitlist_size = MIN(2*options->hitlist_size, options->hitlist_size + 50);
+    else 
+       hitlist_size = options->hitlist_size;
+
+    /* AM: Query multiplexing */
+    if( mult_queries )
+    {
+      for( i = 0; i < mult_queries->NumQueries; ++i )
+        mult_queries->result_info[i].results 
+	  = (BLASTResultHitlistPtr *)MemNew( 
+	      (hitlist_size + 1)*sizeof( BLASTResultHitlistPtr ) );
+
+      mult_queries->max_results_per_query = hitlist_size;
+      hitlist_size *= mult_queries->NumQueries;
+    }
+    
     /* On the first call query length is used for the subject length. */
     search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, 0, options->threshold_second, hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
     
@@ -5147,6 +5537,10 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
         if (options->db_length > 0)
            search->dblen_eff = dblen;
         search->searchsp_eff = searchsp_eff;
+	/* AM: Moved next two lines here to be able to use mult_queries 
+	       in BLASTSetUpSearchInternalByLoc() */
+	/* --KM put mult_queries, from Main, into the search structure */
+	search->mult_queries = mult_queries;
         status = BLASTSetUpSearchInternalByLoc (search, query_slp, query_bsp, prog_name, qlen, options, callback);
         if (status != 0) {
             ErrPostEx(SEV_WARNING, 0, 0, "SetUpBlastSearch failed.");
@@ -5177,7 +5571,7 @@ BlastSearchBlkPtr LIBCALL
 BLASTSetUpSearchWithReadDb(BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (NULL, query_bsp, prog_name, qlen, dbname, options, callback, NULL, NULL, 0, NULL);
+	return BLASTSetUpSearchWithReadDbInternal(NULL, query_bsp, prog_name, qlen, dbname, options, callback, NULL, NULL, 0, NULL);
 }
 
 BlastSearchBlkPtr LIBCALL 
@@ -5196,15 +5590,18 @@ BlastSearchBlkPtr LIBCALL
 BLASTSetUpSearchByLocWithReadDb(SeqLocPtr query_slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, NULL, NULL, 0, NULL);
+	return BLASTSetUpSearchWithReadDbInternalMult (query_slp, NULL, prog_name, qlen, dbname, options, callback, NULL, NULL, 0, NULL, NULL);
+	/* --KM pass NULL mult_queries */
 }
 
 
 BlastSearchBlkPtr LIBCALL 
-BLASTSetUpSearchByLocWithReadDbEx(SeqLocPtr query_slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total)
+BLASTSetUpSearchByLocWithReadDbEx(SeqLocPtr query_slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, QueriesPtr mult_queries)  
+/* --KM added mult_queries param */
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total, NULL);
+	return BLASTSetUpSearchWithReadDbInternalMult (query_slp, NULL, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total, NULL, mult_queries);
+	/* --KM pass mult_queries */
 }
 static BlastSearchBlkPtr
 BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, Int8 dblen, BlastAllWordPtr all_words, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
@@ -5780,6 +6177,7 @@ BlastReapPartialHitlistByEvalue(BlastSearchBlkPtr search, Int4 start)
    FloatHi searchsp_eff;
    BLAST_KarlinBlkPtr PNTR kbp;
    Int4 context;
+   Uint4 query_num; /* AM: Support for query concatenation. */
 
    if (search->pbp->gapped_calculation && 
        search->prog_number != blast_type_blastn)
@@ -5798,8 +6196,19 @@ BlastReapPartialHitlistByEvalue(BlastSearchBlkPtr search, Int4 start)
                                        (Int4) (search->last_context+1));
          else
             context = (Int4) hsp->context;
-         searchsp_eff = (FloatHi) search->dblen_eff *
-            (FloatHi) search->context[context].query->effective_length;
+
+	    /* AM: Changed to support query concatenation. */
+	    if( !search->mult_queries )
+              searchsp_eff = (FloatHi) search->dblen_eff *
+                             (FloatHi) search->context[context].query->effective_length;
+            else
+	    {
+	      query_num = GetQueryNum( search->mult_queries,
+	                               hsp->query.offset,
+				       hsp->query.end,
+				       hsp->query.frame );
+              searchsp_eff = search->mult_queries->SearchSpEff[query_num];
+	    }
          
          if (kbp[context]) {
             /* kbp[context] == NULL means that this alignment has been 
@@ -5807,6 +6216,7 @@ BlastReapPartialHitlistByEvalue(BlastSearchBlkPtr search, Int4 start)
                Leave it like this for now */
             hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[context], 
                                                  searchsp_eff);
+
             if (hsp->evalue > 10*search->pbp->cutoff_e) {
                hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
                hsp = MemFree(hsp);
@@ -5834,9 +6244,6 @@ BLASTPerformSearchWithReadDb (BlastSearchBlkPtr search, Int4 sequence_number)
 
 	search->dblen_eff_real += MAX(subject_length-search->length_adjustment, 1);
 	search->subject_id = sequence_number;
-
-	search->dblen_eff_real += MAX(subject_length-search->length_adjustment, 1);
-        search->subject_id = sequence_number;
 
         return BLASTPerformSearch(search, subject_length, subject_seq); 
 }
@@ -6676,6 +7083,8 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
     register Int4 num_hits;
     register Int4 next_nhits;
     
+    Int4 i; /*AM: Temporary */
+
     BLAST_ExtendWordParamsPtr     ewp_params;
     Boolean			prelim, succeed_to_right;
     ModLAEntry *mod_lt=lookup->mod_lt;
@@ -6730,7 +7139,8 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
             s_off = (Int4) (s - subject0);
             next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
             next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
-            for (;;) {
+
+            for (;;) { 
                 do {
                     /* lookup a contiguous word. */
                     s++;
@@ -6820,6 +7230,7 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
             
             next_lindex = (((lookup_index) & mask)<<char_size) + *(s+1);
             next_pv_val = pv_array[next_lindex>>PV_ARRAY_BTS];
+
             for (;;) {
 	        do {
                     /* lookup a contiguous word. */
@@ -7440,6 +7851,7 @@ BlastWordExtend_prelim(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 wo
 	register BLAST_Score	score, sum;
 	register BLAST_ScorePtr PNTR	matrix;
 	register BLAST_Score	x, X;
+	Uint4 query_num; /* AM: Support for query multiplexing. */
 	
 	
 
@@ -7466,7 +7878,15 @@ BlastWordExtend_prelim(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 wo
 	q = query + q_off;
 	s =  search->subject->sequence + s_off; 
 
-	X=pbp->X;
+        /* AM: Support for query multiplexing. */
+	if( search->prog_number == blast_type_tblastn && search->mult_queries )
+	{
+	  query_num = GetQueryNum( search->mult_queries, q_off, 
+	                           q_off + word_width + 1, 0 );
+          X = search->mult_queries->dropoff_2nd_pass_array[query_num];
+	}
+	else X=pbp->X;
+
 	matrix = sbp->matrix;
 
 	score=0;
@@ -9067,6 +9487,14 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	SeqIdPtr subject_id=NULL;
         Int4 align_length;
 
+	/* AM: Query multiplexing. */
+	QueriesPtr mult_queries = NULL;
+	Uint4 current_query = 0;
+	MQ_ResultInfoPtr result_info = NULL;
+	Int4 mq_new_index, del_index;
+	BLASTResultHitlistPtr mq_worst_result = NULL;
+	Uint4 tmp_num_results;
+
 	if (search == NULL)
 		return 0;	
 
@@ -9076,9 +9504,17 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 		return 0;
 	}
 
-	current_hitlist = search->current_hitlist;
+        /* AM: Support for query concatenation. */
+	if( !search->mult_queries )
+	  current_hitlist = search->current_hitlist;
+        else
+	  current_hitlist = search->mult_queries->HitListArray[
+	    search->mult_queries->current_query];
 
 	retval = current_hitlist->hspcnt;
+
+	/* AM: Support for query concatenation. */
+	if( search->mult_queries && !retval ) return 0;
 
 	if (search->pbp->gapped_calculation &&
 		search->prog_number != blast_type_blastn)
@@ -9180,6 +9616,14 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	hitlist_max = result_struct->hitlist_max;
 	results = result_struct->results;
 
+        /* AM: Query multiplexing. */
+	if( search->mult_queries )
+	{
+	  mult_queries = search->mult_queries;
+	  current_query = mult_queries->current_query;
+	  result_info = mult_queries->result_info + current_query;
+	}
+
 	/* Record the worst evalue for ReevaluateWithAmbiguities. */
 	if (hitlist_count == hitlist_max)
 	{
@@ -9193,21 +9637,49 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
         {
                 if (hitlist_count == hitlist_max)
                 {       /* Array is full, delete the entry. */
+		  if( !mult_queries ) /* AM: Query multiplexing. */
                         search->current_hitlist =
 			   BlastHitListDestruct(search->current_hitlist);
+                  else search->mult_queries->delete_current_hitlist = TRUE;
+
                         result_hitlist = BLASTResultHitlistFreeEx(search, result_hitlist);
                         if (search->thr_info->results_mutex)
                             NlmMutexUnlock(search->thr_info->results_mutex); /* Free mutex. */
                         return 0;
                 }
                 else
-                {       /* Add to end of array. */
+                {       
+		  /* AM: Query multiplexing. */
+		  if( !mult_queries )
+		        /* Add to end of array. */
 	    		deleted = BlastInsertList2Heap(search, result_hitlist);
+                  else
+		  {
+		    if( result_info->NumResults 
+		          == mult_queries->max_results_per_query )
+                    { /* AM: No more results for this query. */
+		      search->mult_queries->delete_current_hitlist = TRUE;
+                      result_hitlist 
+		        = BLASTResultHitlistFreeEx( search, result_hitlist );
+
+                      if( search->thr_info->results_mutex )
+		        NlmMutexUnlock( search->thr_info->results_mutex );
+
+                      return 0;
+		    }
+		    else /* AM: Append to results_struct and to local. */
+	    	      deleted = BlastInsertList2Heap(search, result_hitlist);
+		  }
                 }
 
 	        if (deleted == 1) 
+		{
+                  /* AM: Query multiplexing. */
+		  if( mult_queries ) MQ_UpdateResultLists( mult_queries );
+
 	        	hitlist_count = result_struct->hitlist_count =
 			   BlastPurgeResultList(results, hitlist_count);
+                }
 	    	else if (deleted == 0) 
 		{
 	      		result_hitlist = BLASTResultHitlistFreeEx(search, result_hitlist);
@@ -9216,6 +9688,9 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	      		return retval;
 		}
                 new_index = hitlist_count;
+
+		/* AM: Query multiplexing. */
+		if( mult_queries ) mq_new_index = result_info->NumResults;
         }
         else
         {
@@ -9223,8 +9698,13 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	  {
 	    deleted = BlastInsertList2Heap(search, result_hitlist);
 	    if (deleted == 1) 
+	    {
+              /* AM: Query multiplexing. */
+	      if( mult_queries ) MQ_UpdateResultLists( mult_queries );
+
 	      hitlist_count = result_struct->hitlist_count =
 		 BlastPurgeResultList(results, hitlist_count);
+            }
 	    else if (deleted == 0) {
 	      result_hitlist = BLASTResultHitlistFreeEx(search, result_hitlist);
 	      if (search->thr_info->results_mutex)
@@ -9275,28 +9755,105 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
                         }
 			old_index = new_index;
                     }
-		    if (hitlist_count == hitlist_max)
-		    {	/* The list is full, delete the last entry. */
-			BlastFreeHeap(search, results[hitlist_max-1]);
-			if (results[hitlist_max-1]->seqalign)
-			   SeqAlignSetFree(results[hitlist_max-1]->seqalign);
-			results[hitlist_max-1] = BLASTResultHitlistFreeEx(search, results[hitlist_max-1]);
-			result_struct->hitlist_count--;	
-			hitlist_count = result_struct->hitlist_count;	
+                    
+		    /* AM: Query multiplexing. */
+		    if( !mult_queries )
+		    {
+		      if (hitlist_count == hitlist_max)
+		      {	/* The list is full, delete the last entry. */
+			  BlastFreeHeap(search, results[hitlist_max-1]);
+			  if (results[hitlist_max-1]->seqalign)
+			     SeqAlignSetFree(results[hitlist_max-1]->seqalign);
+			  results[hitlist_max-1] = BLASTResultHitlistFreeEx(search, results[hitlist_max-1]);
+			  result_struct->hitlist_count--;	
+			  hitlist_count = result_struct->hitlist_count;	
+		      }
+		      if (hitlist_max > 1)
+		    	  Nlm_MemMove((results+new_index+1), (results+new_index), (hitlist_count-new_index)*sizeof(results[0]));
+                    }
+		    else
+		    {
+		      new_index = ResultIndex( current_evalue, high_score,
+		                               search->subject_id, 
+					       results, hitlist_count );
+
+		      tmp_num_results = result_info->NumResults;
+		      del_index = hitlist_count;
+		      mq_new_index = ResultIndex( current_evalue, high_score,
+		                                  search->subject_id, 
+                                                  result_info->results,
+						  result_info->NumResults );
+                      
+		      if( mq_new_index == mult_queries->max_results_per_query )
+		      { /* AM: The list is full and new result is too low --- do nothing. */
+			search->mult_queries->delete_current_hitlist = TRUE;
+                        result_hitlist 
+		          = BLASTResultHitlistFreeEx( search, result_hitlist );
+
+                        if( search->thr_info->results_mutex )
+		          NlmMutexUnlock( search->thr_info->results_mutex );
+
+                        return 0;
+		      }
+
+		      if( result_info->NumResults 
+		            == mult_queries->max_results_per_query )
+                      { /* AM: must remove the worst result for this query. */
+		        mq_worst_result 
+			  = result_info->results[result_info->NumResults - 1];
+                        --tmp_num_results;
+                        del_index = ResultIndex( mq_worst_result->best_evalue,
+			                         mq_worst_result->high_score,
+						 mq_worst_result->subject_id,
+						 results, hitlist_count );
+                        BlastFreeHeap( search, results[del_index] );
+
+			if( results[del_index]->seqalign )
+			  SeqAlignSetFree( results[del_index]->seqalign );
+
+                        results[del_index] 
+			  = BLASTResultHitlistFreeEx( search, 
+			                              results[del_index] );
+                        hitlist_count = --result_struct->hitlist_count;
+		      }
+
+		      if( hitlist_max > 1 )
+		        if( new_index < del_index )
+		          Nlm_MemMove( results + new_index + 1, 
+			               results + new_index,
+				       (del_index - new_index)
+				         *sizeof( results[0] ) );
+                        else if( del_index < new_index )
+			  Nlm_MemMove( results + del_index,
+			               results + del_index + 1,
+				       (new_index - del_index)
+				         *sizeof( results[0] ) );
+
+                      if( mult_queries->max_results_per_query > 1 )
+		        Nlm_MemMove( result_info->results + mq_new_index + 1,
+			             result_info->results + mq_new_index,
+				     (result_info->NumResults - mq_new_index)
+				       *sizeof( results[0] ) );
+
+                      result_info->NumResults = tmp_num_results;
 		    }
-		    if (hitlist_max > 1)
-		    	Nlm_MemMove((results+new_index+1), (results+new_index), (hitlist_count-new_index)*sizeof(results[0]));
 	    }
 	    else
 	    {  /* Case of K=1 and the first hit is eliminated */
 	    	new_index = 0;
 	    	BlastInsertList2Heap(search, result_hitlist);
+
+              /* AM: Query multiplexing. */
+	      if( mult_queries ) mq_new_index = 0;
 	    }
 	  }
 	else
 	  {	/* First hit to be stored. */
 	    new_index = 0;
 	    BlastInsertList2Heap(search, result_hitlist);
+
+            /* AM: Query multiplexing. */
+	    if( mult_queries ) mq_new_index = 0;
 	  }
 	}
 	
@@ -9304,10 +9861,16 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
         {
 		results[new_index] = result_hitlist;
 		result_struct->hitlist_count++;	
+
+          /* AM: Query multiplexing. */
+	  if( mult_queries )
+	  {
+	    result_info->results[mq_new_index] = result_hitlist;
+	    ++result_info->NumResults;
+	  }
 	}
 
         /* We need to sort all hits by score/e_value in results[new_index] */
-
 
         HeapSort(results[new_index]->hsp_array, results[new_index]->hspcnt, 
                  sizeof(BLASTResultHsp), RPSResultHspScoreCmp);
@@ -9334,6 +9897,7 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	BLAST_Score	s, s2;
 	BLAST_Score	dropoff_1st_pass, dropoff_2nd_pass;
 	Int2 index;
+	Int4 i; /* AM: Support for query multiplexing. */
 	
 	Nlm_FloatHi meff, e, e2;
         Int2 last_context;
@@ -9378,9 +9942,23 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	else
 	{
 	   if (pbp->gapped_calculation && search->prog_number != blast_type_blastn)
+	   { /* AM: Changed to support query concatenation. */
+	     if( !search->mult_queries )
 	   	BlastCutoffs_simple(&s, &e, kbp_gap, searchsp, FALSE);
+             else
+	        BlastCutoffs_simple( &s, &e, kbp_gap, 
+		                     search->mult_queries->MinSearchSpEff, 
+				     FALSE );
+           }
 	   else
+	   { /* AM: Changed to support query concatenation. */
+	     if( !search->mult_queries )
 	   	BlastCutoffs_simple(&s, &e, kbp, searchsp, FALSE);
+             else
+	        BlastCutoffs_simple( &s, &e, kbp, 
+		                     search->mult_queries->MinSearchSpEff, 
+				     FALSE ); 
+           }
 	}
 	/* Determine the secondary cutoff score, S2, to use */
 	if (e2 == 0. && !pbp->cutoff_s2_set)
@@ -9400,9 +9978,23 @@ blast_set_parameters(BlastSearchBlkPtr search,
 		BlastCutoffs(&s2, &e2, kbp, meff, avglen, TRUE);
 */
 		if (pbp->gapped_calculation && search->prog_number != blast_type_blastn)
+		{
+		  if( !search->mult_queries )
 			BlastCutoffs(&s2, &e2, kbp_gap, MIN(avglen,meff), avglen, TRUE);
+                  else
+		    BlastCutoffs( &s2, &e2, kbp_gap, 
+		                  MIN( avglen,search->mult_queries->MinLen ), 
+				  avglen, TRUE ); 
+                }
 		else
+		{ /* AM: Changed to support query concatenation. */
+		  if( !search->mult_queries )
 			BlastCutoffs(&s2, &e2, kbp, MIN(avglen,meff), avglen, TRUE);
+                  else
+		    BlastCutoffs( &s2, &e2, kbp, 
+		                  MIN(avglen,2*(search->mult_queries->MinLen)), 
+				  avglen, TRUE ); 
+                }
 		/* Adjust s2 to be in line with s, as necessary */
 		s2 = MAX(s2, 1);
 		if (s2 > s)
@@ -9430,8 +10022,24 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	
 	dropoff_1st_pass = (BLAST_Score) ceil((Nlm_FloatHi) dropoff_number_of_bits_1st_pass * NCBIMATH_LN2 / kbp->Lambda);
 	dropoff_1st_pass = (BLAST_Score) MIN((Nlm_FloatHi) dropoff_1st_pass, s);
-	dropoff_2nd_pass = (BLAST_Score) ceil((Nlm_FloatHi) dropoff_number_of_bits_2nd_pass * NCBIMATH_LN2 / kbp->Lambda);
+
+	/* AM: Change to support query multiplexing. */
+	if( search->prog_number == blast_type_tblastn && search->mult_queries )
+	  dropoff_2nd_pass = (BLAST_Score)ceil( 
+	    (Nlm_FloatHi)dropoff_number_of_bits_2nd_pass*NCBIMATH_LN2
+	      /search->mult_queries->LambdaMin );
+	else
+	  dropoff_2nd_pass = (BLAST_Score) ceil((Nlm_FloatHi) dropoff_number_of_bits_2nd_pass * NCBIMATH_LN2 / kbp->Lambda);
+
 	dropoff_2nd_pass = (BLAST_Score) MIN((Nlm_FloatHi) dropoff_2nd_pass, s);	
+
+	/* AM: Change to support query multiplexing. */
+	if( search->prog_number == blast_type_tblastn && search->mult_queries )
+	  for( i = 0; i < search->mult_queries->NumQueries; ++i )
+	    search->mult_queries->dropoff_2nd_pass_array[i]
+	      = - (BLAST_Score)ceil( (Nlm_FloatHi)dropoff_number_of_bits_2nd_pass*NCBIMATH_LN2
+	                             /search->mult_queries->lambda_array[i] );
+
 	/* The drop-off parameter MUST be negative. */
 	pbp->dropoff_1st_pass = -dropoff_1st_pass;
 	pbp->dropoff_2nd_pass = -dropoff_2nd_pass;
@@ -9497,7 +10105,13 @@ BlastLinkHsps (BlastSearchBlkPtr search)
 	BLAST_HSPPtr hsp;
 	Int4 index;
 
-	hitlist = search->current_hitlist;
+        /* AM: Support for query concatenation. */
+	if( !search->mult_queries || !search->mult_queries->use_mq )
+	  hitlist = search->current_hitlist;
+        else
+	  hitlist = search->mult_queries->HitListArray[
+	    search->mult_queries->current_query];
+
 	if (hitlist && hitlist->hspcnt > 0)
 	{
            /* Link up the HSP's for this hitlist. */
@@ -10045,6 +10659,7 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
  	Int4 path_changed;  /* will be set if an element is removed that may change an existing path */
  	Int4 first_pass, use_current_max; 
 	LinkHelpStruct *lh_helper=0;
+	Uint4 query_num; /* AM: to support query concatenation. */
 
 	if (search == NULL || hitlist == NULL)
 		return NULL;
@@ -10067,7 +10682,17 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 	}
 
 	total_number_of_hsps = hitlist->hspcnt;
-	subject_length = MAX((search->subject->length - search->length_adjustment), 1);
+
+	/* AM: Support for query concatenation */
+	if( !search->mult_queries )
+	  subject_length = MAX((search->subject->length - search->length_adjustment), 1);
+        else
+	{
+	  query_num = GetQueryNum( search->mult_queries, hsp_array[0]->query.offset,
+	                           hsp_array[0]->query.end, hsp_array[0]->query.frame );
+	  subject_length = MAX((search->subject->length 
+	                        - search->mult_queries->Adjustments[query_num]), 1);
+	}
 	
         if (StringCmp(search->prog_name, "tblastn") == 0
             || StringCmp(search->prog_name, "tblastx") == 0
@@ -10514,9 +11139,47 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 		    of links, as this was subtracted out for purposes of the
 		    comparison above. */
 		    best[0]->hsp_link.sum[0] += (best[0]->hsp_link.num[0])*cutoff[0];
-		    prob[0] = BlastSmallGapSumE(kbp[search->first_context], gap_size, gap_prob, gap_decay_rate, best[0]->hsp_link.num[0],best[0]->hsp_link.sum[0], best[0]->hsp_link.xsum[0], search->context[search->first_context].query->effective_length, subject_length, FALSE);
+
+		    /* AM: Support for query concatenation. */
+		    if( !search->mult_queries )
+		      prob[0] = BlastSmallGapSumE(kbp[search->first_context], 
+		                                  gap_size, gap_prob, 
+						  gap_decay_rate, 
+						  best[0]->hsp_link.num[0],
+						  best[0]->hsp_link.sum[0], 
+						  best[0]->hsp_link.xsum[0], 
+						  search->context[search->first_context].query->effective_length, 
+						  subject_length, FALSE);
+                    else
+                      prob[0] = BlastSmallGapSumE( kbp[search->first_context],
+		                                   gap_size, gap_prob,
+						   gap_decay_rate,
+						   best[0]->hsp_link.num[0],
+						   best[0]->hsp_link.sum[0],
+						   best[0]->hsp_link.xsum[0],
+						   search->mult_queries->EffLengths[query_num],
+						   subject_length, FALSE );
+
 		    best[1]->hsp_link.sum[1] += (best[1]->hsp_link.num[1])*cutoff[1];
-		    prob[1] = BlastLargeGapSumE(kbp[search->first_context], gap_prob, gap_decay_rate, best[1]->hsp_link.num[1],best[1]->hsp_link.sum[1], best[1]->hsp_link.xsum[1], search->context[search->first_context].query->effective_length, subject_length, FALSE);
+
+		    /* AM: Support for query concatenation. */
+		    if( !search->mult_queries )
+		      prob[1] = BlastLargeGapSumE(kbp[search->first_context], 
+		                                  gap_prob, gap_decay_rate, 
+						  best[1]->hsp_link.num[1],
+						  best[1]->hsp_link.sum[1], 
+						  best[1]->hsp_link.xsum[1], 
+						  search->context[search->first_context].query->effective_length, 
+						  subject_length, FALSE);
+                    else
+		      prob[1] = BlastLargeGapSumE( kbp[search->first_context], 
+		                                   gap_prob, gap_decay_rate, 
+						   best[1]->hsp_link.num[1],
+						   best[1]->hsp_link.sum[1], 
+						   best[1]->hsp_link.xsum[1], 
+						   search->mult_queries->EffLengths[query_num],
+						   subject_length, FALSE );
+
 		    ordering_method = prob[0]<=prob[1] ? 0:1;
 		  }
 		  else
@@ -10524,7 +11187,25 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 		    /* We only consider the case of big gaps. */
 		    best[1]->hsp_link.sum[1] += (best[1]->hsp_link.num[1])*cutoff[1];
 		    /* gap_prob=0 here as small gaps are NOT considered. */
-		    prob[1] = BlastLargeGapSumE(kbp[search->first_context], 0.0, gap_decay_rate, best[1]->hsp_link.num[1],best[1]->hsp_link.sum[1], best[1]->hsp_link.xsum[1], search->context[search->first_context].query->effective_length, subject_length, FALSE);
+
+		    /* AM: Support for query concatenation. */
+		    if( !search->mult_queries )
+		      prob[1] = BlastLargeGapSumE(kbp[search->first_context], 
+		                                      0.0, gap_decay_rate, 
+						      best[1]->hsp_link.num[1],
+						      best[1]->hsp_link.sum[1], 
+						      best[1]->hsp_link.xsum[1], 
+						      search->context[search->first_context].query->effective_length, 
+						      subject_length, FALSE);
+                    else
+		      prob[1] = BlastLargeGapSumE( kbp[search->first_context], 
+		                                   0.0, gap_decay_rate, 
+						   best[1]->hsp_link.num[1],
+						   best[1]->hsp_link.sum[1], 
+						   best[1]->hsp_link.xsum[1], 
+						   search->mult_queries->EffLengths[query_num],
+						   subject_length, FALSE );
+
 		    ordering_method = 1;
 		  }
 		}
@@ -10533,14 +11214,42 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 		    /* We only consider the case of big gaps. */
 		    best[1]->hsp_link.sum[1] += (best[1]->hsp_link.num[1])*cutoff[1];
 		    /* gap_prob=0 here as small gaps are NOT considered. */
-		    prob[1] = BlastLargeGapSumE(kbp[search->first_context], 0.0, gap_decay_rate, best[1]->hsp_link.num[1],best[1]->hsp_link.sum[1], best[1]->hsp_link.xsum[1], search->context[search->first_context].query->effective_length, subject_length, TRUE);
+
+		    /* AM: Support for query concatenation. */
+		    if( !search->mult_queries )
+		      prob[1] = BlastLargeGapSumE( kbp[search->first_context], 
+		                                   0.0, gap_decay_rate, 
+						   best[1]->hsp_link.num[1],
+						   best[1]->hsp_link.sum[1], 
+						   best[1]->hsp_link.xsum[1], 
+						   search->context[search->first_context].query->effective_length, 
+						   subject_length, TRUE );
+                    else
+		      prob[1] = BlastLargeGapSumE( kbp[search->first_context], 
+		                                   0.0, gap_decay_rate, 
+						   best[1]->hsp_link.num[1],
+						   best[1]->hsp_link.sum[1], 
+						   best[1]->hsp_link.xsum[1], 
+						   search->mult_queries->EffLengths[query_num],
+						   subject_length, FALSE );
+
 		    ordering_method = 1;
 		}
 
 		best[ordering_method]->start_of_chain = TRUE;
 		
-		prob[ordering_method] *= 
+		/* AM: Support for query concatenation. */
+		if( !search->mult_queries )
+		  prob[ordering_method] *= 
 			((Nlm_FloatHi)search->searchsp_eff/((Nlm_FloatHi)subject_length*search->context[search->first_context].query->effective_length));
+                else
+		{
+		  prob[ordering_method] 
+		    *= ((Nlm_FloatHi)search->mult_queries->SearchSpEff[query_num]
+		       /((Nlm_FloatHi)subject_length
+		       *search->mult_queries->EffLengths[query_num]));
+		}
+
 		best[ordering_method]->evalue = prob[ordering_method];
 
 /* remove the links that have been ordered already. */
@@ -10680,7 +11389,15 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 
         cutoff = search->pbp->cutoff_e;
 
-	hitlist = search->current_hitlist;
+        /* AM: Support for query concatenation. */
+	if( !search->mult_queries 
+	    || search->prog_number != blast_type_tblastn 
+	    || !search->mult_queries->use_mq )
+	  hitlist = search->current_hitlist;
+        else
+	  hitlist = search->mult_queries->HitListArray[
+	    search->mult_queries->current_query];
+
 	if (hitlist)
 	{
 		hitlist->hspcnt_max = hitlist->hspcnt;
@@ -10721,7 +11438,16 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 			search->number_of_seqs_better_E++;
 		}
 	}
-	search->current_hitlist = hitlist;
+
+	/* AM: Support for query concatenation. */
+	if( !search->mult_queries 
+	    || search->prog_number != blast_type_tblastn 
+	    || !search->mult_queries->use_mq )
+	  search->current_hitlist = hitlist;
+        else
+	  search->mult_queries->HitListArray[
+	    search->mult_queries->current_query] = hitlist;
+
 	return 0;
 }
 
@@ -10740,6 +11466,8 @@ BlastGetNonSumStatsEvalue (BlastSearchBlkPtr search)
 	BLAST_KarlinBlkPtr PNTR kbp;
 	Int4 hsp_cnt;
 	Int4 index;
+	/* AM: Added to support query concatencation. */
+	Int4 query_num;
 
 	if (search == NULL)
 		return 1;
@@ -10761,8 +11489,24 @@ BlastGetNonSumStatsEvalue (BlastSearchBlkPtr search)
 		for (index=0; index<hsp_cnt; index++)
 		{
 			hsp = hsp_array[index];
-                        if (!search->pbp->mb_params)
-                           hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[hsp->context], search->searchsp_eff);
+                        if (!search->pbp->mb_params) 
+			{
+			  /* AM: changed to support query concatenation. */
+			  if( !search->mult_queries )
+                            hsp->evalue = BlastKarlinStoE_simple(hsp->score, 
+			                                         kbp[hsp->context], 
+								 search->searchsp_eff);
+                          else
+			  {
+			    query_num = GetQueryNum( search->mult_queries,
+			                             hsp->query.offset,
+						     hsp->query.end,
+						     hsp->query.frame );
+	       	            hsp->evalue = BlastKarlinStoE_simple( hsp->score,
+		                                                  kbp[hsp->context],
+						                  search->mult_queries->SearchSpEff[query_num] );
+			  }
+			}
                         else {
                            FloatHi searchsp_eff;
                            hsp->context = BinarySearchInt4(hsp->query.offset,

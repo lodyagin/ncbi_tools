@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.dwn,v $
+* Revision 6.5  2003/02/28 14:59:40  kans
+* changed PROC_POWERPC to correct PROC_PPC platform symbol
+*
 * Revision 6.4  2002/11/22 20:05:04  lavr
 * Configure HAVE_STRDUP and HAVE_STRCASECMP
 *
@@ -75,7 +78,7 @@
 #define COMP_BSD
 #define OS_UNIX
 #define OS_UNIX_DARWIN
-#define PROC_POWERPC
+#define PROC_PPC
 #define WIN_DUMB
 
 /*----------------------------------------------------------------------*/

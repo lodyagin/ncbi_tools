@@ -1,4 +1,4 @@
-/* $Id: readdb.c,v 6.367 2002/12/13 16:01:25 kans Exp $ */
+/* $Id: readdb.c,v 6.400 2003/04/17 21:10:54 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -48,7 +48,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.367 $
+* $Revision: 6.400 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -63,6 +63,105 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.400  2003/04/17 21:10:54  camacho
+* Add PIGs only when removing redundancy
+*
+* Revision 6.399  2003/04/15 19:09:13  camacho
+* Completed implementation of PIG interface
+*
+* Revision 6.398  2003/04/14 19:53:30  camacho
+* Fixed memory leak
+*
+* Revision 6.397  2003/04/09 21:46:00  camacho
+* Added basic PIG interface
+*
+* Revision 6.396  2003/04/09 20:16:17  camacho
+* Use #defined value for location of taxdb.tar.gz
+*
+* Revision 6.395  2003/04/08 15:45:02  camacho
+* Minor fix to previous commit
+*
+* Revision 6.394  2003/04/08 15:37:14  camacho
+* Extended FDBAddSequence2 to take pig
+*
+* Revision 6.393  2003/04/04 17:56:33  camacho
+* fastacmd fix when retrieving repeated identifiers(-a)
+*
+* Revision 6.392  2003/04/03 17:57:00  vakatov
+* Added missing LIBCALL
+*
+* Revision 6.391  2003/04/01 21:51:36  camacho
+* Made fastacmd functions & structure non-static
+*
+* Revision 6.390  2003/03/27 22:51:16  camacho
+* Minor change to previous commit
+*
+* Revision 6.389  2003/03/27 22:26:04  camacho
+* Add error messages and non-zero return value on error for fastacmd
+*
+* Revision 6.388  2003/03/26 18:50:07  camacho
+* Added eFDBCleanOpt to formatdb API
+*
+* Revision 6.387  2003/03/21 22:14:32  camacho
+* Allow C ObjMgr & application to load taxonomy dbs
+*
+* Revision 6.386  2003/03/20 14:03:21  camacho
+* Allow users to set the membership and link bits
+*
+* Revision 6.385  2003/03/14 21:39:08  camacho
+* Fix bug in readdb_get_totals_ex2
+*
+* Revision 6.384  2003/03/08 23:02:35  camacho
+* Bug fix in FDBFinish
+*
+* Revision 6.383  2003/03/07 13:16:42  madden
+* Check for NULL rdfp before dereferencing
+*
+* Revision 6.382  2003/02/26 17:47:31  kimelman
+* bugfix: doublicate close of Files and AsnIo
+*
+* Revision 6.381  2003/02/20 17:29:31  camacho
+* Added support for the creation of empty databases
+*
+* Revision 6.380  2003/02/11 17:46:25  camacho
+* Fix to FDBAddSequence2
+*
+* Revision 6.379  2003/01/31 17:58:29  camacho
+* Eliminate unnecessary checks for redundant databases
+*
+* Revision 6.378  2003/01/31 14:39:21  camacho
+* Use init_state argument to readdb_new_ex2
+*
+* Revision 6.377  2003/01/22 20:21:01  bealer
+* - Handle error case better.
+*
+* Revision 6.376  2003/01/22 19:41:20  camacho
+* Added function to build multi-volume db list for creating alias files
+*
+* Revision 6.375  2003/01/07 17:18:15  camacho
+* Remove warning message when file is not found by FindBlastDBFile
+*
+* Revision 6.374  2003/01/02 22:17:54  madden
+* Print name of database when wrong version used
+*
+* Revision 6.373  2002/12/19 14:25:07  camacho
+* Minor change
+*
+* Revision 6.372  2002/12/17 20:33:25  camacho
+* Removed unnecessary function attribute
+*
+* Revision 6.371  2002/12/17 20:01:18  madden
+* Fix for oidlist when no memory-mapping available
+*
+* Revision 6.370  2002/12/17 17:46:01  madden
+* readdb_get_sequence_number does not check for oidlist
+*
+* Revision 6.369  2002/12/16 20:22:48  camacho
+* Removed unused options in formatdb options structure
+*
+* Revision 6.368  2002/12/16 05:01:54  camacho
+* Fixes to previous commit
+*
 * Revision 6.367  2002/12/13 16:01:25  kans
 * fixed mac compiler complaints
 *
@@ -1482,6 +1581,9 @@ Detailed Contents:
  * the 'mask' databases to the end).
 */ 
 
+#define FILECLOSE(x)  if(x){ FileClose(x); x=NULL;}
+#define ASNIOCLOSE(x) if(x){ AsnIoClose(x); x=NULL;}
+
 #define NLM_GENERATED_CODE_PROTO
 #include <readdb.h>
 #include <ncbithr.h>
@@ -1525,6 +1627,7 @@ Detailed Contents:
 #else
 #define MADVISE_SYNC_MODE TRUE
 #endif
+
 
 /* flag enabling madvise functionality */
 static Boolean useMadvise = FALSE;
@@ -1570,8 +1673,6 @@ static Int8 FormatDbUint8Read(NlmMFILEPtr mfp);
 static ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr, Int4);
 static ValNodePtr IntValNodeCopy(ValNodePtr vnp);
 static int LIBCALLBACK ID_Compare(VoidPtr i, VoidPtr j);
-static GiLinkBitListPtr FDBMergeGiLists(ValNodePtr gi_lists, Int4 nlists);
-static ValNodePtr FDBGetLinkBitsForGi(GiLinkBitListPtr list, Int4 gi);
 static void FDBBlastDefLineSetBit(Int2 bit_no, ValNodePtr PNTR retval);
 
 #if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
@@ -1795,11 +1896,7 @@ NlmCloseMFILE (NlmMFILEPtr mfp)
             Nlm_MemMapFini(mfp->mem_mapp);
         }
 
-        if (mfp->fp)
-        {
-            FileClose(mfp->fp);
-            mfp->fp = NULL;
-        }
+        FILECLOSE(mfp->fp);
     }
 
     mfp = (NlmMFILEPtr) MemFree(mfp);
@@ -1995,14 +2092,14 @@ static GiListPtr FDBReadGiListFromFile(CharPtr filename)
         if (retvalue == 0) continue;
 
         if (glp->count >= glp->allocated) {
-            glp->allocated += GI_ALLOC_CHUNK;
+            glp->allocated *= 2;
             glp->gis= Realloc(glp->gis, sizeof(Int4) * glp->allocated);
         }
 
         glp->gis[glp->count] = gi;
         glp->count++; 
     }
-    FileClose(fd);
+    FILECLOSE(fd);
 
     return glp;
 }
@@ -2260,7 +2357,7 @@ readdb_read_alias_file(CharPtr filename)
     
     MemFree(file_path);
     MemFree(buffer);
-    FileClose(fp);
+    FILECLOSE(fp);
     return rdbap;
 }
 
@@ -2307,15 +2404,12 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
         
         sprintf(buffer, "%s.pal", full_filename);
     rdbap = readdb_read_alias_file(buffer);
-    if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE)
+    if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE &&
+        (rdfp=readdb_new_ex2(rdbap->dblist, TRUE, init_state, rdbap->oidlist, rdbap->gilist)))
     {
-        rdfp = readdb_new_ex2(rdbap->dblist, TRUE, init_state,
-                rdbap->oidlist, rdbap->gilist);
         rdfp->aliasfilename = StringSave(Nlm_FileNameFind(full_filename));
         if (rdfp->cih)
             rdfp->aliasfilebit = DBShift(rdfp->cih->num_of_DBs, rdfp->cih->dbids, rdfp->aliasfilename, TRUE);
-            if (rdbap->gilist)
-               rdfp->gifile = StringSave(rdbap->gilist);
 
             /* In case first_oid and last_oid are given in the alias file, we
              * create a mask in the following lines that only selects those
@@ -2378,15 +2472,12 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
     if ((*is_prot == READDB_DB_IS_NUC) || (rdfp == NULL && *is_prot == READDB_DB_UNKNOWN)) {
         sprintf(buffer, "%s.nal", full_filename);
         rdbap = readdb_read_alias_file(buffer);
-    if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE)
+    if (rdbap && CheckForRecursion(full_filename, rdbap->dblist) == FALSE &&
+        (rdfp=readdb_new_ex2(rdbap->dblist, FALSE, init_state, rdbap->oidlist, rdbap->gilist)))
     {
-        rdfp = readdb_new_ex2(rdbap->dblist, FALSE, init_state,
-                rdbap->oidlist, rdbap->gilist);
         rdfp->aliasfilename = StringSave(Nlm_FileNameFind(full_filename));
         if (rdfp->cih && rdfp->aliasfilebit == 0)
             rdfp->aliasfilebit = DBShift(rdfp->cih->num_of_DBs, rdfp->cih->dbids, rdfp->aliasfilename, FALSE);
-            if (rdbap->gilist)
-               rdfp->gifile = StringSave(rdbap->gilist);
 
             /* In case first_oid and last_oid are given in the alias file, we
              * create a mask in the following lines that only selects those
@@ -2497,7 +2588,6 @@ CharPtr    FindBlastDBFile (CharPtr filename)
             return buffer;
         } else {
             /* we cannot find directory :( */
-            ErrPostEx(SEV_WARNING, 0, 0, "Could not find %s", filename);
             MemFree(buffer); MemFree(buffer1);
             return NULL;
         }
@@ -2683,7 +2773,7 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     
     if (formatdb_ver != FORMATDB_VER && formatdb_ver != FORMATDB_VER_TEXT) {
         ErrPostEx(SEV_WARNING, 0, 0, "readdb: wrong version of formatdb "
-                  "was used to make database.");
+                  "was used to make database %s.", filename);
         rdfp = readdb_destruct(rdfp);
         return NULL;
     }
@@ -2740,6 +2830,13 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
 
     NlmReadMFILE((Uint1Ptr) &(value), 4, 1, rdfp->indexfp);
     rdfp->maxlen = Nlm_SwapUint4(value);
+    
+    /* Initializing taxonomy names database if it exists (only once!) */
+    if (rdfp->formatdb_ver > FORMATDB_VER_TEXT &&
+        init_state & READDB_NEW_DO_TAXDB && taxonomyDbLoaded == FALSE) {
+        rdfp->taxinfo = RDBTaxInfoInit();
+        taxonomyDbLoaded = TRUE;
+    }
     
     if (init_state & READDB_NEW_DO_REPORT) {
         rdfp->parameters |= READDB_CONTENTS_ALLOCATED;
@@ -2807,13 +2904,6 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
         rdfp->allocated_length = 2 + rdfp->maxlen;
     }
 
-    /* Initializing taxonomy names database if it exists (only once!) */
-    if (rdfp->formatdb_ver > FORMATDB_VER_TEXT &&
-        init_state & READDB_NEW_DO_TAXDB && taxonomyDbLoaded == FALSE) {
-        rdfp->taxinfo = RDBTaxInfoInit();
-        taxonomyDbLoaded = TRUE;
-    }
-    
     /* Now initializing Numeric ISAM indexes */ 
     sprintf(buffer,  "%s.%cnd", rdfp->full_filename, is_prot? 'p':'n');  
     sprintf(buffer1, "%s.%cni", rdfp->full_filename, is_prot? 'p':'n');
@@ -2859,6 +2949,22 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
 #endif
     }
     
+    /* Now initializing PIG ISAM indexes */ 
+    if (is_prot) {
+        sprintf(buffer,  "%s.ppd", rdfp->full_filename);
+        sprintf(buffer1, "%s.ppi", rdfp->full_filename);
+    
+        if (FileLength(buffer) != 0 && FileLength(buffer1) != 0) {
+            if ( !(rdfp->isam_pig = ISAMObjectNew(ISAMNumeric, 
+                                                buffer, buffer1))) {
+                ErrPostEx(SEV_WARNING, 0, 0, "Failed to read PIG ISAM object");
+                rdfp = readdb_destruct(rdfp);
+                return rdfp;
+            }
+        }
+    }
+
+
     /* Now initializing Common index files */
     if (isCommonIndex) {
         if (cih) {
@@ -2937,20 +3043,21 @@ Boolean    ReadOIDList (OIDListPtr oidlist)
 
     if (mmfile->mfile_true == FALSE)
     {
-    length = FileLength(oidlist->filename);
-    oidlist->memory = MemNew(length);
-    if (oidlist->memory == NULL)
-        return FALSE;
-    FileRead(oidlist->memory, length, 1, mmfile->fp);
-    oidlist->list = oidlist->memory + 1;
-    NlmCloseMFILE(mmfile);
+    	length = FileLength(oidlist->filename);
+   	oidlist->memory = MemNew(length);
+    	if (oidlist->memory == NULL)
+        	return FALSE;
+    	FileRead(oidlist->memory, length, 1, mmfile->fp);
+    	oidlist->list = oidlist->memory + 1;
+    	oidlist->total = Nlm_SwapUint4(*((Int4Ptr) oidlist->memory));
+    	NlmCloseMFILE(mmfile);
     }
     else
     {
         oidlist->list = (Uint4Ptr) mmfile->mmp_begin + 1;
-    oidlist->mfp = mmfile;
+    	oidlist->mfp = mmfile;
+    	oidlist->total = Nlm_SwapUint4(*((Int4Ptr) mmfile->mmp_begin));
     }
-    oidlist->total = Nlm_SwapUint4(*((Int4Ptr) mmfile->mmp_begin));
 
     return TRUE;
 }
@@ -3190,12 +3297,12 @@ readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len,
         while (rdfp_list) {
 
             if (use_alias && rdfp_list->aliasfilename) {
-                if (rdfp_list->aliaslen)
+                if (rdfp_list->aliaslen >= 0 && rdfp_list->oidlist)
                     *total_len += rdfp_list->aliaslen;
                 else
                     *total_len += readdb_get_dblen(rdfp_list);
 
-                if (rdfp_list->aliasnseq)
+                if (rdfp_list->aliasnseq >= 0 && rdfp_list->oidlist)
                     *total_num += rdfp_list->aliasnseq;
                 else
                     *total_num += readdb_get_num_entries(rdfp_list);
@@ -3484,6 +3591,8 @@ readdb_get_link(ReadDBFILEPtr rdfp, Int4 ordinal_id)
      break;
       rdfp = rdfp->next;
    }
+   if (! rdfp)
+	return 0;
    if (!(last->parameters & READDB_KEEP_HDR_AND_SEQ)) {
       while (rdfp != last) {
      if (last->sequencefp != NULL || last->headerfp != NULL) {
@@ -3624,6 +3733,10 @@ static Boolean OID_GI_BelongsToMaskDB(ReadDBFILEPtr rdfp, Int4 oid, Int4 gi)
     BlastDefLinePtr bdp = NULL, bdp_tmp = NULL;
     SeqIdPtr seqid_gi = NULL;
     Boolean retval = FALSE;
+
+    /* Only protein databases are non-redundant */
+    if (!readdb_is_prot(rdfp))
+        return TRUE;
 
     if ((bdp = FDReadDeflineAsn(rdfp, oid)) != NULL && gi != -1) {
 
@@ -3988,15 +4101,15 @@ readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string, Int4Ptr PNTR ids,
         error =  SISAMFindAllData(rdfp->sisam_opt, string, ids, count);
         
         if(error != ISAMNotFound) {
-        Int4 index=0;
-        while (index < *count)
-        {
-        *ids[index] += rdfp->start;
-        index++;
-        }
+            Int4 index=0;
+            while (index < *count)
+            {
+                (*ids)[index] += rdfp->start;
+                index++;
+            }
             return 1;
         } 
-    rdfp = rdfp->next;
+        rdfp = rdfp->next;
     }
     return -1;
 }
@@ -4041,19 +4154,19 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
         }
     
         if(rdfp->sparse_idx) {
+
+            Int4 seq_num, count;
+            Int4Ptr ids;
         
-               Int4 seq_num, count;
-                Int4Ptr ids;
-        
-               readdb_acc2fastaEx(rdfp, string, &ids, &count);
+            readdb_acc2fastaEx(rdfp, string, &ids, &count);
             if(count > 0) {
-                    seq_num = *ids;
-                    MemFree(ids);
-                    return seq_num;
+                seq_num = *ids;
+                MemFree(ids);
+                return seq_num;
             }
-    }
-    else
-    {
+        }
+        else
+        {
             /* Trying accession first */
         
             sprintf(tmp_str, "gb|%s|", string);
@@ -4124,8 +4237,8 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
             } else {
                     MemFree(data);
             }
-    }
-    rdfp = rdfp->next;
+        }
+        rdfp = rdfp->next;
     }
     
     return -1;
@@ -4214,7 +4327,7 @@ ValNodePtr readdb_get_asn1_defline(ReadDBFILEPtr rdfp, Int4 sequence_number)
 ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr rdfp, 
         Int4 sequence_number)
 {
-    ValNodePtr vnp, memb;
+    ValNodePtr vnp;
     Int4 size = 0;
     ByteStorePtr bsp;
     ByteStorePtr PNTR bspp;
@@ -4222,7 +4335,7 @@ ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr rdfp,
     UserFieldPtr ufp;
     UserObjectPtr uop;
     ObjectIdPtr oidp;
-    BlastDefLinePtr bdsp = NULL, bdsp_tmp;
+    BlastDefLinePtr bdsp = NULL;
     AsnIoMemPtr aimp;
 
     if ((bdsp = FDReadDeflineAsn(rdfp, sequence_number)) == NULL) 
@@ -4555,22 +4668,18 @@ readdb_get_filebits (ReadDBFILEPtr rdfp, Int4 ordinal_id, Uint2Ptr filebit, Uint
 Int4 LIBCALL 
 readdb_get_sequence_number(ReadDBFILEPtr rdfp, Int4 first_seq, Int8 offset) 
 {
-   Int4 m, b, e, n, val;
+   Int4 m, b, e, val;
    Int2 compression_ratio;
-   Int8 dblen;
 
    if (rdfp->parameters & READDB_IS_PROT)
       compression_ratio = 1;
    else 
       compression_ratio = READDB_COMPRESSION_RATIO;
 
-   while (!rdfp->oidlist && rdfp->totlen <= offset) {
+   while (rdfp->totlen <= offset) {
       offset -= rdfp->totlen;
       rdfp = rdfp->next;
    }
-
-   if (rdfp->oidlist)
-      return -1;
 
    e = rdfp->stop;
    b = MAX(first_seq, rdfp->start); 
@@ -5055,7 +5164,7 @@ static CharPtr FDBuildOldStyleDefline(ReadDBFILEPtr rdfp, BlastDefLinePtr bdsp)
 
 BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number) 
 {
-    BlastDefLinePtr bdsp, bdsp_tmp, bdsp_prev, the_bdsp = NULL;
+    BlastDefLinePtr bdsp, bdsp_tmp, bdsp_prev;
     AsnIoPtr aip;
     AsnIoMemPtr aimp;
     Int4 size;
@@ -5169,7 +5278,7 @@ readdb_get_defline_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR de
     Char buffer[READDB_BUF_SIZE], id_buf[READDB_BUF_SIZE];
     CharPtr buf_ptr;
     Int4 new_size, index;
-    BlastDefLinePtr bdsp, bdsp_tmp;
+    BlastDefLinePtr bdsp;
     
     if(rdfp == NULL)
         return FALSE;
@@ -5779,6 +5888,8 @@ ReadDBInit(ReadDBFetchStructPtr rdfsp)
 
     rdfsp->rdfp = readdb_new_ex2(rdfsp->dbname, rdfsp->is_prot,
             READDB_NEW_INDEX | READDB_NEW_DO_TAXDB, NULL, NULL);
+    taxonomyDbLoaded = FALSE; /* If object manager loads tax dbs, don't block
+                                 application from loading it again */
 
     if (rdfsp->rdfp != NULL)
         return TRUE;
@@ -6074,16 +6185,15 @@ void LIBCALL ReadDBBioseqFetchDisable(void)
 
     rdfsp->ctr--;
     if (rdfsp->ctr)   /* connection still pending */
-              return;
+        return;
 
-        if (rdfsp->ReadDBFetchState == READDBBF_READY)
+    if (rdfsp->ReadDBFetchState == READDBBF_READY)
     {
         rdfsp->ReadDBFetchState = READDBBF_DISABLE;  /* not active */
         rdfsp->rdfp = readdb_destruct(rdfsp->rdfp);
-        taxonomyDbLoaded = FALSE;
     }
 
-        return;
+    return;
 }
 
 /*
@@ -6196,9 +6306,11 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
         return FALSE;
 
     if (is_aa == TRUE)
-        rdfp = readdb_new_ex(database, READDB_DB_IS_PROT, FALSE);
+        rdfp = readdb_new_ex2(database, READDB_DB_IS_PROT,
+                READDB_NEW_DO_REPORT, NULL, NULL);
     else
-        rdfp = readdb_new_ex(database, READDB_DB_IS_NUC, FALSE);
+        rdfp = readdb_new_ex2(database, READDB_DB_IS_NUC,
+                READDB_NEW_DO_REPORT, NULL, NULL);
 
     if (rdfp == FALSE)
         return FALSE;
@@ -6414,7 +6526,7 @@ Int2    ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
     (retval+i)->isprot = parseBool(isprot);
     }
 
-    FileClose(fp);
+    FILECLOSE(fp);
     *dbidsp = retval;
     return number_of_DBs;
 }
@@ -6424,6 +6536,7 @@ Int2    ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
 /* ---------------------------------------------------------------------*/
 
 #define STRLENGTH     4096
+#define INDEX_INIT_SIZE 1024
 #define INDEX_ARRAY_CHUNKS 100000
 
 #define LOOKUP_CHUNK   5
@@ -6530,12 +6643,15 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
         Boolean is_asn, Boolean is_asn_bin, Boolean is_seqentry, Boolean
         sparse_idx, Boolean test_non_unique, Boolean parse_deflines, 
         CharPtr basename, CharPtr alias_file_name, Int8 bases_per_volume, 
-        Int4 seqs_per_volume, Int4 version, Boolean dump_info)
+        Int4 seqs_per_volume, Int4 version, Boolean dump_info, EFDBCleanOpt
+        clean_opt)
 {
     FDB_optionsPtr options = NULL;
 
-    if (input == NULL || input[0] == '\0')
+    if ((input == NULL || input[0] == '\0') && alias_file_name != NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "FDBOptionsNew: input file needed");
         return NULL;
+    }
 
     if (!SeqEntryLoad()) {
         ErrPostEx(SEV_ERROR, 0, 0, "FDBOptionsNew: SeqEntryLoad failed");
@@ -6559,7 +6675,6 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
         options->db_title = StringSave(title);
     options->is_protein = is_prot;
     options->parse_mode = parse_deflines;
-
     if (!basename)
         options->base_name = StringSave(options->db_file);
     else
@@ -6582,6 +6697,10 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
     options->sparse_idx = sparse_idx;
     options->test_non_unique = test_non_unique;
     options->total_num_of_seqs = 0;
+    if (clean_opt >= 0 && clean_opt < eCleanOptMax)
+        options->clean_opt = clean_opt;
+    else
+        options->clean_opt = 0;
 
     /* The following options are for NCBI use only */
     options->dump_info = dump_info;
@@ -6591,6 +6710,117 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
     options->tax_lookup = NULL;
 
     return options;
+}
+
+/* Recursively remove a blast database specified by base_name. dbtype must be
+ * either 'p' or 'n' (lowercase) to denote a protein or nucleotide database
+ * respectively. */
+Boolean FDBCleanUpRecursively(CharPtr base_name, Char dbtype)
+{
+    Char filenamebuf[FILENAME_MAX];
+    ReadDBAliasPtr rdbap = NULL;
+    Boolean done = FALSE;
+    CharPtr p = NULL;
+
+    /* Handle alias files */
+    sprintf(filenamebuf, "%s.%cal", base_name, dbtype);
+    rdbap = readdb_read_alias_file(filenamebuf);
+
+    if (rdbap && (CheckForRecursion(filenamebuf, rdbap->dblist) == FALSE)) {
+
+        p = rdbap->dblist;
+        while (!done) {
+            done = readdb_parse_db_names(&p, filenamebuf);
+            if (*filenamebuf == NULLB)
+                break;
+            FDBCleanUpRecursively(filenamebuf, dbtype);
+        }
+        sprintf(filenamebuf, "%s.%cal", base_name, dbtype);
+        FileRemove(filenamebuf); /* alias file */
+        rdbap = ReadDBAliasFree(rdbap);
+        ErrLogPrintf("Removed %s\n",filenamebuf);
+
+    } else { /* Single-volume blast database */
+
+        sprintf(filenamebuf, "%s.%cin", base_name, dbtype);
+        FileRemove(filenamebuf); /* index file */
+        sprintf(filenamebuf, "%s.%chr", base_name, dbtype);
+        FileRemove(filenamebuf); /* header file */
+        sprintf(filenamebuf, "%s.%csq", base_name, dbtype);
+        FileRemove(filenamebuf); /* sequence file */
+        sprintf(filenamebuf, "%s.%csi", base_name, dbtype);
+        FileRemove(filenamebuf); /* string isam index file */
+        sprintf(filenamebuf, "%s.%csd", base_name, dbtype);
+        FileRemove(filenamebuf); /* string isam data file */
+        sprintf(filenamebuf, "%s.%cni", base_name, dbtype);
+        FileRemove(filenamebuf); /* numeric isam index file */
+        sprintf(filenamebuf, "%s.%cnd", base_name, dbtype);
+        FileRemove(filenamebuf); /* numeric isam data file */
+        sprintf(filenamebuf, "%s.%cti", base_name, dbtype);
+        FileRemove(filenamebuf); /* deprecated taxonomy index file */
+        sprintf(filenamebuf, "%s.%ctd", base_name, dbtype);
+        FileRemove(filenamebuf); /* deprecated taxonomy data file */
+        sprintf(filenamebuf, "%s.%ctm", base_name, dbtype);
+        FileRemove(filenamebuf); /* formatdb temporary file */
+        sprintf(filenamebuf, "%s.%cdi", base_name, dbtype);
+        FileRemove(filenamebuf); /* formatdb dump info file (NCBI only) */
+        ErrLogPrintf("Removed single-volume database %s\n",base_name);
+
+    }
+    return TRUE;
+}
+
+/* Before creating any files, check if there are any blast database files
+ * that might collide with the one about to be created.
+ * Returns FALSE only if user does not want to proceed. */
+Boolean FDBCleanUp(FDB_optionsPtr options)
+{
+    Boolean alias_file_exists = FALSE, index_file_exists = FALSE;
+    Char filenamebuf[FILENAME_MAX];
+    MsgAnswer ans;
+    Char dbtype;
+
+    if (!options || options->clean_opt == eCleanNever)
+        return TRUE;
+
+    dbtype = options->is_protein ? 'p' : 'n';
+
+    /* First look for an alias file */
+    sprintf(filenamebuf, "%s.%cal", options->base_name, dbtype);
+    if (FileLength(filenamebuf))
+        alias_file_exists = TRUE;
+
+    /* Now try an index file */
+    sprintf(filenamebuf, "%s.%cin", options->base_name, dbtype);
+    if (FileLength(filenamebuf))
+        index_file_exists = TRUE;
+
+    /* nothing to remove ? */
+    if (!alias_file_exists && !index_file_exists) 
+        return TRUE;
+
+    switch (options->clean_opt) {
+    case eCleanPrompt:
+#ifdef OS_UNIX
+        if (!StringCmp(options->db_file, "stdin")) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Cannot prompt for answer if "
+                    "input to format is stdin");
+            return FALSE;
+        }
+#endif
+        ans = Message(KEY_YNC, "Would you like to clean up %s.* files?",
+            options->base_name);
+        if (ans == ANS_NO || ans == ANS_CANCEL) {
+            ErrLogPrintf("User cancelled formatting.\n");
+            return FALSE;
+        } /* else fall through and clean up ! */
+    case eCleanAlways:
+    default:
+        FDBCleanUpRecursively(options->base_name, dbtype);
+        break;
+    }
+
+    return TRUE;
 }
 
 /* Initialize the formatdb structure.
@@ -6619,6 +6849,8 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
 
     fdbp->options = options;
     
+    /* The next 2 fields are set in FDBOptionsNew, but kept for older apps 
+     * that don't use that function */
     if (options->version == 0)
         fdbp->options->version = FORMATDB_VER;
 
@@ -6628,7 +6860,11 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
 
     fdbp->fd = NULL;
     fdbp->aip = NULL;
-    
+
+    /* Clean up if necessary */
+    if (!FDBCleanUp(options))
+        return NULL;
+
     /* open output BLAST files */
     
     /* Defline file */
@@ -6677,7 +6913,7 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
     ErrLogPrintf("Version %s [%s]\n", BlastGetVersionNumber(), BlastGetReleaseDate()); 
     ErrLogPrintf("Started database file \"%s\"\n", options->db_file);
     /* Allocating space for offset tables */
-    fdbp->OffsetAllocated = 1024; /* initial value */
+    fdbp->OffsetAllocated = INDEX_INIT_SIZE; /* initial value */
     fdbp->DefOffsetTable = (Int4Ptr)MemNew(fdbp->OffsetAllocated*sizeof(Uint4));
     fdbp->SeqOffsetTable = (Int4Ptr)MemNew(fdbp->OffsetAllocated*sizeof(Uint4));
 
@@ -6704,6 +6940,12 @@ FormatDBPtr FormatDBInit(FDB_optionsPtr options)
         return NULL;
     }
 
+    /* Allocate the PIG table structure */
+    if ( !(fdbp->ptable = FDBPigTableNew())) {
+        ErrLogPrintf("Not enough memory to allocate PIG table structure.\n");
+        return NULL;
+    }
+
     return fdbp;
 }
 
@@ -6717,8 +6959,8 @@ ValNodePtr FDBLoadMembershipsTable(void)
     /* Get the number of bits used according to the config file */
     nbits = GetAppParamInt2("formatdb","MembershipBitNumbers","TotalNum",0);
     if (nbits <= 0) {
-        ErrPostEx(SEV_ERROR,0,0,"The membership number of bits in the config"
-                " file seems to be incorrect: %d",nbits);
+        ErrPostEx(SEV_INFO,0,0,"No number of membership bits used found in "
+                "config file. Ignoring");
         return NULL;
     }
 
@@ -6734,15 +6976,15 @@ ValNodePtr FDBLoadMembershipsTable(void)
         mip->bit_number = bit;
 
         if (!StringICmp("swissprot",buffer)) {
-            mip->criteria = (GMCriteriaFunc *) &is_SWISSPROT;
+            mip->criteria = is_SWISSPROT;
         } else if (!StringICmp("pdb",buffer)) {
-            mip->criteria = (GMCriteriaFunc *) &is_PDB;
+            mip->criteria = is_PDB;
         } else if (!StringICmp("refseq_genomic",buffer)) {
-            mip->criteria = (GMCriteriaFunc *) &is_REFSEQ_GENOMIC;
+            mip->criteria = is_REFSEQ_GENOMIC;
         } else if (!StringICmp("refseq_rna",buffer)) {
-            mip->criteria = (GMCriteriaFunc *) &is_REFSEQ_RNA;
+            mip->criteria = is_REFSEQ_RNA;
         } else if (!StringICmp("refseq_protein",buffer)) {
-            mip->criteria = (GMCriteriaFunc *) &is_REFSEQ_PROTEIN;
+            mip->criteria = is_REFSEQ_PROTEIN;
         }
 
         /* Add to the return value only if the criteria is set */
@@ -6758,10 +7000,9 @@ ValNodePtr FDBLoadMembershipsTable(void)
     return retval;
 }
 
-GiLinkBitListPtr FDBLoadLinksTable(void)
+ValNodePtr FDBLoadLinksTable(void)
 {
-    GiLinkBitListPtr retval = NULL;
-    ValNodePtr tmp_list = NULL, tmp_vnp = NULL;
+    ValNodePtr retval = NULL;
     GiListPtr gis = NULL;
     LinkInfoPtr lk_info = NULL;
     Int2 nbits, bit, nlists = 0;
@@ -6770,8 +7011,8 @@ GiLinkBitListPtr FDBLoadLinksTable(void)
     /* Get the number of bits used according to the config file */
     nbits = GetAppParamInt2("formatdb","LinkBitNumbers","TotalNum",0);
     if (nbits <= 0) {
-        ErrPostEx(SEV_ERROR,0,0,"The link number of bits in the config file"
-                " seems to be incorrect: %d",nbits);
+        ErrPostEx(SEV_INFO,0,0,"No number of link bits used found in config "
+                " file. Ignoring");
         return NULL;
     }
 
@@ -6795,189 +7036,11 @@ GiLinkBitListPtr FDBLoadLinksTable(void)
         lk_info = (LinkInfoPtr) MemNew(sizeof(LinkInfo));
         lk_info->bit_number = bit;
         lk_info->gi_list = gis;
-        ValNodeAddPointer(&tmp_list,0,lk_info);
+        ValNodeAddPointer(&retval,0,lk_info);
         nlists++;
         ErrLogPrintf("Link bit %d: %ld gis from %s\n", bit, gis->count, 
                 filename);
     }
-
-    retval = FDBMergeGiLists(tmp_list, nlists);
-
-    /* Free the temporary lists of gis */
-    for (tmp_vnp = tmp_list; tmp_vnp; tmp_vnp = tmp_vnp->next) {
-        lk_info = (LinkInfoPtr) tmp_vnp->data.ptrvalue;
-        lk_info->gi_list = GiListFree(lk_info->gi_list);
-    }
-    tmp_list = ValNodeFreeData(tmp_list);
-
-    return retval;
-}
-
-/* Combine all lists of gis in gi_lists in a GiLinkBitList */
-static GiLinkBitListPtr FDBMergeGiLists(ValNodePtr gi_lists, Int4 nlists)
-{
-    GiLinkBitListPtr retval = NULL;
-    ValNodePtr       vnp = NULL;
-    Int4Ptr          indices = NULL;
-    LinkInfoPtr     *li_list = NULL;
-    GiListPtr        glp = NULL;
-    Int4             min_gi, bit_no, min_idx;
-    Int4Ptr          rv_idx = NULL;     /* index into the return value */
-    register         Int4 i;
-    Boolean          more_gis = FALSE, first_gi = TRUE;
-    Int4Ptr          int4_tmp = NULL; /* tmp value for reallocation */
-    ValNodePtr      *vnp_tmpp = NULL;  /* tmp value for reallocation */
-
-    if (gi_lists == NULL || nlists <= 0)
-        return NULL;
-
-    /* Allocate memory for array of indices into gi lists */
-    if ((indices = (Int4Ptr) MemNew(sizeof(Int4)*nlists)) == NULL) {
-        ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-        return NULL;
-    }
-
-    /* Allocate memory for list of LinkInfoPtrs (indices[i] index these) */
-    if ((li_list = (LinkInfoPtr*)MemNew(sizeof(LinkInfoPtr)*nlists)) == NULL) {
-        ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-        MemFree(indices);
-        return NULL;
-    }
-
-    /* Initialize the array of LinkInfoPtrs */
-    for (i = 0, vnp = gi_lists; vnp != NULL; vnp = vnp->next, i++)
-        li_list[i] = (LinkInfoPtr) vnp->data.ptrvalue;
-
-    /* An index of -1 for each of the lists means that all elements in the gi
-     * list have been examined. When all indices for all lists are -1, we are
-     * done merging the lists */
-    for (i = 0; i < nlists; i++) {
-        if (indices[i] != -1) {
-            more_gis = TRUE;
-            break;
-        }
-    }
-
-    /* Allocate memory for the return value */
-    if ((retval = (GiLinkBitListPtr)MemNew(sizeof(GiLinkBitList))) == NULL) {
-        ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-        MemFree(indices); MemFree(li_list);
-        return NULL;
-    }
-    retval->allocated = GI_ALLOC_CHUNK;
-    retval->gi = (Int4Ptr)MemNew(sizeof(Int4) * retval->allocated);
-    if (retval->gi == NULL) {
-        ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-        MemFree(indices); MemFree(li_list); MemFree(retval);
-        return NULL;
-    }
-    retval->count = 0;
-    rv_idx = &retval->count;
-    retval->link_bit = (ValNodePtr *)MemNew(sizeof(ValNodePtr) *
-                                            retval->allocated);
-    if (retval->link_bit == NULL) {
-        ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-        MemFree(indices); MemFree(li_list); 
-        MemFree(retval->gi); MemFree(retval);
-        return NULL;
-    }
-    
-    /** Iterate over all possible gis and merge them into the return value **/
-    while (more_gis) {
-        
-        min_gi = INT4_MAX;
-        bit_no = -1;
-        min_idx = -1;
-
-        /* determine in which list the minimum gi is (assumes glp are sorted
-         * in ascending order) */
-        for (i = 0; i < nlists; i++) {
-            glp = li_list[i]->gi_list;
-
-            if (indices[i] == -1)
-                continue;
-
-            if (glp->gis[indices[i]] < min_gi) {
-                min_gi = glp->gis[indices[i]];
-                bit_no = li_list[i]->bit_number;
-                min_idx = i;
-            }
-        }
-
-        /* for the first element in retval, assign min_gi */
-        if (((*rv_idx) == 0) && first_gi) {
-            retval->gi[(*rv_idx)] = min_gi;
-            first_gi = FALSE;
-        }
-
-        /* If this is a new gi ... */
-        if (min_gi != retval->gi[(*rv_idx)]) {
-            /* reallocate memory */
-            if (retval->allocated <= ((*rv_idx)+1)) {
-                retval->allocated += GI_ALLOC_CHUNK;
-
-                int4_tmp = (Int4Ptr)Realloc(retval->gi, sizeof(Int4) * 
-                                            retval->allocated);
-                vnp_tmpp  = (ValNodePtr *)Realloc(retval->link_bit,
-                                                 sizeof(ValNodePtr) *
-                                                 retval->allocated);
-                if (int4_tmp == NULL) {
-                    ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-                    MemFree(indices); MemFree(li_list); 
-                    MemFree(retval->gi); MemFree(retval->link_bit);
-                    MemFree(retval);
-                    return NULL;
-                }
-                if (vnp_tmpp == NULL) {
-                    ErrPostEx(SEV_ERROR,0,0,"FDBMergeGiLists: out of memory");
-                    MemFree(indices); MemFree(li_list); 
-                    MemFree(retval->gi); MemFree(retval->link_bit);
-                    MemFree(retval); MemFree(int4_tmp);
-                    return NULL;
-                }
-                retval->gi = int4_tmp; 
-                retval->link_bit = vnp_tmpp;
-                MemSet(retval->gi+((*rv_idx)+1),0,GI_ALLOC_CHUNK*sizeof(Int4));
-                MemSet(retval->link_bit+((*rv_idx)+1), 0, 
-                        GI_ALLOC_CHUNK*sizeof(ValNodePtr));
-                int4_tmp = NULL;
-                vnp_tmpp = NULL;
-            }
-
-            /* Increment the index and create new linked list of link bit
-             * numbers; record the gi being processed */
-            ValNodeAddInt(&(retval->link_bit[++(*rv_idx)]),0,bit_no);
-            retval->gi[(*rv_idx)] = min_gi;
-
-        } else {
-            /* Append bit_number to list of bits to set for this min_gi */
-            ValNodeAddInt(&(retval->link_bit[(*rv_idx)]),0,bit_no);
-        }
-
-        /* increment index for list from which we extracted this min_gi */
-        if (++indices[min_idx] == li_list[min_idx]->gi_list->count)
-            indices[min_idx] = -1; 
-
-        /* see if we are done */
-        more_gis = FALSE;
-        for (i = 0; i < nlists; i++) {
-            if (indices[i] != -1) {
-                more_gis = TRUE;
-                break;
-            }
-        }
-#if 0
-        fprintf(stderr, "FDBMergeGiLists: Added gi %ld (idx %ld), bit %ld;"
-                "continue? %c\n", min_gi, (*rv_idx), bit_no,
-                (more_gis ? 'y' : 'n'));
-#endif
-    }
-    /* Increment retval->count (so it is really the number of elements) */
-    retval->count += 1;
-
-    /* Free memory allocated */
-    MemFree(indices);
-    MemFree(li_list);
 
     return retval;
 }
@@ -7017,36 +7080,32 @@ static void FDBBlastDefLineSetBit(Int2 bit_no, ValNodePtr PNTR retval)
     tmp->data.intvalue |= bit_mask;
 }
 
-/* runs a binary search on list and return the list of link bits to set */
-static ValNodePtr FDBGetLinkBitsForGi(GiLinkBitListPtr list, Int4 gi)
+static Boolean FDBSearchForGi(GiListPtr glp, Int4 gi)
 {
-    Int4 b, m, e;
+    Int4 m, b, e;
 
-    if ((list == NULL) || (gi < 0))
-        return NULL;
+    if (!glp)
+        return FALSE;
 
     b = 0;
-    e = list->count;
+    e = glp->count-1;
 
+    /* do a binary search on the ordered gi list */
     while (b <= e) {
-        m = (b + e)/2;
-        if (list->gi[m] == gi)
-            break;
-        else if (list->gi[m] < gi)
+        m = (b + e) / 2;
+        if (glp->gis[m] == gi)
+            return TRUE;
+        else if (glp->gis[m] < gi)
             b = m + 1;
-        else 
+        else
             e = m - 1;
     }
-
-    if (list->gi[m] == gi)
-        return list->link_bit[m];
-
-    return NULL;
+    return FALSE;
 }
 
-Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, GiLinkBitListPtr links_tblp)
+Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, ValNodePtr links_tblp)
 {
-    ValNodePtr link_vnp = NULL, vnp_list = NULL, vnp_tmp = NULL;
+    ValNodePtr link_vnp = NULL, vnp_list = NULL;
     SeqIdPtr sip = NULL;
     Int4 gi = 0;
 
@@ -7058,14 +7117,14 @@ Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, GiLinkBitListPtr links_tblp)
         return FALSE;
     gi = sip->data.intvalue;
 
-    /* Retrieve the list of link bits for this gi (if any) */
-    if ((vnp_list = FDBGetLinkBitsForGi(links_tblp, gi)) != NULL) {
+    for (vnp_list = links_tblp; vnp_list; vnp_list = vnp_list->next) {
 
-        for (vnp_tmp = vnp_list; vnp_tmp; vnp_tmp = vnp_tmp->next)
-            FDBBlastDefLineSetBit(vnp_tmp->data.intvalue, &link_vnp);
+        LinkInfoPtr lk_info = (LinkInfoPtr)vnp_list->data.ptrvalue;
+        if (FDBSearchForGi(lk_info->gi_list, gi) == TRUE)
+            FDBBlastDefLineSetBit(lk_info->bit_number, &link_vnp);
     }
 
-    if (link_vnp) 
+    if (link_vnp)
         bdp->links = link_vnp;
 
     return TRUE;
@@ -7083,7 +7142,7 @@ Boolean FDBAddMembershipInformation(BlastDefLinePtr bdp, ValNodePtr memb_tblp,
     /* Set the appropriate bit if this sequence satisfies the criteria */
     while (memb_tblp) {
         mip = (MembInfoPtr) memb_tblp->data.ptrvalue;
-        if ((*(mip->criteria))(criteria_arg))
+        if (mip->criteria(criteria_arg))
             FDBBlastDefLineSetBit(mip->bit_number, &memb_vnp);
         memb_tblp = memb_tblp->next;
     }
@@ -7094,18 +7153,19 @@ Boolean FDBAddMembershipInformation(BlastDefLinePtr bdp, ValNodePtr memb_tblp,
     return TRUE;
 }
 
-GiLinkBitListPtr FDBDestroyLinksTable(GiLinkBitListPtr list)
+ValNodePtr FDBDestroyLinksTable(ValNodePtr list)
 {
-    Int4 i;
+    ValNodePtr tmp_vnp;
+    LinkInfoPtr lk_info;
 
     if (!list)
         return NULL;
 
-    MemFree(list->gi);
-    for (i = 0; i < list->count; i++)
-        ValNodeFree(list->link_bit[i]);
-    MemFree(list->link_bit);
-    MemFree(list);
+    for (tmp_vnp = list; tmp_vnp; tmp_vnp = tmp_vnp->next) {
+        lk_info = (LinkInfoPtr) tmp_vnp->data.ptrvalue;
+        lk_info->gi_list = GiListFree(lk_info->gi_list);
+    }
+    list = ValNodeFreeData(list);
 
     return NULL;
 }
@@ -7636,7 +7696,7 @@ static Boolean FormatdbCreateStringIndex(const CharPtr FileName,
     }
     SORTObjectFree(sop);
 
-    FileClose(fd_out);
+    FILECLOSE(fd_out);
     FileRemove(filenamebuf);
 
     sprintf(filenamebuf, "%s.%csi",
@@ -7957,7 +8017,7 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
   return FDBAddSequence2(fdbp,bdp,seq_data_type,seq_data,SequenceLen, 
                          seq_id,title,
                          gi,tax_id,div,owner,date,
-                         AmbCharPtr);
+                         AmbCharPtr, PIG_NONE);
 }
 
 Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
@@ -7977,7 +8037,8 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
                          be used at all. */
                       
                       Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date,
-                      Uint4Ptr  AmbCharPtr)
+                      Uint4Ptr  AmbCharPtr,
+                      Int4 pig_id) /* protein group identifier */
 {
   Uint4               hash;
   Boolean             bdp_was_allocated = FALSE;
@@ -8061,15 +8122,17 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
                  if (FileLength(oldnamebuf) > 0)
                      FileRename(oldnamebuf, newnamebuf);
              }
-             /* Taxonomy database files */
-             StringCpy(oldnamebuf + len, "ti");
-             StringCpy(newnamebuf + len + 3, "ti");
-             if (FileLength(oldnamebuf) > 0)
-                 FileRename(oldnamebuf, newnamebuf);
-             StringCpy(oldnamebuf + len, "td");
-             StringCpy(newnamebuf + len + 3, "td");
-             if (FileLength(oldnamebuf) > 0)
-                 FileRename(oldnamebuf, newnamebuf);
+             if (options->is_protein) {
+                 /* PIG ISAM files */
+                 StringCpy(oldnamebuf + len, "pd");
+                 StringCpy(newnamebuf + len + 3, "pd");
+                 if (FileLength(oldnamebuf) > 0)
+                     FileRename(oldnamebuf, newnamebuf);
+                 StringCpy(oldnamebuf + len, "pi");
+                 StringCpy(newnamebuf + len + 3, "pi");
+                 if (FileLength(oldnamebuf) > 0)
+                     FileRename(oldnamebuf, newnamebuf);
+             }
 
               MemFree(options->base_name);
               newnamebuf[len+1] = NULLB;
@@ -8170,31 +8233,6 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
       }
   }
 
-    /* ---------- Dumping definition line ---------- */
-
-  if(fdbp->options->version > FORMATDB_VER_TEXT) {
-    if(bdp == NULL) {
-      bdp = FDLCreateAsnDF(fdbp, seq_id, title, tax_id);
-      bdp_was_allocated = TRUE;
-    }
-    
-    if(!FDBDumpDeflineAsn(fdbp, bdp)) {
-      ErrPostEx(SEV_ERROR, 0,0, 
-                "FDBDumpDeflineAsn() failed. Formating terminated "
-                "abnormaly");
-      return 1;
-    }
-    if(bdp_was_allocated)
-      BlastDefLineSetFree(bdp);
-  } else {
-    if(!FDBDumpDefline(fdbp, title, seq_id)) {
-      ErrPostEx(SEV_ERROR, 0,0, 
-                "FDBDumpDefline() failed. Formating terminated "
-                "abnormaly");
-      return 1;
-    }
-  }
-
     /* This information is written to the *.[pn]di file, and it is also 
      * needed to set the membership bits in the FORMATDB_VER version of 
      * the blast databases. NOTE: this assumes that no non-redundant 
@@ -8206,6 +8244,17 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
     direc.owner = owner;
     direc.len = SequenceLen;
     direc.hash = hash;
+
+    if (bdp == NULL) {
+        bdp = FDLCreateAsnDF(fdbp, seq_id, title, tax_id);
+        bdp_was_allocated = TRUE;
+    }
+
+    /* Add the PIG information */
+    if (fdbp->options->is_protein && 
+        bdp->other_info == NULL && pig_id != PIG_NONE) {
+        ValNodeAddInt(&bdp->other_info, 0, pig_id);
+    }
 
     /* ----------- Dumping misc info file ----------- */
     if(fdbp->options->dump_info) {
@@ -8234,6 +8283,27 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
         FDBAddMembershipInformation(bdp, fdbp->options->memb_tblp, 
                                     (VoidPtr)&direc);
     }
+
+    /* ---------- Dumping definition line ---------- */
+
+  if(fdbp->options->version > FORMATDB_VER_TEXT) {
+    
+    if(!FDBDumpDeflineAsn(fdbp, bdp)) {
+      ErrPostEx(SEV_ERROR, 0,0, 
+                "FDBDumpDeflineAsn() failed. Formating terminated "
+                "abnormaly");
+      return 1;
+    }
+  } else {
+    if(!FDBDumpDefline(fdbp, title, seq_id)) {
+      ErrPostEx(SEV_ERROR, 0,0, 
+                "FDBDumpDefline() failed. Formating terminated "
+                "abnormaly");
+      return 1;
+    }
+  }
+
+  if(bdp_was_allocated) BlastDefLineSetFree(bdp);
 
   /* ---------------------------------------------- */
 
@@ -8476,12 +8546,6 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
     Char    filenamebuf[FILENAME_MAX];
     Int2    tmp, extra_bytes = 0;
 
-    if(fdbp->num_of_seqs==0){
-    ErrLogPrintf("FDBFinish: Empty %s database...\n",
-                     fdbp->options->is_protein?"protein":"nucleotide");
-    return 0;
-    }
-    
     if(fdbp->aip_def != NULL)   /* Structured deflines */
         fdbp->DefOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->aip_def->fp); 
     else
@@ -8498,7 +8562,7 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
         /* Parsing finished - now dumping index file */
     
     if(fdbp->options->parse_mode)
-        FileClose(fdbp->fd_stmp);
+        FILECLOSE(fdbp->fd_stmp);
     
         /* Information */
 
@@ -8506,22 +8570,21 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
         fdbp->options->version = FORMATDB_VER_TEXT;
     
     if (!FormatDbUint4Write(fdbp->options->version, fdbp->fd_ind))
-    return 1;
+        return 1;
     if (!FormatDbUint4Write(fdbp->options->is_protein, fdbp->fd_ind))
-    return 1;
+        return 1;
     
-    if(fdbp->options->db_title != NULL) {
+    if(fdbp->options->db_title != NULL)
         title_len = StringLen(fdbp->options->db_title);
-    }
     else
         title_len = 0;
     
     if (!FormatDbUint4Write(title_len, fdbp->fd_ind))
-    return 1;
+        return 1;
     
     if (title_len != 0)
         if (FileWrite(fdbp->options->db_title, title_len, 1, fdbp->fd_ind) != (Uint4) 1)
-        return 1;
+            return 1;
     
     MemSet(dateTime, 0, DATETIME_LENGTH);
     Nlm_DayTimeStr(dateTime, TRUE, TRUE);
@@ -8529,29 +8592,26 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
     /* write db_title and date-time stamp eigth bytes aligned */
     tmp = title_len + StringLen(dateTime);
     if (tmp%8) {
-    extra_bytes = 8 - tmp%8;
+        extra_bytes = 8 - tmp%8;
     }
     if (!FormatDbUint4Write(StringLen(dateTime) + extra_bytes, fdbp->fd_ind))
-    return 1;
+        return 1;
     if (FileWrite(dateTime, StringLen(dateTime) + extra_bytes, 1, fdbp->fd_ind) != 1)
-    return 1;
+        return 1;
     
     if (!FormatDbUint4Write(fdbp->num_of_seqs, fdbp->fd_ind))
-    return 1;
+        return 1;
 
-    if (fdbp->options->version == FORMATDB_VER_TEXT)
-    {
+    if (fdbp->options->version == FORMATDB_VER_TEXT) {
         if (!FormatDbUint4Write(fdbp->TotalLen, fdbp->fd_ind))
-        return 1;
-    }
-    else
-    {
+            return 1;
+    } else {
         if (!FormatDbUint8Write(fdbp->TotalLen, fdbp->fd_ind))
-        return 1;
+            return 1;
     }
 
     if (!FormatDbUint4Write(fdbp->MaxSeqLen, fdbp->fd_ind))
-    return 1;
+        return 1;
     
         /* Offset tables */
     
@@ -8562,16 +8622,40 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
     
     for(i=0; i <= fdbp->num_of_seqs; i++) {
         if (!FormatDbUint4Write(fdbp->SeqOffsetTable[i], fdbp->fd_ind))
-        return 1;
+            return 1;
     }
     if(!fdbp->options->is_protein) {
         for(i=0; i <= fdbp->num_of_seqs; i++) {
             if (!FormatDbUint4Write(fdbp->AmbOffsetTable[i], fdbp->fd_ind))
-        return 1;
+            return 1;
         }
     }
     
-        /* Numeric lookup table sort & dump */
+    if(fdbp->num_of_seqs==0){
+
+        Char db_type = fdbp->options->is_protein ? 'p' : 'n';
+        ErrLogPrintf("FDBFinish: Empty %s database...\n",
+                         fdbp->options->is_protein?"protein":"nucleotide");
+
+        /* Close open files and remove them */
+        FILECLOSE(fdbp->fd_seq);
+        FILECLOSE(fdbp->fd_def);
+        ASNIOCLOSE(fdbp->aip_def);
+        FILECLOSE(fdbp->fd_stmp);
+        FILECLOSE(fdbp->fd_sdi);
+        sprintf(filenamebuf, "%s.%chr", fdbp->options->base_name, db_type);
+        FileRemove(filenamebuf);
+        sprintf(filenamebuf, "%s.%ctm", fdbp->options->base_name, db_type);
+        FileRemove(filenamebuf);
+        sprintf(filenamebuf, "%s.%csq", fdbp->options->base_name, db_type);
+        FileRemove(filenamebuf);
+        sprintf(filenamebuf, "%s.%cdi", fdbp->options->base_name, db_type);
+        FileRemove(filenamebuf);
+        FILECLOSE(fdbp->fd_ind); /* the only file standing */
+        return 0;
+    }
+    
+    /* Numeric lookup table sort & dump */
     
     if(fdbp->options->parse_mode && fdbp->lookup->used > 0) {
         FILE    *fd_lookup;
@@ -8586,10 +8670,10 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
         
         for(i=0; i < fdbp->lookup->used; i++) {
             if (!FormatDbUint4Write(fdbp->lookup->table[i], fd_lookup))
-        return 1;
+            return 1;
         }
         
-        FileClose(fd_lookup);
+        FILECLOSE(fd_lookup);
         
             /* Now creating numeric ISAM index */
         
@@ -8614,7 +8698,7 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
         ISAMObjectFree(object);
     }
     
-        /* String file sorting */
+    /* String file sorting */
     
     if(fdbp->options->parse_mode) {
         if (!FormatdbCreateStringIndex(fdbp->options->base_name, 
@@ -8670,8 +8754,8 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
             fd_position = ftell(tdfp);
             FormatDbUint4Write(fd_position, tifp);
             
-            FileClose(tifp);
-            FileClose(tdfp);
+            FILECLOSE(tifp);
+            FILECLOSE(tdfp);
         } else {
             ErrLogPrintf("No taxonomy entries found, no taxonomy database "
                     "will be created\n");
@@ -8682,6 +8766,48 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
         fdbp->options->tax_lookup = RDTaxLookupReset(fdbp->options->tax_lookup);
     } /* if(tax_lookup != NULL) */
 #endif
+
+
+    /* PIG table sort and dump */
+    if (fdbp->options->is_protein && fdbp->ptable && fdbp->ptable->count > 0) {
+        FILE *fp;
+        
+        sprintf(DBName, "%s.ppd", fdbp->options->base_name);
+        
+        if ( !(fp = FileOpen(DBName, "wb")))
+            return 1;
+        
+        HeapSort(fdbp->ptable->pop, fdbp->ptable->count/2,
+                 sizeof(Uint4)*2, ID_Compare); 
+        
+        for (i = 0; i < fdbp->ptable->count; i++) {
+            if (!FormatDbUint4Write(fdbp->ptable->pop[i], fp))
+                return 1;
+        }
+        
+        FILECLOSE(fp);
+        
+        /* Create ISAM index for PIG/ordinal id mapping */
+        sprintf(filenamebuf, "%s.ppi", fdbp->options->base_name);
+        
+        if ( !(object = ISAMObjectNew(ISAMNumeric, DBName, filenamebuf))) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Failed to create PIG ISAM object.\n");
+            return 1;
+        }
+        
+        if ( (error = ISAMMakeIndex(object, 0, 0)) != ISAMNoError) {
+            if (error == ISAMNoOrder) {
+                ErrPostEx(SEV_ERROR, 0, 0, "Failed to create PIG ISAM index."
+                          "  Possibly a PIG included more than once in the "
+                          "database.\n", (long) error);
+            } else {
+                ErrPostEx(SEV_ERROR, 0, 0, "Failed to create PIG ISAM index: "
+                        "ISAMErrorCode %ld.\n", (long) error);
+            }
+            return 1;
+        }
+        ISAMObjectFree(object);
+    }
 
     ErrLogPrintf("Formatted %ld sequences in volume %ld\n", fdbp->num_of_seqs,
             fdbp->options->volume);
@@ -8700,6 +8826,8 @@ FDB_optionsPtr FDBOptionsFree(FDB_optionsPtr options)
     MemFree(options->db_file);
     MemFree(options->base_name);
     MemFree(options->alias_file_name);
+    MemFree(options->gi_file);
+    MemFree(options->gi_file_bin);
     MemFree(options);
 
     return options;
@@ -8731,21 +8859,18 @@ Int2 FormatDBClose(FormatDBPtr fdbp)
     }
     
     FASTALookupFree(fdbp->lookup);
+    FDBPigTableFree(fdbp->ptable);
     
-    if (fdbp->fd)
-        FileClose(fdbp->fd);
+    FILECLOSE(fdbp->fd);
     
-    if(fdbp->aip_def != NULL)   /* Structured deflines */
-        AsnIoClose(fdbp->aip_def);
-    else
-        FileClose(fdbp->fd_def);
+    ASNIOCLOSE(fdbp->aip_def);
     
-    FileClose(fdbp->fd_ind);
-    FileClose(fdbp->fd_seq);
-    FileClose(fdbp->fd_sdi);
+    FILECLOSE(fdbp->fd_def);
+    FILECLOSE(fdbp->fd_ind);
+    FILECLOSE(fdbp->fd_seq);
+    FILECLOSE(fdbp->fd_sdi);
     
-    if (fdbp->aip)
-        AsnIoClose(fdbp->aip);
+    ASNIOCLOSE(fdbp->aip);
 
     /* Do not Clear options structure */
 
@@ -9997,11 +10122,11 @@ Boolean    DB_Subset (GMSubsetDataPtr gmsdp, DI_Record direc)
     return retval;
 }
 
-Boolean    is_EST_HUMAN (VoidPtr direc)
+Boolean   is_EST_HUMAN (VoidPtr direc)
 {
     return (((DI_RecordPtr)direc)->taxid == 9606);
 }
-Boolean    is_EST_MOUSE (VoidPtr direc)
+Boolean   is_EST_MOUSE (VoidPtr direc)
 {
     return (((DI_RecordPtr)direc)->taxid == 10090 ||
             ((DI_RecordPtr)direc)->taxid == 10091 ||
@@ -10010,12 +10135,12 @@ Boolean    is_EST_MOUSE (VoidPtr direc)
             ((DI_RecordPtr)direc)->taxid == 80274 ||
             ((DI_RecordPtr)direc)->taxid == 57486);
 }
-Boolean    is_EST_OTHERS (VoidPtr direc)
+Boolean   is_EST_OTHERS (VoidPtr direc)
 {
     return (!is_EST_HUMAN(direc) && !is_EST_MOUSE(direc));
 }
 
-Boolean    is_SWISSPROT (VoidPtr direc)
+Boolean   is_SWISSPROT (VoidPtr direc)
 {
 #if 0
     SeqIdPtr    sip;
@@ -10031,13 +10156,13 @@ Boolean    is_SWISSPROT (VoidPtr direc)
     return (((DI_RecordPtr)direc)->owner == 6);
 }
 
-Boolean    is_MONTH (VoidPtr direc)
+Boolean   is_MONTH (VoidPtr direc)
 {
     return (((DI_RecordPtr)direc)->gi_threshold != -1 && 
             ((DI_RecordPtr)direc)->gi > ((DI_RecordPtr)direc)->gi_threshold);
 }
 
-Boolean    is_PDB (VoidPtr direc)
+Boolean   is_PDB (VoidPtr direc)
 {
     return (((DI_RecordPtr)direc)->owner == 10);
 }
@@ -10145,7 +10270,9 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
     DI_Record    direc;
     Char        skipstr1[128], skipstr2[128];
     int            readstat, total=0, progress_count=0;
+#ifdef SHOW_PROGRESS
     Int4        progress_chunk = 100;
+#endif
 
     
     /* open index file */
@@ -10195,7 +10322,7 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
                 "(missing accesion field?)", difilename);
         return FALSE;
     }
-    FileClose(fdi);
+    FILECLOSE(fdi);
 
     return TRUE;
 }
@@ -10207,14 +10334,7 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
 /*        Fastacmd API                                           */
 /************************************************************************/
 
-typedef struct FCMDAccList {
-    CharPtr acc;
-    Int4 gi;
-    struct FCMDAccList *next;
-} FCMDAccList, PNTR FCMDAccListPtr;
-
-static FCMDAccListPtr GetAccList(CharPtr file, 
-                                 Int4Ptr TotalItems)
+FCMDAccListPtr LIBCALL GetAccList(CharPtr file, Int4Ptr TotalItems)
 {
     Char TmpBuff[128];
     Int4 i, j, k;
@@ -10317,7 +10437,7 @@ static FCMDAccListPtr GetAccList(CharPtr file,
   return AccList;
 }
 
-static void FCMDAccListFree(FCMDAccListPtr falp)
+void LIBCALL FCMDAccListFree(FCMDAccListPtr falp)
 {
     FCMDAccListPtr falp_tmp, falp_next;
 
@@ -10344,7 +10464,17 @@ static Boolean Fastacmd_PrintTaxonomyInfo(ReadDBFILEPtr rdfp, Int4 oid,
     if ((bdp = FDReadDeflineAsn(rdfp, oid)) == NULL)
         return FALSE;
 
+    if (bdp->taxid == 0) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information not encoded in "
+                "your blast database.");
+        BlastDefLineSetFree(bdp);
+        return FALSE;
+    }
+
     if ((tnames = RDBGetTaxNames(rdfp->taxinfo, bdp->taxid)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information is not available "
+                "for this gi/accession.\nIf you have not done so already, "
+                "please update your copy from: %s\n", TAXDB_ON_FTP);
         BlastDefLineSetFree(bdp);
         return FALSE;
     }
@@ -10502,18 +10632,18 @@ Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 {
     return Fastacmd_Search_ex(searchstr, database, READDB_DB_UNKNOWN, 
             batchfile, dupl, linelen, out, FALSE, FALSE, FALSE, NULL, 
-            Seq_strand_unknown, FALSE, FALSE);
+            Seq_strand_unknown, FALSE, FALSE, PIG_NONE);
 }
 
 Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
     Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
     CharPtr seqlocstr, Uint1 strand, 
-    Boolean taxonomy_info_only, Boolean dbinfo_only)
+    Boolean taxonomy_info_only, Boolean dbinfo_only, Int4 pig)
 {
     BioseqPtr        bsp;
     ReadDBFILEPtr    rdfp = NULL, rdfp_tmp;
-    Int4             i, fid, TotalItems=0, count;
+    Int4             i, fid, TotalItems=0, count = 0;
     FCMDAccListPtr   falp=NULL, falp_tmp;
     CharPtr          buffer = NULL, dbname = database;
     FILE             *fd;
@@ -10522,6 +10652,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     Boolean          translateBlastDB2FASTA = dump_db;
     SeqLocPtr        slp = NULL;
     Uint1            init_state = 0;
+    Int2             retval = 0;
 
     if (searchstr)
         guess_gi = atol(searchstr);
@@ -10529,17 +10660,36 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     if (dbname == NULL)
         dbname = FASTACMD_DEFAULT_DB;
 
-    init_state = taxonomy_info_only ? READDB_NEW_DO_TAXDB : READDB_NEW_INDEX;
+    if (taxonomy_info_only)
+        init_state = READDB_NEW_DO_TAXDB;
+    else if (dbinfo_only)
+        init_state = READDB_NEW_DO_REPORT;
+    else
+        init_state = READDB_NEW_INDEX;
+
     if (!(rdfp = readdb_new_ex2(dbname, is_prot, init_state, NULL, NULL))) {
         ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb for "
              "%s database\n", dbname);
-        return(1);
+        return 1;
     }
 
     if (dbinfo_only) {
         Fastacmd_PrintDbFullInformation(rdfp, dbname, linelen, out);
         readdb_destruct(rdfp);
-        return 0;
+        return retval;
+    }
+
+    if (pig != PIG_NONE) {
+        if ( (fid = readdb_pig2oid(rdfp, pig, NULL)) == -1) {
+            ErrPostEx(SEV_ERROR, 0, 0, "PIG %ld not found", (long) pig);
+            return 1;
+        }
+        bsp = readdb_get_bioseq_ex(rdfp, fid, TRUE, use_ctrlAs);
+        slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
+        BioseqRawToFastaExtraEx(bsp, out, linelen, slp);
+        bsp = BioseqFree(bsp);  
+        slp = SeqLocFree(slp);
+        return retval;
     }
 
     /* Taxonomy information is encoded only in the new database format */
@@ -10547,9 +10697,10 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         for (rdfp_tmp = rdfp; rdfp_tmp; rdfp_tmp = rdfp_tmp->next) {
         if (rdfp_tmp->formatdb_ver < FORMATDB_VER) {
             ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information is not supported "
-                    "in version %d of the blast databases.\nPlease reformat "
-                    "your fasta files with the latest formatdb from\n"
-                    "ftp://ftp.ncbi.nih.gov/executables\n", FORMATDB_VER_TEXT);
+                    "in your version of\nthe blast databases (version %d). "
+                    "Please update your databases and download\nthe taxonomy "
+                    "blast database files (%s)\n", FORMATDB_VER_TEXT,
+                    TAXDB_ON_FTP);
             readdb_destruct(rdfp);
             return 1;
         }
@@ -10557,7 +10708,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         if (rdfp->taxinfo == NULL) {
             ErrPostEx(SEV_ERROR, 0, 0, "Taxonomy information is not "
             "available. Please download it from\n"
-            "ftp://ftp.ncbi.nih.gov/blast/db/FormattedDatabases/taxdb.tar.gz");
+            "%s\n", TAXDB_ON_FTP);
             readdb_destruct(rdfp);
             return 1;
         }
@@ -10568,18 +10719,18 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
             if((falp =  GetAccList(searchstr, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
                 "found. Exiting...\n");
-                return(1);
+                return 1;
             }
         } else if(batchfile != NULL){
             if((fd = FileOpen(batchfile, "r")) == NULL)
-                return (1);
+                return 1;
     
             buffer = WWWReadFileInMemory(fd, 0, TRUE);
     
             if((falp =  GetAccList(buffer, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
                 "found. Exiting...\n");
-                return(1);
+                return 1;
             }
         }
     }
@@ -10604,6 +10755,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         } else if (fid == -1) {
             ErrPostEx(SEV_ERROR, 0, 0, "Entry \"%s\" not found\n", 
                         falp_tmp->acc);
+            retval = 1;
         } else if (ids == NULL) { /* gi or SeqId */
             if (use_target) {
                 ReadDBFILEPtr rdfp_tmp;
@@ -10611,7 +10763,8 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
                     rdfp_tmp->gi_target = falp_tmp->gi;
             }
             if (taxonomy_info_only) {
-                Fastacmd_PrintTaxonomyInfo(rdfp, fid, out, linelen);
+                if (!Fastacmd_PrintTaxonomyInfo(rdfp, fid, out, linelen))
+                    retval = 1;
             } else {
                 bsp = readdb_get_bioseq_ex(rdfp, fid, TRUE, use_ctrlAs);
                 slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
@@ -10620,18 +10773,21 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
                 slp = SeqLocFree(slp);
             }
         } else {
-                for(i = 0; i < count; i++) {
-                    if (taxonomy_info_only) {
-                        Fastacmd_PrintTaxonomyInfo(rdfp, ids[i], out, linelen);
-                    } else {
-                        bsp = readdb_get_bioseq_ex(rdfp, ids[i], TRUE, 
-                                use_ctrlAs);
-                        slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
-                        BioseqRawToFastaExtraEx(bsp, out, linelen, slp);
-                        bsp = BioseqFree(bsp);
-                        slp = SeqLocFree(slp);
-                    }
+            for(i = 0; i < count; i++) {
+                if (taxonomy_info_only) {
+                    if (!Fastacmd_PrintTaxonomyInfo(rdfp, ids[i], out, 
+                                linelen))
+                        retval = 1;
+                } else {
+                    bsp = readdb_get_bioseq_ex(rdfp, ids[i], TRUE, 
+                            use_ctrlAs);
+                    slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
+                    BioseqRawToFastaExtraEx(bsp, out, linelen, slp);
+                    bsp = BioseqFree(bsp);
+                    slp = SeqLocFree(slp);
                 }
+            }
+            ids = MemFree(ids);
         }   
     }
 
@@ -10642,7 +10798,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     readdb_destruct(rdfp);
     MemFree(buffer);
     FCMDAccListFree(falp);
-    return 0;
+    return retval;
 } 
 
 /* #define SHOW_PROGRESS */
@@ -10798,21 +10954,21 @@ Int4 LIBCALL
 readdb_MakeGiFileBinary (CharPtr input_file, CharPtr output_file)
 {
     FILE        *infp=NULL, *outfp=NULL;
-      Int4        index = 0, value, chunk_size = 24, gilist_size;
-        Int2        status;
-        Char        line[GIFILE_LINE_LEN];
+    Int4        index = 0, value, chunk_size = 24, gilist_size;
+    Int2        status;
+    Char        line[GIFILE_LINE_LEN];
     long        tmplong;
-      Uint4Ptr    gi_list;
+    Uint4Ptr    gi_list;
 
     if (!(infp = FileOpen(input_file, "r"))) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", input_file);
-            return -1;
-        }
+        ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", input_file);
+        return -1;
+    }
         
     if (!(outfp = FileOpen(output_file, "wb"))) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", output_file);
-            return -1;
-        }
+        ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", output_file);
+        return -1;
+    }
 
     gi_list = MemNew(chunk_size * sizeof(Uint4));
 
@@ -10847,8 +11003,8 @@ readdb_MakeGiFileBinary (CharPtr input_file, CharPtr output_file)
 
     gi_list = MemFree(gi_list);
 
-    FileClose(infp);
-    FileClose(outfp);
+    FILECLOSE(infp);
+    FILECLOSE(outfp);
 
     return gilist_size;
 }
@@ -10903,7 +11059,7 @@ Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename,
       
       SeqEntryFree(sep);
    }
-   FileClose(fd);
+   FILECLOSE(fd);
    
    if(FormatDBClose(fdbp))
       return 9;
@@ -10973,9 +11129,44 @@ Boolean FD_CreateAliasFileEx(CharPtr title, CharPtr basename,
        if (total_length > 0)
           fprintf(fd, "LENGTH %s\n", Nlm_Int8tostr(total_length, 0));
     }
-    FileClose(fd);
+    FILECLOSE(fd);
     
     return TRUE;
+}
+
+/* Returns the string that must be used in a multi-volume, multi-oidlist
+ * (or multi-alias file) database. This string should be used as the DBLIST
+ * field in the wrapper alias file for the multi-volume subset (or mask).
+ * Caller is responsible to deallocate the return value */
+CharPtr FD_ConstructMultivolumeDBList(CharPtr basename, Int4 nvols)
+{
+    CharPtr retval = NULL;
+    Int4 i, len = 0;
+    Char numstr[10];
+
+    if (!basename || basename[0] == NULLB || nvols <= 0)
+        return NULL;
+
+    /* Allocate memory for return value */
+    len = ((StringLen(basename) + 1) * nvols) + 1;
+    len += (3*nvols); /* for the '.NN' extension */
+    if ((retval = (CharPtr)MemNew(sizeof(Char)*len)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, 
+                "FD_ConstructMultivolumeDBList: out of memory");
+        return NULL;
+    }
+
+    for (i = 0; i < nvols; i++) {
+
+        /* convert nvols to a string */
+        MemSet(numstr, 0, sizeof(numstr));
+        sprintf(numstr, ".%02ld ", (long) i);
+        retval = StringCat(retval, basename);
+        retval = StringCat(retval, numstr);
+    }
+    retval[StringLen(retval)] = NULLB;
+
+    return retval;
 }
 
 Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename, 
@@ -11359,3 +11550,104 @@ readdb_madvise_block (Int4 nSeqs)
 
 #endif /* HAVE_MADVISE */
 #endif /* SOL || LINUX */
+
+/*** PIG (Protein Identifier Group) interface ***/
+
+FDBPigTablePtr LIBCALL
+FDBPigTableNew()
+{
+    FDBPigTablePtr fptp = NULL;
+
+    if ( !(fptp = (FDBPigTablePtr) MemNew(sizeof(FDBPigTable))))
+        return NULL;
+
+    fptp->count = 0;
+    fptp->allocated = INDEX_INIT_SIZE*2;
+
+    if ( !(fptp->pop = (Int4Ptr) MemNew(sizeof(Int4)*fptp->allocated)))
+        return FDBPigTableFree(fptp);
+
+    return fptp;
+}
+
+FDBPigTablePtr LIBCALL
+FDBPigTableFree(FDBPigTablePtr fptp)
+{
+    if (!fptp)
+        return NULL;
+
+    fptp->pop = MemFree(fptp->pop);
+    return MemFree(fptp);
+}
+
+Boolean LIBCALL
+FDBAddPig(FDBPigTablePtr fptp, Int4 pig, Int4 oid)
+{
+    if (!fptp || pig == PIG_NONE || oid < 0)
+        return FALSE;
+
+    /* Reallocate if necessary */
+    if (fptp->count + 2 >= fptp->allocated) {
+        fptp->allocated += (INDEX_ARRAY_CHUNKS*2);
+        fptp->pop = (Int4Ptr) Realloc(fptp->pop, sizeof(Int4)*fptp->allocated);
+
+        if (!fptp->pop) {
+            FDBPigTableFree(fptp);
+            return FALSE;
+        }
+    }
+
+    fptp->pop[fptp->count++] = pig;
+    fptp->pop[fptp->count++] = oid;
+
+    return TRUE;
+}
+
+Int4 LIBCALL 
+readdb_get_pig(ReadDBFILEPtr rdfp, Int4 oid)
+{
+    BlastDefLinePtr bdp = NULL;
+    Int4 pig = PIG_NONE;
+
+    if (rdfp->formatdb_ver < FORMATDB_VER) 
+        return pig;
+
+    if (!(bdp = FDReadDeflineAsn(rdfp, oid)))
+        return pig;
+
+    if (bdp->other_info && 
+            ( (pig = bdp->other_info->data.intvalue) != PIG_NONE)) {
+        bdp = (BlastDefLinePtr) BlastDefLineSetFree(bdp);
+        return pig;
+    }
+
+    bdp = (BlastDefLinePtr) BlastDefLineSetFree(bdp);
+    return pig;
+}
+
+Int4 LIBCALL 
+readdb_pig2oid(ReadDBFILEPtr rdfp, Int4 pig, Int4Ptr start)
+{
+    Int4 retval = -1;
+    ISAMErrorCode error;
+    Uint4 oid = 0;
+
+    for ( ; rdfp; rdfp = rdfp->next) {
+
+        if (!rdfp->isam_pig)
+            continue;
+
+        if ( (error = NISAMSearch(rdfp->isam_pig, pig, &oid, NULL)) < 0) {
+            ErrPostEx(SEV_WARNING, 0, 0, "Failed to initialize PIG search"
+                    "on %s\nISAM Error code is %d\n", rdfp->filename, error);
+            continue;
+        } else if (error != ISAMNotFound) {
+            if (start)
+                *start = rdfp->start;
+            retval = (Int4)oid + rdfp->start;
+            break;
+        }
+    }
+
+    return retval;
+}

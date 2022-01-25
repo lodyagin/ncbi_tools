@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.5 2002/09/19 18:12:30 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.7 2003/04/02 16:20:53 rsmith Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,12 @@
 #  endif
 #  ifdef OS_UNIX_BEOS
 #      define NCBI_OS_BEOS
+#  endif
+#  ifdef OS_UNIX_DARWIN
+#      define NCBI_OS_DARWIN 1
+#    ifdef COMP_METRO
+#      define NCBI_COMPILER_METROWERKS 1
+#    endif
 #  endif
 #  if !defined(HAVE_GETHOSTBYNAME_R)
 #    if   defined(OS_UNIX_SOL)

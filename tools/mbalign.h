@@ -15,7 +15,7 @@ typedef struct {
 } edit_script_t;
 
 edit_script_t *edit_script_free(edit_script_t *es);
-edit_script_t *edit_script_new();
+edit_script_t *edit_script_new(void);
 edit_script_t *edit_script_append(edit_script_t *es, edit_script_t *et);
 
 enum {
@@ -49,7 +49,7 @@ typedef struct mb_space_struct {
 
 #define EDIT_OPC(op) (op & EDIT_OP_MASK)
 
-MBSpacePtr new_mb_space();
+MBSpacePtr new_mb_space(void);
 void refresh_mb_space(MBSpacePtr sp);
 void free_mb_space(MBSpacePtr sp);
 ThreeValPtr get_mb_space(MBSpacePtr S, Int4 amount);

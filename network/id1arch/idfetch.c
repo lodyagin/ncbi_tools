@@ -25,6 +25,18 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.27  2003/03/28 18:48:39  yaschenk
+ tuning ObjMgr, adding STREAM_SEQ_PORT_FIRST to SeqEntryToGnbk
+
+ Revision 1.26  2003/01/29 23:08:19  yaschenk
+ fixing FASTA on far pointers
+
+ Revision 1.25  2003/01/21 22:27:23  kans
+ new CstType parameter for flatfile generator
+
+ Revision 1.24  2002/12/30 22:36:53  yaschenk
+ optimizing..
+
  Revision 1.23  2002/11/07 17:21:55  yaschenk
  switching ID1 to new displatcher
 
@@ -137,7 +149,13 @@
 #include <ncbi.h>
 #include <objsset.h>
 #include <accid1.h>
+
+#if 0
 #include <asn2ff.h>
+#else
+#include <asn2gnbk.h>
+#endif
+
 #include <tofasta.h>
 #include <ni_types.h>
 #include <ni_lib.h>
@@ -206,6 +224,7 @@ int Numarg = sizeof(myargs)/sizeof(myargs[0]);
    }
 
 static Nlm_Int2 Nlm_WhichArg PROTO(( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap));
+static void MyBioseqToFasta(BioseqPtr bsp, Pointer userdata);
 
 Int4 giBuffer[1000];
 int giBufferPos = 0;
@@ -338,6 +357,16 @@ Int2 Main()
     has_trouble=TRUE;
     goto FATAL;
   }
+
+  {  /** tuning ObjMgr **/
+	ObjMgrPtr	omp;
+        omp=ObjMgrGet();
+        omp->maxtemp=500;
+        /*omp->maxobj=64000;*/
+        omp->autoclean = TRUE;
+
+  }
+
   if(myargs[infotypearg].intvalue != 1)
   {
     outmode = "w";
@@ -375,14 +404,19 @@ Int2 Main()
   if( has_trouble )
     exit (1);
 
-  if(fp_in || myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
-  { /*** Statefull mode ***/
-        putenv("CONN_STATELESS=FALSE");  /***NI_SetInterface(eNII_WWW);***/
-  }
-  else
-  { /*** Stateless mode ***/
-	putenv("CONN_STATELESS=TRUE");   /***NI_SetInterface(eNII_WWWDirect);***/
-  }
+
+	if(   fp_in 
+	   || myargs[entrezqueryarg].strvalue
+           || myargs[entrezqueryfilearg].strvalue
+           || myargs[outtypearg].intvalue == 3
+           || myargs[outtypearg].intvalue == 4
+           || myargs[outtypearg].intvalue == 5
+              ) { /*** Statefull mode ***/
+		putenv("CONN_STATELESS=FALSE"); 
+	}
+	else { /*** Stateless mode ***/
+		putenv("CONN_STATELESS=TRUE"); 
+	}
 
   if(!ID1BioseqFetchEnable("idfetch",TRUE))
   {
@@ -939,6 +973,7 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
   }
   else
   {
+    putenv("CONN_STATELESS=FALSE");  /*** some formats may ask a lot of information ***/
     switch(myargs[outtypearg].intvalue)
     {
     case 1:
@@ -952,7 +987,12 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       }
       break;
     case 3:
+#if 0
       if(!SeqEntryToFlat(sep, fp, GENBANK_FMT, RELEASE_MODE)){
+#else 
+      AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
+      if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,STREAM_SEQ_PORT_FIRST,0,NULL,fp)){
+#endif
         ErrPostEx(SEV_WARNING,0,0,
                   "GenBank Format does not exist for this sequence ");
         retval=FALSE;
@@ -960,7 +1000,12 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       }
       break;
     case 4:
+#if 0
       if(!SeqEntryToFlat(sep, fp, GENPEPT_FMT, RELEASE_MODE))
+#else 
+      AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
+      if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,STREAM_SEQ_PORT_FIRST,0,NULL,fp))
+#endif
       {
         ErrPostEx(SEV_WARNING,0,0,
                   "GenPept Format does not exist for this sequence");
@@ -975,12 +1020,21 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       switch(myargs[infotypearg].intvalue){
       case 0:
         if(bsp){
+#if 0
           SeqEntrysToFasta (sep, fp, ISA_na (bsp->mol), group_segs);
+#else
+		MyBioseqToFasta(bsp,(Pointer)fp);
+#endif
         }
         else
         {
+#if 0
           SeqEntryToFasta(sep, fp, TRUE);  /* nuc acids */
           SeqEntryToFasta(sep, fp, FALSE); /* proteins */
+#else
+		VisitBioseqsInSep(sep,(Pointer)fp, MyBioseqToFasta);
+
+#endif
         }
         break;
       case 2:
@@ -1001,11 +1055,13 @@ DONE:
   {
     static Uint2  reap_cnt;
     BioseqUnlock(bsp);
+#if 0
     reap_cnt++;
     if(reap_cnt > 128){
       ObjMgrFreeCache(0);
       reap_cnt=0;
     }
+#endif
   }
   else if(sep)
   {
@@ -1108,3 +1164,42 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
   return count;
 }
 
+#define FASTA_LINE_SIZE         70
+#define FASTA_LINES_IN_CHUNK    5000
+
+static void
+MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
+{
+        SeqPortPtr      spp=NULL;
+        Char            buf[2048];
+        Char         	str[200];
+        ValNodePtr      vnp;
+        MolInfoPtr      mip=NULL;
+	FILE PNTR fp=(FILE PNTR)userdata;
+	Int4    start=0,step=FASTA_LINE_SIZE*FASTA_LINES_IN_CHUNK,stop;
+
+	for(vnp=bsp->descr;vnp;vnp=vnp->next){
+                if(vnp->choice==Seq_descr_molinfo){
+                        mip = (MolInfoPtr)(vnp->data.ptrvalue);
+                }
+        }
+	SeqIdWrite(bsp->id,str,PRINTID_FASTA_LONG,199);
+	if(!CreateDefLine(NULL, bsp, buf, sizeof(buf), mip?mip->tech:0, NULL, NULL)) return;
+	fprintf(fp, ">%s %s\n", str,buf);
+	while(start < bsp->length){
+		stop=start+step-1;
+		if(stop >= bsp->length) stop=bsp->length-1;
+		spp = SeqPortNew(bsp,start,stop,0, (ISA_na(bsp->mol))?Seq_code_iupacna:Seq_code_ncbieaa);
+		if(spp==NULL) return;
+		SeqPortSet_do_virtual(spp, TRUE);
+		while (FastaSeqLineEx(spp, buf, FASTA_LINE_SIZE, ISA_na(bsp->mol),TRUE)) {
+			fprintf(fp,"%s\n", buf);
+			buf[0] = '\0';
+		}
+		if(spp) {
+			SeqPortFree(spp);
+			spp=NULL;
+		}
+		start=stop+1;
+	}
+}

@@ -1,4 +1,4 @@
-/* $Id: xmlblast.c,v 6.23 2002/11/14 15:37:18 dondosha Exp $ */
+/* $Id: xmlblast.c,v 6.29 2003/03/21 21:01:16 camacho Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,30 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.23 $
+* $Revision: 6.29 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.29  2003/03/21 21:01:16  camacho
+* Fixed inversion of subject and query sequences for tblastx
+*
+* Revision 6.28  2003/02/19 15:42:32  madden
+* Check glb_matrix before freeing
+*
+* Revision 6.27  2003/01/28 16:57:11  dondosha
+* For single query, call the old BXMLPrintOutput function from BXMLPrintMultiQueryOutput
+*
+* Revision 6.26  2003/01/23 20:02:53  dondosha
+* Distinguish between blastn and megablast programs in multi-query XML output
+*
+* Revision 6.25  2003/01/23 19:55:20  dondosha
+* Added the closing part for multi-query XML output.
+*
+* Revision 6.24  2003/01/06 23:01:40  dondosha
+* Added function to create a multi-query XML output for web megablast
+*
 * Revision 6.23  2002/11/14 15:37:18  dondosha
 * Added functions to extract all hit information from seqalign that can be extracted without loading sequences
 *
@@ -367,8 +385,8 @@ Boolean BXMLGetSeqLineForStdSeg(StdSegPtr ssp, HspPtr hsp, Int4 length,
                         codon[2] = SeqPortGetResidue(spp1);
                         residue2 = AAForCodon(codon, genetic_code2);
                         
-                        hsp->qseq[abs_index] = residue1;
-                        hsp->hseq[abs_index] = residue2;
+                        hsp->qseq[abs_index] = residue2;
+                        hsp->hseq[abs_index] = residue1;
                         
                         if (residue1 == residue2)
                             hsp->midline[abs_index] = residue1;
@@ -711,9 +729,9 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
         
         is_aa = (bsp->mol == Seq_mol_aa);
            
-	if (BioseqGetTitle(bsp))
+        if (BioseqGetTitle(bsp))
         	hitp->def = StringSave(BioseqGetTitle(bsp));
-	else
+        else
         	hitp->def = StringSave("No definition line found");
           
         SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
@@ -973,7 +991,8 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
     if (aip != NULL)      
         BlastOutputAsnWrite(boutp, aip, NULL);
     
-    free_default_matrix(glb_matrix);
+    if (glb_matrix)
+    	free_default_matrix(glb_matrix);
     glb_matrix = NULL;
     
     BlastOutputFree(boutp);
@@ -982,6 +1001,109 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
     
     return TRUE;
 }
+
+Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign, 
+           BLAST_OptionsBlkPtr options, CharPtr program, CharPtr database, 
+           BioseqSetPtr query_set, ValNodePtr other_returns, Int4 flags,
+           CharPtr message)
+{
+    Boolean ungapped = FALSE;
+    BioseqPtr query;
+    SeqEntryPtr sep;
+    Boolean q_is_na, d_is_na;
+    MBXmlPtr mbxp = NULL;
+    IterationPtr iterp;
+    SeqEntryFunc seqentry_callback;
+    Int4 index;
+    Boolean query_found;
+    SeqIdPtr seqid = NULL;
+    SeqAlignPtr sap = NULL, next_seqalign = NULL;
+
+    sep = (SeqEntryPtr) ((BioseqSetPtr)query_set)->seq_set;
+    BlastGetTypes(program, &q_is_na, &d_is_na);
+    if (q_is_na)
+       seqentry_callback = FindNuc;
+    else 
+       seqentry_callback = FindProt;
+
+    /* If no queries, there is nothing to report */
+    if (!sep)
+       return FALSE;
+
+    /* If only one query, call a one-query output function */
+    if (!sep->next) {
+       Boolean return_value;
+       SeqEntryExplore(sep, &query, seqentry_callback);
+       return_value = BXMLPrintOutput(aip, seqalign, options, program, 
+                         database, query, other_returns, flags, message);
+       /* This function is presumed to close the AsnIoPtr inside */
+       AsnIoClose(aip);
+       return return_value;
+    }
+
+    index = 0;
+    while (seqalign) {
+       /* Find the corresponding query */
+       query_found = FALSE;
+       for ( ; sep; ++index, sep = sep->next) {
+          SeqEntryExplore(sep, &query, seqentry_callback);
+          seqid = TxGetQueryIdFromSeqAlign(seqalign);
+          if (SeqIdComp(query->id, seqid) == SIC_YES) {
+             query_found = TRUE;
+             break;
+          }
+       }
+       if (query_found) {
+          /* Find where seqaligns for this query end */
+          for (sap = seqalign; sap && sap->next; sap = sap->next) {
+             if (SeqIdComp(seqid, TxGetQueryIdFromSeqAlign(sap->next)) 
+                 != SIC_YES) {
+                break;
+             }
+          }
+          next_seqalign = sap->next;
+          /* Unlink this query seqaligns from the rest */
+          sap->next = NULL;
+       } else {
+          break;
+       }
+
+       if (!mbxp) {
+          if (options->is_megablast_search) {
+             mbxp = 
+                PSIXmlInit(aip, "megablast", database, options, query, 0);
+          } else {
+             mbxp = 
+                PSIXmlInit(aip, program, database, options, query, 0);
+          }
+       }
+       if(options->gapped_calculation == FALSE || 
+          !StringICmp(program, "tblastx"))
+          ungapped = TRUE;
+    
+       /* Here is one-iterational Blast output */
+       iterp = BXMLBuildOneQueryIteration(seqalign, NULL,
+                      options->is_ooframe, ungapped, index, NULL, query);
+    
+       IterationAsnWrite(iterp, mbxp->aip, mbxp->atp);
+       AsnIoFlush(mbxp->aip);
+       IterationFree(iterp);
+       /* Reconnect the SeqAlign chain */
+       if (sap)
+          sap->next = next_seqalign;
+       seqalign = next_seqalign;
+    }
+    
+    free_default_matrix(glb_matrix);
+    glb_matrix = NULL;
+    
+    MBXmlClose(mbxp, other_returns, !options->gapped_calculation);
+
+    ObjMgrFreeCache(0);
+    
+    return TRUE;
+}
+
 
 PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database, 
                      BLAST_OptionsBlkPtr options, BioseqPtr query, Int4 flags)

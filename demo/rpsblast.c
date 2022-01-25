@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.47 2002/11/29 20:13:13 camacho Exp $
+/* $Id: rpsblast.c,v 6.50 2003/03/20 14:47:16 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,22 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.47 $
+* $Revision: 6.50 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.50  2003/03/20 14:47:16  madden
+* StringSave on asn1_mode
+*
+* Revision 6.49  2003/03/20 13:44:24  madden
+* Fix -m 10/11 output to make them SeqAnnots
+*
+* Revision 6.48  2002/12/31 22:47:16  boemker
+* Added support for printing output as ASN (text, with -m 10, or binary, with
+* -m 11).
+*
 * Revision 6.47  2002/11/29 20:13:13  camacho
 * Fix incorrect parameter to FastaToSeqEntryForDb
 *
@@ -192,8 +202,6 @@
 #include "/am/purew/solaris2/new/../purify/purify-4.5-solaris2/purify.h"
 #endif
 
-AsnIoPtr aip_glb=NULL;
-
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
 static Args myargs[] = {
@@ -318,15 +326,10 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     CharPtr location = NULL;
     
     rpsbop = MemNew(sizeof(RPSBlastOptions));
+    
 
-    if (myargs[5].strvalue != NULL) {
+    if (myargs[5].strvalue != NULL) 
 	rpsbop->out_filename = StringSave(myargs[5].strvalue);
-        if ((rpsbop->outfp = FileOpen(myargs[5].strvalue, "a")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open output "
-                      "file %s\n", myargs[5].strvalue);
-            return NULL;
-        }
-    }
 
     /* Note: these 2 parameters are necessary to intialize RPS Blast */
     rpsbop->rps_database = StringSave(myargs[1].strvalue);    
@@ -363,19 +366,57 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, "BLOSUM62", 0, 0);
     
-    if(myargs[4].intvalue == 7)
+    if(myargs[4].intvalue == 7) {
        rpsbop->is_xml_output = TRUE;
+    }
     else if (myargs[4].intvalue == 8)
        rpsbop->is_tabular = TRUE;
-    else if (myargs[4].intvalue == 8 || myargs[4].intvalue == 9)
+    else if (myargs[4].intvalue == 9)
     {
        rpsbop->is_tabular = TRUE;
        rpsbop->is_tabular_comments = TRUE;
+    }
+    else if (myargs[4].intvalue == 10 || myargs[4].intvalue == 11)
+    {
+       rpsbop->is_asn1_output = TRUE;
+	if (myargs[4].intvalue == 10)
+		rpsbop->asn1_mode = StringSave("w");
+	else
+		rpsbop->asn1_mode = StringSave("wb");
     }
     else
        PGPGetPrintOptions(options->gapped_calculation, 
                           &rpsbop->align_options, &rpsbop->print_options);
     
+
+    if (!rpsbop->is_xml_output && !rpsbop->is_asn1_output && (rpsbop->outfp = FileOpen(rpsbop->out_filename, "a")) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open output "
+                      "file %s\n", rpsbop->out_filename);
+            return NULL;
+    }
+
+    if (myargs[16].strvalue != NULL) {
+        if (myargs[14].intvalue == 0) {
+            ErrPostEx(SEV_FATAL, 0, 0, 
+                      "-J option must be TRUE to use this option");
+            return NULL;
+        } else  {
+            if ((rpsbop->aip = AsnIoOpen (myargs[16].strvalue,"w")) == NULL) {
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
+                          "file %s\n", myargs[16].strvalue);
+                return NULL;
+            }
+    	}
+    }
+    else if (rpsbop->is_asn1_output)
+    {
+            if ((rpsbop->aip = AsnIoOpen (rpsbop->out_filename, rpsbop->asn1_mode)) == NULL) {
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
+                          "file %s\n", rpsbop->out_filename);
+                return NULL;
+            }
+    }
+
     options->dropoff_2nd_pass  = (Int4) myargs[6].floatvalue;
     options->expect_value  = (Nlm_FloatHi) myargs[3].floatvalue;
     options->hitlist_size = MAX(rpsbop->number_of_descriptions, 
@@ -448,6 +489,24 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     CharPtr title;
     ValNodePtr vnp, mask;
 
+
+
+    seqannot = SeqAnnotNew();
+    seqannot->type = 2;
+    align_type = BlastGetProgramNumber(rpsbop->query_is_protein ?
+                                       "blastp" : "blastx");
+    AddAlignInfoToSeqAnnot(seqannot, align_type); /* blastp or tblastn */
+    
+    if(rpsbop->aip != NULL) {     
+	seqannot->data = seqalign;
+        SeqAnnotAsnWrite(seqannot, rpsbop->aip, NULL);
+	AsnIoReset(rpsbop->aip);
+    }
+
+    if (rpsbop->outfp == NULL)
+	return;
+	
+
     free_buff();    
     init_buff_ex(128);
     
@@ -466,13 +525,6 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     PrintDefLinesFromSeqAlign(prune->sap, 80, rpsbop->outfp, 
                               rpsbop->print_options, FIRST_PASS, NULL);
 
-    seqannot = SeqAnnotNew();
-    seqannot->type = 2;
-    align_type = BlastGetProgramNumber(rpsbop->query_is_protein ?
-                                       "blastp" : "blastx");
-    
-    AddAlignInfoToSeqAnnot(seqannot, align_type); /* blastp or tblastn */
-    
     /* Now adding database title from SeqAnnot */
 
     title = readdb_get_title(rpsbop->rdfp);
@@ -485,9 +537,11 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
                                        prune);
     seqannot->data = prune->sap;
 
-    if(aip_glb != NULL) {     
-        SeqAnnotAsnWrite(seqannot, aip_glb, NULL);
-	AsnIoReset(aip_glb);
+    if(rpsbop->aip != NULL) {     
+        SeqAnnotAsnWrite(seqannot, rpsbop->aip, NULL);
+/*
+	AsnIoReset(rpsbop->aip);
+*/
     }
 
     /* ------ Mask needed ----- */
@@ -698,26 +752,12 @@ Int2 Main(void)
     if((fd = FileOpen(myargs[5].strvalue, "w")) != NULL)
         FileClose(fd);
     
-    if (myargs[16].strvalue != NULL) {
-        if (myargs[14].intvalue == 0) {
-            ErrPostEx(SEV_FATAL, 0, 0, 
-                      "-J option must be TRUE to use this option");
-            return 1;
-        } else  {
-            if ((aip_glb = AsnIoOpen (myargs[16].strvalue,"w")) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
-                          "file %s\n", myargs[16].strvalue);
-                return 1;
-            }
-    	}
-    }
-        
     if((rpsbop = RPSReadBlastOptions()) == NULL) {
         ErrPostEx(SEV_FATAL, 0, 0, "Unable to create RPS Blast options");
         return 1;
     }
 
-    if (!rpsbop->is_xml_output && !rpsbop->is_tabular)
+    if (!rpsbop->is_xml_output && !rpsbop->is_tabular && !rpsbop->is_asn1_output)
 	    BlastPrintVersionInfo("RPS-BLAST", rpsbop->html, rpsbop->outfp);
     
     /* VoidPtr bsp_data = NULL, print_data = NULL; */

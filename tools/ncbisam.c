@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.28 2002/09/23 19:48:09 camacho Exp $
+/* $Id: ncbisam.c,v 6.29 2003/04/14 19:52:31 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.29  2003/04/14 19:52:31  camacho
+* Added ISAMUninitSearch
+*
 * Revision 6.28  2002/09/23 19:48:09  camacho
 * Avoid the use of data->db_fd when searching the ISAM databases
 *
@@ -1401,6 +1404,51 @@ void ISAMSetCheckForNonUnique(ISAMObjectPtr object, Boolean test_non_unique)
 
     return;
 }
+
+/* ---------------------- ISAMUninitSearch --------------------------
+   Purpose:     Uninitialize an ISAM search (free all allocated and used 
+                buffers and unmap and close all mapped/opened files).
+                Undoes what the ISAMInitSearch function does.
+   Parameters:  ISAM object
+   Returns:     ISAM Error Code
+   NOTE:        None
+  ------------------------------------------------------------------*/
+ISAMErrorCode ISAMUninitSearch(ISAMObjectPtr object)
+{
+    ISAMDataPtr data = NULL;
+    
+    if (!object)
+        return ISAMBadParameter;
+
+    if ( !(data = (ISAMDataPtr) object))
+        return ISAMBadParameter;
+
+    if (data->initialized == FALSE)
+        return ISAMNoError;
+
+    if (data->mmp != NULL) {
+        Nlm_MemMapFini(data->mmp);
+        data->mmp = NULL;
+    } else {
+        MemFree(data->FileStart);
+        data->FileStart = NULL;
+    }
+
+    if (data->db_fd != NULL)
+        FileClose(data->db_fd);  
+    
+    NlmCloseMFILE(data->mfp);
+
+    if (data->max_line_size != 0) {
+        data->max_line_size = 0;
+        MemFree(data->line);
+        data->line = NULL;
+    }
+    
+    data->initialized = FALSE;
+
+    return ISAMNoError;
+}
 /* ---------------------- ISAMObjectFree --------------------------
    Purpose:     To terminate all allocated and used buffers
                 unmap and close all mapped/opened files
@@ -1413,27 +1461,12 @@ void ISAMObjectFree(ISAMObjectPtr object)
 {
     ISAMDataPtr data = (ISAMDataPtr) object;
 
+    if (ISAMUninitSearch(object) != ISAMNoError)
+        return;
+
     if((data = (ISAMDataPtr) object) == NULL)
         return;
 
-    if(data->mmp != NULL) {
-        Nlm_MemMapFini(data->mmp);
-        data->mmp = NULL;
-    } else {
-        MemFree(data->FileStart);
-        data->FileStart = NULL;
-    }
-
-    if(data->db_fd != NULL)
-        FileClose(data->db_fd);  
-    
-    NlmCloseMFILE(data->mfp);
-
-    if(data->max_line_size != 0) {
-        data->max_line_size = 0;
-        MemFree(data->line);
-    }
-    
     MemFree(data->DBFileName);
     MemFree(data->IndexFileName);
     MemFree(data->CAName);

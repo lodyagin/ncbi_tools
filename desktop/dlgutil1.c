@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.36 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -672,6 +672,22 @@ static Boolean GeneMatchFunc (GatherContextPtr gcp)
   return TRUE;
 }
 
+static void SaveGoTermsInSfp (UserObjectPtr uop, Pointer userdata)
+
+{
+  FeatureFormPtr  ffp;
+  ObjectIdPtr     oip;
+
+  if (uop == NULL || userdata == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "GeneOntology") == 0) {
+    ffp = (FeatureFormPtr) userdata;
+    ffp->goTermUserObj = AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead,
+                                       (AsnWriteFunc) UserObjectAsnWrite);
+  }
+}
+
 extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
 
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
@@ -719,6 +735,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
       SetTitle (ffp->geneDesc, "");
+      SetTitle (ffp->locusTag, "");
       ggl.ffp = ffp;
       ggl.omp = ObjMgrGet ();
       ggl.slp = sfp->location;
@@ -768,6 +785,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetValue (ffp->useGeneXref, 3);
         SetTitle (ffp->geneSymbol, grp->locus);
         SetTitle (ffp->geneDesc, grp->desc);
+        SetTitle (ffp->locusTag, grp->locus_tag);
         SafeHide (ffp->editGeneBtn);
         SafeHide (ffp->newGeneGrp);
       } else if (ggl.val == 1 && grp != NULL && (! ggl.xrefmatch)) {
@@ -775,6 +793,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetValue (ffp->useGeneXref, 2);
         SetTitle (ffp->geneSymbol, grp->locus);
         SetTitle (ffp->geneDesc, grp->desc);
+        SetTitle (ffp->locusTag, grp->locus_tag);
         SafeHide (ffp->editGeneBtn);
         SafeShow (ffp->newGeneGrp);
       } else if (grp != NULL && (! ggl.xrefmatch)) {
@@ -782,6 +801,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetValue (ffp->useGeneXref, 2);
         SetTitle (ffp->geneSymbol, grp->locus);
         SetTitle (ffp->geneDesc, grp->desc);
+        SetTitle (ffp->locusTag, grp->locus_tag);
         SafeHide (ffp->editGeneBtn);
         SafeShow (ffp->newGeneGrp);
       } else if (ggl.val > 2) {
@@ -801,6 +821,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->gbquals, sfp->qual);
       SeqFeatPtrToFieldPage (ffp->gbquals, sfp);
       PointerToDialog (ffp->usrobjext, sfp->ext);
+      VisitUserObjectsInUop (sfp->ext, (Pointer) ffp, SaveGoTermsInSfp);
     } else {
       SetTitle (ffp->comment, "");
       SetValue (ffp->evidence, 1);
@@ -812,10 +833,12 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
       SetTitle (ffp->geneDesc, "");
+      SetTitle (ffp->locusTag, "");
       PointerToDialog (ffp->featcits, NULL);
       PointerToDialog (ffp->dbxrefs, NULL);
       PointerToDialog (ffp->gbquals, NULL);
       PointerToDialog (ffp->usrobjext, NULL);
+      ffp->goTermUserObj = NULL;
     }
   }
 }
@@ -853,6 +876,9 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
       } else if (sfp->ext == NULL) {
         sfp->ext = old->ext;
         old->ext = NULL;
+      }
+      if (ffp->goTermUserObj != NULL) {
+        sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
       }
       /*
       if (sfp->cit == NULL) {
@@ -961,6 +987,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Int2            i;
   Int4Ptr         intptr;
   Uint2           itemID;
+  Char            locustag [128];
   Boolean         noLeft;
   Boolean         noRight;
   SeqEntryPtr     oldscope;
@@ -1077,7 +1104,14 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           } else if (val == 2) {
             GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
             GetTitle (ffp->geneDesc, desc, sizeof (desc));
+            GetTitle (ffp->locusTag, locustag, sizeof (locustag));
             grp = CreateNewGeneRef (symbol, NULL, desc, FALSE);
+            if (! StringHasNoText (locustag)) {
+              if (grp == NULL) {
+                grp = GeneRefNew ();
+              }
+              grp->locus_tag = StringSave (locustag);
+            }
           } else {
             vnp = ffp->geneNames;
             i = val - 3;
@@ -1114,6 +1148,9 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       if (ompc.input_entityID == 0) {
         sfp->qual = DialogToPointer (ffp->gbquals);
         sfp->ext = DialogToPointer (ffp->usrobjext);
+        if (ffp->goTermUserObj != NULL) {
+          sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
+        }
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
@@ -1127,6 +1164,9 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
         sfp->qual = DialogToPointer (ffp->gbquals);
         sfp->ext = DialogToPointer (ffp->usrobjext);
+        if (ffp->goTermUserObj != NULL) {
+          sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
+        }
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
@@ -1189,7 +1229,14 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           if (sep != NULL && sep->data.ptrvalue != NULL) {
             GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
             GetTitle (ffp->geneDesc, desc, sizeof (desc));
+            GetTitle (ffp->locusTag, locustag, sizeof (locustag));
             grp = CreateNewGeneRef (symbol, NULL, desc, FALSE);
+            if (! StringHasNoText (locustag)) {
+              if (grp == NULL) {
+                grp = GeneRefNew ();
+              }
+              grp->locus_tag = StringSave (locustag);
+            }
             if (grp != NULL) {
               sfp = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
               if (sfp != NULL) {

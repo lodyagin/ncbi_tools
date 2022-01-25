@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.28 2002/10/09 20:30:05 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.31 2003/01/10 14:47:47 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.28 $
+* $Revision: 1.31 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.31  2003/01/10 14:47:47  bauer
+* fixed problem with CDART connectivity
+*
+* Revision 1.30  2003/01/09 21:56:29  bauer
+* reduced default number of hits to 25
+*
+* Revision 1.29  2002/12/24 18:22:49  bauer
+* changes for v1.60
+*
 * Revision 1.28  2002/10/09 20:30:05  bauer
 * increased max. number of CDART neighbors
 *
@@ -124,10 +133,13 @@
 
 #define  BLASTCLI_BUF_SIZE 255
 
-#define  CDSEARCH_TEST  /* use iblast1 instead of public service rpsblast */
-#undef   DART_TEST      /* will only be used for inhouse locations, uses
-                           iblast21 instead of iblast1 or public rpsblast */
+#undef  CDSEARCH_TEST  /* use iblast1 instead of public service rpsblast */
+#undef  DART_TEST      /* will only be used for inhouse locations, uses
+                          iblast21 instead of iblast1 or public rpsblast */
 #define  WIN_GIF
+
+#define DARTSIZELIMIT 1500
+#define DARTFAMILYNUM 5000
 
 #include <ncbi.h>
 #include <ncbimain.h>
@@ -153,6 +165,9 @@
 #include <qblastnet.h>
 #include <pmfapi.h>
 #include <entrez2.h>
+
+unsigned iDartFam[DARTFAMILYNUM];
+Int4     iDartFamNum = 0;
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -422,7 +437,7 @@ static Args myargs [] = {
     { "Program Name",                                                  /* 0 */
       "blastp",    NULL, NULL, FALSE, 'p', ARG_STRING,   0.0, 0, NULL},
     { "Database",                                                      /* 1 */
-      "oasis_sap", NULL, NULL, FALSE, 'd', ARG_STRING,   0.0, 0, NULL},
+      "cdd",       NULL, NULL, FALSE, 'd', ARG_STRING,   0.0, 0, NULL},
     { "Query File",                                                    /* 2 */
       "stdin",     NULL, NULL, TRUE , 'i', ARG_FILE_IN,  0.0, 0, NULL},
     { "Expectation value (E)",                                         /* 3 */
@@ -444,11 +459,11 @@ static Args myargs [] = {
     { "Penalty for a nucleotide mismatch (blastn only)",              /* 11 */
       "-3",        NULL, NULL, FALSE, 'q', ARG_INT,      0.0, 0, NULL},
     { "Reward for a nucleotide match (blastn only)",                  /* 12 */
-  "1",       NULL, NULL, FALSE, 'r', ARG_INT,      0.0, 0, NULL},
+      "1",         NULL, NULL, FALSE, 'r', ARG_INT,      0.0, 0, NULL},
     { "Number of one-line descriptions (V)",                          /* 13 */
-      "50",        NULL, NULL, FALSE, 'v', ARG_INT,      0.0, 0, NULL},
+      "25",        NULL, NULL, FALSE, 'v', ARG_INT,      0.0, 0, NULL},
     { "Number of alignments to show (B)",                             /* 14 */
-      "50",        NULL, NULL, FALSE, 'b', ARG_INT,      0.0, 0, NULL},
+      "25",        NULL, NULL, FALSE, 'b', ARG_INT,      0.0, 0, NULL},
     { "Threshold for extending hits, default if zero",                /* 15 */
       "0",         NULL, NULL, FALSE, 'f', ARG_INT,      0.0, 0, NULL},
     { "Perfom gapped alignment (not available with tblastx)",         /* 16 */
@@ -597,15 +612,15 @@ static Boolean WRPSBDrawSearchPage()
   databases[0] = CDDSearch1;
   databases[1] = CDDSearch2;
   databases[2] = CDDSearch3;
+  databases[3] = CDDSearch4;
   datab_nam[0] = CDDSname1;
   datab_nam[1] = CDDSname2;
   datab_nam[2] = CDDSname3;
+  datab_nam[3] = CDDSname4; 
   if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {
-    databases[3] = CDDSearch4;
     databases[4] = CDDSearch5;
     databases[5] = CDDSearch6;
     databases[6] = CDDSearch7;
-    datab_nam[3] = CDDSname4; 
     datab_nam[4] = CDDSname5; 
     datab_nam[5] = CDDSname6; 
     datab_nam[6] = CDDSname7;
@@ -953,6 +968,9 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
         oval_w = (lrx - ulx) / 3; 
         if (oval_w > 5) oval_w = 5;
         gdImageRoundRectangle(im,ulx,uly,lrx,lry,oval_w,3,colidx,1);
+	if (aapThis->bIsArch) {
+          gdImageRoundRectangle(im,ulx,uly,lrx,lry,oval_w,3,black,0);
+	}
         if (lrx-ulx > 8) {
   	  if (aapThis->nmissg>=0.2) {
 	    points[0].x = ulx - 1;
@@ -1012,7 +1030,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 	  Nlm_StrNCpy(cTmp,aapThis->cGraphId,15);
 	} else Nlm_StrCpy(cTmp,aapThis->cGraphId);
 	titlecol = white;
-	if (aapThis->colcyc == 2 || aapThis->colcyc == 4 || aapThis->colcyc == 5) titlecol = black;
+	if (aapThis->colcyc == 2 || aapThis->colcyc == 4 || aapThis->colcyc == 5 || aapThis->bIsArch) titlecol = black;
         if (strlen(cTmp)*gdFont7X13b->w < swidth) {
           gdImageString(im,
                         gdFont7X13b,
@@ -1062,16 +1080,18 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 static Dart_Connect *WRPSBConnectDart() 
 {
   Dart_Connect        *Connection;
-  Char                 cOutString[PATH_MAX];
+  CharPtr              cOutString;
   
+  cOutString = MemNew(PATH_MAX*sizeof(Char));
   sprintf(cOutString,"ODBCINI=%s",ODBCINI);
   putenv(cOutString);
   putenv("LD_LIBRARY_PATH=/opt/machine/merant/lib");
-/*  if  (Nlm_StrCmp(CDDlocat,"inhouse")!=0) { */
+  if  (Nlm_StrCmp(CDDlocat,"inhouse")!=0) {
     Connection = Dart_Init2("CDart", DARTUSER, DARTPASS); 
-/*  } else {
-    Connection = Dart_Init2("CDartWrite", DARTUSER, DARTPASS); 
-  } */
+  } else {
+    Connection = Dart_Init2("CDart", DARTUSER, DARTPASS); 
+  } 
+  Dart_CdFamily(Connection, iDartFam, DARTFAMILYNUM, &iDartFamNum);
   return (Connection);
 }
 
@@ -1091,15 +1111,31 @@ static Boolean WRPSBHitIsNew(AlignmentAbstractPtr aapThis,
 {
   AlignmentAbstractPtr aap;
   int                  Size, i;
-  unsigned             Gilist[500];
-  char                 Accession[500][30];
+  unsigned             Gilist[DARTSIZELIMIT];
+  char                 Accession[DARTSIZELIMIT][30];
   
   if (!aapThis) return FALSE;
+  for (i=0;i<iDartFamNum;i++) {
+    if (iDartFam[i] == aapThis->pssmid) {
+     aapThis->bIsArch = TRUE;
+     return(TRUE);    
+    }
+  }
   if (Connection) {
-    if (Dart_Related(Connection,aapThis->cCDDid,Gilist,500,&Size,NULL)) {
-      for (i=0;i<Size;i++) {
-        if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
-	  Accession[i][0] = '\0';
+    if (aapThis->pssmid > 0) {
+      if (Dart_SameSim(Connection,aapThis->pssmid,Gilist,DARTSIZELIMIT,&Size)) {
+        for (i=0;i<Size;i++) {
+          if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	    Accession[i][0] = '\0';
+          }
+	}
+      }
+    } else {
+      if (Dart_Related(Connection,aapThis->cCDDid,Gilist,DARTSIZELIMIT,&Size,NULL)) {
+        for (i=0;i<Size;i++) {
+          if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	    Accession[i][0] = '\0';
+          }
 	}
       }
     }
@@ -1114,21 +1150,23 @@ static Boolean WRPSBHitIsNew(AlignmentAbstractPtr aapThis,
         return FALSE;
       }
     }
-    if (aapThis->cCDDid && aap->cCDDid) {
-      if (Nlm_StrCmp(aapThis->cCDDid,aap->cCDDid) == 0) {
-        aapThis->colcyc = aap->colcyc;
-        return FALSE;
-      }
-    }
     for (i=0;i<Size;i++) {
       if (Nlm_StrCmp(Accession[i],aap->cCDDid) == 0) {
         aapThis->colcyc = aap->colcyc;
         return FALSE;
       }
     }
-    if (Nlm_StrICmp(aapThis->cGraphId,aap->cGraphId) == 0) {
-      aapThis->colcyc = aap->colcyc;
-      return FALSE;
+    if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {   /* map names just for inhouse */
+      if (aapThis->cCDDid && aap->cCDDid) {
+        if (Nlm_StrCmp(aapThis->cCDDid,aap->cCDDid) == 0) {
+          aapThis->colcyc = aap->colcyc;
+          return FALSE;
+        }
+      }
+      if (Nlm_StrICmp(aapThis->cGraphId,aap->cGraphId) == 0) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
     }
     aap = aap->next;
   }
@@ -1402,12 +1440,15 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->red = aapThis->blue = 255;    
       aapThis->cGraphId = aapThis->cCDDid;
     }
+    aapThis->bIsArch = FALSE;
     if (WRPSBHitIsNew(aapThis,aapHead,Connection)) {
-      aapThis->colcyc = lastcol + 1;
-      if (aapThis->colcyc >= iNcolors) {
-        aapThis->colcyc -= iNcolors;
+      if (!aapThis->bIsArch) {
+        aapThis->colcyc = lastcol + 1;
+        if (aapThis->colcyc >= iNcolors) {
+          aapThis->colcyc -= iNcolors;
+        }
+        lastcol = aapThis->colcyc;
       }
-      lastcol = aapThis->colcyc;
     }
 
 /*
@@ -1422,9 +1463,16 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->blue  = iDartCol[aapThis->colcyc][2];
     }
 */
-    aapThis->red   = iDartCol[aapThis->colcyc][0];
-    aapThis->green = iDartCol[aapThis->colcyc][1];
-    aapThis->blue  = iDartCol[aapThis->colcyc][2];
+    if (aapThis->bIsArch) {
+      aapThis->colcyc = 255;
+      aapThis->red    = 200;
+      aapThis->green  = 200;
+      aapThis->blue   = 200;
+    } else {
+      aapThis->red   = iDartCol[aapThis->colcyc][0];
+      aapThis->green = iDartCol[aapThis->colcyc][1];
+      aapThis->blue  = iDartCol[aapThis->colcyc][2];
+    }
     sprintf(aapThis->name,"ali%d",(Int4)random());
     aapThis->bIsOasis = bDbIsOasis;
     if (bDbIsOasis) {
@@ -1890,9 +1938,17 @@ static AlignmentAbstractPtr WRPSBWWWargs(WWWInfoPtr www_info, Boolean *bIsQueued
       colcyc = (Int4) atoi(strtok(NULL,","));
       if (colcyc < 0) WRPSBHtmlError("Error in image formatting - invalid color");
       aapThis->colcyc = colcyc;
-      aapThis->red   = iDartCol[aapThis->colcyc][0];
-      aapThis->green = iDartCol[aapThis->colcyc][1];
-      aapThis->blue  = iDartCol[aapThis->colcyc][2];
+      if (colcyc == 255) {
+        aapThis->bIsArch = TRUE;
+        aapThis->red   = 200;
+        aapThis->green = 200;
+        aapThis->blue  = 200;
+      } else {
+        aapThis->red   = iDartCol[aapThis->colcyc][0];
+        aapThis->green = iDartCol[aapThis->colcyc][1];
+        aapThis->blue  = iDartCol[aapThis->colcyc][2];
+        aapThis->bIsArch = FALSE;
+      }
       nmiss = (Int4) atoi(strtok(NULL,","));
       if (nmiss < 0 || nmiss >= 100) WRPSBHtmlError("Error in image formatting - invalid truncation");
       aapThis->nmissg = (Nlm_FloatHi) nmiss / 100.0;
@@ -2024,7 +2080,7 @@ static AlignmentAbstractPtr WRPSBWWWargs(WWWInfoPtr www_info, Boolean *bIsQueued
 /*---------------------------------------------------------------------------*/
   if ((indx = WWWFindName(www_info,"SEQUENCE")) >= 0) {
     *sequence = WWWGetValueByIndex(www_info,indx);
-    if (*sequence == NULL || *sequence[0]==NULLB) {
+    if ((*sequence == NULL || *sequence[0]==NULLB) && *rid == NULL) {
       WRPSBHtmlError("Query SEQUENCE missing from input!");
     }
   }
@@ -2533,7 +2589,7 @@ Int2 Main (void)
     if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {
       myargs[1].strvalue = StringSave("cdd_loc");
     } else {
-      myargs[1].strvalue = StringSave("oasis_sap");
+      myargs[1].strvalue = StringSave("cdd");
     }
   } else {
     www_arg = WWWGetValueByIndex(www_info, indx);
@@ -2802,9 +2858,9 @@ Int2 Main (void)
   if (bIsPrecalc || rid) {
     iDartRet = 0;
     if (bIsPrecalc) {
-      cSapDBTitle = MemNew(20*sizeof(Char));
-      dPtr = MemNew(20*sizeof(Char));
-      iDartRet = Dart_Version(Connection,dPtr,20,cSapDBTitle,20);
+      cSapDBTitle = MemNew(128*sizeof(Char));
+      dPtr = MemNew(128*sizeof(Char));
+      iDartRet = Dart_Version(Connection,dPtr,128,cSapDBTitle,128); 
       if (iDartRet) {
         cPtr = Nlm_StrStr(cSapDBTitle,".v");
         if (cPtr) {
@@ -2829,8 +2885,8 @@ Int2 Main (void)
         Nlm_StrCpy(dbname,cSapDBTitle);
       } else {
         if (dbname[0] == '\0') {   /* worst case - don't know a thing about db */
-          Nlm_StrCpy(dbname,"unknown");
-          Nlm_StrCpy(dbversion,"??");
+          Nlm_StrCpy(dbname,"cdd");
+          Nlm_StrCpy(dbversion,"v1.60");
         }
       }
     }

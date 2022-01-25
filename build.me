@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: build.me,v 1.6 1999/08/12 18:38:41 beloslyu Exp $
+# $Id: build.me,v 1.7 2003/04/04 20:13:23 lavr Exp $
 #
 # W A R N I N G ! ! !
 # That script is intended for internal use in NCBI only
@@ -9,9 +9,11 @@
 
 #check that we're running withing NCBI
 MYDOMAIN=`grep '^domain' /etc/resolv.conf |awk '{print $2}'`
-if [ "$MYDOMAIN" != "nlm.nih.gov" ] ; then
-	echo That script is intended for internal use in NCBI only
-	exit 1
+test -z "$MYDOMAIN"  &&  MYDOMAIN="`hostname --fqdn 2>/dev/null`"
+test -z "$MYDOMAIN"  &&  MYDOMAIN="`domainname`"
+if [ `echo "$MYDOMAIN" | grep -c 'nlm[.]nih[.]gov$'` != 1 ] ; then
+    echo That script is intended for internal use in NCBI only
+    exit 1
 fi
 
 SCRIPTDIR=/am/ncbiapdata/scripts

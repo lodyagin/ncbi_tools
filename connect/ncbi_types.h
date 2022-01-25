@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/*  $Id: ncbi_types.h,v 6.2 2002/09/19 18:05:41 lavr Exp $
+/*  $Id: ncbi_types.h,v 6.3 2003/04/09 19:05:58 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,6 +50,12 @@
 #include <stddef.h>
 
 
+/** @addtogroup UtilityFunc
+ *
+ * @{
+ */
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -83,9 +89,15 @@ typedef unsigned int TNCBI_Time;
 #endif
 
 
+/* @} */
+
+
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_types.h,v $
+ * Revision 6.3  2003/04/09 19:05:58  siyan
+ * Added doxygen support
+ *
  * Revision 6.2  2002/09/19 18:05:41  lavr
  * Header file guard macro changed; log moved to end
  *

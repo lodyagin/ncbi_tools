@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.43 $
+* $Revision: 6.48 $
 *
 * File Description: 
 *
@@ -66,6 +66,7 @@ typedef struct seqPanelLines {
   Int4    bioSeqLine;   /* this line refers to bioseq line           */
   Int2    lineType;     /* what to draw on this line (see ELineType) */
   Int4    idx;          /* feature index                             */
+  Int4    row;          /* index in alignment                        */
   Boolean protProduct;
 } SeqPanLine, PNTR SeqPanLinePtr;
 
@@ -99,9 +100,14 @@ typedef struct bioseqviewdata {
   PopuP           newNumControl;
   PopuP           newGridControl;
 
-  Int4            LineHeight, LineSpace, CharHeight, CharWidth, BlocksAtLine, CharsAtLine, TotalLines;
-  Boolean         DrawGrid;
+  // for new sequence and alignment viewers
+  Int4            LineHeight, LineSpace, CharHeight, CharWidth, BlocksAtLine, CharsAtLine, TotalLines, TargetRow;
+  Int2            SeqStartPosX;  /* Draw Sequence from this x pos */
+  SeqAlignPtr     salp;
+  Boolean         DrawGrid, seqAlignMode;
   SeqPanLinePtr   PNTR SeqPanLines;
+  ValNodePtr      Selection;
+
 
   GrouP           udvParentGrp;
   /*
@@ -133,6 +139,7 @@ typedef struct bioseqviewdata {
 
   PopuP           ffModeCtrl;
   PopuP           ffStyleCtrl;
+  ButtoN          ffCustomBtn;
 
   PopuP           newGphStyle;
   PopuP           newGphFilter;
@@ -220,6 +227,7 @@ extern BioseqPageData dskPageData;
 
 extern BioseqPageData asn2gphGphPageData;
 extern BioseqPageData seqpnlPageData;
+extern BioseqPageData seqAlnPnlPageData;
 
 /*
 *  The SeqViewProcsPtr may be registered with a call to SetAppProperty
@@ -379,3 +387,4 @@ extern void EnableDisableLegendItem (BioseqViewPtr bvp, Boolean enable);
 #endif
 
 #endif /* ndef _SEQVIEW_ */
+

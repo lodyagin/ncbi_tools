@@ -1,6 +1,5 @@
 /*
- * $Id: vastsrvDB.c,v 1.1.1.1 2002/12/06 20:17:21 chenj Exp $
- *
+ * $Id: vastsrvDB.c,v 1.8 2003/01/31 16:11:44 chenj Exp $
  *
  * ===========================================================================
  *
@@ -26,28 +25,45 @@
  *
  * ===========================================================================
  *
+ * File Name: vastsrvDB.c --- The database version of vastsrv.c
  *
- * Author: Jie Chen,  Christopher Hogue, Tom Madej, Siqian He
+ * Author: Christopher Hogue, Tom Madej, Siqian He, Jie Chen
  *
- * 
+ *
  * $Log: vastsrvDB.c,v $
- * Revision 1.1.1.1  2002/12/06 20:17:21  chenj
- * Imported Scouces
+ * Revision 1.8  2003/01/31 16:11:44  chenj
+ * set ODBCINI correctly
+ *
+ * Revision 1.7  2003/01/15 17:15:39  chenj
+ * delete all SelfNbr stuff
+ *
+ * Revision 1.6  2003/01/15 16:24:52  chenj
+ * Change some posting messages
+ *
+ * Revision 1.5  2003/01/14 21:15:19  chenj
+ * change VastToCn3d() to VastToCn3DAndAli()
  *
  *
  *
- * This file is the main program to create new vastsrv.cgi which displays 
- * graphics for structure features and annotations.
+ * This file with others together produce graphical display of structure 
+ * alignment.
  *
- * =========================================================================
+ *
+ * ===========================================================================
  *
  */
 
+/* Main program for VAST structure neighbor server. */
+
+/* Use vastlocl.c instead of vastdtbs.c because it's faster to read in the
+ * existing BiostrucAnnotSet file than to load it from database.
+ */
+
+/* define DEBUG_1 1 */
 
 #include "vastuti.h"
 
 #define CPUTIME_MAX		120
-#define MAX_MMDBIDS		4096
 #define DEFAULT_SUBSET_NUM    	NRBlast10e_40 	/* the NR set BLAST 10e-40 */
 #define DEFAULT_SORT_BY		NRes 	/* Number of Aligned Residues */
 #define NUM_HITS_PER_PAGE	60
@@ -62,8 +78,6 @@
 #define DOMID_SIZE              7       /* used to be 6, as length of domId */
 #define MaxVPP			150
 
-
-/* J. Chen */
 #define HEADFILE   "sshead.txt"
 
 Char 		VSPATH[PATH_MAX];
@@ -112,8 +126,8 @@ static Uint1 getSubsetNbr(Char *subname)
 
 static void 
 VastTableBegin (FILE *table, Int4 iMMDBid, Int4 iFSID, SortBy sortby,
-	SubSetID subsetnum, Int4 iKept,  CharPtr NonNbr, CharPtr SelfNbr, 
-	VastPageDataPtr vpp, Int4 numhitsdisplayed, Int4 numhits, Int4 numpages,
+	SubSetID subsetnum, Int4 iKept,  CharPtr NonNbr, VastPageDataPtr vpp, 
+	Int4 numhitsdisplayed, Int4 numhits, Int4 numpages,
 	Int4 pagenum, char cTable, Int4 NbrFlag, CharPtr JobID, CharPtr pcPass)
 {
 	 Int4 domNo;
@@ -147,26 +161,25 @@ VastTableBegin (FILE *table, Int4 iMMDBid, Int4 iFSID, SortBy sortby,
 /* J. Chen */
 
     fprintf(table, "<br>\n"); 
+    fprintf(table, "<font class=SMALL1><strong>");
     if (NbrFlag == DEF_ALL_NBR) {
 	if (numhitsdisplayed > iKept) {
             int numtmp;
 
             numtmp  = numhits - numhitsdisplayed + iKept;
             if (numtmp)
-                fprintf(table, "<font class=SMALL1><strong>%d out of %d ",
-                                        numhitsdisplayed-iKept, numhits);
-            else fprintf(table, "<font class=SMALL1><strong>%d ", numhits);
+                fprintf(table, "%d out of %d ", numhitsdisplayed-iKept,numhits);
+            else fprintf(table, "%d ", numhits);
             if (iKept)
                 fprintf(table, "with %d additional selected ", iKept);
             if (numhitsdisplayed > 1)
-                fprintf(table, "structure neighbors displayed.</strong></font>\n");
-            else fprintf(table, "structure neighbor displayed.</strong></font>\n");
+                fprintf(table, "structure neighbors displayed");
+            else fprintf(table, "structure neighbor displayed");
 
         }
         else if (iKept > 1)
-                fprintf(table,"<font class=SMALL1><strong>%d selected neighbors displayed.</strong></font>\n",iKept);
-        else fprintf(table, "<font class=SMALL1><strong>1 selected neighbor displayed.</strong></font>\n");
-
+                fprintf(table,"%d selected neighbors displayed",iKept);
+        else fprintf(table, "1 selected neighbor displayed");
     }
     else {
 	if (numhitsdisplayed > iKept)  {
@@ -175,17 +188,17 @@ VastTableBegin (FILE *table, Int4 iMMDBid, Int4 iFSID, SortBy sortby,
             numtmp = numhitsdisplayed - iKept;
 
             if (numtmp>1)
-                fprintf(table, "<font class=SMALL1><strong>%d neighbors found.", numtmp);
-            else fprintf(table, "<font class=SMALL1><strong>1 neighbor found.");
+                fprintf(table, "%d neighbors found", numtmp);
+            else fprintf(table, "1 neighbor found");
             if (iKept>1)
-                fprintf(table, " and displayed with %d additional selected ones",iKept);
+                fprintf(table, ", and displayed with %d additional selected ones",iKept);
             else if (iKept ==1)
-                fprintf(table, " and displayed with 1 additional selected neighbor");
+                fprintf(table, ", and displayed with 1 additional selected neighbor");
 
 	}
         else if (iKept >1)
-                fprintf(table, "<font class=SMALL1><strong>%d selected neighbors displayed", iKept);
-        else fprintf(table, "<font class=SMALL1><strong>1 selected neighbor displayed");
+                fprintf(table, "%d selected neighbors displayed", iKept);
+        else fprintf(table, "1 selected neighbor displayed");
 
         if (NonNbr && NonNbr[0] != NULLB) {
 	   Char str[MAX_TBUFF];
@@ -193,21 +206,12 @@ VastTableBegin (FILE *table, Int4 iMMDBid, Int4 iFSID, SortBy sortby,
 	   if (strchr(NonNbr, ','))
 		sprintf(str, " are not structure neighbors");
 	   else sprintf(str, " is not a structure neighbor");
-	   fprintf(table, ", but <font color=#CC6600>%s</font>%s", NonNbr,str);
+	   if (StrLen(NonNbr) <= 41) 
+	      fprintf(table,", but <font color=#CC6600>%s</font>%s",NonNbr,str);
+	   else fprintf(table, ", but others are not structure neighbors");
  	}
-/*
-        if (SelfNbr && SelfNbr[0] != NULLB) {
-	   Char str[MAX_TBUFF];
-	  
-	   if (strchr(SelfNbr, ',')) sprintf(str, " are");
-	   else sprintf(str, " is"); 
-	   if (NonNbr && NonNbr[0] != NULLB) fprintf(table, ",");
-	   else fprintf(table, ", but");
-	   fprintf(table, " <font color=#CC6600>%s</font>%s query domain itself", SelfNbr, str);
-  	}
-*/
-	fprintf(table, ".</strong></font>\n");
     }
+    fprintf(table, ".</strong></font>\n");
 
 } /* end of VastTableBegin */
 
@@ -224,12 +228,17 @@ static Int2 CalCellHForCDs(Int4 Fsid)
   DenseSegPtr   *dsp;
   SeqAnnotPtr   sap = NULL;
   SeqAlignPtr   salp= NULL;
-  unsigned	*PssmId, Gilist[100]; 
+  unsigned	*PssmId, *Pssmlist, count; 
  
   gi = constructGi(Fsid/10000, (Fsid % 10000)/100);
   seqlen = constructChainLength(Fsid/10000, (Fsid % 10000)/100); 
 
   if (Dart_Gi2Sap(dartcon, gi, &sap, NULL) && (sap != NULL)) {
+
+    if (!Dart_CdNum(dartcon, &count))
+            PrtMes("chenj@ncbi.nlm.nih.gov",
+                        "MmdbSrv", "Can't do Dart_CdNum()", NULL, FALSE);
+    Pssmlist = (unsigned *) MemNew (count * sizeof (unsigned));
 
     end=head = NewOverLoc(seqlen);
     head->y = 90+FontBH;
@@ -263,11 +272,15 @@ static Int2 CalCellHForCDs(Int4 Fsid)
         if (iClus[i] >= 0) continue;
         iClus[i] = i;
 
-        if (Dart_Related(dartcon, CddName[i], Gilist, 100, &NumRows, NULL)) {
+        if (Dart_Related(dartcon, CddName[i],Pssmlist,count,&NumRows, NULL)) {
+	
+	  if (NumRows > count)
+	     PrtMes("chenj@ncbi.nlm.nih.gov", "VASTSRV",
+		"Dart_Related(): NumRows>MaxPssm", NULL, FALSE);
 
           for (j=0; j< NumRows; j++)
             for (k=i+1; k< CdNum; k++)
-              if (PssmId[k] == Gilist[j]) iClus[k] = i;
+              if (PssmId[k] == Pssmlist[j]) iClus[k] = i;
 
         }
     }
@@ -290,6 +303,7 @@ static Int2 CalCellHForCDs(Int4 Fsid)
     MemFree(iClus);
     for (i=0; i< CdNum; i++) MemFree(CddName[i]);
     MemFree(CddName);
+    MemFree(Pssmlist);
 
   }
 
@@ -574,7 +588,7 @@ SaveBioAnnotSetInFile(Int4 Fsid, SubSetID subsetnum, SortBy sortby, CharPtr JobI
 static void
 MakeVastTableGraph(VastPageDataPtr vpp, Int4 numhitsdisplayed, Int4 FSID, 
 	Int4 iKept, CharPtr selnbrstring, CharPtr selsdidstring, 
-	CharPtr NonNbr, CharPtr SelfNbr, SortBy sortby, SubSetID subsetnum, 
+	CharPtr NonNbr, SortBy sortby, SubSetID subsetnum, 
 	Int4 pagenum, Int4 numhits, char cTable, Int4 NbrFlag, CharPtr JobID, 
 	CharPtr pcPass, Int2 ImgSize, Int2 GraphFlag)
 {
@@ -587,12 +601,16 @@ MakeVastTableGraph(VastPageDataPtr vpp, Int4 numhitsdisplayed, Int4 FSID,
   numpages = numhits / NUM_HITS_PER_PAGE;
   numpages = numhits % NUM_HITS_PER_PAGE == 0 ? numpages : (numpages+1);
 
+/*
   if(numhits<=0) {
-      fprintf(stdout, "<h1><a href=\"%s/vasthelp.html#VASTNonbr\">%s</a></h1>\n", VASTpath, "VAST did not find any structure neighbors.");
+      fprintf(stdout, "<h1><a href=\"%s%s#VASTNonbr\">%s</a></h1>\n", 
+							URLBase, HELPname);
+      fprintf(stdout, "VAST did not find any structure neighbors.");
       fprintf(stdout, "<HR SIZE=5 NOSHADE>\n");
       fprintf(stdout, "</body></html>\n");
       return;
   }
+*/
 
   if (NbrFlag == DEF_ALL_NBR) {
      if (numhits < NUM_HITS_PER_PAGE) pagenum = DEFAULT_PAGE;
@@ -604,7 +622,7 @@ MakeVastTableGraph(VastPageDataPtr vpp, Int4 numhitsdisplayed, Int4 FSID,
 	     selsdidstring, sortby, subsetnum, pagenum, ImgSize, JobID, pcPass);
   else {
   	VastTableBegin(stdout, iMMDBid, FSID, sortby, subsetnum, iKept,NonNbr,
-		SelfNbr, vpp, numhitsdisplayed, numhits, numpages, 
+		vpp, numhitsdisplayed, numhits, numpages, 
 		pagenum, cTable, NbrFlag, JobID, pcPass);
 	switch (cTable) {
 	    case 'n': 
@@ -1223,24 +1241,19 @@ static Int4 MakeVppByVSNbr(Int4 Fsid, CharPtr JobID, VastPageDataPtr vpp,
 
 
 
-static Int4 CheckNbrs(CharPtr arg, CharPtr msname, 
-		CharPtr *SelNames, Int4 iSel, VastPageDataPtr vpp, Int4 vppnum)
+static Int4 CheckNbrs(CharPtr arg, CharPtr *SelNames, Int4 iSel, VastPageDataPtr vpp, Int4 vppnum)
 {
-   Char		savedchar, name[10], msdom[10];
+   Char		savedchar, name[10];
    CharPtr	str, ptr0=NULL, ptr = NULL, ptr2 = NULL;
    Int4		i, j, count=0;
   
-   arg[0] = msname[0] = NULLB;
-   constructDomName(aSdi, msdom);
-   if (msdom[6] == ' ') msdom[6] = NULLB;
+   arg[0] = NULLB;
    if (!vppnum) {
 	for (i=0; i< iSel; i++) {
 	   char tmp[10];	
 
            sprintf(tmp, "%s, ", SelNames[i]);
-	   if (!StrNCmp(msdom, SelNames[i], StrLen(msdom)))
-		StringCat(msname,  tmp);
-	   else StringCat(arg, tmp);
+	   StringCat(arg, tmp);
  	}
 	return;
    }
@@ -1276,9 +1289,7 @@ static Int4 CheckNbrs(CharPtr arg, CharPtr msname,
 	char	tmp[10];
 	
 	sprintf(tmp, "%s, ", SelNames[i]);
-	if (!StrNCmp(SelNames[i], msdom, StrLen(msdom)))
-		StringCat(msname, tmp);
-	else StringCat(arg, tmp);
+	StringCat(arg, tmp);
 	count++;
      }
   }
@@ -1290,21 +1301,20 @@ static Int4 CheckNbrs(CharPtr arg, CharPtr msname,
 
 
 
-CheckNbrsbysdid(CharPtr NonNbr, CharPtr mssdid, Int4Ptr SelSds, Int4 iSds,
+CheckNbrsbysdid(CharPtr NonNbr, Int4Ptr SelSds, Int4 iSds,
         VastPageDataPtr vpp, Int4 numhits)
 {
    Int4  i, j;
    Char  str[10];
 
-   NonNbr[0] = mssdid[0] = NULLB;
+   NonNbr[0] = NULLB;
 
    for (i=0; i< iSds; i++) {
         j=0;
         while (j < numhits && SelSds[i] != vpp[j].bSdi) j++;
         if (j == numhits) {
             sprintf(str, "%d, ", SelSds[i]);
-	    if (aSdi == SelSds[i]) StringCat(mssdid, str);
-            else StringCat(NonNbr, str);
+            StringCat(NonNbr, str);
         }
    }
    
@@ -1317,7 +1327,7 @@ CheckNbrsbysdid(CharPtr NonNbr, CharPtr mssdid, Int4Ptr SelSds, Int4 iSds,
 Int2 Main()
 {
   Char 		cTable='n', ODBCInitStr[100], LIBPathStr[100], str[15];
-  Char          NonNbr[MAX_TBUFF], SelfNbr[MAX_TBUFF];
+  Char          NonNbr[MAX_TBUFF];
   CharPtr 	JobID = NULL, pcPass, www_arg, Cmd=NULL, *SelNames=NULL;
   CharPtr	selnbrstring = NULL, selsdidstring=NULL;
   Int2 		ret, ImgSize;
@@ -1330,10 +1340,6 @@ Int2 Main()
   SortBy 	sortby = DEFAULT_SORT_BY;
   WWWInfoPtr 	www_info;
   VastPageData 	vpp[MaxVPP];
-
-
-  VastSrvInitialize();
-  MmdbSrvInitialize();
 
 
   /* this sets up the unix time limit */
@@ -1350,10 +1356,16 @@ Int2 Main()
   if (WWWGetNumEntries(www_info) == 0) 
 	PrtMes(NULL, "VASTSERV", "No input - nothing to report.", NULL, FALSE);
 
-  if (! GetVastParams()) 
-	PrtMes(MAILto, "VASTSRV", 
-		"Couldn't read the config file \".vastrc\"...", NULL, FALSE);
 
+  if (! GetVastParams())
+        PrtMes(MAILto, "VASTSRV",
+                "Couldn't read the config file \".vastrc\"...", NULL, FALSE);
+
+  sprintf(ODBCInitStr, "ODBCINI=%s", INITpath);
+  putenv(ODBCInitStr);
+
+  VastSrvInitialize();
+  MmdbSrvInitialize();
 
   if ((indx= WWWFindName(www_info, "dispsub")) >=0) 
 		iSubBut = DEF_LIST_SUBMIT;
@@ -1386,7 +1398,7 @@ Int2 Main()
       switch (www_arg[0]) {
       	case 'a':			/* Cn3d 4.0 */
       	case 'c':			/* Cn3d 3.0 */
-        	  (Boolean) VastToCn3D(www_info);
+        	  (Boolean) VastToCn3DAndAli(www_info);
         	  exit(0);
       	default:
 	   PrtMes(NULL, "VASTSRV",
@@ -1405,7 +1417,7 @@ Int2 Main()
       	case 'h':			/* HTML */
       	case 'f':			/* FASTA */
       	case 't':			/* TEXT */
-		  (Boolean) VastToCn3D(www_info); 
+		  (Boolean) VastToCn3DAndAli(www_info); 
                   exit(0);
         default:
 	   PrtMes(NULL, "VASTSRV", 
@@ -1421,9 +1433,6 @@ Int2 Main()
 
 
 /* Jie Chen: Initialization of dart database */
-
-  sprintf(ODBCInitStr, "ODBCINI=%s", INITpath);
-  putenv(ODBCInitStr);
 
   sprintf(LIBPathStr, "LD_LIBRARY_PATH=%s", LIBpath);
   putenv(LIBPathStr);
@@ -1447,24 +1456,36 @@ Int2 Main()
 		"Invalid Biostruc-feature-set-id: chaindom = ", www_arg, FALSE);
   }
   else if ((indx = WWWFindName(www_info, "sdid")) >=0) {
+	int maxsdi;
+
 	www_arg = WWWGetValueByIndex(www_info, indx);
 	if (isdigit(www_arg[0])) aSdi = (long) atol(www_arg);
+	else if (www_arg[0] == '-') aSdi = atol(www_arg);
 	else 
 	   PrtMes(MAILto, "VASTSRV",
                 "Non-numeric Structure Domain Identifier (sdid) = ",
                  www_arg,FALSE);
 
+	maxsdi = constructMaxSdi();
+	if (!aSdi || aSdi > maxsdi) 
+           PrtMes(NULL, "VASTSRV",
+               "Vast neighbor data for this domain is not yet available. Please try later again.", NULL, FALSE);
+
+	if (aSdi < 0)
+	   PrtMes(NULL, "VASTSRV",
+	     "This is an obsolete domain, no Vast information.", NULL, FALSE);
+
 	aDomId = SdiToLongDomId(aSdi);
         if (!aDomId) {
 
            sprintf(str, "%d", aSdi);
-           PrtMes(NULL, "VASTSRV",
-               "Either an incorrect sdid or an obsolete query domain: sdid  = ",                                                                str,FALSE);
+           PrtMes(MAILto, "VASTSRV",
+	    "Error: No domain exists for this identifier: sdid  = ",str,FALSE);
         }
 
   }
   else PrtMes(NULL, "VASTSRV", 
-		"No chaindom or sdid -- Please input chaindom and Structure Domain Identifier.", NULL, FALSE);
+		"No chaindom or sdid -- Please input chaindom or Structure Domain Identifier.", NULL, FALSE);
 
 
   if ((indx = WWWFindName(www_info, "vsid")) >= 0) { /* a VAST Search job */
@@ -1558,6 +1579,7 @@ Int2 Main()
 
 
   iKept = 0;
+  KepBsfId = NULL;
   if ((iSubBut==DEF_LIST_SUBMIT || iSubBut==FIND_SUBMIT) 
 		&& (indx = WWWFindName(www_info, "hit")) >=0) {
     
@@ -1618,13 +1640,22 @@ Int2 Main()
   NbrFlag = DEF_ALL_NBR;
   if (iSubBut==FIND_SUBMIT) {
 
-    Int4        numhitsbyuid = 0, numhitsbysdid = 0;
+    Int4        i, numhitsbyuid = 0, numhitsbysdid = 0;
     CharPtr 	NonNbrbyuid=NULL, NonNbrbysdid=NULL;
-    CharPtr	msname = NULL, mssdid=NULL;
 
     if ((indx=WWWFindName(www_info, "selnbr")) >= 0) {
 
       www_arg = WWWGetValueByIndex(www_info, indx);
+
+
+    for (i=0; i< strlen(www_arg); i++)
+	if (!isdigit(www_arg[i]) && (!isalpha(www_arg[i])) && (www_arg[i] != ','))
+           {
+		if (i && www_arg[i-1] == ',') www_arg[i] = ' ';
+		else www_arg[i] = ',';
+	   }
+
+
       if (www_arg[0] != NULLB) { 
 	MakeNbrList(www_arg, &SelNames, NULL, &iSel, 1);
 
@@ -1641,8 +1672,7 @@ Int2 Main()
 
            numhitsdisplayed += numhitsbyuid;
 	   NonNbrbyuid = (CharPtr) MemNew (iSel * 10);
-	   msname = (CharPtr) MemNew (iSel*10);
-	   CheckNbrs(NonNbrbyuid, msname,SelNames, iSel, vpp, numhitsdisplayed);
+	   CheckNbrs(NonNbrbyuid,SelNames, iSel, vpp, numhitsdisplayed);
 	   sprintf(NonNbr, NonNbrbyuid);
 
 	   selnbrstring =(CharPtr)MemNew((size_t)(StrLen(www_arg) +3*iSel));
@@ -1657,7 +1687,20 @@ Int2 Main()
     }		/* if (selnbr) */
 
     if ((indx=WWWFindName(www_info, "selsdid")) >=0) {
+	int i;
+
         www_arg = WWWGetValueByIndex(www_info, indx);
+
+/* change return carriage. */
+
+	for (i=0; i< strlen(www_arg); i++)
+           if (!isdigit(www_arg[i]) && (!isalpha(www_arg[i])) && 
+						(www_arg[i] != ','))
+           {
+                if (i && www_arg[i-1] == ',') www_arg[i] = ' ';
+                else www_arg[i] = ',';
+           }
+
         if (www_arg[0] != NULLB) {
             MakeNbrList(www_arg, NULL, &SelSds, &iSds, 0);
         }
@@ -1680,17 +1723,14 @@ Int2 Main()
 		  MakeVppByVSNbr(aDomId, JobID, vpp+numhitsdisplayed, NULL,
 			SelSds, 1, iSds, KepBsfId,iKept,0);
             }
-            else {
+            else 
                 numhitsbysdid = 
                    constructVPPBySdi(vpp+numhitsdisplayed, MaxVPP, aSdi,
-			 www_arg, (unsigned *)KepBsfId,iKept,sortby);
-            }
+				www_arg, (unsigned *)KepBsfId,iKept,sortby);
 
             numhitsdisplayed += numhitsbysdid;
             NonNbrbysdid = (CharPtr) MemNew (iSds *10);
-	    mssdid = (CharPtr) MemNew (iSds *10);
-            CheckNbrsbysdid(NonNbrbysdid, mssdid, SelSds, iSds, vpp, 
-							numhitsdisplayed);
+            CheckNbrsbysdid(NonNbrbysdid, SelSds, iSds, vpp, numhitsdisplayed);
 
             selsdidstring = (CharPtr) MemNew (StrLen(www_arg)+3*iSds);
             for (i=0; i< iSds; i++) {
@@ -1717,24 +1757,9 @@ Int2 Main()
         MemFree(NonNbrbysdid);
     }
 
-    if (msname && msname[0] != NULLB) {
-	sprintf(SelfNbr, msname);
-	MemFree(msname);
-	
-	if (mssdid && mssdid[0] != NULLB) {
-		StringCat(SelfNbr, mssdid);
-		MemFree(mssdid);
-	}
-    }
-    else if (mssdid && mssdid[0] != NULLB) {
-	StringCat(SelfNbr, mssdid);
-        MemFree(mssdid);
-    }
-
     if (NonNbr[0] != NULLB) NonNbr[StrLen(NonNbr)-2] = NULLB;
-    if (SelfNbr[0] != NULLB) SelfNbr[StrLen(SelfNbr)-2] = NULLB;
 
-    if (!numhitsdisplayed && NonNbr[0] == NULLB && SelfNbr[0]== NULLB)
+    if (!numhitsdisplayed && NonNbr[0] == NULLB)
         PrtMes(NULL, "VASTSRV",
           "Please select a neighbor by using checkbox or input a name in the test box following \"Find\", then click \"Find\" again.",
           NULL, FALSE);
@@ -1751,7 +1776,7 @@ Int2 Main()
 	else if (subsetnum < 6)
     	    numhitsdisplayed=
 		constructVastPages(vpp+iKept,NUM_HITS_PER_PAGE,
-			aDomId, (unsigned *)KepBsfId, iKept, subsetnum, sortby, 
+			aDomId, (unsigned *)KepBsfId, iKept, subsetnum, sortby,
 			NUM_HITS_PER_PAGE, pagenum);
 
     	if (subsetnum < 6) {
@@ -1780,25 +1805,10 @@ Int2 Main()
 	printf("<br><h2>VASTSRV:<p>\n");
 	if (NonNbr && NonNbr[0] != NULLB) {
 	   if (strchr(NonNbr, ',')) 
-	      sprintf(str," are not structure neighbors of the query domain");
-	   else sprintf(str," is not a structure neighbor");
+	      sprintf(str," are not structure neighbors. ");
+	   else sprintf(str," is not a structure neighbor. ");
  	   printf("<font color=#CC6600>%s</font>%s\n", NonNbr, str);
 	}
-        else if (SelfNbr && SelfNbr[0] != NULLB) 
-	   printf("No specific neighbors were found.\n");
-/*
-        if (SelfNbr && SelfNbr[0] != NULLB) {
-           Char str[MAX_TBUFF];
-
-           if (strchr(SelfNbr, ',')) sprintf(str, " are");
-           else sprintf(str, " is");
-	   if (NonNbr && NonNbr[0] != NULLB) printf(", ");
-           printf("<font color=#CC6600>%s</font>%s query domain itself.<h2>\n", 
-								SelfNbr, str);
-        }
-	else printf(".</h2>\n");
-*/
-
       }
  
       exit(0);
@@ -1834,7 +1844,7 @@ Int2 Main()
                  	"Missing imgsize: imgsize = ", www_arg, FALSE);
 		}  /* sth is wrong */
 		MakeVastTableGraph(vpp, numhitsdisplayed, aDomId, iKept, 
-			selnbrstring, selsdidstring, NonNbr, SelfNbr, sortby, 
+			selnbrstring, selsdidstring, NonNbr, sortby, 
 			subsetnum, pagenum, totalnumhits, cTable, NbrFlag, 
 			JobID, pcPass, ImgSize,1);
 	   }
@@ -1853,7 +1863,7 @@ Int2 Main()
     }
     else   
     	MakeVastTableGraph(vpp,numhitsdisplayed,aDomId, iKept, selnbrstring,
-		selsdidstring, NonNbr, SelfNbr, sortby, subsetnum, pagenum, 
+		selsdidstring, NonNbr, sortby, subsetnum, pagenum, 
 		totalnumhits, cTable, NbrFlag, JobID, pcPass, 0, 0);
   } 
 

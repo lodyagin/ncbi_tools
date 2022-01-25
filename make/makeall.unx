@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.208 2002/10/28 20:31:30 lavr Exp $
+#	$Id: makeall.unx,v 6.211 2003/03/24 22:12:25 madden Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -247,7 +247,7 @@ SRC22 = corematx.c dvncode.c objmmdb1.c objmmdb2.c objmmdb3.c objcn3d.c \
 SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	simutil.c slist.c sec.c tfuns.c toasn3.c toporg.c \
 	pobutil.c stsutil.c suggadj.c suggest.c suggslp.c \
-	blast.c blastutl.c blastool.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
+	blast.c blastutl.c blastool.c blastconcat.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
 	bandalg2.c bandalg3.c bandalg4.c bandalg5.c bandalgn.c blastkar.c \
 	actutils.c posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
@@ -376,7 +376,8 @@ OBJ22 = corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o objcn3d.o \
 OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	simutil.o slist.o sec.o tfuns.o toasn3.o toporg.o \
 	pobutil.o stsutil.o suggadj.o suggest.o suggslp.o \
-	blast.o blastutl.o blastool.o splutil.o gapxdrop.o bandalg0.o bandalg1.o \
+	blast.o blastutl.o blastool.o blastconcat.o splutil.o \
+	gapxdrop.o bandalg0.o bandalg1.o \
 	bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o \
 	actutils.o posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
@@ -644,8 +645,8 @@ copy :
 	$(SRCCOPY) ../connect/*.h ../include
 	-mkdir ../include/connect
 	-chmod ug+rw,o+r ../include/connect
-	-rm ../include/ncbi_*.h
-	cp -fp ../connect/ncbi_*.h ../include/connect
+	-rm ../include/ncbi_*.h ../include/connect_export.h
+	cp -fp ../connect/ncbi_*.h ../connect/connect_export.h ../include/connect
 	$(SRCCOPY) ../ctools/*.c .
 	-mkdir ../include/ctools
 	-chmod ug+rw,o+r ../include/ctools

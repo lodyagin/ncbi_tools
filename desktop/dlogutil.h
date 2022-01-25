@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -101,6 +101,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   GrouP           newGeneGrp;       \
   TexT            geneSymbol;       \
   TexT            geneDesc;         \
+  TexT            locusTag;         \
   ButtoN          editGeneBtn;      \
   TexT            protXrefName;     \
   DialoG          location;         \
@@ -108,7 +109,8 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   DialoG          featcits;         \
   DialoG          dbxrefs;          \
   DialoG          gbquals;          \
-  DialoG          usrobjext;
+  DialoG          usrobjext;        \
+  UserObjectPtr   goTermUserObj;
 
 typedef struct descform {
   DESCRIPTOR_FORM_BLOCK

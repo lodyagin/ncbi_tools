@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SENDMAIL__H
 #define CONNECT___NCBI_SENDMAIL__H
 
-/*  $Id: ncbi_sendmail.h,v 6.9 2002/09/24 15:01:17 lavr Exp $
+/*  $Id: ncbi_sendmail.h,v 6.13 2003/04/09 19:05:47 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,14 @@
  *
  */
 
-#include <connect/ncbi_core.h>
+#include <connect/connect_export.h>
+#include <connect/ncbi_types.h>
+
+
+/** @addtogroup Sendmail
+ *
+ * @{
+ */
 
 
 #ifdef __cplusplus
@@ -81,7 +88,9 @@ typedef struct {
  * Return value equals the argument passed in.
  * Note: This call is the only valid way to init SSendMailInfo.
  */
-extern SSendMailInfo* SendMailInfo_Init(SSendMailInfo* info);
+extern NCBI_XCONNECT_EXPORT SSendMailInfo* SendMailInfo_Init
+(SSendMailInfo*       info
+ );
 
 
 /* Send a simple message to recipient(s) defined in 'to',
@@ -92,19 +101,23 @@ extern SSendMailInfo* SendMailInfo_Init(SSendMailInfo* info);
  * gets returned. Communicaiton parameters for connection with sendmail
  * are set using default values as described in SendMailInfo_Init().
  */
-extern const char* CORE_SendMail(const char* to,
-                                 const char* subject,
-                                 const char* body);
+extern NCBI_XCONNECT_EXPORT const char* CORE_SendMail
+(const char*          to,
+ const char*          subject,
+ const char*          body
+ );
 
-/* Send a message as in CORE_SendMail() but with specifying explicitly
- * all additional parameters of the message and communication via
+/* Send a message as in CORE_SendMail() but by explicitly specifying
+ * all additional parameters of the message and the communication via
  * argument 'info'. In case of 'info' == NULL, the call is completely
  * equivalent to CORE_SendMail().
  */
-extern const char* CORE_SendMailEx(const char* to,
-                                   const char* subject,
-                                   const char* body,
-                                   const SSendMailInfo* info);
+extern NCBI_XCONNECT_EXPORT const char* CORE_SendMailEx
+(const char*          to,
+ const char*          subject,
+ const char*          body,
+ const SSendMailInfo* info
+ );
 
 
 #ifdef __cplusplus
@@ -112,9 +125,24 @@ extern const char* CORE_SendMailEx(const char* to,
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_sendmail.h,v $
+ * Revision 6.13  2003/04/09 19:05:47  siyan
+ * Added doxygen support
+ *
+ * Revision 6.12  2003/01/21 20:02:54  lavr
+ * Added missing <connect/connect_export.h>
+ *
+ * Revision 6.11  2003/01/17 19:44:20  lavr
+ * Reduce dependencies
+ *
+ * Revision 6.10  2003/01/08 01:59:33  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.9  2002/09/24 15:01:17  lavr
  * File description indented uniformly
  *

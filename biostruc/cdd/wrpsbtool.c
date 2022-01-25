@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.17 2002/10/22 14:55:20 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.18 2002/12/24 18:22:14 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.18  2002/12/24 18:22:14  bauer
+* changes for v1.60
+*
 * Revision 1.17  2002/10/22 14:55:20  bauer
 * fixed URL for bottom help link
 *
@@ -410,10 +413,15 @@ void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
     }
     strncpy(dupstr,aapThis->long_defline,PATH_MAX);
     part1 = strtok(dupstr," ");
-    part2 = dupstr + strlen(part1) + 1;
-    part2[min(strlen(part2),65)] = '\0';
-    if (strlen(part2) == 65) {
-      part2[64]='.'; part2[63]='.'; part2[62]='.';
+    if (part1) {
+      part2 = dupstr + strlen(part1) + 1;
+      part2[min(strlen(part2),65)] = '\0';
+      if (strlen(part2) == 65) {
+        part2[64]='.'; part2[63]='.'; part2[62]='.';
+      }
+    } else {
+      part1 = StringSave(" ");
+      part2 = StringSave(" ");
     }
     fprintf(table,"<TD NOWRAP ALIGN=LEFT><a href=\"%s\">%s</a></TD>\n",
             aapThis->cHtmlLink,part1);

@@ -140,6 +140,18 @@ The Bioseq has a gi identifier but no GenBank/EMBL/DDBJ accession identifier.
 $^   MultipleAccessions, 38
 The Bioseq has a gi identifier and more than one GenBank/EMBL/DDBJ accession identifier.
 
+$^   HistAssemblyMissing, 39
+The Bioseq has a TPA identifier but does not have a Seq-hist.assembly alignment.  This
+should be annotated or calculated by the database, resulting in a PRIMARY block visible
+in the flatfile.
+
+$^   TerminalNs, 40
+The Bioseq has one or more N bases at the end.
+
+$^   UnexpectedIdentifierChange, 41
+The set of sequence identifiers on a Bioseq are not consistent with the previous version
+of the record in the database.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -235,6 +247,10 @@ There is a source qualifier that is no longer legal for use in GenBank records.
 $^   StructuredSourceNote, 23
 The name of a structured source field is present as text in a note.  The data
 should probably be put into the appropriate field instead.
+
+$^   UnnecessaryBioSourceFocus, 24
+Focus should not be set on a BioSource descriptor in records where there is no
+BioSource feature.
 
 $$ GENERIC, 3
 

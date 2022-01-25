@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.17 2002/10/28 20:16:00 lavr Exp $
+/*  $Id: ncbi_servicep.h,v 6.21 2003/03/07 22:21:55 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,6 +60,7 @@ struct SSERV_IterTag {
     const char*  service;        /* requested service name                 */
     TSERV_Type   type;           /* requested server type(s)               */
     unsigned int preferred_host; /* preferred host to select, network b.o. */
+    double       preference;     /* range [0..100] %%                      */
     SSERV_Info** skip;           /* servers to skip                        */
     size_t       n_skip;         /* number of servers in the array         */
     size_t       n_max_skip;     /* number of allocated slots in the array */
@@ -69,6 +70,26 @@ struct SSERV_IterTag {
 
     void*        data;           /* private data field                     */
 };
+
+
+/* Modified 'fast track' routine for one-shot obtaining of a service info.
+ * Please see <connect/ncbi_service.h> for explanations [SERV_GetInfoEx()].
+ * For now, this call is to exclusively support MYgethostbyname() replacement
+ * of standard gethostbyname() libcall in apache Web daemon (see in daemons/).
+ *
+ * NOTE: Preference 0 does not prohibit the preferred_host to be selected;
+ *       nor preference 100 ultimately opts for the preferred_host; rather,
+ *       the preference is considered as an estimate for the selection
+ *       probability when all other conditions for favoring the host are
+ *       optimal, i.e., preference 0 actually means not to favor the preferred
+ *       host at all, while 100 means to opt for one as much as possible.
+ */
+SSERV_Info* SERV_GetInfoP
+(const char*         service,       /* service name                          */
+ TSERV_Type          types,         /* mask of type(s) of servers requested  */
+ unsigned int        preferred_host,/* preferred host to use service on, nbo */
+ double              preference     /* [0=min..100=max] preference in %%     */
+ );
 
 
 /* Private interface: update mapper information from the given text
@@ -107,6 +128,12 @@ char* SERV_ServiceName(const char* service);
 char* SERV_GetConfig(void);
 
 
+/* Given the status gap and wanted preference, calculate
+ * acceptable stretch for the gap (the number of candidates is n).
+ */
+double SERV_Preference(double pref, double gap, unsigned int n);
+
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
@@ -115,6 +142,18 @@ char* SERV_GetConfig(void);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_servicep.h,v $
+ * Revision 6.21  2003/03/07 22:21:55  lavr
+ * Explain what is "preference" for SERV_GetInfoP()
+ *
+ * Revision 6.20  2003/02/28 14:49:09  lavr
+ * SERV_Preference(): redeclare last argument 'unsigned'
+ *
+ * Revision 6.19  2003/02/13 21:37:28  lavr
+ * Comment SERV_Preference(), change last argument
+ *
+ * Revision 6.18  2003/01/31 21:19:41  lavr
+ * +SERV_Preference()
+ *
  * Revision 6.17  2002/10/28 20:16:00  lavr
  * Take advantage of host info API
  *

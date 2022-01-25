@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: main functions for running Spidey as a standalone 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spideymain.c,v $
+* Revision 6.9  2003/04/04 19:42:56  kskatz
+* Added a new command line option (-R) to allow external users to point spidey to a repeat database that it can pass on to blast for filtering repeats
+*
 * Revision 6.8  2002/10/02 16:47:11  kskatz
 * clarifying the explanation of the -L option
 *
@@ -98,8 +101,9 @@
 #define MYARGSTRAND    24
 #define MYARGDSPLICE   25
 #define MYARGASPLICE   26
+#define MYARGREPDB     27
 
-#define NUMARGS        27
+#define NUMARGS        28
 
 Args myargs[NUMARGS] = {
    {"Input file -- genomic sequence(s)", NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
@@ -131,6 +135,8 @@ Args myargs[NUMARGS] = {
    {"Restrict to plus (p) or minus (p) strand of genomic seq?", NULL, NULL, NULL, TRUE, 'S', ARG_STRING, 0.0, 0, NULL},
    {"File with donor splice matrix", NULL, NULL, NULL, TRUE, 'M', ARG_FILE_IN, 0.0, 0, NULL},
    {"File with acceptor splice matrix", NULL, NULL, NULL, TRUE, 'N', ARG_FILE_IN, 0.0, 0, NULL},
+      /* KSK added */
+   {"File (including path) to repeat blast database for filtering", NULL, NULL, NULL, TRUE, 'R', ARG_STRING, 0.0, 0, NULL},
 };
 
 static void SPI_FindAllNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
@@ -423,6 +429,7 @@ Int2 Main()
    /*KSK*/
    spot->bigintron = (Boolean)myargs[MYARGXL].intvalue; 
    spot->bigintron_size = myargs[MYARGXL_SIZE].intvalue;
+   spot->repeat_db_file = myargs[MYARGREPDB].strvalue;
    txt = myargs[MYARGORG].strvalue;
    if (!StringICmp(txt, "d") || !StringICmp(txt, "D"))
       spot->organism = SPI_FLY;

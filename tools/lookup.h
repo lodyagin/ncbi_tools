@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,9 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.33  2003/01/10 17:48:01  dondosha
+* Corrections in 2 macros
+*
 * Revision 6.32  2002/08/30 15:48:17  dondosha
 * MegaBlastWordFinderDeallocate prototype moved from mblast.h
 *
@@ -350,7 +353,7 @@ static const Uint4 crc_table[256] = {
 #define GET_EXTRA_CODE_PACKED_4_18_OPT(s) ((*(s+1))>>4)
 #define GET_EXTRA_CODE_PACKED_18_OPT(s,b,val,ecode) {GET_NEXT_PACKED_NUCL(s,b,ecode); GET_NEXT_PACKED_NUCL(s,b,val); PACK_EXTRA_CODE(ecode, val,MASK_EXTRA_OPT);}
 
-#define GET_AMBIG_CONDITION_18_OPT(s) (((*(s+1))&NUC_MASK == 0) && ((*(s+2))&NUC_MASK == 0))
+#define GET_AMBIG_CONDITION_18_OPT(s) (((*(s+1))&NUC_MASK) | ((*(s+2))&NUC_MASK))
 
 /* 111,010,010,110,010,010,111 - 12 of 21 */
 /* 111,010,010,100,010,010,111 - 11 of 21 */
@@ -404,7 +407,7 @@ static const Uint4 crc_table[256] = {
 #define GET_EXTRA_CODE_18(s) ((*(s+2)) & MASK_EXTRA_18)
 #define GET_EXTRA_CODE_PACKED_4_18(s) (((*(s+1))>>4) & MASK_EXTRA_18)
 #define GET_EXTRA_CODE_PACKED_18(s,b,val,ecode) {GET_NEXT_PACKED_NUCL(s,b,val); GET_NEXT_PACKED_NUCL(s,b,ecode);}
-#define GET_AMBIG_CONDITION_18(s) (((*(s+1))&NUC_MASK == 0) && ((*(s+2))&NUC_MASK == 0))
+#define GET_AMBIG_CONDITION_18(s) ((*(s+2))&NUC_MASK)
 
 /* 10,010,110,110,110,010,110,1 - 12 of 21 */
 /* 10,010,110,010,110,010,110,1 - 11 of 21 */

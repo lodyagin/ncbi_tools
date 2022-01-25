@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.13  2003/03/28 21:27:18  rsmith
+* on Mac OS took out ClearCurrentScrap after Cut/Copy. It only erased whatever was copied.
+*
+* Revision 6.12  2003/01/07 15:08:11  shomrat
+* Change condition in for loop in Nlm_SetScrollText
+*
 * Revision 6.11  2002/12/04 22:35:11  johnson
 * WIN_MSWIN: replace UNIX '\n' with DOS "\r\n" in Nlm_SetScrollText
 *
@@ -1805,7 +1811,7 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   /* count number of newlines */
   tmp = title;
   count = 0;
-  for (tmp = title; *tmp; ++tmp) {
+  for (tmp = title; tmp != NULL && *tmp; ++tmp) {
       if (*tmp == '\n')
 	  ++count;
   }
@@ -1954,12 +1960,6 @@ extern Nlm_TexT Nlm_CurrentText (void)
 static void Clipboard_TEToDeskScrap()
 {
 	OSErr err;
-	// Clear the desk scrap.
-#if TARGET_API_MAC_CARBON
-	OSStatus status = ClearCurrentScrap();
-#else
-	ZeroScrap();
-#endif
 	// Copy the TE scrap to the desk scrap.
 	err = TEToScrap();
 }

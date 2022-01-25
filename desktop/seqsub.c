@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -1515,10 +1515,12 @@ static void SubmitBlockFormActnProc (ForM f)
 extern Int2 LIBCALLBACK SubmitBlockGenFunc (Pointer data)
 
 {
+  ObjMgrDataPtr     omdp;
   OMProcControlPtr  ompcp;
   OMUserDataPtr     omudp;
   SubmitFormPtr     sbfp;
-  SubmitBlockPtr    sbp;
+  SubmitBlockPtr    sbp = NULL;
+  SeqSubmitPtr      ssp;
   WindoW            w;
 
   ompcp = (OMProcControlPtr) data;
@@ -1529,6 +1531,15 @@ extern Int2 LIBCALLBACK SubmitBlockGenFunc (Pointer data)
       sbp = (SubmitBlockPtr) ompcp->input_data;
       break;
     case OBJ_SEQSUB :
+      break;
+    case OBJ_SEQSUB_CIT :
+      omdp = ObjMgrGetData (ompcp->input_entityID);
+      if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
+        ssp = (SeqSubmitPtr) omdp->dataptr;
+        if (ssp != NULL && ssp->datatype == 1) {
+          sbp = ssp->sub;
+        }
+       }
       break;
     case 0 :
       break;
@@ -1555,6 +1566,9 @@ extern Int2 LIBCALLBACK SubmitBlockGenFunc (Pointer data)
     sbfp->input_itemtype = ompcp->input_itemtype;
     sbfp->this_itemtype = OBJ_SUBMIT_BLOCK;
     sbfp->this_subtype = 0;
+    if (ompcp->input_itemtype == OBJ_SEQSUB_CIT && ompcp->input_itemID == 1) {
+      sbfp->input_itemtype = OBJ_SUBMIT_BLOCK;
+    }
     sbfp->procid = ompcp->proc->procid;
     sbfp->proctype = ompcp->proc->proctype;
     sbfp->userkey = OMGetNextUserKey ();

@@ -25,15 +25,15 @@
 *
 * File Name:  ncbilcl.h
 *
-* Author:  Gish, Kans, Ostell, Schuler
+* Author:  Gish, Kans, Ostell, Schuler, Epstein
 *
 * Version Creation Date:   3/31/94
 *
-* $Revision: 6.4 $
+* $Revision: 6.9 $
 *
 * File Description:
 *		system dependent header
-*		Metrowerks version
+*		Metrowerks and Darwin combined version
 *
 * Modifications:
 * --------------------------------------------------------------------------
@@ -41,6 +41,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: ncbilcl.met,v $
+* Revision 6.9  2003/02/28 15:53:32  kans
+* initial consolidation of ncbilcl.met and ncbilcl.dwn
+*
+* Revision 6.8  2003/02/25 15:33:03  rsmith
+* OS_UNIX_DARWIN (Mach on Macs) uses tempnam for temporary files, not tmpnam.
+*
+* Revision 6.7  2002/12/19 14:52:27  kans
+* define _USE_CTYPE_INLINE_ (RGS)
+*
+* Revision 6.6  2002/12/18 22:16:02  kans
+* DIRDELIMCHR and STR / for UNIX and : for Mac
+*
+* Revision 6.5  2002/12/17 23:00:05  kans
+* support for OS_UNIX_DARWIN for Mach-O executables (RGS)
+*
 * Revision 6.4  2001/07/03 17:42:35  juran
 * Don't redefine NULL under C++.
 * Throw a preprocessor error if targeting 68K.
@@ -76,6 +91,33 @@
 # Revision 1.4  1995/05/15  18:45:58  ostell
 # added Log line
 #
+* ORIGINAL LOG FOR ncbilcl.dwn
+*
+* Revision 6.5  2003/02/28 14:59:40  kans
+* changed PROC_POWERPC to correct PROC_PPC platform symbol
+*
+* Revision 6.4  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
+* Revision 6.3  2002/01/22 16:34:54  kans
+* contributor contact information copied from obsolete readme.macosx file
+*
+* Revision 6.2  2001/04/03 21:01:54  beloslyu
+* changed to big endian (according to Nathan Willard <willard@turbogenomics.com>)
+*
+* Revision 6.1  2001/01/19 20:28:42  kans
+* initial checkin - contributed by William Van Etten <vanetten@computefarm.com>
+*
+*   William Van Etten, PhD
+*   Blackstone Technology Group
+*   80 Summer Street
+*   Boston, MA 02110
+*   617-542-4770 x4003
+*   vanetten@computefarm.com
+*
+* Revision 1.1  2001/01/13 15:42:41  vanetten
+* port to Darwin 1.2
+*
 *
 *
 * ==========================================================================
@@ -83,18 +125,33 @@
 #ifndef _NCBILCL_
 #define _NCBILCL_
 
+#ifdef __MWERKS__
+
 /* PLATFORM DEFINITION FOR MACINTOSH UNDER METROWERKS C/C++ */
 
 #define COMP_METRO
+#ifdef __MACH__
+#define OS_UNIX
+#define OS_UNIX_DARWIN
+#else
 #define OS_MAC
+#endif
+#define PROC_PPC
 #define WIN_MAC
 
-#if defined(__POWERPC__) || defined(powerc) || defined(__powerc) || defined(__POWERPC)
+#else /* APPLE DEVELOPMENT SYSTEM GCC COMPILER */
+
+/* PLATFORM DEFINITION FOR MACINTOSH UNDER Darwin 1.2.* */
+
+#define COMP_BSD
+#define OS_UNIX
+#define OS_UNIX_DARWIN
 #define PROC_PPC
-#else
-#define PROC_MC680X0
-#error "The NCBI C Toolkit does not support Mac OS on the 680x0 processor."
-#endif
+#define WIN_DUMB
+
+#endif /* __MWERKS__ */
+
+/* PROC_MC680X0 (680x0 processor) no longer supported */
 
 /*----------------------------------------------------------------------*/
 /*      Desired or available feature list                               */
@@ -104,19 +161,61 @@
 /*      #includes                                                       */
 /*----------------------------------------------------------------------*/
 
-#include <MacMemory.h>
-#include <stdio.h>
+/* needed to make ctype.h work when including it from /usr/include (not the MW version) */
+/*
+#ifndef _USE_CTYPE_INLINE_
+#define _USE_CTYPE_INLINE_
+#endif
+*/
+#define _USE_CTYPE_INLINE_
 #include <ctype.h>
+
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <errno.h>
-#include <limits.h>
 #include <float.h>
+
+#ifdef OS_UNIX_DARWIN
+/*
+the following should be found in /usr/include and such Unix-y
+places not in the ncbi tree or in the Metroworks tree
+*/
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/param.h>
+#include <stddef.h>
+#include <memory.h>
+#include <unistd.h>
+#include <fcntl.h>
+#else /* OS_MAC */
+#include <MacMemory.h>
+#endif /* OS_UNIX_DARWIN */
+
+/* Check if there are POSIX threads available */
+/*
+#ifdef OS_UNIX_DARWIN
+#ifdef _POSIX_THREADS
+#define POSIX_THREADS_AVAIL
+#endif
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
+#endif
+*/
 
 /*----------------------------------------------------------------------*/
 /*      Missing ANSI-isms                                               */
 /*----------------------------------------------------------------------*/
+#ifndef SEEK_SET
+#define SEEK_SET	0	/* Set file pointer to offset */
+#define SEEK_CUR	1	/* Set file pointer to current plus offset */
+#define SEEK_END	2	/* Set file pointer to EOF plus offset */
+#endif
+
+#ifdef __MWERKS__
+
 #ifndef FILENAME_MAX
 #define FILENAME_MAX 255
 #endif
@@ -124,14 +223,45 @@
 #define PATH_MAX 255
 #endif
 
+#else
+
+#ifndef FILENAME_MAX
+#define FILENAME_MAX 1024
+#endif
+#ifndef LOGNAME_MAX
+#define LOGNAME_MAX	MAXLOGNAME
+#endif
+#ifndef PATH_MAX
+#define PATH_MAX 1024
+#endif
+
+#endif /* __MWERKS__ */
+
+/* 
+in /usr/include/ppc/param.h is a macro ALIGN which conflicts with
+our function in gapxdrop.c/h
+*/
+
+#ifdef ALIGN
+#undef ALIGN
+#endif
+
 /*----------------------------------------------------------------------*/
 /*      Aliased Logicals, Datatypes                                     */
 /*----------------------------------------------------------------------*/
 
+#ifdef __MWERKS__
+
 /* NULL may not be a (void *) in C++. */
 #ifndef __cplusplus
-#	undef NULL
-#	define NULL ((void *)0)
+#undef NULL
+#define NULL ((void *)0)
+#endif
+
+#endif /* __MWERKS__ */
+
+#ifndef sigset
+#define sigset signal
 #endif
 
 /*----------------------------------------------------------------------*/
@@ -139,14 +269,24 @@
 /*----------------------------------------------------------------------*/
 #define PROTO(x)	x	/* Function prototypes are real */
 #define VPROTO(x)	x	/* Prototype for variable argument list */
+
+#ifdef OS_UNIX
+#define DIRDELIMCHR	'/'
+#define DIRDELIMSTR	"/"
+#else
 #define DIRDELIMCHR	':'
 #define DIRDELIMSTR	":"
+#endif
 #define CWDSTR	"."
 
 #define KBYTE	(1024)
 #define MBYTE	(1048576)
 
 #define IS_BIG_ENDIAN
+
+#ifdef OS_UNIX_DARWIN
+#define TEMPNAM_AVAIL
+#endif
 
 /*----------------------------------------------------------------------*/
 /*      For importing MS_DOS code                                       */
@@ -155,6 +295,7 @@
 #define far
 #define huge
 #define cdecl
+#define pascal
 #define _pascal
 #define _near
 #define _far

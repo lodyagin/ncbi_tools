@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.c,v 1.40 2001/04/27 20:12:46 juran Exp $
+/*  $Id: ddvgraph.c,v 1.41 2003/04/21 15:30:21 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,15 +29,19 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.40 $
+* $Revision: 1.41 $
 *
 * File Description: graphic engine of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.c,v $
+* Revision 1.41  2003/04/21 15:30:21  kans
+* use consistent newline character
+*
 * Revision 1.40  2001/04/27 20:12:46  juran
-* Heed warnings:  Make functions static.Block out 'dead code' (functions that aren't called anywhere in ncbi).
+* Heed warnings:  Make functions static.
+Block out 'dead code' (functions that aren't called anywhere in ncbi).
 *
 * Revision 1.39  2000/07/24 22:00:08  hurwitz
 * fixed bug that 1/2 characters were displayed sometimes
@@ -73,7 +77,7 @@
 * keep track of master during move row operations
 *
 * Revision 1.28  2000/03/24 20:34:59  lewisg
-* add blast from file, bug fixes, get rid of redundant code, etc.
+* add blast from file, bug fixes, get rid of ant code, etc.
 *
 * Revision 1.27  2000/02/23 19:49:33  durand
 * use row number instead of SeqId for coloring

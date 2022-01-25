@@ -65,10 +65,6 @@ SOURCE=..\..\..\cdromlib\acccn3ds.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\cdromlib\accmmdbs.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\api\alignmgr.c
 # End Source File
 # Begin Source File

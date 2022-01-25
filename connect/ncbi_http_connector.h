@@ -1,7 +1,7 @@
 #ifndef CONNECT___HTTP_CONNECTOR__H
 #define CONNECT___HTTP_CONNECTOR__H
 
-/*  $Id: ncbi_http_connector.h,v 6.10 2002/09/19 18:06:39 lavr Exp $
+/*  $Id: ncbi_http_connector.h,v 6.12 2003/04/09 19:05:44 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,6 +38,12 @@
 
 #include <connect/ncbi_connector.h>
 #include <connect/ncbi_connutil.h>
+
+
+/** @addtogroup Connectors
+ *
+ * @{
+ */
 
 
 #ifdef __cplusplus
@@ -122,7 +128,7 @@ typedef enum {
 } EHCC_Flags;
 typedef int THCC_Flags;  /* binary OR of "EHttpCreateConnectorFlags"         */
 
-extern CONNECTOR HTTP_CreateConnector
+extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnector
 (const SConnNetInfo* net_info,
  const char*         user_header,
  THCC_Flags          flags
@@ -158,7 +164,7 @@ typedef void (*FHttpAdjustCleanup)
 (void* adjust_data                  /* supplemental user data for cleanup    */
  );
 
-extern CONNECTOR HTTP_CreateConnectorEx
+extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnectorEx
 (const SConnNetInfo*  net_info,
  THCC_Flags           flags,
  FHttpParseHTTPHeader parse_http_hdr, /* may be NULL, then no addtl. parsing */
@@ -173,9 +179,18 @@ extern CONNECTOR HTTP_CreateConnectorEx
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_http_connector.h,v $
+ * Revision 6.12  2003/04/09 19:05:44  siyan
+ * Added doxygen support
+ *
+ * Revision 6.11  2003/01/08 01:59:32  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.10  2002/09/19 18:06:39  lavr
  * Additional blank line inserted after inclusion of headers
  *

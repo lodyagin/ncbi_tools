@@ -32,7 +32,7 @@ objcn3dAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cn3d
-*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001 12:45 PM
+*    Generated using ASNCODE Revision: 6.14 at Jan 27, 2003  4:24 PM
 *
 **************************************************/
 

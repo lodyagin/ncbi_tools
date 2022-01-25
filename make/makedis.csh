@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.81 2002/12/03 15:23:52 beloslyu Exp $
+# $Id: makedis.csh,v 1.83 2003/03/05 22:00:46 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -139,6 +139,8 @@ case OSF1:
 	end
 	breaksw
 case Linux:
+    echo "libs version is:"
+	ls -l /lib/libc.so*
 	switch (`uname -m`)
 	case "ppc":
 		set platform=ppclinux
@@ -270,6 +272,10 @@ mv makeall.unx makefile
 #  LIB45=libddvlib.a  and for the makenet, this symbol
 #  BLIB31=libvibnet.a 
 #
+
+#uncomment two following lines to don't build X11 apps
+#set HAVE_OGL=0
+#set HAVE_MOTIF=0
 
 # if $OPENGL_TARGETS (in <platform>.ncbi.mk) is defined, 
 # then add the appropriate flags, libraries, and binaries for OpenGL apps

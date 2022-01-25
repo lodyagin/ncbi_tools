@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.81 $
+* $Revision: 6.96 $
 *
 * File Description:
 *
@@ -49,8 +49,8 @@
 
 /* these do not apply to individual features; they are used, ie in "AddFeatureToFilter (FEATDEF_ANY_RNA. . .)
    that would make the filter include _all_ types of RNA */
-#define FEATDEF_ANY_RNA (FEATDEF_MAX + 2)
-#define FEATDEF_ANY_PROT (FEATDEF_MAX + 1)
+#define FEATDEF_ANY_PROT (APPEARANCEITEM_MAX + 1)
+#define FEATDEF_ANY_RNA (APPEARANCEITEM_MAX + 2)
 
 typedef struct renderInput {
   AppearanceItemPtr AIP;
@@ -73,9 +73,11 @@ typedef struct viewerInstanceData {
   Int4Ptr         ceiling;
   SeqAnnotPtr PNTR sapList;
   Uint2           sapCount;
+  SeqAnnotPtr     currentSAP;
   SegmenT         drawOnMe;
+  SegmenT         sanLevelSeg;
   SegmenT         topLevelSeg;
-  Uint2           featureCount;
+  Uint4           featureCount;
   ValNodePtr      featVNP;      /* data.ptrvalue == RelevantFeatureItem [RELEVANT_FEATS_PER_CHUNK] */
   ValNodePtr      BSPsegmentVNP;
   AppearancePtr   AppPtr;
@@ -114,13 +116,17 @@ typedef struct filterProcessState {
   FilterItemPtr    currentFIP;
   ValNodePtr       currentFilterVNP;
   ValNodePtr       needFreeList; /* things to be freed with ValNodeFreeData() after finishing this filter */
-  SegmenT          labelSegs [FEATDEF_MAX];
-  SegmenT          drawSegs [FEATDEF_MAX];
+  SegmenT          labelSegs [APPEARANCEITEM_MAX];
+  SegmenT          drawSegs [APPEARANCEITEM_MAX];
   Int4             ceiling;
   RenderInput      renderParm;
   Uint4            featuresProcessedCount;
   BoolPtr          featuresProcessed;    /*points to an array of boolean [vContext->featureCount] */
   ViewerContextPtr vContext;
+  Boolean          groupBoxDrawn;
+  Boolean          groupLabelDrawn;
+  Boolean          annotBoxDrawn;
+  Boolean          annotLabelDrawn;
 } FilterProcessState, PNTR FilterProcessStatePtr;
 
 typedef void (*RenderFuncPtr)    (RenderInputPtr rip, ViewerContextPtr vContext);
@@ -132,7 +138,7 @@ typedef struct renderClass {
 } RenderClass, PNTR RenderClassPtr;
 
 typedef struct internalRow {
-  Uint2           rowFeatureCount;
+  Uint4           rowFeatureCount;
   DataVal         layoutData;
   ValNodePtr      feats;        /* data.ptrvalue == RelevantFeatureItemPtr */
   struct internalRow PNTR next;
@@ -468,7 +474,7 @@ NLM_EXTERN FilterPtr FindFilterByName (
 )
 
 {
-  Uint1  i;
+  Int1  i;
 
   if (VCP == NULL || StringHasNoText (name) || (! VCP->ArraysPopulated)) return NULL;
   i = StringIndexInStringList (name, VCP->FilterNameArray);
@@ -482,7 +488,7 @@ NLM_EXTERN AppearancePtr FindAppearanceByName (
 )
 
 {
-  Uint1  i;
+  Int1  i;
 
   if (VCP == NULL || StringHasNoText (name) || (! VCP->ArraysPopulated)) return NULL;
   i = StringIndexInStringList (name, VCP->AppearanceNameArray);
@@ -495,7 +501,7 @@ NLM_EXTERN LayoutAlgorithm FindLayoutByName (
 )
 
 {
-  Uint1  i;
+  Int1  i;
 
   if (StringHasNoText (name)) return 0;
   i = StringIndexInStringList (name, LayoutStrings);
@@ -544,6 +550,30 @@ static AppearancePtr FindAppearanceByName_T (
   }
   return NULL;
 }
+
+static CharPtr FindFeatStrFromFeatDefType (Uint1 type)
+{
+  CharPtr featName;
+
+  featName = FindKeyFromFeatDefType (type, FALSE);
+  /* handle locally defined feature types. */
+  if (type > FEATDEF_MAX)
+  {
+    switch (type) {
+    case APPEARANCEITEM_Alignment:
+      featName = "align";
+      break;
+    case APPEARANCEITEM_Segment:
+      featName = "segment";
+      break;
+    case APPEARANCEITEM_Graph:
+      featName = "graph";
+      break;
+    }
+  }
+  return featName;
+}
+
 
 NLM_EXTERN AppearancePtr CreateAppearance (
   CharPtr newname,
@@ -739,6 +769,17 @@ static AppearanceItemPtr ParseFeatureAppearanceItem (
   if (newAIP->LabelFont != inheritFromMe->LabelFont) {
     changed = TRUE;
   }
+  
+  /* this is only meaningful for alignment styles to change the appearance of the alignment's label. */
+  newAIP->format = BioseqFormatValues [0];
+  if (GetAppParam (config_filename, sect, "format", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BioseqFormat);
+    if (i >= 0 && i < DIM (BioseqFormatValues)) {
+      newAIP->format = BioseqFormatValues  [i];
+    }
+  }
+
+
   if (! changed) {
     MemFree (newAIP);
     return NULL;
@@ -760,7 +801,7 @@ static AppearancePtr ParseAppearance (
   AppearanceItem     DefaultAppearanceItem = {
     {0, 0, 0}, {64, 64, 64}, Render_Box, 0, 5, 0, FALSE, LineGap, TRUE, TRUE, NULL, LabelAbove
   };
-  Uint1              i;
+  Int1               i;
   unsigned           val;
 
   if (appearanceNameInFile == NULL) return NULL;
@@ -794,6 +835,7 @@ static AppearancePtr ParseAppearance (
     }
   }
 
+  /* group box settings */
   if (GetAppParam (config_filename, sect, "groupboxcolor", NULL, buf, sizeof (buf))) {
     ParseColor (buf, AP->GroupBoxColor);
   }
@@ -808,6 +850,22 @@ static AppearancePtr ParseAppearance (
     ParseColor (buf, AP->GroupLabelColor);
   }
 
+  /* Named Annotation Style settings */
+  if (GetAppParam (config_filename, sect, "annotboxcolor", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, AP->AnnotBoxColor);
+  }
+
+  if (GetAppParam (config_filename, sect, "annotlabelfont", NULL, buf, sizeof (buf))) {
+    AP->AnnotLabelFont = LocalParseFont (buf);
+    if (AP->AnnotLabelFont == NULL) {
+      AP->AnnotLabelFont = programFont;
+    }
+  }
+  if (GetAppParam (config_filename, sect, "annotlabelcolor", NULL, buf, sizeof (buf))) {
+    ParseColor (buf, AP->AnnotLabelColor);
+  }
+
+
   sprintf (outputBuffer, "%s.bioseq", appearanceNameInFile);
   AP->bioseqAIP = ParseBioseqAppearanceItem (outputBuffer, VCP);
   sprintf (outputBuffer, "%s.imp", appearanceNameInFile);
@@ -821,9 +879,9 @@ static AppearancePtr ParseAppearance (
   } else {
     AddAppearanceItemToAppearance (impAIP, AP, FEATDEF_IMP, VCP);
   }
-  for (i = 1; i < FEATDEF_MAX; i++) {
+  for (i = 1; i < APPEARANCEITEM_MAX; i++) {
     if (i == FEATDEF_IMP) continue;
-    sprintf (outputBuffer, "%s.%s", appearanceNameInFile, FindKeyFromFeatDefType (i, FALSE));
+    sprintf (outputBuffer, "%s.%s", appearanceNameInFile, FindFeatStrFromFeatDefType (i));
     if (i >= FEATDEF_allele && i <= FEATDEF_35_signal) {        /* is it an imp-feat ? */
       newAIP = ParseFeatureAppearanceItem (outputBuffer, impAIP, FALSE, VCP);
       newAIP = newAIP ? newAIP : impAIP;
@@ -874,14 +932,14 @@ static void ChangeFeatureInFilterItem (
 
   if (includeMe) {
     orderIncrement = 1;
-    for (i = 0; i < FEATDEF_MAX; i++) {
+    for (i = 0; i < APPEARANCEITEM_MAX; i++) {
       order = MAX (order, FIP->IncludeFeature [i]);
     }
     order++; /* the lowest available order index */
   }
 
   if (newFeatdef == FEATDEF_ANY) {
-    for (i = 0; i < FEATDEF_MAX; i++) {
+    for (i = 1; i < APPEARANCEITEM_MAX; i++) {  /* start at 1 since we do not want to ever include FEATDEF_BAD */
       FIP->IncludeFeature [i] = order;
       order += orderIncrement;
     }
@@ -907,7 +965,7 @@ static void ChangeFeatureInFilterItem (
       FIP->IncludeFeature [i] = order;
       order += orderIncrement;
     }
-  } else if (newFeatdef < FEATDEF_MAX) {
+  } else if (newFeatdef < APPEARANCEITEM_MAX) {
     FIP->IncludeFeature [newFeatdef] = order;
   }
 }
@@ -1022,15 +1080,15 @@ static FilterItemPtr ParseFilterItem (
     val = MIN (val, 100);
     FIP->IntraRowPaddingPixels = val;
   }
-  FIP->DrawItemRect = FALSE;
-  FIP->FillItemRect = FALSE;
+  FIP->DrawGroupBox = FALSE;
+  FIP->FillGroupBox = FALSE;
   if (GetAppParam (config_filename, sect, "groupbox", NULL, buf, sizeof (buf))) {
     i = StringIndexInStringList (buf, BoolStrings);
     if (i >= 0 && i < DIM (BoolValues) && i >= 0) {
-      FIP->DrawItemRect = BoolValues [i];
+      FIP->DrawGroupBox = BoolValues [i];
     }
   }
-  if (FIP->DrawItemRect) {
+  if (FIP->DrawGroupBox) {
     if (GetAppParam (config_filename, sect, "groupboxcolor", NULL, buf, sizeof (buf))) {
       FIP->GroupBoxColorSet = TRUE;
       ParseColor (buf, FIP->GroupBoxColor);
@@ -1038,7 +1096,7 @@ static FilterItemPtr ParseFilterItem (
     if (GetAppParam (config_filename, sect, "fillbox", NULL, buf, sizeof (buf))) {
       i = StringIndexInStringList (buf, BoolStrings);
       if (i >= 0 && i < DIM (BoolValues)) {
-        FIP->FillItemRect = BoolValues[i];
+        FIP->FillGroupBox = BoolValues[i];
       }
     }
   }
@@ -1067,7 +1125,7 @@ static FilterItemPtr ParseFilterItem (
     }
   }
 
-  FIP->LabelLoc = LabelUnset;
+  FIP->LabelLoc = LabelAbove;
   if (GetAppParam (config_filename, sect, "label", NULL, buf, sizeof (buf))) {
     i = StringIndexInStringList (buf, LlocStrings);
     if (i >= 0 && i < DIM (LlocValues)) {
@@ -1097,7 +1155,7 @@ static FilterItemPtr ParseFilterItem (
       FIP->MatchStrand = StrandValues [i];
     }
   }
-  for (i = 1; i < FEATDEF_MAX; i++) {
+  for (i = 1; i < APPEARANCEITEM_MAX; i++) {
     sprintf (featureNum, "feature%d", (unsigned) i);
     if (GetAppParam (config_filename, sect, featureNum, NULL, buf, sizeof (buf))) {
       featdeftype = FindFeatDefTypeFromKey (buf);
@@ -1150,8 +1208,10 @@ static FilterItemPtr ParseFilterItem (
         } else if (StringICmp (buf, "bioseq") == 0) {
           FIP->Type = BioseqFilter;
         } else if (StringICmp (buf, "graph") == 0) {
+          featdeftype = APPEARANCEITEM_Graph;
           FIP->Type = GraphFilter;
         } else if (StringICmp (buf, "align") == 0) {
+          featdeftype = APPEARANCEITEM_Alignment;
           FIP->Type = AlignmentFilter;
         } else continue; /* failed to find a match */
       }
@@ -1211,7 +1271,58 @@ static FilterPtr ParseFilter (
     sscanf (buf, "%ud", &val);
   }
   FP->MaxScaleWithLabels = val;
-
+  
+  /* Group by Named Annotation stuff */
+  FP->AnnotBoxColorSet = FALSE;
+  FP->AnnotLabelFontSet = FALSE;
+  FP->AnnotLabelColorSet = FALSE;
+  
+  FP->GroupByAnnot = TRUE;
+  if (GetAppParam (config_filename, sect, "annotgroup", NULL, buf, sizeof (buf))) {
+    i = StringIndexInStringList (buf, BoolStrings);
+    if (i >= 0 && i < DIM (BoolStrings)) {
+      FP->GroupByAnnot =  (BoolValues [i]);
+    }
+  }
+  if (FP->GroupByAnnot) {
+    FP->DrawAnnotBox = TRUE;
+    if (GetAppParam (config_filename, sect, "annotbox", NULL, buf, sizeof (buf))) {
+      i = StringIndexInStringList (buf, BoolStrings);
+      if (i >= 0 && i < DIM (BoolStrings)) {
+        FP->DrawAnnotBox =  (BoolValues [i]);
+      }
+    }
+    if (FP->DrawAnnotBox) {
+      if (GetAppParam (config_filename, sect, "annotboxcolor", NULL, buf, sizeof (buf))) {
+        FP->AnnotBoxColorSet = TRUE;
+        ParseColor (buf, FP->AnnotBoxColor);
+      }
+    }
+    FP->AnnotLabelLoc = LabelOnTop;
+    if (GetAppParam (config_filename, sect, "annotlabel", NULL, buf, sizeof (buf))) {
+      i = StringIndexInStringList (buf, GroupLabelLocations);
+      if (i >= 0 && i < DIM (GroupLabelLocationValues)) {
+        FP->AnnotLabelLoc = GroupLabelLocationValues[i];
+      }
+    }
+    if (FP->AnnotLabelLoc != NoLabel) {
+      FP->AnnotLabelFont = programFont;
+      if (GetAppParam (config_filename, sect, "annotlabelfont", NULL, buf, sizeof (buf))) {
+        FP->AnnotLabelFont = LocalParseFont (buf);
+        if (FP->AnnotLabelFont == NULL) {
+          FP->AnnotLabelFont = programFont;
+        } else {
+          FP->AnnotLabelFontSet = TRUE;
+        }
+      }
+      if (GetAppParam (config_filename, sect, "annotlabelcolor", NULL, buf, sizeof (buf))) {
+        FP->AnnotLabelColorSet = TRUE;
+        ParseColor (buf, FP->AnnotLabelColor);
+      }
+    }
+  }
+  
+  /* other default values */
   GetAppParam (config_filename, sect, "layout", NULL, buf, sizeof (buf));
   i = StringIndexInStringList (buf, LayoutStrings);
   if (i >= 0 && i < DIM (LayoutValues)) {
@@ -1246,7 +1357,7 @@ static FilterPtr ParseFilter (
     }
   }
 
-  for (i = 1; i < FEATDEF_MAX; i++) {
+  for (i = 1; i < APPEARANCEITEM_MAX; i++) {
     sprintf (outputBuffer, "%s%d", "group", (unsigned) i);
     if (GetAppParam (config_filename, sect, outputBuffer, NULL, buf, sizeof (buf))) {
       FIP = ParseFilterItem (buf, defaultRowPadding, defaultGroupPadding, defaultLayout, VCP);
@@ -1282,11 +1393,11 @@ static FilterPtr ParseFilter (
     FP->FilterItemList = VNP;
 
     FIP->Type = BioseqFilter;
-    FIP->IntraRowPaddingPixels = 5;
+    FIP->IntraRowPaddingPixels = defaultRowPadding;
   }
 
   if (createImplicitGraphs && ! foundAlignmentFilter) {
-    /* insert a Graph filter at the_end of the list */
+    /* insert an alignment filter at the_end of the list */
     FIP = MemNew (sizeof (FilterItem));
     VNP = ValNodeAddPointer (&FP->FilterItemList, 0, FIP);
     if (FIP == NULL || VNP == NULL ) {
@@ -1294,7 +1405,11 @@ static FilterPtr ParseFilter (
       return NULL;
     }
     FIP->Type = AlignmentFilter;
-    FIP->IntraRowPaddingPixels = 5;
+    FIP->LayoutChoice = defaultLayout;
+    FIP->GroupPadding = defaultGroupPadding;
+    FIP->IntraRowPaddingPixels = defaultRowPadding;
+    FIP->LabelLoc = LabelAbove;
+    FIP->MatchStrand = StrandValues [0];
   }
 
   if (createImplicitGraphs && ! foundGraphFilter) {
@@ -1494,6 +1609,7 @@ NLM_EXTERN FilterPtr DestroyFilter (
     MemFree (VNP->data.ptrvalue);
     MemFree (VNP);
   }
+  --VCP->FilterCount;
   MemFree (FP);
   return NULL;
 }
@@ -1511,7 +1627,7 @@ NLM_EXTERN void AddAppearanceItemToAppearance (
 
   if (AIP == NULL || AP == NULL || VCP == NULL) return;
   if (newFeatdef == FEATDEF_ANY) {
-    for (i = 0; i < FEATDEF_MAX; i++) {
+    for (i = 0; i < APPEARANCEITEM_MAX; i++) {
       AP->FeaturesAppearanceItem [i] = AIP;
     }
   } else if (newFeatdef == FEATDEF_ANY_RNA) {
@@ -1530,7 +1646,7 @@ NLM_EXTERN void AddAppearanceItemToAppearance (
     for (i = FEATDEF_allele; i <= FEATDEF_35_signal; i++) {
       AP->FeaturesAppearanceItem [i] = AIP;
     }
-  } else if (newFeatdef < FEATDEF_MAX) {
+  } else if (newFeatdef < APPEARANCEITEM_MAX) {
     AP->FeaturesAppearanceItem [newFeatdef] = AIP;
   } else return;
   for (VNP = AP->AppearanceItemList; VNP != NULL && VNP->data.ptrvalue != AIP; VNP = VNP->next) continue;
@@ -1777,7 +1893,7 @@ static void render_with_box_master (
 )
 
 {
-  Uint4                   StartY;
+  Int4                    StartY;
   Uint2                   pieceIValStart;
   PrimitivE               thisPrim;
   Uint2                   i;
@@ -1971,11 +2087,11 @@ static void DrawFeatureAndLabel (
       label = RFIP->ContentLabel;
       break;
     case 2:                    /*only type */
-      label = FindKeyFromFeatDefType (RFIP->featdeftype, FALSE);
+      label = FindFeatStrFromFeatDefType (RFIP->featdeftype);
       break;
     case 3:                    /*add both */
-      if (StringCmp (FindKeyFromFeatDefType (RFIP->featdeftype, FALSE), RFIP->ContentLabel) != 0) {
-        sprintf (tempStringBuffer, "%s: %s", FindKeyFromFeatDefType (RFIP->featdeftype, FALSE), RFIP->ContentLabel);
+      if (StringCmp (FindFeatStrFromFeatDefType (RFIP->featdeftype), RFIP->ContentLabel) != 0) {
+        sprintf (tempStringBuffer, "%s: %s", FindFeatStrFromFeatDefType (RFIP->featdeftype), RFIP->ContentLabel);
         label = tempStringBuffer;
       } else {
         label = RFIP->ContentLabel;
@@ -1997,7 +2113,7 @@ static void DrawFeatureAndLabel (
       textStartX = (RFIP->Left + RFIP->Right) / 2;
       /*      textStartY = RIP->yStart - RIP->rowHeight / 2; -- change "labelInside" to mean "above, but not wider than"*/
       textStartY = RIP->yStart;
-      labelAlign = UPPER_CENTER;
+      labelAlign = LOWER_CENTER;
       break;
     case LabelInside:
       if (textWidthBP + 2 * vContext->viewScale >= (RFIP->Right - RFIP->Left)) {
@@ -2014,7 +2130,7 @@ static void DrawFeatureAndLabel (
     case LabelAbove:
       textStartX = (RFIP->Left + RFIP->Right) / 2;
       textStartY = RIP->yStart;
-      labelAlign = UPPER_CENTER;
+      labelAlign = LOWER_CENTER;
       break;
     case LabelBelow:
       textStartY = RIP->yStart - RIP->Height;
@@ -2200,11 +2316,11 @@ static void GetFeatureAndDecorationDimensions (
         label = RFIP->ContentLabel;
         break;
       case 2:                  /*only type */
-        label = FindKeyFromFeatDefType (RFIP->featdeftype, FALSE);
+        label = FindFeatStrFromFeatDefType (RFIP->featdeftype);
         break;
       case 3:                  /*add both */
-        if (StringCmp (FindKeyFromFeatDefType (RFIP->featdeftype, FALSE), RFIP->ContentLabel) != 0) {
-          sprintf (tempStringBuffer, "%s: %s", FindKeyFromFeatDefType (RFIP->featdeftype, FALSE), RFIP->ContentLabel);
+        if (StringCmp (FindFeatStrFromFeatDefType (RFIP->featdeftype), RFIP->ContentLabel) != 0) {
+          sprintf (tempStringBuffer, "%s: %s", FindFeatStrFromFeatDefType (RFIP->featdeftype), RFIP->ContentLabel);
           label = tempStringBuffer;
         } else {
           label = RFIP->ContentLabel;
@@ -2259,6 +2375,7 @@ static void GetFeatureAndDecorationDimensions (
   RIP->decorationLeft = Start;
   RIP->decorationRight = Stop;
   RIP->decorationHeight = Height;
+  RIP->featureOffset = featureOffset;
 }
 
 
@@ -2304,6 +2421,84 @@ static Boolean BuildRenderInputFromRFIP (
   return TRUE;
 }
 
+/* If this is a named Seq Annotation, return its name. Otherwise, return NULL */
+static CharPtr GetSeqAnnotName(SeqAnnotPtr sap)
+{
+  if (sap != NULL && sap->desc != NULL)
+  {
+    AnnotDescrPtr  descPtr;
+    /* look for a 'name' record */
+    for (descPtr = sap->desc; descPtr != NULL; descPtr = descPtr->next)
+    {
+      if (Annot_descr_name == descPtr->choice) /* name choice */
+        return descPtr->data.ptrvalue;
+    }
+    /* if an alignment look for a Blast Type or a Hist Seqalign user object */
+  	if(sap->type ==2) /* not an alignment annotation */
+  	{
+    	UserObjectPtr uop;
+    	ObjectIdPtr oip;
+    	UserFieldPtr ufp;
+ 
+    	for (descPtr = sap->desc; descPtr; descPtr = descPtr->next)
+    	{
+    		if (Annot_descr_user == descPtr->choice)
+    		{
+    			
+    			for (uop = descPtr->data.ptrvalue; uop; uop = uop->next)
+    			{
+    				if (uop->type)
+    				{
+    					oip = uop->type;
+    					
+    					if (StringCmp(oip->str, "Blast Type") == 0)
+    					{
+    						ufp = uop->data;
+    						if (ufp && ufp->choice == 2)
+    						{
+    							oip = ufp->label;
+    							if (oip && oip->str)
+    							{
+    							  return oip->str;
+    							}
+    						}
+    					}	
+    				}	
+    			}
+    		}
+    	}
+    	for (descPtr = sap->desc; descPtr; descPtr = descPtr->next)
+    	{
+    		if (Annot_descr_user == descPtr->choice)
+    		{
+    			
+    			for (uop = descPtr->data.ptrvalue; uop; uop = uop->next)
+    			{
+    				if (uop->type)
+    				{
+    					oip = uop->type;
+    					
+    					if (StringCmp(oip->str, "Hist Seqalign") == 0)
+    					{
+    						ufp = uop->data;
+    						if (ufp && ufp->choice == 4 && ufp->data.boolvalue)
+    						{
+    							oip = ufp->label;
+    							if (oip && oip->str)
+    							{
+    								return oip->str;
+    							}
+    						}
+    					}
+    				}	
+    			}
+    		}
+    	}
+  	}
+  }
+  return NULL;
+}
+
 static Boolean GetAndCountFeatures (
   ViewerContextPtr vContext
 )
@@ -2313,7 +2508,8 @@ static Boolean GetAndCountFeatures (
   SeqMgrFeatContext       fContext;
   RelevantFeatureItemPtr  rFeats;
   ValNodePtr              sapList = NULL, VNP, VNPtail;
-  Uint2                   i = 0;
+  SeqAnnotPtr             SAnnP;
+  Uint2                   i;
   Int4                    swap;
 
   if (vContext == NULL) return FALSE;
@@ -2322,10 +2518,31 @@ static Boolean GetAndCountFeatures (
   vContext->featVNP = NULL;
   vContext->sapList = NULL;
 
+  /* create list of all named SeqAnnot's in this BioSeq. */
+  for (SAnnP = vContext->BSP->annot; SAnnP != NULL; SAnnP = SAnnP->next) 
+  {
+    if (GetSeqAnnotName(SAnnP)) {
+      vContext->sapCount++;
+      ValNodeAddPointer (&sapList, 0, SAnnP);
+    }
+  }
+  if (vContext->sapCount > 0) {
+    vContext->sapList = MemNew (vContext->sapCount * sizeof (SeqAnnotPtr));
+    if (vContext->sapList == NULL) {
+      ValNodeFree (sapList);
+      return FALSE;
+    }
+    for (i = 0, VNP = sapList; VNP != NULL && i < vContext->sapCount; VNP = VNP->next, i++) {
+      vContext->sapList[i] = VNP->data.ptrvalue;
+    }
+    ValNodeFree (sapList);
+  }
+  
   rFeats = MemNew (RELEVANT_FEATS_PER_CHUNK * sizeof (RelevantFeatureItem));
   if (rFeats == NULL) return FALSE;
   ValNodeAddPointer (&vContext->featVNP, 0, rFeats);
   VNPtail = vContext->featVNP;
+  i = 0;
   sfp = SeqMgrGetNextFeature (vContext->BSP, NULL, 0, 0, &fContext);
   while (sfp != NULL) {
     vContext->featureCount++;
@@ -2353,13 +2570,11 @@ static Boolean GetAndCountFeatures (
       rFeats [i].Right = rFeats [i].Left;
       rFeats [i].Left = swap;
     }
-    /* look at fContext.sap -- if unique, add to sapList */
-    for (VNP = sapList; VNP != NULL; VNP = VNP->next) {
-      if (VNP->data.ptrvalue == fContext.sap) break;
+    if (GetSeqAnnotName(fContext.sap)) { /* save this feature's Annot Ptr if it is a named Seq Annot. */
+      rFeats [i].sap = fContext.sap;
     }
-    if (VNP == NULL) {          /* fContext.sap was not found */
-      vContext->sapCount++;
-      ValNodeAddPointer (&sapList, 0, fContext.sap);
+    else {
+      rFeats [i].sap = NULL;
     }
     i++;
     if (i >= RELEVANT_FEATS_PER_CHUNK) {
@@ -2373,19 +2588,8 @@ static Boolean GetAndCountFeatures (
       }
       VNPtail->data.ptrvalue = rFeats;
     }
+
     sfp = SeqMgrGetNextFeature (vContext->BSP, sfp, 0, 0, &fContext);
-  }
-  if (vContext->sapCount > 0) {
-    vContext->sapList = MemNew (vContext->sapCount * sizeof (SeqAnnotPtr));
-    if (vContext->sapList == NULL) {
-      MemFree (rFeats);
-      ValNodeFree (sapList);
-      return FALSE;
-    }
-    for (i = 0, VNP = sapList; VNP != NULL && i < vContext->sapCount; VNP = VNP->next, i++) {
-      vContext->sapList[i] = VNP->data.ptrvalue;
-    }
-    ValNodeFree (sapList);
   }
   if (vContext->featureCount == 0) {
     MemFree (rFeats);
@@ -2447,6 +2651,57 @@ static Boolean EnsureFeatureHasSegment (
   return TRUE;
 }
 
+/*
+  return a string describing the sequences in this alignment,
+  concatenating strings from all the seqid's of the sequences in this alignment 
+  except for the one in 'notthisRow' which ordinarly will be the bioseq.
+*/
+
+static Boolean SeqAlignContentLabel(SeqAlignPtr sap, Int4 notThisRow, CharPtr buf, Int4 buflen, Uint1 format)
+{
+  Int4      r, rows, slen;
+  Char      localbuf[100];
+  SeqIdPtr  sid;
+  Char      rowDelim[] = ",";
+  Int4      rowDelimLen = sizeof(rowDelim) - 1;
+  Boolean   firstTime = TRUE;
+  
+  if (sap == NULL || buf == NULL) return FALSE;
+  
+  rows = AlnMgr2GetNumRows(sap);
+  if (rows < 1)
+    rows = sap->dim;
+  if (rows < 1)
+    return FALSE;
+ 
+  for (r = 1; r <= rows; ++r)
+  {
+    if (r == notThisRow)
+      continue;
+    sid = AlnMgr2GetNthSeqIdPtr(sap, r);
+    if (sid == NULL) {
+     sid = AlnMgr2GetNthSeqIdPtrStdSeg(sap, r);
+    }
+    if (sid == NULL) return FALSE;
+
+    SeqIdWrite (sid, localbuf, format, sizeof (localbuf) - 1);
+    slen = StringLen(localbuf);
+    if (slen < buflen - rowDelimLen - 1)
+    {
+      if (!firstTime) {
+        StringNCat(buf, rowDelim, buflen);
+        buflen -= sizeof(rowDelim) - 1;
+        firstTime = FALSE;
+      }
+      StringNCat(buf, localbuf, buflen);
+      buflen -= slen + 1;
+     }
+  }
+  
+  if (StringLen(buf) <= 0)
+    return FALSE;
+  return TRUE;
+}
 
 static RelevantFeatureItemPtr GetNextRFIPinAlignmentFilter (
   FilterProcessStatePtr FPSP
@@ -2456,43 +2711,109 @@ static RelevantFeatureItemPtr GetNextRFIPinAlignmentFilter (
   AlignmentFilterStatePtr alignSP;
   SeqAlignPtr             SAlnP;
   Int4                    alignRow, start, stop;
+  Int4                    alignStart, alignStop;
+  Int4                    nsegs, iseg, i;
+  Int4                    row2, seq2Start;
   SeqIdPtr                SID;
   BioseqPtr               BSP;
   RelevantFeatureItemPtr  RFIP;
   ViewerContextPtr        vContext;
   FilterItemPtr           currentFIP;
+  Boolean                 stdSeg = FALSE;
+  AppearanceItemPtr       AIP;
+  Char                    labelbuf[150];
 
   if (FPSP == NULL) return NULL;
   vContext = FPSP->vContext;
   currentFIP = FPSP->currentFIP;
   if (vContext == NULL || currentFIP == NULL) return NULL;
 
+  AIP = vContext->AppPtr->FeaturesAppearanceItem[APPEARANCEITEM_Alignment];
+
   alignSP = &FPSP->state.align;
 
   if (alignSP->SAPcurrent == NULL) return NULL;      
-  alignSP->SAPcurrent = alignSP->SAPcurrent->next;
   SAlnP = alignSP->SAPcurrent;
+  alignSP->SAPcurrent = alignSP->SAPcurrent->next;
   RFIP = MemNew (sizeof (RelevantFeatureItem));
   if (RFIP == NULL || (ValNodeAddPointer (&FPSP->needFreeList, 0, RFIP)) == NULL) {
     MemFree (RFIP);
     return NULL;
   }
+  /* make sure the alignment is indexed */
   if (!AlnMgr2IndexSingleChildSeqAlign (SAlnP)) return NULL;
   BSP = vContext->BSP;
   SID = BSP->id;
+  /* which row in the alignment is the BioSeq? */
   alignRow = AlnMgr2GetFirstNForSip (SAlnP, SID);
-  if (alignRow == -1) return NULL;
-  AlnMgr2GetNthSeqRangeInSA (SAlnP, alignRow, &start, &stop);
-/* !!! put in alignment manager code - AlnMgr2GetNthSeqRangeInSAStdSeg !!! */
+  if (alignRow == -1)
+  {
+    alignRow = AlignMgr2GetFirstNForStdSeg (SAlnP, SID);
+    if (alignRow == -1)  return NULL;
+    stdSeg = TRUE;
+  }
+  
+  /* where does this alignment start & stop in bioseq coords? */
+  if (!stdSeg)
+    AlnMgr2GetNthSeqRangeInSA (SAlnP, alignRow, &start, &stop);
+  else
+    AlnMgr2GetNthSeqRangeInSAStdSeg (SAlnP, alignRow, &start, &stop);
+
   if (start < 0 || stop < 0) return NULL;
   RFIP->Left = MIN (start, stop);
   RFIP->Right = MAX (start, stop);
   RFIP->plusstrand = (start < stop);
   RFIP->numivals = 1;
-  RFIP->featdeftype = 1;
+  RFIP->featdeftype = APPEARANCEITEM_Alignment;
   RFIP->entityID = SAlnP->idx.entityID;
   RFIP->itemID = SAlnP->idx.itemID;
   RFIP->itemType = SAlnP->idx.itemtype;
+  labelbuf[0] = 0;
+  if (SeqAlignContentLabel(SAlnP, alignRow, labelbuf, sizeof(labelbuf) - 1, AIP->format))
+  {
+    RFIP->ContentLabel = StringSave(labelbuf);
+  }
+  
+  if (stdSeg)
+    return RFIP;
+    
+  nsegs = AlnMgr2GetNumSegs(SAlnP);
+  if (nsegs <= 1)
+    return RFIP;
+    
+  RFIP->ivals = MemNew (2 * nsegs * sizeof (Int4));
+  if (RFIP->ivals != NULL) 
+  {
+      RFIP->numivals = 0;
+      i = 0;
+      for (iseg = 1; iseg <= nsegs; ++iseg)
+      {
+        /* get segment location in alignment coordinates */
+        AlnMgr2GetNthSegmentRange(SAlnP, iseg, &alignStart, &alignStop);
+        /* convert to bioseq coordinates */
+        start = AlnMgr2MapSeqAlignToBioseq(SAlnP, alignStart, alignRow);
+        if (alignStart != alignStop)
+          stop  = AlnMgr2MapSeqAlignToBioseq(SAlnP, alignStop , alignRow);
+        else
+          stop = start;
+          
+        /* ignore gaps on the bioseq, zero length segments & errors */
+        /* hence we may have less than nsegs ivals */
+        if (start < 0 || stop < 0 || stop == start) 
+          continue;
+
+        /* Is this a gap on the BioSeq ? */
+        row2 = 3 - alignRow; /* alignRow == 1 then row2 == 2; & vice versa. dim must be 2! */
+        seq2Start = AlnMgr2MapSeqAlignToBioseq(SAlnP, alignStart, row2);
+        
+        if (seq2Start == -2 ) 
+          continue; /* a gap */
+
+        RFIP->ivals[i++] = MIN(start, stop);
+        RFIP->ivals[i++] = MAX(start, stop);
+        RFIP->numivals++;
+      }
+  }
   return RFIP;
 }
 
@@ -2506,11 +2827,15 @@ static RelevantFeatureItemPtr GetNextRFIPinFeatureFilter (
   RelevantFeatureItemPtr  RFIP;
   ViewerContextPtr        vContext;
   FilterItemPtr           currentFIP;
+  FilterPtr               FP;
 
   if (FPSP == NULL) return NULL;
   vContext = FPSP->vContext;
   currentFIP = FPSP->currentFIP;
   if (vContext == NULL || currentFIP == NULL) return NULL;
+  FP = vContext->FltPtr;
+  if (FP == NULL) return NULL;
+  
   featSP = &FPSP->state.feat;
   for (; featSP->featureBlockOffset + featSP->indexInBlock < vContext->featureCount; featSP->indexInBlock++) {
     if (featSP->indexInBlock >= RELEVANT_FEATS_PER_CHUNK) {
@@ -2521,6 +2846,9 @@ static RelevantFeatureItemPtr GetNextRFIPinFeatureFilter (
     }
     currentRFIPblockVNP = featSP->currentRFIPblockVNP;
     RFIP = (RelevantFeatureItemPtr) (currentRFIPblockVNP->data.ptrvalue) + featSP->indexInBlock;
+    
+    if (FP->GroupByAnnot && RFIP->sap != vContext->currentSAP) continue;
+    
     if (! vContext->allFeatures
         && (RFIP->Right < vContext->from || RFIP->Left > vContext->to)) {
       continue;
@@ -3135,6 +3463,112 @@ static Uint2 SingleRowLayout (
 }
 
 
+/* 
+  Call DrawNameAnnotbox() in a sub-function of FilterAndLayout, when you know that something
+  will be drawn in as a result of this call to FilterAndLayout in the current sanLevelSeg.
+  return FALSE if there is an error. Return true whether we draw anything or not.
+*/
+static Boolean DrawNamedAnnotBox(FilterProcessStatePtr FPSP)
+{
+  ViewerContextPtr vContext;
+  CharPtr          annotName;
+  FilterPtr        FP;
+  
+  if (FPSP == NULL) /* something wrong !? */
+    return FALSE;
+  vContext = FPSP->vContext;
+  if (vContext == NULL)
+    return FALSE;
+  if (vContext->sanLevelSeg == NULL)
+    return FALSE;
+  if ((FP = vContext->FltPtr) == NULL)
+    return FALSE;
+
+  if (!FP->GroupByAnnot) /* we are not grouping by named annotations */
+    return TRUE;
+    
+  annotName = GetSeqAnnotName(vContext->currentSAP);
+  if (annotName == NULL)  /* we are currently not working on a named Seq Annot. */
+    return TRUE;
+    
+  if (FP->DrawAnnotBox && !FPSP->annotBoxDrawn) /* We should draw the box and it hasn't been done yet. */
+  {
+    AddAttribute (vContext->sanLevelSeg, COLOR_ATT, FP->AnnotBoxColor, 0, 0, 0, 0);
+    AddSilentSegRect (vContext->sanLevelSeg, FALSE, 0);
+    FPSP->ceiling -= 5;
+    FPSP->annotBoxDrawn = TRUE;
+  }
+  
+  /* Have a label that should be drawn at the top of the box? */
+  if (!FPSP->annotLabelDrawn && !StringHasNoText (annotName))
+  {
+    AddAttribute (vContext->sanLevelSeg, COLOR_ATT, FP->AnnotLabelColor, 0, 0, 0, 0);
+    switch (FP->AnnotLabelLoc) {
+    case LabelOnTop:
+      AddTextLabel (vContext->sanLevelSeg, (vContext->from + vContext->to) / 2, FPSP->ceiling,
+                    annotName, FP->AnnotLabelFont, 1, LOWER_CENTER, 0);
+      SelectFont(FP->AnnotLabelFont);
+      FPSP->ceiling -=  LineHeight () + 4;
+      break;
+    case LabelOnSide:
+      AddTextLabel (vContext->sanLevelSeg, 0, FPSP->ceiling, 
+                    annotName, FP->AnnotLabelFont, 1, LOWER_RIGHT, 0);
+      break;
+    }
+    FPSP->annotLabelDrawn = TRUE;
+  }
+  return TRUE;
+}
+
+/* 
+  Call DrawFilterItemBoxLabel() in a sub-function of FilterAndLayout, when you know that something
+  will be drawn in as a result of this call to FilterAndLayout in the current filterSeg (vc->drawOnMe).
+  return FALSE if there is an error. Return true whether we draw anything or not.
+*/
+static Boolean DrawFilterItemBoxLabel(
+  FilterProcessStatePtr FPSP,
+  FilterItemPtr FIP
+)
+{
+  ViewerContextPtr    vContext;
+  SegmenT             invisibleSeg;
+
+  if (FPSP == NULL) /* something wrong !? */
+    return FALSE;
+  vContext = FPSP->vContext;
+  if (vContext == NULL)
+    return FALSE;
+  if (vContext->drawOnMe == NULL)
+    return FALSE;
+  
+  if (FIP->DrawGroupBox && !FPSP->groupBoxDrawn) /* want to draw it, or already drawn. */
+  {   
+    AddAttribute (vContext->drawOnMe, COLOR_ATT, FIP->GroupBoxColor, 0, 0, 0, 0);
+    AddSilentSegRect (vContext->drawOnMe, FALSE, 0);
+    FPSP->ceiling -= 5;
+    /* add invisible line to force width of SegRect */
+    invisibleSeg = CreateSegment (vContext->drawOnMe, 0, 0);
+    SetSegmentVisibleFlag (invisibleSeg, FALSE);
+    AddLine (invisibleSeg, vContext->from - 1 * vContext->viewScale ,  FPSP->ceiling , 
+                           vContext->to + 1 * vContext->viewScale ,  FPSP->ceiling, FALSE, 0);
+    FPSP->groupBoxDrawn = TRUE;
+  }
+    
+  /* need to draw a label on top? */
+  if (FIP->GroupLabelLoc == LabelOnTop && !FPSP->groupLabelDrawn && !StringHasNoText (FIP->GroupLabel)) {
+    AddAttribute (vContext->drawOnMe, COLOR_ATT, FIP->GroupLabelColor, 0, 0, 0, 0);
+    AddTextLabel (vContext->drawOnMe, (vContext->from + vContext->to) / 2, FPSP->ceiling,
+                  FIP->GroupLabel, FIP->GroupLabelFont, 1, LOWER_CENTER, 0);
+    SelectFont (FIP->GroupLabelFont);
+    FPSP->ceiling -= LineHeight () + 4;
+    FPSP->groupLabelDrawn = TRUE;
+  }
+
+  return TRUE;
+}
+
+
+
 static const LayoutFunction LayoutAlgorithmTable [] = {
   BubbleUpLayout,             /* placeholder for Layout_Inherit */
   SimpleDiagonalLayout,       /* Layout_Diagonal */
@@ -3162,7 +3596,8 @@ static Uint2 ProcessRows (
   Uint2                   I, J, K, lastI, lastJ, lastK; /* for keeping track of which segment in the tree we're in*/
   Uint1                   featdeftype;
   Int4                    featMidPoint;
-  Uint2                   row, rowCount, feat, rowHeight, totalHeight;
+  Uint2                   row, rowCount, rowHeight, totalHeight;
+  Uint4                   feat;
   InternalRowPtr          firstRow, thisRow;
   ValNodePtr              VNP;
   RelevantFeatureItemPtr  RFIP;
@@ -3173,7 +3608,6 @@ static Uint2 ProcessRows (
   Boolean                 SegmentChanged = TRUE;
   Boolean                 emptyRow = TRUE;
   Boolean                 allEmpty = TRUE;
-  Boolean                 NeedToDrawSegRect;
   FilterItemPtr           FIP;
 
   firstRow = MemNew (sizeof (InternalRow));
@@ -3182,7 +3616,6 @@ static Uint2 ProcessRows (
   VNP = FPSP->currentFilterVNP;
   if (VNP == NULL) return 0;
   FIP = (FilterItemPtr) VNP->data.ptrvalue;
-  NeedToDrawSegRect = FIP->DrawItemRect;
 
   rowCount = (*LayoutAlgorithmTable [layoutC]) (firstRow, FPSP);
 
@@ -3207,10 +3640,10 @@ static Uint2 ProcessRows (
       }
       rowHeight = MAX (rowHeight, RI.decorationHeight);
     }
-    if (!allEmpty && NeedToDrawSegRect) {
-      AddAttribute (vContext->drawOnMe, COLOR_ATT, FIP->GroupBoxColor, 0, 0, 0, 0);
-      AddSegRect (vContext->drawOnMe, FALSE, 0);
-      NeedToDrawSegRect = FALSE;
+    if (!allEmpty)
+    {
+      DrawNamedAnnotBox(FPSP);
+      DrawFilterItemBoxLabel(FPSP, FIP);
     }
 
     /*Repeat, but actually draw them this time */
@@ -3264,14 +3697,12 @@ static Uint2 ProcessRows (
     if (! emptyRow) {
       totalHeight += rowHeight + FPSP->currentFIP->IntraRowPaddingPixels;
     }
-    if (thisRow->next == NULL) return totalHeight;
+    if (thisRow->next == NULL) break;
     thisRow = thisRow->next;
   }
   if (allEmpty) {
     return 0;
   }
-  /*  totalHeight += rowHeight;*/
-  totalHeight += FPSP->currentFIP->GroupPadding;
   return totalHeight;
 }
 
@@ -3470,12 +3901,14 @@ static Boolean LIBCALLBACK Asn2gphSegmentExploreProc (
   ViewerContextPtr   vContext;
   AppearancePtr      AP;
   BioseqAppearanceItemPtr BioAIP;
+  BioseqPtr          bsp;
 
   if ((RFIP = MemNew (sizeof (RelevantFeatureItem))) == NULL) return FALSE;
   vContext = context->userdata;
+  bsp = vContext->BSP;
   ValNodeAddPointer (&vContext->BSPsegmentVNP, 0, RFIP);
   sip = SeqLocId (slp);
-  if (sip != NULL && sip->choice == SEQID_GI) {
+  if (sip != NULL && sip->choice == SEQID_GI && BioseqFindCore (sip) != NULL) {
     gi = sip->data.intvalue;
     newid = SeqIdStripLocus (GetSeqIdForGI (gi));
     sip = newid;
@@ -3502,7 +3935,13 @@ static Boolean LIBCALLBACK Asn2gphSegmentExploreProc (
   RFIP->Right = MAX (left, right);
   RFIP->entityID = context->entityID;
   RFIP->itemID = context->itemID;
-  RFIP->itemType = OBJ_BIOSEQ_SEG;
+  if (bsp->repr == Seq_repr_seg) {
+    RFIP->itemType = OBJ_BIOSEQ_SEG;
+  } else if (bsp->repr == Seq_repr_delta) {
+    RFIP->itemType = OBJ_BIOSEQ_DELTA;
+  } else {
+    RFIP->itemType = OBJ_BIOSEQ_SEG;
+  }
   RFIP->numivals = 1;
   RFIP->featdeftype = 0;
   RFIP->plusstrand = (context->strand == Seq_strand_plus);
@@ -4145,7 +4584,7 @@ static void ResetFilterState (
   }
 }
 
-static void DrawAlignments (
+static Uint2 SmearAlignments (
   FilterProcessStatePtr FPSP,
   ViewerContextPtr vContext  
 )
@@ -4154,72 +4593,172 @@ static void DrawAlignments (
   SeqAlignPtr              SAP;
   BioseqPtr                BSP;
   SeqIdPtr                 SID;
-
+  AppearanceItemPtr        AIP;
+  FilterItemPtr            FIP;
+  
   AlignmentFilterStatePtr  alignSP;
   Int4                     alignRow, start, stop, weight, swap, maxDensity, i, length;
   Uint1                    color[3], col;
-  Uint2Ptr                 densities;
-
+  Uint1                    minCol = 224; /* density == min -> light gray */
+  Uint1                    maxCol = 0;   /* density == max -> black */
+  Uint2Ptr                 densities, gapDensities;
+  const Uint1              minDensity = 1;  /* minimum density we will display. */
   SegmenT                  seg;
-
-  if (FPSP == NULL || vContext == NULL) return;
+  Boolean                  empty = TRUE;
+  
+  if (FPSP == NULL || vContext == NULL) return 0;
   alignSP = &FPSP->state.align;
+  
+  /* get the Appearance item for alignments */
+  AIP = vContext->AppPtr->FeaturesAppearanceItem[APPEARANCEITEM_Alignment];
 
   BSP = vContext->BSP;
   SID = BSP->id;
   densities = MemNew (sizeof (Uint2) * vContext->seqLength / vContext->viewScale);
-  if (densities == NULL) return;
-
-  for (SAP = alignSP->SAPhead; SAP != NULL; SAP = SAP->next) {
-    if (!AlnMgr2IndexSingleChildSeqAlign (SAP)) continue;
+  if (densities == NULL) return 0;
+  gapDensities = MemNew (sizeof (Uint2) * vContext->seqLength / vContext->viewScale);
+  if (gapDensities == NULL) return 0;
+  
+  /* for all the alignments in this list (from a single annotation in this BioSeq) */
+  for (SAP = alignSP->SAPhead; SAP != NULL; SAP = SAP->next) 
+  {
+    Int4  nrows;
+    Int4  row2;
+    Int4  nsegs;
+    Int4  iseg;
+    Int4  alignStart, alignStop;
+    Int4  seq2Start;
+    Boolean stdSeg = FALSE;
+   
+    if (!AlnMgr2IndexSingleChildSeqAlign (SAP)) continue; /* make sure we are indexed */
+    
+    nrows = AlnMgr2GetNumRows(SAP);
+    if (nrows < 1)
+      nrows = SAP->dim;
+      
+    if (nrows != 2) continue;  /* can't handle 3+ dimension alignments */
+    
+    /* which row in the alignment is this BioSeq */
     alignRow = AlnMgr2GetFirstNForSip (SAP, SID);
-    if (alignRow > -1) {
-      AlnMgr2GetNthSeqRangeInSA (SAP, alignRow, &start, &stop);
-    } else {
+    if (alignRow == -1) 
+    {
       alignRow = AlignMgr2GetFirstNForStdSeg (SAP, SID);
       if (alignRow == -1) continue;
+      stdSeg = TRUE;
+    }
+
+    /* iterate through all the segments of this Alignment. */
+    if (!stdSeg) {
+      nsegs = AlnMgr2GetNumSegs(SAP);
+      for (iseg = 1; iseg <= nsegs; ++iseg)
+      {
+        /* get segment location in alignment coordinates */
+        AlnMgr2GetNthSegmentRange(SAP, iseg, &alignStart, &alignStop);
+        /* convert to bioseq coordinates */
+        start = AlnMgr2MapSeqAlignToBioseq(SAP, alignStart, alignRow);
+        if (alignStart != alignStop)
+          stop  = AlnMgr2MapSeqAlignToBioseq(SAP, alignStop , alignRow);
+        else
+          stop = start;
+        if (start < 0 || stop < 0) /* ignore gaps on the bioseq & errors */
+          continue;
+        if (stop < start) {
+          swap = stop;
+          stop = start;
+          start = swap;
+        }
+        start /= vContext->viewScale;
+        stop /= vContext->viewScale;
+        
+        /* Is this a gap or an alignment segment? */
+        row2 = 3 - alignRow; /* alignRow == 1 then row2 == 2; & vice versa. dim must be 2! */
+        seq2Start = AlnMgr2MapSeqAlignToBioseq(SAP, alignStart, row2);
+
+        weight = 1; /* make this based on alignment score !?? */
+        
+        if (seq2Start == -2 ) 
+        {  /* a gap */
+          for (i = start; i <= stop; i++) 
+            gapDensities[i] += weight;
+        }
+        else if (seq2Start >= 0)
+        { /* a real alignment. */
+          weight = 1; /* do this correctly based on the alignment score !!!!! */
+          for (i = start; i <= stop; i++)
+            densities[i] += weight;
+        }
+        
+        empty = FALSE;
+      } /* for iseg <= nsegs */
+    } else { /* std segs */
       AlnMgr2GetNthSeqRangeInSAStdSeg (SAP, alignRow, &start, &stop);
-    }
-    if (start < 0 || stop < 0) continue;
-    if (stop < start) {
-      swap = stop;
-      stop = start;
-      start = swap;
-    }
-    start /= vContext->viewScale;
-    stop /= vContext->viewScale;
-    weight = 1; /* do this correctly based on the alignment score !!!!! */
-    for (i = start; i <= stop; i++) {
-      densities[i] += weight;
-    }
-  }
+
+      if (start < 0 || stop < 0) /* ignore gaps on the bioseq & errors */
+        continue;
+      if (stop < start) {
+        swap = stop;
+        stop = start;
+        start = swap;
+      }
+      start /= vContext->viewScale;
+      stop /= vContext->viewScale;
+
+      weight = 1; /* make this based on alignment score !?? */
+
+      for (i = start; i <= stop; i++)
+        densities[i] += weight;
+        
+      empty = FALSE;
+    } /* if std segs */
+  } /* for SAP != NULL */
+
+  if (empty) 
+    return 0; /* there was nothing to show. */
+  
+  DrawNamedAnnotBox(FPSP);
+  FIP = (FilterItemPtr) FPSP->currentFilterVNP->data.ptrvalue;
+  DrawFilterItemBoxLabel(FPSP, FIP);
+
+  
   maxDensity = 0;
   for (i = 0; i < vContext->seqLength / vContext->viewScale; i++) {
     maxDensity = MAX (maxDensity, densities[i]);
   }
 
-  seg = CreateSegment (vContext->topLevelSeg, 0, 0);
-  FPSP->ceiling -= 5;
+  seg = CreateSegment ( vContext->drawOnMe, 0, 0);
 
   for (i = 0; i < vContext->seqLength / vContext->viewScale; i++) {
+
     for (length = 0; i + length < vContext->seqLength; length++) {
       if (densities [i] != densities [i + length]) break;
     }
-    if (densities [i] == 0) {
+    /* convert density (1 - maxDensity) to "color" number (224 - 0) */
+    if (densities [i] < minDensity) {
       col = 255;
+    } else if (maxDensity == minDensity) {
+      col = 224;
     } else {
-      col = (Uint1) (224 - ((densities [i] * 192) / 256));
+      col = (Uint1) (minCol + (densities[i] - minDensity)*(maxCol - minCol)/(maxDensity - minDensity));
+      /* col = (Uint1) (224 - ((densities [i] * 192) / 256)); */
     }
-    color [2] = color [1] = color [0] = col;
+    color [2] = color [1] = color [0] = col;  /* set to shade of grey. (minCol = 224) */
     if (col < 255) {
       AddAttribute (seg, COLOR_ATT, color, 0, 0, 1, 0);
-      AddRectangle (seg, i * vContext->viewScale, FPSP->ceiling, (i + length) * vContext->viewScale, FPSP->ceiling - 10, NO_ARROW, TRUE, 0);
+      AddRectangle (seg, i * vContext->viewScale, FPSP->ceiling, (i + length) * vContext->viewScale, FPSP->ceiling - (AIP->Height), NO_ARROW, TRUE, 0);
     }
-    i += length;
+    else if (gapDensities[i] > 0) {
+      AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
+      AddLine (seg, i * vContext->viewScale, FPSP->ceiling - (AIP->Height)/2, (i + length) * vContext->viewScale, FPSP->ceiling - (AIP->Height)/2, NO_ARROW, 0);
+    }
+    i += length - 1;
   }
+  
   MemFree (densities);
-  FPSP->ceiling -= 15;
+  MemFree (gapDensities);
+  
+  return AIP->Height;
 }
+
 
 static Boolean FilterAndLayout (
   ViewerContextPtr vContext
@@ -4233,7 +4772,7 @@ static Boolean FilterAndLayout (
   FilterItem          tempFI;
   Int1                featdeftype;
   LayoutAlgorithm     layoutC;
-  Int4                height;
+  Int4                height, totalheight;
   SegmenT             filterSeg, invisibleSeg;
   Uint1               featdefOrder;
   Boolean             emptyFilterGroup;
@@ -4241,6 +4780,7 @@ static Boolean FilterAndLayout (
   BioseqPtr           BSP;
   SeqAnnotPtr         SAnnP;
   SeqAlignPtr         SAlnP;
+
 
   if (vContext == NULL) return FALSE;
   MemSet (&FPS, 0, sizeof (FilterProcessState));
@@ -4253,21 +4793,36 @@ static Boolean FilterAndLayout (
   FPS.featuresProcessed = MemNew (vContext->featureCount * sizeof (Boolean));
   if (FPS.featuresProcessed == NULL && vContext->featureCount != 0) return FALSE;
   AP = vContext->AppPtr;
+  vContext->sanLevelSeg = CreateSegment (vContext->topLevelSeg, 0, 0);
+  FPS.annotBoxDrawn = FALSE;
+  FPS.annotLabelDrawn = FALSE;
 
   FP = vContext->FltPtr;
+  if (! FP->AnnotBoxColorSet) {
+    MemCopy (FP->AnnotBoxColor, AP->AnnotBoxColor, sizeof (Uint1 [3]));
+  }
+  if (! FP->AnnotLabelColorSet) {
+    MemCopy (FP->AnnotLabelColor, AP->AnnotLabelColor, sizeof (Uint1 [3]));
+  }
+  if (! FP->AnnotLabelFontSet) {
+    FP->AnnotLabelFont = AP->AnnotLabelFont;
+  }
+
   for (FPS.currentFilterVNP = FP->FilterItemList;
        FPS.currentFilterVNP != NULL;
        FPS.currentFilterVNP = FPS.currentFilterVNP->next) {
 
     if (FPS.currentFilterVNP->data.ptrvalue == NULL) continue; /* this should not happen if config file parsing worked */
 
-    filterSeg = CreateSegment (vContext->topLevelSeg, 0, 0);
+    filterSeg = CreateSegment (vContext->sanLevelSeg, 0, 0);
     MemSet (FPS.labelSegs, 0, sizeof (FPS.labelSegs));
     MemSet (FPS.drawSegs, 0, sizeof (FPS.drawSegs));
     vContext->drawOnMe = filterSeg;
     emptyFilterGroup = TRUE;
     undoCeiling = FPS.ceiling;
     FPS.featuresProcessedCount = 0;
+    FPS.groupBoxDrawn = FALSE;
+    FPS.groupLabelDrawn = FALSE;
 
     FIP = (FilterItemPtr) FPS.currentFilterVNP->data.ptrvalue;
 
@@ -4281,22 +4836,18 @@ static Boolean FilterAndLayout (
       FIP->GroupLabelFont = AP->GroupLabelFont;
     }
 
-    if (FIP->DrawItemRect) {
-      FPS.ceiling -= 4;
-    }
-    if (FIP->GroupLabelLoc == LabelOnTop) {
-      SelectFont (FIP->GroupLabelFont);
-      FPS.ceiling -= LineHeight () + 4;
-    }
-
     switch (FIP->Type) {
       case InvalidFilter:
         break;
       case BioseqFilter:
+        if (vContext->currentSAP) 
+          break;
         height = DrawBioseq (FPS.ceiling, FIP, vContext);
         emptyFilterGroup = FALSE;
         break;
       case GraphFilter:
+        if (vContext->currentSAP) 
+          break;
         height = DrawGraphs (FPS.ceiling, vContext);
         if (height != 0) {
           emptyFilterGroup = FALSE;
@@ -4305,22 +4856,49 @@ static Boolean FilterAndLayout (
       case AlignmentFilter:
         BSP = vContext->BSP;
         height = 0;
+        totalheight = 0;
+        layoutC = (vContext->overrideLayout != Layout_Inherit) ? vContext->overrideLayout : FIP->LayoutChoice;
         FPS.currentFIP = FIP;
-        for (SAnnP = BSP->annot; SAnnP != NULL; SAnnP = SAnnP->next) {
-          if (SAnnP->type != 2) continue;  /* type 2 is an alignment */
+        
+        /*
+         *  Or we could move the current SAnnP into FPS.state.align and put all of this logic
+         *  into GetNextRFIPinAlignmentFilter() which SmearAlignments would call, making Alignment
+         *  processing more like Feature processing.
+         */
+        for (SAnnP = BSP->annot; SAnnP != NULL; SAnnP = SAnnP->next) 
+        {
+          if (SAnnP->type != 2) continue;  /* type 2 annotation is an alignment */
+          
+          if (FP->GroupByAnnot) /* are we grouping by named annotations? */
+          {
+            if (GetSeqAnnotName(SAnnP)) /* this is a named annotation */
+            {
+              if (SAnnP != vContext->currentSAP) /* only do the named annotation we are currently doing. */
+                continue;
+            }
+            else if (vContext->currentSAP) /* don't do any unnamed annotation if we are doing a particular named one. */
+              continue;
+          }
+                   
           emptyFilterGroup = FALSE;
           SAlnP = (SeqAlignPtr) SAnnP->data;
           ResetFilterState (&FPS);
           FPS.state.align.SAPhead = FPS.state.align.SAPcurrent = SAlnP;
-          /*
-          height = ProcessRows (Layout_FeatTypePerLine, &FPS, vContext);
-          */
 
-          DrawAlignments (&FPS, vContext);
-
-          height += 10;
-          FPS.ceiling -= height;
+         switch (layoutC) {
+            case Layout_FeatTypePerLine:
+             height = SmearAlignments (&FPS, vContext);
+              height += FIP->IntraRowPaddingPixels;
+              break;
+            default:
+              height = ProcessRows (layoutC, &FPS, vContext);
+              break;
+          }
+          totalheight += height;
+          if (height > 0)
+            FPS.ceiling -= height;
         }
+        height = 0;
         break;
       case FeatureFilter:
         layoutC = (vContext->overrideLayout != Layout_Inherit) ? vContext->overrideLayout : FIP->LayoutChoice;
@@ -4339,9 +4917,9 @@ static Boolean FilterAndLayout (
             FPS.currentFIP = &tempFI;
             MemCopy (&tempFI, FIP, sizeof (FilterItem)); /* copy the filter . . . */
             MemSet (&tempFI.IncludeFeature, 0, sizeof (tempFI.IncludeFeature));  /* but don't include any features */
-            tempFI.AddTypeToLabel = FALSE;
-            for (featdefOrder = 1; featdefOrder < FEATDEF_MAX; featdefOrder++) {
-              for (featdeftype = 1; featdeftype < FEATDEF_MAX; featdeftype++) {
+            tempFI.AddTypeToLabel = TristateFalse;
+            for (featdefOrder = 1; featdefOrder < APPEARANCEITEM_MAX; featdefOrder++) {
+              for (featdeftype = 1; featdeftype < APPEARANCEITEM_MAX; featdeftype++) {
                 if (FIP->IncludeFeature [featdeftype] == featdefOrder) {
                   ResetFilterState (&FPS);
                   tempFI.IncludeFeature[featdeftype] = TRUE;
@@ -4405,40 +4983,60 @@ static Boolean FilterAndLayout (
       FPS.ceiling = undoCeiling;
       continue;
     } else {
-      if (FIP->DrawItemRect) {
-        invisibleSeg = CreateSegment (filterSeg, 0, 0);
-        SetSegmentVisibleFlag (invisibleSeg, FALSE);
-        AddLine (invisibleSeg, vContext->from - 1, undoCeiling - 2, vContext->to + 1, undoCeiling - 2, FALSE, 0);
-        undoCeiling -= 4;
-      }
       switch (FIP->GroupLabelLoc) {
       default: break;
       case LabelOnTop:
-        if (StringHasNoText (FIP->GroupLabel)) break;
-        AddAttribute (filterSeg, COLOR_ATT, FIP->GroupLabelColor, 0, 0, 0, 0);
-        AddTextLabel (filterSeg, (vContext->from + vContext->to) / 2, undoCeiling,
-                      FIP->GroupLabel, FIP->GroupLabelFont, 1, LOWER_CENTER, 0);
+        /* already done in DrawFilterItemBoxLabel() */
         break;
       case LabelOnSide:
+        AddAttribute (vContext->drawOnMe, COLOR_ATT, FIP->GroupLabelColor, 0, 0, 0, 0);
         AddTextLabel (filterSeg, 0, FPS.ceiling - height / 2, FIP->GroupLabel,
-                      programFont, 1, MIDDLE_RIGHT, 0);
+                      FIP->GroupLabelFont, 1, MIDDLE_RIGHT, 0);
+        SelectFont (FIP->GroupLabelFont);
         height = MAX (height, LineHeight () + 3);
+        FPS.groupLabelDrawn = TRUE;
         break;
       case LabelOnBottom:
+        AddAttribute (vContext->drawOnMe, COLOR_ATT, FIP->GroupLabelColor, 0, 0, 0, 0);
         AddTextLabel (filterSeg, (vContext->from + vContext->to) / 2 , FPS.ceiling - height, FIP->GroupLabel,
-                      programFont, 1, LOWER_CENTER, 0);
+                      FIP->GroupLabelFont, 1, LOWER_CENTER, 0);
+        SelectFont (FIP->GroupLabelFont);
         height += LineHeight () + 3;
+        FPS.groupLabelDrawn = TRUE;
         break;
       }
     }
-    if (FIP->DrawItemRect && !emptyFilterGroup) {
-      FPS.ceiling -= 20;
+    if (FPS.groupBoxDrawn) {
+      FPS.ceiling -= 10;
     }
-    FPS.ceiling -= height + FIP->IntraRowPaddingPixels;
+    FPS.ceiling -= height + FIP->GroupPadding;
     if (FPS.needFreeList != NULL) {
       ValNodeFreeData (FPS.needFreeList);
       FPS.needFreeList = NULL;
     }
+  } /* for ( FP->FilterItemList->next ) */
+
+  if (FP->GroupByAnnot && FP->AnnotLabelLoc == LabelOnBottom) {
+    CharPtr             annotName;
+
+    annotName = GetSeqAnnotName(vContext->currentSAP);
+    if (annotName != NULL && !StringHasNoText(annotName))
+    {
+      AddAttribute (vContext->sanLevelSeg, COLOR_ATT, FP->AnnotLabelColor, 0, 0, 0, 0);
+      AddTextLabel (vContext->sanLevelSeg, (vContext->from + vContext->to) / 2 , FPS.ceiling, annotName,
+                    FP->AnnotLabelFont, 1, LOWER_CENTER, 0);
+      SelectFont (FP->AnnotLabelFont);
+      FPS.ceiling -= LineHeight () + 3;
+      FPS.annotLabelDrawn = TRUE;
+    }
+  }
+  if (FPS.annotBoxDrawn) {
+    /* add invisible line to force width of SegRect and space under group boxes. */
+    invisibleSeg = CreateSegment (vContext->sanLevelSeg, 0, 0);
+    SetSegmentVisibleFlag (invisibleSeg, FALSE);
+    AddLine (invisibleSeg, vContext->from - 3 * vContext->viewScale ,  FPS.ceiling + 10, 
+                           vContext->to + 3 * vContext->viewScale ,  FPS.ceiling + 10, FALSE, 0);
+    FPS.ceiling -= 20;
   }
   if (FPS.needFreeList != NULL) {
     ValNodeFreeData (FPS.needFreeList);
@@ -4483,6 +5081,8 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
 
 {
   ViewerContext  VC;
+  Int2           sapIndex;
+  Int4           theCeiling = 0;
 
   /*
     Removed checks feats->featureCount == 0 || feats->featVNP == NULL
@@ -4499,9 +5099,9 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
   VC.sapList = feats->sapList;
   VC.sapCount = feats->sapCount;
   if (topLevel == NULL) {
-    VC.drawOnMe = VC.topLevelSeg = CreatePicture ();
+    VC.drawOnMe = VC.sanLevelSeg = VC.topLevelSeg = CreatePicture ();
   } else {
-    VC.drawOnMe = VC.topLevelSeg = topLevel;
+    VC.drawOnMe = VC.sanLevelSeg = VC.topLevelSeg = topLevel;
   }
   VC.featureCount = feats->featureCount;
   VC.featVNP = feats->featVNP;
@@ -4509,8 +5109,22 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
   VC.FltPtr = FP;
   VC.overrideLayout = overrideLayout;
   VC.seqLength = bsp->length;
-  VC.ceiling = ceiling;
+  
+  if (NULL == ceiling)
+    VC.ceiling = &theCeiling;
+  else
+    VC.ceiling = ceiling;
+  
+  VC.currentSAP = NULL;
   FilterAndLayout (&VC);
+  /* do again for named Seq Annot's */
+  if (FP->GroupByAnnot)
+  {
+    for (sapIndex = 0; sapIndex < VC.sapCount; ++sapIndex) {
+      VC.currentSAP = VC.sapList[sapIndex];
+      FilterAndLayout (&VC);    
+    }
+  }
   return VC.topLevelSeg;
 }
 
@@ -4585,7 +5199,7 @@ NLM_EXTERN SegmenT CreateGraphicView (
   FilterPtr         FP;
   AppearancePtr     AP;
   LayoutAlgorithm   overrideLayout;
-  Uint1             i;
+  Int1              i;
 
   if (bsp == NULL && location == NULL) return NULL;
   myVCP = GetGraphicConfigParseResults ();
@@ -4676,6 +5290,7 @@ typedef struct staticConfigFile {
 /* [Styles] */
 static ConfigFileLine defaultStyleLines1 [] = {
   {"style00", "defaultStyle"},
+  {"style100", "summary"},
   {NULL, NULL}
 };
 
@@ -4699,12 +5314,15 @@ static ConfigFileLine defaultStyleLines2 [] = {
   {"showtype", "yes"},
   {"showcontent", "yes"},
   {"shadesmears", "false"},
+  {"annotboxcolor", "100, 100, 100"},
+  {"annotlabelcolor", "black"},
+  {"annotlabelfont", "program"},
   {NULL, NULL}
 };
 
 /* [defaultStyle.bioseq] */
 static ConfigFileLine defaultStyleLines3 [] = {
-  {"label", "top"},
+  {"label", "left"},
   {"format", "accn"},
   {"scale", "true"},
   {"labelfont", "program"},
@@ -4786,17 +5404,140 @@ static ConfigFileLine defaultStyleLines11 [] = {
   {NULL, NULL}
 };
 
-/* [Filters] */
+/* [defaultStyle.align] */
 static ConfigFileLine defaultStyleLines12 [] = {
+  {"label", "above"},
+  {"color", "blue"},
+  {"labelcolor", "blue"},
+  {"showarrow", "true"},
+  {"showtype", "no"},
+  {"showcontent", "yes"},
+  {"format", "accession"},
+  {NULL, NULL}
+};
+
+/* [summary.master] */
+static ConfigFileLine defaultStyleLines13 [] = {
+  {"name", "Summary"},
+  {"label", "none"},
+  {"height", "3"},
+  {"labelfont", "small"},
+  {"grouplabelfont", "small"},
+  {"annotlabelfont", "small"},
+  {NULL, NULL}
+};
+
+/* [summary.bioseq] */
+static ConfigFileLine defaultStyleLines14 [] = {
+  {"label", "above"},
+  {"format", "accn"},
+  {"scale", "true"},
+  {"labelfont", "program"},
+  {"scalefont", "small"},
+  {"height", "5"},
+  {"scaleheight", "5"},
+  {"color", "0, 0, 0"},
+  {"labelcolor", "64, 64, 255"},
+  {"scalecolor", "32, 32, 32"},
+  {NULL, NULL}
+};
+
+/* [summary.gene] */
+static ConfigFileLine defaultStyleLines15 [] = {
+  {"label", "above"},
+  {"color", "blue"},
+  {"labelcolor", "blue"},
+  {"showarrow", "true"},
+  {NULL, NULL}
+};
+
+/* [summary.mRNA] */
+static ConfigFileLine defaultStyleLines16 [] = {
+  {"label", "above"},
+  {"color", "cyan"},
+  {"labelcolor", "cyan"},
+  {"showarrow", "true"},
+  {"gap", "line"},
+  {NULL, NULL}
+};
+
+/* [summary.cds] */
+static ConfigFileLine defaultStyleLines17 [] = {
+  {"label", "above"},
+  {"color", "magenta"},
+  {"labelcolor", "magenta"},
+  {"showarrow", "true"},
+  {"gap", "angle"},
+  {NULL, NULL}
+};
+
+/* [summary.tRNA] */
+static ConfigFileLine defaultStyleLines18 [] = {
+  {"label", "above"},
+  {"color", "green"},
+  {"labelcolor", "green"},
+  {"showarrow", "true"},
+  {"gap", "line"},
+  {NULL, NULL}
+};
+
+/* [summary.align] */
+static ConfigFileLine defaultStyleLines19 [] = {
+  {"label", "above"},
+  {"color", "blue"},
+  {"labelcolor", "blue"},
+  {"showarrow", "true"},
+  {"showtype", "no"},
+  {"showcontent", "yes"},
+  {"format", "accession"},
+  {NULL, NULL}
+};
+
+/* [summary.imp] */
+static ConfigFileLine defaultStyleLines20 [] = {
+  {"showcontent", "no"},
+  {"color", "gray"},
+  {"labelcolor", "gray"},
+  {NULL, NULL}
+};
+
+/* [summary.exon] */
+static ConfigFileLine defaultStyleLines21 [] = {
+  {"showcontent", "no"},
+  {"color", "dark cyan"},
+  {"labelcolor", "dark cyan"},
+  {NULL, NULL}
+};
+
+/* [summary.intron] */
+static ConfigFileLine defaultStyleLines22 [] = {
+  {"showcontent", "no"},
+  {"color", "light gray"},
+  {"labelcolor", "light gray"},
+  {NULL, NULL}
+};
+
+/* [summary.bond] */
+static ConfigFileLine defaultStyleLines23 [] = {
+  {"displaywith", "cappedline"},
+  {NULL, NULL}
+};
+
+/* [Filters] */
+static ConfigFileLine defaultStyleLines24 [] = {
   {"filter00", "defaultFilt"},
+  {"filter100", "summary"},
   {"maxlabelscale", "200"},
   {"grouppadding", "2"},
   {"rowpadding", "2"},
+  {"annotgroup", "yes"},
+  {"annotbox", "yes"},
+  {"annotlabel", "above"},
   {NULL, NULL}
 };
 
 /* [defaultFilt] */
-static ConfigFileLine defaultStyleLines13 [] = {
+static ConfigFileLine defaultStyleLines25 [] = {
   {"name", "Default"},
   {"layout", "compact"},
   {"group1", "defaultFilt-gene-cds-prot-mrna"},
@@ -4804,13 +5545,15 @@ static ConfigFileLine defaultStyleLines13 [] = {
   {"group3", "defaultFilt-exon-intron-label"},
   {"group4", "defaultFilt-variations"},
   {"group5", "defaultFilt-conflicts"},
-  {"group6", "defaultFilt-impfeats"},
-  {"group7", "defaultFilt-everything-else-label"},
+  {"group7", "defaultFilt-STS"},
+  {"group8", "defaultFilt-impfeats"},
+  {"group9", "defaultFilt-alignments"},
+  {"group10", "defaultFilt-everything-else-label"},
   {NULL, NULL}
 };
 
 /* [filters.defaultFilt-gene-cds-prot-mrna] */
-static ConfigFileLine defaultStyleLines14 [] = {
+static ConfigFileLine defaultStyleLines26 [] = {
   {"feature1", "gene"},
   {"feature2", "cds"},
   {"feature3", "prot"},
@@ -4825,7 +5568,7 @@ static ConfigFileLine defaultStyleLines14 [] = {
 };
 
 /* [filters.defaultFilt-other-rnas] */
-static ConfigFileLine defaultStyleLines15 [] = {
+static ConfigFileLine defaultStyleLines27 [] = {
   {"feature1", "rna"},
   {"name", "Structural RNAs"},
   {"grouplabel", "none"},
@@ -4834,7 +5577,7 @@ static ConfigFileLine defaultStyleLines15 [] = {
 };
 
 /* [filters.defaultFilt-exon-intron-label] */
-static ConfigFileLine defaultStyleLines16 [] = {
+static ConfigFileLine defaultStyleLines28 [] = {
   {"feature1", "exon"},
   {"feature2", "intron"},
   {"name", "Introns and Exons"},
@@ -4844,7 +5587,7 @@ static ConfigFileLine defaultStyleLines16 [] = {
 };
 
 /* [filters.defaultFilt-variations] */
-static ConfigFileLine defaultStyleLines17 [] = {
+static ConfigFileLine defaultStyleLines29 [] = {
   {"feature1", "variation"},
   {"name", "Variations"},
   {"groupbox", "true"},
@@ -4857,7 +5600,7 @@ static ConfigFileLine defaultStyleLines17 [] = {
 };
 
 /* [filters.defaultFilt-conflicts] */
-static ConfigFileLine defaultStyleLines18 [] = {
+static ConfigFileLine defaultStyleLines30 [] = {
   {"feature1", "conflict"},
   {"name", "Conflicts"},
   {"groupbox", "true"},
@@ -4869,20 +5612,83 @@ static ConfigFileLine defaultStyleLines18 [] = {
   {NULL, NULL}
 };
 
+/* [filters.defaultFilt-STS] */
+static ConfigFileLine defaultStyleLines31 [] = {
+  {"feature1", "STS"},
+  {"name", "STS"},
+  {"groupbox", "true"},
+  {"boxcolor", "red"},
+  {"grouplabel", "above"},
+  {"layout", "smear"},
+  {"showtype", "no"},
+  {"showcontent", "no"},
+  {NULL, NULL}
+};
+
 /* [filters.defaultFilt-impfeats] */
-static ConfigFileLine defaultStyleLines19 [] = {
-  {"feature1", "Import"},
+static ConfigFileLine defaultStyleLines32 [] = {
+  {"feature1", "import"},
   {"name", "Import Features"},
   {"grouplabel", "none"},
   {"label", "above"},
   {NULL, NULL}
 };
 
- /* [filters.defaultFilt-everything-else-label] */
-static ConfigFileLine defaultStyleLines20 [] = {
+/* [filters.defaultFilt-alignments] */
+static ConfigFileLine defaultStyleLines33 [] = {
+  {"feature1", "align"},
+  {"name", "Alignments"},
+  {"grouplabel", "none"},
+  {"label", "above"},
+  {"layout", "smear"},
+  {"showtype", "no"},
+  {NULL, NULL}
+};
+
+/* [filters.defaultFilt-everything-else-label] */
+static ConfigFileLine defaultStyleLines34 [] = {
   {"feature1", "everything"},
   {"grouplabel", "none"},
   {"label", "above"},
+  {NULL, NULL}
+};
+
+/* [summary] */
+static ConfigFileLine defaultStyleLines35 [] = {
+  {"group1", "summary-gene-rna-cds-nolabel"},
+  {"group2", "summary-allelse"},
+  {"group3", "summary-aligns-nolabel"},
+  {"name", "Summary"},
+  {"defaultlayout", "compact"},
+  {"rowpadding", "3"},
+  {"grouppadding", "1"},
+  {"label", "none"},
+  {"annotlabelfont", "small"},
+  {NULL, NULL}
+};
+
+/* [filters.summary-gene-rna-cds-nolabel] */
+static ConfigFileLine defaultStyleLines36 [] = {
+  {"feature1", "gene"},
+  {"feature2", "rna"},
+  {"feature3", "cds"},
+  {"layout", "geneproducts"},
+  {"label", "none"},
+  {NULL, NULL}
+};
+
+/* [filters.summary-aligns-nolabel] */
+static ConfigFileLine defaultStyleLines37 [] = {
+  {"feature1", "align"},
+  {"label", "none"},
+  {NULL, NULL}
+};
+
+ /* [filters.summary-allelse] */
+static ConfigFileLine defaultStyleLines38 [] = {
+  {"feature1", "everything"},
+  {"layout", "smear"},
+  {"label", "none"},
   {NULL, NULL}
 };
 
@@ -4899,15 +5705,33 @@ static StaticConfigFile defaultStyle [] = {
   {defaultStyleLines9, "defaultStyle.exon"},
   {defaultStyleLines10, "defaultStyle.intron"},
   {defaultStyleLines11, "defaultStyle.bond"},
-  {defaultStyleLines12, "Filters"},
-  {defaultStyleLines13, "defaultFilt"},
-  {defaultStyleLines14, "filters.defaultFilt-gene-cds-prot-mrna"},
-  {defaultStyleLines15, "filters.defaultFilt-other-rnas"},
-  {defaultStyleLines16, "filters.defaultFilt-exon-intron-label"},
-  {defaultStyleLines17, "filters.defaultFilt-variations"},
-  {defaultStyleLines18, "filters.defaultFilt-conflicts"},
-  {defaultStyleLines19, "filters.defaultFilt-impfeats"},
-  {defaultStyleLines20, "filters.defaultFilt-everything-else-label"},
+  {defaultStyleLines12, "defaultStyle.align"},
+  {defaultStyleLines13, "summary.master"},
+  {defaultStyleLines14, "summary.bioseq"},
+  {defaultStyleLines15, "summary.gene"},
+  {defaultStyleLines16, "summary.mRNA"},
+  {defaultStyleLines17, "summary.cds"},
+  {defaultStyleLines18, "summary.tRNA"},
+  {defaultStyleLines19, "summary.align"},
+  {defaultStyleLines20, "summary.imp"},
+  {defaultStyleLines21, "summary.exon"},
+  {defaultStyleLines22, "summary.intron"},
+  {defaultStyleLines23, "summary.bond"},
+  {defaultStyleLines24, "Filters"},
+  {defaultStyleLines25, "defaultFilt"},
+  {defaultStyleLines26, "filters.defaultFilt-gene-cds-prot-mrna"},
+  {defaultStyleLines27, "filters.defaultFilt-other-rnas"},
+  {defaultStyleLines28, "filters.defaultFilt-exon-intron-label"},
+  {defaultStyleLines29, "filters.defaultFilt-variations"},
+  {defaultStyleLines30, "filters.defaultFilt-conflicts"},
+  {defaultStyleLines31, "filters.defaultFilt-STS"},
+  {defaultStyleLines32, "filters.defaultFilt-impfeats"},
+  {defaultStyleLines33, "filters.defaultFilt-alignments"},
+  {defaultStyleLines34, "filters.defaultFilt-everything-else-label"},
+  {defaultStyleLines35, "summary"},
+  {defaultStyleLines36, "filters.summary-gene-rna-cds-nolabel"},
+  {defaultStyleLines37, "filters.summary-aligns-nolabel"},
+  {defaultStyleLines38, "filters.summary-allelse"},
   {NULL, NULL}
 };
 

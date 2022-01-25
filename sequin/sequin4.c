@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.170 $
+* $Revision: 6.177 $
 *
 * File Description: 
 *
@@ -1202,6 +1202,7 @@ static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
   Char              str [256];
   FILE              *tmpFp;
   Char              tmpPath [PATH_MAX];
+  AliConfigInfo     configInfo;
    
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
@@ -1239,6 +1240,9 @@ static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
     if (GetInputFileName (path, sizeof (path), NULL, "TEXT")) {
       fp = FileOpen (path, "r");
       if (fp != NULL) {
+        MemSet ((Pointer) &configInfo, 0, sizeof (AliConfigInfo));
+        configInfo.gapChar = "-.";
+        Ali_SetConfig (&configInfo, ALI_SET_GAP_CHAR);
         afdp = Ali_Read (fp);
         FileClose (fp);
         if (afdp != NULL) {
@@ -1384,10 +1388,8 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
 {
   BioseqPtr         bsp;
   BioseqSetPtr      bssp;
-  Int4              chlen;
   SeqAnnotPtr       curr;
   DenseSegPtr       dsp;
-  Int4              endsfixed;
   ObjectIdPtr       oip;
   OMProcControlPtr  ompcp;
   SeqAlignPtr       salp;
@@ -1404,6 +1406,7 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   SeqIdPtr          sip2;
   UserFieldPtr      ufp;
   UserObjectPtr     uop;
+  Boolean           revcomp = FALSE;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
@@ -1427,20 +1430,17 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   sbp = sbp->next;
   MemFree(sbp_prev);
   salp_head = salp_prev = NULL;
-  endsfixed = 0;
   while (sbp != NULL)
   {
     if (ISA_na(sbp->bsp->mol))
     {
        sip1 = SeqIdDup(bsp->id);
        sip2 = SeqIdDup(sbp->bsp->id);
-       salp = Sequin_GlobalAlignTwoSeq(bsp, sbp->bsp, &chlen);
+       salp = Sqn_GlobalAlign2Seq(bsp, sbp->bsp, &revcomp);
        dsp = (DenseSegPtr)(salp->segs);
        SeqIdSetFree(dsp->ids);
        dsp->ids = sip1;
        dsp->ids->next = sip2;
-       if (chlen > endsfixed)
-          endsfixed = chlen;
        if (salp != NULL && salp_head != NULL)
        {
           salp_prev->next = salp;
@@ -1452,10 +1452,6 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
     sbp = sbp->next;
     MemFree(sbp_prev);
   }
-  if (endsfixed > 0)
-  {
-    Message(MSG_OK, "The first sequence does not extend to both ends, so as much as %d nt%s on the ends %s not been algorithmically aligned.\nIf the ends do not look correctly aligned, and a good alignment is needed in those areas,\nchoose a sequence that extends to the desired end and put that first, then realign.", endsfixed, endsfixed > 1?"s":"", endsfixed > 1?"have":"has");
- }
   if (salp_head != NULL)
   {
     salp_tmp = salp_head;
@@ -1468,7 +1464,7 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
        }
        salp_tmp = salp_tmp->next;
     }
-    AlnMgr2IndexSeqAlign(salp_head);
+    AlnMgr2IndexSeqAlignEx(salp_head, FALSE);
     salp_mult = AlnMgr2GetSubAlign(salp_head, 0, -1, 0, TRUE);
     salp_mult->dim = AlnMgr2GetNumRows(salp_head);
     salp_mult->type = SAT_PARTIAL;
@@ -1526,9 +1522,7 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
 {
   BioseqPtr         bsp;
   BioseqSetPtr      bssp;
-  Int4              chlen;
   SeqAnnotPtr       curr;
-  Int4              endsfixed;
   ObjectIdPtr       oip;
   OMProcControlPtr  ompcp;
   SeqAlignPtr       salp;
@@ -1566,12 +1560,9 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
   sbp = sbp->next;
   MemFree(sbp_prev);
   salp_head = salp_prev = NULL;
-  endsfixed = 0;
   while (sbp != NULL)
   {
-    salp = Sequin_GlobalAlignTwoSeq(bsp, sbp->bsp, &chlen);
-    if (chlen > endsfixed)
-       endsfixed = chlen;
+    salp = Sqn_GlobalAlign2Seq(bsp, sbp->bsp, FALSE);
     if (salp_head != NULL && salp != NULL)
     {
        salp_prev->next = salp;
@@ -1582,8 +1573,6 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
     sbp = sbp->next;
     MemFree(sbp_prev);
   }
-  if (endsfixed > 1)
-    Message(MSG_OK, "The first sequence does not extend to both ends, so as much as %d nt%s on the ends %s not been algorithmically aligned.\nIf the ends do not look correctly aligned, and a good alignment is needed in those areas,\nchoose a sequence that extends to the desired end and put that first, then realign.", endsfixed, endsfixed > 1?"s":"", endsfixed > 1?"have":"has");
   if (salp_head != NULL)
   {
     salp_tmp = salp_head;
@@ -2686,7 +2675,9 @@ static void myrelease(IcoN ic, PoinT pt)
 		pos = (pt.x - r.left)/ovp->dx - ir;
 		for (vnp=ovp->orfs, item=1; vnp; vnp=vnp->next, item++) {
 			slp = vnp->data.ptrvalue;
+			if (slp == NULL) continue;
 			sip = slp->data.ptrvalue;
+			if (sip == NULL) continue;
 			if (vnp->choice != ir || sip->strand != Seq_strand_plus) {
 				continue;
 			}
@@ -2698,6 +2689,8 @@ static void myrelease(IcoN ic, PoinT pt)
 			Beep();
 			return;
 		}
+		if (slp == NULL) return;
+		if (sip == NULL) return;
 		ovp->frame = ir;
 		ovp->strand = sip->strand;
 		ovp->from = sip->from;
@@ -2737,7 +2730,9 @@ static void myrelease(IcoN ic, PoinT pt)
 		pos = (pt.x - r.left)/ovp->dx - ir;
 		for (vnp=ovp->orfs, item=1; vnp; vnp=vnp->next, item++) {
 			slp = vnp->data.ptrvalue;
+			if (slp == NULL) continue;
 			sip = slp->data.ptrvalue;
+			if (sip == NULL) continue;
 			if (vnp->choice != ir  || sip->strand != Seq_strand_minus) {
 				continue;
 			}
@@ -2749,6 +2744,8 @@ static void myrelease(IcoN ic, PoinT pt)
 			Beep();
 			return;
 		}
+		if (slp == NULL) return;
+		if (sip == NULL) return;
 		ovp->frame = ir;
 		ovp->strand = sip->strand;
 		ovp->from = sip->from;
@@ -5674,7 +5671,6 @@ extern void SetupSequinFilters (void)
     REGISTER_CLEAR_SEQENTRYSCOPE;
     REGISTER_SEQUIN_CACHE_ACCN;
     REGISTER_SEQUIN_GI_TO_ACCN;
-    REGISTER_TPAASSEMBLYUSER_DESC_EDIT;
     REGISTER_REFGENEUSER_DESC_EDIT;
     REGISTER_PROT_IDS_TO_GENE_SYN;
     REGISTER_DESCRIPTOR_PROPAGATE;
@@ -5687,6 +5683,8 @@ extern void SetupSequinFilters (void)
       }
     }
   }
+
+  REGISTER_TPAASSEMBLYUSER_DESC_EDIT;
 
   REGISTER_BIOSEQ_COMPLEMENT;
   REGISTER_BIOSEQ_REVERSE;
@@ -6570,14 +6568,16 @@ static Boolean LIBCALLBACK SetDescriptorFocus (BioseqPtr bsp,
   /* a source feature in addition to the    */
   /* source descriptor.                     */
 
-  if (NULL == SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0,
+  is_focus = (Boolean) * ((BoolPtr) bContext->userdata);
+
+  /* don't need feature to clear existing focus on descriptor */
+
+  if (is_focus && NULL == SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0,
 				    &fContext))
     return TRUE;
 
   /* Set the focus on all of the Bioseq's */
   /* source descriptors.                  */
-
-  is_focus = (Boolean) bContext->userdata;
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dContext);
   while (NULL != sdp) {

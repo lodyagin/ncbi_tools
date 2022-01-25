@@ -40,6 +40,9 @@
 #define ERR_SEQ_INST_HistoryGiCollision  1,36
 #define ERR_SEQ_INST_GiWithoutAccession  1,37
 #define ERR_SEQ_INST_MultipleAccessions  1,38
+#define ERR_SEQ_INST_HistAssemblyMissing  1,39
+#define ERR_SEQ_INST_TerminalNs  1,40
+#define ERR_SEQ_INST_UnexpectedIdentifierChange  1,41
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -64,6 +67,7 @@
 #define ERR_SEQ_DESCR_ObsoleteSourceLocation  2,21
 #define ERR_SEQ_DESCR_ObsoleteSourceQual  2,22
 #define ERR_SEQ_DESCR_StructuredSourceNote  2,23
+#define ERR_SEQ_DESCR_UnnecessaryBioSourceFocus  2,24
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2

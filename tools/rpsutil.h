@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.19 2002/10/17 20:36:00 camacho Exp $
+/* $Id: rpsutil.h,v 6.23 2003/03/20 14:46:12 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,25 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.19 $
+* $Revision: 6.23 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.23  2003/03/20 14:46:12  madden
+* C++ comment to C comment
+*
+* Revision 6.22  2003/03/20 13:52:02  madden
+* Changes to support SeqAnnot output with -m10/11
+*
+* Revision 6.21  2003/01/24 22:26:03  camacho
+* RPSInit is deprecated, use RPSInitEx instead
+*
+* Revision 6.20  2002/12/31 22:48:54  boemker
+* Added xml_mode to RPSBlastOptions to support ASN output in
+* ../demo/rpsblast.c.
+*
 * Revision 6.19  2002/10/17 20:36:00  camacho
 * Disallow -L option for tblastn
 *
@@ -190,6 +203,9 @@ typedef struct _rps_blast_options {
     Boolean believe_query;
     Uint4 align_options, print_options;
     Boolean is_xml_output;
+    Boolean is_asn1_output;
+    char* asn1_mode;  /* "w" or "wb" */
+    AsnIoPtr aip;
     Int4 num_threads;
 
     /* These parameters are for foprmating convinience only */
@@ -215,14 +231,17 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
 /* FINCTION DEFINITIONS */
 /****************************************************************************/
 
-/* ----------------------  RPSInit --------------------------
+/* ----------------------  RPSInitEx --------------------------
    Purpose:     Initialize main structures of the RPS Search
                 
    Parameters:  database - BLAST database of the sequence set corresponding 
                            to PSI matrix set
+                query_is_prot - Whether query sequence is protein or nucleotide
+                blast_options - BLAST options block
    Returns:     Poiner to created RPSInfoPtr
   ------------------------------------------------------------------*/
 RPSInfoPtr RPSInitEx(CharPtr database, Int4 query_is_prot, BLAST_OptionsBlkPtr blast_options);
+/*** This function is DEPRECATED. Please use RPSInitEx instead (01/24/03) ***/
 RPSInfoPtr RPSInit(CharPtr database, Int4 query_is_prot);
 
 /* ----------------------  RPSClose --------------------------

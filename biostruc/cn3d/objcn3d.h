@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cn3d
-*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001 12:45 PM
+*    Generated using ASNCODE Revision: 6.14 at Feb 6, 2003  9:02 AM
 *
 **************************************************/
 
@@ -88,6 +88,9 @@ NLM_EXTERN Boolean LIBCALL Cn3dUserAnnotationsAsnWrite PROTO (( Cn3dUserAnnotati
 #define Cn3d_color_scheme_weighted_variety 10
 #define Cn3d_color_scheme_information_content 11
 #define Cn3d_color_scheme_fit 12
+#define Cn3d_color_scheme_block_fit 17
+#define Cn3d_color_scheme_block_z_fit 18
+#define Cn3d_color_scheme_block_row_fit 19
 #define Cn3d_color_scheme_temperature 13
 #define Cn3d_color_scheme_hydrophobicity 14
 #define Cn3d_color_scheme_charge 15
@@ -234,9 +237,9 @@ NLM_EXTERN Boolean LIBCALL Cn3dStyleSettingsAsnWrite PROTO (( Cn3dStyleSettingsP
 *    Cn3dStyleSettingsSet
 *
 **************************************************/
-typedef struct struct_Cn3dStyleSettings Cn3dStyleSettingsSet;
-typedef struct struct_Cn3dStyleSettings PNTR Cn3dStyleSettingsSetPtr;
-#define Cn3dStyleSettingsSetNew() Cn3dStyleSettingsNew() 
+typedef struct struct_Cn3d_style_settings Cn3dStyleSettingsSet;
+typedef struct struct_Cn3d_style_settings PNTR Cn3dStyleSettingsSetPtr;
+#define Cn3dStyleSettingsSetNew() Cn3d_style_settingsNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.81 $
+* $Revision: 6.84 $
 *
 * File Description: 
 *
@@ -115,10 +115,14 @@ extern "C" {
 #define SEQ_FMT_PAUP          5
 */
 
+#define SEQ_ORIG_SUBMISSION   1
+#define SEQ_TPA_SUBMISSION    2
+
 typedef struct fmtblk {
   Int2         seqPackage;
   Int2         seqFormat;
   Int2         numSeqs;
+  Int2         submType;
 } FormatBlock, PNTR FormatBlockPtr;
 
 typedef struct sqnblk {
@@ -156,6 +160,7 @@ extern Boolean  docSumUp;
 extern Boolean  bioseqViewUp;
 #endif
 
+extern void PrefixAuthorityWithOrganism (IteM i);
 extern void UpdateFastaSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
 extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
@@ -496,6 +501,68 @@ extern SeqAlignPtr Sequin_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, Int
 #ifndef WIN_MAC
 extern void CreateSqnInitialFormMenus (WindoW w);
 #endif
+
+#define NUM_PAGES  8
+
+typedef struct sequencesform {
+  FORM_MESSAGE_BLOCK
+  GrouP           pages [NUM_PAGES];
+  Int2            currentPage;
+  Int2            tagFromPage [NUM_PAGES];
+  Int2            numPages;
+  DialoG          tbs;
+
+  DialoG          genbio;
+  Uint1           dnamolfrommolinfo;
+  PopuP           moltypePopup;
+  EnumFieldAssoc  PNTR moltypeAlist;
+  PopuP           topologyPopup;
+  ButtoN          partial5;
+  ButtoN          partial3;
+  GrouP           singleIdGrp;
+  TexT            singleSeqID;
+  ButtoN          makeAlign;
+  DialoG          dnaseq;
+
+  Int2            seqPackage;
+  Int2            seqFormat;
+  Int2            numSeqs;
+  Int2            submType;
+
+  ButtoN          protTechBoth;
+  ButtoN          partialN;
+  ButtoN          partialC;
+  Boolean         makeMRNA;
+  DialoG          protseq;
+
+  DialoG          mrnaseq;
+  ButtoN          partialmRNA5;
+  ButtoN          partialmRNA3;
+
+  GrouP           annotType;
+  GrouP           annotGrp;
+  ButtoN          partialLft;
+  ButtoN          partialRgt;
+  TexT            geneName;
+  PrompT          protOrRnaPpt;
+  TexT            protOrRnaName;
+  TexT            featcomment;
+  TexT            defline;
+  ButtoN          orgPrefix;
+  PopuP           genome;
+  PopuP           gencode;
+
+  ButtoN          nextBtn;
+  ButtoN          prevBtn;
+  BtnActnProc     goToNext;
+  BtnActnProc     goToPrev;
+
+  SeqEntryPtr     topSeqForConfirm;
+  SeqEntryPtr     currConfirmSeq;
+  FormActnFunc    putItAllTogether;
+  Int2            currConfirmCount;
+} SequencesForm, PNTR SequencesFormPtr;
+
 
 
 #ifdef __cplusplus

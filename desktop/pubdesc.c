@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description:
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.29  2003/02/24 14:14:10  kans
+* removed unnecessary prototypes
+*
 * Revision 6.28  2002/11/03 21:10:12  kans
 * do not put standard remark popup in online pub dialog
 *
@@ -4407,11 +4410,6 @@ static void Quit PROTO((ButtoN b));
 
 /****** prototypes for user action CB***************/
 
-void Accept PROTO((ButtoN b));
-
-static void  SendQuery PROTO((ButtoN b));
-static void  CreateDocSum  PROTO((ByteStorePtr uids_bs, DoC doc, TexT count));
-static void  DisplayDocSum PROTO((CharPtr docSum, DoC dp));
 static void  MyNotify PROTO((DoC d, Int2 item, Int2 row, Int2 col, Boolean dblclick));
 
 

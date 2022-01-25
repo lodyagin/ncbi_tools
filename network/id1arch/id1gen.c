@@ -32,7 +32,7 @@ id1genAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-ID1Access
-*    Generated using ASNCODE Revision: 6.0 at Jul 30, 1998  4:04 PM
+*    Generated using ASNCODE Revision: 6.0 at Mar 18, 2003 12:08 PM
 *
 **************************************************/
 
@@ -61,6 +61,12 @@ ID1serverRequestFree(ValNodePtr anp)
       SeqIdFree(anp -> data.ptrvalue);
       break;
    case ID1serverRequest_getsefromgi:
+      ID1serverMaxcomplexFree(anp -> data.ptrvalue);
+      break;
+   case ID1serverRequest_getsewithinfo:
+      ID1serverMaxcomplexFree(anp -> data.ptrvalue);
+      break;
+   case ID1serverRequest_getblobinfo:
       ID1serverMaxcomplexFree(anp -> data.ptrvalue);
       break;
    }
@@ -169,6 +175,14 @@ ID1serverRequestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == ID1SERVER_REQUEST_getsewithinfo) {
+      choice = ID1serverRequest_getsewithinfo;
+      func = (AsnReadFunc) ID1serverMaxcomplexAsnRead;
+   }
+   else if (atp == ID1SERVER_REQUEST_getblobinfo) {
+      choice = ID1serverRequest_getblobinfo;
+      func = (AsnReadFunc) ID1serverMaxcomplexAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -261,6 +275,14 @@ ID1serverRequestAsnWrite(ID1serverRequestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case ID1serverRequest_getgistate:
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, ID1SERVER_REQUEST_getgistate, &av);
+      break;
+   case ID1serverRequest_getsewithinfo:
+      writetype = ID1SERVER_REQUEST_getsewithinfo;
+      func = (AsnWriteFunc) ID1serverMaxcomplexAsnWrite;
+      break;
+   case ID1serverRequest_getblobinfo:
+      writetype = ID1SERVER_REQUEST_getblobinfo;
+      func = (AsnWriteFunc) ID1serverMaxcomplexAsnWrite;
       break;
    }
    if (writetype != NULL) {
@@ -650,6 +672,12 @@ ID1serverBackFree(ValNodePtr anp)
    case ID1serverBack_girevhist:
       AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) ID1SeqHistFree);
       break;
+   case ID1serverBack_gotsewithinfo:
+      ID1SeqEntryInfoFree(anp -> data.ptrvalue);
+      break;
+   case ID1serverBack_gotblobinfo:
+      ID1blobInfoFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -773,6 +801,14 @@ ID1serverBackAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   else if (atp == ID1SERVER_BACK_gotsewithinfo) {
+      choice = ID1serverBack_gotsewithinfo;
+      func = (AsnReadFunc) ID1SeqEntryInfoAsnRead;
+   }
+   else if (atp == ID1SERVER_BACK_gotblobinfo) {
+      choice = ID1serverBack_gotblobinfo;
+      func = (AsnReadFunc) ID1blobInfoAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -871,6 +907,14 @@ ID1serverBackAsnWrite(ID1serverBackPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case ID1serverBack_girevhist:
       retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) ID1SeqHistAsnWrite, aip, ID1SERVER_BACK_girevhist, ID1SERVER_BACK_girevhist_E);
       break;
+   case ID1serverBack_gotsewithinfo:
+      writetype = ID1SERVER_BACK_gotsewithinfo;
+      func = (AsnWriteFunc) ID1SeqEntryInfoAsnWrite;
+      break;
+   case ID1serverBack_gotblobinfo:
+      writetype = ID1SERVER_BACK_gotblobinfo;
+      func = (AsnWriteFunc) ID1blobInfoAsnWrite;
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -884,6 +928,414 @@ erret:
    AsnUnlinkType(orig);       /* unlink local tree */
    return retval;
 }
+
+
+/**************************************************
+*
+*    ID1SeqEntryInfoNew()
+*
+**************************************************/
+NLM_EXTERN 
+ID1SeqEntryInfoPtr LIBCALL
+ID1SeqEntryInfoNew(void)
+{
+   ID1SeqEntryInfoPtr ptr = MemNew((size_t) sizeof(ID1SeqEntryInfo));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ID1SeqEntryInfoFree()
+*
+**************************************************/
+NLM_EXTERN 
+ID1SeqEntryInfoPtr LIBCALL
+ID1SeqEntryInfoFree(ID1SeqEntryInfoPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   ID1blobInfoFree(ptr -> blob_info);
+   SeqEntryFree(ptr -> blob);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ID1SeqEntryInfoAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ID1SeqEntryInfoPtr LIBCALL
+ID1SeqEntryInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ID1SeqEntryInfoPtr ptr;
+
+   if (! loaded)
+   {
+      if (! id1genAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ID1SeqEntryInfo ::= (self contained) */
+      atp = AsnReadId(aip, amp, ID1SEQENTRY_INFO);
+   } else {
+      atp = AsnLinkType(orig, ID1SEQENTRY_INFO);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ID1SeqEntryInfoNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ID1SEQENTRY_INFO_blob_info) {
+      ptr -> blob_info = ID1blobInfoAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1SEQENTRY_INFO_blob) {
+      ptr -> blob = SeqEntryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ID1SeqEntryInfoFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ID1SeqEntryInfoAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ID1SeqEntryInfoAsnWrite(ID1SeqEntryInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! id1genAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ID1SEQENTRY_INFO);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> blob_info != NULL) {
+      if ( ! ID1blobInfoAsnWrite(ptr -> blob_info, aip, ID1SEQENTRY_INFO_blob_info)) {
+         goto erret;
+      }
+   }
+   if (ptr -> blob != NULL) {
+      if ( ! SeqEntryAsnWrite(ptr -> blob, aip, ID1SEQENTRY_INFO_blob)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ID1blobInfoNew()
+*
+**************************************************/
+NLM_EXTERN 
+ID1blobInfoPtr LIBCALL
+ID1blobInfoNew(void)
+{
+   ID1blobInfoPtr ptr = MemNew((size_t) sizeof(ID1blobInfo));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ID1blobInfoFree()
+*
+**************************************************/
+NLM_EXTERN 
+ID1blobInfoPtr LIBCALL
+ID1blobInfoFree(ID1blobInfoPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> satname);
+   MemFree(ptr -> comment);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ID1blobInfoAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ID1blobInfoPtr LIBCALL
+ID1blobInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ID1blobInfoPtr ptr;
+
+   if (! loaded)
+   {
+      if (! id1genAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ID1blobInfo ::= (self contained) */
+      atp = AsnReadId(aip, amp, ID1BLOB_INFO);
+   } else {
+      atp = AsnLinkType(orig, ID1BLOB_INFO);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ID1blobInfoNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ID1BLOB_INFO_gi) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> gi = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_sat) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> sat = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_sat_key) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> sat_key = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_satname) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> satname = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_suppress) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> suppress = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_withdrawn) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> withdrawn = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_confidential) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> confidential = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_blob_state) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> blob_state = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_comment) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> comment = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ID1BLOB_INFO_extfeatmask) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> extfeatmask = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ID1blobInfoFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ID1blobInfoAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ID1blobInfoAsnWrite(ID1blobInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! id1genAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ID1BLOB_INFO);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> gi;
+   retval = AsnWrite(aip, ID1BLOB_INFO_gi,  &av);
+   av.intvalue = ptr -> sat;
+   retval = AsnWrite(aip, ID1BLOB_INFO_sat,  &av);
+   av.intvalue = ptr -> sat_key;
+   retval = AsnWrite(aip, ID1BLOB_INFO_sat_key,  &av);
+   if (ptr -> satname != NULL) {
+      av.ptrvalue = ptr -> satname;
+      retval = AsnWrite(aip, ID1BLOB_INFO_satname,  &av);
+   }
+   av.intvalue = ptr -> suppress;
+   retval = AsnWrite(aip, ID1BLOB_INFO_suppress,  &av);
+   av.intvalue = ptr -> withdrawn;
+   retval = AsnWrite(aip, ID1BLOB_INFO_withdrawn,  &av);
+   av.intvalue = ptr -> confidential;
+   retval = AsnWrite(aip, ID1BLOB_INFO_confidential,  &av);
+   av.intvalue = ptr -> blob_state;
+   retval = AsnWrite(aip, ID1BLOB_INFO_blob_state,  &av);
+   if (ptr -> comment != NULL) {
+      av.ptrvalue = ptr -> comment;
+      retval = AsnWrite(aip, ID1BLOB_INFO_comment,  &av);
+   }
+   av.intvalue = ptr -> extfeatmask;
+   retval = AsnWrite(aip, ID1BLOB_INFO_extfeatmask,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************
@@ -913,7 +1365,7 @@ NLM_EXTERN
 ID1serverDebugPtr LIBCALL
 ID1serverDebugAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -969,7 +1421,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 ID1serverDebugAsnWrite(ID1serverDebugPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

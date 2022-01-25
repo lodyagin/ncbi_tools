@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.51 $
+* $Revision: 6.54 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.54  2003/04/09 18:16:53  kans
+* motif version of Nlm_ProcessKeyPress sets ctrlKey and shftKey, clears cmmdKey and optKey, leaves dblClick alone
+*
+* Revision 6.53  2003/01/27 17:43:03  kans
+* do not set silent if xx_argc > 1
+*
+* Revision 6.52  2003/01/24 20:55:42  rsmith
+* ConvertFilename now extern not static, renamed Nlm_* and only defined in vibutils.c
+*
 * Revision 6.51  2002/11/06 21:32:50  ucko
 * Accept "--help" as a synonym for the less intuitive "-"
 *
@@ -631,6 +640,10 @@
 #endif
 #endif
 
+#ifdef WIN_MAC
+/* imported from vibutils.c, not in the header files. rsmith */
+extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename );
+#endif
 
 #ifdef WIN_MAC
 #ifndef Nlm_WindowTool
@@ -5209,6 +5222,7 @@ static pascal OSErr HandleAEIgnore (const AppleEvent *event, AppleEvent *reply, 
   return noErr;
 }
 
+#if 0
 /* AppleEvent handlers modified from Roger Sayle's RasMol code */
 static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 
@@ -5243,6 +5257,7 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
     *dst++ = fss->name [i];
   *dst = '\0';
 }
+#endif
 
 static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply, AERefCon ref)
 
@@ -5278,7 +5293,7 @@ static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply,
                         &dtype, (Ptr) &fss, sizeof (fss),
                         &size);
     if ( !stat ) {   
-      ConvertFilename (&fss, filename);
+      Nlm_ConvertFilename (&fss, filename);
 
       if (registeredDropProc != NULL) {
         registeredDropProc (filename);
@@ -5339,7 +5354,7 @@ static pascal OSErr HandleAEAnswer (const AppleEvent *event, AppleEvent *reply, 
                         &dtype, (Ptr) &fss, sizeof (fss),
                         &size);
     if ( !stat ) {   
-      ConvertFilename (&fss, filename);
+      Nlm_ConvertFilename (&fss, filename);
       if (registeredResultProc != NULL) {
         registeredResultProc (filename);
         Nlm_FileRemove (filename); /* ? */
@@ -6963,8 +6978,13 @@ static void Nlm_ProcessKeyPress (XEvent *event)
   Nlm_Char buffer[2];
 
   if (event->type == KeyPress  &&  keyAction != NULL  &&
-      XLookupString(&event->xkey, buffer, sizeof(buffer), NULL, NULL) == 1)
-    keyAction( *buffer );
+      XLookupString(&event->xkey, buffer, sizeof(buffer), NULL, NULL) == 1) {
+      Nlm_ctrlKey  = ((event->xkey.state & ControlMask) != 0);
+      Nlm_shftKey  = ((event->xkey.state & ShiftMask  ) != 0);
+      Nlm_cmmdKey = FALSE;
+      Nlm_optKey = FALSE;
+      keyAction( *buffer );
+  }
 }
 #endif
 
@@ -7637,7 +7657,9 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
       resolved[j] = TRUE;
     }       
 
+/*
   silent = (Nlm_Boolean)(silent  ||  xx_argc > 1);
+*/
 
   if ( silent )
     {

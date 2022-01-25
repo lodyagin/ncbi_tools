@@ -324,8 +324,73 @@ static Int2 NumberingMatch(ValNodePtr num1, ValNodePtr num2)
 	return 2;
 }
 
+static AuthListPtr AlpFromPdp (
+  PubdescPtr pdp,
+  CitSubPtr csp
+)
+
+{
+  AuthListPtr  alp = NULL;
+  CitArtPtr    cap;
+  CitBookPtr   cbp;
+  CitGenPtr    cgp;
+  CitPatPtr    cpp;
+  ValNodePtr   vnp;
+
+  if (csp != NULL) {
+    alp = csp->authors;
+    if (alp != NULL) return alp;
+  }
+  if (pdp == NULL) return NULL;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    switch (vnp->choice) {
+      case PUB_Gen :
+        cgp = (CitGenPtr) vnp->data.ptrvalue;
+        if (cgp != NULL) {
+          alp = cgp->authors;
+        }
+        break;
+      case PUB_Sub :
+        csp = (CitSubPtr) vnp->data.ptrvalue;
+        if (csp != NULL) {
+          alp = csp->authors;
+        }
+        break;
+      case PUB_Article :
+        cap = (CitArtPtr) vnp->data.ptrvalue;
+        if (cap != NULL) {
+          alp = cap->authors;
+        }
+        break;
+      case PUB_Book :
+      case PUB_Proc :
+      case PUB_Man :
+        cbp = (CitBookPtr) vnp->data.ptrvalue;
+        if (cbp != NULL) {
+          alp = cbp->authors;
+        }
+        break;
+      case PUB_Patent :
+        cpp = (CitPatPtr) vnp->data.ptrvalue;
+        if (cpp != NULL) {
+          alp = cpp->authors;
+        }
+        break;
+      default :
+        break;
+    }
+
+    if (alp != NULL) return alp;
+  }
+
+  return NULL;
+}
+
 static Boolean PubdescMatch(PubdescPtr p1, PubdescPtr p2)
 {
+	AuthListPtr alp1, alp2;
+
 	if (p1 == NULL || p2 == NULL)
 		return TRUE;
 	if (p1->name && p2->name) {
@@ -346,6 +411,13 @@ static Boolean PubdescMatch(PubdescPtr p1, PubdescPtr p2)
 	}
 	if (p1->num && p2->num) {
 		if (NumberingMatch(p1->num, p2->num) != 0) 
+			return FALSE;
+	}
+	/* do full author match */
+	alp1 = AlpFromPdp (p1, NULL);
+	alp2 = AlpFromPdp (p2, NULL);
+	if (alp1 != NULL && alp2 != NULL) {
+		if (AuthListMatch (alp1, alp2, TRUE) != 0)
 			return FALSE;
 	}
 	return TRUE;

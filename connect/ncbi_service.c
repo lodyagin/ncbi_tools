@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.42 2002/11/12 05:53:01 lavr Exp $
+/*  $Id: ncbi_service.c,v 6.45 2003/02/28 14:49:04 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -110,7 +110,7 @@ static int/*bool*/ s_AddSkipInfo(SERV_ITER iter, SSERV_Info* info)
 
 static SERV_ITER s_Open(const char* service,
                         TSERV_Type type, unsigned int preferred_host,
-                        const SConnNetInfo* net_info,
+                        double preference, const SConnNetInfo* net_info,
                         const SSERV_Info* const skip[], size_t n_skip,
                         SSERV_Info** info, HOST_INFO* host_info)
 {
@@ -125,6 +125,8 @@ static SERV_ITER s_Open(const char* service,
     iter->type = type;
     iter->preferred_host = preferred_host == SERV_LOCALHOST
         ? SOCK_gethostbyname(0) : preferred_host;
+    iter->preference = 0.01*(preference < 0.0   ? 0.0   :
+                             preference > 100.0 ? 100.0 : preference);
     iter->n_skip = iter->n_max_skip = 0;
     iter->skip = 0;
     iter->last = 0;
@@ -181,7 +183,24 @@ SERV_ITER SERV_OpenEx(const char* service,
                       const SConnNetInfo* net_info,
                       const SSERV_Info* const skip[], size_t n_skip)
 {
-    return s_Open(service, type, preferred_host, net_info, skip, n_skip, 0, 0);
+    return s_Open(service, type, preferred_host, 0.0,
+                  net_info, skip, n_skip, 0, 0);
+}
+
+
+static SSERV_Info* s_GetInfo(const char* service, TSERV_Type type,
+                             unsigned int preferred_host, double preference,
+                             const SConnNetInfo* net_info,
+                             const SSERV_Info* const skip[], size_t n_skip,
+                             HOST_INFO* host_info)
+{
+    SSERV_Info* info = 0;
+    SERV_ITER iter = s_Open(service, type, preferred_host, preference,
+                            net_info, skip, n_skip, &info, host_info);
+    if (iter && !info && iter->op && iter->op->GetNextInfo)
+        info = (*iter->op->GetNextInfo)(iter, host_info);
+    SERV_Close(iter);
+    return info;
 }
 
 
@@ -191,13 +210,15 @@ SSERV_Info* SERV_GetInfoEx(const char* service,
                            const SSERV_Info* const skip[], size_t n_skip,
                            HOST_INFO* host_info)
 {
-    SSERV_Info* info = 0;
-    SERV_ITER iter = s_Open(service, type, preferred_host,
-                            net_info, skip, n_skip, &info, host_info);
-    if (iter && !info && iter->op && iter->op->GetNextInfo)
-        info = (*iter->op->GetNextInfo)(iter, host_info);
-    SERV_Close(iter);
-    return info;
+    return s_GetInfo(service, type, preferred_host, 0.0,
+                     net_info, skip, n_skip, host_info);
+}
+
+
+SSERV_Info* SERV_GetInfoP(const char* service, TSERV_Type type,
+                          unsigned int preferred_host, double preference)
+{
+    return s_GetInfo(service, type, preferred_host, preference, 0, 0, 0, 0);
 }
 
 
@@ -339,7 +360,7 @@ char* SERV_Print(SERV_ITER iter)
 {
     static const char accepted_types[] = "Accepted-Server-Types:";
     static const char client_revision[] = "Client-Revision:";
-    static const char revision[] = "$Revision: 6.42 $";
+    static const char revision[] = "$Revision: 6.45 $";
     char buffer[128], *str;
     TSERV_Type type, t;
     size_t buflen, i;
@@ -427,8 +448,38 @@ char* SERV_Print(SERV_ITER iter)
 
 
 /*
+ * Note parameters' ranges here:
+ * 0.0 <= pref <= 1.0
+ * 0.0 <  gap  <= 1.0
+ * n >= 2
+ * Hence, the formula below always yields a value in the range [0.0 .. 1.0].
+ */
+double SERV_Preference(double pref, double gap, unsigned int n)
+{
+    assert(0.0 <= pref && pref <= 1.0);
+    assert(0.0 <  gap  && gap  <= 1.0);
+    assert(n >= 2);
+    if (gap >= pref)
+        return gap;
+    else if (gap >= 0.75*(1.0/(double) n))
+        return pref;
+    else
+        return 2.5*gap*pref;
+}
+
+
+/*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.c,v $
+ * Revision 6.45  2003/02/28 14:49:04  lavr
+ * SERV_Preference(): redeclare last argument 'unsigned'
+ *
+ * Revision 6.44  2003/02/13 22:04:16  lavr
+ * Document SERV_Preference() domain, change last argument, tweak formula
+ *
+ * Revision 6.43  2003/01/31 21:19:30  lavr
+ * +SERV_GetInfoP(), preference measure for preferred host, SERV_Preference()
+ *
  * Revision 6.42  2002/11/12 05:53:01  lavr
  * Fit a long line within 80 chars
  *

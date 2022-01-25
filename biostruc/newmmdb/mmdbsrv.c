@@ -1,5 +1,5 @@
 /* 
-* $Id: mmdbsrv.c,v 1.1.1.1 2002/12/04 21:12:07 chenj Exp $
+* $Id: mmdbsrv.c,v 1.7 2003/01/31 16:05:11 chenj Exp $
 *
 *
 * ===========================================================================
@@ -31,6 +31,24 @@
 *
 *
 * $Log: mmdbsrv.c,v $
+* Revision 1.7  2003/01/31 16:05:11  chenj
+* minor changes
+*
+* Revision 1.6  2003/01/29 19:51:12  chenj
+* minor changes
+*
+* Revision 1.5  2003/01/23 20:51:06  chenj
+* fixed bug in dealing with obsolete structure
+*
+* Revision 1.4  2003/01/22 17:04:45  chenj
+* change Cn3D 4.0 to 4.1
+*
+* Revision 1.3  2003/01/15 17:54:59  chenj
+* bugs in view of an obsolete structure was fixed
+*
+* Revision 1.2  2003/01/15 16:12:04  chenj
+* Change the font color (replaced by)
+*
 * Revision 1.1.1.1  2002/12/04 21:12:07  chenj
 * Imported sources
 *
@@ -219,7 +237,7 @@ CDDurl = http://scarecrow:5701/Structure/cdd/cddsrv.cgi
 #include <mmdbapi.h>
 #include <objmime.h>
 #include "mmdbuti.h"
-
+#include <sys/utsname.h>
 
 #ifdef OS_UNIX
 #include <signal.h>
@@ -264,6 +282,7 @@ Char	Database[PATH_MAX];
 
 static Char CGIPath[PATH_MAX];
 static Char URLcgi[PATH_MAX];
+static Char URLcgi_absolute_path[PATH_MAX];
 static Char CGIName[256];
 static Char DATApath[PATH_MAX];
 static Char LOGpath[PATH_MAX];
@@ -394,36 +413,8 @@ static Int4 ConvertMMDBUID(CharPtr pcString)
     for (i=0; i< StrLen(pcTemp); i++) pcTemp[i] = toupper(pcTemp[i]);
     CleanSpaces(pcTemp);
     if (!StrToInt4(pcTemp, &iUID))
-      {
-/*
-	   if (psok == FALSE) {
-		if (!MMDBInit()) {
-		    ErrLogPrintf("#MMDB Files Access Failed to Initialize.\n");
-        	    PrtMes(MAILTO, "MMDBSRV",
-           	    "Unable to Open MMDB Files on Server.", NULL, FALSE);
-	 	}
-
-		iUID = MMDBEvalPDB(pcTemp);
-		MMDBFini();
-	   }
-	   else {
-           	iUID = constructMaxMmdbIdForPdbId(pcTemp);
-		if (!iUID) {
-			
-	  	    if (!MMDBInit()) {
-			ErrLogPrintf("#MMDB Files Access Failed to Init.\n");
-                    	PrtMes(MAILTO, "MMDBSRV",
-                    	   "Unable to Open MMDB Files on Server.", NULL, FALSE);
-                    }
-
-		    iUID = MMDBEvalPDB(pcTemp);
-		    MMDBFini();
-		}
-	   }
- */
 	iUID = constructLiveOrDeadMmdbIdForPdbId(pcTemp, &psok, Database);
 	
-      }
     MemFree(pcTemp);
     return iUID; 
 } /* ConvertMMDBUID() */
@@ -434,7 +425,7 @@ static void MakeUIDList(CharPtr pcString,  ValNodePtr PNTR ppvnUIDS)
   CharPtr Ptr = NULL;
   CharPtr Ptr2 = NULL, Ptr3 = NULL;
   Char SavedChar = NULL, SavedChar3 = NULL;
-  Int4 Uid = 0,  Uid1, Uid2;
+  Int4 Uid = 0,  Uid1, Uid2, tmpuid1, tmpuid2;
   
   Ptr = SkipSpaces(pcString);
   if (*Ptr == NULLB)
@@ -452,12 +443,19 @@ static void MakeUIDList(CharPtr pcString,  ValNodePtr PNTR ppvnUIDS)
           *Ptr3 = NULLB;
           Uid1 = 0;
           Uid1 = ConvertMMDBUID(Ptr);
+	  if (Uid1 <0) tmpuid1 = -Uid1;
+	  else tmpuid1 = Uid1;
           *Ptr3 = SavedChar3;
           Ptr = SkipSet(Ptr3, " -");
           Uid2 = 0;
           Uid2 = ConvertMMDBUID(Ptr);
-          for (Uid = Uid1;  Uid <= Uid2; Uid++)
+	  if (Uid2<0) tmpuid2 = -Uid2;
+	  else tmpuid2 = Uid2;
+          for (Uid = tmpuid1;  Uid <= tmpuid2; Uid++) {
+	    if (Uid == -Uid1) Uid = Uid1;
+	    if (Uid == -Uid2) Uid = Uid2;
      	    if (Uid) ValNodeAddInt(ppvnUIDS, 0, Uid);
+	  }
       }
       else {
       	  Uid = ConvertMMDBUID(Ptr);
@@ -492,46 +490,6 @@ static Int4 GetOptionValue(CharPtr Value, Int4 NumElements, CharPtr *ElementText
 }
 
 
-
-/* Output links from the protein and nucleotide chains to GenPept reports. */
-
-/************ Added by Ken for Layer One PDB releases ************/
-
-static void My_StringNCpy(CharPtr str1, CharPtr str2, Int4 len)
-{
-  StringNCpy(str1,str2,len);
-  str1[len] = '\0';
-} 
-
-static Boolean IsLayerOne(ValNodePtr pvn)
-{
-  Boolean Layer = FALSE;
-  CharPtr comment_txt;
-  CharPtr LayerOne = {"This is Layer 1 Release"};
-  CharPtr temp_string;
-  Int4 len;
-  
-  while (pvn)
-  {
-     if (pvn->choice == BiostrucDescr_pdb_comment)
-     {
-        comment_txt = (CharPtr)pvn->data.ptrvalue;
-        temp_string = StringSave(LayerOne);
-        len = StringLen(LayerOne);
-        My_StringNCpy(temp_string, &comment_txt[18], len);
-        if (!StringICmp(temp_string, LayerOne))
-        {
-          Layer = TRUE;
-          break;
-        }
-     }
-     pvn = pvn->next;
-   }
-   
-   return Layer;
-}
-/***** End of functions added by Ken ********************/
-
 /* J. Chen (begin) */
 
 
@@ -545,7 +503,7 @@ PrintStrucViewNew_page(Int4 uid, FILE *File)
   	fprintf(File, "<TD class=SMALL1>\n");
 
 	fprintf(File, "<strong>");
-	fprintf(File, "<INPUT TYPE=submit VALUE=\"View 3D Structure\">");
+	fprintf(File, "<INPUT TYPE=submit NAME= submit VALUE=\"View 3D Structure\">");
 	fprintf(File, "&nbsp;&nbsp;of&nbsp;</strong>\n");
 
 	fprintf(File, "<SELECT NAME=Complexity>\n");
@@ -570,8 +528,9 @@ PrintStrucViewNew_page(Int4 uid, FILE *File)
 	
     	fprintf(File, "<img src=\"/Structure/new.gif\" alt=\"New\">\n");
     	fprintf(File, "<a href=\"/Structure/CN3D/cn3d.shtml\">");
-	fprintf(File, "<B><I>Get Cn3D 4.0!</I></B></a>");
+	fprintf(File, "<B><I>Get Cn3D 4.1!</I></B></a>");
 
+	if (uid <0) uid = -uid;
         fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%d>\n", uid);
         fprintf(File, "<INPUT TYPE=HIDDEN NAME=form VALUE=6>\n");
         fprintf(File, "<INPUT TYPE=HIDDEN NAME=db VALUE=t>\n");
@@ -704,7 +663,7 @@ PrintStrucInfoNew(PDNMS ModelStruc, Int4 LiveUid, unsigned short Live,
   	else if (psok && pmsdThis->iMMDBid != LiveUid) {
 		fprintf(File, "\n<FONT color=red>(</FONT>");
 		fprintf(File, "<a href=\"%s%s#ObsoNbr\">", URLBase, HELPname);
-		fprintf(File, "<FONT color=red>replaced by:</FONT></a> ");
+		fprintf(File, "<FONT color=MAROON>replaced by:</FONT></a> ");
        		fprintf(File, "<A HREF=\"%s%s?uid=%d&form=6&db=t&Dopt=s\">",
         					URLcgi, CGIName, LiveUid);
 		fprintf(File, "<FONT COLOR=RED>%d</FONT></a>", LiveUid);
@@ -716,8 +675,6 @@ PrintStrucInfoNew(PDNMS ModelStruc, Int4 LiveUid, unsigned short Live,
   fprintf(File, "<strong>&nbsp;&nbsp;&nbsp;&nbsp;PDB:</strong></font>\n<spacer size=4>\n");
   fprintf(File, "<A HREF=\"%s=%s\">%s</A>\n",
   		TDBurl, pmsdThis->pcPDBName, pmsdThis->pcPDBName);
-  if (IsLayerOne(pmsdThis->pbsBS->descr))
-    	fprintf(File, " - Warning: <A HREF=\"http://www.pdb.bnl.gov/pdb-docs/what_is_LR.html\">Not validated!</A>\n");              /* ? */
 
   fprintf(File, "</td>\n</tr>\n");
 
@@ -781,9 +738,38 @@ PrintChainsMap (BiostrucPtr bsp, PDNMS ModelStruc, Int2 chain1, FILE *File)
 	imgsize = y + FontBH + 80;
 
         fprintf(File, "</map>\n");
+/*
+         {
+         struct utsname name;
+           char *chp = getenv("SERVER_NAME");
+
+         uname(&name);
+           if (!strcmp(chp,"web.ncbi.nlm.nih.gov") &&
+                                       !strcmp(name.nodename, "rosencrantz"))
+               strcpy(URLcgi_absolute_path,
+                       "http://rosencrantz.nlm.nih.gov:2441/Structure/mmdb/");
+         else if (!strcmp(chp, "web.ncbi.nlm.nih.gov") &&
+                                       !strcmp(name.nodename, "guildenstern"))
+             strcpy(URLcgi_absolute_path,
+               "http://guildenstern.nlm.nih.gov:2441/Structure/mmdb/");
+         else if (!strcmp(chp, "www.ncbi.nlm.nih.gov") &&
+                                       !strcmp(name.nodename, "rosencrantz"))
+               strcpy(URLcgi_absolute_path,
+                       "http://rosencrantz.nlm.nih.gov:80/Structure/mmdb/");
+         else if (!strcmp(chp, "www.ncbi.nlm.nih.gov") &&
+                                       !strcmp(name.nodename, "guildenstern"))
+               strcpy(URLcgi_absolute_path,
+                       "http://guildenstern.nlm.nih.gov:80/Structure/mmdb/");
+         else strcpy(URLcgi_absolute_path, URLcgi);
+
+         }
+ */
+
+       strcpy(URLcgi_absolute_path, URLcgi);
+
 
 	fprintf(File, "<img src=\"%s%s?cmd=graph&uid=%d&chbeg=%d&chend=%d&imgsize=%d\" usemap=#chain_map border=0 ismap>\n",
-                URLcgi, CGIName, uid, chain1, chain2, imgsize);
+                URLcgi_absolute_path, CGIName, uid, chain1, chain2, imgsize);
 
 	MemFree(DomIdx);
 
@@ -794,19 +780,26 @@ PrintChainsMap (BiostrucPtr bsp, PDNMS ModelStruc, Int2 chain1, FILE *File)
 	
 static void PrintPageView(Int4 UidNum, Int4Ptr Uids, Int4 TotalPg, Int2 PageCur,FILE *File)
 {
-	Int2 i;
+	Int2 i, tmpuid;
 
 	if (TotalPg == 1) return;
 
 	fprintf(File, "<FORM name=pagequery method=post action=\"%s%s\">\n",
 		URLcgi, CGIName);	
-        if (UidNum == 1)
-              fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%d>\n", Uids[0]);
+        if (UidNum == 1) {
+	      if (Uids[0] <0) tmpuid = -Uids[0];
+	      else tmpuid = Uids[0];
+              fprintf(File,"<INPUT TYPE=HIDDEN NAME=uid VALUE=%d>\n",tmpuid);
+	}
         else {
-                fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%d",
-                                                                Uids[0]);
-                for (i=1; i< UidNum; i++)
+		if (Uids[0] <0) tmpuid = -Uids[0];
+		else tmpuid = Uids[0];
+                fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%d",tmpuid);
+                for (i=1; i< UidNum; i++) {
+		    if (Uids[i] <0) tmpuid = -Uids[i];
+		    else tmpuid = Uids[i];
                     fprintf(File, ",%d", Uids[i]);
+		}
                 fprintf(File, ">\n");
         }
         fprintf(File, "<INPUT TYPE=HIDDEN NAME=form VALUE=6>\n");
@@ -971,6 +964,15 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
   }
 
   sep = (SeqEntryPtr) constructSeqEntryForMmdbId(uid, TRUE, Database);
+  if (sep == NULL) {
+	char str[10];
+
+	sprintf(str, "%d", uid);
+	PrtMes(NULL, "MMDBSRV",
+	  "No sequence information available on this MMDB server, maybe an obsolete structure: uid=", str, TRUE);
+
+	return 0;
+  }
 
   bssp = BiostrucSeqNew();
   bssp->structure = bsp;
@@ -1301,6 +1303,7 @@ static Int4 SendSummaryPageNew_page_fly(Int4Ptr Uids, Int4 NumToDisplay, Int4Ptr
 	for (count = 0; count < NumToDisplay; count++)
 	{
 		uid = Uids[count];
+		if (uid <0) uid = -uid;
 	        bsp[count] = (BiostrucPtr) openBSP(uid, 3, 0, TRUE, FALSE, 
 						FALSE, &psok, Database);
 
@@ -1623,8 +1626,6 @@ Int2 Main ()
   }
 
  
-/* J. Chen  for Pubstruc with backup of flat files */
-
   if (!OpenMMDBAPI(0, NULL)) {
        ErrLogPrintf("#OpenMMDBAPI failed.\n");
        PrtMes(MAILTO, "MMDBSRV Error", " - Unable OpenMMDBAPI.", NULL, FALSE);
@@ -1640,9 +1641,6 @@ Int2 Main ()
 	   "Unable to Open MMDB Database on Server.", NULL, FALSE);
   }
 
-
-
-/* Jie Chen: Initialization of dart database */
 
   IndexArgs = -1;
   if ((IndexArgs = WWWFindName(info,"db")) >= 0)
@@ -1715,11 +1713,8 @@ Int2 Main ()
           MMDBids[iCount] =  (Int4) pvnThis->data.intvalue;
 
  	  LiveMMDBids[iCount] = MMDBids[iCount];
-	  if (psok) {
-	/*	unsigned short i; */
-
+	  if (psok) 
           	 i =constructLiveMmdbId(&(LiveMMDBids[iCount]),&(Live[iCount]));
-	  }
           pvnThis = pvnThis->next;
 	  iCount++;
      }   	 

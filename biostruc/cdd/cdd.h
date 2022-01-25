@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "cdd.h13";
+static char * asnfilename = "cdd.h14";
 static AsnValxNode avnx[30] = {
     {20,"unassigned" ,0,0.0,&avnx[1] } ,
     {20,"finished-ok" ,1,0.0,&avnx[2] } ,
@@ -177,7 +177,7 @@ static AsnType atx[132] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[122],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Cdd" , "cdd.h13",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Cdd" , "cdd.h14",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

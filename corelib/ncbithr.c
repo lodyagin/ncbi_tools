@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.33 2002/03/12 15:50:00 ivanov Exp $ */
+/* $Id: ncbithr.c,v 6.35 2003/03/06 15:12:27 coulouri Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,12 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.35  2003/03/06 15:12:27  coulouri
+* add mach/mach.h header for codewarrior
+*
+* Revision 6.34  2003/03/06 14:15:04  coulouri
+* add mach support for NlmCPUNumber
+*
 * Revision 6.33  2002/03/12 15:50:00  ivanov
 * Changed a name created mutex from "Nlm_InitLock32" to NULL
 * in the NlmMutexInit() under WIN32
@@ -2550,7 +2556,24 @@ NLM_EXTERN Boolean NlmThreadsAvailable(void)
 
 NLM_EXTERN Int4 NlmCPUNumber(void)
 {
-#if defined(WIN32)
+#if defined(OS_UNIX_DARWIN)
+
+#include <mach/mach.h>
+#include <mach/mach_host.h>
+#include <mach/host_info.h>
+
+host_basic_info_data_t hinfo;
+mach_msg_type_number_t hinfo_count = HOST_BASIC_INFO_COUNT;
+kern_return_t rc;
+
+rc=host_info( mach_host_self(), HOST_BASIC_INFO, (host_info_t) &hinfo, &hinfo_count);
+
+if (rc!=KERN_SUCCESS)
+ return -1;
+
+return hinfo.avail_cpus;
+
+#elif defined(WIN32)
   SYSTEM_INFO sysInfo;
   GetSystemInfo(&sysInfo);
   return sysInfo.dwNumberOfProcessors;

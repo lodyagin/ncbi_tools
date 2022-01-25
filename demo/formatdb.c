@@ -30,11 +30,53 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.74 $
+   $Revision: 6.86 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.86  2003/04/03 19:10:59  camacho
+   Fixed typo
+
+   Revision 6.85  2003/03/26 18:51:45  camacho
+
+   1. Minor bug fixes.
+   2. Added eFDBCleanOpt parameter to FDBOptionsNew.
+
+   Revision 6.84  2003/03/20 14:03:02  camacho
+   Allow users to set the membership and link bits
+
+   Revision 6.83  2003/03/11 18:27:45  madden
+   Cast value to Int8 to prevent rollover
+
+   Revision 6.82  2003/02/25 15:53:40  beloslyu
+   final coma is not allowed after the last element of enum (at least AIX compiler barks)
+
+   Revision 6.81  2003/01/27 20:17:06  camacho
+   Bug fix in alias file creation
+
+   Revision 6.80  2003/01/23 22:01:29  camacho
+   Minor change
+
+   Revision 6.79  2003/01/22 19:44:51  camacho
+
+   1. Added check for number of volumes greater than 100.
+   2. Fixed bug when creating alias files if multiple FASTA inputs are used.
+   3. Implemented correct creation of alias files when creating custom
+      blast databases with a gi list.
+
+   Revision 6.78  2003/01/16 19:46:07  kans
+   changed NULL to 0 to fix Mac compiler error
+
+   Revision 6.77  2003/01/07 17:20:26  camacho
+   Added error message when gi file is not found
+
+   Revision 6.76  2002/12/18 15:16:17  camacho
+   Minor fixes of command-line arguments
+
+   Revision 6.75  2002/12/16 20:22:19  camacho
+   Better error handling when creating alias files
+
    Revision 6.74  2002/12/13 13:44:50  camacho
    Use FDBOptionsNew to create options structure
 
@@ -326,48 +368,57 @@
 #define NUMARG (sizeof(dump_args)/sizeof(dump_args[0]))
 
 Args dump_args[] = {
-    { "Title for database file", /* 0 */
+    { "Title for database file",
       NULL, NULL, NULL, TRUE, 't', ARG_STRING, 0.0, 0, NULL},
-    {"Input file(s) for formatting", /* 1 */
+    {"Input file(s) for formatting",
      NULL, NULL,NULL,TRUE,'i',ARG_FILE_IN, 0.0,0,NULL},
-    {"Logfile name:",           /* 2 */
+    {"Logfile name:",
      "formatdb.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
-    {"Type of file\n"           /* 3 */
+    {"Type of file\n"
      "         T - protein   \n"
      "         F - nucleotide", 
      "T", NULL,NULL,TRUE,'p',ARG_BOOLEAN,0.0,0,NULL},
-    {"Parse options\n"          /* 4 */
+    {"Parse options\n"
      "         T - True: Parse SeqId and create indexes.\n"
      "         F - False: Do not parse SeqId. Do not create indexes.\n",
      "F", NULL,NULL,TRUE,'o',ARG_BOOLEAN,0.0,0,NULL},
     {"Input file is database in ASN.1 format (otherwise FASTA is expected)\n"
      "         T - True, \n"
-     "         F - False.\n",   /* 5 */
+     "         F - False.\n",
      "F", NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL},
-    {"ASN.1 database in binary mode\n" /* 6 */
+    {"ASN.1 database in binary mode\n"
      "         T - binary, \n"
      "         F - text mode.\n",
      "F", NULL,NULL,TRUE,'b',ARG_BOOLEAN,0.0,0,NULL},
-    {"Input is a Seq-entry",    /* 7 */
+    {"Input is a Seq-entry",
      "F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
-    { "Base name for BLAST files", /* 8 */
+    { "Base name for BLAST files",
       NULL, NULL, NULL, TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
-    { "Database volume size in millions of letters", /* 9 */
+    { "Database volume size in millions of letters",
       "0", "0", NULL, TRUE, 'v', ARG_INT, 0.0, 0, NULL},
-    { "Create indexes limited only to accessions - sparse", /* 10 */
+    { "Create indexes limited only to accessions - sparse",
       "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Verbose: check for non-unique string ids in the database", /* 11 */
+    { "Verbose: check for non-unique string ids in the database",
       "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Create ASN.1 structured deflines",                  /* 12 */
+    { "Create ASN.1 structured deflines",
       "T", NULL, NULL, TRUE, 'A', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Create an alias file with this name\n" /* 13 */
+    { "Create an alias file with this name\n"
       "        use the gifile arg (below) if set to calculate db size\n"
       "        use the BLAST db specified with -i (above)", 
       NULL, NULL, NULL, TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
-    {"Gifile (file containing list of gi's)",           /* 14 */
+    {"Gifile (file containing list of gi's)",
      NULL, NULL,NULL,TRUE,'F',ARG_FILE_IN, 0.0,0,NULL},
-    {"Binary Gifile produced from the Gifile specified above",           /* 15 */
+    {"Binary Gifile produced from the Gifile specified above",
      NULL, NULL,NULL,TRUE,'B',ARG_FILE_OUT, 0.0,0,NULL},
+#if 0
+     /* disabled for this release of the NCBI C toolkit */
+    {"Clean up options for new blast database generation\n"
+     "         0 - Never: Do not clean up any 'basename.*' blast db files.\n"
+     "         1 - Always: Remove all 'basename.*' blast db files.\n"
+     "         2 - Prompt: If any 'basename.*' blast db files are found,\n"
+     "                     prompt user.\n",
+     "0", "0","2",TRUE,'c',ARG_INT,0.0,0,NULL},
+#endif
 };
 
 enum {
@@ -381,12 +432,13 @@ enum {
     seqentry_arg,
     basename_arg,
     dbsize_arg,
-    sparce_arg,
+    sparse_arg,
     nonunique_arg,
     asn1_deflines_arg,
-    aliasfilename_arg,
+    alias_fn_arg,
     gifile_arg,
-    bin_gifile_arg
+    bin_gifile_arg,
+    cleanup_arg
 };
 
 static Int4 GetGiFromSeqId(SeqIdPtr sip)
@@ -459,6 +511,42 @@ BlastDefLinePtr FDBGetDefAsnFromBioseq(BioseqPtr bsp)
     return bdp_head;
 }
 
+/* Fasta file delimiters */
+#define DELIM " "
+#define MAX_VOLUMES 99
+
+Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
+        bases_per_vol, Int4Ptr num_inputs)
+{
+    Int8 predicted_dblength = 0;
+    Char *next_file;
+
+    next_file = StringTokMT(fasta_files, DELIM, &fasta_files);
+    predicted_dblength = FileLength(next_file);
+    *num_inputs = 1;
+
+    while ((next_file = StringTokMT(fasta_files, DELIM, &fasta_files))) {
+        predicted_dblength += FileLength(next_file);
+        (*num_inputs)++;
+    }
+
+    if (bases_per_vol == 0)
+        return TRUE;
+
+    if (!is_prot)
+        predicted_dblength /= READDB_COMPRESSION_RATIO;
+
+    if ((predicted_dblength/bases_per_vol) > (MAX_VOLUMES - 10)) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Using %s bases per volume will exceed "
+                "the maximum number\nof volumes formatdb can create.\n"
+                "Please increase this value or do not set it at all.\n",
+                Nlm_Int8tostr(bases_per_vol, 0));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 Boolean FDBUpdateTaxIdInBdp(BlastDefLinePtr bdp_in)
 {
 
@@ -480,19 +568,21 @@ Boolean FDBUpdateTaxIdInBdp(BlastDefLinePtr bdp_in)
 Int2 Main(void) 
 {
     SeqEntryPtr sep;
-    FormatDBPtr	fdbp;
+    FormatDBPtr    fdbp;
     FDB_optionsPtr options;
     BioseqPtr bsp;
     Int2 id_ctr=1;
-    Int4 count = 0, sequence_count=0, first_oid;
-    Int8 total_length;
-    Char basename[FILENAME_MAX];
+    Int4 count = 0, sequence_count=0;
+    Int4 input_ctr = 0, num_inputfiles = 0;
+    Int8 total_length, *lengths = NULL;
     CharPtr error_msg=NULL;
-    Char buffer[42];
     FILE *fd;
-    CharPtr next_db = NULL;
+    CharPtr next_db = NULL, file_inputs = NULL, orig_ptr = NULL, tmp = NULL;
     Boolean multiple_inputs = FALSE;
     Char buf[256] = { '\0' };
+    Int4Ptr last_oid = NULL;
+    CharPtr *inputs = NULL;
+    Char tmpbuf1[PATH_MAX], tmpbuf2[PATH_MAX];
     
     /* get arguments */
     StringCpy(buf, "formatdb ");
@@ -501,8 +591,7 @@ Int2 Main(void)
         return 1;
 
     if (!SeqEntryLoad())
-        return NULL;
-
+        return 0;
     
     if (!ErrSetLog(dump_args[logfile_arg].strvalue))
         ErrShow();
@@ -511,106 +600,175 @@ Int2 Main(void)
     UseLocalAsnloadDataAndErrMsg();
     ErrSetMessageLevel(SEV_WARNING);
     
+    /* Parse input string for multiple inputs */
+    file_inputs = StringSave(dump_args[input_arg].strvalue);
+    tmp = StringTokMT(file_inputs, DELIM, &next_db); 
+    if (next_db) {
+       if (!dump_args[basename_arg].strvalue) {
+          ErrPostEx(SEV_FATAL, 0, 0, "Database base name must be provided "
+                  "with multiple input files\n");
+          return 1;
+       } 
+       multiple_inputs = TRUE;
+       /* When formatdb takes multiple inputs and writes one blast database,
+        * it also writes alias files for each of the inputs passed in. Make
+        * sure that none of these inputs has the same name as the basename for
+        * the new database */
+       do {
+           if (!StringCmp(dump_args[basename_arg].strvalue, tmp)) {
+               ErrPostEx(SEV_FATAL, 0, 0, "Database base name cannot have the "
+                       "same name as one of the input files\n");
+               return 1;
+           }
+       } while ((tmp = StringTokMT(next_db, DELIM, &next_db)));
+    }
+    MemFree(file_inputs);
+
     options = FDBOptionsNew(dump_args[input_arg].strvalue,
                             dump_args[is_prot_arg].intvalue,
                             dump_args[title_arg].strvalue,
                             dump_args[asn_arg].intvalue,
                             dump_args[asnbin_arg].intvalue,
                             dump_args[seqentry_arg].intvalue,
-                            dump_args[sparce_arg].intvalue,
+                            dump_args[sparse_arg].intvalue,
                             dump_args[nonunique_arg].intvalue,
                             dump_args[parse_arg].intvalue,
                             dump_args[basename_arg].strvalue,
-                            dump_args[aliasfilename_arg].strvalue,
-                            dump_args[dbsize_arg].intvalue*1000000, 0,
+                            dump_args[alias_fn_arg].strvalue,
+                            ((Int8)dump_args[dbsize_arg].intvalue)*1000000, 0,
                             dump_args[asn1_deflines_arg].intvalue ?
                                 FORMATDB_VER : FORMATDB_VER_TEXT ,
-                            FALSE);
+                            FALSE, 0);
     if (options == NULL)
         return 1;
 
     options->gi_file = StringSave(dump_args[gifile_arg].strvalue);
     options->gi_file_bin = StringSave(dump_args[bin_gifile_arg].strvalue);
+    orig_ptr = options->db_file;
+    options->db_file = StringTokMT(options->db_file, DELIM, &next_db); 
 
-    options->db_file = StringTokMT(options->db_file, " ", &next_db);
-    if (next_db) {
-       if (!options->base_name) {
-          ErrPostEx(SEV_FATAL, 0, 0, "Database base name must be provided with multiple input files\n");
-          return 1;
-       } 
-       multiple_inputs = TRUE;
-       first_oid = 1;
-    }
-
-    if(options->base_name != NULL)
-        StringCpy(basename, options->base_name);
-    else
-        StringCpy(basename, options->db_file);
-
-    options->alias_file_name = StringSave(basename);
-
-    if (options->alias_file && options->gi_file_bin)
-    {
-          ErrPostEx(SEV_FATAL, 0, 0, "The -L and -B options may not be specified together");
-	  return 1;
-    }
-    else if (options->gi_file_bin && options->gi_file == NULL)
-    {
-          ErrPostEx(SEV_FATAL, 0, 0, "The -B option may not be specified without the -F option");
-	  return 1;
+    if (options->gi_file && dump_args[alias_fn_arg].strvalue == NULL &&
+            options->gi_file_bin == NULL) {
+        ErrPostEx(SEV_FATAL,0,0,"The -F option must be used with either "
+                "the -L or -B option\n");
+        FDBOptionsFree(options);
+        return 1;
+    } else if (dump_args[alias_fn_arg].strvalue && options->gi_file_bin) {
+        ErrPostEx(SEV_FATAL, 0, 0, "The -L and -B options may not be "
+                "specified together");
+        FDBOptionsFree(options);
+        return 1;
+    } else if (options->gi_file_bin && options->gi_file == NULL) {
+        ErrPostEx(SEV_FATAL, 0, 0, "The -B option may not be specified "
+                "without the -F option");
+        FDBOptionsFree(options);
+        return 1;
+    } else if (dump_args[alias_fn_arg].strvalue && options->gi_file == NULL) {
+        ErrPostEx(SEV_FATAL, 0, 0, "The -L option must be specified "
+                "with the -F option\n");
+        FDBOptionsFree(options);
+        return 1;
     }
    
     
-    if (options->alias_file)
-    {
-	Int8 number_of_letters=0;
-	Int4 number_of_sequences=0;
+    /*** Write alias file using a gilist ***/
+    if (options->alias_file_name && options->gi_file) {
+        Int8 nletters=0, nletters_tot=0;
+        Int4 nseqs=0, nseqs_tot=0;
+        CharPtr gifile;
+        Int4 i, gi_list_total, ordinal_id, rdfp_ctr = 0;
+        BlastDoubleInt4Ptr gi_list;
+        ReadDBFILEPtr rdfp, rdfp_tmp;
+        Char alias_fn[PATH_MAX], base_fn[PATH_MAX];
+    
+        rdfp = rdfp_tmp = readdb_new(options->db_file, options->is_protein);
+        if (rdfp == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Unable to open BLAST db %s\n", 
+                    options->db_file);
+            FDBOptionsFree(options);
+            return 1;
+        }
+        if ((gifile = FindBlastDBFile(options->gi_file)) == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Unable to find %s\n", options->gi_file);
+            rdfp = readdb_destruct(rdfp);
+            FDBOptionsFree(options);
+            return 1;
+        }
+        gi_list = GetGisFromFile(gifile, &gi_list_total);
+        gifile = MemFree(gifile);
 
-	if (options->gi_file)
-	{
-		CharPtr gifile;
-		Int4 i, gi_list_total, ordinal_id;
-		BlastDoubleInt4Ptr gi_list;
-		ReadDBFILEPtr rdfp;
-
-		rdfp = readdb_new(options->db_file, options->is_protein);
-		if (rdfp == NULL)
-		{
-          		ErrPostEx(SEV_FATAL, 0, 0, "Unable to open BLAST db %s\n", options->db_file);
-			return 1;
-		}
-		gifile = FindBlastDBFile(options->gi_file);
-		gi_list = GetGisFromFile(gifile, &gi_list_total);
-		gifile = MemFree(gifile);
-		for (i=0; i < gi_list_total; i++) 
-		{
-                	ordinal_id = readdb_gi2seq(rdfp, gi_list[i].gi, NULL);
-			if (ordinal_id >= 0)
-			{
-				number_of_sequences++;
-				number_of_letters += readdb_get_sequence_length(rdfp, ordinal_id);
-			}
+        /* Iterate through the rdfp's (there might be many) */
+        for (; rdfp; rdfp = rdfp->next, rdfp_ctr++) {
+            nseqs = nletters = 0;
+            for (i = 0; i < gi_list_total; i++) {
+                ordinal_id = readdb_gi2seq(rdfp, gi_list[i].gi, NULL);
+                if (ordinal_id >= 0) {
+                    nseqs++;
+                    nletters += readdb_get_sequence_length(rdfp, ordinal_id);
                 }
-		rdfp = readdb_destruct(rdfp);
-		gi_list = MemFree(gi_list);
-        if (number_of_letters == 0 || number_of_sequences == 0)
-            ErrPostEx(SEV_WARNING, 0, 0, "No gis from %s were found in the %s "
-                    "database", options->gi_file, options->db_file);
-	}
-        FD_CreateAliasFileEx(options->db_title, options->alias_file, 0, 
-                               options->is_protein, basename, 
-                               0, 0, number_of_letters, number_of_sequences,
-			       NULL, options->gi_file);
-    	FDBOptionsFree(options);
-	return 0;
+            }
+            sprintf(alias_fn, "%s.%02d", options->alias_file_name, rdfp_ctr);
+            /* For the base name (DBLIST field in alias file) append the
+             * volume number if there are multiple volumes in this database */
+            if (rdfp->next || rdfp_ctr != 0)
+                sprintf(base_fn, "%s.%02d", options->base_name, rdfp_ctr);
+            else
+                StringCpy(base_fn, options->base_name);
+            FD_CreateAliasFileEx(options->db_title, alias_fn, 0, 
+                    options->is_protein, base_fn, 0, 0, 
+                    nletters, nseqs, NULL, options->gi_file);
+            ErrLogPrintf("Created %s alias file with %ld sequences, %s %s\n",
+                    alias_fn, nseqs, Nlm_Int8tostr(nletters,0), 
+                    options->is_protein ? "residues" : "bases");
+            nseqs_tot += nseqs; nletters_tot += nletters;
+        }
+        /* Sanity check: Don't write 'ghost' alias files */
+        if (nletters_tot == 0 || nseqs_tot == 0) {
+            ErrPostEx(SEV_FATAL, 0, 0, "No gis from %s were found in the %s "
+                "database", options->gi_file, options->db_file);
+            for (i = 0; i <= rdfp_ctr; i++) {
+                sprintf(alias_fn,"%s.%02d.%cal", options->alias_file_name, i,
+                        options->is_protein ? 'p' : 'n');
+                FileRemove(alias_fn);
+            }
+            FDBOptionsFree(options);
+            rdfp_tmp = readdb_destruct(rdfp_tmp);
+            return 1;
+        }
+        /* Adjust alias files if necessary */
+        if (rdfp_ctr == 1) { /* single volume database */
+            sprintf(tmpbuf1, "%s.%cal", alias_fn, 
+                    options->is_protein ? 'p' : 'n');
+            sprintf(tmpbuf2, "%s.%cal", options->alias_file_name,
+                    options->is_protein ? 'p' : 'n');
+            FileRename(tmpbuf1, tmpbuf2);
+            ErrLogPrintf("Renamed %s to %s\n", tmpbuf1, tmpbuf2);
+        } else { /* multi-volume database */
+            Char *p = FD_ConstructMultivolumeDBList(options->alias_file_name,
+                    rdfp_ctr);
+            /* Create wrapper alias file */
+            FD_CreateAliasFileEx(options->db_title, options->alias_file_name,
+                    0, options->is_protein, p, 0, 0, nletters_tot, nseqs_tot,
+                    NULL, NULL);
+            ErrLogPrintf("Created wrapper alias file %s for %s\n",
+                    options->alias_file_name, p);
+            p = MemFree(p);
+        }
+
+        gi_list = MemFree(gi_list);
+        FDBOptionsFree(options);
+        rdfp_tmp = readdb_destruct(rdfp_tmp);
+        return 0;
+    } else if (options->gi_file_bin && options->gi_file) {
+        /*** Convert text gi list to binary format ***/
+        Int4 ngis;
+        ngis = readdb_MakeGiFileBinary(options->gi_file, options->gi_file_bin);
+        ErrLogPrintf("Converted %ld gi(s) to binary format on %s\n",
+                ngis, options->gi_file_bin);
+        FDBOptionsFree(options);
+        return 0;
     }
-    else if (options->gi_file_bin && options->gi_file)
-    {
-	readdb_MakeGiFileBinary(options->gi_file, options->gi_file_bin);
-    	FDBOptionsFree(options);
-	return 0;
-    }
-	
+    
 #ifdef TAX_CS_LOOKUP
     if(dump_args[12].intvalue && options->parse_mode) {
         /* These functions will create taxonomy lookup database */
@@ -619,10 +777,37 @@ Int2 Main(void)
     }
 #endif    
     
+    /*** Make sure that the inputs will not create too many volumes ***/
+    if (!FDBCheckFastaInputs(dump_args[input_arg].strvalue, 
+                             options->is_protein,
+                             options->bases_in_volume, &num_inputfiles))
+        return 1;
+
+    /* Allocate last_oid to keep track of the last ordinal ids that each
+     * of the input files had */
+    if (multiple_inputs) {
+        ASSERT(num_inputfiles > 0);
+        last_oid = (Int4Ptr) MemNew(num_inputfiles*sizeof(Int4));
+        inputs = (CharPtr *) MemNew(num_inputfiles*sizeof(CharPtr));
+        lengths = (Int8Ptr) MemNew(num_inputfiles*sizeof(Int8));
+        if (!last_oid || !inputs || !lengths) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Out of memory");
+            FDBOptionsFree(options);
+            return 1;
+        }
+    }
+
     /* Initialize formatdb structure */
     if ((fdbp = FormatDBInit(options)) == NULL)
         return 2;        
     
+    /* Allow users to set their own membership and link bits using a
+     * .formatdbrc file. Useful for formatting purposes */
+    if (options->version >= FORMATDB_VER) {
+        options->linkbit_listp = FDBLoadLinksTable();
+        options->memb_tblp = FDBLoadMembershipsTable();
+    }
+
     /* Loop on input files */
     while (options->db_file) {
        total_length = 0; 
@@ -630,13 +815,15 @@ Int2 Main(void)
        if (!options->isASN) {
           /* FASTA format of input database */
           
-          if((fd = FileOpen(options->db_file, "r")) == NULL)
+          if((fd = FileOpen(options->db_file, "r")) == NULL) {
+             ErrPostEx(SEV_ERROR, 0, 0, "Could not open %s\n", options->db_file);
              return 3;
+          }
           
           /* Get sequences */
           while ((sep = FastaToSeqEntryForDb(fd, 
                                              (Boolean)!options->is_protein,
-                                             &error_msg, options->parse_mode, basename, &id_ctr,NULL)) != NULL) {
+                                             &error_msg, options->parse_mode, options->base_name, &id_ctr,NULL)) != NULL) {
              
              sequence_count++;
              if(!IS_Bioseq(sep)) { /* Not Bioseq - failure */
@@ -650,6 +837,7 @@ Int2 Main(void)
              total_length += bsp->length;
              
              if (error_msg) {
+                 Char buffer[42];
                  SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, 41);
                  ErrPostEx(SEV_WARNING, 0, 0, "Sequence number %ld (%s), %s\n", 
                            sequence_count, buffer, error_msg);
@@ -666,7 +854,7 @@ Int2 Main(void)
           FileClose(fd);
           
           /* Writing multi-volume pointer file */
-	  FD_MakeAliasFile(options);
+      FD_MakeAliasFile(options);
           
        } else {
           /* ASN.1 format of input database */
@@ -728,12 +916,15 @@ Int2 Main(void)
        } /* end "if FASTA or ASN.1" */
        
        if (multiple_inputs) {
-          FD_CreateAliasFileEx(NULL, options->db_file, 0, 
-                               options->is_protein, basename, 
-                               first_oid, sequence_count, total_length, 0, NULL, NULL);
-          first_oid = sequence_count + 1;
+           /* record the ordinal ids, input file names and input file lengths
+            * in the following arrays. This will be used later to
+            * create the multiple alias files in case that the multiple input
+            * results in a multi-volume database */
+           inputs[input_ctr] = options->db_file;
+           lengths[input_ctr] = total_length;
+           last_oid[input_ctr++] = sequence_count;
        }
-       options->db_file = StringTokMT(next_db, " ", &next_db);
+       options->db_file = StringTokMT(next_db, DELIM, &next_db);
        
     } /* Loop on input files */
 
@@ -741,6 +932,95 @@ Int2 Main(void)
 
     if(FormatDBClose(fdbp))
         return 9;
+    options->db_file = orig_ptr;
+
+    /* If multiple inputs were given, create an alias file for each of the
+     * fasta file inputs */
+    if (multiple_inputs) {
+        ReadDBFILEPtr rdfp, rdfp_tmp;
+        Boolean span_multiple_rdfp = FALSE, first_time = TRUE;
+        Int4 start_oid = 1, stop_oid, vol_ctr = 0;
+        Char basename[PATH_MAX]; /* save the name of individual alias files */
+        Char dblist[PATH_MAX]; /* save the name(s) of all alias files when an
+                                  input spans multiple volumes */
+ 
+        ASSERT(input_ctr == num_inputfiles);
+        rdfp = rdfp_tmp = readdb_new(dump_args[basename_arg].strvalue, 
+                                     options->is_protein);
+        if (rdfp == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, 
+                    "Cannot create alias files for multiple inputs");
+            FDBOptionsFree(options);
+            return 1;
+        }
+ 
+        /* For each rdfp write the corresponding alias file(s) */
+        ErrLogPrintf("\nCreating alias files for multiple FASTA inputs...\n");
+        input_ctr = 0;
+        MemSet(dblist, 0, sizeof(dblist));
+        MemSet(basename, 0, sizeof(basename));
+
+        for (; input_ctr < num_inputfiles; input_ctr++) {
+            while (rdfp) {
+
+                sprintf(basename, "%s.%02d", inputs[input_ctr], vol_ctr);
+
+                if (first_time || span_multiple_rdfp) {
+                    start_oid = 1;
+                    first_time = FALSE;
+                } else
+                    start_oid = last_oid[input_ctr-1] - rdfp->start+1;
+
+                if (last_oid[input_ctr] > (rdfp->stop+1)) {
+                    stop_oid = rdfp->stop+1;
+                    span_multiple_rdfp = TRUE;
+                    StringCat(dblist, basename); StringCat(dblist, " ");
+                } else if (span_multiple_rdfp) {
+                    StringCat(dblist, basename); StringCat(dblist, " ");
+                    stop_oid = last_oid[input_ctr] - rdfp->start;
+                } else {
+                    stop_oid = last_oid[input_ctr] - rdfp->start;
+                }
+
+                ErrLogPrintf("Input %s (up to %ld) alias file %s (%ld-%ld)\n",
+                        inputs[input_ctr], last_oid[input_ctr], basename,
+                        start_oid, stop_oid);
+                FD_CreateAliasFileEx(NULL, basename, 0, 
+                            options->is_protein, rdfp->filename, 
+                            start_oid, stop_oid, lengths[input_ctr], 
+                            0, NULL, NULL);
+
+                if (last_oid[input_ctr] > rdfp->stop) {
+                    rdfp = rdfp->next;
+                    vol_ctr++;
+                } else 
+                    break;
+            }
+
+            if (span_multiple_rdfp) {
+                /* Create wrapper alias file for the corresponding volumes */
+                FD_CreateAliasFileEx(NULL, inputs[input_ctr], 0,
+                        options->is_protein, dblist, 0, 0, lengths[input_ctr],
+                        0, NULL, NULL);
+                span_multiple_rdfp = FALSE;
+                ErrLogPrintf("Created wrapper alias file %s for %s\n",
+                        inputs[input_ctr], dblist);
+            } else {
+                /* Rename the alias file just created */
+                sprintf(tmpbuf1, "%s.%cal", basename,
+                        options->is_protein ? 'p' : 'n');
+                sprintf(tmpbuf2, "%s.%cal", inputs[input_ctr],
+                        options->is_protein ? 'p' : 'n');
+                FileRename(tmpbuf1, tmpbuf2);
+                ErrLogPrintf("Renamed %s to %s\n", tmpbuf1, tmpbuf2);
+            }
+            MemSet(dblist, 0, sizeof(dblist));
+        }
+        rdfp_tmp = readdb_destruct(rdfp_tmp);
+        MemFree(last_oid);
+        MemFree(inputs);
+        MemFree(lengths);
+    }
 
 #ifdef TAX_CS_LOOKUP
     if(dump_args[12].intvalue && options->parse_mode) {
@@ -748,6 +1028,10 @@ Int2 Main(void)
     }
 #endif    
 
+    if (options->version >= FORMATDB_VER) {
+        options->linkbit_listp = FDBDestroyLinksTable(options->linkbit_listp);
+        options->memb_tblp = FDBDestroyMembershipsTable(options->memb_tblp);
+    }
     FDBOptionsFree(options);
 
     return 0;

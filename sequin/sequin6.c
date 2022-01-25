@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.93 $
+* $Revision: 6.100 $
 *
 * File Description: 
 *
@@ -51,15 +51,6 @@
 #include <objsub.h>
 #include <explore.h>
 
-#define GENE_TYPE             1
-#define CDS_TYPE              2
-#define PROT_TYPE             3
-#define RNA_TYPE              4
-#define BIOSOURCE_TYPE        5
-#define ORGMOD_SUBSOURCE_TYPE 6
-#define IMPORT_FEAT_TYPE      7
-
-#define NUMBER_OF_TYPES       7
 #define NUMBER_OF_SUFFIXES    7
 
 static ENUM_ALIST(name_suffix_alist)
@@ -73,16 +64,31 @@ static ENUM_ALIST(name_suffix_alist)
   {"VI",   8},
 END_ENUM_ALIST
 
+#define GENE_TYPE             1
+#define CDS_TYPE              2
+#define PROT_TYPE             3
+#define RNA_TYPE              4
+#define BIOSOURCE_TYPE        5
+#define ORGMOD_SUBSOURCE_TYPE 6
+#define IMPORT_FEAT_TYPE      7
+#define DEFLINE_TYPE          8
+
+#define NUMBER_OF_TYPES               7
+#define NUMBER_OF_TYPES_WITH_DEFLINE  8
+
 static ENUM_ALIST(target_field_alist)
   {" ",                    0},
-  {"Gene",                 1},
-  {"CDS",                  2},
-  {"Prot",                 3},
-  {"RNA",                  4},
-  {"BioSource",            5},
-  {"OrgMod and SubSource", 6},
-  {"Import Feature",       7},
+  {"Gene",                 GENE_TYPE},
+  {"CDS",                  CDS_TYPE},
+  {"Prot",                 PROT_TYPE},
+  {"RNA",                  RNA_TYPE},
+  {"BioSource",            BIOSOURCE_TYPE},
+  {"OrgMod and SubSource", ORGMOD_SUBSOURCE_TYPE},
+  {"Import Feature",       IMPORT_FEAT_TYPE},
+  {"DefLine",              DEFLINE_TYPE},
 END_ENUM_ALIST
+
+#define EXT_NUMBER_OF_TYPES       7
 
 static ENUM_ALIST(ext_target_field_alist)
   {" ",                    0},
@@ -210,7 +216,8 @@ static ENUM_ALIST(subsource_and_orgmod_note_subtype_alist)
   {"Isolation-source",       1028},
   {"Lab-host",               1016},
   {"Map",                    1002},
-  {"Note",                    255},
+  {"Note -- OrgMod",          255},
+  {"Note -- SubSource",      1255},
   {"Old Lineage",             253},
   {"Old Name",                254},
   {"Pathovar",                 11},
@@ -382,10 +389,12 @@ static void SetConvertAcceptButton (Handle a)
 
   cfp = (ConvertFormPtr) GetObjectExtra (a);
   if (cfp == NULL) return;
-  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+  if (GetEnumPopup (cfp->target, target_field_alist, &val) && val > 0) {
     cfp->type = (Int2) val;
-    if (GetEnumPopup (cfp->subtarget [cfp->type],
-		      cfp->alists [cfp->type], &val) && val > 0) {
+    if ((DEFLINE_TYPE == cfp->type) ||
+	(GetEnumPopup (cfp->subtarget [cfp->type],
+		      cfp->alists [cfp->type], &val) &&
+	val > 0)) {
       if (GetValue (cfp->asnOrFlat) > 0) {
         if ((! TextHasNoText (cfp->atleft)) ||
 	    (! TextHasNoText (cfp->atright))) {
@@ -471,7 +480,7 @@ static void ChangeSubtarget (PopuP p)
 
   cfp = (ConvertFormPtr) GetObjectExtra (p);
   if (cfp == NULL) return;
-  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+  if (GetEnumPopup (cfp->target, target_field_alist, &val) && val > 0) {
     for (i = 0; i < NUM_SUBTARGET_POPUPS; i++) {
       if (i != (Int2) val) {
         SafeHide (cfp->subtarget [i]);
@@ -1748,7 +1757,7 @@ static void ConvertFromFlatFile (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
   } else return;
 
-  ajp = asn2gnbk_setup (bsp, bssp, NULL, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0, NULL);
+  ajp = asn2gnbk_setup (bsp, bssp, NULL, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, NULL);
   if (ajp != NULL) {
     goOn = TRUE;
     for (index = 0; index < ajp->numParagraphs && goOn; index++) {
@@ -1872,6 +1881,10 @@ static void SearchAndExciseText (CharPtr PNTR strptr, ConvertFormPtr cfp)
       rgt += StringLen (cfp->rightstr);
     }
   }
+
+  if (lft == rgt)   /* No text to delete */
+    return;
+
   if (lft != NULL) {
     *tmp = '\0';
     lft = tmp;
@@ -1894,7 +1907,6 @@ static void RemoveAFeatureText (SeqEntryPtr sep,
 				Pointer     mydata,
 				Int4        index,
 				Int2        indent)
-
 {
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
@@ -2127,7 +2139,35 @@ static void RemoveASourceText (BioSourcePtr biop, ConvertFormPtr cfp)
   }
 }
 
-static void DoOneRemoveText (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, MonitorPtr mon)
+static Boolean LIBCALLBACK DeflineRemInTxt_DoBioseq (BioseqPtr bsp,
+				   SeqMgrBioseqContextPtr context)
+{
+  ConvertFormPtr cfp;
+  CharPtr        title;
+
+  /* Check parameters */
+
+  if (NULL == context)
+    return FALSE;
+
+  cfp = (ConvertFormPtr) context->userdata;
+  if (NULL == cfp)
+    return FALSE;
+
+  /* Remove requested text from the defline */
+
+  title = BioseqGetTitle (bsp);
+  SearchAndExciseText (&title, cfp);
+
+  /* Return TRUE to continue on to the next Bioseq */
+
+  return TRUE;
+}
+
+static void DoOneRemoveText (Uint2          entityID,
+			     SeqEntryPtr    sep,
+			     ConvertFormPtr cfp,
+			     MonitorPtr     mon)
 
 {
   BioSourcePtr  biop;
@@ -2228,31 +2268,72 @@ static void DoRemoveTextProc (ButtoN b)
   SeqEntryPtr     sep;
   UIEnum          val;
 
+  /* Get the current sequence and associated data */
+
   cfp = (ConvertFormPtr) GetObjectExtra (b);
-  if (cfp == NULL || cfp->input_entityID == 0) return;
+  if (cfp == NULL || cfp->input_entityID == 0)
+    return;
+
   sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
-  if (sep == NULL) return;
+  if (sep == NULL)
+    return;
+
+  /* Hide the window and set the 'working' cursor */
+
   Hide (cfp->form);
   WatchCursor ();
   Update ();
-  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
-    cfp->type = (Int2) val;
-    if (GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val) && val > 0) {
-      cfp->subtype = (Int2) val;
-      cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
-      cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
-      TrimOffEndQuotes (cfp->leftstr, TRIM_LEFT_END);
-      TrimOffEndQuotes (cfp->rightstr, TRIM_RIGHT_END);
-      cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
-      cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
-      mon = MonitorStrNewEx ("Removing Text From String", 20, FALSE);
-      cfp->index = 0;
-      DoOneRemoveText (cfp->input_entityID, sep, cfp, mon);
-      MonitorFree (mon);
-      cfp->leftstr = MemFree (cfp->leftstr);
-      cfp->rightstr = MemFree (cfp->rightstr);
-    }
+
+  /* Get the feature and subfeature types */
+
+  GetEnumPopup (cfp->target, target_field_alist, &val);
+  if (0 == val) {
+    ArrowCursor ();
+    Update ();
+    Remove (cfp->form);
+    return;
   }
+
+  cfp->type = (Int2) val;
+
+  if (DEFLINE_TYPE != cfp->type) {
+    GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
+    if (0 == val) {
+      ArrowCursor ();
+      Update ();
+      Remove (cfp->form);
+      return;
+    }
+    cfp->subtype = (Int2) val;
+  }
+
+  /* Get the before (left) and after (right) strings */
+
+  cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
+  cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
+  TrimOffEndQuotes (cfp->leftstr, TRIM_LEFT_END);
+  TrimOffEndQuotes (cfp->rightstr, TRIM_RIGHT_END);
+
+  /* Get the states of the radio buttons */
+
+  cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
+  cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
+
+  /* Do actual work of removing text */
+
+  mon = MonitorStrNewEx ("Removing Text From String", 20, FALSE);
+  cfp->index = 0;
+  if (cfp->type == DEFLINE_TYPE)
+    SeqMgrExploreBioseqs (cfp->input_entityID, NULL, cfp,
+			  DeflineRemInTxt_DoBioseq, TRUE, TRUE, TRUE);
+  else
+    DoOneRemoveText (cfp->input_entityID, sep, cfp, mon);
+  MonitorFree (mon);
+  
+  /* Clean up and exit */
+
+  cfp->leftstr = MemFree (cfp->leftstr);
+  cfp->rightstr = MemFree (cfp->rightstr);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (cfp->input_entityID, TRUE);
@@ -2377,7 +2458,7 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
+  for (j = 1; j <= EXT_NUMBER_OF_TYPES; j++) {
     if ((j == IMPORT_FEAT_TYPE) || (j == ORGMOD_SUBSOURCE_TYPE)) {
       cfp->subtarget [j] =
 	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
@@ -2454,7 +2535,7 @@ static void RemOutTxt_SetAcceptButtonStatus (ConvertFormPtr cfp)
 
   /* Disable if a target has not been selected */
 
-  if (!GetEnumPopup (cfp->target, ext_target_field_alist, &val)) {
+  if (!GetEnumPopup (cfp->target, target_field_alist, &val)) {
     SafeDisable (cfp->accept);
     return;
   }
@@ -2465,18 +2546,21 @@ static void RemOutTxt_SetAcceptButtonStatus (ConvertFormPtr cfp)
   }
 
   /* Disable if a subtarget has not been selected */
+  /* unless the selected target is DefLine.       */
 
   cfp->type = (Int2) val;
+  if (cfp->type != DEFLINE_TYPE) {
   
-  if (!GetEnumPopup (cfp->subtarget [cfp->type],
-		      cfp->alists [cfp->type], &val)) {
-    SafeDisable (cfp->accept);
-    return;
-  }
-
-  if (val <= 0) {
-    SafeDisable (cfp->accept);
-    return;
+    if (!GetEnumPopup (cfp->subtarget [cfp->type],
+		       cfp->alists [cfp->type], &val)) {
+      SafeDisable (cfp->accept);
+      return;
+    }
+    
+    if (val <= 0) {
+      SafeDisable (cfp->accept);
+      return;
+    }
   }
 
   /* If we made it to here then we've met */
@@ -3094,6 +3178,7 @@ static Boolean LIBCALLBACK RemOutTxt_DoBioseq (BioseqPtr bsp,
   Boolean        featureFilterArray [SEQFEAT_MAX];
   Boolean        descFilterArray [SEQDESCR_MAX];
   ConvertFormPtr cfp;
+  CharPtr        title;
 
   /* Check parameters */
 
@@ -3165,6 +3250,10 @@ static Boolean LIBCALLBACK RemOutTxt_DoBioseq (BioseqPtr bsp,
       SeqMgrExploreFeatures (bsp, cfp, RemOutTxt_DoImpFeat,
 			     NULL, featureFilterArray, NULL);
       break;
+    case DEFLINE_TYPE :
+      title = BioseqGetTitle (bsp);
+      RemOutTxt_SearchAndExcise (title, cfp);
+      break;
     default:
       break;
   }
@@ -3219,17 +3308,19 @@ static void RemOutTxt_AcceptCallback (ButtoN acceptButton)
 
   /* Get the feature and subfeature types */
 
-  GetEnumPopup (cfp->target, ext_target_field_alist, &val);
+  GetEnumPopup (cfp->target, target_field_alist, &val);
   if (0 == val)
     return;
   else
     cfp->type = (Int2) val;
 
-  GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
-  if (0 == val)
-    return;
-  else
-    cfp->subtype = (Int2) val;
+  if (DEFLINE_TYPE != cfp->type) {
+    GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
+    if (0 == val)
+      return;
+    else
+      cfp->subtype = (Int2) val;
+  }
 
   /* Get the before (left) and after (right) strings */
 
@@ -3313,7 +3404,7 @@ static void RemOutTxt_FeatureCallback (PopuP p)
   /* Hide the old sub-feature popup */
   /* and display the new one.       */
 
-  if (GetEnumPopup (cfp->target, ext_target_field_alist, &val) && val > 0) {
+  if (GetEnumPopup (cfp->target, target_field_alist, &val) && val > 0) {
     for (i = 0; i < NUM_SUBTARGET_POPUPS; i++) {
       if (i != (Int2) val) {
         SafeHide (cfp->subtarget [i]);
@@ -3474,8 +3565,11 @@ extern void RemoveTextOutsideString (IteM i)
 
   subFeatureGroup = HiddenGroup (featureGroup, 0, 0, NULL);
 
-  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
-    if (j == ORGMOD_SUBSOURCE_TYPE) {
+  for (j = 1; j <= NUMBER_OF_TYPES_WITH_DEFLINE; j++) {
+    if (j == DEFLINE_TYPE) {
+      /* No Subtypes for defline, so do nothing */
+    }
+    else if (j == ORGMOD_SUBSOURCE_TYPE) {
       cfp->subtarget [j] =
 	(PopuP) SingleList (subFeatureGroup, 10, 8,
 		    (LstActnProc) RemOutTxt_SubFeatureCallback);
@@ -3596,8 +3690,11 @@ extern void RemoveTextInsideString (IteM i)
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= NUMBER_OF_TYPES; j++) {
-    if (j == ORGMOD_SUBSOURCE_TYPE) {
+  for (j = 1; j <= NUMBER_OF_TYPES_WITH_DEFLINE; j++) {
+    if (j == DEFLINE_TYPE) {
+      /* No subtypes for DefLines, so do nothing */
+    }
+    else if (j == ORGMOD_SUBSOURCE_TYPE) {
       cfp->subtarget [j] =
 	(PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
       SetObjectExtra (cfp->subtarget [j], cfp, NULL);
@@ -3828,7 +3925,7 @@ extern Int2 CountSeqEntryComponents (SeqEntryPtr sep)
 }
 
 static ENUM_ALIST(rnax_subtype_alist)
-  {" ",            7},
+  {" ",           99},
   {"unknown",      0},
   {"preRna",       1},
   {"mRNA",         2},
@@ -3836,6 +3933,7 @@ static ENUM_ALIST(rnax_subtype_alist)
   {"rRNA",         4},
   {"snRNA",        5},
   {"scRNA",        6},
+  {"snoRNA",       7},
   {"Other RNA",  255},
 END_ENUM_ALIST
 
@@ -4349,7 +4447,10 @@ static void ApplyBioFeatToRaw (Uint2        entityID,
   /* If we've got a raw Bioseq then do the apply */
 
   if (bsp->repr == Seq_repr_raw) {
+    RealApplyBioFeatToAll (entityID, nucSep, nucSep, afp, FALSE);
+    /*
     RealApplyBioFeatToAll (entityID, parentSep, nucSep, afp, FALSE);
+    */
   }
 }
 
@@ -6053,7 +6154,7 @@ static ENUM_ALIST(rna_field_alist)
 END_ENUM_ALIST
 
 static ENUM_ALIST(rna_subtype_alist)
-  {" ",            7},
+  {" ",           99},
   {"unknown",      0},
   {"preRna",       1},
   {"mRNA",         2},
@@ -6061,6 +6162,7 @@ static ENUM_ALIST(rna_subtype_alist)
   {"rRNA",         4},
   {"snRNA",        5},
   {"scRNA",        6},
+  {"snoRNA",       7},
   {"Other RNA",  255},
 END_ENUM_ALIST
 
@@ -6191,7 +6293,7 @@ static Boolean ProcessEachRNAFunc (GatherContextPtr gcp)
   str = NULL;
   if (rfp->rnaSubType != NULL) {
     if (GetEnumPopup (rfp->rnaSubType, rna_subtype_alist, &val)) {
-      if (val != 7 && (Uint1) val != rrp->type) {
+      if (val != 99 && (Uint1) val != rrp->type) {
         rrp = NULL;
       }
     }
@@ -6306,16 +6408,16 @@ static Boolean CleanupEachRNAFunc (GatherContextPtr gcp)
   } else return TRUE;
   if (rfp->rnaSubType != NULL) {
     if (GetEnumPopup (rfp->rnaSubType, rna_subtype_alist, &val)) {
-      if (val != 7 && (Uint1) val != rrp->type) {
+      if (val != 99 && (Uint1) val != rrp->type) {
         rrp = NULL;
       }
     }
   }
   if (rrp == NULL) return TRUE;
-  desttype = 7;
+  desttype = 99;
   if (rfp->rnaDestType != NULL) {
     if (GetEnumPopup (rfp->rnaDestType, rna_subtype_alist, &val)) {
-      if (val != 7 && (Uint1) val != rrp->type) {
+      if (val != 99 && (Uint1) val != rrp->type) {
         desttype = (Uint1) val;
       }
     }
@@ -6353,7 +6455,7 @@ static Boolean CleanupEachRNAFunc (GatherContextPtr gcp)
         default :
           break;
       }
-      if (desttype != 7) {
+      if (desttype != 99) {
         rrp->type = desttype;
       }
       break;
@@ -6544,13 +6646,13 @@ static void ProcessRNA (IteM i, Int2 type)
   StaticPrompt (p, "RNA subtype", 0, popupMenuHeight, programFont, 'l');
   rfp->rnaSubType = PopupList (p, TRUE, NULL);
   InitEnumPopup (rfp->rnaSubType, rna_subtype_alist, NULL);
-  SetEnumPopup (rfp->rnaSubType, rna_subtype_alist, (UIEnum) 7);
+  SetEnumPopup (rfp->rnaSubType, rna_subtype_alist, (UIEnum) 99);
   rfp->rnaDestType = NULL;
   if (type == CONVERT_RNA) {
     StaticPrompt (p, "Change to", 0, popupMenuHeight, programFont, 'l');
     rfp->rnaDestType = PopupList (p, TRUE, NULL);
     InitEnumPopup (rfp->rnaDestType, rna_subtype_alist, NULL);
-    SetEnumPopup (rfp->rnaDestType, rna_subtype_alist, (UIEnum) 7);
+    SetEnumPopup (rfp->rnaDestType, rna_subtype_alist, (UIEnum) 99);
   }
 
   rfp->txtGrp = NULL;

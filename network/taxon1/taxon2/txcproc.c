@@ -31,6 +31,9 @@
 *
 *
 * $Log: txcproc.c,v $
+* Revision 1.7  2003/03/05 21:32:00  soussov
+* new lookup procedure
+*
 * Revision 1.6  1999/12/20 17:05:17  soussov
 * taxid4gi added
 *
@@ -2591,4 +2594,10 @@ Int4 tax_getTaxId4GI(Int4 gi)
     }
     ct_cmd_drop(cmd);
     return tax_id;		
+}
+
+Int4 txc_findByOrg(OrgRefPtr inp_orgRef, OrgModPtr* hitName)
+{
+    if(hitName) *hitName= NULL;
+    return tax1_getTaxIdByOrgRef(inp_orgRef);
 }

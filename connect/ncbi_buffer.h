@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_BUFFER__H
 #define CONNECT___NCBI_BUFFER__H
 
-/*  $Id: ncbi_buffer.h,v 6.6 2002/09/19 17:59:53 lavr Exp $
+/*  $Id: ncbi_buffer.h,v 6.9 2003/04/10 12:52:15 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -49,8 +49,14 @@
 #  error "<ncbibuf.h> and <ncbi_buffer.h> must never be #include'd together"
 #endif
 
-/* This is only needed to define "size_t"... */
-#include <stddef.h>
+#include <connect/connect_export.h>
+#include <stddef.h>     /* ...to define "size_t"... */
+
+
+/** @addtogroup BuffServices
+ *
+ * @{
+ */
 
 
 #ifdef __cplusplus
@@ -68,32 +74,47 @@ typedef struct BUF_tag* BUF;  /* handle of a buffer */
  *        if "chunk_size" is passed 0 then set it to BUF_DEF_CHUNK_SIZE
  */
 #define BUF_DEF_CHUNK_SIZE 1024
-extern size_t BUF_SetChunkSize(BUF* pBuf, size_t chunk_size);
+extern NCBI_XCONNECT_EXPORT size_t BUF_SetChunkSize
+(BUF*        pBuf,
+ size_t      chunk_size
+ );
 
 
 /* Return the number of bytes stored in "buf".
  * NOTE: return 0 if "buf" == NULL
  */
-extern size_t BUF_Size(BUF buf);
+extern NCBI_XCONNECT_EXPORT size_t BUF_Size(BUF buf);
 
 
 /* Add new data to the end of "*pBuf" (to be read last).
  * On error (failed memory allocation), return zero value.
  * NOTE:  if "*pBuf" == NULL then create it.
  */
-extern /*bool*/int BUF_Write(BUF* pBuf, const void* data, size_t size);
+extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_Write
+(BUF*        pBuf,
+ const void* data,
+ size_t      size
+ );
 
 
 /* Write the data to the very beginning of "*pBuf" (to be read first).
  * On error (failed memory allocation), return zero value.
  * NOTE:  if "*pBuf" == NULL then create it.
  */
-extern /*bool*/int BUF_PushBack(BUF* pBuf, const void* data, size_t size);
+extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_PushBack
+(BUF*        pBuf,
+ const void* data,
+ size_t      size
+ );
 
 
 /* Equivalent to "BUF_PeekAt(buf, 0, data, size)", see description below.
  */
-extern size_t BUF_Peek(BUF buf, void* data, size_t size);
+extern NCBI_XCONNECT_EXPORT size_t BUF_Peek
+(BUF         buf,
+ void*       data,
+ size_t      size
+ );
 
 
 /* Copy up to "size" bytes stored in "buf" (starting at position "pos")
@@ -102,7 +123,12 @@ extern size_t BUF_Peek(BUF buf, void* data, size_t size);
  * Return zero and do nothing if "buf" is NULL or "pos" >= BUF_Size(buf).
  * Do nothing and return min(BUF_Size(buf)-pos, size) if "data" is NULL.
  */
-extern size_t BUF_PeekAt(BUF buf, size_t pos, void* data, size_t size);
+extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAt
+(BUF         buf,
+ size_t      pos,
+ void*       data,
+ size_t      size
+ );
 
 
 /* Copy up to "size" bytes stored in "buf" to "data" and remove
@@ -111,13 +137,17 @@ extern size_t BUF_PeekAt(BUF buf, size_t pos, void* data, size_t size);
  * NOTE: if "buf"  == NULL then do nothing and return 0
  *       if "data" == NULL then do not copy data anywhere(still, remove it)
  */
-extern size_t BUF_Read(BUF buf, void* data, size_t size);
+extern NCBI_XCONNECT_EXPORT size_t BUF_Read
+(BUF         buf,
+ void*       data,
+ size_t      size
+ );
 
 
-/* Destroy all internal data;  return NULL.
+/* Destroy all internal data.
  * NOTE: do nothing if "buf" == NULL
  */
-extern BUF BUF_Destroy(BUF buf);
+extern NCBI_XCONNECT_EXPORT void BUF_Destroy(BUF buf);
 
 
 #ifdef __cplusplus
@@ -125,9 +155,21 @@ extern BUF BUF_Destroy(BUF buf);
 #endif
 
 
+/* @} */
+
+
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_buffer.h,v $
+ * Revision 6.9  2003/04/10 12:52:15  siyan
+ * Changed group name for doxygen
+ *
+ * Revision 6.8  2003/04/09 17:58:40  siyan
+ * Added doxygen support
+ *
+ * Revision 6.7  2003/01/08 01:59:32  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.6  2002/09/19 17:59:53  lavr
  * Header file guard macro changed; log moved to the end
  *

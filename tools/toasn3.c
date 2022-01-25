@@ -2838,6 +2838,14 @@ Int2 BioSourceToGeneticCode (BioSourcePtr biop)
       if (onp != NULL) {
         if (biop->genome == 4 || biop->genome == 5) {
           return onp->mgcode;
+        } else if (biop->genome == GENOME_chloroplast ||
+                   biop->genome == GENOME_chromoplast ||
+                   biop->genome == GENOME_plastid ||
+                   biop->genome == GENOME_cyanelle ||
+                   biop->genome == GENOME_apicoplast ||
+                   biop->genome == GENOME_leucoplast ||
+                   biop->genome == GENOME_proplastid) {
+          return 11;
         } else {
           return onp->gcode;
         }
@@ -2846,6 +2854,28 @@ Int2 BioSourceToGeneticCode (BioSourcePtr biop)
   }
   return 0;
 }
+
+static void GetTopBiop (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  BioSourcePtr PNTR  biopp;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_source) return;
+  biopp = (BioSourcePtr PNTR) userdata;
+  if (biopp == NULL) return;
+  if (*biopp != NULL) return;
+  *biopp = (BioSourcePtr) sdp->data.ptrvalue;
+}
+
+static BioSourcePtr GetTopBioSourceFromSep (SeqEntryPtr sep)
+
+{
+  BioSourcePtr  biop = NULL;
+
+  VisitDescriptorsInSep (sep, (Pointer) &biop, GetTopBiop);
+  return biop;
+}
+
 static Boolean get_src (GatherContextPtr gcp)
 {
 	ValNodePtr	vnp, new;
@@ -3168,6 +3198,7 @@ static Boolean check_gcode (GatherContextPtr gcp)
 *	checks db_xref and removes them all if product is present
 *	changes PIDe to PID in dbtag
 ****************************************************************************/
+/*
 static void CheckGeneticCode(SeqEntryPtr sep)
 {
 	ValNodePtr vnp = NULL;
@@ -3181,6 +3212,7 @@ static void CheckGeneticCode(SeqEntryPtr sep)
 	if (sep == NULL) {
 		return;
 	}
+
 	entityID = ObjMgrGetEntityIDForChoice(sep);
   	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
 	focus = FocusSeqEntry(sep, &gs);
@@ -3217,7 +3249,135 @@ static void CheckGeneticCode(SeqEntryPtr sep)
 		ValNodeFree(gc_vnp);
 	
 	return;
-	
+}
+*/
+
+static void CheckGCode (SeqFeatPtr sfp, Pointer userdata)
+
+{
+	Int2Ptr  codep;
+	Uint1    code;
+	SeqFeatPtr      f;
+	CdRegionPtr 	cds;
+	BioseqPtr 		bsp;
+	SeqAnnotPtr     ap;
+	ValNodePtr 		vnp, vnpnext;
+	DbtagPtr 		db;
+	GeneticCodePtr 	grp;
+	Uint1 			gcpvalue;
+	CharPtr			protein_seq = NULL;
+	ByteStorePtr	byte_sp;
+	MolInfoPtr		mfp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  codep = (Int2Ptr) userdata;
+  if (codep == NULL) return;
+  code = (Uint1) *codep;
+
+  cds = (CdRegionPtr) sfp->data.value.ptrvalue;
+  if (cds == NULL) return;
+
+			grp = cds->genetic_code;
+			if (sfp->product != NULL) {
+/*  remove all PID dbxref  */
+				for (vnp=sfp->dbxref; vnp; vnp=vnpnext) {
+					vnpnext = vnp->next;
+					db = vnp->data.ptrvalue;
+					if (db->db) {
+						if (StringNCmp(db->db, "PID", 3) == 0) {
+							sfp->dbxref = remove_node(sfp->dbxref, vnp);
+						}
+					}
+				}
+/* change SeqId GENERAL dbtag in ProtRef */
+				vnp = SeqLocId(sfp->product);
+				FixPIDDbtag(&vnp);
+/*  change PID in protein SeqID GENERAL dbtag  */
+				bsp = BioseqFind(SeqLocId(sfp->product));
+				if (bsp != NULL) {
+					FixPIDDbtag(&(bsp->id));
+/* change SeqId GENERAL dbtag in ProtRef */
+					for (ap = bsp->annot; ap; ap = ap ->next) {
+						if (ap->type != 1) {
+							continue;
+						}
+						for (f = ap->data; f; f = f->next) {
+							if (f->data.choice != SEQFEAT_PROT) {
+								continue;
+							}
+							vnp = SeqLocId(f->location);
+							FixPIDDbtag(&vnp);
+						}
+					}
+				}
+			}
+			cds = sfp->data.value.ptrvalue;
+/* check the translation */
+			if (sfp->product) {
+				protein_seq = GetProduct(sfp->product, sfp->location);
+				byte_sp = ProteinFromCdRegion(sfp, FALSE);
+				if (cds->conflict == TRUE) {
+					if (CompareTranslation(byte_sp, protein_seq)) {
+						cds->conflict = FALSE;
+					} else if (bsp != NULL) {
+						for (vnp = bsp->descr; vnp != NULL; vnp = vnp->next) {
+							if (vnp->choice == Seq_descr_molinfo) {
+								break;
+							}
+						}
+						if (vnp != NULL) {
+							mfp = vnp->data.ptrvalue;
+							mfp->tech = 13; /* _concept_transl_a */
+						}
+					}
+				}
+				if (protein_seq)
+					MemFree(protein_seq);
+				if (byte_sp)
+					BSFree(byte_sp);
+			}
+/* remove asn2ff_generated comments */
+			sfp = StripCDSComment(sfp);
+
+/* check genetic code */
+			if (GBQualPresent("pseudo", sfp->qual) == TRUE) {
+				return;
+			}
+			if (sfp->pseudo) return;					
+			if (cds) {
+				grp = cds->genetic_code;
+				if (grp == NULL) {
+					gcpvalue = 1;
+				} else {
+					vnp = grp->data.ptrvalue;
+					gcpvalue = vnp->data.intvalue;
+				}
+				if (gcpvalue != code) {
+					CharPtr	str=SeqLocPrint(sfp->location);
+					ErrPostEx(SEV_ERROR, ERR_TAXONOMY_GeneticCode, 
+	"Genetic code from Taxonomy server is different from the one in CDS %s: %d|%d", str, (int) code, (int) gcpvalue);
+					MemFree(str);
+				}
+			}
+}
+
+static void CheckGeneticCode (SeqEntryPtr sep)
+
+{
+  BioSourcePtr  biop;
+  Int2          code;
+
+  if (sep == NULL) return;
+  biop = GetTopBioSourceFromSep (sep);
+  if (biop == NULL) return;
+  code = BioSourceToGeneticCode (biop);
+
+  if (code <= 0) {
+    ErrPostStr(SEV_WARNING, ERR_SOURCE_GeneticCode, "Genetic code in BioSource not found");
+    return;
+  }
+
+  VisitFeaturesInSep (sep, (Pointer) &code, CheckGCode);
 }
 
 static Boolean ParseRange(CharPtr pos, Int4 PNTR from, Int4 PNTR to)
@@ -3679,13 +3839,17 @@ void EntryChangeGBSource (SeqEntryPtr sep)
 	BioSourcePtr 	biosp;
 	CharPtr 		source=NULL, s, div = NULL;
 	ValNodePtr 		vnp = NULL, v;
+	/*
 	GatherScope 	gs;
 	Uint2			entityID;	   
 	Uint1 			focus;
+	*/
 	Int2			len=0;
 	
 	if (sep == NULL)
 		return;
+
+	/*
 	entityID = ObjMgrGetEntityIDForChoice(sep);
   	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
 	focus = FocusSeqEntry(sep, &gs);
@@ -3703,6 +3867,9 @@ void EntryChangeGBSource (SeqEntryPtr sep)
 	}
 	biosp = (BioSourcePtr) vnp->data.ptrvalue;
 	vnp=MemFree(vnp);
+	*/
+
+	biosp = GetTopBioSourceFromSep (sep);
 	if (biosp != NULL) {
 		orp = biosp->org;
 	}
@@ -4219,7 +4386,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 				pos2 = pos;
 		}
 		pos = pos2 - pos1; /* codon length */
-		if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len2 - 1))   /*  a codon */
+		if (/* pos == 2 || */ (pos >= 0 && pos <= 1 && pos2 == len2 - 1))   /*  a codon */
 		/* allowing a partial codon at the end */
 		{
 			return;

@@ -134,7 +134,11 @@ s_ID1ArchSeqEntryGet (Int4 uid, CharPtr db, Int4 ent,Int4Ptr status, Int2 maxple
     AsnIoReset(asnout);
     ID1serverRequestFree (id1reqp);
 
-    if ((id1bp = NetID1servReadAsn()) == NULL)
+    SeqMgrHoldIndexing(TRUE);
+    id1bp = NetID1servReadAsn();
+    SeqMgrHoldIndexing(FALSE);
+
+    if (id1bp == NULL)
         return NULL;
 
     if (id1bp->choice != ID1serverBack_gotseqentry &&

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFO__H
 #define CONNECT___NCBI_HOST_INFO__H
 
-/*  $Id: ncbi_host_info.h,v 6.2 2002/11/08 17:16:11 lavr Exp $
+/*  $Id: ncbi_host_info.h,v 6.5 2003/04/09 19:05:42 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,15 @@
  *
  */
 
+#include <connect/connect_export.h>
+
+
+/** @addtogroup ServiceSupport
+ *
+ * @{
+ */
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -50,20 +59,23 @@ typedef struct SHostInfoTag* HOST_INFO;
 
 /* Return CPU count or -1 if error occurred.
  */
-int HINFO_CpuCount(HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT int HINFO_CpuCount(HOST_INFO host_info);
 
 
 /* Return task count or -1 if error occurred.
  */
-int HINFO_TaskCount(HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT int HINFO_TaskCount(HOST_INFO host_info);
 
 
 /* Return non-zero on success and store load averages in the
  * provided array "lavg", with the standard load average for last
- * minute stored at the index [0], and instant load average
+ * minute stored at index [0], and instant load average
  * (aka BLAST) stored at index [1]. Return 0 on error.
  */
-int/*bool*/ HINFO_LoadAverage(HOST_INFO host_info, double lavg[2]);
+extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_LoadAverage
+(HOST_INFO host_info,
+ double    lavg[2]
+ );
 
 
 /* Return non-zero on success and store host status coefficients in
@@ -72,7 +84,10 @@ int/*bool*/ HINFO_LoadAverage(HOST_INFO host_info, double lavg[2]);
  * average stored at index [1]. Status may return as 0 if the host
  * does not provide such information. Return 0 on error.
  */
-int/*bool*/ HINFO_Status(HOST_INFO host_info, double status[2]);
+extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_Status
+(HOST_INFO host_info,
+ double    status[2]
+ );
 
 
 /* Return non-zero on success and store BLAST counters in the
@@ -80,7 +95,10 @@ int/*bool*/ HINFO_Status(HOST_INFO host_info, double status[2]);
  * containing task counters, and last 3 entries (indices [5..7])
  * containing queue sizes. Return 0 on error.
  */
-int/*bool*/ HINFO_BLASTParams(HOST_INFO host_info, unsigned int blast[8]);
+extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_BLASTParams
+(HOST_INFO    host_info,
+ unsigned int blast[8]
+ );
 
 
 /* Obtain and return host environment. The host environment is the
@@ -91,7 +109,7 @@ int/*bool*/ HINFO_BLASTParams(HOST_INFO host_info, unsigned int blast[8]);
  * host environment remains valid until the handle 'host_info' deleted
  * in the application program.
  */
-const char* HINFO_Environment(HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT const char* HINFO_Environment(HOST_INFO host_info);
 
 
 #ifdef __cplusplus
@@ -99,9 +117,21 @@ const char* HINFO_Environment(HOST_INFO host_info);
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_host_info.h,v $
+ * Revision 6.5  2003/04/09 19:05:42  siyan
+ * Added doxygen support
+ *
+ * Revision 6.4  2003/02/08 21:03:51  lavr
+ * Unimportant change in comments
+ *
+ * Revision 6.3  2003/01/08 01:59:32  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.2  2002/11/08 17:16:11  lavr
  * NULL parameter acceptance explicitly stated
  *

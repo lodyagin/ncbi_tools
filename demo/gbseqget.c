@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/4/02
 *
-* $Revision: 6.5 $
+* $Revision: 6.9 $
 *
 * File Description:  Demo to fetch by accession, write GBSet XML
 *
@@ -50,6 +50,7 @@
 #include <subutil.h>
 #include <tofasta.h>
 #include <explore.h>
+#include <ent2api.h>
 #include <pmfapi.h>
 #include <asn2gnbp.h>
 
@@ -77,6 +78,108 @@ static CharPtr ReadALine (
     *ptr = '\0';
   }
   return rsult;
+}
+
+static void DoQuery (
+  FILE *fp,
+  FILE *dfp,
+  XtraPtr extra,
+  Boolean get_var,
+  Boolean do_nuc,
+  Boolean do_prot
+)
+
+{
+  Entrez2BooleanReplyPtr  e2br;
+  Entrez2IdListPtr        e2lp;
+  Entrez2RequestPtr       e2rq;
+  Entrez2ReplyPtr         e2ry;
+  Int4                    flags = 0;
+  Int4                    i;
+  Char                    line [256];
+  E2ReplyPtr              reply;
+  SeqEntryPtr             sep;
+  CharPtr                 str;
+  Uint4                   uid;
+
+  if (get_var) {
+    flags = 1;
+  }
+
+  e2rq = EntrezCreateBooleanRequest (TRUE, FALSE, "Nucleotide", NULL, 0, 0, NULL, 0, 0);
+  if (e2rq == NULL) return;
+
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+
+  str = ReadALine (line, sizeof (line), fp);
+  if (! StringHasNoText (str)) {
+    EntrezAddToBooleanRequest (e2rq, NULL, 0, "ACCN", str, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+  }
+
+  while (str != NULL) {
+    if (! StringHasNoText (str)) {
+      EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+      EntrezAddToBooleanRequest (e2rq, NULL, 0, "ACCN", str, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+    }
+    str = ReadALine (line, sizeof (line), fp);
+  }
+
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+
+  str = ReadALine (line, sizeof (line), dfp);
+  if (! StringHasNoText (str)) {
+    EntrezAddToBooleanRequest (e2rq, NULL, 0, "MDAT", str, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+  }
+
+  while (str != NULL) {
+    if (! StringHasNoText (str)) {
+      EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+      EntrezAddToBooleanRequest (e2rq, NULL, 0, "MDAT", str, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+    }
+    str = ReadALine (line, sizeof (line), dfp);
+  }
+
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+  EntrezAddToBooleanRequest (e2rq, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, TRUE);
+
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+
+  if (e2ry == NULL) return;
+  reply = e2ry->reply;
+  if (reply == NULL || reply->choice != E2Reply_eval_boolean) return;
+  e2br = EntrezExtractBooleanReply (e2ry);
+  if (e2br == NULL) return;
+
+  e2lp = e2br->uids;
+  if (e2lp != NULL) {
+    BSSeek (e2lp->uids, 0, SEEK_SET);
+    for (i = 0; i < e2lp->num; i++) {
+      uid = Nlm_BSGetUint4 (e2lp->uids);
+      if (uid < 1) continue;
+
+      sep = PubSeqSynchronousQuery (uid, 0, flags);
+      if (sep == NULL) continue;
+
+      if (do_nuc) {
+        SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, SEGMENT_STYLE,
+                        SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
+                        LOCK_FAR_COMPONENTS, 0, extra, NULL);
+      }
+      if (do_prot) {
+        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, ENTREZ_MODE, SEGMENT_STYLE,
+                        SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
+                        LOCK_FAR_COMPONENTS, 0, extra, NULL);
+      }
+
+      SeqEntryFree (sep);
+    }
+  }
+
+  Entrez2BooleanReplyFree (e2br);
 }
 
 static void ProcessAccession (
@@ -154,25 +257,30 @@ static void ProcessAccession (
 
   if (do_nuc) {
     SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                    SHOW_FAR_TRANSLATION, LOCK_FAR_COMPONENTS, extra, NULL);
+                    SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
+                    LOCK_FAR_COMPONENTS, 0, extra, NULL);
   }
   if (do_prot) {
     SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                    SHOW_FAR_TRANSLATION, LOCK_FAR_COMPONENTS, extra, NULL);
+                    SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
+                    LOCK_FAR_COMPONENTS, 0, extra, NULL);
   }
 
   SeqEntryFree (sep);
 }
 
 #define i_argInputFile  0
-#define o_argOutputFile 1
-#define n_argNewRecords 2
-#define v_argVariations 3
-#define m_argMolecule   4
+#define d_argDateFile   1
+#define o_argOutputFile 2
+#define n_argNewRecords 3
+#define v_argVariations 4
+#define m_argMolecule   5
 
 Args myargs [] = {
-  {"Input File Name", "stdin", NULL, NULL,
+  {"Sequence File Name", "stdin", NULL, NULL,
     FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Date List", NULL, NULL, NULL,
+    TRUE, 'd', ARG_FILE_IN, 0.0, 0, NULL},
   {"Output File Name", "stdout", NULL, NULL,
     FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
   {"New Records Only", "F", NULL, NULL,
@@ -190,6 +298,7 @@ Int2 Main (void)
 {
   AsnIoPtr    aip;
   AsnTypePtr  atp;
+  FILE        *dfp = NULL;
   Boolean     do_nuc = FALSE;
   Boolean     do_prot = FALSE;
   XtraPtr     extra;
@@ -238,6 +347,13 @@ Int2 Main (void)
     return 1;
   }
 
+  if (! StringHasNoText (myargs [d_argDateFile].strvalue)) {
+    dfp = FileOpen (myargs [d_argDateFile].strvalue, "r");
+    if (dfp == NULL) {
+      return 1;
+    }
+  }
+
   if (GetAppParam ("NCBI", "SETTINGS", "XMLPREFIX", NULL, xmlbuf, sizeof (xmlbuf))) {
     AsnSetXMLmodulePrefix (StringSave (xmlbuf));
   }
@@ -281,18 +397,23 @@ Int2 Main (void)
   MemSet ((Pointer) &gbst, 0, sizeof (GBSet));
   AsnOpenStruct (aip, atp, (Pointer) &gbst);
 
-  str = ReadALine (line, sizeof (line), fp);
-  while (str != NULL) {
-    if (! StringHasNoText (str)) {
-      ProcessAccession (str, extra, only_new, get_var, do_nuc, do_prot);
-    }
+  if (dfp != NULL) {
+    DoQuery (fp, dfp, extra, get_var, do_nuc, do_prot);
+  } else {
     str = ReadALine (line, sizeof (line), fp);
+    while (str != NULL) {
+      if (! StringHasNoText (str)) {
+        ProcessAccession (str, extra, only_new, get_var, do_nuc, do_prot);
+      }
+      str = ReadALine (line, sizeof (line), fp);
+    }
   }
 
   AsnCloseStruct (aip, atp, NULL);
   AsnPrintNewLine (aip);
   AsnIoClose (aip);
 
+  FileClose (dfp);
   FileClose (fp);
 
   PubSeqFetchDisable ();

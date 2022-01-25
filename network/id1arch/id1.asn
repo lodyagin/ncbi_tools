@@ -1,4 +1,4 @@
---$Revision: 1.4 $
+--$Revision: 1.9 $
 --********************************************************************
 --
 --  Network Id server network access
@@ -32,8 +32,10 @@ ID1server-request ::= CHOICE {
 		getseqidsfromgi	INTEGER, --get all Seq-ids of given gi
 		getgihist	INTEGER, --get an historical list of gis 
 		getgirev	INTEGER, --get a revision history of gi
-		getgistate	INTEGER  --get a state of gi
- }
+		getgistate	INTEGER,  --get a state of gi
+		getsewithinfo	ID1server-maxcomplex,
+		getblobinfo	ID1server-maxcomplex
+}
 
 --  Complexity stuff will be for ID1
 
@@ -68,8 +70,29 @@ ID1server-back ::= CHOICE {
 		ids	SET OF Seq-id,
 		gihist	SET OF ID1Seq-hist,  -- because hand crafted Seq-hist does not follow 
 		                             -- same conventions 
-		girevhist SET OF ID1Seq-hist
- }
+		girevhist SET OF ID1Seq-hist,
+		gotsewithinfo   ID1SeqEntry-info,
+		gotblobinfo	ID1blob-info	
+}
 
 ID1server-debug ::= SET OF ID1server-back
+
+
+ID1blob-info ::= SEQUENCE {
+		gi INTEGER ,
+		sat INTEGER,
+                sat-key INTEGER,
+                satname VisibleString,
+		suppress	INTEGER,
+		withdrawn	INTEGER,
+		confidential	INTEGER,
+		blob-state	INTEGER,
+                comment         VisibleString OPTIONAL, -- public comment for withdrawn record 
+		extfeatmask	INTEGER	      OPTIONAL  -- mask for external features (SNP,...)
+}
+
+ID1SeqEntry-info ::= SEQUENCE {
+		blob-info	ID1blob-info,
+		blob		Seq-entry OPTIONAL
+}
 END

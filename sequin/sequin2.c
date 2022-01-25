@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.123 $
+* $Revision: 6.132 $
 *
 * File Description: 
 *
@@ -1030,6 +1030,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
   AlignFileDataPtr  afdp;
   BioseqSetPtr   bssp;
   Char           ch;
+  AliConfigInfo  configInfo;
   ErrInfoPtr     eip;
   Uint1          format;
   FILE           *fp;
@@ -1052,6 +1053,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
   SeqEntryPtr    tmp;
   CharPtr        ttl;
   ValNodePtr     vnp;
+  Char           errStr [PATH_MAX + 64];
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
@@ -1104,14 +1106,19 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
           if (newAlignReader) {
             fp = FileOpen (path, "r");
             if (fp != NULL) {
+              MemSet ((Pointer) &configInfo, 0, sizeof (AliConfigInfo));
+              configInfo.gapChar = "-.";
+              Ali_SetConfig (&configInfo, ALI_SET_GAP_CHAR);
               afdp = Ali_Read (fp);
               FileClose (fp);
               if (afdp != NULL) {
                 pip = afdp->info;
                 if (pip != NULL) {
-                  if (pip->contigOrInter == ALI_CONTIGUOUS && ppp->format == SEQ_FMT_INTERLEAVE) {
+                  if (pip->contigOrInter == ALI_CONTIGUOUS &&
+		      ppp->format == SEQ_FMT_INTERLEAVE) {
                     AppendText (ppp->doc, "ERROR: Interleaved specified, Contiguous read\n\n", &faParFmt, &faColFmt, programFont);
-                  } else if (pip->contigOrInter == ALI_INTERLEAVED && ppp->format == SEQ_FMT_CONTIGUOUS) {
+                  } else if (pip->contigOrInter == ALI_INTERLEAVED &&
+			     ppp->format == SEQ_FMT_CONTIGUOUS) {
                     AppendText (ppp->doc, "ERROR: Contiguous specified, Interleaved read\n\n", &faParFmt, &faColFmt, programFont);
                   }
                 }
@@ -1149,6 +1156,12 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
                 Ali_Free (afdp);
                 afdp = NULL;
               }
+	      else
+		{
+		  sprintf (errStr, "ERROR: Unable to read file %s\n\n", path);
+		  AppendText (ppp->doc, errStr, &faParFmt,
+			      &faColFmt, programFont);
+		}
             }
           } else {
             sep = ReadLocalAlignment (format, path);
@@ -1234,9 +1247,13 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
         }
         ValNodeFreeData (head);
       } else {
-        SafeHide (ppp->doc);
+	sprintf (errStr, "ERROR: Unable to open file %s\n\n", path);
+	AppendText (ppp->doc, errStr, &faParFmt, &faColFmt, programFont);
+	AppendText (ppp->doc, strerror(errno), &faParFmt, &faColFmt,
+		    programFont);
+	SafeShow (ppp->doc);
+        SafeHide (ppp->instructions);
         Update ();
-        SafeShow (ppp->instructions);
       }
       ArrowCursor ();
       Update ();
@@ -1315,8 +1332,6 @@ static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
   return (DialoG) p;
 }
 
-#define NUM_PAGES  8
-
 #define ORGANISM_PAGE     0
 #define NUCLEOTIDE_PAGE   1
 #define MRNA_PAGE         2
@@ -1346,64 +1361,6 @@ static ENUM_ALIST(topology_nuc_alist)
 {"Linear",          TOPOLOGY_LINEAR},
 {"Circular",        TOPOLOGY_CIRCULAR},
 END_ENUM_ALIST
-
-typedef struct sequencesform {
-  FORM_MESSAGE_BLOCK
-  GrouP           pages [NUM_PAGES];
-  Int2            currentPage;
-  Int2            tagFromPage [NUM_PAGES];
-  Int2            numPages;
-  DialoG          tbs;
-
-  DialoG          genbio;
-  Uint1           dnamolfrommolinfo;
-  PopuP           moltypePopup;
-  EnumFieldAssoc  PNTR moltypeAlist;
-  PopuP           topologyPopup;
-  ButtoN          partial5;
-  ButtoN          partial3;
-  GrouP           singleIdGrp;
-  TexT            singleSeqID;
-  ButtoN          makeAlign;
-  DialoG          dnaseq;
-
-  Int2            seqPackage;
-  Int2            seqFormat;
-  Int2            numSeqs;
-
-  ButtoN          protTechBoth;
-  ButtoN          partialN;
-  ButtoN          partialC;
-  Boolean         makeMRNA;
-  DialoG          protseq;
-
-  DialoG          mrnaseq;
-  ButtoN          partialmRNA5;
-  ButtoN          partialmRNA3;
-
-  GrouP           annotType;
-  GrouP           annotGrp;
-  ButtoN          partialLft;
-  ButtoN          partialRgt;
-  TexT            geneName;
-  PrompT          protOrRnaPpt;
-  TexT            protOrRnaName;
-  TexT            featcomment;
-  TexT            defline;
-  ButtoN          orgPrefix;
-  PopuP           genome;
-  PopuP           gencode;
-
-  ButtoN          nextBtn;
-  ButtoN          prevBtn;
-  BtnActnProc     goToNext;
-  BtnActnProc     goToPrev;
-
-  SeqEntryPtr     topSeqForConfirm;
-  SeqEntryPtr     currConfirmSeq;
-  FormActnFunc    putItAllTogether;
-  Int2            currConfirmCount;
-} SequencesForm, PNTR SequencesFormPtr;
 
 /*---------------------------------------------------------------------*/
 /*                                                                     */
@@ -2417,8 +2374,15 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
 
     RealizeWindow (w);
 
+    str [0] = '\0';
     sip = SeqIdFindWorst (pbsp->id);
-    SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+    if (sip != NULL) {
+      if (sip->choice == SEQID_LOCAL) {
+        SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+      } else {
+        SeqIdWrite (sip, str, PRINTID_FASTA_SHORT, sizeof (str));
+      }
+    }
     SetTitle (fpfp->seqID, str);
     if (pbsp->descr != NULL) {
       vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
@@ -5112,10 +5076,12 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
       sqfp->seqPackage = format->seqPackage;
       sqfp->seqFormat = format->seqFormat;
       sqfp->numSeqs = format->numSeqs;
+      sqfp->submType = format->submType;
     } else {
       sqfp->seqPackage = SEQ_PKG_SINGLE;
       sqfp->seqFormat = SEQ_FMT_FASTA;
       sqfp->numSeqs = 0;
+      sqfp->submType = SEQ_ORIG_SUBMISSION;
     }
 
     w = FixedWindow (left, top, -10, -10, title, NULL);
@@ -5530,6 +5496,7 @@ static SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp)
   ContactInfoPtr  cip;
   CitSubPtr       csp;
   DatePtr         dp;
+  CharPtr         os;
   SubmitBlockPtr  sbp;
   Char            str [64];
 
@@ -5538,8 +5505,14 @@ static SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp)
     sbp = SubmitBlockNew ();
     if (sbp != NULL) {
       sbp->subtype = 1;
-      sprintf (str, "Sequin %s", SEQUIN_APPLICATION);
+      os = GetOpSysString ();
+      if (os != NULL) {
+        sprintf (str, "Sequin %s - %s", SEQUIN_APPLICATION, os);
+      } else {
+        sprintf (str, "Sequin %s", SEQUIN_APPLICATION);
+      }
       sbp->tool = StringSave (str);
+      MemFree (os);
       sbp->reldate = sqp->releasedate;
       dp = sbp->reldate;
       if (dp != NULL && dp->data [0] == 1 && dp->data [1] > 0) {
@@ -5668,6 +5641,7 @@ static void ParseInMoreProteinsCommon (IteM i, Boolean doSuggest)
   MsgAnswer    ans;
   BaseFormPtr  bfp;
   BioseqPtr    bsp;
+  BioseqSetPtr  bssp;
   Int2         code;
   Int4         count;
   ValNodePtr   descr;
@@ -5845,6 +5819,12 @@ static void ParseInMoreProteinsCommon (IteM i, Boolean doSuggest)
       }
     }
     addhere = sep;
+    if (IS_Bioseq_set (addhere)) {
+      bssp = (BioseqSetPtr) addhere->data.ptrvalue;
+      if (bssp != NULL && bssp->_class == BioseqseqSet_class_genbank) {
+        addhere = bssp->seq_set;
+      }
+    }
     target = NULL;
     if (! doSuggest) {
       if (rawvnp != NULL) {
@@ -6258,7 +6238,7 @@ static void DownloadProc (ButtoN b)
     }
   }
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, 0);
+    sep = PubSeqSynchronousQuery (uid, 0, -1);
     /* EntrezFini (); */
     if (sep == NULL) {
       ArrowCursor ();
@@ -6451,7 +6431,7 @@ extern void DownloadAndUpdateProc (ButtoN b)
   ArrowCursor ();
   Update ();
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, 0);
+    sep = PubSeqSynchronousQuery (uid, 0, -1);
     /* EntrezFini (); */
     if (sep == NULL) {
       Message (MSG_OK, "Unable to find this record in the database.");

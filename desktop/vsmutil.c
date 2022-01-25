@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.26 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -1431,6 +1431,8 @@ extern int LIBCALLBACK ValidErrHook (const ErrDesc *err)
   if (err != NULL) {
     /* FileOpen report matches ERR_SEQ_DESCR_FileOpenCollision instead of ERR_SEQ_DESCR_Inconsistent */
     if (err->errcode == E_File && err->subcode == E_FOpen) return 1;
+    /* suppress connector messages with 0, 0 as code and subcode - reverted after calling ErrSetLogLevel to suppress these */
+    /* if (StringCmp (err->errtext, "[CONN_Read]  Cannot read data (connector \"HTTP\", error \"Closed\")") == 0) return 1; */
     msg_level = ErrGetMessageLevel ();
     name1 = NULL;
     name2 = NULL;

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connection.c,v 6.27 2002/09/19 19:43:46 lavr Exp $
+/*  $Id: ncbi_connection.c,v 6.30 2003/01/28 15:16:37 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,6 @@
 #include "ncbi_priv.h"
 #include <connect/ncbi_buffer.h>
 #include <connect/ncbi_connection.h>
-#include <connect/ncbi_connector.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -140,7 +139,7 @@ extern EIO_Status CONN_ReInit
     CONNECTOR  x_conn = 0;
     EIO_Status status;
 
-    CONN_NOT_NULL("ReInit");
+    CONN_NOT_NULL(ReInit);
 
     /* check arg */
     if (!connector  &&  !conn->meta.list) {
@@ -246,7 +245,7 @@ extern EIO_Status CONN_SetTimeout
 {
     EIO_Status status = eIO_Success;
 
-    CONN_NOT_NULL("SetTimeout");
+    CONN_NOT_NULL(SetTimeout);
 
     if (event == eIO_Open) {
         if (new_timeout  &&  new_timeout != CONN_DEFAULT_TIMEOUT) {
@@ -294,7 +293,7 @@ extern const STimeout* CONN_GetTimeout
 (CONN      conn,
  EIO_Event event)
 {
-    CONN_NOT_NULL_EX("GetTimeout", 0);
+    CONN_NOT_NULL_EX(GetTimeout, 0);
 
     switch (event) {
     case eIO_Open:
@@ -327,7 +326,7 @@ extern EIO_Status CONN_Wait
 {
     EIO_Status status;
 
-    CONN_NOT_NULL("Wait");
+    CONN_NOT_NULL(Wait);
 
     if (conn->state == eCONN_Unusable               ||
         (event != eIO_Read  &&  event != eIO_Write) ||
@@ -342,7 +341,7 @@ extern EIO_Status CONN_Wait
     /* check if there is a PEEK'ed data in the input */
     if (event == eIO_Read && BUF_Size(conn->buf))
         return eIO_Success;
-    
+
     /* call current connector's "WAIT" method */
     status = conn->meta.wait
         ? conn->meta.wait(conn->meta.c_wait, event, timeout)
@@ -371,7 +370,7 @@ extern EIO_Status CONN_Write
         return eIO_InvalidArg;
     *n_written = 0;
 
-    CONN_NOT_NULL("Write");
+    CONN_NOT_NULL(Write);
 
     if (conn->state == eCONN_Unusable)
         return eIO_InvalidArg;
@@ -395,12 +394,26 @@ extern EIO_Status CONN_Write
 }
 
 
+extern EIO_Status CONN_PushBack
+(CONN        conn,
+ const void* buf,
+ size_t      size)
+{
+    CONN_NOT_NULL(PushBack);
+
+    if (conn->state != eCONN_Open)
+        return eIO_InvalidArg;
+
+    return BUF_PushBack(&conn->buf, buf, size) ? eIO_Success : eIO_Unknown;
+}
+
+
 extern EIO_Status CONN_Flush
 (CONN conn)
 {
     EIO_Status status;
 
-    CONN_NOT_NULL("Flush");
+    CONN_NOT_NULL(Flush);
 
     if (conn->state == eCONN_Unusable)
         return eIO_InvalidArg;
@@ -449,7 +462,7 @@ static EIO_Status s_CONN_Read
         ? BUF_Peek(conn->buf, buf, size) : BUF_Read(conn->buf, buf, size);
     if (*n_read == size)
         return eIO_Success;
-    buf = (char*) buf + *n_read;
+    buf   = (char*) buf + *n_read;
     size -= *n_read;
 
     /* read data from the connection */
@@ -517,7 +530,7 @@ extern EIO_Status CONN_Read
     if (!n_read)
         return eIO_InvalidArg;
     *n_read = 0;
-    CONN_NOT_NULL("Read");
+    CONN_NOT_NULL(Read);
 
     if (conn->state == eCONN_Unusable)
         return eIO_InvalidArg;
@@ -544,7 +557,7 @@ extern EIO_Status CONN_Read
 
 extern EIO_Status CONN_Status(CONN conn, EIO_Event dir)
 {
-    CONN_NOT_NULL("Status");
+    CONN_NOT_NULL(Status);
 
     if (conn->state == eCONN_Unusable  ||  !conn->meta.list)
         return eIO_Unknown;
@@ -564,7 +577,7 @@ extern EIO_Status CONN_Status(CONN conn, EIO_Event dir)
 
 extern EIO_Status CONN_Close(CONN conn)
 {
-    CONN_NOT_NULL("Close");
+    CONN_NOT_NULL(Close);
 
     if (conn->state != eCONN_Unusable) {
         /* callback established? call it first, if so */
@@ -586,7 +599,7 @@ extern EIO_Status CONN_Close(CONN conn)
 
 extern const char* CONN_GetType(CONN conn)
 {
-    CONN_NOT_NULL_EX("GetType", 0);
+    CONN_NOT_NULL_EX(GetType, 0);
 
     return conn->state == eCONN_Unusable  ||  !conn->meta.list   ||
         !conn->meta.get_type ? 0 : conn->meta.get_type(conn->meta.c_get_type);
@@ -603,7 +616,7 @@ extern EIO_Status CONN_SetCallback
     if (i >= CONN_N_CALLBACKS)
         return eIO_InvalidArg;
 
-    CONN_NOT_NULL("SetCallback");
+    CONN_NOT_NULL(SetCallback);
 
     if ( old_cb )
         *old_cb = conn->callback[i];
@@ -640,7 +653,7 @@ extern EIO_Status CONN_WaitAsync
     CONNECTOR  x_connector = conn->connector;
     SConnectorAsyncHandler* x_data = &conn->async_data;
 
-    CONN_NOT_NULL("WaitAsync");
+    CONN_NOT_NULL(WaitAsync);
 
     /* perform connect, if not connected yet */
     if (!conn->connected  &&  (status = s_Connect(conn)) != eIO_Success)
@@ -683,6 +696,15 @@ extern EIO_Status CONN_WaitAsync
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connection.c,v $
+ * Revision 6.30  2003/01/28 15:16:37  lavr
+ * Fix "NULL" message not to contain double quotes in call names
+ *
+ * Revision 6.29  2003/01/17 19:44:46  lavr
+ * Reduce dependencies
+ *
+ * Revision 6.28  2003/01/15 19:51:17  lavr
+ * +CONN_PushBack()
+ *
  * Revision 6.27  2002/09/19 19:43:46  lavr
  * Add more assert()'s and do not rely on CONN_Flush() to open in CONN_Read()
  *

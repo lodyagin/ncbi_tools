@@ -48,7 +48,7 @@
       <p>&nbsp;</p>
 
 			 <p>
-				<i>Last modified:</i> $Date: 2002/10/03 18:31:52 $<br>
+				<i>Last modified:</i> $Date: 2003/02/08 17:50:34 $<br>
 				<i>Latest version: </i>
 				<a href="http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html">
 				  http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html</a>
@@ -112,16 +112,17 @@ Using NCBI services from behind a security firewall requires opening ports in
 your firewall. The ports to open are:
 
 <p align="center">
-<pre>
-Firewall Port        IP Address
---------------------------------
 <!--    5853            130.14.22.1  SERVER RETIRED -->
 <!--    5859            130.14.22.2  SERVER RETIRED -->
 <!--    5840            130.14.22.8  SERVER RETIRED -->
-    5845            130.14.22.12  (cannot be accessed from outside NCBI!)
 <!--    5810            130.14.22.30 SERVER RETIRED -->
+<pre>
+Firewall Port        IP Address
+--------------------------------
+ 5860..5870         130.14.29.112
     5812            130.14.22.31
     5811            130.14.22.32
+    5845            130.14.22.12  (cannot be accessed from outside NCBI!)
 </pre>
 
 <p>

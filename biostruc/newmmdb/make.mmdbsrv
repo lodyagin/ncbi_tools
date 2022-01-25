@@ -1,5 +1,5 @@
 #######################################################################
-# $Id: make.mmdbsrv,v 1.1.1.1 2002/12/04 21:12:08 chenj Exp $
+# $Id: make.mmdbsrv,v 1.2 2003/01/14 19:27:06 chenj Exp $
 #
 #
 # This makefile is now used to make the new version of mmdbsrv, which fetches
@@ -12,6 +12,9 @@
 #
 #
 # $Log: make.mmdbsrv,v $
+# Revision 1.2  2003/01/14 19:27:06  chenj
+# change mmdbsrv_cj.[co] to mmdbsrv.[co]
+#
 # Revision 1.1.1.1  2002/12/04 21:12:08  chenj
 # Imported sources
 #
@@ -40,8 +43,8 @@ LIBPATH = $(NCBI_LIBDIR)
 
 # SYMBOLS FOR flat file source, executables.
 
-SRC_FP = mmdbsrv_cj.c mmdbgraph.c mmdbuti.c
-OBJ_FP = mmdbsrv_cj.o mmdbgraph.o mmdbuti.o
+SRC_FP = mmdbsrv.c mmdbgraph.c mmdbuti.c
+OBJ_FP = mmdbsrv.o mmdbgraph.o mmdbuti.o
 
 CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(NCBI_SYBFLAG) -I/netopt/structure/include
 LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L../lib -L$(LIBPATH) \

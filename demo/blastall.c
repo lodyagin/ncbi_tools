@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.123 2002/09/18 20:34:30 camacho Exp $
+/* $Id: blastall.c,v 6.131 2003/04/08 17:33:42 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,31 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.131  2003/04/08 17:33:42  dondosha
+ * Scale the default values of gap costs if match reward is > 1
+ *
+ * Revision 6.130  2003/04/07 14:46:25  madden
+ * Disallow query concatenation if XML, tabular, or ASN.1
+ *
+ * Revision 6.129  2003/04/01 22:40:09  dondosha
+ * Check lower case masking option if megablast option is on
+ *
+ * Revision 6.128  2003/03/25 15:28:08  dondosha
+ * Print tabular output header before checking if seqalign is NULL
+ *
+ * Revision 6.127  2003/03/24 21:17:08  madden
+ * XML fix, remove random printf statements
+ *
+ * Revision 6.126  2003/03/24 19:43:05  madden
+ * Changes to support query concatenation for blastn and tblastn
+ *
+ * Revision 6.125  2003/03/20 13:44:23  madden
+ * Fix -m 10/11 output to make them SeqAnnots
+ *
+ * Revision 6.124  2002/12/31 22:47:16  boemker
+ * Added support for printing output as ASN (text, with -m 10, or binary, with
+ * -m 11).
+ *
  * Revision 6.123  2002/09/18 20:34:30  camacho
  * Restored -P option
  *
@@ -603,7 +628,7 @@ static Args myargs[] = {
       "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines\n10 ASN, text\n11 ASN, binary", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "BLAST report Output File", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -694,8 +719,15 @@ static Args myargs[] = {
     { "Frame shift penalty (OOF algorithm for blastx)", /* 38 */
       "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL},
     { "Length of the largest intron allowed in tblastn for linking HSPs (0 disables linking)", /* 39 */
-      "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL} 
+      "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL}, 
 #endif
+/*--KM
+   seems ok to add another param b/c NUMARG is defined based on 
+    sizeof(myargs) itself
+   made optional=TRUE but this may change?
+*/
+    { "Number of concatenated queries, for blastn and tblastn", /* 40 */
+      "0", NULL, NULL, TRUE, 'B', ARG_INT, 0.0, 0, NULL}
 };
 
 #ifdef BLAST_CS_API
@@ -780,6 +812,23 @@ Int2 Main (void)
     int (LIBCALLBACK *handle_results)(VoidPtr srch);       
     Int4 from = 0, to = -1;
     const char *dummystr;
+    Uint1 num_queries;		/*--KM for concatenated queries in blastn, tblastn */
+    Uint1 num_iters;
+    Uint1 sap_iter;
+    SeqAlignPtr curr_seqalign;
+    SeqAlignPtrArray sap_array;		/*--KM for separating seqaligns to test concat printing, temporary?*/
+    SeqAlignPtrArrayPtr sap_arr_ptr;
+    SeqAnnotPtr curr_seqannot;
+    SeqAnnotPtrArray seq_annot_arr;
+    Uint1 bsp_iter;
+    BspArray fake_bsp_arr;	/*--KM the array of fake_bsps for indiv. queries */ 
+    Boolean concat_done, nuc_concat;
+    QueriesPtr mult_queries = NULL;	/*--KM, AM: stores information related to 
+                                                    query multipolexing, to put in search */
+    BioseqPtr curr_bsp;
+
+    /* AM: Support for query multiplexing. */
+    Uint4 num_spacers;
 
 #ifdef BLAST_CS_API
     BlastNet3Hptr    bl3hp;
@@ -830,8 +879,9 @@ Int2 Main (void)
         return (1);
     }
 
+    align_view = (Int1) myargs[4].intvalue;
     outfp = NULL;
-    if (blast_outputfile != NULL) {
+    if (align_view != 7 && align_view != 10 && align_view != 11 && blast_outputfile != NULL) {
         if ((outfp = FileOpen(blast_outputfile, "w")) == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", blast_outputfile);
             return (1);
@@ -844,7 +894,6 @@ Int2 Main (void)
         FileClose(infp);	
         return 0;
     }
-    align_view = (Int1) myargs[4].intvalue;
     
     align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
 
@@ -866,7 +915,7 @@ Int2 Main (void)
     if (myargs[21].intvalue != 0)
         believe_query = TRUE;
     
-    if (believe_query == FALSE && myargs[20].strvalue) {
+    if (believe_query == FALSE && (myargs[20].strvalue || align_view == 10 || align_view ==11)) {
         ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to produce a SeqAlign file");
     }
     
@@ -890,6 +939,22 @@ Int2 Main (void)
     number_of_descriptions = myargs[13].intvalue;	
     number_of_alignments = myargs[14].intvalue;	
     options->hitlist_size = MAX(number_of_descriptions, number_of_alignments);
+
+    if (StringICmp("blastn", blast_program) == 0) {
+        options->penalty = myargs[11].intvalue;
+        options->reward = myargs[12].intvalue;
+        if (options->reward > 1) {
+           /* Scale the default values for gap costs; will be overridden
+              later, if command line values are non-zero */
+           options->gap_open *= options->reward;
+           options->gap_extend *= options->reward;
+        }
+    } else {
+        if (myargs[15].intvalue != 0) {
+            options->threshold_second = myargs[15].intvalue;
+        }
+    }
+    
     if (myargs[7].intvalue != 0)
         options->gap_open = myargs[7].intvalue;
     if (myargs[8].intvalue != 0)
@@ -932,15 +997,7 @@ Int2 Main (void)
     }
     
     show_gi = (Boolean) myargs[10].intvalue;
-    if (StringICmp("blastn", blast_program) == 0) {
-        options->penalty = myargs[11].intvalue;
-        options->reward = myargs[12].intvalue;
-    } else {
-        if (myargs[15].intvalue != 0) {
-            options->threshold_second = myargs[15].intvalue;
-        }
-    }
-    
+
     options->genetic_code = myargs[17].intvalue;
     options->db_genetic_code = myargs[18].intvalue;
     options->number_of_cpus = myargs[19].intvalue;
@@ -1045,6 +1102,14 @@ Int2 Main (void)
                 return 1;
         }
     }
+    else if (align_view == 10 || align_view == 11) 
+    {
+        const char* mode = (align_view == 10) ? "w" : "wb";
+        if ((aip = AsnIoOpen (blast_outputfile, (char*) mode)) == NULL) {
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                return 1;
+        }
+    }
 
     if(align_view < 7) {
        if (html) {
@@ -1053,8 +1118,16 @@ Int2 Main (void)
                   "VLINK=\"#660099\" ALINK=\"#660099\">\n");
           fprintf(outfp, "<PRE>\n");
        }
-    } else if (align_view == 7)     
-       xml_aip = AsnIoOpen(blast_outputfile, "wx");
+    } else if (align_view == 7 ) {
+        xml_aip = AsnIoOpen(blast_outputfile, "wx");
+    }
+
+    if(align_view >= 7 && myargs[40].intvalue > 1)
+    {
+      ErrPostEx( SEV_FATAL, 0, 0, 
+                 "blast: Query concatenation is currently not supported with -m > 7");
+      return 1;
+    }
 
 
                   /* Futamura: Setting up the psitblastn options */
@@ -1074,8 +1147,36 @@ Int2 Main (void)
     	bl3hp = BNETInitializeBlast(blast_database, blast_program, outfp, 
                                 db_is_na, options->is_rps_blast, html, FALSE);
 #endif
+
+    /*--KM get number of queries for concatenated blastn/tblastn queries */
+    options->NumQueries=myargs[40].intvalue;  
+    num_queries = options->NumQueries;
+    if (num_queries>0 && 
+	!( (StringICmp("blastn",  blast_program) == 0) || 
+	   (StringICmp("tblastn", blast_program) == 0)   ) ) {
+
+	ErrPostEx(SEV_FATAL, 0, 0, "blast: Can't concat with program %s\n", myargs[0].strvalue);
+       return 1;
+    }
     
+    /* AM: Query concatenation is not consistent with ungapped search */
+    if( num_queries > 0 && !myargs[16].intvalue )
+    {
+      ErrPostEx( SEV_FATAL, 0, 0, 
+                 "blast: Query concatenation is inconsistent with ungapped search\n" );
+      return 1;
+    }
+
+    /* --KM set bool value if DNA and concat needed, need for Fasta->seq functions */
+    if (num_queries>0 && query_is_na == TRUE) {
+        nuc_concat = TRUE;
+    } else {
+        nuc_concat = FALSE;
+    }
+ 
     /* --- Main loop over all FASTA entries in the input file ---- */
+
+    concat_done = FALSE;	/*--KM */
 
     if (myargs[36].strvalue) {       
         CharPtr delimiters = " ,;";
@@ -1097,16 +1198,19 @@ Int2 Main (void)
 	  while ((sep=FastaToSeqEntryForDb(infp, query_is_na, NULL,
 					   believe_query, prefix, &ctr, 
 					   &mask_slp)) != NULL) {
-	     
-	     if (mask_slp) {
-		if (!last_mask)
-		   options->query_lcase_mask = last_mask = mask_slp;
-		else {
-		   last_mask->next = mask_slp;
-		   last_mask = last_mask->next;
-		}
-		mask_slp = NULL;
-	     }
+	     if ((Boolean)myargs[31].intvalue) {
+                if (mask_slp) {
+                   if (!last_mask)
+                      options->query_lcase_mask = last_mask = mask_slp;
+                   else {
+                      last_mask->next = mask_slp;
+                      last_mask = last_mask->next;
+                   }
+                   mask_slp = NULL;
+                }
+             } else {
+                mask_slp = SeqLocSetFree(mask_slp);
+             }
 	     query_bsp = NULL;
 	     if (query_is_na) 
 		SeqEntryExplore(sep, &query_bsp, FindNuc);
@@ -1147,32 +1251,79 @@ Int2 Main (void)
           if (num_bsps == 0) 
              break;
        } else {
-          if(myargs[31].intvalue) {
-             sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
-             
-          } else {
-             sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query);
-          }
-          
-          if(sep == NULL)
+          /* not megablast */
+
+          /*--KM make array of fake_bsp's if concat. query */
+          if (concat_done)
              break;
+          if (num_queries > 0)  {
+             fake_bsp_arr = (BspArray) MemNew(sizeof(BioseqPtr)*num_queries); 
+          }
+          num_iters = (num_queries>0) ? num_queries : 1; 
+          for (bsp_iter=0; bsp_iter<num_iters; bsp_iter++) {
+
+             if(myargs[31].intvalue) {
+                sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
+             
+             } else {
+                sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query);
+             }
           
-          query_bsp = NULL;
-          if (query_is_na) {
-             SeqEntryExplore(sep, &query_bsp, FindNuc);
+             /* if concat and num_queries has not been reached and sep is NULL, crap out */
+             if (sep == NULL && bsp_iter < num_queries) {   /* implies num_queries>0 */
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Only %n queries found!\n", bsp_iter); 
+                return (1);
+             }
+               
+             if(sep == NULL)
+                break;  /* no more queries, can go to finish with next break */
+          
+             query_bsp = NULL;
+             if (query_is_na) {
+                SeqEntryExplore(sep, &query_bsp, FindNuc);
+             } else {
+                SeqEntryExplore(sep, &query_bsp, FindProt);
+             }
+          
+             if (query_bsp == NULL) {
+                ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+                return 2;
+             }
+
+             if (num_queries>0) {
+                *(fake_bsp_arr + bsp_iter) = query_bsp;
+             }
+          }
+          if ( (sep == NULL && num_queries ==0) || (num_queries>0 && concat_done) )
+             break;  /* go to finish */
+
+          /* --KM */
+          
+          if (num_queries>0) {
+             concat_done = TRUE;   /* --KM to prevent futher looping */
+
+             /* AM: Determine the number of query separators. */
+	     num_spacers = GetNumSpacers( options, believe_query, fake_bsp_arr ); 
+
+	     if( num_spacers%2 ) ++num_spacers;
+
+             /* --KM make the concatenated fake_bsp */
+	     /* AM: Added num_spacers. */
+	     if( query_is_na )
+               fake_bsp = (BioseqPtr) 
+                          BlastMakeFakeBspConcat(fake_bsp_arr, num_queries, query_is_na, num_spacers); 
+             else
+               fake_bsp = (BioseqPtr) 
+                          BlastMakeFakeBspConcat(fake_bsp_arr, num_queries, query_is_na, num_spacers); 
+             
+             /* construct the MultQueries struct here*/
+             mult_queries = (QueriesPtr) BlastMakeMultQueries(fake_bsp_arr, num_queries, query_is_na, num_spacers);
           } else {
-             SeqEntryExplore(sep, &query_bsp, FindProt);
+             if(believe_query)
+                fake_bsp = query_bsp;
+             else 
+                fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
           }
-          
-          if (query_bsp == NULL) {
-             ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
-             return 2;
-          }
-        
-          if(believe_query)
-             fake_bsp = query_bsp;
-          else 
-             fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
 
 	  err_ticket = BlastSetUserErrorString(NULL, query_bsp->id, believe_query);
         
@@ -1184,6 +1335,8 @@ Int2 Main (void)
           source->org->orgname = OrgNameNew();
           source->org->orgname->gcode = options->genetic_code;
           ValNodeAddPointer(&(query_bsp->descr), Seq_descr_source, source);
+
+       /* free sep later when done. --KM remember to free all if array*/
        }
 
        global_fp = outfp;
@@ -1198,8 +1351,14 @@ Int2 Main (void)
 #else
            fprintf(outfp, "\n");
 #endif            
-           if (!options->is_megablast_search)
-              AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
+           if (!options->is_megablast_search) {
+              /* KM added loop here for concat case */
+              num_iters = (num_queries>0) ? num_queries : 1;
+              for (bsp_iter=0; bsp_iter<num_iters; bsp_iter++) {
+                 curr_bsp = (num_queries>0) ? *(fake_bsp_arr + bsp_iter) : query_bsp; 
+                 AcknowledgeBlastQuery(curr_bsp, 70, outfp, believe_query, html);
+              }
+           }
 
             /* Here we first check, that database do no exists */
 
@@ -1229,7 +1388,7 @@ Int2 Main (void)
         		ErrPostEx(SEV_WARNING, 0, 0, "Out-of-frame option selected, Expect values are only approximate and calculated not assuming out-of-frame alignments");
         }
 #ifdef OS_UNIX
-        if(align_view < 7) {
+        if(align_view < 7) { /*--KM why not fold into previous if statement? */
 #ifdef BLAST_CS_API
             fprintf(global_fp, "%s", "Searching... please wait.. ");
 #else
@@ -1274,7 +1433,8 @@ Int2 Main (void)
                                       align_view < 7 ? tick_callback : NULL,
 				      NULL, &status);
 #else
-           seqalign = BioseqBlastEngineWithCallback(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, align_view < 7 ? tick_callback : NULL, handle_results);
+           /* KM added mult_queries param */
+           seqalign = BioseqBlastEngineWithCallbackMult(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, align_view < 7 ? tick_callback : NULL, handle_results, mult_queries);
 #endif
         } else { /* Location on query provided */
            to = MIN(to, fake_bsp->length - 1);
@@ -1296,7 +1456,7 @@ Int2 Main (void)
                                          align_view < 7 ? tick_callback : NULL,
                                          NULL, &status);
 #else
-           seqalign = BioseqBlastEngineByLocWithCallback(slp, blast_program, blast_database, options, &other_returns, &error_returns, align_view < 7 ? tick_callback : NULL, NULL, NULL, 0, handle_results);
+           seqalign = BioseqBlastEngineByLocWithCallbackMult(slp, blast_program, blast_database, options, &other_returns, &error_returns, align_view < 7 ? tick_callback : NULL, NULL, NULL, 0, handle_results, mult_queries);
 #endif
            
         }
@@ -1378,25 +1538,37 @@ Int2 Main (void)
 	{	/* Could have become non-NUll for last query. */
            mask_loc_start = NULL;
 	}
-        if (seqalign) {
-           if (align_view == 8 || align_view == 9) {
-	      if (align_view == 9)
-              	PrintTabularOutputHeader(blast_database, query_bsp, slp, 
-                                       blast_program, 0, believe_query,
-                                       global_fp);
+        /* Print header in any case */
+        if (align_view == 9) {
+           PrintTabularOutputHeader(blast_database, query_bsp, slp, 
+              blast_program, 0, believe_query, global_fp);
+        }
 
-              BlastPrintTabulatedResults(seqalign, query_bsp, slp, 
+        if (seqalign) {
+	   if (num_queries > 0) { /* AM: Support for query multiplexing. */
+	      sap_array = mult_queries->sap_array_data->sap_array;
+	   }   
+	
+	   if (align_view == 8 || align_view == 9) {
+/* --KM need to put a loop around this. seqaligns already broken up
+   note the method for looping if num_aligns > 0 - reuse this method everywhere */
+	      num_iters = (num_queries>0) ? num_queries : 1;
+	      for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
+	         curr_seqalign = (num_queries>0) ? *(sap_array + sap_iter) : seqalign;
+	         BlastPrintTabulatedResults(curr_seqalign, query_bsp, slp, 
                                          number_of_alignments,
                                          blast_program, 
                                          !options->gapped_calculation,
                                          believe_query, from, 0, global_fp,
                                          (align_view == 9));
-              SeqAlignSetFree(seqalign);
+	         SeqAlignSetFree(curr_seqalign);
+	      }
            } else {
            while (seqalign) {
-              if (!options->is_megablast_search)
+	    		
+              if (!options->is_megablast_search){
                  next_seqalign = NULL;
-              else {
+	      } else {
                  SeqIdPtr sip, next_sip = NULL;
                  
                  sap = seqalign;
@@ -1449,70 +1621,110 @@ Int2 Main (void)
                  free_buff();
                  BioseqUnlock(bsp);
               }
-              if(align_view == 7 && !options->is_ooframe) {
+              if((align_view == 7) && !options->is_ooframe) {
                  if (options->is_megablast_search) {
                     bsp = BioseqLockById(SeqLocId(tmp_slp));
                     BXMLPrintOutput(xml_aip, seqalign, 
                                     options, blast_program, blast_database, 
                                     bsp, other_returns, 0, NULL);
                     BioseqUnlock(bsp);
+                    AsnIoReset(xml_aip);
+                    SeqAlignSetFree(seqalign);
                  } else {
-                    BXMLPrintOutput(xml_aip, seqalign, 
+	            num_iters = (num_queries>0) ? num_queries : 1;
+                    for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
+                       curr_seqalign = (num_queries > 0) ? *(sap_array + sap_iter) : seqalign;
+                       BXMLPrintOutput(xml_aip, curr_seqalign, 
                                     options, blast_program, blast_database, 
                                     fake_bsp, other_returns, 0, NULL);
-                 }
-                 AsnIoReset(xml_aip);
-                 SeqAlignSetFree(seqalign);
+                       AsnIoReset(xml_aip);
+                       SeqAlignSetFree(curr_seqalign);
+                    } /* for loop over sap-array (concat) */
+                 } /* not MBlast case */
               } else {
-                 seqannot = SeqAnnotNew();
-                 seqannot->type = 2;
-                 AddAlignInfoToSeqAnnot(seqannot, align_type);
-                 seqannot->data = seqalign;
-                 if (aip) {
-                    SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
-                    AsnIoReset(aip);
-                 }
+	         /* create the array of SeqAnnotPtrs, if necessary */
+
+	         num_iters = (num_queries > 0) ? num_queries : 1; 
+                 for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
+                    curr_seqalign = (num_queries > 0) ? *(sap_array + sap_iter) : seqalign;
+                    if ( (num_queries > 0) && (sap_iter == 0) ) {
+                       seq_annot_arr = (SeqAnnotPtrArray) MemNew(sizeof(SeqAnnotPtr)*num_queries);
+                    }
+                    seqannot = SeqAnnotNew();
+                    seqannot->type = 2;
+                    AddAlignInfoToSeqAnnot(seqannot, align_type);
+                    seqannot->data = curr_seqalign;
+                    if (aip) {
+                       SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
+                       AsnIoReset(aip);
+                    }
+                    if (num_queries > 0) {
+                       *(seq_annot_arr + sap_iter) = seqannot;
+                    }
+                 } /* make seqannots over the sap_iters from concat, or the single seqalign */
+                    
                  if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
                     ObjMgrSetHold();
-                    init_buff_ex(85);
-                    PrintDefLinesFromSeqAlignEx2(seqalign, 80, outfp, print_options, FIRST_PASS, 
-			NULL, number_of_descriptions, NULL, NULL);
-                    free_buff();
-                    
-                    prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, NULL);
-                    seqannot->data = prune->sap;
+                    /* print deflines */
+                    for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
+                       curr_seqalign = (num_queries > 0) ? *(sap_array + sap_iter) : seqalign;
 
-                    if(options->is_ooframe) {
-                        OOFShowBlastAlignment(seqalign, /*mask*/ NULL,
-                                              outfp, align_options, txmatrix);
-                    } else {
-                        if (align_view != 0)
-                            ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, NULL);
-                        else
-                            ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, FormatScoreFunc);
-                    }
+                       init_buff_ex(85);
+
+                       PrintDefLinesFromSeqAlignEx2(curr_seqalign, 80, outfp, 
+					print_options, FIRST_PASS, NULL, 
+					number_of_descriptions, NULL, NULL);
+                       free_buff();
+                    } /* print deflines, looped if concat */
+
+                    for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
+                       curr_seqalign = (num_queries > 0) ? *(sap_array + sap_iter) : seqalign;
+                       curr_seqannot = (num_queries > 0) ? *(seq_annot_arr + sap_iter) : seqannot;
+
+                       prune = BlastPruneHitsFromSeqAlign(curr_seqalign,
+					number_of_alignments, NULL);
+                       curr_seqannot->data = prune->sap;
+
+                       if(options->is_ooframe) {
+                          OOFShowBlastAlignment(curr_seqalign, /*mask*/ NULL,
+                       			outfp, align_options, txmatrix);
+                       } else {
+                          if (align_view != 0)
+                             ShowTextAlignFromAnnot(curr_seqannot, 60, outfp, NULL, NULL, 
+                       			align_options, txmatrix, mask_loc, NULL);
+                          else
+                             ShowTextAlignFromAnnot(curr_seqannot, 60, outfp, NULL, NULL,
+                        		align_options, txmatrix, mask_loc, 
+                       			FormatScoreFunc);
+                       }
                     
-                    seqannot->data = seqalign;
-                    prune = BlastPruneSapStructDestruct(prune);
+                       curr_seqannot->data = curr_seqalign;
+                       prune = BlastPruneSapStructDestruct(prune);
+                    } /* show text align, loop over seqalign/seqannots for concat */
                     ObjMgrClearHold();
                     
                     ObjMgrFreeCache(0);
-                    
+                 } /* if outfp */
+                 for (sap_iter=0; sap_iter < num_queries; sap_iter++) {
+                    /* upper bound is num_queries, take care not to do this unless concat */
+                    *(seq_annot_arr + sap_iter) = SeqAnnotFree(*(seq_annot_arr + sap_iter)); 
                  }
-                 seqannot = SeqAnnotFree(seqannot);
-              } /* if XML Printing */
+	/*--KM free seqalign array and all seqaligns?? */
+
+              } /* end of else (not XML Printing) */
               if (options->is_megablast_search)
                  tmp_slp = tmp_slp->next;
-              if (seqannot)
+        /* --KM watch for memory leaks */
+              if (seqannot && num_queries == 0)   
                  seqannot = SeqAnnotFree(seqannot);
               seqalign = next_seqalign;
            } /* End of loop on all seqaligns */
            if (mask_loc && next_mask_loc)
               mask_loc->next = next_mask_loc;
 
-           }
+           } /* end of align_view not tabular case */
         } else {         /* seqalign is NULL */
-           if(align_view == 7 && !options->is_ooframe) {
+           if((align_view == 7) && !options->is_ooframe) {
               BlastErrorMsgPtr error_msg;
               CharPtr message;
               

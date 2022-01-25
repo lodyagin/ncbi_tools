@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.197 $
+* $Revision: 6.203 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,24 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.203  2003/04/03 22:40:09  kans
+* feature index location problem now reports latest identifier in record to make it easier to find problem
+*
+* Revision 6.202  2003/03/10 20:55:08  kans
+* LockAllSegments calls LockAllBioseqs if component was itself far delta or seg
+*
+* Revision 6.201  2003/02/12 14:20:46  kans
+* added IsNonGappedLiteral, used to allow compressed deltas as (previously always raw) parts of segsets
+*
+* Revision 6.200  2003/01/29 22:01:16  kans
+* corrected printing in CountGapsInDeltaSeq
+*
+* Revision 6.199  2003/01/21 20:15:00  kans
+* support for SeqMgrSetSeqIdSetFunc and GetSeqIdSetForGI needed for validator
+*
+* Revision 6.198  2002/12/17 17:30:10  kans
+* CountGapsInDeltaSeq calls NextLitLength to sum up adjacent non-gap SeqLits, used to break up long literals or isolate small runs of ambiguous (uncompressible) sequence
+*
 * Revision 6.197  2002/12/03 23:09:03  kans
 * added TestFeatOverlap
 *
@@ -3068,6 +3086,20 @@ NLM_EXTERN Boolean LIBCALL SpreadGapsInDeltaSeq (BioseqPtr bsp)
 *      returns TRUE if values in argument were set.
 *
 *****************************************************************************/
+static Boolean NextLitLength (DeltaSeqPtr next, Int4Ptr lenp)
+
+{
+  SeqLitPtr  slp;
+
+  if (lenp == NULL) return FALSE;
+  *lenp = 0;
+  if (next == NULL || next->choice != 2) return FALSE;
+  slp = (SeqLitPtr) next->data.ptrvalue;
+  if (slp == NULL || slp->seq_data == NULL) return FALSE;
+  *lenp = slp->length;
+  return TRUE;
+}
+
 NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs, Int4Ptr num_gaps, Int4Ptr known_residues, Int4Ptr num_gaps_faked, CharPtr buf, Int4 buflen)
 {
 	Boolean retval = FALSE;
@@ -3077,8 +3109,9 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 		len = 0,
 		fake_gaps = 0,
 		from = 0, 
-		tlen = 0;
-	DeltaSeqPtr dsp;
+		tlen = 0,
+		nxtlen;
+	DeltaSeqPtr dsp, next;
 	SeqLocPtr slocp;
 	SeqLitPtr slp;
 	IntFuzzPtr ifp;
@@ -3093,8 +3126,9 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 	retval = TRUE;  /* can function */
 
 
-	for (dsp = (DeltaSeqPtr)(bsp->seq_ext); dsp != NULL; dsp = dsp->next)
+	for (dsp = (DeltaSeqPtr)(bsp->seq_ext); dsp != NULL; dsp = next)
 	{
+		next = dsp->next;
 		segs++;
 		from = len + 1;
 		switch (dsp->choice)
@@ -3132,6 +3166,12 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 				if (slp->seq_data != NULL)
 				{
 					residues += slp->length;
+					while (NextLitLength (next, &nxtlen)) {
+						tlen += nxtlen;
+						len  += nxtlen;
+						residues += nxtlen;
+						next = next->next;
+					}
 					if (buf) {
 						sprintf(tmp, "* %8ld %8ld: contig of %ld bp in length~", (long) from, (long) len, (long) tlen);
 						blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
@@ -3164,7 +3204,7 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq (BioseqPtr bsp, Int4Ptr num_segs,
 						}
 					}
 					if (!unk && buf) {
-						sprintf(tmp, "* %8ld %ld: gap of %8ld bp~", (long) from, (long) len, (long) tlen);
+						sprintf(tmp, "* %8ld %8ld: gap of %ld bp~", (long) from, (long) len, (long) tlen);
 						blen = (Int2) MIN ((Int4) buflen, (Int4) sizeof (tmp));
 						diff = LabelCopy(buf, tmp, blen);
 						buflen -= diff;
@@ -4236,6 +4276,34 @@ NLM_EXTERN Boolean LIBCALL SeqMgrClearFeatureIndexes (Uint2 entityID, Pointer pt
 
 /*****************************************************************************
 *
+*   IsNonGappedLiteral(BioseqPtr bsp)
+*      Returns TRUE if bsp is a delta seq is composed only of Seq-lits with
+*      actual sequence data.  These are now made to allow optimal compression
+*      of otherwise raw sequences with runs of ambiguous bases.
+*
+*****************************************************************************/
+
+NLM_EXTERN Boolean IsNonGappedLiteral (BioseqPtr bsp)
+
+{
+  DeltaSeqPtr  dsp;
+  SeqLitPtr    slitp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
+  if (bsp->seq_ext_type != 4 || bsp->seq_ext == NULL) return FALSE;
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
+    if (dsp->choice != 2) return FALSE; /* not Seq-lit */
+    slitp = (SeqLitPtr) dsp->data.ptrvalue;
+    if (slitp == NULL) return FALSE;
+    if (slitp->seq_data == NULL || slitp->length == 0) return FALSE; /* gap */
+  }
+
+  return TRUE;
+}
+
+/*****************************************************************************
+*
 *   FindAppropriateBioseq finds the segmented bioseq if location is join on parts
 *
 *****************************************************************************/
@@ -4263,7 +4331,7 @@ static BioseqPtr FindAppropriateBioseq (SeqLocPtr loc, BioseqPtr tryfirst)
 
     /* first see if this is raw local part of segmented bioseq */
 
-    if (bsp != NULL && bsp->repr == Seq_repr_raw) {
+    if (bsp != NULL && (bsp->repr == Seq_repr_raw || IsNonGappedLiteral (bsp))) {
       omdp = SeqMgrGetOmdpForBioseq (bsp);
       if (omdp != NULL && omdp->datatype == OBJ_BIOSEQ) {
         bspextra = (BioseqExtraPtr) omdp->extradata;
@@ -5641,14 +5709,23 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
       {
         GatherContext     gc;
         GatherContextPtr  gcp;
+        Char              lastbspid [41];
+        SeqIdPtr          sip;
         MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
         gcp = &gc;
         gc.entityID = gop->entityID;
         gc.itemID = gop->itemID;
         gc.thistype = gop->itemtype;
+        lastbspid [0] = '\0';
+        if (exindx->lastbsp != NULL) {
+          sip = SeqIdFindBest (exindx->lastbsp->id, 0);
+          if (sip != NULL) {
+            SeqIdWrite (sip, lastbspid, PRINTID_FASTA_LONG, sizeof (lastbspid));
+          }
+        }
         ErrPostItem (SEV_WARNING, 0, 0,
-                     "SeqMgr indexing feature location problem - Feature: %s - Location [%s]",
-                     buf, loclbl);
+                     "SeqMgr indexing feature location problem - Feature: %s - Location [%s] - Record [%s]",
+                     buf, loclbl, lastbspid);
       }
     } else {
       /*
@@ -6437,7 +6514,7 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
 
   /* check for raw part packaged with segmented bioseq */
 
-  if (bsp->repr == Seq_repr_raw && lastsegbsp != NULL && *lastsegbsp != NULL) {
+  if ((bsp->repr == Seq_repr_raw || IsNonGappedLiteral (bsp)) && lastsegbsp != NULL && *lastsegbsp != NULL) {
     omdp = SeqMgrGetOmdpForBioseq (bsp);
     if (omdp == NULL) return;
 
@@ -9352,6 +9429,8 @@ NLM_EXTERN SeqLocPtr TrimLocInSegment (
   return rsult;
 }
 
+static void LockAllBioseqs (BioseqPtr bsp, Pointer userdata);
+
 static void LockAllSegments (SeqLocPtr slp, ValNodePtr PNTR vnpp)
 
 {
@@ -9385,6 +9464,14 @@ static void LockAllSegments (SeqLocPtr slp, ValNodePtr PNTR vnpp)
 
   bsp = BioseqLockById (sip);
   ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
+
+  /* now recurse if component is also far delta or seg */
+
+  if (bsp != NULL) {
+    if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
+      LockAllBioseqs (bsp, (Pointer) vnpp);
+    }
+  }
 }
 
 static void LockAllBioseqs (BioseqPtr bsp, Pointer userdata)
@@ -9506,6 +9593,7 @@ NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist)
 *       calls any registered function to preload the cache
 *
 *****************************************************************************/
+
 NLM_EXTERN void LIBCALL SeqMgrSetPreCache (SIDPreCacheFunc func)
 
 {
@@ -9536,6 +9624,40 @@ NLM_EXTERN Int4 LookupFarSeqIDs (
   SeqMgrUnlock ();
   if (func == NULL) return 0;
   return (*func) (sep, components, locations, products, alignments, history);
+}
+
+/*****************************************************************************
+*
+*   SeqMgrSetSeqIdSetFunc
+*       registers the GiToSeqIdSet lookup function
+*   GetSeqIdSetForGI
+*       calls any registered function to lookup the set of SeqIds
+*
+*****************************************************************************/
+
+NLM_EXTERN void LIBCALL SeqMgrSetSeqIdSetFunc (SeqIdSetLookupFunc func)
+
+{
+  SeqMgrPtr  smp;
+
+  smp = SeqMgrWriteLock ();
+  if (smp == NULL) return;
+  smp->seq_id_set_lookup_func = func;
+  SeqMgrUnlock ();
+}
+
+NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdSetForGI (Int4 gi)
+
+{
+  SeqIdSetLookupFunc  func;
+  SeqMgrPtr           smp;
+
+  smp = SeqMgrReadLock ();
+  if (smp == NULL) return 0;
+  func = smp->seq_id_set_lookup_func;
+  SeqMgrUnlock ();
+  if (func == NULL) return 0;
+  return (*func) (gi);
 }
 
 /*****************************************************************************

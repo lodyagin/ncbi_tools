@@ -3,6 +3,9 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.14  2003/02/22 21:20:05  kans
+* added GBQUAL_locus_tag, legal for now in gene features
+*
 * Revision 6.13  2002/04/17 14:41:08  kans
 * added GBQUAL_serovar to source feature
 *
@@ -171,8 +174,9 @@
 #define GBQUAL_environmental_sample 78
 #define GBQUAL_isolation_source  79
 #define GBQUAL_serovar           80
+#define GBQUAL_locus_tag         81
 
-#define ParFlat_TOTAL_GBQUAL     81
+#define ParFlat_TOTAL_GBQUAL     82
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

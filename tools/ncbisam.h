@@ -1,4 +1,4 @@
-/* $Id: ncbisam.h,v 6.3 2000/07/18 19:29:27 shavirin Exp $
+/* $Id: ncbisam.h,v 6.4 2003/04/14 19:52:31 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *         External include file for ISAM library
 *
 * $Log: ncbisam.h,v $
+* Revision 6.4  2003/04/14 19:52:31  camacho
+* Added ISAMUninitSearch
+*
 * Revision 6.3  2000/07/18 19:29:27  shavirin
 * Added new parameter test_non_unique to suppress check for non-unique
 * strings ids in the database - default - TRUE.
@@ -148,6 +151,16 @@ ISAMObjectPtr ISAMObjectNew(ISAMType type,       /* Type of ISAM */
    NOTE:        None
   ------------------------------------------------------------------*/
 void ISAMObjectFree(ISAMObjectPtr object);
+
+/* ---------------------- ISAMUninitSearch --------------------------
+   Purpose:     Uninitialize an ISAM search (free all allocated and used 
+                buffers and unmap and close all mapped/opened files).
+                Undoes what the ISAMInitSearch function does.
+   Parameters:  ISAM object
+   Returns:     ISAM Error Code
+   NOTE:        None
+  ------------------------------------------------------------------*/
+ISAMErrorCode ISAMUninitSearch(ISAMObjectPtr object);
 
 /* ------------------------ ISAMSearchTerm -------------------------
    Purpose:     Main search function of complete String ISAM

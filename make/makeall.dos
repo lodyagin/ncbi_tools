@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.157 2002/10/28 20:31:27 lavr Exp $
+# $Id: makeall.dos,v 6.158 2003/01/07 22:11:29 lavr Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -205,8 +205,8 @@ copy_reg:
 	copy ..\connect\ncbi_dispd.h .
 	copy ..\connect\ncbi_lbsmd.h .
 	copy ..\connect\*.h $(INCPATH)
-	$(DEL) ..\include\ncbi_*.h
-	copy ..\connect\ncbi_*.h $(INCPATH)\connect
+	$(DEL) ..\include\ncbi_*.h ..\include\connect_export.h
+	copy ..\connect\ncbi_*.h ..\connect\connect_export.h $(INCPATH)\connect
 	copy ..\ctools\*.c .
 	copy ..\ctools\*.h $(INCPATH)\ctools
 	copy ..\object\*.c .

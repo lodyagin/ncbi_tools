@@ -35,6 +35,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cblast.c,v $
+* Revision 1.9  2002/12/31 21:00:32  ywang
+* read environment variables from config file
+*
+* Revision 1.8  2002/12/20 21:44:09  ywang
+* update CDart_Init2
+*
+* Revision 1.7  2002/12/18 16:58:35  ywang
+* get defline from blast DB now
+*
+* Revision 1.6  2002/12/18 15:29:56  ywang
+* improve query id label
+*
 * Revision 1.5  2002/12/12 15:59:45  ywang
 * wording improvement
 *
@@ -217,11 +229,61 @@ static Boolean CblastSrvGetParams()
     return FALSE;
   }
 
+  GetAppParam("cblast", "CBLAST", "ODBCINI", "", ODBCINI, PATH_MAX);
+  if (ODBCINI[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no ODBCINI ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "DARTUSER", "", DARTUSER, PATH_MAX);
+  if (DARTUSER[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no DARTUSER ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "DARTPASS", "", DARTPASS, PATH_MAX);
+  if (DARTPASS[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no DARTPASS ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "DARTLIB", "", DARTLIB, PATH_MAX);
+  if (DARTLIB[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no NRPDB ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "LDLIBRARYPATH", "", LDLIBRARYPATH, PATH_MAX);
+  if (LDLIBRARYPATH[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no LDLIBRARYPATH ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "SYBASE", "", SYBASE, PATH_MAX);
+  if (SYBASE[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no NRPDB ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "BLASTDB", "", BLASTDB, PATH_MAX);
+  if (BLASTDB[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no NRPDB ...\n");
+    return FALSE;
+  }
+
+  GetAppParam("cblast", "CBLAST", "NCBI", "", NCBI, PATH_MAX);
+  if (NCBI[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CBLAST config file\nCBLAST section has no NRPDB ...\n");
+    return FALSE;
+  }
+
   return TRUE;
 }                                                    /* end CddGetParams */
 /*---------------------------*/
 void CblastSrvInit()
 {
+
+  Char str[1024];
 
   if((! VastSrvInitialize()) || (! MmdbSrvInitialize()))
   {
@@ -229,10 +291,10 @@ void CblastSrvInit()
     exit(0);
   }
 
-  putenv("ODBCINI=/netopt/structure/ini/.odbc.sassy.ini"); 
-  putenv("LD_LIBRARY_PATH=/opt/machine/merant/lib");    
+  sprintf(str, "ODBCINI=%s", ODBCINI); putenv(str);
+  putenv("LD_LIBRARY_PATH=/opt/machine/merant/lib");      
 
-    dartcon = Dart_Init2("CDart", "lewisg", "lewisg");     
+  dartcon = Dart_Init2(DARTLIB, DARTUSER, DARTPASS);     
 
   StringCat(LOGpath, "cblast.log");
   if( !ErrSetLogfile (LOGpath, ELOG_APPEND) ) {
@@ -268,6 +330,7 @@ void CblastSrvInit()
   ID1BioseqFetchEnable ("CBLAST", FALSE);
 */
 
+/*
   if (EntrezInit("CBLAST", NULL, FALSE) == FALSE)
   {
     printf("Content-type: text/html\n\n");
@@ -275,6 +338,7 @@ void CblastSrvInit()
     printf("CBLAST: EntrezInit Failed.<p>\n");
     return;
   }
+*/
 
 }
 /*----------*/
@@ -1032,7 +1096,10 @@ Int2 Main()
   SeqAnnotPtr sap_dart = NULL;
   SeqAnnotPtr sap_set = NULL, sap_subject_pair, sap_pdb_pair = NULL;
   SeqAlignPtr salp = NULL;
+  DenseSegPtr dsp = NULL;
   BioseqPtr query_bsp = NULL, cdquery_bsp = NULL, subject_bsp = NULL;
+  SeqIdPtr sipQuery=NULL, sip=NULL;
+  ObjectIdPtr              oidp;
   SeqEntryPtr sep = NULL;
   Int4 query_gi = 0, subject_rep_gi = 0, subject_sel_gi = 0, subject_str_gi = 0; 
   Int2 status = -3;
@@ -1095,12 +1162,44 @@ Int2 Main()
      pcThis = WWWGetValueByIndex(info,IndexArgs);
      CblastAddWWWQueryData("blast_RID", pcThis, &query_num, &wqp_head);
      status = QBlastGetResults(pcThis, &sap_set, &query_bsp, NULL, NULL, NULL, NULL); 
+     sip=query_bsp->id;
+     sipQuery=(SeqIdPtr) ValNodeNew(NULL);
+     sipQuery->choice = SEQID_LOCAL;
+     oidp = ObjectIdNew();
+     oidp->str = StringSave("query");
+     sipQuery->data.ptrvalue = oidp;
+     sipQuery->next=NULL;
+     query_bsp->id = SeqIdDup(sipQuery);
+     sip = SeqIdFree(sip);
      if(!sap_set){
         printf("Content-type: text/html\r\n\r\n");
         printf("<h2>Error</h2>\n");
         printf("Can not retrieve data with RID: %s!\n", pcThis);
         exit(0);
      }
+     salp=sap_set->data;
+     while(salp){
+       dsp = salp->segs;
+       sip=dsp->ids;
+       dsp->ids = SeqIdDup(sipQuery);
+       dsp->ids->next=sip->next;
+       sip->next=NULL;
+       sip = SeqIdFree(sip); 
+ 
+       salp = salp->next;
+     }
+     sipQuery=SeqIdFree(sipQuery);
+/*
+{
+AsnIoPtr aip = NULL;
+aip = AsnIoOpen("test4.sap", "w");
+SeqAnnotAsnWrite(sap_set, aip, NULL);
+aip = AsnIoClose(aip);
+aip = AsnIoOpen("test4.bsp", "w");
+BioseqAsnWrite(query_bsp, aip, NULL);
+aip = AsnIoClose(aip);
+}
+*/
 
      IndexArgs = -1;
      if((IndexArgs = WWWFindName(info, "blast_CD_RID")) >= 0){
@@ -1541,7 +1640,7 @@ printf("CdName: %s bRep: %d iClust: %d iMaprow: %d from: %d to: %d\n", cnip[i]->
    else if(DrawBlastPDBNbSummaryOnePairOneHSP){
         /* case blastview assuming subject_sel_gi > 0*/
      subject_pdbid = (SeqIdPtr) CblastGetPDBIdFromBioseq(subject_bsp); 
-     bpnp = (BlastPDBNbPtr)BlastPDBNbInfoBuild(sap_subject_pair, subject_rep_gi, subject_sel_gi, subject_pdbid);
+     bpnp = (BlastPDBNbPtr)BlastPDBNbInfoBuild(sap_subject_pair, subject_rep_gi, subject_sel_gi, subject_pdbid, rdfp);
      subject_pdbid = SeqIdFree(subject_pdbid);
    }
    if(bpnp) {

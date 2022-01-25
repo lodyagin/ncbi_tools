@@ -1,7 +1,7 @@
 #ifndef TEST_ASSERT__H
 #define TEST_ASSERT__H
 
-/*  $Id: test_assert.h,v 6.18 2002/06/21 13:52:15 lebedev Exp $
+/*  $Id: test_assert.h,v 6.21 2003/03/12 21:25:19 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,72 +32,17 @@
  *   Setup #NDEBUG and #_DEBUG preprocessor macro in a way that ASSERTs
  *   will be active even in the "Release" mode (it's useful for test apps).
  *
- * --------------------------------------------------------------------------
- * $Log: test_assert.h,v $
- * Revision 6.18  2002/06/21 13:52:15  lebedev
- * NCBI_OS_DARWIN: assert fix
- *
- * Revision 6.17  2002/05/01 19:14:08  lavr
- * Changed: NCBI_COMPILER_MIPSPRO -> NCBI_OS_IRIX
- *
- * Revision 6.16  2002/04/23 16:23:46  lavr
- * Yet another tweak for Windows :-(
- *
- * Revision 6.15  2002/04/23 14:35:16  lavr
- * Another round of moving things to get tests to link on Windows (Release)
- *
- * Revision 6.14  2002/04/22 20:41:00  ivanov
- * Added #define _ASSERT assert
- *
- * Revision 6.13  2002/04/22 20:36:31  ivanov
- * #undef _ASSERT added for Windows to disable use this macro in tests
- * -- application don't terminate in Windows _ASSERT (CRT library bug).
- *
- * Revision 6.12  2002/04/22 19:28:14  lavr
- * Shuffle things around again to get asserts defined in both Debug and Release
- *
- * Revision 6.11  2002/04/22 14:16:30  lavr
- * Add #undef assert, seems not to work otherwise on SGIs
- *
- * Revision 6.10  2002/04/18 15:50:19  lavr
- * Work around MSVC compiler bug treating formal parameter as a class name
- *
- * Revision 6.9  2002/04/16 22:04:20  lavr
- * #undef _ASSERT added for Windows to resolve macro redefinition
- *
- * Revision 6.8  2002/04/15 23:51:10  lavr
- * +#include <stdio.h> to define stderr
- *
- * Revision 6.7  2002/04/15 20:06:09  lavr
- * Fixed function pointer type: now explicit instead of Microsoft's PFV
- *
- * Revision 6.6  2002/04/15 19:22:24  lavr
- * Register MSVC-specific handler which suppresses popup messages at run-time
- *
- * Revision 6.5  2002/03/22 19:49:55  lavr
- * Undef NDEBUG; include <assert.h>; must go last in the list of include files
- *
- * Revision 6.4  2002/03/21 22:02:35  lavr
- * Provide assert() for MSVC
- *
- * Revision 6.3  2002/01/20 04:56:27  vakatov
- * Use #_MSC_VER rather than #include <ncbiconf.h> as the latter does not
- * exist when the code is compiled for the C Toolkit
- *
- * Revision 6.2  2002/01/19 00:04:00  vakatov
- * Do not force #_DEBUG on MSVC -- or it fails to link some functions which
- * defined in the debug C run-time lib only (such as _CrtDbgReport)
- *
- * Revision 6.1  2002/01/16 21:19:26  vakatov
- * Initial revision
- *
- * ===========================================================================
  */
 
 #include "../ncbi_config.h"
 
 
-#ifdef NCBI_OS_MSWIN
+#if defined(NCBI_OS_MAC) || \
+   (defined(NCBI_OS_DARWIN) && defined(NCBI_COMPILER_METROWERKS))
+#  include <stdio.h>
+#  include <stdlib.h>
+
+#elif defined(NCBI_OS_MSWIN)
 #  ifdef   _ASSERT
 #    undef _ASSERT
 #  endif
@@ -141,7 +86,8 @@ static void _SuppressDiagPopupMessages(void)
 static void (*_SDPM)(void) = _SuppressDiagPopupMessages;
 
 #  pragma data_seg()
-#endif
+
+#endif /*defined(NCBI_OS_...)*/
 
 
 #ifdef   NDEBUG
@@ -179,5 +125,17 @@ static void (*_SDPM)(void) = _SuppressDiagPopupMessages;
 #endif
 #define  _ASSERT assert
 
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: test_assert.h,v $
+ * Revision 6.21  2003/03/12 21:25:19  lavr
+ * More elaborate conditional branch for Mac's Codewarrior
+ *
+ * Revision 6.20  2003/03/12 20:54:45  lavr
+ * Add NCBI_OS_MAC branch and sync include/test and connect/test locations
+ *
+ * ===========================================================================
+ */
 
 #endif  /* TEST_ASSERT__H */

@@ -31,6 +31,9 @@
 *
 *
 * $Log: txclient.h,v $
+* Revision 1.7  2003/03/05 21:32:00  soussov
+* new lookup procedure
+*
 * Revision 1.6  1998/07/23 18:27:01  soussov
 * one prototype added
 *
@@ -168,11 +171,13 @@ Boolean te_saveEditWindows(void);
 
 #ifdef TAXSERVICE
 Int4 txc_getTaxIdByOrgRef(OrgRefPtr orgRef);
+Int4 txc_findByOrg(OrgRefPtr inp_orgRef, OrgModPtr* hitName);
 #endif
 
 _subspecPtr tax_SSgetAll(Int4 tax_id);
 _subspecPtr tax_SSget(Int4 tax_id, _subspecPtr ssrec);
 tax_OrgModPtr tax_SSgetLegal(Int4 tax_id);
 Int4 tax_SSgetNodes(Uint1 stype, CharPtr sname, Uint1 mode, Int4Ptr* ids);
+
 
 #endif

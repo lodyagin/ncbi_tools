@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.61 $
+* $Revision: 6.67 $
 *
 * File Description: 
 *
@@ -563,24 +563,68 @@ static int LIBCALLBACK SortDescrProc (VoidPtr vp1, VoidPtr vp2)
   return 0;
 }
 
-static void LookForGEDseqID (BioseqPtr bsp, Pointer userdata)
+typedef struct lookforids {
+  Boolean isGED;
+  Boolean isNTorNW;
+  Boolean isNC;
+  Boolean isTPA;
+} LookForIDs, PNTR LookForIDsPtr;
+
+static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
 
 {
-  BoolPtr   isGEDPtr;
-  SeqIdPtr  sip;
+  LookForIDsPtr  lfip;
+  SeqIdPtr       sip;
+  TextSeqIdPtr   tsip;
 
-  isGEDPtr = (BoolPtr) userdata;
+  lfip = (LookForIDsPtr) userdata;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     switch (sip->choice) {
       case SEQID_GENBANK :
       case SEQID_EMBL :
       case SEQID_DDBJ :
-        *isGEDPtr = TRUE;
-        return;
+        lfip->isGED = TRUE;
+        break;
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+        lfip->isTPA = TRUE;
+        break;
+      case SEQID_OTHER :
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL) {
+          if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
+            lfip->isNC = TRUE;
+          } else if (StringNCmp (tsip->accession, "NT_", 3) == 0) {
+            lfip->isNTorNW = TRUE;
+          } else if (StringNCmp (tsip->accession, "NW_", 3) == 0) {
+            lfip->isNTorNW = TRUE;
+          }
+        }
+        break;
       default :
         break;
     }
   }
+}
+
+static void LookForGEDetc (
+  SeqEntryPtr topsep,
+  BoolPtr isGED,
+  BoolPtr isNTorNW,
+  BoolPtr isNC,
+  BoolPtr isTPA
+)
+
+{
+  LookForIDs  lfi;
+
+  MemSet ((Pointer) &lfi, 0, sizeof (LookForIDs));
+  VisitBioseqsInSep (topsep, (Pointer) &lfi, LookForSeqIDs);
+  *isGED = lfi.isGED;
+  *isNTorNW = lfi.isNTorNW;
+  *isNC = lfi.isNC;
+  *isTPA = lfi.isTPA;
 }
 
 static void LookForNonLocalID (BioseqPtr bsp, Pointer userdata)
@@ -695,7 +739,7 @@ static CharPtr RelModeFailText (
   return StringSave (relmodemsg4);
 }
 
-static Int2 asn2gb_line_estimate [25] = {
+static Int2 asn2gb_line_estimate [27] = {
   0,
   1,
   1,
@@ -710,6 +754,7 @@ static Int2 asn2gb_line_estimate [25] = {
   1,
   2, /* organism */
   6, /* reference */
+  4, /* primary */
   4, /* comment */
   1,
   4, /* source */
@@ -718,6 +763,7 @@ static Int2 asn2gb_line_estimate [25] = {
   1,
  20, /* sequence */
   4, /* contig */
+  1,
   1,
   1,
   1
@@ -731,7 +777,8 @@ static Boolean PopulateFF (
   FmtType format,
   ModType mode,
   StlType style,
-  FlgType flags
+  FlgType flags,
+  CstType custom
 )
 
 {
@@ -763,9 +810,9 @@ static Boolean PopulateFF (
       level = ErrSetMessageLevel (SEV_MAX);
       if (usethetop != NULL && IS_Bioseq_set (usethetop)) {
         bssp = (BioseqSetPtr) usethetop->data.ptrvalue;
-        ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, style, flags, 0, NULL);
+        ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, style, flags, 0, custom, NULL);
       } else {
-        ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, style, flags, 0, NULL);
+        ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, style, flags, 0, custom, NULL);
       }
       if (ajp == NULL) return FALSE;
       fsp->ajp = ajp;
@@ -839,13 +886,17 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
 
 {
   BioseqPtr        bsp;
+  CstType          custom = 0;
   DoC              doc;
   Uint2            entityID;
   FonT             fnt;
   FILE             *fp;
   Boolean          hastpaaligns;
   Int2             into;
-  Boolean          isGenBankEMBLorDDBJ;
+  Boolean          isGED;
+  Boolean          isNTorNW;
+  Boolean          isNC;
+  Boolean          isTPA;
   Int2             item;
   ErrSev           level;
   Boolean          lockFar = FALSE;
@@ -906,6 +957,14 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
         break;
       default :
         break;
+    }
+  }
+  if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
+    lockFar = TRUE;
+  }
+  if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
+    if (GetStatus (bvp->ffCustomBtn)) {
+      custom = SHOW_TRANCRIPTION | SHOW_PEPTIDE;
     }
   }
   doc = NULL;
@@ -979,14 +1038,20 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   WatchCursor ();
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
-  isGenBankEMBLorDDBJ = FALSE;
-  VisitBioseqsInSep (topsep, (Pointer) &isGenBankEMBLorDDBJ, LookForGEDseqID);
+  LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA);
+  if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
+    if (isNTorNW || isTPA) {
+      flags |= ONLY_NEAR_FEATURES;
+    } else if (isNC) {
+      flags |= NEAR_FEATURES_SUPPRESS;
+    }
+  }
   if (bvp->useScrollText) {
     TmpNam (path);
     fp = FileOpen (path, "w");
     if (fp != NULL) {
       level = ErrSetMessageLevel (SEV_MAX);
-      if (SeqEntryToGnbk (sep, NULL, format, mode, style, flags, 0, NULL, fp)) {
+      if (SeqEntryToGnbk (sep, NULL, format, mode, style, flags, 0, custom, NULL, fp)) {
         FileClose (fp);
         if (! FileToScrollText (txt, path)) {
           SetTitle (txt, "(Text is too large to be displayed in this control.)");
@@ -1008,7 +1073,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     }
     FileRemove (path);
   } else {
-    if (PopulateFF (doc, sep, bsp, usethetop, format, mode, style, flags)) {
+    if (PopulateFF (doc, sep, bsp, usethetop, format, mode, style, flags, custom)) {
       SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
       SetDocProcs (doc, ClickIcon, NULL, ReleaseIcon, NULL);
       SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
@@ -1042,7 +1107,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
 static void PopulateGenBank (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT, SHOW_CONTIG_FEATURES | SHOW_CONTIG_SOURCES);
+  PopulateFlatFile (bvp, GENBANK_FMT, SHOW_CONTIG_FEATURES | SHOW_CONTIG_SOURCES | SHOW_FAR_TRANSLATION);
 }
 
 static void PopulateEMBL (BioseqViewPtr bvp)
@@ -1337,10 +1402,12 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
   AsnIoPtr     aipout = NULL;
   AsnTypePtr   atp = NULL;
   BioseqPtr    bsp;
+  CstType      custom = 0;
   DoC          doc;
   Uint2        entityID;
   XtraPtr      extra = NULL;
   FonT         fnt;
+  FmtType      format = GENBANK_FMT;
   GBSeq        gbsq;
   GBSet        gbst;
   Int2         into;
@@ -1401,6 +1468,9 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
   if (bvp != NULL && bvp->displayFont != NULL) {
     fnt = bvp->displayFont;
   }
+  if (bsp != NULL && ISA_aa (bsp->mol)) {
+    format = GENPEPT_FMT;
+  }
   if (doGbseq && aipout != NULL) {
     if (bvp->hasTargetControl && bvp->ffModeCtrl != NULL) {
       val = GetValue (bvp->ffModeCtrl);
@@ -1445,6 +1515,11 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
           break;
       }
     }
+    if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
+      if (GetStatus (bvp->ffCustomBtn)) {
+        custom = SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+      }
+    }
     if (GetAppParam ("NCBI", "SETTINGS", "XMLPREFIX", NULL, xmlbuf, sizeof (xmlbuf))) {
       AsnSetXMLmodulePrefix (StringSave (xmlbuf));
     }
@@ -1458,7 +1533,7 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
     extra = &xtra;
     MemSet ((Pointer) &gbst, 0, sizeof (GBSet));
     AsnOpenStruct (aipout, atp, (Pointer) &gbst);
-    if (SeqEntryToGnbk (sep, NULL, GENBANK_FMT, mode, style, CREATE_XML_GBSEQ_FILE, 0, extra, NULL)) {
+    if (SeqEntryToGnbk (sep, NULL, format, mode, style, CREATE_XML_GBSEQ_FILE, 0, custom, extra, NULL)) {
       AsnCloseStruct (aipout, atp, NULL);
       AsnPrintNewLine (aipout);
       AsnIoClose (aipout);

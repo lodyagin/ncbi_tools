@@ -1,5 +1,5 @@
 /*----------------*/
-/* $Id: tc2proc.c,v 1.23 2002/10/18 19:48:51 soussov Exp $           */
+/* $Id: tc2proc.c,v 1.28 2003/03/05 21:32:00 soussov Exp $           */
 /*----------------*/
 
 #include <stdlib.h>
@@ -17,6 +17,8 @@
 #define ORGMOD_gb_acronym 32
 #define ORGMOD_gb_anamorph 33
 #define ORGMOD_gb_synonym 34
+#define ORGMOD_anamorph 29
+#define ORGMOD_synonym 28
 
 
 static TreePtr tax_tree= NULL;
@@ -204,6 +206,7 @@ int CloseTaxDB(void)
             }
         }
     }
+    tax_tree= NULL;
     return 1;
 }
 
@@ -766,74 +769,79 @@ static Int2 getSubtypeFromName(CharPtr name)
 {
     CharPtr c;
     if(strchr(name, '.') == NULL) return 0;
+
+    /* ignore subsp. cf. and subsp. aff. */
+    if (StringStr (name, "subsp. cf.") != NULL) return 0;
+    if (StringStr (name, "subsp. aff.") != NULL) return 0;
+
     /* check for subsp */
     c= StringStr(name, "subsp.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 6);
         return 22;
     }
     c= StringStr(name, "ssp.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 4);
         return 22;
     }
     c= StringStr(name, "f. sp.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 6);
         return 26;
     }
     c= StringStr(name, "f.sp.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 5);
         return 26;
     }
     c= StringStr(name, "str.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 4);
         return 2;
     }
     c= StringStr(name, "substr.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 7);
         return 3;
     }
     c= StringStr(name, "var.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 4);
         return 6;
     }
     c= StringStr(name, "sv.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 3);
         return 9;
     }
     c= StringStr(name, "cv.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 3);
         return 10;
     }
     c= StringStr(name, "pv.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 3);
         return 11;
     }
     c= StringStr(name, "bv.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 3);
         return 13;
     }
     c= StringStr(name, "f.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 2);
         return 25;
     }
     c= StringStr(name, "fo.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 3);
         return 25;
     }
     c= StringStr(name, "grp.");
-    if(c) {
+    if(c == name) {
         rmWord(name, c, 4);
         return 15;
     }
@@ -1380,7 +1388,7 @@ static OrgRefPtr getFromBuff(Int4 id, int* is_sp, int* is_uncult, NameListPtr* b
     return orp;
 }
 
-static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp)
+static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp, CharPtr taxname)
 {
     _subspec src_ss;
     _subspecPtr ss= NULL;
@@ -1395,7 +1403,15 @@ static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp)
         OrgModFree(omp);
         return NULL;
     }
-      
+
+    if((omp->subtype == ORGMOD_anamorph ||
+        omp->subtype == ORGMOD_synonym) && 
+       StringICmp(omp->subname, taxname) == 0) {
+        omp->next= NULL;
+        OrgModFree(omp);
+        return NULL;
+    }
+        
 
     if((omp->subname != NULL) && (omp->subtype != 0)) {
         src_ss.stype= omp->subtype;
@@ -1426,13 +1442,13 @@ static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp)
     return omp;
 }
 
-static void CleanOrgMod(Int4 tax_id, OrgNamePtr onp)
+static void CleanOrgMod(Int4 tax_id, OrgNamePtr onp, CharPtr taxname)
 {
     OrgModPtr omp, omp_p, omp_n;
 
     for(omp_p= NULL, omp= onp->mod; omp != NULL; omp= omp_n) {
         omp_n= omp->next;
-        if((omp= fixModifier(tax_id, omp)) == NULL) {
+        if((omp= fixModifier(tax_id, omp, taxname)) == NULL) {
             /* exclude this modifier */
             if(omp_p == NULL) {
                 onp->mod= omp_n;
@@ -1443,13 +1459,13 @@ static void CleanOrgMod(Int4 tax_id, OrgNamePtr onp)
     }
 }
 	    
-static void cleanOrgName(Int4 tax_id, OrgNamePtr onp)
+static void cleanOrgName(Int4 tax_id, OrgNamePtr onp, CharPtr taxname)
 {
     if(onp->lineage != NULL) onp->lineage= MemFree(onp->lineage);
     if(onp->div != NULL) onp->div= MemFree(onp->div);
 #if 1
     /* #if 0 means that we will trust to initial modifier */
-    if(onp->mod != NULL) CleanOrgMod(tax_id, onp);
+    if(onp->mod != NULL) CleanOrgMod(tax_id, onp, taxname);
 #endif
     if(onp->next != NULL) OrgNameSetFree(onp->next);
     if(onp->data != NULL) {
@@ -1536,7 +1552,7 @@ static int subtypeConflict(Int2 t1, Int2 t2)
     return 0;
 }
 
-static void mergeOrgMod(OrgModPtr omp, OrgModPtr src)
+static void mergeOrgMod(OrgModPtr omp, OrgModPtr src, int need_copy)
 {
     if(src == NULL) return;
     else {
@@ -1544,18 +1560,31 @@ static void mergeOrgMod(OrgModPtr omp, OrgModPtr src)
         for(dst= omp; dst != NULL; dst= dst->next) {
             lst= dst;
             if(subtypeConflict((Int2)dst->subtype, (Int2)src->subtype)) {
-                mergeOrgMod(omp, src->next);
+                lst= src->next;
+                if(!need_copy) {
+                    src->next= NULL;
+                    OrgModFree(src);
+                }
+                mergeOrgMod(omp, lst, need_copy);
                 return;
             }
         }
 
-        lst->next= dst= OrgModNew();
-        dst->subtype= src->subtype;
-        dst->subname= (src->subname != NULL)? StringSave(src->subname) : NULL;
-        dst->attrib= (src->attrib != NULL)? StringSave(src->attrib) : NULL;
-        dst->next= NULL;
+        if(need_copy) {
+            lst->next= dst= OrgModNew();
+            dst->subtype= src->subtype;
+            dst->subname= (src->subname != NULL)? StringSave(src->subname) : NULL;
+            dst->attrib= (src->attrib != NULL)? StringSave(src->attrib) : NULL;
+            dst->next= NULL;
+            lst= src->next;
+        }
+        else {
+            lst->next= src;
+            lst= src->next;
+            src->next= NULL;
+        }
         
-        mergeOrgMod(omp, src->next);
+        mergeOrgMod(omp, lst, need_copy);
     }
 
 }
@@ -1644,7 +1673,7 @@ static void bldOrgRefOut(OrgRefPtr dst, OrgRefPtr src, Int4 tax_id)
   
     if(onp->mod == NULL) onp->mod= copyOrgMod(src->orgname->mod);
     else {
-        mergeOrgMod(onp->mod, src->orgname->mod);
+        mergeOrgMod(onp->mod, src->orgname->mod, 1);
     }
     onp->lineage= (src->orgname->lineage != NULL)? StringSave(src->orgname->lineage) : NULL;
     onp->gcode= src->orgname->gcode;
@@ -1652,33 +1681,80 @@ static void bldOrgRefOut(OrgRefPtr dst, OrgRefPtr src, Int4 tax_id)
     onp->div= StringSave(src->orgname->div);
 }
 
-static void populateReplaced(OrgRefPtr orp, CharPtr oldName)
+static void populateReplaced(OrgRefPtr orp, OrgModPtr hitName)
 {
-    OrgNamePtr onp;
-    OrgModPtr omp;
+    OrgModPtr omp, srv_mod;
 
-    if((orp->taxname != NULL) && (StringICmp(orp->taxname, oldName) == 0)) {
-        MemFree(oldName);
-        return;
-    }
+    if(hitName == NULL) return;
 
-    if((orp->common != NULL) && (StringICmp(orp->common, oldName) == 0)) {
-        MemFree(oldName);
-        return;
-    }
-
-    /* organism name was changed */
-    onp= orp->orgname;
-    if(onp != NULL) {
-        omp= OrgModNew();
-        omp->next= onp->mod;
-        omp->subtype= 254;
-        omp->subname= oldName;
-        onp->mod= omp;
+    /* find the real hitName */
+    if (hitName->subtype == 254) {
+        srv_mod= hitName->next;
+        hitName->next= NULL;
     }
     else {
-        MemFree(oldName);
+        srv_mod= hitName;
+        for(omp= hitName, hitName= hitName->next; hitName; hitName= hitName->next) {
+            if(hitName->subtype == 254) {
+                omp->next= hitName->next;
+                hitName->next= NULL;
+                break;
+            }
+            else {
+                omp= hitName;
+            }
+        }
     }
+                
+
+    if(orp->orgname->mod) {
+        mergeOrgMod(orp->orgname->mod, srv_mod, 0);
+    }
+    else {
+        orp->orgname->mod= srv_mod;
+    }
+
+
+    if(hitName == NULL) return;
+
+    for(omp= orp->orgname->mod; omp != NULL; omp= omp->next) {
+        if(omp->subtype == 254) { /* search name is populated already */
+            if((omp->attrib == NULL) && (hitName->attrib != NULL) &&
+               (StringICmp(omp->subname, hitName->subname) == 0)) { 
+                omp->attrib= hitName->attrib;
+                hitName->attrib= NULL;
+            }
+            OrgModFree(hitName);
+            return;
+        }
+    }
+
+    if((orp->taxname != NULL) && (StringICmp(orp->taxname, hitName->subname) == 0)) {
+        /* we probably don't need to populate search name */
+        if(hitName->attrib == NULL) {
+            OrgModFree(hitName);
+            return;
+        }
+        else {
+            Uint1 st= atoi(hitName->attrib+1);
+            char* sn= strchr(hitName->attrib, '=');
+            if(sn == NULL) {
+                OrgModFree(hitName);
+                return;
+            }
+            ++sn;
+            for(omp= orp->orgname->mod; omp != NULL; omp= omp->next) {
+                if((omp->subtype == st) && (StringICmp(omp->subname, sn) == 0)) {
+                    OrgModFree(hitName);
+                    return;
+                }
+            }
+        }
+    }
+
+    /* adding this modifier */
+    hitName->next= orp->orgname->mod;
+    orp->orgname->mod= hitName;
 }
 
 Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge)
@@ -1689,10 +1765,9 @@ Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge)
     int is_species;
     int is_uncultured;
     NameListPtr bl;
-    Boolean need_search_name= TRUE;
-    CharPtr hit_name;
+    OrgModPtr hitName;
 
-    tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
+    tax_id= txc_findByOrg(inp_orgRef, &hitName);
     if(tax_id <= 0) return NULL;
     db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, &is_uncultured, &bl);
     if(db_orgRef == NULL) return NULL;
@@ -1702,47 +1777,6 @@ Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge)
     res->is_uncultured= is_uncultured;
     res->blast_name= make_blast_name(bl);
 
-    /* populate search name if necessary */
-    if(inp_orgRef->taxname != NULL) {
-        if((db_orgRef->taxname != NULL) && (StringICmp(inp_orgRef->taxname, db_orgRef->taxname) == 0)) {
-            need_search_name= FALSE;
-        }
-        else if((db_orgRef->common != NULL) && (StringICmp(inp_orgRef->taxname, db_orgRef->common) == 0)) {
-            need_search_name= FALSE;
-        }
-    }
-
-    if(need_search_name && (inp_orgRef->common != NULL)) {
-        if((db_orgRef->taxname != NULL) && (StringICmp(inp_orgRef->common, db_orgRef->taxname) == 0)) {
-            need_search_name= FALSE;
-        }
-        else if((db_orgRef->common != NULL) && (StringICmp(inp_orgRef->common, db_orgRef->common) == 0)) {
-            need_search_name= FALSE;
-        }
-    }
-
-    if(need_search_name && (inp_orgRef->orgname != NULL)) {
-        /* check if search name already exists */
-        OrgModPtr omp;
-
-        for(omp= inp_orgRef->orgname->mod; omp != NULL; omp= omp->next) {
-            if(omp->subtype == 254) {
-                need_search_name= FALSE;
-                break;
-            }
-        }
-    }
-
-    hit_name= NULL;
-    if(need_search_name) {
-        if((inp_orgRef->taxname != NULL) && (inp_orgRef->taxname[0] != '\0')) {
-            hit_name= StringSave(inp_orgRef->taxname);
-        }
-        else if((inp_orgRef->common != NULL) && (inp_orgRef->common[0] != '\0')) {
-            hit_name= StringSave(inp_orgRef->common);
-        }
-    }
-
     if(merge) {
         /* we have to merge old orgref with the new one */
         res->org= inp_orgRef;
@@ -1750,7 +1784,8 @@ Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge)
         if(inp_orgRef->taxname != NULL) MemFree(inp_orgRef->taxname);
         if(inp_orgRef->common != NULL) MemFree(inp_orgRef->common);
         if(inp_orgRef->syn != NULL) ValNodeFreeData(inp_orgRef->syn);
-        if(inp_orgRef->orgname != NULL) cleanOrgName(tax_id, inp_orgRef->orgname);
+        if(inp_orgRef->orgname != NULL) cleanOrgName(tax_id, inp_orgRef->orgname,
+                                                     db_orgRef->taxname);
     }
     else {
         /* make new orgref */
@@ -1760,7 +1795,7 @@ Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge)
     }
     /* fill-up orgref based on db_orgRef */
     bldOrgRefOut(res->org, db_orgRef, tax_id);
-    if(need_search_name && (hit_name != NULL)) populateReplaced(res->org, hit_name);
+    populateReplaced(res->org, hitName);
     return res;
 }
 
@@ -1770,10 +1805,11 @@ Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
     Int4 tax_id;
     OrgRefPtr db_orgRef;
     int is_species;
-    Boolean need_search_name= TRUE;
-    CharPtr hit_name;
+    OrgModPtr hitName;
 
-    tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
+    tax_id= txc_findByOrg(inp_orgRef, &hitName);
+
+    //tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
     if(tax_id <= 0) return NULL;
     db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, NULL, NULL);
     if(db_orgRef == NULL) return NULL;
@@ -1783,47 +1819,6 @@ Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
     res->embl_code= NULL;
     res->div= (db_orgRef->orgname != NULL)? StringSave(db_orgRef->orgname->div) : NULL;
 
-    /* populate search name if necessary */
-    if(inp_orgRef->taxname != NULL) {
-        if((db_orgRef->taxname != NULL) && (StringICmp(inp_orgRef->taxname, db_orgRef->taxname) == 0)) {
-            need_search_name= FALSE;
-        }
-        else if((db_orgRef->common != NULL) && (StringICmp(inp_orgRef->taxname, db_orgRef->common) == 0)) {
-            need_search_name= FALSE;
-        }
-    }
-
-    if(need_search_name && (inp_orgRef->common != NULL)) {
-        if((db_orgRef->taxname != NULL) && (StringICmp(inp_orgRef->common, db_orgRef->taxname) == 0)) {
-            need_search_name= FALSE;
-        }
-        else if((db_orgRef->common != NULL) && (StringICmp(inp_orgRef->common, db_orgRef->common) == 0)) {
-            need_search_name= FALSE;
-        }
-    }
-
-    if(need_search_name && (inp_orgRef->orgname != NULL)) {
-        /* check if search name already exists */
-        OrgModPtr omp;
-
-        for(omp= inp_orgRef->orgname->mod; omp != NULL; omp= omp->next) {
-            if(omp->subtype == 254) {
-                need_search_name= FALSE;
-                break;
-            }
-        }
-    }
-
-    hit_name= NULL;
-    if(need_search_name) {
-        if((inp_orgRef->taxname != NULL) && (inp_orgRef->taxname[0] != '\0')) {
-            hit_name= StringSave(inp_orgRef->taxname);
-        }
-        else if((inp_orgRef->common != NULL) && (inp_orgRef->common[0] != '\0')) {
-            hit_name= StringSave(inp_orgRef->common);
-        }
-    }
-
     if(merge) {
         /* we have to merge old orgref with the new one */
         res->org= inp_orgRef;
@@ -1831,7 +1826,8 @@ Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
         if(inp_orgRef->taxname != NULL) MemFree(inp_orgRef->taxname);
         if(inp_orgRef->common != NULL) MemFree(inp_orgRef->common);
         if(inp_orgRef->syn != NULL) ValNodeFreeData(inp_orgRef->syn);
-        if(inp_orgRef->orgname != NULL) cleanOrgName(tax_id, inp_orgRef->orgname);
+        if(inp_orgRef->orgname != NULL) cleanOrgName(tax_id, inp_orgRef->orgname, 
+                                                     db_orgRef->taxname);
     }
     else {
         /* make new orgref */
@@ -1841,7 +1837,7 @@ Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
     }
     /* fill-up orgref based on db_orgRef */
     bldOrgRefOut(res->org, db_orgRef, tax_id);
-    if(need_search_name && (hit_name != NULL)) populateReplaced(res->org, hit_name);
+    populateReplaced(res->org, hitName);
     return res;
 }
   
@@ -2162,6 +2158,7 @@ Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef)
 
 Boolean tax1_isAlive(void)
 {
+    if(!tax1_inited()) return FALSE;
     return (tax1_getTaxIdByName("dog") > 1)? TRUE : FALSE;
 }
 
@@ -2203,4 +2200,9 @@ CharPtr tax1m_getBlastName(Int4 tax_id)
 
     tree_closeCursor(cursor);
     return res;
+}
+
+Boolean tax1_inited()
+{
+    return (tax_tree != NULL)? TRUE : FALSE;
 }

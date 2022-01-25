@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: picture.h,v $
+* Revision 6.14  2003/03/18 17:00:10  kans
+* Nlm_AddSilentSegRect does not absorb clicks, SegRect reverted to absorb clicks, so desktop click responsiveness is maintained
+*
 * Revision 6.13  2002/08/07 18:13:42  kans
 * G/SetPrimitiveIDs, itemID is Uint4
 *
@@ -366,6 +369,8 @@ Nlm_Uint2 primID));
 
 extern Nlm_PrimitivE Nlm_AddSegRect     PROTO((Nlm_SegmenT parent, 
 Nlm_Boolean fill, Nlm_Uint2 primID));
+extern Nlm_PrimitivE Nlm_AddSilentSegRect PROTO((Nlm_SegmenT parent, 
+Nlm_Boolean fill, Nlm_Uint2 primID));
 extern Nlm_PrimitivE Nlm_AddLine        PROTO((Nlm_SegmenT parent, 
 Nlm_Int4 pnt1X, Nlm_Int4 pnt1Y, Nlm_Int4 pnt2X, Nlm_Int4 pnt2Y, 
 Nlm_Boolean arrow, Nlm_Uint2 primID));
@@ -503,6 +508,7 @@ extern Nlm_enumPrimAddOrder Nlm_ChangeAddPrimOrder
 #define AddRectangle Nlm_AddRectangle
 #define AddRoundedRectangle Nlm_AddRoundedRectangle
 #define AddSegRect Nlm_AddSegRect
+#define AddSilentSegRect Nlm_AddSilentSegRect
 #define AddLine Nlm_AddLine
 #define AddSymbol Nlm_AddSymbol
 #define AddBitmap Nlm_AddBitmap

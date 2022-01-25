@@ -1,5 +1,5 @@
 /*
-* $Id: mmdbuti.h,v 1.1.1.1 2002/12/04 21:12:08 chenj Exp $
+* $Id: mmdbuti.h,v 1.3 2003/01/15 16:15:09 chenj Exp $
 *
 *
 * ===========================================================================
@@ -31,6 +31,12 @@
 *
 *
 * $Log: mmdbuti.h,v $
+* Revision 1.3  2003/01/15 16:15:09  chenj
+* change the definition of ChainScaleMapOrImg()
+*
+* Revision 1.2  2003/01/14 19:57:17  chenj
+* Minor changes
+*
 * Revision 1.1.1.1  2002/12/04 21:12:08  chenj
 * Imported sources
 *
@@ -44,7 +50,7 @@
 #include <ncbi.h>
 #include <mmdbdata.h>
 #include <gifgen.h>
-#include "/net/scarecorw/str3/web/dev/htdocs/Structure/chenj/bin/utilisCJ.h"
+#include "/net/scarecrow/str3/web/dev/htdocs/Structure/chenj/bin/utilisCJ.h"
 #include "/netopt/structure/include/dart.h"
 #include "/netopt/structure/include/dartutil.h"
 #include "/netopt/structure/include/dbinfo.h"
@@ -72,7 +78,7 @@ Int2 ChainNameMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y,
 
 
 void ChainScaleMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, 
-PMMD pmmd, Int4 sdid, Int4 color, Int4 labelcol, FILE *File);
+PMMD pmmd, Int4 uid, Int4 sdid, Int4 color, Int4 labelcol, FILE *File);
 
 
 Int2 ChainDomMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, Int4 uid, 

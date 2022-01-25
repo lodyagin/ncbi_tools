@@ -32,8 +32,61 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.215 $
+* $Revision: 6.232 $
 * $Log: blastool.c,v $
+* Revision 6.232  2003/04/17 20:51:33  camacho
+* Rolled back previous changes
+*
+* Revision 6.230  2003/04/14 19:53:18  camacho
+* Use ISAMUninitSearch to avoid running into memory problems
+*
+* Revision 6.229  2003/04/04 20:02:38  dondosha
+* ABR bug fix in BlastPrintTabulatedResultsEx
+*
+* Revision 6.228  2003/03/26 20:29:50  boemker
+* By default, set required_end = 0 to match behavior of blastcgicmd.cpp
+*
+* Revision 6.227  2003/03/26 15:47:52  boemker
+* sizeof x -> sizeof(x)
+*
+* Revision 6.226  2003/03/26 15:46:18  boemker
+* In BLAST_OptionsBlkInit, use memset to clear structure.
+*
+* Revision 6.225  2003/03/26 13:36:06  boemker
+* Corrected misspelling (opts => options) in BLAST_WizardOptionsBlkInit.
+*
+* Revision 6.224  2003/03/26 02:45:25  boemker
+* Rewrote BLAST_WizardOptionsBlkInit to reflect changes in
+* BLAST_WizardOptionsBlk.
+*
+* Revision 6.223  2003/03/25 22:25:57  boemker
+* Replaced cutoff_s2, which isn't used, with cutoff_s, which is.  Added
+* query_lcase_mask.  Made alignments and descriptions (arguments of function
+* BLAST_Wizard) optional.  Rewrote to avoid use of snprintf, which isn't
+* portable.
+*
+* Revision 6.222  2003/03/25 19:58:18  boemker
+* Moved code to initialize search options from blastcgicmd.cpp to here, as
+* BLAST_Wizard et al.
+*
+* Revision 6.221  2003/03/24 19:42:14  madden
+* Changes to support query concatenation for blastn and tblastn
+*
+* Revision 6.220  2003/02/28 18:34:41  dondosha
+* Added a possibility to print sequences in the -D3 output
+*
+* Revision 6.219  2003/02/18 19:50:09  madden
+* Correctly report number of sequences better than expect value for gapped search
+*
+* Revision 6.218  2003/01/31 17:57:27  camacho
+* Fix to MergeDbGiFilesWithOIDLists
+*
+* Revision 6.217  2003/01/15 19:06:30  dondosha
+* Correction in copying defline in BlastPrintTabulatedResultsEx
+*
+* Revision 6.216  2003/01/14 20:28:53  madden
+* New function BLASTAddBlastDBTitleToSeqAnnotEx
+*
 * Revision 6.215  2002/12/04 23:32:49  camacho
 * Do not set use_this_gi with nucleotide dbs (redundant)
 *
@@ -713,6 +766,7 @@ Contents: Utilities for BLAST
 #include <xmlblast.h>
 #include <mblast.h>
 #include <simutil.h>
+#include <vecscrn.h>
 
 
 /* Mutex for assignment of db seqs to search. */
@@ -957,10 +1011,22 @@ FormatBlastParameters(BlastSearchBlkPtr search)
            evalue = pbp->cutoff_e;
            if (StringCmp(search->prog_name, "blastn") == 0 ||
                search->pbp->gapped_calculation == FALSE) {
-              BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
+	     /* AM: Changed to support query concatenation. */
+             if( !search->mult_queries )
+               BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
+             else
+               { BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->mult_queries->MinLenEff, (Nlm_FloatHi) search->dblen_eff, FALSE); }
+
               sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2);
            } else {
-              BlastCutoffs(&cutoff, &evalue, search->sbp->kbp_gap[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
+	     if( !search->mult_queries )
+               BlastCutoffs(&cutoff, &evalue, search->sbp->kbp_gap[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
+             else
+               BlastCutoffs( &cutoff, &evalue, 
+	                     search->sbp->kbp_gap[search->first_context],
+			     (Nlm_FloatHi)search->mult_queries->MinLenEff, 
+			     (Nlm_FloatHi)search->dblen_eff, FALSE );
+
               sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp_gap[search->first_context]->Lambda))-(search->sbp->kbp_gap[search->first_context]->logK))/NCBIMATH_LN2);
            }
            add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
@@ -1930,6 +1996,21 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
            }
         }
 
+        /* --KM check -B option: query concatenation only with certain
+           BLAST flavors */
+        if (options->NumQueries>0 &&
+        !( (StringICmp("blastn",  progname) == 0) ||
+        (StringICmp("tblastn", progname) == 0)   ) ) {
+
+                BlastConstructErrorMessage("BLASTOptionValidateEx",
+                    "Query concatenation can only be used with blastn and tblastn",
+                    1, error_return);
+                return 1;
+	}
+    
+
+
+
 	return status;
 }
 
@@ -2456,15 +2537,25 @@ Boolean IntersectDoubleInt4ListWithOIDLists(
    the rdfp_chain).
    If there are any ordinal id lists present in the rdfp_chain, these will be
    intersected with the oidlists created from the gifiles.
+   The gis that were listed in each rdfp->gifile that belong to this database
+   are returned in the bglp. Caller is responsible for deallocating this
+   value.
 */
 static
-void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret) 
+void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret,
+        BlastGiListPtr *bglpp) 
 {
-    ReadDBFILEPtr  rdfp = NULL;
+    ReadDBFILEPtr  rdfp = NULL, rdfp_tmp = NULL;
     BlastDoubleInt4Ptr	list=NULL, global_list = NULL;
     BlastGiListPtr tmp_list = NULL;
     Int4	i, index, ngis = 0, total_num_gis = 0, start;
+    Char buf[256];
  
+    /* If this argument is not passed in, any gis from rdfp->gifile will
+     * be lost for formatting purposes */
+    if (!bglpp)
+        return;
+
     /** 
      * Gather all gis from all rdfp->gifile(s).
      */
@@ -2485,6 +2576,19 @@ void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret)
             }
             ngis = index;
 
+            /* Workaround: Uninitialize unneeded numeric ISAM indices.
+             * When the ISAM indices are used to map gis to ordinal ids, these
+             * files are memory mapped, and if the rdfp_chain is long, we might
+             * run out of memory. Because of this, we uninitialize all the ISAM
+             * indices every time we read a gi file. */
+            for (rdfp_tmp = rdfp_chain; rdfp_tmp; rdfp_tmp = rdfp_tmp->next) {
+                if (ISAMUninitSearch(rdfp_tmp->nisam_opt) != ISAMNoError) {
+                    BlastConstructErrorMessage("MergeDbGiFilesWithOIDLists",
+                            "Could not uninitialize NISAM indices", SEV_WARNING,
+                            err_ret);
+                }
+            }
+
             tmp_list = CombineDoubleInt4Lists(global_list, total_num_gis, 
                                               list, ngis);
             if (tmp_list) {
@@ -2501,7 +2605,6 @@ void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret)
          * restrict this entire rdfp (mask all of its sequences) */
         if (FileLength(rdfp->gifile) > 0 && ngis == 0) {
             Int4 maxoid = rdfp->stop - rdfp->start;
-            Char buf[256];
 
             rdfp->oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
             rdfp->oidlist->total = maxoid + 1;
@@ -2530,6 +2633,7 @@ void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret)
             return;
         }
   
+        *bglpp = BlastGiListNew(global_list, total_num_gis);
         MemFree(global_list);
     }
     return;
@@ -2575,8 +2679,9 @@ BlastCreateVirtualOIDList(BlastGiListPtr bglp, ReadDBFILEPtr rdfp_chain,
     if (bglp) {
         gilist = bglp->gi_list;
         for (i = 0; i < bglp->total; i++) {
-            if (!options->gilist_already_calculated) { 
-                /* nabrd software does this */
+            if (!options->gilist_already_calculated && /* nabrd does this */
+                gilist[i].ordinal_id <= 0) { /* assumes gilist was
+                                                memset'd to zero */
                 gilist[i].ordinal_id = readdb_gi2seq(rdfp_chain, gilist[i].gi, 
                                                  &start);
                 gilist[i].start = start;
@@ -2746,7 +2851,9 @@ BlastCreateVirtualOIDList(BlastGiListPtr bglp, ReadDBFILEPtr rdfp_chain,
    The policy to restrict blast searches follows:
    All rdfp->gifile(s) are read and from the file(s) in (a) and merged (union).
    The resulting gilist is then intersected with any rdfp->oidlist(s) in (b)
-   (see MergeDbGiFilesWithOIDLists).
+   (see MergeDbGiFilesWithOIDLists). Gis from rdfp->gifile(s) will be returned
+   so that they can be added to the search->thr_info->blast_gi_list structure.
+
    If non-NULL, (c), (d), and (e) are intersected and this result is 
    intersected with the gilist obtained previously.
 
@@ -2775,7 +2882,7 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
         oidlist_forall_rdfp = TRUE;
 
     /* Create individual oidlists for those databases which have gi lists */
-    MergeDbGiFilesWithOIDLists(search->rdfp, &search->error_return);
+    MergeDbGiFilesWithOIDLists(search->rdfp, &search->error_return, &bglp);
 
     if (gi_list)
         bglp = CombineDoubleInt4Lists(gi_list, gi_list_size, NULL, 0);
@@ -4157,7 +4264,8 @@ CharPtr BLASTGetDatabaseTitleFromSeqAnnot(SeqAnnotPtr seqannot)
     return NULL;
 }
 
-void BLASTAddBlastDBTitleToSeqAnnot(SeqAnnotPtr seqannot, CharPtr title)
+
+void BLASTAddBlastDBTitleToSeqAnnotEx(SeqAnnotPtr seqannot, CharPtr title, Boolean is_na)
 {
     UserObjectPtr uop;
     UserFieldPtr ufp;
@@ -4175,9 +4283,17 @@ void BLASTAddBlastDBTitleToSeqAnnot(SeqAnnotPtr seqannot, CharPtr title)
     
     oip->str = StringSave(title);
     ufp->choice = 4;
-    ufp->data.boolvalue = TRUE; /* Just to fill required field ... */
+    ufp->data.boolvalue = is_na; /* Nucleotide if TRUE. */
     
     ValNodeAddPointer(&(seqannot->desc), Annot_descr_user, (Pointer)uop);
+}
+
+/* BLASTAddBlastDBTitleToSeqAnnotEx is preferred if the type of database is known. */
+
+void BLASTAddBlastDBTitleToSeqAnnot(SeqAnnotPtr seqannot, CharPtr title)
+{
+	BLASTAddBlastDBTitleToSeqAnnotEx(seqannot, title, TRUE);
+	return;
 }
 
 /* pos is assumed to be the address of a chracter in the array seq
@@ -4520,7 +4636,7 @@ BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id)
 	ptr = buf_start = &buffer[0];
 
 	if (string)
-		StringNCpy(ptr, string, BLAST_ERROR_BULEN);
+		StringNCpy_0(ptr, string, BLAST_ERROR_BULEN);
 
 	if (sip != NULL)
 	{
@@ -4545,7 +4661,7 @@ BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id)
 	    if (use_id)
 	    {
     	    	SeqIdWrite(sip, textid, PRINTID_FASTA_LONG, BLAST_ERROR_BULEN-1);
-	    	StringNCpy(ptr, textid, BLAST_ERROR_BULEN-1);
+	    	StringNCpy_0(ptr, textid, BLAST_ERROR_BULEN-1);
 	    }
 	    else if (title)
 	    {
@@ -4761,7 +4877,7 @@ void BlastPrintTabulatedResultsEx(SeqAlignPtr seqalign, BioseqPtr query_bsp,
             if ((title = StringSave(BioseqGetTitle(query_bsp))) != NULL) {
                defline = MemFree(defline);
                defline = StringTokMT(title, " ", &title);
-               StringCpy(query_buffer, defline);
+               StringNCpy_0(query_buffer, defline, BUFFER_LENGTH);
                defline = MemFree(defline);
             } else
                StringCpy(query_buffer, defline+4);
@@ -5358,6 +5474,33 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
    return 0;
 }
 
+static void FillSequenceBuffers(Uint1Ptr query_ptr, Uint1Ptr subject_ptr, 
+            CharPtr query_buffer, CharPtr subject_buffer, Int4 length)
+{
+   Int4 index;
+   CharPtr blastna_to_iupacna = "ACGTRYMKWSBDHVN-";
+   
+   if (!query_ptr) {
+      MemSet(query_buffer, '-', length);
+   } else {
+      for (index = 0; index < length; ++index) {
+         *query_buffer = blastna_to_iupacna[*query_ptr];
+         query_buffer++;
+         query_ptr++;
+      }
+   }
+
+   if (!subject_ptr) {
+      MemSet(subject_buffer, '-', length);
+   } else {
+      for (index = 0; index < length; ++index) {
+         *subject_buffer = blastna_to_iupacna[*subject_ptr];
+         subject_buffer++;
+         subject_ptr++;
+      }
+   }
+}
+
 
 int LIBCALLBACK
 MegaBlastPrintAlignInfo(VoidPtr ptr)
@@ -5382,11 +5525,16 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    CharPtr subject_descr=NULL, subject_buffer, buffer;
    Boolean numeric_sip_type = FALSE;
    FILE *fp = (FILE *) search->output;
+   CharPtr query_seq_buffer, subject_seq_buffer;
+   Uint1Ptr query_ptr, subject_ptr;
+   Boolean print_sequences;
 
    if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
       search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
       return 0;
    }
+
+   print_sequences = (getenv("PRINT_SEQUENCES") != NULL);
 
    subject_seq = search->subject->sequence_start + 1;
 
@@ -5571,15 +5719,16 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
       num_gap_opens = 0;
       num_mismatches = 0;
       for (i=0; i<numseg; i++) {
-         align_length += length[i];
 	 if (start[2*i] != -1 && start[2*i+1] != -1) {
 	    num_ident = MegaBlastGetNumIdentical(query_seq, subject_seq, 
                                                  start[2*i], start[2*i+1], 
                                                  length[i], FALSE);
             perc_ident += num_ident;
             num_mismatches += length[i] - num_ident;
-	 } else
+         } else {
             num_gap_opens++;
+         }
+         align_length += length[i];
       }
       perc_ident = perc_ident / align_length * 100;
       /* Avoid printing 100.00 when the hit is not an exact match */
@@ -5594,6 +5743,27 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
          MemFree(strands);
          MemFree(query_buffer);
          continue;
+      }
+
+      if (print_sequences) {
+         /* Fill the query and subject sequence buffers */
+         query_seq_buffer = MemNew((align_length+1));
+         subject_seq_buffer = MemNew((align_length+1));
+         align_length = 0;
+         for (i=0; i<numseg; i++) {
+            if (start[2*i] != -1)
+               query_ptr = &query_seq[start[2*i]];
+            else
+               query_ptr = NULL;
+            if (start[2*i+1] != -1)
+               subject_ptr = &subject_seq[start[2*i+1]];
+            else
+               subject_ptr = NULL;
+            FillSequenceBuffers(query_ptr, subject_ptr, 
+               &query_seq_buffer[align_length], 
+               &subject_seq_buffer[align_length], length[i]);
+            align_length += length[i];
+         }
       }
 
       if (hsp->context) {
@@ -5638,18 +5808,44 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
       else
          sprintf(bit_score_buff, "%4.2lf", bit_score);
 
-      if (numeric_sip_type)
-         fprintf(fp, 
-                 "%s\t%ld\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\n",
-                 query_buffer, (long) subject_gi, perc_ident, (long) align_length, 
-                 (long) num_mismatches, (long) num_gap_opens, (long) q_start, (long) q_end, (long) s_start, 
-                 (long) s_end, eval_buff, bit_score_buff);
-      else 
-	 fprintf(fp, 
-                 "%s\t%s\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\n",
-                 query_buffer, subject_buffer, perc_ident, (long) align_length, 
-                 (long) num_mismatches, (long) num_gap_opens, (long) q_start, (long) q_end, (long) s_start, 
-                 (long) s_end, eval_buff, bit_score_buff);
+
+      if (print_sequences) {
+         if (numeric_sip_type) {
+            fprintf(fp, 
+       "%s\t%ld\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\t%s\t%s\n",
+               query_buffer, (long) subject_gi, perc_ident, 
+               (long) align_length, (long) num_mismatches, 
+               (long) num_gap_opens, (long) q_start, (long) q_end, 
+               (long) s_start, (long) s_end, eval_buff, bit_score_buff,
+               query_seq_buffer, subject_seq_buffer);
+         } else {
+            fprintf(fp, 
+        "%s\t%s\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\t%s\t%s\n",
+               query_buffer, subject_buffer, perc_ident, 
+               (long) align_length, (long) num_mismatches, 
+               (long) num_gap_opens, (long) q_start, (long) q_end, 
+               (long) s_start, (long) s_end, eval_buff, bit_score_buff,
+               query_seq_buffer, subject_seq_buffer);
+         }
+         MemFree(query_seq_buffer);
+         MemFree(subject_seq_buffer);
+      } else {
+         if (numeric_sip_type) {
+            fprintf(fp, 
+               "%s\t%ld\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\n",
+               query_buffer, (long) subject_gi, perc_ident, 
+               (long) align_length, (long) num_mismatches, 
+               (long) num_gap_opens, (long) q_start, (long) q_end, 
+               (long) s_start, (long) s_end, eval_buff, bit_score_buff);
+         } else {
+            fprintf(fp, 
+               "%s\t%s\t%.2f\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\n",
+               query_buffer, subject_buffer, perc_ident, 
+               (long) align_length, (long) num_mismatches, 
+               (long) num_gap_opens, (long) q_start, (long) q_end, 
+               (long) s_start, (long) s_end, eval_buff, bit_score_buff);
+         }
+      }
 
       MemFree(start);
       MemFree(length);
@@ -5728,7 +5924,11 @@ void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
       ff_AddString("# Database: ");
       ff_AddString(blast_database);
       NewContLine();
-      ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score");
+      if (getenv("PRINT_SEQUENCES")) {
+         ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score, query seq., subject seq.");
+      } else {
+         ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score");
+      }
    }
 
    ff_EndPrint();
@@ -6043,6 +6243,11 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
    Int4 length,hitlist_count,sequence_length,index,index1,total_num_hsp=0,hspcnt;
    Char buffer[512];
    Int2 num_queries, query_index;
+
+   /* AM: Support for query multiplexing. */
+   MQ_DivideResultsInfoPtr subjects = NULL;
+   Int4 index2;
+   Int4 nhlists = 0;
    
    head = NULL;
    tail = NULL;
@@ -6139,10 +6344,28 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
          if (!single_chain) {
             head = tail = NULL;
          }
-         for (index=0; index<MIN(hitlist_count, options->hitlist_size);
-              index++) {
+
+         /* AM: Support for query multiplexing. */
+	 if( search->mult_queries )
+	 {
+           subjects = (MQ_DivideResultsInfoPtr)MemNew( sizeof( MQ_DivideResultsInfo )*hitlist_count );
+	   nhlists = hitlist_count;
+         }
+	 else nhlists = MIN(hitlist_count, options->hitlist_size);
+
+         for (index=0, index2 = 0; index<nhlists; index++) {
             seqalign = result_struct->results[index]->seqalign;
             if (seqalign) {
+
+              /* AM: Support for query multiplexing. */
+	      if( search->mult_queries )
+	      {
+	        subjects[index2].evalue
+		  = result_struct->results[index]->best_evalue;
+	        subjects[index2++].subject_id 
+	          = result_struct->results[index]->subject_id;
+              }
+
                if (head == NULL) {
                   head = seqalign;
                } else {
@@ -6152,6 +6375,16 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                tail = seqalign;
             }
          }
+
+         /* AM: Support for query multiplexing. */
+	 if( search->mult_queries )
+	 {
+	   search->mult_queries->sap_array_data->sap_array
+	     = DivideSeqAligns( options, head, 
+	                        search->mult_queries, subjects );
+	   subjects = MemFree( subjects );
+         }
+
          /* Free the extra seqaligns */
          for ( ; index < hitlist_count; index++)
             result_struct->results[index]->seqalign = 
@@ -6213,9 +6446,28 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
       index = 0;
       if (!options || 
           (!(options->tweak_parameters) && !(options->smith_waterman))) {
+
+         /* AM: Support for query multiplexing. */
+	 if( search->mult_queries )
+	 {
+           subjects = (MQ_DivideResultsInfoPtr)MemNew( sizeof( MQ_DivideResultsInfo )*hitlist_count );
+	   nhlists = hitlist_count;
+         }
+	 else nhlists = MIN(hitlist_count, options->hitlist_size);
+
          /* Only save alignments up to the original hitlist size */
-         for ( ; index<MIN(hitlist_count, options->hitlist_size); index++) {
+         for ( index2 = 0; index<nhlists; index++) {
             seqalign = result_struct->results[index]->seqalign;
+
+            /* AM: Support for query multiplexing. */
+	    if( search->mult_queries )
+	    {
+	      subjects[index2].evalue
+	        = result_struct->results[index]->best_evalue;
+	      subjects[index2++].subject_id 
+	        = result_struct->results[index]->subject_id;
+            }
+
             if (seqalign) {
                if (head == NULL) {
                   head = seqalign;
@@ -6226,6 +6478,15 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                tail = seqalign;
             }
          }
+
+         /* AM: Support for query multiplexing. */
+	 if( search->mult_queries )
+	 {
+	   search->mult_queries->sap_array_data->sap_array
+	     = DivideSeqAligns( options, head, 
+	                        search->mult_queries, subjects );
+	   subjects = MemFree( subjects );
+         }
       } 
       
       /* Free the unused seqaligns (all in case of PSI BLAST, 
@@ -6234,6 +6495,7 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
          result_struct->results[index]->seqalign = 
             SeqAlignSetFree(result_struct->results[index]->seqalign);
       }
+      search->number_of_seqs_better_E = MIN(hitlist_count, options->hitlist_size);
    } else {
       /* Ungapped psi-blast. */
       if (StringCmp("blastp", search->prog_name) == 0 && search->positionBased == TRUE)
@@ -6333,6 +6595,9 @@ BlastHSPGetNumIdentical(BlastSearchBlkPtr search, BLAST_HSPPtr hsp,
    q_off = (hsp ? hsp->query.offset : result_hsp->query_offset);
    s_off = (hsp ? hsp->subject.offset : result_hsp->subject_offset);
 
+   if (search->pbp->is_ooframe)
+     q_off /= CODON_LENGTH;
+   
    query_seq = search->context[context].query->sequence;
    if (search->subject->sequence_start)
       subject_seq = search->subject->sequence_start + 1;
@@ -6383,4 +6648,356 @@ BlastHSPGetNumIdentical(BlastSearchBlkPtr search, BLAST_HSPPtr hsp,
    *align_length_ptr = align_length;
    *num_ident_ptr = num_ident;
    return 0;
+}
+
+/*  --------------------------------------------------------------------
+ *
+ *  BLAST_Wizard & related functions
+ *
+ *  --------------------------------------------------------------------
+ */
+
+void
+BLAST_WizardOptionsBlkInit(BLAST_WizardOptionsBlkPtr options)
+{
+    memset(options, 0, sizeof(BLAST_WizardOptionsBlk));
+}
+
+void
+BLAST_WizardOptionsBlkDone(BLAST_WizardOptionsBlkPtr options)
+{
+    if(options->entrez_query) {
+        MemFree(options->entrez_query);
+        options->entrez_query = 0;
+    }
+    if(options->filter_string) {
+        MemFree(options->filter_string);
+        options->filter_string = 0;
+    }
+    ValNodeFree(options->gilist);
+    options->gilist = 0;
+    if(options->matrix) {
+        MemFree(options->matrix);
+        options->matrix = 0;
+    }
+    if(options->phi_pattern) {
+        MemFree(options->phi_pattern);
+        options->phi_pattern = 0;
+    }
+    if(options->query_lcase_mask) {
+        ValNodeFreeData(options->query_lcase_mask);
+        options->query_lcase_mask = 0;
+    }
+    if(options->string_options) {
+        MemFree(options->string_options);
+        options->string_options = 0;
+    }
+}
+
+void
+BLAST_WizardOptionsMaskInit(BLAST_WizardOptionsMaskPtr mask)
+{
+    mask->block_width               = FALSE;
+    mask->cutoff_s                  = FALSE;
+    mask->db_genetic_code           = FALSE;
+    mask->ethresh                   = FALSE;
+    mask->expect_value              = FALSE;
+    mask->first_db_seq              = FALSE;
+    mask->final_db_seq              = FALSE;
+    mask->gap_extend                = FALSE;
+    mask->gap_open                  = FALSE;
+    mask->gapped_calculation        = FALSE;
+    mask->genetic_code              = FALSE;
+    mask->hitlist_size              = FALSE;
+    mask->hsp_range_max             = FALSE;
+    mask->is_ooframe                = FALSE;
+    mask->mb_disc_type              = FALSE;
+    mask->mb_template_length        = FALSE;
+    mask->no_traceback              = FALSE;
+    mask->penalty                   = FALSE;
+    mask->perc_identity             = FALSE;
+    mask->perform_culling           = FALSE;
+    mask->pseudoCountConst          = FALSE;
+    mask->required_end              = FALSE;
+    mask->required_start            = FALSE;
+    mask->reward                    = FALSE;
+    mask->searchsp_eff              = FALSE;
+    mask->smith_waterman            = FALSE;
+    mask->strand_option             = FALSE;
+    mask->threshold_first           = FALSE;
+    mask->threshold_second          = FALSE;
+    mask->tweak_parameters          = FALSE;
+    mask->use_best_align            = FALSE;
+    mask->use_real_db_size          = FALSE;
+    mask->window_size               = FALSE;
+    mask->wordsize                  = FALSE;
+
+    mask->two_hits                  = FALSE;
+}
+
+BLAST_OptionsBlkPtr
+BLAST_Wizard(
+    const char*                 program,
+    const char*                 service,
+    BLAST_WizardOptionsBlkPtr   options,
+    BLAST_WizardOptionsMaskPtr  mask,
+    int*                        alignments,
+    int*                        descriptions,
+    char**                      error)
+{
+    int dummy_alignments = -1;
+    int dummy_descriptions = -1;
+    BLAST_OptionsBlkPtr out = 0;
+    Boolean ungapped_alignment;
+    *error = 0;
+    if(!alignments)
+        alignments = &dummy_alignments;
+    if(!descriptions)
+        descriptions = &dummy_descriptions;
+    if(mask->expect_value && mask->cutoff_s) {
+        *error = StringSave("can't specify both expect_value and cutoff_s");
+        goto end;
+    }
+    ungapped_alignment = mask->gapped_calculation ?
+        !options->gapped_calculation :
+        FALSE;
+    if(!StringCmp(service, "vecscreen")) {
+        out = VSBlastOptionNew();
+        out->gapped_calculation = !ungapped_alignment;
+    }
+    else {
+        Boolean is_megablast_search = !StringICmp(service, "megablast");
+        out = BLASTOptionNewEx(
+            (char*) program, !ungapped_alignment, is_megablast_search);
+
+        /* set some defaults for backward compat. with blastcgicmd.cpp */
+        if(!StringCmp(service, "psi"))
+            out->ethresh = 0.001;
+
+        /* ignore some fields for backward compat. with blastcgicmd.cpp */
+        if(is_megablast_search)
+            mask->block_width = FALSE;
+        else {
+            mask->mb_disc_type = FALSE;
+            mask->mb_template_length = FALSE;
+            mask->no_traceback = FALSE;
+            mask->two_hits = FALSE;
+        }
+    }
+    if(out->is_megablast_search) {
+        out->no_traceback = mask->no_traceback ?
+            options->no_traceback :
+            FALSE;
+    }
+    if(mask->expect_value)
+        out->expect_value = options->expect_value;
+    if(mask->cutoff_s)
+        out->cutoff_s = options->cutoff_s;
+    if(mask->threshold_first)
+        out->threshold_first = options->threshold_first;
+    if(mask->threshold_second)
+        out->threshold_second = options->threshold_second;
+    if(mask->perc_identity)
+        out->perc_identity = options->perc_identity;
+    if(out->is_megablast_search) {
+        if (out->perc_identity >= 95.0) {
+            out->reward = 1;
+            out->penalty = -3;
+        }
+        else if(out->perc_identity >= 85.0
+                || out->perc_identity == 0.0) {
+            out->reward = 1;
+            out->penalty = -2;
+        }
+        else if (out->perc_identity >= 80.0) {
+            out->reward = 2;
+            out->penalty = -3;
+        }
+        else if (out->perc_identity >= 75.0) {
+            out->reward = 4;
+            out->penalty = -5;
+        }
+        else if (out->perc_identity >= 60.0) {
+            out->reward = 2;
+            out->penalty = -2;
+        }
+    }
+    if(mask->penalty)
+        out->penalty = options->penalty;
+    if(mask->reward)
+        out->reward = options->reward;
+    if(mask->wordsize)
+        out->wordsize = options->wordsize;
+    if(mask->searchsp_eff)
+        out->searchsp_eff = options->searchsp_eff;
+    if(mask->hsp_range_max)
+        out->hsp_range_max = options->hsp_range_max;
+    if(!out->is_megablast_search) {
+        if(mask->block_width)
+            out->block_width = options->block_width;
+    }
+    else {
+        if(mask->mb_template_length)
+            out->mb_template_length = options->mb_template_length;
+        if(mask->two_hits && options->two_hits)
+            out->window_size = 40;
+        if(mask->mb_disc_type)
+            out->mb_disc_type = options->mb_disc_type;
+        if(out->mb_template_length > 0
+                && out->wordsize <= 12
+                && out->wordsize >= 11
+                && out->perc_identity < 90.0) {
+            if(out->perc_identity >= 85.0) {
+                out->gap_open = 4;
+                out->gap_extend = 1;
+            }
+            else if(out->perc_identity >= 80.0) {
+                out->gap_open = 5;
+                out->gap_extend = 2;
+            }
+            else if(out->perc_identity >= 75) {
+                out->gap_open = 7;
+                out->gap_extend = 2;
+            }
+            else if(out->perc_identity >= 60) {
+                out->gap_open = 3;
+                out->gap_extend = 1;
+            }
+        }
+    }
+    if(!out->perform_culling)
+        out->perform_culling = mask->perform_culling ?
+            options->perform_culling :
+            FALSE;
+    if(mask->gap_open)
+        out->gap_open = options->gap_open;
+    if(mask->gap_extend)
+        out->gap_extend = options->gap_extend;
+    if(mask->genetic_code)
+        out->genetic_code = options->genetic_code;
+    if(mask->db_genetic_code)
+        out->db_genetic_code = options->db_genetic_code;
+    if(!out->tweak_parameters)
+        out->tweak_parameters = mask->tweak_parameters ?
+            options->tweak_parameters :
+            FALSE;
+    if(!strcmp(service, "psi")) {
+        out->ethresh = mask->ethresh ?
+            options->ethresh :
+            0.001;
+        out->tweak_parameters = mask->tweak_parameters ?
+            options->tweak_parameters :
+            FALSE;
+    }
+    if(options->entrez_query) {
+        out->entrez_query = options->entrez_query; /* take ownership */
+        options->entrez_query = 0;
+        out->gifile = 0;
+    }
+    if(options->matrix) {
+        out->matrix = options->matrix; /* take ownership */
+        options->matrix = 0;
+    }
+    if(options->phi_pattern) {
+        out->phi_pattern = options->phi_pattern; /* take ownership */
+        options->phi_pattern = 0;
+    }
+    if(out->is_megablast_search) {
+        if(out->wordsize < 8)
+            out->wordsize = 8;
+        out->cutoff_s2 = out->wordsize * out->reward;
+    }
+    out->hitlist_size = -1;
+    if(mask->hitlist_size) {
+        out->hitlist_size = options->hitlist_size;
+        *alignments = MIN(out->hitlist_size, *alignments);
+        *descriptions = MIN(out->hitlist_size, *descriptions);
+    }
+    else
+        out->hitlist_size = -1;
+    if(options->string_options) {
+        int other_adv_descriptions = -1;
+        int other_adv_alignments = -1;
+        parse_blast_options(
+            out,
+            options->string_options,
+            error,
+            NULL,
+            &other_adv_descriptions,
+            &other_adv_alignments);
+        if(*error)
+            goto end;
+        if (other_adv_alignments != -1) {
+            *alignments = other_adv_alignments;
+            out->hitlist_size =
+                MAX(out->hitlist_size, other_adv_alignments);
+        }
+        if (other_adv_descriptions != -1) {
+            *descriptions = other_adv_descriptions;
+            out->hitlist_size =
+                MAX(out->hitlist_size, other_adv_descriptions);
+        }
+        if(!StringCmp(out->filter_string, "T")) {
+            MemFree(out->filter_string);
+            if(StringICmp(program, "blastn"))
+                out->filter_string = StringSave("S");
+            else
+                out->filter_string = StringSave("D");
+        }
+    }
+    /* append ; for backward compat. with blastcgicmd.cpp */
+    if(out->filter_string) {
+        char buf[10240];
+        if(strlen(out->filter_string)+2 > sizeof buf) {
+            *error = StringSave("internal error: buffer too small");
+            goto end;
+        }
+        sprintf(buf, "%s;", out->filter_string);
+        MemFree(out->filter_string);
+        out->filter_string = StringSave(buf);
+    }
+    if(options->filter_string) {
+        char buf[10240];
+        char* s = out->filter_string ? out->filter_string : "";
+        if(strlen(s)+strlen(options->filter_string)+1 > sizeof buf) {
+            *error = StringSave("internal error: buffer too small");
+            goto end;
+        }
+        sprintf(buf, "%s%s", s, options->filter_string);
+        if(out->filter_string)
+            MemFree(out->filter_string);
+        out->filter_string = StringSave(buf);
+    }
+    if(out->filter_string)
+        out->filter = TRUE;
+    if(out->hitlist_size != -1) {
+        if(*descriptions == -1)
+            *descriptions = MIN(100, out->hitlist_size);
+        if(*alignments == -1)
+            *alignments = MIN(100, out->hitlist_size);
+    } else {
+        if(*descriptions == -1)
+            *descriptions = 100;
+        if(*alignments == -1)
+            *alignments = 100;
+        out->hitlist_size = MAX(*descriptions, *alignments);
+    }
+    if(!strcmp(service, "vecscreen"))
+        out->hitlist_size = 1000;
+    if(mask->required_start)
+        out->required_start = options->required_start;
+    if(mask->required_end)
+        out->required_end = options->required_end;
+	else
+		out->required_end = 0; /* backward compat. with blastcgicmd.cpp */
+    if(options->gilist) {
+        out->gilist = options->gilist; /* take ownership */
+        options->gilist = 0;
+    }
+end:
+    if(*error) {
+        BLASTOptionDelete(out);
+        out = 0;
+    }
+    return out;
 }

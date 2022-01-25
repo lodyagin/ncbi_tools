@@ -38,9 +38,27 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.177 $
+ * $Revision: 6.183 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.183  2003/04/04 17:16:31  dondosha
+ * Previous change reversed, was incorrect
+ *
+ * Revision 6.182  2003/04/03 22:35:44  dondosha
+ * When saving hit list, save hsp contexts modulo 2, since multiple query information is no longer needed
+ *
+ * Revision 6.181  2003/03/19 19:16:20  dondosha
+ * Small correction for a rarely happening case in MegaBlastExtendHit
+ *
+ * Revision 6.180  2003/03/13 19:03:10  dondosha
+ * Minor bug fix in MegaBlastExtendHit
+ *
+ * Revision 6.179  2003/03/13 16:53:03  dondosha
+ * Minor bug fixes
+ *
+ * Revision 6.178  2002/12/26 20:27:40  dondosha
+ * Bug fix for e-values of hits whose extent changes when reevaluating with ambiguities
+ *
  * Revision 6.177  2002/11/25 19:57:29  dondosha
  * Further fix to the HSP limit (-H) megablast option
  *
@@ -667,6 +685,9 @@ BioseqMegaBlastEngine (BioseqPtr PNTR bspp, CharPtr progname, CharPtr database,
          ErrPostEx(SEV_FATAL, 0, 0,
                    "Location outside of the query sequence range\n");
          return NULL;
+      } else if (to <= from) {
+         ErrPostEx(SEV_FATAL, 0, 0, "Empty query location provided\n");
+         return NULL;
       }
       slp = SeqLocIntNew(from, to, options->strand_option, bspp[0]->id);
       index++;
@@ -731,7 +752,7 @@ BioseqMegaBlastEngineByLoc (SeqLocPtr slp, CharPtr progname, CharPtr database,
 	/* If no options, use default. */
         if (options == NULL)
 	{
-		options = BLASTOptionNew(progname, FALSE);
+		options = BLASTOptionNewEx(progname, TRUE, TRUE);
 		options_allocated = TRUE;
 	}
 
@@ -1037,6 +1058,7 @@ static Uint1 inverse_halfbyte[16] =
 { 0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15 };
 
 #define MIN_LIMIT_HSP_NUM 1e20
+#define BLASTNA_N_RESIDUE 14
 
 Int2
 MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
@@ -1315,13 +1337,13 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
             sequence that will go into the first context */
          if (filter_slp && !mask_at_hash) {
             MegaBlastMaskTheResidues(query_seq, query_length,
-				     14, filter_slp, FALSE,
+				     BLASTNA_N_RESIDUE, filter_slp, FALSE,
 				     SeqLocStart(private_slp), mask_at_hash);
          }
          MemCpy(&query_seq_combined[1], query_seq, query_length+1);
 	 if (filter_slp && mask_at_hash) {
             MegaBlastMaskTheResidues(query_seq_combined+1, query_length,
-				     14, filter_slp, FALSE,
+				     BLASTNA_N_RESIDUE, filter_slp, FALSE,
 				     SeqLocStart(private_slp), mask_at_hash);
          }
 
@@ -1351,8 +1373,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
 
 	 query_seq_start_rev[0] = query_seq_rev[query_length] = 0x0f;
          if (filter_slp && !mask_at_hash) {
-            MegaBlastMaskTheResidues(query_seq_rev, query_length, 14, 
-                                     filter_slp, TRUE, 
+            MegaBlastMaskTheResidues(query_seq_rev, query_length, 
+                                     BLASTNA_N_RESIDUE, filter_slp, TRUE, 
                                      SeqLocStart(private_slp_rev), 
                                      mask_at_hash);
          }
@@ -1360,7 +1382,8 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
                 query_seq_rev,query_length+1);
 	 if (filter_slp && mask_at_hash) {
             MegaBlastMaskTheResidues(query_seq_combined+full_query_length+1, 
-                                     query_length, 14, filter_slp, TRUE, 
+                                     query_length, BLASTNA_N_RESIDUE, 
+                                     filter_slp, TRUE, 
                                      SeqLocStart(private_slp_rev), 
                                      mask_at_hash);
          }               
@@ -1555,7 +1578,7 @@ available) this needs to be set higher up. */
      search->sbp->kbp[search->first_context]->Lambda);*/
    search->pbp->gap_x_dropoff = options->gap_x_dropoff;
    /* Ensures that gap_x_dropoff_final is at least as large as gap_x_dropoff. */
-   search->pbp->gap_x_dropoff_final = MAX(search->pbp->gap_x_dropoff_final, search->pbp->gap_x_dropoff);
+   search->pbp->gap_x_dropoff_final = MAX(options->gap_x_dropoff_final, search->pbp->gap_x_dropoff);
    
    /* "threshold" (first and second) must be set manually for two-pass right now.*/
    search->pbp->threshold_set = TRUE;
@@ -1986,7 +2009,6 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
          CRC32(crc, hash_buf);
          ecode1 = (crc>>hash_shift) & hash_mask;
 #endif
-         
          if (use_two_templates) {
             if (template_type == TEMPL_11_16)
                ecode2 = GET_WORD_INDEX_11_16_OPT(ecode) | bit0;
@@ -2133,7 +2155,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
             while ((s_off <= subj_length) && ((pv_array[ecode1>>pv_array_bts]&
                      (((PV_ARRAY_TYPE) 1)<<(ecode1&PV_ARRAY_MASK))) == 0)
                    && (!use_two_templates || ((pv_array[ecode2>>pv_array_bts]&
-                        (((PV_ARRAY_TYPE) 1)<<(ecode2&PV_ARRAY_MASK))) == 0))) {
+                       (((PV_ARRAY_TYPE) 1)<<(ecode2&PV_ARRAY_MASK))) == 0))) {
                ecode = ((ecode & mask) << 8) + *++subject;
 
                switch (template_type) {
@@ -2633,14 +2655,13 @@ MegaBlastWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
    Int4 min_hit_size;
    PV_ARRAY_TYPE *pv_array = lookup->pv_array;
    Int4 pv_array_bts;
-   
+
    if (search->pbp->mb_params->disc_word) {
       if (search->pbp->mb_params->one_base_step)
          return MegaBlastWordFinder_disc_1b(search, lookup);
       else
          return MegaBlastWordFinder_disc(search, lookup);
    }
-
 
    min_hit_size = lookup->mb_lt->lpm;
    if (search->pbp->window_size > 0)
@@ -2732,10 +2753,6 @@ Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search)
    /* Make current hitlist available for rewriting of extended hsps 
       without freeing the hsp_array since it's used in this function */
    search->current_hitlist->hspcnt = 0;
-
-#if LOOKUP_DRIVER_TEST
-   return 0;
-#endif
 
    e_hsp_array = (MegaBlastExactMatchPtr PNTR) 
       Malloc(hspcnt*sizeof(MegaBlastExactMatchPtr));
@@ -2891,8 +2908,8 @@ MegaBlastExtendHit(BlastSearchBlkPtr search, LookupTablePtr lookup,
             If hit is longer than the required minimum, it must have already 
             been saved earlier.
          */                  
-         if (combo_array_elem->diag_level > min_hit_length ||
-            (!two_hits && combo_array_elem->diag_level == min_hit_length))
+         if (!hit_ready && ((combo_array_elem->diag_level > min_hit_length) ||
+              (!two_hits && combo_array_elem->diag_level == min_hit_length)))
          {
             MegaBlastSaveExactMatch(search, q_off, s_off);
          }
@@ -2901,7 +2918,7 @@ MegaBlastExtendHit(BlastSearchBlkPtr search, LookupTablePtr lookup,
          combo_array_elem->last_hit = s_pos;
          combo_array_elem->diag_level = len;
          /* Save the hit if it already qualifies */
-         if (len == min_hit_length)
+         if (!two_hits && (len >= min_hit_length))
             MegaBlastSaveExactMatch(search, q_off, s_off);
       }
       return 0;
@@ -2943,7 +2960,7 @@ MegaBlastExtendHit(BlastSearchBlkPtr search, LookupTablePtr lookup,
             /* Start the new hit */            
             estack[index].length = len;
             estack[index].level = s_off;
-            if (hit_ready)
+            if (!two_hits && (len >= min_hit_length))
                MegaBlastSaveExactMatch(search, q_off, s_off);
          }
          return 0;
@@ -2975,7 +2992,7 @@ MegaBlastExtendHit(BlastSearchBlkPtr search, LookupTablePtr lookup,
    estack[stack_top].level = s_off;
    estack[stack_top].length = len;
    lookup->mb_lt->stack_index[index1] = stack_top + 1;
-   if (!two_hits && len >= min_hit_length)
+   if (!two_hits && (len >= min_hit_length))
       MegaBlastSaveExactMatch(search, q_off, s_off);
       
    return 0;
@@ -3431,7 +3448,7 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
    Uint1 mask = 0x0f;
    GapXEditScriptPtr esp, last_esp, prev_esp, first_esp;
    Boolean purge, delete_hsp;
-   FloatHi searchsp_eff, evalue = -1;
+   FloatHi searchsp_eff;
    Int4 last_esp_num;
    Int4 query_length;
    Int2 status;
@@ -3552,6 +3569,8 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
       }
 
       query_start = (Uint1Ptr) search->context[context].query->sequence;
+      searchsp_eff = (FloatHi) search->dblen_eff *
+            (FloatHi) search->context[context].query->effective_length;
       
       query = query_start + hsp->query.offset; 
       subject = subject_start + hsp->subject.offset;
@@ -3583,9 +3602,9 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
          }
          
          if (sum < 0) {
-            if (score < search->pbp->cutoff_s2 || (evalue = 
+            if (score < search->pbp->cutoff_s2 ||
                    BlastKarlinStoE_simple(score, search->sbp->kbp[context],
-                   searchsp_eff)) > search->pbp->cutoff_e) {
+                   searchsp_eff) > search->pbp->cutoff_e) {
                /* Start from new offset */
                new_q_start = query;
                new_s_start = subject;
@@ -3602,7 +3621,6 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
                if (prev_esp)
                   prev_esp->next = NULL;
                last_esp = NULL;
-               evalue = -1;
             } else {
                /* Stop here */
                break;
@@ -3629,12 +3647,8 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
          hsp->score = score;
          searchsp_eff = (FloatHi) search->dblen_eff *
             (FloatHi) search->context[context].query->effective_length;
-         if (evalue >= 0) {
-            hsp->evalue = evalue;
-         } else {
-            hsp->evalue = BlastKarlinStoE_simple(score,
-               search->sbp->kbp[context], searchsp_eff);
-         }
+         hsp->evalue = BlastKarlinStoE_simple(score,
+                          search->sbp->kbp[context], searchsp_eff);
          if (hsp->evalue > search->pbp->cutoff_e) {
             delete_hsp = TRUE;
          } else {

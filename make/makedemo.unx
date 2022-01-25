@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.62 2002/06/17 14:27:20 ivanov Exp $
+#	$Id: makedemo.unx,v 6.64 2003/01/16 22:39:47 dondosha Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -95,7 +95,7 @@ EXE1 = testcore makeset \
 	dosimple asn2ff getseq getfeat checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
-	testval seedtop fmerge makemat copymat impala bl2seq \
+	testval seedtop fmerge makemat copymat impala \
 	megablast vecscreen gil2bin tbl2asn blastclust rpsblast \
 	asn2xml \
 	test_regexp demo_regexp demo_regexp_grep
@@ -105,7 +105,7 @@ SRC1 = testcore.c makeset.c \
     getseq.c getfeat.c checksub.c asndhuff.c \
     entrcmd.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
-    testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c bl2seq.c \
+    testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c \
 	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c \
 	asn2xml.c \
 	pcretest.c pcredemo.c pcregrep.c
@@ -303,11 +303,6 @@ copymat : copymat.c $(THREAD_OBJ)
 
 impala : profiles.c $(THREAD_OBJ)
 	$(CC) -o impala $(LDFLAGS) profiles.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
-
-# bl2seq
-
-bl2seq : bl2seq.c
-	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # testgen
 

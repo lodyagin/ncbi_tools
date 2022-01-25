@@ -346,7 +346,7 @@ mode, should the dispatcher notice that this might be needed for the
 client to further succeed with the service requested. This however
 is <i>not</i> a substitute for <tt>CONN_FIREWALL</tt> parameter, and an application,
 which connects from behind a firewall, must still use <tt>CONN_FIREWALL=TRUE</tt>
-in order to function seamlessly.
+in order to function flawlessly.
 
 <p>
 Also note that C toolkit can have debugging printouts disabled in the core,
@@ -385,14 +385,21 @@ your firewall. The ports to open are:
 <pre>
 Firewall Port        IP Address
 --------------------------------
-    5845            130.14.22.12  (no access from outside NCBI!)
+ 5860..5870         130.14.29.112 (range reserved for future extensions)
     5812            130.14.22.31
     5811            130.14.22.32
+    5845            130.14.22.12  (no access from outside NCBI!)
 </pre>
 
 <p>
 If your firewall is not transparent, the firewall port number
 should be mapped to the same port number on the external host.
+
+<p>
+Please note that there is a range that we reserved for future
+extensions of connection library and NCBI servers and clients.
+While this range might not be presently used, we strongly recommend
+you to be prepared and have these ports configured on your firewalls.
 
 <p>
 <u>TROUBLESHOOTING</u>:  You can test whether these ports are accessible from
@@ -542,7 +549,7 @@ you have a question, please contact <a href="mailto:info@ncbi.nlm.nih.gov">
 <p>
 <hr>
 <table border="0" cellspasing="0">
-<tr><td>Source: distrib/doc/dispatcher.html</td><td>$Date: 2002/11/13 19:49:53 $</td><td>$Revision: 6.17 $</td></tr>
+<tr><td>Source: distrib/doc/dispatcher.html</td><td>$Date: 2003/02/07 19:25:03 $</td><td>$Revision: 6.19 $</td></tr>
 </table>
 
 

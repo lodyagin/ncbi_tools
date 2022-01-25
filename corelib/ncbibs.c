@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   ByteStore functions
@@ -56,6 +56,9 @@
 * 04-15-93 Schuler     Changed _cdecl to LIBCALL
 *
 * $Log: ncbibs.c,v $
+* Revision 6.7  2003/01/21 17:56:23  kans
+* minor fix in BSAdd, comment that BSAdd does not change totlen
+*
 * Revision 6.6  2002/02/07 21:52:40  kans
 * added cast in Nlm_SwapUint4Buff call
 *
@@ -221,6 +224,10 @@ NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSAdd (Nlm_ByteStorePtr bsp, Nlm_Int4 len, Nlm_B
 				while (prevbsup->next != ccbsup)
 					prevbsup = prevbsup->next;
 			}
+		}										 /* at very end of data */
+		else if (bsp->seekptr == (bsp->chain_offset + ccbsup->len))
+		{
+			prevbsup = ccbsup; /* JK */
 		}										 /* after all blocks */
 		else if (bsp->seekptr >= (bsp->chain_offset + ccbsup->len_avail))
 		{

@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-ID1Access
-*    Generated using ASNCODE Revision: 6.0 at Jul 30, 1998  4:04 PM
+*    Generated using ASNCODE Revision: 6.0 at Mar 18, 2003 12:08 PM
 *
 **************************************************/
 
@@ -33,6 +33,8 @@ typedef ValNode ID1serverRequest;
 #define ID1serverRequest_getgihist 6
 #define ID1serverRequest_getgirev 7
 #define ID1serverRequest_getgistate 8
+#define ID1serverRequest_getsewithinfo 9
+#define ID1serverRequest_getblobinfo 10
 
 
 NLM_EXTERN ID1serverRequestPtr LIBCALL ID1serverRequestFree PROTO ((ID1serverRequestPtr ));
@@ -89,11 +91,57 @@ typedef ValNode ID1serverBack;
 #define ID1serverBack_ids 8
 #define ID1serverBack_gihist 9
 #define ID1serverBack_girevhist 10
+#define ID1serverBack_gotsewithinfo 11
+#define ID1serverBack_gotblobinfo 12
 
 
 NLM_EXTERN ID1serverBackPtr LIBCALL ID1serverBackFree PROTO ((ID1serverBackPtr ));
 NLM_EXTERN ID1serverBackPtr LIBCALL ID1serverBackAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ID1serverBackAsnWrite PROTO (( ID1serverBackPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID1SeqEntryInfo
+*
+**************************************************/
+typedef struct struct_ID1SeqEntry_info {
+   struct struct_ID1blob_info PNTR   blob_info;
+   ValNodePtr   blob;
+} ID1SeqEntryInfo, PNTR ID1SeqEntryInfoPtr;
+
+
+NLM_EXTERN ID1SeqEntryInfoPtr LIBCALL ID1SeqEntryInfoFree PROTO ((ID1SeqEntryInfoPtr ));
+NLM_EXTERN ID1SeqEntryInfoPtr LIBCALL ID1SeqEntryInfoNew PROTO (( void ));
+NLM_EXTERN ID1SeqEntryInfoPtr LIBCALL ID1SeqEntryInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID1SeqEntryInfoAsnWrite PROTO (( ID1SeqEntryInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID1blobInfo
+*
+**************************************************/
+typedef struct struct_ID1blob_info {
+   Int4   gi;
+   Int4   sat;
+   Int4   sat_key;
+   CharPtr   satname;
+   Int4   suppress;
+   Int4   withdrawn;
+   Int4   confidential;
+   Int4   blob_state;
+   CharPtr   comment;
+   Int4   extfeatmask;
+} ID1blobInfo, PNTR ID1blobInfoPtr;
+
+
+NLM_EXTERN ID1blobInfoPtr LIBCALL ID1blobInfoFree PROTO ((ID1blobInfoPtr ));
+NLM_EXTERN ID1blobInfoPtr LIBCALL ID1blobInfoNew PROTO (( void ));
+NLM_EXTERN ID1blobInfoPtr LIBCALL ID1blobInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID1blobInfoAsnWrite PROTO (( ID1blobInfoPtr , AsnIoPtr, AsnTypePtr));
 
 
 

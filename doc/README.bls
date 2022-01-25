@@ -478,25 +478,8 @@ The options may be obtained by executing 'bl2seq -'.
 Fastacmd
 --------
 
-Fastacmd retrives FASTA formatted sequences from a BLAST database, if it was formatted
-using the '-o' option.  An example fastacmd call would be:
-
-fastacmd -d nr -s p38398
-
-The fastacmd options are:
-
-fastacmd   arguments:
-
-  -d  Database [String]
-    default = nr
-  -s  Search string: GIs, accessions and locuses may be used delimited
-      by comma or space) [String]  Optional
-  -i  Input file wilth GIs/accessions/locuses for batch retrieval [String]  Optional
-  -a  Retrieve duplicated accessions [T/F]  Optional
-    default = F
-  -l  Line length for sequence [Integer]  Optional
-    default = 80
-
+There is now a separate document describing fastacmd (README.fastacmd).  Please
+refer to it for information on using this tool.
 
 
 Filtering Strings

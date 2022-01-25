@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE_CONNECTOR__H
 #define CONNECT___NCBI_SERVICE_CONNECTOR__H
 
-/*  $Id: ncbi_service_connector.h,v 6.7 2002/09/19 18:05:09 lavr Exp $
+/*  $Id: ncbi_service_connector.h,v 6.10 2003/04/09 19:05:52 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,8 +36,13 @@
  *
  */
 
-#include <connect/ncbi_server_info.h>
 #include <connect/ncbi_service.h>
+
+
+/** @addtogroup Connectors
+ *
+ * @{
+ */
 
 
 #ifdef __cplusplus
@@ -57,10 +62,12 @@ typedef struct {
 } SSERVICE_Extra;
 
 
-extern CONNECTOR SERVICE_CreateConnectorEx(const char*           service,
-                                           TSERV_Type            types,
-                                           const SConnNetInfo*   net_info,
-                                           const SSERVICE_Extra* params);
+extern NCBI_XCONNECT_EXPORT CONNECTOR SERVICE_CreateConnectorEx
+(const char*           service,
+ TSERV_Type            types,
+ const SConnNetInfo*   net_info,
+ const SSERVICE_Extra* params
+ );
 
 #define SERVICE_CreateConnector(service) \
     SERVICE_CreateConnectorEx(service, fSERV_Any, 0, 0)
@@ -71,9 +78,21 @@ extern CONNECTOR SERVICE_CreateConnectorEx(const char*           service,
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service_connector.h,v $
+ * Revision 6.10  2003/04/09 19:05:52  siyan
+ * Added doxygen support
+ *
+ * Revision 6.9  2003/01/17 19:44:20  lavr
+ * Reduce dependencies
+ *
+ * Revision 6.8  2003/01/08 01:59:33  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.7  2002/09/19 18:05:09  lavr
  * Header file guard macro changed; log moved to end
  *

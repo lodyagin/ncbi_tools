@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: computes local alignments for dot matrix
 *
@@ -38,8 +38,11 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 
-$Revision: 6.8 $
+$Revision: 6.9 $
 $Log: dotseq.c,v $
+Revision 6.9  2003/02/07 21:21:50  kans
+DOT_BuildPLookup was erroneously calling MemFree on elements of array
+
 Revision 6.8  2001/08/09 17:21:08  kans
 include alignmgr.h to avoid Mac compile error
 
@@ -918,10 +921,12 @@ static LookupTablePtr DOT_BuildPLookup(Uint1Ptr queryseq, Int4 qlen, Int4 word_s
         return NULL;
 
   /* deallocate */
+  /*
   for (index=0; index<num_cols; index++)
     {
       if (array[index]) MemFree(array[index]);
     }
+  */
   if (array) MemFree(array);
   if (all_words) MemFree(all_words);
 

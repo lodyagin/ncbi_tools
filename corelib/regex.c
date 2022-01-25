@@ -140,7 +140,11 @@ init_syntax_once (void)
 #endif /* not emacs */
 
 /* Get the interface, including the syntax bits.  */
+#ifdef __MWERKS__
+#include <corelib/regex.h>
+#else
 #include "regex.h"
+#endif
 
 /* isalpha etc. are used for the character classes.  */
 #include <ctype.h>

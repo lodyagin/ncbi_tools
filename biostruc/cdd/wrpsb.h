@@ -1,4 +1,4 @@
-/* $Id: wrpsb.h,v 1.11 2002/08/16 19:50:36 bauer Exp $
+/* $Id: wrpsb.h,v 1.13 2003/01/09 21:56:29 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 1/19/2000
 *
-* $Revision: 1.11 $
+* $Revision: 1.13 $
 *
 * File Description:
 *         Header file for WWW-RPS BLAST client
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsb.h,v $
+* Revision 1.13  2003/01/09 21:56:29  bauer
+* reduced default number of hits to 25
+*
+* Revision 1.12  2002/12/24 18:23:18  bauer
+* changes for v1.60
+*
 * Revision 1.11  2002/08/16 19:50:36  bauer
 * increased timeout span
 *
@@ -77,9 +83,9 @@
 #define CPUTIME_MAX        900
 #define RPSBNAME           "wrpsb.cgi"
 #define QRPSBNAME          "wrpsb.cgi"
-#define DEFAULT_DATALIB    "oasis_sap"
+#define DEFAULT_DATALIB    "cdd"
 #define DEFAULT_EVALUE     "0.01"
-#define DEFAULT_NHITS      "50"
+#define DEFAULT_NHITS      "25"
 #define NUMARGS            (sizeof(myargs)/sizeof(myargs[0]))
 #define RPS_MAGIC_NUMBER   7702
 #define WRPSB_GRAPH_WIDTH  600
@@ -161,6 +167,7 @@ typedef struct _alignment_abstract {
   Boolean                         bIsOasis;
   Boolean                         bIsProfile;
   Boolean                         bHasStructure;
+  Boolean                         bIsArch;
   TxDfLineStructPtr               defline;
   CharPtr                         long_defline;
   CharPtr                         cCDDid;

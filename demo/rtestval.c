@@ -5,14 +5,16 @@
 *       check for stop codons
 *       Check for and fix non 3.0 asn spec things
 *
-* $Id: rtestval.c,v 1.7 2002/10/28 19:30:57 kans Exp $
+* $Id: rtestval.c,v 1.9 2003/02/20 14:29:22 kans Exp $
 *
 *****************************************************************************/
 #include <accid1.h>
 #include <objsub.h>
 #include <valid.h>
+#include <seqmgr.h>
+#include <pmfapi.h>
 
-#define NUMARG 17
+#define NUMARG 18
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -30,7 +32,8 @@ Args myargs[NUMARG] = {
 	{"Validate alignments?","F",NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL},
 	{"Require ISO-JTA?","F",NULL,NULL,TRUE,'j',ARG_BOOLEAN,0.0,0,NULL},
 	{"Use remote Fetch?","F",NULL,NULL,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
-	{"Remote fetch of CDS products?","F",NULL,NULL,TRUE,'z',ARG_BOOLEAN,0.0,0,NULL}};
+	{"Remote fetch of CDS products?","F",NULL,NULL,TRUE,'z',ARG_BOOLEAN,0.0,0,NULL},
+	{"Check against old IDs?","F",NULL,NULL,TRUE,'y',ARG_BOOLEAN,0.0,0,NULL}};
 
 CharPtr AsnIoGets PROTO((AsnIoPtr aip));  /* from asnio.h */
 void LIBCALLBACK error_ret PROTO((Int2 value, CharPtr msg));
@@ -144,6 +147,10 @@ Int2 Main(void)
 			ErrPostEx(SEV_FATAL,0,0, "Can't initialize ID1");
 			return 1;
 		}
+		if (myargs[17].intvalue) /* enable seqid set fetching */
+		{
+			SeqMgrSetSeqIdSetFunc (GiRevHistLookupSeqIdSet);
+		}
 	}
 
 	vsp = ValidStructNew();
@@ -154,6 +161,7 @@ Int2 Main(void)
 	vsp->farIDsInAlignments = (Boolean)(myargs[13].intvalue);
 	vsp->alwaysRequireIsoJTA = (Boolean)(myargs[14].intvalue);
 	vsp->farFetchCDSproducts = (Boolean) (myargs[15].intvalue && myargs[16].intvalue);
+	vsp->validateIDSet = (Boolean)(myargs[17].intvalue);
 
 	if (myargs[8].intvalue)   /* continue on ASN.1 error */
 		AsnIoSetErrorMsg(aip, error_ret);

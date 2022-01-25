@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *   This file consists mostly of functions for creating, destroying, reading,
@@ -138,6 +138,9 @@
 *
 * RCS Modification History:
 * $Log: ni_msg.c,v $
+* Revision 6.3  2002/12/17 23:01:36  kans
+* support for OS_UNIX_DARWIN for Mach-O executables (RGS)
+*
 * Revision 6.2  2001/08/29 18:00:01  juran
 * Under Carbon, define missing POSIX macros in terms of Mac counterparts.
 *
@@ -191,7 +194,7 @@ static char *  _this_file = __FILE__;
 #include "ni_msg.h"
 #include "ni_asn.h"   /* produced by ASNTOOL */
 
-#if TARGET_API_MAC_CARBON
+#if TARGET_API_MAC_CARBON && !defined(O_NDELAY)
 #define O_NDELAY kO_NDELAY
 #endif
 

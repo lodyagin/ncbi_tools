@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.51 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *
@@ -4318,7 +4318,7 @@ extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
     Hide (pfp->pages [PROT_PAGE]);
 
     s = HiddenGroup (h, -1, 0, NULL);
-    CreateCommonFeatureGroupEx (s, (FeatureFormPtr) pfp, sfp, FALSE, TRUE, TRUE);
+    CreateCommonFeatureGroupEx (s, (FeatureFormPtr) pfp, sfp, /* FALSE */ TRUE, TRUE, TRUE);
     pfp->pages [COMMON_PAGE] = s;
     Hide (pfp->pages [COMMON_PAGE]);
 
@@ -4915,7 +4915,7 @@ static void ChangeRnaProc (PopuP p)
           SafeHide (rpp->rrnaPrompt);
           SafeHide (rpp->ornaPrompt);
           SafeShow (rpp->trnaGrp);
-          SafeHide (rfp->product);
+          SafeShow (rfp->product);
           SafeHide (rfp->usrobjext);
           break;
         case 4 :
@@ -4923,7 +4923,31 @@ static void ChangeRnaProc (PopuP p)
           SafeHide (rpp->ornaPrompt);
           SafeShow (rpp->rrnaPrompt);
           SafeShow (rpp->nameGrp);
-          SafeHide (rfp->product);
+          SafeShow (rfp->product);
+          SafeHide (rfp->usrobjext);
+          break;
+        case 5 :
+          SafeHide (rpp->trnaGrp);
+          SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
+          SafeShow (rpp->nameGrp);
+          SafeShow (rfp->product);
+          SafeHide (rfp->usrobjext);
+          break;
+        case 6 :
+          SafeHide (rpp->trnaGrp);
+          SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
+          SafeShow (rpp->nameGrp);
+          SafeShow (rfp->product);
+          SafeHide (rfp->usrobjext);
+          break;
+        case 7 :
+          SafeHide (rpp->trnaGrp);
+          SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
+          SafeShow (rpp->nameGrp);
+          SafeShow (rfp->product);
           SafeHide (rfp->usrobjext);
           break;
         case 255 :
@@ -4931,7 +4955,7 @@ static void ChangeRnaProc (PopuP p)
           SafeHide (rpp->rrnaPrompt);
           SafeShow (rpp->ornaPrompt);
           SafeShow (rpp->nameGrp);
-          SafeHide (rfp->product);
+          SafeShow (rfp->product);
           SafeHide (rfp->usrobjext);
           break;
         default :
@@ -5133,7 +5157,7 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
         SafeHide (rpp->rrnaPrompt);
         SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->trnaGrp);
-        SafeHide (rfp->product);
+        SafeShow (rfp->product);
         SafeHide (rfp->usrobjext);
         break;
       case FEATDEF_rRNA :
@@ -5141,7 +5165,31 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
         SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->rrnaPrompt);
         SafeShow (rpp->nameGrp);
-        SafeHide (rfp->product);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        break;
+      case FEATDEF_snRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->rrnaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        break;
+      case FEATDEF_scRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->rrnaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        break;
+      case FEATDEF_snoRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->rrnaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
         SafeHide (rfp->usrobjext);
         break;
       case FEATDEF_otherRNA :
@@ -5149,7 +5197,7 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
         SafeHide (rpp->rrnaPrompt);
         SafeShow (rpp->ornaPrompt);
         SafeShow (rpp->nameGrp);
-        SafeHide (rfp->product);
+        SafeShow (rfp->product);
         SafeHide (rfp->usrobjext);
         break;
       default :

@@ -28,9 +28,17 @@
 *
 * Initial Version Creation Date: 6/25/2002
 *
-* $Revision: 1.5 $
+* $Revision: 1.10 $
 *
 * Modifications:
+* --------------------------------------------------------------------------
+* $Log: cblastutil.c,v $
+* Revision 1.10  2002/12/31 21:00:33  ywang
+* read environment variables from config file
+*
+* Revision 1.9  2002/12/31 19:39:58  ywang
+* add Log to record modification history
+*
 * ==========================================================================
 */
 
@@ -56,6 +64,7 @@
 #include <netentr.h>
 #include <cddutil.h>
 #include <objcn3d.h>
+#include <fdlobj.h>
 /* #include <asnalign.h> */
 #include <txalign.h>
 
@@ -72,8 +81,84 @@ static Int4  iNcolors = 13;
 extern Int2 entry_page;
 Int4 snp_color[2][3] = {255, 128, 0, 0, 255, 0};
 
-#define MaxRelatedCD 1000 
+#define MaxRelatedCD 15000 
 
+/*----------*/
+BioseqPtr CblastRDbGetBioseq(SeqIdPtr sip, Int4 oid, ReadDBFILEPtr rdfp)
+{
+    BioseqPtr   bsp;
+    Uint4   header;
+    SeqIdPtr    tmp_sip = NULL;
+    Char    buf[64];
+
+    bsp = readdb_get_bioseq(rdfp, oid);
+
+    if(sip == NULL) return bsp;
+
+    header = 0;
+    while(readdb_get_header(rdfp,oid,&header,&tmp_sip,NULL)) {
+    if(SeqIdComp(tmp_sip,sip) == SIC_YES ||
+       SeqIdComp(tmp_sip->next,sip) == SIC_YES) break;
+    tmp_sip = SeqIdSetFree(tmp_sip);
+    }
+    if(tmp_sip == NULL) {
+    SeqIdPrint(sip,buf,PRINTID_FASTA_SHORT);
+    ErrPostEx(SEV_WARNING,0,0,"Bad seqid %s",buf);
+    return NULL;
+    }
+    bsp->id = SeqIdSetFree(bsp->id);
+    bsp->id = tmp_sip->next;
+    bsp->id->next = tmp_sip;
+    bsp->id->next->next = NULL;
+
+    return bsp;
+}
+/*--------------*/
+BioseqPtr CblastGetBioseqWithGi(Int4 gi, ReadDBFILEPtr rdfp)
+{
+  Int4 oid = 0, start = 0;
+  BioseqPtr bsp = NULL;
+  SeqIdPtr sip = NULL;
+
+  if((oid = readdb_gi2seq(rdfp,gi,&start)) != -1){
+    sip = ValNodeNew(NULL);
+    sip->choice = SEQID_GI;
+    sip->data.intvalue = gi;
+    bsp = (BioseqPtr) CblastRDbGetBioseq(sip, oid, rdfp);
+  }
+
+  return bsp;
+}
+/*-------------------*/
+static CharPtr CblastGetDefline(Int4 gi, ReadDBFILEPtr rdfp)
+{
+  Int4 oid=0, start=0;
+  CharPtr doc = NULL;
+  BlastDefLinePtr bdlp_head=NULL, bdlp=NULL;
+  SeqIdPtr sip=NULL;
+
+
+  if((oid = readdb_gi2seq(rdfp,gi,&start)) != -1){
+    bdlp_head = FDReadDeflineAsn(rdfp, oid);
+    bdlp = bdlp_head;
+    while(bdlp){
+      sip = bdlp->seqid;
+      while(sip){
+        if(sip->choice == SEQID_GI){
+          if(gi == sip->data.intvalue) doc=StringSave(bdlp->title);
+        }
+        sip=sip->next;
+      }
+      bdlp=bdlp->next;
+    }
+  }
+
+  if(!doc) doc=StringSave("Protein with known structure");
+
+  if(bdlp_head)bdlp_head=BlastDefLineSetFree(bdlp_head);
+
+  return doc;
+}
 /*-------------------*/
 static Boolean cblast_load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 {
@@ -633,52 +718,6 @@ PDBIdInfoPtr GetFirstRedundantPDBSeqIdsForGi(Int4 query_gi, ReadDBFILEPtr rdfp)
 
     return NULL;
 }
-/*----------*/
-BioseqPtr CblastRDbGetBioseq(SeqIdPtr sip, Int4 oid, ReadDBFILEPtr rdfp)
-{
-    BioseqPtr   bsp;
-    Uint4   header;
-    SeqIdPtr    tmp_sip = NULL;
-    Char    buf[64];
-
-    bsp = readdb_get_bioseq(rdfp, oid);
-
-    if(sip == NULL) return bsp;
-
-    header = 0;
-    while(readdb_get_header(rdfp,oid,&header,&tmp_sip,NULL)) {
-    if(SeqIdComp(tmp_sip,sip) == SIC_YES ||
-       SeqIdComp(tmp_sip->next,sip) == SIC_YES) break;
-    tmp_sip = SeqIdSetFree(tmp_sip);
-    }
-    if(tmp_sip == NULL) {
-    SeqIdPrint(sip,buf,PRINTID_FASTA_SHORT);
-    ErrPostEx(SEV_WARNING,0,0,"Bad seqid %s",buf);
-    return NULL;
-    }
-    bsp->id = SeqIdSetFree(bsp->id);
-    bsp->id = tmp_sip->next;
-    bsp->id->next = tmp_sip;
-    bsp->id->next->next = NULL;
-
-    return bsp;
-}
-/*--------------*/
-BioseqPtr CblastGetBioseqWithGi(Int4 gi, ReadDBFILEPtr rdfp)
-{
-  Int4 oid = 0, start = 0;
-  BioseqPtr bsp = NULL;
-  SeqIdPtr sip = NULL;
-
-  if((oid = readdb_gi2seq(rdfp,gi,&start)) != -1){
-    sip = ValNodeNew(NULL);
-    sip->choice = SEQID_GI;
-    sip->data.intvalue = gi;
-    bsp = (BioseqPtr) CblastRDbGetBioseq(sip, oid, rdfp);
-  }
-
-  return bsp;
-}
 /*-------------------*/
 BlastPDBNbPtr BlastPDBNbNew()
 {
@@ -1161,7 +1200,7 @@ CdInfoPtr FillCdInfo(CdInfoPtr cip, Dart_Connect *dartcon)
     if(cnip[i]->iClust >= 0) continue;
     cnip[i]->iClust = i;
     cnip[i]->iColor = (thisColor++) % iNcolors;
-    if(Dart_Related(dartcon, cnip[i]->CdName, Gilist, MaxRelatedCD, &NumRows, NULL)) {
+    if(Dart_SameSim(dartcon, cnip[i]->PssmId, Gilist, MaxRelatedCD, &NumRows)) {
       Int2 k;
       if(NumRows <= MaxRelatedCD) ActualNumRows = NumRows;
       else ActualNumRows = MaxRelatedCD;
@@ -1185,6 +1224,7 @@ printf("i: %d CdName: %s iClust: %d from: %d to: %d\n", i, cnip[i]->CdName, cnip
 */
     for(j =i+1; j<cd_num; j++){
       if(cnip[j]->iClust != cnip[i]->iClust) continue;
+      if(cnip[j]->bFinished) continue;
       if(cnip[j]->to <= cnip[i]->from || cnip[j]->from >= cnip[i]->to){
         cnip[j]->bFinished = FALSE;
       }
@@ -1195,6 +1235,12 @@ printf("i: %d CdName: %s iClust: %d from: %d to: %d\n", i, cnip[i]->CdName, cnip
     }
   }
 
+/* to confirm cd display info */
+/*
+  for(i=0; i<cd_num; i++){
+    printf("i: %d CdName: %s iClust: %d bRep: %d bFinished: %d from: %d to: %d\n", i, cnip[i]->CdName, cnip[i]->iClust, cnip[i]->bRep, cnip[i]->bFinished, cnip[i]->from, cnip[i]->to);
+  }
+*/
              
   cd_num = 0;
   maprow_num = 0;
@@ -1302,7 +1348,7 @@ printf("i: %d CdName: %s iClust: %d from: %d to: %d\n", i, cnip[i]->CdName, cnip
 }
 /*-----------------------------*/
 /*-----------------------------*/
-BlastPDBNbPtr BlastPDBNbInfoBuild(SeqAnnotPtr sap, Int4 gi_rep, Int4 gi_subject, SeqIdPtr sip)
+BlastPDBNbPtr BlastPDBNbInfoBuild(SeqAnnotPtr sap, Int4 gi_rep, Int4 gi_subject, SeqIdPtr sip, ReadDBFILEPtr rdfp)
 {
   SeqAlignPtr salp = NULL;
   SeqIdPtr pdbid = NULL;
@@ -1323,12 +1369,15 @@ BlastPDBNbPtr BlastPDBNbInfoBuild(SeqAnnotPtr sap, Int4 gi_rep, Int4 gi_subject,
     csidp->bRep = 1;
     csidp->PDBgi = gi_subject;
           /* by default, all blast hits will be shown */
+ /*
     entrez_dsp = NetDocSum(TYP_AA, gi_subject);
     if(entrez_dsp){
       csidp->doc = StringSave(entrez_dsp->title);
       DocSumFree(entrez_dsp);
     }
     else csidp->doc = StringSave("   ");
+*/
+    csidp->doc=CblastGetDefline(csidp->PDBgi, rdfp);
 
     ValNodeAddPointer(&csip_head, icount, csidp); 
     salp = salp->next;
@@ -1445,12 +1494,16 @@ BlastPDBNbPtr GetBlastPDBNbInfo(SeqAnnotPtr sap, Int4 blast_rep_gi, Int4 subject
         csidp->bRep = 1;
         pdb_gi = pdb_gilist->data.intvalue;
         csidp->PDBgi = pdb_gi;
+/*
         entrez_dsp = NetDocSum(TYP_AA, pdb_gi);
         if(entrez_dsp){
           csidp->doc = StringSave(entrez_dsp->title);
           DocSumFree(entrez_dsp);
         }
         else csidp->doc = StringSave("   ");
+*/
+        csidp->doc=CblastGetDefline(csidp->PDBgi, rdfp);
+
         ValNodeAddPointer(&csip_head, icount, csidp);
         icount++;
 

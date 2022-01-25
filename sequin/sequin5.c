@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.137 $
+* $Revision: 6.139 $
 *
 * File Description:
 *
@@ -73,6 +73,7 @@
 #include <salpedit.h>
 #include <salptool.h>
 #include <rpsutil.h>
+#include <subutil.h>
 
 static void CommonLaunchBioseqViewer (SeqEntryPtr sep, CharPtr path, Boolean directToEditor)
 
@@ -1073,38 +1074,13 @@ void ConvertToLocalProc (IteM i)
 static SeqIdPtr SeqIdFindBestForPromotion (SeqIdPtr sip)
 
 {
-  Uint1  order [NUM_ORDER];
-
-  SeqIdBestRank (order, NUM_ORDER);
-  order [SEQID_OTHER] = 52;
-  return SeqIdSelect (sip, order, NUM_ORDER);
+  return SeqIdFindBest (sip, 0);
 }
 
 static SeqIdPtr SeqIdFindWorstForPromotion (SeqIdPtr sip)
 
 {
-  Uint1  order [NUM_SEQID];
-
-  SeqIdBestRank (order, NUM_SEQID);
-  order [SEQID_LOCAL] = 10;
-  order [SEQID_GENBANK] = 5;
-  order [SEQID_EMBL] = 5;
-  order [SEQID_PIR] = 5;
-  order [SEQID_SWISSPROT] = 5;
-  order [SEQID_DDBJ] = 5;
-  order [SEQID_PRF] = 5;
-  order [SEQID_PDB] = 5;
-  order [SEQID_TPG] = 5;
-  order [SEQID_TPE] = 5;
-  order [SEQID_TPD] = 5;
-  order [SEQID_PATENT] = 10;
-  order [SEQID_GENERAL] = 15;
-  order [SEQID_GIBBSQ] = 15;
-  order [SEQID_GIBBMT] = 15;
-  order [SEQID_GIIM] = 20;
-  order [SEQID_GI] = 20;
-  order [SEQID_OTHER] = 52;
-  return SeqIdSelect (sip, order, NUM_SEQID);
+  return SeqIdFindWorst (sip);
 }
 
 static void PromoteSeqId (SeqIdPtr sip, Boolean alsoCheckLocalAccn, Boolean findWorst)
@@ -5946,5 +5922,56 @@ extern Boolean DoBuildContig (void)
   ObjMgrSetOptions (OM_OPT_FREE_IF_NO_VIEW, entityID);
   ObjMgrSetDirtyFlag (entityID, TRUE);
   return TRUE;
+}
+
+static void DoParseTrinomial (BioSourcePtr biop, Pointer userdata)
+
+{
+  BinomialOrgNamePtr  bonp;
+  OrgModPtr           omp;
+  OrgNamePtr          onp;
+  OrgRefPtr           orp;
+
+  if (biop == NULL) return;
+  orp = biop->org;
+  if (orp == NULL) return;
+  onp = orp->orgname;
+  if (onp == NULL) return;
+  if (onp->choice != 1) return;
+  bonp = (BinomialOrgNamePtr) onp->data;
+  if (bonp == NULL) return;
+  if (StringHasNoText (bonp->subspecies)) return;
+  for (omp = onp->mod; omp != NULL; omp = omp->next) {
+    if (omp->subtype == ORGMOD_sub_species) return;
+  }
+  omp = OrgModNew ();
+  if (omp == NULL) return;
+  omp->subtype = ORGMOD_sub_species;
+  omp->subname = StringSave (bonp->subspecies);
+  omp->next = onp->mod;
+  onp->mod = omp;
+}
+
+extern void ParseTrinomial (IteM i);
+extern void ParseTrinomial (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitBioSourcesInSep (sep, NULL, DoParseTrinomial);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update ();
 }
 

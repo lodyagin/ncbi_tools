@@ -28,13 +28,19 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.42 $
+* $Revision: 6.44 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.44  2003/03/31 20:17:11  todorov
+* Added AlnMgr2IndexSeqAlignEx
+*
+* Revision 6.43  2003/02/03 12:36:22  kans
+* AlnMgr2ComputeScoreForSeqAlign checks return value of AlnMgr2ComputeFreqMatrix, returns -1 if NULL to avoid dereference crash
+*
 * Revision 6.42  2002/10/23 16:32:19  todorov
 * CondenseColumns fixed: needed to move the lens too.
 *
@@ -1127,7 +1133,13 @@ NLM_EXTERN Boolean AlnMgr2IndexLite(SeqAlignPtr sap)
 *  as a multiple alignment by AlnMgr2 functions.
 *
 ***************************************************************************/
+
 NLM_EXTERN void AlnMgr2IndexSeqAlign(SeqAlignPtr sap)
+{
+   AlnMgr2IndexSeqAlignEx(sap, TRUE);
+}
+
+NLM_EXTERN void AlnMgr2IndexSeqAlignEx(SeqAlignPtr sap, Boolean replace_gi)
 {
    AMAlignIndex2Ptr  amaip;
    AMIntervalSetPtr  amint;
@@ -1141,7 +1153,9 @@ NLM_EXTERN void AlnMgr2IndexSeqAlign(SeqAlignPtr sap)
 
    if (sap == NULL || sap->saip != NULL)
       return;
-   SAM_ReplaceGI(sap);
+   if (replace_gi) {
+     SAM_ReplaceGI(sap);
+   }
    AlnMgr2IndexLite(sap);
    AlnMgr2DecomposeToPairwise(sap);
    amaip = (AMAlignIndex2Ptr)(sap->saip);
@@ -8207,6 +8221,8 @@ NLM_EXTERN Int4 AlnMgr2ComputeScoreForSeqAlign(SeqAlignPtr sap)
    mismatch = 0;
    seqscore = 0;
    afp = AlnMgr2ComputeFreqMatrix(sap, 0, -1, 0);
+   if (afp == NULL)
+     return -1;
    for (i=0; i<afp->len; i++)
    {
       res1 = -1;

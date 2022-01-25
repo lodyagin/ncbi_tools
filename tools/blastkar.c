@@ -47,8 +47,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.84 $
+ * $Revision: 6.87 $
  * $Log: blastkar.c,v $
+ * Revision 6.87  2003/03/07 22:33:25  bealer
+ * - Fix UMR when alphabet_type is not set.
+ *
+ * Revision 6.86  2003/02/27 19:07:56  madden
+ * Add functions PrintMatrixMessage and PrintAllowedValuesMessage
+ *
+ * Revision 6.85  2003/02/26 18:23:49  madden
+ * Add functions BlastKarlinkGapBlkFill and BlastKarlinReportAllowedValues, call from BlastKarlinBlkGappedCalcEx
+ *
  * Revision 6.84  2002/10/24 22:52:14  dondosha
  * When checking config file for matrices path, allow aa or nt subdirectories too
  *
@@ -1447,14 +1456,11 @@ Int2 LIBCALL
 BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
 
 {
-    Char string[PATH_MAX], alphabet_type[3];
-    CharPtr matrix_dir;
-    Int2 status;
-    FILE *fp;
+    Char string[PATH_MAX] = "", alphabet_type[3] = "";
+    CharPtr matrix_dir = NULL;
+    Int2 status = 0;
+    FILE *fp = NULL;
     
-    status=0;
-    
-    fp = NULL;
     if (sbp->read_in_matrix) {
         /* Convert matrix name to upper case. */
         matrix = Nlm_StrUpper(matrix);
@@ -2867,19 +2873,68 @@ Int2 LIBCALL
 BlastKarlinBlkGappedCalcEx(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, CharPtr matrix_name, ValNodePtr PNTR error_return)
 
 {
-	Boolean found_matrix, found_values;
+	Char buffer[256];
+	Int2 status = BlastKarlinkGapBlkFill(kbp, gap_open, gap_extend, decline_align, matrix_name);
+
+	if (status && error_return)
+	{
+		if (status == 1)
+		{
+			MatrixInfoPtr matrix_info;
+			ValNodePtr vnp, head; 		
+
+			vnp = head = BlastLoadMatrixValues();
+
+			sprintf(buffer, "%s is not a supported matrix", matrix_name);
+			BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+
+			while (vnp)
+			{
+				matrix_info = vnp->data.ptrvalue;
+				sprintf(buffer, "%s is a supported matrix", matrix_info->name);
+				BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+				vnp = vnp->next;
+			}
+
+			BlastMatrixValuesDestruct(head);
+		}
+		else if (status == 2)
+		{
+			if (decline_align == INT2_MAX)
+				sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
+			else
+				sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, (long) decline_align, matrix_name);
+			BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+			BlastKarlinReportAllowedValues(matrix_name, error_return);
+		}
+	}
+
+	return status;
+}
+
+/*
+	Attempts to fill KarlinBlk for given gap opening, extensions etc.  
+	Will return non-zero status if that fails.
+
+	return values:	-1 if matrix_name is NULL;
+			1 if matrix not found
+			2 if matrix found, but open, extend etc. values not supported.
+*/
+Int2 LIBCALL
+BlastKarlinkGapBlkFill(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, CharPtr matrix_name)
+{
+	Boolean found_matrix=FALSE, found_values=FALSE;
 	array_of_8 *values;
 	Char buffer[256];
+	Int2 status=0;
 	Int4 index, max_number_values=0;
 	MatrixInfoPtr matrix_info;
 	ValNodePtr vnp, head;
 	
 	if (matrix_name == NULL)
-		return 1;
+		return -1;
 
 	values = NULL;
-	found_matrix = FALSE;
-	found_values = FALSE;
 
 	vnp = head = BlastLoadMatrixValues();
 	while (vnp)
@@ -2918,43 +2973,144 @@ BlastKarlinBlkGappedCalcEx(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_exten
 
 		if (found_values == TRUE)
 		{
-			BlastMatrixValuesDestruct(head);
-			return 0;
+			status = 0;
 		}
-	}
-	else
-	{
-		sprintf(buffer, "%s is not a supported matrix", matrix_name);
-		BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
-		vnp = head;
-		while (vnp)
-		{
-			matrix_info = vnp->data.ptrvalue;
-			sprintf(buffer, "%s is a supported matrix", matrix_info->name);
-			BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
-			vnp = vnp->next;
-		}
-		BlastMatrixValuesDestruct(head);
-		return 2;
-	}
-
-	if (decline_align == INT2_MAX)
-		sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
-	else
-		sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, (long) decline_align, matrix_name);
-	BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
-	for (index=0; index<max_number_values; index++)
-	{
-		if (Nint(values[index][2]) == INT2_MAX)
-			sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]));
 		else
-			sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]), (long) Nint(values[index][2]));
-		BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+		{
+			status = 2;
+		}
+	}
+	else
+	{
+		status = 1;
 	}
 
 	BlastMatrixValuesDestruct(head);
 
-	return 1;
+	return status;
+}
+
+CharPtr
+PrintMatrixMessage(const Char *matrix_name)
+{
+	CharPtr buffer=MemNew(1024*sizeof(Char));
+	CharPtr ptr;
+	MatrixInfoPtr matrix_info;
+        ValNodePtr vnp, head;
+
+	ptr = buffer;
+        sprintf(ptr, "%s is not a supported matrix, supported matrices are:\n", matrix_name);
+
+	ptr += StringLen(ptr);
+
+        vnp = head = BlastLoadMatrixValues();
+
+        while (vnp)
+        {
+        	matrix_info = vnp->data.ptrvalue;
+        	sprintf(ptr, "%s \n", matrix_info->name);
+		ptr += StringLen(ptr);
+		vnp = vnp->next;
+        }
+        BlastMatrixValuesDestruct(head);
+
+	return buffer;
+}
+
+CharPtr
+PrintAllowedValuesMessage(const Char *matrix_name, Int4 gap_open, Int4 gap_extend, Int4 decline_align) 
+{
+	array_of_8 *values;
+	Boolean found_matrix=FALSE;
+	CharPtr buffer, ptr;
+	Int2 status=0;
+	Int4 index, max_number_values=0;
+	MatrixInfoPtr matrix_info;
+	ValNodePtr vnp, head;
+
+	ptr = buffer = MemNew(2048*sizeof(Char));
+
+        if (decline_align == INT2_MAX)
+              sprintf(ptr, "Gap existence and extension values of %ld and %ld not supported for %s\nsupported values are:\n", 
+		(long) gap_open, (long) gap_extend, matrix_name);
+        else
+               sprintf(ptr, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld not supported for %s\n supported values are:\n", 
+		(long) gap_open, (long) gap_extend, (long) decline_align, matrix_name);
+
+	ptr += StringLen(ptr);
+
+	vnp = head = BlastLoadMatrixValues();
+	while (vnp)
+	{
+		matrix_info = vnp->data.ptrvalue;
+		if (StringICmp(matrix_info->name, matrix_name) == 0)
+		{
+			values = matrix_info->values;
+			max_number_values = matrix_info->max_number_values;
+			found_matrix = TRUE;
+			break;
+		}
+		vnp = vnp->next;
+	}
+
+	if (found_matrix)
+	{
+		for (index=0; index<max_number_values; index++)
+		{
+			if (Nint(values[index][2]) == INT2_MAX)
+				sprintf(ptr, "%ld, %ld\n", (long) Nint(values[index][0]), (long) Nint(values[index][1]));
+			else
+				sprintf(ptr, "%ld, %ld, %ld\n", (long) Nint(values[index][0]), (long) Nint(values[index][1]), (long) Nint(values[index][2]));
+			ptr += StringLen(ptr);
+		}
+	}
+
+	BlastMatrixValuesDestruct(head);
+
+	return buffer;
+}
+	
+
+Int2 LIBCALL
+BlastKarlinReportAllowedValues(const Char *matrix_name, ValNodePtr PNTR error_return)
+{
+	array_of_8 *values;
+	Boolean found_matrix=FALSE;
+	Char buffer[256];
+	Int2 status=0;
+	Int4 index, max_number_values=0;
+	MatrixInfoPtr matrix_info;
+	ValNodePtr vnp, head;
+
+	vnp = head = BlastLoadMatrixValues();
+	while (vnp)
+	{
+		matrix_info = vnp->data.ptrvalue;
+		if (StringICmp(matrix_info->name, matrix_name) == 0)
+		{
+			values = matrix_info->values;
+			max_number_values = matrix_info->max_number_values;
+			found_matrix = TRUE;
+			break;
+		}
+		vnp = vnp->next;
+	}
+
+	if (found_matrix)
+	{
+		for (index=0; index<max_number_values; index++)
+		{
+			if (Nint(values[index][2]) == INT2_MAX)
+				sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]));
+			else
+				sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]), (long) Nint(values[index][2]));
+			BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+		}
+	}
+
+	BlastMatrixValuesDestruct(head);
+
+	return 0;
 }
 
 /* 

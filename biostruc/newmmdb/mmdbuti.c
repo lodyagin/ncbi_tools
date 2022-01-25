@@ -1,5 +1,5 @@
 /*
-* $Id: mmdbuti.c,v 1.1.1.1 2002/12/04 21:12:08 chenj Exp $
+* $Id: mmdbuti.c,v 1.3 2003/01/15 16:13:42 chenj Exp $
 *
 *
 * ===========================================================================
@@ -31,6 +31,12 @@
 *
 *
 * $Log: mmdbuti.c,v $
+* Revision 1.3  2003/01/15 16:13:42  chenj
+* add uid as an argument to ChainScaleMapOrImg()
+*
+* Revision 1.2  2002/12/26 21:21:20  chenj
+* use Dart_CdNum() to get all Cds in database
+*
 * Revision 1.1.1.1  2002/12/04 21:12:08  chenj
 * Imported sources
 *
@@ -108,7 +114,7 @@ Int2 ChainNameMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y,
 
 void 
 ChainScaleMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, PMMD pmmd, 
-Int4 sdid, Int4 color, Int4 labelcol, FILE *File)
+Int4 uid, Int4 sdid, Int4 color, Int4 labelcol, FILE *File)
 {
     Char    cTmp[MAX_TBUFF], *chain;
     Int2    x0, x1, y1, x2, y2, right, seqlen;
@@ -124,6 +130,12 @@ Int4 sdid, Int4 color, Int4 labelcol, FILE *File)
     if (ismap ==TRUE)  {
 
         sprintf(cTmp, "residues, click to see its structure neighbors.");
+
+	if (!sdid) {
+	   Int4 maxuid = constructMaxMmdbId();
+	   
+   	   if (uid <= maxuid) sdid=-1;
+	}
 
         fprintf(File, "<area shape=rect coords=%d,%d,%d,%d ", x, y, x2, y2);
         fprintf(File, VastLink, VASTurl, sdid);
@@ -205,7 +217,7 @@ Int4 sdid, Int4 color, Int4 labelcol, FILE *File)
 Int2 ChainDomMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, Int4 uid, 
 		PMMD pmmd, Int4Ptr DomIdx, IntervalHead **DomHead, FILE *File)
 {
-    Char                    cTom[MAX_TBUFF], str[100];
+    Char                    cTom[MAX_TBUFF];
     Int4                    x1, x2, y1, y2, ytmp = 0, idx, chnNo;
     Int4                    colidx, from, to, seqlen, color=0; 
     Int4		    right, labelcol=0, chndom0;
@@ -229,7 +241,7 @@ Int2 ChainDomMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, Int4 uid,
 		labelcol = black;
 	}
 
-	ChainScaleMapOrImg(ismap, im, x, y, pmmd, LongDomId2Sdi(chndom0), 
+	ChainScaleMapOrImg(ismap, im, x, y, pmmd, uid, LongDomId2Sdi(chndom0), 
 		color, labelcol, File);
 
 	ytmp = y+FontBH+4;
@@ -267,7 +279,7 @@ Int2 ChainDomMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, Int4 uid,
 			color=gray;
 			lablecol = white;
 		    }
-		    ChainScaleMapOrImg(ismap, im, x, y, pmmd,
+		    ChainScaleMapOrImg(ismap, im, x, y, pmmd, uid, 
 			LongDomId2Sdi(chndom0), color, lablecol, File);
                 }
 
@@ -282,7 +294,7 @@ Int2 ChainDomMapOrImg(Boolean ismap, gdImagePtr im, Int2 x, Int2 y, Int4 uid,
 		    x1 = MAX(x1, x);
 		    x2 = MIN(x2, right);
 		    if (ismap == TRUE) {
-                        sprintf(cTom, "Residues %d to %d, click for structure neighbors", from, to);                        StringCat(cTom, str);
+                        sprintf(cTom, "Residues %d to %d, click for structure neighbors", from, to);                        
                         fprintf(File, "<area shape=rect coords=%d,%d,%d,%d ",
                                 x1, y1, x2, y2);
                         fprintf(File, VastLink, VASTurl, 
@@ -364,7 +376,8 @@ static Int4    iDartCol[13][3] = {{153,204,255},     /* sky b */
 
     if (Dart_Gi2Sap(dartcon, gi, &sap, NULL)  && (sap != NULL)) {
 
-	unsigned    	Gilist[100], *PssmId;
+
+	unsigned    	*Pssmlist, *PssmId, count;
 	Int2        	*iColor, CdNum, thisColor=0, *iClus;
 	Int4        	NumRows;
 	Char		querynm[MAX_TBUFF], shortname[MAX_TBUFF];
@@ -376,6 +389,11 @@ static Int4    iDartCol[13][3] = {{153,204,255},     /* sky b */
 	if (StrLen(CDDdb))
 	    StrCut(Version, Version, StrLen(CDDdb)+2, StrLen(Version));
 	
+        if (!Dart_CdNum(dartcon, &count))
+	    PrtMes("chenj@ncbi.nlm.nih.gov", 
+			"MmdbSrv", "Can't do Dart_CdNum()", NULL, FALSE);
+  	Pssmlist = (unsigned *) MemNew (count * sizeof (unsigned));
+
 	end = head = NewOverLoc(seqlen);
 	head->y = y0 = y+5;
    
@@ -391,8 +409,7 @@ static Int4    iDartCol[13][3] = {{153,204,255},     /* sky b */
 
 	for (salp = (SeqAlignPtr)sap->data, i=0; salp!=NULL; 
 						salp=salp->next, i++) {
-
-	    dsp[i] = (DenseSegPtr)salp->segs;
+	    dsp[i] = (DenseSegPtr)salp->segs; 
 	    PssmId[i] = GetPSSMID(dsp[i]);
 	    iClus[i] = -1;
 	
@@ -403,7 +420,6 @@ static Int4    iDartCol[13][3] = {{153,204,255},     /* sky b */
 		strtmp = GetCDDName(dsp[i]);
 		sprintf(CddName[i], strtmp);
 	    }
-
 	}
 	
 	for (i=0; i< CdNum; i++) {
@@ -411,12 +427,17 @@ static Int4    iDartCol[13][3] = {{153,204,255},     /* sky b */
 	    if (ismap == FALSE) iColor[i] = (thisColor++) % iNcolors;
 	    iClus[i] = i;
 
-	    if (Dart_Related(dartcon, CddName[i], Gilist, 100, &NumRows, NULL)){
+	    if (Dart_Related(dartcon, CddName[i],Pssmlist,count,&NumRows,NULL)){
 		Int2 k;
+		
+		if (NumRows > count)
+		   PrtMes("chenj@ncbi.nlm.nih.gov",
+			"MMDBSRV", "Dart_Related(): NumRows > MaxPssm",
+			NULL, FALSE);
 
 		for (j=0; j< NumRows; j++) {
 		    for (k=i+1; k< CdNum; k++)
-			if (PssmId[k] == Gilist[j]) {
+			if (PssmId[k] == Pssmlist[j]) {
 			    if (ismap == FALSE) iColor[k] = iColor[i];
 			    iClus[k] = i;
 			}
@@ -429,9 +450,6 @@ static Int4    iDartCol[13][3] = {{153,204,255},     /* sky b */
 	    if (isalpha(querynm[i])) querynm[i] = tolower(querynm[i]);
 	if (querynm[4] == ' ') querynm[4] = '+';
 
-{
-Boolean printok = FALSE;
-
 	for (i=0; i< CdNum; i++) {
 
 	    numseg = (dsp[i])->numseg;
@@ -443,15 +461,6 @@ Boolean printok = FALSE;
 	    x1 = MAX(x, x1);
 	    x2 = MIN(x2, right);
 	    y1= GetY1(head, &end, from, to, seqlen, iClus[i], 7);
-
-
-/*
-if (y1 == -2 && !printok) {
-fprintf(stderr, "querynm %s\n", querynm);
-printok = TRUE;
-}
-
-*/
 
 	    if (y1 < 0) continue;
 	    y2 = y1+FontBH+4;
@@ -535,7 +544,7 @@ printok = TRUE;
 		    	case 1: strcpy(shortname, "."); break;
 		    	case 2: strcpy(shortname, "..");
 		    }
-		    gdImageString(im,gdFont7X13b, x1+4, y1+2, shortname, color);
+		    gdImageString(im,gdFont7X13b,x1+4, y1+2, shortname, color);
 		}
 	    }
 
@@ -544,8 +553,6 @@ printok = TRUE;
 		y0 = y1;
 	    }
 	}	/* for */
-
-}	/* Boolean */
 
 	y0 = y2;
 
@@ -579,6 +586,7 @@ printok = TRUE;
     	for (i=0; i< CdNum; i++) MemFree(CddName[i]);
     	MemFree(CddName);
     	MemFree(iClus);
+    	MemFree(Pssmlist);
     }
     else y2 = y;
 

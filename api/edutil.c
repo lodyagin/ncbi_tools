@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.19  2003/02/10 22:57:45  kans
+* added BioseqCopyEx, which takes a BioseqPtr instead of a SeqIdPtr for the source
+*
 * Revision 6.18  2002/07/26 20:15:55  kans
 * BioseqInsert can do feature indexed collection of features to adjust
 *
@@ -1680,10 +1683,10 @@ NLM_EXTERN Boolean	LIBCALL SeqEntryDelFeat (SeqEntryPtr sep, SeqIdPtr sip, Int4 
 *        sourceid to new copy using SeqFeatsCopy().
 *
 *****************************************************************************/
-NLM_EXTERN BioseqPtr LIBCALL BioseqCopy (SeqIdPtr newid, SeqIdPtr sourceid, Int4 from, Int4 to,
+NLM_EXTERN BioseqPtr LIBCALL BioseqCopyEx (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from, Int4 to,
                                Uint1 strand, Boolean do_feat)
 {
-	BioseqPtr newbsp=NULL, oldbsp, tmpbsp;
+	BioseqPtr newbsp=NULL, tmpbsp;
 	SeqPortPtr spp=NULL;
 	ByteStorePtr bsp;
 	Uint1 seqtype;
@@ -1699,17 +1702,7 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqCopy (SeqIdPtr newid, SeqIdPtr sourceid, Int4
 	SeqEntryPtr oldscope;
 
 
-	if ((sourceid == NULL) || (from < 0)) return FALSE;
-
-	oldbsp = BioseqFind(sourceid);
-	if (oldbsp == NULL) {
-		oldscope = SeqEntrySetScope (NULL);
-		if (oldscope != NULL) {
-			oldbsp = BioseqFind(sourceid);
-			SeqEntrySetScope (oldscope);
-		}
-	}
-	if (oldbsp == NULL) return NULL;
+	if ((oldbsp == NULL) || (from < 0)) return FALSE;
 
 	len = to - from + 1;
 	if (len <= 0) return NULL;
@@ -1843,6 +1836,27 @@ erret:
 	BioseqFree(newbsp);
 	SeqPortFree(spp);
 	return NULL;
+}
+
+NLM_EXTERN BioseqPtr LIBCALL BioseqCopy (SeqIdPtr newid, SeqIdPtr sourceid, Int4 from, Int4 to,
+                               Uint1 strand, Boolean do_feat)
+{
+	BioseqPtr oldbsp;
+	SeqEntryPtr oldscope;
+
+	if ((sourceid == NULL) || (from < 0)) return FALSE;
+
+	oldbsp = BioseqFind(sourceid);
+	if (oldbsp == NULL) {
+		oldscope = SeqEntrySetScope (NULL);
+		if (oldscope != NULL) {
+			oldbsp = BioseqFind(sourceid);
+			SeqEntrySetScope (oldscope);
+		}
+	}
+	if (oldbsp == NULL) return NULL;
+
+	return BioseqCopyEx (newid, oldbsp, from, to, strand, do_feat);
 }
 
 /*****************************************************************************

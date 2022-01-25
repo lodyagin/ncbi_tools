@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.32  2002/12/19 14:02:28  johnson
+* change c++-style comments to c-style
+*
 * Revision 6.31  2002/11/20 16:00:03  johnson
 * Revamped CpG routines; now equivalent to "strict" human CpG mapviewer track
 *
@@ -280,14 +283,14 @@ static Boolean ExtendHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr isle)
     ACT_CGInfoPtr win = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
     memcpy(win, isle, sizeof(ACT_CGInfo));
 
-    //jump by 200bp increments
+    /* jump by 200bp increments */
     while (win->to + CG_WINDOWSIZE < seqLength && IsIsland(win)) {
         win->from += CG_WINDOWSIZE;
         win->to += CG_WINDOWSIZE;
         CalcWindowStats(seq, win);
     }
 
-    //if we overshot, slide back by 1bp increments
+    /* if we overshot, slide back by 1bp increments */
     while (!IsIsland(win)) {
         RemovePosition(seq, win->to, win);
         --win->from;
@@ -295,7 +298,7 @@ static Boolean ExtendHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr isle)
         AddPosition(seq, win->from, win);
     }
 
-    //trim ends of entire island until we're above criteria again
+    /* trim ends of entire island until we're above criteria again */
     isle->to = win->to;
     CalcWindowStats(seq, isle);
     while(!IsIsland(isle) && (isle->from < isle->to)) {
@@ -307,7 +310,7 @@ static Boolean ExtendHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr isle)
 
     free(win);
 
-    if (isle->from >= isle->to) {//in case we trimmed to nothing
+    if (isle->from >= isle->to) {/* in case we trimmed to nothing */
         isle->to = isle->from;
         return FALSE;
     }

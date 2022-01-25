@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.99 $
+* $Revision: 6.105 $
 *
 * File Description: 
 *
@@ -425,8 +425,11 @@ typedef struct formatform {
 
   GrouP           package;
   GrouP           format;
+  GrouP           submType;
   ButtoN          nexusButton;
   ButtoN          paupButton;
+  ButtoN          originalButton;
+  ButtoN          tpaButton;
   TexT            numseqs;
 
   Int2            restoreFormatTo;
@@ -502,6 +505,7 @@ static Pointer FormatFormToFormatBlockPtr (ForM f)
     (fbp->seqPackage)++;
   }
   fbp->seqFormat = GetValue (ffp->format);
+  fbp->submType = GetValue (ffp->submType);
   GetTitle (ffp->numseqs, str, sizeof (str));
   if (StrToInt (str, &val) && val > 0) {
     fbp->numSeqs = val;
@@ -548,7 +552,7 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
   ButtoN         b;
   GrouP          c;
   FormatFormPtr  ffp;
-  GrouP          g1, g2;
+  GrouP          g1, g2, g3;
   GrouP          h;
   PrompT         ppt;
   Char           str [32];
@@ -608,6 +612,16 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     ffp->restoreFormatTo = SEQ_FMT_FASTA;
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) ffp->format, NULL);
 
+    g3 = HiddenGroup (h, 2, 0, NULL);
+
+    ppt = StaticPrompt (g3, "Submission category", 0, 0, programFont, 'l');
+    ffp->submType = HiddenGroup (g3, -1, 0, NULL);
+    SetObjectExtra (ffp->submType, ffp, NULL);
+    ffp->originalButton = RadioButton (ffp->submType, "Original Submission");
+    ffp->tpaButton = RadioButton (ffp->submType, "Third Party Annotation");
+    SetValue (ffp->submType, SEQ_ORIG_SUBMISSION);
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) ffp->submType, NULL);
+
     c = HiddenGroup (w, 4, 0, NULL);
     SetGroupSpacing (c, 10, 2);
     b = PushButton (c, " << Prev Form ", goBack);
@@ -615,7 +629,8 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     b = PushButton (c, " Next Form >> ", goToNext);
     SetObjectExtra (b, ffp, NULL);
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) g2, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_LEFT, (HANDLE) g1, (HANDLE) g2, (HANDLE) g3, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
 
     RealizeWindow (w);
 
@@ -3461,21 +3476,35 @@ extern void ViewAlignmentSummary (IteM i)
 #define EDIT_CDSET     3
 #define ADD_CDSET      4
 
+#define CDS_COMMENT_FIELD        1
+#define GENE_LOCUS_FIELD         2
+#define GENE_DESCRIPTION_FIELD   3
+#define GENE_ALLELE_FIELD        4
+#define GENE_MAPLOC_FIELD        5
+#define GENE_SYNONYM_FIELD       6
+#define GENE_COMMENT_FIELD       7
+#define GENE_LOCUS_TAG_FIELD     8
+#define PROT_NAME_FIELD          9
+#define PROT_DESCRIPTION_FIELD  10
+#define PROT_EC_NUMBER_FIELD    11
+#define PROT_ACTIVITY_FIELD     12
+#define PROT_COMMENT_FIELD      13
+
 static ENUM_ALIST(cds_gene_prot_field_alist)
   {" ",                    0},
-  {"CDS comment",          1},
-  {"Gene locus",           2},
-  {"Gene description",     3},
-  {"Gene allele",          4},
-  {"Gene maploc",          5},
-  {"Gene synonym",         6},
-  {"Gene comment",         7},
-  {"Gene locus tag",       8},
-  {"Protein name",         9},
-  {"Protein description", 10},
-  {"Protein E.C. number", 11},
-  {"Protein activity",    12},
-  {"Protein comment",     13},
+  {"CDS comment",          CDS_COMMENT_FIELD},
+  {"Gene locus",           GENE_LOCUS_FIELD},
+  {"Gene description",     GENE_DESCRIPTION_FIELD},
+  {"Gene allele",          GENE_ALLELE_FIELD},
+  {"Gene maploc",          GENE_MAPLOC_FIELD},
+  {"Gene synonym",         GENE_SYNONYM_FIELD},
+  {"Gene comment",         GENE_COMMENT_FIELD},
+  {"Gene locus tag",       GENE_LOCUS_TAG_FIELD},
+  {"Protein name",         PROT_NAME_FIELD},
+  {"Protein description",  PROT_DESCRIPTION_FIELD},
+  {"Protein E.C. number",  PROT_EC_NUMBER_FIELD},
+  {"Protein activity",     PROT_ACTIVITY_FIELD},
+  {"Protein comment",      PROT_COMMENT_FIELD},
 END_ENUM_ALIST
 
 static ENUM_ALIST(prot_subtype_alist)
@@ -3681,6 +3710,101 @@ static void EditCdsetString (CharPtr PNTR strptr, CdsetFormPtr cfp, CharPtr foun
   *strptr = newstring;
 }
 
+static CharPtr  GetStringFromField (Int2       fromval,
+				    SeqFeatPtr cds,
+				    SeqFeatPtr gene,
+				    GeneRefPtr grp,
+				    SeqFeatPtr prot,
+				    ProtRefPtr prp)
+{
+  CharPtr    str = NULL;
+  ValNodePtr vnp;
+
+  switch (fromval) {
+    case CDS_COMMENT_FIELD :
+      if (cds != NULL) {
+	str = StringSave (cds->comment);
+      }
+      break;
+    case GENE_LOCUS_FIELD :
+      if (grp != NULL) {
+	str = StringSave (grp->locus);
+      }
+      break;
+    case GENE_DESCRIPTION_FIELD :
+      if (grp != NULL) {
+	str = StringSave (grp->desc);
+      }
+      break;
+    case GENE_ALLELE_FIELD :
+      if (grp != NULL) {
+	str = StringSave (grp->allele);
+      }
+      break;
+    case GENE_MAPLOC_FIELD :
+      if (grp != NULL) {
+	str = StringSave (grp->maploc);
+      }
+      break;
+    case GENE_SYNONYM_FIELD :
+      if (grp != NULL) {
+	vnp = grp->syn;
+	if (vnp != NULL) {
+	  str = StringSave (vnp->data.ptrvalue);
+	}
+      }
+      break;
+    case GENE_COMMENT_FIELD :
+      if (gene != NULL) {
+	str = StringSave (gene->comment);
+      }
+      break;
+    case GENE_LOCUS_TAG_FIELD :
+      if (grp != NULL) {
+	str = StringSave (grp->locus_tag);
+      }
+      break;
+    case PROT_NAME_FIELD :
+      if (prp != NULL) {
+	vnp = prp->name;
+	if (vnp != NULL) {
+	  str = StringSave (vnp->data.ptrvalue);
+	}
+      }
+      break;
+    case PROT_DESCRIPTION_FIELD :
+      if (prp != NULL) {
+	str = StringSave (prp->desc);
+      }
+      break;
+    case PROT_EC_NUMBER_FIELD :
+      if (prp != NULL) {
+	vnp = prp->ec;
+	if (vnp != NULL) {
+	  str = StringSave (vnp->data.ptrvalue);
+	}
+      }
+      break;
+    case PROT_ACTIVITY_FIELD :
+      if (prp != NULL) {
+	vnp = prp->activity;
+	if (vnp != NULL) {
+	  str = StringSave (vnp->data.ptrvalue);
+	}
+      }
+      break;
+    case PROT_COMMENT_FIELD :
+      if (prot != NULL) {
+	str = StringSave (prot->comment);
+      }
+      break;
+    default :
+      break;
+  }
+  
+  return str;
+}
+
 static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
 
 {
@@ -3744,97 +3868,30 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
       break;
     case EDIT_CDSET :
     case CONVERT_CDSET :
-      switch (cfp->fromval) {
-        case 1 :
-          if (cds != NULL) {
-            str = StringSave (cds->comment);
-          }
-          break;
-        case 2 :
-          if (grp != NULL) {
-            str = StringSave (grp->locus);
-          }
-          break;
-        case 3 :
-          if (grp != NULL) {
-            str = StringSave (grp->desc);
-          }
-          break;
-        case 4 :
-          if (grp != NULL) {
-            str = StringSave (grp->allele);
-          }
-          break;
-        case 5 :
-          if (grp != NULL) {
-            str = StringSave (grp->maploc);
-          }
-          break;
-        case 6 :
-          if (grp != NULL) {
-            vnp = grp->syn;
-            if (vnp != NULL) {
-              str = StringSave (vnp->data.ptrvalue);
-            }
-          }
-          break;
-        case 7 :
-          if (gene != NULL) {
-            str = StringSave (gene->comment);
-          }
-          break;
-        case 8 :
-          if (grp != NULL) {
-            str = StringSave (grp->locus_tag);
-          }
-          break;
-        case 9 :
-          if (prp != NULL) {
-            vnp = prp->name;
-            if (vnp != NULL) {
-              str = StringSave (vnp->data.ptrvalue);
-            }
-          }
-          break;
-        case 10 :
-          if (prp != NULL) {
-            str = StringSave (prp->desc);
-          }
-          break;
-        case 11 :
-          if (prp != NULL) {
-            vnp = prp->ec;
-            if (vnp != NULL) {
-              str = StringSave (vnp->data.ptrvalue);
-            }
-          }
-          break;
-        case 12 :
-          if (prp != NULL) {
-            vnp = prp->activity;
-            if (vnp != NULL) {
-              str = StringSave (vnp->data.ptrvalue);
-            }
-          }
-          break;
-        case 13 :
-          if (prot != NULL) {
-            str = StringSave (prot->comment);
-          }
-          break;
-        default :
-          break;
-      }
+      str = GetStringFromField (cfp->fromval, cds, gene, grp, prot, prp);
       break;
     default :
       break;
   }
+
   if (cfp->type == EDIT_CDSET) {
     foundit = StringISearch (str, cfp->findStr);
-    if (foundit != NULL) {
+    if (foundit != NULL)
       EditCdsetString (&str, cfp, foundit);
+  }
+
+  /* Only convert if the string constraint is met */
+
+  if (cfp->type == CONVERT_CDSET) {
+    if (cfp->findStr != NULL) {
+      foundit = StringISearch (str, cfp->findStr);
+      if (foundit == NULL) {
+	MemFree (str);
+	return TRUE;
+      }
     }
   }
+
   switch (cfp->type) {
     case REMOVE_CDSET :
       break;
@@ -3842,37 +3899,37 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
     case ADD_CDSET :
     case EDIT_CDSET :
       switch (cfp->toval) {
-        case 1 :
+        case CDS_COMMENT_FIELD :
           if (cds != NULL) {
             cds->comment = SaveOrReplaceString (cfp, str, cds->comment);
             str = NULL;
           }
           break;
-        case 2 :
+        case GENE_LOCUS_FIELD :
           if (grp != NULL) {
             grp->locus = SaveOrReplaceString (cfp, str, grp->locus);
             str = NULL;
           }
           break;
-        case 3 :
+        case GENE_DESCRIPTION_FIELD :
           if (grp != NULL) {
             grp->desc = SaveOrReplaceString (cfp, str, grp->desc);
             str = NULL;
           }
           break;
-        case 4 :
+        case GENE_ALLELE_FIELD :
           if (grp != NULL) {
             grp->allele = SaveOrReplaceString (cfp, str, grp->allele);
             str = NULL;
           }
           break;
-        case 5 :
+        case GENE_MAPLOC_FIELD :
           if (grp != NULL) {
             grp->maploc = SaveOrReplaceString (cfp, str, grp->maploc);
             str = NULL;
           }
           break;
-        case 6 :
+        case GENE_SYNONYM_FIELD :
           if (grp != NULL) {
             if (! StringHasNoText (str)) {
               if (grp->syn != NULL && ShouldReplaceString (cfp)) {
@@ -3892,19 +3949,19 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 7 :
+        case GENE_COMMENT_FIELD :
           if (gene != NULL) {
             gene->comment = SaveOrReplaceString (cfp, str, gene->comment);
             str = NULL;
           }
           break;
-        case 8 :
+        case GENE_LOCUS_TAG_FIELD :
           if (grp != NULL) {
             grp->locus_tag = SaveOrReplaceString (cfp, str, grp->locus_tag);
             str = NULL;
           }
           break;
-        case 9 :
+        case PROT_NAME_FIELD :
           if (prp != NULL) {
             if (! StringHasNoText (str)) {
               if (prp->name != NULL && ShouldReplaceString (cfp)) {
@@ -3924,13 +3981,13 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 10 :
+        case PROT_DESCRIPTION_FIELD :
           if (prp != NULL) {
             prp->desc = SaveOrReplaceString (cfp, str, prp->desc);
             str = NULL;
           }
           break;
-        case 11 :
+        case PROT_EC_NUMBER_FIELD :
           if (prp != NULL) {
             if (! StringHasNoText (str)) {
               if (prp->ec != NULL && ShouldReplaceString (cfp)) {
@@ -3950,7 +4007,7 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 12 :
+        case PROT_ACTIVITY_FIELD :
           if (prp != NULL) {
             if (! StringHasNoText (str)) {
               if (prp->activity != NULL && ShouldReplaceString (cfp)) {
@@ -3970,7 +4027,7 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
             }
           }
           break;
-        case 13 :
+        case PROT_COMMENT_FIELD :
           if (prot != NULL) {
             prot->comment = SaveOrReplaceString (cfp, str, prot->comment);
             str = NULL;
@@ -3997,6 +4054,7 @@ static Boolean CleanupEachCDSFunc (GatherContextPtr gcp)
   SeqFeatPtr    prot;
   ProtRefPtr    prp;
   SeqFeatPtr    sfp;
+  CharPtr       str;
 
   if (gcp == NULL) return TRUE;
   cfp = (CdsetFormPtr) gcp->userdata;
@@ -4017,84 +4075,76 @@ static Boolean CleanupEachCDSFunc (GatherContextPtr gcp)
     prp = (ProtRefPtr) prot->data.value.ptrvalue;
   } else if (sfp->data.choice == SEQFEAT_CDREGION) {
     cds = sfp;
-    /*
-    FindGeneAndProtForCDS (cfp->input_entityID, cds, &gene, &prot);
-    if (gene != NULL) {
-      grp = (GeneRefPtr) gene->data.value.ptrvalue;
-    }
-    if (prot != NULL) {
-      prp = (ProtRefPtr) prot->data.value.ptrvalue;
-    }
-    */
   } else return TRUE;
+
+  /* If there is a string constraint, only delete if */
+  /* the field contains that string.                 */
+  
+  if (cfp->type == CONVERT_CDSET) {
+    if (cfp->findStr != NULL) {
+      str = GetStringFromField (cfp->fromval, cds, gene, grp, prot, prp);
+      if (StringISearch (str, cfp->findStr) == NULL)
+	return TRUE;
+    }
+  }
+
+  /* Delete the relevant field */
+
   switch (cfp->type) {
     case REMOVE_CDSET :
     case CONVERT_CDSET :
       switch (cfp->fromval) {
-        case 1 :
-          if (cds != NULL) {
+        case CDS_COMMENT_FIELD :
+          if (cds != NULL)
             cds->comment = MemFree (cds->comment);
-          }
           break;
-        case 2 :
-          if (grp != NULL) {
+        case GENE_LOCUS_FIELD :
+          if (grp != NULL)
             grp->locus = MemFree (grp->locus);
-          }
           break;
-        case 3 :
-          if (grp != NULL) {
+        case GENE_DESCRIPTION_FIELD :
+          if (grp != NULL)
             grp->desc = MemFree (grp->desc);
-          }
           break;
-        case 4 :
-          if (grp != NULL) {
+        case GENE_ALLELE_FIELD :
+          if (grp != NULL)
             grp->allele = MemFree (grp->allele);
-          }
           break;
-        case 5 :
-          if (grp != NULL) {
+        case GENE_MAPLOC_FIELD :
+          if (grp != NULL)
             grp->maploc = MemFree (grp->maploc);
-          }
           break;
-        case 6 :
-          if (grp != NULL) {
-            grp->syn = ValNodeFreeData (grp->syn);
-          }
+        case GENE_SYNONYM_FIELD :
+          if (grp != NULL)
+	    grp->syn = ValNodeFreeData (grp->syn);
           break;
-        case 7 :
-          if (gene != NULL) {
+        case GENE_COMMENT_FIELD :
+          if (gene != NULL)
             gene->comment = MemFree (gene->comment);
-          }
           break;
-        case 8 :
-          if (gene != NULL) {
+        case GENE_LOCUS_TAG_FIELD :
+          if (gene != NULL)
             grp->locus_tag = MemFree (grp->locus_tag);
-          }
           break;
-        case 9 :
-          if (prp != NULL) {
-            prp->name = ValNodeFreeData (prp->name);
-          }
-          break;
-        case 10 :
-          if (prp != NULL) {
+        case PROT_NAME_FIELD :
+          if (prp != NULL)
+	    prp->name = ValNodeFreeData (prp->name);
+	  break;
+        case PROT_DESCRIPTION_FIELD :
+          if (prp != NULL) 
             prp->desc = MemFree (prp->desc);
-          }
           break;
-        case 11 :
-          if (prp != NULL) {
-            prp->ec = ValNodeFreeData (prp->ec);
-          }
+        case PROT_EC_NUMBER_FIELD :
+          if (prp != NULL)
+	    prp->ec = ValNodeFreeData (prp->ec);
           break;
-        case 12 :
-          if (prp != NULL) {
-            prp->activity = ValNodeFreeData (prp->activity);
-          }
+        case PROT_ACTIVITY_FIELD :
+          if (prp != NULL)
+	    prp->activity = ValNodeFreeData (prp->activity);
           break;
-        case 13 :
-          if (prot != NULL) {
+        case PROT_COMMENT_FIELD :
+          if (prot != NULL)
             prot->comment = MemFree (prot->comment);
-          }
           break;
         default :
           break;
@@ -4191,12 +4241,16 @@ static void DoProcessCDSet (ButtoN b)
   if (cfp->type == ADD_CDSET || cfp->type == EDIT_CDSET) {
     cfp->toval = cfp->fromval;
   }
-  cfp->onlyGene = (Boolean) ((cfp->toval >= 2 && cfp->toval <= 8) &&
-                             (cfp->fromval >= 2 && cfp->fromval <= 8));
-  cfp->onlyProt = (Boolean) ((cfp->toval >= 9 && cfp->toval <= 13) &&
-                             (cfp->fromval >= 9 && cfp->fromval <= 13));
+  cfp->onlyGene = (Boolean) ((cfp->toval >= GENE_LOCUS_FIELD &&
+			      cfp->toval <= GENE_LOCUS_TAG_FIELD) &&
+                             (cfp->fromval >= GENE_LOCUS_FIELD &&
+			      cfp->fromval <= GENE_LOCUS_TAG_FIELD));
+  cfp->onlyProt = (Boolean) ((cfp->toval >= PROT_NAME_FIELD &&
+			      cfp->toval <= PROT_COMMENT_FIELD) &&
+                             (cfp->fromval >= PROT_NAME_FIELD &&
+			      cfp->fromval <= PROT_COMMENT_FIELD));
   if (cfp->type == ADD_CDSET || cfp->type == CONVERT_CDSET) {
-    if (cfp->toval >= 9 && cfp->toval <= 13) {
+    if (cfp->toval >= PROT_NAME_FIELD && cfp->toval <= PROT_COMMENT_FIELD) {
       sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
       SeqEntryExplore (sep, NULL, AddProtFeatIfMissing);
     }
@@ -4231,23 +4285,23 @@ static void DoProcessCDSet (ButtoN b)
     sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
     if (CountSeqEntryComponents (sep) == 1) {
       switch (cfp->fromval) {
-        case 1 :
+        case CDS_COMMENT_FIELD :
           Message (MSG_OK, "When only one record present, edit the CdRgn feature directly");
           break;
-        case 2 :
-        case 3 :
-        case 4 :
-        case 5 :
-        case 6 :
-        case 7 :
-        case 8 :
+        case GENE_LOCUS_FIELD :
+        case GENE_DESCRIPTION_FIELD :
+        case GENE_ALLELE_FIELD :
+        case GENE_MAPLOC_FIELD :
+        case GENE_SYNONYM_FIELD :
+        case GENE_COMMENT_FIELD :
+        case GENE_LOCUS_TAG_FIELD :
           Message (MSG_OK, "When only one record present, edit the gene feature directly");
           break;
-        case 9 :
-        case 10 :
-        case 11 :
-        case 12 :
-        case 13 :
+        case PROT_NAME_FIELD :
+        case PROT_DESCRIPTION_FIELD :
+        case PROT_EC_NUMBER_FIELD :
+        case PROT_ACTIVITY_FIELD :
+        case PROT_COMMENT_FIELD :
           Message (MSG_OK, "When only one record present, edit the protein feature directly");
           break;
         default :
@@ -4299,32 +4353,32 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
   } else return TRUE;
   str = NULL;
   switch (cfp->fromval) {
-    case 1 :
+    case CDS_COMMENT_FIELD :
       if (cds != NULL) {
         str = cds->comment;
       }
       break;
-    case 2 :
+    case GENE_LOCUS_FIELD :
       if (grp != NULL) {
         str = grp->locus;
       }
       break;
-    case 3 :
+    case GENE_DESCRIPTION_FIELD :
       if (grp != NULL) {
         str = grp->desc;
       }
       break;
-    case 4 :
+    case GENE_ALLELE_FIELD :
       if (grp != NULL) {
         str = grp->allele;
       }
       break;
-    case 5 :
+    case GENE_MAPLOC_FIELD :
       if (grp != NULL) {
         str = grp->maploc;
       }
       break;
-    case 6 :
+    case GENE_SYNONYM_FIELD :
       if (grp != NULL) {
         vnp = grp->syn;
         if (vnp != NULL) {
@@ -4332,17 +4386,17 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 7 :
+    case GENE_COMMENT_FIELD :
       if (gene != NULL) {
         str = gene->comment;
       }
       break;
-    case 8 :
+    case GENE_LOCUS_TAG_FIELD :
       if (grp != NULL) {
         str = grp->locus_tag;
       }
       break;
-    case 9 :
+    case PROT_NAME_FIELD :
       if (prp != NULL) {
         vnp = prp->name;
         if (vnp != NULL) {
@@ -4350,12 +4404,12 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 10 :
+    case PROT_DESCRIPTION_FIELD :
       if (prp != NULL) {
         str = prp->desc;
       }
       break;
-    case 11 :
+    case PROT_EC_NUMBER_FIELD :
       if (prp != NULL) {
         vnp = prp->ec;
         if (vnp != NULL) {
@@ -4363,7 +4417,7 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 12 :
+    case PROT_ACTIVITY_FIELD :
       if (prp != NULL) {
         vnp = prp->activity;
         if (vnp != NULL) {
@@ -4371,7 +4425,7 @@ static Boolean SetCDSExample (GatherContextPtr gcp)
         }
       }
       break;
-    case 13 :
+    case PROT_COMMENT_FIELD :
       if (prot != NULL) {
         str = prot->comment;
       }
@@ -4424,7 +4478,7 @@ static void ChangeCDSetExample (PopuP p)
     gs.ignore[OBJ_SEQFEAT] = FALSE;
     gs.ignore[OBJ_SEQANNOT] = FALSE;
     GatherEntity (cfp->input_entityID, (Pointer) cfp, SetCDSExample, &gs);
-    if (cfp->fromval >= 9 && cfp->fromval <= 13) {
+    if (cfp->fromval >= PROT_NAME_FIELD && cfp->fromval <= PROT_COMMENT_FIELD) {
       SafeShow (cfp->protSubGrp);
     } else {
       SafeHide (cfp->protSubGrp);
@@ -4633,11 +4687,10 @@ static void ProcessCDSet (IteM i, Int2 type)
       */
       break;
     case CONVERT_CDSET :
-      /*
       y = HiddenGroup (h, 2, 0, NULL);
-      StaticPrompt (y, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
+      StaticPrompt (y, "Optional string constraint", 0,
+		    dialogTextHeight, programFont, 'c');
       cfp->findthis = DialogText (y, "", 14, NULL);
-      */
       y = HiddenGroup (h, 2, 0, NULL);
       cfp->leaveOn = CheckBox (y, "Leave on original", NULL);
       break;
@@ -4843,9 +4896,9 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
 
   if (usethetop != NULL && IS_Bioseq_set (usethetop)) {
     bssp = (BioseqSetPtr) usethetop->data.ptrvalue;
-    ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, NORMAL_STYLE, 0, 0, NULL);
+    ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, NORMAL_STYLE, 0, 0, 0, NULL);
   } else {
-    ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, NORMAL_STYLE, 0, 0, NULL);
+    ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, NORMAL_STYLE, 0, 0, 0, NULL);
   }
   if (ajp != NULL) {
     for (index = 0; index < ajp->numParagraphs; index++) {

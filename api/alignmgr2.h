@@ -28,13 +28,16 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.h,v $
+* Revision 6.19  2003/03/31 20:17:11  todorov
+* Added AlnMgr2IndexSeqAlignEx
+*
 * Revision 6.18  2002/08/07 21:57:33  kans
 * added AlignMgr2GetFirstNForStdSeg
 *
@@ -435,6 +438,7 @@ NLM_EXTERN Boolean AlnMgr2IndexLite(SeqAlignPtr sap);
 *
 ***************************************************************************/
 NLM_EXTERN void AlnMgr2IndexSeqAlign(SeqAlignPtr sap);
+NLM_EXTERN void AlnMgr2IndexSeqAlignEx(SeqAlignPtr sap, Boolean replace_gi);
 
 /***************************************************************************
 *

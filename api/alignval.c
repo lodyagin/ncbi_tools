@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -1849,11 +1849,11 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
      while (salptmp)
      {
         salp_count++;
-        if(salp->segtype==5)
+        if(salptmp->segtype==5)
         {
            ValidateSeqAlign ((SeqAlignPtr) (salptmp->segs), entityID, message, msg_success, find_remote_bsp, delete_bsp, delete_salp, &svp->dirty);
         } 
-        else if (salp->segtype<1 || salp->segtype>4)
+        else if (salptmp->segtype<1 || salptmp->segtype>4)
         {
            ValMessage (salp, Err_Segtype, SEV_ERROR, NULL, NULL, salptmp->segtype);
         }
@@ -2071,6 +2071,8 @@ NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntry
   useValErr = TRUE;
   useVsp = vsp;
   vsp->gcp = &gc;
+  vsp->bssp = NULL;
+  vsp->bsp = NULL;
   vsp->sfp = NULL;
   vsp->descr = NULL;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));

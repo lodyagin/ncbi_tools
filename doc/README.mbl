@@ -107,7 +107,13 @@ either specific to Mega BLAST or having different meaning:
    algorithm tree exploration. When the score of a given branch drops below the
    current best score minus the X-dropoff, the exploration of this branch
    stops. 
+-y X-dropoff for ungapped extensions. 
+-Z X-dropoff for the final gapped extension.
+   Both -y and -Z are used only in conjunction with -n T option, i.e. when 
+   non-greedy gapped extension is performed, like in blastn.
 
+   Note that all of these are the raw values, as opposed to bit values for other 
+   variations of BLAST.
 -----------------------------
 
 -e The cutoff expectation value. 
@@ -210,3 +216,49 @@ either specific to Mega BLAST or having different meaning:
    not reported in all output formats except -D 0 (with the latter the traceback 
    is not performed, so it is impossible to calculate the percentage of identical 
    residues). 
+
+-----------------------------
+
+-t Discontiguous word template length.
+
+   If this is not zero, the discontiguous word approach is used. The supported
+   template lengths are 16, 18, and 21. The word size (-W parameter) must be 11 or
+   12 in this case.
+
+-N Discontiguous template type: coding (0), non-coding (1), or both (2).
+   For each of the three template lengths, two discontiguous templates are 
+   supported. One of them, called coding, is based on the '110' pattern, the other
+   is optimal, or close to optimal, based on the hit probability simulations for 
+   random sequences.
+
+   The exact templates are:
+   W = 11, t = 16, coding:     1101101101101101
+   W = 11, t = 16, non-coding: 1110010110110111
+   W = 12, t = 16, coding:     1111101101101101
+   W = 12, t = 16, non-coding: 1110110110110111
+   W = 11, t = 18, coding:     101101100101101101
+   W = 11, t = 18, non-coding: 111010010110010111
+   W = 12, t = 18, coding:     101101101101101101
+   W = 12, t = 18, non-coding: 111010110010110111
+   W = 11, t = 21, coding:     100101100101100101101
+   W = 11, t = 21, non-coding: 111010010100010010111
+   W = 12, t = 21, coding:     100101101101100101101
+   W = 12, t = 21, non-coding: 111010010110010010111
+ 
+   If 'both' option is chosen, then all initial matches satisfying either one of the
+   two types of templates are extended.
+
+-----------------------------
+
+-g Generate words for every base of the database.
+
+   Both in blastn and traditional megablast, the database sequences are compressed 
+   4:1, and words are looked up only at the beginning of each byte, i.e. at every 4th
+   base. This option prescribes to lookup words starting at any arbitrary base
+   of the database sequence.
+
+-----------------------------
+
+-H Maximal number of HSPs to save per database sequence.
+
+-----------------------------

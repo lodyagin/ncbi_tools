@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cblast.h,v $
+* Revision 1.6  2002/12/31 21:00:33  ywang
+* read environment variables from config file
+*
 * Revision 1.5  2002/12/12 15:59:45  ywang
 * wording improvement
 *
@@ -68,6 +71,14 @@ static Char    DOCSUMurl[PATH_MAX];
 static Char    MAILto[PATH_MAX];
 static Char    LOGpath[PATH_MAX];
 static Char    NRPDB[PATH_MAX];
+static Char    ODBCINI[PATH_MAX];
+static Char    DARTUSER[PATH_MAX];
+static Char    DARTPASS[PATH_MAX];
+static Char    DARTLIB[PATH_MAX];
+static Char    LDLIBRARYPATH[PATH_MAX];
+static Char    SYBASE[PATH_MAX];
+static Char    BLASTDB[PATH_MAX];
+static Char    NCBI[PATH_MAX];
 
 static Char    MMDBpath[PATH_MAX];
 

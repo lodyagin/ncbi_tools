@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.24 2002/12/10 14:51:22 lavr Exp $
+# $Id: install.sh,v 1.26 2003/01/31 14:45:06 lavr Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -30,7 +30,7 @@ makedir()
 }
 
 
-echo "[`basename $script`]  NCBI C:  \"$builddir\" to \"$target\"..."
+echo "[`basename $script`] NCBI C:  \"$builddir\" to \"$target\"..."
 sleep 2
 
 
@@ -129,6 +129,7 @@ cp -p "$bd"/connect/ncbi_dispd.h          "$srcdir"/connect
 cp -p "$bd"/connect/ncbi_lbsmd.h          "$srcdir"/connect
 cp -p "$bd"/connect/*.h                   "$incdir"
 mv "$incdir"/ncbi_*.h                     "$incdir"/connect
+mv "$incdir"/connect_export.h             "$incdir"/connect
 cp -p "$bd"/connect/test/*.[ch]           "$srcdir"/connect/test
 cp -p "$bd"/ctools/*.c                    "$srcdir"/ctools
 cp -p "$bd"/ctools/*.h                    "$incdir"/ctools

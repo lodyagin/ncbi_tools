@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/24/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Converts fielded text into final report in a file
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: tofile.c,v $
+* Revision 6.2  2003/03/27 18:23:42  kans
+* increased 16000 character buffer to 24000 to handle long PubMed abstracts (e.g., pmid 12209194 technical report on toxicity studies)
+*
 * Revision 6.1  1998/06/12 20:05:48  kans
 * fixed unix compiler warnings
 *
@@ -487,11 +490,11 @@ static Int2 SkipPastNewLine (CharPtr text, Int2 cnt)
   Char  ch;
 
   ch = *(text + cnt);
-  while (ch != '\0' && ch != '\n' && cnt < 16300) {
+  while (ch != '\0' && ch != '\n' && cnt < 24300) {
     cnt++;
     ch = *(text + cnt);
   }
-  while ((ch == '\n' || ch == '\r') && cnt < 16380) {
+  while ((ch == '\n' || ch == '\r') && cnt < 24380) {
     cnt++;
     ch = *(text + cnt);
   }
@@ -510,7 +513,7 @@ NLM_EXTERN Boolean SendTextToFile (FILE *f, CharPtr text, ParPtr parFmt, ColPtr 
   rsult = TRUE;
   start = 0;
   cntr = StringLen (text);
-  cnt = MIN (cntr, 16000);
+  cnt = MIN (cntr, 24000);
   cnt = SkipPastNewLine (text + start, cnt);
   while (cnt > 0) {
     tptr = TableSegment (text + start, cnt, parFmt, colFmt);
@@ -520,7 +523,7 @@ NLM_EXTERN Boolean SendTextToFile (FILE *f, CharPtr text, ParPtr parFmt, ColPtr 
     FreeTable (tptr);
     start += cnt;
     cntr -= cnt;
-    cnt = MIN (cntr, 16000);
+    cnt = MIN (cntr, 24000);
     cnt = SkipPastNewLine (text + start, cnt);
   }
   return rsult;

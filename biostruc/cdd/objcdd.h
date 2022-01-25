@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at Oct 31, 2002  9:42 AM
+*    Generated using ASNCODE Revision: 6.14 at Feb 6, 2003 12:10 PM
 *
 **************************************************/
 

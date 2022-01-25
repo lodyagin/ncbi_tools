@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.35  2003/03/19 21:13:22  kans
+* protect UNIX version of ScrollRect
+*
 * Revision 6.34  2002/06/13 16:15:12  kans
 * fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
 *
@@ -4295,6 +4298,12 @@ extern void Nlm_ScrollRect (Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy)
   unsigned int  srcX;
   unsigned int  srcY;
 
+  if (r != NULL) {
+    if (ABS (dy) >= ABS (r->bottom - r->top) || ABS (dx) >= ABS (r->right - r->left)) {
+      Nlm_InvalRect (r);
+      return;
+    }
+  }
   if (r != NULL && Nlm_currentXDisplay != NULL &&
       Nlm_currentXGC != NULL && Nlm_currentXWindow != 0) {
     height = ABS (r->bottom - r->top) - ABS (dy);

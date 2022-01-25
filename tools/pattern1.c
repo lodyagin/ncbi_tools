@@ -1,4 +1,4 @@
-/* $Id: pattern1.c,v 6.13 2002/08/28 13:37:29 madden Exp $
+/* $Id: pattern1.c,v 6.14 2003/03/06 21:33:13 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,12 @@ Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
 
-$Revision: 6.13 $ 
+$Revision: 6.14 $ 
 
 $Log: pattern1.c,v $
+Revision 6.14  2003/03/06 21:33:13  madden
+Move big arrays from stack to heap
+
 Revision 6.13  2002/08/28 13:37:29  madden
 Fix memory leaks
 
@@ -1403,7 +1406,7 @@ Int4 LIBCALL align_of_pattern(Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,
     Int4 wordIndex; /*index over words*/
 
     Int4 placeIndex1, placeIndex2; /*indices over places in pattern*/
-    Int4  hitArray1[MAX_HIT], hitArray2[MAX_HIT];
+    Int4  *hitArray1=NULL, *hitArray2=NULL;
     Int4 numPlacesInWord[MAX_WORDS_IN_PATTERN];
     Int4 **matrix;  /*score matrix*/
     Int4 gap_open; /*gap opening penalty*/
@@ -1428,6 +1431,8 @@ Int4 LIBCALL align_of_pattern(Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,
                     patternSearch);
       } 
       else {
+	hitArray1 = Nlm_Malloc(MAX_HIT*sizeof(Int4));
+	hitArray2 = Nlm_Malloc(MAX_HIT*sizeof(Int4));
 	if (alignScript) {
 	    data->sapp = alignScript;
 	    data->last = 0;
@@ -1480,6 +1485,10 @@ Int4 LIBCALL align_of_pattern(Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,
 	}
 	else 
 	  *tback = data->sapp;
+
+	hitArray1 = MemFree(hitArray1);
+	hitArray2 = MemFree(hitArray2);
+
 	return local_score;     
       }
 

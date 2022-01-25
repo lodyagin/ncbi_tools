@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.47 2002/12/10 17:34:15 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.53 2003/03/06 21:55:31 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,9 +33,7 @@
 
 #include "ncbi_ansi_ext.h"
 #include "ncbi_priv.h"
-#include <connect/ncbi_connection.h>
 #include <connect/ncbi_connutil.h>
-#include <connect/ncbi_socket.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -278,8 +276,8 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
     }
 
     /* host & port first */
-    if ((s = strstr(url, "//")) != 0) {
-        const char* h = s + 2; /* host starts here */
+    if ((s = strstr(url, "://")) != 0) {
+        const char* h = s + 3; /* host starts here */
         const char* p;         /* host ends here   */
 
         if (strncasecmp(url, "http://", 7) != 0)
@@ -393,11 +391,9 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
     if (!(hdr = (char*) info->http_user_header) || !(hdrlen = strlen(hdr))) {
         if (op == eUserHeaderOp_Delete)
             return 1/*success*/;
-        if (!hdr) {
-            if (!(hdr = strdup("")))
-                return 0/*failure*/;
-            hdrlen = 0;
-        }
+        if (!hdr && !(hdr = strdup("")))
+            return 0/*failure*/;
+        hdrlen = 0;
     }
 
     if (op != eUserHeaderOp_Delete) {
@@ -463,7 +459,12 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
             if (newtaglen != taglen || strncasecmp(newline, line, taglen) != 0)
                 continue;
 
-            l = op == eUserHeaderOp_Extend ? linelen + len : len;
+            if (op == eUserHeaderOp_Extend) {
+                l = linelen + len;
+                if (len && linelen > 1 && line[linelen - 2] == '\r')
+                    --l;
+            } else
+                l = len;
             if (l != linelen) {
                 if (l > linelen) {
                     char*  temp = (char*)realloc(hdr, hdrlen + l - linelen +1);
@@ -483,16 +484,12 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
 
             if (len) {
                 if (op == eUserHeaderOp_Extend) {
-                    char* s = &line[linelen - 1];
-                    if (linelen > 1 && *(s - 1) == '\r')
-                        *(s - 1) = ',';
+                    char* s = &line[l - len - 1];
                     *s++ = ' ';
                     memcpy(s, newtagval, len);
-                    linelen += len;
-                } else {
+                } else
                     memcpy(line, newline, len);
-                    linelen  = len;
-                }
+                linelen = l;
                 used = 1;
             }
         }
@@ -887,17 +884,17 @@ extern SOCK URL_Connect
 
 /* Code for the "*_StripToPattern()" functions
  */
-typedef EIO_Status (*FDoRead)
-     (void*          src,
-      void*          dest,
-      size_t         size,
-      size_t*        n_read,
-      EIO_ReadMethod how
+typedef EIO_Status (*FDoIO)
+     (void*     stream,
+      void*     buf,
+      size_t    size,
+      size_t*   n_read,
+      EIO_Event what     /* eIO_Read | eIO_Write (to pushback) */
       );
 
 static EIO_Status s_StripToPattern
-(void*       source,
- FDoRead     read_func,
+(void*       stream,
+ FDoIO       io_func,
  const void* pattern,
  size_t      pattern_size,
  BUF*        buf,
@@ -911,80 +908,75 @@ static EIO_Status s_StripToPattern
     /* check args */
     if ( n_discarded )
         *n_discarded = 0;
-    if (!source  ||  (!!pattern ^ !!pattern_size))
+    if (!stream  ||  (!!pattern ^ !!pattern_size))
         return eIO_InvalidArg;
 
     /* allocate a temporary read buffer */
     buffer_size = 2 * pattern_size;
     if (buffer_size < 4096)
         buffer_size = 4096;
-    if (!(buffer = (char*) malloc(buffer_size)))
+    if ( !(buffer = (char*) malloc(buffer_size)) )
         return eIO_Unknown;
 
     if ( !pattern ) {
         /* read/discard until EOF */
         do {
-            status= read_func(source,buffer,buffer_size,&n_read,eIO_ReadPlain);
+            status = io_func(stream, buffer, buffer_size, &n_read, eIO_Read);
             if ( buf )
                 BUF_Write(buf, buffer, n_read);
             if ( n_discarded )
                 *n_discarded += n_read;
         } while (status == eIO_Success);
-    } else for (;;) {
-        /* peek/read; search for the pattern; store the discarded data */
-        /* peek */
-        size_t n_peeked, n_stored, x_discarded;
-        assert(n_read < pattern_size);
-        status = read_func(source, buffer + n_read, buffer_size - n_read,
-                           &n_peeked, eIO_ReadPeek);
-        if ( !n_peeked ) {
-            assert(status != eIO_Success);
-            break; /*error*/
-        }
+    } else {
+        for (;;) {
+            /* read; search for the pattern; store the discarded data */
+            size_t x_read, n_stored;
 
-        n_stored = n_read + n_peeked;
-
-        if (n_stored >= pattern_size) {
-            /* search for the pattern */
-            size_t n_check = n_stored - pattern_size + 1;
-            const char* b;
-            for (b = buffer;  n_check;  b++, n_check--) {
-                if (*b != *((const char*) pattern))
-                    continue;
-                if (memcmp(b, pattern, pattern_size) == 0)
-                    break; /*found*/
+            assert(n_read < pattern_size);
+            status = io_func(stream, buffer + n_read, buffer_size - n_read,
+                             &x_read, eIO_Read);
+            if ( !x_read ) {
+                assert(status != eIO_Success);
+                break; /*error*/
             }
-            /* pattern found */
-            if ( n_check ) {
-                size_t x_read = b - buffer + pattern_size;
-                assert( memcmp(b, pattern, pattern_size) == 0 );
-                status = read_func(source, buffer + n_read, x_read - n_read,
-                                   &x_discarded, eIO_ReadPlain);
-                assert(status == eIO_Success);
-                assert(x_discarded == x_read - n_read);
-                if ( buf )
-                    BUF_Write(buf, buffer + n_read, x_read - n_read);
-                if ( n_discarded )
-                    *n_discarded += x_read - n_read;
-                break; /*success*/
+            n_stored = n_read + x_read;
+
+            if (n_stored >= pattern_size) {
+                /* search for the pattern */
+                size_t n_check = n_stored - pattern_size + 1;
+                const char* b;
+                for (b = buffer;  n_check;  b++, n_check--) {
+                    if (*b != *((const char*) pattern))
+                        continue;
+                    if (memcmp(b, pattern, pattern_size) == 0)
+                        break; /*found*/
+                }
+                /* pattern found */
+                if ( n_check ) {
+                    size_t x_discarded = (size_t)(b - buffer) + pattern_size;
+                    if ( buf )
+                        BUF_Write(buf, buffer + n_read, x_discarded - n_read);
+                    if ( n_discarded )
+                        *n_discarded += x_discarded;
+                    /* return unused portion to the stream */
+                    status = io_func(stream, buffer + x_discarded,
+                                     n_stored - x_discarded, 0, eIO_Write);
+                    break; /*finished*/
+                }
             }
-        }
 
-        /* pattern not found yet */
-        status = read_func(source, buffer + n_read, n_peeked,
-                           &x_discarded, eIO_ReadPlain);
-        assert(status == eIO_Success);
-        assert(x_discarded == n_peeked);
-        if ( buf )
-            BUF_Write(buf, buffer + n_read, n_peeked);
-        if ( n_discarded )
-            *n_discarded += n_peeked;
-        n_read = n_stored;
+            /* pattern not found yet */
+            if ( buf )
+                BUF_Write(buf, buffer + n_read, x_read);
+            if ( n_discarded )
+                *n_discarded += x_read;
+            n_read = n_stored;
 
-        if (n_read > pattern_size) {
-            size_t n_cut = n_read - pattern_size + 1;
-            n_read = pattern_size - 1;
-            memmove(buffer, buffer + n_cut, n_read);
+            if (n_read > pattern_size) {
+                size_t n_cut = n_read - pattern_size + 1;
+                n_read = pattern_size - 1;
+                memmove(buffer, buffer + n_cut, n_read);
+            }
         }
     }
 
@@ -994,14 +986,23 @@ static EIO_Status s_StripToPattern
 }
 
 
-static EIO_Status s_CONN_Read
-(void*          source,
- void*          dest,
- size_t         size,
- size_t*        n_read,
- EIO_ReadMethod how)
+static EIO_Status s_CONN_IO
+(void*     stream,
+ void*     buf,
+ size_t    size,
+ size_t*   n_read,
+ EIO_Event what)
 {
-    return CONN_Read((CONN)source, dest, size, n_read, how);
+    switch (what) {
+    case eIO_Read:
+        return CONN_Read((CONN) stream, buf, size, n_read, eIO_ReadPlain);
+    case eIO_Write:
+        assert(stream);
+        return CONN_PushBack((CONN) stream, buf, size);
+    default:
+        break;
+    }
+    return eIO_InvalidArg;
 }
 
 extern EIO_Status CONN_StripToPattern
@@ -1012,18 +1013,26 @@ extern EIO_Status CONN_StripToPattern
  size_t*     n_discarded)
 {
     return s_StripToPattern
-        (conn, s_CONN_Read, pattern, pattern_size, buf, n_discarded);
+        (conn, s_CONN_IO, pattern, pattern_size, buf, n_discarded);
 }
 
 
-static EIO_Status s_SOCK_Read
-(void*          source,
- void*          dest,
- size_t         size,
- size_t*        n_read,
- EIO_ReadMethod how)
+static EIO_Status s_SOCK_IO
+(void*     stream,
+ void*     buf,
+ size_t    size,
+ size_t*   n_read,
+ EIO_Event what)
 {
-    return SOCK_Read((SOCK)source, dest, size, n_read, how);
+    switch (what) {
+    case eIO_Read:
+        return SOCK_Read((SOCK) stream, buf, size, n_read, eIO_ReadPlain);
+    case eIO_Write:
+        return SOCK_PushBack((SOCK) stream, buf, size);
+    default:
+        break;
+    }
+    return eIO_InvalidArg;
 }
 
 extern EIO_Status SOCK_StripToPattern
@@ -1034,23 +1043,29 @@ extern EIO_Status SOCK_StripToPattern
  size_t*     n_discarded)
 {
     return s_StripToPattern
-        (sock, s_SOCK_Read, pattern, pattern_size, buf, n_discarded);
+        (sock, s_SOCK_IO, pattern, pattern_size, buf, n_discarded);
 }
 
 
-static EIO_Status s_BUF_Read
-(void*          source,
- void*          dest,
- size_t         size,
- size_t*        n_read,
- EIO_ReadMethod how)
+static EIO_Status s_BUF_IO
+(void*     stream,
+ void*     buf,
+ size_t    size,
+ size_t*   n_read,
+ EIO_Event what)
 {
-    size_t read = (how == eIO_ReadPeek
-                   ? BUF_Peek((BUF)source, dest, size)
-                   : BUF_Read((BUF)source, dest, size));
-    if (n_read)
-        *n_read = read;
-    return read ? eIO_Success : eIO_Closed;
+    switch (what) {
+    case eIO_Read:
+        *n_read = BUF_Read((BUF) stream, buf, size);
+        return *n_read ? eIO_Success : eIO_Closed;
+    case eIO_Write:
+        assert(stream);
+        return BUF_PushBack((BUF*) &stream, buf, size)
+            ? eIO_Success : eIO_Unknown;
+    default:
+        break;
+    }
+    return eIO_InvalidArg;
 }
 
 extern EIO_Status BUF_StripToPattern
@@ -1061,7 +1076,7 @@ extern EIO_Status BUF_StripToPattern
  size_t*     n_discarded)
 {
     return s_StripToPattern
-        (buffer, s_BUF_Read, pattern, pattern_size, buf, n_discarded);
+        (buffer, s_BUF_IO, pattern, pattern_size, buf, n_discarded);
 }
 
 
@@ -1442,9 +1457,12 @@ extern size_t HostPortToString(unsigned int   host,
 
     if (!buf || !buflen)
         return 0;
-    if (!host || SOCK_ntoa(host, abuf, sizeof(abuf)) != 0)
+    if (!host)
         *abuf = 0;
-    sprintf(abuf + strlen(abuf), ":%hu", port);
+    else if (SOCK_ntoa(host, abuf, sizeof(abuf)) != 0)
+        return 0;
+    if (port || !host)
+        sprintf(abuf + strlen(abuf), ":%hu", port);
     n = strlen(abuf);
     assert(n < sizeof(abuf));
     if (n >= buflen)
@@ -1458,6 +1476,25 @@ extern size_t HostPortToString(unsigned int   host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.53  2003/03/06 21:55:31  lavr
+ * s_ModifyUserHeader(): Heed uninitted usage warning
+ * HostPortToString():   Do not append :0 (for zero port) if host is not empty
+ *
+ * Revision 6.52  2003/02/28 14:47:41  lavr
+ * Bugfix: proper bool -> eIO_Status conversion in s_BUF_IO()
+ *
+ * Revision 6.51  2003/01/31 21:17:04  lavr
+ * More robust search for sheme in URL
+ *
+ * Revision 6.50  2003/01/17 19:44:46  lavr
+ * Reduce dependencies
+ *
+ * Revision 6.49  2003/01/15 19:52:25  lavr
+ * *_StripToPattern() calls modified to use Read/PushBack instead of Peek/Read
+ *
+ * Revision 6.48  2002/12/13 21:19:13  lavr
+ * Separate header tag values with spaces as most commonly required (rfc1945)
+ *
  * Revision 6.47  2002/12/10 17:34:15  lavr
  * Remove errno decoding on failed connect in URL_Connect()
  *

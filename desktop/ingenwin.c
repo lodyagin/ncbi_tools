@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -8250,8 +8250,10 @@ NLM_EXTERN Int2 LIBCALLBACK Ing_RegisterIngenueProc (Pointer data)
     ErrPostEx (SEV_ERROR, 0, 0, "Input Data NULL");
     return OM_MSG_RET_ERROR;
   }
-  
+  return OM_MSG_RET_OK;
+  /*
   ErrPostEx (SEV_ERROR, 0, 0, "Not yet implemented");
   return OM_MSG_RET_ERROR;
+  */
 }
 

@@ -1,5 +1,5 @@
 /* 
- * $Id: vast2cn3dDB.c,v 1.1.1.1 2002/12/06 20:17:21 chenj Exp $
+ * $Id: vast2cn3dDB.c,v 1.3 2003/01/15 16:21:47 chenj Exp $
  *
  *
  * ===========================================================================
@@ -31,6 +31,12 @@
  *
  *
  * $Log: vast2cn3dDB.c,v $
+ * Revision 1.3  2003/01/15 16:21:47  chenj
+ * add construcMaxSdi()
+ *
+ * Revision 1.2  2003/01/14 20:42:32  chenj
+ * change VastToCn3D() to VastToCn3DAndAli()
+ *
  * Revision 1.1.1.1  2002/12/06 20:17:21  chenj
  * Imported Scouces
  *
@@ -149,7 +155,7 @@ static Int4 GetMGPIdx(GiBsfIdDataPtr gbp, Int4 BsfId)
 
 /* Display a structural alignment in Cn3D and in HTML*/
 
-Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
+Boolean LIBCALL VastToCn3DAndAli(WWWInfoPtr www_info)
 {
   Char 		szName[5], AsnPath[PATH_MAX], AsnName[10]; 
   Char		cViewType, pdbname_m[5], chain_m=' ';
@@ -189,20 +195,33 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
                 "Invalid Biostruc-feature-set-id: chaindom = ", www_arg, FALSE);
   }
   else if ((indx = WWWFindName(www_info, "sdid")) >=0) {
+	int maxsdi;
+
         www_arg = WWWGetValueByIndex(www_info, indx);
-        if (isdigit(www_arg[0])) aSdi= (long) atol(www_arg);
-        else
+        if (isdigit(www_arg[0]) || www_arg[0] == '-') 
+		aSdi= (long) atol(www_arg);
+        else 
            PrtMes(MAILto, "VASTSRV",
                 "Non-numeric Structure Domain Identifier: sdid = ",
                  www_arg,FALSE);
+
+        maxsdi = constructMaxSdi();
+        if (aSdi > maxsdi || !aSdi)
+            PrtMes(NULL, "VASTSRV",
+                "Vast neighbor data for this domain is not yet available. Please try later again.", NULL, FALSE);
+
+	if (aSdi < 0)
+ 	   PrtMes(NULL, "VASTSRV",
+	      "This is an obsolete domain, no VAST information.", NULL, FALSE);
 
         Fsid = SdiToLongDomId(aSdi);
         if (!Fsid) {
            Char str[10];
 
            sprintf(str, "%d", aSdi);
-           PrtMes(NULL, "VASTSRV",
-               "Either an incorrect sdid or an obsolete query domain: sdid  = ",                                                                str,FALSE);
+           PrtMes(MAILto, "VASTSRV",
+               "Error: No domain exists for this identifier: sdid = ", str,FALSE);
+ 
         }
   }
   else 
@@ -933,4 +952,4 @@ AsnIoClose(aipr);
   NcbiMimeAsn1Free(pvnNcbi); 
 
   return 0; 
-} 	/* end of VastToCn3D */
+} 	/* end of VastToCn3DAndAli */

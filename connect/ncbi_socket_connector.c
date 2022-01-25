@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket_connector.c,v 6.14 2002/12/04 16:55:45 lavr Exp $
+/*  $Id: ncbi_socket_connector.c,v 6.15 2003/01/17 19:44:47 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,7 +35,6 @@
 
 #include "ncbi_ansi_ext.h"
 #include <connect/ncbi_socket_connector.h>
-#include <connect/ncbi_socket.h>
 #include <stdlib.h>
 
 #define MAX_IP_ADDR_LEN       16 /* sizeof("255.255.255.255") */
@@ -374,6 +373,9 @@ extern CONNECTOR SOCK_CreateConnectorOnTopEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_socket_connector.c,v $
+ * Revision 6.15  2003/01/17 19:44:47  lavr
+ * Reduce dependencies
+ *
  * Revision 6.14  2002/12/04 16:55:45  lavr
  * Take advantage of SOCK_CreateEx()
  *

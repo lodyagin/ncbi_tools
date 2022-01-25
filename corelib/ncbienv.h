@@ -1,5 +1,5 @@
 
-/*  $Id: ncbienv.h,v 6.2 1999/11/29 19:58:50 vakatov Exp $
+/*  $Id: ncbienv.h,v 6.3 2003/01/29 19:37:14 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   	protokeys for portable string routines
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.h,v $
+* Revision 6.3  2003/01/29 19:37:14  kans
+* added GetOpSysString to return allocated string describing operating system running the program
+*
 * Revision 6.2  1999/11/29 19:58:50  vakatov
 * To parse command-line arguments:
 * + ECmdLineQuote, Nlm_ParseCmdLineArguments(), Nlm_FreeCmdLineArguments()
@@ -140,6 +143,9 @@ NLM_EXTERN Nlm_Boolean Nlm_ParseCmdLineArguments
  */
 NLM_EXTERN void Nlm_FreeCmdLineArguments(char** argv);
 
+/* returns allocated string describing operating system running the program */
+
+NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void);
 
 #define GetAppParamInt(a,b,c,d)   (int)GetAppParamLong(a,b,c,(long)(d))
 #define SetAppParamInt(a,b,c,d)   SetAppParamLong(a,b,c,(long)(d))
@@ -160,6 +166,7 @@ NLM_EXTERN void Nlm_FreeCmdLineArguments(char** argv);
 #define GetEnvParam   Nlm_GetEnvParam
 #define ParseCmdLineArguments Nlm_ParseCmdLineArguments
 #define FreeCmdLineArguments  Nlm_FreeCmdLineArguments
+#define GetOpSysString Nlm_GetOpSysString
 
 
 #ifdef __cplusplus

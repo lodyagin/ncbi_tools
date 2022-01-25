@@ -81,14 +81,15 @@ Value:
 | on your proxy firewall server to those of NCBI
 | (see in http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html).
 | Thus the mapping on your non-transparent firewall server
-| shoul look like this:
+| should look like this:
 | 
-| SRV_PROXY_HOST:5853    -->    130.14.22.1:5853  RETIRED -- DO NOT USE!
-| SRV_PROXY_HOST:5859    -->    130.14.22.2:5859  RETIRED -- DO NOT USE!
-| SRV_PROXY_HOST:5840    -->    130.14.22.8:5840  RETIRED -- DO NOT USE!
-| SRV_PROXY_HOST:5810    -->    130.14.22.30:5810 RETIRED -- DO NOT USE!
-| SRV_PROXY_HOST:5812    -->    130.14.22.31:5812
-| SRV_PROXY_HOST:5811    -->    130.14.22.32:5811
+| SRV_PROXY_HOST:5853       --> 130.14.22.1:5853  RETIRED -- DO NOT USE!
+| SRV_PROXY_HOST:5859       --> 130.14.22.2:5859  RETIRED -- DO NOT USE!
+| SRV_PROXY_HOST:5840       --> 130.14.22.8:5840  RETIRED -- DO NOT USE!
+| SRV_PROXY_HOST:5810       --> 130.14.22.30:5810 RETIRED -- DO NOT USE!
+| SRV_PROXY_HOST:5812       --> 130.14.22.31:5812
+| SRV_PROXY_HOST:5811       --> 130.14.22.32:5811
+| SRV_PROXY_HOST:5850..5860 --> 130.14.29.112:5850..5860(for future extensions)
 | 
 | NOTE:  It's pretty rare (if ever) when you have to use
 |        "SRV_PROXY_HOST" as most of firewalls are "transparent"
@@ -187,4 +188,4 @@ Solaris or IRIX. Then, the client must run on the host that:
 a) belongs to one of NCBI subnets and
 b) has "lbdaemon"(load-balance daemon) application running on it.
 
-$Date: 2002/09/07 02:00:28 $
+$Date: 2003/02/08 17:51:14 $

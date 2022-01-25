@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,12 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.8  2003/03/25 19:14:59  bazhin
+* Function "ten_authors()" became public (from static).
+*
+* Revision 6.7  2003/03/12 20:35:02  bazhin
+* "ten_authors()" function now can handle consortiums.
+*
 * Revision 6.6  2001/03/08 12:47:44  ostell
 * made FixPub work if no medline uid returned, but pmid is returned.
 *
@@ -248,7 +254,7 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
 *    ten_authors   
 * 											
 ****************************************************************************/
-static Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp) 
+Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp) 
 {
 	Int2 num, numnew, i, match, n;
 	ValNodePtr v;
@@ -273,8 +279,13 @@ static Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
 			for (v = art_tmp->authors->names; v != NULL && numnew < 10;
 								v = v->next, numnew++) {
 				aup = v->data.ptrvalue;
-				namestd	= aup->name->data;
-				mu[numnew] = namestd->names[0];	
+				if(aup->name->choice == 2)
+				{
+					namestd = aup->name->data;
+					mu[numnew] = namestd->names[0];
+				}
+				else if(aup->name->choice == 5)
+					mu[numnew] = aup->name->data;
 			}
 		}
 
@@ -283,8 +294,15 @@ static Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
 				no_compare = FALSE;
 				for (v = art->authors->names; v != NULL; v = v->next) {
 					aup = v->data.ptrvalue;
-					namestd	= aup->name->data;
-					ptr = namestd->names[0];
+					if(aup->name->choice == 2)
+					{
+						namestd = aup->name->data;
+						ptr = namestd->names[0];
+					}
+					else if(aup->name->choice == 5)
+						ptr = aup->name->data;
+					else
+						continue;
 					for (i = 0; i < numnew; i++) {
 						if (StringICmp(ptr, mu[i]) == 0) {
 							match++;

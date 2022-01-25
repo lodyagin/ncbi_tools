@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.83 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -255,6 +255,11 @@ NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
   SeqHistPtr shp
 );
 
+NLM_EXTERN UserObjectPtr ParseTitleIntoTpaAssembly (
+  SqnTagPtr stp,
+  UserObjectPtr uop
+);
+
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
   if they are packaged in the same directory as the executing program. */
 
@@ -266,6 +271,10 @@ NLM_EXTERN void GetRidOfLocusInSeqIds (Uint2 entityID, SeqEntryPtr sep);
 
 NLM_EXTERN SeqLocPtr StripLocusFromSeqLoc (SeqLocPtr location);
 NLM_EXTERN SeqIdPtr SeqIdStripLocus (SeqIdPtr sip);
+
+/* LeaveBestCDD removes all but best CDD region in an area of overlapping features */
+
+NLM_EXTERN void LeaveBestCDD (SeqEntryPtr sep);
 
 /* ConvertPubSrcComDescsToFeats is useful when merging records */
 
@@ -366,7 +375,8 @@ feature table with ReadAsnFastaOrFlatFile) to stand-alone gene features or prote
 and protein bioseqs.  It processes ALL features in the list - you give it the FIRST sfp. */
 
 NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID);
-NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop, Boolean remove_trailingX);
+NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop,
+                                Boolean remove_trailingX, Boolean gen_prod_set);
 
 /* SetEmptyGeneticCodes imposes genetic code on all coding regions within a feature table */
 
@@ -399,6 +409,10 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep);
 which does change the itemID structure, and is intended to be safe for a retrofit of the ID database */
 
 NLM_EXTERN void CautiousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+
+/* Convert a segmented or delta Bioseq to a raw Bioseq */
+
+NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp);
 
 /* general purpose text finite state machine */
 /* based on Practical Algorithms for Programmers by Binstock and Rex */

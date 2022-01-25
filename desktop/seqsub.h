@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: seqsub.h,v $
+* Revision 6.2  2002/12/20 18:31:08  kans
+* added REGISTER_SEQSUBCIT_EDIT, support for OBJ_SEQSUB_CIT in SubmitBlockGenFunc
+*
 * Revision 6.1  2000/07/08 20:44:01  vakatov
 * Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
@@ -58,6 +61,7 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp);
 extern DialoG CreateSubmitDataDialog (GrouP h, CharPtr title, Boolean newOnly, Boolean defaultAsUpdate);
 
 #define REGISTER_SUBMITBLOCK_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit SubmitBlock","SubmitBlock",OBJ_SUBMIT_BLOCK,0,OBJ_SUBMIT_BLOCK,0,NULL,SubmitBlockGenFunc,PROC_PRIORITY_DEFAULT)
+#define REGISTER_SEQSUBCIT_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit SeqSubCit","SeqSubCit",OBJ_SEQSUB_CIT,0,OBJ_SEQSUB_CIT,0,NULL,SubmitBlockGenFunc,PROC_PRIORITY_DEFAULT)
 
 extern ForM CreateSubmitBlockForm (Int2 left, Int2 top, CharPtr title,
                                    Boolean newOnly, Boolean defaultAsUpdate, SubmitBlockPtr sbp,

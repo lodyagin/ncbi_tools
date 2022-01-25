@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.112 2002/11/12 16:04:24 dondosha Exp $ */
+/* $Id: blastpgp.c,v 6.115 2003/03/20 14:47:16 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,18 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.112 $ 
+ * $Revision: 6.115 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.115  2003/03/20 14:47:16  madden
+ * StringSave on asn1_mode
+ *
+ * Revision 6.114  2003/03/20 13:44:23  madden
+ * Fix -m 10/11 output to make them SeqAnnots
+ *
+ * Revision 6.113  2002/12/31 22:47:16  boemker
+ * Added support for printing output as ASN (text, with -m 10, or binary, with
+ * -m 11).
+ *
  * Revision 6.112  2002/11/12 16:04:24  dondosha
  * Do not print the no hits found message for tabular output
  *
@@ -493,7 +503,7 @@ static Args myargs[] = {
       "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 4 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = Tabular output, \n9 = Tabular output with comments", /* 5 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = Tabular output, \n9 = Tabular output with comments\n10 = ASN, text\n11 = ASN, binary", /* 5 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 6 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -593,6 +603,8 @@ typedef struct _pgp_blast_options {
     FILE *patfp; 
     seedSearchItems *seedSearch;
     Boolean is_xml_output;
+    Boolean is_asn1_output;
+    char* asn1_mode;  /* "w" or "wb" */
 } PGPBlastOptions, PNTR PGPBlastOptionsPtr;
 
 void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out, 
@@ -661,6 +673,9 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     SeqEntryPtr sep;
     Boolean is_dna;
     ObjectIdPtr obidp;
+    Int4 align_view;
+
+    align_view = myargs[5].intvalue;
 
     bop = MemNew(sizeof(PGPBlastOptions));
     
@@ -672,7 +687,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         return NULL;
     }
     
-    if (myargs[6].strvalue != NULL) {
+    if (align_view != 7 && align_view != 10 && align_view != 11 && myargs[6].strvalue != NULL) {
         if ((bop->outfp = FileOpen(myargs[6].strvalue, "w")) == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
                       "file %s\n", myargs[6].strvalue);
@@ -690,7 +705,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         
         if (bop->believe_query == FALSE) {
             ErrPostEx(SEV_FATAL, 0, 0, 
-                      "-J option must be TRUE to use this option");
+                      "-J option must be TRUE for ASN.1 output");
             return NULL;
         }
         
@@ -699,6 +714,24 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
                       "file %s\n", myargs[24].strvalue);
             return NULL;
         }
+    }
+    else if (align_view == 10 || align_view == 11)
+    {
+        const char* mode = (align_view == 10) ? "w" : "wb";
+        if (bop->believe_query == FALSE) {
+            ErrPostEx(SEV_FATAL, 0, 0, 
+                      "-J option must be TRUE for ASN.1 output");
+            return NULL;
+        }
+        if ((bop->aip_out = AsnIoOpen(myargs[6].strvalue, (char*) mode)) == NULL) {
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[6].strvalue);
+                return NULL;
+        }
+	bop->is_asn1_output = TRUE;
+        if(align_view == 10)
+            bop->asn1_mode = StringSave("w");
+        else 
+            bop->asn1_mode = StringSave("wb");
     }
 
     options = BLASTOptionNew("blastp", (Boolean)myargs[14].intvalue);
@@ -916,6 +949,9 @@ Boolean PGPFormatHeader(PGPBlastOptionsPtr bop)
 {
     Boolean html = myargs[37].intvalue;
 
+    if (bop->outfp == NULL)
+	return FALSE;
+
     if (html)
         fprintf(bop->outfp, "<PRE>\n");
     
@@ -941,6 +977,9 @@ Boolean  PGPFormatFooter(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search)
     ValNodePtr other_returns;
     BLAST_MatrixPtr blast_matrix;
     Boolean html = myargs[37].intvalue;
+
+    if (bop->outfp == NULL)
+	return FALSE;
 
     if (html)
         fprintf(bop->outfp, "<PRE>\n");
@@ -1178,7 +1217,7 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
     AddAlignInfoToSeqAnnot(seqannot, 2);
     seqannot->data = head;
 
-    if (search->pbp->maxNumPasses != 1) {
+    if (search->pbp->maxNumPasses != 1 && myargs[5].intvalue < 7) {
         fprintf(bop->outfp, "\nResults from round %d\n", 
                 thisPassNum);
     }
@@ -1222,7 +1261,7 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
 
     /* ------- --------------------------------------- ------- */
 
-    if (ALL_ROUNDS && search->posConverged) {
+    if (ALL_ROUNDS && search->posConverged && myargs[5].intvalue < 7) {
         fprintf(bop->outfp, "\nCONVERGED!\n");
     }
 
@@ -1479,7 +1518,7 @@ Int2 Main (void)
                 head = SeqAlignSetFree(head);
             
 #ifdef OS_UNIX
-            if(!bop->is_xml_output && !tabular_output) {
+            if(!bop->is_xml_output && !tabular_output && !bop->is_asn1_output) {
                 search->thr_info->tick_callback =  tick_callback;
                 fprintf(global_fp, "%s", "Searching");
                 fflush(global_fp);
@@ -1542,7 +1581,7 @@ Int2 Main (void)
             }
             
 #ifdef OS_UNIX
-            if(!bop->is_xml_output && !tabular_output) {
+            if(!bop->is_xml_output && !tabular_output && !bop->is_asn1_output) {
                 fprintf(global_fp, "%s", "done\n\n");
             }
 #endif
@@ -1585,7 +1624,7 @@ Int2 Main (void)
                 
                 IterationFree(iterp);
                 BlastOtherReturnsFree(other_returns);
-            } else {
+            } else if(!bop->is_asn1_output){
                 PGPFormatMainOutput(head, bop, search, thisPassNum,
                                     lastSeqAligns, numLastSeqAligns, 
                                     seed_seqloc, posSearch->posRepeatSequences);
@@ -1655,7 +1694,7 @@ Int2 Main (void)
                                      compactSearch, posComputationCalled);
             }
 
-        	if (bop->aip_out != NULL && head != NULL)
+        	if ((bop->is_asn1_output || bop->aip_out != NULL) && head != NULL)
             		PGPSeqAlignOut(bop, head);
             
         } while (( 0 == search->pbp->maxNumPasses || thisPassNum < (search->pbp->maxNumPasses)) && (! (search->posConverged)));

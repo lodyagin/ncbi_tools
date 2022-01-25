@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.20 2002/10/03 16:22:03 kans Exp $
+* $Id: ncbierr.c,v 6.21 2003/03/25 14:56:08 ivanov Exp $
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.21  2003/03/25 14:56:08  ivanov
+* Nlm_AbnormalExitPure(): FatalAppExit() call changed to exit() under MS Windows (by Howard Feldman feldman@mshri.on.ca)
+*
 * Revision 6.20  2002/10/03 16:22:03  kans
 * changed fgets to Nlm_FileGets
 *
@@ -1898,10 +1901,6 @@ NLM_EXTERN void LIBCALL Nlm_AbnormalExitPure(int code)
   abort();
 #elif defined(OS_MAC)
   ExitToShell();
-#elif defined(OS_MSWIN)
-  char message[35];
-  sprintf(message, "Abrupt: code = %d", code);
-  FatalAppExit(0, message);
 #else
   exit( code );
 #endif

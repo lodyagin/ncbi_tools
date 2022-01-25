@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.122 $
+* $Revision: 6.138 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,54 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.138  2003/04/16 15:39:37  coulouri
+* fix compiler warning
+*
+* Revision 6.137  2003/04/15 19:09:13  camacho
+* Completed implementation of PIG interface
+*
+* Revision 6.136  2003/04/10 15:11:37  camacho
+* Include PIG interface in __cplusplus
+*
+* Revision 6.135  2003/04/09 21:46:00  camacho
+* Added basic PIG interface
+*
+* Revision 6.134  2003/04/08 19:45:35  camacho
+* Defined invalid PIG
+*
+* Revision 6.133  2003/04/08 15:37:15  camacho
+* Extended FDBAddSequence2 to take pig
+*
+* Revision 6.132  2003/04/01 21:51:36  camacho
+* Made fastacmd functions & structure non-static
+*
+* Revision 6.131  2003/03/27 22:26:04  camacho
+* Add error messages and non-zero return value on error for fastacmd
+*
+* Revision 6.130  2003/03/26 19:11:22  camacho
+* Minor change to previous commit
+*
+* Revision 6.129  2003/03/26 18:50:07  camacho
+* Added eFDBCleanOpt to formatdb API
+*
+* Revision 6.128  2003/01/30 21:57:28  camacho
+* Added more detailed comment to readdb_new_ex2
+*
+* Revision 6.127  2003/01/22 19:41:21  camacho
+* Added function to build multi-volume db list for creating alias files
+*
+* Revision 6.126  2002/12/20 14:37:34  coulouri
+* Fix prototype for RDBTaxInfoInit()
+*
+* Revision 6.125  2002/12/17 20:33:25  camacho
+* Removed unnecessary function attribute
+*
+* Revision 6.124  2002/12/16 20:22:48  camacho
+* Removed unused options in formatdb options structure
+*
+* Revision 6.123  2002/12/16 05:01:55  camacho
+* Fixes to previous commit
+*
 * Revision 6.122  2002/12/13 13:43:25  camacho
 * Changes to set links and membership bits in formatdb API
 *
@@ -674,7 +722,6 @@ belong to the same sequence. */
 #define FORMATDB_VER_TEXT 3
 #define FORMATDB_VER      4
 
-
 /* 'Magic' number at the beginning of a binary gi list that indicates it is binary. */
 #define READDB_MAGIC_NUMBER UINT4_MAX
 
@@ -819,11 +866,12 @@ typedef Boolean (*TaxCallbackFunc) (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
       Taxonomy blast database 
       ----  */
 
+#define TAXDB_ON_FTP "ftp://ftp.ncbi.nih.gov/blast/db/taxdb.tar.gz"
 #define BLAST_TAXDB_FILENAME "taxdb"
 
 /* Initialize taxonomy lookup database. returns NULL if failure or
    this database do not exists */
-RDBTaxInfoPtr  RDBTaxInfoInit();
+RDBTaxInfoPtr  RDBTaxInfoInit(void);
 
 /* Free memory, unmap files etc. related to the taxonomy database */
 void RDBTaxInfoClose(RDBTaxInfoPtr tip);
@@ -873,9 +921,11 @@ sequence information. */
 /* Buffer and allocated amount of this buffer.  These should always be
 NULL (i.e., NOT USED) if mem-mapping is used; only used to store sequence
 if there is no mem-mapping or it failed. */
-        ISAMObjectPtr nisam_opt;  /* Object for numeric search */
-        ISAMObjectPtr sisam_opt;  /* Object for string search */
-        RDBTaxInfoPtr taxinfo;    /* This object if not NULL - pointer to
+
+    ISAMObjectPtr nisam_opt;  /* Object for numeric search */
+    ISAMObjectPtr sisam_opt;  /* Object for string search */
+    ISAMObjectPtr isam_pig;   /* Object for PIG search */
+    RDBTaxInfoPtr taxinfo;    /* This object if not NULL - pointer to
                                      the taxonomy names database */
 	Uint1Ptr buffer;
 	Int4 allocated_length;
@@ -937,7 +987,15 @@ ReadDBFILEPtr LIBCALL readdb_new PROTO((CharPtr filename, Uint1 is_prot));
 */
 ReadDBFILEPtr LIBCALL readdb_new_ex PROTO((CharPtr filename, Uint1 is_prot, Boolean init_indices));
 
-/* allows a list of ordinalid's (or list of list of ordinal id's) to be specified.
+/* 
+ * Initializes the blast database specified in the argument list.
+ * filename: blast database to initialize
+ * is_prot: is this database protein ?
+ * init_state: bitwise-OR of the READDB_NEW_* values (selectively mmap certain
+ *             files)
+ * oidlist: Path to the ordinal id list to use (this is mmap'd)
+ * gilist: Path to the gi list to use (this is not resolved until the search
+ *         is conducted (see BlastProcessGiLists)
 */
 ReadDBFILEPtr LIBCALL readdb_new_ex2 PROTO((CharPtr filename, Uint1 is_prot,
             Uint1 init_state, CharPtr oidlist, CharPtr gilist));
@@ -1202,26 +1260,63 @@ typedef struct _linkinfo {
     GiListPtr gi_list;  /* update links bit array for gis in this list */
 } LinkInfo, *LinkInfoPtr;
 
-/* This structure is populated after combining all gi lists for the various
- * link bits to be set (according to the .formatdbrc config file). There is
- * only one instance of this structure when creating a blast database */
-typedef struct _gi_linkbit_list {
-    Int4Ptr         gi;         /* gi to update */
-    ValNodePtr PNTR link_bit;   /* linked list of integers, indicating bit to
-                                   set */
-    Int4            count, allocated; 
-} GiLinkBitList, *GiLinkBitListPtr;
-
 /* Structure that holds the membership information */
 typedef Boolean (*GMCriteriaFunc) (VoidPtr direc);
 
 typedef struct _membinfo {
     Int4 bit_number;    /* indicates the position in the membership bit array */
-    GMCriteriaFunc *criteria; /* function pointer that is invoked to
+    GMCriteriaFunc criteria; /* function pointer that is invoked to
                                  determine wheather certain sequence
                                  belongs to the membership represented by
                                  this bit_number */
 } MembInfo, *MembInfoPtr;
+
+/* Options to clean up blast database files from a previous instance of the
+ * database with the same name as the one about to be created. This has been
+ * added to prevent the case in which an alias file might have precedence over
+ * a single-volume blast database. */
+typedef enum EFDBCleanOpt {
+    eCleanNever = 0,    /* don't remove older files of the db to be created,
+                           just overwrite them or ignore alias files */
+    eCleanAlways,       /* clean up all older files of the db to be created */
+    eCleanPrompt,       /* Assumes interactive program */
+    eCleanOptMax
+} EFDBCleanOpt;
+
+/*** PIG (Protein Identifier Group) interface ***/
+
+#define PIG_NONE        -1          /* No protein identifier group */
+
+/* PIG table structure
+ * From this information the formatdb API creates a pair of ISAM files to map 
+ * PIGs to ordinal ids */
+typedef struct FDBPigTable {
+    Int4Ptr     pop;                /* list of pig/ordinal id pairs */
+    Int4        count, allocated;   /* keep track of table size */
+} FDBPigTable, * FDBPigTablePtr;
+
+/* Allocate a PIG table structure */
+FDBPigTablePtr LIBCALL
+FDBPigTableNew PROTO((void));
+
+/* Deallocate a PIG table structure */
+FDBPigTablePtr LIBCALL
+FDBPigTableFree PROTO((FDBPigTablePtr fptp));
+
+/* Add a PIG to the PIG table structure, return FALSE on error */
+Boolean LIBCALL
+FDBAddPig PROTO((FDBPigTablePtr fptp, Int4 pig, Int4 oid));
+
+/* Retrieve the PIG for a given ordinal id */
+Int4 LIBCALL
+readdb_get_pig PROTO((ReadDBFILEPtr rdfp, Int4 oid));
+
+/* Retrieve the ordinal id corresponding to a given PIG (analogous to
+ * readdb_gi2seq) */
+Int4 LIBCALL
+readdb_pig2oid PROTO((ReadDBFILEPtr rdfp, Int4 pig, Int4Ptr start));
+
+/************************************************/
 
 typedef struct _FDB_options {
     Int4  version;   /* Version of the database created by formatdb program
@@ -1257,14 +1352,14 @@ typedef struct _FDB_options {
                                 volume */
    Int2 volume;      /* Largest volume */
    Int4 total_num_of_seqs; /* total number of sequences for this database */
-   CharPtr	alias_file, /* name of alias file to be generated. */
-		gi_file,	/* Gi file to be used in processing. */
-		gi_file_bin;	/* Gi file to be used in processing. */
+   CharPtr	gi_file;        /* Gi file to be used in processing. */ 
+   CharPtr  gi_file_bin;	/* Gi file to be used in processing. */
 
-   GiLinkBitListPtr linkbit_listp; /* list of gis and the bits to set */
+   ValNodePtr    linkbit_listp; /* list of gis and the bits to set */
    ValNodePtr    memb_tblp;     /* Linked list of MembInfo structures */
    VoidPtr       memb_argp;     /* Argument to criteria function in MembInfo
                                    structure */
+   EFDBCleanOpt clean_opt;      /* clean up option */
 
 } FDB_options, PNTR FDB_optionsPtr;
     
@@ -1300,6 +1395,9 @@ typedef struct formatdb
     /* lookup table */
 
     FASTALookupPtr	lookup;
+
+    /* Table to map PIGs to ordinal ids */
+    FDBPigTablePtr   ptable;   
 
     /* General formatdb options */
 
@@ -1341,7 +1439,8 @@ FDB_optionsPtr FDBOptionsNew(
         Int8 bases_per_volume, /* [in] max num of residues/bases per volume */
         Int4 seqs_per_volume, /* [in] max num of sequences per volume */
         Int4 version, /* [in] database version */
-        Boolean dump_info); /* [in] should basename.[pn]di be created? */
+        Boolean dump_info, /* [in] should basename.[pn]di be created? */
+        EFDBCleanOpt clean_opt);/* [in] should basename.* files be removed ? */
 
 /* --------------------- FDBOptionsFree ---------------------------
    Purpose: Frees the memory allocated for the formatdb options structure.
@@ -1350,8 +1449,8 @@ FDB_optionsPtr FDBOptionsNew(
 FDB_optionsPtr FDBOptionsFree(FDB_optionsPtr options);
 
 /* The next 4 functions are for production database dump ({id,rs}dump_blast) */
-GiLinkBitListPtr FDBLoadLinksTable(void);
-GiLinkBitListPtr FDBDestroyLinksTable(GiLinkBitListPtr list);
+ValNodePtr FDBLoadLinksTable(void);
+ValNodePtr FDBDestroyLinksTable(ValNodePtr list);
 ValNodePtr FDBLoadMembershipsTable(void);
 ValNodePtr FDBDestroyMembershipsTable(ValNodePtr tbl);
 
@@ -1380,13 +1479,14 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
                          be used at all. */
                       
                       Int4 gi, Int4 tax_id, CharPtr div, Int4 owner, Int4 date,
-                      Uint4Ptr  AmbCharPtr);
+                      Uint4Ptr  AmbCharPtr,
+                      Int4 pig_id); /* protein identifier group */
 
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
 
-Boolean FDBAddLinksInformation(BlastDefLinePtr bdp,GiLinkBitListPtr links_tblp);
+Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, ValNodePtr links_tblp);
 Boolean FDBAddMembershipInformation(BlastDefLinePtr bdp, ValNodePtr memb_tblp, 
                                     VoidPtr criteria_arg);
 
@@ -1477,14 +1577,27 @@ Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 		FILE *fout, CharPtr difile, Int4 gi_threshold);
 #endif
 
-/* Fastacmd API */
+/************************************************************************/
+/*        Fastacmd API                                           */
+/************************************************************************/
+
+typedef struct FCMDAccList {
+    CharPtr acc;
+    Int4 gi;
+    struct FCMDAccList *next;
+} FCMDAccList, PNTR FCMDAccListPtr;
+
+FCMDAccListPtr LIBCALL GetAccList(CharPtr file, Int4Ptr TotalItems);
+void LIBCALL FCMDAccListFree(FCMDAccListPtr falp);
+
+/* Fastacmd_Search and Fastacmd_Search_ex return non-zero on failure */
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
 Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
 	Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
     CharPtr seqlocstr, Uint1 strand, Boolean taxonomy_info_only, 
-    Boolean dbinfo_only);
+    Boolean dbinfo_only, Int4 pig);
 Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
 		    Boolean use_ctrlAs);
 
@@ -1495,6 +1608,8 @@ Int4 FastaToBlastDB PROTO((FDB_optionsPtr options, CharPtr basename,
 			   Int4 Bases_In_Volume));
 
 BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number);
+
+CharPtr FD_ConstructMultivolumeDBList(CharPtr basename, Int4 vols);
 
 Boolean FD_CreateAliasFileEx PROTO((CharPtr title, CharPtr basename, 
             Int4 volumes, Boolean is_protein, CharPtr parent,
@@ -1540,6 +1655,7 @@ readdb_preload PROTO((ReadDBFILEPtr rdfp, Int4 first_db_seq,
 
 #endif /* HAVE_MADVISE */
 #endif /* SOL || LINUX */
+
 #ifdef __cplusplus
 }
 #endif

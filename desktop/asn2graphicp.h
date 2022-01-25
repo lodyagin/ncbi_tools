@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.34 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -57,9 +57,10 @@
 extern "C" {
 #endif
 
-#define APPEARANCEITEM_MAX (FEATDEF_MAX + 3)
-#define APPEARANCEITEM_Alignment (FEATDEF_MAX + 1)
-#define APPEARANCEITEM_Segment (FEATDEF_MAX + 2)
+#define APPEARANCEITEM_Segment (FEATDEF_MAX + 1)
+#define APPEARANCEITEM_Alignment (FEATDEF_MAX + 2)
+#define APPEARANCEITEM_Graph (FEATDEF_MAX + 3)
+#define APPEARANCEITEM_MAX (FEATDEF_MAX + 4)
 
 typedef enum {
   Layout_Inherit = 0,           /* inherit layout from higher-level entity */
@@ -112,6 +113,7 @@ typedef struct appearanceItem {
   Boolean         AddTypeToLabel;
   FonT            LabelFont;
   LabelLocEnum    LabelLoc;
+  Uint1           format;         /* label format, currently only valid for alignments. */
 } AppearanceItem, PNTR AppearanceItemPtr;
   
 typedef enum {
@@ -145,6 +147,10 @@ typedef struct appearance {
   Uint1                    GroupLabelColor [3];
   FonT                     GroupLabelFont;  
   Uint1                    GroupBoxColor [3];
+  Uint1                    AnnotLabelColor [3];
+  FonT                     AnnotLabelFont;  
+  Uint1                    AnnotBoxColor [3];
+ 
 } Appearance, PNTR AppearancePtr;
 
 typedef enum {
@@ -188,8 +194,8 @@ typedef struct filterItem {
   Uint2              GroupPadding;               /* number of blank (pixel) rows after this group */
   LayoutAlgorithm    LayoutChoice;
   GroupLabelLocation GroupLabelLoc;
-  Boolean            DrawItemRect;
-  Boolean            FillItemRect;
+  Boolean            DrawGroupBox;
+  Boolean            FillGroupBox;
   StrandChoice       MatchStrand;
   Tristate           AddDescToLabel;
   Tristate           AddTypeToLabel;
@@ -201,6 +207,16 @@ typedef struct filter {
   ValNodePtr      FilterItemList;       /* data.ptrvalue == FilterItemPtr */
   CharPtr         name;
   Uint2           MaxScaleWithLabels;    /* turn off all labels if scale > MaxScaleWithLabels*/
+  Boolean             GroupByAnnot;         /* features or alignments in named annotations group separately? */
+  Boolean             DrawAnnotBox;         /* draw a box around such features. */
+  GroupLabelLocation  AnnotLabelLoc;
+  Uint1               AnnotBoxColor[3];
+  Boolean             AnnotBoxColorSet;
+  FonT                AnnotLabelFont;  
+  Boolean             AnnotLabelFontSet;
+  Uint1               AnnotLabelColor [3];
+  Boolean             AnnotLabelColorSet;
+  
 } Filter, PNTR FilterPtr;
 
 typedef enum endPointType {
@@ -220,7 +236,7 @@ typedef struct relevantFeatureItem {
   Int2            numivals;
   Uint2           entityID, itemType;
   Uint4           itemID;
-  Uint2           SAPindex; /* was this feature found in a SeqAnnot table?  0 if not, else the SeqAnnot table number (1-based) */
+  SeqAnnotPtr     sap; /* was this feature found in a named SeqAnnot table?  0 if not, else a pointer to the SeqAnnot */
 } RelevantFeatureItem, PNTR RelevantFeatureItemPtr;
 
 typedef struct relevantFeatures {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -3085,7 +3085,8 @@ static void FindSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
   SeqAlignPtr        salp, 
-                     salptmp;
+                     salptmp,
+                     curr_sap;
   DenseSegPtr        dsp;
   CcId2Ptr           cip;
   Boolean            found;
@@ -3103,9 +3104,20 @@ static void FindSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
               if (cip->sip!=NULL) {
                  while (!found && salptmp!=NULL) 
                  {
-                    dsp = (DenseSegPtr)salptmp->segs;
-                    found = (Boolean)(SeqIdOrderInBioseqIdList(cip->sip, dsp->ids)>0);
-                    salptmp=salptmp->next;
+                   switch (salptmp->segtype) {
+                   case 5: /* disc */
+                     curr_sap = (SeqAlignPtr)salptmp->segs;
+                     while (!found && curr_sap!=NULL) {
+                       dsp = (DenseSegPtr)curr_sap->segs;
+                       found = (Boolean)(SeqIdOrderInBioseqIdList(cip->sip, dsp->ids)>0);
+                       curr_sap = curr_sap->next;
+                     }
+                     break;
+                   default:
+                     dsp = (DenseSegPtr)salptmp->segs;
+                     found = (Boolean)(SeqIdOrderInBioseqIdList(cip->sip, dsp->ids)>0);
+                   }
+                   salptmp=salptmp->next;
                  }
               }
               if (found || cip->sip==NULL) {
@@ -3129,9 +3141,20 @@ static void FindSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
               if (cip->sip!=NULL) {
                  while (!found && salptmp!=NULL) 
                  {
-                    dsp = (DenseSegPtr)salptmp->segs;
-                    found = (Boolean)(SeqIdOrderInBioseqIdList(cip->sip, dsp->ids)>0);
-                    salptmp=salptmp->next;
+                   switch (salptmp->segtype) {
+                   case 5: /* disc */
+                     curr_sap = (SeqAlignPtr)salptmp->segs;
+                     while (!found && curr_sap!=NULL) {
+                       dsp = (DenseSegPtr)curr_sap->segs;
+                       found = (Boolean)(SeqIdOrderInBioseqIdList(cip->sip, dsp->ids)>0);
+                       curr_sap = curr_sap->next;
+                     }
+                     break;
+                   default:
+                     dsp = (DenseSegPtr)salptmp->segs;
+                     found = (Boolean)(SeqIdOrderInBioseqIdList(cip->sip, dsp->ids)>0);
+                   }
+                   salptmp=salptmp->next;
                  }
               }
               if (found || cip->sip==NULL) {

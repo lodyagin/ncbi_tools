@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.105 $
+* $Revision: 6.111 $
 *
 * File Description: 
 *
@@ -1066,6 +1066,12 @@ static void ResizeViewForm (WindoW w)
     SetPosition (bfp->bvd.seqView, &s);
     AdjustPrnt (bfp->bvd.seqView, &s, FALSE);
   }
+  if (bfp->bvd.clickMe != NULL) {
+    GetPosition (bfp->bvd.clickMe, &s);
+    s.right = width - 10;
+    SetPosition (bfp->bvd.clickMe, &s);
+    AdjustPrnt (bfp->bvd.clickMe, &s, FALSE);
+  }
   /*
   if (bfp->bvd.udv != NULL) {
     GetPosition (bfp->bvd.udv, &s);
@@ -1694,6 +1700,29 @@ static void ChangeBioseqSequenceStyle (PopuP p)
   BioseqPagePtr      bpp;
 
   bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp != NULL && bfp->bvd.bsp != NULL) {
+    WatchCursor ();
+    bfp->bvd.moveToOldPos = FALSE;
+    bpp = bfp->currentBioseqPage;
+    if (bpp != NULL && bpp->show != NULL) {
+      bpp->show (&(bfp->bvd), FALSE);
+    }
+    Update ();
+    PointerToForm (bfp->form, (Pointer) bfp->bvd.bsp);
+    SetBioseqImportExportItems (bfp);
+    ArrowCursor ();
+    Update ();
+    AdjustDynamicGraphicViewer (&(bfp->bvd));
+  }
+}
+
+static void ChangeFlatFileExtras (ButtoN b)
+
+{
+  BioseqViewFormPtr  bfp;
+  BioseqPagePtr      bpp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (b);
   if (bfp != NULL && bfp->bvd.bsp != NULL) {
     WatchCursor ();
     bfp->bvd.moveToOldPos = FALSE;
@@ -2383,16 +2412,19 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
     }
     switch (svpp->useFolderTabs) {
       case CHANGE_VIEW_NOTABS :
+        MemFree (titles);
         return NULL;
       case CHANGE_VIEW_FOLDERTABS :
         tbs = CreateFolderTabs (g, titles, page,
                                 0, 0, SYSTEM_FOLDER_TAB,
                                 ChangeBioseqViewTabs, (Pointer) bfp);
+        MemFree (titles);
         return (Handle) tbs;
       case CHANGE_VIEW_TEXTTABS :
         tbs = CreateTextTabs (g, titles, page,
                               0, 0, SYSTEM_TEXT_TAB,
                               ChangeBioseqViewTabs, (Pointer) bfp);
+        MemFree (titles);
         return (Handle) tbs;
       case CHANGE_VIEW_RADIOBUTTONS :
         k = HiddenGroup (g, -3, 0, NULL);
@@ -2421,6 +2453,7 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
         }
         SetValue (rads, page + 1);
         AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) rads, NULL);
+        MemFree (titles);
         return (Handle) rads;
       case CHANGE_VIEW_POPUP :
         k = HiddenGroup (g, -3, 0, NULL);
@@ -2432,6 +2465,7 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
         }
         SetValue (pops, page + 1);
         AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) pops, NULL);
+        MemFree (titles);
         return (Handle) pops;
       default :
         break;
@@ -2835,7 +2869,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     PopupItem (bfp->bvd.ffModeCtrl, "Sequin");
     PopupItem (bfp->bvd.ffModeCtrl, "Dump");
     SetValue (bfp->bvd.ffModeCtrl, 3);
-    bfp->bvd.baseCtgControlGrp = HiddenGroup (bfp->bvd.docTxtControlGrp, 2, 0, NULL);
+    bfp->bvd.baseCtgControlGrp = HiddenGroup (bfp->bvd.docTxtControlGrp, -3, 0, NULL);
     StaticPrompt (bfp->bvd.baseCtgControlGrp, "Style", 0, popupMenuHeight, programFont, 'l');
     bfp->bvd.ffStyleCtrl = PopupList (bfp->bvd.baseCtgControlGrp, TRUE, ChangeBioseqSequenceStyle);
     SetObjectExtra (bfp->bvd.ffStyleCtrl, bfp, NULL);
@@ -2844,6 +2878,10 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     PopupItem (bfp->bvd.ffStyleCtrl, "Master");
     PopupItem (bfp->bvd.ffStyleCtrl, "Contig");
     SetValue (bfp->bvd.ffStyleCtrl, 1);
+    if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+      bfp->bvd.ffCustomBtn = CheckBox (bfp->bvd.baseCtgControlGrp, "Extras", ChangeFlatFileExtras);
+      SetObjectExtra (bfp->bvd.ffCustomBtn, bfp, NULL);
+    }
     Hide (bfp->bvd.baseCtgControlGrp);
     Hide (bfp->bvd.docTxtControlGrp);
 
@@ -3007,12 +3045,11 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     bfp->bvd.seqViewParentGrp = HiddenGroup (h, -1, 0, NULL);
     GetNextPosition (bfp->bvd.seqViewParentGrp, &pt);
     pty = pt.y;
-    newPnlGrp = HiddenGroup (bfp->bvd.seqViewParentGrp, 6, 0, NULL);
+    newPnlGrp = HiddenGroup (bfp->bvd.seqViewParentGrp, 8, 0, NULL);
     StaticPrompt (newPnlGrp, "Feature display: ", 0, popupMenuHeight, programFont, 'l');
     bfp->bvd.newFeatControl = PopupList (newPnlGrp, TRUE, ChangeSeqViewControls);
     SetObjectExtra (bfp->bvd.newFeatControl, bfp, NULL);
-    PopupItem (bfp->bvd.newFeatControl, "On");
-    PopupItem (bfp->bvd.newFeatControl, "Off");
+    PopupItem (bfp->bvd.newFeatControl, "-------");
     SetValue (bfp->bvd.newFeatControl, 1);
     StaticPrompt (newPnlGrp, " Numbering: ", 0, popupMenuHeight, programFont, 'l');
     bfp->bvd.newNumControl = PopupList (newPnlGrp, TRUE, ChangeSeqViewControls);
@@ -3020,8 +3057,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     PopupItem (bfp->bvd.newNumControl, "None");
     PopupItem (bfp->bvd.newNumControl, "Side");
     PopupItem (bfp->bvd.newNumControl, "Top");
-    SetValue (bfp->bvd.newNumControl, 3);
-    
+    SetValue (bfp->bvd.newNumControl, 3);    
     StaticPrompt (newPnlGrp, " Grid: ", 0, popupMenuHeight, programFont, 'l');
     bfp->bvd.newGridControl = PopupList (newPnlGrp, TRUE, ChangeSeqViewControls);
     SetObjectExtra (bfp->bvd.newGridControl, bfp, NULL);
@@ -3078,7 +3114,8 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
 
     AlignObjects (ALIGN_CENTER, (HANDLE) bfp->bvd.text, (HANDLE) bfp->bvd.doc, NULL);
     AlignObjects (ALIGN_RIGHT, (HANDLE) bfp->bvd.vwr, (HANDLE)  bfp->bvd.text,
-                  (HANDLE) bfp->bvd.doc, (HANDLE) bfp->bvd.pnl, NULL);
+                  (HANDLE) bfp->bvd.doc, (HANDLE) bfp->bvd.pnl,
+                  (HANDLE) bfp->bvd.clickMe, NULL);
     AlignObjects (ALIGN_LOWER, (HANDLE) bfp->bvd.vwr, (HANDLE)  bfp->bvd.text,
                   (HANDLE) bfp->bvd.doc, (HANDLE) bfp->bvd.pnl, NULL);
 
@@ -3202,6 +3239,7 @@ static Boolean SetClickmeTitle (GatherContextPtr gcp)
 {
   BioseqViewFormPtr  bfp;
   Char               buf [80];
+  DeltaSeqPtr        dsp;
   CharPtr            label = NULL;
   ObjMgrPtr          omp;
   ObjMgrTypePtr      omtp = NULL;
@@ -3224,6 +3262,12 @@ static Boolean SetClickmeTitle (GatherContextPtr gcp)
     } else if (gcp->thistype == OBJ_BIOSEQ_SEG) {
       SeqLocLabel (gcp->thisitem, buf, sizeof (buf) - 1, OM_LABEL_BOTH);
       label = "BioseqSeg";
+    } else if (gcp->thistype == OBJ_BIOSEQ_DELTA) {
+      dsp = (DeltaSeqPtr) gcp->thisitem;
+      if (dsp != NULL && dsp->choice == 1) {
+        SeqLocLabel ((SeqLocPtr) dsp->data.ptrvalue, buf, sizeof (buf) - 1, OM_LABEL_BOTH);
+      }
+      label = "BioseqDelta";
     }
   }
   if (! StringHasNoText (buf)) {

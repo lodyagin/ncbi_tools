@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.27 2002/10/28 20:12:20 lavr Exp $
+/*  $Id: ncbi_service.h,v 6.29 2003/04/09 19:05:50 siyan Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,12 @@
 #include <connect/ncbi_host_info.h>
 
 
+/** @addtogroup ServiceSupport
+ *
+ * @{
+ */
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -69,7 +75,7 @@ typedef struct SSERV_IterTag* SERV_ITER;
  * internally by ConnNetInfo_Create(service) and then automatically used).
  * NOTE that no preferred host (0) is set in the resultant iterator.
  */
-SERV_ITER SERV_OpenSimple
+extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenSimple
 (const char*         service        /* service name                          */
  );
 
@@ -79,7 +85,7 @@ SERV_ITER SERV_OpenSimple
 #define SERV_ANYHOST    0           /* default, may be used as just 0 in code*/
 
 
-SERV_ITER SERV_OpenEx
+extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenEx
 (const char*         service,       /* service name                          */
  TSERV_Type          types,         /* mask of type(s) of servers requested  */
  unsigned int        preferred_host,/* preferred host to use service on, nbo */
@@ -106,7 +112,7 @@ SERV_ITER SERV_OpenEx
  * it will be freed automatically upon iterator destruction. On the other hand,
  * host information has to be explicitly free()'d when no longer needed.
  */
-const SSERV_Info* SERV_GetNextInfoEx
+extern NCBI_XCONNECT_EXPORT const SSERV_Info* SERV_GetNextInfoEx
 (SERV_ITER           iter,          /* handle obtained via 'SERV_Open*' call */
  HOST_INFO*          host_info      /* ptr to store host info to [may be 0]  */
  );
@@ -122,7 +128,7 @@ const SSERV_Info* SERV_GetNextInfoEx
  * explicitly free()'d by the application when no longer needed.
  * Note that env is only supplied if the function returns a non-NULL result.
  */
-SSERV_Info* SERV_GetInfoEx
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoEx
 (const char*         service,       /* service name                          */
  TSERV_Type          types,         /* mask of type(s) of servers requested  */
  unsigned int        preferred_host,/* preferred host to use service on, nbo */
@@ -140,7 +146,7 @@ SSERV_Info* SERV_GetInfoEx
 /* Penalize server returned last from SERV_GetNextInfo[Ex]().
  * Return 0 if failed, 1 if successful.
  */
-int/*bool*/ SERV_Penalize
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Penalize
 (SERV_ITER           iter,          /* handle obtained via 'SERV_Open*' call */
  double              fine           /* fine in a range [0=min..100=max] (%%) */
  );
@@ -150,14 +156,14 @@ int/*bool*/ SERV_Penalize
  * Caution: All previously obtained with this iterator pointers (if any)
  * to server descriptors (SSERV_Info*) become invalid.
  */
-void SERV_Reset
+extern NCBI_XCONNECT_EXPORT void SERV_Reset
 (SERV_ITER           iter           /* handle obtained via 'SERV_Open*' call */
  );
 
 
 /* Deallocate the iterator. Must be called to finish lookup process.
  */
-void SERV_Close
+extern NCBI_XCONNECT_EXPORT void SERV_Close
 (SERV_ITER           iter           /* handle obtained via 'SERV_Open*' call */
  );
 
@@ -167,9 +173,18 @@ void SERV_Close
 #endif
 
 
+/* @} */
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.29  2003/04/09 19:05:50  siyan
+ * Added doxygen support
+ *
+ * Revision 6.28  2003/01/08 01:59:33  lavr
+ * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
+ *
  * Revision 6.27  2002/10/28 20:12:20  lavr
  * +ncbi_host_info.h
  *

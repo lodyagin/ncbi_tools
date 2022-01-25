@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.52 $
+* $Revision: 6.53 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.53  2003/04/04 19:42:56  kskatz
+* Added a new command line option (-R) to allow external users to point spidey to a repeat database that it can pass on to blast for filtering repeats
+*
 * Revision 6.52  2002/11/14 17:20:38  johnson
 * fixed nasty memory misallocation bug in SPI_CheckSplicesForRevComp
 *
@@ -416,6 +419,7 @@ NLM_EXTERN SPI_mRNAPtr SPI_AlignmRNAToGenomic(BioseqPtr bsp_genomic, BioseqPtr b
 ***************************************************************************/
 NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsinfoPtr spim, FILE *ofp, FILE *ofp2, SPI_OptionsPtr spot)
 {
+    Char                 rep_buf[1024] = "m L;R";
    Int4                 i;
    BLAST_OptionsBlkPtr  options;
    SPI_Progress         progress;
@@ -456,7 +460,15 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
       standalone = TRUE;
    spot->printheader = TRUE;
    options = BLASTOptionNew("blastn", FALSE);
-   options->filter_string = StringSave("m L;R");
+   
+   /* KSK added to allow user defined repeat db path */
+   /* options->filter_string = StringSave("m L;R"); */
+   if (spot->repeat_db_file){
+        strcat(rep_buf, " -d ");
+        strcat(rep_buf, spot->repeat_db_file);
+   }
+   options->filter_string = StringSave(rep_buf);
+   /*end of adding repeat db path */
    options->expect_value = spot->firstpasseval;
    options->query_lcase_mask = spot->lcaseloc;
    if (spot->interspecies)
@@ -7000,6 +7012,7 @@ NLM_EXTERN SPI_OptionsPtr SPI_OptionsNew(void)
    spot->from = 0;
    spot->bigintron = 0; 
    spot->bigintron_size = 0;  /* added by KSK*/
+   spot->repeat_db_file = 0; /* added by KSK */
    return spot;
 }
 
@@ -10137,7 +10150,10 @@ static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip_head, SPI_OptionsP
             sbp1->bsp = bsp_genomic;
             sbp2 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfo));
             sbp2->bsp = bsp_mrna;
-            sbp2->lcaseloc = spot->lcaseloc;
+            if (spot->lcaseloc){ /* fixes an ABW ? */
+                sbp2->lcaseloc = spot->lcaseloc;
+            }
+            /* sbp2->lcaseloc = spot->lcaseloc; */
             spot->revcomp = TRUE;
             revcmp = SPI_AlnSinglemRNAToGen(sbp1, sbp2, NULL, NULL, spot);
             spot->revcomp = FALSE;

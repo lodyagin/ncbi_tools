@@ -25,6 +25,15 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.54  2003/01/16 19:46:28  kans
+* include accid1.h to fix Mac compiler error on missing symbols
+*
+* Revision 6.53  2003/01/10 20:55:36  dondosha
+* Enable the Entrez client option without a special definition
+*
+* Revision 6.52  2003/01/07 15:47:11  dondosha
+* Hide the -A argument if NCBI_ENTREZ_CLIENT is not defined
+*
 * Revision 6.51  2002/09/18 18:21:04  camacho
 * Fixed memory leak when using the -U option
 *
@@ -186,6 +195,7 @@
 #include <txalign.h>
 #include <sqnutils.h>
 #include <mblast.h>
+#include <accid1.h>
 
 /* Used by the callback function. */
 FILE *global_fp=NULL;
@@ -208,7 +218,6 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na,
    Char tmp[LOCAL_BUFLEN];
    Int2 index;
 
-#ifdef NCBI_ENTREZ_CLIENT
    if (!ID1BioseqFetchEnable ("bl2seq", TRUE))
       ErrPostEx(SEV_FATAL, 0, 0, 
                 "Entrez access interface currently unavailable\n");
@@ -362,7 +371,6 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na,
    BioseqUnlock(bsp_tmp);
    BioseqPack(bsp);
    ID1BioseqFetchDisable();
-#endif   
    return bsp;
 }
 		
@@ -383,10 +391,10 @@ static Args myargs [] = {
 	"0", NULL, NULL, FALSE, 'd', ARG_FLOAT, 0.0, 0, NULL},/* 5 */
   { "SeqAnnot output file",
 	NULL, NULL, NULL, TRUE, 'a', ARG_FILE_OUT, 0.0, 0, NULL},/* 6 */
-  { "Cost to open a gap (zero invokes default behavior)",
-        "0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},/* 7 */
-  { "Cost to extend a gap (zero invokes default behavior)",
-        "0", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},/* 8 */
+  { "Cost to open a gap (-1 invokes default behavior; non-default values can result in unreliable statistics)",
+        "-1", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},/* 7 */
+  { "Cost to extend a gap (-1 invokes default behavior; non-default values can result in unreliable statistics)",
+        "-1", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},/* 8 */
   { "X dropoff value for gapped alignment (in bits) (zero invokes default "
     "behavior)\n      blastn 30, megablast 20, tblastx 0, all others 15",
         "0", NULL, NULL, FALSE, 'X', ARG_INT, 0.0, 0, NULL},/* 9 */
@@ -411,18 +419,18 @@ static Args myargs [] = {
         "F", NULL, NULL, TRUE, 'm', ARG_BOOLEAN, 0.0, 0, NULL},/* 18 */
   { "Effective length of the search space (use zero for the real size)",
         "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL}, /* 19 */
-  { "Input sequences in the form of accession.version",
-        "F", NULL, NULL, FALSE, 'A', ARG_BOOLEAN, 0.0, 0, NULL}, /* 20 */
   { "Length of the largest intron allowed in tblastn for linking HSPs",
-        "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL},/* 21 */
+        "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL},/* 20 */
   { "Location on first sequence",
-        NULL, NULL, NULL, TRUE, 'I', ARG_STRING, 0.0, 0, NULL},/* 22 */
+        NULL, NULL, NULL, TRUE, 'I', ARG_STRING, 0.0, 0, NULL},/* 21 */
   { "Location on second sequence",
-        NULL, NULL, NULL, TRUE, 'J', ARG_STRING, 0.0, 0, NULL},/* 23 */
+        NULL, NULL, NULL, TRUE, 'J', ARG_STRING, 0.0, 0, NULL},/* 22 */
   { "Output format: 0 - traditional, 1 - tabular", 
-        "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL}, /* 24 */
+        "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL}, /* 23 */
   { "Use lower case filtering for the query sequence",
-        "F", NULL, NULL, TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL}/* 25 */
+        "F", NULL, NULL, TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL},/* 24 */
+  { "Input sequences in the form of accession.version",
+        "F", NULL, NULL, FALSE, 'A', ARG_BOOLEAN, 0.0, 0, NULL} /* 25 */
 };
 
 Int2 Main (void)
@@ -468,16 +476,10 @@ Int2 Main (void)
                 return 1;
 
 	ErrSetMessageLevel(SEV_WARNING);
-        entrez_lookup = (Boolean) myargs[20].intvalue;
+        entrez_lookup = (Boolean) myargs[25].intvalue;
         html = (Boolean) myargs[17].intvalue;
         seqannot_output = (myargs[6].strvalue != NULL);
 
-#ifndef NCBI_ENTREZ_CLIENT
-        if (entrez_lookup) {
-           ErrPostEx(SEV_WARNING, 0, 0, "Entrez client interface unavailable, -A option cannot be used");
-           return 1;
-        }
-#endif
         if (entrez_lookup) {
            query_accver = myargs [0].strvalue;
            subject_accver = myargs [1].strvalue;
@@ -519,12 +521,12 @@ Int2 Main (void)
 
         global_fp = outfp;
 	options = BLASTOptionNewEx(program_name, (Boolean) myargs[3].intvalue, (Boolean) myargs[18].intvalue);
-        tabular_output = (Uint1) myargs[24].intvalue; 
+        tabular_output = (Uint1) myargs[23].intvalue; 
         believe_query = (seqannot_output || entrez_lookup); 
         if (entrez_lookup) {
            query_bsp = BioseqFromAccession(query_accver, 1, seq1_is_na, TRUE);
         } else {
-           if (myargs[25].intvalue)
+           if (myargs[24].intvalue)
               sep = FastaToSeqEntryForDb(infp, seq1_is_na, NULL, 
                                          believe_query, NULL, NULL, 
                                          &options->query_lcase_mask);
@@ -615,18 +617,18 @@ Int2 Main (void)
 	options->matrix = MemFree(options->matrix);
         BLASTOptionSetGapParams(options, myargs[11].strvalue, 0, 0); 
 
-        if (myargs[7].intvalue != 0)
+        if (myargs[7].intvalue != -1)
               options->gap_open = myargs[7].intvalue;
-        if (myargs[8].intvalue != 0)
+        if (myargs[8].intvalue != -1)
                options->gap_extend = myargs[8].intvalue;
 
 	options->strand_option = myargs[16].intvalue;
 
         /* Input longest intron length is in nucleotide scale; in the lower 
            level code it will be used in protein scale */
-        if (myargs[21].intvalue > 0) 
+        if (myargs[20].intvalue > 0) 
            options->longest_intron = 
-              MAX(myargs[21].intvalue, MAX_INTRON_LENGTH);
+              MAX(myargs[20].intvalue, MAX_INTRON_LENGTH);
 
         if (believe_query) {
            bsp1 = query_bsp;
@@ -636,7 +638,7 @@ Int2 Main (void)
 
         bsp2 = fake_subject_bsp;
 
-        if (!myargs[22].strvalue && !myargs[23].strvalue) {
+        if (!myargs[21].strvalue && !myargs[22].strvalue) {
            seqalign = BlastTwoSequencesWithCallback(bsp1, bsp2, program_name, 
               options, &other_returns, &error_returns, handle_results);
         } else {
@@ -645,7 +647,7 @@ Int2 Main (void)
            CharPtr location;
            Int4 from, to;
            SeqLocPtr slp1 = NULL, slp2 = NULL;
-           location = myargs[22].strvalue;
+           location = myargs[21].strvalue;
            if (location) {
               from = atoi(StringTokMT(location, delimiters, &location)) - 1;
               to = atoi(location) - 1;
@@ -664,7 +666,7 @@ Int2 Main (void)
            } else
               ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBestAccession(bsp1->id)));
 
-           location = myargs[23].strvalue;
+           location = myargs[22].strvalue;
            if (location) {
               from = atoi(StringTokMT(location, delimiters, &location)) - 1;
               to = atoi(location) - 1;

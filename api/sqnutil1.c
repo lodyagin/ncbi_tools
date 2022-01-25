@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.258 $
+* $Revision: 6.271 $
 *
 * File Description: 
 *
@@ -1635,21 +1635,26 @@ NLM_EXTERN void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode)
   }
 }
 
-NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop, Boolean remove_trailingX)
+NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, Boolean include_stop, Boolean remove_trailingX, Boolean gen_prod_set)
 
 {
   ByteStorePtr         bs;
+  BioseqSetPtr         bssp;
   Char                 ch;
   CdRegionPtr          crp;
   Int2                 ctr = 1;
+  DbtagPtr             dbt;
   ValNodePtr           descr;
+  SeqFeatPtr           first;
   GBQualPtr            gbq;
   SeqFeatPtr           gene;
   GeneRefPtr           grp;
-  Int2                 i;
+  Int4                 i;
   Char                 id [64];
-  SeqEntryPtr          last = NULL;
+  SeqEntryPtr          last;
+  BioseqPtr            mbsp;
   MolInfoPtr           mip;
+  SeqEntryPtr          msep;
   SeqFeatXrefPtr       next;
   GBQualPtr            nextqual;
   SeqEntryPtr          old;
@@ -1667,6 +1672,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   ProtRefPtr           prp;
   SeqEntryPtr          psep;
   CharPtr              ptr;
+  CharPtr              rnaseq;
   SeqEntryPtr          sep;
   SeqIdPtr             sip;
   SeqEntryPtr          target = NULL;
@@ -1676,12 +1682,28 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   SeqFeatXrefPtr       xref;
 
   if (sfp == NULL || bsp == NULL) return;
+
+  /* set subtypes, used to find mRNA features for genomic product sets */
+
+  first = sfp;
+  while (sfp != NULL) {
+    if (sfp->idx.subtype == 0) {
+      sfp->idx.subtype = FindFeatDefType (sfp);
+    }
+    sfp = sfp->next;
+  }
+
+  /* expand genes specified by qualifiers on other features (except repeat_region) */
+
+  sfp = first;
   while (sfp != NULL) {
     prev = &(sfp->xref);
     xref = sfp->xref;
     while (xref != NULL) {
       next = xref->next;
-      if (xref->data.choice == SEQFEAT_GENE && sfp->data.choice != SEQFEAT_GENE) {
+      if (xref->data.choice == SEQFEAT_GENE &&
+          sfp->data.choice != SEQFEAT_GENE &&
+          sfp->idx.subtype != FEATDEF_repeat_region) {
         grp = (GeneRefPtr) xref->data.value.ptrvalue;
         if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) {
         } else {
@@ -1698,6 +1720,12 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                 gene->location = AsnIoMemCopy (sfp->location,
                                                (AsnReadFunc) SeqLocAsnRead,
                                                (AsnWriteFunc) SeqLocAsnWrite);
+                /* copy dbxrefs from parent feature */
+                for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+                  dbt = (DbtagPtr) vnp->data.ptrvalue;
+                  if (dbt == NULL) continue;
+                  ValNodeAddPointer (&(gene->dbxref), 0, (Pointer) DbtagDup (dbt));
+                }
               }
             }
           }
@@ -1706,9 +1734,175 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
           xref->data.choice = 0;
           SeqFeatXrefFree (xref);
         }
-      } else if (xref->data.choice == SEQFEAT_PROT &&
-                 sfp->data.choice == SEQFEAT_CDREGION &&
-                 sfp->product == NULL) {
+      } else {
+        prev = &(xref->next);
+      }
+      xref = next;
+    }
+    sfp = sfp->next;
+  }
+
+  /* expand mRNA features into cDNA product sequences */
+
+  bssp = NULL;
+  sep = NULL;
+  last = NULL;
+  if (gen_prod_set) {
+    sep = GetTopSeqEntryForEntityID (entityID);
+    if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp != NULL && bssp->seq_set != NULL) {
+        last = bssp->seq_set;
+        while (last->next != NULL) {
+          last = last->next;
+        }
+      }
+    }
+  }
+  if (gen_prod_set && sep != NULL && bssp != NULL && last != NULL) {
+    target = sep;
+    SaveSeqEntryObjMgrData (target, &omdptop, &omdata);
+    GetSeqEntryParent (target, &parentptr, &parenttype);
+    sfp = first;
+    while (sfp != NULL) {
+      if (sfp->data.choice == SEQFEAT_RNA && sfp->product == NULL) {
+        gbq = sfp->qual;
+        prevqual = (GBQualPtr PNTR) &(sfp->qual);
+        id [0] = '\0';
+        sip = NULL;
+        while (gbq != NULL) {
+          nextqual = gbq->next;
+          if (StringICmp (gbq->qual, "transcript_id") == 0) {
+            *(prevqual) = gbq->next;
+            gbq->next = NULL;
+            StringNCpy_0 (id, gbq->val, sizeof (id));
+            GBQualFree (gbq);
+          } else {
+            prevqual = (GBQualPtr PNTR) &(gbq->next);
+          }
+          gbq = nextqual;
+        }
+        if (! StringHasNoText (id)) {
+          if (StringChr (id, '|') != NULL) {
+            sip = SeqIdParse (id);
+          } else {
+            ptr = StringChr (id, '.');
+            if (ptr != NULL) {
+              *ptr = '\0';
+              ptr++;
+              if (sscanf (ptr, "%ld", &val) == 1) {
+                version = (Uint4) val;
+              }
+            }
+            sip = SeqIdFromAccession (id, version, NULL);
+          }
+        }
+        if (sip != NULL || sfp->idx.subtype == FEATDEF_mRNA) {
+          rnaseq = GetSequenceByFeature (sfp);
+          if (rnaseq != NULL) {
+            i = (Int4) StringLen (rnaseq);
+            bs = BSNew (i + 2);
+            if (bs != NULL) {
+              BSWrite (bs, (VoidPtr) rnaseq, (Int4) StringLen (rnaseq));
+              mbsp = BioseqNew ();
+              if (mbsp != NULL) {
+                mbsp->repr = Seq_repr_raw;
+                mbsp->mol = Seq_mol_rna;
+                mbsp->seq_data_type = Seq_code_iupacna;
+                mbsp->seq_data = bs;
+                mbsp->length = BSLen (bs);
+                BioseqPack (mbsp);
+                bs = NULL;
+                /*
+                sep = GetTopSeqEntryForEntityID (entityID);
+                */
+                old = SeqEntrySetScope (sep);
+                if (sip != NULL) {
+                  mbsp->id = sip;
+                } else if (sfp->idx.subtype == FEATDEF_mRNA) {
+                  /* actually just making rapid unique ID for mRNA */
+                  mbsp->id = MakeNewProteinSeqIdEx (sfp->location, NULL, NULL, &ctr);
+                }
+                CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+                SeqMgrAddToBioseqIndex (mbsp);
+                SeqEntrySetScope (old);
+                msep = SeqEntryNew ();
+                if (msep != NULL) {
+                  msep->choice = 1;
+                  msep->data.ptrvalue = (Pointer) mbsp;
+                  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) mbsp, msep);
+                  mip = MolInfoNew ();
+                  if (mip != NULL) {
+                    switch (sfp->idx.subtype) {
+                      case FEATDEF_preRNA :
+                        mip->biomol = MOLECULE_TYPE_PRE_MRNA;
+                        break;
+                      case FEATDEF_mRNA :
+                        mip->biomol = MOLECULE_TYPE_MRNA;
+                        break;
+                      case FEATDEF_tRNA :
+                        mip->biomol = MOLECULE_TYPE_TRNA;
+                        break;
+                      case FEATDEF_rRNA :
+                        mip->biomol = MOLECULE_TYPE_RRNA;
+                        break;
+                      case FEATDEF_snRNA :
+                        mip->biomol = MOLECULE_TYPE_SNRNA;
+                        break;
+                      case FEATDEF_scRNA :
+                        mip->biomol = MOLECULE_TYPE_SCRNA;
+                        break;
+                      case FEATDEF_otherRNA :
+                        mip->biomol = MOLECULE_TYPE_TRANSCRIBED_RNA;
+                        break;
+                      case FEATDEF_snoRNA :
+                        mip->biomol = MOLECULE_TYPE_SNORNA;
+                        break;
+                      default :
+                        mip->biomol = 0;
+                        break;
+                    }
+                    if (partial5 && partial3) {
+                      mip->completeness = 5;
+                    } else if (partial5) {
+                      mip->completeness = 3;
+                    } else if (partial3) {
+                      mip->completeness = 4;
+                    }
+                    vnp = CreateNewDescriptor (msep, Seq_descr_molinfo);
+                    if (vnp != NULL) {
+                      vnp->data.ptrvalue = (Pointer) mip;
+                    }
+                  }
+                  /* add mRNA sequence to genomic product set */
+                  last->next = msep;
+                  last = msep;
+                  SetSeqFeatProduct (sfp, mbsp);
+                }
+              }
+            }
+            rnaseq = MemFree (rnaseq);
+          }
+        }
+      }
+      sfp = sfp->next;
+    }
+    SeqMgrLinkSeqEntry (target, parenttype, parentptr);
+    RestoreSeqEntryObjMgrData (target, omdptop, &omdata);
+  }
+
+  /* expand coding region features into protein product sequences */
+
+  last = NULL;
+  sfp = first;
+  while (sfp != NULL) {
+    prev = &(sfp->xref);
+    xref = sfp->xref;
+    while (xref != NULL) {
+      next = xref->next;
+      if (xref->data.choice == SEQFEAT_PROT &&
+          sfp->data.choice == SEQFEAT_CDREGION &&
+          sfp->product == NULL) {
         prp = (ProtRefPtr) xref->data.value.ptrvalue;
         xref->data.value.ptrvalue = NULL;
         if (prp != NULL) {
@@ -1729,11 +1923,11 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                   ptr++;
                   ch = *ptr;
                 }
-                i = (Int2) StringLen (protseq);
+                i = (Int4) StringLen (protseq);
                 if (i > 0 && protseq [i - 1] == '*') {
                   protseq [i - 1] = '\0';
                 }
-                bs = BSNew ((Int4) (i + 2));
+                bs = BSNew (i + 2);
                 if (bs != NULL) {
                   ptr = protseq;
                   /*
@@ -1753,7 +1947,50 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                 pbsp->seq_data = bs;
                 pbsp->length = BSLen (bs);
                 bs = NULL;
-                sep = GetBestTopParentForData (entityID, bsp);
+                sep = NULL;
+                mbsp = NULL;
+                if (gen_prod_set) {
+                  gbq = sfp->qual;
+                  prevqual = (GBQualPtr PNTR) &(sfp->qual);
+                  id [0] = '\0';
+                  sip = NULL;
+                  while (gbq != NULL) {
+                    nextqual = gbq->next;
+                    if (StringICmp (gbq->qual, "transcript_id") == 0) {
+                      *(prevqual) = gbq->next;
+                      gbq->next = NULL;
+                      StringNCpy_0 (id, gbq->val, sizeof (id));
+                      GBQualFree (gbq);
+                    } else {
+                      prevqual = (GBQualPtr PNTR) &(gbq->next);
+                    }
+                    gbq = nextqual;
+                  }
+                  if (! StringHasNoText (id)) {
+                    if (StringChr (id, '|') != NULL) {
+                      sip = SeqIdParse (id);
+                    } else {
+                      ptr = StringChr (id, '.');
+                      if (ptr != NULL) {
+                        *ptr = '\0';
+                        ptr++;
+                        if (sscanf (ptr, "%ld", &val) == 1) {
+                          version = (Uint4) val;
+                        }
+                      }
+                      sip = SeqIdFromAccession (id, version, NULL);
+                    }
+                  }
+                  mbsp = BioseqFind (sip);
+                  SeqIdFree (sip);
+                  if (mbsp != NULL) {
+                    sep = SeqMgrGetSeqEntryForData (mbsp);
+                  } else {
+                    sep = GetBestTopParentForDataEx (entityID, bsp, TRUE);
+                  }
+                } else {
+                  sep = GetBestTopParentForData (entityID, bsp);
+                }
                 old = SeqEntrySetScope (sep);
                 gbq = sfp->qual;
                 prevqual = (GBQualPtr PNTR) &(sfp->qual);
@@ -1815,20 +2052,22 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                       vnp->data.ptrvalue = (Pointer) mip;
                     }
                   }
-                  if (last == NULL) {
+                  /* the first protein may change the set/seq structure,
+                  so goes through AddSeqEntryToSeqEntry */
 
-                    /* the first protein may change the set/seq structure,
-                    so goes through AddSeqEntryToSeqEntry */
-
+                  if (gen_prod_set || last == NULL) {
                     descr = ExtractBioSourceAndPubs (sep);
                     AddSeqEntryToSeqEntry (sep, psep, TRUE);
                     ReplaceBioSourceAndPubs (sep, descr);
-                    target = sep;
-                    SaveSeqEntryObjMgrData (target, &omdptop, &omdata);
-                    GetSeqEntryParent (target, &parentptr, &parenttype);
+                    last = psep;
                   } else {
                     last->next = psep;
                     last = psep;
+                  }
+                  if (target == NULL) {
+                    target = sep;
+                    SaveSeqEntryObjMgrData (target, &omdptop, &omdata);
+                    GetSeqEntryParent (target, &parentptr, &parenttype);
                   }
                   SetSeqFeatProduct (sfp, pbsp);
                   psep = SeqMgrGetSeqEntryForData (pbsp);
@@ -1866,7 +2105,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
 NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
 
 {
-  PromoteXrefsEx (sfp, bsp, entityID, TRUE, FALSE);
+  PromoteXrefsEx (sfp, bsp, entityID, TRUE, FALSE, FALSE);
 }
 
 /* begin BasicSeqEntryCleanup section */
@@ -5353,6 +5592,36 @@ static void StrStripSpaces (
   *new_str = '\0';
 }
 
+static CharPtr uninfStrings [] = {
+  "signal",
+  "transit",
+  "peptide",
+  "signal peptide",
+  "signal-peptide",
+  "signal_peptide",
+  "transit peptide",
+  "transit-peptide",
+  "transit_peptide",
+  "unnamed",
+  "unknown",
+  "putative",
+  NULL
+};
+
+static Boolean InformativeString (CharPtr str)
+
+{
+  Int2  i;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  for (i = 0; uninfStrings [i] != NULL; i++) {
+    if (StringICmp (str, uninfStrings [i]) == 0) return FALSE;
+  }
+
+  return TRUE;
+}
+
 static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
@@ -5518,7 +5787,9 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
               sfp->comment == NULL) {
             sfp->comment = StringSave ("putative");
           }
-          prp->name = ValNodeFreeData (prp->name);
+          if (! InformativeString (str)) {
+            prp->name = ValNodeFreeData (prp->name);
+          }
         }
       }
       if (prp->processed == 2 && prp->name == NULL) {
@@ -7159,6 +7430,7 @@ static Boolean FileExists (CharPtr dirname, CharPtr subname, CharPtr filename)
   return (Boolean) (FileLength (path) > 0);
 }
 
+/*
 static Boolean CheckAsnloadPath (CharPtr dirname, CharPtr subdir)
 
 {
@@ -7177,6 +7449,7 @@ static Boolean CheckAsnloadPath (CharPtr dirname, CharPtr subdir)
   return TRUE;
 #endif
 }
+*/
 
 static Boolean CheckDataPath (CharPtr dirname, CharPtr subdir)
 
@@ -7204,7 +7477,6 @@ static void SetTransientPath (CharPtr dirname, CharPtr subname, CharPtr file,
 NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
 
 {
-  Boolean  asnFound;
   Boolean  dataFound;
   Char     path [PATH_MAX];
   CharPtr  ptr;
@@ -7215,9 +7487,8 @@ NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
     ptr++;
     *ptr = '\0';
   }
-  asnFound = CheckAsnloadPath (path, "asnload");
   dataFound = CheckDataPath (path, "data");
-  if (! (asnFound && dataFound)) {
+  if (! (dataFound)) {
     if (ptr != NULL) {
       ptr--;
       *ptr = '\0';
@@ -7226,11 +7497,57 @@ NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
         ptr++;
         *ptr = '\0';
       }
-      asnFound = CheckAsnloadPath (path, "asnload");
       dataFound = CheckDataPath (path, "data");
     }
   }
-  if (asnFound && dataFound) {
+#ifdef OS_UNIX_DARWIN
+  /* Mac OS X package has application in Programname.app/Contents/MacOS/Programname */
+  if (! (dataFound)) {
+    if (ptr != NULL) {
+      /* check within Contents/Resources */
+      FileBuildPath (path, "Resources", NULL);
+      dataFound = CheckDataPath (path, "data");
+      /* did not change ptr, so if it failed just go up to next higher level */
+    }
+  }
+  if (! (dataFound)) {
+    if (ptr != NULL) {
+      ptr--;
+      *ptr = '\0';
+      ptr = StringRChr (path, DIRDELIMCHR);
+      if (ptr != NULL) {
+        ptr++;
+        *ptr = '\0';
+      }
+      dataFound = CheckDataPath (path, "data");
+    }
+  }
+  if (! (dataFound)) {
+    if (ptr != NULL) {
+      ptr--;
+      *ptr = '\0';
+      ptr = StringRChr (path, DIRDELIMCHR);
+      if (ptr != NULL) {
+        ptr++;
+        *ptr = '\0';
+      }
+      dataFound = CheckDataPath (path, "data");
+    }
+  }
+  if (! (dataFound)) {
+    if (ptr != NULL) {
+      ptr--;
+      *ptr = '\0';
+      ptr = StringRChr (path, DIRDELIMCHR);
+      if (ptr != NULL) {
+        ptr++;
+        *ptr = '\0';
+      }
+      dataFound = CheckDataPath (path, "data");
+    }
+  }
+#endif
+  if (dataFound) {
     SetTransientPath (path, "asnload", "NCBI", "NCBI", "ASNLOAD");
     SetTransientPath (path, "data", "NCBI", "NCBI", "DATA");
     if (CheckErrMsgPath (path, "errmsg")) {

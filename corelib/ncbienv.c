@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.31 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.31  2003/01/29 20:57:36  kans
+* added linux, sgi, and solaris intel to GetOpSysString
+*
+* Revision 6.30  2003/01/29 19:37:14  kans
+* added GetOpSysString to return allocated string describing operating system running the program
+*
+* Revision 6.29  2003/01/27 14:54:24  kans
+* for darwin, also check /Contents/Resources/ of Mac OS X package for initial prepackaged config file
+*
+* Revision 6.28  2003/01/17 20:59:02  kans
+* for Mach-O, try home/Library/Preferences/xxx.cnf first
+*
 * Revision 6.27  2002/10/03 16:22:03  kans
 * changed fgets to Nlm_FileGets
 *
@@ -662,6 +674,54 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
 
   fp = NULL;
   if (file != NULL) {
+#ifdef OS_UNIX_DARWIN
+    /* For Mach-O executables, check username/Library/Preferences/xxx.cnf first */
+    Nlm_StringNCpy_0(str, file, sizeof(str) - 4);
+    if ( ! Nlm_Qualified (str) ) {
+        /* if the user has already supplied a name with .xxx use that name
+         * otherwise add the .cnf here */
+        Nlm_StringCat(str, ".cnf");
+    }
+    /* if the name isn't all lowercase, make it so now */
+    len = (Nlm_Int2) Nlm_StringLen (str);
+    for (i = 0; i < len; i++) {
+      str [i] = TO_LOWER (str [i]);
+    }
+    if (Nlm_GetHome (path, sizeof (path))) {
+      Nlm_FileBuildPath(path, "Library", NULL);
+      Nlm_FileBuildPath(path, "Preferences", NULL);
+      Nlm_FileBuildPath(path, NULL, str);
+      fp = Nlm_FileOpen (path, "r");
+      if (fp == NULL && create) {
+        fp = Nlm_FileOpen (path, "w");
+        Nlm_FileClose (fp);
+        fp = Nlm_FileOpen (path, "r");
+      }
+      if (writeMode && fp != NULL) {
+        Nlm_FileClose (fp);
+        fp = Nlm_FileOpen (path, "w");
+      }
+      if (fp != NULL) {
+        return fp;
+      }
+    }
+    /* also check within Contents/Resources of Mac OS X package */
+    ProgramPath (path, sizeof (path));
+    pth = StringRChr (path, DIRDELIMCHR);
+    if (pth != NULL) {
+      *pth = '\0';
+      pth = StringRChr (path, DIRDELIMCHR);
+      if (pth != NULL) {
+        *pth = '\0';
+        FileBuildPath (path, "Resources", NULL);
+        Nlm_FileBuildPath (path, NULL, str);
+        fp = Nlm_FileOpen (path, "r");
+        if (fp != NULL) {
+          return fp;
+        }
+      }
+    }
+#endif
     dontUseLocalConfig = getenv("NCBI_DONT_USE_LOCAL_CONFIG") != NULL;
     newfp = NULL;
     Nlm_StringMove(str, ".");
@@ -2203,3 +2263,62 @@ NLM_EXTERN Nlm_Boolean Nlm_FreeArgs(Nlm_Int2 numargs, Nlm_ArgPtr ap)
     }
   return TRUE;
 }
+
+NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
+
+{
+  Nlm_CharPtr  str = "unknown";
+
+#if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
+  long  sysVer;
+
+  if ( Gestalt (gestaltSystemVersion, &sysVer) == noErr) {
+    /* system version in low order word is hexadecimal */
+    if (sysVer >= 4096) {
+      str = "MAC Carbon on OS X";
+    } else if (sysVer >= 2304) {
+      str = "MAC Carbon on OS 9";
+    } else {
+      str = "MAC Carbon on OS 8";
+    }
+  }
+#endif
+
+#ifdef OS_UNIX
+  /* initial nonspecific UNIX string */
+  str = "UNIX";
+#ifdef OS_UNIX_DARWIN
+  str = "MAC UNIX on OS X";
+#endif
+#ifdef OS_UNIX_SYSV
+  str = "SYSV UNIX";
+#endif
+
+#ifdef OS_UNIX_SOL
+  str = "SOLARIS UNIX";
+#ifdef PROC_I80X86
+  str = "SOLARIS INTEL UNIX";
+#endif
+#endif
+
+#ifdef OS_UNIX_SUN
+  str = "SUN UNIX";
+#endif
+#ifdef OS_UNIX_IRIX
+  str = "SGI UNIX";
+#endif
+#ifdef OS_UNIX_LINUX
+  str = "LINUX UNIX";
+#endif
+#endif
+
+#ifdef OS_NT
+  str = "NT";
+#endif
+#ifdef OS_MSWIN
+  str = "MS WINDOWS";
+#endif
+
+  return Nlm_StringSave (str);
+}
+
