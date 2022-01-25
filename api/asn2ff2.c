@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   7/15/95
  *
- * $Revision: 6.35 $
+ * $Revision: 6.36 $
  *
  * File Description: 
  *
@@ -39,6 +39,9 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: asn2ff2.c,v $
+ * Revision 6.36  2001/12/24 16:21:32  kans
+ * initialize urf in GetStrForUserObject
+ *
  * Revision 6.35  2001/11/09 20:20:41  kans
  * new GENOME ANNOTATION REFSEQ text
  *
@@ -541,7 +544,7 @@ static CharPtr GetStrForBankit(UserObjectPtr uop)
 static CharPtr GetStrForUserObject(UserObjectPtr uop)
 {
     ObjectIdPtr		oip;
-	UserFieldPtr	ufp, tmp, u, urf;
+	UserFieldPtr	ufp, tmp, u, urf = NULL;
 	CharPtr			curator = NULL, ptr=NULL, st;
 	Int2			i=0, acclen;
 	CharPtr			p = NULL, pp;

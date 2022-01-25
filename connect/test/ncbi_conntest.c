@@ -1,4 +1,4 @@
-/*  $Id: ncbi_conntest.c,v 6.4 2001/03/02 20:03:34 lavr Exp $
+/*  $Id: ncbi_conntest.c,v 6.6 2002/03/22 19:46:02 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,12 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_conntest.c,v $
+ * Revision 6.6  2002/03/22 19:46:02  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.5  2002/01/16 21:23:14  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.4  2001/03/02 20:03:34  lavr
  * Typos fixed
  *
@@ -46,14 +52,12 @@
  * ==========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
-
 #include "ncbi_conntest.h"
 #include "../ncbi_priv.h"
 #include <connect/ncbi_connection.h>
 #include <string.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 /***********************************************************************

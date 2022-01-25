@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  runs external programs for ingenue
 *
@@ -3534,7 +3534,7 @@ static Int4 Ing_PrintSpideyReport(IngReportPtr Report, SegmenT seg,  SPI_mRNAPtr
 
   /* print analysis name */
   row++;
-  MemSet((Pointer)tmpstr, '/0', sizeof(tmpstr));
+  MemSet((Pointer)tmpstr, '\0', sizeof(tmpstr));
   temp=StringSave("--   Spidey   --     ");
   swidth=StringWidth(temp);
   slen=StringLen(temp);
@@ -3551,7 +3551,7 @@ static Int4 Ing_PrintSpideyReport(IngReportPtr Report, SegmenT seg,  SPI_mRNAPtr
   epp=spidp->epp;
   FastaDefLine (bsp_genomic, defline, 200, NULL, NULL, 0);
   SeqIdWrite(bsp_genomic->id, idstr, PRINTID_FASTA_LONG, 41);
-  MemSet((Pointer)tmpstr, '/0', sizeof(tmpstr));
+  MemSet((Pointer)tmpstr, '\0', sizeof(tmpstr));
   sprintf(tmpstr, "Genomic Sequence: %s ", idstr);
   sprintf(tmp, "%s, ", defline);
   StringCat(tmpstr, tmp);
@@ -3893,7 +3893,7 @@ static Int4 Ing_PrintBlastReport(IngReportPtr Report, SegmenT seg, SeqAlignPtr s
 
   /* print analysis name */
   row++;
-  MemSet((Pointer)tmpstr, '/0', sizeof(tmpstr));
+  MemSet((Pointer)tmpstr, '\0', sizeof(tmpstr));
   sprintf(tmp, "--   %s   --     ", name);
   temp=StringSave(tmp);
   swidth=StringWidth(temp);
@@ -3910,7 +3910,7 @@ static Int4 Ing_PrintBlastReport(IngReportPtr Report, SegmenT seg, SeqAlignPtr s
 
   FastaDefLine (bsp_genomic, defline, 200, NULL, NULL, 0);
   SeqIdWrite(bsp_genomic->id, idstr, PRINTID_FASTA_LONG, 41);
-  MemSet((Pointer)tmpstr, '/0', sizeof(tmpstr));
+  MemSet((Pointer)tmpstr, '\0', sizeof(tmpstr));
   sprintf(tmpstr, "Genomic Sequence: %s ", idstr);
   sprintf(tmp, "%s, ", defline);
   StringCat(tmpstr, tmp);

@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.10 at Jan 5, 2001 12:44 PM
+*    Generated using ASNCODE Revision: 6.14 at Apr 16, 2002 11:50 AM
 *
 **************************************************/
 
@@ -151,6 +151,11 @@ typedef struct struct_Blast_parameters {
    Int4   is_ooframe;
    Uint1   endpoint_results;
    FloatHi   percent_identity;
+   Int4   first_db_seq;
+   Int4   final_db_seq;
+   Int4   window_size;
+   Int4   mb_template_length;
+   Int4   mb_disc_type;
 } BlastParameters, PNTR BlastParametersPtr;
 
 

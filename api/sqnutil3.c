@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -1175,7 +1175,10 @@ NLM_EXTERN CharPtr FindKeyFromFeatDefType (Uint1 type, Boolean forGBFF)
   if (forGBFF) {
     if (type == FEATDEF_GENE) {
       key = "gene";
-    } else if (type == FEATDEF_REGION || type == FEATDEF_COMMENT || type == FEATDEF_SITE) {
+    } else if (type == FEATDEF_REGION ||
+               type == FEATDEF_COMMENT ||
+               type == FEATDEF_BOND ||
+               type == FEATDEF_SITE) {
       key = "misc_feature";
     }
   }

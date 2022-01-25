@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.6 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *
@@ -47,6 +47,7 @@
 #include <objmedli.h>
 #include <objpubme.h>
 #include <objsset.h>
+#include <urlquery.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -63,11 +64,24 @@ extern "C" {
 
 /* low-level connection functions */
 
-/* db is "PubMed", "Protein", "Nucleotide", or "Popset" */
-
-NLM_EXTERN CONN PMFetchOpenConnection (
-  CharPtr db,
+NLM_EXTERN CONN PubMedFetchOpenConnection (
   Int4 uid
+);
+
+NLM_EXTERN CONN PubSeqFetchOpenConnection (
+  Int4 uid,
+  Int2 retcode,
+  Int4 flags
+);
+
+NLM_EXTERN CONN GiRevHistOpenConnection (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids
+);
+
+NLM_EXTERN CONN AccnRevHistOpenConnection (
+  CharPtr accn
 );
 
 NLM_EXTERN PubmedEntryPtr PubMedWaitForReply (
@@ -78,22 +92,37 @@ NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
   CONN conn
 );
 
+NLM_EXTERN CharPtr GiRevHistWaitForReply (
+  CONN conn
+);
+
+NLM_EXTERN Int4 AccnRevHistWaitForReply (
+  CONN conn
+);
+
 /*
  PubMedSynchronousQuery and PubSeqSynchronousQuery open a
  connection, send a uid request, and wait for a reply
 */
 
-/* db "PubMed" is implied */
-
 NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   Int4 uid
 );
 
-/* db must be "Protein", "Nucleotide", or "Popset" */
-
 NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
-  CharPtr db,
-  Int4 uid
+  Int4 uid,
+  Int2 retcode,
+  Int4 flags
+);
+
+NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids
+);
+
+NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
+  CharPtr accn
 );
 
 /*
@@ -129,8 +158,9 @@ NLM_EXTERN PubmedEntryPtr PubMedReadReply (
 );
 
 NLM_EXTERN Boolean PubSeqAsynchronousQuery (
-  CharPtr db,
   Int4 uid,
+  Int2 retcode,
+  Int4 flags,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -145,6 +175,40 @@ NLM_EXTERN SeqEntryPtr PubSeqReadReply (
   EIO_Status status
 );
 
+NLM_EXTERN Boolean GiRevHistAsynchronousQuery (
+  Int4 uid,
+  Int4 num,
+  Int4Ptr uids,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Int4 GiRevHistCheckQueue (
+  QUEUE* queue
+);
+
+NLM_EXTERN CharPtr GiRevHistReadReply (
+  CONN conn,
+  EIO_Status status
+);
+
+NLM_EXTERN Boolean AccnRevHistAsynchronousQuery (
+  CharPtr accn,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Int4 AccnRevHistCheckQueue (
+  QUEUE* queue
+);
+
+NLM_EXTERN Int4 AccnRevHistReadReply (
+  CONN conn,
+  EIO_Status status
+);
+
 /* SeqId fetch function */
 
 NLM_EXTERN Boolean PubSeqFetchEnable (
@@ -152,6 +216,22 @@ NLM_EXTERN Boolean PubSeqFetchEnable (
 );
 NLM_EXTERN void PubSeqFetchDisable (
   void
+);
+
+/* multiple SeqId preload into cache functions */
+
+NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
+  Int4 num,
+  Int4Ptr uids
+);
+
+NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
+  SeqEntryPtr sep,
+  Boolean components,
+  Boolean locations,
+  Boolean products,
+  Boolean alignments,
+  Boolean history
 );
 
 

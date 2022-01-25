@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.36 $
+* $Revision: 1.40 $
 *
 * File Description: 
 *
@@ -382,6 +382,17 @@ static Entrez2RequestPtr CreateRequest (
   e2rq->cookie = StringSaveNoNull (e2cookie);
 
   return e2rq;
+}
+
+/* history needs to be used for Boolean ids and key queries */
+
+NLM_EXTERN void EntrezSetUseHistoryFlag (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  if (e2rq == NULL) return;
+  e2rq->use_history = TRUE;
 }
 
 NLM_EXTERN Entrez2IdListPtr EntrezCreateEntrezIdList (
@@ -1027,6 +1038,10 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
             ValNodeCopyStr (head, 0, buf);
             rsult = FALSE;
           }
+        } else if (StringCmp (fld, "TEXT") == 0) {
+          sprintf (buf, "Database %s field %s should be WORD", db, fld);
+          ValNodeCopyStr (head, 0, buf);
+          rsult = FALSE;
         }
       }
       if (StringLen (fld) > 4) {

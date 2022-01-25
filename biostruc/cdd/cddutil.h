@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.25 2001/11/13 19:51:52 bauer Exp $
+/* $Id: cddutil.h,v 1.35 2002/04/22 16:37:31 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,43 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.25 $
+* $Revision: 1.35 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.35  2002/04/22 16:37:31  bauer
+* added check for missing structure alignments
+*
+* Revision 1.34  2002/04/18 21:00:27  bauer
+* added check CddFeaturesAreConsistent
+*
+* Revision 1.33  2002/04/12 14:02:43  bauer
+* added update_date case to CddAssignDescr
+*
+* Revision 1.32  2002/04/11 14:34:26  bauer
+* added CddRemoveConsensus
+*
+* Revision 1.31  2002/02/20 22:27:28  bauer
+* utility functions for the CD-Server
+*
+* Revision 1.30  2002/02/12 23:00:47  bauer
+* added missing break in CddRelocateSeqLoc
+*
+* Revision 1.29  2002/02/06 19:35:37  bauer
+* some more CddGet.. functionality
+*
+* Revision 1.28  2002/02/05 23:15:41  bauer
+* added a few CddGet.. utility functions, changes to CddAddDescr allow to extend scrapbook line by line
+*
+* Revision 1.27  2002/01/05 14:49:44  bauer
+* made SeqAlignDup a local function
+*
+* Revision 1.26  2002/01/04 19:46:56  bauer
+* added functions to interconvert PSSM-Ids and accessions
+*
 * Revision 1.25  2001/11/13 19:51:52  bauer
 * support for annotation transfer in alignment reindexing
 *
@@ -174,6 +204,12 @@ typedef struct _cdd_explicit_alignment {
   Int4         *adata;
 } CddExpAlign, PNTR CddExpAlignPtr;
 
+typedef struct _cdd_idx_data {
+  Int4     iPssmId;
+  CharPtr  cCDDid;
+  struct _cdd_idx_data PNTR next;
+} CddIdxData, PNTR CddIdxDataPtr;
+
 /*---------------------------------------------------------------------------*/
 /* removed PHI-Blast specific variables from this data structure             */
 /*---------------------------------------------------------------------------*/
@@ -207,11 +243,33 @@ CddTreePtr LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin);
 /*---------------------------------------------------------------------------*/
 /* Cdd Data manipulations and queries                                        */
 /*---------------------------------------------------------------------------*/
-void    LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
-Int4    LIBCALL CddGetStatus(CddPtr pcdd);
-Boolean LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp);
-Boolean LIBCALL CddHasConsensus(CddPtr pcdd);
-void    LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn, CharPtr cEx);
+void       LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
+void       LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
+CharPtr    LIBCALL CddGetAccession(CddPtr pcdd);
+Int4       LIBCALL CddGetVersion(CddPtr pcdd);
+OrgRefPtr  LIBCALL CddGetOrgRef(CddPtr pcdd);
+Int4       LIBCALL CddGetPssmId(CddPtr pcdd);
+Int4       LIBCALL CddGetPmIds(CddPtr pcdd, Int4Ptr iPMids);
+CharPtr    LIBCALL CddGetDescr(CddPtr pcdd);
+DatePtr    LIBCALL CddGetCreateDate(CddPtr pcdd);
+DatePtr    LIBCALL CddGetUpdateDate(CddPtr pcdd);
+CharPtr    LIBCALL CddGetSource(CddPtr pcdd);
+CharPtr    LIBCALL CddGetSourceId(CddPtr pcdd);
+Int4       LIBCALL CddGetStatus(CddPtr pcdd);
+Int4       LIBCALL CddGetAlignmentLength(CddPtr pcdd);
+ValNodePtr LIBCALL CddGetAnnotNames(CddPtr pcdd);
+Boolean    LIBCALL CddHasDescription(CddPtr pcdd, CharPtr pc);
+Boolean    LIBCALL CddHasAnnotation(CddPtr pcdd);
+Boolean    LIBCALL CddMasterIs3D(CddPtr pcdd);
+Int4       LIBCALL CddCount3DAlignments(CddPtr pcdd); 
+Boolean    LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp);
+Boolean    LIBCALL CddHasConsensus(CddPtr pcdd);
+void       LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn, CharPtr cEx);
+Boolean    LIBCALL CddCheckForRepeats(CddPtr pcdd, Int4 width, Int4 GapI, Int4 GapE,
+                                      Nlm_FloatHi rthresh, Boolean bOutput);
+void       LIBCALL CddTruncStringAtFirstPunct(CharPtr pChar);
+Boolean    LIBCALL CddFeaturesAreConsistent(CddPtr pcdd);
+Boolean    LIBCALL CddHas3DSuperpos(CddPtr pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* report Errors in processing and exit immediately                          */
@@ -222,11 +280,12 @@ void LIBCALL CddSevError(CharPtr cErrTxt);
 /*---------------------------------------------------------------------------*/
 /* extract BioSeqs from the list stored in the CD                            */
 /*---------------------------------------------------------------------------*/
-BioseqPtr LIBCALL CddFindSip(SeqIdPtr sip, SeqEntryPtr sep);
-BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
-                                 Int4 to, Uint1 strand, Boolean do_feat);
-BioseqPtr LIBCALL CddExtractBioseq(SeqEntryPtr sep, SeqIdPtr sip);
-void      LIBCALL CddShrinkBioseq(BioseqPtr bsp);
+BioseqPtr   LIBCALL CddFindSip(SeqIdPtr sip, SeqEntryPtr sep);
+BioseqPtr   LIBCALL CddBioseqCopy(SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
+                                  Int4 to, Uint1 strand, Boolean do_feat);
+BioseqPtr   LIBCALL CddExtractBioseq(SeqEntryPtr sep, SeqIdPtr sip);
+void        LIBCALL CddShrinkBioseq(BioseqPtr bsp);
+SeqAnnotPtr LIBCALL CddFindMMDBIdInBioseq(BioseqPtr bsp, Int4 *iMMDBid);
 
 /*---------------------------------------------------------------------------*/
 /* Cdd specific sequence alignment format converters                         */
@@ -314,13 +373,17 @@ void LIBCALL CddReindexMSLDenDiagMaster(SeqAlignPtr salp, Int4 offset);
 
 /*---------------------------------------------------------------------------*/
 /* Transfer alignment annotation between sequences in the alignment          */
+/* and return a list detailing a sequence location in residue numbers        */
 /*---------------------------------------------------------------------------*/
-static SeqIdPtr CddFindSeqIdInSeqLoc(SeqLocPtr location);
-static SeqIdPtr CddFindSeqIdInAlignAnnot(AlignAnnotPtr oldannot);
-void   LIBCALL  CddTransferAlignAnnot(AlignAnnotPtr oldannot,
-                                      SeqIdPtr newMaster,
-				      SeqAlignPtr salp,
-				      BioseqSetPtr bssp);
+static  SeqIdPtr        CddFindSeqIdInSeqLoc(SeqLocPtr location);
+        Int4Ptr LIBCALL CddGetFeatLocList(SeqLocPtr location, Int4 *nres);
+static  void            CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali);
+static  Boolean         CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap);
+static  SeqIdPtr        CddFindSeqIdInAlignAnnot(AlignAnnotPtr oldannot);
+        void    LIBCALL CddTransferAlignAnnot(AlignAnnotPtr oldannot,
+                                              SeqIdPtr newMaster,
+				              SeqAlignPtr salp,
+				              BioseqSetPtr bssp);
 
 /*---------------------------------------------------------------------------*/
 /* reindex a Seqalign to a new "Master"                                      */
@@ -345,7 +408,7 @@ SeqAlignPtr    CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter);
 Int2   LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify, Int4Ptr *iBreakAfter);
 FloatHi        CddGetPairId(TrianglePtr pTri, Int4 idx1, Int4 idx2);
 static Boolean HitYet(Int4Ptr retlist, Int4 index, Int4 i);
-Int4Ptr        CddMostDiverse(TrianglePtr pTri, Int4 length);
+Int4Ptr        CddMostDiverse(TrianglePtr pTri, Int4 length, Int4 maxdiv);
 Int4Ptr        CddMostSimilarToQuery(ScorePtr psc, Int4 length);
 BioseqPtr      CddRetrieveBioseqById(SeqIdPtr sip, SeqEntryPtr sep);
 TrianglePtr    CddCalculateTriangle(CddPtr pcdd);
@@ -359,7 +422,29 @@ PDBSeqIdPtr LIBCALL CddGetPdbSeqId(SeqIdPtr sip);
 /*---------------------------------------------------------------------------*/
 /* Make a Consensus Sequence and reindex alignment                           */
 /*---------------------------------------------------------------------------*/
+SeqAnnotPtr LIBCALL CddSeqAnnotForSeqAlign (SeqAlignPtr salp);
+SeqAlignPtr LIBCALL CddSeqAlignDup (SeqAlignPtr salp);
+SeqAlignPtr LIBCALL SeqAlignSetDup(SeqAlignPtr salp);
+void        LIBCALL CddDegapSeqAlign(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp, SeqEntryPtr sep, BioseqPtr bsp, SeqIntPtr range, BioseqPtr *bspCons, SeqAlignPtr *salpCons);
+Boolean     LIBCALL CddRemoveConsensus(CddPtr pcdd);
+
+/*---------------------------------------------------------------------------*/
+/* dump out CD contents used for Entrez indexing in pseudo XML               */
+/*---------------------------------------------------------------------------*/
+static CharPtr CddFixForXML(CharPtr pc);
+void LIBCALL CddDumpPMLinks(CddPtr pcdd, FILE *FP);
+void LIBCALL CddDumpTaxLinks(CddPtr pcdd, FILE *FP);
+void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP);
+
+/*---------------------------------------------------------------------------*/
+/* conversions between PSSM-Ids and CDD accessions                           */
+/*---------------------------------------------------------------------------*/
+CddIdxDataPtr LIBCALL CddIdxDataNew(CharPtr acc, Int4 uid);
+CddIdxDataPtr LIBCALL CddIdxDataLink(CddIdxDataPtr PNTR head, CddIdxDataPtr cidp);
+CddIdxDataPtr LIBCALL CddReadIdx(CharPtr CDDidx);
+void LIBCALL CddAccFromPssmId(Int4 iPssmId, CharPtr cAcc, CharPtr CDDidx);
+void LIBCALL CddPssmIdFromAcc(Int4 *iPssmId, CharPtr cAcc, CharPtr CDDidx);
 
 #ifdef __cplusplus
 }

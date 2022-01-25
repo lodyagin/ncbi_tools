@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.17 $
-* $Revision: 6.17 $
+* $Revision: 6.18 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.18  2001/12/21 20:21:16  cavanaug
+ * old_locus_fmt now controls generated of *old* LOCUS line format
+ *
  * Revision 6.17  2001/12/05 18:14:05  cavanaug
  * Changes for new LOCUS line format
  *
@@ -430,7 +433,8 @@ typedef struct asn2ff_job {
                                Pointer user_data);
 	Int4 (*ajp_print_index)(struct asn2ff_job *ajp, Pointer user_data);
 	Int4 (*ajp_count_index)(struct asn2ff_job *ajp, Int4 num, Pointer user_data);
-	Boolean new_locus_fmt;	/* TRUE if utilizing the new format for the LOCUS line */
+	Boolean old_locus_fmt;	/* Set to TRUE in order to generate the old LOCUS-line format,
+				   pre-dating 12/21/2001 */
 } Asn2ffJob, PNTR Asn2ffJobPtr;
 
 

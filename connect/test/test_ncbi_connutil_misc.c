@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_connutil_misc.c,v 6.4 2000/11/07 23:24:43 vakatov Exp $
+/*  $Id: test_ncbi_connutil_misc.c,v 6.8 2002/03/22 19:46:51 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,18 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_connutil_misc.c,v $
+ * Revision 6.8  2002/03/22 19:46:51  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.7  2002/02/20 19:12:39  lavr
+ * Swapped eENCOD_Url and eENCOD_None; eENCOD_Unknown introduced; test cleaned
+ *
+ * Revision 6.6  2002/02/05 21:45:55  lavr
+ * Included header files rearranged
+ *
+ * Revision 6.5  2002/01/16 21:23:15  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.4  2000/11/07 23:24:43  vakatov
  * [MIME]  In-sync with the C Toolkit "connutil.c:R6.15"
  *
@@ -45,13 +57,11 @@
  * ===========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
-
-#include <connect/ncbi_util.h>
 #include <connect/ncbi_connutil.h>
+#include <connect/ncbi_util.h>
 #include <string.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 /***********************************************************************
@@ -227,7 +237,8 @@ static void TEST_MIME(void)
         for (i = 0, subtype = (EMIME_SubType) i;
              i <= (int) eMIME_Unknown;  i++, subtype = (EMIME_SubType) i) {
             for (j = 0, encoding = (EMIME_Encoding) j; 
-                 j <= (int) eENCOD_None;  j++, encoding = (EMIME_Encoding) j) {
+                 j < (int) eENCOD_Unknown;
+                 j++, encoding = (EMIME_Encoding) j) {
                 assert(!s_Try_MIME(str, type, subtype, encoding));
                 MIME_ComposeContentTypeEx(type, subtype, encoding,
                                           str, sizeof(str));
@@ -244,13 +255,15 @@ static void TEST_MIME(void)
                       eMIME_T_NcbiData, eMIME_AsnText, eENCOD_Url));
     assert(s_Try_MIME("x-ncbi-data/x-eeee",
                       eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None));
+    assert(s_Try_MIME("x-ncbi-data/plain-",
+                      eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None));
 
     assert(!s_Try_MIME("content-TYPE : x-ncbi-data/x-unknown\r",
                        eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None));
     assert(s_Try_MIME("text/html",
                       eMIME_T_Text, eMIME_Html, eENCOD_None));
-    assert(!s_Try_MIME("", eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None));
-    assert(!s_Try_MIME(0, eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None));
+    assert(!s_Try_MIME("", eMIME_T_NcbiData, eMIME_Unknown, eENCOD_Unknown));
+    assert(!s_Try_MIME(0, eMIME_T_NcbiData, eMIME_Unknown, eENCOD_Unknown));
 }
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.9 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -40,8 +40,8 @@
 */
 
 #include <objmgr.h>
-#include <gather.h>
 #include <asn2gnbk.h>
+#include <explore.h>
 #include <tomedlin.h>
 #include <tofasta.h>
 #include <simple.h>
@@ -60,6 +60,7 @@
 #include <dlogutil.h>
 #include <pmfapi.h>
 #include <strucapi.h>
+#include <mimapi.h>
 #include <objmime.h>
 #include <cn3dopen.h>
 
@@ -301,7 +302,7 @@ static Uint1  genericon [] = {
 static CharPtr  defaultRadios [] = { "Summary", "Fields", NULL };
 static CharPtr  medRadios [] = { "Summary", "Fields", "Abstract", "Citation", "MEDLINE", "PubMed ID", NULL };
 static CharPtr  prtRadios [] = { "Summary", "Fields", "GenPept", "FASTA", "Protein ID", NULL };
-static CharPtr  nucRadios [] = { "Summary", "Fields", "GenBank", "EMBL", "FASTA", "Nucleotide ID", NULL };
+static CharPtr  nucRadios [] = { "Summary", "Fields", "GenBank", "EMBL", "FASTA", "CDS FASTA", "Nucleotide ID", NULL };
 static CharPtr  strucRadios [] = { "Summary", "Fields", "Report", "Structure ID", NULL };
 static CharPtr  genRadios [] = { "Summary", "Fields", "Genome ID", NULL };
 static CharPtr  popsetRadios [] = { "Summary", "Fields", "Sequence ID", NULL };
@@ -312,13 +313,13 @@ static CharPtr  probeRadios [] = { "Summary", "Fields", "ProbeSet ID", NULL };
 static CharPtr  domainRadios [] = { "Summary", "Fields", "Domain ID", NULL };
 static CharPtr  localBioseqRadios [] = { "FASTA", NULL };
 
-static CharPtr  medLaunch [] = { "Local", "Web Entrez", NULL };
-static CharPtr  prtLaunch [] = { "Local", "Sequin", "Web Entrez", NULL };
-static CharPtr  nucLaunch [] = { "Local", "Sequin", "Web Entrez", NULL };
-static CharPtr  strucLaunch [] = { "Cn3D", "Web Entrez", NULL };
-static CharPtr  genLaunch [] = { "Local", "Sequin", "Web Entrez", NULL };
-static CharPtr  popsetLaunch [] = { "Local", "Sequin", "Web Entrez", NULL };
-static CharPtr  omimLaunch [] = { "Web Entrez", NULL };
+static CharPtr  medLaunch [] = { "Local", "Web Entrez", "ASN.1", NULL };
+static CharPtr  prtLaunch [] = { "Local", "Sequin", "Web Entrez", "ASN.1", NULL };
+static CharPtr  nucLaunch [] = { "Local", "Sequin", "Web Entrez", "ASN.1", NULL };
+static CharPtr  strucLaunch [] = { "Cn3D", "Web Entrez", "ASN.1", NULL };
+static CharPtr  genLaunch [] = { "Local", "Sequin", "Web Entrez", "ASN.1", NULL };
+static CharPtr  popsetLaunch [] = { "Local", "Sequin", "Web Entrez", "ASN.1", NULL };
+static CharPtr  omimLaunch [] = { "Web Entrez", "ASN.1", NULL };
 static CharPtr  taxonomyLaunch [] = { "Web Entrez", NULL };
 static CharPtr  bookLaunch [] = { "Web Entrez", NULL };
 static CharPtr  probeLaunch [] = { "Web Entrez", NULL };
@@ -692,6 +693,7 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   CharPtr               caption;
   Char                  ch;
   Int2                  commas;
+  CharPtr               comname;
   CharPtr               cpt;
   CharPtr               etal;
   CharPtr               extra;
@@ -699,6 +701,7 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   CharPtr               mrnasrc1;
   CharPtr               mrnasrc2;
   CharPtr               oid;
+  CharPtr               rank;
   CharPtr               sciname;
   CharPtr               str;
   CharPtr               taxid;
@@ -717,10 +720,12 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   authors = NULL;
   book = NULL;
   caption = NULL;
+  comname = NULL;
   extra = NULL;
   mrnasrc1 = NULL;
   mrnasrc2 = NULL;
   oid = NULL;
+  rank = NULL;
   sciname = NULL;
   taxid = NULL;
   title = NULL;
@@ -742,6 +747,10 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
       taxid = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "ScientificName") == 0) {
       sciname = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "CommonName") == 0) {
+      comname = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "Rank") == 0) {
+      rank = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "Oid") == 0) {
       oid = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "Accession1") == 0) {
@@ -797,7 +806,8 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   }
 
   len = StringLen (cpt) + StringLen (ttl) + StringLen (extra) +
-        StringLen (mrnasrc2) + StringLen (", et al.") + StringLen ("vs. ");
+        StringLen (mrnasrc2) + StringLen (comname) +
+        StringLen (", et al.") + StringLen ("vs. ") + StringLen (" []");
   str = MemNew (len + 10);
   if (str != NULL) {
     StringCpy (str, cpt);
@@ -830,6 +840,14 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
       if (! StringHasNoText (extra)) {
         StringCat (str, "\r");
         StringCat (str, extra);
+      }
+    } else if (ttl == sciname) {
+      if (StringICmp (rank, "species") == 0) {
+        if (! StringHasNoText (comname)) {
+          StringCat (str, " [");
+          StringCat (str, comname);
+          StringCat (str, "]");
+        }
       }
     }
   }
@@ -949,18 +967,17 @@ static CharPtr Query_FetchDocSumCommon (DoC d, Int2 item, FormatE2DSPProc proc)
     }
   }
 
-  /* accelerate docsum page even with slow server by requesting several at once */
+  /* accelerate docsum page requesting several at once */
 
-#ifdef WIN_MAC
-  e2RequestPtr = EntrezCreateDocSumRequest (dbName, 0, (Int4) numToFetch, uids, NULL);
-#endif
 #ifdef WIN_MOTIF
-  if ((getenv ("NCBI_ENTREZ_FAST_DOCSUMS")) != NULL) {
+  if ((getenv ("NCBI_ENTREZ_SLOW_DOCSUMS")) == NULL) {
     e2RequestPtr = EntrezCreateDocSumRequest (dbName, 0, (Int4) numToFetch, uids, NULL);
   }
+#else
+  e2RequestPtr = EntrezCreateDocSumRequest (dbName, 0, (Int4) numToFetch, uids, NULL);
 #endif
 
-  /* leave one at a time request in public version until server is made faster */
+  /* one at a time request if not grouping, to make sure server did not slow down again */
 
   if (e2RequestPtr == NULL) {
     e2RequestPtr = EntrezCreateDocSumRequest (dbName, uid, 0, NULL, NULL);
@@ -1195,20 +1212,109 @@ static BioseqPtr GetBioseqForUid (SeqEntryPtr topsep, Int4 uid)
 
 /*==================================================================*/
 /*                                                                  */
+/*  GetSequenceComplexity () -                                      */
+/*                                                                  */
+/*==================================================================*/
+
+static Int2 GetSequenceComplexity (void)
+
+{
+  Entrez2GlobalsPtr  egp;
+  Int2               retcode = 0;
+  Int2               val;
+
+  egp = (Entrez2GlobalsPtr) GetAppProperty ("Entrez2Globals");
+  if (egp == NULL || egp->seqComplex == NULL) return retcode;
+  val = GetValue (egp->seqComplex);
+  switch (val) {
+    case 1 :
+      retcode = 0;
+      break;
+    case 2 :
+      retcode = SEQENTRY_READ_NUC_PROT;
+      break;
+    case 3 :
+      retcode = SEQENTRY_READ_SEG_SET;
+      break;
+    case 4 :
+      retcode = SEQENTRY_READ_BIOSEQ;
+     break;
+    default :
+      retcode = 0;
+      break;
+  }
+  return retcode;
+}
+
+/*==================================================================*/
+/*                                                                  */
 /*  FetchSequence () -                                              */
 /*                                                                  */
 /*==================================================================*/
 
-static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format, Boolean do_fasta, Boolean is_na)
+static void FormatCdsSeq (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  BioseqPtr          bsp;
+  Char               buf [512];
+  SeqMgrFeatContext  cdscontext;
+  SeqFeatPtr         gene = NULL;
+  SeqMgrFeatContext  genecontext;
+  GeneRefPtr         grp;
+  FILE               *fp;
+  SeqIdPtr           sip;
+  SeqPortPtr         spp;
+  Char               tmp [32];
+
+  if (sfp->data.choice != SEQFEAT_CDREGION) return;
+  fp = (FILE *) userdata;
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return;
+  if (sfp != SeqMgrGetDesiredFeature (0, bsp, 0, 0, sfp, &cdscontext)) return;
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp == NULL || (! SeqMgrGeneIsSuppressed (grp))) {
+    gene = SeqMgrGetOverlappingGene (sfp->location, &genecontext);
+  }
+  spp = SeqPortNewByLoc (sfp->location, Seq_code_iupacna);
+  if (spp == NULL) return;
+  sip = SeqIdFindWorst (bsp->id);
+  SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
+  sprintf (tmp, "_cds_%ld", (long) sfp->idx.itemID);
+  StringCat (buf, tmp);
+  FastaFileFunc (bsp, FASTA_ID, buf, sizeof (buf), (Pointer) fp);
+  buf [0] = '\0';
+  if (! StringHasNoText (cdscontext.label)) {
+    StringCat (buf, "[protein=");
+    StringCat (buf, cdscontext.label);
+    StringCat (buf, "] ");
+  }
+  if (! StringHasNoText (genecontext.label)) {
+    StringCat (buf, "[gene=");
+    StringCat (buf, genecontext.label);
+    StringCat (buf, "] ");
+  }
+  TrimSpacesAroundString (buf);
+  FastaFileFunc (bsp, FASTA_DEFLINE, buf, sizeof (buf), (Pointer) fp);
+  while (FastaSeqLine (spp, buf, 70, TRUE)) {
+    FastaFileFunc (bsp, FASTA_SEQLINE, buf, sizeof (buf), (Pointer) fp);
+  }
+  SeqPortFree (spp);
+  FastaFileFunc (bsp, FASTA_EOS, buf, sizeof (buf), (Pointer)fp);
+}
+
+static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format,
+                              Boolean do_fasta, Boolean do_cds, Boolean is_na)
 
 {
   BioseqPtr    bsp;
   CharPtr      failed;
   FILE         *fp;
+  Int4         flags = 0;
   Uint1        group_segs = 0;
   ErrSev       level;
   Boolean      okay = FALSE;
   Char         path [PATH_MAX];
+  Int2         retcode;
   SeqEntryPtr  seqEntryPtr;
   SeqEntryPtr  sep;
   SummFormPtr  sfp;
@@ -1225,13 +1331,18 @@ static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format, Boo
   currDbName = DBGetNameFromID (sfp->currDb);
   str = NULL;
 
-  if ((seqEntryPtr = PubSeqSynchronousQuery (currDbName, uid)) == NULL) return failed;
+  retcode = GetSequenceComplexity ();
+  if ((seqEntryPtr = PubSeqSynchronousQuery (uid, retcode, flags)) == NULL) return failed;
 
   bsp = GetBioseqForUid (seqEntryPtr, uid);
   sep = SeqMgrGetSeqEntryForData (bsp);
   if (sep == NULL) {
     SeqEntryFree (seqEntryPtr);
     return failed;
+  }
+
+  if ((! do_fasta) && (! do_cds)) {
+    LookupFarSeqIDs (seqEntryPtr, TRUE, TRUE, TRUE, TRUE, TRUE);
   }
 
   /*------------------------*/
@@ -1251,8 +1362,15 @@ static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format, Boo
         group_segs = 3;
       }
       okay = SeqEntrysToFasta (seqEntryPtr, fp, is_na, group_segs);
+    } else if (do_cds) {
+      SeqMgrIndexFeatures (0, (Pointer) bsp);
+      VisitFeaturesInSep (seqEntryPtr, (Pointer) fp, FormatCdsSeq);
+      okay = TRUE;
     } else {
-      okay = SeqEntryToGnbk (sep, NULL, format, RELEASE_MODE, NORMAL_STYLE, 0, fp);
+      okay = SeqEntryToGnbk (sep, NULL, format, RELEASE_MODE, NORMAL_STYLE, 0,
+                             LOOKUP_FAR_COMPONENTS | LOOKUP_FAR_LOCATIONS |
+                             LOOKUP_FAR_PRODUCTS | LOOKUP_FAR_HISTORY,
+                             NULL, fp);
     }
     if (okay) {
       FileClose (fp);
@@ -1274,31 +1392,37 @@ static CharPtr FetchSequence (DoC d, Int2 item, Pointer ptr, FmtType format, Boo
 static CharPtr FetchGenBank (DoC d, Int2 item, Pointer ptr)
 
 {
-  return FetchSequence (d, item, ptr, GENBANK_FMT, FALSE, FALSE);
+  return FetchSequence (d, item, ptr, GENBANK_FMT, FALSE, FALSE, FALSE);
 }
 
 static CharPtr FetchEmbl (DoC d, Int2 item, Pointer ptr)
 
 {
-  return FetchSequence (d, item, ptr, EMBL_FMT, FALSE, FALSE);
+  return FetchSequence (d, item, ptr, EMBL_FMT, FALSE, FALSE, FALSE);
 }
 
 static CharPtr FetchGenPept (DoC d, Int2 item, Pointer ptr)
 
 {
-  return FetchSequence (d, item, ptr, GENPEPT_FMT, FALSE, FALSE);
+  return FetchSequence (d, item, ptr, GENPEPT_FMT, FALSE, FALSE, FALSE);
 }
 
 static CharPtr FetchFastaNuc (DoC d, Int2 item, Pointer ptr)
 
 {
-  return FetchSequence (d, item, ptr, GENPEPT_FMT, TRUE, TRUE);
+  return FetchSequence (d, item, ptr, 0, TRUE, FALSE, TRUE);
 }
 
 static CharPtr FetchFastaProt (DoC d, Int2 item, Pointer ptr)
 
 {
-  return FetchSequence (d, item, ptr, GENPEPT_FMT, TRUE, FALSE);
+  return FetchSequence (d, item, ptr, 0, TRUE, FALSE, FALSE);
+}
+
+static CharPtr FetchFastaCDS (DoC d, Int2 item, Pointer ptr)
+
+{
+  return FetchSequence (d, item, ptr, 0, FALSE, TRUE, TRUE);
 }
 
 /*==================================================================*/
@@ -1719,7 +1843,7 @@ static void RecalculateDocSum (SummFormPtr sfp)
 
 static DocPrntProc mlDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchAbstract, FetchCitation, FetchMedline, FetchUid, NULL };
 static DocPrntProc aaDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchGenPept, FetchFastaProt, FetchUid, NULL };
-static DocPrntProc ntDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchGenBank, FetchEmbl, FetchFastaNuc, FetchUid, NULL };
+static DocPrntProc ntDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchGenBank, FetchEmbl, FetchFastaNuc, FetchFastaCDS, FetchUid, NULL };
 static DocPrntProc stDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchPDB, FetchUid, NULL };
 static DocPrntProc chDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc popsetDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
@@ -2231,14 +2355,17 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Ch
   BioseqPtr          bsp;
   Entrez2GlobalsPtr  egp;
   Uint2              entityID;
+  Int4               flags = 0;
   Int2               handled;
   Uint2              itemID;
+  Int2               retcode;
   SeqEntryPtr        seqEntryPtr;
   ValNode            vn;
 
   WatchCursor ();
   Update ();
-  seqEntryPtr = PubSeqSynchronousQuery (dbName, uid);
+  retcode = GetSequenceComplexity ();
+  seqEntryPtr = PubSeqSynchronousQuery (uid, retcode, flags);
   if (seqEntryPtr == NULL) {
     ArrowCursor ();
     Update ();
@@ -2263,6 +2390,8 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Ch
     Message (MSG_OK, "Unable to find this record in memory.");
     return;
   }
+
+  LookupFarSeqIDs (seqEntryPtr, TRUE, TRUE, TRUE, TRUE, TRUE);
 
   egp = (Entrez2GlobalsPtr) GetAppProperty ("Entrez2Globals");
   if (egp != NULL) {
@@ -2297,8 +2426,10 @@ static void LaunchSequin (Int4 uid, Int2 numAlign, Int4Ptr alignuids, CharPtr db
   BioseqPtr          bsp;
   Entrez2GlobalsPtr  egp;
   Uint2              entityID;
+  Int4               flags = 0;
   Uint2              itemID;
   Char               path [PATH_MAX];
+  Int2               retcode;
   SeqEntryPtr        seqEntryPtr;
   ValNode            vn;
 #ifdef WIN_MOTIF
@@ -2307,7 +2438,8 @@ static void LaunchSequin (Int4 uid, Int2 numAlign, Int4Ptr alignuids, CharPtr db
 
   WatchCursor ();
   Update ();
-  seqEntryPtr = PubSeqSynchronousQuery (dbName, uid);
+  retcode = GetSequenceComplexity ();
+  seqEntryPtr = PubSeqSynchronousQuery (uid, retcode, flags);
   if (seqEntryPtr == NULL) {
     ArrowCursor ();
     Update ();
@@ -2367,6 +2499,12 @@ static void LaunchSequin (Int4 uid, Int2 numAlign, Int4Ptr alignuids, CharPtr db
 
   ArrowCursor ();
 }
+
+/*==================================================================*/
+/*                                                                  */
+/*  LaunchStructureViewer () -                                      */
+/*                                                                  */
+/*==================================================================*/
 
 static Int4 GetBiostrucComplexity (void)
 
@@ -2523,6 +2661,131 @@ static void LaunchStructureViewer (Int4 uid)
 
 /*==================================================================*/
 /*                                                                  */
+/*  LaunchXXXASN () -                                               */
+/*                                                                  */
+/*==================================================================*/
+
+static void LaunchMedlineASN (Int4 uid)
+
+{
+  AsnIoPtr        aip;
+  Char            path [PATH_MAX];
+  PubmedEntryPtr  pep;
+
+  WatchCursor ();
+  Update ();
+  pep = PubMedSynchronousQuery (uid);
+  if (pep == NULL) {
+    ArrowCursor ();
+    Update ();
+    Message (MSG_OK, "Unable to find this record in the database.");
+    return;
+  }
+  TmpNam (path);
+  aip = AsnIoOpen (path, "w");
+  if (aip != NULL) {
+    PubmedEntryAsnWrite (pep, aip, NULL);
+    AsnIoClose (aip);
+    LaunchGeneralTextViewer (path, "PubMed ASN.1");
+  }
+  FileRemove (path);
+  PubmedEntryFree (pep);
+  ArrowCursor ();
+}
+
+static void LaunchSequenceASN (Int4 uid)
+
+{
+  AsnIoPtr     aip;
+  Int4         flags = 0;
+  Char         path [PATH_MAX];
+  Int2         retcode;
+  SeqEntryPtr  seqEntryPtr;
+
+  WatchCursor ();
+  Update ();
+  retcode = GetSequenceComplexity ();
+  seqEntryPtr = PubSeqSynchronousQuery (uid, retcode, flags);
+  if (seqEntryPtr == NULL) {
+    ArrowCursor ();
+    Update ();
+    Message (MSG_OK, "Unable to find this record in the database.");
+    return;
+  }
+  TmpNam (path);
+  aip = AsnIoOpen (path, "w");
+  if (aip != NULL) {
+    SeqEntryAsnWrite (seqEntryPtr, aip, NULL);
+    AsnIoClose (aip);
+    LaunchGeneralTextViewer (path, "Sequence ASN.1");
+  }
+  FileRemove (path);
+  SeqEntryFree (seqEntryPtr);
+  ArrowCursor ();
+}
+
+static void LaunchStructureASN (Int4 uid)
+
+{
+  AsnIoPtr     aip;
+  BiostrucPtr  biostrucPtr;
+  Int4         complexity;
+  Int2         maxModels;
+  Char         path [PATH_MAX];
+
+  WatchCursor ();
+  Update ();
+  complexity = GetBiostrucComplexity ();
+  maxModels = GetBiostrucMaxModels ();
+  biostrucPtr = StrucSynchronousQuery (uid, complexity, maxModels);
+  if (biostrucPtr == NULL) {
+    ArrowCursor ();
+    Update ();
+    Message (MSG_OK, "Unable to find this record in the database.");
+    return;
+  }
+  TmpNam (path);
+  aip = AsnIoOpen (path, "w");
+  if (aip != NULL) {
+    BiostrucAsnWrite (biostrucPtr, aip, NULL);
+    AsnIoClose (aip);
+    LaunchGeneralTextViewer (path, "Structure ASN.1");
+  }
+  FileRemove (path);
+  BiostrucFree (biostrucPtr);
+  ArrowCursor ();
+}
+
+static void LaunchMimASN (Int4 uid)
+
+{
+  AsnIoPtr     aip;
+  MimEntryPtr  mep;
+  Char         path [PATH_MAX];
+
+  WatchCursor ();
+  Update ();
+  mep = MimSynchronousQuery (uid);
+  if (mep == NULL) {
+    ArrowCursor ();
+    Update ();
+    Message (MSG_OK, "Unable to find this record in the database.");
+    return;
+  }
+  TmpNam (path);
+  aip = AsnIoOpen (path, "w");
+  if (aip != NULL) {
+    MimEntryAsnWrite (mep, aip, NULL);
+    AsnIoClose (aip);
+    LaunchGeneralTextViewer (path, "MIM ASN.1");
+  }
+  FileRemove (path);
+  MimEntryFree (mep);
+  ArrowCursor ();
+}
+
+/*==================================================================*/
+/*                                                                  */
 /*  LaunchRecViewer () -                                            */
 /*                                                                  */
 /*==================================================================*/
@@ -2530,7 +2793,9 @@ static void LaunchStructureViewer (Int4 uid)
 NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2 db, Int2 launchType)
 
 {
-  CharPtr  dbName;
+  CharPtr   dbName;
+  Char      id [41];
+  SeqIdPtr  sip;
 
   if (uid == 0) return;
 
@@ -2542,6 +2807,8 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
         LaunchMedlineViewer (uid);
       } else if (launchType == 2) {
         LaunchEntrezURL ("PubMed", uid, "Abstract");
+      } else if (launchType == 3) {
+        LaunchMedlineASN (uid);
       }
     } else if (StringICmp (dbName, "Protein") == 0) {
       if (launchType == 1) {
@@ -2550,6 +2817,8 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
         LaunchSequin (uid, numAlign, alignuids, dbName);
       } else if (launchType == 3) {
         LaunchEntrezURL ("Protein", uid, "GenPept");
+      } else if (launchType == 4) {
+        LaunchSequenceASN (uid);
       }
     } else if (StringICmp (dbName, "Nucleotide") == 0) {
       if (launchType == 1) {
@@ -2558,20 +2827,30 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
         LaunchSequin (uid, numAlign, alignuids, dbName);
       } else if (launchType == 3) {
         LaunchEntrezURL ("Nucleotide", uid, "GenBank");
+      } else if (launchType == 4) {
+        LaunchSequenceASN (uid);
       }
     } else if (StringICmp (dbName, "Structure") == 0) {
       if (launchType == 1) {
         LaunchStructureViewer (uid);
       } else if (launchType == 2) {
         LaunchEntrezURL ("Structure", uid, "DocSum");
+      } else if (launchType == 3) {
+        LaunchStructureASN (uid);
       }
     } else if (StringICmp (dbName, "Genome") == 0) {
+      sprintf (id, "gnl|NCBI_GENOMES|%ld", (long) uid);
+      sip = SeqIdParse (id);
+      uid = GetGIForSeqId (sip);
+      SeqIdFree (sip);
       if (launchType == 1) {
         LaunchSequenceViewer (uid, numAlign, alignuids, "Nucleotide");
       } else if (launchType == 2) {
         LaunchSequin (uid, numAlign, alignuids, dbName);
       } else if (launchType == 3) {
         LaunchEntrezURL ("Genome", uid, "DocSum");
+      } else if (launchType == 4) {
+        LaunchSequenceASN (uid);
       }
     } else if (StringICmp (dbName, "Popset") == 0) {
       if (launchType == 1) {
@@ -2580,10 +2859,14 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
         LaunchSequin (uid, numAlign, alignuids, dbName);
       } else if (launchType == 3) {
         LaunchEntrezURL ("Popset", uid, "DocSum");
+      } else if (launchType == 4) {
+        LaunchSequenceASN (uid);
       }
     } else if (StringICmp (dbName, "OMIM") == 0) {
       if (launchType == 1) {
         LaunchEntrezURL ("OMIM", uid, "DocSum");
+      } else if (launchType == 2) {
+        LaunchMimASN (uid);
       }
     } else if (StringICmp (dbName, "Taxonomy") == 0) {
       if (launchType == 1) {
@@ -3767,6 +4050,14 @@ static void LoadDocsumOptionsMenu (MenU m)
   egp->alignWithChecked = StatusItem (m, "Align Checked Items", NULL);
   SetStatus (egp->alignWithChecked, egp->alignDefault);
   SeparatorItem (m);
+  sub = SubMenu (m, "Sequence Complexity");
+  egp->seqComplex = ChoiceGroup (sub, NULL);
+  ChoiceItem (egp->seqComplex, "Everything");
+  ChoiceItem (egp->seqComplex, "NucProt");
+  ChoiceItem (egp->seqComplex, "SegSet");
+  ChoiceItem (egp->seqComplex, "BioSeq");
+  SetValue (egp->seqComplex, 1);
+  SeparatorItem (m);
   sub = SubMenu (m, "Structure Complexity");
   egp->strucComplex = ChoiceGroup (sub, NULL);
   ChoiceItem (egp->strucComplex, "NCBI one XYZ per atom model");
@@ -4161,8 +4452,6 @@ static void SetupMenus (WindoW w)
     FormCommandItem (m, COPY_MENU_ITEM, bfp, VIB_MSG_COPY);
 
     m = PulldownMenu (w, "Options");
-    CommandItem (m, "Preferences...", Entrez2PrefsProc);
-    SeparatorItem (m);
     sub = SubMenu (m, "Neighbor Policy");
 
     c = CreateNeighborDelayChoice (sub, bfp);
@@ -4262,7 +4551,7 @@ NLM_EXTERN ForM CreateDocsumForm (
   /* Create the document summary window */
   /*------------------------------------*/
 
-  w = DocumentWindow (-50, -33, -10, -10, title, StdSendCloseWindowMessageProc, ResizeDocSumForm);
+  w = DocumentWindow (left, top, -10, -10, title, StdSendCloseWindowMessageProc, ResizeDocSumForm);
 
   /*-------------------------------*/
   /* Set window callback functions */
@@ -4387,7 +4676,7 @@ NLM_EXTERN ForM CreateDocsumForm (
   /* Set up the document panel */
   /*---------------------------*/
 
-  sfp->docsum = DocumentPanel (g, 32 * stdCharWidth, 20 * stdLineHeight);
+  sfp->docsum = DocumentPanel (g, 33 * stdCharWidth, 20 * stdLineHeight);
   SetObjectExtra (sfp->docsum, sfp, NULL);
   SetDocProcs (sfp->docsum, ClickDocSum, NULL, ReleaseDocSum, NULL);
   SetDocCache (sfp->docsum, NULL, NULL, NULL);
@@ -4508,489 +4797,435 @@ NLM_EXTERN ForM CreateDocsumForm (
 }
 
 
-static ENUM_ALIST(all_mode_alist)
-  {"Automatic",   1},
-  {"Lookup",      2},
-  {"MeSH Tree",   3},
-  {"Range",       4},
-  {"Selection",   5},
-  {"Taxonomy",    6},
-  {"Truncation",  7},
-END_ENUM_ALIST
+/* NetConfig copied from old netcnfg.c file */
 
-static ENUM_ALIST(med_views_alist)
-  {"Abstract",    1},
-  {"Citation",    2},
-  {"MEDLINE",     3},
-  {"ASN.1",       4},
-END_ENUM_ALIST
+typedef struct netconfigdata {
+  FORM_MESSAGE_BLOCK
 
+  GrouP           srvConnMode;
+  GrouP           netGroup;
 
-typedef struct entrezprefs {
-  Boolean         persistDefault;
-  Boolean         alignDefault;
-  Boolean         lookupDirect;
-  Boolean         showAsn;
-  CharPtr         initDatabase;
-  CharPtr         initField;
-  CharPtr         initMode;
-  CharPtr         initMedLabel;
-  CharPtr         initNucLabel;
-  CharPtr         initProtLabel;
-  CharPtr         initGenomeLabel;
-  Int2            minPixelWidth;
-  Int2            minPixelHeight;
-} EntrezPrefs, PNTR EntrezPrefsPtr;
+  TexT            proxyHost;
+  TexT            proxyPort;
+  TexT            firewallProxy;
 
-typedef struct prefspage {
-  DIALOG_MESSAGE_BLOCK ButtoN persist;
-  ButtoN               align;
-  GrouP                lookup;
-  ButtoN               showAsn;
-  PopuP                initDb;
-  PopuP                initFld;
-  PopuP                initMode;
-  PopuP                initMed;
-  PopuP                initNuc;
-  PopuP                initProt;
-  PopuP                initGenome;
-  TexT                 minWidth;
-  TexT                 minHeight;
-  EnumFieldAssocPtr    dbalist;
-  EnumFieldAssocPtr    fldalist;
-  EnumFieldAssocPtr    nucalist;
-  EnumFieldAssocPtr    protalist;
-  EnumFieldAssocPtr    gnomalist;
-} PrefsPage, PNTR PrefsPagePtr;
+  Char            proxyValue [256];
+  Char            portValue [16];
+  Char            firewallValue [256];
 
-typedef struct prefsform {
-  FORM_MESSAGE_BLOCK DialoG prefs;
-} PrefsForm, PNTR PrefsFormPtr;
+  ButtoN          dnsAvailable;
+  PopuP           timeOut;
 
+  VoidProc        accepted;
+  VoidProc        cancelled;
+  VoidProc        turnedOff;
 
-/*==================================================================*/
-/*                                                                  */
-/*  ReplaceString () -                                              */
-/*                                                                  */
-/*==================================================================*/
+  ButtoN          accept;
+} NetConfigData, PNTR NetConfigPtr;
 
-static void ReplaceString (CharPtr PNTR target, CharPtr newstr)
+static void ConfigMessageProc (ForM f, Int2 mssg)
 
 {
-  if (target == NULL) return;
-  MemFree (*target);
-  *target = StringSaveNoNull (newstr);
-}
+  VoidProc        cancelled;
+  NetConfigPtr    ncp;
 
-/*==================================================================*/
-/*                                                                  */
-/*  EntrezPrefsNew () -                                             */
-/*                                                                  */
-/*==================================================================*/
-
-static EntrezPrefsPtr EntrezPrefsNew (void)
-
-{
-  EntrezPrefsPtr  epp;
-
-  epp = (EntrezPrefsPtr) MemNew (sizeof (EntrezPrefs));
-  return epp;
-}
-
-/*==================================================================*/
-/*                                                                  */
-/*  EntrezPrefsFree () -                                            */
-/*                                                                  */
-/*==================================================================*/
-
-static EntrezPrefsPtr EntrezPrefsFree (EntrezPrefsPtr epp)
-
-{
-  if (epp == NULL) return NULL;
-  epp->initDatabase = MemFree (epp->initDatabase);
-  epp->initField = MemFree (epp->initField);
-  epp->initMode = MemFree (epp->initMode);
-  epp->initMedLabel = MemFree (epp->initMedLabel);
-  epp->initNucLabel = MemFree (epp->initNucLabel);
-  epp->initProtLabel = MemFree (epp->initProtLabel);
-  epp->initGenomeLabel = MemFree (epp->initGenomeLabel);
-  return NULL;
-}
-
-/*==================================================================*/
-/*                                                                  */
-/*  DefaultMessageProc () -                                         */
-/*                                                                  */
-/*==================================================================*/
-
-static void DefaultMessageProc (ForM f, Int2 mssg)
-
-{
-  StdEditorProcsPtr sepp;
-
-  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
-  if (sepp != NULL)
-    if (sepp->handleMessages != NULL)
-      sepp->handleMessages (f, mssg);
-}
-
-/*==================================================================*/
-/*                                                                  */
-/*  AcceptPrefsProc () -                                            */
-/*                                                                  */
-/*==================================================================*/
-
-static void AcceptPrefsProc (ButtoN b)
-
-{
-  EntrezPrefsPtr       epp;
-  PrefsFormPtr         pfp;
-  Entrez2GlobalsPtr    egp;
-  MedlineViewProcsPtr  mvpp;
-  SeqViewProcsPtr      svpp;
-
-  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
-  if (svpp == NULL) return;
-
-  mvpp = (MedlineViewProcsPtr) GetAppProperty ("MedlineDisplayForm");
-  if (mvpp == NULL) return;
-
-  egp = (Entrez2GlobalsPtr) GetAppProperty ("Entrez2Globals");
-  if (egp == NULL) return;
-
-  pfp = (PrefsFormPtr) GetObjectExtra (b);
-  if (pfp == NULL) return;
-  Hide (pfp->form);
-
-  epp = (EntrezPrefsPtr) DialogToPointer (pfp->prefs);
-  if (epp != NULL) {
-    egp->persistDefault = epp->persistDefault;
-    egp->alignDefault = epp->alignDefault;
-    egp->lookupDirect = epp->lookupDirect;
-    egp->showAsn = epp->showAsn;
-    ReplaceString (&(egp->initDatabase), epp->initDatabase);
-    ReplaceString (&(egp->initField), epp->initField);
-    ReplaceString (&(egp->initMode), epp->initMode);
-    ReplaceString (&(mvpp->initMedLabel), epp->initMedLabel);
-    ReplaceString (&(svpp->initNucLabel), epp->initNucLabel);
-    ReplaceString (&(svpp->initProtLabel), epp->initProtLabel);
-    ReplaceString (&(svpp->initGenomeLabel), epp->initGenomeLabel);
-    SetAppParam ("ENTREZ", "PREFERENCES", "PARENTSPERSIST", egp->persistDefault ? "TRUE" : "FALSE");
-    SetAppParam ("ENTREZ", "PREFERENCES", "ALIGNCHECKED", egp->alignDefault ? "TRUE" : "FALSE");
-    SetAppParam ("ENTREZ", "PREFERENCES", "LOOKUPDIRECT", egp->lookupDirect ? "TRUE" : "FALSE");
-    SetAppParam ("ENTREZ", "PREFERENCES", "SHOWASNPAGE", egp->showAsn ? "TRUE" : "FALSE");
-    SetAppParam ("ENTREZ", "SETTINGS", "DATABASE", egp->initDatabase);
-    SetAppParam ("ENTREZ", "SETTINGS", "FIELD", egp->initField);
-    SetAppParam ("ENTREZ", "SETTINGS", "MODE", egp->initMode);
-    SetAppParam ("ENTREZ", "SETTINGS", "MEDPAGE", mvpp->initMedLabel);
-    SetAppParam ("ENTREZ", "SETTINGS", "NUCPAGE", svpp->initNucLabel);
-    SetAppParam ("ENTREZ", "SETTINGS", "PRTPAGE", svpp->initProtLabel);
-    SetAppParam ("ENTREZ", "SETTINGS", "GENMPAGE", svpp->initGenomeLabel);
+  ncp = (NetConfigPtr) GetObjectExtra (f);
+  if (ncp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_CLOSE:
+        cancelled = ncp->cancelled;
+        Remove (f);
+        if (cancelled != NULL) {
+          cancelled ();
+        }
+        break;
+      case VIB_MSG_CUT:
+        StdCutTextProc (NULL);
+        break;
+      case VIB_MSG_COPY:
+        StdCopyTextProc (NULL);
+        break;
+      case VIB_MSG_PASTE:
+        StdPasteTextProc (NULL);
+        break;
+      case VIB_MSG_DELETE:
+        StdDeleteTextProc (NULL);
+        break;
+      default:
+        if (ncp->appmessage != NULL) {
+          ncp->appmessage (f, mssg);
+        }
+        break;
+    }
   }
-  EntrezPrefsFree (epp);
-  Remove (pfp->form);
 }
 
-/*==================================================================*/
-/*                                                                  */
-/*  PrefsPtrToPrefsPage () -                                        */
-/*                                                                  */
-/*==================================================================*/
-
-static void PrefsPtrToPrefsPage (DialoG d, Pointer data)
+static void ConfigFormActivate (WindoW w)
 
 {
-  EntrezPrefsPtr  epp;
-  PrefsPagePtr    ppp;
+  NetConfigPtr    ncp;
 
-  ppp = (PrefsPagePtr) GetObjectExtra (d);
-  if (ppp == NULL) return;
-  epp = (EntrezPrefsPtr) data;
-  if (epp != NULL) {
-    SetStatus (ppp->persist, epp->persistDefault);
-    SetStatus (ppp->align, epp->alignDefault);
-    if (epp->lookupDirect) {
-      SetValue (ppp->lookup, 2);
+  ncp = (NetConfigPtr) GetObjectExtra (w);
+  if (ncp != NULL) {
+    if (ncp->activate != NULL) {
+      ncp->activate (w);
+    }
+  }
+}
+
+static Boolean NoEntryExists (CharPtr type)
+
+{
+  Char  str [256];
+
+  if (GetAppParam ("NCBI", "NET_SERV", type, NULL, str, sizeof (str))) {
+    if (! StringHasNoText (str)) return FALSE;
+  }
+  return TRUE;
+}
+
+static void AcceptNetConfigForm (ButtoN b)
+
+{
+  VoidProc      accepted;
+  NetConfigPtr  ncp;
+  Char          str [256];
+  VoidProc      turnedOff;
+  Int2          val;
+
+  ncp = (NetConfigPtr) GetObjectExtra (b);
+  if (ncp == NULL) return;
+
+  val = GetValue (ncp->srvConnMode);
+  if (val == 1) {
+    turnedOff = ncp->turnedOff;
+    Remove (ncp->form);
+    if (turnedOff != NULL) {
+      turnedOff ();
+    }
+    Update ();
+    return;
+  } else if (val == 3) {
+    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "FIREWALL");
+    GetTitle (ncp->proxyHost, str, sizeof (str));
+    if (! StringHasNoText (str)) {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", str);
+      GetTitle (ncp->proxyPort, str, sizeof (str));
+      if (StringICmp (str, "80") == 0) {
+        str [0] = '\0';
+      }
+      if (! StringHasNoText (str)) {
+        SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", str);
+      } else {
+        SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
+      }
     } else {
-      SetValue (ppp->lookup, 1);
+      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
+      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
     }
-    SetStatus (ppp->showAsn, epp->showAsn);
-    SetEnumPopupByName (ppp->initDb, ppp->dbalist, epp->initDatabase);
-    SetEnumPopupByName (ppp->initFld, ppp->fldalist, epp->initField);
-    SetEnumPopupByName (ppp->initMode, all_mode_alist, epp->initMode);
-    SetEnumPopupByName (ppp->initMed, med_views_alist, epp->initMedLabel);
-    SetEnumPopupByName (ppp->initNuc, ppp->nucalist, epp->initNucLabel);
-    SetEnumPopupByName (ppp->initProt, ppp->protalist, epp->initProtLabel);
-    SetEnumPopupByName (ppp->initGenome, ppp->gnomalist, epp->initGenomeLabel);
+    GetTitle (ncp->firewallProxy, str, sizeof (str));
+    if (! StringHasNoText (str)) {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", str);
+    } else {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
+    }
   } else {
-    SetStatus (ppp->persist, TRUE);
-    SetStatus (ppp->align, TRUE);
-    SetValue (ppp->lookup, 1);
-    SetStatus (ppp->showAsn, FALSE);
-    SetEnumPopupByName (ppp->initDb, ppp->dbalist, "PubMed");
-    SetEnumPopupByName (ppp->initFld, ppp->fldalist, "All Fields");
-    SetEnumPopupByName (ppp->initMode, all_mode_alist, "Automatic");
-    SetEnumPopupByName (ppp->initMed, med_views_alist, "Abstract");
-    SetEnumPopupByName (ppp->initNuc, ppp->nucalist, "GenBank");
-    SetEnumPopupByName (ppp->initProt, ppp->protalist, "GenPept");
-    SetEnumPopupByName (ppp->initGenome, ppp->gnomalist, "Map");
+    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
   }
-}
 
-/*==================================================================*/
-/*                                                                  */
-/*  PrefsPageToPrefsPtr () -                                        */
-/*                                                                  */
-/*==================================================================*/
-
-static Pointer PrefsPageToPrefsPtr (DialoG d)
-
-{
-  EntrezPrefsPtr  epp;
-  PrefsPagePtr    ppp;
-
-  ppp = (PrefsPagePtr) GetObjectExtra (d);
-  if (ppp == NULL) return NULL;
-  epp = (EntrezPrefsPtr) MemNew (sizeof (EntrezPrefs));
-  if (epp == NULL) return NULL;
-  epp->persistDefault = GetStatus (ppp->persist);
-  epp->alignDefault = GetStatus (ppp->align);
-  epp->lookupDirect = (GetValue (ppp->lookup) == 2);
-  epp->showAsn = GetStatus (ppp->showAsn);
-  epp->initDatabase = GetEnumPopupByName (ppp->initDb, ppp->dbalist);
-  epp->initField = GetEnumPopupByName (ppp->initFld, ppp->fldalist);
-  epp->initMode = GetEnumPopupByName (ppp->initMode, all_mode_alist);
-  epp->initMedLabel = GetEnumPopupByName (ppp->initMed, med_views_alist);
-  epp->initNucLabel = GetEnumPopupByName (ppp->initNuc, ppp->nucalist);
-  epp->initProtLabel = GetEnumPopupByName (ppp->initProt, ppp->protalist);
-  epp->initGenomeLabel = GetEnumPopupByName (ppp->initGenome, ppp->gnomalist);
-  return (Pointer) epp;
-}
-
-/*==================================================================*/
-/*                                                                  */
-/*  MakePageSpecAlist () -                                          */
-/*                                                                  */
-/*==================================================================*/
-
-static EnumFieldAssocPtr MakePageSpecAlist (SeqViewProcsPtr svpp, Boolean nucOK, Boolean protOK, Boolean genomeOK)
-
-{
-  EnumFieldAssocPtr alist;
-  EnumFieldAssocPtr ap;
-  BioseqPagePtr   bpp;
-  Int2            i;
-
-  if (svpp == NULL) return NULL;
-  bpp = svpp->pageSpecs;
-  i = 0;
-  while (bpp != NULL) {
-    i++;
-    bpp = bpp->next;
+  if (GetStatus (ncp->dnsAvailable)) {
+    SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", NULL);
+  } else {
+    SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", "130.14.22.106");
   }
-  alist = MemNew (sizeof (EnumFieldAssoc) * (i + 2));
-  if (alist == NULL) return NULL;
-  ap = alist;
-  bpp = svpp->pageSpecs;
-  i = 0;
-  while (bpp != NULL) {
-    if ((nucOK && bpp->nucOK) || (protOK && bpp->protOK) || (genomeOK && bpp->genomeOK)) {
-      ap->name = StringSave (bpp->label);
-      ap->value = i;
-      ap++;
-      i++;
+
+  switch (GetValue (ncp->timeOut)) {
+    case 1 :
+      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "10");
+      break;
+    case 3 :
+      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "60");
+      break;
+    case 4 :
+      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "300");
+      break;
+    default :
+      SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", NULL);
+      break;
+  }
+
+  if (GetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_PORT", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "80") == 0) {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_PORT", NULL);
     }
-    bpp = bpp->next;
   }
-  ap->name = NULL;
-  return alist;
+
+  if (GetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_URL", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "/Service/nph-dispd.cgi") == 0) {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_URL", NULL);
+    }
+  }
+
+  if (NoEntryExists ("SRV_CONN_MODE") &&
+      NoEntryExists ("SRV_CONN_TIMEOUT") &&
+      NoEntryExists ("SRV_ENGINE_HOST") &&
+      NoEntryExists ("SRV_ENGINE_PORT") &&
+      NoEntryExists ("SRV_ENGINE_URL") &&
+      NoEntryExists ("SRV_HTTP_PROXY_HOST") &&
+      NoEntryExists ("SRV_HTTP_PROXY_PORT") &&
+      NoEntryExists ("SRV_PROXY_HOST")) {
+    SetAppParam ("NCBI", "NET_SERV", NULL, NULL);
+  }
+
+  accepted = ncp->accepted;
+  Remove (ncp->form);
+  if (accepted != NULL) {
+    accepted ();
+  }
+  Update ();
 }
 
-/*==================================================================*/
-/*                                                                  */
-/*  CleanupEntrezPrefsProc () -                                     */
-/*                                                                  */
-/*==================================================================*/
-
-static void CleanupEntrezPrefsProc (GraphiC g, VoidPtr data)
+static void ChangeConfigControls (NetConfigPtr ncp)
 
 {
-  PrefsPagePtr  ppp;
+  Boolean  hasProxy;
+  Int2     val;
 
-  ppp = (PrefsPagePtr) data;
-  if (ppp != NULL) {
-    ppp->dbalist = FreeEnumFieldAlist (ppp->dbalist);
-    ppp->fldalist = FreeEnumFieldAlist (ppp->fldalist);
-    ppp->nucalist = FreeEnumFieldAlist (ppp->nucalist);
-    ppp->protalist = FreeEnumFieldAlist (ppp->protalist);
-    ppp->gnomalist = FreeEnumFieldAlist (ppp->gnomalist);
+  if (ncp == NULL) return;
+  val = GetValue (ncp->srvConnMode);
+  if (val == 1) {
+    SafeHide (ncp->netGroup);
   }
-  StdCleanupExtraProc (g, data);
+  if (val == 3) {
+    if (! Enabled (ncp->proxyHost)) {
+      SafeSetTitle (ncp->proxyHost, ncp->proxyValue);
+    }
+    Enable (ncp->proxyHost);
+    if (! Enabled (ncp->firewallProxy)) {
+      SafeSetTitle (ncp->firewallProxy, ncp->firewallValue);
+    }
+    Enable (ncp->firewallProxy);
+  } else {
+    if (Enabled (ncp->proxyHost)) {
+      GetTitle (ncp->proxyHost, ncp->proxyValue, sizeof (ncp->proxyValue));
+      SafeSetTitle (ncp->proxyHost, NULL);
+    }
+    Disable (ncp->proxyHost);
+    if (Enabled (ncp->firewallProxy)) {
+      GetTitle (ncp->firewallProxy, ncp->firewallValue, sizeof (ncp->firewallValue));
+      SafeSetTitle (ncp->firewallProxy, NULL);
+    }
+    Disable (ncp->firewallProxy);
+  }
+  hasProxy = (Boolean) (! TextHasNoText (ncp->proxyHost));
+  if (hasProxy) {
+    if (! Enabled (ncp->proxyHost)) {
+      SafeSetTitle (ncp->proxyHost, ncp->proxyValue);
+    }
+    Enable (ncp->proxyHost);
+    if (! Enabled (ncp->proxyPort)) {
+      SafeSetTitle (ncp->proxyPort, ncp->portValue);
+    }
+    Enable (ncp->proxyPort);
+  } else {
+    if (Enabled (ncp->proxyPort)) {
+      GetTitle (ncp->proxyPort, ncp->portValue, sizeof (ncp->portValue));
+      SafeSetTitle (ncp->proxyPort, NULL);
+    }
+    Disable (ncp->proxyPort);
+  }
+  if (val != 1) {
+    SafeShow (ncp->netGroup);
+  }
 }
 
-/*==================================================================*/
-/*                                                                  */
-/*  CreateEntrezPrefsDialog () -                                    */
-/*                                                                  */
-/*==================================================================*/
-
-static DialoG CreateEntrezPrefsDialog (GrouP prnt, CharPtr title)
+static void ChangeConnection (GrouP g)
 
 {
-  Entrez2GlobalsPtr  egp;
-  Entrez2InfoPtr     e2ip;
-  GrouP              g1, g2, g3, g4, g5;
-  Boolean            macLike;
-  GrouP              p;
-  PrefsPagePtr       ppp;
-  GrouP              s;
-  SeqViewProcsPtr    svpp;
+  NetConfigPtr  ncp;
 
-  p = HiddenGroup (prnt, 1, 0, NULL);
-  SetGroupSpacing (p, 10, 10);
-
-  e2ip = Query_GetInfo ();
-  if (e2ip == NULL) return NULL;
-
-  egp = (Entrez2GlobalsPtr) GetAppProperty ("Entrez2Globals");
-  if (egp == NULL) return (DialoG) p;
-  macLike = egp->popdownBehavior;
-
-  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
-  if (svpp == NULL) return (DialoG) p;
-
-  ppp = (PrefsPagePtr) MemNew (sizeof (PrefsPage));
-  if (ppp != NULL) {
-    SetObjectExtra (p, ppp, CleanupEntrezPrefsProc);
-    ppp->dialog = (DialoG) p;
-    ppp->todialog = PrefsPtrToPrefsPage;
-    ppp->fromdialog = PrefsPageToPrefsPtr;
-
-    ppp->dbalist = CreateDatabaseAlist (e2ip);
-    ppp->fldalist = CreateFieldAlist (e2ip->db_info);
-
-    ppp->nucalist = MakePageSpecAlist (svpp, TRUE, FALSE, FALSE);
-    ppp->protalist = MakePageSpecAlist (svpp, FALSE, TRUE, FALSE);
-    ppp->gnomalist = MakePageSpecAlist (svpp, FALSE, FALSE, TRUE);
-
-    if (title != NULL && title [0] != '\0')
-      s = NormalGroup (p, -1, 0, title, systemFont, NULL);
-    else
-      s = HiddenGroup (p, -1, 0, NULL);
-    SetGroupSpacing (s, 10, 10);
-
-    g1 = HiddenGroup (s, -1, 0, NULL);
-    g5 = HiddenGroup (g1, 3, 0, NULL);
-    SetGroupSpacing (g5, 10, 3);
-    ppp->persist = CheckBox (g5, "Parents Persist", NULL);
-    ppp->align = CheckBox (g5, "Align Checked", NULL);
-    ppp->showAsn = CheckBox (g5, "Show ASN.1 Report", NULL);
-    g2 = HiddenGroup (g1, 2, 0, NULL);
-    StaticPrompt (g2, "Lookup Mode Launches", 0, stdLineHeight, programFont, 'l');
-    ppp->lookup = HiddenGroup (g2, 2, 0, NULL);
-    RadioButton (ppp->lookup, "DocSum");
-    RadioButton (ppp->lookup, "Record");
-    AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) g5, NULL);
-
-    g3 = HiddenGroup (s, 0, 2, NULL);
-
-    StaticPrompt (g3, "Database", 0, 0, programFont, 'l');
-    ppp->initDb = PopupList (g3, macLike, NULL);
-    InitEnumPopup (ppp->initDb, ppp->dbalist, NULL);
-    SetEnumPopupByName (ppp->initDb, ppp->dbalist, "PubMed");
-
-    StaticPrompt (g3, "Field", 0, 0, programFont, 'l');
-    ppp->initFld = PopupList (g3, macLike, NULL);
-    InitEnumPopup (ppp->initFld, ppp->fldalist, NULL);
-    SetEnumPopupByName (ppp->initFld, ppp->fldalist, "All Fields");
-
-    StaticPrompt (g3, "Mode", 0, 0, programFont, 'l');
-    ppp->initMode = PopupList (g3, macLike, NULL);
-    InitEnumPopup (ppp->initMode, all_mode_alist, NULL);
-    SetEnumPopupByName (ppp->initMode, all_mode_alist, "Automatic");
-
-    g4 = HiddenGroup (s, 0, 2, NULL);
-
-    StaticPrompt (g4, "PubMed", 0, 0, programFont, 'l');
-    ppp->initMed = PopupList (g4, macLike, NULL);
-    InitEnumPopup (ppp->initMed, med_views_alist, NULL);
-    SetEnumPopupByName (ppp->initMed, med_views_alist, "Abstract");
-
-    StaticPrompt (g4, "Nucleotide", 0, 0, programFont, 'l');
-    ppp->initNuc = PopupList (g4, macLike, NULL);
-    InitEnumPopup (ppp->initNuc, ppp->nucalist, NULL);
-    SetEnumPopupByName (ppp->initNuc, ppp->nucalist, "GenBank");
-
-    StaticPrompt (g4, "Protein", 0, 0, programFont, 'l');
-    ppp->initProt = PopupList (g4, macLike, NULL);
-    InitEnumPopup (ppp->initProt, ppp->protalist, NULL);
-    SetEnumPopupByName (ppp->initProt, ppp->protalist, "GenPept");
-
-    StaticPrompt (g4, "Genome", 0, 0, programFont, 'l');
-    ppp->initGenome = PopupList (g4, macLike, NULL);
-    InitEnumPopup (ppp->initGenome, ppp->gnomalist, NULL);
-    SetEnumPopupByName (ppp->initGenome, ppp->gnomalist, "Map");
-
-    AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) g3, (HANDLE) g4, NULL);
-  }
-
-  return (DialoG) p;
+  ncp = (NetConfigPtr) GetObjectExtra (g);
+  ChangeConfigControls (ncp);
 }
 
-/*==================================================================*/
-/*                                                                  */
-/*  Entrez2PrefsProc () -                                           */
-/*                                                                  */
-/*==================================================================*/
-
-void Entrez2PrefsProc (IteM i)
+static void ChangeProxy (TexT t)
 
 {
-  ButtoN               b;
-  GrouP                c;
-  EntrezPrefsPtr       epp;
-  GrouP                g;
-  MedlineViewProcsPtr  mvpp;
-  PrefsFormPtr         pfp;
-  WindoW               w;
-  Entrez2GlobalsPtr    egp;
-  SeqViewProcsPtr      svpp;
+  NetConfigPtr  ncp;
 
-  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
-  mvpp = (MedlineViewProcsPtr) GetAppProperty ("MedlineDisplayForm");
-  egp = (Entrez2GlobalsPtr) GetAppProperty ("Entrez2Globals");
-  pfp = (PrefsFormPtr) MemNew (sizeof (PrefsForm));
-  if (pfp == NULL) return;
-  w = FixedWindow (-50, -33, -10, -10, "Preferences", StdCloseWindowProc);
-  SetObjectExtra (w, pfp, StdCleanupFormProc);
-  pfp->form = (ForM) w;
-  pfp->formmessage = DefaultMessageProc;
-  g = HiddenGroup (w, -1, 0, NULL);
-  SetGroupSpacing (g, 10, 10);
-  pfp->prefs = CreateEntrezPrefsDialog (g, NULL);
-  c = HiddenGroup (g, 2, 0, NULL);
-  b = PushButton (c, "Accept", AcceptPrefsProc);
-  SetObjectExtra (b, pfp, NULL);
-  PushButton (c, "Cancel", StdCancelButtonProc);
-  AlignObjects (ALIGN_CENTER, (HANDLE) pfp->prefs, (HANDLE) c, NULL);
-  RealizeWindow (w);
-  epp = EntrezPrefsNew ();
-  if (epp != NULL) {
-    epp->persistDefault = egp->persistDefault;
-    epp->alignDefault = egp->alignDefault;
-    epp->lookupDirect = egp->lookupDirect;
-    epp->showAsn = egp->showAsn;
-    epp->initDatabase = StringSaveNoNull (egp->initDatabase);
-    epp->initField = StringSaveNoNull (egp->initField);
-    epp->initMode = StringSaveNoNull (egp->initMode);
-    epp->initMedLabel = StringSaveNoNull (mvpp->initMedLabel);
-    epp->initNucLabel = StringSaveNoNull (svpp->initNucLabel);
-    epp->initProtLabel = StringSaveNoNull (svpp->initProtLabel);
-    epp->initGenomeLabel = StringSaveNoNull (svpp->initGenomeLabel);
+  ncp = (NetConfigPtr) GetObjectExtra (t);
+  ChangeConfigControls (ncp);
+}
+
+NLM_EXTERN void ShowNewNetConfigForm (
+  WndActnProc activate,
+  FormMessageFunc messages,
+  VoidProc accepted,
+  VoidProc cancelled,
+  VoidProc turnedOff,
+  Boolean netCurrentlyOn
+)
+
+{
+  ButtoN        b;
+  GrouP         c;
+  GrouP         g;
+  GrouP         h;
+  GrouP         j;
+  Int2          len;
+  NetConfigPtr  ncp;
+  PrompT        ppt0, ppt1;
+  ButtoN        rb;
+  Char          str [256];
+  WindoW        w;
+  GrouP         x;
+  GrouP         z;
+
+  w = NULL;
+  ncp = (NetConfigPtr) MemNew (sizeof (NetConfigData));
+  if (ncp != NULL) {
+
+    w = FixedWindow (-50, -33, -10, -10, "Network Configuration",
+                     StdSendCloseWindowMessageProc);
+    SetObjectExtra (w, ncp, StdCleanupFormProc);
+    ncp->form = (ForM) w;
+    ncp->formmessage = ConfigMessageProc;
+
+    ncp->appmessage = messages;
+    ncp->activate = activate;
+    SetActivate (w, ConfigFormActivate);
+
+    ncp->accepted = accepted;
+    ncp->cancelled = cancelled;
+    ncp->turnedOff = turnedOff;
+
+    h = HiddenGroup (w, -1, 0, NULL);
+    SetGroupSpacing (h, 5, 10);
+
+    j = HiddenGroup (h, 2, 0, NULL);
+    ppt0 = StaticPrompt (j, "Connection", 0, 0, programFont, 'l');
+    ncp->srvConnMode = HiddenGroup (j, 4, 0, ChangeConnection);
+    SetObjectExtra (ncp->srvConnMode, ncp, NULL);
+    rb = RadioButton (ncp->srvConnMode, "None");
+    RadioButton (ncp->srvConnMode, "Normal");
+    RadioButton (ncp->srvConnMode, "Firewall");
+    /* RadioButton (ncp->srvConnMode, "Stateless"); */
+    SetValue (ncp->srvConnMode, 2);
+    if (turnedOff == NULL) {
+      Disable (rb);
+    }
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt0, (HANDLE) ncp->srvConnMode, NULL);
+
+    ncp->netGroup = HiddenGroup (h, -1, 0, NULL);
+    SetGroupSpacing (ncp->netGroup, 5, 10);
+  
+    SelectFont (programFont);
+    len = StringWidth ("HTTP Proxy Server ") + 2;
+    SelectFont (systemFont);
+
+    z = HiddenGroup (ncp->netGroup, -2, 0, NULL);
+    StaticPrompt (z, "HTTP Proxy Server", len, dialogTextHeight, programFont, 'l');
+    ncp->proxyHost = DialogText (z, "", 12, ChangeProxy);
+    SetObjectExtra (ncp->proxyHost, ncp, NULL);
+    /*
+    StaticPrompt (z, "", 0, 0, programFont, 'l');
+    StaticPrompt (z, "", 0, 0, programFont, 'l');
+    */
+    ppt0 = StaticPrompt (z, "HTTP Proxy Port ", len, dialogTextHeight, programFont, 'l');
+    ncp->proxyPort = DialogText (z, "", 3, NULL);
+    x = MultiLinePrompt (z, "Non-transparent Proxy Server", len, programFont);
+    ncp->firewallProxy = DialogText (z, "", 12, NULL);
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) ncp->firewallProxy, NULL);
+    /*
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt0, (HANDLE) ncp->proxyPort,
+                  (HANDLE) ncp->firewallProxy, NULL);
+    */
+    AlignObjects (ALIGN_RIGHT, (HANDLE) ncp->proxyHost, (HANDLE) ncp->firewallProxy, NULL);
+    AlignObjects (ALIGN_LEFT, (HANDLE) ncp->proxyHost, (HANDLE) ncp->firewallProxy, NULL);
+
+    g = HiddenGroup (ncp->netGroup, 5, 0, NULL);
+    /*
+    ppt0 = StaticPrompt (g, "Domain name server", 0, 0, programFont, 'l');
+    ncp->dnsAvailable = CheckBox (g, "Available", NULL);
+    */
+    ncp->dnsAvailable = CheckBox (g, "Domain Name Server", NULL);
+    SetStatus (ncp->dnsAvailable, TRUE);
+    /* StaticPrompt (g, " ", 0, 0, programFont, 'l'); */
+    ppt1 = StaticPrompt (g, "Timeout", 0, popupMenuHeight, programFont, 'l');
+    ncp->timeOut = PopupList (g, TRUE, NULL);
+    PopupItem (ncp->timeOut, "10 seconds");
+    PopupItem (ncp->timeOut, "30 seconds");
+    PopupItem (ncp->timeOut, "60 seconds");
+    PopupItem (ncp->timeOut, " 5 minutes");
+    SetValue (ncp->timeOut, 2);
+    AlignObjects (ALIGN_MIDDLE, /* (HANDLE) ppt0, */ (HANDLE) ncp->dnsAvailable,
+                  (HANDLE) ppt1, (HANDLE) ncp->timeOut, NULL);
+
+    c = HiddenGroup (w, 4, 0, NULL);
+    SetGroupSpacing (c, 10, 2);
+    ncp->accept = PushButton (c, "Accept", AcceptNetConfigForm);
+    SetObjectExtra (ncp->accept, ncp, NULL);
+    b = PushButton (c, "Cancel", StdSendCancelButtonMessageProc);
+    SetObjectExtra (b, ncp, NULL);
+
+    /*
+    AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
+    */
+    AlignObjects (ALIGN_CENTER, (HANDLE) j, (HANDLE) z, (HANDLE) g, (HANDLE) c, NULL);
+
+    RealizeWindow (w);
+
+    if (! netCurrentlyOn) {
+      SafeSetValue (ncp->srvConnMode, 1);
+      Hide (ncp->netGroup);
+    } else if (GetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "WWW", str, sizeof (str))) {
+      if (StringICmp (str, "FIREWALL") == 0) {
+        SafeSetValue (ncp->srvConnMode, 3);
+      }
+    }
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL, str, sizeof (str))) {
+      if (! StringHasNoText (str)) {
+        SafeSetTitle (ncp->proxyHost, str);
+        if (GetValue (ncp->srvConnMode) == 2) {
+          SafeSetValue (ncp->srvConnMode, 3);
+        }
+      }
+    }
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL, str, sizeof (str))) {
+      if (! StringHasNoText (str)) {
+        SafeSetTitle (ncp->proxyPort, str);
+      }
+    }
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL, str, sizeof (str))) {
+      if (! StringHasNoText (str)) {
+        SafeSetTitle (ncp->firewallProxy, str);
+      }
+    }
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", NULL, str, sizeof (str))) {
+      if (StringICmp (str, "130.14.22.106") == 0 || StringICmp (str, "130.14.22.107") == 0 ) {
+        SafeSetStatus (ncp->dnsAvailable, FALSE);
+      }
+    }
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_CONN_TIMEOUT", "30", str, sizeof (str))) {
+      if (StringICmp (str, "10") == 0) {
+        SafeSetValue (ncp->timeOut, 1);
+      } else if (StringICmp (str, "60") == 0) {
+        SafeSetValue (ncp->timeOut, 3);
+      } else if (StringICmp (str, "300") == 0) {
+        SafeSetValue (ncp->timeOut, 4);
+      } else {
+        SafeSetValue (ncp->timeOut, 2);
+      }
+    }
+
+    ChangeConfigControls (ncp);
+
+    Show (w);
+    Select (w);
+    Select (ncp->proxyHost);
   }
-  PointerToDialog (pfp->prefs, (Pointer) epp);
-  EntrezPrefsFree (epp);
-  Show (w);
-  Select (w);
 }
 

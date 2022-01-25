@@ -32,8 +32,14 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.48 $ 
+/* $Revision: 6.50 $ 
 * $Log: blast.h,v $
+* Revision 6.50  2002/03/14 16:11:40  camacho
+* Extended BlastTwoSequences to allow comparison between sequence and PSSM
+*
+* Revision 6.49  2002/02/15 23:36:23  dondosha
+* Correction for megablast with non-greedy extensions
+*
 * Revision 6.48  2001/07/09 15:12:47  shavirin
 * Functions BLbasicSmithWatermanScoreOnly() and BLSmithWatermanFindStart()
 * used to calculate Smith-waterman alignments on low level become external.
@@ -440,7 +446,7 @@ SeqAlignPtr LIBCALL BlastTwoSequencesByLoc PROTO((SeqLocPtr slp1, SeqLocPtr slp2
 
 SeqAlignPtr LIBCALL BlastTwoSequencesByLocEx PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
-SeqAlignPtr LIBCALL BlastTwoSequencesByLocWithCallback PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
+SeqAlignPtr LIBCALL BlastTwoSequencesByLocWithCallback PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)), BLAST_MatrixPtr matrix));
 
 SeqAlignPtr LIBCALL BlastTwoSequencesEx PROTO((BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
@@ -459,6 +465,7 @@ BlastSequencesOnTheFlyEx PROTO((BlastSearchBlkPtr search, BioseqPtr subject_bsp)
    
 SeqAlignPtr LIBCALL SumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length));
 
+SeqAlignPtr LIBCALL MegaSumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length, Int2 query_number));
 
 /*
 	Performs a complete BLAST search and returns a SeqAnlign.

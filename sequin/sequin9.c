@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.138 $
+* $Revision: 6.141 $
 *
 * File Description: 
 *
@@ -2299,14 +2299,14 @@ static Int4 MapBioseqToBioseqSpecial(SeqAlignPtr sap, Int4 begin, Int4 fin, Int4
 
    if (sap == NULL || sap->saip == NULL)
       return -2;
-   AlnMgrGetNthSeqRangeInSA(sap, begin, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA(sap, fin, &start2, &stop2);
+   AlnMgr2GetNthSeqRangeInSA(sap, begin, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(sap, fin, &start2, &stop2);
    /* check to see whether the position is outside the alignment */
    if (pos < start1)
       return (start2 - (start1 - pos));
    else if (pos > stop1)
       return (stop2 + (pos-stop1));
-   sapos = AlnMgrMapBioseqToSeqAlign(sap, pos, begin, NULL);
+   sapos = AlnMgr2MapBioseqToSeqAlign(sap, pos, begin);
    bspos = MapRowCoordsSpecial(sap, sapos, fin, which_end);
    if (bspos >= 0)
       return bspos;
@@ -2409,7 +2409,7 @@ static Boolean AdjustAlignment (
     }
   }
 
-  AlnMgrIndexSingleChildSeqAlign (sap);
+  AlnMgr2IndexSingleChildSeqAlign (sap);
 
   return TRUE;
 }
@@ -2917,10 +2917,12 @@ static Boolean ReplaceSequence (UpsDataPtr udp)
   SeqLocPtr          slp;
   tRNAPtr            trp;
 
-  if (StringICmp (udp->seq1, udp->seq2) == 0) {
-    ans = Message (MSG_OKC, "Replacement sequence is identical to original - possible error");
-    if (ans == ANS_CANCEL) return FALSE;
-  }
+  if (udp->salp != NULL)
+    if (StringICmp (udp->seq1, udp->seq2) == 0) {
+      ans = Message (MSG_OKC, "Replacement sequence is identical to"
+		     " original - possible error");
+      if (ans == ANS_CANCEL) return FALSE;
+    }
 
   oldbsp = udp->oldbsp;
   newbsp = udp->newbsp;
@@ -3095,6 +3097,108 @@ static Boolean Merge3Prime (UpsDataPtr udp)
   if (! AdjustAlignment (udp, 3)) return FALSE;
 
   /* then finish by replacing with new sequence */
+
+  return ReplaceSequence (udp);
+}
+
+/*==================================================================*/
+/*                                                                  */
+/*  Merge5PrimeNoOverlap () -- Merge a new sequence onto the 5' end */
+/*                             of an existing sequence.             */
+/*                                                                  */
+/*                             Performs a similar function to       */
+/*                             Merge5Prime() except works when      */
+/*                             there is no alignment between the    */
+/*                             two sequences.                       */
+/*                                                                  */
+/*==================================================================*/
+
+static Boolean Merge5PrimeNoOverlap (UpsDataPtr udp)
+
+{
+  CharPtr       origSeqStr;
+  CharPtr       newSeqStr;
+  CharPtr       mergedSeqStr;
+  Int4          mergedLen;
+  ByteStorePtr  mergedBS;
+
+  /* Get original and new sequences */
+
+  origSeqStr = GetSequenceByBsp (udp->oldbsp);
+  newSeqStr = GetSequenceByBsp (udp->newbsp);
+
+  /* Concatenate the new sequence onto the beginning */
+  /* (i.e. the 5' end) of the original sequence.     */
+
+  mergedLen =  StringLen (newSeqStr) + StringLen (origSeqStr);
+  mergedSeqStr = (CharPtr) MemNew (mergedLen + 1);
+  sprintf (mergedSeqStr, "%s%s", newSeqStr, origSeqStr);
+
+  /* Convert the new sequence into a ByteStore */
+
+  mergedBS = BSNew (mergedLen);
+  BSWrite (mergedBS, (VoidPtr) mergedSeqStr, mergedLen);
+
+  /* Replace the original sequence with the */
+  /* new concatenated sequence.             */
+
+  udp->newbsp->seq_data      = BSFree (udp->newbsp->seq_data);
+  udp->newbsp->seq_data      = mergedBS;
+  udp->newbsp->seq_data_type = Seq_code_iupacna;
+  udp->newbsp->length        = mergedLen;
+
+  /* Replace the merged sequence and return */
+
+  return ReplaceSequence (udp);
+}
+
+/*==================================================================*/
+/*                                                                  */
+/*  Merge3PrimeNoOverlap () -- Merge a new sequence onto the 3' end */
+/*                             of an existing sequence.             */
+/*                                                                  */
+/*                             Performs a similar function to       */
+/*                             Merge3Prime() except works when      */
+/*                             there is no alignment between the    */
+/*                             two sequences.                       */
+/*                                                                  */
+/*==================================================================*/
+
+static Boolean Merge3PrimeNoOverlap (UpsDataPtr udp)
+
+{
+  CharPtr       origSeqStr;
+  CharPtr       newSeqStr;
+  CharPtr       mergedSeqStr;
+  Int4          mergedLen;
+  ByteStorePtr  mergedBS;
+
+  /* Get original and new sequences */
+
+  origSeqStr = GetSequenceByBsp (udp->oldbsp);
+  newSeqStr = GetSequenceByBsp (udp->newbsp);
+
+  /* Concatenate the new sequence onto the end   */
+  /* (i.e. the 3' end) of the original sequence. */
+
+  mergedLen =  StringLen (newSeqStr) + StringLen (origSeqStr);
+  mergedSeqStr = (CharPtr) MemNew (mergedLen + 1);
+  sprintf (mergedSeqStr, "%s%s", origSeqStr, newSeqStr);
+
+  /* Convert the new sequence into a ByteStore */
+
+  mergedBS = BSNew (mergedLen);
+  BSWrite (mergedBS, (VoidPtr) mergedSeqStr, mergedLen);
+
+  /* Replace the original sequence with the */
+  /* new concatenated sequence.             */
+
+  udp->newbsp->seq_data      = BSFree (udp->newbsp->seq_data);
+  udp->newbsp->seq_data      = mergedBS;
+  udp->newbsp->seq_data_type = Seq_code_iupacna;
+  udp->newbsp->length        = mergedLen;
+
+  /* Replace the merged sequence and return */
 
   return ReplaceSequence (udp);
 }
@@ -3465,13 +3569,23 @@ static void AcceptRMC (ButtoN b)
         }
         break;
       case 2 :
-        if (Merge5Prime (udp)) {
-          update = TRUE;
+	if (NULL == udp->salp) {
+	  if (Merge5PrimeNoOverlap (udp))
+	    update = TRUE;
+	}
+	else {
+	  if (Merge5Prime (udp))
+	    update = TRUE;
         }
         break;
       case 3 :
-        if (Merge3Prime (udp)) {
-          update = TRUE;
+	if (NULL == udp->salp) {
+	  if (Merge3PrimeNoOverlap (udp))
+	    update = TRUE;
+	}
+	else {
+	  if (Merge3Prime (udp))
+	    update = TRUE;
         }
         break;
       case 4 :
@@ -3704,54 +3818,53 @@ static void DrawAlignDiffs (
 )
 
 {
-  AlnMsgPtr  amp1, amp2;
+  AlnMsg2Ptr  amp1, amp2;
   SegmenT    seg;
-  Int4       start, stop, len, len1, len2, i, j, k;
+  Int4       len1, len2, i;
+  Int4       seg_i, seg_n, seg_start, seg_stop;
 
   if (udp->seq1 == NULL || udp->seq2 == NULL) return;
   len1 = StringLen (udp->seq1);
   len2 = StringLen (udp->seq2);
 
-  amp1 = AlnMsgNew ();
-  amp2 = AlnMsgNew ();
-  if (amp1 == NULL || amp2 == NULL) return;
-
   seg = CreateSegment (pict, 0, 0);
   AddAttribute (seg, COLOR_ATT, RED_COLOR, 0, 0, 0, 0);
 
-  amp1->from_m = 0;
-  amp1->to_m = -1;
-  amp1->row_num = 1;
+  seg_n = AlnMgr2GetNumSegs(sap);
+  for (seg_i = 1; seg_i<=seg_n; seg_i++) {
+    AlnMgr2GetNthSegmentRange(sap, seg_i, &seg_start, &seg_stop);
 
-  amp2->from_m = 0;
-  amp2->to_m = -1;
-  amp2->row_num = 2;
+    amp1 = AlnMsgNew2 ();
+    amp2 = AlnMsgNew2 ();
+    if (amp1 == NULL || amp2 == NULL) return;
 
-  start = 0;
-  stop = 0;
+    amp1->from_aln = seg_start;
+    amp1->to_aln = seg_stop;
+    amp1->row_num = 1;
 
-  while (AlnMgrGetNextAlnBit (sap, amp1) && AlnMgrGetNextAlnBit (sap, amp2)) {
-    len = amp1->to_b - amp1->from_b + 1;
-    if (len == amp2->to_b - amp2->from_b + 1) {
-      stop = start + len;
-      if (amp1->gap == 0 && amp2->gap == 0) {
-        for (i = start, j = amp1->from_b, k = amp2->from_b;
-             i < stop && j <= len1 && k <= len2; i++, j++, k++) {
-          if (udp->seq1 [j] != udp->seq2 [k]) {
+    amp2->from_aln = seg_start;
+    amp2->to_aln = seg_stop;
+    amp2->row_num = 2;
 
-            /* record for accurate scrolling to text view */
-            ValNodeAddInt (&(udp->mismatches), 0, i);
+    AlnMgr2GetNextAlnBit (sap, amp1);
+    AlnMgr2GetNextAlnBit (sap, amp2);
 
-            AddLine (seg, i, top, i, bottom, FALSE, 0);
-          }
+    if (amp1->to_row - amp1->from_row == amp2->to_row - amp2->from_row &&
+        amp1->type == AM_SEQ && amp2->type == AM_SEQ) {
+      for (i=0; i<seg_stop-seg_start+1; i++) {
+        if (udp->seq1[amp1->from_row+i] != udp->seq2[amp2->from_row+i]) {
+
+          /* record for accurate scrolling to text view */
+          ValNodeAddInt (&(udp->mismatches), 0, i);
+
+          AddLine (seg, seg_start+i, top, seg_start+i, bottom, FALSE, 0);
         }
       }
     }
-    start += len;
-  }
 
-  AlnMsgFree (amp1);
-  AlnMsgFree (amp2);
+    AlnMsgFree2 (amp1);
+    AlnMsgFree2 (amp2);
+  }
 }
 
 static void DrawAlignBits (
@@ -3766,16 +3879,16 @@ static void DrawAlignBits (
 )
 
 {
-  AlnMsgPtr  amp;
+  AlnMsg2Ptr  amp;
   Int4       len, start, stop, from, to;
   Char       str [96];
   Boolean    wasgap;
 
-  amp = AlnMsgNew ();
+  amp = AlnMsgNew2 ();
   if (amp == NULL) return;
 
-  amp->from_m = 0;
-  amp->to_m = -1;
+  amp->from_aln = 0;
+  amp->to_aln = -1;
   amp->row_num = row;
 
   start = 0;
@@ -3784,10 +3897,10 @@ static void DrawAlignBits (
   to = 0;
   wasgap = FALSE;
 
-  while (AlnMgrGetNextAlnBit (sap, amp)) {
-    len = amp->to_b - amp->from_b + 1;
+  while (AlnMgr2GetNextAlnBit (sap, amp)) {
+    len = amp->to_row - amp->from_row + 1;
     stop = start + len;
-    if (amp->gap != 0) {
+    if (amp->type == AM_GAP) {
       if (wasgap) {
         to = stop;
       } else {
@@ -3825,7 +3938,7 @@ static void DrawAlignBits (
     }
   }
 
-  AlnMsgFree (amp);
+  AlnMsgFree2 (amp);
 
   sprintf (str, "%ld", (long) pos1);
   AddLabel (pict, 0, (top + bottom) / 2, str, SMALL_TEXT, 5, MIDDLE_LEFT, 0);
@@ -3890,7 +4003,7 @@ static CharPtr MakeAlignSequence (
 
 {
   CharPtr    aln;
-  AlnMsgPtr  amp;
+  AlnMsg2Ptr  amp;
   Int4       aln_length, len, lens, start, stop, from, to, i, j;
 
   if (udp == NULL || sap == NULL || seq == NULL) return NULL;
@@ -3901,11 +4014,11 @@ static CharPtr MakeAlignSequence (
   aln_length = udp->aln_length;
   MemSet ((Pointer) aln, '-', aln_length);
 
-  amp = AlnMsgNew ();
+  amp = AlnMsgNew2 ();
   if (amp == NULL) return aln;
 
-  amp->from_m = 0;
-  amp->to_m = -1;
+  amp->from_aln = 0;
+  amp->to_aln = -1;
   amp->row_num = row;
 
   start = 0;
@@ -3913,19 +4026,19 @@ static CharPtr MakeAlignSequence (
   from = 0;
   to = 0;
 
-  while (AlnMgrGetNextAlnBit (sap, amp)) {
-    len = amp->to_b - amp->from_b + 1;
+  while (AlnMgr2GetNextAlnBit (sap, amp)) {
+    len = amp->to_row - amp->from_row + 1;
     stop = start + len;
 
-    if (amp->gap == 0) {
-      for (i = start, j = amp->from_b; i < stop && j < lens; i++, j++) {
+    if (amp->type == AM_SEQ) {
+      for (i = start, j = amp->from_row; i < stop && j < lens; i++, j++) {
         aln [i] = seq [j];
       }
     }
     start += len;
   }
 
-  AlnMsgFree (amp);
+  AlnMsgFree2 (amp);
 
   return aln;
 }
@@ -3974,9 +4087,9 @@ static void CalculateOverhangs (
   if (udp == NULL) return;
   sap = udp->salp;
   if (sap == NULL) return;
-  aln_length = AlnMgrGetAlnLength (sap, FALSE);
-  AlnMgrGetNthSeqRangeInSA (sap, 1, &startold, &stopold);
-  AlnMgrGetNthSeqRangeInSA (sap, 2, &startnew, &stopnew);
+  aln_length = AlnMgr2GetAlnLength (sap, FALSE);
+  AlnMgr2GetNthSeqRangeInSA (sap, 1, &startold, &stopold);
+  AlnMgr2GetNthSeqRangeInSA (sap, 2, &startnew, &stopnew);
   lenold = udp->oldbsp->length;
   lennew = udp->newbsp->length;
 
@@ -3992,8 +4105,8 @@ static void CalculateOverhangs (
   udp->startmax = MAX (startold, startnew);
   udp->stopmax = MAX (aln_length + lenold - stopold, aln_length + lennew - stopnew);
 
-  udp->strandold = AlnMgrGetNthStrand (sap, 1);
-  udp->strandnew = AlnMgrGetNthStrand (sap, 2);
+  udp->strandold = AlnMgr2GetNthStrand (sap, 1);
+  udp->strandnew = AlnMgr2GetNthStrand (sap, 2);
 
   entityID = ObjMgrGetEntityIDForPointer (udp->oldbsp);
   sep = GetTopSeqEntryForEntityID (entityID);
@@ -4152,11 +4265,11 @@ static void LetDraw (
   top = bottom - 5;
   i = 0;
   j = offset;
-  pos = AlnMgrMapRowCoords (udp->salp, j, 2, NULL);
+  pos = AlnMgr2MapSeqAlignToBioseq (udp->salp, j, 2);
   while (pos < 1 && i < udp->maxchars && j < udp->aln_length) {
     i++;
     j++;
-    pos = AlnMgrMapRowCoords (udp->salp, j, 2, NULL);
+    pos = AlnMgr2MapSeqAlignToBioseq (udp->salp, j, 2);
   }
   for (; i < udp->maxchars + udp->log10_aln_length && j < udp->aln_length; i++, j++) {
     ch1 = udp->aln2 [j];
@@ -4208,11 +4321,11 @@ static void LetDraw (
   bottom = top + 5;
   i = 0;
   j = offset;
-  pos = AlnMgrMapRowCoords (udp->salp, j, 1, NULL);
+  pos = AlnMgr2MapSeqAlignToBioseq (udp->salp, j, 1);
   while (pos < 1 && i < udp->maxchars && j < udp->aln_length) {
     i++;
     j++;
-    pos = AlnMgrMapRowCoords (udp->salp, j, 1, NULL);
+    pos = AlnMgr2MapSeqAlignToBioseq (udp->salp, j, 1);
   }
   for (; i < udp->maxchars + udp->log10_aln_length && j < udp->aln_length; i++, j++) {
     ch1 = udp->aln1 [j];
@@ -4648,7 +4761,10 @@ static ForM UpdateSequenceForm (
   udp->recomb1 = -1;
   udp->recomb2 = -1;
 
-  if (udp->new5 > udp->old5 && udp->new3 < udp->old3) {
+  if (udp->salp == NULL) { /* No alignment */
+    Disable (b4);
+  }
+  else if (udp->new5 > udp->old5 && udp->new3 < udp->old3) {
     /* extend 5' */
     SetValue (udp->rmc, 2);
     /*
@@ -4827,6 +4943,7 @@ extern void PrepareToUpdateSequences (
   BioseqPtr oldbsp,
   BioseqPtr newbsp
 );
+
 extern void PrepareToUpdateSequences (
   BioseqPtr oldbsp,
   BioseqPtr newbsp
@@ -4835,10 +4952,13 @@ extern void PrepareToUpdateSequences (
 {
   Uint2        entityID;
   ForM         f;
-  SeqEntryPtr  oldsep, newsep;
+  SeqEntryPtr  oldsep;
+  SeqEntryPtr  newsep;
   Boolean      revcomp = FALSE;
   SeqAlignPtr  salp = NULL;
-  SeqIdPtr     sip, tempid = NULL;
+  SeqIdPtr     tempid = NULL;
+  SeqIdPtr     sip;
+  MsgAnswer    ans;
 
   if (oldbsp == NULL || newbsp == NULL) return;
   if (ISA_na (oldbsp->mol) != ISA_na (newbsp->mol)) {
@@ -4883,9 +5003,12 @@ extern void PrepareToUpdateSequences (
     SeqMgrReplaceInBioseqIndex (newbsp);
   }
   ArrowCursor ();
+
   if (salp == NULL) {
-    Message (MSG_OK, "Unable to align the sequences");
-    return;
+    ans = Message (MSG_YN, "There is no alignment between the sequences. "
+		   "Do you wish to continue anyway?");
+    if (ans == ANS_NO)
+      return;
   }
 
   f = UpdateSequenceForm (oldbsp, newbsp, salp, revcomp);
@@ -5011,61 +5134,67 @@ static IvalInfoPtr IvalInfoFree (
 
 static IvalInfoPtr GetAlignmentIntervals (SeqAlignPtr sap, Int4 row1, Int4 row2, Int4 from, Int4 to)
 {
-   AlnMsgPtr    amp1;
-   AlnMsgPtr    amp2;
+   AlnMsg2Ptr    amp1;
+   AlnMsg2Ptr    amp2;
    IvalInfoPtr  ival;
-   IvalInfoPtr  ival_head;
-   IvalInfoPtr  ival_prev;
+   IvalInfoPtr  ival_head = NULL;
+   IvalInfoPtr  ival_prev = NULL;
    Int4         from_aln;
    Int4         start;
    Int4         stop;
    Int4         tmp;
    Int4         to_aln;
+   Int4         seg_i, seg_n, seg_start, seg_stop;
 
    if (sap == NULL || sap->saip == NULL)
       return NULL;
-   AlnMgrGetNthSeqRangeInSA(sap, row1, &start, &stop);
+   AlnMgr2GetNthSeqRangeInSA(sap, row1, &start, &stop);
    if (from < start)
       from = start;
    if (to > stop)
       to = stop;
-   from_aln = AlnMgrMapBioseqToSeqAlign(sap, from, row1, NULL);
-   to_aln = AlnMgrMapBioseqToSeqAlign(sap, to, row1, NULL);
+   from_aln = AlnMgr2MapBioseqToSeqAlign(sap, from, row1);
+   to_aln = AlnMgr2MapBioseqToSeqAlign(sap, to, row1);
    if (from_aln > to_aln)
    {
       tmp = from_aln;
       from_aln = to_aln;
       to_aln = tmp;
    }
-   amp1 = AlnMsgNew();
-   amp1->from_m = from_aln;
-   amp1->to_m = to_aln;
-   amp1->row_num = row1;
-   amp2 = AlnMsgNew();
-   amp2->from_m = from_aln;
-   amp2->to_m = to_aln;
-   amp2->row_num = row2;
-   ival_head = ival_prev = NULL;
-   while (AlnMgrGetNextAlnBit(sap, amp1) && AlnMgrGetNextAlnBit(sap, amp2))
-   {
-      if (amp1->gap == 0 && amp2->gap == 0)
-      {
-         ival = (IvalInfoPtr)MemNew(sizeof(IvalInfo));
-         ival->start1 = amp1->from_b;
-         ival->stop1 = amp1->to_b;
-         ival->start2 = amp2->from_b;
-         ival->stop2 = amp2->to_b;
-         if (ival_head == NULL)
-            ival_head = ival_prev = ival;
-         else
-         {
-            ival_prev->next = ival;
-            ival_prev = ival;
-         }
-      }
+   seg_n = AlnMgr2GetNumSegs(sap);
+   for (seg_i=1; seg_i<=seg_n; seg_i++) {
+     AlnMgr2GetNthSegmentRange(sap, seg_i, &seg_start, &seg_stop);
+     if (seg_start > to_aln) continue;
+     if (seg_stop < from_aln) continue;
+     if (seg_start < from_aln) seg_start = from_aln;
+     if (seg_stop > to_aln) seg_stop = to_aln;
+     
+     amp1 = AlnMsgNew2();
+     amp1->from_aln = seg_start;
+     amp1->to_aln = seg_stop;
+     amp1->row_num = row1;
+     amp2 = AlnMsgNew2();
+     amp2->from_aln = seg_start;
+     amp2->to_aln = seg_stop;
+     amp2->row_num = row2;
+     AlnMgr2GetNextAlnBit(sap, amp1);
+     AlnMgr2GetNextAlnBit(sap, amp2);
+     if (amp1->type == AM_SEQ && amp2->type == AM_SEQ) {
+       ival = (IvalInfoPtr)MemNew(sizeof(IvalInfo));
+       ival->start1 = amp1->from_row;
+       ival->stop1 = amp1->to_row;
+       ival->start2 = amp2->from_row;
+       ival->stop2 = amp2->to_row;
+       if (ival_head == NULL)
+         ival_head = ival_prev = ival;
+       else {
+         ival_prev->next = ival;
+         ival_prev = ival;
+       }
+     }
+     AlnMsgFree2(amp1);
+     AlnMsgFree2(amp2);
    }
-   AlnMsgFree(amp1);
-   AlnMsgFree(amp2);
    return ival_head;
 }
 
@@ -5294,7 +5423,7 @@ static void DoFeatProp (
 
   if (bsp == NULL || salp == NULL || sfp == NULL) return;
 
-  sip = AlnMgrGetNthSeqIdPtr (salp, fin);
+  sip = AlnMgr2GetNthSeqIdPtr (salp, fin);
   if (sip == NULL) return;
 
   newloc = MapLocForProp (salp, begin, fin, sip, gapSplit, sfp->location);
@@ -5493,9 +5622,9 @@ static void AcceptFeatProp (
 
   SeqEntrySetScope (NULL);
 
-  SAIndexFree (salp->saip);
+  SAIndex2Free2 (salp->saip);
   salp->saip = NULL;
-  AlnMgrIndexSingleChildSeqAlign (salp);
+  AlnMgr2IndexSingleChildSeqAlign (salp);
 
   dsp = (DenseSegPtr)(salp->segs);
   sip = SeqIdFindBest (bsp->id, 0);
@@ -5516,16 +5645,16 @@ static void AcceptFeatProp (
     sip_tmp = sip_tmp->next;
   }
   dsp->ids = sip_head;
-  row = AlnMgrGetNForSip (salp, sip);
-  numRows = AlnMgrGetNumRows (salp);
+  row = AlnMgr2GetFirstNForSip (salp, sip);
+  numRows = AlnMgr2GetNumRows (salp);
 
   if (row == -1) {
-    Message (MSG_OK, "AlnMgrGetNForSip failed");
+    Message (MSG_OK, "AlnMgr2GetNForSip failed");
     Remove (fdp->form);
     return;
   }
   if (numRows < 1) {
-    Message (MSG_OK, "AlnMgrGetNumRows failed");
+    Message (MSG_OK, "AlnMgr2GetNumRows failed");
     Remove (fdp->form);
     return;
   }
@@ -5993,14 +6122,24 @@ static void FuseFeatJoins (SeqFeatPtr sfp, Pointer userdata)
 
 {
   BioseqPtr  bsp;
+  Boolean    partial5;
+  Boolean    partial3;
   SeqLocPtr  slp;
 
   bsp = BioseqFindFromSeqLoc (sfp->location);
   if (bsp == NULL) return;
+
+  slp = SeqLocFindNext (sfp->location, NULL);
+  if (slp == NULL) return;
+  slp = SeqLocFindNext (sfp->location, slp);
+  if (slp == NULL) return;
+
   slp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, TRUE, FALSE);
   if (slp == NULL) return;
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   sfp->location = SeqLocFree (sfp->location);
   sfp->location = slp;
+  SetSeqLocPartial (sfp->location, partial5, partial3);
 }
 
 extern void FuseSlpJoins (IteM i);

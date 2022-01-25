@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.34 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.36  2002/01/04 15:01:43  kans
+* move query window down a bit
+*
+* Revision 6.35  2002/01/03 16:56:44  kans
+* unique names for windows, different positions for comparison with entrez2
+*
 * Revision 6.34  2000/12/05 17:52:58  kans
 * removed cn3d, which caused ddv link problem
 *
@@ -1734,7 +1740,7 @@ Int2 Main (void)
   */
   SetTitle (w, "Creating initial window");
 
-  termListForm = CreateTermListForm (-50, -33, "Query",
+  termListForm = CreateTermListForm (-70, -70, "Entrez1 Query",
                                     TermSelectionActivateProc,
                                     TermSelectionFormMessage);
 
@@ -1746,7 +1752,7 @@ Int2 Main (void)
     Select (termListForm);
     Update ();
 
-    docSumForm = CreateDocSumForm (-10, -90, "Document",
+    docSumForm = CreateDocSumForm (-90, -10, "Entrez1 Document",
                                    DocumentSummaryActivateProc,
                                    DocumentSummaryFormMessage);
     UseDelayedNeighbor (docSumForm, TRUE);

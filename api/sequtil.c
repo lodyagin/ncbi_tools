@@ -29,13 +29,40 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.101 $
+* $Revision: 6.110 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.110  2002/04/24 17:11:03  kans
+* added BR as DDBJ TPA accession prefix
+*
+* Revision 6.109  2002/04/02 18:19:56  kans
+* SeqLocPartialCheck fixes
+*
+* Revision 6.108  2002/03/26 18:11:26  kans
+* WHICH_db_accession WGS assignments - A*** NCBI, B*** DDBJ, C*** EMBL
+*
+* Revision 6.107  2002/03/12 17:08:32  kans
+* added BQ as NCBI EST
+*
+* Revision 6.106  2002/02/14 18:30:27  kans
+* SeqIdFromAccessionDotVersion defaults version to INT2_MIN
+*
+* Revision 6.105  2002/01/29 19:28:16  kans
+* SeqIdParse can parse type|accession.ver with no trailing vertical bars for RefSeq and DNA database types
+*
+* Revision 6.104  2002/01/22 18:49:15  kans
+* added ACCN_NCBI_WGS, ACCN_EMBL_WGS, and ACCN_DDBJ_WGS
+*
+* Revision 6.103  2002/01/17 13:49:32  kans
+* BP added as DDBJ EST accession prefix
+*
+* Revision 6.102  2002/01/16 16:59:38  camacho
+* Changed the type of buflen parameter in SeqIdWrite from Int2 to Uint4
+*
 * Revision 6.101  2001/11/29 14:04:29  kans
 * reverted GetThePointForOffset, deal with trans-splicing in feature indexing left/right extreme calculation itself
 *
@@ -3057,7 +3084,7 @@ NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
 *   		last '\0' 
 *
 *****************************************************************************/
-NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 buflen)
+NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 buflen)
 
 {
 	SeqIdPtr sip;
@@ -3531,7 +3558,10 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 				numtoken++;
 				if (*buf == '\0')
 				{
-					if (type == SEQID_OTHER && numtoken == 2)
+					if (type == SEQID_OTHER && (numtoken == 2 || numtoken == 1))
+						done = TRUE;
+					else if ((type == SEQID_GENBANK || type == SEQID_EMBL || type == SEQID_DDBJ ||
+							type == SEQID_TPG || type == SEQID_TPE || type == SEQID_TPD) && numtoken == 1)
 						done = TRUE;
 					else if (numtoken < (Int2)(expect_tokens[type]))
 						goto erret;
@@ -5822,8 +5852,11 @@ NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head)
 								retval |= SLP_INTERNAL;
 							break;
 						case 2:    /* partial */
-						case 5:    /* no ends */
 							retval |= SLP_OTHER;
+							break;
+						case 5:    /* no ends */
+							retval |= SLP_START;
+							retval |= SLP_STOP;
 							break;
 						default:
 							break;
@@ -8118,7 +8151,7 @@ NLM_EXTERN SeqIdPtr SeqIdFromAccessionDotVersion (CharPtr accession)
 {
   Char      accn [41];
   CharPtr   ptr;
-  long int  ver = 0;
+  long int  ver = INT2_MIN;
 
   StringNCpy_0 (accn, accession, sizeof (accn));
   ptr = StringChr (accn, '.');
@@ -8126,7 +8159,7 @@ NLM_EXTERN SeqIdPtr SeqIdFromAccessionDotVersion (CharPtr accession)
     *ptr = '\0';
     ptr++;
     if (sscanf (ptr, "%ld", &ver) != 1) {
-      ver = 0;
+      ver = INT2_MIN;
     }
   }
   return SeqIdFromAccession (accn, (Uint4) ver, NULL);
@@ -8375,11 +8408,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
   Uint4 retcode = 0;
   Boolean retval = TRUE;
   Boolean first = TRUE;
-  CharPtr temp=NULL;
+  Char temp [16];
  
   if (s == NULL || ! *s)
     return FALSE;
- 
+
   switch (StringLen(s)) {
 
   case 6:                       /* Old-style 6-character accession */
@@ -8481,7 +8514,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           break;
       if(IS_ALPHA(*(s+2))) {
           /* New(1999) 8-character protein accession, three letters + 5 digits */
-          temp = (CharPtr) MemNew(4);
           temp[0] = *s; s++;
           temp[1] = *s; s++;
           temp[2] = *s; s++;
@@ -8505,7 +8537,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           }
       } else if (IS_DIGIT(*(s+2))) {
           /* New 8-character accession, two letters + 6 digits */
-          temp = (CharPtr) MemNew(3);
           temp[0] = *s; s++;
           temp[1] = *s; s++;
           temp[2] = '\0';
@@ -8516,7 +8547,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"BE") == 0) || 
 	      (StringICmp(temp,"BF") == 0) || 
 	      (StringICmp(temp,"BI") == 0) || 
-	      (StringICmp(temp,"BM") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"BM") == 0) || 
+	      (StringICmp(temp,"BQ") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
@@ -8545,6 +8577,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_TPA;
           } else if ((StringICmp(temp,"BN") == 0)) {      /* EMBL third-party annotation */
               retcode = ACCN_EMBL_TPA;
+          } else if ((StringICmp(temp,"BR") == 0)) {      /* DDBJ third-party annotation */
+              retcode = ACCN_DDBJ_TPA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
@@ -8558,7 +8592,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"AU") == 0) ||
                      (StringICmp(temp,"AV") == 0) ||
                      (StringICmp(temp,"BB") == 0) ||
-                     (StringICmp(temp,"BJ") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"BJ") == 0) ||
+                     (StringICmp(temp,"BP") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;
@@ -8595,7 +8630,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
       if(*(s+2)!='_')
           break;
       /* New(1999) 8-character protein accession, three letters + 5 digits */
-      temp = (CharPtr) MemNew(4);
       temp[0] = *s; s++;
       temp[1] = *s; s++;
       temp[2] = NULLB; s++;
@@ -8626,13 +8660,35 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           s++;
       }
       break;
+    case 12: /* whole genome shotgun 12-character accession, four letters + 8 digits */
+      if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)) || !IS_ALPHA(*(s+2)) || !IS_ALPHA(*(s+3)))
+          break;
+      temp[0] = *s; s++;
+      temp[1] = *s; s++;
+      temp[2] = *s; s++;
+      temp[3] = *s; s++;
+      temp[4] = '\0';
+      if ((StringNICmp(temp,"A", 1) == 0)) { 
+          retcode = ACCN_NCBI_WGS;
+      } else if ((StringNICmp(temp,"B", 1) == 0)) {
+          retcode = ACCN_DDBJ_WGS;
+      } else if ((StringNICmp(temp,"C", 1) == 0)) {
+          retcode = ACCN_EMBL_WGS;
+      } else
+          retval = FALSE;
+      while (*s) {
+          if (! IS_DIGIT(*s)) {
+              retval = FALSE;
+              break;
+          }
+          s++;
+      }
+      break;
   default:   
     retval = FALSE;
     break;
   }                     /* Endswitch, StringLen(s) */
  
-  if(temp)
-      MemFree(temp);
   return (retval ? retcode : ACCN_UNKNOWN);
 }
 

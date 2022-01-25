@@ -28,13 +28,22 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.11 $
+* $Revision: 6.14 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.h,v $
+* Revision 6.14  2002/04/16 17:54:03  wheelan
+* increased XLINTRON sizes
+*
+* Revision 6.13  2002/04/04 17:17:24  wheelan
+* changed endfuzz to 8
+*
+* Revision 6.12  2002/01/30 19:08:51  wheelan
+* better support for revcomp
+*
 * Revision 6.11  2001/12/18 18:00:18  wheelan
 * add strand
 *
@@ -110,7 +119,7 @@ extern "C" {
 
 #define SPI_TEENYEXON  6 /* smallest exon to look for */
 
-#define SPI_ENDFUZZ  13 /* if the overall alignment misses less than or equal */
+#define SPI_ENDFUZZ  8 /* if the overall alignment misses less than or equal */
                         /* to this amount on the ends of the mRNA, the        */
                         /* alignment will be extended.                        */
 
@@ -123,11 +132,11 @@ extern "C" {
 
 #define SPI_INTRONSIZE  35000 /* used only to decide whether an mRNA may have fallen */
                               /* off a contig */
-#define SPI_INTRONSIZEXL  120000 /* if spot->bigintron TRUE, use this */
+#define SPI_INTRONSIZEXL  220000 /* if spot->bigintron TRUE, use this */
 
 #define SPI_BIGINTRON  100000 /* max size of 1st and last introns, if 1st and last exons */
                               /* have to be found by SPI_FindPiece. */
-#define SPI_BIGINTRONXL  240000 /* if spot->bigintron TRUE, use this */
+#define SPI_BIGINTRONXL  500000 /* if spot->bigintron TRUE, use this */
 
 #define SPI_PADDING  0 /* how much each region is padded on each side */
 
@@ -266,6 +275,7 @@ typedef struct spi_reginfo {
    Boolean      fallsoff; /* this mRNA may fall off the end of the genomic sequence */
    SPI_UTRInfo  utr; /* if this is a CDS, UTR %ids are here */
    SPI_MultPtr  smu;
+   Boolean      revcmp_try;
    struct spi_reginfo PNTR next;
 } SPI_RegionInfo, PNTR SPI_RegionInfoPtr;
 
@@ -392,6 +402,7 @@ typedef struct spi_options {
    Boolean               makemult; /* make a multiple alignment from numerous returns? */
    Boolean               bigintron;
    Uint1                 strand; /* to restrict the search to one genomic strand */
+   Boolean               revcomp;
 } SPI_Options, PNTR SPI_OptionsPtr;
 
 typedef struct spi_n {

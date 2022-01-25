@@ -9,7 +9,7 @@
 #include <objsub.h>
 #include <valid.h>
 
-#define NUMARG 14
+#define NUMARG 15
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -24,7 +24,8 @@ Args myargs[NUMARG] = {
 	{"Lowest severity of error to show","3","0","4",FALSE,'q',ARG_INT,0.0,0,NULL},
 	{"ASN.1 spec level to filter","0","0","3",FALSE,'l',ARG_INT,0.0,0,NULL},
 	{"Use SeqMgr indexing?","T",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
-	{"Validate alignments?","F",NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL}};
+	{"Validate alignments?","F",NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL},
+	{"Require ISO-JTA?","F",NULL,NULL,TRUE,'j',ARG_BOOLEAN,0.0,0,NULL}};
 
 CharPtr AsnIoGets PROTO((AsnIoPtr aip));  /* from asnio.h */
 void LIBCALLBACK error_ret PROTO((Int2 value, CharPtr msg));
@@ -37,7 +38,7 @@ Int2 Main(void)
 	AsnTypePtr atp, atp2;
 	AsnModulePtr amp;
 	ValidStructPtr vsp;
-	Int2 numerrors, fatal_error = 0, error_level, i, spec_version;
+	Int2 numerrors, found_one, fatal_error = 0, error_level, i, spec_version;
 	CharPtr tmp;
 	Boolean found;
 	DataVal av;
@@ -133,6 +134,7 @@ Int2 Main(void)
 	vsp->useSeqMgrIndexes = (Boolean)(myargs[12].intvalue); /* indexed validate */
 	vsp->validateAlignments = (Boolean)(myargs[13].intvalue);
 	vsp->farIDsInAlignments = (Boolean)(myargs[13].intvalue);
+	vsp->alwaysRequireIsoJTA = (Boolean)(myargs[14].intvalue);
 
 	if (myargs[8].intvalue)   /* continue on ASN.1 error */
 		AsnIoSetErrorMsg(aip, error_ret);
@@ -141,6 +143,7 @@ Int2 Main(void)
 		vsp->patch_seq = TRUE;
 		
 	numerrors = 0;
+	found_one = FALSE;
 	if ( myargs[1].intvalue)   /* read one Seq-entry */
 	{
 		sep = SeqEntryAsnRead(aip, NULL);
@@ -153,6 +156,7 @@ Int2 Main(void)
 		}
 		else
 		{
+			found_one = TRUE;
 			if (aip->io_failure)
 			{
 				vsp->non_ascii_chars = TRUE;
@@ -174,6 +178,7 @@ Int2 Main(void)
 	{
 		while ((atp = AsnReadId(aip, amp, atp)) != NULL)
 		{
+			found_one = TRUE;
 			if (atp == atp2)    /* top level Seq-entry */
 			{
 				sep = SeqEntryAsnRead(aip, atp);
@@ -218,7 +223,11 @@ Int2 Main(void)
 	{
 		if (! numerrors)
 		{
-			printf("All entries are OK!\n");
+			if (! found_one) {
+				printf("Unable to read file\n");
+			} else {
+				printf("All entries are OK!\n");
+			}
 		}
 		else
 			printf("%d messges reported\n", (int)numerrors);

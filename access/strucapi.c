@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
@@ -55,21 +55,32 @@ NLM_EXTERN CONN StrucOpenConnection (
 )
 
 {
-  CONN    conn;
-  size_t  n_written;
-  Char    query [256];
+  CONN        conn;
+  size_t      n_written;
+  Char        query [256];
+  EIO_Status  status;
 
   if (uid < 1) return NULL;
 
+  /*
   conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Structure/mmdb/mmdbsrv.cgi",
                              NULL, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_WwwForm, eENCOD_Url, 0);
+  */
 
+  conn = QUERY_OpenServiceQuery ("StrucFetch", NULL, 30);
   if (conn == NULL) return NULL;
 
   sprintf (query, "uid=%ld&save=asntext&form=6&db=t&Dopt=i&mdlLvl=%ld&MaxModels=%ld",
            (long) uid, (long) modelLevel, (long) maxModels);
-  CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
+
+  /*
+  sprintf (query, "uid=%ld&mdlLvl=%ld&MaxModels=%ld",
+           (long) uid, (long) modelLevel, (long) maxModels);
+  */
+
+  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
+  if (status != eIO_Success) return NULL;
 
   return conn;
 }

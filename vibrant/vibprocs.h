@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.20  2002/01/09 15:23:54  kans
+* added HasAquaMenuLayout
+*
 * Revision 6.19  2001/09/10 17:34:33  bazhin
 * Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
 *
@@ -418,6 +421,7 @@ void        Nlm_PopupItems PROTO((Nlm_PopuP p, Nlm_CharPtr PNTR titles));
 void        Nlm_DeskAccGroup PROTO((Nlm_MenU m));
 Nlm_ChoicE  Nlm_FontGroup PROTO((Nlm_MenU m));
 void        Nlm_SeparatorItem PROTO((Nlm_MenU m));
+Nlm_Boolean Nlm_HasAquaMenuLayout (void);
 
 /***  Bar Object  ***/
 

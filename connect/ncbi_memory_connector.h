@@ -1,4 +1,7 @@
-/*  $Id: ncbi_socket_.c,v 6.3 2001/07/14 20:22:17 vakatov Exp $
+#ifndef NCBI_MEMORY_CONNECTOR__H
+#define NCBI_MEMORY_CONNECTOR__H
+
+/*  $Id: ncbi_memory_connector.h,v 6.1 2002/02/20 19:29:35 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -23,37 +26,38 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov
+ * Author:  Anton Lavrentiev
  *
  * File Description:
- *   Wrapper for "ncbi_socket.c" under NCBI C Toolkit
+ *   In-memory CONNECTOR
  *
- * ===========================================================================
+ *   See <connect/ncbi_connector.h> for the detailed specification of
+ *   the connector's methods and structures.
+ *
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_memory_connector.h,v $
+ * Revision 6.1  2002/02/20 19:29:35  lavr
+ * Initial revision
+ *
+ * ==========================================================================
  */
 
+#include <connect/ncbi_connector.h>
 
-/* Configuration
- */
-#include <ncbilcl.h>
-
-#if defined(OS_UNIX)
-#  define NCBI_OS_UNIX 1
-#  if !defined(HAVE_GETHOSTBYNAME_R)
-#    if   defined(OS_UNIX_SOL)
-#      define HAVE_GETHOSTBYNAME_R 5
-#      define HAVE_GETHOSTBYADDR_R 7
-#    elif defined(OS_UNIX_LINUX)
-#      define HAVE_GETHOSTBYNAME_R 6
-#      define HAVE_GETHOSTBYADDR_R 8
-#    endif
-#  endif
-#elif defined(OS_MSWIN)
-#  define NCBI_OS_MSWIN 1
-#elif defined(OS_MAC)
-#  define NCBI_OS_MAC 1
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 
-/* Real code
+/* Create new CONNECTOR structure to handle a data transfer in-memory.
+ * Use lock (may be NULL) to protect write/read operations.
+ * Return NULL on error.
  */
-#include "ncbi_socket.c"
+extern CONNECTOR MEMORY_CreateConnector(MT_LOCK lock);
+
+
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
+
+#endif /* NCBI_MEMORY_CONNECTOR__H */

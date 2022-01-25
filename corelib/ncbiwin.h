@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.5  2002/02/15 20:19:50  beloslyu
+* bug fixed
+*
+* Revision 6.4  2002/02/15 19:53:28  beloslyu
+* fix for HP-UX
+*
 * Revision 6.3  1999/12/21 17:34:56  kans
 * Added ControlDefinitions.h to the Mac client portion to support universal headers version 3.3 (in preparation for Carbon compatibility) - churchill
 *
@@ -197,13 +203,15 @@
 #endif
 #endif
 
-#ifdef WIN_X
+#if defined(WIN_X)
+#if !defined(OS_UNIX_HPUX)
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
 #include <X11/Xresource.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
+#endif
 #include <X11/cursorfont.h>
 #endif
 

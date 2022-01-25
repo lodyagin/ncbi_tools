@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.113 $
-* $Revision: 6.113 $
+* $Revision: 6.116 $
+* $Revision: 6.116 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -3335,14 +3335,18 @@ void CheckSeqPort (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start)
 	} else {
 		if (ajp->slp) {
 			spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
-			start1 = start - spp->start;
+			if (spp != NULL) {
+			  start1 = start - spp->start;
+			}
 		/*	spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
 			start1 = start - spp->start - SeqLocStart(ajp->slp);*/
 		} else {
 			spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
-			start1 = start - spp->start;
+			if (spp != NULL) {
+		  	start1 = start - spp->start;
+			}
 		}
-		if (start1 != spp->curpos) 
+		if (spp != NULL && start1 != spp->curpos) 
 			SeqPortSeek(spp, start1, SEEK_SET);
 	}
 	gbp->spp = spp;
@@ -3367,9 +3371,9 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 	   The addition of snoRNA with biomol value 12 breaks this design.
 	   Also, the new LOCUS line format requires larger molecule type
 	   strings, since the space for that field has been increased from 4 to 6.
-	   Hence new_locus_mol, utilized if ajp->new_locus_fmt is set. */
+	   Hence new_locus_mol, utilized if ajp->old_locus_fmt is *NOT* set. */
 	
-	static CharPtr mol [9] = {"    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "uRNA", "scRNA", " AA "};
+	static CharPtr mol [10] = {"    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "uRNA", "scRNA", " AA ","oRNA"};
 
 	static CharPtr new_locus_mol [10] = {"      ", "DNA   ", "RNA   ", "mRNA  ", "rRNA  ", "tRNA  ", "uRNA  ", "scRNA ", " AA   ", "snoRNA"};
 
@@ -3401,7 +3405,7 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 		mfp = (MolInfoPtr)vnp->data.ptrvalue;
 		if (mfp->biomol <= 8) {
 			imol = (Int2) (mfp->biomol);
-		} else if (mfp->biomol == 12 && ajp->new_locus_fmt) {
+		} else if (mfp->biomol == 12) {
 			imol = 9;
 		}
 	} else {
@@ -3436,24 +3440,28 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 	
 	if (ajp->format == GENBANK_FMT || ajp->format == SELECT_FMT) {
 		if (bsp->topology == 2) {
-		  if (ajp->new_locus_fmt == TRUE) {
-			sprintf(buffer, "%12ld bp %s%-6s  circular", 
-				(long) length, strand[istrand], new_locus_mol[imol]);
-		  } else {
+		  if (ajp->old_locus_fmt == TRUE) {
 			sprintf(buffer, "%7ld bp %s%-4s  circular", 
 				(long) length, strand[istrand], mol[imol]);
+		  } else {
+			sprintf(buffer, "%12ld bp %s%-6s  circular", 
+				(long) length, strand[istrand], new_locus_mol[imol]);
 		  }
 		} else {
-		  if (ajp->new_locus_fmt == TRUE) {
-			sprintf(buffer, "%12ld bp %s%-6s  linear  ", 
-				(long) length, strand[istrand], new_locus_mol[imol]);
-		  } else {
+		  if (ajp->old_locus_fmt == TRUE) {
  			sprintf(buffer, "%7ld bp %s%-4s          ", 
  				(long) length, strand[istrand], mol[imol]);
+		  } else {
+			sprintf(buffer, "%12ld bp %s%-6s  linear  ", 
+				(long) length, strand[istrand], new_locus_mol[imol]);
 		  }
 		}
 	} else if (ajp->format == GENPEPT_FMT) {
+		  if (ajp->old_locus_fmt == TRUE) {
 			sprintf(buffer, "%7ld aa", (long) length);
+		  } else {
+			sprintf(buffer, "%12ld aa            linear", (long) length);
+		  }
 	} else if (ajp->format == EMBL_FMT || ajp->format == PSEUDOEMBL_FMT ||
 		ajp->format == EMBLPEPT_FMT) {
 		if (ajp->pseudo == FALSE) { /* do authentic EMBL */
@@ -3565,16 +3573,16 @@ void PrintLocusLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		GetMolInfo(ajp, buffer, gbp);
 		ff_AddString( buffer);
 
-		if (ajp->new_locus_fmt)
-		  TabToColumn(65);
-		else
+		if (ajp->old_locus_fmt)
 		  TabToColumn(53);
+		else
+		  TabToColumn(65);
 		ff_AddString(gbp->div);
 
-		if (ajp->new_locus_fmt)
-		  TabToColumn(69);
-		else
+		if (ajp->old_locus_fmt)
 		  TabToColumn(63);
+		else
+		  TabToColumn(69);
 		ff_AddString(gbp->date);
 
 		ff_EndPrint();
@@ -5114,6 +5122,11 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 		ptr += StringLen(ptr);
 		CheckSeqPort(ajp, gbp, start);
 		spp = gbp->spp;
+		if (spp == NULL) {
+          ff_AddString(ptr);
+          ff_EndPrint();
+		  return;
+		}
 		if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
 			SeqPortSet_do_virtual(spp, TRUE);
 		}
@@ -5187,6 +5200,11 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 			spp = SeqPortNew(bsp, start, stop, 0, Seq_code_iupacaa);
 		else
 			spp = SeqPortNew(bsp, start, stop, 0, Seq_code_ncbieaa);
+		if (spp == NULL) {
+          ff_AddString(ptr);
+          ff_EndPrint();
+		  return;
+		}
 		if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
 			SeqPortSet_do_virtual(spp, TRUE);
 		}
@@ -5236,6 +5254,11 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 		ff_StartPrint(5, 5, 0, NULL);
 		CheckSeqPort(ajp, gbp, start);
 		spp = gbp->spp;
+		if (spp == NULL) {
+          ff_AddString(ptr);
+          ff_EndPrint();
+		  return;
+		}
 		if (stop == -1)
 			stop = spp->stop;
 		for (index=start; index<=stop; index += 10)

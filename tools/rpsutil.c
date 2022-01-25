@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.44 2001/12/21 20:41:13 bauer Exp $
+/* $Id: rpsutil.c,v 6.45 2002/03/26 16:48:54 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.44 $
+* $Revision: 6.45 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.45  2002/03/26 16:48:54  madden
+* Correctly calculate effective lengths, use correct Karlin-Altschul parameters
+*
 * Revision 6.44  2001/12/21 20:41:13  bauer
 * changed string parsing for Pfam in RPSBgetCddHits to deal with longer Deflines
 *
@@ -270,14 +273,15 @@ void RPSInfoDetach(RPSInfoPtr rpsinfo)
 
 /*get information from matrixAuxiliaryFile
 */
-static Boolean getAuxInformation(CharPtr auxFile, Nlm_FloatHiPtr scalingFactor)
+static Boolean getAuxInformation(CharPtr auxFile, Nlm_FloatHiPtr scalingFactor,
+	RPSInfoPtr rpsinfo, Int4Ptr gap_open, Int4Ptr gap_extend, CharPtr matrix_name)
 {
     Char underlyingMatrixName[PATH_MAX]; /*name of matrix to read*/
     Nlm_FloatHi privateScalingFactor;
     Int4 maxLength; /*maximum length of sequence*/
     Int4 dbLength; /*length of database*/
+    Int4 index; /* index for "for" loop. */
     Nlm_FloatHi Kungapped, Hungapped; /*two values to read*/
-    Int4 gap_open, gap_extend; /*gap costs to skip over in reading*/
     FILE *matrixAuxiliaryFile;
 
     
@@ -289,18 +293,29 @@ static Boolean getAuxInformation(CharPtr auxFile, Nlm_FloatHiPtr scalingFactor)
 
     matrixAuxiliaryFile = FileOpen(auxFile, "r"); 
     fscanf(matrixAuxiliaryFile,"%s",underlyingMatrixName);
-    fscanf(matrixAuxiliaryFile,"%d\n", &gap_open);
-    fscanf(matrixAuxiliaryFile,"%d\n", &gap_extend);
+    if (underlyingMatrixName != NULL)
+	StringCpy(matrix_name, underlyingMatrixName);
+    else
+	matrix_name[0] = NULLB;
+
+    fscanf(matrixAuxiliaryFile,"%d\n", gap_open);
+    fscanf(matrixAuxiliaryFile,"%d\n", gap_extend);
     fscanf(matrixAuxiliaryFile, "%le", &Kungapped);
     fscanf(matrixAuxiliaryFile, "%le", &Hungapped);
     fscanf(matrixAuxiliaryFile, "%d", &maxLength);
     fscanf(matrixAuxiliaryFile, "%d", &dbLength);
     fscanf(matrixAuxiliaryFile, "%lf", &privateScalingFactor);
+
+    rpsinfo->karlinK = MemNew(rpsinfo->matrixCount*sizeof(FloatHi));
+    for (index=0; index<rpsinfo->matrixCount; index++)
+    {
+    	fscanf(matrixAuxiliaryFile, "%d", &maxLength);
+    	fscanf(matrixAuxiliaryFile, "%le", &(rpsinfo->karlinK[index]));
+    }
     FileClose(matrixAuxiliaryFile);
 
     if (scalingFactor)
     	*scalingFactor = privateScalingFactor;
-   
 
     return TRUE; 
 }
@@ -314,8 +329,10 @@ RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr bla
 {
     Nlm_FloatHi scalingFactor;
     RPSInfoPtr rpsinfo;
+    Int4 gap_open, gap_extend;
     Int4Ptr header;
-    Char rps_matrix[PATH_MAX], rps_lookup[PATH_MAX], rps_aux[PATH_MAX];
+    Char rps_matrix[PATH_MAX], rps_lookup[PATH_MAX], rps_aux[PATH_MAX], matrix_name[PATH_MAX];
+    
 
     rpsinfo = MemNew(sizeof(RPSInfo));
     
@@ -363,10 +380,19 @@ RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr bla
     rpsinfo->lookup = RPSInitLookup(rps_lookup);
 
     /* Now look in aux file. */
-    getAuxInformation(rps_aux, &scalingFactor);
+    getAuxInformation(rps_aux, &scalingFactor, rpsinfo, &gap_open, &gap_extend, matrix_name);
 
     if (blast_options && scalingFactor != 0.0)
+    {
 	blast_options->scalingFactor = scalingFactor;
+	blast_options->gap_open = gap_open;
+	blast_options->gap_extend = gap_extend;
+	if (matrix_name[0] != NULLB)
+	{
+		blast_options->matrix = MemFree(blast_options->matrix);
+		blast_options->matrix = StringSave(matrix_name);
+	}
+    }
     
     return rpsinfo;
 }
@@ -378,6 +404,8 @@ void RPSClose(RPSInfoPtr rpsinfo)
     Nlm_MemMapFini(rpsinfo->mmMatrix);
 
     RPSFreeLookup(rpsinfo->lookup);
+
+    MemFree(rpsinfo->karlinK);
 
     MemFree(rpsinfo);
     
@@ -536,18 +564,36 @@ void RPSequenceFree(RPSequencePtr rpseqp)
 
 void RPSUpdateDbSize(BLAST_OptionsBlkPtr options, RPSInfoPtr rpsinfo, Int4 query_length)
 {
+    Int4 length_adjustment, effective_query_length;
+    Int8 dblen, dblen_eff; 
+    BLAST_KarlinBlkPtr kbp;
 
+    if (options == NULL)
+	return;
+
+    dblen = rpsinfo->offsets[rpsinfo->matrixCount] - (rpsinfo->matrixCount); 
     options->dbseq_num = rpsinfo->matrixCount;
 
+    kbp = BlastKarlinBlkCreate();
+    BlastKarlinBlkGappedCalcEx(kbp, options->gap_open, options->gap_extend, 
+	options->decline_align, options->matrix, NULL);
+
+    BlastCalculateEffectiveLengths(options, rpsinfo->matrixCount, dblen, query_length, kbp, 
+	&effective_query_length, &length_adjustment);
+
+    kbp = BlastKarlinBlkDestruct(kbp);
+
     if(options->db_length == 0) {
-        options->db_length = rpsinfo->offsets[rpsinfo->matrixCount];
+	options->db_length = dblen;
     }
+
+    dblen_eff = MAX(options->dbseq_num, dblen - options->dbseq_num*length_adjustment);
 
     if(options->searchsp_eff == 0) {
         if(rpsinfo->query_is_prot)
-            options->searchsp_eff = query_length * options->db_length;
+            options->searchsp_eff = effective_query_length * dblen_eff;
         else
-            options->searchsp_eff = query_length * 6 * options->db_length;
+            options->searchsp_eff = query_length * 6 * dblen_eff;
     }
     
     return;
@@ -1081,6 +1127,9 @@ RPSimpalaStatCorrections(RPSequencePtr rpseq, Nlm_FloatHiPtr LambdaRatio, Nlm_Fl
     return TRUE;
 }
 
+/* Multiplier used by Impala, should use Method of Altshul, Bundschuh, etc.? */
+#define PRO_K_MULTIPLIER 1.2
+
 SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
                               Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr
                               subject_bsp)
@@ -1193,6 +1242,15 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
                 continue;
             }
 
+	    if (rpsinfo->karlinK)
+	    {
+		search->sbp->kbp_gap[0]->K = PRO_K_MULTIPLIER*rpsinfo->karlinK[new_result->subject_id];
+		search->sbp->kbp_gap[0]->logK = log(search->sbp->kbp_gap[0]->K);
+		/* scalingFactor should only be different than one (or zero) if
+			the aux file was read and rpsinfo->karlinK was filled in. */
+		if (search->pbp->scalingFactor != 0) 
+			search->sbp->kbp_gap[0]->Lambda /= search->pbp->scalingFactor;
+	    }
 
             if (rpseq->copyMatrix) {
                 posMatrix = search->sbp->posMatrix;

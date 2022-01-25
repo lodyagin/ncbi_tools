@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.39 $
+* $Revision: 6.40 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,9 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.40  2002/03/27 19:26:31  kans
+* AddToGeneOntologyUserObject takes string for GO id to keep leading zeroes
+*
 * Revision 6.39  2001/12/12 16:01:47  kans
 * added MOLECULE_TYPE_TRANSCRIBED_RNA, SUBSRC_transgenic, SUBSRC_environmental_sample, and SUBSRC_isolation_source
 *
@@ -1562,7 +1565,7 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   UserObjectPtr uop,
   CharPtr type,
   CharPtr text,
-  Int4 goid,
+  CharPtr goid,
   Int4 pmid,
   CharPtr evidence
 );

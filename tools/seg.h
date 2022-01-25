@@ -29,7 +29,7 @@
  *
  * Version Creation Date: 4/24/98
  *
- * $Revision: 6.6 $
+ * $Revision: 6.8 $
  *
  * File Description:  low-complexity filter 'seg'
  *
@@ -42,6 +42,9 @@
  * ==========================================================================
  */
 
+#ifndef __SEGSTR__
+#define __SEGSTR__
+
 #include <stdio.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -51,6 +54,11 @@
 #include <ncbibs.h>
 #include <sequtil.h>
 #include <seqport.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /*-----------------------------------------------------(alphabet defines)---*/
 
@@ -88,7 +96,7 @@ typedef struct segparams
    FloatHi hicut;
    Int4 period;
    Int4 hilenmin;
-   Boolean overlaps;
+   Boolean overlaps;	/* merge overlapping pieces if TRUE. */
    Int4 maxtrim;
    Int4 maxbogus;
    AlphaPtr palpha;
@@ -131,3 +139,8 @@ extern void lower(CharPtr string, size_t len);
 extern void upper(CharPtr string, size_t len);
 
 /*--------------------------------------------------------------------------*/
+
+#ifdef __cplusplus
+}
+#endif
+#endif

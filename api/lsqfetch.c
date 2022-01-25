@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.12  2002/01/22 19:50:32  kans
+* IndexedFastaLibBioseqFetchFunc looks for prefix with upper case followed by lower case
+*
 * Revision 6.11  2001/09/21 20:02:04  kans
 * allow U and u to be DNA in CheckDnaResidue for the BLAST guys, even though it is amino acid Selenocysteine in most places
 *
@@ -71,6 +74,9 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.12  2002/01/22 19:50:32  kans
+* IndexedFastaLibBioseqFetchFunc looks for prefix with upper case followed by lower case
+*
 * Revision 6.11  2001/09/21 20:02:04  kans
 * allow U and u to be DNA in CheckDnaResidue for the BLAST guys, even though it is amino acid Selenocysteine in most places
 *
@@ -1255,7 +1261,7 @@ static Int2 LIBCALLBACK IndexedFastaLibBioseqFetchFunc (Pointer data)
   if (sip->choice == SEQID_LOCAL) {
 
     SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
-    if (StringNICmp (id, "Hs", 2) == 0) {
+    if (StringLen (id) > 2 && IS_UPPER (id [0]) && IS_LOWER (id [1])) {
       StringCpy (tmp, id + 2);
       ptr = StringChr (tmp, '_');
       if (ptr != NULL) {

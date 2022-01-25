@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -758,7 +758,7 @@ main (int argc, char *argv[])
   CharPtr  ptr;
   CharPtr  request;
   Int2     service;
-  Char     tempfile [L_tmpnam];
+  Char     tempfile [PATH_MAX];
 
 /* at startup, first verify environment */
 

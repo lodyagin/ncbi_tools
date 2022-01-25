@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.46 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.46  2002/03/28 13:30:28  kans
+* check for OS_UNIX_DARWIN before including MoreCarbonAccessors.h, Profiler.h (EN)
+*
+* Revision 6.45  2002/03/18 16:55:19  kans
+* ProfilerInit stackDepth parameter to 50
+*
+* Revision 6.44  2002/03/18 16:33:53  kans
+* ProfilerInit numFunctions parameter to 1000
+*
 * Revision 6.43  2001/11/26 21:25:04  juran
 * Define type AERefCon as SInt32 for AE handler prototypes.
 * It may need to be UInt32 for pre-3.4 Universal Interfaces under Carbon, or something.
@@ -582,7 +591,9 @@
 #ifdef WIN_MAC
 #include <Appearance.h>
 #include <Navigation.h>
-#include <Profiler.h>
+# if !defined(OS_UNIX_DARWIN)
+#  include <Profiler.h>
+# endif
 # include "MoreCarbonAccessors.h"
 #endif
 
@@ -6358,7 +6369,7 @@ void main ()
   OSErr  err;
 
 #if __profile__
-  ProfilerInit (collectDetailed, bestTimeBase, 100, 20);
+  ProfilerInit (collectDetailed, bestTimeBase, 1000, 50);
   ProfilerSetStatus (FALSE);
 #endif
 

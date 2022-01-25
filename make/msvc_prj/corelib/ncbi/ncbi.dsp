@@ -147,11 +147,15 @@ SOURCE=..\..\..\..\connect\ncbi_http_connector.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_memory_connector.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\connect\ncbi_priv.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\connect\ncbi_sendmail_.c
+SOURCE=..\..\..\..\connect\ncbi_sendmail.c
 # End Source File
 # Begin Source File
 
@@ -175,7 +179,7 @@ SOURCE=..\..\..\..\connect\ncbi_service_lbsmd_stub.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\connect\ncbi_socket_.c
+SOURCE=..\..\..\..\connect\ncbi_socket.c
 # End Source File
 # Begin Source File
 
@@ -349,6 +353,10 @@ SOURCE=..\..\..\..\connect\ncbi_buffer.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_config.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\connect\ncbi_connection.h
 # End Source File
 # Begin Source File
@@ -370,6 +378,10 @@ SOURCE=..\..\..\..\connect\ncbi_file_connector.h
 # Begin Source File
 
 SOURCE=..\..\..\..\connect\ncbi_http_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_memory_connector.h
 # End Source File
 # Begin Source File
 

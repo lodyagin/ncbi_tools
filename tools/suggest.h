@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -119,8 +119,8 @@ typedef struct struct_Suggest_error {
 #define MAX_EXONS	5000			/* maximum number of exons */
 #define WORD_SIZE	3			/* length of critical word (DO NOT CHANGE!) */
 
-#define PlusStrand 1
-#define MinusStrand 2
+#define SuggestPlusStrand 1
+#define SuggestMinusStrand 2
 
 /*****************************************************************************
  * Typedefs

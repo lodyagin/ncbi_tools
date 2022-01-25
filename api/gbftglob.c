@@ -4,6 +4,21 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.26  2002/04/17 19:11:48  kans
+* added serovar to GBQual_names
+*
+* Revision 6.25  2002/04/17 14:41:08  kans
+* added GBQUAL_serovar to source feature
+*
+* Revision 6.24  2002/04/02 21:10:24  kans
+* restored organelle and transcript_id, which accidentally got deleted
+*
+* Revision 6.23  2002/03/26 16:06:31  kans
+* added transgenic, environmental_sample, and isolation_source
+*
+* Revision 6.22  2002/02/13 18:45:52  kans
+* increased ParFlat_TOTAL_GBFEAT, added snoRNA
+*
 * Revision 6.21  2001/12/11 17:56:42  kans
 * allele and phenotype added to several features
 *
@@ -150,7 +165,7 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"number", Class_number}, {"organism", Class_text}, 
  {"partial", Class_none}, {"PCR_conditions", Class_text}, 
  {"pop_variant", Class_text}, {"phenotype", Class_text},
-  {"plasmid", Class_text}, {"product", Class_text}, 
+ {"plasmid", Class_text}, {"product", Class_text}, 
  {"proviral", Class_none}, {"pseudo", Class_none},
  {"rearranged", Class_none}, { "replace", Class_text}, 
  {"rpt_family", Class_text}, {"rpt_type", Class_rpt},
@@ -166,6 +181,8 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"focus", Class_none}, { "specimen_voucher", Class_text},
  {"protein_id", Class_text}, { "country", Class_text},
  {"organelle", Class_text}, {"transcript_id", Class_text},   
+ {"transgenic", Class_none}, {"environmental_sample", Class_none},
+ {"isolation_source", Class_text}, {"serovar", Class_text},
  };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -507,6 +524,13 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+   {"snoRNA",  0, {-1, -1, -1, -1, -1}, 13,
+     {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
+      GBQUAL_gene,GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial,
+      GBQUAL_product, GBQUAL_pseudo, GBQUAL_standard_name, GBQUAL_usedin,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"snRNA",  0, {-1, -1, -1, -1, -1}, 13,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
       GBQUAL_gene,GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial,
@@ -514,7 +538,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 47,
+   {"source", 1, {GBQUAL_organism, -1, -1, -1, -1}, 50,
      {GBQUAL_cell_line, GBQUAL_cell_type, GBQUAL_chloroplast, 
       GBQUAL_chromoplast, GBQUAL_chromosome,
       GBQUAL_citation, GBQUAL_clone, GBQUAL_clone_lib, GBQUAL_country, GBQUAL_cultivar,
@@ -528,7 +552,8 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_sub_species, GBQUAL_sub_strain, GBQUAL_tissue_lib, 
       GBQUAL_tissue_type, GBQUAL_transposon, GBQUAL_usedin, 
       GBQUAL_specimen_voucher, GBQUAL_variety, GBQUAL_virion,
-      GBQUAL_organelle, -1, -1, -1, -1}},
+      GBQUAL_organelle, GBQUAL_transgenic, GBQUAL_environmental_sample,
+      GBQUAL_isolation_source, GBQUAL_serovar}},
    {"stem_loop",  0, {-1, -1, -1, -1, -1}, 11,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
       GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, 

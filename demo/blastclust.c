@@ -1,4 +1,4 @@
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.28 $  $Date: 2001/11/16 20:34:17 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.30 $  $Date: 2002/03/14 21:07:11 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.30  2002/03/14 21:07:11  dondosha
+* Slight improvement in finding the used id list from a gi list when reclustering
+*
+* Revision 6.29  2002/02/11 21:32:10  dondosha
+* Free Bioseqs after use to avoid accumulation
+*
 * Revision 6.28  2001/11/16 20:34:17  dondosha
 * Bug fix: BioseqUnlock was missing; also added ObjMgrFreeCache calls
 *
@@ -397,7 +403,7 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
 
    /* Test for list of ids to use for reclustering */
    if (idfp) {
-      CharPtr id_str, used_id_string;
+      CharPtr used_id_string;
       CharPtr delimiter_list = " \t\n,;";
       Int4 length;
 
@@ -406,8 +412,6 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
       while((length = 
 	     FileRead(used_id_string, sizeof(Char), FILE_BUFFER_SIZE, idfp))) {
 	 ptr = used_id_string;
-	 if (gi_list)
-	    id_str = (CharPtr) Malloc(10);
 	 while ((id = StringTokMT(ptr, delimiter_list, &ptr)) 
 		!= NULL) {
 	    if (ptr==NULL && length==FILE_BUFFER_SIZE) {
@@ -415,19 +419,14 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
 	       break;
 	    }
 	    for (i=0; i<num_queries; i++) {
-	       if (gi_list) 
-		  sprintf(id_str, "%ld", gi_list[i]);
-	       else
-		  id_str = id_list[i];
-	       if (!StrCmp(id_str, id))
+	       if ((gi_list && atoi(id) == gi_list[i]) ||
+                   (!gi_list && !StrCmp(id_list[i], id)))
 		  break;
 	    }
 	    if (i < num_queries)
 	       used_id_index[i] = TRUE;
 	 }
       }
-      if (gi_list)
-	 MemFree(id_str);
    }
 
    while ((num_hits = FileRead(info, sizeof(ClusterLogInfo), INFO_LIST_SIZE,
@@ -1028,11 +1027,12 @@ Int2 Main (void)
                                          &id_list[index]);
              }
              BioseqUnlock(bsp);
-          } else if (sip->choice != SEQID_GENERAL)
+             BioseqFree(bsp);
+          } else if (sip->choice != SEQID_GENERAL) {
              numeric_id_type &= 
                 GetAccessionFromSeqId(sip, &gi_list[index], 
                                       &id_list[index]); 
-          else {
+          } else {
              BioseqPtr bsp = BioseqLockById(sip);
              CharPtr title = StringSave(BioseqGetTitle(bsp));
              if (title) {
@@ -1045,6 +1045,7 @@ Int2 Main (void)
                            PRINTID_FASTA_SHORT, BUFFER_SIZE);
              }
              BioseqUnlock(bsp);
+             BioseqFree(bsp);
           }
 	  sip = SeqIdSetFree(sip);
        }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.71 $
+* $Revision: 6.75 $
 *
 * File Description: 
 *
@@ -107,7 +107,7 @@ extern "C" {
 #define SEQ_FMT_CONTIGUOUS    2 
 #define SEQ_FMT_INTERLEAVE    3 
 #define NUM_SEQ_FMT           3 
-
+  
 /*
 #define SEQ_FMT_FASTAGAP      2
 #define SEQ_FMT_PHYLIP        3
@@ -156,6 +156,10 @@ extern Boolean  docSumUp;
 extern Boolean  bioseqViewUp;
 #endif
 
+extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
+extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
+extern SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,
+				       SeqIdPtr  new_sip);
 extern SequinBlockPtr SequinBlockFree (SequinBlockPtr sbp);
 
 extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
@@ -331,6 +335,7 @@ extern CharPtr SearchForString (CharPtr str, CharPtr sub, Boolean case_counts, B
 extern void AddAboutAndHelpMenuItems (MenU m);
 extern void NetConfigureProc (IteM i);
 extern void EntrezQueryProc (IteM i);
+extern void Entrez2QueryProc (IteM i);
 extern void SetupEditSecondary (MenU m, BaseFormPtr bfp);
 extern void SimplePowerBlastProc (IteM i);
 extern void SimpleCDDBlastProc (IteM i);
@@ -364,7 +369,10 @@ extern void PrepareToConvertToCDS (SeqEntryPtr sep, Uint2 entityID,
                                    Uint2 subtype, CharPtr findthis);
 extern void ConvertToLocalProc (IteM i);
 extern void PromoteToBestIDProc (IteM i);
-extern void RemoveIDsFromBioseqs (IteM i);
+extern void PromoteToWorstIDProc (IteM i);
+extern void RemoveGBIDsFromBioseqs (IteM i);
+extern void RemoveGBIDsFromProteins (IteM i);
+extern void RemoveGIsFromBioseqs (IteM i);
 extern void VectorScreenProc (IteM i);
 extern void SimplePowerBlastProc (IteM i);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);

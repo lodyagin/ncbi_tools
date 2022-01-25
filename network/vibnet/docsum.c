@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.54  2002/01/03 16:53:52  kans
+* use left, top passed in
+*
 * Revision 6.53  2001/11/02 12:51:01  kans
 * add EntrezDocSum time log if environment variable set on UNIX
 *
@@ -3288,7 +3291,7 @@ extern ForM CreateDocSumForm (Int2 left, Int2 top, CharPtr title,
   macLike = egp->popdownBehavior;
   sfp = (SummFormPtr) MemNew (sizeof (SummFormData));
   if (sfp != NULL) {
-    w = DocumentWindow (-50, -33, -10, -10, title,
+    w = DocumentWindow (left, top, -10, -10, title,
                         StdSendCloseWindowMessageProc, ResizeDocSumForm);
     SetObjectExtra (w, sfp, CleanupEntrezDocSumForm);
     sfp->form = (ForM) w;

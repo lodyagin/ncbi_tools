@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_core.c,v 6.6 2001/08/09 16:25:28 lavr Exp $
+/*  $Id: test_ncbi_core.c,v 6.8 2002/03/22 19:46:57 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,12 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_core.c,v $
+ * Revision 6.8  2002/03/22 19:46:57  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.7  2002/01/16 21:23:15  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.6  2001/08/09 16:25:28  lavr
  * Remove last (unneeded) parameter from LOG_Reset() and its test
  *
@@ -53,13 +59,11 @@
  * ===========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
-
 #include <connect/ncbi_util.h>
 #include <stdlib.h>
 #include <errno.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 /* Aux. to printout a name of the next function to test

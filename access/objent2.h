@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.13 at Nov 26, 2001  8:44 AM
+*    Generated using ASNCODE Revision: 6.13 at Jan 28, 2002 12:12 PM
 *
 **************************************************/
 
@@ -126,6 +126,7 @@ typedef struct struct_Entrez2_request {
    Int4   version;
    CharPtr   tool;
    CharPtr   cookie;
+   Uint1   use_history;
 } Entrez2Request, PNTR Entrez2RequestPtr;
 
 

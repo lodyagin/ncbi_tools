@@ -30,8 +30,17 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.129 $ 
+/* $Revision: 6.132 $ 
 * $Log: blastdef.h,v $
+* Revision 6.132  2002/04/23 20:59:53  madden
+* Change version and date for release
+*
+* Revision 6.131  2002/04/09 18:16:43  dondosha
+* Added more options/parameters for megablast
+*
+* Revision 6.130  2002/03/28 18:53:18  madden
+* Add ValNodePtr mask1 to BlastSearch structure
+*
 * Revision 6.129  2001/12/28 20:38:39  dondosha
 * Moved Mega BLAST related parameters into a separate structure
 *
@@ -793,8 +802,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.2"
-#define BLAST_RELEASE_DATE "Jan-08-2002"
+#define BLAST_ENGINE_VERSION "2.2.3"
+#define BLAST_RELEASE_DATE "May-13-2002"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -894,6 +903,12 @@ typedef struct _blast_prune_hits_from_sap {
 #define FILTER_NONE 0
 #define FILTER_DUST 1
 #define FILTER_SEG  2
+
+typedef enum {
+   MB_WORD_CODING = 0,
+   MB_WORD_MAX_INFO = 1,
+   MB_TWO_TEMPLATES = 2
+} MBDiscWordType;
 
 /**********************************************************************
 	Structure for the blast options (available to user/programmer).
@@ -1008,7 +1023,21 @@ typedef struct _blast_optionsblk {
         Int2 mb_template_length;  /* Length of the discontiguous word */
         Boolean mb_use_dyn_prog;  /* Use dynamic programming gapped extension in
                                      megablast with affine gap scores */ 
+        MBDiscWordType mb_disc_type;
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
+
+typedef enum {
+   TEMPL_11_16 = 0,
+   TEMPL_12_16 = 1,
+   TEMPL_11_18 = 2,
+   TEMPL_12_18 = 3,
+   TEMPL_11_21 = 4,
+   TEMPL_12_21 = 5,
+   TEMPL_11_16_MAX = 6,
+   TEMPL_12_16_MAX = 7,
+   TEMPL_11_18_MAX = 8,
+   TEMPL_12_18_MAX = 9
+} MBTemplateType;
 
 typedef struct _mb_parameter_blk_ {
    Boolean no_traceback;    /* No traceback in greedy extension */
@@ -1024,6 +1053,8 @@ typedef struct _mb_parameter_blk_ {
    Int2    template_length; /* Length of a discontiguous word template */
    Boolean use_dyn_prog;    /* Use dynamic programming extension for affine gap
                                scores */
+   MBTemplateType template_type; /* Type of a discontiguous template */
+   Boolean use_two_templates;
 } MegaBlastParameterBlk, PNTR MegaBlastParameterBlkPtr;
 
 /****************************************************************************
@@ -1569,6 +1600,7 @@ typedef struct _blast_matrix_rescale {
 #define BLAST_SEARCH_ALLOC_QUERY_SLP 4096
 /* #define BLAST_SEARCH_ALLOC_GILIST 8192 */
 #define BLAST_SEARCH_ALLOC_THRINFO 8192 /* 16384 */
+#define BLAST_SEARCH_ALLOC_MASK1 16384
 
 typedef struct blast_search_block {
     Int4 allocated; 
@@ -1592,6 +1624,7 @@ a field is allocated, then it's bit is non-zero.
 		all_words		BLAST_SEARCH_ALLOC_ALL_WORDS
 		query_slp		BLAST_SEARCH_ALLOC_QUERY_SLP
 		blast_gi_list		BLAST_SEARCH_ALLOC_GILIST
+		mask1			BLAST_SEARCH_ALLOC_MASK1
 */
 
 /*
@@ -1657,6 +1690,7 @@ a field is allocated, then it's bit is non-zero.
       ValNodePtr containing masking SeqLocPtr's
       */
     ValNodePtr mask;
+    ValNodePtr mask1;
     /*
       What genetic codes are we using to translate the query or database
       when needed.  Based upon NCBI genetic codes.

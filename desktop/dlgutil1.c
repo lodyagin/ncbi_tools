@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.27 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -90,14 +90,78 @@ ENUM_ALIST(months_alist)
   {"Dec",  12},
 END_ENUM_ALIST
 
+/* Note that this function is a copy of DoDescriptorPropagate () */
+/* in sequin4.c                                                  */
+
+static Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  BioseqSetPtr      bssp = NULL;
+  OMProcControlPtr  ompcp;
+  SeqEntryPtr       seqentry;
+  ValNodePtr        sourcedescr;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->input_entityID == 0) {
+    Message (MSG_ERROR, "Please select a BioseqSet");
+    return OM_MSG_RET_ERROR;
+  }
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQSET :
+      bssp = (BioseqSetPtr) ompcp->input_data;
+      break;
+    case 0 :
+      Message (MSG_ERROR, "Please select a BioseqSet");
+      return OM_MSG_RET_ERROR;
+    default :
+      Message (MSG_ERROR, "Please select a BioseqSet");
+      return OM_MSG_RET_ERROR;
+  }
+
+  if (bssp != NULL) {
+    sourcedescr = bssp->descr;
+    if (sourcedescr != NULL) {
+      bssp->descr = NULL;
+      seqentry = bssp->seq_set;
+      while (seqentry != NULL) {
+        if (seqentry->data.ptrvalue != NULL) {
+          if (seqentry->choice == 1) {
+            bsp = (BioseqPtr) seqentry->data.ptrvalue;
+            ValNodeLink (&(bsp->descr),
+                         AsnIoMemCopy ((Pointer) sourcedescr,
+                                       (AsnReadFunc) SeqDescrAsnRead,
+                                       (AsnWriteFunc) SeqDescrAsnWrite));
+          } else if (seqentry->choice == 2) {
+            bssp = (BioseqSetPtr) seqentry->data.ptrvalue;
+            ValNodeLink (&(bssp->descr),
+                         AsnIoMemCopy ((Pointer) sourcedescr,
+                                       (AsnReadFunc) SeqDescrAsnRead,
+                                       (AsnWriteFunc) SeqDescrAsnWrite));
+          }
+        }
+        seqentry = seqentry->next;
+      }
+      SeqDescrFree (sourcedescr);
+    }
+  }
+
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  return OM_MSG_RET_DONE;
+}
+
 extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
 
 {
+  MsgAnswer          ans;
   DescriptorFormPtr  dfp;
   Int4Ptr            intptr;
   OMProcControl      ompc;
   Boolean            rsult;
   ValNodePtr         sdp;
+  SeqEntryPtr        sep;
+  BioseqSetPtr       bssp;
 
   rsult = FALSE;
   dfp = (DescriptorFormPtr) GetObjectExtra (f);
@@ -140,6 +204,21 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
         rsult = TRUE;
       }
     }
+
+    /* If the descriptor was added to a GenBank set then*/
+    /* optionally propagate it to the set's Bioseqs.    */
+
+    if (ompc.input_itemtype == OBJ_BIOSEQSET) {
+      sep = (SeqEntryPtr) ompc.input_choice;
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp->_class == BioseqseqSet_class_genbank) {
+	ans = Message (MSG_YN, "Do you wish to propagate the descriptor to "
+		       "the set's Bioseqs?");
+	if (ANS_YES == ans)
+	  DescriptorPropagate (&ompc);
+      }
+    }
+    
   }
   return rsult;
 }
@@ -3651,13 +3730,15 @@ static void DbtagPtrToRWDbtagDialog (DialoG d, Pointer data)
 static Pointer DbtagDialogToDbtagPtr (DialoG d)
 
 {
-  Boolean      alldigits = TRUE;
+  Boolean      alldigits;
   Char         ch;
   DbtagPtr     dp;
   ValNodePtr   head;
   Int2         j;
+  Boolean      leadingzero;
   Int2         len;
   ValNodePtr   list;
+  Boolean      notallzero;
   ObjectIdPtr  oid;
   Boolean      okay;
   CharPtr      ptr;
@@ -3698,17 +3779,25 @@ static Pointer DbtagDialogToDbtagPtr (DialoG d)
               tmp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
               TrimSpacesAroundString (tmp);
               if (tmp != NULL) {
+                leadingzero = FALSE;
+                notallzero = FALSE;
+                alldigits = TRUE;
                 ptr = tmp;
                 ch = *ptr;
+                if (ch == '0') {
+                  leadingzero = TRUE;
+                }
                 while (ch != '\0') {
                   if (ch == ' ' || ch == '+' || ch == '-') {
                   } else if (! (IS_DIGIT (ch))) {
                     alldigits = FALSE;
+                  } else if ('1'<= ch && ch <='9') {
+                    notallzero = TRUE;
                   }
                   ptr++;
                   ch = *ptr;
                 }
-                if (alldigits && sscanf (tmp, "%ld", &val) == 1) {
+                if (alldigits && (! (leadingzero && notallzero)) && sscanf (tmp, "%ld", &val) == 1) {
                   oid->id = (Int4) val;
                   MemFree (tmp);
                 } else {

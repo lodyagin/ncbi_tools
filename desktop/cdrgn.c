@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.46 $
+* $Revision: 6.48 $
 *
 * File Description: 
 *
@@ -2001,7 +2001,7 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
 
     x = HiddenGroup (g, -1, 0, NULL);
     f = HiddenGroup (x, 6, 0, NULL);
-    cfp->product = CreateProteinOrMRNAProductDialog (f, NULL, "Product", FALSE, cfp->sep, cfp, NULL, (BaseFormPtr) cfp);
+    cfp->product = CreateProteinOrMRNAProductDialog (f, NULL, "Protein Product", FALSE, cfp->sep, cfp, NULL, (BaseFormPtr) cfp);
     cfp->protSeqIdGrp = HiddenGroup (f, -2, 0, NULL);
     StaticPrompt (cfp->protSeqIdGrp, "SeqID", 0, dialogTextHeight, programFont, 'l');
     cfp->protSeqIdTxt = DialogText (cfp->protSeqIdGrp, "", 6, NULL);
@@ -3915,7 +3915,31 @@ static void ChangeProtSubPage (VoidPtr data, Int2 newval, Int2 oldval)
   }
 }
 
-static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp)
+static void ChangeProtProcessed (PopuP p)
+
+{
+  ProtFormPtr  pfp;
+  Int2         val;
+
+  pfp = (ProtFormPtr) GetObjectExtra (p);
+  if (pfp == NULL) return;
+  val = GetValue (p);
+  switch (val) {
+    case 1 :
+      SafeHide (pfp->product);
+      break;
+    case 2 :
+    case 3 :
+    case 4 :
+    case 5 :
+      SafeShow (pfp->product);
+      break;
+    default :
+      break;
+  }
+}
+
+static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp, SeqFeatPtr sfp, ProtFormPtr pfp)
 
 {
   GrouP        f;
@@ -3979,13 +4003,22 @@ static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp)
 
     r = HiddenGroup (ppp->protGrp [0], 2, 0, NULL);
     StaticPrompt (r, "Processing", 0, dialogTextHeight, programFont, 'l');
-    ppp->processed = PopupList (r, TRUE, NULL);
+    ppp->processed = PopupList (r, TRUE, ChangeProtProcessed);
+    SetObjectExtra (ppp->processed, (Pointer) pfp, NULL);
     PopupItem (ppp->processed, " ");
     PopupItem (ppp->processed, "Proprotein");
     PopupItem (ppp->processed, "Mature");
     PopupItem (ppp->processed, "Signal peptide");
     PopupItem (ppp->processed, "Transit peptide");
     SetValue (ppp->processed, 1);
+
+    pfp->product = CreateProteinOrMRNAProductDialog (ppp->protGrp [0], NULL, "Processing Product", FALSE,
+                                                     pfp->sep, NULL, NULL, (BaseFormPtr) pfp);
+    if (sfp == NULL || sfp->product == NULL) {
+      if (prp == NULL || prp->processed < 2) {
+        SafeHide (pfp->product);
+      }
+    }
 
     ppp->protGrp [1] = HiddenGroup (k, 0, 10, NULL);
     StaticPrompt (ppp->protGrp [1], "Enzyme Commission Number", 0, 0, programFont, 'c');
@@ -4180,6 +4213,42 @@ static void ProtFormActivate (WindoW w)
   }
 }
 
+static void ProtRefPtrToForm (ForM f, Pointer data)
+
+{
+  SeqEntryPtr  oldsep;
+  ProtFormPtr  pfp;
+  SeqEntryPtr  sep;
+  SeqFeatPtr   sfp;
+  Int4         val;
+
+  pfp = (ProtFormPtr) GetObjectExtra (f);
+  if (pfp != NULL) {
+    sep = GetTopSeqEntryForEntityID (pfp->input_entityID);
+    oldsep = SeqEntrySetScope (sep);
+    sfp = (SeqFeatPtr) data;
+    if (sfp != NULL) {
+      switch (sfp->data.choice) {
+        case SEQFEAT_BOND :
+        case SEQFEAT_SITE :
+        case SEQFEAT_PSEC_STR :
+          val = (Int4) sfp->data.value.intvalue;
+          PointerToDialog (pfp->data, (Pointer) &(val));
+          break;
+        case SEQFEAT_COMMENT:
+          break;
+        default :
+          PointerToDialog (pfp->data, sfp->data.value.ptrvalue);
+          break;
+      }
+      SeqFeatPtrToCommon ((FeatureFormPtr) pfp, sfp);
+      PointerToDialog (pfp->location, sfp->location);
+      PointerToDialog (pfp->product, sfp->product);
+    }
+    SeqEntrySetScope (oldsep);
+  }
+}
+
 extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
                             SeqFeatPtr sfp, SeqEntryPtr sep,
                             FormActnFunc actproc)
@@ -4202,7 +4271,7 @@ extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
     SetObjectExtra (w, pfp, StdFeatFormCleanupProc);
     pfp->form = (ForM) w;
     pfp->actproc = actproc;
-    pfp->toform = StdSeqFeatPtrToFeatFormProc;
+    pfp->toform = ProtRefPtrToForm;
     pfp->fromform = NULL;
     pfp->formmessage = ProtFormMessage;
     pfp->testform = NULL;
@@ -4237,7 +4306,7 @@ extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
     if (sfp != NULL && sfp->data.choice == SEQFEAT_PROT) {
       prp = sfp->data.value.ptrvalue;
     }
-    pfp->data = CreateProtDialog (s, NULL, prp);
+    pfp->data = CreateProtDialog (s, NULL, prp, sfp, pfp);
     pfp->pages [PROT_PAGE] = s;
     Hide (pfp->pages [PROT_PAGE]);
 

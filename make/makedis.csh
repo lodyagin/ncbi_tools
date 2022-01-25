@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.65 2001/08/07 21:00:59 beloslyu Exp $
+# $Id: makedis.csh,v 1.68 2002/04/18 16:30:44 ivanov Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -137,6 +137,9 @@ case Linux:
 	case "ppc":
 		set platform=ppclinux
 		breaksw
+	case "parisc":
+		set platform=hppalinux
+		breaksw
 	default:
 		set platform=linux
 		breaksw
@@ -208,7 +211,17 @@ case AIX:
 	end
 	breaksw
 case HP-UX:
-	set platform=hpux
+	switch (`uname -m`)
+	case "ia64":
+		set platform=hpux_ia64
+		breaksw
+	case "9000/800":
+		set platform=hpux
+		breaksw
+	default:
+		set platform=hpux
+		breaksw
+	endsw
 	breaksw
 default:
 	echo Platform not found : `uname -a`
@@ -374,11 +387,23 @@ set net_stat = $status
 
 if ($make_stat != 0 || $demo_stat != 0 || $threaded_demo_stat != 0 || $net_stat != 0) then
    echo FAILURE primary make status = $make_stat, demo = $demo_stat, threaded_demo = $threaded_demo_stat, net = $net_stat
+	cat <<EOF
+#######
+#        #####   #####    ####   #####
+#        #    #  #    #  #    #  #    #
+#####    #    #  #    #  #    #  #    #
+#        #####   #####   #    #  #####
+#        #   #   #   #   #    #  #   #
+#######  #    #  #    #   ####   #    #
+EOF
    exit 1
 else
    # we are in ncbi/build directory now. Let us make the VERSION file
-   echo putting date stamp to the file ../VERSION
-   date > ../VERSION
+   echo "Put the date stamp to the file ../VERSION"
+   echo "The executable files were built on `date`" > ../VERSION
+   echo "The version number of each individual application" >> ../VERSION
+   echo "may be found in the appropriate documentation files in ./ncbi/doc/" >> ../VERSION
+   echo "uname -a ouput is: `uname -a`" >> ../VERSION
    echo '*********************************************************'
    echo '*The new binaries are located in ./ncbi/build/ directory*'
    echo '*********************************************************'

@@ -56,7 +56,7 @@ Args myargs[] = {
 	{"Use VERSION?","T",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
 	{"Show Bankit comments?","F",NULL,NULL,TRUE,'C',ARG_BOOLEAN,0.0,0,NULL},
 	{"For GenBank Release?","F",NULL,NULL,TRUE,'R',ARG_BOOLEAN,0.0,0,NULL},
-	{"New LOCUS line format?","F",NULL,NULL,TRUE,'L',ARG_BOOLEAN,0.0,0,NULL}
+	{"New LOCUS line format?","T",NULL,NULL,TRUE,'L',ARG_BOOLEAN,0.0,0,NULL}
 	};
 
 
@@ -303,9 +303,9 @@ Int2 Main(void)
 		ajp->forgbrel = TRUE;
 	}
 	if (myargs[28].intvalue) {
-		ajp->new_locus_fmt = TRUE;
+		ajp->old_locus_fmt = FALSE;
 	} else {
-		ajp->new_locus_fmt = FALSE;
+		ajp->old_locus_fmt = TRUE;
 	}
 	useSeqMgrIndexes = (Boolean)(myargs[24].intvalue);
 	/* get pointer to all loaded ASN.1 modules */

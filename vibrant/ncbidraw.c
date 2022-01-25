@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.33  2002/03/28 13:35:48  kans
+* only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
+*
+* Revision 6.32  2002/03/06 20:15:14  northup
+* under X11 cache colors from XAllocColor using a hash table. (EN)
+*
+* Revision 6.31  2002/02/04 19:04:51  kans
+* pass fsp.size to LoadFontData for systemFont on Mac - now label width calculated correctly
+*
+* Revision 6.30  2002/02/04 18:49:15  kans
+* fsp.size = GetDefFontSize () for systemFont on Mac - Mac OS X uses Lucida Grande 13
+*
 * Revision 6.29  2001/08/29 21:14:10  juran
 * Move Carbon forward-compatibility to MoreCarbonAccessors.h.
 * Call InvalRgn instead of InvalWindowRegion.
@@ -313,7 +325,9 @@ typedef struct gdImageStruct { void* dummy; } gdImage;
 Nlm_Boolean  Nlm_nowPrinting = FALSE;
 
 #ifdef WIN_MAC
-# include "MoreCarbonAccessors.h"
+# if !defined(OS_UNIX_DARWIN)
+#include "MoreCarbonAccessors.h"
+#endif
 #endif
 
 #ifdef WIN_MAC
@@ -1299,6 +1313,21 @@ extern void Nlm_DkGray (void)
 }
 
 
+#ifdef WIN_X
+#define COLOR_HASH(lrgb) (lrgb % 251)  /* 251 is the largest prime less than 256 */
+#define RGB_2_LRGB(red, green, blue) ((red) | (green << 8) | (blue << 16))
+#define LRGB_RED(lrgb)   ((lrgb) & 0xFF)
+#define LRGB_GREEN(lrgb) ((lrgb >> 8) & 0xFF)
+#define LRGB_BLUE(lrgb)  (((lrgb >> 16) & 0xFF)
+
+/* note: without a lock, the same color may appear multiple times in the hash table (not the end of the world) */
+typedef struct nlm_colorHashBucket {
+  Nlm_Uint4  lrgb;
+  XColor xcolor;
+  struct nlm_colorHashBucket PNTR next;
+} Nlm_ColorHashBucket, PNTR Nlm_ColorHashBucketPtr;
+#endif
+
 extern void Nlm_SelectColor (Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue)
 {
 #ifdef WIN_MAC
@@ -1335,13 +1364,52 @@ extern void Nlm_SelectColor (Nlm_Uint1 red, Nlm_Uint1 green, Nlm_Uint1 blue)
 #endif
 #ifdef WIN_X
   XColor xcolor;
+  Nlm_Uint1  hash;
+  Nlm_Uint4  lrgb;
+  Nlm_ColorHashBucketPtr CHBP, tail;
+  static Nlm_ColorHashBucketPtr ColorHashBuckets [256] = {NULL};
+
+  lrgb = RGB_2_LRGB (red, green, blue);
+  hash = COLOR_HASH (lrgb);
+  tail = NULL;
+  if (ColorHashBuckets [hash] != NULL) {
+    for (CHBP = ColorHashBuckets [hash]; CHBP != NULL; CHBP = CHBP->next) {
+      if (CHBP->lrgb == lrgb) {
+	xcolor = CHBP->xcolor;
+	Nlm_ChooseColor (xcolor.pixel);
+	return;
+      }
+      tail = CHBP;
+    }
+  }
+
   Nlm_XAllocColor(&xcolor, Nlm_VibrantDefaultColormap(), red, green, blue);
-  Nlm_ChooseColor( xcolor.pixel );
+  Nlm_ChooseColor(xcolor.pixel );
+
+  if (tail != NULL) {
+    tail->next = MemNew (sizeof (Nlm_ColorHashBucket));
+    tail = tail->next;
+  } else {
+    tail = ColorHashBuckets [hash] = MemNew (sizeof (Nlm_ColorHashBucket));
+  }
+  if (tail != NULL) {
+    tail->lrgb = lrgb;
+    tail->xcolor = xcolor;
+  }  
+  
 #endif
 #ifdef WIN_GIF
   Nlm_curGIFColor = (int)Nlm_GetColorRGB ( red, green, blue );
 #endif
 }
+
+#ifdef WIN_X
+#undef COLOR_HASH
+#undef RGB_2_LRGB
+#undef LRGB_RED
+#undef LRGB_GREEN
+#undef LRGB_BLUE
+#endif
 
 
 extern Nlm_Uint4 Nlm_GetColorRGB (Nlm_Uint1 red, Nlm_Uint1 green,
@@ -6352,8 +6420,8 @@ extern void Nlm_SetUpDrawingTools (void)
   Nlm_PtoCstr ( tmpFontName );
   Nlm_StringNCpy_0 (fsp.name, tmpFontName, FONT_NAME_SIZE - 1);
   fsp.name[FONT_NAME_SIZE - 1] = 0;
-  fsp.size = 12;
-  Nlm_LoadFontData (Nlm_systemFont, NULL, -1, &fsp, 0, 12, 0, NULL);
+  fsp.size = GetDefFontSize ();
+  Nlm_LoadFontData (Nlm_systemFont, NULL, -1, &fsp, 0, fsp.size, 0, NULL);
   Nlm_programFont = (Nlm_FonT) Nlm_HandNew (sizeof (Nlm_FontRec));
   /* esl: LoadFontData changed to work with new FontData format */
   Nlm_StrCpy (fsp.name, "Monaco");

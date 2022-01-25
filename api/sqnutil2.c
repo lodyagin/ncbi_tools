@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.112 $
+* $Revision: 6.129 $
 *
 * File Description: 
 *
@@ -1488,7 +1488,7 @@ static CharPtr molinfo_tech_list [] = {
   "?", "standard", "EST", "STS", "survey", "genetic map", "physical map",
   "derived", "concept-trans", "seq-pept", "both", "seq-pept-overlap",
   "seq-pept-homol", "concept-trans-a", "htgs 1", "htgs 2", "htgs 3",
-  "fli cDNA", "htgs 0", "htc", NULL
+  "fli cDNA", "htgs 0", "htc", "wgs", NULL
 };
 
 NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
@@ -1609,6 +1609,11 @@ NLM_EXTERN ProtRefPtr ParseTitleIntoProtRef (
   }
   if (str != NULL) {
     ValNodeCopyStr (&(prp->name), 0, str);
+  }
+
+  str = SqnTagFind (stp, "prot_desc");
+  if (str != NULL) {
+    prp->desc = StringSave (str);
   }
 
   str = SqnTagFind (stp, "EC_number");
@@ -1902,7 +1907,7 @@ static SeqEntryPtr ReadPhrapDNA (FILE *fp, CharPtr id)
   return sep;
 }
 
-static SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
+NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
 
 {
   ByteStorePtr  bs = NULL;
@@ -1915,6 +1920,7 @@ static SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
   Int2          min = INT2_MAX;
   Boolean       nonewline;
   CharPtr       p;
+  Int4          pos;
   CharPtr       q;
   Char          prefix [256];
   size_t        prefixlen;
@@ -1936,11 +1942,15 @@ static SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
     StringCpy (buf, prefix);
     prefix [0] = '\0';
     prefixlen = StringLen (buf);
+    pos = ftell (fp);
     ReadALineOfScores (buf + prefixlen, sizeof (buf) - prefixlen, fp, &nonewline);
     /* above function returned prefix characters past buf start */
     str = buf;
-    if (HasNoText (str)) {
+    if (HasNoText (str) || str [0] == '>') {
       goOn = FALSE;
+      if (str [0] == '>') {
+        fseek (fp, pos, SEEK_SET);
+      }
     } else {
       i = 0;
       p = str;
@@ -3113,6 +3123,8 @@ NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str)
   }
   if (StringICmp ("fMet", tmp) == 0) return (Uint1) 'M';
   if (StringICmp ("OTHER", tmp) == 0) return (Uint1) 'X';
+  if (StringICmp ("Aspartate", tmp) == 0) return (Uint1) 'D';
+  if (StringICmp ("Glutamate", tmp) == 0) return (Uint1) 'E';
   return 0;
 }
 
@@ -3139,6 +3151,8 @@ NLM_EXTERN Uint1 FindTrnaAA (CharPtr str)
   }
   if (StringICmp ("fMet", tmp) == 0) return (Uint1) 'M';
   if (StringICmp ("OTHER", tmp) == 0) return (Uint1) 'X';
+  if (StringICmp ("Aspartate", tmp) == 0) return (Uint1) 'D';
+  if (StringICmp ("Glutamate", tmp) == 0) return (Uint1) 'E';
   return 0;
 }
 
@@ -3159,12 +3173,14 @@ NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str)
       }
     }
   }
-  if (StringICmp ("fMet", tmp) == 0) return aaList [35];
-  if (StringICmp ("OTHER", tmp) == 0) return aaList [52];
+  if (StringICmp ("fMet", tmp) == 0) return "Methionine";
+  if (StringICmp ("OTHER", tmp) == 0) return "Selenocysteine";
+  if (StringICmp ("Aspartate", tmp) == 0) return "Aspartic Acid";
+  if (StringICmp ("Glutamate", tmp) == 0) return "Glutamic Acid";
   return NULL;
 }
 
-NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr cdP)
+NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr cdP, Boolean noSingleLetter)
 
 {
   Uint1       aa;
@@ -3198,8 +3214,11 @@ NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr c
   for (vnp = head; (aa == 0 || aa == 'A') && vnp != NULL; vnp = vnp->next) {
     str = (CharPtr) vnp->data.ptrvalue;
     curraa = FindTrnaAA (str);
+    if (noSingleLetter && StringLen (str) == 1) {
+      curraa = 0;
+    }
     if (curraa != 0) {
-      if (aa == 0) {
+      if (aa == 0 || aa == 'A') {
         aa = curraa;
       }
     } else if (StringICmp ("tRNA", str) != 0 &&
@@ -3266,6 +3285,27 @@ NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr c
     *justTrnaText = justt;
   }
   return aa;
+}
+
+static Boolean ThreeLettersPlusDigits (CharPtr str)
+
+{
+  Char    ch;
+  Int2    i;
+  size_t  len;
+
+  if (StringHasNoText (str)) return FALSE;
+  len = StringLen (str);
+  if (len < 4) return FALSE;
+  for (i = 0; i < 3; i++) {
+    ch = str [i];
+    if (! IS_ALPHA (ch)) return FALSE;
+  }
+  for (i = 3; i < len; i++) {
+    ch = str [i];
+    if (! IS_DIGIT (ch)) return FALSE;
+  }
+  return TRUE;
 }
 
 NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx)
@@ -3339,7 +3379,11 @@ NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx)
   ch = *ptr;
   while (ch != '\0') {
     if (ch == '*') {  /* keep possible terminator tRNA symbol */
-    } else if (! IS_ALPHA (ch)) {
+    } else if (IS_WHITESP (ch) ||
+               ch == '-' || ch == ',' || ch == ';' ||
+               ch == ':' || ch == '(' || ch == ')' ||
+               ch == '=' || ch == '\'' || ch == '_' ||
+               ch == '~') {
      *ptr = ' ';
     }
     ptr++;
@@ -3374,6 +3418,9 @@ NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx)
     }
     SqnTrimSpacesAroundString (tmp);
     if (! HasNoText (tmp)) {
+      if (ThreeLettersPlusDigits (tmp)) {
+        tmp [3] = '\0';
+      }
       ValNodeCopyStr (&head, 0, tmp);
     }
   }
@@ -3855,8 +3902,8 @@ static Boolean ParseQualIntoGeneOntologyUserObject (SeqFeatPtr sfp, CharPtr qual
 {
   CharPtr        fields [4];
   Int2           found, j;
-  Int4           goid = 0, pmid = 0;
   long int       num;
+  Int4           pmid = 0;
   CharPtr        str, ptr;
   UserObjectPtr  uop;
 
@@ -3884,13 +3931,10 @@ static Boolean ParseQualIntoGeneOntologyUserObject (SeqFeatPtr sfp, CharPtr qual
         ptr++;
       }
     }
-    if (fields [1] != NULL && sscanf (fields [1], "%ld", &num) == 1) {
-      goid = (Int4) num;
-    }
     if (fields [2] != NULL && sscanf (fields [2], "%ld", &num) == 1) {
       pmid = (Int4) num;
     }
-    AddToGeneOntologyUserObject (uop, goQualType [found], fields [0], goid, pmid, fields [3]);
+    AddToGeneOntologyUserObject (uop, goQualType [found], fields [0], fields [1], pmid, fields [3]);
     MemFree (val);
     return TRUE;
   }
@@ -3901,6 +3945,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
 
 {
   Uint1           aa;
+  Boolean         bail;
   Uint1           codon [6];
   CdRegionPtr     crp;
   DbtagPtr        db;
@@ -3929,6 +3974,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   if (sfp == NULL || HasNoText (qual) ||
       (HasNoText (val) &&
        StringCmp (qual, "pseudo") != 0 &&
+       StringCmp (qual, "exception") != 0 &&
        StringCmp (qual, "mitochondrion") != 0)) return;
   qnum = GBQualNameValid (qual);
   if (qnum <= -1) {
@@ -3938,6 +3984,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
     }
   }
   if (qnum <= -1) {
+    bail = TRUE;
     if (sfp->data.choice == SEQFEAT_IMP) {
       ifp = (ImpFeatPtr) sfp->data.value.ptrvalue; /* for variation user object */
     }
@@ -3996,6 +4043,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       if (prp == NULL) return;
       prp->desc = MemFree (prp->desc);
       prp->desc = StringSaveNoNull (val);
+    } else if (sfp->data.choice == SEQFEAT_CDREGION && StringCmp (qual, "prot_note") == 0) {
+      bail = FALSE;
     } else if (ifp != NULL && StringICmp (ifp->key, "variation") == 0 && ParseQualIntoSnpUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "STS") == 0 && ParseQualIntoStsUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "misc_feature") == 0 && ParseQualIntoCloneUserObject (sfp, qual, val)) {
@@ -4006,7 +4055,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
     } else {
       ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_UnknownImpFeatQual, "Unknown qualifier %s", qual);
     }
-    return;
+    if (bail) return;
   }
   if (qnum == GBQUAL_note) {
     if (sfp->comment == NULL) {
@@ -4015,7 +4064,10 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       len = StringLen (sfp->comment) + StringLen (val) + 5;
       str = MemNew (sizeof (Char) * len);
       StringCpy (str, sfp->comment);
+      /*
       StringCat (str, "; ");
+      */
+      StringCat (str, "~");
       StringCat (str, val);
       sfp->comment = MemFree (sfp->comment);
       sfp->comment = str;
@@ -4070,11 +4122,33 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       oip->str = StringSave (tag);
       db->tag = oip;
     }
-    vnp->next = sfp->dbxref;
-    sfp->dbxref = vnp;
+    if (sfp->data.choice == SEQFEAT_GENE && sfp->data.value.ptrvalue != NULL) {
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      vnp->next = grp->db;
+      grp->db = vnp;
+    } else {
+      vnp->next = sfp->dbxref;
+      sfp->dbxref = vnp;
+    }
     return;
   } else if (qnum == GBQUAL_replace && StringCmp (val, "-") == 0) {
     val = "";
+  } else if (qnum == GBQUAL_evidence) {
+    if (StringICmp (val, "experimental") == 0) {
+      sfp->exp_ev = 1;
+    } else if (StringICmp (val, "not_experimental") == 0 ||
+               StringICmp (val, "non_experimental") == 0 ||
+               StringICmp (val, "not-experimental") == 0 ||
+               StringICmp (val, "non-experimental") == 0) {
+      sfp->exp_ev = 2;
+    }
+    return;
+  } else if (qnum == GBQUAL_exception) {
+    sfp->excpt = TRUE;
+    if (! HasNoText (val)) {
+      sfp->except_text = StringSave (val);
+    }
+    return;
   }
 
   if (sfp->data.choice == SEQFEAT_GENE) {
@@ -4098,6 +4172,11 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       grp = (GeneRefPtr) sfp->data.value.ptrvalue;
       if (grp != NULL) {
         grp->allele = StringSave (val);
+      }
+    } else if (qnum == GBQUAL_map) {
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp != NULL) {
+        grp->maploc = StringSave (val);
       }
     }
     return;
@@ -4152,7 +4231,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
           for (j = 0; j < 6; j++) {
             trna->codon [j] = 255;
           }
-          aa = ParseTRnaString (val, &justTrnaText, codon);
+          aa = ParseTRnaString (val, &justTrnaText, codon, FALSE);
           if (aa != 0) {
             if (justTrnaText) {
               for (j = 0; j < 6; j++) {
@@ -4174,6 +4253,18 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
                   sfp->comment = str;
                 }
               }
+            }
+          } else {
+            if (sfp->comment == NULL) {
+              sfp->comment = StringSave (val);
+            } else {
+              len = StringLen (sfp->comment) + StringLen (val) + 5;
+              str = MemNew (sizeof (Char) * len);
+              StringCpy (str, sfp->comment);
+              StringCat (str, "; ");
+              StringCat (str, val);
+              sfp->comment = MemFree (sfp->comment);
+              sfp->comment = str;
             }
           }
         }
@@ -4500,6 +4591,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
         } else if (sfp != NULL && qual != NULL &&
                    (val != NULL ||
                     StringCmp (qual, "pseudo") == 0 ||
+                    StringCmp (qual, "exception") == 0 ||
                     StringCmp (qual, "mitochondrion") == 0)) {
 
           AddQualifierToFeature (sfp, qual, val);

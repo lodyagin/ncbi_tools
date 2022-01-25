@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   ByteStore functions
@@ -56,6 +56,9 @@
 * 04-15-93 Schuler     Changed _cdecl to LIBCALL
 *
 * $Log: ncbibs.c,v $
+* Revision 6.6  2002/02/07 21:52:40  kans
+* added cast in Nlm_SwapUint4Buff call
+*
 * Revision 6.5  2000/05/26 23:34:58  kans
 * added BSDupAndSwapUint4 for copying and swapping of UID lists passed over network to BIG_ENDIAN server
 *
@@ -903,7 +906,7 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDupAndSwapUint4 (Nlm_ByteStorePtr sour
         swapLen = Nlm_BSRead (source, buf, count);
         swapLen /= 4;
         /* swap Uint4 if IS_LITTLE_ENDIAN */
-        Nlm_SwapUint4Buff (buf, swapLen);
+        Nlm_SwapUint4Buff ((Nlm_Uint4Ptr) buf, swapLen);
         Nlm_BSWrite (dest, buf, count);
         sourceLen -= count;
         count = MIN (sourceLen, (Nlm_Int4) BUFSIZE);

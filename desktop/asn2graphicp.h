@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.8 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -44,7 +44,6 @@
 
 #include <asn2graphic.h>
 #include <objfdef.h>
-#include <bspview.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -60,13 +59,14 @@ extern "C" {
 
 typedef enum layoutAlgorithm {
   Layout_Inherit = 0,           /* inherit layout from higher-level entity */
-  Layout_DiagonalOneFeatPerLine,
-  Layout_DiagonalSawtooth,
+  Layout_Diagonal,
+  /* Layout_DiagonalSawtooth, */
   Layout_FeatTypePerLine,
   Layout_FeatTypePerLineGroup,
-  Layout_AllInOneLine,
+  /*  Layout_AllInOneLine, */
   Layout_PackUpward,
-  Layout_GroupCorrespondingFeats
+  Layout_GroupCorrespondingFeats,
+  Layout_GroupCorrespondingFeatsRepeat
 } LayoutAlgorithm;
 
 typedef enum renderChoice {
@@ -78,8 +78,9 @@ typedef enum renderChoice {
 } RenderAlgorithm;
 
 typedef enum labelLocEnum {
-  LabelNone = 0,
-  LabelInside,                  /* |====label====| */
+  LabelUnset = 0,
+  LabelNone,
+  LabelInside,
   LabelAbove,
   LabelBelow,
   LabelLeft,
@@ -96,25 +97,27 @@ typedef enum vibSymbols {
   SymDownTriangle
 } VibSymbols;
 
+typedef enum gapEnum {
+  NoGap = 0,
+  LineGap,
+  AngleGap
+} GapEnum;
+
 typedef struct appearanceItem {
-  Boolean         AddDescToLabel;       /* label for a gene (xyz) includes "xyz" ? */
-  Boolean         AddTypeToLabel;       /* label for a CDS includes "CDS: " ? */
+  Uint1           LabelColor [3];
   Uint1           Color [3];
-  Uint1           FontColor [3];
-  FonT            LabelFont;
-  LabelLocEnum    LabelLoc;
   RenderAlgorithm RenderChoice;
   Int1            VibLinestyle;         /* these are as in AddAttribute */
   Uint1           Height;
   Int1            VibShading;
-} AppearanceItem , PNTR AppearanceItemPtr;
-
-typedef struct appearance {
-  ValNodePtr      AppearanceItemList;   /* data.ptrvalue == AppearanceItemPtr */
-  CharPtr         name;
-  AppearanceItemPtr FeaturesAppearanceItem [FEATDEF_MAX];
-} Appearance, PNTR AppearancePtr;
-
+  Boolean         ShowArrow;
+  GapEnum         GapChoice;
+  Boolean         AddDescToLabel;
+  Boolean         AddTypeToLabel;
+  FonT            LabelFont;
+  LabelLocEnum    LabelLoc;
+} AppearanceItem, PNTR AppearanceItemPtr;
+  
 typedef enum {
   NoLabel = 0,
   LabelOnTop,
@@ -122,36 +125,104 @@ typedef enum {
   LabelOnSide
 } GroupLabelLocation;
 
+typedef struct bioseqAppearanceItem {
+  Boolean            drawScale;
+  Uint1              bioseqColor [3];
+  Uint1              labelColor [3];
+  Uint1              scaleColor [3];
+  FonT               labelFont;
+  FonT               scaleFont;
+  GroupLabelLocation labelLoc;
+  Uint1              height;
+  Uint1              scaleHeight;
+  Uint1              format;
+} BioseqAppearanceItem, PNTR BioseqAppearanceItemPtr;
+
+typedef struct appearance {
+  ValNodePtr               AppearanceItemList;   /* data.ptrvalue == AppearanceItemPtr */
+  CharPtr                  name;
+  AppearanceItemPtr        FeaturesAppearanceItem [FEATDEF_MAX];
+  BioseqAppearanceItemPtr  bioseqAIP;
+  Boolean                  ShadeSmears; /* if FALSE, multi-feature smears (which can't be selected/edited like normal features) will be hollow instead of filled */
+  Uint2                    MaxScaleForArrow;
+  Uint2                    MinPixelsForArrow;
+  Uint1                    GroupLabelColor [3];
+  FonT                     GroupLabelFont;  
+  Uint1                    GroupBoxColor [3];
+} Appearance, PNTR AppearancePtr;
+
+typedef enum {
+  InvalidFilter = 0,
+  BioseqFilter,
+  FeatureFilter,
+  GraphFilter,
+  AlignmentFilter
+} FilterType;
+
+typedef enum {
+  InvalidStrand = 0,
+  MinusStrand,
+  PlusStrand,
+  BothStrands
+} StrandChoice;
+
+typedef enum {
+  TristateUnset = 0,
+  TristateTrue,
+  TristateFalse
+} Tristate;
+
+#define BOOL_TO_TRISTATE(aBool)   ((aBool) ? (TristateTrue) : (TristateFalse))
+  /* bool_from_SET_tristate means that the tristate has already been checked, and was not "TristateUnset" */
+#define BOOL_FROM_SET_TRISTATE(aTri) ((aTri == TristateTrue) ? (TRUE) : (FALSE))
+
+
+/* IncludeFeature[featdef_xxx] is either 0 (not included) or a number which indictes its order in this filter (1 = first, ..., FEATDEF_MAX = last) */
 typedef struct filterItem {
+  FilterType         Type;
   CharPtr            GroupLabel;
-  Boolean            IncludeFeature [FEATDEF_MAX];
-  Uint2              IntraRowPaddingPixels;
+  Uint1              GroupLabelColor [3];
+  Boolean            GroupLabelColorSet;
+  FonT               GroupLabelFont;  
+  Boolean            GroupLabelFontSet;
+  Uint1              GroupBoxColor [3];
+  Boolean            GroupBoxColorSet;
+  Uint1              IncludeFeature [FEATDEF_MAX];
+  Uint2              IntraRowPaddingPixels;       /* number of blank (pixel) rows after _each_ row in this group*/
+  Uint2              GroupPadding;               /* number of blank (pixel) rows after this group */
   LayoutAlgorithm    LayoutChoice;
-  GroupLabelLocation LabelLocation;
-  Uint1              RectColor [3];
+  GroupLabelLocation GroupLabelLoc;
   Boolean            DrawItemRect;
   Boolean            FillItemRect;
+  StrandChoice       MatchStrand;
+  Tristate           AddDescToLabel;
+  Tristate           AddTypeToLabel;
+  LabelLocEnum       LabelLoc;
+  Tristate           DrawScale;
 } FilterItem, PNTR FilterItemPtr;
 
 typedef struct filter {
   ValNodePtr      FilterItemList;       /* data.ptrvalue == FilterItemPtr */
   CharPtr         name;
-  LayoutAlgorithm DefaultLayout;
+  Uint2           MaxScaleWithLabels;    /* turn off all labels if scale > MaxScaleWithLabels*/
 } Filter, PNTR FilterPtr;
+
+typedef enum endPointType {
+  EndAbsolute = 0,
+  EndPartial,
+  EndClipped
+} EndPointType;  
 
 typedef struct relevantFeatureItem {
   Uint4           Left, Right;
-  Uint2           decorationHeight;
-  Int4            decorationLeft, decorationRight;
-  Uint2           Height;
-  Boolean         StartOnLeft;
-  Boolean         StartPartial, StopPartial;
+  Boolean         plusstrand;
+  EndPointType    LeftEnd;
+  EndPointType    RightEnd;
   CharPtr         ContentLabel;
   Uint1           featdeftype;
   Int4Ptr         ivals;
   Int2            numivals;
-  Uint2           entityID, itemID;
-  Uint2           localSAPindex;
+  Uint2           entityID, itemID, itemType;
 } RelevantFeatureItem, PNTR RelevantFeatureItemPtr;
 
 typedef struct relevantFeatures {
@@ -177,15 +248,24 @@ typedef struct viewerConfigs {
   ValNodePtr         AppearanceNameList;
   ValNodePtr         FilterList; 
   ValNodePtr         FilterNameList;
+  Uint2              DefaultMaxScaleWithLabels;
+  Uint2              DefaultMaxScaleForArrow;
+  Uint2              DefaultMinPixelsForArrow;
+  Uint2              DefaultGroupPadding;
+  Uint2              DefaultRowPadding;
+  Boolean            DefaultShadeSmears;  
 } ViewerConfigs, PNTR ViewerConfigsPtr;
 
 /* Public Functions */
 
 NLM_EXTERN SegmenT CreateGraphicViewFromBsp (
   BioseqPtr bsp,
+  SeqLocPtr location,
   Int4 scale,
-  FilterPtr FP,
+  Int4Ptr ceiling,
+  SegmenT topLevel,
   AppearancePtr AP,
+  FilterPtr FP,
   LayoutAlgorithm overrideLayout
 );
 
@@ -193,12 +273,15 @@ NLM_EXTERN SegmenT CreateGraphicViewFromBsp (
 
 NLM_EXTERN SegmenT CreateGraphicViewInternal (
   BioseqPtr bsp,
+  Int4 from,
+  Int4 to,
+  Boolean allFeatures,
   RelevantFeaturesPtr feats,
-  VoidPtr aligns, /* NULL for now, will become a RelevantGraphPtr*/
-  VoidPtr graphs, /* likewise */
   Int4 scale,
-  FilterPtr FP,
+  Int4Ptr ceiling,
+  SegmenT topLevel,
   AppearancePtr AP,
+  FilterPtr FP,
   LayoutAlgorithm overrideLayout
 );
 
@@ -209,6 +292,7 @@ NLM_EXTERN RelevantFeaturesPtr FreeCollectedFeatures (RelevantFeaturesPtr RFP);
 NLM_EXTERN ViewerConfigsPtr GetGraphicConfigParseResults (void);
 NLM_EXTERN FilterPtr FindFilterByName (CharPtr name, ViewerConfigsPtr VCP);
 NLM_EXTERN AppearancePtr FindAppearanceByName (CharPtr name, ViewerConfigsPtr VCP);
+NLM_EXTERN LayoutAlgorithm FindLayoutByName (CharPtr name);
 
 /* Functions for Manipulating Filter and Appearance Structures */
 NLM_EXTERN Uint2 ParseConfigFile (ViewerConfigsPtr VCP);
@@ -220,9 +304,9 @@ NLM_EXTERN FilterItemPtr CreateNewFilterItemInFilter (CharPtr name, FilterPtr pa
 NLM_EXTERN FilterPtr DestroyFilter (FilterPtr FP, ViewerConfigsPtr VCP);
 NLM_EXTERN AppearancePtr DestroyAppearance (AppearancePtr AP, ViewerConfigsPtr VCP);
 NLM_EXTERN void AddAppearanceItemToAppearance (AppearanceItemPtr AIP, AppearancePtr AP, Uint1 newFeatdef, ViewerConfigsPtr VCP);
-
-/* Data structure for adding to Sequin Bioseq viewer form */
-NLM_EXTERN BioseqPageData asn2gphGphPageData;
+NLM_EXTERN Uint2 GetAppearanceCount (void);
+NLM_EXTERN Uint2 GetFilterCount (void);
+NLM_EXTERN Uint2 GetLayoutCount (void);
 
 
 #ifdef __cplusplus

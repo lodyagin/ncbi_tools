@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.109 $
+* $Revision: 6.111 $
 *
 * File Description: 
 *
@@ -668,7 +668,7 @@ sequence in the spaces above.  Then click on \
 'Import Nucleotide FASTA' to read a FASTA file that \
 contains the sequence (which can be in segments).  The \
 FASTA definition lines may be of the following form:\n\n\
->ID [org=scientific name] [strain=name] [clone=name] title\n\n\
+>ID [organism=scientific name] [strain=name] [clone=name] title\n\n\
 where the [ and ] brackets are actually in the text.";
 
 static CharPtr  fastaGenMsg = "\
@@ -677,7 +677,7 @@ sequence in the spaces above.  Then click on \
 'Import Genomic FASTA' to read a FASTA file that \
 contains the sequence (which can be in segments).  The \
 FASTA definition lines may be of the following form:\n\n\
->ID [org=scientific name] [strain=name] [clone=name] title\n\n\
+>ID [organism=scientific name] [strain=name] [clone=name] title\n\n\
 where the [ and ] brackets are actually in the text.";
 
 static CharPtr  fastaMrnaMsg  = "\
@@ -695,7 +695,7 @@ sequences in the spaces above.  Then click on \
 'Import Protein FASTA' to read a FASTA file that \
 contains the sequences.  The FASTA definition lines should \
 be of the following form:\n\n\
->ID [gene=symbol] [prot=name] title\n\n\
+>ID [gene=symbol] [protein=name] title\n\n\
 where the [ and ] brackets are actually in the text.";
 
 extern DialoG CreateFastaDialog (GrouP h, CharPtr title,
@@ -5001,7 +5001,7 @@ static CharPtr  phyloOrgFastaMsg = "\
 organism names in the individual nucleotide sequence \
 FASTA definition lines. These should be of the \
 following form:\n\n\
->[org=scientific name]\n\n\
+>[organism=scientific name]\n\n\
 Additional information, e.g., [strain=name], \
 can also be included. See the help documentation for \
 full details";
@@ -5011,7 +5011,7 @@ static CharPtr  phyloOrgPhylipMsg = "\
 organism names FASTA-like definition lines after \
 the normal PHYLIP, NEXUS or MACAW file. These should \
 be of the following form:\n\n\
->[org=scientific name]\n\n\
+>[organism=scientific name]\n\n\
 Additional information, e.g., [strain=name], \
 can also be included. See the help documentation for \
 full details";
@@ -5205,7 +5205,11 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
         }
       }
     }
-    if (sqfp->seqPackage >= SEQ_PKG_POPULATION && sqfp->seqFormat == SEQ_FMT_FASTA) {
+    if (((sqfp->seqPackage == SEQ_PKG_POPULATION) ||
+	 (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) ||
+	 (sqfp->seqPackage == SEQ_PKG_MUTATION) ||
+	 (sqfp->seqPackage == SEQ_PKG_ENVIRONMENT)) &&
+	(sqfp->seqFormat == SEQ_FMT_FASTA)) {
       sqfp->makeAlign = CheckBox (g, "Create Alignment", NULL);
       /*
       if (sqfp->seqPackage < SEQ_PKG_GENBANK) {

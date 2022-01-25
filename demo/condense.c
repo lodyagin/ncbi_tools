@@ -1,29 +1,4 @@
-/* condense.c
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*            National Center for Biotechnology Information (NCBI)
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government do not place any restriction on its use or reproduction.
-*  We would, however, appreciate having the NCBI and the author cited in
-*  any work or product based on this material
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-* ===========================================================================
-*
-* Author:  Jim Ostell
+/*****************************************************************************
 *
 *   condense.c
 *     entrez version
@@ -49,8 +24,6 @@
 * prf = prf|accession|name
 * pdb = pdb|entry name (string)|chain id (char)
 *
-* $Id: condense.c,v 6.1 2001/11/28 15:58:58 beloslyu Exp $
-*
 *****************************************************************************/
 #include <ent2api.h>
 #include <accpubseq.h>
@@ -72,6 +45,8 @@ Args myargs[NUMARGS] = {
 
 static char * norg = "Unknown";
 
+#define PUB_LIMIT 50
+
 typedef struct seqinfo {
 	BioseqPtr bsp;
 	Int4 gi;
@@ -82,8 +57,8 @@ typedef struct seqinfo {
 	CharPtr orgname;
 	Char Defline[80];
 	Int2 pubctr;   /* number of citations */
-	Int4 PubMedId [50];
-	CitArtPtr cap [50];
+	Int4 PubMedId [PUB_LIMIT];
+	CitArtPtr cap [PUB_LIMIT];
 	ProtRefPtr prp;
 	GeneRefPtr grp;
 	SeqFeatPtr cds;
@@ -304,7 +279,7 @@ Int2 Main(void)
 		if (! gi)
 		{
 			PUBSEQFini();
-			SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
+			SeqIdWrite(sip, tbuf, PRINTID_FASTA_SHORT,40);
 			ErrPostEx(SEV_FATAL,0,0, "Couldn't find SeqId [%s]", tbuf);
 			return 1;
 		}
@@ -333,7 +308,7 @@ Int2 Main(void)
 	***/
 
 	e2rq = EntrezCreateGetLinksRequest ( "protein", 0, 1, &gi, NULL,
-		"protein_protein", 30000, FALSE, TRUE);
+		"protein_protein", MaxSeq, FALSE, TRUE);
 
 	if (e2rq == NULL)
 		printf("Couldn't create link request\n");
@@ -514,7 +489,7 @@ Int2 Main(void)
 	fprintf(fp, "Publications cited were:\n");
 	for (i = 0; i < ctr; i++)
 	{
-		for (j = 0; j < 50; j++)
+		for (j = 0; j < PUB_LIMIT; j++)
 		{
 			if (seqs[i].cap[j] != NULL)
 				AddDataToList(seqs[i].PubMedId[j], seqs[i].cap[j]);
@@ -647,7 +622,7 @@ void BioseqAnalyze (SeqInfoPtr seqs, BioseqPtr bsp, Int4 index)
 			pdp = (PubdescPtr)(vnp->data.ptrvalue);
 			doit = FALSE;
 			ctr = sip->pubctr;
-			for (xp = pdp->pub; xp != NULL; xp = xp->next)
+			for (xp = pdp->pub; xp != NULL && ctr < PUB_LIMIT; xp = xp->next)
 			{
 				switch (xp->choice)
 				{
@@ -666,8 +641,12 @@ void BioseqAnalyze (SeqInfoPtr seqs, BioseqPtr bsp, Int4 index)
 						break;
 				}
 			}
-			if (doit)  /* saved one */
+			if (doit){  /* saved one */
 				sip->pubctr++;
+       }
+       if ( sip->pubctr >= PUB_LIMIT){
+          break;
+       }
 					
 	}
 

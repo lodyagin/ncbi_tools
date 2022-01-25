@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnmla.h60";
+static char * asnfilename = "asnmla.h61";
 static AsnValxNode avnx[20] = {
     {20,"not-set" ,0,0.0,&avnx[1] } ,
     {20,"name" ,1,0.0,&avnx[2] } ,
@@ -34,12 +34,12 @@ static AsnValxNode avnx[20] = {
 
 static AsnType atx[58] = {
   {401, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[1]} ,
-  {402, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[2]} ,
-  {403, "Medlars-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[3]} ,
-  {404, "Pubmed-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[4]} ,
-  {405, "Medline-si" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[5]} ,
-  {406, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[6]} ,
-  {407, "Title" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[7]} ,
+  {402, "Medlars-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[2]} ,
+  {403, "Pubmed-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[3]} ,
+  {404, "Medline-si" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[4]} ,
+  {405, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[5]} ,
+  {406, "Title" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[6]} ,
+  {407, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[7]} ,
   {408, "Mla-request" ,1,0,0,0,0,0,0,0,NULL,&atx[35],&atx[8],0,&atx[14]} ,
   {0, "init" ,128,0,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[10]} ,
   {305, "NULL" ,0,5,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -51,22 +51,22 @@ static AsnType atx[58] = {
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[18]} ,
   {410, "Title-type" ,1,0,0,0,0,0,0,0,NULL,&atx[17],&avnx[0],0,&atx[36]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "title" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
+  {0, "title" ,128,1,0,0,0,0,0,0,NULL,&atx[5],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "citmatch" ,128,4,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[21]} ,
+  {0, "citmatch" ,128,4,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[21]} ,
   {0, "fini" ,128,5,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[22]} ,
   {0, "getmriuids" ,128,6,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[23]} ,
-  {0, "getaccuids" ,128,7,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[24]} ,
+  {0, "getaccuids" ,128,7,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[24]} ,
   {0, "uidtopmid" ,128,8,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[25]} ,
-  {0, "pmidtouid" ,128,9,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[26]} ,
-  {0, "getmlepmid" ,128,10,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[27]} ,
-  {0, "getpubpmid" ,128,11,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[28]} ,
-  {0, "citmatchpmid" ,128,12,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[29]} ,
+  {0, "pmidtouid" ,128,9,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[26]} ,
+  {0, "getmlepmid" ,128,10,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[27]} ,
+  {0, "getpubpmid" ,128,11,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[28]} ,
+  {0, "citmatchpmid" ,128,12,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[29]} ,
   {0, "getmripmids" ,128,13,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[30]} ,
-  {0, "getaccpmids" ,128,14,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[31]} ,
-  {0, "citlstpmids" ,128,15,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[32]} ,
+  {0, "getaccpmids" ,128,14,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[31]} ,
+  {0, "citlstpmids" ,128,15,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[32]} ,
   {0, "getmleuid" ,128,16,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[33]} ,
-  {0, "getmlrpmid" ,128,17,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[34]} ,
+  {0, "getmlrpmid" ,128,17,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[34]} ,
   {0, "getmlruid" ,128,18,0,0,0,0,0,0,NULL,&atx[11],NULL,0,NULL} ,
   {315, "CHOICE" ,0,-1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {411, "Title-msg-list" ,1,0,0,0,0,0,0,0,NULL,&atx[19],&atx[37],0,&atx[41]} ,
@@ -79,7 +79,7 @@ static AsnType atx[58] = {
   {0, "init" ,128,0,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[44]} ,
   {0, "error" ,128,1,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[45]} ,
   {0, "getmle" ,128,2,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[46]} ,
-  {0, "getpub" ,128,3,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[47]} ,
+  {0, "getpub" ,128,3,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[47]} ,
   {0, "gettitle" ,128,4,0,0,0,0,0,0,NULL,&atx[36],NULL,0,&atx[48]} ,
   {0, "citmatch" ,128,5,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[49]} ,
   {0, "fini" ,128,6,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[50]} ,
@@ -88,12 +88,12 @@ static AsnType atx[58] = {
   {0, "getpmids" ,128,8,0,0,0,0,0,0,NULL,&atx[40],&atx[53],0,&atx[54]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[11],NULL,0,NULL} ,
   {0, "outuid" ,128,9,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[55]} ,
-  {0, "outpmid" ,128,10,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[56]} ,
-  {0, "getpme" ,128,11,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[57]} ,
-  {0, "getmlr" ,128,12,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} };
+  {0, "outpmid" ,128,10,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[56]} ,
+  {0, "getpme" ,128,11,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[57]} ,
+  {0, "getmlr" ,128,12,0,0,0,0,0,0,NULL,&atx[1],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-MedArchive" , "asnmla.h60",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-MedArchive" , "asnmla.h61",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

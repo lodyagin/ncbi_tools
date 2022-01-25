@@ -786,6 +786,32 @@ static Boolean GetPMFromPub(ValNodePtr v, Int4Ptr m, Int4Ptr p)
 	return (*m != 0 || *p != 0);
 }
 
+static Boolean CitGenTitlesMatch (ValNodePtr pub1, ValNodePtr pub2)
+
+{
+  CitGenPtr  cgp1, cgp2;
+
+  if (pub1->choice == PUB_Gen) {
+    cgp1 = (CitGenPtr) pub1->data.ptrvalue;
+    if (cgp1->serial_number != -1 && pub1->next != NULL) {
+      pub1 = pub1->next;
+    }
+  }
+  if (pub2->choice == PUB_Gen) {
+    cgp2 = (CitGenPtr) pub2->data.ptrvalue;
+    if (cgp2->serial_number != -1 && pub2->next != NULL) {
+      pub2 = pub2->next;
+    }
+  }
+
+  if (pub1->choice != PUB_Gen || pub2->choice != PUB_Gen) return TRUE;
+  cgp1 = (CitGenPtr) pub1->data.ptrvalue;
+  cgp2 = (CitGenPtr) pub2->data.ptrvalue;
+  if (cgp1->title == NULL || cgp2->title == NULL) return TRUE;
+  if (StringCmp (cgp1->title, cgp2->title) != 0) return FALSE;
+  return TRUE;
+}
+
 NLM_EXTERN Int2 PubLabelMatch (ValNodePtr pub1, ValNodePtr pub2)
 {
 	ValNodePtr m1, m2;
@@ -842,10 +868,12 @@ NLM_EXTERN Int2 PubLabelMatch (ValNodePtr pub1, ValNodePtr pub2)
 		  g1->cit [len - 1] = '\0';
 		}
 		len = MIN (StringLen (g1->cit), StringLen (g2->cit));
-		if (StringNCmp(g1->cit, g2->cit, len) == 0) {
-			PubFree(m1);
-			PubFree(m2);
-			return 0;
+		if (StringNICmp(g1->cit, g2->cit, len) == 0) {
+			if (CitGenTitlesMatch (pub1, pub2)) {
+				PubFree(m1);
+				PubFree(m2);
+				return 0;
+			}
 		}
 	}
 	PubFree(m1);

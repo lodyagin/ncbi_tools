@@ -18,6 +18,8 @@ static void SaveEntrezRequest (Entrez2RequestPtr e2rq)
   Entrez2RequestAsnWrite (e2rq, aip, NULL);
   AsnIoFlush (aip);
   AsnIoClose (aip);
+  printf ("\n");
+  fflush (stdout);
 }
 
 static void SaveEntrezReply (Entrez2ReplyPtr e2ry)
@@ -34,6 +36,8 @@ static void SaveEntrezReply (Entrez2ReplyPtr e2ry)
   Entrez2ReplyAsnWrite (e2ry, aip, NULL);
   AsnIoFlush (aip);
   AsnIoClose (aip);
+  printf ("\n\n");
+  fflush (stdout);
 }
 
 static void SaveBooleanIdList (Entrez2ReplyPtr e2ry)
@@ -70,6 +74,20 @@ static Int4 pmuidlist [] = {
   2539356
 };
 
+static Int4 jkuidlist [] = {
+  11449736,
+  11449725,
+  10838572,
+  9707937,
+  9707929,
+  8743683,
+  1937004,
+  2005826,
+  2678811,
+  2539356,
+  7252148
+};
+
 static Int4 nucuidlist [] = {
   14993658,
   14971124
@@ -84,30 +102,19 @@ static Int4 taxuidlist [] = {
   40674
 };
 
-static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
+static Int4 DoInfoValidation (Entrez2ReplyPtr e2ry, Boolean showinfo)
 
 {
   CharPtr              cookie;
-  Int4                 count;
   Entrez2DbInfoPtr     e2db;
   Entrez2FieldInfoPtr  e2fd;
   Entrez2InfoPtr       e2ip;
-  Entrez2RequestPtr    e2rq;
-  Entrez2ReplyPtr      e2ry;
   ValNodePtr           head = NULL;
-  CharPtr              key1 = NULL;
-  CharPtr              key2 = NULL;
-  CharPtr              key3 = NULL;
   Int4                 orgtermcount = -1;
-  Int4                 pos = -1;
   E2ReplyPtr           reply;
   CharPtr              str;
   ValNodePtr           vnp;
 
-  e2rq = EntrezCreateGetInfoRequest ();
-  SaveEntrezRequest (e2rq);
-  e2ry = EntrezSynchronousQuery (e2rq);
-  e2rq = Entrez2RequestFree (e2rq);
   if (e2ry != NULL) {
     cookie = StringSave (e2ry->cookie);
     reply = e2ry->reply;
@@ -152,10 +159,136 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
     if (cookie == NULL) {
       cookie = "(null)";
     }
-    printf ("initial returned cookie:\n%s\n", cookie);
+    printf ("initial returned cookie:\n%s\n\n", cookie);
   } else {
-    printf ("GetInfo request failed\n");
+    printf ("GetInfo request failed\n\n");
   }
+  return orgtermcount;
+}
+
+static void NewTextE2 (Boolean showuids, Boolean showinfo)
+
+{
+  Entrez2RequestPtr  e2rq;
+  Entrez2ReplyPtr    e2ry;
+  CharPtr            key1 = NULL;
+  Int4               pos = -1;
+
+  e2rq = EntrezCreateGetInfoRequest ();
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  DoInfoValidation (e2ry, showinfo);
+
+  e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, "PubMed", NULL, 0, 0, NULL, 0, 0);
+  EntrezAddToBooleanRequest (e2rq, NULL, 0, NULL, NULL, NULL, 0, 11, jkuidlist, NULL, FALSE, FALSE);
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    key1 = StringSave (e2ry->key);
+    SaveEntrezReply (e2ry);
+    if (showuids) {
+      SaveBooleanIdList (e2ry); /* also frees e2ry */
+    } else {
+      Entrez2ReplyFree (e2ry);
+    }
+  } else {
+    printf ("Boolean request failed\n");
+  }
+
+  e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, "PubMed", NULL, 0, 0, NULL, 0, 0);
+  EntrezAddToBooleanRequest (e2rq, NULL, 0, NULL, NULL, key1, 0, 0, NULL, NULL, FALSE, FALSE);
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    SaveEntrezReply (e2ry);
+    if (showuids) {
+      SaveBooleanIdList (e2ry); /* also frees e2ry */
+    } else {
+      Entrez2ReplyFree (e2ry);
+    }
+  } else {
+    printf ("Boolean request failed\n");
+  }
+
+  e2rq = EntrezCreateGetTermPositionRequest ("PubMed", "AUTH", "wheelan s");
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    SaveEntrezReply (e2ry);
+    pos = EntrezExtractTermPosReply (e2ry);
+    Entrez2ReplyFree (e2ry);
+  } else {
+    printf ("GetTermPosition request failed\n");
+  }
+
+  if (pos >= 0) {
+    e2rq = EntrezCreateGetTermListRequest ("PubMed", "AUTH", pos, 4);
+    SaveEntrezRequest (e2rq);
+    e2ry = EntrezSynchronousQuery (e2rq);
+    e2rq = Entrez2RequestFree (e2rq);
+    if (e2ry != NULL) {
+      SaveEntrezReply (e2ry);
+      Entrez2ReplyFree (e2ry);
+    } else {
+      printf ("GetTermList request failed\n");
+    }
+  }
+
+  e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, "PubMed", NULL, 0, 0, NULL, 0, 0);
+  EntrezAddToBooleanRequest (e2rq, NULL, 0, "AUTH", "wheelan s", NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    SaveEntrezReply (e2ry);
+    if (showuids) {
+      SaveBooleanIdList (e2ry); /* also frees e2ry */
+    } else {
+      Entrez2ReplyFree (e2ry);
+    }
+  } else {
+    printf ("Boolean request failed\n");
+  }
+
+  e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, "PubMed", NULL, 0, 0, NULL, 0, 0);
+  EntrezAddToBooleanRequest (e2rq, NULL, 0, "AUTH", "wheelan s", NULL, 0, 0, NULL, NULL, FALSE, TRUE);
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry != NULL) {
+    SaveEntrezReply (e2ry);
+    if (showuids) {
+      SaveBooleanIdList (e2ry); /* also frees e2ry */
+    } else {
+      Entrez2ReplyFree (e2ry);
+    }
+  } else {
+    printf ("Boolean request failed\n");
+  }
+}
+
+static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
+
+{
+  Int4               count;
+  Entrez2RequestPtr  e2rq;
+  Entrez2ReplyPtr    e2ry;
+  CharPtr            key1 = NULL;
+  CharPtr            key2 = NULL;
+  CharPtr            key3 = NULL;
+  Int4               orgtermcount = -1;
+  Int4               pos = -1;
+  CharPtr            str;
+
+  e2rq = EntrezCreateGetInfoRequest ();
+  SaveEntrezRequest (e2rq);
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  orgtermcount = DoInfoValidation (e2ry, showinfo);
 
   e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, "taxonomy", NULL, 0, 0, NULL, 0, 0);
   EntrezAddToBooleanRequest (e2rq, NULL, 0, NULL, NULL, NULL, 0, 1, taxuidlist, NULL, FALSE, FALSE);
@@ -163,7 +296,6 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
   e2ry = EntrezSynchronousQuery (e2rq);
   e2rq = Entrez2RequestFree (e2rq);
   if (e2ry != NULL) {
-    key3 = StringSave (e2ry->key);
     SaveEntrezReply (e2ry);
     if (showuids) {
       SaveBooleanIdList (e2ry); /* also frees e2ry */
@@ -179,7 +311,6 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
   e2ry = EntrezSynchronousQuery (e2rq);
   e2rq = Entrez2RequestFree (e2rq);
   if (e2ry != NULL) {
-    key1 = StringSave (e2ry->key);
     SaveEntrezReply (e2ry);
     if (showuids) {
       SaveBooleanIdList (e2ry); /* also frees e2ry */
@@ -429,13 +560,14 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
 
 /* Args structure contains command-line arguments */
 
-#define v_argService 0
-#define s_argServer  1
-#define r_argPort    2
-#define p_argPath    3
-#define h_argHuge    4
-#define u_argUids    5
-#define g_argInfo    6
+#define v_argService  0
+#define s_argServer   1
+#define r_argPort     2
+#define p_argPath     3
+#define h_argHuge     4
+#define u_argUids     5
+#define g_argInfo     6
+#define n_argNewTests 7
 
 Args myargs [] = {
   {"Service", NULL, NULL, NULL,
@@ -452,12 +584,14 @@ Args myargs [] = {
     TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Show Get-Info Reply", "F", NULL, NULL,
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"New Tests", "F", NULL, NULL,
+    TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
-  Boolean  dohuge, showinfo, showuids;
+  Boolean  dohuge, newtests, showinfo, showuids;
   CharPtr  server, service, path;
   Uint2    port;
 
@@ -502,6 +636,7 @@ Int2 Main (void)
   dohuge = (Boolean) myargs [h_argHuge].intvalue;
   showuids = (Boolean) myargs [u_argUids].intvalue;
   showinfo = (Boolean) myargs [g_argInfo].intvalue;
+  newtests = (Boolean) myargs [n_argNewTests].intvalue;
 
   if (! StringHasNoText (service)) {
     EntrezSetService (service);
@@ -511,7 +646,11 @@ Int2 Main (void)
     printf ("testent2 %s:%d%s\n", server, (int) port, path);
   }
 
-  TestE2 (dohuge, showuids, showinfo);
+  if (newtests) {
+    NewTextE2 (showuids, showinfo);
+  } else {
+    TestE2 (dohuge, showuids, showinfo);
+  }
   printf ("testent2 finished\n");
 
   return 0;

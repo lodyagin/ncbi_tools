@@ -1,3 +1,28 @@
+/* 
+* ===========================================================================
+*
+*                            PUBLIC DOMAIN NOTICE
+*               National Center for Biotechnology Information
+*
+*  This software/database is a "United States Government Work" under the
+*  terms of the United States Copyright Act.  It was written as part of
+*  the author's offical duties as a United States Government employee and
+*  thus cannot be copyrighted.  This software/database is freely available
+*  to the public for use. The National Library of Medicine and the U.S.
+*  Government have not placed any restriction on its use or reproduction.
+*
+*  Although all reasonable efforts have been taken to ensure the accuracy
+*  and reliability of the software and data, the NLM and the U.S.
+*  Government do not and cannot warrant the performance or results that
+*  may be obtained by using this software or data. The NLM and the U.S.
+*  Government disclaim all warranties, express or implied, including
+*  warranties of performance, merchantability or fitness for any particular
+*  purpose.
+*
+*  Please cite the author in any work or product based on this material.
+*
+* ===========================================================================*/
+
 
 /*--------------------------------------------------------------------------*/
 
@@ -29,7 +54,7 @@ void trim(SequencePtr seq, Int4Ptr leftend, Int4Ptr rightend,
 FloatHi getprob(Int4Ptr sv, Int4 total, AlphaPtr palpha);
 FloatHi lnperm(Int4Ptr sv, Int4 tot);
 FloatHi lnass(Int4Ptr sv, Int4 alphasize);
-void mergesegs(SequencePtr seq, SegPtr segs);
+void mergesegs(SequencePtr seq, SegPtr segs, Boolean overlap);
 void decrementsv(Int4Ptr sv, Int4 class);
 void incrementsv(Int4Ptr sv, Int4 class);
 static void appendseg(SegPtr segs, SegPtr seg);
@@ -169,6 +194,11 @@ SeqLocPtr BioseqSegNa (BioseqPtr bsp, SegParamsPtr sparamsp)
    segs = (SegPtr) NULL;
    SegSeq (seqwin, sparamsp, &segs, 0);
 
+/* merge the segment if desired. */
+
+   if (sparamsp->overlaps)
+	mergesegs(seqwin, segs, sparamsp->overlaps);
+
 /* convert segs to seqlocs */
 
    slp = SegsToSeqLoc(bsp, segs);   
@@ -193,6 +223,7 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
    Int4 index, len;
    CharPtr seq;
    Uint1       residue;
+   Boolean params_allocated = FALSE;
 
 /* error msg stuff */
 
@@ -219,6 +250,7 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
      {
       sparamsp = SegParamsNewAa();
       SegParamsCheck (sparamsp);
+      params_allocated = TRUE;
       if (!sparamsp)
         {
          ErrPostEx (SEV_WARNING, 0, 0, "null parameters object");
@@ -276,6 +308,11 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
    segs = (SegPtr) NULL;
    SegSeq (seqwin, sparamsp, &segs, 0);
 
+/* merge the segment if desired. */
+
+   if (sparamsp->overlaps)
+	mergesegs(seqwin, segs, sparamsp->overlaps);
+
 /* convert segs to seqlocs */
 
    slp = SegsToSeqLoc(bsp, segs);   
@@ -285,6 +322,9 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
    SeqFree (seqwin);
    SegFree (segs);
    SeqPortFree(spp);
+   if(params_allocated)
+       SegParamsFree(sparamsp);
+   
    return (slp);
   }
 
@@ -385,6 +425,11 @@ SeqLocPtr SeqlocSegAa (SeqLocPtr slpin, SegParamsPtr sparamsp)
    
    segs = (SegPtr) NULL;
    SegSeq (seqwin, sparamsp, &segs, 0);
+
+/* merge the segment if desired. */
+
+   if (sparamsp->overlaps)
+	mergesegs(seqwin, segs, sparamsp->overlaps);
 
    /* convert segs to seqlocs */
    
@@ -956,18 +1001,21 @@ FloatHi lnass(Int4Ptr sv, Int4 alphasize)
 }
 
 /*------------------------------------------------------------(mergesegs)---*/
+/* merge together overlapping segments, 
+	hilenmin also does something, but we need to ask Scott Federhen what?
+*/
 
-void mergesegs(SequencePtr seq, SegPtr segs)
+void mergesegs(SequencePtr seq, SegPtr segs, Boolean overlaps)
 
   {SegPtr seg, nextseg;
-   Boolean overlaps;           /* overlaps, hilenmin yet unset */
-   Int4 hilenmin;
+   Int4 hilenmin;		/* hilenmin yet unset */
    Int4 len;
 
-   overlaps = FALSE;           /* overlaps - temporary default */
    hilenmin = 0;               /* hilenmin - temporary default */
 
-   if (overlaps) return;
+   if (overlaps == FALSE) 
+	return;
+	
    if (segs==NULL) return;
 
    if (segs->begin<hilenmin) segs->begin = 0;
@@ -1058,7 +1106,7 @@ SegPtr per_mergesegs(SequencePtr seq, SegPtr *persegs)
      }
 
    MemFree(localsegs);
-   mergesegs(seq, segs);
+   mergesegs(seq, segs, FALSE);
    return(segs);
   }
 

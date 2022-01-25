@@ -1,11 +1,11 @@
 #
-# $Id: alphaOSF1.ncbi.mk,v 1.8 2001/06/12 21:11:55 vakatov Exp $
+# $Id: alphaOSF1.ncbi.mk,v 1.10 2002/02/27 21:53:55 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = alf
 NCBI_CC = cc
-NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -O
+NCBI_CFLAGS1 = -c -pthread
+NCBI_LDFLAGS1 = -O -pthread
 NCBI_OPTFLAG = -O
 NCBI_BIN_MASTER = /usr/home/coremake/ncbi/bin
 NCBI_BIN_COPY = /usr/home/coremake/ncbi/bin
@@ -15,7 +15,7 @@ NCBI_ALTLIB = /usr/home/coremake/ncbi/altlib
 #NCBI_VIBFLAG = -I/usr/X11R6/include -L/usr/X11R6/lib -DWIN_MOTIF
 NCBI_VIBFLAG = -DWIN_MOTIF
 NCBI_VIBLIBS = -lXm -lXmu -lXt -lX11 -lXext
-NCBI_DISTVIBLIBS = -non_shared -lXm -lXmu -lXt -lX11 -lXext -lSM -lICE -ldnet_stub
+NCBI_DISTVIBLIBS = -non_shared -lXm -shared -lXmu -lXt -lX11 -lXext -lSM -lICE -ldnet_stub
 NCBI_OTHERLIBS = -lm
 NCBI_OTHERLIBS_MT = -lm -lpthread
 NCBI_THR_OBJ = $(NCBI_LIBDIR)/ncbithr.o

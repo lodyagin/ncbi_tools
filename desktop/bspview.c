@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.88 $
+* $Revision: 6.96 $
 *
 * File Description: 
 *
@@ -114,8 +114,6 @@ typedef struct bioseqviewform {
 
   Boolean         cleanupObjectPtr;
   WndActnProc     activateForm;
-
-  ValNodePtr      bsplist;
 
   ForM            toolForm;
 } BioseqViewForm, PNTR BioseqViewFormPtr;
@@ -1729,7 +1727,6 @@ static void ChangeBioseqSequenceStyle (PopuP p)
       bpp->show (&(bfp->bvd), FALSE);
     }
     Update ();
-    bfp->bvd.showContigJoin = (Boolean) (! bfp->bvd.showContigJoin);
     PointerToForm (bfp->form, (Pointer) bfp->bvd.bsp);
     SetBioseqImportExportItems (bfp);
     ArrowCursor ();
@@ -2016,18 +2013,40 @@ static void ChangeNewScale (PopuP p)
   }
 }
 
-static void ChangeNewLayout (PopuP p)
+static void ChangeNewLayout (ChoicE c)
 
 {
   BioseqViewFormPtr  bfp;
 
-  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = (BioseqViewFormPtr) GetObjectExtra (c);
+#endif
   if (bfp != NULL) {
     bfp->bvd.moveToOldPos = TRUE;
     PointerToForm (bfp->form, bfp->bvd.bsp);
     Update ();
     AdjustDynamicGraphicViewer (&(bfp->bvd));
   }
+}
+
+extern void CreateNewLayoutMenu (MenU m, BaseFormPtr bp);
+extern void CreateNewLayoutMenu (MenU m, BaseFormPtr bp)
+
+{
+  BioseqViewFormPtr  bfp;
+  Int2               j;
+  CharPtr PNTR       layoutnames;
+
+  bfp = (BioseqViewFormPtr) bp;
+  bfp->bvd.newGphLayout = ChoiceGroup (m, ChangeNewLayout);
+  SetObjectExtra (bfp->bvd.newGphLayout, bfp, NULL);
+  layoutnames = GetLayoutNameList ();
+  for (j = 0; layoutnames [j] != NULL; j++) {
+    ChoiceItem (bfp->bvd.newGphLayout, layoutnames [j]);
+  }
+  SetValue (bfp->bvd.newGphLayout, 1);
 }
 
 static void ChangeSalsaControls (PopuP p)
@@ -2123,7 +2142,7 @@ static void CleanupBioseqForm (GraphiC g, VoidPtr data)
         }
       }
     }
-    bfp->bsplist = UnlockFarComponents (bfp->bsplist);
+    bfp->bvd.bsplist = UnlockFarComponents (bfp->bvd.bsplist);
     bfp->bvd.pict = DeletePicture (bfp->bvd.pict);
     if (bfp->bvd.slp_list != NULL) {
       bfp->bvd.slp_list = free_slp_list (bfp->bvd.slp_list);
@@ -2525,7 +2544,6 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   SeqViewControlsProc  makeControls = NULL;
   Int2                 mssg;
   Boolean              newGraphicalViewer = FALSE;
-  Boolean              newLayoutOverride = FALSE;
   Int2                 numStyles;
   Int2                 pixheight;
   Int2                 pixwidth;
@@ -2542,7 +2560,6 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   SeqEntryPtr          sep;
   CharPtr              str;
   CharPtr              styleName;
-  PopuP                v;
   Int2                 val;
   WindoW               w;
   PopuP                x;
@@ -2593,7 +2610,6 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       if (svpp->allowScrollText) {
         bfp->bvd.useScrollText = svpp->startInScrollText;
       }
-      bfp->bvd.showContigJoin = TRUE;
       bfp->bvd.launchEditors = svpp->launchEditors;
       bfp->bvd.launchSubviewers = svpp->launchSubviewers;
       bfp->bvd.sendSelectMessages = svpp->sendSelectMessages;
@@ -2731,6 +2747,9 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         if (svpp->initNucLabel != NULL) {
           bpp = bfp->bioseqNucPageList;
           str = svpp->initNucLabel;
+          if (bsp->length > 350000) {
+            str = "Graphic";
+          }
         }
       }
       if (str != NULL && bpp != NULL) {
@@ -2818,22 +2837,24 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       PopupItem (x, "Doc");
       PopupItem (x, "Text");
     }
-    if (bfp->bvd.hasTargetControl && GetAppProperty ("InternalNcbiSequin") != NULL) {
-      bfp->bvd.modeControlGrp = HiddenGroup (bfp->bvd.docTxtControlGrp, -4, 0, NULL);
-      StaticPrompt (bfp->bvd.modeControlGrp, "Mode", 0, popupMenuHeight, programFont, 'l');
-      bfp->bvd.ffModeCtrl = PopupList (bfp->bvd.modeControlGrp, TRUE, ChangeFlatFileMode);
-      SetObjectExtra (bfp->bvd.ffModeCtrl, bfp, NULL);
-      PopupItem (bfp->bvd.ffModeCtrl, "Sequin");
-      PopupItem (bfp->bvd.ffModeCtrl, "Release");
-      SetValue (bfp->bvd.ffModeCtrl, 1);
-    }
+    bfp->bvd.modeControlGrp = HiddenGroup (bfp->bvd.docTxtControlGrp, -4, 0, NULL);
+    StaticPrompt (bfp->bvd.modeControlGrp, "Mode", 0, popupMenuHeight, programFont, 'l');
+    bfp->bvd.ffModeCtrl = PopupList (bfp->bvd.modeControlGrp, TRUE, ChangeFlatFileMode);
+    SetObjectExtra (bfp->bvd.ffModeCtrl, bfp, NULL);
+    PopupItem (bfp->bvd.ffModeCtrl, "Release");
+    PopupItem (bfp->bvd.ffModeCtrl, "Entrez");
+    PopupItem (bfp->bvd.ffModeCtrl, "Sequin");
+    PopupItem (bfp->bvd.ffModeCtrl, "Dump");
+    SetValue (bfp->bvd.ffModeCtrl, 3);
     bfp->bvd.baseCtgControlGrp = HiddenGroup (bfp->bvd.docTxtControlGrp, 2, 0, NULL);
-    StaticPrompt (bfp->bvd.baseCtgControlGrp, "Sequence", 0, popupMenuHeight, programFont, 'l');
-    v = PopupList (bfp->bvd.baseCtgControlGrp, TRUE, ChangeBioseqSequenceStyle);
-    SetObjectExtra (v, bfp, NULL);
-    PopupItem (v, "Bases");
-    PopupItem (v, "CONTIG");
-    SetValue (v, 2);
+    StaticPrompt (bfp->bvd.baseCtgControlGrp, "Style", 0, popupMenuHeight, programFont, 'l');
+    bfp->bvd.ffStyleCtrl = PopupList (bfp->bvd.baseCtgControlGrp, TRUE, ChangeBioseqSequenceStyle);
+    SetObjectExtra (bfp->bvd.ffStyleCtrl, bfp, NULL);
+    PopupItem (bfp->bvd.ffStyleCtrl, "Normal");
+    PopupItem (bfp->bvd.ffStyleCtrl, "Segment");
+    PopupItem (bfp->bvd.ffStyleCtrl, "Master");
+    PopupItem (bfp->bvd.ffStyleCtrl, "Contig");
+    SetValue (bfp->bvd.ffStyleCtrl, 1);
     Hide (bfp->bvd.baseCtgControlGrp);
     Hide (bfp->bvd.docTxtControlGrp);
 
@@ -2865,20 +2886,16 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
 
 #ifdef NEW_GRAPHICAL_VIEWER
     newGraphicalViewer = TRUE;
-    newLayoutOverride = TRUE;
 #endif
     if (GetAppProperty ("NewSequinGraphicalViewer") != NULL) {
       newGraphicalViewer = TRUE;
-    }
-    if (GetAppProperty ("NewSequinLayoutOverride") != NULL) {
-      newLayoutOverride = TRUE;
     }
 
     if (newGraphicalViewer) {
       StaticPrompt (bfp->bvd.newGphControlGrp, "Style", 0, popupMenuHeight, programFont, 'l');
       bfp->bvd.newGphStyle = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewStyle);
       SetObjectExtra (bfp->bvd.newGphStyle, bfp, NULL);
-      PopupItems (bfp->bvd.newGphStyle, GetAppearanceNameList ());
+      PopupItems (bfp->bvd.newGphStyle, GetStyleNameList ());
       SetValue (bfp->bvd.newGphStyle, 1);
 
       StaticPrompt (bfp->bvd.newGphControlGrp, "Filter", 0, popupMenuHeight, programFont, 'l');
@@ -2887,6 +2904,10 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       PopupItems (bfp->bvd.newGphFilter, GetFilterNameList ());
       SetValue (bfp->bvd.newGphFilter, 1);
 
+      /*
+      if (GetAppProperty ("NewSequinLayoutOverride") != NULL) {
+        newLayoutOverride = TRUE;
+      }
       if (newLayoutOverride) {
         StaticPrompt (bfp->bvd.newGphControlGrp, "Layout", 0, popupMenuHeight, programFont, 'l');
         bfp->bvd.newGphLayout = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewLayout);
@@ -2894,6 +2915,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         PopupItems (bfp->bvd.newGphLayout, GetLayoutNameList ());
         SetValue (bfp->bvd.newGphLayout, 1);
       }
+      */
 
       StaticPrompt (bfp->bvd.newGphControlGrp, "Scale", 0, popupMenuHeight, programFont, 'l');
       bfp->bvd.newGphScale = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewScale);
@@ -3067,11 +3089,14 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     Update ();
     BioseqViewFormActivate ((WindoW) bfp->form);
 
+    /*
     if (svpp != NULL && svpp->lockFarComponents) {
       entityID = ObjMgrGetEntityIDForPointer (bsp);
       sep = GetTopSeqEntryForEntityID (entityID);
-      bfp->bsplist = LockFarComponents (sep);
+      bfp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE);
+      LookupFarSeqIDs (sep, TRUE, TRUE, TRUE, TRUE);
     }
+    */
 
     SendMessageToForm (bfp->form, VIB_MSG_INIT);
     SetCurrentPagePointers (bfp);
@@ -3415,7 +3440,7 @@ static void CleanSmartViewer (BioseqViewFormPtr bfp)
         }
       }
     }
-    bfp->bsplist = UnlockFarComponents (bfp->bsplist);
+    bfp->bvd.bsplist = UnlockFarComponents (bfp->bvd.bsplist);
     bfp->bvd.pict = DeletePicture (bfp->bvd.pict);
     if (bfp->bvd.slp_list != NULL) {
       bfp->bvd.slp_list = free_slp_list (bfp->bvd.slp_list);

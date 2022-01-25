@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.147 2001/11/20 21:47:41 lavr Exp $
+# $Id: makeall.dos,v 6.150 2002/02/20 21:18:22 lavr Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -21,14 +21,14 @@ OBJ1  = \
 	+asnbufo.obj +asndebin.obj +asnenbin.obj +asngen.obj +asngenob.obj \
 	+asnio.obj +asnlex.obj +asnlext.obj +asnout.obj +asnprint.obj \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
-	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +ncbi_socket_.obj +matrix.obj \
+	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +ncbi_socket.obj +matrix.obj \
 	+ncbibuf.obj +ncbi_buffer.obj +ncbi_core.obj +ncbi_util.obj +ncbi_priv.obj \
 	+ncbi_ansi_ext.obj +ncbi_connection.obj +ncbi_connector.obj +ncbi_connutil.obj \
-        +ncbi_file_connector.obj +ncbi_http_connector.obj \
-        +ncbi_server_info.obj +ncbi_service.obj \
-        +ncbi_service_connector.obj +ncbi_service_dispd.obj \
+	+ncbi_file_connector.obj +ncbi_http_connector.obj \
+	+ncbi_memory_connector.obj +ncbi_server_info.obj +ncbi_service.obj \
+	+ncbi_service_connector.obj +ncbi_service_dispd.obj \
 	+ncbi_service_lbsmd_stub.obj +ncbi_socket_connector.obj \
-	+urlquery.obj +binary.obj +ncbi_sendmail_.obj +asn_connection.obj
+	+urlquery.obj +binary.obj +ncbi_sendmail.obj +asn_connection.obj
 
 OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
@@ -196,6 +196,7 @@ copy_reg:
 	copy ..\connect\*.c .
 	copy ..\connect\ncbi_priv.h .
 	copy ..\connect\ncbi_comm.h .
+	copy ..\connect\ncbi_config.h .
 	copy ..\connect\ncbi_server_infop.h .
 	copy ..\connect\ncbi_servicep.h .
 	copy ..\connect\ncbi_servicep_dispd.h .

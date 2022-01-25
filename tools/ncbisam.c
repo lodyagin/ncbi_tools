@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.23 2001/07/09 14:17:24 madden Exp $
+/* $Id: ncbisam.c,v 6.26 2002/04/04 17:57:10 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.23 $
+* $Revision: 6.26 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.26  2002/04/04 17:57:10  camacho
+* Fixed binary search implementation in NISAMSearch
+*
+* Revision 6.25  2002/04/02 20:51:21  camacho
+* Fixed bug in NISAMSearch
+*
+* Revision 6.24  2002/01/18 18:53:13  madden
+* Changes to research the last page if appropriate
+*
 * Revision 6.23  2001/07/09 14:17:24  madden
 * Fix PC-lint complaints from R. Williams
 *
@@ -1461,11 +1470,11 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     Int4 NumElements, *KeyPage, *KeyPageStart;
     Int4 first, last, current, index, type;
     Boolean NoData;
-    NISAMKeyDataPtr KeyDataPage, KeyDataSamples, KeyDataPageStart;
+    NISAMKeyDataPtr KeyDataPage=NULL, KeyDataSamples, KeyDataPageStart;
     Uint4Ptr KeySamples;
     Uint4 Key;
     ISAMErrorCode error;
-    
+
     if((data = (ISAMDataPtr) object) == NULL)
         return ISAMBadParameter;
     
@@ -1483,7 +1492,9 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     
     Stop = data->NumSamples -1;
     
-    while(Stop >= Start) {
+    if (!data->lastKeyDataPage || Number <= data->first_gi || Number >= data->last_gi)
+    {
+       while(Stop >= Start) {
         SampleNum = ((Uint4)(Stop + Start)) >> 1;
         if (type == ISAMNumericNoData)
             Key = SwapUint4(KeySamples[SampleNum]);
@@ -1503,19 +1514,22 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
             if(Index != NULL)
                 *Index = SampleNum * data->PageSize;
             
+	    /* NULL this out so we don't confuse the next lookup. */
+	    data->lastKeyDataPage = NULL;
+
             return ISAMNoError;
-        }
+         }
         
-        /* Otherwise, search for the next sample. */
-        if ( Number < Key )
+         /* Otherwise, search for the next sample. */
+         if ( Number < Key )
             Stop = --SampleNum;
-        else
+         else
             Start = SampleNum +1;
-    }
+       }
     
-    /* If the term is out of range altogether, report not finding it. */
+       /* If the term is out of range altogether, report not finding it. */
     
-    if ( (SampleNum < 0) || (SampleNum >= data->NumSamples)) {
+       if ( (SampleNum < 0) || (SampleNum >= data->NumSamples)) {
         
         if (Data != NULL)
             *Data = ISAMNotFound;
@@ -1524,13 +1538,15 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
             *Index = ISAMNotFound;
         
         return ISAMNotFound;
-    }
+      }
     
-    /* load the appropriate page of numbers into memory. */
+      /* load the appropriate page of numbers into memory. */
     
-    NumElements = GetPageNumElements(data, SampleNum, &Start);
-    
-    if (NoData) {
+      NumElements = GetPageNumElements(data, SampleNum, &Start);
+      first = Start;
+      last = Start + NumElements - 1;
+
+      if (NoData) {
 	if (data->mfp->mfile_true)
 	{
 		NlmSeekInMFILE(data->mfp, Start*sizeof(Int4), SEEK_SET);
@@ -1544,12 +1560,18 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
         	FileRead(KeyPageStart, sizeof(Int4), NumElements, data->db_fd);
 		KeyPage = KeyPageStart - Start;
 	}
-    } else {
+      } else {
 	if (data->mfp->mfile_true)
 	{
 		NlmSeekInMFILE(data->mfp, Start*sizeof(NISAMKeyData), SEEK_SET);
 		KeyDataPageStart = (NISAMKeyDataPtr) data->mfp->mmp;
 		KeyDataPage = KeyDataPageStart - Start;
+		/* The following data is used if the next lookup is on the same page. */
+		data->first_gi = SwapUint4(KeyDataPage[first].key);
+		data->last_gi = SwapUint4(KeyDataPage[last].key);
+		data->first = first;
+		data->last = last;
+		data->lastKeyDataPage = KeyDataPage;
 	}
 	else
 	{
@@ -1559,41 +1581,47 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
         	FileRead(KeyDataPageStart, sizeof(NISAMKeyData), NumElements, data->db_fd);
 		KeyDataPage = KeyDataPageStart - Start;
 	}
+      }
+    }
+    else
+    {
+	first = data->first;
+	last = data->last;
+	KeyDataPage = data->lastKeyDataPage;
     }
     
-    first = Start;
-    last = Start + NumElements;
     found = FALSE;
     /* Search the page for the number. */
     if (NoData) {
-	for (index=0; index<NCBISAM_ITER_MAX; index++)
-	{
-		current = (first+last)/2;
-		if (SwapUint4(KeyPage[current]) > Number)
-			last = current;
-		else if (SwapUint4(KeyPage[current]) < Number)
-			first = current;
-		else
-		{
-			found = TRUE;
-			break;
-		}
-	}
+        while (first <= last)
+        {
+            current = (first+last)/2;
+            Key = SwapUint4(KeyPage[current]);
+            if (Key > Number)
+                last = --current;
+            else if (Key < Number)
+                first = ++current;
+            else
+            {
+                found = TRUE;
+                break;
+            }
+        }
     } else {
-	for (index=0; index<NCBISAM_ITER_MAX; index++)
-	{
-		current = (first+last)/2;
-		Key = KeyDataPage[current].key;
-		if (SwapUint4(Key) > Number)
-			last = current;
-		else if (SwapUint4(Key) < Number)
-			first = current;
-		else
-		{
-			found = TRUE;
-			break;
-		}
-	}
+        while (first <= last)
+        {
+            current = (first+last)/2;
+            Key = SwapUint4(KeyDataPage[current].key);
+            if (Key > Number)
+                last = --current;
+            else if (Key < Number)
+                first = ++current;
+            else
+            {
+                found = TRUE;
+                break;
+            }
+        }
     }
 
     
@@ -1609,9 +1637,9 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
 	if (data->mfp->mfile_true == FALSE)
 	{
     	    if (NoData)
-       	     	MemFree(KeyPageStart);
+       	     	KeyPageStart = MemFree(KeyPageStart);
        	    else
-       	     	MemFree(KeyDataPageStart);
+       	     	KeyDataPageStart = MemFree(KeyDataPageStart);
 	}
         
         return ISAMNotFound;
@@ -1630,9 +1658,9 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     if (data->mfp->mfile_true == FALSE)
     {
     	    if (NoData)
-       	     	MemFree(KeyPageStart);
+       	     	KeyPageStart = MemFree(KeyPageStart);
        	    else
-       	     	MemFree(KeyDataPageStart);
+       	     	KeyDataPageStart = MemFree(KeyDataPageStart);
     }
     
     return ISAMNoError;

@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.65 $
+* $Revision: 6.68 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.68  2002/02/15 18:30:55  kans
+* no longer change snoRNA to misc_RNA
+*
+* Revision 6.67  2001/12/28 21:37:10  kans
+* allow sfp->product to be SEQLOC_EQUIV
+*
+* Revision 6.66  2001/12/21 20:21:06  cavanaug
+* old_locus_fmt now controls generated of *old* LOCUS line format
+*
 * Revision 6.65  2001/12/05 18:13:53  cavanaug
 * Changes for new LOCUS line format
 *
@@ -766,6 +775,7 @@ NLM_EXTERN SeqIdPtr GetProductSeqId(ValNodePtr product)
 {
 	SeqIdPtr sip=NULL;
 	SeqIntPtr seq_int;
+	SeqLocPtr slp;
 
 	if (product)
 	{
@@ -777,6 +787,13 @@ NLM_EXTERN SeqIdPtr GetProductSeqId(ValNodePtr product)
 		{
 			seq_int = (SeqIntPtr) product->data.ptrvalue;
 			sip = seq_int->id;
+		}
+		else if (product->choice == SEQLOC_EQUIV)
+		{
+			for (slp = (SeqLocPtr) product->data.ptrvalue; slp != NULL; slp = slp->next) {
+				sip = GetProductSeqId (slp);
+				if (sip != NULL) return sip;
+			}
 		}
 	}
 	return sip;
@@ -906,7 +923,7 @@ NLM_EXTERN Boolean GetNAFeatKey(Boolean is_new, CharPtr PNTR buffer, SeqFeatPtr 
 				*buffer = StringSave("scRNA");
 				break;
 			case 7:
-				*buffer = StringSave("misc_RNA"); /* snoRNA */
+				*buffer = StringSave("snoRNA"); /* snoRNA */
 				break;
 			case 255:
 				*buffer = StringSave("misc_RNA");
@@ -3247,10 +3264,10 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				SeqIdWrite(isip, 
 					buf_acc, PRINTID_TEXTID_ACCESSION, MAX_ACCESSION_LEN);
 
-				if (ajp->new_locus_fmt == TRUE)
-				  sprintf(gbp->locus, "%-16s", buf_acc);
-				else
+				if (ajp->old_locus_fmt == TRUE)
 				  sprintf(gbp->locus, "%-10s", buf_acc);
+				else
+				  sprintf(gbp->locus, "%-16s", buf_acc);
 				
 				flatloc =  FlatLoc(bsp, ajp->slp);
 				sprintf(gbp->accession, "%s REGION: %s", buf_acc, flatloc);
@@ -3290,10 +3307,10 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 					PRINTID_TEXTID_ACCESSION, MAX_ACCESSION_LEN+1);
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
 
-			if (ajp->new_locus_fmt == TRUE)
-			  sprintf(gbp->locus, "%-16s", buf_acc); 
-			else
+			if (ajp->old_locus_fmt == TRUE)
 			  sprintf(gbp->locus, "%-10s", buf_acc); 
+			else
+			  sprintf(gbp->locus, "%-16s", buf_acc); 
 
 			if (ajp->show_version) {
 				SeqIdWrite(isip, buf_acc, 
@@ -3349,15 +3366,15 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 					buf_acc, MAX_ACCESSION_LEN+1);
 				if (sip->choice == SEQID_OTHER 
 						&& StringNCmp(tsip->accession, "NT_", 3) == 0) {
-					if (ajp->new_locus_fmt == TRUE)
-					  sprintf(gbp->locus, "%-16s", buf_acc);
-					else
+					if (ajp->old_locus_fmt == TRUE)
 					  sprintf(gbp->locus, "%-10s", buf_acc);
-				} else {
-					if (ajp->new_locus_fmt == TRUE)
-					  sprintf(gbp->locus, "%-16s", buf_locus);
 					else
+					  sprintf(gbp->locus, "%-16s", buf_acc);
+				} else {
+					if (ajp->old_locus_fmt == TRUE)
 					  sprintf(gbp->locus, "%-10s", buf_locus);
+					else
+					  sprintf(gbp->locus, "%-16s", buf_locus);
 				}
 				num_seg--;
 			if (ajp->show_version) {
@@ -3384,10 +3401,10 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				total_segs, num_seg,buf_locus,  buf_acc, buf_acc); 
 				StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
 
-				if (ajp->new_locus_fmt == TRUE)
-				  sprintf(gbp->locus, "%-16s", buf_locus); 
-				else
+				if (ajp->old_locus_fmt == TRUE)
 				  sprintf(gbp->locus, "%-10s", buf_locus); 
+				else
+				  sprintf(gbp->locus, "%-16s", buf_locus); 
 
 				num_seg--;
 				break;
@@ -3397,10 +3414,10 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 					total_segs, num_seg, buf_locus, buf_acc, buf_acc); 
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
 
-			if (ajp->new_locus_fmt == TRUE)
-			  sprintf(gbp->locus, "%-16s", buf_locus); 
-			else
+			if (ajp->old_locus_fmt == TRUE)
 			  sprintf(gbp->locus, "%-10s", buf_locus); 
+			else
+			  sprintf(gbp->locus, "%-16s", buf_locus); 
 
 			num_seg--;
 			break;
@@ -3426,15 +3443,15 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
 			if (sip->choice == SEQID_OTHER 
 					&& StringNCmp(tsip->accession, "NT_", 3) == 0) {
-				if (ajp->new_locus_fmt == TRUE)
-				  sprintf(gbp->locus, "%-16s", buf_acc);
-				else
+				if (ajp->old_locus_fmt == TRUE)
 				  sprintf(gbp->locus, "%-10s", buf_acc);
-			} else {
-				if (ajp->new_locus_fmt == TRUE)
-				  sprintf(gbp->locus, "%-16s", buf_locus);
 				else
+				  sprintf(gbp->locus, "%-16s", buf_acc);
+			} else {
+				if (ajp->old_locus_fmt == TRUE)
 				  sprintf(gbp->locus, "%-10s", buf_locus);
+				else
+				  sprintf(gbp->locus, "%-16s", buf_locus);
 			}
 			num_seg--;
 			
@@ -3445,7 +3462,7 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				total_segs, num_seg, buf_locus, buf_acc, buf_acc); 
 			StringNCpy_0(gbp->accession, buf_acc,
 													 MAX_ACCESSION_LEN+1);
-			if (ajp->new_locus_fmt == TRUE)
+			if (ajp->old_locus_fmt == TRUE)
 			  sprintf(gbp->locus, "%-10s", buf_locus); 
 			else
 			  sprintf(gbp->locus, "%-16s", buf_locus); 

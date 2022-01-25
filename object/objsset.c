@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objsset.c,v $
+* Revision 6.5  2002/03/11 22:22:58  kans
+* removed retcode >= 3 test from SeqEntryAsnGet
+*
 * Revision 6.4  2001/11/30 12:20:18  kans
 * ObjMgrDeleteAllInRecord called when freeing top bsp or bssp
 *
@@ -1050,7 +1053,6 @@ NLM_EXTERN SeqEntryPtr LIBCALL SeqEntryAsnGet (AsnIoPtr aip, AsnTypePtr orig, Se
 	if ((aip == NULL) || (sip == NULL) || (retcode < 0) || (retcode > 4))
 		return sep;
 
-	if (retcode >= 3) retcode = 0;   /* only nuc-prots for now */
 	av.realvalue = 0.0;    /* just zeros it out to prevent debugger fuss */
 	oop = (Op_objssetPtr)MemNew(sizeof(Op_objsset));
 	if (oop == NULL) return sep;

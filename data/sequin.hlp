@@ -468,12 +468,6 @@ elements not listed here, such as a B chromosome or an F factor.
 Note this does not include the cloning vector used to propagate
 the sequence of interest. 
 
-#-Transposon:  transposable element flanked by repeat sequences containing
-genes in addition to those needed for insertion 
-
-#-Insertion sequence:  simple transposable element carrying repeat sequences
-containing a transposase gene 
-
 #-Cyanelle:  a specialized type of plastid found exclusively in
 glaucocystophytes (e.g., Cyanophora).  NOTE: 'cyanelle' should be
 applied ONLY to members of the Glaucocystophyceae. 
@@ -575,6 +569,11 @@ for example, the sequence of a cDNA derived from small cytoplasmic RNA.
 #-Other-Genetic [plasmid]: A sequence that is not normal genetic
 material but that is also is not a transcription product.  Examples
 include plasmids, B chromosomes, and F factors.
+
+#-cRNA: A sequence derived from complementary RNA transcribed from DNA, mainly used for viral submissions.
+
+#-Small nucleolar RNA: A sequence derived from small nucleolar RNA, for example, the sequence of a cDNA derived from snoRNA.
+
 
 **Topology
 
@@ -1026,10 +1025,7 @@ example,
 !TTAGATACAGGAGCAGATGATACAGTATTAGAAGAAAT 
 !]
 
-#If the sequence is in FASTA+GAP format, Sequin will keep the alignment
-provided.
- However, if the sequence is in FASTA format, you must click on the Create
-Alignment button in order to make Sequin generate the alignment.
+#Currently Sequin is unable to properly display discontinuous alignments even though they can be used to create the submission file.
 
 **To import a nucleotide sequence into Sequin
 
@@ -1712,40 +1708,7 @@ entered can be edited here.
 
 #A GenBank sequence can represent one of several different molecule
 types. Enter in the Molecule pop-up menu the type of molecule that was
-sequenced.
-
-#-Genomic DNA: Sequence derived directly from the DNA of an organism. 
-Note: The DNA sequence of an rRNA gene has this molecule type.
-
-#-Genomic RNA: Sequence derived directly from the genomic RNA of certain
-organisms, such a viruses.
-
-#-Precursor RNA: An RNA transcript before it is processed into mRNA,
-rRNA, tRNA, or other cellular RNA species.
-
-#-mRNA[cDNA]: A cDNA sequence derived from mRNA.
-
-#-Ribosomal RNA: A sequence derived from the RNA in ribosomes, for
-example, the sequence of a cDNA derived from rRNA.
-
-#-Transfer RNA: A sequence derived from the RNA in a transfer RNA, for
-example, the sequence of a cDNA derived from tRNA.
-
-#-Small nuclear RNA: A sequence derived from small nuclear RNA, for
-example, the sequence of a cDNA derived from snRNA.
-
-#-Small cytoplasmic RNA: A sequence derived from small cytoplasmic RNA,
-for example, the sequence of a cDNA derived from small cytoplasmic RNA.
-
-#-Peptide:  Do not select this item.
-
-#-Other-Genetic [plasmid]: A sequence that is not normal genetic
-material but that is also is not a transcription product.  Examples
-include plasmids, B chromosomes, and F factors.
-
-#-Genomic mRNA:  Do not select this item.
-
-#-Other:  Do not select this item.
+sequenced.  A brief description of the choices in this pop-up menu were listed previously.
 
 ***Completedness
 
@@ -1843,7 +1806,7 @@ projects.
 
 ***Class:
 
-#From the pop-up menu, please select the type of molecule which was sequenced.
+#From the pop-up menu, select the type of molecule which was sequenced.
 
 #-DNA:  DNA
 
@@ -1857,11 +1820,11 @@ projects.
 
 ***Topology:
 
-#From the pop-up menu, please select the topology of the sequenced molecule.
+#From the pop-up menu, select the topology of the sequenced molecule.
 
 #-Linear:  Linear molecule (most sequences)
 
-#-Circular:  Circular molecule (such as a complete plasmid)
+#-Circular:  Circular molecule (such as a complete plasmid or mitochondrion)
 
 #-Tandem:  Do not select this item.
 
@@ -1869,14 +1832,14 @@ projects.
 
 ***Strand:
 
-#From the pop-up menu, please select which strand of the molecule was
-sequenced.
+#From the pop-up menu, select whether the sequence was derived from an organism with a single- or double-stranded genome.  This is used primarily for viral submissions. 
 
-#-Single:  Only one strand was sequenced.
 
-#-Double:  Both strands were sequenced.
+#-Single:  The organism contains only a single-stranded genome, for example ssRNA viruses. 
 
-#-Mixed:  In different regions, either one or both strands were sequenced.
+#-Double:  The organism contains only a double-stranded genome, for example dsDNA viruses.
+
+#-Mixed:  Do not select this item. 
 
 #-Mixed Rev:  Do not select this item.
 
@@ -2257,7 +2220,7 @@ source key (/insertion_seq, /transposon, /proviral)
 
 #any transcript or RNA product that cannot be defined by other RNA keys
 (prim_transcript, precursor_RNA, mRNA, 5'clip, 3'clip, 5'UTR, 3'UTR,
-exon, intron, polyA_site, rRNA, tRNA, scRNA, and snRNA)
+exon, intron, polyA_site, rRNA, tRNA, scRNA, snoRNA, and snRNA)
 
 *misc_signal
 
@@ -2380,9 +2343,11 @@ nascent polypeptide to the membrane; leader sequence
 
 *snRNA
 
-#small nuclear RNA; any one of many small RNA species confined to the
-nucleus; several of the snRNAs are involved in splicing or other RNA
-processing reactions
+#small nuclear RNA involved in pre-mRNA splicing and processing 
+
+*snoRNA
+
+#small nucleolar RNA molecules generally involved in rRNA modification and processing
 
 *source
 
@@ -2619,65 +2584,66 @@ page.  You may select as many modifiers as you want.
 
 #The following is a description of the available modifiers:
 
-#-Chromosome:  Chromosome to which the gene maps.
-
-#-Map:  Map location of the gene.
-
-#-Clone:  Name of clone from which sequence was obtained.
-
-#-Subclone:  Name of subclone from which sequence was obtained.
-
-#-Haplotype:  Haplotype of the organism.
-
-#-Genotype:  Genotype of the organism.
-
-#-Sex:  Sex of the organism from which the sequence derives.
-
 #-Cell-line:  Cell line from which sequence derives.
 
 #-Cell-type:  Type of cell from which sequence derives.
 
-#-Tissue-type:  Type of tissue from which sequence derives.
+#-Chromosome:  Chromosome to which the gene maps.
+
+#-Clone:  Name of clone from which sequence was obtained.
 
 #-Clone-lib:  Name of library from which sequence was obtained.
 
+#-Country: The country of origin of DNA samples used for epidemiological or
+population studies.
+
 #-Dev-stage:  Developmental stage of organism.
 
+#-Endogenous-virus-name:  Name of inactive virus that is integrated into the
+chromosome of its host cell and can therefore exhibit vertical transmission.
+
+#-Environmental-sample: Identifies sequence derived by direct molecular isolation from an unidentified organism
+
 #-Frequency:  Frequency of occurrence of a feature.
+
+#-Genotype:  Genotype of the organism.
 
 #-Germline:  If the sequence shown is DNA and a member of the
 immunoglobulin family, this qualifier is used to denote that the
 sequence is from unrearranged DNA.
 
-#-Rearranged:  If the sequence shown is DNA and a member of the
-immunoglobulin family, this qualifier is used to denote that the
-sequence is from rearranged DNA.
+#-Haplotype:  Haplotype of the organism.
+
+#-Isolation-source:  Describes the local geographical source of the organism from which the sequence was derived
 
 #-Lab-host:  Laboratory host used to propagate the organism from which
 the sequence was derived.
 
-#-Pop-variant:  Name of the population variant from which the sequence was
-obtained.
-
-#-Tissue-lib:  Tissue library from which the sequence was obtained.
+#-Map:  Map location of the gene.
 
 #-Plasmid-name:  Name of plasmid from which the sequence was obtained.
 
-#-Transposon-name:  Name of transposable element from which the sequence was
-obtained.
-
-#-Ins-sequence-name:  Name of insertion element from which the sequence was
-obtained.
-
 #-Plastid-name:  Name of plastid from which the sequence was obtained.
 
-#-Country: The country of origin of DNA samples used for epidemiological or
-population studies.
+#-Pop-variant:  Name of the population variant from which the sequence was
+obtained.
+
+#-Rearranged:  If the sequence shown is DNA and a member of the
+immunoglobulin family, this qualifier is used to denote that the
+sequence is from rearranged DNA.
 
 #-Segment: Name of viral genome fragmented into two or more nucleic acid molecules.
 
-#-Endogenous-virus-name:  Name of inactive virus that is integrated into the
-chromosome of its host cell and can therefore exhibit vertical transmission.
+#-Sex:  Sex of the organism from which the sequence derives.
+
+#-Subclone:  Name of subclone from which sequence was obtained.
+
+#-Tissue-lib:  Tissue library from which the sequence was obtained.
+
+#-Tissue-type:  Type of tissue from which sequence derives.
+
+#-Transgenic:  Identified organism which was the recipient of transgenic DNA
+
 
 **Organism Subpage
 
@@ -2689,90 +2655,89 @@ the page. You may select as many modifiers as you want.
 
 #The following is a description of the available modifiers:
 
-#-Strain:  Strain of organism from which sequence was obtained.
+#-Acronym:  Standard synonym (usually of a virus) based on the initials
+of the formal name.  An example is HIV-1.
 
-#-Substrain:  Sub-strain of organism from which sequence was obtained.
+#-Anamorph: The scientific name applied to the asexual phase of a fungus.
 
-#-Type:  Type of organism from which sequence was obtained.
+#-Authority: The author or authors of the organism name from which sequence
+was obtained.
 
-#-Subtype:  Subtype of organism from which sequence was obtained.
-
-#-Variety:  Variety of organism from which sequence was obtained.
-
-#-Serotype:  Variety of a species (usually a fungus, bacteria or virus)
-characterized by its antigenic properties.  Same as serogroup and
-serovar.
-
-#-Serogroup:  See serotype.
-
-#-Serovar:  See serotype.
-
-#-Cultivar:  Cultivated variety of plant from which sequence was obtained.
-
-#-Pathovar:  Variety of a species (usually a fungus, bacteria or virus)
-characterized by the biological target of the pathogen.  Examples
-include Pseudomonas syringae pathovar tomato and Pseudomonas syringae
-pathovar tabaci.
-
-#-Chemovar:  Variety of a species (usually a fungus, bacteria or virus)
-characterized by its biochemical properties.
+#-Biotype:  See biovar.
 
 #-Biovar:  Variety of a species (usually a fungus, bacteria or virus)
 characterized by some specific biological property (often geographical,
 ecological, or physiological).  Same as biotype.
 
-#-Biotype:  See biovar.
+#-Breed: The named breed from which sequence was obtained (usually applied
+to domesticated mammals).
 
-#-Group:  Do not select this item.
-
-#-Subgroup:  Do not select this item.
-
-#-Isolate:  Identification or description of the specific individual
-from which this sequence was obtained.  An example is Patient X14.
+#-Chemovar:  Variety of a species (usually a fungus, bacteria or virus)
+characterized by its biochemical properties.
 
 #-Common:  Common name of the organism from which sequence was obtained.
 
-#-Acronym:  Standard synonym (usually of a virus) based on the initials
-of the formal name.  An example is HIV-1.
+#-Cultivar:  Cultivated variety of plant from which sequence was obtained.
 
 #-Dosage:  Do not select this item.
+
+#-Ecotype: The named ecotype (population adapted to a local habitat) from
+which sequence was obtained (customarily applied to populations of
+Arabidopsis thaliana).
+
+#-Forma: The forma (lowest taxonomic unit governed by the nomenclatural
+codes) of organism from which sequence was obtained. This term is usually
+applied to plants and fungi.
+
+#-Forma-specialis: The physiologically distinct form from which sequence
+was obtained (usually restricted to certain parasitic fungi).
+
+#-Group:  Do not select this item.
+
+#-Isolate:  Identification or description of the specific individual
+from which this sequence was obtained.  An example is Patient X14.
 
 #-Natural Host:  When the sequence submission is from an organism that
 exists in a symbiotic, parasitic or other special relationship with some
 second organism, the 'natural host' modifier can be used to identify the
 name of the host species.
 
-#-Sub-species:  Subspecies of organism from which sequence was obtained.
+#-Old name:  Do not select this item.
+
+#-Pathovar:  Variety of a species (usually a fungus, bacteria or virus)
+characterized by the biological target of the pathogen.  Examples
+include Pseudomonas syringae pathovar tomato and Pseudomonas syringae
+pathovar tabaci.
+
+#-Serogroup:  See serotype.
+
+#-Serotype:  Variety of a species (usually a fungus, bacteria or virus)
+characterized by its antigenic properties.  Same as serogroup and
+serovar.
+
+#-Serovar:  See serotype.
 
 #-Specimen-voucher: An identifier of the individual or collection of the source
 organism and the place where it is currently stored, usually an institution.
 
-#-Authority: The author or authors of the organism name from which sequence 
-was obtained.
+#-Strain:  Strain of organism from which sequence was obtained.
 
-#-Forma: The forma (lowest taxonomic unit governed by the nomenclatural 
-codes) of organism from which sequence was obtained. This term is usually 
-applied to plants and fungi.
+#-Subgroup:  Do not select this item.
 
-#-Forma-specialis: The physiologically distinct form from which sequence 
-was obtained (usually restricted to certain parasitic fungi).
+#-Sub-species:  Subspecies of organism from which sequence was obtained.
 
-#-Ecotype: The named ecotype (population adapted to a local habitat) from 
-which sequence was obtained (customarily applied to populations of 
-Arabidopsis thaliana).
-  
-#-Synonym: The synonym (alternate scientific name) of the organism name 
+#-Substrain:  Sub-strain of organism from which sequence was obtained.
+
+#-Subtype:  Subtype of organism from which sequence was obtained.
+
+#-Synonym: The synonym (alternate scientific name) of the organism name
 from which sequence was obtained.
-
-#-Anamorph: The scientific name applied to the asexual phase of a fungus. 
 
 #-Teleomorph: The scientific name applied to the sexual phase of a fungus.
 
-#-Breed: The named breed from which sequence was obtained (usually applied 
-to domesticated mammals).
+#-Type:  Type of organism from which sequence was obtained.
 
-#-Old name:  Do not select this item.
-
+#-Variety:  Variety of organism from which sequence was obtained.
 
 
 *Miscellaneous Page
@@ -2810,16 +2775,12 @@ a specific interval on a given sequence.
 
 #Publications are entered into the Reference field of the database
 entry. References are citations of unpublished, in press, or published
-works which are relevant to the submitted sequence.  You may add as many
-citations as you wish.  However, you must decide whether the Publication
-should be entered as a descriptor or a feature.
+works which are relevant to the submitted sequence. Publications
+should provid information regarding the principle cloning and
+sequence determination of the sequence within the record. 
 
-#In general, if there is one publication describing a sequence, a
-Publication Descriptor should be used.  If multiple publications all
-describe the same sequence, only the reference which appeared first in
-print should be included in the descriptor.  To enter a Publication
-Decriptor, select Publications under the Annotate menu, and click on
-Publication Descriptor.
+#In general, there is one publication describing a sequence and a
+Publication Descriptor should be used. To enter a Publication Descriptor, select Publications under the Annotate menu and click on Publication Descriptor. 
 
 #However, if one publication describes the cloning of the 5' end of a
 gene, and another publication describes the cloning of the 3' end of the
@@ -2827,14 +2788,10 @@ gene, Publication features should be used.  To make a publication
 feature, first, enter the publication itself into the record by choosing
 Publication Feature in the Publications section of the Annotate menu. 
 Enter the information about the publication, and then enter the interval
-(on the Location page) that the publication refers to.  Next, add this
-reference to the feature by double clicking on the feature, going to the
-Citations subpage of the Properties page, clicking on Edit Citations,
-and selecting the citation(s) you want to add.
+(on the Location page) that the publication refers to. 
 
 #We do not encourage the liberal use of Publication Features in an entry
-in an effort to keep the size of the database down.  Please enter a
-reference for a feature only if it is a novel or controversial feature.
+in an effort to keep the size of the database down.  
 
 #If you plan to add a reference to a published journal article, you
 should run Sequin in its network-aware mode.  In this mode, the program,
@@ -2879,21 +2836,21 @@ print.
 #Using the radio buttons, select the type of publication in which the
 sequence will appear.
 
-#-Journal:  Journal
+#-Journal
 
-#-Book Chapter:  Chapter in a book
+#-Book Chapter
 
-#-Book:  Entire book
+#-Book
 
-#-Thesis/Monograph:  Thesis or monograph
+#-Thesis/Monograph
 
 #-Proceedings Chapter:  Abstract from a meeting
 
 #-Proceedings:  A meeting
 
-#-Patent:  Patent
+#-Patent
 
-#-Submission:
+#-Submission
 
 **Scope
 
@@ -2905,9 +2862,7 @@ commonly the publication in which the sequence is first described.
 
 #-Refers to part of the sequence:  The publication listed in this
 citation describes only a part of the sequence.  This option should be
-used when (1) Different parts of a sequence have been generated by
-different investigators, or (2) The sequence was generated in segments
-over a period of time.
+used when the sequence was generated in segments over a period of time. 
 
 #-Cites a feature on the sequence:  The publication listed in this
 citation describes or refers to a feature (such as a class of promoter
@@ -2977,8 +2932,7 @@ retrieve the missing Title and Authors inforamtion.
 
 **Remark Page
 
-#This can be any additional comment that should be associated with this
-citation.
+#This page is reserved for use by the database staff. 
 
 >File Menu
 
@@ -3237,7 +3191,7 @@ Submitting the finished record to the database
  
 *Spell Check
 
-#Performs a spelling check on the record.
+#Performs a spelling check on the record versus the PubMed database.
 
 *CDD BLAST 
 
@@ -3478,7 +3432,7 @@ entitled
 Descriptors,
 </A>
 above.
-#The ninth option Generate Definition Line, will generate an title for your
+#The ninth option Generate Definition Line, will generate a title for your
 sequence based on the information provided in the record.  This option will
 work
 for single sequences as well as sets of sequences, and can handle complex

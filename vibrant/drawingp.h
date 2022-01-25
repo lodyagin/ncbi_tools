@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/13/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: drawingp.h,v $
+* Revision 6.2  2002/03/20 22:10:52  kans
+* set small/medium/large font prototyped in drawingp.h and viewer.h
+*
 * Revision 6.1  1999/10/04 17:16:32  kans
 * include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
 *
@@ -118,6 +121,10 @@ extern void Nlm_CleanupPrimitive PROTO((Nlm_BasePPtr item));
 
 extern void Nlm_DrawSegment PROTO((SegPPtr seg, Nlm_DrawInfoPtr drawinfoPtr ));
 
+extern Nlm_FonT Nlm_SetSmallFont  PROTO((void));
+extern Nlm_FonT Nlm_SetMediumFont PROTO((void));
+extern Nlm_FonT Nlm_SetLargeFont  PROTO((void));
+
 #define smallFont Nlm_smallFont
 #define mediumFont Nlm_mediumFont
 #define largeFont Nlm_largeFont
@@ -128,6 +135,15 @@ extern void Nlm_DrawSegment PROTO((SegPPtr seg, Nlm_DrawInfoPtr drawinfoPtr ));
 #define TryOffsetPrimitive Nlm_TryOffsetPrimitive
 #define TryGetPrimitiveLimits Nlm_TryGetPrimitiveLimits
 #define CleanupPrimitive Nlm_CleanupPrimitive
+#ifndef SetSmallFont
+#define SetSmallFont Nlm_SetSmallFont
+#endif
+#ifndef SetMediumFont
+#define SetMediumFont Nlm_SetMediumFont
+#endif
+#ifndef SetLargeFont
+#define SetLargeFont Nlm_SetLargeFont
+#endif
 
 #ifdef __cplusplus
 }

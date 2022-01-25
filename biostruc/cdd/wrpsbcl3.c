@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.18 2001/05/31 22:04:46 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.20 2002/03/07 19:12:14 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -8,7 +8,7 @@
 *  terms of the United States Copyright Act.  It was written as part of
 *  the author's official duties as a United States Government employee and
 *  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
+*  to the public for use. The National Library of Medicine and the U.S.
 *  Government have not placed any restriction on its use or reproduction.
 *
 *  Although all reasonable efforts have been taken to ensure the accuracy
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.18 $
+* $Revision: 1.20 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.20  2002/03/07 19:12:14  bauer
+* major revisions to cgi-bins and the CD-dumper
+*
+* Revision 1.19  2002/01/04 20:03:54  bauer
+* minor changes in DefLine parsing
+*
 * Revision 1.18  2001/05/31 22:04:46  bauer
 * changes to accomodate new type of Smart accessions
 *
@@ -112,6 +118,8 @@
 #include <wrpsbtool.h>
 #include <ncbiwww.h>
 #include <www.h>
+#include <dart.h>
+#include <cddutil.h>
 
 /*---------------------------------------------------------------------------*/
 /* USE_PNG is the switch determining whether graphics are stored as PNG-file */
@@ -277,6 +285,16 @@ static Boolean CddGetParams()
     ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSearch4...\n");
     return FALSE;
   }
+  GetAppParam("cdd", "CDDSRV", "CDDSearch5", "", CDDSearch5, PATH_MAX);
+  if (database[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSearch5...\n");
+    return FALSE;
+  }
+  GetAppParam("cdd", "CDDSRV", "CDDSearch6", "", CDDSearch6, PATH_MAX);
+  if (database[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSearch6...\n");
+    return FALSE;
+  }
   GetAppParam("cdd", "CDDSRV", "CDDSname1", "", CDDSname1, PATH_MAX);
   if (database[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSname1...\n");
@@ -295,6 +313,16 @@ static Boolean CddGetParams()
   GetAppParam("cdd", "CDDSRV", "CDDSname4", "", CDDSname4, PATH_MAX);
   if (database[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSname4...\n");
+    return FALSE;
+  }
+   GetAppParam("cdd", "CDDSRV", "CDDSname5", "", CDDSname5, PATH_MAX);
+  if (database[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSname5...\n");
+    return FALSE;
+  }
+   GetAppParam("cdd", "CDDSRV", "CDDSname6", "", CDDSname6, PATH_MAX);
+  if (database[0] == '\0') {
+    ErrPostEx(SEV_FATAL,0,0,"CDD config file\nWRPSB section has no CDDSname6...\n");
     return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "CDDlocat", "", CDDlocat, PATH_MAX);
@@ -540,6 +568,137 @@ static Boolean WRPSBGetArgs(CharPtr progname, Int2 numargs, ArgPtr ap)
   }
   return FALSE;
 }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Draw the search page, version 01/02                                       */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static Boolean WRPSBDrawSearchPage() 
+{
+  CharPtr databases[6] = {NULL,NULL,NULL,NULL,NULL,NULL};
+  CharPtr datab_nam[6] = {NULL,NULL,NULL,NULL,NULL,NULL};
+  Char    *expect[] = { "0.000001","0.0001", "0.01", 
+                        "1", "10", "100", NULL};
+  Char    *nhits[] = {"10","25","50","100","250",NULL};
+  Int4    i;
+
+
+  databases[0] = CDDSearch1;
+  databases[1] = CDDSearch2;
+  databases[2] = CDDSearch3;
+  databases[3] = CDDSearch4;
+  datab_nam[0] = CDDSname1;
+  datab_nam[1] = CDDSname2;
+  datab_nam[2] = CDDSname3;
+  datab_nam[3] = CDDSname4; 
+  if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {
+    databases[4] = CDDSearch5;
+    datab_nam[4] = CDDSname5; 
+  }
+
+
+
+  WRPSBSearchHead(NULL);
+
+  printf("<br><H4>Search the <A HREF=\"cdd.shtml\">Conserved Domain Database</A> with Reverse Position Specific BLAST</H4>\n");
+
+  printf("<FORM ACTION=\"%s\" METHOD=POST" ">\n", RPSBNAME);
+
+  printf("Search Database: <SELECT NAME=\"DATALIB\">\n");
+  for (i=0; databases[i] != NULL; i++) {        
+    if (Nlm_StrCmp(databases[i],DEFAULT_DATALIB)==0) {
+      printf("<OPTION VALUE=\"%s\" SELECTED> %s\n",databases[i],datab_nam[i]);
+    } else {
+      printf("<OPTION VALUE=\"%s\"> %s\n",databases[i],datab_nam[i]);
+    }
+  }
+  printf("</SELECT>\n");
+
+  printf("<BR>Enter query as <strong>Protein</strong>\n"
+         "<SELECT NAME=\"INPUT_TYPE\"> \n" 
+         " <OPTION SELECTED VALUE=\"fasta\"> Sequence in FASTA format \n"
+         " <OPTION VALUE=\"access\"> Accession or GI \n"
+         "</SELECT>\n");
+  printf("<INPUT TYPE=\"submit\">\n");
+  printf("<INPUT TYPE=\"reset\">\n");
+  printf("<BR><TEXTAREA NAME=\"SEQUENCE\" rows=8 cols=64></TEXTAREA>\n");
+  printf("<BR><BR>Please read about <A HREF=\"http://www.ncbi.nlm.nih.gov/BLAST/fasta.html\">"
+         "FASTA</A> format description<BR>\n");
+  printf("<HR>\n");
+
+  printf("<BR><strong>Advanced options for the BLAST server:</strong><BR><BR>\n");
+  
+  printf("<a href=\"cdd_help.shtml#WRPSBExpect\">Expect&nbsp;</a>");
+
+  printf("<SELECT name = \"EXPECT\">\n");
+  for (i=0; expect[i] != NULL; i++) {   
+    if (strcmp(expect[i],DEFAULT_EVALUE)==0) {
+      printf("<OPTION SELECTED VALUE=\"%s\">&nbsp;%s\n",expect[i],expect[i]);
+    } else {
+      printf("<OPTION VALUE=\"%s\">&nbsp;%s\n",expect[i],expect[i]);
+    }
+  }
+  printf("</SELECT>\n");
+  printf("&nbsp;&nbsp;<a href=\"cdd_help.shtml#WRPSBFilter\">Filter</a>\n");
+  printf("<INPUT TYPE=\"checkbox\" VALUE=\"T\" NAME=\"FILTER\" CHECKED> Low complexity.&nbsp;&nbsp;\n");
+
+  printf("Search <A HREF=\"cdd_help.shtml#WRPSBMode\">mode</A>: <SELECT name = \"SMODE\">\n");
+  printf("<OPTION SELECTED VALUE=\"0\"> Multiple hits 1-pass\n");
+  printf("<OPTION VALUE=\"1\"> Single hit 1-pass\n");
+  printf("<OPTION VALUE=\"2\"> 2-pass\n");
+  printf("</SELECT><BR>\n");
+  
+  printf("<BR><BR><strong>Output formatting options:</strong><BR><BR>\n");
+
+  printf("Display <A HREF=\"cdd_help.shtml#WRPSBHits\">up to</A> <SELECT name = \"NHITS\">\n");
+  for (i=0; nhits[i] != NULL; i++) {    
+    if (strcmp(nhits[i],DEFAULT_NHITS)==0) {
+      printf("<OPTION SELECTED VALUE=\"%s\">&nbsp;%s hits\n",nhits[i],nhits[i]);
+    } else {
+      printf("<OPTION VALUE=\"%s\">&nbsp;%s hits\n",nhits[i],nhits[i]);
+    }
+  }
+  printf("</SELECT>\n");
+  printf("<A HREF=\"cdd_help.shtml#WRPSBGraph\">with</A>&nbsp;\n");
+  printf("<SELECT NAME=\"GRAPH\">\n");
+  printf("<OPTION VALUE=\"0\">No Graphic Overview\n");
+  printf("<OPTION VALUE=\"1\">Condensed Graphic Overview\n");
+  printf("<OPTION SELECTED VALUE=\"2\">Extended Graphic Overview\n");
+  printf("</SELECT>\n");
+  printf("<A HREF=\"cdd_help.shtml#WRPSBColor\">in</A>&nbsp;\n");
+  printf("<SELECT NAME=\"PAIR\">\n");
+  printf("<OPTION VALUE=\"0\">Color Scheme 1\n");
+  printf("<OPTION VALUE=\"1\">Color Scheme 2\n");
+  printf("<OPTION SELECTED VALUE=\"2\">Color Scheme 3\n");
+  printf("</SELECT><BR>\n");
+  printf("Print Graphics using&nbsp<SELECT NAME=\"GW\">\n");
+  printf("<OPTION VALUE=\"-5\">5 pixels per residue\n");
+  printf("<OPTION VALUE=\"-2\">2 pixels per residue\n");
+  printf("<OPTION SELECTED VALUE=\"-1\">Default Width\n");
+  printf("<OPTION VALUE=\"1\">1 residue per pixel\n");
+  printf("<OPTION VALUE=\"2\">2 residues per pixel\n");
+  printf("<OPTION VALUE=\"5\">5 residues per pixel\n");
+  printf("<OPTION VALUE=\"10\">10 residues per pixel\n");
+  printf("</SELECT>\n");
+
+  printf("<hr>\n");
+  printf("Send job to Queue:&nbsp;<INPUT TYPE=\"checkbox\" VALUE=\"T\" NAME=\"QUEUE\">&nbsp;&nbsp;\n");
+
+  printf("or retrieve CD-Search request #<INPUT type=\"TEXT\" name=\"RID\" maxlength=40 size=18>\n");
+  printf("<INPUT TYPE=\"submit\" VALUE=\"Submit\">\n");
+  printf("</FORM>\n");
+  printf("<hr>\n");
+
+  printf("<b><a href=\"http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=9254694&form=6&db=m&Dopt=r\">Reference</a>:</b>\n");
+  printf("Altschul, Stephen F., Thomas L. Madden, Alejandro A. Sch&auml;ffer, \n");
+  printf("Jinghui Zhang, Zheng Zhang, Webb Miller, and David J. Lipman (1997), \n");
+  printf("\"Gapped BLAST and PSI-BLAST: a new generation of protein database search\n");
+  printf("programs\",  Nucleic Acids Res. 25:3389-3402.\n");
+
+  WRPSBSearchFoot();
+}
+
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -973,11 +1132,35 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 	    points[2].y = lry + 1 - WRPSB_GRAPH_HEIGHT / 4;
 	    gdImageFilledPolygon(im,points,3,white);
 	  }
+	  if (aapThis->indents && aapThis->nindents > 0) {
+	    for (i=0;i<aapThis->nindents;i++) {
+	      points[0].x = aapThis->indents[i] - 1 + 5;
+	      points[0].y = lry + 1;
+	      points[1].x = aapThis->indents[i] + 1 + 5;
+	      points[1].y = lry + 1;
+	      points[2].x = aapThis->indents[i] + 5;
+	      points[2].y = lry - 2 + 1;
+	      gdImageFilledPolygon(im,points,3,white);
+/*	      gdImageLine(im,points[0].x,points[0].y,points[2].x,points[2].y,black);
+	      gdImageLine(im,points[1].x,points[1].y,points[2].x,points[2].y,black); */
+	      points[0].x = aapThis->indents[i] - 1 + 5;
+	      points[0].y = uly - 1;
+	      points[1].x = aapThis->indents[i] + 1 + 5;
+	      points[1].y = uly - 1;
+	      points[2].x = aapThis->indents[i] + 5;
+	      points[2].y = uly - 1 + 2;
+	      gdImageFilledPolygon(im,points,3,white);
+/*	      gdImageLine(im,points[0].x,points[0].y,points[2].x,points[2].y,black);
+	      gdImageLine(im,points[1].x,points[1].y,points[2].x,points[2].y,black); */
+	    }
+	  }
 	}
         swidth = lrx-ulx+1;
         ulx = 5+(aapThis->gstart+aapThis->gstop)/2;
         uly = WRPSB_GRAPH_SPACER+(2*WRPSB_GRAPH_SPACER+WRPSB_GRAPH_HEIGHT)/2+gystep*aapThis->row;
-        strcpy(cTmp,aapThis->cGraphId);
+        if (Nlm_StrLen(aapThis->cGraphId) >= 16) {
+	  Nlm_StrNCpy(cTmp,aapThis->cGraphId,15);
+	} else Nlm_StrCpy(cTmp,aapThis->cGraphId);
         if (strlen(cTmp)*gdFontMediumBold->w < swidth) {
           gdImageString(im,
                         gdFontMediumBold,
@@ -1253,7 +1436,7 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
         }
         if (StrCmp(dbname,"Pfam") == 0) {
           cdhThis->ShortName = StringSave(StrTok(title,","));
-          cdhThis->Definition = StringSave(StrTok(NULL,",")+1);
+          cdhThis->Definition = StringSave(StrTok(NULL,".")+1);
         } else if (StrCmp(dbname,"Smart") == 0) {
           cdhThis->ShortName = StringSave(cdhThis->CDDid);
           cdhThis->Definition = StringSave(StrTok(title,";"));
@@ -1284,6 +1467,114 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* check whether a hit is unique, or to a CD hit somewhere else in the list  */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static Boolean WRPSBHitIsNew(AlignmentAbstractPtr aapThis,
+                             AlignmentAbstractPtr aapHead,
+			     Dart_Connect *Connection)
+{
+  AlignmentAbstractPtr aap;
+  int                  Size, i;
+  unsigned             Gilist[50];
+  char                 Accession[50][30];
+  
+  if (!aapThis) return FALSE;
+  if (Connection) {
+    if (Dart_Related(Connection,aapThis->cCDDid,Gilist,50,&Size,NULL)) {
+      for (i=0;i<Size;i++) {
+        if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	  Accession[i][0] = '\0';
+	}
+      }
+    }
+  }
+  
+  aap = aapHead; while (aap) {
+    if (aapThis->pssmid > -1 && aap->pssmid > -1) {
+      if (aapThis->pssmid == aap->pssmid) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
+    }
+    if (aapThis->cCDDid && aap->cCDDid) {
+      if (Nlm_StrCmp(aapThis->cCDDid,aap->cCDDid) == 0) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
+    }
+    for (i=0;i<Size;i++) {
+      if (Nlm_StrCmp(Accession[i],aap->cCDDid) == 0) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
+    }
+    if (Nlm_StrICmp(aapThis->cGraphId,aap->cGraphId) == 0) {
+      aapThis->colcyc = aap->colcyc;
+      return FALSE;
+    }
+    aap = aap->next;
+  }
+  return TRUE;			     
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* define the indents on a block containing repeats according to the alignmt */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void WRPSBIndentsViaSeqAlign(CddRepeatPtr pcdr,
+                                    AlignmentAbstractPtr aap,
+				    Int4 iGraphWidth,
+				    Int4 length)
+{
+  SeqLocPtr      slp;
+  SeqIntPtr      sintp;
+  Int4Ptr        istarts;
+  Int4           i = 0, j, s1, s2;
+  CddExpAlignPtr pCDea;
+  DenseSegPtr    dsp;
+  
+  istarts = MemNew(pcdr->count * sizeof (Int4));
+  slp = (SeqLocPtr) pcdr->location->data.ptrvalue;
+  while (slp) {
+    sintp = (SeqIntPtr) slp->data.ptrvalue;
+    istarts[i] = sintp->from; i++;
+    slp = slp->next;
+  }
+  
+  pCDea = CddExpAlignNew();
+  CddExpAlignAlloc(pCDea,length);
+  dsp = aap->salp->segs;
+  for (i=0;i<dsp->numseg;i++) {
+    s1 = dsp->starts[i*2];
+    s2 = dsp->starts[i*2+1]; 
+    if (s1 >=0 && s2>= 0) {
+      for (j=0;j<dsp->lens[i];j++) {
+        pCDea->adata[s1+j]=s2+j;
+      }
+    }
+  }
+  aap->indents = MemNew(pcdr->count * sizeof (Int4));
+  aap->nindents = 0;
+  for (i=0;i<pcdr->count;i++) {
+    for (j=0;j<length;j++) {
+      if (pCDea->adata[j] >= istarts[i]) {
+        s1 = (j * iGraphWidth) / (length - 1);
+	if (s1 > aap->gstart && s1 < aap->gstop) {
+	  aap->indents[aap->nindents] = s1;
+	  aap->nindents++;
+	}
+	break;
+      }
+    }
+  }
+  MemFree(istarts);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* fill in the Alignment Abstract Data Structure                             */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1298,13 +1589,15 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
   Boolean              *bConflict;
   Boolean              bDbIsOasis = TRUE, found_score = FALSE;
   Int4                 maxrow = 1, i;
-  Int4                 iCount = 0;
-  Int4                 iColValue, number, score;
+  Int4                 lastcol = -1;
+  Int4                 iCount = 0, replen;
+  Int4                 iColValue, number, score, fullCDstart, fullCDstop, nindent;
   Int4                 *iOvrlap, *iMutual;
   AlignmentAbstractPtr aap, aapThis, aapTmp, aapHead = NULL;
   BioseqPtr            bsp;
   CddTreePtr           pcddt;
   CddDescrPtr          description;
+  CddRepeatPtr         pcdr;
   CharPtr              cTemp;
   CharPtr              cCurrDesc;
   DbtagPtr             dbtp;
@@ -1319,20 +1612,28 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
   Char                 buffer[BUFFER_LENGTH+1];
   Char                 cDatabase[16];
   Char                 cCDDid[16];
+  Dart_Connect        *Connection;
 
-  if (strcmp(myargs[1].strvalue,"cdd")==0) bDbIsOasis = FALSE;
+  putenv("ODBCINI=/netopt/structure/ini/.odbc.sassy.ini");
+  putenv("LD_LIBRARY_PATH=/opt/machine/merant/lib");
+
+  Connection = Dart_Init2("CDart", "lewisg", "lewisg"); 
+
+
+  if (strcmp(myargs[1].strvalue,"cdd_prop")==0) bDbIsOasis = FALSE;
   
   sap = prune->sap;
   *bAnyPdb = FALSE;
   while (sap) {
     iCount++;
     aapThis = (AlignmentAbstractPtr)MemNew(sizeof(AlignmentAbstract));
-    aapThis->salp = sap;
+    aapThis->salp = sap; aapThis->pssmid = -1;
     dsp = sap->segs;
     for (i=0;i<dsp->numseg;i++) {
       if (dsp->starts[2*i] > -1) {
         aapThis->mstart = dsp->starts[2*i];
 	aapThis->nmissg = (Nlm_FloatHi) dsp->starts[2*i+1];
+	fullCDstart = aapThis->mstart - aapThis->nmissg;
         break;
       }
     }
@@ -1355,6 +1656,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     else                         iColValue =   0;
     bsp = BioseqLockById(sip);
     aapThis->nmissg = aapThis->nmissg/(Nlm_FloatHi)bsp->length;
+    fullCDstop = aapThis->mstop + bsp->length - 1 - aapThis->cmissg;
     aapThis->cmissg = ((Nlm_FloatHi)bsp->length-1.0-aapThis->cmissg)/(Nlm_FloatHi) bsp->length;
     txsp = (TxDfLineStructPtr) MemNew(sizeof(TxDfLineStruct));
     txsp->segs_str = NULL;
@@ -1394,12 +1696,12 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     StrCpy(aapThis->long_defline, aapThis->defline->buffer_id);
     StrCat(aapThis->long_defline," ");
     StrCat(aapThis->long_defline,aapThis->defline->title);
-    cTemp = strdup(txsp->buffer_id);
+    cTemp = StringSave(txsp->buffer_id);
     if (strncmp(cTemp,"gnl|",4)==0) {
       strtok(cTemp,"|");
-      aapThis->cDatabase = strdup(strtok(NULL,"|"));
+      aapThis->cDatabase = StringSave(strtok(NULL,"|"));
       strcpy(path,strtok(NULL,"|"));
-      aapThis->cCDDid = strdup(strtok(path," "));
+      aapThis->cCDDid = StringSave(strtok(path," "));
       MemFree(cTemp);
     } else WRPSBHtmlError("Could not interpret subject defline!");
     aapThis->bIsProfile = FALSE;
@@ -1407,8 +1709,8 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->red = 255;
       aapThis->green = aapThis->blue = iColValue;
       if (StrNCmp(aapThis->cCDDid,"smart0",6) == 0) {
-        cTemp = strdup(txsp->title);
-        aapThis->cGraphId = strdup(strtok(cTemp,","));
+        cTemp = StringSave(txsp->title);
+        aapThis->cGraphId = StringSave(strtok(cTemp,","));
 	MemFree(cTemp);
       } else {
         aapThis->cGraphId = aapThis->cCDDid;
@@ -1416,8 +1718,8 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     } else if (StringICmp(aapThis->cDatabase,"Pfam") ==0) {
       aapThis->blue = 255;
       aapThis->red = aapThis->green = iColValue;
-      cTemp = strdup(txsp->title);
-      aapThis->cGraphId = strdup(strtok(cTemp,","));
+      cTemp = StringSave(txsp->title);
+      aapThis->cGraphId = StringSave(strtok(cTemp,","));
       MemFree(cTemp);
     } else if (StringICmp(aapThis->cDatabase,"scop1.39") ==0) {
       aapThis->green = 255;
@@ -1427,19 +1729,51 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     } else if (StringICmp(aapThis->cDatabase,"Load") ==0) {
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    
-      cTemp = strdup(aapThis->cCDDid);
+      cTemp = StringSave(aapThis->cCDDid);
       if (strstr(cTemp,":")) {
         strtok(cTemp,":");
-        aapThis->cGraphId = strdup(strtok(NULL,":"));
+        aapThis->cGraphId = StringSave(strtok(NULL,":"));
       } else {
         strtok(cTemp,"_");
-        aapThis->cGraphId = strdup(strtok(NULL,"_"));
+        aapThis->cGraphId = StringSave(strtok(NULL,"_"));
       }
       MemFree(cTemp);
+    } else if (StringCmp(aapThis->cDatabase,"CDD") == 0) {
+      aapThis->pssmid = atoi(aapThis->cCDDid);
+      cTemp = StringSave(txsp->title);
+      aapThis->cCDDid = StringSave(strtok(cTemp,","));
+      aapThis->cGraphId = StringSave(strtok(NULL,","));
+      CddTruncStringAtFirstPunct(aapThis->cGraphId);
+      if (Nlm_StrNCmp(aapThis->cGraphId," ",1) == 0) aapThis->cGraphId = aapThis->cGraphId+1;
+    } else if (StringCmp(aapThis->cDatabase,"Cdd") == 0) {
+      cTemp = StringSave(txsp->title);
+      if (Nlm_StrStr(cTemp,",") != NULL) {
+        if (Nlm_StrStr(cTemp,";") == NULL ||
+	    Nlm_StrStr(cTemp,",") < Nlm_StrStr(cTemp,";")) {
+	  aapThis->cGraphId = StringSave(strtok(cTemp,","));
+	} else aapThis->cGraphId = StringSave(strtok(cTemp,";"));
+      } else aapThis->cGraphId = StringSave(strtok(cTemp,";"));
     } else {
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    
       aapThis->cGraphId = aapThis->cCDDid;
+    }
+    if (WRPSBHitIsNew(aapThis,aapHead,Connection)) {
+      aapThis->colcyc = lastcol + 1;
+      if (aapThis->colcyc >= iNcolors) {
+        aapThis->colcyc -= iNcolors;
+      }
+      lastcol = aapThis->colcyc;
+    }
+    if (evalue > 0.01) {
+      aapThis->red   = iDartCol[aapThis->colcyc+iNcolors][0];
+      aapThis->green = iDartCol[aapThis->colcyc+iNcolors][1];
+      aapThis->blue  = iDartCol[aapThis->colcyc+iNcolors][2];
+    
+    } else {
+      aapThis->red   = iDartCol[aapThis->colcyc][0];
+      aapThis->green = iDartCol[aapThis->colcyc][1];
+      aapThis->blue  = iDartCol[aapThis->colcyc][2];
     }
     sprintf(aapThis->name,"ali%d",(Int4)random());
     aapThis->bIsOasis = bDbIsOasis;
@@ -1454,26 +1788,44 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     strcat(hpath,aapThis->cCDDid);
     strcat(hpath,"&version=");
     strcat(hpath,dbversion);
-    aapThis->cHtmlLink = strdup(hpath);
+    aapThis->cHtmlLink = StringSave(hpath);
 /*---------------------------------------------------------------------------*/
 /* Open Cdd tree file and add description to aapThis data structure          */
 /* changed to binary read to get prepared for the v1.00 rollout. Aron 6/12/00*/
 /*---------------------------------------------------------------------------*/
     pcddt = (CddTreePtr) CddTreeReadFromFile(path,TRUE);
-    if (!pcddt) WRPSBHtmlError("Could not open CD tree file!");
-    aapThis->description = pcddt->description;
-    description = aapThis->description;
     aapThis->bHasStructure = FALSE;
-    while (description) {
-      if (description->choice == CddDescr_comment) {
-        cCurrDesc = description->data.ptrvalue;
-        if (strcmp(cCurrDesc,"linked to 3D-structure")==0) {
-          aapThis->bHasStructure = TRUE;
-          *bAnyPdb = TRUE;
-          break;
+    if (pcddt) {
+      aapThis->description = pcddt->description;
+      description = aapThis->description;
+      while (description) {
+        if (description->choice == CddDescr_comment) {
+          cCurrDesc = description->data.ptrvalue;
+          if (strcmp(cCurrDesc,"linked to 3D-structure")==0) {
+            aapThis->bHasStructure = TRUE;
+            *bAnyPdb = TRUE;
+          }
         }
+	if (description->choice == CddDescr_repeats) {
+	  pcdr = (CddRepeatPtr) description->data.ptrvalue;
+	  nindent = pcdr->count - 1;
+	  if (NULL == pcdr->location) {
+	    replen = (fullCDstop - fullCDstart + 1) / (nindent+1);
+	    aapThis->nindents = 0;
+	    aapThis->indents = MemNew(nindent * sizeof(Int4));
+	    for (i=0;i<nindent;i++) {
+	      fullCDstop = ((fullCDstart + (i+1)*replen) * iGraphWidth) / (query_bsp->length - 1);
+              if (fullCDstop > aapThis->gstart && fullCDstop < aapThis->gstop) {
+                aapThis->indents[aapThis->nindents] = fullCDstop;
+	        aapThis->nindents++;
+	      }
+	    }
+	  } else {
+	    WRPSBIndentsViaSeqAlign(pcdr,aapThis,iGraphWidth,query_bsp->length);
+	  }
+	}
+        description = description->next;
       }
-      description = description->next;
     }
 /*---------------------------------------------------------------------------*/
 /* get the file name for the FASTA-sequence file which stores the subject..  */
@@ -1541,6 +1893,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     sap = sap->next;
   }
   *mxr = maxrow;
+  Dart_Fini(Connection);
   return(aapHead);
 }
 
@@ -1634,17 +1987,22 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
   ObjMgrSetHold();
   init_buff_ex(128);
 
-  fprintf(table,"Content-type: text/html\n\n");
+
+  WRPSBSearchHead(NULL);
+
+/*  fprintf(table,"Content-type: text/html\n\n");
   fprintf(table,"<HTML>\n");
   fprintf(table,"<TITLE>CD-Search Results</TITLE>\n");
   fprintf(table,"<BODY BGCOLOR=#FFFFFF>\n");
   fprintf(table,"<A HREF=\"%sblast_form.map\">\n",URLcgi);
-  fprintf(table,"<IMG SRC=\"%scdsearch.gif\" BORDER=0 ISMAP></A>\n",URLcgi);
+  fprintf(table,"<IMG SRC=\"%scdsearch.gif\" BORDER=0 ISMAP></A>\n",URLcgi);  */
   fprintf(table,"<PRE>\n");
+  
+  fprintf(table,"<BR>\n");
   BlastPrintVersionInfoEx("RPS-BLAST", TRUE, version, date, table);
   fprintf(table, "\n");
-/*  BlastPrintReference(FALSE, 90, table);
-  fprintf(table, "\n"); */
+/*  BlastPrintReference(FALSE, 90, table);  fprintf(table, "\n"); */
+  fprintf(table,"<BR>\n");
   WRPSBAcknowledgeBlastQuery(query_bsp, 70, table, believe_query, TRUE);
   fprintf(table,"\n");
   init_buff_ex(85);
@@ -1711,14 +2069,101 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
     fprintf(table,"</PRE>\n");
     fprintf(table,"</FORM>\n");
   }
-  fprintf(table,"</BODY>\n");
-  fprintf(table,"</HTML>\n");
+/*  fprintf(table,"</BODY>\n");
+  fprintf(table,"</HTML>\n"); */
   fflush(table);
   if (table != stdout) {
     fclose(table);
     PrintFile(tableName);
     RemoveTempFiles();
   }
+  WRPSBSearchFoot();
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* output a page indicating WAIT status                                      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_FloatHi expect, Int4 nhits)
+{
+  CharPtr  cTitle;
+  
+  cTitle = MemNew(sizeof(char) * 50);
+  sprintf(cTitle,"CD-Search request $s",rid);
+  WRPSBSearchHead(cTitle);
+  printf("<BR>\n");
+  HowLong += 5;
+  if (HowLong <= 60) {
+    printf("<meta http-equiv=\"refresh\" content=\"%d; url=%s%s?RID=%s&GRAPH=%d&PAIR=%d&EXPECT=%f&NHITS=%d&WAIT=%d\">\n",
+           HowLong,URLcgi,QRPSBNAME,rid,iGraphMode,iPairMode,expect,nhits,HowLong);
+  }
+  printf("<br>\n");
+  printf("<h2>Waiting for BLAST-queue to finish</H2>\n",rid);
+  printf("<FORM ACTION=\"%s\" METHOD=POST" ">\n", QRPSBNAME);
+  printf("<INPUT TYPE=\"HIDDEN\" name=\"GRAPH\" value=\"%d\">\n",iGraphMode);
+  printf("<INPUT TYPE=\"HIDDEN\" name=\"PAIR\" value=\"%d\">\n",iPairMode);
+  printf("<INPUT TYPE=\"HIDDEN\" name=\"EXPECT\" value=\"%f\">\n",expect);
+  printf("<INPUT TYPE=\"HIDDEN\" name=\"NHITS\" value=\"%d\">\n",nhits);
+  printf("<INPUT TYPE=\"HIDDEN\" name=\"WAIT\" value=\"%d\">\n",HowLong);
+  printf("Retrieve CD-Search request # ");
+  printf("<INPUT type=\"TEXT\" name=\"RID\" value=\"%s\" maxlength=40 size=25>\n", rid);
+  if (HowLong > 60) {
+    printf("<h4>Page will not refresh automatically,</H4>\n");
+    printf("<INPUT TYPE=\"submit\" VALUE=\"Click Here to check again!\">\n");
+  } else {
+    printf("<INPUT TYPE=\"submit\" VALUE=\"Check\">\n");
+  }
+  printf("</FORM>\n");
+
+  WRPSBSearchFoot();
+  fflush(stdout);
+  MemFree(cTitle);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* process the WWW arguments                                                 */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void WRPSBWWWargs(WWWInfoPtr www_info, Boolean *bIsQueued, Int4 *qlength,
+                  Boolean *bMode)
+{
+  CharPtr     www_arg;
+  Int4        indx;
+
+  if (WWWGetMethod(www_info) == COMMAND_LINE) {
+    if (GetArgc() <2) *bMode = FALSE; else *bMode = TRUE; 
+  } else if (WWWGetMethod(www_info) == WWW_GET) {
+    if (WWWGetNumEntries(www_info)<1) {
+      if (!WRPSBDrawSearchPage()) WRPSBHtmlError("Could not draw initial page...");
+    } else *bMode = TRUE;
+  } else if (WWWGetMethod(www_info) == WWW_POST) {
+    *bMode = TRUE;
+  } else *bMode = FALSE;
+
+/*---------------------------------------------------------------------------*/
+/* parse data refering to queued RPS-Blast searches                          */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info,"QUEUE")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+    if (Nlm_StrCmp(www_arg,"T") == 0) {
+      *bIsQueued = TRUE;
+    }
+  }
+  
+/*---------------------------------------------------------------------------*/
+/* parse input designating wrpsb.cgi as a graphics formatter                 */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info,"QL")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+    *qlength = (Int4) atoi(www_arg);
+    if (*qlength <= 0) WRPSBHtmlError("Error in image formatting!");  
+  }
+
+  
+
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1749,6 +2194,7 @@ Int2 Main (void)
   CharPtr             www_arg, cPtr;
   CharPtr             outptr          = NULL;
   CharPtr             cPrecalcName;
+  CharPtr             rid             = NULL;
   CharPtr             cSapDBTitle     = NULL;
   Int4Ptr             giptr           = NULL;
   SeqAnnotPtr         sap             = NULL;
@@ -1761,7 +2207,7 @@ Int2 Main (void)
   ValNodePtr          error_returns   = NULL;
   ValNodePtr          mask_loc, vnp;
   WWWInfoPtr          www_info;
-  WWWInfoDataPtr      info;
+/*  WWWInfoDataPtr      info; */
   struct rlimit       rl;
   Boolean             bMode           = FALSE;
   Boolean             bQueryIsFasta;
@@ -1772,6 +2218,7 @@ Int2 Main (void)
   Boolean             bIsPrecalc      = FALSE;
   Boolean             bDbFromSeqAnnot = FALSE;
   Boolean             bIsNetscape     = FALSE;
+  Boolean             bIsQueued       = FALSE;
   Char                blast_program[32];
   Char                dbversion[6], dbname[16];
   Char                path[PATH_MAX];
@@ -1798,9 +2245,8 @@ Int2 Main (void)
 /*---------------------------------------------------------------------------*/
 /* Get Default Arguments (but DON'T read from command line)                  */
 /*---------------------------------------------------------------------------*/
-  if (!WRPSBGetArgs ("blastcl3", NUMARGS, myargs)) {
+  if (!WRPSBGetArgs ("blastcl3", NUMARGS, myargs))
     WRPSBHtmlError("Can't read Arguments!");
-  }
 
   UseLocalAsnloadDataAndErrMsg ();
 
@@ -1817,10 +2263,10 @@ Int2 Main (void)
   }
   EntrezBioseqFetchEnable("blast_2.0MT",TRUE);
 
-
 /*---------------------------------------------------------------------------*/
 /* Have to deal with the environment CHANGE here from development server to  */
-/* using the production servers! (cdsearch_test vs. rpsblast)                */
+/* using the production servers! (cdsearch_test vs. rpsblast) - this will    */
+/* not affect the queued version of RPS-Blast                                */
 /*---------------------------------------------------------------------------*/
   if (getenv("NI_SERVICE_NAME_NETBLAST")==NULL) {
 #ifdef CDSEARCH_TEST
@@ -1855,38 +2301,20 @@ Int2 Main (void)
   if (WWWGetArgs(&www_info) != WWWErrOk) {
     WRPSBHtmlError("Failed to process posting - check your get/post syntax.");
   }
-  if (WWWGetMethod(www_info) == COMMAND_LINE) {
-    if (GetArgc() <2) bMode = FALSE; else bMode = TRUE; 
-  } else if (WWWGetMethod(www_info) == WWW_GET) {
-    if (WWWGetNumEntries(www_info)<1) {
-      if (!WRPSBDrawPage()) WRPSBHtmlError("Could not draw initial page...");
-      return 1;
-    } else bMode = TRUE;
-  } else if (WWWGetMethod(www_info) == WWW_POST) {
-    bMode = TRUE;
-  } else bMode = FALSE;
+
+/*---------------------------------------------------------------------------*/
+/* read in the WWW information block                                         */
+/*---------------------------------------------------------------------------*/
+  WRPSBWWWargs(www_info, &bIsQueued, &qlength, &bMode);
 
   if (!bMode)
-    if (!WRPSBDrawPage()) WRPSBHtmlError("Could not draw initial page...");
-  info = (WWWInfoDataPtr) www_info;
+    if (!WRPSBDrawSearchPage()) WRPSBHtmlError("Could not draw initial page...");
 /*---------------------------------------------------------------------------*/
 /* try to determine browser/client                                           */
 /*---------------------------------------------------------------------------*/
+/*  info = (WWWInfoDataPtr) www_info;
   if (StringStr(info->agent,"Mozilla/4")) bIsNetscape = TRUE;
-  if (StringStr(info->agent,"MSIE")) bIsNetscape = FALSE;
-
-/*---------------------------------------------------------------------------*/
-/* parse input designating wrpsb.cgi as a graphics formatter                 */
-/*---------------------------------------------------------------------------*/
-  if ((indx = WWWFindName(www_info,"QL")) >= 0) {
-    www_arg = WWWGetValueByIndex(www_info, indx);
-    qlength = (Int4) atoi(www_arg);
-    if (qlength <= 0) WRPSBHtmlError("Error in image formating!");  
-    
-  
-  }
-  
-
+  if (StringStr(info->agent,"MSIE")) bIsNetscape = FALSE; */
 
 /*---------------------------------------------------------------------------*/
 /* anything beyond this point assumes that a search is launched and results  */
@@ -1925,7 +2353,7 @@ Int2 Main (void)
 /*---------------------------------------------------------------------------*/
   if ((indx = WWWFindName(www_info,"PRECALC")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
-    cPrecalcName = strdup(www_arg);
+    cPrecalcName = StringSave(www_arg);
     strcpy(path,CDDhuman); StrCat(path,cPrecalcName);
     aip = AsnIoOpen(path,"r");
     sap = SeqAnnotAsnRead(aip, NULL);
@@ -1973,7 +2401,7 @@ Int2 Main (void)
       WRPSBHtmlError("DATALIB missing from input!");
     } else {
       www_arg = WWWGetValueByIndex(www_info, indx);
-      myargs[1].strvalue = strdup(www_arg);
+      myargs[1].strvalue = StringSave(www_arg);
     }
   } else myargs[1].strvalue = dbname;
   blast_database   = myargs [1].strvalue;
@@ -1985,7 +2413,7 @@ Int2 Main (void)
   BLASTOptionSetGapParams(options, myargs[25].strvalue, 0, 0);
   if ((indx = WWWFindName(www_info,"FILTER")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
-    myargs[6].strvalue = strdup(www_arg);
+    myargs[6].strvalue = StringSave(www_arg);
   }
   if (StringICmp(myargs[6].strvalue, "T") == 0) {
     if (StringICmp("blastn", blast_program) == 0)

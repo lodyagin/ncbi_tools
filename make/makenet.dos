@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.64 2001/09/13 18:14:01 lewisg Exp $
+# $Id: makenet.dos,v 6.66 2002/04/19 18:06:40 kans Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -60,12 +60,14 @@ CNSGNV_EXE   = cnsgnv.___
 ENTREZCF_EXE = entrezcf.___
 NETENTCF_EXE = netentcf.___
 NENTREZ_EXE  = nentrez.___
+ENTREZ2_EXE  = entrez2.___
 SEQUIN_EXE   = sequin.___
 VCLIENT_EXE  = vclient.___
 DDV_EXE      = ddv.__
 UDV_EXE      = udv.__
 !ifdef OPENGL
 NENTREZ_OGL_EXE = nentrez_ogl.___
+ENTREZ2_OGL_EXE = entrez2_ogl.___
 SEQUIN_OGL_EXE  = sequin_ogl.___
 !endif
 !endif
@@ -80,7 +82,7 @@ DO_LIB = \
 DO_EXE = \
  $(ENTREZCF_EXE) \
  $(BLASTCL3_EXE) \
- $(NETENTCF_EXE) $(NENTREZ_EXE)  \
+ $(NETENTCF_EXE) $(NENTREZ_EXE) $(ENTREZ2_EXE)  \
  $(VCLIENT_EXE) $(SEQUIN_EXE) \
  $(DDV_EXE) $(UDV_EXE) \
  $(CCPV_EXE) $(CCP_EXE) $(DUSTV_EXE) $(DUST_EXE) \
@@ -88,7 +90,7 @@ DO_EXE = \
  $(SEARCHV_EXE) $(SRCHAA_EXE) $(SRCHNT_EXE) \
  $(TWOPV_EXE) $(TWOP_EXE) \
  $(CNSRTV_EXE) $(CNSRT_EXE) $(CNSGNV_EXE) $(CNSGN_EXE) \
- $(SEQUIN_OGL_EXE) $(NENTREZ_OGL_EXE)
+ $(SEQUIN_OGL_EXE) $(NENTREZ_OGL_EXE) $(ENTREZ2_OGL_EXE)
 
 nocopy:	$(DO_OBJ) $(DO_LIB) $(DO_EXE)
 
@@ -118,6 +120,7 @@ copy :
 	copy ..\network\id1arch\*.c .
 	copy ..\network\nsdemocl\*.* .
 	copy ..\demo\entrez.c .
+	copy ..\demo\entrez2.c .
 	copy ..\demo\entrezcf.c .
 	copy ..\demo\netentcf.c .
 	copy ..\demo\ccpv.c .
@@ -149,6 +152,7 @@ copy :
 	copy ..\network\vibnet\*.h $(INCPATH)
 !ifdef OPENGL
 	copy nentrez.rc nentrez_ogl.rc
+	copy entrez2rc entrez2_ogl.rc
 	copy sequin.rc sequin_ogl.rc
 !endif
 !endif
@@ -347,6 +351,33 @@ $(NENTREZ_OGL_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = nentrez_ogl
 TEST_OBJ = entrez.obj
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB20) $(LIB45) $(LIB36) $(LIB23) $(LIB22) \
+	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
+TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##########################################################
+!ifdef ENTREZ2_EXE
+$(ENTREZ2_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = entrez2
+TEST_OBJ = entrez2.obj
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB45) $(LIB36) $(LIB23) $(LIB22) \
+	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##########################################################
+!ifdef ENTREZ2_OGL_EXE
+$(ENTREZ2_OGL_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = entrez2_ogl
+TEST_OBJ = entrez2.obj
 TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB20) $(LIB45) $(LIB36) $(LIB23) $(LIB22) \
 	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)

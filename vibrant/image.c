@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: image.c,v $
+* Revision 6.6  2002/03/28 13:35:48  kans
+* only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
+*
 * Revision 6.5  2001/04/05 03:24:12  juran
 * Carbon fixes.
 *
@@ -110,7 +113,9 @@
 #include <math.h>
 
 #ifdef WIN_MAC
-# include "MoreCarbonAccessors.h"
+# if !defined(OS_UNIX_DARWIN)
+#include "MoreCarbonAccessors.h"
+#endif
 #endif
 
 #ifndef _IMAGE_

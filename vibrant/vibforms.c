@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.12  2002/01/09 15:11:23  kans
+* SetEnumPopupEx and SetEnumPopupByNameEx to suppress error if 0 or NULL initial value, called by dialog creators
+*
 * Revision 6.11  1999/10/21 16:50:40  kans
 * use SafeSetValue for enum lists and spreadsheets
 *
@@ -303,12 +306,18 @@ Boolean GetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pval)
   return FALSE;
 } 
 
-void SetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnum val) 
+static void SetEnumPopupEx (PopuP lst, EnumFieldAssocPtr al, UIEnum val, Boolean zeroOkay) 
 {
   Int2 i;
   for (i = 1; al->name != NULL; i++, al++)
      if (al->value == val) { SafeSetValue (lst, i); return; }
+  if (zeroOkay && val == 0) return;
   Message(MSG_POSTERR, "SetEnumPopup: %ld", (long)val);
+} 
+
+void SetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnum val) 
+{
+  SetEnumPopupEx (lst, al, val, FALSE);
 } 
 
 CharPtr GetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al)
@@ -319,13 +328,20 @@ CharPtr GetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al)
   return NULL;
 } 
 
-void SetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)
+static void SetEnumPopupByNameEx (PopuP lst, EnumFieldAssocPtr al, CharPtr name, Boolean zeroOkay)
 
 {
   Int2 i;
   for (i = 1; al->name != NULL; i++, al++)
      if (StringICmp (al->name, name) == 0) { SafeSetValue (lst, i); return; }
+  if (zeroOkay && StringHasNoText (name)) return;
   Message(MSG_POSTERR, "SetEnumPopupByName: %s", name);
+}
+
+void SetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)
+
+{
+  SetEnumPopupByNameEx (lst, al, name, FALSE);
 }
 
 Boolean WhereInEnumPopup (EnumFieldAssocPtr al, CharPtr name, UIEnumPtr pval)
@@ -554,7 +570,7 @@ PopuP CreateEnumPopupDialog (GrouP prnt, Boolean macLike, PupActnProc actn,
   adp->alist = DuplicateEnumFieldAlist (al);
   adp->userdata = userdata;
   InitEnumPopup (p, adp->alist, NULL);
-  SetEnumPopup (p, adp->alist, val);
+  SetEnumPopupEx (p, adp->alist, val, TRUE);
   return p;
 }
 
@@ -598,7 +614,7 @@ LisT CreateEnumListDialog (GrouP prnt, Int2 width, Int2 height, LstActnProc actn
   for (ap = adp->alist; ap->name != NULL; ap++) {
     ListItem (p, ap->name);
   }
-  SetEnumPopup ((PopuP) p, adp->alist, val);
+  SetEnumPopupEx ((PopuP) p, adp->alist, val, TRUE);
   return p;
 }
 

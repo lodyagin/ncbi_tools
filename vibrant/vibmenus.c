@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.15  2002/03/28 13:30:27  kans
+* check for OS_UNIX_DARWIN before including MoreCarbonAccessors.h, Profiler.h (EN)
+*
+* Revision 6.14  2002/01/09 15:23:53  kans
+* added HasAquaMenuLayout
+*
 * Revision 6.13  2001/05/17 22:04:26  kans
 * separator item in mswin creates a fake status item link, so GetChildPosition is correct, and thus later submenus have the correct position for enabling and disabling
 *
@@ -245,7 +251,9 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
-# include "MoreCarbonAccessors.h"
+# if !defined(OS_UNIX_DARWIN)
+#  include "MoreCarbonAccessors.h"
+# endif
 #define Nlm_MenuTool   MenuHandle
 #define Nlm_PopupTool  Nlm_Handle
 #define Nlm_ItemTool   Nlm_Handle
@@ -359,6 +367,18 @@ static Nlm_Boolean      handlechar;
 #ifdef WIN_MOTIF
 static Widget           choiceWidget = NULL;
 #endif
+
+extern Nlm_Boolean Nlm_HasAquaMenuLayout (void)
+
+{
+#if TARGET_API_MAC_CARBON
+  SInt32 result;
+
+  return (Boolean) (Gestalt (gestaltMenuMgrAttr, &result) == noErr) && ((result & gestaltMenuMgrAquaLayoutMask) != 0);
+#else
+  return FALSE;
+#endif
+}
 
 static void Nlm_LoadMenuData (Nlm_MenU m, Nlm_MenuTool hdl,
 			      Nlm_PrompT ppt, Nlm_Int2 tag,

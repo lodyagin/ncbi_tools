@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.16 2001/08/28 17:49:45 thiessen Exp $
+/*  $Id: ncbi_util.c,v 6.19 2002/02/11 20:36:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.19  2002/02/11 20:36:44  lavr
+ * Use "ncbi_config.h"
+ *
+ * Revision 6.18  2002/02/05 22:02:17  lavr
+ * Minor tweak
+ *
+ * Revision 6.17  2002/01/28 20:22:39  lavr
+ * Get rid of GCC warning about "'%D' yields only 2 last digits of year"
+ *
  * Revision 6.16  2001/08/28 17:49:45  thiessen
  * oops, sorry - incorrect fix; reverted
  *
@@ -84,9 +93,11 @@
  * ===========================================================================
  */
 
+#include "ncbi_config.h"
 #include "ncbi_priv.h"
 #ifndef NCBI_CXX_TOOLKIT
 #  include <ncbistd.h>
+#  include <ncbimisc.h>
 #  include <ncbitime.h>
 #else
 #  include <ctype.h>
@@ -216,6 +227,7 @@ extern char* LOG_ComposeMessage
 
     /* Pre-calculate total message length */
     if ((format_flags & fLOG_DateTime) != 0) {
+        static const char timefmt[] = "%D %T ";
         struct tm* tm;
 #ifdef NCBI_CXX_TOOLKIT
         time_t t = time(0);
@@ -228,10 +240,10 @@ extern char* LOG_ComposeMessage
 #  endif/*HAVE_LOCALTIME_R*/
 #else /*NCBI_CXX_TOOLKIT*/
         struct tm temp;
-        GetDayTime(&temp);
+        Nlm_GetDayTime(&temp);
         tm = &temp;
 #endif/*NCBI_CXX_TOOLKIT*/
-        datetime_len = strftime(datetime, sizeof(datetime), "%D %T ", tm);
+        datetime_len = strftime(datetime, sizeof(datetime), timefmt, tm);
     }
     if ((format_flags & fLOG_Level) != 0  &&
         (call_data->level != eLOG_Note ||
@@ -515,4 +527,19 @@ extern void CORE_SetREG(REG rg)
 extern REG CORE_GetREG(void)
 {
     return g_CORE_Registry;
+}
+
+
+
+/******************************************************************************
+ *  MISCELLANEOUS
+ */
+
+extern const char* CORE_GetPlatform(void)
+{
+#ifndef NCBI_CXX_TOOLKIT
+    return Nlm_PlatformName();
+#else
+    return HOST;
+#endif /*NCBI_CXX_TOOLKIT*/
 }

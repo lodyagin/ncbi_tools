@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.16 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -71,6 +71,9 @@
 
 #define STATE_OFF         0
 #define STATE_ON          1
+
+#define E2_RANGE_FROM     1
+#define E2_RANGE_TO       2
 
 #define GROUP_NONE        0
 #define GROUP_SINGLE      1
@@ -136,7 +139,7 @@
 typedef enum {
   SELECTION_MODE = 1,
   AUTOMATIC_MODE,
-  TRUNCATION_MODE,
+  WILD_CARD_MODE,
   MESH_TREE_MODE,
   TAXONOMY_MODE,
   RANGE_MODE,
@@ -150,40 +153,40 @@ typedef enum {
 static ENUM_ALIST(mult_alist)
   {"Multiple",            AUTOMATIC_MODE},
   {"Selection",           SELECTION_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(auto_alist)
   {"Automatic",           TRANSLATE_MODE},
   {"Multiple",            AUTOMATIC_MODE},
   {"Selection",           SELECTION_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(accn_alist)
   {"Lookup",              LOOKUP_ACCN_MODE},
   {"Range",               RANGE_MODE},
   {"Selection",           SELECTION_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
   {"View",                VIEW_ACCN_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(mesh_alist)
   {"MeSH Tree",           MESH_TREE_MODE},
   {"Selection",           SELECTION_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(tax_alist)
   {"Selection",           SELECTION_MODE},
   {"Taxonomy",            TAXONOMY_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(default_alist)
   {"Range",               RANGE_MODE},
   {"Selection",           SELECTION_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(range_alist)
@@ -193,7 +196,7 @@ END_ENUM_ALIST
 
 static ENUM_ALIST(trunc_alist)
   {"Selection",           SELECTION_MODE},
-  {"Truncation",          TRUNCATION_MODE},
+  {"Wild Card",           WILD_CARD_MODE},
 END_ENUM_ALIST
 
 static ENUM_ALIST(uid_alist)
@@ -286,6 +289,11 @@ typedef struct {
   TexT                termText;
   TexT                fromText;
   TexT                toText;
+  Boolean             isValidFrom;
+  Boolean             isValidTo;
+  Boolean             isFromTextChanged;
+  Boolean             isToTextChanged;
+  Int2                currRangeField;
   ButtoN              acceptButton;
   PopuP               taxLineagePopup;
   ValNodePtr          taxStrings;
@@ -310,9 +318,6 @@ typedef struct {
 /* File-wide static variables */
 /*----------------------------*/
 
-/*
-static IteM           s_showASNItem;
-*/
 static ChoicE         s_showASNItem;
 static Entrez2InfoPtr s_masterE2ip = NULL;
 
@@ -349,6 +354,7 @@ static Boolean Query_TranslateAndAddBoolTerm (
   Int4 num
 );
 
+static Boolean LoadAvailList (FormInfoPtr pFormInfo, CharPtr str);
 
 /*==================================================================*/
 /*                                                                  */
@@ -366,20 +372,43 @@ NLM_EXTERN Boolean ShowASN (void)
   return GetStatus (s_showASNItem);
   */
   val = GetValue (s_showASNItem);
-  if (val == 11) return TRUE;
+  if (val >= 11) return TRUE;
   if (val < 2) return FALSE;
   SetValue (s_showASNItem, val - 1);
   if (val < 2) return FALSE;
   return TRUE;
 }
 
+static void LogOrLaunch (CharPtr path, CharPtr title)
+
+{
+  Char    buf [256];
+  size_t  ct;
+  FILE    *ifp;
+  FILE    *ofp;
+  Int2    val;
+
+  val = GetValue (s_showASNItem);
+  if (val == 12) {
+    ifp = FileOpen (path, "r");
+    ofp = FileOpen ("entrez2.log", "a");
+    if (ifp != NULL && ofp != NULL) {
+      while ((ct = FileRead (buf, 1, sizeof (buf), ifp)) > 0) {
+        FileWrite (buf, 1, ct, ofp);
+      }
+    }
+    fprintf (ofp, "\n");
+    FileClose (ofp);
+    FileClose (ifp);
+  } else {
+    LaunchGeneralTextViewer (path, title);
+  }
+}
+
 /*==================================================================*/
 /*                                                                  */
 /*  DisplayEntrezRequest () - Displays an Entrez2 request in a      */
 /*                           pop-up window.                         */
-/*                                                                  */
-/*     NOTE - This is a debugging function and should not be called */
-/*            anywhere except during development.                   */
 /*                                                                  */
 /*==================================================================*/
 
@@ -395,7 +424,7 @@ NLM_EXTERN void DisplayEntrezRequest (Entrez2RequestPtr e2rq)
   if (aip == NULL) return;
   Entrez2RequestAsnWrite (e2rq, aip, NULL);
   AsnIoClose (aip);
-  LaunchGeneralTextViewer (path, "Entrez2RequestAsnWrite");
+  LogOrLaunch (path, "Entrez2RequestAsnWrite");
   FileRemove (path);
 }
 
@@ -403,9 +432,6 @@ NLM_EXTERN void DisplayEntrezRequest (Entrez2RequestPtr e2rq)
 /*                                                                  */
 /*  DisplayEntrezReply () - Displays an Entrez2 reply in a pop-up   */
 /*                         window.                                  */
-/*                                                                  */
-/*     NOTE - This is a debugging function and should not be called */
-/*            anywhere except during development.                   */
 /*                                                                  */
 /*==================================================================*/
 
@@ -421,7 +447,7 @@ NLM_EXTERN void DisplayEntrezReply (Entrez2ReplyPtr e2ry)
   if (aip == NULL) return;
   Entrez2ReplyAsnWrite (e2ry, aip, NULL);
   AsnIoClose (aip);
-  LaunchGeneralTextViewer (path, "Entrez2ReplyAsnWrite");
+  LogOrLaunch (path, "Entrez2ReplyAsnWrite");
   FileRemove (path);
 }
 
@@ -569,6 +595,44 @@ static Entrez2FieldInfoPtr FieldGetInfo (Int2 dbId, Int2 fieldId)
   }
 
   return NULL;
+}
+
+/*==================================================================*/
+/*                                                                  */
+/*  IsValidFieldName () - Given a database ID and a field name,     */
+/*                        check to see if it is as valid name.      */
+/*                                                                  */
+/*==================================================================*/
+
+static Boolean IsValidFieldName (Int2 dbId, CharPtr fieldName)
+
+{
+  Entrez2DbInfoPtr     e2db;
+  Entrez2FieldInfoPtr  e2fd;
+
+  /*------------------*/
+  /* Check parameters */
+  /*------------------*/
+
+  if (dbId < 0 || fieldName == NULL) return FALSE;
+
+  /*-----------------------*/
+  /* Find the requested DB */
+  /*-----------------------*/
+
+  e2db = DBGetInfo (dbId);
+  if (e2db == NULL) return FALSE;
+
+  /*----------------*/
+  /* Get field info */
+  /*----------------*/
+
+  for (e2fd = e2db->fields; e2fd != NULL; e2fd = e2fd->next) {
+    if (StrICmp (e2fd->field_name, fieldName) == 0)
+      return TRUE;
+  }
+
+  return FALSE;
 }
 
 /*===================================================================*/
@@ -719,14 +783,15 @@ static Int2 FieldGetModePopup (Int2 dbId, Int2 fieldId, EnumFieldAssocPtr fieldA
   /* is_truncatable = fieldInfo->is_truncatable; */
   is_truncatable = (Boolean) (! is_rangable);
 
-  if ((StringICmp (dbInfo->db_name, "PubMed") == 0) &&
-      ((StringICmp (fieldInfo->field_name, "TITL") == 0) ||
-       (StringICmp (fieldInfo->field_name, "WORD") == 0) ||
-       (StringICmp (fieldInfo->field_name, "TIAB") == 0))) {
-    modeId = POPUP_MULT;
-  } else if (StringICmp (dbInfo->db_name, "PubMed") == 0 &&
-             StringICmp (fieldInfo->field_name, "ALL") == 0) {
+  if (StringICmp (dbInfo->db_name, "PubMed") == 0 &&
+      StringICmp (fieldInfo->field_name, "ALL") == 0) {
     modeId = POPUP_AUTO;
+  } else if (StringICmp (fieldInfo->field_name, "ALL") == 0) {
+    modeId = POPUP_MULT;
+  } else if ((StringICmp (fieldInfo->field_name, "TITL") == 0) ||
+             (StringICmp (fieldInfo->field_name, "WORD") == 0) ||
+             (StringICmp (fieldInfo->field_name, "TIAB") == 0)) {
+    modeId = POPUP_MULT;
   } else if (StringICmp (fieldInfo->field_name, "ACCN") == 0 ||
              StringICmp (fieldInfo->field_name, "PACC") == 0) {
     modeId = POPUP_ACCN;
@@ -1074,6 +1139,8 @@ static void Reset_Callback (ButtoN b)
   DoResetAvail (pFormInfo, TRUE);
   ResetChosen (pFormInfo);
   Reset (pFormInfo->advQueryText);
+  pFormInfo->isValidFrom = FALSE;
+  pFormInfo->isValidTo = FALSE;
 }
 
 /*==================================================================*/
@@ -1155,7 +1222,7 @@ static StateDataPtr CreateTerm (
     for (sdp = pFormInfo->termList; sdp != NULL; sdp = sdp->next) {
       if (MeshStringICmp (sdp->term, strs) == 0 &&
           sdp->db == currDb && sdp->fld == currFld) return NULL;
-	}
+    }
   }
 
   /*------------------------------*/
@@ -1454,6 +1521,8 @@ static Int4 GetTermPage (FormInfoPtr pFormInfo, CharPtr str)
   }
   Entrez2RequestFree (e2rq);
 
+  if (pos == -1) return -1;
+
   return rsult;
 }
 
@@ -1474,6 +1543,29 @@ static void ChangeUnderscoreToSpace (CharPtr str)
   ch = *ptr;
   while (ch != '\0') {
     if (ch == '_')
+      *ptr = ' ';
+    ptr++;
+    ch = *ptr;
+  }
+}
+
+/*==================================================================*/
+/*                                                                  */
+/*  ChangePeriodToSpace () -                                    */
+/*                                                                  */
+/*==================================================================*/
+
+static void ChangePeriodToSpace (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  if (str == NULL) return;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '.')
       *ptr = ' ';
     ptr++;
     ch = *ptr;
@@ -1521,7 +1613,11 @@ static Int2 FindLineOfText (CharPtr text, CharPtr str)
   CharPtr       lookfor, ptr;
   size_t        len;
 
+  /* Check parameters */
+
   if (StringLen (text) == 0 || StringLen (str) == 0) return 0;
+
+  /* Count the number of lines to be searched */
 
   mid = 0;
   lookfor = StringSave (str);
@@ -1535,6 +1631,13 @@ static Int2 FindLineOfText (CharPtr text, CharPtr str)
     ptr++;
     ch = *ptr;
   }
+
+  if (numLines <= 0) {
+    MemFree (lookfor);
+    return 0;
+  }
+
+  /* Create an array of pointers to the lines */
 
   index = MemNew (sizeof (CharPtr) * (size_t) (numLines + 3));
   if (index != NULL) {
@@ -1556,31 +1659,41 @@ static Int2 FindLineOfText (CharPtr text, CharPtr str)
     }
   }
 
-  if (numLines > 0) {
-    left = 1;
-    right = numLines;
-    while (left <= right) {
-      mid = (left + right) / 2;
-      compare = StringICmp (lookfor, index [mid - 1]);
-      if (compare <= 0)
-        right = mid - 1;
-      if (compare >= 0)
-        left = mid + 1;
-    }
-    if (left <= right + 1) {
-      len = StringLen (lookfor);
-      compare = StringNICmp (lookfor, index [mid - 1], len);
-      if (compare > 0) {
-        mid++;
-        if (mid <= numLines) {
-          compare = StringNICmp (lookfor, index [mid - 1], len);
-          if (compare > 0)
-            mid = 0;
-        } else
-          mid = 0;
-      }
-    }
+  /* Do a binary search for the search string */
+
+  left = 1;
+  right = numLines;
+  while (left <= right) {
+    mid = (left + right) / 2;
+    compare = StringICmp (lookfor, index [mid - 1]);
+    if (compare <= 0)
+      right = mid - 1;
+    if (compare >= 0)
+      left = mid + 1;
   }
+
+  if (left <= right + 1) {
+    len = StringLen (lookfor);
+    compare = StringNICmp (lookfor, index [mid - 1], len);
+    if (compare > 0) {
+      mid++;
+      /*
+      if (mid <= numLines) {
+	compare = StringNICmp (lookfor, index [mid - 1], len);
+	if (compare > 0)
+	  mid = 0;
+      } else
+	mid = 0;
+      */
+    }
+    /*
+    else
+      mid = 0;
+    */
+  }
+  
+  /* Clean up and return */
+
   MemFree (index);
   MemFree (lookfor);
   return mid;
@@ -1592,7 +1705,11 @@ static Int2 FindLineOfText (CharPtr text, CharPtr str)
 /*                                                                  */
 /*==================================================================*/
 
-static void ScrollToText (FormInfoPtr pFormInfo, CharPtr str, Int2 page, Boolean hard, Boolean exact)
+static void ScrollToText (FormInfoPtr pFormInfo,
+			  CharPtr     str,
+			  Int2        page,
+			  Boolean     hard,
+			  Boolean     exact)
 
 {
   Int2     compare, oldItem, oldRow, perfect, row;
@@ -1602,25 +1719,57 @@ static void ScrollToText (FormInfoPtr pFormInfo, CharPtr str, Int2 page, Boolean
   Char     temp [256];
   CharPtr  text;
 
+  /* Check parameters */
+
   if (StringHasNoText (str) || page == 0) return;
+
+  /* Clean up the text string */
 
   StringNCpy_0 (temp, str, sizeof (temp));
   ChangeUnderscoreToSpace (temp);
+  ChangePeriodToSpace (temp);
   ChangeMeshSlashSymbol (temp);
-  text = GetDocText (pFormInfo->availDoc, page, 0, 1);  /* forces format if not before */
+
+  /* Get the information on the current page of data */
+
+  text = GetDocText (pFormInfo->availDoc, page, 0, 1);
   GetItemParams4 (pFormInfo->availDoc, page, &startsAt, NULL, NULL, NULL, NULL);
   GetDocParams4 (pFormInfo->availDoc, NULL, &numLines);
   ChangeMeshSlashSymbol (text);
+
+  /* Search for the text string in the current page of data */
+
   row = FindLineOfText (text, temp);
   MemFree (text);
+
+  /* If the text string is not on the page */
+  /* then go to the top of the page.       */
+
   if (row < 1 || row > numLines)
+    /*
+    return;
+    */
     row = 1;
+
+  /* If the term is not on the current page then */
+  /* we have to load and search the new page.    */
+
+  /*
+  if (row <= 1 || row >= numLines) {
+    LoadAvailList (pFormInfo, str);
+    return;
+  }
+  */
+
+  /* Redisplay the page with the text string highlighted */
+  
   startsAt += row - 1;
   sb = GetSlateVScrollBar ((SlatE) pFormInfo->availDoc);
   CorrectBarMax (sb, numLines - 7);
   if (!RowIsVisible (pFormInfo->availDoc, page, row, NULL, NULL)) {
     ForceFormat (pFormInfo->availDoc, page);    /* forces UpdateLineStarts */
-    GetItemParams4 (pFormInfo->availDoc, page, &startsAt, NULL, NULL, NULL, NULL);
+    GetItemParams4 (pFormInfo->availDoc, page, &startsAt, NULL, NULL,
+		    NULL, NULL);
     GetDocParams4 (pFormInfo->availDoc, NULL, &numLines);
     startsAt += row - 1;
     sb = GetSlateVScrollBar ((SlatE) pFormInfo->availDoc);
@@ -1643,7 +1792,8 @@ static void ScrollToText (FormInfoPtr pFormInfo, CharPtr str, Int2 page, Boolean
       pFormInfo->availItem = page;
       pFormInfo->availRow = row;
       InvalDocRows (pFormInfo->availDoc, oldItem, oldRow, oldRow);
-      InvalDocRows (pFormInfo->availDoc, pFormInfo->availItem, pFormInfo->availRow, pFormInfo->availRow);
+      InvalDocRows (pFormInfo->availDoc, pFormInfo->availItem,
+		    pFormInfo->availRow, pFormInfo->availRow);
     }
     if (exact) {
       if (perfect == 0)
@@ -1670,18 +1820,17 @@ static Boolean LoadAvailList (FormInfoPtr pFormInfo, CharPtr str)
   Int4                 pagesize;
   Int2                 numpages = 0;
   Int2                 page = 0;
-  Boolean              rsult = FALSE;
 
   pFormInfo->availItem = 0;
   pFormInfo->availRow = 0;
   Reset (pFormInfo->availDoc);
   SetDocCache (pFormInfo->availDoc, NULL, NULL, NULL);
   Update ();
-  if (str [0] == '\0') return rsult;
+  if (str [0] == '\0') return FALSE;
 
   fieldInfo = FieldGetInfo (pFormInfo->currDb, pFormInfo->currField);
   count = fieldInfo->term_count;
-  if (count == 0) return rsult;
+  if (count == 0) return FALSE;
 
   pFormInfo->availNumTerms = count;
   pagesize = 1;
@@ -1705,13 +1854,15 @@ static Boolean LoadAvailList (FormInfoPtr pFormInfo, CharPtr str)
 
   page = GetTermPage (pFormInfo, str);
   pFormInfo->availCurrentPage = page + 1;
-  ScrollToText (pFormInfo, str, pFormInfo->availCurrentPage, FALSE, FALSE);
+  if (page != -1) {
+    ScrollToText (pFormInfo, str, pFormInfo->availCurrentPage, FALSE, FALSE);
+  }
 
   InvalDocument (pFormInfo->availDoc);
   Update ();
   AdjustDocScroll (pFormInfo->availDoc);
 
-  return rsult;
+  return TRUE;
 }
 
 /*==================================================================*/
@@ -1724,13 +1875,12 @@ static void ProcessSelectionTerm (FormInfoPtr pFormInfo, CharPtr str)
 
 {
   Int4     iTermCount;
+  Char     termText [E2_STR_BUFF_SIZE];
   CharPtr  text;
 
-  /*---------------------------------------*/
   /* If a new term has been typed into the */
   /* term text entry box, then do a lookup */
   /* of that term.                         */
-  /*---------------------------------------*/
 
   if (pFormInfo->textChanged) {
     LoadAvailList (pFormInfo, str);
@@ -1738,29 +1888,51 @@ static void ProcessSelectionTerm (FormInfoPtr pFormInfo, CharPtr str)
     pFormInfo->okayToAccept = FALSE;
   }
 
-  /*---------------------------------------------*/
-  /* Otherwise, if a term has been selected from */
-  /* the term selection box, add that term to    */
-  /* to the Query Refinement list of terms.      */
-  /*---------------------------------------------*/
+  /* Process the highlighted term from */
+  /* the term selection box            */
 
-  else if (pFormInfo->okayToAccept && pFormInfo->availItem > 0 && pFormInfo->availRow > 0) {
-    text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem, pFormInfo->availRow, E2_TERM_COL);
-    if (text != NULL) {
+  else if (pFormInfo->okayToAccept &&
+	   pFormInfo->availItem > 0 &&
+	   pFormInfo->availRow > 0) {
+
+    text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
+		       pFormInfo->availRow, E2_TERM_COL);
+    if (NULL == text)
+      return;
+
+    GetTitle (pFormInfo->termText, termText, E2_STR_BUFF_SIZE);
+
+    /* If the higlighted term is the same as */
+    /* in the text entry box, then add the   */
+    /* term to the Query Refinement list.    */
+
+    if (StringICmp (termText, text) == 0) {
+      if (StringICmp (str, text) == 0) {
+	MemFree (text);
+	text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
+			   pFormInfo->availRow, E2_COUNT_COL);
+	TrimSpacesAroundString (text);
+	StrToLong (text, &iTermCount);
+	MemFree (text);
+	Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb,
+			   pFormInfo->currField, str, STATE_ON,
+			   iTermCount);
+	Select (pFormInfo->termText);
+	pFormInfo->okayToAccept = FALSE;
+      }
+    }
+
+    /* Otherwise, just move the higlighted */
+    /* term to the text box.               */
+
+    else {
       TrimSpacesAroundString (text);
       SafeSetTitle (pFormInfo->termText, text);
       Select (pFormInfo->termText);
       Update ();
       StringNCpy_0 (str, text, E2_STR_BUFF_SIZE);
     }
-    MemFree (text);
-    text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem, pFormInfo->availRow, E2_COUNT_COL);
-    TrimSpacesAroundString (text);
-    StrToLong (text, &iTermCount);
-    MemFree (text);
-    Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb, pFormInfo->currField, str, STATE_ON, iTermCount);
-    Select (pFormInfo->termText);
-    pFormInfo->okayToAccept = FALSE;
+
   }
 }
 
@@ -2027,6 +2199,7 @@ static Int4 Query_TruncateCount (FormInfoPtr pFormInfo, CharPtr str)
 {
   CharPtr                 dbName;
   Boolean                 doNotExplode;
+  Boolean                 doNotTranslate;
   Int4                    count;
   Entrez2RequestPtr       e2RequestPtr;
   Entrez2ReplyPtr         e2ReplyPtr;
@@ -2056,8 +2229,11 @@ static Int4 Query_TruncateCount (FormInfoPtr pFormInfo, CharPtr str)
   /* Send truncated term count request to the server. */
   /*--------------------------------------------------*/
 
+  doNotTranslate = FALSE;
   doNotExplode = !GetStatus (pFormInfo->explodeItem);
-  EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, fieldInfo->field_name, str, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, fieldInfo->field_name,
+                             str, NULL, 0, 0, NULL, NULL,
+                             doNotExplode, doNotTranslate);
 
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
@@ -2086,6 +2262,177 @@ static Int4 Query_TruncateCount (FormInfoPtr pFormInfo, CharPtr str)
   return count;
 }
 
+/*==================================================================*/
+/*                                                                  */
+/*  Query_FetchRangeCount () -                                      */
+/*                                                                  */
+/*==================================================================*/
+
+static Int4 Query_FetchRangeCount (FormInfoPtr pFormInfo, CharPtr str)
+
+{
+  CharPtr                 dbName;
+  Int4                    count;
+  Entrez2RequestPtr       e2RequestPtr;
+  Entrez2ReplyPtr         e2ReplyPtr;
+  Entrez2BooleanReplyPtr  e2BooleanPtr;
+  Entrez2FieldInfoPtr     fieldInfo;
+  Boolean                 doNotTranslate;
+
+  if (pFormInfo == NULL || StringHasNoText (str)) return 0;
+
+  /*--------------------------------*/
+  /* Get the name of the current DB */
+  /*--------------------------------*/
+
+  dbName = DBGetNameFromID (pFormInfo->currDb);
+  if (StringHasNoText (dbName)) return 0;
+
+  fieldInfo = FieldGetInfo (pFormInfo->currDb, pFormInfo->currField);
+  if (fieldInfo == NULL) return 0;
+
+  /*---------------------------------*/
+  /* Create an empty Boolean request */
+  /*---------------------------------*/
+
+  e2RequestPtr = EntrezCreateBooleanRequest (FALSE, FALSE, dbName, NULL, 0, 0, NULL, 0, 0);
+  if (e2RequestPtr == NULL) return 0;
+
+  /*--------------------------------------------------*/
+  /* Send truncated term count request to the server. */
+  /*--------------------------------------------------*/
+
+  doNotTranslate = FALSE;
+  EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, fieldInfo->field_name, str, NULL, 0, 0, NULL, NULL, FALSE, doNotTranslate);
+
+  if (ShowASN () == TRUE)
+    DisplayEntrezRequest (e2RequestPtr);
+
+  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+
+  if (ShowASN () == TRUE)
+    DisplayEntrezReply (e2ReplyPtr);
+
+  if (e2ReplyPtr == NULL) return 0;
+
+  /*----------------------------------*/
+  /* Parse the count out of the reply */
+  /*----------------------------------*/
+
+  e2BooleanPtr = EntrezExtractBooleanReply (e2ReplyPtr);
+  if (e2BooleanPtr != NULL)
+    count = e2BooleanPtr->count;
+  else {
+    Entrez2RequestFree (e2RequestPtr);
+    return 0;
+  }
+    
+
+  /*----------------------------------*/
+  /* Clean up and return successfully */
+  /*----------------------------------*/
+
+  Entrez2BooleanReplyFree (e2BooleanPtr);
+  Entrez2RequestFree (e2RequestPtr);
+
+  return count;
+}
+
+/*===================================================================*/
+/*                                                                   */
+/* ProcessRangeTerms ()                                              */
+/*                                                                   */
+/*===================================================================*/
+
+static void ProcessRangeTerms (FormInfoPtr pFormInfo)
+{
+  Char          fromStr [E2_STR_BUFF_SIZE];
+  Char          toStr [E2_STR_BUFF_SIZE];
+  Char          rangeStr [2 * E2_STR_BUFF_SIZE + 1];
+  StateDataPtr  sdp;
+  Int4          count;
+  CharPtr       text;
+
+  /* If a new term has been typed into the */
+  /* 'To' text box, then do a lookup of    */
+  /* that term.                            */
+
+  if (pFormInfo->isToTextChanged) {
+    GetTitle (pFormInfo->toText, toStr, E2_STR_BUFF_SIZE);
+    pFormInfo->isValidTo = LoadAvailList (pFormInfo, toStr);
+    pFormInfo->isToTextChanged = FALSE;
+  }
+  /* If we have valid 'From' and 'To' terms then */
+  /* create a range term in the query window.    */
+
+  else if ((pFormInfo->isValidFrom) && (pFormInfo->isValidTo)) {
+
+    /* Get the 'from' and 'to' strings */
+
+    GetTitle (pFormInfo->toText, toStr, E2_STR_BUFF_SIZE);
+    GetTitle (pFormInfo->fromText, fromStr, E2_STR_BUFF_SIZE);
+    sprintf(rangeStr, "%s:%s", fromStr, toStr);
+    
+    /* Get a count for the range */
+    
+    count = Query_FetchRangeCount (pFormInfo, rangeStr);
+    
+    /*  Add a term to the linked list */
+    
+    sdp = CreateTerm (pFormInfo->form, pFormInfo->currDb,
+                      pFormInfo->currField, rangeStr, STATE_ON, count,
+                      FALSE);
+    if (NULL == sdp)
+      return;
+    
+    /* Display the range as one term */
+    
+    DisplayTerm (pFormInfo, rangeStr, sdp->field, sdp->count);
+    
+    Select (pFormInfo->fromText);
+    Reset (pFormInfo->availDoc);
+    pFormInfo->okayToAccept = FALSE;
+  }
+
+  /* If a new term has been typed into the */
+  /* 'From' text box, then do a lookup of  */
+  /* that term.                            */
+
+  else if (pFormInfo->isFromTextChanged) {
+    GetTitle (pFormInfo->fromText, fromStr, E2_STR_BUFF_SIZE);
+    pFormInfo->isValidFrom = LoadAvailList (pFormInfo, fromStr);
+    pFormInfo->isFromTextChanged = FALSE;
+  }
+    
+  else if (pFormInfo->okayToAccept &&
+           pFormInfo->availItem > 0 &&
+           pFormInfo->availRow > 0) {
+    text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
+                       pFormInfo->availRow, E2_TERM_COL);
+    if (text != NULL) {
+      TrimSpacesAroundString (text);
+      if (pFormInfo->currRangeField == E2_RANGE_FROM) {
+        SafeSetTitle (pFormInfo->fromText, text);
+        Select (pFormInfo->fromText);
+        pFormInfo->isValidFrom = TRUE;
+        pFormInfo->isFromTextChanged = FALSE;
+      }
+      else {
+        SafeSetTitle (pFormInfo->toText, text);
+        Select (pFormInfo->toText);
+        pFormInfo->isValidTo = TRUE;
+        pFormInfo->isToTextChanged = FALSE;
+      }
+      Update ();
+    }
+    MemFree (text);
+  }
+
+  /* Return successfully */
+  
+  return;
+}
+
 /*===================================================================*/
 /*                                                                   */
 /*  Accept_Callback () - Called when the accept button is pressed,   */
@@ -2101,7 +2448,6 @@ static void Accept_Callback (ButtoN b)
   FormInfoPtr   pFormInfo;
   StateDataPtr  sdp;
   Char          str [E2_STR_BUFF_SIZE];
-  Char          tmp [128];
 
   pFormInfo = (FormInfoPtr) GetObjectExtra (b);
 
@@ -2115,7 +2461,8 @@ static void Accept_Callback (ButtoN b)
   WatchCursor ();
   switch (pFormInfo->currMode) {
     case TRANSLATE_MODE:
-      Query_TranslateAndAddBoolTerm (pFormInfo->form, pFormInfo->currDb, pFormInfo->currField, str, STATE_ON, 0);
+      Query_TranslateAndAddBoolTerm (pFormInfo->form, pFormInfo->currDb,
+				     pFormInfo->currField, str, STATE_ON, 0);
       SafeSetTitle (pFormInfo->termText, "");
       if (Visible (pFormInfo->termText))
         Select (pFormInfo->termText);
@@ -2125,14 +2472,14 @@ static void Accept_Callback (ButtoN b)
       break;
     case SELECTION_MODE:
       ProcessSelectionTerm (pFormInfo, str);
+      /*
+      pFormInfo->availCurrentPage = 0;
+      */
       break;
     case AUTOMATIC_MODE:
       ProcessMultipleTerms (pFormInfo, str);
       break;
-    case TRUNCATION_MODE:
-      /*
-         TruncateTerm (str);
-      */
+    case WILD_CARD_MODE:
       StringCat (str, "*");
       count = Query_TruncateCount (pFormInfo, str);
       sdp = CreateTerm (pFormInfo->form, pFormInfo->currDb,
@@ -2154,19 +2501,7 @@ static void Accept_Callback (ButtoN b)
       ProcessTaxonomyTerm (pFormInfo, str);
       break;
     case RANGE_MODE:
-      if (pFormInfo->textChanged) {
-        LoadAvailList (pFormInfo, str);
-        pFormInfo->textChanged = FALSE;
-        pFormInfo->okayToAccept = FALSE;
-      } else if (pFormInfo->okayToAccept) {
-        GetTitle (pFormInfo->fromText, str, E2_STR_BUFF_SIZE);
-        GetTitle (pFormInfo->toText, tmp, sizeof (tmp));
-        StringCat (str, ":");
-        StringCat (str, tmp);
-        Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb, pFormInfo->currField, str, STATE_ON, 0);
-        Select (pFormInfo->fromText);
-        pFormInfo->okayToAccept = FALSE;
-      }
+      ProcessRangeTerms (pFormInfo);
       break;
     case LOOKUP_ACCN_MODE:
     case LOOKUP_UID_MODE:
@@ -2216,19 +2551,70 @@ static void EvaluateRetrieve_Callback (ButtoN evaluateRetrieveButton)
 
 /*===================================================================*/
 /*                                                                   */
-/*  FieldView_Callback () - Callback function for the "View Fields"  */
-/*                         button in Advanced Query mode.            */
+/*  DatabaseView_Callback () and FieldView_Callback () -             */
+/*     Callback functions for items in Help menu.                    */
 /*                                                                   */
 /*===================================================================*/
 
-static void FieldView_Callback (ButtoN fieldViewButton)
+static void DatabaseView_Callback (IteM i)
+
+{
+  Entrez2DbInfoPtr  e2db;
+  Entrez2InfoPtr    e2ip;
+  FILE              *fp;
+  Int2              len;
+  Int2              max_menu = 0;
+  Int2              max_name = 0;
+  Char              path [PATH_MAX];
+
+  e2ip = Query_GetInfo ();
+  if (e2ip == NULL) return;
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  if (fp == NULL) return;
+  for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
+    len = (Int2) StringLen (e2db->db_name);
+    max_name = MAX (len, max_name);
+    len = (Int2) StringLen (e2db->db_menu);
+    max_menu = MAX (len, max_menu);
+  }
+  max_name += 2;
+  max_menu += 2;
+  for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
+    len = (Int2) StringLen (e2db->db_name);
+    max_name = MAX (len, max_name);
+    len = (Int2) StringLen (e2db->db_menu);
+    max_menu = MAX (len, max_menu);
+  }
+  for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
+    len = (Int2) StringLen (e2db->db_name);
+    fprintf (fp, "%s", e2db->db_name);
+    while (len < max_name) {
+      fprintf (fp, " ");
+      len++;
+    }
+    len = (Int2) StringLen (e2db->db_menu);
+    fprintf (fp, "%s", e2db->db_menu);
+    while (len < max_menu) {
+      fprintf (fp, " ");
+      len++;
+    }
+    fprintf (fp, "%s", e2db->db_descr);
+    fprintf (fp, "\n");
+  }
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "Database Summary");
+  FileRemove (path);
+}
+
+static void FieldView_Callback (IteM i)
 
 {
   Entrez2InfoPtr       e2ip;
   EnumFieldAssocPtr    fieldAlist;
   Entrez2FieldInfoPtr  fieldInfo;
   FILE                 *fp;
-  Int2                 i;
+  Int2                 j;
   Int2                 len;
   Int2                 max_menu = 0;
   Int2                 max_name = 0;
@@ -2241,8 +2627,8 @@ static void FieldView_Callback (ButtoN fieldViewButton)
   TmpNam (path);
   fp = FileOpen (path, "w");
   if (fp == NULL) return;
-  for (i = 0; fieldAlist [i].name != NULL; i++) {
-    fieldInfo = FieldGetInfoFromName (fieldAlist [i].name);
+  for (j = 0; fieldAlist [j].name != NULL; j++) {
+    fieldInfo = FieldGetInfoFromName (fieldAlist [j].name);
     len = (Int2) StringLen (fieldInfo->field_name);
     max_name = MAX (len, max_name);
     len = (Int2) StringLen (fieldInfo->field_menu);
@@ -2250,8 +2636,8 @@ static void FieldView_Callback (ButtoN fieldViewButton)
   }
   max_name += 2;
   max_menu += 2;
-  for (i = 0; fieldAlist [i].name != NULL; i++) {
-    fieldInfo = FieldGetInfoFromName (fieldAlist [i].name);
+  for (j = 0; fieldAlist [j].name != NULL; j++) {
+    fieldInfo = FieldGetInfoFromName (fieldAlist [j].name);
     len = (Int2) StringLen (fieldInfo->field_name);
     fprintf (fp, "%s", fieldInfo->field_name);
     while (len < max_name) {
@@ -2264,14 +2650,44 @@ static void FieldView_Callback (ButtoN fieldViewButton)
       fprintf (fp, " ");
       len++;
     }
-    len = (Int2) StringLen (fieldInfo->field_descr);
     fprintf (fp, "%s", fieldInfo->field_descr);
     fprintf (fp, "\n");
   }
   FileClose (fp);
-  LaunchGeneralTextViewer (path, "Field List");
+  LaunchGeneralTextViewer (path, "Field Summary");
   FileRemove (path);
   FreeEnumFieldAlist (fieldAlist);
+}
+
+static CharPtr modeSummary [] = {
+  "Automatic  Terms are processed through PubMed query engine",
+  "Lookup     Accession looked up directly into Document window",
+  "MeSH Tree  MeSH hierarchy above current level displayed in popup",
+  "Multiple   Terms extracted and processed one at a time",
+  "Range      From and To values entered as a composite term",
+  "Selection  Available terms are displayed in Term Selection box",
+  "Taxonomy   Organism hierarchy above current level displayed in popup",
+  "View       Accession looked up directly into Viewer window",
+  "Wild Card  Term appended with asterisk and processed",
+  NULL
+};
+
+static void ModeView_Callback (IteM i)
+
+{
+  FILE  *fp;
+  Int2  j;
+  Char  path [PATH_MAX];
+
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+  if (fp == NULL) return;
+  for (j = 0; modeSummary [j] != NULL; j++) {
+    fprintf (fp, "%s\n", modeSummary [j]);
+  }
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "Mode Summary");
+  FileRemove (path);
 }
 
 /*==================================================================*/
@@ -2558,9 +2974,11 @@ static void ChangeTaxParents_Callback (PopuP p)
   }
 }
 
-/*==================================================================*/
+/*===================================================================*/
 /*                                                                   */
-/*  TextAction () - Enable/disable accept button and scroll to text. */
+/*  TextAction () - Called when a key is type into the "Term:" text  */
+/*                  entry box.  Enables/disables the accept button   */
+/*                  and scroll to text.                              */
 /*                                                                   */
 /*===================================================================*/
 
@@ -2573,8 +2991,12 @@ static void TextAction (TexT t)
 
   pFormInfo = (FormInfoPtr) GetObjectExtra (t);
 
+  /* Enable or disable the 'Accept' button based */
+  /* on the mode and the current text.           */
+
   if (pFormInfo->currMode == RANGE_MODE) {
-    if (TextHasNoText (pFormInfo->fromText) && TextHasNoText (pFormInfo->toText))
+    if (TextHasNoText (pFormInfo->fromText) &&
+        TextHasNoText (pFormInfo->toText))
       SafeDisable (pFormInfo->acceptButton);
     else
       SafeEnable (pFormInfo->acceptButton);
@@ -2589,6 +3011,62 @@ static void TextAction (TexT t)
       SafeEnable (pFormInfo->acceptButton);
   }
 
+  /* Get the current text */
+
+  GetTitle (t, str, sizeof (str));
+
+  /* If there is no text then clear */
+  /* the 'Term Selection' window.   */
+
+  if (str [0] == '\0') {
+    pFormInfo->availItem = 0;
+    pFormInfo->availRow = 0;
+    Reset (pFormInfo->availDoc);
+    for (i = 0; i < 7; i++)
+      AppendText (pFormInfo->availDoc, " \n", &availParFmt, availColFmt,
+		  systemFont);
+    InvalDocument (pFormInfo->availDoc);
+    pFormInfo->textChanged = FALSE;
+    pFormInfo->okayToAccept = FALSE;
+    pFormInfo->availCurrentPage = 0;
+  }
+
+  /* If there is text, then attempt to scroll */
+  /* to it in the 'Term Selection' window.    */
+
+  else {
+    pFormInfo->textChanged = TRUE;
+    pFormInfo->okayToAccept = FALSE;
+    if (pFormInfo->availCurrentPage > 0 &&
+	pFormInfo->currMode == SELECTION_MODE)
+      ScrollToText (pFormInfo, str, pFormInfo->availCurrentPage, TRUE, TRUE);
+    Update ();
+  }
+}
+
+/*==================================================================*/
+/*                                                                   */
+/*  ToTextAction () -                                                */
+/*                                                                   */
+/*===================================================================*/
+
+static void ToTextAction (TexT t)
+
+{
+  Int2         i;
+  FormInfoPtr  pFormInfo;
+  Char         str [256];
+
+  pFormInfo = (FormInfoPtr) GetObjectExtra (t);
+
+  pFormInfo->currRangeField = E2_RANGE_TO;
+
+  if (TextHasNoText (pFormInfo->fromText) &&
+      TextHasNoText (pFormInfo->toText))
+    SafeDisable (pFormInfo->acceptButton);
+  else
+    SafeEnable (pFormInfo->acceptButton);
+  
   GetTitle (t, str, sizeof (str));
   if (str [0] == '\0') {
     pFormInfo->availItem = 0;
@@ -2597,12 +3075,56 @@ static void TextAction (TexT t)
     for (i = 0; i < 7; i++)
       AppendText (pFormInfo->availDoc, " \n", &availParFmt, availColFmt, systemFont);
     InvalDocument (pFormInfo->availDoc);
-    pFormInfo->textChanged = FALSE;
-    pFormInfo->okayToAccept = FALSE;
+    pFormInfo->isToTextChanged = FALSE;
+    pFormInfo->isValidTo = FALSE;
     pFormInfo->availCurrentPage = 0;
   } else {
-    pFormInfo->textChanged = TRUE;
-    pFormInfo->okayToAccept = FALSE;
+    pFormInfo->isToTextChanged = TRUE;
+    pFormInfo->isValidTo = TRUE;
+    if (pFormInfo->availCurrentPage > 0)
+      ScrollToText (pFormInfo, str, pFormInfo->availCurrentPage, TRUE, TRUE);
+    Update ();
+  }
+}
+
+/*==================================================================*/
+/*                                                                   */
+/*  FromTextAction () -                                              */
+/*                                                                   */
+/*===================================================================*/
+
+static void FromTextAction (TexT t)
+
+{
+  Int2         i;
+  FormInfoPtr  pFormInfo;
+  Char         str [256];
+
+  pFormInfo = (FormInfoPtr) GetObjectExtra (t);
+
+  pFormInfo->currRangeField = E2_RANGE_FROM;
+
+  if (TextHasNoText (pFormInfo->fromText) &&
+      TextHasNoText (pFormInfo->toText))
+    SafeDisable (pFormInfo->acceptButton);
+  else
+    SafeEnable (pFormInfo->acceptButton);
+
+  GetTitle (t, str, sizeof (str));
+  if (str [0] == '\0') {
+    pFormInfo->availItem = 0;
+    pFormInfo->availRow = 0;
+    Reset (pFormInfo->availDoc);
+    for (i = 0; i < 7; i++)
+      AppendText (pFormInfo->availDoc, " \n", &availParFmt,
+                  availColFmt, systemFont);
+    InvalDocument (pFormInfo->availDoc);
+    pFormInfo->isFromTextChanged = FALSE;
+    pFormInfo->isValidFrom = FALSE;
+    pFormInfo->availCurrentPage = 0;
+  } else {
+    pFormInfo->isFromTextChanged = TRUE;
+    pFormInfo->isValidFrom = TRUE;
     if (pFormInfo->availCurrentPage > 0)
       ScrollToText (pFormInfo, str, pFormInfo->availCurrentPage, TRUE, TRUE);
     Update ();
@@ -2684,9 +3206,10 @@ static void ChangeMode (PopuP p)
     SafeHide (pFormInfo->rangeGroup);
     SafeHide (pFormInfo->taxLineagePopup);
     SafeShow (pFormInfo->termGroup);
-    TextAction (pFormInfo->termText);
     pFormInfo->availItem = 0;
     pFormInfo->availRow = 0;
+    pFormInfo->availCurrentPage = 0;
+    TextAction (pFormInfo->termText);
     Reset (pFormInfo->availDoc);
     SetDocCache (pFormInfo->availDoc, NULL, NULL, NULL);
     for (i = 0; i < 7; i++) {
@@ -2960,6 +3483,7 @@ static Boolean Query_AddUidsTerm (ForM f, CharPtr uidListName, Int4 iUidCount, I
   RecT               r;
   BaR                sb;
   FormInfoPtr        pFormInfo;
+  Boolean            doNotTranslate;
 
   pFormInfo = (FormInfoPtr) GetObjectExtra (f);
 
@@ -2991,9 +3515,11 @@ static Boolean Query_AddUidsTerm (ForM f, CharPtr uidListName, Int4 iUidCount, I
 
   dbName = DBGetNameFromID (pFormInfo->currDb);
   e2rq = EntrezCreateBooleanRequest (FALSE, FALSE, dbName, NULL, 0, 0, NULL, 0, 0);
-  EntrezAddToBooleanRequest (e2rq, NULL, 0, NULL, NULL, NULL, 0, iUidCount, uids, NULL, FALSE, FALSE);
-
   if (e2rq == NULL) return FALSE;
+
+  doNotTranslate = FALSE;
+  EntrezAddToBooleanRequest (e2rq, NULL, 0, NULL, NULL, NULL, 0, iUidCount, uids, NULL, FALSE, doNotTranslate);
+  EntrezSetUseHistoryFlag (e2rq);
 
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2rq);
@@ -4217,6 +4743,29 @@ static void AdvancedQueryToggle_Callback (IteM i)
   }
 }
 
+/*==================================================================*/
+/*                                                                  */
+/*  ExplodeTermsToggle_Callback () - Called when the "Explode       */
+/*                                   Terms" menu option is          */
+/*                                   selected.                      */
+/*                                                                  */
+/*==================================================================*/
+
+static void ExplodeTermsToggle_Callback (IteM i)
+
+{
+  FormInfoPtr  pFormInfo;
+
+  pFormInfo = (FormInfoPtr) GetObjectExtra (i);
+  if (pFormInfo == NULL) return;
+
+  WatchCursor ();
+  Update ();
+  RecalculateChosen (pFormInfo);
+  ArrowCursor ();
+  Update ();
+}
+
 /*===================================================================*/
 /*                                                                   */
 /*  TermList_UnselectAll () -- Marks all terms in the term list as   */
@@ -4361,9 +4910,6 @@ static void SetupMenus (WindoW w, FormInfoPtr pFormInfo, Boolean explodeToggle, 
   m = PulldownMenu (w, "File");
   CommandItem (m, "Import UID List.../I", ImportUIDs_Callback);
   CommandItem (m, "Export UID List.../E", ExportUIDs_Callback);
-  /*
-  FormCommandItem (m, "Open New Query Window", (BaseFormPtr) pFormInfo, E2_MSG_NEWWIN);
-  */
   SeparatorItem (m);
   CommandItem (m, "Quit/Q", Quit_Callback);
 
@@ -4382,7 +4928,6 @@ static void SetupMenus (WindoW w, FormInfoPtr pFormInfo, Boolean explodeToggle, 
   /*--------------*/
 
   m = PulldownMenu (w, "Options");
-  CommandItem (m, "Preferences...", Entrez2PrefsProc);
 
   clearUnusedItem = CommandItem (m, "Clear Unused Query Terms", Query_ClearUnusedTerms);
   SetObjectExtra (clearUnusedItem, pFormInfo, NULL);
@@ -4390,13 +4935,10 @@ static void SetupMenus (WindoW w, FormInfoPtr pFormInfo, Boolean explodeToggle, 
   SetStatus (pFormInfo->advancedQueryItem, advancedQueryToggle);
   SetObjectExtra (pFormInfo->advancedQueryItem, pFormInfo, NULL);
 
-  pFormInfo->explodeItem = StatusItem (m, "Explode Terms", NULL);
+  pFormInfo->explodeItem = StatusItem (m, "Explode Terms", ExplodeTermsToggle_Callback);
   SetStatus (pFormInfo->explodeItem, explodeToggle);
+  SetObjectExtra (pFormInfo->explodeItem, pFormInfo, NULL);
 
-  /*
-  s_showASNItem = StatusItem (m, "Show ASN.1", NULL);
-  SetStatus (s_showASNItem, FALSE);
-  */
   s = SubMenu (m, "Show ASN.1");
   s_showASNItem = ChoiceGroup (s, NULL);
   ChoiceItem (s_showASNItem, "OFF");
@@ -4410,7 +4952,17 @@ static void SetupMenus (WindoW w, FormInfoPtr pFormInfo, Boolean explodeToggle, 
   ChoiceItem (s_showASNItem, "8");
   ChoiceItem (s_showASNItem, "9");
   ChoiceItem (s_showASNItem, "ON");
+  ChoiceItem (s_showASNItem, "LOG");
   SetValue (s_showASNItem, 1);
+
+  /*------------*/
+  /* Help menu */
+  /*------------*/
+
+  m = PulldownMenu (w, "Help");
+  CommandItem (m, "Databases...", DatabaseView_Callback);
+  CommandItem (m, "Fields...", FieldView_Callback);
+  CommandItem (m, "Modes...", ModeView_Callback);
 }
 
 /*==================================================================*/
@@ -4426,7 +4978,6 @@ static GrouP SetupAdvQueryGroup (FormInfoPtr pFormInfo, GrouP mainGroup)
   GrouP   advQueryGroup;
   GrouP   buttonGroup;
   GrouP   instructionGroup;
-  ButtoN  fieldViewButton;
   Char    tempStr [256];
 
   advQueryGroup = HiddenGroup (mainGroup, -1, 0, NULL);
@@ -4456,13 +5007,6 @@ static GrouP SetupAdvQueryGroup (FormInfoPtr pFormInfo, GrouP mainGroup)
 
   pFormInfo->advResetButton = PushButton (buttonGroup, "Reset", Reset_Callback);
   SetObjectExtra (pFormInfo->advResetButton, pFormInfo, NULL);
-
-  /*--------------------------------*/
-  /* Create the 'Field View' button */
-  /*--------------------------------*/
-
-  fieldViewButton = PushButton (buttonGroup, "View Fields", FieldView_Callback);
-  SetObjectExtra (fieldViewButton, pFormInfo, NULL);
 
   /*----------------------------------------------*/
   /* Create instructions for using advanced query */
@@ -4629,16 +5173,25 @@ static void ReleaseAvail (DoC d, PoinT pt)
 
   if (pFormInfo->availClickItem != item || pFormInfo->availClickRow != row) return;
 
+  text = GetDocText (pFormInfo->availDoc, item, row, 1);
+  if (StringHasNoText (text)) {
+    text = MemFree (text);
+  }
+
   olditem = pFormInfo->availItem;
   oldrow = pFormInfo->availRow;
-  pFormInfo->availItem = item;
-  pFormInfo->availRow = row;
+  if (text != NULL) {
+    pFormInfo->availItem = item;
+    pFormInfo->availRow = row;
+  } else {
+    pFormInfo->availItem = 0;
+    pFormInfo->availRow = 0;
+  }
   if (olditem > 0 && oldrow > 0)
     InvalDocRows (pFormInfo->availDoc, olditem, oldrow, oldrow);
-  if (item > 0 && row > 0)
+  if (text != NULL && item > 0 && row > 0)
     InvalDocRows (pFormInfo->availDoc, item, row, row);
 
-  text = GetDocText (pFormInfo->availDoc, item, row, 1);
   if (text != NULL) {
     ptr = text;
     ch = *ptr;
@@ -4660,8 +5213,19 @@ static void ReleaseAvail (DoC d, PoinT pt)
       Select (pFormInfo->termText);
     }
     Update ();
+  } else {
+    if (pFormInfo->currMode == RANGE_MODE) {
+      SafeSetTitle (pFormInfo->fromText, "");
+      SafeSetTitle (pFormInfo->toText, "");
+      Select (pFormInfo->fromText);
+    } else {
+      SafeSetTitle (pFormInfo->termText, "");
+      Select (pFormInfo->termText);
+    }
+    Update ();
   }
-  if (pFormInfo->wasDoubleClick) {
+
+  if (text != NULL && pFormInfo->wasDoubleClick) {
     WatchCursor ();
     Update ();
 
@@ -4672,23 +5236,23 @@ static void ReleaseAvail (DoC d, PoinT pt)
     } else if (pFormInfo->currMode == RANGE_MODE) {
       ResetClip ();
       sTermCount = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
-			       pFormInfo->availRow, E2_COUNT_COL);
+                               pFormInfo->availRow, E2_COUNT_COL);
       TrimSpacesAroundString (sTermCount);
       iTermCount = atoi (sTermCount);
       MemFree (sTermCount);
       Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb,
-			 pFormInfo->currField, text, STATE_ON, iTermCount);
+                         pFormInfo->currField, text, STATE_ON, iTermCount);
       Update ();
       RecalculateChosen (pFormInfo);
     } else {
       ResetClip ();
       sTermCount = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
-			       pFormInfo->availRow, E2_COUNT_COL);
+                               pFormInfo->availRow, E2_COUNT_COL);
       TrimSpacesAroundString (sTermCount);
       iTermCount = atoi (sTermCount);
       MemFree (sTermCount);
       Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb,
-			 pFormInfo->currField, text, STATE_ON, iTermCount);
+                         pFormInfo->currField, text, STATE_ON, iTermCount);
       Update ();
       RecalculateChosen (pFormInfo);
     }
@@ -5577,11 +6141,13 @@ static GrouP SetupStdQueryGroup (FormInfoPtr pFormInfo, GrouP mainGroup)
 
   pFormInfo->rangeGroup = HiddenGroup (c, 4, 0, NULL);
   StaticPrompt (pFormInfo->rangeGroup, "From:", 0, dialogTextHeight, programFont, 'l');
-  pFormInfo->fromText = DialogText (pFormInfo->rangeGroup, "", wid, TextAction);
+  pFormInfo->fromText = DialogText (pFormInfo->rangeGroup, "", wid, FromTextAction);
+  pFormInfo->isValidFrom = FALSE;
   SetObjectExtra (pFormInfo->fromText, pFormInfo, NULL);
 
   StaticPrompt (pFormInfo->rangeGroup, "To:", 0, dialogTextHeight, programFont, 'l');
-  pFormInfo->toText = DialogText (pFormInfo->rangeGroup, "", wid, TextAction);
+  pFormInfo->toText = DialogText (pFormInfo->rangeGroup, "", wid, ToTextAction);
+  pFormInfo->isValidTo = FALSE;
   SetObjectExtra (pFormInfo->toText, pFormInfo, NULL);
   Hide (pFormInfo->rangeGroup);
 
@@ -5868,52 +6434,130 @@ NLM_EXTERN Entrez2InfoPtr Query_GetInfo (void)
 static Boolean TermlistToRequestCloseGroup (FormInfoPtr pFormInfo, Entrez2RequestPtr e2RequestPtr)
 
 {
-  Int2          group;
-  Int2          last;
-  StateDataPtr  sdp;
-  Boolean       isEmpty = TRUE;
-  Boolean       doNotTranslate;
-  Boolean       doNotExplode;
-  Boolean       doNotTruncate;
-  size_t        len;
+  Int2                 group;
+  Int2                 last;
+  StateDataPtr         sdp;
+  Boolean              isEmpty = TRUE;
+  Boolean              doNotExplode;
+  Boolean              doNotTranslate;
+  CharPtr              rangeStr;
+  CharPtr              fromTerm;
+  CharPtr              toTerm;
+  Entrez2FieldInfoPtr  fieldInfo;
+  CharPtr              dbName;
 
   group = 0;
   last = 0;
-
-  doNotTranslate = TRUE;
-  doNotExplode = !GetStatus (pFormInfo->explodeItem);
+  doNotExplode = ! GetStatus (pFormInfo->explodeItem);
   sdp = pFormInfo->termList;
 
+  /* Loop through all the terms in the linked list */
+
   for (sdp = pFormInfo->termList; sdp != NULL; sdp = sdp->next) {
+
+    /* Do not translate if DB is PubMed */
+    /* and the field is ALL.            */
+
+    fieldInfo = FieldGetInfo (sdp->db, sdp->fld);
+    dbName = DBGetNameFromID (sdp->db);
+    
+    if ((StrICmp(dbName, "PubMed") == 0) && 
+         (StrICmp(fieldInfo->field_name, "ALL") == 0))
+      doNotTranslate = doNotExplode; /* doNotTranslate = TRUE; */
+    else
+      doNotTranslate = doNotExplode;
+
     if (sdp->group == GROUP_SINGLE || sdp->group == GROUP_FIRST)
       group++;
     if (sdp->state == STATE_ON) {
       isEmpty = FALSE;
+
+      /* Add opening parens at beginning */
+
       if (last == 0) {
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-      } else if (last == group) {
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-      } else if (sdp->above == ENTREZ_OP_BUTNOT) {
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_BUTNOT, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-      } else {
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
       }
+
+      /* Put an 'OR' operator between groups */
+
+      else if (last == group) {
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_OR,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+      }
+
+      /* Put 'BUTNOT' operator where requested */
+
+      else if (sdp->above == ENTREZ_OP_BUTNOT) {
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_BUTNOT,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+      }
+
+      /* Otherwise default operator is 'AND' */
+
+      else {
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_AND,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_LEFT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+      }
+
+      /* Add in the term itself */
+
       if (sdp->key == NULL) {
-        doNotTruncate = TRUE;
-        len = StringLen (sdp->term);
-        if (len > 1 && sdp->term [len - 1] == '*') {
-          doNotTruncate = FALSE;
+
+        /* If it is a range, then split out the to and from */
+
+        if (StringChr (sdp->term, ':') != 0) {
+          rangeStr = (CharPtr) MemNew (strlen (sdp->term) + 1);
+          StringCpy (rangeStr, sdp->term);
+          fromTerm = StringTokMT(rangeStr, ":", &rangeStr);
+          toTerm = StringTokMT(rangeStr, ":", &rangeStr);
+          if ((fromTerm != NULL) && (toTerm != NULL)) {
+            EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, sdp->field,
+                                       fromTerm, NULL, 0, 0, NULL, NULL,
+                                       doNotExplode, doNotTranslate);
+            EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RANGE,
+                                       NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                       doNotExplode, doNotTranslate);
+            EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, sdp->field,
+                                       toTerm, NULL, 0, 0, NULL, NULL,
+                                       doNotExplode, doNotTranslate);
+          }
+          MemFree (rangeStr);
         }
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, sdp->field, sdp->term, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTruncate);
+        else
+          EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, sdp->field,
+                                     sdp->term, NULL, 0, 0, NULL, NULL,
+                                     doNotExplode, doNotTranslate);
       } else {
-        EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, NULL, NULL, sdp->key, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
+        EntrezAddToBooleanRequest (e2RequestPtr, NULL, 0, NULL, NULL,
+                                   sdp->key, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+        EntrezSetUseHistoryFlag (e2RequestPtr);
       }
       last = group;
     }
@@ -5921,10 +6565,18 @@ static Boolean TermlistToRequestCloseGroup (FormInfoPtr pFormInfo, Entrez2Reques
 
   if (isEmpty == TRUE) return FALSE;
 
+  /* Add on the closing parens */
+
   if (group > 0 && last > 0) {
-    EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
-    EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, doNotExplode, doNotTranslate);
+    EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
+    EntrezAddToBooleanRequest (e2RequestPtr, NULL, ENTREZ_OP_RIGHT_PAREN,
+                                   NULL, NULL, NULL, 0, 0, NULL, NULL,
+                                   doNotExplode, doNotTranslate);
   }
+
+  /* Return successfully */
 
   return TRUE;
 }
@@ -6187,7 +6839,10 @@ NLM_EXTERN Int4 Query_FetchParsedCount (ForM f)
   /* the ingredients for the query.     */
   /*------------------------------------*/
 
-  if (pFormInfo->termList == NULL || pFormInfo->chosenNumLines < 1 || pFormInfo->termList->db < 0) return -1;
+  if (pFormInfo->termList == NULL ||
+      pFormInfo->chosenNumLines < 1 ||
+      pFormInfo->termList->db < 0)
+    return -1;
 
   /*--------------------------------*/
   /* Get the name of the current DB */
@@ -6200,7 +6855,8 @@ NLM_EXTERN Int4 Query_FetchParsedCount (ForM f)
   /* Create an empty Boolean request */
   /*---------------------------------*/
 
-  e2RequestPtr = EntrezCreateBooleanRequest (FALSE, TRUE, dbName, NULL, 0, 0, NULL, 0, 0);
+  e2RequestPtr = EntrezCreateBooleanRequest (FALSE, TRUE, dbName, NULL,
+                                             0, 0, NULL, 0, 0);
   if (e2RequestPtr == NULL) return -1;
 
   /*------------------------------------*/
@@ -6242,7 +6898,8 @@ NLM_EXTERN Int4 Query_FetchParsedCount (ForM f)
         currentTerm = pFormInfo->termList;
         found = FALSE;
         while ((currentTerm != NULL) && (! found)) {
-          if ((StrICmp (currentTerm->field, tmpTerm->field) == 0) && (StrICmp (currentTerm->term, tmpTerm->term) == 0)) {
+          if ((StrICmp (currentTerm->field, tmpTerm->field) == 0) &&
+              (StrICmp (currentTerm->term, tmpTerm->term) == 0)) {
             currentTerm->count = tmpTerm->term_count;
             found = TRUE;
           }
@@ -6377,6 +7034,7 @@ static Boolean Query_TranslateAndAddBoolTerm (
   Int2                    nextGroup;
   Int2                    tmpOp;
   Boolean                 allowDuplicates;
+  Boolean                 doNotTranslate;
 
   pFormInfo = (FormInfoPtr) GetObjectExtra (f);
 
@@ -6407,10 +7065,9 @@ static Boolean Query_TranslateAndAddBoolTerm (
   /* of terms for the given term.      */
   /*-----------------------------------*/
 
-  e2RequestPtr = EntrezCreateBooleanRequest (FALSE, TRUE, dbName,
-					     NULL, 0, 0, NULL, 0, 0);
-  EntrezAddToBooleanRequest (e2RequestPtr, strs, 0, NULL, NULL, NULL,
-			     0, 0, NULL, NULL, TRUE, TRUE);
+  doNotTranslate = TRUE;
+  e2RequestPtr = EntrezCreateBooleanRequest (FALSE, TRUE, dbName, NULL, 0, 0, NULL, 0, 0);
+  EntrezAddToBooleanRequest (e2RequestPtr, strs, 0, NULL, NULL, NULL, 0, 0, NULL, NULL, TRUE, doNotTranslate);
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
@@ -6470,7 +7127,11 @@ static Boolean Query_TranslateAndAddBoolTerm (
       tmpTerm = (Entrez2BooleanTermPtr) valNodeTermList->data.ptrvalue;
       cleanedUpTerm = RemoveExtraQuotes (tmpTerm->term);
       StringCpy (tmpTerm->term, cleanedUpTerm);
-      fieldName = FieldGetNameFromMenuName (currDb, tmpTerm->field);
+      if (IsValidFieldName (currDb, tmpTerm->field) == FALSE)
+        fieldName = FieldGetNameFromMenuName (currDb, tmpTerm->field);
+      else
+        fieldName = tmpTerm->field;
+
       fieldId = FieldGetIDFromName (currDb, fieldName);
 
       /*-----------------------------------*/
@@ -6489,7 +7150,7 @@ static Boolean Query_TranslateAndAddBoolTerm (
       if (NULL != sdp)
         prev = sdp;
       sdp = CreateTerm (f, currDb, fieldId, tmpTerm->term, state,
-			tmpTerm->term_count, allowDuplicates);
+                        tmpTerm->term_count, allowDuplicates);
       if (NULL == sdp) {
         valNodeTermList = valNodeTermList->next;
         sdp = prev;

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.37 $
+* $Revision: 6.41 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -156,6 +156,8 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures (
 *     bioseq to get the best protein feature or encoding CDS
 *   SeqMgrGetRNAgivenProduct takes an mRNA (cDNA) bioseq and gets the encoding
 *     mRNA feature on the genomic bioseq
+*   SeqMgrGetPROTgivenProduct takes an protein bioseq and gets the encoding
+*     processed protein feature on a precursor protein bioseq
 *
 *****************************************************************************/
 
@@ -174,6 +176,11 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetCDSgivenProduct (
 );
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetRNAgivenProduct (
+  BioseqPtr bsp,
+  SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetPROTgivenProduct (
   BioseqPtr bsp,
   SeqMgrFeatContext PNTR context
 );
@@ -463,13 +470,16 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext (
 *     contained within the feature range, or merely that it be overlapped by the
 *     feature, and returns the position in the index
 *   SeqMgrGetFeatureInIndex gets an arbitrary feature indexed by the array
+*   SeqMgrGetAllOverlappingFeatures returns all features that overlap with the
+*     indicated overlap specificity
 *
 *****************************************************************************/
 
-#define SIMPLE_OVERLAP   0
-#define CONTAINED_WITHIN 1
-#define CHECK_INTERVALS  2
-#define INTERVAL_OVERLAP 3
+#define SIMPLE_OVERLAP   0 /* any overlap of extremes */
+#define CONTAINED_WITHIN 1 /* contained within extremes */
+#define LOCATION_SUBSET  2 /* SeqLocAinB must be satisfied, no boundary checking */
+#define CHECK_INTERVALS  3 /* SeqLocAinB plus internal exon-intron boundaries must match */
+#define INTERVAL_OVERLAP 4 /* at least one pair of intervals must overlap */
 
 NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex (
   BioseqPtr bsp,
@@ -494,6 +504,16 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (
   Int4 numfeats,
   Uint2 index,
   SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN Int2 LIBCALL SeqMgrGetAllOverlappingFeatures (
+  SeqLocPtr slp,
+  Uint2 subtype,
+  VoidPtr featarray,
+  Int4 numfeats,
+  Int2 overlapType,
+  Pointer userdata,
+  SeqMgrFeatExploreProc userfunc
 );
 
 /* the following functions are not frequently called by applications */
@@ -530,7 +550,25 @@ NLM_EXTERN Boolean LIBCALL SeqMgrClearFeatureIndexes (
 NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (
   Uint2 entityID,
   Pointer ptr,
-  Boolean flip
+  Boolean flip,
+  Boolean dorevfeats
+);
+
+/*****************************************************************************
+*
+*   If indexed with dorevfeats TRUE, SeqMgrExploreFeaturesRev presents features
+*     in reverse order, used for asn2gb master style on far genomic contigs that
+*     point to the minus strand of a component
+*
+*****************************************************************************/
+
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeaturesRev (
+  BioseqPtr bsp,
+  Pointer userdata,
+  SeqMgrFeatExploreProc userfunc,
+  SeqLocPtr locationFilter,
+  BoolPtr seqFeatFilter,
+  BoolPtr featDefFilter
 );
 
 

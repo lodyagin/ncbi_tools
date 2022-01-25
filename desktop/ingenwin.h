@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: handles windowing for ingenue
 *
@@ -94,7 +94,8 @@ extern "C" {
 #define MYARGTBDLFILE   5
 #define MYARGBEGIN      6
 #define MYARGEND        7
-#define REG_INGENUE    ObjMgrProcLoad(OMPROC_EDIT, "Ing_StandAlone", "Ing_StandAlone", 0, 0, 0, 0, NULL, Ing_RegIngenueProc, PROC_PRIORITY_HIGHEST)
+#define REG_INGENUE    ObjMgrProcLoad(OMPROC_EDIT, "Ing_StandAlone", "Ing_StandAlone",OBJ_BIOSEQ,0,OBJ_BIOSEQ,0, NULL, Ing_RegIngenueProc, PROC_PRIORITY_DEFAULT)
+#define REGISTER_INGENUE    ObjMgrProcLoad(OMPROC_EDIT, "Ingenue_StandAlone", "Ingenue Editor",OBJ_BIOSEQ,0,OBJ_BIOSEQ,0, NULL, Ing_RegisterIngenueProc, PROC_PRIORITY_DEFAULT)
 
 
 /******************************************************
@@ -205,6 +206,7 @@ typedef struct gv_objectdata {
  *
 ******************************************************/
 NLM_EXTERN Int2 LIBCALLBACK Ing_RegIngenueProc (Pointer data);
+NLM_EXTERN Int2 LIBCALLBACK Ing_RegisterIngenueProc (Pointer data);
 extern void Ing_FileOpenProc(IngGenomeViewerPtr igvp, WindoW w);
 extern void Ing_ReadmRNAs(FILE *fp, IngGenomeViewerPtr igvp, CharPtr GI_list);
 extern void Ing_CreateDotMatrixForm(IngGenomeViewerPtr igvp, SeqAlignPtr sap, CharPtr path, CharPtr GI_list);

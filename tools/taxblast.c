@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.12 2001/12/13 21:48:51 camacho Exp $
+/* $Id: taxblast.c,v 6.13 2002/01/11 16:31:13 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.13  2002/01/11 16:31:13  camacho
+* Verify if taxonomy service is properly initialized in RDTaxLookupInit
+*
 * Revision 6.12  2001/12/13 21:48:51  camacho
 * Fixed retrieval of maximum taxonomy id to properly populate the
 * RDBTaxLookup structure.
@@ -1802,9 +1805,21 @@ RDBTaxLookupPtr RDTaxLookupInit(void)
 {
     RDBTaxLookupPtr tax_lookup;
     TAXDataPtr tax_data;
+    Int2 retries = 3, secs2wait = 10;
 
     /* connect to taxonomy service */
-    tax1_init();   
+    while (retries--) {
+        if (tax1_init())
+            break;
+        else
+            sleep(secs2wait);
+    }
+
+    if (!tax1_isAlive()) {
+        ErrPostEx(SEV_FATAL,0,0, 
+                "Could not initialize taxonomy service: RDTaxLookupInit");
+        return NULL;
+    }
     
     /* download all the taxonomy tree from the server */
     tax1e_invokeChildren(-1); 

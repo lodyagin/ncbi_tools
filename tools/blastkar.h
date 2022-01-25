@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.25 $ 
+/* $Revision: 6.26 $ 
 * $Log: blastkar.h,v $
+* Revision 6.26  2002/03/18 21:31:56  madden
+* Added comments
+*
 * Revision 6.25  2000/12/28 16:23:24  madden
 * Function getAlphaBeta from AS
 *
@@ -385,9 +388,10 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
 typedef struct _blast_matrix {
 		Boolean is_prot;	/* Matrix is for proteins */
 		CharPtr name;		/* Name of Matrix (i.e., BLOSUM62). */
-		/* Position-specific BLAST rows and columns are different. */
-		Int4	rows,		
-			columns;
+		/* Position-specific BLAST rows and columns are different, otherwise they are the
+		alphabet length. */
+		Int4	rows,		/* query length + 1 for PSSM. */
+			columns;	/* alphabet size in all cases (26). */
 		Int4Ptr PNTR matrix;
                 Nlm_FloatHi ** posFreqs;
 		FloatHi karlinK;

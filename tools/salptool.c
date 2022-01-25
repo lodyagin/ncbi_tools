@@ -2239,6 +2239,65 @@ static void showtextalign_fromalign (SeqAlignPtr salp, CharPtr path, FILE *fp)
   } 
 }
 
+typedef struct besthit {
+   SeqAlignPtr  sap;
+   SeqIdPtr     sip1;
+   SeqIdPtr     sip2;
+   CharPtr      errstr;
+   Boolean      nonly;
+   Int4         errtype;
+   struct besthit PNTR next;
+} BestHit, PNTR BestHitPtr;
+
+static int LIBCALLBACK OrderBestHits(Pointer ptr1, Pointer ptr2)
+{
+   BestHitPtr  hip1;
+   BestHitPtr  hip2;
+
+   hip1 = *((BestHitPtr PNTR)(ptr1));
+   hip2 = *((BestHitPtr PNTR)(ptr2));
+   if (hip1->errtype < hip2->errtype)
+      return -1;
+   else if (hip1->errtype > hip2->errtype)
+      return 1;
+   else
+      return 0;
+}
+
+static SeqIdPtr SWSeqIdReplaceID(SeqIdPtr sip_head, SeqIdPtr sip1, SeqIdPtr sip2)
+{
+   Boolean   found;
+   SeqIdPtr  sip;
+   SeqIdPtr  sip_prev;
+
+   sip = sip_head;
+   sip_prev = NULL;
+   while (sip != NULL && !found)
+   {
+      if (SeqIdComp(sip, sip1))
+         found = TRUE;
+      else
+      {
+         sip_prev = sip;
+         sip = sip->next;
+      }
+   }
+   if (!found)
+      return sip_head;
+   if (sip_prev == NULL)
+   {
+      sip2->next = sip_head->next;
+      SeqIdFree(sip_head);
+      return sip2;
+   } else
+   {
+      sip_prev->next = sip2;
+      sip2->next = sip->next;
+      SeqIdFree(sip);
+      return sip_head;
+   }
+}
+
 static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
 {
   BLAST_OptionsBlkPtr options;
@@ -2256,7 +2315,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Int4                gi = 0,
                       offset,
                       totlenlcl = 0, totlendb = 0;
-  Int4                j, k, len;
+  Int4                i, j, k, len;
   Int2                index;
   Uint1               strand;
   Boolean             ok, 
@@ -2267,7 +2326,12 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Int4                start1, start2, stop1, stop2;
   CharPtr             errstr;
   Boolean             nonly;
+  BestHitPtr          hip, hip_prev, hip_head;
+  BestHitPtr          PNTR hiparray;
+  Char                messagestr[1500];
+  Int4                numhips;
 
+  hip_prev = hip_head = NULL;
   errstr = NULL;
   if (salp!=NULL) {
      if (salp->segtype == 2) {
@@ -2330,77 +2394,64 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                     MemFree(errstr);
                  errstr = (CharPtr)MemNew(1000*sizeof(Char));
                  bestsalp = SeqAlignBestHit (seqalign, bsp1, bsp2, 100, &errstr, &nonly);
-                 if (errstr[0] == '\0' || nonly) 
+                 hip = (BestHitPtr)MemNew(sizeof(BestHit));
+                 hip->sap = bestsalp;
+                 hip->sip1 = lclsip;
+                 hip->sip2 = dbsip;
+                 hip->errstr = StringSave(errstr);
+                 hip->nonly = nonly;
+                 if (*hip->errstr == '\0' || nonly)
+                    hip->errtype = 0;
+                 else
+                    hip->errtype = 1;
+                 if (hip_head != NULL)
                  {
-                    SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank. \nDo you wish to replace it?", strLog);
-                    if (ans != ANS_CANCEL) 
-                    {
-                       offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
-                       if ((SeqAlignStrand(bestsalp, 0)==Seq_strand_minus && SeqAlignStrand(bestsalp, 1) != Seq_strand_minus) || (SeqAlignStrand(bestsalp, 1)==Seq_strand_minus && SeqAlignStrand(bestsalp, 0) != Seq_strand_minus))
-                       {
-                          strand=Seq_strand_minus;
-                          AlnMgr2IndexSingleChildSeqAlign(bestsalp);
-                          AlnMgr2GetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
-                          AlnMgr2GetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
-                          len = stop2 + start1;
-                       } else
-                          strand=Seq_strand_plus;
-                       SeqAlignStartUpdate (salp, lclsip, offset, len, strand);
-                       dsp->ids = SeqIdReplaceID(dsp->ids, presip, dbsip, next); 
-                       if (presip)
-                          sip = presip->next;
-                       else
-                          sip = dsp->ids;
-                       SeqAlignReplaceId (lclsip, dbsip, salp);
-                       vnp = nrSeqIdAdd (vnp, lclsip);
-                       found = TRUE;
-                    }
-                    SeqAlignFree (bestsalp);
-                 }
-                 else {
-                    SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank.\n However, the local version is not identical to the most recent database version.\n %s \nDo you wish to replace it anyway ?\n If you cancel, the alignment of the local and the database versions \nof \"%s\" will be saved in the error file \"error.log\"", strLog, errstr, strLog);
-                    if (ans != ANS_CANCEL) 
-                    {
-                       offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
-                       if (SeqAlignStrand(bestsalp, 0)==Seq_strand_minus || SeqAlignStrand(bestsalp, 1)==Seq_strand_minus)
-                          strand=Seq_strand_minus;
-                       else
-                          strand=Seq_strand_plus;
-                       SeqAlignStartUpdate (salp, lclsip, offset, len, strand);
-                       dsp->ids = SeqIdReplaceID(dsp->ids, presip, dbsip, next); 
-                       if (presip)
-                          sip = presip->next;
-                       else
-                          sip = dsp->ids;
-                       SeqAlignReplaceId (lclsip, dbsip, salp);
-                       vnp = nrSeqIdAdd (vnp, lclsip);
-                       found = TRUE;
-                    }
-                    else {
-                       showtextalign_fromalign (bestsalp, "error.log", NULL);
-                    }
-                    sip->next = next;
-                 }
-                 if (seqalign)
-                    seqalign = SeqAlignFree (seqalign);
-              } else {
+                    hip_prev->next = hip;
+                    hip_prev = hip;
+                 } else
+                    hip_head = hip_prev = hip;
+             } else {
                  if (totlendb == 0) {
-                   SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                   ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                    SeqIdWrite(dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                    sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
                    sip->next = next;
                  } else if (totlenlcl == 0) {
                    SeqIdWrite (lclsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                   ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                   sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
                    sip->next = next;
                  }
+                 hip = (BestHitPtr)MemNew(sizeof(BestHit));
+                 hip->sap = bestsalp;
+                 hip->sip1 = lclsip;
+                 hip->sip2 = dbsip;
+                 hip->errstr = StringSave(errstr);
+                 hip->nonly = FALSE;
+                 hip->errtype = 2;
+                 if (hip_head != NULL)
+                 {
+                    hip_prev->next = hip;
+                    hip_prev = hip;
+                 } else
+                    hip_head = hip_prev = hip;
               }
               }
               else {
                  SeqIdWrite (sip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                 ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                 sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
                  sip->next = next;
+                 hip = (BestHitPtr)MemNew(sizeof(BestHit));
+                 hip->sap = bestsalp;
+                 hip->sip1 = lclsip;
+                 hip->sip2 = dbsip;
+                 hip->errstr = StringSave(errstr);
+                 hip->nonly = FALSE;
+                 hip->errtype = 3;
+                 if (hip_head != NULL)
+                 {
+                    hip_prev->next = hip;
+                    hip_prev = hip;
+                 } else
+                    hip_head = hip_prev = hip;
               }
            }
            presip = sip;
@@ -2408,6 +2459,126 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
            index++;
            found = FALSE;
         }
+        hip = hip_head;
+        numhips = 0;
+        while (hip != NULL)
+        {
+           numhips++;
+           hip = hip->next;
+        }
+        hiparray = (BestHitPtr PNTR)MemNew(numhips*sizeof(BestHitPtr));
+        hip = hip_head;
+        numhips = 0;
+        while (hip != NULL)
+        {
+           hiparray[numhips] = hip;
+           numhips++;
+           hip = hip->next;
+        }
+        HeapSort(hiparray, numhips, sizeof(BestHitPtr), OrderBestHits);
+        i = 0;
+        while (i<numhips && (*hiparray[i]->errstr == '\0' || hiparray[i]->nonly == TRUE))
+        {
+           i++;
+        }
+        if (i > 0)
+        {
+           messagestr[0] = '\0';
+           for (j=0; j<i; j++)
+           {
+              SeqIdWrite(hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+              StringCat(messagestr, strLog);
+              StringCat(messagestr, ", ");
+           }
+           ans = Message(MSG_OKC, "This alignment contains %s that %s already in GenBank. \nDo you wish to replace %s?", messagestr, i>1?"are":"is", i>1?"them":"it");
+           if (ans != ANS_CANCEL)
+           {
+              for (j=0; j<i; j++)
+              {
+                 offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+                 if ((SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 0) != Seq_strand_minus))
+                 {
+                     strand=Seq_strand_minus;
+                     AlnMgr2IndexSingleChildSeqAlign(hiparray[j]->sap);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
+                     len = stop2 + start1;
+                 } else
+                      strand=Seq_strand_plus;
+                 SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
+                 dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+                 if (presip)
+                    sip = presip->next;
+                 else
+                    sip = dsp->ids;
+                 SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
+                 vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
+                 found = TRUE;
+                 SeqAlignFree(hiparray[j]->sap);
+              }
+           } else /* need to ask one by one */
+           {
+              for (j=0; j<i; j++)
+              {
+                 SeqIdWrite(hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                 ans = Message(MSG_OKC, "This alignment contains %s that is already in GenBank. \nDo you wish to replace it?", strLog);
+                 if (ans != ANS_CANCEL)
+                 {
+                    offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+                    if ((SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 0) != Seq_strand_minus))
+                    {
+                        strand=Seq_strand_minus;
+                        AlnMgr2IndexSingleChildSeqAlign(hiparray[j]->sap);
+                        AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
+                        AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
+                        len = stop2 + start1;
+                    } else
+                         strand=Seq_strand_plus;
+                    SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
+                    dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+                    if (presip)
+                       sip = presip->next;
+                    else
+                       sip = dsp->ids;
+                    SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
+                    vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
+                    found = TRUE;
+                    SeqAlignFree(hiparray[j]->sap);
+                 }
+              }
+           }
+        }
+        for (j=i; j<numhips; j++)
+        {
+           if (hiparray[j]->errtype == 1)
+           {
+               SeqIdWrite (hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+               ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank.\n However, the local version is not identical to the most recent database version.\n %s \nDo you wish to replace it anyway ?\n If you cancel, the alignment of the local and the database versions \nof \"%s\" will be saved in the error file \"error.log\"", strLog, hiparray[j]->errstr, strLog);
+               if (ans != ANS_CANCEL)
+               {
+                  offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+                  if (SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus || SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus)
+                     strand=Seq_strand_minus;
+                  else
+                     strand=Seq_strand_plus;
+                  SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
+                  dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+                  if (presip)
+                     sip = presip->next;
+                  else
+                     sip = dsp->ids;
+                  SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
+                  vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
+                  found = TRUE;
+               }
+               else {
+                  showtextalign_fromalign (hiparray[j]->sap, "error.log", NULL);
+               }
+            } else
+               Message(MSG_OK, "%s", hiparray[j]->errstr);
+            if (seqalign)
+               seqalign = SeqAlignFree (seqalign);
+         }
      }
   }
   return vnp;  

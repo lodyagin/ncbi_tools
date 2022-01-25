@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.12 2001/11/13 19:52:56 bauer Exp $
+/* $Id: cddumper.c,v 1.16 2002/03/07 19:12:14 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.12 $
+* $Revision: 1.16 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.16  2002/03/07 19:12:14  bauer
+* major revisions to cgi-bins and the CD-dumper
+*
+* Revision 1.15  2002/02/20 22:26:33  bauer
+* fixed bug in recalculation of diversity ranks for finished CDs
+*
+* Revision 1.14  2002/01/28 14:10:40  bauer
+* add short name to trunc_master defline
+*
+* Revision 1.13  2002/01/04 19:49:16  bauer
+* support for CDTrack production
+*
 * Revision 1.12  2001/11/13 19:52:56  bauer
 * biostrucs from file
 *
@@ -89,7 +101,7 @@
 #include "cddsrv.h"
 #include "cddutil.h"
 
-#define NUMARGS 23
+#define NUMARGS 25
 static Args myargs[NUMARGS] = {
   {"Cd-Accession",                                           /*0*/
    "RHO",      NULL,NULL,FALSE,'c',ARG_STRING, 0.0,0,NULL},
@@ -115,10 +127,10 @@ static Args myargs[NUMARGS] = {
    "-1",       NULL,NULL,FALSE,'p',ARG_INT,    0.0,0,NULL},
   { "Use this real-ind file to import alignment",           /*11*/
     NULL,      NULL,NULL,TRUE, 'i',ARG_STRING, 0.0,0,NULL},
-  { "Update this existing CD (local file name)",            /*12*/
+  { "Update this existing CD (file name, will overwrite)",  /*12*/
    NULL,       NULL,NULL,TRUE, 'u',ARG_STRING, 0.0,0,NULL},
   { "Binary input CD",                                      /*13*/
-   "F",        NULL,NULL,FALSE,'e',ARG_BOOLEAN,0.0,0,NULL},
+    "F",       NULL,NULL,FALSE,'e',ARG_BOOLEAN,0.0,0,NULL},
   { "New accession for CD in case of update",               /*14*/
     NULL,      NULL,NULL,TRUE, 'n',ARG_STRING, 0.0,0,NULL},
   { "Parse new name from real-ind file",                    /*15*/
@@ -127,7 +139,7 @@ static Args myargs[NUMARGS] = {
     "BLOSUM62",NULL,NULL,FALSE,'M',ARG_STRING, 0.0,0,NULL},
   { "Make this PDB-derived sequence the new master",        /*17*/
     NULL,      NULL,NULL,TRUE, 'R',ARG_STRING, 0.0,0,NULL},
-  { "Output PSSMs only",                                    /*18*/
+  { "Output Checkpoint file/Sequence only (no CD/tree)",    /*18*/
     "F",       NULL,NULL,FALSE,'o',ARG_BOOLEAN,0.0,0,NULL},
   { "trim Bioseqs",                                         /*19*/
     "T",       NULL,NULL,FALSE,'T',ARG_BOOLEAN,0.0,0,NULL},
@@ -136,7 +148,11 @@ static Args myargs[NUMARGS] = {
   { "retrieve superposition data from PubVast",             /*21*/
     "T",       NULL,NULL,FALSE,'v',ARG_BOOLEAN,0.0,0,NULL},
   { "Parse short name from description, move to name field",/*22*/
-    "F",       NULL,NULL,TRUE,'P', ARG_BOOLEAN,0.0,0,NULL}
+    "F",       NULL,NULL,TRUE, 'P',ARG_BOOLEAN,0.0,0,NULL},
+  { "Write out Checkpoint File, Sequence, and Tree File",   /*23*/
+    "T",       NULL,NULL,TRUE, 'K',ARG_BOOLEAN,0.0,0,NULL},
+  { "Verbose",                                              /*24*/
+    "F",       NULL,NULL,TRUE, 'V',ARG_BOOLEAN,0.0,0,NULL}
 };
 
 /*---------------------------------------------------------------------------*/
@@ -146,52 +162,11 @@ static Args myargs[NUMARGS] = {
 /*---------------------------------------------------------------------------*/
 static Boolean CddGetParams()
 {
-  URLBase[0] = URLcgi[0] = ENTREZurl[0] = DOCSUMurl[0] = MAILto[0] = '\0';
   MMDBpath[0] = gunzip[0] = '\0';
 
-  GetAppParam("cdd", "CDDSRV", "URLBase", "", URLBase, PATH_MAX);
-  if (URLBase[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no URLBase...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "URLcgi", "", URLcgi, PATH_MAX);
-  if (URLcgi[0] == '\0') {
-                ErrPostEx(SEV_FATAL,0,0,"CDD config file has no URLcgi...\n");
-                return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "ENTREZurl", "", ENTREZurl, PATH_MAX);
-  if (ENTREZurl[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no ENTREZurl...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "DOCSUMurl", "", DOCSUMurl, PATH_MAX);
-  if (DOCSUMurl[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no DOCSUMurl...\n");
-    return FALSE;
-  }
   GetAppParam("cdd", "CDDSRV", "Gunzip", "", gunzip, (size_t) 256*(sizeof(Char)));
   if (gunzip[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no Gunzip...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "Database", "", MMDBpath, PATH_MAX);
-  if (MMDBpath[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"MMDB config file\nMMDBSRV section has no Database...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "MAILto", "", MAILto, PATH_MAX);
-  if (MAILto[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no MAILto...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "DATApath", "", DATApath, PATH_MAX);
-  if (DATApath[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no VAST Data path...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "CDDpath", "", CDDpath, PATH_MAX);
-  if (CDDpath[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no VAST html path...\n");
     return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "CDDatabase", "", CDDdpath, PATH_MAX);
@@ -199,19 +174,9 @@ static Boolean CddGetParams()
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no CDD data path...\n");
     return FALSE;
   }
-  GetAppParam("cdd", "CDDSRV", "CVDatabase", "", CDDvpath, PATH_MAX);
-  if (CDDvpath[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no CDD/VAST data path...\n");
-    return FALSE;
-  }
   GetAppParam("cdd", "CDDSRV", "CDDextens", "", CDDextens, PATH_MAX);
   if (CDDextens[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no CDD file name extension...\n");
-    return FALSE;
-  }
-  GetAppParam("cdd", "CDDSRV", "RAWextens", "", RAWextens, PATH_MAX);
-  if (RAWextens[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no RAW file name extension...\n");
     return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "CDDdescr", "", CDDdescr, PATH_MAX);
@@ -219,13 +184,8 @@ static Boolean CddGetParams()
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no description file name extension...\n");
     return FALSE;
   }
-  GetAppParam("cdd", "CDDSRV", "Database", "", database, PATH_MAX);
-  if (database[0] == '\0') {
-    ErrPostEx(SEV_FATAL,0,0,"CDD config file has no VAST data path...\n");
-    return FALSE;
-  }
   GetAppParam("cdd", "CDDSRV", "REFpath", "", REFpath, PATH_MAX);
-  if (database[0] == '\0') {
+  if (REFpath[0] == '\0') {
     ErrPostEx(SEV_FATAL,0,0,"CDD config file has no REFpath...\n");
     return FALSE;
   }
@@ -372,7 +332,7 @@ static CddSumPtr CddSumLink(CddSumPtr PNTR head, CddSumPtr newnode)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeqPtr pbsaSeq,
-                           Boolean bTrimBioseq)
+                           Boolean bTrimBioseq, Boolean bVerbose)
 {
   BioseqPtr      bspNew;
   CddSumPtr      pcdsThis, pcds = NULL;
@@ -467,7 +427,8 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
         } else {
           sep = (SeqEntryPtr) ID1SeqEntryGet(uid,retcode);
           if (sep == NULL) {
-            printf("Unable to get SeqEntry %d from ID1, skipping ..\n",uid);
+            if (bVerbose) 
+	      printf("Unable to get SeqEntry %d from ID1, skipping ..\n",uid);
           } else {
             if (pcdsThis->bIsPdb) nPdb++;
             iCddSize++;
@@ -522,8 +483,9 @@ CddSumPtr CddProcessSeqAln(SeqAlignPtr* salpInOut, Int4* n_Pdb, BiostrucAlignSeq
         }
       }
       else {
-        printf("Warning: %s - could not find uid #%d[%d] in ID1, removed from Cdd\n",
-	       cCDDid,iCddSize,sip->data.intvalue);
+        if (bVerbose)
+          printf("Warning: %s - could not find uid #%d[%d] in ID1, removed from Cdd\n",
+	         cCDDid,iCddSize,sip->data.intvalue);
         sip=sip->next;
         iPcount++;
       }
@@ -778,7 +740,7 @@ SeqAlignPtr CddReadRealInd(CharPtr name)
       pdb_seq_id = (PDBSeqIdPtr) PDBSeqIdNew();
       if (strlen(pdbid) > 4) pdb_seq_id->chain = (Uint1) *(pdbid+4);
       pdbid[4]='\0';
-      pdb_seq_id->mol = strdup(pdbid);
+      pdb_seq_id->mol = StringSave(pdbid);
       strtok(mid,"|");
       priThis->mgi = atoi(mid);
       sip = ValNodeNew(NULL);
@@ -800,7 +762,7 @@ SeqAlignPtr CddReadRealInd(CharPtr name)
       pdb_seq_id = (PDBSeqIdPtr) PDBSeqIdNew();
       if (strlen(pdbid) > 4) pdb_seq_id->chain = (Uint1) *(pdbid+4);
       pdbid[4]='\0';
-      pdb_seq_id->mol = strdup(pdbid);
+      pdb_seq_id->mol = StringSave(pdbid);
       strtok(sid,"|");
       priThis->sgi = atoi(sid);
       sip = ValNodeNew(NULL);
@@ -1608,7 +1570,7 @@ static Int4 Cdd_tax1_join(Int4 taxid1, Int4 taxid2)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-static void CddAddTax(CddPtr pcdd) 
+static void CddAddTax(CddPtr pcdd, Boolean bVerbose) 
 {
   BioseqPtr               bsp;
   BioseqSetPtr            bssp;
@@ -1627,7 +1589,7 @@ static void CddAddTax(CddPtr pcdd)
   descr = pcdd->description; /* assumes that Tax-node is not 1st description*/
   while (descr) {            /* and that there's no 2 consecutive Tax-nodes */
     if (descr->choice == CddDescr_tax_source) {
-      printf("Updating existing taxonomy assignments...\n");
+      if (bVerbose) printf("Updating existing taxonomy assignments...\n");
       if (vnpTail) vnpTail->next = descr->next;
     }
     vnpTail = descr;
@@ -1639,7 +1601,7 @@ static void CddAddTax(CddPtr pcdd)
   sep = bssp->seq_set;
   while (sep) {
     if (sep->choice != 1) {
-      printf("Warning: Error in Seq-entry!\n");
+      if (bVerbose) printf("Warning: Error in Seq-entry!\n");
     } else {
       bsp = sep->data.ptrvalue;
       descr = bsp->descr;
@@ -1688,8 +1650,24 @@ static ValNodePtr SeqDescCopy(ValNodePtr vnp)
   
   vnpNew = ValNodeNew(NULL);
   vnpNew->choice = vnp->choice;
-  vnpNew->data.ptrvalue = strdup(vnp->data.ptrvalue);
+  vnpNew->data.ptrvalue = StringSave(vnp->data.ptrvalue);
   return(vnpNew);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static CharPtr CddTitlePrepend(CharPtr cTitle, CharPtr cPrefix)
+{
+  CharPtr  cNewTitle;
+  Int4     cLen;
+  
+  cLen = Nlm_StrLen(cTitle) + Nlm_StrLen(cPrefix) + 3;
+  cNewTitle = MemNew(cLen * sizeof(Char));
+  sprintf(cNewTitle,"%s, %s",cPrefix, cTitle);
+  MemFree(cTitle);
+  return (cNewTitle);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1702,18 +1680,19 @@ Int2 Main()
   BioseqPtr                bspTrunc, bspCons, bspFake;
   BioseqPtr                bspThis;
   BioseqSetPtr             bssp;
-  BiostrucAlignPtr         pbsaStruct = NULL;
+  BiostrucAlignPtr         pbsaStruct              = NULL;
   BiostrucAlignSeqPtr      pbsaSeq;
   BiostrucSeqsPtr          pbsaStrSeq;
-  CddDescPtr               pcddesc = NULL, pcddeschead = NULL;
+  CddDescPtr               pcddesc                 = NULL;
+  CddDescPtr               pcddeschead             = NULL;
   CddExpAlignPtr           pCDea, pCDea1, pCDeaR;
   CddPtr                   pcdd;
-  CddSumPtr                pcds = NULL;
+  CddSumPtr                pcds                    = NULL;
   CddTreePtr               pcddt;
   CharPtr                  cCategory, pcTest;
   CharPtr                  cDescStr, cDescNew;
   DbtagPtr                 dbtp;
-  GlobalIdPtr              pGid;
+  GlobalIdPtr              pGid                    = NULL;
   ObjectIdPtr              oidp;
   PDBSeqIdPtr              pdbsip;
   SeqAlignPtr              salpHead, salpNew, salpCons, salpCopy, salpTail;
@@ -1721,18 +1700,22 @@ Int2 Main()
   SeqAnnotPtr              psaCAlignHead;
   SeqEntryPtr              sepNew;
   SeqEntryPtr              oldhead, newhead, septemp, oldtail, newtail, remaind;
-  SeqIdPtr                 sip_master, sipTrunc;
+  SeqIdPtr                 sip_master, sipTrunc, sipNew;
   SeqIntPtr                sintp;
-  TrianglePtr              pTri = NULL;
-  ValNodePtr               pvnId, pub, vnp, desc = NULL;
-  Int4                     muid, nPdb = 0, i;
-  Int2                     iSeqStrMode = CDDSEVSTRUC;
-  Boolean                  is_network;
+  TrianglePtr              pTri                    = NULL;
+  ValNodePtr               pvnId, pub, vnp, vnpHead, pubNew;
+  ValNodePtr               desc                    = NULL;
+  Int4                     pmid, muid, i, nPdb     = 0;
+  Int4*                    iGiList;
+  Int2                     iSeqStrMode             = CDDSEVSTRUC;
+  Boolean                  is_network, bHaveSource = FALSE;
   Char                     CDDref[PATH_MAX];
-  Char                     cLink[23] = "linked to 3D-structure";
+  Char                     cLink[23]               = "linked to 3D-structure";
   Char                     pcBuf[100];
   Char                     cOutFile[PATH_MAX];
   FILE                    *fp;
+  Boolean                  bIsFinished             = FALSE;
+  CharPtr                  pch;
 
 /*---------------------------------------------------------------------------*/
 /* retrieve command-line parameters                                          */
@@ -1749,7 +1732,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   if (!ID1BioseqFetchEnable("cddump",TRUE))
     CddSevError("Unable to initialize ID1");
-  if (!MMDBInit()) CddHtmlError("MMDB Initialization failed");
+  if (!MMDBInit()) CddSevError("MMDB Initialization failed");
   if ( !EntrezInit("Cddump", FALSE, &is_network))
     CddSevError("Unable to start Entrez");
 
@@ -1767,14 +1750,18 @@ Int2 Main()
     } else pcdd = (CddPtr) CddReadFromFile(myargs[12].strvalue, FALSE);
     if (!pcdd) CddSevError("Could not read CD from file!");
     iSeqStrMode = CDDUPDATE;
-    if (CddHasConsensus(pcdd)) CddSevError("Unable to process: CD has consensus");
-    psaCAlignHead = (SeqAnnotPtr)  pcdd->seqannot;
-    salpHead      = (SeqAlignPtr)  pcdd->seqannot->data;
-    bssp          = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
-    pbsaSeq       = BiostrucAlignSeqNew();
-    pbsaSeq->sequences = bssp->seq_set;
-    if (myargs[14].strvalue) {
-      strcpy(cCDDid, myargs[14].strvalue);
+    if (CddHasConsensus(pcdd)) {
+      bIsFinished = TRUE;
+      if (myargs[24].intvalue) printf("CD is finished, will dump Checkpoint only\n"); 
+    } else {
+      psaCAlignHead = (SeqAnnotPtr)  pcdd->seqannot;
+      salpHead      = (SeqAlignPtr)  pcdd->seqannot->data;
+      bssp          = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
+      pbsaSeq       = BiostrucAlignSeqNew();
+      pbsaSeq->sequences = bssp->seq_set;
+      if (myargs[14].strvalue) {
+        strcpy(cCDDid, myargs[14].strvalue);
+      }
     }
   }
 
@@ -1797,7 +1784,8 @@ Int2 Main()
 /* process the Seqalign                                                      */
 /*---------------------------------------------------------------------------*/
     pcds = (CddSumPtr) CddProcessSeqAln(&salpHead,&nPdb,pbsaSeq,
-                                        myargs[19].intvalue);
+                                        myargs[19].intvalue,
+					(Boolean) myargs[24].intvalue);
     if (nPdb > 1) {
       salpHead = CddAlignSort(salpHead,pcds);
       pcds = CddSumSort(pcds);
@@ -1893,11 +1881,11 @@ Int2 Main()
     pcddeschead = pcddesc;
     while (pcddesc) {
       if (strcmp(cCDDid,pcddesc->cCddId)==0) {
-        CddAssignDescr(pcdd,(CharPtr) strdup(pcddesc->cDescr),CddDescr_comment,0);
+        CddAssignDescr(pcdd,(CharPtr) StringSave(pcddesc->cDescr),CddDescr_comment,0);
         if (strncmp(pcddesc->cSourc," ",1)!=0) {
           cCategory = StringSave(pcddesc->cSourc);
           cCategory[strlen(cCategory)-1]='\0';
-          CddAssignDescr(pcdd, (CharPtr) strdup(cCategory),CddDescr_category,0);
+          CddAssignDescr(pcdd, (CharPtr) StringSave(cCategory),CddDescr_category,0);
         }
         break;
       }  
@@ -1908,25 +1896,23 @@ Int2 Main()
 /* note whether CD has link to 3D-Structure                                  */
 /*---------------------------------------------------------------------------*/
     if (nPdb) {
-      CddAssignDescr(pcdd, strdup(cLink), CddDescr_comment,0);
-      
+      CddAssignDescr(pcdd, StringSave(cLink), CddDescr_comment,0);
     }
-    CddAssignDescr(pcdd, NULL, CddDescr_status , myargs[8].intvalue);
 
 /*---------------------------------------------------------------------------*/
 /* assign the source identifier if present                                   */
 /*---------------------------------------------------------------------------*/
     if (NULL == myargs[4].strvalue) {
       if (strncmp(myargs[0].strvalue,"pfam",4) == 0) {
-        myargs[4].strvalue = strdup("Pfam");
+        myargs[4].strvalue = StringSave("Pfam");
       } else if (strncmp(myargs[0].strvalue,"LOAD",4) == 0) {
-        myargs[4].strvalue = strdup("Load");
+        myargs[4].strvalue = StringSave("Load");
       } else {
-        myargs[4].strvalue = strdup("Smart");
+        myargs[4].strvalue = StringSave("Smart");
       }
     
     }
-    CddAssignDescr(pcdd,strdup(myargs[4].strvalue),CddDescr_source,0);
+    CddAssignDescr(pcdd,StringSave(myargs[4].strvalue),CddDescr_source,0);
 
 /*---------------------------------------------------------------------------*/
 /* assign create date as the current date                                    */
@@ -1957,8 +1943,44 @@ Int2 Main()
       FileClose(fp);
       MedArchFini();
     }
-
   }                                       /* end if iSeqStrMode != CDDUPDATE */
+
+/*---------------------------------------------------------------------------*/
+/* remove status if present and set to current flag                          */
+/*---------------------------------------------------------------------------*/
+  if (!bIsFinished) {
+    CddKillDescr(pcdd,NULL, CddDescr_status, 0);
+    CddAssignDescr(pcdd, NULL, CddDescr_status , myargs[8].intvalue);
+/*---------------------------------------------------------------------------*/
+/* assign a CD-name automatically if not yet present in the CD               */
+/*---------------------------------------------------------------------------*/
+      if (!pcdd->name) {
+        pcdd->name = StringSave(cCDDid);
+      }
+      if (myargs[22].intvalue) {
+        if (Nlm_StrNCmp(pcdd->name,"pfam0",5) == 0 ||
+            Nlm_StrNCmp(pcdd->name,"smart0",6) == 0 || 
+	    Nlm_StrNCmp(pcdd->name,"LOAD_",5) == 0) {
+          vnp = pcdd->description;
+          while (vnp) {
+            if (vnp->choice == CddDescr_comment) {
+	      if (Nlm_StrCmp(vnp->data.ptrvalue,"linked to 3D-structure") != 0) {
+	        cDescStr = StringSave(vnp->data.ptrvalue);
+                break;
+	      }
+            }
+            vnp = vnp->next;
+          }
+          cDescNew = Nlm_StrStr(cDescStr,",");
+          if (cDescNew) {
+            if (Nlm_StrLen(cDescNew) > 2) {
+	      vnp->data.ptrvalue = cDescNew + 2;
+              Nlm_StrTok(cDescStr,",");
+              pcdd->name = cDescStr;
+            }
+          }
+        }
+      }
 
 /*---------------------------------------------------------------------------*/
 /* if parsed from a real.ind-file, extract the CDD id from the input file    */
@@ -1966,265 +1988,416 @@ Int2 Main()
 /* with RPS-Blast. The CDD-id is only chaged at this point so that the refs  */
 /* and descriptions are parsed according to the id of the 'mother' CD        */
 /*---------------------------------------------------------------------------*/
-  if (myargs[15].intvalue > 0 && myargs[11].strvalue) {
-    strncpy(cCDDid,myargs[11].strvalue,strlen(myargs[11].strvalue)-9);
-  }
+    if (myargs[15].intvalue > 0 && myargs[11].strvalue) {
+      strncpy(cCDDid,myargs[11].strvalue,strlen(myargs[11].strvalue)-9);
+    }
 
 /*---------------------------------------------------------------------------*/
 /* this part includes modifications which are part of a CD update as well    */
 /*---------------------------------------------------------------------------*/
-  pvnId = ValNodeNew(NULL);
-  pGid = (GlobalIdPtr) GlobalIdNew();
-  pGid->accession = strdup(cCDDid);
-  pvnId->choice = CddId_gid;
-  pvnId->data.ptrvalue = (GlobalIdPtr) pGid;
-  pcdd->id = pvnId;
-  
+    if (!pcdd->id || myargs[14].strvalue) {
+      pvnId = ValNodeNew(NULL);
+      pGid = (GlobalIdPtr) GlobalIdNew();
+      pGid->accession = StringSave(cCDDid);
+      pvnId->choice = CddId_gid;
+      pvnId->data.ptrvalue = (GlobalIdPtr) pGid;
+      pcdd->id = pvnId;
+    }
+    
 /*---------------------------------------------------------------------------*/
 /* if requested, reindex the CD-Alignment to a new master. The argument must */
 /* be given as a PDB-derived Sequence ID, in the form of "1ABCX" or "1ABC"   */
 /*---------------------------------------------------------------------------*/
-  if (myargs[17].strvalue) {
-    if (strlen(myargs[17].strvalue) < 4) CddSevError("option -R needs a valid PDB-Id");
-    if (strlen(myargs[17].strvalue) > 5) CddSevError("option -R needs a valid PDB-Id");
-    pdbsip = PDBSeqIdNew();
-    if (strlen(myargs[17].strvalue) == 5) {
-      pdbsip->chain = (Uint1) *(myargs[17].strvalue+4);
-      myargs[17].strvalue[4]='\0';
-    }
-    pdbsip->mol = strdup(myargs[17].strvalue);
-    sip_master = ValNodeNew(NULL);
-    sip_master->choice = SEQID_PDB;
-    sip_master->data.ptrvalue = pdbsip;
-    if (!CddFindSip(sip_master,bssp->seq_set)) CddSevError("Could not find new master in CD");
+    if (myargs[17].strvalue) {
+      if (strlen(myargs[17].strvalue) < 4) CddSevError("option -R needs a valid PDB-Id");
+      if (strlen(myargs[17].strvalue) > 5) CddSevError("option -R needs a valid PDB-Id");
+      pdbsip = PDBSeqIdNew();
+      if (strlen(myargs[17].strvalue) == 5) {
+        pdbsip->chain = (Uint1) *(myargs[17].strvalue+4);
+        myargs[17].strvalue[4]='\0';
+      }
+      pdbsip->mol = StringSave(myargs[17].strvalue);
+      sip_master = ValNodeNew(NULL);
+      sip_master->choice = SEQID_PDB;
+      sip_master->data.ptrvalue = pdbsip;
+      if (!CddFindSip(sip_master,bssp->seq_set)) CddSevError("Could not find new master in CD");
 
-    psaCAlignHead = SeqAnnotNew();
-    psaCAlignHead->type = 2;
-    psaCAlignHead->data = CddReindexSeqAlign(salpHead,sip_master,bssp);
-    salpHead = psaCAlignHead->data;
-    pcdd->seqannot = (SeqAnnotPtr) psaCAlignHead;
-    if (NULL != pcdd->features) pcdd->features = NULL;
+      psaCAlignHead = SeqAnnotNew();
+      psaCAlignHead->type = 2;
+      psaCAlignHead->data = CddReindexSeqAlign(salpHead,sip_master,bssp);
+      salpHead = psaCAlignHead->data;
+      pcdd->seqannot = (SeqAnnotPtr) psaCAlignHead;
+      if (NULL != pcdd->features) pcdd->features = NULL;
 /*---------------------------------------------------------------------------*/
 /* for compliance with Cn3D++, the bioseqs need to be reordered so that the  */
 /* new master appears on top                                                 */
 /*---------------------------------------------------------------------------*/
-    septemp = bssp->seq_set;
-    oldhead = septemp;
-    oldtail = septemp;
-    while (septemp) {
-      if (septemp->choice == 1) {
-        bspThis = (BioseqPtr) septemp->data.ptrvalue;
-	if (CddSameSip(bspThis->id, sip_master)) {
-	  newhead = septemp;
-	  newtail = septemp;
-	  remaind = septemp->next;
-          break;	
-	}
-	else oldtail = septemp;
-      } else (CddSevError("Invalid SeqEntry encountered while reindexing to new master"));
-      septemp = septemp->next;
+      septemp = bssp->seq_set;
+      oldhead = septemp;
+      oldtail = septemp;
+      while (septemp) {
+        if (septemp->choice == 1) {
+          bspThis = (BioseqPtr) septemp->data.ptrvalue;
+	  if (CddSameSip(bspThis->id, sip_master)) {
+	    newhead = septemp;
+	    newtail = septemp;
+	    remaind = septemp->next;
+            break;	
+	  }
+	  else oldtail = septemp;
+        } else (CddSevError("Invalid SeqEntry encountered while reindexing to new master"));
+        septemp = septemp->next;
+      }
+      bssp->seq_set = newhead;
+      newtail->next = oldhead;
+      oldtail->next = remaind;    
     }
-    bssp->seq_set = newhead;
-    newtail->next = oldhead;
-    oldtail->next = remaind;    
-  }
 
 /*---------------------------------------------------------------------------*/
 /* assuming this is a set of pairwise master-slave dendiag alignments,       */
 /* calculate the interval on the master that is aligned                      */
 /*---------------------------------------------------------------------------*/
-  sip_master = CddDetermineMasterSip(pcdd);
-  CddAssignProfileRange(pcdd, sip_master);
+    sip_master = CddDetermineMasterSip(pcdd);
+    CddAssignProfileRange(pcdd, sip_master);
+    if (sip_master->choice == SEQID_PDB) {
+      pcdd->master3d = (SeqIdPtr) SeqIdDup(sip_master);
+    }
 
 /*---------------------------------------------------------------------------*/
 /* create identifier and description for the truncated master                */
 /*---------------------------------------------------------------------------*/
-  oidp = (ObjectIdPtr) ObjectIdNew();
-  oidp->str = strdup(cCDDid);
-  dbtp = DbtagNew();
-  dbtp->tag = oidp;
-  dbtp->db = myargs[4].strvalue;
-  vnp = pcdd->description;
-  while (vnp) {
-    if (vnp->choice == CddDescr_comment) {
-      desc = ValNodeNew(NULL);
-      desc->choice = Seq_descr_title;
-      desc->data.ptrvalue = StringSave((CharPtr)vnp->data.ptrvalue);
-      break;
+    oidp = (ObjectIdPtr) ObjectIdNew();
+    oidp->str = StringSave(cCDDid);
+    dbtp = DbtagNew();
+    dbtp->tag = oidp;
+    dbtp->db = myargs[4].strvalue;
+    vnp = pcdd->description;
+    while (vnp) {
+      if (vnp->choice == CddDescr_comment) {
+        desc = ValNodeNew(NULL);
+        desc->choice = Seq_descr_title;
+        desc->data.ptrvalue = StringSave((CharPtr)vnp->data.ptrvalue);
+        break;
+      }
+      vnp = vnp->next;
     }
-    vnp = vnp->next;
-  }
 
 /*---------------------------------------------------------------------------*/
 /* and create the truncated master                                           */
 /*---------------------------------------------------------------------------*/
-  sintp = (SeqIntPtr) pcdd->profile_range;
-  sipTrunc = (SeqIdPtr) ValNodeNew(NULL);
-  sipTrunc->choice = 11;
-  sipTrunc->data.ptrvalue = dbtp;
-  bspTrunc = (BioseqPtr) BioseqCopy(sipTrunc,sip_master,sintp->from,sintp->to,0,FALSE);
-  if (desc) bspTrunc->descr = SeqDescCopy(desc);
-  if (myargs[9].intvalue == 0) {
+    sintp = (SeqIntPtr) pcdd->profile_range;
+    sipTrunc = (SeqIdPtr) ValNodeNew(NULL);
+    sipTrunc->choice = 11;
+    sipTrunc->data.ptrvalue = dbtp;
+    bspTrunc = (BioseqPtr) BioseqCopy(sipTrunc,sip_master,sintp->from,sintp->to,0,FALSE);
+    if (desc) bspTrunc->descr = SeqDescCopy(desc);
+    if (myargs[9].intvalue == 0) {
 /*---------------------------------------------------------------------------*/
 /* add to cdd if no consensus is calculated                                  */
 /*---------------------------------------------------------------------------*/
-    pcdd->trunc_master = (struct bioseq PNTR) bspTrunc;
+      pcdd->trunc_master = (struct bioseq PNTR) bspTrunc;
 /*---------------------------------------------------------------------------*/
 /* now calculate the PSSM and write the checkpoint file and corresponding    */
 /* sequence out to disk                                                      */
 /*---------------------------------------------------------------------------*/
-    salpCopy = (SeqAlignPtr) CddCopyMSLDenDiag(pcdd->seqannot->data);
-    CddReindexMSLDenDiagMaster(salpCopy, sintp->from);
-    bspFake  = (BioseqPtr) BioseqCopy(NULL,sip_master,sintp->from,sintp->to,0,FALSE);
-    CddDenDiagCposComp2(bspFake,myargs[10].intvalue,salpCopy,pcdd,bspTrunc,0.5,1.0,myargs[16].strvalue);
-  } else {
+      salpCopy = (SeqAlignPtr) CddCopyMSLDenDiag(pcdd->seqannot->data);
+      CddReindexMSLDenDiagMaster(salpCopy, sintp->from);
+      bspFake  = (BioseqPtr) BioseqCopy(NULL,sip_master,sintp->from,sintp->to,0,FALSE);
+/*---------------------------------------------------------------------------*/
+/* Kludge to tell CddDenDiagCposComp2 whether to write out the matrix or not */
+/*---------------------------------------------------------------------------*/
+      if (myargs[23].intvalue) {
+        CddAssignDescr(pcdd,"Write out matrix",CddDescr_comment,0);
+      }
+      CddDenDiagCposComp2(bspFake,myargs[10].intvalue,salpCopy,pcdd,bspTrunc,0.5,1.0,myargs[16].strvalue);
+      if (myargs[23].intvalue) {
+        CddKillDescr(pcdd,"Write out matrix",CddDescr_comment,0);
+      }
+    } else {
 /*---------------------------------------------------------------------------*/
 /* calculate consensus sequence using the 50/50 algorithm                    */
 /*---------------------------------------------------------------------------*/
-    salpNew = (SeqAlignPtr) CddConsensus(salpHead,bssp->seq_set,
-                                         bspTrunc,pcdd->profile_range,
-                                         &bspCons, &salpCons);
-    if (desc) bspCons->descr = SeqDescCopy(desc);
-    sepNew = SeqEntryNew();
-    sepNew->data.ptrvalue = bspCons;
-    sepNew->choice = 1;
-    ValNodeLink(&(pbsaSeq->sequences), sepNew);
-    sintp->from = 0;
-    sintp->to = bspCons->length - 1;
-    sintp->id = SeqIdDup(bspCons->id);
-    sip_master = sintp->id;
-    BioseqFree(bspTrunc);
-    bspTrunc = (BioseqPtr) BioseqCopy(sipTrunc,sip_master,sintp->from,sintp->to,0,FALSE);
-    if (desc) bspTrunc->descr = SeqDescCopy(desc);
-    bspFake  = (BioseqPtr) BioseqCopy(NULL,sip_master,sintp->from,sintp->to,0,FALSE);
-    CddDenDiagCposComp2(bspFake,myargs[10].intvalue,salpNew,pcdd,bspTrunc,0.5,1.0,myargs[16].strvalue);
-    pcdd->trunc_master = (struct bioseq PNTR) bspTrunc;
-    salpNew = SeqAlignSetFree(salpNew);
+      salpNew = (SeqAlignPtr) CddConsensus(salpHead,bssp->seq_set,
+                                           bspTrunc,pcdd->profile_range,
+                                           &bspCons, &salpCons);
+      if (desc) bspCons->descr = SeqDescCopy(desc);
+      sepNew = SeqEntryNew();
+      sepNew->data.ptrvalue = bspCons;
+      sepNew->choice = 1;
+      ValNodeLink(&(pbsaSeq->sequences), sepNew);
+      sintp->from = 0;
+      sintp->to = bspCons->length - 1;
+      sintp->id = SeqIdDup(bspCons->id);
+      sip_master = sintp->id;
+      BioseqFree(bspTrunc);
+      bspTrunc = (BioseqPtr) BioseqCopy(sipTrunc,sip_master,sintp->from,sintp->to,0,FALSE);
+      if (desc) bspTrunc->descr = SeqDescCopy(desc);
+/*---------------------------------------------------------------------------*/
+/* also add short name to trunc_master defline - if there's a consensus seq. */
+/*---------------------------------------------------------------------------*/
+      vnp = bspTrunc->descr;
+      while (vnp) {
+        if (vnp->choice == Seq_descr_title) {
+          if (Nlm_StrNCmp(vnp->data.ptrvalue,pcdd->name,Nlm_StrLen(pcdd->name))) {
+	    vnp->data.ptrvalue = CddTitlePrepend(vnp->data.ptrvalue, pcdd->name);
+	  }
+          break;      
+        }
+        vnp = vnp->next;
+      }
+      bspFake  = (BioseqPtr) BioseqCopy(NULL,sip_master,sintp->from,sintp->to,0,FALSE);
+/*---------------------------------------------------------------------------*/
+/* Kludge to tell CddDenDiagCposComp2 whether to write out the matrix or not */
+/*---------------------------------------------------------------------------*/
+      if (myargs[23].intvalue) {
+        CddAssignDescr(pcdd,"Write out matrix",CddDescr_comment,0);
+      }
+      CddDenDiagCposComp2(bspFake,myargs[10].intvalue,salpNew,pcdd,bspTrunc,0.5,1.0,myargs[16].strvalue);
+      if (myargs[23].intvalue) {
+        CddKillDescr(pcdd,"Write out matrix",CddDescr_comment,0);
+      }
+    
+      pcdd->trunc_master = (struct bioseq PNTR) bspTrunc;
+      salpNew = SeqAlignSetFree(salpNew);
 /*---------------------------------------------------------------------------*/
 /* Now reindex the seqalign to make the consensus the new master             */
 /*---------------------------------------------------------------------------*/
-    pCDea1 = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpCons,bssp->seq_set);
-    pCDeaR = (CddExpAlignPtr) InvertCddExpAlign(pCDea1, bssp->seq_set);
-    salpNew = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL); 
-    pCDeaR = CddExpAlignFree(pCDeaR);   
-    salpTail = salpNew;
-    salpCopy = salpHead;
-    salpHead = salpCopy;
-    i = 0;
-    while (salpHead) {
-      i++;
-      pCDea = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpHead, bssp->seq_set);
-      pCDeaR = (CddExpAlignPtr) CddReindexExpAlign(pCDea1,bspCons->length,pCDea,0,i);
-      salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL);
-      pCDeaR = CddExpAlignFree(pCDeaR);
-      pCDea = CddExpAlignFree(pCDea);
-      salpTail->next = salpThis;
-      salpTail = salpThis;
-      salpHead = salpHead->next;
+      pCDea1 = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpCons,bssp->seq_set);
+      pCDeaR = (CddExpAlignPtr) InvertCddExpAlign(pCDea1, bssp->seq_set);
+      salpNew = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL); 
+      pCDeaR = CddExpAlignFree(pCDeaR);   
+      salpTail = salpNew;
+      salpCopy = salpHead;
+      salpHead = salpCopy;
+      i = 0;
+      while (salpHead) {
+        i++;
+        pCDea = (CddExpAlignPtr) SeqAlignToCddExpAlign(salpHead, bssp->seq_set);
+        pCDeaR = (CddExpAlignPtr) CddReindexExpAlign(pCDea1,bspCons->length,pCDea,0,i);
+        salpThis = (SeqAlignPtr) CddExpAlignToSeqAlign(pCDeaR,NULL);
+        pCDeaR = CddExpAlignFree(pCDeaR);
+        pCDea = CddExpAlignFree(pCDea);
+        salpTail->next = salpThis;
+        salpTail = salpThis;
+        salpHead = salpHead->next;
+      }
+      psaCAlignHead->data = salpNew;
+      pCDea1 = CddExpAlignFree(pCDea1);
+      salpCopy = SeqAlignSetFree(salpCopy);
+/*---------------------------------------------------------------------------*/
+/* transfer CD annotation from the old master to the consensus sequence      */
+/*---------------------------------------------------------------------------*/
+      if (pcdd->alignannot) 
+        CddTransferAlignAnnot(pcdd->alignannot,sip_master,salpNew,bssp);
     }
-    psaCAlignHead->data = salpNew;
-    pCDea1 = CddExpAlignFree(pCDea1);
-    salpCopy = SeqAlignSetFree(salpCopy);
+  } else {                                            /* END if !bIsFinished */
+    vnp = pcdd->id; while (vnp) {
+      if (vnp->choice == CddId_uid) {
+        sipNew = (SeqIdPtr) ValNodeNew(NULL);
+	sipNew->choice = SEQID_GENERAL;
+	dbtp = (DbtagPtr) DbtagNew();
+	dbtp->db = StringSave("CDD");
+	oidp = ObjectIdNew();
+	oidp->id = vnp->data.intvalue;
+	dbtp->tag = oidp;
+	sipNew->data.ptrvalue = dbtp;
+	pcdd->trunc_master->id = sipNew;
+        break;
+      }
+      vnp = vnp->next;
+    }
+    vnp = pcdd->trunc_master->descr;
+    while (vnp) {
+      if (vnp->choice == Seq_descr_title) {
+        if (Nlm_StrNCmp(vnp->data.ptrvalue,pcdd->name,Nlm_StrLen(pcdd->name))) {
+	  vnp->data.ptrvalue = CddTitlePrepend(vnp->data.ptrvalue, pcdd->name);
+	}
+	pvnId = pcdd->id; while (pvnId) {
+	  if (pvnId->choice == CddId_gid) {
+	    pGid = pvnId->data.ptrvalue;
+	    vnp->data.ptrvalue = CddTitlePrepend(vnp->data.ptrvalue,pGid->accession);
+	  }
+	  pvnId = pvnId->next;
+	}
+        break;      
+      }
+      vnp = vnp->next;
+    }
+    salpCopy = SeqAlignSetDup(pcdd->seqannot->data);
+    CddDegapSeqAlign(salpCopy);
+    if (myargs[23].intvalue) {
+      CddAssignDescr(pcdd,"Write out matrix",CddDescr_comment,0);
+    }
+    CddDenDiagCposComp2(pcdd->trunc_master,myargs[10].intvalue,salpCopy,pcdd,pcdd->trunc_master,0.5,1.0,myargs[16].strvalue);
+    if (myargs[23].intvalue) {
+      CddKillDescr(pcdd,"Write out matrix",CddDescr_comment,0);
+    }
+    SeqAlignSetFree(salpCopy);
   }
-  
 /*---------------------------------------------------------------------------*/
 /* if the CD needs to be written to disk, fill in the missing data items     */
 /*---------------------------------------------------------------------------*/
   if (myargs[18].intvalue == 0) {
-
-
+    if (!bIsFinished) {
 /*---------------------------------------------------------------------------*/
 /* do the following steps only if the CD-status is not 2, pending release    */
 /*---------------------------------------------------------------------------*/
-    if (myargs[8].intvalue != 2) {
+      if (myargs[8].intvalue != 2) {
 
 /*---------------------------------------------------------------------------*/
 /* Calculate pairwise percent identities between the sequences, for alignment*/
 /* formatting purposes                                                       */
 /*---------------------------------------------------------------------------*/
-      pTri = (TrianglePtr) CddCalculateTriangle(pcdd);
-      if (pTri) pcdd->distance = pTri;
-    } else {
-      pcdd->posfreq = NULL;
-      pcdd->scoremat = NULL;
-    }
+        pTri = (TrianglePtr) CddCalculateTriangle(pcdd);
+        if (myargs[24].intvalue) printf("\n");
+        if (pTri) pcdd->distance = pTri;
+      } else {
+        pcdd->posfreq = NULL;
+        pcdd->scoremat = NULL;
+      }
 
 /*---------------------------------------------------------------------------*/
 /* create/update the CD taxonomy data item                                   */
 /*---------------------------------------------------------------------------*/
-    CddAddTax(pcdd);
+      CddAddTax(pcdd, (Boolean) myargs[24].intvalue);
 
 /*---------------------------------------------------------------------------*/
 /* check if CD is a proper CD, and trim the seqaligns if necessary           */
 /*---------------------------------------------------------------------------*/
-    if (myargs[8].intvalue !=3 && myargs[20].intvalue > 0) {
-      if (CddTrimSeqAligns(pcdd)) CddSevError("Crashed while trimming seqaligns!");
-    }
+      if (myargs[8].intvalue !=3 && myargs[20].intvalue > 0) {
+        if (CddTrimSeqAligns(pcdd)) CddSevError("Crashed while trimming seqaligns!");
+      }
 
 /*---------------------------------------------------------------------------*/
 /* for output, convert the pairwise master-slave densediag to a multiple     */
 /* dense-diag alignment if the block-structure is consistent - and if        */
 /* specified in the command line                                             */
 /*---------------------------------------------------------------------------*/
-    if (myargs[5].intvalue > 0) {
-      pcdd->seqannot->data = (SeqAlignPtr)CddMSLDenDiagToMULDenDiag(pcdd->seqannot->data);
+      if (myargs[5].intvalue > 0) {
+        pcdd->seqannot->data = (SeqAlignPtr)CddMSLDenDiagToMULDenDiag(pcdd->seqannot->data);
+      }
     }
-
 /*---------------------------------------------------------------------------*/
-/* assign a CD-name automatically if not yet present in the CD               */
+/* unhook the PSSM if not required but still present in the CD               */
 /*---------------------------------------------------------------------------*/
-    if (!pcdd->name) {
-      pcdd->name = strdup(cCDDid);
-    }
-    if (myargs[22].intvalue) {
-      if (Nlm_StrNCmp(pcdd->name,"pfam0",5) == 0 ||
-          Nlm_StrNCmp(pcdd->name,"smart0",6) == 0 || 
-	  Nlm_StrNCmp(pcdd->name,"LOAD_",5) == 0) {
-        vnp = pcdd->description;
-        while (vnp) {
-          if (vnp->choice == CddDescr_comment) {
-	    if (Nlm_StrCmp(vnp->data.ptrvalue,"linked to 3D-structure") != 0) {
-	      cDescStr = StringSave(vnp->data.ptrvalue);
-              break;
-	    }
-          }
-          vnp = vnp->next;
-        }
-        cDescNew = Nlm_StrStr(cDescStr,",");
-        if (cDescNew) {
-          if (Nlm_StrLen(cDescNew) > 2) {
-	    vnp->data.ptrvalue = cDescNew + 2;
-            Nlm_StrTok(cDescStr,",");
-            pcdd->name = cDescStr;
-          }
-        }
+    if (myargs[3].intvalue == 0) {
+      if (pcdd->scoremat) {    
+        pcdd->scoremat = NULL;           /* using MatrixFree corrupts memory */
       }
     }
 
 /*---------------------------------------------------------------------------*/
+/* convert list of pairwise distances into a sorted list of diversity        */
+/*---------------------------------------------------------------------------*/
+    if (!bIsFinished) {
+      if (pcdd->distance) {
+        pcdd->distance->div_ranks = NULL;
+        iGiList = CddMostDiverse(pcdd->distance, pcdd->distance->nelements-1,MAXDIV);
+        vnp = NULL; vnpHead = NULL;
+        for (i=0;i<MIN(MAXDIV,(pcdd->distance->nelements-1));i++) {
+          vnp = ValNodeAddInt(&vnpHead,0,iGiList[i]);
+        }
+        MemFree(iGiList);
+        pcdd->distance->div_ranks = vnpHead;
+        pcdd->distance->scores = ScoreSetFree(pcdd->distance->scores);
+      }
+/*---------------------------------------------------------------------------*/
+/* check for repeats in the CD using default values for detection            */
+/*---------------------------------------------------------------------------*/
+      if (CddCheckForRepeats(pcdd,10,15,2,.875,FALSE)) {
+        if (myargs[24].intvalue) {
+          printf("..found repeats in %s\n",pcdd->name);
+        }
+      }
+
+/*---------------------------------------------------------------------------*/
+/* do a final check of citations listed in description, avoid duplicates     */
+/*---------------------------------------------------------------------------*/
+      MedArchInit();
+      vnp = pcdd->description;
+      while (vnp) {
+        if (vnp->choice == CddDescr_reference) {
+          pub = vnp->data.ptrvalue;
+	  if (pub->choice != PUB_PMid) {
+	    pmid = 0;
+	    pmid = MedArchCitMatchPmId(pub);
+            if (pmid > 0) {
+              pubNew = ValNodeNew(NULL);
+              pubNew->choice = PUB_PMid;
+              pubNew->data.intvalue = pmid;
+              vnp->data.ptrvalue = pubNew;
+	      PubFree(pub);
+	      pub = pubNew;
+            }
+	  }
+          if (pub->choice == PUB_PMid) {
+	    vnpHead = pcdd->description;
+	    while (vnpHead) {
+              if (vnpHead == vnp) break; 
+	      else {
+	        if (vnpHead->choice == CddDescr_reference) {
+                  pubNew = vnpHead->data.ptrvalue;
+		  if (pubNew->choice == PUB_PMid) {
+                    if (pubNew->data.intvalue == pub->data.intvalue) {
+                      CddKillDescr(pcdd,pubNew,CddDescr_reference,pubNew->data.intvalue);
+		    }		
+		  }	      
+	        }
+	      }
+	      vnpHead = vnpHead->next;
+	    }
+	  }
+        }
+        vnp = vnp->next;
+      }
+      MedArchFini();
+    
+/*---------------------------------------------------------------------------*/
+/* record the original "source-id" in the CD - for compat. with curated set  */
+/*---------------------------------------------------------------------------*/
+      vnp = pcdd->description;
+      while (vnp) {
+        if (vnp->choice == CddDescr_source_id) {
+          bHaveSource = TRUE; break;      
+        }
+        vnp = vnp->next;
+      }
+      if (!bHaveSource && pGid) {
+        vnp = ValNodeNew(NULL);
+        vnp->choice = CddId_gid;
+        vnp->data.ptrvalue = pGid;
+        CddAssignDescr(pcdd,vnp,CddDescr_source_id,0);
+      }
+    }
+/*---------------------------------------------------------------------------*/
 /* Write the finished CD out to disk                                         */
 /*---------------------------------------------------------------------------*/
-    strcpy(cOutFile,cCDDid);
-    strcat(cOutFile,".");
-    strcat(cOutFile,myargs[1].strvalue);
-
+    if (myargs[12].strvalue) {
+      strcpy(cOutFile,myargs[12].strvalue);
+    } else {
+      strcpy(cOutFile,cCDDid);
+      strcat(cOutFile,".");
+      strcat(cOutFile,myargs[1].strvalue);
+    }
     if (!CddWriteToFile(pcdd,cOutFile,(Boolean) myargs[2].intvalue))
       CddSevError("Could not write ASN.1 output / CDD to file!");
 
 /*---------------------------------------------------------------------------*/
 /* output the corresponding Cdd tree-file                                    */
 /*---------------------------------------------------------------------------*/
-    strcpy(cOutFile,cCDDid);
-    strcat(cOutFile,".");
-    strcat(cOutFile,myargs[6].strvalue);
+    if (myargs[23].intvalue) {
+      strcpy(cOutFile,cCDDid);
+      strcat(cOutFile,".");
+      strcat(cOutFile,myargs[6].strvalue);
   
-    pcddt              = CddTreeNew();
-    pcddt->name        = pcdd->name;
-    pcddt->id          = pcdd->id;
-    pcddt->description = pcdd->description;
+      pcddt              = CddTreeNew();
+      pcddt->name        = pcdd->name;
+      pcddt->id          = pcdd->id;
+      pcddt->description = pcdd->description;
 
-    if (!CddTreeWriteToFile(pcddt,cOutFile,(Boolean) myargs[2].intvalue))
-      CddSevError("Could not write CDD-tree");
+      if (!CddTreeWriteToFile(pcddt,cOutFile,(Boolean) myargs[2].intvalue))
+        CddSevError("Could not write CDD-tree");
+    }
   }
 
 /*---------------------------------------------------------------------------*/

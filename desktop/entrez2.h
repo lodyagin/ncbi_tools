@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -122,6 +122,15 @@ NLM_EXTERN ForM CreateDocsumForm (
   Boolean delayedNeighbor
 );
 
+NLM_EXTERN void ShowNewNetConfigForm (
+  WndActnProc activate,
+  FormMessageFunc messages,
+  VoidProc accepted,
+  VoidProc cancelled,
+  VoidProc turnedOff,
+  Boolean netCurrentlyOn
+);
+
 NLM_EXTERN void RetrieveDocs (ForM f, Int2 num, Int2 parents, Int4Ptr uids, CharPtr dbName);
 NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2 db, Int2 launchType);
 
@@ -142,8 +151,6 @@ NLM_EXTERN Int4 Query_FetchParsedCount (ForM f);
 NLM_EXTERN Entrez2TermListPtr Query_FetchSeveralCounts (CharPtr dbName, CharPtr fieldName, CharPtr searchStr, Int2 count);
 
 NLM_EXTERN Boolean TermList_UnselectAll (ForM f);
-
-NLM_EXTERN void Entrez2PrefsProc (IteM i);
 
 NLM_EXTERN EnumFieldAssocPtr CreateDatabaseAlist (Entrez2InfoPtr e2ip);
 NLM_EXTERN EnumFieldAssocPtr CreateFieldAlist (Entrez2DbInfoPtr e2db);

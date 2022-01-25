@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.41 $
+* $Revision: 6.46 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.46  2002/04/12 20:42:39  kans
+* LookupFarSeqIDs has separate parameter for alignments and history
+*
+* Revision 6.45  2002/03/14 16:40:03  kans
+* SeqMgrIndexFeaturesEx takes dorevfeats, SeqMgrExploreFeaturesRev and featsByRev added for asn2gb
+*
+* Revision 6.44  2002/03/07 16:12:30  kans
+* TrimLocInSegment for asn2gb master style to constrain feature locations within the part sequence range used by the contig
+*
+* Revision 6.43  2001/12/28 13:19:12  kans
+* added seq_id_precache_func, SeqMgrSetPreCache, LookupFarSeqIDs
+*
+* Revision 6.42  2001/12/26 15:29:23  kans
+* FetchFromSeqIdGiCache and RecordInSeqIdGiCache are extern
+*
 * Revision 6.41  2001/11/15 18:15:48  kans
 * set bsp->omdp at creation, SeqMgrDeleteIndexesInRecord sets omdp->bulkIndexFree
 *
@@ -262,6 +277,8 @@ typedef BioseqPtr (LIBCALLBACK * BSFetchTop)
 
 typedef BioseqPtr (LIBCALLBACK * BSFetch) PROTO((SeqIdPtr sip, Pointer data));
 
+typedef Int4 (LIBCALLBACK * SIDPreCacheFunc) (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, Boolean alignments, Boolean history);
+
 typedef struct seqidindexelement {
 	CharPtr str;               /* PRINTID_FASTA_SHORT string */
 	ObjMgrDataPtr omdp;             /* the omdp containing the Bioseq */
@@ -293,6 +310,7 @@ typedef struct seqmng {        /* functions for sequence data management */
 	SeqIdIndexBlockPtr BioseqIndexData;    /* what BioseqIndex points to */
 	Boolean is_write_locked;
 	Int4 hold_indexing;      /* set by SeqMgrHoldIndexing */
+	SIDPreCacheFunc seq_id_precache_func;
 } SeqMgr, PNTR SeqMgrPtr;
 
 /**** All replaced in Object Manager ************/
@@ -777,6 +795,16 @@ NLM_EXTERN Boolean LIBCALL CountGapsInDeltaSeq PROTO((BioseqPtr bsp, Int4Ptr num
 
 NLM_EXTERN Int4 LIBCALL GetUniGeneIDForSeqId PROTO((SeqIdPtr sip));
 
+/*****************************************************************************
+*
+*   FetchFromSeqIdGiCache(gi, sipp)
+*   RecordInSeqIdGiCache(gi, sip)
+*     Internal functions to cache gi - SeqId associations
+*
+*****************************************************************************/
+NLM_EXTERN Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp);
+NLM_EXTERN void RecordInSeqIdGiCache (Int4 gi, SeqIdPtr sip);
+
 
 /*****************************************************************************
 *
@@ -857,6 +885,7 @@ typedef struct bioseqextra {
   SMFeatItemPtr PNTR  featsByID;      /* array of all features on bioseq in original itemID order */
   SMFeatItemPtr PNTR  featsBySfp;     /* array of all features on bioseq sorted by SeqFeatPtr */
   SMFeatItemPtr PNTR  featsByPos;     /* array of all features on bioseq sorted by location */
+  SMFeatItemPtr PNTR  featsByRev;     /* array of all features on bioseq sorted by reverse location */
   SMFeatItemPtr PNTR  featsByLabel;   /* array of all features on bioseq sorted by label */
 
   SMFeatItemPtr PNTR  genesByPos;     /* subset of featsByPos array containing only gene features */
@@ -939,6 +968,20 @@ NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp, Int4
 
 /*****************************************************************************
 *
+*   TrimLocInSegment takes a location on an indexed far segmented part and trims
+*     trims it to the region referred to by the parent segmented or delta bioseq.
+*
+*****************************************************************************/
+
+NLM_EXTERN SeqLocPtr TrimLocInSegment (
+  BioseqPtr master,
+  SeqLocPtr location,
+  BoolPtr p5ptr,
+  BoolPtr p3ptr
+);
+
+/*****************************************************************************
+*
 *   SeqMgrIndexAlignments called by SeqMgrIndexFeatures, can be called separately
 *
 *****************************************************************************/
@@ -970,6 +1013,24 @@ NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep);
 NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products);
 
 NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
+
+/*****************************************************************************
+*
+*   SeqMgrSetPreCache registers the GiToSeqID precache function
+*   LookupFarSeqIDs calls any registered function to preload the cache
+*
+*****************************************************************************/
+
+NLM_EXTERN void LIBCALL SeqMgrSetPreCache (SIDPreCacheFunc func);
+
+NLM_EXTERN Int4 LookupFarSeqIDs (
+  SeqEntryPtr sep,
+  Boolean components,
+  Boolean locations,
+  Boolean products,
+  Boolean alignments,
+  Boolean history
+);
 
 /*****************************************************************************
 *

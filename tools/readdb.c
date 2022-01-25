@@ -1,4 +1,4 @@
-/* $Id: readdb.c,v 6.291 2001/12/19 21:14:24 camacho Exp $ */
+/* $Id: readdb.c,v 6.307 2002/04/26 16:31:36 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -48,7 +48,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.291 $
+* $Revision: 6.307 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -63,6 +63,58 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.307  2002/04/26 16:31:36  camacho
+* Byte order fix to BlastDBToFasta
+*
+* Revision 6.306  2002/04/24 22:26:42  dondosha
+* First and last oid in alias files are one-offset
+*
+* Revision 6.305  2002/04/18 19:35:05  camacho
+* 1. Added fdfilter/genmask callbacks for wgs subsets
+* 2. Modified fdfilter/genmask refseq_protein callback function
+* 3. Fixed problem in readdb_read_alias_file to read multiple oidlists
+*
+* Revision 6.304  2002/04/09 20:15:15  camacho
+* Fixed FDBAddSequence to correctly handle the dump_info files when using volumes
+*
+* Revision 6.303  2002/03/26 15:32:50  camacho
+* Allow space delimited GIs/accessions in fastacmd
+*
+* Revision 6.302  2002/03/18 17:58:17  camacho
+* Added detailed error messages
+*
+* Revision 6.301  2002/03/08 16:58:50  camacho
+* Added accessions to dump info files *.[pn]di
+*
+* Revision 6.300  2002/02/15 20:50:24  beloslyu
+* fix from HP
+*
+* Revision 6.299  2002/01/31 21:29:50  camacho
+* Fixed bug in readdb_get_asn1_defline
+*
+* Revision 6.298  2002/01/25 17:06:57  camacho
+* Added new criteria to create new refseq databases
+*
+* Revision 6.297  2002/01/24 18:47:48  camacho
+* Moved RDBTaxNamesFree from readdb.[ch] to txalign.[ch]
+*
+* Revision 6.296  2002/01/11 19:22:26  camacho
+* 1. Added preferred_gi field to ReadDBFILE structure.
+* 2. Modified FDReadDeflineAsn to return the preferred gi as the
+*    first element of the list of BlastDefLine structures (if set).
+*
+* Revision 6.295  2002/01/10 20:55:37  camacho
+* Modified OIDBelongsToMaskDB to accept a gi as a parameter
+*
+* Revision 6.294  2002/01/09 20:19:14  camacho
+* Fix to previous commit
+*
+* Revision 6.293  2002/01/09 19:47:49  camacho
+* Added call to SeqEntryLoad in readdb_new_internal
+*
+* Revision 6.292  2002/01/09 14:45:30  camacho
+* Fixed some memory leaks, fix to BlastDBToFasta
+*
 * Revision 6.291  2001/12/19 21:14:24  camacho
 * Guard against a bad pointer in readdb_get_taxonomy_names
 *
@@ -1654,7 +1706,6 @@ static ReadDBAliasPtr
 readdb_read_alias_file(CharPtr filename)
 
 {
-    Boolean done=FALSE, first=TRUE;
     CharPtr buffer;
     CharPtr file_path, ptr;
     Char file_buffer[PATH_MAX], full_buffer[PATH_MAX];
@@ -1701,42 +1752,46 @@ readdb_read_alias_file(CharPtr filename)
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
             if (*ptr != NULLB)
-	    {
-		if (file_path && *file_path != NULLB)
-		{ /* Prepend file_path if it exists. */
-			rdbap->dblist = MemNew(total_length*sizeof(Char));
-			length=0;
-			while (!done)
-			{
-				done = readdb_parse_db_names(&ptr, file_buffer);
-				sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, file_buffer);
+            {
+                Boolean done = FALSE, first = TRUE;
+                if (file_path && *file_path != NULLB)
+                { /* Prepend file_path if it exists. */
+                    rdbap->dblist = MemNew(total_length*sizeof(Char));
+                    length=0;
+                    while (!done)
+                    {
+                        done = readdb_parse_db_names(&ptr, file_buffer);
+                        sprintf(full_buffer, "%s%c%s", file_path, 
+                                DIRDELIMCHR, file_buffer);
 
-				if(*file_buffer == DIRDELIMCHR)
-				    StringCpy(full_buffer, file_buffer);
-				else
-				    sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, file_buffer);
+                        if(*file_buffer == DIRDELIMCHR)
+                            StringCpy(full_buffer, file_buffer);
+                        else
+                            sprintf(full_buffer, "%s%c%s", file_path, 
+                                    DIRDELIMCHR, file_buffer);
 
-				buffer_length = StringLen(full_buffer);
-				if (buffer_length+length > total_length)
-				{
-					rdbap->dblist = Realloc(rdbap->dblist, 2*total_length);
-					total_length *= 2;
-				}		
-				if (!first)
-				{
-					StringCpy(rdbap->dblist+length, " ");
-					length++;
-				}
-				else
-					first = FALSE;
-				StringCpy(rdbap->dblist+length, full_buffer);
-					length += buffer_length;
-			}
-			
-		}
-		else
-                	rdbap->dblist = StringSave(ptr);
-	    }
+                        buffer_length = StringLen(full_buffer);
+                        if (buffer_length+length > total_length)
+                        {
+                            rdbap->dblist = Realloc(rdbap->dblist, 
+                                            2*total_length);
+                            total_length *= 2;
+                        }		
+                        if (!first)
+                        {
+                            StringCpy(rdbap->dblist+length, " ");
+                            length++;
+                        }
+                        else
+                            first = FALSE;
+                        StringCpy(rdbap->dblist+length, full_buffer);
+                        length += buffer_length;
+                    }
+                    
+                } 
+                else
+                    rdbap->dblist = StringSave(ptr);
+            }
             
             continue;
         }
@@ -1749,13 +1804,13 @@ readdb_read_alias_file(CharPtr filename)
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
             if (*ptr != NULLB) {
-		if (file_path && StrCmp(file_path,"")) {
-		    /* add directory prefix, if any */
-		    sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, ptr);
-		    rdbap->gilist = StringSave(full_buffer);
-		} else {
-		    rdbap->gilist = StringSave(ptr);
-		}
+            if (file_path && StrCmp(file_path,"")) {
+                /* add directory prefix, if any */
+                sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, ptr);
+                rdbap->gilist = StringSave(full_buffer);
+            } else {
+                rdbap->gilist = StringSave(ptr);
+            }
 	    }
             
             continue;
@@ -1769,14 +1824,42 @@ readdb_read_alias_file(CharPtr filename)
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
             if (*ptr != NULLB) {
-		if (file_path && StrCmp(file_path, "")) {
-		    /* add directory prefix, if any */
-		    sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, ptr);
-		    rdbap->oidlist = StringSave(full_buffer);
-		} else {
-		    rdbap->oidlist = StringSave(ptr);
-		}
-	    }
+                Boolean done=FALSE, first=TRUE;
+                if (file_path && StrCmp(file_path, "")) {
+                    /* add directory prefix, if any */
+                    rdbap->oidlist = MemNew(total_length*sizeof(Char));
+                    length = 0;
+                    while (!done) {
+                        done = readdb_parse_db_names(&ptr, file_buffer);
+                        sprintf(full_buffer, "%s%c%s", file_path,
+                                DIRDELIMCHR, file_buffer);
+
+                        if (*file_buffer == DIRDELIMCHR)
+                            StringCpy(full_buffer, file_buffer);
+                        else
+                            sprintf(full_buffer, "%s%c%s", file_path,
+                                    DIRDELIMCHR, file_buffer);
+
+                        buffer_length = StringLen(full_buffer);
+                        if (buffer_length+length > total_length) {
+                            rdbap->oidlist = Realloc(rdbap->oidlist,
+                                    2*total_length);
+                            total_length *= 2;
+                        }
+                        if (!first) {
+                            StringCpy(rdbap->oidlist+length, " ");
+                            length++;
+                        } else {
+                            first = FALSE;
+                        }
+                        StringCpy(rdbap->oidlist+length, full_buffer);
+                        length += buffer_length;
+                    }
+
+                } else {
+                    rdbap->oidlist = StringSave(ptr);
+                }
+            }
             
             continue;
         }
@@ -1895,15 +1978,17 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
             if (rdbap->gilist)
                rdfp->gifile = StringSave(rdbap->gilist);
 
+            /* In case first_oid and last_oid are given in the alias file, we
+             * create a mask in the following lines that only selects those
+             * ordinal id's that are in the range of first_oid and last_oid */
             if (rdbap->first_oid > 0) {
-                /* Create OID list mask */
                 OIDListPtr oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
                 Int4 total, mask_index, oid, oid_bit;
                 oidlist->total = rdbap->last_oid + 1;
                 total = rdbap->last_oid/MASK_WORD_SIZE + 2;
                 oidlist->list = (Uint4Ptr) MemNew (total*sizeof(Int4));
                 oidlist->memory = oidlist->list;
-                for (oid=rdbap->first_oid; oid<=rdbap->last_oid; oid++) {
+                for (oid=rdbap->first_oid-1; oid<rdbap->last_oid; oid++) {
                     mask_index = oid / MASK_WORD_SIZE;
                     oid_bit = 
                         0x1 << (MASK_WORD_SIZE - 1 - oid % MASK_WORD_SIZE);
@@ -1957,8 +2042,10 @@ static	Int2	IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfpp, Boo
             if (rdbap->gilist)
                rdfp->gifile = StringSave(rdbap->gilist);
 
+            /* In case first_oid and last_oid are given in the alias file, we
+             * create a mask in the following lines that only selects those
+             * ordinal id's that are in the range of first_oid and last_oid */
             if (rdbap->first_oid > 0) {
-                /* Create OID list mask */
                 OIDListPtr oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
                 Int4 total, mask_index, oid, oid_bit;
                 oidlist->total = rdbap->last_oid + 1;
@@ -2453,6 +2540,10 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     
     /* Initialize shared information structure */
     rdfp->shared_info = (ReadDBSharedInfoPtr) MemNew(sizeof(ReadDBSharedInfo));
+
+    /* Without this, FDReadDeflineAsn will fail! */
+    if (rdfp->formatdb_ver > FORMATDB_VER_TEXT)
+        SeqEntryLoad();
     
     return rdfp;
 }
@@ -2495,8 +2586,9 @@ Boolean	ReadOIDList (OIDListPtr oidlist)
     /* use memmap */
     mmfile = NlmOpenMFILE(oidlist->filename);
     if (!mmfile) {
-	ErrPostEx(SEV_ERROR, 0, 0, "Could not open OID mask.\n");
-	return FALSE;
+        ErrPostEx(SEV_ERROR, 0, 0, "Could not open OID mask %s\n", 
+                  oidlist->filename);
+        return FALSE;
     }
 
     if (mmfile->mfile_true == FALSE)
@@ -3041,19 +3133,35 @@ readdb_get_link(ReadDBFILEPtr rdfp, Int4 ordinal_id)
    return rdfp;
 }
 
-static Boolean OIDBelongsToMaskDB(ReadDBFILEPtr rdfp, Int4 oid)
+/* This function verifies if a given ordinal id (or gi) belongs
+   to a mask database, based on the membership bit stored in the
+   BlastDefLine structure of the new ASN.1 deflines.
+   Note: If gi is -1, then only the oid will be verified to belong
+   to the mask database. This will matter only on non-redundant
+   databases, where there can be many gi's associated with the same
+   oid */
+static Boolean OID_GI_BelongsToMaskDB(ReadDBFILEPtr rdfp, Int4 oid, Int4 gi)
 {
     BlastDefLinePtr bdp = NULL, bdp_tmp = NULL;
+    SeqIdPtr seqid_gi = NULL;
     Int4 membership_mask = (0x1 << rdfp->membership_bit - 1);
+    Boolean retval = FALSE;
 
-    SeqEntryLoad();
+    if ((bdp = FDReadDeflineAsn(rdfp, oid)) != NULL && gi != -1) {
 
-    if ((bdp = FDReadDeflineAsn(rdfp, oid)) == NULL)
-        return FALSE;
-    else {
+        ValNodeAddInt(&seqid_gi, SEQID_GI, gi);
+ 
+        for (bdp_tmp = bdp; bdp_tmp; bdp_tmp = bdp_tmp->next) {
+            if (SeqIdIn(bdp_tmp->seqid, seqid_gi)) {
+                retval = TRUE;
+                break;
+            }
+        }
         bdp = BlastDefLineSetFree(bdp);
-        return TRUE;
+        seqid_gi = SeqIdFree(seqid_gi);
     }
+
+    return retval;
 }
 
 
@@ -3116,7 +3224,7 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
         /* Before returning, make sure that this gi belongs to
          * the subset (mask) database, if we are dealing with one */
         if (rdfp->oidlist && rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
-            if (OIDBelongsToMaskDB(rdfp, Value+rdfp->start) == FALSE)
+            if (!OID_GI_BelongsToMaskDB(rdfp, Value+rdfp->start, gi))
                 return -1;
         }
                 
@@ -3160,7 +3268,7 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
                  * CommonIndex, rely on the membership information on 
                  * the BlastDefLine structure */
                 if (rdfp->oidlist && rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
-                    if (OIDBelongsToMaskDB(rdfp,retval+rdfp->start) == TRUE)
+                    if (OID_GI_BelongsToMaskDB(rdfp,retval+rdfp->start,gi))
                         break;
                 }
 
@@ -3483,7 +3591,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
 	            Value = atol(data);
 	            MemFree(data);
                 if (rdfp->oidlist && rdfp->formatdb_ver < FORMATDB_VER_TEXT) {
-                    if (OIDBelongsToMaskDB(rdfp,Value+rdfp->start) == FALSE)
+                    if (!OID_GI_BelongsToMaskDB(rdfp,Value+rdfp->start,-1))
                         return -1;
                 }
 
@@ -3507,7 +3615,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
 	            Value = atol(data);
 	            MemFree(data);
                 if (rdfp->oidlist && rdfp->formatdb_ver < FORMATDB_VER_TEXT) {
-                    if (OIDBelongsToMaskDB(rdfp,Value+rdfp->start) == FALSE)
+                    if (!OID_GI_BelongsToMaskDB(rdfp,Value+rdfp->start,-1))
                         return -1;
                 }
 
@@ -3530,7 +3638,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
 	            Value = atol(data);
 	            MemFree(data);
                 if (rdfp->oidlist && rdfp->formatdb_ver < FORMATDB_VER_TEXT) {
-                    if (OIDBelongsToMaskDB(rdfp,Value+rdfp->start) == FALSE)
+                    if (!OID_GI_BelongsToMaskDB(rdfp,Value+rdfp->start,-1))
                         return -1;
                 }
 
@@ -3601,6 +3709,11 @@ ValNodePtr readdb_get_asn1_defline(ReadDBFILEPtr rdfp, Int4 sequence_number)
     bspp[0] = bsp;
     ufp->data.ptrvalue = bspp;
 
+    /* And object Id type for this object */
+    oidp = ObjectIdNew();
+    oidp->str = StringSave(ASN_DEFLINE_OBJ_LABEL);
+    ufp->label = oidp;
+
     /* SEQUENCE OF OCTET STRING ,   ptrvalue = ByteStorePtr PNTR */
     ufp->choice = 10;
 
@@ -3608,10 +3721,9 @@ ValNodePtr readdb_get_asn1_defline(ReadDBFILEPtr rdfp, Int4 sequence_number)
     uop = UserObjectNew();
     uop->data = ufp;
 
-    /* And object Id type for this object */
+    /* Create a new ObjectId for the UserObject */
     oidp = ObjectIdNew();
     oidp->str = StringSave(ASN_DEFLINE_OBJ_LABEL);
-
     uop->type = oidp;
 
     /* Finaly descriptor is created as ... */
@@ -3659,6 +3771,11 @@ ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr rdfp,
     bspp[0] = bsp;
     ufp->data.ptrvalue = bspp;
 
+    /* And object Id type for this object */
+    oidp = ObjectIdNew();
+    oidp->str = StringSave(ASN_DEFLINE_OBJ_LABEL);
+    ufp->label = oidp;
+
     /* SEQUENCE OF OCTET STRING ,   ptrvalue = ByteStorePtr PNTR */
     ufp->choice = 10;
 
@@ -3666,10 +3783,9 @@ ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr rdfp,
     uop = UserObjectNew();
     uop->data = ufp;
 
-    /* And object Id type for this object */
+    /* Create a new ObjectId for this UserObject */
     oidp = ObjectIdNew();
     oidp->str = StringSave(ASN_DEFLINE_OBJ_LABEL);
-
     uop->type = oidp;
 
     /* Finaly descriptor is created as ... */
@@ -3743,6 +3859,7 @@ ValNodePtr readdb_get_taxonomy_names(ReadDBFILEPtr rdfp, Int4 sequence_number)
             ufp_last->next = ufp;
 
         ufp_last = ufp;
+        RDBTaxNamesFree(tnames);
     }
 
     /* Finaly descriptor is created as ... */
@@ -3752,6 +3869,7 @@ ValNodePtr readdb_get_taxonomy_names(ReadDBFILEPtr rdfp, Int4 sequence_number)
     else {
         UserObjectFree(uop);
     }
+    BlastDefLineSetFree(bdp);
     
     return vnp;
 }
@@ -4431,10 +4549,11 @@ static CharPtr FDBuildOldStyleDefline(ReadDBFILEPtr rdfp, BlastDefLinePtr bdsp)
 
 BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number) 
 {
-    BlastDefLinePtr bdsp;
+    BlastDefLinePtr bdsp, bdsp_tmp, bdsp_prev, the_bdsp = NULL;
     AsnIoPtr aip;
     AsnIoMemPtr aimp;
     Int4 size;
+    SeqIdPtr seqid = NULL;
 
     if ((rdfp = readdb_get_link(rdfp, sequence_number)) == NULL)
         return NULL;
@@ -4464,8 +4583,7 @@ BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number)
     if (rdfp->oidlist && rdfp->membership_bit != 0) {
         ValNodePtr memb = NULL;
         Uint4 memb_mask = 0;
-        BlastDefLinePtr bdsp_tmp, bdsp_last;
-        BlastDefLinePtr bdsp_rv_tmp = NULL, bdsp_head = NULL;
+        BlastDefLinePtr bdsp_last, bdsp_rv_tmp = NULL, bdsp_head = NULL;
         Boolean first = TRUE;
 
         /* create the memberships mask */
@@ -4481,7 +4599,7 @@ BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number)
                     bdsp_head = bdsp_last = bdsp_rv_tmp;
                     if (!bdsp_rv_tmp) {
                         ErrPostEx(SEV_ERROR,0,0,
-                                "Not enough memory in FDReadDefLineAsn");
+                                "Not enough memory in FDReadDeflineAsn");
                         return bdsp;
                     }
                     first = FALSE;
@@ -4489,7 +4607,7 @@ BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number)
                     bdsp_rv_tmp = BlastDefLineNew();
                     if (!bdsp_rv_tmp) {
                         ErrPostEx(SEV_ERROR,0,0,
-                                "Not enough memory in FDReadDefLineAsn");
+                                "Not enough memory in FDReadDeflineAsn");
                         bdsp_head = BlastDefLineSetFree(bdsp_head);
                         return bdsp;
                     }
@@ -4507,9 +4625,32 @@ BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number)
             }
         }
         bdsp = BlastDefLineSetFree(bdsp);
-        return bdsp_head;
+        bdsp = bdsp_head;
     }
 
+    /* If the preferred gi is set, then put the BlastDefLine structure that
+     * contains it first in the chain of BlastDefLinePtr's */
+    if (rdfp->preferred_gi != 0) {
+ 
+        ValNodeAddInt(&seqid, SEQID_GI, rdfp->preferred_gi);
+        bdsp_prev = NULL;
+    
+        for (bdsp_tmp = bdsp; bdsp_tmp; bdsp_tmp = bdsp_tmp->next) {
+            
+            if (SeqIdIn(bdsp_tmp->seqid, seqid)) {
+                if (bdsp_prev != NULL) 
+                    bdsp_prev->next = bdsp_tmp->next;
+                if (bdsp_tmp != bdsp) {
+                    bdsp_tmp->next = bdsp;
+                    bdsp = bdsp_tmp;
+                }
+                break;
+            }
+            bdsp_prev = bdsp_tmp;
+        }
+        SeqIdFree(seqid);
+    }
+     
     return bdsp;
 }
 
@@ -4553,7 +4694,8 @@ readdb_get_defline_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR de
         bdsp = FDReadDeflineAsn(rdfp, sequence_number);
 
         if(bdsp == NULL) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Failure to read defline ASN for %d", sequence_number);
+            ErrPostEx(SEV_ERROR, 0, 0, "readdb_get_defline_ex: "
+                    "Failure to read defline ASN for %d", sequence_number);
             if (seqidp)        *seqidp = NULL;
             if (description)   *description = NULL;
             if (buf_ptr != &buffer[0])
@@ -4698,7 +4840,8 @@ Boolean LIBCALL readdb_get_descriptor (ReadDBFILEPtr rdfp,
         if(rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
             bdfp = FDReadDeflineAsn(rdfp, sequence_number);
             if(bdfp == NULL) {
-                ErrPostEx(SEV_ERROR, 0, 0, "Failure to read defline ASN for %d", sequence_number);
+                ErrPostEx(SEV_ERROR, 0, 0, "readdb_get_descriptor: "
+                        "Failure to read defline ASN for %d", sequence_number);
                 *id = NULL;
                 *description = NULL;
                 return FALSE;
@@ -4816,6 +4959,8 @@ readdb_get_header_ex (ReadDBFILEPtr rdfp, Int4 sequence_number,
     Uint4 header_index_end;
     BlastDefLinePtr bdlp = NULL;
 
+    rdfp = readdb_get_link(rdfp, sequence_number);
+
     if (!rdfp)
         return retval;
 
@@ -4824,7 +4969,8 @@ readdb_get_header_ex (ReadDBFILEPtr rdfp, Int4 sequence_number,
         if (*header_index == 0) {
             bdlp = FDReadDeflineAsn(rdfp, sequence_number);
             if (bdlp == NULL) {
-                ErrPostEx(SEV_ERROR,0,0,"Failure to read defline ASN for %d",
+                ErrPostEx(SEV_ERROR,0,0,"readdb_get_header_ex: "
+                          "Failure to read defline ASN for %d",
                           sequence_number);
                 if (id != NULL)          *id = NULL;
                 if (description != NULL) *description = NULL;
@@ -5282,8 +5428,10 @@ static Int2 LIBCALLBACK ReadDBBioseqFetchFunc(Pointer data)
 		while (rdfp)
 		{	/* look in all databases for the proper ID. */
 			ordinal_id = SeqId2OrdinalId(rdfp, best_id);
-			if (ordinal_id >= 0)
+			if (ordinal_id >= 0) {
+                                rdfp->preferred_gi = best_id->data.intvalue;
 				break;
+                        }
 			rdfp = rdfp->next;
 		}
 
@@ -5295,6 +5443,9 @@ static Int2 LIBCALLBACK ReadDBBioseqFetchFunc(Pointer data)
 
 	/* A BioseqPtr is returned by this function. */
 	bsp = readdb_get_bioseq(rdfp, ordinal_id);
+       
+        /* Reset the preferred_gi */
+        rdfp->preferred_gi = 0;
 
         /* We have to add information about genetic code to
            the Bioseq */
@@ -6805,6 +6956,12 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
              StringCpy(newnamebuf + len + 3, "si");
              if (FileLength(oldnamebuf) > 0)
                 FileRename(oldnamebuf, newnamebuf);
+             if (options->dump_info) {
+                 StringCpy(oldnamebuf + len, "di");
+                 StringCpy(newnamebuf + len + 3, "di");
+                 if (FileLength(oldnamebuf) > 0)
+                     FileRename(oldnamebuf, newnamebuf);
+             }
 
              MemFree(options->base_name);
              newnamebuf[len+1] = NULLB;
@@ -6955,10 +7112,6 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
             return 1;
         }
 
-        if(bdp_was_allocated) {
-            BlastDefLineSetFree(bdp);
-        }
-
     } else {
         if(!FDBDumpDefline(fdbp, title, seq_id)) {
             ErrPostEx(SEV_ERROR, 0,0, 
@@ -6970,10 +7123,29 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp,
     
     /* ----------- Dumping misc info file ----------- */
     if(fdbp->options->dump_info) {               
-        fprintf(fdbp->fd_sdi, "%ld %ld %ld %ld %s %ld %ld %ld\n", 
-                (long) fdbp->num_of_seqs, (long) gi, (long) tax_id, 
-                (long) owner, div?div:"N/A", 
-                (long) SequenceLen, (long) hash, (long) date);
+
+        if(fdbp->options->version > FORMATDB_VER_TEXT) {
+            CharPtr accession = NULL;
+
+            /* Add the accession too */
+            accession = FDFGetAccessionFromSeqIdChain((SeqIdPtr)bdp->seqid);
+            fprintf(fdbp->fd_sdi, "%ld %ld %ld %ld %s %ld %ld %ld %s\n", 
+                    (long) fdbp->num_of_seqs, (long) gi, (long) tax_id, 
+                    (long) owner, div?div:"N/A", 
+                    (long) SequenceLen, (long) hash, (long) date,
+                    (char*) accession ? accession : "unknown");
+            accession = MemFree(accession);
+
+            if(bdp_was_allocated) {
+                BlastDefLineSetFree(bdp);
+            }
+
+        } else {
+            fprintf(fdbp->fd_sdi, "%ld %ld %ld %ld %s %ld %ld %ld\n", 
+                    (long) fdbp->num_of_seqs, (long) gi, (long) tax_id, 
+                    (long) owner, div?div:"N/A", 
+                    (long) SequenceLen, (long) hash, (long) date);
+        }
     }
     
     /* ---------------------------------------------- */
@@ -7346,7 +7518,7 @@ static	Int2	FDBFinish (FormatDBPtr fdbp)
                 ErrPostEx(SEV_ERROR, 0, 0, "Failed to create index."
                           "  Possibly a gi included more than once in the database.\n", (long) error);
             } else {
-                ErrPostEx(SEV_ERROR, 0, 0, "Failed to create index.\n", (long) error);
+                ErrPostEx(SEV_ERROR, 0, 0, "Failed to create index: ISAMErrorCode %ld.\n", (long) error);
             }
             return 1;
         }
@@ -8011,8 +8183,10 @@ RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id)
 
         /* Scientific name */
 
-        if((chptr = StringChr(start_ptr, '\t')) == NULL)
+        if((chptr = StringChr(start_ptr, '\t')) == NULL) {
+            RDBTaxNamesFree(tnames);
             return NULL;
+        }
         
         *chptr = NULLB;
         chptr++;
@@ -8021,8 +8195,10 @@ RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id)
         
         /* Common name */
         
-        if((chptr = StringChr(start_ptr, '\t')) == NULL)
+        if((chptr = StringChr(start_ptr, '\t')) == NULL) {
+            RDBTaxNamesFree(tnames);
             return NULL;
+        }
         
         *chptr = NULLB;
         chptr++;
@@ -8031,8 +8207,10 @@ RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id)
 
         /* Blast name */
 
-        if((chptr = StringChr(start_ptr, '\t')) == NULL)
+        if((chptr = StringChr(start_ptr, '\t')) == NULL) {
+            RDBTaxNamesFree(tnames);
             return NULL;
+        }
 
         *chptr = NULLB;
         chptr++;
@@ -8053,18 +8231,6 @@ RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id)
     }
 
     return NULL;
-}
-
-void RDBTaxNamesFree(RDBTaxNamesPtr tnames)
-{
-    if(tnames == NULL)
-        return;
-    
-    MemFree(tnames->sci_name);
-    MemFree(tnames->common_name);
-    MemFree(tnames->blast_name);
-    MemFree(tnames);
-    return;
 }
 
 RDBTaxNamesPtr readdb_get_taxnames(ReadDBFILEPtr rdfp, Int4 tax_id)
@@ -8718,15 +8884,81 @@ Boolean	is_PDB (DI_Record direc)
     return (direc.owner == 10);
 }
 
-Boolean is_REFSEQ(DI_Record direc)
+Boolean is_REFSEQ_GENOMIC(DI_Record direc)  
 {
-    return (direc.owner == 20);
+    CharPtr accprefix1 = "NC";
+    CharPtr accprefix2 = "NG";
+
+    if (direc.owner == 21 || direc.owner == 23 ||
+        direc.owner == 24 || direc.owner == 25 ||
+        direc.owner == 26 || direc.owner == 27 ||
+        direc.owner == 31) {
+
+        if ((StringNCmp(accprefix1,direc.acc,2) == 0) ||
+            StringNCmp(accprefix2,direc.acc,2) == 0)
+            return TRUE;
+
+    }
+    return FALSE;
+}
+
+Boolean is_REFSEQ_RNA(DI_Record direc) 
+{
+    return (direc.owner == 20 || direc.owner == 27 || direc.owner == 28);
+}
+
+Boolean is_REFSEQ_PROTEIN(DI_Record direc)
+{
+    CharPtr accprefix = "NP";
+    Int2 ownership = (direc.owner == 20 || direc.owner == 23 ||
+                      direc.owner == 24 || direc.owner == 25 ||
+                      direc.owner == 26 || direc.owner == 27 ||
+                      direc.owner == 28);
+
+    return (ownership || (StringNCmp(accprefix,direc.acc,2) == 0));
 }
 
 Boolean is_CONTIG(DI_Record direc)
 {
     return (direc.owner == 28);
 }
+
+Boolean is_WGS_ANOPHELES(DI_Record direc)
+{
+    return (direc.taxid == 180454);
+}
+
+Boolean is_WGS_RICE(DI_Record direc)
+{
+    return (direc.taxid == 39946);
+}
+
+CharPtr FDFGetAccessionFromSeqIdChain(SeqIdPtr seqid_list)
+{
+    SeqIdPtr     sip;
+    TextSeqIdPtr tsip;
+    CharPtr      acc;
+
+    if(seqid_list == NULL)
+        return NULL;
+
+    for(acc = NULL, sip = seqid_list; sip != NULL; sip = sip->next)
+    {
+        if(sip->choice != SEQID_GENBANK && sip->choice != SEQID_EMBL &&
+           sip->choice != SEQID_DDBJ && sip->choice != SEQID_OTHER)
+            continue;
+
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if(tsip == NULL || tsip->accession == NULL ||
+           tsip->accession[0] == '\0')
+            continue;
+
+        acc = StringSave(tsip->accession);
+        break;
+    }
+    return(acc);
+}
+
 
 /* Function scans .pdi or .ndi file and do callback() for this gi and oid */
 
@@ -8737,7 +8969,7 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
 
     FILE		*fdi;
     DI_Record	direc;
-    Char		skipstr[128];
+    Char		skipstr1[128], skipstr2[128];
     int			readstat, total=0, progress_count=0;
     Boolean		(*criteria)(DI_Record);
     Int4		progress_chunk = 100;
@@ -8746,8 +8978,8 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
     fdi = FileOpen(difilename, "r");
 
     if (!fdi) {
-	fprintf(out, "\nERROR: cannot open '%s'", difilename);
-	return FALSE;
+        fprintf(out, "\nERROR: cannot open '%s'", difilename);
+        return FALSE;
     }
     
     /* check what subset was wanted */
@@ -8763,21 +8995,35 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
         criteria = &is_PDB;
     }	else if (!StringICmp(subset, "month")) {
         criteria = &is_MONTH;
+    }   else if (!StringICmp(subset, "refseq_genomic")) {
+        criteria = &is_REFSEQ_GENOMIC;
+    }   else if (!StringICmp(subset, "refseq_rna")) {
+        criteria = &is_REFSEQ_RNA;
+    }   else if (!StringICmp(subset, "refseq_protein")) {
+        criteria = &is_REFSEQ_PROTEIN;
+    }   else if (!StringICmp(subset, "wgs_anopheles")) {
+        criteria = &is_WGS_ANOPHELES;
+    }   else if (!StringICmp(subset, "wgs_rice")) {
+        criteria = &is_WGS_RICE;
     }
     
     /* set gi threshold for month subset */
     direc.gi_threshold = gi_threshold;
+    MemSet(skipstr2, NULLB, 128);
     
     /* each line in index file looks like: */
-    /* 2933800 5769963 9606 8 EST 427 -2021038615 38990825 */
+    /* 2933800 5769963 9606 8 EST 427 -2021038615 38990825 M61958 */
     
-    fprintf(out, "\nScan index files");
-    while ((readstat = fscanf(fdi, "%ld %ld %ld %ld %s %ld %ld %ld", (long *) &direc.oid, (long *) &direc.gi, (long *) &direc.taxid, (long *) &direc.owner, skipstr, (long *) &direc.len, (long *) &direc.hash, (long *) &direc.div)) > 0) {
+    while ((readstat = fscanf(fdi, "%ld %ld %ld %ld %s %ld %ld %ld %s", (long *) &direc.oid, (long *) &direc.gi, (long *) &direc.taxid, (long *) &direc.owner, skipstr1, (long *) &direc.len, (long *) &direc.hash, (long *) &direc.div, skipstr2)) > 0) {
         
+        direc.acc = StringSave(skipstr2);
+        /*direc.oid += *curr_oid;*/
         if (DB_Subset(criteria, direc)) {
             callback(&direc, data);
             progress_count++;
         }
+        direc.acc = MemFree(direc.acc);
+        MemSet(skipstr2, NULLB, 128);
 #ifdef SHOW_PROGRESS
         if (!(total % progress_chunk)) {
             if (progress_count < progress_chunk/3) { 
@@ -8796,10 +9042,12 @@ Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
     }
     
     if (readstat != EOF) {
-        fprintf(out, "Error occured");
+        fprintf(out, "\nError occured while parsing %s "
+                "(missing accesion field?)", difilename);
+        return FALSE;
     }
     FileClose(fdi);
-    
+
     return TRUE;
 }
 /************************************************************************/
@@ -8854,8 +9102,9 @@ static FCMDAccListPtr GetAccList(CharPtr file,
       while (j < 128  && i < FileLen) { 
           TmpBuff[j] = file[i];
           j++; i++;
-          if(file[i] == ',' || /* Comma is valid delimiter */
-             file[i] == '\n')  
+          if(isspace((int)file[i]) ||
+             file[i] == ',' || /* Comma is valid delimiter */
+             file[i] == '\n')
               break;
       }
       TmpBuff[j] = NULLB;
@@ -9093,7 +9342,7 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
     }
     rdfp_tmp = rdfp;
 
-    if (!rdfp->oidlist) { 
+    if (!rdfp->oidlist) {
     
         for (i = 0; i < total; i++) {
 #ifdef SHOW_PROGRESS
@@ -9129,7 +9378,7 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
                     oidlist = rdfp_tmp->oidlist;
                 } else {
                     ErrPostEx(SEV_FATAL,0,0,
-                            "Oid %d is not in this mask");
+                            "BlastDBToFasta: Oid %d is not in this mask");
                     return -1;
                 }
 
@@ -9146,7 +9395,14 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
             /* Adjust the index i to this rdfp_tmp */
             maskidx = (i - rdfp_tmp->start)/MASK_WORD_SIZE;
             bit_shift = MASK_WORD_SIZE-1 - (i - rdfp_tmp->start) % MASK_WORD_SIZE;
-            dump = oidlist->list[maskidx] & (0x1 << bit_shift);
+
+            /* Make sure we are not addressing an index that's larger
+             * than the our oidlist */
+            if ((i - rdfp_tmp->start) > oidlist->total)
+                continue;
+
+            /* Mask this index! */
+            dump = SwapUint4(oidlist->list[maskidx]) & (0x1 << bit_shift);
 
             if (dump) {
                 if ((bsp = readdb_get_bioseq_ex(rdfp,i, TRUE, ctrlA)) != NULL) {
@@ -9269,7 +9525,7 @@ Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename,
    FormatDBPtr fdbp;
    SeqEntryPtr sep;
    BioseqPtr bsp;
-   Char filenamebuf[128];
+   Char filenamebuf[FILENAME_MAX];
    Int4 count=0, volume=0;
 
    if ((fdbp = FormatDBInit(options)) == NULL)

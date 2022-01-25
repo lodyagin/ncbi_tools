@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.43 2001/12/13 21:05:38 madden Exp $
+/* $Id: txalign.c,v 6.60 2002/04/26 16:26:30 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,64 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.43 $
+* $Revision: 6.60 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.60  2002/04/26 16:26:30  madden
+* Add length check to for loop over fasta seqid
+*
+* Revision 6.59  2002/04/24 17:53:11  dondosha
+* Pass SeqIds in URL safe form to the wblast2.cgi link
+*
+* Revision 6.58  2002/04/15 20:22:05  dondosha
+* Changed link to wblast2.cgi to
+*
+* Revision 6.57  2002/04/05 15:53:53  camacho
+* Fixed Tx_PrintDefLine
+*
+* Revision 6.56  2002/03/26 23:26:37  dondosha
+* Added a possibility of a link to Blast 2 sequences from megablast output
+*
+* Revision 6.55  2002/02/21 17:48:52  camacho
+* Fixed UMR problem in PrintDefLinesFromSeqAlignEx2
+*
+* Revision 6.54  2002/02/15 14:18:24  camacho
+* Added RDBTaxNamesClone function
+*
+* Revision 6.53  2002/02/07 19:44:23  jianye
+* added discrimination between na and aa sequence for locus link linkout
+*
+* Revision 6.52  2002/02/05 19:50:50  camacho
+* Fix to Tx_PrintDefLine
+*
+* Revision 6.51  2002/02/01 20:04:56  jianye
+* Fixed getting wrong blast defline struct for non-redundant bioseq and adding utility function getBlastDefLineForSeqId(bdlp, sip)
+*
+* Revision 6.50  2002/01/31 21:17:00  camacho
+* Fixed minor memory leak
+*
+* Revision 6.49  2002/01/29 21:43:45  jianye
+* Changed some gif image path and get rid of unneeded readdb.h include
+*
+* Revision 6.48  2002/01/24 18:47:49  camacho
+* Moved RDBTaxNamesFree from readdb.[ch] to txalign.[ch]
+*
+* Revision 6.47  2002/01/23 20:29:14  madden
+* Add back 6.45 changes that were accidentally removed
+*
+* Revision 6.46  2002/01/23 19:42:57  jianye
+* Added checkLinkoutType(), addLinkoutForBioseq(). Changed PrintDefLinesFromSeqAlignEx2 and FSFPrintOneDefline for linkout info.  Fixed bug in FDGetTaxNamesFromBioseq().
+*
+* Revision 6.45  2002/01/15 20:41:23  madden
+* If tool_url is dumpgnl.cgi do no set the NO_ENTREZ flag
+*
+* Revision 6.44  2002/01/10 20:59:05  camacho
+* Fixed problem with long deflines in Tx_PrintDefLine
+*
 * Revision 6.43  2001/12/13 21:05:38  madden
 * Comment out hyperlink to wgetorg for new db format
 *
@@ -400,6 +451,8 @@
 #include <ncbimisc.h>
 #include <salpacc.h>
 #include <salpstat.h>
+#include <fdlKludge.h>
+
 
 #define BUFFER_LENGTH 2048
 #define MIN_INS_SPACE 50
@@ -409,6 +462,8 @@
 #define TXALIGN_HREF "http://www.ncbi.nlm.nih.gov"
 
 #define NEW_ENTREZ_HREF "http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi"
+
+#define WBLAST2_HREF "http://www.ncbi.nlm.nih.gov/blast/bl2seq/wblast2.cgi"
 
 /* Used in make_dumpgnl_links, set in getreq.cpp or getreqcmd.cpp */
 const char *RID_glb;
@@ -434,6 +489,144 @@ typedef struct _txdfline_struct {
 	size_t  segs_buflen,
 		segs_used;
 } TxDfLineStruct, *TxDfLineStructPtr;
+
+/* url for linkout*/
+static CharPtr linkoutURL[total_linkout]={"<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>", /* 1, linkout_locuslink*/
+					  "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>" /* 2, linkout_locuslink*/};
+
+/*fill string with num spaces and null-end the string*/
+static void makeEmptyString(CharPtr str, Int4 num){
+  Int4 i;
+  if(str){
+    for (i=0; i<num; i++){
+      str[i]=' ';
+    }
+    str[i]='\0';
+  }
+}
+
+       
+/*return initials of names not exceeding 15 elements delimited by space. Need to free memory afterwards*/
+static CharPtr getNameInitials(CharPtr name){
+  CharPtr temp, temp2, initials=NULL; 
+  Int4 i, maxElements=15;
+  CharPtr nameCopy;
+ 
+  if(name){
+    nameCopy=MemNew(StringLen(name)+sizeof(Char));
+    if(!nameCopy) {
+      printf("insufficient memory!\n");
+      exit (1);              
+    }
+
+    StringCpy(nameCopy, name);
+    temp2=StrTok(nameCopy, " ");
+    if(temp2){
+      initials=MemNew((maxElements+1)*sizeof(Char));
+      if(!initials) {
+	printf("insufficient memory!\n");
+	exit (1);              
+      }
+      i=0;
+      initials[i]=*temp2;
+      i++;
+      while((temp2=StrTok(NULL, " "))&&i<maxElements){      
+	initials[i]=*temp2;
+	i++;
+      }
+      initials[i]='\0';
+    }
+    MemFree(nameCopy);
+  }
+ 
+  return initials;
+}
+
+/*return true if the linkout type in bdfl is linkoutType, false otherwise*/
+NLM_EXTERN Boolean checkLinkoutType(BlastDefLinePtr bdfl, Uint1 linkoutType){
+  Boolean isThisType=FALSE;
+  ValNodePtr vnp;
+  Int4 intval;
+
+  if(bdfl){
+    vnp=bdfl->links;
+    if(vnp){
+      intval=vnp->data.intvalue;
+      if(linkoutType&intval){
+	isThisType=TRUE;
+      }
+    }
+  }
+  return isThisType;
+}
+
+/* return bdlp containing the sip from a chain of bdlp. Return the first bdlp if sip is null*/
+BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip){
+  BlastDefLinePtr temp;
+  
+  temp=bdlp;
+  while(temp){
+    if(temp->seqid){
+      if(SeqIdMatch(temp->seqid, sip)){
+	break;
+      }
+    }
+    temp=temp->next;
+  }
+
+  return temp;
+}
+/*print linkout for bsp.  If sip is not null, the linkout is for that sip (ie., the case for nonredundant blast db*/
+static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){   
+    BlastDefLinePtr bdlp, actualBdlp;
+    CharPtr taxName, unigeneName;
+    Boolean hasLinkout=FALSE;
+    Int4 gi;
+    Char molType[8]={""};
+    RDBTaxNamesPtr rnp;
+
+    if(bsp){
+      bdlp=FDGetDeflineAsnFromBioseq(bsp);
+      actualBdlp=getBlastDefLineForSeqId(bdlp, sip);
+      if(actualBdlp){
+	gi=GetGIForSeqId(bsp->id);
+	if(ISA_aa(bsp->mol)){
+	  sprintf(molType, "[pgi]");
+	}
+	else if(ISA_na(bsp->mol)){
+	  sprintf(molType, "[ngi]");
+	}
+
+	/*add space in front of linkout*/
+	fprintf(fp, " ");
+	
+	if(checkLinkoutType(actualBdlp, linkout_locuslink)){
+	  hasLinkout=TRUE;
+	  fprintf(fp, linkoutURL[linkout_locuslink-1], gi, molType);
+	}
+	 
+	
+	if(checkLinkoutType(actualBdlp, linkout_unigene)){	
+	  hasLinkout=TRUE;	
+	  rnp=FDGetTaxNamesFromBioseq(bsp, actualBdlp->taxid);
+	  if(rnp&&rnp->sci_name){
+	    unigeneName=getNameInitials(rnp->sci_name);
+	    if(unigeneName){
+	      fprintf(fp, linkoutURL[linkout_unigene-1], unigeneName, gi);
+	    }
+	    MemFree(unigeneName);
+	  }
+	 
+	  RDBTaxNamesFree(rnp);
+	}
+	/*add one space*/
+	if(hasLinkout){
+	  fprintf(fp, " ");
+	  }
+      }
+      BlastDefLineSetFree(bdlp);
+    }
+}
 
 
 static Int4 get_num_empty_space(Boolean compress)
@@ -3050,6 +3243,59 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 	return ShowAlignNodeText2Ex(anp_list, num_node, line_len, fp, left, right, option, matrix, fmt_score_func, db_name, blast_type, posMatrix, NULL);
 }
 
+/**
+ * transforms a string so that it becomes safe to be used as part of URL
+ * the function converts characters with special meaning (such as
+ * semicolon -- protocol separator) to escaped hexadecimal (%xx)
+ */
+static
+CharPtr
+MakeURLSafe(CharPtr src)
+{
+	static Char HEXDIGS[] = "0123456789ABCDEF";
+	CharPtr buf;
+	size_t len;
+	CharPtr p;
+	Char c;
+
+	if (src == NULL) {
+		return NULL;
+	}
+	/* first pass to calculate required buffer size */
+	for (p = src, len = 0; (c = *(p++)) != '\0'; ) {
+		switch (c) {
+		default:
+			if (c < '0' || (c > '9' && c < 'A') ||
+					(c > 'Z' && c < 'a') || c > 'z') {
+				len += 3;
+				break;
+			}
+		case '-': case '_': case '.': case '!': case '~':
+		case '*': case '\'': case '(': case ')':
+			++len;
+		}
+	}
+	buf = (CharPtr)MemNew(len + 1);
+	/* second pass -- conversion */
+	for (p = buf; (c = *(src++)) != '\0'; ) {
+		switch (c) {
+		default:
+			if (c < '0' || (c > '9' && c < 'A') ||
+					(c > 'Z' && c < 'a') || c > 'z') {
+				*(p++) = '%';
+				*(p++) = HEXDIGS[(c >> 4) & 0xf];
+				*(p++) = HEXDIGS[c & 0xf];
+				break;
+			}
+		case '-': case '_': case '.': case '!': case '~':
+		case '*': case '\'': case '(': case ')':
+			*(p++) = c;
+		}
+	}
+	*p = '\0';
+	return buf;
+}
+
 static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 line_len, FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)), CharPtr db_name, CharPtr blast_type, Int4Ptr PNTR posMatrix, SeqAlignPtr PNTR last_align)
 {
     CharPtr bar, sep_bar;
@@ -3210,7 +3456,8 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
 
 	*tool_url = NULLB;
         GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
-	if (*tool_url != NULLB)
+	/* Do use Entrez if available if the tool is dumpgnl.cgi as it does not handle gi's. */
+	if (*tool_url != NULLB && StringStr(tool_url, "dumpgnl.cgi") == NULL)
 		option |= TXALIGN_NO_ENTREZ;
     }
 
@@ -3355,6 +3602,8 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                                 }
                             }
                             fmt_score_func(&aso);
+    /* Print seqids of other sequences in a cluster if clustering of hits 
+       has been done  */                         
     {
        BioseqPtr bsp;
        SeqIdPtr sip, sip_head;
@@ -3364,6 +3613,7 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
        Char HTML_dopt[8], HTML_database[11];
        Char HTML_buffer[BUFFER_LENGTH+1]; 
 
+       /* Cluster sequences ids are saved in align->master (kludge) */
        sip_head = align->master;
        if (sip_head) {
           for (sip=sip_head, index=0; sip; sip = sip->next, index++); 
@@ -3399,6 +3649,28 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
           fprintf(fp, "\n\n");
        }
     }
+    if (option & TXALIGN_BL2SEQ_LINK) {
+       Boolean numeric_id;
+       Int4 gi, index;
+       CharPtr accession, id1, id2;
+       Char buffer[BUFFER_LENGTH+1];
+       BioseqPtr bsp;
+       SeqPortPtr spp;
+       CharPtr query_seq;
+
+       bsp = BioseqLockById(asp->master_sip);
+
+       SeqIdWrite(SeqIdFindBest(bsp->id, SEQID_GI), buffer, PRINTID_FASTA_SHORT, BUFFER_LENGTH);
+       id1 = MakeURLSafe(buffer);
+       BioseqUnlock(bsp);
+
+       SeqIdWrite(SeqIdFindBest(asp->target_sip, SEQID_GI), buffer, PRINTID_FASTA_SHORT, BUFFER_LENGTH);
+       id2 = MakeURLSafe(buffer);
+
+       fprintf(fp, "<A HREF=%s?PROGRAM=tblastx&WORD=3&RID=%s&ONE=%s&TWO=%s> Get TBLASTX alignments </A>\n",
+               WBLAST2_HREF, RID_glb, id1, id2);
+    }
+
 
                             aso.segs = (CharPtr) MemFree(aso.segs);
                         }
@@ -3794,59 +4066,6 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 			mode, marks, number_of_descriptions, (CharPtr)NULL, (CharPtr)NULL);
 }
 
-/**
- * transforms a string so that it becomes safe to be used as part of URL
- * the function converts characters with special meaning (such as
- * semicolon -- protocol separator) to escaped hexadecimal (%xx)
- */
-static
-CharPtr
-MakeURLSafe(CharPtr src)
-{
-	static Char HEXDIGS[] = "0123456789ABCDEF";
-	CharPtr buf;
-	size_t len;
-	CharPtr p;
-	Char c;
-
-	if (src == NULL) {
-		return NULL;
-	}
-	/* first pass to calculate required buffer size */
-	for (p = src, len = 0; (c = *(p++)) != '\0'; ) {
-		switch (c) {
-		default:
-			if (c < '0' || (c > '9' && c < 'A') ||
-					(c > 'Z' && c < 'a') || c > 'z') {
-				len += 3;
-				break;
-			}
-		case '-': case '_': case '.': case '!': case '~':
-		case '*': case '\'': case '(': case ')':
-			++len;
-		}
-	}
-	buf = (CharPtr)MemNew(len + 1);
-	/* second pass -- conversion */
-	for (p = buf; (c = *(src++)) != '\0'; ) {
-		switch (c) {
-		default:
-			if (c < '0' || (c > '9' && c < 'A') ||
-					(c > 'Z' && c < 'a') || c > 'z') {
-				*(p++) = '%';
-				*(p++) = HEXDIGS[(c >> 4) & 0xf];
-				*(p++) = HEXDIGS[c & 0xf];
-				break;
-			}
-		case '-': case '_': case '.': case '!': case '~':
-		case '*': case '\'': case '(': case ')':
-			*(p++) = c;
-		}
-	}
-	*p = '\0';
-	return buf;
-}
-
 static
 CharPtr
 StringAppend(CharPtr *dst, size_t *size, CharPtr src, size_t *used)
@@ -4133,17 +4352,20 @@ static BlastDefLinePtr  FilterAsn1DefLine(BlastDefLinePtr bdsp, SeqIdPtr gilist)
 static Boolean
 Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 {
-	BlastDefLinePtr bdsp_tmp;
+	BlastDefLinePtr bdsp_tmp = NULL;
 	Char seqid_buf[BUFFER_LENGTH];
-	CharPtr ptr;
-	Int4 seqid_length, total_length;
+	CharPtr ptr = NULL;
+	Int4 seqid_length = 0, total_length = 0;
 
 	if (bdsp == NULL)
 		return FALSE;
 
-	StringNCpy(buffer, bdsp->title, length);
+    /* Initialize arrays */
+    MemSet(seqid_buf, '\0', BUFFER_LENGTH);
+    MemSet(buffer, '\0', length);
 
-	total_length = StringLen(buffer);
+	StringNCpy(buffer, bdsp->title, length);
+	total_length = StringLen(buffer) + 1;
 
 	if (total_length >= length)
 		return TRUE;
@@ -4152,20 +4374,20 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 	bdsp_tmp = bdsp->next;
 	while (bdsp_tmp)
 	{
-        ptr = buffer+total_length;
-		SeqIdWrite(bdsp_tmp->seqid, seqid_buf, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+        ptr = buffer+total_length - 1;
+		SeqIdWrite(bdsp_tmp->seqid, seqid_buf, PRINTID_FASTA_LONG, BUFFER_LENGTH-1);
 		*ptr = ' ';
 		*(ptr+1) = '>';
 		StringNCpy(ptr+2, seqid_buf, length-total_length-2);
-		total_length += StringLen(seqid_buf) + 2;
-		if (total_length >= length)
+        total_length = StringLen(buffer) + 1;
+		if (total_length+2 >= length) 
 			break;
 
-		ptr = buffer+total_length;
+		ptr = buffer+total_length - 1;
 		*ptr = ' ';
 		StringNCpy(ptr+1, bdsp_tmp->title, length-total_length-1);
-		total_length += StringLen(bdsp_tmp->title);
-		if (total_length >= length)
+        total_length = StringLen(buffer) + 1;
+		if (total_length+3 >= length)
 			break;
 
 		bdsp_tmp = bdsp_tmp->next;
@@ -4199,7 +4421,9 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     DbtagPtr db_tag;
     ObjectIdPtr oip;
     CharPtr www_root_path = NULL;
-
+    Int2 ColumnDistance=2, extraSpace=0, extraSpace2=0, strLen=0, maxEvalWidth=5, maxNWidth=2;
+    Char tempBuf[64], tempBuf2[64];
+      
     if (outfp == NULL) {
         return FALSE;
     }
@@ -4247,16 +4471,16 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
         if ((mode == FIRST_PASS) || (mode == NOT_FIRST_PASS_REPEATS)) {
             NewContLine();
             NewContLine();
-            TabToColumn((Int2)(titleIdAllocated+2));
+            TabToColumn((Int2)(titleIdAllocated));
             
-            ff_AddString("Score     E");
+            ff_AddString("Score    E");
             NewContLine();
             ff_AddString("Sequences producing significant alignments:");
-            TabToColumn((Int2)(titleIdAllocated+2));
+            TabToColumn((Int2)(titleIdAllocated));
             if (options & TXALIGN_SHOW_NO_OF_SEGS) {
-                ff_AddString("(bits)  Value  N");
+                ff_AddString("(bits) Value  N");
             } else {
-                ff_AddString("(bits)  Value");
+                ff_AddString("(bits) Value");
             }
             NewContLine();
         }
@@ -4312,6 +4536,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 		    BlastDefLinePtr bdsp;
 		    Char buffer_priv[BUFFER_LENGTH];
 
+                MemSet(buffer_priv, '\0', BUFFER_LENGTH);
         	    bdsp =  FDGetDeflineAsnFromBioseq(bsp);
                     gi_list = GetUseThisGi(seqalign);
                     if (gi_list) {
@@ -4406,7 +4631,8 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 
 	*tool_url = NULLB;
         GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
-	if (*tool_url != NULLB)
+	/* Do use Entrez if available if the tool is dumpgnl.cgi as it does not handle gi's. */
+	if (*tool_url != NULLB  && StringStr(tool_url, "dumpgnl.cgi") == NULL)
 		options |= TXALIGN_NO_ENTREZ;
     }
 
@@ -4480,7 +4706,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                 fprintf(outfp, "%s", HTML_buffer);
                 make_link = TRUE;
                 /* If not SEQID_GI */
-            } else if (bestid != NULL && (bestid->choice == SEQID_GENERAL && !(options & TXALIGN_NO_DUMPGNL)) || (options & TXALIGN_NO_ENTREZ))
+            } else if (bestid != NULL && !(options & TXALIGN_NO_DUMPGNL) || (options & TXALIGN_NO_ENTREZ))
                 {
                     if (bestid->choice != SEQID_GENERAL && bestid->choice != SEQID_OTHER)
                         { /* HACK, HACK, use SEQID_GENERAL for Greg's page, even though GI is present. */
@@ -4654,11 +4880,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                 sprintf(buffer1, "%s", bit_score_buff);
             }
             
-            if (options & TXALIGN_SHOW_NO_OF_SEGS) 
-                sprintf((ptr+pos), " %s  %s  %ld", buffer1, eval_buff_ptr, (long) txsp->number);
-            else
-                sprintf((ptr+pos), " %s  %s", buffer1, eval_buff_ptr);
-        }
+          
 #else
         if (txsp->found_score) {
             evalue = txsp->evalue;
@@ -4677,7 +4899,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
             } else if (evalue < 10.0) {
                 sprintf(eval_buff, "%2.1lf", evalue);
             } else {
-                sprintf(eval_buff, "%5.0lf", evalue);
+                sprintf(eval_buff, "%2.0lf", evalue);
             }
             
             bit_score = txsp->bit_score;
@@ -4708,16 +4930,40 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
             } else {
                 sprintf(buffer1, "%s", bit_score_buff);
             }
-            
-            if (options & TXALIGN_SHOW_NO_OF_SEGS) 
-                sprintf((ptr+pos), " %s  %s  %ld", buffer1, eval_buff_ptr, (long) txsp->number);
-            else
-                sprintf((ptr+pos), " %s  %s", buffer1, eval_buff_ptr);
+
+#endif	    
+	    /*adjust N position*/
+            strLen=StringLen(eval_buff_ptr);
+	    extraSpace=strLen<maxEvalWidth?(maxEvalWidth-strLen):0;
+	    makeEmptyString(tempBuf, extraSpace);
+            if (options & TXALIGN_SHOW_NO_OF_SEGS) {
+	      sprintf(tempBuf2, "%ld", (long) txsp->number);
+	      strLen=StringLen(tempBuf2);
+	      extraSpace2=strLen<maxNWidth?(maxNWidth-strLen):0;	    
+	      makeEmptyString(tempBuf2, extraSpace2);
+	      sprintf((ptr+pos), " %s   %s  %s%ld%s", buffer1, eval_buff_ptr, tempBuf, (long) txsp->number,tempBuf2);
+	      
+	    }
+            else{
+	      
+	      sprintf((ptr+pos), " %s   %s%s", buffer1, eval_buff_ptr, tempBuf);
+	
+	    }
         }
-#endif
-        if (countdescr == -1 || countdescr > 0)
-            fprintf(outfp, "%s\n", ptr);
-        
+
+
+        if (countdescr == -1 || countdescr > 0){
+	 
+	  fprintf(outfp, "%s", ptr);
+	  /*add link out*/
+	 
+	  if(options&TXALIGN_SHOW_LINKOUT){
+	    bsp=BioseqLockById(txsp->id);
+	    addLinkoutForBioseq(bsp, txsp->id, outfp);
+	    BioseqUnlock(bsp);
+	  }
+	  fprintf(outfp, "\n"); 
+	}  
         txsp = txsp->next;
         if (countdescr > 0)
             countdescr--;
@@ -4775,7 +5021,7 @@ NumToFrame(Int2 frame, CharPtr buffer)
 	}
 
 	return buffer;
-}
+}   
 
 /* This function transfer SeqAlignPtr into AlignStatOptionPtr */
 
@@ -4949,7 +5195,8 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
     ObjectIdPtr oip;
     CharPtr ptr;
     Int4 gi, seqid_len = 0;
-    
+    BioseqPtr bsp;
+
     /* Printing full label to the buffer */
      SeqIdWrite(sip, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
 
@@ -4963,7 +5210,8 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
 	
 		*tool_url = NULLB;
        		 GetAppParam("NCBI", asop->blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
-		if (*tool_url != NULLB)
+		/* Do use Entrez if available if the tool is dumpgnl.cgi as it does not handle gi's. */
+		if (*tool_url != NULLB && StringStr(tool_url, "dumpgnl.cgi") == NULL)
 			asop->no_entrez = TRUE;
     	}
 
@@ -4994,7 +5242,7 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
                         NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt,
 			asop->txalign_options & TXALIGN_TARGET_IN_LINKS ? "TARGET=\"EntrezView\"" : "");
                 
-            } else if ((bestid->choice == SEQID_GENERAL && asop->no_dumpgnl == FALSE) || asop->no_entrez == TRUE) {
+            } else if (asop->no_dumpgnl == FALSE || asop->no_entrez == TRUE) {
                 if (bestid->choice != SEQID_GENERAL && bestid->choice != SEQID_OTHER)
                     { /* HACK, HACK, use SEQID_OTHER for Greg's page, even though GI is present. */
                         /* bsp is already present. */
@@ -5068,6 +5316,14 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
         fprintf(asop->fp, " ");
     }
 
+    /*add link out*/
+    if(asop->txalign_options&TXALIGN_SHOW_LINKOUT){
+      bsp=BioseqLockById(sip);
+      if(bsp){
+	addLinkoutForBioseq(bsp, sip, asop->fp);
+	BioseqUnlock(bsp);
+      }
+    }
 #if 0
     if(taxid >=0 && asop->html_hot_link == TRUE && make_link == TRUE) {
         fprintf(asop->fp, 
@@ -5129,7 +5385,7 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp,
     }
     return TRUE;
 }
-
+#define TX_SEQID_BUF_SIZE 200
 NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 
 {
@@ -5139,11 +5395,12 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     CharPtr new_defline;
     Char buf1[5], buf2[5];
     Char buffer[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10];
-    Char HTML_buffer[BUFFER_LENGTH+1], seqid_buf[128];
+    Char HTML_buffer[BUFFER_LENGTH+1], seqid_buf[TX_SEQID_BUF_SIZE+2];
     Char id_buffer[BUFFER_LENGTH+1];
     Nlm_FloatHi bit_score, evalue; 
     Int4 percent_identical, percent_positive;
     Int4 number, score, gi, len, i;
+    Int4 index; /* index for while loop over seqid. */
     ObjectIdPtr obid;
     SeqIdPtr gilist, sip, new_sip, sip_tmp;
     ScorePtr	scrp, sp;
@@ -5195,9 +5452,9 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                     /* If ">" character exists in the defline - we have to check,
                        that this is start of new SeqId string */
                     
-                    for (ptr = chptr+1, sptr = seqid_buf; 
-                         *ptr != ' ' && *ptr != NULLB; 
-                         ptr++, sptr++) {
+                    for (index=0, ptr = chptr+1, sptr = seqid_buf; 
+                         *ptr != ' ' && *ptr != NULLB && index < TX_SEQID_BUF_SIZE; 
+                         index++, ptr++, sptr++) {
                         *sptr = *ptr;
                     }
                     *sptr = NULLB;
@@ -6160,6 +6417,39 @@ NLM_EXTERN void OOFDisplayTraceBack2(Int4Ptr a, CharPtr dna, CharPtr pro,
     dna1 = MemFree(dna1);
 }
 
+void RDBTaxNamesFree(RDBTaxNamesPtr tnames)
+{
+    if (tnames == NULL)
+        return;
+
+    if (tnames->sci_name != NULL)
+        MemFree(tnames->sci_name);
+    if (tnames->common_name != NULL)
+        MemFree(tnames->common_name);
+    if (tnames->blast_name != NULL)
+        MemFree(tnames->blast_name);
+    MemFree(tnames);
+
+    return;
+}
+
+RDBTaxNamesPtr RDBTaxNamesClone(RDBTaxNamesPtr orig)
+{
+    RDBTaxNamesPtr retval = NULL;
+
+    if (!orig)
+        return retval;
+
+    if ((retval = (RDBTaxNamesPtr) MemNew(sizeof(RDBTaxNames))) != NULL) {
+        retval->tax_id = orig->tax_id;
+        retval->sci_name = StringSave(orig->sci_name);
+        retval->common_name = StringSave(orig->common_name);
+        retval->blast_name = StringSave(orig->blast_name);
+        StringCpy(retval->s_king, orig->s_king);
+    }
+    return retval;
+}
+
 RDBTaxNamesPtr FDGetTaxNamesFromBioseq(BioseqPtr bsp, Int4 taxid) 
 {
     BlastDefLinePtr bdsp;
@@ -6185,10 +6475,10 @@ RDBTaxNamesPtr FDGetTaxNamesFromBioseq(BioseqPtr bsp, Int4 taxid)
                         cpp = ufp->data.ptrvalue;
                         tnames = (RDBTaxNamesPtr) MemNew(sizeof(RDBTaxNames));
                         tnames->tax_id = taxid;
-                        tnames->sci_name = cpp[SCI_NAME_POS];
+                        tnames->sci_name =StringSave(cpp[SCI_NAME_POS]);
                         tnames->common_name = StringSave(cpp[COMMON_NAME_POS]);
                         tnames->blast_name = StringSave(cpp[BLAST_NAME_POS]);
-                        StringCpy(cpp[S_KING_POS], tnames->s_king);
+			StringCpy(tnames->s_king, cpp[S_KING_POS]);
                     }
                 }
             }

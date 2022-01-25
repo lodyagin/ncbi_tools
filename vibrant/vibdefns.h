@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.9  2002/01/09 15:23:54  kans
+* added HasAquaMenuLayout
+*
 * Revision 6.8  2001/09/10 17:34:21  bazhin
 * Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
 *
@@ -279,6 +282,7 @@ extern "C" {
 #define DeskAccGroup Nlm_DeskAccGroup
 #define FontGroup Nlm_FontGroup
 #define SeparatorItem Nlm_SeparatorItem
+#define HasAquaMenuLayout Nlm_HasAquaMenuLayout
 
 #define ScrollBar4 Nlm_ScrollBar4
 #define ScrollBar Nlm_ScrollBar

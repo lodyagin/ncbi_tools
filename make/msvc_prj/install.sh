@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.2 2001/12/17 21:16:10 ivanov Exp $
+# $Id: install.sh,v 1.10 2002/01/04 20:24:34 lavr Exp $
 # Author:  Denis Vakatov (vakatov@ncbi.nlm.nih.gov)
 #          Vladimir Ivanov (ivanov@ncbi.nlm.nih.gov)
 #
@@ -15,24 +15,24 @@ if test -z "$target" ; then
   echo "USAGE:  `basename $0` [build_dir] [install_dir]"
 fi
 
-builddir="${builddir:-//u/coremake/ncbi_c}"
-target="${target:-//u/coremake/public_c_test}"
+builddir="${builddir:-//u/coremake/ncbi}"
+target="${target:-//u/coremake/public/ncbi}"
 
 echo "[`basename $0`]  NCBI C:   \"$builddir\" to \"$target\"..."
 
 
 # Derive the destination dirs
 incdir="$target/include"
-srcdir="$target/altsrc"
-dbgdir="$target/dbglib"
-libdir="$target/lib"
+srcdir="$target/src"
+dbgdir="$target/Debug"
+libdir="$target/Release"
 bindir="$target/bin"
 datdir="$target/data"
 
 # Alternate dirs (mirrors)
-srcdir_a="$target/src"
-dbgdir_a="$target/DebugMT"
-libdir_a="$target/ReleaseMT"
+srcdir_a="$target/altsrc"
+dbgdir_a="$target/dbglib"
+libdir_a="$target/lib"
 
 
 # Check
@@ -47,20 +47,15 @@ if test -d "$target" ; then
 fi
 mkdir -p "$target"
 
-if test $? -ne 0 ; then
-  echo "[$0] ERROR:  Cannot create target dir \"$target\""
-  exit 2
-fi
-
-
 # Make dirs without mirrors
-
 mkdir -p "$incdir"
 mkdir -p "$incdir/connect"
 mkdir -p "$incdir/ctools"
 mkdir -p "$srcdir"
-mkdir -p "$dbgdir"
-mkdir -p "$libdir"
+for i in "" "MT"; do
+  mkdir -p "$dbgdir$i"
+  mkdir -p "$libdir$i"
+done
 mkdir -p "$bindir"
 mkdir -p "$datdir"
 
@@ -165,24 +160,28 @@ cp -p "$bd"/network/vibnet/*.c            "$srcdir"
 cp -p "$bd"/network/vibnet/*.h            "$incdir"
 
 # Object files
-cp -p "$bd"/make/msvc_prj/corelib/ncbimain/DebugMT/ncbimain.obj "$dbgdir"
-cp -p "$bd"/make/msvc_prj/corelib/ncbimain/ReleaseMT/ncbimain.obj "$libdir"
-cp -p "$bd"/make/msvc_prj/corelib/ncbi/DebugMT/ncbithr.obj "$dbgdir"
-cp -p "$bd"/make/msvc_prj/corelib/ncbi/ReleaseMT/ncbithr.obj "$libdir"
+for i in "" "MT"; do
+  cp -p "$bd/make/msvc_prj/corelib/ncbimain/Debug$i/ncbimain.obj" "$dbgdir$i"
+  cp -p "$bd/make/msvc_prj/corelib/ncbimain/Release$i/ncbimain.obj" "$libdir$i"
+  cp -p "$bd/make/msvc_prj/corelib/ncbi/Debug$i/ncbithr.obj" "$dbgdir$i"
+  cp -p "$bd/make/msvc_prj/corelib/ncbi/Release$i/ncbithr.obj" "$libdir$i"
+done
 
-# Debug libs
-cp -p `find $buiddir -name '*.lib' | grep DebugMT` "$dbgdir"
+for i in "" "MT"; do
+  # Debug libs
+  cp -p `find $buiddir -name '*.lib' | grep "Debug${i}/"` "$dbgdir$i"
 
-# Release libs
-cp -p `find $buiddir -name '*.lib' | grep ReleaseMT` "$libdir"
+  # Release libs
+  cp -p `find $buiddir -name '*.lib' | grep "Release${i}/"` "$libdir$i"
+done
 
 # Executables
-cp -p `find $buiddir -name '*.exe' | grep ReleaseMT` "$bindir"
+cp -p `find $buiddir -name '*.exe' | grep "ReleaseMT/"` "$bindir"
 
 # Data
 cp -pr "$builddir/data/" "$target"
 
 # Make mirrors dirs
 cp -pr "$srcdir" "$srcdir_a"
-cp -pr "$dbgdir" "$dbgdir_a"
-cp -pr "$libdir" "$libdir_a"
+cp -pr "${dbgdir}MT" "$dbgdir_a"
+cp -pr "${libdir}MT" "$libdir_a"

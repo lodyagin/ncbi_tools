@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.38 2001/08/28 17:45:01 madden Exp $
+/* $Id: rpsblast.c,v 6.39 2002/04/29 19:55:25 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.39  2002/04/29 19:55:25  madden
+* Use ARG_FLOAT for db length
+*
 * Revision 6.38  2001/08/28 17:45:01  madden
 * Add -m 9 as tabular output with comments
 *
@@ -214,7 +217,7 @@ static Args myargs [] = {
     { "Number of database sequence to show alignments for (B)", /* 22 */
       "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the database (use zero for the real size)", /* 23 */
-      "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
+      "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
     { "Effective length of the search space (use zero for the real size)", /* 24 */
       "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
     { "Produce HTML output",  /* 25 */
@@ -319,8 +322,8 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     
     /* rpsbop->options->query_lcase_mask = slp; External filtering */
     
-    if (myargs[23].intvalue)
-        options->db_length = (Int8) myargs[23].intvalue;
+    if (myargs[23].floatvalue)
+        options->db_length = (Int8) myargs[23].floatvalue;
     
     if (myargs[24].floatvalue)
         options->searchsp_eff = (Nlm_FloatHi) myargs[24].floatvalue;

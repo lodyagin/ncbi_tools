@@ -35,6 +35,21 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.109  2002/02/27 13:47:11  kans
+* fixed model evidence printing
+*
+* Revision 6.108  2002/02/20 21:59:04  tatiana
+* IMGT/LIGM dbxref added
+*
+* Revision 6.107  2002/01/31 22:31:31  tatiana
+* allow trascript_id in NC records
+*
+* Revision 6.106  2002/01/18 19:53:24  kans
+* if RefSeq, allow WormBase dbxref
+*
+* Revision 6.105  2001/12/28 21:37:10  kans
+* allow sfp->product to be SEQLOC_EQUIV
+*
 * Revision 6.104  2001/11/29 18:29:38  kans
 * added FANTOM_DB to list of legal db_xrefs, incremented DBNUM
 *
@@ -712,6 +727,7 @@ CharPtr dbtag[DBNUM] = {
   "taxon",
   "UniGene",
   "UniSTS",
+  "IMGT/LIGM",
   };
 
 
@@ -719,7 +735,20 @@ CharPtr dbtag[DBNUM] = {
 *	sfp_out: synthetic SeqFeatPtr of type ImpFeat for use in printing.
 *	This function puts the dbxref qualifier on every SeqFeatPtr.
 *************************************************************************/
-static void Add_dbxref (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, SeqFeatPtr sfp)
+static Boolean IsRefSeq (BioseqPtr bsp)
+{
+  SeqIdPtr        sip;
+
+  if (bsp == NULL)
+    return FALSE;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER)
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static void Add_dbxref (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, SeqFeatPtr sfp, BioseqPtr bsp)
 {
 	Int4 id = -1;
 	Int2 i;
@@ -739,6 +768,9 @@ static void Add_dbxref (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, SeqFeatPtr sfp)
 					id = i;
 					break;
 				}
+			}
+			if (id == -1 && StringCmp (db->db, "WormBase") == 0 && IsRefSeq (bsp)) {
+				id = 18; /* show it even if not RefSeq record */
 			}
 			if (ajp->mode == RELEASE_MODE && id == -1) {
 				continue;  /* drop unknown dbtag */
@@ -1198,7 +1230,7 @@ NLM_EXTERN void PrintSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			sfp_out->qual = GBQualFree(sfp_out->qual);
 		NoteStructReset(nsp);
 		PrepareSourceFeatQuals(sfp_in, sfp_out, gbp, FALSE);
-		Add_dbxref(ajp, sfp_out, sfp_in); 
+		Add_dbxref(ajp, sfp_out, sfp_in, bsp); 
 		status = ValidateNAImpFeat(sfp_out);
 		if (status < 0) { 
 /* source feat is probably missing organism name, add
@@ -1717,7 +1749,7 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 	ptr = (CharPtr) MemNew(ptrlen) + 1;
 	if (add) {
 		if (method != NULL) {
-			sprintf (ptr, "%s %s %s.", mrnaevtext1, mrnaevtext1, method);
+			sprintf (ptr, "%s %s %s.", mrnaevtext1, mrnaevtext2, method);
 		} else {
 			sprintf (ptr, "%s.", mrnaevtext1);
 		}
@@ -3377,12 +3409,12 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 	if (ajp->mode != DIRSUB_MODE) {
 		AddPID(ajp, sfp_out, (Boolean) (is_contig || is_NG || is_NC));
 	}
-	if (is_contig || is_NG) {
+	if (is_contig || is_NG || is_NC) {
 		if (sfp != NULL && sfp->data.choice == SEQFEAT_RNA) {
 			Add_trid(ajp, sfp_out); 
 		}
 	}
-	Add_dbxref(ajp, sfp_out, sfp); 
+	Add_dbxref(ajp, sfp_out, sfp, bsp); 
 	vnp = gbp->Pub;
 	if (sfp && sfp->cit) {
 		buffer[0] = '\0';
@@ -3643,6 +3675,7 @@ NLM_EXTERN void Add_trid (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 		return;
 	}
 	sip = GetProductSeqId(product);
+	if (sip == NULL) return;
 	if (sip->choice == SEQID_GI) {
 		if ((newid = GetSeqIdForGI(sip->data.intvalue)) != NULL) {
 			SeqIdWrite(newid, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);

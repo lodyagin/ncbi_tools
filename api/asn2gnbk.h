@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.30 $
+* $Revision: 6.38 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -55,7 +55,7 @@
 extern "C" {
 #endif
 
-/* choices of format, mode, style, and bit flags */
+/* choices of format, mode, and style */
 
 typedef enum {
   GENBANK_FMT = 1,
@@ -74,20 +74,55 @@ typedef enum {
 
 typedef enum {
   NORMAL_STYLE = 1,
-  SEGMENTED_STYLE,
+  SEGMENT_STYLE,
   MASTER_STYLE,
   CONTIG_STYLE
 } StlType;
 
-#define CREATE_HTML_FLATFILE    1
-#define SHOW_CONTIG_FEATURES    2
-#define SHOW_CONTIG_SOURCES     4
-#define SHOW_FAR_TRANSLATION    8
-#define LOCK_FAR_COMPONENTS    16
-#define LOCK_FAR_LOCATIONS     32
-#define LOCK_FAR_PRODUCTS      64
+/* bit flags for modifying behavior */
 
 typedef unsigned long FlgType;
+
+#define CREATE_HTML_FLATFILE      1
+
+#define SHOW_CONTIG_FEATURES      2
+#define SHOW_CONTIG_SOURCES       4
+
+#define SHOW_FAR_TRANSLATION      8
+#define TRANSLATE_IF_NO_PRODUCT  16
+#define ALWAYS_TRANSLATE_CDS     32
+
+#define ONLY_NEAR_FEATURES       64
+#define FAR_FEATURES_SUPPRESS   128
+
+#define COPY_GPS_CDS_UP         256
+#define COPY_GPS_GENE_DOWN      512
+#define HIDE_IMP_FEATS         1024
+#define HIDE_SNP_FEATS         2048
+
+#define DDJB_VARIANT_FORMAT    4096
+#define USE_NEW_SOURCE_ORG     8192
+#define USE_OLD_LOCUS_LINE    16384
+
+/* locking behavior for system performance */
+
+typedef unsigned long LckType;
+
+#define FREE_SEQPORT_EACH_TIME    1
+#define LOCK_FAR_COMPONENTS       2
+#define LOCK_FAR_LOCATIONS        4
+#define LOCK_FAR_PRODUCTS         8
+#define LOOKUP_FAR_COMPONENTS    16
+#define LOOKUP_FAR_LOCATIONS     32
+#define LOOKUP_FAR_PRODUCTS      64
+#define LOOKUP_FAR_HISTORY      128
+
+/* opaque pointer for special extensions */
+
+struct XtraData;
+typedef struct XtraData* XtraPtr;
+
+/* flatfile generation functions */
 
 NLM_EXTERN Boolean SeqEntryToGnbk (
   SeqEntryPtr sep,
@@ -96,6 +131,8 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
   ModType mode,
   StlType style,
   FlgType flags,
+  LckType locks,
+  XtraPtr extra,
   FILE *fp
 );
 
@@ -106,6 +143,8 @@ NLM_EXTERN Boolean BioseqToGnbk (
   ModType mode,
   StlType style,
   FlgType flags,
+  LckType locks,
+  XtraPtr extra,
   FILE *fp
 );
 

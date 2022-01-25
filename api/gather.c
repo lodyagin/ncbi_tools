@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.37  2002/04/13 20:23:53  kans
+* fixed get next descriptor unindexed
+*
 * Revision 6.36  2001/11/15 18:47:13  kans
 * fix to unindexed get next descriptor
 *
@@ -6800,12 +6803,12 @@ NLM_EXTERN SeqDescrPtr GetNextDescriptorUnindexed (
     bsp = (BioseqPtr) ovp->idx.parentptr;
     if (bsp == NULL) return NULL;
     if (bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
-    bssp = (BioseqSetPtr) ovp->idx.parentptr;
+    bssp = (BioseqSetPtr) bsp->idx.parentptr;
   } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
     bssp = (BioseqSetPtr) ovp->idx.parentptr;
     if (bssp == NULL) return NULL;
     if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
-    bssp = (BioseqSetPtr) ovp->idx.parentptr;
+    bssp = (BioseqSetPtr) bssp->idx.parentptr;
   } else return NULL;
 
   while (bssp != NULL) {
@@ -6813,7 +6816,7 @@ NLM_EXTERN SeqDescrPtr GetNextDescriptorUnindexed (
       if (sdp->choice == choice) return sdp;
      }
      if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
-     bssp = (BioseqSetPtr) bsp->idx.parentptr;
+     bssp = (BioseqSetPtr) bssp->idx.parentptr;
   }
   return NULL;
 }

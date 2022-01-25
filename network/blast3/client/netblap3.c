@@ -34,6 +34,21 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.95  2002/04/24 17:59:03  dondosha
+* Added handling of parameters for database splitting and megablast with discontiguous words
+*
+* Revision 1.94  2002/04/03 16:29:48  dondosha
+* Added SPLIT_BLAST macro to allow simultaneous use in current and new system
+*
+* Revision 1.93  2002/03/01 19:19:45  dondosha
+* Previous change made in a wrong place
+*
+* Revision 1.92  2002/03/01 19:04:24  dondosha
+* Set window size option to 0 for Web Mega BLAST
+*
+* Revision 1.91  2002/02/20 21:45:17  madden
+* Add protection against truncated posFreq sequence
+*
 * Revision 1.90  2001/09/06 20:27:10  dondosha
 * threshold_first removed from options
 *
@@ -683,6 +698,7 @@ BlastFini (BlastNet3Hptr bl3hptr)
     return retval;
 }
 
+#ifndef SPLIT_BLAST
 NLM_EXTERN BlastParametersPtr LIBCALL
 BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 
@@ -760,8 +776,15 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->query_lcase_mask = (ValNodePtr) options->query_lcase_mask;
         parameters->endpoint_results = options->no_traceback;
         parameters->percent_identity = (FloatHi) options->perc_identity;
+        parameters->first_db_seq = options->first_db_seq;
+        parameters->final_db_seq = options->final_db_seq;
+        parameters->window_size = options->window_size;
+        parameters->mb_template_length = options->mb_template_length;
+        parameters->mb_disc_type = options->mb_disc_type;
+
 	return parameters;
 }
+#endif
 
 /*
 	Translates the BlastDbinfoPtr into TxDfDbInfoPtr.
@@ -871,6 +894,7 @@ QueryIsProteinFromType(Uint2 type)
 	}
 }
 
+#ifndef SPLIT_BLAST
 static BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choice)
 
 {
@@ -885,7 +909,7 @@ static BlastResponsePtr GetResponsePtr(BlastResponsePtr response, Nlm_Uint1 choi
 
 	return response;
 }
-
+#endif
 
 NLM_EXTERN BlastDbinfoPtr LIBCALL
 BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
@@ -907,7 +931,8 @@ BlastRequestDbInfo (BlastNet3Hptr bl3hp, CharPtr database, Boolean is_prot)
 
 	ValNodeAddPointer(&request, BlastRequest_db_info_specific, dbinfo_get);
 	SubmitRequest(bl3hp, request, &response, NULL, TRUE);
-	response = GetResponsePtr(response, BlastResponse_db_info_specific);
+	response = (BlastResponsePtr)
+           GetResponsePtr(response, BlastResponse_db_info_specific);
 
 	if (response)
 	{
@@ -935,7 +960,8 @@ BlastGetDbInfo (BlastNet3BlockPtr blnet3blkptr)
 	response = blnet3blkptr->response;
 	while (response)
 	{
-		response = GetResponsePtr(response, BlastResponse_db_info_specific);
+		response = (BlastResponsePtr)
+                   GetResponsePtr(response, BlastResponse_db_info_specific);
 		if (response)
 		{
 			last = dbinfo;
@@ -959,7 +985,8 @@ NetBlastGetMatrix(BlastNet3BlockPtr blnet3blkptr)
 	BlastMatrixPtr matrix=NULL;
 	
 
-	response = GetResponsePtr(blnet3blkptr->response, BlastResponse_matrix);
+	response = (BlastResponsePtr)
+           GetResponsePtr(blnet3blkptr->response, BlastResponse_matrix);
 
 	if (response)
 		matrix = (BlastMatrixPtr) response->data.ptrvalue;
@@ -974,7 +1001,8 @@ BlastGetParameterBuffer (BlastNet3BlockPtr blnet3blkptr)
 	BlastResponsePtr response;
 	CharPtr buffer=NULL;
 
-	response = GetResponsePtr(blnet3blkptr->response, BlastResponse_parameters);
+	response = (BlastResponsePtr)
+           GetResponsePtr(blnet3blkptr->response, BlastResponse_parameters);
 
 	if (response)
 		buffer = (CharPtr) response->data.ptrvalue;
@@ -996,7 +1024,8 @@ BlastGetKaParams (BlastNet3BlockPtr blnet3blkptr, Boolean gapped)
 	response = blnet3blkptr->response;
 	while (response)
 	{
-		response = GetResponsePtr(response, BlastResponse_kablk);
+		response =(BlastResponsePtr)
+                   GetResponsePtr(response, BlastResponse_kablk);
 		if (response)
 		{
                     kablk = (BlastKABlkPtr) response->data.ptrvalue;
@@ -1013,6 +1042,8 @@ BlastGetKaParams (BlastNet3BlockPtr blnet3blkptr, Boolean gapped)
 /*
 	Converts 'standard' BLAST matrix to network matrix. 
 */
+
+#ifndef SPLIT_BLAST
 NLM_EXTERN BlastMatrixPtr LIBCALL
 BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
 
@@ -1092,15 +1123,25 @@ BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
         posFreqs = (Nlm_FloatHi **) 
             MemNew(blast_matrix->rows*sizeof(Nlm_FloatHi *));
 
-        for (index1=0; index1 < blast_matrix->rows; index1++) {
+        for (index1=0; index1<blast_matrix->rows && vnp; index1++) {
             posFreqs[index1] = (Nlm_FloatHi *) MemNew(blast_matrix->columns*sizeof(Nlm_FloatHi));
-            for (index2=0; index2<blast_matrix->columns; index2++) {
+            for (index2=0; index2<blast_matrix->columns && vnp; index2++) {
                 posFreqs[index1][index2] = (Nlm_FloatHi) vnp->data.realvalue;
                 vnp = vnp->next;
             }
         }
         blast_matrix->posFreqs = posFreqs;
+
+	/* Check if matrix was truncated. */
+	if (index1 != blast_matrix->rows || index2 != blast_matrix->columns)
+	{
+		posFreqs = MemFree(posFreqs);
+		blast_matrix->name = MemFree(blast_matrix->name);
+		blast_matrix = MemFree(blast_matrix);
+		return NULL;
+	}
     } 
+
     if (net_matrix->scores != NULL) {
        vnp = net_matrix->scores;
        matrix = (Int4Ptr PNTR) MemNew(blast_matrix->rows*sizeof(Int4Ptr));
@@ -1117,6 +1158,7 @@ BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
 
     return blast_matrix;
 }
+#endif
 
 NLM_EXTERN ValNodePtr LIBCALL
 BlastGetMaskedLoc (BlastNet3BlockPtr blnet3blkptr)
@@ -1130,7 +1172,8 @@ BlastGetMaskedLoc (BlastNet3BlockPtr blnet3blkptr)
 
 	while (response)
 	{
-		response = GetResponsePtr(response, BlastResponse_mask);
+		response = (BlastResponsePtr)
+                   GetResponsePtr(response, BlastResponse_mask);
 		if (response)
 		{
 			blast_mask = (BlastMaskPtr) response->data.ptrvalue;
@@ -1161,7 +1204,8 @@ PrivateBlastGetBioseq(BlastNet3Hptr bl3hptr, CharPtr database, SeqIdPtr sip, Boo
 	ValNodeAddPointer(&request, BlastRequest_db_seq_get, blast_sip);
 	SubmitRequest(bl3hptr, request, &response, NULL, TRUE);
 	
-	response = GetResponsePtr(response, BlastResponse_db_seq_get);
+	response = (BlastResponsePtr)
+           GetResponsePtr(response, BlastResponse_db_seq_get);
 	if (response)
 	{
 		bsp = (BioseqPtr) response->data.ptrvalue;
@@ -1221,23 +1265,29 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean
 	search->matrix =
 	   BlastMatrixToBlastNetMatrix(blnet3blkptr->blast_matrix);
 	search->query_set = blnet3blkptr->bsp_set;
-	ValNodeAddPointer(&request, BlastRequest_search, search);
-	*status = SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback, TRUE);
-	
-	blnet3blkptr->response = response;
-	node = GetResponsePtr(response, BlastResponse_alignment);
-	if (node)
-            seqalign = (SeqAlignPtr) node->data.ptrvalue;
+        
+        ValNodeAddPointer(&request, BlastRequest_search, search);
+        *status = SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback, TRUE);
+        
+        blnet3blkptr->response = response;
+        node = (BlastResponsePtr)
+           GetResponsePtr(response, BlastResponse_alignment);
+        if (node)
+           seqalign = (SeqAlignPtr) node->data.ptrvalue;
 
         if (other_returns) { 
            /* MegaBLAST endpoint returns */
-           node = GetResponsePtr(response, BlastResponse_mbalign);
-           if (node)
-              ValNodeAddPointer(other_returns, BlastResponse_mbalign, node->data.ptrvalue);
+           node = (BlastResponsePtr)
+              GetResponsePtr(response, BlastResponse_mbalign);
+           if (node) {
+              ValNodeAddPointer(other_returns, BlastResponse_mbalign,
+                                node->data.ptrvalue);
+           }
         }
 	if (error_returns)
 	{
-	    node = GetResponsePtr(response, BlastResponse_error);
+	    node = (BlastResponsePtr)
+               GetResponsePtr(response, BlastResponse_error);
 	    if (node)
 	    	ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
 	}
@@ -1291,13 +1341,15 @@ BlastBioseqByParts (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, B
 	*status = SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback, TRUE);
 	
 	blnet3blkptr->response = response;
-	node = GetResponsePtr(response, BlastResponse_parts);
+	node = (BlastResponsePtr)
+           GetResponsePtr(response, BlastResponse_parts);
 	if (node)
             blast_parts = (BlastPartsPtr) node->data.ptrvalue;
 	
 	if (error_returns)
 	{
-	    node = GetResponsePtr(response, BlastResponse_error);
+	    node = (BlastResponsePtr)
+               GetResponsePtr(response, BlastResponse_error);
 	    if (node)
 	    	ValNodeAddPointer(error_returns, BlastResponse_error, node->data.ptrvalue);
 	}
@@ -1342,12 +1394,14 @@ SeedBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns,
                             blnet3blkptr->callback, TRUE);
     
     blnet3blkptr->response = response;
-    node = GetResponsePtr(response, BlastResponse_phialign);
+    node = (BlastResponsePtr)
+       GetResponsePtr(response, BlastResponse_phialign);
     if (node)
         bphp = (BlastPhialignPtr) node->data.ptrvalue;
     
     if (error_returns) {
-        node = GetResponsePtr(response, BlastResponse_error);
+        node = (BlastResponsePtr)
+           GetResponsePtr(response, BlastResponse_error);
         if (node)
             ValNodeAddPointer(error_returns, BlastResponse_error, 
                               node->data.ptrvalue);
@@ -2413,15 +2467,12 @@ TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr o
     ReadDBBioseqFetchEnable ("blastcl3", database, db_is_na, TRUE);
 
     if (mb_results) {
+       MegaBlastHitPtr mb_hit;
        /* Results come as alignment endpoints only from Mega BLAST */
-       MegaBlastHitPtr mb_hit = mb_results->mbhits /*, next_hit */ ;
-
-
-       while (mb_hit) {
+       for (mb_hit=mb_results->mbhits; mb_hit; mb_hit = mb_hit->next) {
           fprintf(outfp, "%s\t%s\t%d\t%d\t%d\t%d\t%d\n", mb_hit->id1,
                   mb_hit->id2, mb_hit->query_offset, mb_hit->subject_offset,
                   mb_hit->query_end, mb_hit->subject_end, mb_hit->score);
-          mb_hit = mb_hit->next;
        }
        MegaBlastResultsFree(mb_results);
     }
@@ -2571,7 +2622,7 @@ TraditionalBlastReportLocExtra(SeqLocPtr slp, BLAST_OptionsBlkPtr options, Blast
         Converst the BlastParametersPtr (used by network service) to
         BLAST_OptionsBlkPtr (used by blast).
 */
-
+#ifndef SPLIT_BLAST
 NLM_EXTERN BLAST_OptionsBlkPtr
 parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr PNTR error_return)
 
@@ -2646,7 +2697,9 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                     options->searchsp_eff = parameters->searchsp_eff;
 		if (parameters->hsp_range_max)
                     options->hsp_range_max = parameters->hsp_range_max;
-		if (parameters->block_width)
+		if (parameters->block_width || parameters->is_megablast)
+                   /* In case of megablast, block_width should be 0 by default
+                      instead of 20 returned from BLASTOptionNew */
                     options->block_width = parameters->block_width;
 		if (parameters->perform_culling)
                     options->perform_culling = parameters->perform_culling;
@@ -2678,6 +2731,17 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                    (SeqLocPtr) parameters->query_lcase_mask;
                 options->no_traceback = parameters->endpoint_results;
                 options->perc_identity = (FloatLo) parameters->percent_identity;
+                options->first_db_seq = parameters->first_db_seq;
+                options->final_db_seq = parameters->final_db_seq;
+                options->window_size = parameters->window_size;
+                if (options->window_size == 0 && StringCmp(program, "blastn"))
+                    options->window_size = 40;
+                options->mb_template_length = parameters->mb_template_length;
+                options->mb_disc_type = parameters->mb_disc_type;
+                if (options->mb_template_length > 0 && 
+                    (options->gap_open > 0 || options->gap_extend > 0)) {
+                   options->mb_use_dyn_prog = TRUE;
+                }
         }
 
 	if ((status = BLASTOptionValidateEx(options, program, error_return))) {
@@ -2754,3 +2818,4 @@ NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids,
 
     return count;
 }
+#endif

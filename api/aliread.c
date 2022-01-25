@@ -1024,6 +1024,17 @@ static Boolean s_ProcessOtherLine (AliConfigInfoPtr configPtr,
       configPtr->missingChar = (CharPtr) MemNew (2);
       sprintf (configPtr->missingChar, "%c", tmpStr[0]);
       MemFree (tmpStr);
+
+      /* If the new missing char conflicts with the */
+      /* gap or unaligned char, then blank them out */
+      /* to give the new one precedence.            */
+
+      if (StringICmp (configPtr->missingChar, configPtr->gapChar) == 0)
+	StringCpy (configPtr->gapChar, "");
+
+      if (StringICmp (configPtr->missingChar, configPtr->unalignedChar) == 0)
+	StringCpy (configPtr->unalignedChar, "");
+	
     }
   
   /* Check for definition of gap character */
@@ -1036,6 +1047,17 @@ static Boolean s_ProcessOtherLine (AliConfigInfoPtr configPtr,
       configPtr->gapChar = (CharPtr) MemNew (2);
       sprintf (configPtr->gapChar, "%c", tmpStr[0]);
       MemFree (tmpStr);
+
+      /* If the new gap char conflicts with the missing */
+      /* or unaligned char, then blank them out to give */
+      /* the new one precedence.                        */
+
+      if (StringICmp (configPtr->gapChar, configPtr->missingChar) == 0)
+	StringCpy (configPtr->missingChar, "");
+
+      if (StringICmp (configPtr->gapChar, configPtr->unalignedChar) == 0)
+	StringCpy (configPtr->unalignedChar, "");
+	
     }
   
   /* Check for definition of unaligned character */
@@ -1048,6 +1070,17 @@ static Boolean s_ProcessOtherLine (AliConfigInfoPtr configPtr,
       configPtr->unalignedChar = (CharPtr) MemNew (2);
       sprintf (configPtr->unalignedChar, "%c", tmpStr[0]);
       MemFree (tmpStr);
+
+      /* If the new unaligned char conflicts with the */
+      /* gap or missing char, then blank them out to  */
+      /* give the new one precedence.                 */
+
+      if (StringICmp (configPtr->unalignedChar, configPtr->gapChar) == 0)
+	StringCpy (configPtr->gapChar, "");
+
+      if (StringICmp (configPtr->unalignedChar, configPtr->missingChar) == 0)
+	StringCpy (configPtr->missingChar, "");
+	
     }
   
   /* Return successfully */

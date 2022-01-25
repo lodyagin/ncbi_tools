@@ -37,10 +37,11 @@
 #define ERR_SEQ_INST_BadSecondaryAccn  1,33
 #define ERR_SEQ_INST_ZeroGiNumber  1,34
 #define ERR_SEQ_INST_RnaDnaConflict  1,35
+#define ERR_SEQ_INST_HistoryGiCollision  1,36
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
-#define ERR_SEQ_DESCR_Inconsistent  2,3
+#define ERR_SEQ_DESCR_FileOpenCollision  2,3
 #define ERR_SEQ_DESCR_Unknown  2,4
 #define ERR_SEQ_DESCR_NoPubFound  2,5
 #define ERR_SEQ_DESCR_NoOrgFound  2,6
@@ -57,6 +58,7 @@
 #define ERR_SEQ_DESCR_BadSubSource  2,17
 #define ERR_SEQ_DESCR_BadOrgMod  2,18
 #define ERR_SEQ_DESCR_InconsistentProteinTitle  2,19
+#define ERR_SEQ_DESCR_Inconsistent  2,20
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -134,6 +136,7 @@
 #define ERR_SEQ_FEAT_AbuttingIntervals  5,56
 #define ERR_SEQ_FEAT_CollidingGeneNames  5,57
 #define ERR_SEQ_FEAT_MultiIntervalGene  5,58
+#define ERR_SEQ_FEAT_FeatContentDup  5,59
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

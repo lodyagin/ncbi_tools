@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/25/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: viewer.h,v $
+* Revision 6.2  2002/03/20 22:10:52  kans
+* set small/medium/large font prototyped in drawingp.h and viewer.h
+*
 * Revision 6.1  1997/11/17 23:56:32  kans
 * added PictureHasEnlarged, call on scroll if PictureGrew dynamically
 *
@@ -187,9 +190,15 @@ extern Nlm_FonT Nlm_SetLargeFont  PROTO((void));
 #define ResetHighlight Nlm_ResetHighlight
 #define MapWorldToViewer Nlm_MapWorldToViewer
 #define MapViewerToWorld Nlm_MapViewerToWorld
+#ifndef SetSmallFont
 #define SetSmallFont Nlm_SetSmallFont
+#endif
+#ifndef SetMediumFont
 #define SetMediumFont Nlm_SetMediumFont
+#endif
+#ifndef SetLargeFont
 #define SetLargeFont Nlm_SetLargeFont
+#endif
 
 #ifdef __cplusplus
 }

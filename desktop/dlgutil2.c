@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -1255,6 +1255,11 @@ static void ChangeCannedMessage (PopuP p)
     case 6 :
       SetTitle (ffp->exceptText, "artificial frameshift");
       SetStatus (ffp->exception, TRUE);
+      break;
+    case 7 :
+      SetTitle (ffp->exceptText, "nonconsensus splice site");
+      SetStatus (ffp->exception, TRUE);
+      break;
     default :
       break;
   }
@@ -1389,22 +1394,24 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "ribosomal slippage");
       PopupItem (canned, "trans splicing");
       PopupItem (canned, "artificial frameshift");
+      PopupItem (canned, "nonconsensus splice site");
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
         } else if (StringICmp (sfp->except_text, "reasons given in citation") == 0 ||
                    StringICmp (sfp->except_text, "reasons cited in publication") == 0) {
           SetValue (canned, 3);
-        } else if (StringICmp (sfp->except_text, "ribosomal slippage") == 0) {
+        } else if (StringICmp (sfp->except_text, "ribosomal slippage") == 0 ||
+                   StringICmp (sfp->except_text, "ribosome slippage") == 0) {
           SetValue (canned, 4);
-        } else if (StringICmp (sfp->except_text, "ribosome slippage") == 0) {
-          SetValue (canned, 4);
-        } else if (StringICmp (sfp->except_text, "trans splicing") == 0) {
-          SetValue (canned, 5);
-        } else if (StringICmp (sfp->except_text, "trans-splicing") == 0) {
+        } else if (StringICmp (sfp->except_text, "trans splicing") == 0 ||
+                   StringICmp (sfp->except_text, "trans-splicing") == 0) {
           SetValue (canned, 5);
         } else if (StringICmp (sfp->except_text, "artificial frameshift") == 0) {
           SetValue (canned, 6);
+        } else if (StringICmp (sfp->except_text, "non-consensus splice site") == 0 ||
+                   StringICmp (sfp->except_text, "nonconsensus splice site") == 0) {
+          SetValue (canned, 7);
         }
       } else {
         SetValue (canned, 1);

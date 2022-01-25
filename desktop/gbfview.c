@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.39 $
+* $Revision: 6.51 $
 *
 * File Description: 
 *
@@ -43,9 +43,9 @@
 */
 
 #include <bspview.h>
-#include <asn2ff.h>
-#include <ffprint.h>
+#include <asn2gnbp.h>
 #include <tofasta.h>
+#include <explore.h>
 
 static ParData ffParFmt = {FALSE, FALSE, FALSE, FALSE, TRUE, 0, 0};
 static ColData ffColFmt = {0, 0, 80, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, TRUE};
@@ -56,27 +56,27 @@ typedef struct docdescrstruct {
 } DocDescrStruct, PNTR DocDescrPtr;
 
 typedef struct flatstruct {
-  Asn2ffJobPtr      ajp;
-  FFPrintArrayPtr   pap;
-  SeqEntryPtr       sep;
-  Int4              pap_size;
-  Int4              numdescr;
-  DocDescrPtr       descr;
+  Asn2gbJobPtr       ajp;
+  BaseBlockPtr PNTR  paragraphs;
+  Int4               numParagraphs;
+  SeqEntryPtr        sep;
+  Int4               numdescr;
+  DocDescrPtr        descr;
 } FlatStruct, PNTR FlatStructPtr;
 
 static Boolean GetIDsFromDoc (DoC d, Int2 item, Uint2Ptr entityPtr,
                               Uint2Ptr itemPtr, Uint2Ptr typePtr)
 
 {
-  BioseqViewPtr    bvp;
-  Pointer          dataPtr;
-  DescrStructPtr   descr;
-  unsigned int     entityID;
-  FlatStructPtr    fsp;
-  unsigned int     itemID;
-  unsigned int     itemtype;
-  Boolean          okay;
-  FFPrintArrayPtr  pap;
+  BaseBlockPtr       bbp;
+  BioseqViewPtr      bvp;
+  Pointer            dataPtr;
+  unsigned int       entityID;
+  FlatStructPtr      fsp;
+  unsigned int       itemID;
+  unsigned int       itemtype;
+  Boolean            okay;
+  BaseBlockPtr PNTR  paragraphs;
 
   okay = FALSE;
   entityID = 0;
@@ -89,13 +89,13 @@ static Boolean GetIDsFromDoc (DoC d, Int2 item, Uint2Ptr entityPtr,
     GetItemParams (d, item, NULL, NULL, NULL, NULL, &dataPtr);
     if (dataPtr != NULL) {
       fsp = (FlatStructPtr) dataPtr;
-      pap = fsp->pap;
-      if (pap != NULL) {
-        descr = pap [item - 1].descr;
-        if (descr != NULL) {
-          entityID = descr->entityID;
-          itemID = descr->itemID;
-          itemtype = descr->itemtype;
+      paragraphs = fsp->paragraphs;
+      if (paragraphs != NULL) {
+        bbp = paragraphs [item - 1];
+        if (bbp != NULL) {
+          entityID = bbp->entityID;
+          itemID = bbp->itemID;
+          itemtype = bbp->itemtype;
           okay = (Boolean) (entityID > 0 && itemID > 0 && itemtype > 0);
         }
       }
@@ -469,8 +469,7 @@ static void DocFreeFlat (DoC d, VoidPtr data)
 
   if (data != NULL) {
     fsp = (FlatStructPtr) data;
-    asn2ff_cleanup (fsp->ajp);
-    MemFree (fsp->ajp);
+    fsp->ajp = asn2gnbk_cleanup (fsp->ajp);
     MemFree (fsp->descr);
     MemFree (fsp);
   }
@@ -479,17 +478,17 @@ static void DocFreeFlat (DoC d, VoidPtr data)
 static CharPtr FFPrintFunc (DoC d, Int2 index, Pointer data)
 
 {
-  BaseFormPtr      bfp;
-  BioseqPtr        bsp;
-  BioseqViewPtr    bvp;
-  DescrStructPtr   descr;
-  FlatStructPtr    fsp;
-  ErrSev           level;
-  SeqEntryPtr      oldsep = NULL;
-  OMUserDataPtr    omudp;
-  FFPrintArrayPtr  pap;
-  CharPtr          str = NULL;
-  SeqEntryPtr      topsep;
+  BaseBlockPtr       bbp;
+  BaseFormPtr        bfp;
+  BioseqPtr          bsp;
+  BioseqViewPtr      bvp;
+  FlatStructPtr      fsp;
+  ErrSev             level;
+  SeqEntryPtr        oldsep = NULL;
+  OMUserDataPtr      omudp;
+  BaseBlockPtr PNTR  paragraphs;
+  CharPtr            str = NULL;
+  SeqEntryPtr        topsep;
 
   bvp = (BioseqViewPtr) GetObjectExtra (d);
   fsp = (FlatStructPtr) data;
@@ -501,18 +500,18 @@ static CharPtr FFPrintFunc (DoC d, Int2 index, Pointer data)
     topsep = GetTopSeqEntryForEntityID (bfp->input_entityID);
     oldsep = SeqEntrySetScope (topsep);
   }
-  str = FFPrint (fsp->pap, (Int4) (index - 1), fsp->pap_size);
+  str = asn2gnbk_format (fsp->ajp, (Int4) (index - 1));
   if (oldsep != NULL) {
     SeqEntrySetScope (oldsep);
   }
   if (bfp != NULL) {
-    pap = fsp->pap;
-    if (pap != NULL) {
-      descr = pap [index - 1].descr;
-      if (descr != NULL && descr->entityID != 0 && descr->entityID != bfp->input_entityID) {
-        if (! InBioseqViewEntityList (descr->entityID, bvp)) {
-          ValNodeAddInt (&(bvp->entityList), 0, (Int4) descr->entityID);
-          omudp = ObjMgrAddUserData (descr->entityID, bfp->procid,
+    paragraphs = fsp->paragraphs;
+    if (paragraphs != NULL) {
+      bbp = paragraphs [index - 1];
+      if (bbp != NULL && bbp->entityID != 0 && bbp->entityID != bfp->input_entityID) {
+        if (! InBioseqViewEntityList (bbp->entityID, bvp)) {
+          ValNodeAddInt (&(bvp->entityList), 0, (Int4) bbp->entityID);
+          omudp = ObjMgrAddUserData (bbp->entityID, bfp->procid,
 	                                 OMPROC_VIEW, bfp->userkey);
           if (omudp != NULL) {
             omudp->userdata.ptrvalue = (Pointer) bfp;
@@ -584,14 +583,123 @@ static void LookForGEDseqID (BioseqPtr bsp, Pointer userdata)
   }
 }
 
-static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, Uint1 mode, Boolean show_gene, Boolean showContigJoin)
+static void LookForNonLocalID (BioseqPtr bsp, Pointer userdata)
 
 {
-  Asn2ffJobPtr    ajp;
+  BoolPtr   isNonLocalPtr;
+  SeqIdPtr  sip;
+
+  isNonLocalPtr = (BoolPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_LOCAL :
+        break;
+      default :
+        *isNonLocalPtr = TRUE;
+        break;
+    }
+  }
+}
+
+static void LookForPubs (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr  hasPub;
+
+  hasPub = (BoolPtr) userdata;
+  *hasPub = TRUE;
+}
+
+static CharPtr relmodemsg1 = "Record cannot only have a local Seq-id for release mode";
+static CharPtr relmodemsg2 = "Record must have a publication for release mode";
+static CharPtr relmodemsg3 = "Release mode failure";
+
+static CharPtr RelModeFailText (
+  BioseqPtr bsp,
+  SeqEntryPtr usethetop
+)
+
+{
+  SeqMgrDescContext  dcontext;
+  SeqMgrFeatContext  fcontext;
+  Boolean            nonLocalID;
+  Boolean            hasPubs;
+
+  nonLocalID = FALSE;
+  if (usethetop) {
+    VisitBioseqsInSep (usethetop, (Pointer) &nonLocalID, LookForNonLocalID);
+  } else {
+    LookForNonLocalID (bsp, (Pointer) &nonLocalID);
+  }
+  if (! nonLocalID) {
+    return StringSave (relmodemsg1);
+  }
+
+  hasPubs = FALSE;
+  if (usethetop) {
+    if (VisitPubdescsInSep (usethetop, NULL, NULL) == 0) {
+      return StringSave (relmodemsg2);
+    }
+  } else {
+    if (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_pub, &dcontext) == NULL) {
+      return StringSave (relmodemsg2);
+    }
+    if (SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_PUB, 0, &fcontext) == NULL) {
+      return StringSave (relmodemsg2);
+    }
+  }
+
+  return StringSave (relmodemsg3);
+}
+
+static Int2 asn2gb_line_estimate [25] = {
+  0,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  2, /* organism */
+  6, /* reference */
+  4, /* comment */
+  1,
+  4, /* source */
+  6, /* feature */
+  1,
+  1,
+ 20, /* sequence */
+  4, /* contig */
+  1,
+  1,
+  1
+};
+
+static Boolean PopulateFF (
+  DoC d,
+  SeqEntryPtr sep,
+  BioseqPtr bsp,
+  SeqEntryPtr usethetop,
+  FmtType format,
+  ModType mode,
+  StlType style,
+  FlgType flags
+)
+
+{
+  Asn2gbJobPtr    ajp;
+  BaseBlockPtr    bbp;
+  BlockType       blocktype;
+  BioseqSetPtr    bssp;
   BioseqViewPtr   bvp;
-  DescrStructPtr  descr;
   DocDescrPtr     doscr;
   DocDescrPtr     doscrp;
+  Int2            estimate;
   FonT            fnt;
   FlatStructPtr   fsp;
   Int4            index;
@@ -610,42 +718,30 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
       fsp->sep = sep;
       SetDocData (d, (Pointer) fsp, DocFreeFlat);
       level = ErrSetMessageLevel (SEV_MAX);
-      ajp = MemNew (sizeof (Asn2ffJob));
+      if (usethetop != NULL && IS_Bioseq_set (usethetop)) {
+        bssp = (BioseqSetPtr) usethetop->data.ptrvalue;
+        ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, style, flags, 0, NULL);
+      } else {
+        ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, style, flags, 0, NULL);
+      }
       if (ajp == NULL) return FALSE;
       fsp->ajp = ajp;
-      ajp->sep = sep;
-      ajp->mode = mode;
-      ajp->format = format;
-      ajp->show_version = TRUE;
-      ajp->gb_style = TRUE;
-      ajp->show_seq = TRUE;
-      ajp->show_gi = TRUE;
-      ajp->error_msgs = FALSE;
-      ajp->non_strict = TRUE;
-      ajp->Spop = spop;
-      ajp->show_gene = show_gene;
-      if (/* IsAGenomeRecord (sep) || */
-          IsSegmentedBioseqWithoutParts (sep)) {
-        ajp->only_one = TRUE;
-        ajp->genome_view = TRUE;
-        ajp->contig_view = (Boolean) (! showContigJoin);
-      } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
-        ajp->only_one = TRUE;
-        ajp->genome_view = TRUE;
-        ajp->contig_view = (Boolean) (! showContigJoin);
-      }
-      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-        ajp->bankit = TRUE;
-      }
-      fsp->pap_size = asn2ff_setup (ajp, &(fsp->pap));
-      if (fsp->pap_size > 0) {
-        asn2ff_set_output (NULL, "\n");
+      fsp->numParagraphs = ajp->numParagraphs;
+      fsp->paragraphs = ajp->paragraphArray;
+      if (fsp->numParagraphs > 0 && fsp->paragraphs != NULL) {
         fsp->numdescr = 0;
-        for (index = 0; index < fsp->pap_size; index++) {
+        for (index = 0; index < fsp->numParagraphs; index++) {
+          estimate = 1;
+          bbp = fsp->paragraphs [index];
+          if (bbp != NULL) {
+            blocktype = bbp->blocktype;
+            if (blocktype >= HEAD_BLOCK && blocktype <= TAIL_BLOCK) {
+              estimate = asn2gb_line_estimate [(int) blocktype];
+            }
+          }
           AppendItem (d, FFPrintFunc, (Pointer) fsp, FALSE,
-                      fsp->pap [index].estimate, &ffParFmt,
-                      &ffColFmt, fnt);
-          if (fsp->pap [index].descr != NULL) {
+                      estimate, &ffParFmt, &ffColFmt, fnt);
+          if (bbp != NULL) {
             (fsp->numdescr)++;
           }
         }
@@ -653,13 +749,13 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
         fsp->descr = doscrp;
         fsp->numdescr = 0;
         if (doscrp != NULL) {
-          for (index = 0; index < fsp->pap_size; index++) {
-            descr = fsp->pap [index].descr;
-            if (descr != NULL) {
+          for (index = 0; index < fsp->numParagraphs; index++) {
+            bbp = fsp->paragraphs [index];
+            if (bbp != NULL) {
               doscr = &(doscrp [fsp->numdescr]);
-              doscr->entityID = descr->entityID;
-              doscr->itemID = descr->itemID;
-              doscr->itemtype = descr->itemtype;
+              doscr->entityID = bbp->entityID;
+              doscr->itemID = bbp->itemID;
+              doscr->itemtype = bbp->itemtype;
               doscr->docitem = index + 1;
               (fsp->numdescr)++;
             }
@@ -674,37 +770,100 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
   return rsult;
 }
 
-static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene)
+static void LookForTpa (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
 
 {
-  Asn2ffJobPtr  ajp;
-  BioseqPtr     bsp;
-  DoC           doc;
-  Uint2         entityID;
-  FILE          *fp;
-  Int2          into;
-  Boolean       isGenBankEMBLorDDBJ;
-  Boolean       showContigJoin;
-  Int2          item;
-  ErrSev        level;
-  Uint1         mode;
-  SeqEntryPtr   oldsep;
-  Char          path [PATH_MAX];
-  BaR           sb = NULL;
-  SeqEntryPtr   sep;
-  Int4          startsAt;
-  SeqEntryPtr   topsep;
-  TexT          txt;
+  BoolPtr        hastpaP;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "TpaAssembly") != 0) return;
+
+  hastpaP = (BoolPtr) userdata;
+  *hastpaP = TRUE;
+}
+
+static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
+
+{
+  BioseqPtr        bsp;
+  DoC              doc;
+  Uint2            entityID;
+  FonT             fnt;
+  FILE             *fp;
+  Boolean          hastpaaligns;
+  Int2             into;
+  Boolean          isGenBankEMBLorDDBJ;
+  Int2             item;
+  ErrSev           level;
+  Boolean          lockFar = FALSE;
+  Boolean          lookupFar = FALSE;
+  ModType          mode = SEQUIN_MODE;
+  SeqEntryPtr      oldsep;
+  Char             path [PATH_MAX];
+  BaR              sb = NULL;
+  SeqEntryPtr      sep;
+  Int4             startsAt;
+  CharPtr          str;
+  StlType          style = NORMAL_STYLE;
+  SeqViewProcsPtr  svpp;
+  SeqEntryPtr      topsep;
+  TexT             txt;
+  SeqEntryPtr      usethetop = NULL;
+  Int2             val;
 
   if (bvp == NULL) return;
-  if (bvp->hasTargetControl) {
-    if (bvp->ffModeCtrl != NULL && GetValue (bvp->ffModeCtrl) == 2) {
-      mode = RELEASE_MODE;
-    } else {
-      mode = SEQUIN_MODE;
+  if (bvp->hasTargetControl && bvp->ffModeCtrl != NULL) {
+    val = GetValue (bvp->ffModeCtrl);
+    switch (val) {
+      case 1 :
+        mode = RELEASE_MODE;
+        break;
+      case 2 :
+        mode = ENTREZ_MODE;
+        break;
+      case 3 :
+        mode = SEQUIN_MODE;
+        break;
+      case 4 :
+        mode = DUMP_MODE;
+        break;
+      default :
+        break;
     }
-  } else {
-    mode = RELEASE_MODE;
+  }
+  /* now using control instead of seqid type */
+  if (bvp->ffStyleCtrl != NULL) {
+    val = GetValue (bvp->ffStyleCtrl);
+    switch (val) {
+      case 1 :
+        style = NORMAL_STYLE;
+        lookupFar = TRUE;
+        break;
+      case 2 :
+        style = SEGMENT_STYLE;
+        lockFar = TRUE;
+        break;
+      case 3 :
+        style = MASTER_STYLE;
+        lockFar = TRUE;
+        break;
+      case 4 :
+        style = CONTIG_STYLE;
+        lookupFar = TRUE;
+        break;
+      default :
+        break;
+    }
   }
   doc = NULL;
   txt = NULL;
@@ -734,11 +893,27 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
       Message (MSG_ERROR, "StdPrintOptionsNew failed");
     }
   }
+
+  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
+  if (svpp != NULL && svpp->lockFarComponents) {
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+    sep = GetTopSeqEntryForEntityID (entityID);
+    if (bvp->bsplist == NULL && lockFar) {
+      bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE);
+    }
+    if (lookupFar) {
+      hastpaaligns = FALSE;
+      VisitDescriptorsInSep (sep, (Pointer) &hastpaaligns, LookForTpa);
+      LookupFarSeqIDs (sep, TRUE, TRUE, TRUE, FALSE, hastpaaligns);
+    }
+  }
+
   sep = SeqMgrGetSeqEntryForData (bsp);
   entityID = ObjMgrGetEntityIDForChoice (sep);
   if (bvp->hasTargetControl) {
     if (bvp->viewWholeEntity) {
       sep = GetTopSeqEntryForEntityID (entityID);
+      usethetop = sep;
     } else if (ISA_na (bsp->mol) && bsp->repr == Seq_repr_seg) {
       sep = GetBestTopParentForData (entityID, bsp);
     } else if (ISA_aa (bsp->mol) && bsp->repr == Seq_repr_seg) {
@@ -759,65 +934,56 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
   ffColFmt.pixInset = 8;
   isGenBankEMBLorDDBJ = FALSE;
   VisitBioseqsInSep (topsep, (Pointer) &isGenBankEMBLorDDBJ, LookForGEDseqID);
-  /* now using control instead of seqid type */
-  showContigJoin = bvp->showContigJoin;
   if (bvp->useScrollText) {
-    ajp = MemNew (sizeof (Asn2ffJob));
-    if (ajp != NULL) {
-      TmpNam (path);
-      fp = FileOpen (path, "w");
-      if (fp != NULL) {
-        level = ErrSetMessageLevel (SEV_MAX);
-        ajp->sep = sep;
-        ajp->mode = mode;
-        ajp->format = format;
-        ajp->show_version = TRUE;
-        ajp->gb_style = TRUE;
-        ajp->show_seq = TRUE;
-        ajp->show_gi = TRUE;
-        ajp->error_msgs = FALSE;
-        ajp->non_strict = TRUE;
-        ajp->Spop = spop;
-        ajp->show_gene = show_gene;
-        if (/* IsAGenomeRecord (sep) || */
-            IsSegmentedBioseqWithoutParts (sep)) {
-          ajp->only_one = TRUE;
-          ajp->genome_view = TRUE;
-          ajp->contig_view = (Boolean) (! showContigJoin);
-        } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
-          ajp->only_one = TRUE;
-          ajp->genome_view = TRUE;
-          ajp->contig_view = (Boolean) (! showContigJoin);
+    TmpNam (path);
+    fp = FileOpen (path, "w");
+    if (fp != NULL) {
+      level = ErrSetMessageLevel (SEV_MAX);
+      if (SeqEntryToGnbk (sep, NULL, format, mode, style, flags, 0, NULL, fp)) {
+        FileClose (fp);
+        if (! FileToScrollText (txt, path)) {
+          SetTitle (txt, "(Text is too large to be displayed in this control.)");
         }
-        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-          ajp->bankit = TRUE;
+      } else if (mode == RELEASE_MODE) {
+        str = RelModeFailText (bsp, usethetop);
+        if (str != NULL) {
+          fprintf (fp, "%s", str);
         }
-        ajp->fp = fp;
-        if (SeqEntryToFlatAjp (ajp, sep, fp, format, mode)) {
-          FileClose (fp);
-          if (! FileToScrollText (txt, path)) {
-            SetTitle (txt, "(Text is too large to be displayed in this control.)");
-          }
-        } else {
-          FileClose (fp);
+        FileClose (fp);
+        if (str != NULL) {
+          FileToScrollText (txt, path);
         }
-        ErrSetMessageLevel (level);
+        MemFree (str);
+      } else {
+        FileClose (fp);
       }
-      FileRemove (path);
+      ErrSetMessageLevel (level);
     }
-    MemFree (ajp);
+    FileRemove (path);
   } else {
-    PopulateFF (doc, sep, bsp, format, mode, show_gene, showContigJoin);
-    SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
-    SetDocProcs (doc, ClickIcon, NULL, ReleaseIcon, NULL);
-    SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
-    SetDocAutoAdjust (doc, FALSE);
-    ForceFormat (doc, item);
-    SetDocAutoAdjust (doc, TRUE);
-    AdjustDocScroll (doc);
-    GetItemParams4 (doc, item, &startsAt, NULL, NULL, NULL, NULL);
-    CorrectBarValue (sb, startsAt + into);
-    UpdateDocument (doc, 0, 0);
+    if (PopulateFF (doc, sep, bsp, usethetop, format, mode, style, flags)) {
+      SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
+      SetDocProcs (doc, ClickIcon, NULL, ReleaseIcon, NULL);
+      SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
+      SetDocAutoAdjust (doc, FALSE);
+      ForceFormat (doc, item);
+      SetDocAutoAdjust (doc, TRUE);
+      AdjustDocScroll (doc);
+      GetItemParams4 (doc, item, &startsAt, NULL, NULL, NULL, NULL);
+      CorrectBarValue (sb, startsAt + into);
+      UpdateDocument (doc, 0, 0);
+    } else if (mode == RELEASE_MODE) {
+      str = RelModeFailText (bsp, usethetop);
+      if (str != NULL) {
+        fnt = programFont;
+        if (bvp != NULL && bvp->displayFont != NULL) {
+          fnt = bvp->displayFont;
+        }
+        AppendText (doc, str, &ffParFmt, &ffColFmt, fnt);
+      }
+      MemFree (str);
+      UpdateDocument (doc, 0, 0);
+    }
   }
 
   SeqEntrySetScope (oldsep);
@@ -829,7 +995,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
 static void PopulateGenBank (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT, TRUE);
+  PopulateFlatFile (bvp, GENBANK_FMT, 0);
 }
 
 static void PopulateEMBL (BioseqViewPtr bvp)
@@ -837,43 +1003,50 @@ static void PopulateEMBL (BioseqViewPtr bvp)
 {
   if (bvp == NULL) return;
   if (bvp->hasTargetControl) {
-    PopulateFlatFile (bvp, PSEUDOEMBL_FMT, TRUE);
+    PopulateFlatFile (bvp, EMBL_FMT, 0);
   } else {
-    PopulateFlatFile (bvp, EMBL_FMT, TRUE);
+    PopulateFlatFile (bvp, EMBL_FMT, 0);
   }
 }
 
 static void PopulateDDBJ (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENBANK_FMT, FALSE);
+  PopulateFlatFile (bvp, GENBANK_FMT, DDJB_VARIANT_FORMAT);
 }
 
 static void PopulateGenPept (BioseqViewPtr bvp)
 
 {
-  PopulateFlatFile (bvp, GENPEPT_FMT, TRUE);
+  PopulateFlatFile (bvp, GENPEPT_FMT, 0);
+}
+
+static void PopulateFTable (BioseqViewPtr bvp)
+
+{
+  PopulateFlatFile (bvp, FTABLE_FMT, 0);
 }
 
 static void PopulateFasta (BioseqViewPtr bvp)
 
 {
-  BioseqPtr    bsp;
-  DoC          doc;
-  Uint2        entityID;
-  Boolean      fastaOK;
-  Boolean      fastaNucOK;
-  Boolean      fastaPrtOK;
-  FonT         fnt;
-  FILE         *fp;
-  Uint1        group_segs;
-  Int2         into;
-  Int2         item;
-  Char         path [PATH_MAX];
-  BaR          sb = NULL;
-  SeqEntryPtr  sep;
-  Int4         startsAt;
-  TexT         txt;
+  BioseqPtr        bsp;
+  DoC              doc;
+  Uint2            entityID;
+  Boolean          fastaOK;
+  Boolean          fastaNucOK;
+  Boolean          fastaPrtOK;
+  FonT             fnt;
+  FILE             *fp;
+  Uint1            group_segs;
+  Int2             into;
+  Int2             item;
+  Char             path [PATH_MAX];
+  BaR              sb = NULL;
+  SeqEntryPtr      sep;
+  Int4             startsAt;
+  SeqViewProcsPtr  svpp;
+  TexT             txt;
 
   if (bvp == NULL) return;
   doc = NULL;
@@ -895,6 +1068,16 @@ static void PopulateFasta (BioseqViewPtr bvp)
     SetDocAutoAdjust (doc, FALSE);
   }
   if (bsp == NULL) return;
+
+  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
+  if (svpp != NULL && svpp->lockFarComponents) {
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+    sep = GetTopSeqEntryForEntityID (entityID);
+    if (bvp->bsplist == NULL) {
+      bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE);
+    }
+  }
+
   sep = SeqMgrGetSeqEntryForData (bsp);
   if (bvp->hasTargetControl) {
     if (bvp->viewWholeEntity) {
@@ -1511,17 +1694,20 @@ static void PrintFlatFileFastaOrAsn (BioseqViewPtr bvp)
   }
 }
 
-static void ExportFlatFileFastaOrAsn (BioseqViewPtr bvp, CharPtr filename, CharPtr dfault)
+static void ExportFlatFileFastaOrAsnEx (BioseqViewPtr bvp, CharPtr filename, CharPtr dfault, Boolean specialSave)
 
 {
-  Char  ch;
-  Char  dfaultFile [32];
-  DoC   doc;
-  FILE  *f;
-  Int2  j;
-  Int2  k;
-  Char  path [PATH_MAX];
-  TexT  txt;
+  Char     ch;
+  Char     dfaultFile [32];
+  DoC      doc;
+  FILE     *f;
+  Int2     i;
+  Int2     j;
+  Int2     k;
+  Int2     numItems;
+  Char     path [PATH_MAX];
+  CharPtr  str;
+  TexT     txt;
 
   if (bvp == NULL) return;
   if (bvp->bsp == NULL) return;
@@ -1582,6 +1768,15 @@ static void ExportFlatFileFastaOrAsn (BioseqViewPtr bvp, CharPtr filename, CharP
       if (f != NULL) {
         if (bvp->useScrollText) {
           ScrollTextToFile (txt, path);
+        } else if (specialSave) {
+          GetDocParams (doc, &numItems, NULL);
+          for (i = 1; i <= numItems; i++) {
+            str = GetDocText (doc, i, 0, 0);
+            if (! StringHasNoText (str)) {
+              fprintf (f, "%s", str);
+            }
+            MemFree (str);
+          }
         } else {
           SaveDocument (doc, f);
         }
@@ -1590,6 +1785,18 @@ static void ExportFlatFileFastaOrAsn (BioseqViewPtr bvp, CharPtr filename, CharP
       ArrowCursor ();
     }
   }
+}
+
+static void ExportFlatFileFastaOrAsn (BioseqViewPtr bvp, CharPtr filename, CharPtr dfault)
+
+{
+  ExportFlatFileFastaOrAsnEx (bvp, filename, dfault, FALSE);
+}
+
+static void ExportFeatureTable (BioseqViewPtr bvp, CharPtr filename, CharPtr dfault)
+
+{
+  ExportFlatFileFastaOrAsnEx (bvp, filename, dfault, TRUE);
 }
 
 static CharPtr asnconfirmmsg =
@@ -1655,8 +1862,15 @@ BioseqPageData gnptPageData = {
   ExportFlatFileFastaOrAsn, NULL, ResizeFlatFileFastaOrAsn, NULL
 };
 
+BioseqPageData ftblPageData = {
+  "Table", TRUE, TRUE, TRUE, FALSE, -1,
+  PopulateFTable, ShowFlatFile, SelectFlatFile,
+  CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
+  ExportFeatureTable, NULL, ResizeFlatFileFastaOrAsn, NULL
+};
+
 BioseqPageData fstaPageData = {
-  "FASTA", TRUE, TRUE, FALSE, FALSE, -1,
+  "FASTA", TRUE, TRUE, TRUE, FALSE, -1,
   PopulateFasta, ShowFastaOrAsn, NULL,
   CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
   ExportFlatFileFastaOrAsn, NULL, ResizeFlatFileFastaOrAsn, NULL

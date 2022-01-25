@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/10/96
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   	Memory- and MT-safe "sprintf()"
@@ -37,50 +37,53 @@
 * Modifications:
 * --------------------------------------------------------------------------
 *
- * $Log: tsprintf.c,v $
- * Revision 6.8  2001/04/17 13:49:55  beloslyu
- * changes for Linux PPC, contributed by Gary Bader <gary.bader@utoronto.ca>
- *
- * Revision 6.7  2001/03/23 14:04:14  beloslyu
- * fix the name of strnlen to my_strnlen. It appears IBM's AIX has it's own function with this name
- *
- * Revision 6.6  2000/12/28 21:25:14  vakatov
- * Comment fixed
- *
- * Revision 6.5  2000/12/28 21:16:44  vakatov
- * va_args():  use "int" to fetch a "short int" argument
- *
- * Revision 6.4  2000/07/19 20:54:48  vakatov
- * minor cleanup
- *
- * Revision 6.3  1998/01/28 15:57:24  vakatov
- * Nlm_TSPrintfArgs():  always ignore the "vsprintf()"'s return value;
- * count the resultant string length using StrLen
- *
- * Revision 6.2  1997/12/04 22:05:35  vakatov
- * Check for NULL string arg;  cut the output instead of crashing the program
- *
- * Revision 6.1  1997/11/26 21:26:33  vakatov
- * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
- *
- * Revision 6.0  1997/08/25 18:17:40  madden
- * Revision changed to 6.0
- *
- * Revision 1.5  1997/07/15 16:51:48  vakatov
- * vsprintf_count_args() -- allow "fmt" be NULL(just return 0, don't crash)
- *
- * Revision 1.4  1996/12/03 21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 1.3  1996/07/23  16:23:20  epstein
- * fix for non-SYSV UNIX systems (e.g., SunOS 4)
- *
- * Revision 1.2  1996/07/22  15:27:31  vakatov
- * Fixed "%c"-formatting bug
- *
- * Revision 1.1  1996/07/16  20:02:06  vakatov
- * Initial revision
- *
+* $Log: tsprintf.c,v $
+* Revision 6.9  2002/03/11 16:55:43  ivanov
+* Fixed fp_count() -- error with round-up numbers
+*
+* Revision 6.8  2001/04/17 13:49:55  beloslyu
+* changes for Linux PPC, contributed by Gary Bader <gary.bader@utoronto.ca>
+*
+* Revision 6.7  2001/03/23 14:04:14  beloslyu
+* fix the name of strnlen to my_strnlen. It appears IBM's AIX has it's own 
+* function with this name
+*
+* Revision 6.6  2000/12/28 21:25:14  vakatov
+* Comment fixed
+*
+* Revision 6.5  2000/12/28 21:16:44  vakatov
+* va_args():  use "int" to fetch a "short int" argument
+*
+* Revision 6.4  2000/07/19 20:54:48  vakatov
+* minor cleanup
+*
+* Revision 6.3  1998/01/28 15:57:24  vakatov
+* Nlm_TSPrintfArgs():  always ignore the "vsprintf()"'s return value;
+* count the resultant string length using StrLen
+*
+* Revision 6.2  1997/12/04 22:05:35  vakatov
+* Check for NULL string arg;  cut the output instead of crashing the program
+*
+* Revision 6.1  1997/11/26 21:26:33  vakatov
+* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
+*
+* Revision 6.0  1997/08/25 18:17:40  madden
+* Revision changed to 6.0
+*
+* Revision 1.5  1997/07/15 16:51:48  vakatov
+* vsprintf_count_args() -- allow "fmt" be NULL(just return 0, don't crash)
+*
+* Revision 1.4  1996/12/03 21:48:33  vakatov
+* Adopted for 32-bit MS-Windows DLLs
+*
+* Revision 1.3  1996/07/23  16:23:20  epstein
+* fix for non-SYSV UNIX systems (e.g., SunOS 4)
+*
+* Revision 1.2  1996/07/22  15:27:31  vakatov
+* Fixed "%c"-formatting bug
+*
+* Revision 1.1  1996/07/16  20:02:06  vakatov
+* Initial revision
 *
 * ==========================================================================
 */
@@ -156,13 +159,13 @@ static int fp_count(double fp, char type, int size, int precision, int flags)
       counter = 1 + 1 + precision + 5;
       break;
     case 'f':
-      counter = (power10 > 0.0 ? (int)power10 : 0) + 1 + 1 + precision;
+      counter = (power10 > 0.0 ? (int)power10 + 1 : 0) + 1 + 1 + precision;
       break;
     case 'g':
       {
         int e_count = 1 + precision + 5;
         int f_count = 1 + precision +
-          ((power10 < 0.0) ? (int)(-power10) + 1 : 0);
+          ((power10 < 0.0) ? (int)(-power10) + 2 : 0);
         counter = (f_count < e_count) ? f_count : e_count;
         break;
       }
@@ -174,8 +177,7 @@ static int fp_count(double fp, char type, int size, int precision, int flags)
   if (precision == 0)
     counter--;
 
-  if ((counter >= size)  &&
-      (((fp > 0)  &&  (flags & (PLUS|SPACE)))  ||  (fp < 0)))
+  if (((fp > 0)  &&  (flags & (PLUS|SPACE)))  ||  (fp < 0))
     counter++;
 
   return ((counter > size) ? counter : size);

@@ -1,4 +1,4 @@
---$Revision: 1.22 $
+--$Revision: 1.23 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -19,7 +19,8 @@ EXPORTS	Blast-search, Blast-request,
 	Blast-phialign;
 
 	
-IMPORTS Bioseq, Bioseq-set FROM NCBI-Sequence
+IMPORTS Bioseq FROM NCBI-Sequence
+        Bioseq-set FROM NCBI-Seqset
 	Seq-id, Seq-loc FROM NCBI-Seqloc
 	Seq-align, Seq-align-set FROM NCBI-Seqalign;
 
@@ -180,7 +181,12 @@ Blast-parameters ::= SEQUENCE {
 	query-lcase-mask SEQUENCE OF Seq-loc OPTIONAL, -- locations for lower case masking.
 	is-ooframe      INTEGER OPTIONAL,  -- option to do outer frame. 
         endpoint-results BOOLEAN OPTIONAL, -- return only endpoints and scores, no seqalign.
-        percent-identity   REAL OPTIONAL   -- percent of identical residues in individual hit.   
+        percent-identity   REAL OPTIONAL,  -- percent of identical residues in individual hit.   
+        first-db-seq    INTEGER OPTIONAL, -- first sequence in database
+        final-db-seq    INTEGER OPTIONAL, -- last sequence in database
+        window-size     INTEGER OPTIONAL, -- window size for the two hit version
+        mb-template-length INTEGER OPTIONAL,-- length of discontiguous word template
+        mb-disc-type    INTEGER OPTIONAL  -- type of discontiguous words
 }
 
 				-- series of these when the request is queued

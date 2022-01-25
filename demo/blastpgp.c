@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.104 2001/10/12 14:55:41 dondosha Exp $ */
+/* $Id: blastpgp.c,v 6.106 2002/04/29 19:55:25 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,14 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.104 $ 
+ * $Revision: 6.106 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.106  2002/04/29 19:55:25  madden
+ * Use ARG_FLOAT for db length
+ *
+ * Revision 6.105  2002/03/13 22:48:06  dondosha
+ * Avoid freeing masking locations after each iteration with XML output
+ *
  * Revision 6.104  2001/10/12 14:55:41  dondosha
  * Changed description of the -t option
  *
@@ -521,7 +527,7 @@ static Args myargs [] = {
     { "Word size, default if zero", /* 30 */
       "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the database (use zero for the real size)", /* 31 */
-      "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
+      "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
     { "Number of best hits from a region to keep", /* 32 */
       "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
     { "Compute locally optimal Smith-Waterman alignments", /*33*/
@@ -797,8 +803,8 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         options->ethresh = 0.0;
     if (myargs[30].intvalue)
         options->wordsize = myargs[30].intvalue;
-    if (myargs[31].intvalue)
-        options->db_length = (Int8) myargs[31].intvalue;
+    if (myargs[31].floatvalue)
+        options->db_length = (Int8) myargs[31].floatvalue;
     
     options->hsp_range_max  = myargs[32].intvalue;
     if (options->hsp_range_max != 0)
@@ -1536,11 +1542,14 @@ Int2 Main (void)
             /* Here is all BLAST formating of the main output done */
             
             if(bop->is_xml_output) {
-                
                 ValNodePtr other_returns;
                 IterationPtr iterp;
-
+                ValNodePtr vnp = search->mask;
+                /* Avoid linking masking locations into other_returns, 
+                   lest they will be freed */
+                search->mask = NULL;
                 other_returns = BlastOtherReturnsPrepare(search);
+                search->mask = vnp;
 
                 if (head == NULL) {                
                     iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, "No hits found");

@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.7 2001/11/13 19:48:48 bauer Exp $
+/* $Id: cddsrv.h,v 1.10 2002/04/25 14:31:22 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.7 $
+* $Revision: 1.10 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.10  2002/04/25 14:31:22  bauer
+* layout changes to the CDD server
+*
+* Revision 1.9  2002/03/07 19:12:14  bauer
+* major revisions to cgi-bins and the CD-dumper
+*
+* Revision 1.8  2002/01/04 19:50:57  bauer
+* initial changes to deal with PSSM-Ids
+*
 * Revision 1.7  2001/11/13 19:48:48  bauer
 * add cCDDfname for cddumper
 *
@@ -75,6 +84,7 @@
 #define CDDONESTRUC  5
 #define CDDSEVSTRUC  6
 #define CDDUPDATE    7  /* in cddumper: import a CD and recalculate tax. etc */
+#define CDDASCDD     8  /* for use with Cn3D 4.0 - new mime types            */
 
 /*---------------------------------------------------------------------------*/
 /* Options for iMode in cddsrv. Determines whether a summary is produced or  */
@@ -90,9 +100,11 @@
 
 #define CPUTIME_MAX   240
 #define MAX_MMDBIDS   4096
-#define CDD_MAX_DESCR 2048
+#define CDD_MAX_DESCR 3072
 
 #define MMDB_UNIXCOMPRESSED
+
+#define MAXDIV 100
 
 #define MMDBCALL   "http://www.ncbi.nlm.nih.gov/Structure/mmdb/mmdbsrv.cgi?uid="
 #define ENTREZCALL "http://www.ncbi.nlm.nih.gov/entrez/utils/qmap.cgi?db=Protein&form=6&Dopt=g&uid="
@@ -177,6 +189,9 @@ static Char    CDDPost_O[PATH_MAX];
 static Char    CDDPost_C[PATH_MAX];
 static Char    CDDefault[PATH_MAX];
 static Char    CDDdbtype[PATH_MAX];
+static Char    ODBCINI[PATH_MAX];
+static Char    DARTUSER[PATH_MAX];
+static Char    DARTPASS[PATH_MAX];
 
 /*---------------------------------------------------------------------------*/
 /* static/local Function prototypes                                          */
@@ -205,7 +220,8 @@ static Boolean             CddIsVASTData(Int4 uid);
 static BiostrucAnnotSetPtr CddVASTBsAnnotSetGet (Int4 uid);
 static CddSumPtr           CddSumSort(CddSumPtr pcds);
 static SeqAlignPtr         CddAlignSort(SeqAlignPtr salp, CddSumPtr pcds);
-
+static void CDDSrvHead(FILE *table, CharPtr title);
+static void CDDSrvFoot(FILE *table);
 
 
 

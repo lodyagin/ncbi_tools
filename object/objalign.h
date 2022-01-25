@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager interface for module NCBI-Seqalign
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objalign.h,v $
+* Revision 6.7  2002/01/10 14:35:18  dondosha
+* Added GenericSeqAlignSetAsnWrite to allow writing seqalign set without a parent asn type
+*
 * Revision 6.6  1999/09/28 12:09:56  kans
 * added alignID field
 *
@@ -224,6 +227,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignSetFree PROTO((SeqAlignPtr sap));
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignSetNew PROTO((void));
 NLM_EXTERN SeqAlignPtr LIBCALL SpecialSeqAlignSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set));
 NLM_EXTERN Boolean LIBCALL SpecialSeqAlignSetAsnWrite PROTO((SeqAlignPtr sap, AsnIoPtr aip, AsnTypePtr set));
+NLM_EXTERN Boolean LIBCALL GenericSeqAlignSetAsnWrite PROTO((SeqAlignPtr sap, AsnIoPtr aip));
 
 
 /*****************************************************************************

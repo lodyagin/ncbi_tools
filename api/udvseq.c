@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.24  2002/03/14 16:40:03  kans
+* SeqMgrIndexFeaturesEx takes dorevfeats, SeqMgrExploreFeaturesRev and featsByRev added for asn2gb
+*
 * Revision 6.23  2001/10/03 00:15:47  vakatov
 * Replaced some ASSERTs by VERIFYs
 *
@@ -1031,9 +1034,9 @@ Uint2 EntityID;
 	if (SeqMgrFeaturesAreIndexed (entityID_seq) == 0) {
 		/*create the index*/
 		if (bsp)
-			EntityID=SeqMgrIndexFeaturesEx (0, bsp, bReverse);
+			EntityID=SeqMgrIndexFeaturesEx (0, bsp, bReverse, FALSE);
 		else
-			EntityID=SeqMgrIndexFeaturesEx (entityID_seq, NULL, bReverse);
+			EntityID=SeqMgrIndexFeaturesEx (entityID_seq, NULL, bReverse, FALSE);
 	}
 	
 	if (EntityID == 0) {

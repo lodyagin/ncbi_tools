@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.17  2002/01/16 17:02:04  camacho
+* Changed buflen and seqlen in MyFsa struct. to use Uint4, as well as some function prototypes
+*
 * Revision 6.16  2001/08/31 15:29:54  kans
 * added CreateDefLineEx to ignore existing title descriptor, force generation of protein title computationally
 *
@@ -168,8 +171,8 @@ typedef struct descrinfo {   /* struct used for defline */
 
 typedef struct myfsa {   /* struct used for fasta searches */
     CharPtr buf;         /* buffer for strings (suggest 255 minimum) */
-    Int2 buflen,         /* length of buf */
-        seqlen;          /* length of sequence lines (must be buflen-1 or less) */
+    Uint4 buflen,         /* length of buf */
+          seqlen;          /* length of sequence lines (must be buflen-1 or less) */
     Pointer mydata;      /* pointer to your own data */
     FastaWriteFunc myfunc;  /* callback to process parts of fasta file */
     BioseqPtr bsp;       /* Bioseq being processed */
@@ -350,7 +353,7 @@ Boolean FastaReadSequenceMem
 *      buf should be at least 40 bytes
 *
 *****************************************************************************/
-NLM_EXTERN Boolean FastaId PROTO((BioseqPtr bsp, CharPtr buf, Int2 buflen));
+NLM_EXTERN Boolean FastaId PROTO((BioseqPtr bsp, CharPtr buf, Uint4 buflen));
 
 /*****************************************************************************
 *
@@ -365,10 +368,10 @@ NLM_EXTERN Boolean FastaId PROTO((BioseqPtr bsp, CharPtr buf, Int2 buflen));
 *       if (tech == MI_TECH_phase1 or phase2, adds order comment to defline)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean FastaDefLine PROTO((BioseqPtr bsp, CharPtr buf, Int2 buflen, CharPtr accession, CharPtr organism, Uint1 tech));
+NLM_EXTERN Boolean FastaDefLine PROTO((BioseqPtr bsp, CharPtr buf, Uint4 buflen, CharPtr accession, CharPtr organism, Uint1 tech));
 
-NLM_EXTERN Boolean CreateDefLine PROTO((ItemInfoPtr dip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism));
-NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism, Boolean ignoreTitle);
+NLM_EXTERN Boolean CreateDefLine PROTO((ItemInfoPtr dip, BioseqPtr bsp, CharPtr buf, Uint4 buflen, Uint1 tech, CharPtr accession, CharPtr organism));
+NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Uint4 buflen, Uint1 tech, CharPtr accession, CharPtr organism, Boolean ignoreTitle);
 /*****************************************************************************
 *
 *   FastaSeqPort(bsp, is_na, do_virtual)

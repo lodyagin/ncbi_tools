@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: picture.c,v $
+* Revision 6.5  2002/03/07 15:53:45  kans
+* added SetSegmentVisibleFlag to set/clear the visible flag before attaching to a viewer
+*
 * Revision 6.4  1999/10/13 17:45:46  kans
 * added entityID, itemID, and itemtype to primitive internal structure, added Get and Set functions
 *
@@ -575,6 +578,28 @@ Boolean Nlm_SegmentVisible (SegmenT segment)
     }
   }
   return vis;
+}
+
+/*****************************************************************************
+*
+*   Nlm_SetSegmentVisibleFlag (segment, visible)
+*       Sets the visibility of a segment
+*
+*****************************************************************************/
+
+void Nlm_SetSegmentVisibleFlag (SegmenT segment, Boolean visible)
+
+{
+  SegPPtr  seg;
+
+  if (segment != NULL) {
+    seg = (SegPPtr) segment;
+    if (seg->base.code == SEGMENT || seg->base.code == PICTURE) {
+      seg->seg.visible = visible;
+    } else {
+      Message (MSG_ERROR, "Nlm_SetSegmentVisibleFlag argument not a segment or picture");
+    }
+  }
 }
 
 /*****************************************************************************

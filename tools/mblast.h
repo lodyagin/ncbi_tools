@@ -32,8 +32,14 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.39 $ 
+/* $Revision: 6.41 $ 
 * $Log: mblast.h,v $
+* Revision 6.41  2002/04/09 18:21:00  dondosha
+* Changed #ifdefs to conditionals, allowing different discontiguous templates in a single binary
+*
+* Revision 6.40  2002/02/15 23:30:39  dondosha
+* Allow masked query output with masking by lower case
+*
 * Revision 6.39  2002/01/04 22:29:02  dondosha
 * Changed diagonal distance for hsp inclusion check from 10 to 6
 *
@@ -154,18 +160,14 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 #define __MBLAST__
 
 #include <ncbi.h>
+#include <blastdef.h>
 #include <blastpri.h>
-#include <lookup.h>
 #include <objcode.h>
 #include <objseq.h>
-#include <sequtil.h>
 #include <tofasta.h>
 #include <seqport.h>
-#include <readdb.h>
 #include <ncbithr.h>
-#include <gapxdrop.h>
 #include <dust.h>
-#include <mbalign.h>
 
 
 #ifdef __cplusplus
@@ -318,7 +320,7 @@ void BlastLCaseMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length,
 SeqLocPtr MaskSeqLocFromSeqAlign PROTO((SeqAlignPtr seqalign));
    
 void PrintMaskedSequence PROTO((BioseqPtr query_bsp, SeqLocPtr mask_slp, 
-				CharPtr file_name, Boolean first));
+				FILE *fp, Int2 line_len, Boolean lcase_masking));
 Int4 LIBCALL 
 MegaBlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
 
@@ -327,6 +329,8 @@ MegaBlastGetHspPercentIdentity PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp
 
 MegaBlastParameterBlkPtr
 MegaBlastParameterBlkNew PROTO((BLAST_OptionsBlkPtr options));
+
+MBTemplateType GetMBTemplateType PROTO((Int2 weight, Int2 length, MBDiscWordType type));
 
 #ifdef __cplusplus
 }

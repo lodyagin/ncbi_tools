@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.330 2002/01/04 22:01:33 coulouri Exp $
+/* $Id: blast.c,v 6.346 2002/04/23 16:01:27 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +47,58 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.330 $
+ * $Revision: 6.346 $
  *
  * $Log: blast.c,v $
+ * Revision 6.346  2002/04/23 16:01:27  madden
+ * Fix for ungapped search of arbitrary matrix
+ *
+ * Revision 6.345  2002/04/23 15:40:10  madden
+ * Fix for effective length change and ungapped blast
+ *
+ * Revision 6.344  2002/04/19 21:22:30  madden
+ * Added protection for matrices that are only empty strings
+ *
+ * Revision 6.343  2002/04/18 12:07:05  madden
+ * Check for Selenocysteine in Bioseq, replace with X
+ *
+ * Revision 6.342  2002/04/17 17:30:15  madden
+ * Call getAlphaBeta only for gapped alignments
+ *
+ * Revision 6.341  2002/04/16 15:42:15  madden
+ * Save mask1 for lookup table hashing only (change for neighboring)
+ *
+ * Revision 6.340  2002/04/04 21:19:15  dondosha
+ * Corrections for megablast with non-greedy extensions
+ *
+ * Revision 6.339  2002/03/26 21:20:50  dondosha
+ * 1. Make hitlist size larger for preliminary gapped alignment
+ * 2. Pass readdb structure to megablast set up if it is already initialized
+ *
+ * Revision 6.338  2002/03/26 16:46:40  madden
+ * Move calculation of effective lengths to BlastCalculateEffectiveLengths
+ *
+ * Revision 6.337  2002/03/06 18:34:31  dondosha
+ * Pass the filtered locations back from the megablast engine to use in formatting
+ *
+ * Revision 6.336  2002/02/27 22:39:00  dondosha
+ * Fixed bug in splitting long database sequences for translated searches
+ *
+ * Revision 6.335  2002/02/27 17:43:20  dondosha
+ * Made effective database length option work properly
+ *
+ * Revision 6.334  2002/02/26 22:25:20  dondosha
+ * Return error as soon as it is found that matrix name is not supported
+ *
+ * Revision 6.333  2002/02/26 17:37:40  dondosha
+ * Fixed bug in BlastNtWordFinder for word sizes > 12
+ *
+ * Revision 6.332  2002/02/26 15:03:13  dondosha
+ * Accidental newline in sprintf removed
+ *
+ * Revision 6.331  2002/02/25 23:26:57  dondosha
+ * Changed error to warning if no letters to be indexed just on one context
+ *
  * Revision 6.330  2002/01/04 22:01:33  coulouri
  * Fixed BlastSetLimits() to work under linux
  *
@@ -2104,6 +2153,7 @@ Detailed Contents:
 
 #include <mbalign.h>
 #include <mblast.h>
+
 /* 
 The last database sequence a tick (progress indicator) was issued for
 and the increments (i.e., number of db sequences completed) that a tick 
@@ -3054,17 +3104,17 @@ do_blast_search(VoidPtr ptr)
             for (index=0; index<id_list_length; index++) {
                 index1 = id_list[index];
                 search = BLASTPerformSearchWithReadDb(search, index1);
-                if (search->pbp->do_sum_stats == TRUE && 
-		    !search->pbp->mb_params)
-                    status = BlastLinkHsps(search);
-                else
-                    status = BlastGetNonSumStatsEvalue(search);
-                if (!search->pbp->mb_params || !search->handle_results)
+                if (!search->pbp->mb_params) {
+                   if (search->pbp->do_sum_stats == TRUE)
+                      status = BlastLinkHsps(search);
+                   else
+                      status = BlastGetNonSumStatsEvalue(search);
                    status = BlastReapHitlistByEvalue(search);
-                if (search->pbp->mb_params)
+                   if (!search->handle_results)
+                      status = BlastReevaluateWithAmbiguities(search, index1);
+                } else {
                    MegaBlastReevaluateWithAmbiguities(search, index1);
-		else if (!search->handle_results)
-		   status = BlastReevaluateWithAmbiguities(search, index1);
+                }
 		
                 if (search->handle_results)
                     search->handle_results((VoidPtr) search);
@@ -3085,18 +3135,17 @@ do_blast_search(VoidPtr ptr)
         } else if (!search->thr_info->realdb_done) {
             for (index=start; index<stop; index++) {
                 search = BLASTPerformSearchWithReadDb(search, index);
-                if (search->pbp->do_sum_stats == TRUE && 
-		    !search->pbp->mb_params)
-                    status = BlastLinkHsps(search);
-                else
-                    status = BlastGetNonSumStatsEvalue(search);
-                if (!search->pbp->mb_params ||
-                    !search->handle_results) 
+                if (!search->pbp->mb_params) {
+                   if (search->pbp->do_sum_stats == TRUE)
+                      status = BlastLinkHsps(search);
+                   else
+                      status = BlastGetNonSumStatsEvalue(search);
                    status = BlastReapHitlistByEvalue(search);
-                if (search->pbp->mb_params)
+                   if (!search->handle_results)
+                      status = BlastReevaluateWithAmbiguities(search, index);
+                } else {
                    MegaBlastReevaluateWithAmbiguities(search, index);
-                else if (!search->handle_results)
-                   status = BlastReevaluateWithAmbiguities(search, index);
+                }
                 
                 if (search->handle_results)
                    search->handle_results((VoidPtr) search);
@@ -3116,6 +3165,7 @@ do_blast_search(VoidPtr ptr)
                     break;	
             }
         }
+
         /* Get out if "stop" was the last seq. */
         if (time_out_boolean)
             break;
@@ -3435,30 +3485,37 @@ HackSeqLocId(SeqLocPtr slp, SeqIdPtr id)
 		assert(0); */
 	}
 }
-/* This function assume specific structure of SeqLoc !! */
-SeqLocPtr  blastDuplicateSeqLocInt(SeqLocPtr lcmask)
+/* This function duplicates a SEQLOC_PACKED_INT or a SEQLOC_INT type of SeqLoc */
+SeqLocPtr  blastDuplicateSeqLocInt(SeqLocPtr slp_head)
 {
-    SeqLocPtr dup_slp, slp, dup_head;
+    SeqLocPtr dup_slp, slp, dup_head = NULL;
     SeqIntPtr sqip;
 
-    if(lcmask == NULL)
+    if(slp_head == NULL)
         return NULL;
-
-    /* Top level SeqLoc */    
-    dup_head = dup_slp = ValNodeNew(NULL);
-    dup_slp->choice = lcmask->choice;
 
     /* First seqLoc in lower level */
 
-    slp = lcmask->data.ptrvalue;
+    if (slp_head->choice == SEQLOC_PACKED_INT) {
+       slp = slp_head->data.ptrvalue;
+       dup_head = ValNodeNew(NULL);
+       dup_head->choice = slp_head->choice;
+    } else if (slp_head->choice == SEQLOC_INT) {
+       slp = slp_head;
+    } else { 
+       return NULL;
+    }
     sqip = slp->data.ptrvalue;
     
-    dup_slp->data.ptrvalue = (VoidPtr) SeqLocIntNew(sqip->from, sqip->to, sqip->strand, sqip->id);
-    
-    dup_slp = dup_slp->data.ptrvalue;
-    
+    /* Top level SeqLoc */    
+
+    dup_slp = (VoidPtr) SeqLocIntNew(sqip->from, sqip->to, sqip->strand, sqip->id);
+    if (dup_head)
+       dup_head->data.ptrvalue = dup_slp;
+    else
+       dup_head = dup_slp;
+
     /* Loop over all SeqIntPtr s in this SeqLoc */
-    
     for(slp = slp->next; slp != NULL; slp = slp->next) {
         sqip = slp->data.ptrvalue;
         dup_slp->next = (VoidPtr) SeqLocIntNew(sqip->from, sqip->to, sqip->strand, sqip->id);
@@ -3485,57 +3542,58 @@ void BLASTUpdateSeqIdInSeqInt(SeqLocPtr mask, SeqIdPtr sip)
     }
     return;
 }
-/* This function use PACKED INT as lcmask */
-static SeqLocPtr blastMergeFilterLocs(SeqLocPtr filter_slp, 
-                                      SeqLocPtr lcmask, Boolean translate,
-                                      Int2 frame, Int4 length)
+/* This function use PACKED INT as slp2 */
+SeqLocPtr blastMergeFilterLocs(SeqLocPtr slp1, SeqLocPtr slp2, Boolean translate,
+                               Int2 frame, Int4 length)
 {
 
-    SeqLocPtr slp, dup_slp;
+    SeqLocPtr slp, dup_slp, dup_head;
 
-    if(filter_slp == NULL && lcmask == NULL)
+    if(slp1 == NULL && slp2 == NULL)
         return NULL;
 
-    if(lcmask == NULL)
-        return filter_slp;
-    
-    dup_slp = blastDuplicateSeqLocInt(lcmask);
+    if(slp2 == NULL)
+        return slp1;
 
-    /* Request to translate means, that lcmask is DNA SeqLoc, that should be
+    dup_slp = blastDuplicateSeqLocInt(slp2);
+
+    /* Request to translate means, that slp2 is DNA SeqLoc, that should be
        translated into protein SeqLoc corresponding to the specific frame */
 
     if(translate) {
         BlastConvertDNASeqLoc(dup_slp, frame, length);
     }
     
-    if(filter_slp == NULL) {
+    if(slp1 == NULL) {
         return dup_slp;
     }
 
     /* OK We have 2 not NULL filters - merging... */
     
-    if(filter_slp->choice == SEQLOC_PACKED_INT)
-        slp = (SeqLocPtr) filter_slp->data.ptrvalue;
+    if(slp1->choice == SEQLOC_PACKED_INT)
+        slp = (SeqLocPtr) slp1->data.ptrvalue;
     else
-        slp = filter_slp;
+        slp = slp1;
+
+    if (dup_slp->choice == SEQLOC_PACKED_INT) {
+       dup_head = dup_slp;
+       dup_slp = (SeqLocPtr) dup_slp->data.ptrvalue;
+       MemFree(dup_head);
+    }
     
     if(slp == NULL) {
         ErrPostEx(SEV_WARNING, 0, 0, "Invalid filter detected");
-        filter_slp->data.ptrvalue = dup_slp->data.ptrvalue;
-        dup_slp->data.ptrvalue = NULL;
-        SeqLocFree(dup_slp);
+        slp1->data.ptrvalue = dup_slp;
     } 
     else
     {
     	while(slp->next != NULL)
-       		 slp = slp->next;
+           slp = slp->next;
     
-    	slp->next = dup_slp->data.ptrvalue;
-    	dup_slp->data.ptrvalue = NULL;
-    	SeqLocFree(dup_slp);
+    	slp->next = dup_slp;
      }
     
-    return filter_slp;
+    return slp1;
 }
 
 /* This function is used to filter one frame of the translated DNA
@@ -3666,6 +3724,76 @@ BlastCreateQueryDNAP(BlastSearchBlkPtr search, Int4 length)
     return bsbpp;
 }
 
+/*
+	function to calculate effective query length and
+	effective db length.
+*/
+
+Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options, 
+	Int4 dbseq_num, Int8 dblen, Int4 length, BLAST_KarlinBlkPtr kbp, 
+	Int4Ptr effective_query_length, Int4Ptr length_adjustment)
+
+{
+	Nlm_FloatHi alpha, beta; /*alpha and beta for new scoring system */
+        Nlm_FloatHi KtoUse, logKtoUse; /*K to use in length adjustment calc */
+        Nlm_FloatHi LambdaToUse; /*Lambda to use in length adjustment */
+	Int4 min_query_length, last_length_adjustment;
+	Int4 index;
+
+	if (options == NULL)
+		return FALSE;
+
+	if (options->gapped_calculation &&
+		StringCmp(options->program_name, "blastn") != 0)
+		min_query_length = (Int4) 1/(kbp->K);
+	else
+		min_query_length = (Int4) 1/(kbp->K);
+
+	if (StringCmp(options->program_name, "blastn") != 0)
+	{
+	
+		if (options->gapped_calculation) {
+			getAlphaBeta(options->matrix,&alpha,&beta,options->gapped_calculation, options->gap_open, options->gap_extend);
+	  		KtoUse = kbp->K;
+	  		logKtoUse = kbp->logK;
+	  		LambdaToUse = kbp->Lambda;
+		}
+		else 
+		{
+	  		KtoUse = kbp->K;
+	  		logKtoUse = kbp->logK;
+	  		LambdaToUse = kbp->Lambda;
+		}
+	}
+	*length_adjustment = 0;
+	last_length_adjustment = 0;
+	for (index=0; index<5; index++)
+	{
+		if (StringCmp(options->program_name, "blastn") != 0 && options->gapped_calculation)
+		{
+	  		*length_adjustment = Nlm_Nint(((logKtoUse+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(dbseq_num, (dblen)-(dbseq_num*last_length_adjustment)))))*alpha/LambdaToUse) + beta);
+		}
+		else
+		{
+			*length_adjustment = (Int4) ((kbp->logK)+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(1, (dblen)-(dbseq_num*last_length_adjustment)))))/(kbp->H);
+		}
+		if (*length_adjustment >= length-min_query_length)
+		{
+			*length_adjustment = length-min_query_length;
+			break;
+		}
+	
+		if (ABS(last_length_adjustment-*length_adjustment) <= 1)
+			break;
+		last_length_adjustment = *length_adjustment;
+	}
+	*length_adjustment = MAX(*length_adjustment, 0);
+
+        *effective_query_length = MAX(length - *length_adjustment, min_query_length);
+	
+	return TRUE;
+}
+
 #define DROPOFF_NUMBER_OF_BITS 10.0
 #define INDEX_THR_MIN_SIZE 20000
 Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)(Int4 done, Int4 positives))
@@ -3677,7 +3805,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	Char buffer[128];
 	Int2 retval = 0, status, last_index;
 	Int4 effective_query_length, query_length, full_query_length,
-		index, length, length_adjustment=0, last_length_adjustment, min_query_length;
+		index, length, length_adjustment=0;
 	Int4 array_size, max_length, block_width;
 	Int4Ptr open, extend;
 	Nlm_FloatHiPtr lambda, K, H;
@@ -3691,9 +3819,6 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	Uint1Ptr sequence;
 	Uint1Ptr query_seq, query_seq_start, query_seq_rev, query_seq_start_rev;
 	ValNodePtr vnp;
-	Nlm_FloatHi alpha, beta; /*alpha and beta for new scoring system*/
-        Nlm_FloatHi KtoUse, logKtoUse; /*K to use in length adjustment calculation*/
-	Nlm_FloatHi LambdaToUse; /*Lambda to use in length adjuatment*/
 
 	if (options == NULL)
 	{
@@ -3884,6 +4009,8 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
         if(StringCmp(prog_name, "blastn") == 0) {
 		if (filter_slp && !mask_at_hash)
 			ValNodeAddPointer(&(search->mask), SEQLOC_MASKING_NOTSET, filter_slp);
+		else
+			ValNodeAddPointer(&(search->mask1), SEQLOC_MASKING_NOTSET, filter_slp);
         }
 
 
@@ -3895,6 +4022,8 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
                 SeqPortSet_do_virtual(spp, TRUE);
 		if (filter_slp && !mask_at_hash)
 			ValNodeAddPointer(&(search->mask), SEQLOC_MASKING_NOTSET, filter_slp);
+		else
+			ValNodeAddPointer(&(search->mask1), SEQLOC_MASKING_NOTSET, filter_slp);
 	}
 	else if (StringCmp(prog_name, "blastx") == 0 || StringCmp(prog_name, "tblastx") == 0 || StringCmp(prog_name, "blastn") == 0)
 	{
@@ -3927,6 +4056,13 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 
 			if (IS_residue(residue))
 			{
+				if (residue == 24) /* 24 is Selenocysteine. */
+				{
+					residue = 21; /* change Selenocysteine to X. */
+					sprintf(buffer, "Selenocysteine (U) at position %ld replaced by X", 
+						(long) index+1);
+					BlastConstructErrorMessage("Blast", buffer, 1, &(search->error_return));
+				}
 				query_seq[index] = residue;
 				index++;
 			}
@@ -3958,6 +4094,13 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 		{
 			if (IS_residue(residue))
 			{
+				if (residue == 24) /* 24 is Selenocysteine. */
+				{
+					residue = 21; /* change Selenocysteine to X. */
+					sprintf(buffer, "Selenocysteine (U) at position %ld replaced by X", 
+						(long) index+1);
+					BlastConstructErrorMessage("Blast", buffer, 1, &(search->error_return));
+				}
 				query_seq_rev[index] = residue;
 				index++;
 			}
@@ -4086,6 +4229,8 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 			}
 			if (filter_slp && !mask_at_hash)
 				ValNodeAddPointer(&(search->mask), FrameToDefine(search->context[index].query->frame), filter_slp);
+			else
+				ValNodeAddPointer(&(search->mask1), FrameToDefine(search->context[index].query->frame), filter_slp);
 		   }
 		   BlastSequenceAddSequence(search->context[index].query, NULL, sequence, length, query_length, 0);
 		}
@@ -4114,7 +4259,9 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 
 	if (mask_at_hash)
 	{ /* No longer needed. */
+/*
 		filter_slp = SeqLocSetFree(filter_slp);
+*/
 	}
 	
 /* Set the ambiguous residue before the ScoreBlk is filled. */
@@ -4125,7 +4272,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	}
 	else
 	{
-  	        if(options->matrix!=NULL) {
+  	        if(options->matrix!=NULL && *(options->matrix) != NULLB) {
 		     search->sbp->read_in_matrix = TRUE;
 	        } else {
 		     search->sbp->read_in_matrix = FALSE;
@@ -4213,7 +4360,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 
 	search->sbp->kbp_gap = search->sbp->kbp_gap_std;
         search->sbp->kbp = search->sbp->kbp_std;
-	if (StringCmp(prog_name, "blastn") != 0)
+	if (search->pbp->gapped_calculation && StringCmp(prog_name, "blastn") != 0)
 	{
 		array_size = BlastKarlinGetMatrixValues(search->sbp->name, &open, &extend, &lambda, &K, &H, NULL);
 		if (array_size > 0)
@@ -4233,7 +4380,15 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 			MemFree(lambda);
 			MemFree(K);
 			MemFree(H);
-		}
+		} else {
+                   /* This can only happen in case of unsupported matrix! */
+                   sprintf(buffer, 
+                           "matrix %s is not supported\n",
+                           search->sbp->name);
+                   BlastConstructErrorMessage("BLASTSetUpSearch", buffer, 2,
+                                              &search->error_return);
+                   retval = 1;
+                }
 		if (search->sbp->kbp_ideal == NULL)
         		search->sbp->kbp_ideal = BlastKarlinBlkStandardCalcEx(search->sbp);
 	}
@@ -4250,56 +4405,23 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	if (retval)
            goto BlastSetUpReturn;
 
-	if (search->pbp->gapped_calculation &&
-		StringCmp(search->prog_name, "blastn") != 0)
-		min_query_length = (Int4) 1/(search->sbp->kbp_gap_std[search->first_context]->K);
+	if (options->gapped_calculation && StringCmp(options->program_name, "blastn") != 0)
+		BlastCalculateEffectiveLengths(options, search->dbseq_num, search->dblen, 
+			length, search->sbp->kbp_gap_std[search->first_context],
+			&effective_query_length, &length_adjustment);
 	else
-		min_query_length = (Int4) 1/(search->sbp->kbp[search->first_context]->K);
+		BlastCalculateEffectiveLengths(options, search->dbseq_num, search->dblen, 
+			length, search->sbp->kbp[search->first_context],
+			&effective_query_length, &length_adjustment);
 
-	if (search->prog_number != blast_type_blastn)
-	{
-	
-		getAlphaBeta(options->matrix,&alpha,&beta,search->pbp->gapped_calculation, search->pbp->gap_open, search->pbp->gap_extend);
-		if (search->pbp->gapped_calculation) {
-	  		KtoUse = search->sbp->kbp_gap_std[search->first_context]->K;
-	  		logKtoUse = search->sbp->kbp_gap_std[search->first_context]->logK;
-	  		LambdaToUse = search->sbp->kbp_gap_std[search->first_context]->Lambda;
-		}
-		else 
-		{
-	  		KtoUse = search->sbp->kbp[search->first_context]->K;
-	  		logKtoUse = search->sbp->kbp[search->first_context]->logK;
-	  		LambdaToUse = search->sbp->kbp[search->first_context]->Lambda;
-		}
-	}
-	last_length_adjustment = 0;
-	for (index=0; index<5; index++)
-	{
-		if (search->prog_number != blast_type_blastn)
-		{
-	  		length_adjustment = Nlm_Nint(((logKtoUse+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(search->dbseq_num, (search->dblen)-(search->dbseq_num*last_length_adjustment)))))*alpha/LambdaToUse) + beta);
-		}
-		else
-		{
-			length_adjustment = (Int4) ((search->sbp->kbp[search->first_context]->logK)+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(1, (search->dblen)-(search->dbseq_num*last_length_adjustment)))))/(search->sbp->kbp[search->first_context]->H);
-		}
-		if (length_adjustment >= length-min_query_length)
-		{
-			length_adjustment = length-min_query_length;
-			break;
-		}
-	
-		if (ABS(last_length_adjustment-length_adjustment) <= 1)
-			break;
-		last_length_adjustment = length_adjustment;
-	}
 	search->length_adjustment = MAX(length_adjustment, 0);
 
-	if (search->prog_number != blast_type_blastn)
-		search->dblen_eff = MAX(search->dbseq_num, search->dblen - search->dbseq_num*search->length_adjustment); 
-	else
-		search->dblen_eff = MAX(1, search->dblen - search->dbseq_num*search->length_adjustment);
-	effective_query_length = MAX(length - search->length_adjustment, min_query_length);
+        if (!search->dblen_eff) {
+           if (search->prog_number != blast_type_blastn)
+              search->dblen_eff = MAX(search->dbseq_num, search->dblen - search->dbseq_num*search->length_adjustment); 
+           else
+              search->dblen_eff = MAX(1, search->dblen - search->dbseq_num*search->length_adjustment);
+        }
 	
 	for (index=search->first_context; index<=search->last_context; index++)
 	{
@@ -4530,9 +4652,10 @@ available) this needs to be set higher up. */
 			    status = BlastFindWords(search, 0, search->context[index].query->length, options->threshold_second, (Uint1) index);
 			else
 			    status = BlastNewFindWords(search, 0, search->context[index].query->length, options->threshold_second, (Uint1) index);
-			if (status != 0) {
+			if (status < 0) {
                             search->thr_info->awake_index = FALSE;
-                            ErrPostEx(SEV_WARNING, 0, 0, "BlastFindWords returned non-zero status");
+                            ErrPostEx(SEV_WARNING, 0, 0, 
+                               "BlastFindWords returned non-zero status");
                             retval = 1;
                             goto BlastSetUpReturn;
 			}
@@ -4559,10 +4682,10 @@ available) this needs to be set higher up. */
 		if (status > 0)
 		{
 			search->thr_info->awake_index = FALSE;
-			sprintf(buffer, "No valid letters to be indexed");
-			BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
-                        retval = 1;
-			goto BlastSetUpReturn;
+			sprintf(buffer, "No valid letters to be indexed on context %d", index);
+                        /* This is just a warning */
+			BlastConstructErrorMessage("Blast", buffer, 1,
+                                                   &(search->error_return));
 		}
 		else if (status < 0)
 		{
@@ -4578,6 +4701,8 @@ available) this needs to be set higher up. */
 	   else
 	      mb_lookup_position_aux_destruct(search->wfp->lookup);
 	}
+
+
 	/* 
 	Turn off the index thread by setting this flag.  Don't wait for a join, as the
 	search will take much longer than the one second for this to die.
@@ -4781,7 +4906,7 @@ BLASTSetUpSearchWithReadDbInternalEx (SeqLocPtr query_slp, BioseqPtr query_bsp,
 						    prog_name, 0,
 						    dbname, options, callback,
 						    seqid_list, gi_list,
-						    gi_list_total, NULL);
+						    gi_list_total, rdfp);
    else
       return BLASTSetUpSearchWithReadDbInternal(query_slp, query_bsp,
 						prog_name, qlen,
@@ -4803,7 +4928,8 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
     Int8	dblen;
     Int4	query_length;
     Nlm_FloatHi	searchsp_eff=0;
-    
+    Int4        hitlist_size;
+
     /* Allocate default options if none are allocated yet. */
     if (options == NULL) {
         options = BLASTOptionNew(prog_name, FALSE);
@@ -4824,8 +4950,9 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
     else
         query_length = query_bsp->length;
     
+    hitlist_size = MIN(2*options->hitlist_size, options->hitlist_size + 50);
     /* On the first call query length is used for the subject length. */
-    search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, 0, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
+    search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, 0, options->threshold_second, hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
     
     if (search) {
        readdb_get_totals_ex(search->rdfp, &(dblen), &(search->dbseq_num), TRUE);
@@ -4854,7 +4981,7 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 #endif
         /* command-line/options trump alias file. */
         if (options->db_length > 0)
-            dblen = options->db_length;
+           dblen = options->db_length;
         if (options->dbseq_num > 0)
             search->dbseq_num = options->dbseq_num;
         if (options->searchsp_eff > 0)
@@ -4867,6 +4994,8 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
             searchsp_eff /= 3.0;
         }
         search->dblen = dblen;
+        if (options->db_length > 0)
+           search->dblen_eff = dblen;
         search->searchsp_eff = searchsp_eff;
         status = BLASTSetUpSearchInternalByLoc (search, query_slp, query_bsp, prog_name, qlen, options, callback);
         if (status != 0) {
@@ -4935,6 +5064,7 @@ BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name,
 	Int2 status, first_context, last_context;
 	Int4 actual_query_length=0;
 	Nlm_FloatHi searchsp_eff=0;
+        Int4        hitlist_size;
 
 	/* Allocate default options if no are allocated yet. */
 	if (options == NULL)
@@ -4970,7 +5100,10 @@ BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name,
 	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
 /* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, 0, options->threshold_second, options->hitlist_size, prog_name, all_words, first_context, last_context, options->window_size);
+        hitlist_size = MIN(2*options->hitlist_size, 
+                           options->hitlist_size + 50);
+
+	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, 0, options->threshold_second, hitlist_size, prog_name, all_words, first_context, last_context, options->window_size);
 
 	if (search)
 	{
@@ -5846,8 +5979,11 @@ BLASTPerformFinalSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
               }
               start += length - DBSEQ_CHUNK_OVERLAP;
               search->subject->original_length = start;
-              search->subject->sequence += 
-                 (length - DBSEQ_CHUNK_OVERLAP)/READDB_COMPRESSION_RATIO;
+              if (search->prog_number == blast_type_blastn)
+                 search->subject->sequence += 
+                    (length - DBSEQ_CHUNK_OVERLAP)/READDB_COMPRESSION_RATIO;
+              else
+                 search->subject->sequence += length - DBSEQ_CHUNK_OVERLAP;
               search->current_hitlist->hspcnt = 
                  search->current_hitlist->hspcnt_max = 0;
            }
@@ -8055,9 +8191,9 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
                         BlastHitListPurge(search->current_hitlist);
         }
 	
-	compressed_wordsize = lookup->wordsize;
+	compressed_wordsize = lookup->reduced_wordsize;
 	wordsize = wfp->wordsize;
-	extra_bytes = lookup->wordsize - lookup->reduced_wordsize;
+	extra_bytes = lookup->wordsize - compressed_wordsize;
 
 /* The subject sequence is too short, exit this function now. */
 	if (wordsize > search->subject->length)
@@ -8067,8 +8203,8 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
         lookup_index = index;
 /* Determines when to stop scanning the database; does not include remainder. */
         s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
-	compression_factor = wfp->compression_ratio*lookup->reduced_wordsize;
-	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
+	compression_factor = wfp->compression_ratio*compressed_wordsize;
+	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*lookup->wordsize;
 	search_context = search->context;
 	query_length = search_context[search->first_context].query->length;
         extra_bytes_needed = extra_bytes;
@@ -10326,7 +10462,7 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 	if (search == NULL)
 		return 1;
 
-	cutoff = search->pbp->cutoff_e;
+        cutoff = search->pbp->cutoff_e;
 
 	hitlist = search->current_hitlist;
 	if (hitlist)

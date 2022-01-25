@@ -1,4 +1,4 @@
-/* $Id: megablast.c,v 6.83 2001/12/28 20:42:16 dondosha Exp $
+/* $Id: megablast.c,v 6.91 2002/04/29 19:55:25 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,31 @@
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.91  2002/04/29 19:55:25  madden
+ * Use ARG_FLOAT for db length
+ *
+ * Revision 6.90  2002/04/25 21:57:46  madden
+ * Strip options for release
+ *
+ * Revision 6.89  2002/04/24 19:55:14  madden
+ * Rolled back last change
+ *
+ * Revision 6.88  2002/04/23 20:58:53  madden
+ * Suppress options for release
+ *
+ * Revision 6.87  2002/04/09 18:17:34  dondosha
+ * Added a discontiguous word type option
+ *
+ * Revision 6.86  2002/03/08 20:22:56  dondosha
+ * Bug fix: masking locations were freed incorrectly in some cases
+ *
+ * Revision 6.85  2002/03/06 18:34:32  dondosha
+ * Pass the filtered locations back from the megablast engine to use in formatting
+ *
+ * Revision 6.84  2002/02/15 23:30:00  dondosha
+ * 1. Fix for very long queries
+ * 2. Added -m8 and -m9 options - needed in conjunction with -Q option.
+ *
  * Revision 6.83  2001/12/28 20:42:16  dondosha
  * Added options related to discontiguous words
  *
@@ -710,6 +735,10 @@ MegaBlastPrintSegments(VoidPtr ptr)
    return 1;
 }
 
+/*
+#define DO_NOT_SUPPRESS_BLAST_OP
+*/
+
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
 static Args myargs [] = {
@@ -719,7 +748,7 @@ static Args myargs [] = {
 	"stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},/* 1 */
   { "Expectation value", 
 	"1000000.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},/* 2 */
-  { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", 
+  { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines", 
         "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},       /* 3 */
   { "BLAST report Output File", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},/* 4 */
@@ -750,7 +779,7 @@ static Args myargs [] = {
   { "Word size (length of best perfect match)", 
         "28", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},      /* 17 */
   { "Effective length of the database (use zero for the real size)", 
-        "0", NULL, NULL, FALSE, 'z', ARG_STRING, 0.0, 0, NULL},     /* 18 */
+        "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},     /* 18 */
   { "Maximal number of positions for a hash value (set to 0 to ignore)",
         "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},       /* 19 */
   { "Query strands to search against database: 3 is both, 1 is top, 2 is bottom",
@@ -782,7 +811,17 @@ static Args myargs [] = {
   { "X dropoff value for ungapped extension",
 	"10", NULL, NULL, FALSE, 'y', ARG_INT, 0.0, 0, NULL},      /* 33 */
   { "X dropoff value for dynamic programming gapped extension",
-	"50", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL}       /* 34 */
+	"50", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},       /* 34 */
+#ifdef DO_NOT_SUPPRESS_BLAST_OP
+  { "Length of a discontiguous word template (contiguous word if 0)",
+	"0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL},       /* 35 */
+  {"Generate words for every base of the database (default is every 4th base)",
+        "F", NULL, NULL, TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},    /* 36 */
+  {"Use non-greedy (dynamic programming) extension for affine gap scores",
+        "F", NULL, NULL, TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},    /* 37 */
+  { "Type of a discontiguous word template (0 - coding, 1 - maximal, 2 - two simultaneous",
+	"0", NULL, NULL, FALSE, 'N', ARG_INT, 0.0, 0, NULL}       /* 38 */
+#endif
 };
 
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
@@ -807,10 +846,11 @@ Int2 Main (void)
 	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
 	Uint1 align_type, align_view;
 	Uint4 align_options, print_options;
-	ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns, error_returns;
+	ValNodePtr mask_loc, mask_loc_start, next_mask_loc;
+        ValNodePtr vnp, other_returns, error_returns;
 
 	CharPtr blast_program, blast_database, blast_inputfile, blast_outputfile;
-	FILE *infp, *outfp;
+	FILE *infp, *outfp, *mqfp;
 	Int4 index, num_bsps, total_length, total_processed = 0;
 	Int2 ctr = 1;
 	Char prefix[2];
@@ -818,6 +858,7 @@ Int2 Main (void)
 	Boolean done, first_seq = TRUE, hits_found;
 	CharPtr masked_query_file;
         const char *dummystr;
+        Boolean lcase_masking;
 
         if (! GetArgs ("megablast", NUMARG, myargs))
 	   return (1);
@@ -915,7 +956,7 @@ Int2 Main (void)
 
 	options->cutoff_s = (options->wordsize + 4)*options->reward;
 
-        options->db_length = StringToInt8(myargs[18].strvalue, &dummystr);
+        options->db_length = (Int8) myargs[18].floatvalue;
 
 	options->perform_culling = FALSE;
 	/* Kludge */
@@ -923,6 +964,17 @@ Int2 Main (void)
 
 	options->strand_option = myargs[20].intvalue;
         options->window_size = myargs[32].intvalue;
+        lcase_masking = (Boolean) myargs[28].intvalue;
+#ifdef DO_NOT_SUPPRESS_BLAST_OP
+        options->mb_template_length = myargs[35].intvalue;
+        options->mb_one_base_step = (Boolean) myargs[36].intvalue;
+        /* Allow dynamic programming gapped extension only with affine 
+           gap scores */
+        if (options->gap_open != 0 || options->gap_extend != 0)
+           options->mb_use_dyn_prog = (Boolean) myargs[37].intvalue;
+
+        options->mb_disc_type = myargs[38].intvalue;
+#endif
 
         print_options = 0;
         align_options = 0;
@@ -977,7 +1029,7 @@ Int2 Main (void)
            options->output = outfp;
 
 	if (myargs[12].intvalue==MBLAST_ALIGNMENTS) {
-	   if (align_view != 7) {
+	   if (align_view < 7) {
               if (html) {
                  fprintf(outfp, "<HTML>\n<TITLE>MEGABLAST Search Results</TITLE>\n");
                  fprintf(outfp, "<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
@@ -1032,7 +1084,7 @@ Int2 Main (void)
 	   while ((sepp[num_bsps]=FastaToSeqEntryForDb(infp, query_is_na, NULL,
 						       believe_query, prefix, &ctr, 
 						       &mask_slp)) != NULL) {
-              if (!myargs[28].intvalue) /* Lower case ignored */
+              if (!lcase_masking) /* Lower case ignored */
                  mask_slp = SeqLocFree(mask_slp);
 	      if (mask_slp) {
 		 if (!last_mask)
@@ -1066,6 +1118,10 @@ Int2 Main (void)
 		 break;
 	      }
 	   }
+
+           if (num_bsps == 0)
+               break;
+
 	   SeqMgrHoldIndexing(FALSE);
 	   other_returns = NULL;
 	   error_returns = NULL;
@@ -1100,7 +1156,7 @@ Int2 Main (void)
 	   } else /* if (myargs[12].intvalue==MBLAST_ALIGNMENTS) */
 	      seqalign_array = BioseqMegaBlastEngine(query_bsp_array, blast_program,
 				  blast_database, options, &other_returns, 
-                                  &error_returns, align_view != 7 ? tick_callback : NULL,
+                                  &error_returns, align_view < 7 ? tick_callback : NULL,
                                   NULL, NULL, 0, NULL);
 	   
 #ifdef OS_UNIX
@@ -1147,7 +1203,7 @@ Int2 Main (void)
 		 case SEQLOC_MASKING_MINUS1:
 		 case SEQLOC_MASKING_MINUS2:
 		 case SEQLOC_MASKING_MINUS3:
-		    /*ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);*/
+		    ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
 		    break;
 		 default:
 		    break;
@@ -1155,7 +1211,7 @@ Int2 Main (void)
 	      }	
 	      
 #ifdef OS_UNIX
-              if(align_view != 7) {
+              if(align_view < 7) {
                  fprintf(global_fp, "%s\n", " done");
               }
 #endif
@@ -1163,32 +1219,65 @@ Int2 Main (void)
               masked_query_file = myargs[26].strvalue;
               hits_found = FALSE;
 
+              mask_loc_start = next_mask_loc = mask_loc;
+              mask_loc = NULL;
               if (seqalign_array) {
                  for (index=0; index<num_bsps; index++) {
-                    if (seqalign_array[index]==NULL) continue;
+                    seqalign = seqalign_array[index];
+                    if (next_mask_loc && 
+                        SeqIdComp(SeqLocId((SeqLocPtr)next_mask_loc->data.ptrvalue), 
+                                  query_bsp_array[index]->id) == SIC_YES) {
+                       mask_loc = (SeqLocPtr) 
+                          MemDup(next_mask_loc, sizeof(SeqLoc));
+                       next_mask_loc = next_mask_loc->next;
+                       mask_loc->next = NULL;
+                    }
+                    if (masked_query_file) {
+                       mask_slp = MaskSeqLocFromSeqAlign(seqalign);
+                       if (mask_loc) 
+                          mask_slp = blastMergeFilterLocs(mask_slp, 
+                              (SeqLocPtr)mask_loc->data.ptrvalue,
+                              FALSE, 0, 0);
+                       if (first_seq)
+                          mqfp = FileOpen(masked_query_file, "w");
+                       PrintMaskedSequence(query_bsp_array[index], mask_slp,
+                                           mqfp, 50, lcase_masking);
+                       first_seq = FALSE;
+                       SeqLocSetFree(mask_slp);
+                    }
+                    if (seqalign==NULL) {
+                       mask_loc = MemFree(mask_loc);
+                       continue;
+                    }
                     hits_found = TRUE;
-                    if (align_view != 7) {
+                    if (align_view < 7) {
                        init_buff_ex(70);
                        AcknowledgeBlastQuery(query_bsp_array[index], 70, outfp, 
                                              believe_query, html);
                        free_buff();
                     }
-                    seqalign = seqalign_array[index];
-                    if (masked_query_file) {
-                       SeqLocPtr query_slp = NULL;
-                       ValNodeAddPointer(&query_slp, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(query_bsp_array[index]->id, SEQID_GI)));
-                       mask_slp = MaskSeqLocFromSeqAlign(seqalign);
-                       PrintMaskedSequence(query_bsp_array[index], mask_slp,
-                                           masked_query_file, first_seq);
-                       first_seq = FALSE;
-                       SeqLocSetFree(mask_slp);
-                    }
-                    if(align_view == 7) {
+                    if (align_view == 8 || align_view == 9) {
+                       if (align_view == 9)
+                          PrintTabularOutputHeader(blast_database, 
+                             query_bsp_array[index], NULL, blast_program, 0,
+                             believe_query, global_fp);
+
+                       BlastPrintTabulatedResults(seqalign, 
+                          query_bsp_array[index], NULL, number_of_alignments,
+                          blast_program, !options->gapped_calculation, 
+                          believe_query, options->required_start, 0, 
+                          global_fp);
+
+                       SeqAlignSetFree(seqalign);
+                       mask_loc = MemFree(mask_loc);
+                       continue;
+                    } else if(align_view == 7) {
                        BXMLPrintOutput(xml_aip, seqalign, 
                                        options, "megablast", blast_database, 
                                        query_bsp_array[index], other_returns, 0, NULL);
                        AsnIoReset(xml_aip);
                        SeqAlignSetFree(seqalign);
+                       mask_loc = MemFree(mask_loc);
                        continue;
                     }
                     seqannot = SeqAnnotNew();
@@ -1221,10 +1310,14 @@ Int2 Main (void)
                        ObjMgrFreeCache(0);
                     }
                     seqannot = SeqAnnotFree(seqannot);
+                    mask_loc = MemFree(mask_loc);
                  } /* End loop on seqaligns for different queries */
               } 
 
-              if (!hits_found)
+              if (masked_query_file)
+                 FileClose(mqfp);
+
+              if (!hits_found && align_view < 7)
                  fprintf(outfp, "\n\n ***** No hits found ******\n\n");
 
               matrix = BLAST_MatrixDestruct(matrix);
@@ -1233,7 +1326,7 @@ Int2 Main (void)
                  fprintf(outfp, "<PRE>\n");
               init_buff_ex(85);
               dbinfo_head = dbinfo;
-              if(align_view != 7) {
+              if(align_view < 7) {
                  while (dbinfo) {
                     PrintDbReport(dbinfo, 70, outfp);
                     dbinfo = dbinfo->next;
@@ -1242,20 +1335,20 @@ Int2 Main (void)
               dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
               
               if (ka_params) {
-                 if(align_view != 7)
+                 if(align_view < 7)
                     PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
                  MemFree(ka_params);
               }
               if (ka_params_gap) {
-                 if(align_view != 7)
+                 if(align_view < 7)
                     PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
                  MemFree(ka_params_gap);
               }
-              if(align_view != 7)
+              if(align_view < 7)
                  PrintTildeSepLines(params_buffer, 70, outfp);
               MemFree(params_buffer);
               free_buff();
-              mask_loc_start = mask_loc;
+              mask_loc = mask_loc_start;
               while (mask_loc) {
                  SeqLocSetFree(mask_loc->data.ptrvalue);
                  mask_loc = mask_loc->next;
@@ -1278,6 +1371,15 @@ Int2 Main (void)
 		 case TXMATRIX:
 		    BLAST_MatrixDestruct(vnp->data.ptrvalue);
 		    break;
+		 case SEQLOC_MASKING_NOTSET:
+		 case SEQLOC_MASKING_PLUS1:
+		 case SEQLOC_MASKING_PLUS2:
+		 case SEQLOC_MASKING_PLUS3:
+		 case SEQLOC_MASKING_MINUS1:
+		 case SEQLOC_MASKING_MINUS2:
+		 case SEQLOC_MASKING_MINUS3:
+                    mask_loc = vnp->data.ptrvalue;
+                    SeqLocSetFree(mask_loc);
 		 default:
 		    break;
 		 }
@@ -1304,9 +1406,9 @@ Int2 Main (void)
         if (align_view == 7)
            xml_aip = AsnIoClose(xml_aip);
 
-        if (align_view != 7 && html) 
+        if (align_view < 7 && html) 
            fprintf(outfp, "</PRE>\n</BODY>\n</HTML>\n");
-        if (align_view != 7 && myargs[29].intvalue)
+        if (align_view < 7 && myargs[29].intvalue)
            fprintf(outfp, "Mega BLAST run finished, processed %d queries\n",
                    total_processed);
 	MemFree(query_bsp_array);

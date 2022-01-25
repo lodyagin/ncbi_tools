@@ -1,7 +1,7 @@
 #ifndef NCBI_SOCKET__H
 #define NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.15 2001/12/03 21:33:48 vakatov Exp $
+/*  $Id: ncbi_socket.h,v 6.16 2002/04/22 20:52:34 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -85,6 +85,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.16  2002/04/22 20:52:34  lavr
+ * +SOCK_htons(), macros SOCK_ntohl() and SOCK_ntohs()
+ *
  * Revision 6.15  2001/12/03 21:33:48  vakatov
  * + SOCK_IsServerSide()
  *
@@ -508,11 +511,15 @@ extern int SOCK_ntoa
  );
 
 
-/* See man for the BSD htonl().
+/* See man for the BSD htonl() and htons().
  */
-extern unsigned int SOCK_htonl
-(unsigned int value
- );
+extern unsigned int SOCK_htonl(unsigned int value);
+
+#define SOCK_ntohl SOCK_htonl
+
+extern unsigned short SOCK_htons(unsigned short value);
+
+#define SOCK_ntohs SOCK_htons
 
 
 /* Return INET host address (in network byte order) of the

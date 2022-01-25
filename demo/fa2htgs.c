@@ -24,13 +24,14 @@
 *                       "-P" for contig names
 *                       "-A" for accession list file  Kans  4-8-98
 *                       "-X" for coordinates on resulting master or individual accessions
+*                       "-Q" for separate quality score file
 *
 *****************************************************************************/
 #include <subutil.h>
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 34
+#define NUMARG 36
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -66,6 +67,8 @@ Args myargs[NUMARG] = {
    {"htgs_fulltop keyword","F", NULL ,NULL ,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
    {"htgs_activefin keyword","F", NULL ,NULL ,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
    {"htgs_cancelled keyword","F", NULL ,NULL ,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
+   {"Filename for quality scores",NULL,NULL,NULL,TRUE,'Q',ARG_FILE_IN,0.0,0,NULL} ,
+   {"Whole Genome Shotgun?","F", NULL ,NULL ,TRUE,'w',ARG_BOOLEAN,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -417,6 +420,24 @@ static CharPtr BioseqGetLocalIdStr (BioseqPtr bsp)
   return NULL;
 }
 
+static SeqAnnotPtr NewGraphSeqAnnot (CharPtr name, SeqGraphPtr sgp)
+
+{
+  SeqAnnotPtr  sap = NULL;
+
+  if (sgp == NULL) return NULL;
+  sap = SeqAnnotNew ();
+  if (sap == NULL) return NULL;
+
+  if (! HasNoText (name)) {
+    ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
+  }
+  sap->type = 3;
+  sap->data = (Pointer) sgp;
+
+  return sap;
+}
+
 static void MakeAssemblyFragments (BioseqPtr bsp, CharPtr name, Int2 index,
                                    CharPtr sp6_clone, CharPtr sp6_end,
                                    CharPtr t7_clone, CharPtr t7_end,
@@ -492,6 +513,88 @@ static void MakeAssemblyFragments (BioseqPtr bsp, CharPtr name, Int2 index,
   sfp->comment = StringSaveNoNull (str);
 }
 
+static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+  CharPtr  rsult;
+
+  if (str == NULL || size < 1 || fp == NULL) return NULL;
+  *str = '\0';
+  rsult = fgets (str, size, fp);
+  if (rsult != NULL) {
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0' && ch != '\n' && ch != '\r') {
+      ptr++;
+      ch = *ptr;
+    }
+    *ptr = '\0';
+  }
+  return rsult;
+}
+
+static void ReadQualScores (SeqEntryPtr sep_list, CharPtr qual_fname)
+
+{
+  BioseqPtr    bsp;
+  Char         buf [256];
+  FILE         *fp;
+  SeqGraphPtr  lastsgp;
+  CharPtr      ptr;
+  SeqAnnotPtr  sap;
+  SeqEntryPtr  sep;
+  SeqGraphPtr  sgp;
+  CharPtr      str;
+
+  if (sep_list == NULL || qual_fname == NULL) return;
+  fp = FileOpen (qual_fname, "r");
+  if (fp == NULL) return;
+
+  str = ReadALine (buf, sizeof (buf), fp);
+  while (str != NULL) {
+
+    if (str [0] == '>') {
+      ptr = str + 1;
+      TrimSpacesAroundString (ptr);
+      sep = sep_list;
+      while (sep != NULL && StringCmp (ptr, BioseqGetLocalIdStr ((BioseqPtr) sep->data.ptrvalue)) != 0) {
+        sep = sep->next;
+      }
+      if (sep != NULL) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        sgp = ReadPhrapQuality (fp, bsp);
+        if (sgp != NULL) {
+          for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+            if (sap->type == 3) {
+              for (lastsgp = sap->data; lastsgp->next != NULL; lastsgp = lastsgp->next) {
+                continue;
+              }
+              lastsgp->next = sgp;
+              break;
+            }
+          }
+          if (sap == NULL) {
+            if (bsp->annot != NULL) {
+              for (sap = bsp->annot; sap->next != NULL; sap = sap->next) {
+                continue;
+              }
+              sap->next = NewGraphSeqAnnot ("Graphs", sgp);
+            } else {
+              bsp->annot = NewGraphSeqAnnot ("Graphs", sgp);
+            }
+          }
+        }
+      }
+    }
+
+    str = ReadALine (buf, sizeof (buf), fp);
+  }
+
+  FileClose (fp);
+}
+
 /*****************************************************************************
 *
 *   Main program loop to read, process, write SeqEntrys
@@ -517,9 +620,9 @@ Int2 Main(void)
    Uint2 frag;
    CharPtr  newstr, accession, remark, center, organism, clone, seqbuf,
       seqname, strain, chromosome, title, extra_ac, clone_lib, map,
-      comment_fname, comment_fstr, phrap_fname, fasta_fname, contigs, accn_fname,
-      contig_table, sp6_clone, t7_clone, sp6_end = NULL, t7_end = NULL,
-      pstring = NULL;
+      comment_fname, comment_fstr, phrap_fname, fasta_fname, qual_fname,
+      contigs, accn_fname, contig_table, sp6_clone, t7_clone,
+      sp6_end = NULL, t7_end = NULL, pstring = NULL;
    Char  instr[120], buf [256], dumsp6 [64], dumt7 [64];
    CharPtr field [MAX_FIELDS], ptr;
    Int4   totalen, filelen, len, length = 0, cumlength = 0, gaplen;
@@ -529,7 +632,7 @@ Int2 Main(void)
    ValNodePtr vnp, vnp2, PNTR prevpnt, next;
    Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster,
       htgsDraft, usedelta = FALSE, do_contig, left_end, right_end,
-      htgsFulltop, htgsActivefin, htgsCancelled;
+      htgsFulltop, htgsActivefin, htgsCancelled, wgs_flag;
    Int2 index = 0;
    ValNodePtr rescuedsgps = NULL, rescuedcontigs = NULL, fragmentgroups = NULL;
    ValNodePtr seqlitlist = NULL;
@@ -556,6 +659,10 @@ Int2 Main(void)
      MI_htgs_phase = (Uint1)MI_TECH_htgs_0;
    else
      MI_htgs_phase = (Uint1)(MI_TECH_htgs_1 + htgs_phase - 1);
+   wgs_flag = (Boolean) myargs[35].intvalue;
+   if (wgs_flag) {
+     MI_htgs_phase = (Uint1)MI_TECH_wgs;
+   }
 
    accession = myargs[9].strvalue;
    remark = myargs[10].strvalue;
@@ -583,6 +690,7 @@ Int2 Main(void)
    htgsFulltop = (Boolean) myargs[31].intvalue;
    htgsActivefin = (Boolean) myargs[32].intvalue;
    htgsCancelled = (Boolean) myargs[33].intvalue;
+   qual_fname = myargs [34].strvalue;
 
    dumsp6 [0] = '\0';
    dumt7 [0] = '\0';
@@ -870,6 +978,9 @@ Int2 Main(void)
    } else {
       while ((sep = FastaToSeqEntry (fp, TRUE)) != NULL) {
          ValNodeLink (&sep_list, sep);
+      }
+      if (qual_fname != NULL) {
+      	ReadQualScores (sep_list, qual_fname);
       }
    }
 

@@ -1,4 +1,4 @@
-/* $Id: qrpsb.c,v 1.6 2001/11/13 19:45:47 bauer Exp $
+/* $Id: qrpsb.c,v 1.7 2002/01/04 20:03:54 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 11/27/2000
 *
-* $Revision: 1.6 $
+* $Revision: 1.7 $
 *
 * File Description:
 *         WWW-RPS BLAST using the BLAST queue
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: qrpsb.c,v $
+* Revision 1.7  2002/01/04 20:03:54  bauer
+* minor changes in DefLine parsing
+*
 * Revision 1.6  2001/11/13 19:45:47  bauer
 * restricted number of automated queue re-checks
 *
@@ -1353,12 +1356,12 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     StrCpy(aapThis->long_defline, aapThis->defline->buffer_id);
     StrCat(aapThis->long_defline," ");
     StrCat(aapThis->long_defline,aapThis->defline->title);
-    cTemp = strdup(txsp->buffer_id);
+    cTemp = StringSave(txsp->buffer_id);
     if (strncmp(cTemp,"gnl|",4)==0) {
       strtok(cTemp,"|");
-      aapThis->cDatabase = strdup(strtok(NULL,"|"));
+      aapThis->cDatabase = StringSave(strtok(NULL,"|"));
       strcpy(path,strtok(NULL,"|"));
-      aapThis->cCDDid = strdup(strtok(path," "));
+      aapThis->cCDDid = StringSave(strtok(path," "));
     } else WRPSBHtmlError("Could not interpret subject defline!");
     MemFree(cTemp);
     aapThis->bIsProfile = FALSE;
@@ -1366,8 +1369,8 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->red = 255;
       aapThis->green = aapThis->blue = iColValue;
       if (StrNCmp(aapThis->cCDDid,"smart0",6) == 0) {
-        cTemp = strdup(txsp->title);
-        aapThis->cGraphId = strdup(strtok(cTemp,","));
+        cTemp = StringSave(txsp->title);
+        aapThis->cGraphId = StringSave(strtok(cTemp,","));
 	MemFree(cTemp);
       } else {
         aapThis->cGraphId = aapThis->cCDDid;
@@ -1375,8 +1378,8 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     } else if (StringICmp(aapThis->cDatabase,"Pfam") ==0) {
       aapThis->blue = 255;
       aapThis->red = aapThis->green = iColValue;
-      cTemp = strdup(txsp->title);
-      aapThis->cGraphId = strdup(strtok(cTemp,","));
+      cTemp = StringSave(txsp->title);
+      aapThis->cGraphId = StringSave(strtok(cTemp,","));
       MemFree(cTemp);
     } else if (StringICmp(aapThis->cDatabase,"scop1.39") ==0) {
       aapThis->green = 255;
@@ -1386,13 +1389,13 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     } else if (StringICmp(aapThis->cDatabase,"Load") ==0) {
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    
-      cTemp = strdup(aapThis->cCDDid);
+      cTemp = StringSave(aapThis->cCDDid);
       if (strstr(cTemp,":")) {
         strtok(cTemp,":");
-        aapThis->cGraphId = strdup(strtok(NULL,":"));
+        aapThis->cGraphId = StringSave(strtok(NULL,":"));
       } else {
         strtok(cTemp,"_");
-        aapThis->cGraphId = strdup(strtok(NULL,"_"));
+        aapThis->cGraphId = StringSave(strtok(NULL,"_"));
       }
       MemFree(cTemp);
     } else {
@@ -1413,7 +1416,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     strcat(hpath,aapThis->cCDDid);
     strcat(hpath,"&version=");
     strcat(hpath,dbversion);
-    aapThis->cHtmlLink = strdup(hpath);
+    aapThis->cHtmlLink = StringSave(hpath);
 /*---------------------------------------------------------------------------*/
 /* Open Cdd tree file and add description to aapThis data structure          */
 /* changed to binary read to get prepared for the v1.00 rollout. Aron 6/12/00*/
@@ -1838,7 +1841,7 @@ Int2 Main (void)
 /*---------------------------------------------------------------------------*/
   if ((indx = WWWFindName(www_info, "RID")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info,indx);
-    rid = strdup(www_arg);
+    rid = StringSave(www_arg);
     if (rid && strlen(rid)) Qmode = FORMATJOB;
   } 
   
@@ -1858,7 +1861,7 @@ Int2 Main (void)
   blast_database   = myargs [1].strvalue;
   if ((indx = WWWFindName(www_info,"FILTER")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
-    myargs[6].strvalue = strdup(www_arg);
+    myargs[6].strvalue = StringSave(www_arg);
   }
   if (StringICmp(myargs[6].strvalue, "T") == 0) {
     if (StringICmp("blastn", blast_program) == 0)
@@ -1903,7 +1906,7 @@ Int2 Main (void)
     WRPSBHtmlError("DATALIB missing from input!");
   } else if (indx >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
-    myargs[1].strvalue = strdup(www_arg);
+    myargs[1].strvalue = StringSave(www_arg);
   }
   if ((indx = WWWFindName(www_info,"IS_PROT")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);

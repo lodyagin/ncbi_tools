@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.44 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,24 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.50  2002/04/09 18:19:47  dondosha
+* Changed #ifdefs to conditionals, allowing different discontiguous templates in a single binary
+*
+* Revision 6.49  2002/04/01 22:28:29  dondosha
+* Corrected syntax error for megablast with two-templates case
+*
+* Revision 6.48  2002/03/26 21:15:54  dondosha
+* Added macro definitions to allow template length 21
+*
+* Revision 6.47  2002/03/05 17:39:39  dondosha
+* Use reduced_wordsize instead of wordsize in lookup_find_init
+*
+* Revision 6.46  2002/02/19 22:35:06  dondosha
+* Fixed uninitialized variable bug introduced by the two-template code
+*
+* Revision 6.45  2002/02/15 23:35:01  dondosha
+* Allow hash table and two templates for megablast
+*
 * Revision 6.44  2001/12/28 20:46:21  dondosha
 * 1. Mega BLAST related parameters moved into a separate structure
 * 2. Environment variables for discontiguous words, etc. changed to options
@@ -259,6 +277,7 @@ Detailed Contents:
 
 #include <ncbi.h>
 #include <blast.h> /* this already includes lookup.h */
+/*#include <zlib.h> /* For the CRC32 hashing function */
 
 /* mod_lt[] is a modified lookup table.  -cfj
  * It contains the same info that is accessible via lookup->position, but in a form that reduces the
@@ -770,11 +789,11 @@ lookup_find_init(LookupTablePtr lookup, Int4 PNTR lookup_index, Uint1Ptr string)
     Int4 char_size, wordsize;
     
     char_size = lookup->char_size;
-    wordsize = lookup->wordsize;
+    wordsize = lookup->reduced_wordsize;
     
+    /* Fill in wordsize-1 spaces. */
     *lookup_index = *string;
     
-    /* Fill in wordsize-2 spaces. */
     wordsize -= 2;
     while (wordsize > 0) {
         string++;
@@ -834,6 +853,19 @@ BLAST_WordFinderDestruct (BLAST_WordFinderPtr wfp)
     return wfp;
 }
 
+#if 0
+/* Given a 4-byte integer index, compute a 'size'-bit hash value */
+Int4 MB_GetHashValue(Int4 index, Int4 size) 
+{
+   Int4 value;
+   VoidPtr buffer = (VoidPtr) &(index);
+   
+   value = crc32(0, buffer, 4);
+   value = value>>(32-size);
+   return value;
+}
+#endif
+
 Boolean
 MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
 {
@@ -841,8 +873,9 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    Int4 query_length = search->context[search->first_context].query->length;
    register Uint1Ptr seq, pos;
    register Int4 index;
-   register Int4 ecode, ecode1, extra_code;
+   register Int4 ecode, extra_code;
    register Int4 mask;
+   Int4 ecode1, ecode2;
    Uint1 val, nuc_mask = 0xfc, at_hash_mask = 0x10;
    MbLookupTablePtr mb_lt;
    Int4 masked_word_count = 0;
@@ -850,8 +883,15 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    Int4 pv_shift, pv_array_bts, pv_size;
    Boolean discontiguous_word = FALSE;
    Int2 word_length, extra_length, word_weight;
-   Int4 weight11 = 0, template18 = 0, last_offset;
-   
+   Int4 weight11 = 0, /*template18 = 0, */last_offset;
+   Int4 length, size, hash_shift, hash_mask, crc;
+   Uint1Ptr hash_buf;
+   Int4 bit0, no_bit0;
+   Int2 template_length;
+   MegaBlastParameterBlkPtr mb_params = search->pbp->mb_params;
+   MBTemplateType template_type = mb_params->template_type;
+   Boolean amb_cond;
+   Boolean use_two_templates = mb_params->use_two_templates;
 
    if (lookup == NULL)
       return FALSE;
@@ -868,18 +908,24 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       mb_lt->width = 3;
    mb_lt->lpm = lookup->wordsize * READDB_COMPRESSION_RATIO;
 
-   mb_lt->max_positions = search->pbp->mb_params->max_positions; 
-   mb_lt->hashsize = (1<<(8*mb_lt->width)); 
+   mb_lt->max_positions = mb_params->max_positions; 
 
-   if (search->pbp->mb_params->disc_word) {
+#ifdef USE_HASH_TABLE
+   /* Make hash table size the smallest power of 2 greater than query length */
+   for (length=query_length,size=1; length>0; length=length>>1,size++);
+   mb_lt->hashsize = 1<<size;
+   hash_shift = (32 - size)/2;
+   hash_mask = mb_lt->hashsize - 1;
+#else
+   mb_lt->hashsize = (1<<(8*mb_lt->width));
+#endif
+
+   if (mb_params->disc_word) {
       discontiguous_word = TRUE;
       word_length = READDB_COMPRESSION_RATIO*(mb_lt->width+1);
-      extra_length = search->pbp->mb_params->template_length - word_length;
-      word_weight = search->pbp->mb_params->word_weight;
-      if (word_weight == 11)
-         weight11 = 0xffffffff;
-      if (extra_length > 0)
-         template18 = 0xffffffff;
+      template_length = mb_params->template_length;
+      extra_length = template_length - word_length;
+      word_weight = mb_params->word_weight;
       mask = (1 << (8*(mb_lt->width+1) - 2)) - 1;
    } else {
       word_length = READDB_COMPRESSION_RATIO*mb_lt->width;
@@ -897,15 +943,36 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       MegaBlastLookupTableDestruct(lookup);
       return FALSE;
    }
-
+   if (use_two_templates) {
+      if (!weight11) {
+         if ((mb_lt->hashtable2 = (Int4Ptr) 
+              MemNew(mb_lt->hashsize*sizeof(Int4))) == NULL) {
+            MegaBlastLookupTableDestruct(lookup);
+            return FALSE;
+         }
+      } else {/* For weight 11 no need for extra main table */
+         mb_lt->hashtable2 = mb_lt->hashtable;
+      }
+      if ((mb_lt->next_pos2 = (Int4Ptr) 
+           MemNew(query_length*sizeof(Int4))) == NULL) {
+         MegaBlastLookupTableDestruct(lookup);
+         return FALSE;
+      }
+   }
    seq = search->context[search->first_context].query->sequence_start;
    pos = seq + word_length;
 
    ecode = 0;
 
    if (discontiguous_word) {
-      if (template18) {
-         register Uint1 val1, val2;
+      if (word_weight == 11) {
+         no_bit0 = 0x007fffff;
+         bit0 = 0x00800000;
+      } else {
+         no_bit0 = 0xffffffff;
+         bit0 = 0x00000000;
+      }
+      if (/*template18*/extra_length) {
          last_offset = query_length - extra_length;
          for (index = 1; index <= last_offset; index++) {
             val = *++seq;
@@ -919,14 +986,86 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                /* get next base */
                ecode = ((ecode & mask) << 2) + val;
                if (seq >= pos) {
-                  val1 = *(seq+1);
-                  val2 = *(seq+2);
-                  if (((val1&nuc_mask) == 0) && ((val2&nuc_mask) == 0)) {
-                     extra_code = (Int4) ((val1<<2) | val2);
-                     ecode1 = GET_WORD_INDEX(ecode,weight11,template18) | 
-                        (extra_code & MASK_EXTRA);
-                     if (mb_lt->hashtable[ecode1] == 0)
-                        lookup->num_unique_pos_added++;
+                  switch (template_type) {
+                  case TEMPL_11_18: case TEMPL_12_18:
+                     amb_cond = !GET_AMBIG_CONDITION_18(seq);
+                     break;
+                  case TEMPL_11_18_MAX: case TEMPL_12_18_MAX:
+                     amb_cond = !GET_AMBIG_CONDITION_18_MAX(seq);
+                     break;
+                  case TEMPL_11_21: case TEMPL_12_21:
+                     amb_cond = !GET_AMBIG_CONDITION_21(seq);
+                     break;
+                  default:
+                     amb_cond = FALSE;
+                     break;
+                  }
+
+                  if (amb_cond) {
+                     switch (template_type) {
+                     case TEMPL_11_18:
+                        ecode1 = (GET_WORD_INDEX_11_18(ecode) |
+                                  GET_EXTRA_CODE_18(seq)) & no_bit0;
+                        break;
+                     case TEMPL_12_18:
+                        ecode1 = (GET_WORD_INDEX_12_18(ecode) |
+                                  GET_EXTRA_CODE_18(seq)) & no_bit0;
+                        break;
+                     case TEMPL_11_18_MAX:
+                        ecode1 = (GET_WORD_INDEX_11_18_MAX(ecode) |
+                                  GET_EXTRA_CODE_18_MAX(seq)) & no_bit0;
+                        break;
+                     case TEMPL_12_18_MAX:
+                        ecode1 = (GET_WORD_INDEX_12_18_MAX(ecode) |
+                                  GET_EXTRA_CODE_18_MAX(seq)) & no_bit0;
+                        break;
+                     case TEMPL_11_21:
+                        ecode1 = (GET_WORD_INDEX_11_21(ecode) |
+                                  GET_EXTRA_CODE_21(seq)) & no_bit0;
+                        break;
+                     case TEMPL_12_21:
+                        ecode1 = (GET_WORD_INDEX_12_21(ecode) |
+                                  GET_EXTRA_CODE_21(seq)) & no_bit0;
+                        break;
+                     default: 
+                        ecode1 = 0;
+                        break;
+                     }
+
+#ifdef USE_HASH_TABLE                     
+                     hash_buf = (Uint1Ptr)&ecode1;
+                     CRC32(crc, hash_buf);
+                     ecode1 = (crc>>hash_shift) & hash_mask;
+#endif
+
+                     if (use_two_templates) {
+                        switch (template_type) {
+                        case TEMPL_11_18:
+                           ecode2 = GET_WORD_INDEX_11_18_MAX(ecode) |
+                              GET_EXTRA_CODE_18_MAX(seq) | bit0;
+                           break;
+                        case TEMPL_12_18:
+                           ecode2 = GET_WORD_INDEX_12_18_MAX(ecode) |
+                              GET_EXTRA_CODE_18_MAX(seq) | bit0;
+                           break;
+                        default:
+                           ecode2 = 0; break;
+                        }
+                           
+#ifdef USE_HASH_TABLE                     
+                        hash_buf = (Uint1Ptr)&ecode2;
+                        CRC32(crc, hash_buf);
+                        ecode2 = (crc>>hash_shift) & hash_mask;
+#endif
+                        if (mb_lt->hashtable[ecode1] == 0 || 
+                            mb_lt->hashtable2[ecode2] == 0)
+                           lookup->num_unique_pos_added++;
+                        mb_lt->next_pos2[index] = mb_lt->hashtable2[ecode2];
+                        mb_lt->hashtable2[ecode2] = index;
+                     } else {
+                        if (mb_lt->hashtable[ecode1] == 0)
+                           lookup->num_unique_pos_added++;
+                     }
                      mb_lt->next_pos[index] = mb_lt->hashtable[ecode1];
                      mb_lt->hashtable[ecode1] = index;
                   }
@@ -950,9 +1089,54 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                /* get next base */
                ecode = ((ecode & mask) << 2) + val;
                if (seq >= pos) {
-                  ecode1 = GET_WORD_INDEX(ecode,weight11,0);
-                  if (mb_lt->hashtable[ecode1] == 0)
-                     lookup->num_unique_pos_added++;
+                  switch (template_type) {
+                  case TEMPL_11_16:
+                     ecode1 = GET_WORD_INDEX_11_16(ecode) & no_bit0;
+                     break;
+                  case TEMPL_12_16:
+                     ecode1 = GET_WORD_INDEX_12_16(ecode) & no_bit0;
+                     break;
+                  case TEMPL_11_16_MAX:
+                     ecode1 = GET_WORD_INDEX_11_16_MAX(ecode) & no_bit0;
+                     break;
+                  case TEMPL_12_16_MAX:
+                     ecode1 = GET_WORD_INDEX_12_16_MAX(ecode) & no_bit0;
+                     break;
+                  default:
+                     ecode1 = 0;
+                     break;
+                  }
+                     
+#ifdef USE_HASH_TABLE
+                  hash_buf = (Uint1Ptr)&ecode1;
+                  CRC32(crc, hash_buf);
+                  ecode1 = (crc>>hash_shift) & hash_mask;
+#endif
+                  if (use_two_templates) {
+                     switch (template_type) {
+                     case TEMPL_11_16:
+                        ecode2 = GET_WORD_INDEX_11_16_MAX(ecode) | bit0;
+                        break;
+                     case TEMPL_12_16:
+                        ecode2 = GET_WORD_INDEX_12_16_MAX(ecode) | bit0;
+                        break;
+                     default:
+                        ecode2 = 0; break;
+                     }
+#ifdef USE_HASH_TABLE                     
+                     hash_buf = (Uint1Ptr)&ecode2;
+                     CRC32(crc, hash_buf);
+                     ecode2 = (crc>>hash_shift) & hash_mask;
+#endif
+                     if (mb_lt->hashtable[ecode1] == 0 || 
+                         mb_lt->hashtable2[ecode2] == 0)
+                        lookup->num_unique_pos_added++;
+                     mb_lt->next_pos2[index] = mb_lt->hashtable2[ecode2];
+                     mb_lt->hashtable2[ecode2] = index;
+                  } else {
+                     if (mb_lt->hashtable[ecode1] == 0)
+                        lookup->num_unique_pos_added++;
+                  }
                   mb_lt->next_pos[index] = mb_lt->hashtable[ecode1];
                   mb_lt->hashtable[ecode1] = index;
                }
@@ -983,11 +1167,17 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    /* Now remove the hash entries that have too many positions */
    if (mb_lt->max_positions>0) {
       for (ecode=0; ecode<mb_lt->hashsize; ecode++) {
-	 Int4 pcount;
+	 Int4 pcount, pcount1=0;
 	 for (index=mb_lt->hashtable[ecode], pcount=0; 
 	      index>0; index=mb_lt->next_pos[index], pcount++);
-	 if (pcount>mb_lt->max_positions) {
+         if (use_two_templates) {
+            for (index=mb_lt->hashtable2[ecode], pcount1=0; 
+                 index>0; index=mb_lt->next_pos2[index], pcount1++);
+         }
+	 if ((pcount=MAX(pcount,pcount1))>mb_lt->max_positions) {
 	    mb_lt->hashtable[ecode] = 0;
+            if (use_two_templates)
+               mb_lt->hashtable2[ecode] = 0;
 	    ErrPostEx(SEV_WARNING, 0, 0, "%lx - %d", ecode, pcount);
 	    masked_word_count++;
 	 }
@@ -1033,10 +1223,15 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       mb_lt->num_stacks = num_stacks;
    } 
 
+#ifdef USE_HASH_TABLE
+   /* If hash table is used instead of index table, no need for extra reduction
+      of pv_array size */
+   pv_shift = 0;
+#else
    /* For 12-mer based lookup table need to make presense bit array much 
       smaller, so it stays in cache, even though this allows for collisions */
    pv_shift = (mb_lt->width < 3) ? 0 : 5;
-
+#endif
    pv_array_bts = PV_ARRAY_BTS + pv_shift;
 
    if (lookup->num_unique_pos_added < 
@@ -1046,7 +1241,8 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       pv_array = MemNew(pv_size*PV_ARRAY_BYTES);
 
       for (index=0; index<mb_lt->hashsize; index++) {
-         if (mb_lt->hashtable[index] != 0)
+         if (mb_lt->hashtable[index] != 0 ||
+             (use_two_templates && mb_lt->hashtable2[index] != 0))
             pv_array[index>>pv_array_bts] |= 
                (((PV_ARRAY_TYPE) 1)<<(index&PV_ARRAY_MASK));
       }
@@ -1067,6 +1263,8 @@ MegaBlastLookupTableDestruct(LookupTablePtr lookup)
       MemFree(lookup->mb_lt->hashtable);
    if (lookup->mb_lt->next_pos)
       MemFree(lookup->mb_lt->next_pos);
+   if (lookup->mb_lt->next_pos2)
+      MemFree(lookup->mb_lt->next_pos2);
    if (lookup->mb_lt->estack) {
       for (index=0; index<lookup->mb_lt->num_stacks; index++)
 	 MemFree(lookup->mb_lt->estack[index]);

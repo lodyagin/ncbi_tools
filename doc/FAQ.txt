@@ -15,14 +15,13 @@ A. The binaries of NCBI toolkit may be downloaded at:
 	CN3D:		ftp://ftp.ncbi.nih.gov/cn3d/
 
 Currently NCBI prepares the binaries for the following platforms:
-	IBM       -- AIX 4.3.3
-	DEC Alpha -- OSF1 V5.1
-	SGI       -- IRIX 6.4
-	SGI       -- IRIX 5.3
-	Sun/Sparc -- Solaris 2.6
+	Sun/Sparc -- Solaris 2.6 and 2.7
 	Intel x86 -- Solaris 2.7
-	Intel x86 -- Red Hat Linux release 5.2 with kernel 2.0.36
-	Intel x86 -- Microsoft NT or Windows 95 (32bit)
+	Intel x86 -- Linux with kernel 2.4.17 and glibc ver 2.2.4
+	Intel x86 -- Microsoft Windows 2000 (32bit)
+	IBM       -- AIX 4.3.3
+	DEC Alpha -- OSF1 V5.1 and V4.0
+	SGI       -- IRIX 6.2
 	Motorola 68000   -- MacOS
 	Motorola PowerPC -- MacOS
 
@@ -57,39 +56,40 @@ A. Read the file ftp://ftp.ncbi.nih.gov/toolbox/readme.unx
    The new binaries and libraries will be in ncbi/build subdirectory
 
 Q. May I build toolkit on Solaris/Intel or Solaris/Sparc using GNU C?
-A. Yes, just copy the file ./ncbi/platform/solaris-gcc.ncbi.mk
-   instead of ./ncbi/platform/solarisintel.ncbi.mk (for Solaris/Intel)
-   or ./ncbi/platform/solaris.ncbi.mk (for Solaris/Sparc).
+A. Yes, just set the environment variable CC to gcc prior to run of
+   ./ncbi/make/makedis.csh , like:
+	# in sh or bash
+	CC=gcc ./ncbi/make/makedis.csh - 2>&1 | tee out.makedis.txt
+	# in csh or tcsh
+	env CC=gcc ./ncbi/make/makedis.csh - |& tee out.makedis.txt
 
 Q. How can I build toolkit on Linux with Vibrant library?
-A. You should purchase Motif for Linux. For example look at:
-	http://www.redhat.com/online_orders.phtml?pid=RH2110
-As an alternative to Motif there is free clone which is called Lesstif
-which can be obtained at http://www.lesstif.org/
-We didn't check it work yet, so you can use Lesstif for your own risk.
-Besides that the X11R6 development toolkit should be installed.
+A. You should purchase Motif for Linux. 
+As an alternative to Motif there is a free clone which is called Lesstif
+which can be downloaded at http://www.lesstif.org/
+We didn't check this option yet, so you can use Lesstif for your own risk.
+Besides the Motif/Lesstif the X11R6 development toolkit should be installed.
+
+Q. On RedHat Linux 7.* I got the following error on compilation of toolkit:
+gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -O2 -c  -I../include objproj.c
+{standard input}: Assembler messages:
+{standard input}:2352: Error: immediate operand illegal with absolute jump
+{standard input}:2761: Error: immediate operand illegal with absolute jump
+make: *** [objproj.o] Error 1
+So how can I solve this problem?
+A. This is a bug in optimizier of gcc compiler which is instaled by default
+on Redhat Linux. You can either compile this file manually deleting the
+optimization flag:
+    cd ./ncbi/build
+    gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -c  -I../include objproj.c
+    cd ../..
+    ./make/makedis.csh 2>&1 | tee -a out.makedis.txt
+Or upgrade the gcc to latest version 3.0.4
 
 Q. How can I build toolkit on Linux without Vibrant library?
-A. To disable vibrant library you need to edit the files
-   ncbi/platform/linux.ncbi.mk and ncbi/make/makedis.csh
-   to delete all references to:
-
-	BLIB31=libvibnet.a
-	LIB20=libncbidesk.a
-	LIB28=libvibgif.a
-	LIB30=libncbicn3d.a
-	LIB4=libvibrant.a
-	VIBFLAG="$NCBI_VIBFLAG"
-	VIBLIBS="$NCBI_DISTVIBLIBS"
-
-  Besides that you should delete the references to Psequin, Nentrez, Cn3D
-  and powblast in ncbi/make/makedis.csh
-
-Q. Are there any ready binaries of NCBI toolkit for Debian Linux?
-A. Yes, they are. Try to look at
-   http://www.pasteur.fr/units/sis/debian/biology-en.html
-   and
-   http://www.debian.org/Packages/unstable/libs/vibrant6.html
+A. Yes, the ./ncbi/make/makedis.csh script tries to check for Motif presence
+and without motif/lesstif builds only ascii-based applications like
+standalone blast or idfetch.
 
 Q. Can I build threaded version of BLAST on IRIX6.X?
 A. Yes, you can if you upgrade your system and put the proper patches.

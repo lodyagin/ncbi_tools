@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.45 2001/11/15 15:35:13 kans Exp $
+/* $Id: cddutil.c,v 1.58 2002/04/25 14:30:19 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,52 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.45 $
+* $Revision: 1.58 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.58  2002/04/25 14:30:19  bauer
+* fixed CddFindMMDBIdInBioseq
+*
+* Revision 1.57  2002/04/22 16:37:31  bauer
+* added check for missing structure alignments
+*
+* Revision 1.56  2002/04/18 21:00:26  bauer
+* added check CddFeaturesAreConsistent
+*
+* Revision 1.55  2002/04/12 14:02:43  bauer
+* added update_date case to CddAssignDescr
+*
+* Revision 1.54  2002/04/11 14:34:25  bauer
+* added CddRemoveConsensus
+*
+* Revision 1.53  2002/03/28 15:55:00  bauer
+* fixed bug in CddFindBioseqInSeqEntry, thanks to Ben
+*
+* Revision 1.52  2002/02/20 22:27:28  bauer
+* utility functions for the CD-Server
+*
+* Revision 1.51  2002/02/12 23:00:46  bauer
+* added missing break in CddRelocateSeqLoc
+*
+* Revision 1.50  2002/02/06 19:35:37  bauer
+* some more CddGet.. functionality
+*
+* Revision 1.49  2002/02/05 23:15:40  bauer
+* added a few CddGet.. utility functions, changes to CddAddDescr allow to extend scrapbook line by line
+*
+* Revision 1.48  2002/01/28 14:11:29  bauer
+* add score to entrez neighbor lists
+*
+* Revision 1.47  2002/01/05 14:49:44  bauer
+* made SeqAlignDup a local function
+*
+* Revision 1.46  2002/01/04 19:46:56  bauer
+* added functions to interconvert PSSM-Ids and accessions
+*
 * Revision 1.45  2001/11/15 15:35:13  kans
 * changed strdup to StringSave for Mac
 *
@@ -288,7 +327,7 @@ CddTreePtr LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin)
 /*---------------------------------------------------------------------------*/
 void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
 {
-  ValNodePtr  vnp;
+  ValNodePtr  vnp, vnp2;
 
   vnp = ValNodeNew(NULL);
   vnp->choice = iWhat;
@@ -306,6 +345,7 @@ void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
       vnp->data.ptrvalue = (ValNodePtr) pThis;
       break;
     case CddDescr_create_date:
+    case CddDescr_update_date:
       vnp->data.ptrvalue = (DatePtr) pThis;
       break;
     case CddDescr_tax_source:
@@ -318,12 +358,271 @@ void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
       vnp->data.intvalue = (Int4) iIval;
       break;
     case CddDescr_scrapbook:
-      vnp->data.ptrvalue = (ValNodePtr) pThis;
+      vnp = ValNodeExtractList(&pcdd->description, CddDescr_scrapbook);
+      vnp2 = ValNodeCopyStr(NULL,0,(CharPtr)pThis);
+      if(vnp) {
+	if(vnp->next) ErrPostEx(SEV_WARNING,0,0,"Multiple scrapbooks");
+	ValNodeLink((ValNodePtr *)&vnp->data.ptrvalue, vnp2);
+      } else ValNodeAddPointer(&vnp, CddDescr_scrapbook, vnp2);
+      break;
     default:
       vnp->data.ptrvalue = pThis;
       break;
   }
   ValNodeLink(&(pcdd->description),vnp);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* remove an item from the CD description. Works for a limited set of types. */
+/* status and repeats are removed no matter what. For comments, references   */
+/* etc. the content of the description is compared to the input              */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddKillDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval) 
+{
+  ValNodePtr   vnp, vnpold = NULL, vnpthis = NULL, vnpbefore = NULL, pub;
+  
+  vnp = pcdd->description;
+  while (vnp) {
+    if (vnp->choice == iWhat) {
+      switch (iWhat) {
+        case CddDescr_comment:
+        case CddDescr_othername:
+        case CddDescr_category:
+        case CddDescr_source:
+          if (Nlm_StrCmp((CharPtr)pThis,(CharPtr)vnp->data.ptrvalue) == 0) {
+            if (!vnpthis) {
+	      vnpthis = vnp;
+	      vnpbefore = vnpold;
+            }
+	  }
+          break;
+	case CddDescr_status:
+	case CddDescr_repeats:
+          if (!vnpthis) {
+	    vnpthis = vnp;
+	    vnpbefore = vnpold;
+          }
+	  break;
+        case CddDescr_reference:
+	  pub = vnp->data.ptrvalue;
+	  if ((pThis && pThis == pub) || 
+	      (iIval>0 && pub->choice==PUB_PMid && pub->data.intvalue==iIval)) {
+	    if (!vnpthis) {
+	      vnpthis = vnp;
+	      vnpbefore = vnpold;
+	    }
+	  }
+        default:
+	  break;
+      }    
+    }
+    vnpold = vnp;
+    vnp = vnp->next;
+  }
+  if (vnpthis) {
+    if (vnpbefore) {
+      vnpbefore->next = vnpthis->next;    
+    } else {
+      pcdd->description = vnpthis->next;
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* series of functions to extract info from CDs                              */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Int4 LIBCALL CddGetVersion(CddPtr pcdd) 
+{
+  CddIdPtr    cid;
+  GlobalIdPtr pGid;
+
+  cid = pcdd->id; while (cid) {
+    if (cid->choice == CddId_gid) {
+      pGid = cid->data.ptrvalue;
+      return pGid->version;
+    }
+    cid = cid->next;
+  }
+  return 0;
+}
+
+OrgRefPtr LIBCALL CddGetOrgRef(CddPtr pcdd)
+{
+  CddDescrPtr   pcdsc;
+
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_tax_source) {
+      return (OrgRefPtr) pcdsc->data.ptrvalue;
+    }
+    pcdsc = pcdsc->next;
+  }
+  return NULL;
+}
+
+Int4 LIBCALL CddGetPssmId(CddPtr pcdd) 
+{
+  CddIdPtr cid;
+  
+  cid = pcdd->id; while (cid) {
+    if (cid->choice == CddId_uid) {
+      return cid->data.intvalue;
+    }
+    cid = cid->next;
+  }
+  return 0;
+}
+
+Int4 LIBCALL CddGetPmIds(CddPtr pcdd, Int4Ptr iPMids)
+{
+  Int4          count = 0;
+  CddDescrPtr   pcdsc;
+  ValNodePtr    pub;
+  Boolean       bRefOpen = FALSE;
+
+  if (iPMids) iPMids = MemNew(250*sizeof(Int4));
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_reference) {
+      pub = pcdsc->data.ptrvalue;
+      if (pub->choice == PUB_PMid) {
+        iPMids[count] = pub->data.intvalue;
+        count++;
+        if (count >= 250) return count;
+      }
+    }
+    pcdsc = pcdsc->next;
+  }
+  return count;
+}
+
+
+CharPtr LIBCALL CddGetDescr(CddPtr pcdd)
+{
+  CddDescrPtr   pcdsc;
+
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_comment) {
+      if (Nlm_StrCmp(pcdsc->data.ptrvalue,"linked to 3D-structure") != 0) {
+        return (CharPtr) pcdsc->data.ptrvalue;
+      }
+    }
+    pcdsc = pcdsc->next;
+  }
+  return NULL;
+}
+
+DatePtr LIBCALL CddGetCreateDate(CddPtr pcdd)
+{
+  CddDescrPtr pcdsc;
+
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_create_date) {
+      return (DatePtr) pcdsc->data.ptrvalue;
+    }
+    pcdsc = pcdsc->next;
+  }
+  return NULL;
+}
+
+DatePtr LIBCALL CddGetUpdateDate(CddPtr pcdd)
+{
+  DatePtr pcd = NULL, pcdthis;
+  CddDescrPtr pcdsc;
+
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_update_date) {
+      pcdthis = (DatePtr) pcdsc->data.ptrvalue;
+      if (!pcd) {
+	pcd = pcdthis; 
+      } else {
+	if (pcdthis->data[1] > pcd->data[1]) {
+	  pcd = pcdthis;
+	} else {
+	  if (pcdthis->data[2] > pcd->data[2]) {
+	    pcd = pcdthis;
+	  } else {
+	    if (pcdthis->data[3] > pcd->data[3]) pcd = pcdthis;
+	  }
+	}
+      }
+    }
+    pcdsc = pcdsc->next;
+  }
+  return pcd;
+}
+
+CharPtr LIBCALL CddGetSource(CddPtr pcdd)
+{
+  CddDescrPtr pcdsc;
+
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_source) {
+      return (CharPtr) pcdsc->data.ptrvalue;
+    }
+    pcdsc = pcdsc->next;
+  }
+  return NULL;
+}
+
+CharPtr LIBCALL CddGetSourceId(CddPtr pcdd)
+{
+  CddDescrPtr pcdsc;
+  GlobalIdPtr pGid;
+  ValNodePtr  vnp;
+
+  pcdsc = pcdd->description;
+  while (pcdsc) {
+    if (pcdsc->choice == CddDescr_source_id) {
+      vnp = pcdsc->data.ptrvalue;
+      if (vnp->choice == CddId_gid) {
+        pGid = vnp->data.ptrvalue;
+        return (CharPtr) pGid->accession;
+      }
+    }
+    pcdsc = pcdsc->next;
+  }
+  return NULL;
+}
+
+Int4 LIBCALL CddGetAlignmentLength(CddPtr pcdd)
+{
+  SeqAnnotPtr sap;
+  SeqAlignPtr salp;
+  Int4        iLength = 0;
+
+  sap = pcdd->seqannot;
+  if (sap) {
+    salp = (SeqAlignPtr) sap->data;
+    while (salp) {
+      iLength++;
+      salp = salp->next;
+    }
+  }
+  return iLength + 1;
+}
+
+ValNodePtr LIBCALL CddGetAnnotNames(CddPtr pcdd)
+{
+  AlignAnnotPtr   aap;
+  ValNodePtr    vnpHead = NULL;
+  ValNodePtr    vnp, thisid;
+ 
+  aap = pcdd->alignannot;
+  while (aap) {
+    vnp = ValNodeCopyStr(&(vnpHead),0,aap->description);
+    aap = aap->next;  
+  }
+  return (vnpHead);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -343,6 +642,88 @@ Int4 LIBCALL CddGetStatus(CddPtr pcdd)
     pCddesc = pCddesc->next;
   }
   return 0;
+}
+
+/*---------------------------------------------------------------------------*/
+/* find a particular descriptive string in a CD                              */
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddHasDescription(CddPtr pcdd, CharPtr pc)
+{
+  CddDescrPtr    pCddesc;
+  
+  if (!pcdd) return FALSE;
+  pCddesc = pcdd->description;
+  while (pCddesc) {
+    if (pCddesc->choice == CddDescr_comment) {
+      if (Nlm_StrCmp((CharPtr)pCddesc->data.ptrvalue,pc) == 0) return TRUE;
+    }
+    pCddesc = pCddesc->next;
+  }
+  return FALSE;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Is the alignment decorated with feature annotation?                       */
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddHasAnnotation(CddPtr pcdd)
+{
+  AlignAnnotPtr aap;
+  
+  aap = pcdd->alignannot;
+  if (aap) {
+    if (aap->description) return TRUE;
+  }
+  return FALSE;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Is the CD master a 3D Structure                                           */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddMasterIs3D(CddPtr pcdd)
+{
+  SeqAlignPtr     salp;
+  DenseDiagPtr    ddp;
+  SeqIdPtr        sip;
+
+  if (!pcdd) return FALSE;
+  if (!pcdd->seqannot) return FALSE;
+  salp = pcdd->seqannot->data;
+  ddp = salp->segs;
+  sip = ddp->id;
+  if (sip->choice == SEQID_PDB) return TRUE;
+  return FALSE;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* How many structure-related alignments in a CDD?                           */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Int4 LIBCALL CddCount3DAlignments(CddPtr pcdd) 
+{
+  Int4              n3dali = 0;
+  Boolean           bHasConsensus;
+  Boolean           bHas3DMaster;
+  SeqAlignPtr       salp;
+  DenseDiagPtr      ddp;
+  SeqIdPtr          sip;
+  
+  
+  bHasConsensus = CddHasConsensus(pcdd);
+  bHas3DMaster = CddMasterIs3D(pcdd);
+
+  if (!bHasConsensus && !bHas3DMaster) return(0);
+  salp = pcdd->seqannot->data;
+  while (salp) {
+    ddp = salp->segs;
+    sip = ddp->id->next;
+    if (sip->choice == SEQID_PDB) n3dali++;
+    salp = salp->next;
+  }
+  if (n3dali && bHasConsensus) n3dali--;
+  return (n3dali);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -367,6 +748,17 @@ Boolean LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp)
 /*---------------------------------------------------------------------------*/
 /* Check if Cdd has a consensus Sequence                                     */
 /*---------------------------------------------------------------------------*/
+Boolean static SipIsConsensus(SeqIdPtr sip)
+{
+  ObjectIdPtr   oidp;
+  
+  if (!sip) return (FALSE);
+  if (sip->choice != SEQID_LOCAL) return (FALSE);
+  oidp = sip->data.ptrvalue; if (!oidp) return(FALSE);
+  if (StringCmp(oidp->str,"consensus")==0) return (TRUE);
+  return(FALSE);
+}
+
 Boolean LIBCALL CddHasConsensus(CddPtr pcdd)
 {
   SeqIntPtr   sintp;
@@ -377,11 +769,7 @@ Boolean LIBCALL CddHasConsensus(CddPtr pcdd)
   sintp = (SeqIntPtr) pcdd->profile_range;
   if (!sintp) return (FALSE);
   sip = (SeqIdPtr) sintp->id;
-  if (!sip) return (FALSE);
-  if (sip->choice != SEQID_LOCAL) return (FALSE);
-  oidp = sip->data.ptrvalue; if (!oidp) return(FALSE);
-  if (StringCmp(oidp->str,"consensus")==0) return (TRUE);
-  return(FALSE);
+  return(SipIsConsensus(sip));
 }
 
 /*---------------------------------------------------------------------------*/
@@ -410,6 +798,210 @@ void LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn,
     }
   }
 }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* repeat detection - find repeated subsequences in a CD consensus Sequence  */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddCheckForRepeats(CddPtr pcdd, Int4 width, Int4 GapI, Int4 GapE,
+                                   Nlm_FloatHi rthresh, Boolean bOutput)
+{
+  CddRepeatPtr        pcdr;
+  BLAST_ScoreBlkPtr   sbp;
+  BioseqPtr           bsp;
+  Int4                len, winner = 1;
+  Int4                **iscore, repct = 0;
+  Int4                **fscore, wfac, bst, pnum, plen;
+  Int2                iStatus;
+  Int4                i, j, k, l, m, n, t1, t2, laststart;
+  SeqPortPtr          spp;
+  Uint1Ptr            buffer;
+  Boolean             done = FALSE;
+  Boolean             tbdone;
+  Nlm_FloatHi         cfac, wplaus = 0.0;
+  SeqLocPtr           slp, slpHead;
+  SeqIntPtr           sintp;
+  
+  typedef struct repstep {
+    Int4            score;
+    Int4            start;
+    Int4            npred;
+    Int4            lpred;
+    Int4            lremn;
+    Nlm_FloatHi     plaus;
+  } RepStep;
+
+  RepStep            rep[100];
+
+  if (!CddHasConsensus) return FALSE;
+  bsp = pcdd->trunc_master;
+  len = bsp->length;
+  sbp = BLAST_ScoreBlkNew(Seq_code_ncbistdaa,1);
+  sbp->read_in_matrix = TRUE;
+  sbp->protein_alphabet = TRUE;
+  sbp->posMatrix = NULL;
+  sbp->number_of_contexts = 1;
+  iStatus = BlastScoreBlkMatFill(sbp,"BLOSUM62");
+  
+  spp = SeqPortNew(bsp, 0, LAST_RESIDUE, Seq_strand_unknown,Seq_code_ncbistdaa);
+  buffer = MemNew((len)*sizeof(Uint1));
+  for (i=0; i<len; i++) buffer[i] = SeqPortGetResidue(spp);
+  spp = SeqPortFree(spp);
+
+  iscore = (Int4 **) MemNew(len * sizeof(Int4 *));
+  for (i=0;i<len;i++) iscore[i] = (Int4 *) MemNew(len * sizeof(Int4));
+  fscore = (Int4 **) MemNew(len * sizeof(Int4 *));
+  for (i=0;i<len;i++) fscore[i] = (Int4 *) MemNew(len * sizeof(Int4));
+
+  for (i=0;i<len;i++) {
+    t1 = buffer[i];
+    iscore[i][i] = sbp->matrix[t1][t1];
+    for (j=i+1;j<len;j++) {
+      t2 = buffer[j];
+      iscore[i][j] = sbp->matrix[t1][t2];
+      fscore[j][i] = 0;
+    }  
+  }
+
+  laststart = 0;
+  while (!done) {
+    for (i=0;i<len;i++) for (j=i;j<len;j++) fscore[i][j] = iscore[i][j];
+    for (i=len-2;i>=0;i--) {
+      for (j=len-2;j>=i;j--) {
+        bst = fscore[i+1][j+1];
+        for (k = i+2;k<i+2+width && k<len;k++) bst = MAX(bst,fscore[k][j+1]-GapI-GapE*(k-i-1));
+        for (l = j+2;l<j+2+width && l<len;l++) bst = MAX(bst,fscore[i+1][l]-GapI-GapE*(l-j-1));
+        bst = MAX(bst, 0);
+        fscore[i][j] += bst;
+      }
+    }
+
+    bst = 0; l = 0;
+    for (j=laststart;j<len;j++) if (fscore[0][j] >= bst) {
+      bst = fscore[0][j]; l = j;
+    }
+    if (bst <= 0.0) {
+      done = TRUE;
+      break;
+    }
+    laststart = l;
+/*    printf("Next best alignment scores %4d at %4d (of %4d: %5.1f%%)\n",bst,l,len, 100.0*l/len); */
+    rep[repct].start = l;
+    rep[repct].score = bst;
+    rep[repct].npred = 1;
+    rep[repct].plaus = 0.0;
+    rep[repct].lpred = len;
+    rep[repct].lremn = len - rep[repct].start;
+    if (repct > 0) {
+      rep[repct].lpred = (Int4) (0.5 + ((Nlm_FloatHi)   l / (Nlm_FloatHi) repct));
+      rep[repct].npred = (Int4) (0.5 + ((Nlm_FloatHi) len / (Nlm_FloatHi) rep[repct].lpred)); 
+    }
+    repct++;
+    i = 0; j = l;
+    tbdone = FALSE;
+    if (l >= len-1) {
+      tbdone = TRUE;
+      done = TRUE;
+    }
+    while (!tbdone) {
+      m = i+1; n = j+1;
+      bst = fscore[m][n];
+      for (k=i+2;k<i+2+width && k<len;k++) {
+        if (fscore[k][j+1]-GapI-GapE*(k-i-1) > bst) {
+	  bst = fscore[k][j+1]-GapI-GapE*(k-i-1);
+	  m = k; n = j+1;
+	}
+      }
+      for (l=j+2;l<j+2+width && l<len;l++) {
+        if (fscore[i+1][l]-GapI-GapE*(l-j-1) > bst) {
+	  bst = fscore[i+1][l]-GapI-GapE*(l-j-1);
+	  m = i+1; n = l;
+	}
+      }
+      iscore[i][j] = -10000;
+      if (bst < 0) tbdone = TRUE;
+      i = m; j = n;
+      if (i >= len-1 || j >= len-1) {
+	tbdone = TRUE;
+	iscore[i][j] = -10000;
+      }
+    }
+  }
+  
+  for (i=0;i<len;i++) MemFree(fscore[i]);
+  MemFree(fscore);
+  for (i=0;i<len;i++) MemFree(iscore[i]);
+  MemFree(iscore);
+  rep[0].plaus = (Nlm_FloatHi) (rep[0].score - rep[1].score) / (Nlm_FloatHi) rep[0].score;
+  if (rep[0].plaus > rthresh) rep[0].plaus = 1.0;
+  winner = 1; wplaus = rep[0].plaus;
+
+  for (i=1;i<repct;i++) {
+    pnum = i+1;
+    plen = (Int4) (((Nlm_FloatHi)len/(Nlm_FloatHi)pnum)+.5);
+    cfac = 0.0;
+    for (j=i;j>0;j--) {
+      cfac += (Nlm_FloatHi)(abs(rep[j].start-(j*plen)))/(Nlm_FloatHi)plen;
+    }
+    cfac /= (Nlm_FloatHi) i;
+    rep[i].plaus = 1.0 - cfac;
+
+    if (rep[i].plaus > wplaus) {
+      wplaus = rep[i].plaus;
+      winner = pnum;
+    }
+  }
+  for (i=0;i<winner;i++) {
+    if (rep[i].lpred < 3 || (i>0 && rep[i].score < 17)) {
+      winner = 1; break;
+    }
+  }
+
+  if (bOutput) {
+    for (i=0;i<repct;i++) {
+      printf("%s %3d %4d %8.5f %4d %8.5f %2d %3d %8.5f\n",pcdd->name,
+             i,rep[i].score,(Nlm_FloatHi)rep[i].score/(Nlm_FloatHi)rep[0].score,
+	     rep[i].start, (Nlm_FloatHi)rep[i].start/(Nlm_FloatHi)len,
+	     rep[i].npred,rep[i].lpred, rep[i].plaus);
+    }
+    printf("%s: predicted %d repeats\n",pcdd->name,winner);
+  }
+
+  CddKillDescr(pcdd,NULL,CddDescr_repeats,0);
+  if (winner > 1) {
+    pcdr = CddRepeatNew(); pcdr->avglen = 0;  
+    slp = NULL; slpHead = NULL;
+    for (i=0;i<winner;i++) {
+      k = rep[i].start;
+      if (i < (winner-1)) l = rep[i+1].start - 1; else l = len - 1;
+      pcdr->avglen += l-k+1;
+      slp = (SeqLocPtr) ValNodeNew(NULL);
+      slp->choice = SEQLOC_INT;
+      sintp = SeqIntNew();
+      sintp->from = k;
+      sintp->to = l;
+      sintp->id = SeqIdDup(pcdd->profile_range->id);
+      slp->data.ptrvalue = sintp;
+      if (!slpHead) slpHead = slp; else ValNodeLink(&(slpHead),slp);
+    }
+    pcdr->avglen /= winner;
+    pcdr->count = winner;
+    pcdr->location = (SeqLocPtr) ValNodeNew(NULL);
+    pcdr->location->choice = SEQLOC_PACKED_INT;
+    pcdr->location->data.ptrvalue = slpHead;
+    CddAssignDescr(pcdd,pcdr,CddDescr_repeats,0);
+  }
+  
+  sbp = BLAST_ScoreBlkDestruct(sbp);
+  MemFree(buffer);
+  if (winner > 1) return TRUE;
+  return (FALSE);
+}
+
+
+
+
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -966,7 +1558,7 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
     spp = SeqPortFree(spp);
     while (ddp) {
       for (c=ddp->starts[0];c<ddp->starts[0]+ddp->len;c++) {
-        if (buffer[c] >= 0 && buffer[c] < alphabetSize)
+        if (buffer[c] >= 0 && buffer[c] < (Uint1) alphabetSize)
           typefreq[c][buffer[c]] += 1.0;
       }
       ddp = ddp->next;
@@ -984,7 +1576,7 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
     while (ddp) {
       for (c=ddp->starts[1];c<ddp->starts[1]+ddp->len;c++) {
         i = ddp->starts[0]+c-ddp->starts[1];
-        if (buffer[c] >= 0 && buffer[c] < alphabetSize)
+        if (buffer[c] >= 0 && buffer[c] < (Uint1) alphabetSize)
 	  typefreq[i][buffer[c]] += 1.0;
       }
       ddp = ddp->next;
@@ -1778,10 +2370,10 @@ BioseqPtr LIBCALL CddFindBioseqInSeqEntry(SeqEntryPtr sep, SeqIdPtr sip)
 
   while (sepThis) {
     if (IS_Bioseq(sepThis)) {
-      bsp = sep->data.ptrvalue;
+      bsp = sepThis->data.ptrvalue;
       if (CddSameSip(bsp->id, sip)) return(bsp);
     } else if (IS_Bioseq_set(sepThis)) {
-      bssp = sep->data.ptrvalue;
+      bssp = sepThis->data.ptrvalue;
       bsp = CddFindBioseqInSeqEntry(bssp->seq_set,sip);
       if (CddSameSip(bsp->id, sip)) return(bsp);
     }
@@ -2172,16 +2764,32 @@ static Boolean HitYet(Int4Ptr retlist, Int4 index, Int4 i)
 /* return a list of indices for the n most dissimilar sequences in a CD      */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-Int4Ptr CddMostDiverse(TrianglePtr pTri, Int4 length)
+Int4Ptr CddMostDiverse(TrianglePtr pTri, Int4 length, Int4 maxdiv)
 {
   Int4Ptr     retlist;
   Int4        index, winner, i, j, ncomp;
   FloatHi     sumcomp, mincomp;
   FloatHi     **iMat;
   ScorePtr    psc;
+  ValNodePtr  vnp;
   
   if (!pTri) return NULL;
   if (length >= pTri->nelements) return NULL;
+  if (length > maxdiv) length = maxdiv;
+  retlist = MemNew(length * sizeof(Int4));
+  retlist[0] = 0;
+
+  if (pTri->div_ranks) {
+    vnp = pTri->div_ranks; i = 0;
+    while (vnp) {
+      retlist[i] = vnp->data.intvalue;
+      i++; 
+      if (i >= length) break;
+      vnp = vnp->next;
+    }
+    return(retlist);
+  }
+  
   iMat = (FloatHi **) calloc(pTri->nelements,sizeof (FloatHi *));
   for (i=0;i<pTri->nelements;i++) {
     iMat[i] = (FloatHi *) calloc(pTri->nelements,sizeof(FloatHi));
@@ -2195,8 +2803,6 @@ Int4Ptr CddMostDiverse(TrianglePtr pTri, Int4 length)
     }
   }
   
-  retlist = MemNew(length * sizeof(Int4));
-  retlist[0] = 0;
   index = 0; for (index = 1; index < length; index++) {
     mincomp = 100.0, winner = -1;
     for (i=1;i<pTri->nelements;i++) {
@@ -2551,6 +3157,149 @@ ScorePtr CddCalculateQuerySim(CddPtr pcdd, SeqAlignPtr salp)
    return(pscHead);
 }
 
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* cloned from salpedit.c and salpacc.c                                      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SeqAnnotPtr LIBCALL CddSeqAnnotForSeqAlign (SeqAlignPtr salp)
+{
+  SeqAnnotPtr sap;
+
+  if (salp==NULL)
+     return NULL;
+  sap = SeqAnnotNew ();
+  sap->type = 2;
+  sap->data = (Pointer) salp;
+  return sap;
+}
+
+SeqAlignPtr LIBCALL CddSeqAlignDup (SeqAlignPtr salp)
+{
+  SeqAnnotPtr sap, 
+              sap2;
+  SeqAlignPtr salp2 = NULL,
+              next; 
+
+  next = salp->next;
+  salp->next = NULL;
+  sap = CddSeqAnnotForSeqAlign (salp);
+  sap2 = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
+  if (sap2!=NULL) {
+     salp2 = (SeqAlignPtr)sap2->data;
+     sap2->data = NULL;
+     SeqAnnotFree (sap2);
+  }
+  if (next != NULL)
+     salp->next = next;
+  sap->data = NULL;
+  SeqAnnotFree (sap);
+  return salp2;
+}
+
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Duplicate a whole Sequence Alignment (i.e. a linked list of Seqaligns     */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+
+SeqAlignPtr LIBCALL SeqAlignSetDup(SeqAlignPtr salp)
+{
+  SeqAlignPtr   salpHead = NULL;
+  SeqAlignPtr   salpTail = NULL;
+  SeqAlignPtr   salpThis;
+
+  while (salp) {
+    salpThis = (SeqAlignPtr) CddSeqAlignDup(salp);
+    if (salpTail) {
+      salpTail->next = salpThis;
+      salpTail = salpThis;
+      salpThis->next = NULL;
+    } else {
+      salpHead = salpThis;
+      salpTail = salpThis;
+      salpThis->next = NULL;
+    }
+    salp = salp->next;
+  }
+  return (salpHead);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* fill internal gaps in a sequence alignment to prepare it for PSSM calc.   */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddDegapSeqAlign(SeqAlignPtr salp)
+{
+  DenseDiagPtr    ddp;
+  Int4            iM, iS, iN, iC;
+  Boolean         bFirst, bInit = TRUE;
+  BioseqPtr       bsp;
+  SeqIdPtr        sip;
+  Int4            mLen, sLen;
+  
+  while (salp) {
+    ddp = salp->segs;
+    if (bInit) {
+      sip = ddp->id;
+      bsp = BioseqLockById(sip);
+      mLen = bsp->length;
+      BioseqUnlock(bsp);
+      bInit = FALSE;
+    }
+    sip = ddp->id->next;
+    bsp = BioseqLockById(sip);
+    sLen = bsp->length;
+    BioseqUnlock(bsp);
+    bFirst = TRUE;
+    while (ddp) {
+      if (bFirst) { /* extend first aligned block to N-terminus */
+        iM = ddp->starts[0];
+	iS = ddp->starts[1];
+	if (iM > iS) iM = iS;
+	ddp->starts[0] -= iM;
+	ddp->starts[1] -= iM;
+	ddp->len += iM;
+        bFirst = FALSE;
+      }
+      if (ddp->next) {
+        iM = ddp->next->starts[0] - (ddp->starts[0]+ddp->len);
+        iS = ddp->next->starts[1] - (ddp->starts[1]+ddp->len);
+        if (iM > iS) iM = iS;
+        if (iM > 0) {
+          if (iM == 1) {
+	    iN = 1; iC = 0;
+          } else {
+	    if ((iM % 2) == 0) {
+	      iN = iC = iM / 2;
+	    } else {
+	      iC = iM / 2; iN = iC + 1;
+	    }
+          }
+	  ASSERT(iN+iC == iM);
+	  ddp->len += iN;
+	  ddp->next->starts[0] -= iC;
+	  ddp->next->starts[1] -= iC;
+	  ddp->next->len += iC;
+        }
+      } else { /* extend last aligned block to C-terminus */
+        iM = mLen - (ddp->starts[0]+ddp->len);      
+        iS = sLen - (ddp->starts[1]+ddp->len);      
+        if (iM > iS) iM = iS;
+	ddp->len += iM;
+      }
+      ddp = ddp->next;
+    }
+    salp = salp->next;
+  }
+}
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* Calculate a weighted 50/50 consensus sequence and make it new master      */
@@ -2717,7 +3466,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
     ASSERT (k>=0 && k<maxextlen);
     pCEACell[i][k].seqpos = seqpos;
     pCEACell[i][k].aatype = buffer[seqpos];
-    if (pCEACell[i][k].aatype < 0 || pCEACell[i][k].aatype > 26) {
+    if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
       pCEACell[i][k].aatype = 26;
     }
   }
@@ -2744,7 +3493,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
         ASSERT (k>=0 && k<maxextlen);
 	pCEACell[i][k].seqpos = ddp->starts[1] + j - ddp->starts[0];
 	pCEACell[i][k].aatype = buffer[pCEACell[i][k].seqpos];
-        if (pCEACell[i][k].aatype < 0 || pCEACell[i][k].aatype > 26) {
+        if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
           pCEACell[i][k].aatype = 26;
         }
       }
@@ -2760,7 +3509,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
             ASSERT (k>=0 && k<maxextlen);
 	    pCEACell[i][k].seqpos = j;
 	    pCEACell[i][k].aatype = buffer[j];
-            if (pCEACell[i][k].aatype < 0 || pCEACell[i][k].aatype > 26) {
+            if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
               pCEACell[i][k].aatype = 26;
             }
 	  }
@@ -2769,7 +3518,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
             ASSERT (k>=0 && k<maxextlen);
 	    pCEACell[i][k].seqpos = j;
 	    pCEACell[i][k].aatype = buffer[j];
-            if (pCEACell[i][k].aatype < 0 || pCEACell[i][k].aatype > 26) {
+            if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
               pCEACell[i][k].aatype = 26;
             }
 	  }	
@@ -2816,7 +3565,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
     if (pCEACol[k].occpos >= maxpos) {
       ContWeight++;
       for (i=0;i<nalign;i++) {
-        if (pCEACell[i][k].seqpos != -1 && pCEACell[i][k].aatype < 26) {
+        if (pCEACell[i][k].seqpos != -1 && pCEACell[i][k].aatype < (Uint1) 26) {
           pCAW[i].nposaligned++;
 	  if (pCEACol[k].typecount[pCEACell[i][k].aatype] > 0) {
   	    pCAW[i].weight += 1.0 / (pCEACol[k].ntypes * 
@@ -2845,7 +3594,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
   ConsensusLen = 0;
   for (k=0;k<maxextlen;k++) {
     for (i=0;i<nalign;i++) {
-      if (pCEACell[i][k].seqpos != -1 && pCEACell[i][k].aatype < 26) {
+      if (pCEACell[i][k].seqpos != -1 && pCEACell[i][k].aatype < (Uint1) 26) {
         pCEACol[k].w_occpos += pCAW[i].weight;
 	pCEACol[k].wtypefreq[pCEACell[i][k].aatype]+=pCAW[i].weight;
       }
@@ -3441,6 +4190,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   Char                    mtrxFileName[PATH_MAX];
   FILE                   *fp;
   Boolean                 bHasConsensus;
+  Boolean                 bWriteOut = FALSE;
   Nlm_FloatHi            *AInf, SumAInf = 0.0;
   char*                   Input;    /* order of residue-types from CD's      */
   char*                   Output;   /*order of res-types needed for threading*/
@@ -3451,6 +4201,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   cAccession = CddGetAccession(pcdd);
   if (pcdd) {
     bHasConsensus = CddHasConsensus(pcdd);
+    bWriteOut = CddHasDescription(pcdd,"Write out matrix");
   } else {                                        /* determine from seqalign */
     bHasConsensus = SeqAlignHasConsensus(salp);
   }
@@ -3465,7 +4216,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
     else if (SumAInf > 39) iPseudo = 2;
     else iPseudo = 1;
     MemFree(AInf);
-    if (pcdd) printf("%s AInf:%6.1f PseudoCt: %d\n",cAccession,SumAInf, iPseudo);
+    if (pcdd && bWriteOut) printf("%s AInf:%6.1f PseudoCt: %d\n",cAccession,SumAInf, iPseudo);
   }
   if (NULL == matrix_name) {
     static CharPtr defaultMatrix = "BLOSUM62";
@@ -3517,7 +4268,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /*---------------------------------------------------------------------------*/
 /* Construct name for checkpoint file and write out (if in a CD context)     */
 /*---------------------------------------------------------------------------*/
-  if (pcdd) {
+  if (pcdd && bWriteOut) {
     strcpy(ckptFileName,cAccession);
     strcat(ckptFileName,CKPTEXT);
     if (NULL != ckptFileName)
@@ -3542,11 +4293,11 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /* also, write out the PSSM as an ASCII-formatted MATRIX file, for use with  */
 /* copymat                                                                   */
 /*---------------------------------------------------------------------------*/
-    strcpy(mtrxFileName,cAccession);
+/*    strcpy(mtrxFileName,cAccession);
     strcat(mtrxFileName,MTRXEXT);
     CddtakeMatrixCheckpoint(compactSearch,posSearch,search->sbp,mtrxFileName,
                             NULL,FALSE,1.0);
-
+*/
     sctp = SeqCodeTableFind(Seq_code_ncbistdaa);
     LetterHead = NULL;
     for (a=0;a<compactSearch->alphabetSize;a++) {
@@ -3617,7 +4368,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
     MemFree(Coverage);
   }
 
-  if (bspOut && pcdd) {
+  if (bspOut && pcdd && bWriteOut) {
     strcpy(cseqFileName,cAccession);
     strcat(cseqFileName,CSEQEXT);
     fp = FileOpen(cseqFileName, "w");
@@ -3757,7 +4508,122 @@ CddPtr LIBCALL CddFreeCarefully(CddPtr pcdd)
 }
 
 /*---------------------------------------------------------------------------*/
+/* Translate a SeqLoc into an Integer list of residue numbers                */
 /*---------------------------------------------------------------------------*/
+Int4Ptr LIBCALL CddGetFeatLocList(SeqLocPtr location, Int4 *nres)
+{
+  SeqLocPtr     slp;
+  SeqIntPtr     sintp;
+  PackSeqPntPtr pspp;
+  SeqPntPtr     spp;
+  Int4Ptr       presnum;
+  Int4          i;
+  Int4          nSubLoc;
+  Int4Ptr       pSubLoc;
+
+  presnum = MemNew(100 * sizeof(Int4));
+  *nres = 0;
+  if (!location) return;
+  switch (location->choice) {
+    case SEQLOC_NULL:
+    case SEQLOC_FEAT:
+    case SEQLOC_BOND:
+    case SEQLOC_EMPTY:
+    case SEQLOC_WHOLE:
+      break;
+    case SEQLOC_INT:
+      sintp = (SeqIntPtr) location->data.ptrvalue;
+      for (i=sintp->from;i<=sintp->to;i++) {
+        presnum[*nres] = i;
+	(*nres)++; if (*nres >= 100) presnum = Nlm_MemMore(presnum,((*nres)+1)*sizeof(Int4));
+      }
+      break;
+    case SEQLOC_PNT:
+      spp = location->data.ptrvalue;
+      presnum[*nres] = spp->point;
+	(*nres)++; if (*nres >= 100) presnum = Nlm_MemMore(presnum,((*nres)+1)*sizeof(Int4));
+      break;
+    case SEQLOC_PACKED_PNT:
+      pspp = location->data.ptrvalue;
+      while (pspp) {
+	for (i=0;i<pspp->used;i++) {
+	  presnum[*nres] = pspp->pnts[i];
+	  (*nres)++; if (*nres >= 100) presnum = Nlm_MemMore(presnum,((*nres)+1)*sizeof(Int4));
+	}
+        pspp = pspp->next;
+      }
+      break;
+    case SEQLOC_PACKED_INT:
+    case SEQLOC_MIX:
+    case SEQLOC_EQUIV:
+      slp = (SeqLocPtr)location->data.ptrvalue;
+      while (slp) {
+        pSubLoc = CddGetFeatLocList(slp, &nSubLoc);
+        for (i=0;i<nSubLoc;i++) {
+	  presnum[*nres] = pSubLoc[i];
+	  (*nres)++; if (*nres >= 100) presnum = Nlm_MemMore(presnum,((*nres)+1)*sizeof(Int4));
+	}	
+        slp = slp->next;
+      }      
+    default:
+      break;
+  }
+  return(presnum);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static Boolean CddSeqLocInExpAlign(SeqLocPtr location, CddExpAlignPtr eap)
+{
+  SeqIntPtr     sintp;
+  SeqPntPtr     spp;
+  PackSeqPntPtr pspp;
+  SeqLocPtr     slp;
+  Int4          i;
+
+  if (!location) return;
+  switch (location->choice) {
+    case SEQLOC_NULL:
+    case SEQLOC_FEAT:
+    case SEQLOC_BOND:
+    case SEQLOC_EMPTY:
+    case SEQLOC_WHOLE:
+      break;
+    case SEQLOC_INT:
+      sintp = (SeqIntPtr) location->data.ptrvalue;
+      for (i=sintp->from;i<=sintp->to;i++) {
+        if (eap->adata[i] < 0) return FALSE;
+      }
+      break;
+    case SEQLOC_PNT:
+      spp = location->data.ptrvalue;
+      if (eap->adata[spp->point] < 0) return FALSE;
+      break;
+    case SEQLOC_PACKED_PNT:
+      pspp = location->data.ptrvalue;
+      while (pspp) {
+	for (i=0;i<pspp->used;i++) {
+          if (eap->adata[pspp->pnts[i]] < 0) return FALSE;
+	}
+        pspp = pspp->next;
+      }
+      break;
+    case SEQLOC_PACKED_INT:
+    case SEQLOC_MIX:
+    case SEQLOC_EQUIV:
+      slp = (SeqLocPtr)location->data.ptrvalue;
+      while (slp) {
+        if (!CddSeqLocInExpAlign(slp,eap)) return FALSE;
+        slp = slp->next;
+      }      
+    default:
+      break;
+  }
+  return(TRUE);
+
+}
+
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static void CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali)
@@ -3778,6 +4644,7 @@ static void CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali)
     case SEQLOC_WHOLE:
       SeqIdFree(location->data.ptrvalue);
       location->data.ptrvalue = (SeqIdPtr) SeqIdDup(sip);
+      break;
     case SEQLOC_INT:
       sintp = (SeqIntPtr) location->data.ptrvalue;
       SeqIdFree(sintp->id);
@@ -4132,4 +4999,588 @@ Int2 LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify,
     ValNodeFree(vhead);
 
     return 0;
+}
+
+/*---------------------------------------------------------------------------*/
+/* fix character string for export into XML                                  */
+/*---------------------------------------------------------------------------*/
+static CharPtr CddFixForXML(CharPtr pc)
+{
+  CharPtr pcNew;
+  Int4    i = 0, j = 0;
+  
+  pcNew = MemNew(sizeof(Char) * (Nlm_StrLen(pc) + 100));
+  
+  while (pc[i] != '\0') {
+    if (pc[i] == '>') {
+      pcNew[j] = '&';
+      pcNew[j+1] = 'g';
+      pcNew[j+2] = 't';
+      pcNew[j+3] = ';';    
+      j += 4;
+    } else if (pc[i] == '<') {
+      pcNew[j] = '&';
+      pcNew[j+1] = 'l';
+      pcNew[j+2] = 't';
+      pcNew[j+3] = ';';    
+      j += 4;
+    } else if (pc[i] == '&') {
+      pcNew[j] = '&';
+      pcNew[j+1] = 'a';
+      pcNew[j+2] = 'm';
+      pcNew[j+3] = 'p';    
+      pcNew[j+4] = ';';    
+      j += 5;
+    } else {
+      pcNew[j] = pc[i];
+      j++;    
+    }
+    i++;
+  }
+  MemFree(pc);
+  pcNew[j] = '\0';
+  pcNew = Nlm_Realloc(pcNew, sizeof(Char) * Nlm_StrLen(pcNew));
+  return(pcNew);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* dump out pubmed links for a CD to be used in Entrez neighboring           */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddDumpPMLinks(CddPtr pcdd, FILE *FP)
+{
+  CddIdPtr     cid;
+  Int4         gi = 0, pmid = 0;
+  ValNodePtr   pub, pdescr;
+
+  cid = (CddIdPtr) pcdd->id;
+  while (cid) {
+    switch (cid->choice) {
+      case CddId_uid:
+        gi = cid->data.intvalue;
+        break;
+      default:
+        break;
+    }
+    cid = cid->next;
+  }
+  if (gi > 0) {
+    pdescr = pcdd->description;
+    while (pdescr) {
+      switch (pdescr->choice) {
+        case CddDescr_reference:
+          pub = pdescr->data.ptrvalue;
+	  if (pub->choice == PUB_PMid) {
+            pmid = pub->data.intvalue;
+	    if (pmid > 0) {
+	      fprintf(FP,"%d\t%d\t0\n",gi,pmid);
+	    }
+	  }
+          break;
+        default:
+          break;
+      }
+      pdescr = pdescr->next;
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* dump out taxonomy links for a CD to be used in Entrez neighboring         */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddDumpTaxLinks(CddPtr pcdd, FILE *FP)
+{
+  CddIdPtr     cid;
+  Int4         txid = 0, gi = 0;
+  DbtagPtr     dbtp;
+  ObjectIdPtr  oidp;
+  ValNodePtr   pdescr, vnp;
+  OrgRefPtr    pOrgRef;
+
+  cid = (CddIdPtr) pcdd->id;
+  while (cid) {
+    switch (cid->choice) {
+      case CddId_uid:
+        gi = cid->data.intvalue;
+        break;
+      default:
+        break;
+    }
+    cid = cid->next;
+  }
+  if (gi > 0) {
+    pdescr = pcdd->description;
+    while (pdescr) {
+      switch (pdescr->choice) {
+        case CddDescr_tax_source:
+          pOrgRef = (OrgRefPtr) pdescr->data.ptrvalue;
+          vnp = pOrgRef->db;
+	  while (vnp) {
+	    dbtp = (DbtagPtr) vnp->data.ptrvalue;
+	    if (dbtp && Nlm_StrCmp(dbtp->db,"taxon") == 0) {
+	      oidp = dbtp->tag;
+	      if (oidp && oidp->id >= 0) {
+                fprintf(FP,"%d\t%d\t0\n",gi,oidp->id);	      
+	      } 
+	    }
+	    vnp = vnp->next;
+	  }
+          break;
+        default:
+          break;
+      }
+      pdescr = pdescr->next;
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* dump out contents of a CD used for Entrez-indexing in pseudo-XML          */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP)
+{
+  ValNodePtr    pdescr, vnp, cid;
+  CharPtr       cShortName  = NULL, cAbstract = NULL, cPubDate  = NULL;
+  CharPtr       cEntrezDate = NULL, cFilter   = NULL, cOrganism = NULL;
+  CharPtr       cAccession  = NULL, cDatabase = NULL;
+  Int4          gi = 0;
+  Boolean       bHaveAbstract = FALSE, bAllocDatabase = FALSE;
+  GlobalIdPtr   pGid;
+  OrgRefPtr     pOrgRef;
+  DatePtr       pDate;
+
+  cEntrezDate = MemNew(11 * sizeof(Char));
+  cid = (CddIdPtr) pcdd->id;
+  while (cid) {
+    switch (cid->choice) {
+      case CddId_uid:
+        gi = cid->data.intvalue;
+        break;
+      case CddId_gid:
+        pGid = (GlobalIdPtr) cid->data.ptrvalue;
+	cAccession = pGid->accession;      
+        break;
+      default:
+        break;
+    }
+    cid = cid->next;
+  }
+  pdescr = pcdd->description;
+  while (pdescr) {
+    switch (pdescr->choice) {
+      case CddDescr_comment:
+        if (!bHaveAbstract) {
+	  cAbstract = (CharPtr) pdescr->data.ptrvalue;
+	  bHaveAbstract = TRUE;
+	}
+        break;
+      case CddDescr_source:
+        cDatabase = (CharPtr) pdescr->data.ptrvalue;
+      case CddDescr_tax_source:
+        pOrgRef = (OrgRefPtr) pdescr->data.ptrvalue;
+	cOrganism = pOrgRef->taxname; 
+        break;
+      case CddDescr_create_date:
+      case CddDescr_update_date:
+        cPubDate = MemNew(11 * sizeof(Char));
+        pDate = (DatePtr) pdescr->data.ptrvalue;
+	if (pDate->data[2] > 0 && pDate->data[3] > 0)
+	  sprintf(cPubDate,"%d/%d/%d",pDate->data[2],pDate->data[3],pDate->data[1]+1900);
+        if (pDate->data[2] > 0 && pDate->data[3] == 0)
+          sprintf(cPubDate,"%d/%d",pDate->data[2],pDate->data[1]+1900);
+        if (pDate->data[2] == 0 && pDate->data[3] == 0)
+          sprintf(cPubDate,"%d",pDate->data[1]+1900);
+        break;
+      default:
+        break;
+    }
+    pdescr = pdescr->next;
+  }
+  cShortName = (CharPtr) pcdd->name;
+  if (cAccession) {
+    if (Nlm_StrNCmp(cAccession,"cd",2) == 0) {
+      cDatabase = StringSave("Cdd");
+      bAllocDatabase = TRUE;
+    }
+  }
+  if (!cPubDate) {
+    cPubDate = MemNew(11 * sizeof(Char));
+    pDate = (DatePtr) DateCurr();
+    if (pDate->data[2] > 0 && pDate->data[3] > 0)
+      sprintf(cPubDate,"%d/%d/%d",pDate->data[2],pDate->data[3],pDate->data[1]+1900);
+    if (pDate->data[2] > 0 && pDate->data[3] == 0)
+      sprintf(cPubDate,"%d/%d",pDate->data[2],pDate->data[1]+1900);
+    if (pDate->data[2] == 0 && pDate->data[3] == 0)
+      sprintf(cPubDate,"%d",pDate->data[1]+1900);
+  }
+  pDate = (DatePtr) DateCurr();
+  if (pDate->data[2] > 0 && pDate->data[3] > 0)
+    sprintf(cEntrezDate,"%d/%d/%d",pDate->data[2],pDate->data[3],pDate->data[1]+1900);
+  if (pDate->data[2] > 0 && pDate->data[3] == 0)
+    sprintf(cEntrezDate,"%d/%d",pDate->data[2],pDate->data[1]+1900);
+  if (pDate->data[2] == 0 && pDate->data[3] == 0)
+    sprintf(cEntrezDate,"%d",pDate->data[1]+1900);
+
+  cAbstract = CddFixForXML(cAbstract);
+  cShortName = CddFixForXML(cShortName);
+
+  fprintf(FP,"    <IdxDocument>\n");  
+  if (gi > 0) 
+    fprintf(FP,"        <IdxUid>%d</IdxUid>\n",gi);
+  fprintf(FP,"        <IdxKeyFields>\n");
+  if (cPubDate)
+    fprintf(FP,"            <PubDate>%s</PubDate>\n",cPubDate);  
+  if (cEntrezDate)
+    fprintf(FP,"            <EntrezDate>%s</EntrezDate>\n",cEntrezDate);  
+  fprintf(FP,"        </IdxKeyFields>\n");
+  fprintf(FP,"        <IdxDisplayFields>\n");
+  if (cAccession)
+    fprintf(FP,"            <Accession>%s</Accession>\n",cAccession);
+  if (cShortName)
+    fprintf(FP,"            <Title>%s</Title>\n",cShortName);
+  if (cAbstract) 
+    fprintf(FP,"            <Abstract>%s</Abstract>\n",cAbstract);
+  fprintf(FP,"        </IdxDisplayFields>\n");
+  fprintf(FP,"        <IdxSearchFields>\n");
+  if (gi > 0) 
+    fprintf(FP,"            <Uid>%d</Uid>\n",gi);
+  if (cFilter)
+    fprintf(FP,"            <Filter>%s</Filter>\n",cFilter);
+  if (cAccession)
+    fprintf(FP,"            <Accession>%s</Accession>\n",cAccession);
+  if (cDatabase) 
+    fprintf(FP,"            <Database>%s</Database>\n",cDatabase);
+  if (cShortName)
+    fprintf(FP,"            <Title>%s</Title>\n",cShortName);
+  if (cAbstract) 
+    fprintf(FP,"            <Text>%s</Text>\n",cAbstract);
+  if (cOrganism)
+    fprintf(FP,"            <Organism>%s</Organism>\n",cOrganism);
+  if (cPubDate)
+    fprintf(FP,"            <PubDate>%s</PubDate>\n",cPubDate);  
+  if (cEntrezDate)
+    fprintf(FP,"            <EntrezDate>%s</EntrezDate>\n",cEntrezDate);  
+  fprintf(FP,"        </IdxSearchFields>\n");
+  fprintf(FP,"    </IdxDocument>\n");  
+
+  if (bAllocDatabase) MemFree(cDatabase);
+  MemFree(cPubDate);
+  MemFree(cEntrezDate);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* create and link a CddIdxData structure                                    */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+CddIdxDataPtr LIBCALL CddIdxDataNew(CharPtr acc, Int4 uid)
+{
+
+  CddIdxDataPtr     cidp;
+
+  cidp = MemNew(sizeof(CddIdxData));
+
+  if (acc) {
+    cidp->cCDDid  = acc;
+    cidp->iPssmId = uid;
+  }
+  cidp->next = NULL;
+  return(cidp);
+}
+
+CddIdxDataPtr LIBCALL CddIdxDataLink(CddIdxDataPtr PNTR head, CddIdxDataPtr cidp)
+{
+  CddIdxDataPtr  cidpThis;
+
+  cidpThis = *head;
+  if (cidpThis) {
+    while (cidpThis->next != NULL) cidpThis = cidpThis->next;
+    cidpThis->next = cidp;
+  } else {
+    *head = cidp;
+  }
+  return *head;
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* read in the cdd.idx file to return data associating accessions with uids  */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+CddIdxDataPtr LIBCALL CddReadIdx(CharPtr CDDidx)
+{
+  CddIdxDataPtr cidp, cidpHead = NULL;
+  Char          pcBuf[2048];
+  CharPtr       pcTest;
+  CharPtr       acc;
+  Int4          uid;
+  FILE         *fp;
+  
+  fp = FileOpen(CDDidx,"r");
+  if (!fp) CddSevError("could not open cdd.idx!");
+  do {
+    pcBuf[0]='\0';
+    pcTest = fgets(pcBuf, (size_t)2048, fp);
+    if (pcTest) if (pcTest[0] != ' ') {
+      uid = (Int4) atoi(Nlm_StrTok(pcTest," "));
+      acc = (CharPtr) StringSave(Nlm_StrTok(NULL," "));
+      if (acc) {
+        acc[Nlm_StrLen(acc) - 1] = '\0';
+        cidp = CddIdxDataNew(acc,uid);
+        CddIdxDataLink(&(cidpHead),cidp);
+      }
+    }
+  } while (pcTest);
+  FileClose(fp);
+  return(cidpHead);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* retrieve a CDD accession via the PSSMid or vice versa                     */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddAccFromPssmId(Int4 iPssmId, CharPtr cAcc, CharPtr CDDidx)
+{
+  CddIdxDataPtr cidp;
+
+  cidp = CddReadIdx(CDDidx);
+  if (!cidp) CddSevError("cdd.idx read failed!");
+  while (cidp) {
+    if (iPssmId == cidp->iPssmId) {
+      Nlm_StrCpy(cAcc, cidp->cCDDid);
+      break;
+    }
+    cidp = cidp->next;
+  }
+}
+
+void LIBCALL CddPssmIdFromAcc(Int4 *iPssmId, CharPtr cAcc, CharPtr CDDidx)
+{
+  CddIdxDataPtr cidp;
+
+  cidp = CddReadIdx(CDDidx);
+  if (!cidp) CddSevError("cdd.idx read failed!");
+  while (cidp) {
+    if (Nlm_StrCmp(cAcc, cidp->cCDDid) == 0) {
+      *iPssmId = cidp->iPssmId;
+      break;
+    }
+    cidp = cidp->next;
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* truncate a string right at the position of the first puncutation mark     */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddTruncStringAtFirstPunct(CharPtr pChar)
+{
+  Int4   i;
+  
+  for (i=0;i<Nlm_StrLen(pChar);i++) {
+    if (pChar[i] == ',' ||
+	pChar[i] == ';' ||
+	pChar[i] == '.') {
+      pChar[i] = '\0'; break;	
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Remove a Consensus from a CD                                              */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddRemoveConsensus(CddPtr pcdd)
+{
+  SeqIdPtr     sip;
+  BioseqPtr    bsp;
+  SeqAlignPtr  salp, salpnew;
+  DenseDiagPtr ddp;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  sepThis, sepHead = NULL, sepTail = NULL;
+
+  if (!CddHasConsensus(pcdd)) return FALSE;
+  salp = (SeqAlignPtr)  pcdd->seqannot->data;
+  ddp  = (DenseDiagPtr) salp->segs;
+  sip  = (SeqIdPtr)     ddp->id->next;
+  bssp = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
+  if (pcdd->alignannot) {
+    CddTransferAlignAnnot(pcdd->alignannot, sip, salp, bssp);
+  }
+  salpnew = CddReindexSeqAlign(salp,sip,bssp);
+  pcdd->seqannot->data = salpnew->next;
+  sepThis = bssp->seq_set;
+  while (sepThis) {
+    bsp = (BioseqPtr) sepThis->data.ptrvalue;
+    if (!SipIsConsensus(bsp->id)) {
+      if (!sepHead) sepHead = sepThis;
+      if (sepTail) sepTail->next = sepThis;
+      sepTail = sepThis;
+    }
+    sepThis = sepThis->next;
+  }
+  sepTail->next = NULL;
+  bssp->seq_set = sepHead;
+  pcdd->sequences->data.ptrvalue = bssp;
+  pcdd->profile_range = NULL;
+  pcdd->trunc_master = NULL;
+  pcdd->posfreq = NULL;
+  pcdd->scoremat = NULL;
+  pcdd->distance = NULL;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Check if a CD has annotation that is inconsistent with the alignment      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddFeaturesAreConsistent(CddPtr pcdd)
+{
+  SeqAlignPtr    salp;
+  CddExpAlignPtr eap;
+  BioseqSetPtr   bssp;
+  AlignAnnotPtr  aap;
+  SeqLocPtr      slp;
+  
+  if (!pcdd->alignannot) return TRUE;
+  bssp = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
+  salp = (SeqAlignPtr) pcdd->seqannot->data;
+  if (!salp) return TRUE;
+  eap = SeqAlignToCddExpAlign(salp,bssp->seq_set);
+  aap = pcdd->alignannot;
+  while (aap) {
+    slp = aap->location;
+    if (!CddSeqLocInExpAlign(slp,eap)) return FALSE;
+    aap = aap->next;
+  }
+  CddExpAlignFree(eap);
+  return TRUE;
+  
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* find a MMDB-Identifier in a Bioseq                                        */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SeqAnnotPtr LIBCALL CddFindMMDBIdInBioseq(BioseqPtr bsp, Int4 *iMMDBid)
+{
+  SeqAnnotPtr annot, prevannot = NULL;
+  SeqIdPtr    sip;
+  DbtagPtr    dbtp;
+  ObjectIdPtr oidp;
+
+  *iMMDBid = 0;
+  annot = bsp->annot;
+  while(annot) {
+    if (annot->type == 4) {
+      sip = annot->data;
+      while (sip) {
+        if (sip->choice == SEQID_GENERAL) {
+          dbtp = sip->data.ptrvalue;
+	  if (Nlm_StrCmp(dbtp->db,"mmdb") == 0) {
+            oidp = dbtp->tag;
+	    *iMMDBid = oidp->id;
+	    return(prevannot);
+	  }
+        }
+        sip = sip->next;
+      }
+    }
+    if (annot->next) prevannot = annot;
+    annot = annot->next;
+  }
+  return (NULL);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Check if a CD has 3D superposition information for all aligned chains     */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL CddHas3DSuperpos(CddPtr pcdd)
+{
+  BioseqSetPtr          bssp;
+  BiostrucAnnotSetPtr   basp        = NULL;
+  SeqAlignPtr           salp;
+  DenseDiagPtr          ddp;
+  SeqIdPtr              sip1, sip2;
+  Int4Ptr               pMMDBid;
+  Int4                  i, nStruct  = 0;
+  BioseqPtr             bsp;
+  BiostrucFeatureSetPtr bfsp;
+  BiostrucFeaturePtr    bfp;
+  ValNodePtr            location, vnp;
+  ChemGraphAlignmentPtr cgap;
+  Int4                  thisslave;
+
+  pMMDBid = MemNew(250 * sizeof(Int4));
+  basp = pcdd->features;
+  if (!basp) return FALSE;
+  bssp = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
+/*---------------------------------------------------------------------------*/
+/* create a list of MMDB-Id pairs which need to be checked                   */
+/*---------------------------------------------------------------------------*/
+  salp = pcdd->seqannot->data;
+  while (salp) {
+    ddp = salp->segs;
+    sip1 = ddp->id;
+	  sip2 = ddp->id->next;
+    if (sip1->choice == SEQID_PDB) {
+		  if (nStruct == 0) {
+        bsp = CddFindSip(sip1,bssp->seq_set);
+        CddFindMMDBIdInBioseq(bsp,&pMMDBid[nStruct]);
+        nStruct++;
+      }
+    }
+    if (sip2->choice == SEQID_PDB) {
+      bsp = CddFindSip(sip2,bssp->seq_set);
+      CddFindMMDBIdInBioseq(bsp,&pMMDBid[nStruct]);
+      nStruct++;
+    }
+    salp = salp->next;
+  }
+/*---------------------------------------------------------------------------*/
+/* now walk down the biostruc annot set and remove all pairs encountered     */
+/*---------------------------------------------------------------------------*/
+  bfsp = basp->features;
+  while (bfsp) {
+    bfp = bfsp->features;
+    while (bfp) {
+      location = bfp->Location_location;
+      if (location->choice == Location_location_alignment) {
+        cgap = location->data.ptrvalue;
+	vnp = cgap->biostruc_ids;
+        thisslave = vnp->next->data.intvalue;
+        for (i=1;i<nStruct;i++) {
+	  if (thisslave == pMMDBid[i]) {
+            pMMDBid[i] = 0; break;  
+	  }
+	}
+      }
+      bfp = bfp->next;    
+    }
+    bfsp = bfsp->next;  
+  }
+
+/*---------------------------------------------------------------------------*/
+/* at this point check if any pair is left (i.e. any mmdb-id except master)  */
+/*---------------------------------------------------------------------------*/
+  for (i=1;i<nStruct;i++) {
+    if (pMMDBid[i]) {
+      MemFree(pMMDBid); return(FALSE);
+    }
+  }
+  MemFree(pMMDBid); return TRUE;
 }

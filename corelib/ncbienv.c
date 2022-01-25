@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.26  2002/03/28 13:29:08  kans
+* checks for OS_UNIX_DARWIN (EN)
+*
 * Revision 6.25  2001/08/02 14:44:10  vakatov
 * [OSF1]  NLM_XOPEN_SOURCE_500:: Kludge-fix for the weak-minded native
 * preprocessor
@@ -718,7 +721,7 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
 #endif /* OS_UNIX */
 
 
-#ifdef OS_MAC
+#if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
 /*****************************************************************************
  *
  *   Nlm_OpenConfigFile (file, writeMode, create)
@@ -845,7 +848,7 @@ Nlm_OpenConfigFile(const Nlm_Char* file,
     }
   return fp;
 }
-#endif /* OS_MAC */
+#endif /* defined(OS_MAC) && !defined(OS_UNIX_DARWIN) */
 
 #ifdef OS_VMS
 /*****************************************************************************
@@ -1785,7 +1788,7 @@ static int    targc = 0;
 static char **targv = NULL;
 
 
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && !defined(OS_UNIX_DARWIN)
 static FSSpec       apFileSpec;
 static Str255       apName;
 static Handle       apParam;
@@ -1840,7 +1843,7 @@ static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
     }
   }
 }
-#endif /* WIN_MAC */
+#endif /* defined(WIN_MAC) && !defined(OS_UNIX_DARWIN) */
 
 
 #if defined(OS_MSWIN) || defined(OS_VMS)

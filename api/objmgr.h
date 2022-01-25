@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.32  2001/12/26 20:54:14  kans
+* added defines for OM_OPT_RECORD_SUPPRESSED and OM_OPT_RECORD_DEAD
+*
 * Revision 6.31  2001/11/19 15:26:19  kans
 * added ObjMgrDeleteAllInRecord, still need to bail in ObjMgrDelete if bulkIndexFree, then call from BioseqFree and BioseqSetFree
 *
@@ -699,8 +702,11 @@ NLM_EXTERN Boolean LIBCALL ObjMgrUnlock PROTO((void));
 *      to that entity.
 *
 *****************************************************************************/
-#define OM_OPT_FREE_IF_NO_VIEW 1  /* free entity if no more UserData
-                                            structures are attached to it */
+#define OM_OPT_FREE_IF_NO_VIEW   1  /* free entity if no more UserData
+                                       structures are attached to it */
+#define OM_OPT_RECORD_SUPPRESSED 2  /* removed from distribution, still
+                                       available for retrieval */
+#define OM_OPT_RECORD_DEAD       4
 
 /*****************************************************************************
 *

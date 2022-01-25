@@ -1,4 +1,4 @@
-/* $Id: xmlblast.c,v 6.18 2001/05/01 20:54:32 madden Exp $ */
+/* $Id: xmlblast.c,v 6.21 2002/04/23 20:48:24 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,21 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.18 $
+* $Revision: 6.21 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.21  2002/04/23 20:48:24  madden
+* Fix hsp_count for ungapped case
+*
+* Revision 6.20  2002/03/08 21:34:57  madden
+* If no title for Bioseq use "No definition line found"
+*
+* Revision 6.19  2002/01/15 21:56:38  madden
+* Fixes from Jed Wing (Turbogenomics) for ungapped runs
+*
 * Revision 6.18  2001/05/01 20:54:32  madden
 * Set glb_matrix in BXMLSeqAlignToHits if not already set
 *
@@ -103,6 +112,7 @@ static Int4Ptr PNTR glb_matrix;
 
 Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length, Boolean is_aa, Int4Ptr PNTR matrix)
 {
+    SeqIdPtr m_id, t_id;
     SeqInt si;
     SeqLoc sl;
     Int4 i;
@@ -125,7 +135,8 @@ Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length, Bo
     
     /* SeqLoc for query sequence */
     
-    si.id = SeqIdDup(ddp->id);
+    m_id = SeqIdDup(ddp->id);
+    si.id = m_id;
     si.from = hsp->query_from;
     si.to = hsp->query_to;
     si.strand = (ddp->strands == NULL) ? 0 : ddp->strands[0];
@@ -135,7 +146,8 @@ Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length, Bo
     
     /* SeqLoc for the subject */
     
-    si.id = ddp->id->next;
+    t_id = SeqIdDup(ddp->id->next);
+    si.id = t_id;
     si.from = hsp->hit_from;
     si.to = hsp->hit_to;
     si.strand = (ddp->strands == NULL) ? 0 : ddp->strands[1];
@@ -171,7 +183,8 @@ Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length, Bo
         }
     }
 
-    SeqIdFree(si.id);
+    SeqIdFree(t_id);
+    SeqIdFree(m_id);
     SeqPortFree(m_spp);
     SeqPortFree(t_spp);
     
@@ -692,7 +705,10 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
         
         is_aa = (bsp->mol == Seq_mol_aa);
            
-        hitp->def = StringSave(BioseqGetTitle(bsp));
+	if (BioseqGetTitle(bsp))
+        	hitp->def = StringSave(BioseqGetTitle(bsp));
+	else
+        	hitp->def = StringSave("No definition line found");
           
         SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
         hitp->id = StringSave(buffer);
@@ -725,9 +741,9 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
                 if(hspp == NULL)
                     break;
                 
+                hspp->num = hsp_count;
+                hsp_count++;
                 if(!ungapped) {  /* Only one chain for gapped */
-                    hspp->num = hsp_count;
-                    hsp_count++;
                     break;
                 }
                 chain++;
@@ -755,6 +771,7 @@ IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign,
     IterationPtr iterp;
     TxDfDbInfoPtr dbinfo=NULL;
     BLAST_KarlinBlkPtr ka_params_gap=NULL;
+    BLAST_KarlinBlkPtr ka_params_ungap=NULL;
     ValNodePtr vnp;
     
     iterp = IterationNew();
@@ -774,6 +791,9 @@ IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign,
             case TXKABLK_GAP:
                 ka_params_gap = vnp->data.ptrvalue;
                 break;
+            case TXKABLK_NOGAP:
+                ka_params_ungap = vnp->data.ptrvalue;
+                break;
             case EFF_SEARCH_SPACE:
                 iterp->stat->eff_space = vnp->data.realvalue;
                 break;
@@ -787,11 +807,19 @@ IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign,
             iterp->stat->db_len = dbinfo->total_length;
         }
         
-        if(ka_params_gap != NULL) {
-            iterp->stat->lambda = ka_params_gap->Lambda;
-            iterp->stat->kappa = ka_params_gap->K;
-            iterp->stat->entropy = ka_params_gap->H;
-        }
+        if(ungapped) {
+            if(ka_params_ungap != NULL) {
+                iterp->stat->lambda = ka_params_ungap->Lambda;
+                iterp->stat->kappa = ka_params_ungap->K;
+                iterp->stat->entropy = ka_params_ungap->H;
+            }
+        } else {
+            if(ka_params_gap != NULL) {
+                iterp->stat->lambda = ka_params_gap->Lambda;
+                iterp->stat->kappa = ka_params_gap->K;
+                iterp->stat->entropy = ka_params_gap->H;
+            }
+         }
     }
     
     iterp->message = StringSave(message);

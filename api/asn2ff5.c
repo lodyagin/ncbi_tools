@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -45,6 +45,12 @@
 /*************************************
 *
  * $Log: asn2ff5.c,v $
+ * Revision 6.13  2002/01/29 12:37:21  kans
+ * restored year for unpublished records to minimize QA diffs
+ *
+ * Revision 6.12  2002/01/10 15:19:16  kans
+ * suppress year in unpublished citgen - this is new policy, and suppresses diffs against asn2gb
+ *
  * Revision 6.11  2001/06/25 22:39:05  kans
  * format_patent puts patent seqid in GenPept format
  *
@@ -1913,6 +1919,13 @@ static CharPtr fmt_gen_2 (Boolean embl_format, ValNodePtr the_pub,
 
   	if (year[0] != '\0') 
   	{
+  		/* this removes the year from unpublished records
+  		if (unp == NULL) {
+  			temp = StringMove (temp," (");
+  			temp = StringMove (temp, year);
+  			temp = StringMove (temp,")");
+  		}
+  		*/
   		temp = StringMove (temp," (");
   		temp = StringMove (temp, year);
   		temp = StringMove (temp,")");

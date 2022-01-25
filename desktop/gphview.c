@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.45 $
+* $Revision: 6.54 $
 *
 * File Description:
 *
@@ -990,10 +990,18 @@ static void PopulateGraphic (BioseqViewPtr bvp)
   Int4           vwr_x;
   Int4           vwr_y;
   Int2           vwr_align;
+  SeqViewProcsPtr  svpp;
 
   if (bvp == NULL) return;
   sep = SeqMgrGetSeqEntryForData (bvp->bsp);
   entityID = ObjMgrGetEntityIDForChoice (sep);
+
+  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
+  if (svpp != NULL && svpp->lockFarComponents) {
+    sep = GetTopSeqEntryForEntityID (entityID);
+    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, TRUE, FALSE);
+  }
+
   sep = GetBestTopParentForData (entityID, bvp->bsp);
   if (! bvp->hasTargetControl) {
     PopulateSimpleGraphic (bvp); /* Nentrez should do this until more work is done */
@@ -3445,7 +3453,7 @@ BioseqPageData sumPageData = {
 };
 
 BioseqPageData gphPageData = {
-  "Graphic", TRUE, TRUE, TRUE, FALSE, -1,
+  "OldGraphic", TRUE, TRUE, TRUE, FALSE, -1,
   PopulateGraphic, ShowGraphical, SelectGraphical,
   CopyGraphicalToClipboard, PrintGraphical,
   NULL, GifGraphical, ResizeGraphical, NULL
@@ -3471,3 +3479,606 @@ BioseqPageData dskPageData = {
   CopyGraphicalToClipboard, PrintGraphical,
   NULL, NULL, ResizeDesktop, NULL
 };
+
+/* new graphical viewer - sequin integration */
+
+#include <asn2graphicp.h>
+
+static void Asn2GphSelectRegion (VieweR viewer, SegmenT segment, PrimitivE primitive,
+                              SeqLocPtr region, Uint2 entityID)
+
+{
+  BioseqPtr  bsp;
+  RecT       d;
+  ViewPData  extra;
+  RecT       r;
+  RecT       s;
+  SegPPtr    seg;
+  WindoW     tempPort;
+  BoxInfo    pLimits;
+
+  if (viewer == NULL || segment == NULL || primitive == NULL || region == NULL) return;
+  seg = (SegPPtr) segment;
+  if (seg->base.code != SEGMENT && seg->base.code != PICTURE) return;
+  if (! seg->seg.visible) return;
+  if (Visible (viewer) && AllParentsVisible (viewer)) {
+    GetPanelExtra ((PaneL) viewer, &extra);
+    TryGetPrimitiveLimits ((BasePPtr) primitive, extra.scale.scaleX,
+                           extra.scale.scaleY, &pLimits);
+    bsp = GetBioseqGivenSeqLoc (region, entityID);
+    if (bsp == NULL) return;
+    if (ABS (pLimits.left - pLimits.right) < bsp->length) return;
+    pLimits.left = SeqLocStart (region);
+    pLimits.right = SeqLocStop (region);
+    if (! BoxInViewport (&r, &(pLimits), &(extra.scale))) return;
+    InsetRect (&r, 0, -3);
+    if (ABS (r.left - r.right) < 2) {
+      InsetRect (&r, -1, 0);
+    }
+    ObjectRect (viewer, &s);
+    InsetRect (&s, 2, 2);
+    SectRect (&r, &s, &d);
+    tempPort = SavePort (viewer);
+    Select (viewer);
+    Dotted ();
+    FrameRect (&d);
+    Solid ();
+    RestorePort (tempPort);
+  }
+}
+
+static Boolean Asn2GphDrawSelectionPrim (SegmenT seg, PrimitivE prim, Uint2 segID,
+                                  Uint2 primID, Uint2 primCt, VoidPtr userdata)
+
+{
+  Uint2         entityID;
+  Uint2         itemID;
+  Uint2         itemtype;
+  SelStructPtr  sel;
+  SelectPtr     sp;
+
+  sp = (SelectPtr) userdata;
+  GetPrimitiveIDs (prim, &entityID, &itemID, &itemtype, NULL);
+  for (sel = sp->sel; sel != NULL; sel = sel->next) {
+    if (entityID == sel->entityID &&
+        itemID == sel->itemID &&
+        itemtype == sel->itemtype &&
+        sel->region != NULL) {
+      Asn2GphSelectRegion (sp->vwr, seg, prim, sel->region, entityID);
+    }
+  }
+  return TRUE;
+}
+
+static void Asn2GphDrawSelectionRange (VieweR viewer, SegmenT segment)
+
+{
+  Boolean       okay;
+  SelectData    sd;
+  SelStructPtr  sel;
+
+  sd.vwr = viewer;
+  sd.sel = ObjMgrGetSelected ();
+  sd.entityID = 0;
+  sd.itemID = 0;
+  sd.itemtype = 0;
+  sd.region = NULL;
+  okay = FALSE;
+  for (sel = sd.sel; sel != NULL; sel = sel->next) {
+    if (sel->itemtype == OBJ_BIOSEQ && sel->region != NULL) {
+      okay = TRUE;
+    }
+  }
+  if (okay) {
+    ExploreSegment (segment, (Pointer) &sd, Asn2GphDrawSelectionPrim);
+  }
+}
+
+static void CopyAsn2GphGraphicToClipboard (BioseqViewPtr bvp)
+{
+  if (bvp == NULL || bvp->vwr == NULL) return;
+  CopyViewer (bvp->vwr);
+}
+
+static void PrintAsn2GphGraphic (BioseqViewPtr bvp)
+
+{
+#ifdef WIN_MOTIF
+  if (bvp == NULL || bvp->vwr == NULL) return;
+  Message (MSG_OK, "Printing of graphics under MOTIF is not supported at this time.");
+#else
+  MsgAnswer ans;
+  if (bvp == NULL || bvp->vwr == NULL) return;
+  ans = Message (MSG_YN, "Do you want to print just the visible area?");
+  if (ans == ANS_YES) {
+    PrintViewer (bvp->vwr);
+  } else {
+    PrintAllViewer (bvp->vwr);
+  }
+#endif
+}
+
+static Boolean SelectAsn2GphPrim (
+  SegmenT seg,
+  PrimitivE prim,
+  Uint2 segID,
+  Uint2 primID,
+  Uint2 primCt,
+  VoidPtr userdata
+)
+
+{
+  Uint2      entityID;
+  Uint2      itemID;
+  Uint2      itemtype;
+  SelectPtr  sp;
+
+  sp = (SelectPtr) userdata;
+  GetPrimitiveIDs (prim, &entityID, &itemID, &itemtype, NULL);
+  if (entityID == sp->entityID &&
+      itemID == sp->itemID &&
+      itemtype == sp->itemtype) {
+    HighlightPrimitive (sp->vwr, seg, prim, FRAME_PRIMITIVE);
+    /*
+    HighlightSegment (sp->vwr, seg, FRAME_SEGMENT);
+    */
+  }
+  return TRUE;
+}
+
+static Boolean DeselectAsn2GphPrim (
+  SegmenT seg,
+  PrimitivE prim,
+  Uint2 segID,
+  Uint2 primID,
+  Uint2 primCt,
+  VoidPtr userdata
+)
+
+{
+  Uint2      entityID;
+  Uint2      itemID;
+  Uint2      itemtype;
+  SelectPtr  sp;
+
+  sp = (SelectPtr) userdata;
+  GetPrimitiveIDs (prim, &entityID, &itemID, &itemtype, NULL);
+  if (entityID == sp->entityID &&
+      itemID == sp->itemID &&
+      itemtype == sp->itemtype) {
+    HighlightPrimitive (sp->vwr, seg, prim, PLAIN_PRIMITIVE);
+    /*
+    HighlightSegment (sp->vwr, seg, PLAIN_SEGMENT);
+    */
+  }
+  return TRUE;
+}
+
+static void SelectAsn2GphView (
+  BioseqViewPtr bvp,
+  Uint2 selentityID,
+  Uint2 selitemID,
+  Uint2 selitemtype,
+  SeqLocPtr region,
+  Boolean select,
+  Boolean scrollto
+)
+
+{
+  SelectData  sd;
+
+  if (bvp == NULL) return;
+  if (! bvp->highlightSelections) return;
+  sd.vwr = bvp->vwr;
+  sd.sel = ObjMgrGetSelected ();
+  sd.entityID = selentityID;
+  sd.itemID = selitemID;
+  sd.itemtype = selitemtype;
+  sd.region = region;
+  if (select) {
+    ExploreSegment (bvp->pict, (Pointer) &sd, SelectAsn2GphPrim);
+  } else {
+    ExploreSegment (bvp->pict, (Pointer) &sd, DeselectAsn2GphPrim);
+  }
+}
+
+static Boolean InitSelectAsn2GphPrim (
+  SegmenT seg,
+  PrimitivE prim,
+  Uint2 segID,
+  Uint2 primID,
+  Uint2 primCt,
+  VoidPtr userdata
+)
+
+{
+  Uint2         entityID;
+  Uint2         itemID;
+  Uint2         itemtype;
+  SelStructPtr  sel;
+  SelectPtr     sp;
+
+  sp = (SelectPtr) userdata;
+  GetPrimitiveIDs (prim, &entityID, &itemID, &itemtype, NULL);
+  for (sel = sp->sel; sel != NULL; sel = sel->next) {
+    if (entityID == sel->entityID &&
+        itemID == sel->itemID &&
+        itemtype == sel->itemtype) {
+      HighlightPrimitive (sp->vwr, seg, prim, FRAME_PRIMITIVE);
+    }
+  }
+  return TRUE;
+}
+
+static void InitSelectAsn2GphView (BioseqViewPtr bvp)
+
+{
+  SelectData  sd;
+
+  if (bvp == NULL) return;
+  if (! bvp->highlightSelections) return;
+  sd.vwr = bvp->vwr;
+  sd.sel = ObjMgrGetSelected ();
+  sd.entityID = 0;
+  sd.itemID = 0;
+  sd.itemtype = 0;
+  sd.region = NULL;
+  ExploreSegment (bvp->pict, (Pointer) &sd, InitSelectAsn2GphPrim);
+}
+
+static void ClickAsn2GphGraphic (
+  VieweR vwr,
+  SegmenT seg,
+  PoinT pt
+)
+
+{
+  BioseqViewPtr  bvp;
+
+  bvp = (BioseqViewPtr) GetObjectExtra (vwr);
+  if (bvp == NULL) return;
+  bvp->wasDoubleClick = dblClick;
+  bvp->wasShiftKey = shftKey;
+  bvp->old_rect_shown = FALSE;
+  if (! dblClick) {
+    bvp->pnt_start = pt;
+  }
+  bvp->pnt_stop = pt;
+}
+
+static void ReleaseAsn2GphGraphic (
+  VieweR vwr,
+  SegmenT seg,
+  PoinT pt
+)
+
+{
+  BioseqViewPtr  bvp;
+  Uint2          entityID;
+  Uint2          itemID;
+  Uint2          itemtype;
+  SeqEntryPtr    sep;
+  PrimitivE      thatPrim;
+  PrimitivE      thisPrim;
+  SegmenT        smallestSeg;
+
+  bvp = (BioseqViewPtr) GetObjectExtra (vwr);
+  if (bvp == NULL) {
+    ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    return;
+  }
+
+  smallestSeg = FindSegPrim (vwr, pt, NULL, NULL, &thisPrim);
+  if (smallestSeg == NULL || thisPrim == NULL) {
+    ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    return;
+  }
+
+  GetPrimitiveIDs (thisPrim, &entityID, &itemID, &itemtype, NULL);
+
+  if (entityID == 0 && itemID == 0 && (itemtype == OBJ_SEQFEAT || itemtype == 0)) {
+    ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    return;
+  }
+  if (bvp->wasDoubleClick) {
+
+    seg = FindSegPrim (vwr, bvp->pnt_start, NULL, NULL, &thatPrim);
+    if (seg == smallestSeg && thisPrim == thatPrim) {
+
+      sep = GetTopSeqEntryForEntityID (entityID);
+      if (bvp->launchSubviewers) {
+        WatchCursor ();
+        Update ();
+        LaunchNewBioseqViewer (bvp->bsp, entityID, itemID, itemtype);
+        ArrowCursor ();
+        Update ();
+        return;
+      } else if (LaunchViewerNotEditor (bvp, sep, entityID, itemID, itemtype)) {
+        WatchCursor ();
+        Update ();
+        LaunchNewBioseqViewer (bvp->bsp, entityID, itemID, itemtype);
+        ArrowCursor ();
+        Update ();
+        return;
+      } else if (bvp->launchEditors) {
+        WatchCursor ();
+        Update ();
+        GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID,
+                          itemtype, 0, 0, itemtype, 0);
+        ArrowCursor ();
+        Update ();
+      }
+    }
+  }
+  if (! bvp->sendSelectMessages) return;
+  if (bvp->wasShiftKey) {
+    ObjMgrAlsoSelect (entityID, itemID, itemtype, 0, NULL);
+  } else {
+    ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
+  }
+}
+
+
+typedef struct multiBioseqDrawState {
+  Int4 ceiling;
+  SegmenT topLevelSegment;
+  FilterPtr FP;
+  AppearancePtr AP;
+  LayoutAlgorithm overrideLayout;
+  Int4 scale;
+} MultiBioseqDrawState, PNTR MultiBioseqDrawStatePtr;
+
+static void VisitAndDrawBioseqs (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  MultiBioseqDrawStatePtr state;
+  state = userdata;
+  if (state == NULL) return;
+  CreateGraphicViewFromBsp (bsp, NULL, state->scale, &state->ceiling,
+                            state->topLevelSegment, state->AP,
+                            state->FP, state->overrideLayout);
+  state->ceiling -= 25;
+}
+
+/*
+#define TEST_SEQLOC_LIMIT
+static float START_FRACTION = 0.3;
+static float STOP_FRACTION = 0.6;
+*/
+
+static void PopulateAsn2GphGraphic (
+  BioseqViewPtr bvp
+)
+
+{
+  BioseqPtr    bsp;
+  Uint2        entityID;
+  Uint2        i;
+  Int4         len;
+  Int4         max;
+  Int4         min;
+
+  SeqEntryPtr  oldscope = NULL;
+  RecT         r;
+  Int4         scaleX;
+
+  SeqEntryPtr  sep;
+  Char         str[32];
+  Int4         vwr_x;
+  Int4         vwr_y;
+  Int2         vwr_align;
+
+  CharPtr PNTR nameList;
+  CharPtr      appearanceName;
+  CharPtr      filterName;
+  CharPtr      layoutName;
+  ViewerConfigsPtr  myVCP;
+
+  MultiBioseqDrawState drawState;
+
+  SeqViewProcsPtr  svpp;
+
+  if (bvp == NULL) return;
+
+  WatchCursor ();
+
+  vwr_x = INT4_MIN;
+  vwr_y = INT4_MAX;
+  vwr_align = UPPER_LEFT;
+  if (bvp->moveToOldPos) {
+    if (bvp->pict != NULL) {
+      get_viewer_position (bvp->vwr, &(vwr_x), &(vwr_y));
+      vwr_align = MIDDLE_CENTER;
+    }
+    bvp->moveToOldPos = FALSE;
+  }
+
+  Reset (bvp->vwr);
+  bvp->pict = DeletePicture (bvp->pict);
+  Update ();
+
+  bsp = bvp->bsp;
+  if (bsp == NULL) {
+    ArrowCursor ();
+    return;
+  }
+
+  svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
+  if (svpp != NULL && svpp->lockFarComponents) {
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+    sep = GetTopSeqEntryForEntityID (entityID);
+    LookupFarSeqIDs (sep, TRUE, FALSE, FALSE, TRUE, FALSE);
+  }
+
+  if (bvp->scaleNotCalculated) {
+    SafeHide (bvp->newGphScale);
+    Reset (bvp->newGphScale);
+    ObjectRect (bvp->vwr, &r);
+    InsetRect (&r, 4, 4);
+    len = bsp->length;
+    max = (Int4) MAX (len / (Int4) (r.right - r.left), 1) + 2;
+    max = (Int4) MIN (max, 50000L);
+    min = (Int4) MAX (len / 320000L, 1L);
+    bvp->maxScale = max;
+    i = 1;
+    /*      while (i < MAXZOOMSCALEVAL && min > zoomScaleVal[i]) {
+      i++;
+      }*/
+    bvp->minIndex = i;
+    while (i < MAXZOOMSCALEVAL && max > zoomScaleVal[i - 1]) {
+      sprintf (str, "%ld", (long) (zoomScaleVal[i]));
+      if (max < zoomScaleVal[i]) {
+        sprintf (str, "%ld", (long) zoomScaleVal[i]);
+      }
+      PopupItem (bvp->newGphScale, str);
+      i++;
+    }
+    SetValue (bvp->newGphScale, MAX (i - bvp->minIndex, 1));
+    bvp->scaleNotCalculated = FALSE;
+  }
+  SafeShow (bvp->newGphScale);
+  i = GetValue (bvp->newGphScale) - 1 + bvp->minIndex;
+  if (i < MAXZOOMSCALEVAL && i > 0) {
+    /*    scaleX = MIN (zoomScaleVal[i], bvp->maxScale);*/
+    scaleX = zoomScaleVal[i];
+  } else {
+    scaleX = bvp->minIndex;
+  }
+
+  i = GetValue (bvp->newGphFilter) - 1;
+  nameList = GetFilterNameList ();
+  if (i < GetFilterCount ()) {
+    filterName = nameList [i];
+  } else {
+    filterName = "default"; /* as good a guess as any, and it _should_ exist in the config file*/
+  }
+
+  i = GetValue (bvp->newGphStyle) - 1;
+  nameList = GetStyleNameList ();
+  if (i < GetAppearanceCount ()) {
+    appearanceName = nameList [i];
+  } else {
+    appearanceName = "default";
+  }
+
+  i = GetValue (bvp->newGphLayout) - 1;
+  nameList = GetLayoutNameList ();
+  if (i < GetLayoutCount()) {
+    layoutName = nameList[i];
+  } else {
+    layoutName = NULL; /* no need to pass a dummy string for an optional value */
+  }
+
+  if (!bvp->viewWholeEntity) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    entityID = ObjMgrGetEntityIDForChoice (sep);
+    if (entityID > 0) {
+      sep = GetBestTopParentForData (entityID, bsp);
+      oldscope = SeqEntrySetScope (sep);
+    }
+
+#ifdef TEST_SEQLOC_LIMIT
+{
+   SeqInt si;
+   ValNode vn;
+
+     MemSet ((Pointer) (&si), 0, sizeof (SeqInt));
+     MemSet ((Pointer) (&vn), 0, sizeof (ValNode));
+
+     si.from = bsp->length * START_FRACTION;
+     si.to = bsp->length * STOP_FRACTION;
+     si.strand = Seq_strand_plus;
+     si.id = bsp->id;
+
+     vn.choice = SEQLOC_INT;
+     vn.data.ptrvalue = &si;
+
+     bvp->pict = CreateGraphicView (bsp, &vn, scaleX, appearanceName, filterName, layoutName);
+}
+#else
+     bvp->pict = CreateGraphicView (bsp, NULL, scaleX, appearanceName, filterName, layoutName);
+#endif
+
+     if (entityID > 0) {
+       SeqEntrySetScope (oldscope);
+     }
+
+   } else {
+     sep = SeqMgrGetSeqEntryForData (bsp);
+     entityID = ObjMgrGetEntityIDForChoice (sep);
+     if (entityID > 0) {
+       sep = GetTopSeqEntryForEntityID (entityID);
+       oldscope = SeqEntrySetScope (sep);
+     }
+
+     drawState.scale = scaleX;
+     drawState.ceiling = 0;
+     drawState.topLevelSegment = CreatePicture ();
+     myVCP = GetGraphicConfigParseResults ();
+     drawState.FP = FindFilterByName (filterName, myVCP);
+     drawState.AP = FindAppearanceByName (appearanceName, myVCP);
+     drawState.overrideLayout = FindLayoutByName (layoutName);
+
+     VisitBioseqsInSep (sep, &drawState, VisitAndDrawBioseqs);
+     bvp->pict = drawState.topLevelSegment;
+   }
+
+   AttachPicture (bvp->vwr, bvp->pict, vwr_x, vwr_y, vwr_align, scaleX, 1, bvp->highlightSelections ? Asn2GphDrawSelectionRange : NULL);
+   SetViewerProcs (bvp->vwr, ClickAsn2GphGraphic, NULL, ReleaseAsn2GphGraphic, NULL);
+
+   InitSelectAsn2GphView (bvp);
+
+   ArrowCursor ();
+}
+
+static void ShowAsn2GphGraphic (
+  BioseqViewPtr bvp,
+  Boolean show
+)
+
+{
+  if (bvp == NULL)
+    return;
+  if (show) {
+    SafeShow (bvp->vwr);
+    SafeShow (bvp->newGphControlGrp);
+    EnableDisableLegendItem (bvp, TRUE);
+    SafeHide (bvp->findGeneGrp);
+    SafeShow (bvp->clickMe);
+  } else {
+    SafeHide (bvp->vwr);
+    Reset (bvp->vwr);
+    bvp->pict = DeletePicture (bvp->pict);
+    SafeHide (bvp->styleControlGrp);
+    SafeHide (bvp->scaleControlGrp);
+    EnableDisableLegendItem (bvp, FALSE);
+    SafeHide (bvp->findGeneGrp);
+    SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
+    SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
+    SafeHide (bvp->clickMe);
+  }
+}
+
+static void ResizeAsn2GphGraphic (BioseqViewPtr bvp)
+
+{
+  if (bvp == NULL) return;
+  if (bvp->vwr != NULL) {
+    if (Visible (bvp->vwr) && AllParentsVisible (bvp->vwr)) {
+      ViewerWasResized (bvp->vwr);
+    }
+  }
+}
+
+extern BioseqPageData  asn2gphGphPageData = {
+  "Graphic", TRUE, TRUE, TRUE, FALSE, -1,
+  PopulateAsn2GphGraphic, ShowAsn2GphGraphic, SelectAsn2GphView,
+  CopyAsn2GphGraphicToClipboard, PrintAsn2GphGraphic, NULL, NULL,
+  ResizeAsn2GphGraphic, NULL
+};
+

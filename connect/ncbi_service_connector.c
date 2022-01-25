@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_connector.c,v 6.30 2001/12/04 15:56:47 lavr Exp $
+/*  $Id: ncbi_service_connector.c,v 6.35 2002/03/30 03:34:32 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,21 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_service_connector.c,v $
+ * Revision 6.35  2002/03/30 03:34:32  lavr
+ * BUGFIX: Memory leak from SERV_ITER in usused connector
+ *
+ * Revision 6.34  2002/03/22 22:18:28  lavr
+ * Remove uuu->conn (contained in uuu->meta.list); honor timeout on open
+ *
+ * Revision 6.33  2002/03/22 19:52:18  lavr
+ * Do not include <stdio.h>: included from ncbi_util.h or ncbi_priv.h
+ *
+ * Revision 6.32  2002/03/19 22:14:53  lavr
+ * Proper indentation of nested preprocessor directives
+ *
+ * Revision 6.31  2002/03/11 22:00:22  lavr
+ * Support encoding in MIME content type for server data
+ *
  * Revision 6.30  2001/12/04 15:56:47  lavr
  * Use strdup() instead of explicit strcpy(malloc(...), ...)
  *
@@ -132,7 +147,7 @@
 
 #include "ncbi_comm.h"
 #if defined(_DEBUG) && !defined(NDEBUG)
-#include "ncbi_priv.h"
+#  include "ncbi_priv.h"
 #endif
 #include "ncbi_servicep.h"
 #include <connect/ncbi_ansi_ext.h>
@@ -141,7 +156,6 @@
 #include <connect/ncbi_service_connector.h>
 #include <connect/ncbi_socket_connector.h>
 #include <ctype.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -152,8 +166,7 @@ typedef struct SServiceConnectorTag {
     TSERV_Type         types;           /* Server types, record keeping only */
     SConnNetInfo*      net_info;        /* Connection information            */
     SERV_ITER          iter;            /* Dispatcher information            */
-    CONNECTOR          conn;            /* Low level communication connector */
-    SMetaConnector     meta;            /*        ...and its virtual methods */
+    SMetaConnector     meta;            /* Low level comm.conn and its VT    */
     unsigned int       host;            /* from parsed connection info...    */
     unsigned short     port;
     ticket_t           ticket;
@@ -276,16 +289,17 @@ static int/*bool*/ s_ParseHeader(const char* header, void* data,
 }
 
 
-static char* s_AdjustNetParams(SConnNetInfo* net_info,
-                               EReqMethod    req_method,
-                               const char*   cgi_name,
-                               const char*   first_arg,
-                               const char*   first_val,
-                               const char*   cgi_args,
-                               const char*   static_header,
-                               EMIME_Type    mime_t,
-                               EMIME_SubType mime_s,
-                               char*         dynamic_header /*will be freed!*/)
+static char* s_AdjustNetParams(SConnNetInfo*   net_info,
+                               EReqMethod      req_method,
+                               const char*     cgi_name,
+                               const char*     first_arg,
+                               const char*     first_val,
+                               const char*     cgi_args,
+                               const char*     static_header,
+                               EMIME_Type      mime_t,
+                               EMIME_SubType   mime_s,
+                               EMIME_Encoding  mime_e,
+                               char*           dynamic_header/*will be freed*/)
 {
     char content_type[MAX_CONTENT_TYPE_LEN], *retval;
 
@@ -326,7 +340,7 @@ static char* s_AdjustNetParams(SConnNetInfo* net_info,
 
     if (mime_t == SERV_MIME_TYPE_UNDEFINED ||
         mime_s == SERV_MIME_SUBTYPE_UNDEFINED ||
-        !MIME_ComposeContentTypeEx(mime_t, mime_s, eENCOD_None,
+        !MIME_ComposeContentTypeEx(mime_t, mime_s, mime_e,
                                    content_type, sizeof(content_type))) {
         *content_type = 0;
     }
@@ -400,8 +414,8 @@ static int/*bool*/ s_AdjustNetInfo(SConnNetInfo* net_info, void* data,
                                             NCBID_NAME,
                                             "service", uuu->service,
                                             SERV_NCBID_ARGS(&info->u.ncbid),
-                                            user_header,
-                                            info->mime_t, info->mime_s,
+                                            user_header, info->mime_t,
+                                            info->mime_s, info->mime_e,
                                             iter_header);
             break;
         case fSERV_Http:
@@ -417,8 +431,8 @@ static int/*bool*/ s_AdjustNetInfo(SConnNetInfo* net_info, void* data,
                                             SERV_HTTP_PATH(&info->u.http),
                                             0, 0,
                                             SERV_HTTP_ARGS(&info->u.http),
-                                            user_header,
-                                            info->mime_t, info->mime_s,
+                                            user_header, info->mime_t,
+                                            info->mime_s, info->mime_e,
                                             iter_header);
             break;
         case fSERV_Standalone:
@@ -428,8 +442,8 @@ static int/*bool*/ s_AdjustNetInfo(SConnNetInfo* net_info, void* data,
                                             uuu->net_info->path,
                                             "service", uuu->service,
                                             uuu->net_info->args,
-                                            user_header,
-                                            info->mime_t, info->mime_s,
+                                            user_header, info->mime_t,
+                                            info->mime_s, info->mime_e,
                                             iter_header);
             break;
         default:
@@ -494,8 +508,8 @@ static CONNECTOR s_Open
                                             NCBID_NAME,
                                             "service", uuu->service,
                                             SERV_NCBID_ARGS(&info->u.ncbid),
-                                            user_header,
-                                            info->mime_t, info->mime_s, 0);
+                                            user_header, info->mime_t,
+                                            info->mime_s, info->mime_e, 0);
             if (!user_header)
                 return 0;
             break;
@@ -513,8 +527,8 @@ static CONNECTOR s_Open
                                             SERV_HTTP_PATH(&info->u.http),
                                             0, 0,
                                             SERV_HTTP_ARGS(&info->u.http),
-                                            user_header,
-                                            info->mime_t, info->mime_s, 0);
+                                            user_header, info->mime_t,
+                                            info->mime_s, info->mime_e, 0);
             if (!user_header)
                 return 0;
             break;
@@ -526,8 +540,8 @@ static CONNECTOR s_Open
                                                 0,
                                                 "service", uuu->service,
                                                 0,
-                                                user_header,
-                                                info->mime_t, info->mime_s, 0);
+                                                user_header, info->mime_t,
+                                                info->mime_s, info->mime_e, 0);
                 if (!user_header)
                     return 0;
             }
@@ -549,7 +563,8 @@ static CONNECTOR s_Open
                                         uuu->service, 0,
                                         user_header,
                                         SERV_MIME_TYPE_UNDEFINED,
-                                        SERV_MIME_SUBTYPE_UNDEFINED, 0);
+                                        SERV_MIME_SUBTYPE_UNDEFINED,
+                                        eENCOD_None, 0);
         if (!user_header)
             return 0;
     }
@@ -589,9 +604,9 @@ static CONNECTOR s_Open
                                           uuu/*adj.data*/, 0/*cleanup.data*/);
             /* Wait for connection info back (error-transparent by DISPD.CGI)*/
             if (conn && CONN_Create(conn, &c) == eIO_Success) {
-                CONN_SetTimeout(c, eIO_Open, timeout);
+                CONN_SetTimeout(c, eIO_Open,      timeout);
                 CONN_SetTimeout(c, eIO_ReadWrite, timeout);
-                CONN_SetTimeout(c, eIO_Close, timeout);
+                CONN_SetTimeout(c, eIO_Close,     timeout);
                 /* This dummy read triggers parse header callback */
                 CONN_Read(c, 0, 0, &n, eIO_Plain);
                 CONN_Close(c);
@@ -650,10 +665,10 @@ static EIO_Status s_Close
             (*uuu->params.cleanup)(uuu->params.data);
     }
 
-    if (uuu->conn) {
+    if (uuu->meta.list) {
         SMetaConnector* meta = connector->meta;
-        METACONN_Remove(meta, uuu->conn);
-        uuu->conn = 0;
+        METACONN_Remove(meta, uuu->meta.list);
+        uuu->meta.list = 0;
         s_Reset(meta);
     }
 
@@ -667,11 +682,12 @@ static EIO_Status s_VT_Open
 {
     SServiceConnector* uuu = (SServiceConnector*) connector->handle;
     SMetaConnector* meta = connector->meta;
+    EIO_Status status = eIO_Unknown;
     const SSERV_Info* info;
     SConnNetInfo* net_info;
     CONNECTOR conn;
 
-    assert(!uuu->conn && !uuu->name);
+    assert(!uuu->meta.list && !uuu->name);
     for (;;) {
         if (!uuu->iter && !s_OpenDispatcher(uuu))
             break;
@@ -681,6 +697,7 @@ static EIO_Status s_VT_Open
         else if (!(info = s_GetNextInfo(uuu)))
             break;
 
+        status = eIO_Unknown;
         if (!(net_info = ConnNetInfo_Clone(uuu->net_info)))
             break;
         if (info && info->type == fSERV_Firewall)
@@ -697,16 +714,18 @@ static EIO_Status s_VT_Open
                 continue;
         }
 
+        /* Setup the new connector on a temporary meta-connector... */
         METACONN_Add(&uuu->meta, conn);
+        /* ...then link the new connector in using current connection's meta */
         conn->meta = meta;
         conn->next = meta->list;
         meta->list = conn;
 
-        CONN_SET_METHOD(meta, wait,  uuu->meta.wait,  uuu->meta.c_wait);
-        CONN_SET_METHOD(meta, write, uuu->meta.write, uuu->meta.c_write);
-        CONN_SET_METHOD(meta, flush, uuu->meta.flush, uuu->meta.c_flush);
-        CONN_SET_METHOD(meta, read,  uuu->meta.read,  uuu->meta.c_read);
-        CONN_SET_METHOD(meta, status,uuu->meta.status,uuu->meta.c_status);
+        CONN_SET_METHOD(meta, wait,   uuu->meta.wait,   uuu->meta.c_wait);
+        CONN_SET_METHOD(meta, write,  uuu->meta.write,  uuu->meta.c_write);
+        CONN_SET_METHOD(meta, flush,  uuu->meta.flush,  uuu->meta.c_flush);
+        CONN_SET_METHOD(meta, read,   uuu->meta.read,   uuu->meta.c_read);
+        CONN_SET_METHOD(meta, status, uuu->meta.status, uuu->meta.c_status);
 #ifdef IMPLEMENTED__CONN_WaitAsync
         CONN_SET_METHOD(meta, wait_async,
                         uuu->meta.wait_async, uuu->meta.c_wait_async);
@@ -725,9 +744,13 @@ static EIO_Status s_VT_Open
         }
 
         if (uuu->meta.open) {
-            EIO_Status status = (*uuu->meta.open)(uuu->meta.c_open, timeout);
+            status = (*uuu->meta.open) (uuu->meta.c_open,
+                                        timeout == CONN_DEFAULT_TIMEOUT
+                                        ? uuu->net_info->timeout : timeout);
             if (status != eIO_Success) {
-                s_Close(connector, timeout, 0/*close_dispatcher - don't!*/);
+                s_Close(connector, timeout == CONN_DEFAULT_TIMEOUT
+                        ? uuu->net_info->timeout : timeout,
+                        0/*don't close dispatcher!*/);
                 continue;
             }
         }
@@ -735,7 +758,7 @@ static EIO_Status s_VT_Open
         return eIO_Success;
     }
 
-    return eIO_Unknown;
+    return status;
 }
 
 
@@ -770,6 +793,7 @@ static void s_Destroy(CONNECTOR connector)
 {
     SServiceConnector* uuu = (SServiceConnector*) connector->handle;
 
+    s_CloseDispatcher(uuu);
     ConnNetInfo_Destroy(uuu->net_info);
     if (uuu->name)
         free((void*) uuu->name);
@@ -807,7 +831,6 @@ extern CONNECTOR SERVICE_CreateConnectorEx
         xxx->net_info->firewall = 1/*true*/;
     xxx->types    = types;
     xxx->iter     = 0;
-    xxx->conn     = 0;
     if (params)
         memcpy(&xxx->params, params, sizeof(xxx->params));
     else

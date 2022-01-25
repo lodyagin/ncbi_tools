@@ -46,25 +46,24 @@ A Quick Guide</b>
 </font>
 </a>
 
-<p align="center">
-<font size=2>
-Jonathan Kans, Colombe Chappey, Jinghui Zhang, Tatiana Tatusov, and James
-Ostell<br> National Center for Biotechnology Information, National Library of
-Medicine, NIH
-</font>
-
 <hr>
 
 <! use img src="http://www.ncbi.nlm.nih.gov/Sequin/QuickGuide/image##.gif" align=bottom>
 
+<p align="left">
+<font size=4>
+<b><i>Introduction</i></b>
+</font>
+
 <p align="justify">
-Sequin is a stand-alone software tool developed by the NCBI for submitting and
-updating sequences to the GenBank, EMBL, and DDBJ databases. Sequin has the
-capacity to handle long sequences and sets of sequences (segmented entries, as
-well as population, phylogenetic, and mutation studies). It also allows
-sequence editing and updating, and provides complex annotation capabilities.
-In addition, Sequin contains a number of built-in validation functions for
-enhanced quality assurance.
+Sequin is a stand-alone software tool developed by the National Center for
+Biotechnology Information (NCBI) for submitting and updating sequences to the
+GenBank, EMBL, and DDBJ databases. Sequin has the capacity to handle long
+sequences and sets of sequences (segmented entries, as well as population,
+phylogenetic, and mutation studies). It also allows sequence editing and
+updating, and provides complex annotation capabilities. In addition, Sequin
+contains a number of built-in validation functions for enhanced quality
+assurance.
 
 <p align="justify">
 This overview is intended to provide a quick guide to Sequin's capabilities,
@@ -809,21 +808,53 @@ choices. These are for use by the original submitter of a record.
 <p align="justify">
 You can read a FASTA file or raw sequence file. This can be a replacement
 sequence, or it can overlap the original sequence at the 5' or 3' end. After
-Sequin aligns the two sequences, you then select replace or merge, as
-appropriate, and the sequence in your record is updated, with all feature
-intervals adjusted properly.
+Sequin aligns the two sequences, and you select optional parameters, the
+sequence in your record is updated, with all feature intervals adjusted
+properly.
 
 <p align="justify">
 You can also update with an existing sequence record that contains features.
 This can be obtained from a file, or retrieved from Entrez either via an
-accession number or by selecting an alignment after running
-<a href="http://www.ncbi.nlm.nih.gov/Sequin/sequin.hlp.html#PowerBLAST">PowerBLAST</a>.
-The latter two choices require the
+accession number. The latter choice requires the
 <a href="http://www.ncbi.nlm.nih.gov/Sequin/netaware.html">
 network-aware</a> version of Sequin. Once it gets the new record, Sequin
 aligns the two sequences as before. This is typically used either to merge two
 records that overlap, or to copy features from database records onto a new
 large contig.
+
+<br>
+<p align="center">
+<img src="images/seqn16.gif" align=bottom alt="Update Sequence form
+displays information on how the old and new sequences align.">
+<br>
+
+<p align="justify">
+The first panel shows how the two sequences align to each other.  In this
+case it is a 5' extension of the existing sequence. 400 bases are new, 70
+bases overlap the old sequence, and there are 30 bases of vector on the new
+sequence that do not align to the old sequence and will be trimmed off.
+
+<p align="justify">
+The second panel shows details of the 70 base aligned region. There is one
+single base gap in each sequence. The total number of sequence letters plus
+gap characters is the alignment length, 71 in this example. (This number was
+shown between the sequence figures in the first panel.) Mismatched bases are
+indicated by vertical red lines between the two sequences.
+
+<p align="justify">
+The third panel shows the actual sequence letters in the aligned region.
+Clicking on a gap or mismatch in the second panel scrolls to the appropriate
+place in this panel.
+
+<p align="justify">
+Before pressing Accept, you need to enter optional parameters. The alignment
+relationship is calculated by Sequin, but in some cases you may want to
+replace rather than extend the existing sequence. If you read in a record
+with features, you need to say if you only want to replace sequence, copy
+features, or do both. This control is disabled if no features were present.
+If you are copying features, you can keep protein IDs (such as when merging
+two existing overlapping records), and you can indicate how to treat features
+that were annotated in the overlapping area of both the old and new sequence.
 
 <p align="left">
 <a name="autodefline">
@@ -867,7 +898,7 @@ genetic codes, mismatched amino acids, and non-consensus splice sites.
 
 <br>
 <p align="center">
-<img src="images/seqn16.gif" align=bottom alt="Validator form has controls for
+<img src="images/seqn17.gif" align=bottom alt="Validator form has controls for
 Message verbosity, Severity, message Filter, and a display of error messages.">
 <br>
 
@@ -931,7 +962,7 @@ tRNA, or completion of a stop codon by poly-adenylation of an mRNA.
 
 <br>
 <p align="center">
-<img src="images/seqn17.gif" align=bottom alt="Coding Region page has small
+<img src="images/seqn18.gif" align=bottom alt="Coding Region page has small
 folder tabs for Product, Protein, Exceptions, and Misc. Product subpage has
 controls for Genetic Code, Predict Interval, and Translate Product.">
 <br>
@@ -982,7 +1013,7 @@ database staff.
 
 <br>
 <p align="center">
-<img src="images/seqn18.gif" align=bottom alt="Properties page has small
+<img src="images/seqn19.gif" align=bottom alt="Properties page has small
 folder tabs for General, Comment, Citations, and Cross-Refs. General page
 has controls for Partial, Pseudo, Evidence, Exception, and Explanation.">
 <br>
@@ -1002,7 +1033,7 @@ locations.
 
 <br>
 <p align="center">
-<img src="images/seqn19.gif" align=bottom alt="Location page has controls for
+<img src="images/seqn20.gif" align=bottom alt="Location page has controls for
 5 prime Partial and 3 partial Partial, and a spreadsheet for entering an arbitrary
 number of intervals.">
 <br>
@@ -1056,7 +1087,7 @@ both the nucleotide and protein sequences.
 
 <br>
 <p align="center">
-<img src="images/seqn20.gif" align=bottom alt="NCBI DeskTop window displays a
+<img src="images/seqn21.gif" align=bottom alt="NCBI DeskTop window displays a
 Venn Diagram of the internal structure of a record in the NCBI Data Model.">
 <br>
 
@@ -1107,7 +1138,7 @@ sequence record.
 
 <br>
 <p align="center">
-<img src="images/seqn21.gif" align=bottom alt="Network Configuration form has
+<img src="images/seqn22.gif" align=bottom alt="Network Configuration form has
 buttons for Normal, Firewall, or No Connection.">
 <br>
 
@@ -1444,13 +1475,18 @@ will result in a GenBank flatfile containing:
                      /product="tRNA-Glu"
 </pre>
 
+<p align="justify">
+More instructions on using the feature table format for submitting large
+genomic records are available at
+<a href="http://www.ncbi.nlm.nih.gov/Sequin/table.html">
+<tt>http://www.ncbi.nlm.nih.gov/Sequin/table.html</tt></a>.
 
 <HR>
 
 <CENTER>
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk</A></P>
-<P CLASS=medium1>Revised February 15, 2001
+<P CLASS=medium1>Revised April 18, 2002
 
 </CENTER>
 

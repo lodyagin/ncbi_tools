@@ -47,8 +47,14 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.78 $
+ * $Revision: 6.80 $
  * $Log: blastkar.c,v $
+ * Revision 6.80  2002/04/09 18:44:19  madden
+ * Do not return if status of BlastScoreBlkMatCreate is non-zero
+ *
+ * Revision 6.79  2002/02/26 22:25:21  dondosha
+ * Return error as soon as it is found that matrix name is not supported
+ *
  * Revision 6.78  2001/12/13 14:30:49  madden
  * Add BLASTKAR_SMALL_FLOAT to prevent floating point exception for very small floats
  *
@@ -1663,9 +1669,11 @@ BlastScoreBlkMatRead(BLAST_ScoreBlkPtr sbp, FILE *fp)
     } else {
         /* Fill-in all the defaults ambiguity and normal codes */
         status=BlastScoreBlkMatCreate(sbp); 
-        if(status != 0);
-        NlmMutexUnlock(read_matrix_mutex); 
-        return status;
+        if(status != 0)
+	{
+        	NlmMutexUnlock(read_matrix_mutex); 
+        	return status;
+	}
     }
     
     /* Read the residue names for the second alphabet */
@@ -2658,7 +2666,7 @@ Nlm_FloatHi *beta, Boolean gapped, Int4 gap_open, Int4 gap_extend)
 {
    Int4Ptr gapOpen_arr, gapExtend_arr, pref_flags;
    FloatHiPtr alpha_arr, beta_arr;
-   Int4 num_values;
+   Int2 num_values;
    Int4 i; /*loop index*/
 
    num_values = BlastKarlinGetMatrixValuesEx2(matrixName, &gapOpen_arr, 
@@ -2686,7 +2694,7 @@ Nlm_FloatHi *beta, Boolean gapped, Int4 gap_open, Int4 gap_extend)
        }
      }
    }
-   else {
+   else if (num_values > 0) {
      (*alpha) = alpha_arr[0];
      (*beta) = beta_arr[0];
    }

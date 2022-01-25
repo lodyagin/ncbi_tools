@@ -737,7 +737,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.4 $
+--$Revision: 6.5 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -862,6 +862,7 @@ MolInfo ::= SEQUENCE {
         fli-cdna (17) ,         -- full length insert cDNA
         htgs-0 (18) ,           -- single genomic reads for coordination
         htc (19) ,              -- high throughput cDNA
+        wgs (20) ,              -- whole genome shotgun sequencing
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
@@ -2688,7 +2689,7 @@ FeatDefGroupSet ::= SEQUENCE {
 END
 
     
---$Revision: 6.10 $
+--$Revision: 6.12 $
 --****************************************************************
 --
 --  NCBI MIME type (chemical/ncbi-asn1-ascii and chemical/ncbi-asn1-binary)
@@ -2732,7 +2733,12 @@ Biostruc-seqs-aligns-cdd ::= SEQUENCE {
         bundle Bundle-seqs-aligns,          -- either seqs + alignments
         cdd Cdd                             -- or CDD (which contains these)
     },
-    structures SET OF Biostruc OPTIONAL     -- structures
+    structures SET OF Biostruc OPTIONAL,    -- structures
+    structure-type ENUMERATED {             -- type of structures to load if
+        ncbi-backbone(2),                   -- not present; meanings and
+        ncbi-all-atom(3),                   -- values are same as MMDB's
+        pdb-model(4)                        -- Model-type
+    } OPTIONAL
 }
 
 Biostruc-align ::= SEQUENCE {

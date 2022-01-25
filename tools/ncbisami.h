@@ -1,4 +1,4 @@
-/* $Id: ncbisami.h,v 6.3 2000/07/18 19:29:28 shavirin Exp $
+/* $Id: ncbisami.h,v 6.4 2002/01/18 18:53:13 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *         Internal include file for ISAM library
 *
 * $Log: ncbisami.h,v $
+* Revision 6.4  2002/01/18 18:53:13  madden
+* Changes to research the last page if appropriate
+*
 * Revision 6.3  2000/07/18 19:29:28  shavirin
 * Added new parameter test_non_unique to suppress check for non-unique
 * strings ids in the database - default - TRUE.
@@ -156,6 +159,10 @@ typedef struct ISAMData
     Int4            max_line_size;  /* Maximum string length in the database */
     Int4            idx_option;    /* Options set by upper layer */
     Boolean       test_non_unique; /* Check if data for String ISAM sorted */
+	/* the following values are used to find gi's on a page that was recently searched. */
+    NISAMKeyDataPtr lastKeyDataPage;	/* last page searched. */
+    Int4 first_gi, last_gi;		/* first and last gi's of last page. */
+    Int4 first, last;		/* first and last offset's of last page. */
 } ISAMData, PNTR ISAMDataPtr;
 
 typedef struct ISAMTmpCA

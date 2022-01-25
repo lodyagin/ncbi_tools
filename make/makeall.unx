@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.190 2001/11/30 19:24:58 beloslyu Exp $
+#	$Id: makeall.unx,v 6.197 2002/03/20 19:01:20 beloslyu Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -168,14 +168,15 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c \
 	gifgen.c togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c \
-	ncbisock.c ncbi_socket_.c ncbi_socket.c matrix.c ncbibuf.c \
+	ncbisock.c ncbi_socket.c ncbi_socket.c matrix.c ncbibuf.c \
 	ncbi_buffer.c ncbi_core.c ncbi_util.c ncbi_priv.c \
 	ncbi_ansi_ext.c ncbi_connection.c ncbi_connector.c ncbi_connutil.c \
 	ncbi_file_connector.c ncbi_heapmgr.c ncbi_http_connector.c \
-	$(NCBI_LBSM_SRC) ncbi_server_info.c ncbi_service.c \
+	ncbi_memory_connector.c $(NCBI_LBSM_SRC) \
+	ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_service_dispd.c \
 	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
-	ncbi_sendmail_.c ncbi_sendmail.c asn_connection.c
+	ncbi_sendmail.c ncbi_sendmail.c asn_connection.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
@@ -262,8 +263,8 @@ SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c \
 	pir_index.c
 
 SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ftamain.c gb_ascii.c \
-	genref.c hash.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c \
-	utilfeat.c utilref.c fta_qscore.c pir_ascii.c
+	genref.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c \
+	utilfeat.c utilref.c fta_qscore.c pir_ascii.c fta_clup.c fta_src.c
 
 SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
 
@@ -282,14 +283,15 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o \
 	gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o \
-	ncbisock.o ncbi_socket_.o matrix.o ncbibuf.o ncbi_buffer.o \
+	ncbisock.o ncbi_socket.o matrix.o ncbibuf.o ncbi_buffer.o \
 	ncbi_core.o ncbi_util.o ncbi_priv.o \
 	ncbi_ansi_ext.o ncbi_connection.o ncbi_connector.o ncbi_connutil.o \
 	ncbi_file_connector.o ncbi_heapmgr.o ncbi_http_connector.o \
-	$(NCBI_LBSM_OBJ) ncbi_server_info.o ncbi_service.o \
+	ncbi_memory_connector.o $(NCBI_LBSM_OBJ) \
+	ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_service_dispd.o \
 	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
-	ncbi_sendmail_.o asn_connection.o
+	ncbi_sendmail.o asn_connection.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
@@ -392,8 +394,8 @@ OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o \
 	pir_index.o
 
 OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ftamain.o gb_ascii.o \
-	genref.o hash.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o \
-	utilfeat.o utilref.o fta_qscore.o pir_ascii.o
+	genref.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o \
+	utilfeat.o utilref.o fta_qscore.o pir_ascii.o fta_clup.o fta_src.o
 
 OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 
@@ -426,7 +428,7 @@ sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) $
 clean :
 	-rm -f *.[acho]
 
-.NO_PARALLEL:	copy $(ULIB4)
+.NO_PARALLEL:	copy $(ULIB4) $(ULIB30)
 
 .WAIT:
 	echo Waiting...go
@@ -448,10 +450,6 @@ clean :
 ## Special case
 ##
 
-ncbi_socket_.o : ncbi_socket.c ncbi_socket_.c
-	$(CC) $(CFLAGS) ncbi_socket_.c
-ncbi_sendmail_.o : ncbi_sendmail.c ncbi_sendmail_.c
-	$(CC) $(CFLAGS) ncbi_sendmail_.c
 lbapi.o : lbapi.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) lbapi.c
 ncbithrs.o: ncbithrs.c
@@ -490,8 +488,6 @@ gb_ascii.o: gb_ascii.c
 	$(CC) $(CFLAGS) $<
 genref.o: genref.c
 	$(CC) $(CFLAGS) $<
-hash.o: hash.c
-	$(CC) $(CFLAGS) $<
 ind.o: ind.c
 	$(CC) $(CFLAGS) $<
 loadfeat.o: loadfeat.c
@@ -511,6 +507,10 @@ utilref.o: utilref.c
 fta_qscore.o: fta_qscore.c
 	$(CC) $(CFLAGS) $<
 pir_ascii.o: pir_ascii.c
+	$(CC) $(CFLAGS) $<
+fta_clup.o: fta_clup.c
+	$(CC) $(CFLAGS) $<
+fta_src.o: fta_src.c
 	$(CC) $(CFLAGS) $<
 
 deflate.o: deflate.c
@@ -618,6 +618,7 @@ copy :
 	$(SRCCOPY) ../connect/*.c .
 	$(SRCCOPY) ../connect/ncbi_priv.h .
 	$(SRCCOPY) ../connect/ncbi_comm.h .
+	$(SRCCOPY) ../connect/ncbi_config.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm_ipc.h .
 	$(SRCCOPY) ../connect/ncbi_server_infop.h .

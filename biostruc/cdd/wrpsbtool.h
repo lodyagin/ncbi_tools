@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.h,v 1.5 2001/03/09 22:52:01 bauer Exp $
+/* $Id: wrpsbtool.h,v 1.6 2002/03/07 19:12:15 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description:
 *         header for WWW-RPS BLAST tools
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.h,v $
+* Revision 1.6  2002/03/07 19:12:15  bauer
+* major revisions to cgi-bins and the CD-dumper
+*
 * Revision 1.5  2001/03/09 22:52:01  bauer
 * use JavaScript to embed graphics in results page
 *
@@ -92,6 +95,8 @@ static     Int4                   borkPutbuf(gdIOCtx*, const void *, Int4);
 static     void                   borkPutchar(gdIOCtx*, Int4 );
 static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                OverlapInterval(Int4 from1, Int4 to1, Int4 from2, Int4 to2);
+           void                   WRPSBSearchHead(CharPtr title);
+           void                   WRPSBSearchFoot();
            void                   WRPSBHtmlError(CharPtr cErrTxt); 
            Int4                   max(Int4 i1, Int4 i2);
            Int4                   min(Int4 i1, Int4 i2);

@@ -3,6 +3,15 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.13  2002/04/17 14:41:08  kans
+* added GBQUAL_serovar to source feature
+*
+* Revision 6.12  2002/03/26 16:06:30  kans
+* added transgenic, environmental_sample, and isolation_source
+*
+* Revision 6.11  2002/02/13 18:45:52  kans
+* increased ParFlat_TOTAL_GBFEAT, added snoRNA
+*
 * Revision 6.10  2001/04/10 22:17:03  tatiana
 * GBQUAL_endogenous_virus backed off to /note
 *
@@ -154,17 +163,21 @@
 #define GBQUAL_virion            70
 #define GBQUAL_focus             71
 #define GBQUAL_specimen_voucher  72
-#define GBQUAL_protein_id	     73
-#define GBQUAL_country		     74
-#define GBQUAL_organelle		 75
-#define GBQUAL_transcript_id	 76
+#define GBQUAL_protein_id        73
+#define GBQUAL_country           74
+#define GBQUAL_organelle         75
+#define GBQUAL_transcript_id     76
+#define GBQUAL_transgenic        77
+#define GBQUAL_environmental_sample 78
+#define GBQUAL_isolation_source  79
+#define GBQUAL_serovar           80
 
-#define ParFlat_TOTAL_GBQUAL     77
+#define ParFlat_TOTAL_GBQUAL     81
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
 #define ParFlat_TOTAL_Rpt         7
-#define ParFlat_TOTAL_GBFEAT     63
+#define ParFlat_TOTAL_GBFEAT     64
 
 #define  Class_pos_aa             1
 #define  Class_text               2

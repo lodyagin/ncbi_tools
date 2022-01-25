@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.10 $
+* $Revision: 6.15 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -54,19 +54,11 @@
 extern "C" {
 #endif
 
-/* private flags */
-
-#define FREE_SEQPORT_EACH_TIME  128
-#define DDJB_VARIANT_FORMAT     256
-#define USE_NEW_SOURCE_ORG      512
-#define USE_OLD_LOCUS_LINE     1024
-#define COPY_GPS_CDS_UP        2048
-#define COPY_GPS_GENE_DOWN     4096
-
 /* internal block type identifiers */
 
 typedef enum {
-  LOCUS_BLOCK = 1,
+  HEAD_BLOCK = 1,
+  LOCUS_BLOCK,
   DEFLINE_BLOCK,
   ACCESSION_BLOCK,
   VERSION_BLOCK,
@@ -86,7 +78,9 @@ typedef enum {
   ORIGIN_BLOCK,
   SEQUENCE_BLOCK,
   CONTIG_BLOCK,
-  SLASH_BLOCK
+  WGS_BLOCK,
+  SLASH_BLOCK,
+  TAIL_BLOCK
 } BlockType;
 
 #define ASN2GB_BASE_BLOCK \
@@ -195,13 +189,40 @@ typedef struct asn2gb_job {
   BaseBlockPtr   PNTR paragraphByIDs;
 } Asn2gbJob,  PNTR Asn2gbJobPtr;
 
+
+/* callback types and structure for special extensions */
+
+typedef void (*Asn2gbWriteFunc) (CharPtr str, Pointer userdata, BlockType blocktype);
+
+typedef struct IndxData {
+  CharPtr     locus;
+  CharPtr     accession;
+  CharPtr     version;
+  CharPtr     gi;
+  CharPtr     div;
+  ValNodePtr  authors;
+  ValNodePtr  genes;
+  ValNodePtr  journals;
+  ValNodePtr  keywords;
+  ValNodePtr  secondaries;
+} IndxBlock, PNTR IndxPtr;
+
+typedef struct XtraData {
+  Asn2gbWriteFunc  ffwrite;
+  CharPtr          ffhead;
+  CharPtr          fftail;
+  IndxPtr          index;
+  Pointer          userdata;
+} XtraBlock;
+
+
 /*
   asn2gnbk_setup creates a structure laying out the flatfile structure.
 
     Of the first three parameters (bsp, bssp, slp), only one should not be NULL.
     If bsp is passed in, that is the target bioseq.  If bssp is passed in, it is
     expected to be a population/phylogenetic/mutation study, and all records are
-    shown, but with no segment numbers.  slp is not yet implemented.
+    shown, but with no segment numbers.
 
   asn2gnbk_format creates a string for a given paragraph.
 
@@ -217,7 +238,9 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   FmtType format,
   ModType mode,
   StlType style,
-  FlgType flags
+  FlgType flags,
+  LckType locks,
+  IndxPtr index
 );
 
 NLM_EXTERN CharPtr asn2gnbk_format (

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -8214,3 +8214,43 @@ NLM_EXTERN Int2 LIBCALLBACK Ing_RegIngenueProc(Pointer data)
   Ing_AttachMessageProc(igvp,ompcp->proc->procid,ompcp->input_entityID);
   return(OM_MSG_RET_DONE);
 }
+
+/*******************************************************************************
+
+  Function : Ing_RegIngenueProc()
+  
+  Purpose : registered ingenue function, will create its own igvp soon
+
+*******************************************************************************/
+NLM_EXTERN Int2 LIBCALLBACK Ing_RegisterIngenueProc (Pointer data)
+{
+  IngGenomeViewerPtr  igvp;
+  OMProcControlPtr    ompcp;
+  BioseqPtr           bsp;
+  SeqEntryPtr         sep;
+  
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Data NULL [1]");
+    return OM_MSG_RET_ERROR;
+  }
+  
+  switch (ompcp->input_itemtype) {
+  case OBJ_BIOSEQ :
+    bsp = (BioseqPtr) ompcp->input_data;
+    break;
+  case 0 :
+    return OM_MSG_RET_ERROR;
+  default :
+    return OM_MSG_RET_ERROR;
+  }
+  
+  if (bsp == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Input Data NULL");
+    return OM_MSG_RET_ERROR;
+  }
+  
+  ErrPostEx (SEV_ERROR, 0, 0, "Not yet implemented");
+  return OM_MSG_RET_ERROR;
+}
+

@@ -1,4 +1,7 @@
-/*  $Id: ncbi_sendmail_.c,v 6.3 2001/07/25 19:21:06 lavr Exp $
+#ifndef NCBI_CONFIG__H
+#define NCBI_CONFIG__H
+
+/*  $Id: ncbi_config.h,v 6.1 2002/02/11 20:38:30 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -23,28 +26,34 @@
  *
  * ===========================================================================
  *
- * Author:  Anton Lavrentiev
+ * Author:  Denis Vakatov
  *
  * File Description:
- *   Wrapper for "ncbi_sendmail.c" under NCBI C Toolkit
+ *   Configuration wrapper CONNECT library in NCBI C Toolkit
  *
  * ===========================================================================
  */
 
 
-/* Configuration
+/* Real configuration
  */
 #include <ncbilcl.h>
 
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
+#  if !defined(HAVE_GETHOSTBYNAME_R)
+#    if   defined(OS_UNIX_SOL)
+#      define HAVE_GETHOSTBYNAME_R 5
+#      define HAVE_GETHOSTBYADDR_R 7
+#    elif defined(OS_UNIX_LINUX)
+#      define HAVE_GETHOSTBYNAME_R 6
+#      define HAVE_GETHOSTBYADDR_R 8
+#    endif
+#  endif
 #elif defined(OS_MSWIN)
 #  define NCBI_OS_MSWIN 1
 #elif defined(OS_MAC)
 #  define NCBI_OS_MAC 1
 #endif
-#define NCBI_SENDMAIL_TOOLKIT "C"
 
-/* Real code
- */
-#include "ncbi_sendmail.c"
+#endif /* NCBI_CONFIG__H */

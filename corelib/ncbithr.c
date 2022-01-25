@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.32 2001/12/14 21:09:20 ivanov Exp $ */
+/* $Id: ncbithr.c,v 6.33 2002/03/12 15:50:00 ivanov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,10 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.33  2002/03/12 15:50:00  ivanov
+* Changed a name created mutex from "Nlm_InitLock32" to NULL
+* in the NlmMutexInit() under WIN32
+*
 * Revision 6.32  2001/12/14 21:09:20  ivanov
 * Enable threads under WIN32 in MT-configurations
 *
@@ -2036,7 +2040,7 @@ NLM_EXTERN TNlmMutex NlmMutexInit(TNlmMutexPtr theMutexPtr)
 #elif defined(WIN32_THREADS_AVAIL)
   {{
     if (s_Init_mutex == NULL) {
-      HANDLE x_Init_mutex = CreateMutex(NULL, FALSE, "Nlm_InitLock32");
+      HANDLE x_Init_mutex = CreateMutex(NULL, FALSE, NULL);
       if ( x_Init_mutex )
         s_Init_mutex = x_Init_mutex;
       else

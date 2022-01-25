@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.7 2001/07/23 20:20:12 dondosha Exp $
+/* $Id: txalign.h,v 6.13 2002/03/26 23:26:38 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.13 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,24 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.13  2002/03/26 23:26:38  dondosha
+* Added a possibility of a link to Blast 2 sequences from megablast output
+*
+* Revision 6.12  2002/02/15 14:18:24  camacho
+* Added RDBTaxNamesClone function
+*
+* Revision 6.11  2002/02/01 20:04:57  jianye
+* Fixed getting wrong blast defline struct for non-redundant bioseq and adding utility function getBlastDefLineForSeqId(bdlp, sip)
+*
+* Revision 6.10  2002/01/24 18:47:49  camacho
+* Moved RDBTaxNamesFree from readdb.[ch] to txalign.[ch]
+*
+* Revision 6.9  2002/01/23 19:32:25  jianye
+* Added checkLinkoutType()
+*
+* Revision 6.8  2002/01/23 17:54:50  jianye
+* Added SHOW_LINKOUT def
+*
 * Revision 6.7  2001/07/23 20:20:12  dondosha
 * Made replace_bytestore_data function public for use in web blast2seq
 *
@@ -193,33 +211,37 @@
 #define TX_MATRIX_SIZE 128	/*size of the matrix for showing the 
                                   text alignment*/
 
-#define TXALIGN_LOCUS_NAME	((Uint4)256)	/*display the locus name*/
-#define TXALIGN_MASTER		((Uint4)2)	/*display the alignment as multiple pairwise alignment*/
-#define TXALIGN_MISMATCH	((Uint4)4)	/*display the mismatched residue of the sequence */
-#define TXALIGN_MATRIX_VAL	((Uint4)8)	/*display the matrix of the alignment */
-#define TXALIGN_HTML		((Uint4)16)	/*display the format in a HTML page*/
-#define TXALIGN_HTML_RELATIVE	((Uint4)8192)	/*the HTML (if enabled by TXALIGN_HTML) should be relative*/
-#define TXALIGN_SHOW_RULER	((Uint4)32)	/*display the ruler for the text alignment*/
-#define TXALIGN_COMPRESS	((Uint4)64)	/*make the space for label smaller*/
-#define TXALIGN_END_NUM		((Uint4)128)	/*show the number at the end */
-#define TXALIGN_FLAT_INS	((Uint4)1)	/*flat the insertions in multiple pairwise alignment */
-#define TXALIGN_SHOW_GI         ((Uint4)512)    /*show the gi in the defline. */
-#define TXALIGN_SHOW_NO_OF_SEGS ((Uint4)1024)    /*show the number of (sum statistics) segments in the one-line descriptions? */
+#define TXALIGN_LOCUS_NAME	((Uint4)0x00000100)	/*display the locus name*/
+#define TXALIGN_MASTER		((Uint4)0x00000002)	/*display the alignment as multiple pairwise alignment*/
+#define TXALIGN_MISMATCH	((Uint4)0x00000004)	/*display the mismatched residue of the sequence */
+#define TXALIGN_MATRIX_VAL	((Uint4)0x00000008)	/*display the matrix of the alignment */
+#define TXALIGN_HTML		((Uint4)0x00000010)	/*display the format in a HTML page*/
+#define TXALIGN_HTML_RELATIVE	((Uint4)0x00002000)	/*the HTML (if enabled by TXALIGN_HTML) should be relative*/
+#define TXALIGN_SHOW_RULER	((Uint4)0x00000020)	/*display the ruler for the text alignment*/
+#define TXALIGN_COMPRESS	((Uint4)0x00000040)	/*make the space for label smaller*/
+#define TXALIGN_END_NUM		((Uint4)0x00000080)	/*show the number at the end */
+#define TXALIGN_FLAT_INS	((Uint4)0x00000001)	/*flat the insertions in multiple pairwise alignment */
+#define TXALIGN_SHOW_GI         ((Uint4)0x00000200)    /*show the gi in the defline. */
+#define TXALIGN_SHOW_NO_OF_SEGS ((Uint4)0x00000400)    /*show the number of (sum statistics) segments in the one-line descriptions? */
 
-#define TXALIGN_BLASTX_SPECIAL  ((Uint4)2048)	/*display the BLASTX results 
+#define TXALIGN_BLASTX_SPECIAL  ((Uint4)0x00000800)	/*display the BLASTX results 
 						  as protein alignment */
-#define	TXALIGN_SHOW_QS		((Uint4)4096)	/*show the results as query-subect*/
-#define TXALIGN_SPLIT_ANNOT	((Uint4)16384)	/*for Seq-annot from the same alignment, split the 
+#define	TXALIGN_SHOW_QS		((Uint4)0x00001000)	/*show the results as query-subect*/
+#define TXALIGN_SPLIT_ANNOT	((Uint4)0x00004000)	/*for Seq-annot from the same alignment, split the 
 												the display into individual panel*/
-#define TXALIGN_SHOW_STRAND	((Uint4)32768)	/*for displaying the stradn even in the compact form*/
-#define TXALIGN_BLUNT_END	((Uint4)65536)	/*showing the blunt-end for the end gaps*/
-#define TXALIGN_DO_NOT_PRINT_TITLE	((Uint4)131072)	/* do not print title before list of deflines */
-#define TXALIGN_CHECK_BOX	((Uint4)262144)	/* place checkbox before the line (HTML only) */
-#define TXALIGN_CHECK_BOX_CHECKED	((Uint4)524288)	/* make default value for checkboxes ON (HTML only) */
-#define TXALIGN_NEW_GIF		((Uint4)1048576)	/* print new.gif near new alignments (HTML only) */
-#define TXALIGN_NO_ENTREZ	((Uint4)2097152)	/* Use dumpgnl syntax instead of ENTREZ. */
-#define TXALIGN_NO_DUMPGNL	((Uint4)4194304)	/* No dumpgnl output, even if GNL. */
-#define TXALIGN_TARGET_IN_LINKS	((Uint4)8388608)	/* Put TARGET in Entrez links */
+#define TXALIGN_SHOW_STRAND	((Uint4)0x00008000)	/*for displaying the stradn even in the compact form*/
+#define TXALIGN_BLUNT_END	((Uint4)0x00010000)	/*showing the blunt-end for the end gaps*/
+#define TXALIGN_DO_NOT_PRINT_TITLE	((Uint4)0x00020000)	/* do not print title before list of deflines */
+#define TXALIGN_CHECK_BOX	((Uint4)0x00040000)	/* place checkbox before the line (HTML only) */
+#define TXALIGN_CHECK_BOX_CHECKED	((Uint4)0x00080000)	/* make default value for checkboxes ON (HTML only) */
+#define TXALIGN_NEW_GIF		((Uint4)0x00100000)	/* print new.gif near new alignments (HTML only) */
+#define TXALIGN_NO_ENTREZ	((Uint4)0x00200000)	/* Use dumpgnl syntax instead of ENTREZ. */
+#define TXALIGN_NO_DUMPGNL	((Uint4)0x00400000)	/* No dumpgnl output, even if GNL. */
+#define TXALIGN_TARGET_IN_LINKS	((Uint4)0x00800000)	/* Put TARGET in Entrez links */
+#define TXALIGN_SHOW_LINKOUT ((Uint4)0x01000000)        /*print linkout info*/
+#define TXALIGN_BL2SEQ_LINK ((Uint4) 0x02000000)        /* Add link to Blast 2 Sequences */
+
+
 /*
 	Used by psi-blast to distinguish first from subsequent passes.
 */
@@ -256,6 +278,9 @@ typedef	struct _RDBTaxNames {
     CharPtr blast_name;
     Char  s_king[3];
 } RDBTaxNames, *RDBTaxNamesPtr;
+
+void RDBTaxNamesFree(RDBTaxNamesPtr tnames);
+RDBTaxNamesPtr RDBTaxNamesClone(RDBTaxNamesPtr orig);
 
 /****************************************************************************/
 /* TYPEDEFS */
@@ -633,6 +658,10 @@ RDBTaxNamesPtr FDGetTaxNamesFromBioseq(BioseqPtr bsp, Int4 taxid);
 
 NLM_EXTERN Boolean replace_bytestore_data PROTO((BioseqPtr bsp, ValNodePtr bs_list, Uint1 frame));
 
+NLM_EXTERN Boolean checkLinkoutType(BlastDefLinePtr bdfl, Uint1 linkoutType);
+
+/* return bdlp containing the sip from a chain of bdlp*/
+NLM_EXTERN BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip);
 #ifdef __cplusplus
 }
 #endif

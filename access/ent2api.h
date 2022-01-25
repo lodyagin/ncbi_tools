@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.20 $
+* $Revision: 1.21 $
 *
 * File Description: 
 *
@@ -244,6 +244,12 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkedRequest (
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetLinkCountsRequest (
   CharPtr db,
   Int4 uid
+);
+
+/* history needs to be used for Boolean ids and key queries */
+
+NLM_EXTERN void EntrezSetUseHistoryFlag (
+  Entrez2RequestPtr e2rq
 );
 
 /* reply extraction functions - these free the enclosing Entrez2ReplyPtr */

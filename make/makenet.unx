@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.140 2001/11/28 16:30:17 beloslyu Exp $
+#	$Id: makenet.unx,v 6.143 2002/04/16 21:48:56 lavr Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -85,7 +85,7 @@ ASNDIR = asnstat
 
 BLIB5 = libncbiacc.a
 BLIB6 = libnetcli.a
-BLIB6_= libnetcli_.a
+#BLIB6_= libnetcli_.a
 BLIB7 = libnetentr.a
 BLIB8 = libncbiNacc.a
 BLIB9 = libncbiCacc.a
@@ -164,7 +164,7 @@ LIB4 = -lvibrant
 LIB400 = -lvibrantOGL
 LIB5 = -lncbiacc
 LIB6 = -lnetcli
-LIB6_= -lnetcli_
+#LIB6_= -lnetcli_
 LIB7 = -lnetentr
 LIB8 = -lncbiNacc
 LIB9 = -lncbiCacc
@@ -235,10 +235,10 @@ NETCLILIB    = $(LIB6)
 BENTREZLIBS  = $(BLIB8) $(BLIB7) $(BNETCLILIB) $(BLIB3)
 ENTREZLIBS   = $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3)
 
-BNETCLILIB_  = libnetcli_$(NCBI_ENCR)$(NCBI_SOCKS).a
-NETCLILIB_   = $(LIB6_)$(NCBI_ENCR)$(NCBI_SOCKS)
-BENTREZLIBS_ = $(BLIB8) $(BLIB7) $(BNETCLILIB_) $(BLIB3)
-ENTREZLIBS_  = $(LIB8) $(LIB7) $(NETCLILIB_) $(LIB3)
+#BNETCLILIB_  = libnetcli_$(NCBI_ENCR)$(NCBI_SOCKS).a
+#NETCLILIB_   = $(LIB6_)$(NCBI_ENCR)$(NCBI_SOCKS)
+#BENTREZLIBS_ = $(BLIB8) $(BLIB7) $(BNETCLILIB_) $(BLIB3)
+#ENTREZLIBS_  = $(LIB8) $(LIB7) $(NETCLILIB_) $(LIB3)
 
 ##
 ## servers/dispatcher/ncbid never use SOCKS
@@ -246,8 +246,8 @@ ENTREZLIBS_  = $(LIB8) $(LIB7) $(NETCLILIB_) $(LIB3)
 BSRVNETCLILIB  = libnetcli$(NCBI_ENCR).a
 SRVNETCLILIB   = $(LIB6)$(NCBI_ENCR)
 
-BSRVNETCLILIB_ = libnetcli_$(NCBI_ENCR).a
-SRVNETCLILIB_  = $(LIB6_)$(NCBI_ENCR)
+#BSRVNETCLILIB_ = libnetcli_$(NCBI_ENCR).a
+#SRVNETCLILIB_  = $(LIB6_)$(NCBI_ENCR)
 
 ###
 NCBI_INCDIR = ../include
@@ -272,8 +272,8 @@ LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(NCBI_OTHERLINKOPTIONS) -L$(NCBI_LINKING
 ## sources for libraries
 
 SRC6  = ni_lib_.c ni_www.c ni_debug.c ncbicli.c ncbiurl.c \
-        ni_disp.c ni_msg.c ni_error.c ni_encrs.c ni_serv.c
-SRC6_ = ni_lib.c ni_msg.c ni_error.c ni_encrs.c
+        ni_disp.c ni_msg.c ni_error.c ni_encrs.c ni_service.c
+#SRC6_ = ni_lib.c ni_msg.c ni_error.c ni_encrs.c
 
 SRC7 =	netentr.c netlib.c objneten.c
 
@@ -330,13 +330,14 @@ SRC43 = os_mtutils.c already_running.c
 
 SRC44 = idload_lib.c
 
-NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
+#NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
+NET_LIBS_SRC = $(SRC6) $(SRC7) $(SRC8) $(SRC9)
 
 # objects for libraries
 
 OBJ6  = ni_lib_.o ncbicli.o ncbiurl.o ni_www.o ni_debug.o \
-        ni_disp.o ni_msg.o ni_error.o ni_encrs.o ni_serv.o
-OBJ6_ = ni_lib.o ni_msg.o ni_error.o ni_encrs.o
+        ni_disp.o ni_msg.o ni_error.o ni_encrs.o ni_service.o
+#OBJ6_ = ni_lib.o ni_msg.o ni_error.o ni_encrs.o
 
 OBJ7 =	netentr.o netlib.o objneten.o
 
@@ -489,7 +490,8 @@ ln-if-absent:	../make/ln-if-absent
 	rm -f ln-if-absent
 	ln -s ../make/ln-if-absent .
 
-nocopy : sources $(BLIB6) $(BLIB6_) $(NCBI_ENCR) $(NCBI_SOCKS) \
+#nocopy : sources $(BLIB6) $(BLIB6_) $(NCBI_ENCR) $(NCBI_SOCKS) /
+nocopy : sources $(BLIB6) $(NCBI_ENCR) $(NCBI_SOCKS) \
    $(NCBI_ENCR)$(NCBI_SOCKS) $(BLIB7) \
    $(BLIB8) $(BLIB9) $(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
 	  $(DLIB42) $(DLIB43) $(DLIB44)
@@ -841,11 +843,11 @@ $(BLIB6) : $(OBJ6)
 	$(LIBCOPY) $(BLIB6) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB6)
 
-$(BLIB6_) : $(OBJ6_)
-	- rm -f $(BLIB6_)
-	$(AR) cru $(BLIB6_) $(OBJ6_)
-	$(LIBCOPY) $(BLIB6_) $(NCBI_LIBDIR)
-	$(RAN) $(NCBI_LIBDIR)/$(BLIB6_)
+#$(BLIB6_) : $(OBJ6_)
+#	- rm -f $(BLIB6_)
+#	$(AR) cru $(BLIB6_) $(OBJ6_)
+#	$(LIBCOPY) $(BLIB6_) $(NCBI_LIBDIR)
+#	$(RAN) $(NCBI_LIBDIR)/$(BLIB6_)
 
 $(BLIB7) : $(OBJ7)
 	- rm -f $(BLIB7)

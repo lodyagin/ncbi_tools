@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.79 $
+* $Revision: 6.81 $
 *
 * File Description: 
 *
@@ -268,7 +268,7 @@ NLM_EXTERN void DeleteMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 inde
 
 NLM_EXTERN Uint1 FindTrnaAA (CharPtr str);
 NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
-NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr codon);
+NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr codon, Boolean noSingleLetter);
 NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
 NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx);
 NLM_EXTERN Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon);
@@ -315,6 +315,10 @@ NLM_EXTERN Int4 SequinEntryList (SeqEntryPtr sep, Pointer mydata, SeqEntryFunc m
 of Bioseqs containing SeqGraphs, with individual reads removed and only contigs remaining */
 
 NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp);
+
+/* Internal function to read quality scores, made available to parse separate DNA and quality score files */
+
+NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp);
 
 /* SetPhrapContigOrder takes the results of ReadPhrapFile and a string indicating the order
 of contigs, and returns a SeqEntryList in the desired order, with all other contigs removed */

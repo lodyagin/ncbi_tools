@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.16  2002/03/08 20:13:10  ivanov
+* Fixed AsnPrintNewLine(), AsnPrintString() -- accurate print XML
+*
 * Revision 6.15  2001/10/11 14:39:08  ostell
 * added support for XMLModulePrefix
 *
@@ -124,14 +127,6 @@
 
 #include "asnbuild.h"
 
-#define XMLSUBS 5
-static Char xmlsubchars[XMLSUBS] = { '&','<','>','\'','\"' };
-static CharPtr xmlsubstrs[XMLSUBS] = {
-	"&amp;",
-	"&lt;",
-	"&gt;",
-	"&apos;",
-	"&quot;" };
 
 /********
      MakeXMLModuleName()
@@ -220,35 +215,36 @@ static Boolean AsnXMLTag(AsnIoPtr aip, AsnTypePtr atp, Boolean term)
 	else
 		tmp = StringMove(tmp, "NONAME_FOUND");
 
-	if (! term)
-	{
-		atp2 = AsnFindBaseType(atp);
-
-	if ((atp == atp2) || (atp->name == NULL))
-	{
-		isa = AsnFindBaseIsa(atp);
-		switch (isa)
-		{
-			case NULL_TYPE:
-				tmp = StringMove(tmp, " /");
-				break; /* done */
-			case BOOLEAN_TYPE:
-			case ENUM_TYPE:
-			case INTEGER_TYPE:
-			case BIGINT_TYPE:
-				noend = TRUE;
-				break;
-			default:
-				break;
-		}
-	}
-
-	}
+	if (! term) 
+    {
+        atp2 = AsnFindBaseType(atp);
+        
+        if ((atp == atp2) || (atp->name == NULL))
+        {
+            isa = AsnFindBaseIsa(atp);
+            switch (isa)
+            {
+                case NULL_TYPE:
+                    tmp = StringMove(tmp, "/");
+                    break; /* done */
+                case BOOLEAN_TYPE:
+                case ENUM_TYPE:
+                case INTEGER_TYPE:
+                case BIGINT_TYPE:
+                    noend = TRUE;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
 	if (! noend)
 		tmp = StringMove(tmp, ">");
+
 	AsnPrintCharBlock(buf, aip);
 	return noend;
 }
+
 static Boolean AsnXMLBegin(AsnIoPtr aip, AsnTypePtr atp)
 {
 	AsnTypePtr atp2;
@@ -370,7 +366,7 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 		if(isXML) {
 			AsnPrintCharBlock("<?xml version=\"1.0\"?>", aip);
 			AsnPrintNewLine(aip);
-			}
+		}
 
 		while ((atp2->name == NULL) || (IS_LOWER(*atp2->name)))
 			atp2 = atp2->type;    /* find a Type Reference */
@@ -397,7 +393,7 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 	if(isXML)
 	{
 		AsnXMLBegin(aip, atp2);
-	}
+    }
 	else if (atp2->name != NULL)
 	{
 		AsnPrintString(atp2->name, aip);   /* put the element name */
@@ -545,11 +541,12 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 				/* AsnTypeSetIndent */
                 while (! done)
 		{
-		if (AsnFindBaseIsa(aip->typestack[aip->type_indent - 1].type) == CHOICE_TYPE)
+		if (AsnFindBaseIsa(aip->typestack[aip->type_indent - 1].type) 
+            == CHOICE_TYPE)
 		{
 			atp2 = aip->typestack[aip->type_indent - 1].type;
 			if (aip->type_indent >= 2)
-				isa = AsnFindBaseIsa(aip->typestack[aip->type_indent - 2].type);
+				isa = AsnFindBaseIsa(aip->typestack[aip->type_indent-2].type);
 			else
 				isa = NULL_TYPE;    /* just fake it */
 			if (((isa != SETOF_TYPE) && (isa != SEQOF_TYPE)) ||
@@ -1062,79 +1059,79 @@ NLM_EXTERN void AsnPrintOctets (ByteStorePtr ssp, AsnIoPtr aip)
 NLM_EXTERN void AsnPrintIndent (Boolean increase, AsnIoPtr aip)
 
 {
-	Int1 offset,
-		 curr_indent;
+	Int1    offset, curr_indent;
 	BoolPtr tmp;
-	int decr, isa;
+	int     decr, isa;
 	
-
 	if (increase)
-	{
-		aip->indent_level++;
-		curr_indent = aip->indent_level;
-		if (curr_indent == aip->max_indent)   /* expand indent levels */
-		{
-			tmp = aip->first;
-			aip->first = (BoolPtr) MemNew((sizeof(Boolean) * (aip->max_indent + 10)));
-			MemCopy(aip->first, tmp, (size_t)(sizeof(Boolean) * aip->max_indent));
-			MemFree(tmp);
-			aip->max_indent += 10;
-		}
-		aip->first[curr_indent] = TRUE;     /* set to first time */
-		offset = curr_indent * aip->tabsize;
-
-		if (! (aip->type & ASNIO_CARRIER))
-		{
-			while (aip->linepos < offset)
-			{
-				*(aip->linebuf + aip->linepos) = ' ';
-				aip->linepos++;
-			}
-			aip->offset = aip->linepos + (aip->linebuf - (CharPtr)aip->buf);
-		}
-	}
+    {
+        aip->indent_level++;
+        curr_indent = aip->indent_level;
+        if (curr_indent == aip->max_indent)   /* expand indent levels */
+        {
+            tmp = aip->first;
+            aip->first = (BoolPtr) MemNew((sizeof(Boolean) *
+                                           (aip->max_indent + 10)));
+            MemCopy(aip->first, tmp, (size_t)(sizeof(Boolean) * 
+                                              aip->max_indent));
+            MemFree(tmp);
+            aip->max_indent += 10;
+        }
+        aip->first[curr_indent] = TRUE;     /* set to first time */
+        offset = curr_indent * aip->tabsize;
+        
+        if (! (aip->type & ASNIO_CARRIER))
+        {
+            while (aip->linepos < offset)
+            {
+                *(aip->linebuf + aip->linepos) = ' ';
+                aip->linepos++;
+            }
+            aip->offset = aip->linepos + (aip->linebuf - (CharPtr)aip->buf);
+        }
+    }
 	else
-	{
-		offset = aip->indent_level * aip->tabsize;
-		curr_indent = aip->type_indent;
-		decr = 1;   /* always backup indent for named element */
-		do
-		{
-			if (aip->indent_level)
-				aip->indent_level -= decr;
-			if (curr_indent)
-				curr_indent--;
-			isa = NULL_TYPE;        /* fake key */
-			if ((aip->indent_level) && (curr_indent))
-			{
-				isa = AsnFindBaseIsa(aip->typestack[curr_indent - 1].type);
-				if (aip->typestack[curr_indent-1].type->name != NULL)
-					decr = 1;     /* indent for named choices as elements */
-				else
-					decr = 0;     /* not referenced choice objects */
-			}
-		} while ((isa == CHOICE_TYPE) && (aip->token != ISMODULE_TOKEN) &&
-			(! (aip->type & ASNIO_XML)));
-
-		if (aip->linepos == offset)    /* nothing written yet */
-		{
-			curr_indent = aip->indent_level * aip->tabsize;
-			while (offset >= curr_indent)
-			{
-				offset--;
-				if (! (aip->type & ASNIO_CARRIER))
-				{
-					if ((offset >= 0) && (aip->linebuf[offset] != ' '))
-						curr_indent = 127;
-				}
-			}
-			offset++;
-			aip->linepos = offset;
-			aip->offset = aip->linepos + (aip->linebuf - (CharPtr)aip->buf);
-		}
-		if (! aip->indent_level)   /* level 0 - no commas */
-			aip->first[0] = TRUE;
-	}
+    {
+        offset = aip->indent_level * aip->tabsize;
+        curr_indent = aip->type_indent;
+        decr = 1;   /* always backup indent for named element */
+        do
+        {
+            if (aip->indent_level)
+                aip->indent_level -= decr;
+            if (curr_indent)
+                curr_indent--;
+            isa = NULL_TYPE;        /* fake key */
+            if ((aip->indent_level) && (curr_indent))
+            {
+                isa = AsnFindBaseIsa(aip->typestack[curr_indent - 1].type);
+                if (aip->typestack[curr_indent-1].type->name != NULL)
+                    decr = 1;       /* indent for named choices as elements */
+                else
+                    decr = 0;       /* not referenced choice objects */
+            }
+        } while ((isa == CHOICE_TYPE) && (aip->token != ISMODULE_TOKEN) &&
+                 (! (aip->type & ASNIO_XML)));
+        
+        if (aip->linepos == offset)    /* nothing written yet */
+        {
+            curr_indent = aip->indent_level * aip->tabsize;
+            while (offset >= curr_indent)
+            {
+                offset--;
+                if (! (aip->type & ASNIO_CARRIER))
+                {
+                    if ((offset >= 0) && (aip->linebuf[offset] != ' '))
+                        curr_indent = 127;
+                }
+            }
+            offset++;
+            aip->linepos = offset;
+            aip->offset = aip->linepos + (aip->linebuf - (CharPtr)aip->buf);
+        }
+        if (! aip->indent_level)   /* level 0 - no commas */
+            aip->first[0] = TRUE;
+    }
 	return;
 }
 
@@ -1148,197 +1145,499 @@ NLM_EXTERN void AsnPrintIndent (Boolean increase, AsnIoPtr aip)
 NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
 
 {
-	Int1 tpos, indent;
+	Int1    tpos, indent;
 	CharPtr tmp;
 	Boolean do_print = TRUE;
 
 	if (aip->linepos == 0)     /* nothing in buffer yet */
-	{
-		if ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN))
-		{            /* print blank line */
-			tmp = aip->linebuf;
-			*tmp = ' ';
-			tmp++;
-			*tmp = '\0';
-			aip->linepos = tmp - aip->linebuf;
-			aip->offset = tmp - (CharPtr)aip->buf;
-		}
-		else
-		{
-			aip->no_newline = FALSE;   /* reset to normal */
-			return;
-		}
-	}
+    {
+        if ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN))
+        {            /* print blank line */
+            tmp = aip->linebuf;
+            *tmp = ' ';
+            tmp++;
+            *tmp = '\0';
+            aip->linepos = tmp - aip->linebuf;
+            aip->offset = tmp - (CharPtr)aip->buf;
+        }
+        else
+        {
+            aip->no_newline = FALSE;      /* reset to normal */
+            return;
+        }
+    }
 		
-	if (! (aip->type & ASNIO_CARRIER))           /* really printing */
-	{
-		tpos = aip->indent_level * aip->tabsize;
-		if (tpos == aip->linepos)   /* just an empty indent? */
-		{
-			if (! ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN)))
-				do_print = FALSE;   /* assume that's the case */
-			for (tmp = aip->linebuf; tpos != 0; tpos--, tmp++)
-			{
-				if (*tmp != ' ')
-				{
-					do_print = TRUE;  /* set sentinel */
-					break;
-				}
-			}
-		}
+	if (! (aip->type & ASNIO_CARRIER))    /* really printing */
+    {
+        tpos = aip->indent_level * aip->tabsize;
+        if (tpos == aip->linepos)         /* just an empty indent? */
+        {
+            if (! ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN)))
+                do_print = FALSE;         /* assume that's the case */
+            for (tmp = aip->linebuf; tpos != 0; tpos--, tmp++)
+            {
+                if (*tmp != ' ')
+                {
+                    do_print = TRUE;      /* set sentinel */
+                    break;
+                }
+            }
+        }
 
-		if (do_print)   /* not an empty indent */
-		{
-			tmp = aip->linebuf + aip->linepos;
-			if (aip->first[aip->indent_level] == FALSE)    /* not first line of struct */
-			{
-			    if(!(aip->type & ASNIO_XML))  {
-				*tmp = ' '; tmp++;						   /* add commas */
-				*tmp = ','; tmp++;
-			    }
-			}
-			else if (aip->linepos)         /* is first line, remove trailing blanks */
-			{								/* if just indented */
-				tmp--;
-				while ((*tmp == ' ') && (tmp > aip->linebuf))
-					tmp--;
-				tmp++;
-			}
-			if ((aip->type & ASNIO_XML) && (aip->token == ISMODULE_TOKEN) && (tmp == aip->linebuf))
-			{                   /* print an empty line for formatting */
-				*tmp = ' ';
-				tmp++;
-			}
-			*tmp = '\0';
-			aip->linepos = tmp - aip->linebuf;
-			aip->offset = tmp - (CharPtr)aip->buf;
-
-			AsnIoPuts(aip);
-		}
-	}
-
-	if ((do_print) && (aip->indent_level))    /* level 0 never has commas */
+        if (do_print)   /* not an empty indent */
+        {
+            tmp = aip->linebuf + aip->linepos;
+            
+            /* not first line of struct */
+            if (aip->first[aip->indent_level] == FALSE)
+            {
+                if (!(aip->type & ASNIO_XML))   /* add commas */
+                {
+                    *tmp = ' '; tmp++;
+                    *tmp = ','; tmp++;
+                }
+            }
+            else if (!aip->no_newline && aip->linepos)
+            /* is first line, remove trailing blanks if just indented */
+            {
+                tmp--;
+                while ((*tmp == ' ') && (tmp > aip->linebuf))
+                    tmp--;
+                tmp++;
+            }
+            if ((aip->type & ASNIO_XML) && 
+                (aip->token == ISMODULE_TOKEN) && (tmp == aip->linebuf))
+            {   /* print an empty line for formatting */
+                *tmp = ' ';
+                tmp++;
+            }
+            *tmp = '\0';
+            aip->linepos = tmp - aip->linebuf;
+            aip->offset = tmp - (CharPtr)aip->buf;
+            
+            AsnIoPuts(aip);
+        }
+    }
+    
+	if ((do_print) && (aip->indent_level))       /* level 0 never has commas */
 		aip->first[aip->indent_level] = FALSE;
 
-	if (! (aip->type & ASNIO_CARRIER))     /* really printing */
-	{
-		tmp = aip->linebuf;
-		indent = aip->indent_level * aip->tabsize;
-		for (tpos = 0; tpos < indent; tpos++, tmp++)
-			*tmp = ' ';
-		aip->linepos = tpos;
-		aip->offset += tpos;
-	}
+	if (! (aip->type & ASNIO_CARRIER)) /* really printing */
+    {
+         tmp = aip->linebuf;
+         indent = aip->indent_level * aip->tabsize;
+         for (tpos = 0; tpos < indent; tpos++, tmp++)
+             *tmp = ' ';
+         aip->linepos = tpos;
+         aip->offset += tpos;
+    }
 	aip->no_newline = FALSE;   /* reset to normal */
 	return;
 }
+
+
+/*  XML transliteration table
+ */
+
+typedef struct {
+    const char*  str;
+    unsigned int len;
+} SXmlChar;
+
+static const SXmlChar s_XmlChar[256] =
+{
+    { "&#0;",    4 },   /*   0 */
+    { "&#1;",    4 },   /*   1 */
+    { "&#2;",    4 },   /*   2 */
+    { "&#3;",    4 },   /*   3 */
+    { "&#4;",    4 },   /*   4 */
+    { "&#5;",    4 },   /*   5 */
+    { "&#6;",    4 },   /*   6 */
+    { "&#7;",    4 },   /*   7 */
+    { "&#8;",    4 },   /*   8 */
+    { "&#9;",    4 },   /*   9 */
+    { "&#10;",   5 },   /*  10 */
+    { "&#11;",   5 },   /*  11 */
+    { "&#12;",   5 },   /*  12 */
+    { "&#13;",   5 },   /*  13 */
+    { "&#14;",   5 },   /*  14 */
+    { "&#15;",   5 },   /*  15 */
+    { "&#16;",   5 },   /*  16 */
+    { "&#17;",   5 },   /*  17 */
+    { "&#18;",   5 },   /*  18 */
+    { "&#19;",   5 },   /*  19 */
+    { "&#20;",   5 },   /*  20 */
+    { "&#21;",   5 },   /*  21 */
+    { "&#22;",   5 },   /*  22 */
+    { "&#23;",   5 },   /*  23 */
+    { "&#24;",   5 },   /*  24 */
+    { "&#25;",   5 },   /*  25 */
+    { "&#26;",   5 },   /*  26 */
+    { "&#27;",   5 },   /*  27 */
+    { "&#28;",   5 },   /*  28 */
+    { "&#29;",   5 },   /*  29 */
+    { "&#30;",   5 },   /*  30 */
+    { "&#31;",   5 },   /*  31 */
+    { " ",       1 },   /*  32 */
+    { "!",       1 },   /*  33 */
+    { "&quot;",  6 },   /*  34 */
+    { "#",       1 },   /*  35 */
+    { "$",       1 },   /*  36 */
+    { "%",       1 },   /*  37 */
+    { "&amp;",   5 },   /*  38 */
+    { "&apos;",  6 },   /*  39 */
+    { "(",       1 },   /*  40 */
+    { ")",       1 },   /*  41 */
+    { "*",       1 },   /*  42 */
+    { "+",       1 },   /*  43 */
+    { ",",       1 },   /*  44 */
+    { "-",       1 },   /*  45 */
+    { ".",       1 },   /*  46 */
+    { "/",       1 },   /*  47 */
+    { "0",       1 },   /*  48 */
+    { "1",       1 },   /*  49 */
+    { "2",       1 },   /*  50 */
+    { "3",       1 },   /*  51 */
+    { "4",       1 },   /*  52 */
+    { "5",       1 },   /*  53 */
+    { "6",       1 },   /*  54 */
+    { "7",       1 },   /*  55 */
+    { "8",       1 },   /*  56 */
+    { "9",       1 },   /*  57 */
+    { ":",       1 },   /*  58 */
+    { ";",       1 },   /*  59 */
+    { "&lt;",    4 },   /*  60 */
+    { "=",       1 },   /*  61 */
+    { "&gt;",    4 },   /*  62 */
+    { "?",       1 },   /*  63 */
+    { "@",       1 },   /*  64 */
+    { "A",       1 },   /*  65 */
+    { "B",       1 },   /*  66 */
+    { "C",       1 },   /*  67 */
+    { "D",       1 },   /*  68 */
+    { "E",       1 },   /*  69 */
+    { "F",       1 },   /*  70 */
+    { "G",       1 },   /*  71 */
+    { "H",       1 },   /*  72 */
+    { "I",       1 },   /*  73 */
+    { "J",       1 },   /*  74 */
+    { "K",       1 },   /*  75 */
+    { "L",       1 },   /*  76 */
+    { "M",       1 },   /*  77 */
+    { "N",       1 },   /*  78 */
+    { "O",       1 },   /*  79 */
+    { "P",       1 },   /*  80 */
+    { "Q",       1 },   /*  81 */
+    { "R",       1 },   /*  82 */
+    { "S",       1 },   /*  83 */
+    { "T",       1 },   /*  84 */
+    { "U",       1 },   /*  85 */
+    { "V",       1 },   /*  86 */
+    { "W",       1 },   /*  87 */
+    { "X",       1 },   /*  88 */
+    { "Y",       1 },   /*  89 */
+    { "Z",       1 },   /*  90 */
+    { "[",       1 },   /*  91 */
+    { "\\",      1 },   /*  92 */
+    { "]",       1 },   /*  93 */
+    { "^",       1 },   /*  94 */
+    { "_",       1 },   /*  95 */
+    { "`",       1 },   /*  96 */
+    { "a",       1 },   /*  97 */
+    { "b",       1 },   /*  98 */
+    { "c",       1 },   /*  99 */
+    { "d",       1 },   /* 100 */
+    { "e",       1 },   /* 101 */
+    { "f",       1 },   /* 102 */
+    { "g",       1 },   /* 103 */
+    { "h",       1 },   /* 104 */
+    { "i",       1 },   /* 105 */
+    { "j",       1 },   /* 106 */
+    { "k",       1 },   /* 107 */
+    { "l",       1 },   /* 108 */
+    { "m",       1 },   /* 109 */
+    { "n",       1 },   /* 110 */
+    { "o",       1 },   /* 111 */
+    { "p",       1 },   /* 112 */
+    { "q",       1 },   /* 113 */
+    { "r",       1 },   /* 114 */
+    { "s",       1 },   /* 115 */
+    { "t",       1 },   /* 116 */
+    { "u",       1 },   /* 117 */
+    { "v",       1 },   /* 118 */
+    { "w",       1 },   /* 119 */
+    { "x",       1 },   /* 120 */
+    { "y",       1 },   /* 121 */
+    { "z",       1 },   /* 122 */
+    { "{",       1 },   /* 123 */
+    { "|",       1 },   /* 124 */
+    { "}",       1 },   /* 125 */
+    { "~",       1 },   /* 126 */
+    { "&#127;",  6 },   /* 127 */
+    { "&#128;",  6 },   /* 128 */
+    { "&#129;",  6 },   /* 129 */
+    { "&#130;",  6 },   /* 130 */
+    { "&#131;",  6 },   /* 131 */
+    { "&#132;",  6 },   /* 132 */
+    { "&#133;",  6 },   /* 133 */
+    { "&#134;",  6 },   /* 134 */
+    { "&#135;",  6 },   /* 135 */
+    { "&#136;",  6 },   /* 136 */
+    { "&#137;",  6 },   /* 137 */
+    { "&#138;",  6 },   /* 138 */
+    { "&#139;",  6 },   /* 139 */
+    { "&#140;",  6 },   /* 140 */
+    { "&#141;",  6 },   /* 141 */
+    { "&#142;",  6 },   /* 142 */
+    { "&#143;",  6 },   /* 143 */
+    { "&#144;",  6 },   /* 144 */
+    { "&#145;",  6 },   /* 145 */
+    { "&#146;",  6 },   /* 146 */
+    { "&#147;",  6 },   /* 147 */
+    { "&#148;",  6 },   /* 148 */
+    { "&#149;",  6 },   /* 149 */
+    { "&#150;",  6 },   /* 150 */
+    { "&#151;",  6 },   /* 151 */
+    { "&#152;",  6 },   /* 152 */
+    { "&#153;",  6 },   /* 153 */
+    { "&#154;",  6 },   /* 154 */
+    { "&#155;",  6 },   /* 155 */
+    { "&#156;",  6 },   /* 156 */
+    { "&#157;",  6 },   /* 157 */
+    { "&#158;",  6 },   /* 158 */
+    { "&#159;",  6 },   /* 159 */
+    { "&#160;",  6 },   /* 160 */
+    { "&#161;",  6 },   /* 161 */
+    { "&#162;",  6 },   /* 162 */
+    { "&#163;",  6 },   /* 163 */
+    { "&#164;",  6 },   /* 164 */
+    { "&#165;",  6 },   /* 165 */
+    { "&#166;",  6 },   /* 166 */
+    { "&#167;",  6 },   /* 167 */
+    { "&#168;",  6 },   /* 168 */
+    { "&#169;",  6 },   /* 169 */
+    { "&#170;",  6 },   /* 170 */
+    { "&#171;",  6 },   /* 171 */
+    { "&#172;",  6 },   /* 172 */
+    { "&#173;",  6 },   /* 173 */
+    { "&#174;",  6 },   /* 174 */
+    { "&#175;",  6 },   /* 175 */
+    { "&#176;",  6 },   /* 176 */
+    { "&#177;",  6 },   /* 177 */
+    { "&#178;",  6 },   /* 178 */
+    { "&#179;",  6 },   /* 179 */
+    { "&#180;",  6 },   /* 180 */
+    { "&#181;",  6 },   /* 181 */
+    { "&#182;",  6 },   /* 182 */
+    { "&#183;",  6 },   /* 183 */
+    { "&#184;",  6 },   /* 184 */
+    { "&#185;",  6 },   /* 185 */
+    { "&#186;",  6 },   /* 186 */
+    { "&#187;",  6 },   /* 187 */
+    { "&#188;",  6 },   /* 188 */
+    { "&#189;",  6 },   /* 189 */
+    { "&#190;",  6 },   /* 190 */
+    { "&#191;",  6 },   /* 191 */
+    { "&#192;",  6 },   /* 192 */
+    { "&#193;",  6 },   /* 193 */
+    { "&#194;",  6 },   /* 194 */
+    { "&#195;",  6 },   /* 195 */
+    { "&#196;",  6 },   /* 196 */
+    { "&#197;",  6 },   /* 197 */
+    { "&#198;",  6 },   /* 198 */
+    { "&#199;",  6 },   /* 199 */
+    { "&#200;",  6 },   /* 200 */
+    { "&#201;",  6 },   /* 201 */
+    { "&#202;",  6 },   /* 202 */
+    { "&#203;",  6 },   /* 203 */
+    { "&#204;",  6 },   /* 204 */
+    { "&#205;",  6 },   /* 205 */
+    { "&#206;",  6 },   /* 206 */
+    { "&#207;",  6 },   /* 207 */
+    { "&#208;",  6 },   /* 208 */
+    { "&#209;",  6 },   /* 209 */
+    { "&#210;",  6 },   /* 210 */
+    { "&#211;",  6 },   /* 211 */
+    { "&#212;",  6 },   /* 212 */
+    { "&#213;",  6 },   /* 213 */
+    { "&#214;",  6 },   /* 214 */
+    { "&#215;",  6 },   /* 215 */
+    { "&#216;",  6 },   /* 216 */
+    { "&#217;",  6 },   /* 217 */
+    { "&#218;",  6 },   /* 218 */
+    { "&#219;",  6 },   /* 219 */
+    { "&#220;",  6 },   /* 220 */
+    { "&#221;",  6 },   /* 221 */
+    { "&#222;",  6 },   /* 222 */
+    { "&#223;",  6 },   /* 223 */
+    { "&#224;",  6 },   /* 224 */
+    { "&#225;",  6 },   /* 225 */
+    { "&#226;",  6 },   /* 226 */
+    { "&#227;",  6 },   /* 227 */
+    { "&#228;",  6 },   /* 228 */
+    { "&#229;",  6 },   /* 229 */
+    { "&#230;",  6 },   /* 230 */
+    { "&#231;",  6 },   /* 231 */
+    { "&#232;",  6 },   /* 232 */
+    { "&#233;",  6 },   /* 233 */
+    { "&#234;",  6 },   /* 234 */
+    { "&#235;",  6 },   /* 235 */
+    { "&#236;",  6 },   /* 236 */
+    { "&#237;",  6 },   /* 237 */
+    { "&#238;",  6 },   /* 238 */
+    { "&#239;",  6 },   /* 239 */
+    { "&#240;",  6 },   /* 240 */
+    { "&#241;",  6 },   /* 241 */
+    { "&#242;",  6 },   /* 242 */
+    { "&#243;",  6 },   /* 243 */
+    { "&#244;",  6 },   /* 244 */
+    { "&#245;",  6 },   /* 245 */
+    { "&#246;",  6 },   /* 246 */
+    { "&#247;",  6 },   /* 247 */
+    { "&#248;",  6 },   /* 248 */
+    { "&#249;",  6 },   /* 249 */
+    { "&#250;",  6 },   /* 250 */
+    { "&#251;",  6 },   /* 251 */
+    { "&#252;",  6 },   /* 252 */
+    { "&#253;",  6 },   /* 253 */
+    { "&#254;",  6 },   /* 254 */
+    { "&#255;",  6 }    /* 255 */
+};
+
+
 /*****************************************************************************
 *
 *   Boolean AsnPrintString(str, aip)
 *
 *****************************************************************************/
 NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
-
 {
-	Uint4 stringlen;
-	register int templen;
-	Int1 first = 1;
-	register CharPtr current, str;
-	Boolean indent_state, found;
-	int bad_char = 0, bad_char_ctr = 0, i;
+	register CharPtr current, previous, current_save = NULL, str, str_begin;
+	Boolean          isXML = FALSE;
+	Boolean          indent_state;
+	int              bad_char = 0, bad_char_ctr = 0;
+    int              linepos_start = aip->linepos;
 
-	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
-	{
-		if ((aip->fix_non_print == 0) || (aip->fix_non_print == 3))   /* post error if non-printing chars */
-		{
-			for (str = the_string; *str != '\0'; str++)
-			{
-				if ((*str < ' ') || (*str > '~'))
-				{
-					bad_char_ctr++;
-					bad_char = (int)(*str);
-				}
-			}
-		}
-		goto ret;
-	}
+    if (aip->type & ASNIO_XML)
+		isXML = TRUE;
+
+	if (aip->type & ASNIO_CARRIER) {
+        /* Post error if non-printing chars */
+        if ((aip->fix_non_print == 0) || (aip->fix_non_print == 3)) {
+            for (str = the_string; *str != '\0'; str++) {
+                if ((*str < ' ') || (*str > '~')) {
+                    bad_char_ctr++;
+                    bad_char = (int)(*str);
+                }
+            }
+        }
+        goto ret;
+    }
 
 	str = the_string;
-	stringlen = StringLen(str);
 	indent_state = aip->first[aip->indent_level];
+    
+    /* Get current ptr to output */
+    current = aip->linebuf + aip->linepos;
+    str_begin = current;
 
+    /* Break it up into lines and convert chars if necessary */
+	while (*str)  {
+        char ch = *str;
+        previous = current;
 
-					/* break it up into lines if necessary */
-	while (stringlen)
-	{
-		if (! first)               /* into multiple lines */
-		{
-			aip->first[aip->indent_level] = TRUE;   /* no commas */
-			if (aip->type & ASNIO_XML)  /* don't split XML lines */
-				aip->no_newline = TRUE;
-			AsnPrintNewLine(aip);       /* this call resets no_newline itself */
-			aip->offset -= aip->linepos;
-			aip->linepos = 0;
-		}
-		first = 0;
+        /* Fix non print char if necessary */
+        if (aip->fix_non_print != 2  &&  (ch < ' '  ||  ch > '~')) {
+            if ( !bad_char_ctr ) {
+                bad_char = (int) ch;
+            }
+            bad_char_ctr++;
+            ch = '#';   /* replace with # */
+        }
+        
+        /*  XML and double quotes fixes */
+        if ( isXML ) {
+            const SXmlChar* xml_char = &s_XmlChar[(unsigned int) ch];
+            if (xml_char->len == 1) {
+                *current++ = ch;
+            } else {
+                current = StringMove(current, xml_char->str);
+            }
+        } else {
+            *current++ = ch;
+            if (ch == '\"') {   /* must double quotes */
+                *current++ = ch;
+            }
+        }
 
-		templen = (int)(aip->linelength - aip->linepos);
+        /* Correct position in the buffer */
+        aip->linepos += (current - previous);
+        aip->offset  += (current - previous);
 
-		if (stringlen <= (Uint4)templen)     /* it fits in remaining space */
-			templen = (int) stringlen;
-		else
-			templen = AsnPrintGetWordBreak(str, templen);
+        /* Check to necessety a new line */
 
-		current = aip->linebuf + aip->linepos;
-		stringlen -= (Uint4)templen;
-		aip->linepos += templen;
-		aip->offset += templen;
-		while (templen)
-		{
-			if ((aip->fix_non_print != 2) && ((*str < ' ') || (*str > '~')))
-			{
-				if (! bad_char_ctr)
-					bad_char = (int)(*str);
-				bad_char_ctr++;
+        if ( (current >= aip->linebuf + aip->linelength)  && *(str+1) )  {
 
-				*str = '#';   /* replace with # */
-			}
-			
-			if (aip->type & ASNIO_XML)
-			{
-				found = FALSE;
-				for (i = 0; (i < XMLSUBS) && (! found); i++)
-				{
-					if (*str == xmlsubchars[i])
-					{
-						current = StringMove(current, xmlsubstrs[i]);
-						current--;
-						aip->linepos += (StringLen(xmlsubstrs[i]) - 1);
-						aip->offset += (StringLen(xmlsubstrs[i]) - 1);
-						found = TRUE;
-					}
-				}
-				if (! found)
-					*current = *str;
-			}
-			else
-			{
-				*current = *str;
-				if (*str == '\"')     /* must double quotes */
-				{
-					current++; aip->linepos++; aip->offset++;
-					*current = '\"';
-				}
-			}
-			current++; str++; templen--;
-		}
-	}
-	aip->first[aip->indent_level] = indent_state;   /* reset indent state */
+            /* Get word break */
+
+            size_t pos;
+            int cnt_save;
+            
+            *current = *(str+1);
+            *(current+1) = 0;
+            pos = AsnPrintGetWordBreak(str_begin, 
+                                       aip->linelength - linepos_start);
+
+            /* Save rest of string */
+
+            cnt_save = current - str_begin - pos;
+            if ( cnt_save < 0 ) 
+                cnt_save = 0;
+
+            if ( cnt_save ) {
+                if ( !current_save )
+                    current_save = MemNew(aip->linelength);
+                if ( !current_save ) 
+                    return FALSE;
+                MemCopy(current_save, str_begin + pos, cnt_save);
+                aip->linepos -= cnt_save;
+                aip->offset  -= cnt_save;
+            }
+
+            /* Print new line */
+
+            aip->first[aip->indent_level] = TRUE;   /* no commas */
+            if ( isXML )                /* don't split XML lines */
+                aip->no_newline = TRUE;
+            AsnPrintNewLine(aip);       
+            aip->offset = aip->offset - aip->linepos + cnt_save;
+            aip->linepos = cnt_save;
+            linepos_start = 0;
+            
+            /* Restore saved string and calculate current ptr to output */
+            if ( current_save ) {
+                MemCopy(aip->linebuf, current_save, cnt_save);
+            }
+            current = aip->linebuf + aip->linepos;
+            str_begin = aip->linebuf;
+        }
+
+        /* Move to next char */ 
+        str++;
+    }
+    
+    /* Reset indent state */
+	aip->first[aip->indent_level] = indent_state;
+
 ret:
-	if ((bad_char_ctr) && ((aip->fix_non_print == 0) || (aip->fix_non_print == 3)))
-	{
-		AsnIoErrorMsg(aip, 106, bad_char, the_string);
-	}
+    if ( current_save )
+        MemFree(current_save);
+
+    /* Check on error */
+	if ((bad_char_ctr) && 
+        ((aip->fix_non_print == 0) || (aip->fix_non_print == 3))) {
+        AsnIoErrorMsg(aip, 106, bad_char, the_string);
+    }
 	return TRUE;
 }
 
@@ -1366,15 +1665,13 @@ NLM_EXTERN void AsnPrintCharBlock (CharPtr str, AsnIoPtr aip)
 	templen = (Int1)(aip->linelength - aip->linepos);
 	indent_state = aip->first[aip->indent_level];
 
-	if (stringlen > (Uint4)templen)     /* won't fit on line */
-	{
-			aip->first[aip->indent_level] = TRUE;   /* no commas */
-			if (aip->type & ASNIO_XML)  /* don't split XML lines */
-				aip->no_newline = TRUE;
-			AsnPrintNewLine(aip);       /* this call resets no_newline itself */
-			aip->offset -= aip->linepos;
-			aip->linepos = 0;
-	}
+	if (!(aip->type & ASNIO_XML) && (stringlen > (Uint4)templen)) 
+    {   /* won't fit on line -- don't split XML lines */
+        aip->first[aip->indent_level] = TRUE;   /* no commas */
+        AsnPrintNewLine(aip);       /* this call resets no_newline itself */
+        aip->offset -= aip->linepos;
+        aip->linepos = 0;
+    }
 
 	current = aip->linebuf + aip->linepos;
 	MemCopy(current, str, (size_t)stringlen);
@@ -1404,14 +1701,14 @@ NLM_EXTERN int AsnPrintGetWordBreak (CharPtr str, int maxlen)
 	tmp = str + maxlen;    /* point just PAST the end of region */
 	len = maxlen + 1;
 	while ((len) && (! IS_WHITESP(*tmp)))
-	{
-		len--; tmp--;
-	}
+        {
+            len--; tmp--;
+        }
 	while ((len) && (IS_WHITESP(*tmp)))
-	{
-		len--;             /* move past white space */
-		tmp--;
-	}
+        {
+            len--;             /* move past white space */
+            tmp--;
+        }
 	if (len < 1)         /* never found any whitespace or only 1 space */
 		len = maxlen;    /* have to break a word */
 
@@ -1459,21 +1756,21 @@ NLM_EXTERN void AsnPrintCloseStruct (AsnIoPtr aip, AsnTypePtr atp)
 		AsnPrintNewLine(aip);
         AsnXMLTerm(aip, atp);
 		while ((aip->type_indent) && 
-			(AsnFindBaseIsa(aip->typestack[aip->type_indent - 1].type) == CHOICE_TYPE))
-			/* pop out of choice nests */
-		{
-				atp2 = aip->typestack[aip->type_indent - 1].type;
-				if (aip->type_indent >= 2)
-					isa = AsnFindBaseIsa(aip->typestack[aip->type_indent - 2].type);
-				else
-					isa = NULL_TYPE;
-
-				AsnPrintIndent(FALSE, aip);
-
-				AsnTypeSetIndent(FALSE, aip, atp);
-				AsnPrintNewLine(aip);
-				AsnXMLTerm(aip, atp2);
-
+               (AsnFindBaseIsa(aip->typestack[aip->type_indent - 1].type) 
+                == CHOICE_TYPE))
+   		{   /* pop out of choice nests */
+			atp2 = aip->typestack[aip->type_indent - 1].type;
+            if (aip->type_indent >= 2)
+                isa = AsnFindBaseIsa(aip->typestack[aip->type_indent - 2].type);
+            else
+                isa = NULL_TYPE;
+            
+            AsnPrintIndent(FALSE, aip);
+            
+            AsnTypeSetIndent(FALSE, aip, atp);
+            AsnPrintNewLine(aip);
+            AsnXMLTerm(aip, atp2);
+            
 		}
     } else {
 	    AsnPrintChar(' ', aip);
@@ -1483,17 +1780,20 @@ NLM_EXTERN void AsnPrintCloseStruct (AsnIoPtr aip, AsnTypePtr atp)
     }
 	return;
 }
+
 static void AsnXMLCommentBegin(AsnIoPtr aip)
 {
 	AsnPrintCharBlock("<!-- ", aip);
 	return;
 }
+
 static void AsnXMLCommentEnd(AsnIoPtr aip)
 {
 	AsnPrintCharBlock(" -->", aip);
 	AsnPrintNewLine(aip);
 	return;
 }
+
 static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 {
 	AsnTypePtr atp2;
@@ -1520,7 +1820,9 @@ static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 	isa = AsnFindBaseIsa(atp);
 	if ((atp->branch != NULL) && (isa == INTEGER_TYPE) && (isa == ENUM_TYPE))
 	{
-		for (avnp = (AsnValxNodePtr)(atp->branch); avnp != NULL; avnp = avnp->next)
+		for (avnp = (AsnValxNodePtr)(atp->branch); 
+             avnp != NULL; 
+             avnp = avnp->next)
 		{
 			if (avnp->aop != NULL)  /* comments here */
 			{
@@ -1530,7 +1832,9 @@ static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 		}
 		if (doenum)
 		{
-			for (avnp = (AsnValxNodePtr)(atp->branch); avnp != NULL; avnp = avnp->next)
+			for (avnp = (AsnValxNodePtr)(atp->branch); 
+                 avnp != NULL; 
+                 avnp = avnp->next)
 			{
 				if (avnp->name != NULL)
 				{
@@ -1544,7 +1848,8 @@ static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 					if (avnp->aop != NULL)
 					{
 						AsnPrintChar(' ', aip);
-						AsnPrintCharBlock((CharPtr)(avnp->aop->data.ptrvalue),aip);
+						AsnPrintCharBlock((CharPtr)(avnp->aop->data.ptrvalue),
+                                          aip);
 					}
 					AsnPrintNewLine(aip);
 					didone = TRUE;
@@ -1574,6 +1879,7 @@ static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 	AsnPrintString(" ( ", aip);
 	return;
 }
+
 static void AsnXMLElementAdd(CharPtr prev, AsnTypePtr atp, CharPtr repeat,
 			     AsnIoPtr aip, Boolean do_newline)
 {
@@ -1606,12 +1912,14 @@ static void AsnXMLElementAdd(CharPtr prev, AsnTypePtr atp, CharPtr repeat,
         AsnPrintString(buf, aip);
 	return;
 }
+
 static void AsnXMLElementEnd(AsnIoPtr aip)
 {
 	AsnPrintCharBlock(" )>", aip);
 	AsnPrintNewLine(aip);
 	return;
 }
+
 static void AsnPrintSubTypeXML(AsnTypePtr atp, AsnIoPtr aip)
 {
 	AsnTypePtr atp2, atp3;
@@ -1662,6 +1970,7 @@ static void AsnPrintSubTypeXML(AsnTypePtr atp, AsnIoPtr aip)
 	return;
 	
 }
+
 static void AsnPrintTopTypeXML (AsnIoPtr aip, AsnTypePtr atp)
 {
 
@@ -1890,7 +2199,8 @@ NLM_EXTERN void AsnPrintModuleXML (AsnModulePtr amp, AsnIoPtr aip)
 			if (firstone)
 			{
 				AsnXMLCommentBegin(aip);
-				AsnPrintString("Elements referenced from other modules:  ", aip);
+				AsnPrintString("Elements referenced from other modules:  ", 
+                               aip);
 				AsnPrintNewLine(aip);
 			}
 			else
@@ -2221,6 +2531,7 @@ static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip)
 	}
 	return retval;
 }
+
 static void AsnPrintTreeType(Int2 indent, AsnTypePtr atp, CharPtr prefix, FILE *fp)
 {
 	Int2 isa;
@@ -2279,14 +2590,14 @@ static void AsnPrintTreeType(Int2 indent, AsnTypePtr atp, CharPtr prefix, FILE *
 		return;
 
 	atp->been_here = TRUE;
-	AsnPrintTreeType((indent + 1), atp->type, "TYPE=", fp);
+	AsnPrintTreeType((Int2)(indent + 1), atp->type, "TYPE=", fp);
 
 	isa = AsnFindBaseIsa(atp);
 	if (((isa == SEQOF_TYPE) || (isa == SETOF_TYPE) ||
 	    (isa == SEQ_TYPE) || (isa == SET_TYPE) ||
 	    (isa == CHOICE_TYPE) || (isa > 400)) && (! atp->imported))
 	for (atp2 = (AsnTypePtr)(atp->branch); atp2 != NULL; atp2 = atp2->next)
-		AsnPrintTreeType((indent + 1), atp2, "Branch=", fp);
+		AsnPrintTreeType((Int2)(indent + 1), atp2, "Branch=", fp);
 
 	atp->been_here = FALSE;  /* just prevent recursion */
 	return;

@@ -1,4 +1,4 @@
-/* $Id: wrpsb.h,v 1.5 2001/02/22 15:53:22 bauer Exp $
+/* $Id: wrpsb.h,v 1.6 2002/03/07 19:12:14 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 1/19/2000
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description:
 *         Header file for WWW-RPS BLAST client
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsb.h,v $
+* Revision 1.6  2002/03/07 19:12:14  bauer
+* major revisions to cgi-bins and the CD-dumper
+*
 * Revision 1.5  2001/02/22 15:53:22  bauer
 * support for jagged edge blocks
 *
@@ -57,20 +60,20 @@
 #include "objcdd.h"
 #include "wrpsbutil.h"
 
-#define CPUTIME_MAX        480
+#define CPUTIME_MAX        600
 #define RPSBNAME           "wrpsb.cgi"
-#define QRPSBNAME          "qrpsb.cgi"
-#define DEFAULT_DATALIB    "oasis_sap"
+#define QRPSBNAME          "wrpsb.cgi"
+#define DEFAULT_DATALIB    "cdd"
 #define DEFAULT_EVALUE     "0.01"
 #define DEFAULT_NHITS      "50"
 #define NUMARGS            (sizeof(myargs)/sizeof(myargs[0]))
 #define RPS_MAGIC_NUMBER   7702
 #define WRPSB_GRAPH_WIDTH  600
-#define WRPSB_GRAPH_MAXROW 20
+#define WRPSB_GRAPH_MAXROW 25
 #define WRPSB_GRAPH_HEIGHT 16
 #define WRPSB_GRAPH_SPACER  4
-#define BUFFER_LENGTH      2048
-#define CDD_MAX_DESCR      2048
+#define BUFFER_LENGTH      3072
+#define CDD_MAX_DESCR      3072
 #define MUTUAL_OVERLAP     .5
 #define USE_PNG
 #undef RESULTS_FILE
@@ -123,9 +126,12 @@ typedef struct _cdd_hit {
 typedef struct _alignment_abstract {
   ScorePtr                        score;
   Int4                            red, green, blue;
+  Int4                            colcyc, nindents;
   Int4                            mstart, mstop, gstart, gstop;
+  Int4                           *indents;
   Nlm_FloatHi                     nmissg, cmissg;
   Int4                            row;
+  Int4                            pssmid;
   SeqAlignPtr                     salp;
   Char                            name[16];
   Boolean                         bDrawThisOne;
@@ -182,13 +188,48 @@ static Char    CDDSearch1[PATH_MAX];
 static Char    CDDSearch2[PATH_MAX];
 static Char    CDDSearch3[PATH_MAX];
 static Char    CDDSearch4[PATH_MAX];
+static Char    CDDSearch5[PATH_MAX];
+static Char    CDDSearch6[PATH_MAX];
 static Char    CDDSname1[PATH_MAX];
 static Char    CDDSname2[PATH_MAX];
 static Char    CDDSname3[PATH_MAX];
 static Char    CDDSname4[PATH_MAX];
+static Char    CDDSname5[PATH_MAX];
+static Char    CDDSname6[PATH_MAX];
 static Char    CDDlocat[PATH_MAX];
 static Char    CDDhuman[PATH_MAX];
 static Char    CDDhumsq[PATH_MAX];
+
+/*---------------------------------------------------------------------------*/
+/* DART color scheme                                                         */
+/*---------------------------------------------------------------------------*/
+static Int4    iNcolors = 13;
+static Int4    iDartCol[26][3] = {{255,  0,  0},     /* red   */
+                                  {  0,  0,255},     /* blue  */
+                                  {  0,255,  0},     /* green */
+                                  {204,102,  0},     /* orange */
+                                  {204,204,  0},     /* yeller */
+                                  {153,204,255},     /* sky b */
+                                  {102,153,  0},     /* spring */
+                                  {204,102,153},     /* lavender */
+                                  {  0,204,204},     /* cyan */
+                                  {153,153,  0},     /* brown */
+                                  {153, 51,255},     /* violet */
+                                  {  0,153,153},     /* blue-green */
+                                  {  0,204,102},     /* teal */
+                                  {255,102,102},     /* pale red */
+                                  {102,102,255},     /* pale blue */
+                                  {102,255,102},     /* pale green */
+                                  {255,204,102},     /* pale orange */
+                                  {255,255,102},     /* pale yeller */
+                                  {204,255,255},     /* pale sky b */
+                                  {204,255,102},     /* pale spring */
+                                  {255,204,255},     /* pale lavender */
+                                  {102,255,255},     /* pale cyan */
+                                  {204,204, 51},     /* pale brown */
+                                  {204,102,255},     /* pale violet */
+                                  {102,204,204},     /* pale blue green */
+                                  {102,255,204}};    /* pale teal */
 
 /*---------------------------------------------------------------------------*/
 /* Function Prototypes                                                       */

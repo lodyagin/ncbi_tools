@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connection.c,v 6.18 2001/08/20 20:13:15 vakatov Exp $
+/*  $Id: ncbi_connection.c,v 6.23 2002/04/24 21:18:04 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,22 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connection.c,v $
+ * Revision 6.23  2002/04/24 21:18:04  lavr
+ * Beautifying: pup open check before buffer check in CONN_Wait()
+ *
+ * Revision 6.22  2002/04/22 19:30:01  lavr
+ * Do not put trace message on polling wait (tmo={0,0})
+ * More effective CONN_Read w/o repeatitive checkings for eIO_ReadPersist
+ *
+ * Revision 6.21  2002/03/22 22:17:01  lavr
+ * Better check when formally timed out but technically polled in CONN_Wait()
+ *
+ * Revision 6.20  2002/02/05 22:04:12  lavr
+ * Included header files rearranged
+ *
+ * Revision 6.19  2002/01/30 20:10:56  lavr
+ * Remove *n_read = 0 assignment in s_CONN_Read; replace it with assert()
+ *
  * Revision 6.18  2001/08/20 20:13:15  vakatov
  * CONN_ReInit() -- Check connection handle for NULL (it was missed in R6.17)
  *
@@ -106,10 +122,9 @@
  */
 
 #include "ncbi_priv.h"
+#include <connect/ncbi_buffer.h>
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_connector.h>
-#include <connect/ncbi_buffer.h>
-
 #include <stdlib.h>
 #include <string.h>
 
@@ -166,16 +181,16 @@ typedef struct SConnectionTag {
 
     /* "[c|r|w|l]_timeout" is either 0 (means infinite), CONN_DEFAULT_TIMEOUT
        (to use connector-specific one), or points to "[cc|rr|ww|ll]_timeout" */
-    const STimeout* c_timeout;         /* timeout on connect                 */
-    const STimeout* r_timeout;         /* timeout on reading                 */
-    const STimeout* w_timeout;         /* timeout on writing                 */
-    const STimeout* l_timeout;         /* timeout on close                   */
-    STimeout        cc_timeout;        /* storage for "c_timeout"            */
-    STimeout        rr_timeout;        /* storage for "r_timeout"            */
-    STimeout        ww_timeout;        /* storage for "w_timeout"            */
-    STimeout        ll_timeout;        /* storage for "l_timeout"            */
+    const STimeout*        c_timeout;  /* timeout on connect                 */
+    const STimeout*        r_timeout;  /* timeout on reading                 */
+    const STimeout*        w_timeout;  /* timeout on writing                 */
+    const STimeout*        l_timeout;  /* timeout on close                   */
+    STimeout               cc_timeout; /* storage for "c_timeout"            */
+    STimeout               rr_timeout; /* storage for "r_timeout"            */
+    STimeout               ww_timeout; /* storage for "w_timeout"            */
+    STimeout               ll_timeout; /* storage for "l_timeout"            */
 
-    SCONN_Callback  callback[CONN_N_CALLBACKS];
+    SCONN_Callback         callback[CONN_N_CALLBACKS];
 } SConnection;
 
 
@@ -190,7 +205,7 @@ extern EIO_Status CONN_Create
 {
     CONN conn = (SConnection*) calloc(1, sizeof(SConnection));
     EIO_Status status = eIO_Unknown;
-    
+
     if ( conn ) {
         int i;
         conn->state = eCONN_Unusable;
@@ -401,31 +416,28 @@ extern EIO_Status CONN_Wait
     if (conn->state == eCONN_Unusable ||
         (event != eIO_Read && event != eIO_Write))
         return eIO_InvalidArg;
-    
-    /* check if there is a PEEK'ed data in the input */
-    if (event == eIO_Read && BUF_Size(conn->buf))
-        return eIO_Success;
 
     /* perform open, if not opened yet */
     if (conn->state != eCONN_Open && (status = s_Open(conn)) != eIO_Success)
         return status;
 
+    /* check if there is a PEEK'ed data in the input */
+    if (event == eIO_Read && BUF_Size(conn->buf))
+        return eIO_Success;
+
     /* call current connector's "WAIT" method */
     status = conn->meta.wait ?
         (*conn->meta.wait)(conn->meta.c_wait, event, timeout) :
         eIO_NotSupported;
-    
+
     if (status != eIO_Success) {
-        if (status == eIO_Timeout) {
-            ELOG_Level level = (timeout && timeout != CONN_DEFAULT_TIMEOUT &&
-                                !timeout->sec && !timeout->usec)
-                ? eLOG_Trace : eLOG_Warning;
-            CONN_LOG(level, "[CONN_Wait]  I/O timed out");
-        } else {
+        if (status != eIO_Timeout)
             CONN_LOG(eLOG_Error, "[CONN_Wait]  Error waiting on I/O");
-        }
+        else if (timeout == CONN_DEFAULT_TIMEOUT ||
+                 (timeout  &&  timeout->sec + timeout->usec != 0))
+            CONN_LOG(eLOG_Warning, "[CONN_Wait]  I/O timed out");
     }
-    
+
     return status;
 }
 
@@ -437,7 +449,7 @@ extern EIO_Status CONN_Write
  size_t*     n_written)
 {
     EIO_Status status;
-    
+
     CONN_NOT_NULL("Write");
 
     if (conn->state == eCONN_Unusable || !n_written)
@@ -448,7 +460,7 @@ extern EIO_Status CONN_Write
     /* open connection, if not yet opened */
     if (conn->state != eCONN_Open && (status = s_Open(conn)) != eIO_Success)
         return status;
-    
+
     /* call current connector's "WRITE" method */
     status = conn->meta.write ?
         (*conn->meta.write)(conn->meta.c_write, buf, size, n_written,
@@ -456,7 +468,7 @@ extern EIO_Status CONN_Write
 
     if (status != eIO_Success)
         CONN_LOG(eLOG_Error, "[CONN_Write]  Write error");
-    
+
     return status;
 }
 
@@ -470,19 +482,19 @@ extern EIO_Status CONN_Flush
 
     if (conn->state == eCONN_Unusable)
         return eIO_InvalidArg;
-    
+
     /* do nothing, if not opened yet */
     if (conn->state != eCONN_Open)
         return eIO_Success;
-    
+
     /* call current connector's "FLUSH" method */
     status = conn->meta.flush ?
         (*conn->meta.flush)(conn->meta.c_flush, conn->w_timeout) :
         eIO_NotSupported;
-    
+
     if (status != eIO_Success)
         CONN_LOG(eLOG_Warning, "[CONN_Flush]  Cannot flush data");
-    
+
     return status;
 }
 
@@ -498,18 +510,8 @@ static EIO_Status s_CONN_Read
  int/*bool*/ peek)
 {
     EIO_Status status;
-    
-    if (conn->state == eCONN_Unusable)
-        return eIO_InvalidArg;
 
-    /* perform open, if not yet */
-    if (conn->state != eCONN_Open  &&  (status = s_Open(conn)) != eIO_Success)
-        return status;
-    
-    /* flush the unwritten output data, if any */
-    CONN_Flush(conn);
-
-    *n_read = 0;
+    assert(*n_read == 0);
 
     /* check if the read method is specified at all */
     if ( !conn->meta.read ) {
@@ -562,18 +564,22 @@ static EIO_Status s_CONN_ReadPersist
  size_t  size,
  size_t* n_read)
 {
+    EIO_Status status;
+
     assert(*n_read == 0);
 
-    do {
-        size_t x_read;
-        EIO_Status status = CONN_Read(conn, (char*) buf + *n_read,
-                                      size - *n_read, &x_read, eIO_Plain);
+    for (;;) {
+        size_t x_read = 0;
+        status = s_CONN_Read(conn, (char*) buf + *n_read,
+                             size - *n_read, &x_read, 0/*no peek*/);
         *n_read += x_read;
-        if (status != eIO_Success)
-            return status;
-    } while (*n_read != size);
+        if (*n_read == size  ||  status != eIO_Success)
+            break;
+        /* flush the unwritten output data, if any */
+        CONN_Flush(conn);
+    }
 
-    return eIO_Success;
+    return status;
 }
 
 
@@ -584,14 +590,26 @@ extern EIO_Status CONN_Read
  size_t*        n_read,
  EIO_ReadMethod how)
 {
+    EIO_Status status;
+
     CONN_NOT_NULL("Read");
+
+    if (conn->state == eCONN_Unusable)
+        return eIO_InvalidArg;
+
+    /* perform open, if not yet */
+    if (conn->state != eCONN_Open  &&  (status = s_Open(conn)) != eIO_Success)
+        return status;
+
+    /* flush the unwritten output data, if any */
+    CONN_Flush(conn);
 
     *n_read = 0;
     switch (how) {
     case eIO_Plain:
-        return s_CONN_Read(conn, buf, size, n_read, 0/*false*/);
+        return s_CONN_Read(conn, buf, size, n_read, 0/*no peek*/);
     case eIO_Peek:
-        return s_CONN_Read(conn, buf, size, n_read, 1/*true*/);
+        return s_CONN_Read(conn, buf, size, n_read, 1/*peek*/);
     case eIO_Persist:
         return s_CONN_ReadPersist(conn, buf, size, n_read);
     }
@@ -657,7 +675,7 @@ extern EIO_Status CONN_SetCallback
         return eIO_InvalidArg;
 
     CONN_NOT_NULL("SetCallback");
-    
+
     if ( old_cb )
         *old_cb = conn->callback[i];
     if ( new_cb )

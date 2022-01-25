@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket.c,v 6.11 2001/07/11 00:44:33 vakatov Exp $
+/*  $Id: test_ncbi_socket.c,v 6.14 2002/03/22 19:47:48 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_socket.c,v $
+ * Revision 6.14  2002/03/22 19:47:48  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.13  2002/02/11 20:36:45  lavr
+ * Use "ncbi_config.h"
+ *
+ * Revision 6.12  2002/01/16 21:23:15  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.11  2001/07/11 00:44:33  vakatov
  * Added TEST_gethostby***() -- tests for SOCK_gethostby{addr,name}()
  *
@@ -72,18 +81,18 @@
  * ===========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
+#include "../ncbi_config.h"
+
+/* OS must be specified in the command-line ("-D....") or in the conf. header
+ */
+#if !defined(NCBI_OS_UNIX) && !defined(NCBI_OS_MSWIN) && !defined(NCBI_OS_MAC)
+#  error "Unknown OS, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN, NCBI_OS_MAC!"
+#endif
 
 #include <connect/ncbi_socket.h>
 #include <connect/ncbi_util.h>
-
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-
-
 #if defined(NCBI_OS_UNIX)
 #  include <unistd.h>
 #  define X_SLEEP(x) ((void) sleep(x))
@@ -93,6 +102,8 @@
 #else
 #  define X_SLEEP(x) ((void) 0)
 #endif
+/* This header must go last */
+#include "test_assert.h"
 
 
 /* #define DO_CLIENT */

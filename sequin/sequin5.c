@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.135 $
+* $Revision: 6.136 $
 *
 * File Description:
 *
@@ -1080,7 +1080,34 @@ static SeqIdPtr SeqIdFindBestForPromotion (SeqIdPtr sip)
   return SeqIdSelect (sip, order, NUM_ORDER);
 }
 
-static void PromoteSeqId (SeqIdPtr sip, Boolean alsoCheckLocalAccn)
+static SeqIdPtr SeqIdFindWorstForPromotion (SeqIdPtr sip)
+
+{
+  Uint1  order [NUM_SEQID];
+
+  SeqIdBestRank (order, NUM_SEQID);
+  order [SEQID_LOCAL] = 10;
+  order [SEQID_GENBANK] = 5;
+  order [SEQID_EMBL] = 5;
+  order [SEQID_PIR] = 5;
+  order [SEQID_SWISSPROT] = 5;
+  order [SEQID_DDBJ] = 5;
+  order [SEQID_PRF] = 5;
+  order [SEQID_PDB] = 5;
+  order [SEQID_TPG] = 5;
+  order [SEQID_TPE] = 5;
+  order [SEQID_TPD] = 5;
+  order [SEQID_PATENT] = 10;
+  order [SEQID_GENERAL] = 15;
+  order [SEQID_GIBBSQ] = 15;
+  order [SEQID_GIBBMT] = 15;
+  order [SEQID_GIIM] = 20;
+  order [SEQID_GI] = 20;
+  order [SEQID_OTHER] = 52;
+  return SeqIdSelect (sip, order, NUM_SEQID);
+}
+
+static void PromoteSeqId (SeqIdPtr sip, Boolean alsoCheckLocalAccn, Boolean findWorst)
 
 {
   SeqIdPtr     bestid, newid, oldid;
@@ -1103,7 +1130,11 @@ static void PromoteSeqId (SeqIdPtr sip, Boolean alsoCheckLocalAccn)
   }
   if (bsp == NULL) return;
 
-  bestid = SeqIdFindBestForPromotion (bsp->id);
+  if (findWorst) {
+    bestid = SeqIdFindWorstForPromotion (bsp->id);
+  } else {
+    bestid = SeqIdFindBestForPromotion (bsp->id);
+  }
   if (bestid == NULL) return;
   newid = SeqIdDup (bestid);
   if (newid == NULL) return;
@@ -1123,16 +1154,16 @@ static void PromoteSeqId (SeqIdPtr sip, Boolean alsoCheckLocalAccn)
   SeqIdStripLocus (sip);
 }
 
-static void PromoteSeqIdList (SeqIdPtr sip, Boolean alsoCheckLocalAccn)
+static void PromoteSeqIdList (SeqIdPtr sip, Boolean alsoCheckLocalAccn, Boolean findWorst)
 
 {
   while (sip != NULL) {
-    PromoteSeqId (sip, alsoCheckLocalAccn);
+    PromoteSeqId (sip, alsoCheckLocalAccn, findWorst);
     sip = sip->next;
   }
 }
 
-static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn)
+static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn, Boolean findWorst)
 
 {
   SeqLocPtr      loc;
@@ -1149,27 +1180,27 @@ static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn)
       case SEQLOC_EMPTY :
       case SEQLOC_WHOLE :
         sip = (SeqIdPtr) slp->data.ptrvalue;
-        PromoteSeqIdList (sip, alsoCheckLocalAccn);
+        PromoteSeqIdList (sip, alsoCheckLocalAccn, findWorst);
         break;
       case SEQLOC_INT :
         sinp = (SeqIntPtr) slp->data.ptrvalue;
         if (sinp != NULL) {
           sip = sinp->id;
-          PromoteSeqIdList (sip, alsoCheckLocalAccn);
+          PromoteSeqIdList (sip, alsoCheckLocalAccn, findWorst);
         }
         break;
       case SEQLOC_PNT :
         spp = (SeqPntPtr) slp->data.ptrvalue;
         if (spp != NULL) {
           sip = spp->id;
-          PromoteSeqIdList (sip, alsoCheckLocalAccn);
+          PromoteSeqIdList (sip, alsoCheckLocalAccn, findWorst);
         }
         break;
       case SEQLOC_PACKED_PNT :
         psp = (PackSeqPntPtr) slp->data.ptrvalue;
         if (psp != NULL) {
           sip = psp->id;
-          PromoteSeqIdList (sip, alsoCheckLocalAccn);
+          PromoteSeqIdList (sip, alsoCheckLocalAccn, findWorst);
         }
         break;
       case SEQLOC_PACKED_INT :
@@ -1177,7 +1208,7 @@ static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn)
       case SEQLOC_EQUIV :
         loc = (SeqLocPtr) slp->data.ptrvalue;
         while (loc != NULL) {
-          PromoteSeqLocList (loc, alsoCheckLocalAccn);
+          PromoteSeqLocList (loc, alsoCheckLocalAccn, findWorst);
           loc = loc->next;
         }
         break;
@@ -1187,12 +1218,12 @@ static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn)
           spp = (SeqPntPtr) sbp->a;
           if (spp != NULL) {
             sip = spp->id;
-            PromoteSeqIdList (sip, alsoCheckLocalAccn);
+            PromoteSeqIdList (sip, alsoCheckLocalAccn, findWorst);
           }
           spp = (SeqPntPtr) sbp->b;
           if (spp != NULL) {
             sip = spp->id;
-            PromoteSeqIdList (sip, alsoCheckLocalAccn);
+            PromoteSeqIdList (sip, alsoCheckLocalAccn, findWorst);
           }
         }
         break;
@@ -1205,7 +1236,7 @@ static void PromoteSeqLocList (SeqLocPtr slp, Boolean alsoCheckLocalAccn)
   }
 }
 
-static Boolean PromoteIDsProc (GatherObjectPtr gop)
+static Boolean PromoteIDsProc (GatherObjectPtr gop, Boolean findWorst)
 
 {
   CodeBreakPtr  cbp;
@@ -1218,16 +1249,16 @@ static Boolean PromoteIDsProc (GatherObjectPtr gop)
   sfp = (SeqFeatPtr) gop->dataptr;
   if (sfp == NULL) return TRUE;
 
-  PromoteSeqLocList (sfp->location, FALSE);
+  PromoteSeqLocList (sfp->location, FALSE, findWorst);
 
-  PromoteSeqLocList (sfp->product, FALSE);
+  PromoteSeqLocList (sfp->product, FALSE, findWorst);
 
   switch (sfp->data.choice) {
     case SEQFEAT_CDREGION :
       crp = (CdRegionPtr) sfp->data.value.ptrvalue;
       if (crp != NULL && crp->code_break != NULL) {
         for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
-          PromoteSeqLocList (cbp->loc, FALSE);
+          PromoteSeqLocList (cbp->loc, FALSE, findWorst);
         }
       }
       break;
@@ -1236,7 +1267,7 @@ static Boolean PromoteIDsProc (GatherObjectPtr gop)
       if (rrp != NULL && rrp->type == 3 && rrp->ext.choice == 2) {
         trp = rrp->ext.value.ptrvalue;
         if (trp != NULL && trp->anticodon != NULL) {
-          PromoteSeqLocList (trp->anticodon, FALSE);
+          PromoteSeqLocList (trp->anticodon, FALSE, findWorst);
         }
       }
       break;
@@ -1245,6 +1276,12 @@ static Boolean PromoteIDsProc (GatherObjectPtr gop)
   }
 
   return TRUE;
+}
+
+static Boolean PromoteBestIDsProc (GatherObjectPtr gop)
+
+{
+  return PromoteIDsProc (gop, FALSE);
 }
 
 void PromoteToBestIDProc (IteM i)
@@ -1264,7 +1301,38 @@ void PromoteToBestIDProc (IteM i)
 
   oldscope = SeqEntrySetScope (sep);
 
-  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, PromoteIDsProc, NULL, NULL);
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, PromoteBestIDsProc, NULL, NULL);
+
+  SeqEntrySetScope (oldscope);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static Boolean PromoteWorstIDsProc (GatherObjectPtr gop)
+
+{
+  return PromoteIDsProc (gop, TRUE);
+}
+
+void PromoteToWorstIDProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  oldscope, sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  oldscope = SeqEntrySetScope (sep);
+
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, PromoteWorstIDsProc, NULL, NULL);
 
   SeqEntrySetScope (oldscope);
 
@@ -1289,27 +1357,27 @@ static Boolean PromoteAlignIDsProc (GatherObjectPtr gop)
   switch (sap->segtype) {
     case SAS_DENDIAG :
       for (ddp = sap->segs; ddp != NULL; ddp = ddp->next) {
-        PromoteSeqIdList (ddp->id, TRUE);
+        PromoteSeqIdList (ddp->id, TRUE, FALSE);
       }
       break;
     case SAS_DENSEG :
       dsp = sap->segs;
       if (dsp != NULL) {
-        PromoteSeqIdList (dsp->ids, TRUE);
+        PromoteSeqIdList (dsp->ids, TRUE, FALSE);
       }
       break;
     case SAS_STD :
       for (ssp = sap->segs; ssp != NULL; ssp = ssp->next) {
-        PromoteSeqIdList (ssp->ids, TRUE);
+        PromoteSeqIdList (ssp->ids, TRUE, FALSE);
         for (slp = ssp->loc; slp != NULL; slp = slp->next) {
-          PromoteSeqLocList (slp, TRUE);
+          PromoteSeqLocList (slp, TRUE, FALSE);
         }
       }
       break;
     case SAS_PACKED :
       psp = (PackSegPtr) sap->segs;
       if (psp != NULL) {
-        PromoteSeqIdList (psp->ids, TRUE);
+        PromoteSeqIdList (psp->ids, TRUE, FALSE);
       }
       break;
     case SAS_COMPSEQ :
@@ -1347,7 +1415,7 @@ void PromoteAlignsToBestIDProc (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
-static Boolean RemoveIDsProc (GatherObjectPtr gop)
+static Boolean RemoveGBIDsProc (GatherObjectPtr gop)
 
 {
   BioseqPtr      bsp;
@@ -1375,7 +1443,7 @@ static Boolean RemoveIDsProc (GatherObjectPtr gop)
   return TRUE;
 }
 
-void RemoveIDsFromBioseqs (IteM i)
+void RemoveGBIDsFromBioseqs (IteM i)
 
 {
   MsgAnswer    ans;
@@ -1388,10 +1456,111 @@ void RemoveIDsFromBioseqs (IteM i)
 #endif
   if (bfp == NULL) return;
 
-  ans = Message (MSG_OKC, "Currently deletes all GenBank/EMBL/DDBJ SeqIDs");
+  ans = Message (MSG_OKC, "Currently deletes all GenBank SeqIDs");
   if (ans == ANS_CANCEL) return;
 
-  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, RemoveIDsProc, NULL, NULL);
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, RemoveGBIDsProc, NULL, NULL);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static Boolean RemoveGBProtIDsProc (GatherObjectPtr gop)
+
+{
+  BioseqPtr      bsp;
+  SeqIdPtr       nextid, sip;
+  SeqIdPtr PNTR  previd;
+
+  if (gop->itemtype != OBJ_BIOSEQ) return TRUE;
+  bsp = (BioseqPtr) gop->dataptr;
+  if (bsp == NULL) return TRUE;
+  if (! ISA_aa (bsp->mol)) return TRUE;
+
+  previd = (SeqIdPtr PNTR) &(bsp->id);
+  sip = bsp->id;
+  while (sip != NULL) {
+    nextid = sip->next;
+    if (sip->choice == SEQID_GENBANK) {
+      *previd = sip->next;
+      sip->next = NULL;
+      SeqIdFree (sip);
+    } else {
+      previd = (SeqIdPtr PNTR) &(sip->next);
+    }
+    sip = sip->next;
+  }
+
+  return TRUE;
+}
+
+void RemoveGBIDsFromProteins (IteM i)
+
+{
+  MsgAnswer    ans;
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  ans = Message (MSG_OKC, "Currently deletes all GenBank SeqIDs");
+  if (ans == ANS_CANCEL) return;
+
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, RemoveGBProtIDsProc, NULL, NULL);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static Boolean RemoveGIProc (GatherObjectPtr gop)
+
+{
+  BioseqPtr      bsp;
+  SeqIdPtr       nextid, sip;
+  SeqIdPtr PNTR  previd;
+
+  if (gop->itemtype != OBJ_BIOSEQ) return TRUE;
+  bsp = (BioseqPtr) gop->dataptr;
+  if (bsp == NULL) return TRUE;
+
+  previd = (SeqIdPtr PNTR) &(bsp->id);
+  sip = bsp->id;
+  while (sip != NULL) {
+    nextid = sip->next;
+    if (sip->choice == SEQID_GI) {
+      *previd = sip->next;
+      sip->next = NULL;
+      SeqIdFree (sip);
+    } else {
+      previd = (SeqIdPtr PNTR) &(sip->next);
+    }
+    sip = sip->next;
+  }
+
+  return TRUE;
+}
+
+void RemoveGIsFromBioseqs (IteM i)
+
+{
+  MsgAnswer    ans;
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  ans = Message (MSG_OKC, "Currently deletes all GI SeqIDs");
+  if (ans == ANS_CANCEL) return;
+
+  GatherObjectsInEntity (bfp->input_entityID, 0, NULL, RemoveGIProc, NULL, NULL);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);

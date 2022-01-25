@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.147 $
+* $Revision: 6.160 $
 *
 * File Description: 
 *
@@ -1019,6 +1019,8 @@ static Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID, Boolean includ
   ByteStorePtr  bs;
   BioseqPtr     bsp;
   Char          ch;
+  SeqFeatPtr    gene;
+  GeneRefPtr    grp;
   SeqEntryPtr   master;
   MolInfoPtr    mip;
   SeqEntryPtr   old;
@@ -1032,6 +1034,22 @@ static Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID, Boolean includ
   ValNodePtr    vnp;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return TRUE;
+
+  /* bail on pseudo CDS */
+
+  if (sfp->pseudo) return TRUE;
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) {
+    if (grp->pseudo) return TRUE;
+  } else {
+    gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+    if (gene != NULL) {
+      if (gene->pseudo) return TRUE;
+      grp = (GeneRefPtr) gene->data.value.ptrvalue;
+      if (grp != NULL && grp->pseudo) return TRUE;
+    }
+  }
+
   slp = SeqLocFindNext (sfp->location, NULL);
   if (slp == NULL) return TRUE;
   CheckSeqLocForPartial (slp, &partial5, &partial3);
@@ -3405,6 +3423,8 @@ static void TestGeneRefStuff (void)
 }
 */
 
+#define CKA_GAPLEN  50 /* max allowed unaligned gap size */
+
 typedef struct cka_acc {
    CharPtr      accession;
    SeqIdPtr     sip_whole;
@@ -3500,8 +3520,12 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    Boolean           found;
    Int4              i;
    Int4              j;
-  Int4              last;
+   Int4              last;
+   FILE              PNTR ofp;
    Int4              prev;
+   Boolean           retval;
+   Char              string[300];
+   Char              textid[42];
 
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return FALSE;
@@ -3526,6 +3550,10 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &acc->start_seq, &acc->stop_seq);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &acc->start_acc, &acc->stop_acc);
       acc->strand = AlnMgr2GetNthStrand(amaip->saps[i], 2);
+      acc->start_seq++;
+      acc->stop_seq++;
+      acc->start_acc++;
+      acc->stop_acc++;
    }
    acc = acc_head;
    i = 0;
@@ -3546,8 +3574,10 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
       acc = acc->next;
    }
    HeapSort(accarray, i, sizeof(CKA_AccPtr), CKA_SortAccs);
+   SeqIdWrite(accarray[0]->sip_whole, textid, PRINTID_TEXTID_ACC_VER, 41);
    first = last = -1;
    prev = -1;
+   retval = TRUE;
    for (j=0; j<i && first <=0 ; j++)
    {
       acc = accarray[j];
@@ -3557,29 +3587,58 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
             first = acc->start_seq;
          last = MAX(last, acc->stop_seq);
       } else
-         Message (MSG_OKC, "Accession %s does not align to the bioseq.", acc->accession);
+         Message (MSG_OK, "Accession %s does not align to the bioseq %s.", acc->accession, textid);
       if (prev != -1)
       {
-         if (acc->start_seq > prev)
+         if (acc->start_seq > prev + CKA_GAPLEN)
          {
-            Message (MSG_ERROR, "The annotated accessions do not completely cover the bioseq:\n %s aligns to %d-%d but next aln is %s to %d-%d", accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq);
+            sprintf(string, "The annotated accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but next aln is %s to %d-%d", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq);
+            ofp = FileOpen("cka_validate.txt", "w");
+            fprintf(ofp, "%s", string);
+            FileClose(ofp);
+            Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
             MemFree(accarray);
-            return FALSE;
+            retval = FALSE;
+         } else if (acc->start_seq > prev)
+         {
+            Message(MSG_OK, "The annotated accessions do not completely cover the bioseq %s:\n %s aligns to %d-%d but the next aln is %s to %d-%d;\n the gap is less than %d and is acceptable.", textid, accarray[j-1]->accession, accarray[j-1]->start_seq, accarray[j-1]->stop_seq, acc->accession, acc->start_seq, acc->stop_seq, CKA_GAPLEN);
          }
       }
       prev = acc->stop_seq+1;
    }
-   if (first != 0 || last != bioseqlen-1)
+   if (first != 1 || last != bioseqlen)
    {
-      if (first != 0)
-         Message (MSG_ERROR, "The annotated accessions do not completely cover the bioseq:\n %s (the first aln) starts at position %d", accarray[0]->accession, accarray[0]->start_seq);
-      if (accarray[i-1]->stop_seq != bioseqlen-1)
-         Message (MSG_ERROR, "The annotated accessions do not completely cover the bioseq:\n %s (the last aln) goes to %d, bioseq length is %d", accarray[i-1]->accession, accarray[i-1]->stop_seq, bioseqlen-1);
+      if (first > CKA_GAPLEN)
+      {
+         sprintf(string, "The annotated accessions do not completely cover the bioseq %s:\n %s (the first aln) starts at position %d", textid, accarray[0]->accession, accarray[0]->start_seq);
+         ofp = FileOpen("cka_validate.txt", "w");
+         fprintf(ofp, "%s\n", string);
+         FileClose(ofp);
+         Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+         retval = FALSE;
+      } else if (first != 1)
+      {
+         Message(MSG_OK, "The annotated accessions do not completely cover the bioseq %s:\n %s (the first alignment) starts at position %d, but the gap is less than %d and is acceptable.", textid, accarray[0]->accession, accarray[0]->start_seq, CKA_GAPLEN);
+      }
+      if (accarray[i-1]->stop_seq < bioseqlen-CKA_GAPLEN)
+      {
+         sprintf (string, "The annotated accessions do not completely cover the bioseq %s:\n %s (the last aln) goes to %d, bioseq length is %d", textid, accarray[i-1]->accession, accarray[i-1]->stop_seq, bioseqlen);
+         if (first != 0)
+            ofp = FileOpen("cka_validate.txt", "a");
+         else
+            ofp = FileOpen("cka_validate.txt", "w");
+         fprintf(ofp, "%s", string);
+         FileClose(ofp);
+         Message(MSG_ERROR, "The following message was written to cka_validate.txt: %s", string);
+         retval = FALSE;
+      } else if (accarray[i-1]->stop_seq < bioseqlen)
+      {
+         Message(MSG_OK, "The annotated accesseions do not completely cover the bioseq %s:\n %s (the last alignment) goes to %d, bioseq length is %d, but the gap is less than %d and is acceptable", textid, accarray[i-1]->accession, accarray[i-1]->stop_seq, bioseqlen, CKA_GAPLEN);
+      }
       MemFree(accarray);
-      return FALSE;
    }
    MemFree(accarray);
-   return TRUE;
+   return retval;
 }
 
 static void CKA_RunChecker(SeqEntryPtr sep)
@@ -3593,6 +3652,7 @@ static void CKA_RunChecker(SeqEntryPtr sep)
    SeqIdPtr     lastid;
    SeqAlignPtr  sap;
    SeqHistPtr   shp;
+   Char         textid[42];
 
    if (sep == NULL)
    {
@@ -3600,7 +3660,6 @@ static void CKA_RunChecker(SeqEntryPtr sep)
       return;
    }
    acc_head = NULL;
-   SeqMgrIndexFeatures(0, (Pointer)(sep));
    SeqEntryExplore(sep, &acc_head, CKA_FindAllTpaDescr);
    lastid = NULL;
    if (acc_head == NULL)
@@ -3632,23 +3691,24 @@ static void CKA_RunChecker(SeqEntryPtr sep)
       if (ISA_na(bsp->mol))
       {
          sap = CKA_MakeAlign(bsp, acc_head);
+         SeqIdWrite(bsp->id, textid, PRINTID_TEXTID_ACC_VER, 41);
          if (CKA_ValidateSeqAlign(sap, acc_head, bsp->length))
-         {
+            Message(MSG_OK, "Alignments were successfully created and are being added to %s.", textid);
+         else
+            Message(MSG_OK, "Alignments were created but are not valid. They are being added to %s for review.", textid);
          /* make seq-hist and add it to record */
-            if (bsp->hist != NULL)
-            {
-               shp = bsp->hist;
-               if (shp->assembly != NULL)
-                  SeqAlignSetFree(shp->assembly);
-               shp->assembly = sap;
-            } else
-            {
-               shp = SeqHistNew();
-               shp->assembly = sap;
-               bsp->hist = shp;
-            }
+         if (bsp->hist != NULL)
+         {
+            shp = bsp->hist;
+            if (shp->assembly != NULL)
+               SeqAlignSetFree(shp->assembly);
+            shp->assembly = sap;
          } else
-            SeqAlignSetFree(sap);
+         {
+            shp = SeqHistNew();
+            shp->assembly = sap;
+            bsp->hist = shp;
+         }
       } else
          Message(MSG_ERROR, "%s is annotated on a non-nucleotide bioseq.", acc_head->accession);
       while (acc_head != NULL)
@@ -3722,11 +3782,14 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head)
    while (acc != NULL)
    {
       options = BLASTOptionNew("blastn", TRUE);
-      options->wordsize = 32;
-      options->gap_open = 0;
-      options->gap_extend = 0;
+      if (bsp->length > 10000)
+      {
    /* faster with no filtering */
-      options->is_megablast_search = TRUE;
+         options->is_megablast_search = TRUE;
+         options->gap_open = options->gap_extend = 0;
+         options->wordsize = 32;
+      } else
+         options->filter_string = StringSave("m L;R");
       sip = SeqIdFromAccessionDotVersion(acc->accession);
       bsp_tmp = BioseqLockById(sip);
       if (!ISA_na(bsp_tmp->mol))
@@ -4117,12 +4180,12 @@ typedef struct historyformdata {
 static SeqIdPtr VisStrDialogToSeqIdSet (DialoG d)
 
 {
-  long          gi;
-  SeqIdPtr      head = NULL;
-  ValNodePtr    list;
-  CharPtr       str;
-  TextSeqIdPtr  tsip;
-  ValNodePtr    vnp;
+  long        gi;
+  SeqIdPtr    head = NULL;
+  ValNodePtr  list;
+  SeqIdPtr    sip;
+  CharPtr     str;
+  ValNodePtr  vnp;
 
   if (d == NULL) return NULL;
   list = DialogToPointer (d);
@@ -4134,10 +4197,9 @@ static SeqIdPtr VisStrDialogToSeqIdSet (DialoG d)
         ValNodeAddInt (&head, SEQID_GI, (Int4) gi);
         */
       } else {
-        tsip = TextSeqIdNew ();
-        if (tsip != NULL) {
-          tsip->accession = StringSaveNoNull (str);
-          ValNodeAddPointer (&head, SEQID_GENBANK, (Pointer) tsip);
+        sip = SeqIdFromAccessionDotVersion (str);
+        if (sip != NULL) {
+          ValNodeLink (&head, sip);
         }
       }
     }
@@ -4187,6 +4249,7 @@ static ValNodePtr GetStringsForSeqIDs (SeqIdPtr sip)
       case SEQID_GENBANK :
       case SEQID_EMBL :
       case SEQID_DDBJ :
+      case SEQID_OTHER :
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL && (! StringHasNoText (tsip->accession))) {
           StringNCpy_0 (buf, tsip->accession, sizeof (buf));
@@ -4534,7 +4597,7 @@ typedef struct deffeats {
   Int2        numUnknown;
 } DefFeatsData, PNTR DefFeatsPtr;
 
-static Boolean GetMolBioFeatsGatherFunc (GatherContextPtr gcp, Boolean getGene, Boolean getMrna)
+static Boolean GetMolBioFeatsGatherFunc (GatherContextPtr gcp, Boolean getGene, Boolean getSnoRNA)
 
 {
   DefFeatsPtr  dfp;
@@ -4574,17 +4637,6 @@ static Boolean GetMolBioFeatsGatherFunc (GatherContextPtr gcp, Boolean getGene, 
       rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
       if (rrp == NULL) return TRUE;
       switch (rrp->type) {
-        case 2 :
-          if (getMrna) {
-            dfp = MemNew (sizeof (DefFeatsData));
-            if (dfp == NULL) return TRUE;
-            dfp->entityID = gcp->entityID;
-            dfp->itemID = gcp->itemID;
-            dfp->sfp = sfp;
-            dfp->subtype = FEATDEF_mRNA;
-            ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
-          }
-          break;
         case 3 :
           dfp = MemNew (sizeof (DefFeatsData));
           if (dfp == NULL) return TRUE;
@@ -4602,6 +4654,28 @@ static Boolean GetMolBioFeatsGatherFunc (GatherContextPtr gcp, Boolean getGene, 
           dfp->sfp = sfp;
           dfp->subtype = FEATDEF_rRNA;
           ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
+          break;
+         case 5 :
+          if (getSnoRNA) {
+            dfp = MemNew (sizeof (DefFeatsData));
+            if (dfp == NULL) return TRUE;
+            dfp->entityID = gcp->entityID;
+            dfp->itemID = gcp->itemID;
+            dfp->sfp = sfp;
+            dfp->subtype = FEATDEF_snRNA;
+            ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
+          }
+          break;
+       case 7 :
+          if (getSnoRNA) {
+            dfp = MemNew (sizeof (DefFeatsData));
+            if (dfp == NULL) return TRUE;
+            dfp->entityID = gcp->entityID;
+            dfp->itemID = gcp->itemID;
+            dfp->sfp = sfp;
+            dfp->subtype = FEATDEF_snoRNA;
+            ValNodeAddPointer (vnpp, 0, (Pointer) dfp);
+          }
           break;
         case 255 :
           if (rrp->ext.choice == 1) {
@@ -4654,12 +4728,6 @@ static Boolean GetCDStRNArRNAGatherFunc (GatherContextPtr gcp)
 }
 
 static Boolean GetGeneCDStRNArRNAGatherFunc (GatherContextPtr gcp)
-
-{
-  return GetMolBioFeatsGatherFunc (gcp, TRUE, FALSE);
-}
-
-static Boolean GetGeneCDStRNArRNAmRNAGatherFunc (GatherContextPtr gcp)
 
 {
   return GetMolBioFeatsGatherFunc (gcp, TRUE, TRUE);
@@ -4780,7 +4848,7 @@ extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
 
 static Int2  orgmod_rank [32];
-static Int2  subsource_rank [26];
+static Int2  subsource_rank [29];
 
 static Boolean StrainAlreadyInParentheses (CharPtr taxname, CharPtr strain)
 
@@ -4829,7 +4897,10 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
                   StringNCpy_0 (str, ap->name, sizeof (str));
                 }
               }
-              LabelAModifier (str, text, labelMods);
+              if (mod->subtype == ORGMOD_nat_host) {
+                StringCpy (str, "from");
+              }
+              LabelAModifier (str, text, labelMods || mod->subtype == ORGMOD_nat_host);
               if (! StringHasNoText (str)) {
                 ValNodeCopyStr (stringsPtr, orgmod_rank [mod->subtype], str);
               }
@@ -4842,7 +4913,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
 
     ssp = biop->subtype;
     while (ssp != NULL) {
-      if (ssp->subtype < 26 && subsource_rank [ssp->subtype] > 0) {
+      if (ssp->subtype < 29 && subsource_rank [ssp->subtype] > 0) {
         text [0] = '\0';
         str [0] = '\0';
         StringNCpy_0 (text, ssp->name, sizeof (text));
@@ -4853,7 +4924,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
             if (ptr != NULL) {
               *ptr = '\0';
             }
-            if (ssp->subtype == 23) { /* country */
+            if (ssp->subtype == SUBSRC_country) { /* country */
               ptr = StringStr (text, ":");
               if (ptr != NULL) {
                 *ptr = '\0';
@@ -4861,10 +4932,13 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
             }
           }
         }
-        if (ssp->subtype == 23 /* && (! labelMods) */) {
+        if (ssp->subtype == SUBSRC_country /* && (! labelMods) */) {
           StringCpy (str, "from");
         }
-        LabelAModifier (str, text, labelMods || (ssp->subtype == 23));
+        if (ssp->subtype == SUBSRC_lab_host /* && (! labelMods) */) {
+          StringCpy (str, "from");
+        }
+        LabelAModifier (str, text, labelMods || ssp->subtype == SUBSRC_country || ssp->subtype == SUBSRC_lab_host);
         if (! StringHasNoText (str)) {
           ValNodeCopyStr (stringsPtr, subsource_rank [ssp->subtype], str);
         }
@@ -5193,6 +5267,72 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                     } else {
                       StringCat (str, ", complete sequence");
                     }
+                  }
+                }
+              }
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_snoRNA) {
+          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+          if (rrp != NULL) {
+            if (rrp->ext.choice == 1) {
+              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
+              if (! StringHasNoText (str)) {
+                if (StringStr (str, "snoRNA") == NULL ||
+                    StringStr (str, "small nucleolar RNA") == NULL) {
+                  StringCat (str, " snoRNA");
+                }
+                if (dfp->genename != NULL) {
+                  StringNCpy_0 (text, dfp->genename, sizeof (text));
+                  if (! StringHasNoText (text)) {
+                    StringCat (str, " (");
+                    StringCat (str, text);
+                    StringCat (str, ")");
+                  }
+                }
+                if (dfp->lastInGroup || dfp->lastInType) {
+                  StringCat (str, " gene");
+                  if (count > 1) {
+                    StringCat (str, "s");
+                  }
+                  if (dfp->sfp->partial) {
+                    StringCat (str, ", partial sequence");
+                  } else {
+                    StringCat (str, ", complete sequence");
+                  }
+                }
+              }
+            }
+          }
+        } else if (dfp->subtype == FEATDEF_snRNA) {
+          rrp = (RnaRefPtr) dfp->sfp->data.value.ptrvalue;
+          if (rrp != NULL) {
+            if (rrp->ext.choice == 1) {
+              StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str));
+              if (! StringHasNoText (str)) {
+                if (StringStr (str, "snRNA") == NULL &&
+                    StringStr (str, "small nuclear RNA") == NULL) {
+                  StringCat (str, " snRNA");
+                }
+                if (dfp->genename != NULL) {
+                  StringNCpy_0 (text, dfp->genename, sizeof (text));
+                  if (! StringHasNoText (text)) {
+                    StringCat (str, " (");
+                    StringCat (str, text);
+                    StringCat (str, ")");
+                  }
+                }
+                if (dfp->lastInGroup || dfp->lastInType) {
+                  if (mip == NULL || mip->biomol != MOLECULE_TYPE_SNRNA) {
+                    StringCat (str, " gene");
+                    if (count > 1) {
+                      StringCat (str, "s");
+                    }
+                  }
+                  if (dfp->sfp->partial) {
+                    StringCat (str, ", partial sequence");
+                  } else {
+                    StringCat (str, ", complete sequence");
                   }
                 }
               }
@@ -5771,7 +5911,8 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
             mip->tech == MI_TECH_htgs_2 ||
             mip->tech == MI_TECH_est ||
             mip->tech == MI_TECH_sts ||
-            mip->tech == MI_TECH_survey) {
+            mip->tech == MI_TECH_survey ||
+            mip->tech == MI_TECH_wgs) {
           ttl = ValNodeExtract (&(bsp->descr), Seq_descr_title);
           if (ttl != NULL) {
             ttl = ValNodeFreeData (ttl);
@@ -6243,7 +6384,7 @@ static void DefLineModFormAcceptProc (ButtoN b)
         }
         for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
           if (StringICmp (ap->name, sourceModAlphaList [count].value) == 0 &&
-              ap->value > 0 && ap->value < 25) {
+              ap->value > 0 && ap->value < 29) {
             subsource_rank [ap->value] = 0;
           }
         }
@@ -6584,7 +6725,7 @@ extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean sm
     }
     for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
       if (StringICmp (ap->name, sourceModAlphaList [count].value) == 0 &&
-          ap->value > 0 && ap->value < 25) {
+          ap->value > 0 && ap->value < 29) {
         subsource_rank [ap->value] = sourceModAlphaList[count].rank + 1;
       }
     }
@@ -6662,6 +6803,13 @@ static void StringToLower (CharPtr str)
   }
 }
 
+static CharPtr molinfo_tech_list [] = {
+  "?", "standard", "EST", "STS", "survey", "genetic map", "physical map",
+  "derived", "concept-trans", "seq-pept", "both", "seq-pept-overlap",
+  "seq-pept-homol", "concept-trans-a", "htgs 1", "htgs 2", "htgs 3",
+  "fli cDNA", "htgs 0", "htc", "wgs", NULL
+};
+
 static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -6669,12 +6817,14 @@ static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, 
   BioseqContextPtr   bcp;
   BioSourcePtr       biop;
   BioseqPtr          bsp;
+  MolInfoPtr         mip;
   OrgModPtr          mod;
   OrgNamePtr         onp;
   OrgRefPtr          orp;
   SeqDescrPtr        sdp;
   SubSourcePtr       ssp;
   CharPtr            str;
+  Uint1              tech = 0;
   Char               text [256];
   ValNodePtr         ttl;
   ValNodePtr         vnp;
@@ -6694,6 +6844,30 @@ static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, 
     vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
     vnp = ValNodeFreeData (vnp);
   }
+  bcp = BioseqContextNew (bsp);
+  sdp = BioseqContextGetSeqDescr (bcp, Seq_descr_molinfo, NULL, NULL);
+  if (sdp != NULL) {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL) {
+      switch (mip->tech) {
+        case MI_TECH_est :
+        case MI_TECH_sts :
+        case MI_TECH_survey :
+        case MI_TECH_htgs_1 :
+        case MI_TECH_htgs_2 :
+        case MI_TECH_htgs_3 :
+        case MI_TECH_fli_cdna :
+        case MI_TECH_htgs_0 :
+        case MI_TECH_htc :
+        case MI_TECH_wgs :
+          tech = mip->tech;
+          break;
+        default :
+          break;
+      }
+    }
+  }
+  BioseqContextFree (bcp);
   str = MemNew (2000);
 
   orp = biop->org;
@@ -6747,6 +6921,13 @@ static void MakeNucleotideTitlesInSequinStyle (SeqEntryPtr sep, Pointer mydata, 
         mod = mod->next;
       }
     }
+  }
+
+  if (tech > 0) {
+    StringCpy (text, "[tech=");
+    StringCat (text, molinfo_tech_list [tech]);
+    StringCat (text, "] ");
+    StringCat (str, text);
   }
 
   TrimSpacesAroundString (str);
@@ -6855,17 +7036,36 @@ static void MakeProteinTitlesInSequinStyle (Uint2 entityID, SeqEntryPtr sep)
               StringCat (str, text);
               StringCat (str, "]");
             }
+            if (grp->syn != NULL) {
+              StringNCpy_0 (text, (CharPtr) grp->syn->data.ptrvalue, sizeof (text));
+              if (! StringHasNoText (text)) {
+                if (str [0] != '\0') {
+                  StringCat (str, " ");
+                }
+                StringCat (str, "[gene_syn=");
+                StringCat (str, text);
+                StringCat (str, "]");
+              }
+            }
           }
         }
         if (dfp->prot != NULL) {
           prp = (ProtRefPtr) dfp->prot->data.value.ptrvalue;
-          if (prp != NULL && prp->name != NULL) {
-            StringNCpy_0 (text, (CharPtr) prp->name->data.ptrvalue, sizeof (text));
-            if (! StringHasNoText (text)) {
-              if (str [0] != '\0') {
-                StringCat (str, " ");
+          if (prp != NULL) {
+            if (prp->name != NULL) {
+              StringNCpy_0 (text, (CharPtr) prp->name->data.ptrvalue, sizeof (text));
+              if (! StringHasNoText (text)) {
+                if (str [0] != '\0') {
+                  StringCat (str, " ");
+                }
+                StringCat (str, "[protein=");
+                StringCat (str, text);
+                StringCat (str, "]");
               }
-              StringCat (str, "[protein=");
+            }
+            StringNCpy_0 (text, (CharPtr) prp->desc, sizeof (text));
+            if (! StringHasNoText (text)) {
+              StringCat (str, "[prot_desc=");
               StringCat (str, text);
               StringCat (str, "]");
             }
@@ -6921,7 +7121,7 @@ static Boolean LIBCALLBACK SequinFTableBioseq (BioseqPtr bsp, SeqMgrBioseqContex
 
   if (bsp == NULL) return TRUE;
   fp = (FILE *) context->userdata;
-  BioseqToGnbk (bsp, NULL, FTABLE_FMT, DUMP_MODE, NORMAL_STYLE, 0, fp);
+  BioseqToGnbk (bsp, NULL, FTABLE_FMT, DUMP_MODE, NORMAL_STYLE, 0, 0, NULL, fp);
   return TRUE;
 }
 

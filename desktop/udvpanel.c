@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.52 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvpanel.c,v $
+* Revision 6.53  2002/03/14 16:38:48  kans
+* SeqMgrIndexFeaturesEx takes new parameter
+*
 * Revision 6.52  2000/06/27 20:46:38  hurwitz
 * fixed bugs with select rectangle, added select row option
 *
@@ -3627,7 +3630,7 @@ WindoW				hWinMain;
 		vdp->bDisplayRevComp = FALSE;
 	/*rebuilt the Feature Index*/
 	SeqMgrClearFeatureIndexes(0,vdp->bsp_i.bsp);
-	SeqMgrIndexFeaturesEx (0, vdp->bsp_i.bsp, vdp->bDisplayRevComp);
+	SeqMgrIndexFeaturesEx (0, vdp->bsp_i.bsp, vdp->bDisplayRevComp, FALSE);
 	
 	/*rebuilt the display*/
 	UDV_resize_viewer(vdp->UnDViewer,vdp);	

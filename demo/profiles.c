@@ -1,4 +1,4 @@
-/* $Id: profiles.c,v 6.32 2000/11/20 14:37:20 madden Exp $
+/* $Id: profiles.c,v 6.33 2001/12/28 18:02:33 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,12 @@ Contents: main routines for impala program to search a database of
   PSI-BLAST-generated position-specific score matrices
 
 =======
- $Revision: 6.32 $
+ $Revision: 6.33 $
 
  $Log: profiles.c,v $
+ Revision 6.33  2001/12/28 18:02:33  dondosha
+ Keep score and scoreThisAlign for each local alignment, so as to allow tie-breaking by score
+
  Revision 6.32  2000/11/20 14:37:20  madden
  Changed FileOpen mode for byte-encoded checkpoint files from "r" to "rb" or from "w" to "wb" to solve a problem on Windows NT.
 
@@ -934,7 +937,7 @@ static SeqAlignPtr convertSWalignsToSeqAligns(SWResults * SWAligns,  Uint1Ptr qu
                      curSW->reverseAlignScript, curSW->queryStart, 
 		     curSW->seqStart);
       nextSeqAlign = GapXEditBlockToSeqAlign(nextEditBlock, curSW->subject_id, query_id);
-      nextSeqAlign->score = addScoresToSeqAlign(curSW->score, 
+      nextSeqAlign->score = addScoresToSeqAlign(curSW->scoreThisAlign, 
            curSW->eValueThisAlign, curSW->Lambda, curSW->logK);
       if (NULL == seqAlignList)
         seqAlignList = nextSeqAlign;
@@ -1004,6 +1007,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
    Int4 numAligns; /*number of matching alignments*/
    Nlm_FloatHi firstEvalue, lowerBoundEvalue, thisEvalue, bestEvalue; 
        /*e-values for one profile, first two are estimates*/
+   Int4 bestScore, newScore; /*best score for this match, score for 1 alignment*/
    Int4 queryEnd, dbEnd, finalQueryEnd, finalDbEnd; /*end positions of optimal local alignment*/
    Int4 score; /*score of optimal local alignment*/
    Int4 *alignScript, *reverseAlignScript; 
@@ -1228,6 +1232,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 		 if ((XdropAlignScore < score) && (doublingCount < 3)) 
 		   MemFree(reverseAlignScript);
 	       } while ((XdropAlignScore < score) && (doublingCount < 3));
+               newScore = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / scalingFactor);
 	       thisSequenceFile = FileOpen(oneSequenceFileName, "r");
 	       dbSequence = readSequence(thisSequenceFile, &dbSequenceLength, 
 					 &subject_id, TRUE, dbSequenceLength+2, i+1);
@@ -1237,8 +1242,11 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 		 /* complement alignment script to put query on top*/
 		 *revASptr = -(*revASptr); 
 	       }
-	       if (!foundMatchForThisMatrix) 
+	       if (!foundMatchForThisMatrix) {
 		 bestEvalue = thisEvalue;
+		 bestScore = newScore;
+	       }
+
 	       newSW = (SWResults *) MemNew(1 * sizeof(SWResults)); 
 	       newSW->seq = dbSequence;
 	       newSW->seqStart = dbStart;
@@ -1246,7 +1254,8 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 	       newSW->queryStart = queryStart;
 	       newSW->queryEnd = queryStart + finalQueryEnd;
 	       newSW->reverseAlignScript = reverseAlignScript;
-	       newSW->score = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / scalingFactor);
+	       newSW->score = bestScore;
+	       newSW->scoreThisAlign = newScore;
 	       newSW->eValue = bestEvalue;
 	       newSW->eValueThisAlign = thisEvalue;
 	       newSW->subject_index = i;

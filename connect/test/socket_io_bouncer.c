@@ -1,4 +1,4 @@
-/*  $Id: socket_io_bouncer.c,v 6.1 2000/04/07 20:04:37 vakatov Exp $
+/*  $Id: socket_io_bouncer.c,v 6.3 2002/03/22 19:46:11 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,18 +31,22 @@
  *
  * --------------------------------------------------------------------------
  * $Log: socket_io_bouncer.c,v $
+ * Revision 6.3  2002/03/22 19:46:11  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.2  2002/01/16 21:23:14  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.1  2000/04/07 20:04:37  vakatov
  * Initial revision
  *
  * ==========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
-
 #include <connect/ncbi_socket.h>
 #include <stdio.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 static FILE* s_LogFile;

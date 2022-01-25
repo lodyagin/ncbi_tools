@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001  2:17 PM
+*    Generated using ASNCODE Revision: 6.13 at Mar 7, 2002  1:32 PM
 *
 **************************************************/
 
@@ -145,9 +145,9 @@ NLM_EXTERN Boolean LIBCALL CddTreeAsnWrite PROTO (( CddTreePtr , AsnIoPtr, AsnTy
 *    CddTreeSet
 *
 **************************************************/
-typedef struct struct_CddTree CddTreeSet;
-typedef struct struct_CddTree PNTR CddTreeSetPtr;
-#define CddTreeSetNew() CddTreeNew() 
+typedef struct struct_Cdd_tree CddTreeSet;
+typedef struct struct_Cdd_tree PNTR CddTreeSetPtr;
+#define CddTreeSetNew() Cdd_treeNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 

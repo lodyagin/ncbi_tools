@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: 
 *
@@ -53,14 +53,28 @@ NLM_EXTERN CONN MimOpenConnection (
 )
 
 {
-  Char  query [64];
+  CONN        conn;
+  size_t      n_written;
+  Char        query [64];
+  EIO_Status  status;
 
   if (uid < 1) return NULL;
 
+  /*
   sprintf (query, "cmd=ASN.1&id=%ld", (long) uid);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/dispomim.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
+  */
+
+  sprintf (query, "id=%ld", (long) uid);
+  conn = QUERY_OpenServiceQuery ("MimFetch", NULL, 30);
+  if (conn == NULL) return NULL;
+
+  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
+  if (status != eIO_Success) return NULL;
+
+  return conn;
 }
 
 #ifdef OS_MAC

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.5  2002/01/08 20:48:22  kans
+* PubLabelUnique internal call to PubLabelUnique (..., unique), not PubLabel
+*
 * Revision 6.4  2001/11/20 14:50:54  kans
 * PubLabelUnique return immediately if PMID or MUID, already unique
 *
@@ -1397,7 +1400,7 @@ NLM_EXTERN Int2 LIBCALL PubLabelUnique (ValNodePtr pub, CharPtr buf, Int2 buflen
 					else
 						first = FALSE;
 
-					diff = PubLabel(eq[i], buf, buflen, OM_LABEL_CONTENT);
+					diff = PubLabelUnique (eq[i], buf, buflen, OM_LABEL_CONTENT, unique);
 					buflen -= diff; buf += diff;
 				}
 			}

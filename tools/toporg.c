@@ -1372,6 +1372,7 @@ static SeqLocPtr GetAnticodonFromObject(SeqFeatPtr sfp)
 ****************************************************************************/
 void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
+	BioSourcePtr    biop;
 	BioseqPtr       bsp;
 	BioseqSetPtr    bssp;
 	ValNodePtr		descr;
@@ -1381,6 +1382,7 @@ void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	GeneRefPtr		grp;
 	QualMapPtr		qmp;
    	RnaRefPtr  		rrp;
+   	SubSourcePtr    ssp;
 	tRNAPtr			trna;
 	GBQualPtr		q, qnext;
 		
@@ -1400,7 +1402,25 @@ void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		descr = bssp->descr;
 		sap = bssp->annot;
 	}
-	
+
+	while (descr != NULL) {
+		if (descr->choice == Seq_descr_source) {
+			biop = (BioSourcePtr) descr->data.ptrvalue;
+			if (biop != NULL) {
+				for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+					if (ssp->subtype == SUBSRC_map && ssp->name != NULL) {
+			 			if (qmp->name == NULL) {
+						 	qmp->name = StringSave (ssp->name);
+			 			} else if (StringCmp (qmp->name, ssp->name) != 0) {
+			 				qmp->same = FALSE;
+			 			}
+					}
+				}
+			}
+		}
+		descr = descr->next;
+	}
+
 /* look for all the same maploc and place it to SubSource*/
 	for (ap = sap; ap != NULL; ap = ap->next) {
 		if (ap->type != 1) {
@@ -4509,9 +4529,11 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   ErrSev          msev;
   Int4            muid = 0;
   Boolean         objMgrFilter [OBJ_MAX];
+  SeqEntryPtr     oldscope;
   ValNodePtr      vnp;
 
   if (sep == NULL) return;
+  oldscope = SeqEntrySetScope (sep);
   msev = ErrSetMessageLevel (SEV_MAX);
   lsev = ErrSetLogLevel (SEV_MAX);
   entityID = SeqMgrGetEntityIDForSeqEntry (sep);
@@ -4602,8 +4624,10 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   InstantiateProteinTitles (entityID, NULL);
   SeqMgrClearFeatureIndexes (entityID, NULL);
   BasicSeqEntryCleanup (sep);
+  TransTableFreeAll ();
   ErrSetMessageLevel (msev);
   ErrSetLogLevel (lsev);
+  SeqEntrySetScope (oldscope);
 }
 
 extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)

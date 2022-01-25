@@ -31,7 +31,7 @@ objent2AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.13 at Nov 26, 2001  8:44 AM
+*    Generated using ASNCODE Revision: 6.13 at Jan 28, 2002 12:12 PM
 *    Manual addition to swap bytes in id list if IS_LITTLE_ENDIAN
 *
 **************************************************/
@@ -996,6 +996,7 @@ Entrez2RequestNew(void)
 {
    Entrez2RequestPtr ptr = MemNew((size_t) sizeof(Entrez2Request));
 
+   ptr -> use_history = 0;
    return ptr;
 
 }
@@ -1096,6 +1097,13 @@ Entrez2RequestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> cookie = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_REQUEST_use_history) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> use_history = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1161,6 +1169,10 @@ Entrez2RequestAsnWrite(Entrez2RequestPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> cookie != NULL) {
       av.ptrvalue = ptr -> cookie;
       retval = AsnWrite(aip, ENTREZ2_REQUEST_cookie,  &av);
+   }
+   av.boolvalue = ptr -> use_history;
+   if (ptr -> use_history) { /* temporary until server has new spec */
+     retval = AsnWrite(aip, ENTREZ2_REQUEST_use_history,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -1428,8 +1428,8 @@ extern int LIBCALLBACK ValidErrHook (const ErrDesc *err)
   ErrSev      sev;
 
   if (err != NULL) {
-    /* cannot suppress FileOpen report here because it is same as ERR_SEQ_DESCR_Inconsistent */
-    /* if (err->errcode == E_File && err->subcode == E_FOpen) return 1; */
+    /* FileOpen report matches ERR_SEQ_DESCR_FileOpenCollision instead of ERR_SEQ_DESCR_Inconsistent */
+    if (err->errcode == E_File && err->subcode == E_FOpen) return 1;
     name1 = NULL;
     name2 = NULL;
     if (err->module [0] != '\0') {

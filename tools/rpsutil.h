@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.16 2001/08/28 17:45:34 madden Exp $
+/* $Id: rpsutil.h,v 6.17 2002/03/26 16:47:42 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.17  2002/03/26 16:47:42  madden
+* Add scaled Karlin-Altschul K paramter to structure
+*
 * Revision 6.16  2001/08/28 17:45:34  madden
 * Add is_tabular_comments field to options
 *
@@ -147,6 +150,7 @@ typedef struct _RPSInfo {
     Nlm_MemMapPtr mmMatrix;     /* Memory map pointer for the matrix file */
     Int4 matrixCount;           /* Total number of PSSM matrixes */
     Int4Ptr offsets;            /* Offsets of matrixes in the file */
+    Nlm_FloatHiPtr karlinK;      /* Karlin-Altschul K paramter from the aux file. */
     RPScoreRow PNTR bigMatrix;  /* PSI Matrixes for all sequences */
     RPSLookupPtr lookup;        /* Precalculated lookup tables */
     Boolean query_is_prot;      /* Do we need translate query sequence ? */

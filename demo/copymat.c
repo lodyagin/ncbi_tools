@@ -34,6 +34,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.22  2002/04/08 19:02:31  madden
+Allow float for threshold
+
 Revision 6.21  2001/06/07 16:45:08  shavirin
 Removed bug related to 64bit address structure on SGI platform.
 
@@ -108,7 +111,7 @@ static Args myargs [] = {
     { "Create RPS mem map file(s)", /* 2 */
       "T", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Threshold for extending hits for RPS database", /* 3 */
-      "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
+      "11", NULL, NULL, FALSE, 'f', ARG_FLOAT, 0.0, 0, NULL},
     { "Word size for RPS database", /* 4 */
       "3", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
 };
@@ -445,7 +448,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     start = seqlens[0]; /* 0 */
     
     if(BlastNewFindWordsEx(lookup, &posMatrix[start], 0, all_length, 
-                           all_words, myargs[3].intvalue * scalingFactor, 
+                           all_words, (Int4) (myargs[3].floatvalue*scalingFactor), 
                            myargs[4].intvalue, 0) < 0) {
         ErrPostEx(SEV_ERROR, 0,0, "Failure to create llokup table");
         return FALSE;

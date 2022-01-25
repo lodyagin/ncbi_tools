@@ -32,8 +32,23 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.90 $ 
+/* $Revision: 6.95 $ 
 * $Log: blastpri.h,v $
+* Revision 6.95  2002/04/18 16:18:20  dondosha
+* Added BlastPrintTabulatedResultsEx with extra argument to keep track of progress
+*
+* Revision 6.94  2002/04/15 20:42:05  jianye
+* Added getFastaStyleTitle(BioseqPtr bsp)
+*
+* Revision 6.93  2002/03/26 16:46:41  madden
+* Move calculation of effective lengths to BlastCalculateEffectiveLengths
+*
+* Revision 6.92  2002/03/06 18:34:32  dondosha
+* Pass the filtered locations back from the megablast engine to use in formatting
+*
+* Revision 6.91  2002/03/05 17:58:57  dondosha
+* Set same offsets for the traceback as for preliminary extension for megablast with non-greedy extensions
+*
 * Revision 6.90  2002/01/04 20:16:12  dondosha
 * Correction for single strand blastx with OOF gapping
 *
@@ -755,6 +770,11 @@ void BlastSaveCurrentHspGapped PROTO((BlastSearchBlkPtr search, BLAST_Score
 				      score, Int4 q_offset, Int4 s_offset, Int4
 				      q_length, Int4 s_length, Int2 context,
 				      GapXEditScriptPtr esp));
+void BlastNtSaveCurrentHspGapped PROTO((BlastSearchBlkPtr search, BLAST_Score
+				      score, Int4 q_offset, Int4 s_offset, Int4
+				      q_length, Int4 s_length, 
+                                      Int4 q_gapped_start, Int4 s_gapped_start,
+                                      Int2 context, GapXEditScriptPtr esp));
 
 void BlastNtSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context, Int4 query_gap_start, Int4 subject_gap_start));
 
@@ -922,6 +942,12 @@ StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length,
 int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
 int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
 void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp));
+void BlastPrintTabulatedResultsEx PROTO((SeqAlignPtr seqalign, BioseqPtr
+                                         query_bsp, SeqLocPtr query_slp, Int4
+                                         num_alignments, CharPtr blast_program,
+                                         Boolean is_ungapped, Boolean
+                                         believe_query, Int4 q_shift, Int4
+                                         s_shift, FILE *fp, int *num_formatted));
 void
 BlastProcessGiLists PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                            BlastDoubleInt4Ptr gi_list, Int4Ptr gi_list_size));
@@ -936,6 +962,21 @@ SeqAlignPtr BLASTPostSearchLogic PROTO((BlastSearchBlkPtr search,BLAST_OptionsBl
 Boolean
 BlastNtWordUngappedExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, 
                                  Int4 s_off, Int4 cutoff));
+SeqLocPtr blastMergeFilterLocs PROTO((SeqLocPtr filter_slp, 
+                                      SeqLocPtr lcmask, Boolean translate,
+                                      Int2 frame, Int4 length));
+
+/*
+        function to calculate effective query length and
+        effective db length.
+*/
+
+Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options,
+        Int4 dbseq_num, Int8 dblen, Int4 length, BLAST_KarlinBlkPtr kbp,
+        Int4Ptr effective_query_length, Int4Ptr length_adjustment);
+
+/*return query fasta style title(id+title). New memory was allocated for this title*/
+CharPtr getFastaStyleTitle(BioseqPtr bsp);
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -92,7 +92,6 @@ typedef struct bioseqviewdata {
   PrompT          clickMe;
 
   Boolean         useScrollText;
-  Boolean         showContigJoin;
   Boolean         launchEditors;
   Boolean         launchSubviewers;
   Boolean         sendSelectMessages;
@@ -115,11 +114,12 @@ typedef struct bioseqviewdata {
   PopuP           numControl;
 
   PopuP           ffModeCtrl;
+  PopuP           ffStyleCtrl;
 
   PopuP           newGphStyle;
   PopuP           newGphFilter;
   PopuP           newGphScale;
-  PopuP           newGphLayout;
+  ChoicE          newGphLayout;
 
   ValNodePtr      slp_list;
   ValNodePtr      g_list;
@@ -137,6 +137,8 @@ typedef struct bioseqviewdata {
   PoinT           pnt_start;
   PoinT           pnt_stop;
   Boolean         old_rect_shown;
+
+  ValNodePtr      bsplist;
 
   FonT            displayFont;
   ValNodePtr      sentinelList;
@@ -189,12 +191,15 @@ extern BioseqPageData gnbkPageData;
 extern BioseqPageData emblPageData;
 extern BioseqPageData ddbjPageData;
 extern BioseqPageData gnptPageData;
+extern BioseqPageData ftblPageData;
 
 extern BioseqPageData fstaPageData;
 extern BioseqPageData qualPageData;
 extern BioseqPageData asnPageData;
 extern BioseqPageData xmlPageData;
 extern BioseqPageData dskPageData;
+
+extern BioseqPageData asn2gphGphPageData;
 
 /*
 *  The SeqViewProcsPtr may be registered with a call to SetAppProperty

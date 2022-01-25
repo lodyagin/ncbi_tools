@@ -1,4 +1,4 @@
-/* $Id: wwwblast.c,v 6.29 2000/11/29 16:11:31 dondosha Exp $
+/* $Id: wwwblast.c,v 6.30 2002/01/08 22:36:25 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description:
 *        Standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.c,v $
+* Revision 6.30  2002/01/08 22:36:25  dondosha
+* Added tabular output functionality
+*
 * Revision 6.29  2000/11/29 16:11:31  dondosha
 * If multiple queries, send proper lower case mask to the search engine
 *
@@ -238,6 +241,8 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     DenseSegPtr dsp, next_dsp;
     AsnIoPtr xml_aip;
     MegaBlastResultsPtr mb_results = NULL;
+    Boolean tabular_output = (theInfo->align_view == HitTable || 
+                              theInfo->align_view == HitTableWithHeader);
     
     MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
     MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
@@ -253,7 +258,8 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     init_buff_ex(85);
     dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
     
-    if (dbinfo && !(options->is_megablast_search && options->no_traceback))
+    if (dbinfo && !tabular_output && 
+        !(options->is_megablast_search && options->no_traceback))
         PrintDbInformationBasic(database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, stdout, TRUE);
     dbinfo = BlastDbinfoFree(dbinfo);
     free_buff();
@@ -320,9 +326,9 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
           mb_hit = mb_hit->next;
        }
        MegaBlastResultsFree(mb_results);
-    } else if (!seqalign) 
+    } else if (!seqalign) {
        done = FALSE;
-
+    }
     
     ReadDBBioseqFetchEnable ("blastall", database, db_is_na, TRUE);
     
@@ -331,6 +337,19 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     if(theInfo->xml_output)
         xml_aip = AsnIoOpen("stdout", "wx");
 
+    if (tabular_output) {
+       if (theInfo->align_view == HitTableWithHeader)
+          PrintTabularOutputHeader(database, bsp, slp,
+              (options->is_megablast_search ? "megablast" : program),
+              0, FALSE, stdout);
+
+       BlastPrintTabulatedResults(seqalign, bsp, slp, 
+                                  theInfo->number_of_alignments,
+                                  program, 
+                                  !theInfo->options->gapped_calculation,
+                                  FALSE, SeqLocStart(slp), 0, stdout);
+       SeqAlignSetFree(seqalign);
+    } else {
     while (seqalign) {
         if (!options->is_megablast_search)
             next_seqalign = NULL;
@@ -454,7 +473,8 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
             seqannot = SeqAnnotFree(seqannot);
         seqalign = next_seqalign;
         fprintf(stdout, "<PRE>\n");
-    } 
+    }
+    } /* End if not hit table */ 
     if (!done) { /* seqalign == NULL */
     if(theInfo->xml_output && !options->is_ooframe) {
        BlastErrorMsgPtr error_msg;
@@ -478,7 +498,7 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
        }
        
        AsnIoReset(xml_aip);
-    } else {
+    } else if (!tabular_output) {
        fprintf(stdout, "\n\n ***** No hits found ******\n\n");
     }
     }
@@ -498,7 +518,8 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
                
     init_buff_ex(85);
     tx_dbinfo_head = tx_dbinfo;
-    if (!(options->is_megablast_search && options->no_traceback)) {
+    if (!tabular_output && 
+        !(options->is_megablast_search && options->no_traceback)) {
         while (tx_dbinfo) {
             PrintDbReport(tx_dbinfo, 70, stdout);
             tx_dbinfo = tx_dbinfo->next;
@@ -507,18 +528,21 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     tx_dbinfo_head = TxDfDbInfoDestruct(tx_dbinfo_head);
     
     if (ka_params) {
-        if (!(options->is_megablast_search && options->no_traceback))
+        if (!tabular_output && 
+            !(options->is_megablast_search && options->no_traceback))
             PrintKAParameters(ka_params->lambda, ka_params->k, ka_params->h, 
                               70, stdout, FALSE);
             MemFree(ka_params);
     }
     if (ka_params_gap) {
-        if (!(options->is_megablast_search && options->no_traceback))
+        if (!tabular_output && 
+            !(options->is_megablast_search && options->no_traceback))
             PrintKAParameters(ka_params_gap->lambda, ka_params_gap->k, ka_params_gap->h, 70, stdout, TRUE);
         MemFree(ka_params_gap);
     }
     
-    if (!(options->is_megablast_search && options->no_traceback))
+    if (!tabular_output && 
+        !(options->is_megablast_search && options->no_traceback))
         PrintTildeSepLines(params_buffer, 70, stdout);
     
     printf("</PRE></BODY></HTML>\n");
@@ -708,6 +732,8 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
     AsnIoPtr xml_aip;
     MegaBlastResultsPtr mb_results = NULL;
     BLAST_OptionsBlkPtr options = theInfo->options;
+    Boolean tabular_output = (theInfo->align_view == HitTable || 
+                              theInfo->align_view == HitTableWithHeader);
 
     if(theInfo == NULL)
 	return FALSE;
@@ -717,13 +743,13 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
     query_slp = theInfo->query_slp;
     lcase_mask = query_lcase_mask = options->query_lcase_mask;
 
-    if(!theInfo->xml_output && 
+    if(!theInfo->xml_output && !tabular_output && 
        !(is_megablast && options->no_traceback)) {
         PrintDbInformation(theInfo->database, !theInfo->db_is_na, 
                            70, stdout, TRUE);
     }
 
-    if(options->entrez_query != NULL && 
+    if(!tabular_output && options->entrez_query != NULL && 
        theInfo->gi_list_total > 0) {
 
         printf("Your search was limited by an Entrez query: '%s'\n"
@@ -855,6 +881,20 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                                    theInfo->fake_bsp, other_returns, 0, 0, NULL);
                    AsnIoReset(xml_aip);
                     /* printf("</XM>"); */
+                } else if (tabular_output) {
+                   if (theInfo->align_view == HitTableWithHeader)
+                      PrintTabularOutputHeader(theInfo->database, 
+                          theInfo->fake_bsp, query_slp, 
+                          (options->is_megablast_search ? 
+                           "megablast" : theInfo->program),
+                          0, FALSE, stdout);
+
+                   BlastPrintTabulatedResults(seqalign, theInfo->fake_bsp, 
+                        query_slp, theInfo->number_of_alignments, 
+                        theInfo->program, 
+                        !theInfo->options->gapped_calculation, FALSE, 
+                        (query_slp ? SeqLocStart(query_slp) : 0), 0, 
+                        stdout);
                 } else {
                     seqannot = SeqAnnotNew();
                     seqannot->type = 2;
@@ -992,7 +1032,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             txmatrix = (Int4Ptr PNTR) TxMatrixDestruct(txmatrix);
         
         dbinfo_head = dbinfo;
-        if(!theInfo->xml_output && 
+        if(!theInfo->xml_output && !tabular_output && 
            !(is_megablast && options->no_traceback)) {        
             fprintf(stdout, "<PRE>");
             init_buff_ex(85);
@@ -1005,7 +1045,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
         
         if (ka_params) {
-            if(!theInfo->xml_output && 
+            if(!theInfo->xml_output && !tabular_output && 
                !(is_megablast && options->no_traceback)) {        
                 PrintKAParameters(ka_params->Lambda, ka_params->K, 
                                   ka_params->H, 70, stdout, FALSE);
@@ -1014,7 +1054,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         }
         
         if (ka_params_gap) {
-            if(!theInfo->xml_output && 
+            if(!theInfo->xml_output && !tabular_output &&
                !(is_megablast && options->no_traceback)) {        
                 PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K,
                                   ka_params_gap->H, 70, stdout, TRUE);
@@ -1022,7 +1062,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             MemFree(ka_params_gap);
         }
         
-        if(!theInfo->xml_output && 
+        if(!theInfo->xml_output && !tabular_output && 
            !(is_megablast && options->no_traceback)) {        
             
             PrintTildeSepLines(params_buffer, 70, stdout);
@@ -1031,7 +1071,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             
             fprintf(stdout, "<HR>\n");
             
-            if(theInfo->show_tax_blast) {
+            if( !tabular_output && theInfo->show_tax_blast) {
                 TXBHtmlReport(seqalign, stdout, theInfo->query_is_na,
                               theInfo->db_is_na, theInfo->database, 
                               NULL, NULL, theInfo->show_gi);
@@ -1151,7 +1191,8 @@ Int2 Main(void)
 
     /* Print BLAST Header */
 
-    if(!theInfo->xml_output) {        
+    if(!theInfo->xml_output && 
+       theInfo->align_view != HitTableWithHeader) {        
         WWWBlastPrintHeader(theInfo);
     }
 

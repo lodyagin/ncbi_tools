@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnmime.h10";
-static AsnValxNode avnx[13] = {
+static char * asnfilename = "asnmime.h12";
+static AsnValxNode avnx[16] = {
     {20,"docsum" ,1,0.0,&avnx[1] } ,
     {20,"genbank" ,2,0.0,&avnx[2] } ,
     {20,"genpept" ,3,0.0,&avnx[3] } ,
@@ -23,9 +23,12 @@ static AsnValxNode avnx[13] = {
     {20,"medlars" ,10,0.0,&avnx[10] } ,
     {20,"embl" ,11,0.0,&avnx[11] } ,
     {20,"pdb" ,12,0.0,&avnx[12] } ,
-    {20,"kinemage" ,13,0.0,NULL } };
+    {20,"kinemage" ,13,0.0,NULL } ,
+    {20,"ncbi-backbone" ,2,0.0,&avnx[14] } ,
+    {20,"ncbi-all-atom" ,3,0.0,&avnx[15] } ,
+    {20,"pdb-model" ,4,0.0,NULL } };
 
-static AsnType atx[80] = {
+static AsnType atx[81] = {
   {401, "Ncbi-mime-asn1" ,1,0,0,0,0,1,0,0,NULL,&atx[16],&atx[1],0,&atx[13]} ,
   {0, "entrez" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[22]} ,
   {410, "Entrez-general" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[3],0,&atx[23]} ,
@@ -104,11 +107,12 @@ static AsnType atx[80] = {
   {0, "user-annotations" ,128,5,0,1,0,0,0,0,NULL,&atx[37],NULL,0,NULL} ,
   {0, "cdd" ,128,1,0,0,0,0,0,0,NULL,&atx[77],NULL,0,NULL} ,
   {404, "Cdd" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[9]} ,
-  {0, "structures" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[79],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[13],NULL,0,NULL} };
+  {0, "structures" ,128,1,0,1,0,0,0,0,NULL,&atx[27],&atx[79],0,&atx[80]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[13],NULL,0,NULL} ,
+  {0, "structure-type" ,128,2,0,1,0,0,0,0,NULL,&atx[19],&avnx[13],0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Mime" , "asnmime.h10",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Mime" , "asnmime.h12",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -184,6 +188,7 @@ static AsnModulePtr amp = ampx;
 #define ALIGNS_CDD_seq_align_data_cdd &at[76]
 #define SEQS_ALIGNS_CDD_structures &at[78]
 #define SEQS_ALIGNS_CDD_structures_E &at[79]
+#define SEQS_ALIGNS_CDD_structure_type &at[80]
 
 #define BUNDLE_SEQS_ALIGNS &at[66]
 #define BUNDLE_SEQS_ALIGNS_sequences &at[67]

@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.93 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,25 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.98  2002/04/18 19:35:07  camacho
+* 1. Added fdfilter/genmask callbacks for wgs subsets
+* 2. Modified fdfilter/genmask refseq_protein callback function
+* 3. Fixed problem in readdb_read_alias_file to read multiple oidlists
+*
+* Revision 6.97  2002/03/08 16:58:50  camacho
+* Added accessions to dump info files *.[pn]di
+*
+* Revision 6.96  2002/01/25 17:06:57  camacho
+* Added new criteria to create new refseq databases
+*
+* Revision 6.95  2002/01/24 18:47:48  camacho
+* Moved RDBTaxNamesFree from readdb.[ch] to txalign.[ch]
+*
+* Revision 6.94  2002/01/11 19:22:26  camacho
+* 1. Added preferred_gi field to ReadDBFILE structure.
+* 2. Modified FDReadDeflineAsn to return the preferred gi as the
+*    first element of the list of BlastDefLine structures (if set).
+*
 * Revision 6.93  2001/12/18 13:01:51  camacho
 * Added new flag -D to dump blast database in FASTA format
 *
@@ -716,7 +735,6 @@ void RDBTaxInfoClose(RDBTaxInfoPtr tip);
 /* Main function to get taxonomy names for given tax_id from
    blast taxonomy database. Returns NULL if tax_id is not in the database */
 RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id);
-void RDBTaxNamesFree(RDBTaxNamesPtr tnames);
 
 #define TAX_DB_MAGIC_NUMBER 0x8739
 
@@ -774,8 +792,11 @@ if there is no mem-mapping or it failed. */
 	Int4		    sparse_idx;/* Sparse indexes indicator */
         Char                full_filename[PATH_MAX]; /* Full path for the file */
         ReadDBSharedInfoPtr shared_info;
-	Int4 	            gi_target; /* only this gi should be retrieved if non-zero. */
+	Int4 	            gi_target; /* only this gi should be retrieved */
+                                       /* if non-zero. */
         CharPtr             gifile;    /* Path to a file with the gi list */
+        Int4		    preferred_gi; /* this gi should be listed first */
+                                          /* in the bioseq if non-zero */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
     
 /* Function prototypes */
@@ -1066,7 +1087,7 @@ typedef struct FASTALookup {
 
 typedef struct _FDB_options {
     Int4  version;   /* Version of the database created by formatdb program
-	    	 	currently supported are 3 - FORMATDV_VER_TEXT and
+	    	 	currently supported are 3 - FORMATDB_VER_TEXT and
 	    	 	4 - FORMATDB_VER - for ASN.1 structured deflines */
     CharPtr db_title;    /* Title for the database to be created */
     CharPtr db_file;     /* Name for input data file - 'IN' name */
@@ -1099,6 +1120,7 @@ typedef struct _FDB_options {
    CharPtr	alias_file, /* name of alias file to be generated. */
 		gi_file,	/* Gi file to be used in processing. */
 		gi_file_bin;	/* Gi file to be used in processing. */
+
 } FDB_options, PNTR FDB_optionsPtr;
     
 typedef struct formatdb 
@@ -1193,12 +1215,15 @@ typedef	struct di_record {
     Int4    len;
     Int4    hash;
     Int4    date;
-	Int4	gi_threshold; /* for 'month' subset */
+    CharPtr acc; /* accession should not exceed this size */
+	Int4	gi_threshold;   /* for 'month' subset */
 } DI_Record, *DI_RecordPtr;
 
 Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
 	Boolean(*callback)(DI_RecordPtr direc, VoidPtr data), VoidPtr data,
 	FILE *out, Int4 gi_threshold);
+
+CharPtr FDFGetAccessionFromSeqIdChain(SeqIdPtr seqid_list);
 
 /* These functions determine the criteria for the membership bits */
 Boolean is_EST_HUMAN(DI_Record direc);
@@ -1207,8 +1232,12 @@ Boolean is_EST_OTHERS(DI_Record direc);
 Boolean is_SWISSPROT(DI_Record direc);
 Boolean is_MONTH(DI_Record direc);
 Boolean is_PDB(DI_Record direc);
-Boolean is_REFSEQ(DI_Record direc);
+Boolean is_REFSEQ_GENOMIC(DI_Record direc);
+Boolean is_REFSEQ_RNA(DI_Record direc);
+Boolean is_REFSEQ_PROTEIN(DI_Record direc);
 Boolean is_CONTIG(DI_Record direc);
+Boolean is_WGS_ANOPHELES(DI_Record direc);
+Boolean is_WGS_RICE(DI_Record direc);
 
 typedef	struct updateindex_struct {
     FILE	*cifile;/* CommonIndex file */

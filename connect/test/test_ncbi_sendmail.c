@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_sendmail.c,v 6.5 2001/03/07 20:49:29 lavr Exp $
+/*  $Id: test_ncbi_sendmail.c,v 6.7 2002/04/15 19:21:45 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  *
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_sendmail.c,v $
+ * Revision 6.7  2002/04/15 19:21:45  lavr
+ * +#include "../test/test_assert.h"
+ *
+ * Revision 6.6  2002/03/22 19:48:58  lavr
+ * Removed <stdio.h>: included from ncbi_util.h or ncbi_priv.h
+ *
  * Revision 6.5  2001/03/07 20:49:29  lavr
  * Forgotten #include <string.h> added
  *
@@ -50,10 +56,11 @@
 
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <connect/ncbi_sendmail.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 #define TEST_HUGE_BODY_SIZE     (1024*100)

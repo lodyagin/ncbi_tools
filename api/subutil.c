@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.45 $
+* $Revision: 6.46 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.46  2002/03/27 19:26:31  kans
+* AddToGeneOntologyUserObject takes string for GO id to keep leading zeroes
+*
 * Revision 6.45  2001/12/11 16:50:41  kans
 * added TpaAssembly user object creation functions
 *
@@ -4664,7 +4667,7 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   UserObjectPtr uop,
   CharPtr type,
   CharPtr text,
-  Int4 goid,
+  CharPtr goid,
   Int4 pmid,
   CharPtr evidence
 )
@@ -4734,13 +4737,13 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   entry->data.ptrvalue = (Pointer) ufp;
   last = ufp;
 
-  if (goid > 0) {
+  if (goid != NULL && *goid != '\0') {
     ufp = UserFieldNew ();
     oip = ObjectIdNew ();
     oip->str = StringSave ("go id");
     ufp->label = oip;
-    ufp->choice = 2; /* integer */
-    ufp->data.intvalue = goid;
+    ufp->choice = 1; /* visible string - need to keep leading zeroes */
+    ufp->data.ptrvalue = (Pointer) StringSave (goid);
     last->next = ufp;
     last = ufp;
   }

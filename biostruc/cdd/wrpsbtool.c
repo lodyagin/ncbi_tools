@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.11 2001/03/09 22:52:01 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.12 2002/03/07 19:12:15 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.11 $
+* $Revision: 1.12 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.12  2002/03/07 19:12:15  bauer
+* major revisions to cgi-bins and the CD-dumper
+*
 * Revision 1.11  2001/03/09 22:52:01  bauer
 * use JavaScript to embed graphics in results page
 *
@@ -133,17 +136,110 @@ Boolean OverlapMutual(Int4 from1, Int4 to1, Int4 from2, Int4 to2)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* Header and Footer for the Pages                                           */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void WRPSBSearchHead(CharPtr title)
+{
+  CharPtr cTitle;
+
+  cTitle = MemNew(128 * sizeof (Char));
+  if (!title) {
+    StringCpy(cTitle,"NCBI CD-Search");
+  } else (StringCpy(cTitle, title));
+  
+  printf("Content-type: text/html\n\n");
+  printf("<html>\n");
+  printf("  <head>\n");
+  printf("    <META name=\"keywords\" content=\"CDD, protein domains, domains, NCBI, National Center for Biotechnology Information, National Library of Medicine, NLM, rps-blast, rps\">\n");
+  printf("    <title>%s</title>\n",cTitle);
+  printf("    <link rel=\"stylesheet\" href=\"http://www.ncbi.nlm.nih.gov/corehtml/ncbi_test.css\">\n");
+  printf("  </head>\n");
+  printf("  <body bgcolor=\"#FFFFFF\" text=\"#000000\" link=\"#0033CC\" vlink=\"#CC3300\">\n");
+  printf("<!--  the header   -->\n");
+  printf("<!--start of first table -->\n");
+  printf("    <table width=\"100%%\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n");
+  printf("      <tr>                  \n");
+  printf("<!-- logo -->\n");
+  printf("        <td>\n");
+  printf("          <table width=\"100%%\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\">\n");
+  printf("            <tr>\n");
+  printf("              <td align=\"left\">\n");
+  printf("                <A HREF=\"http://www.ncbi.nlm.nih.gov\">\n");
+  printf("                  <img src=\"http://www.ncbi.nlm.nih.gov/corehtml/left.GIF\" width=\"130\" height=\"45\" border=\"0\">\n");
+  printf("                </a>\n");
+  printf("              </td>\n");
+  printf("              <td align=\"left\">\n");
+  printf("                <span class=\"H2\">NCBI Conserved Domain Search</span>\n");
+  printf("              </td>\n");
+  printf("            </tr>\n");
+  printf("          </table>\n");
+  printf("        </td>\n");
+  printf("      </tr>\n");
+  printf("      <tr>\n");
+  printf("<!--site map-->\n");
+  printf("        <td>\n");
+  printf("          <table class=\"TEXT\" border=\"0\" cellspacing=\"0\" cellpadding=\"2\" bgcolor=\"#000000\" width=\"100%%\">\n");
+  printf("            <tr class=\"TEXT\" align=\"CENTER\">\n");
+  printf("              <td width=\"12.5%%\"><a href=\"wrpsb.cgi\" class=\"GUTTER3\"><FONT COLOR=\"#FFFF00\"><b>New Search</b></FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=PubMed\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">PubMed</FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Nucleotide\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Nucleotide</FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Protein\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Protein</FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Structure\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Structure</FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"cdd.shtml\" class=\"GUTTER3\"><FONT COLOR=\"#FFFF00\"><b>CDD</b></FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=Taxonomy\" class=\"GUTTER3\"><FONT COLOR=\"#FFFFFF\">Taxonomy</FONT></a></td>\n");
+  printf("              <td width=\"12.5%%\"><a href=\"cdd_help.shtml\" class=\"GUTTER3\"><FONT COLOR=\"#FFFF00\"><b>Help?</b></FONT></a></td>\n");
+  printf("            </tr>\n");
+  printf("          </table>\n");
+  printf("        </td>\n");
+  printf("      </tr>\n");
+  printf("    </table>\n");
+  printf("<!--start of 2nd table -->              \n");
+  printf("    <table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" width=\"100%%\">\n");
+  printf("      <tr valign=\"TOP\"> \n");
+  printf("<!-- right content column  --> \n");
+  printf("         <td width=\"100%%\" bgcolor=\"#FFFFFF\">       \n");
+  printf("<!-- -------- view --------- -->\n");
+
+  MemFree(cTitle);
+}
+
+/*---------------------------------------------------------------------------*/
+/* lower part of the page - the "footer"                                     */
+/*---------------------------------------------------------------------------*/
+void WRPSBSearchFoot()
+{
+  printf("<!-- -------- end of view --------- -->\n");
+  printf("         </td>\n");
+  printf("<!-- end of right content column  -->                         \n");
+  printf("      </tr>\n");
+  printf("      <tr valign=\"TOP\"> \n");
+  printf("        <td width=\"100%%\"> \n");
+  printf("          <br>\n");
+  printf("          <div align=\"center\" class=\"medium1\">  \n");
+  printf("            <p><b><a href=\"html/help.html\">Help</a></b> | <a href=\"http://www.ncbi.nlm.nih.gov/About/disclaimer.html\">Disclaimer</a> | <a href=\"mailto:info@ncbi.nlm.nih.gov\">Write to the Help Desk</a><BR><a href=\"http://www.ncbi.nlm.nih.gov\">NCBI</a> | <a href=\"http://www.nlm.nih.gov\">NLM</a> | <a href=\"http://www.nih.gov\">NIH</a> </p>\n");
+  printf("            <p>&nbsp;</p>\n");
+  printf("          </div>\n");
+  printf("        </td>\n");
+  printf("      </tr>\n");
+  printf("    </table>\n");
+  printf("<!--  end of content  -->\n");
+  printf("  </body>\n");
+  printf("</html>\n");
+  fflush(NULL);
+  exit(0);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* output simple error message as HTML                                       */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 void WRPSBHtmlError(CharPtr cErrTxt) 
 {
-  printf("Content-type: text/html\n\n");
-  printf("<HTML>\n");
-  printf("<TITLE>CD-Search Error</TITLE>\n");
-  printf("<BODY BGCOLOR=#FFFFFF>\n");
-  printf("<A HREF=\"blast_form.map\">\n");
-  printf("<IMG SRC=\"%scdsearch.gif\" BORDER=0 ISMAP></A>\n",URLcgi);
-  printf("<h2>WRPSB Error:</h2>\n");
-  printf("<h3>%s</h3>\n",cErrTxt);
-  printf("</BODY></HTML>\n");
+  WRPSBSearchHead("CD-Search Error");
+  printf("<BR><h3>%s</h3>\n",cErrTxt);
+  WRPSBSearchFoot();
   exit(1);
 }
 
@@ -1234,7 +1330,13 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
     description = aap->description;
     while (description) {
       if (description->choice == CddDescr_comment) {
-        fprintf(fp,", %s\n", description->data.ptrvalue);
+        if (Nlm_StrCmp(aap->cDatabase,"CDD") == 0) {
+          fprintf(fp,", %s, %s, %s\n",aap->cCDDid,aap->cGraphId,description->data.ptrvalue);
+	} else if (Nlm_StrCmp(aap->cDatabase,"Cdd") == 0) {
+          fprintf(fp,", %s, %s\n",aap->cGraphId,description->data.ptrvalue);
+	} else {
+          fprintf(fp,", %s\n", description->data.ptrvalue);
+        }
 	break;
       }
       description = description->next;

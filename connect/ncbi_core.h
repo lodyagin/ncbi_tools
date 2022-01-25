@@ -1,7 +1,7 @@
 #ifndef NCBI_CORE__H
 #define NCBI_CORE__H
 
-/*  $Id: ncbi_core.h,v 6.13 2001/09/27 22:29:35 vakatov Exp $
+/*  $Id: ncbi_core.h,v 6.14 2002/03/28 13:28:43 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,6 +62,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core.h,v $
+ * Revision 6.14  2002/03/28 13:28:43  kans
+ * undef verify if already defined, such as on Mac OS X Darwin (EN)
+ *
  * Revision 6.13  2001/09/27 22:29:35  vakatov
  * Always define "NDEBUG" if "_DEBUG" is not defined (mostly for the C Toolkit)
  *
@@ -111,6 +114,10 @@
 
 
 /* Run-time debugging */
+#if defined(verify)
+#undef verify
+#endif
+
 #if !defined(NDEBUG)  &&  !defined(_DEBUG)
 #  define NDEBUG
 #endif

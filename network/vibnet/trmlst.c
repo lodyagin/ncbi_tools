@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -3323,7 +3323,7 @@ extern ForM CreateTermListForm (Int2 left, Int2 top, CharPtr title,
   tfp = (TermFormPtr) MemNew (sizeof (TermFormData));
 
   if (tfp != NULL) {
-    w = FixedWindow (-50, -33, -10, -10, title, StdSendCloseWindowMessageProc);
+    w = FixedWindow (left, top, -10, -10, title, StdSendCloseWindowMessageProc);
     SetObjectExtra (w, tfp, CleanupEntrezTermListForm);
     tfp->form = (ForM) w;
     tfp->formmessage = EntrezTermListFormMessage;

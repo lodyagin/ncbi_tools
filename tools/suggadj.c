@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -1102,7 +1102,7 @@ fflush(stdout);
 			if (right_exon_starts-left_exon_ends != 4){
 /*-- not due to mismatch ---*/
 						if( (m_stk[i-1].left_add_bases=check_split_codon (
-					j+1, (m_stk[i].orient==MinusStrand)?rev_seq:dna_seq, p_seq,
+					j+1, (m_stk[i].orient==SuggestMinusStrand)?rev_seq:dna_seq, p_seq,
 					genetic_code, left_exon_ends, right_exon_starts) )) 
 						m_stk[i].right_add_bases =
 							3 - m_stk[i-1].left_add_bases;
@@ -1519,7 +1519,7 @@ m_stk[i-1].p_pos, m_stk[i-1].length, m_stk[i].p_pos);
 ---*/
 
 	if (m_stk[i].orient == m_stk[i-1].orient)
-		overlapping_fixer((m_stk[i].orient==MinusStrand)?rev_seq:dna_seq,
+		overlapping_fixer((m_stk[i].orient==SuggestMinusStrand)?rev_seq:dna_seq,
 			p_seq, genetic_code, i, j, k);
 }
 	}

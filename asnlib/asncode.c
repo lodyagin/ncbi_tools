@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.14  2002/03/07 21:36:27  beloslyu
+* typo fixed
+*
 * Revision 6.13  2001/11/05 20:25:34  madden
 * Fix (by Karl Sirotkin) for underscores (e.g., struct_BlastDefLine to struct_Blast_def_line)
 *
@@ -135,7 +138,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.13 $";
+static char     RCS_Rev [] = "$Revision: 6.14 $";
 
 /*******************
  * Interator structure
@@ -525,7 +528,7 @@ Main (void)
    Int2            debugarg, loadfilesarg, dirarg, outnamearg, bufarg, seearg,
                    includearg, maxdefarg, bittwiddlearg;
    Boolean         has_trouble = FALSE;
-   AsnCodeInfoPtr  acip = MemNew (size of (AsnCodeInfor));
+   AsnCodeInfoPtr  acip = MemNew (sizeof(AsnCodeInfo));
 
    if (!GetArgs ("AsnCode 1", NUMARGS, asnargs))
       return 1;

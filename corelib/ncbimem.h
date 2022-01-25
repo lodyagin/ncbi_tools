@@ -32,7 +32,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   	prototypes for ncbi memory functions
@@ -40,6 +40,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.h,v $
+* Revision 6.7  2002/02/07 14:41:19  ivanov
+* Added MemSearch()
+*
 * Revision 6.6  2001/07/26 16:37:45  beloslyu
 * OS_UNIX_DARWIN can use mmap
 *
@@ -101,15 +104,17 @@ extern "C" {
 #endif
 
 
-NLM_EXTERN void* LIBCALL Nlm_MemNew(size_t size);
-NLM_EXTERN void* LIBCALL Nlm_MemGet(size_t size, unsigned int flags);
-NLM_EXTERN void* LIBCALL Nlm_MemMore(void* ptr, size_t size);
-NLM_EXTERN void* LIBCALL Nlm_MemExtend(void* ptr, size_t size, size_t oldsize);
-NLM_EXTERN void* LIBCALL Nlm_MemFree(void* ptr);
-NLM_EXTERN void* LIBCALL Nlm_MemCopy(void* dst, const void* src, size_t bytes);
-NLM_EXTERN void* LIBCALL Nlm_MemMove(void* dst, const void* src, size_t bytes);
-NLM_EXTERN void* LIBCALL Nlm_MemFill(void* ptr, int value, size_t bytes);
-NLM_EXTERN void* LIBCALL Nlm_MemDup(const void* orig, size_t size);
+NLM_EXTERN void*  LIBCALL Nlm_MemNew(size_t size);
+NLM_EXTERN void*  LIBCALL Nlm_MemGet(size_t size, unsigned int flags);
+NLM_EXTERN void*  LIBCALL Nlm_MemMore(void* ptr, size_t size);
+NLM_EXTERN void*  LIBCALL Nlm_MemExtend(void* ptr, size_t size, size_t oldsize);
+NLM_EXTERN void*  LIBCALL Nlm_MemFree(void* ptr);
+NLM_EXTERN void*  LIBCALL Nlm_MemCopy(void* dst, const void* src, size_t bytes);
+NLM_EXTERN void*  LIBCALL Nlm_MemMove(void* dst, const void* src, size_t bytes);
+NLM_EXTERN void*  LIBCALL Nlm_MemFill(void* ptr, int value, size_t bytes);
+NLM_EXTERN void*  LIBCALL Nlm_MemDup(const void* orig, size_t size);
+NLM_EXTERN size_t LIBCALL Nlm_MemSearch(const void* where, size_t where_size,
+                                        const void* what, size_t what_size);
 
 #if defined(OS_MAC) || defined(OS_MSWIN) || defined(MSC_VIRT)
 NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandNew(size_t size);
@@ -133,7 +138,7 @@ NLM_EXTERN void  mac_Free   (void* ptr);
 
 /* [UNIX only] set the limit for the heap size and its increase policy for
  *  NCBI memory allocation functions:
- *    MemGet, MemNew, MemMore, MemExtend 
+ *    MemGet, MemNew, MemMore, MemExtend
  *  when the heap size reaches "curr", it ussues a warning, then it increases
  *  "curr" by "add" bytes -- unless "curr" has already reached "max".
  *  in the latter case, program ussues a FATAL_ERROR error message and
@@ -191,6 +196,7 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 #define MemCpy  Nlm_MemCpy
 #define MemChr  Nlm_MemChr
 #define MemCmp  Nlm_MemCmp
+#define MemSearch  Nlm_MemSearch
 
 /*** High-level NCBI functions ***/
 

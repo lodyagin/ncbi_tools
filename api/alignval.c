@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -584,7 +584,7 @@ static void ValidateSeqId (SeqIdPtr sip, SeqAlignPtr salp)
 		AlignValBioseqUnlockById(siptemp);
 	*/
 	bsp = BioseqFindCore (siptemp);
-	if (bsp == NULL && sip->choice == SEQID_LOCAL) {
+	if (bsp == NULL && siptemp->choice == SEQID_LOCAL) {
 		ValMessage (salp, Err_SeqId, SEV_ERROR, siptemp, NULL, 0);
 	}
   }

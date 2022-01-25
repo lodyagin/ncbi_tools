@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.61 $
+* $Revision: 6.65 $
 *
 * File Description: 
 *
@@ -45,6 +45,18 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.65  2002/04/18 22:24:16  kans
+ * added dbEST and dbSTS links
+ *
+ * Revision 6.64  2002/02/20 21:59:44  tatiana
+ * IMGT/LIGM dbxref added
+ *
+ * Revision 6.63  2002/02/01 19:40:01  kans
+ * MGD uses id=MGI: URL prefix, strips MGI: if in db_xref text
+ *
+ * Revision 6.62  2002/01/02 13:21:16  kans
+ * added WormBase links
+ *
  * Revision 6.61  2001/12/06 17:00:41  kans
  * TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
  *
@@ -385,6 +397,8 @@ static Char link_pir[MAX_WWWBUF];
 static Char link_pdb[MAX_WWWBUF];
 static Char link_gdb_map[MAX_WWWBUF];
 static Char link_UniSTS[MAX_WWWBUF];
+static Char link_dbSTS[MAX_WWWBUF];
+static Char link_dbEST[MAX_WWWBUF];
 static Char link_omim[MAX_WWWBUF];
 static Char link_locus[MAX_WWWBUF];
 static Char link_snp[MAX_WWWBUF];
@@ -395,6 +409,9 @@ static Char link_fly_fban[MAX_WWWBUF];
 static Char link_fly_fbgn[MAX_WWWBUF];
 static Char link_cdd[MAX_WWWBUF];
 static Char link_niaest[MAX_WWWBUF];
+static Char link_worm_sequence[MAX_WWWBUF];
+static Char link_worm_locus[MAX_WWWBUF];
+static Char link_imgt[MAX_WWWBUF];
 
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
 
@@ -406,7 +423,7 @@ static Char link_niaest[MAX_WWWBUF];
 #define DEF_LINK_CODE "/htbin-post/Taxonomy/wprintgc?"
 
 #define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/cgi-bin/COG/palox?"
-#define DEF_LINK_MGD "http://www.informatics.jax.org/searches/accession_report.cgi?id="
+#define DEF_LINK_MGD "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"
 #define DEF_LINK_FBGN "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
 #define DEF_LINK_FBAN "http://www.fruitfly.org/cgi-bin/annot/fban?"
 
@@ -433,6 +450,8 @@ static Char link_niaest[MAX_WWWBUF];
 #define DEF_LINK_GDB_SUFFIX "&match=Inclusive&order=Locus+Location"
 
 #define DEF_LINK_UniSTS "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="
+#define DEF_LINK_dbSTS "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
+#define DEF_LINK_dbEST "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 #define DEF_LINK_OMIM "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="
 #define DEF_LINK_LOCUS "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="
 #define DEF_LINK_SNP "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="
@@ -441,6 +460,9 @@ static Char link_niaest[MAX_WWWBUF];
 
 #define DEF_LINK_CDD "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="
 #define DEF_LINK_NIAEST "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="
+#define DEF_LINK_WORM_SEQUENCE "http://www.wormbase.org/db/seq/sequence?name="
+#define DEF_LINK_WORM_LOCUS "http://www.wormbase.org/db/gene/locus?name="
+#define DEF_LINK_IMGT "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"
 
 /* now other data bases are linked to Entrez. may be changed later 
 static char *link_epd = 
@@ -518,6 +540,10 @@ NLM_EXTERN void LIBCALL init_www(void)
 		link_omim, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_UniSTS", DEF_LINK_UniSTS, 
 		link_UniSTS, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_dbSTS", DEF_LINK_dbSTS, 
+		link_dbSTS, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_dbEST", DEF_LINK_dbEST, 
+		link_dbEST, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_LOCUS", DEF_LINK_LOCUS, 
 		link_locus, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_SNP", DEF_LINK_SNP, 
@@ -536,6 +562,12 @@ NLM_EXTERN void LIBCALL init_www(void)
 		link_cdd, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_NIAEST", DEF_LINK_NIAEST, 
 		link_niaest, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_WORM_SEQUENCE", DEF_LINK_WORM_SEQUENCE, 
+		link_worm_sequence, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_WORM_LOCUS", DEF_LINK_WORM_LOCUS, 
+		link_worm_locus, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_IMGT", DEF_LINK_IMGT, 
+		link_imgt, MAX_WWWBUF);
 
 }
 
@@ -1093,6 +1125,44 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			ff_AddString(p);
 			AddLink("</a>");
 		} 
+		if (( p = StringStr(str, "dbEST:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("dbEST:");
+			l = StringLen(link_dbEST) + StringLen(p);
+			prefix = "<a href=%sval=gnl|dbest|%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_dbEST, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "dbSTS:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("dbSTS:");
+			l = StringLen(link_dbSTS) + StringLen(p);
+			prefix = "<a href=%sval=gnl|dbsts|%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_dbSTS, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
 		if (( p = StringStr(str, "LocusID:")) != NULL) {
 			nothing = FALSE;
 			p += StringLen("LocusID:");
@@ -1164,6 +1234,25 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			while (*p == ' ')
 				p++;
 			sprintf(s, prefix, link_sgd, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "IMGT/LIGM:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("IMGT/LIGM:");
+			l = StringLen(link_imgt) + StringLen(p);
+			prefix = "<a href=%s%s>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_imgt, p);
 			AddLink(s);
 			MemFree(s);
 			ff_AddString(p);
@@ -1304,6 +1393,9 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			MemFree(ss);
 			while (*p == ' ')
 				p++;
+			if (StringNICmp (p, "MGI:", 4) == 0) {
+				p += 4;
+			}
 			sprintf(s, prefix, link_mgd, p);
 			AddLink(s);
 			MemFree(s);
@@ -1343,6 +1435,33 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			while (*p == ' ')
 				p++;
 			sprintf(s, prefix, link_niaest, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
+		if (( p = StringStr(str, "WormBase:")) != NULL) {
+			CharPtr worm_link = NULL;
+			nothing = FALSE;
+			p += StringLen("WormBase:");
+			if (StringStr (str, "unc") != NULL) {
+				worm_link = link_worm_locus;
+				l = StringLen(worm_link) + StringLen(p);
+				prefix = "<a href=%s%s;class=Locus>"; 
+			} else {
+				worm_link = link_worm_sequence;
+				l = StringLen(worm_link) + StringLen(p);
+				prefix = "<a href=%s%s;class=Sequence>"; 
+			}
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, worm_link, p);
 			AddLink(s);
 			MemFree(s);
 			ff_AddString(p);

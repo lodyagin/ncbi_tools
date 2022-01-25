@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.24 2001/12/04 15:56:28 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.32 2002/04/13 06:36:36 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,31 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.32  2002/04/13 06:36:36  lavr
+ * Fix for empty path parsing in HTTP URL
+ *
+ * Revision 6.31  2002/03/19 22:13:09  lavr
+ * Minor tweak in recognizing "infinite" (and part) as a special timeout
+ *
+ * Revision 6.30  2002/03/11 21:53:18  lavr
+ * Recognize ALL in CONN_DEBUG_PRINTOUT; bugfix for '//' in proxy adjustement
+ *
+ * Revision 6.29  2002/02/20 19:12:17  lavr
+ * Swapped eENCOD_Url and eENCOD_None; eENCOD_Unknown introduced
+ *
+ * Revision 6.28  2002/02/08 22:22:17  lavr
+ * BUGFIX: sizeof(info) -> sizeof(*info) in ConnNetInfo_Create()
+ *
+ * Revision 6.27  2002/01/30 20:14:48  lavr
+ * URL_Connect(): Print error code in some failure messages
+ *
+ * Revision 6.26  2002/01/28 20:21:46  lavr
+ * Do not store "" as a user_header
+ *
+ * Revision 6.25  2001/12/30 19:40:32  lavr
+ * +ConnNetInfo_ParseURL()
+ * Added recordkeeping of service name for which the info was created
+ *
  * Revision 6.24  2001/12/04 15:56:28  lavr
  * Use strdup() instead of explicit strcpy(malloc(...), ...)
  *
@@ -119,6 +144,7 @@
 #include <connect/ncbi_connutil.h>
 #include <connect/ncbi_socket.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -198,12 +224,14 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 #define REG_VALUE(name, value, def_value) \
     s_GetValue(service, name, value, sizeof(value), def_value)
 
-    SConnNetInfo* info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo));
-
+    SConnNetInfo* info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo) +
+                                                (service  &&  *service
+                                                 ? strlen(service) + 1 : 0));
     /* aux. storage for the string-to-int conversions, etc. */
     char   str[32];
     int    val;
     double dbl;
+    char*  s;
 
     /* client host */
     SOCK_gethostname(info->client_host, sizeof(info->client_host));
@@ -224,7 +252,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
     /* request method */
     REG_VALUE(REG_CONN_REQ_METHOD, str, DEF_CONN_REQ_METHOD);
-    if (strcasecmp(str, "ANY") == 0)
+    if (!*str  ||  strcasecmp(str, "ANY") == 0)
         info->req_method = eReqMethod_Any;
     else if (strcasecmp(str, "POST") == 0)
         info->req_method = eReqMethod_Post;
@@ -233,9 +261,9 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
     /* connection timeout */
     REG_VALUE(REG_CONN_TIMEOUT, str, 0);
-    if (*str && strncasecmp(str, "infinite", strlen(str)) == 0)
+    if (strlen(str) > 2  &&  strncasecmp(str, "infinite", strlen(str)) == 0) {
         info->timeout = 0;
-    else {
+    } else {
         info->timeout = &info->tmo;
         dbl = atof(str);
         if (dbl <= 0.0)
@@ -244,7 +272,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
         info->timeout->usec = (unsigned int)
             ((dbl - info->timeout->sec) * 1000000);
     }
-    
+
     /* max. # of attempts to establish a connection */
     REG_VALUE(REG_CONN_MAX_TRY, str, 0);
     val = atoi(str);
@@ -269,14 +297,16 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     /* turn on debug printout? */
     REG_VALUE(REG_CONN_DEBUG_PRINTOUT, str, DEF_CONN_DEBUG_PRINTOUT);
     if (*str  &&
-        (strcmp(str, "1") == 0 ||
-         strcasecmp(str, "true") == 0 ||
-         strcasecmp(str, "yes" ) == 0 ||
-         strcasecmp(str, "some") == 0))
+        (strcmp(str, "1") == 0  ||
+         strcasecmp(str, "true") == 0  ||
+         strcasecmp(str, "yes" ) == 0  ||
+         strcasecmp(str, "some") == 0)) {
         info->debug_printout = eDebugPrintout_Some;
-    else if (*str  &&  strcasecmp(str, "data") == 0)
+    } else if (*str  &&
+               (strcasecmp(str, "data") == 0  ||
+                strcasecmp(str, "all" ) == 0)) {
         info->debug_printout = eDebugPrintout_Data;
-    else 
+    } else
         info->debug_printout = eDebugPrintout_None;
 
     /* stateless client? */
@@ -304,6 +334,13 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     info->http_user_header = 0;
     /* not adjusted yet... */
     info->http_proxy_adjusted = 0/*false*/;
+    /* remember the service name for which this structure has been created */
+    if (service  &&  *service) {
+        s = (char*) info + sizeof(*info);
+        strcpy(s, service);
+    } else
+        s = 0;
+    info->service = s;
 
     /* done */
     return info;
@@ -326,8 +363,8 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 
     {{
         char x_path[sizeof(info->path)];
-        sprintf(x_path, "http://%s:%hu/%s",
-                info->host, info->port, info->path);
+        sprintf(x_path, "http://%s:%hu%s%s", info->host, info->port,
+                *info->path == '/' ? "" : "/", info->path);
         assert(strlen(x_path) < sizeof(x_path));
         strcpy(info->path, x_path);
     }}
@@ -341,12 +378,89 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 }
 
 
+extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
+{
+    const char *s, *a;
+    char* p;
+
+    if (info->http_proxy_adjusted) {
+        /* undo proxy adjustment */
+        SConnNetInfo* temp = ConnNetInfo_Create(info->service);
+        if (!ConnNetInfo_ParseURL(temp, info->path)) {
+            ConnNetInfo_Destroy(temp);
+            return 0/*failure*/;
+        }
+        memcpy(info->host, temp->host, sizeof(info->host));
+        info->port = temp->port;
+        memcpy(info->path, temp->path, sizeof(info->path));
+        ConnNetInfo_Destroy(temp);
+        info->http_proxy_adjusted = 0/*false*/;
+    }
+
+    /* host & port first */
+    if ((s = strstr(url, "//")) != 0) {
+        const char* h = s + 2; /* host starts here */
+        const char* p;         /* host ends here   */
+
+        if (strncasecmp(url, "http://", 7) != 0)
+            return 0/*failure*/;
+        if (!(s = strchr(h, '/')))
+            s = h + strlen(h);
+        if ((p = strchr(h, ':')) != 0 && p < s) {
+            unsigned short port;
+            int n;
+
+            if (sscanf(p, ":%hu%n", &port, &n) < 1 || p + n != s)
+                return 0/*failure*/;
+            info->port = port;
+        } else
+            p = s;
+        if ((size_t)(p - h) < sizeof(info->host)) {
+            memcpy(info->host, h, (size_t)(p - h));
+            info->host[(size_t)(p - h)] = '\0';
+        } else {
+            memcpy(info->host, h, sizeof(info->host) - 1);
+            info->host[sizeof(info->host) - 1] = '\0';
+        }
+    } else
+        s = url;
+
+    /* arguments */
+    if ((a = strchr(s, '?')) != 0) {
+        strncpy(info->args, a + 1, sizeof(info->args));
+        info->args[sizeof(info->args) - 1] = '\0';
+    } else
+        a = s + strlen(s);
+
+    /* path (NB: can be relative) */
+    if (s != url || *s == '/' || !(p = strrchr(info->path, '/'))) {
+        /* absolute path */
+        p = info->path - 1;
+        if (!*s) {
+            s = "/";   /* in case of an empty path we take the root '/' */
+            a = s + 1;
+        }
+    }
+    p++;
+    if ((size_t)(a - s) < sizeof(info->path) - (size_t)(p - info->path)) {
+        memcpy(p, s, (size_t)(a - s));
+        p[(size_t)(a - s)] = '\0';
+    } else {
+        memcpy(p, s, sizeof(info->path) - (size_t)(p - info->path) - 1);
+        info->path[sizeof(info->path) - 1] = '\0';
+    }
+
+    return 1/*success*/;
+}
+
+
 extern void ConnNetInfo_SetUserHeader(SConnNetInfo* info,
                                       const char*   user_header)
 {
     if (info->http_user_header)
         free((void*) info->http_user_header);
-    info->http_user_header = user_header ? strdup(user_header) : 0;
+    info->http_user_header =
+        user_header && *user_header ? strdup(user_header) : 0;
 }
 
 
@@ -356,11 +470,18 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
     if ( !info )
         return 0;
 
-    x_info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo));
+    x_info = (SConnNetInfo*) malloc(sizeof(SConnNetInfo) +
+                                    (info->service
+                                     ? strlen(info->service) + 1 : 0));
     *x_info = *info;
-    if (info->timeout && info->timeout != CONN_DEFAULT_TIMEOUT) {
-        x_info->tmo = *info->timeout;
+    if (info->timeout  &&  info->timeout != CONN_DEFAULT_TIMEOUT) {
+        x_info->tmo     = *info->timeout;
         x_info->timeout = &x_info->tmo;
+    }
+    if (info->service) {
+        char* s = (char*) x_info + sizeof(*x_info);
+        strcpy(s, info->service);
+        x_info->service = s;
     }
     x_info->http_user_header = 0;
     ConnNetInfo_SetUserHeader(x_info, info->http_user_header);
@@ -386,6 +507,8 @@ extern void ConnNetInfo_Print(const SConnNetInfo* info, FILE* fp)
     fprintf(fp, "\n----- [BEGIN] ConnNetInfo_Print -----\n");
 
     if ( info ) {
+        s_PrintString(fp, "service",        (info->service ?
+                                             info->service : "<none>"));
         s_PrintString(fp, "client_host",     info->client_host);
         s_PrintString(fp, "host",            info->host);
         s_PrintULong (fp, "port",            info->port);
@@ -445,7 +568,7 @@ extern SOCK URL_Connect
  size_t          content_length,
  const STimeout* c_timeout,
  const STimeout* rw_timeout,
- const char*     user_header,
+ const char*     user_hdr,
  int/*bool*/     encode_args,
  ESwitch         data_logging)
 {
@@ -456,11 +579,11 @@ extern SOCK URL_Connect
     SOCK  sock;
     char  buffer[128];
     char* x_args = 0;
+    EIO_Status st;
 
     /* check the args */
     if (!host  ||  !*host  ||  !port  ||  !path  ||  !*path  ||
-        (user_header  &&  *user_header  &&
-         user_header[strlen(user_header) - 1] != '\n')) {
+        (user_hdr  &&  *user_hdr  &&  user_hdr[strlen(user_hdr)-1] != '\n')) {
         CORE_LOG(eLOG_Error, "[URL_Connect]  Bad arguments");
         assert(0);
         return 0/*error*/;
@@ -488,10 +611,10 @@ extern SOCK URL_Connect
     }
 
     /* connect to HTTPD */
-    if (SOCK_Create(host, port, c_timeout, &sock) != eIO_Success) {
+    if ((st = SOCK_Create(host, port, c_timeout, &sock)) != eIO_Success) {
         CORE_LOGF(eLOG_Error,
-                  ("[URL_Connect]  Socket connect to %s:%hu failed",
-                   host, port));
+                  ("[URL_Connect]  Socket connect to %s:%hu failed: %s", host,
+                   port, st==eIO_Success? strerror(errno) : IO_StatusStr(st)));
         return 0/*error*/;
     }
     
@@ -524,38 +647,39 @@ extern SOCK URL_Connect
     /* compose and send HTTP header */
     if (
         /* {POST|GET} <path>?<args> HTTP/1.0\r\n */
-        SOCK_Write(sock, (const void*) X_REQ_R, strlen(X_REQ_R), 0)
+        (st = SOCK_Write(sock, (const void*) X_REQ_R, strlen(X_REQ_R), 0))
         != eIO_Success  ||
-        SOCK_Write(sock, (const void*) path, strlen(path), 0)
+        (st = SOCK_Write(sock, (const void*) path, strlen(path), 0))
         != eIO_Success  ||
         (x_args  &&
-         (SOCK_Write(sock, (const void*) X_REQ_Q, strlen(X_REQ_Q), 0)
+         ((st = SOCK_Write(sock, (const void*) X_REQ_Q, strlen(X_REQ_Q), 0))
           != eIO_Success  ||
-          SOCK_Write(sock, (const void*) x_args, strlen(x_args), 0)
+          (st = SOCK_Write(sock, (const void*) x_args, strlen(x_args), 0))
           != eIO_Success
           )
          )  ||
-        SOCK_Write(sock, (const void*) X_REQ_E, strlen(X_REQ_E), 0)
+        (st = SOCK_Write(sock, (const void*) X_REQ_E, strlen(X_REQ_E), 0))
         != eIO_Success  ||
 
-        /*  <user_header> */
-        (user_header  &&
-         SOCK_Write(sock, (const void*) user_header, strlen(user_header), 0)
+        /* <user_header> */
+        (user_hdr  &&
+         (st = SOCK_Write(sock, (const void*) user_hdr, strlen(user_hdr), 0))
          != eIO_Success)  ||
 
-        /*  Content-Length: <content_length>\r\n\r\n */
+        /* Content-Length: <content_length>\r\n\r\n */
         (req_method != eReqMethod_Get  &&
          (sprintf(buffer, "Content-Length: %lu\r\n",
                   (unsigned long) content_length) <= 0  ||
-          SOCK_Write(sock, (const void*) buffer, strlen(buffer), 0)
+          (st = SOCK_Write(sock, (const void*) buffer, strlen(buffer), 0))
           != eIO_Success))  ||
-        SOCK_Write(sock, (const void*) "\r\n", 2, 0)
+        (st = SOCK_Write(sock, (const void*) "\r\n", 2, 0))
         != eIO_Success)
         {
             CORE_LOGF(eLOG_Error,
-                      ("[URL_Connect]  Error sending HTTP header to %s:%hu",
-                       host, port));
-            if ( x_args )
+                      ("[URL_Connect]  Error sending HTTP header to"
+                       " %s:%hu: %s", host, port, st == eIO_Success
+                       ? strerror(errno) : IO_StatusStr(st)));
+            if (x_args)
                 free(x_args);
             SOCK_Close(sock);
             return 0/*error*/;
@@ -916,9 +1040,10 @@ static const char* s_MIME_SubType[eMIME_Unknown+1] = {
     "x-unknown"
 };
 
-static const char* s_MIME_Encoding[eENCOD_None+1] = {
+static const char* s_MIME_Encoding[eENCOD_Unknown+1] = {
+    "",
     "urlencoded",
-    ""
+    "encoded"
 };
 
 
@@ -981,7 +1106,7 @@ extern int/*bool*/ MIME_ParseContentTypeEx
     if ( subtype )
         *subtype = eMIME_Unknown;
     if ( encoding )
-        *encoding = eENCOD_None;
+        *encoding = eENCOD_Unknown;
 
     if (!str  ||  !*str)
         return 0/*false*/;
@@ -1012,9 +1137,9 @@ extern int/*bool*/ MIME_ParseContentTypeEx
         }
     }
 
-    for (i = 0;  i < (int) eENCOD_None;  i++) {
+    for (i = 0;  i < (int) eENCOD_Unknown;  i++) {
         char* x_encoding = strstr(x_subtype, s_MIME_Encoding[i]);
-        if (x_encoding  &&
+        if (x_encoding  &&  *x_encoding  &&
             x_encoding != x_subtype  &&  *(x_encoding - 1) == '-'  &&
             strcmp(x_encoding, s_MIME_Encoding[i]) == 0) {
             if ( encoding ) {
@@ -1024,7 +1149,9 @@ extern int/*bool*/ MIME_ParseContentTypeEx
             break;
         }
     }
-  
+    if (encoding  &&  *encoding == eENCOD_Unknown)
+        *encoding = eENCOD_None;
+
     if ( subtype ) {
         for (i = 0;  i < (int) eMIME_Unknown;  i++) {
             if ( !strcmp(x_subtype, s_MIME_SubType[i]) ) {
@@ -1052,7 +1179,7 @@ extern int/*bool*/ MIME_ParseContentType
         if ( subtype )
             *subtype  = eMIME_Unknown;
         if ( encoding )
-            *encoding = eENCOD_None;
+            *encoding = eENCOD_Unknown;
         return 0/*false*/;
     }
 

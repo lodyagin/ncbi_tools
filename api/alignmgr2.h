@@ -28,13 +28,25 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.10 $
+* $Revision: 6.14 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.h,v $
+* Revision 6.14  2002/04/09 18:21:55  wheelan
+* changed params for AlnMgr2IndexAsRows
+*
+* Revision 6.13  2002/03/04 17:19:29  wheelan
+* added AlnMgr2FuseSet, changed behavior of RemoveInconsistent
+*
+* Revision 6.12  2002/01/30 19:12:20  wheelan
+* added RemoveInconsistentAlnsFromSet, ExtractPairwiseSeqAlign, changed behavior of GetSubAlign, changed structures and behavior of GetNextAlnBit, added GetInterruptInfo
+*
+* Revision 6.11  2001/12/28 22:53:46  wheelan
+* added AlnMgr2DupAlnAndIndexes, changed amaip struct
+*
 * Revision 6.10  2001/12/14 12:38:35  wheelan
 * added functions for ddv
 *
@@ -92,6 +104,9 @@ extern "C" {
 #define AM_NUCSIZE   6
 #define AM_PROTSIZE  26
 
+/* max seqport window */
+#define AM_SEQPORTSIZE 20000
+
 /* defines for AlnMgr2ComputeScoreForPairwiseSeqAlign */
 #define AM_GAPOPEN  -11
 #define AM_GAPEXT   -1
@@ -100,12 +115,17 @@ extern "C" {
 #define INDEX_CHILD   1
 #define INDEX_PARENT  2
 
-/* defines for amp->type */
+/* defines for amp->type and interrupt->type */
 #define AM_SEQ        1
 #define AM_GAP        2
+#define AM_INSERT     3
+#define AM_UNALIGNED  4
 
 #define AM2_LEFT_TAIL   0
 #define AM2_RIGHT_TAIL  1
+
+#define AM2_LEFT        1
+#define AM2_RIGHT       2
 
 /* defines for AlnMgr2AddInNewSA */
 #define AM_START    -1
@@ -154,21 +174,32 @@ typedef struct am_saindex {
    Int4                   score;
    Boolean                aligned;
    SeqAlignPtr            top;
+   Int4                   tmp;
 } SAIndex2, PNTR SAIndex2Ptr;
 
 NLM_EXTERN Boolean LIBCALLBACK SAIndex2Free2(VoidPtr index);
 
-typedef struct am_unalign {
+typedef struct am_interrinfo {
+   Uint1    strand;
    Int4Ptr  starts;
    Int4Ptr  lens;
-   Int4     which_side;
-} AMUnalign, PNTR AMUnalignPtr;
+   Int4Ptr  types;
+   Int4     num;
+} AMInterrInfo, PNTR AMInterrInfoPtr;
+
+NLM_EXTERN void AlnMgr2FreeInterruptInfo(AMInterrInfoPtr interrupt);
 
 typedef struct am_insert {
    Int4Ptr  starts;
    Int4Ptr  lens;
    Int4     which_side;
 } AMInsert, PNTR AMInsertPtr;
+
+typedef struct am_unalign {
+   Int4Ptr  starts;
+   Int4Ptr  lens;
+   Int4     which_side;
+} AMUnalign, PNTR AMUnalignPtr;
 
 typedef struct am_parcel {
    Int4          alnstart;
@@ -184,7 +215,6 @@ typedef struct am_alignindex {
    Int4                   anchor;
    Int4                   numrows;
    SeqIdPtr               PNTR ids;  /* one SeqId per row */
-   Int4Ptr                aligncoords;
    Int4                   numsaps;
    SeqAlignPtr            PNTR saps;
    Boolean                PNTR aligned; /* for each sap -- is it used in the overall alignment? */
@@ -193,28 +223,31 @@ typedef struct am_alignindex {
 
 NLM_EXTERN Boolean LIBCALLBACK AMAlignIndex2Free2(VoidPtr index);
 
-typedef struct am_adjacent {
-   Int4  from;
-   Int4  to;
-} AMAdjac, PNTR AMAdjacPtr;
+typedef struct {
+   Int4  insertlen;
+   Int4  unalnlen;
+   Int4  segnum;
+   Int4  row;
+   Int4  which_side;
+} AMInterrupt, PNTR AMInterruptPtr;
 
 typedef struct am_msg2 {
 /* fields filled in by calling function */
-   Int4        from_aln; /* from is in alignment coordinates */
-   Int4        to_aln;   /* to is in alignment coordinates */
-   Int4        row_num; /* which row the function wants to retrieve */
+   Int4            from_aln; /* from is in alignment coordinates */
+   Int4            to_aln;   /* to is in alignment coordinates */
+   Int4            row_num; /* which row the function wants to retrieve */
+
 /* fields filled in by AlnMgr2GetNextAlnBit */
-   Int4        from_row;
-   Int4        to_row;
-   Uint1       strand;
-   Uint1       type; /* AM_SEQ or AM_GAP */
-   AMAdjacPtr  left_insert;
-   AMAdjacPtr  right_insert;
-   AMAdjacPtr  left_unaligned;
-   AMAdjacPtr  right_unaligned;
+   Int4            from_row;
+   Int4            to_row;
+   Uint1           strand;
+   Uint1           type; /* AM_SEQ or AM_GAP */
+   AMInterruptPtr  left_interrupt;
+   AMInterruptPtr  right_interrupt;
+
 /* fields used internally */
-   Int4        len;
-   Int4        real_from;
+   Int4            len;
+   Int4            real_from;
 } AlnMsg2, PNTR AlnMsg2Ptr;
 
 NLM_EXTERN AlnMsg2Ptr AlnMsgNew2(void);
@@ -228,6 +261,17 @@ typedef struct am_small {
    Int4  n4;
    struct am_small PNTR next;
 } AM_Small2, PNTR AM_Small2Ptr;
+
+typedef struct am_consistset {
+   Int4         numrows;
+   Int4Ptr      starts;
+   Int4Ptr      stops;
+   Uint1Ptr     strands;
+   SeqAlignPtr  sap;
+   Int4         used;
+   Int4Ptr      which;
+   struct am_consistset PNTR next;
+} AMConsSet, PNTR AMConsSetPtr;
 
 typedef struct am_coreinf {
    Int4      start_core;
@@ -324,11 +368,12 @@ typedef struct am_bit {
 /***************************************************************************
 *
 *  SECTION 1: Functions for allocating and freeing data structures used
-*  by the alignment manager.
+*  by the alignment manager; copying functions are also here.
 *
 ***************************************************************************/
 NLM_EXTERN void AMFreqFree(AMFreqPtr afp);
 NLM_EXTERN void AMAlignIndexFreeEitherIndex(SeqAlignPtr sap);
+NLM_EXTERN SeqAlignPtr AlnMgr2DupAlnAndIndexes(SeqAlignPtr sap);
 
 /***************************************************************************
 *
@@ -387,6 +432,8 @@ NLM_EXTERN void AlnMgr2IndexSeqAlign(SeqAlignPtr sap);
 ***************************************************************************/
 NLM_EXTERN void AlnMgr2ReIndexSeqAlign(SeqAlignPtr sap);
 
+NLM_EXTERN Boolean AlnMgr2IndexAsRows(SeqAlignPtr sap, Uint1 strand, Boolean truncate);
+
 /***************************************************************************
 *
 *  AlnMgr2IndexIndexedChain takes a linked list of indexed seqaligns
@@ -430,6 +477,16 @@ NLM_EXTERN void AlnMgr2PrintSeqAlign(SeqAlignPtr sap, Int4 linesize, Boolean isn
 ***************************************************************************/
 NLM_EXTERN Boolean AlnMgr2GetNextAlnBit(SeqAlignPtr sap, AlnMsg2Ptr amp);
 
+/* SECTION 4a */
+/***************************************************************************
+*
+*  AlnMgr2GetInterruptInfo returns a structure describing the inserts and
+*  unaligned regions in an interrupt. The structure is allocated by this
+*  function and must be freed with AlnMgr2FreeInterruptInfo.
+*
+***************************************************************************/
+NLM_EXTERN AMInterrInfoPtr AlnMgr2GetInterruptInfo(SeqAlignPtr sap, AMInterruptPtr interrupt);
+
 /* SECTION 4b */
 /***************************************************************************
 *
@@ -454,6 +511,8 @@ NLM_EXTERN SeqIdPtr AlnMgr2GetNthSeqIdPtr(SeqAlignPtr sap, Int4 n);
 *  AlnMgr2GetNthSeqRangeInSA returns the smallest and largest sequence
 *  coordinates contained in the nth row of an indexed seqalign. Either
 *  start or stop can be NULL to only retrieve one of the coordinates.
+*  If start and stop are -1, there is an error; if they are both -2, the
+*  row is just one big insert. RANGE
 *
 ***************************************************************************/
 NLM_EXTERN void AlnMgr2GetNthSeqRangeInSA(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
@@ -658,10 +717,15 @@ NLM_EXTERN Boolean AlnMgr2TruncateSeqAlign(SeqAlignPtr sap, Int4 start, Int4 sto
 *  'from' to 'to' in the row coordinates specified, or if which_row is 0,
 *  'from' and 'to' are assumed to be alignment coordinates. If 'to' is -1,
 *  the subalignment will go to the end of the specified row (or to the end
-*  of the whole alignment).
+*  of the whole alignment). If the alignment is discontinuous and fill_in
+*  is FALSE, the alignment will be returned as an SAS_DISC set, each piece
+*  represented by a single alignment. If the alignment is discontinuous and
+*  fill_in is TRUE, the unaligned regions will be added in to the alignment,
+*  with all gaps in all other rows. If the alignment is continuous, it
+*  doesn't matter whether fill_in is TRUE or FALSE. (SUBALIGN)
 *
 ***************************************************************************/
-NLM_EXTERN SeqAlignPtr AlnMgr2GetSubAlign(SeqAlignPtr sap, Int4 from, Int4 to, Int4 row);
+NLM_EXTERN SeqAlignPtr AlnMgr2GetSubAlign(SeqAlignPtr sap, Int4 from, Int4 to, Int4 which_row, Boolean fill_in);
 
 /***************************************************************************
 *
@@ -762,6 +826,43 @@ NLM_EXTERN void AlnMgr2ExtendToCoords(SeqAlignPtr sap, Int4 from, Int4 to, Int4 
 *
 ***************************************************************************/
 NLM_EXTERN SeqAlignPtr AlnMgr2PadConservatively(SeqAlignPtr sap);
+
+/***************************************************************************
+*
+*  AlnMgr2ExtractPairwiseSeqAlign takes an indexed alignment (parent or
+*  child, but must be fully indexed, not lite) and extracts a pairwise
+*  subalignment containing the two requested rows. The subalignment is
+*  unindexed and may have internal unaligned regions.
+*
+***************************************************************************/
+NLM_EXTERN SeqAlignPtr AlnMgr2ExtractPairwiseSeqAlign(SeqAlignPtr sap, Int4 n1, Int4 n2);
+
+/***************************************************************************
+*
+*  AlnMgr2RemoveInconsistentAlnsFromSet takes an alignment that is
+*  indexed at least at the AM2_LITE level, and prunes the child
+*  alignments so that the remaining alignments form a consistent, 
+*  nonoverlapping set. All alignments must have the same number of rows,
+*  and they must be the same rows (although not necessarily in the same
+*  order). The function uses a simple greedy algorithm to construct the
+*  nonoverlapping set, starting with the highest-scoring alignment.
+*  If fuzz is negative, the function creates the best nonoverlapping set
+*  by actually truncating alignments.
+*
+***************************************************************************/
+NLM_EXTERN void AlnMgr2RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz);
+
+/***************************************************************************
+*
+*  AlnMgr2FuseSet takes a set of alignments sharing all their rows and orders
+*  the alignments, then fuses together any adjacent alignments. If returnall
+*  is TRUE, all pieces are returned; if not, then only the largest piece is
+*  returned. This function will work best when called after
+*  AlnMgr2RemoveInconsistentAlnsFromSet(sap_head, -1).
+*
+***************************************************************************/
+NLM_EXTERN SeqAlignPtr AlnMgr2FuseSet(SeqAlignPtr sap_head, Boolean returnall);
+
 
 /***************************************************************************/
 

@@ -195,10 +195,58 @@ Package=<4>
     Project_Dep_Name demo_vecscreen
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name http_connector_hit
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name socket_io_bouncer
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_buffer
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_connutil_hit
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_connutil_misc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_core
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_disp
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_file_connector
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_http_connector
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_http_get
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_memory_connector
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_sendmail
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name test_ncbi_service_connector
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name test_ncbi_socket
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name test_ncbi_socket_connector
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name test_ncbisock
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asn2gb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_entrez2
     End Project Dependency
 }}}
 
@@ -302,6 +350,12 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name vibrant_ogl
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name vibgif
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -334,6 +388,36 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_asn2gb"=.\demo\asn2gb\demo_asn2gb.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
     End Project Dependency
 }}}
 
@@ -871,6 +955,36 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbicdr
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name vibrant
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_entrez2"=.\demo\entrez2\demo_entrez2.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbidesk
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimmdb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name vibrant
@@ -1629,6 +1743,36 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_spidey"=.\demo\spidey\demo_spidey.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_srchaa"=.\demo\srchaa\demo_srchaa.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2223,6 +2367,21 @@ Package=<4>
 
 ###############################################################################
 
+Project: "http_connector_hit"=.\connect\test\http_connector_hit\http_connector_hit.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "medarch"=.\network\medarch\client\medarch.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2427,6 +2586,195 @@ Package=<4>
 
 ###############################################################################
 
+Project: "socket_io_bouncer"=.\connect\test\socket_io_bouncer\socket_io_bouncer.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_buffer"=.\connect\test\test_ncbi_buffer\test_ncbi_buffer.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_connutil_hit"=.\connect\test\test_ncbi_connutil_hit\test_ncbi_connutil_hit.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_connutil_misc"=.\connect\test\test_ncbi_connutil_misc\test_ncbi_connutil_misc.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_core"=.\connect\test\test_ncbi_core\test_ncbi_core.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_disp"=.\connect\test\test_ncbi_disp\test_ncbi_disp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_file_connector"=.\connect\test\test_ncbi_file_connector\test_ncbi_file_connector.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_http_connector"=.\connect\test\test_ncbi_http_connector\test_ncbi_http_connector.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name xconntest
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_http_get"=.\connect\test\test_ncbi_http_get\test_ncbi_http_get.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_memory_connector"=.\connect\test\test_ncbi_memory_connector\test_ncbi_memory_connector.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name xconntest
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_sendmail"=.\connect\test\test_ncbi_sendmail\test_ncbi_sendmail.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_service_connector"=.\connect\test\test_ncbi_service_connector\test_ncbi_service_connector.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name xconntest
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "test_ncbi_socket"=.\connect\test\test_ncbi_socket\test_ncbi_socket.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2435,6 +2783,24 @@ Package=<5>
 
 Package=<4>
 {{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "test_ncbi_socket_connector"=.\connect\test\test_ncbi_socket_connector\test_ncbi_socket_connector.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name xconntest
+    End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
@@ -2497,6 +2863,18 @@ Package=<4>
 ###############################################################################
 
 Project: "vibrant_ogl"=.\vibrant\vibrant_ogl\vibrant_ogl.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "xconntest"=.\connect\test\xconntest.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

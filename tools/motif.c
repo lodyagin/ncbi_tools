@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description:  sequence motif search functions
 *
@@ -388,9 +388,9 @@ NLM_EXTERN MotifInfoPtr MOT_MotifSearch(CharPtr motif, BioseqPtr bsp, Boolean is
    while (salp != NULL)
    {
       mip = (MotifInfoPtr)MemNew(sizeof(MotifInfo));
-      AlnMgrIndexSingleChildSeqAlign(salp);
-      AlnMgrGetNthSeqRangeInSA(salp, 2, &start, &stop);
-      mip->strand = AlnMgrGetNthStrand(salp, 1);
+      AlnMgr2IndexSingleChildSeqAlign(salp);
+      AlnMgr2GetNthSeqRangeInSA(salp, 2, &start, &stop);
+      mip->strand = AlnMgr2GetNthStrand(salp, 1);
       mip->start = start;
       mip->stop = stop;
       GetScoreAndEvalue(salp, &score, &bit_score, &evalue, &number);

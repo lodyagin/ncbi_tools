@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -1914,6 +1914,7 @@ static ENUM_ALIST(molinfo_biomol_nucX_alist)
   {"Genomic-mRNA",          10},
   {"cRNA",                  11},
   {"Small nucleolar RNA",   12},
+  {"Transcribed RNA",       13},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -1944,7 +1945,8 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"HTGS 3",            16},
   {"FLI_cDNA",          17},
   {"HTC",               19},
-  {"Other:",            255},
+  {"WGS",               20},
+  {"Other:",           255},
 END_ENUM_ALIST
 
 static ENUM_ALIST(molinfo_tech_nuc_alist)
@@ -1962,7 +1964,8 @@ static ENUM_ALIST(molinfo_tech_nuc_alist)
   {"HTGS 3",            16},
   {"FLI_cDNA",          17},
   {"HTC",               19},
-  {"Other:",            255},
+  {"WGS",               20},
+  {"Other:",           255},
 END_ENUM_ALIST
 
 static ENUM_ALIST(molinfo_tech_prot_alist)
@@ -1973,7 +1976,7 @@ static ENUM_ALIST(molinfo_tech_prot_alist)
   {"Seq-Pept-Overlap",  11},
   {"Seq-Pept-Homol",    12},
   {"Concept-Trans-A",   13},
-  {"Other:",            255},
+  {"Other:",           255},
 END_ENUM_ALIST
 
 static ENUM_ALIST(molinfo_complete_alist)
@@ -2015,14 +2018,14 @@ END_ENUM_ALIST
 static Uint1 check_biomol (Uint1 biomol)
 
 {
-  if (biomol > 12 && biomol < 253) return 0;
+  if (biomol > 13 && biomol < 253) return 0;
   return biomol;
 }
 
 static Uint1 check_technique (Uint1 tech)
 
 {
-  if (tech > 19 && tech != 255) return 0;
+  if (tech > 20 && tech != 255) return 0;
   return tech;
 }
 
@@ -3039,6 +3042,7 @@ static void GenBankFormActnProc (ForM f)
 extern Int2 LIBCALLBACK GenBankGenFunc (Pointer data)
 
 {
+  BioseqPtr         bsp;
   GenBankFormPtr    gfp;
   OMProcControlPtr  ompcp;
   OMUserDataPtr     omudp;
@@ -3088,6 +3092,17 @@ extern Int2 LIBCALLBACK GenBankGenFunc (Pointer data)
     gfp->procid = ompcp->proc->procid;
     gfp->proctype = ompcp->proc->proctype;
     gfp->userkey = OMGetNextUserKey ();
+
+    /* DOn't allow history update for proteins */
+
+    bsp = GetBioseqGivenIDs (gfp->input_entityID,
+			     gfp->input_itemID,
+			     gfp->input_itemtype);
+    if (ISA_aa (bsp->mol)) {
+      SetStatus (gfp->xaccnstohistory, FALSE);
+      SafeDisable (gfp->xaccnstohistory);
+    }
+  
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
 	                           OMPROC_EDIT, gfp->userkey);
     if (omudp != NULL) {

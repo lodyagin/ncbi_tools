@@ -87,7 +87,7 @@ SOURCE=..\..\..\..\network\nsclilib\ni_msg.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\network\nsclilib\ni_serv.c
+SOURCE=..\..\..\..\network\nsclilib\ni_service.c
 # End Source File
 # Begin Source File
 

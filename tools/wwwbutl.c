@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 6.27 2001/09/06 20:24:34 dondosha Exp $
+/* $Id: wwwbutl.c,v 6.30 2002/04/19 17:47:24 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.27 $
+* $Revision: 6.30 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 6.30  2002/04/19 17:47:24  dondosha
+* Removed restriction on the allowed number of databases in the config file
+*
+* Revision 6.29  2002/03/19 23:30:19  dondosha
+* Do not increment options->wordsize by 4 for megablast any more
+*
+* Revision 6.28  2002/01/08 22:36:24  dondosha
+* Added tabular output functionality
+*
 * Revision 6.27  2001/09/06 20:24:34  dondosha
 * Removed threshold_first
 *
@@ -129,9 +138,10 @@ void WWWBlastInfoFree(WWWBlastInfoPtr theInfo)
     MemFree(theInfo->database);
     MemFree(theInfo->program);
 
-    for(i = 0; i < MAX_DB_NUM; i++) {
+    for(i = 0; i < theInfo->blast_config->num_dbs; i++) {
         MemFree(theInfo->blast_config->allow_db[i]);
     }
+    MemFree(theInfo->blast_config->allow_db);
     MemFree(theInfo->blast_config);
 
     /* if(!theInfo->believe_query)
@@ -453,7 +463,8 @@ static BLASTConfigPtr BLASTConfigNew(void)
     config->run_max = DEFAULT_RUN_MAX;
     config->queue_max = DEFAULT_QUEUE_MAX;
     config->num_cpu = NUM_CPU_TO_USE;
-    MemSet(config->allow_db, 0, sizeof(CharPtr)*MAX_DB_NUM);
+    config->allow_db = (CharPtr PNTR) MemNew(INIT_DB_NUM*sizeof(CharPtr));
+    config->db_num_allocated = INIT_DB_NUM;
 
     return config;
 }
@@ -545,10 +556,23 @@ static BLASTConfigPtr BLASTReadConfigFile(CharPtr filename, CharPtr program)
 		    (value = atoi(line)) != 0) {
 		config->niceval = value;
 	    } else if(!StringICmp(word, program)) {
-		for(i = 0 ; line[0] != NULLB && i < MAX_DB_NUM; i++) {
+		for(i = 0 ; line[0] != NULLB; i++) {
 		    BLASTConfigGetWord(word, line);
-		    config->allow_db[i] = StringSave(word);
+                    if (i >= config->db_num_allocated) {
+                        CharPtr PNTR ptr;
+                        if ((ptr = (CharPtr PNTR)
+                            Realloc(config->allow_db, 
+                                    2*config->db_num_allocated*sizeof(CharPtr)))
+                            != NULL) {
+                            config->allow_db = ptr;
+                            config->db_num_allocated *= 2;
+                        } else {
+                            break;
+                        }
+                    }
+                    config->allow_db[i] = StringSave(word);
 		}
+                config->num_dbs = i;
 	    }
 	}
     }
@@ -562,7 +586,7 @@ static Boolean ValidateCombinationsEx(WWWBlastInfoPtr theInfo,
 {
     Int4 i;
     
-    for(i = 0; theInfo->blast_config->allow_db[i] != NULL; i++) {
+    for(i = 0; i < theInfo->blast_config->num_dbs; i++) {
 	if(!StringICmp(database, theInfo->blast_config->allow_db[i]))
 	    return TRUE;
     }
@@ -1416,7 +1440,6 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
                if (options->wordsize < 8)
                   options->wordsize = 8;
                options->cutoff_s2 = options->wordsize*options->reward;
-               options->wordsize += 4;
             }
         }
 
@@ -1501,9 +1524,9 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     if((chptr = WWWGetValueByName(theInfo->info, 
                                   "ALIGNMENT_VIEW")) != NULL &&
        StringStr(chptr, "default") == NULL) {
-	theInfo->align_view = atoi(chptr);
+	theInfo->align_view = (BLASTAlignView) atoi(chptr);
         
-        if(theInfo->align_view == 12) {
+        if(theInfo->align_view == BlastXML) {
             theInfo->xml_output = TRUE;
         }
     }
@@ -1513,7 +1536,7 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 
     if(options->is_ooframe) {
         theInfo->xml_output = FALSE;
-        theInfo->align_view = 0;
+        theInfo->align_view = Pairwise;
     }
 
     if (WWWGetValueByName(theInfo->info, "NCBI_GI") != NULL)
@@ -1549,14 +1572,17 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     if (!gapped_set)
         theInfo->print_options += TXALIGN_SHOW_NO_OF_SEGS;
     
-    if (theInfo->align_view) {
+    if (theInfo->align_view != Pairwise) {
         theInfo->align_options += TXALIGN_MASTER;
-        if (theInfo->align_view == 1 || theInfo->align_view == 3)
+        if (theInfo->align_view == QueryAnchoredIdent || 
+            theInfo->align_view == FlatQueryAnchoredIdent)
             theInfo->align_options += TXALIGN_MISMATCH;
-        if (theInfo->align_view == 3 || theInfo->align_view == 4 || 
-            theInfo->align_view == 6)
+        if (theInfo->align_view == FlatQueryAnchoredIdent || 
+            theInfo->align_view == FlatQueryAnchoredNoIdent || 
+            theInfo->align_view == FlatQueryAnchoredBluntEnd)
             theInfo->align_options += TXALIGN_FLAT_INS;
-        if (theInfo->align_view == 5 || theInfo->align_view == 6)
+        if (theInfo->align_view == QueryAnchoredBluntEnd || 
+            theInfo->align_view == FlatQueryAnchoredBluntEnd)
             theInfo->align_options += TXALIGN_BLUNT_END;
     } else {
         theInfo->align_options += TXALIGN_MATRIX_VAL;
@@ -2624,18 +2650,18 @@ Boolean PHIPrintOutput(WWWBlastInfoPtr theInfo,
 	print_options += TXALIGN_SHOW_NO_OF_SEGS;
 
 
-    if (theInfo->align_view) {
-	align_options += TXALIGN_MASTER;
-
-	if (theInfo->align_view == 1 || theInfo->align_view == 3)
-	    align_options += TXALIGN_MISMATCH;
-        
-	if (theInfo->align_view == 3 || theInfo->align_view == 4 || 
-            theInfo->align_view == 6)
-	    align_options += TXALIGN_FLAT_INS;
-
-	if (theInfo->align_view == 5 || theInfo->align_view == 6)
-	    align_options += TXALIGN_BLUNT_END;
+    if (theInfo->align_view != Pairwise) {
+        align_options += TXALIGN_MASTER;
+        if (theInfo->align_view == QueryAnchoredIdent || 
+            theInfo->align_view == FlatQueryAnchoredIdent)
+            align_options += TXALIGN_MISMATCH;
+        if (theInfo->align_view == FlatQueryAnchoredIdent || 
+            theInfo->align_view == FlatQueryAnchoredNoIdent || 
+            theInfo->align_view == FlatQueryAnchoredBluntEnd)
+            align_options += TXALIGN_FLAT_INS;
+        if (theInfo->align_view == QueryAnchoredBluntEnd || 
+            theInfo->align_view == FlatQueryAnchoredBluntEnd)
+            align_options += TXALIGN_BLUNT_END;
     } else {
 	align_options += TXALIGN_MATRIX_VAL;
 	align_options += TXALIGN_SHOW_QS;
@@ -2781,7 +2807,7 @@ the alignment was checked on the previous iteration \
         
         f_order[FEATDEF_REGION] = 1;
         g_order[FEATDEF_REGION] = 1;
-        if(theInfo->align_view == 0) {
+        if(theInfo->align_view == Pairwise) {
             ShowTextAlignFromAnnotExtra(theInfo->fake_bsp, 
                                         print_data->vnp, 
                                         print_data->seqloc, 60, 
@@ -2882,18 +2908,18 @@ Boolean PSIPrintOutput(WWWBlastInfoPtr theInfo,
     if (theInfo->options->gapped_calculation == FALSE)
 	print_options += TXALIGN_SHOW_NO_OF_SEGS;
     
-    if (theInfo->align_view) {
-	align_options += TXALIGN_MASTER;
-        
-	if (theInfo->align_view == 1 || theInfo->align_view == 3)
-	    align_options += TXALIGN_MISMATCH;
-        
-	if (theInfo->align_view == 3 || theInfo->align_view == 4 || 
-            theInfo->align_view == 6)
-	    align_options += TXALIGN_FLAT_INS;
-
-	if (theInfo->align_view == 5 || theInfo->align_view == 6)
-	    align_options += TXALIGN_BLUNT_END;
+    if (theInfo->align_view != Pairwise) {
+        align_options += TXALIGN_MASTER;
+        if (theInfo->align_view == QueryAnchoredIdent || 
+            theInfo->align_view == FlatQueryAnchoredIdent)
+            align_options += TXALIGN_MISMATCH;
+        if (theInfo->align_view == FlatQueryAnchoredIdent || 
+            theInfo->align_view == FlatQueryAnchoredNoIdent || 
+            theInfo->align_view == FlatQueryAnchoredBluntEnd)
+            align_options += TXALIGN_FLAT_INS;
+        if (theInfo->align_view == QueryAnchoredBluntEnd || 
+            theInfo->align_view == FlatQueryAnchoredBluntEnd)
+            align_options += TXALIGN_BLUNT_END;
     } else {
 	align_options += TXALIGN_MATRIX_VAL;
 	align_options += TXALIGN_SHOW_QS;
@@ -3031,7 +3057,7 @@ the alignment was checked on the previous iteration \
                 fflush(stdout);
             }
         } else {   /* Old type formating */
-            if (theInfo->align_view == 0) {
+            if (theInfo->align_view == Pairwise) {
                 ShowTextAlignFromAnnot2(seqannot, 60, stdout, f_order,
                                         g_order, align_options, txmatrix, 
                                         print_data->mask_loc, 

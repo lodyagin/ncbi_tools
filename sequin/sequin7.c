@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.89 $
+* $Revision: 6.92 $
 *
 * File Description: 
 *
@@ -59,8 +59,7 @@ static char *time_of_compilation = "now";
 #include <vsm.h>
 #include <document.h>
 #include <maputil.h>
-#include <asn2ff.h>
-#include <ffprint.h>
+#include <asn2gnbp.h>
 #include <bspview.h>
 #include <findrepl.h>
 #include <toasn3.h>
@@ -345,6 +344,8 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
     if (useEntrez) {
       SeparatorItem (m);
       CommandItem (m, "Entrez Query...", EntrezQueryProc);
+      SeparatorItem (m);
+      CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
       if (extraServices) {
         SeparatorItem (m);
         CommandItem (m, "Process FASTA Nucleotide Updates", ParseInNucUpdates);
@@ -4777,29 +4778,27 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
                             CharPtr sub, Boolean case_counts, Boolean whole_word)
 
 {
-  Asn2ffJobPtr     ajp;
+  Asn2gbJobPtr     ajp;
   Boolean          already;
+  BaseBlockPtr     bbp;
   BioseqPtr        bsp;
-  DescrStructPtr   descr;
+  BioseqSetPtr     bssp;
   unsigned int     entID;
   Int4             index;
   unsigned int     itmID;
   unsigned int     itmtype;
   ErrSev           level;
   SeqEntryPtr      oldsep;
-  FFPrintArrayPtr  pap = NULL;
-  Int4             pap_size;
   SeqEntryPtr      sep = NULL;
   SelStructPtr     sel;
   CharPtr          string;
   SeqEntryPtr      topsep;
+  SeqEntryPtr      usethetop = NULL;
 
-  ajp = (Asn2ffJobPtr) MemNew (sizeof (Asn2ffJob));
-  if (ajp == NULL) return;
-
-  if (itemID == 0)
+  if (itemID == 0) {
     sep = GetTopSeqEntryForEntityID (entityID);
-  else {
+    usethetop = sep;
+  } else {
     bsp = GetBioseqGivenIDs (entityID, itemID, itemtype);
     if (bsp == NULL)
       return;
@@ -4816,39 +4815,26 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
   WatchCursor ();
   Update ();
 
-  ajp->sep = sep;
-  ajp->mode = mode;
-  ajp->format = format;
-  ajp->gb_style = TRUE;
-  ajp->show_seq = TRUE;
-  ajp->show_gi = TRUE;
-  ajp->error_msgs = FALSE;
-  ajp->non_strict = TRUE;
-  ajp->Spop = spop;
-  ajp->show_gene = TRUE;
-  if (IsAGenomeRecord (sep)) {
-    ajp->only_one = TRUE;
-    ajp->genome_view = TRUE;
-  }
-  ajp->bankit = TRUE;
-
   topsep = GetTopSeqEntryForEntityID (entityID);
   oldsep = SeqEntrySetScope (topsep);
 
-  pap_size = asn2ff_setup (ajp, &pap);
-  if (pap_size > 0) {
-    asn2ff_set_output (NULL, "\n");
-    for (index = 0; index < pap_size; index++) {
-      string = FFPrint (pap, index, pap_size);
+  if (usethetop != NULL && IS_Bioseq_set (usethetop)) {
+    bssp = (BioseqSetPtr) usethetop->data.ptrvalue;
+    ajp = asn2gnbk_setup (NULL, bssp, NULL, format, mode, NORMAL_STYLE, 0, 0, NULL);
+  } else {
+    ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, NORMAL_STYLE, 0, 0, NULL);
+  }
+  if (ajp != NULL) {
+    for (index = 0; index < ajp->numParagraphs; index++) {
+      string = asn2gnbk_format (ajp, (Int4) index);
       if (string != NULL && *string != '\0') {
         CompressSpaces (string);
         if (SearchForString (string, sub, case_counts, whole_word) != NULL) {
-          if (pap [index].descr) {
-            descr = pap [index].descr;
-            entID = descr->entityID;
-            itmID = descr->itemID;
-            itmtype = descr->itemtype;
-            pap [index].descr = MemFree (pap [index].descr);
+          bbp = ajp->paragraphArray [index];
+          if (bbp != NULL) {
+            entID = bbp->entityID;
+            itmID = bbp->itemID;
+            itmtype = bbp->itemtype;
             already = FALSE;
             for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
               if (sel->entityID == entID && sel->itemID == itmID && sel->itemtype == itmtype) {
@@ -4863,13 +4849,11 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
       }
       MemFree (string);
     }
-    MemFree (pap);
+    asn2gnbk_cleanup (ajp);
   }
-  asn2ff_cleanup (ajp);
 
   SeqEntrySetScope (oldsep);
 
-  MemFree (ajp);
   ErrSetMessageLevel (level);
   ArrowCursor ();
   Update ();
@@ -6633,10 +6617,12 @@ static void AddOrgToDefElement (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, In
     orp = biop->org;
     if (orp == NULL) return;
     StringNCpy_0 (str, orp->taxname, sizeof (str));
+    /*
     ptr = StringSearch (str, "(");
     if (ptr != NULL) {
       *ptr = '\0';
     }
+    */
     TrimSpacesAroundString (str);
     if (StringICmp (str, "Human immunodeficiency virus type 1") == 0) {
       StringCpy (str, "HIV-1");

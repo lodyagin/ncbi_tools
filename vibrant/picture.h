@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: picture.h,v $
+* Revision 6.12  2002/03/07 15:53:45  kans
+* added SetSegmentVisibleFlag to set/clear the visible flag before attaching to a viewer
+*
 * Revision 6.11  1999/10/13 17:45:46  kans
 * added entityID, itemID, and itemtype to primitive internal structure, added Get and Set functions
 *
@@ -407,6 +410,9 @@ extern void          Nlm_UnlinkSegment      PROTO((Nlm_SegmenT child));
 extern void          Nlm_ExploreSegment     PROTO((Nlm_SegmenT segment, 
 Nlm_VoidPtr userdata, Nlm_SegmentExploreProc callback));
 
+/* SetSegmentVisibleFlag does not change the display in the viewer - use ShowSegment and HideSegment */
+extern void          Nlm_SetSegmentVisibleFlag (Nlm_SegmenT segment, Nlm_Boolean visible);
+
 /*Working with primitive */
 
 extern Nlm_PrimitivE Nlm_GetPrimitive PROTO((Nlm_SegmenT segment, Nlm_Uint2 primCt));
@@ -487,6 +493,7 @@ extern Nlm_enumPrimAddOrder Nlm_ChangeAddPrimOrder
 #define SegmentVisible Nlm_SegmentVisible
 #define SegmentStyle Nlm_SegmentStyle
 #define SegmentBox Nlm_SegmentBox
+#define SetSegmentVisibleFlag Nlm_SetSegmentVisibleFlag
 #define AddAttribute Nlm_AddAttribute
 #define AddPrimitive Nlm_AddPrimitive
 #define AddInvFrame Nlm_AddInvFrame

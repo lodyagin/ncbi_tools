@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -66,6 +66,9 @@
 *     
 *     A detailed change log follows:
 *     $Log: suggest.c,v $
+*     Revision 6.9  2002/02/06 21:10:38  kans
+*     PlusStrand and MinusStrand prefixed with Suggest to avoid collision with asn2graphic viewer symbols
+*
 *     Revision 6.8  2001/05/25 19:43:53  vakatov
 *     Nested comment typo fixed
 *
@@ -489,7 +492,7 @@ Int4 Total_len;
 
 #define fatal(m)	{ErrPostEx(SEV_FATAL, 0, 0, "%s:  %s", module, m); goto Error;}
 
-static char * suggest_revision = "$Revision: 6.8 $";
+static char * suggest_revision = "$Revision: 6.9 $";
 
 static Int4	suggest_get_frames_init = 1;
 
@@ -1003,15 +1006,15 @@ static Int4 AddInterval (Int4 lonum, Int4 hinum, Int4 orient)
       return 1;
     }
   } else {
-    if (nt_orient [start_nt] == MinusStrand) {
+    if (nt_orient [start_nt] == SuggestMinusStrand) {
       lonum -= nt_len_offsets [start_nt];
       hinum -= nt_len_offsets [start_nt];
       lonum = nt_dna_len [start_nt] - lonum + 1;
       hinum = nt_dna_len [start_nt] - hinum + 1;
-      if (orient == MinusStrand){
-        orient = PlusStrand;
-      } else if (orient == PlusStrand) {
-        orient = MinusStrand;
+      if (orient == SuggestMinusStrand){
+        orient = SuggestPlusStrand;
+      } else if (orient == SuggestPlusStrand) {
+        orient = SuggestMinusStrand;
       }
       lonum += nt_len_offsets [start_nt];
       hinum += nt_len_offsets [start_nt];
@@ -1103,7 +1106,7 @@ report(void)
 			to = dna_len;
 		}
 
-		if (m_stk[i].orient == MinusStrand) {
+		if (m_stk[i].orient == SuggestMinusStrand) {
 			from = dna_len - from + 1;
 			to = dna_len - to + 1;
 		}
@@ -1318,7 +1321,7 @@ dna_len, pro_len);
 		}
 	} else if (get_frames(dna_seq) != 0)
 		goto Error;
-	orientation = PlusStrand;
+	orientation = SuggestPlusStrand;
 	if (search() != 0)
 		goto Error;
 
@@ -1340,7 +1343,7 @@ dna_len, pro_len);
 		}
 	} else if (get_frames(rev_seq) != 0)
 		goto Error;
-	orientation = MinusStrand;
+	orientation = SuggestMinusStrand;
 	if (search() != 0)
 		goto Error;
 
@@ -1641,7 +1644,7 @@ static void Suggest_Intervals (SuggestRecPtr sugrp,
         dna_len = 0;
         nt_len_offsets [0] = 0;
         nt_id_seq[0] = 0;
-        last_orient = PlusStrand;
+        last_orient = SuggestPlusStrand;
         nt_orient[0] = last_orient;
 
         m_top = 0;

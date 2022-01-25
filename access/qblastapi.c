@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.17  2002/04/12 14:27:35  madden
+* Check RID for internal jobs, send to appropriate place
+*
 * Revision 1.16  2001/02/25 21:50:41  kans
 * changes from Uint4 to size_t due to connection type changes
 *
@@ -727,6 +730,40 @@ static void LIBCALLBACK AsnIoErrorFunc(Int2 type, CharPtr message)
     return;
 }
 
+/*
+	Tests the RID to see if it's an in-house job
+	(i.e., indexer) kept in the LL queue, or a
+	normal one.
+
+	External jobs start with a 0 after the first dash
+	(e.g., 1018299345-016645-15460), internal jobs
+	do not.
+
+	Return value is TRUE for internal jobs, FALSE for external.
+
+*/
+static Boolean QblastTestRID(CharPtr RID)
+
+{
+	Boolean retval=TRUE;
+
+	while (*RID != NULLB)
+	{
+		if (*RID == '-')
+		{
+			RID++;
+			if (*RID == '0')
+				retval = FALSE;
+			else
+				retval = TRUE;
+			break;
+		}
+		RID++;
+	}
+
+	return retval;
+}
+
 /* Function to get SeqAnnot for RID. We suupose, that search already
    finished and results are exists on the Qblast repository */
 
@@ -742,8 +779,10 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
 
     /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
     
-    sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&"
-            "FORMAT_OBJECT=Alignment", RID);
+    if (QblastTestRID(RID) == FALSE)
+    	sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&FORMAT_OBJECT=Alignment", RID);
+    else
+    	sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&FORMAT_OBJECT=Alignment&CLIENT=DirSub", RID);
     
     /*    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
     conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
@@ -780,8 +819,10 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
     
     /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
     
-    sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&"
-            "FORMAT_TYPE=ASN.1", RID);
+    if (QblastTestRID(RID) == FALSE)
+    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1", RID);
+    else
+    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1&CLIENT=DirSub", RID);
     
     /* conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
     
@@ -810,6 +851,7 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
    ASN.1 will be returned as CharPtr buffer*/
 NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
 {
+    Boolean	internal_job;
     Char         query_string[256];
     CONN         conn;
     size_t       n_written;
@@ -821,7 +863,10 @@ NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
 /*
     sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=13", RID);
 */
-    sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1", RID);
+    if (QblastTestRID(RID) == FALSE)
+    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1", RID);
+    else
+    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1&CLIENT=DirSub", RID);
     
     conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
                                "/blast/Blast.cgi", NULL, 

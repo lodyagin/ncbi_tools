@@ -44,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.6  2002/03/05 21:11:04  kans
+* do not replace ifp->key
+*
 * Revision 6.5  2001/12/12 17:38:38  kans
 * added new subsource qualifiers, four now have empty name
 *
@@ -1363,7 +1366,7 @@ static void FindReplFeats (
       break;
     case SEQFEAT_IMP :
       ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
-      FindReplString (&(ifp->key), fsp);
+      /* FindReplString (&(ifp->key), fsp); */
       FindReplString (&(ifp->loc), fsp);
       FindReplString (&(ifp->descr), fsp);
       break;

@@ -1,6 +1,6 @@
 	
 			README for stand-alone BLAST
-			   (last updated 12/18/2001)
+			   (last updated 04/23/2002)
 
 
 
@@ -1006,6 +1006,53 @@ References
 
 Release History
 ---------------
+
+Notes for 2.2.3 release (04/24/02):
+
+Enhancements:
+
+1.) Version 4 of the BLAST databases is now the default for formatdb.  
+This can be overridden for older binaries by use of "-A F" on the
+command-line.
+
+
+Bug fixes:
+
+1.) A problem has been fixed that caused tblastn searches to miss some protein matches,
+if the database sequence was longer than 15 million bases.
+
+2.) Selenocysteine residues (U) in the query are now replaced by X's as these
+are not supported in the currently available matrices (e.g., BLOSUM62), so that
+their presence occasionally caused data corruption.
+
+3.) A problem with combining the "-m 7" and "-n T" options in blastall has 
+been fixed.
+
+4.) XML output had a <Hit_def> field that could (incorrectly) have an empty value,
+this has been fixed.
+
+5.) A problem with reading databases with more than one volume and an oidlist has
+been fixed.
+
+6.) A problem with ungapped XML output that caused all HSP's to be number zero
+has been resolved, they are now numbered with one-offset.
+
+7.) A bug that prevented use of some matrices for ungapped searches has
+been fixed.
+
+8.) Effective query and database lengths were calculated incorrectly for 
+rpsblast, leading to a minor change in expect values in some cases.  This
+has been corrected.
+
+9.) A for loop that could overrun the end of a buffer during formatting was
+fixed.  Many thanks to Haruna Cofer of SGI for pointing this.
+
+10.) The effective database length command-line argument (-z) has been fixed
+for blastall and megablast.  The parser was reading digits only until
+there were no non-digits (e.g., 1.6e8 was interpreted as "1"), leading
+to wildly incorrect effective database lengths.  This has been fixed so 
+that 160000000 and 1.6e8 are interpeted the same way. 
+
 
 Notes for 2.2.2 release:
 

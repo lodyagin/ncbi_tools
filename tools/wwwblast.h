@@ -1,4 +1,4 @@
-/* $Id: wwwblast.h,v 6.8 2000/10/31 20:17:13 shavirin Exp $
+/* $Id: wwwblast.h,v 6.10 2002/04/19 17:47:24 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:
 *        Definitions for standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.h,v $
+* Revision 6.10  2002/04/19 17:47:24  dondosha
+* Removed restriction on the allowed number of databases in the config file
+*
+* Revision 6.9  2002/01/08 22:36:25  dondosha
+* Added tabular output functionality
+*
 * Revision 6.8  2000/10/31 20:17:13  shavirin
 * Added definition of the function TestSTDOut(void);
 *
@@ -106,7 +112,7 @@ typedef enum {
     BLASTMiscError       =  -99  /* undefined internal error             */
 } BLASTErrCode;
 
-#define MAX_DB_NUM 256
+#define INIT_DB_NUM 256
 
 /* Max. total number of concurrent running requests */
 #define DEFAULT_RUN_MAX            2 
@@ -126,8 +132,23 @@ typedef struct BLASTConfig {
     Int4 queue_max;
     Int4 num_cpu;
     Int4 niceval;
-    CharPtr allow_db[MAX_DB_NUM];
+    Int2 num_dbs;
+    Int2 db_num_allocated;
+    CharPtr PNTR allow_db;
 } BLASTConfig, PNTR BLASTConfigPtr;
+
+typedef enum {
+ Pairwise = 0,
+ QueryAnchoredIdent = 1,
+ QueryAnchoredNoIdent = 2,
+ FlatQueryAnchoredIdent = 3,
+ FlatQueryAnchoredNoIdent = 4,
+ QueryAnchoredBluntEnd = 5,
+ FlatQueryAnchoredBluntEnd = 6,
+ BlastXML = 7,
+ HitTable = 8,
+ HitTableWithHeader = 9
+} BLASTAlignView;
 
 typedef struct _www_blast_info {
     BLAST_OptionsBlkPtr options;
@@ -141,7 +162,8 @@ typedef struct _www_blast_info {
     Boolean query_is_na, db_is_na, align_type, show_gi, show_overview;
     Boolean believe_query;
     Uint4 align_options, print_options;
-    Int4 align_view, input_type, color_schema;
+    BLASTAlignView align_view;
+    Int4 input_type, color_schema;
     Boolean is_phi_blast;
     Boolean show_tax_blast;
     Boolean xml_output;
@@ -182,6 +204,7 @@ typedef struct BLASTPrintData {
     ValNodePtr         info_vnp; /* PHI-Blast info strings */
     BLAST_MatrixPtr    matrix; /* Needed for the positives computation */
 } BLASTPrintData, PNTR BLASTPrintDataPtr;
+
 
 /* ------------------------------------------- */
 void WWWBlastInfoFree(WWWBlastInfoPtr theInfo);

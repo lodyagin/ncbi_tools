@@ -29,13 +29,19 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.37  2002/01/22 18:49:15  kans
+* added ACCN_NCBI_WGS, ACCN_EMBL_WGS, and ACCN_DDBJ_WGS
+*
+* Revision 6.36  2002/01/16 16:59:38  camacho
+* Changed the type of buflen parameter in SeqIdWrite from Int2 to Uint4
+*
 * Revision 6.35  2001/09/28 22:42:49  vakatov
 * Renamed "new" to "x_new" -- to avoid clash with the C++ "operator new"
 *
@@ -643,7 +649,7 @@ NLM_EXTERN Int2 SeqIdBestRank(Uint1Ptr buf, Int2 num);
 NLM_EXTERN SeqIdPtr SeqIdFindBest(SeqIdPtr sip, Uint1 target);
 NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip);
 NLM_EXTERN CharPtr SeqIdPrint(SeqIdPtr sip, CharPtr buf, Uint1 format);
-NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Int2 buflen);
+NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Uint4 buflen);
 NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
 				     CharPtr PNTR id);
 NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf);
@@ -1121,6 +1127,10 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 #define ACCN_DDBJ_TPA 52
 #define ACCN_DDBJ_TPA_PROT 53
 
+#define ACCN_NCBI_WGS 54
+#define ACCN_EMBL_WGS 55
+#define ACCN_DDBJ_WGS 56
+
 
 /* Some accessions prefix can be either protein or nucleotide 
    such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
@@ -1159,7 +1169,7 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 
 #define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA) || ((c)== ACCN_DDBJ_TPA_PROT))
 
-#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT))
+#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_NCBI_WGS))
 
 /*
   Macro to detect EMBL accession numbers  (can also belong to another DB)

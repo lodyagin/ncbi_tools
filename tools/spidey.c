@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.35  2002/04/04 17:18:20  wheelan
+* numerous bug fixes and little changes; added SPI_CheckForPolyAExon
+*
+* Revision 6.34  2002/01/30 19:09:05  wheelan
+* better support for revcomp, plus changes for new alignment manager funcs
+*
 * Revision 6.33  2001/12/18 18:00:01  wheelan
 * bug fix for NULL segs in RemoveTeenyAln
 *
@@ -829,7 +835,7 @@ NLM_EXTERN void SPI_MakeMultipleAlignment(SPI_RegionInfoPtr srip_head)
       numblocks++;
       sbp->sap = SPI_RearrangeAlns(sbp->sap);
       AlnMgr2IndexIndexedChain(sbp->sap);
-      sub_sap = AlnMgr2GetSubAlign(sbp->sap, 0, -1, 0);
+      sub_sap = AlnMgr2GetSubAlign(sbp->sap, 0, -1, 0, TRUE);
       SeqAlignSetFree(sbp->sap);
       sbp->sap = sub_sap;
       if (strand == Seq_strand_minus)
@@ -1688,7 +1694,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
    if (spot->printaln != 2)
    {
       if (spot->printheader)
-         fprintf(ofp, "--SPIDEY version 1.2--\n");
+         fprintf(ofp, "--SPIDEY version 1.31--\n");
       fprintf(ofp, "Genomic: %s ", textid1);
       fprintf(ofp, "%s, ", text1);
       fprintf(ofp, "%d bp\n", bsp_genomic->length);
@@ -2147,7 +2153,7 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
 
    if (ofp == NULL || herd == NULL || bsp_genomic == NULL || bsp_mrna == NULL)
       return;
-   fprintf(ofp, "--SPIDEY version 1.2--\n");
+   fprintf(ofp, "--SPIDEY version 1.31--\n");
    FastaDefLine (bsp_genomic, text1, 200, NULL, NULL, 0);
    SeqIdWrite(bsp_genomic->id, textid1, PRINTID_FASTA_LONG, 41);
    fprintf(ofp, "Genomic: %s ", textid1);
@@ -3814,6 +3820,64 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
 
 /***************************************************************************
 *
+*  SPI_CheckForPolyAExon looks at the 3' terminal exon and checks to see
+*  whether it consists only of polyAs. If so, the exon is deleted.
+*
+***************************************************************************/
+static void SPI_CheckForPolyAExon(SeqAlignPtr sap)
+{
+   AMAlignIndex2Ptr  amaip;
+   BioseqPtr         bsp;
+   Int4              len;
+   Int4              polya;
+   SeqAlignPtr       salp;
+   SeqAlignPtr       salp_prev;
+   SeqAlignPtr       sap_target;
+   SeqIdPtr          sip;
+   Int4              start;
+   Int4              stop;
+   Uint1             strand;
+
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
+   sip = AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 2);
+   bsp = BioseqLockById(sip);
+   len = bsp->length;
+   BioseqUnlock(bsp);
+   if (strand == Seq_strand_minus)
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, &start, &stop);
+   else
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &start, &stop);
+   polya = SPI_IsItPolyA(sip);
+   SeqIdFree(sip);
+   if (len - start > polya)
+      return;
+   if (strand == Seq_strand_minus)
+      sap_target = amaip->saps[0];
+   else
+      sap_target = amaip->saps[amaip->numsaps-1];
+   salp = (SeqAlignPtr)(sap->segs);
+   salp_prev = NULL;
+   while (salp != NULL)
+   {
+      if (salp == sap_target)
+      {
+         if (salp_prev == NULL)
+            sap->segs = (Pointer)(sap_target->next);
+         else
+            salp_prev->next = sap_target->next;
+         SeqAlignFree(sap_target);
+      }
+      salp_prev = salp;
+      salp = salp->next;
+   }
+   AMAlignIndexFreeEitherIndex(sap);
+   AlnMgr2IndexLite(sap);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+}
+
+/***************************************************************************
+*
 *  SPI_ConnectAln looks through all the alignments in a set and fills in
 *  the gaps on the mRNA sequence. If do_ends is TRUE, the function will
 *  try to fill in the alignments until they extend to both ends of the 
@@ -4130,6 +4194,8 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
    SeqIdFree(sip2);
    if (firsttime) /* reconnect to pick up last pieces */
       SPI_ConnectAln(sap, spot, srip, do_ends, FALSE);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+   SPI_CheckForPolyAExon(sap);
    return TRUE;
 }
 
@@ -4788,23 +4854,23 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
          SPI_AddToAln(amaip->saps[0], gstart1, SPI_LEFT, strand);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &mstart2, &mstop2);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, &gstart2, &gstop2);
-      if (len1 - mstop2-1 > 0 && len1 - mstop2-1 <= SPI_ENDFUZZ && len2-gstop2 >= len1-mstop2)
+      if (len1 - srip->polyAtail - mstop2-1 > 0 && len1 - mstop2-1 <= SPI_ENDFUZZ && len2-gstop2 >= len1-mstop2)
          SPI_AddToAln(amaip->saps[amaip->numsaps-1], len1-mstop2-1, SPI_RIGHT, strand);
-      else if (len1-mstop2-1 > 2 && len1 - mstop2-1 <= SPI_ENDFUZZ && len1-mstop2 > len2 - gstop2)
+      else if (len1-mstop2-1 - srip->polyAtail > 2 && len1 - mstop2-1 <= SPI_ENDFUZZ && len1-mstop2 > len2 - gstop2)
          SPI_AddToAln(amaip->saps[amaip->numsaps-1], len2-gstop2-1, SPI_RIGHT, strand);
    } else
    {
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &gstart1, &gstop1);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, &mstart2, &mstop2);
-      if (len1 - mstop2-1 > 0 && len1 - mstop2-1 <= 2*SPI_TEENYEXON && gstart1 >= (len1 - mstop2 - 1))
+      if (len1 - mstop2-1-srip->polyAtail > 0 && len1 - mstop2-1 <= 2*SPI_TEENYEXON && gstart1 >= (len1 - mstop2 - 1))
          SPI_AddToAln(amaip->saps[0], len1-mstop2-1, SPI_LEFT, strand);
-      else if (len1 - mstop2-1 > 0 && len1 - mstop2-1 <= 2*SPI_TEENYEXON && gstart1 < (len1 - mstop2 - 1))
+      else if (len1 - mstop2-1-srip->polyAtail > 0 && len1 - mstop2-1 <= 2*SPI_TEENYEXON && gstart1 < (len1 - mstop2 - 1))
          SPI_AddToAln(amaip->saps[0], gstart1, SPI_LEFT, strand);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &mstart1, &mstop1);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, &gstart2, &gstop2);
-      if (mstart1 > 0 && mstart1 <= SPI_TEENYEXON && len2 - gstop2 -1> mstart1)
+      if (mstart1 > 0 && mstart1 <= SPI_ENDFUZZ && len2 - gstop2 -1> mstart1)
          SPI_AddToAln(amaip->saps[amaip->numsaps-1], mstart1, SPI_RIGHT, strand);
-      else if (mstart1 > 0 && mstart1 <= SPI_TEENYEXON && len2 - gstop2 -1<= mstart1)
+      else if (mstart1 > 0 && mstart1 <= SPI_ENDFUZZ && len2 - gstop2 -1<= mstart1)
           SPI_AddToAln(amaip->saps[amaip->numsaps-1], len2-gstop2-1, SPI_RIGHT, strand);
    }
    /* send the alignments in pairs to be adjusted to good splice sites */
@@ -6100,7 +6166,7 @@ static SeqAlignPtr SPI_FillInLastmRNAHoles(SeqAlignPtr sap, SeqIdPtr sip_genomic
             currstart2 = start2;
          if ((gap2 = spi_isa_gap(currstart2, prevstop2, strand)) >= SPI_TEENYEXON)
          {
-            if ((gap1 = spi_isa_gap(start1, prevstop1, Seq_strand_plus)) >= SPI_TEENYEXON)
+            if ((gap1 = spi_isa_gap(start1, prevstop1, Seq_strand_plus)) >= SPI_TEENYEXON || (prevstop1 == -1))
             {
                slp1 = SeqLocIntNew(prevstop1+1, start1-1, Seq_strand_plus, sip_genomic);
                if (strand != Seq_strand_minus)
@@ -8469,14 +8535,14 @@ NLM_EXTERN void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, In
             {
                conflict = FALSE;
             /* check first for conflict on first row */
-               if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + fuzz)
+               if (spin[i]->n2 + spin[i]->n3 - 1 >= spin[curr]->n2 + fuzz)
                {
-                  if (spin[i]->n2 < spin[curr]->n2 + fuzz)
+                  if (spin[i]->n2 <= spin[curr]->n2 + fuzz)
                      conflict = TRUE;
                }
-               if (spin[i]->n2 < spin[curr]->n2 + spin[curr]->n3 - 1 - fuzz)
+               if (spin[i]->n2 <= spin[curr]->n2 + spin[curr]->n3 - 1 - fuzz)
                {
-                  if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + spin[curr]->n3 - 1)
+                  if (spin[i]->n2 + spin[i]->n3 - 1 >= spin[curr]->n2 + spin[curr]->n3 - 1)
                      conflict = TRUE;
                }
                if (spin[i]->n2 >= spin[curr]->n2)
@@ -8485,12 +8551,12 @@ NLM_EXTERN void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, In
                      conflict = TRUE;
                }
             /* then check for conflict and consistency on second row */
-               if (spin[i]->n4 + spin[i]->n3-1 > spin[curr]->n4 + fuzz)
+               if (spin[i]->n4 + spin[i]->n3-1 >= spin[curr]->n4 + fuzz)
                {
-                  if (spin[i]->n4 < spin[curr]->n4 + fuzz)
+                  if (spin[i]->n4 <= spin[curr]->n4 + fuzz)
                      conflict = TRUE;
                }
-               if (spin[i]->n4 < spin[curr]->n4 + spin[curr]->n3 - 1 - fuzz)
+               if (spin[i]->n4 <= spin[curr]->n4 + spin[curr]->n3 - 1 - fuzz)
                {
                   if (spin[i]->n4 + spin[i]->n3 - 1 > spin[curr]->n4 + fuzz)
                      conflict = TRUE;
@@ -8500,26 +8566,26 @@ NLM_EXTERN void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, In
                   if (spin[i]->n4 + spin[i]->n3 - 1 <= spin[curr]->n4 + spin[curr]->n3 - 1)
                      conflict = TRUE;
                }
-               if (spin[i]->n2 + spin[i]->n3 - 1 < spin[curr]->n2 + fuzz)
+               if (spin[i]->n2 + spin[i]->n3 - 1 <= spin[curr]->n2 + fuzz)
                {
                   if (strand == 1)
                   {
-                     if (spin[i]->n4 + spin[i]->n3 - 1 > spin[curr]->n4 + fuzz)
+                     if (spin[i]->n4 + spin[i]->n3 - 1 >= spin[curr]->n4 + fuzz)
                         conflict = TRUE;
                   } else if (strand == -1)
                   {
-                     if (spin[curr]->n4 + spin[curr]->n3 - 1 - fuzz > spin[i]->n4)
+                     if (spin[curr]->n4 + spin[curr]->n3 - 1 - fuzz >= spin[i]->n4)
                         conflict = TRUE;
                   }
                } else
                {
                   if (strand == 1)
                   {
-                     if (spin[i]->n4 < spin[curr]->n4 + spin[curr]->n3 - fuzz)
+                     if (spin[i]->n4 <= spin[curr]->n4 + spin[curr]->n3 - fuzz)
                         conflict = TRUE;
                   } else if (strand == -1)
                   {
-                     if (spin[i]->n4 + spin[i]->n3 - 1 - fuzz > spin[curr]->n4)
+                     if (spin[i]->n4 + spin[i]->n3 - 1 - fuzz >= spin[curr]->n4)
                         conflict = TRUE;
                   }
                }
@@ -8701,8 +8767,11 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
    Int4               stop_cds;
    Int4Ptr            tmpmstarts;
    Int4Ptr            tmpmstops;
+   Int4               tmp1;
+   Int4               tmp2;
+   Int4               tmp3;
 
-   if (srip_mrna == NULL)
+   if (srip_mrna == NULL || srip_mrna->revcomp == TRUE)
       return NULL;
    SeqMgrIndexFeatures(0, (Pointer)bsp_mrna);
    featDefFilter = (BoolPtr)MemNew((FEATDEF_MAX)*sizeof(Boolean));
@@ -8715,6 +8784,17 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
    if (context.right == 0)
       return NULL;
    start_cds = stop_cds = -1;
+   offset = context.left;
+   tmp1 = srip_mrna->smp->mstarts[0];
+   tmp2 = srip_mrna->smp->mstops[srip_mrna->smp->numexons-1];
+   if (tmp2 < tmp1)
+   {
+      tmp3 = tmp2;
+      tmp2 = tmp1;
+      tmp1 = tmp3;
+   }
+   if (context.left > tmp2 || context.right < tmp1) /* cds not contained in model */
+      return NULL;
    if (srip_mrna->smp->strand != Seq_strand_minus)
    {
       for (i=0; i<srip_mrna->smp->numexons; i++)
@@ -8752,7 +8832,6 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
       smp->gstarts = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
       smp->gstops = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
       smp->saps = (SeqAlignPtr PNTR)MemNew((smp->numexons)*sizeof(SeqAlignPtr));
-      offset = context.left;
       if (srip_mrna->smp->mstarts[start_cds] < offset)
          smp->mstarts[0] = 0;
       else
@@ -8871,7 +8950,6 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
       smp->gstarts = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
       smp->gstops = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
       smp->saps = (SeqAlignPtr PNTR)MemNew((smp->numexons)*sizeof(SeqAlignPtr));
-      offset = context.left;
       if (smp->numexons > 1)
          smp->mstarts[0] = srip_mrna->smp->mstarts[start_cds] - offset;
       if (smp->fallsoff == SPI_NEITHER || smp->fallsoff == SPI_LEFT)
@@ -9133,7 +9211,7 @@ static Boolean LIBCALLBACK SPI_GetCDS(SeqFeatPtr sfp, SeqMgrFeatContextPtr conte
    if (sfp == NULL)
       return FALSE;
    spin = (SPI_nPtr)context->userdata;
-   if (context->seqfeattype == SEQFEAT_CDREGION)
+   if (context->seqfeattype == SEQFEAT_CDREGION && context->strand != Seq_strand_minus)
    {
       spin->n1 = context->left;
       spin->n2 = context->right;
@@ -9399,6 +9477,8 @@ static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip_head, SPI_OptionsP
    Int4               c;
    Int4               i;
    SPI_RegionInfoPtr  revcmp;
+   SPI_bsinfoPtr      sbp1;
+   SPI_bsinfoPtr      sbp2;
    Int4               sites;
    Int4               sites2;
    SPI_RegionInfoPtr  srip;
@@ -9414,55 +9494,62 @@ static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip_head, SPI_OptionsP
    c = 0;
    while (srip != NULL)
    {
-      sites = 0;
-      for (i=0; i<srip->smp->numexons; i++)
+      if (spot->revcomp == FALSE)
       {
-         sites += srip->smp->splicedon[i];
-      }
-      if ((sites*100)/srip->smp->numexons < SPI_REVCOMPTHRESH)
-      {
-         revcmp = (SPI_RegionInfoPtr)MemNew(sizeof(SPI_RegionInfo));
-         revcmp->revcomp = TRUE;
-         revcmp->gstart = srip->gstart;
-         revcmp->gstop = srip->gstop;
-         BioseqRevComp(bsp_mrna);
-         ErrSetMessageLevel(SEV_MAX);
-         SPI_AlignInWindows(&revcmp, bsp_genomic, bsp_mrna, spot);
-         if (revcmp != NULL && revcmp->smp != NULL)
+         srip->revcmp_try = TRUE;
+         sites = 0;
+         for (i=0; i<srip->smp->numexons; i++)
          {
-            SPI_BeautifySMP(revcmp);
+            sites += srip->smp->splicedon[i];
+         }
+         if ((sites*100)/srip->smp->numexons < SPI_REVCOMPTHRESH)
+         {
+            BioseqRevComp(bsp_mrna);
+            ErrSetMessageLevel(SEV_MAX);
+            sbp1 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfoPtr));
+            sbp1->bsp = bsp_genomic;
+            sbp2 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfoPtr));
+            sbp2->bsp = bsp_mrna;
+            sbp2->lcaseloc = spot->lcaseloc;
+            spot->revcomp = TRUE;
+            revcmp = SPI_AlnSinglemRNAToGen(sbp1, sbp2, NULL, NULL, spot);
+            spot->revcomp = FALSE;
             if (revcmp != NULL && revcmp->smp != NULL)
             {
-               MemFree(revcmp->smp->protein);
-               revcmp->smp->protein = SPI_GetProteinFrommRNA(bsp_mrna, &revcmp->smp->transstart);
-            }
-         }
-         BioseqRevComp(bsp_mrna);
-         if (revcmp != NULL && revcmp->smp != NULL)
-         {
-            sites2 = 0;
-            for (i=0; i<revcmp->smp->numexons; i++)
-            {
-               sites2 += revcmp->smp->splicedon[i];
-            }
-            if ((sites2*100)/revcmp->smp->numexons > (sites*100)/srip->smp->numexons)
-            {
-               if (revcmp->smp->mRNAcoverage > srip->smp->mRNAcoverage - SPI_COVERDIFF)
+               SPI_BeautifySMP(revcmp);
+               if (revcmp != NULL && revcmp->smp != NULL)
                {
-                  if (revcmp->smp->mismatch < srip->smp->mismatch + SPI_MISMTCHDIFF)
+                  MemFree(revcmp->smp->protein);
+                  revcmp->smp->protein = SPI_GetProteinFrommRNA(bsp_mrna, &revcmp->smp->transstart);
+               }
+            }
+            BioseqRevComp(bsp_mrna);
+            if (revcmp != NULL && revcmp->smp != NULL)
+            {
+               sites2 = 0;
+               for (i=0; i<revcmp->smp->numexons; i++)
+               {
+                  sites2 += revcmp->smp->splicedon[i];
+               }
+               if ((sites2*100)/revcmp->smp->numexons > (sites*100)/srip->smp->numexons)
+               {
+                  if (revcmp->smp->mRNAcoverage > srip->smp->mRNAcoverage - SPI_COVERDIFF)
                   {
-                     SPI_mRNAFree(srip->smp);
-                     srip->smp = revcmp->smp;
-                     srip->revcomp = TRUE;
-                     srip->mstart = revcmp->mstart;
-                     srip->mstop = revcmp->mstop;
-                     srip->strand = revcmp->strand;
-                     srip->coverage = revcmp->coverage;
-                     srip->score = revcmp->score;
-                     srip->polyAtail = revcmp->polyAtail;
-                     srip->fallsoff = revcmp->fallsoff;
-                     srip->utr = revcmp->utr;
-                     MemFree(revcmp);
+                     if (revcmp->smp->mismatch < srip->smp->mismatch + SPI_MISMTCHDIFF)
+                     {
+                        SPI_mRNAFree(srip->smp);
+                        srip->smp = revcmp->smp;
+                        srip->revcomp = TRUE;
+                        srip->mstart = revcmp->mstart;
+                        srip->mstop = revcmp->mstop;
+                        srip->strand = revcmp->strand;
+                        srip->coverage = revcmp->coverage;
+                        srip->score = revcmp->score;
+                        srip->polyAtail = revcmp->polyAtail;
+                        srip->fallsoff = revcmp->fallsoff;
+                        srip->utr = revcmp->utr;
+                        MemFree(revcmp);
+                     }
                   }
                }
             }

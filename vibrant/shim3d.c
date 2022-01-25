@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.78 $
+* $Revision: 6.79 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.79  2002/03/28 13:35:48  kans
+* only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
+*
 * Revision 6.78  2001/05/25 19:46:58  vakatov
 * Nested comment typo fixed
 *
@@ -279,7 +282,9 @@
 #elif defined(macintosh)
 #include <agl.h>
 #include <fonts.h>
+# if !defined(OS_UNIX_DARWIN)
 #include "MoreCarbonAccessors.h"
+#endif
 
 #elif defined(WIN_MOTIF)
 #include <GL/glx.h>

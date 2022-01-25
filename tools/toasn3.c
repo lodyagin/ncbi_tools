@@ -1201,7 +1201,7 @@ static void RestoreUpdateDatePos (SeqEntryPtr sep, Int2 update_date_pos)
     bssp->descr = vnp;
   } else {
     descr = bssp->descr;
-    while (update_date_pos > 1) {
+    while (update_date_pos > 1 && descr != NULL) {
       descr = descr->next;
       update_date_pos--;
     }
@@ -3620,6 +3620,10 @@ static void ChangeGBDiv (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 					} else if (mfp->tech == check_tech[i].num) {
 						gbp->div = MemFree(gbp->div);
 						return;
+					} else if (mfp->tech == 0 && StringCmp (gbp->div, "STS") == 0) {
+						mfp->tech = MI_TECH_sts;
+						gbp->div = MemFree(gbp->div);
+						return;
 					}
 				}
 			}
@@ -4192,38 +4196,37 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 	protid = SeqLocId(sfp->product);
 	if (protid == NULL)
 		return;
-	protseq = BioseqFind(protid);
+	/* protseq = BioseqFind(protid); */
+	protseq = BioseqLockById (protid); /* tries BioseqFind, will fetch remotely if enabled */
 	if (protseq == NULL) return;
-	if (((protseq->length + 1) == aas) && /* correct length with termination */
-		(remainder == 0))
+	BioseqUnlock (protseq); /* unlock but do not cache out, easier than unlocking everywhere in code below */
+	if (((protseq->length + 1) == aas) && (remainder == 0)) /* correct length with termination */
 		return;
 
-		cbp = crp->code_break;
-		while (cbp != NULL)
+	cbp = crp->code_break;
+	while (cbp != NULL)
+	{
+		pos1 = INT4_MAX;
+		pos2 = -10;
+		tmpslp = NULL;
+		while ((tmpslp = SeqLocFindNext(cbp->loc, tmpslp)) != NULL)
 		{
-			pos1 = INT4_MAX;
-			pos2 = -10;
-			tmpslp = NULL;
-			while ((tmpslp = SeqLocFindNext(cbp->loc, tmpslp)) != NULL)
-			{
-				pos = GetOffsetInLoc(tmpslp, sfp->location, 
-SEQLOC_START);
-				if (pos < pos1)
-					pos1 = pos;
-				pos = GetOffsetInLoc(tmpslp, sfp->location, 
-SEQLOC_STOP);
-				if (pos > pos2)
-					pos2 = pos;
-			}
-			pos = pos2 - pos1; /* codon length */
-			if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len2 - 1))   /*  a codon */
-			/* allowing a partial codon at the end */
-			{
-				return;
-			}
-
-			cbp = cbp->next;
+			pos = GetOffsetInLoc(tmpslp, sfp->location, SEQLOC_START);
+			if (pos < pos1)
+				pos1 = pos;
+			pos = GetOffsetInLoc(tmpslp, sfp->location, SEQLOC_STOP);
+			if (pos > pos2)
+				pos2 = pos;
 		}
+		pos = pos2 - pos1; /* codon length */
+		if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len2 - 1))   /*  a codon */
+		/* allowing a partial codon at the end */
+		{
+			return;
+		}
+
+		cbp = cbp->next;
+	}
 
 	while ((curr = SeqLocFindNext(sfp->location, curr)) != NULL)
 	{
@@ -5570,6 +5573,25 @@ static Boolean OnlyPunctuation (CharPtr str)
   return TRUE;
 }
 
+static Boolean IsOnlinePub (PubdescPtr pdp)
+
+{
+  CitGenPtr   cgp;
+  ValNodePtr  vnp;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == PUB_Gen) {
+      cgp = (CitGenPtr) vnp->data.ptrvalue;
+      if (cgp != NULL) {
+        if (StringNICmp (cgp->cit, "Online Publication", 18) == 0) {
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
 static void CleanDescStrings (ValNodePtr sdp)
 
 {
@@ -5633,7 +5655,14 @@ static void CleanDescStrings (ValNodePtr sdp)
       break;
     case Seq_descr_pub :
       pdp = (PubdescPtr) sdp->data.ptrvalue;
-      CleanVisString (&(pdp->comment));
+      if (IsOnlinePub (pdp)) {
+        TrimSpacesAroundString (pdp->comment);
+        if (StringHasNoText (pdp->comment)) {
+          pdp->comment = MemFree (pdp->comment);
+        }
+      } else {
+        CleanVisString (&(pdp->comment));
+      }
       break;
     case Seq_descr_region :
       CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);

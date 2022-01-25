@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_lib_.c,v $  $Revision: 4.9 $  $Date: 2001/02/21 22:09:27 $
+/*  $RCSfile: ni_lib_.c,v $  $Revision: 4.10 $  $Date: 2002/04/16 21:34:20 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_lib_.c,v $
+* Revision 4.10  2002/04/16 21:34:20  lavr
+* Disable old dispatcher completely and unconditionally
+*
 * Revision 4.9  2001/02/21 22:09:27  lavr
 * SERVICE connector included
 *
@@ -64,11 +67,11 @@
 #include <ncbinet.h>
 #include <ncbithr.h>
 
-/* As for now, the old-fashioned interface is supported for all platforms
+/* From now on, the old-fashioned interface is NOT supported for all platforms
  */
-#define NI_DISP_SUPPORTED
+#undef NI_DISP_SUPPORTED
 
-/* As for now, the WWW(HTTPD)-based interfaces are not always supported
+/* WWW(HTTPD)-based interfaces are supported on selected platforms
  */
 #if defined(OS_UNIX) || defined(OS_MSWIN) || defined(OS_MAC)
 #define NI_WWW_SUPPORTED

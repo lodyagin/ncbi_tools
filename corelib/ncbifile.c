@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.24  2002/04/05 19:02:47  ivanov
+* Changed L_tmpnam to PATH_MAX in Nlm_TmpNam()
+*
 * Revision 6.23  2001/08/29 17:33:15  juran
 * Cleanup.
 *
@@ -1169,7 +1172,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TmpNam (Nlm_CharPtr s)
 {
 #ifdef TEMPNAM_AVAIL
     char *filename;
-    static Nlm_Char save_filename[L_tmpnam+30];
+    static Nlm_Char save_filename[PATH_MAX];
 
     /* emulate tmpnam(), except get the benefits of tempnam()'s ability to */
     /* place the files in another directory specified by the environment   */

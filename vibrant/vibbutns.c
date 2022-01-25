@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -41,6 +41,15 @@
 *
 *
 * $Log: vibbutns.c,v $
+* Revision 6.7  2002/03/07 19:18:21  kans
+* check box wid += 4 for Aqua
+*
+* Revision 6.6  2002/02/05 14:02:28  kans
+* adjust push button margins in Mac OS X Aqua
+*
+* Revision 6.5  2002/01/09 23:22:02  juran
+* Make buttons wider in Aqua.
+*
 * Revision 6.4  2000/02/07 20:17:35  lewisg
 * minor bug fixes, use gui font for win32
 *
@@ -140,6 +149,8 @@ typedef  struct  Nlm_buttondata {
   Nlm_ControlTool  handle;
   Nlm_Int2         border;
   Nlm_Int2         offset;
+  Nlm_Int2         shrinkX;
+  Nlm_Int2         shrinkY;
   Nlm_Boolean      defaultBtn;
 } Nlm_ButtonData;
 
@@ -174,6 +185,7 @@ static void NlmHint_ResetDefButtonA(Widget w, XtPointer client_data,
 
 static void Nlm_LoadButtonData (Nlm_ButtoN b, Nlm_ControlTool hdl,
                                 Nlm_Int2 bdr, Nlm_Int2 ofs,
+                                Nlm_Int2 shkX, Nlm_Int2 shkY,
                                 Nlm_Boolean dflt)
 
 {
@@ -186,6 +198,8 @@ static void Nlm_LoadButtonData (Nlm_ButtoN b, Nlm_ControlTool hdl,
     ptr->handle = hdl;
     ptr->border = bdr;
     ptr->offset = ofs;
+    ptr->shrinkX = shkX;
+    ptr->shrinkY = shkY;
     ptr->defaultBtn = dflt;
     Nlm_HandUnlock (b);
     recentButton = NULL;
@@ -476,6 +490,10 @@ static void Nlm_DrawDefault (Nlm_GraphiC b)
   Nlm_ControlTool  c;
   Nlm_RecT         r;
 
+  if (Nlm_HasAquaMenuLayout ()) {
+    Nlm_DrawButton (b);
+    return;
+  }
   if (Nlm_GetVisible (b) && Nlm_GetAllParentsVisible (b)) {
     Nlm_GetRect (b, &r);
     Nlm_InsetRect (&r, -4, -4);
@@ -815,7 +833,7 @@ static void Nlm_SetButtonPosition (Nlm_GraphiC b, Nlm_RectPtr r, Nlm_Boolean sav
   border = bdata.border;
   Nlm_InvalButton (b, border);
   MoveControl (c, r->left, r->top);
-  SizeControl (c, r->right - r->left, r->bottom - r->top);
+  SizeControl (c, r->right - r->left - bdata.shrinkX, r->bottom - r->top - bdata.shrinkY);
   Nlm_SetRect (b, r);
   Nlm_InvalButton (b, border);
 #endif
@@ -1012,7 +1030,8 @@ static void NlmHint_ResetDefButtonA(Widget w, XtPointer client_data,
 
 
 static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
-                           Nlm_Int2 type, Nlm_BtnActnProc actn)
+                           Nlm_Int2 type, Nlm_Int2 shrinkX,
+                           Nlm_Int2 shrinkY, Nlm_BtnActnProc actn)
 {
   Nlm_Int2         border;
   Nlm_ControlTool  c;
@@ -1046,14 +1065,19 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
 
 #ifdef WIN_MAC
   Nlm_CtoPstr (temp);
-  Nlm_RecTToRectTool (&r, &rtool);
   switch (type) {
     case PUSH_STYLE:
       procID = 0;
+      r.right -= shrinkX;
+      r.bottom -= shrinkY;
       break;
     case DEFAULT_STYLE:
       procID = 0;
-      border = 5;
+      if (! Nlm_HasAquaMenuLayout ()) {
+        border = 5;
+      }
+      r.right -= shrinkX;
+      r.bottom -= shrinkY;
       break;
     case CHECK_STYLE:
       procID = 1;
@@ -1065,8 +1089,9 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
       procID = 0;
       break;
   }
+  Nlm_RecTToRectTool (&r, &rtool);
   c = NewControl (wptr, &rtool, (StringPtr) temp, FALSE, 0, 0, 1, procID, 0);
-  Nlm_LoadButtonData (b, c, border, offset, dflt);
+  Nlm_LoadButtonData (b, c, border, offset, shrinkX, shrinkY, dflt);
 #endif
 
 #ifdef WIN_MSWIN
@@ -1094,7 +1119,7 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
   if ( c ) {
     SetProp (c, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) b);
   }
-  Nlm_LoadButtonData (b, c, border, offset, dflt);
+  Nlm_LoadButtonData (b, c, border, offset, 0, 0, dflt);
   if (lpfnNewButtonProc == NULL) {
     lpfnNewButtonProc = (WNDPROC) MakeProcInstance ((FARPROC) ButtonProc, Nlm_currentHInst);
   }
@@ -1161,7 +1186,7 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
   }
   XmStringFree (label);
   XtAddCallback (c, call, Nlm_ButtonCallback, (XtPointer) b);
-  Nlm_LoadButtonData (b, c, border, offset, dflt);
+  Nlm_LoadButtonData (b, c, border, offset, 0, 0, dflt);
   Nlm_OverrideStdTranslations((Nlm_GraphiC)b, c,
                               VERT_PAGE|VERT_ARROW|HORIZ_PAGE|HORIZ_ARROW);
   XtManageChild( c );
@@ -1202,6 +1227,8 @@ static Nlm_ButtoN Nlm_CommonButton (Nlm_GrouP prnt, Nlm_CharPtr title,
   Nlm_Int2    hgt;
   Nlm_PoinT   npt;
   Nlm_RecT    r;
+  Nlm_Int2    shrinkX = 0;
+  Nlm_Int2    shrinkY = 0;
   Nlm_WindoW  tempPort;
   Nlm_Int2    wid;
 
@@ -1213,27 +1240,38 @@ static Nlm_ButtoN Nlm_CommonButton (Nlm_GrouP prnt, Nlm_CharPtr title,
   wid = Nlm_StringWidth (title);
 
 #ifdef WIN_MAC
+  hgt = Nlm_stdLineHeight;
+  wid += 20;
   switch (type) {
     case PUSH_STYLE:
-      hgt = Nlm_stdLineHeight+3;
-      wid += 20;
-      break;
     case DEFAULT_STYLE:
-      hgt = Nlm_stdLineHeight+3;
-      wid += 20;
+      hgt += 3;
       break;
-    case CHECK_STYLE:
-      hgt = Nlm_stdLineHeight;
-      wid += 20;
-      break;
-    case RADIO_STYLE:
-      hgt = Nlm_stdLineHeight;
-      wid += 20;
-      break;
-    default:
-      hgt = Nlm_stdLineHeight;
-      wid += 20;
-      break;
+  }
+  if (Nlm_HasAquaMenuLayout ()) {
+    switch (type) {
+      case PUSH_STYLE:
+        wid += 10;
+        hgt = 26;
+        shrinkX = 6;
+        shrinkY = 6;
+        break;
+      case DEFAULT_STYLE:
+        wid += 10;
+        hgt = 26;
+        shrinkX = 6;
+        shrinkY = 6;
+        break;
+      case CHECK_STYLE:
+        wid += 4;
+        break;
+      case RADIO_STYLE:
+        wid += 4;
+        break;
+      default:
+        wid += 0;
+        break;
+    }
   }
 #endif
 
@@ -1270,7 +1308,7 @@ static Nlm_ButtoN Nlm_CommonButton (Nlm_GrouP prnt, Nlm_CharPtr title,
   Nlm_LoadRect(&r, npt.x, npt.y, (Nlm_Int2)(npt.x+wid), (Nlm_Int2)(npt.y+hgt));
   b = (Nlm_ButtoN) Nlm_CreateLink ((Nlm_GraphiC) prnt, &r, sizeof (Nlm_ButtonRec), classPtr);
   if (b != NULL) {
-    Nlm_NewButton (b, title, type, actn);
+    Nlm_NewButton (b, title, type, shrinkX, shrinkY, actn);
     Nlm_GetRect ((Nlm_GraphiC) b, &r);
     Nlm_DoAdjustPrnt ((Nlm_GraphiC) b, &r, TRUE, FALSE);
     Nlm_DoShow ((Nlm_GraphiC) b, TRUE, FALSE);

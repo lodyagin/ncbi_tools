@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.3 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -43,7 +43,6 @@
 #define _ASN2GRAPHIC_
 
 #include <ncbi.h>
-#include <vibrant.h>
 #include <picture.h>
 #include <objseq.h>
 
@@ -59,17 +58,18 @@
 extern "C" {
 #endif
 
-NLM_EXTERN SegmenT EasyGraphicView (
+NLM_EXTERN SegmenT CreateGraphicView (
   BioseqPtr bsp,
+  SeqLocPtr location,
   Int4 scale,
+  CharPtr styleName,
   CharPtr filterName,
-  CharPtr appearanceName,
   CharPtr overrideLayout
 );
 
 /* These return a NULL-Pointer-terminated array of CharPtrs parsed from the configuration file */
 
-NLM_EXTERN CharPtr PNTR GetAppearanceNameList (void);
+NLM_EXTERN CharPtr PNTR GetStyleNameList (void);
 NLM_EXTERN CharPtr PNTR GetFilterNameList (void);
 NLM_EXTERN CharPtr PNTR GetLayoutNameList (void);
 

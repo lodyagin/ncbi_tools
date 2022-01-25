@@ -28,13 +28,26 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.25 $
+* $Revision: 6.29 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.29  2002/04/02 21:45:32  wheelan
+* added CpG finding functions written by Philip Johnson
+*
+* Revision 6.28  2002/03/27 17:35:24  todorov
+* 1) AMAlignIndexFreeEitherIndex instead of AMFreeAllIndexes
+* 2) recreated ACT_MakeProfileFromSA
+*
+* Revision 6.27  2002/03/27 14:40:41  kans
+* #include <alignmgr.h>
+*
+* Revision 6.26  2002/03/26 19:56:21  todorov
+* alignmgr to alignmgr2 transition
+*
 * Revision 6.25  2001/12/28 21:22:32  wheelan
 * bug fix in Sqn_GlobalAlign2Seqs
 *
@@ -112,13 +125,189 @@
 
 #include <actutils.h>
 #include <viewmgr.h>
+#include <alignmgr.h>
 
 static void StateTableSearch (TextFsaPtr tbl, CharPtr txt, Int2Ptr state, Int4 pos, ACT_sitelistPtr PNTR asp_prev, ACT_sitelistPtr PNTR asp_head);
 static Boolean am_isa_gap(Int4 start, Int4 prevstop, Uint1 strand);
 static void am_fix_strand(SeqAlignPtr sap, Uint1 strand1, Uint1 strand2);
 
 
+/*-----------------------------------------------------------------------------
+  Pre : locked nucleotide bioseq ptr
+  Post: entire sequence loaded into memory in iupacna format
+-----------------------------------------------------------------------------*/
+static CharPtr LoadSequence(BioseqPtr bsp)
+{
+    SeqPortPtr spp;
+    CharPtr buf;
+    Int4 readCount;
+
+    buf = (CharPtr) MemNew(bsp->length * sizeof(Char));
+    spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown,
+                     Seq_code_iupacna);
+
+    readCount = 0;
+    while (readCount < bsp->length) {
+        readCount += SeqPortRead(spp, (UcharPtr) buf+readCount, 25000);
+        assert(readCount != 0);
+    }
+    SeqPortFree(spp);
+
+    return buf;
+}
+
+/*-----------------------------------------------------------------------------
+  Pre : sequence, position to be added, cgIsland information
+  Post: cgIsle adjusted according to the nucleotide at position i
+-----------------------------------------------------------------------------*/
+static void AddPosition(CharPtr seq, Int4 i, ACT_CGInfoPtr cgIsle)
+{
+    switch(seq[i]) {
+    case 'A': cgIsle->a++; break;
+    case 'C': cgIsle->c++; break;
+    case 'G': cgIsle->g++;
+        if (i > 0 && seq[i-1] == 'C')
+            cgIsle->cg++;
+        break;
+    case 'T': cgIsle->t++; break;
+    case 'N': cgIsle->n++; break;
+    }
+}
+
+/*-----------------------------------------------------------------------------
+  Pre : sequence, length of sequence, start of window
+  Post: cgInfo filled with stats (#a's, c's, etc.) for window (start ->
+  start + window size)
+-----------------------------------------------------------------------------*/
+static void CalcWindowStats(CharPtr seq, Int4 seqLength, Int4 start,
+                     ACT_CGInfoPtr cgIsle)
+{
+    Int4 i;
+
+    cgIsle->from = start;
+    cgIsle->to = MIN(start + CG_WINDOWSIZE, seqLength) - 1;
+    cgIsle->length = cgIsle->to - cgIsle->from + 1;
+
+    for (i = cgIsle->from; i < cgIsle->to; i++)
+        AddPosition(seq, i, cgIsle);
+}
+
+/*-----------------------------------------------------------------------------
+  Pre : CGIsle structure filled
+  Post: whether or not we consider this to be a CpG island
+-----------------------------------------------------------------------------*/
+static Boolean IsIsland(ACT_CGInfoPtr cgIsle)
+{
+    return (100*(cgIsle->c + cgIsle->g) > 50*cgIsle->length &&
+            100 * cgIsle->cg * cgIsle->length > 60 * cgIsle->c * cgIsle->g);
+}
+
+
+/*-----------------------------------------------------------------------------
+  Pre : sequence, length of sequence, CGIsle structure filled with info
+  about current window
+  Post: whether or not we found a cgIsland further down the sequence that
+  meets the mimimum criteria; if so, cgIsle is set to that window
+-----------------------------------------------------------------------------*/
+static Boolean SlideToHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr cgIsle)
+{
+    Boolean found;
+
+    if (cgIsle->from > cgIsle->to) /* flag that we've hit the end */
+        return FALSE;
+
+    found = IsIsland(cgIsle);
+
+    while (cgIsle->to < (seqLength-1) && !found) {
+        /* remove 1 nt from left side */
+        switch(seq[cgIsle->from]) {
+        case 'A': cgIsle->a--; break;
+        case 'C': cgIsle->c--; break;
+        case 'G': cgIsle->g--;
+            if (cgIsle->from > 0 && seq[cgIsle->from-1] == 'C')
+                cgIsle->cg--;
+            break;
+        case 'T': cgIsle->t--; break;
+        case 'N': cgIsle->n--; break;
+        }
+
+        /* advance */
+        cgIsle->to++;
+        cgIsle->from++;
+
+        /* add 1 nt onto right side */
+        AddPosition(seq, cgIsle->to, cgIsle);
+
+        if (IsIsland(cgIsle))
+            found = TRUE;
+    }
+}
+
+/*-----------------------------------------------------------------------------
+  Pre : sequence, length of sequence, CGIsle structure filled with info
+  about current window --> which is, in fact, a CpG island
+  Post: whether or not we found a cgIsland further down the sequence that
+  meets the mimimum criteria; if so, cgIsle is set to that window
+-----------------------------------------------------------------------------*/
+static void ExtendHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr cgIsle)
+{
+    ACT_CGInfo lastGood;
+
+    lastGood = *cgIsle;
+    cgIsle->to++;
+
+    while (cgIsle->to < seqLength &&
+           cgIsle->to < (lastGood.to+CG_WINDOWSIZE)) {
+        cgIsle->length = cgIsle->to - cgIsle->from + 1;
+        AddPosition(seq, cgIsle->to, cgIsle);
+        if (IsIsland(cgIsle))
+            lastGood = *cgIsle;
+        cgIsle->to++;
+    };
+
+    /* overshot */
+    *cgIsle = lastGood;
+}
+
+/*-----------------------------------------------------------------------------
+  Pre : locked nucleotide bioseq ptr
+  Post: 
+-----------------------------------------------------------------------------*/
 NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
+{
+    CharPtr buf;
+    ACT_CGInfoPtr cgHead, cgIsle;
+
+    if (bsp == NULL)
+        return NULL;
+    if (bsp->mol == Seq_mol_aa) {
+        Message(SEV_WARNING, "Must use nucleotide sequence\n");
+        return NULL;
+    }
+
+    buf = LoadSequence(bsp);
+
+    cgHead = NULL;
+
+    cgIsle = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
+    CalcWindowStats(buf, bsp->length, 0, cgIsle);
+
+    while (SlideToHit(buf, bsp->length, cgIsle)) {
+        ExtendHit(buf, bsp->length, cgIsle);
+        cgIsle->next = cgHead;
+        cgHead = cgIsle;
+        printf("CpG: %d to %d, Confidence: %d\n", cgHead->from, cgHead->to, 100 * cgIsle->cg * cgIsle->length/(cgIsle->c * cgIsle->g));
+
+        cgIsle = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
+        CalcWindowStats(buf, bsp->length, cgHead->to+1, cgIsle);
+    }
+
+    free(cgIsle);
+    free(buf);
+
+    return cgHead;
+}
+/*NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
 {
    ACT_CGInfoPtr    acg;
    ACT_CGInfoPtr    acg_head;
@@ -295,10 +484,10 @@ NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
          }
       }
    }
-   /* check for restriction sites in potential islands found */
+    check for restriction sites in potential islands found 
    acg = acg_head;
    return acg_head;
-   acg_prev = NULL; /* Statement not reached... */
+   acg_prev = NULL;  Statement not reached... 
    while (acg)
    {
       asp_prev = NULL;
@@ -322,7 +511,7 @@ NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
             asp = asp->next;
          }
       }
-      /*if (acg->asp == NULL)
+      if (acg->asp == NULL)
       {
          if (acg_prev != NULL)
          {
@@ -359,11 +548,11 @@ NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
             acg_prev = acg;
             acg = acg->next;
          }
-      }*/
+      }
    }
    MemFree(buf);
    return acg_head;
-}
+}*/
 
 NLM_EXTERN Uint1 ACT_GetResidue(Int4 pos, Uint1Ptr buf, Int4Ptr offset, BioseqPtr bsp)
 {
@@ -733,8 +922,8 @@ NLM_EXTERN int LIBCALLBACK ACT_CompareProfileConfidence(VoidPtr base, VoidPtr la
 
 NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
 {
-   AMAlignIndexPtr  amaip;
-   AlnMsgPtr        amp;
+   AMAlignIndex2Ptr  amaip;
+   AlnMsg2Ptr        amp;
    ACTProfilePtr    app;
    ACTProfilePtr    app_head;
    ACTProfilePtr    app_prev;
@@ -754,11 +943,11 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
       return NULL;
    if (sap->saip->indextype == INDEX_PARENT)
    {
-      amaip = (AMAlignIndexPtr)(sap->saip);
-      if (amaip->mstype == AM_NEATINDEX || amaip->mstype == AM_LITE || amaip->mstype == AM_NULL)
+      amaip = (AMAlignIndex2Ptr)(sap->saip);
+      if (amaip->alnstyle == AM2_LITE)
          return NULL;
    }
-   sip = AlnMgrGetNthSeqIdPtr(sap, 1);
+   sip = AlnMgr2GetNthSeqIdPtr(sap, 1);
    bsp = BioseqLockById(sip);
    if (bsp == NULL)
       return NULL;
@@ -768,10 +957,11 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
       nuc = FALSE;
    BioseqUnlockById(sip);
    sip = SeqIdFree(sip);
-   amp = AlnMsgNew();
-   amp->to_m = -1;
+   amp = AlnMsgNew2();
+   amp->to_aln = -1;
    amp->row_num = 1;
    app_head = NULL;
+/*
    if (sap->saip->indextype == INDEX_PARENT)
    {
       for (i=0; i<amaip->numseg; i++)
@@ -800,10 +990,11 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
       }
    } else
    {
-      while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)))
+*/
+      while ((Boolean) (more = AlnMgr2GetNextAlnBit(sap, amp)))
       {
          app = ACT_ProfileNew(nuc);
-         app->len = amp->to_b - amp->from_b + 1;;
+         app->len = amp->to_row - amp->from_row + 1;;
          if (nuc)
          {
             for (j=0; j<ACT_NUCLEN; j++)
@@ -824,145 +1015,36 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
          } else
             app_head = app_prev = app;
       }
+/*
    }
-   numrows = AlnMgrGetNumRows(sap);
+*/
+   numrows = AlnMgr2GetNumRows(sap);
    for (i=1; i<=numrows; i++)
    {
-      amp = AlnMsgReNew(amp);
-      amp->to_m = -1;
+      AlnMsgReNew2(amp);
+      amp->to_aln = -1;
       amp->row_num = i;
       app = app_head;
 
-      sip = AlnMgrGetNthSeqIdPtr(sap, i);
+      sip = AlnMgr2GetNthSeqIdPtr(sap, i);
       bsp = BioseqLockById(sip);
       count = 0;
-      while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)) && app != NULL)
+      while ((Boolean) (more = AlnMgr2GetNextAlnBit(sap, amp)) && app != NULL)
       {
-         if (amp->gap == 0 && bsp != NULL)
+         if (amp->type == AM_SEQ && bsp != NULL)
          {
-            slp = SeqLocIntNew(amp->from_b, amp->to_b, amp->strand, sip);
+            slp = SeqLocIntNew(amp->from_row, amp->to_row, amp->strand, sip);
             ACT_BuildProfile(slp, &app, &count, 0);
             SeqLocFree(slp);
-         } else if (amp->gap != 0)
-            ACT_BuildProfile(NULL, &app, &count, (amp->to_b - amp->from_b + 1));
+         } else if (amp->type == AM_GAP)
+            ACT_BuildProfile(NULL, &app, &count, (amp->to_row - amp->from_row + 1));
       }
       BioseqUnlockById(sip);
       sip = SeqIdFree(sip);
    }
    ACT_EstimateConfidence(app_head);
-   AlnMsgFree(amp);
+   AlnMsgFree2(amp);
    return app_head;
-}
-
-NLM_EXTERN Boolean ACT_AddBioseqToSAByProfile(SeqAlignPtr sap, BioseqPtr bsp)
-{
-   ACT_PlaceBoundsPtr  abp;
-   ACTProfilePtr       app;
-   ACTProfilePtr       app_head;
-   ACT_PositionPtr     apos;
-   ACT_PositionPtr     aposminus;
-   ACT_TopScorePtr     PNTR ats;
-   ACT_TopScorePtr     PNTR atsminus;
-   ACT_TopScorePtr     ats_tmp;
-   Int4                c;
-   Int4                i;
-   Int4                j;
-   Int4                len;
-   Int4                nprof;
-   FloatHiPtr          scorearray;
-   FloatHiPtr          scorearrayminus;
-
-   if (sap == NULL || bsp == NULL)
-      return FALSE;
-   app = ACT_MakeProfileFromSA(sap);
-   if (app == NULL)
-      return FALSE;
-   app_head = app;
-   nprof = 0;
-   len = 0;
-   while (app)
-   {
-      nprof += 1;
-      len += app->len;
-      app = app->next;
-   }
-   app = app_head;
-   if (len > bsp->length)
-   {
-      ErrPostEx(SEV_WARNING, 0, 0, "Sequence too short to align");
-      return FALSE;
-   }
-   scorearray = (FloatHiPtr)MemNew((bsp->length)*sizeof(FloatHi));
-   scorearrayminus = NULL;
-   ats = (ACT_TopScorePtr PNTR)MemNew(nprof*sizeof(ACT_TopScorePtr));
-   c = 0;
-   while (app)
-   {
-      for (i=0; i<bsp->length; i++)
-      {
-         scorearray[i] = ACT_ScoreProfile(bsp, i, Seq_strand_plus, app);
-      }
-      ats[c] = ACT_FindPeakScores(scorearray, bsp->length);
-      c++;
-      app = app->next;
-   }
-   ats = ACT_SortAndTruncate(ats);
-   apos = (ACT_PositionPtr)MemNew(sizeof(ACT_Position));
-   abp = (ACT_PlaceBoundsPtr)MemNew(sizeof(ACT_PlaceBounds));
-   abp->ats = ats;
-   abp->app = app_head;
-   abp->len = bsp->length;
-   abp->apos = apos;
-   abp->nprof = nprof;
-   abp->currprof = nprof-1;
-   abp->currpos = (Int4Ptr)MemNew(nprof*sizeof(Int4));
-   abp->boundarray = (Int4Ptr)MemNew(nprof*sizeof(Int4));
-   abp->numats = (Int4Ptr)MemNew(nprof*sizeof(Int4));
-   abp->currats = (ACT_TopScorePtr PNTR)MemNew(nprof*sizeof(ACT_TopScorePtr));
-   for (i=0; i<nprof; i++)
-   {
-      abp->boundarray[i] = abp->ats[i]->pos;
-      ats_tmp = abp->ats[i];
-      abp->currats[i] = ats_tmp;
-      j=0;
-      while (ats_tmp != NULL)
-      {
-         ats_tmp = ats_tmp->next;
-         j++;
-      }
-      abp->numats[i] = j;
-      if (i>0)
-      {
-         ats_tmp = abp->currats[i];
-         while (abp->boundarray[i] <= abp->boundarray[i-1])
-         {
-            ats_tmp = ats_tmp->next;
-            if (ats_tmp == NULL)
-               return FALSE;
-            abp->boundarray[i] = ats_tmp->pos;
-            abp->currats[i] = ats_tmp;
-            abp->currpos[i]++;
-         }
-      }
-   }
-   apos->posarray = (Int4Ptr)MemNew(nprof*sizeof(Int4));
-   apos = ACT_PlaceByScore(abp);
-   if (ISA_na(bsp->mol)) /* if it's a nucleotide, try the minus strand too */
-   {
-   }
-   for (i=0; i<nprof; i++)
-   {
-      MemFree(ats[i]);
-   }
-   MemFree(ats);
-   MemFree(scorearray);
-   MemFree(apos->posarray);
-   MemFree(apos);
-   MemFree(abp->boundarray);
-   MemFree(abp->currpos);
-   MemFree(abp->numats);
-   MemFree(abp);
-   return FALSE;
 }
 
 NLM_EXTERN ACT_TopScorePtr PNTR ACT_SortAndTruncate(ACT_TopScorePtr PNTR ats)
@@ -1138,447 +1220,6 @@ static FloatHi act_get_eval(Int4 exp)
   return eval;
 }
 
-NLM_EXTERN SeqAlignPtr ACT_GlobalAlignSimple(BioseqPtr bsp1, BioseqPtr bsp2,
-                                             Boolean Default)
-{
-   Char *program;
-   BLAST_OptionsBlkPtr options;
-   SeqAlign *sap, *sap_final;
-
-   if (bsp1 == NULL || bsp2 == NULL)
-      return NULL;
-
-   if (ISA_aa(bsp1->mol))
-   {
-      if (ISA_aa(bsp2->mol))
-         program = StringSave("blastp");
-      else
-         return NULL;
-   } else if (ISA_na(bsp1->mol))
-   {
-      if (ISA_na(bsp2->mol))
-         program = StringSave("blastn");
-      else
-         return NULL;
-   }
-   else return NULL;
-
-   options = BLASTOptionNew(program, TRUE);
-   if(!Default) {
-       options->gapped_calculation = TRUE;
-       options->expect_value = act_get_eval(60);
-       options->wordsize = 20;
-       options->filter_string = StringSave("m L");
-   }
-   sap = BlastTwoSequences(bsp1, bsp2, program, options);
-   MemFree(program);
-   BLASTOptionDelete(options);
-   if (sap == NULL)
-   {
-      return NULL;
-   }
-   if(!AlnMgrIndexSeqAlign(sap)) goto error;
-   if (!AlnMgrMakeMultipleByScore(sap)) goto error;
-   AlnMgrDeleteHidden(sap, FALSE);
-   sap_final = AlnMgrForcePairwiseContinuous(sap);
-error:
-   SeqAlignSetFree(sap);
-   return sap_final;
-}
-
-
-NLM_EXTERN SeqAlignPtr ACT_GlobalAlignTwoSeq(BioseqPtr bsp1, BioseqPtr bsp2)
-{
-   SeqAlignPtr          sap_final;
-
-   sap_final = ACT_GlobalAlignSimple(bsp1, bsp2, FALSE);
-   if(sap_final == NULL) return NULL;
-   sap_final->idx.entityID = ObjMgrRegister(OBJ_SEQALIGN, sap_final);
-   AssignIDsInEntity(sap_final->idx.entityID, OBJ_SEQALIGN, (Pointer)sap_final);
-   return sap_final;
-}
-
-NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuous(SeqAlignPtr sap)
-{
-   return (AlnMgrForcePairwiseContinuousEx(sap, 0, -1, 0, -1));
-}
-
-NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuousEx(SeqAlignPtr sap, Int4 start_1, Int4 stop_1, Int4 start_2, Int4 stop_2)
-{
-   AMAlignIndexPtr      amaip;
-   AlnMsgPtr            amp;
-   BioseqPtr            bsp1;
-   BioseqPtr            bsp2;
-   Int4                 currstart2;
-   DenseSegPtr          dsp;
-   DenseSegPtr          dsp_old;
-   Int4                 end1;
-   Int4                 end2;
-   GlobalBandStructPtr  gbsp;
-   Int4                 i;
-   Boolean              is_prot;
-   Int4                 j;
-   Boolean              more;
-   Int4                 numseg;
-   Int4                 prevstop1;
-   Int4                 prevstop2;
-   RowSourcePtr         rsp;
-   SeqAlignPtr          sap_new;
-   SeqAlignPtr          sap_tmp;
-   SeqIdPtr             sip1;
-   SeqIdPtr             sip2;
-   SeqLocPtr            slp1;
-   SeqLocPtr            slp2;
-   Int4                 start1;
-   Int4                 start2;
-   Int4                 stop1;
-   Int4                 stop2;
-   Uint1                strand1;
-   Uint1                strand2;
-
-   if (sap == NULL)
-      return NULL;
-   if (sap->saip == NULL)
-   {
-      if (!AlnMgrIndexSeqAlign(sap))
-         return NULL;
-   }
-   if (sap->saip->indextype != INDEX_PARENT)
-      return NULL;
-   i = AlnMgrGetNumRows(sap);
-   if (i != 2)
-      return NULL;
-   sip1 = AlnMgrGetNthSeqIdPtr(sap, 1);
-   sip2 = AlnMgrGetNthSeqIdPtr(sap, 2);
-   bsp1 = BioseqLockById(sip1);
-   if (bsp1 == NULL)
-      return NULL;
-   bsp2 = BioseqLockById(sip2);
-   if (bsp2 == NULL)
-   {
-      BioseqUnlock(bsp1);
-      return NULL;
-   }
-   if (ISA_na(bsp1->mol))
-      is_prot = FALSE;
-   else
-      is_prot = TRUE;
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   rsp = amaip->rowsource[0];
-   prevstop1 = start_1 - 1;
-   prevstop2 = start_2 - 1;
-   strand1 = AlnMgrGetNthStrand(sap, 1);
-   strand2 = AlnMgrGetNthStrand(sap, 2);
-   if (strand2 == Seq_strand_minus)
-   {
-      if (stop_2 == -1)
-         prevstop2 = bsp2->length;
-      else
-         prevstop2 = stop_2+1;
-   }
-   for (i=0; i<rsp->numsaps; i++)
-   {
-      sap_new = NULL;
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[i]-1], rsp->num_in_sap[i], &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[i]-1], 3-rsp->num_in_sap[i], &start2, &stop2);
-      if (strand2 == Seq_strand_minus)
-         currstart2 = stop2;
-      else
-         currstart2 = start2;
-      if (am_isa_gap(start1, prevstop1, strand1))
-      {
-         if (am_isa_gap(currstart2, prevstop2, strand2))
-         {
-             /* HS: gaps in both, try to realign ends */
-            slp1 = SeqLocIntNew(prevstop1+1, start1-1, strand1, sip1);
-            if (strand2 != Seq_strand_minus)
-               slp2 = SeqLocIntNew(prevstop2+1, start2-1, strand2, sip2);
-            else
-               slp2 = SeqLocIntNew(currstart2+1, prevstop2-1, strand2, sip2);
-            gbsp = CreatBandStruct(slp1, slp2, NULL, is_prot, G_BAND_QUADRATIC);
-            sap_new = GlobalBandByLoc(gbsp, slp1, slp2, is_prot, G_BAND_QUADRATIC);
-            am_fix_strand(sap_new, strand1, strand2);
-            gbsp = GlobalBandStructDelete(gbsp);
-            SeqLocFree(slp1);
-            SeqLocFree(slp2);
-            if(sap_new) {
-                sap_tmp = (SeqAlignPtr)(sap->segs);
-                while (sap_tmp->next != NULL)
-                    {
-                        sap_tmp = sap_tmp->next;
-                    }
-                sap_tmp->next = sap_new;
-                amaip->numsaps++;/* HS */
-            }
-         } else  /* extend first alignment ; 
-                   HS: extend length of gap on 2nd sequence to cover first sequence */
-         { 
-            sap_tmp = amaip->saps[0];
-            SAIndexFree(sap_tmp->saip);
-            if (sap_tmp->score != NULL)
-            {
-               ScoreSetFree(sap_tmp->score);
-               sap_tmp->score = NULL;
-            }
-            sap_tmp->saip = NULL;
-            dsp_old = (DenseSegPtr)(sap_tmp->segs);
-            dsp = DenseSegNew();
-            dsp->starts = (Int4Ptr)MemNew((dsp_old->numseg+1)*2*sizeof(Int4));
-            dsp->lens = (Int4Ptr)MemNew((dsp_old->numseg+1)*sizeof(Int4));
-            dsp->starts[1] = -1;
-            dsp->starts[0] = 0;
-            dsp->lens[0] = start1 - 1;
-            dsp->strands = (Uint1Ptr)MemNew((dsp_old->numseg+1)*2*sizeof(Uint1));
-            dsp->dim = 2;
-            dsp->numseg = dsp_old->numseg+1;
-            dsp->ids = dsp_old->ids;
-            dsp_old->ids = NULL;
-            dsp->strands[0] = strand1;
-            dsp->strands[1] = strand2;
-            for (j=0; j<(dsp_old->numseg); j++)
-            {
-               dsp->starts[2*(j+1)] = dsp_old->starts[2*j];
-               dsp->starts[2*(j+1)+1] = dsp_old->starts[2*j+1];
-               dsp->lens[j+1] = dsp_old->lens[j];
-               dsp->strands[2*(j+1)] = strand1;
-               dsp->strands[2*j] = strand2;
-            }
-            sap_tmp->segs = (Pointer)(dsp);
-            DenseSegFree(dsp_old);
-         }
-      } else if (am_isa_gap(currstart2, prevstop2, strand2)) /*extend first alignment*/
-          { /* HS extend gap on 1st sequence to cover second sequence */
-         sap_tmp = amaip->saps[0];
-         SAIndexFree(sap_tmp->saip);
-         if (sap_tmp->score != NULL)
-         {
-            ScoreSetFree(sap_tmp->score);
-            sap_tmp->score = NULL;
-         }
-         sap_tmp->saip = NULL;
-         dsp_old = (DenseSegPtr)(sap_tmp->segs);
-         dsp = DenseSegNew();
-         dsp->starts = (Int4Ptr)MemNew((dsp_old->numseg+1)*2*sizeof(Int4));
-         dsp->lens = (Int4Ptr)MemNew((dsp_old->numseg+1)*sizeof(Int4));
-         dsp->starts[0] = -1;
-         if (strand2 != Seq_strand_minus)
-         {
-            dsp->lens[0] = start2 - prevstop2 - 1;
-            dsp->starts[1] = prevstop2+1;
-         } else
-         {
-            dsp->starts[1] = currstart2+1;
-            dsp->lens[0] = prevstop2-currstart2 - 1;
-         }
-         dsp->strands = (Uint1Ptr)MemNew((dsp_old->numseg+1)*2*sizeof(Uint1));
-         dsp->dim = 2;
-         dsp->numseg = dsp_old->numseg+1;
-         dsp->ids = dsp_old->ids;
-         dsp_old->ids = NULL;
-         dsp->strands[0] = strand1;
-         dsp->strands[1] = strand2;
-         for (j=0; j<(dsp_old->numseg); j++)
-         {
-            dsp->starts[2*(j+1)] = dsp_old->starts[2*j];
-            dsp->starts[2*(j+1)+1] = dsp_old->starts[2*j+1];
-            dsp->lens[j+1] = dsp_old->lens[j];
-            dsp->strands[2*(j+1)] = strand1;
-            dsp->strands[2*j] = strand2;
-         }
-         sap_tmp->segs = (Pointer)(dsp);
-         DenseSegFree(dsp_old);
-      }
-      prevstop1 = stop1;
-      if (strand2 != Seq_strand_minus)
-         prevstop2 = stop2;
-      else
-         prevstop2 = start2;
-   }
-   if (strand2 == Seq_strand_minus)
-   {
-      if (start_1 == 0)
-         end2 = -1;
-      else
-         end2 = start_1+1;
-   } else
-   {
-      if (stop_2 == -1)
-         end2 = bsp2->length;
-      else
-         end2 = stop_2+1;
-   }
-   if (stop_1 == -1)
-      end1 = bsp1->length;
-   else
-      end1 = stop_1+1;
-   if (am_isa_gap(end1, prevstop1, strand1))
-   {
-      if (am_isa_gap(end2, prevstop2, strand2))
-      {
-          /* HS gaps in both, realign ends */
-         gbsp = GlobalBandStructCreate(G_BAND_QUADRATIC);
-         slp1 = SeqLocIntNew(prevstop1+1, bsp1->length-1, strand1, sip1);
-         if (strand2 != Seq_strand_minus)
-            slp2 = SeqLocIntNew(prevstop2+1, end2-1, strand2, sip2);
-         else
-            slp2 = SeqLocIntNew(end2+1, prevstop2-1, strand2, sip2);
-         gbsp->seqloc1 = slp1;
-         gbsp->seqloc2 = slp2;
-         sap_new = GlobalBandByLoc(gbsp, slp1, slp2, is_prot, G_BAND_QUADRATIC);
-         am_fix_strand(sap_new, strand1, strand2);
-         gbsp = GlobalBandStructDelete(gbsp);
-         SeqLocFree(slp1);
-         SeqLocFree(slp2);
-         if(sap_new) {
-             sap_tmp = (SeqAlignPtr)(sap->segs);
-             while (sap_tmp->next != NULL)
-                 {
-                     sap_tmp = sap_tmp->next;
-                 }
-             sap_tmp->next = sap_new;
-             amaip->numsaps++; /* HS */
-         }
-      } else  /* extend last alignment */
-      {
-         sap_tmp = amaip->saps[amaip->alnsaps-1];
-         SAIndexFree(sap_tmp->saip);
-         if (sap_tmp->score != NULL)
-         {
-            ScoreSetFree(sap_tmp->score);
-            sap_tmp->score = NULL;
-         }
-         sap_tmp->saip = NULL;
-         dsp_old = (DenseSegPtr)(sap_tmp->segs);
-         dsp = DenseSegNew();
-         dsp->numseg = dsp_old->numseg+1;
-         dsp->starts = (Int4Ptr)MemNew((dsp->numseg+1)*2*sizeof(Int4));
-         dsp->lens = (Int4Ptr)MemNew((dsp->numseg+1)*sizeof(Int4));
-         dsp->strands = (Uint1Ptr)MemNew((dsp->numseg+1)*2*sizeof(Uint1));
-         for (j=0; j<dsp_old->numseg; j++)
-         {
-            dsp->starts[2*j] = dsp_old->starts[2*j];
-            dsp->starts[2*j+1] = dsp_old->starts[2*j+1];
-            dsp->lens[j] = dsp_old->lens[j];
-            dsp->strands[2*j] = strand1;
-            dsp->strands[2*j+1] = strand2;
-         }
-         dsp->starts[2*j+1] = -1;
-         dsp->starts[2*j] = prevstop1+1;
-         dsp->lens[j] = bsp1->length - prevstop1 - 1;
-         dsp->strands[2*j] = strand1;
-         dsp->strands[2*j+1] = strand2;
-         dsp->dim = 2;
-         dsp->ids = dsp_old->ids;
-         dsp_old->ids = NULL;
-         sap_tmp->segs = (Pointer)(dsp);
-         DenseSegFree(dsp_old);
-      }
-   } else if (am_isa_gap(end2, prevstop2, strand2)) /* extend last alignment */
-   {
-      sap_tmp = amaip->saps[amaip->alnsaps-1];
-      SAIndexFree(sap_tmp->saip);
-      if (sap_tmp->score != NULL)
-      {
-         ScoreSetFree(sap_tmp->score);
-         sap_tmp->score = NULL;
-      }
-      sap_tmp->saip = NULL;
-      dsp_old = (DenseSegPtr)(sap_tmp->segs);
-      dsp = DenseSegNew();
-      dsp->numseg = dsp_old->numseg+1;
-      dsp->starts = (Int4Ptr)MemNew((dsp->numseg+1)*2*sizeof(Int4));
-      dsp->lens = (Int4Ptr)MemNew((dsp->numseg+1)*sizeof(Int4));
-      dsp->strands = (Uint1Ptr)MemNew((dsp->numseg+1)*2*sizeof(Uint1));
-      for (j=0; j<dsp_old->numseg; j++)
-      {
-         dsp->starts[2*j] = dsp_old->starts[2*j];
-         dsp->starts[2*j+1] = dsp_old->starts[2*j+1];
-         dsp->lens[j] = dsp_old->lens[j];
-         dsp->strands[2*j] = strand1;
-         dsp->strands[2*j+1] = strand2;
-      }
-      dsp->starts[2*j] = -1;
-      if (strand2 != Seq_strand_minus)
-      {
-         dsp->starts[2*j+1] = prevstop2 + 1;
-         dsp->lens[j] = bsp2->length - prevstop2 - 1;
-      } else
-      {
-         dsp->starts[2*j+1] = end2+1;
-         dsp->lens[j] = prevstop2 - end2 - 1;
-      }
-      dsp->strands[2*j] = strand1;
-      dsp->strands[2*j+1] = strand2;
-      dsp->dim = 2;
-      dsp->ids = dsp_old->ids;
-      dsp_old->ids = NULL;
-      sap_tmp->segs = (Pointer)(dsp);
-      DenseSegFree(dsp_old);
-   }
-   BioseqUnlock(bsp1);
-   BioseqUnlock(bsp2);
-   AlnMgrReIndexSeqAlign(sap);
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   if (amaip == NULL)
-      return NULL;
-   amp = AlnMsgNew();
-   amp->row_num = 1;
-   amp->from_m = 0;
-   amp->to_m = -1;
-   numseg = 0;
-   while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)))
-   {
-      numseg++;
-   }
-   sap_new = SeqAlignNew();
-   dsp = DenseSegNew();
-   dsp->dim = 2;
-   dsp->numseg = numseg;
-   dsp->starts = (Int4Ptr)MemNew((dsp->numseg*2)*sizeof(Int4));
-   dsp->lens = (Int4Ptr)MemNew((dsp->numseg)*sizeof(Int4));
-   dsp->strands = (Uint1Ptr)MemNew((dsp->numseg*2)*sizeof(Int4));
-   for (i=0; i<2; i++)
-   {
-      amp = AlnMsgReNew(amp);
-      amp->row_num = i+1;
-      amp->from_m = 0;
-      amp->to_m = -1;
-      numseg = 0;
-      while ((Boolean) (more = AlnMgrGetNextAlnBit(sap, amp)))
-      {
-         if (amp->gap == 0)
-         {
-            dsp->starts[numseg*2+i] = amp->from_b;
-            dsp->lens[numseg] = amp->to_b - amp->from_b + 1;
-            if (i == 0)
-            {
-               dsp->strands[numseg*2] = strand1;
-            } else
-               dsp->strands[numseg*2+i] = strand2;
-         } else
-         {
-            dsp->starts[numseg*2+i] = -1;
-            dsp->lens[numseg] = amp->to_b - amp->from_b + 1;
-            if (i==0)
-               dsp->strands[numseg*2] = strand1;
-            else
-               dsp->strands[numseg*2+i] = strand2;
-         }
-         numseg++;
-         if (numseg > dsp->numseg)
-            return NULL;
-      }
-   }
-   dsp->ids = SeqIdDup(sip1);
-   dsp->ids->next = SeqIdDup(sip2);
-   sap_new->type = SAT_GLOBAL;
-   sap_new->segtype = SAS_DENSEG;
-   sap_new->dim = 2;
-   sap_new->segs = (Pointer)dsp;
-   amp = AlnMsgFree(amp);
-   return sap_new;
-}
-
 static Boolean am_isa_gap(Int4 start, Int4 prevstop, Uint1 strand)
 {
    if (strand != Seq_strand_minus)
@@ -1616,729 +1257,6 @@ static void am_fix_strand(SeqAlignPtr sap, Uint1 strand1, Uint1 strand2)
    return;
 }
 
-/*
-  Algorithm to merge SeqAligns resulting from two blast hits.
-  Untested results If try to merge very non-diagonal SeqAligns.
-  
-  
- */
-
-NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwiseEx(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master, Uint1 strand_master, Uint1 strand_subject, Int4 startm1,Int4 stopm1, Int4 start1, Int4 stop1,Int4 startm2,Int4 stopm2, Int4 start2, Int4 stop2) {
-    /* Overlaps/slight-gaps between two segments can be divided in ten categories
-       (five per strand) depending on the relative pentants of the two
-       end-points of the alignment.
-       .. for ++ alignments (The diagonal is the first Hit,
-                   the "end" of the other diagonal falls into one of the
-                   5 regions (pentant).
-       \    |
-        \II |
-         \  |   III            region I & II yield overlaps in both master&slave
-    I     \ |                  regions III & V will require a gap in one sequence
-           \|                  region IV will require gaps in both through a 
- -----------------------                     needleman-wunsch alignment.
-            | 
-      V     |    IV
-            |
-            |
-
-for +- alignments
-            |    /
-            | II/ 
-    III     |  /
-            | /   I
-            |/
- ------------------------
-            |
-    IV      |    V
-            |
-            |
-                       For regions II and V, could use a simpler "sliding" method
-                       to try a simple long gap.. to bridge the two diagonals.
-                       XXX For now, simply use Needleman-Wunsch.
-
-    Diagrammatic conventions have the query vertical, and the subject horizontal.
-
-    */
-    Int4 gapOpen = 6;
-    Int4 gapExtend = 1;
-    Int4 reward=1,penalty=-3;
-    Int4 score;
-    Nlm_FloatHi Kappa=0.0,Lambda=0.0;
-    FloatHi H;
-    Int4 ** matrix;
-    BLAST_MatrixPtr blmat;
-    SeqLocPtr slp1,slp2;
-    BioseqPtr bsp1,bsp2;
-    AlnMsgPtr amp1,amp2;
-    Int4 start2_in1,PostGap;
-    SAIndexPtr saip;
-    Int4 top_c,bottom_c,left_c,right_c;
-    Int4 start2_proj_m1,start1_proj_m2;
-    Int4 stop2_proj_m1,stop1_proj_m2;
-    SeqIdPtr sip1,sip2;
-    char * matrix_name;
-    SeqAlignPtr salp_new,salp_merging;
-    AMAlignIndexPtr amaip;
-    Int4 numrows;
-    Uint1 mol1,mol2;
-    
-    amaip = (AMAlignIndexPtr)(sap_global->saip);
-    numrows = amaip->numrows;
-    if(numrows<2 || numrows>3) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: Invalid call with SeqAlign with too %s row (%d instead of 2 or 3 )\n", numrows<2 ? "little" : "many",numrows);
-        return NULL;
-    }
-    /* Find Alignment coordinates of start2 .. and see if in seqalign */
-
-    sip1 = SeqAlignId(salp1,0);
-    sip2 = SeqAlignId(salp1,1);
-    if(!sip1 || !sip2) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: SeqAlign with NULL SeqIds\n");
-        return NULL;
-    }
-    bsp1 = BioseqLockById(sip1);
-    if(!bsp1) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: SeqAlign with NULL SeqIds\n");
-        return NULL;
-    }
-    bsp2 = BioseqLockById(sip2);
-    if(!bsp2) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: SeqAlign with NULL SeqIds\n");
-        return NULL;
-    }
-    mol1 = bsp1->mol;
-    mol2 = bsp2->mol;
-    if((bsp1->mol == Seq_mol_aa && bsp2->mol != Seq_mol_aa) || (bsp1->mol != Seq_mol_aa && bsp2->mol == Seq_mol_aa)) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: Invalid call with protein-dna alignment \n");
-        return NULL;
-    }
-    BioseqUnlockById(sip1);
-    BioseqUnlockById(sip2);
-
-    if(strand_subject != Seq_strand_minus && strand_master != Seq_strand_plus) {
-        /*
-          Top Left Corner 
-        */
-        top_c = startm2;
-        start2_proj_m1 = AlnMgrMapBioseqToBioseq(sap_global,start2,numrows,1,(Boolean) TRUE,&PostGap);
-        if(start2_proj_m1!=-2) {
-            if(start2_proj_m1==-1) {
-                if(PostGap!=-1)
-                    start2_proj_m1 = PostGap;
-            }
-            if(start2_proj_m1!=-1 && start2_proj_m1<top_c)
-                top_c = start2_proj_m1;
-        }
-        if(stopm1<top_c) {
-            top_c = stopm1;
-        }
-        left_c = AlnMgrMapBioseqToBioseq(sap_global,top_c,1,2,(Boolean) TRUE,&PostGap);
-
-        if(left_c!=-2) {
-            if(left_c==-1) {
-                if(PostGap!=-1)
-                    left_c = PostGap;
-            }
-        }
-        if(left_c<0) {
-            ErrPostEx(SEV_WARNING,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: Cannot project coordinate back in SeqAlign : bug in input SeqAlign or AlnMgrMapBioseqToBioseq or  AlnMgrMapBioseqToSeqAlign\n");
-            return NULL;
-        }
-        
-        /*
-          Bottom Right Corner 
-        */
-        bottom_c = stopm1;
-        stop1_proj_m2 = AlnMgrMapBioseqToBioseq(sap_global,stop1,2,1,(Boolean) TRUE,&PostGap);
-        if(stop1_proj_m2!=-2) {
-            if(stop1_proj_m2==-1) {
-            if(PostGap!=-1)
-                stop1_proj_m2 = PostGap;
-            }
-            if(stop1_proj_m2!=-1 && stop1_proj_m2>bottom_c)
-                bottom_c = stop1_proj_m2;
-        }
-        if(startm2>bottom_c)
-            bottom_c = startm2;
-        
-        right_c = AlnMgrMapBioseqToBioseq(sap_global,bottom_c,1,numrows,(Boolean) TRUE,&PostGap);
-        if(right_c!=-2) {
-            if(right_c==-1) {
-                if(PostGap!=-1)
-                    right_c = PostGap;
-            }
-        }
-        if(right_c<0) {
-            ErrPostEx(SEV_WARNING,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: Cannot project coordinate back in SeqAlign : bug in input SeqAlign or AlnMgrMapBioseqToBioseq or  AlnMgrMapBioseqToSeqAlign\n");
-            return NULL;
-        }
-        slp1 = SeqLocIntNew(top_c,bottom_c,Seq_strand_plus, SeqAlignId(salp1,0));
-        slp2 = SeqLocIntNew(left_c,right_c,Seq_strand_plus, SeqAlignId(salp1,1));
-    } else if (strand_subject == Seq_strand_minus && strand_master != Seq_strand_minus) {
-        /*
-          Top Right Corner 
-        */
-        top_c = startm2;
-        stop2_proj_m1 = AlnMgrMapBioseqToBioseq(sap_global,stop2,numrows,1,(Boolean) TRUE,&PostGap);
-        if(stop2_proj_m1!=-2) {
-            if(stop2_proj_m1==-1) {
-                if(PostGap!=-1)
-                    stop2_proj_m1 = PostGap;
-            }
-            if(stop2_proj_m1!=-1 && stop2_proj_m1<top_c)
-                top_c = stop2_proj_m1;
-        }
-        if(stopm1<top_c)
-            top_c = stopm1;
-        
-        right_c = AlnMgrMapBioseqToBioseq(sap_global,top_c,1,2,(Boolean) TRUE,&PostGap);
-        if(right_c!=-2) {
-            if(right_c==-1) {
-                if(PostGap!=-1)
-                    right_c = PostGap;
-            }
-        }
-        if(right_c<0) {
-            ErrPostEx(SEV_WARNING,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: Cannot project coordinate back in SeqAlign : bug in input SeqAlign or AlnMgrMapBioseqToBioseq or  AlnMgrMapBioseqToSeqAlign\n");
-            return NULL;
-        }
-        
-        /*
-          Bottom Left Corner 
-        */
-        bottom_c = stopm1;
-        start1_proj_m2 = AlnMgrMapBioseqToBioseq(sap_global,start1,2,1,(Boolean) TRUE,&PostGap);
-        if(start1_proj_m2!=-2) {
-            if(start1_proj_m2==-1) {
-            if(PostGap!=-1)
-                start1_proj_m2 = PostGap;
-            }
-            if(start1_proj_m2!=-1 && start1_proj_m2>bottom_c)
-                bottom_c = start1_proj_m2;
-        }
-        if(startm2>bottom_c)
-            bottom_c = startm2;
-        
-        left_c = AlnMgrMapBioseqToBioseq(sap_global,bottom_c,1,numrows,(Boolean) TRUE,&PostGap);
-        if(left_c!=-2) {
-            if(left_c==-1) {
-                if(PostGap!=-1)
-                    left_c = PostGap;
-            }
-        }
-        if(left_c<0) {
-            ErrPostEx(SEV_WARNING,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: Cannot project coordinate back in SeqAlign : bug in input SeqAlign or AlnMgrMapBioseqToBioseq or  AlnMgrMapBioseqToSeqAlign\n");
-            return NULL;
-        }
-        slp1 = SeqLocIntNew(top_c,bottom_c,Seq_strand_plus, SeqAlignId(salp1,0));
-        slp2 = SeqLocIntNew(left_c,right_c,Seq_strand_minus, SeqAlignId(salp1,1));
-        
-    } else {
-        ErrPostEx(SEV_WARNING,0,0,"%c %c alignment or unsupported\n",strand_master != Seq_strand_minus ? '+' : '-',strand_subject != Seq_strand_minus ? '+' : '-');
-        return NULL;
-    }
-    if(mol1 == Seq_mol_aa) {
-        BlastKarlinGetDefaultMatrixValues("BLOSUM62", &gapOpen, &gapExtend, &Lambda, &Kappa, &H);
-        blmat = BLAST_MatrixFetch("BLOSUM62");
-        matrix = (Int4Ptr PNTR) blmat->matrix;
-        blmat->name = MemFree(blmat->name);
-        if(blmat->posFreqs != NULL) {
-            Int4 index;
-            for (index = 0; index < blmat->rows; index++) {
-                MemFree(blmat->posFreqs[index]);
-            }
-            MemFree(blmat->posFreqs);
-        }
-        MemFree(blmat);
-    } else {
-        Int4 index;
-        BLASTMatrixStructurePtr matrix_struct;
-        matrix_struct = (BLASTMatrixStructurePtr) MemNew(sizeof(BLASTMatrixStructure));
-        for (index=0; index<BLAST_MATRIX_SIZE-1; index++)
-            {
-                matrix_struct->matrix[index] = matrix_struct->long_matrix + index*BLAST_MATRIX_SIZE;
-            }
-        matrix = (Int4Ptr PNTR ) matrix_struct->matrix;
-        BlastScoreBlkMatCreateEx((BLAST_ScorePtr PNTR)matrix,penalty,reward);
-        
-    }
-
-    salp_merging = NeedlemanWunschQuadraticByLoc(slp1,slp2, matrix, gapOpen, gapExtend,&score, Kappa, Lambda);
-    MemFree(matrix);
-    AlnMgrReIndexSeqAlign(salp_merging);
-
-    /*
-      NOW Merge all 3 SeqAligns..
-      Since we insisted that we know the coordinates on BOTH seqaligns..
-      all we have to do is Make a new SeqAlign.. and
-      use GetNextAlnBit 
-     */
-    salp_new = AlnMgrMerge3OverlappingSeqAligns(salp1,salp_merging,salp2,top_c,bottom_c);
-    SeqAlignFree(salp_merging);
-    return salp_new;
-}
-
-
-
-
-
-/*
-  Take a Single local SeqAlign and align ends of alignment, or add gaps,
-  to make it into a global alignment.
- */
-
-NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignLocalToGlobal(SeqAlignPtr sap) {
-    Int4 gapOpen = 5;
-    Int4 gapExtend = 1;
-    Int4 reward=1,penalty=-3;
-    Int4 score;
-    Nlm_FloatHi Kappa=0.0,Lambda=0.0;
-    FloatHi H;
-    BLAST_Score ** matrix=NULL;
-    BLAST_MatrixPtr blmat;
-    SeqLocPtr slps1,slps2,slpe1,slpe2;
-    Int4 len1,len2;
-    BioseqPtr bsp1,bsp2;
-    SAIndexPtr saip;
-    SeqIdPtr sip1,sip2;
-    char * matrix_name;
-    SeqAlignPtr salp_new,salp_merging,salp_begin,salp_end,sap0;
-    Int4 start1,start2,stop1,stop2;
-    Uint1 mol1,mol2;
-    Uint1 qstrand,sstrand;
-
-    /* Find Alignment coordinates of start2 .. and see if in seqalign */
-    if(sap->saip)
-        sap0 = ((AMAlignIndexPtr)(sap->saip))->saps[0];
-    else
-        sap0 = sap;
-
-    sip1 = SeqIdDup(SeqAlignId(sap0,0));
-    sip2 = SeqIdDup(SeqAlignId(sap0,1));
-    if(!sip1 || !sip2) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: SeqAlign with NULL SeqIds\n");
-        return NULL;
-    }
-    bsp1 = BioseqLockById(sip1);
-    if(!bsp1) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: SeqAlign with NULL SeqIds\n");
-        return NULL;
-    }
-    bsp2 = BioseqLockById(sip2);
-    if(!bsp2) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignMergeTwoPairwiseEx: SeqAlign with NULL SeqIds\n");
-        return NULL;
-    }
-    mol1 = bsp1->mol;
-    mol2 = bsp2->mol;
-    len1 = bsp1->length;
-    len2 = bsp2->length;
-    if((bsp1->mol == Seq_mol_aa && bsp2->mol != Seq_mol_aa) || (bsp1->mol != Seq_mol_aa && bsp2->mol == Seq_mol_aa)) {
-        ErrPostEx(SEV_ERROR,0,0,"AlnMgrSeqAlignLocalToGlobal: Invalid call with protein-dna alignment \n");
-        return NULL;
-    }
-    BioseqUnlockById(sip1);
-    BioseqUnlockById(sip2);
-    SeqIdFree(sip1);
-    SeqIdFree(sip2);
-    qstrand = SeqAlignStrand(sap0,0);
-    sstrand = SeqAlignStrand(sap0,1);
-    slps1=NULL;
-    slps2=NULL;
-    slpe1=NULL;
-    slpe2=NULL;
-    start1 = SeqAlignStart(sap0,0);
-    stop1 = SeqAlignStop(sap0,0);
-    start2 = SeqAlignStart(sap0,1);
-    stop2 = SeqAlignStop(sap0,1);
-
-    if(qstrand!=Seq_strand_minus) {
-        if(start1>0) 
-            slps1 = SeqLocIntNew(0,start1-1,Seq_strand_plus, SeqAlignId(sap0,0));
-        if(stop1<len1-1) 
-            slpe1 = SeqLocIntNew(stop1+1,len1-1,Seq_strand_plus, SeqAlignId(sap0,0));
-    } else {
-        if(stop1<len1-1) 
-            slps1 = SeqLocIntNew(stop1+1,len1-1,Seq_strand_minus, SeqAlignId(sap0,0));
-        if(start1>0) 
-            slpe1 = SeqLocIntNew(0,start1-1,Seq_strand_minus, SeqAlignId(sap0,0));
-    }
-    if(sstrand!=Seq_strand_minus) {
-        if(start2>0) 
-            slps2 = SeqLocIntNew(0,start2-1,Seq_strand_plus, SeqAlignId(sap0,1));
-        if(stop2<len2-1) 
-            slpe2 = SeqLocIntNew(stop2+1,len2-1,Seq_strand_plus, SeqAlignId(sap0,1));
-    } else {
-        if(stop2<len2-1) 
-            slps2 = SeqLocIntNew(stop2+1,len2-1,Seq_strand_minus, SeqAlignId(sap0,1));
-        if(start2>0) 
-            slpe2 = SeqLocIntNew(0,start2-1,Seq_strand_minus, SeqAlignId(sap0,1));
-    }
-
-    /*
-       If either end is not an end-gap 
-    */
-    if(slps1&&slps2 || slpe1&&slpe2) {
-        if(mol1 == Seq_mol_aa) {
-            BlastKarlinGetDefaultMatrixValues("BLOSUM62", &gapOpen, &gapExtend, &Lambda, &Kappa, &H);
-            blmat = BLAST_MatrixFetch("BLOSUM62");
-            matrix = blmat->matrix;
-            blmat->name = MemFree(blmat->name);
-            if(blmat->posFreqs != NULL) {
-                Int4 index;
-                for (index = 0; index < blmat->rows; index++) {
-                    MemFree(blmat->posFreqs[index]);
-                }
-                MemFree(blmat->posFreqs);
-            }
-            MemFree(blmat);
-        } else {
-            Int4 index;
-            BLASTMatrixStructurePtr matrix_struct;
-            matrix_struct = (BLASTMatrixStructurePtr) MemNew(sizeof(BLASTMatrixStructure));
-            for (index=0; index<BLAST_MATRIX_SIZE-1; index++)
-                {
-                    matrix_struct->matrix[index] = matrix_struct->long_matrix + index*BLAST_MATRIX_SIZE;
-                }
-            matrix = matrix_struct->matrix;
-            BlastScoreBlkMatCreateEx(matrix,penalty,reward);
-        }
-    }
-
-    /* 
-       Align 1st end
-    */
-    if(slps1 && slps2) {
-        salp_begin = NeedlemanWunschQuadraticByLoc(slps1,slps2, matrix, gapOpen, gapExtend,&score, Kappa, Lambda);
-    if(salp_begin)
-        AlnMgrIndexSeqAlign(salp_begin);
-
-    } else if (slps1) {
-        /* align left end of query with gaps 
-          Q 123456789QQQQQQQQQQQQ
-          S  ------------12345678
-         */
-        DenseSegPtr dsp;
-        salp_begin = SeqAlignNew();
-        salp_begin->segtype = SAS_DENSEG;
-        salp_begin->type = SAT_PARTIAL;
-
-        dsp = DenseSegNew();
-        salp_begin->segs = dsp;
-        dsp->dim=2;
-        dsp->numseg=1;
-        dsp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->lens = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->strands = (Uint1Ptr)MemNew(2*sizeof(Uint1));
-        dsp->ids = SeqIdDupList(SeqAlignId(sap0,0));
-        dsp->starts[1]=-1;
-        /* works for +- strand */
-        dsp->starts[0]=SeqLocStart(slps1); 
-        dsp->lens[0]=SeqLocStop(slps1)+1-dsp->starts[0];
-
-        dsp->strands[0]=qstrand;
-        dsp->strands[1]=sstrand;
-    } else if (slps2) {
-        /*
-          align left end of subject with gaps
-          Q  -----------123456789
-          S  123456789SSSSSSSSSSS
-
-         */
-        DenseSegPtr dsp;
-        salp_begin = SeqAlignNew();
-        salp_begin->segtype = SAS_DENSEG;
-        salp_begin->type = SAT_PARTIAL;
-
-        dsp = DenseSegNew();
-        salp_begin->segs = dsp;
-        dsp->dim=2;
-        dsp->numseg=1;
-        dsp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->lens = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->strands = (Uint1Ptr)MemNew(2*sizeof(Uint1));
-        dsp->ids = SeqIdDupList(SeqAlignId(sap0,0));
-        dsp->starts[0]=-1;
-        dsp->starts[1]=SeqLocStart(slps2);
-        dsp->lens[0]=SeqLocStop(slps2)+1-dsp->starts[1];
-        dsp->strands[0]=qstrand;
-        dsp->strands[1]=sstrand;
-    } else {
-        /* Left-end completely aligned. */
-        salp_begin = NULL;
-    }
-
-    if(slpe1 && slpe2) {
-        salp_end = NeedlemanWunschQuadraticByLoc(slpe1,slpe2, matrix, gapOpen, gapExtend,&score, Kappa, Lambda);
-    if(salp_end)
-        AlnMgrIndexSeqAlign(salp_end);
-    } else if (slpe1) {
-        DenseSegPtr dsp;
-        salp_end = SeqAlignNew();
-        salp_end->segtype = SAS_DENSEG;
-        salp_end->type = SAT_PARTIAL;
-
-        dsp = DenseSegNew();
-        salp_end->segs = dsp;
-        dsp->dim=2;
-        dsp->numseg=1;
-        dsp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->lens = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->strands = (Uint1Ptr)MemNew(2*sizeof(Uint1));
-        dsp->ids = SeqIdDupList(SeqAlignId(sap0,0));
-        dsp->starts[1]=-1;
-        dsp->starts[0]=SeqLocStart(slpe1);
-        dsp->lens[0]=SeqLocStop(slpe1)+1-dsp->starts[0];
-        dsp->strands[0]=qstrand;
-        dsp->strands[1]=sstrand;
-    } else if (slpe2) {
-        DenseSegPtr dsp;
-        salp_end = SeqAlignNew();
-        salp_end->segtype = SAS_DENSEG;
-        salp_end->type = SAT_PARTIAL;
-
-        dsp = DenseSegNew();
-        salp_end->segs = dsp;
-        dsp->dim=2;
-        dsp->numseg=1;
-        dsp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->lens = (Int4Ptr)MemNew(2*sizeof(Int4));
-        dsp->strands = (Uint1Ptr)MemNew(2*sizeof(Uint1));
-        dsp->ids = SeqIdDupList(SeqAlignId(sap0,0));
-        dsp->starts[1]=SeqLocStart(slpe2);
-        dsp->starts[0]=-1;
-        dsp->lens[0]=SeqLocStop(slpe2)+1-dsp->starts[1];
-        dsp->strands[0]=qstrand;
-        dsp->strands[1]=sstrand;
-    } else {
-        salp_end = NULL;
-    }
-
-    if(sap) {
-        AlnMgrIndexSeqAlign(sap);
-        sap0 = ((AMAlignIndexPtr)(sap->saip))->saps[0];
-    }
-
-    if(salp_begin || salp_end) {
-        Int4 cut_start,cut_stop;
-        cut_start = SeqAlignStart(sap0,0)-1;
-        if(cut_start<0 && salp_begin!=NULL) {
-            cut_start=0;
-        }
-        cut_stop = SeqAlignStop((SeqAlignPtr)sap0,0)+1;
-        if(cut_stop>len1-1 && salp_end!=NULL)
-            cut_stop = len1-1;
-        salp_new = AlnMgrMerge3OverlappingSeqAligns(salp_begin,sap,salp_end,cut_start,cut_stop);
-        if(salp_begin)
-            SeqAlignFree(salp_begin);
-        if(salp_end)
-            SeqAlignFree(salp_end);
-        if(matrix)
-            MemFree(matrix);
-    } else {
-        salp_new =(SeqAlignPtr) AsnIoMemCopy (sap0, (AsnReadFunc) SeqAlignAsnRead,(AsnWriteFunc) SeqAlignAsnWrite);
-      /*  AlnMgrIndexSeqAlign(salp_new);*/
-    }
-    if(slps1)
-        SeqLocFree(slps1);
-    if(slps2)
-        SeqLocFree(slps2);
-    if(slpe1)
-        SeqLocFree(slpe1);
-    if(slpe2)
-        SeqLocFree(slpe2);
-
-    if(salp_new)
-        salp_new->type = SAT_GLOBAL;
-    return salp_new;
-}
-
-NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwise(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master) {
-    Uint1 strand_subject, strand_master;
-    Int4 start1,start2,stop1,stop2,startm1,startm2,stopm1,stopm2;
-    AlnMgrGetNthSeqRangeInSA(salp1, 3-which_master, &start1, &stop1);
-    AlnMgrGetNthSeqRangeInSA(salp2, 3-which_master, &start2, &stop2);
-    AlnMgrGetNthSeqRangeInSA(salp1, which_master, &startm1, &stopm1);
-    AlnMgrGetNthSeqRangeInSA(salp2, which_master, &startm2, &stopm2);
-    
-    strand_subject = AlnMgrGetNthStrand(salp1, 3-which_master);
-    strand_master = AlnMgrGetNthStrand(salp1, which_master);
-    if (strand_subject != Seq_strand_minus)
-        strand_subject = Seq_strand_plus;
-
-    return AlnMgrSeqAlignMergeTwoPairwiseEx(sap_global,salp1,salp2,which_master,strand_master, strand_subject,startm1, stopm1, start1, stop1, startm2, stopm2, start2, stop2);
-
-}
-
-/*
-  Take a list of Pairwise SeqAligns, output from AlnMgrRemoveInconsistentFromPairwiseSet
-  and Merges them if possible (if they don't have gaps of AM_MPS_MAXGAP(~1000 nt) or more )
-  return the number of SeqAligns it merged the results in, or -1 if failed.
-*/
-
-#define AM_MPS_MAX_GAP 1000 
-NLM_EXTERN Int4 AlnMgrSeqAlignMergePairwiseSet(SeqAlignPtr PNTR sap_ptr ) {
-    AMAlignIndexPtr amaip;
-    SAIndexPtr saip1;
-    SeqAlignPtr sap,salp;
-    AMTinyInfoPtr PNTR tiparray;
-    Int4 i;
-    FloatHi bit_score,evalue,score;
-    Int4 numsegs;
-    SeqAlignPtr salp_merged, PNTR saparray,salp_head,salp_last;
-    Int4 startm1,stopm1,startm2,stopm2;
-    Int4 start1,stop1,start2,stop2;
-    Boolean DeleteAln,MergeAlns;
-    Uint1 strand,strand_master;
-
-   if (sap_ptr == NULL || *sap_ptr==NULL)
-       return 0;
-   sap= *sap_ptr;
-   if((sap->saip != NULL && sap->saip->indextype != INDEX_PARENT))
-      return -1;
-   if (sap->saip == NULL)
-   {
-      if (!AlnMgrIndexLite(sap))
-         return -1;
-   }
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   if(!amaip)
-       return -1;
-   if (amaip->numbsqs > 2)
-      return -1;
-   if(amaip->numsaps>=2) {
-       salp = salp_head = salp_last = (SeqAlignPtr)(sap->segs);
-       while(salp_last->next!=NULL) {
-           salp_last = salp_last->next;
-       }
-       
-       tiparray = (AMTinyInfoPtr PNTR)MemNew((amaip->alnsaps)*sizeof(AMTinyInfoPtr));
-       for (i=0; i<amaip->alnsaps; i++)
-           {
-               saip1 = (SAIndexPtr)amaip->saps[i]->saip;
-               AlnMgrGetNthSeqRangeInSA(amaip->saps[i], saip1->master, &start1, &stop1);
-               tiparray[i] = (AMTinyInfoPtr)MemNew(sizeof(AMTinyInfo));
-               tiparray[i]->start = start1;
-               tiparray[i]->stop = stop1;
-               tiparray[i]->numsap = i;
-               tiparray[i]->which = 0; /* Important */
-           }
-       HeapSort((Pointer)tiparray, (size_t)(amaip->alnsaps), sizeof(AMTinyInfoPtr), AlnMgrCompareTips);
-       saparray = (SeqAlignPtr PNTR)(MemNew((amaip->alnsaps)*sizeof(SeqAlignPtr)));
-       
-       for (i=0; i<amaip->alnsaps; i++)
-           {
-               saparray[i] = amaip->saps[i];
-           }
-       for (i=0; i<amaip->alnsaps; i++)
-           {
-               amaip->saps[i] = saparray[tiparray[i]->numsap];
-               tiparray[i]->numsap = i;
-           }
-       MemFree(saparray);
-       
-       
-       if ((saip1 = (SAIndexPtr)amaip->saps[0]->saip)==NULL) 
-           return 0;
-       strand = AlnMgrGetNthStrand(amaip->saps[tiparray[0]->numsap], 3-saip1->master);
-       strand_master = AlnMgrGetNthStrand(amaip->saps[tiparray[0]->numsap], saip1->master);
-       if (strand != Seq_strand_minus)
-           strand = Seq_strand_plus;
-       numsegs=0;
-       startm1 = tiparray[0]->start;
-       stopm1 = tiparray[0]->stop;
-       AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 3-saip1->master, &start1, &stop1);
-       i=1;
-       while(i<amaip->numsaps) {
-           /*
-             if two current alignments overlap or touch.. package
-             seqaligns in one dsp
-           */
-           startm2 = tiparray[i]->start;
-           stopm2 = tiparray[i]->stop;
-           AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 3-saip1->master, &start2, &stop2);
-           DeleteAln = FALSE;
-           if (startm1 != startm2) {
-               if((strand!=Seq_strand_minus && start2<=start1) || (strand == Seq_strand_minus && stop2<=stop1)) {
-                   ErrPostEx(SEV_WARNING,0,0,"BUG: Input SeqAlign to AlnMgrSeqAlignMergePairwiseSet violated input conditions\n");
-               } else {
-                   Int4 vert_gap,horiz_gap,gap_area;
-                   if(strand!=Seq_strand_minus) {
-                       vert_gap=startm2-stopm1;
-                       horiz_gap=start2-stop1;
-                   } else {
-                       vert_gap=startm2-stopm1;
-                       horiz_gap=start1-stop2;
-                   }
-                   gap_area = vert_gap*horiz_gap;
-                   if(gap_area<0) 
-                       gap_area = - gap_area;
-                   if(gap_area<AM_MPS_MAX_GAP*AM_MPS_MAX_GAP) {
-                       MergeAlns = TRUE;
-                   } else {
-                       if(((vert_gap>=-20 && vert_gap<=20) || (horiz_gap >=-20 && horiz_gap<=20))
-                          && gap_area <= 10*AM_MPS_MAX_GAP*AM_MPS_MAX_GAP) {
-                           MergeAlns = TRUE;
-                       } else
-                           MergeAlns = FALSE;
-                   }
-                   if(MergeAlns) {
-                       salp_merged = AlnMgrSeqAlignMergeTwoPairwiseEx(sap,amaip->saps[i-1],amaip->saps[i],saip1->master, strand_master, (Uint1) Seq_strand_plus, startm1, stopm1, start1, stop1,startm2, stopm2, start2,  stop2);
-                       amaip->saps[i-1]=salp_merged;
-                       if(salp_head)
-                           salp_last->next = salp_merged;
-                       else
-                           salp_head = salp_merged;
-                       salp_last = salp_merged;
-                       DeleteAln=TRUE;
-                   } else { /* Too much or too little Overlap to merge */
-                       ErrPostEx(SEV_WARNING,0,0,"AlnMgrSeqAlignMergePairwiseSet: Input alignments overlap too much/little to merge(Indicative of repeats/large deletions):\nMaster Overlap = %d , Subject Overlap = %d\n",vert_gap,horiz_gap);
-                       DeleteAln = FALSE;
-                   }
-               }
-           } else {
-               DeleteAln = TRUE;
-               /* Overlapping starts!
-                  Since Guaranteed that the 
-                  first one is longer because of the sort Fn. 
-                  --> Delete the shorter one (second alignment )
-               */
-           }
-           if(DeleteAln) {
-               amaip->numsaps--;
-               amaip->saps[i]=NULL;
-               if(i<amaip->numsaps) {
-                   Int4 j;
-                   for(j=i+1;j<amaip->numsaps;j++) {
-                       MemMove(tiparray+j-1,tiparray+j,sizeof(tiparray[0]));
-                       amaip->saps[j-1]=amaip->saps[j];
-                   }
-               }
-               /* Deletes SeqAligns not in amaip->saps[0..amaip->numsaps-1] array */
-               AlnMgrDeleteHidden(sap,FALSE); /* Delete unused SeqAligns and Re-Index */
-               amaip = (AMAlignIndexPtr)(sap->saip);
-               saip1 = (SAIndexPtr)amaip->saps[0]->saip;
-               /* Try again re-merging current (don't increment i) */
-           } else {
-               i++;
-               startm1 = startm2;
-               stopm1 = stopm2;
-               start1 = start2;
-               stop1 = stop2;
-           }
-       }
-   }
-   if(amaip->numsaps==1) {
-       SeqAlignPtr sap_tmp;
-       sap_tmp = SeqAlignDup((SeqAlignPtr)sap->segs);
-       sap->segs=NULL;
-       SeqAlignFree(sap);
-       sap = sap_tmp;
-   }
-   *sap_ptr = sap;
-   AlnMgrReIndexSeqAlign(sap);
-   return amaip->numsaps;
-}
 typedef struct sq_spin {
    Int4  n1;
    Int4  n2;
@@ -2377,7 +1295,7 @@ static int LIBCALLBACK ACT_CompareSpins (VoidPtr ptr1, VoidPtr ptr2)
 
 static void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 n)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Boolean          conflict;
    Int4             curr;
    Int4             i;
@@ -2394,20 +1312,20 @@ static void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 
       return;
    if (n > 2)
       return;
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   indextype = amaip->mstype;
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   indextype = amaip->alnstyle;
    /* make sure that everything is on the plus strand of the nth sequence */
    for (i=0; i<amaip->numsaps; i++)
    {
       salp = amaip->saps[i];
-      strand = AlnMgrGetNthStrand(salp, n);
+      strand = AlnMgr2GetNthStrand(salp, n);
       if (strand == Seq_strand_minus)
       {
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          salp->next = NULL;
          SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
       }
    }
    /* spin structure: n1 = which alignment, n2 = start on first row, n3 =
@@ -2418,12 +1336,12 @@ static void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 
       spin[i] = (SQN_nPtr)MemNew(sizeof(SQN_n));
       salp = amaip->saps[i];
       spin[i]->n1 = i;
-      AlnMgrGetNthSeqRangeInSA(salp, n, &start, &stop);
+      AlnMgr2GetNthSeqRangeInSA(salp, n, &start, &stop);
       spin[i]->n3 = stop - start;
       spin[i]->n2 = start;
-      AlnMgrGetNthSeqRangeInSA(salp, 3-n, &start, &stop);
+      AlnMgr2GetNthSeqRangeInSA(salp, 3-n, &start, &stop);
       spin[i]->n4 = start;
-      strand = AlnMgrGetNthStrand(salp, 3-n);
+      strand = AlnMgr2GetNthStrand(salp, 3-n);
       if (strand == Seq_strand_minus)
          spin[i]->n5 = -1;
       else
@@ -2519,13 +1437,13 @@ static void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 
       }
    }
    sap->segs = (Pointer)(salp_head);
-   if (indextype == AM_LITE)
+   if (indextype == AM2_LITE)
    {
-      AMAlignIndexFree(sap->saip);
+      AMAlignIndex2Free2(sap->saip);
       sap->saip = NULL;
-      AlnMgrIndexLite(sap);
+      AlnMgr2IndexLite(sap);
    } else
-      AlnMgrReIndexSeqAlign(sap);
+      AlnMgr2ReIndexSeqAlign(sap);
    MemFree(spin);
 }
 
@@ -2551,7 +1469,7 @@ NLM_EXTERN void ACT_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start
             *stop = -1;
          return;
       }
-      AlnMgrGetNthSeqRangeInSA(salp, n, &tmp1, &tmp2);
+      AlnMgr2GetNthSeqRangeInSA(salp, n, &tmp1, &tmp2);
       if (tmp1 < start_tmp || start_tmp == -1)
          start_tmp = tmp1;
       if (tmp2 > stop_tmp)
@@ -2633,7 +1551,7 @@ static SeqAlignPtr ACT_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2)
    }
    if (sap_head == NULL)
       return NULL;
-   AlnMgrIndexLite(sap_head);
+   AlnMgr2IndexLite(sap_head);
    ACT_RemoveInconsistentAlnsFromSet(sap_head, 6, 1);
    sap = (SeqAlignPtr)(sap_head->segs);
    sap_head->segs = NULL;
@@ -2656,7 +1574,7 @@ static SeqAlignPtr ACT_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2)
 
 NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side)
 {
-   AMAlignIndexPtr      amaip;
+   AMAlignIndex2Ptr      amaip;
    DenseSegPtr          dsp;
    Int4                 i;
    Int4                 nstart1;
@@ -2730,13 +1648,13 @@ NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1
    SeqLocFree(slp2);
    if (sap == NULL)
       return NULL;
-   AlnMgrIndexLite(sap);
+   AlnMgr2IndexLite(sap);
    ACT_RemoveInconsistentAlnsFromSet(sap, 20, 1);
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
    ACT_GetNthSeqRangeInSASet(sap, 1, &nstart1, &nstop1);
    ACT_GetNthSeqRangeInSASet(sap, 2, &nstart2, &nstop2);
-   strand = AlnMgrGetNthStrand(amaip->saps[0], 2);
+   strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    sap_head = NULL;
    if (strand != Seq_strand_minus)
    {
@@ -2761,16 +1679,16 @@ NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1
    }
    for (i=0; i<amaip->numsaps-1; i++)
    {
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &nstart1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 1, &nstop1, NULL);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &nstart1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &nstop1, NULL);
       if (strand != Seq_strand_minus)
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &nstart2);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, &nstop2, NULL);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &nstart2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &nstop2, NULL);
       } else
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &nstop2, NULL);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &nstart2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &nstop2, NULL);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &nstart2);
       }
    }
    ACT_GetNthSeqRangeInSASet(sap, 1, &nstart1, &nstop1);
@@ -2882,9 +1800,9 @@ static void ACT_ExtendAlnRight(SeqAlignPtr sap, Int4 which_row, Int4 start, Int4
       if (dsp->strands[which_row-1] == Seq_strand_minus)
          dsp->starts[(dsp->dim)*(dsp->numseg-1) + which_row - 1] = stop;
    }
-   SAIndexFree(sap->saip);
+   SAIndex2Free2(sap->saip);
    sap->saip = NULL;
-   AlnMgrIndexSingleChildSeqAlign(sap);
+   AlnMgr2IndexSingleChildSeqAlign(sap);
 }
 
 static SeqAlignPtr ACT_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
@@ -2905,13 +1823,13 @@ static SeqAlignPtr ACT_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
 
    for (i=0; i<numsaps-1; i++)
    {
-      AlnMgrGetNthSeqRangeInSA(saps[i], 1, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(saps[i+1], 1, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(saps[i], 1, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(saps[i+1], 1, &start2, &stop2);
       if (start2 - stop1 > 1)
          ACT_ExtendAlnRight(saps[i], 1, stop1+1, start2-1);
-      AlnMgrGetNthSeqRangeInSA(saps[i], 2, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(saps[i+1], 2, &start2, &stop2);
-      strand = AlnMgrGetNthStrand(saps[i], 2);
+      AlnMgr2GetNthSeqRangeInSA(saps[i], 2, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(saps[i+1], 2, &start2, &stop2);
+      strand = AlnMgr2GetNthStrand(saps[i], 2);
       if (strand == Seq_strand_minus)
       {
          if (stop2 - start1 > 1)
@@ -2957,13 +1875,13 @@ static SeqAlignPtr ACT_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
    salp->segtype = SAS_DENSEG;
    salp->dim = 2;
    salp->segs = (Pointer)(dsp);
-   AlnMgrIndexSingleChildSeqAlign(salp);
+   AlnMgr2IndexSingleChildSeqAlign(salp);
    return salp;
 }
 
 NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 len2)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             diff;
    DenseSegPtr      dsp;
    Int4             i;
@@ -2977,12 +1895,12 @@ NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 le
 
    if (sap == NULL)
       return NULL;
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   strand = AlnMgrGetNthStrand(amaip->saps[0], 2);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    numseg = 0;
-   AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 1, &start1, NULL);
-   AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 2, &start2, &stop2);
+   AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &start1, NULL);
+   AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, &start2, &stop2);
    if (strand != Seq_strand_minus)
       diff = start2;
    else
@@ -2993,33 +1911,33 @@ NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 le
    {
       dsp = (DenseSegPtr)(amaip->saps[i]->segs);
       numseg += dsp->numseg;
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, &tmp);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, &tmp);
       if (stop1 < start1+1)
-         AlnMgrTruncateSAP(amaip->saps[i+1], start1+1, tmp, 1);
+         AlnMgr2TruncateSAP(amaip->saps[i+1], start1+1, tmp, 1);
       if (strand != Seq_strand_minus)
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, &tmp);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, &tmp);
          if (stop2 < start2+1)
-            AlnMgrTruncateSAP(amaip->saps[i+1], start2+1, tmp, 2);
+            AlnMgr2TruncateSAP(amaip->saps[i+1], start2+1, tmp, 2);
       } else
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, &tmp);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, &tmp);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
          if (stop2 < start2 + 1)
-            AlnMgrTruncateSAP(amaip->saps[i], start2+1, tmp, 2);
+            AlnMgr2TruncateSAP(amaip->saps[i], start2+1, tmp, 2);
       }
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, &tmp);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, &tmp);
       if (strand != Seq_strand_minus)
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, &tmp);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, &tmp);
       } else
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, &tmp);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, &tmp);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
       }
       if (stop1 > start1+1)
          numseg++;
@@ -3028,15 +1946,15 @@ NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 le
    }
    dsp = (DenseSegPtr)(amaip->saps[amaip->numsaps-1]->segs);
    numseg += dsp->numseg;
-   AlnMgrGetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, NULL, &stop1);
-   AlnMgrGetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &start2, &stop2);
+   AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, NULL, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &start2, &stop2);
    if (strand != Seq_strand_minus)
       diff = len2 - stop2;
    else
       diff = start2;
    if (stop1 < len1 && diff > 0)
       numseg += 2;
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
    return (ACT_CreateContinuousAln(amaip->saps, amaip->numsaps));
 }
 
@@ -3065,9 +1983,9 @@ static void SQN_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 str
          starts = (Int4Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Int4));
          lens = (Int4Ptr)MemNew((dsp->numseg+1)*sizeof(Int4));
          strands = (Uint1Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Uint1));
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &i, &j);
          starts[0] = i - offset;
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &i, &j);
          if (strand == Seq_strand_minus)
             starts[1] = j + 1;
          else
@@ -3103,9 +2021,9 @@ static void SQN_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 str
          starts = (Int4Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Int4));
          lens = (Int4Ptr)MemNew((dsp->numseg+1)*sizeof(Int4));
          strands = (Uint1Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Uint1));
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &i, &j);
          starts[2*(dsp->numseg)-1] = i+1;
-         AlnMgrGetNthSeqRangeInSA(sap, 2, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 2, &i, &j);
          if (strand == Seq_strand_minus)
            starts[2*(dsp->numseg)] = i - offset;
          else
@@ -3131,9 +2049,9 @@ static void SQN_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 str
       }
    }
    /* free the old index and reindex the alignment */
-   SAIndexFree(sap->saip);
+   SAIndex2Free2(sap->saip);
    sap->saip = NULL;
-   AlnMgrIndexSingleChildSeqAlign(sap);
+   AlnMgr2IndexSingleChildSeqAlign(sap);
 }
 
 NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand)
@@ -3158,10 +2076,10 @@ NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uin
 
    if (sap == NULL || ovl == 0)
       return;
-   AlnMgrGetNthSeqRangeInSA(sap, 1, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA(sap, 2, &start2, &stop2);
-   sip1 = AlnMgrGetNthSeqIdPtr(sap, 1);
-   sip2 = AlnMgrGetNthSeqIdPtr(sap, 2);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(sap, 2, &start2, &stop2);
+   sip1 = AlnMgr2GetNthSeqIdPtr(sap, 1);
+   sip2 = AlnMgr2GetNthSeqIdPtr(sap, 2);
    bsp1 = BioseqLockById(sip1);
    bsp2 = BioseqLockById(sip2);
    if (which_side == SQN_LEFT && (start1<ovl+SQN_MAXGAP || start2<ovl+SQN_MAXGAP))
@@ -3199,9 +2117,9 @@ NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uin
       }
       DenseSegFree(dsp);
       sap->segs = (Pointer)(dsp_new);
-      SAIndexFree(sap->saip);
+      SAIndex2Free2(sap->saip);
       sap->saip = NULL;
-      AlnMgrIndexSingleChildSeqAlign(sap);
+      AlnMgr2IndexSingleChildSeqAlign(sap);
       SeqIdFree(sip1);
       SeqIdFree(sip2);
       BioseqUnlock(bsp1);
@@ -3242,9 +2160,9 @@ NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uin
       dsp_new->strands[(dsp_new->numseg-1)*2] = dsp_new->strands[(dsp_new->numseg-1)*2+1] = Seq_strand_plus;
       DenseSegFree(dsp);
       sap->segs = (Pointer)dsp_new;
-      SAIndexFree(sap->saip);
+      SAIndex2Free2(sap->saip);
       sap->saip = NULL;
-      AlnMgrIndexSingleChildSeqAlign(sap);
+      AlnMgr2IndexSingleChildSeqAlign(sap);
       SeqIdFree(sip1);
       SeqIdFree(sip2);
       BioseqUnlock(bsp1);
@@ -3311,9 +2229,9 @@ NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uin
             dsp_new->starts[1] = start2 - ovl;
          sap->segs = (Pointer)dsp_new;
          DenseSegFree(dsp);
-         SAIndexFree(sap->saip);
+         SAIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexSingleChildSeqAlign(sap);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
       } else
          SQN_AddToAln(sap, ovl, SQN_LEFT, strand);
    } else if (which_side == SQN_RIGHT)
@@ -3376,9 +2294,9 @@ NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uin
          dsp_new->starts[2*dsp->numseg+1] = -1;
          sap->segs = (Pointer)dsp_new;
          DenseSegFree(dsp);
-         SAIndexFree(sap->saip);
+         SAIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexSingleChildSeqAlign(sap);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
       } else
          SQN_AddToAln(sap, ovl, SQN_RIGHT, strand);
    }
@@ -3417,14 +2335,14 @@ static Int4 MapRowCoordsSpecial(SeqAlignPtr sap, Uint4 pos, Int4 row, Int4 which
    DenseSegPtr  dsp;
    Int4         idx;
    Int4         offset;
-   SAIndexPtr   saip;
+   SAIndex2Ptr   saip;
    Int4         start;
 
    if (sap == NULL || row < 0)
       return -1;
    if (sap->saip == NULL)
       return -1;
-   saip = (SAIndexPtr)sap->saip;
+   saip = (SAIndex2Ptr)sap->saip;
    dsp = (DenseSegPtr)sap->segs;
    start = sqn_binary_search_on_uint4_list(saip->aligncoords, pos, dsp->numseg);
    offset = pos - saip->aligncoords[start];
@@ -3474,14 +2392,14 @@ static Int4 MapBioseqToBioseqSpecial(SeqAlignPtr sap, Int4 begin, Int4 fin, Int4
 
    if (sap == NULL || sap->saip == NULL)
       return -2;
-   AlnMgrGetNthSeqRangeInSA(sap, begin, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA(sap, fin, &start2, &stop2);
+   AlnMgr2GetNthSeqRangeInSA(sap, begin, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(sap, fin, &start2, &stop2);
    /* check to see whether the position is outside the alignment */
    if (pos < start1)
       return (start2 - (start1 - pos));
    else if (pos > stop1)
       return (stop2 + (pos-stop1));
-   sapos = AlnMgrMapBioseqToSeqAlign(sap, pos, begin, NULL);
+   sapos = AlnMgr2MapBioseqToSeqAlign(sap, pos, begin);
    bspos = MapRowCoordsSpecial(sap, sapos, fin, which_end);
    if (bspos >= 0)
       return bspos;
@@ -3528,9 +2446,9 @@ static void SPI_flip_sa_list (SeqAlignPtr sap)
       }
       if (sap->saip != NULL) /* free indexes, reindex */
       {
-         SAIndexFree(sap->saip);
+         SAIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexSingleChildSeqAlign(sap);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
       }
       sap = sap->next;
    }
@@ -3538,7 +2456,7 @@ static void SPI_flip_sa_list (SeqAlignPtr sap)
 
 NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
 {
-   AMAlignIndexPtr      amaip;
+   AMAlignIndex2Ptr      amaip;
    Int4                 i;
    BLAST_OptionsBlkPtr  options;
    CharPtr              program = "blastn";
@@ -3580,13 +2498,13 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
       Message(MSG_OK,"BLAST finds no sequence similarity");
       return NULL;
    }
-   AlnMgrIndexLite(sap);
+   AlnMgr2IndexLite(sap);
    ACT_RemoveInconsistentAlnsFromSet(sap, 20, 1);
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
    ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
    ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
-   strand = AlnMgrGetNthStrand(amaip->saps[0], 2);
+   strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
 
    /* if opposite strand submitted, reverse complement, realign */
 
@@ -3594,7 +2512,7 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
      if (revcomp != NULL) {
        *revcomp = TRUE;
      }
-     AMFreeAllIndexes (sap);
+     AMAlignIndexFreeEitherIndex (sap);
      sap = SeqAlignFree (sap);
      BioseqRevComp (bsp2);
      entityID = ObjMgrGetEntityIDForPointer (bsp2);
@@ -3627,13 +2545,13 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
         Message(MSG_OK,"BLAST finds no sequence similarity in reverse complement");
         return NULL;
      }
-     AlnMgrIndexLite(sap);
+     AlnMgr2IndexLite(sap);
      ACT_RemoveInconsistentAlnsFromSet(sap, 20, 1);
-     amaip = (AMAlignIndexPtr)(sap->saip);
-     AlnMgrSortAlnSetByNthRowPos(sap, 1);
+     amaip = (AMAlignIndex2Ptr)(sap->saip);
+     AlnMgr2SortAlnSetByNthRowPos(sap, 1);
      ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
      ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
-     strand = AlnMgrGetNthStrand(amaip->saps[0], 2);
+     strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    }
 
    /* done with any reverse complementing and reblasting, now extend frayed ends */
@@ -3661,16 +2579,16 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
       SQN_ExtendAlnAlg(amaip->saps[0], start2, SQN_LEFT, Seq_strand_plus);
    for (i=0; i<amaip->numsaps-1; i++)
    {
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, NULL);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, NULL);
       if (strand != Seq_strand_minus)
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, NULL);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, NULL);
       } else
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, NULL);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, NULL);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
       }
       sap_new = ACT_FindPiece(bsp1, bsp2, start1, stop1, start2, stop2, strand, SQN_MIDDLE);
       if (sap_head)
@@ -3720,10 +2638,203 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
       sap_new = sap_new->next;
    }
    sap_new->next = sap_head;  /* put the new alignments in the original set */
-   AMAlignIndexFree(amaip);
+   AMAlignIndex2Free2(amaip);
    sap->saip = NULL;
-   AlnMgrIndexLite(sap);  /* reindex the alignments */
+   AlnMgr2IndexLite(sap);  /* reindex the alignments */
    sap_final = ACT_CleanUpAlignments(sap, bsp1->length, bsp2->length);
    return sap_final;
+}
+
+/***************************************************************************
+*
+*   AlnMgrTruncateSAP truncates a given seqalign to contain only the
+*   bioseq coordinates from start to stop on the indicated row.  Anything
+*   before those coordinates is discarded; anything remaining afterwards
+*   is made into another seqalign and put in sap->next (the original next,
+*   if any, is now at sap->next->next).  Doesn't work on parent seqaligns.
+*   The function returns TRUE if the orignal alignment extended past stop.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgr2TruncateSAP(SeqAlignPtr sap, Int4 start, Int4 stop, Int4 row)
+{
+   DenseDiagPtr  ddp;
+   DenseDiagPtr  ddp2;
+   DenseSegPtr   dsp;
+   Int4          from;
+   Int4          i;
+   Int4          mstart;
+   Int4          mstop;
+   SeqAlignPtr   sap1;
+   SeqAlignPtr   sap2;
+   Int4          tmp;
+   Int4          to;
+
+   if (sap == NULL || stop<start || row < 1)
+      return FALSE;
+   if (sap->segtype == SAS_DENSEG)
+   {
+      if (sap->saip == NULL)
+         AlnMgr2IndexSingleChildSeqAlign(sap);
+      AlnMgr2GetNthSeqRangeInSA(sap, row, &mstart, &mstop);
+      if (mstart > start || mstop < stop)
+         return FALSE;
+      if (mstart == start)
+      {
+         if (mstop == stop)
+            return FALSE;
+         else if (mstop > stop)
+         {
+            from = AlnMgr2MapBioseqToSeqAlign(sap, start, row);
+            to = AlnMgr2MapBioseqToSeqAlign(sap, stop, row);
+            if (to < from)
+            {
+               tmp = to;
+               to = from;
+               from = tmp;
+            }
+            sap1 = AlnMgr2GetSubAlign(sap, from, to, 0, FALSE);
+            AlnMgr2IndexSingleChildSeqAlign(sap1);
+            from = AlnMgr2MapBioseqToSeqAlign(sap, stop+1, row);
+            if (from < 0)
+               return FALSE;
+            to = AlnMgr2MapBioseqToSeqAlign(sap, mstop, row);
+            if (to < from)
+            {
+               tmp = to;
+               to = from;
+               from = tmp;
+            }
+            sap2 = AlnMgr2GetSubAlign(sap, from, to, 0, FALSE);
+            sap2->next = sap->next;
+            sap->next = sap2;
+            dsp = sap->segs;
+            sap->segs = (Pointer)(sap1->segs);
+            sap1->segs = NULL;
+            DenseSegFree(dsp);
+            SeqAlignFree(sap1);
+            AlnMgr2IndexSingleChildSeqAlign(sap);
+            AlnMgr2IndexSingleChildSeqAlign(sap2);
+            return TRUE;
+         }
+      } else if (mstart < start) /* throw away the first part */
+      {
+         from = AlnMgr2MapBioseqToSeqAlign(sap, start, row);
+         to = AlnMgr2MapBioseqToSeqAlign(sap, stop, row);
+         if (to < from)
+         {
+            tmp = to;
+            to = from;
+            from = tmp;
+         }
+         sap1 = AlnMgr2GetSubAlign(sap, from, to, 0, FALSE);
+         if (mstop == stop) /* done */
+         {
+            dsp = sap->segs;
+            sap->segs = (Pointer)(sap1->segs);
+            sap1->segs = NULL;
+            DenseSegFree(dsp);
+            SeqAlignFree(sap1);
+            AlnMgr2IndexSingleChildSeqAlign(sap);
+            return TRUE;
+         } else if (mstop > stop)
+         {
+            from = AlnMgr2MapBioseqToSeqAlign(sap, stop+1, row);
+            if (from < 0)
+               return FALSE;
+            to = AlnMgr2MapBioseqToSeqAlign(sap, mstop, row);
+            if (to < from)
+            {
+               tmp = to;
+               to = from;
+               from = tmp;
+            }
+            sap2 = AlnMgr2GetSubAlign(sap, from, to, 0, FALSE);
+            sap2->next = sap->next;
+            sap->next = sap2;
+            AlnMgr2IndexSingleChildSeqAlign(sap2);
+            dsp = sap->segs;
+            sap->segs = (Pointer)(sap1->segs);
+            sap1->segs = NULL;
+            DenseSegFree(dsp);
+            SeqAlignFree(sap1);
+            AlnMgr2IndexSingleChildSeqAlign(sap);
+            return TRUE;
+         }
+      }
+   } else if (sap->segtype == SAS_DENDIAG)
+   {
+      ddp = (DenseDiagPtr)(sap->segs);
+      if (ddp->dim < row)
+         return FALSE;
+      mstart = ddp->starts[row-1];
+      mstop = mstart + ddp->len - 1;
+      if (mstart > start || mstop < stop)
+         return FALSE;
+      if (mstart == start)
+      {
+         if (mstop == stop)
+            return FALSE;
+         else if (mstop > stop)
+         {
+            ddp2 = DenseDiagNew();
+            ddp2->dim = ddp->dim;
+            ddp2->starts = (Int4Ptr)MemNew((ddp->dim)*sizeof(Int4));
+            ddp2->id = SeqIdDupList(ddp->id);
+            ddp2->strands = (Uint1Ptr)MemNew((ddp->dim)*sizeof(Uint1));
+            ddp2->scores = ScoreDup(ddp->scores);
+            for (i=0; i<ddp->dim; i++)
+            {
+               ddp2->starts[i] = ddp->starts[i] + ddp->len - (mstop - stop);
+               ddp2->strands[i] = ddp->strands[i];
+            }
+            ddp2->len = mstop - stop;
+            ddp->len = ddp->len - (mstop - stop);
+            sap2 = SeqAlignNew();
+            sap2->type = SAT_PARTIAL;
+            sap2->segtype = SAS_DENSEG;
+            sap2->segs = (Pointer)ddp2;
+            sap2->next = sap->next;
+            sap->next = sap2;
+            AlnMgr2IndexSingleChildSeqAlign(sap2);
+            return TRUE;
+         }
+      } else if (mstart < start)
+      {
+         for (i=0; i<ddp->dim; i++)
+         {
+            ddp->starts[i] = ddp->starts[i] + start - mstart;
+         }
+         ddp->len = ddp->len - (start - mstart);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
+         if (mstop == stop)
+            return FALSE;
+         else if (mstop > stop)
+         {
+            ddp2 = DenseDiagNew();
+            ddp2->dim = ddp->dim;
+            ddp2->starts = (Int4Ptr)MemNew((ddp->dim)*sizeof(Int4));
+            ddp2->id = SeqIdDupList(ddp->id);
+            ddp2->strands = (Uint1Ptr)MemNew((ddp->dim)*sizeof(Uint1));
+            ddp2->scores = ScoreDup(ddp->scores);
+            for (i=0; i<ddp->dim; i++)
+            {
+               ddp2->starts[i] = ddp->starts[i] + ddp->len - (mstop - stop);
+               ddp2->strands[i] = ddp->strands[i];
+            }
+            ddp2->len = mstop - stop;
+            ddp->len = ddp->len - (mstop - stop);
+            sap2 = SeqAlignNew();
+            sap2->type = SAT_PARTIAL;
+            sap2->segtype = SAS_DENSEG;
+            sap2->segs = (Pointer)ddp2;
+            sap2->next = sap->next;
+            sap->next = sap2;
+            AlnMgr2IndexSingleChildSeqAlign(sap2);
+            return TRUE;
+         }   
+      }
+   } else
+      return FALSE;
+   return FALSE;
 }
 

@@ -13,9 +13,10 @@ property pBuildObsoleteLibraries : false
 
 -- Which targets to create.
 -- If these are changed you must recreate the project files.  There is no direct effect on building.
-property pCreateBlueTargets : true -- 'Blue' was the codename for System 7.  Here, it means pre-Carbon.
+property pCreateBlueTargets : true -- 'Blue' was codename for System 7, here it means pre-Carbon.
 property pCreateCarbonTargets : true
 property pCreateDebugTargets : true
+property pCreateProfiledTargets : false
 property pCreateOptimizedTargets : true
 
 -- Whether to compile everything.
@@ -23,11 +24,7 @@ property pShouldBuild : true
 
 property pDirsToCreate : {¬
 	{relPath:"", name:"include"}, ¬
-	{relPath:"", name:"ctools"}, ¬
 	{relPath:"", name:"lib"}}
-
-property pDebugPrefix : ""
-property pReleasePrefix : ""
 
 property pLinkExecutables : false
 
@@ -41,7 +38,7 @@ on ProjectData(projName, features, fileData)
 		set projName to characters 1 through 18 of projName as string
 	end if
 	
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		if features does not contain "C" and features does not contain "C++" then
 			--error "Project " & projName & "'s default language (a feature) must be C or C++."
@@ -70,7 +67,7 @@ on AddSimpleProject(projName, features, section, fileList)
 end AddSimpleProject
 
 on DataPlusPrefixFile(dataRec, prefix)
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		set the Prefix File of dataRec's settings to prefix
 		return dataRec
@@ -88,7 +85,10 @@ on SetProjectData()
 			{projPath:"corelib:", fileList:{¬
 				"ncbibs", "ncbienv", "ncbierr", "ncbifile", "ncbimath", "ncbimem", "ncbimisc", ¬
 				"ncbimsg", "ncbiprop", "ncbisgml", "ncbistr", "ncbitime", "ncbilang", "gifgen", ¬
-				"togif", "ncbithr", "tsprintf", "tree", "wwwutils", "matrix", "binary", "regex.c"}}, ¬
+				"togif", "ncbithr", "tsprintf", "tree", "wwwutils", "matrix", "binary", "regex"}}, ¬
+		¬
+			{projPath:"corelib:morefile:", fileList:{¬
+				"FullPath", "FSpCompat", "MoreFilesX"}}, ¬
 		¬
 			{projPath:"connect:", fileList:{¬
 				"ncbibuf", "ncbisock", "connection", "urlquery"}}, ¬
@@ -101,11 +101,11 @@ on SetProjectData()
 				"asnlext", "asnout", "asnprint", "asntypes"}}}))
 	
 	AddSimpleProject("ncbiconn", {}, "connect", ¬
-		{"ncbi_buffer", "ncbi_socket_", "ncbi_core", "ncbi_util", "ncbi_priv", "ncbi_ansi_ext", ¬
+		{"ncbi_buffer", "ncbi_socket", "ncbi_core", "ncbi_util", "ncbi_priv", "ncbi_ansi_ext", ¬
 			"ncbi_connection", "ncbi_connector", "ncbi_connutil", "ncbi_file_connector", ¬
-			"ncbi_http_connector", "ncbi_server_info", "ncbi_service", "ncbi_service_connector", ¬
-			"ncbi_service_dispd", "ncbi_service_lbsmd_stub", "ncbi_socket_connector", ¬
-			"ncbi_sendmail_"})
+			"ncbi_http_connector", "ncbi_memory_connector", "ncbi_server_info", "ncbi_service", ¬
+			"ncbi_service_connector", "ncbi_service_dispd", "ncbi_service_lbsmd_stub", ¬
+			"ncbi_socket_connector", "ncbi_sendmail"})
 	
 	AddProject(ProjectData("ncbiobj", {}, {¬
 		¬
@@ -125,8 +125,8 @@ on SetProjectData()
 				"jzcoll", "jzmisc", "lsqfetch", "maputil", "mconsist", "objmgr", "prtutil", "satutil", ¬
 				"seqmgr", "seqport", "sequtil", "simple", "sqnutil1", "sqnutil2", "sqnutil3", ¬
 				"subutil", "tofasta", "tofile", "tomedlin", "utilpars", "utilpub", "salpstat", ¬
-				"salpedit", "valid", "alignmgr", "alignmgr2", "aliparse", "aliread", "alignval", "wprint", ¬
-				"salpacc", "salprop", "salsap", "salstruc", "salutil", "udvseq", "blocks", ¬
+				"salpedit", "valid", "alignmgr", "alignmgr2", "aliparse", "aliread", "alignval", ¬
+				"wprint", "salpacc", "salprop", "salsap", "salstruc", "salutil", "udvseq", "blocks", ¬
 				"pgppop", "samutil", "ddvcolor", "viewmgr", "jsavlt", "needleman", "fdlobj", "txalign"}}, ¬
 		¬
 			{projPath:"ddv:", fileList:{¬
@@ -215,7 +215,7 @@ on SetProjectData()
 		{"netentr", "netlib", "objneten"})
 	
 	AddSimpleProject("netcli", {}, "network:nsclilib", ¬
-		{"ncbicli", "ncbiurl", "ni_disp", "ni_encrs", "ni_serv", "ni_error", "ni_lib_", ¬
+		{"ncbicli", "ncbiurl", "ni_disp", "ni_encrs", "ni_service", "ni_error", "ni_lib_", ¬
 			"ni_macdv", "ni_msg", "ni_www", "ni_debug"})
 	
 	AddSimpleProject("ncbibls3", {}, "network:blast3:client", ¬
@@ -240,27 +240,12 @@ on SetProjectData()
 	
 end SetProjectData
 
-on CopyHeaders()
-	tell application "Finder"
-		
-		set corelibFolder to folder (my ModuleRoot() & "corelib")
-		set connectFolder to folder (my ModuleRoot() & "connect")
-		set ctoolsFolder to folder (my ModuleRoot() & "ctools")
-		
-		my UpdateRenameHeader("ncbilcl.met", corelibFolder, "ncbilcl.h", "")
-		--my UpdateRenameHeader("asn_connection.h", connectFolder, "", ctoolsFolder)
-		
-	end tell
-end CopyHeaders
-
 --
 -- Global variables
 --
 
-global gIsOSX
 global gStartupDisk
 global gHomeDir
-global gDevDir
 global gMWroot
 global gMWCWfolder
 global gMacLibs
@@ -278,6 +263,19 @@ global gRsrcsDir
 global gOutputDir
 
 global gProjectData
+
+global gOpenGLdir
+global gOpenGLpresent
+
+on CopyHeaders()
+	tell application "Finder"
+		
+		set corelibFolder to folder (gDistribRoot & "corelib")
+		
+		my UpdateRenameHeader("ncbilcl.met", corelibFolder, "ncbilcl.h", "")
+		
+	end tell
+end CopyHeaders
 
 on AddProject(projData)
 	
@@ -297,7 +295,12 @@ end ResolveAlias
 on IsOSX()
 	tell application "Finder"
 		
-		set vers to the version as string as number
+		set vers to the version as text
+		
+		if second character of vers is equal to "." then
+			set vers to "0" & vers
+		end if
+		
 		return vers > 10 or vers = 10
 		
 	end tell
@@ -315,41 +318,13 @@ on HomeDir()
 	end tell
 end HomeDir
 
-on DevDir()
-	
-	return ResolveAlias(HomeDir() & "Development")
-	
-end DevDir
-
-on SandboxDir()
-	
-	-- "<Boot>:Development:Trees:NCBI:vault.ncbi:"
-	-- "<Boot>:Users:<User>:Development:Trees:NCBI:vault.ncbi:"
-	
-	set Trees to ResolveAlias(DevDir() & "Trees")
-	set NCBIgroup to ResolveAlias(Trees & "NCBI")
-	set Vault to ResolveAlias(NCBIgroup & "vault.ncbi")
-	return Vault
-	
-end SandboxDir
-
-on DistribDir()
-	
-	-- "<Boot>:Development:NCBI:"
-	-- This is NOT the "distrib" directory!  This is where toolkit distributions go.
-	return ResolveAlias(DevDir() & "NCBI")
-	
-end DistribDir
-
 on CToolkitRoot()
 	
 	try
-		set modRoot to ResolveAlias(DistribDir() & "ncbi")
+		set modRoot to ResolveAlias(gMWroot & "ncbi")
 	on error
 		try
-			set modRoot to ResolveAlias(SandboxDir() & "distrib")
-		on error
-			set modRoot to ResolveAlias(gMWroot & "ncbi")
+			set modRoot to ResolveAlias(gHomeDir & "ncbi")
 		end try
 	end try
 	
@@ -360,12 +335,10 @@ end CToolkitRoot
 on CPlusPlusToolkitRoot()
 	
 	try
-		set modRoot to ResolveAlias(DistribDir() & "c++")
+		set modRoot to ResolveAlias(gMWroot & "cxx")
 	on error
 		try
-			set modRoot to ResolveAlias(ResolveAlias(SandboxDir() & "internal") & "c++")
-		on error
-			set modRoot to ResolveAlias(gMWroot & "cxx")
+			set modRoot to ResolveAlias(gHomeDir & "cxx")
 		end try
 	end try
 	
@@ -386,7 +359,8 @@ end ModuleRoot
 on MWRootDir()
 	
 	set mwRoot to ""
-	set mwLocations to {gStartupDisk, gStartupDisk & "Applications:", gStartupDisk & "Applications (Mac OS 9):"}
+	set mwLocations to {gStartupDisk, gStartupDisk & "Applications:", gStartupDisk & "Applications (Mac OS 9):", ¬
+		gHomeDir, gHomeDir & "Applications:", gHomeDir & "Applications (Mac OS 9):"}
 	repeat with mwVersion from 6 to 7
 		set dirName to "Metrowerks CodeWarrior " & mwVersion & ".0"
 		repeat with mwLoc in mwLocations
@@ -401,13 +375,27 @@ on MWRootDir()
 	
 end MWRootDir
 
+on FindOpenGL()
+	tell application "Finder"
+		
+		set results to every folder of folder gMWroot whose name starts with "OpenGL SDK"
+		if (count results) > 0 then
+			set dir to item 1 of results as string
+		else
+			set dir to ""
+		end if
+		
+		return dir
+		
+	end tell
+end FindOpenGL
+
 on SetGlobals()
 	tell application "Finder"
 		
 		set gProjectData to {}
 		
 		set gStartupDisk to startup disk as string
-		set gIsOSX to my IsOSX()
 		set gHomeDir to my HomeDir()
 		set gMWroot to my MWRootDir()
 		set gMWCWfolder to gMWroot & "Metrowerks CodeWarrior:"
@@ -428,9 +416,11 @@ on SetGlobals()
 			set gSourceDir to gDistribRoot
 			set gLibsDir to gDistribRoot & "lib:"
 			set gOutputDir to gDistribRoot & "build:"
-			set gCToolsDir to gDistribRoot & "ctools:"
 			set gRsrcsDir to gDistribRoot & "link:macmet:"
 		end if
+		
+		set gOpenGLdir to my FindOpenGL()
+		set gOpenGLpresent to (gOpenGLdir is not "")
 		
 		if pLinkExecutables then
 			set gProjectsDir to gOutputDir
@@ -440,7 +430,6 @@ on SetGlobals()
 		
 	end tell
 end SetGlobals
-
 
 on HeaderExists(header, headerDir)
 	tell application "Finder"
@@ -494,14 +483,8 @@ on UpdateRenameHeader(canonicalName, canonicalDir, dotHName, dotHDir)
 	end tell
 end UpdateRenameHeader
 
-on UpdateHeader(headerName, headerDir)
-	
-	UpdateRenameHeader(headerName, headerDir, "", "")
-	
-end UpdateHeader
-
-on SetDebugSettings(shouldDebug)
-	tell application "CodeWarrior IDE 4.2.5"
+on SetDebugSettings(shouldDebug, shouldProfile)
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		if shouldDebug then
 			(* ===== Panel PPC Global Optimizer =====  *)
@@ -515,7 +498,6 @@ on SetDebugSettings(shouldDebug)
 			Set Preferences of panel "C/C++ Compiler" to ¬
 				{Inlining:inline_none ¬
 					, AutoInlining:false}
-			
 		else
 			(* ==== optimized/release settings ==== *)
 			(* ===== Panel PPC Global Optimizer =====  *)
@@ -531,11 +513,21 @@ on SetDebugSettings(shouldDebug)
 					, AutoInlining:true}
 		end if
 		
+		if shouldProfile then
+			(* ===== Panel PPC Processor ===== *)
+			Set Preferences of panel "PPC CodeGen" to ¬
+				{Use Profiler:true}
+		else
+			(* ===== Panel PPC Processor ===== *)
+			Set Preferences of panel "PPC CodeGen" to ¬
+				{Use Profiler:false}
+		end if
+		
 	end tell
 end SetDebugSettings
 
 on SetPreferences()
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		(* ===== Section "Target" ===== *)
 		
@@ -630,7 +622,7 @@ on SetPreferences()
 end SetPreferences
 
 on SetPaths1()
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -644,13 +636,12 @@ on SetPaths1()
 end SetPaths1
 
 on SetPaths2()
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		-- Add recursive include dir AFTER source dirs to avoid major performance hit
 		set pathsToAdd to {}
 		-- gDistribRoot & "link:macmet:", 
-		repeat with i in {gDistribRoot, ¬
-			gLibsDir, gIncludeDir}
+		repeat with i in {gDistribRoot, gLibsDir, gIncludeDir}
 			copy {name:i, recursive:false, origin:absolute} to end of pathsToAdd
 		end repeat
 		if not pUsingCPlusPlus then
@@ -667,6 +658,9 @@ on SetPaths2()
 		set dirsToAdd to {¬
 			":MacOS Support:", ¬
 			":MSL:"}
+		if gOpenGLpresent then
+			copy gOpenGLdir to end of dirsToAdd
+		end if
 		-- if gPNGpresent ...
 		
 		repeat with i in dirsToAdd
@@ -678,7 +672,7 @@ on SetPaths2()
 end SetPaths2
 
 on AddFeatures(features, flags)
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		if features contains "BNDL" then
 			Set Preferences of panel "Output Flags" to {Has Bundle:true}
@@ -697,11 +691,17 @@ on AddFeatures(features, flags)
 			
 		end if
 		
+		if features contains "OpenGL" then
+			set OpenGLLibs to gOpenGLdir & "Libraries:"
+			Set Preferences of panel "Access Paths" to {System Paths:{{name:OpenGLLibs, recursive:true, origin:absolute}}}
+			Add Files {OpenGLLibs & "OpenGLLibraryStub", OpenGLLibs & "OpenGLUtilityStub"}
+		end if
+		
 	end tell
 end AddFeatures
 
 on SetupTarget(proj, flags)
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		-- initialize variables
 		set projRsrcs to {}
@@ -732,7 +732,11 @@ on SetupTarget(proj, flags)
 		if flags contains "debug" then
 			set targetDebug to "dbg"
 		else
-			set targetDebug to ""
+			if flags contains "profile" then
+				set targetDebug to "prf"
+			else
+				set targetDebug to ""
+			end if
 		end if
 		set targetName to projName & " " & targetAPI
 		set libNameSuffix to "-" & targetAPI
@@ -773,13 +777,6 @@ on SetupTarget(proj, flags)
 		
 		-- Set the appropriate prefix file.
 		set prefixFile to Prefix File of projSettings
-		if prefixFile is "" then
-			if flags contains "debug" then
-				set prefixFile to pDebugPrefix
-			else
-				set prefixFile to pReleasePrefix
-			end if
-		end if
 		if flags contains "Carbon" then
 			if prefixFile is "" then
 				set prefixFile to "CarbonPrefix.h"
@@ -810,12 +807,16 @@ on SetupTarget(proj, flags)
 			Add Files filesToAdd
 		end repeat
 		
-		if flags contains "debug" then
+		if flags contains "debug" or flags contains "profile" then
 			set the debug of every target file of target (count targets of project document 1) ¬
 				of project document 1 to true
-			my SetDebugSettings(true)
+			if flags contains "profile" then
+				my SetDebugSettings(true, true)
+			else
+				my SetDebugSettings(true, false)
+			end if
 		else
-			my SetDebugSettings(false)
+			my SetDebugSettings(false, false)
 		end if
 		
 		-- Add appropriate system libraries.
@@ -867,7 +868,7 @@ on CreateFolders()
 end CreateFolders
 
 on CreateProject(proj)
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		
 		-- This statement doesn't work, because AppleScript is broken.
 		if proj is {} then return
@@ -892,12 +893,20 @@ on CreateProject(proj)
 				my SetupTarget(proj, "Blue debug")
 			end if
 			
+			if pCreateBlueTargets and pCreateProfiledTargets then
+				my SetupTarget(proj, "Blue profile")
+			end if
+			
 			if pCreateBlueTargets and pCreateOptimizedTargets then
 				my SetupTarget(proj, "Blue")
 			end if
 			
 			if pCreateCarbonTargets and pCreateDebugTargets then
 				my SetupTarget(proj, "Carbon debug")
+			end if
+			
+			if pCreateCarbonTargets and pCreateProfiledTargets then
+				my SetupTarget(proj, "Carbon profile")
 			end if
 			
 			if pCreateCarbonTargets and pCreateOptimizedTargets then
@@ -922,7 +931,7 @@ on CreateAllProjects()
 end CreateAllProjects
 
 on BuildProject(projName)
-	tell application "CodeWarrior IDE 4.2.5"
+	tell application "CodeWarrior IDE 4.2.6"
 		open (gProjectsDir & projName & pProjectFileExtension)
 		repeat with i from 2 to (count targets of project document 1)
 			set the current target of project document 1 to target i of project document 1
@@ -963,11 +972,7 @@ end BuildAllProjects
 
 on SignalCompletion()
 	
-	try
-		say "Make complete."
-	on error
-		beep
-	end try
+	beep
 	
 end SignalCompletion
 
@@ -980,7 +985,7 @@ with timeout of 60000 seconds
 	CreateFolders()
 	CopyHeaders()
 	
-	tell application "CodeWarrior IDE 4.2.5" to activate
+	tell application "CodeWarrior IDE 4.2.6" to activate
 	
 	CreateAllProjects()
 	

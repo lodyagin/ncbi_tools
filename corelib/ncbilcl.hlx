@@ -25,52 +25,55 @@
 *
 * File Name:  ncbilcl.h
 *
-* $Revision: 6.2 $
-*      (this file has not been tested for accuracy)
+* Author:  Contributed by Howard Feldman <feldman@mshri.on.ca>
+*
+* Version Creation Date:   4/5/02
+*
+* $Revision: 6.1 $
 *
 * File Description:
 *		system dependent header
-*		HP-UX version
+*       version for HPPA Linux
 *
-* $Log: ncbilcl.hp,v $
-* Revision 6.2  2001/01/03 16:08:02  beloslyu
-* allow the work with largefiles
+* Modifications:
+* --------------------------------------------------------------------------
+* $Log: ncbilcl.hlx,v $
+* Revision 6.1  2002/04/15 20:04:41  ivanov
+* Initial revision
 *
-* Revision 6.1  2000/01/13 23:37:12  beloslyu
-* changes because of port to HP-UX 11.0
 * ==========================================================================
 */
 #ifndef _NCBILCL_
 #define _NCBILCL_
 
-/* PLATFORM DEFINITION FOR Hewlett-Packard UNDER HP-UX */
+/* PLATFORM DEFINITION FOR Linux */
 
 #define COMP_SYSV
 #define OS_UNIX
-#define OS_UNIX_SYSV
+#define OS_UNIX_LINUX
+#define OS_UNIX_HPPALINUX
 #define PROC_HPPA
 #define WIN_DUMB
+
 
 /*----------------------------------------------------------------------*/
 /*      Desired or available feature list                               */
 /*----------------------------------------------------------------------*/
-#define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
-#define SYSV_STREAMS_AVAIL  /* System V STREAMS module available */
+#define SYSV_IPC_AVAIL  /* System V Interprocess Communication available */
+/*#define _POSIX_C_SOURCE 199309L*/
 
-/*----------------------------------------------------------------------*/
-/*      Defines needed to trigger the correct inclusions in system files*/
-/*      Reportedly needed in HP/UX 9.05                                 */
-/*----------------------------------------------------------------------*/
-#define _INCLUDE_POSIX_SOURCE
-#define _INCLUDE_XOPEN_SOURCE
+#ifndef _REENTRANT
+#define _REENTRANT
+#endif
 
-/* allow the fork with largefiles */
-#define _FILE_OFFSET_BITS 64
+/* good for the EGCS C/C++ compiler on Linux(e.g. putenv(), tempnam() proto) */
+/*#define _SVID_SOURCE 1 */
+
+
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */
 /*----------------------------------------------------------------------*/
 #include <sys/types.h>
-#include <sys/resource.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <stddef.h>
@@ -83,18 +86,23 @@
 #include <math.h>
 #include <errno.h>
 #include <float.h>
+#include <unistd.h>
 
+/* Check if there are POSIX threads available */
+#ifdef _POSIX_THREADS
 #define POSIX_THREADS_AVAIL
-#define _POSIX_C_SOURCE 199506L
-#define _XOPEN_SOURCE_EXTENDED
+#endif
+
 
 /*----------------------------------------------------------------------*/
 /*      Missing ANSI-isms                                               */
 /*----------------------------------------------------------------------*/
+#define noalias	
+
 #ifndef SEEK_SET
-#define SEEK_SET	0
-#define SEEK_CUR	1
-#define SEEK_END	2
+#define SEEK_SET	0	/* Set file pointer to offset */
+#define SEEK_CUR	1	/* Set file pointer to current plus offset */
+#define SEEK_END	2	/* Set file pointer to EOF plus offset */
 #endif
 #ifndef FILENAME_MAX
 #define FILENAME_MAX 1024
@@ -107,21 +115,16 @@
 /*----------------------------------------------------------------------*/
 /*      Misc Macros                                                     */
 /*----------------------------------------------------------------------*/
-#if defined(__STDC__)
-#define PROTO(x)	x	/* Function prototypes copied */
-#define VPROTO(x)	x	/* Prototype for variable argument list */
-#else
-#define PROTO(x)	()	/* Function prototypes faked in */
-#define VPROTO(x)	()	/* Prototype for variable argument list */
-#endif
-#define DIRDELIMCHR	'/'
-#define DIRDELIMSTR	"/"
-#define CWDSTR	"."
+#define PROTO(x) x	/* Prototypes are acceptable */
+#define VPROTO(x) x   /* Prototype for variable argument list */
+#define DIRDELIMCHR     '/'
+#define DIRDELIMSTR     "/"
+#define CWDSTR          "."
 
-#define KBYTE	(1024)
-#define MBYTE	(1048576)
+#define KBYTE           (1024)
+#define MBYTE           (1048576)
 
-#define IS_BIG_ENDIAN
+#define IS_LITTLE_ENDIAN
 #define TEMPNAM_AVAIL
 
 /*----------------------------------------------------------------------*/
@@ -144,12 +147,12 @@
 #define EXP2(x) exp((x)*LN2)
 #define LOG2(x) (log(x)*(1./LN2))
 #define EXP10(x) exp((x)*LN10)
-#define LOG10(x) (log(x)*(1./LN10))
+#define LOG10(x) log10(x)
 
 /*----------------------------------------------------------------------*/
 /*      Macros Defining Limits                                          */
 /*----------------------------------------------------------------------*/
 #define MAXALLOC	0x40000000 /* Largest permissible memory request */
 
-#endif /* _NCBILCL_ */
+#endif
 

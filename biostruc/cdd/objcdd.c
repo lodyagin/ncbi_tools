@@ -35,7 +35,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001  2:17 PM
+*    Generated using ASNCODE Revision: 6.13 at Mar 7, 2002  1:32 PM
 *
 **************************************************/
 

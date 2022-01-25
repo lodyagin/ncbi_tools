@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.92 $
+* $Revision: 6.100 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,30 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.100  2002/04/26 13:58:25  kans
+* phase 3 should not say complete sequence
+*
+* Revision 6.99  2002/04/25 20:34:08  kans
+* segments or pieces = CountGapsInDeltaSeq numgaps + 1, not numsegs - numgaps
+*
+* Revision 6.98  2002/04/24 18:47:21  kans
+* if >? construct, set is_gap variable, do not call FastaReadSequenceInternalEx, which overrides bsp->length
+*
+* Revision 6.97  2002/04/01 15:34:47  kans
+* changes for WGS master, individual deflines
+*
+* Revision 6.96  2002/03/11 21:21:35  dondosha
+* Change in MakeTrustedID: make use of the prefix argument
+*
+* Revision 6.95  2002/02/26 21:35:02  kans
+* UseOrgMods calls StrainNotAtEndOfTaxname
+*
+* Revision 6.94  2002/02/21 17:06:47  kans
+* CreateDefLineEx handles MI_TECH_wgs
+*
+* Revision 6.93  2002/01/16 17:02:04  camacho
+* Changed buflen and seqlen in MyFsa struct. to use Uint4, as well as some function prototypes
+*
 * Revision 6.92  2001/12/05 18:18:32  kans
 * for protein defline organism, check stop list before looking for overlapping source feature of parent CDS
 *
@@ -591,7 +615,7 @@ static Uint1 aa_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
         60   /* 18 = tpd */
     };
 
-#define FASTA_BUFFER_LEN 25000
+#define FASTA_BUFFER_LEN 65536
 #define PATENT_ORDER 110         /* order for any patent */
 
 /*****************************************************************************
@@ -864,7 +888,7 @@ NLM_EXTERN Boolean FastaDumpFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
 
 			if (buflen >= FASTA_BUFFER_LEN-1)
 			{
-				Int4 index=buflen;
+				Uint4 index=buflen;
 				while (index > 0 && buf[index] != ' ')
 				{
 					if (buf[index] == '\001')
@@ -985,7 +1009,7 @@ NLM_EXTERN Boolean SeqEntrysToFastaX (SeqEntryPtr sep, MyFsaPtr mfp, Boolean is_
 *   SeqEntrysToDefline(sep, mfa, is_na, group_segs)
 *
 *****************************************************************************/
-#define DEFLINE_MAX_LEN 2048
+#define DEFLINE_MAX_LEN FASTA_BUFFER_LEN
 
 NLM_EXTERN Boolean SeqEntrysToDefline(SeqEntryPtr sep, 
                            FILE *fp, Boolean is_na, Uint1 group_segs)
@@ -1156,7 +1180,7 @@ NLM_EXTERN Boolean BioseqToFastaDump (BioseqPtr bsp, FILE *fp, Boolean is_na)
 *   Boolean BioseqToFastaX(bsp, mfp, is_na)
 *
 *****************************************************************************/
-static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean printid_general);
+static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general);
 
 NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 
@@ -1886,7 +1910,7 @@ static SeqIdPtr MakeTrustedID (CharPtr prefix, Int2Ptr ctrptr)
 		start = 1;
 	}
 
-	sprintf (buf, "%d", (int) start);
+	sprintf (buf, "%d_%.32s", (int) start, prefix);
 
 	newid = ValNodeNew (NULL);
 	oid = ObjectIdNew ();
@@ -1926,6 +1950,7 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
     long           len = 0;
     FILE           *fd;    
     const Char     PNTR firstchar;
+    Boolean        is_gap = FALSE;
   
 
     if (special_symbol != NULL) {
@@ -2115,6 +2140,7 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
             } else {
                 bsp->length = -1;
             }
+            is_gap = TRUE;
         }
 
         MemFree(buffer);
@@ -2134,14 +2160,15 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
     SeqMgrAddToBioseqIndex (bsp);
     
     /* OK, now processing sequence */
-    
-    if(!FastaReadSequenceInternalEx(input, type, next_char, is_na,
-                                    &bsp->length, &bsp->seq_data,
-                                    errormsg, special_symbol, 
-                                    mask_ptr, bsp->id)) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Failure to read sequence. "
-                  "FastaToSeqEntry() failed.\n");
-        return NULL;
+    if (! is_gap) {
+        if(!FastaReadSequenceInternalEx(input, type, next_char, is_na,
+                                        &bsp->length, &bsp->seq_data,
+                                        errormsg, special_symbol, 
+                                        mask_ptr, bsp->id)) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Failure to read sequence. "
+                      "FastaToSeqEntry() failed.\n");
+            return NULL;
+        }
     }
     
     BioseqPack(bsp);     /* Trying to pack Bioseq more */
@@ -2191,7 +2218,7 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
 *      buf should be at least 40 bytes
 *
 *****************************************************************************/
-NLM_EXTERN Boolean FastaId(BioseqPtr bsp, CharPtr buf, Int2 buflen)
+NLM_EXTERN Boolean FastaId(BioseqPtr bsp, CharPtr buf, Uint4 buflen)
 {
 	if ((bsp == NULL) || (buf == NULL)) return FALSE;
 
@@ -2199,7 +2226,7 @@ NLM_EXTERN Boolean FastaId(BioseqPtr bsp, CharPtr buf, Int2 buflen)
 	return TRUE;
 }
 
-static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean printid_general)
+static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general)
 {
 	if ((bsp == NULL) || (buf == NULL)) return FALSE;
 
@@ -2220,7 +2247,7 @@ static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean printid
 *       a few deflines are longer than 255
 *
 *****************************************************************************/
-NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Int2 buflen,
+NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Uint4 buflen,
                                           CharPtr accession, CharPtr organism, Uint1 tech)
 {
 	BioseqContextPtr bcp;
@@ -2228,7 +2255,7 @@ NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Int2 buflen,
 	CharPtr tmp;
 	PdbBlockPtr pbp;
 	PatentSeqIdPtr psip;
-	Int2 diff, phase;
+	Uint4 diff, phase;
 	Int4 num_segs, num_gaps;
 	Char tbuf[80];
 	static CharPtr htgs[2] = {
@@ -2316,8 +2343,11 @@ NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Int2 buflen,
 		{
 			if (CountGapsInDeltaSeq(bsp, &num_segs, &num_gaps, NULL, NULL, NULL, 0))
 			{
-				sprintf(tbuf, ", %ld %s pieces", (long)(num_segs - num_gaps),
-					htgs[phase - 1]);
+				if (num_gaps > 0) {
+					sprintf(tbuf, ", %ld %s pieces", (long)(num_gaps + 1), htgs[phase - 1]);
+				} else {
+					sprintf(tbuf, ", %ld %s piece", (long)(num_gaps + 1), htgs[phase - 1]);
+				}
 				diff = LabelCopy(buf, tbuf, buflen);
 				buflen -= diff;
 				buf += diff;
@@ -2859,7 +2889,26 @@ static CharPtr SimpleSegSeqTitle (BioseqPtr bsp)
   return title;
 }
 
-static CharPtr UseOrgMods(BioseqPtr bsp)
+static Boolean StrainNotAtEndOfTaxname (CharPtr name, CharPtr strain)
+
+{
+  CharPtr  ptr;
+
+  if (StringHasNoText (name) || StringHasNoText (strain)) return TRUE;
+  ptr = StringChr (name, ' ');
+  if (ptr == NULL) return TRUE;
+  ptr++;
+  ptr = StringChr (ptr, ' ');
+  if (ptr == NULL) return TRUE;
+  ptr++;
+  ptr = StringISearch (ptr, strain);
+  if (ptr == NULL) return TRUE;
+  ptr += StringLen (strain);
+  if (! StringHasNoText (ptr)) return TRUE;
+  return FALSE;
+}
+
+static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 {
 	ItemInfoPtr 		iip = NULL;
 	ValNodePtr 			vnp;
@@ -2912,7 +2961,7 @@ static CharPtr UseOrgMods(BioseqPtr bsp)
 		if (onp != NULL) {
 			mod = onp->mod;
 			if (mod && mod->subtype == 2) { /* strain */
-				if (mod->subname != NULL) {
+				if (mod->subname != NULL && StrainNotAtEndOfTaxname (name, mod->subname)) {
 					str = (CharPtr) MemNew(StringLen(mod->subname) + 9);
 					deflen += StringLen(mod->subname) + 9;
 					sprintf(str, " strain %s", mod->subname);		
@@ -2920,6 +2969,7 @@ static CharPtr UseOrgMods(BioseqPtr bsp)
 			}
 		}
 	}
+	deflen += StringLen (suffix) + 2;
 	def = (CharPtr) MemNew(deflen+1);
 	if (name) {
 		def = StringCat(def, name);
@@ -2940,6 +2990,10 @@ static CharPtr UseOrgMods(BioseqPtr bsp)
 	if (str) {
 		def = StringCat(def, str);
 		MemFree(str);
+	}
+	if (suffix) {
+		def = StringCat(def, " ");
+		def = StringCat(def, suffix);
 	}
 	return def;
 }
@@ -3198,14 +3252,14 @@ static Boolean NotSpecialTaxName (CharPtr taxname)
 *		ItemInfoPtr iip is used in flat file generator to keep entityId, itemId
 *		and itemtype
 *****************************************************************************/
-NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism, Boolean ignoreTitle)
+NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Uint4 buflen, Uint1 tech, CharPtr accession, CharPtr organism, Boolean ignoreTitle)
 {
 	ValNodePtr vnp = NULL;
 	CharPtr tmp = NULL, title = NULL;
 	PdbBlockPtr pbp;
 	PatentSeqIdPtr psip;
 	PDBSeqIdPtr	pdbip;	
-	Int2 diff, phase, i;
+	Uint4 diff, phase, i;
 	Boolean doit;
 	Int4 num_segs, num_gaps;
 	static Char tbuf[80];
@@ -3218,8 +3272,12 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 	Boolean htg_tech = FALSE, htgs_draft = FALSE, is_nc = FALSE, is_tpa = FALSE;
 	MolInfoPtr mip;
 	GBBlockPtr gbp = NULL;
+	Boolean wgsmaster = FALSE;
+	CharPtr suffix = NULL;
 	SeqIdPtr sip;
 	TextSeqIdPtr tsip;
+	DbtagPtr general = NULL;
+	ObjectIdPtr oip;
 	ItemInfo ii;
 	BioSourcePtr biop;
 	OrgRefPtr orp;
@@ -3244,6 +3302,21 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 			case SEQID_TPE :
 			case SEQID_TPD :
 				is_tpa = TRUE;
+				break;
+			case SEQID_GENERAL :
+				general = (DbtagPtr) sip->data.ptrvalue;
+				break;
+			case SEQID_GENBANK :
+			case SEQID_EMBL :
+			case SEQID_DDBJ :
+				tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+				if (tsip != NULL && tsip->accession != NULL) {
+					if (StringLen (tsip->accession) == 12) {
+						if (StringCmp (tsip->accession + 6, "000000") == 0) {
+							wgsmaster = TRUE;
+						}
+					}
+				}
 				break;
 			default :
 				break;
@@ -3278,13 +3351,28 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 	if (tech == MI_TECH_htgs_0 || tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
 		title = MemFree(title);  /* manufacture all HTG titles */
 		if (title == NULL || *title == '\0') {
-			title = UseOrgMods(bsp);
+			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
 		}
 
 	} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey) {
 		if (title == NULL || *title == '\0') {
-			title = UseOrgMods(bsp);
+			title = UseOrgMods(bsp, NULL);
+			organism = NULL;
+		}
+	} else if (tech == MI_TECH_wgs) {
+		if (title == NULL || *title == '\0') {
+			if (! wgsmaster) {
+				if (general != NULL) {
+					oip = general->tag;
+					if (oip != NULL) {
+						if (! StringHasNoText (oip->str)) {
+							suffix = oip->str;
+						}
+					}
+				}
+			}
+			title = UseOrgMods(bsp, suffix);
 			organism = NULL;
 		}
 	} else if (is_nc && title == NULL) {
@@ -3407,7 +3495,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					title = SimpleSegSeqTitle (bsp);
 				}
 				if (title == NULL) {
-					title = UseOrgMods(bsp);
+					title = UseOrgMods(bsp, NULL);
 				}
 				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
 					diff = LabelCopy (buf, "TPA: ", buflen);
@@ -3429,9 +3517,9 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		if (tech == MI_TECH_htgs_0)
 			phase = 0;
 		else
-			phase = (Int2)(tech - MI_TECH_htgs_1 + 1);
+			phase = (Uint4)(tech - MI_TECH_htgs_1 + 1);
 		if (title == NULL|| *title == '\0') {
-			title = UseOrgMods(bsp);
+			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
 			if (title != NULL) {
 				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
@@ -3446,6 +3534,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		}
 		if (phase == 3)
 		{
+			/*
 			if (title) {
 				if (title && StringStr(title, "complete sequence") == NULL) {
 					diff = LabelCopy(buf, ", complete sequence", buflen);
@@ -3453,6 +3542,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					buf += diff;
 				}
 			}
+			*/
 		} else {
 			doit = FALSE;
 			if (phase == 0) {
@@ -3497,8 +3587,11 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 				if (CountGapsInDeltaSeq(bsp, 
 						&num_segs, &num_gaps, NULL, NULL, NULL, 0))
 				{
-					sprintf(tbuf, ", %ld %s pieces", 
-							(long)(num_segs - num_gaps), htgs[phase - 1]);
+					if (num_gaps > 0) {
+						sprintf(tbuf, ", %ld %s pieces", (long)(num_gaps + 1), htgs[phase - 1]);
+					} else {
+						sprintf(tbuf, ", %ld %s piece", (long)(num_gaps + 1), htgs[phase - 1]);
+					}
 					diff = LabelCopy(buf, tbuf, buflen);
 					buflen -= diff;
 					buf += diff;
@@ -3512,9 +3605,9 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 			}
 		}
 
-	} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey) {
+	} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey || tech == MI_TECH_wgs) {
 		if (title == NULL|| *title == '\0') {
-			title = UseOrgMods(bsp);
+			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
 			if (title != NULL) {
 				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
@@ -3551,6 +3644,20 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					buf += diff;
 				}
 			}
+		} else if (tech == MI_TECH_wgs) {
+			if (title) {
+				if (wgsmaster) {
+					if (title && StringStr (title, "whole genome shotgun sequencing project") == NULL) {
+						diff = LabelCopy(buf, " whole genome shotgun sequencing project", buflen);
+						buflen -= diff;
+						buf += diff;
+					}
+				} else if (title && StringStr (title, "whole genome shotgun sequence") == NULL) {
+					diff = LabelCopy(buf, ", whole genome shotgun sequence", buflen);
+					buflen -= diff;
+					buf += diff;
+				}
+			}
 		}
 	}
 
@@ -3567,7 +3674,7 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 	return TRUE;
 }
 
-NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism)
+NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Uint4 buflen, Uint1 tech, CharPtr accession, CharPtr organism)
 
 {
   return CreateDefLineEx (iip, bsp, buf, buflen, tech, accession, organism, FALSE);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.41 $
+* $Revision: 6.44 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.44  2002/02/01 18:59:33  kans
+* ConvertFilename calls GetFullPath instead of FSMakePath
+*
+* Revision 6.43  2002/02/01 16:18:34  kans
+* if Carbon, call FSMakePath for input/output file name paths
+*
+* Revision 6.42  2002/01/31 19:01:44  kans
+* MyNavEventProc was deferencing NULL, crashed on Mac OS X (UNIX based), but not used anyway
+*
 * Revision 6.41  2001/11/01 14:25:53  kans
 * use times function for UNIX ComputerTime
 *
@@ -359,6 +368,7 @@ either.
 // Use non-session APIs of the Carbon Printing Manager, for easy porting
 #  define PM_USE_SESSION_APIS 0
 #  include <PMApplication.h>
+#  include <FullPath.h>
 # endif
 #endif
 
@@ -4555,6 +4565,36 @@ static void Nlm_FileMapCallback (Widget fs, XtPointer client_data, XtPointer cal
 #endif
 
 #ifdef WIN_MAC
+#if TARGET_API_MAC_CARBON
+
+/* new code calling MoreFiles */
+static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
+
+
+{
+  OSErr        err;
+  short        fullPathLen;
+  Handle       fullPath = NULL;
+  Nlm_CharPtr  str;
+
+  if (fss == NULL || filename == NULL) return;
+  *filename = '\0';
+  /*
+  FSMakePath (fss->vRefNum, fss->parID, (ConstStr255Param) fss->name, (UInt8 *) filename, 255);
+  */
+  err = GetFullPath (fss->vRefNum, fss->parID, (ConstStr255Param) fss->name, &fullPathLen, &fullPath);
+  if (fullPath == NULL || fullPathLen < 1) return;
+  str = Nlm_HandLock (fullPath);
+  if (str != NULL) {
+    str [fullPathLen] = '\0';
+    Nlm_StringCpy (filename, str);
+  }
+  Nlm_HandUnlock (fullPath);
+  Nlm_HandFree (fullPath);
+}
+
+#else
+
 /* AppleEvent handlers modified from Roger Sayle's RasMol code */
 static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
 
@@ -4589,6 +4629,8 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
     *dst++ = fss->name [i];
   *dst = '\0';
 }
+
+#endif
 #endif
 
 #ifdef OS_MAC
@@ -4598,18 +4640,6 @@ static pascal void MyNavEventProc (NavEventCallbackMessage callBackSelector,
                                    NavCallBackUserData callBackUD)
 
 {
-  WindowPtr window = (WindowPtr) callBackParms->eventData.eventDataParms.event->message;
-  switch (callBackSelector) {
-    case kNavCBEvent:
-      switch (callBackParms->eventData.eventDataParms.event->what) {
-        case updateEvt:
-          /*
-          MyHandleUpdateEvent (window, (EventRecord*) callBackParms->eventData.eventDataParms.event);
-          */
-          break;
-      }
-      break;
-  }
 }
 
 static pascal Boolean MyNavTextFilterProc (AEDesc* theItem, void* info,

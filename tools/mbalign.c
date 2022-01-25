@@ -1,4 +1,4 @@
-/* $Id: mbalign.c,v 6.35 2001/12/28 20:38:41 dondosha Exp $
+/* $Id: mbalign.c,v 6.36 2002/03/20 19:56:34 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.36  2002/03/20 19:56:34  dondosha
+* Check entire list of readdb structures for maximal length when allocating memory for greedy algorithm
+*
 * Revision 6.35  2001/12/28 20:38:41  dondosha
 * Moved Mega BLAST related parameters into a separate structure
 *
@@ -505,9 +508,11 @@ BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
    else
       gap_open += gap_extend;
 
-   if (search->rdfp)
-      max_len = readdb_get_maxlen(search->rdfp);
-   else
+   if (search->rdfp) {
+      ReadDBFILEPtr rdfp;
+      for (rdfp = search->rdfp, max_len = 0; rdfp; rdfp = rdfp->next)
+         max_len = MAX(max_len, readdb_get_maxlen(rdfp));
+   } else
       max_len = search->subject->length;
 
    max_len = MIN(max_len, MAX_DBSEQ_LEN);

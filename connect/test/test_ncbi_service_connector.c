@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_service_connector.c,v 6.15 2001/09/24 20:36:22 lavr Exp $
+/*  $Id: test_ncbi_service_connector.c,v 6.19 2002/03/22 19:47:41 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,18 @@
  *
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_service_connector.c,v $
+ * Revision 6.19  2002/03/22 19:47:41  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.18  2002/03/21 22:02:16  lavr
+ * Change default server from "ray" into "www.ncbi.nlm.nih.gov"
+ *
+ * Revision 6.17  2002/02/05 21:45:55  lavr
+ * Included header files rearranged
+ *
+ * Revision 6.16  2002/01/16 21:23:15  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.15  2001/09/24 20:36:22  lavr
  * Adjusted parameters in SERVICE_CreateConnectorEx()
  *
@@ -78,23 +90,19 @@
  * ==========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
-
 #include "../ncbi_priv.h"
-#include <connect/ncbi_util.h>
 #include <connect/ncbi_service_connector.h>
-#include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+/* This header must go last */
+#include "test_assert.h"
+
 
 int main(int argc, const char* argv[])
 {
     static char obuf[128] = "UUUUUZZZZZZUUUUUUZUZUZZUZUZUZUZUZ\n";
     const char* service = argc > 1 ? argv[1] : "bounce";
-    const char* host = argc > 2 ? argv[2] : "ray";
+    const char* host = argc > 2 ? argv[2] : "www.ncbi.nlm.nih.gov";
     CONNECTOR connector;
     SConnNetInfo *info;
     STimeout  timeout;

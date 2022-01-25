@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.18  2002/02/07 14:41:19  ivanov
+* Added MemSearch()
+*
 * Revision 6.17  2000/03/08 17:55:49  vakatov
 * Use Int8 for the file size.
 * Also, get rid of the WIN16 code, do other cleanup.
@@ -268,7 +271,7 @@ static void* s_MemAllocator(void *ptr, size_t size,
     }
     if ( !size )
       return Nlm_MemFree(ptr);
-      
+
     x_ptr = Nlm_Realloc(ptr, size);
     break;
   }
@@ -458,6 +461,33 @@ NLM_EXTERN void * LIBCALL  Nlm_MemMove (void * dst, const void *src, size_t byte
 NLM_EXTERN void * LIBCALL  Nlm_MemFill (void *buf, int value, size_t bytes)
 {
     return  buf ? Nlm_MemSet (buf, value, bytes) : NULL;
+}
+
+
+/*****************************************************************************
+*
+*   void Nlm_MemSearch(Pointer where, where_size, Pointer what, what_size)
+*   	search a position one block of data into another
+*
+*****************************************************************************/
+
+NLM_EXTERN size_t LIBCALL Nlm_MemSearch(const void* where, size_t where_size,
+                                        const void* what, size_t what_size)
+{
+	size_t i, rbound, pos;
+	
+	rbound = where_size - what_size;
+	pos = -1;
+    i = 0;
+	if (where_size  &&  what_size  &&  where_size >= what_size) {
+		while ((i <= rbound)  &&  (pos == -1)) {
+			if (memcmp((char*)where + i, what, what_size)==0)
+                pos = i;
+            else
+                i++;
+		}
+	}
+	return pos;
 }
 
 
@@ -734,12 +764,12 @@ void mac_Free (void *ptr)
 /*****************************************************************************
 *
 *   Windows DLL-specific functions (shared memory)
-*   
+*
 *   dll_Malloc
 *   dll_Calloc	(not yet)
 *   dll_Realloc	(not yet)
-*   dll_Free   
-*   
+*   dll_Free
+*
 *****************************************************************************/
 
 
@@ -770,7 +800,7 @@ void   dll_Free (void *pMem)
 
 
 /*********************************************************************
-*	Function to test whether memory-mapping is available. 
+*	Function to test whether memory-mapping is available.
 *
 *	returns TRUE if it is supported by NCBI routines.
 *********************************************************************/
@@ -808,7 +838,7 @@ NLM_EXTERN Nlm_MemMapPtr Nlm_MemMapInit(const Nlm_Char PNTR name)
           *str = '/';  /* name of a file-mapping object cannot contain '\' */
 
       if ( !(mem_mapp->hMap =
-             OpenFileMapping(FILE_MAP_READ, FALSE, x_name)) ) 
+             OpenFileMapping(FILE_MAP_READ, FALSE, x_name)) )
         { /* If failed to attach to an existing file-mapping object then
            * create a new one(based on the specified file) */
           HANDLE hFile= CreateFile(name, GENERIC_READ, FILE_SHARE_READ, NULL,

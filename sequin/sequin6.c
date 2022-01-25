@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.58 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *
@@ -45,10 +45,10 @@
 #include "sequin.h"
 #include <ncbilang.h>
 #include <gather.h>
-#include <asn2ff.h>
-#include <ffprint.h>
+#include <asn2gnbp.h>
 #include <bspview.h>
 #include <import.h>
+#include <objsub.h>
 
 static ENUM_ALIST(target_field_alist)
   {" ",                    0},
@@ -59,6 +59,7 @@ static ENUM_ALIST(target_field_alist)
   {"BioSource",            5},
   {"OrgMod",               6},
   {"SubSource",            7},
+  {"Import Feature",       8},
 END_ENUM_ALIST
 
 static ENUM_ALIST(ext_target_field_alist)
@@ -182,6 +183,12 @@ static ENUM_ALIST(subsource_note_subtype_alist)
   {"Environmental-sample",  27},
   {"Isolation-source",      28},
   {"Note",                 255},
+END_ENUM_ALIST
+
+static ENUM_ALIST(impfeat_field_alist)
+  {" ",        0},
+  {"GBQual",   1},
+  {"Comment",  2},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  orgmod_subtype_alist [];
@@ -617,44 +624,31 @@ static void FoundStringForConversion (Uint2 entityID, SeqEntryPtr sep, ConvertFo
 static void ConvertFromFlatFile (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, Uint1 format)
 
 {
-  Asn2ffJobPtr     ajp;
+  Asn2gbJobPtr     ajp;
+  BioseqPtr        bsp = NULL;
+  BioseqSetPtr     bssp = NULL;
   Boolean          goOn;
   Int4             index;
   ErrSev           level;
   CharPtr          lft = NULL;
   Boolean          okay;
-  FFPrintArrayPtr  pap = NULL;
-  Int4             pap_size;
   CharPtr          rgt = NULL;
   CharPtr          string;
   CharPtr          tmp;
 
-  ajp = (Asn2ffJobPtr) MemNew (sizeof (Asn2ffJob));
-  if (ajp == NULL) return;
   level = ErrSetMessageLevel (SEV_MAX);
 
-  ajp->sep = sep;
-  ajp->mode = SEQUIN_MODE;
-  ajp->format = format;
-  ajp->gb_style = TRUE;
-  ajp->show_seq = TRUE;
-  ajp->show_gi = TRUE;
-  ajp->error_msgs = FALSE;
-  ajp->non_strict = TRUE;
-  ajp->Spop = spop;
-  ajp->show_gene = TRUE;
-  if (IsAGenomeRecord (sep) || IsSegmentedBioseqWithoutParts (sep)) {
-    ajp->only_one = TRUE;
-    ajp->genome_view = TRUE;
-  }
-  ajp->bankit = TRUE;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  } else return;
 
-  pap_size = asn2ff_setup (ajp, &pap);
-  if (pap_size > 0) {
-    asn2ff_set_output (NULL, "\n");
+  ajp = asn2gnbk_setup (bsp, bssp, NULL, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0, NULL);
+  if (ajp != NULL) {
     goOn = TRUE;
-    for (index = 0; index < pap_size && goOn; index++) {
-      string = FFPrint (pap, index, pap_size);
+    for (index = 0; index < ajp->numParagraphs && goOn; index++) {
+      string = asn2gnbk_format (ajp, (Int4) index);
       if (string != NULL && *string != '\0') {
         CompressSpaces (string);
         okay = TRUE;
@@ -695,11 +689,9 @@ static void ConvertFromFlatFile (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr
       }
       MemFree (string);
     }
-    MemFree (pap);
+    asn2gnbk_cleanup (ajp);
   }
-  asn2ff_cleanup (ajp);
 
-  MemFree (ajp);
   ErrSetMessageLevel (level);
 }
 
@@ -783,12 +775,16 @@ static void SearchAndExciseText (CharPtr PNTR strptr, ConvertFormPtr cfp)
   }
 }
 
-static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+static void RemoveAFeatureText (SeqEntryPtr sep,
+				Pointer     mydata,
+				Int4        index,
+				Int2        indent)
 
 {
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
   ConvertFormPtr  cfp;
+  GBQualPtr       gbqp;
   GeneRefPtr      grp;
   ProtRefPtr      prp;
   RnaRefPtr       rrp;
@@ -901,7 +897,24 @@ static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
                 break;
             }
           }
-        }
+        } else if (sfp->data.choice == SEQFEAT_IMP && cfp->type == 8) {
+          switch (cfp->subtype) {
+            case 1 :
+	      gbqp = sfp->qual;
+	      while (NULL != gbqp)
+		{
+		  if (NULL != gbqp->val)
+		    SearchAndExciseText (&gbqp->val, cfp);
+		  gbqp = gbqp->next;
+		}
+              break;
+            case 2 :
+              SearchAndExciseText (&sfp->comment, cfp);
+              break;
+            default :
+              break;
+          }
+	}
         sfp = sfp->next;
       }
     }
@@ -1028,6 +1041,9 @@ static void DoOneRemoveText (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp
     case 7 :
       SeqEntryToBioSource (sep, NULL, NULL, 0, &biop);
       RemoveASourceText (biop, cfp);
+      break;
+    case 8 :
+      SeqEntryExplore (sep, (Pointer) cfp, RemoveAFeatureText);
       break;
     default :
       break;
@@ -1202,8 +1218,8 @@ static void CleanupParseForm (GraphiC g, VoidPtr data)
 
   cfp = (ConvertFormPtr) data;
   if (cfp != NULL) {
-    if (cfp->alists [8] != NULL) {
-      FreeEnumFieldAlist (cfp->alists [8]);
+    if (cfp->alists [9] != NULL) {
+      FreeEnumFieldAlist (cfp->alists [9]);
     }
   }
   StdCleanupFormProc (g, data);
@@ -1292,26 +1308,27 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
   cfp->alists [5] = orgref_field_alist;
   cfp->alists [6] = orgmod_note_subtype_alist;
   cfp->alists [7] = subsource_note_subtype_alist;
-  cfp->alists [8] = import_featdef_alist (TRUE, FALSE, FALSE);
+  cfp->alists [8] = impfeat_field_alist;
+  cfp->alists [9] = import_featdef_alist (TRUE, FALSE, FALSE);
 
   cfp->replaceOldAsked = FALSE;
   cfp->doReplaceAll = FALSE;
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= 7; j++) {
+  for (j = 1; j <= 8; j++) {
     cfp->subtarget [j] = PopupList (x, TRUE, (PupActnProc) SetConvertAcceptButton);
     SetObjectExtra (cfp->subtarget [j], cfp, NULL);
     InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
     SetEnumPopup (cfp->subtarget [j], cfp->alists [j], 0);
     Hide (cfp->subtarget [j]);
   }
-  cfp->subtarget [8] = (PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
-  SetObjectExtra (cfp->subtarget [8], cfp, NULL);
-  for (ap = cfp->alists [8]; ap->name != NULL; ap++) {
-    ListItem ((LisT) cfp->subtarget [8], ap->name);
+  cfp->subtarget [9] = (PopuP) SingleList (x, 10, 8, (LstActnProc) SetConvertAcceptButton);
+  SetObjectExtra (cfp->subtarget [9], cfp, NULL);
+  for (ap = cfp->alists [9]; ap->name != NULL; ap++) {
+    ListItem ((LisT) cfp->subtarget [9], ap->name);
   }
-  Hide (cfp->subtarget [8]);
+  Hide (cfp->subtarget [9]);
 
   c = HiddenGroup (h, 4, 0, NULL);
   cfp->accept = PushButton (c, "Accept", DoConvertProc);
@@ -1400,13 +1417,14 @@ extern void RemoveTextInsideString (IteM i)
   cfp->alists [5] = orgref_field_alist;
   cfp->alists [6] = orgmod_note_subtype_alist;
   cfp->alists [7] = subsource_note_subtype_alist;
+  cfp->alists [8] = impfeat_field_alist;
 
   cfp->replaceOldAsked = FALSE;
   cfp->doReplaceAll = FALSE;
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= 7; j++) {
+  for (j = 1; j <= 8; j++) {
     cfp->subtarget [j] = PopupList (x, TRUE, (PupActnProc) SetConvertAcceptButton);
     SetObjectExtra (cfp->subtarget [j], cfp, NULL);
     InitEnumPopup (cfp->subtarget [j], cfp->alists [j], NULL);
@@ -2082,6 +2100,8 @@ Int2 ApplyAnnotationToAll (Int2 type, SeqEntryPtr sep,
 
   MemSet ((Pointer) (&afd), 0, sizeof (ApplyFormData));
   afd.type = type;
+  if (ADD_RRNA == type)
+    afd.rnatype = 4;
   afd.errcount = 0;
   afd.partial5 = partialLft;
   afd.partial3 = partialRgt;

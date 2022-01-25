@@ -1,4 +1,4 @@
-/* $Id: actutils.h,v 6.10 2001/09/04 13:47:13 wheelan Exp $
+/* $Id: actutils.h,v 6.12 2002/03/27 17:35:39 todorov Exp $
  *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.12  2002/03/27 17:35:39  todorov
+* recreated ACT_MakeProfileFromSA
+*
+* Revision 6.11  2002/03/26 19:56:21  todorov
+* alignmgr to alignmgr2 transition
+*
 * Revision 6.10  2001/09/04 13:47:13  wheelan
 * made several functions extern
 *
@@ -74,7 +80,7 @@
 
 #include <ncbi.h>
 #include <objalign.h>
-#include <alignmgr.h>
+#include <alignmgr2.h>
 #include <sqnutils.h>
 #include <bandalgn.h>
 #include <needleman.h>
@@ -182,27 +188,27 @@ NLM_EXTERN void ACT_EstimateConfidence(ACTProfilePtr app);
 NLM_EXTERN ACTProfilePtr ACT_SortProfilesByConfidence(ACTProfilePtr app);
 NLM_EXTERN int LIBCALLBACK ACT_CompareProfileConfidence(VoidPtr base, VoidPtr large_son);
 NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap);
-NLM_EXTERN Boolean ACT_AddBioseqToSAByProfile(SeqAlignPtr sap, BioseqPtr bsp);
 NLM_EXTERN ACT_TopScorePtr PNTR ACT_SortAndTruncate(ACT_TopScorePtr PNTR ats);
 NLM_EXTERN ACT_TopScorePtr ACT_FindPeakScores(FloatHiPtr scorearray, Int4 len);
 NLM_EXTERN ACT_PositionPtr ACT_PlaceByScore(ACT_PlaceBoundsPtr abp);
 NLM_EXTERN FloatHi ACT_CalcScore(ACT_PlaceBoundsPtr abp);
-NLM_EXTERN SeqAlignPtr ACT_GlobalAlignSimple(BioseqPtr bsp1, BioseqPtr bsp2,
-                                             Boolean Default);
-NLM_EXTERN SeqAlignPtr ACT_GlobalAlignTwoSeq(BioseqPtr bsp1, BioseqPtr bsp2);
-NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuous(SeqAlignPtr sap);
-NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuousEx(SeqAlignPtr sap, Int4 start_1, Int4 stop_1, Int4 start_2, Int4 stop_2);
-
-NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwiseEx(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master, Uint1 strand_master, Uint1 strand_subject, Int4 startm1,Int4 stopm1, Int4 start1, Int4 stop1,Int4 startm2,Int4 stopm2, Int4 start2, Int4 stop2);
-NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignLocalToGlobal(SeqAlignPtr sap);
-NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwise(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master);
-NLM_EXTERN Int4 AlnMgrSeqAlignMergePairwiseSet(SeqAlignPtr PNTR sap_ptr);
 NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 NLM_EXTERN void ACT_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
 NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side);
 NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand);
 NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 len2);
 
+/***************************************************************************
+*
+*   AlnMgr2TruncateSAP truncates a given seqalign to contain only the
+*   bioseq coordinates from start to stop on the indicated row.  Anything
+*   before those coordinates is discarded; anything remaining afterwards
+*   is made into another seqalign and put in sap->next (the original next,
+*   if any, is now at sap->next->next). Doesn't work on parent seqaligns.
+*   The function returns TRUE if the orignal alignment extended past stop.
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgr2TruncateSAP(SeqAlignPtr sap, Int4 start, Int4 stop, Int4 row);
 
 
 #ifdef __cplusplus

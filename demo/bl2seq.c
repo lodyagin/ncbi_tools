@@ -25,6 +25,18 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.44  2002/05/01 16:43:53  dondosha
+* Call BLASTOptionSetGapParams instead of setting options->matrix
+*
+* Revision 6.43  2002/04/29 19:55:26  madden
+* Use ARG_FLOAT for db length
+*
+* Revision 6.42  2002/03/19 23:29:38  dondosha
+* Do not increment options->wordsize by 4 for megablast any more
+*
+* Revision 6.41  2002/03/14 16:11:41  camacho
+* Extended BlastTwoSequences to allow comparison between sequence and PSSM
+*
 * Revision 6.40  2001/07/19 22:05:47  dondosha
 * Made db_length option a string, to convert to Int8 value
 *
@@ -307,7 +319,7 @@ static Args myargs [] = {
   { "alignment output file",
 	"stdout", NULL, NULL, FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},/* 4 */
   { "theor. db size (zero is real size)", 
-	"0", NULL, NULL, FALSE, 'd', ARG_STRING, 0.0, 0, NULL},/* 5 */
+	"0", NULL, NULL, FALSE, 'd', ARG_FLOAT, 0.0, 0, NULL},/* 5 */
   { "SeqAnnot output file",
 	NULL, NULL, NULL, TRUE, 'a', ARG_FILE_OUT, 0.0, 0, NULL},/* 6 */
   { "Cost to open a gap (zero invokes default behavior)",
@@ -530,7 +542,7 @@ Int2 Main (void)
                 options->reward = myargs[13].intvalue;
         }
 
-	options->db_length = StringToInt8(myargs[5].strvalue, &dummystr);
+	options->db_length = (Int8) myargs[5].floatvalue;
 
 	options->discontinuous = FALSE;
 
@@ -546,12 +558,11 @@ Int2 Main (void)
                options->wordsize = (Int2) myargs[10].intvalue;
 
 	if (options->is_megablast_search) {
-	   options->cutoff_s2 = options->wordsize;
-           options->wordsize += 4;
-	   options->cutoff_s = options->wordsize;
+	   options->cutoff_s2 = options->wordsize*options->reward;
+	   options->cutoff_s = (options->wordsize + 4)*options->reward;
         }
 	MemFree(options->matrix);
-	options->matrix = myargs[11].strvalue;
+        BLASTOptionSetGapParams(options, myargs[11].strvalue, 0, 0); 
 
 	options->strand_option = myargs[16].intvalue;
 
@@ -559,7 +570,7 @@ Int2 Main (void)
            code it will be used in protein scale */
         if (myargs[21].intvalue > 0) 
            options->longest_intron = MAX(myargs[21].intvalue, MAX_INTRON_LENGTH);
-        if (myargs[24].intvalue == 1) {
+        if (myargs[24].intvalue != 0) {
            options->output = (VoidPtr) outfp;
            if (options->is_megablast_search)
               handle_results = MegaBlastPrintAlignInfo;
@@ -622,7 +633,7 @@ Int2 Main (void)
            } else
               ValNodeAddPointer(&slp2, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBestAccession(bsp2->id)));
            
-           seqalign = BlastTwoSequencesByLocWithCallback(slp1, slp2, program_name, options, &other_returns, &error_returns, handle_results);
+           seqalign = BlastTwoSequencesByLocWithCallback(slp1, slp2, program_name, options, &other_returns, &error_returns, handle_results, NULL);
            SeqLocFree(slp1);
            SeqLocFree(slp2);
         }

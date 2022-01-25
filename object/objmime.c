@@ -31,6 +31,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.c,v $
+* Revision 6.13  2002/02/27 15:53:37  thiessen
+* fix typo
+*
+* Revision 6.12  2002/02/26 13:21:21  thiessen
+* add structure type to new general mime
+*
 * Revision 6.11  2001/11/21 16:38:23  thiessen
 * move cn3d stuff into bundle
 *
@@ -1671,6 +1677,13 @@ BiostrucSeqsAlignsCddAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == SEQS_ALIGNS_CDD_structure_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> structure_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1809,6 +1822,8 @@ BiostrucSeqsAlignsCddAsnWrite(BiostrucSeqsAlignsCddPtr ptr, AsnIoPtr aip, AsnTyp
       }
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> structures, (AsnWriteFunc) BiostrucAsnWrite, aip, SEQS_ALIGNS_CDD_structures, SEQS_ALIGNS_CDD_structures_E);
+   av.intvalue = ptr -> structure_type;
+   retval = AsnWrite(aip, SEQS_ALIGNS_CDD_structure_type,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

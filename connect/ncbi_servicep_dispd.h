@@ -1,7 +1,7 @@
 #ifndef NCBI_SERVICEP_DISPD__H
 #define NCBI_SERVICEP_DISPD__H
 
-/*  $Id: ncbi_servicep_dispd.h,v 6.7 2001/04/24 21:32:06 lavr Exp $
+/*  $Id: ncbi_servicep_dispd.h,v 6.9 2002/04/13 06:40:16 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,12 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_servicep_dispd.h,v $
+ * Revision 6.9  2002/04/13 06:40:16  lavr
+ * Few tweaks to reduce the number of syscalls made
+ *
+ * Revision 6.8  2002/02/05 22:04:13  lavr
+ * Included header files rearranged
+ *
  * Revision 6.7  2001/04/24 21:32:06  lavr
  * SERV_DISPD_STALE_RATIO_OK and SERV_DISPD_LOCAL_SVC_BONUS moved to .c file
  *
@@ -60,15 +66,17 @@
  * ==========================================================================
  */
 
-#include <connect/ncbi_connutil.h>
 #include "ncbi_servicep.h"
+#include <connect/ncbi_connutil.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
-const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter, const SConnNetInfo *info);
+const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
+                                    const SConnNetInfo *net_info,
+                                    SSERV_Info** info, char** env);
 
 
 #ifdef __cplusplus

@@ -30,11 +30,17 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.65 $
+   $Revision: 6.67 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.67  2002/04/19 13:10:43  madden
+   Make new database format the default
+
+   Revision 6.66  2002/02/15 22:01:19  beloslyu
+   fix from HP
+
    Revision 6.65  2001/11/06 15:24:20  dondosha
    Roll back previous change - it was not needed
 
@@ -331,7 +337,7 @@ Args dump_args[] = {
     { "Verbose: check for non-unique string ids in the database", /* 11 */
       "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Create ASN.1 structured deflines",                  /* 12 */
-      "F", NULL, NULL, TRUE, 'A', ARG_BOOLEAN, 0.0, 0, NULL},
+      "T", NULL, NULL, TRUE, 'A', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Create an alias file with this name\n" /* 13 */
       "        use the gifile arg (below) if set to calculate db size\n"
       "        use the BLAST db specified with -i (above)", 
@@ -499,7 +505,7 @@ Int2 Main(void)
     Int2 id_ctr=1;
     Int4 count = 0, sequence_count=0, first_oid;
     Int8 total_length;
-    Char basename[128];
+    Char basename[FILENAME_MAX];
     CharPtr error_msg=NULL;
     Char buffer[42];
     FILE *fd;

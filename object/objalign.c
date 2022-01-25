@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -1689,6 +1689,12 @@ NLM_EXTERN Boolean LIBCALL SpecialSeqAlignSetAsnWrite (SeqAlignPtr sap, AsnIoPtr
 {
     return SeqAlignSetAsnWrite(sap, aip, set, SEQ_ALIGN_SET_E);
 }
+
+NLM_EXTERN Boolean LIBCALL GenericSeqAlignSetAsnWrite (SeqAlignPtr sap, AsnIoPtr aip)
+{
+    return SeqAlignSetAsnWrite(sap, aip, SEQ_ALIGN_SET, SEQ_ALIGN_SET_E);
+}
+
 
 /*****************************************************************************
 *

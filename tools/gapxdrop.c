@@ -32,8 +32,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.61 $
+/* $Revision: 6.62 $
 * $Log: gapxdrop.c,v $
+* Revision 6.62  2002/03/05 17:53:41  dondosha
+* Added one sanity check in GapXEditBlockToSeqAlign
+*
 * Revision 6.61  2001/08/27 18:56:26  madden
 * Fix OOFGapXEditBlockToSeqAlign if alignment overruns end of query
 *
@@ -2497,7 +2500,7 @@ GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdP
                     if(numseg != 0) { /* End of aligned area */
                         break;
                     } else {
-                        while(curr->op_type == GAPALIGN_DECLINE) {
+                        while(curr && curr->op_type == GAPALIGN_DECLINE) {
                             numseg++;
                             curr = curr->next; 
                         }

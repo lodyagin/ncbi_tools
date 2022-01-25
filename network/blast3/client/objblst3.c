@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.10 at Jan 5, 2001 12:44 PM
+*    Generated using ASNCODE Revision: 6.14 at Apr 16, 2002 11:50 AM
 *
 **************************************************/
 
@@ -1353,6 +1353,41 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> percent_identity = av.realvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_first_db_seq) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> first_db_seq = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_final_db_seq) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> final_db_seq = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_window_size) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> window_size = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_mb_template_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> mb_template_length = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_mb_disc_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> mb_disc_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1591,6 +1626,16 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, BLAST_PARAMETERS_endpoint_results,  &av);
    av.realvalue = ptr -> percent_identity;
    retval = AsnWrite(aip, BLAST_PARAMETERS_percent_identity,  &av);
+   av.intvalue = ptr -> first_db_seq;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_first_db_seq,  &av);
+   av.intvalue = ptr -> final_db_seq;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_final_db_seq,  &av);
+   av.intvalue = ptr -> window_size;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_window_size,  &av);
+   av.intvalue = ptr -> mb_template_length;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_mb_template_length,  &av);
+   av.intvalue = ptr -> mb_disc_type;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_mb_disc_type,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

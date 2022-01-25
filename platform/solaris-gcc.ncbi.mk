@@ -1,5 +1,5 @@
 #
-# $Id: solaris-gcc.ncbi.mk,v 1.12 2001/09/10 18:50:54 beloslyu Exp $
+# $Id: solaris-gcc.ncbi.mk,v 1.14 2002/04/28 03:46:11 vakatov Exp $
 #
 # If you want to use gcc on solaris you need to copy this
 # file to solaris.ncbi.mk
@@ -8,8 +8,9 @@ NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_CC = gcc
 NCBI_CFLAGS1 = -c 
-NCBI_LDFLAGS1 = -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
-NCBI_OPTFLAG = -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+#The gcc3.0.3 fails on some files if -O2 is used
+NCBI_LDFLAGS1 = -O -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+NCBI_OPTFLAG = -O -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib

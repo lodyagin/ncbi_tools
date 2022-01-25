@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.24  2002/02/20 21:59:33  tatiana
+ * DBNUM increased for IMGT/LIGM
+ *
  * Revision 6.23  2001/11/29 18:29:38  kans
  * added FANTOM_DB to list of legal db_xrefs, incremented DBNUM
  *
@@ -171,6 +174,9 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.24  2002/02/20 21:59:33  tatiana
+* DBNUM increased for IMGT/LIGM
+*
 * Revision 6.23  2001/11/29 18:29:38  kans
 * added FANTOM_DB to list of legal db_xrefs, incremented DBNUM
 *
@@ -327,7 +333,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 44
+#define DBNUM 45
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

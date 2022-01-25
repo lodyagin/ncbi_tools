@@ -1,5 +1,5 @@
 @ECHO OFF
-REM $Id: all.bat,v 1.3 2001/12/17 17:39:39 ivanov Exp $
+REM $Id: all.bat,v 1.4 2002/01/03 17:35:23 lavr Exp $
 REM ===========================================================================
 REM 
 REM                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@ REM Build NCBI C Toolkit under Windows
 REM
 REM ---------------------------------------------------------------------------
 REM $Log: all.bat,v $
+REM Revision 1.4  2002/01/03 17:35:23  lavr
+REM Change LOOP label
+REM
 REM Revision 1.3  2001/12/17 17:39:39  ivanov
 REM Changed path to ncbi.dsw
 REM
@@ -44,11 +47,11 @@ REM ===========================================================================
 
 IF _%1% == _ GOTO DEFAULT
 SET CFG=%1%
-GOTO LOOP
+GOTO ARGLOOP
 :DEFAULT
 SET CFG=ALL
 
-:LOOP
+:ARGLOOP
 IF %CFG% == ALL GOTO CONTINUE
 IF %CFG% == Debug GOTO CONTINUE
 IF %CFG% == DebugMT GOTO CONTINUE
@@ -70,7 +73,7 @@ IF %CFG% == ALL GOTO COMPLETE
 SHIFT
 IF _%1% == _ GOTO COMPLETE
 SET CFG=%1%
-GOTO LOOP
+GOTO ARGLOOP
 
 :ABORT
 ECHO INFO: Build failed.

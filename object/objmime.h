@@ -31,6 +31,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.h,v $
+* Revision 6.14  2002/03/14 01:29:11  thiessen
+* hand changes from struct_Seq_annot to seqannot
+*
+* Revision 6.13  2002/02/27 15:53:37  thiessen
+* fix typo
+*
+* Revision 6.12  2002/02/26 13:21:21  thiessen
+* add structure type to new general mime
+*
 * Revision 6.11  2001/11/21 16:38:23  thiessen
 * move cn3d stuff into bundle
 *
@@ -57,8 +66,8 @@
 *
 * ==========================================================================
 */
-#ifndef _objmime_ 
-#define _objmime_ 
+#ifndef _objmime_
+#define _objmime_
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -247,8 +256,13 @@ NLM_EXTERN Boolean LIBCALL BiostrucSeqsAsnWrite PROTO (( BiostrucSeqsPtr , AsnIo
 typedef struct struct_Biostruc_seqs_aligns_cdd {
    ValNodePtr   SeqAlignData_seq_align_data;
    struct struct_Biostruc PNTR   structures;
+   Uint2   structure_type;
 } BiostrucSeqsAlignsCdd, PNTR BiostrucSeqsAlignsCddPtr;
 
+/* following #defines are for enumerated type, not used by object loaders */
+#define Biostruc_seqs_aligns_cdd_structure_type_ncbi_backbone 2
+#define Biostruc_seqs_aligns_cdd_structure_type_ncbi_all_atom 3
+#define Biostruc_seqs_aligns_cdd_structure_type_pdb_model 4
 
 NLM_EXTERN BiostrucSeqsAlignsCddPtr LIBCALL BiostrucSeqsAlignsCddFree PROTO ((BiostrucSeqsAlignsCddPtr ));
 NLM_EXTERN BiostrucSeqsAlignsCddPtr LIBCALL BiostrucSeqsAlignsCddNew PROTO (( void ));
@@ -283,9 +297,9 @@ static Boolean LIBCALL SeqAlignData_seq_align_dataAsnWrite PROTO (( SeqAlignData
 **************************************************/
 typedef struct struct_Bundle_seqs_aligns {
    ValNodePtr   sequences;
-   struct struct_Seq_annot PNTR   seqaligns;
+   struct seqannot PNTR   seqaligns;    /* manual change */
    struct struct_Biostruc_annot_set PNTR   strucaligns;
-   struct struct_Seq_annot PNTR   imports;
+   struct seqannot PNTR   imports;
    struct struct_Cn3d_style_dictionary PNTR   style_dictionary;
    struct struct_Cn3d_user_annotations PNTR   user_annotations;
 } BundleSeqsAligns, PNTR BundleSeqsAlignsPtr;

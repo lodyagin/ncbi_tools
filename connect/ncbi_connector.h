@@ -1,7 +1,7 @@
 #ifndef NCBI_CONNECTOR__H
 #define NCBI_CONNECTOR__H
 
-/*  $Id: ncbi_connector.h,v 6.7 2001/04/24 21:20:01 lavr Exp $
+/*  $Id: ncbi_connector.h,v 6.8 2002/03/22 22:18:48 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connector.h,v $
+ * Revision 6.8  2002/03/22 22:18:48  lavr
+ * Cosmetic update
+ *
  * Revision 6.7  2001/04/24 21:20:01  lavr
  * Introduced CONN_DEFAULT_TIMEOUT and CONN_INFINITE_TIMEOUT
  *
@@ -249,11 +252,11 @@ typedef struct SConnectorTag {
 
 #ifdef IMPLEMENTED__CONN_WaitAsync
 typedef struct {
-  CONN              conn;
-  EIO_Event         event;
-  FConnAsyncHandler handler;
-  void*             data;
-  FConnAsyncCleanup cleanup;
+  CONN                   conn;
+  EIO_Event              event;
+  FConnAsyncHandler      handler;
+  void*                  data;
+  FConnAsyncCleanup      cleanup;
 } SConnectorAsyncHandler;
 
 typedef void (*FConnectorAsyncHandler)

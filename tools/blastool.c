@@ -32,8 +32,35 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.173 $
+* $Revision: 6.182 $
 * $Log: blastool.c,v $
+* Revision 6.182  2002/04/18 19:05:08  camacho
+* Modified BlastProcessGiLists to deal with multi-volume databases with empty oidlists
+*
+* Revision 6.181  2002/04/18 16:18:21  dondosha
+* Added BlastPrintTabulatedResultsEx with extra argument to keep track of progress
+*
+* Revision 6.180  2002/04/15 20:51:38  jianye
+* Added getFastaStyleTitle(BioseqPtr bsp)
+*
+* Revision 6.179  2002/04/10 17:42:02  madden
+* Fix for blastn matrix check (last checkin)
+*
+* Revision 6.178  2002/04/10 15:50:15  dondosha
+* Added validity checks for some megablast options
+*
+* Revision 6.177  2002/04/09 18:44:44  madden
+* Set matrix for blastn correctly
+*
+* Revision 6.176  2002/03/22 17:05:09  dondosha
+* For megablast tabular formatting of seqalign, count number of alignments for each query separately
+*
+* Revision 6.175  2002/02/27 20:13:56  dondosha
+* Added checks for NULL pointer in BlastInsertList2Heap
+*
+* Revision 6.174  2002/02/14 20:37:38  dondosha
+* Bug fix in callback for blastn tabular output when only reverse strand is searched
+*
 * Revision 6.173  2002/01/07 23:16:00  dondosha
 * Fixed several memory leaks and allocation/freeing bugs in multithreaded megablast
 *
@@ -1726,6 +1753,34 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
               return 1;
 	  }
 
+        /* Check the validity of the megablast specific options */
+        if (options->is_megablast_search) {
+           if (options->mb_template_length > 0) {
+              if (options->mb_template_length != 16 &&
+                  options->mb_template_length != 18 &&
+                  options->mb_template_length != 21) {
+                 BlastConstructErrorMessage("BLASTOptionValidateEx",
+                     "Only discontiguous template lengths 16, 18 and 21 are supported", 
+                                            1, error_return);
+                 return 1;
+              }
+
+              if (options->wordsize < 11 || options->wordsize > 12) {
+                 BlastConstructErrorMessage("BLASTOptionValidateEx",
+                     "Only discontiguous word sizes 11 and 12 are supported", 
+                                            1, error_return);
+                 return 1;
+              }
+
+              if (options->mb_disc_type > MB_TWO_TEMPLATES) {
+                 BlastConstructErrorMessage("BLASTOptionValidateEx",
+                     "Allowed discontiguous word types are: 0 - coding, 1 - maximal, 2 - two templates", 
+                                            1, error_return);
+                 return 1;
+              }
+           }
+        }
+
 	return status;
 }
 
@@ -1740,21 +1795,17 @@ BLASTOptionSetGapParams (BLAST_OptionsBlkPtr options,
 
 {
     Boolean found_matrix=FALSE, threshold_set=FALSE;
+    Int4 threshold, window_size;
     
     if (options == NULL || matrix_name == NULL)
         return -1;
     
-    /* blastn is different. */
-    if (StringICmp("blastn", options->program_name) == 0) {
-        if (!options->is_megablast_search) {
-           options->gap_open  = 5;
-           options->gap_extend  = 2;
-        } else {
-           options->gap_open = options->gap_extend = 0;
-        }
-        return 0;
-    }
-    
+/* Save these in case we need to restore (for blastn). */
+    threshold =  options->threshold_second;
+    window_size =  options->window_size;
+
+/* We check for protein matrices also for blastn in case a nucl.-nucl. matrix really
+has been specified. */
     if (StringICmp(matrix_name, "BLOSUM62") == 0) {
         options->gap_open  = 11;
         options->gap_extend  = 1;
@@ -1814,7 +1865,26 @@ BLASTOptionSetGapParams (BLAST_OptionsBlkPtr options,
     if (extended)
         options->gap_extend  = extended;
     
-    if (matrix_name) {
+    
+    /* blastn and megablast are different. */
+    if (StringICmp("blastn", options->program_name) == 0) {
+    	options->threshold_second = threshold;
+    	options->window_size = window_size;
+        if (!options->is_megablast_search) {
+           options->gap_open  = 5;
+           options->gap_extend  = 2;
+	   if (found_matrix == FALSE) /* probably not a protein-protein matrix. */
+	   {
+        	options->matrix = StringSave(matrix_name);
+	   }
+        } else {
+           options->gap_open = options->gap_extend = 0;
+        }
+	return 0;
+    }
+
+    if (matrix_name) 
+    {
         if (options->matrix)
             MemFree(options->matrix);
         options->matrix = StringSave(matrix_name);
@@ -2349,6 +2419,12 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
             if (alias_oidlist) {
                mask_index = (virtual_oid - start) / MASK_WORD_SIZE;
                oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - (virtual_oid-start) % MASK_WORD_SIZE);
+               /* In a database with volumes and oidlists we might have empty 
+                * masks (ie: month est subset in a multi-volume est real 
+                * database), so reset the mask index to avoid accessing 
+                * outside the bounds of the alias_oidlist->list */
+               if (alias_oidlist->total == 0)
+                   mask_index = 0;
             }
             
             virtual_oid_bit = 0x1 << (MASK_WORD_SIZE - 1 - virtual_oid % MASK_WORD_SIZE);
@@ -3194,7 +3270,7 @@ BlastInsertList2Heap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitl
       }
       for (hp = search->result_struct->heap_ptr; hp; hp = hp->next) 
 	if (hp->cutvalue >= begin) break;
-      if (hp->num_in_heap < hsp_range_max || small(hp->heap[0], hsp)) {
+      if (hp && hp->num_in_heap < hsp_range_max || small(hp->heap[0], hsp)) {
 	if (!hp->prev || hp->prev->cutvalue != begin-1) {
 	  BlastInsertWholeHeap(search, hp, begin-1);
 	}
@@ -3221,7 +3297,7 @@ BlastInsertList2Heap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitl
 	} 
       }
       hp = search->result_struct->heap_ptr;
-      if (hp->num_in_heap < hsp_range_max || small(hp->heap[0], hsp)) {
+      if (hp && hp->num_in_heap < hsp_range_max || small(hp->heap[0], hsp)) {
 	if (end != hp->cutvalue) {
 	  BlastInsertWholeHeap(search, hp, end);
 	  hp = hp->prev;
@@ -3303,7 +3379,8 @@ BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
 	  }
 	}
       }
-      hp = hp->prev;
+      if (hp)
+         hp = hp->prev;
       BlastPossibleDeleteWholeHeap(search, &hp, hsp);
     }
 }
@@ -4303,6 +4380,18 @@ void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                 Boolean believe_query, Int4 q_shift, 
                                 Int4 s_shift, FILE *fp)
 {
+   BlastPrintTabulatedResultsEx(seqalign, query_bsp, query_slp, num_alignments,
+                                blast_program, is_ungapped, believe_query,
+                                q_shift, s_shift, fp, NULL);
+}
+
+void BlastPrintTabulatedResultsEx(SeqAlignPtr seqalign, BioseqPtr query_bsp,
+                                SeqLocPtr query_slp, Int4 num_alignments, 
+                                CharPtr blast_program, Boolean is_ungapped, 
+                                Boolean believe_query, Int4 q_shift, 
+                                Int4 s_shift, FILE *fp, 
+                                int *num_formatted)
+{
    SeqAlignPtr sap, sap_tmp = NULL;
    FloatHi perc_ident, bit_score, evalue;
    Int4 numseg, num_gap_opens, num_mismatches, num_ident, score;
@@ -4319,6 +4408,7 @@ void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    AlignSumPtr asp = NULL;
    CharPtr defline, title;
    SeqLocPtr slp;
+   Int4 alignments_count;
 
    is_translated = (StringCmp(blast_program, "blastn") &&
                     StringCmp(blast_program, "blastp"));
@@ -4342,6 +4432,9 @@ void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       if (query_slp)
          query_id = TxGetQueryIdFromSeqAlign(sap);
       if (SeqIdComp(query_id, old_query_id) != SIC_YES) {
+         if (old_query_id && num_formatted)
+            (*num_formatted)++;
+         alignments_count = num_alignments;
          /* New query: find the corresponding SeqLoc */
          while (slp && SeqIdComp(query_id, SeqLocId(slp)) != SIC_YES)
             slp = slp->next;
@@ -4371,22 +4464,12 @@ void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       } else
          query_id = old_query_id;      
 
-      perc_ident = 0;
-      align_length = 0;
-      num_gap_opens = 0;
-      num_mismatches = 0;
-
-      GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
-
-      ScoreAndEvalueToBuffers(bit_score, evalue, 
-                              &bit_score_buff, &eval_buff);
-
       subject_id = TxGetSubjectIdFromSeqAlign(sap);
 
       if (SeqIdComp(subject_id, old_subject_id) != SIC_YES) {
          /* New subject sequence has been found in the seqalign list */
-         if (--num_alignments < 0)
-            break;
+         if (--alignments_count < 0)
+            continue;
          BioseqUnlock(subject_bsp);
          subject_bsp = BioseqLockById(subject_id);
       
@@ -4408,6 +4491,16 @@ void BlastPrintTabulatedResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
          defline = MemFree(defline);
       }
       
+      perc_ident = 0;
+      align_length = 0;
+      num_gap_opens = 0;
+      num_mismatches = 0;
+
+      GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
+
+      ScoreAndEvalueToBuffers(bit_score, evalue, 
+                              &bit_score_buff, &eval_buff);
+
       /* Loop on segments within this seqalign (in ungapped case) */
       while (TRUE) {
          if (sap->segtype == SAS_DENSEG) {
@@ -4851,14 +4944,20 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
 
       if (!is_translated && search->pbp->gapped_calculation) {
          DenseSegPtr dsp = (DenseSegPtr) sap->segs;
+         Boolean reverse = (dsp->strands[0] != dsp->strands[1]);
          numseg = dsp->numseg;
          
          for (i=0; i<numseg; i++) {
             align_length += dsp->lens[i];
             if (dsp->starts[2*i] != -1 && dsp->starts[2*i+1] != -1) {
+               if (reverse) {
+                  q_start = 
+                     query_length - dsp->starts[2*i] - dsp->lens[i] + 1;
+               } else {
+                  q_start = dsp->starts[2*i];
+               }
                num_ident = BlastGetNumIdentical(query_seq, subject_seq, 
-                                                dsp->starts[2*i], dsp->starts[2*i+1], 
-                                                dsp->lens[i], FALSE);
+                  q_start, dsp->starts[2*i+1], dsp->lens[i], FALSE);
                perc_ident += num_ident;
                num_mismatches += dsp->lens[i] - num_ident;
             } else
@@ -4873,6 +4972,11 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
             q_end = 2*query_length - dsp->starts[0] + 1;
             s_start = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
             s_end = dsp->starts[1]+1;
+         } else if (reverse) {
+            q_start = dsp->starts[0];
+            q_end = dsp->starts[2*numseg-2] + dsp->lens[numseg-1] - 1;
+            s_end = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
+            s_start = dsp->starts[1]+1;
          } else {
             q_start = dsp->starts[0] + 1;
             q_end = dsp->starts[2*numseg-2] + dsp->lens[numseg-1];
@@ -5193,13 +5297,15 @@ void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
    
    ff_StartPrint(0, 0, BUFFER_LENGTH, NULL);
 
-   program = StringSave(blast_program);
-   Nlm_StrUpper(program);
-   sprintf(buffer, "# %s %s [%s]", program, BlastGetVersionNumber(),
-           BlastGetReleaseDate());
-   MemFree(program);
-   ff_AddString(buffer);
-   NewContLine();
+   if (blast_program) {
+      program = StringSave(blast_program);
+      Nlm_StrUpper(program);
+      sprintf(buffer, "# %s %s [%s]", program, BlastGetVersionNumber(),
+              BlastGetReleaseDate());
+      MemFree(program);
+      ff_AddString(buffer);
+      NewContLine();
+   }
 
    ff_AddString("# Database: ");
    ff_AddString(blast_database);
@@ -5508,6 +5614,8 @@ SeqAlignPtr BlastClusterHitsFromSeqAlign(SeqAlignPtr seqalign,
             }
          }
       } else {
+         /* Save the ids of sequences in the cluster in the 'master' field of
+            SeqAlign structure (kludge) */
          if (!sapp[root[index]]->master) {
             sapp[root[index]]->master = 
                SeqIdDup(TxGetSubjectIdFromSeqAlign(sapp[index]));
@@ -5752,4 +5860,30 @@ SeqAlignPtr BLASTPostSearchLogic(BlastSearchBlkPtr search,BLAST_OptionsBlkPtr op
 	gi_list = SeqIdSetFree(gi_list);
 	return head;
 
+}
+/*return query fasta style title(id+title). New memory was allocated for this title*/
+CharPtr getFastaStyleTitle(BioseqPtr bsp){
+  
+  CharPtr titleBuf=NULL;
+
+  if(bsp){
+    
+    if (bsp->id)
+      {
+	Char idBuf[BUFFER_LENGTH+1];
+	CharPtr seqTitle, temp=NULL;
+
+	SeqIdWrite(bsp->id, idBuf, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+	temp=idBuf;
+	if (StringNCmp(idBuf, "lcl|", 4) == 0)
+	  temp=StrStr(idBuf, "gi|");
+		
+	titleBuf=MemNew(sizeof(Char)*(BUFFER_LENGTH+1));
+	StringCpy(titleBuf,temp); 
+	seqTitle= BioseqGetTitle(bsp);
+	StringNCat(titleBuf, seqTitle, BUFFER_LENGTH-StringLen(temp));
+       
+      }
+  }
+   return titleBuf;
 }

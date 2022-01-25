@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_connutil_hit.c,v 6.7 2001/03/02 20:03:57 lavr Exp $
+/*  $Id: test_ncbi_connutil_hit.c,v 6.10 2002/04/15 19:21:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_connutil_hit.c,v $
+ * Revision 6.10  2002/04/15 19:21:44  lavr
+ * +#include "../test/test_assert.h"
+ *
+ * Revision 6.9  2002/03/22 19:48:56  lavr
+ * Removed <stdio.h>: included from ncbi_util.h or ncbi_priv.h
+ *
+ * Revision 6.8  2002/02/05 21:45:55  lavr
+ * Included header files rearranged
+ *
  * Revision 6.7  2001/03/02 20:03:57  lavr
  * Typos fixed
  *
@@ -54,10 +63,11 @@
  * ===========================================================================
  */
 
-#include <connect/ncbi_util.h>
 #include <connect/ncbi_connutil.h>
-#include <stdio.h>
+#include <connect/ncbi_util.h>
 #include <stdlib.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 int main(int argc, char** argv)

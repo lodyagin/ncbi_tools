@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket_connector.c,v 6.3 2001/12/04 15:55:33 lavr Exp $
+/*  $Id: test_ncbi_socket_connector.c,v 6.5 2002/03/22 19:47:55 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  *
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_socket_connector.c,v $
+ * Revision 6.5  2002/03/22 19:47:55  lavr
+ * Test_assert.h made last among the include files
+ *
+ * Revision 6.4  2002/01/16 21:23:15  vakatov
+ * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
+ *
  * Revision 6.3  2001/12/04 15:55:33  lavr
  * +Test for SOCK_CreateConnectorOnTop()
  *
@@ -42,14 +48,12 @@
  * ==========================================================================
  */
 
-#if defined(NDEBUG)
-#  undef NDEBUG
-#endif 
-
 #include "ncbi_conntest.h"
 #include "../ncbi_priv.h"
 #include <connect/ncbi_socket_connector.h>
 #include <connect/ncbi_util.h>
+/* This header must go last */
+#include "test_assert.h"
 
 
 int main(int argc, const char* argv[])

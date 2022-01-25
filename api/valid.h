@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.6  2002/03/12 22:27:00  kans
+* added alwaysRequireIsoJTA
+*
 * Revision 6.5  2000/02/14 15:00:19  kans
 * added vsp->farIDsInAlignments for use by alignment validator
 *
@@ -145,6 +148,7 @@ typedef struct validstruct {
 	Boolean suppressContext;       /* suppress context part of message */
 	Boolean validateAlignments;    /* call alignval test suite */
 	Boolean farIDsInAlignments;    /* fetch to get far IDs in alignments */
+	Boolean alwaysRequireIsoJTA;   /* force check for iso_jta */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

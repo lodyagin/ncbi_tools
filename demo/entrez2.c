@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.7 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -50,6 +50,7 @@
 #include <document.h>
 #include <asn.h>
 #include <ent2api.h>
+#include <pmfapi.h>
 #include <urlquery.h>
 #include <dlogutil.h>
 #include <medview.h>
@@ -223,18 +224,23 @@ static void SetupAppProperties (void)
 
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &mapPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData);
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData);
+  /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData); */
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asn2gphGphPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &seqPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbgnPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gnbkPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &emblPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gnptPageData);
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &ftblPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &fstaPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &qualPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asnPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &xmlPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
+
+  SetAppProperty ("NewSequinGraphicalViewer", (void *) 1024);
+  SetAppProperty ("NewSequinLayoutOverride", (void *) 1024);
 
   SetAppProperty ("SeqDisplayForm", &seqviewprocs);
 
@@ -290,6 +296,13 @@ static void SetupAppProperties (void)
 
   if (GetEntrezAppParam ("SETTINGS", "GENMPAGE", "Map", str, sizeof (str))) {
     seqviewprocs.initGenomeLabel = StringSaveNoNull (str);
+  }
+
+  seqviewprocs.lockFarComponents = TRUE;
+  if (GetEntrezAppParam ("SETTINGS", "LOCKFAR", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "FALSE") == 0) {
+      seqviewprocs.lockFarComponents = FALSE;
+    }
   }
 
   if (GetEntrezAppParam ("SETTINGS", "XMLPREFIX", NULL, str, sizeof (str))) {
@@ -719,12 +732,18 @@ static void AboutProc (IteM i)
   Select (w);
 }
 
-#ifdef WIN_MAC
 /*==================================================================*/
 /*                                                                  */
 /*  SetupMacMenus ()                                                */
 /*                                                                  */
 /*==================================================================*/
+
+#ifdef WIN_MAC
+static void DoQuit (IteM i)
+
+{
+  QuitProc ();
+}
 
 static void SetupMacMenus (void)
 
@@ -735,6 +754,9 @@ static void SetupMacMenus (void)
   CommandItem (m, "About Entrez...", AboutProc);
   SeparatorItem (m);
   DeskAccGroup (m);
+
+  m = PulldownMenu (NULL, "File");
+  CommandItem (m, "Quit/Q", DoQuit);
 }
 
 static void MacDeactProc (WindoW w)
@@ -746,9 +768,61 @@ static void MacDeactProc (WindoW w)
 
 /*==================================================================*/
 /*                                                                  */
+/*  ConfigForm... ()                                                */
+/*                                                                  */
+/*==================================================================*/
+
+static void ConfigFormMessage (ForM f, Int2 mssg)
+
+{
+  BaseFormPtr  bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (f);
+  if (bfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_CUT :
+        StdCutTextProc (NULL);
+        break;
+      case VIB_MSG_COPY :
+        StdCopyTextProc (NULL);
+        break;
+      case VIB_MSG_PASTE :
+        StdPasteTextProc (NULL);
+        break;
+      case VIB_MSG_DELETE :
+        StdDeleteTextProc (NULL);
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static void ConfigAccepted (void)
+
+{
+  Message (MSG_OK, "Please rerun Entrez now that it is configured");
+  QuitProgram ();
+}
+
+static void ConfigCancelled (void)
+
+{
+  Message (MSG_OK, "Entrez cannot run without ncbi configuration file");
+  QuitProgram ();
+}
+
+/*==================================================================*/
+/*                                                                  */
 /*  Main () - The main controlling logic for this program.          */
 /*                                                                  */
 /*==================================================================*/
+
+static CharPtr getInfoFailed =
+  "Unable to connect to Entrez2 server, use\n\
+'setenv CONN_DEBUG_PRINTOUT TRUE' to assist\n\
+debugging, or use -c command line argument\n\
+for firewall configuration dialog";
 
 Int2 Main (void)
 
@@ -760,7 +834,8 @@ Int2 Main (void)
   PaneL    p;
   CharPtr  path = "/entrez/utils/entrez2server.fcgi";
   Uint2    port = 2441;
-  CharPtr  server = "neptune.nlm.nih.gov";
+  CharPtr  server = "www.ncbi.nlm.nih.gov";
+  Boolean  showConfigForm = FALSE;
   Char     str [32];
   Boolean  useNormalServ = FALSE;
   Boolean  useTestServ = FALSE;
@@ -896,10 +971,22 @@ Int2 Main (void)
           useTestServ = TRUE;
         } else if (StringCmp (argv [j], "-u") == 0) {
           useURL = TRUE;
+        } else if (StringCmp (argv [j], "-c") == 0) {
+          showConfigForm = TRUE;
         }
       }
   } }
 #endif
+
+  if (showConfigForm) {
+    Remove (w);
+    ArrowCursor ();
+    ShowNewNetConfigForm (NULL, ConfigFormMessage,
+                          ConfigAccepted, ConfigCancelled,
+                          NULL, TRUE);
+    ProcessEvents ();
+    return 0;
+  }
 
   /*--------------------------------------*/
   /* Optionally choose the Entrez2 server */
@@ -921,9 +1008,13 @@ Int2 Main (void)
 
   if (Query_GetInfo () == NULL) {
     ArrowCursor ();
-    Message (MSG_OK, "Unable to connect to Entrez2");
+    Message (MSG_OK, "%s", getInfoFailed);
     QuitProgram ();
     return 1;
+  }
+
+  if (! PubSeqFetchEnable ()) {
+    Message (MSG_POSTERR, "PubSeqFetchEnable failed");
   }
 
   /*--------------------------------*/
@@ -1007,6 +1098,8 @@ Int2 Main (void)
   /*------*/
   /* Exit */
   /*------*/
+
+  PubSeqFetchDisable ();
 
   return 0;
 }

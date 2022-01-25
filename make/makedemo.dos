@@ -292,7 +292,7 @@ $(T_SOCKET_EXE):
 	$(MAKE) -f <<
 $(INCLUDE_GEN)
 TEST_NAME = test_ncbi_socket
-TEST_OBJ = test_ncbi_socket_.obj
+TEST_OBJ = test_ncbi_socket.obj
 TEST_LIB =  $(LIB1)
 MAIN_OBJ =
 $(INCLUDE_EXE)

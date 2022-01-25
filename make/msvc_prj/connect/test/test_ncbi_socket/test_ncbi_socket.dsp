@@ -55,7 +55,7 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=..\..\..\..\..\connect\test\test_ncbi_socket_.c
+SOURCE=..\..\..\..\..\connect\test\test_ncbi_socket.c
 # End Source File
 # End Group
 # Begin Group "Header Files"

@@ -131,6 +131,9 @@ a legal value for a gi number.
 $^   RnaDnaConflict, 35
 The MolInfo biomol field is inconsistent with the Bioseq molecule type field.
 
+$^   HistoryGiCollision, 36
+The Bioseq history gi refers to this Bioseq, not to its predecessor or successor.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -145,9 +148,8 @@ This descriptor cannot be used with this Bioseq. A descriptor placed at the
 BioseqSet level applies to all of the Bioseqs in the set. Please make sure
 the descriptor is consistent with every sequence to which it applies.
 
-$^   Inconsistent, 3
-There are two descriptors of the same type which are inconsistent with each
-other. Please make them consistent.
+$^   FileOpenCollision, 3
+FileOpen is unable to find a local file.  This is normal, and can be ignored.
 
 $^   Unknown, 4
 An unknown or "other" modifier was used.
@@ -213,6 +215,10 @@ $^   InconsistentProteinTitle, 19
 An instantiated protein title descriptor should normally be the same as the
 automatically generated title.  This may be a curated exception, or it may
 be out of synch with the current annotation.
+
+$^   Inconsistent, 20
+There are two descriptors of the same type which are inconsistent with each
+other. Please make them consistent.
 
 $$ GENERIC, 3
 
@@ -396,9 +402,8 @@ $^ FarLocation, 29
 The location has a reference to a bioseq that is not packaged in this record.
 
 $^ DuplicateFeat, 30
-The intervals on this feature are identical to another feature of the same type.
-This is likely to be an error in annotating the record.  Note that GenBank format
-suppresses duplicate features, so use of Graphic view is recommended.
+The intervals on this feature are identical to another feature of the same type,
+but the label or comment are different.
 
 $^ UnnecessaryGeneXref, 31
 This feature has a gene xref that is identical to the overlapping gene.  This is
@@ -515,6 +520,12 @@ Two gene features should not have the same name.
 $^   MultiIntervalGene, 58
 A gene feature on a single Bioseq should have a single interval spanning everything
 considered to be under that gene.
+
+$^ FeatContentDup, 59
+The intervals on this feature are identical to another feature of the same type,
+and the label and comment are also identical. This is likely to be an error in
+annotating the record.  Note that GenBank format suppresses duplicate features,
+so use of Graphic view is recommended.
 
 $$ SEQ_ALIGN, 6
 

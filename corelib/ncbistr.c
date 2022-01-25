@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.11  2002/01/16 16:58:38  camacho
+* Changed type of buflen parameter in LabelCopy from Int2 to Uint4
+*
 * Revision 6.10  2001/01/05 22:43:58  shavirin
 * Added functions, that transfer Uint8 values to platform-independent
 * objects and back.
@@ -874,9 +877,9 @@ NLM_EXTERN char* LIBCALL Nlm_Int8ToString (Nlm_Int8  value, char* str, size_t st
 *       returns number of characters transferred to "to"
 *
 *****************************************************************************/
-NLM_EXTERN Nlm_Int2 LIBCALL Nlm_LabelCopy (Nlm_CharPtr to, Nlm_CharPtr from, Nlm_Int2 buflen)
+NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_LabelCopy (Nlm_CharPtr to, Nlm_CharPtr from, Nlm_Uint4 buflen)
 {
-	Nlm_Int2 len;
+	Nlm_Uint4 len;
 
 	if ((to == NULL) || (from == NULL) || (buflen < 0)) return 0;
 	
@@ -900,12 +903,12 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_LabelCopy (Nlm_CharPtr to, Nlm_CharPtr from, Nlm
 	}
 
 	*to = '\0';      /* buffer is bufferlen+1 */
-	return (Nlm_Int2)(len - buflen);
+	return (Nlm_Uint4)(len - buflen);
 }
 
-NLM_EXTERN void LIBCALL Nlm_LabelCopyNext(Nlm_CharPtr PNTR to, Nlm_CharPtr from, Nlm_Int2 PNTR buflen)
+NLM_EXTERN void LIBCALL Nlm_LabelCopyNext(Nlm_CharPtr PNTR to, Nlm_CharPtr from, Nlm_Uint4 PNTR buflen)
 {
-	Nlm_Int2 diff;
+	Nlm_Uint4 diff;
 
 	diff = Nlm_LabelCopy(*to, from, *buflen);
 	*buflen -= diff; *to += diff;
@@ -927,9 +930,9 @@ NLM_EXTERN void LIBCALL Nlm_LabelCopyNext(Nlm_CharPtr PNTR to, Nlm_CharPtr from,
 *  
 *
 *****************************************************************************/
-NLM_EXTERN Nlm_Int2 LIBCALL Nlm_LabelCopyExtra (Nlm_CharPtr to, Nlm_CharPtr from, Nlm_Int2 buflen, Nlm_CharPtr prefix, Nlm_CharPtr suffix)
+NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_LabelCopyExtra (Nlm_CharPtr to, Nlm_CharPtr from, Nlm_Uint4 buflen, Nlm_CharPtr prefix, Nlm_CharPtr suffix)
 {
-	Nlm_Int2 len, diff;
+	Nlm_Int4 len, diff;
 
 	if ((to == NULL) || (buflen < 1) || (from == NULL)) return 0;
 
@@ -943,7 +946,7 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_LabelCopyExtra (Nlm_CharPtr to, Nlm_CharPtr from
 	diff = Nlm_LabelCopy(to, suffix, buflen);
 	buflen -= diff;
 
-	return (Nlm_Int2)(len-buflen);
+	return (Nlm_Int4)(len-buflen);
 }
 
 #define NEWLINE '\n'
